@@ -1,0 +1,55 @@
+{
+  "title": "Modelle",
+  "subtitle": "Ein öffentlicher Name, viele Anbieter. Lastverteilung über gesunde Endpunkte.",
+  "add": "Modell hinzufügen",
+  "formTitle": "{mode, select, edit {Modell bearbeiten} add {Modell hinzufügen} other {Modell hinzufügen}}",
+  "formSubmit": "{mode, select, save {Speichern} create {Modell hinzufügen} other {Modell hinzufügen}}",
+  "addHint": "Wähle einen Anbieter und die Upstream-Modell-ID. Routing ist optional.",
+  "emptyTitle": "Keine Modelle",
+  "empty": "Lege einen öffentlichen Namen an, den Clients als model senden.",
+  "needProvider": "Verbinde zuerst einen <providers>Anbieter</providers>, dann lege ein öffentliches Modell an.",
+  "connectProvider": "Anbieter verbinden",
+  "addEndpoint": "Endpunkt hinzufügen",
+  "deleteEndpoint": "Endpunkt entfernen",
+  "columns": {
+    "alias": "Öffentlicher Name",
+    "strategy": "Modus",
+    "endpoints": "Endpunkte",
+    "overflow": "Überlauf"
+  },
+  "fields": {
+    "alias": "Öffentlicher Modellname",
+    "strategy": "Lastverteilungsmodus",
+    "baseUrl": "API-Basis-URL",
+    "upstream": "Upstream-Modell-ID",
+    "weight": "Gewicht",
+    "retries": "Wiederholungen",
+    "overflow": "Überlauf-Alias",
+    "fallbacks": "Fallback-Aliasse",
+    "provider": "Anbieterverbindung",
+    "noProvider": "Eigener Endpunkt",
+    "costIn": "Input-Kosten / 1k",
+    "costOut": "Output-Kosten / 1k",
+    "billingMode": "Abrechnung"
+  },
+  "billingModes": {
+    "average": "Durchschnitt der Endpunkte",
+    "routed": "Gerouteter Anbieter"
+  },
+  "billingModeLabel": "{mode, select, average {Durchschnitt der Endpunkte} routed {Gerouteter Anbieter} other {{mode}}}",
+  "billingModeHint": "{mode, select, average {Abgerechnet wird der Durchschnitt der Endpunktpreise. Dieser Durchschnitt ist die Untergrenze: eine günstigere Route wird trotzdem mit dem Durchschnitt berechnet.} routed {Abgerechnet wird der Endpunkt, der die Anfrage bedient hat.} other {}}",
+  "priceFromProvider": "Preise von {source}",
+  "strategies": {
+    "weighted_random": "Gewichteter Zufall",
+    "least_inflight": "Wenigste laufende",
+    "cost_lowest": "Günstigste Kosten",
+    "fast": "Schnell (niedrigste Latenz)",
+    "priority": "Priorität"
+  },
+  "strategyLabel": "{strategy, select, weighted_random {Gewichteter Zufall} least_inflight {Wenigste laufende} cost_lowest {Günstigste Kosten} fast {Schnell (niedrigste Latenz)} priority {Priorität} auto {Auto (Kosten)} other {{strategy}}}",
+  "removeConfirm": "Modell-Alias {alias} entfernen?",
+  "toasts": {
+    "saved": "{mode, select, edit {Modell aktualisiert} add {Modell hinzugefügt} other {Modell hinzugefügt}}",
+    "deleted": "Modell entfernt"
+  }
+}

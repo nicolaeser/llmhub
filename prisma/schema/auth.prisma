@@ -1,0 +1,189 @@
+model User {
+  id                 String    @id @default(uuid())
+  username           String    @unique
+  email              String    @unique
+  password           String
+  blocked            Boolean   @default(false)
+  isOwner            Boolean   @default(false)
+  roleId             String?
+  mustChangePassword Boolean   @default(false)
+  logContent         Boolean   @default(true)
+  passwordChangedAt  DateTime?
+  revision           Int       @default(0)
+
+  orgId  String?
+  teamId String?
+
+  maxBudget      Decimal   @default(0) @db.Decimal(20, 10)
+  spend          Decimal   @default(0) @db.Decimal(20, 10)
+  budgetDuration String    @default("")
+  spendResetAt   DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  role Role?         @relation(fields: [roleId], references: [id], onDelete: Restrict)
+  org  Organization? @relation(fields: [orgId], references: [id], onDelete: SetNull)
+  team Team?         @relation(fields: [teamId], references: [id], onDelete: SetNull)
+
+  sessions        Session[]
+  resetTokens     PasswordResetToken[]
+  virtualKeys     VirtualKey[]
+  totp            UserTotp?
+  passkeys        UserPasskey[]
+  loginChallenges LoginChallenge[]
+  ceremonies      AuthCeremony[]
+  securityEvents  UserSecurityEvent[]
+  managementKeys  ManagementKey[]
+
+  @@index([roleId])
+  @@index([orgId])
+  @@index([teamId])
+}
+
+model Role {
+  id          String   @id @default(cuid())
+  templateKey String?  @unique
+  name        String?  @unique
+  description String?
+  permissions String[] @default([])
+  revision    Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  users       User[]
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  tokenHash    String   @unique
+  userId       String
+  secondFactor String
+  ipAddress    String?
+  userAgent    String?
+  createdAt    DateTime @default(now())
+  lastActive   DateTime @default(now())
+  expiresAt    DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model ManagementKey {
+  id          String    @id @default(cuid())
+  userId      String
+  name        String
+  prefix      String
+  hash        String    @unique
+  permissions String[]  @default([])
+  expiresAt   DateTime?
+  lastUsedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model UserTotp {
+  userId        String         @id
+  secret        String?
+  enabledAt     DateTime?
+  lastTimeStep  Int?
+  pendingSecret String?
+  pendingAt     DateTime?
+  updatedAt     DateTime       @updatedAt
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  recoveryCodes RecoveryCode[]
+}
+
+model RecoveryCode {
+  id        String    @id @default(cuid())
+  userId    String
+  codeHash  String
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+  totp      UserTotp  @relation(fields: [userId], references: [userId], onDelete: Cascade)
+
+  @@unique([userId, codeHash])
+  @@index([userId, usedAt])
+}
+
+model UserPasskey {
+  id               String    @id @default(cuid())
+  userId           String
+  credentialIdHash String    @unique
+  credentialId     String
+  publicKey        Bytes
+  counter          BigInt    @default(0)
+  transports       String?
+  backedUp         Boolean   @default(false)
+  name             String
+  createdAt        DateTime  @default(now())
+  lastUsedAt       DateTime?
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model LoginChallenge {
+  id                String    @id @default(cuid())
+  tokenHash         String    @unique
+  userId            String
+  purpose           String
+  factor            String?
+  attempts          Int       @default(0)
+  webauthnChallenge String?
+  expiresAt         DateTime
+  consumedAt        DateTime?
+  createdAt         DateTime  @default(now())
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model AuthCeremony {
+  id        String   @id @default(cuid())
+  tokenHash String?  @unique
+  purpose   String
+  userId    String?
+  challenge String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user      User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, purpose])
+  @@index([expiresAt])
+}
+
+model UserSecurityEvent {
+  id        String   @id @default(cuid())
+  userId    String
+  actor     String
+  action    String
+  ipAddress String?
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+}
+
+model PasswordResetToken {
+  id        String    @id @default(uuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  hash      String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+}
+
+model LoginAttempt {
+  id        String   @id @default(uuid())
+  key       String
+  createdAt DateTime @default(now())
+
+  @@index([key, createdAt])
+}

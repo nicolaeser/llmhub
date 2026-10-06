@@ -1,0 +1,71 @@
+{
+  "title": "API keys",
+  "subtitle": "Keys authenticate applications against the /v1 API.",
+  "create": "Create key",
+  "gettingStarted": {
+    "title": "Getting started",
+    "subtitle": "Connect a provider, add a model, then create an API key. After that, try the Playground.",
+    "provider": "Connect a provider",
+    "model": "Add a model",
+    "key": "Create an API key",
+    "status": "{status, select, done {Done} other {To do}}"
+  },
+  "searchPlaceholder": "Search name or prefix…",
+  "empty": "Create a key to start routing traffic through the gateway.",
+  "emptyTitle": "No API keys",
+  "noMatches": "No keys match that search.",
+  "overview": {
+    "keys": "Keys",
+    "spend": "Spend (7 days)",
+    "requests": "Requests (7 days)",
+    "errors": "Errors (7 days)"
+  },
+  "secretTitle": "Save this secret",
+  "secretHint": "This is the only time the full key is shown.",
+  "columns": {
+    "name": "Key name",
+    "secret": "Secret",
+    "spend": "Spend / Budget",
+    "status": "Status",
+    "access": "Model access"
+  },
+  "fields": {
+    "alias": "Key name",
+    "team": "Team",
+    "personal": "Personal (billed to your team)",
+    "project": "Project",
+    "noProject": "No project",
+    "access": "Model access",
+    "templates": "Model templates",
+    "templatesHint": "Template rules stay current as models change. <link>Manage templates</link>",
+    "templatesPlaceholder": "No template",
+    "models": "Individual models",
+    "modelsHint": "Allowed in addition to the selected templates.",
+    "modelsPlaceholder": "No individual models",
+    "search": "Search",
+    "noResults": "No matches",
+    "days": "Expires in days",
+    "rpm": "Requests per minute",
+    "tpm": "Tokens per minute",
+    "allowedIps": "Allowed client IPs",
+    "allowedIpsHint": "One IP address per line. Leave empty to allow any address.",
+    "blocked": "Block this key",
+    "logContent": "Store request content",
+    "logContentHint": "When off, request logs for this key keep only metadata, no prompts or responses."
+  },
+  "revoke": "Revoke",
+  "rotate": "Rotate",
+  "toasts": {
+    "saved": "{mode, select, updated {Key updated} other {Key created}}",
+    "revoked": "Key revoked",
+    "rotated": "Key rotated. Copy the new secret."
+  },
+  "edit": "Edit key",
+  "dialogTitle": "{mode, select, edit {Edit key} other {Create a key}}",
+  "dialogSubmit": "{mode, select, edit {Save} other {Create key}}",
+  "access": "{state, select, all {Without templates or models, this key can use every model.} none {This key cannot use any model yet. Pick a template that matches models or add individual models.} other {{count, plural, one {This key can use # model.} other {This key can use # models.}}}}",
+  "allModels": "All models",
+  "modelCount": "{count, plural, one {# model} other {# models}}",
+  "budget": "Set budget",
+  "contentOff": "Content not logged"
+}

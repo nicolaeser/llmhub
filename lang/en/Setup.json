@@ -1,0 +1,13 @@
+{
+  "title": "Create the first administrator",
+  "subtitle": "This form runs once. Open it on purpose at /internal-api/setup.",
+  "username": "Username",
+  "email": "Email",
+  "password": "Password",
+  "submit": "Create administrator",
+  "errors": {
+    "code": "{code, select, RATE_LIMITED {Too many setup attempts. Try again later.} VALIDATION {Check the form fields and try again.} WEAK_PASSWORD {Use at least 10 characters with a letter and a number.} PASSWORD_GUESSABLE {This password is too easy to guess. Avoid common words, sequences, and your username or email.} SETUP_ALREADY_COMPLETE {Setup has already been completed.} other {Could not create the administrator.}}"
+  },
+  "passwordRules": "At least 10 characters with a letter and a number. Common passwords and ones containing your username or email are rejected.",
+  "nextStep": "Next you set up two-factor authentication. This account becomes the owner and always keeps full access."
+}

@@ -1,0 +1,38 @@
+{
+  "title": "Anbieter",
+  "subtitle": "Verbinde OpenAI, Anthropic, OpenRouter, xAI und beliebige OpenAI-kompatible Endpunkte.",
+  "connect": "Verbinden",
+  "edit": "{name} bearbeiten",
+  "formTitle": "{mode, select, edit {{name} bearbeiten} connect {{name} verbinden} other {{name} verbinden}}",
+  "formSubmit": "{mode, select, save {Speichern} connect {Verbinden} other {Verbinden}}",
+  "kindName": "{kind, select, openai {OpenAI} anthropic {Anthropic} openrouter {OpenRouter} openrouter_eu {OpenRouter EU} xai {xAI Grok} typesafe {TypeSafe AI} openai_compat {OpenAI-kompatibel} other {{kind}}}",
+  "kindDescription": "{kind, select, openai {Offizielle OpenAI-API.} anthropic {Native Anthropic-Messages-API.} openrouter {Ein Key für Hunderte Modelle.} openrouter_eu {OpenRouter mit Routing innerhalb der EU.} xai {Grok über die xAI-API.} typesafe {Jev-Entscheidungsmodell über die TypeSafe-API.} openai_compat {vLLM, SGLang, Ollama oder jeder OpenAI-kompatible Server.} other {}}",
+  "displayName": "Anzeigename",
+  "baseUrl": "API-Basis-URL",
+  "apiKey": "API-Schlüssel",
+  "apiKeyKeep": "Leer lassen, um den gespeicherten Schlüssel zu behalten.",
+  "toasts": {
+    "saved": "{mode, select, created {Anbieter verbunden} updated {Anbieter aktualisiert} deleted {Getrennt} other {Anbieter verbunden}}"
+  },
+  "deleteConfirm": "{name} trennen?",
+  "empty": "Noch keine Anbieter verbunden.",
+  "emptyTitle": "Einen Anbieter verbinden",
+  "moreProviders": "Weitere Anbieter",
+  "keyState": "{state, select, stored {API-Key hinterlegt} other {Kein API-Key}}",
+  "connectedCount": "{count, plural, =0 {Nicht verbunden} one {# Verbindung} other {# Verbindungen}}",
+  "policy": {
+    "title": "Datenschutz",
+    "hint": "Modellvorlagen wählen Modelle anhand dieser Angaben aus. Trage ein, was deine Vereinbarung mit diesem Anbieter abdeckt.",
+    "zdr": "Zero Data Retention (ZDR)",
+    "zdrHint": "Der Anbieter speichert laut Vereinbarung keine Prompts oder Ausgaben.",
+    "retention": "Datenaufbewahrung (Tage)",
+    "retentionHint": "Wie lange der Anbieter Prompts und Ausgaben aufbewahrt. Leer lassen, wenn unbekannt.",
+    "region": "Datenregion",
+    "regionOption": "{region, select, eu {EU} us {USA} global {Global} other {Nicht angegeben}}",
+    "noTraining": "Kein Training mit Prompts",
+    "noTrainingHint": "Der Anbieter verwendet Prompts und Ausgaben nicht zum Trainieren von Modellen.",
+    "zdrChip": "ZDR",
+    "retentionChip": "{days, plural, one {# Tag Aufbewahrung} other {# Tage Aufbewahrung}}",
+    "noTrainingChip": "Kein Training"
+  }
+}

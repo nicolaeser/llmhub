@@ -1,0 +1,27 @@
+{
+  "errors": {
+    "code": "{code, select, VALIDATION {Check your input and try again.} INVALID_CREDENTIALS {Email or password is incorrect.} RATE_LIMITED {Too many attempts. Try again later.} LOGIN_CHALLENGE_EXPIRED {The sign-in expired. Sign in again.} INVALID_SECOND_FACTOR {The verification code is not valid.} SECOND_FACTOR_LOCKED {Too many failed verification attempts. Try again later.} TWO_FACTOR_ENROLLMENT_REQUIRED {Set up two-factor authentication first.} TWO_FACTOR_ALREADY_ENABLED {Two-factor authentication is already active.} TWO_FACTOR_CHANGED {Two-factor authentication changed. Start again.} PASSKEY_VERIFICATION_FAILED {The passkey could not be verified.} PASSKEY_CHALLENGE_EXPIRED {The passkey request expired or was cancelled. Try again.} PASSKEY_LIMIT {Remove a passkey before adding another one.} PASSKEY_EXISTS {This passkey is already registered.} PASSKEY_NOT_FOUND {Passkey not found.} PASSKEYS_UNAVAILABLE {Passkeys need an HTTPS app URL with a domain name.} PASSWORD_INCORRECT {The current password is incorrect.} PASSWORD_REUSED {Choose a password that differs from the current one.} PASSWORD_CHANGED {The password changed in the meantime. Sign in again.} WEAK_PASSWORD {Use at least 10 characters with a letter and a number.} PASSWORD_GUESSABLE {This password is too easy to guess. Avoid common passwords and your name or email.} CURRENT_SESSION {Use sign out to end the current session.} FORBIDDEN {You do not have permission for this.} Forbidden {You do not have permission for this.} Unauthorized {Your session ended. Sign in again.} INVALID_SCOPE {You cannot grant permissions you do not hold.} ROLE_PROTECTED {This role contains permissions you do not hold.} ROLE_EXISTS {A role with this name already exists.} ROLE_IN_USE {This role is still assigned. Assign another role first.} ROLE_CHANGED {This role changed in the meantime. Reload and try again.} ROLE_NOT_FOUND {Role not found.} ROLE_NOT_TEMPLATE {Only built-in roles can be reset.} NAME_REQUIRED {Enter a name with at least 2 characters.} USER_PROTECTED {This person has permissions you do not hold.} OWNER_PROTECTED {The owner account is protected.} CANNOT_SELF {Use your account page for your own account.} USER_EXISTS {A user with that username or email already exists.} USER_NOT_FOUND {User not found.} USER_CHANGED {This user changed in the meantime. Reload and try again.} KEY_LIMIT {You reached the limit of 25 management keys. Revoke one first.} NOT_FOUND {Not found.} other {Something went wrong. Try again.}}"
+  },
+  "codeLabel": "Authenticator code",
+  "codeHint": "Enter the 6-digit code from your authenticator app.",
+  "recoveryCodeLabel": "Recovery code",
+  "recoveryCodeHint": "Each recovery code works once.",
+  "switchMethod": "{method, select, totp {Use a recovery code} other {Use the authenticator app}}",
+  "stepUpLabel": "Confirm with your authenticator code",
+  "qrAlt": "QR code for your authenticator app",
+  "enrollStepApp": "Install an authenticator app such as 1Password, Bitwarden, or Google Authenticator.",
+  "enrollStepScan": "Scan the QR code or enter the key manually.",
+  "enrollStepConfirm": "Enter the 6-digit code the app shows.",
+  "openInApp": "Open in authenticator app",
+  "manualKey": "Setup key",
+  "copyKey": "Copy setup key",
+  "copied": "Copied",
+  "copyFailed": "Could not copy",
+  "recoveryTitle": "Save your recovery codes",
+  "recoveryIntro": "Use one of these codes when you cannot reach your authenticator. They are shown only once.",
+  "recoveryListLabel": "Recovery codes",
+  "copyAll": "Copy all",
+  "download": "Download",
+  "recoveryFileHeader": "LLM Hub recovery codes. Each code works once.",
+  "storedConfirm": "I stored these recovery codes in a safe place."
+}

@@ -1,0 +1,38 @@
+{
+  "title": "Providers",
+  "subtitle": "Connect OpenAI, Anthropic, OpenRouter, xAI, and any OpenAI-compatible endpoint.",
+  "connect": "Connect",
+  "edit": "Edit {name}",
+  "formTitle": "{mode, select, edit {Edit {name}} connect {Connect {name}} other {Connect {name}}}",
+  "formSubmit": "{mode, select, save {Save} connect {Connect} other {Connect}}",
+  "kindName": "{kind, select, openai {OpenAI} anthropic {Anthropic} openrouter {OpenRouter} openrouter_eu {OpenRouter EU} xai {xAI Grok} typesafe {TypeSafe AI} openai_compat {OpenAI-compatible} other {{kind}}}",
+  "kindDescription": "{kind, select, openai {Official OpenAI API.} anthropic {Native Anthropic Messages API.} openrouter {One key for hundreds of models.} openrouter_eu {OpenRouter with EU in-region routing.} xai {Grok over the xAI API.} typesafe {Jev decision model over the TypeSafe API.} openai_compat {vLLM, SGLang, Ollama, or any OpenAI-compatible server.} other {}}",
+  "displayName": "Display name",
+  "baseUrl": "API base URL",
+  "apiKey": "API key",
+  "apiKeyKeep": "Leave blank to keep the stored key.",
+  "toasts": {
+    "saved": "{mode, select, created {Provider connected} updated {Provider updated} deleted {Disconnected} other {Provider connected}}"
+  },
+  "deleteConfirm": "Disconnect {name}?",
+  "empty": "No providers connected yet.",
+  "emptyTitle": "Connect a provider",
+  "moreProviders": "More providers",
+  "keyState": "{state, select, stored {API key stored} other {No API key}}",
+  "connectedCount": "{count, plural, =0 {Not connected} one {# connection} other {# connections}}",
+  "policy": {
+    "title": "Data policy",
+    "hint": "Model templates use these facts to select models. Enter what your agreement with this provider covers.",
+    "zdr": "Zero data retention (ZDR)",
+    "zdrHint": "The provider stores no prompts or outputs under your agreement.",
+    "retention": "Data retention (days)",
+    "retentionHint": "How long the provider keeps prompts and outputs. Leave empty if unknown.",
+    "region": "Data region",
+    "regionOption": "{region, select, eu {EU} us {US} global {Global} other {Unspecified}}",
+    "noTraining": "No training on prompts",
+    "noTrainingHint": "The provider does not use prompts or outputs to train models.",
+    "zdrChip": "ZDR",
+    "retentionChip": "{days, plural, one {# day retention} other {# days retention}}",
+    "noTrainingChip": "No training"
+  }
+}

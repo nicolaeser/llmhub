@@ -1,0 +1,25 @@
+import type { Permission } from "@/types/auth";
+
+export const PERMISSION_KEYS = {
+  "keys:read": "keysRead",
+  "keys:read-all": "keysReadAll",
+  "keys:manage": "keysManage",
+  "providers:read": "providersRead",
+  "providers:manage": "providersManage",
+  "models:read": "modelsRead",
+  "models:manage": "modelsManage",
+  "tenancy:read": "tenancyRead",
+  "tenancy:manage": "tenancyManage",
+  "spend:read": "spendRead",
+  "spend:read-all": "spendReadAll",
+  "logs:content": "logsContent",
+  "budgets:manage": "budgetsManage",
+  "users:read": "usersRead",
+  "users:manage": "usersManage",
+  "users:security": "usersSecurity",
+  "roles:manage": "rolesManage",
+  "settings:read": "settingsRead",
+  "settings:manage": "settingsManage",
+  "playground:use": "playgroundUse",
+  "assistant:use": "assistantUse",
+} as const satisfies Record<Permission, string>;

@@ -1,0 +1,55 @@
+{
+  "title": "Models",
+  "subtitle": "One public name, many providers. Load-balance across healthy endpoints.",
+  "add": "Add model",
+  "formTitle": "{mode, select, edit {Edit model} add {Add model} other {Add model}}",
+  "formSubmit": "{mode, select, save {Save} create {Add model} other {Add model}}",
+  "addHint": "Pick a provider and the upstream model id. Routing options are optional.",
+  "emptyTitle": "No models",
+  "empty": "Add a public name clients can send as model.",
+  "needProvider": "Connect a <providers>provider</providers> first, then add a public model name.",
+  "connectProvider": "Connect a provider",
+  "addEndpoint": "Add endpoint",
+  "deleteEndpoint": "Remove endpoint",
+  "columns": {
+    "alias": "Public name",
+    "strategy": "Mode",
+    "endpoints": "Endpoints",
+    "overflow": "Overflow"
+  },
+  "fields": {
+    "alias": "Public model name",
+    "strategy": "Load-balance mode",
+    "baseUrl": "API base URL",
+    "upstream": "Upstream model id",
+    "weight": "Weight",
+    "retries": "Retries",
+    "overflow": "Overflow alias",
+    "fallbacks": "Fallback aliases",
+    "provider": "Provider connection",
+    "noProvider": "Custom endpoint",
+    "costIn": "Input cost / 1k",
+    "costOut": "Output cost / 1k",
+    "billingMode": "Billing"
+  },
+  "billingModes": {
+    "average": "Average of endpoints",
+    "routed": "Routed provider"
+  },
+  "billingModeLabel": "{mode, select, average {Average of endpoints} routed {Routed provider} other {{mode}}}",
+  "billingModeHint": "{mode, select, average {Bill the average of endpoint prices. That average is the floor: a cheaper route still bills the average.} routed {Bill the endpoint that served the request.} other {}}",
+  "priceFromProvider": "Prices from {source}",
+  "strategies": {
+    "weighted_random": "Weighted random",
+    "least_inflight": "Least in-flight",
+    "cost_lowest": "Lowest cost",
+    "fast": "Fast (lowest latency)",
+    "priority": "Priority"
+  },
+  "strategyLabel": "{strategy, select, weighted_random {Weighted random} least_inflight {Least in-flight} cost_lowest {Lowest cost} fast {Fast (lowest latency)} priority {Priority} auto {Auto (cost)} other {{strategy}}}",
+  "removeConfirm": "Remove model alias {alias}?",
+  "toasts": {
+    "saved": "{mode, select, edit {Model updated} add {Model added} other {Model added}}",
+    "deleted": "Model removed"
+  }
+}

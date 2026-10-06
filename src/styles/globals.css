@@ -1,0 +1,39 @@
+@import "tailwindcss";
+@import "@heroui/styles";
+
+@custom-variant dark (&:is(.dark *));
+
+:root,
+.light,
+[data-theme="light"] {
+  --accent: oklch(0.585 0.2 277);
+  --accent-foreground: oklch(0.9911 0 0);
+  --background: oklch(0.9612 0 0);
+  --surface: var(--white);
+  --surface-secondary: oklch(0.9612 0 0);
+  --border: color-mix(in oklab, var(--foreground) 10%, transparent);
+  --field-border: var(--border);
+  --field-border-width: 1px;
+}
+
+.dark,
+[data-theme="dark"] {
+  --accent: oklch(0.72 0.16 277);
+  --accent-foreground: oklch(0.2 0.03 277);
+  --background: oklch(0.24 0.012 277);
+  --foreground: oklch(0.97 0.006 277);
+  --surface: oklch(0.29 0.014 277);
+  --surface-secondary: oklch(0.33 0.014 277);
+  --overlay: oklch(0.36 0.014 277);
+  --default: oklch(0.34 0.012 277);
+  --field-background: oklch(0.34 0.014 277);
+  --backdrop: oklch(0.12 0.01 277 / 0.62);
+  --border: color-mix(in oklab, var(--foreground) 16%, transparent);
+  --muted: oklch(0.74 0.02 277);
+}
+
+@layer base {
+  .dark {
+    color: var(--foreground);
+  }
+}

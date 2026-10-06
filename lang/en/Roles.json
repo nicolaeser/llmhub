@@ -1,0 +1,124 @@
+{
+  "title": "Roles and permissions",
+  "subtitle": "Roles bundle permissions. Nobody can grant permissions they do not hold, and the owner always keeps full access.",
+  "create": "Create role",
+  "createTitle": "Create role",
+  "editTitle": "Edit {role}",
+  "edit": "Edit",
+  "reset": "Reset to template",
+  "builtIn": "Built-in",
+  "protected": "Protected",
+  "noRole": "No role",
+  "actionsMenu": "Actions for {role}",
+  "templateName": "{key, select, admin {Admin} operator {Operator} finance {Finance} viewer {Viewer} other {Role}}",
+  "templateDescription": "{key, select, admin {Full access, including roles, settings, and user security.} operator {Operates keys, providers, models, tenancy, and users. No roles or settings.} finance {Usage, logs, and chargeback for everyone. Read-only elsewhere.} viewer {Read-only console with own keys, own usage, playground, and assistant.} other {}}",
+  "members": "{count, plural, =0 {No members} one {# member} other {# members}}",
+  "permissionCount": "{count, plural, one {# permission} other {# permissions}}",
+  "level": "{level, select, view {View} work {Work} sensitive {Sensitive} other {}}",
+  "domain": "{domain, select, keys {API keys} providers {Providers} models {Models} tenancy {Tenancy} spend {Usage and budgets} access {Users and roles} settings {Settings} tools {Tools} other {Other}}",
+  "columns": {
+    "role": "Role",
+    "members": "Members",
+    "permissions": "Permissions"
+  },
+  "fields": {
+    "name": "Name",
+    "description": "Description"
+  },
+  "missingTitle": "Deleted built-in roles",
+  "missingHint": "Restore a built-in role with its template permissions.",
+  "restore": "Restore {name}",
+  "deleteTitle": "Delete role",
+  "deleteConfirm": "Delete the role {role}?",
+  "toasts": {
+    "deleted": "Role deleted",
+    "reset": "Role reset to template",
+    "restored": "Role restored"
+  },
+  "permissions": {
+    "keysRead": {
+      "label": "View own keys",
+      "description": "See API keys you own and their spend."
+    },
+    "keysReadAll": {
+      "label": "View all keys",
+      "description": "See every API key, not only your own."
+    },
+    "keysManage": {
+      "label": "Manage keys",
+      "description": "Create, edit, block, and delete API keys."
+    },
+    "providersRead": {
+      "label": "View providers",
+      "description": "See provider connections without secrets."
+    },
+    "providersManage": {
+      "label": "Manage providers",
+      "description": "Add providers and change their credentials."
+    },
+    "modelsRead": {
+      "label": "View models",
+      "description": "See model groups and deployments."
+    },
+    "modelsManage": {
+      "label": "Manage models",
+      "description": "Edit routing, aliases, and deployments."
+    },
+    "tenancyRead": {
+      "label": "View tenancy",
+      "description": "See organizations, teams, and projects."
+    },
+    "tenancyManage": {
+      "label": "Manage tenancy",
+      "description": "Create and change organizations, teams, and projects."
+    },
+    "spendRead": {
+      "label": "View own usage",
+      "description": "See usage, logs, and spend for your own keys."
+    },
+    "spendReadAll": {
+      "label": "View all usage",
+      "description": "See usage, logs, chargeback, and spend for everyone."
+    },
+    "logsContent": {
+      "label": "View request content",
+      "description": "Read stored prompts and responses in request logs you can see."
+    },
+    "budgetsManage": {
+      "label": "Manage budgets",
+      "description": "Set budgets and temporary limits."
+    },
+    "usersRead": {
+      "label": "View users",
+      "description": "See the people who can sign in."
+    },
+    "usersManage": {
+      "label": "Manage users",
+      "description": "Create, block, and delete users and assign roles."
+    },
+    "usersSecurity": {
+      "label": "Manage user security",
+      "description": "Sign out sessions and reset two-factor authentication of others."
+    },
+    "rolesManage": {
+      "label": "Manage roles",
+      "description": "Create and edit roles and their permissions."
+    },
+    "settingsRead": {
+      "label": "View settings",
+      "description": "See guardrails, cache, logging, and admin settings."
+    },
+    "settingsManage": {
+      "label": "Manage settings",
+      "description": "Change guardrails, cache, logging, and admin settings."
+    },
+    "playgroundUse": {
+      "label": "Use playground",
+      "description": "Send requests from the playground and API reference."
+    },
+    "assistantUse": {
+      "label": "Use assistant",
+      "description": "Ask the console assistant within your permissions."
+    }
+  }
+}

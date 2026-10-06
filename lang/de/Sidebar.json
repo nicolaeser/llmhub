@@ -1,0 +1,33 @@
+{
+  "appName": "LLM Hub",
+  "primaryNav": "Hauptnavigation",
+  "toggleCollapsed": "{collapsed, select, true {Seitenleiste ausklappen} other {Seitenleiste einklappen}}",
+  "openMenu": "Navigationsmenü öffnen",
+  "goHome": "Zu den API-Keys",
+  "sections": {
+    "gateway": "Gateway",
+    "observe": "Beobachtbarkeit",
+    "access": "Zugriff",
+    "developer": "Entwickler",
+    "settings": "Einstellungen"
+  },
+  "items": {
+    "keys": "API-Keys",
+    "playground": "Spielwiese",
+    "assistant": "Assistent",
+    "providers": "Anbieter",
+    "models": "Modelle",
+    "modelTemplates": "Modellvorlagen",
+    "guardrails": "Leitplanken",
+    "usage": "Nutzung",
+    "logs": "Protokolle",
+    "structure": "Struktur & Budgets",
+    "users": "Benutzer",
+    "apiRef": "API-Referenz",
+    "cache": "Cache",
+    "logging": "Logging & Alarme",
+    "roles": "Rollen",
+    "adminSettings": "Einstellungen"
+  },
+  "account": "Konto und Sicherheit"
+}

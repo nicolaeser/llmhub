@@ -1,0 +1,56 @@
+{
+  "title": "Nutzung",
+  "subtitle": "Ausgaben, Token, Fehler und Anfragevolumen.",
+  "days": "{n, plural, one {# Tag} other {# Tage}}",
+  "metrics": {
+    "spend": "Ausgaben",
+    "requests": "Anfragen",
+    "errors": "Fehler",
+    "tokens": "Token",
+    "latency": "Mittlere Latenz",
+    "p95": "p95-Latenz",
+    "rate429": "Upstream 429"
+  },
+  "charts": {
+    "dailySpend": "Tägliche Ausgaben",
+    "outcomes": "Ergebnisse",
+    "byGroup": "Ausgaben nach Kategorie",
+    "dailyRequests": "Tägliche Anfragen"
+  },
+  "group": {
+    "model": "Modell",
+    "team": "Team",
+    "org": "Organisation",
+    "project": "Projekt",
+    "key": "Schlüssel",
+    "user": "Benutzer"
+  },
+  "chargeback": "Chargeback-CSV",
+  "columns": {
+    "name": "Name",
+    "spend": "Ausgaben",
+    "prompt": "Prompt-Token",
+    "completion": "Completion-Token"
+  },
+  "range": "Zeitraum",
+  "empty": "Noch keine Ausgaben. Sende eine Spielwiesen-Anfrage.",
+  "ok": "OK",
+  "successRate": "Erfolgsquote",
+  "summary": "Ausgaben {spend, number, money} bei {count, number, integer} Anfragen, davon {errors, number, integer} Fehler.",
+  "exportPdf": "PDF exportieren",
+  "latencyValue": "{ms, number, integer} ms",
+  "pdf": {
+    "title": "Nutzungsbericht",
+    "period": "{days, plural, one {Letzter # Tag} other {Letzte # Tage}} · {range}",
+    "filter": "Modell: {model}",
+    "generated": "Erstellt am {at, date, long}",
+    "byModel": "Ausgaben nach Modell",
+    "colModel": "Modell",
+    "colShare": "Anteil",
+    "colSpend": "Ausgaben",
+    "colPrompt": "Prompt",
+    "colCompletion": "Completion",
+    "total": "Gesamt",
+    "noSpend": "Keine Ausgaben in diesem Zeitraum."
+  }
+}

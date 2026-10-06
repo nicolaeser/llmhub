@@ -1,0 +1,69 @@
+{
+  "title": "Modellvorlagen",
+  "subtitle": "Wiederverwendbare Modellfreigaben für API-Keys. Regeln wählen Modelle nach Anbieter, Datenaufbewahrung, Region oder Name aus und passen sich automatisch an, wenn sich Modelle ändern.",
+  "add": "Neue Vorlage",
+  "emptyTitle": "Keine Modellvorlagen",
+  "empty": "Lege eine Vorlage an, um Keys mit einem Schritt eine passende Modellauswahl zu geben, zum Beispiel nur Modelle mit Zero Data Retention oder nur in der EU gehostete Modelle.",
+  "readOnly": "Du kannst Vorlagen ansehen. Zum Ändern brauchst du die Berechtigung models:manage.",
+  "columns": {
+    "name": "Vorlage",
+    "rules": "Regeln",
+    "models": "Modelle",
+    "keys": "Keys"
+  },
+  "rule": {
+    "zdr": "Zero Data Retention",
+    "noTraining": "Kein Training",
+    "retention": "{days, plural, =0 {Keine Aufbewahrung} one {Aufbewahrung ≤ # Tag} other {Aufbewahrung ≤ # Tage}}",
+    "regions": "Region: {regions}",
+    "providers": "{count, plural, one {# Anbieter} other {# Anbieter}}",
+    "patterns": "Name: {patterns}",
+    "models": "{count, plural, one {+# Modell} other {+# Modelle}}"
+  },
+  "region": "{region, select, eu {EU} us {USA} global {Global} other {Nicht angegeben}}",
+  "matchCount": "{count, plural, =0 {Keine Modelle} one {# Modell} other {# Modelle}}",
+  "keyCount": "{count, plural, =0 {Nicht verwendet} one {# Key} other {# Keys}}",
+  "dialogTitle": "{mode, select, edit {Vorlage bearbeiten} other {Neue Vorlage}}",
+  "dialogSubmit": "{mode, select, edit {Speichern} other {Vorlage anlegen}}",
+  "preset": {
+    "label": "Ausgangspunkt",
+    "option": "{preset, select, zdr {Zero Data Retention} eu {Datenhaltung in der EU} noTraining {Kein Training mit Prompts} shortRetention {Aufbewahrung bis 30 Tage} other {Leer}}",
+    "name": "{preset, select, zdr {Zero Data Retention} eu {Nur EU} noTraining {Kein Training} shortRetention {Aufbewahrung bis 30 Tage} other {}}"
+  },
+  "fields": {
+    "name": "Name",
+    "description": "Beschreibung",
+    "rulesTitle": "Regeln",
+    "rulesHint": "Ein Modell passt nur, wenn jeder Endpunkt dahinter, auch Fallback- und Überlauf-Aliasse, alle Regeln erfüllt.",
+    "providers": "Anbieter",
+    "providersHint": "Nur Modelle, die ausschließlich über diese Verbindungen laufen.",
+    "providersPlaceholder": "Beliebiger Anbieter",
+    "patterns": "Muster für Modellnamen",
+    "patternsHint": "Durch Kommas getrennt. * passt auf alles, zum Beispiel claude-*, gpt-4o*.",
+    "regions": "Datenregion",
+    "regionsHint": "Nur Modelle, deren Anbieter Daten ausschließlich in den gewählten Regionen verarbeiten.",
+    "retention": "Maximale Datenaufbewahrung (Tage)",
+    "retentionHint": "Leer lassen für keine Grenze. Anbieter ohne angegebene Aufbewahrung passen nie.",
+    "zdrOnly": "Nur Zero Data Retention",
+    "zdrOnlyHint": "Nur Anbieter mit einer Vereinbarung zu Zero Data Retention.",
+    "noTrainingOnly": "Kein Training mit Prompts",
+    "noTrainingOnlyHint": "Nur Anbieter, die Prompts und Ausgaben nicht für Training verwenden.",
+    "models": "Immer erlauben",
+    "modelsHint": "Werden unabhängig von den Regeln oben ergänzt.",
+    "modelsPlaceholder": "Keine zusätzlichen Modelle",
+    "search": "Suchen",
+    "noResults": "Keine Treffer"
+  },
+  "preview": {
+    "title": "Vorschau",
+    "summary": "{count, plural, =0 {Diese Vorlage passt aktuell auf kein Modell.} one {Diese Vorlage erlaubt # Modell.} other {Diese Vorlage erlaubt # Modelle.}}",
+    "empty": "Füge eine Regel oder ein Modell hinzu, um die Vorlage festzulegen.",
+    "more": "{count, plural, one {+# weiteres} other {+# weitere}}"
+  },
+  "deleteConfirm": "Vorlage {name} löschen?",
+  "deleteInUse": "{count, plural, one {Entferne sie zuerst aus # Key.} other {Entferne sie zuerst aus # Keys.}}",
+  "toasts": {
+    "saved": "{mode, select, edit {Vorlage aktualisiert} other {Vorlage angelegt}}",
+    "deleted": "Vorlage gelöscht"
+  }
+}

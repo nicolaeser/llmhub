@@ -1,0 +1,21 @@
+{
+  "title": "Budget für {alias}",
+  "kindHint": "{kind, select, org {Budget der Organisation. Begrenzt alles darin.} team {Budget des Teams. Gilt gemeinsam für Mitglieder, Projekte und Schlüssel.} project {Budget des Projekts. Begrenzt die Schlüssel in diesem Projekt.} user {Persönliches Budget. Begrenzt diese Person über alle ihre Schlüssel.} key {Budget des Schlüssels. Gilt nur für diesen Schlüssel.} other {Budget}}",
+  "limitSpend": "Ausgaben begrenzen",
+  "amount": "Ausgabenlimit",
+  "amountHint": "Anfragen werden blockiert, sobald die Ausgaben diesen Betrag erreichen.",
+  "amountInvalid": "Gib einen Betrag über null ein.",
+  "exceedsParent": "Höher als {kind, select, org {die Organisation} team {das Team} project {das Projekt} user {die Person} key {der Schlüssel} other {die übergeordnete Ebene}} {alias} ({cap, number, currency}). Senke den Betrag oder erhöhe zuerst dieses Budget.",
+  "presets": "Schnellauswahl",
+  "unlimitedHint": "Kein eigenes Limit. Budgets darüber gelten weiterhin.",
+  "period": "Reset-Periode",
+  "periods": "{period, select, daily {Täglich} weekly {Wöchentlich} monthly {Monatlich} other {Nie}}",
+  "periodCustom": "{days, plural, one {Jeden Tag} other {Alle # Tage}}",
+  "periodHint": "Zu Beginn jeder Periode fallen die Ausgaben auf null. Eine geänderte Periode beginnt sofort neu.",
+  "preview": "Bereits genutzt",
+  "previewText": "Bisher {spend, number, currency} ausgegeben{capped, select, yes { von {cap, number, currency}} other {}}{hasBoost, select, yes {, dazu eine temporäre Erhöhung von {boost, number, currency}} other {}}.",
+  "saveBudget": "Budget speichern",
+  "toasts": {
+    "saved": "Budget gespeichert"
+  }
+}

@@ -1,0 +1,64 @@
+{
+  "title": "Einstellungen",
+  "subtitle": "Anmeldung, Assistant, Objektspeicher und SCIM. Secrets bleiben in der Umgebung.",
+  "save": "Einstellungen speichern",
+  "saved": "Einstellungen gespeichert",
+  "env": {
+    "title": "Umgebung",
+    "subtitle": "Diese Werte kommen aus der Prozessumgebung. Sie werden nicht in der Konsole bearbeitet.",
+    "appUrl": "App-URL",
+    "s3": "Objektspeicher",
+    "s3State": "{ready, select, true {S3-Zugangsdaten vorhanden} other {Nicht konfiguriert}}",
+    "oidc": "OIDC-Client",
+    "oidcState": "{ready, select, true {OIDC_CLIENT_SECRET ist gesetzt} other {Nicht konfiguriert}}",
+    "smtp": "Mail",
+    "smtpState": "{ready, select, true {SMTP_URL ist gesetzt} other {Nicht konfiguriert}}",
+    "hint": "Secrets kommen aus der Umgebung: S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY, OIDC_CLIENT_SECRET und SMTP_URL."
+  },
+  "s3": {
+    "title": "Objektspeicher",
+    "subtitle": "Dateien, Batch-Ausgaben, Videos und optionale Log-Archive landen in S3, sobald Bucket und Schlüssel gesetzt sind.",
+    "enabled": "Objektspeicher verwenden",
+    "field": "{field, select, bucket {Bucket} region {Region} endpoint {Endpoint} prefix {Schlüssel-Präfix} public_base_url {Öffentliche Basis-URL} addressing {Adressierung} other {Einstellung}}",
+    "addressing": "{mode, select, path {Pfad-Stil (/bucket/key)} virtual_hosted {Virtual-Hosted (bucket.endpoint/key)} other {Automatisch}}",
+    "domainBucket": "Der Host ist der Bucket (CNAME oder Domain-Bucket)",
+    "keysHint": "Zugangsschlüssel bleiben in der Umgebung als S3_ACCESS_KEY_ID und S3_SECRET_ACCESS_KEY."
+  },
+  "scim": {
+    "title": "SCIM-Provisionierung",
+    "subtitle": "Dein Identity Provider legt Konsolen-Benutzer per SCIM an, aktualisiert und sperrt sie. Der Token kann jede eingebaute Rolle vergeben, auch Admin.",
+    "endpoint": "Basis-URL",
+    "token": "Bearer-Token",
+    "state": "{set, select, true {Aktiv} other {Nicht erstellt}}",
+    "issue": "{set, select, true {Token ersetzen} other {Token erstellen}}",
+    "issueDescription": "{set, select, true {Bestätige mit deinem Authenticator. Der aktuelle Token funktioniert danach sofort nicht mehr.} other {Bestätige mit deinem Authenticator. Der Token wird nur einmal angezeigt.}}",
+    "revoke": "Token widerrufen",
+    "revokeDescription": "Bestätige mit deinem Authenticator. SCIM-Anfragen schlagen fehl, bis du einen neuen Token erstellst.",
+    "tokenTitle": "Token jetzt kopieren",
+    "tokenHint": "Er wird nur einmal angezeigt. Trage ihn in deinem Identity Provider als Bearer-Token ein.",
+    "copy": "Token kopieren",
+    "issued": "SCIM-Token erstellt",
+    "revoked": "SCIM-Token widerrufen",
+    "manageHint": "Nur Personen mit allen Berechtigungen können den SCIM-Token erstellen oder widerrufen."
+  },
+  "access": {
+    "title": "Anmeldung",
+    "subtitle": "Der Owner meldet sich immer mit Passwort und Zwei-Faktor-Authentifizierung an, unabhängig von SSO.",
+    "registration": "Selbstregistrierung erlauben",
+    "registrationHint": "Standardmäßig aus. Neue Konten bekommen die Rolle Viewer und müssen die Zwei-Faktor-Authentifizierung einrichten. SSO legt Konten bei der ersten Anmeldung unabhängig von dieser Einstellung an."
+  },
+  "sso": {
+    "enabled": "Single Sign-on mit OpenID Connect",
+    "issuer": "Issuer-URL",
+    "clientId": "Client-ID",
+    "redirectUrl": "Redirect-URL",
+    "redirectHint": "Leer lassen, um den als Platzhalter gezeigten Standard-Callback zu nutzen.",
+    "secretHint": "{ready, select, true {OIDC_CLIENT_SECRET ist gesetzt. Der Provider muss E-Mail-Adressen bestätigen (email_verified).} other {Setze OIDC_CLIENT_SECRET in der Umgebung, bevor du SSO aktivierst.}}"
+  },
+  "assistant": {
+    "title": "Assistant",
+    "subtitle": "Der Konsolen-Assistant läuft auf einem deiner Gateway-Modelle und wird wie jede andere Anfrage abgerechnet.",
+    "model": "Standardmodell",
+    "none": "Kein Standard (im Assistant wählen)"
+  }
+}

@@ -1,0 +1,64 @@
+{
+  "title": "Settings",
+  "subtitle": "Sign-in, assistant, object storage, and SCIM. Secrets stay in the environment.",
+  "save": "Save settings",
+  "saved": "Settings saved",
+  "env": {
+    "title": "Environment",
+    "subtitle": "These values come from process env. They are not edited in the console.",
+    "appUrl": "App URL",
+    "s3": "Object storage",
+    "s3State": "{ready, select, true {S3 credentials present} other {Not configured}}",
+    "oidc": "OIDC client",
+    "oidcState": "{ready, select, true {OIDC_CLIENT_SECRET is set} other {Not configured}}",
+    "smtp": "Mail",
+    "smtpState": "{ready, select, true {SMTP_URL is set} other {Not configured}}",
+    "hint": "Secrets come from the environment: S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY, OIDC_CLIENT_SECRET, and SMTP_URL."
+  },
+  "s3": {
+    "title": "Object storage",
+    "subtitle": "Files, batch outputs, videos, and optional log archives go to S3 when a bucket and keys are set.",
+    "enabled": "Use object storage",
+    "field": "{field, select, bucket {Bucket} region {Region} endpoint {Endpoint} prefix {Key prefix} public_base_url {Public base URL} addressing {Addressing} other {Setting}}",
+    "addressing": "{mode, select, path {Path style (/bucket/key)} virtual_hosted {Virtual-hosted (bucket.endpoint/key)} other {Automatic}}",
+    "domainBucket": "The host is the bucket (CNAME or domain bucket)",
+    "keysHint": "Access keys stay in the environment as S3_ACCESS_KEY_ID and S3_SECRET_ACCESS_KEY."
+  },
+  "scim": {
+    "title": "SCIM provisioning",
+    "subtitle": "Your identity provider creates, updates, and blocks console users through SCIM. The token can assign every built-in role, including admin.",
+    "endpoint": "Base URL",
+    "token": "Bearer token",
+    "state": "{set, select, true {Active} other {Not created}}",
+    "issue": "{set, select, true {Replace token} other {Create token}}",
+    "issueDescription": "{set, select, true {Confirm with your authenticator. The current token stops working immediately.} other {Confirm with your authenticator. The token is shown only once.}}",
+    "revoke": "Revoke token",
+    "revokeDescription": "Confirm with your authenticator. SCIM requests fail until you create a new token.",
+    "tokenTitle": "Copy the token now",
+    "tokenHint": "It is shown only once. Paste it into your identity provider as the bearer token.",
+    "copy": "Copy token",
+    "issued": "SCIM token created",
+    "revoked": "SCIM token revoked",
+    "manageHint": "Only people who hold every permission can create or revoke the SCIM token."
+  },
+  "access": {
+    "title": "Sign-in",
+    "subtitle": "The owner always signs in with a password and two-factor authentication, independent of SSO.",
+    "registration": "Allow self-registration",
+    "registrationHint": "Off by default. New accounts get the Viewer role and must set up two-factor authentication. SSO creates accounts on first sign-in regardless of this setting."
+  },
+  "sso": {
+    "enabled": "Single sign-on with OpenID Connect",
+    "issuer": "Issuer URL",
+    "clientId": "Client ID",
+    "redirectUrl": "Redirect URL",
+    "redirectHint": "Leave empty to use the default callback shown as placeholder.",
+    "secretHint": "{ready, select, true {OIDC_CLIENT_SECRET is set. The provider must confirm email addresses (email_verified).} other {Set OIDC_CLIENT_SECRET in the environment before enabling SSO.}}"
+  },
+  "assistant": {
+    "title": "Assistant",
+    "subtitle": "The console assistant runs on one of your gateway models and is billed like any other request.",
+    "model": "Default model",
+    "none": "No default (pick in the assistant)"
+  }
+}

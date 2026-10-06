@@ -1,0 +1,170 @@
+{
+  "title": "Structure & budgets",
+  "subtitle": "Build it step by step: organization, then teams, then projects. Budgets and limits apply along this chain.",
+  "createOrg": "Create organization",
+  "emptyTitle": "No organization yet",
+  "empty": "Start with the organization. Teams, projects, people, and budgets all hang below it.",
+  "tree": {
+    "title": "Hierarchy",
+    "addOrg": "Organization",
+    "search": "Filter by name…",
+    "clear": "Clear filter",
+    "noMatches": "Nothing matches that filter.",
+    "unlimited": "No cap",
+    "unassigned": "Not assigned"
+  },
+  "steps": {
+    "title": "Set up step by step",
+    "subtitle": "Each step builds on the one before. Finished steps stay checked.",
+    "number": "Step {n, number, integer}",
+    "status": "{status, select, done {Done} other {To do}}",
+    "org": {
+      "title": "Organization",
+      "hint": "The company tenant at the top.",
+      "action": "Create organization"
+    },
+    "team": {
+      "title": "Teams",
+      "hint": "People groups inside the organization.",
+      "action": "Add a team"
+    },
+    "project": {
+      "title": "Projects",
+      "hint": "Key buckets inside a team, such as an app.",
+      "action": "Add a project"
+    },
+    "members": {
+      "title": "People",
+      "hint": "Put each person into one team.",
+      "action": "Open the team"
+    },
+    "budget": {
+      "title": "Budgets",
+      "hint": "Cap spend at any level. Children cannot exceed parents.",
+      "action": "Set a budget"
+    }
+  },
+  "detail": {
+    "kind": "{kind, select, org {Organization} team {Team} project {Project} other {Item}}",
+    "orgSummary": "{teams, plural, one {# team} other {# teams}} · {members, plural, one {# person} other {# people}}",
+    "teamSummary": "{projects, plural, one {# project} other {# projects}} · {members, plural, one {# member} other {# members}}",
+    "projectSummary": "{keys, plural, one {# key} other {# keys}}",
+    "edit": "{kind, select, org {Edit organization} team {Edit team} project {Edit project} other {Edit}}",
+    "delete": "{kind, select, org {Delete organization} team {Delete team} project {Delete project} other {Delete}}",
+    "deleteTitle": "{kind, select, org {Delete organization {alias}?} team {Delete team {alias}?} project {Delete project {alias}?} other {Delete {alias}?}}",
+    "deleteHint": "{kind, select, org {Move or delete its teams first. People leave the organization.} team {Move or delete its projects first. Members leave the team and its keys become personal keys.} project {Its keys stay with the team.} other {This cannot be undone.}}",
+    "deleted": "{kind, select, org {Organization deleted} team {Team deleted} project {Project deleted} other {Deleted}}"
+  },
+  "budget": {
+    "title": "Budget",
+    "resets": "{when, select, now {This period has ended. Spend resets with the next request.} other {Spend resets on {date, date, stamp}.}}",
+    "noReset": "Spend never resets on its own.",
+    "edit": "{capped, select, yes {Change budget} other {Set budget}}",
+    "boost": "Temporary boost",
+    "used": "Used",
+    "spent": "Spent",
+    "limit": "Limit",
+    "limitValue": "{capped, select, yes {{cap, number, currency}{hasBoost, select, yes { + {boost, number, currency}} other {}}} other {No own cap}}",
+    "available": "Still available",
+    "unlimited": "Unlimited",
+    "projected": "Projected 30 days",
+    "exhausts": "At the current pace the budget runs out in {days, plural, =0 {less than a day} one {# day} other {# days}}.",
+    "limitedBy": "{kind, select, org {Organization} team {Team} project {Project} user {Person} key {Key} other {Parent}} {alias} is the tighter limit: {amount, number, currency} left.",
+    "inherits": "No own cap. The limits above still apply."
+  },
+  "boost": {
+    "title": "Temporary boost for {alias}",
+    "hint": "Adds extra headroom on top of the budget until it expires. Parent limits still apply.",
+    "amount": "Extra amount",
+    "amountHint": "Added to the current limit.",
+    "amountInvalid": "Enter an amount above zero.",
+    "presets": "Quick amounts",
+    "duration": "Valid for",
+    "hours": "{hours, select, 24 {24 hours} 72 {3 days} 168 {7 days} 720 {30 days} other {{hours, number, integer} hours}}",
+    "until": "Expires {date, date, stamp}.",
+    "active": "Active boosts",
+    "expires": "Until {date, date, stamp}",
+    "remove": "Remove boost",
+    "submit": "Add boost",
+    "added": "Boost added",
+    "removed": "Boost removed"
+  },
+  "node": {
+    "title": "{mode, select, edit {{kind, select, org {Edit organization} team {Edit team} project {Edit project} other {Edit}}} other {{kind, select, org {New organization} team {New team} project {New project} other {New}}}}",
+    "hint": "{kind, select, org {The company tenant. Teams go inside it.} team {A group of people inside an organization. Members share its budget and rate limits.} project {A bucket for keys inside a team, such as an app or environment.} other {}}",
+    "name": "{kind, select, org {Organization name} team {Team name} project {Project name} other {Name}}",
+    "placeholder": "{kind, select, org {Acme Inc.} team {Engineering} project {Support bot} other {}}",
+    "parent": "{kind, select, team {Organization} project {Team} other {Parent}}",
+    "parentPlaceholder": "{kind, select, team {Choose an organization} project {Choose a team} other {Choose}}",
+    "parentHint": "{mode, select, edit {Moving it also moves its members and keys.} other {{kind, select, team {Create the organization first if it is missing.} project {Create the team first if it is missing.} other {}}}}",
+    "teamOption": "{team} ({org})",
+    "rpm": "Requests per minute",
+    "rpmHint": "0 means no team limit.",
+    "tpm": "Tokens per minute",
+    "tpmHint": "0 means no team limit.",
+    "owner": "Owner",
+    "ownerHint": "The person responsible for this project.",
+    "submit": "{mode, select, edit {Save} other {{kind, select, org {Create organization} team {Create team} project {Create project} other {Create}}}}",
+    "saved": "{mode, select, edit {Saved} other {{kind, select, org {Organization created} team {Team created} project {Project created} other {Created}}}}"
+  },
+  "limits": {
+    "title": "Rate limits",
+    "hint": "Shared by every key and member of this team.",
+    "rpm": "Requests per minute",
+    "tpm": "Tokens per minute",
+    "unlimited": "Unlimited"
+  },
+  "children": {
+    "title": "{kind, select, team {Teams} other {Projects}} ({count, number, integer})",
+    "hint": "{kind, select, team {Teams split the organization into groups of people.} other {Projects group the team's keys.}}",
+    "allocated": "{kind, select, team {Teams} other {Projects}} have {amount, number, currency} in own budgets.",
+    "add": "{kind, select, team {Add team} other {Add project}}",
+    "empty": "{kind, select, team {No teams yet. Add the first one to continue.} other {No projects yet. Add one to group keys.}}",
+    "open": "Open {alias}",
+    "usage": "Budget used by {alias}",
+    "spendOf": "{spend, number, currency} of {cap, number, currency}",
+    "noCap": "{spend, number, currency} spent, no own cap",
+    "teamDetail": "{members, plural, one {# member} other {# members}} · {projects, plural, one {# project} other {# projects}}",
+    "projectDetail": "{keys, plural, one {# key} other {# keys}}"
+  },
+  "members": {
+    "title": "People ({count, number, integer})",
+    "hint": "{kind, select, org {Everyone in this organization. A person can be in one organization and one team.} other {A person belongs to one team. Joining a team also places them in its organization.}}",
+    "empty": "{kind, select, org {Nobody is in this organization yet.} other {Nobody is in this team yet.}}",
+    "columns": {
+      "user": "Person",
+      "team": "Team",
+      "budget": "Spend / Budget"
+    },
+    "noTeam": "No team",
+    "budget": "Budget for {username}",
+    "remove": "Remove {username}",
+    "noCandidates": "Everyone is already here.",
+    "pick": "Choose a person",
+    "addLabel": "{kind, select, org {Add to organization} other {Add to team}}",
+    "currentPlace": "{placed, select, team {Now in {team}} org {Now in {org}, no team} other {Not assigned yet}}",
+    "add": "Add",
+    "added": "Person added",
+    "removed": "Person removed"
+  },
+  "keys": {
+    "title": "API keys ({count, number, integer})",
+    "hint": "{kind, select, team {Keys bound to this team. Personal keys of its members are billed here too.} other {Keys in this project.}}",
+    "empty": "No keys yet. Create one on the <link>API keys</link> page and pick this team or project.",
+    "columns": {
+      "key": "Key",
+      "owner": "Owner",
+      "budget": "Spend / Budget"
+    },
+    "budget": "Budget for {alias}"
+  },
+  "alerts": {
+    "title": "Budget alerts",
+    "hint": "Webhooks under Logging & alerts that subscribe to budget thresholds fire once per threshold when spend crosses it.",
+    "saved": "Alert thresholds saved",
+    "remove": "Remove {value, number, integer} percent",
+    "add": "New threshold",
+    "addHint": "Between 1 and 100 percent of a budget.",
+    "addButton": "Add threshold"
+  }
+}

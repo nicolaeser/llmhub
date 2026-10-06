@@ -1,0 +1,8 @@
+{
+  "title": "Caching",
+  "subtitle": "Identische Chat-Anfragen ohne Streaming vom selben Key werden für die eingestellte Zeit aus dem Speicher beantwortet.",
+  "ttl": "TTL in Sekunden",
+  "ttlHint": "0 schaltet den Cache aus. Der Cache liegt im Speicher jedes App-Prozesses und hält bis zu 1000 Antworten.",
+  "save": "Speichern",
+  "saved": "Cache-Einstellungen gespeichert"
+}

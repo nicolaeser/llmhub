@@ -1,0 +1,8 @@
+{
+  "title": "Caching",
+  "subtitle": "Identical non-streaming chat requests from the same key are answered from memory for the configured time.",
+  "ttl": "TTL seconds",
+  "ttlHint": "0 turns the cache off. The cache lives in each app process and holds up to 1000 responses.",
+  "save": "Save",
+  "saved": "Cache settings saved"
+}

@@ -1,0 +1,71 @@
+{
+  "title": "API-Keys",
+  "subtitle": "Keys authentifizieren Anwendungen an der /v1-API.",
+  "create": "Schlüssel erstellen",
+  "gettingStarted": {
+    "title": "Erste Schritte",
+    "subtitle": "Verbinde einen Anbieter, lege ein Modell an, dann einen API-Key. Danach kannst du die Spielwiese ausprobieren.",
+    "provider": "Anbieter verbinden",
+    "model": "Modell anlegen",
+    "key": "API-Key erstellen",
+    "status": "{status, select, done {Fertig} other {Offen}}"
+  },
+  "searchPlaceholder": "Name oder Präfix suchen…",
+  "empty": "Erstelle einen Schlüssel, um Traffic durch das Gateway zu routen.",
+  "emptyTitle": "Keine API-Keys",
+  "noMatches": "Keine Schlüssel passen zur Suche.",
+  "overview": {
+    "keys": "Schlüssel",
+    "spend": "Ausgaben (7 Tage)",
+    "requests": "Anfragen (7 Tage)",
+    "errors": "Fehler (7 Tage)"
+  },
+  "secretTitle": "Dieses Geheimnis speichern",
+  "secretHint": "Der vollständige Schlüssel wird nur dieses eine Mal angezeigt.",
+  "columns": {
+    "name": "Schlüsselname",
+    "secret": "Geheimnis",
+    "spend": "Ausgaben / Budget",
+    "status": "Status",
+    "access": "Modellzugriff"
+  },
+  "fields": {
+    "alias": "Key-Name",
+    "team": "Team",
+    "personal": "Persönlich (wird deinem Team berechnet)",
+    "project": "Projekt",
+    "noProject": "Kein Projekt",
+    "access": "Modellzugriff",
+    "templates": "Modellvorlagen",
+    "templatesHint": "Regeln aus Vorlagen bleiben aktuell, wenn sich Modelle ändern. <link>Vorlagen verwalten</link>",
+    "templatesPlaceholder": "Keine Vorlage",
+    "models": "Einzelne Modelle",
+    "modelsHint": "Zusätzlich zu den gewählten Vorlagen erlaubt.",
+    "modelsPlaceholder": "Keine einzelnen Modelle",
+    "search": "Suchen",
+    "noResults": "Keine Treffer",
+    "days": "Läuft ab in Tagen",
+    "rpm": "Anfragen pro Minute",
+    "tpm": "Tokens pro Minute",
+    "allowedIps": "Erlaubte Client-IPs",
+    "allowedIpsHint": "Eine IP-Adresse pro Zeile. Leer lassen, um jede Adresse zu erlauben.",
+    "blocked": "Diesen Key sperren",
+    "logContent": "Anfrageinhalte speichern",
+    "logContentHint": "Wenn aus, speichern die Request-Logs für diesen Key nur Metadaten, keine Prompts oder Antworten."
+  },
+  "revoke": "Widerrufen",
+  "rotate": "Rotieren",
+  "toasts": {
+    "saved": "{mode, select, updated {Key aktualisiert} other {Key erstellt}}",
+    "revoked": "Key widerrufen",
+    "rotated": "Key rotiert. Kopiere das neue Secret."
+  },
+  "edit": "Key bearbeiten",
+  "dialogTitle": "{mode, select, edit {Key bearbeiten} other {Key erstellen}}",
+  "dialogSubmit": "{mode, select, edit {Speichern} other {Key erstellen}}",
+  "access": "{state, select, all {Ohne Vorlagen oder Modelle darf dieser Key jedes Modell nutzen.} none {Dieser Key darf noch kein Modell nutzen. Wähle eine Vorlage mit passenden Modellen oder füge einzelne Modelle hinzu.} other {{count, plural, one {Dieser Key darf # Modell nutzen.} other {Dieser Key darf # Modelle nutzen.}}}}",
+  "allModels": "Alle Modelle",
+  "modelCount": "{count, plural, one {# Modell} other {# Modelle}}",
+  "budget": "Budget festlegen",
+  "contentOff": "Inhalte nicht protokolliert"
+}

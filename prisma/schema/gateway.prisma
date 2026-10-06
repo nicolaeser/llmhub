@@ -1,0 +1,294 @@
+model Setting {
+  key   String @id
+  value String
+}
+
+model Organization {
+  id             String    @id @default(cuid())
+  alias          String
+  maxBudget      Decimal   @default(0) @db.Decimal(20, 10)
+  spend          Decimal   @default(0) @db.Decimal(20, 10)
+  budgetDuration String    @default("")
+  spendResetAt   DateTime?
+  piiPolicy      Json?
+  createdAt      DateTime  @default(now())
+
+  teams Team[]
+  users User[]
+  keys  VirtualKey[]
+}
+
+model Team {
+  id             String        @id @default(cuid())
+  orgId          String?
+  org            Organization? @relation(fields: [orgId], references: [id], onDelete: SetNull)
+  alias          String
+  maxBudget      Decimal       @default(0) @db.Decimal(20, 10)
+  spend          Decimal       @default(0) @db.Decimal(20, 10)
+  budgetDuration String        @default("")
+  rpmLimit       Int           @default(0)
+  tpmLimit       Int           @default(0)
+  spendResetAt   DateTime?
+  createdAt      DateTime      @default(now())
+
+  users    User[]
+  projects Project[]
+  keys     VirtualKey[]
+
+  @@index([orgId])
+}
+
+model Project {
+  id             String    @id @default(cuid())
+  teamId         String?
+  team           Team?     @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  alias          String
+  owner          String    @default("")
+  maxBudget      Decimal   @default(0) @db.Decimal(20, 10)
+  spend          Decimal   @default(0) @db.Decimal(20, 10)
+  budgetDuration String    @default("")
+  spendResetAt   DateTime?
+  createdAt      DateTime  @default(now())
+
+  keys VirtualKey[]
+
+  @@index([teamId])
+}
+
+model VirtualKey {
+  id             String        @id @default(cuid())
+  hash           String        @unique
+  prefix         String
+  keyAlias       String        @default("")
+  userId         String?
+  user           User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+  teamId         String?
+  team           Team?         @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  orgId          String?
+  org            Organization? @relation(fields: [orgId], references: [id], onDelete: SetNull)
+  projectId      String?
+  project        Project?      @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  models         Json          @default("[]")
+  maxBudget      Decimal       @default(0) @db.Decimal(20, 10)
+  spend          Decimal       @default(0) @db.Decimal(20, 10)
+  rpmLimit       Int           @default(0)
+  tpmLimit       Int           @default(0)
+  budgetDuration String        @default("")
+  expiresAt      DateTime?
+  allowedIps     Json          @default("[]")
+  blocked        Boolean       @default(false)
+  logContent     Boolean       @default(true)
+  prevHash       String        @default("")
+  prevHashUntil  DateTime?
+  spendResetAt   DateTime?
+  piiPolicy      Json?
+  createdAt      DateTime      @default(now())
+
+  templates VirtualKeyTemplate[]
+
+  @@index([teamId])
+  @@index([userId])
+}
+
+model ModelTemplate {
+  id               String   @id @default(cuid())
+  name             String   @unique
+  description      String   @default("")
+  models           Json     @default("[]")
+  patterns         Json     @default("[]")
+  providerIds      Json     @default("[]")
+  regions          Json     @default("[]")
+  zdrOnly          Boolean  @default(false)
+  noTrainingOnly   Boolean  @default(false)
+  maxRetentionDays Int?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  keys VirtualKeyTemplate[]
+}
+
+model VirtualKeyTemplate {
+  keyId      String
+  key        VirtualKey    @relation(fields: [keyId], references: [id], onDelete: Cascade)
+  templateId String
+  template   ModelTemplate @relation(fields: [templateId], references: [id], onDelete: Restrict)
+
+  @@id([keyId, templateId])
+  @@index([templateId])
+}
+
+model ProviderConnection {
+  id            String   @id @default(cuid())
+  name          String
+  kind          String
+  baseUrl       String   @default("")
+  apiKey        String   @default("")
+  discovered    Json     @default("[]")
+  zdr           Boolean  @default(false)
+  retentionDays Int?
+  region        String   @default("")
+  noTraining    Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  deployments Deployment[]
+}
+
+model ModelGroup {
+  alias          String @id
+  strategy       String @default("least_inflight")
+  billingMode    String @default("routed")
+  overflowGroup  String @default("")
+  numRetries     Int    @default(0)
+  fallbackGroups Json   @default("[]")
+
+  deployments Deployment[]
+}
+
+model Deployment {
+  id         String              @id @default(cuid())
+  groupAlias String
+  group      ModelGroup          @relation(fields: [groupAlias], references: [alias], onDelete: Cascade)
+  kind       String
+  baseUrl    String              @default("")
+  model      String              @default("")
+  weight     Int                 @default(1)
+  costInput  Decimal             @default(0) @db.Decimal(20, 10)
+  costOutput Decimal             @default(0) @db.Decimal(20, 10)
+  providerId String?
+  provider   ProviderConnection? @relation(fields: [providerId], references: [id], onDelete: SetNull)
+
+  @@index([groupAlias])
+  @@index([providerId])
+}
+
+model SpendEvent {
+  id               String   @id @default(cuid())
+  keyId            String   @default("")
+  teamId           String   @default("")
+  orgId            String   @default("")
+  projectId        String   @default("")
+  userId           String   @default("")
+  model            String   @default("")
+  deployment       String   @default("")
+  tag              String   @default("")
+  promptTokens     Int      @default(0)
+  completionTokens Int      @default(0)
+  cost             Decimal  @default(0) @db.Decimal(20, 10)
+  createdAt        DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([keyId])
+  @@index([model])
+  @@index([teamId])
+  @@index([orgId])
+  @@index([projectId])
+  @@index([userId])
+}
+
+model UsageDaily {
+  day              DateTime @db.Date
+  keyId            String   @default("")
+  teamId           String   @default("")
+  orgId            String   @default("")
+  projectId        String   @default("")
+  userId           String   @default("")
+  model            String   @default("")
+  requests         Int      @default(0)
+  errors           Int      @default(0)
+  rateLimited      Int      @default(0)
+  latencyMs        BigInt   @default(0)
+  promptTokens     BigInt   @default(0)
+  completionTokens BigInt   @default(0)
+  cost             Decimal  @default(0) @db.Decimal(20, 10)
+
+  @@id([day, keyId, teamId, orgId, projectId, userId, model], name: "slice")
+  @@index([day])
+}
+
+model RequestLog {
+  id               String             @id @default(cuid())
+  keyId            String             @default("")
+  userId           String             @default("")
+  teamId           String             @default("")
+  orgId            String             @default("")
+  projectId        String             @default("")
+  model            String             @default("")
+  endpoint         String             @default("")
+  deploymentId     String             @default("")
+  provider         String             @default("")
+  upstreamModel    String             @default("")
+  stream           Boolean            @default(false)
+  tag              String             @default("")
+  status           Int                @default(0)
+  latencyMs        Int                @default(0)
+  outcome          String             @default("")
+  error            String             @default("")
+  promptTokens     Int                @default(0)
+  completionTokens Int                @default(0)
+  cost             Decimal            @default(0) @db.Decimal(20, 10)
+  piiMode          String             @default("")
+  piiInput         String[]           @default([])
+  piiOutput        String[]           @default([])
+  contentSkip      String             @default("")
+  createdAt        DateTime           @default(now())
+  content          RequestLogContent?
+
+  @@index([createdAt])
+  @@index([keyId])
+  @@index([userId])
+  @@index([teamId])
+  @@index([orgId])
+  @@index([projectId])
+  @@index([status])
+}
+
+model RequestLogContent {
+  logId     String     @id
+  log       RequestLog @relation(fields: [logId], references: [id], onDelete: Cascade)
+  request   Json?
+  response  Json?
+  truncated Boolean    @default(false)
+  createdAt DateTime   @default(now())
+
+  @@index([createdAt])
+}
+
+model StoredObject {
+  id          String   @id @default(cuid())
+  kind        String
+  owner       String   @default("")
+  filename    String   @default("")
+  purpose     String   @default("")
+  contentType String   @default("")
+  bytes       Int      @default(0)
+  payload     Bytes?
+  meta        Json     @default("{}")
+  createdAt   DateTime @default(now())
+
+  @@index([kind, owner])
+}
+
+model TempBudget {
+  id         String   @id @default(cuid())
+  entityType String
+  entityId   String
+  amount     Decimal  @db.Decimal(20, 10)
+  until      DateTime
+
+  @@index([entityType, entityId])
+}
+
+model GatewayAuditLog {
+  id         String   @id @default(cuid())
+  actor      String
+  action     String
+  objectType String
+  objectId   String
+  beforeJson String   @default("")
+  afterJson  String   @default("")
+  createdAt  DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([objectType, objectId])
+}

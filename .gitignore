@@ -1,0 +1,11 @@
+/node_modules
+/.next/
+/src/generated/
+/rustfs-data/
+/postgres-data/
+/redis-data/
+
+.env*
+*.tsbuildinfo
+next-env.d.ts
+npm-debug.log*

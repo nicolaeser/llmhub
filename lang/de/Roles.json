@@ -1,0 +1,124 @@
+{
+  "title": "Rollen und Berechtigungen",
+  "subtitle": "Rollen bündeln Berechtigungen. Niemand kann Rechte vergeben, die er selbst nicht hat, und der Owner behält immer vollen Zugriff.",
+  "create": "Rolle anlegen",
+  "createTitle": "Rolle anlegen",
+  "editTitle": "{role} bearbeiten",
+  "edit": "Bearbeiten",
+  "reset": "Auf Vorlage zurücksetzen",
+  "builtIn": "Integriert",
+  "protected": "Geschützt",
+  "noRole": "Keine Rolle",
+  "actionsMenu": "Aktionen für {role}",
+  "templateName": "{key, select, admin {Admin} operator {Operator} finance {Finance} viewer {Viewer} other {Rolle}}",
+  "templateDescription": "{key, select, admin {Voller Zugriff inklusive Rollen, Einstellungen und Benutzersicherheit.} operator {Betreibt Schlüssel, Provider, Modelle, Mandanten und Benutzer. Keine Rollen oder Einstellungen.} finance {Nutzung, Logs und Chargeback aller. Sonst nur lesend.} viewer {Lesende Konsole mit eigenen Schlüsseln, eigener Nutzung, Playground und Assistent.} other {}}",
+  "members": "{count, plural, =0 {Keine Mitglieder} one {# Mitglied} other {# Mitglieder}}",
+  "permissionCount": "{count, plural, one {# Berechtigung} other {# Berechtigungen}}",
+  "level": "{level, select, view {Lesen} work {Arbeiten} sensitive {Sensibel} other {}}",
+  "domain": "{domain, select, keys {API-Keys} providers {Provider} models {Modelle} tenancy {Mandanten} spend {Nutzung und Budgets} access {Benutzer und Rollen} settings {Einstellungen} tools {Werkzeuge} other {Sonstiges}}",
+  "columns": {
+    "role": "Rolle",
+    "members": "Mitglieder",
+    "permissions": "Berechtigungen"
+  },
+  "fields": {
+    "name": "Name",
+    "description": "Beschreibung"
+  },
+  "missingTitle": "Gelöschte integrierte Rollen",
+  "missingHint": "Stelle eine integrierte Rolle mit ihren Vorlagenberechtigungen wieder her.",
+  "restore": "{name} wiederherstellen",
+  "deleteTitle": "Rolle löschen",
+  "deleteConfirm": "Rolle {role} löschen?",
+  "toasts": {
+    "deleted": "Rolle gelöscht",
+    "reset": "Rolle auf Vorlage zurückgesetzt",
+    "restored": "Rolle wiederhergestellt"
+  },
+  "permissions": {
+    "keysRead": {
+      "label": "Eigene Schlüssel ansehen",
+      "description": "Eigene API-Keys und deren Kosten sehen."
+    },
+    "keysReadAll": {
+      "label": "Alle Schlüssel ansehen",
+      "description": "Alle API-Keys sehen, nicht nur die eigenen."
+    },
+    "keysManage": {
+      "label": "Schlüssel verwalten",
+      "description": "API-Keys erstellen, bearbeiten, sperren und löschen."
+    },
+    "providersRead": {
+      "label": "Provider ansehen",
+      "description": "Provider-Verbindungen ohne Secrets sehen."
+    },
+    "providersManage": {
+      "label": "Provider verwalten",
+      "description": "Provider hinzufügen und Zugangsdaten ändern."
+    },
+    "modelsRead": {
+      "label": "Modelle ansehen",
+      "description": "Modellgruppen und Deployments sehen."
+    },
+    "modelsManage": {
+      "label": "Modelle verwalten",
+      "description": "Routing, Aliase und Deployments bearbeiten."
+    },
+    "tenancyRead": {
+      "label": "Mandanten ansehen",
+      "description": "Organisationen, Teams und Projekte sehen."
+    },
+    "tenancyManage": {
+      "label": "Mandanten verwalten",
+      "description": "Organisationen, Teams und Projekte anlegen und ändern."
+    },
+    "spendRead": {
+      "label": "Eigene Nutzung ansehen",
+      "description": "Nutzung, Logs und Kosten der eigenen Schlüssel sehen."
+    },
+    "spendReadAll": {
+      "label": "Gesamte Nutzung ansehen",
+      "description": "Nutzung, Logs, Chargeback und Kosten aller sehen."
+    },
+    "logsContent": {
+      "label": "Anfrageinhalte ansehen",
+      "description": "Gespeicherte Prompts und Antworten in sichtbaren Request-Logs lesen."
+    },
+    "budgetsManage": {
+      "label": "Budgets verwalten",
+      "description": "Budgets und temporäre Limits festlegen."
+    },
+    "usersRead": {
+      "label": "Benutzer ansehen",
+      "description": "Personen sehen, die sich anmelden können."
+    },
+    "usersManage": {
+      "label": "Benutzer verwalten",
+      "description": "Benutzer anlegen, sperren, löschen und Rollen zuweisen."
+    },
+    "usersSecurity": {
+      "label": "Benutzersicherheit verwalten",
+      "description": "Sitzungen anderer abmelden und deren Zwei-Faktor-Authentifizierung zurücksetzen."
+    },
+    "rolesManage": {
+      "label": "Rollen verwalten",
+      "description": "Rollen und ihre Berechtigungen anlegen und bearbeiten."
+    },
+    "settingsRead": {
+      "label": "Einstellungen ansehen",
+      "description": "Guardrails, Cache, Logging und Admin-Einstellungen sehen."
+    },
+    "settingsManage": {
+      "label": "Einstellungen verwalten",
+      "description": "Guardrails, Cache, Logging und Admin-Einstellungen ändern."
+    },
+    "playgroundUse": {
+      "label": "Playground nutzen",
+      "description": "Anfragen aus Playground und API-Referenz senden."
+    },
+    "assistantUse": {
+      "label": "Assistent nutzen",
+      "description": "Den Konsolen-Assistenten im Rahmen der eigenen Rechte nutzen."
+    }
+  }
+}

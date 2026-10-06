@@ -1,0 +1,57 @@
+---
+type: instruction
+description: Load for server actions, gateway libraries, or non-HTTP application logic.
+scope: repository
+---
+
+# Backend
+
+Load before changing `src/lib/`, colocated `_action.ts`, or gateway helpers that are not HTTP route files.
+
+## Mandatory rules
+
+- Mutations for the console live in colocated `_action.ts` with `"use server"`. Call `requirePermission` (or `requireAuth`) first. Return payloads; the client applies them to `useState`.
+- Use `runAction` / `actionFail` from `src/lib/http/action-result.ts`. User-visible action errors must be translated keys or ICU selects, not hardcoded English.
+- Gateway request handling shares `gateRequest`, `allowModel`, `applyPii`, `dispatchChat` / `streamChat`, `forwardToModel`, `meter`, `recordUsage`, and `fireAlert` under `src/lib/gateway/`.
+- Every model call runs on a request-scoped principal from `withTrace` (`src/lib/gateway/gate.ts`): `gateRequest` adds it for `/v1`, and the playground, assistant, and each batch line call it themselves. The trace carries the endpoint, the PII-redacted request from `applyPii(body, principal)`, and the PII entities found. Must not share one traced principal across batch lines.
+- The PII policy is always the effective one from `resolvePii(principal)` (`src/lib/gateway/settings.ts`): the key's `piiPolicy`, else the organization's `piiPolicy`, else the global `Enterprise.pii`. An override replaces the whole policy. `applyPii` and `writeRequestLog` must both use it; must not read `getPii()` for request handling.
+- Callers pass `request`, `response`, `error`, and `stream` to `recordUsage` or `meter` so the log carries content. Output redaction must pass `principal.trace?.piiOutput` as the `found` set to `redactPii` / `redactChatJson` / `redactMessage` / `redactMessageEvent`. Streams rebuild the response with `ChatStreamTranscript` / `MessagesStreamTranscript` (`src/lib/gateway/log-content.ts`).
+- Every model-consuming path is admitted through `admit` (`assertBudget` + `assertRate`): `/v1`, the playground, and the console assistant. There is no master key and no bypass.
+- `assertBudget` walks `budgetChain` (`src/lib/gateway/billing.ts`): key → user → project → team → org; any capped holder at its cap plus active `TempBudget` boosts answers 429 `budget_exceeded`. Budget writes go through the Structure actions (`src/app/(app)/structure/_action.ts`), which reject a cap above any capped ancestor (`capConflict` in `src/lib/utils/budget.ts`, `BUDGET_EXCEEDS_PARENT`) and allow boosts only on capped holders, for at most `MAX_BOOST_HOURS`.
+- Model access is `principal.models`: the key's explicit list plus every alias its model templates match (`allowedModels`, `src/lib/gateway/model-access.ts`; pure matching in `src/lib/gateway/model-policy.ts`). A key with neither allows every alias. Routes must check the requested alias with `allowModel` and every caller fallback with `modelChain` (`src/lib/gateway/gate.ts`).
+- Upstream failures throw `GateError` (`src/lib/gateway/errors.ts`) and are metered as errors. Must not fabricate responses, images, embeddings, or fallbacks when the upstream fails or lacks an endpoint.
+- Provider kinds are `openai`, `anthropic`, `openrouter`, `openrouter_eu`, `xai`, `typesafe`, and `openai_compat` (`src/lib/gateway/catalog.ts`). Provider keys are sealed in the database only; there is no env fallback. Routing strategies are `least_inflight`, `weighted_random`, `cost_lowest`, `priority`, and `fast`. Deployments cool down only on retryable failures (5xx, 429, network).
+- Cost bills 5-minute cache writes at 1.25x and 1-hour cache writes at 2x the deployment input rate; cache reads at 0.1x except Claude Fable/Mythos 5.1 (0.025x) and Claude Opus 5.5 (0.05x) (`src/lib/gateway/cost.ts`).
+- Cost follows the tier the provider reports it served, never the requested one: `service_tier` `priority`/`fast`/`ultrafast` 2x and `flex` 0.5x on `openai`, `xai`, and OpenRouter kinds; Anthropic `usage.speed: "fast"` 2x and `usage.inference_geo: "us"` 1.1x; GPT-5.6 above 272K input tokens 2x input and 1.5x output. OpenRouter's `usage.cost` (plus BYOK `upstream_inference_cost`) replaces the estimate. `openai_compat` ignores tiers. Reasoning tokens a provider reports outside `completion_tokens` (xAI, Gemini OpenAI-compat) are billed as output (`usageFromUnknown`).
+- Service modes (`src/lib/gateway/service-mode.ts`): fast is `service_tier: "priority"` on OpenAI and xAI, `speed: "fast"` plus the `fast-mode-2026-02-01` beta only on Claude Opus 4.8+, and `service_tier` plus `provider.sort` on OpenRouter. A group strategy of `fast` or `priority` requests that premium tier for every call.
+- The maintenance sweep deletes stored responses, batches, videos, and batch result files after `Enterprise.object_retention_days` (default 30) and uploaded files after `file_retention_days` (default 0, off). Request logs, spend events, audit rows, and stored request content follow `log_retention_days`, `spend_retention_days`, `audit_retention_days`, and `content_retention_days` (0 keeps them). It also starts queued batches; a batch claims its row through a lease in `StoredObject.purpose`.
+- `recordUsage` writes the `UsageDaily` rollup, `SpendEvent`, and spend increments for key, user, team, org, and project in one transaction, then calls `writeRequestLog` (`src/lib/gateway/request-log.ts`) for `RequestLog`, nested `RequestLogContent`, and the optional S3 archive. `logPayload` elides binary data and vectors and shortens long values before storage. Usage, chargeback, dashboard, and assistant totals read `UsageDaily`, never `RequestLog`.
+- Money is `Decimal(20,10)` in Postgres. Convert at the boundary with `money()` from `src/lib/utils/money.ts`.
+- Alerts go through `fireAlert(event, message)` (`src/lib/gateway/alerts.ts`) to every entry of `Enterprise.alert_webhooks` (at most `MAX_ALERT_WEBHOOKS`) subscribed to that event. Events are `WEBHOOK_EVENTS` (`src/lib/gateway/webhook-events.ts`): `upstream_exhaustion`, `budget_threshold`, `provider_models_changed`. `normalizeWebhooks` reads a legacy single `alert_webhook` as one webhook subscribed to every event. Each webhook is delivered separately (a BullMQ `webhooks` job, or inline without Redis); delivery re-reads the webhook and skips it if it was removed or unsubscribed.
+- Alert webhooks are signed with HMAC-SHA256 over `timestamp.body` (`X-LLMHub-Timestamp`, `X-LLMHub-Signature: sha256=…`). Each secret is sealed in `Setting` (`patchEnterprise` seals, `getEnterprise` opens), never leaves the server, and is not stored in job data.
+- Provider model lists sync hourly (`runModelSync`, `src/worker/model-sync.ts`) and on demand through `refreshProviderModels` (`src/lib/gateway/discovery.ts`). A sync only rewrites `ProviderConnection.discovered`; it never edits deployments or model groups. Changes write `provider.models_discovered` (first list) or `provider.models_changed` audit rows, and added or removed models fire `provider_models_changed` naming model groups that still route to removed models. An empty upstream list never replaces a non-empty one.
+- The console assistant runs on a gateway model alias (`Enterprise.assistant_model` or the alias picked on the assistant page). Write tools run only when the per-session write switch is on; otherwise `callMcpTool` (`src/lib/assistant/mcp.ts`) answers `read_only`, and tools still check the operator's permissions. Created key secrets go to the UI as a `secret` event and never into model context.
+- Exclusive first-row writes use `prisma.$transaction` with `isolationLevel: "Serializable"` and a count check inside the transaction. Must not use Prisma `$queryRaw` / `$executeRaw`.
+- Helpers outside a request must receive a formatter, already-formatted strings, or stay locale-agnostic.
+- Every named type lives in `src/types/<domain>.ts`; every Zod schema lives in `src/schemas/<domain>.ts`. Import types directly from that file. Must not re-export, use `export *`, or add `index.ts` barrels.
+- Auth and account errors throw `AuthError` codes (`src/lib/auth/errors.ts`); `runAction` turns them into `actionFail(code)` and the UI maps codes through `Security.errors.code`.
+- `requirePermission` accepts a delegated principal set by `runAsPrincipal` (`src/lib/auth/delegation.ts`), which only `/api` handlers set after management-key auth. `requireSession` stays cookie-only, so account and security actions never run under a management key.
+
+## Architecture
+
+- `src/lib/auth/` session, cookies, guards, OIDC, throttle.
+- `src/lib/gateway/` types, router, PII, billing, upstream, SCIM, model discovery, model access.
+- `src/lib/management/` management-key auth, scope, `/api` route wrapper, serializers, Structure helpers.
+- `src/lib/assistant/` console assistant loop, prompt, and tools.
+- `src/lib/bootstrap/` catalog and boot.
+- `src/lib/` must not import route modules.
+
+## Prohibited patterns
+
+- Do not call `revalidatePath` / `revalidateTag` / `router.refresh`.
+- Do not log passwords, SCIM tokens, or raw API keys.
+- Do not create the first operator from register, SSO, or SCIM.
+
+## Validation
+
+`npm test` for the touched module (`log-content`, `request-log-query`, and `request-log-record` cover request logging; `budget-rules`, `budget-tenancy`, and `billing` cover budgets; `model-templates`, `model-sync`, `alert-webhooks`, `pii-policy`, `pricing-modes`, and `assistant-mcp` cover their modules). Gateway changes must keep `/v1` auth fail-closed.

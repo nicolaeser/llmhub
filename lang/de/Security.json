@@ -1,0 +1,27 @@
+{
+  "errors": {
+    "code": "{code, select, VALIDATION {Prüfe deine Eingaben und versuche es erneut.} INVALID_CREDENTIALS {E-Mail oder Passwort ist falsch.} RATE_LIMITED {Zu viele Versuche. Versuche es später erneut.} LOGIN_CHALLENGE_EXPIRED {Die Anmeldung ist abgelaufen. Melde dich erneut an.} INVALID_SECOND_FACTOR {Der Bestätigungscode ist ungültig.} SECOND_FACTOR_LOCKED {Zu viele fehlgeschlagene Bestätigungen. Versuche es später erneut.} TWO_FACTOR_ENROLLMENT_REQUIRED {Richte zuerst die Zwei-Faktor-Authentifizierung ein.} TWO_FACTOR_ALREADY_ENABLED {Die Zwei-Faktor-Authentifizierung ist bereits aktiv.} TWO_FACTOR_CHANGED {Die Zwei-Faktor-Authentifizierung hat sich geändert. Starte erneut.} PASSKEY_VERIFICATION_FAILED {Der Passkey konnte nicht bestätigt werden.} PASSKEY_CHALLENGE_EXPIRED {Die Passkey-Anfrage ist abgelaufen oder wurde abgebrochen. Versuche es erneut.} PASSKEY_LIMIT {Entferne einen Passkey, bevor du einen weiteren hinzufügst.} PASSKEY_EXISTS {Dieser Passkey ist bereits registriert.} PASSKEY_NOT_FOUND {Passkey nicht gefunden.} PASSKEYS_UNAVAILABLE {Passkeys brauchen eine HTTPS-App-URL mit Domainnamen.} PASSWORD_INCORRECT {Das aktuelle Passwort ist falsch.} PASSWORD_REUSED {Wähle ein anderes Passwort als das aktuelle.} PASSWORD_CHANGED {Das Passwort wurde zwischenzeitlich geändert. Melde dich erneut an.} WEAK_PASSWORD {Nutze mindestens 10 Zeichen mit einem Buchstaben und einer Zahl.} PASSWORD_GUESSABLE {Dieses Passwort ist zu leicht zu erraten. Vermeide gängige Passwörter sowie deinen Namen oder deine E-Mail.} CURRENT_SESSION {Beende die aktuelle Sitzung über Abmelden.} FORBIDDEN {Dafür fehlt dir die Berechtigung.} Forbidden {Dafür fehlt dir die Berechtigung.} Unauthorized {Deine Sitzung ist beendet. Melde dich erneut an.} INVALID_SCOPE {Du kannst keine Berechtigungen vergeben, die du selbst nicht hast.} ROLE_PROTECTED {Diese Rolle enthält Berechtigungen, die du nicht hast.} ROLE_EXISTS {Eine Rolle mit diesem Namen existiert bereits.} ROLE_IN_USE {Diese Rolle ist noch zugewiesen. Weise zuerst eine andere Rolle zu.} ROLE_CHANGED {Diese Rolle wurde zwischenzeitlich geändert. Lade neu und versuche es erneut.} ROLE_NOT_FOUND {Rolle nicht gefunden.} ROLE_NOT_TEMPLATE {Nur integrierte Rollen lassen sich zurücksetzen.} NAME_REQUIRED {Gib einen Namen mit mindestens 2 Zeichen ein.} USER_PROTECTED {Diese Person hat Berechtigungen, die du nicht hast.} OWNER_PROTECTED {Das Owner-Konto ist geschützt.} CANNOT_SELF {Nutze für dein eigenes Konto die Kontoseite.} USER_EXISTS {Ein Benutzer mit diesem Namen oder dieser E-Mail existiert bereits.} USER_NOT_FOUND {Benutzer nicht gefunden.} USER_CHANGED {Dieser Benutzer wurde zwischenzeitlich geändert. Lade neu und versuche es erneut.} KEY_LIMIT {Du hast das Limit von 25 Management-Keys erreicht. Widerrufe zuerst einen.} NOT_FOUND {Nicht gefunden.} other {Etwas ist schiefgelaufen. Versuche es erneut.}}"
+  },
+  "codeLabel": "Authenticator-Code",
+  "codeHint": "Gib den 6-stelligen Code aus deiner Authenticator-App ein.",
+  "recoveryCodeLabel": "Wiederherstellungscode",
+  "recoveryCodeHint": "Jeder Wiederherstellungscode funktioniert einmal.",
+  "switchMethod": "{method, select, totp {Wiederherstellungscode verwenden} other {Authenticator-App verwenden}}",
+  "stepUpLabel": "Mit deinem Authenticator-Code bestätigen",
+  "qrAlt": "QR-Code für deine Authenticator-App",
+  "enrollStepApp": "Installiere eine Authenticator-App wie 1Password, Bitwarden oder Google Authenticator.",
+  "enrollStepScan": "Scanne den QR-Code oder gib den Schlüssel manuell ein.",
+  "enrollStepConfirm": "Gib den 6-stelligen Code aus der App ein.",
+  "openInApp": "In Authenticator-App öffnen",
+  "manualKey": "Einrichtungsschlüssel",
+  "copyKey": "Einrichtungsschlüssel kopieren",
+  "copied": "Kopiert",
+  "copyFailed": "Kopieren fehlgeschlagen",
+  "recoveryTitle": "Speichere deine Wiederherstellungscodes",
+  "recoveryIntro": "Nutze einen dieser Codes, wenn du deinen Authenticator nicht erreichst. Sie werden nur einmal angezeigt.",
+  "recoveryListLabel": "Wiederherstellungscodes",
+  "copyAll": "Alle kopieren",
+  "download": "Herunterladen",
+  "recoveryFileHeader": "LLM Hub Wiederherstellungscodes. Jeder Code funktioniert einmal.",
+  "storedConfirm": "Ich habe diese Codes an einem sicheren Ort gespeichert."
+}

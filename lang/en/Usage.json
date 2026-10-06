@@ -1,0 +1,56 @@
+{
+  "title": "Usage",
+  "subtitle": "Spend, tokens, errors, and request volume.",
+  "days": "{n, plural, one {# day} other {# days}}",
+  "metrics": {
+    "spend": "Spend",
+    "requests": "Requests",
+    "errors": "Errors",
+    "tokens": "Tokens",
+    "latency": "Avg latency",
+    "p95": "p95 latency",
+    "rate429": "Upstream 429"
+  },
+  "charts": {
+    "dailySpend": "Daily spend",
+    "outcomes": "Outcomes",
+    "byGroup": "Spend breakdown",
+    "dailyRequests": "Daily requests"
+  },
+  "group": {
+    "model": "Model",
+    "team": "Team",
+    "org": "Organization",
+    "project": "Project",
+    "key": "Key",
+    "user": "User"
+  },
+  "chargeback": "Chargeback CSV",
+  "columns": {
+    "name": "Name",
+    "spend": "Spend",
+    "prompt": "Prompt tokens",
+    "completion": "Completion tokens"
+  },
+  "range": "Range",
+  "empty": "No spend yet. Send a playground request.",
+  "ok": "OK",
+  "successRate": "Success rate",
+  "summary": "Spend {spend, number, money} across {count, number, integer} requests with {errors, number, integer} errors.",
+  "exportPdf": "Export PDF",
+  "latencyValue": "{ms, number, integer} ms",
+  "pdf": {
+    "title": "Usage report",
+    "period": "{days, plural, one {Last # day} other {Last # days}} · {range}",
+    "filter": "Model: {model}",
+    "generated": "Generated {at, date, long}",
+    "byModel": "Spend by model",
+    "colModel": "Model",
+    "colShare": "Share",
+    "colSpend": "Spend",
+    "colPrompt": "Prompt",
+    "colCompletion": "Completion",
+    "total": "Total",
+    "noSpend": "No spend in this period."
+  }
+}

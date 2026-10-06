@@ -1,0 +1,38 @@
+{
+  "appName": "LLM Hub",
+  "titleTemplate": "%s | LLM Hub",
+  "metaDescription": "Self-hosted OpenAI-compatible AI gateway.",
+  "save": "Save",
+  "cancel": "Cancel",
+  "delete": "Delete",
+  "edit": "Edit",
+  "refresh": "Refresh",
+  "search": "Search",
+  "loading": "Loading",
+  "advanced": "Advanced",
+  "copy": "Copy",
+  "copied": "Copied",
+  "done": "Done",
+  "close": "Close",
+  "test": "Test",
+  "import": "Import",
+  "actions": "Actions",
+  "status": "Status",
+  "all": "All",
+  "none": "None",
+  "empty": "Nothing here yet.",
+  "goHome": "Go to API keys",
+  "signOut": "Sign out",
+  "health": {
+    "status": "{status, select, ok {Healthy} down {Down} other {Connecting}}"
+  },
+  "theme": {
+    "toggle": "{isDark, select, true {Switch to light mode} other {Switch to dark mode}}"
+  },
+  "spendBudget": "{hasCap, select, yes {{spend, number, money} / {budget, number, money}} other {{spend, number, money} / ∞}}",
+  "blockedState": "{blocked, select, true {Blocked} other {Active}}",
+  "tenancy": {
+    "step": "{n, number, integer}"
+  },
+  "continue": "Continue"
+}

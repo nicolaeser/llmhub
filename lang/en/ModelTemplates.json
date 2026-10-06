@@ -1,0 +1,69 @@
+{
+  "title": "Model templates",
+  "subtitle": "Reusable model access for API keys. Rules select models by provider, data retention, region, or name and update automatically as models change.",
+  "add": "New template",
+  "emptyTitle": "No model templates",
+  "empty": "Create a template to give keys a curated set of models in one step, for example only zero data retention models or only EU-hosted models.",
+  "readOnly": "You can view templates. Changing them requires the models:manage permission.",
+  "columns": {
+    "name": "Template",
+    "rules": "Rules",
+    "models": "Models",
+    "keys": "Keys"
+  },
+  "rule": {
+    "zdr": "Zero data retention",
+    "noTraining": "No training",
+    "retention": "{days, plural, =0 {No retention} one {Retention ≤ # day} other {Retention ≤ # days}}",
+    "regions": "Region: {regions}",
+    "providers": "{count, plural, one {# provider} other {# providers}}",
+    "patterns": "Name: {patterns}",
+    "models": "{count, plural, one {+# model} other {+# models}}"
+  },
+  "region": "{region, select, eu {EU} us {US} global {Global} other {Unspecified}}",
+  "matchCount": "{count, plural, =0 {No models} one {# model} other {# models}}",
+  "keyCount": "{count, plural, =0 {Unused} one {# key} other {# keys}}",
+  "dialogTitle": "{mode, select, edit {Edit template} other {New template}}",
+  "dialogSubmit": "{mode, select, edit {Save} other {Create template}}",
+  "preset": {
+    "label": "Start from",
+    "option": "{preset, select, zdr {Zero data retention} eu {EU data residency} noTraining {No training on prompts} shortRetention {Retention up to 30 days} other {Blank}}",
+    "name": "{preset, select, zdr {Zero data retention} eu {EU only} noTraining {No training} shortRetention {Retention up to 30 days} other {}}"
+  },
+  "fields": {
+    "name": "Name",
+    "description": "Description",
+    "rulesTitle": "Rules",
+    "rulesHint": "A model qualifies only when every endpoint behind it, including fallback and overflow aliases, meets every rule.",
+    "providers": "Providers",
+    "providersHint": "Only models served exclusively by these connections.",
+    "providersPlaceholder": "Any provider",
+    "patterns": "Model name patterns",
+    "patternsHint": "Comma-separated. * matches anything, for example claude-*, gpt-4o*.",
+    "regions": "Data region",
+    "regionsHint": "Only models whose providers all process data in the selected regions.",
+    "retention": "Maximum data retention (days)",
+    "retentionHint": "Leave empty for no limit. Providers without a stated retention never match.",
+    "zdrOnly": "Zero data retention only",
+    "zdrOnlyHint": "Only providers marked with a zero data retention agreement.",
+    "noTrainingOnly": "No training on prompts",
+    "noTrainingOnlyHint": "Only providers that do not use prompts or outputs for training.",
+    "models": "Always include",
+    "modelsHint": "Added regardless of the rules above.",
+    "modelsPlaceholder": "No extra models",
+    "search": "Search",
+    "noResults": "No matches"
+  },
+  "preview": {
+    "title": "Preview",
+    "summary": "{count, plural, =0 {This template matches no model right now.} one {This template allows # model.} other {This template allows # models.}}",
+    "empty": "Add a rule or a model to define the template.",
+    "more": "{count, plural, one {+# more} other {+# more}}"
+  },
+  "deleteConfirm": "Delete template {name}?",
+  "deleteInUse": "{count, plural, one {Remove it from # key first.} other {Remove it from # keys first.}}",
+  "toasts": {
+    "saved": "{mode, select, edit {Template updated} other {Template created}}",
+    "deleted": "Template deleted"
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "title": "Budget for {alias}",
+  "kindHint": "{kind, select, org {Organization budget. Caps everything inside it.} team {Team budget. Shared by its members, projects, and keys.} project {Project budget. Caps the keys in this project.} user {Personal budget. Caps this person across all their keys.} key {Key budget. Caps this key only.} other {Budget}}",
+  "limitSpend": "Limit spending",
+  "amount": "Spending limit",
+  "amountHint": "Requests are blocked once spend reaches this amount.",
+  "amountInvalid": "Enter an amount above zero.",
+  "exceedsParent": "Higher than the {kind, select, org {organization} team {team} project {project} user {person} key {key} other {parent}} {alias} ({cap, number, currency}). Lower it or raise that budget first.",
+  "presets": "Quick amounts",
+  "unlimitedHint": "No own cap. Budgets above this level still apply.",
+  "period": "Reset period",
+  "periods": "{period, select, daily {Daily} weekly {Weekly} monthly {Monthly} other {Never}}",
+  "periodCustom": "{days, plural, one {Every day} other {Every # days}}",
+  "periodHint": "Spend goes back to zero at the start of each period. Changing the period starts a new one now.",
+  "preview": "Already used",
+  "previewText": "{spend, number, currency} spent so far{capped, select, yes { of {cap, number, currency}} other {}}{hasBoost, select, yes {, plus a temporary boost of {boost, number, currency}} other {}}.",
+  "saveBudget": "Save budget",
+  "toasts": {
+    "saved": "Budget saved"
+  }
+}
