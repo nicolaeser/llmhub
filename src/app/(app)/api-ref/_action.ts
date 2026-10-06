@@ -1,7 +1,6 @@
 "use server";
 
 import prisma from "@/lib/db/prisma";
-import { env } from "@/lib/env";
 import { requirePermission } from "@/lib/auth/guards";
 import { hasPerm, PERMISSIONS } from "@/lib/auth/permissions";
 import { OPENAPI_PATHS } from "@/lib/gateway/openapi";
@@ -18,9 +17,7 @@ export async function loadApiRefAction() {
         orderBy: { alias: "asc" },
       }),
     ]);
-    const origin = env.NEXT_PUBLIC_APP_URL.replace(/\/+$/, "");
     return {
-      origin,
       paths: OPENAPI_PATHS,
       models: models.map((row) => row.alias),
       canTry: hasPerm(session.permissions, PERMISSIONS.PLAYGROUND_USE),

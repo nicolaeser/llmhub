@@ -8,18 +8,18 @@ import { StepUpDialog } from "@/components/security/step-up-dialog";
 import { issueScimTokenAction, revokeScimTokenAction } from "../_action";
 import { SettingSection } from "./fields";
 import { isActionFail } from "@/lib/http/action-result";
+import { useOrigin } from "@/lib/hooks/use-origin";
 
 export function ScimSection({
-  appUrl,
   initiallySet,
   canManage,
 }: {
-  appUrl: string;
   initiallySet: boolean;
   canManage: boolean;
 }) {
   const t = useTranslations("AdminSettings");
   const tSecurity = useTranslations("Security");
+  const origin = useOrigin();
   const [tokenSet, setTokenSet] = useState(initiallySet);
   const [token, setToken] = useState<string | null>(null);
   const issueStepUp = useOverlayState();
@@ -31,7 +31,7 @@ export function ScimSection({
       <ul className="divide-y divide-border">
         <li className="flex flex-wrap items-baseline justify-between gap-2 py-3 text-sm">
           <span className="text-muted">{t("scim.endpoint")}</span>
-          <code className="min-w-0 font-mono text-xs break-all">{`${appUrl.replace(/\/+$/, "")}/scim/v2`}</code>
+          <code className="min-w-0 font-mono text-xs break-all">{`${origin}/scim/v2`}</code>
         </li>
         <li className="flex flex-wrap items-baseline justify-between gap-2 py-3 text-sm">
           <span className="text-muted">{t("scim.token")}</span>

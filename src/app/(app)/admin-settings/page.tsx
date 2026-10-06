@@ -210,7 +210,7 @@ export default function AdminSettingsPage() {
         <p className="text-xs text-muted">{t("s3.keysHint")}</p>
       </SettingSection>
 
-      <ScimSection appUrl={appUrl} initiallySet={view.scimTokenSet} canManage={view.canManageScim} />
+      <ScimSection initiallySet={view.scimTokenSet} canManage={view.canManageScim} />
 
       <SettingSection title={t("env.title")} subtitle={t("env.subtitle")}>
         <ul className="divide-y divide-border">
