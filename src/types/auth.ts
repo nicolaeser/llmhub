@@ -1,5 +1,6 @@
 import type { Role, User } from "@/generated/prisma/client";
 import type { SessionFactor } from "@/types/security";
+import type { AssistantToolName } from "@/types/assistant";
 
 export type PermissionDomain =
   | "keys"
@@ -117,6 +118,7 @@ export type RoleSummary = {
   name: string | null;
   description: string | null;
   permissions: Permission[];
+  assistantToolsDisabled: AssistantToolName[];
   memberCount: number;
   revision: number;
   editable: boolean;

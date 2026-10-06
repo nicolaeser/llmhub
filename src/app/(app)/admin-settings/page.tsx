@@ -4,6 +4,7 @@ import { useEffect, useState, useTransition } from "react";
 import { Button, Label, ListBox, Select, Separator, Spinner, toast } from "@heroui/react";
 import { useTranslations } from "next-intl";
 import PageHeader from "@/components/console/page-header";
+import { Link } from "@/i18n/routing";
 import { loadAdminSettingsAction, saveAdminSettingsAction } from "./_action";
 import { SettingSection, SettingSwitch, SettingText } from "./_components/fields";
 import { ScimSection } from "./_components/scim-section";
@@ -134,7 +135,13 @@ export default function AdminSettingsPage() {
       <SettingSection title={t("assistant.title")} subtitle={t("assistant.subtitle")}>
         <Select
           selectedKey={settings.assistant_model || "none"}
-          onSelectionChange={(key) => update({ assistant_model: String(key) === "none" ? "" : String(key) })}
+          onSelectionChange={(key) => {
+            const assistant_model = String(key) === "none" ? "" : String(key);
+            update({
+              assistant_model,
+              assistant_model_locked: assistant_model ? settings.assistant_model_locked : false,
+            });
+          }}
           isDisabled={disabled}
           className="max-w-md"
           fullWidth
@@ -159,6 +166,22 @@ export default function AdminSettingsPage() {
             </ListBox>
           </Select.Popover>
         </Select>
+        <SettingSwitch
+          label={t("assistant.lock")}
+          isSelected={settings.assistant_model_locked}
+          onChange={(assistant_model_locked) => update({ assistant_model_locked })}
+          disabled={disabled || !settings.assistant_model}
+          hint={t("assistant.lockHint", { state: settings.assistant_model ? "ready" : "missing" })}
+        />
+        <p className="text-xs text-muted">
+          {t.rich("assistant.toolsHint", {
+            link: (chunks) => (
+              <Link href="/roles" className="text-accent">
+                {chunks}
+              </Link>
+            ),
+          })}
+        </p>
       </SettingSection>
 
       <SettingSection title={t("s3.title")} subtitle={t("s3.subtitle")}>

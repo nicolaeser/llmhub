@@ -6,14 +6,12 @@ import { admit, withTrace } from "@/lib/gateway/gate";
 import { sessionPrincipal } from "@/lib/gateway/principal";
 import { getEnterprise } from "@/lib/gateway/settings";
 import { getTranslations } from "next-intl/server";
-import {
-  asNumber,
-  asRecord,
-  asString
-} from "@/lib/gateway/core";
+import { asRecord } from "@/lib/gateway/core";
 import { ASSISTANT_STEP_LIMIT_NOTE, assistantSystemPrompt } from "@/lib/assistant/prompt";
 import { callMcpTool, mcpToolsForModel } from "@/lib/assistant/mcp";
+import { setupStatus } from "@/lib/assistant/tools/general";
 import {
+  assistantAlias,
   completionText,
   parseToolArgs,
   parseToolCalls,
@@ -29,9 +27,9 @@ import type {
 import type { JsonMap } from "@/types/gateway";
 
 const ASSISTANT_ENDPOINT = "/internal-api/assistant/chat";
-const MAX_STEPS = 6;
-const MAX_TOOL_CALLS_PER_STEP = 4;
-const MAX_TOOL_RESULT_CHARS = 8_000;
+const MAX_STEPS = 10;
+const MAX_TOOL_CALLS_PER_STEP = 6;
+const MAX_TOOL_RESULT_CHARS = 12_000;
 
 class AssistantNoLlmError extends Error {
   constructor() {
@@ -98,7 +96,7 @@ function isAbortError(err: unknown): boolean {
 }
 
 async function resolveAssistantAlias(requested: string): Promise<string | null> {
-  const alias = requested || (await getEnterprise()).assistant_model || "";
+  const alias = assistantAlias(requested, await getEnterprise());
   if (!alias) return null;
   const match = await prisma.modelGroup.findUnique({ where: { alias }, select: { alias: true } });
   return match?.alias ?? null;
@@ -155,9 +153,9 @@ export async function* runAssistant(opts: {
   model?: string;
   signal?: AbortSignal;
 }): AsyncGenerator<AssistantEvent> {
-  const setup = await callMcpTool("get_setup_status", {}, opts.ctx);
+  const setup = await setupStatus(opts.ctx);
   const now = `${new Date().toISOString().slice(0, 16)}Z`;
-  const system = `${assistantSystemPrompt(opts.ctx.locale, opts.ctx.allowWrite)}\n\n## Live snapshot\nCurrent time (UTC): ${now}\n${JSON.stringify(setup.result)}`;
+  const system = `${assistantSystemPrompt(opts.ctx.locale, opts.ctx.allowWrite)}\n\n## Live snapshot\nCurrent time (UTC): ${now}\n${JSON.stringify(setup)}`;
   const messages: AssistantMessage[] = [
     { role: "system", content: system },
     ...opts.history
@@ -229,7 +227,6 @@ export async function* runAssistant(opts: {
       return;
     }
     if (err instanceof AssistantNoLlmError) {
-      const rec = asRecord(setup.result);
       const t = await getTranslations({
         locale: opts.ctx.locale,
         namespace: "Assistant",
@@ -237,10 +234,10 @@ export async function* runAssistant(opts: {
       yield {
         type: "text",
         delta: t("noModelReply", {
-          next: asString(rec?.next, "connect_provider"),
-          providers: asNumber(rec?.providers, 0),
-          models: asNumber(rec?.models, 0),
-          keys: asNumber(rec?.keys, 0),
+          next: setup.next,
+          providers: setup.providers,
+          models: setup.models,
+          keys: setup.keys,
           setupHelp: t("setupHelp"),
         }),
       };

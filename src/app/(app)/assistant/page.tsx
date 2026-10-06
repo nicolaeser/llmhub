@@ -19,7 +19,9 @@ import PageHeader from "@/components/console/page-header";
 import { isActionFail } from "@/lib/http/action-result";
 import { useAssistantSession } from "@/app/(app)/_components/assistant-session";
 import { loadAssistantAction } from "./_action";
+import type { AssistantToolView } from "@/types/assistant";
 import AssistantComposer from "./_components/assistant-composer";
+import AssistantTools from "./_components/assistant-tools";
 import AssistantTranscript from "./_components/assistant-transcript";
 
 export default function AssistantPage() {
@@ -28,6 +30,8 @@ export default function AssistantPage() {
   const session = useAssistantSession();
   const chooseModel = session?.chooseModel;
   const [models, setModels] = useState<string[]>([]);
+  const [modelLocked, setModelLocked] = useState(false);
+  const [tools, setTools] = useState<AssistantToolView[]>([]);
   const [canWrite, setCanWrite] = useState(false);
   const [failure, setFailure] = useState("");
   const [loading, setLoading] = useState(true);
@@ -41,6 +45,8 @@ export default function AssistantPage() {
         setFailure(res.error);
       } else {
         setModels(res.models);
+        setModelLocked(res.modelLocked);
+        setTools(res.tools);
         setCanWrite(res.canWrite);
         chooseModel?.(res.models, res.defaultModel);
       }
@@ -124,7 +130,7 @@ export default function AssistantPage() {
           }}
           aria-label={t("model")}
           fullWidth
-          isDisabled={models.length === 0}
+          isDisabled={modelLocked || models.length === 0}
           placeholder={t("noModels")}
         >
           <Label>{t("model")}</Label>
@@ -142,6 +148,7 @@ export default function AssistantPage() {
               ))}
             </ListBox>
           </Select.Popover>
+          {modelLocked ? <Description>{t("modelLocked")}</Description> : null}
         </Select>
         <Switch
           isSelected={canWrite && session.allowWrite}
@@ -158,6 +165,7 @@ export default function AssistantPage() {
           <Description>{t("write.hint", { state: writeState })}</Description>
         </Switch>
       </div>
+      <AssistantTools tools={tools} allowWrite={canWrite && session.allowWrite} />
       <Card className="min-h-0 flex-1 gap-0 p-0">
         <AssistantTranscript
           messages={session.messages}

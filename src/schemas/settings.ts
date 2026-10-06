@@ -21,6 +21,7 @@ const text = z.string().trim().max(200);
 export const adminSettingsSchema = z.object({
   registration_enabled: z.boolean(),
   assistant_model: text,
+  assistant_model_locked: z.boolean().default(false),
   oidc: z.object({
     enabled: z.boolean(),
     issuer: optionalUrl,

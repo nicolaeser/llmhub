@@ -191,6 +191,11 @@ export default function RolesPage() {
                           {t("level", { level: "sensitive" })}
                         </Chip>
                       ) : null}
+                      {role.assistantToolsDisabled.length ? (
+                        <Chip size="sm" variant="soft">
+                          {t("toolsOff", { count: role.assistantToolsDisabled.length })}
+                        </Chip>
+                      ) : null}
                     </div>
                   </Table.Cell>
                   <Table.Cell>
