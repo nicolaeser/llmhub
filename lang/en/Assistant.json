@@ -32,11 +32,7 @@
   "toolOutput": "Output",
   "toolNoOutput": "{status, select, running {Waiting for the result…} other {No output}}",
   "openPage": "Open {page}",
-  "code": "Code",
-  "copyCode": "Copy code",
   "copyMessage": "Copy reply",
-  "image": "Image",
-  "table": "Table",
   "suggestions": {
     "setup": "What is missing to send a first request?",
     "keys": "How do API keys work?",
@@ -44,7 +40,5 @@
     "playground": "How do I test in the playground?"
   },
   "secretOnce": "New key secret. It is shown only once and never sent to the model.",
-  "copySecret": "Copy key secret",
-  "copied": "Copied",
-  "copyFailed": "Could not copy"
+  "copySecret": "Copy key secret"
 }

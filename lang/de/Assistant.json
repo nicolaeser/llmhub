@@ -32,11 +32,7 @@
   "toolOutput": "Ausgabe",
   "toolNoOutput": "{status, select, running {Warte auf das Ergebnis…} other {Keine Ausgabe}}",
   "openPage": "{page} öffnen",
-  "code": "Code",
-  "copyCode": "Code kopieren",
   "copyMessage": "Antwort kopieren",
-  "image": "Bild",
-  "table": "Tabelle",
   "suggestions": {
     "setup": "Was fehlt für die erste Anfrage?",
     "keys": "Wie funktionieren API-Keys?",
@@ -44,7 +40,5 @@
     "playground": "Wie teste ich in der Spielwiese?"
   },
   "secretOnce": "Neues Key-Secret. Es wird nur einmal angezeigt und nie an das Modell gesendet.",
-  "copySecret": "Key-Secret kopieren",
-  "copied": "Kopiert",
-  "copyFailed": "Kopieren fehlgeschlagen"
+  "copySecret": "Key-Secret kopieren"
 }

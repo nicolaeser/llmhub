@@ -1,11 +1,32 @@
 "use client";
 
-import type { ReactNode } from "react";
-import { Alert, Card, Chip, Modal, Separator, Spinner, Tabs, type useOverlayState } from "@heroui/react";
+import { useState, type ReactNode } from "react";
+import {
+  Alert,
+  Button,
+  Card,
+  Chip,
+  Dropdown,
+  Label,
+  Modal,
+  Separator,
+  Spinner,
+  Switch,
+  Tabs,
+  type useOverlayState,
+} from "@heroui/react";
+import { Braces, ChevronDown, Download, FileCode, FileText, type LucideIcon } from "lucide-react";
 import { useFormatter, useTranslations } from "next-intl";
+import Markdown from "@/components/console/markdown";
 import { splitPiiPlaceholders } from "@/lib/gateway/pii";
-import type { RequestLogDetail, TranscriptEntry } from "@/types/logs";
+import type { RequestLogDetail, RequestLogExportFormat, TranscriptEntry } from "@/types/logs";
 import PiiChip from "./pii-chip";
+
+const EXPORT_FORMATS: { id: RequestLogExportFormat; icon: LucideIcon }[] = [
+  { id: "pdf", icon: FileText },
+  { id: "md", icon: FileCode },
+  { id: "json", icon: Braces },
+];
 
 function PiiText({ text }: { text: string }) {
   const tPii = useTranslations("Guardrails");
@@ -24,7 +45,7 @@ function PiiText({ text }: { text: string }) {
   );
 }
 
-function Entry({ entry }: { entry: TranscriptEntry }) {
+function Entry({ entry, markdown }: { entry: TranscriptEntry; markdown: boolean }) {
   const t = useTranslations("Logs.detail");
   const heading =
     entry.kind === "tool_call"
@@ -47,9 +68,15 @@ function Entry({ entry }: { entry: TranscriptEntry }) {
       ) : entry.kind === "tool_call" || entry.kind === "tool_result" ? (
         <pre className="font-mono text-xs break-all whitespace-pre-wrap">{entry.text}</pre>
       ) : entry.kind === "reasoning" ? (
-        <div className="text-muted">
-          <PiiText text={entry.text} />
-        </div>
+        markdown ? (
+          <Markdown text={entry.text} pii muted />
+        ) : (
+          <div className="text-muted">
+            <PiiText text={entry.text} />
+          </div>
+        )
+      ) : markdown ? (
+        <Markdown text={entry.text} pii />
       ) : (
         <PiiText text={entry.text} />
       )}
@@ -80,6 +107,7 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
 
 function Content({ detail }: { detail: RequestLogDetail }) {
   const t = useTranslations("Logs.detail");
+  const [markdown, setMarkdown] = useState(true);
   if (!detail.content) {
     const message = !detail.canViewContent && detail.hasContent
       ? t("noPermission")
@@ -119,12 +147,20 @@ function Content({ detail }: { detail: RequestLogDetail }) {
         <Tabs.Panel id="conversation" className="space-y-4 pt-4">
           {input.length || output.length ? (
             <>
+              <Switch size="sm" isSelected={markdown} onChange={setMarkdown}>
+                <Switch.Content>
+                  <Switch.Control>
+                    <Switch.Thumb />
+                  </Switch.Control>
+                  <Label>{t("markdown")}</Label>
+                </Switch.Content>
+              </Switch>
               {input.map((entry, index) => (
-                <Entry key={`in-${index}`} entry={entry} />
+                <Entry key={`in-${index}`} entry={entry} markdown={markdown} />
               ))}
               {input.length && output.length ? <Separator /> : null}
               {output.map((entry, index) => (
-                <Entry key={`out-${index}`} entry={entry} />
+                <Entry key={`out-${index}`} entry={entry} markdown={markdown} />
               ))}
             </>
           ) : (
@@ -145,9 +181,11 @@ function Content({ detail }: { detail: RequestLogDetail }) {
 export default function LogDetailDialog({
   state,
   detail,
+  onExport,
 }: {
   state: ReturnType<typeof useOverlayState>;
   detail: RequestLogDetail | null;
+  onExport: (format: RequestLogExportFormat) => void;
 }) {
   const t = useTranslations("Logs");
   const tDetail = useTranslations("Logs.detail");
@@ -161,19 +199,47 @@ export default function LogDetailDialog({
   return (
     <Modal state={state}>
       <Modal.Backdrop>
-        <Modal.Container size="lg" scroll="inside">
-          <Modal.Dialog>
+        <Modal.Container scroll="inside">
+          <Modal.Dialog className="sm:min-w-lg sm:max-w-5xl">
             <Modal.CloseTrigger aria-label={tCommon("close")} />
             <Modal.Header>
-              <Modal.Heading>{tDetail("title")}</Modal.Heading>
-              {detail ? (
-                <p className="text-sm text-muted">
-                  {tDetail("subtitle", {
-                    model: detail.model,
-                    time: format.dateTime(new Date(detail.createdAt), "dateTime"),
-                  })}
-                </p>
-              ) : null}
+              <div className="flex flex-wrap items-start justify-between gap-3 pr-10">
+                <div className="min-w-0 space-y-1">
+                  <Modal.Heading>{tDetail("title")}</Modal.Heading>
+                  {detail ? (
+                    <p className="text-sm text-muted">
+                      {tDetail("subtitle", {
+                        model: detail.model,
+                        time: format.dateTime(new Date(detail.createdAt), "dateTime"),
+                      })}
+                    </p>
+                  ) : null}
+                </div>
+                {detail ? (
+                  <Dropdown>
+                    <Button size="sm" variant="secondary">
+                      <Download size={14} aria-hidden />
+                      {tDetail("export")}
+                      <ChevronDown size={14} aria-hidden />
+                    </Button>
+                    <Dropdown.Popover>
+                      <Dropdown.Menu
+                        aria-label={tDetail("export")}
+                        onAction={(key) => onExport(String(key) as RequestLogExportFormat)}
+                      >
+                        {EXPORT_FORMATS.map(({ id, icon: Icon }) => (
+                          <Dropdown.Item key={id} id={id} textValue={tDetail("exportFormat", { format: id })}>
+                            <div className="flex items-center gap-2">
+                              <Icon size={14} aria-hidden />
+                              <Label>{tDetail("exportFormat", { format: id })}</Label>
+                            </div>
+                          </Dropdown.Item>
+                        ))}
+                      </Dropdown.Menu>
+                    </Dropdown.Popover>
+                  </Dropdown>
+                ) : null}
+              </div>
             </Modal.Header>
             <Modal.Body className="space-y-5">
               {!detail ? (
