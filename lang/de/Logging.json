@@ -28,7 +28,7 @@
   "removeWebhook": "Webhook {position, number} entfernen",
   "events": "Events",
   "eventLabel": "{event, select, upstream_exhaustion {Upstream erschöpft} budget_threshold {Budget-Schwelle} provider_models_changed {Provider-Modelle geändert} other {Event}}",
-  "eventHint": "{event, select, upstream_exhaustion {Kein gesundes Deployment hat geantwortet oder der Upstream lieferte 5xx oder 429.} budget_threshold {Ein Key, Team, eine Organisation oder ein Projekt hat eine Budget-Alarmschwelle überschritten.} provider_models_changed {Der stündliche Sync hat hinzugefügte oder entfernte Provider-Modelle gefunden.} other {}}",
+  "eventHint": "{event, select, upstream_exhaustion {Kein gesundes Deployment hat geantwortet oder der Upstream lieferte 5xx oder 429.} budget_threshold {Ein Key, eine Person, ein Projekt, eine Abteilung oder ein Unternehmen hat eine Budget-Alarmschwelle überschritten.} provider_models_changed {Der stündliche Sync hat hinzugefügte oder entfernte Provider-Modelle gefunden.} other {}}",
   "eventsRequired": "Wähle mindestens ein Event.",
   "contentTitle": "Anfrageinhalte",
   "contentSubtitle": "Prompts und Antworten, die mit jedem Request-Log gespeichert werden.",

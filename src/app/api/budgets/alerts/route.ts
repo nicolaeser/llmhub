@@ -1,4 +1,4 @@
-import { saveBudgetAlertsAction } from "@/app/(app)/structure/_action";
+import { saveBudgetAlertsAction } from "@/app/(app)/companies/_action";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { managementRoute, readBody, respond, unwrap } from "@/lib/management/http";
 import { budgetAlertsSchema } from "@/schemas/management";

@@ -5,25 +5,25 @@ import {
   addBoostAction,
   deleteNodeAction,
   loadStructureAction,
-  placeMemberAction,
   removeBoostAction,
   saveBudgetAlertsAction,
+  saveMemberAction,
   saveOrgAction,
   saveProjectAction,
   saveTeamAction,
   setBudgetAction,
-} from "@/app/(app)/structure/_action";
+} from "@/app/(app)/companies/_action";
 import {
   boostToolInput,
   budgetAlertsToolInput,
   deleteNodeToolInput,
-  placeMemberToolInput,
   removeBoostToolInput,
   saveNodeToolInput,
   setBudgetToolInput,
   structureToolInput,
 } from "@/schemas/assistant";
 import { defineTool, needsConfirmation, toolFail, viaAction } from "@/lib/assistant/tools/define";
+import { isActionFail } from "@/lib/http/action-result";
 import type { AssistantToolResult } from "@/types/assistant";
 import type { ActionFail } from "@/types/actions";
 import type { BudgetResult, BudgetView, NodeKind, StructurePayload } from "@/types/structure";
@@ -57,25 +57,36 @@ function compactStructure(payload: StructurePayload) {
     projects: payload.projects.map((row) => ({
       id: row.id,
       alias: row.alias,
+      orgId: row.orgId,
       teamId: row.teamId,
       owner: row.owner,
       budget: budget(row.budget),
     })),
-    users: payload.users.map((row) => ({
+    members: payload.members.map((row) => ({
       id: row.id,
-      username: row.username,
+      name: row.alias,
       orgId: row.orgId,
       teamId: row.teamId,
       blocked: row.blocked,
+      logContent: row.logContent,
+      budget: budget(row.budget),
+    })),
+    users: payload.users.map((row) => ({
+      id: row.id,
+      username: row.alias,
+      orgId: row.orgId,
       budget: budget(row.budget),
     })),
     keys: payload.keys.map((row) => ({
       id: row.id,
       alias: row.alias,
       prefix: row.prefix,
-      userId: row.userId,
+      binding: row.memberId ? "member" : row.projectId ? "project" : "internal",
+      orgId: row.orgId,
       teamId: row.teamId,
       projectId: row.projectId,
+      memberId: row.memberId,
+      userId: row.userId,
       blocked: row.blocked,
       budget: budget(row.budget),
     })),
@@ -86,54 +97,86 @@ const KIND_FIELD = {
   org: "orgs",
   team: "teams",
   project: "projects",
+  member: "members",
   user: "users",
   key: "keys",
 } as const;
 
-function savedNode(kind: NodeKind, alias: string, parentId: string) {
+function idsOf(payload: StructurePayload, kind: NodeKind): string[] {
+  const rows =
+    kind === "org"
+      ? payload.orgs
+      : kind === "team"
+        ? payload.teams
+        : kind === "project"
+          ? payload.projects
+          : payload.members;
+  return rows.map((row) => row.id);
+}
+
+function savedNode(kind: NodeKind, id: string, before: Set<string>) {
   return (payload: StructurePayload): AssistantToolResult => {
     const compact = compactStructure(payload);
-    const node =
-      kind === "org"
-        ? compact.orgs.find((row) => row.alias === alias)
-        : kind === "team"
-          ? compact.teams.find((row) => row.alias === alias && row.orgId === parentId)
-          : compact.projects.find((row) => row.alias === alias && row.teamId === parentId);
-    return { result: { ok: true, kind, node: node ?? null }, navigate: "/structure" };
+    const nodeId = id || idsOf(payload, kind).find((row) => !before.has(row)) || "";
+    const rows: { id: string }[] = compact[KIND_FIELD[kind]];
+    const node = rows.find((row) => row.id === nodeId) ?? null;
+    return { result: { ok: true, kind, node }, navigate: nodeId ? `/companies?node=${kind}:${nodeId}` : "/companies" };
   };
 }
 
 async function saveNode(args: z.output<typeof saveNodeToolInput>): Promise<AssistantToolResult> {
   const id = args.id ?? "";
+  const current = await loadStructureAction();
+  const before = new Set(isActionFail(current) ? [] : idsOf(current, args.kind));
   if (args.kind === "org") {
     const existing = id ? await prisma.organization.findUnique({ where: { id } }) : null;
     if (id && !existing) return toolFail("not_found");
-    const alias = args.alias ?? existing?.alias ?? "";
-    return viaAction(saveOrgAction({ id, alias }), savedNode("org", alias, ""));
+    return viaAction(
+      saveOrgAction({ id, alias: args.alias ?? existing?.alias ?? "" }),
+      savedNode("org", id, before),
+    );
   }
   if (args.kind === "team") {
     const existing = id ? await prisma.team.findUnique({ where: { id } }) : null;
     if (id && !existing) return toolFail("not_found");
-    const alias = args.alias ?? existing?.alias ?? "";
-    const orgId = args.orgId ?? existing?.orgId ?? "";
     return viaAction(
       saveTeamAction({
         id,
-        alias,
-        orgId,
+        alias: args.alias ?? existing?.alias ?? "",
+        orgId: args.orgId ?? existing?.orgId ?? "",
         rpm: args.rpm ?? existing?.rpmLimit ?? 0,
         tpm: args.tpm ?? existing?.tpmLimit ?? 0,
       }),
-      savedNode("team", alias, orgId),
+      savedNode("team", id, before),
     );
   }
-  const existing = id ? await prisma.project.findUnique({ where: { id } }) : null;
+  if (args.kind === "project") {
+    const existing = id ? await prisma.project.findUnique({ where: { id } }) : null;
+    if (id && !existing) return toolFail("not_found");
+    return viaAction(
+      saveProjectAction({
+        id,
+        alias: args.alias ?? existing?.alias ?? "",
+        orgId: args.orgId ?? existing?.orgId ?? "",
+        teamId: args.teamId ?? existing?.teamId ?? "",
+        owner: args.owner ?? existing?.owner ?? "",
+      }),
+      savedNode("project", id, before),
+    );
+  }
+  const existing = id ? await prisma.member.findUnique({ where: { id } }) : null;
   if (id && !existing) return toolFail("not_found");
-  const alias = args.alias ?? existing?.alias ?? "";
-  const teamId = args.teamId ?? existing?.teamId ?? "";
   return viaAction(
-    saveProjectAction({ id, alias, teamId, owner: args.owner ?? existing?.owner ?? "" }),
-    savedNode("project", alias, teamId),
+    saveMemberAction({
+      id,
+      alias: args.alias ?? existing?.name ?? "",
+      email: args.email ?? existing?.email ?? "",
+      orgId: args.orgId ?? existing?.orgId ?? "",
+      teamId: args.teamId ?? existing?.teamId ?? "",
+      blocked: args.blocked ?? existing?.blocked ?? false,
+      logContent: args.logContent ?? existing?.logContent ?? true,
+    }),
+    savedNode("member", id, before),
   );
 }
 
@@ -146,7 +189,7 @@ function budgetSaved(pending: Promise<BudgetResult | ActionFail>) {
 export const structureTools = {
   get_structure: defineTool({
     description:
-      "Organizations, teams (with RPM and TPM limits), projects, users, and keys with their ids, parents, and budgets (cap, spend, period, boosts, percent used, forecast). Pass kind to keep the answer short.",
+      "Customer companies (org) with their departments (team, with RPM and TPM limits), projects, people (member, the company's own users), console users, and keys with ids, parents, key binding (project, member, or internal), and budgets (cap, spend, period, boosts, percent used, forecast). Pass kind to keep the answer short.",
     input: structureToolInput,
     run: async ({ kind }) =>
       viaAction(loadStructureAction(), (payload) => {
@@ -157,38 +200,30 @@ export const structureTools = {
   }),
   save_structure_node: defineTool({
     description:
-      "Create or update an organization, team, or project. Teams need an organization, projects need a team. Omitted fields keep their current value on update.",
+      "Create or update a company (org), department (team), project, or person (member). Departments, projects, and people need orgId when created and stay in that company; projects and people may sit in a department of the same company. Omitted fields keep their current value on update.",
     input: saveNodeToolInput,
     run: async (args) => saveNode(args),
   }),
   delete_structure_node: defineTool({
     description:
-      "Delete an organization, team, or project. Organizations and teams must have no teams or projects left. Destructive: ask first and pass confirm only after the operator agreed.",
+      "Delete a company, department, project, or person. A company must be empty first. Deleting a department keeps its projects and people in the company. Deleting a project or person revokes its keys. Destructive: ask first and pass confirm only after the operator agreed.",
     input: deleteNodeToolInput,
     run: async ({ kind, id, confirm }) =>
       needsConfirmation(confirm) ??
-      viaAction(deleteNodeAction({ kind, id }), () => ({ result: { ok: true, kind, id }, navigate: "/structure" })),
-  }),
-  place_member: defineTool({
-    description: "Move a user into a team (which also sets the organization), into an organization only, or out of both.",
-    input: placeMemberToolInput,
-    run: async ({ userId, teamId, orgId }) =>
-      viaAction(placeMemberAction({ userId, teamId, orgId }), (payload) => {
-        const user = payload.users.find((row) => row.id === userId);
-        return {
-          result: { ok: true, userId, teamId: user?.teamId ?? teamId, orgId: user?.orgId ?? orgId },
-          navigate: "/structure",
-        };
-      }),
+      viaAction(deleteNodeAction({ kind, id }), () => ({
+        result: { ok: true, kind, id },
+        navigate: "/companies",
+      })),
   }),
   set_budget: defineTool({
     description:
-      "Set the spend cap and reset period of an organization, team, project, user, or key. A cap cannot exceed a capped parent.",
+      "Set the spend cap and reset period of a company, department, project, person, console user, or key. A cap cannot exceed a capped parent.",
     input: setBudgetToolInput,
     run: async (args) => budgetSaved(setBudgetAction(args)),
   }),
   add_budget_boost: defineTool({
-    description: "Add a temporary budget boost on a capped organization, team, project, user, or key for up to 720 hours.",
+    description:
+      "Add a temporary budget boost on a capped company, department, project, person, console user, or key for up to 720 hours.",
     input: boostToolInput,
     run: async (args) => budgetSaved(addBoostAction(args)),
   }),

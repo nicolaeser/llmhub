@@ -20,7 +20,7 @@ export default function ChildrenCard({
   onOpen: (ref: NodeRef) => void;
   onAdd: () => void;
 }) {
-  const t = useTranslations("Structure.children");
+  const t = useTranslations("Companies.children");
   const format = useFormatter();
   const Icon = kind === "team" ? Users : Folder;
   const allocated = rows.reduce((sum, row) => sum + row.budget.maxBudget, 0);

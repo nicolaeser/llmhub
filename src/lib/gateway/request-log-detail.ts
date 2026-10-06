@@ -2,17 +2,18 @@ import "server-only";
 
 import prisma from "@/lib/db/prisma";
 import { hasPerm, PERMISSIONS } from "@/lib/auth/permissions";
-import { seesAllSpend } from "@/lib/auth/scope";
+import { spendScope } from "@/lib/auth/scope";
 import { requestTranscript, responseTranscript } from "@/lib/gateway/log-content";
 import { money } from "@/lib/utils/money";
 import type { RequestLog } from "@/generated/prisma/client";
 import type { AuthenticatedSession } from "@/types/auth";
 import type { RequestLogDetail, RequestLogRow } from "@/types/logs";
 
-export async function requestLogLabels(rows: { keyId: string; userId: string }[]) {
+export async function requestLogLabels(rows: { keyId: string; userId: string; memberId: string }[]) {
   const keyIds = [...new Set(rows.map((row) => row.keyId).filter(Boolean))];
   const userIds = [...new Set(rows.map((row) => row.userId).filter(Boolean))];
-  const [keys, users] = await Promise.all([
+  const memberIds = [...new Set(rows.map((row) => row.memberId).filter(Boolean))];
+  const [keys, users, members] = await Promise.all([
     keyIds.length
       ? prisma.virtualKey.findMany({
           where: { id: { in: keyIds } },
@@ -22,10 +23,14 @@ export async function requestLogLabels(rows: { keyId: string; userId: string }[]
     userIds.length
       ? prisma.user.findMany({ where: { id: { in: userIds } }, select: { id: true, username: true } })
       : [],
+    memberIds.length
+      ? prisma.member.findMany({ where: { id: { in: memberIds } }, select: { id: true, name: true } })
+      : [],
   ]);
   return {
     keys: new Map(keys.map((key) => [key.id, key.keyAlias || key.prefix])),
     users: new Map(users.map((user) => [user.id, user.username])),
+    members: new Map(members.map((member) => [member.id, member.name])),
   };
 }
 
@@ -46,6 +51,8 @@ export function requestLogRow(
     keyLabel: names.keys.get(row.keyId) ?? "",
     userId: row.userId,
     userLabel: names.users.get(row.userId) ?? "",
+    memberId: row.memberId,
+    memberLabel: names.members.get(row.memberId) ?? "",
     teamId: row.teamId,
     orgId: row.orgId,
     projectId: row.projectId,
@@ -66,7 +73,7 @@ export async function findRequestLogDetail(
 ): Promise<RequestLogDetail | null> {
   const canViewContent = hasPerm(session.permissions, PERMISSIONS.LOGS_CONTENT);
   const row = await prisma.requestLog.findFirst({
-    where: { id, ...(seesAllSpend(session) ? {} : { userId: session.user.id }) },
+    where: { id, ...spendScope(session) },
     include: { content: { select: { logId: true } } },
   });
   if (!row) return null;

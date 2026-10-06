@@ -74,8 +74,9 @@ async function requestLogDocument(detail: RequestLogDetail): Promise<RequestLogD
       { label: tDetail("tag"), value: detail.tag || none },
       { label: tDetail("key"), value: label(detail.keyLabel, detail.keyId) },
       { label: tDetail("user"), value: label(detail.userLabel, detail.userId) },
-      { label: tDetail("team"), value: label(detail.teamLabel, detail.teamId) },
+      { label: tDetail("member"), value: label(detail.memberLabel, detail.memberId) },
       { label: t("columns.org"), value: label(detail.orgLabel, detail.orgId) },
+      { label: tDetail("team"), value: label(detail.teamLabel, detail.teamId) },
       { label: t("columns.project"), value: label(detail.projectLabel, detail.projectId) },
       { label: t("columns.latency"), value: t("latencyMs", { value: detail.latencyMs }) },
       {

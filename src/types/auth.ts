@@ -180,5 +180,6 @@ export type VerifiedOidcState = {
 export type TargetRow = {
   id: string;
   isOwner: boolean;
+  orgId: string | null;
   role: { permissions: string[] } | null;
 };

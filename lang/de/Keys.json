@@ -1,6 +1,6 @@
 {
   "title": "API-Keys",
-  "subtitle": "Keys authentifizieren Anwendungen an der /v1-API.",
+  "subtitle": "Keys authentifizieren Anwendungen an der /v1-API. Jeder Key gehört zu einem Projekt oder einer Person eines Unternehmens, oder intern zu dir.",
   "create": "Schlüssel erstellen",
   "gettingStarted": {
     "title": "Erste Schritte",
@@ -24,17 +24,14 @@
   "secretHint": "Der vollständige Schlüssel wird nur dieses eine Mal angezeigt.",
   "columns": {
     "name": "Schlüsselname",
-    "secret": "Geheimnis",
+    "binding": "Gehört zu",
     "spend": "Ausgaben / Budget",
     "status": "Status",
     "access": "Modellzugriff"
   },
   "fields": {
     "alias": "Key-Name",
-    "team": "Team",
-    "personal": "Persönlich (wird deinem Team berechnet)",
-    "project": "Projekt",
-    "noProject": "Kein Projekt",
+    "binding": "Gehört zu",
     "access": "Modellzugriff",
     "templates": "Modellvorlagen",
     "templatesHint": "Regeln aus Vorlagen bleiben aktuell, wenn sich Modelle ändern. <link>Vorlagen verwalten</link>",
@@ -67,5 +64,15 @@
   "allModels": "Alle Modelle",
   "modelCount": "{count, plural, one {# Modell} other {# Modelle}}",
   "budget": "Budget festlegen",
-  "contentOff": "Inhalte nicht protokolliert"
+  "contentOff": "Inhalte nicht protokolliert",
+  "binding": {
+    "kind": "{kind, select, project {Projekt} member {Person} other {Intern}}",
+    "hint": "{kind, select, project {Für eine Anwendung. Wird dem Projekt, seiner Abteilung und dem Unternehmen berechnet.} member {Persönlicher Key für einen Benutzer des Unternehmens. Wird der Person, ihrer Abteilung und dem Unternehmen berechnet.} other {{scope, select, company {Für deine eigene Nutzung. Wird deinem Budget und deinem Unternehmen berechnet.} other {Für deine eigene Nutzung. Wird deinem persönlichen Budget berechnet, keinem Kunden.}}}}",
+    "pick": "{kind, select, project {Projekt wählen} other {Person wählen}}",
+    "place": "{hasTeam, select, yes {{org} › {team}} other {{org}}}",
+    "path": "{kind, select, project {Projekt} member {Person} other {Intern}}{hasPlace, select, yes { · {place}} other {}}",
+    "targetHint": "{kind, select, project {Budgets und Limits von Projekt, Abteilung und Unternehmen gelten.} other {Budgets und Limits von Person, Abteilung und Unternehmen gelten.}}",
+    "empty": "{kind, select, project {Noch keine Projekte. Lege eines unter <link>Unternehmen</link> an.} other {Noch keine Personen. Lege eine unter <link>Unternehmen</link> an.}}",
+    "locked": "Projekt- und Personen-Keys erfordern die Berechtigung Unternehmen verwalten. Du kannst interne Keys für dich selbst erstellen."
+  }
 }

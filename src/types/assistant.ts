@@ -98,9 +98,10 @@ export type AssistantWireMessage =
 
 export type UsageBreakdownGroup =
   | "model"
-  | "team"
   | "org"
+  | "team"
   | "project"
+  | "member"
   | "key"
   | "user";
 
@@ -164,7 +165,6 @@ export type AssistantToolName =
   | "get_structure"
   | "save_structure_node"
   | "delete_structure_node"
-  | "place_member"
   | "set_budget"
   | "add_budget_boost"
   | "remove_budget_boost"
@@ -208,8 +208,7 @@ export type AssistantContext = {
   userId: string;
   permissions: Permission[];
   disabledTools: AssistantToolName[];
-  teamId: string;
-  orgId: string;
+  orgId: string | null;
   locale: AssistantLocale;
   allowWrite: boolean;
 };

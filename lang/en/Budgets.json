@@ -1,11 +1,11 @@
 {
   "title": "Budget for {alias}",
-  "kindHint": "{kind, select, org {Organization budget. Caps everything inside it.} team {Team budget. Shared by its members, projects, and keys.} project {Project budget. Caps the keys in this project.} user {Personal budget. Caps this person across all their keys.} key {Key budget. Caps this key only.} other {Budget}}",
+  "kindHint": "{kind, select, org {Company budget. Caps everything inside it.} team {Department budget. Shared by its projects, people, and their keys.} project {Project budget. Caps the keys of this project.} member {Personal budget. Caps this person across all their keys.} user {Console user budget. Caps their playground use and internal keys.} key {Key budget. Applies to this key only.} other {Budget}}",
   "limitSpend": "Limit spending",
   "amount": "Spending limit",
   "amountHint": "Requests are blocked once spend reaches this amount.",
   "amountInvalid": "Enter an amount above zero.",
-  "exceedsParent": "Higher than the {kind, select, org {organization} team {team} project {project} user {person} key {key} other {parent}} {alias} ({cap, number, currency}). Lower it or raise that budget first.",
+  "exceedsParent": "Higher than {kind, select, org {the company} team {the department} project {the project} member {the person} user {the console user} key {the key} other {the level above}} {alias} ({cap, number, currency}). Lower the amount or raise that budget first.",
   "presets": "Quick amounts",
   "unlimitedHint": "No own cap. Budgets above this level still apply.",
   "period": "Reset period",

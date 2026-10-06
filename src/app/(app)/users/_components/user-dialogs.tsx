@@ -4,7 +4,6 @@ import { useState, useTransition } from "react";
 import {
   Button,
   Description,
-  Disclosure,
   Input,
   Label,
   ListBox,
@@ -24,7 +23,7 @@ import { useSecurityError } from "@/components/security/use-security-error";
 import type { RoleOption } from "@/types/auth";
 import type { ConsoleUser, UsersConsolePayload } from "@/types/users";
 import {
-  assignUserRoleAction,
+  assignUserAccessAction,
   createUserAction,
   deleteUserAction,
   setUserPasswordAction,
@@ -77,17 +76,58 @@ function RoleSelect({
   );
 }
 
+function AccessSelect({
+  orgs,
+  value,
+  onChange,
+  isDisabled,
+}: {
+  orgs: UsersConsolePayload["orgs"];
+  value: string;
+  onChange: (id: string) => void;
+  isDisabled: boolean;
+}) {
+  const t = useTranslations("Users");
+  return (
+    <Select
+      selectedKey={value || "platform"}
+      onSelectionChange={(key) => onChange(key == null || key === "platform" ? "" : String(key))}
+      isDisabled={isDisabled}
+      fullWidth
+    >
+      <Label>{t("fields.access")}</Label>
+      <Select.Trigger>
+        <Select.Value />
+        <Select.Indicator />
+      </Select.Trigger>
+      <Select.Popover>
+        <ListBox aria-label={t("fields.access")}>
+          <ListBox.Item id="platform" textValue={t("access", { scope: "platform", org: "" })}>
+            {t("access", { scope: "platform", org: "" })}
+            <ListBox.ItemIndicator />
+          </ListBox.Item>
+          {orgs.map((org) => (
+            <ListBox.Item key={org.id} id={org.id} textValue={org.alias}>
+              {t("access", { scope: "company", org: org.alias })}
+              <ListBox.ItemIndicator />
+            </ListBox.Item>
+          ))}
+        </ListBox>
+      </Select.Popover>
+      <Description>{t("fields.accessHint", { scope: value ? "company" : "platform" })}</Description>
+    </Select>
+  );
+}
+
 export function CreateUserDialog({
   state,
   roles,
   orgs,
-  teams,
   onSaved,
 }: {
   state: OverlayState;
   roles: RoleOption[];
   orgs: UsersConsolePayload["orgs"];
-  teams: UsersConsolePayload["teams"];
   onSaved: (payload: UsersConsolePayload) => void;
 }) {
   const t = useTranslations("Users");
@@ -98,12 +138,11 @@ export function CreateUserDialog({
   const [password, setPassword] = useState("");
   const [roleId, setRoleId] = useState(() => defaultRoleId(roles));
   const [orgId, setOrgId] = useState("");
-  const [teamId, setTeamId] = useState("");
   const [pending, start] = useTransition();
 
   function save(close: () => void) {
     start(async () => {
-      const result = await createUserAction({ username, email, password, roleId, orgId, teamId });
+      const result = await createUserAction({ username, email, password, roleId, orgId });
       if (isActionFail(result)) {
         toast.danger(errorText(result.error));
         return;
@@ -139,84 +178,7 @@ export function CreateUserDialog({
                     <Description>{t("initialPasswordHint")}</Description>
                   </TextField>
                   <RoleSelect roles={roles} value={roleId} onChange={setRoleId} isDisabled={pending} />
-                  <Disclosure>
-                    <Disclosure.Heading>
-                      <Disclosure.Trigger className="flex w-full items-center justify-between text-sm text-muted">
-                        {tCommon("advanced")}
-                        <Disclosure.Indicator />
-                      </Disclosure.Trigger>
-                    </Disclosure.Heading>
-                    <Disclosure.Content>
-                      <Disclosure.Body className="space-y-4 pt-3">
-                        <Select
-                          selectedKey={orgId || "none"}
-                          onSelectionChange={(key) => {
-                            const next = String(key) === "none" ? "" : String(key);
-                            setOrgId(next);
-                            if (next && teams.find((team) => team.id === teamId)?.orgId !== next) {
-                              setTeamId("");
-                            }
-                          }}
-                          isDisabled={pending}
-                          fullWidth
-                        >
-                          <Label>{t("fields.org")}</Label>
-                          <Select.Trigger>
-                            <Select.Value />
-                            <Select.Indicator />
-                          </Select.Trigger>
-                          <Select.Popover>
-                            <ListBox aria-label={t("fields.org")}>
-                              <ListBox.Item id="none" textValue={t("fields.none")}>
-                                {t("fields.none")}
-                                <ListBox.ItemIndicator />
-                              </ListBox.Item>
-                              {orgs.map((org) => (
-                                <ListBox.Item key={org.id} id={org.id} textValue={org.alias}>
-                                  {org.alias}
-                                  <ListBox.ItemIndicator />
-                                </ListBox.Item>
-                              ))}
-                            </ListBox>
-                          </Select.Popover>
-                          <Description>{t("fields.orgHint")}</Description>
-                        </Select>
-                        <Select
-                          selectedKey={teamId || "none"}
-                          onSelectionChange={(key) => {
-                            const next = teams.find((team) => team.id === String(key));
-                            setTeamId(next?.id ?? "");
-                            if (next?.orgId) setOrgId(next.orgId);
-                          }}
-                          isDisabled={pending}
-                          fullWidth
-                        >
-                          <Label>{t("fields.team")}</Label>
-                          <Select.Trigger>
-                            <Select.Value />
-                            <Select.Indicator />
-                          </Select.Trigger>
-                          <Select.Popover>
-                            <ListBox aria-label={t("fields.team")}>
-                              <ListBox.Item id="none" textValue={t("fields.none")}>
-                                {t("fields.none")}
-                                <ListBox.ItemIndicator />
-                              </ListBox.Item>
-                              {teams
-                                .filter((team) => !orgId || team.orgId === orgId)
-                                .map((team) => (
-                                  <ListBox.Item key={team.id} id={team.id} textValue={team.alias}>
-                                    {team.alias}
-                                    <ListBox.ItemIndicator />
-                                  </ListBox.Item>
-                                ))}
-                            </ListBox>
-                          </Select.Popover>
-                          <Description>{t("fields.teamHint")}</Description>
-                        </Select>
-                      </Disclosure.Body>
-                    </Disclosure.Content>
-                  </Disclosure>
+                  <AccessSelect orgs={orgs} value={orgId} onChange={setOrgId} isDisabled={pending} />
                 </Modal.Body>
                 <Modal.Footer>
                   <Button variant="tertiary" onPress={close} isDisabled={pending}>
@@ -244,29 +206,34 @@ export function CreateUserDialog({
   );
 }
 
-export function ChangeRoleDialog({
+export function ChangeAccessDialog({
   state,
   target,
   roles,
+  orgs,
   onSaved,
 }: {
   state: OverlayState;
   target: ConsoleUser | null;
   roles: RoleOption[];
+  orgs: UsersConsolePayload["orgs"];
   onSaved: (payload: UsersConsolePayload) => void;
 }) {
   const t = useTranslations("Users");
   const tCommon = useTranslations("Common");
   const errorText = useSecurityError();
   const [roleId, setRoleId] = useState(target?.roleId ?? "");
+  const [orgId, setOrgId] = useState(target?.orgId ?? "");
   const [pending, start] = useTransition();
+  const changed = roleId !== target?.roleId || orgId !== (target?.orgId ?? "");
 
   function save(close: () => void) {
     if (!target) return;
     start(async () => {
-      const result = await assignUserRoleAction({
+      const result = await assignUserAccessAction({
         userId: target.id,
         roleId,
+        orgId,
         revision: target.revision,
       });
       if (isActionFail(result)) {
@@ -291,6 +258,7 @@ export function ChangeRoleDialog({
                 </Modal.Header>
                 <Modal.Body className="space-y-4">
                   <RoleSelect roles={roles} value={roleId} onChange={setRoleId} isDisabled={pending} />
+                  <AccessSelect orgs={orgs} value={orgId} onChange={setOrgId} isDisabled={pending} />
                   <p className="text-xs text-muted">{t("changeRoleHint")}</p>
                 </Modal.Body>
                 <Modal.Footer>
@@ -299,7 +267,7 @@ export function ChangeRoleDialog({
                   </Button>
                   <Button
                     isPending={pending}
-                    isDisabled={!roleId || roleId === target?.roleId}
+                    isDisabled={!roleId || !changed}
                     onPress={() => save(close)}
                   >
                     {({ isPending }) => (

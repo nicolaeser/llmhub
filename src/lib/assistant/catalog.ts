@@ -52,7 +52,6 @@ export const assistantToolCatalog = {
   get_structure: meta("structure", "read", "tenancy:read"),
   save_structure_node: meta("structure", "write", "tenancy:manage"),
   delete_structure_node: meta("structure", "destructive", "tenancy:manage"),
-  place_member: meta("structure", "write", "tenancy:manage"),
   set_budget: meta("structure", "write", "budgets:manage"),
   add_budget_boost: meta("structure", "write", "budgets:manage"),
   remove_budget_boost: meta("structure", "write", "budgets:manage"),

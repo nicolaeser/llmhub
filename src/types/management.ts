@@ -45,6 +45,7 @@ export type UsageSource = {
   teamId: string;
   orgId: string;
   projectId: string;
+  memberId: string;
   keyId: string;
   userId: string;
   spend: number;
@@ -59,6 +60,7 @@ export type UsageSource = {
   byTeam: SliceRow[];
   byOrg: SliceRow[];
   byProject: SliceRow[];
+  byMember: SliceRow[];
   byKey: SliceRow[];
   byUser: SliceRow[];
   chargeback: SliceRow[];

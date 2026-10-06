@@ -1,6 +1,11 @@
-import type { SliceRow, UsageSlice } from "@/types/gateway";
+import type { ChargebackParts, SliceRow, UsageSlice } from "@/types/gateway";
 
-type SliceKey = keyof Pick<UsageSlice, "model" | "teamId" | "orgId" | "projectId" | "keyId" | "userId">;
+type SliceKey = keyof Pick<
+  UsageSlice,
+  "model" | "teamId" | "orgId" | "projectId" | "memberId" | "keyId" | "userId"
+>;
+
+const CHARGEBACK_PARTS = ["orgId", "teamId", "projectId", "memberId", "keyId", "userId", "model"] as const;
 
 function rollUp(rows: UsageSlice[], nameOf: (row: UsageSlice) => string): SliceRow[] {
   const map = new Map<string, Required<SliceRow> & { latencySum: number }>();
@@ -48,10 +53,18 @@ export function groupRequestHealth(rows: UsageSlice[], key: SliceKey): SliceRow[
 
 export function chargebackRows(rows: UsageSlice[]): SliceRow[] {
   return rollUp(rows.filter(billable), (row) =>
-    [row.orgId, row.teamId, row.projectId, row.keyId, row.userId, row.model]
-      .map((part) => part || "-")
-      .join("/"),
+    CHARGEBACK_PARTS.map((part) => row[part] || "-").join("/"),
   ).sort((a, b) => b.spend - a.spend);
+}
+
+export function chargebackParts(name: string): ChargebackParts {
+  const values = name.split("/");
+  const parts = {} as ChargebackParts;
+  CHARGEBACK_PARTS.forEach((part, index) => {
+    const value = values[index];
+    parts[part] = value && value !== "-" ? value : "";
+  });
+  return parts;
 }
 
 export function percentileIndex(count: number, p: number): number {

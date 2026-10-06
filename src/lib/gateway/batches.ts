@@ -81,6 +81,7 @@ function snapshotOf(principal: Principal): BatchSnapshot {
     teamId: principal.teamId,
     orgId: principal.orgId,
     userId: principal.userId,
+    memberId: principal.memberId,
     models: principal.models,
   };
 }
@@ -95,6 +96,7 @@ async function restorePrincipal(meta: JsonMap): Promise<Principal | null> {
     teamId: String(snap.teamId ?? ""),
     orgId: String(snap.orgId ?? ""),
     userId: String(snap.userId ?? ""),
+    memberId: String(snap.memberId ?? ""),
     models: Array.isArray(snap.models) ? snap.models.filter((m): m is string => typeof m === "string") : [],
   };
 }

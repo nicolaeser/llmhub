@@ -6,7 +6,7 @@ import { createKeySchema, updateKeySchema } from "@/schemas/keys";
 import type { ZodType } from "zod";
 import { requirePermission } from "@/lib/auth/guards";
 import { hasPerm, PERMISSIONS } from "@/lib/auth/permissions";
-import { keyVisibleTo, seesAllSpend } from "@/lib/auth/scope";
+import { companyOf, inCompany, keyVisibleTo, spendScope } from "@/lib/auth/scope";
 import {
   chargebackRows,
   groupRequestHealth,
@@ -17,32 +17,41 @@ import { actionFail, runAction } from "@/lib/http/action-result";
 import { listKeys, toKeyView } from "@/app/(app)/_data";
 import { writeAudit } from "@/lib/gateway/audit";
 import { usageSlices, usageTotals } from "@/lib/gateway/usage-totals";
+import { isInternalKey } from "@/lib/gateway/key-tenancy";
 import { loadModelPolicies, templateRuleSelect } from "@/lib/gateway/model-access";
 import { templateModels, templateRulesOf } from "@/lib/gateway/model-policy";
 import type { UsageSlice } from "@/types/gateway";
 import type { AuthenticatedSession } from "@/types/auth";
 
-async function keyTenancy(session: AuthenticatedSession, teamId: string, projectId: string) {
-  const project = projectId
-    ? await prisma.project.findUnique({ where: { id: projectId }, select: { id: true, teamId: true } })
-    : null;
-  if (projectId && !project) throw new Error("PROJECT_NOT_FOUND");
-  if (project?.teamId && teamId && project.teamId !== teamId) {
-    throw new Error("PROJECT_TEAM_MISMATCH");
+async function keyBinding(
+  session: AuthenticatedSession,
+  projectId: string,
+  memberId: string,
+  current: { projectId: string | null; memberId: string | null } | null = null,
+) {
+  if (projectId && memberId) throw new Error("KEY_BINDING_CONFLICT");
+  const unchanged =
+    current !== null && (current.projectId ?? "") === projectId && (current.memberId ?? "") === memberId;
+  if ((projectId || memberId) && !unchanged && !hasPerm(session.permissions, PERMISSIONS.TENANCY_MANAGE)) {
+    throw new Error("FORBIDDEN");
   }
-  const wantedTeam = project?.teamId ?? teamId;
-  const team = wantedTeam
-    ? await prisma.team.findUnique({ where: { id: wantedTeam }, select: { id: true, orgId: true } })
-    : null;
-  if (wantedTeam && !team) throw new Error("TEAM_NOT_FOUND");
-  if (
-    team &&
-    team.id !== session.user.teamId &&
-    !hasPerm(session.permissions, PERMISSIONS.TENANCY_MANAGE)
-  ) {
-    throw new Error("TEAM_NOT_MEMBER");
+  if (projectId) {
+    const project = await prisma.project.findUnique({
+      where: { id: projectId },
+      select: { id: true, orgId: true, teamId: true },
+    });
+    if (!project?.orgId || !inCompany(session, project.orgId)) throw new Error("PROJECT_NOT_FOUND");
+    return { projectId: project.id, memberId: null, teamId: project.teamId, orgId: project.orgId };
   }
-  return { teamId: team?.id ?? null, orgId: team?.orgId ?? null, projectId: project?.id ?? null };
+  if (memberId) {
+    const member = await prisma.member.findUnique({
+      where: { id: memberId },
+      select: { id: true, orgId: true, teamId: true },
+    });
+    if (!member || !inCompany(session, member.orgId)) throw new Error("MEMBER_NOT_FOUND");
+    return { projectId: null, memberId: member.id, teamId: member.teamId, orgId: member.orgId };
+  }
+  return null;
 }
 
 function parseKeyInput<T>(schema: ZodType<T>, raw: unknown): T {
@@ -65,7 +74,12 @@ export async function createKeyAction(raw: unknown) {
   return runAction(async () => {
     const session = await requirePermission(PERMISSIONS.KEYS_MANAGE);
     const input = parseKeyInput(createKeySchema, raw);
-    const tenancy = await keyTenancy(session, input.teamId, input.projectId);
+    const tenancy = (await keyBinding(session, input.projectId, input.memberId)) ?? {
+      projectId: null,
+      memberId: null,
+      teamId: null,
+      orgId: companyOf(session),
+    };
     const templates = await keyTemplates(input.templateIds);
     const secret = `sk-hub-${randomToken()}`;
     const row = await prisma.virtualKey.create({
@@ -108,8 +122,13 @@ export async function updateKeyAction(raw: unknown) {
     const session = await requirePermission(PERMISSIONS.KEYS_MANAGE);
     const input = parseKeyInput(updateKeySchema, raw);
     const existing = await prisma.virtualKey.findUnique({ where: { id: input.id } });
-    if (!existing || !keyVisibleTo(session, existing.userId)) return actionFail("NOT_FOUND");
-    const tenancy = await keyTenancy(session, input.teamId, input.projectId);
+    if (!existing || !keyVisibleTo(session, existing)) return actionFail("NOT_FOUND");
+    const bound = await keyBinding(session, input.projectId, input.memberId, existing);
+    const tenancy =
+      bound ??
+      (isInternalKey(existing)
+        ? { projectId: null, memberId: null, teamId: null, orgId: existing.orgId }
+        : { projectId: null, memberId: null, teamId: null, orgId: companyOf(session), userId: session.user.id });
     const templates = await keyTemplates(input.templateIds);
     const after = {
       keyAlias: input.alias,
@@ -145,7 +164,7 @@ export async function rotateKeyAction(id: string) {
     const session = await requirePermission(PERMISSIONS.KEYS_MANAGE);
     if (!id) return actionFail("MISSING_ID");
     const existing = await prisma.virtualKey.findUnique({ where: { id } });
-    if (!existing || !keyVisibleTo(session, existing.userId)) {
+    if (!existing || !keyVisibleTo(session, existing)) {
       return actionFail("NOT_FOUND");
     }
     const secret = `sk-hub-${randomToken()}`;
@@ -175,7 +194,7 @@ export async function revokeKeyAction(id: string) {
     const session = await requirePermission(PERMISSIONS.KEYS_MANAGE);
     if (!id) return actionFail("MISSING_ID");
     const existing = await prisma.virtualKey.findUnique({ where: { id } });
-    if (!existing || !keyVisibleTo(session, existing.userId)) {
+    if (!existing || !keyVisibleTo(session, existing)) {
       return actionFail("NOT_FOUND");
     }
     await prisma.virtualKey.delete({ where: { id } });
@@ -193,31 +212,58 @@ export async function revokeKeyAction(id: string) {
 export async function loadKeysPageAction() {
   return runAction(async () => {
     const session = await requirePermission(PERMISSIONS.KEYS_READ);
-    const anyTeam = hasPerm(session.permissions, PERMISSIONS.TENANCY_MANAGE);
-    const ownTeam = anyTeam ? {} : { id: session.user.teamId ?? "" };
-    const ownProjects = anyTeam
-      ? {}
-      : { OR: [{ teamId: null }, { teamId: session.user.teamId ?? "" }] };
-    const [keys, teams, projects, policies, templates, providerCount, overview] = await Promise.all([
-      listKeys(session),
-      prisma.team.findMany({ where: ownTeam, orderBy: { alias: "asc" } }),
-      prisma.project.findMany({
-        where: ownProjects,
-        orderBy: { alias: "asc" },
-        select: { id: true, alias: true, teamId: true },
-      }),
-      loadModelPolicies(),
-      prisma.modelTemplate.findMany({
-        orderBy: { name: "asc" },
-        select: { ...templateRuleSelect, name: true, description: true },
-      }),
-      prisma.providerConnection.count(),
-      usageTotals(7, seesAllSpend(session) ? undefined : session.user.id),
-    ]);
+    const company = companyOf(session);
+    const inScope = company ? { orgId: company } : {};
+    const [keys, orgs, teams, projects, members, users, policies, templates, providerCount, overview] =
+      await Promise.all([
+        listKeys(session),
+        prisma.organization.findMany({
+          where: company ? { id: company } : {},
+          orderBy: { alias: "asc" },
+          select: { id: true, alias: true },
+        }),
+        prisma.team.findMany({
+          where: inScope,
+          orderBy: { alias: "asc" },
+          select: { id: true, alias: true, orgId: true },
+        }),
+        prisma.project.findMany({
+          where: inScope,
+          orderBy: { alias: "asc" },
+          select: { id: true, alias: true, orgId: true, teamId: true },
+        }),
+        prisma.member.findMany({
+          where: inScope,
+          orderBy: { name: "asc" },
+          select: { id: true, name: true, orgId: true, teamId: true },
+        }),
+        prisma.user.findMany({ where: inScope, select: { id: true, username: true } }),
+        loadModelPolicies(),
+        prisma.modelTemplate.findMany({
+          orderBy: { name: "asc" },
+          select: { ...templateRuleSelect, name: true, description: true },
+        }),
+        prisma.providerConnection.count(),
+        usageTotals(7, spendScope(session)),
+      ]);
     return {
       keys,
-      teams: teams.map((t) => ({ id: t.id, alias: t.alias })),
-      projects,
+      companyId: company ?? "",
+      orgs,
+      teams: teams.map((row) => ({ id: row.id, alias: row.alias, orgId: row.orgId ?? "" })),
+      projects: projects.map((row) => ({
+        id: row.id,
+        alias: row.alias,
+        orgId: row.orgId ?? "",
+        teamId: row.teamId ?? "",
+      })),
+      members: members.map((row) => ({
+        id: row.id,
+        alias: row.name,
+        orgId: row.orgId,
+        teamId: row.teamId ?? "",
+      })),
+      owners: Object.fromEntries(users.map((user) => [user.id, user.username])),
       models: policies.map((policy) => policy.alias),
       templates: templates.map((template) => ({
         id: template.id,
@@ -227,9 +273,35 @@ export async function loadKeysPageAction() {
       })),
       providers: providerCount,
       overview,
+      selfId: session.user.id,
+      canManage: hasPerm(session.permissions, PERMISSIONS.KEYS_MANAGE),
+      canBind: hasPerm(session.permissions, PERMISSIONS.TENANCY_MANAGE),
       canBudget: hasPerm(session.permissions, PERMISSIONS.BUDGETS_MANAGE),
     };
   });
+}
+
+async function usageNames(rows: UsageSlice[]): Promise<Record<string, string>> {
+  const ids = (pick: (row: UsageSlice) => string) => [...new Set(rows.map(pick).filter(Boolean))];
+  const [orgs, teams, projects, members, keys, users] = await Promise.all([
+    prisma.organization.findMany({ where: { id: { in: ids((row) => row.orgId) } }, select: { id: true, alias: true } }),
+    prisma.team.findMany({ where: { id: { in: ids((row) => row.teamId) } }, select: { id: true, alias: true } }),
+    prisma.project.findMany({ where: { id: { in: ids((row) => row.projectId) } }, select: { id: true, alias: true } }),
+    prisma.member.findMany({ where: { id: { in: ids((row) => row.memberId) } }, select: { id: true, name: true } }),
+    prisma.virtualKey.findMany({
+      where: { id: { in: ids((row) => row.keyId) } },
+      select: { id: true, keyAlias: true, prefix: true },
+    }),
+    prisma.user.findMany({ where: { id: { in: ids((row) => row.userId) } }, select: { id: true, username: true } }),
+  ]);
+  return Object.fromEntries([
+    ...orgs.map((row) => [row.id, row.alias]),
+    ...teams.map((row) => [row.id, row.alias]),
+    ...projects.map((row) => [row.id, row.alias]),
+    ...members.map((row) => [row.id, row.name]),
+    ...keys.map((row) => [row.id, row.keyAlias || row.prefix]),
+    ...users.map((row) => [row.id, row.username]),
+  ]);
 }
 
 export async function loadUsageAction(
@@ -241,37 +313,35 @@ export async function loadUsageAction(
         teamId?: string;
         orgId?: string;
         projectId?: string;
+        memberId?: string;
         keyId?: string;
         userId?: string;
       } = 14,
 ) {
   return runAction(async () => {
     const session = await requirePermission(PERMISSIONS.SPEND_READ);
-    const days = Math.min(
-      366,
-      typeof input === "number"
-        ? Math.max(1, Math.trunc(input) || 14)
-        : Math.max(1, Math.trunc(input.days ?? 14) || 14),
-    );
-    const model =
-      typeof input === "number" ? "" : (input.model ?? "").trim();
-    const teamId = typeof input === "number" ? "" : (input.teamId ?? "").trim();
-    const orgId = typeof input === "number" ? "" : (input.orgId ?? "").trim();
-    const projectId =
-      typeof input === "number" ? "" : (input.projectId ?? "").trim();
-    const keyId = typeof input === "number" ? "" : (input.keyId ?? "").trim();
-    const userId = typeof input === "number" ? "" : (input.userId ?? "").trim();
+    const query = typeof input === "number" ? { days: input } : input;
+    const text = (value: string | undefined) => (value ?? "").trim();
+    const days = Math.min(366, Math.max(1, Math.trunc(query.days ?? 14) || 14));
+    const model = text(query.model);
+    const teamId = text(query.teamId);
+    const orgId = text(query.orgId);
+    const projectId = text(query.projectId);
+    const memberId = text(query.memberId);
+    const keyId = text(query.keyId);
+    const userId = text(query.userId);
     const now = new Date();
     const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
     const since = new Date(today - (days - 1) * 86400000);
     const filters = {
-      ...(seesAllSpend(session) ? {} : { userId: session.user.id }),
       ...(model ? { model } : {}),
       ...(teamId ? { teamId } : {}),
       ...(orgId ? { orgId } : {}),
       ...(projectId ? { projectId } : {}),
+      ...(memberId ? { memberId } : {}),
       ...(keyId ? { keyId } : {}),
       ...(userId ? { userId } : {}),
+      ...spendScope(session),
     };
     const requestWhere = { ...filters, createdAt: { gte: since } };
     const [rows, logged] = await Promise.all([
@@ -317,12 +387,15 @@ export async function loadUsageAction(
       teamId,
       orgId,
       projectId,
+      memberId,
       keyId,
       userId,
+      names: await usageNames(rows),
       models: distinct((row) => row.model),
       teams: distinct((row) => row.teamId),
       orgs: distinct((row) => row.orgId),
       projects: distinct((row) => row.projectId),
+      members: distinct((row) => row.memberId),
       keys: distinct((row) => row.keyId),
       users: distinct((row) => row.userId),
       spend: totals.spend,
@@ -337,6 +410,7 @@ export async function loadUsageAction(
       byTeam: groupSpend(rows, "teamId").slice(0, 12),
       byOrg: groupSpend(rows, "orgId").slice(0, 12),
       byProject: groupSpend(rows, "projectId").slice(0, 12),
+      byMember: groupSpend(rows, "memberId").slice(0, 12),
       byKey: groupSpend(rows, "keyId").slice(0, 12),
       byUser: groupSpend(rows, "userId").slice(0, 12),
       healthByModel: groupRequestHealth(rows, "model").slice(0, 12),

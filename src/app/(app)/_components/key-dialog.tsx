@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useId, useState, useTransition } from "react";
 import {
   Alert,
   Button,
@@ -15,6 +15,8 @@ import {
   Switch,
   TextArea,
   TextField,
+  ToggleButton,
+  ToggleButtonGroup,
   toast,
   type useOverlayState,
 } from "@heroui/react";
@@ -23,8 +25,11 @@ import { Link } from "@/i18n/routing";
 import MultiPicker from "@/components/console/multi-picker";
 import { createKeyAction, updateKeyAction } from "@/app/(app)/_action";
 import { isActionFail } from "@/lib/http/action-result";
-import type { KeyOptions } from "@/types/keys";
+import type { KeyBindingKind, KeyOptions, KeyPreset } from "@/types/keys";
 import type { VirtualKeyView } from "@/types/gateway";
+import { bindingKind, placeOf } from "./key-binding";
+
+const KINDS: KeyBindingKind[] = ["project", "member", "internal"];
 
 function splitList(value: string): string[] {
   return value
@@ -33,24 +38,46 @@ function splitList(value: string): string[] {
     .filter(Boolean);
 }
 
+function initialKind(
+  editing: VirtualKeyView | null,
+  preset: KeyPreset | null,
+  options: KeyOptions,
+  canBind: boolean,
+): KeyBindingKind {
+  if (editing) return bindingKind(editing);
+  if (!canBind) return "internal";
+  if (preset) return preset.kind;
+  return options.projects.length || options.members.length ? "project" : "internal";
+}
+
 export function KeyDialog({
   state,
   editing,
+  preset,
   options,
+  canBind,
   onSaved,
 }: {
   state: ReturnType<typeof useOverlayState>;
   editing: VirtualKeyView | null;
+  preset: KeyPreset | null;
   options: KeyOptions;
+  canBind: boolean;
   onSaved: (key: VirtualKeyView, secret: string | null) => void;
 }) {
   const t = useTranslations("Keys");
   const tTemplates = useTranslations("ModelTemplates");
   const tError = useTranslations("Error");
   const tCommon = useTranslations("Common");
+  const bindingLabel = useId();
   const [alias, setAlias] = useState(editing?.key_alias ?? "");
-  const [teamId, setTeamId] = useState(editing?.team_id ?? "");
-  const [projectId, setProjectId] = useState(editing?.project_id ?? "");
+  const [kind, setKind] = useState<KeyBindingKind>(() => initialKind(editing, preset, options, canBind));
+  const [projectId, setProjectId] = useState(
+    editing?.project_id ?? (preset?.kind === "project" ? preset.id : ""),
+  );
+  const [memberId, setMemberId] = useState(
+    editing?.member_id ?? (preset?.kind === "member" ? preset.id : ""),
+  );
   const [models, setModels] = useState<string[]>(editing?.models ?? []);
   const [templateIds, setTemplateIds] = useState<string[]>(editing?.templates ?? []);
   const [rpm, setRpm] = useState(String(editing?.rpm_limit ?? 0));
@@ -60,7 +87,9 @@ export function KeyDialog({
   const [blocked, setBlocked] = useState(editing?.blocked ?? false);
   const [logContent, setLogContent] = useState(editing?.log_content ?? true);
   const [pending, start] = useTransition();
-  const projects = options.projects.filter((p) => !p.teamId || p.teamId === teamId);
+  const targets = kind === "project" ? options.projects : options.members;
+  const targetId = kind === "project" ? projectId : memberId;
+  const bound = kind === "internal" || Boolean(targetId);
   const allowed = new Set([
     ...models,
     ...options.templates
@@ -74,8 +103,8 @@ export function KeyDialog({
     start(async () => {
       const shared = {
         alias: alias.trim(),
-        teamId,
-        projectId,
+        projectId: kind === "project" ? projectId : "",
+        memberId: kind === "member" ? memberId : "",
         models,
         templateIds,
         rpm: Number(rpm) || 0,
@@ -119,61 +148,93 @@ export function KeyDialog({
                     <Label>{t("fields.alias")}</Label>
                     <Input placeholder="prod-backend" />
                   </TextField>
-                  <Select
-                    selectedKey={teamId || "none"}
-                    onSelectionChange={(key) => {
-                      setTeamId(String(key) === "none" ? "" : String(key));
-                      setProjectId("");
-                    }}
-                    isDisabled={pending}
-                    fullWidth
-                  >
-                    <Label>{t("fields.team")}</Label>
-                    <Select.Trigger>
-                      <Select.Value />
-                      <Select.Indicator />
-                    </Select.Trigger>
-                    <Select.Popover>
-                      <ListBox aria-label={t("fields.team")}>
-                        <ListBox.Item id="none" textValue={t("fields.personal")}>
-                          {t("fields.personal")}
-                          <ListBox.ItemIndicator />
-                        </ListBox.Item>
-                        {options.teams.map((team) => (
-                          <ListBox.Item key={team.id} id={team.id} textValue={team.alias}>
-                            {team.alias}
-                            <ListBox.ItemIndicator />
-                          </ListBox.Item>
-                        ))}
-                      </ListBox>
-                    </Select.Popover>
-                  </Select>
-                  <Select
-                    selectedKey={projectId || "none"}
-                    onSelectionChange={(key) => setProjectId(String(key) === "none" ? "" : String(key))}
-                    isDisabled={pending}
-                    fullWidth
-                  >
-                    <Label>{t("fields.project")}</Label>
-                    <Select.Trigger>
-                      <Select.Value />
-                      <Select.Indicator />
-                    </Select.Trigger>
-                    <Select.Popover>
-                      <ListBox aria-label={t("fields.project")}>
-                        <ListBox.Item id="none" textValue={t("fields.noProject")}>
-                          {t("fields.noProject")}
-                          <ListBox.ItemIndicator />
-                        </ListBox.Item>
-                        {projects.map((project) => (
-                          <ListBox.Item key={project.id} id={project.id} textValue={project.alias}>
-                            {project.alias}
-                            <ListBox.ItemIndicator />
-                          </ListBox.Item>
-                        ))}
-                      </ListBox>
-                    </Select.Popover>
-                  </Select>
+                  <div className="space-y-2">
+                    <p id={bindingLabel} className="text-sm font-medium text-foreground">
+                      {t("fields.binding")}
+                    </p>
+                    <ToggleButtonGroup
+                      fullWidth
+                      selectionMode="single"
+                      disallowEmptySelection
+                      aria-labelledby={bindingLabel}
+                      selectedKeys={[kind]}
+                      onSelectionChange={(keys) => {
+                        const next = KINDS.find((item) => item === [...keys][0]);
+                        if (next) setKind(next);
+                      }}
+                      isDisabled={pending || !canBind}
+                    >
+                      {KINDS.map((item, index) => (
+                        <ToggleButton key={item} id={item}>
+                          {index > 0 ? <ToggleButtonGroup.Separator /> : null}
+                          {t("binding.kind", { kind: item })}
+                        </ToggleButton>
+                      ))}
+                    </ToggleButtonGroup>
+                    <p className="text-xs text-muted">
+                      {canBind
+                        ? t("binding.hint", { kind, scope: options.companyId ? "company" : "platform" })
+                        : t("binding.locked")}
+                    </p>
+                  </div>
+                  {kind === "internal" ? null : (
+                    <Select
+                      isRequired
+                      selectedKey={targetId || null}
+                      onSelectionChange={(key) => {
+                        const next = key == null ? "" : String(key);
+                        if (kind === "project") setProjectId(next);
+                        else setMemberId(next);
+                      }}
+                      placeholder={t("binding.pick", { kind })}
+                      isDisabled={pending || !canBind || targets.length === 0}
+                      fullWidth
+                    >
+                      <Label>{t("binding.kind", { kind })}</Label>
+                      <Select.Trigger>
+                        <Select.Value />
+                        <Select.Indicator />
+                      </Select.Trigger>
+                      <Select.Popover>
+                        <ListBox aria-label={t("binding.kind", { kind })}>
+                          {targets.map((target) => {
+                            const place = placeOf(options, target.orgId, target.teamId);
+                            return (
+                              <ListBox.Item
+                                key={target.id}
+                                id={target.id}
+                                textValue={`${target.alias} ${place.org} ${place.team}`}
+                              >
+                                <div className="min-w-0">
+                                  <p className="text-sm">{target.alias}</p>
+                                  <p className="text-xs text-muted">
+                                    {t("binding.place", {
+                                      org: place.org,
+                                      team: place.team,
+                                      hasTeam: place.team ? "yes" : "no",
+                                    })}
+                                  </p>
+                                </div>
+                                <ListBox.ItemIndicator />
+                              </ListBox.Item>
+                            );
+                          })}
+                        </ListBox>
+                      </Select.Popover>
+                      <Description>
+                        {targets.length
+                          ? t("binding.targetHint", { kind })
+                          : t.rich("binding.empty", {
+                              kind,
+                              link: (chunks) => (
+                                <Link href="/companies" className="text-accent">
+                                  {chunks}
+                                </Link>
+                              ),
+                            })}
+                      </Description>
+                    </Select>
+                  )}
                   <Separator />
                   <p className="text-sm font-medium text-foreground">{t("fields.access")}</p>
                   <MultiPicker
@@ -267,7 +328,7 @@ export function KeyDialog({
                   </Button>
                   <Button
                     isPending={pending}
-                    isDisabled={!alias.trim()}
+                    isDisabled={!alias.trim() || !bound}
                     onPress={() => save(close)}
                   >
                     {({ isPending }) => (

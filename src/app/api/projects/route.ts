@@ -1,4 +1,4 @@
-import { saveProjectAction } from "@/app/(app)/structure/_action";
+import { saveProjectAction } from "@/app/(app)/companies/_action";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { managementRoute, readBody, respond, respondList, unwrap } from "@/lib/management/http";
 import { serializeProject } from "@/lib/management/serialize";
@@ -15,8 +15,13 @@ export const GET = managementRoute(PERMISSIONS.TENANCY_READ, async () => {
 export const POST = managementRoute(PERMISSIONS.TENANCY_MANAGE, async ({ req }) => {
   const body = await readBody(req, projectCreateSchema);
   const structure = unwrap(
-    await saveProjectAction({ alias: body.alias, teamId: body.team_id, owner: body.owner }),
+    await saveProjectAction({
+      alias: body.alias,
+      orgId: body.org_id,
+      teamId: body.team_id ?? "",
+      owner: body.owner,
+    }),
   );
-  const projects = structure.projects.filter((project) => project.teamId === body.team_id);
+  const projects = structure.projects.filter((project) => project.orgId === body.org_id);
   return respond(serializeProject(byAlias(projects, body.alias, "project"), structure), 201);
 });

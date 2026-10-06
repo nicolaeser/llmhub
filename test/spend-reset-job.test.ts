@@ -23,7 +23,7 @@ test("runSpendResets exists and is called from runMaintenanceSweep", async () =>
   assert.match(sweep, /await runSpendResets\(now\)/);
 });
 
-test("runSpendResets zeros virtualKey, user, team, organization, and project spend", async () => {
+test("runSpendResets zeros virtualKey, user, member, team, organization, and project spend", async () => {
   const source = await readFile(
     new URL("../src/worker/jobs.ts", import.meta.url),
     "utf8",
@@ -38,6 +38,7 @@ test("runSpendResets zeros virtualKey, user, team, organization, and project spe
   for (const model of [
     "virtualKey",
     "user",
+    "member",
     "team",
     "organization",
     "project",

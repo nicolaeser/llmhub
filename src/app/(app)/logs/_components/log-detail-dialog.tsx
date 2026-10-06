@@ -280,8 +280,9 @@ export default function LogDetailDialog({
                     <Field label={tDetail("tag")}>{detail.tag ? <PiiText text={detail.tag} /> : tCommon("none")}</Field>
                     <Field label={tDetail("key")}>{label(detail.keyLabel, detail.keyId)}</Field>
                     <Field label={tDetail("user")}>{label(detail.userLabel, detail.userId)}</Field>
-                    <Field label={tDetail("team")}>{label(detail.teamLabel, detail.teamId)}</Field>
+                    <Field label={tDetail("member")}>{label(detail.memberLabel, detail.memberId)}</Field>
                     <Field label={t("columns.org")}>{label(detail.orgLabel, detail.orgId)}</Field>
+                    <Field label={tDetail("team")}>{label(detail.teamLabel, detail.teamId)}</Field>
                     <Field label={t("columns.project")}>{label(detail.projectLabel, detail.projectId)}</Field>
                     <Field label={t("columns.latency")}>{t("latencyMs", { value: detail.latencyMs })}</Field>
                     <Field label={t("columns.tokens")}>

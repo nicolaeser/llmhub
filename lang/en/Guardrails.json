@@ -24,17 +24,17 @@
   "testerHint": "Uses the saved global policy.",
   "redact": "Redact sample",
   "saved": "PII policy saved",
-  "policyHint": "Applies to every request unless its organization or API key has an override.",
+  "policyHint": "Applies to every request unless its company or API key has an override.",
   "entitiesHint": "Without a selection, the default set applies.",
   "overrides": "Overrides",
-  "overridesHint": "Give an organization or a single API key its own policy. Each request uses exactly one policy, chosen in this order:",
+  "overridesHint": "Give a company or a single API key its own policy. Each request uses exactly one policy, chosen in this order:",
   "overridesEmpty": "No overrides yet. Every request uses the global policy.",
   "addOverride": "Add override",
   "scope": "Applies to",
-  "scopeLabel": "{scope, select, org {Organization} key {API key} other {{scope}}}",
-  "overrideTarget": "{scope, select, org {Organization} key {API key} other {{scope}}}: {alias}",
+  "scopeLabel": "{scope, select, org {Company} key {API key} other {{scope}}}",
+  "overrideTarget": "{scope, select, org {Company} key {API key} other {{scope}}}: {alias}",
   "overrideTitle": "{mode, select, edit {Edit override} other {Add override}}",
-  "overrideHint": "This policy fully replaces the inherited one for the selected organization or API key: mode, output redaction, and entities.",
+  "overrideHint": "This policy fully replaces the inherited one for the selected company or API key: mode, output redaction, and entities.",
   "saveOverride": "Save override",
   "overrideSaved": "{mode, select, removed {Override removed} other {Override saved}}",
   "removeOverride": "Remove override",
@@ -53,11 +53,11 @@
     "number": "{n, number}",
     "key": {
       "title": "API key override",
-      "hint": "If the request's API key has an override, only that applies. Its organization's override is ignored."
+      "hint": "If the request's API key has an override, only that applies. Its company's override is ignored."
     },
     "org": {
-      "title": "Organization override",
-      "hint": "Otherwise the override of the organization the key belongs to applies."
+      "title": "Company override",
+      "hint": "Otherwise the override of the company the key belongs to applies."
     },
     "global": {
       "title": "Global policy",

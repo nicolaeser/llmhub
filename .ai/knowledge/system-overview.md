@@ -26,9 +26,10 @@ LLM Hub is a Next.js 16 App Router app: OpenAI- and Anthropic-compatible `/v1` A
 
 - Operator: a `User` row. The first operator is created at `/internal-api/setup` as the owner with the `admin` template role.
 - Role: an editable permission bundle; templates are `admin`, `operator`, `finance`, `viewer`.
-- Structure: organization → team → project. A team belongs to one organization, a project to one team, and a user may be placed in an organization and one of its teams. Managed on the Structure & budgets page (`src/app/(app)/structure/`, `src/types/structure.ts`).
-- Budget: `maxBudget` plus optional period on a key, user, project, team, or organization. Temporary boosts (`TempBudget`) raise a cap until they expire.
-- API key (`VirtualKey`): hashed credential for `/v1`, optionally bound to a team, project, model list, model templates, RPM/TPM, client IP allowlist, and PII policy override, with a request-content logging switch.
+- Company (`Organization`): a customer. Departments (`Team`) hold shared budgets and RPM/TPM limits; projects (`Project`) and people (`Member`, the company's own users who never sign in) belong to a company and optionally a department. Managed on the Companies page (`src/app/(app)/companies/`, `src/types/structure.ts`).
+- Console user (`User`): signs in to the console. Without `orgId` a platform user; with `orgId` restricted to that company and `COMPANY_PERMISSIONS`.
+- Budget: `maxBudget` plus optional period on a key, console user, member, project, department, or company. Temporary boosts (`TempBudget`) raise a cap until they expire.
+- API key (`VirtualKey`): hashed credential for `/v1`, bound to one project (project key) or one member (personal key), or an internal key of the console user who owns it; plus model list, model templates, RPM/TPM, client IP allowlist, and PII policy override, with a request-content logging switch.
 - Model template (`ModelTemplate`): reusable model-access rule set (aliases, glob patterns, providers, data regions, ZDR, no-training, maximum retention) attached to keys; matching aliases are resolved at authentication time.
 - Request log: one `RequestLog` row per metered gateway request, including cache hits, upstream failures, and PII blocks (tenancy, endpoint, routing, status, tokens, cost, PII markers). Prompt and response bodies live in `RequestLogContent`.
 - Management key (`ManagementKey`): hashed personal credential for `/api`, scoped to a subset of the owner's permissions.

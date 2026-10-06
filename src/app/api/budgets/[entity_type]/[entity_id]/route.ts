@@ -1,4 +1,4 @@
-import { setBudgetAction } from "@/app/(app)/structure/_action";
+import { setBudgetAction } from "@/app/(app)/companies/_action";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { ApiProblem } from "@/lib/http/problem";
 import { managementRoute, readBody, respond, unwrap } from "@/lib/management/http";
@@ -11,7 +11,7 @@ export const PUT = managementRoute<{ entity_type: string; entity_id: string }>(
   async ({ req, params }) => {
     const entity = budgetEntitySchema.safeParse(params);
     if (!entity.success) {
-      throw new ApiProblem("UNKNOWN_ENTITY_TYPE", "entity_type must be key, user, project, team, or org");
+      throw new ApiProblem("UNKNOWN_ENTITY_TYPE", "entity_type must be key, user, member, project, team, or org");
     }
     const { entity_type: kind, entity_id: id } = entity.data;
     const body = await readBody(req, budgetUpdateSchema);

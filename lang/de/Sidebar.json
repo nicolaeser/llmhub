@@ -5,13 +5,15 @@
   "openMenu": "Navigationsmenü öffnen",
   "goHome": "Zu den API-Keys",
   "sections": {
+    "customers": "Kunden",
     "gateway": "Gateway",
     "observe": "Beobachtbarkeit",
-    "access": "Zugriff",
+    "access": "Konsolenzugriff",
     "developer": "Entwickler",
     "settings": "Einstellungen"
   },
   "items": {
+    "companies": "Unternehmen",
     "keys": "API-Keys",
     "playground": "Spielwiese",
     "assistant": "Assistent",
@@ -21,8 +23,7 @@
     "guardrails": "Leitplanken",
     "usage": "Nutzung",
     "logs": "Protokolle",
-    "structure": "Struktur & Budgets",
-    "users": "Benutzer",
+    "users": "Konsolen-Benutzer",
     "apiRef": "API-Referenz",
     "cache": "Cache",
     "logging": "Logging & Alarme",
