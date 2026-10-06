@@ -12,6 +12,8 @@ import PiiOverrideDialog from "./pii-override-dialog";
 
 type OverrideResult = { scope: PiiScope; id: string; override: PiiOverrideView | null };
 
+const PRECEDENCE = ["key", "org", "global"] as const;
+
 export default function PiiOverrides({
   overrides,
   targets,
@@ -75,6 +77,18 @@ export default function PiiOverrides({
           </Button>
         ) : null}
       </Card.Header>
+      <ol className="grid gap-3 md:grid-cols-3" aria-label={t("precedence.title")}>
+        {PRECEDENCE.map((level, index) => (
+          <li key={level}>
+            <Card variant="secondary" className="h-full gap-1">
+              <span className="text-xs tabular-nums text-muted">{t("precedence.number", { n: index + 1 })}</span>
+              <p className="text-sm font-medium">{t(`precedence.${level}.title`)}</p>
+              <p className="text-xs text-muted">{t(`precedence.${level}.hint`)}</p>
+            </Card>
+          </li>
+        ))}
+      </ol>
+      <p className="text-xs text-muted">{t("precedence.replace")}</p>
       {overrides.length === 0 ? (
         <p className="text-sm text-muted">{t("overridesEmpty")}</p>
       ) : (
