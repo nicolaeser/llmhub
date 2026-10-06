@@ -42,8 +42,10 @@ function initialKind(
   editing: VirtualKeyView | null,
   preset: KeyPreset | null,
   options: KeyOptions,
+  canBind: boolean,
 ): KeyBindingKind {
   if (editing) return bindingKind(editing);
+  if (!canBind) return "internal";
   if (preset) return preset.kind;
   return options.projects.length || options.members.length ? "project" : "internal";
 }
@@ -53,12 +55,14 @@ export function KeyDialog({
   editing,
   preset,
   options,
+  canBind,
   onSaved,
 }: {
   state: ReturnType<typeof useOverlayState>;
   editing: VirtualKeyView | null;
   preset: KeyPreset | null;
   options: KeyOptions;
+  canBind: boolean;
   onSaved: (key: VirtualKeyView, secret: string | null) => void;
 }) {
   const t = useTranslations("Keys");
@@ -67,7 +71,7 @@ export function KeyDialog({
   const tCommon = useTranslations("Common");
   const bindingLabel = useId();
   const [alias, setAlias] = useState(editing?.key_alias ?? "");
-  const [kind, setKind] = useState<KeyBindingKind>(() => initialKind(editing, preset, options));
+  const [kind, setKind] = useState<KeyBindingKind>(() => initialKind(editing, preset, options, canBind));
   const [projectId, setProjectId] = useState(
     editing?.project_id ?? (preset?.kind === "project" ? preset.id : ""),
   );
@@ -158,7 +162,7 @@ export function KeyDialog({
                         const next = KINDS.find((item) => item === [...keys][0]);
                         if (next) setKind(next);
                       }}
-                      isDisabled={pending}
+                      isDisabled={pending || !canBind}
                     >
                       {KINDS.map((item, index) => (
                         <ToggleButton key={item} id={item}>
@@ -168,10 +172,9 @@ export function KeyDialog({
                       ))}
                     </ToggleButtonGroup>
                     <p className="text-xs text-muted">
-                      {t("binding.hint", {
-                        kind,
-                        scope: options.companyId ? "company" : "platform",
-                      })}
+                      {canBind
+                        ? t("binding.hint", { kind, scope: options.companyId ? "company" : "platform" })
+                        : t("binding.locked")}
                     </p>
                   </div>
                   {kind === "internal" ? null : (
@@ -184,7 +187,7 @@ export function KeyDialog({
                         else setMemberId(next);
                       }}
                       placeholder={t("binding.pick", { kind })}
-                      isDisabled={pending || targets.length === 0}
+                      isDisabled={pending || !canBind || targets.length === 0}
                       fullWidth
                     >
                       <Label>{t("binding.kind", { kind })}</Label>

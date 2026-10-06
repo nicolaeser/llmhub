@@ -60,6 +60,7 @@ export default function KeysPage() {
   const [owners, setOwners] = useState<Record<string, string>>({});
   const [providerCount, setProviderCount] = useState(0);
   const [canManage, setCanManage] = useState(false);
+  const [canBind, setCanBind] = useState(false);
   const [canBudget, setCanBudget] = useState(false);
   const [budgetKey, setBudgetKey] = useState<VirtualKeyView | null>(null);
   const [overview, setOverview] = useState({
@@ -160,6 +161,7 @@ export default function KeysPage() {
         setOwners(res.owners);
         setProviderCount(res.providers);
         setCanManage(res.canManage);
+        setCanBind(res.canBind);
         setCanBudget(res.canBudget);
         setOverview(res.overview);
         const requested = parsePreset(new URLSearchParams(window.location.search).get("new"));
@@ -438,6 +440,7 @@ export default function KeysPage() {
         editing={editing}
         preset={preset}
         options={options}
+        canBind={canBind}
         onSaved={(row, created) => {
           upsertKey(row);
           if (created) setSecret(created);

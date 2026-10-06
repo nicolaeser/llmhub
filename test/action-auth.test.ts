@@ -72,6 +72,18 @@ test("keys bind to one project or one person inside the caller's company", async
   assert.match(source, /!inCompany\(session, project\.orgId\)/);
   assert.match(source, /!inCompany\(session, member\.orgId\)/);
   assert.doesNotMatch(source, /TEAM_NOT_MEMBER/);
+  assert.match(
+    source,
+    /if \(\(projectId \|\| memberId\) && !unchanged && !hasPerm\(session\.permissions, PERMISSIONS\.TENANCY_MANAGE\)\) \{\n\s+throw new Error\("FORBIDDEN"\);/,
+  );
+  assert.match(source, /await keyBinding\(session, input\.projectId, input\.memberId, existing\)/);
+});
+
+test("PATCH /api/keys replaces the whole binding when either reference is sent", async () => {
+  const source = await readFile(new URL("../src/app/api/keys/[id]/route.ts", import.meta.url), "utf8");
+  assert.match(source, /const rebinds = body\.project_id !== undefined \|\| body\.member_id !== undefined;/);
+  assert.match(source, /projectId: rebinds \? \(body\.project_id \?\? ""\) : current\.project_id/);
+  assert.match(source, /memberId: rebinds \? \(body\.member_id \?\? ""\) : current\.member_id/);
 });
 
 test("user console actions are permission-gated and protect the owner", async () => {

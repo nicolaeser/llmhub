@@ -72,6 +72,7 @@
     "place": "{hasTeam, select, yes {{org} › {team}} other {{org}}}",
     "path": "{kind, select, project {Projekt} member {Person} other {Intern}}{hasPlace, select, yes { · {place}} other {}}",
     "targetHint": "{kind, select, project {Budgets und Limits von Projekt, Abteilung und Unternehmen gelten.} other {Budgets und Limits von Person, Abteilung und Unternehmen gelten.}}",
-    "empty": "{kind, select, project {Noch keine Projekte. Lege eines unter <link>Unternehmen</link> an.} other {Noch keine Personen. Lege eine unter <link>Unternehmen</link> an.}}"
+    "empty": "{kind, select, project {Noch keine Projekte. Lege eines unter <link>Unternehmen</link> an.} other {Noch keine Personen. Lege eine unter <link>Unternehmen</link> an.}}",
+    "locked": "Projekt- und Personen-Keys erfordern die Berechtigung Unternehmen verwalten. Du kannst interne Keys für dich selbst erstellen."
   }
 }

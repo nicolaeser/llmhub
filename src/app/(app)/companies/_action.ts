@@ -204,7 +204,9 @@ async function structurePayload(session: AuthenticatedSession): Promise<Structur
     companyId: company ?? "",
     canManage: hasPerm(session.permissions, PERMISSIONS.TENANCY_MANAGE),
     canBudget: hasPerm(session.permissions, PERMISSIONS.BUDGETS_MANAGE),
-    canCreateKeys: hasPerm(session.permissions, PERMISSIONS.KEYS_MANAGE),
+    canCreateKeys:
+      hasPerm(session.permissions, PERMISSIONS.KEYS_MANAGE) &&
+      hasPerm(session.permissions, PERMISSIONS.TENANCY_MANAGE),
   };
 }
 

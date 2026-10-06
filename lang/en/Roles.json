@@ -74,7 +74,7 @@
     },
     "spendRead": {
       "label": "View own usage",
-      "description": "See usage, logs, and spend for your own keys."
+      "description": "See usage, logs, and spend for your own internal keys and the playground."
     },
     "spendReadAll": {
       "label": "View all usage",

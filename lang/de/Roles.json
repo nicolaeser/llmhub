@@ -74,7 +74,7 @@
     },
     "spendRead": {
       "label": "Eigene Nutzung ansehen",
-      "description": "Nutzung, Logs und Kosten der eigenen Schlüssel sehen."
+      "description": "Nutzung, Logs und Kosten der eigenen internen Keys und der Spielwiese sehen."
     },
     "spendReadAll": {
       "label": "Gesamte Nutzung ansehen",

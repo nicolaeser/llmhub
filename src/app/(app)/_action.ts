@@ -24,8 +24,18 @@ import { money } from "@/lib/utils/money";
 import type { UsageSlice } from "@/types/gateway";
 import type { AuthenticatedSession } from "@/types/auth";
 
-async function keyBinding(session: AuthenticatedSession, projectId: string, memberId: string) {
+async function keyBinding(
+  session: AuthenticatedSession,
+  projectId: string,
+  memberId: string,
+  current: { projectId: string | null; memberId: string | null } | null = null,
+) {
   if (projectId && memberId) throw new Error("KEY_BINDING_CONFLICT");
+  const unchanged =
+    current !== null && (current.projectId ?? "") === projectId && (current.memberId ?? "") === memberId;
+  if ((projectId || memberId) && !unchanged && !hasPerm(session.permissions, PERMISSIONS.TENANCY_MANAGE)) {
+    throw new Error("FORBIDDEN");
+  }
   if (projectId) {
     const project = await prisma.project.findUnique({
       where: { id: projectId },
@@ -114,7 +124,7 @@ export async function updateKeyAction(raw: unknown) {
     const input = parseKeyInput(updateKeySchema, raw);
     const existing = await prisma.virtualKey.findUnique({ where: { id: input.id } });
     if (!existing || !keyVisibleTo(session, existing)) return actionFail("NOT_FOUND");
-    const bound = await keyBinding(session, input.projectId, input.memberId);
+    const bound = await keyBinding(session, input.projectId, input.memberId, existing);
     const tenancy =
       bound ??
       (isInternalKey(existing)
@@ -266,6 +276,7 @@ export async function loadKeysPageAction() {
       overview,
       selfId: session.user.id,
       canManage: hasPerm(session.permissions, PERMISSIONS.KEYS_MANAGE),
+      canBind: hasPerm(session.permissions, PERMISSIONS.TENANCY_MANAGE),
       canBudget: hasPerm(session.permissions, PERMISSIONS.BUDGETS_MANAGE),
     };
   });

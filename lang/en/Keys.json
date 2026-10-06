@@ -72,6 +72,7 @@
     "place": "{hasTeam, select, yes {{org} › {team}} other {{org}}}",
     "path": "{kind, select, project {Project} member {Person} other {Internal}}{hasPlace, select, yes { · {place}} other {}}",
     "targetHint": "{kind, select, project {Budgets and limits of the project, department, and company apply.} other {Budgets and limits of the person, department, and company apply.}}",
-    "empty": "{kind, select, project {No projects yet. Add one under <link>Companies</link>.} other {No people yet. Add one under <link>Companies</link>.}}"
+    "empty": "{kind, select, project {No projects yet. Add one under <link>Companies</link>.} other {No people yet. Add one under <link>Companies</link>.}}",
+    "locked": "Project and person keys need the Manage companies permission. You can create internal keys for yourself."
   }
 }

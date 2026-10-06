@@ -2,13 +2,7 @@ ALTER TABLE "User" DROP CONSTRAINT "User_orgId_fkey";
 
 ALTER TABLE "User" DROP CONSTRAINT "User_teamId_fkey";
 
-UPDATE "User" SET "orgId" = NULL WHERE "orgId" IS NOT NULL;
-
 ALTER TABLE "VirtualKey" DROP CONSTRAINT "VirtualKey_projectId_fkey";
-
-DROP INDEX "User_teamId_idx";
-
-ALTER TABLE "User" DROP COLUMN "teamId";
 
 ALTER TABLE "Project" ADD COLUMN     "orgId" TEXT;
 
@@ -62,33 +56,42 @@ CREATE INDEX "SpendEvent_memberId_idx" ON "SpendEvent"("memberId");
 
 CREATE INDEX "RequestLog_memberId_idx" ON "RequestLog"("memberId");
 
-ALTER TABLE "User" ADD CONSTRAINT "User_orgId_fkey" FOREIGN KEY ("orgId") REFERENCES "Organization"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-
-ALTER TABLE "Project" ADD CONSTRAINT "Project_orgId_fkey" FOREIGN KEY ("orgId") REFERENCES "Organization"("id") ON DELETE SET NULL ON UPDATE CASCADE;
-
-ALTER TABLE "Member" ADD CONSTRAINT "Member_orgId_fkey" FOREIGN KEY ("orgId") REFERENCES "Organization"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-
-ALTER TABLE "Member" ADD CONSTRAINT "Member_teamId_fkey" FOREIGN KEY ("teamId") REFERENCES "Team"("id") ON DELETE SET NULL ON UPDATE CASCADE;
-
-ALTER TABLE "VirtualKey" ADD CONSTRAINT "VirtualKey_projectId_fkey" FOREIGN KEY ("projectId") REFERENCES "Project"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
-ALTER TABLE "VirtualKey" ADD CONSTRAINT "VirtualKey_memberId_fkey" FOREIGN KEY ("memberId") REFERENCES "Member"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
 INSERT INTO "Project" ("id", "orgId", "teamId", "alias", "owner", "createdAt")
 SELECT 'keys_' || t."id", t."orgId", t."id", t."alias" || ' keys', '', CURRENT_TIMESTAMP
 FROM "Team" AS t
 WHERE t."orgId" IS NOT NULL
   AND EXISTS (
     SELECT 1 FROM "VirtualKey" AS k
-    WHERE k."teamId" = t."id" AND k."projectId" IS NULL
+    LEFT JOIN "User" AS u ON u."id" = k."userId"
+    WHERE k."projectId" IS NULL
+      AND COALESCE(k."teamId", u."teamId") = t."id"
   );
 
 UPDATE "VirtualKey" AS k
-SET "projectId" = 'keys_' || t."id", "orgId" = t."orgId"
+SET "projectId" = 'keys_' || t."id"
 FROM "Team" AS t
-WHERE k."teamId" = t."id"
+WHERE k."projectId" IS NULL
+  AND t."orgId" IS NOT NULL
+  AND t."id" = COALESCE(k."teamId", (SELECT u."teamId" FROM "User" AS u WHERE u."id" = k."userId"));
+
+INSERT INTO "Project" ("id", "orgId", "teamId", "alias", "owner", "createdAt")
+SELECT 'keys_' || o."id", o."id", NULL, o."alias" || ' keys', '', CURRENT_TIMESTAMP
+FROM "Organization" AS o
+WHERE EXISTS (
+  SELECT 1 FROM "VirtualKey" AS k
+  JOIN "User" AS u ON u."id" = k."userId"
+  WHERE k."projectId" IS NULL
+    AND k."teamId" IS NULL
+    AND u."orgId" = o."id"
+);
+
+UPDATE "VirtualKey" AS k
+SET "projectId" = 'keys_' || u."orgId"
+FROM "User" AS u
+WHERE u."id" = k."userId"
   AND k."projectId" IS NULL
-  AND t."orgId" IS NOT NULL;
+  AND k."teamId" IS NULL
+  AND u."orgId" IS NOT NULL;
 
 UPDATE "VirtualKey" AS k
 SET "orgId" = p."orgId", "teamId" = p."teamId"
@@ -100,3 +103,21 @@ UPDATE "VirtualKey"
 SET "teamId" = NULL, "orgId" = NULL
 WHERE "projectId" IS NULL
   AND "memberId" IS NULL;
+
+UPDATE "User" SET "orgId" = NULL WHERE "orgId" IS NOT NULL;
+
+DROP INDEX "User_teamId_idx";
+
+ALTER TABLE "User" DROP COLUMN "teamId";
+
+ALTER TABLE "User" ADD CONSTRAINT "User_orgId_fkey" FOREIGN KEY ("orgId") REFERENCES "Organization"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+ALTER TABLE "Project" ADD CONSTRAINT "Project_orgId_fkey" FOREIGN KEY ("orgId") REFERENCES "Organization"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+ALTER TABLE "Member" ADD CONSTRAINT "Member_orgId_fkey" FOREIGN KEY ("orgId") REFERENCES "Organization"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+ALTER TABLE "Member" ADD CONSTRAINT "Member_teamId_fkey" FOREIGN KEY ("teamId") REFERENCES "Team"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+ALTER TABLE "VirtualKey" ADD CONSTRAINT "VirtualKey_projectId_fkey" FOREIGN KEY ("projectId") REFERENCES "Project"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+ALTER TABLE "VirtualKey" ADD CONSTRAINT "VirtualKey_memberId_fkey" FOREIGN KEY ("memberId") REFERENCES "Member"("id") ON DELETE CASCADE ON UPDATE CASCADE;
