@@ -1,17 +1,23 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
+import { callMcpTool, isWriteTool, listMcpTools, mcpToolsForModel } from "@/lib/assistant/mcp";
+import { ASSISTANT_EXPLAIN, ASSISTANT_PAGES } from "@/lib/assistant/knowledge";
+import { codeExample, nextSetupStep } from "@/lib/assistant/tools/general";
+import { toPublicKeyView } from "@/lib/assistant/tools/keys";
 import {
-  ASSISTANT_EXPLAIN,
-  ASSISTANT_PAGES,
-  callMcpTool,
-  isWriteTool,
-  listMcpTools,
-  mcpToolsForModel,
-  nextSetupStep,
-  toPublicKeyView,
-} from "@/lib/assistant/mcp";
+  assistantToolAllowed,
+  assistantToolCatalog,
+  assistantToolList,
+  assistantToolNames,
+  assistantToolViews,
+} from "@/lib/assistant/catalog";
+import { roleWriteSchema } from "@/schemas/auth";
+import { adminSettingsSchema } from "@/schemas/settings";
+import { normalizeEnterprise } from "@/lib/gateway/settings";
 import {
+  assistantAlias,
+  assistantModelLocked,
   completionText,
   parseAssistantLocale,
   parseAssistantModel,
@@ -44,6 +50,7 @@ import type { AssistantChatMessage, AssistantContext } from "@/types/assistant";
 const ctx: AssistantContext = {
   userId: "user-1",
   permissions: Object.values(PERMISSIONS),
+  disabledTools: [],
   teamId: "",
   orgId: "",
   locale: "en",
@@ -85,7 +92,22 @@ test("MCP catalog exposes setup, explain, and write tools", () => {
     "create_provider",
     "create_model",
     "create_key",
-  ]) {
+    "whoami",
+    "get_usage",
+    "search_logs",
+    "get_log",
+    "get_provider",
+    "update_model",
+    "update_key",
+    "rotate_key",
+    "revoke_key",
+    "get_structure",
+    "set_budget",
+    "list_users",
+    "get_settings",
+    "update_guardrails",
+    "code_example",
+  ] as const) {
     assert.ok(names.includes(name), name);
   }
   const keys = listMcpTools().find((tool) => tool.name === "list_keys");
@@ -113,7 +135,8 @@ test("explain covers setup tenancy keys providers models v1 playground", async (
     "usage",
     "roles",
     "sso",
-  ];
+    "assistant",
+  ] as const;
   for (const topic of topics) {
     assert.ok(ASSISTANT_EXPLAIN[topic], topic);
   }
@@ -124,7 +147,7 @@ test("explain covers setup tenancy keys providers models v1 playground", async (
     assert.ok((rec.text ?? "").length > 20, topic);
   }
   const unknown = await callMcpTool("explain", { topic: "nope" }, ctx);
-  assert.deepEqual(unknown.result, { error: "unknown_topic" });
+  assert.equal((unknown.result as { error?: string }).error, "invalid_arguments");
 });
 
 test("open_page maps known console routes", async () => {
@@ -136,16 +159,16 @@ test("open_page maps known console routes", async () => {
     navigate: "/playground",
   });
   const unknown = await callMcpTool("open_page", { page: "nope" }, ctx);
-  assert.deepEqual(unknown.result, { error: "unknown_page" });
+  assert.equal((unknown.result as { error?: string }).error, "invalid_arguments");
 });
 
 test("list_keys mapping never selects hash or secret", async () => {
   const source = await readFile(
-    new URL("../src/lib/assistant/mcp.ts", import.meta.url),
+    new URL("../src/lib/assistant/tools/keys.ts", import.meta.url),
     "utf8",
   );
-  const start = source.indexOf('case "list_keys"');
-  const end = source.indexOf('case "explain"');
+  const start = source.indexOf("run:", source.indexOf("list_keys: defineTool"));
+  const end = source.indexOf("get_key: defineTool");
   assert.ok(start > 0 && end > start);
   const block = source.slice(start, end);
   assert.match(block, /prefix: true/);
@@ -155,6 +178,7 @@ test("list_keys mapping never selects hash or secret", async () => {
   assert.doesNotMatch(block, /secret/);
   assert.doesNotMatch(block, /prevHash/);
   const view = toPublicKeyView({
+    id: "key-1",
     keyAlias: "ops",
     prefix: "sk-hub-abcd",
     spend: 1.5,
@@ -164,6 +188,7 @@ test("list_keys mapping never selects hash or secret", async () => {
   assert.deepEqual(Object.keys(view).sort(), [
     "alias",
     "blocked",
+    "id",
     "maxBudget",
     "prefix",
     "spend",
@@ -299,7 +324,7 @@ test("assistant run uses posted alias not alphabetical first ModelGroup", async 
   assert.match(run, /findUnique/);
   assert.doesNotMatch(run, /findFirst/);
   assert.doesNotMatch(run, /orderBy:\s*\{\s*alias:\s*"asc"/);
-  assert.match(run, /assistant_model/);
+  assert.match(run, /assistantAlias\(requested, await getEnterprise\(\)\)/);
   assert.match(run, /if \(!alias\) throw new AssistantNoLlmError\(\)/);
 });
 
@@ -312,17 +337,33 @@ test("parseAssistantModel keeps gateway aliases and drops junk", () => {
 });
 
 test("write tools wrap console actions and re-check manage perms", async () => {
-  const source = await readFile(
-    new URL("../src/lib/assistant/mcp.ts", import.meta.url),
-    "utf8",
-  );
-  assert.match(source, /createProviderAction/);
-  assert.match(source, /createModelGroupAction/);
-  assert.match(source, /createKeyAction/);
-  assert.match(source, /PROVIDERS_MANAGE/);
-  assert.match(source, /MODELS_MANAGE/);
-  assert.match(source, /KEYS_MANAGE/);
-  assert.doesNotMatch(source, /master_key/);
+  const read = (file: string) => readFile(new URL(`../src/lib/assistant/tools/${file}`, import.meta.url), "utf8");
+  const [providers, models, keys, structure, access, settings] = await Promise.all([
+    read("providers.ts"),
+    read("models.ts"),
+    read("keys.ts"),
+    read("structure.ts"),
+    read("access.ts"),
+    read("settings.ts"),
+  ]);
+  assert.match(providers, /createProviderAction/);
+  assert.match(providers, /apiKey: ""/);
+  assert.match(models, /createModelGroupAction/);
+  assert.match(models, /updateModelGroupAction/);
+  assert.match(keys, /createKeyAction/);
+  assert.match(keys, /rotateKeyAction/);
+  assert.match(structure, /setBudgetAction/);
+  assert.match(access, /setUserBlockedAction/);
+  assert.match(settings, /saveGuardrailsAction/);
+  for (const source of [providers, models, keys, structure, access, settings]) {
+    assert.doesNotMatch(source, /prisma\.\w+\.(create|update|upsert|delete)(Many)?\(/);
+    assert.doesNotMatch(source, /master_key/);
+  }
+  assert.equal(assistantToolCatalog.create_provider.permission, PERMISSIONS.PROVIDERS_MANAGE);
+  assert.equal(assistantToolCatalog.create_model.permission, PERMISSIONS.MODELS_MANAGE);
+  assert.equal(assistantToolCatalog.create_key.permission, PERMISSIONS.KEYS_MANAGE);
+  assert.equal(assistantToolCatalog.revoke_user_sessions.permission, PERMISSIONS.USERS_SECURITY);
+  assert.equal(assistantToolCatalog.update_gateway_settings.permission, PERMISSIONS.SETTINGS_MANAGE);
 });
 
 test("system prompt names the dashboard MCP and setup loop", () => {
@@ -341,6 +382,7 @@ test("mcpToolsForModel hides write tools without manage perms", () => {
   const viewer: AssistantContext = {
     userId: "user-2",
     permissions: [...roleTemplates.viewer],
+    disabledTools: [],
     teamId: "",
     orgId: "",
     locale: "en",
@@ -378,7 +420,7 @@ test("consumeSseBuffer holds partial lines until flush", () => {
 test("write tools stay hidden and refuse to run without write access", async () => {
   const readOnly: AssistantContext = { ...ctx, allowWrite: false };
   const names = mcpToolsForModel(readOnly).map((tool) => tool.function.name);
-  for (const name of ["create_provider", "create_model", "create_key"]) {
+  for (const name of ["create_provider", "create_model", "create_key"] as const) {
     assert.equal(isWriteTool(name), true, name);
     assert.equal(names.includes(name), false, name);
     const called = await callMcpTool(name, { alias: "x", kind: "openai" }, readOnly);
@@ -665,11 +707,184 @@ test("usage_breakdown parses groups and sorts by the chosen metric", () => {
 test("read-only operators keep the operations tools behind spend:read", async () => {
   const readOnly: AssistantContext = { ...ctx, permissions: [], allowWrite: false };
   const names = mcpToolsForModel(readOnly).map((tool) => tool.function.name);
-  assert.equal(names.includes("search_logs"), true);
-  assert.equal(names.includes("usage_breakdown"), true);
-  for (const name of ["search_logs", "usage_breakdown"]) {
+  assert.equal(names.includes("search_logs"), false);
+  assert.equal(names.includes("usage_breakdown"), false);
+  const reader: AssistantContext = { ...readOnly, permissions: [PERMISSIONS.SPEND_READ] };
+  const readerNames = mcpToolsForModel(reader).map((tool) => tool.function.name);
+  for (const name of ["search_logs", "usage_breakdown"] as const) {
     assert.equal(isWriteTool(name), false, name);
+    assert.equal(assistantToolCatalog[name].permission, PERMISSIONS.SPEND_READ, name);
+    assert.equal(readerNames.includes(name), true, name);
     const called = await callMcpTool(name, { groupBy: "model" }, readOnly);
     assert.deepEqual(called, { result: { error: "forbidden" } }, name);
   }
+  assert.equal(readerNames.includes("search_audit_log"), false);
+  assert.equal(assistantToolCatalog.search_audit_log.permission, PERMISSIONS.SPEND_READ_ALL);
+});
+
+test("tool catalog covers every registered tool with a permission and access level", () => {
+  const names = listMcpTools().map((tool) => tool.name);
+  assert.deepEqual([...names].sort(), [...assistantToolNames].sort());
+  for (const tool of listMcpTools()) {
+    assert.equal(tool.inputSchema.type, "object", tool.name);
+    assert.equal("$schema" in tool.inputSchema, false, tool.name);
+    assert.ok(tool.description.length > 10, tool.name);
+  }
+  for (const name of assistantToolNames) {
+    const meta = assistantToolCatalog[name];
+    assert.ok(["read", "write", "destructive"].includes(meta.access), name);
+    if (meta.access !== "read") assert.notEqual(meta.permission, null, name);
+    assert.equal(isWriteTool(name), meta.access !== "read", name);
+  }
+});
+
+test("roles can switch assistant tools off", async () => {
+  const limited: AssistantContext = { ...ctx, disabledTools: ["get_usage", "create_key"] };
+  const names = mcpToolsForModel(limited).map((tool) => tool.function.name);
+  assert.equal(names.includes("get_usage"), false);
+  assert.equal(names.includes("create_key"), false);
+  assert.equal(names.includes("get_overview"), true);
+  assert.deepEqual(await callMcpTool("get_usage", {}, limited), { result: { error: "tool_disabled" } });
+  assert.deepEqual(await callMcpTool("create_key", { alias: "x" }, limited), {
+    result: { error: "tool_disabled" },
+  });
+  assert.equal(
+    assistantToolViews(limited).some((tool) => tool.name === "get_usage"),
+    false,
+  );
+});
+
+test("tools need the operator's permission even when the role leaves them on", async () => {
+  const viewer: AssistantContext = { ...ctx, permissions: [...roleTemplates.viewer] };
+  assert.deepEqual(await callMcpTool("revoke_key", { key: "x", confirm: true }, viewer), {
+    result: { error: "forbidden" },
+  });
+  assert.deepEqual(await callMcpTool("get_settings", {}, { ...viewer, permissions: [] }), {
+    result: { error: "forbidden" },
+  });
+  assert.deepEqual(await callMcpTool("nope", {}, ctx), { result: { error: "unknown_tool" } });
+  assert.equal(
+    assistantToolAllowed("update_gateway_settings", {
+      permissions: [PERMISSIONS.SETTINGS_READ],
+      disabledTools: [],
+      allowWrite: true,
+    }),
+    false,
+  );
+  assert.equal(
+    assistantToolAllowed("get_settings", {
+      permissions: [PERMISSIONS.SETTINGS_READ],
+      disabledTools: [],
+      allowWrite: false,
+    }),
+    true,
+  );
+});
+
+test("destructive tools wait for an explicit confirmation", async () => {
+  for (const [name, args] of [
+    ["revoke_key", { key: "ops" }],
+    ["rotate_key", { key: "ops" }],
+    ["delete_provider", { id: "p1" }],
+    ["delete_model", { alias: "gpt" }],
+    ["delete_model_template", { id: "t1" }],
+    ["delete_structure_node", { kind: "team", id: "t1" }],
+    ["revoke_user_sessions", { userId: "u1" }],
+    ["set_user_blocked", { userId: "u1", blocked: true }],
+  ] as const) {
+    assert.equal(assistantToolCatalog[name].access, "destructive", name);
+    assert.deepEqual(await callMcpTool(name, args, ctx), { result: { error: "confirmation_required" } }, name);
+  }
+});
+
+test("tool input is validated before any tool runs", async () => {
+  const bad = await callMcpTool("set_budget", { kind: "galaxy", id: "x", maxBudget: -1 }, ctx);
+  const rec = bad.result as { error?: string; issues?: { path: string }[] };
+  assert.equal(rec.error, "invalid_arguments");
+  assert.ok(rec.issues?.some((issue) => issue.path === "kind"));
+});
+
+test("stored tool lists drop unknown names and keep catalog order", () => {
+  assert.deepEqual(assistantToolList(["revoke_key", "nope", "get_usage", "get_usage", 3]), [
+    "get_usage",
+    "revoke_key",
+  ]);
+  assert.deepEqual(assistantToolList(null), []);
+});
+
+test("role schema accepts assistant tool switches and rejects unknown tools", () => {
+  const base = { name: "Ops", description: null, permissions: ["keys:read"] };
+  const parsed = roleWriteSchema.safeParse(base);
+  assert.equal(parsed.success && parsed.data.assistantToolsDisabled.length, 0);
+  assert.equal(roleWriteSchema.safeParse({ ...base, assistantToolsDisabled: ["revoke_key"] }).success, true);
+  assert.equal(roleWriteSchema.safeParse({ ...base, assistantToolsDisabled: ["rm_rf"] }).success, false);
+});
+
+test("an enforced assistant model wins over the operator's pick", () => {
+  const locked = { assistant_model: "house-model", assistant_model_locked: true };
+  assert.equal(assistantModelLocked(locked), true);
+  assert.equal(assistantAlias("other-model", locked), "house-model");
+  assert.equal(assistantAlias("", locked), "house-model");
+  const open = { assistant_model: "house-model", assistant_model_locked: false };
+  assert.equal(assistantAlias("other-model", open), "other-model");
+  assert.equal(assistantAlias("", open), "house-model");
+  const empty = { assistant_model: "", assistant_model_locked: true };
+  assert.equal(assistantModelLocked(empty), false);
+  assert.equal(assistantAlias("other-model", empty), "other-model");
+  assert.equal(normalizeEnterprise({ assistant_model_locked: true }).assistant_model_locked, true);
+  assert.equal(normalizeEnterprise({}).assistant_model_locked, false);
+});
+
+test("admin settings carry the model lock", async () => {
+  const settings = {
+    registration_enabled: false,
+    assistant_model: "house-model",
+    oidc: { enabled: false, issuer: "", client_id: "", redirect_url: "" },
+    s3: {
+      enabled: false,
+      bucket: "",
+      region: "",
+      endpoint: "",
+      prefix: "",
+      addressing: "auto",
+      public_base_url: "",
+      domain_bucket: false,
+    },
+  };
+  const parsed = adminSettingsSchema.safeParse(settings);
+  assert.equal(parsed.success && parsed.data.assistant_model_locked, false);
+  const locked = adminSettingsSchema.safeParse({ ...settings, assistant_model_locked: true });
+  assert.equal(locked.success && locked.data.assistant_model_locked, true);
+  const action = await readFile(
+    new URL("../src/app/(app)/assistant/_action.ts", import.meta.url),
+    "utf8",
+  );
+  assert.match(action, /assistantModelLocked\(enterprise\)/);
+  assert.match(action, /disabledAssistantTools\(session\)/);
+  const route = await readFile(
+    new URL("../src/app/internal-api/assistant/chat/route.ts", import.meta.url),
+    "utf8",
+  );
+  assert.match(route, /disabledTools/);
+});
+
+test("code examples call this gateway with a key from the environment", () => {
+  const python = codeExample({
+    origin: "https://hub.example.com",
+    model: "gpt-house",
+    language: "python",
+    endpoint: "chat",
+  });
+  assert.match(python, /base_url="https:\/\/hub\.example\.com\/v1"/);
+  assert.match(python, /LLMHUB_API_KEY/);
+  assert.match(python, /gpt-house/);
+  const curl = codeExample({
+    origin: "https://hub.example.com",
+    model: "claude-house",
+    language: "curl",
+    endpoint: "messages",
+  });
+  assert.match(curl, /\/v1\/messages/);
+  assert.match(curl, /x-api-key/);
+  assert.doesNotMatch(curl, /sk-hub-/);
 });

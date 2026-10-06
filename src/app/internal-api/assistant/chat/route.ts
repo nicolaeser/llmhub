@@ -13,6 +13,7 @@ import {
   parseClientMessages,
 } from "@/lib/assistant/parse";
 import { runAssistant } from "@/lib/assistant/run";
+import { disabledAssistantTools } from "@/lib/assistant/access";
 import type { AssistantMessage } from "@/types/assistant";
 import type { JsonMap } from "@/types/gateway";
 
@@ -54,6 +55,7 @@ export async function POST(req: Request) {
     });
   }
 
+  const disabledTools = await disabledAssistantTools(session);
   const encoder = new TextEncoder();
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
@@ -72,6 +74,7 @@ export async function POST(req: Request) {
           ctx: {
             userId: session.user.id,
             permissions: session.permissions,
+            disabledTools,
             teamId: session.user.teamId ?? "",
             orgId: session.user.orgId ?? "",
             locale: parseAssistantLocale(body.locale),

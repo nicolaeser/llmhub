@@ -2,34 +2,35 @@
 
 import prisma from "@/lib/db/prisma";
 import { requirePermission } from "@/lib/auth/guards";
-import { hasPerm, PERMISSIONS } from "@/lib/auth/permissions";
+import { disabledAssistantTools } from "@/lib/assistant/access";
+import { assistantToolViews, isWriteAccess } from "@/lib/assistant/catalog";
+import { assistantModelLocked } from "@/lib/assistant/parse";
+import { PERMISSIONS } from "@/lib/auth/permissions";
 import { getEnterprise } from "@/lib/gateway/settings";
 import { runAction } from "@/lib/http/action-result";
-
-const WRITE_PERMISSIONS = [
-  PERMISSIONS.PROVIDERS_MANAGE,
-  PERMISSIONS.MODELS_MANAGE,
-  PERMISSIONS.KEYS_MANAGE,
-] as const;
 
 export async function loadAssistantAction() {
   return runAction(async () => {
     const session = await requirePermission(PERMISSIONS.ASSISTANT_USE);
-    const [groups, enterprise] = await Promise.all([
+    const [groups, enterprise, disabledTools] = await Promise.all([
       prisma.modelGroup.findMany({
         select: { alias: true },
         orderBy: { alias: "asc" },
       }),
       getEnterprise(),
+      disabledAssistantTools(session),
     ]);
-    const models = groups.map((group) => group.alias);
+    const aliases = groups.map((group) => group.alias);
     const preferred = enterprise.assistant_model ?? "";
+    const modelLocked = assistantModelLocked(enterprise);
+    const models = modelLocked ? aliases.filter((alias) => alias === preferred) : aliases;
+    const tools = assistantToolViews({ permissions: session.permissions, disabledTools });
     return {
       models,
       defaultModel: models.includes(preferred) ? preferred : "",
-      canWrite: WRITE_PERMISSIONS.some((permission) =>
-        hasPerm(session.permissions, permission),
-      ),
+      modelLocked,
+      tools,
+      canWrite: tools.some((tool) => isWriteAccess(tool.access)),
     };
   });
 }

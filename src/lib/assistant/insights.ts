@@ -184,6 +184,7 @@ export async function searchLogs(query: LogSearchQuery, ctx: AssistantContext) {
       orderBy: { createdAt: "desc" },
       take: query.limit,
       select: {
+        id: true,
         createdAt: true,
         model: true,
         endpoint: true,
@@ -222,6 +223,7 @@ export async function searchLogs(query: LogSearchQuery, ctx: AssistantContext) {
       .slice(0, MAX_LOG_GROUPS),
     errors: errorSamples(rows),
     requests: rows.map((row) => ({
+      id: row.id,
       at: row.createdAt.toISOString(),
       model: row.model,
       endpoint: row.endpoint,

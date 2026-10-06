@@ -75,6 +75,8 @@ export default function AssistantTranscript({
     { id: "setup", label: t("suggestions.setup") },
     { id: "keys", label: t("suggestions.keys") },
     { id: "usage", label: t("suggestions.usage") },
+    { id: "errors", label: t("suggestions.errors") },
+    { id: "budgets", label: t("suggestions.budgets") },
     { id: "playground", label: t("suggestions.playground") },
   ] as const;
 

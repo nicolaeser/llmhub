@@ -13,6 +13,7 @@ import {
   ArrowUpRight,
   BookOpen,
   Boxes,
+  Building2,
   ChartColumn,
   ChartPie,
   CircleAlert,
@@ -22,33 +23,63 @@ import {
   KeyRound,
   ListChecks,
   Network,
+  PencilLine,
   Plug,
   ScrollText,
+  Settings,
+  Trash2,
+  UserCog,
   Wrench,
   type LucideIcon,
 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/routing";
+import { assistantToolCatalog, assistantToolNames } from "@/lib/assistant/catalog";
 import { toolArgsPreview, toolErrorCode } from "@/lib/assistant/transcript";
-import type { AssistantToolPart } from "@/types/assistant";
+import type {
+  AssistantToolAccess,
+  AssistantToolGroup,
+  AssistantToolName,
+  AssistantToolPart,
+} from "@/types/assistant";
 import { NAV } from "@/app/(app)/_components/nav-data";
 import CopyButton from "@/components/console/copy-button";
 
-const TOOL_ICONS: Record<string, LucideIcon> = {
+const NAMED_ICONS: Partial<Record<AssistantToolName, LucideIcon>> = {
   get_setup_status: ListChecks,
-  get_overview: ChartColumn,
-  list_provider_kinds: Boxes,
-  list_providers: Plug,
-  list_models: Network,
-  list_keys: KeyRound,
   search_logs: ScrollText,
+  search_audit_log: ScrollText,
   usage_breakdown: ChartPie,
   explain: BookOpen,
   open_page: ArrowUpRight,
+  list_provider_kinds: Boxes,
   create_provider: CirclePlus,
   create_model: CirclePlus,
   create_key: CirclePlus,
 };
+
+const GROUP_ICONS: Record<AssistantToolGroup, LucideIcon> = {
+  general: BookOpen,
+  usage: ChartColumn,
+  providers: Plug,
+  models: Network,
+  keys: KeyRound,
+  structure: Building2,
+  access: UserCog,
+  settings: Settings,
+};
+
+const ACCESS_ICONS: Partial<Record<AssistantToolAccess, LucideIcon>> = {
+  write: PencilLine,
+  destructive: Trash2,
+};
+
+const TOOL_ICONS: Partial<Record<string, LucideIcon>> = Object.fromEntries(
+  assistantToolNames.map((name) => {
+    const { access, group } = assistantToolCatalog[name];
+    return [name, NAMED_ICONS[name] ?? ACCESS_ICONS[access] ?? GROUP_ICONS[group]];
+  }),
+);
 
 const NAV_LABELS = new Map(
   NAV.flatMap((section) => section.items).map((item) => [

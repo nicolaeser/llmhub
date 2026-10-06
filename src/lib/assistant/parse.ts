@@ -5,7 +5,12 @@ import {
   stringifyContent
 } from "@/lib/gateway/core";
 import { redactPii } from "@/lib/gateway/pii";
-import type { AssistantMessage, AssistantToolCall, AssistantLocale } from "@/types/assistant";
+import type {
+  AssistantLocale,
+  AssistantMessage,
+  AssistantModelSettings,
+  AssistantToolCall,
+} from "@/types/assistant";
 import type { JsonMap } from "@/types/gateway";
 
 const MAX_MESSAGES = 20;
@@ -30,6 +35,15 @@ export function parseAssistantModel(raw: unknown): string {
   if (!value || value.length > 200 || value.includes("..")) return "";
   if (!/^[a-zA-Z0-9][\w./:+-]*$/.test(value)) return "";
   return value;
+}
+
+export function assistantModelLocked(settings: AssistantModelSettings): boolean {
+  return settings.assistant_model_locked === true && Boolean(settings.assistant_model);
+}
+
+export function assistantAlias(requested: string, settings: AssistantModelSettings): string {
+  if (assistantModelLocked(settings)) return settings.assistant_model ?? "";
+  return requested || settings.assistant_model || "";
 }
 
 export function redactSecrets(text: string): string {
