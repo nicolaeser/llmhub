@@ -27,6 +27,7 @@ export type BatchSnapshot = {
   teamId: string;
   orgId: string;
   userId: string;
+  memberId: string;
   models: string[];
 };
 

@@ -1,11 +1,11 @@
 {
   "title": "Budget für {alias}",
-  "kindHint": "{kind, select, org {Budget der Organisation. Begrenzt alles darin.} team {Budget des Teams. Gilt gemeinsam für Mitglieder, Projekte und Schlüssel.} project {Budget des Projekts. Begrenzt die Schlüssel in diesem Projekt.} user {Persönliches Budget. Begrenzt diese Person über alle ihre Schlüssel.} key {Budget des Schlüssels. Gilt nur für diesen Schlüssel.} other {Budget}}",
+  "kindHint": "{kind, select, org {Budget des Unternehmens. Begrenzt alles darin.} team {Budget der Abteilung. Gilt gemeinsam für ihre Projekte, Personen und deren Keys.} project {Budget des Projekts. Begrenzt die Keys in diesem Projekt.} member {Persönliches Budget. Begrenzt diese Person über alle ihre Keys.} user {Budget des Konsolen-Benutzers. Begrenzt Spielwiese und interne Keys.} key {Budget des Keys. Gilt nur für diesen Key.} other {Budget}}",
   "limitSpend": "Ausgaben begrenzen",
   "amount": "Ausgabenlimit",
   "amountHint": "Anfragen werden blockiert, sobald die Ausgaben diesen Betrag erreichen.",
   "amountInvalid": "Gib einen Betrag über null ein.",
-  "exceedsParent": "Höher als {kind, select, org {die Organisation} team {das Team} project {das Projekt} user {die Person} key {der Schlüssel} other {die übergeordnete Ebene}} {alias} ({cap, number, currency}). Senke den Betrag oder erhöhe zuerst dieses Budget.",
+  "exceedsParent": "Höher als {kind, select, org {das Unternehmen} team {die Abteilung} project {das Projekt} member {die Person} user {der Konsolen-Benutzer} key {der Key} other {die übergeordnete Ebene}} {alias} ({cap, number, currency}). Senke den Betrag oder erhöhe zuerst dieses Budget.",
   "presets": "Schnellauswahl",
   "unlimitedHint": "Kein eigenes Limit. Budgets darüber gelten weiterhin.",
   "period": "Reset-Periode",

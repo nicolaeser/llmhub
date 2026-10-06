@@ -24,7 +24,7 @@ export default function AlertsCard({
   thresholds: number[];
   onSaved: (thresholds: number[]) => void;
 }) {
-  const t = useTranslations("Structure.alerts");
+  const t = useTranslations("Companies.alerts");
   const tError = useTranslations("Error");
   const format = useFormatter();
   const [draft, setDraft] = useState(90);

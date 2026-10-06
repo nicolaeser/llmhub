@@ -147,13 +147,17 @@ export const userCreateSchema = z
     password: newPasswordSchema,
     roleId: idSchema,
     orgId: z.string().max(191).optional(),
-    teamId: z.string().max(191).optional(),
   })
   .strict()
   .superRefine(rejectPersonalPassword);
 
-export const userRoleSchema = z
-  .object({ userId: idSchema, roleId: idSchema, revision: z.number().int().min(0) })
+export const userAccessSchema = z
+  .object({
+    userId: idSchema,
+    roleId: idSchema,
+    orgId: z.string().max(191),
+    revision: z.number().int().min(0),
+  })
   .strict();
 
 export const userPasswordSchema = z

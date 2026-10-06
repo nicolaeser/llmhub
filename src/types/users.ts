@@ -12,9 +12,10 @@ export type ConsoleUser = {
   isOwner: boolean;
   blocked: boolean;
   orgId: string | null;
-  teamId: string | null;
   orgAlias: string;
-  teamAlias: string;
+  maxBudget: number;
+  spend: number;
+  budgetDuration: string;
   twoFactorEnabled: boolean;
   passkeys: number;
   activeSessions: number;
@@ -29,8 +30,8 @@ export type UsersConsolePayload = {
   users: ConsoleUser[];
   roles: RoleOption[];
   orgs: TenancyOption[];
-  teams: (TenancyOption & { orgId: string | null })[];
   selfId: string;
   canManage: boolean;
   canSecure: boolean;
+  canBudget: boolean;
 };

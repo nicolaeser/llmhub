@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 const root = fileURLToPath(new URL("..", import.meta.url));
 
 const PAGES: { slug: string; english: string[] }[] = [
-  { slug: "structure", english: ["Structure & budgets", "Structure"] },
+  { slug: "companies", english: ["Companies"] },
   { slug: "users", english: ["Internal users", "Internal Users"] },
   { slug: "providers", english: ["Providers"] },
   { slug: "models", english: ["Models + Endpoints"] },

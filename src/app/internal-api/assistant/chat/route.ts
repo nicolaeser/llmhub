@@ -72,8 +72,7 @@ export async function POST(req: Request) {
           ctx: {
             userId: session.user.id,
             permissions: session.permissions,
-            teamId: session.user.teamId ?? "",
-            orgId: session.user.orgId ?? "",
+            orgId: session.user.orgId,
             locale: parseAssistantLocale(body.locale),
             allowWrite: parseAssistantWrite(body.write),
           },

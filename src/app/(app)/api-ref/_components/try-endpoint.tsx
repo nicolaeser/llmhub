@@ -278,7 +278,7 @@ export default function TryEndpoint({
                       {t.rich("apiKeyHint", {
                         surface: endpoint.style,
                         keys: (chunks) => (
-                          <Link href={management ? "/account" : "/"} className="text-accent">
+                          <Link href={management ? "/account" : "/keys"} className="text-accent">
                             {chunks}
                           </Link>
                         ),

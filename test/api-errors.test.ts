@@ -144,7 +144,7 @@ test("every error code the HTTP surfaces can emit is in the problem catalog", ()
   const sources = [
     ...walk(path.join(root, "src/app/api")),
     ...walk(path.join(root, "src/app/internal-api")),
-    ...["", "models", "providers", "structure", "logs", "model-templates"].map((dir) =>
+    ...["", "models", "providers", "companies", "logs", "model-templates"].map((dir) =>
       path.join(root, "src/app/(app)", dir, "_action.ts"),
     ),
   ];

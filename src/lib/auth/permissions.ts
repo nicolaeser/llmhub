@@ -104,6 +104,19 @@ export const roleTemplates: Readonly<Record<RoleTemplateKey, readonly Permission
   ]),
 };
 
+export const COMPANY_PERMISSIONS = [
+  "keys:read",
+  "keys:read-all",
+  "keys:manage",
+  "tenancy:read",
+  "tenancy:manage",
+  "spend:read",
+  "spend:read-all",
+  "logs:content",
+  "budgets:manage",
+  "playground:use",
+] as const satisfies readonly Permission[];
+
 export function isRoleTemplateKey(value: unknown): value is RoleTemplateKey {
   return roleTemplateKeys.includes(value as RoleTemplateKey);
 }
@@ -125,9 +138,13 @@ export function sortPermissions(list: readonly Permission[]): Permission[] {
 export function effectivePermissions(input: {
   isOwner: boolean;
   rolePermissions: unknown;
+  orgId: string | null;
 }): Permission[] {
   if (input.isOwner) return [...permissions];
-  return permissionList(input.rolePermissions);
+  const granted = permissionList(input.rolePermissions);
+  if (!input.orgId) return granted;
+  const allowed = new Set<Permission>(COMPANY_PERMISSIONS);
+  return granted.filter((permission) => allowed.has(permission));
 }
 
 export function isSubset(

@@ -4,7 +4,7 @@ import { requirePermission } from "@/lib/auth/guards";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { runAction } from "@/lib/http/action-result";
 import {
-  assignUserRole,
+  assignUserAccess,
   createUser,
   deleteUser,
   resetUserTwoFactor,
@@ -62,9 +62,9 @@ export async function setUserPasswordAction(input: unknown) {
   );
 }
 
-export async function assignUserRoleAction(input: unknown) {
+export async function assignUserAccessAction(input: unknown) {
   return runAction(() =>
-    mutateThenList(PERMISSIONS.USERS_MANAGE, (session) => assignUserRole(session, input)),
+    mutateThenList(PERMISSIONS.USERS_MANAGE, (session) => assignUserAccess(session, input)),
   );
 }
 

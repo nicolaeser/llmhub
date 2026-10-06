@@ -8,63 +8,39 @@ import { allowedModels, templateRuleSelect } from "@/lib/gateway/model-access";
 import { templateRulesOf } from "@/lib/gateway/model-policy";
 import { GateError } from "@/lib/gateway/errors";
 import { isManagementKey } from "@/lib/management/scope";
+import { resolveKeyTenancy } from "@/lib/gateway/key-tenancy";
 import type { VirtualKeyView, Principal } from "@/types/gateway";
 
-const OWNER_SELECT = { id: true, blocked: true, teamId: true, orgId: true } as const;
-
-async function liveScope(input: {
-  projectId: string | null;
-  teamId: string | null;
-  member: { teamId: string | null; orgId: string | null } | null;
-}): Promise<{ teamId: string; orgId: string }> {
-  const project = input.projectId
-    ? await prisma.project.findUnique({ where: { id: input.projectId }, select: { teamId: true } })
-    : null;
-  const bound = project?.teamId ?? input.teamId;
-  const teamId = bound ?? input.member?.teamId ?? null;
-  const team = teamId
-    ? await prisma.team.findUnique({ where: { id: teamId }, select: { id: true, orgId: true } })
-    : null;
-  if (!team) return { teamId: "", orgId: input.member?.orgId ?? "" };
-  return { teamId: team.id, orgId: team.orgId ?? (bound ? "" : (input.member?.orgId ?? "")) };
-}
-
-export async function sessionPrincipal(user: {
-  id: string;
-  teamId?: string | null;
-  orgId?: string | null;
-}): Promise<Principal> {
-  const scope = await liveScope({
-    projectId: null,
-    teamId: null,
-    member: { teamId: user.teamId ?? null, orgId: user.orgId ?? null },
-  });
-  return { actor: user.id, ...scope, userId: user.id, models: [] };
+export function sessionPrincipal(user: { id: string; orgId: string | null }): Principal {
+  return {
+    actor: user.id,
+    teamId: "",
+    orgId: user.orgId ?? "",
+    userId: user.id,
+    memberId: "",
+    models: [],
+  };
 }
 
 const keyInclude = {
-  user: { select: OWNER_SELECT },
   templates: { select: { templateId: true, template: { select: templateRuleSelect } } },
 } as const;
 
 async function principalFromKey(
   row: Omit<Parameters<typeof toKeyView>[0], "templates"> & {
-    user: { id: string; blocked: boolean; teamId: string | null; orgId: string | null } | null;
     templates: { templateId: string; template: Parameters<typeof templateRulesOf>[0] }[];
   },
 ): Promise<Principal | null> {
-  if (!row.user || row.user.blocked) return null;
+  const { tenancy, active } = await resolveKeyTenancy(row);
+  if (!active) return null;
   const key: VirtualKeyView = toKeyView(row);
-  const scope = await liveScope({
-    projectId: row.projectId,
-    teamId: row.teamId,
-    member: row.user,
-  });
   return {
     actor: row.prefix,
     key,
-    ...scope,
-    userId: row.user.id,
+    teamId: tenancy.teamId,
+    orgId: tenancy.orgId,
+    userId: tenancy.userId,
+    memberId: tenancy.memberId,
     models: await allowedModels(
       key.models,
       row.templates.map((link) => templateRulesOf(link.template)),
@@ -100,6 +76,7 @@ export async function authenticateBearer(token: string): Promise<Principal> {
     const permissions = effectivePermissions({
       isOwner: user.isOwner,
       rolePermissions: user.role?.permissions ?? [],
+      orgId: user.orgId,
     });
     if (!hasPerm(permissions, PERMISSIONS.PLAYGROUND_USE)) {
       throw new GateError(403, "permission_denied", "playground access is not allowed for this user");

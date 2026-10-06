@@ -3,7 +3,7 @@
 import prisma from "@/lib/db/prisma";
 import { requirePermission } from "@/lib/auth/guards";
 import { hasPerm, PERMISSIONS } from "@/lib/auth/permissions";
-import { seesAllSpend } from "@/lib/auth/scope";
+import { companyOf, seesAllSpend, spendScope } from "@/lib/auth/scope";
 import { writeAudit } from "@/lib/gateway/audit";
 import { requestTranscript, responseTranscript } from "@/lib/gateway/log-content";
 import {
@@ -19,10 +19,11 @@ import type { LogOptions, RequestLogDetail, RequestLogRow } from "@/types/logs";
 
 const OPTION_LIMIT = 500;
 
-async function labels(rows: { keyId: string; userId: string }[]) {
+async function labels(rows: { keyId: string; userId: string; memberId: string }[]) {
   const keyIds = [...new Set(rows.map((row) => row.keyId).filter(Boolean))];
   const userIds = [...new Set(rows.map((row) => row.userId).filter(Boolean))];
-  const [keys, users] = await Promise.all([
+  const memberIds = [...new Set(rows.map((row) => row.memberId).filter(Boolean))];
+  const [keys, users, members] = await Promise.all([
     keyIds.length
       ? prisma.virtualKey.findMany({
           where: { id: { in: keyIds } },
@@ -32,10 +33,14 @@ async function labels(rows: { keyId: string; userId: string }[]) {
     userIds.length
       ? prisma.user.findMany({ where: { id: { in: userIds } }, select: { id: true, username: true } })
       : [],
+    memberIds.length
+      ? prisma.member.findMany({ where: { id: { in: memberIds } }, select: { id: true, name: true } })
+      : [],
   ]);
   return {
     keys: new Map(keys.map((key) => [key.id, key.keyAlias || key.prefix])),
     users: new Map(users.map((user) => [user.id, user.username])),
+    members: new Map(members.map((member) => [member.id, member.name])),
   };
 }
 
@@ -56,6 +61,8 @@ function rowView(
     keyLabel: names.keys.get(row.keyId) ?? "",
     userId: row.userId,
     userLabel: names.users.get(row.userId) ?? "",
+    memberId: row.memberId,
+    memberLabel: names.members.get(row.memberId) ?? "",
     teamId: row.teamId,
     orgId: row.orgId,
     projectId: row.projectId,
@@ -73,14 +80,14 @@ function rowView(
 export async function loadLogsAction(input?: { page?: number; pageSize?: number; filters?: unknown }) {
   return runAction(async () => {
     const session = await requirePermission(PERMISSIONS.SPEND_READ);
-    const scoped = seesAllSpend(session);
-    const owner = scoped ? null : session.user.id;
+    const scoped = seesAllSpend(session) && !companyOf(session);
+    const scope = spendScope(session);
     const page = Math.max(1, Math.trunc(input?.page ?? 1) || 1);
     const pageSize = Math.min(100, Math.max(10, Math.trunc(input?.pageSize ?? 50) || 50));
     const skip = (page - 1) * pageSize;
     const filters = parseLogFilters(input?.filters);
-    const requestWhere = requestLogWhere(filters, owner);
-    const spendWhere = spendEventWhere(filters, owner);
+    const requestWhere = requestLogWhere(filters, scope);
+    const spendWhere = spendEventWhere(filters, scope);
     const auditWhere = auditLogWhere(filters);
     const [requests, spend, audit, requestTotal, spendTotal, auditTotal] = await Promise.all([
       prisma.requestLog.findMany({
@@ -142,16 +149,21 @@ export async function loadLogsAction(input?: { page?: number; pageSize?: number;
 export async function loadLogOptionsAction() {
   return runAction(async () => {
     const session = await requirePermission(PERMISSIONS.SPEND_READ);
+    const company = companyOf(session);
     const scoped = seesAllSpend(session);
     const [keys, users] = await Promise.all([
       prisma.virtualKey.findMany({
-        where: scoped ? {} : { userId: session.user.id },
+        where: {
+          ...(company ? { orgId: company } : {}),
+          ...(scoped ? {} : { userId: session.user.id }),
+        },
         orderBy: { keyAlias: "asc" },
         take: OPTION_LIMIT,
         select: { id: true, keyAlias: true, prefix: true },
       }),
       scoped
         ? prisma.user.findMany({
+            where: company ? { orgId: company } : {},
             orderBy: { username: "asc" },
             take: OPTION_LIMIT,
             select: { id: true, username: true },
@@ -171,7 +183,7 @@ export async function loadLogDetailAction(id: string) {
     if (typeof id !== "string" || !id) return actionFail("MISSING_ID");
     const canViewContent = hasPerm(session.permissions, PERMISSIONS.LOGS_CONTENT);
     const row = await prisma.requestLog.findFirst({
-      where: { id, ...(seesAllSpend(session) ? {} : { userId: session.user.id }) },
+      where: { id, ...spendScope(session) },
       include: { content: { select: { logId: true } } },
     });
     if (!row) return actionFail("NOT_FOUND");

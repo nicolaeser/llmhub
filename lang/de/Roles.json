@@ -65,12 +65,12 @@
       "description": "Routing, Aliase und Deployments bearbeiten."
     },
     "tenancyRead": {
-      "label": "Mandanten ansehen",
-      "description": "Organisationen, Teams und Projekte sehen."
+      "label": "Unternehmen ansehen",
+      "description": "Unternehmen, Abteilungen, Projekte und Personen sehen."
     },
     "tenancyManage": {
-      "label": "Mandanten verwalten",
-      "description": "Organisationen, Teams und Projekte anlegen und ändern."
+      "label": "Unternehmen verwalten",
+      "description": "Unternehmen, Abteilungen, Projekte und Personen anlegen und ändern."
     },
     "spendRead": {
       "label": "Eigene Nutzung ansehen",

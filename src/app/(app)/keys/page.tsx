@@ -18,12 +18,13 @@ import EmptyState from "@/components/console/empty-state";
 import PageHeader from "@/components/console/page-header";
 import StatCard from "@/components/console/stat-card";
 import GettingStarted from "@/app/(app)/_components/getting-started";
+import { bindingKind, parsePreset, placeOf } from "@/app/(app)/_components/key-binding";
 import { KeyDialog } from "@/app/(app)/_components/key-dialog";
 import { loadKeysPageAction, revokeKeyAction, rotateKeyAction } from "@/app/(app)/_action";
-import { setBudgetAction } from "@/app/(app)/structure/_action";
+import { setBudgetAction } from "@/app/(app)/companies/_action";
 import { isActionFail } from "@/lib/http/action-result";
 import type { VirtualKeyView } from "@/types/gateway";
-import type { KeyOptions } from "@/types/keys";
+import type { KeyOptions, KeyPreset } from "@/types/keys";
 import type { BudgetResult, BudgetView } from "@/types/structure";
 
 function keyBudget(row: VirtualKeyView): BudgetView {
@@ -47,11 +48,18 @@ export default function KeysPage() {
   const format = useFormatter();
   const [loading, setLoading] = useState(true);
   const [keys, setKeys] = useState<VirtualKeyView[]>([]);
-  const [teams, setTeams] = useState<KeyOptions["teams"]>([]);
-  const [projects, setProjects] = useState<KeyOptions["projects"]>([]);
-  const [aliases, setAliases] = useState<string[]>([]);
-  const [templates, setTemplates] = useState<KeyOptions["templates"]>([]);
+  const [options, setOptions] = useState<KeyOptions>({
+    companyId: "",
+    orgs: [],
+    teams: [],
+    projects: [],
+    members: [],
+    models: [],
+    templates: [],
+  });
+  const [owners, setOwners] = useState<Record<string, string>>({});
   const [providerCount, setProviderCount] = useState(0);
+  const [canManage, setCanManage] = useState(false);
   const [canBudget, setCanBudget] = useState(false);
   const [budgetKey, setBudgetKey] = useState<VirtualKeyView | null>(null);
   const [overview, setOverview] = useState({
@@ -62,14 +70,17 @@ export default function KeysPage() {
   const [query, setQuery] = useState("");
   const [secret, setSecret] = useState<string | null>(null);
   const [editing, setEditing] = useState<VirtualKeyView | null>(null);
+  const [preset, setPreset] = useState<KeyPreset | null>(null);
   const [dialogKey, setDialogKey] = useState(0);
   const [busy, setBusy] = useState<{ id: string; action: "rotate" | "revoke" } | null>(null);
   const [, start] = useTransition();
   const dialogState = useOverlayState();
   const budgetState = useOverlayState();
+  const openKeyDialog = dialogState.open;
 
-  function openDialog(row: VirtualKeyView | null) {
+  function openDialog(row: VirtualKeyView | null, next: KeyPreset | null = null) {
     setEditing(row);
+    setPreset(next);
     setDialogKey((n) => n + 1);
     dialogState.open();
   }
@@ -137,25 +148,62 @@ export default function KeysPage() {
     loadKeysPageAction().then((res) => {
       if (!isActionFail(res)) {
         setKeys(res.keys);
-        setTeams(res.teams);
-        setProjects(res.projects);
-        setAliases(res.models);
-        setTemplates(res.templates);
+        setOptions({
+          companyId: res.companyId,
+          orgs: res.orgs,
+          teams: res.teams,
+          projects: res.projects,
+          members: res.members,
+          models: res.models,
+          templates: res.templates,
+        });
+        setOwners(res.owners);
         setProviderCount(res.providers);
+        setCanManage(res.canManage);
         setCanBudget(res.canBudget);
         setOverview(res.overview);
+        const requested = parsePreset(new URLSearchParams(window.location.search).get("new"));
+        if (requested && res.canManage) {
+          window.history.replaceState(null, "", window.location.pathname);
+          setEditing(null);
+          setPreset(requested);
+          setDialogKey((n) => n + 1);
+          openKeyDialog();
+        }
       }
       setLoading(false);
     });
-  }, []);
+  }, [openKeyDialog]);
 
   function accessLabel(row: VirtualKeyView): string {
     if (!row.templates.length && !row.models.length) return t("allModels");
-    const names = templates.filter((template) => row.templates.includes(template.id)).map((template) => template.name);
+    const names = options.templates
+      .filter((template) => row.templates.includes(template.id))
+      .map((template) => template.name);
     return format.list(
       row.models.length ? [...names, t("modelCount", { count: row.models.length })] : names,
       { type: "unit" },
     );
+  }
+
+  function binding(row: VirtualKeyView) {
+    const kind = bindingKind(row);
+    const target =
+      kind === "project"
+        ? options.projects.find((item) => item.id === row.project_id)
+        : kind === "member"
+          ? options.members.find((item) => item.id === row.member_id)
+          : undefined;
+    const place = placeOf(options, row.org_id, row.team_id);
+    const name = target?.alias ?? (kind === "internal" ? owners[row.user_id] : undefined);
+    return {
+      name: name || tCommon("none"),
+      path: t("binding.path", {
+        kind,
+        hasPlace: place.org ? "yes" : "no",
+        place: t("binding.place", { org: place.org, team: place.team, hasTeam: place.team ? "yes" : "no" }),
+      }),
+    };
   }
 
   const filtered = useMemo(() => {
@@ -181,17 +229,14 @@ export default function KeysPage() {
     );
   }
 
-  const createButton = (
-    <Button
-      aria-label={t("create")}
-      onPress={() => openDialog(null)}
-    >
+  const createButton = canManage ? (
+    <Button onPress={() => openDialog(null)}>
       <Plus size={16} aria-hidden />
       {t("create")}
     </Button>
-  );
+  ) : undefined;
   const setupIncomplete =
-    providerCount === 0 || aliases.length === 0 || keys.length === 0;
+    canManage && (providerCount === 0 || options.models.length === 0 || keys.length === 0);
 
   return (
     <div className="space-y-5">
@@ -204,7 +249,7 @@ export default function KeysPage() {
       {setupIncomplete ? (
         <GettingStarted
           providers={providerCount}
-          models={aliases.length}
+          models={options.models.length}
           keys={keys.length}
           onCreateKey={() => openDialog(null)}
         />
@@ -266,96 +311,106 @@ export default function KeysPage() {
                 <Table.Content>
                   <Table.Header>
                     <Table.Column isRowHeader>{t("columns.name")}</Table.Column>
-                    <Table.Column>{t("columns.secret")}</Table.Column>
+                    <Table.Column>{t("columns.binding")}</Table.Column>
                     <Table.Column>{t("columns.access")}</Table.Column>
                     <Table.Column>{t("columns.spend")}</Table.Column>
                     <Table.Column>{t("columns.status")}</Table.Column>
                     <Table.Column>{tCommon("actions")}</Table.Column>
                   </Table.Header>
                   <Table.Body>
-                    {filtered.map((row) => (
-                      <Table.Row key={row.token_id} id={row.token_id}>
-                        <Table.Cell>
-                          <div className="font-medium">{row.key_alias || tCommon("none")}</div>
-                          <div className="font-mono text-xs text-muted">
-                            {row.token_id}
-                          </div>
-                        </Table.Cell>
-                        <Table.Cell>
-                          <span className="font-mono text-xs">{row.key_name}…</span>
-                        </Table.Cell>
-                        <Table.Cell>
-                          <span className="text-sm">{accessLabel(row)}</span>
-                        </Table.Cell>
-                        <Table.Cell>
-                          {tCommon("spendBudget", {
-                            hasCap: row.max_budget > 0 ? "yes" : "no",
-                            spend: row.spend,
-                            budget: row.max_budget,
-                          })}
-                        </Table.Cell>
-                        <Table.Cell>
-                          <div className="flex flex-wrap gap-1">
-                            <Chip size="sm" variant="soft">
-                              {tCommon("blockedState", {
-                                blocked: row.blocked ? "true" : "false",
-                              })}
-                            </Chip>
-                            {row.log_content ? null : (
-                              <Chip size="sm" variant="soft" color="warning">
-                                {t("contentOff")}
+                    {filtered.map((row) => {
+                      const bound = binding(row);
+                      return (
+                        <Table.Row key={row.token_id} id={row.token_id}>
+                          <Table.Cell>
+                            <div className="font-medium">{row.key_alias || tCommon("none")}</div>
+                            <div className="font-mono text-xs text-muted">{row.key_name}…</div>
+                          </Table.Cell>
+                          <Table.Cell>
+                            <div className="min-w-0">
+                              <p className="text-sm">{bound.name}</p>
+                              <p className="text-xs text-muted">{bound.path}</p>
+                            </div>
+                          </Table.Cell>
+                          <Table.Cell>
+                            <span className="text-sm">{accessLabel(row)}</span>
+                          </Table.Cell>
+                          <Table.Cell>
+                            {tCommon("spendBudget", {
+                              hasCap: row.max_budget > 0 ? "yes" : "no",
+                              spend: row.spend,
+                              budget: row.max_budget,
+                            })}
+                          </Table.Cell>
+                          <Table.Cell>
+                            <div className="flex flex-wrap gap-1">
+                              <Chip size="sm" variant="soft">
+                                {tCommon("blockedState", {
+                                  blocked: row.blocked ? "true" : "false",
+                                })}
                               </Chip>
-                            )}
-                          </div>
-                        </Table.Cell>
-                        <Table.Cell>
-                          <div className="flex gap-1">
-                            <Button
-                              isIconOnly
-                              size="sm"
-                              variant="ghost"
-                              aria-label={t("edit")}
-                              onPress={() => openDialog(row)}
-                            >
-                              <Pencil size={14} aria-hidden />
-                            </Button>
-                            {canBudget ? (
-                              <Button
-                                isIconOnly
-                                size="sm"
-                                variant="ghost"
-                                aria-label={t("budget")}
-                                onPress={() => openBudget(row)}
-                              >
-                                <Wallet size={14} aria-hidden />
-                              </Button>
-                            ) : null}
-                            <Button
-                              isIconOnly
-                              size="sm"
-                              variant="ghost"
-                              aria-label={t("rotate")}
-                              isPending={busy?.id === row.token_id && busy.action === "rotate"}
-                              isDisabled={busy !== null && busy.id !== row.token_id}
-                              onPress={() => rotate(row.token_id)}
-                            >
-                              <RefreshCw size={14} aria-hidden />
-                            </Button>
-                            <Button
-                              isIconOnly
-                              size="sm"
-                              variant="danger-soft"
-                              aria-label={t("revoke")}
-                              isPending={busy?.id === row.token_id && busy.action === "revoke"}
-                              isDisabled={busy !== null && busy.id !== row.token_id}
-                              onPress={() => revoke(row.token_id)}
-                            >
-                              <Trash2 size={14} aria-hidden />
-                            </Button>
-                          </div>
-                        </Table.Cell>
-                      </Table.Row>
-                    ))}
+                              {row.log_content ? null : (
+                                <Chip size="sm" variant="soft" color="warning">
+                                  {t("contentOff")}
+                                </Chip>
+                              )}
+                            </div>
+                          </Table.Cell>
+                          <Table.Cell>
+                            <div className="flex gap-1">
+                              {canManage ? (
+                                <Button
+                                  isIconOnly
+                                  size="sm"
+                                  variant="ghost"
+                                  aria-label={t("edit")}
+                                  onPress={() => openDialog(row)}
+                                >
+                                  <Pencil size={14} aria-hidden />
+                                </Button>
+                              ) : null}
+                              {canBudget ? (
+                                <Button
+                                  isIconOnly
+                                  size="sm"
+                                  variant="ghost"
+                                  aria-label={t("budget")}
+                                  onPress={() => openBudget(row)}
+                                >
+                                  <Wallet size={14} aria-hidden />
+                                </Button>
+                              ) : null}
+                              {canManage ? (
+                                <>
+                                  <Button
+                                    isIconOnly
+                                    size="sm"
+                                    variant="ghost"
+                                    aria-label={t("rotate")}
+                                    isPending={busy?.id === row.token_id && busy.action === "rotate"}
+                                    isDisabled={busy !== null && busy.id !== row.token_id}
+                                    onPress={() => rotate(row.token_id)}
+                                  >
+                                    <RefreshCw size={14} aria-hidden />
+                                  </Button>
+                                  <Button
+                                    isIconOnly
+                                    size="sm"
+                                    variant="danger-soft"
+                                    aria-label={t("revoke")}
+                                    isPending={busy?.id === row.token_id && busy.action === "revoke"}
+                                    isDisabled={busy !== null && busy.id !== row.token_id}
+                                    onPress={() => revoke(row.token_id)}
+                                  >
+                                    <Trash2 size={14} aria-hidden />
+                                  </Button>
+                                </>
+                              ) : null}
+                            </div>
+                          </Table.Cell>
+                        </Table.Row>
+                      );
+                    })}
                   </Table.Body>
                 </Table.Content>
               </Table.ScrollContainer>
@@ -381,7 +436,8 @@ export default function KeysPage() {
         key={dialogKey}
         state={dialogState}
         editing={editing}
-        options={{ teams, projects, models: aliases, templates }}
+        preset={preset}
+        options={options}
         onSaved={(row, created) => {
           upsertKey(row);
           if (created) setSecret(created);

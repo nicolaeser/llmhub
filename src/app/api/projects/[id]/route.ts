@@ -1,4 +1,4 @@
-import { deleteNodeAction, saveProjectAction } from "@/app/(app)/structure/_action";
+import { deleteNodeAction, saveProjectAction } from "@/app/(app)/companies/_action";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { managementRoute, readBody, respond, unwrap } from "@/lib/management/http";
 import { serializeProject } from "@/lib/management/serialize";
@@ -19,7 +19,8 @@ export const PATCH = managementRoute<{ id: string }>(PERMISSIONS.TENANCY_MANAGE,
     await saveProjectAction({
       id: existing.id,
       alias: body.alias ?? existing.alias,
-      teamId: body.team_id ?? existing.teamId,
+      orgId: existing.orgId,
+      teamId: body.team_id === undefined ? existing.teamId : (body.team_id ?? ""),
       owner: body.owner ?? existing.owner,
     }),
   );

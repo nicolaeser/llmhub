@@ -1,12 +1,14 @@
 import type { SpendHolder } from "@/types/gateway";
 
-export type BudgetKind = "org" | "team" | "project" | "user" | "key";
+export type BudgetKind = "org" | "team" | "project" | "member" | "user" | "key";
 
-export type NodeKind = "org" | "team" | "project";
+export type NodeKind = "org" | "team" | "project" | "member";
 
 export type NodeRef = { kind: NodeKind; id: string };
 
-export type SetupStep = "org" | "team" | "project" | "members" | "budget";
+export type SetupStep = "org" | "team" | "project" | "member" | "budget";
+
+export type SpendScope = { orgId?: string; userId?: string };
 
 export type BoostView = { id: string; amount: number; until: string };
 
@@ -45,6 +47,7 @@ export type TeamNode = {
 export type ProjectNode = {
   id: string;
   alias: string;
+  orgId: string;
   teamId: string;
   owner: string;
   budget: BudgetView;
@@ -52,11 +55,19 @@ export type ProjectNode = {
 
 export type MemberNode = {
   id: string;
-  username: string;
+  alias: string;
   email: string;
   orgId: string;
   teamId: string;
   blocked: boolean;
+  logContent: boolean;
+  budget: BudgetView;
+};
+
+export type ConsoleUserNode = {
+  id: string;
+  alias: string;
+  orgId: string;
   budget: BudgetView;
 };
 
@@ -65,8 +76,10 @@ export type KeyNode = {
   alias: string;
   prefix: string;
   userId: string;
+  orgId: string;
   teamId: string;
   projectId: string;
+  memberId: string;
   blocked: boolean;
   budget: BudgetView;
 };
@@ -75,11 +88,32 @@ export type StructurePayload = {
   orgs: OrgNode[];
   teams: TeamNode[];
   projects: ProjectNode[];
-  users: MemberNode[];
+  members: MemberNode[];
+  users: ConsoleUserNode[];
   keys: KeyNode[];
   thresholds: number[];
+  companyId: string;
   canManage: boolean;
   canBudget: boolean;
+  canCreateKeys: boolean;
+};
+
+export type MemberInput = {
+  id?: string;
+  alias: string;
+  email: string;
+  orgId: string;
+  teamId: string;
+  blocked: boolean;
+  logContent: boolean;
+};
+
+export type ProjectInput = {
+  id?: string;
+  alias: string;
+  orgId: string;
+  teamId: string;
+  owner: string;
 };
 
 export type BudgetTarget = { kind: BudgetKind; id: string; alias: string };
@@ -103,8 +137,6 @@ export type BudgetResult = { kind: BudgetKind; id: string; budget: BudgetView };
 export type HolderRecord = {
   alias: string;
   row: SpendHolder;
-  userId: string | null;
-  projectId: string | null;
-  teamId: string | null;
   orgId: string | null;
+  links: { kind: BudgetKind; id: string | null }[];
 };

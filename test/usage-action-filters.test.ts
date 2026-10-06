@@ -9,31 +9,21 @@ function exportedAsyncFn(source: string, name: string): string {
   return next === -1 ? source.slice(start) : source.slice(start, next);
 }
 
-test("loadUsageAction accepts tenant filters, uses seesAllSpend, and returns rollups", async () => {
+test("loadUsageAction accepts tenant filters, applies the spend scope last, and returns rollups", async () => {
   const source = await readFile(
     new URL("../src/app/(app)/_action.ts", import.meta.url),
     "utf8",
   );
-  assert.match(source, /seesAllSpend/);
   const fn = exportedAsyncFn(source, "loadUsageAction");
-  assert.match(fn, /teamId\?: string/);
-  assert.match(fn, /orgId\?: string/);
-  assert.match(fn, /projectId\?: string/);
-  assert.match(fn, /keyId\?: string/);
-  assert.match(fn, /userId\?: string/);
-  assert.match(fn, /seesAllSpend\(session\)/);
-  assert.match(fn, /\.\.\.\(teamId \? \{ teamId \} : \{\}\)/);
-  assert.match(fn, /\.\.\.\(orgId \? \{ orgId \} : \{\}\)/);
-  assert.match(fn, /\.\.\.\(projectId \? \{ projectId \} : \{\}\)/);
-  assert.match(fn, /\.\.\.\(keyId \? \{ keyId \} : \{\}\)/);
-  assert.match(fn, /\.\.\.\(userId \? \{ userId \} : \{\}\)/);
-  assert.match(fn, /byTeam:/);
-  assert.match(fn, /byOrg:/);
-  assert.match(fn, /byProject:/);
-  assert.match(fn, /byKey:/);
-  assert.match(fn, /byUser:/);
-  assert.match(fn, /healthByModel:/);
-  assert.match(fn, /healthByTeam:/);
+  for (const field of ["teamId", "orgId", "projectId", "memberId", "keyId", "userId"]) {
+    assert.match(fn, new RegExp(`${field}\\?: string`), field);
+    assert.match(fn, new RegExp(`\\.\\.\\.\\(${field} \\? \\{ ${field} \\} : \\{\\}\\)`), field);
+  }
+  assert.match(fn, /\.\.\.\(userId \? \{ userId \} : \{\}\),\n\s+\.\.\.spendScope\(session\),/);
+  for (const group of ["byTeam", "byOrg", "byProject", "byMember", "byKey", "byUser", "healthByModel", "healthByTeam"]) {
+    assert.match(fn, new RegExp(`${group}:`), group);
+  }
+  assert.match(fn, /names: await usageNames\(rows\)/);
   assert.match(fn, /chargeback:/);
   assert.match(fn, /p95Latency:/);
   assert.match(fn, /rate429/);

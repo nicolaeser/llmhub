@@ -138,6 +138,7 @@ export async function getSession(): Promise<SessionResult> {
     permissions: effectivePermissions({
       isOwner: user.isOwner,
       rolePermissions: role?.permissions ?? [],
+      orgId: user.orgId,
     }),
     secondFactor: factor,
     ipAddress: row.ipAddress,

@@ -1,5 +1,6 @@
 import type { Prisma } from "@/generated/prisma/client";
 import type { LogFilterValues } from "@/types/logs";
+import type { SpendScope } from "@/types/structure";
 
 const DAY_MS = 86_400_000;
 const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
@@ -34,18 +35,20 @@ export function createdAtRange(from: string, to: string): Prisma.DateTimeFilter 
   return Object.keys(range).length ? range : undefined;
 }
 
-function people(filters: LogFilterValues, ownerId: string | null) {
-  if (ownerId) return { userId: ownerId };
-  return filters.userId ? { userId: filters.userId } : {};
+function scoped(filters: LogFilterValues, scope: SpendScope) {
+  return {
+    ...(filters.userId ? { userId: filters.userId } : {}),
+    ...(filters.keyId ? { keyId: filters.keyId } : {}),
+    ...(filters.model ? { model: filters.model } : {}),
+    ...scope,
+  };
 }
 
-export function requestLogWhere(filters: LogFilterValues, ownerId: string | null): Prisma.RequestLogWhereInput {
+export function requestLogWhere(filters: LogFilterValues, scope: SpendScope): Prisma.RequestLogWhereInput {
   const status = filters.status ? Number(filters.status) : Number.NaN;
   const createdAt = createdAtRange(filters.from, filters.to);
   return {
-    ...people(filters, ownerId),
-    ...(filters.keyId ? { keyId: filters.keyId } : {}),
-    ...(filters.model ? { model: filters.model } : {}),
+    ...scoped(filters, scope),
     ...(Number.isInteger(status) ? { status } : {}),
     ...(filters.endpoint ? { endpoint: { contains: filters.endpoint } } : {}),
     ...(filters.pii ? { OR: [{ piiInput: { isEmpty: false } }, { piiOutput: { isEmpty: false } }] } : {}),
@@ -53,12 +56,10 @@ export function requestLogWhere(filters: LogFilterValues, ownerId: string | null
   };
 }
 
-export function spendEventWhere(filters: LogFilterValues, ownerId: string | null): Prisma.SpendEventWhereInput {
+export function spendEventWhere(filters: LogFilterValues, scope: SpendScope): Prisma.SpendEventWhereInput {
   const createdAt = createdAtRange(filters.from, filters.to);
   return {
-    ...people(filters, ownerId),
-    ...(filters.keyId ? { keyId: filters.keyId } : {}),
-    ...(filters.model ? { model: filters.model } : {}),
+    ...scoped(filters, scope),
     ...(createdAt ? { createdAt } : {}),
   };
 }

@@ -19,11 +19,12 @@
   },
   "group": {
     "model": "Model",
-    "team": "Team",
-    "org": "Organization",
+    "org": "Company",
+    "team": "Department",
     "project": "Project",
+    "member": "Person",
     "key": "Key",
-    "user": "User"
+    "user": "Console user"
   },
   "chargeback": "Chargeback CSV",
   "columns": {

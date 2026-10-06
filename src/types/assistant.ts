@@ -82,8 +82,7 @@ export type AssistantLocale = "en" | "de";
 export type AssistantContext = {
   userId: string;
   permissions: Permission[];
-  teamId: string;
-  orgId: string;
+  orgId: string | null;
   locale: AssistantLocale;
   allowWrite: boolean;
 };

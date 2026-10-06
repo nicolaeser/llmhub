@@ -23,22 +23,19 @@ import AlertsCard from "./_components/alerts-card";
 import BoostDialog from "./_components/boost-dialog";
 import BudgetCard from "./_components/budget-card";
 import ChildrenCard from "./_components/children-card";
+import CompanyTree from "./_components/company-tree";
 import KeysCard from "./_components/keys-card";
 import MembersCard from "./_components/members-card";
 import NodeDialog from "./_components/node-dialog";
 import SetupSteps, { setupDone } from "./_components/setup-steps";
-import StructureTree from "./_components/structure-tree";
 import { budgetOf, chainOf, nodeExists, parseNodeRef, withBudget } from "./_components/tree-model";
 
 function firstNode(data: StructurePayload): NodeRef | null {
-  if (data.orgs[0]) return { kind: "org", id: data.orgs[0].id };
-  if (data.teams[0]) return { kind: "team", id: data.teams[0].id };
-  if (data.projects[0]) return { kind: "project", id: data.projects[0].id };
-  return null;
+  return data.orgs[0] ? { kind: "org", id: data.orgs[0].id } : null;
 }
 
-export default function StructurePage() {
-  const t = useTranslations("Structure");
+export default function CompaniesPage() {
+  const t = useTranslations("Companies");
   const tCommon = useTranslations("Common");
   const tError = useTranslations("Error");
   const format = useFormatter();
@@ -49,8 +46,9 @@ export default function StructurePage() {
   const [nodeForm, setNodeForm] = useState<{
     kind: NodeKind;
     editingId: string | null;
-    parentId: string;
-  }>({ kind: "org", editingId: null, parentId: "" });
+    orgId: string;
+    teamId: string;
+  }>({ kind: "org", editingId: null, orgId: "", teamId: "" });
   const [budgetTarget, setBudgetTarget] = useState<BudgetTarget | null>(null);
   const [dialogKey, setDialogKey] = useState(0);
   const [deleting, startDelete] = useTransition();
@@ -68,13 +66,17 @@ export default function StructurePage() {
     });
   }, []);
 
-  function select(ref: NodeRef) {
+  function select(ref: NodeRef | null) {
     setPicked(ref);
-    window.history.replaceState(null, "", `?node=${ref.kind}:${ref.id}`);
+    window.history.replaceState(
+      null,
+      "",
+      ref ? `?node=${ref.kind}:${ref.id}` : window.location.pathname,
+    );
   }
 
-  function openNode(kind: NodeKind, editingId: string | null, parentId: string) {
-    setNodeForm({ kind, editingId, parentId });
+  function openNode(kind: NodeKind, editingId: string | null, orgId: string, teamId = "") {
+    setNodeForm({ kind, editingId, orgId, teamId });
     setDialogKey((n) => n + 1);
     nodeState.open();
   }
@@ -117,39 +119,61 @@ export default function StructurePage() {
     );
   }
 
+  const platform = !data.companyId;
   const selected =
     [picked, parseNodeRef(nodeParam)].find((ref) => nodeExists(data, ref)) ?? firstNode(data);
   const org = selected?.kind === "org" ? data.orgs.find((row) => row.id === selected.id) : undefined;
-  const team =
-    selected?.kind === "team" ? data.teams.find((row) => row.id === selected.id) : undefined;
+  const team = selected?.kind === "team" ? data.teams.find((row) => row.id === selected.id) : undefined;
   const project =
-    selected?.kind === "project"
-      ? data.projects.find((row) => row.id === selected.id)
-      : undefined;
-  const parentTeam = project ? data.teams.find((row) => row.id === project.teamId) : undefined;
-  const parentOrg = data.orgs.find((row) => row.id === (team?.orgId ?? parentTeam?.orgId));
-  const node = org ?? team ?? project;
+    selected?.kind === "project" ? data.projects.find((row) => row.id === selected.id) : undefined;
+  const member =
+    selected?.kind === "member" ? data.members.find((row) => row.id === selected.id) : undefined;
+  const placed = team ?? project ?? member;
+  const node = org ?? placed;
+  const orgId = org?.id ?? placed?.orgId ?? "";
+  const teamId = team?.id ?? project?.teamId ?? member?.teamId ?? "";
+  const parentOrg = data.orgs.find((row) => row.id === orgId);
+  const parentTeam = !team ? data.teams.find((row) => row.id === teamId) : undefined;
   const crumbs = [
     ...(parentOrg && !org ? [{ ref: `org:${parentOrg.id}`, alias: parentOrg.alias }] : []),
     ...(parentTeam ? [{ ref: `team:${parentTeam.id}`, alias: parentTeam.alias }] : []),
     ...(node && selected ? [{ ref: `${selected.kind}:${node.id}`, alias: node.alias }] : []),
   ];
-  const membersOf = (teamId: string) => data.users.filter((user) => user.teamId === teamId);
-  const keysOf = (kind: "team" | "project", id: string) =>
-    data.keys.filter((key) => (kind === "team" ? key.teamId : key.projectId) === id);
-  const firstTeam = data.teams.find((row) => row.orgId) ?? data.teams[0];
+  const projectsIn = (where: { orgId?: string; teamId?: string }) =>
+    data.projects.filter(
+      (row) => (!where.orgId || row.orgId === where.orgId) && (!where.teamId || row.teamId === where.teamId),
+    );
+  const membersIn = (where: { orgId?: string; teamId?: string }) =>
+    data.members.filter(
+      (row) => (!where.orgId || row.orgId === where.orgId) && (!where.teamId || row.teamId === where.teamId),
+    );
+  const keysOf = (kind: NodeKind, id: string) =>
+    data.keys.filter((key) =>
+      kind === "org"
+        ? key.orgId === id
+        : kind === "team"
+          ? key.teamId === id
+          : kind === "project"
+            ? key.projectId === id
+            : key.memberId === id,
+    );
+  const teamAlias = (id: string) => data.teams.find((row) => row.id === id)?.alias ?? "";
   const done = setupDone(data);
   const showSteps = data.canManage && Object.values(done).some((value) => !value);
   const budgetFor = budgetTarget ? budgetOf(data, budgetTarget.kind, budgetTarget.id) : null;
+  const canEditNode = data.canManage && (selected?.kind !== "org" || platform);
+  const canBudgetNode = data.canBudget && (selected?.kind !== "org" || platform);
 
   function onStep(step: SetupStep) {
-    const orgId = org?.id ?? parentOrg?.id ?? data?.orgs[0]?.id ?? "";
+    const target = orgId || data?.orgs[0]?.id || "";
     if (step === "org") openNode("org", null, "");
-    if (step === "team") openNode("team", null, orgId);
-    if (step === "project") openNode("project", null, team?.id ?? firstTeam?.id ?? "");
-    if (step === "members" && firstTeam) select({ kind: "team", id: firstTeam.id });
+    if (step === "team") openNode("team", null, target);
+    if (step === "project") openNode("project", null, target, team?.id ?? "");
+    if (step === "member") openNode("member", null, target, team?.id ?? "");
     if (step === "budget" && data?.orgs[0]) {
-      openBudget({ kind: "org", id: data.orgs[0].id, alias: data.orgs[0].alias }, budgetState);
+      const kind = platform ? "org" : data.teams[0] ? "team" : null;
+      const row = kind === "org" ? data.orgs[0] : data.teams[0];
+      if (kind && row) openBudget({ kind, id: row.id, alias: row.alias }, budgetState);
     }
   }
 
@@ -161,29 +185,51 @@ export default function StructurePage() {
         return;
       }
       setData(result);
-      const parent =
-        ref.kind === "project" && parentTeam
-          ? { kind: "team" as const, id: parentTeam.id }
-          : ref.kind === "team" && parentOrg
-            ? { kind: "org" as const, id: parentOrg.id }
-            : null;
-      setPicked(parent);
-      window.history.replaceState(
-        null,
-        "",
-        parent ? `?node=${parent.kind}:${parent.id}` : window.location.pathname,
-      );
+      const parent: NodeRef | null =
+        ref.kind === "org"
+          ? null
+          : ref.kind !== "team" && parentTeam
+            ? { kind: "team", id: parentTeam.id }
+            : parentOrg
+              ? { kind: "org", id: parentOrg.id }
+              : null;
+      select(parent);
       toast(t("detail.deleted", { kind: ref.kind }), { variant: "success" });
     });
   }
 
-  const createOrg = data.canManage ? () => openNode("org", null, "") : null;
+  const createOrg = data.canManage && platform ? () => openNode("org", null, "") : null;
+  const summary = org
+    ? t("detail.orgSummary", {
+        teams: data.teams.filter((row) => row.orgId === org.id).length,
+        projects: projectsIn({ orgId: org.id }).length,
+        members: membersIn({ orgId: org.id }).length,
+      })
+    : team
+      ? t("detail.teamSummary", {
+          projects: projectsIn({ teamId: team.id }).length,
+          members: membersIn({ teamId: team.id }).length,
+        })
+      : project
+        ? t("detail.projectSummary", {
+            hasTeam: project.teamId ? "yes" : "no",
+            team: teamAlias(project.teamId),
+            keys: keysOf("project", project.id).length,
+          })
+        : member
+          ? t("detail.memberSummary", {
+              hasTeam: member.teamId ? "yes" : "no",
+              team: teamAlias(member.teamId),
+              hasEmail: member.email ? "yes" : "no",
+              email: member.email,
+            })
+          : "";
 
   return (
     <div className="space-y-5">
       <PageHeader
         title={t("title")}
-        subtitle={t("subtitle")}
+        subtitle={t("subtitle", { scope: platform ? "platform" : "company" })}
         actions={
           createOrg && node ? (
             <Button onPress={createOrg}>
@@ -200,7 +246,7 @@ export default function StructurePage() {
         <EmptyState
           icon={Building2}
           title={t("emptyTitle")}
-          description={t("empty")}
+          description={t("empty", { scope: platform ? "platform" : "company" })}
           action={
             createOrg ? (
               <Button onPress={createOrg}>
@@ -213,12 +259,7 @@ export default function StructurePage() {
       ) : (
         <div className="grid gap-5 lg:grid-cols-[18rem_minmax(0,1fr)] xl:grid-cols-[20rem_minmax(0,1fr)]">
           <div className="min-w-0 lg:sticky lg:top-4 lg:self-start">
-            <StructureTree
-              data={data}
-              selected={selected}
-              onSelect={select}
-              onCreateOrg={createOrg}
-            />
+            <CompanyTree data={data} selected={selected} onSelect={select} onCreateOrg={createOrg} />
           </div>
 
           <div className="min-w-0 space-y-5">
@@ -242,29 +283,15 @@ export default function StructurePage() {
                 <p className="text-sm text-muted">
                   {t("detail.kind", { kind: selected.kind })}
                   {" · "}
-                  {org
-                    ? t("detail.orgSummary", {
-                        teams: data.teams.filter((row) => row.orgId === org.id).length,
-                        members: data.users.filter((user) => user.orgId === org.id).length,
-                      })
-                    : team
-                      ? t("detail.teamSummary", {
-                          projects: data.projects.filter((row) => row.teamId === team.id).length,
-                          members: membersOf(team.id).length,
-                        })
-                      : t("detail.projectSummary", {
-                          keys: project ? keysOf("project", project.id).length : 0,
-                        })}
+                  {summary}
                 </p>
               </div>
-              {data.canManage ? (
+              {canEditNode ? (
                 <div className="flex flex-wrap gap-2">
                   <Button
                     size="sm"
                     variant="secondary"
-                    onPress={() =>
-                      openNode(selected.kind, node.id, team?.orgId ?? project?.teamId ?? "")
-                    }
+                    onPress={() => openNode(selected.kind, node.id, orgId, teamId)}
                   >
                     <Pencil size={14} aria-hidden />
                     {t("detail.edit", { kind: selected.kind })}
@@ -295,7 +322,7 @@ export default function StructurePage() {
               key={`${selected.kind}:${node.id}`}
               chain={chainOf(data, selected.kind, node.id)}
               budget={node.budget}
-              canBudget={data.canBudget}
+              canBudget={canBudgetNode}
               onEdit={() =>
                 openBudget({ kind: selected.kind, id: node.id, alias: node.alias }, budgetState)
               }
@@ -343,8 +370,8 @@ export default function StructurePage() {
                     alias: row.alias,
                     budget: row.budget,
                     detail: t("children.teamDetail", {
-                      members: membersOf(row.id).length,
-                      projects: data.projects.filter((item) => item.teamId === row.id).length,
+                      members: membersIn({ teamId: row.id }).length,
+                      projects: projectsIn({ teamId: row.id }).length,
                     }),
                   }))}
                 canManage={data.canManage}
@@ -353,49 +380,54 @@ export default function StructurePage() {
               />
             ) : null}
 
-            {team ? (
+            {org || team ? (
               <ChildrenCard
                 kind="project"
-                rows={data.projects
-                  .filter((row) => row.teamId === team.id)
-                  .map((row) => ({
-                    id: row.id,
-                    alias: row.alias,
-                    budget: row.budget,
-                    detail: t("children.projectDetail", {
-                      keys: keysOf("project", row.id).length,
-                    }),
-                  }))}
+                rows={projectsIn(org ? { orgId: org.id } : { teamId }).map((row) => ({
+                  id: row.id,
+                  alias: row.alias,
+                  budget: row.budget,
+                  detail: t("children.projectDetail", {
+                    hasTeam: org && row.teamId ? "yes" : "no",
+                    team: teamAlias(row.teamId),
+                    keys: keysOf("project", row.id).length,
+                  }),
+                }))}
                 canManage={data.canManage}
                 onOpen={select}
-                onAdd={() => openNode("project", null, team.id)}
+                onAdd={() => openNode("project", null, orgId, team?.id ?? "")}
               />
             ) : null}
 
             {org || team ? (
               <MembersCard
-                key={`members-${selected.kind}:${node.id}`}
                 data={data}
                 kind={org ? "org" : "team"}
-                id={node.id}
-                onChanged={setData}
+                members={membersIn(org ? { orgId: org.id } : { teamId })}
+                onOpen={select}
+                onAdd={() => openNode("member", null, orgId, team?.id ?? "")}
                 onBudget={(target) => openBudget(target, budgetState)}
               />
             ) : null}
 
-            {team || project ? (
-              <KeysCard
-                data={data}
-                kind={team ? "team" : "project"}
-                keys={keysOf(team ? "team" : "project", node.id)}
-                onBudget={(target) => openBudget(target, budgetState)}
-              />
-            ) : null}
+            <KeysCard
+              data={data}
+              kind={selected.kind}
+              keys={keysOf(selected.kind, node.id)}
+              createFor={
+                project
+                  ? { kind: "project", id: project.id }
+                  : member
+                    ? { kind: "member", id: member.id }
+                    : null
+              }
+              onBudget={(target) => openBudget(target, budgetState)}
+            />
           </div>
         </div>
       )}
 
-      {data.canBudget ? (
+      {data.canBudget && platform ? (
         <AlertsCard
           thresholds={data.thresholds}
           onSaved={(thresholds) =>
@@ -409,7 +441,8 @@ export default function StructurePage() {
         state={nodeState}
         kind={nodeForm.kind}
         editingId={nodeForm.editingId}
-        parentId={nodeForm.parentId}
+        orgId={nodeForm.orgId}
+        teamId={nodeForm.teamId}
         data={data}
         onSaved={(payload, ref) => {
           setData(payload);

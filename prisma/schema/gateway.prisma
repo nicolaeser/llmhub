@@ -13,9 +13,11 @@ model Organization {
   piiPolicy      Json?
   createdAt      DateTime  @default(now())
 
-  teams Team[]
-  users User[]
-  keys  VirtualKey[]
+  teams    Team[]
+  projects Project[]
+  members  Member[]
+  users    User[]
+  keys     VirtualKey[]
 }
 
 model Team {
@@ -31,7 +33,7 @@ model Team {
   spendResetAt   DateTime?
   createdAt      DateTime      @default(now())
 
-  users    User[]
+  members  Member[]
   projects Project[]
   keys     VirtualKey[]
 
@@ -39,19 +41,45 @@ model Team {
 }
 
 model Project {
-  id             String    @id @default(cuid())
+  id             String        @id @default(cuid())
+  orgId          String?
+  org            Organization? @relation(fields: [orgId], references: [id], onDelete: SetNull)
   teamId         String?
-  team           Team?     @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  team           Team?         @relation(fields: [teamId], references: [id], onDelete: SetNull)
   alias          String
-  owner          String    @default("")
-  maxBudget      Decimal   @default(0) @db.Decimal(20, 10)
-  spend          Decimal   @default(0) @db.Decimal(20, 10)
-  budgetDuration String    @default("")
+  owner          String        @default("")
+  maxBudget      Decimal       @default(0) @db.Decimal(20, 10)
+  spend          Decimal       @default(0) @db.Decimal(20, 10)
+  budgetDuration String        @default("")
   spendResetAt   DateTime?
-  createdAt      DateTime  @default(now())
+  createdAt      DateTime      @default(now())
 
   keys VirtualKey[]
 
+  @@index([orgId])
+  @@index([teamId])
+}
+
+model Member {
+  id             String       @id @default(cuid())
+  orgId          String
+  org            Organization @relation(fields: [orgId], references: [id], onDelete: Restrict)
+  teamId         String?
+  team           Team?        @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  name           String
+  email          String       @default("")
+  blocked        Boolean      @default(false)
+  logContent     Boolean      @default(true)
+  maxBudget      Decimal      @default(0) @db.Decimal(20, 10)
+  spend          Decimal      @default(0) @db.Decimal(20, 10)
+  budgetDuration String       @default("")
+  spendResetAt   DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  keys VirtualKey[]
+
+  @@index([orgId])
   @@index([teamId])
 }
 
@@ -67,7 +95,9 @@ model VirtualKey {
   orgId          String?
   org            Organization? @relation(fields: [orgId], references: [id], onDelete: SetNull)
   projectId      String?
-  project        Project?      @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  project        Project?      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  memberId       String?
+  member         Member?       @relation(fields: [memberId], references: [id], onDelete: Cascade)
   models         Json          @default("[]")
   maxBudget      Decimal       @default(0) @db.Decimal(20, 10)
   spend          Decimal       @default(0) @db.Decimal(20, 10)
@@ -88,6 +118,9 @@ model VirtualKey {
 
   @@index([teamId])
   @@index([userId])
+  @@index([orgId])
+  @@index([projectId])
+  @@index([memberId])
 }
 
 model ModelTemplate {
@@ -168,6 +201,7 @@ model SpendEvent {
   teamId           String   @default("")
   orgId            String   @default("")
   projectId        String   @default("")
+  memberId         String   @default("")
   userId           String   @default("")
   model            String   @default("")
   deployment       String   @default("")
@@ -183,6 +217,7 @@ model SpendEvent {
   @@index([teamId])
   @@index([orgId])
   @@index([projectId])
+  @@index([memberId])
   @@index([userId])
 }
 
@@ -192,6 +227,7 @@ model UsageDaily {
   teamId           String   @default("")
   orgId            String   @default("")
   projectId        String   @default("")
+  memberId         String   @default("")
   userId           String   @default("")
   model            String   @default("")
   requests         Int      @default(0)
@@ -202,7 +238,7 @@ model UsageDaily {
   completionTokens BigInt   @default(0)
   cost             Decimal  @default(0) @db.Decimal(20, 10)
 
-  @@id([day, keyId, teamId, orgId, projectId, userId, model], name: "slice")
+  @@id([day, keyId, teamId, orgId, projectId, memberId, userId, model], name: "slice")
   @@index([day])
 }
 
@@ -213,6 +249,7 @@ model RequestLog {
   teamId           String             @default("")
   orgId            String             @default("")
   projectId        String             @default("")
+  memberId         String             @default("")
   model            String             @default("")
   endpoint         String             @default("")
   deploymentId     String             @default("")
@@ -240,6 +277,7 @@ model RequestLog {
   @@index([teamId])
   @@index([orgId])
   @@index([projectId])
+  @@index([memberId])
   @@index([status])
 }
 

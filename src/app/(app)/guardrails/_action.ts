@@ -4,7 +4,7 @@ import prisma from "@/lib/db/prisma";
 import { Prisma } from "@/generated/prisma/client";
 import { requirePermission } from "@/lib/auth/guards";
 import { hasPerm, PERMISSIONS } from "@/lib/auth/permissions";
-import { keyVisibleTo, seesAllResources } from "@/lib/auth/scope";
+import { keyScope, keyVisibleTo } from "@/lib/auth/scope";
 import { actionFail, runAction } from "@/lib/http/action-result";
 import { writeAudit } from "@/lib/gateway/audit";
 import { getPii, piiOverride, savePii } from "@/lib/gateway/settings";
@@ -58,7 +58,7 @@ async function payload(session: Session, pii: PiiPolicy) {
   const [orgs, keys] = await Promise.all([
     prisma.organization.findMany({ select: ORG_SELECT, orderBy: { alias: "asc" } }),
     prisma.virtualKey.findMany({
-      where: seesAllResources(session) ? {} : { userId: session.user.id },
+      where: keyScope(session),
       select: KEY_SELECT,
       orderBy: { keyAlias: "asc" },
     }),
@@ -84,7 +84,7 @@ async function findTarget(session: Session, scope: PiiScope, id: string) {
     return row ? { target: orgTarget(row), raw: row.piiPolicy } : null;
   }
   const row = await prisma.virtualKey.findUnique({ where: { id }, select: KEY_SELECT });
-  if (!row || !keyVisibleTo(session, row.userId)) return null;
+  if (!row || !keyVisibleTo(session, row)) return null;
   return { target: keyTarget(row), raw: row.piiPolicy };
 }
 

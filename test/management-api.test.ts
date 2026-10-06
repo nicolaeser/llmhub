@@ -174,6 +174,7 @@ test("serializers expose snake_case resources with nulls for unset references", 
     team_id: "",
     org_id: "",
     project_id: "",
+    member_id: "m1",
     models: ["gpt"],
     templates: [],
     max_budget: 0,
@@ -190,6 +191,7 @@ test("serializers expose snake_case resources with nulls for unset references", 
   });
   assert.equal(key.object, "api_key");
   assert.equal(key.team_id, null);
+  assert.equal(key.member_id, "m1");
   assert.equal(key.expires_at, null);
   assert.equal("key" in key, false);
   const usage = serializeUsage({
@@ -198,6 +200,7 @@ test("serializers expose snake_case resources with nulls for unset references", 
     teamId: "t1",
     orgId: "",
     projectId: "",
+    memberId: "",
     keyId: "",
     userId: "",
     spend: 2,
@@ -212,9 +215,10 @@ test("serializers expose snake_case resources with nulls for unset references", 
     byTeam: [],
     byOrg: [],
     byProject: [],
+    byMember: [],
     byKey: [],
     byUser: [],
-    chargeback: [{ name: "-/t1/-/k1/u1/gpt", spend: 2, prompt: 6, completion: 4 }],
+    chargeback: [{ name: "-/t1/-/m1/k1/-/gpt", spend: 2, prompt: 6, completion: 4 }],
   });
   assert.deepEqual(usage.filters.team_id, "t1");
   assert.equal(usage.totals.requests, 3);
@@ -222,8 +226,9 @@ test("serializers expose snake_case resources with nulls for unset references", 
     org_id: null,
     team_id: "t1",
     project_id: null,
+    member_id: "m1",
     key_id: "k1",
-    user_id: "u1",
+    user_id: null,
     model: "gpt",
     spend: 2,
     prompt_tokens: 6,

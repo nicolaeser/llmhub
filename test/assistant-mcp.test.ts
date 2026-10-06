@@ -37,8 +37,7 @@ import type { AssistantChatMessage, AssistantContext } from "@/types/assistant";
 const ctx: AssistantContext = {
   userId: "user-1",
   permissions: Object.values(PERMISSIONS),
-  teamId: "",
-  orgId: "",
+  orgId: null,
   locale: "en",
   allowWrite: true,
 };
@@ -120,7 +119,9 @@ test("explain covers setup tenancy keys providers models v1 playground", async (
 
 test("open_page maps known console routes", async () => {
   assert.equal(ASSISTANT_PAGES.providers, "/providers");
-  assert.equal(ASSISTANT_PAGES.keys, "/");
+  assert.equal(ASSISTANT_PAGES.keys, "/keys");
+  assert.equal(ASSISTANT_PAGES.companies, "/companies");
+  assert.equal(ASSISTANT_PAGES.members, "/companies");
   const opened = await callMcpTool("open_page", { page: "playground" }, ctx);
   assert.deepEqual(opened, {
     result: { href: "/playground" },
@@ -332,8 +333,7 @@ test("mcpToolsForModel hides write tools without manage perms", () => {
   const viewer: AssistantContext = {
     userId: "user-2",
     permissions: [...roleTemplates.viewer],
-    teamId: "",
-    orgId: "",
+    orgId: null,
     locale: "en",
     allowWrite: true,
   };

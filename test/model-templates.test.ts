@@ -46,6 +46,7 @@ function keyPrincipal(models: string[], templates: string[]): Principal {
     team_id: "",
     org_id: "",
     project_id: "",
+    member_id: "",
     models,
     templates,
     max_budget: 0,
@@ -60,7 +61,7 @@ function keyPrincipal(models: string[], templates: string[]): Principal {
     log_content: true,
     created_at: "",
   };
-  return { actor: "sk-hub-abc", key, teamId: "", orgId: "", userId: "", models };
+  return { actor: "sk-hub-abc", key, teamId: "", orgId: "", userId: "", memberId: "", models };
 }
 
 test("patternMatches supports * wildcards case-insensitively", async () => {

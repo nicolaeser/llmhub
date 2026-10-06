@@ -2,7 +2,7 @@ import "server-only";
 
 import prisma from "@/lib/db/prisma";
 import type { AuthenticatedSession } from "@/types/auth";
-import { seesAllResources } from "@/lib/auth/scope";
+import { keyScope } from "@/lib/auth/scope";
 import type { VirtualKeyView } from "@/types/gateway";
 import { money } from "@/lib/utils/money";
 import { piiOverride } from "@/lib/gateway/settings";
@@ -22,6 +22,7 @@ export function toKeyView(row: {
   teamId: string | null;
   orgId: string | null;
   projectId: string | null;
+  memberId: string | null;
   models: unknown;
   maxBudget: Prisma.Decimal;
   spend: Prisma.Decimal;
@@ -44,6 +45,7 @@ export function toKeyView(row: {
     team_id: row.teamId ?? "",
     org_id: row.orgId ?? "",
     project_id: row.projectId ?? "",
+    member_id: row.memberId ?? "",
     models: jsonArray(row.models),
     templates: row.templates.map((template) => template.templateId),
     max_budget: money(row.maxBudget),
@@ -62,7 +64,7 @@ export function toKeyView(row: {
 
 export async function listKeys(session: AuthenticatedSession) {
   const rows = await prisma.virtualKey.findMany({
-    where: seesAllResources(session) ? {} : { userId: session.user.id },
+    where: keyScope(session),
     orderBy: { createdAt: "desc" },
     include: { templates: { select: { templateId: true } } },
   });

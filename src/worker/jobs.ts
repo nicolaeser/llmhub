@@ -122,6 +122,21 @@ export async function runSpendResets(now = new Date()): Promise<number> {
     await prisma.user.update({ where: { id: row.id }, data });
     n += 1;
   }
+  const members = await prisma.member.findMany({
+    select: {
+      id: true,
+      budgetDuration: true,
+      spendResetAt: true,
+      createdAt: true,
+    },
+  });
+  for (const row of members) {
+    if (!periodElapsed(row.budgetDuration, row.spendResetAt, now, row.createdAt)) {
+      continue;
+    }
+    await prisma.member.update({ where: { id: row.id }, data });
+    n += 1;
+  }
   const teams = await prisma.team.findMany({
     select: {
       id: true,
@@ -176,7 +191,7 @@ export async function runBudgetAlerts(): Promise<number> {
     ? enterprise.budget_alert_thresholds
     : [50, 80, 100];
   const state = await getBudgetAlertState();
-  const [keys, users, teams, orgs, projects] = await Promise.all([
+  const [keys, users, members, teams, orgs, projects] = await Promise.all([
     prisma.virtualKey.findMany({
       select: {
         id: true,
@@ -189,6 +204,10 @@ export async function runBudgetAlerts(): Promise<number> {
     prisma.user.findMany({
       where: { maxBudget: { gt: 0 } },
       select: { id: true, username: true, spend: true, maxBudget: true },
+    }),
+    prisma.member.findMany({
+      where: { maxBudget: { gt: 0 } },
+      select: { id: true, name: true, spend: true, maxBudget: true },
     }),
     prisma.team.findMany({
       select: { id: true, alias: true, spend: true, maxBudget: true },
@@ -214,6 +233,13 @@ export async function runBudgetAlerts(): Promise<number> {
       alias: u.username,
       spend: money(u.spend),
       cap: money(u.maxBudget),
+    })),
+    ...members.map((m) => ({
+      kind: "member",
+      id: m.id,
+      alias: m.name,
+      spend: money(m.spend),
+      cap: money(m.maxBudget),
     })),
     ...teams.map((t) => ({
       kind: "team",

@@ -13,7 +13,7 @@ import { money } from "@/lib/utils/money";
 import type { Prisma } from "@/generated/prisma/client";
 
 export const ASSISTANT_PAGES: Record<string, string> = {
-  keys: "/",
+  keys: "/keys",
   playground: "/playground",
   providers: "/providers",
   models: "/models",
@@ -21,12 +21,16 @@ export const ASSISTANT_PAGES: Record<string, string> = {
   guardrails: "/guardrails",
   usage: "/usage",
   logs: "/logs",
-  structure: "/structure",
-  organizations: "/structure",
-  teams: "/structure",
-  projects: "/structure",
+  companies: "/companies",
+  structure: "/companies",
+  organizations: "/companies",
+  departments: "/companies",
+  teams: "/companies",
+  projects: "/companies",
+  people: "/companies",
+  members: "/companies",
   users: "/users",
-  budgets: "/structure",
+  budgets: "/companies",
   "api-ref": "/api-ref",
   cache: "/cache",
   router: "/models",
@@ -39,9 +43,9 @@ export const ASSISTANT_EXPLAIN: Record<string, string> = {
   setup:
     "Connect one provider with an API key, add a public model alias that points at that provider, then create a virtual key. Clients call /v1 with Authorization: Bearer and that key. Playground tests the same path as a signed-in operator.",
   tenancy:
-    "Build the structure step by step on the Structure & budgets page: organization (company tenant), then teams inside it (people groups with shared RPM and TPM limits), then projects inside a team (key buckets). People join a team, which also places them in its organization. Personal keys (no team) are billed to the owner's team and organization.",
+    "Customers live on the Companies page. A company is the tenant. Inside it, departments carry shared budgets and RPM and TPM limits (for example IT at most 5000 per month). Projects belong to a company and optionally to a department; people are the company's own users, not console users, and also optionally sit in a department. Every customer API key belongs to exactly one project (a project key) or one person (a personal key), so spend rolls up to the department and the company. Console users are separate: platform users see every company, and a console user assigned to a company only sees and manages that company.",
   keys:
-    "API keys are hashed Bearer credentials for /v1. The full secret is shown once in the console. Keys can be limited to models or model templates, client IPs, RPM, and TPM, and can be blocked or rotated.",
+    "API keys are hashed Bearer credentials for /v1. The full secret is shown once in the console. A key belongs to a project or a person of a company, or is an internal key of the console user who created it. Keys can be limited to models or model templates, client IPs, RPM, and TPM, and can be blocked or rotated.",
   templates:
     "Model templates are reusable model allowlists for API keys. A template combines rules (provider connections, name patterns such as claude-*, zero data retention, maximum provider data retention, data region, no training on prompts) with always-included models. Rules are evaluated on every request, so new matching models are allowed automatically. A model qualifies only when every endpoint behind it, including fallback and overflow aliases, meets every rule. Data policy is set per provider connection on the Providers page.",
   providers:
@@ -52,9 +56,9 @@ export const ASSISTANT_EXPLAIN: Record<string, string> = {
   playground:
     "Playground streams chat through the gateway as the signed-in operator. It does not need a virtual key. A model alias must exist.",
   budgets:
-    "Budgets cap spend on an organization, team, project, user, or key and are managed on the Structure & budgets page (key budgets also on API keys). Every request is checked against the whole chain: key, its owner, project, team, and organization. A child budget cannot exceed its parent. When any cap is reached, further /v1 calls are blocked until the period resets, the cap is raised, or a temporary boost is added.",
+    "Budgets cap spend on a company, department, project, person, console user, or key and are managed on the Companies page (key budgets also on API keys). Every request is checked against the whole chain: key, its person or project, department, and company; internal keys and the playground check the console user and their company. A child budget cannot exceed its parent. When any cap is reached, further /v1 calls are blocked until the period resets, the cap is raised, or a temporary boost is added.",
   guardrails:
-    "Guardrails are a gateway-wide PII policy that masks or blocks matches in prompts before they reach the upstream model and can redact model output. An organization or a single API key can override it with its own mode, output setting, and entity list; a key override wins over its organization.",
+    "Guardrails are a gateway-wide PII policy that masks or blocks matches in prompts before they reach the upstream model and can redact model output. A company or a single API key can override it with its own mode, output setting, and entity list; a key override wins over its company.",
   cache:
     "The response cache answers identical non-streaming chat requests from the same key from memory for the configured TTL. Configure it under Cache.",
   router:
@@ -224,14 +228,15 @@ export function listMcpTools(): McpToolDef[] {
     {
       name: "create_key",
       description:
-        "Create a virtual key. Returns the full secret once. Requires keys:manage.",
+        "Create a virtual key. Pass projectId for a project key or memberId for a person's key; with neither it is an internal key of the operator. Returns the full secret once. Requires keys:manage.",
       inputSchema: {
         type: "object",
         additionalProperties: false,
         required: ["alias"],
         properties: {
           alias: { type: "string" },
-          teamId: { type: "string" },
+          projectId: { type: "string" },
+          memberId: { type: "string" },
         },
       },
     },
@@ -285,7 +290,7 @@ export async function callMcpTool(
         prisma.virtualKey.count({ where: keyWhere }),
         usageTotals(
           7,
-          hasPerm(ctx.permissions, PERMISSIONS.SPEND_READ_ALL) ? undefined : ctx.userId,
+          hasPerm(ctx.permissions, PERMISSIONS.SPEND_READ_ALL) ? {} : { userId: ctx.userId },
         ),
       ]);
       return {
@@ -422,7 +427,8 @@ export async function callMcpTool(
       }
       const created = await createKeyAction({
         alias: str(args.alias) || "assistant-key",
-        teamId: str(args.teamId),
+        projectId: str(args.projectId),
+        memberId: str(args.memberId),
       });
       if (isActionFail(created)) return { result: { error: created.message } };
       return {
@@ -433,7 +439,7 @@ export async function callMcpTool(
           note: "The console already showed the operator the secret once. Never ask for it or repeat it.",
         },
         secret: created.key.key,
-        navigate: "/",
+        navigate: "/keys",
       };
     }
     default:

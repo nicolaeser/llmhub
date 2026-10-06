@@ -5,17 +5,17 @@ import { Check } from "lucide-react";
 import { useTranslations } from "next-intl";
 import type { SetupStep, StructurePayload } from "@/types/structure";
 
-const STEPS: SetupStep[] = ["org", "team", "project", "members", "budget"];
+const STEPS: SetupStep[] = ["org", "team", "project", "member", "budget"];
 
 export function setupDone(data: StructurePayload): Record<SetupStep, boolean> {
-  const capped = [...data.orgs, ...data.teams, ...data.projects, ...data.users].some(
+  const capped = [...data.orgs, ...data.teams, ...data.projects, ...data.members].some(
     (row) => row.budget.maxBudget > 0,
   );
   return {
     org: data.orgs.length > 0,
-    team: data.teams.some((row) => row.orgId),
-    project: data.projects.some((row) => row.teamId),
-    members: data.users.some((row) => row.teamId),
+    team: data.teams.length > 0,
+    project: data.projects.length > 0,
+    member: data.members.length > 0,
     budget: capped,
   };
 }
@@ -27,7 +27,7 @@ export default function SetupSteps({
   data: StructurePayload;
   onStep: (step: SetupStep) => void;
 }) {
-  const t = useTranslations("Structure.steps");
+  const t = useTranslations("Companies.steps");
   const done = setupDone(data);
   const current = STEPS.find((step) => !done[step]);
 

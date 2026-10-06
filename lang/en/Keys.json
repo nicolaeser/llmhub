@@ -1,6 +1,6 @@
 {
   "title": "API keys",
-  "subtitle": "Keys authenticate applications against the /v1 API.",
+  "subtitle": "Keys authenticate applications against the /v1 API. Every key belongs to a project or a person of a company, or internally to you.",
   "create": "Create key",
   "gettingStarted": {
     "title": "Getting started",
@@ -24,17 +24,14 @@
   "secretHint": "This is the only time the full key is shown.",
   "columns": {
     "name": "Key name",
-    "secret": "Secret",
+    "binding": "Belongs to",
     "spend": "Spend / Budget",
     "status": "Status",
     "access": "Model access"
   },
   "fields": {
     "alias": "Key name",
-    "team": "Team",
-    "personal": "Personal (billed to your team)",
-    "project": "Project",
-    "noProject": "No project",
+    "binding": "Belongs to",
     "access": "Model access",
     "templates": "Model templates",
     "templatesHint": "Template rules stay current as models change. <link>Manage templates</link>",
@@ -67,5 +64,14 @@
   "allModels": "All models",
   "modelCount": "{count, plural, one {# model} other {# models}}",
   "budget": "Set budget",
-  "contentOff": "Content not logged"
+  "contentOff": "Content not logged",
+  "binding": {
+    "kind": "{kind, select, project {Project} member {Person} other {Internal}}",
+    "hint": "{kind, select, project {For an application. Billed to the project, its department, and the company.} member {Personal key for a user of the company. Billed to the person, their department, and the company.} other {{scope, select, company {For your own use. Billed to your budget and your company.} other {For your own use. Billed to your personal budget, not to a customer.}}}}",
+    "pick": "{kind, select, project {Choose a project} other {Choose a person}}",
+    "place": "{hasTeam, select, yes {{org} › {team}} other {{org}}}",
+    "path": "{kind, select, project {Project} member {Person} other {Internal}}{hasPlace, select, yes { · {place}} other {}}",
+    "targetHint": "{kind, select, project {Budgets and limits of the project, department, and company apply.} other {Budgets and limits of the person, department, and company apply.}}",
+    "empty": "{kind, select, project {No projects yet. Add one under <link>Companies</link>.} other {No people yet. Add one under <link>Companies</link>.}}"
+  }
 }

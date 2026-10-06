@@ -1,0 +1,175 @@
+{
+  "title": "Unternehmen",
+  "subtitle": "{scope, select, company {Dein Unternehmen mit Abteilungen, Projekten, Personen und Budgets.} other {Kunden mit Abteilungen, Projekten, Personen und Budgets.}}",
+  "createOrg": "Unternehmen hinzufügen",
+  "emptyTitle": "Noch keine Unternehmen",
+  "empty": "{scope, select, company {Dein Unternehmen ist noch nicht eingerichtet. Wende dich an einen Plattform-Admin.} other {Lege das erste Kundenunternehmen an. Abteilungen, Projekte, Personen und ihre API-Keys liegen darin.}}",
+  "tree": {
+    "title": "Unternehmen",
+    "addOrg": "Unternehmen",
+    "search": "Nach Namen filtern…",
+    "clear": "Filter löschen",
+    "noMatches": "Nichts passt zu diesem Filter.",
+    "unlimited": "Ohne Limit"
+  },
+  "steps": {
+    "title": "Kunden einrichten",
+    "subtitle": "Abteilungen sind optional, damit lassen sich aber ganze Gruppen wie die IT begrenzen. Erledigte Schritte bleiben abgehakt.",
+    "number": "Schritt {n, number, integer}",
+    "status": "{status, select, done {Erledigt} other {Offen}}",
+    "org": {
+      "title": "Unternehmen",
+      "hint": "Der Kunde, ganz oben.",
+      "action": "Unternehmen hinzufügen"
+    },
+    "team": {
+      "title": "Abteilungen",
+      "hint": "Gruppen wie IT oder Vertrieb mit gemeinsamem Budget und Rate-Limits.",
+      "action": "Abteilung hinzufügen"
+    },
+    "project": {
+      "title": "Projekte",
+      "hint": "Anwendungen oder Integrationen mit eigenen Projekt-Keys.",
+      "action": "Projekt hinzufügen"
+    },
+    "member": {
+      "title": "Personen",
+      "hint": "Die eigenen Benutzer des Unternehmens mit persönlichen Keys. Keine Konsolen-Benutzer.",
+      "action": "Person hinzufügen"
+    },
+    "budget": {
+      "title": "Budgets",
+      "hint": "Ausgaben auf jeder Ebene begrenzen, etwa die IT auf 5.000 im Monat. Kinder dürfen Eltern nicht übersteigen.",
+      "action": "Budget festlegen"
+    }
+  },
+  "detail": {
+    "kind": "{kind, select, org {Unternehmen} team {Abteilung} project {Projekt} member {Person} user {Konsolen-Benutzer} key {Key} other {Übergeordnet}}",
+    "orgSummary": "{teams, plural, one {# Abteilung} other {# Abteilungen}} · {projects, plural, one {# Projekt} other {# Projekte}} · {members, plural, one {# Person} other {# Personen}}",
+    "teamSummary": "{projects, plural, one {# Projekt} other {# Projekte}} · {members, plural, one {# Person} other {# Personen}}",
+    "projectSummary": "{hasTeam, select, yes {Abteilung {team}} other {Keine Abteilung}} · {keys, plural, one {# Key} other {# Keys}}",
+    "memberSummary": "{hasTeam, select, yes {Abteilung {team}} other {Keine Abteilung}}{hasEmail, select, yes { · {email}} other {}}",
+    "edit": "{kind, select, org {Unternehmen bearbeiten} team {Abteilung bearbeiten} project {Projekt bearbeiten} member {Person bearbeiten} other {Bearbeiten}}",
+    "delete": "{kind, select, org {Unternehmen löschen} team {Abteilung löschen} project {Projekt löschen} member {Person löschen} other {Löschen}}",
+    "deleteTitle": "{kind, select, org {Unternehmen {alias} löschen?} team {Abteilung {alias} löschen?} project {Projekt {alias} löschen?} member {{alias} löschen?} other {{alias} löschen?}}",
+    "deleteHint": "{kind, select, org {Lösche zuerst Abteilungen, Projekte und Personen und entziehe Konsolen-Benutzern den Zugriff auf dieses Unternehmen.} team {Projekte und Personen bleiben im Unternehmen, nur ohne Abteilung.} project {Alle API-Keys dieses Projekts werden widerrufen.} member {Alle persönlichen API-Keys dieser Person werden widerrufen.} other {Das lässt sich nicht rückgängig machen.}}",
+    "deleted": "{kind, select, org {Unternehmen gelöscht} team {Abteilung gelöscht} project {Projekt gelöscht} member {Person gelöscht} other {Gelöscht}}"
+  },
+  "budget": {
+    "title": "Budget",
+    "resets": "{when, select, now {Diese Periode ist abgelaufen. Die Ausgaben werden mit der nächsten Anfrage zurückgesetzt.} other {Die Ausgaben werden am {date, date, stamp} zurückgesetzt.}}",
+    "noReset": "Die Ausgaben werden nie automatisch zurückgesetzt.",
+    "edit": "{capped, select, yes {Budget ändern} other {Budget festlegen}}",
+    "boost": "Temporäre Erhöhung",
+    "used": "Genutzt",
+    "spent": "Ausgegeben",
+    "limit": "Limit",
+    "limitValue": "{capped, select, yes {{cap, number, currency}{hasBoost, select, yes { + {boost, number, currency}} other {}}} other {Kein eigenes Limit}}",
+    "available": "Noch verfügbar",
+    "unlimited": "Unbegrenzt",
+    "projected": "Prognose 30 Tage",
+    "exhausts": "Beim aktuellen Tempo ist das Budget in {days, plural, =0 {weniger als einem Tag} one {# Tag} other {# Tagen}} aufgebraucht.",
+    "limitedBy": "{kind, select, org {Unternehmen} team {Abteilung} project {Projekt} member {Person} user {Konsolen-Benutzer} key {Key} other {Übergeordnet}} {alias} ist das engere Limit: noch {amount, number, currency} übrig.",
+    "inherits": "Kein eigenes Limit. Die Limits darüber gelten weiterhin."
+  },
+  "boost": {
+    "title": "Temporäre Erhöhung für {alias}",
+    "hint": "Gibt bis zum Ablauf zusätzlichen Spielraum über dem Budget. Übergeordnete Limits gelten weiterhin.",
+    "amount": "Zusätzlicher Betrag",
+    "amountHint": "Wird zum aktuellen Limit addiert.",
+    "amountInvalid": "Gib einen Betrag über null ein.",
+    "presets": "Schnellauswahl",
+    "duration": "Gültig für",
+    "hours": "{hours, select, 24 {24 Stunden} 72 {3 Tage} 168 {7 Tage} 720 {30 Tage} other {{hours, number, integer} Stunden}}",
+    "until": "Läuft am {date, date, stamp} ab.",
+    "active": "Aktive Erhöhungen",
+    "expires": "Bis {date, date, stamp}",
+    "remove": "Erhöhung entfernen",
+    "submit": "Erhöhung hinzufügen",
+    "added": "Erhöhung hinzugefügt",
+    "removed": "Erhöhung entfernt"
+  },
+  "node": {
+    "title": "{mode, select, edit {{kind, select, org {Unternehmen bearbeiten} team {Abteilung bearbeiten} project {Projekt bearbeiten} member {Person bearbeiten} other {Bearbeiten}}} other {{kind, select, org {Neues Unternehmen} team {Neue Abteilung} project {Neues Projekt} member {Neue Person} other {Neu}}}}",
+    "hint": "{kind, select, org {Der Kunde. Abteilungen, Projekte und Personen liegen darin.} team {Eine Gruppe im Unternehmen, etwa die IT. Ihre Projekte und Personen teilen Budget und Rate-Limits.} project {Eine Anwendung oder Integration. Ihre Keys werden dem Projekt, der Abteilung und dem Unternehmen berechnet.} member {Ein Benutzer des Unternehmens mit persönlichen API-Keys. Personen melden sich nicht an dieser Konsole an.} other {}}",
+    "name": "{kind, select, org {Name des Unternehmens} team {Name der Abteilung} project {Name des Projekts} member {Name} other {Name}}",
+    "placeholder": "{kind, select, org {Acme GmbH} team {IT} project {Support-Bot} member {Alex Beispiel} other {}}",
+    "org": "Unternehmen",
+    "orgPlaceholder": "Unternehmen wählen",
+    "orgLocked": "{kind, select, team {Eine Abteilung bleibt in ihrem Unternehmen.} project {Ein Projekt bleibt in seinem Unternehmen.} member {Eine Person bleibt in ihrem Unternehmen.} other {Das lässt sich nicht ändern.}}",
+    "team": "Abteilung",
+    "noTeam": "Keine Abteilung",
+    "teamHint": "{kind, select, project {Optional. Budget und Rate-Limits der Abteilung gelten dann auch für dieses Projekt.} other {Optional. Budget und Rate-Limits der Abteilung gelten dann auch für diese Person.}}",
+    "email": "E-Mail",
+    "emailHint": "Optional. Hilft beim Wiederfinden und muss im Unternehmen eindeutig sein.",
+    "rpm": "Anfragen pro Minute",
+    "rpmHint": "0 bedeutet kein Limit für die Abteilung.",
+    "tpm": "Tokens pro Minute",
+    "tpmHint": "0 bedeutet kein Limit für die Abteilung.",
+    "owner": "Verantwortlich",
+    "ownerHint": "Wer für dieses Projekt zuständig ist, etwa eine Team-Adresse.",
+    "logContent": "Anfrageinhalte speichern",
+    "logContentHint": "Wenn aus, speichern die Request-Logs für Keys dieser Person nur Metadaten, keine Prompts oder Antworten.",
+    "blocked": "Diese Person sperren",
+    "blockedHint": "Gesperrte Personen können keinen ihrer Keys nutzen.",
+    "submit": "{mode, select, edit {Speichern} other {{kind, select, org {Unternehmen hinzufügen} team {Abteilung hinzufügen} project {Projekt hinzufügen} member {Person hinzufügen} other {Hinzufügen}}}}",
+    "saved": "{mode, select, edit {Gespeichert} other {{kind, select, org {Unternehmen hinzugefügt} team {Abteilung hinzugefügt} project {Projekt hinzugefügt} member {Person hinzugefügt} other {Hinzugefügt}}}}"
+  },
+  "limits": {
+    "title": "Rate-Limits",
+    "hint": "Gelten gemeinsam für alle Keys in dieser Abteilung.",
+    "rpm": "Anfragen pro Minute",
+    "tpm": "Tokens pro Minute",
+    "unlimited": "Unbegrenzt"
+  },
+  "children": {
+    "title": "{kind, select, team {Abteilungen} other {Projekte}} ({count, number, integer})",
+    "hint": "{kind, select, team {Abteilungen fassen Projekte und Personen des Unternehmens unter gemeinsamen Limits zusammen.} other {Projekte sind Anwendungen mit eigenen Keys.}}",
+    "allocated": "{kind, select, team {Abteilungen} other {Projekte}} haben zusammen {amount, number, currency} an eigenen Budgets.",
+    "add": "{kind, select, team {Abteilung hinzufügen} other {Projekt hinzufügen}}",
+    "empty": "{kind, select, team {Noch keine Abteilungen. Sie sind optional.} other {Noch keine Projekte. Lege eines an, um Projekt-Keys auszugeben.}}",
+    "open": "{alias} öffnen",
+    "usage": "Budgetnutzung von {alias}",
+    "spendOf": "{spend, number, currency} von {cap, number, currency}",
+    "noCap": "{spend, number, currency} ausgegeben, kein eigenes Limit",
+    "teamDetail": "{members, plural, one {# Person} other {# Personen}} · {projects, plural, one {# Projekt} other {# Projekte}}",
+    "projectDetail": "{hasTeam, select, yes {{team} · } other {}}{keys, plural, one {# Key} other {# Keys}}"
+  },
+  "members": {
+    "title": "Personen ({count, number, integer})",
+    "hint": "{kind, select, org {Die eigenen Benutzer des Unternehmens. Sie bekommen persönliche API-Keys und melden sich nicht an dieser Konsole an.} other {Personen in dieser Abteilung. Das Budget der Abteilung gilt auch für sie.}}",
+    "empty": "{kind, select, org {Noch keine Personen in diesem Unternehmen.} other {Noch keine Personen in dieser Abteilung.}}",
+    "add": "Person hinzufügen",
+    "columns": {
+      "person": "Person",
+      "team": "Abteilung",
+      "keys": "Keys",
+      "budget": "Ausgabe / Budget"
+    },
+    "noTeam": "Keine Abteilung",
+    "budget": "Budget für {name}",
+    "open": "{name} öffnen"
+  },
+  "keys": {
+    "title": "API-Keys ({count, number, integer})",
+    "hint": "{kind, select, org {Alle Keys, die diesem Unternehmen berechnet werden.} team {Keys von Projekten und Personen in dieser Abteilung.} project {Projekt-Keys. Sie werden diesem Projekt berechnet.} member {Persönliche Keys dieser Person.} other {}}",
+    "create": "Key erstellen",
+    "empty": "{kind, select, project {Noch keine Keys. Erstelle einen für dieses Projekt.} member {Noch keine Keys. Erstelle einen persönlichen Key für diese Person.} other {Noch keine Keys. Erstelle sie für ein Projekt oder eine Person oder auf der Seite <link>API-Keys</link>.}}",
+    "columns": {
+      "key": "Key",
+      "owner": "Gehört zu",
+      "budget": "Ausgabe / Budget"
+    },
+    "ownerKind": "{kind, select, project {Projekt} member {Person} other {Intern}}",
+    "budget": "Budget für {alias}"
+  },
+  "alerts": {
+    "title": "Budget-Alarme",
+    "hint": "Webhooks unter Logging & Alarme, die Budget-Schwellen abonniert haben, feuern einmal je Schwelle, wenn die Ausgabe sie überschreitet.",
+    "saved": "Alarm-Schwellen gespeichert",
+    "remove": "{value, number, integer} Prozent entfernen",
+    "add": "Neue Schwelle",
+    "addHint": "Zwischen 1 und 100 Prozent eines Budgets.",
+    "addButton": "Schwelle hinzufügen"
+  }
+}
