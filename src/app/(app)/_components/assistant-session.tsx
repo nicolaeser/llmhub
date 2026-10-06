@@ -15,8 +15,8 @@ import { Link } from "@/i18n/routing";
 import { consumeSseBuffer } from "@/lib/assistant/sse";
 import {
   applyAssistantEvent,
-  messageText,
   settleAssistantMessage,
+  wireMessage,
 } from "@/lib/assistant/transcript";
 import type { AssistantChatMessage } from "@/types/assistant";
 
@@ -159,9 +159,7 @@ export default function AssistantProvider({
           locale,
           model,
           write: allowWrite,
-          messages: history
-            .map((row) => ({ role: row.role, content: messageText(row) }))
-            .filter((row) => row.content),
+          messages: history.flatMap((row) => wireMessage(row) ?? []),
         }),
         signal: controller.signal,
       });

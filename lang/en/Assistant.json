@@ -12,7 +12,7 @@
   "thinking": "Thinking…",
   "composerHint": "Enter to send, Shift+Enter for a new line",
   "emptyTitle": "Operator assistant",
-  "emptyHint": "I can check what is missing, explain the console, look up providers, models, keys, and usage, and walk the first setup loop.",
+  "emptyHint": "I can check what is missing, explain the console, look up providers, models, keys, usage, and failing requests, and walk the first setup loop.",
   "forbiddenTitle": "Assistant unavailable",
   "forbidden": "Your role does not include the assistant.",
   "loadFailed": "The assistant could not be loaded. Try again.",
@@ -24,7 +24,7 @@
     "hint": "{state, select, on {The assistant may create providers, models, and keys when you ask.} unavailable {Your role cannot create providers, models, or keys, so the assistant stays read-only.} other {Read-only. The assistant can look things up but cannot change anything.}}",
     "mode": "{state, select, on {Write access on} other {Read-only}}"
   },
-  "toolName": "{name, select, get_setup_status {Setup status} get_overview {Overview} list_provider_kinds {Provider kinds} list_providers {Providers} list_models {Models} list_keys {Keys} explain {Explain} open_page {Open page} create_provider {Create provider} create_model {Create model} create_key {Create key} other {{name}}}",
+  "toolName": "{name, select, get_setup_status {Setup status} get_overview {Overview} list_provider_kinds {Provider kinds} list_providers {Providers} list_models {Models} list_keys {Keys} search_logs {Request logs} usage_breakdown {Usage breakdown} explain {Explain} open_page {Open page} create_provider {Create provider} create_model {Create model} create_key {Create key} other {{name}}}",
   "toolStatus": "{status, select, running {Running} done {Done} error {Failed} stopped {Stopped} other {}}",
   "toolCount": "{count, plural, =0 {No results} one {# result} other {# results}}",
   "toolError": "{code, select, forbidden {Not allowed for your role} read_only {Write access is off} unknown_tool {Unknown tool} unknown_topic {Unknown topic} unknown_page {Unknown page} provider_not_found {Provider not found} other {Failed}}",

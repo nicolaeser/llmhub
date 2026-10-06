@@ -29,8 +29,15 @@ import {
   settleAssistantMessage,
   toolArgsPreview,
   toolErrorCode,
+  wireMessage,
 } from "@/lib/assistant/transcript";
-import { assistantSystemPrompt } from "@/lib/assistant/prompt";
+import {
+  errorSamples,
+  parseLogSearch,
+  parseUsageBreakdown,
+  sortUsageRows,
+} from "@/lib/assistant/insights";
+import { ASSISTANT_STEP_LIMIT_NOTE, assistantSystemPrompt } from "@/lib/assistant/prompt";
 import { PERMISSIONS, roleTemplates } from "@/lib/auth/permissions";
 import type { AssistantChatMessage, AssistantContext } from "@/types/assistant";
 
@@ -71,6 +78,8 @@ test("MCP catalog exposes setup, explain, and write tools", () => {
     "list_providers",
     "list_models",
     "list_keys",
+    "search_logs",
+    "usage_breakdown",
     "explain",
     "open_page",
     "create_provider",
@@ -473,4 +482,194 @@ test("assistant run streams tool calls with ids and keeps secrets out of tool co
   assert.match(run, /assistantSystemPrompt\(opts\.ctx\.locale, opts\.ctx\.allowWrite\)/);
   const pushed = run.slice(run.indexOf('role: "tool"'));
   assert.doesNotMatch(pushed.slice(0, 200), /secret/);
+});
+
+test("wire messages carry finished tool results but never secrets or links", () => {
+  const message: AssistantChatMessage = {
+    id: "a",
+    role: "assistant",
+    parts: [
+      { type: "text", text: "Checking." },
+      {
+        type: "tool",
+        id: "0-0",
+        name: "create_key",
+        status: "done",
+        args: { alias: "ops" },
+        result: { ok: true, prefix: "sk-hub-ab" },
+        href: "/",
+        secret: "sk-hub-secret",
+      },
+      { type: "tool", id: "0-1", name: "list_keys", status: "stopped", args: {} },
+      { type: "text", text: "Done." },
+    ],
+  };
+  const wire = wireMessage(message);
+  assert.deepEqual(wire, {
+    role: "assistant",
+    parts: [
+      { type: "text", text: "Checking." },
+      { type: "tool", name: "create_key", args: { alias: "ops" }, result: { ok: true, prefix: "sk-hub-ab" } },
+      { type: "text", text: "Done." },
+    ],
+  });
+  assert.doesNotMatch(JSON.stringify(wire), /sk-hub-secret|href/);
+  assert.deepEqual(
+    wireMessage({ id: "u", role: "user", parts: [{ type: "text", text: "hi" }] }),
+    { role: "user", content: "hi" },
+  );
+  assert.equal(wireMessage({ id: "e", role: "assistant", parts: [] }), null);
+});
+
+test("client history replays tool results as paired tool calls", () => {
+  const parsed = parseClientMessages([
+    { role: "user", content: "list my keys" },
+    {
+      role: "assistant",
+      parts: [
+        { type: "text", text: "Checking." },
+        { type: "tool", name: "list_keys", args: {}, result: [{ alias: "a" }, { alias: "b" }] },
+        { type: "tool", name: "get_overview", args: {}, result: { spend7d: 1 } },
+        { type: "tool", name: "bad name", args: {}, result: {} },
+        { type: "tool", name: "explain", args: { topic: "keys" } },
+        { type: "text", text: "You have two keys." },
+      ],
+    },
+    { role: "user", content: "block the second one" },
+  ]);
+  assert.deepEqual(
+    parsed.map((message) => message.role),
+    ["user", "assistant", "tool", "tool", "assistant", "user"],
+  );
+  const call = parsed[1];
+  assert.equal(call?.content, "Checking.");
+  assert.deepEqual(
+    call?.toolCalls?.map((item) => item.name),
+    ["list_keys", "get_overview"],
+  );
+  assert.deepEqual(
+    parsed.slice(2, 4).map((message) => message.toolCallId),
+    call?.toolCalls?.map((item) => item.id),
+  );
+  assert.equal(parsed[2]?.content, JSON.stringify([{ alias: "a" }, { alias: "b" }]));
+  assert.equal(parsed[4]?.content, "You have two keys.");
+  for (const id of call?.toolCalls?.map((item) => item.id) ?? []) {
+    assert.match(id, /^[a-zA-Z0-9_-]+$/);
+  }
+});
+
+test("replayed tool results stay within the history budget", () => {
+  const big = { rows: "x".repeat(10_000) };
+  const turns = Array.from({ length: 10 }, () => ({
+    role: "assistant",
+    parts: [
+      { type: "tool", name: "list_keys", args: {}, result: big },
+      { type: "text", text: "ok" },
+    ],
+  }));
+  const parsed = parseClientMessages([...turns, { role: "user", content: "next" }]);
+  const tools = parsed.filter((message) => message.role === "tool");
+  assert.equal(tools.length, 10);
+  const total = tools.reduce((sum, message) => sum + message.content.length, 0);
+  assert.ok(total < 30_000, String(total));
+  assert.match(tools.at(-1)?.content ?? "", /"truncated":true/);
+  assert.equal(tools[0]?.content, JSON.stringify({ omitted: true }));
+});
+
+test("assistant run replays history tools and summarizes at the step limit", async () => {
+  const run = await readFile(
+    new URL("../src/lib/assistant/run.ts", import.meta.url),
+    "utf8",
+  );
+  assert.match(run, /tool_choice: toolChoice/);
+  assert.match(run, /ASSISTANT_STEP_LIMIT_NOTE/);
+  assert.match(run, /"none",/);
+  assert.match(run, /redactSecrets\(call\.arguments\)/);
+  assert.match(ASSISTANT_STEP_LIMIT_NOTE, /Do not call tools/);
+});
+
+test("search_logs parses bounded filters and defaults to the last day", () => {
+  const now = new Date("2026-10-06T12:00:00.000Z");
+  const defaults = parseLogSearch({}, now);
+  assert.equal(defaults.filters.from, "2026-10-05T12:00:00.000Z");
+  assert.equal(defaults.filters.to, "");
+  assert.equal(defaults.filters.status, "");
+  assert.equal(defaults.filters.userId, "");
+  assert.equal(defaults.filters.keyId, "");
+  assert.equal(defaults.errorsOnly, false);
+  assert.equal(defaults.limit, 15);
+  const custom = parseLogSearch(
+    { model: " gpt-x ", status: 502, errorsOnly: true, hours: 5000, limit: 500, userId: "other" },
+    now,
+  );
+  assert.equal(custom.filters.model, "gpt-x");
+  assert.equal(custom.filters.status, "502");
+  assert.equal(custom.filters.userId, "");
+  assert.equal(custom.errorsOnly, true);
+  assert.equal(custom.limit, 50);
+  assert.equal(custom.filters.from, new Date(now.getTime() - 744 * 3_600_000).toISOString());
+  assert.equal(parseLogSearch({ status: 42 }, now).filters.status, "");
+  assert.equal(parseLogSearch({ errorsOnly: "true" }, now).errorsOnly, false);
+  const range = parseLogSearch({ from: "2026-10-06T05:00:00Z", to: "2026-10-06T09:00:00Z" }, now);
+  assert.equal(range.filters.from, "2026-10-06T05:00:00Z");
+  assert.equal(range.filters.to, "2026-10-06T09:00:00Z");
+});
+
+test("search_logs reads metadata only and never request content", async () => {
+  const source = await readFile(
+    new URL("../src/lib/assistant/insights.ts", import.meta.url),
+    "utf8",
+  );
+  const start = source.indexOf("export async function searchLogs");
+  const end = source.indexOf("export async function usageBreakdown");
+  assert.ok(start > 0 && end > start);
+  const block = source.slice(start, end);
+  assert.match(block, /requestLogWhere\(query\.filters, owner\)/);
+  assert.match(block, /select: \{/);
+  assert.doesNotMatch(block, /content|include:|requestLogContent|\btag\b/);
+  assert.match(source, /SPEND_READ_ALL/);
+  const samples = errorSamples([
+    { error: "upstream 502" },
+    { error: "upstream 502" },
+    { error: "bad key sk-proj-abcdefghijklmnopqrstuvwx" },
+    { error: "" },
+  ]);
+  assert.deepEqual(samples[0], { message: "upstream 502", count: 2 });
+  assert.equal(samples.length, 2);
+  assert.doesNotMatch(JSON.stringify(samples), /sk-proj-abcdefghijklmnop/);
+});
+
+test("usage_breakdown parses groups and sorts by the chosen metric", () => {
+  assert.deepEqual(parseUsageBreakdown({ groupBy: "team" }), {
+    groupBy: "team",
+    days: 7,
+    model: "",
+    sort: "spend",
+    limit: 10,
+  });
+  assert.equal(parseUsageBreakdown({ groupBy: "toString" }).groupBy, "model");
+  assert.equal(parseUsageBreakdown({ days: 0 }).days, 1);
+  assert.equal(parseUsageBreakdown({ days: 9999, limit: 99 }).days, 366);
+  assert.equal(parseUsageBreakdown({ limit: 99 }).limit, 25);
+  assert.equal(parseUsageBreakdown({ sort: "errors" }).sort, "errors");
+  const rows = [
+    { name: "a", spend: 1, prompt: 0, completion: 0, requests: 10, errors: 5 },
+    { name: "b", spend: 3, prompt: 0, completion: 0, requests: 2, errors: 0 },
+    { name: "c", spend: 2, prompt: 0, completion: 0, requests: 30, errors: 1 },
+  ];
+  assert.deepEqual(sortUsageRows(rows, "spend").map((row) => row.name), ["b", "c", "a"]);
+  assert.deepEqual(sortUsageRows(rows, "requests").map((row) => row.name), ["c", "a", "b"]);
+  assert.deepEqual(sortUsageRows(rows, "errors").map((row) => row.name), ["a", "c", "b"]);
+});
+
+test("read-only operators keep the operations tools behind spend:read", async () => {
+  const readOnly: AssistantContext = { ...ctx, permissions: [], allowWrite: false };
+  const names = mcpToolsForModel(readOnly).map((tool) => tool.function.name);
+  assert.equal(names.includes("search_logs"), true);
+  assert.equal(names.includes("usage_breakdown"), true);
+  for (const name of ["search_logs", "usage_breakdown"]) {
+    assert.equal(isWriteTool(name), false, name);
+    const called = await callMcpTool(name, { groupBy: "model" }, readOnly);
+    assert.deepEqual(called, { result: { error: "forbidden" } }, name);
+  }
 });
