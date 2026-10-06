@@ -12,6 +12,7 @@
   "advanced": "Advanced",
   "copy": "Copy",
   "copied": "Copied",
+  "copyFailed": "Could not copy",
   "done": "Done",
   "close": "Close",
   "test": "Test",

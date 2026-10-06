@@ -246,6 +246,7 @@ export type Enterprise = {
   budget_alert_thresholds?: number[];
   registration_enabled?: boolean;
   assistant_model?: string;
+  assistant_model_locked?: boolean;
 };
 
 export type Deployment = {

@@ -91,6 +91,11 @@
     "reasoning": "Denkprozess",
     "toolCall": "Tool-Aufruf {name}",
     "toolResult": "Tool-Ergebnis",
-    "media": "{media, select, image {Bild} file {Datei} audio {Audio} other {Anhang}}"
+    "media": "{media, select, image {Bild} file {Datei} audio {Audio} other {Anhang}}",
+    "export": "Exportieren",
+    "exportFormat": "{format, select, pdf {PDF} md {Markdown} other {JSON}}",
+    "markdown": "Markdown darstellen",
+    "generated": "Erstellt am {at, date, zoned}",
+    "page": "Seite {page, number, integer} von {total, number, integer}"
   }
 }

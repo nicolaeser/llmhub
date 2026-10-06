@@ -10,6 +10,7 @@ import { actionFail, runAction } from "@/lib/http/action-result";
 import { writeAudit } from "@/lib/gateway/audit";
 import { issueScimToken, revokeScimToken, scimTokenSet } from "@/lib/gateway/scim";
 import { getEnterprise, patchEnterprise } from "@/lib/gateway/settings";
+import { assistantModelLocked } from "@/lib/assistant/parse";
 import { resolveS3Config } from "@/lib/s3/config";
 import { env } from "@/lib/env";
 import { stepUpSchema } from "@/schemas/auth";
@@ -29,6 +30,7 @@ async function view(enterprise: Enterprise, session: AuthenticatedSession) {
     settings: {
       registration_enabled: enterprise.registration_enabled === true,
       assistant_model: enterprise.assistant_model ?? "",
+      assistant_model_locked: assistantModelLocked(enterprise),
       oidc: {
         enabled: enterprise.oidc?.enabled === true,
         issuer: enterprise.oidc?.issuer ?? "",
@@ -69,13 +71,14 @@ export async function saveAdminSettingsAction(raw: unknown) {
     const session = await requirePermission(PERMISSIONS.SETTINGS_MANAGE);
     const parsed = adminSettingsSchema.safeParse(raw);
     if (!parsed.success) return actionFail("VALIDATION");
-    const enterprise = await patchEnterprise(parsed.data);
+    const settings = { ...parsed.data, assistant_model_locked: assistantModelLocked(parsed.data) };
+    const enterprise = await patchEnterprise(settings);
     await writeAudit({
       actor: session.user.id,
       action: "settings.admin",
       objectType: "enterprise",
       objectId: "enterprise",
-      after: parsed.data,
+      after: settings,
     });
     return view(enterprise, session);
   });

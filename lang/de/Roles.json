@@ -14,8 +14,23 @@
   "templateDescription": "{key, select, admin {Voller Zugriff inklusive Rollen, Einstellungen und Benutzersicherheit.} operator {Betreibt Schlüssel, Provider, Modelle, Mandanten und Benutzer. Keine Rollen oder Einstellungen.} finance {Nutzung, Logs und Chargeback aller. Sonst nur lesend.} viewer {Lesende Konsole mit eigenen Schlüsseln, eigener Nutzung, Playground und Assistent.} other {}}",
   "members": "{count, plural, =0 {Keine Mitglieder} one {# Mitglied} other {# Mitglieder}}",
   "permissionCount": "{count, plural, one {# Berechtigung} other {# Berechtigungen}}",
+  "toolsOff": "{count, plural, one {# Assistent-Werkzeug aus} other {# Assistent-Werkzeuge aus}}",
   "level": "{level, select, view {Lesen} work {Arbeiten} sensitive {Sensibel} other {}}",
   "domain": "{domain, select, keys {API-Keys} providers {Provider} models {Modelle} tenancy {Mandanten} spend {Nutzung und Budgets} access {Benutzer und Rollen} settings {Einstellungen} tools {Werkzeuge} other {Sonstiges}}",
+  "tabs": {
+    "label": "Rolleneinstellungen",
+    "permissions": "Berechtigungen ({count, number, integer})",
+    "tools": "{off, plural, =0 {Assistent-Werkzeuge} one {Assistent-Werkzeuge (# aus)} other {Assistent-Werkzeuge (# aus)}}"
+  },
+  "tools": {
+    "hint": "Mitglieder dieser Rolle können nur die hier eingeschalteten Assistent-Werkzeuge nutzen. Jedes Werkzeug braucht weiterhin die passende Berechtigung, und Werkzeuge, die etwas ändern, zusätzlich den Schreibzugriff im Assistenten.",
+    "noAssistant": "Diese Rolle kann den Assistenten nicht nutzen. Schalte die Berechtigung Assistent ein, damit diese Werkzeuge wirken.",
+    "enableAll": "Alle einschalten",
+    "readOnly": "Nur lesende Werkzeuge",
+    "disableAll": "Alle ausschalten",
+    "needs": "Braucht die Berechtigung {permission}",
+    "access": "{access, select, read {Lesen} write {Schreiben} destructive {Destruktiv} other {}}"
+  },
   "columns": {
     "role": "Rolle",
     "members": "Mitglieder",

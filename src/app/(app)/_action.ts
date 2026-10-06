@@ -16,11 +16,10 @@ import {
 import { actionFail, runAction } from "@/lib/http/action-result";
 import { listKeys, toKeyView } from "@/app/(app)/_data";
 import { writeAudit } from "@/lib/gateway/audit";
-import { usageTotals } from "@/lib/gateway/usage-totals";
+import { usageSlices, usageTotals } from "@/lib/gateway/usage-totals";
 import { isInternalKey } from "@/lib/gateway/key-tenancy";
 import { loadModelPolicies, templateRuleSelect } from "@/lib/gateway/model-access";
 import { templateModels, templateRulesOf } from "@/lib/gateway/model-policy";
-import { money } from "@/lib/utils/money";
 import type { UsageSlice } from "@/types/gateway";
 import type { AuthenticatedSession } from "@/types/auth";
 
@@ -345,8 +344,8 @@ export async function loadUsageAction(
       ...spendScope(session),
     };
     const requestWhere = { ...filters, createdAt: { gte: since } };
-    const [slices, logged] = await Promise.all([
-      prisma.usageDaily.findMany({ where: { ...filters, day: { gte: since } } }),
+    const [rows, logged] = await Promise.all([
+      usageSlices({ ...filters, day: { gte: since } }),
       prisma.requestLog.count({ where: requestWhere }),
     ]);
     const p95Row = logged
@@ -357,23 +356,6 @@ export async function loadUsageAction(
           select: { latencyMs: true },
         })
       : null;
-    const rows: UsageSlice[] = slices.map((row) => ({
-      day: row.day.toISOString().slice(0, 10),
-      keyId: row.keyId,
-      teamId: row.teamId,
-      orgId: row.orgId,
-      projectId: row.projectId,
-      memberId: row.memberId,
-      userId: row.userId,
-      model: row.model,
-      requests: row.requests,
-      errors: row.errors,
-      rateLimited: row.rateLimited,
-      latencyMs: Number(row.latencyMs),
-      promptTokens: Number(row.promptTokens),
-      completionTokens: Number(row.completionTokens),
-      cost: money(row.cost),
-    }));
     const daily = new Map<string, { spend: number; requests: number; errors: number }>();
     for (let i = days - 1; i >= 0; i--) {
       daily.set(new Date(today - i * 86400000).toISOString().slice(0, 10), {

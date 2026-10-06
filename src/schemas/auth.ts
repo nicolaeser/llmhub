@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { passwordPolicyIssue, PASSWORD_MAX_LENGTH } from "@/lib/auth/password-policy";
 import { permissions, roleTemplateKeys } from "@/lib/auth/permissions";
+import { assistantToolNames } from "@/lib/assistant/catalog";
 import type { Permission } from "@/types/auth";
 
 export const idSchema = z.string().min(1).max(191);
@@ -129,6 +130,7 @@ export const roleWriteSchema = z
     name: z.string().trim().min(2).max(80).nullable(),
     description: z.string().trim().max(500).nullable(),
     permissions: z.array(permissionSchema).max(permissions.length),
+    assistantToolsDisabled: z.array(z.enum(assistantToolNames)).max(assistantToolNames.length).default([]),
   })
   .strict();
 

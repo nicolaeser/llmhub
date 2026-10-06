@@ -13,7 +13,7 @@ export default function CopyButton({
   label: string;
   variant?: "ghost" | "secondary";
 }) {
-  const t = useTranslations("Assistant");
+  const t = useTranslations("Common");
   return (
     <Button
       isIconOnly

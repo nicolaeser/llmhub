@@ -4,6 +4,7 @@
   "open": "Open assistant",
   "model": "Model",
   "noModels": "Add a model alias first",
+  "modelLocked": "Set by an administrator. Other models cannot be used.",
   "placeholder": "Ask about setup, keys, or models…",
   "send": "Send",
   "stop": "Stop",
@@ -12,7 +13,7 @@
   "thinking": "Thinking…",
   "composerHint": "Enter to send, Shift+Enter for a new line",
   "emptyTitle": "Operator assistant",
-  "emptyHint": "I can check what is missing, explain the console, look up providers, models, keys, and usage, and walk the first setup loop.",
+  "emptyHint": "I can check what is missing, explain the console, look up spend, failing requests, keys, models, providers, companies, and users, and make the changes you ask for when Write access is on.",
   "forbiddenTitle": "Assistant unavailable",
   "forbidden": "Your role does not include the assistant.",
   "loadFailed": "The assistant could not be loaded. Try again.",
@@ -21,30 +22,34 @@
   "error": "{code, select, no_llm {Add a model alias first, or connect a provider.} llm_failed {The assistant could not complete that turn.} UNAUTHORIZED {Sign in to use the console} FORBIDDEN {You cannot use the assistant} VALIDATION {That message could not be sent} INVALID_JSON {That message could not be sent} PAYLOAD_TOO_LARGE {That conversation is too long to send} other {Something went wrong}}",
   "write": {
     "label": "Write access",
-    "hint": "{state, select, on {The assistant may create providers, models, and keys when you ask.} unavailable {Your role cannot create providers, models, or keys, so the assistant stays read-only.} other {Read-only. The assistant can look things up but cannot change anything.}}",
+    "hint": "{state, select, on {The assistant may make the changes you ask for. Destructive actions need your confirmation first.} unavailable {Your role has no assistant tools that change anything, so the assistant stays read-only.} other {Read-only. The assistant can look things up but cannot change anything.}}",
     "mode": "{state, select, on {Write access on} other {Read-only}}"
   },
-  "toolName": "{name, select, get_setup_status {Setup status} get_overview {Overview} list_provider_kinds {Provider kinds} list_providers {Providers} list_models {Models} list_keys {Keys} explain {Explain} open_page {Open page} create_provider {Create provider} create_model {Create model} create_key {Create key} other {{name}}}",
+  "toolName": "{name, select, get_setup_status {Setup status} whoami {My access} explain {Explain} open_page {Open page} list_provider_kinds {Provider kinds} list_api_endpoints {API endpoints} code_example {Code example} get_overview {Overview} get_usage {Usage report} usage_breakdown {Usage breakdown} search_logs {Request logs} search_audit_log {Audit log} get_log {Log details} list_providers {Providers} get_provider {Provider details} create_provider {Create provider} update_provider {Update provider} refresh_provider_models {Refresh provider models} import_provider_models {Import provider models} delete_provider {Delete provider} list_models {Models} get_model {Model details} create_model {Create model} update_model {Update model} delete_model {Delete model} list_model_templates {Model templates} save_model_template {Save model template} delete_model_template {Delete model template} list_keys {Keys} get_key {Key details} create_key {Create key} update_key {Update key} rotate_key {Rotate key} revoke_key {Revoke key} get_structure {Companies and budgets} save_structure_node {Save company, department, project, or person} delete_structure_node {Delete company, department, project, or person} set_budget {Set budget} add_budget_boost {Add budget boost} remove_budget_boost {Remove budget boost} set_budget_alerts {Budget alert thresholds} list_users {Console users} list_roles {Roles} set_user_blocked {Block or unblock user} assign_user_role {Assign role and access} revoke_user_sessions {Sign user out} get_settings {Settings} get_guardrails {Guardrails} test_pii {Test PII masking} update_guardrails {Update guardrails} update_gateway_settings {Update gateway settings} other {{name}}}",
+  "toolHint": "{name, select, get_setup_status {Counts providers, models, and keys and names the next setup step.} whoami {Shows the operator's role, company scope, permissions, and available tools.} explain {Explains console concepts such as keys, budgets, routing, or guardrails.} open_page {Links to a console page.} list_provider_kinds {Lists the provider types the gateway can connect.} list_api_endpoints {Lists the /v1 and /api endpoints.} code_example {Writes curl, Python, or TypeScript code for this gateway.} get_overview {Seven-day spend, requests, and errors.} get_usage {Spend, tokens, latency, and top models, companies, departments, projects, people, and keys.} usage_breakdown {Spend, requests, errors, and latency grouped by model, company, department, project, person, key, or console user.} search_logs {Recent requests with error patterns by status, provider, and upstream model. No content.} search_audit_log {Who created, changed, or deleted what in the console.} get_log {Status, error, and upstream of one request without content.} list_providers {Connected providers with data policy. Never API keys.} get_provider {One provider with its discovered upstream models and prices.} create_provider {Creates a provider connection without a key.} update_provider {Renames a provider or changes its base URL or data policy.} refresh_provider_models {Fetches the provider's model list now.} import_provider_models {Creates model aliases from discovered models.} delete_provider {Deletes an unused provider connection.} list_models {Model aliases with routing settings.} get_model {One model alias with its deployments and prices.} create_model {Adds a model alias on a connected provider.} update_model {Changes routing, fallbacks, retries, and deployments.} delete_model {Deletes a model alias.} list_model_templates {Model templates with their rules and matches.} save_model_template {Creates or updates a model template.} delete_model_template {Deletes an unused model template.} list_keys {Key aliases, prefixes, spend, and budgets. Never secrets.} get_key {Limits, models, templates, and whether it belongs to a project, a person, or is internal.} create_key {Creates a key for a project, a person, or internal use. The secret is shown only to the operator.} update_key {Changes models, limits, IPs, who it belongs to, or blocks a key.} rotate_key {Issues a new secret. The old one works for one more hour.} revoke_key {Deletes a key permanently.} get_structure {Companies, departments, projects, people, and budgets.} save_structure_node {Creates or changes companies, departments, projects, and people.} delete_structure_node {Deletes an empty company, a department, a project, or a person.} set_budget {Sets a spend cap and reset period.} add_budget_boost {Adds a temporary budget boost.} remove_budget_boost {Removes a temporary budget boost.} set_budget_alerts {Sets the percentages that fire budget alerts.} list_users {Console users with role, company scope, and second-factor status. No email addresses.} list_roles {Roles with permissions and switched-off tools.} set_user_blocked {Blocks or unblocks a user.} assign_user_role {Gives a console user another role or limits them to a company.} revoke_user_sessions {Signs a user out everywhere.} get_settings {Cache, retention, logging, sign-in, and assistant settings. Never secrets.} get_guardrails {Global PII policy and overrides.} test_pii {Shows how a sample text would be masked.} update_guardrails {Changes the PII policy or an override.} update_gateway_settings {Changes cache TTL, retention, and content logging.} other {}}",
+  "tools": {
+    "summary": "{total, plural, one {# tool for your role} other {# tools for your role}}, {usable, number, integer} usable now",
+    "group": "{group, select, general {General} usage {Usage and logs} providers {Providers} models {Models and templates} keys {API keys} structure {Companies and budgets} access {Users and roles} settings {Settings and guardrails} other {}}",
+    "reads": "Looks up: {list}",
+    "changes": "Changes: {list}",
+    "hint": "{state, select, on {Write access is on. Destructive actions still need your confirmation.} other {Turn on Write access to let the assistant make changes.}} Administrators choose the tools per role under Roles."
+  },
   "toolStatus": "{status, select, running {Running} done {Done} error {Failed} stopped {Stopped} other {}}",
   "toolCount": "{count, plural, =0 {No results} one {# result} other {# results}}",
-  "toolError": "{code, select, forbidden {Not allowed for your role} read_only {Write access is off} unknown_tool {Unknown tool} unknown_topic {Unknown topic} unknown_page {Unknown page} provider_not_found {Provider not found} other {Failed}}",
+  "toolError": "{code, select, forbidden {Not allowed for your role} tool_disabled {Switched off for your role} read_only {Write access is off} confirmation_required {Waiting for your confirmation} invalid_arguments {Invalid input} unknown_tool {Unknown tool} unknown_topic {Unknown topic} unknown_page {Unknown page} not_found {Not found} provider_not_found {Provider not found} deployment_not_found {Deployment not found} user_not_found {User not found} ambiguous_key {Several keys match} alias_exists {Name already in use} name_exists {Name already in use} provider_in_use {Still used by a model} template_in_use {Still used by a key} has_children {Still has departments, projects, or people} budget_exceeds_parent {Exceeds a parent budget} budget_not_capped {Needs a budget cap first} cannot_self {Not possible on your own account} owner_protected {The owner is protected} user_protected {User is protected} nothing_to_change {Nothing to change} validation {Invalid input} platform_only {Platform users only} org_locked {The company cannot change} team_not_in_org {The department belongs to another company} member_exists {A person with this email already exists} member_not_found {Person not found} project_not_found {Project not found} key_binding_conflict {Either a project or a person, not both} org_required {Company missing} org_not_found {Company not found} team_not_found {Department not found} other {Failed}}",
   "toolInput": "Input",
   "toolOutput": "Output",
   "toolNoOutput": "{status, select, running {Waiting for the result…} other {No output}}",
   "openPage": "Open {page}",
-  "code": "Code",
-  "copyCode": "Copy code",
   "copyMessage": "Copy reply",
-  "image": "Image",
-  "table": "Table",
   "suggestions": {
     "setup": "What is missing to send a first request?",
     "keys": "How do API keys work?",
     "usage": "How much did we spend this week?",
-    "playground": "How do I test in the playground?"
+    "playground": "How do I test in the playground?",
+    "errors": "Which requests failed today and why?",
+    "budgets": "Which budgets are close to their cap?"
   },
   "secretOnce": "New key secret. It is shown only once and never sent to the model.",
-  "copySecret": "Copy key secret",
-  "copied": "Copied",
-  "copyFailed": "Could not copy"
+  "copySecret": "Copy key secret"
 }

@@ -91,6 +91,11 @@
     "reasoning": "Reasoning",
     "toolCall": "Tool call {name}",
     "toolResult": "Tool result",
-    "media": "{media, select, image {Image} file {File} audio {Audio} other {Attachment}}"
+    "media": "{media, select, image {Image} file {File} audio {Audio} other {Attachment}}",
+    "export": "Export",
+    "exportFormat": "{format, select, pdf {PDF} md {Markdown} other {JSON}}",
+    "markdown": "Render Markdown",
+    "generated": "Generated {at, date, zoned}",
+    "page": "Page {page, number, integer} of {total, number, integer}"
   }
 }

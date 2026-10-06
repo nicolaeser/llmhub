@@ -23,7 +23,7 @@ export function toJsonl(rows: unknown[]): string {
 }
 
 export function fileResponse(
-  body: string,
+  body: BodyInit,
   filename: string,
   contentType: string,
 ) {

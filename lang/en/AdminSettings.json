@@ -59,6 +59,9 @@
     "title": "Assistant",
     "subtitle": "The console assistant runs on one of your gateway models and is billed like any other request.",
     "model": "Default model",
-    "none": "No default (pick in the assistant)"
+    "none": "No default (pick in the assistant)",
+    "lock": "Enforce this model",
+    "lockHint": "{state, select, missing {Pick a default model first.} other {Nobody can switch the assistant to another model.}}",
+    "toolsHint": "Which tools the assistant may use is set per role under <link>Roles</link>."
   }
 }
