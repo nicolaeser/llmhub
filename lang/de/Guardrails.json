@@ -9,11 +9,12 @@
   "mode": "Wenn PII gefunden wird",
   "mask": "Mit Platzhaltern maskieren",
   "block": "Anfrage blockieren (400)",
+  "modeHint": "Blockieren lehnt die Anfrage mit 400 pii_blocked ab, bevor sie das Modell erreicht. Die Modellausgabe wird in beiden Modi nur maskiert.",
   "output": "Auch Modellausgabe schwärzen",
   "outputHint": "PII aus Completions entfernen, bevor sie den Client erreichen",
   "entities": "Entitäten",
-  "entityLabel": "{id, select, CREDIT_CARD {Kreditkarte} CRYPTO {Krypto-Wallet} EMAIL_ADDRESS {E-Mail} IBAN_CODE {IBAN} IP_ADDRESS {IP-Adresse} PHONE_NUMBER {Telefon} URL {URL} DATE_TIME {Datum / Uhrzeit} MEDICAL_LICENSE {Medizinische Lizenz} US_SSN {US-SSN} US_ITIN {US-ITIN} US_PASSPORT {US-Reisepass} US_BANK_NUMBER {US-Bankkonto} US_DRIVER_LICENSE {US-Führerschein} UK_NHS {UK-NHS-Nummer} UK_NINO {UK National Insurance} ES_NIF {Spanische NIF} ES_NIE {Spanische NIE} IT_FISCAL_CODE {Italienischer Steuercode} IT_VAT_CODE {Italienische USt-IdNr.} PL_PESEL {Polnische PESEL} SG_NRIC_FIN {Singapur NRIC/FIN} AU_ABN {Australisches ABN} AU_ACN {Australisches ACN} AU_TFN {Australisches TFN} AU_MEDICARE {Australisches Medicare} IN_PAN {Indisches PAN} IN_AADHAAR {Indisches Aadhaar} IN_PASSPORT {Indischer Reisepass} FI_PERSONAL_IDENTITY_CODE {Finnische Personenkennzahl} JWT {JWT} SECRET {API-Schlüssel / Geheimnisse} other {{id}}}",
-  "categoryLabel": "{category, select, Finance {Finanzen} General {Allgemein} Health {Gesundheit} USA {USA} UK {UK} Spain {Spanien} Italy {Italien} Poland {Polen} Singapore {Singapur} Australia {Australien} India {Indien} Finland {Finnland} Credentials {Zugangsdaten} other {{category}}}",
+  "entityLabel": "{id, select, CREDIT_CARD {Kreditkarte} CRYPTO {Krypto-Wallet} EMAIL_ADDRESS {E-Mail} IBAN_CODE {IBAN} IP_ADDRESS {IP-Adresse} PHONE_NUMBER {Telefon} URL {URL} DATE_TIME {Datum / Uhrzeit} MEDICAL_LICENSE {Medizinische Lizenz} US_SSN {US-SSN} US_ITIN {US-ITIN} US_PASSPORT {US-Reisepass} US_BANK_NUMBER {US-Bankkonto} US_DRIVER_LICENSE {US-Führerschein} UK_NHS {UK-NHS-Nummer} UK_NINO {UK National Insurance} ES_NIF {Spanische NIF} ES_NIE {Spanische NIE} IT_FISCAL_CODE {Italienischer Steuercode} IT_VAT_CODE {Italienische USt-IdNr.} PL_PESEL {Polnische PESEL} SG_NRIC_FIN {Singapur NRIC/FIN} AU_ABN {Australisches ABN} AU_ACN {Australisches ACN} AU_TFN {Australisches TFN} AU_MEDICARE {Australisches Medicare} IN_PAN {Indisches PAN} IN_AADHAAR {Indisches Aadhaar} IN_PASSPORT {Indischer Reisepass} FI_PERSONAL_IDENTITY_CODE {Finnische Personenkennzahl} DE_TAX_ID {Steuer-ID} DE_TAX_NUMBER {Steuernummer} DE_VAT_ID {Deutsche USt-IdNr.} DE_SOCIAL_SECURITY {Rentenversicherungsnummer} DE_HEALTH_INSURANCE {Krankenversichertennummer} DE_ID_CARD {Personalausweis} DE_PASSPORT {Deutscher Reisepass} AT_SOCIAL_SECURITY {Österreichische Sozialversicherungsnummer} AT_VAT_ID {Österreichische UID-Nummer} CH_AHV {AHV-Nummer} CH_UID {Schweizer UID} JWT {JWT} SECRET {API-Schlüssel / Geheimnisse} PRIVATE_KEY {Privater Schlüssel} CONNECTION_STRING {Verbindungs-String / DB-URL} ENV_SECRET {Geheimnis in Env / Config} other {{id}}}",
+  "categoryLabel": "{category, select, Finance {Finanzen} General {Allgemein} Health {Gesundheit} USA {USA} UK {UK} Spain {Spanien} Italy {Italien} Poland {Polen} Singapore {Singapur} Australia {Australien} India {Indien} Finland {Finnland} Germany {Deutschland} Austria {Österreich} Switzerland {Schweiz} Credentials {Zugangsdaten} other {{category}}}",
   "groups": "Datengruppen",
   "groupsHint": "Alle Entitäten einer Gruppe auf einmal aus- oder abwählen.",
   "groupTag": "{label} ({selected, number}/{total, number})",
@@ -26,7 +27,7 @@
   "policyHint": "Gilt für jede Anfrage, sofern ihre Organisation oder ihr API-Key keine Überschreibung hat.",
   "entitiesHint": "Ohne Auswahl gilt die Standardauswahl.",
   "overrides": "Überschreibungen",
-  "overridesHint": "Gib einer Organisation oder einem einzelnen API-Key eine eigene Richtlinie. Die Überschreibung eines Keys hat Vorrang vor seiner Organisation, alles andere nutzt die globale Richtlinie.",
+  "overridesHint": "Gib einer Organisation oder einem einzelnen API-Key eine eigene Richtlinie. Für jede Anfrage gilt genau eine Richtlinie, gewählt in dieser Reihenfolge:",
   "overridesEmpty": "Noch keine Überschreibungen. Jede Anfrage nutzt die globale Richtlinie.",
   "addOverride": "Überschreibung hinzufügen",
   "scope": "Gilt für",
@@ -46,5 +47,22 @@
     "name": "Name",
     "output": "Modellausgabe"
   },
-  "logsHint": "Request-Logs markieren jede Entität, die diese Richtlinie in Prompts und Antworten findet, und auch die gespeicherten Log-Inhalte sind maskiert."
+  "logsHint": "Request-Logs markieren jede Entität, die diese Richtlinie in Prompts und Antworten findet, und auch die gespeicherten Log-Inhalte sind maskiert.",
+  "precedence": {
+    "title": "Reihenfolge der Richtlinien",
+    "number": "{n, number}",
+    "key": {
+      "title": "Überschreibung des API-Keys",
+      "hint": "Hat der API-Key der Anfrage eine Überschreibung, gilt nur diese. Die Überschreibung seiner Organisation wird dann nicht beachtet."
+    },
+    "org": {
+      "title": "Überschreibung der Organisation",
+      "hint": "Sonst gilt die Überschreibung der Organisation, zu der der Key gehört."
+    },
+    "global": {
+      "title": "Globale Richtlinie",
+      "hint": "Sonst gilt die globale Richtlinie oben auf dieser Seite."
+    },
+    "replace": "Eine Überschreibung ersetzt die geerbte Richtlinie vollständig, also Modus, Schwärzung der Ausgabe und Entitäten. Ohne ausgewählte Entitäten gilt die Standardauswahl."
+  }
 }

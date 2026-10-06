@@ -56,6 +56,7 @@ export default function PiiPolicyFields({
               </ListBox.Item>
             </ListBox>
           </Select.Popover>
+          <Description>{t("modeHint")}</Description>
         </Select>
       </div>
       <div className="space-y-4">
