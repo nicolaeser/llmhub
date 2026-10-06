@@ -1,12 +1,14 @@
 "use client";
 
 import { createContext, useContext, type ComponentProps, type JSX } from "react";
-import Markdown, { type Components, type ExtraProps } from "react-markdown";
+import type { Root, RootContent, Text } from "mdast";
+import ReactMarkdown, { type Components, type ExtraProps } from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { Card, Separator, Table } from "@heroui/react";
+import { Card, Chip, Separator, Table } from "@heroui/react";
 import { Image as ImageGlyph, Square, SquareCheck } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/routing";
+import { splitPiiPlaceholders } from "@/lib/gateway/pii";
 import CopyButton from "./copy-button";
 
 type MdNode = NonNullable<ExtraProps["node"]>;
@@ -17,6 +19,27 @@ const TableSection = createContext<"head" | "body">("body");
 const RowHeaderCell = createContext<MdChild | undefined>(undefined);
 
 const LINK_CLASS = "text-accent underline underline-offset-2";
+
+function piiTexts(node: Text): Text[] {
+  return splitPiiPlaceholders(node.value).map((part) =>
+    part.entity
+      ? { type: "text", value: part.text, data: { hName: "span", hProperties: { dataPii: part.entity } } }
+      : { type: "text", value: part.text },
+  );
+}
+
+function markPii(parent: { children: RootContent[] }) {
+  parent.children = parent.children.flatMap((child): RootContent[] => {
+    if (child.type === "text") return piiTexts(child);
+    if ("children" in child) markPii(child);
+    return [child];
+  });
+}
+
+const remarkPii = () => (tree: Root) => markPii(tree);
+
+const PLUGINS = [remarkGfm];
+const PII_PLUGINS = [remarkGfm, remarkPii];
 
 function safeHref(href: string): string | null {
   if (href.startsWith("/") && !href.startsWith("//") && !href.includes("\\")) {
@@ -69,7 +92,7 @@ function MdLink({ href, children }: Md<"a">) {
 }
 
 function MdImage({ src, alt }: Md<"img">) {
-  const t = useTranslations("Assistant");
+  const t = useTranslations("Markdown");
   const safe = typeof src === "string" ? safeHref(src) : null;
   const label = alt || t("image");
   if (!safe) return <span className="text-muted">{label}</span>;
@@ -87,7 +110,7 @@ function MdImage({ src, alt }: Md<"img">) {
 }
 
 function MdPre({ node }: Md<"pre">) {
-  const t = useTranslations("Assistant");
+  const t = useTranslations("Markdown");
   const code = firstElement(node, "code");
   const language = codeLanguage(code);
   const text = code ? textOf(code).replace(/\n$/, "") : "";
@@ -116,7 +139,7 @@ function MdCode({ children }: Md<"code">) {
 }
 
 function MdTable({ node, children }: Md<"table">) {
-  const t = useTranslations("Assistant");
+  const t = useTranslations("Markdown");
   const hasBody = Boolean(firstElement(node, "tbody"));
   return (
     <Table variant="secondary">
@@ -187,6 +210,17 @@ function MdListItem({ className, children }: Md<"li">) {
   return <li className="pl-1">{children}</li>;
 }
 
+function MdSpan({ node, children }: Md<"span">) {
+  const t = useTranslations("Guardrails");
+  const entity = node?.properties.dataPii;
+  if (typeof entity !== "string") return <span>{children}</span>;
+  return (
+    <Chip size="sm" variant="soft" color="warning">
+      {t("entityLabel", { id: entity })}
+    </Chip>
+  );
+}
+
 function MdInput({ type, checked }: Md<"input">) {
   if (type !== "checkbox") return null;
   return checked ? (
@@ -231,14 +265,25 @@ const COMPONENTS: Components = {
   ol: MdOrderedList,
   li: MdListItem,
   input: MdInput,
+  span: MdSpan,
 };
 
-export default function AssistantMarkdown({ text }: { text: string }) {
+export default function Markdown({
+  text,
+  pii = false,
+  muted = false,
+}: {
+  text: string;
+  pii?: boolean;
+  muted?: boolean;
+}) {
   return (
-    <div className="min-w-0 space-y-3 text-sm leading-relaxed break-words text-foreground">
-      <Markdown remarkPlugins={[remarkGfm]} components={COMPONENTS}>
+    <div
+      className={`min-w-0 space-y-3 text-sm leading-relaxed break-words ${muted ? "text-muted" : "text-foreground"}`}
+    >
+      <ReactMarkdown remarkPlugins={pii ? PII_PLUGINS : PLUGINS} components={COMPONENTS}>
         {text}
-      </Markdown>
+      </ReactMarkdown>
     </div>
   );
 }

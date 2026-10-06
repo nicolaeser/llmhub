@@ -30,7 +30,7 @@ import { Link } from "@/i18n/routing";
 import { toolArgsPreview, toolErrorCode } from "@/lib/assistant/transcript";
 import type { AssistantToolPart } from "@/types/assistant";
 import { NAV } from "@/app/(app)/_components/nav-data";
-import CopyButton from "./copy-button";
+import CopyButton from "@/components/console/copy-button";
 
 const TOOL_ICONS: Record<string, LucideIcon> = {
   get_setup_status: ListChecks,

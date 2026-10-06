@@ -206,7 +206,13 @@ export default function LogsPage() {
         </div>
       </div>
 
-      <LogDetailDialog state={detailState} detail={detail} />
+      <LogDetailDialog
+        state={detailState}
+        detail={detail}
+        onExport={(format) => {
+          if (detail) download(`/internal-api/logs/${encodeURIComponent(detail.id)}/export?format=${format}`);
+        }}
+      />
     </div>
   );
 }
