@@ -12,7 +12,7 @@
   "thinking": "Denkt nach…",
   "composerHint": "Enter zum Senden, Umschalt+Enter für eine neue Zeile",
   "emptyTitle": "Operator-Assistent",
-  "emptyHint": "Ich prüfe, was fehlt, erkläre die Konsole, schlage Anbieter, Modelle, Schlüssel und Nutzung nach und führe durch den ersten Setup-Lauf.",
+  "emptyHint": "Ich prüfe, was fehlt, erkläre die Konsole, schlage Anbieter, Modelle, Schlüssel, Nutzung und fehlgeschlagene Anfragen nach und führe durch den ersten Setup-Lauf.",
   "forbiddenTitle": "Assistent nicht verfügbar",
   "forbidden": "Deine Rolle enthält den Assistenten nicht.",
   "loadFailed": "Der Assistent konnte nicht geladen werden. Versuche es erneut.",
@@ -24,7 +24,7 @@
     "hint": "{state, select, on {Der Assistent darf auf deine Anfrage Anbieter, Modelle und Schlüssel anlegen.} unavailable {Deine Rolle kann keine Anbieter, Modelle oder Schlüssel anlegen, daher bleibt der Assistent schreibgeschützt.} other {Nur lesen. Der Assistent kann nachsehen, aber nichts ändern.}}",
     "mode": "{state, select, on {Schreibzugriff an} other {Nur lesen}}"
   },
-  "toolName": "{name, select, get_setup_status {Einrichtungsstatus} get_overview {Überblick} list_provider_kinds {Anbieterarten} list_providers {Anbieter} list_models {Modelle} list_keys {Schlüssel} explain {Erklärung} open_page {Seite öffnen} create_provider {Anbieter anlegen} create_model {Modell anlegen} create_key {Schlüssel anlegen} other {{name}}}",
+  "toolName": "{name, select, get_setup_status {Einrichtungsstatus} get_overview {Überblick} list_provider_kinds {Anbieterarten} list_providers {Anbieter} list_models {Modelle} list_keys {Schlüssel} search_logs {Anfrageprotokolle} usage_breakdown {Nutzungsauswertung} explain {Erklärung} open_page {Seite öffnen} create_provider {Anbieter anlegen} create_model {Modell anlegen} create_key {Schlüssel anlegen} other {{name}}}",
   "toolStatus": "{status, select, running {Läuft} done {Fertig} error {Fehlgeschlagen} stopped {Gestoppt} other {}}",
   "toolCount": "{count, plural, =0 {Keine Ergebnisse} one {# Ergebnis} other {# Ergebnisse}}",
   "toolError": "{code, select, forbidden {Für deine Rolle nicht erlaubt} read_only {Schreibzugriff ist aus} unknown_tool {Unbekanntes Werkzeug} unknown_topic {Unbekanntes Thema} unknown_page {Unbekannte Seite} provider_not_found {Anbieter nicht gefunden} other {Fehlgeschlagen}}",

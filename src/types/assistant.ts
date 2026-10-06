@@ -1,4 +1,5 @@
 import type { Permission } from "@/types/auth";
+import type { LogFilterValues } from "@/types/logs";
 
 export type SetupNext = "connect_provider" | "add_model" | "create_key" | "ready";
 
@@ -19,6 +20,8 @@ export type AssistantMessage = {
   toolCallId?: string;
   name?: string;
 };
+
+export type AssistantToolChoice = "auto" | "none";
 
 export type AssistantToolCall = {
   id: string;
@@ -75,6 +78,43 @@ export type AssistantChatMessage = {
   id: string;
   role: "user" | "assistant";
   parts: AssistantPart[];
+};
+
+export type AssistantWirePart =
+  | { type: "text"; text: string }
+  | {
+      type: "tool";
+      name: string;
+      args: Record<string, unknown>;
+      result: unknown;
+    };
+
+export type AssistantWireMessage =
+  | { role: "user" | "assistant"; content: string }
+  | { role: "assistant"; parts: AssistantWirePart[] };
+
+export type UsageBreakdownGroup =
+  | "model"
+  | "team"
+  | "org"
+  | "project"
+  | "key"
+  | "user";
+
+export type UsageBreakdownSort = "spend" | "requests" | "errors";
+
+export type UsageBreakdownQuery = {
+  groupBy: UsageBreakdownGroup;
+  days: number;
+  model: string;
+  sort: UsageBreakdownSort;
+  limit: number;
+};
+
+export type LogSearchQuery = {
+  filters: LogFilterValues;
+  errorsOnly: boolean;
+  limit: number;
 };
 
 export type AssistantLocale = "en" | "de";

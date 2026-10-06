@@ -1,8 +1,11 @@
 import type {
   AssistantChatMessage,
   AssistantEvent,
+  AssistantPart,
   AssistantPartGroup,
   AssistantToolPart,
+  AssistantWireMessage,
+  AssistantWirePart,
 } from "@/types/assistant";
 
 function patchTool(
@@ -92,6 +95,33 @@ export function messageText(message: AssistantChatMessage): string {
   return message.parts
     .flatMap((part) => (part.type === "text" ? [part.text] : []))
     .join("\n\n");
+}
+
+function isReplayableTool(part: AssistantPart): part is AssistantToolPart {
+  return (
+    part.type === "tool" &&
+    (part.status === "done" || part.status === "error") &&
+    part.result !== undefined
+  );
+}
+
+export function wireMessage(
+  message: AssistantChatMessage,
+): AssistantWireMessage | null {
+  if (message.role === "assistant" && message.parts.some(isReplayableTool)) {
+    return {
+      role: "assistant",
+      parts: message.parts.flatMap((part): AssistantWirePart[] => {
+        if (part.type === "text") return [{ type: "text", text: part.text }];
+        if (!isReplayableTool(part)) return [];
+        return [
+          { type: "tool", name: part.name, args: part.args, result: part.result },
+        ];
+      }),
+    };
+  }
+  const content = messageText(message);
+  return content ? { role: message.role, content } : null;
 }
 
 export function groupAssistantParts(

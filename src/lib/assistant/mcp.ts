@@ -7,6 +7,13 @@ import { isActionFail } from "@/lib/http/action-result";
 import { createKeyAction } from "@/app/(app)/_action";
 import { createProviderAction } from "@/app/(app)/providers/_action";
 import { createModelGroupAction } from "@/app/(app)/models/_action";
+import {
+  parseLogSearch,
+  parseUsageBreakdown,
+  searchLogs,
+  USAGE_GROUP_FIELDS,
+  usageBreakdown,
+} from "@/lib/assistant/insights";
 import type { SetupNext, PublicKeyView, McpToolDef, AssistantContext } from "@/types/assistant";
 import { usageTotals } from "@/lib/gateway/usage-totals";
 import { money } from "@/lib/utils/money";
@@ -164,6 +171,68 @@ export function listMcpTools(): McpToolDef[] {
       name: "list_keys",
       description: "Virtual key aliases and prefixes only. Never full secrets.",
       inputSchema: { type: "object", properties: {}, additionalProperties: false },
+    },
+    {
+      name: "search_logs",
+      description:
+        "Recent gateway requests, newest first, with counts by status, outcome, provider, and upstream model and the most common error messages. Metadata only, never prompts or responses. Defaults to the last 24 hours. Requires spend:read.",
+      inputSchema: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          model: { type: "string", description: "Public model alias." },
+          status: { type: "integer", description: "HTTP status, for example 502." },
+          errorsOnly: {
+            type: "boolean",
+            description: "Only requests whose outcome is not ok.",
+          },
+          endpoint: {
+            type: "string",
+            description: "Part of the endpoint path, for example /v1/chat/completions.",
+          },
+          hours: {
+            type: "integer",
+            minimum: 1,
+            maximum: 744,
+            description: "Look back this many hours when from is not set. Default 24.",
+          },
+          from: { type: "string", description: "ISO 8601 start time." },
+          to: { type: "string", description: "ISO 8601 end time." },
+          limit: {
+            type: "integer",
+            minimum: 1,
+            maximum: 50,
+            description: "Requests to list. Default 15.",
+          },
+        },
+      },
+    },
+    {
+      name: "usage_breakdown",
+      description:
+        "Spend, requests, errors, 429s, tokens, and average latency from the daily usage rollup, grouped by model, team, organization, project, key, or user. Requires spend:read.",
+      inputSchema: {
+        type: "object",
+        additionalProperties: false,
+        required: ["groupBy"],
+        properties: {
+          groupBy: { type: "string", enum: Object.keys(USAGE_GROUP_FIELDS) },
+          days: {
+            type: "integer",
+            minimum: 1,
+            maximum: 366,
+            description: "UTC days including today. Default 7.",
+          },
+          model: { type: "string", description: "Only this public model alias." },
+          sort: { type: "string", enum: ["spend", "requests", "errors"] },
+          limit: {
+            type: "integer",
+            minimum: 1,
+            maximum: 25,
+            description: "Groups to list. Default 10.",
+          },
+        },
+      },
     },
     {
       name: "explain",
@@ -359,6 +428,18 @@ export async function callMcpTool(
       const href = pageHref(str(args.page));
       if (!href) return { result: { error: "unknown_page" } };
       return { result: { href }, navigate: href };
+    }
+    case "search_logs": {
+      if (!hasPerm(ctx.permissions, PERMISSIONS.SPEND_READ)) {
+        return { result: { error: "forbidden" } };
+      }
+      return { result: await searchLogs(parseLogSearch(args), ctx) };
+    }
+    case "usage_breakdown": {
+      if (!hasPerm(ctx.permissions, PERMISSIONS.SPEND_READ)) {
+        return { result: { error: "forbidden" } };
+      }
+      return { result: await usageBreakdown(parseUsageBreakdown(args), ctx) };
     }
     case "create_provider": {
       if (!hasPerm(ctx.permissions, PERMISSIONS.PROVIDERS_MANAGE)) {
