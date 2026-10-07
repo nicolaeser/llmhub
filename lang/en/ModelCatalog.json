@@ -26,7 +26,7 @@
   "providers": "{active} of {total, plural, one {# provider} other {# providers}} active",
   "newProviders": "{count, plural, one {# new provider} other {# new providers}}",
   "autoRoutes": "Add new providers automatically",
-  "autoRoutesHint": "Providers that start offering this model are routed in the next refresh. Your own OpenAI-compatible servers are always turned on by hand.",
+  "autoRoutesHint": "Routes trusted providers that start offering this model after the next refresh. The default comes from Admin settings. Own OpenAI-compatible servers are always turned on by hand.",
   "openModels": "Routing and prices",
   "columns": {
     "provider": "Provider",
@@ -49,5 +49,9 @@
   "empty": "Connect a provider, then refresh the catalog to group its models.",
   "noResults": "No models match the filter.",
   "more": "{count, plural, one {Show # more} other {Show # more}}",
-  "readOnly": "You can view the catalog. Changes need the models:manage permission."
+  "readOnly": "You can view the catalog. Changes need the models:manage permission.",
+  "tag": "{tag, select, free {Free} batch {Batch} thinking {Thinking} online {Online} extended {Extended} nitro {Nitro} floor {Floor} beta {Beta} other {{tag}}}",
+  "tagFilter": "Variant",
+  "tagOption": "{tag, select, all {All variants} standard {Standard} free {Free} batch {Batch} thinking {Thinking} online {Online} extended {Extended} nitro {Nitro} floor {Floor} beta {Beta} other {{tag}}}",
+  "autoRoutesMode": "{mode, select, inherit {Default ({value, select, true {on} other {off}})} on {On} other {Off}}"
 }

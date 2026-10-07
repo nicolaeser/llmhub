@@ -3,6 +3,14 @@
   "subtitle": "Sign-in, assistant, model catalog, object storage, and SCIM. Infrastructure secrets stay in the environment.",
   "save": "Save settings",
   "saved": "Settings saved",
+  "updates": {
+    "title": "Updates",
+    "subtitle": "Compares this build with the releases published on GitHub for the same channel.",
+    "enabled": "Check for updates",
+    "hint": "Asks the GitHub releases API at most every six hours and shows Update available in the top bar. Turn it off in networks without internet access.",
+    "state": "{state, select, available {Running {current}. {latest} is available.} current {Running {current}, the newest release.} other {Running {current}.}}",
+    "open": "Open the release on GitHub"
+  },
   "env": {
     "title": "Environment",
     "subtitle": "These values come from process env. They are not edited in the console.",
@@ -65,8 +73,8 @@
     "toolsHint": "Which tools the assistant may use is set per role under <link>Roles</link>."
   },
   "jev": {
-    "title": "Model catalog (Jev)",
-    "subtitle": "Jev groups models that providers name differently into one alias. It runs on OpenRouter with its own key, so its cost shows up separately from gateway traffic.",
+    "title": "Model catalog",
+    "subtitle": "How the catalog groups provider models and when it routes new providers on its own.",
     "enabled": "Group models with Jev",
     "enabledHint": "{ready, select, true {Runs during each catalog refresh and only checks models that are new or could not be grouped by name.} other {Enter an OpenRouter API key first.}}",
     "apiKey": "OpenRouter API key for Jev",
@@ -75,6 +83,10 @@
     "model": "Jev model",
     "modelHint": "OpenRouter System One model id. jev-latest follows the newest release.",
     "clearKey": "Remove the stored key and turn Jev off",
-    "catalogHint": "Results and refresh status are on the <link>Model catalog</link> page."
+    "catalogHint": "Results and refresh status are on the <link>Model catalog</link> page.",
+    "autoRoutes": "Add new providers automatically",
+    "autoRoutesHint": "Default for every alias that does not set its own value. Only trusted providers that start offering a model are routed; own OpenAI-compatible servers are always turned on by hand.",
+    "minConfidence": "Minimum Jev confidence",
+    "minConfidenceHint": "Jev matches below this value are shown in the catalog but never routed on their own. Matches by name always count as certain."
   }
 }

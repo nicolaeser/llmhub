@@ -133,7 +133,7 @@ function groupAudit(g: {
   enabled: boolean;
   vendor: string;
   displayName: string;
-  autoRoutes: boolean;
+  autoRoutes: boolean | null;
   strategy: string;
   billingMode: string;
   priceInput: Prisma.Decimal;
@@ -169,7 +169,7 @@ function mapGroup(g: {
   enabled: boolean;
   vendor: string;
   displayName: string;
-  autoRoutes: boolean;
+  autoRoutes: boolean | null;
   strategy: string;
   billingMode: string;
   priceInput: Prisma.Decimal;
@@ -288,7 +288,7 @@ export async function createModelGroupAction(input: {
   enabled?: boolean;
   vendor?: string;
   displayName?: string;
-  autoRoutes?: boolean;
+  autoRoutes?: boolean | null;
   strategy: string;
   billingMode?: string;
   priceInput?: number;
@@ -316,7 +316,7 @@ export async function createModelGroupAction(input: {
         enabled: input.enabled ?? true,
         vendor: labelOf(input.vendor, "", VENDOR_MAX).toLowerCase(),
         displayName: labelOf(input.displayName, "", DISPLAY_NAME_MAX),
-        autoRoutes: input.autoRoutes ?? false,
+        autoRoutes: input.autoRoutes ?? null,
         strategy: strategyOf(input.strategy),
         billingMode: billingModeOf(input.billingMode),
         priceInput: priceOf(input.priceInput, 0),
@@ -348,7 +348,7 @@ export async function updateModelGroupAction(input: {
   enabled?: boolean;
   vendor?: string;
   displayName?: string;
-  autoRoutes?: boolean;
+  autoRoutes?: boolean | null;
   strategy: string;
   billingMode?: string;
   priceInput?: number;
@@ -375,7 +375,7 @@ export async function updateModelGroupAction(input: {
         enabled: input.enabled ?? existing.enabled,
         vendor: labelOf(input.vendor, existing.vendor, VENDOR_MAX).toLowerCase(),
         displayName: labelOf(input.displayName, existing.displayName, DISPLAY_NAME_MAX),
-        autoRoutes: input.autoRoutes ?? existing.autoRoutes,
+        autoRoutes: input.autoRoutes === undefined ? existing.autoRoutes : input.autoRoutes,
         strategy: strategyOf(input.strategy, existing.strategy),
         billingMode: billingModeOf(input.billingMode, existing.billingMode),
         priceInput: priceOf(input.priceInput, money(existing.priceInput)),

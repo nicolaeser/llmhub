@@ -23,6 +23,9 @@ export const adminSettingsSchema = z.object({
   registration_enabled: z.boolean(),
   assistant_model: text.transform(modelAlias),
   assistant_model_locked: z.boolean().default(false),
+  update_check: z.boolean(),
+  catalog_auto_routes: z.boolean(),
+  catalog_min_confidence: z.number().min(0.5).max(1),
   catalog_jev: z.object({
     enabled: z.boolean(),
     model: z.string().trim().max(120).regex(/^[\w.~:/-]*$/),

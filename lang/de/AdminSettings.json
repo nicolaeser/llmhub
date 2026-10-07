@@ -3,6 +3,14 @@
   "subtitle": "Anmeldung, Assistant, Modellkatalog, Objektspeicher und SCIM. Infrastruktur-Secrets bleiben in der Umgebung.",
   "save": "Einstellungen speichern",
   "saved": "Einstellungen gespeichert",
+  "updates": {
+    "title": "Updates",
+    "subtitle": "Vergleicht diesen Build mit den Releases desselben Kanals auf GitHub.",
+    "enabled": "Nach Updates suchen",
+    "hint": "Fragt höchstens alle sechs Stunden die GitHub-Releases ab und zeigt oben „Update verfügbar“. Schalte es in Netzen ohne Internetzugang aus.",
+    "state": "{state, select, available {Installiert ist {current}. Verfügbar ist {latest}.} current {Installiert ist {current}, das neueste Release.} other {Installiert ist {current}.}}",
+    "open": "Release auf GitHub öffnen"
+  },
   "env": {
     "title": "Umgebung",
     "subtitle": "Diese Werte kommen aus der Prozessumgebung. Sie werden nicht in der Konsole bearbeitet.",
@@ -65,8 +73,8 @@
     "toolsHint": "Welche Werkzeuge der Assistant nutzen darf, legst du pro Rolle unter <link>Rollen</link> fest."
   },
   "jev": {
-    "title": "Modellkatalog (Jev)",
-    "subtitle": "Jev fasst Modelle, die Anbieter unterschiedlich benennen, unter einem Alias zusammen. Es läuft über OpenRouter mit einem eigenen Key, damit die Kosten getrennt vom Gateway-Verkehr erscheinen.",
+    "title": "Modellkatalog",
+    "subtitle": "Wie der Katalog Anbieter-Modelle gruppiert und wann er neue Anbieter selbst routet.",
     "enabled": "Modelle mit Jev gruppieren",
     "enabledHint": "{ready, select, true {Läuft bei jeder Katalog-Aktualisierung und prüft nur Modelle, die neu sind oder sich nicht über den Namen zuordnen ließen.} other {Trage zuerst einen OpenRouter-API-Key ein.}}",
     "apiKey": "OpenRouter-API-Key für Jev",
@@ -75,6 +83,10 @@
     "model": "Jev-Modell",
     "modelHint": "Modell-ID für OpenRouter System One. jev-latest folgt der neuesten Version.",
     "clearKey": "Gespeicherten Key entfernen und Jev ausschalten",
-    "catalogHint": "Ergebnisse und Status der Aktualisierung findest du im <link>Modellkatalog</link>."
+    "catalogHint": "Ergebnisse und Status der Aktualisierung findest du im <link>Modellkatalog</link>.",
+    "autoRoutes": "Neue Anbieter automatisch aufnehmen",
+    "autoRoutesHint": "Standard für jeden Alias ohne eigene Einstellung. Geroutet werden nur vertrauenswürdige Anbieter, die ein Modell neu anbieten; eigene OpenAI-kompatible Server schaltest du immer von Hand ein.",
+    "minConfidence": "Mindestsicherheit für Jev",
+    "minConfidenceHint": "Jev-Zuordnungen unter diesem Wert erscheinen im Katalog, werden aber nie selbst geroutet. Zuordnungen über den Namen gelten immer als sicher."
   }
 }

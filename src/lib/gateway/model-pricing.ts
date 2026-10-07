@@ -1,6 +1,7 @@
 import "server-only";
 import prisma from "@/lib/db/prisma";
 import { REPORTED_COST_KINDS } from "@/lib/gateway/cost";
+import { splitTag } from "@/lib/gateway/model-catalog";
 import { minuteClock, priceAt, priceWindowQuery, priceWindowRates } from "@/lib/gateway/price-schedule";
 import { money } from "@/lib/utils/money";
 import type { CostRates, ModelPricing, PriceSchedule, PublicModel, TokenPricing } from "@/types/gateway";
@@ -66,6 +67,7 @@ export async function pricedModels(at: Date, aliases?: string[]): Promise<Public
     alias: group.alias,
     vendor: group.vendor,
     displayName: group.displayName,
+    tags: [splitTag(group.alias).tag].filter(Boolean),
     pricing: modelPricing(
       {
         billing_mode: group.billingMode,

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   activationEntries,
+  splitTag,
   autoRouteEntries,
   catalogStatus,
   displayNameOf,
@@ -27,8 +28,10 @@ function provider(id: string, kind: string, ids: string[]): CatalogProviderInput
 }
 
 function group(alias: string, extra: Partial<CatalogGroupInput> = {}): CatalogGroupInput {
-  return { alias, vendor: "", displayName: "", autoRoutes: false, ...extra };
+  return { alias, vendor: "", displayName: "", autoRoutes: null, ...extra };
 }
+
+const routing = { autoRoutes: false, minConfidence: 0.9 };
 
 function plan(input: {
   providers: CatalogProviderInput[];
@@ -183,12 +186,14 @@ test("own servers join a trusted model's alias but are never turned on automatic
   assert.equal(local.alias, "claude-opus-5-5");
   assert.equal(local.trusted, false);
   assert.deepEqual(
-    autoRouteEntries(result.entries, [group("claude-opus-5-5", { autoRoutes: true })]).map((entry) => entry.providerId),
+    autoRouteEntries(result.entries, [group("claude-opus-5-5", { autoRoutes: true })], routing).map(
+      (entry) => entry.providerId,
+    ),
     ["anthropic"],
   );
-  assert.deepEqual(activationEntries(result.entries).map((entry) => entry.providerId), ["anthropic"]);
+  assert.deepEqual(activationEntries(result.entries, 0.9).map((entry) => entry.providerId), ["anthropic"]);
   const alone = plan({ providers: [provider("a", "openai_compat", ["llama3"]), provider("b", "openai_compat", ["llama3"])] });
-  assert.equal(activationEntries(alone.entries).length, 2);
+  assert.equal(activationEntries(alone.entries, 0.9).length, 2);
 });
 
 test("disabled providers stay out of activation and automatic routing", () => {
@@ -200,8 +205,8 @@ test("disabled providers stay out of activation and automatic routing", () => {
     stored: [stored(entry, { disabled: true })],
   });
   assert.equal(next.get("router", "openai/gpt-4o")?.disabled, true);
-  assert.deepEqual(activationEntries(next.entries), []);
-  assert.deepEqual(autoRouteEntries(next.entries, [group("gpt-4o", { autoRoutes: true })]), []);
+  assert.deepEqual(activationEntries(next.entries, 0.9), []);
+  assert.deepEqual(autoRouteEntries(next.entries, [group("gpt-4o", { autoRoutes: true })], routing), []);
   assert.equal(catalogStatus({ source: "rule", disabled: true }), "disabled");
   assert.equal(catalogStatus({ source: "route", disabled: true }), "active");
   assert.equal(catalogStatus({ source: "", disabled: false }), "new");
@@ -268,4 +273,100 @@ test("Jev requests carry only model metadata and verdicts trust only offered ali
   assert.equal(jevVerdict(task, answer("none", { none: 0.9 })), null);
   assert.equal(jevVerdict(task, answer("gpt-4o", { "gpt-4o": 1 })), null);
   assert.equal(jevVerdict(task, { error: "nope" }), null);
+});
+
+test("aliases inherit the global automatic routing default unless they set their own", () => {
+  const result = plan({
+    providers: [provider("router", "openrouter", ["openai/gpt-4o", "anthropic/claude-sonnet-4.5", "x-ai/grok-4"])],
+    groups: [
+      group("gpt-4o"),
+      group("claude-sonnet-4-5", { autoRoutes: false }),
+      group("grok-4", { autoRoutes: true }),
+    ],
+  });
+  const routed = (autoRoutes: boolean) =>
+    autoRouteEntries(result.entries, [group("gpt-4o"), group("claude-sonnet-4-5", { autoRoutes: false }), group("grok-4", { autoRoutes: true })], {
+      autoRoutes,
+      minConfidence: 0.9,
+    })
+      .map((entry) => entry.alias)
+      .sort();
+  assert.deepEqual(routed(true), ["gpt-4o", "grok-4"]);
+  assert.deepEqual(routed(false), ["grok-4"]);
+});
+
+test("Jev matches route on their own only at the configured confidence", () => {
+  const entry = plan({
+    providers: [provider("groq", "openai", ["gpt-4o-fast"])],
+    groups: [group("gpt-4o")],
+  }).get("groq", "gpt-4o-fast")!;
+  const matched = { ...entry, alias: "gpt-4o", source: "jev" as const, confidence: 0.85 };
+  const groups = [group("gpt-4o", { autoRoutes: true })];
+  assert.deepEqual(autoRouteEntries([matched], groups, { autoRoutes: false, minConfidence: 0.9 }), []);
+  assert.equal(autoRouteEntries([matched], groups, { autoRoutes: false, minConfidence: 0.8 }).length, 1);
+  assert.deepEqual(activationEntries([matched], 0.9), []);
+  assert.equal(activationEntries([matched], 0.8).length, 1);
+});
+
+test("tags split off as variants of the base model and never merge into it", () => {
+  assert.deepEqual(splitTag("gpt-4o:free"), { base: "gpt-4o", tag: "free" });
+  assert.deepEqual(splitTag("gpt-4o-batch"), { base: "gpt-4o", tag: "batch" });
+  assert.deepEqual(splitTag("llama3:8b"), { base: "llama3:8b", tag: "" });
+  assert.deepEqual(splitTag("ft:gpt-4o-mini:org:custom:abc"), { base: "ft:gpt-4o-mini:org:custom:abc", tag: "" });
+  assert.deepEqual(splitTag("gpt-4o-mini"), { base: "gpt-4o-mini", tag: "" });
+
+  const result = plan({
+    providers: [
+      provider("router", "openrouter", ["anthropic/claude-sonnet-4.5:thinking", "openai/gpt-4o:free"]),
+      provider("anthropic", "anthropic", ["claude-sonnet-4-5-20250929"]),
+      provider("openai", "openai", ["gpt-4o", "gpt-4o-batch"]),
+      provider("together", "openai_compat", ["meta-llama/llama-3.3-70b-instruct-free"]),
+    ],
+    groups: [group("gpt-4o", { vendor: "openai" })],
+  });
+  assert.equal(result.get("router", "anthropic/claude-sonnet-4.5:thinking")?.alias, "claude-sonnet-4-5:thinking");
+  assert.equal(result.get("router", "openai/gpt-4o:free")?.alias, "gpt-4o:free");
+  assert.equal(result.get("openai", "gpt-4o-batch")?.alias, "gpt-4o:batch");
+  assert.equal(result.get("openai", "gpt-4o")?.alias, "gpt-4o");
+  assert.equal(result.get("together", "meta-llama/llama-3.3-70b-instruct-free")?.alias, "llama-3.3-70b-instruct:free");
+
+  const merged = plan({
+    providers: [
+      provider("router", "openrouter", ["openai/gpt-4o:free"]),
+      provider("eu", "openrouter_eu", ["openai/gpt-4o:free"]),
+    ],
+    groups: [group("gpt-4o", { vendor: "openai", autoRoutes: true }), group("gpt-4o:free", { vendor: "openai" })],
+  });
+  assert.equal(merged.get("router", "openai/gpt-4o:free")?.alias, "gpt-4o:free");
+  assert.equal(merged.get("eu", "openai/gpt-4o:free")?.alias, "gpt-4o:free");
+  assert.deepEqual(
+    autoRouteEntries(merged.entries, [group("gpt-4o", { autoRoutes: true }), group("gpt-4o:free")], {
+      autoRoutes: false,
+      minConfidence: 0.9,
+    }),
+    [],
+  );
+});
+
+test("Jev only compares variants with the same tag", () => {
+  const result = plan({
+    providers: [
+      provider("router", "openrouter", ["meta-llama/llama-3.3-70b-instruct", "meta-llama/llama-3.3-70b-instruct:free"]),
+      provider("groq", "openai_compat", ["llama-3.3-70b-versatile", "llama-3.3-70b-versatile:free"]),
+    ],
+  });
+  const tasks = new Map(result.jev.map((task) => [task.upstreamId, task.candidates.map((candidate) => candidate.alias)]));
+  assert.deepEqual(tasks.get("llama-3.3-70b-versatile"), ["llama-3.3-70b-instruct"]);
+  assert.deepEqual(tasks.get("llama-3.3-70b-versatile:free"), ["llama-3.3-70b-instruct:free"]);
+});
+
+test("model list entries carry variant tags only when there are some", async () => {
+  const { modelEntry } = await import("@/lib/gateway/core");
+  const created = new Date("2026-10-01T00:00:00.000Z");
+  const free = modelEntry("gpt-4o:free", created, null, { vendor: "openai", displayName: "GPT-4o (free)", tags: ["free"] });
+  assert.equal(free.owned_by, "openai");
+  assert.deepEqual(free.tags, ["free"]);
+  const plain = modelEntry("gpt-4o", created, null, { vendor: "openai", displayName: "", tags: [] });
+  assert.equal("tags" in plain, false);
+  assert.equal(plain.display_name, "gpt-4o");
 });

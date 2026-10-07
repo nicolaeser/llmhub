@@ -33,6 +33,7 @@ export type PublicModel = {
   alias: string;
   vendor: string;
   displayName: string;
+  tags: string[];
   pricing: ModelPricing | null;
 };
 
@@ -300,6 +301,14 @@ export type Enterprise = {
   assistant_model?: string;
   assistant_model_locked?: boolean;
   catalog_jev?: JevSettings;
+  catalog_auto_routes?: boolean;
+  catalog_min_confidence?: number;
+  update_check?: boolean;
+};
+
+export type CatalogRouting = {
+  autoRoutes: boolean;
+  minConfidence: number;
 };
 
 export type JevSettings = {

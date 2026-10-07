@@ -4,7 +4,7 @@ import prisma from "@/lib/db/prisma";
 import { digest, randomToken } from "@/lib/crypto";
 import { createKeySchema, updateKeySchema } from "@/schemas/keys";
 import type { ZodType } from "zod";
-import { requirePermission } from "@/lib/auth/guards";
+import { requireAuth, requirePermission } from "@/lib/auth/guards";
 import { hasPerm, PERMISSIONS } from "@/lib/auth/permissions";
 import { companyOf, inCompany, keyVisibleTo, spendScope } from "@/lib/auth/scope";
 import {
@@ -16,6 +16,8 @@ import {
 import { actionFail, runAction } from "@/lib/http/action-result";
 import { listKeys, toKeyView } from "@/app/(app)/_data";
 import { writeAudit } from "@/lib/gateway/audit";
+import { getEnterprise } from "@/lib/gateway/settings";
+import { checkForUpdate } from "@/lib/updates/update-check";
 import { usageSlices, usageTotals } from "@/lib/gateway/usage-totals";
 import { isInternalKey } from "@/lib/gateway/key-tenancy";
 import { loadModelPolicies, templateRuleSelect } from "@/lib/gateway/model-access";
@@ -428,5 +430,12 @@ export async function loadAliasesAction() {
       prisma.providerConnection.count(),
     ]);
     return { models: models.map((m) => m.alias), providers };
+  });
+}
+
+export async function loadUpdateStatusAction() {
+  return runAction(async () => {
+    await requireAuth();
+    return checkForUpdate((await getEnterprise()).update_check !== false);
   });
 }

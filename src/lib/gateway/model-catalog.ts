@@ -23,12 +23,14 @@ export const NATIVE_VENDORS: Readonly<Record<string, string>> = {
 const AGGREGATOR_KINDS = new Set(["openrouter", "openrouter_eu"]);
 const VENDOR_SYNONYMS: Readonly<Record<string, string>> = { "x-ai": "xai" };
 const SNAPSHOT = /^(.+?)-(\d{4}-\d{2}-\d{2}|\d{8})$/;
+const COLON_TAG = /^([^:]+):([a-z][a-z0-9-]{0,23})$/;
+const DASH_TAGS = ["batch", "free"] as const;
 const DISPLAY_VENDOR_PREFIX = /^[^:]{1,40}:\s+/;
 const MIN_CANDIDATE_SIMILARITY = 0.34;
 const MAX_JEV_CANDIDATES = 8;
 
 export const JEV_SUGGEST_CONFIDENCE = 0.5;
-export const JEV_AUTO_CONFIDENCE = 0.9;
+export const DEFAULT_AUTO_CONFIDENCE = 0.9;
 export const JEV_QUESTION = "same_model";
 export const JEV_NONE = "none";
 
@@ -37,6 +39,8 @@ type Item = {
   kind: string;
   upstreamId: string;
   name: string;
+  base: string;
+  tag: string;
   vendor: string;
   key: string;
   display: string;
@@ -53,9 +57,15 @@ type Target = {
   alias: string;
   vendor: string;
   name: string;
+  tag: string;
   label: string;
   tier: number;
   rank: number;
+};
+
+type AutoRouting = {
+  autoRoutes: boolean;
+  minConfidence: number;
 };
 
 type Decidable = {
@@ -106,21 +116,44 @@ export function baseName(upstreamId: string): string {
   return id.slice(id.lastIndexOf("/") + 1);
 }
 
-export function snapshotNames(ids: string[]): Map<string, string> {
-  const names = new Map(ids.map((id) => [id, baseName(id)]));
-  const present = new Set(names.values());
+export function splitTag(name: string): { base: string; tag: string } {
+  const colon = COLON_TAG.exec(name);
+  if (colon) return { base: colon[1]!, tag: colon[2]! };
+  const dash = DASH_TAGS.find((tag) => name.length > tag.length + 1 && name.endsWith(`-${tag}`));
+  return dash ? { base: name.slice(0, -(dash.length + 1)), tag: dash } : { base: name, tag: "" };
+}
+
+export function taggedAlias(family: string, tag: string): string {
+  return tag ? `${family}:${tag}` : family;
+}
+
+function collapseSnapshots(names: string[]): Map<string, string> {
+  const present = new Set(names);
   const dated = new Map<string, Set<string>>();
   for (const name of present) {
     const base = SNAPSHOT.exec(name)?.[1];
     if (base) dated.set(base, (dated.get(base) ?? new Set()).add(name));
   }
   const out = new Map<string, string>();
-  for (const [id, name] of names) {
+  for (const name of present) {
     const base = SNAPSHOT.exec(name)?.[1];
     const alone = base !== undefined && !present.has(base) && dated.get(base)?.size === 1;
-    out.set(id, alone ? base : name);
+    out.set(name, alone ? base : name);
   }
   return out;
+}
+
+export function snapshotNames(ids: string[]): Map<string, string> {
+  const parts = new Map(ids.map((id) => [id, splitTag(baseName(id))]));
+  const byTag = new Map<string, string[]>();
+  for (const part of parts.values()) byTag.set(part.tag, [...(byTag.get(part.tag) ?? []), part.base]);
+  const collapsed = new Map([...byTag].map(([tag, bases]) => [tag, collapseSnapshots(bases)]));
+  return new Map(
+    [...parts].map(([id, part]) => [
+      id,
+      taggedAlias(collapsed.get(part.tag)?.get(part.base) ?? part.base, part.tag),
+    ]),
+  );
 }
 
 export function matchKey(name: string): string {
@@ -154,14 +187,14 @@ export function catalogStatus(entry: { source: CatalogSource; disabled: boolean 
   return entry.disabled ? "disabled" : "new";
 }
 
-export function activationEntries<T extends Decidable>(entries: T[]): T[] {
+export function activationEntries<T extends Decidable>(entries: T[], minConfidence: number): T[] {
   const anchored = entries.some((entry) => entry.trusted);
   return entries.filter(
     (entry) =>
       !entry.disabled &&
       entry.source !== "route" &&
       (entry.trusted || entry.source === "manual" || entry.source === "" || !anchored) &&
-      (entry.source !== "jev" || entry.confidence >= JEV_AUTO_CONFIDENCE),
+      (entry.source !== "jev" || entry.confidence >= minConfidence),
   );
 }
 
@@ -175,11 +208,14 @@ function itemsOf(providers: CatalogProviderInput[]): Item[] {
       if (seen.has(key)) continue;
       seen.add(key);
       const name = names.get(model.id) ?? baseName(model.id);
+      const { base, tag } = splitTag(name);
       items.push({
         providerId: provider.id,
         kind: provider.kind,
         upstreamId: model.id,
         name,
+        base,
+        tag,
         vendor: vendorOf(provider.kind, model.id),
         key: matchKey(name),
         display: displayNameOf(provider.kind, model.id, model.name),
@@ -211,6 +247,7 @@ function clustersOf(
   items: Item[],
   taken: Set<string>,
   stored: Map<string, StoredCatalogEntry>,
+  propose: (lead: Item) => string,
 ): Cluster[] {
   const byId = new Map<string, Cluster>();
   const add = (id: string, vendor: string, item: Item) => {
@@ -246,8 +283,9 @@ function clustersOf(
   for (const cluster of ordered) {
     if (cluster.alias) continue;
     const lead = leadOf(cluster.items);
-    let alias = lead.name;
-    if (taken.has(alias)) alias = `${cluster.vendor || lead.kind}-${lead.name}`;
+    const proposal = propose(lead);
+    let alias = proposal;
+    if (taken.has(alias)) alias = `${cluster.vendor || lead.kind}-${proposal}`;
     const stem = alias;
     let suffix = 2;
     while (taken.has(alias)) alias = `${stem}-${suffix++}`;
@@ -265,7 +303,10 @@ function better(a: Target, b: Target): boolean {
 
 function candidatesFor(item: Item, own: Target, targets: Target[]): JevCandidate[] {
   return targets
-    .filter((target) => target.alias !== own.alias && target.alias !== JEV_NONE && better(target, own))
+    .filter(
+      (target) =>
+        target.alias !== own.alias && target.alias !== JEV_NONE && target.tag === item.tag && better(target, own),
+    )
     .filter((target) => vendorsCompatible(item.vendor, target.vendor))
     .map((target) => ({ target, score: nameSimilarity(item.name, target.name) }))
     .filter((row) => row.score >= MIN_CANDIDATE_SIMILARITY)
@@ -295,20 +336,43 @@ export function planCatalog(input: {
   }
   const stored = new Map(input.stored.map((row) => [entryKey(row.providerId, row.upstreamId), row]));
   const matched = new Map(items.map((item) => [item, groupMatch(item, byKey)]));
-  const clusters = clustersOf(
-    items.filter((item) => !matched.get(item)),
-    new Set([...RESERVED_ALIASES, ...groups.map((group) => group.alias)]),
+  const unmatched = items.filter((item) => !matched.get(item));
+  const taken = new Set([...RESERVED_ALIASES, ...groups.map((group) => group.alias)]);
+  const standard = clustersOf(
+    unmatched.filter((item) => !item.tag),
+    taken,
     stored,
+    (lead) => lead.name,
   );
+  const familyOf = (item: Item): string => {
+    const key = matchKey(item.base);
+    const group = (byKey.get(key) ?? []).find((row) => vendorsCompatible(item.vendor, row.vendor));
+    if (group) return group.alias;
+    const cluster = standard.find(
+      (row) => row.items[0]?.key === key && vendorsCompatible(item.vendor, row.vendor),
+    );
+    return cluster?.alias ?? item.base;
+  };
+  const clusters = [
+    ...standard,
+    ...clustersOf(
+      unmatched.filter((item) => item.tag),
+      taken,
+      stored,
+      (lead) => taggedAlias(familyOf(lead), lead.tag),
+    ),
+  ];
   const clusterOf = new Map<Item, Cluster>();
   for (const cluster of clusters) for (const item of cluster.items) clusterOf.set(item, cluster);
 
   const targets = new Map<string, Target>();
   for (const group of groups) {
+    const name = groupNames.get(group.alias) ?? group.alias;
     targets.set(group.alias, {
       alias: group.alias,
       vendor: group.vendor,
-      name: groupNames.get(group.alias) ?? group.alias,
+      name,
+      tag: splitTag(name).tag,
       label: [group.alias, group.vendor, group.displayName].filter(Boolean).join(" · "),
       tier: 0,
       rank: 0,
@@ -320,6 +384,7 @@ export function planCatalog(input: {
       alias: cluster.alias,
       vendor: cluster.vendor,
       name: lead.name,
+      tag: lead.tag,
       label: [cluster.alias, cluster.vendor, lead.display].filter(Boolean).join(" · "),
       tier: 1,
       rank: kindRank(lead.kind),
@@ -400,15 +465,21 @@ export function planCatalog(input: {
   return { entries, jev };
 }
 
-export function autoRouteEntries(entries: CatalogEntryPlan[], groups: CatalogGroupInput[]): CatalogEntryPlan[] {
-  const open = new Set(groups.filter((group) => group.autoRoutes).map((group) => group.alias));
+export function autoRouteEntries(
+  entries: CatalogEntryPlan[],
+  groups: CatalogGroupInput[],
+  routing: AutoRouting,
+): CatalogEntryPlan[] {
+  const open = new Set(
+    groups.filter((group) => group.autoRoutes ?? routing.autoRoutes).map((group) => group.alias),
+  );
   return entries.filter(
     (entry) =>
       entry.fresh &&
       !entry.disabled &&
       entry.trusted &&
       open.has(entry.alias) &&
-      (entry.source === "rule" || (entry.source === "jev" && entry.confidence >= JEV_AUTO_CONFIDENCE)),
+      (entry.source === "rule" || (entry.source === "jev" && entry.confidence >= routing.minConfidence)),
   );
 }
 

@@ -181,7 +181,7 @@ model ModelGroup {
   fallbackGroups Json    @default("[]")
   vendor         String  @default("")
   displayName    String  @default("")
-  autoRoutes     Boolean @default(false)
+  autoRoutes     Boolean?
 
   deployments  Deployment[]
   priceWindows ModelPriceWindow[]
