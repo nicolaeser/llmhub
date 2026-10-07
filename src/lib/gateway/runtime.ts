@@ -12,8 +12,10 @@ import {
 } from "@/lib/gateway/router";
 import { asRecord, asStringArray, ERR_NO_HEALTHY, ERR_UNKNOWN_GROUP } from "@/lib/gateway/core";
 import { modelAlias } from "@/lib/gateway/model-alias";
+import { routePermitted } from "@/lib/gateway/model-policy";
 import { priceWindowQuery, priceWindowRates } from "@/lib/gateway/price-schedule";
 import type { DbDeployment, ResolvedDeployment, Deployment, ModelGroup } from "@/types/gateway";
+import type { DeploymentRule, RoutePolicy } from "@/types/model-templates";
 import { money } from "@/lib/utils/money";
 
 const COOLDOWN_MS = 15_000;
@@ -37,7 +39,37 @@ function mapDeployment(row: DbDeployment): ResolvedDeployment {
   };
 }
 
-const providerSelect = { select: { id: true, kind: true, baseUrl: true, apiKey: true } } as const;
+const providerSelect = {
+  select: {
+    id: true,
+    kind: true,
+    baseUrl: true,
+    apiKey: true,
+    zdr: true,
+    retentionDays: true,
+    region: true,
+    noTraining: true,
+  },
+} as const;
+
+function routeOf(dep: ResolvedDeployment): RoutePolicy {
+  const provider = dep.provider;
+  if (!provider) return null;
+  return {
+    id: provider.id,
+    zdr: provider.zdr,
+    retentionDays: provider.retentionDays,
+    region: provider.region,
+    noTraining: provider.noTraining,
+  };
+}
+
+export function permittedDeployments(
+  items: ResolvedDeployment[],
+  rules: DeploymentRule[] | undefined,
+): ResolvedDeployment[] {
+  return rules ? items.filter((dep) => routePermitted(rules, routeOf(dep))) : items;
+}
 
 export async function loadGroup(requested: string): Promise<ModelGroup & { mapped: ResolvedDeployment[] }> {
   const alias = modelAlias(requested);
@@ -109,14 +141,18 @@ function pick(items: ResolvedDeployment[], strategy: string): ResolvedDeployment
 
 export async function acquireGroup(
   group: ModelGroup & { mapped: ResolvedDeployment[] },
+  rules: DeploymentRule[] | undefined,
   exclude: Set<string> = new Set(),
   strategy = "",
 ): Promise<{ dep: ResolvedDeployment; release: () => void; overflow: boolean }> {
-  const ready = healthy(group.mapped.filter((d) => !exclude.has(d.id)), Date.now());
+  const ready = healthy(
+    permittedDeployments(group.mapped, rules).filter((d) => !exclude.has(d.id)),
+    Date.now(),
+  );
   if (!ready.length) {
     if (group.overflow_group && group.overflow_group !== group.alias) {
       const overflow = await loadGroup(group.overflow_group);
-      const acquired = await acquireGroup(overflow, exclude, strategy);
+      const acquired = await acquireGroup(overflow, rules, exclude, strategy);
       return { ...acquired, overflow: true };
     }
     throw ERR_NO_HEALTHY;

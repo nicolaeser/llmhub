@@ -1,6 +1,6 @@
 import packageJson from "../../../package.json";
 import { PROVIDER_CATALOG } from "@/lib/gateway/catalog";
-import type { JsonMap, ModelPricing, Principal } from "@/types/gateway";
+import type { JsonMap, ModelPricing, Principal, PublicModel } from "@/types/gateway";
 
 export class RouterError extends Error {
   constructor(
@@ -103,18 +103,25 @@ export function newRequestId(): string {
   return `req_${newId(12)}`;
 }
 
-export function modelEntry(id: string, created: Date, pricing?: ModelPricing | null): JsonMap {
+export function modelEntry(
+  id: string,
+  created: Date,
+  pricing?: ModelPricing | null,
+  origin?: Pick<PublicModel, "vendor" | "displayName">,
+): JsonMap {
   return {
     id,
     object: "model",
     created: Math.floor(created.getTime() / 1000),
-    owned_by: "llm-hub",
+    owned_by: origin?.vendor || "llm-hub",
     type: "model",
-    display_name: id,
+    display_name: origin?.displayName || id,
     created_at: created.toISOString(),
     ...(pricing ? { pricing } : {}),
   };
 }
+
+export const AUTO_MODEL: PublicModel = { alias: "auto", vendor: "", displayName: "", pricing: null };
 
 export const VERSION = packageJson.version;
 

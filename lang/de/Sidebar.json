@@ -18,6 +18,7 @@
     "playground": "Spielwiese",
     "assistant": "Assistent",
     "providers": "Anbieter",
+    "modelCatalog": "Modellkatalog",
     "models": "Modelle",
     "modelTemplates": "Modellvorlagen",
     "guardrails": "Leitplanken",

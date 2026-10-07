@@ -23,6 +23,7 @@ export type AdminSettingsView = {
   aliases: string[];
   canManage: boolean;
   canManageScim: boolean;
+  jevKeySet: boolean;
   scimTokenSet: boolean;
   s3Ready: boolean;
   oidcEnv: boolean;

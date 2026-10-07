@@ -297,8 +297,7 @@ test("assistant lives on internal-api not public /api", async () => {
   assert.doesNotMatch(panel, /localStorage\.setItem\([^)]*[Ww]rite/);
   assert.match(page, /loadAssistantAction/);
   assert.match(page, /useAssistantSession/);
-  assert.match(page, /Select\.Trigger/);
-  assert.match(page, /Select\.Indicator/);
+  assert.match(page, /<SearchSelect/);
   assert.match(page, /<Switch/);
   const action = await readFile(
     new URL("../src/app/(app)/assistant/_action.ts", import.meta.url),
@@ -842,6 +841,7 @@ test("admin settings carry the model lock", async () => {
   const settings = {
     registration_enabled: false,
     assistant_model: "house-model",
+    catalog_jev: { enabled: false, model: "jev-latest", api_key: "", clear_api_key: false },
     oidc: { enabled: false, issuer: "", client_id: "", redirect_url: "" },
     s3: {
       enabled: false,

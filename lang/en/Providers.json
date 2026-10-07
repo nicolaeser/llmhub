@@ -34,5 +34,7 @@
     "zdrChip": "ZDR",
     "retentionChip": "{days, plural, one {# day retention} other {# days retention}}",
     "noTrainingChip": "No training"
-  }
+  },
+  "importTarget": "→ {alias}",
+  "importTargetState": "{exists, select, true {Joins alias} other {New alias}}"
 }

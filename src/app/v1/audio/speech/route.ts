@@ -14,7 +14,7 @@ export async function POST(req: Request) {
     const aliases = modelChain(principal, model, clean);
     const usage = meter(principal, model, body);
     try {
-      const hit = await forwardToModel(aliases, "/audio/speech", clean, { binary: true });
+      const hit = await forwardToModel(aliases, principal.routeLimits, "/audio/speech", clean, { binary: true });
       const input = typeof clean.input === "string" ? clean.input : "";
       await usage.ok(hit, { prompt_tokens: estimateTokens(input) });
       return new Response(bytesBody(hit.raw), {

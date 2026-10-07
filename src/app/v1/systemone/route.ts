@@ -22,7 +22,7 @@ export async function POST(req: Request) {
     }
     const usage = meter(principal, model, clean);
     try {
-      const hit = await forwardToModel(aliases, "/systemone", clean);
+      const hit = await forwardToModel(aliases, principal.routeLimits, "/systemone", clean);
       await usage.ok(hit, usageFromUnknown(asRecord(hit.json)?.usage, hit.json));
       return NextResponse.json(hit.json);
     } catch (err) {

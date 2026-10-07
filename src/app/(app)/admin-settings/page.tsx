@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
-import { Button, Label, ListBox, Select, Separator, Spinner, toast } from "@heroui/react";
+import { Button, Description, Input, Label, ListBox, Select, Separator, Spinner, TextField, toast } from "@heroui/react";
 import { useTranslations } from "next-intl";
 import PageHeader from "@/components/console/page-header";
+import SearchSelect from "@/components/console/search-select";
 import { Link } from "@/i18n/routing";
 import { loadAdminSettingsAction, saveAdminSettingsAction } from "./_action";
 import { SettingSection, SettingSwitch, SettingText } from "./_components/fields";
@@ -45,6 +46,11 @@ export default function AdminSettingsPage() {
   const update = (patch: Partial<AdminSettings>) => setSettings({ ...settings, ...patch });
   const oidc = (patch: Partial<AdminSettings["oidc"]>) => update({ oidc: { ...settings.oidc, ...patch } });
   const s3 = (patch: Partial<AdminSettings["s3"]>) => update({ s3: { ...settings.s3, ...patch } });
+  const jev = (patch: Partial<AdminSettings["catalog_jev"]>) =>
+    update({ catalog_jev: { ...settings.catalog_jev, ...patch } });
+  const jevKeyReady = settings.catalog_jev.clear_api_key
+    ? Boolean(settings.catalog_jev.api_key)
+    : view.jevKeySet || Boolean(settings.catalog_jev.api_key);
   const appUrl = view.appUrl.replace(/\/+$/, "");
 
   function save() {
@@ -133,10 +139,17 @@ export default function AdminSettingsPage() {
       </SettingSection>
 
       <SettingSection title={t("assistant.title")} subtitle={t("assistant.subtitle")}>
-        <Select
-          selectedKey={settings.assistant_model || "none"}
-          onSelectionChange={(key) => {
-            const assistant_model = String(key) === "none" ? "" : String(key);
+        <SearchSelect
+          label={t("assistant.model")}
+          items={[
+            { id: "none", label: t("assistant.none") },
+            ...[...new Set([...view.aliases, ...(settings.assistant_model ? [settings.assistant_model] : [])])].map(
+              (alias) => ({ id: alias, label: alias }),
+            ),
+          ]}
+          value={settings.assistant_model || "none"}
+          onChange={(key) => {
+            const assistant_model = key === "none" ? "" : key;
             update({
               assistant_model,
               assistant_model_locked: assistant_model ? settings.assistant_model_locked : false,
@@ -144,28 +157,7 @@ export default function AdminSettingsPage() {
           }}
           isDisabled={disabled}
           className="max-w-md"
-          fullWidth
-        >
-          <Label>{t("assistant.model")}</Label>
-          <Select.Trigger>
-            <Select.Value />
-            <Select.Indicator />
-          </Select.Trigger>
-          <Select.Popover>
-            <ListBox aria-label={t("assistant.model")}>
-              <ListBox.Item id="none" textValue={t("assistant.none")}>
-                {t("assistant.none")}
-                <ListBox.ItemIndicator />
-              </ListBox.Item>
-              {view.aliases.map((alias) => (
-                <ListBox.Item key={alias} id={alias} textValue={alias}>
-                  {alias}
-                  <ListBox.ItemIndicator />
-                </ListBox.Item>
-              ))}
-            </ListBox>
-          </Select.Popover>
-        </Select>
+        />
         <SettingSwitch
           label={t("assistant.lock")}
           isSelected={settings.assistant_model_locked}
@@ -177,6 +169,56 @@ export default function AdminSettingsPage() {
           {t.rich("assistant.toolsHint", {
             link: (chunks) => (
               <Link href="/roles" className="text-accent">
+                {chunks}
+              </Link>
+            ),
+          })}
+        </p>
+      </SettingSection>
+
+      <SettingSection title={t("jev.title")} subtitle={t("jev.subtitle")}>
+        <SettingSwitch
+          label={t("jev.enabled")}
+          isSelected={settings.catalog_jev.enabled}
+          onChange={(enabled) => jev({ enabled })}
+          disabled={disabled || (!settings.catalog_jev.enabled && !jevKeyReady)}
+          hint={t("jev.enabledHint", { ready: jevKeyReady ? "true" : "false" })}
+        />
+        <div className="grid gap-4 md:grid-cols-2">
+          <TextField
+            fullWidth
+            type="password"
+            value={settings.catalog_jev.api_key}
+            onChange={(api_key) => jev({ api_key, clear_api_key: false })}
+            isDisabled={disabled}
+          >
+            <Label>{t("jev.apiKey")}</Label>
+            <Input autoComplete="off" placeholder={t("jev.apiKeyState", { set: view.jevKeySet ? "true" : "false" })} />
+            <Description>{t("jev.apiKeyHint")}</Description>
+          </TextField>
+          <SettingText
+            label={t("jev.model")}
+            value={settings.catalog_jev.model}
+            onChange={(model) => jev({ model })}
+            disabled={disabled}
+            placeholder="jev-latest"
+            hint={t("jev.modelHint")}
+          />
+        </div>
+        {view.jevKeySet ? (
+          <SettingSwitch
+            label={t("jev.clearKey")}
+            isSelected={settings.catalog_jev.clear_api_key}
+            onChange={(clear_api_key) =>
+              jev({ clear_api_key, api_key: "", enabled: clear_api_key ? false : settings.catalog_jev.enabled })
+            }
+            disabled={disabled}
+          />
+        ) : null}
+        <p className="text-xs text-muted">
+          {t.rich("jev.catalogHint", {
+            link: (chunks) => (
+              <Link href="/model-catalog" className="text-accent">
                 {chunks}
               </Link>
             ),

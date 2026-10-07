@@ -61,7 +61,7 @@ function keyPrincipal(models: string[], templates: string[]): Principal {
     log_content: true,
     created_at: "",
   };
-  return { actor: "sk-hub-abc", key, teamId: "", orgId: "", userId: "", memberId: "", models };
+  return { actor: "sk-hub-abc", key, teamId: "", orgId: "", userId: "", memberId: "", models, routeLimits: {} };
 }
 
 test("patternMatches supports * wildcards case-insensitively", async () => {
@@ -77,86 +77,84 @@ test("patternMatches supports * wildcards case-insensitively", async () => {
   assert.equal(patternMatches("", "anything"), false);
 });
 
-test("modelPolicies follows every endpoint, fallback, and overflow", async () => {
+test("modelPolicies lists every route behind an alias, including fallback and overflow", async () => {
   const { modelPolicies } = await import("@/lib/gateway/model-policy");
   const byAlias = new Map(modelPolicies(groups, providers).map((policy) => [policy.alias, policy]));
+  const ids = (alias: string) => byAlias.get(alias)?.routes.map((route) => route?.id ?? null);
 
-  const eu = byAlias.get("claude-eu");
-  assert.deepEqual(
-    { zdr: eu?.zdr, noTraining: eu?.noTraining, retention: eu?.retentionDays, regions: eu?.regions },
-    { zdr: true, noTraining: true, retention: 0, regions: ["eu"] },
-  );
-
-  const mixed = byAlias.get("gpt-4o-mini");
-  assert.equal(mixed?.zdr, false);
-  assert.equal(mixed?.noTraining, true);
-  assert.equal(mixed?.retentionDays, 30);
-  assert.deepEqual(mixed?.regions, ["eu", "us"]);
-  assert.deepEqual(mixed?.providerIds, ["us-30", "zdr-eu"]);
-
-  const local = byAlias.get("local-llama");
-  assert.equal(local?.custom, true);
-  assert.equal(local?.zdr, false);
-  assert.equal(local?.retentionDays, null);
-
-  const fallback = byAlias.get("claude-fallback");
-  assert.equal(fallback?.zdr, false);
-  assert.deepEqual(fallback?.regions, ["eu", "us"]);
-
-  const overflow = byAlias.get("claude-auto");
-  assert.equal(overflow?.custom, true);
-  assert.equal(overflow?.zdr, false);
-
-  assert.equal(byAlias.get("mystery")?.retentionDays, null);
-  assert.deepEqual(byAlias.get("mystery")?.regions, [""]);
-  assert.equal(byAlias.get("empty")?.zdr, false);
-  assert.equal(byAlias.get("empty")?.retentionDays, null);
+  assert.deepEqual(ids("claude-eu"), ["zdr-eu"]);
+  assert.deepEqual(ids("gpt-4o-mini"), ["zdr-eu", "us-30"]);
+  assert.deepEqual(ids("local-llama"), [null]);
+  assert.deepEqual(ids("claude-fallback"), ["zdr-eu", "us-30"]);
+  assert.deepEqual(ids("mystery"), ["unknown"]);
+  assert.deepEqual(ids("empty"), []);
+  const overflow = ids("claude-auto") ?? [];
+  assert.ok(overflow.includes("zdr-eu") && overflow.includes("us-30") && overflow.includes(null));
 });
 
-test("templates combine provider, ZDR, retention, region, and name rules", async () => {
+test("routeAllowed applies provider, ZDR, training, retention, and region rules to one route", async () => {
+  const { routeAllowed } = await import("@/lib/gateway/model-policy");
+  const [zdrEu, us30, unknown] = providers;
+  const rule = (over: Partial<TemplateRules>) => ({ ...rules(over) });
+  assert.equal(routeAllowed(rule({ zdrOnly: true }), zdrEu!), true);
+  assert.equal(routeAllowed(rule({ zdrOnly: true }), us30!), false);
+  assert.equal(routeAllowed(rule({ noTrainingOnly: true }), zdrEu!), true);
+  assert.equal(routeAllowed(rule({ noTrainingOnly: true }), unknown!), false);
+  assert.equal(routeAllowed(rule({ maxRetentionDays: 0 }), zdrEu!), true);
+  assert.equal(routeAllowed(rule({ maxRetentionDays: 29 }), us30!), false);
+  assert.equal(routeAllowed(rule({ maxRetentionDays: 365 }), unknown!), false);
+  assert.equal(routeAllowed(rule({ regions: ["us"] }), us30!), true);
+  assert.equal(routeAllowed(rule({ regions: ["eu"] }), unknown!), false);
+  assert.equal(routeAllowed(rule({ providerIds: ["us-30"] }), us30!), true);
+  assert.equal(routeAllowed(rule({ providerIds: ["us-30"] }), zdrEu!), false);
+  assert.equal(routeAllowed(rule({ zdrOnly: true }), null), false);
+});
+
+test("templates match a model when at least one route meets every rule", async () => {
   const { modelPolicies, templateModels } = await import("@/lib/gateway/model-policy");
   const policies = modelPolicies(groups, providers);
   const match = (over: Partial<TemplateRules>) => templateModels(rules(over), policies).sort();
+  const viaZdrEu = ["claude-auto", "claude-eu", "claude-fallback", "gpt-4o-mini"];
+  const viaEither = ["claude-auto", "claude-eu", "claude-fallback", "gpt-4o", "gpt-4o-mini"];
 
-  assert.deepEqual(match({ zdrOnly: true }), ["claude-eu"]);
-  assert.deepEqual(match({ regions: ["eu"] }), ["claude-eu"]);
-  assert.deepEqual(match({ regions: ["eu", "us"] }), [
-    "claude-eu",
-    "claude-fallback",
-    "gpt-4o",
-    "gpt-4o-mini",
-  ]);
-  assert.deepEqual(match({ maxRetentionDays: 30 }), [
-    "claude-eu",
-    "claude-fallback",
-    "gpt-4o",
-    "gpt-4o-mini",
-  ]);
-  assert.deepEqual(match({ maxRetentionDays: 0 }), ["claude-eu"]);
-  assert.deepEqual(match({ noTrainingOnly: true }), [
-    "claude-eu",
-    "claude-fallback",
-    "gpt-4o",
-    "gpt-4o-mini",
-  ]);
-  assert.deepEqual(match({ providerIds: ["us-30"] }), ["gpt-4o"]);
-  assert.deepEqual(match({ providerIds: ["zdr-eu"] }), ["claude-eu"]);
+  assert.deepEqual(match({ zdrOnly: true }), viaZdrEu);
+  assert.deepEqual(match({ regions: ["eu"] }), viaZdrEu);
+  assert.deepEqual(match({ regions: ["eu", "us"] }), viaEither);
+  assert.deepEqual(match({ maxRetentionDays: 30 }), viaEither);
+  assert.deepEqual(match({ maxRetentionDays: 0 }), viaZdrEu);
+  assert.deepEqual(match({ noTrainingOnly: true }), viaEither);
+  assert.deepEqual(match({ providerIds: ["us-30"] }), ["claude-auto", "claude-fallback", "gpt-4o", "gpt-4o-mini"]);
+  assert.deepEqual(match({ providerIds: ["zdr-eu"] }), viaZdrEu);
   assert.deepEqual(match({ patterns: ["gpt-*"] }), ["gpt-4o", "gpt-4o-mini"]);
-  assert.deepEqual(match({ patterns: ["gpt-*"], zdrOnly: true }), []);
-  assert.deepEqual(match({ patterns: ["claude-*"], regions: ["eu"] }), ["claude-eu"]);
-  assert.deepEqual(match({ zdrOnly: true, models: ["gpt-4o"] }), ["claude-eu", "gpt-4o"]);
+  assert.deepEqual(match({ patterns: ["gpt-*"], zdrOnly: true }), ["gpt-4o-mini"]);
+  assert.deepEqual(match({ patterns: ["claude-*"], regions: ["eu"] }), ["claude-auto", "claude-eu", "claude-fallback"]);
+  assert.deepEqual(match({ zdrOnly: true, models: ["gpt-4o"] }), viaEither);
   assert.deepEqual(match({ models: ["local-llama", "auto"] }), ["auto", "local-llama"]);
+  assert.deepEqual(match({ regions: ["eu"], patterns: ["mystery", "local-*", "empty"] }), []);
   assert.deepEqual(match({}), []);
 });
 
-test("resolveTemplates unions every template", async () => {
-  const { modelPolicies, resolveTemplates } = await import("@/lib/gateway/model-policy");
+test("resolveAccess limits routes only for aliases granted by data rules", async () => {
+  const { modelPolicies, resolveAccess } = await import("@/lib/gateway/model-policy");
   const policies = modelPolicies(groups, providers);
-  assert.deepEqual(
-    resolveTemplates([rules({ zdrOnly: true }), rules({ providerIds: ["us-30"] })], policies).sort(),
-    ["claude-eu", "gpt-4o"],
-  );
-  assert.deepEqual(resolveTemplates([], policies), []);
+  const zdr = rules({ zdrOnly: true });
+  const us = rules({ providerIds: ["us-30"] });
+
+  const access = resolveAccess([], [zdr, us], policies);
+  assert.deepEqual(access.models.sort(), ["claude-auto", "claude-eu", "claude-fallback", "gpt-4o", "gpt-4o-mini"]);
+  assert.equal(access.limits["gpt-4o-mini"]?.length, 2);
+  assert.equal(access.limits["claude-eu"]?.length, 1);
+  assert.equal(access.limits["gpt-4o"]?.[0]?.providerIds[0], "us-30");
+
+  assert.equal("claude-eu" in resolveAccess(["claude-eu"], [zdr], policies).limits, false);
+  assert.deepEqual(resolveAccess(["*"], [zdr], policies).limits, {});
+  const always = resolveAccess([], [rules({ zdrOnly: true, models: ["gpt-4o-mini"] })], policies);
+  assert.equal("gpt-4o-mini" in always.limits, false);
+  assert.ok(always.models.includes("claude-eu"));
+  const named = resolveAccess([], [rules({ patterns: ["gpt-*"] }), zdr], policies);
+  assert.equal("gpt-4o-mini" in named.limits, false);
+  assert.equal("claude-eu" in named.limits, true);
+  assert.deepEqual(resolveAccess([], [], policies), { models: [], limits: {} });
 });
 
 test("templateRulesOf drops malformed JSON entries and unknown regions", async () => {

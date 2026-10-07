@@ -164,7 +164,8 @@ model ProviderConnection {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  deployments Deployment[]
+  deployments    Deployment[]
+  catalogEntries CatalogEntry[]
 }
 
 model ModelGroup {
@@ -178,9 +179,29 @@ model ModelGroup {
   overflowGroup  String  @default("")
   numRetries     Int     @default(0)
   fallbackGroups Json    @default("[]")
+  vendor         String  @default("")
+  displayName    String  @default("")
+  autoRoutes     Boolean @default(false)
 
   deployments  Deployment[]
   priceWindows ModelPriceWindow[]
+}
+
+model CatalogEntry {
+  providerId   String
+  provider     ProviderConnection @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  upstreamId   String
+  name         String             @default("")
+  vendor       String             @default("")
+  alias        String             @default("")
+  source       String             @default("")
+  confidence   Float              @default(0)
+  disabled     Boolean            @default(false)
+  classifiedAt DateTime?
+  updatedAt    DateTime           @updatedAt
+
+  @@id([providerId, upstreamId])
+  @@index([alias])
 }
 
 model ModelPriceWindow {

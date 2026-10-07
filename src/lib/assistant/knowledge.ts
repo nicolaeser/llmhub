@@ -7,6 +7,8 @@ export const ASSISTANT_PAGES = {
   providers: "/providers",
   models: "/models",
   "model-templates": "/model-templates",
+  "model-catalog": "/model-catalog",
+  catalog: "/model-catalog",
   guardrails: "/guardrails",
   usage: "/usage",
   logs: "/logs",
@@ -37,9 +39,11 @@ export const ASSISTANT_EXPLAIN = {
   keys:
     "API keys are hashed Bearer credentials for /v1. The full secret is shown once in the console. A key belongs to a project or a person of a company, or is an internal key of the console user who created it; binding a key to a project or person needs tenancy:manage. Keys can be limited to models or model templates, client IPs, RPM, and TPM, and can be blocked or rotated. Rotation keeps the previous secret valid for one hour.",
   templates:
-    "Model templates are reusable model allowlists for API keys. A template combines rules (provider connections, name patterns such as claude-*, zero data retention, maximum provider data retention, data region, no training on prompts) with always-included models. Rules are evaluated on every request, so new matching models are allowed automatically. A model qualifies only when every endpoint behind it, including fallback and overflow aliases, meets every rule. Data policy is set per provider connection on the Providers page.",
+    "Model templates are reusable model allowlists for API keys. A template combines rules (provider connections, name patterns such as claude-*, zero data retention, maximum provider data retention, data region, no training on prompts) with always-included models. Rules are evaluated on every request, so new matching models are allowed automatically. A model qualifies when at least one endpoint behind it, also through fallback and overflow aliases, meets every rule, and requests from that key are routed only to endpoints that meet the rules. Data policy is set per provider connection on the Providers page.",
   providers:
-    "A provider connection stores the upstream kind, base URL, sealed API key, and data policy (zero data retention, retention days, region, no training). OpenAI, Anthropic, OpenRouter, xAI, and any OpenAI-compatible server are supported. Model lists sync hourly and on demand.",
+    "A provider connection stores the upstream kind, base URL, sealed API key, and data policy (zero data retention, retention days, region, no training). OpenAI, Anthropic, OpenRouter, xAI, and any OpenAI-compatible server are supported. Model lists refresh every two hours with the model catalog and on demand.",
+  catalog:
+    "The model catalog groups every provider model into public aliases. Models with the same name, also spelled differently (dots or dashes, vendor prefixes, date snapshots), share one alias; with Jev set up in Admin settings on its own OpenRouter key, Jev also groups models that providers name differently. The catalog is cached and refreshes every two hours or with Refresh now. A whole model can be turned on or off for every key, and single providers inside it can be turned on or off; aliases keep their names across refreshes. Aliases with Add new providers automatically route trusted providers that start offering the model. Own OpenAI-compatible servers are always turned on by hand.",
   models:
     "A model alias is the public name clients send as model. Aliases are case-insensitive and stored in lowercase; upstream model ids keep their exact case. It load-balances across deployments on connected providers. A disabled alias is hidden from /v1/models and answers model_not_found, also as a fallback or overflow target; its configuration is kept.",
   v1: "OpenAI-compatible API is at /v1 on this origin. Point the OpenAI SDK baseURL at origin/v1 and use a virtual key. Anthropic Messages is at /v1/messages.",

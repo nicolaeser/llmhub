@@ -16,7 +16,7 @@
     "enabled": "Status",
     "strategy": "Modus",
     "billing": "Abrechnung",
-    "endpoints": "Endpunkte",
+    "endpoints": "Anbieter",
     "overflow": "Überlauf"
   },
   "fields": {
@@ -29,6 +29,7 @@
     "retries": "Wiederholungen",
     "overflow": "Überlauf-Alias",
     "fallbacks": "Fallback-Aliasse",
+    "fallbacksPlaceholder": "Keine Fallbacks",
     "provider": "Anbieterverbindung",
     "noProvider": "Eigener Endpunkt",
     "costIn": "Input-Kosten / 1k",
@@ -37,7 +38,13 @@
     "priceIn": "Input-Preis / 1k Tokens",
     "priceOut": "Output-Preis / 1k Tokens",
     "enabled": "Über die API verfügbar",
-    "enabledHint": "Wenn aus, ist das Modell in /v1/models ausgeblendet und Anfragen daran schlagen mit „Modell nicht gefunden“ fehl, auch als Fallback. Die Einstellungen bleiben erhalten."
+    "enabledHint": "Wenn aus, ist das Modell in /v1/models ausgeblendet und Anfragen daran schlagen mit „Modell nicht gefunden“ fehl, auch als Fallback. Die Einstellungen bleiben erhalten.",
+    "vendor": "Hersteller",
+    "vendorHint": "Erscheint als owned_by in /v1/models, zum Beispiel anthropic oder openai.",
+    "displayName": "Anzeigename",
+    "displayNameHint": "Erscheint als display_name in /v1/models. Leer lassen, um den Alias zu verwenden.",
+    "autoRoutes": "Neue Anbieter automatisch aufnehmen",
+    "autoRoutesHint": "Findet der Modellkatalog dieses Modell bei einem weiteren vertrauenswürdigen Anbieter, wird es nach der nächsten Aktualisierung dorthin geroutet."
   },
   "billingModes": {
     "average": "Durchschnitt der Endpunkte",

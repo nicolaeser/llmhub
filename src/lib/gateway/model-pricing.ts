@@ -3,10 +3,12 @@ import prisma from "@/lib/db/prisma";
 import { REPORTED_COST_KINDS } from "@/lib/gateway/cost";
 import { minuteClock, priceAt, priceWindowQuery, priceWindowRates } from "@/lib/gateway/price-schedule";
 import { money } from "@/lib/utils/money";
-import type { CostRates, ModelPricing, PriceSchedule, TokenPricing } from "@/types/gateway";
+import type { CostRates, ModelPricing, PriceSchedule, PublicModel, TokenPricing } from "@/types/gateway";
 
 const pricedGroupSelect = {
   alias: true,
+  vendor: true,
+  displayName: true,
   billingMode: true,
   priceInput: true,
   priceOutput: true,
@@ -54,10 +56,7 @@ export function modelPricing(
   return tokenPricing(first);
 }
 
-export async function pricedModels(
-  at: Date,
-  aliases?: string[],
-): Promise<{ alias: string; pricing: ModelPricing | null }[]> {
+export async function pricedModels(at: Date, aliases?: string[]): Promise<PublicModel[]> {
   const groups = await prisma.modelGroup.findMany({
     where: { enabled: true, ...(aliases ? { alias: { in: aliases } } : {}) },
     orderBy: { alias: "asc" },
@@ -65,6 +64,8 @@ export async function pricedModels(
   });
   return groups.map((group) => ({
     alias: group.alias,
+    vendor: group.vendor,
+    displayName: group.displayName,
     pricing: modelPricing(
       {
         billing_mode: group.billingMode,

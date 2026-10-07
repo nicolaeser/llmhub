@@ -1,0 +1,53 @@
+{
+  "title": "Modellkatalog",
+  "subtitle": "Alle Modelle deiner Anbieter, gruppiert zu öffentlichen Aliassen. Namensregeln und Jev fassen dasselbe Modell zusammen, auch wenn Anbieter es unterschiedlich schreiben. Schalte ein ganzes Modell oder einzelne Anbieter ein und aus.",
+  "refresh": "Jetzt aktualisieren",
+  "refreshed": "Katalog aktualisiert",
+  "saved": "Gespeichert",
+  "lastRefresh": "Zuletzt aktualisiert {when}. Aktualisiert sich automatisch alle {hours, plural, one {Stunde} other {# Stunden}}.",
+  "neverRefreshed": "Noch nicht aktualisiert. Aktualisiert sich automatisch alle {hours, plural, one {Stunde} other {# Stunden}}.",
+  "jev": {
+    "summary": "Jev hat bei der letzten Aktualisierung {asked, plural, =0 {keine Modelle} one {# Modell} other {# Modelle}} geprüft und {matched, plural, =0 {keines} one {# davon} other {# davon}} zugeordnet ({cost}).",
+    "pending": "{count, plural, one {# Modell wartet} other {# Modelle warten}} bei der nächsten Aktualisierung auf Jev.",
+    "missingTitle": "Jev ist nicht eingerichtet",
+    "missing": "Modelle werden nur nach Namensregeln gruppiert. Hinterlege unter <link>Einstellungen</link> einen eigenen OpenRouter-Key für Jev, damit auch unterschiedlich benannte Modelle zusammengefasst werden.",
+    "errorTitle": "Jev wurde abgebrochen",
+    "error": "{code, select, JEV_AUTH {OpenRouter hat den Jev-API-Key abgelehnt.} JEV_CREDITS {Das OpenRouter-Konto für Jev hat kein Guthaben mehr.} JEV_RATE_LIMITED {OpenRouter hat die Jev-Anfragen gedrosselt.} other {Die Jev-Anfrage ist fehlgeschlagen.}} Die übrigen Modelle werden bei der nächsten Aktualisierung geprüft."
+  },
+  "failedTitle": "Einige Anbieter konnten nicht aktualisiert werden",
+  "failed": "{name}: {code, select, UPSTREAM_AUTH {der Anbieter hat den API-Key abgelehnt} UPSTREAM_EMPTY {der Anbieter hat keine Modelle geliefert, die bisherige Liste bleibt} BASE_URL_REQUIRED {die Basis-URL fehlt} other {die Anfrage ist fehlgeschlagen}}",
+  "search": "Modelle suchen",
+  "filter": {
+    "label": "Anzeigen",
+    "option": "{filter, select, active {Aktiv} fresh {Mit neuen Anbietern} missing {Nicht angelegt} disabled {Ausgeschaltet} other {Alle Modelle}}"
+  },
+  "groupState": "{state, select, active {Aktiv} disabled {Aus} other {Nicht angelegt}}",
+  "groupToggle": "{alias} für alle Keys ein- oder ausschalten",
+  "providers": "{active} von {total, plural, one {# Anbieter} other {# Anbietern}} aktiv",
+  "newProviders": "{count, plural, one {# neuer Anbieter} other {# neue Anbieter}}",
+  "autoRoutes": "Neue Anbieter automatisch aufnehmen",
+  "autoRoutesHint": "Anbieter, die dieses Modell neu anbieten, werden bei der nächsten Aktualisierung geroutet. Eigene OpenAI-kompatible Server schaltest du immer von Hand ein.",
+  "openModels": "Routing und Preise",
+  "columns": {
+    "provider": "Anbieter",
+    "model": "Anbieter-Modell",
+    "match": "Zugeordnet über",
+    "active": "Aktiv",
+    "actions": "Aktionen"
+  },
+  "source": "{source, select, route {Aktive Route} manual {Von Hand} rule {Gleicher Name} jev {Jev} other {Eigenes Modell}}",
+  "jevConfidence": "Jev, zu {confidence} sicher",
+  "entryState": "{status, select, active {An} disabled {Ausgeschaltet} other {Neu}}",
+  "entryToggle": "{model} von {provider} verwenden",
+  "untrusted": "Eigener Server: von Hand einschalten",
+  "assign": "Anderem Alias zuordnen",
+  "assignTitle": "{model} verschieben",
+  "assignAlias": "Alias",
+  "assignHint": "Wähle einen bestehenden Alias oder gib einen neuen ein. Eine aktive Route zieht mit um.",
+  "assignSubmit": "Verschieben",
+  "emptyTitle": "Der Katalog ist leer",
+  "empty": "Verbinde einen Anbieter und aktualisiere dann den Katalog, um seine Modelle zu gruppieren.",
+  "noResults": "Kein Modell passt zum Filter.",
+  "more": "{count, plural, one {# weiteres anzeigen} other {# weitere anzeigen}}",
+  "readOnly": "Du kannst den Katalog ansehen. Zum Ändern brauchst du die Berechtigung models:manage."
+}

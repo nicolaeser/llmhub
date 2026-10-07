@@ -202,7 +202,8 @@ test("pages import colocated views and keep auth/data/composition", () => {
 
   assert.match(apiRef, /from "\.\/_components\/copy-button"/);
   assert.match(apiRef, /from "\.\/_components\/try-endpoint"/);
-  assert.match(usage, /from "\.\/_components\/filter-select"/);
+  assert.match(usage, /from "\.\/_components\/usage-charts"/);
+  assert.match(usage, /from "@\/components\/console\/search-select"/);
   assert.doesNotMatch(apiRef, /function CopyButton/);
   assert.doesNotMatch(usage, /function FilterSelect/);
 });

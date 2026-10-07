@@ -22,7 +22,7 @@ import {
   loadProvidersAction,
 } from "@/app/(app)/providers/_action";
 import { isActionFail } from "@/lib/http/action-result";
-import type { ProviderView } from "@/types/providers";
+import type { ImportCandidate, ProviderView } from "@/types/providers";
 import ProviderDialog from "./_components/provider-dialog";
 import ImportModelsDialog from "./_components/import-models-dialog";
 
@@ -39,7 +39,7 @@ export default function ProvidersPage() {
   const [kind, setKind] = useState<(typeof PROVIDER_CATALOG)[number] | null>(null);
   const [edit, setEdit] = useState<ProviderView | null>(null);
   const [discover, setDiscover] = useState<ProviderView | null>(null);
-  const [models, setModels] = useState<ProviderView["discovered"] | null>(null);
+  const [models, setModels] = useState<ImportCandidate[] | null>(null);
   const [dialogKey, setDialogKey] = useState(0);
   const [browseCatalog, setBrowseCatalog] = useState(false);
   const [pending, start] = useTransition();

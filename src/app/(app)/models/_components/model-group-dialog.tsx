@@ -20,6 +20,8 @@ import {
   type useOverlayState,
 } from "@heroui/react";
 import { useTranslations } from "next-intl";
+import MultiPicker from "@/components/console/multi-picker";
+import SearchSelect from "@/components/console/search-select";
 import { formats } from "@/i18n/formats";
 import { PROVIDER_CATALOG } from "@/lib/gateway/catalog";
 import { createModelGroupAction, updateModelGroupAction } from "@/app/(app)/models/_action";
@@ -132,11 +134,20 @@ function ProviderSelect({
 }) {
   const t = useTranslations("Models");
   const tProviders = useTranslations("Providers");
+  const value = dep.providerId || (dep.kind ? `kind:${dep.kind}` : "none");
+  const kinds = PROVIDER_CATALOG.filter(
+    (k) => `kind:${k.kind}` === value || (withCatalog && !providers.some((p) => p.kind === k.kind)),
+  );
   return (
-    <Select
-      selectedKey={dep.providerId || (dep.kind ? `kind:${dep.kind}` : "none")}
-      onSelectionChange={(key) => {
-        const raw = String(key);
+    <SearchSelect
+      label={t("fields.provider")}
+      items={[
+        { id: "none", label: t("fields.noProvider") },
+        ...providers.map((p) => ({ id: p.id, label: p.name, detail: tProviders("kindName", { kind: p.kind }) })),
+        ...kinds.map((k) => ({ id: `kind:${k.kind}`, label: tProviders("kindName", { kind: k.kind }) })),
+      ]}
+      value={value}
+      onChange={(raw) => {
         if (raw === "none") {
           onChange({ providerId: "", kind: "openai_compat" });
           return;
@@ -159,43 +170,7 @@ function ProviderSelect({
         });
       }}
       isDisabled={isDisabled}
-      aria-label={t("fields.provider")}
-      fullWidth
-    >
-      <Label>{t("fields.provider")}</Label>
-      <Select.Trigger>
-        <Select.Value />
-        <Select.Indicator />
-      </Select.Trigger>
-      <Select.Popover>
-        <ListBox aria-label={t("fields.provider")}>
-          <ListBox.Item id="none" textValue={t("fields.noProvider")}>
-            {t("fields.noProvider")}
-            <ListBox.ItemIndicator />
-          </ListBox.Item>
-          {providers.map((p) => (
-            <ListBox.Item key={p.id} id={p.id} textValue={p.name}>
-              {p.name}
-              <ListBox.ItemIndicator />
-            </ListBox.Item>
-          ))}
-          {withCatalog
-            ? PROVIDER_CATALOG.filter((k) => !providers.some((p) => p.kind === k.kind)).map(
-                (k) => (
-                  <ListBox.Item
-                    key={k.kind}
-                    id={`kind:${k.kind}`}
-                    textValue={tProviders("kindName", { kind: k.kind })}
-                  >
-                    {tProviders("kindName", { kind: k.kind })}
-                    <ListBox.ItemIndicator />
-                  </ListBox.Item>
-                ),
-              )
-            : null}
-        </ListBox>
-      </Select.Popover>
-    </Select>
+    />
   );
 }
 
@@ -203,11 +178,13 @@ export default function ModelGroupDialog({
   state,
   editing,
   providers,
+  aliases,
   onSaved,
 }: {
   state: ReturnType<typeof useOverlayState>;
   editing: Group | null;
   providers: ProviderOpt[];
+  aliases: string[];
   onSaved: (group: Group) => void;
 }) {
   const t = useTranslations("Models");
@@ -217,8 +194,11 @@ export default function ModelGroupDialog({
   const [strategy, setStrategy] = useState(editing?.strategy || "least_inflight");
   const [retries, setRetries] = useState(String(editing?.numRetries ?? 2));
   const [overflow, setOverflow] = useState(editing?.overflowGroup ?? "");
-  const [fallbacks, setFallbacks] = useState(editing?.fallbackGroups.join(", ") ?? "");
+  const [fallbacks, setFallbacks] = useState<string[]>(editing?.fallbackGroups ?? []);
   const [enabled, setEnabled] = useState(editing?.enabled ?? true);
+  const [vendor, setVendor] = useState(editing?.vendor ?? "");
+  const [displayName, setDisplayName] = useState(editing?.displayName ?? "");
+  const [autoRoutes, setAutoRoutes] = useState(editing?.autoRoutes ?? false);
   const [billingMode, setBillingMode] = useState<BillingMode>(billingModeOf(editing?.billingMode));
   const [priceIn, setPriceIn] = useState(editing?.priceInput ?? 0);
   const [priceOut, setPriceOut] = useState(editing?.priceOutput ?? 0);
@@ -229,6 +209,11 @@ export default function ModelGroupDialog({
   const [deps, setDeps] = useState<DeploymentDraft[]>(() => draftsOf(editing, providers));
   const [pending, start] = useTransition();
   const mode = editing ? "save" : "create";
+  const otherAliases = aliases.filter((item) => item !== alias);
+  const overflowItems = [
+    { id: "none", label: tCommon("none") },
+    ...[...new Set([...otherAliases, ...(overflow ? [overflow] : [])])].map((item) => ({ id: item, label: item })),
+  ];
   const customPrice = billingMode === "custom";
   const pricesValid =
     !customPrice ||
@@ -248,6 +233,9 @@ export default function ModelGroupDialog({
       const body = {
         alias,
         enabled,
+        vendor,
+        displayName,
+        autoRoutes,
         strategy,
         billingMode,
         priceInput: validPrice(priceIn) ? priceIn : undefined,
@@ -438,6 +426,27 @@ export default function ModelGroupDialog({
                     </Disclosure.Heading>
                     <Disclosure.Content>
                       <Disclosure.Body className="space-y-4 pt-3">
+                        <div className="grid gap-3 sm:grid-cols-2 sm:items-start">
+                          <TextField fullWidth value={vendor} onChange={setVendor} isDisabled={pending}>
+                            <Label>{t("fields.vendor")}</Label>
+                            <Input placeholder="anthropic" />
+                            <Description>{t("fields.vendorHint")}</Description>
+                          </TextField>
+                          <TextField fullWidth value={displayName} onChange={setDisplayName} isDisabled={pending}>
+                            <Label>{t("fields.displayName")}</Label>
+                            <Input />
+                            <Description>{t("fields.displayNameHint")}</Description>
+                          </TextField>
+                        </div>
+                        <Switch isSelected={autoRoutes} onChange={setAutoRoutes} isDisabled={pending}>
+                          <Switch.Content>
+                            <Switch.Control>
+                              <Switch.Thumb />
+                            </Switch.Control>
+                            <Label>{t("fields.autoRoutes")}</Label>
+                          </Switch.Content>
+                          <Description>{t("fields.autoRoutesHint")}</Description>
+                        </Switch>
                         <Select
                           selectedKey={strategy}
                           onSelectionChange={(key) => setStrategy(String(key))}
@@ -471,26 +480,23 @@ export default function ModelGroupDialog({
                           <Label>{t("fields.retries")}</Label>
                           <Input aria-label={t("fields.retries")} />
                         </TextField>
-                        <TextField
-                          fullWidth
-                          value={overflow}
-                          onChange={setOverflow}
+                        <SearchSelect
+                          label={t("fields.overflow")}
+                          items={overflowItems}
+                          value={overflow || "none"}
+                          onChange={(next) => setOverflow(next === "none" ? "" : next)}
                           isDisabled={pending}
-                          aria-label={t("fields.overflow")}
-                        >
-                          <Label>{t("fields.overflow")}</Label>
-                          <Input aria-label={t("fields.overflow")} />
-                        </TextField>
-                        <TextField
-                          fullWidth
-                          value={fallbacks}
+                        />
+                        <MultiPicker
+                          label={t("fields.fallbacks")}
+                          placeholder={t("fields.fallbacksPlaceholder")}
+                          searchLabel={tCommon("search")}
+                          emptyLabel={tCommon("noResults")}
+                          items={otherAliases.map((item) => ({ id: item, label: item }))}
+                          selected={fallbacks}
                           onChange={setFallbacks}
                           isDisabled={pending}
-                          aria-label={t("fields.fallbacks")}
-                        >
-                          <Label>{t("fields.fallbacks")}</Label>
-                          <Input aria-label={t("fields.fallbacks")} />
-                        </TextField>
+                        />
                         {deps.map((d, i) => (
                           <Card key={d.id ?? i} variant="secondary">
                             {i > 0 ? (

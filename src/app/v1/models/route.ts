@@ -1,17 +1,17 @@
 import { NextResponse } from "next/server";
 import { gateRequest, gateResponse, modelPermitted } from "@/lib/gateway/gate";
 import { apiKeyRequest } from "@/lib/gateway/messages";
-import { modelEntry } from "@/lib/gateway/core";
+import { AUTO_MODEL, modelEntry } from "@/lib/gateway/core";
 import { pricedModels } from "@/lib/gateway/model-pricing";
 
 export async function GET(req: Request) {
   try {
     const principal = await gateRequest(apiKeyRequest(req));
     const created = new Date();
-    const models = [...(await pricedModels(created)), { alias: "auto", pricing: null }];
+    const models = [...(await pricedModels(created)), AUTO_MODEL];
     const data = models
       .filter((model) => modelPermitted(principal, model.alias))
-      .map((model) => modelEntry(model.alias, created, model.pricing));
+      .map((model) => modelEntry(model.alias, created, model.pricing, model));
     return NextResponse.json({
       object: "list",
       data,

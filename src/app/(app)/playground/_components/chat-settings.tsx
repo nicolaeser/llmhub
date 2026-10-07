@@ -1,8 +1,9 @@
 "use client";
 
-import { Button, Disclosure, Label, ListBox, Select, TextArea } from "@heroui/react";
+import { Button, Disclosure, TextArea } from "@heroui/react";
 import { Trash } from "lucide-react";
 import { useTranslations } from "next-intl";
+import SearchSelect from "@/components/console/search-select";
 
 export default function ChatSettings({
   models,
@@ -25,31 +26,15 @@ export default function ChatSettings({
   return (
     <>
       <div className="mb-3 flex flex-wrap items-end gap-3">
-        <Select
-          selectedKey={model || null}
-          onSelectionChange={(key) => onModelChange(String(key))}
-          aria-label={t("model")}
-          className="min-w-44 flex-1"
-          fullWidth
-          isDisabled={!models.length}
+        <SearchSelect
+          label={t("model")}
           placeholder={t("noModels")}
-        >
-          <Label>{t("model")}</Label>
-          <Select.Trigger>
-            <Select.Value />
-            <Select.Indicator />
-          </Select.Trigger>
-          <Select.Popover>
-            <ListBox aria-label={t("model")}>
-              {models.map((m) => (
-                <ListBox.Item key={m} id={m} textValue={m}>
-                  {m}
-                  <ListBox.ItemIndicator />
-                </ListBox.Item>
-              ))}
-            </ListBox>
-          </Select.Popover>
-        </Select>
+          items={models.map((m) => ({ id: m, label: m }))}
+          value={model}
+          onChange={onModelChange}
+          isDisabled={!models.length}
+          className="min-w-44 flex-1"
+        />
         <Button variant="ghost" aria-label={t("clear")} isDisabled={pending} onPress={onClear}>
           <Trash size={14} aria-hidden />
           {t("clear")}

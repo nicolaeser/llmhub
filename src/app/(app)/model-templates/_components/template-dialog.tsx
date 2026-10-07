@@ -75,7 +75,9 @@ export default function TemplateDialog({
   const [preset, setPreset] = useState<Preset>("blank");
   const [name, setName] = useState(editing?.name ?? "");
   const [description, setDescription] = useState(editing?.description ?? "");
-  const [providerIds, setProviderIds] = useState<string[]>(editing?.providerIds ?? []);
+  const [providerIds, setProviderIds] = useState<string[]>(() =>
+    (editing?.providerIds ?? []).filter((id) => providers.some((provider) => provider.id === id)),
+  );
   const [patterns, setPatterns] = useState((editing?.patterns ?? []).join(", "));
   const [regions, setRegions] = useState<string[]>(editing?.regions ?? []);
   const [retention, setRetention] = useState(

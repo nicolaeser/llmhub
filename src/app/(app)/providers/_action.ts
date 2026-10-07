@@ -8,20 +8,15 @@ import { writeAudit } from "@/lib/gateway/audit";
 import { PROVIDER_CATALOG } from "@/lib/gateway/catalog";
 import { seal } from "@/lib/crypto";
 import { KNOWN_KINDS } from "@/lib/gateway/core";
-import { modelAlias } from "@/lib/gateway/model-alias";
+import { addRoute, catalogTargets, markRouted } from "@/lib/gateway/catalog-sync";
+import { baseName, vendorOf } from "@/lib/gateway/model-catalog";
 import { refreshProviderModels } from "@/lib/gateway/discovery";
 import { discoveredOf } from "@/lib/gateway/provider-prices";
 import { providerPolicySchema } from "@/schemas/providers";
-import type { ProviderPolicyInput, ProviderRecord, ProviderSyncRecord } from "@/types/providers";
+import type { ImportCandidate, ProviderPolicyInput, ProviderRecord, ProviderSyncRecord } from "@/types/providers";
 
 function specFor(kind: string) {
   return PROVIDER_CATALOG.find((k) => k.kind === kind);
-}
-
-function publicAlias(id: string): string {
-  const alias = modelAlias(id);
-  const i = alias.lastIndexOf("/");
-  return i >= 0 ? alias.slice(i + 1) : alias;
 }
 
 function publicProvider(row: ProviderRecord) {
@@ -172,7 +167,16 @@ export async function discoverProviderAction(id: string) {
     if (!row) return actionFail("NOT_FOUND");
     const refreshed = await refreshProviderModels(row, session.user.id);
     const provider = publicProvider(refreshed.provider);
-    return { provider, models: provider.discovered };
+    const [targets, groups] = await Promise.all([
+      catalogTargets(row.id),
+      prisma.modelGroup.findMany({ select: { alias: true } }),
+    ]);
+    const known = new Set(groups.map((group) => group.alias));
+    const models: ImportCandidate[] = provider.discovered.map((model) => {
+      const alias = targets.get(model.id)?.alias ?? "";
+      return { id: model.id, name: model.name, alias, exists: known.has(alias) };
+    });
+    return { provider, models };
   });
 }
 
@@ -198,9 +202,18 @@ export async function importProviderModelsAction(input: {
     if (ids.length === 0) ids = discovered.map((m) => m.id);
     if (ids.length > 200) ids = ids.slice(0, 200);
     const strategy = input.strategy?.trim() || "cost_lowest";
+    const targets = await catalogTargets(row.id);
     let added = 0;
     let updated = 0;
     for (const modelId of ids) {
+      const target = targets.get(modelId) ?? {
+        providerId: row.id,
+        upstreamId: modelId,
+        alias: baseName(modelId),
+        vendor: vendorOf(row.kind, modelId),
+        name: "",
+      };
+      if (!target.alias) continue;
       const info = byId.get(modelId) ?? {
         id: modelId,
         name: modelId,
@@ -210,50 +223,17 @@ export async function importProviderModelsAction(input: {
         costOutputPer1k: 0,
         priceSource: "none",
       };
-      const alias = publicAlias(modelId);
-      if (!alias) continue;
-      const existing = await prisma.modelGroup.findUnique({
-        where: { alias },
-        include: { deployments: true },
+      const outcome = await addRoute({
+        provider: row,
+        model: info,
+        alias: target.alias,
+        vendor: target.vendor,
+        displayName: target.name,
+        strategy,
       });
-      const depData = {
-        kind: row.kind,
-        model: modelId,
-        providerId: row.id,
-        weight: 1,
-        costInput: info.costInputPer1k,
-        costOutput: info.costOutputPer1k,
-      };
-      if (!existing) {
-        await prisma.modelGroup.create({
-          data: {
-            alias,
-            strategy,
-            numRetries: 2,
-            deployments: { create: depData },
-          },
-        });
-        added += 1;
-        continue;
-      }
-      const dup = existing.deployments.find(
-        (d) => d.providerId === row.id && d.model === modelId,
-      );
-      if (dup) {
-        await prisma.deployment.update({
-          where: { id: dup.id },
-          data: {
-            costInput: depData.costInput,
-            costOutput: depData.costOutput,
-          },
-        });
-        updated += 1;
-      } else {
-        await prisma.deployment.create({
-          data: { groupAlias: alias, ...depData },
-        });
-        added += 1;
-      }
+      await markRouted(target);
+      if (outcome === "updated") updated += 1;
+      else added += 1;
     }
     await writeAudit({
       actor: session.user.id,

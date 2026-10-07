@@ -30,7 +30,7 @@ export async function POST(req: Request) {
     }
     const usage = meter(principal, model, body);
     try {
-      const hit = await forwardToModel(aliases, "/images/generations", rawBody ? null : clean, {
+      const hit = await forwardToModel(aliases, principal.routeLimits, "/images/generations", rawBody ? null : clean, {
         rawBody,
         contentType: rawBody ? undefined : contentType,
       });

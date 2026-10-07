@@ -1,8 +1,12 @@
 import type {
   DataRegion,
+  DeploymentRule,
+  ModelAccess,
   ModelPolicy,
   PolicyGroup,
   ProviderPolicy,
+  RouteLimits,
+  RoutePolicy,
   TemplateRules,
 } from "@/types/model-templates";
 
@@ -97,28 +101,46 @@ function reachable(alias: string, byAlias: Map<string, PolicyGroup>): PolicyGrou
 export function modelPolicies(groups: PolicyGroup[], providers: ProviderPolicy[]): ModelPolicy[] {
   const byAlias = new Map(groups.map((group) => [group.alias, group]));
   const byId = new Map(providers.map((provider) => [provider.id, provider]));
-  return groups.map((group) => {
-    const linked = reachable(group.alias, byAlias)
+  return groups.map((group) => ({
+    alias: group.alias,
+    routes: reachable(group.alias, byAlias)
       .flatMap((node) => node.providerIds)
-      .map((id) => (id ? (byId.get(id) ?? null) : null));
-    const known = linked.filter((provider): provider is ProviderPolicy => provider !== null);
-    const custom = known.length !== linked.length;
-    const complete = linked.length > 0 && !custom;
-    let retentionDays: number | null = complete ? 0 : null;
-    for (const provider of known) {
-      const days = provider.zdr ? 0 : provider.retentionDays;
-      retentionDays = days === null || retentionDays === null ? null : Math.max(retentionDays, days);
-    }
-    return {
-      alias: group.alias,
-      providerIds: [...new Set(known.map((provider) => provider.id))].sort(),
-      custom,
-      zdr: complete && known.every((provider) => provider.zdr),
-      noTraining: complete && known.every((provider) => provider.zdr || provider.noTraining),
-      retentionDays,
-      regions: [...new Set(linked.map((provider) => provider?.region ?? ""))].sort(),
-    };
-  });
+      .map((id) => (id ? (byId.get(id) ?? null) : null)),
+  }));
+}
+
+export function dataRuleOf(rules: DeploymentRule): DeploymentRule | null {
+  const limited =
+    rules.providerIds.length > 0 ||
+    rules.regions.length > 0 ||
+    rules.zdrOnly ||
+    rules.noTrainingOnly ||
+    rules.maxRetentionDays !== null;
+  if (!limited) return null;
+  return {
+    providerIds: rules.providerIds,
+    regions: rules.regions,
+    zdrOnly: rules.zdrOnly,
+    noTrainingOnly: rules.noTrainingOnly,
+    maxRetentionDays: rules.maxRetentionDays,
+  };
+}
+
+export function routeAllowed(rule: DeploymentRule, route: RoutePolicy): boolean {
+  if (!route) return false;
+  if (rule.providerIds.length && !rule.providerIds.includes(route.id)) return false;
+  if (rule.zdrOnly && !route.zdr) return false;
+  if (rule.noTrainingOnly && !route.zdr && !route.noTraining) return false;
+  if (rule.maxRetentionDays !== null) {
+    const days = route.zdr ? 0 : route.retentionDays;
+    if (days === null || days > rule.maxRetentionDays) return false;
+  }
+  if (rule.regions.length && !rule.regions.includes(route.region)) return false;
+  return true;
+}
+
+export function routePermitted(rules: DeploymentRule[] | undefined, route: RoutePolicy): boolean {
+  return !rules || rules.some((rule) => routeAllowed(rule, route));
 }
 
 export function templateMatches(rules: TemplateRules, policy: ModelPolicy): boolean {
@@ -127,29 +149,8 @@ export function templateMatches(rules: TemplateRules, policy: ModelPolicy): bool
   if (rules.patterns.length && !rules.patterns.some((pattern) => patternMatches(pattern, policy.alias))) {
     return false;
   }
-  if (
-    rules.providerIds.length &&
-    (policy.custom ||
-      policy.providerIds.length === 0 ||
-      !policy.providerIds.every((id) => rules.providerIds.includes(id)))
-  ) {
-    return false;
-  }
-  if (rules.zdrOnly && !policy.zdr) return false;
-  if (rules.noTrainingOnly && !policy.noTraining) return false;
-  if (
-    rules.maxRetentionDays !== null &&
-    (policy.retentionDays === null || policy.retentionDays > rules.maxRetentionDays)
-  ) {
-    return false;
-  }
-  if (
-    rules.regions.length &&
-    (policy.regions.length === 0 || !policy.regions.every((region) => rules.regions.includes(region)))
-  ) {
-    return false;
-  }
-  return true;
+  const rule = dataRuleOf(rules);
+  return !rule || policy.routes.some((route) => routeAllowed(rule, route));
 }
 
 export function templateModels(rules: TemplateRules, policies: ModelPolicy[]): string[] {
@@ -157,6 +158,25 @@ export function templateModels(rules: TemplateRules, policies: ModelPolicy[]): s
   return [...new Set([...matched, ...rules.models])];
 }
 
-export function resolveTemplates(templates: TemplateRules[], policies: ModelPolicy[]): string[] {
-  return [...new Set(templates.flatMap((rules) => templateModels(rules, policies)))];
+export function resolveAccess(
+  explicit: string[],
+  templates: TemplateRules[],
+  policies: ModelPolicy[],
+): ModelAccess {
+  const open = new Set(explicit);
+  const limited = new Map<string, DeploymentRule[]>();
+  for (const rules of templates) {
+    for (const alias of rules.models) open.add(alias);
+    const rule = dataRuleOf(rules);
+    for (const policy of policies) {
+      if (rules.models.includes(policy.alias) || !templateMatches(rules, policy)) continue;
+      if (!rule) open.add(policy.alias);
+      else limited.set(policy.alias, [...(limited.get(policy.alias) ?? []), rule]);
+    }
+  }
+  const limits: RouteLimits = {};
+  if (!open.has("*")) {
+    for (const [alias, rules] of limited) if (!open.has(alias)) limits[alias] = rules;
+  }
+  return { models: [...new Set([...open, ...limited.keys()])], limits };
 }

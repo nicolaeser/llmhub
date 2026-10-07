@@ -5,7 +5,7 @@ import { requirePermission } from "@/lib/auth/guards";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { actionFail, runAction } from "@/lib/http/action-result";
 import { writeAudit } from "@/lib/gateway/audit";
-import { modelAlias } from "@/lib/gateway/model-alias";
+import { modelAlias, RESERVED_ALIASES } from "@/lib/gateway/model-alias";
 import {
   asStringArray,
   KNOWN_BILLING_MODES,
@@ -38,6 +38,14 @@ function strategyOf(v: string | undefined, fallback = "least_inflight"): string 
 function kindOf(v: string | undefined): string {
   const s = (v ?? "").trim();
   return KNOWN_KINDS.has(s) ? s : "openai_compat";
+}
+
+const VENDOR_MAX = 60;
+const DISPLAY_NAME_MAX = 120;
+
+function labelOf(v: string | undefined, fallback: string, max: number): string {
+  if (v === undefined) return fallback;
+  return v.trim().slice(0, max);
 }
 
 function billingModeOf(v: string | undefined, fallback = "routed"): string {
@@ -123,6 +131,9 @@ function mapDeployment(d: {
 function groupAudit(g: {
   alias: string;
   enabled: boolean;
+  vendor: string;
+  displayName: string;
+  autoRoutes: boolean;
   strategy: string;
   billingMode: string;
   priceInput: Prisma.Decimal;
@@ -137,6 +148,9 @@ function groupAudit(g: {
   return {
     alias: g.alias,
     enabled: g.enabled,
+    vendor: g.vendor,
+    displayName: g.displayName,
+    autoRoutes: g.autoRoutes,
     strategy: g.strategy,
     billingMode: g.billingMode,
     priceInput: money(g.priceInput),
@@ -153,6 +167,9 @@ function groupAudit(g: {
 function mapGroup(g: {
   alias: string;
   enabled: boolean;
+  vendor: string;
+  displayName: string;
+  autoRoutes: boolean;
   strategy: string;
   billingMode: string;
   priceInput: Prisma.Decimal;
@@ -167,6 +184,9 @@ function mapGroup(g: {
   return {
     alias: g.alias,
     enabled: g.enabled,
+    vendor: g.vendor,
+    displayName: g.displayName,
+    autoRoutes: g.autoRoutes,
     strategy: g.strategy,
     billingMode: g.billingMode,
     priceInput: money(g.priceInput),
@@ -266,6 +286,9 @@ export async function loadModelsAction() {
 export async function createModelGroupAction(input: {
   alias: string;
   enabled?: boolean;
+  vendor?: string;
+  displayName?: string;
+  autoRoutes?: boolean;
   strategy: string;
   billingMode?: string;
   priceInput?: number;
@@ -281,6 +304,7 @@ export async function createModelGroupAction(input: {
     const session = await requirePermission(PERMISSIONS.MODELS_MANAGE);
     const alias = modelAlias(input.alias);
     if (!alias) return actionFail("ALIAS_REQUIRED");
+    if (RESERVED_ALIASES.has(alias)) return actionFail("ALIAS_RESERVED");
     const existing = await prisma.modelGroup.findUnique({ where: { alias } });
     if (existing) return actionFail("ALIAS_EXISTS");
     const deployments = await withCatalogPrices(
@@ -290,6 +314,9 @@ export async function createModelGroupAction(input: {
       data: {
         alias,
         enabled: input.enabled ?? true,
+        vendor: labelOf(input.vendor, "", VENDOR_MAX).toLowerCase(),
+        displayName: labelOf(input.displayName, "", DISPLAY_NAME_MAX),
+        autoRoutes: input.autoRoutes ?? false,
         strategy: strategyOf(input.strategy),
         billingMode: billingModeOf(input.billingMode),
         priceInput: priceOf(input.priceInput, 0),
@@ -319,6 +346,9 @@ export async function createModelGroupAction(input: {
 export async function updateModelGroupAction(input: {
   alias: string;
   enabled?: boolean;
+  vendor?: string;
+  displayName?: string;
+  autoRoutes?: boolean;
   strategy: string;
   billingMode?: string;
   priceInput?: number;
@@ -343,6 +373,9 @@ export async function updateModelGroupAction(input: {
       where: { alias },
       data: {
         enabled: input.enabled ?? existing.enabled,
+        vendor: labelOf(input.vendor, existing.vendor, VENDOR_MAX).toLowerCase(),
+        displayName: labelOf(input.displayName, existing.displayName, DISPLAY_NAME_MAX),
+        autoRoutes: input.autoRoutes ?? existing.autoRoutes,
         strategy: strategyOf(input.strategy, existing.strategy),
         billingMode: billingModeOf(input.billingMode, existing.billingMode),
         priceInput: priceOf(input.priceInput, money(existing.priceInput)),

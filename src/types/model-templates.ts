@@ -15,14 +15,26 @@ export type PolicyGroup = {
   fallbackGroups: string[];
 };
 
+export type RoutePolicy = ProviderPolicy | null;
+
 export type ModelPolicy = {
   alias: string;
+  routes: RoutePolicy[];
+};
+
+export type DeploymentRule = {
   providerIds: string[];
-  custom: boolean;
-  zdr: boolean;
-  retentionDays: number | null;
   regions: string[];
-  noTraining: boolean;
+  zdrOnly: boolean;
+  noTrainingOnly: boolean;
+  maxRetentionDays: number | null;
+};
+
+export type RouteLimits = Record<string, DeploymentRule[]>;
+
+export type ModelAccess = {
+  models: string[];
+  limits: RouteLimits;
 };
 
 export type TemplateRules = {

@@ -17,13 +17,18 @@ import { loadUsageAction } from "@/app/(app)/_action";
 import { isActionFail } from "@/lib/http/action-result";
 import EmptyState from "@/components/console/empty-state";
 import PageHeader from "@/components/console/page-header";
+import SearchSelect from "@/components/console/search-select";
 import StatCard from "@/components/console/stat-card";
-import FilterSelect from "./_components/filter-select";
 import UsageCharts from "./_components/usage-charts";
+import type { PickerItem } from "@/types/console";
 import type { SliceRow } from "@/types/gateway";
 import type { OkStats, UsageQuery } from "@/types/usage";
 
 const RANGES = [7, 14, 30, 90] as const;
+
+type TenantGroup = "org" | "team" | "project" | "member" | "key" | "user";
+
+type FilterKey = Exclude<keyof UsageQuery, "days">;
 
 const INITIAL_QUERY: UsageQuery = {
   days: 14,
@@ -56,6 +61,7 @@ export default function UsagePage() {
   const [pending, start] = useTransition();
   const [query, setQuery] = useState<UsageQuery>(INITIAL_QUERY);
   const [stats, setStats] = useState<OkStats | null>(null);
+  const [picked, setPicked] = useState<Partial<Record<FilterKey, PickerItem>>>({});
 
   const load = useCallback((next: UsageQuery) => {
     start(async () => {
@@ -96,21 +102,26 @@ export default function UsagePage() {
     );
   }
 
-  const label = (id: string) => (id === "unassigned" ? "" : (stats.names[id] ?? id));
-  const options = (ids: string[]) => ids.map((id) => ({ id, label: label(id) || id }));
-  const named = (rows: SliceRow[]) => rows.map((row) => ({ ...row, name: label(row.name) }));
+  const label = (group: TenantGroup, id: string) =>
+    id === "unassigned" ? "" : (stats.names[id] ?? t("deleted", { group }));
+  const options = (group: TenantGroup, ids: string[]): PickerItem[] =>
+    ids.map((id) =>
+      stats.names[id] ? { id, label: stats.names[id] } : { id, label: t("deleted", { group }), detail: id },
+    );
+  const named = (group: TenantGroup, rows: SliceRow[]) =>
+    rows.map((row) => ({ ...row, name: label(group, row.name) }));
   const tenantFilters = [
     {
       key: "model" as const,
       label: t("group.model"),
       options: stats.models.map((id) => ({ id, label: id })),
     },
-    { key: "orgId" as const, label: t("group.org"), options: options(stats.orgs) },
-    { key: "teamId" as const, label: t("group.team"), options: options(stats.teams) },
-    { key: "projectId" as const, label: t("group.project"), options: options(stats.projects) },
-    { key: "memberId" as const, label: t("group.member"), options: options(stats.members) },
-    { key: "keyId" as const, label: t("group.key"), options: options(stats.keys) },
-    { key: "userId" as const, label: t("group.user"), options: options(stats.users) },
+    { key: "orgId" as const, label: t("group.org"), options: options("org", stats.orgs) },
+    { key: "teamId" as const, label: t("group.team"), options: options("team", stats.teams) },
+    { key: "projectId" as const, label: t("group.project"), options: options("project", stats.projects) },
+    { key: "memberId" as const, label: t("group.member"), options: options("member", stats.members) },
+    { key: "keyId" as const, label: t("group.key"), options: options("key", stats.keys) },
+    { key: "userId" as const, label: t("group.user"), options: options("user", stats.users) },
   ];
 
   return (
@@ -167,16 +178,26 @@ export default function UsagePage() {
             </ListBox>
           </Select.Popover>
         </Select>
-        {tenantFilters.map((filter) => (
-          <FilterSelect
-            key={filter.key}
-            label={filter.label}
-            value={query[filter.key]}
-            options={filter.options}
-            allLabel={tCommon("all")}
-            onChange={(next) => apply({ [filter.key]: next })}
-          />
-        ))}
+        {tenantFilters.map((filter) => {
+          const kept = picked[filter.key];
+          const missing =
+            kept && kept.id === query[filter.key] && !filter.options.some((option) => option.id === kept.id);
+          return (
+            <SearchSelect
+              key={filter.key}
+              label={filter.label}
+              items={[{ id: "all", label: tCommon("all") }, ...filter.options, ...(missing ? [kept] : [])]}
+              value={query[filter.key] || "all"}
+              onChange={(next) => {
+                setPicked((current) => ({
+                  ...current,
+                  [filter.key]: filter.options.find((option) => option.id === next),
+                }));
+                apply({ [filter.key]: next === "all" ? "" : next });
+              }}
+            />
+          );
+        })}
       </div>
       <p className="sr-only">
         {t("summary", {
@@ -218,10 +239,10 @@ export default function UsagePage() {
       <UsageCharts
         daily={stats.daily}
         byModel={stats.byModel}
-        byTeam={named(stats.byTeam)}
-        byOrg={named(stats.byOrg)}
-        byProject={named(stats.byProject)}
-        byMember={named(stats.byMember)}
+        byTeam={named("team", stats.byTeam)}
+        byOrg={named("org", stats.byOrg)}
+        byProject={named("project", stats.byProject)}
+        byMember={named("member", stats.byMember)}
         healthByModel={stats.healthByModel}
         requests={stats.count}
         errors={stats.errors}
