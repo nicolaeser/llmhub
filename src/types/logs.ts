@@ -11,7 +11,7 @@ export type LogFilterValues = {
   to: string;
 };
 
-export type ContentSkip = "" | "gateway" | "user" | "key";
+export type ContentSkip = "" | "gateway" | "user" | "member" | "key";
 
 export type TranscriptKind = "text" | "reasoning" | "tool_call" | "tool_result" | "media";
 
@@ -44,6 +44,8 @@ export type RequestLogRow = {
   keyLabel: string;
   userId: string;
   userLabel: string;
+  memberId: string;
+  memberLabel: string;
   teamId: string;
   orgId: string;
   projectId: string;

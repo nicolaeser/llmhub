@@ -15,6 +15,7 @@ import type {
   UsageBreakdownQuery,
 } from "@/types/assistant";
 import type { SliceRow, UsageSlice } from "@/types/gateway";
+import type { SpendScope } from "@/types/structure";
 
 const HOUR_MS = 3_600_000;
 const DEFAULT_LOG_HOURS = 24;
@@ -32,9 +33,10 @@ const UNASSIGNED = "unassigned";
 
 export const USAGE_GROUP_FIELDS = {
   model: "model",
-  team: "teamId",
   org: "orgId",
+  team: "teamId",
   project: "projectId",
+  member: "memberId",
   key: "keyId",
   user: "userId",
 } as const satisfies Record<UsageBreakdownGroup, keyof UsageSlice>;
@@ -63,8 +65,11 @@ function isUsageGroup(value: unknown): value is UsageBreakdownGroup {
   return typeof value === "string" && Object.hasOwn(USAGE_GROUP_FIELDS, value);
 }
 
-function spendOwner(ctx: AssistantContext): string | null {
-  return hasPerm(ctx.permissions, PERMISSIONS.SPEND_READ_ALL) ? null : ctx.userId;
+function spendScopeOf(ctx: AssistantContext): SpendScope {
+  return {
+    ...(ctx.orgId ? { orgId: ctx.orgId } : {}),
+    ...(hasPerm(ctx.permissions, PERMISSIONS.SPEND_READ_ALL) ? {} : { userId: ctx.userId }),
+  };
 }
 
 export function parseLogSearch(
@@ -157,6 +162,10 @@ async function groupLabels(
       return aliasLabels(prisma.organization.findMany({ where, select }));
     case "project":
       return aliasLabels(prisma.project.findMany({ where, select }));
+    case "member":
+      return new Map(
+        (await prisma.member.findMany({ where, select: { id: true, name: true } })).map((row) => [row.id, row.name]),
+      );
     case "key":
       return keyLabels(ids);
     case "user":
@@ -167,9 +176,10 @@ async function groupLabels(
 }
 
 export async function searchLogs(query: LogSearchQuery, ctx: AssistantContext) {
-  const owner = spendOwner(ctx);
+  const scope = spendScopeOf(ctx);
+  const owner = scope.userId ?? null;
   const where: Prisma.RequestLogWhereInput = {
-    ...requestLogWhere(query.filters, owner),
+    ...requestLogWhere(query.filters, scope),
     ...(query.errorsOnly ? { outcome: { not: "ok" } } : {}),
   };
   const [total, groups, rows] = await Promise.all([
@@ -242,11 +252,10 @@ export async function searchLogs(query: LogSearchQuery, ctx: AssistantContext) {
 }
 
 export async function usageBreakdown(query: UsageBreakdownQuery, ctx: AssistantContext) {
-  const owner = spendOwner(ctx);
   const since = usageWindowStart(query.days);
   const slices = await usageSlices({
-    ...(owner ? { userId: owner } : {}),
     ...(query.model ? { model: query.model } : {}),
+    ...spendScopeOf(ctx),
     day: { gte: since },
   });
   const grouped = sortUsageRows(

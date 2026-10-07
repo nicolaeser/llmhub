@@ -16,8 +16,8 @@ export const POST = managementRoute(PERMISSIONS.KEYS_MANAGE, async ({ req }) => 
   const created = unwrap(
     await createKeyAction({
       alias: body.alias,
-      teamId: body.team_id ?? "",
       projectId: body.project_id ?? "",
+      memberId: body.member_id ?? "",
       models: body.models,
       templateIds: body.template_ids,
       rpm: body.rpm_limit,

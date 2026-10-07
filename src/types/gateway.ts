@@ -317,6 +317,7 @@ export type VirtualKeyView = {
   team_id: string;
   org_id: string;
   project_id: string;
+  member_id: string;
   models: string[];
   templates: string[];
   max_budget: number;
@@ -332,12 +333,29 @@ export type VirtualKeyView = {
   created_at: string;
 };
 
+export type KeyTenancy = {
+  userId: string;
+  memberId: string;
+  projectId: string;
+  teamId: string;
+  orgId: string;
+};
+
+export type KeyBindingRow = {
+  userId: string | null;
+  teamId: string | null;
+  orgId: string | null;
+  projectId: string | null;
+  memberId: string | null;
+};
+
 export type Principal = {
   actor: string;
   key?: VirtualKeyView;
   teamId: string;
   orgId: string;
   userId: string;
+  memberId: string;
   models: string[];
   trace?: RequestTrace;
 };
@@ -359,6 +377,7 @@ export type UsageSlice = {
   teamId: string;
   orgId: string;
   projectId: string;
+  memberId: string;
   userId: string;
   model: string;
   requests: number;
@@ -368,6 +387,16 @@ export type UsageSlice = {
   promptTokens: number;
   completionTokens: number;
   cost: number;
+};
+
+export type ChargebackParts = {
+  orgId: string;
+  teamId: string;
+  projectId: string;
+  memberId: string;
+  keyId: string;
+  userId: string;
+  model: string;
 };
 
 export type SliceRow = {

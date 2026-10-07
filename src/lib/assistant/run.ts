@@ -114,7 +114,7 @@ async function completeGateway(
   toolChoice: AssistantToolChoice,
 ): Promise<{ content: string; toolCalls: AssistantToolCall[] }> {
   const principal = withTrace(
-    await sessionPrincipal({ id: ctx.userId, teamId: ctx.teamId, orgId: ctx.orgId }),
+    sessionPrincipal({ id: ctx.userId, orgId: ctx.orgId }),
     ASSISTANT_ENDPOINT,
   );
   await admit(principal);

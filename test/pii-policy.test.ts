@@ -21,6 +21,7 @@ function keyPrincipal(pii: PiiPolicy): Principal {
     team_id: "",
     org_id: "org_1",
     project_id: "",
+    member_id: "",
     models: [],
     templates: [],
     max_budget: 0,
@@ -35,7 +36,7 @@ function keyPrincipal(pii: PiiPolicy): Principal {
     log_content: true,
     created_at: "",
   };
-  return { actor: key.key_name, key, teamId: "", orgId: "org_1", userId: "", models: [] };
+  return { actor: key.key_name, key, teamId: "", orgId: "org_1", userId: "", memberId: "", models: [] };
 }
 
 const sample = { model: "m", messages: [{ role: "user", content: "mail ada@acme.com from 8.8.8.8" }] };

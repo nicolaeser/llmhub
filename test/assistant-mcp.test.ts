@@ -51,8 +51,7 @@ const ctx: AssistantContext = {
   userId: "user-1",
   permissions: Object.values(PERMISSIONS),
   disabledTools: [],
-  teamId: "",
-  orgId: "",
+  orgId: null,
   locale: "en",
   allowWrite: true,
 };
@@ -152,7 +151,9 @@ test("explain covers setup tenancy keys providers models v1 playground", async (
 
 test("open_page maps known console routes", async () => {
   assert.equal(ASSISTANT_PAGES.providers, "/providers");
-  assert.equal(ASSISTANT_PAGES.keys, "/");
+  assert.equal(ASSISTANT_PAGES.keys, "/keys");
+  assert.equal(ASSISTANT_PAGES.companies, "/companies");
+  assert.equal(ASSISTANT_PAGES.members, "/companies");
   const opened = await callMcpTool("open_page", { page: "playground" }, ctx);
   assert.deepEqual(opened, {
     result: { href: "/playground" },
@@ -353,6 +354,9 @@ test("write tools wrap console actions and re-check manage perms", async () => {
   assert.match(keys, /createKeyAction/);
   assert.match(keys, /rotateKeyAction/);
   assert.match(structure, /setBudgetAction/);
+  assert.match(structure, /saveMemberAction/);
+  assert.doesNotMatch(structure, /placeMemberAction/);
+  assert.match(keys, /const rebinds = args\.projectId !== undefined \|\| args\.memberId !== undefined;/);
   assert.match(access, /setUserBlockedAction/);
   assert.match(settings, /saveGuardrailsAction/);
   for (const source of [providers, models, keys, structure, access, settings]) {
@@ -383,8 +387,7 @@ test("mcpToolsForModel hides write tools without manage perms", () => {
     userId: "user-2",
     permissions: [...roleTemplates.viewer],
     disabledTools: [],
-    teamId: "",
-    orgId: "",
+    orgId: null,
     locale: "en",
     allowWrite: true,
   };
@@ -666,7 +669,7 @@ test("search_logs reads metadata only and never request content", async () => {
   const end = source.indexOf("export async function usageBreakdown");
   assert.ok(start > 0 && end > start);
   const block = source.slice(start, end);
-  assert.match(block, /requestLogWhere\(query\.filters, owner\)/);
+  assert.match(block, /requestLogWhere\(query\.filters, scope\)/);
   assert.match(block, /select: \{/);
   assert.doesNotMatch(block, /content|include:|requestLogContent|\btag\b/);
   assert.match(source, /SPEND_READ_ALL/);

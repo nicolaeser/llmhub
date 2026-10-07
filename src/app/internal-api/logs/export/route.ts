@@ -2,7 +2,7 @@ import type { NextRequest } from "next/server";
 import prisma from "@/lib/db/prisma";
 import { getSession } from "@/lib/auth/session";
 import { hasPerm, PERMISSIONS } from "@/lib/auth/permissions";
-import { seesAllSpend } from "@/lib/auth/scope";
+import { companyOf, seesAllSpend, spendScope } from "@/lib/auth/scope";
 import { writeAudit } from "@/lib/gateway/audit";
 import {
   auditLogWhere,
@@ -33,8 +33,7 @@ export async function GET(req: NextRequest) {
     });
   }
 
-  const scoped = seesAllSpend(session);
-  const owner = scoped ? null : session.user.id;
+  const scope = spendScope(session);
   const filters = parseLogFilters(Object.fromEntries(url.searchParams));
   const withContent =
     kind === "requests" && format === "jsonl" && hasPerm(session.permissions, PERMISSIONS.LOGS_CONTENT);
@@ -42,7 +41,7 @@ export async function GET(req: NextRequest) {
   let rows: Record<string, unknown>[];
   if (kind === "requests") {
     const data = await prisma.requestLog.findMany({
-      where: requestLogWhere(filters, owner),
+      where: requestLogWhere(filters, scope),
       orderBy: { createdAt: "desc" },
       take: withContent ? CONTENT_ROW_LIMIT : ROW_LIMIT,
       include: { content: withContent },
@@ -59,6 +58,7 @@ export async function GET(req: NextRequest) {
       latency_ms: r.latencyMs,
       key_id: r.keyId,
       user_id: r.userId,
+      member_id: r.memberId,
       team_id: r.teamId,
       org_id: r.orgId,
       project_id: r.projectId,
@@ -88,7 +88,7 @@ export async function GET(req: NextRequest) {
     }
   } else if (kind === "spend") {
     const data = await prisma.spendEvent.findMany({
-      where: spendEventWhere(filters, owner),
+      where: spendEventWhere(filters, scope),
       orderBy: { createdAt: "desc" },
       take: ROW_LIMIT,
     });
@@ -101,12 +101,15 @@ export async function GET(req: NextRequest) {
       completion_tokens: r.completionTokens,
       key_id: r.keyId,
       user_id: r.userId,
+      member_id: r.memberId,
       team_id: r.teamId,
+      org_id: r.orgId,
+      project_id: r.projectId,
       deployment: r.deployment,
       tag: r.tag,
     }));
   } else {
-    if (!seesAllSpend(session)) {
+    if (!seesAllSpend(session) || companyOf(session)) {
       return problemResponse(req, "FORBIDDEN");
     }
     const data = await prisma.gatewayAuditLog.findMany({

@@ -139,6 +139,7 @@ export default function UsageCharts({
   byTeam = [],
   byOrg = [],
   byProject = [],
+  byMember = [],
   healthByModel = [],
   requests,
   errors,
@@ -148,6 +149,7 @@ export default function UsageCharts({
   byTeam?: SpendPoint[];
   byOrg?: SpendPoint[];
   byProject?: SpendPoint[];
+  byMember?: SpendPoint[];
   healthByModel?: HealthPoint[];
   requests: number;
   errors: number;
@@ -174,6 +176,10 @@ export default function UsageCharts({
     spend: row.spend ?? 0,
   }));
   const projectSeries = byProject.map((row) => ({
+    name: row.name || tCommon("none"),
+    spend: row.spend ?? 0,
+  }));
+  const memberSeries = byMember.map((row) => ({
     name: row.name || tCommon("none"),
     spend: row.spend ?? 0,
   }));
@@ -399,14 +405,6 @@ export default function UsageCharts({
         formatTick={formatSpendTick}
       />
       <GroupSpendChart
-        title={t("group.team")}
-        rows={teamSeries}
-        spendLabel={t("columns.spend")}
-        emptyLabel={t("empty")}
-        formatValue={formatValue}
-        formatTick={formatSpendTick}
-      />
-      <GroupSpendChart
         title={t("group.org")}
         rows={orgSeries}
         spendLabel={t("columns.spend")}
@@ -415,8 +413,24 @@ export default function UsageCharts({
         formatTick={formatSpendTick}
       />
       <GroupSpendChart
+        title={t("group.team")}
+        rows={teamSeries}
+        spendLabel={t("columns.spend")}
+        emptyLabel={t("empty")}
+        formatValue={formatValue}
+        formatTick={formatSpendTick}
+      />
+      <GroupSpendChart
         title={t("group.project")}
         rows={projectSeries}
+        spendLabel={t("columns.spend")}
+        emptyLabel={t("empty")}
+        formatValue={formatValue}
+        formatTick={formatSpendTick}
+      />
+      <GroupSpendChart
+        title={t("group.member")}
+        rows={memberSeries}
         spendLabel={t("columns.spend")}
         emptyLabel={t("empty")}
         formatValue={formatValue}

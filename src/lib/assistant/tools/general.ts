@@ -38,7 +38,10 @@ export function nextSetupStep(counts: {
 }
 
 export function ownKeysWhere(ctx: AssistantContext) {
-  return hasPerm(ctx.permissions, PERMISSIONS.KEYS_READ_ALL) ? {} : { userId: ctx.userId };
+  return {
+    ...(ctx.orgId ? { orgId: ctx.orgId } : {}),
+    ...(hasPerm(ctx.permissions, PERMISSIONS.KEYS_READ_ALL) ? {} : { userId: ctx.userId }),
+  };
 }
 
 function appOrigin(): string {
@@ -139,7 +142,7 @@ export const generalTools = {
   }),
   whoami: defineTool({
     description:
-      "The signed-in operator: role, team, organization, permissions, assistant tools available to the role, write access, and the assistant model policy.",
+      "The signed-in operator: role, the company they are limited to (null for platform users), permissions, assistant tools available to the role, write access, and the assistant model policy.",
     input: emptyToolInput,
     run: async (_args, ctx) => {
       const [user, enterprise] = await Promise.all([
@@ -149,7 +152,6 @@ export const generalTools = {
             username: true,
             isOwner: true,
             role: { select: { name: true, templateKey: true } },
-            team: { select: { id: true, alias: true } },
             org: { select: { id: true, alias: true } },
           },
         }),
@@ -160,8 +162,7 @@ export const generalTools = {
           username: user?.username ?? "",
           owner: user?.isOwner === true,
           role: user?.role?.name ?? user?.role?.templateKey ?? null,
-          team: user?.team ?? null,
-          organization: user?.org ?? null,
+          company: user?.org ?? null,
           permissions: ctx.permissions,
           writeAccess: ctx.allowWrite,
           tools: assistantToolViews(ctx).map((tool) => tool.name),

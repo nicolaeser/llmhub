@@ -1,9 +1,9 @@
 {
-  "title": "Users",
-  "subtitle": "People who can sign in. Roles grant permissions; two-factor authentication is required for everyone.",
-  "emptyTitle": "No users",
+  "title": "Console users",
+  "subtitle": "People who sign in to this console. Platform users see every company; users assigned to a company see only that company. A customer's own people are managed under Companies.",
+  "emptyTitle": "No console users",
   "empty": "Add people who can sign in to the console.",
-  "noMatches": "No users match that search.",
+  "noMatches": "No users match the search.",
   "create": "Add user",
   "createTitle": "Add user",
   "searchPlaceholder": "Search name or email…",
@@ -17,7 +17,7 @@
   "columns": {
     "user": "User",
     "role": "Role",
-    "tenancy": "Organization and team",
+    "access": "Access",
     "security": "Security",
     "lastActive": "Last active"
   },
@@ -26,12 +26,9 @@
     "email": "Email",
     "password": "Password",
     "role": "Role",
-    "org": "Organization",
-    "orgHint": "Company tenant. A person belongs to at most one.",
-    "team": "Team",
-    "teamHint": "People group. A person belongs to at most one team. This is not a project.",
-    "none": "None",
-    "initialPassword": "Initial password"
+    "initialPassword": "Initial password",
+    "access": "Access to",
+    "accessHint": "{scope, select, company {Sees and manages only this company. The role's permissions for providers, models, settings, users, and roles do not apply.} other {Platform user. The role applies to every company and to platform settings.}}"
   },
   "toasts": {
     "created": "User created",
@@ -39,7 +36,7 @@
     "deleted": "User deleted",
     "blocked": "{blocked, select, true {User blocked} other {User unblocked}}",
     "sessionsRevoked": "All sessions signed out",
-    "roleChanged": "Role changed",
+    "roleChanged": "Role and access changed",
     "twoFactorReset": "Two-factor authentication reset",
     "contentLogging": "{enabled, select, true {Content logging turned on} other {Content logging turned off}}"
   },
@@ -49,8 +46,8 @@
   "twoFactor": "{enabled, select, true {2FA on} other {2FA pending}}",
   "passkeys": "{count, plural, one {# passkey} other {# passkeys}}",
   "mustChangePassword": "Password change",
-  "changeRole": "Change role",
-  "changeRoleTitle": "Role for {username}",
+  "changeRole": "Change role and access",
+  "changeRoleTitle": "Role and access for {username}",
   "changeRoleHint": "You can only assign roles whose permissions you hold yourself.",
   "revokeSessions": "Sign out all sessions",
   "resetTwoFactor": "Reset two-factor authentication",
@@ -58,5 +55,7 @@
   "requireChange": "Require a new password at the next sign-in",
   "initialPasswordHint": "The person sets a new password and two-factor authentication at the first sign-in.",
   "contentAction": "{enabled, select, true {Stop logging content} other {Log content again}}",
-  "contentOff": "Content not logged"
+  "contentOff": "Content not logged",
+  "access": "{scope, select, company {{org}} other {Whole hub}}",
+  "budget": "Set budget"
 }

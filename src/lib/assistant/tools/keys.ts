@@ -104,49 +104,55 @@ export const keyTools = {
   }),
   get_key: defineTool({
     description:
-      "One virtual key by id, alias, or prefix: models, templates, RPM and TPM limits, allowed IPs, budget, expiry, team, project, content logging, and PII override. Never the secret.",
+      "One virtual key by id, alias, or prefix: models, templates, RPM and TPM limits, allowed IPs, budget, expiry, who it belongs to (project, person, or internal) with its department and company, content logging, and PII override. Never the secret.",
     input: keyToolInput,
     run: async ({ key }, ctx) =>
       withKey(key, ctx, async (row) => {
-        const [team, project] = await Promise.all([
+        const [org, team, project, member] = await Promise.all([
+          row.orgId ? prisma.organization.findUnique({ where: { id: row.orgId }, select: { alias: true } }) : null,
           row.teamId ? prisma.team.findUnique({ where: { id: row.teamId }, select: { alias: true } }) : null,
           row.projectId
             ? prisma.project.findUnique({ where: { id: row.projectId }, select: { alias: true } })
             : null,
+          row.memberId ? prisma.member.findUnique({ where: { id: row.memberId }, select: { name: true } }) : null,
         ]);
         return {
           result: {
             ...toKeyView(row),
+            binding: row.memberId ? "member" : row.projectId ? "project" : "internal",
+            org_alias: org?.alias ?? "",
             team_alias: team?.alias ?? "",
             project_alias: project?.alias ?? "",
+            member_name: member?.name ?? "",
           },
         };
       }),
   }),
   create_key: defineTool({
     description:
-      "Create a virtual key, optionally limited to models, templates, IPs, RPM, TPM, and an expiry. The console shows the secret to the operator once; you never see it.",
+      "Create a virtual key for a project (projectId) or a person (memberId) of a company, or an internal key of the operator when neither is given; optionally limited to models, templates, IPs, RPM, TPM, and an expiry. Binding to a project or person needs tenancy:manage. The console shows the secret to the operator once; you never see it.",
     input: createKeyToolInput,
     run: async (args) =>
       viaAction(createKeyAction(args), ({ key }) => ({
         result: { ok: true, id: key.token_id, alias: key.key_alias, prefix: key.key_name, note: SECRET_NOTE },
         secret: key.key,
-        navigate: "/",
+        navigate: "/keys",
       })),
   }),
   update_key: defineTool({
     description:
-      "Change a virtual key: alias, team, project, models, templates, RPM, TPM, allowed IPs, content logging, or blocked state. Omitted fields stay unchanged. Budgets use set_budget.",
+      "Change a virtual key: alias, who it belongs to (projectId or memberId; sending either replaces the binding, both empty makes it internal), models, templates, RPM, TPM, allowed IPs, content logging, or blocked state. Omitted fields stay unchanged. Budgets use set_budget.",
     input: updateKeyToolInput,
     run: async (args, ctx) =>
       withKey(args.key, ctx, async (row) => {
         const view = toKeyView(row);
+        const rebinds = args.projectId !== undefined || args.memberId !== undefined;
         return viaAction(
           updateKeyAction({
             id: row.id,
             alias: args.alias ?? (row.keyAlias || row.prefix),
-            teamId: args.teamId ?? view.team_id,
-            projectId: args.projectId ?? view.project_id,
+            projectId: rebinds ? (args.projectId ?? "") : view.project_id,
+            memberId: rebinds ? (args.memberId ?? "") : view.member_id,
             models: args.models ?? view.models,
             templateIds: args.templateIds ?? view.templates,
             rpm: args.rpm ?? view.rpm_limit,
@@ -180,7 +186,7 @@ export const keyTools = {
         viaAction(rotateKeyAction(row.id), ({ key: rotated }) => ({
           result: { ok: true, id: rotated.token_id, alias: rotated.key_alias, prefix: rotated.key_name, note: SECRET_NOTE },
           secret: rotated.key,
-          navigate: "/",
+          navigate: "/keys",
         })),
       ),
   }),

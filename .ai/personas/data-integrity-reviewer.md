@@ -19,7 +19,7 @@ Forward-only migrations. Catalog does not create operators. First row is exclusi
 - `ensureSystemCatalog` seeds role templates and settings only.
 - Setup uses a serializable count+insert.
 - No seed script exists; migrations stay forward-only.
-- Moving a team or project keeps the denormalized `VirtualKey.teamId` / `orgId` and `User.orgId` in the same transaction.
+- Changing a project's or member's department keeps the denormalized `VirtualKey.teamId` / `orgId` in the same transaction, and changing a console user's company updates their internal keys.
 - No budget write lets a child cap exceed a capped ancestor.
 
 ## Required context

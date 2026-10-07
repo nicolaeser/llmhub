@@ -24,17 +24,17 @@
   "testerHint": "Verwendet die gespeicherte globale Richtlinie.",
   "redact": "Beispiel schwärzen",
   "saved": "PII-Richtlinie gespeichert",
-  "policyHint": "Gilt für jede Anfrage, sofern ihre Organisation oder ihr API-Key keine Überschreibung hat.",
+  "policyHint": "Gilt für jede Anfrage, sofern ihr Unternehmen oder ihr API-Key keine Überschreibung hat.",
   "entitiesHint": "Ohne Auswahl gilt die Standardauswahl.",
   "overrides": "Überschreibungen",
-  "overridesHint": "Gib einer Organisation oder einem einzelnen API-Key eine eigene Richtlinie. Für jede Anfrage gilt genau eine Richtlinie, gewählt in dieser Reihenfolge:",
+  "overridesHint": "Gib einem Unternehmen oder einem einzelnen API-Key eine eigene Richtlinie. Für jede Anfrage gilt genau eine Richtlinie, gewählt in dieser Reihenfolge:",
   "overridesEmpty": "Noch keine Überschreibungen. Jede Anfrage nutzt die globale Richtlinie.",
   "addOverride": "Überschreibung hinzufügen",
   "scope": "Gilt für",
-  "scopeLabel": "{scope, select, org {Organisation} key {API-Key} other {{scope}}}",
-  "overrideTarget": "{scope, select, org {Organisation} key {API-Key} other {{scope}}}: {alias}",
+  "scopeLabel": "{scope, select, org {Unternehmen} key {API-Key} other {{scope}}}",
+  "overrideTarget": "{scope, select, org {Unternehmen} key {API-Key} other {{scope}}}: {alias}",
   "overrideTitle": "{mode, select, edit {Überschreibung bearbeiten} other {Überschreibung hinzufügen}}",
-  "overrideHint": "Diese Richtlinie ersetzt die geerbte für die gewählte Organisation oder den API-Key vollständig: Modus, Schwärzung der Ausgabe und Entitäten.",
+  "overrideHint": "Diese Richtlinie ersetzt die geerbte für das gewählte Unternehmen oder den API-Key vollständig: Modus, Schwärzung der Ausgabe und Entitäten.",
   "saveOverride": "Überschreibung speichern",
   "overrideSaved": "{mode, select, removed {Überschreibung entfernt} other {Überschreibung gespeichert}}",
   "removeOverride": "Überschreibung entfernen",
@@ -53,11 +53,11 @@
     "number": "{n, number}",
     "key": {
       "title": "Überschreibung des API-Keys",
-      "hint": "Hat der API-Key der Anfrage eine Überschreibung, gilt nur diese. Die Überschreibung seiner Organisation wird dann nicht beachtet."
+      "hint": "Hat der API-Key der Anfrage eine Überschreibung, gilt nur diese. Die Überschreibung seines Unternehmens wird dann nicht beachtet."
     },
     "org": {
-      "title": "Überschreibung der Organisation",
-      "hint": "Sonst gilt die Überschreibung der Organisation, zu der der Key gehört."
+      "title": "Überschreibung des Unternehmens",
+      "hint": "Sonst gilt die Überschreibung des Unternehmens, zu dem der Key gehört."
     },
     "global": {
       "title": "Globale Richtlinie",

@@ -42,6 +42,8 @@ function loadHolder(kind: BudgetKind, id: string): Promise<SpendHolder | null> {
       return prisma.virtualKey.findUnique({ where: { id }, select: HOLDER_SELECT });
     case "user":
       return prisma.user.findUnique({ where: { id }, select: HOLDER_SELECT });
+    case "member":
+      return prisma.member.findUnique({ where: { id }, select: HOLDER_SELECT });
     case "project":
       return prisma.project.findUnique({ where: { id }, select: HOLDER_SELECT });
     case "team":
@@ -64,6 +66,9 @@ async function spendAfterReset(kind: BudgetKind, row: SpendHolder, now: Date): P
     case "user":
       await prisma.user.updateMany({ where, data });
       break;
+    case "member":
+      await prisma.member.updateMany({ where, data });
+      break;
     case "project":
       await prisma.project.updateMany({ where, data });
       break;
@@ -81,6 +86,7 @@ export function budgetChain(principal: Principal): { kind: BudgetKind; id: strin
   const chain: { kind: BudgetKind; id: string }[] = [
     { kind: "key", id: principal.key?.token_id ?? "" },
     { kind: "user", id: principal.userId },
+    { kind: "member", id: principal.memberId },
     { kind: "project", id: principal.key?.project_id ?? "" },
     { kind: "team", id: principal.teamId },
     { kind: "org", id: principal.orgId },
@@ -218,10 +224,11 @@ export async function recordUsage(input: {
   const teamId = input.principal.teamId;
   const orgId = input.principal.orgId;
   const projectId = input.principal.key?.project_id ?? "";
+  const memberId = input.principal.memberId;
 
   const now = new Date();
   const day = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-  const slice = { day, keyId, teamId, orgId, projectId, userId, model: input.model };
+  const slice = { day, keyId, teamId, orgId, projectId, memberId, userId, model: input.model };
   const failed = input.status >= 400 ? 1 : 0;
   const limited = input.status === 429 ? 1 : 0;
   const writes: Prisma.PrismaPromise<unknown>[] = [
@@ -256,6 +263,7 @@ export async function recordUsage(input: {
           teamId,
           orgId,
           projectId,
+          memberId,
           userId,
           model: input.model,
           deployment: input.deployment?.id ?? "",
@@ -271,6 +279,7 @@ export async function recordUsage(input: {
     const increment = { spend: { increment: cost } };
     if (keyId) writes.push(prisma.virtualKey.updateMany({ where: { id: keyId }, data: increment }));
     if (userId) writes.push(prisma.user.updateMany({ where: { id: userId }, data: increment }));
+    if (memberId) writes.push(prisma.member.updateMany({ where: { id: memberId }, data: increment }));
     if (teamId) writes.push(prisma.team.updateMany({ where: { id: teamId }, data: increment }));
     if (orgId) writes.push(prisma.organization.updateMany({ where: { id: orgId }, data: increment }));
     if (projectId) writes.push(prisma.project.updateMany({ where: { id: projectId }, data: increment }));

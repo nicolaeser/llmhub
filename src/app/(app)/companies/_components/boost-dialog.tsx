@@ -41,7 +41,7 @@ export default function BoostDialog({
   budget: BudgetView | null;
   onSaved: (result: BudgetResult) => void;
 }) {
-  const t = useTranslations("Structure.boost");
+  const t = useTranslations("Companies.boost");
   const tCommon = useTranslations("Common");
   const tError = useTranslations("Error");
   const format = useFormatter();

@@ -55,7 +55,9 @@ export default function LogTable({
                   </Table.Cell>
                   <Table.Cell>
                     <p className="text-sm">{row.keyLabel || t("caller.noKey")}</p>
-                    <p className="text-xs text-muted">{row.userLabel || row.userId || tCommon("none")}</p>
+                    <p className="text-xs text-muted">
+                      {row.memberLabel || row.userLabel || row.memberId || row.userId || tCommon("none")}
+                    </p>
                   </Table.Cell>
                   <Table.Cell>
                     <Chip size="sm" variant="soft" color={row.status >= 400 ? "danger" : "default"} className="whitespace-nowrap">

@@ -127,6 +127,7 @@ export async function authenticateManagementKey(req: Request): Promise<Authentic
   const current = effectivePermissions({
     isOwner: user.isOwner,
     rolePermissions: role?.permissions ?? [],
+    orgId: user.orgId,
   });
   return {
     error: false,

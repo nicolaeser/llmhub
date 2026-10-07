@@ -37,17 +37,27 @@ test("createdAtRange includes the whole end day for date-only input", () => {
 
 test("requestLogWhere scopes to the owner and ignores another user filter", () => {
   const filters = parseLogFilters({ userId: "someone", keyId: "k1", status: "429", endpoint: "/v1/chat" });
-  assert.deepEqual(requestLogWhere(filters, "me"), {
+  assert.deepEqual(requestLogWhere(filters, { userId: "me" }), {
     userId: "me",
     keyId: "k1",
     status: 429,
     endpoint: { contains: "/v1/chat" },
   });
-  assert.deepEqual(requestLogWhere(filters, null).userId, "someone");
+  assert.deepEqual(requestLogWhere(filters, {}).userId, "someone");
+});
+
+test("requestLogWhere keeps company users inside their company", () => {
+  const filters = parseLogFilters({ keyId: "k1" });
+  assert.deepEqual(requestLogWhere(filters, { orgId: "org_a" }), { keyId: "k1", orgId: "org_a" });
+  assert.deepEqual(requestLogWhere(filters, { orgId: "org_a", userId: "me" }), {
+    keyId: "k1",
+    orgId: "org_a",
+    userId: "me",
+  });
 });
 
 test("requestLogWhere filters PII rows across prompt and response markers", () => {
-  const where = requestLogWhere(parseLogFilters({ pii: true, status: "abc" }), null);
+  const where = requestLogWhere(parseLogFilters({ pii: true, status: "abc" }), {});
   assert.deepEqual(where, {
     OR: [{ piiInput: { isEmpty: false } }, { piiOutput: { isEmpty: false } }],
   });
@@ -55,10 +65,10 @@ test("requestLogWhere filters PII rows across prompt and response markers", () =
 
 test("spend and audit filters reuse the scope and date range", () => {
   const filters = parseLogFilters({ model: "m", keyId: "k", from: "2026-10-01", pii: true, endpoint: "/v1" });
-  assert.deepEqual(spendEventWhere(filters, "me"), {
-    userId: "me",
+  assert.deepEqual(spendEventWhere(filters, { userId: "me" }), {
     keyId: "k",
     model: "m",
+    userId: "me",
     createdAt: { gte: new Date("2026-10-01T00:00:00.000Z") },
   });
   assert.deepEqual(auditLogWhere(filters), { createdAt: { gte: new Date("2026-10-01T00:00:00.000Z") } });

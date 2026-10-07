@@ -14,9 +14,9 @@ const confirm = z
   .default(false)
   .describe("Set true only after the operator explicitly confirmed this action in the conversation.");
 const strategy = z.enum(["least_inflight", "weighted_random", "cost_lowest", "priority", "fast"]);
-const budgetKind = z.enum(["org", "team", "project", "user", "key"]);
-const nodeKind = z.enum(["org", "team", "project"]);
-const usageGroups = ["model", "team", "org", "project", "key", "user"] as const satisfies readonly UsageBreakdownGroup[];
+const budgetKind = z.enum(["org", "team", "project", "member", "user", "key"]);
+const nodeKind = z.enum(["org", "team", "project", "member"]);
+const usageGroups = ["model", "org", "team", "project", "member", "key", "user"] as const satisfies readonly UsageBreakdownGroup[];
 const usageSorts = ["spend", "requests", "errors"] as const satisfies readonly UsageBreakdownSort[];
 const keyRef = name.describe("Key id, alias, or prefix.");
 const days = z.number().int().min(0).max(3650);
@@ -58,6 +58,7 @@ export const usageToolInput = z.object({
   teamId: id.optional(),
   orgId: id.optional(),
   projectId: id.optional(),
+  memberId: id.optional(),
   keyId: id.optional(),
   userId: id.optional(),
 });
@@ -200,8 +201,8 @@ export const keyToolInput = z.object({ key: keyRef });
 
 export const createKeyToolInput = z.object({
   alias: z.string().trim().min(1).max(80),
-  teamId: id.optional(),
-  projectId: id.optional(),
+  projectId: id.optional().describe("Project key: the project it belongs to."),
+  memberId: id.optional().describe("Personal key: the person it belongs to. Omit both for an internal key."),
   models: names(500).optional(),
   templateIds: z.array(id).max(50).optional(),
   rpm: rpm.optional(),
@@ -214,8 +215,8 @@ export const createKeyToolInput = z.object({
 export const updateKeyToolInput = z.object({
   key: keyRef,
   alias: z.string().trim().min(1).max(80).optional(),
-  teamId: z.string().trim().max(64).optional().describe("Empty string removes the team."),
-  projectId: z.string().trim().max(64).optional().describe("Empty string removes the project."),
+  projectId: z.string().trim().max(64).optional().describe("Bind to this project. Sending projectId or memberId replaces the binding."),
+  memberId: z.string().trim().max(64).optional().describe("Bind to this person. Empty projectId and memberId make an internal key."),
   models: names(500).optional(),
   templateIds: z.array(id).max(50).optional(),
   rpm: rpm.optional(),
@@ -232,23 +233,20 @@ export const structureToolInput = z.object({
 });
 
 export const saveNodeToolInput = z.object({
-  kind: nodeKind,
+  kind: nodeKind.describe("org is a company, team a department, project an application, member a person of the company."),
   id: id.optional().describe("Omit to create."),
-  alias: z.string().trim().min(1).max(80).optional(),
-  orgId: id.optional().describe("Team: parent organization."),
-  rpm: rpm.optional().describe("Team RPM limit. 0 is unlimited."),
-  tpm: tpm.optional().describe("Team TPM limit. 0 is unlimited."),
-  teamId: id.optional().describe("Project: parent team."),
+  alias: z.string().trim().min(1).max(80).optional().describe("Name. For a member, the person's name."),
+  orgId: id.optional().describe("Company of a department, project, or member. Required to create; cannot change later."),
+  rpm: rpm.optional().describe("Department RPM limit. 0 is unlimited."),
+  tpm: tpm.optional().describe("Department TPM limit. 0 is unlimited."),
+  teamId: z.string().trim().max(64).optional().describe("Project or member: department in the same company. Empty string removes it."),
   owner: label.optional().describe("Project owner contact."),
+  email: z.string().trim().max(254).optional().describe("Member email, unique within the company."),
+  blocked: z.boolean().optional().describe("Member: blocked people cannot use their keys."),
+  logContent: z.boolean().optional().describe("Member: store prompts and responses of their keys."),
 });
 
 export const deleteNodeToolInput = z.object({ kind: nodeKind, id, confirm });
-
-export const placeMemberToolInput = z.object({
-  userId: id,
-  teamId: z.string().trim().max(64).default("").describe("Empty removes the team."),
-  orgId: z.string().trim().max(64).default(""),
-});
 
 export const setBudgetToolInput = z.object({
   kind: budgetKind,
@@ -281,7 +279,16 @@ export const listUsersToolInput = z.object({
 
 export const userBlockedToolInput = z.object({ userId: id, blocked: z.boolean(), confirm });
 
-export const assignRoleToolInput = z.object({ userId: id, roleId: id });
+export const assignRoleToolInput = z.object({
+  userId: id,
+  roleId: id,
+  orgId: z
+    .string()
+    .trim()
+    .max(64)
+    .optional()
+    .describe("Company to limit the console user to. Empty string makes a platform user. Omit to keep."),
+});
 
 export const confirmUserToolInput = z.object({ userId: id, confirm });
 

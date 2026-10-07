@@ -2,7 +2,7 @@ import "server-only";
 
 import prisma from "@/lib/db/prisma";
 import {
-  assignUserRoleAction,
+  assignUserAccessAction,
   loadConsoleUsersAction,
   revokeUserSessionsAction,
   setUserBlockedAction,
@@ -26,8 +26,7 @@ function userView(user: ConsoleUser) {
     role: user.roleName ?? user.roleTemplateKey,
     owner: user.isOwner,
     blocked: user.blocked,
-    organization: user.orgAlias,
-    team: user.teamAlias,
+    company: user.orgId ? user.orgAlias : null,
     twoFactorEnabled: user.twoFactorEnabled,
     passkeys: user.passkeys,
     activeSessions: user.activeSessions,
@@ -46,7 +45,7 @@ function updatedUser(userId: string) {
 export const accessTools = {
   list_users: defineTool({
     description:
-      "Console users with role, team, organization, blocked state, second-factor status, active sessions, and last activity. No email addresses or secrets.",
+      "Console users with role, the company they are limited to (null for platform users), blocked state, second-factor status, active sessions, and last activity. No email addresses or secrets.",
     input: listUsersToolInput,
     run: async ({ search }) =>
       viaAction(loadConsoleUsersAction(), ({ users, roles }) => {
@@ -91,13 +90,22 @@ export const accessTools = {
       viaAction(setUserBlockedAction(userId, blocked), updatedUser(userId)),
   }),
   assign_user_role: defineTool({
-    description: "Give a user another role. Only roles marked assignable in list_users can be given.",
+    description:
+      "Give a console user another role and optionally limit them to one company (orgId) or make them a platform user (empty orgId). Only roles marked assignable in list_users can be given.",
     input: assignRoleToolInput,
-    run: async ({ userId, roleId }) => {
-      const user = await prisma.user.findUnique({ where: { id: userId }, select: { revision: true } });
+    run: async ({ userId, roleId, orgId }) => {
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { revision: true, orgId: true },
+      });
       if (!user) return toolFail("user_not_found");
       return viaAction(
-        assignUserRoleAction({ userId, roleId, revision: user.revision }),
+        assignUserAccessAction({
+          userId,
+          roleId,
+          orgId: orgId ?? user.orgId ?? "",
+          revision: user.revision,
+        }),
         updatedUser(userId),
       );
     },

@@ -3,6 +3,7 @@ import prisma from "@/lib/db/prisma";
 import { money } from "@/lib/utils/money";
 import type { Prisma } from "@/generated/prisma/client";
 import type { UsageSlice } from "@/types/gateway";
+import type { SpendScope } from "@/types/structure";
 
 export function usageWindowStart(days: number, now = new Date()): Date {
   const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
@@ -17,6 +18,7 @@ export async function usageSlices(where: Prisma.UsageDailyWhereInput): Promise<U
     teamId: row.teamId,
     orgId: row.orgId,
     projectId: row.projectId,
+    memberId: row.memberId,
     userId: row.userId,
     model: row.model,
     requests: row.requests,
@@ -29,9 +31,9 @@ export async function usageSlices(where: Prisma.UsageDailyWhereInput): Promise<U
   }));
 }
 
-export async function usageTotals(days: number, userId?: string) {
+export async function usageTotals(days: number, scope: SpendScope = {}) {
   const totals = await prisma.usageDaily.aggregate({
-    where: { day: { gte: usageWindowStart(days) }, ...(userId ? { userId } : {}) },
+    where: { day: { gte: usageWindowStart(days) }, ...scope },
     _sum: { cost: true, requests: true, errors: true },
   });
   return {

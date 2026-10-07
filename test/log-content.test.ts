@@ -178,7 +178,7 @@ test("responseTranscript reads chat, completions, Anthropic, Responses, audio, a
 });
 
 test("withTrace gives every request its own PII trace", () => {
-  const principal: Principal = { actor: "a", teamId: "", orgId: "", userId: "u", models: [] };
+  const principal: Principal = { actor: "a", teamId: "", orgId: "", userId: "u", memberId: "", models: [] };
   const first = withTrace(principal, "/v1/chat/completions");
   const second = withTrace(principal, "batch:/v1/embeddings");
   first.trace?.piiInput.add("EMAIL_ADDRESS");

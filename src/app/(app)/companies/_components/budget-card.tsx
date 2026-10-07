@@ -20,7 +20,7 @@ export default function BudgetCard({
   onEdit: () => void;
   onBoost: () => void;
 }) {
-  const t = useTranslations("Structure.budget");
+  const t = useTranslations("Companies.budget");
   const format = useFormatter();
   const now = useNow({ updateInterval: 60_000 });
   const ratio = usedRatio(budget);

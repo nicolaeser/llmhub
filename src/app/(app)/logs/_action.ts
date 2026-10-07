@@ -3,7 +3,7 @@
 import prisma from "@/lib/db/prisma";
 import { requirePermission } from "@/lib/auth/guards";
 import { PERMISSIONS } from "@/lib/auth/permissions";
-import { seesAllSpend } from "@/lib/auth/scope";
+import { companyOf, seesAllSpend, spendScope } from "@/lib/auth/scope";
 import { writeAudit } from "@/lib/gateway/audit";
 import { findRequestLogDetail, requestLogLabels, requestLogRow } from "@/lib/gateway/request-log-detail";
 import {
@@ -21,14 +21,14 @@ const OPTION_LIMIT = 500;
 export async function loadLogsAction(input?: { page?: number; pageSize?: number; filters?: unknown }) {
   return runAction(async () => {
     const session = await requirePermission(PERMISSIONS.SPEND_READ);
-    const scoped = seesAllSpend(session);
-    const owner = scoped ? null : session.user.id;
+    const scoped = seesAllSpend(session) && !companyOf(session);
+    const scope = spendScope(session);
     const page = Math.max(1, Math.trunc(input?.page ?? 1) || 1);
     const pageSize = Math.min(100, Math.max(10, Math.trunc(input?.pageSize ?? 50) || 50));
     const skip = (page - 1) * pageSize;
     const filters = parseLogFilters(input?.filters);
-    const requestWhere = requestLogWhere(filters, owner);
-    const spendWhere = spendEventWhere(filters, owner);
+    const requestWhere = requestLogWhere(filters, scope);
+    const spendWhere = spendEventWhere(filters, scope);
     const auditWhere = auditLogWhere(filters);
     const [requests, spend, audit, requestTotal, spendTotal, auditTotal] = await Promise.all([
       prisma.requestLog.findMany({
@@ -90,16 +90,21 @@ export async function loadLogsAction(input?: { page?: number; pageSize?: number;
 export async function loadLogOptionsAction() {
   return runAction(async () => {
     const session = await requirePermission(PERMISSIONS.SPEND_READ);
+    const company = companyOf(session);
     const scoped = seesAllSpend(session);
     const [keys, users] = await Promise.all([
       prisma.virtualKey.findMany({
-        where: scoped ? {} : { userId: session.user.id },
+        where: {
+          ...(company ? { orgId: company } : {}),
+          ...(scoped ? {} : { userId: session.user.id }),
+        },
         orderBy: { keyAlias: "asc" },
         take: OPTION_LIMIT,
         select: { id: true, keyAlias: true, prefix: true },
       }),
       scoped
         ? prisma.user.findMany({
+            where: company ? { orgId: company } : {},
             orderBy: { username: "asc" },
             take: OPTION_LIMIT,
             select: { id: true, username: true },

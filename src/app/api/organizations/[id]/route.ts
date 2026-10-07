@@ -1,4 +1,4 @@
-import { deleteNodeAction, saveOrgAction } from "@/app/(app)/structure/_action";
+import { deleteNodeAction, saveOrgAction } from "@/app/(app)/companies/_action";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { managementRoute, readBody, respond, unwrap } from "@/lib/management/http";
 import { serializeOrg } from "@/lib/management/serialize";

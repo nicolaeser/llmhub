@@ -41,10 +41,7 @@ function NavItems({
 
   return items.map((item) => {
     const Icon = item.icon;
-    const active =
-      item.href === "/"
-        ? pathname === "/"
-        : pathname === item.href || pathname.startsWith(`${item.href}/`);
+    const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
     return (
       <Link
         key={item.href}
@@ -200,7 +197,7 @@ export default function Sidebar({
           className={`hidden shrink-0 flex-col bg-surface md:flex ${collapsed ? "w-16" : "w-64"}`}
         >
           <Link
-            href="/"
+            href="/keys"
             aria-label={t("goHome")}
             className="flex h-14 items-center gap-2.5 px-3"
           >

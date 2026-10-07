@@ -1,3 +1,4 @@
+import { chargebackParts } from "@/lib/gateway/usage-stats";
 import type { SliceRow, VirtualKeyView } from "@/types/gateway";
 import type { RequestLogRow } from "@/types/logs";
 import type { AuditLogSource, ProviderSource, SpendLogSource, UsageSource } from "@/types/management";
@@ -25,10 +26,6 @@ function parsedJson(value: string): unknown {
   }
 }
 
-function member(row: MemberNode) {
-  return { id: row.id, username: row.username, email: row.email };
-}
-
 export function serializeApiKey(key: VirtualKeyView) {
   return {
     object: "api_key",
@@ -39,6 +36,7 @@ export function serializeApiKey(key: VirtualKeyView) {
     team_id: orNull(key.team_id),
     org_id: orNull(key.org_id),
     project_id: orNull(key.project_id),
+    member_id: orNull(key.member_id),
     models: key.models,
     template_ids: key.templates,
     log_content: key.log_content,
@@ -118,7 +116,7 @@ export function serializeTeam(team: TeamNode, structure: StructurePayload) {
     spend: team.budget.spend,
     rpm_limit: team.rpmLimit,
     tpm_limit: team.tpmLimit,
-    members: structure.users.filter((user) => user.teamId === team.id).map(member),
+    member_count: structure.members.filter((row) => row.teamId === team.id).length,
   };
 }
 
@@ -129,7 +127,9 @@ export function serializeOrg(org: OrgNode, structure: StructurePayload) {
     alias: org.alias,
     max_budget: org.budget.maxBudget,
     spend: org.budget.spend,
-    members: structure.users.filter((user) => user.orgId === org.id).map(member),
+    team_count: structure.teams.filter((row) => row.orgId === org.id).length,
+    project_count: structure.projects.filter((row) => row.orgId === org.id).length,
+    member_count: structure.members.filter((row) => row.orgId === org.id).length,
   };
 }
 
@@ -138,11 +138,30 @@ export function serializeProject(project: ProjectNode, structure: StructurePaylo
     object: "project",
     id: project.id,
     alias: project.alias,
+    org_id: orNull(project.orgId),
+    org_alias: orNull(structure.orgs.find((org) => org.id === project.orgId)?.alias),
     team_id: orNull(project.teamId),
     team_alias: orNull(structure.teams.find((team) => team.id === project.teamId)?.alias),
     owner: orNull(project.owner),
     max_budget: project.budget.maxBudget,
     spend: project.budget.spend,
+  };
+}
+
+export function serializeMember(row: MemberNode, structure: StructurePayload) {
+  return {
+    object: "member",
+    id: row.id,
+    name: row.alias,
+    email: orNull(row.email),
+    org_id: row.orgId,
+    org_alias: orNull(structure.orgs.find((org) => org.id === row.orgId)?.alias),
+    team_id: orNull(row.teamId),
+    team_alias: orNull(structure.teams.find((team) => team.id === row.teamId)?.alias),
+    blocked: row.blocked,
+    log_content: row.logContent,
+    max_budget: row.budget.maxBudget,
+    spend: row.budget.spend,
   };
 }
 
@@ -190,6 +209,7 @@ export function serializeUsage(usage: UsageSource) {
       team_id: orNull(usage.teamId),
       org_id: orNull(usage.orgId),
       project_id: orNull(usage.projectId),
+      member_id: orNull(usage.memberId),
       key_id: orNull(usage.keyId),
       user_id: orNull(usage.userId),
     },
@@ -207,18 +227,19 @@ export function serializeUsage(usage: UsageSource) {
     by_team: usage.byTeam.map(slice),
     by_org: usage.byOrg.map(slice),
     by_project: usage.byProject.map(slice),
+    by_member: usage.byMember.map(slice),
     by_key: usage.byKey.map(slice),
     by_user: usage.byUser.map(slice),
     chargeback: usage.chargeback.map((row) => {
-      const [orgId, teamId, projectId, keyId, userId, model] = row.name.split("/");
-      const part = (value: string | undefined) => (value && value !== "-" ? value : null);
+      const parts = chargebackParts(row.name);
       return {
-        org_id: part(orgId),
-        team_id: part(teamId),
-        project_id: part(projectId),
-        key_id: part(keyId),
-        user_id: part(userId),
-        model: part(model),
+        org_id: orNull(parts.orgId),
+        team_id: orNull(parts.teamId),
+        project_id: orNull(parts.projectId),
+        member_id: orNull(parts.memberId),
+        key_id: orNull(parts.keyId),
+        user_id: orNull(parts.userId),
+        model: orNull(parts.model),
         spend: row.spend,
         prompt_tokens: row.prompt,
         completion_tokens: row.completion,
@@ -240,6 +261,7 @@ export function serializeRequestLog(row: RequestLogRow) {
     latency_ms: row.latencyMs,
     key_id: orNull(row.keyId),
     user_id: orNull(row.userId),
+    member_id: orNull(row.memberId),
     team_id: orNull(row.teamId),
     org_id: orNull(row.orgId),
     project_id: orNull(row.projectId),

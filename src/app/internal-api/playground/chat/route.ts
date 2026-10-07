@@ -31,7 +31,7 @@ export async function POST(req: Request) {
   try {
     const body = await readJSON<JsonMap>(req);
     const model = modelOf(body);
-    const principal = withTrace(await sessionPrincipal(session.user), requestPath(req));
+    const principal = withTrace(sessionPrincipal(session.user), requestPath(req));
     allowModel(principal, model);
     await admit(principal);
     const { body: clean, output } = await applyPii(body, principal);

@@ -1,5 +1,5 @@
 import "server-only";
-import { loadStructureAction } from "@/app/(app)/structure/_action";
+import { loadStructureAction } from "@/app/(app)/companies/_action";
 import { notFound, unwrap } from "@/lib/management/http";
 import type { BudgetKind, BudgetView, StructurePayload } from "@/types/structure";
 
@@ -27,7 +27,8 @@ export function budgetHolders(
     ...structure.orgs.map((row) => ({ kind: "org" as const, ...row })),
     ...structure.teams.map((row) => ({ kind: "team" as const, ...row })),
     ...structure.projects.map((row) => ({ kind: "project" as const, ...row })),
-    ...structure.users.map((row) => ({ kind: "user" as const, id: row.id, alias: row.username, budget: row.budget })),
+    ...structure.members.map((row) => ({ kind: "member" as const, ...row })),
+    ...structure.users.map((row) => ({ kind: "user" as const, ...row })),
     ...structure.keys.map((row) => ({ kind: "key" as const, ...row })),
   ];
 }

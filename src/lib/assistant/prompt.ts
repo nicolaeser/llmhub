@@ -65,6 +65,6 @@ export function assistantSystemPrompt(
     "Format with GitHub-flavored Markdown: lists, tables, and fenced code blocks with a language render in the console.",
     language,
     "End with one concrete next step when it helps.",
-    "Do not dump every nav item. Organizations, teams, and projects are optional tenancy, not required to send a first request.",
+    "Do not dump every nav item. Companies, departments, projects, and people are optional tenancy, not required to send a first request.",
   ].join("\n");
 }

@@ -26,10 +26,10 @@ function roundMoney(value: number): number {
   return Math.round(value * 10_000) / 10_000;
 }
 
-function compactRows(rows: SliceRow[], labels: Map<string, string>) {
+function compactRows(rows: SliceRow[], labels: Record<string, string>) {
   return rows.slice(0, TOP_ROWS).map((row) => ({
     id: row.name,
-    label: labels.get(row.name) ?? row.name,
+    label: labels[row.name] ?? row.name,
     spend: roundMoney(row.spend),
     requests: row.requests ?? 0,
     errors: row.errors ?? 0,
@@ -37,34 +37,6 @@ function compactRows(rows: SliceRow[], labels: Map<string, string>) {
     completionTokens: row.completion,
   }));
 }
-
-async function usageLabels(ids: {
-  keys: string[];
-  users: string[];
-  teams: string[];
-  orgs: string[];
-  projects: string[];
-}) {
-  const [keys, users, teams, orgs, projects] = await Promise.all([
-    prisma.virtualKey.findMany({
-      where: { id: { in: ids.keys } },
-      select: { id: true, keyAlias: true, prefix: true },
-    }),
-    prisma.user.findMany({ where: { id: { in: ids.users } }, select: { id: true, username: true } }),
-    prisma.team.findMany({ where: { id: { in: ids.teams } }, select: { id: true, alias: true } }),
-    prisma.organization.findMany({ where: { id: { in: ids.orgs } }, select: { id: true, alias: true } }),
-    prisma.project.findMany({ where: { id: { in: ids.projects } }, select: { id: true, alias: true } }),
-  ]);
-  return {
-    keys: new Map(keys.map((row) => [row.id, row.keyAlias || row.prefix])),
-    users: new Map(users.map((row) => [row.id, row.username])),
-    teams: new Map(teams.map((row) => [row.id, row.alias])),
-    orgs: new Map(orgs.map((row) => [row.id, row.alias])),
-    projects: new Map(projects.map((row) => [row.id, row.alias])),
-  };
-}
-
-const topIds = (rows: SliceRow[]) => rows.slice(0, TOP_ROWS).map((row) => row.name);
 
 export const usageTools = {
   get_overview: defineTool({
@@ -75,54 +47,50 @@ export const usageTools = {
         prisma.providerConnection.count(),
         prisma.modelGroup.count(),
         prisma.virtualKey.count({ where: ownKeysWhere(ctx) }),
-        usageTotals(7, hasPerm(ctx.permissions, PERMISSIONS.SPEND_READ_ALL) ? undefined : ctx.userId),
+        usageTotals(7, {
+          ...(ctx.orgId ? { orgId: ctx.orgId } : {}),
+          ...(hasPerm(ctx.permissions, PERMISSIONS.SPEND_READ_ALL) ? {} : { userId: ctx.userId }),
+        }),
       ]);
       return { result: { providers, models, keys, ...totals } };
     },
   }),
   get_usage: defineTool({
     description:
-      "Spend, tokens, requests, errors, latency, daily series, and top models, keys, users, teams, organizations, and projects for the last N days. Filters narrow the result. Operators without spend:read-all only see their own usage.",
+      "Spend, tokens, requests, errors, latency, daily series, and top models, companies, departments, projects, people, keys, and console users for the last N days. Filters narrow the result. Operators without spend:read-all only see their own internal keys and playground use.",
     input: usageToolInput,
     run: async (args) =>
-      viaAction(loadUsageAction(args), async (usage) => {
-        const labels = await usageLabels({
-          keys: topIds(usage.byKey),
-          users: topIds(usage.byUser),
-          teams: topIds(usage.byTeam),
-          orgs: topIds(usage.byOrg),
-          projects: topIds(usage.byProject),
-        });
-        return {
-          result: {
-            days: usage.days,
-            filters: {
-              model: usage.model,
-              teamId: usage.teamId,
-              orgId: usage.orgId,
-              projectId: usage.projectId,
-              keyId: usage.keyId,
-              userId: usage.userId,
-            },
-            totals: {
-              spend: roundMoney(usage.spend),
-              tokens: usage.tokens,
-              requests: usage.count,
-              errors: usage.errors,
-              rateLimited: usage.rate429,
-              meanLatencyMs: Math.round(usage.latency),
-              p95LatencyMs: usage.p95Latency,
-            },
-            daily: usage.daily.map((day) => ({ ...day, spend: roundMoney(day.spend) })),
-            byModel: compactRows(usage.byModel, new Map()),
-            byKey: compactRows(usage.byKey, labels.keys),
-            byUser: compactRows(usage.byUser, labels.users),
-            byTeam: compactRows(usage.byTeam, labels.teams),
-            byOrg: compactRows(usage.byOrg, labels.orgs),
-            byProject: compactRows(usage.byProject, labels.projects),
+      viaAction(loadUsageAction(args), (usage) => ({
+        result: {
+          days: usage.days,
+          filters: {
+            model: usage.model,
+            orgId: usage.orgId,
+            teamId: usage.teamId,
+            projectId: usage.projectId,
+            memberId: usage.memberId,
+            keyId: usage.keyId,
+            userId: usage.userId,
           },
-        };
-      }),
+          totals: {
+            spend: roundMoney(usage.spend),
+            tokens: usage.tokens,
+            requests: usage.count,
+            errors: usage.errors,
+            rateLimited: usage.rate429,
+            meanLatencyMs: Math.round(usage.latency),
+            p95LatencyMs: usage.p95Latency,
+          },
+          daily: usage.daily.map((day) => ({ ...day, spend: roundMoney(day.spend) })),
+          byModel: compactRows(usage.byModel, {}),
+          byOrg: compactRows(usage.byOrg, usage.names),
+          byTeam: compactRows(usage.byTeam, usage.names),
+          byProject: compactRows(usage.byProject, usage.names),
+          byMember: compactRows(usage.byMember, usage.names),
+          byKey: compactRows(usage.byKey, usage.names),
+          byUser: compactRows(usage.byUser, usage.names),
+        },
+      })),
   }),
   search_logs: defineTool({
     description:
@@ -132,7 +100,7 @@ export const usageTools = {
   }),
   usage_breakdown: defineTool({
     description:
-      "Spend, requests, errors, 429s, tokens, and average latency from the daily usage rollup, grouped by model, team, organization, project, key, or user.",
+      "Spend, requests, errors, 429s, tokens, and average latency from the daily usage rollup, grouped by model, company (org), department (team), project, person (member), key, or console user.",
     input: usageBreakdownToolInput,
     run: async (args, ctx) => ({ result: await usageBreakdown(parseUsageBreakdown(args), ctx) }),
   }),
@@ -157,6 +125,7 @@ export const usageTools = {
       const row = await prisma.requestLog.findFirst({
         where: {
           id,
+          ...(ctx.orgId ? { orgId: ctx.orgId } : {}),
           ...(hasPerm(ctx.permissions, PERMISSIONS.SPEND_READ_ALL) ? {} : { userId: ctx.userId }),
         },
       });
@@ -177,6 +146,7 @@ export const usageTools = {
           deploymentId: row.deploymentId,
           keyId: row.keyId,
           userId: row.userId,
+          memberId: row.memberId,
           teamId: row.teamId,
           orgId: row.orgId,
           projectId: row.projectId,
