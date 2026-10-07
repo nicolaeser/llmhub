@@ -21,14 +21,15 @@ export const PATCH = managementRoute<{ id: string }>(PERMISSIONS.KEYS_MANAGE, as
     where: { id: params.id },
     include: { templates: { select: { templateId: true } } },
   });
-  if (!row || !keyVisibleTo(principal, row.userId)) throw notFound("key");
+  if (!row || !keyVisibleTo(principal, row)) throw notFound("key");
   const current = toKeyView(row);
+  const rebinds = body.project_id !== undefined || body.member_id !== undefined;
   const updated = unwrap(
     await updateKeyAction({
       id: current.token_id,
       alias: body.alias ?? (current.key_alias || current.key_name),
-      teamId: body.team_id === undefined ? current.team_id : (body.team_id ?? ""),
-      projectId: body.project_id === undefined ? current.project_id : (body.project_id ?? ""),
+      projectId: rebinds ? (body.project_id ?? "") : current.project_id,
+      memberId: rebinds ? (body.member_id ?? "") : current.member_id,
       models: body.models ?? current.models,
       templateIds: body.template_ids ?? current.templates,
       rpm: body.rpm_limit ?? current.rpm_limit,

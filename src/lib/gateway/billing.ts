@@ -1,6 +1,7 @@
 import "server-only";
 import prisma from "@/lib/db/prisma";
 import { costOf } from "@/lib/gateway/cost";
+import { priceAt, priceWindowQuery, priceWindowRates } from "@/lib/gateway/price-schedule";
 import { capExceeded, periodElapsed } from "@/lib/gateway/period";
 import { incrementRateWindow } from "@/lib/rate-limit/shared";
 import { money } from "@/lib/utils/money";
@@ -8,7 +9,14 @@ import { ownerId } from "@/lib/gateway/core";
 import { writeRequestLog } from "@/lib/gateway/request-log";
 import { GateError } from "@/lib/gateway/errors";
 import type { Prisma } from "@/generated/prisma/client";
-import type { SpendHolder, BillingGroup, CostRates, Usage, Deployment, Principal } from "@/types/gateway";
+import type {
+  SpendHolder,
+  BillingContext,
+  BillingGroup,
+  Usage,
+  Deployment,
+  Principal,
+} from "@/types/gateway";
 import type { BudgetKind } from "@/types/structure";
 
 const HOLDER_SELECT = {
@@ -34,6 +42,8 @@ function loadHolder(kind: BudgetKind, id: string): Promise<SpendHolder | null> {
       return prisma.virtualKey.findUnique({ where: { id }, select: HOLDER_SELECT });
     case "user":
       return prisma.user.findUnique({ where: { id }, select: HOLDER_SELECT });
+    case "member":
+      return prisma.member.findUnique({ where: { id }, select: HOLDER_SELECT });
     case "project":
       return prisma.project.findUnique({ where: { id }, select: HOLDER_SELECT });
     case "team":
@@ -56,6 +66,9 @@ async function spendAfterReset(kind: BudgetKind, row: SpendHolder, now: Date): P
     case "user":
       await prisma.user.updateMany({ where, data });
       break;
+    case "member":
+      await prisma.member.updateMany({ where, data });
+      break;
     case "project":
       await prisma.project.updateMany({ where, data });
       break;
@@ -73,6 +86,7 @@ export function budgetChain(principal: Principal): { kind: BudgetKind; id: strin
   const chain: { kind: BudgetKind; id: string }[] = [
     { kind: "key", id: principal.key?.token_id ?? "" },
     { kind: "user", id: principal.userId },
+    { kind: "member", id: principal.memberId },
     { kind: "project", id: principal.key?.project_id ?? "" },
     { kind: "team", id: principal.teamId },
     { kind: "org", id: principal.orgId },
@@ -124,10 +138,25 @@ export async function assertRate(principal: Principal): Promise<void> {
   }
 }
 
-async function billingContext(dep: Deployment | null | undefined): Promise<{
-  mode: string;
-  peers: CostRates[];
-}> {
+function groupBilling(group: BillingGroup, at: Date): BillingContext {
+  return {
+    mode: group.billing_mode || "routed",
+    peers: group.deployments,
+    price: priceAt(
+      {
+        price: {
+          cost_input_per_1k: group.price_input_per_1k,
+          cost_output_per_1k: group.price_output_per_1k,
+        },
+        time_zone: group.price_time_zone,
+        windows: group.price_windows,
+      },
+      at,
+    ),
+  };
+}
+
+async function billingContext(dep: Deployment | null | undefined, at: Date): Promise<BillingContext> {
   if (!dep?.id) return { mode: "routed", peers: dep ? [dep] : [] };
   const row = await prisma.deployment.findUnique({
     where: { id: dep.id },
@@ -135,6 +164,10 @@ async function billingContext(dep: Deployment | null | undefined): Promise<{
       group: {
         select: {
           billingMode: true,
+          priceInput: true,
+          priceOutput: true,
+          priceTimeZone: true,
+          priceWindows: priceWindowQuery,
           deployments: { select: { costInput: true, costOutput: true } },
         },
       },
@@ -148,6 +181,17 @@ async function billingContext(dep: Deployment | null | undefined): Promise<{
       cost_input_per_1k: money(item.costInput),
       cost_output_per_1k: money(item.costOutput),
     })),
+    price: priceAt(
+      {
+        price: {
+          cost_input_per_1k: money(group.priceInput),
+          cost_output_per_1k: money(group.priceOutput),
+        },
+        time_zone: group.priceTimeZone,
+        windows: group.priceWindows.map(priceWindowRates),
+      },
+      at,
+    ),
   };
 }
 
@@ -169,22 +213,22 @@ export async function recordUsage(input: {
   const usage = input.usage ?? {};
   const prompt = usage.prompt_tokens ?? 0;
   const completion = usage.completion_tokens ?? 0;
-  const billing = input.group
-    ? {
-        mode: input.group.billing_mode || "routed",
-        peers: input.group.deployments,
-      }
-    : await billingContext(input.deployment);
+  const startedAt = new Date(Date.now() - Math.max(0, input.latencyMs));
+  const billing =
+    input.group && input.group.alias !== "auto"
+      ? groupBilling(input.group, startedAt)
+      : await billingContext(input.deployment, startedAt);
   const cost = costOf(input.deployment, usage, billing);
   const keyId = input.principal.key?.token_id ?? "";
   const userId = input.principal.userId;
   const teamId = input.principal.teamId;
   const orgId = input.principal.orgId;
   const projectId = input.principal.key?.project_id ?? "";
+  const memberId = input.principal.memberId;
 
   const now = new Date();
   const day = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-  const slice = { day, keyId, teamId, orgId, projectId, userId, model: input.model };
+  const slice = { day, keyId, teamId, orgId, projectId, memberId, userId, model: input.model };
   const failed = input.status >= 400 ? 1 : 0;
   const limited = input.status === 429 ? 1 : 0;
   const writes: Prisma.PrismaPromise<unknown>[] = [
@@ -219,6 +263,7 @@ export async function recordUsage(input: {
           teamId,
           orgId,
           projectId,
+          memberId,
           userId,
           model: input.model,
           deployment: input.deployment?.id ?? "",
@@ -234,6 +279,7 @@ export async function recordUsage(input: {
     const increment = { spend: { increment: cost } };
     if (keyId) writes.push(prisma.virtualKey.updateMany({ where: { id: keyId }, data: increment }));
     if (userId) writes.push(prisma.user.updateMany({ where: { id: userId }, data: increment }));
+    if (memberId) writes.push(prisma.member.updateMany({ where: { id: memberId }, data: increment }));
     if (teamId) writes.push(prisma.team.updateMany({ where: { id: teamId }, data: increment }));
     if (orgId) writes.push(prisma.organization.updateMany({ where: { id: orgId }, data: increment }));
     if (projectId) writes.push(prisma.project.updateMany({ where: { id: projectId }, data: increment }));

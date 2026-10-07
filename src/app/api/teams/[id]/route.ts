@@ -1,4 +1,4 @@
-import { deleteNodeAction, saveTeamAction } from "@/app/(app)/structure/_action";
+import { deleteNodeAction, saveTeamAction } from "@/app/(app)/companies/_action";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { managementRoute, readBody, respond, unwrap } from "@/lib/management/http";
 import { serializeTeam } from "@/lib/management/serialize";
@@ -19,7 +19,7 @@ export const PATCH = managementRoute<{ id: string }>(PERMISSIONS.TENANCY_MANAGE,
     await saveTeamAction({
       id: existing.id,
       alias: body.alias ?? existing.alias,
-      orgId: body.org_id ?? existing.orgId,
+      orgId: existing.orgId,
       rpm: body.rpm_limit ?? existing.rpmLimit,
       tpm: body.tpm_limit ?? existing.tpmLimit,
     }),

@@ -22,12 +22,12 @@ test("role management actions are gated on roles:manage", async () => {
   assert.doesNotMatch(source, /revalidatePath|router\.refresh/);
 });
 
-test("structure actions gate tenancy and budget writes", async () => {
+test("company actions gate tenancy and budget writes", async () => {
   const source = await readFile(
-    new URL("../src/app/(app)/structure/_action.ts", import.meta.url),
+    new URL("../src/app/(app)/companies/_action.ts", import.meta.url),
     "utf8",
   );
-  for (const name of ["saveOrgAction", "saveTeamAction", "saveProjectAction", "deleteNodeAction", "placeMemberAction"]) {
+  for (const name of ["saveOrgAction", "saveTeamAction", "saveProjectAction", "saveMemberAction", "deleteNodeAction"]) {
     const start = source.indexOf(`export async function ${name}`);
     assert.notEqual(start, -1, name);
     const next = source.indexOf("\nexport ", start + 1);
@@ -45,25 +45,45 @@ test("structure actions gate tenancy and budget writes", async () => {
   assert.doesNotMatch(source, /revalidatePath|router\.refresh/);
 });
 
-test("joining a team places the user in the team's organization", async () => {
+test("departments, projects, and people stay inside one company", async () => {
   const source = await readFile(
-    new URL("../src/app/(app)/structure/_action.ts", import.meta.url),
+    new URL("../src/app/(app)/companies/_action.ts", import.meta.url),
     "utf8",
   );
-  const start = source.indexOf("export async function placeMemberAction");
-  const fn = source.slice(start, source.indexOf("\nexport ", start + 1));
-  assert.match(fn, /const orgId = team\?\.orgId \?\? wantedOrg/);
-  assert.match(fn, /team\.orgId !== wantedOrg/);
+  assert.match(source, /if \(team\.orgId !== orgId\) throw new Error\("TEAM_NOT_IN_ORG"\)/);
+  for (const name of ["saveTeamAction", "saveProjectAction", "saveMemberAction"]) {
+    const start = source.indexOf(`export async function ${name}`);
+    const fn = source.slice(start, source.indexOf("\nexport ", start + 1));
+    assert.match(fn, /await companyFor\(session, input\.orgId\)/, name);
+    assert.match(fn, /throw new Error\("ORG_LOCKED"\)/, name);
+  }
+  const org = source.slice(source.indexOf("export async function saveOrgAction"));
+  assert.match(org.slice(0, org.indexOf("\nexport ", 1)), /assertPlatform\(session\)/);
+  assert.match(source, /PLATFORM_BUDGETS: readonly BudgetKind\[\] = \["org", "user"\]/);
+  assert.match(source, /inCompany\(session, record\.orgId\)/);
 });
 
-test("keys can only bind to the creator's own team without tenancy:manage", async () => {
+test("keys bind to one project or one person inside the caller's company", async () => {
   const source = await readFile(
     new URL("../src/app/(app)/_action.ts", import.meta.url),
     "utf8",
   );
-  assert.match(source, /TEAM_NOT_MEMBER/);
-  assert.match(source, /team\.id !== session\.user\.teamId/);
-  assert.match(source, /PERMISSIONS\.TENANCY_MANAGE/);
+  assert.match(source, /if \(projectId && memberId\) throw new Error\("KEY_BINDING_CONFLICT"\)/);
+  assert.match(source, /!inCompany\(session, project\.orgId\)/);
+  assert.match(source, /!inCompany\(session, member\.orgId\)/);
+  assert.doesNotMatch(source, /TEAM_NOT_MEMBER/);
+  assert.match(
+    source,
+    /if \(\(projectId \|\| memberId\) && !unchanged && !hasPerm\(session\.permissions, PERMISSIONS\.TENANCY_MANAGE\)\) \{\n\s+throw new Error\("FORBIDDEN"\);/,
+  );
+  assert.match(source, /await keyBinding\(session, input\.projectId, input\.memberId, existing\)/);
+});
+
+test("PATCH /api/keys replaces the whole binding when either reference is sent", async () => {
+  const source = await readFile(new URL("../src/app/api/keys/[id]/route.ts", import.meta.url), "utf8");
+  assert.match(source, /const rebinds = body\.project_id !== undefined \|\| body\.member_id !== undefined;/);
+  assert.match(source, /projectId: rebinds \? \(body\.project_id \?\? ""\) : current\.project_id/);
+  assert.match(source, /memberId: rebinds \? \(body\.member_id \?\? ""\) : current\.member_id/);
 });
 
 test("user console actions are permission-gated and protect the owner", async () => {
@@ -74,7 +94,7 @@ test("user console actions are permission-gated and protect the owner", async ()
   assert.match(actions, /USERS_READ/);
   assert.match(actions, /USERS_MANAGE/);
   assert.match(actions, /USERS_SECURITY/);
-  for (const name of ["createUserAction", "deleteUserAction", "setUserPasswordAction", "assignUserRoleAction", "resetUserTwoFactorAction", "revokeUserSessionsAction"]) {
+  for (const name of ["createUserAction", "deleteUserAction", "setUserPasswordAction", "assignUserAccessAction", "resetUserTwoFactorAction", "revokeUserSessionsAction"]) {
     assert.match(actions, new RegExp(name));
   }
   assert.doesNotMatch(actions, /revalidatePath/);

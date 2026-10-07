@@ -12,9 +12,44 @@ export type SpendHolder = {
   createdAt: Date;
 };
 
+export type PriceWindowRates = CostRates & {
+  start_minute: number;
+  end_minute: number;
+};
+
+export type PriceSchedule = {
+  price: CostRates;
+  time_zone: string;
+  windows: PriceWindowRates[];
+};
+
+export type TokenPricing = {
+  prompt: string;
+  completion: string;
+};
+
+export type ModelPricing = TokenPricing & {
+  schedule?: {
+    time_zone: string;
+    default: TokenPricing;
+    windows: (TokenPricing & { start: string; end: string })[];
+  };
+};
+
 export type BillingGroup = {
+  alias: string;
   billing_mode: string;
+  price_input_per_1k: number;
+  price_output_per_1k: number;
+  price_time_zone: string;
+  price_windows: PriceWindowRates[];
   deployments: CostRates[];
+};
+
+export type BillingContext = {
+  mode: string;
+  peers: CostRates[];
+  price?: CostRates;
 };
 
 export type Entry = { expires: number; body: Uint8Array };
@@ -246,6 +281,7 @@ export type Enterprise = {
   budget_alert_thresholds?: number[];
   registration_enabled?: boolean;
   assistant_model?: string;
+  assistant_model_locked?: boolean;
 };
 
 export type Deployment = {
@@ -263,6 +299,10 @@ export type ModelGroup = {
   alias: string;
   strategy: string;
   billing_mode: string;
+  price_input_per_1k: number;
+  price_output_per_1k: number;
+  price_time_zone: string;
+  price_windows: PriceWindowRates[];
   overflow_group: string;
   num_retries: number;
   fallback_groups: string[];
@@ -277,6 +317,7 @@ export type VirtualKeyView = {
   team_id: string;
   org_id: string;
   project_id: string;
+  member_id: string;
   models: string[];
   templates: string[];
   max_budget: number;
@@ -292,12 +333,29 @@ export type VirtualKeyView = {
   created_at: string;
 };
 
+export type KeyTenancy = {
+  userId: string;
+  memberId: string;
+  projectId: string;
+  teamId: string;
+  orgId: string;
+};
+
+export type KeyBindingRow = {
+  userId: string | null;
+  teamId: string | null;
+  orgId: string | null;
+  projectId: string | null;
+  memberId: string | null;
+};
+
 export type Principal = {
   actor: string;
   key?: VirtualKeyView;
   teamId: string;
   orgId: string;
   userId: string;
+  memberId: string;
   models: string[];
   trace?: RequestTrace;
 };
@@ -319,6 +377,7 @@ export type UsageSlice = {
   teamId: string;
   orgId: string;
   projectId: string;
+  memberId: string;
   userId: string;
   model: string;
   requests: number;
@@ -328,6 +387,16 @@ export type UsageSlice = {
   promptTokens: number;
   completionTokens: number;
   cost: number;
+};
+
+export type ChargebackParts = {
+  orgId: string;
+  teamId: string;
+  projectId: string;
+  memberId: string;
+  keyId: string;
+  userId: string;
+  model: string;
 };
 
 export type SliceRow = {

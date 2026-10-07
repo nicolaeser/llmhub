@@ -4,24 +4,44 @@ import { useState, useTransition } from "react";
 import {
   Button,
   Card,
+  Description,
   Disclosure,
+  FieldError,
   Input,
   Label,
   ListBox,
   Modal,
+  NumberField,
   Select,
   Spinner,
+  Switch,
   TextField,
   toast,
   type useOverlayState,
 } from "@heroui/react";
 import { useTranslations } from "next-intl";
+import { formats } from "@/i18n/formats";
 import { PROVIDER_CATALOG } from "@/lib/gateway/catalog";
 import { createModelGroupAction, updateModelGroupAction } from "@/app/(app)/models/_action";
 import { isActionFail } from "@/lib/http/action-result";
-import type { DeploymentDraft, DiscoveredPrice, Group, ProviderOpt } from "@/types/models";
+import { scheduleOverlaps, validPrice, windowValid } from "@/lib/gateway/price-schedule";
+import type {
+  DeploymentDraft,
+  DiscoveredPrice,
+  Group,
+  PriceWindowDraft,
+  ProviderOpt,
+} from "@/types/models";
+import PriceScheduleFields from "./price-schedule-fields";
 
-const BILLING_MODES = ["routed", "average"] as const;
+const BILLING_MODES = ["routed", "average", "custom"] as const;
+
+type BillingMode = (typeof BILLING_MODES)[number];
+
+function billingModeOf(value: string | undefined): BillingMode {
+  return BILLING_MODES.find((mode) => mode === value) ?? "routed";
+}
+
 
 const STRATEGIES = [
   "weighted_random",
@@ -198,12 +218,24 @@ export default function ModelGroupDialog({
   const [retries, setRetries] = useState(String(editing?.numRetries ?? 2));
   const [overflow, setOverflow] = useState(editing?.overflowGroup ?? "");
   const [fallbacks, setFallbacks] = useState(editing?.fallbackGroups.join(", ") ?? "");
-  const [billingMode, setBillingMode] = useState(
-    editing?.billingMode === "average" ? "average" : "routed",
+  const [enabled, setEnabled] = useState(editing?.enabled ?? true);
+  const [billingMode, setBillingMode] = useState<BillingMode>(billingModeOf(editing?.billingMode));
+  const [priceIn, setPriceIn] = useState(editing?.priceInput ?? 0);
+  const [priceOut, setPriceOut] = useState(editing?.priceOutput ?? 0);
+  const [priceTimeZone, setPriceTimeZone] = useState(editing?.priceTimeZone || "UTC");
+  const [priceWindows, setPriceWindows] = useState<PriceWindowDraft[]>(
+    () => editing?.priceWindows.map((w, i) => ({ ...w, key: i + 1 })) ?? [],
   );
   const [deps, setDeps] = useState<DeploymentDraft[]>(() => draftsOf(editing, providers));
   const [pending, start] = useTransition();
   const mode = editing ? "save" : "create";
+  const customPrice = billingMode === "custom";
+  const pricesValid =
+    !customPrice ||
+    (validPrice(priceIn) &&
+      validPrice(priceOut) &&
+      priceWindows.every(windowValid) &&
+      !scheduleOverlaps(priceWindows));
 
   function setDep(i: number, patch: Partial<DeploymentDraft>) {
     setDeps((cur) =>
@@ -215,8 +247,20 @@ export default function ModelGroupDialog({
     start(async () => {
       const body = {
         alias,
+        enabled,
         strategy,
         billingMode,
+        priceInput: validPrice(priceIn) ? priceIn : undefined,
+        priceOutput: validPrice(priceOut) ? priceOut : undefined,
+        priceTimeZone: customPrice ? priceTimeZone : undefined,
+        priceWindows: customPrice
+          ? priceWindows.map((w) => ({
+              start: w.start,
+              end: w.end,
+              priceInput: w.priceInput,
+              priceOutput: w.priceOutput,
+            }))
+          : undefined,
         numRetries: Number(retries) || 0,
         overflowGroup: overflow,
         fallbackGroups: fallbacks,
@@ -264,12 +308,13 @@ export default function ModelGroupDialog({
                   <TextField
                     fullWidth
                     value={alias}
-                    onChange={setAlias}
+                    onChange={(value) => setAlias(value.toLowerCase())}
                     isDisabled={Boolean(editing) || pending}
                     aria-label={t("fields.alias")}
                   >
                     <Label>{t("fields.alias")}</Label>
                     <Input aria-label={t("fields.alias")} />
+                    <Description>{t("fields.aliasHint")}</Description>
                   </TextField>
                   {first ? (
                     <>
@@ -304,6 +349,86 @@ export default function ModelGroupDialog({
                       )}
                     </>
                   ) : null}
+                  <Select
+                    selectedKey={billingMode}
+                    onSelectionChange={(key) => setBillingMode(billingModeOf(String(key)))}
+                    isDisabled={pending}
+                    aria-label={t("fields.billingMode")}
+                    fullWidth
+                  >
+                    <Label>{t("fields.billingMode")}</Label>
+                    <Select.Trigger>
+                      <Select.Value />
+                      <Select.Indicator />
+                    </Select.Trigger>
+                    <Select.Popover>
+                      <ListBox aria-label={t("fields.billingMode")}>
+                        {BILLING_MODES.map((billing) => (
+                          <ListBox.Item
+                            key={billing}
+                            id={billing}
+                            textValue={t(`billingModes.${billing}`)}
+                          >
+                            {t("billingModeLabel", { mode: billing })}
+                            <ListBox.ItemIndicator />
+                          </ListBox.Item>
+                        ))}
+                      </ListBox>
+                    </Select.Popover>
+                    <Description>{t("billingModeHint", { mode: billingMode })}</Description>
+                  </Select>
+                  {customPrice ? (
+                    <div className="grid gap-3 sm:grid-cols-2 sm:items-start">
+                      <NumberField
+                        fullWidth
+                        value={priceIn}
+                        onChange={setPriceIn}
+                        minValue={0}
+                        formatOptions={formats.number.price}
+                        isInvalid={!validPrice(priceIn)}
+                        isDisabled={pending}
+                      >
+                        <Label>{t("fields.priceIn")}</Label>
+                        <NumberField.Group>
+                          <NumberField.Input />
+                        </NumberField.Group>
+                        {validPrice(priceIn) ? null : <FieldError>{t("priceInvalid")}</FieldError>}
+                      </NumberField>
+                      <NumberField
+                        fullWidth
+                        value={priceOut}
+                        onChange={setPriceOut}
+                        minValue={0}
+                        formatOptions={formats.number.price}
+                        isInvalid={!validPrice(priceOut)}
+                        isDisabled={pending}
+                      >
+                        <Label>{t("fields.priceOut")}</Label>
+                        <NumberField.Group>
+                          <NumberField.Input />
+                        </NumberField.Group>
+                        {validPrice(priceOut) ? null : <FieldError>{t("priceInvalid")}</FieldError>}
+                      </NumberField>
+                      <p className="text-sm text-muted sm:col-span-2">{t("priceHint")}</p>
+                      <PriceScheduleFields
+                        windows={priceWindows}
+                        timeZone={priceTimeZone}
+                        basePrice={{ input: priceIn, output: priceOut }}
+                        isDisabled={pending}
+                        onWindowsChange={setPriceWindows}
+                        onTimeZoneChange={setPriceTimeZone}
+                      />
+                    </div>
+                  ) : null}
+                  <Switch isSelected={enabled} onChange={setEnabled} isDisabled={pending}>
+                    <Switch.Content>
+                      <Switch.Control>
+                        <Switch.Thumb />
+                      </Switch.Control>
+                      <Label>{t("fields.enabled")}</Label>
+                    </Switch.Content>
+                    <Description>{t("fields.enabledHint")}</Description>
+                  </Switch>
                   <Disclosure>
                     <Disclosure.Heading>
                       <Disclosure.Trigger className="flex w-full items-center justify-between text-sm text-muted">
@@ -366,36 +491,6 @@ export default function ModelGroupDialog({
                           <Label>{t("fields.fallbacks")}</Label>
                           <Input aria-label={t("fields.fallbacks")} />
                         </TextField>
-                        <Select
-                          selectedKey={billingMode}
-                          onSelectionChange={(key) => setBillingMode(String(key))}
-                          isDisabled={pending}
-                          aria-label={t("fields.billingMode")}
-                          fullWidth
-                        >
-                          <Label>{t("fields.billingMode")}</Label>
-                          <Select.Trigger>
-                            <Select.Value />
-                            <Select.Indicator />
-                          </Select.Trigger>
-                          <Select.Popover>
-                            <ListBox aria-label={t("fields.billingMode")}>
-                              {BILLING_MODES.map((billing) => (
-                                <ListBox.Item
-                                  key={billing}
-                                  id={billing}
-                                  textValue={t(`billingModes.${billing}`)}
-                                >
-                                  {t("billingModeLabel", { mode: billing })}
-                                  <ListBox.ItemIndicator />
-                                </ListBox.Item>
-                              ))}
-                            </ListBox>
-                          </Select.Popover>
-                        </Select>
-                        <p className="text-sm text-muted">
-                          {t("billingModeHint", { mode: billingMode })}
-                        </p>
                         {deps.map((d, i) => (
                           <Card key={d.id ?? i} variant="secondary">
                             {i > 0 ? (
@@ -496,7 +591,7 @@ export default function ModelGroupDialog({
                   <Button
                     aria-label={t("formSubmit", { mode })}
                     isPending={pending}
-                    isDisabled={!alias.trim()}
+                    isDisabled={!alias.trim() || !pricesValid}
                     onPress={() => save(close)}
                   >
                     {({ isPending }) => (

@@ -31,13 +31,121 @@ export const PII_CATALOG: PIIEntity[] = [
   { id: "IN_AADHAAR", label: "Indian Aadhaar", category: "India", example: "1234 5678 9012", default: false },
   { id: "IN_PASSPORT", label: "Indian passport", category: "India", example: "A1234567", default: false },
   { id: "FI_PERSONAL_IDENTITY_CODE", label: "Finnish personal ID", category: "Finland", example: "131052-308T", default: false },
+  { id: "DE_TAX_ID", label: "German tax ID", category: "Germany", example: "12 345 678 995", default: false },
+  { id: "DE_TAX_NUMBER", label: "German tax number", category: "Germany", example: "12/345/67890", default: false },
+  { id: "DE_VAT_ID", label: "German VAT ID", category: "Germany", example: "DE123456788", default: false },
+  { id: "DE_SOCIAL_SECURITY", label: "German pension insurance number", category: "Germany", example: "12 010180 M 013", default: false },
+  { id: "DE_HEALTH_INSURANCE", label: "German health insurance number", category: "Germany", example: "A123456780", default: false },
+  { id: "DE_ID_CARD", label: "German ID card", category: "Germany", example: "T220001293", default: false },
+  { id: "DE_PASSPORT", label: "German passport", category: "Germany", example: "C01X00T478", default: false },
+  { id: "AT_SOCIAL_SECURITY", label: "Austrian social insurance number", category: "Austria", example: "1237 010180", default: false },
+  { id: "AT_VAT_ID", label: "Austrian VAT ID", category: "Austria", example: "ATU12345675", default: false },
+  { id: "CH_AHV", label: "Swiss AHV number", category: "Switzerland", example: "756.1234.5678.97", default: false },
+  { id: "CH_UID", label: "Swiss business ID", category: "Switzerland", example: "CHE-123.456.788", default: false },
   { id: "JWT", label: "JWT", category: "Credentials", example: "eyJ…", default: true },
   { id: "SECRET", label: "API keys / secrets", category: "Credentials", example: "sk-…", default: true },
+  { id: "PRIVATE_KEY", label: "Private key", category: "Credentials", example: "-----BEGIN PRIVATE KEY-----", default: true },
+  { id: "CONNECTION_STRING", label: "Connection string / DB URL", category: "Credentials", example: "postgres://user:pass@db/app", default: true },
+  { id: "ENV_SECRET", label: "Env / config secret", category: "Credentials", example: "DB_PASSWORD=…", default: true },
 ];
 
 const EMAIL = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi;
-const SECRET =
-  /\b(?:sk-[A-Za-z0-9_-]{8,}|sk-or-v1-[A-Za-z0-9]{16,}|AKIA[0-9A-Z]{16}|ghp_[A-Za-z0-9]{20,}|xox[baprs]-[A-Za-z0-9-]{10,})\b/g;
+const SECRET_TOKENS = [
+  "sk-(?=[\\w.-]{8,})[\\w-]+(?:\\.[\\w-]+)*",
+  "(?:sk|rk)_(?:live|test)_[A-Za-z0-9]{10,}",
+  "whsec_[A-Za-z0-9+/=]{20,}",
+  "(?:AKIA|ASIA|ABIA|ACCA)[0-9A-Z]{16}",
+  "gh[pousr]_[A-Za-z0-9]{20,}",
+  "github_pat_[A-Za-z0-9_]{22,}",
+  "glpat-[A-Za-z0-9_-]{20,}",
+  "xox[abeprs]-[A-Za-z0-9-]{10,}",
+  "xapp-[A-Za-z0-9-]{10,}",
+  "AIza[0-9A-Za-z_-]{35}",
+  "GOCSPX-[A-Za-z0-9_-]{20,}",
+  "ya29\\.[A-Za-z0-9_-]{20,}",
+  "hf_[A-Za-z0-9]{30,}",
+  "npm_[A-Za-z0-9]{36}",
+  "pypi-[A-Za-z0-9_-]{50,}",
+  "SG\\.[A-Za-z0-9_-]{16,}\\.[A-Za-z0-9_-]{16,}",
+  "SK[0-9a-f]{32}",
+  "key-[0-9a-f]{32}",
+  "[0-9a-f]{32}-us\\d{1,2}",
+  "shp(?:at|ca|pa|ss)_[a-fA-F0-9]{32}",
+  "dop_v1_[a-f0-9]{64}",
+  "dapi[0-9a-f]{32}",
+  "gsk_[A-Za-z0-9]{40,}",
+  "xai-[A-Za-z0-9]{40,}",
+  "pplx-[A-Za-z0-9]{40,}",
+  "r8_[A-Za-z0-9]{30,}",
+  "ntn_[A-Za-z0-9]{40,}",
+  "secret_[A-Za-z0-9]{43}",
+  "lin_api_[A-Za-z0-9]{40}",
+  "hv[sb]\\.[A-Za-z0-9_-]{20,}",
+  "dp\\.pt\\.[A-Za-z0-9]{40,}",
+  "PMAK-[a-f0-9]{24}-[a-f0-9]{34}",
+  "ATATT3[A-Za-z0-9_=-]{100,}",
+  "sntrys_[A-Za-z0-9+/=_-]{50,}",
+  "sbp_[a-f0-9]{40}",
+  "\\d{8,10}:AA[A-Za-z0-9_-]{33}",
+  "https://hooks\\.slack\\.com/(?:services|workflows|triggers)/[A-Za-z0-9/_-]+",
+  "https://(?:ptb\\.|canary\\.)?discord(?:app)?\\.com/api/webhooks/\\d+/[A-Za-z0-9_-]+",
+];
+const SECRET = new RegExp(`(?<![\\w-])(?:${SECRET_TOKENS.join("|")})(?![\\w-])`, "g");
+const BEARER = /\bBearer[ \t]+([A-Za-z0-9._~+/-]{16,}=*)/g;
+const BASIC_AUTH = /\b(Authorization:[ \t]*Basic[ \t]+)[A-Za-z0-9+/]{8,}={0,2}/gi;
+const PRIVATE_KEY =
+  /-----BEGIN ((?:[A-Z0-9]+ )*PRIVATE KEY(?: BLOCK)?)-----[\s\S]*?(?:-----END \1-----|(?=["'`]|$))/g;
+const CREDENTIAL_URL =
+  /(?<![\w.+\-/:])(?:jdbc:)?[a-z][a-z0-9+.-]*:\/\/[^\s:/?#@"'<>]*:[^\s/?#@"'<>]+@[^\s"'<>]+/gi;
+const QUERY_CREDENTIAL_URL =
+  /(?<![\w.+\-/:])(?:jdbc:)?[a-z][a-z0-9+.-]*:\/\/[^\s"'<>]{0,2048}?[?&;](?:password|passwd|pwd|pass|sslpassword|secret|client_secret|token|access_token|auth_token|api_key|api-key|apikey|sig)=[^\s"'<>&;]+[^\s"'<>]*/gi;
+const ORACLE_URL = /\bjdbc:oracle:[a-z]+:[^\s/@"'<>]+\/[^\s@"'<>]+@[^\s"'<>]+/gi;
+const KEY_VALUE_CONNECTION =
+  /(?<![\w-])[A-Za-z]\w{0,63}[ \t]*=[^;\r\n"']{0,256}(?:;[ \t]*[A-Za-z]\w{0,63}(?: [A-Z]\w{0,63}){0,3}[ \t]*=[^;\r\n"']{0,256})+;?/g;
+const KEY_VALUE_CREDENTIAL =
+  /(?:^|;)[ \t]*(?:password|pwd|accountkey|sharedaccesskey|sharedaccesssignature)[ \t]*=[ \t]*[^;\s]/i;
+const ASSIGNMENT =
+  /(?<![\w.])([A-Za-z_][\w.-]{0,63})(["']?[ \t]*(?::=|[:=])(?![=>:])[ \t]*)("[^"\n]*"|'[^'\n]*'|[^\s"',;}\]]+)/g;
+const SECRET_NAME_WORDS = new Set([
+  "password",
+  "passwd",
+  "pass",
+  "pwd",
+  "secret",
+  "token",
+  "passphrase",
+  "credential",
+  "credentials",
+  "apikey",
+]);
+const SECRET_KEY_QUALIFIERS = new Set([
+  "api",
+  "access",
+  "secret",
+  "private",
+  "auth",
+  "client",
+  "encryption",
+  "signing",
+  "master",
+  "service",
+  "account",
+  "license",
+  "app",
+  "webhook",
+  "session",
+  "hmac",
+  "jwt",
+  "ssh",
+  "deploy",
+]);
+const VALUE_REFERENCE = /^(?:\$|<|%|\[|\{\{)|\$\{/;
+const TRIVIAL_VALUE = /^(?:\*+|x+|\.+|-+|true|false|null|none|nil|undefined|yes|no|on|off|\d{1,5})$/i;
+const TYPE_WORD =
+  /^(?:string|str|number|int|integer|float|bool|boolean|bytes|any|unknown|object|optional|required|text|varchar|secretstr)$/i;
+const CODE_VALUE = /[()[\]{}<>]|^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)+$/;
+const LINE_INDENT = /[ \t]*(?:-[ \t]+)?["']?$/;
+const LINE_END = /[ \t]*(?:\r?\n|$)/y;
 const SSN = /\b(?!000|666|9\d{2})\d{3}-(?!00)\d{2}-(?!0000)\d{4}\b/g;
 const ITIN = /\b9\d{2}-(?:7\d|8\d|9[0-4])-\d{4}\b/g;
 const JWT = /\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/g;
@@ -55,6 +163,11 @@ const NANP = /^(?:1[ .-]?)?(?:\([2-9]\d{2}\)|[2-9]\d{2})[ .-]?[2-9]\d{2}[ .-]?\d
 const IBAN =
   /\b[A-Z]{2}\d{2}(?:[ ]?[A-Z0-9]{4}){2,7}\b/g;
 const BTC = /\b(?:bc1|[13])[a-zA-HJ-NP-Z0-9]{25,62}\b/g;
+const EVM_ADDRESS = /\b0x[a-fA-F0-9]{40}\b/g;
+const BECH32_ADDRESS =
+  /\b(?:(?:ltc1|cosmos1)[02-9ac-hj-np-z]{38,60}|addr1[02-9ac-hj-np-z]{50,110}|bitcoincash:[qp][02-9ac-hj-np-z]{41})\b/g;
+const BASE58_ADDRESS =
+  /\b(?:[LM][1-9A-HJ-NP-Za-km-z]{26,33}|D[5-9A-HJ-NP-U][1-9A-HJ-NP-Za-km-z]{32}|T[1-9A-HJ-NP-Za-km-z]{33}|r[1-9A-HJ-NP-Za-km-z]{24,34}|[48][0-9AB][1-9A-HJ-NP-Za-km-z]{93})\b/g;
 const CARD = /\b(?:\d[ -]*?){13,19}\b/g;
 const URL =
   /\bhttps?:\/\/[^\s<>"']+/gi;
@@ -80,6 +193,18 @@ const IN_PAN = /\b[A-Z]{5}\d{4}[A-Z]\b/g;
 const IN_AADHAAR = /\b\d{4} \d{4} \d{4}\b/g;
 const IN_PASS = /\b[A-Z]\d{7}\b/g;
 const FI_HETU = /\b\d{6}[-+A]\d{3}[0-9A-Y]\b/gi;
+const DE_TAX_ID = /(?<![\w+]|\+[\d ]{0,20})[1-9]\d(?:[ ]?\d{3}){3}(?!\w)/g;
+const DE_TAX_NUMBER = /(?<![\w/])\d{2,3}\/\d{3,4}\/\d{4,5}(?![\w/])/g;
+const DE_VAT = /\bDE[ ]?\d{3}[ ]?\d{3}[ ]?\d{3}\b/g;
+const DE_PENSION =
+  /\b\d{2}[ ]?(?:0[1-9]|[12]\d|3[01])(?:0[1-9]|1[0-2])\d{2}[ ]?[A-Z][ ]?\d{2}[ ]?\d\b/g;
+const DE_HEALTH = /\b[A-Z]\d{9}\b/g;
+const DE_ID_CARD = /\b[LMNPRTVWXY][CFGHJKLMNPRTVWXYZ\d]{8}\d?\b/g;
+const DE_PASSPORT = /\b[CFGHJK][CFGHJKLMNPRTVWXYZ\d]{8}\d?\b/g;
+const AT_SVNR = /\b[1-9]\d{3}[ ]?(?:0[1-9]|[12]\d|3[01])(?:0[1-9]|1[0-2])\d{2}\b/g;
+const AT_VAT = /\bATU[ ]?\d{8}\b/g;
+const CH_AHV = /\b756[. ]?\d{4}[. ]?\d{4}[. ]?\d{2}\b/g;
+const CH_UID = /\bCHE[- ]?\d{3}[. ]?\d{3}[. ]?\d{3}\b/g;
 
 function luhnOk(digits: string): boolean {
   let sum = 0;
@@ -140,13 +265,223 @@ function replaceCards(text: string): string {
   });
 }
 
+function replaceValid(text: string, pattern: RegExp, id: string, valid: (match: string) => boolean): string {
+  return text.replace(pattern, (match) => (valid(match) ? `[${id}]` : match));
+}
+
+function keepTrailingPunctuation(match: string, id: string): string {
+  const trail = /[.,;:!?)\]}]+$/.exec(match)?.[0] ?? "";
+  return `[${id}]${trail}`;
+}
+
+function replaceSecrets(text: string): string {
+  return text
+    .replace(SECRET, "[SECRET]")
+    .replace(BEARER, (match, token: string) =>
+      /\d/.test(token) || token.length >= 32 ? match.replace(token, "[SECRET]") : match,
+    )
+    .replace(BASIC_AUTH, "$1[SECRET]");
+}
+
+function replaceConnections(text: string): string {
+  return text
+    .replace(ORACLE_URL, (match) => keepTrailingPunctuation(match, "CONNECTION_STRING"))
+    .replace(CREDENTIAL_URL, (match) => keepTrailingPunctuation(match, "CONNECTION_STRING"))
+    .replace(QUERY_CREDENTIAL_URL, (match) => keepTrailingPunctuation(match, "CONNECTION_STRING"))
+    .replace(KEY_VALUE_CONNECTION, (match) =>
+      KEY_VALUE_CREDENTIAL.test(match) ? keepTrailingPunctuation(match, "CONNECTION_STRING") : match,
+    );
+}
+
+function nameWords(name: string): string[] {
+  return name
+    .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter(Boolean);
+}
+
+function isTokenLike(value: string): boolean {
+  return value.length >= 20 && /^[\w-]+$/.test(value) && /\d/.test(value) && /[A-Za-z]/.test(value);
+}
+
+function isSecretName(name: string, value: string): boolean {
+  if (/^PWD$/i.test(name)) return false;
+  const words = nameWords(name);
+  const last = words.at(-1) ?? "";
+  if (SECRET_NAME_WORDS.has(last)) return true;
+  return last === "key" && (SECRET_KEY_QUALIFIERS.has(words.at(-2) ?? "") || isTokenLike(value));
+}
+
+function looksLikeSecret(value: string): boolean {
+  return value.length >= 6 && /[\d\W_]/.test(value);
+}
+
+function isLineStart(text: string, offset: number): boolean {
+  const indent = LINE_INDENT.exec(text.slice(Math.max(0, offset - 64), offset))?.[0] ?? "";
+  const start = offset - indent.length;
+  return start === 0 || text[start - 1] === "\n";
+}
+
+function isLineEnd(text: string, end: number): boolean {
+  LINE_END.lastIndex = end;
+  return LINE_END.test(text);
+}
+
+function replaceAssignments(text: string): string {
+  return text.replace(
+    ASSIGNMENT,
+    (match, name: string, assign: string, value: string, offset: number) => {
+      const quote = /^["']/.test(value) ? value[0]! : "";
+      const trail = quote ? "" : (/[.!?:]+$/.exec(value)?.[0] ?? "");
+      const inner = quote ? value.slice(1, -1) : value.slice(0, value.length - trail.length);
+      if (!inner || VALUE_REFERENCE.test(inner) || TRIVIAL_VALUE.test(inner)) return match;
+      if (!isSecretName(name, inner) || TYPE_WORD.test(inner)) return match;
+      if (!quote && CODE_VALUE.test(inner)) return match;
+      const envStyle = assign === "=";
+      const yamlStyle =
+        assign.trim() === ":" && isLineStart(text, offset) && isLineEnd(text, offset + match.length);
+      if (!quote && !envStyle && !yamlStyle && !looksLikeSecret(inner)) return match;
+      return `${name}${assign}${quote}[ENV_SECRET]${quote}${trail}`;
+    },
+  );
+}
+
+function hasBase58Mix(value: string): boolean {
+  return /\d/.test(value) && /[A-Z]/.test(value) && /[a-z]/.test(value);
+}
+
+function replaceCrypto(text: string): string {
+  return text
+    .replace(BTC, "[CRYPTO]")
+    .replace(EVM_ADDRESS, "[CRYPTO]")
+    .replace(BECH32_ADDRESS, "[CRYPTO]")
+    .replace(BASE58_ADDRESS, (match) => (hasBase58Mix(match) ? "[CRYPTO]" : match));
+}
+
+function digitsOf(value: string): string {
+  return value.replace(/\D/g, "");
+}
+
+function digitSum(value: number): number {
+  return Math.floor(value / 10) + (value % 10);
+}
+
+function mod11x10(digits: string): number {
+  let product = 10;
+  for (const char of digits) {
+    const sum = (Number(char) + product) % 10 || 10;
+    product = (sum * 2) % 11;
+  }
+  return (11 - product) % 10;
+}
+
+function isDeTaxId(raw: string): boolean {
+  const digits = digitsOf(raw);
+  if (digits.length !== 11) return false;
+  const head = digits.slice(0, 10);
+  const counts = new Map<string, number>();
+  for (const char of head) counts.set(char, (counts.get(char) ?? 0) + 1);
+  const repeated = [...counts.values()].filter((count) => count > 1);
+  if (repeated.length !== 1 || repeated[0]! > 3 || /(\d)\1\1/.test(head)) return false;
+  return mod11x10(head) === Number(digits[10]);
+}
+
+function isDeTaxNumber(raw: string): boolean {
+  const length = digitsOf(raw).length;
+  return length === 10 || length === 11;
+}
+
+function isDeVatId(raw: string): boolean {
+  const digits = digitsOf(raw);
+  return mod11x10(digits.slice(0, 8)) === Number(digits[8]);
+}
+
+function isDePensionNumber(raw: string): boolean {
+  const compact = raw.replace(/ /g, "");
+  const letter = String(compact.charCodeAt(8) - 64).padStart(2, "0");
+  const digits = `${compact.slice(0, 8)}${letter}${compact.slice(9, 11)}`;
+  const weights = [2, 1, 2, 5, 7, 1, 2, 1, 2, 1, 2, 1];
+  const sum = weights.reduce((acc, weight, i) => acc + digitSum(weight * Number(digits[i])), 0);
+  return sum % 10 === Number(compact[11]);
+}
+
+function isDeHealthInsuranceNumber(raw: string): boolean {
+  const digits = `${String(raw.charCodeAt(0) - 64).padStart(2, "0")}${raw.slice(1, 9)}`;
+  const sum = [...digits].reduce((acc, char, i) => acc + digitSum(Number(char) * (i % 2 ? 2 : 1)), 0);
+  return sum % 10 === Number(raw[9]);
+}
+
+function icaoCheckDigit(value: string): number {
+  const weights = [7, 3, 1];
+  let sum = 0;
+  for (let i = 0; i < value.length; i++) {
+    const char = value[i]!;
+    sum += (/\d/.test(char) ? Number(char) : char.charCodeAt(0) - 55) * weights[i % 3]!;
+  }
+  return sum % 10;
+}
+
+function isDeDocumentNumber(raw: string): boolean {
+  if (!/\d/.test(raw)) return false;
+  return raw.length === 9 || icaoCheckDigit(raw.slice(0, 9)) === Number(raw[9]);
+}
+
+function isAtSocialSecurityNumber(raw: string): boolean {
+  const digits = digitsOf(raw);
+  const weights = [3, 7, 9, 0, 5, 8, 4, 2, 1, 6];
+  const check = weights.reduce((acc, weight, i) => acc + weight * Number(digits[i]), 0) % 11;
+  return check !== 10 && check === Number(digits[3]);
+}
+
+function isAtVatId(raw: string): boolean {
+  const digits = digitsOf(raw);
+  let sum = 0;
+  for (let i = 0; i < 7; i++) sum += digitSum(Number(digits[i]) * (i % 2 ? 2 : 1));
+  return (10 - ((sum + 4) % 10)) % 10 === Number(digits[7]);
+}
+
+function isChAhv(raw: string): boolean {
+  const digits = digitsOf(raw);
+  const sum = [...digits.slice(0, 12)].reduce((acc, char, i) => acc + Number(char) * (i % 2 ? 3 : 1), 0);
+  return (10 - (sum % 10)) % 10 === Number(digits[12]);
+}
+
+function isChUid(raw: string): boolean {
+  const digits = digitsOf(raw);
+  const weights = [5, 4, 3, 2, 7, 6, 5, 4];
+  const rest = weights.reduce((acc, weight, i) => acc + weight * Number(digits[i]), 0) % 11;
+  const check = rest === 0 ? 0 : 11 - rest;
+  return check !== 10 && check === Number(digits[8]);
+}
+
 const RULES: Rule[] = [
-  { id: "SECRET", apply: (t) => t.replace(SECRET, "[SECRET]") },
+  { id: "PRIVATE_KEY", apply: (t) => t.replace(PRIVATE_KEY, "[PRIVATE_KEY]") },
+  { id: "CONNECTION_STRING", apply: replaceConnections },
   { id: "JWT", apply: (t) => t.replace(JWT, "[JWT]") },
+  { id: "SECRET", apply: replaceSecrets },
+  { id: "ENV_SECRET", apply: replaceAssignments },
   { id: "EMAIL_ADDRESS", apply: (t) => t.replace(EMAIL, "[EMAIL_ADDRESS]") },
+  { id: "DE_TAX_ID", apply: (t) => replaceValid(t, DE_TAX_ID, "DE_TAX_ID", isDeTaxId) },
+  { id: "DE_TAX_NUMBER", apply: (t) => replaceValid(t, DE_TAX_NUMBER, "DE_TAX_NUMBER", isDeTaxNumber) },
+  { id: "DE_VAT_ID", apply: (t) => replaceValid(t, DE_VAT, "DE_VAT_ID", isDeVatId) },
+  { id: "DE_SOCIAL_SECURITY", apply: (t) => replaceValid(t, DE_PENSION, "DE_SOCIAL_SECURITY", isDePensionNumber) },
+  {
+    id: "DE_HEALTH_INSURANCE",
+    apply: (t) => replaceValid(t, DE_HEALTH, "DE_HEALTH_INSURANCE", isDeHealthInsuranceNumber),
+  },
+  { id: "DE_ID_CARD", apply: (t) => replaceValid(t, DE_ID_CARD, "DE_ID_CARD", isDeDocumentNumber) },
+  { id: "DE_PASSPORT", apply: (t) => replaceValid(t, DE_PASSPORT, "DE_PASSPORT", isDeDocumentNumber) },
+  {
+    id: "AT_SOCIAL_SECURITY",
+    apply: (t) => replaceValid(t, AT_SVNR, "AT_SOCIAL_SECURITY", isAtSocialSecurityNumber),
+  },
+  { id: "AT_VAT_ID", apply: (t) => replaceValid(t, AT_VAT, "AT_VAT_ID", isAtVatId) },
+  { id: "CH_AHV", apply: (t) => replaceValid(t, CH_AHV, "CH_AHV", isChAhv) },
+  { id: "CH_UID", apply: (t) => replaceValid(t, CH_UID, "CH_UID", isChUid) },
   { id: "CREDIT_CARD", apply: replaceCards },
   { id: "IBAN_CODE", apply: (t) => t.replace(IBAN, "[IBAN_CODE]") },
-  { id: "CRYPTO", apply: (t) => t.replace(BTC, "[CRYPTO]") },
+  { id: "CRYPTO", apply: replaceCrypto },
   { id: "IP_ADDRESS", apply: replaceIps },
   { id: "PHONE_NUMBER", apply: replacePhones },
   { id: "US_SSN", apply: (t) => t.replace(SSN, "[US_SSN]") },

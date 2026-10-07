@@ -10,6 +10,7 @@ import {
   asStringArray,
   asStringMap,
 } from "@/lib/gateway/core";
+import { modelAlias } from "@/lib/gateway/model-alias";
 import { WEBHOOK_EVENTS } from "@/lib/gateway/webhook-events";
 import type {
   AlertWebhook,
@@ -47,6 +48,7 @@ const DEFAULT_ENTERPRISE: Enterprise = {
   log_content: true,
   registration_enabled: false,
   assistant_model: "",
+  assistant_model_locked: false,
   pii: DEFAULT_PII,
   budget_alert_thresholds: [50, 80, 100],
   oidc: {
@@ -114,7 +116,8 @@ export function normalizeEnterprise(raw: unknown): Enterprise {
     log_archive: asBool(rec.log_archive, false),
     log_content: asBool(rec.log_content, true),
     registration_enabled: asBool(rec.registration_enabled, false),
-    assistant_model: asString(rec.assistant_model),
+    assistant_model: modelAlias(asString(rec.assistant_model)),
+    assistant_model_locked: asBool(rec.assistant_model_locked, false),
     oidc: normalizeOidc(rec.oidc),
     pii: normalizePii(rec.pii ?? DEFAULT_PII),
     s3: normalizeS3(rec.s3),

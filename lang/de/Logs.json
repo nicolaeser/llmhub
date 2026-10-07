@@ -17,7 +17,7 @@
     "actor": "Akteur",
     "action": "Aktion",
     "object": "Objekt",
-    "org": "Organisation",
+    "org": "Unternehmen",
     "project": "Projekt",
     "cost": "Kosten",
     "changes": "Änderungen",
@@ -69,8 +69,9 @@
     "yesNo": "{value, select, true {Ja} other {Nein}}",
     "tag": "Tag",
     "key": "API-Key",
-    "user": "Benutzer",
-    "team": "Team",
+    "user": "Konsolen-Benutzer",
+    "member": "Person",
+    "team": "Abteilung",
     "privacy": "Datenschutz",
     "piiFilter": "Prompt-Filter",
     "piiMode": "{mode, select, mask {Vor dem Modell maskiert} block {Vor dem Modell blockiert} other {Nicht gefiltert}}",
@@ -82,7 +83,7 @@
     "requestJson": "Anfrage-JSON",
     "responseJson": "Antwort-JSON",
     "noPermission": "Zum Lesen von Prompts und Antworten brauchst du die Berechtigung Anfrageinhalte ansehen.",
-    "contentMissing": "{reason, select, gateway {Die Inhaltsprotokollierung war für das Gateway ausgeschaltet.} user {Die Inhaltsprotokollierung ist für diesen Benutzer ausgeschaltet.} key {Die Inhaltsprotokollierung ist für diesen API-Key ausgeschaltet.} other {Für diese Anfrage sind keine Inhalte gespeichert.}}",
+    "contentMissing": "{reason, select, gateway {Die Inhaltsprotokollierung war für das Gateway ausgeschaltet.} user {Die Inhaltsprotokollierung ist für diesen Konsolen-Benutzer ausgeschaltet.} member {Die Inhaltsprotokollierung ist für diese Person ausgeschaltet.} key {Die Inhaltsprotokollierung ist für diesen API-Key ausgeschaltet.} other {Für diese Anfrage sind keine Inhalte gespeichert.}}",
     "truncated": "Lange Werte wurden vor dem Speichern gekürzt.",
     "noText": "Kein lesbarer Text. Sieh dir die JSON-Tabs an.",
     "noJson": "Nichts gespeichert.",
@@ -90,6 +91,11 @@
     "reasoning": "Denkprozess",
     "toolCall": "Tool-Aufruf {name}",
     "toolResult": "Tool-Ergebnis",
-    "media": "{media, select, image {Bild} file {Datei} audio {Audio} other {Anhang}}"
+    "media": "{media, select, image {Bild} file {Datei} audio {Audio} other {Anhang}}",
+    "export": "Exportieren",
+    "exportFormat": "{format, select, pdf {PDF} md {Markdown} other {JSON}}",
+    "markdown": "Markdown darstellen",
+    "generated": "Erstellt am {at, date, zoned}",
+    "page": "Seite {page, number, integer} von {total, number, integer}"
   }
 }

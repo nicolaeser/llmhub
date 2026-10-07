@@ -1,10 +1,11 @@
 import { z } from "zod";
+import { modelAlias } from "@/lib/gateway/model-alias";
 import { DATA_REGIONS } from "@/lib/gateway/model-policy";
 
 const templateFields = {
   name: z.string().trim().min(1).max(80),
   description: z.string().trim().max(300).default(""),
-  models: z.array(z.string().trim().min(1).max(200)).max(500).default([]),
+  models: z.array(z.string().trim().min(1).max(200).transform(modelAlias)).max(500).default([]),
   patterns: z.array(z.string().trim().min(1).max(200)).max(50).default([]),
   providerIds: z.array(z.string().trim().min(1).max(64)).max(100).default([]),
   regions: z.array(z.enum(DATA_REGIONS)).max(DATA_REGIONS.length).default([]),

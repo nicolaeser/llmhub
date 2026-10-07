@@ -17,7 +17,7 @@
     "actor": "Actor",
     "action": "Action",
     "object": "Object",
-    "org": "Organization",
+    "org": "Company",
     "project": "Project",
     "cost": "Cost",
     "changes": "Changes",
@@ -69,8 +69,9 @@
     "yesNo": "{value, select, true {Yes} other {No}}",
     "tag": "Tag",
     "key": "API key",
-    "user": "User",
-    "team": "Team",
+    "user": "Console user",
+    "member": "Person",
+    "team": "Department",
     "privacy": "Privacy",
     "piiFilter": "Prompt filter",
     "piiMode": "{mode, select, mask {Masked before the model} block {Blocked before the model} other {Not filtered}}",
@@ -82,7 +83,7 @@
     "requestJson": "Request JSON",
     "responseJson": "Response JSON",
     "noPermission": "You need the View request content permission to read prompts and responses.",
-    "contentMissing": "{reason, select, gateway {Content logging was turned off for the gateway.} user {Content logging is turned off for this user.} key {Content logging is turned off for this API key.} other {No content is stored for this request.}}",
+    "contentMissing": "{reason, select, gateway {Content logging was turned off for the gateway.} user {Content logging is turned off for this console user.} member {Content logging is turned off for this person.} key {Content logging is turned off for this API key.} other {No content is stored for this request.}}",
     "truncated": "Long values were shortened before they were stored.",
     "noText": "No readable text. Check the JSON tabs.",
     "noJson": "Nothing stored.",
@@ -90,6 +91,11 @@
     "reasoning": "Reasoning",
     "toolCall": "Tool call {name}",
     "toolResult": "Tool result",
-    "media": "{media, select, image {Image} file {File} audio {Audio} other {Attachment}}"
+    "media": "{media, select, image {Image} file {File} audio {Audio} other {Attachment}}",
+    "export": "Export",
+    "exportFormat": "{format, select, pdf {PDF} md {Markdown} other {JSON}}",
+    "markdown": "Render Markdown",
+    "generated": "Generated {at, date, zoned}",
+    "page": "Page {page, number, integer} of {total, number, integer}"
   }
 }

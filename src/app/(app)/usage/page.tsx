@@ -20,6 +20,7 @@ import PageHeader from "@/components/console/page-header";
 import StatCard from "@/components/console/stat-card";
 import FilterSelect from "./_components/filter-select";
 import UsageCharts from "./_components/usage-charts";
+import type { SliceRow } from "@/types/gateway";
 import type { OkStats, UsageQuery } from "@/types/usage";
 
 const RANGES = [7, 14, 30, 90] as const;
@@ -30,6 +31,7 @@ const INITIAL_QUERY: UsageQuery = {
   teamId: "",
   orgId: "",
   projectId: "",
+  memberId: "",
   keyId: "",
   userId: "",
 };
@@ -40,6 +42,7 @@ function chargebackHref(query: UsageQuery) {
   if (query.teamId) params.set("teamId", query.teamId);
   if (query.orgId) params.set("orgId", query.orgId);
   if (query.projectId) params.set("projectId", query.projectId);
+  if (query.memberId) params.set("memberId", query.memberId);
   if (query.keyId) params.set("keyId", query.keyId);
   if (query.userId) params.set("userId", query.userId);
   return `/internal-api/usage/chargeback?${params}`;
@@ -93,22 +96,52 @@ export default function UsagePage() {
     );
   }
 
+  const label = (id: string) => (id === "unassigned" ? "" : (stats.names[id] ?? id));
+  const options = (ids: string[]) => ids.map((id) => ({ id, label: label(id) || id }));
+  const named = (rows: SliceRow[]) => rows.map((row) => ({ ...row, name: label(row.name) }));
   const tenantFilters = [
-    { key: "model" as const, label: t("group.model"), options: stats.models },
-    { key: "teamId" as const, label: t("group.team"), options: stats.teams },
-    { key: "orgId" as const, label: t("group.org"), options: stats.orgs },
     {
-      key: "projectId" as const,
-      label: t("group.project"),
-      options: stats.projects,
+      key: "model" as const,
+      label: t("group.model"),
+      options: stats.models.map((id) => ({ id, label: id })),
     },
-    { key: "keyId" as const, label: t("group.key"), options: stats.keys },
-    { key: "userId" as const, label: t("group.user"), options: stats.users },
+    { key: "orgId" as const, label: t("group.org"), options: options(stats.orgs) },
+    { key: "teamId" as const, label: t("group.team"), options: options(stats.teams) },
+    { key: "projectId" as const, label: t("group.project"), options: options(stats.projects) },
+    { key: "memberId" as const, label: t("group.member"), options: options(stats.members) },
+    { key: "keyId" as const, label: t("group.key"), options: options(stats.keys) },
+    { key: "userId" as const, label: t("group.user"), options: options(stats.users) },
   ];
 
   return (
     <div>
-      <PageHeader title={t("title")} subtitle={t("subtitle")} />
+      <PageHeader
+        title={t("title")}
+        subtitle={t("subtitle")}
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant="secondary"
+              aria-label={t("exportPdf")}
+              isPending={pending}
+              onPress={() => {
+                const link = document.createElement("a");
+                const params = new URLSearchParams({ days: String(query.days) });
+                if (query.model) params.set("model", query.model);
+                link.href = `/internal-api/usage/export?${params}`;
+                link.click();
+              }}
+            >
+              <Download size={14} aria-hidden />
+              {t("exportPdf")}
+            </Button>
+            <a href={chargebackHref(query)} className={buttonVariants({ variant: "secondary" })}>
+              <Download size={14} aria-hidden />
+              {t("chargeback")}
+            </a>
+          </div>
+        }
+      />
       <div className="mb-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         <Select
           selectedKey={String(query.days)}
@@ -144,27 +177,6 @@ export default function UsagePage() {
             onChange={(next) => apply({ [filter.key]: next })}
           />
         ))}
-        <div className="flex flex-wrap items-center gap-2 self-end">
-          <Button
-            variant="secondary"
-            aria-label={t("exportPdf")}
-            isPending={pending}
-            onPress={() => {
-              const link = document.createElement("a");
-              const params = new URLSearchParams({ days: String(query.days) });
-              if (query.model) params.set("model", query.model);
-              link.href = `/internal-api/usage/export?${params}`;
-              link.click();
-            }}
-          >
-            <Download size={14} aria-hidden />
-            {t("exportPdf")}
-          </Button>
-          <a href={chargebackHref(query)} className={buttonVariants({ variant: "secondary" })}>
-            <Download size={14} aria-hidden />
-            {t("chargeback")}
-          </a>
-        </div>
       </div>
       <p className="sr-only">
         {t("summary", {
@@ -206,9 +218,10 @@ export default function UsagePage() {
       <UsageCharts
         daily={stats.daily}
         byModel={stats.byModel}
-        byTeam={stats.byTeam}
-        byOrg={stats.byOrg}
-        byProject={stats.byProject}
+        byTeam={named(stats.byTeam)}
+        byOrg={named(stats.byOrg)}
+        byProject={named(stats.byProject)}
+        byMember={named(stats.byMember)}
         healthByModel={stats.healthByModel}
         requests={stats.count}
         errors={stats.errors}

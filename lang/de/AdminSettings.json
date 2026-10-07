@@ -59,6 +59,9 @@
     "title": "Assistant",
     "subtitle": "Der Konsolen-Assistant läuft auf einem deiner Gateway-Modelle und wird wie jede andere Anfrage abgerechnet.",
     "model": "Standardmodell",
-    "none": "Kein Standard (im Assistant wählen)"
+    "none": "Kein Standard (im Assistant wählen)",
+    "lock": "Dieses Modell erzwingen",
+    "lockHint": "{state, select, missing {Wähle zuerst ein Standardmodell.} other {Niemand kann den Assistant auf ein anderes Modell umstellen.}}",
+    "toolsHint": "Welche Werkzeuge der Assistant nutzen darf, legst du pro Rolle unter <link>Rollen</link> fest."
   }
 }

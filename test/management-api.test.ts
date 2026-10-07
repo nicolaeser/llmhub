@@ -19,6 +19,7 @@ import {
   createManagementKeySchema,
   logsQuerySchema,
   modelAliasCreateSchema,
+  modelAliasUpdateSchema,
   teamUpdateSchema,
 } from "@/schemas/management";
 import type { AuthenticatedSession, Permission } from "@/types/auth";
@@ -148,6 +149,19 @@ test("request bodies are strict, typed, and reported with JSON pointers", async 
   assert.equal(form instanceof ApiProblem && form.code, "UNSUPPORTED_MEDIA_TYPE");
 
   assert.equal(modelAliasCreateSchema.safeParse({ alias: "a", strategy: "random" }).success, false);
+  const priced = modelAliasCreateSchema.parse({ alias: "a", billing_mode: "custom", price_input_per_1k: 0.002 });
+  assert.deepEqual([priced.enabled, priced.price_input_per_1k, priced.price_output_per_1k], [true, 0.002, 0]);
+  assert.equal(modelAliasCreateSchema.safeParse({ alias: "a", price_output_per_1k: -1 }).success, false);
+  assert.equal(modelAliasUpdateSchema.safeParse({ enabled: false }).success, true);
+  const night = { start: "22:00", end: "06:00", price_input_per_1k: 0.001, price_output_per_1k: 0.003 };
+  assert.equal(
+    modelAliasUpdateSchema.safeParse({ price_time_zone: "Europe/Berlin", price_schedule: [night] }).success,
+    true,
+  );
+  assert.equal(modelAliasUpdateSchema.safeParse({ price_time_zone: "Mars/Olympus" }).success, false);
+  assert.equal(modelAliasUpdateSchema.safeParse({ price_schedule: [{ ...night, start: "25:00" }] }).success, false);
+  assert.equal(priced.price_time_zone, "UTC");
+  assert.deepEqual(priced.price_schedule, []);
   assert.equal(teamUpdateSchema.safeParse({}).success, true);
   assert.equal(budgetUpdateSchema.safeParse({ max_budget: 10, budget_duration: "30d" }).success, true);
   assert.equal(budgetUpdateSchema.safeParse({ max_budget: 10, budget_duration: "fortnight" }).success, false);
@@ -174,6 +188,7 @@ test("serializers expose snake_case resources with nulls for unset references", 
     team_id: "",
     org_id: "",
     project_id: "",
+    member_id: "m1",
     models: ["gpt"],
     templates: [],
     max_budget: 0,
@@ -190,6 +205,7 @@ test("serializers expose snake_case resources with nulls for unset references", 
   });
   assert.equal(key.object, "api_key");
   assert.equal(key.team_id, null);
+  assert.equal(key.member_id, "m1");
   assert.equal(key.expires_at, null);
   assert.equal("key" in key, false);
   const usage = serializeUsage({
@@ -198,6 +214,7 @@ test("serializers expose snake_case resources with nulls for unset references", 
     teamId: "t1",
     orgId: "",
     projectId: "",
+    memberId: "",
     keyId: "",
     userId: "",
     spend: 2,
@@ -212,9 +229,10 @@ test("serializers expose snake_case resources with nulls for unset references", 
     byTeam: [],
     byOrg: [],
     byProject: [],
+    byMember: [],
     byKey: [],
     byUser: [],
-    chargeback: [{ name: "-/t1/-/k1/u1/gpt", spend: 2, prompt: 6, completion: 4 }],
+    chargeback: [{ name: "-/t1/-/m1/k1/-/gpt", spend: 2, prompt: 6, completion: 4 }],
   });
   assert.deepEqual(usage.filters.team_id, "t1");
   assert.equal(usage.totals.requests, 3);
@@ -222,8 +240,9 @@ test("serializers expose snake_case resources with nulls for unset references", 
     org_id: null,
     team_id: "t1",
     project_id: null,
+    member_id: "m1",
     key_id: "k1",
-    user_id: "u1",
+    user_id: null,
     model: "gpt",
     spend: 2,
     prompt_tokens: 6,

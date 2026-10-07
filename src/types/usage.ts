@@ -10,9 +10,12 @@ export type UsageQuery = {
   teamId: string;
   orgId: string;
   projectId: string;
+  memberId: string;
   keyId: string;
   userId: string;
 };
+
+export type FilterOption = { id: string; label: string };
 
 export type TipItem = {
   name?: unknown;

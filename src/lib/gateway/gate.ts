@@ -8,6 +8,7 @@ import { assertBudget, assertRate, recordUsage } from "@/lib/gateway/billing";
 import { asRecord, isRouterError, newRequestId } from "@/lib/gateway/core";
 import { anthropicErrorBody, GateError, openAIErrorBody } from "@/lib/gateway/errors";
 import { logger } from "@/lib/logging/logger";
+import { modelAlias } from "@/lib/gateway/model-alias";
 import { aliasChain } from "@/lib/gateway/runtime";
 import { NextResponse } from "next/server";
 import type { JsonMap, Principal } from "@/types/gateway";
@@ -88,7 +89,7 @@ export async function admit(principal: Principal): Promise<void> {
 export function modelPermitted(principal: Principal, model: string): boolean {
   const allowed = principal.models;
   if (!allowed.length && !principal.key?.templates.length) return true;
-  return allowed.includes("*") || allowed.includes(model);
+  return allowed.includes("*") || allowed.includes(modelAlias(model));
 }
 
 export function allowModel(principal: Principal, model: string): void {
@@ -158,7 +159,7 @@ export async function readBody(req: Request): Promise<JsonMap> {
 }
 
 export function modelOf(body: JsonMap, fallback = ""): string {
-  return typeof body.model === "string" ? body.model : fallback;
+  return typeof body.model === "string" ? modelAlias(body.model) : fallback;
 }
 
 export function spendTag(body: JsonMap): string {

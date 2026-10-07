@@ -11,8 +11,7 @@ model User {
   passwordChangedAt  DateTime?
   revision           Int       @default(0)
 
-  orgId  String?
-  teamId String?
+  orgId String?
 
   maxBudget      Decimal   @default(0) @db.Decimal(20, 10)
   spend          Decimal   @default(0) @db.Decimal(20, 10)
@@ -23,8 +22,7 @@ model User {
   updatedAt DateTime @updatedAt
 
   role Role?         @relation(fields: [roleId], references: [id], onDelete: Restrict)
-  org  Organization? @relation(fields: [orgId], references: [id], onDelete: SetNull)
-  team Team?         @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  org  Organization? @relation(fields: [orgId], references: [id], onDelete: Restrict)
 
   sessions        Session[]
   resetTokens     PasswordResetToken[]
@@ -38,19 +36,19 @@ model User {
 
   @@index([roleId])
   @@index([orgId])
-  @@index([teamId])
 }
 
 model Role {
-  id          String   @id @default(cuid())
-  templateKey String?  @unique
-  name        String?  @unique
-  description String?
-  permissions String[] @default([])
-  revision    Int      @default(0)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  users       User[]
+  id                     String   @id @default(cuid())
+  templateKey            String?  @unique
+  name                   String?  @unique
+  description            String?
+  permissions            String[] @default([])
+  assistantToolsDisabled String[] @default([])
+  revision               Int      @default(0)
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+  users                  User[]
 }
 
 model Session {

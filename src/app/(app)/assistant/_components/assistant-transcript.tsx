@@ -4,10 +4,10 @@ import { useEffect, useRef } from "react";
 import { Alert, Button, Spinner } from "@heroui/react";
 import { Sparkles } from "lucide-react";
 import { useTranslations } from "next-intl";
+import CopyButton from "@/components/console/copy-button";
+import Markdown from "@/components/console/markdown";
 import { groupAssistantParts, messageText } from "@/lib/assistant/transcript";
 import type { AssistantChatMessage } from "@/types/assistant";
-import AssistantMarkdown from "./assistant-markdown";
-import CopyButton from "./copy-button";
 import ToolCalls from "./tool-calls";
 
 function AssistantAvatar() {
@@ -36,7 +36,7 @@ function AssistantReply({
       <div className="flex min-w-0 flex-1 flex-col gap-3 pt-0.5">
         {groupAssistantParts(message).map((group) =>
           group.type === "text" ? (
-            <AssistantMarkdown key={group.key} text={group.text} />
+            <Markdown key={group.key} text={group.text} />
           ) : (
             <ToolCalls key={group.key} tools={group.tools} />
           ),
@@ -75,6 +75,8 @@ export default function AssistantTranscript({
     { id: "setup", label: t("suggestions.setup") },
     { id: "keys", label: t("suggestions.keys") },
     { id: "usage", label: t("suggestions.usage") },
+    { id: "errors", label: t("suggestions.errors") },
+    { id: "budgets", label: t("suggestions.budgets") },
     { id: "playground", label: t("suggestions.playground") },
   ] as const;
 

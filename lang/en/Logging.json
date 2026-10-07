@@ -28,7 +28,7 @@
   "removeWebhook": "Remove webhook {position, number}",
   "events": "Events",
   "eventLabel": "{event, select, upstream_exhaustion {Upstream exhaustion} budget_threshold {Budget threshold} provider_models_changed {Provider models changed} other {Event}}",
-  "eventHint": "{event, select, upstream_exhaustion {No healthy deployment answered, or the upstream returned 5xx or 429.} budget_threshold {A key, team, organization, or project crossed a budget alert threshold.} provider_models_changed {The hourly sync found added or removed provider models.} other {}}",
+  "eventHint": "{event, select, upstream_exhaustion {No healthy deployment answered, or the upstream returned 5xx or 429.} budget_threshold {A key, person, project, department, or company crossed a budget alert threshold.} provider_models_changed {The hourly sync found added or removed provider models.} other {}}",
   "eventsRequired": "Choose at least one event.",
   "contentTitle": "Request content",
   "contentSubtitle": "Prompts and responses stored with each request log.",

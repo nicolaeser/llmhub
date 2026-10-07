@@ -1,17 +1,18 @@
 import "server-only";
 
-type Rgb = readonly [number, number, number];
-type Font = "regular" | "bold";
-
-type TextStyle = {
-  size: number;
-  font?: Font;
-  color?: Rgb;
-  align?: "left" | "right" | "center";
-  maxWidth?: number;
-  shrink?: boolean;
-  tracking?: number;
-};
+import {
+  canvas,
+  type Canvas,
+  COLORS,
+  CONTENT_W,
+  drawFooter,
+  drawHeader,
+  FOOTER_RULE,
+  MARGIN,
+  PAGE_W,
+  pdfDocument,
+  type TextStyle,
+} from "./pdf";
 
 export type UsagePdfInput = {
   brand: string;
@@ -42,221 +43,10 @@ export type UsagePdfInput = {
   };
 };
 
-const PAGE_W = 595.28;
-const PAGE_H = 841.89;
-const MARGIN = 40;
-const CONTENT_W = PAGE_W - MARGIN * 2;
-const HEADER_H = 122;
-const FOOTER_RULE = 44;
-
-const COLORS = {
-  accent: [99, 103, 239],
-  accentRaised: [126, 130, 242],
-  accentSoft: [236, 238, 254],
-  onAccent: [255, 255, 255],
-  onAccentMuted: [207, 213, 249],
-  ink: [30, 31, 37],
-  muted: [110, 113, 126],
-  border: [220, 222, 227],
-  axis: [196, 198, 206],
-  surface: [244, 245, 249],
-  track: [232, 233, 240],
-} satisfies Record<string, Rgb>;
-
-const REGULAR_WIDTHS = [
-  278, 278, 355, 556, 556, 889, 667, 191, 333, 333, 389, 584, 278, 333, 278, 278, 556, 556, 556, 556,
-  556, 556, 556, 556, 556, 556, 278, 278, 584, 584, 584, 556, 1015, 667, 667, 722, 722, 667, 611, 778,
-  722, 278, 500, 667, 556, 833, 722, 778, 667, 778, 722, 667, 611, 722, 667, 944, 667, 667, 611, 278,
-  278, 278, 469, 556, 333, 556, 556, 500, 556, 556, 278, 556, 556, 222, 222, 500, 222, 833, 556, 556,
-  556, 556, 333, 500, 278, 556, 500, 722, 500, 500, 500, 334, 260, 334, 584,
-];
-const BOLD_WIDTHS = [
-  278, 333, 474, 556, 556, 889, 722, 238, 333, 333, 389, 584, 278, 333, 278, 278, 556, 556, 556, 556,
-  556, 556, 556, 556, 556, 556, 333, 333, 584, 584, 584, 611, 975, 722, 722, 722, 722, 667, 611, 778,
-  722, 278, 556, 722, 611, 833, 722, 778, 667, 778, 722, 667, 611, 722, 667, 944, 667, 667, 611, 333,
-  278, 333, 584, 556, 333, 556, 611, 556, 611, 556, 333, 611, 611, 278, 278, 556, 278, 889, 611, 611,
-  611, 611, 389, 556, 333, 611, 556, 778, 556, 556, 500, 389, 280, 389, 584,
-];
-const EXTRA_WIDTHS: Record<number, readonly [number, number]> = {
-  0x80: [556, 556],
-  0x82: [222, 278],
-  0x84: [333, 500],
-  0x85: [1000, 1000],
-  0x91: [222, 278],
-  0x92: [222, 278],
-  0x93: [333, 500],
-  0x94: [333, 500],
-  0x95: [350, 350],
-  0x96: [556, 556],
-  0x97: [1000, 1000],
-  0x99: [1000, 1000],
-  0xa0: [278, 278],
-  0xb0: [400, 400],
-  0xb7: [278, 278],
-  0xd7: [584, 584],
-  0xdf: [611, 611],
-};
-const WIN_ANSI: Record<string, number> = {
-  "€": 0x80,
-  "‚": 0x82,
-  "„": 0x84,
-  "…": 0x85,
-  "‘": 0x91,
-  "’": 0x92,
-  "“": 0x93,
-  "”": 0x94,
-  "•": 0x95,
-  "–": 0x96,
-  "—": 0x97,
-  "™": 0x99,
-  " ": 0x20,
-  " ": 0xa0,
-};
-const ELLIPSIS = 0x85;
-
-function encode(value: string): number[] {
-  const bytes: number[] = [];
-  for (const char of value.normalize("NFC")) {
-    const code = char.codePointAt(0)!;
-    if ((code >= 0x20 && code <= 0x7e) || (code >= 0xa0 && code <= 0xff)) bytes.push(code);
-    else bytes.push(WIN_ANSI[char] ?? 0x3f);
-  }
-  return bytes;
-}
-
-function advance(byte: number, font: Font): number {
-  const widths = font === "bold" ? BOLD_WIDTHS : REGULAR_WIDTHS;
-  if (byte >= 0x20 && byte <= 0x7e) return widths[byte - 0x20]!;
-  const extra = EXTRA_WIDTHS[byte];
-  if (extra) return extra[font === "bold" ? 1 : 0];
-  const base = String.fromCharCode(byte).normalize("NFD").charCodeAt(0);
-  return base >= 0x20 && base <= 0x7e ? widths[base - 0x20]! : 556;
-}
-
-function measure(bytes: number[], font: Font, size: number, tracking = 0): number {
-  return (bytes.reduce((sum, byte) => sum + advance(byte, font), 0) * size) / 1000 + tracking * bytes.length;
-}
-
-function truncate(bytes: number[], font: Font, size: number, maxWidth: number): number[] {
-  if (measure(bytes, font, size) <= maxWidth) return bytes;
-  const out = bytes.slice();
-  while (out.length > 0 && measure([...out, ELLIPSIS], font, size) > maxWidth) out.pop();
-  while (out.at(-1) === 0x20) out.pop();
-  return [...out, ELLIPSIS];
-}
-
-const num = (value: number) => Number(value.toFixed(2)).toString();
-const rgb = (color: Rgb) => color.map((channel) => num(channel / 255)).join(" ");
-const hex = (bytes: number[]) => bytes.map((byte) => byte.toString(16).padStart(2, "0")).join("");
-
-function canvas() {
-  const ops: string[] = [];
-
-  function rect(x: number, y: number, w: number, h: number, fill: Rgb) {
-    ops.push(`${rgb(fill)} rg ${num(x)} ${num(y)} ${num(w)} ${num(h)} re f`);
-  }
-
-  function roundedRect(
-    x: number,
-    y: number,
-    w: number,
-    h: number,
-    radii: number | [number, number, number, number],
-    fill: Rgb,
-  ) {
-    const k = 0.5523;
-    const [bl, br, tr, tl] = (typeof radii === "number" ? [radii, radii, radii, radii] : radii).map(
-      (r) => Math.max(0, Math.min(r, w / 2, h / 2)),
-    ) as [number, number, number, number];
-    const path = [`${num(x + bl)} ${num(y)} m`, `${num(x + w - br)} ${num(y)} l`];
-    if (br) path.push(`${num(x + w - br + k * br)} ${num(y)} ${num(x + w)} ${num(y + br - k * br)} ${num(x + w)} ${num(y + br)} c`);
-    path.push(`${num(x + w)} ${num(y + h - tr)} l`);
-    if (tr) path.push(`${num(x + w)} ${num(y + h - tr + k * tr)} ${num(x + w - tr + k * tr)} ${num(y + h)} ${num(x + w - tr)} ${num(y + h)} c`);
-    path.push(`${num(x + tl)} ${num(y + h)} l`);
-    if (tl) path.push(`${num(x + tl - k * tl)} ${num(y + h)} ${num(x)} ${num(y + h - tl + k * tl)} ${num(x)} ${num(y + h - tl)} c`);
-    path.push(`${num(x)} ${num(y + bl)} l`);
-    if (bl) path.push(`${num(x)} ${num(y + bl - k * bl)} ${num(x + bl - k * bl)} ${num(y)} ${num(x + bl)} ${num(y)} c`);
-    ops.push(`${rgb(fill)} rg ${path.join(" ")} h f`);
-  }
-
-  function line(x1: number, y1: number, x2: number, y2: number, stroke: Rgb, width = 0.5) {
-    ops.push(`${rgb(stroke)} RG ${num(width)} w ${num(x1)} ${num(y1)} m ${num(x2)} ${num(y2)} l S`);
-  }
-
-  function textWidth(value: string, style: TextStyle): number {
-    return measure(encode(value), style.font ?? "regular", style.size, style.tracking);
-  }
-
-  function text(value: string, x: number, y: number, style: TextStyle) {
-    const font = style.font ?? "regular";
-    let size = style.size;
-    let bytes = encode(value);
-    if (style.maxWidth !== undefined) {
-      const natural = measure(bytes, font, size);
-      if (style.shrink && natural > style.maxWidth) size = Math.max(7, (size * style.maxWidth) / natural);
-      bytes = truncate(bytes, font, size, style.maxWidth);
-    }
-    const width = measure(bytes, font, size, style.tracking);
-    const left = style.align === "right" ? x - width : style.align === "center" ? x - width / 2 : x;
-    ops.push(
-      `BT /${font === "bold" ? "F2" : "F1"} ${num(size)} Tf ${num(style.tracking ?? 0)} Tc ${rgb(style.color ?? COLORS.ink)} rg ${num(left)} ${num(y)} Td <${hex(bytes)}> Tj ET`,
-    );
-  }
-
-  return { ops, rect, roundedRect, line, text, textWidth };
-}
-
-type Canvas = ReturnType<typeof canvas>;
-
 function niceStep(max: number, count: number): number {
   const raw = max / count;
   const magnitude = 10 ** Math.floor(Math.log10(raw));
   return ([1, 2, 2.5, 5, 10].find((factor) => factor * magnitude >= raw) ?? 10) * magnitude;
-}
-
-function drawHeader(page: Canvas, input: UsagePdfInput): number {
-  const bottom = PAGE_H - HEADER_H;
-  page.rect(0, bottom, PAGE_W, HEADER_H, COLORS.accent);
-
-  const mark = 22;
-  const markY = PAGE_H - 28 - mark;
-  page.roundedRect(MARGIN, markY, mark, mark, 5, COLORS.onAccent);
-  const glyph = mark * 0.64;
-  const scale = glyph / 24;
-  const origin = { x: MARGIN + (mark - glyph) / 2, y: markY + (mark - glyph) / 2 };
-  for (const [gx, gy, gw, gh] of [
-    [6.75, 4.5, 3, 15],
-    [14.25, 4.5, 3, 15],
-    [6.75, 10.5, 10.5, 3],
-  ] as const) {
-    page.rect(origin.x + gx * scale, origin.y + glyph - (gy + gh) * scale, gw * scale, gh * scale, COLORS.accent);
-  }
-  page.text(input.brand, MARGIN + mark + 9, markY + 7, {
-    size: 11,
-    font: "bold",
-    color: COLORS.onAccent,
-    tracking: 0.2,
-  });
-
-  if (input.filter) {
-    const style = { size: 8.5, font: "bold", color: COLORS.onAccent, maxWidth: 220 } satisfies TextStyle;
-    const width = Math.min(page.textWidth(input.filter, style), style.maxWidth);
-    page.roundedRect(PAGE_W - MARGIN - width - 20, markY + 1, width + 20, 20, 10, COLORS.accentRaised);
-    page.text(input.filter, PAGE_W - MARGIN - 10, markY + 8, { ...style, align: "right" });
-  }
-
-  page.text(input.title, MARGIN, PAGE_H - 82, {
-    size: 24,
-    font: "bold",
-    color: COLORS.onAccent,
-    maxWidth: CONTENT_W,
-  });
-  page.text(input.period, MARGIN, PAGE_H - 100, {
-    size: 10,
-    color: COLORS.onAccentMuted,
-    maxWidth: CONTENT_W,
-  });
-  return bottom;
 }
 
 function drawKpis(page: Canvas, kpis: UsagePdfInput["kpis"], top: number): number {
@@ -396,57 +186,17 @@ function drawModelTable(page: Canvas, table: UsagePdfInput["byModel"], top: numb
   page.text(table.total.completion, col.completion, baseline, { ...total, align: "right" });
 }
 
-function drawFooter(page: Canvas, input: UsagePdfInput) {
-  page.line(MARGIN, FOOTER_RULE, PAGE_W - MARGIN, FOOTER_RULE, COLORS.border, 0.5);
-  page.text(input.generated, MARGIN, FOOTER_RULE - 14, { size: 8, color: COLORS.muted });
-  page.text(input.brand, PAGE_W - MARGIN, FOOTER_RULE - 14, {
-    size: 8,
-    font: "bold",
-    color: COLORS.muted,
-    align: "right",
-  });
-}
-
-function pdfString(value: string): string {
-  let out = "FEFF";
-  for (let i = 0; i < value.length; i++) out += value.charCodeAt(i).toString(16).padStart(4, "0");
-  return `<${out}>`;
-}
-
 export function usagePdf(input: UsagePdfInput): Uint8Array {
   const page = canvas();
-  const headerBottom = drawHeader(page, input);
+  const headerBottom = drawHeader(page, {
+    brand: input.brand,
+    title: input.title,
+    subtitle: input.period,
+    badge: input.filter,
+  });
   const kpiBottom = drawKpis(page, input.kpis, headerBottom - 24);
   const chartBottom = drawDailyChart(page, input.daily, kpiBottom - 28);
   drawModelTable(page, input.byModel, chartBottom - 26);
-  drawFooter(page, input);
-
-  const stream = page.ops.join("\n") + "\n";
-  const objects: string[] = [
-    "<< /Type /Catalog /Pages 2 0 R >>",
-    "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
-    `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${PAGE_W} ${PAGE_H}] /Contents 4 0 R /Resources << /Font << /F1 5 0 R /F2 6 0 R >> >> >>`,
-    `<< /Length ${Buffer.byteLength(stream)} >>\nstream\n${stream}endstream`,
-    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>",
-    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>",
-    `<< /Title ${pdfString(input.title)} /Producer ${pdfString(input.brand)} >>`,
-  ];
-  const chunks: Buffer[] = [Buffer.from("%PDF-1.4\n")];
-  const xref = [0];
-  let offset = chunks[0]!.length;
-  objects.forEach((body, i) => {
-    const obj = `${i + 1} 0 obj\n${body}\nendobj\n`;
-    xref.push(offset);
-    const buf = Buffer.from(obj);
-    chunks.push(buf);
-    offset += buf.length;
-  });
-  const xrefStart = offset;
-  let table = `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
-  for (let i = 1; i < xref.length; i++) {
-    table += `${String(xref[i]).padStart(10, "0")} 00000 n \n`;
-  }
-  table += `trailer << /Size ${objects.length + 1} /Root 1 0 R /Info ${objects.length} 0 R >>\nstartxref\n${xrefStart}\n%%EOF`;
-  chunks.push(Buffer.from(table));
-  return Buffer.concat(chunks);
+  drawFooter(page, { left: input.generated, right: input.brand });
+  return pdfDocument([page], { title: input.title, producer: input.brand });
 }

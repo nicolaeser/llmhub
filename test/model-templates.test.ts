@@ -46,6 +46,7 @@ function keyPrincipal(models: string[], templates: string[]): Principal {
     team_id: "",
     org_id: "",
     project_id: "",
+    member_id: "",
     models,
     templates,
     max_budget: 0,
@@ -60,7 +61,7 @@ function keyPrincipal(models: string[], templates: string[]): Principal {
     log_content: true,
     created_at: "",
   };
-  return { actor: "sk-hub-abc", key, teamId: "", orgId: "", userId: "", models };
+  return { actor: "sk-hub-abc", key, teamId: "", orgId: "", userId: "", memberId: "", models };
 }
 
 test("patternMatches supports * wildcards case-insensitively", async () => {
@@ -181,6 +182,24 @@ test("keys bound to templates fail closed when nothing resolves", async () => {
   assert.equal(modelPermitted(keyPrincipal(["claude-eu"], ["template"]), "claude-eu"), true);
   assert.equal(modelPermitted(keyPrincipal(["claude-eu"], ["template"]), "gpt-4o"), false);
   assert.equal(modelPermitted(keyPrincipal(["*"], []), "gpt-4o"), true);
+});
+
+test("model names are matched case-insensitively and normalized to lowercase", async () => {
+  const { modelChain, modelOf, modelPermitted } = await import("@/lib/gateway/gate");
+  const { createKeySchema } = await import("@/schemas/keys");
+  const { createTemplateSchema } = await import("@/schemas/model-templates");
+  const { adminSettingsSchema } = await import("@/schemas/settings");
+  assert.equal(modelOf({ model: "  Gemma-3-27B " }), "gemma-3-27b");
+  assert.equal(modelOf({}, "fallback"), "fallback");
+  const principal = keyPrincipal(["gemma-3-27b", "llama-70b"], ["template"]);
+  assert.equal(modelPermitted(principal, "GEMMA-3-27b"), true);
+  assert.deepEqual(modelChain(principal, modelOf({ model: "Gemma-3-27B" }), { fallbacks: ["LLAMA-70B"] }), [
+    "gemma-3-27b",
+    "llama-70b",
+  ]);
+  assert.deepEqual(createKeySchema.parse({ alias: "ci", models: ["Gemma-3-27B"] }).models, ["gemma-3-27b"]);
+  assert.deepEqual(createTemplateSchema.parse({ name: "t", models: ["Llama-70B"] }).models, ["llama-70b"]);
+  assert.equal(adminSettingsSchema.shape.assistant_model.parse(" Gemma-3-27B "), "gemma-3-27b");
 });
 
 test("request fallbacks must be allowed for the key", async () => {

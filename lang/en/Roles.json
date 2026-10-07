@@ -14,8 +14,23 @@
   "templateDescription": "{key, select, admin {Full access, including roles, settings, and user security.} operator {Operates keys, providers, models, tenancy, and users. No roles or settings.} finance {Usage, logs, and chargeback for everyone. Read-only elsewhere.} viewer {Read-only console with own keys, own usage, playground, and assistant.} other {}}",
   "members": "{count, plural, =0 {No members} one {# member} other {# members}}",
   "permissionCount": "{count, plural, one {# permission} other {# permissions}}",
+  "toolsOff": "{count, plural, one {# assistant tool off} other {# assistant tools off}}",
   "level": "{level, select, view {View} work {Work} sensitive {Sensitive} other {}}",
   "domain": "{domain, select, keys {API keys} providers {Providers} models {Models} tenancy {Tenancy} spend {Usage and budgets} access {Users and roles} settings {Settings} tools {Tools} other {Other}}",
+  "tabs": {
+    "label": "Role settings",
+    "permissions": "Permissions ({count, number, integer})",
+    "tools": "{off, plural, =0 {Assistant tools} one {Assistant tools (# off)} other {Assistant tools (# off)}}"
+  },
+  "tools": {
+    "hint": "Members of this role can only use the assistant tools switched on here. Each tool still needs the matching permission, and tools that change something also need Write access in the assistant.",
+    "noAssistant": "This role cannot use the assistant. Turn on the Assistant permission so these tools take effect.",
+    "enableAll": "Turn all on",
+    "readOnly": "Read-only tools",
+    "disableAll": "Turn all off",
+    "needs": "Needs the permission {permission}",
+    "access": "{access, select, read {Read} write {Write} destructive {Destructive} other {}}"
+  },
   "columns": {
     "role": "Role",
     "members": "Members",
@@ -65,16 +80,16 @@
       "description": "Edit routing, aliases, and deployments."
     },
     "tenancyRead": {
-      "label": "View tenancy",
-      "description": "See organizations, teams, and projects."
+      "label": "View companies",
+      "description": "See companies, departments, projects, and people."
     },
     "tenancyManage": {
-      "label": "Manage tenancy",
-      "description": "Create and change organizations, teams, and projects."
+      "label": "Manage companies",
+      "description": "Create and change companies, departments, projects, and people."
     },
     "spendRead": {
       "label": "View own usage",
-      "description": "See usage, logs, and spend for your own keys."
+      "description": "See usage, logs, and spend for your own internal keys and the playground."
     },
     "spendReadAll": {
       "label": "View all usage",

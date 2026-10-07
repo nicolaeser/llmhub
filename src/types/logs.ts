@@ -11,7 +11,7 @@ export type LogFilterValues = {
   to: string;
 };
 
-export type ContentSkip = "" | "gateway" | "user" | "key";
+export type ContentSkip = "" | "gateway" | "user" | "member" | "key";
 
 export type TranscriptKind = "text" | "reasoning" | "tool_call" | "tool_result" | "media";
 
@@ -44,6 +44,8 @@ export type RequestLogRow = {
   keyLabel: string;
   userId: string;
   userLabel: string;
+  memberId: string;
+  memberLabel: string;
   teamId: string;
   orgId: string;
   projectId: string;
@@ -76,4 +78,40 @@ export type RequestLogDetail = RequestLogRow & {
   error: string;
   canViewContent: boolean;
   content: RequestLogContentView | null;
+};
+
+export type RequestLogExportFormat = "pdf" | "md" | "json";
+
+export type RequestLogDocumentEntry = {
+  role: string;
+  assistant: boolean;
+  heading: string;
+  kind: TranscriptKind;
+  text: string;
+};
+
+export type RequestLogDocumentField = { label: string; value: string; mono?: boolean };
+
+export type RequestLogDocument = {
+  brand: string;
+  title: string;
+  subtitle: string;
+  status: string;
+  generated: string;
+  error: { label: string; text: string } | null;
+  fields: RequestLogDocumentField[];
+  privacy: { heading: string; fields: RequestLogDocumentField[]; note: string };
+  content: {
+    heading: string;
+    notice: string;
+    truncated: string;
+    conversation: string;
+    empty: string;
+    input: RequestLogDocumentEntry[];
+    output: RequestLogDocumentEntry[];
+    payloads: { heading: string; json: string }[];
+    noJson: string;
+  };
+  piiLabel: (entity: string) => string;
+  pageLabel: (page: number, total: number) => string;
 };

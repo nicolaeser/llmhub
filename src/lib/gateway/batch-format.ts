@@ -1,4 +1,5 @@
 import { asRecord, newId } from "@/lib/gateway/core";
+import { modelAlias } from "@/lib/gateway/model-alias";
 import type { BatchEndpoint, BatchLine, BatchLineError, BatchLineResult } from "@/types/batches";
 import type { JsonMap } from "@/types/gateway";
 
@@ -75,11 +76,11 @@ export function parseBatchInput(
       errors.push(lineError(line, "missing_model", "body.model is required", "body.model"));
       return;
     }
-    if (model && body.model !== model) {
+    if (model && modelAlias(body.model) !== model) {
       errors.push(lineError(line, "mismatched_model", "every request in a batch must use the same model", "body.model"));
       return;
     }
-    model = body.model;
+    model = modelAlias(body.model);
     if (body.stream === true) {
       errors.push(lineError(line, "invalid_request", "streaming is not supported in batches", "body.stream"));
       return;

@@ -11,6 +11,8 @@ import {
   pickWeighted,
 } from "@/lib/gateway/router";
 import { asRecord, asStringArray, ERR_NO_HEALTHY, ERR_UNKNOWN_GROUP } from "@/lib/gateway/core";
+import { modelAlias } from "@/lib/gateway/model-alias";
+import { priceWindowQuery, priceWindowRates } from "@/lib/gateway/price-schedule";
 import type { DbDeployment, ResolvedDeployment, Deployment, ModelGroup } from "@/types/gateway";
 import { money } from "@/lib/utils/money";
 
@@ -37,14 +39,22 @@ function mapDeployment(row: DbDeployment): ResolvedDeployment {
 
 const providerSelect = { select: { id: true, kind: true, baseUrl: true, apiKey: true } } as const;
 
-export async function loadGroup(alias: string): Promise<ModelGroup & { mapped: ResolvedDeployment[] }> {
+export async function loadGroup(requested: string): Promise<ModelGroup & { mapped: ResolvedDeployment[] }> {
+  const alias = modelAlias(requested);
   if (alias === "auto") {
-    const rows = await prisma.deployment.findMany({ include: { provider: providerSelect } });
+    const rows = await prisma.deployment.findMany({
+      where: { group: { enabled: true } },
+      include: { provider: providerSelect },
+    });
     const mapped = rows.map(mapDeployment);
     return {
       alias: "auto",
       strategy: "cost_lowest",
       billing_mode: "routed",
+      price_input_per_1k: 0,
+      price_output_per_1k: 0,
+      price_time_zone: "UTC",
+      price_windows: [],
       overflow_group: "",
       num_retries: 1,
       fallback_groups: [],
@@ -55,14 +65,21 @@ export async function loadGroup(alias: string): Promise<ModelGroup & { mapped: R
 
   const group = await prisma.modelGroup.findUnique({
     where: { alias },
-    include: { deployments: { include: { provider: providerSelect } } },
+    include: {
+      deployments: { include: { provider: providerSelect } },
+      priceWindows: priceWindowQuery,
+    },
   });
-  if (!group) throw ERR_UNKNOWN_GROUP;
+  if (!group?.enabled) throw ERR_UNKNOWN_GROUP;
   const mapped = group.deployments.map(mapDeployment);
   return {
     alias: group.alias,
     strategy: group.strategy,
     billing_mode: group.billingMode,
+    price_input_per_1k: money(group.priceInput),
+    price_output_per_1k: money(group.priceOutput),
+    price_time_zone: group.priceTimeZone,
+    price_windows: group.priceWindows.map(priceWindowRates),
     overflow_group: group.overflowGroup,
     num_retries: group.numRetries,
     fallback_groups: asStringArray(group.fallbackGroups),
@@ -156,7 +173,7 @@ export function aliasChain(model: string, body: Record<string, unknown>): string
   const out: string[] = [];
   const add = (value: unknown) => {
     if (typeof value === "string") {
-      const alias = value.trim();
+      const alias = modelAlias(value);
       if (!alias || seen.has(alias)) return;
       seen.add(alias);
       out.push(alias);

@@ -10,7 +10,7 @@ Load `BASE.md` first. Then open only the documents below that match the task.
 
 ## Knowledge
 
-- [knowledge/system-overview.md](knowledge/system-overview.md) — Process split, worker jobs, route groups, and product vocabulary (structure, budgets, model templates); load when work crosses console, gateway, or boot.
+- [knowledge/system-overview.md](knowledge/system-overview.md) — Process split, worker jobs, route groups, and product vocabulary (companies, departments, people, console users, budgets, model templates); load when work crosses console, gateway, or boot.
 - [knowledge/pitfalls.md](knowledge/pitfalls.md) — Verified traps and stale paths; load when debugging surprises or conflicting docs.
 - [knowledge/next-intl-icu.md](knowledge/next-intl-icu.md) — ICU messages, formatters, and anti-patterns for next-intl; load when changing strings, counts, dates, money, or lists.
 
@@ -37,6 +37,6 @@ Load `BASE.md` first. Then open only the documents below that match the task.
 - [personas/accessibility-reviewer.md](personas/accessibility-reviewer.md) — Keyboard, naming, contrast, and FieldError audit; apply on forms, overlays, or responsive chrome.
 - [personas/style-enforcer.md](personas/style-enforcer.md) — Token, primitive, unit, and overflow review; apply on visual changes.
 - [personas/application-security-reviewer.md](personas/application-security-reviewer.md) — Tenant isolation, secret, PII, and log-content review; apply on auth, management keys, internal-api, assistant tools, and request logs.
-- [personas/data-integrity-reviewer.md](personas/data-integrity-reviewer.md) — Schema, migration order, catalog, tenancy copies, budget caps, and first-row exclusivity; apply on Prisma, setup, or structure changes.
+- [personas/data-integrity-reviewer.md](personas/data-integrity-reviewer.md) — Schema, migration order, catalog, tenancy copies, budget caps, and first-row exclusivity; apply on Prisma, setup, or company changes.
 - [personas/delivery-reliability-reviewer.md](personas/delivery-reliability-reviewer.md) — Preflight, migrate-on-start, compose data, and build-version review; apply on deploy or env.
 - [personas/content-localization-steward.md](personas/content-localization-steward.md) — Locale parity and ICU review; apply on copy.

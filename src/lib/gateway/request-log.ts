@@ -30,6 +30,13 @@ export type RequestLogEntry = {
 export async function contentSkip(principal: Principal, enterprise: Enterprise): Promise<ContentSkip> {
   if (enterprise.log_content === false) return "gateway";
   if (principal.key && principal.key.log_content === false) return "key";
+  if (principal.memberId) {
+    const member = await prisma.member.findUnique({
+      where: { id: principal.memberId },
+      select: { logContent: true },
+    });
+    if (member && !member.logContent) return "member";
+  }
   if (!principal.userId) return "";
   const user = await prisma.user.findUnique({
     where: { id: principal.userId },
@@ -81,6 +88,7 @@ export async function writeRequestLog(entry: RequestLogEntry): Promise<void> {
     teamId: entry.principal.teamId,
     orgId: entry.principal.orgId,
     projectId: entry.principal.key?.project_id ?? "",
+    memberId: entry.principal.memberId,
   };
   const meta = {
     model: entry.model,
@@ -116,6 +124,7 @@ export async function writeRequestLog(entry: RequestLogEntry): Promise<void> {
       team_id: dims.teamId,
       org_id: dims.orgId,
       project_id: dims.projectId,
+      member_id: dims.memberId,
       model: meta.model,
       endpoint: meta.endpoint,
       deployment_id: meta.deploymentId,

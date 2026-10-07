@@ -2,7 +2,18 @@ import "server-only";
 import prisma from "@/lib/db/prisma";
 import type { z } from "zod";
 import type { modelAliasCreateSchema } from "@/schemas/management";
-import type { DeploymentInput } from "@/types/models";
+import type { DeploymentInput, PriceWindow } from "@/types/models";
+
+export function priceWindowInputs(
+  schedule: z.infer<typeof modelAliasCreateSchema>["price_schedule"] | undefined,
+): PriceWindow[] | undefined {
+  return schedule?.map((window) => ({
+    start: window.start,
+    end: window.end,
+    priceInput: window.price_input_per_1k,
+    priceOutput: window.price_output_per_1k,
+  }));
+}
 
 export async function deploymentInputs(
   deployments: z.infer<typeof modelAliasCreateSchema>["deployments"],

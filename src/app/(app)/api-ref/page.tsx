@@ -19,6 +19,7 @@ import PageHeader from "@/components/console/page-header";
 import { loadApiRefAction } from "@/app/(app)/api-ref/_action";
 import { Link } from "@/i18n/routing";
 import { isActionFail } from "@/lib/http/action-result";
+import { useOrigin } from "@/lib/hooks/use-origin";
 import { GATEWAY_ERRORS } from "@/lib/gateway/errors";
 import { ANTHROPIC_VERSION } from "@/lib/gateway/openapi";
 import { PROBLEMS } from "@/lib/http/problems";
@@ -63,7 +64,7 @@ export default function ApiRefPage() {
   const tError = useTranslations("Error");
   const tCommon = useTranslations("Common");
   const [loading, setLoading] = useState(true);
-  const [origin, setOrigin] = useState("");
+  const origin = useOrigin();
   const [paths, setPaths] = useState<OpenApiPath[]>([]);
   const [keys, setKeys] = useState<KeyPrefix[]>([]);
   const [models, setModels] = useState<string[]>([]);
@@ -78,7 +79,6 @@ export default function ApiRefPage() {
   useEffect(() => {
     loadApiRefAction().then((res) => {
       if (!isActionFail(res)) {
-        setOrigin(res.origin);
         setPaths(res.paths);
         setKeys(res.keys);
         setModels(res.models);

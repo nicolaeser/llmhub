@@ -1,4 +1,4 @@
-import { saveTeamAction } from "@/app/(app)/structure/_action";
+import { saveTeamAction } from "@/app/(app)/companies/_action";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { managementRoute, readBody, respond, respondList, unwrap } from "@/lib/management/http";
 import { serializeTeam } from "@/lib/management/serialize";

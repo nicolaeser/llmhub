@@ -9,6 +9,15 @@ export const formats = {
     time: { timeStyle: "medium" },
     dateTime: { dateStyle: "medium", timeStyle: "medium" },
     stamp: { dateStyle: "medium", timeStyle: "short" },
+    zoned: {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      timeZoneName: "short",
+    },
   },
   number: {
     integer: { maximumFractionDigits: 0 },
@@ -32,6 +41,12 @@ export const formats = {
       currency: "USD",
       minimumFractionDigits: 4,
       maximumFractionDigits: 4,
+    },
+    price: {
+      style: "currency",
+      currency: "USD",
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 8,
     },
   },
   list: {

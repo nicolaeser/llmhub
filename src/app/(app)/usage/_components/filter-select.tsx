@@ -1,6 +1,7 @@
 "use client";
 
 import { Label, ListBox, Select } from "@heroui/react";
+import type { FilterOption } from "@/types/usage";
 
 export default function FilterSelect({
   label,
@@ -11,7 +12,7 @@ export default function FilterSelect({
 }: {
   label: string;
   value: string;
-  options: string[];
+  options: FilterOption[];
   allLabel: string;
   onChange: (next: string) => void;
 }) {
@@ -36,9 +37,9 @@ export default function FilterSelect({
             {allLabel}
             <ListBox.ItemIndicator />
           </ListBox.Item>
-          {options.map((name) => (
-            <ListBox.Item key={name} id={name} textValue={name}>
-              {name}
+          {options.map((option) => (
+            <ListBox.Item key={option.id} id={option.id} textValue={option.label}>
+              {option.label}
               <ListBox.ItemIndicator />
             </ListBox.Item>
           ))}

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  COMPANY_PERMISSIONS,
   effectivePermissions,
   hasPerm,
   isSubset,
@@ -13,17 +14,29 @@ import {
   sortPermissions,
 } from "@/lib/auth/permissions";
 import { canGrant, canManage, grantActor } from "@/lib/auth/grants";
-import { keyVisibleTo, seesAllResources, seesAllSpend } from "@/lib/auth/scope";
+import {
+  companyOf,
+  inCompany,
+  keyScope,
+  keyVisibleTo,
+  seesAllResources,
+  seesAllSpend,
+  spendScope,
+} from "@/lib/auth/scope";
 import type { AuthenticatedSession, Permission } from "@/types/auth";
 
-function session(perms: readonly Permission[], isOwner = false): AuthenticatedSession {
+function session(
+  perms: readonly Permission[],
+  isOwner = false,
+  orgId: string | null = null,
+): AuthenticatedSession {
   return {
     error: false,
     sessionId: "s1",
-    user: { id: "u1" } as AuthenticatedSession["user"],
+    user: { id: "u1", orgId } as AuthenticatedSession["user"],
     isOwner,
     role: null,
-    permissions: effectivePermissions({ isOwner, rolePermissions: [...perms] }),
+    permissions: effectivePermissions({ isOwner, rolePermissions: [...perms], orgId }),
     secondFactor: "TOTP",
     ipAddress: null,
     userAgent: null,
@@ -89,8 +102,8 @@ test("unknown permissions are dropped and order follows the catalog", () => {
 });
 
 test("the owner holds every permission regardless of role", () => {
-  assert.deepEqual(effectivePermissions({ isOwner: true, rolePermissions: [] }), permissions);
-  assert.deepEqual(effectivePermissions({ isOwner: false, rolePermissions: null }), []);
+  assert.deepEqual(effectivePermissions({ isOwner: true, rolePermissions: [], orgId: null }), permissions);
+  assert.deepEqual(effectivePermissions({ isOwner: false, rolePermissions: null, orgId: null }), []);
 });
 
 test("nobody grants or manages beyond their own permissions", () => {
@@ -113,8 +126,43 @@ test("visibility follows permissions, not role names", () => {
   assert.equal(seesAllResources(operator), true);
   assert.equal(seesAllSpend(finance), true);
   assert.equal(seesAllSpend(viewer), false);
-  assert.equal(keyVisibleTo(viewer, "u1"), true);
-  assert.equal(keyVisibleTo(viewer, "u2"), false);
-  assert.equal(keyVisibleTo(operator, "u2"), true);
+  assert.equal(keyVisibleTo(viewer, { userId: "u1", orgId: null }), true);
+  assert.equal(keyVisibleTo(viewer, { userId: "u2", orgId: null }), false);
+  assert.equal(keyVisibleTo(operator, { userId: "u2", orgId: "org_a" }), true);
   assert.equal(hasPerm(viewer.permissions, PERMISSIONS.ASSISTANT_USE), true);
+});
+
+test("company users keep only company permissions of their role", () => {
+  const scoped = effectivePermissions({ isOwner: false, rolePermissions: [...roleTemplates.admin], orgId: "org_a" });
+  assert.deepEqual(scoped, permissionList([...COMPANY_PERMISSIONS]));
+  for (const permission of ["providers:manage", "settings:read", "users:read", "roles:manage", "assistant:use", "models:read"] as const) {
+    assert.equal(scoped.includes(permission), false, permission);
+  }
+  assert.deepEqual(
+    effectivePermissions({ isOwner: false, rolePermissions: ["keys:read", "providers:read"], orgId: "org_a" }),
+    ["keys:read"],
+  );
+  assert.deepEqual(effectivePermissions({ isOwner: true, rolePermissions: [], orgId: "org_a" }), permissions);
+});
+
+test("company scope narrows keys and spend to the assigned company", () => {
+  const platform = session(roleTemplates.admin);
+  const company = session(roleTemplates.admin, false, "org_a");
+  const companyViewer = session(roleTemplates.viewer, false, "org_a");
+  const owner = session([], true, "org_a");
+  assert.equal(companyOf(platform), null);
+  assert.equal(companyOf(company), "org_a");
+  assert.equal(companyOf(owner), null);
+  assert.equal(inCompany(platform, "org_b"), true);
+  assert.equal(inCompany(company, "org_a"), true);
+  assert.equal(inCompany(company, "org_b"), false);
+  assert.equal(inCompany(company, null), false);
+  assert.deepEqual(keyScope(platform), {});
+  assert.deepEqual(keyScope(company), { orgId: "org_a" });
+  assert.deepEqual(keyScope(companyViewer), { orgId: "org_a", userId: "u1" });
+  assert.deepEqual(spendScope(company), { orgId: "org_a" });
+  assert.deepEqual(spendScope(companyViewer), { orgId: "org_a", userId: "u1" });
+  assert.equal(keyVisibleTo(company, { userId: "u9", orgId: "org_a" }), true);
+  assert.equal(keyVisibleTo(company, { userId: "u1", orgId: "org_b" }), false);
+  assert.equal(keyVisibleTo(company, { userId: "u1", orgId: null }), false);
 });

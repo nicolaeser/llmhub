@@ -14,6 +14,7 @@ import {
 } from "@heroui/react";
 import { MoreHorizontal, Plus, User } from "lucide-react";
 import { useFormatter, useNow, useTranslations } from "next-intl";
+import BudgetDialog from "@/components/budget/budget-dialog";
 import EmptyState from "@/components/console/empty-state";
 import PageHeader from "@/components/console/page-header";
 import { isActionFail } from "@/lib/http/action-result";
@@ -21,9 +22,11 @@ import type { ActionFail } from "@/types/actions";
 import { StepUpDialog } from "@/components/security/step-up-dialog";
 import { useRoleName } from "@/components/security/use-role-name";
 import { useSecurityError } from "@/components/security/use-security-error";
+import type { BudgetResult, BudgetView } from "@/types/structure";
 import type { ConsoleUser, UsersConsolePayload } from "@/types/users";
+import { setBudgetAction } from "@/app/(app)/companies/_action";
 import {
-  ChangeRoleDialog,
+  ChangeAccessDialog,
   CreateUserDialog,
   DeleteUserDialog,
   SetPasswordDialog,
@@ -35,6 +38,20 @@ import {
   setUserBlockedAction,
   setUserContentLoggingAction,
 } from "./_action";
+
+function userBudget(user: ConsoleUser): BudgetView {
+  return {
+    maxBudget: user.maxBudget,
+    spend: user.spend,
+    budgetDuration: user.budgetDuration,
+    boost: 0,
+    boosts: [],
+    resetsAt: null,
+    projectedMonth: 0,
+    daysToExhaust: null,
+    pctUsed: null,
+  };
+}
 
 export default function UsersPage() {
   const t = useTranslations("Users");
@@ -53,6 +70,7 @@ export default function UsersPage() {
   const createState = useOverlayState();
   const passwordState = useOverlayState();
   const roleState = useOverlayState();
+  const budgetState = useOverlayState();
   const deleteState = useOverlayState();
   const resetState = useOverlayState();
 
@@ -96,6 +114,26 @@ export default function UsersPage() {
       setData(result);
       toast(success, { variant: "success" });
     });
+  }
+
+  function applyBudget(result: BudgetResult) {
+    setData((current) =>
+      current
+        ? {
+            ...current,
+            users: current.users.map((user) =>
+              user.id === result.id
+                ? {
+                    ...user,
+                    maxBudget: result.budget.maxBudget,
+                    spend: result.budget.spend,
+                    budgetDuration: result.budget.budgetDuration,
+                  }
+                : user,
+            ),
+          }
+        : current,
+    );
   }
 
   if (loadError) {
@@ -163,7 +201,7 @@ export default function UsersPage() {
                   <Table.Header>
                     <Table.Column isRowHeader>{t("columns.user")}</Table.Column>
                     <Table.Column>{t("columns.role")}</Table.Column>
-                    <Table.Column>{t("columns.tenancy")}</Table.Column>
+                    <Table.Column>{t("columns.access")}</Table.Column>
                     <Table.Column>{t("columns.security")}</Table.Column>
                     <Table.Column>{tCommon("status")}</Table.Column>
                     <Table.Column>{t("columns.lastActive")}</Table.Column>
@@ -188,8 +226,16 @@ export default function UsersPage() {
                               )}
                         </Table.Cell>
                         <Table.Cell>
-                          <p className="text-sm">{user.orgAlias || tCommon("none")}</p>
-                          <p className="text-xs text-muted">{user.teamAlias || tCommon("none")}</p>
+                          <p className="text-sm">
+                            {t("access", { scope: user.orgId ? "company" : "platform", org: user.orgAlias })}
+                          </p>
+                          <p className="text-xs text-muted">
+                            {tCommon("spendBudget", {
+                              hasCap: user.maxBudget > 0 ? "yes" : "no",
+                              spend: user.spend,
+                              budget: user.maxBudget,
+                            })}
+                          </p>
                         </Table.Cell>
                         <Table.Cell>
                           <div className="flex flex-wrap gap-1">
@@ -231,7 +277,7 @@ export default function UsersPage() {
                             : tCommon("none")}
                         </Table.Cell>
                         <Table.Cell>
-                          {user.manageable && (data.canManage || data.canSecure) ? (
+                          {user.manageable && (data.canManage || data.canSecure || data.canBudget) ? (
                             <Dropdown>
                               <Dropdown.Trigger>
                                 <Button
@@ -255,6 +301,7 @@ export default function UsersPage() {
                                   aria-label={t("actionsMenu", { username: user.username })}
                                   onAction={(key) => {
                                     if (key === "role") openDialog(roleState, user);
+                                    if (key === "budget") openDialog(budgetState, user);
                                     if (key === "password") openDialog(passwordState, user);
                                     if (key === "delete") openDialog(deleteState, user);
                                     if (key === "reset") openDialog(resetState, user);
@@ -284,6 +331,11 @@ export default function UsersPage() {
                                   {data.canManage ? (
                                     <Dropdown.Item id="role" textValue={t("changeRole")}>
                                       {t("changeRole")}
+                                    </Dropdown.Item>
+                                  ) : null}
+                                  {data.canBudget ? (
+                                    <Dropdown.Item id="budget" textValue={t("budget")}>
+                                      {t("budget")}
                                     </Dropdown.Item>
                                   ) : null}
                                   {data.canManage ? (
@@ -342,15 +394,24 @@ export default function UsersPage() {
         state={createState}
         roles={data.roles}
         orgs={data.orgs}
-        teams={data.teams}
         onSaved={setData}
       />
-      <ChangeRoleDialog
+      <ChangeAccessDialog
         key={`role-${dialogKey}`}
         state={roleState}
         target={target}
         roles={data.roles}
+        orgs={data.orgs}
         onSaved={setData}
+      />
+      <BudgetDialog
+        key={`budget-${dialogKey}`}
+        state={budgetState}
+        target={target ? { kind: "user", id: target.id, alias: target.username } : null}
+        budget={target ? userBudget(target) : null}
+        ancestors={[]}
+        onSubmit={setBudgetAction}
+        onSaved={applyBudget}
       />
       <SetPasswordDialog
         key={`password-${dialogKey}`}

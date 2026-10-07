@@ -5,13 +5,15 @@
   "openMenu": "Open navigation menu",
   "goHome": "Go to API keys",
   "sections": {
+    "customers": "Customers",
     "gateway": "Gateway",
     "observe": "Observability",
-    "access": "Access",
+    "access": "Console access",
     "developer": "Developer",
     "settings": "Settings"
   },
   "items": {
+    "companies": "Companies",
     "keys": "API keys",
     "playground": "Playground",
     "assistant": "Assistant",
@@ -21,8 +23,7 @@
     "guardrails": "Guardrails",
     "usage": "Usage",
     "logs": "Logs",
-    "structure": "Structure & budgets",
-    "users": "Users",
+    "users": "Console users",
     "apiRef": "API reference",
     "cache": "Cache",
     "logging": "Logging & alerts",

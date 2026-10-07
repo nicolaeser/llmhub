@@ -17,11 +17,12 @@ import { requireStepUp } from "@/lib/auth/second-factor";
 import { securityEvent, userActor } from "@/lib/auth/security-events";
 import { clearSecondFactorFailures } from "@/lib/auth/throttle";
 import { writeAudit } from "@/lib/gateway/audit";
+import { money } from "@/lib/utils/money";
 import {
   idSchema,
   userCreateSchema,
+  userAccessSchema,
   userPasswordSchema,
-  userRoleSchema,
   userSecurityResetSchema,
 } from "@/schemas/auth";
 import type { AuthenticatedSession, GrantActor, TargetRow } from "@/types/auth";
@@ -31,6 +32,7 @@ function targetPermissions(target: TargetRow) {
   return effectivePermissions({
     isOwner: target.isOwner,
     rolePermissions: target.role?.permissions ?? [],
+    orgId: target.orgId,
   });
 }
 
@@ -54,22 +56,12 @@ function assertManageable(
   assertCanManage(grantActor(session), targetPermissions(target), "USER_PROTECTED");
 }
 
-async function resolveTenancy(orgId?: string, teamId?: string) {
-  const nextOrgId = orgId?.trim() || null;
-  const nextTeamId = teamId?.trim() || null;
-  const team = nextTeamId
-    ? await prisma.team.findUnique({ where: { id: nextTeamId }, select: { id: true, orgId: true } })
-    : null;
-  if (nextTeamId && !team) throw new AuthError("VALIDATION");
-  if (team?.orgId && nextOrgId && team.orgId !== nextOrgId) throw new AuthError("VALIDATION");
-  const resolvedOrgId = team?.orgId ?? nextOrgId;
-  if (
-    resolvedOrgId &&
-    !(await prisma.organization.findUnique({ where: { id: resolvedOrgId }, select: { id: true } }))
-  ) {
+async function resolveCompany(orgId?: string): Promise<string | null> {
+  const id = orgId?.trim() || null;
+  if (id && !(await prisma.organization.findUnique({ where: { id }, select: { id: true } }))) {
     throw new AuthError("VALIDATION");
   }
-  return { orgId: resolvedOrgId, teamId: team?.id ?? null };
+  return id;
 }
 
 async function assignableRole(actor: GrantActor, roleId: string) {
@@ -82,13 +74,12 @@ async function assignableRole(actor: GrantActor, roleId: string) {
 export async function usersConsole(session: AuthenticatedSession): Promise<UsersConsolePayload> {
   const actor = grantActor(session);
   const now = new Date();
-  const [users, roles, orgs, teams] = await Promise.all([
+  const [users, roles, orgs] = await Promise.all([
     prisma.user.findMany({
       orderBy: { email: "asc" },
       include: {
         role: { select: { id: true, name: true, templateKey: true, permissions: true } },
         org: { select: { alias: true } },
-        team: { select: { alias: true } },
         totp: { select: { enabledAt: true } },
         _count: { select: { passkeys: true } },
         sessions: {
@@ -103,10 +94,6 @@ export async function usersConsole(session: AuthenticatedSession): Promise<Users
     }),
     roleOptions(actor),
     prisma.organization.findMany({ orderBy: { alias: "asc" }, select: { id: true, alias: true } }),
-    prisma.team.findMany({
-      orderBy: { alias: "asc" },
-      select: { id: true, alias: true, orgId: true },
-    }),
   ]);
   return {
     users: users.map(
@@ -120,9 +107,10 @@ export async function usersConsole(session: AuthenticatedSession): Promise<Users
         isOwner: user.isOwner,
         blocked: user.blocked,
         orgId: user.orgId,
-        teamId: user.teamId,
         orgAlias: user.org?.alias ?? "",
-        teamAlias: user.team?.alias ?? "",
+        maxBudget: money(user.maxBudget),
+        spend: money(user.spend),
+        budgetDuration: user.budgetDuration,
         twoFactorEnabled: Boolean(user.totp?.enabledAt),
         passkeys: user._count.passkeys,
         activeSessions: user.sessions.length,
@@ -138,9 +126,9 @@ export async function usersConsole(session: AuthenticatedSession): Promise<Users
     ),
     roles,
     orgs,
-    teams,
     selfId: session.user.id,
     canManage: hasPerm(session.permissions, PERMISSIONS.USERS_MANAGE),
+    canBudget: hasPerm(session.permissions, PERMISSIONS.BUDGETS_MANAGE),
     canSecure: hasPerm(session.permissions, PERMISSIONS.USERS_SECURITY),
   };
 }
@@ -148,7 +136,7 @@ export async function usersConsole(session: AuthenticatedSession): Promise<Users
 export async function createUser(session: AuthenticatedSession, raw: unknown) {
   const input = parseAuthInput(userCreateSchema, raw);
   const role = await assignableRole(grantActor(session), input.roleId);
-  const tenancy = await resolveTenancy(input.orgId, input.teamId);
+  const orgId = await resolveCompany(input.orgId);
   const exists = await prisma.user.findFirst({
     where: { OR: [{ email: input.email }, { username: input.username }] },
     select: { id: true },
@@ -162,8 +150,7 @@ export async function createUser(session: AuthenticatedSession, raw: unknown) {
         password: await hashPassword(input.password),
         mustChangePassword: true,
         roleId: role.id,
-        orgId: tenancy.orgId,
-        teamId: tenancy.teamId,
+        orgId,
       },
       select: { id: true },
     });
@@ -172,7 +159,7 @@ export async function createUser(session: AuthenticatedSession, raw: unknown) {
       action: "user.create",
       objectType: "user",
       objectId: user.id,
-      after: { username: input.username, email: input.email, roleId: role.id, ...tenancy },
+      after: { username: input.username, email: input.email, roleId: role.id, orgId },
     });
     return user;
   } catch (error) {
@@ -250,7 +237,6 @@ export async function deleteUser(session: AuthenticatedSession, userId: unknown)
       roleId: target.roleId,
       blocked: target.blocked,
       orgId: target.orgId,
-      teamId: target.teamId,
     },
   });
 }
@@ -286,17 +272,24 @@ export async function setUserPassword(session: AuthenticatedSession, raw: unknow
   });
 }
 
-export async function assignUserRole(session: AuthenticatedSession, raw: unknown) {
-  const input = parseAuthInput(userRoleSchema, raw);
+export async function assignUserAccess(session: AuthenticatedSession, raw: unknown) {
+  const input = parseAuthInput(userAccessSchema, raw);
   const target = await loadTarget(input.userId);
   assertManageable(session, target);
   const role = await assignableRole(grantActor(session), input.roleId);
+  const orgId = await resolveCompany(input.orgId);
   const meta = await requestMeta();
-  const { count } = await prisma.user.updateMany({
-    where: { id: target.id, revision: input.revision },
-    data: { roleId: role.id, revision: { increment: 1 } },
+  await prisma.$transaction(async (tx) => {
+    const { count } = await tx.user.updateMany({
+      where: { id: target.id, revision: input.revision },
+      data: { roleId: role.id, orgId, revision: { increment: 1 } },
+    });
+    if (!count) throw new AuthError("USER_CHANGED");
+    await tx.virtualKey.updateMany({
+      where: { userId: target.id, projectId: null, memberId: null },
+      data: { orgId },
+    });
   });
-  if (!count) throw new AuthError("USER_CHANGED");
   await prisma.userSecurityEvent.create({
     data: {
       userId: target.id,
@@ -308,8 +301,8 @@ export async function assignUserRole(session: AuthenticatedSession, raw: unknown
     action: "role.assign",
     objectType: "user",
     objectId: target.id,
-    before: { roleId: target.roleId },
-    after: { roleId: role.id },
+    before: { roleId: target.roleId, orgId: target.orgId },
+    after: { roleId: role.id, orgId },
   });
 }
 
