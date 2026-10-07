@@ -23,6 +23,12 @@ export const adminSettingsSchema = z.object({
   registration_enabled: z.boolean(),
   assistant_model: text.transform(modelAlias),
   assistant_model_locked: z.boolean().default(false),
+  catalog_jev: z.object({
+    enabled: z.boolean(),
+    model: z.string().trim().max(120).regex(/^[\w.~:/-]*$/),
+    api_key: z.string().trim().max(500),
+    clear_api_key: z.boolean(),
+  }),
   oidc: z.object({
     enabled: z.boolean(),
     issuer: optionalUrl,

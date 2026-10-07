@@ -29,6 +29,9 @@ export const PATCH = managementRoute<{ alias: string }>(PERMISSIONS.MODELS_MANAG
     await updateModelGroupAction({
       alias: existing.alias,
       enabled: body.enabled,
+      vendor: body.vendor,
+      displayName: body.display_name,
+      autoRoutes: body.auto_routes,
       strategy: body.strategy ?? existing.strategy,
       billingMode: body.billing_mode ?? existing.billingMode,
       priceInput: body.price_input_per_1k,

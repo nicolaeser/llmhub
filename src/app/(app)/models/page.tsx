@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
-import { Button, Label, Spinner, Switch, Table, toast, useOverlayState } from "@heroui/react";
+import { Button, Chip, Label, Spinner, Switch, Table, toast, useOverlayState } from "@heroui/react";
 import { Network, Plus, Trash2 } from "lucide-react";
 import { useFormatter, useTranslations } from "next-intl";
 import { Link } from "@/i18n/routing";
@@ -19,6 +19,7 @@ import ModelGroupDialog from "./_components/model-group-dialog";
 
 export default function ModelsPage() {
   const t = useTranslations("Models");
+  const tProviders = useTranslations("Providers");
   const tError = useTranslations("Error");
   const tCommon = useTranslations("Common");
   const format = useFormatter();
@@ -42,6 +43,18 @@ export default function ModelsPage() {
       setLoading(false);
     });
   }, []);
+
+  function routeLabels(group: Group): string[] {
+    return [
+      ...new Set(
+        group.deployments.map(
+          (dep) =>
+            providers.find((provider) => provider.id === dep.providerId)?.name ??
+            tProviders("kindName", { kind: dep.kind }),
+        ),
+      ),
+    ];
+  }
 
   function openDialog(group: Group | null) {
     setEditing(group);
@@ -167,6 +180,11 @@ export default function ModelsPage() {
                       >
                         {g.alias}
                       </Button>
+                      {g.vendor || g.displayName ? (
+                        <div className="px-3 text-xs text-muted">
+                          {format.list([g.vendor, g.displayName].filter(Boolean), { type: "unit" })}
+                        </div>
+                      ) : null}
                     </Table.Cell>
                     <Table.Cell>
                       <Switch
@@ -193,7 +211,15 @@ export default function ModelsPage() {
                         windows: g.priceWindows.length,
                       })}
                     </Table.Cell>
-                    <Table.Cell>{format.number(g.endpoints, "integer")}</Table.Cell>
+                    <Table.Cell>
+                      <div className="flex flex-wrap gap-1">
+                        {routeLabels(g).map((label) => (
+                          <Chip key={label} size="sm" variant="soft">
+                            {label}
+                          </Chip>
+                        ))}
+                      </div>
+                    </Table.Cell>
                     <Table.Cell>{g.overflowGroup || tCommon("none")}</Table.Cell>
                     <Table.Cell>
                       <div className="flex gap-1">

@@ -98,6 +98,7 @@ async function restorePrincipal(meta: JsonMap): Promise<Principal | null> {
     userId: String(snap.userId ?? ""),
     memberId: String(snap.memberId ?? ""),
     models: Array.isArray(snap.models) ? snap.models.filter((m): m is string => typeof m === "string") : [],
+    routeLimits: {},
   };
 }
 
@@ -217,7 +218,7 @@ async function forwardLine(principal: Principal, model: string, path: string, bo
   const aliases = modelChain(principal, model, body);
   const usage = meter(principal, model, body);
   try {
-    const hit = await forwardToModel(aliases, path, body);
+    const hit = await forwardToModel(aliases, principal.routeLimits, path, body);
     await usage.ok(hit, usageFromUnknown(asRecord(hit.json)?.usage, hit.json));
     return asRecord(hit.json) ?? {};
   } catch (err) {

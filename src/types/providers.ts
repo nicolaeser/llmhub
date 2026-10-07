@@ -20,6 +20,13 @@ export type ProviderPolicyInput = {
 
 export type ProviderSyncRecord = ProviderRecord & { updatedAt: Date };
 
+export type ImportCandidate = {
+  id: string;
+  name: string;
+  alias: string;
+  exists: boolean;
+};
+
 export type ProviderView = {
   id: string;
   name: string;

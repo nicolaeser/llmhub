@@ -29,6 +29,7 @@ export async function POST(req: Request) {
       : [];
     const routed = await withDeployment(
       modelChain(principal, model, clean),
+      principal.routeLimits,
       async (dep, group) => {
         const anthropic = dep.kind === "anthropic";
         const proxied = await proxyJson({

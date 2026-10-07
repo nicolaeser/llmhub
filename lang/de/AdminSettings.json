@@ -1,6 +1,6 @@
 {
   "title": "Einstellungen",
-  "subtitle": "Anmeldung, Assistant, Objektspeicher und SCIM. Secrets bleiben in der Umgebung.",
+  "subtitle": "Anmeldung, Assistant, Modellkatalog, Objektspeicher und SCIM. Infrastruktur-Secrets bleiben in der Umgebung.",
   "save": "Einstellungen speichern",
   "saved": "Einstellungen gespeichert",
   "env": {
@@ -63,5 +63,18 @@
     "lock": "Dieses Modell erzwingen",
     "lockHint": "{state, select, missing {Wähle zuerst ein Standardmodell.} other {Niemand kann den Assistant auf ein anderes Modell umstellen.}}",
     "toolsHint": "Welche Werkzeuge der Assistant nutzen darf, legst du pro Rolle unter <link>Rollen</link> fest."
+  },
+  "jev": {
+    "title": "Modellkatalog (Jev)",
+    "subtitle": "Jev fasst Modelle, die Anbieter unterschiedlich benennen, unter einem Alias zusammen. Es läuft über OpenRouter mit einem eigenen Key, damit die Kosten getrennt vom Gateway-Verkehr erscheinen.",
+    "enabled": "Modelle mit Jev gruppieren",
+    "enabledHint": "{ready, select, true {Läuft bei jeder Katalog-Aktualisierung und prüft nur Modelle, die neu sind oder sich nicht über den Namen zuordnen ließen.} other {Trage zuerst einen OpenRouter-API-Key ein.}}",
+    "apiKey": "OpenRouter-API-Key für Jev",
+    "apiKeyState": "{set, select, true {Gespeichert. Leer lassen, um ihn zu behalten.} other {sk-or-…}}",
+    "apiKeyHint": "Nutze einen eigenen OpenRouter-Key, damit die Jev-Kosten getrennt von deinen Anbieter-Verbindungen bleiben. Der Key wird verschlüsselt gespeichert und nie wieder angezeigt.",
+    "model": "Jev-Modell",
+    "modelHint": "Modell-ID für OpenRouter System One. jev-latest folgt der neuesten Version.",
+    "clearKey": "Gespeicherten Key entfernen und Jev ausschalten",
+    "catalogHint": "Ergebnisse und Status der Aktualisierung findest du im <link>Modellkatalog</link>."
   }
 }

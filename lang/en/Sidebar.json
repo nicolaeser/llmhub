@@ -18,6 +18,7 @@
     "playground": "Playground",
     "assistant": "Assistant",
     "providers": "Providers",
+    "modelCatalog": "Model catalog",
     "models": "Models",
     "modelTemplates": "Model templates",
     "guardrails": "Guardrails",

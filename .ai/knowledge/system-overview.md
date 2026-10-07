@@ -9,7 +9,7 @@ LLM Hub is a Next.js 16 App Router app: OpenAI- and Anthropic-compatible `/v1` A
 - Web (`next start` / `next dev`) serves HTML, server actions, `/v1`, `/api`, `/internal-api`, `/sso`, `/scim`.
 - Postgres is the durable store (Prisma 7 + `@prisma/adapter-pg`).
 - Optional RustFS/S3 holds files, batches, videos, and log archives.
-- `src/instrumentation.ts` starts an in-process worker (`src/worker/`) after catalog boot: a maintenance sweep every minute, the provider model sync every hour, and alert webhook delivery. Optional Redis (`REDIS_URL`) runs it on the BullMQ `maintenance`, `models`, and `webhooks` queues (`QUEUE_NAMES`, `src/lib/jobs/queues.ts`) and shares RPM/TPM; without it the same jobs use process timers and inline delivery. Redis is never awaited at bind time. No separate worker process.
+- `src/instrumentation.ts` starts an in-process worker (`src/worker/`) after catalog boot: a maintenance sweep every minute, the cached model catalog refresh every two hours, and alert webhook delivery. Optional Redis (`REDIS_URL`) runs it on the BullMQ `maintenance`, `models`, and `webhooks` queues (`QUEUE_NAMES`, `src/lib/jobs/queues.ts`) and shares RPM/TPM; without it the same jobs use process timers and inline delivery. Redis is never awaited at bind time. No separate worker process.
 
 ## Route groups
 

@@ -1,0 +1,53 @@
+{
+  "title": "Model catalog",
+  "subtitle": "Every model your providers offer, grouped into public aliases. Naming rules and Jev group the same model even when providers spell it differently. Turn a whole model or single providers on and off.",
+  "refresh": "Refresh now",
+  "refreshed": "Catalog refreshed",
+  "saved": "Saved",
+  "lastRefresh": "Last refreshed {when}. Refreshes automatically every {hours, plural, one {hour} other {# hours}}.",
+  "neverRefreshed": "Not refreshed yet. Refreshes automatically every {hours, plural, one {hour} other {# hours}}.",
+  "jev": {
+    "summary": "Jev checked {asked, plural, =0 {no models} one {# model} other {# models}} in the last refresh and grouped {matched, plural, =0 {none} one {# of them} other {# of them}} ({cost}).",
+    "pending": "{count, plural, one {# model waits} other {# models wait}} for Jev in the next refresh.",
+    "missingTitle": "Jev is not set up",
+    "missing": "Models are grouped by naming rules only. Add a separate OpenRouter key for Jev under <link>Settings</link> to also group models that providers name differently.",
+    "errorTitle": "Jev stopped",
+    "error": "{code, select, JEV_AUTH {OpenRouter rejected the Jev API key.} JEV_CREDITS {The OpenRouter account for Jev has no credits left.} JEV_RATE_LIMITED {OpenRouter rate-limited the Jev requests.} other {The Jev request failed.}} The remaining models are checked in the next refresh."
+  },
+  "failedTitle": "Some providers could not be refreshed",
+  "failed": "{name}: {code, select, UPSTREAM_AUTH {the provider rejected the API key} UPSTREAM_EMPTY {the provider returned no models, the previous list is kept} BASE_URL_REQUIRED {the base URL is missing} other {the request failed}}",
+  "search": "Search models",
+  "filter": {
+    "label": "Show",
+    "option": "{filter, select, active {Active} fresh {With new providers} missing {Not created} disabled {Turned off} other {All models}}"
+  },
+  "groupState": "{state, select, active {Active} disabled {Off} other {Not created}}",
+  "groupToggle": "Turn {alias} on or off for every key",
+  "providers": "{active} of {total, plural, one {# provider} other {# providers}} active",
+  "newProviders": "{count, plural, one {# new provider} other {# new providers}}",
+  "autoRoutes": "Add new providers automatically",
+  "autoRoutesHint": "Providers that start offering this model are routed in the next refresh. Your own OpenAI-compatible servers are always turned on by hand.",
+  "openModels": "Routing and prices",
+  "columns": {
+    "provider": "Provider",
+    "model": "Provider model",
+    "match": "Grouped by",
+    "active": "Active",
+    "actions": "Actions"
+  },
+  "source": "{source, select, route {Active route} manual {Set by hand} rule {Same name} jev {Jev} other {Own model}}",
+  "jevConfidence": "Jev, {confidence} sure",
+  "entryState": "{status, select, active {On} disabled {Turned off} other {New}}",
+  "entryToggle": "Use {model} from {provider}",
+  "untrusted": "Own server: turn on by hand",
+  "assign": "Move to another alias",
+  "assignTitle": "Move {model}",
+  "assignAlias": "Alias",
+  "assignHint": "Pick an existing alias or type a new one. An active route moves along.",
+  "assignSubmit": "Move",
+  "emptyTitle": "The catalog is empty",
+  "empty": "Connect a provider, then refresh the catalog to group its models.",
+  "noResults": "No models match the filter.",
+  "more": "{count, plural, one {Show # more} other {Show # more}}",
+  "readOnly": "You can view the catalog. Changes need the models:manage permission."
+}

@@ -39,6 +39,7 @@ export type ModelSyncResult = {
   providers: number;
   changed: number;
   failed: number;
+  skipped: boolean;
 };
 
 export type WebhookJobData = {

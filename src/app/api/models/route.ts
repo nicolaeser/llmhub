@@ -18,6 +18,9 @@ export const POST = managementRoute(PERMISSIONS.MODELS_MANAGE, async ({ req }) =
     await createModelGroupAction({
       alias: body.alias,
       enabled: body.enabled,
+      vendor: body.vendor,
+      displayName: body.display_name,
+      autoRoutes: body.auto_routes,
       strategy: body.strategy,
       billingMode: body.billing_mode,
       priceInput: body.price_input_per_1k,

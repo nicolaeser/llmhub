@@ -38,6 +38,9 @@ export type PriceWindowDraft = {
 export type Group = {
   alias: string;
   enabled: boolean;
+  vendor: string;
+  displayName: string;
+  autoRoutes: boolean;
   strategy: string;
   billingMode: string;
   priceInput: number;

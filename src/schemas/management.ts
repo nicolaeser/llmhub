@@ -84,6 +84,9 @@ const deploymentSchema = z
 
 const modelAliasFields = {
   enabled: z.boolean(),
+  vendor: z.string().trim().max(60),
+  display_name: z.string().trim().max(120),
+  auto_routes: z.boolean(),
   strategy,
   billing_mode: billingMode,
   price_input_per_1k: money,
@@ -100,6 +103,9 @@ export const modelAliasCreateSchema = z
   .object({
     alias,
     enabled: modelAliasFields.enabled.default(true),
+    vendor: modelAliasFields.vendor.default(""),
+    display_name: modelAliasFields.display_name.default(""),
+    auto_routes: modelAliasFields.auto_routes.default(false),
     strategy: strategy.default("least_inflight"),
     billing_mode: billingMode.default("routed"),
     price_input_per_1k: money.default(0),

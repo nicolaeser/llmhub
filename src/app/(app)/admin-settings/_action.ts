@@ -9,7 +9,7 @@ import { requireStepUp } from "@/lib/auth/second-factor";
 import { actionFail, runAction } from "@/lib/http/action-result";
 import { writeAudit } from "@/lib/gateway/audit";
 import { issueScimToken, revokeScimToken, scimTokenSet } from "@/lib/gateway/scim";
-import { getEnterprise, patchEnterprise } from "@/lib/gateway/settings";
+import { DEFAULT_JEV_MODEL, getEnterprise, patchEnterprise } from "@/lib/gateway/settings";
 import { assistantModelLocked } from "@/lib/assistant/parse";
 import { resolveS3Config } from "@/lib/s3/config";
 import { env } from "@/lib/env";
@@ -31,6 +31,12 @@ async function view(enterprise: Enterprise, session: AuthenticatedSession) {
       registration_enabled: enterprise.registration_enabled === true,
       assistant_model: enterprise.assistant_model ?? "",
       assistant_model_locked: assistantModelLocked(enterprise),
+      catalog_jev: {
+        enabled: enterprise.catalog_jev?.enabled === true,
+        model: enterprise.catalog_jev?.model ?? DEFAULT_JEV_MODEL,
+        api_key: "",
+        clear_api_key: false,
+      },
       oidc: {
         enabled: enterprise.oidc?.enabled === true,
         issuer: enterprise.oidc?.issuer ?? "",
@@ -51,6 +57,7 @@ async function view(enterprise: Enterprise, session: AuthenticatedSession) {
     aliases: aliases.map((row) => row.alias),
     canManage,
     canManageScim: canManage && canGrant(grantActor(session), permissions),
+    jevKeySet: Boolean(enterprise.catalog_jev?.api_key),
     scimTokenSet: scimToken,
     s3Ready: Boolean(s3Ready),
     oidcEnv: Boolean(env.OIDC_CLIENT_SECRET),
@@ -71,14 +78,22 @@ export async function saveAdminSettingsAction(raw: unknown) {
     const session = await requirePermission(PERMISSIONS.SETTINGS_MANAGE);
     const parsed = adminSettingsSchema.safeParse(raw);
     if (!parsed.success) return actionFail("VALIDATION");
-    const settings = { ...parsed.data, assistant_model_locked: assistantModelLocked(parsed.data) };
-    const enterprise = await patchEnterprise(settings);
+    const { catalog_jev: jevInput, ...rest } = parsed.data;
+    const current = await getEnterprise();
+    const apiKey = jevInput.clear_api_key ? "" : jevInput.api_key || current.catalog_jev?.api_key || "";
+    if (jevInput.enabled && !apiKey) return actionFail("JEV_KEY_REQUIRED");
+    const jev = { enabled: jevInput.enabled, model: jevInput.model || DEFAULT_JEV_MODEL };
+    const settings = { ...rest, assistant_model_locked: assistantModelLocked(rest) };
+    const enterprise = await patchEnterprise({ ...settings, catalog_jev: { ...jev, api_key: apiKey } });
     await writeAudit({
       actor: session.user.id,
       action: "settings.admin",
       objectType: "enterprise",
       objectId: "enterprise",
-      after: settings,
+      after: {
+        ...settings,
+        catalog_jev: { ...jev, api_key_changed: Boolean(jevInput.api_key) || jevInput.clear_api_key },
+      },
     });
     return view(enterprise, session);
   });

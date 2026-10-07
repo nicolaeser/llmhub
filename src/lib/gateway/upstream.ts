@@ -14,6 +14,7 @@ import {
 import { applyProviderServiceMode, requestRoutingOverride, serviceModeHeaders } from "@/lib/gateway/service-mode";
 import { asRecord } from "@/lib/gateway/core";
 import type { ResolvedDeployment, JsonMap, ProxyFirstResult } from "@/types/gateway";
+import type { RouteLimits } from "@/types/model-templates";
 
 export function upstreamHeaders(
   dep: ResolvedDeployment,
@@ -295,6 +296,7 @@ export function withDeploymentModel(raw: BodyInit | undefined, model: string): B
 
 export async function forwardToModel(
   aliases: string[],
+  limits: RouteLimits,
   path: string,
   body: JsonMap | null,
   opts?: {
@@ -318,7 +320,7 @@ export async function forwardToModel(
     for (let attempt = 0; attempt < attempts; attempt++) {
       let acquired;
       try {
-        acquired = await acquireGroup(group, undefined, requestRoutingOverride(body));
+        acquired = await acquireGroup(group, limits[alias], undefined, requestRoutingOverride(body));
       } catch {
         last = new GateError(503, "no_healthy_deployment", "no healthy deployment for model");
         break;

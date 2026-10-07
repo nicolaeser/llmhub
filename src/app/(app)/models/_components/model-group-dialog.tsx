@@ -196,6 +196,9 @@ export default function ModelGroupDialog({
   const [overflow, setOverflow] = useState(editing?.overflowGroup ?? "");
   const [fallbacks, setFallbacks] = useState<string[]>(editing?.fallbackGroups ?? []);
   const [enabled, setEnabled] = useState(editing?.enabled ?? true);
+  const [vendor, setVendor] = useState(editing?.vendor ?? "");
+  const [displayName, setDisplayName] = useState(editing?.displayName ?? "");
+  const [autoRoutes, setAutoRoutes] = useState(editing?.autoRoutes ?? false);
   const [billingMode, setBillingMode] = useState<BillingMode>(billingModeOf(editing?.billingMode));
   const [priceIn, setPriceIn] = useState(editing?.priceInput ?? 0);
   const [priceOut, setPriceOut] = useState(editing?.priceOutput ?? 0);
@@ -230,6 +233,9 @@ export default function ModelGroupDialog({
       const body = {
         alias,
         enabled,
+        vendor,
+        displayName,
+        autoRoutes,
         strategy,
         billingMode,
         priceInput: validPrice(priceIn) ? priceIn : undefined,
@@ -420,6 +426,27 @@ export default function ModelGroupDialog({
                     </Disclosure.Heading>
                     <Disclosure.Content>
                       <Disclosure.Body className="space-y-4 pt-3">
+                        <div className="grid gap-3 sm:grid-cols-2 sm:items-start">
+                          <TextField fullWidth value={vendor} onChange={setVendor} isDisabled={pending}>
+                            <Label>{t("fields.vendor")}</Label>
+                            <Input placeholder="anthropic" />
+                            <Description>{t("fields.vendorHint")}</Description>
+                          </TextField>
+                          <TextField fullWidth value={displayName} onChange={setDisplayName} isDisabled={pending}>
+                            <Label>{t("fields.displayName")}</Label>
+                            <Input />
+                            <Description>{t("fields.displayNameHint")}</Description>
+                          </TextField>
+                        </div>
+                        <Switch isSelected={autoRoutes} onChange={setAutoRoutes} isDisabled={pending}>
+                          <Switch.Content>
+                            <Switch.Control>
+                              <Switch.Thumb />
+                            </Switch.Control>
+                            <Label>{t("fields.autoRoutes")}</Label>
+                          </Switch.Content>
+                          <Description>{t("fields.autoRoutesHint")}</Description>
+                        </Switch>
                         <Select
                           selectedKey={strategy}
                           onSelectionChange={(key) => setStrategy(String(key))}
