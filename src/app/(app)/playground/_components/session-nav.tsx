@@ -1,8 +1,9 @@
 "use client";
 
-import { Button, Card, Label, ListBox, Select } from "@heroui/react";
+import { Button, Card } from "@heroui/react";
 import { Trash2 } from "lucide-react";
 import { useTranslations } from "next-intl";
+import SearchSelect from "@/components/console/search-select";
 import type { Session } from "@/types/playground";
 
 type SessionNavProps = {
@@ -23,29 +24,14 @@ export function SessionPicker({
   const t = useTranslations("Playground");
   return (
     <div className="mb-3 flex items-center gap-2 md:hidden">
-      <Select
-        selectedKey={currentId ?? ""}
-        onSelectionChange={(key) => onSelect(String(key))}
-        aria-label={t("sessions")}
+      <SearchSelect
+        label={t("sessions")}
+        hideLabel
+        items={sessions.map((s) => ({ id: s.id, label: s.title || t("untitled") }))}
+        value={currentId ?? ""}
+        onChange={onSelect}
         className="min-w-0 flex-1"
-        fullWidth
-      >
-        <Label className="sr-only">{t("sessions")}</Label>
-        <Select.Trigger>
-          <Select.Value />
-          <Select.Indicator />
-        </Select.Trigger>
-        <Select.Popover>
-          <ListBox aria-label={t("sessions")}>
-            {sessions.map((s) => (
-              <ListBox.Item key={s.id} id={s.id} textValue={s.title || t("untitled")}>
-                {s.title || t("untitled")}
-                <ListBox.ItemIndicator />
-              </ListBox.Item>
-            ))}
-          </ListBox>
-        </Select.Popover>
-      </Select>
+      />
       <Button
         isIconOnly
         variant="ghost"

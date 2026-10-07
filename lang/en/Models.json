@@ -29,6 +29,7 @@
     "retries": "Retries",
     "overflow": "Overflow alias",
     "fallbacks": "Fallback aliases",
+    "fallbacksPlaceholder": "No fallbacks",
     "provider": "Provider connection",
     "noProvider": "Custom endpoint",
     "costIn": "Input cost / 1k",

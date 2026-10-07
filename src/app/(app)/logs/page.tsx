@@ -14,7 +14,7 @@ import LogTable, { type LogsPayload } from "./_components/log-table";
 
 const PAGE_SIZE = 50;
 const LIVE_INTERVAL_MS = 15_000;
-const NO_OPTIONS: LogOptions = { keys: [], users: [] };
+const NO_OPTIONS: LogOptions = { models: [], keys: [], users: [] };
 const NO_LOGS: LogsPayload = {
   canAudit: false,
   page: 1,

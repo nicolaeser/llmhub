@@ -297,8 +297,7 @@ test("assistant lives on internal-api not public /api", async () => {
   assert.doesNotMatch(panel, /localStorage\.setItem\([^)]*[Ww]rite/);
   assert.match(page, /loadAssistantAction/);
   assert.match(page, /useAssistantSession/);
-  assert.match(page, /Select\.Trigger/);
-  assert.match(page, /Select\.Indicator/);
+  assert.match(page, /<SearchSelect/);
   assert.match(page, /<Switch/);
   const action = await readFile(
     new URL("../src/app/(app)/assistant/_action.ts", import.meta.url),

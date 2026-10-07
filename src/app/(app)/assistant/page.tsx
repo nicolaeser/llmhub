@@ -7,8 +7,6 @@ import {
   Card,
   Description,
   Label,
-  ListBox,
-  Select,
   Spinner,
   Switch,
 } from "@heroui/react";
@@ -16,6 +14,7 @@ import { Plus, Sparkles } from "lucide-react";
 import { useTranslations } from "next-intl";
 import EmptyState from "@/components/console/empty-state";
 import PageHeader from "@/components/console/page-header";
+import SearchSelect from "@/components/console/search-select";
 import { isActionFail } from "@/lib/http/action-result";
 import { useAssistantSession } from "@/app/(app)/_components/assistant-session";
 import { loadAssistantAction } from "./_action";
@@ -123,33 +122,15 @@ export default function AssistantPage() {
         }
       />
       <div className="mb-4 grid gap-4 md:grid-cols-2">
-        <Select
-          selectedKey={session.model || null}
-          onSelectionChange={(key) => {
-            if (key !== null) session.setModel(String(key));
-          }}
-          aria-label={t("model")}
-          fullWidth
-          isDisabled={modelLocked || models.length === 0}
+        <SearchSelect
+          label={t("model")}
           placeholder={t("noModels")}
-        >
-          <Label>{t("model")}</Label>
-          <Select.Trigger>
-            <Select.Value />
-            <Select.Indicator />
-          </Select.Trigger>
-          <Select.Popover>
-            <ListBox aria-label={t("model")}>
-              {models.map((alias) => (
-                <ListBox.Item key={alias} id={alias} textValue={alias}>
-                  {alias}
-                  <ListBox.ItemIndicator />
-                </ListBox.Item>
-              ))}
-            </ListBox>
-          </Select.Popover>
-          {modelLocked ? <Description>{t("modelLocked")}</Description> : null}
-        </Select>
+          items={models.map((alias) => ({ id: alias, label: alias }))}
+          value={session.model}
+          onChange={session.setModel}
+          isDisabled={modelLocked || models.length === 0}
+          description={modelLocked ? t("modelLocked") : undefined}
+        />
         <Switch
           isSelected={canWrite && session.allowWrite}
           onChange={session.setAllowWrite}

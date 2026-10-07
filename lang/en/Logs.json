@@ -32,6 +32,7 @@
   "exportJsonl": "Export JSONL",
   "latencyMs": "{value, number, integer} ms",
   "tokenSplit": "{prompt, number, integer}/{completion, number, integer}",
+  "deleted": "{kind, select, org {Deleted company} team {Deleted department} project {Deleted project} member {Deleted person} key {Deleted key} user {Deleted console user} other {Deleted}}",
   "objectRef": "{objectType} {objectId}",
   "filters": {
     "from": "From",

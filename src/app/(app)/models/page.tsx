@@ -237,6 +237,7 @@ export default function ModelsPage() {
         state={formState}
         editing={editing}
         providers={providers}
+        aliases={groups.map((group) => group.alias)}
         onSaved={saved}
       />
     </div>

@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { Button, Form, Input, Label, ListBox, Select, Spinner, Switch, TextField } from "@heroui/react";
+import { Button, ComboBox, Form, Input, Label, ListBox, Spinner, Switch, TextField } from "@heroui/react";
 import { useTranslations } from "next-intl";
-import type { LogFilterValues, LogOption, LogOptions } from "@/types/logs";
+import SearchSelect from "@/components/console/search-select";
+import type { LogFilterValues, LogOptions } from "@/types/logs";
 
 export const NO_FILTERS: LogFilterValues = {
   model: "",
@@ -15,48 +16,6 @@ export const NO_FILTERS: LogFilterValues = {
   from: "",
   to: "",
 };
-
-function OptionSelect({
-  label,
-  anyLabel,
-  value,
-  options,
-  onChange,
-}: {
-  label: string;
-  anyLabel: string;
-  value: string;
-  options: LogOption[];
-  onChange: (value: string) => void;
-}) {
-  return (
-    <Select
-      selectedKey={value || "all"}
-      onSelectionChange={(key) => onChange(String(key) === "all" ? "" : String(key))}
-      fullWidth
-    >
-      <Label>{label}</Label>
-      <Select.Trigger>
-        <Select.Value />
-        <Select.Indicator />
-      </Select.Trigger>
-      <Select.Popover>
-        <ListBox aria-label={label}>
-          <ListBox.Item id="all" textValue={anyLabel}>
-            {anyLabel}
-            <ListBox.ItemIndicator />
-          </ListBox.Item>
-          {options.map((option) => (
-            <ListBox.Item key={option.id} id={option.id} textValue={option.label}>
-              {option.label}
-              <ListBox.ItemIndicator />
-            </ListBox.Item>
-          ))}
-        </ListBox>
-      </Select.Popover>
-    </Select>
-  );
-}
 
 export default function LogFilters({
   pending,
@@ -81,10 +40,23 @@ export default function LogFilters({
       }}
     >
       <div className="grid gap-3 md:grid-cols-4">
-        <TextField fullWidth value={values.model} onChange={set("model")}>
+        <ComboBox fullWidth allowsCustomValue inputValue={values.model} onInputChange={set("model")}>
           <Label>{t("columns.model")}</Label>
-          <Input />
-        </TextField>
+          <ComboBox.InputGroup>
+            <Input />
+            <ComboBox.Trigger />
+          </ComboBox.InputGroup>
+          <ComboBox.Popover>
+            <ListBox aria-label={t("columns.model")}>
+              {options.models.map((alias) => (
+                <ListBox.Item key={alias} id={alias} textValue={alias}>
+                  {alias}
+                  <ListBox.ItemIndicator />
+                </ListBox.Item>
+              ))}
+            </ListBox>
+          </ComboBox.Popover>
+        </ComboBox>
         <TextField fullWidth value={values.endpoint} onChange={set("endpoint")}>
           <Label>{t("columns.endpoint")}</Label>
           <Input placeholder="/v1/chat/completions" />
@@ -93,20 +65,18 @@ export default function LogFilters({
           <Label>{t("columns.status")}</Label>
           <Input inputMode="numeric" />
         </TextField>
-        <OptionSelect
+        <SearchSelect
           label={t("filters.key")}
-          anyLabel={t("filters.anyKey")}
-          value={values.keyId}
-          options={options.keys}
-          onChange={set("keyId")}
+          items={[{ id: "all", label: t("filters.anyKey") }, ...options.keys]}
+          value={values.keyId || "all"}
+          onChange={(next) => set("keyId")(next === "all" ? "" : next)}
         />
         {options.users.length ? (
-          <OptionSelect
+          <SearchSelect
             label={t("filters.user")}
-            anyLabel={t("filters.anyUser")}
-            value={values.userId}
-            options={options.users}
-            onChange={set("userId")}
+            items={[{ id: "all", label: t("filters.anyUser") }, ...options.users]}
+            value={values.userId || "all"}
+            onChange={(next) => set("userId")(next === "all" ? "" : next)}
           />
         ) : null}
         <TextField fullWidth value={values.from} onChange={set("from")}>

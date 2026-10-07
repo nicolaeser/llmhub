@@ -194,7 +194,8 @@ export default function LogDetailDialog({
   const format = useFormatter();
   const entities = (ids: string[]) =>
     ids.length ? format.list(ids.map((id) => tPii("entityLabel", { id })), "enumeration") : tCommon("none");
-  const label = (name: string, id: string) => name || id || tCommon("none");
+  const label = (kind: "key" | "user" | "member" | "org" | "team" | "project", name: string, id: string) =>
+    name || (id ? t("deleted", { kind }) : tCommon("none"));
 
   return (
     <Modal state={state}>
@@ -278,12 +279,12 @@ export default function LogDetailDialog({
                     </Field>
                     <Field label={tDetail("stream")}>{tDetail("yesNo", { value: String(detail.stream) })}</Field>
                     <Field label={tDetail("tag")}>{detail.tag ? <PiiText text={detail.tag} /> : tCommon("none")}</Field>
-                    <Field label={tDetail("key")}>{label(detail.keyLabel, detail.keyId)}</Field>
-                    <Field label={tDetail("user")}>{label(detail.userLabel, detail.userId)}</Field>
-                    <Field label={tDetail("member")}>{label(detail.memberLabel, detail.memberId)}</Field>
-                    <Field label={t("columns.org")}>{label(detail.orgLabel, detail.orgId)}</Field>
-                    <Field label={tDetail("team")}>{label(detail.teamLabel, detail.teamId)}</Field>
-                    <Field label={t("columns.project")}>{label(detail.projectLabel, detail.projectId)}</Field>
+                    <Field label={tDetail("key")}>{label("key", detail.keyLabel, detail.keyId)}</Field>
+                    <Field label={tDetail("user")}>{label("user", detail.userLabel, detail.userId)}</Field>
+                    <Field label={tDetail("member")}>{label("member", detail.memberLabel, detail.memberId)}</Field>
+                    <Field label={t("columns.org")}>{label("org", detail.orgLabel, detail.orgId)}</Field>
+                    <Field label={tDetail("team")}>{label("team", detail.teamLabel, detail.teamId)}</Field>
+                    <Field label={t("columns.project")}>{label("project", detail.projectLabel, detail.projectId)}</Field>
                     <Field label={t("columns.latency")}>{t("latencyMs", { value: detail.latencyMs })}</Field>
                     <Field label={t("columns.tokens")}>
                       {t("tokenSplit", { prompt: detail.promptTokens, completion: detail.completionTokens })}

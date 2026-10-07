@@ -56,7 +56,16 @@ export async function loadLogsAction(input?: { page?: number; pageSize?: number;
       prisma.spendEvent.count({ where: spendWhere }),
       scoped ? prisma.gatewayAuditLog.count({ where: auditWhere }) : 0,
     ]);
-    const names = await requestLogLabels(requests);
+    const [names, actors] = await Promise.all([
+      requestLogLabels(requests),
+      audit.length
+        ? prisma.user.findMany({
+            where: { id: { in: [...new Set(audit.map((row) => row.actor))] } },
+            select: { id: true, username: true },
+          })
+        : [],
+    ]);
+    const actorNames = new Map(actors.map((user) => [user.id, user.username]));
     return {
       canAudit: scoped,
       page,
@@ -76,7 +85,7 @@ export async function loadLogsAction(input?: { page?: number; pageSize?: number;
       audit: audit.map((r) => ({
         id: r.id,
         createdAt: r.createdAt.toISOString(),
-        actor: r.actor,
+        actor: actorNames.get(r.actor) ?? r.actor,
         action: r.action,
         objectType: r.objectType,
         objectId: r.objectId,
@@ -92,7 +101,8 @@ export async function loadLogOptionsAction() {
     const session = await requirePermission(PERMISSIONS.SPEND_READ);
     const company = companyOf(session);
     const scoped = seesAllSpend(session);
-    const [keys, users] = await Promise.all([
+    const [models, keys, users] = await Promise.all([
+      prisma.modelGroup.findMany({ orderBy: { alias: "asc" }, take: OPTION_LIMIT, select: { alias: true } }),
       prisma.virtualKey.findMany({
         where: {
           ...(company ? { orgId: company } : {}),
@@ -112,6 +122,7 @@ export async function loadLogOptionsAction() {
         : [],
     ]);
     return {
+      models: models.map((model) => model.alias),
       keys: keys.map((key) => ({ id: key.id, label: key.keyAlias || key.prefix })),
       users: users.map((user) => ({ id: user.id, label: user.username })),
     } satisfies LogOptions;
