@@ -3,7 +3,7 @@ import "server-only";
 import { QUEUE_NAMES, getMaintenanceQueue, getModelsQueue } from "@/lib/jobs/queues";
 
 const MAINTENANCE_INTERVAL_MS = 60_000;
-const MODEL_SYNC_INTERVAL_MS = 3_600_000;
+const MODEL_SYNC_INTERVAL_MS = 7_200_000;
 const MODEL_SYNC_BOOT_DEDUP_MS = 600_000;
 
 export async function registerWorkerSchedules(): Promise<void> {

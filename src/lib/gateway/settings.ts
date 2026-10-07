@@ -20,6 +20,7 @@ import type {
   S3Addressing,
   S3Settings,
   Enterprise,
+  JevSettings,
   Principal,
 } from "@/types/gateway";
 import type { PiiPolicy } from "@/types/guardrails";
@@ -35,6 +36,10 @@ const DEFAULT_PII: PIIConfig = {
   entities: [],
 };
 
+export const DEFAULT_JEV_MODEL = "jev-latest";
+
+const DEFAULT_JEV: JevSettings = { enabled: false, model: DEFAULT_JEV_MODEL, api_key: "" };
+
 const DEFAULT_ENTERPRISE: Enterprise = {
   cache_ttl_seconds: 0,
   log_retention_days: 0,
@@ -49,6 +54,7 @@ const DEFAULT_ENTERPRISE: Enterprise = {
   registration_enabled: false,
   assistant_model: "",
   assistant_model_locked: false,
+  catalog_jev: DEFAULT_JEV,
   pii: DEFAULT_PII,
   budget_alert_thresholds: [50, 80, 100],
   oidc: {
@@ -102,6 +108,15 @@ function normalizeWebhooks(rec: JsonMap): AlertWebhook[] {
   ];
 }
 
+export function normalizeJev(raw: unknown): JevSettings {
+  const rec = asRecord(raw) ?? {};
+  return {
+    enabled: asBool(rec.enabled, false),
+    model: asString(rec.model).trim() || DEFAULT_JEV_MODEL,
+    api_key: asString(rec.api_key),
+  };
+}
+
 export function normalizeEnterprise(raw: unknown): Enterprise {
   const rec = asRecord(raw) ?? {};
   return {
@@ -118,6 +133,7 @@ export function normalizeEnterprise(raw: unknown): Enterprise {
     registration_enabled: asBool(rec.registration_enabled, false),
     assistant_model: modelAlias(asString(rec.assistant_model)),
     assistant_model_locked: asBool(rec.assistant_model_locked, false),
+    catalog_jev: normalizeJev(rec.catalog_jev),
     oidc: normalizeOidc(rec.oidc),
     pii: normalizePii(rec.pii ?? DEFAULT_PII),
     s3: normalizeS3(rec.s3),
@@ -179,9 +195,11 @@ async function writeJson(key: string, value: unknown): Promise<void> {
 export async function getEnterprise(): Promise<Enterprise> {
   const raw = await readJson(SETTING_ENTERPRISE);
   const enterprise = normalizeEnterprise({ ...DEFAULT_ENTERPRISE, ...(asRecord(raw) ?? {}) });
+  const jev = enterprise.catalog_jev ?? DEFAULT_JEV;
   return {
     ...enterprise,
     alert_webhooks: (enterprise.alert_webhooks ?? []).map((hook) => ({ ...hook, secret: open(hook.secret) })),
+    catalog_jev: { ...jev, api_key: open(jev.api_key) },
   };
 }
 
@@ -220,10 +238,13 @@ export async function patchEnterprise(patch: Partial<Enterprise>): Promise<Enter
     oidc: patch.oidc ? { ...current.oidc, ...patch.oidc } : current.oidc,
     pii: patch.pii ? { ...current.pii, ...patch.pii } : current.pii,
     s3: patch.s3 ? { ...current.s3, ...patch.s3 } : current.s3,
+    catalog_jev: patch.catalog_jev ? { ...current.catalog_jev, ...patch.catalog_jev } : current.catalog_jev,
   };
+  const jev = next.catalog_jev ?? DEFAULT_JEV;
   await writeJson(SETTING_ENTERPRISE, {
     ...next,
     alert_webhooks: (next.alert_webhooks ?? []).map((hook) => ({ ...hook, secret: seal(hook.secret) })),
+    catalog_jev: { ...jev, api_key: seal(jev.api_key) },
   });
   return next;
 }

@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import {
   Button,
+  Chip,
   ListBox,
   Modal,
   SearchField,
@@ -13,7 +14,7 @@ import {
 import { useTranslations } from "next-intl";
 import { isActionFail } from "@/lib/http/action-result";
 import { importProviderModelsAction } from "@/app/(app)/providers/_action";
-import type { ProviderView } from "@/types/providers";
+import type { ImportCandidate, ProviderView } from "@/types/providers";
 
 export default function ImportModelsDialog({
   state,
@@ -23,9 +24,10 @@ export default function ImportModelsDialog({
 }: {
   state: ReturnType<typeof useOverlayState>;
   provider: ProviderView | null;
-  models: ProviderView["discovered"] | null;
+  models: ImportCandidate[] | null;
   onImported: (provider: ProviderView) => void;
 }) {
+  const t = useTranslations("Providers");
   const tCommon = useTranslations("Common");
   const tError = useTranslations("Error");
   const [query, setQuery] = useState("");
@@ -33,7 +35,7 @@ export default function ImportModelsDialog({
   const [pending, start] = useTransition();
   const q = query.toLowerCase();
   const filtered = (models ?? []).filter(
-    (m) => !q || m.id.toLowerCase().includes(q) || m.name.toLowerCase().includes(q),
+    (m) => !q || m.id.toLowerCase().includes(q) || m.name.toLowerCase().includes(q) || m.alias.includes(q),
   );
 
   function save(close: () => void) {
@@ -94,9 +96,21 @@ export default function ImportModelsDialog({
                     >
                       {filtered.map((m) => (
                         <ListBox.Item key={m.id} id={m.id} textValue={m.id}>
-                          <div className="flex min-w-0 flex-1 items-center justify-between gap-3">
-                            <span className="truncate font-mono text-xs">{m.id}</span>
-                            <span className="truncate text-xs text-muted">{m.name}</span>
+                          <div className="flex min-w-0 flex-1 flex-col gap-1">
+                            <div className="flex min-w-0 items-center justify-between gap-3">
+                              <span className="truncate font-mono text-xs">{m.id}</span>
+                              <span className="truncate text-xs text-muted">{m.name}</span>
+                            </div>
+                            {m.alias ? (
+                              <div className="flex min-w-0 items-center gap-2">
+                                <span className="truncate font-mono text-xs text-muted">
+                                  {t("importTarget", { alias: m.alias })}
+                                </span>
+                                <Chip size="sm" variant="soft" color={m.exists ? "accent" : "default"}>
+                                  {t("importTargetState", { exists: String(m.exists) })}
+                                </Chip>
+                              </div>
+                            ) : null}
                           </div>
                           <ListBox.ItemIndicator />
                         </ListBox.Item>

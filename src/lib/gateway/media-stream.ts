@@ -23,6 +23,7 @@ export async function streamMedia(input: {
   const usage = meter(input.principal, input.model, input.body);
   const routed = await withDeployment(
     input.aliases,
+    input.principal.routeLimits,
     async (dep, group) => {
       const form = withDeploymentModel(input.form, dep.model);
       return openUpstreamStream({

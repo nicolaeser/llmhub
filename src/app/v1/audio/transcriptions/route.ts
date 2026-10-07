@@ -27,7 +27,7 @@ export async function POST(req: Request) {
     }
     const usage = meter(principal, model, body);
     try {
-      const hit = await forwardToModel(aliases, "/audio/transcriptions", rawBody ? null : body, {
+      const hit = await forwardToModel(aliases, principal.routeLimits, "/audio/transcriptions", rawBody ? null : body, {
         rawBody,
         contentType: rawBody ? undefined : contentType,
         binary: true,

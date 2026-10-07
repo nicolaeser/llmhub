@@ -88,6 +88,7 @@ export async function dispatchMessages(input: MessagesInput): Promise<JsonMap> {
   const fallback = chatFallback(input.request);
   const routed = await withDeployment(
     input.aliases,
+    input.principal.routeLimits,
     async (dep, group) => {
       if (dep.kind !== "anthropic") {
         return { native: false, json: asRecord(await chatOnce(dep, group, fallback(), input.model)) ?? {} };
@@ -143,6 +144,7 @@ export async function streamMessages(input: MessagesInput & { req: Request }): P
   const fallback = chatFallback(input.request);
   const routed = await withDeployment(
     input.aliases,
+    input.principal.routeLimits,
     async (dep, group) => {
       if (dep.kind !== "anthropic") {
         return {

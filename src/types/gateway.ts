@@ -2,6 +2,7 @@ import type { Prisma } from "@/generated/prisma/client";
 import type { OPENAPI_METHODS } from "@/lib/gateway/openapi";
 import type { WEBHOOK_EVENTS } from "@/lib/gateway/webhook-events";
 import type { PiiPolicy } from "@/types/guardrails";
+import type { RouteLimits } from "@/types/model-templates";
 
 export type SpendHolder = {
   id: string;
@@ -26,6 +27,13 @@ export type PriceSchedule = {
 export type TokenPricing = {
   prompt: string;
   completion: string;
+};
+
+export type PublicModel = {
+  alias: string;
+  vendor: string;
+  displayName: string;
+  pricing: ModelPricing | null;
 };
 
 export type ModelPricing = TokenPricing & {
@@ -186,7 +194,16 @@ export type DbDeployment = {
   costInput: Prisma.Decimal;
   costOutput: Prisma.Decimal;
   providerId: string | null;
-  provider: { id: string; kind: string; baseUrl: string; apiKey: string } | null;
+  provider: {
+    id: string;
+    kind: string;
+    baseUrl: string;
+    apiKey: string;
+    zdr: boolean;
+    retentionDays: number | null;
+    region: string;
+    noTraining: boolean;
+  } | null;
 };
 
 export type ResolvedDeployment = Deployment & {
@@ -282,6 +299,13 @@ export type Enterprise = {
   registration_enabled?: boolean;
   assistant_model?: string;
   assistant_model_locked?: boolean;
+  catalog_jev?: JevSettings;
+};
+
+export type JevSettings = {
+  enabled: boolean;
+  model: string;
+  api_key: string;
 };
 
 export type Deployment = {
@@ -357,6 +381,7 @@ export type Principal = {
   userId: string;
   memberId: string;
   models: string[];
+  routeLimits: RouteLimits;
   trace?: RequestTrace;
 };
 

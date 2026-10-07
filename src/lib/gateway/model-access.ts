@@ -1,8 +1,8 @@
 import "server-only";
 import prisma from "@/lib/db/prisma";
 import { asStringArray } from "@/lib/gateway/core";
-import { modelPolicies, resolveTemplates } from "@/lib/gateway/model-policy";
-import type { ModelPolicy, TemplateRules } from "@/types/model-templates";
+import { modelPolicies, resolveAccess } from "@/lib/gateway/model-policy";
+import type { ModelAccess, ModelPolicy, TemplateRules } from "@/types/model-templates";
 
 export const templateRuleSelect = {
   id: true,
@@ -41,7 +41,7 @@ export async function loadModelPolicies(): Promise<ModelPolicy[]> {
   );
 }
 
-export async function allowedModels(explicit: string[], templates: TemplateRules[]): Promise<string[]> {
-  if (!templates.length) return explicit;
-  return [...new Set([...explicit, ...resolveTemplates(templates, await loadModelPolicies())])];
+export async function modelAccess(explicit: string[], templates: TemplateRules[]): Promise<ModelAccess> {
+  if (!templates.length) return { models: explicit, limits: {} };
+  return resolveAccess(explicit, templates, await loadModelPolicies());
 }

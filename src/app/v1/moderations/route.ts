@@ -13,7 +13,7 @@ export async function POST(req: Request) {
     const aliases = modelChain(principal, model, clean);
     const usage = meter(principal, model, body);
     try {
-      const hit = await forwardToModel(aliases, "/moderations", clean);
+      const hit = await forwardToModel(aliases, principal.routeLimits, "/moderations", clean);
       await usage.ok(hit);
       return NextResponse.json(hit.json);
     } catch (err) {

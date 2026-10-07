@@ -4,7 +4,7 @@ import { digest } from "@/lib/crypto";
 import { toKeyView } from "@/app/(app)/_data";
 import { effectivePermissions, hasPerm, PERMISSIONS } from "@/lib/auth/permissions";
 import { isTryBearer, verifyTryBearer } from "@/lib/gateway/try-bearer";
-import { allowedModels, templateRuleSelect } from "@/lib/gateway/model-access";
+import { modelAccess, templateRuleSelect } from "@/lib/gateway/model-access";
 import { templateRulesOf } from "@/lib/gateway/model-policy";
 import { GateError } from "@/lib/gateway/errors";
 import { isManagementKey } from "@/lib/management/scope";
@@ -19,6 +19,7 @@ export function sessionPrincipal(user: { id: string; orgId: string | null }): Pr
     userId: user.id,
     memberId: "",
     models: [],
+    routeLimits: {},
   };
 }
 
@@ -34,6 +35,10 @@ async function principalFromKey(
   const { tenancy, active } = await resolveKeyTenancy(row);
   if (!active) return null;
   const key: VirtualKeyView = toKeyView(row);
+  const access = await modelAccess(
+    key.models,
+    row.templates.map((link) => templateRulesOf(link.template)),
+  );
   return {
     actor: row.prefix,
     key,
@@ -41,10 +46,8 @@ async function principalFromKey(
     orgId: tenancy.orgId,
     userId: tenancy.userId,
     memberId: tenancy.memberId,
-    models: await allowedModels(
-      key.models,
-      row.templates.map((link) => templateRulesOf(link.template)),
-    ),
+    models: access.models,
+    routeLimits: access.limits,
   };
 }
 

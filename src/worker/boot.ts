@@ -7,7 +7,7 @@ import { setWorkerMode } from "./health";
 import type { GlobalWithWorkerBoot } from "@/types/jobs";
 
 const WORKER_TICK_MS = 60_000;
-const MODEL_SYNC_TICK_MS = 3_600_000;
+const MODEL_SYNC_TICK_MS = 7_200_000;
 
 export const BOOT_KEY = "__llmhubWorkerBoot";
 

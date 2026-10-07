@@ -16,7 +16,7 @@
     "enabled": "Status",
     "strategy": "Mode",
     "billing": "Billing",
-    "endpoints": "Endpoints",
+    "endpoints": "Providers",
     "overflow": "Overflow"
   },
   "fields": {
@@ -37,7 +37,13 @@
     "priceIn": "Input price / 1k tokens",
     "priceOut": "Output price / 1k tokens",
     "enabled": "Available in the API",
-    "enabledHint": "When off, the model is hidden from /v1/models and requests to it fail with model not found, also as a fallback. Settings are kept."
+    "enabledHint": "When off, the model is hidden from /v1/models and requests to it fail with model not found, also as a fallback. Settings are kept.",
+    "vendor": "Vendor",
+    "vendorHint": "Shown as owned_by in /v1/models, for example anthropic or openai.",
+    "displayName": "Display name",
+    "displayNameHint": "Shown as display_name in /v1/models. Leave empty to use the alias.",
+    "autoRoutes": "Add new providers automatically",
+    "autoRoutesHint": "When the model catalog finds this model at another trusted provider, it routes there after the next refresh."
   },
   "billingModes": {
     "average": "Average of endpoints",

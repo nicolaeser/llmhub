@@ -21,6 +21,7 @@ import { asRecord, isRouterError, newId, stringifyContent } from "@/lib/gateway/
 import { ChatStreamTranscript } from "@/lib/gateway/log-content";
 import { estimateTokens, requestText } from "@/lib/gateway/tokens";
 import type { Group, ResolvedDeployment, JsonMap, Usage, Principal } from "@/types/gateway";
+import type { RouteLimits } from "@/types/model-templates";
 
 export const UPSTREAM_TIMEOUT_MS = 300_000;
 
@@ -61,6 +62,7 @@ function fallbackable(err: unknown): boolean {
 
 export async function withDeployment<T>(
   aliases: string[],
+  limits: RouteLimits,
   fn: (dep: ResolvedDeployment, group: Group) => Promise<T>,
   opts?: { deferRelease?: boolean; strategy?: string },
 ): Promise<{
@@ -71,9 +73,9 @@ export async function withDeployment<T>(
   release: () => void;
 }> {
   let last: unknown = new GateError(404, "model_not_found", "no deployment for model", { param: "model" });
-  const queue = [...aliases];
+  const queue = aliases.map((alias) => ({ alias, root: alias }));
   for (let qi = 0; qi < queue.length; qi++) {
-    const alias = queue[qi]!;
+    const { alias, root } = queue[qi]!;
     let group: Group;
     try {
       group = await loadGroup(alias);
@@ -85,7 +87,7 @@ export async function withDeployment<T>(
     let stopAlias = false;
     for (let i = 0; i < attempts; i++) {
       try {
-        const acquired = await acquireGroup(group, undefined, opts?.strategy);
+        const acquired = await acquireGroup(group, limits[root], undefined, opts?.strategy);
         try {
           const started = Date.now();
           const result = await fn(acquired.dep, group);
@@ -118,10 +120,10 @@ export async function withDeployment<T>(
       }
     }
     for (const fb of group.fallback_groups) {
-      if (!queue.includes(fb)) queue.push(fb);
+      if (!queue.some((entry) => entry.alias === fb)) queue.push({ alias: fb, root });
     }
-    if (!stopAlias && group.overflow_group && !queue.includes(group.overflow_group)) {
-      queue.push(group.overflow_group);
+    if (!stopAlias && group.overflow_group && !queue.some((entry) => entry.alias === group.overflow_group)) {
+      queue.push({ alias: group.overflow_group, root });
     }
   }
   await alertUpstreamFailure(last);
@@ -241,6 +243,7 @@ export async function dispatchChat(input: {
   const started = Date.now();
   const routed = await withDeployment(
     input.aliases,
+    input.principal.routeLimits,
     (dep, group) => chatOnce(dep, group, input.body, input.model),
     { strategy: requestRoutingOverride(input.body) },
   ).catch(async (err) => {
@@ -285,6 +288,7 @@ export async function streamChat(input: {
   const started = Date.now();
   const routed = await withDeployment(
     input.aliases,
+    input.principal.routeLimits,
     (dep, group) => openChatStream(dep, group, input),
     { deferRelease: true, strategy: requestRoutingOverride(input.body) },
   ).catch(async (err) => {
