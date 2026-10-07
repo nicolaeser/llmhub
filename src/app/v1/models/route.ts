@@ -1,17 +1,17 @@
 import { NextResponse } from "next/server";
-import prisma from "@/lib/db/prisma";
 import { gateRequest, gateResponse, modelPermitted } from "@/lib/gateway/gate";
 import { apiKeyRequest } from "@/lib/gateway/messages";
 import { modelEntry } from "@/lib/gateway/core";
+import { pricedModels } from "@/lib/gateway/model-pricing";
 
 export async function GET(req: Request) {
   try {
     const principal = await gateRequest(apiKeyRequest(req));
-    const groups = await prisma.modelGroup.findMany({ select: { alias: true } });
     const created = new Date();
-    const data = [...groups.map((group) => group.alias), "auto"]
-      .filter((alias) => modelPermitted(principal, alias))
-      .map((alias) => modelEntry(alias, created));
+    const models = [...(await pricedModels(created)), { alias: "auto", pricing: null }];
+    const data = models
+      .filter((model) => modelPermitted(principal, model.alias))
+      .map((model) => modelEntry(model.alias, created, model.pricing));
     return NextResponse.json({
       object: "list",
       data,

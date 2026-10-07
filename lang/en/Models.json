@@ -13,12 +13,15 @@
   "deleteEndpoint": "Remove endpoint",
   "columns": {
     "alias": "Public name",
+    "enabled": "Status",
     "strategy": "Mode",
+    "billing": "Billing",
     "endpoints": "Endpoints",
     "overflow": "Overflow"
   },
   "fields": {
     "alias": "Public model name",
+    "aliasHint": "Saved in lowercase. Clients can send any capitalization, such as Gemma-3-27B or gemma-3-27b.",
     "strategy": "Load-balance mode",
     "baseUrl": "API base URL",
     "upstream": "Upstream model id",
@@ -30,14 +33,24 @@
     "noProvider": "Custom endpoint",
     "costIn": "Input cost / 1k",
     "costOut": "Output cost / 1k",
-    "billingMode": "Billing"
+    "billingMode": "Billing",
+    "priceIn": "Input price / 1k tokens",
+    "priceOut": "Output price / 1k tokens",
+    "enabled": "Available in the API",
+    "enabledHint": "When off, the model is hidden from /v1/models and requests to it fail with model not found, also as a fallback. Settings are kept."
   },
   "billingModes": {
     "average": "Average of endpoints",
-    "routed": "Routed provider"
+    "routed": "Routed provider",
+    "custom": "Custom price"
   },
-  "billingModeLabel": "{mode, select, average {Average of endpoints} routed {Routed provider} other {{mode}}}",
-  "billingModeHint": "{mode, select, average {Bill the average of endpoint prices. That average is the floor: a cheaper route still bills the average.} routed {Bill the endpoint that served the request.} other {}}",
+  "billingModeLabel": "{mode, select, average {Average of endpoints} routed {Routed provider} custom {Custom price} other {{mode}}}",
+  "billingModeHint": "{mode, select, average {Bill the average of endpoint prices. That average is the floor: a cheaper route still bills the average.} routed {Bill the endpoint that served the request.} custom {Bill your own price per 1k tokens, whichever endpoint serves the request.} other {}}",
+  "billingSummary": "{mode, select, custom {{input, number, price} in · {output, number, price} out / 1k{windows, plural, =0 {} one { · # time window} other { · # time windows}}} average {Average of endpoints} routed {Routed provider} other {{mode}}}",
+  "priceHint": "Billed to keys, users, teams, and budgets instead of the endpoint cost. Cache and service-tier rules still apply.",
+  "priceInvalid": "Enter a price of 0 or more.",
+  "enabledState": "{enabled, select, true {Enabled} other {Disabled}}",
+  "enabledToggle": "Make {alias} available in the API",
   "priceFromProvider": "Prices from {source}",
   "strategies": {
     "weighted_random": "Weighted random",
@@ -50,6 +63,19 @@
   "removeConfirm": "Remove model alias {alias}?",
   "toasts": {
     "saved": "{mode, select, edit {Model updated} add {Model added} other {Model added}}",
-    "deleted": "Model removed"
+    "deleted": "Model removed",
+    "enabled": "{enabled, select, true {{alias} enabled} other {{alias} disabled}}"
+  },
+  "schedule": {
+    "title": "Time-based prices",
+    "hint": "Bill a different price during set hours, for example cheaper at night. Outside these windows the price above applies. A window may run past midnight, such as 22:00 to 06:00.",
+    "start": "From",
+    "end": "Until",
+    "sameTime": "Start and end must differ.",
+    "overlap": "Two windows cover the same time. Adjust their start or end.",
+    "timeZone": "Time zone",
+    "timeZoneHint": "Window times follow this time zone, including daylight saving changes. A request is priced by when it started.",
+    "add": "Add time window",
+    "remove": "Remove window {index, number}"
   }
 }

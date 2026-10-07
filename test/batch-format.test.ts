@@ -17,6 +17,15 @@ function line(custom: string, body: JsonMap, url = "/v1/chat/completions"): stri
   return JSON.stringify({ custom_id: custom, method: "POST", url, body });
 }
 
+test("batch lines may spell the same model in any case", () => {
+  const parsed = parseBatchInput(
+    [line("a", { model: "Gemma-3-27B", messages: [] }), line("b", { model: "gemma-3-27b", messages: [] })].join("\n"),
+    "/v1/chat/completions",
+  );
+  assert.equal(parsed.errors.length, 0);
+  assert.equal(parsed.model, "gemma-3-27b");
+});
+
 test("batch input parses valid lines and enforces OpenAI batch rules", () => {
   const ok = parseBatchInput(
     [line("a", { model: "m", messages: [] }), "", line("b", { model: "m", messages: [] })].join("\n"),

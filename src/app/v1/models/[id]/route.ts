@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
-import prisma from "@/lib/db/prisma";
 import { gateRequest, gateResponse, modelPermitted } from "@/lib/gateway/gate";
 import { GateError } from "@/lib/gateway/errors";
 import { apiKeyRequest } from "@/lib/gateway/messages";
 import { modelEntry } from "@/lib/gateway/core";
+import { modelAlias } from "@/lib/gateway/model-alias";
+import { pricedModels } from "@/lib/gateway/model-pricing";
 
 export async function GET(
   req: Request,
@@ -11,13 +12,13 @@ export async function GET(
 ) {
   try {
     const principal = await gateRequest(apiKeyRequest(req));
-    const { id } = await ctx.params;
-    const exists =
-      id === "auto" || Boolean(await prisma.modelGroup.findUnique({ where: { alias: id }, select: { alias: true } }));
-    if (!exists || !modelPermitted(principal, id)) {
+    const id = modelAlias((await ctx.params).id);
+    const created = new Date();
+    const model = id === "auto" ? { alias: "auto", pricing: null } : (await pricedModels(created, [id]))[0];
+    if (!model || !modelPermitted(principal, id)) {
       throw new GateError(404, "model_not_found", "model not found", { param: "id" });
     }
-    return NextResponse.json(modelEntry(id, new Date()));
+    return NextResponse.json(modelEntry(id, created, model.pricing));
   } catch (err) {
     return gateResponse(err, req);
   }

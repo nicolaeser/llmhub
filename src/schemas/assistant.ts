@@ -1,5 +1,7 @@
 import { z } from "zod";
 import { assistantPages, assistantTopics } from "@/lib/assistant/knowledge";
+import { BILLING_MODES } from "@/lib/gateway/core";
+import { clockMinute, isTimeZone, MAX_PRICE_WINDOWS } from "@/lib/gateway/price-schedule";
 import { DATA_REGIONS } from "@/lib/gateway/model-policy";
 import type { UsageBreakdownGroup, UsageBreakdownSort } from "@/types/assistant";
 
@@ -18,6 +20,8 @@ const usageGroups = ["model", "org", "team", "project", "member", "key", "user"]
 const usageSorts = ["spend", "requests", "errors"] as const satisfies readonly UsageBreakdownSort[];
 const keyRef = name.describe("Key id, alias, or prefix.");
 const days = z.number().int().min(0).max(3650);
+const price = z.number().min(0).max(1_000_000_000);
+const clock = z.string().refine((value) => clockMinute(value) !== null, "expected HH:MM");
 const rpm = z.number().int().min(0).max(1_000_000);
 const tpm = z.number().int().min(0).max(1_000_000_000);
 const providerPolicy = {
@@ -135,8 +139,33 @@ export const createModelToolInput = z.object({
 
 export const updateModelToolInput = z.object({
   alias: name,
+  enabled: z.boolean().optional().describe("False hides the alias from /v1 and rejects requests to it."),
   strategy: strategy.optional(),
-  billingMode: z.enum(["routed", "average"]).optional(),
+  billingMode: z
+    .enum(BILLING_MODES)
+    .optional()
+    .describe("custom bills priceInputPer1k and priceOutputPer1k instead of the endpoint cost."),
+  priceInputPer1k: price.optional(),
+  priceOutputPer1k: price.optional(),
+  priceTimeZone: z
+    .string()
+    .trim()
+    .max(64)
+    .refine(isTimeZone, "unknown IANA time zone")
+    .optional()
+    .describe("IANA time zone for priceSchedule, such as Europe/Berlin."),
+  priceSchedule: z
+    .array(
+      z.object({
+        start: clock,
+        end: clock.describe("Exclusive. An end before start wraps past midnight."),
+        priceInputPer1k: price,
+        priceOutputPer1k: price,
+      }),
+    )
+    .max(MAX_PRICE_WINDOWS)
+    .optional()
+    .describe("Replaces all time windows that bill a different custom price. Windows must not overlap; [] removes them."),
   numRetries: z.number().int().min(0).max(10).optional(),
   fallbackGroups: names(20).optional(),
   overflowGroup: label.optional(),

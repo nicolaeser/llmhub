@@ -72,6 +72,22 @@ test("OpenRouter's reported cost wins, including BYOK upstream cost and free mod
   close(costOf(dep("openai", "gpt-5.6-sol"), { ...base, cost: 0.01 }), 3);
 });
 
+test("a custom model price replaces endpoint and reported cost but keeps cache and tier rules", () => {
+  const price = { cost_input_per_1k: 0.5, cost_output_per_1k: 1.5 };
+  const custom = { mode: "custom", peers: [], price };
+  close(costOf(dep("openai_compat", "self-hosted/llama", 0, 0), base, custom), 2);
+  close(costOf(dep("openai_compat", "self-hosted/llama", 0, 0), base, { mode: "routed", peers: [], price }), 0.004);
+  const router = dep("openrouter", "anthropic/claude-opus-5-5", 4, 20);
+  close(costOf(router, usageFromUnknown({ prompt_tokens: 1000, completion_tokens: 1000, cost: 0.03 }), custom), 2);
+  close(costOf(dep("openai", "gpt-5.6-sol"), { ...base, service_tier: "flex" }, custom), 1);
+  close(
+    costOf(dep("openai_compat", "self-hosted/llama"), { prompt_tokens: 1000, completion_tokens: 0, cache_read_input_tokens: 1000 }, custom),
+    0.05,
+  );
+  const free = { mode: "custom", peers: [], price: { cost_input_per_1k: 0, cost_output_per_1k: 0 } };
+  close(costOf(dep("openai_compat", "self-hosted/llama", 0, 0), base, free), 0);
+});
+
 test("reasoning tokens reported outside completion_tokens are billed as output", () => {
   const xai = usageFromUnknown({
     prompt_tokens: 663,

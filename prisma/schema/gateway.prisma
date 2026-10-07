@@ -168,14 +168,31 @@ model ProviderConnection {
 }
 
 model ModelGroup {
-  alias          String @id
-  strategy       String @default("least_inflight")
-  billingMode    String @default("routed")
-  overflowGroup  String @default("")
-  numRetries     Int    @default(0)
-  fallbackGroups Json   @default("[]")
+  alias          String  @id
+  enabled        Boolean @default(true)
+  strategy       String  @default("least_inflight")
+  billingMode    String  @default("routed")
+  priceInput     Decimal @default(0) @db.Decimal(20, 10)
+  priceOutput    Decimal @default(0) @db.Decimal(20, 10)
+  priceTimeZone  String  @default("UTC")
+  overflowGroup  String  @default("")
+  numRetries     Int     @default(0)
+  fallbackGroups Json    @default("[]")
 
-  deployments Deployment[]
+  deployments  Deployment[]
+  priceWindows ModelPriceWindow[]
+}
+
+model ModelPriceWindow {
+  id          String     @id @default(cuid())
+  groupAlias  String
+  group       ModelGroup @relation(fields: [groupAlias], references: [alias], onDelete: Cascade)
+  startMinute Int
+  endMinute   Int
+  priceInput  Decimal    @db.Decimal(20, 10)
+  priceOutput Decimal    @db.Decimal(20, 10)
+
+  @@index([groupAlias])
 }
 
 model Deployment {

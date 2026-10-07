@@ -42,6 +42,12 @@ export const formats = {
       minimumFractionDigits: 4,
       maximumFractionDigits: 4,
     },
+    price: {
+      style: "currency",
+      currency: "USD",
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 8,
+    },
   },
   list: {
     enumeration: { type: "conjunction", style: "long" },

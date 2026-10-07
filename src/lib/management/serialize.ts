@@ -57,8 +57,18 @@ export function serializeModelAlias(group: Group) {
   return {
     object: "model_alias",
     alias: group.alias,
+    enabled: group.enabled,
     strategy: group.strategy,
     billing_mode: group.billingMode,
+    price_input_per_1k: group.priceInput,
+    price_output_per_1k: group.priceOutput,
+    price_time_zone: group.priceTimeZone,
+    price_schedule: group.priceWindows.map((window) => ({
+      start: window.start,
+      end: window.end,
+      price_input_per_1k: window.priceInput,
+      price_output_per_1k: window.priceOutput,
+    })),
     num_retries: group.numRetries,
     overflow_group: orNull(group.overflowGroup),
     fallback_groups: group.fallbackGroups,

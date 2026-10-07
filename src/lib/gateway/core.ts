@@ -1,6 +1,6 @@
 import packageJson from "../../../package.json";
 import { PROVIDER_CATALOG } from "@/lib/gateway/catalog";
-import type { JsonMap, Principal } from "@/types/gateway";
+import type { JsonMap, ModelPricing, Principal } from "@/types/gateway";
 
 export class RouterError extends Error {
   constructor(
@@ -103,7 +103,7 @@ export function newRequestId(): string {
   return `req_${newId(12)}`;
 }
 
-export function modelEntry(id: string, created: Date): JsonMap {
+export function modelEntry(id: string, created: Date, pricing?: ModelPricing | null): JsonMap {
   return {
     id,
     object: "model",
@@ -112,6 +112,7 @@ export function modelEntry(id: string, created: Date): JsonMap {
     type: "model",
     display_name: id,
     created_at: created.toISOString(),
+    ...(pricing ? { pricing } : {}),
   };
 }
 
@@ -128,4 +129,6 @@ export const KNOWN_STRATEGIES = new Set([
 export const KNOWN_KINDS = new Set(PROVIDER_CATALOG.map((spec) => spec.kind));
 
 
-export const KNOWN_BILLING_MODES = new Set(["routed", "average"]);
+export const BILLING_MODES = ["routed", "average", "custom"] as const;
+
+export const KNOWN_BILLING_MODES = new Set<string>(BILLING_MODES);

@@ -14,6 +14,7 @@ export async function loadAssistantAction() {
     const session = await requirePermission(PERMISSIONS.ASSISTANT_USE);
     const [groups, enterprise, disabledTools] = await Promise.all([
       prisma.modelGroup.findMany({
+        where: { enabled: true },
         select: { alias: true },
         orderBy: { alias: "asc" },
       }),

@@ -13,6 +13,7 @@ export async function loadApiRefAction() {
     const [keys, models] = await Promise.all([
       listKeys(session),
       prisma.modelGroup.findMany({
+        where: { enabled: true },
         select: { alias: true },
         orderBy: { alias: "asc" },
       }),

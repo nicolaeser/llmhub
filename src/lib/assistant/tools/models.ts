@@ -2,6 +2,7 @@ import "server-only";
 
 import prisma from "@/lib/db/prisma";
 import { asStringArray } from "@/lib/gateway/core";
+import { modelAlias } from "@/lib/gateway/model-alias";
 import { templateRuleSelect } from "@/lib/gateway/model-access";
 import { templateModels, templateRulesOf } from "@/lib/gateway/model-policy";
 import { money } from "@/lib/utils/money";
@@ -27,9 +28,18 @@ import {
   updateModelToolInput,
 } from "@/schemas/assistant";
 import { defineTool, needsConfirmation, toolFail, viaAction } from "@/lib/assistant/tools/define";
-import type { DeploymentInput } from "@/types/models";
+import type { DeploymentInput, PriceWindow } from "@/types/models";
 
 const MAX_TEMPLATE_MATCHES = 100;
+
+function scheduleView(windows: PriceWindow[]) {
+  return windows.map((window) => ({
+    start: window.start,
+    end: window.end,
+    priceInputPer1k: window.priceInput,
+    priceOutputPer1k: window.priceOutput,
+  }));
+}
 
 async function providerNames(): Promise<Map<string, string>> {
   const rows = await prisma.providerConnection.findMany({ select: { id: true, name: true } });
@@ -63,14 +73,21 @@ async function newDeployments(
 
 export const modelTools = {
   list_models: defineTool({
-    description: "Public model aliases with routing strategy, retries, fallbacks, overflow, and the providers behind them.",
+    description:
+      "Public model aliases with enabled state, routing strategy, billing mode, custom price, retries, fallbacks, overflow, and the providers behind them.",
     input: emptyToolInput,
     run: async () => {
       const names = await providerNames();
       return viaAction(loadModelsAction(), ({ groups }) => ({
         result: groups.map((group) => ({
           alias: group.alias,
+          enabled: group.enabled,
           strategy: group.strategy,
+          billingMode: group.billingMode,
+          priceInputPer1k: group.priceInput,
+          priceOutputPer1k: group.priceOutput,
+          priceTimeZone: group.priceTimeZone,
+          priceSchedule: scheduleView(group.priceWindows),
           numRetries: group.numRetries,
           fallbackGroups: group.fallbackGroups,
           overflowGroup: group.overflowGroup,
@@ -89,7 +106,7 @@ export const modelTools = {
     run: async ({ alias }) => {
       const names = await providerNames();
       return viaAction(loadModelsAction(), ({ groups }) => {
-        const group = groups.find((row) => row.alias === alias);
+        const group = groups.find((row) => row.alias === modelAlias(alias));
         if (!group) return toolFail("not_found");
         return {
           result: {
@@ -129,11 +146,11 @@ export const modelTools = {
   }),
   update_model: defineTool({
     description:
-      "Change a model alias: routing strategy, billing mode, retries, fallback aliases, overflow alias, add deployments, remove deployments by id, or change deployment weights. Omitted fields stay unchanged.",
+      "Change a model alias: enable or disable it, routing strategy, billing mode, custom price per 1K tokens and time-of-day price windows, retries, fallback aliases, overflow alias, add deployments, remove deployments by id, or change deployment weights. Omitted fields stay unchanged.",
     input: updateModelToolInput,
     run: async (args) => {
       const existing = await prisma.modelGroup.findUnique({
-        where: { alias: args.alias },
+        where: { alias: modelAlias(args.alias) },
         include: { deployments: true },
       });
       if (!existing) return toolFail("not_found");
@@ -166,8 +183,18 @@ export const modelTools = {
       return viaAction(
         updateModelGroupAction({
           alias: existing.alias,
+          enabled: args.enabled,
           strategy: args.strategy ?? existing.strategy,
           billingMode: args.billingMode ?? existing.billingMode,
+          priceInput: args.priceInputPer1k,
+          priceOutput: args.priceOutputPer1k,
+          priceTimeZone: args.priceTimeZone,
+          priceWindows: args.priceSchedule?.map((window) => ({
+            start: window.start,
+            end: window.end,
+            priceInput: window.priceInputPer1k,
+            priceOutput: window.priceOutputPer1k,
+          })),
           numRetries: args.numRetries ?? existing.numRetries,
           overflowGroup: args.overflowGroup ?? existing.overflowGroup,
           fallbackGroups: args.fallbackGroups ?? asStringArray(existing.fallbackGroups),
@@ -177,7 +204,13 @@ export const modelTools = {
           result: {
             ok: true,
             alias: group.alias,
+            enabled: group.enabled,
             strategy: group.strategy,
+            billingMode: group.billingMode,
+            priceInputPer1k: group.priceInput,
+            priceOutputPer1k: group.priceOutput,
+            priceTimeZone: group.priceTimeZone,
+            priceSchedule: scheduleView(group.priceWindows),
             numRetries: group.numRetries,
             fallbackGroups: group.fallbackGroups,
             overflowGroup: group.overflowGroup,

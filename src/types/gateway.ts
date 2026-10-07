@@ -12,9 +12,44 @@ export type SpendHolder = {
   createdAt: Date;
 };
 
+export type PriceWindowRates = CostRates & {
+  start_minute: number;
+  end_minute: number;
+};
+
+export type PriceSchedule = {
+  price: CostRates;
+  time_zone: string;
+  windows: PriceWindowRates[];
+};
+
+export type TokenPricing = {
+  prompt: string;
+  completion: string;
+};
+
+export type ModelPricing = TokenPricing & {
+  schedule?: {
+    time_zone: string;
+    default: TokenPricing;
+    windows: (TokenPricing & { start: string; end: string })[];
+  };
+};
+
 export type BillingGroup = {
+  alias: string;
   billing_mode: string;
+  price_input_per_1k: number;
+  price_output_per_1k: number;
+  price_time_zone: string;
+  price_windows: PriceWindowRates[];
   deployments: CostRates[];
+};
+
+export type BillingContext = {
+  mode: string;
+  peers: CostRates[];
+  price?: CostRates;
 };
 
 export type Entry = { expires: number; body: Uint8Array };
@@ -264,6 +299,10 @@ export type ModelGroup = {
   alias: string;
   strategy: string;
   billing_mode: string;
+  price_input_per_1k: number;
+  price_output_per_1k: number;
+  price_time_zone: string;
+  price_windows: PriceWindowRates[];
   overflow_group: string;
   num_retries: number;
   fallback_groups: string[];

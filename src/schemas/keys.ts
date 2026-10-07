@@ -1,11 +1,12 @@
 import { isIP } from "node:net";
 import { z } from "zod";
+import { modelAlias } from "@/lib/gateway/model-alias";
 
 const keyFields = {
   alias: z.string().trim().min(1).max(80),
   projectId: z.string().trim().max(64).default(""),
   memberId: z.string().trim().max(64).default(""),
-  models: z.array(z.string().trim().min(1).max(200)).max(500).default([]),
+  models: z.array(z.string().trim().min(1).max(200).transform(modelAlias)).max(500).default([]),
   templateIds: z.array(z.string().trim().min(1).max(64)).max(50).default([]),
   rpm: z.number().int().min(0).max(1_000_000).default(0),
   tpm: z.number().int().min(0).max(1_000_000_000).default(0),

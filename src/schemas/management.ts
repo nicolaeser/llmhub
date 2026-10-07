@@ -1,6 +1,7 @@
 import { isIP } from "node:net";
 import { z } from "zod";
 import { KNOWN_BILLING_MODES, KNOWN_KINDS, KNOWN_STRATEGIES } from "@/lib/gateway/core";
+import { clockMinute, isTimeZone, MAX_PRICE_WINDOWS } from "@/lib/gateway/price-schedule";
 import { MANAGEMENT_PERMISSIONS } from "@/lib/management/scope";
 import { budgetPeriod, MAX_BOOST_HOURS } from "@/lib/utils/budget";
 
@@ -19,6 +20,16 @@ const strategy = z.string().refine((value) => KNOWN_STRATEGIES.has(value), "unkn
 const billingMode = z.string().refine((value) => KNOWN_BILLING_MODES.has(value), "unknown billing mode");
 const kind = z.string().refine((value) => KNOWN_KINDS.has(value), "unknown provider kind");
 const url = z.string().trim().max(2000);
+const clock = z.string().refine((value) => clockMinute(value) !== null, "expected HH:MM");
+const timeZone = z.string().trim().max(64).refine(isTimeZone, "unknown IANA time zone");
+const priceWindow = z
+  .object({
+    start: clock,
+    end: clock,
+    price_input_per_1k: money,
+    price_output_per_1k: money,
+  })
+  .strict();
 
 export const createManagementKeySchema = z.object({
   name: z.string().trim().min(1).max(80),
@@ -72,8 +83,13 @@ const deploymentSchema = z
   .strict();
 
 const modelAliasFields = {
+  enabled: z.boolean(),
   strategy,
   billing_mode: billingMode,
+  price_input_per_1k: money,
+  price_output_per_1k: money,
+  price_time_zone: timeZone,
+  price_schedule: z.array(priceWindow).max(MAX_PRICE_WINDOWS),
   num_retries: z.number().int().min(0).max(10),
   overflow_group: z.string().trim().max(200),
   fallback_groups: z.array(alias).max(20),
@@ -83,8 +99,13 @@ const modelAliasFields = {
 export const modelAliasCreateSchema = z
   .object({
     alias,
+    enabled: modelAliasFields.enabled.default(true),
     strategy: strategy.default("least_inflight"),
     billing_mode: billingMode.default("routed"),
+    price_input_per_1k: money.default(0),
+    price_output_per_1k: money.default(0),
+    price_time_zone: timeZone.default("UTC"),
+    price_schedule: modelAliasFields.price_schedule.default([]),
     num_retries: modelAliasFields.num_retries.default(0),
     overflow_group: modelAliasFields.overflow_group.default(""),
     fallback_groups: modelAliasFields.fallback_groups.default([]),

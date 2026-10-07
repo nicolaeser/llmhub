@@ -22,7 +22,7 @@ import type { Enterprise } from "@/types/gateway";
 async function view(enterprise: Enterprise, session: AuthenticatedSession) {
   const canManage = hasPerm(session.permissions, PERMISSIONS.SETTINGS_MANAGE);
   const [aliases, scimToken, s3Ready] = await Promise.all([
-    prisma.modelGroup.findMany({ select: { alias: true }, orderBy: { alias: "asc" } }),
+    prisma.modelGroup.findMany({ where: { enabled: true }, select: { alias: true }, orderBy: { alias: "asc" } }),
     scimTokenSet(),
     resolveS3Config(),
   ]);

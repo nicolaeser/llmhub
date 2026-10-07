@@ -1,4 +1,4 @@
-import type { CostRates, Deployment, PriceFactors, Usage } from "@/types/gateway";
+import type { BillingContext, CostRates, Deployment, PriceFactors, Usage } from "@/types/gateway";
 
 const TOKEN_FALLBACK = 0.000002;
 const CACHE_READ_RATE = 0.1;
@@ -11,7 +11,7 @@ const US_INFERENCE_RATE = 1.1;
 const OPENAI_LONG_CONTEXT = { threshold: 272_000, input: 2, output: 1.5 };
 const PREMIUM_TIERS = new Set(["priority", "fast", "ultrafast"]);
 const TIERED_KINDS = new Set(["openai", "xai", "openrouter", "openrouter_eu"]);
-const REPORTED_COST_KINDS = new Set(["openrouter", "openrouter_eu"]);
+export const REPORTED_COST_KINDS = new Set(["openrouter", "openrouter_eu"]);
 
 function modelName(dep: Deployment | null | undefined): string {
   return (dep?.model ?? "").toLowerCase();
@@ -94,10 +94,11 @@ function withTokenFallback(sum: number, usage: Partial<Usage>): number {
 export function costOf(
   dep: Deployment | null | undefined,
   usage: Partial<Usage>,
-  opts?: { mode?: string; peers?: CostRates[] },
+  opts?: Partial<BillingContext>,
 ): number {
   if (!dep) return 0;
   const factors = priceFactors(dep, usage);
+  if (opts?.mode === "custom" && opts.price) return rawCost(opts.price, usage, factors);
   const reported = REPORTED_COST_KINDS.has(dep.kind) ? usage.cost : undefined;
   const routed = reported ?? rawCost(dep, usage, factors);
   const average =
