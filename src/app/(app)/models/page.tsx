@@ -14,12 +14,14 @@ import {
   setModelGroupEnabledAction,
 } from "@/app/(app)/models/_action";
 import { isActionFail } from "@/lib/http/action-result";
+import { splitTag } from "@/lib/gateway/model-catalog";
 import type { Group, ProviderOpt } from "@/types/models";
 import ModelGroupDialog from "./_components/model-group-dialog";
 
 export default function ModelsPage() {
   const t = useTranslations("Models");
   const tProviders = useTranslations("Providers");
+  const tCatalog = useTranslations("ModelCatalog");
   const tError = useTranslations("Error");
   const tCommon = useTranslations("Common");
   const format = useFormatter();
@@ -180,6 +182,11 @@ export default function ModelsPage() {
                       >
                         {g.alias}
                       </Button>
+                      {splitTag(g.alias).tag ? (
+                        <Chip size="sm" variant="soft" color="warning">
+                          {tCatalog("tag", { tag: splitTag(g.alias).tag })}
+                        </Chip>
+                      ) : null}
                       {g.vendor || g.displayName ? (
                         <div className="px-3 text-xs text-muted">
                           {format.list([g.vendor, g.displayName].filter(Boolean), { type: "unit" })}

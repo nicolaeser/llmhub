@@ -36,5 +36,9 @@
   "tenancy": {
     "step": "{n, number, integer}"
   },
-  "continue": "Continue"
+  "continue": "Continue",
+  "version": {
+    "updateAvailable": "Update available",
+    "updateLabel": "Update to {version} available, open the release"
+  }
 }

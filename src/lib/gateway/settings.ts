@@ -11,9 +11,11 @@ import {
   asStringMap,
 } from "@/lib/gateway/core";
 import { modelAlias } from "@/lib/gateway/model-alias";
+import { DEFAULT_AUTO_CONFIDENCE, JEV_SUGGEST_CONFIDENCE } from "@/lib/gateway/model-catalog";
 import { WEBHOOK_EVENTS } from "@/lib/gateway/webhook-events";
 import type {
   AlertWebhook,
+  CatalogRouting,
   JsonMap,
   PIIConfig,
   OIDCConfig,
@@ -55,6 +57,9 @@ const DEFAULT_ENTERPRISE: Enterprise = {
   assistant_model: "",
   assistant_model_locked: false,
   catalog_jev: DEFAULT_JEV,
+  catalog_auto_routes: true,
+  catalog_min_confidence: DEFAULT_AUTO_CONFIDENCE,
+  update_check: true,
   pii: DEFAULT_PII,
   budget_alert_thresholds: [50, 80, 100],
   oidc: {
@@ -117,6 +122,18 @@ export function normalizeJev(raw: unknown): JevSettings {
   };
 }
 
+export function catalogConfidence(value: unknown): number {
+  const confidence = asNumber(value, DEFAULT_AUTO_CONFIDENCE);
+  return Math.min(1, Math.max(JEV_SUGGEST_CONFIDENCE, confidence));
+}
+
+export function catalogRouting(enterprise: Enterprise): CatalogRouting {
+  return {
+    autoRoutes: enterprise.catalog_auto_routes ?? true,
+    minConfidence: catalogConfidence(enterprise.catalog_min_confidence),
+  };
+}
+
 export function normalizeEnterprise(raw: unknown): Enterprise {
   const rec = asRecord(raw) ?? {};
   return {
@@ -134,6 +151,9 @@ export function normalizeEnterprise(raw: unknown): Enterprise {
     assistant_model: modelAlias(asString(rec.assistant_model)),
     assistant_model_locked: asBool(rec.assistant_model_locked, false),
     catalog_jev: normalizeJev(rec.catalog_jev),
+    catalog_auto_routes: asBool(rec.catalog_auto_routes, true),
+    catalog_min_confidence: catalogConfidence(rec.catalog_min_confidence),
+    update_check: asBool(rec.update_check, true),
     oidc: normalizeOidc(rec.oidc),
     pii: normalizePii(rec.pii ?? DEFAULT_PII),
     s3: normalizeS3(rec.s3),

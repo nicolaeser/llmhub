@@ -19,7 +19,7 @@ export type CatalogGroupInput = {
   alias: string;
   vendor: string;
   displayName: string;
-  autoRoutes: boolean;
+  autoRoutes: boolean | null;
 };
 
 export type CatalogRouteInput = {
@@ -114,17 +114,27 @@ export type CatalogEntryView = {
 
 export type CatalogGroupView = {
   alias: string;
+  tag: string;
   vendor: string;
   displayName: string;
   state: CatalogGroupState;
-  autoRoutes: boolean;
+  autoRoutes: boolean | null;
   entries: CatalogEntryView[];
 };
 
+export type CatalogFamilyView = {
+  family: string;
+  vendor: string;
+  displayName: string;
+  variants: CatalogGroupView[];
+};
+
 export type CatalogView = {
-  groups: CatalogGroupView[];
+  families: CatalogFamilyView[];
+  tags: string[];
   state: CatalogState | null;
   refreshMs: number;
   jevReady: boolean;
+  autoRoutesDefault: boolean;
   canManage: boolean;
 };

@@ -38,6 +38,8 @@ import PriceScheduleFields from "./price-schedule-fields";
 
 const BILLING_MODES = ["routed", "average", "custom"] as const;
 
+const AUTO_ROUTE_MODES = ["inherit", "on", "off"] as const;
+
 type BillingMode = (typeof BILLING_MODES)[number];
 
 function billingModeOf(value: string | undefined): BillingMode {
@@ -198,7 +200,7 @@ export default function ModelGroupDialog({
   const [enabled, setEnabled] = useState(editing?.enabled ?? true);
   const [vendor, setVendor] = useState(editing?.vendor ?? "");
   const [displayName, setDisplayName] = useState(editing?.displayName ?? "");
-  const [autoRoutes, setAutoRoutes] = useState(editing?.autoRoutes ?? false);
+  const [autoRoutes, setAutoRoutes] = useState<boolean | null>(editing ? editing.autoRoutes : null);
   const [billingMode, setBillingMode] = useState<BillingMode>(billingModeOf(editing?.billingMode));
   const [priceIn, setPriceIn] = useState(editing?.priceInput ?? 0);
   const [priceOut, setPriceOut] = useState(editing?.priceOutput ?? 0);
@@ -438,15 +440,17 @@ export default function ModelGroupDialog({
                             <Description>{t("fields.displayNameHint")}</Description>
                           </TextField>
                         </div>
-                        <Switch isSelected={autoRoutes} onChange={setAutoRoutes} isDisabled={pending}>
-                          <Switch.Content>
-                            <Switch.Control>
-                              <Switch.Thumb />
-                            </Switch.Control>
-                            <Label>{t("fields.autoRoutes")}</Label>
-                          </Switch.Content>
-                          <Description>{t("fields.autoRoutesHint")}</Description>
-                        </Switch>
+                        <SearchSelect
+                          label={t("fields.autoRoutes")}
+                          description={t("fields.autoRoutesHint")}
+                          items={AUTO_ROUTE_MODES.map((mode) => ({
+                            id: mode,
+                            label: t("fields.autoRoutesMode", { mode }),
+                          }))}
+                          value={autoRoutes === null ? "inherit" : autoRoutes ? "on" : "off"}
+                          onChange={(mode) => setAutoRoutes(mode === "inherit" ? null : mode === "on")}
+                          isDisabled={pending}
+                        />
                         <Select
                           selectedKey={strategy}
                           onSelectionChange={(key) => setStrategy(String(key))}

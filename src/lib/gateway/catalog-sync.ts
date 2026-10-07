@@ -11,16 +11,18 @@ import {
   catalogStatus,
   JEV_SUGGEST_CONFIDENCE,
   planCatalog,
+  splitTag,
   trustedKind,
 } from "@/lib/gateway/model-catalog";
 import { RESERVED_ALIASES } from "@/lib/gateway/model-alias";
 import { discoveredOf } from "@/lib/gateway/provider-prices";
-import { getEnterprise } from "@/lib/gateway/settings";
+import { catalogRouting, getEnterprise } from "@/lib/gateway/settings";
 import { logger } from "@/lib/logging/logger";
-import type { DiscoveredModel } from "@/types/gateway";
+import type { CatalogRouting, DiscoveredModel, JevSettings } from "@/types/gateway";
 import type {
   CatalogEntryPlan,
   CatalogEntryView,
+  CatalogFamilyView,
   CatalogGroupView,
   CatalogProviderFailure,
   CatalogSource,
@@ -75,7 +77,6 @@ type RouteTarget = {
   vendor: string;
   displayName: string;
   strategy?: string;
-  autoRoutes?: boolean;
 };
 
 type EntryRef = { providerId: string; upstreamId: string };
@@ -183,8 +184,11 @@ async function runLimited<T>(items: T[], limit: number, run: (item: T) => Promis
   await Promise.all(Array.from({ length: Math.min(limit, items.length) }, lane));
 }
 
-async function classify(entries: CatalogEntryPlan[], tasks: JevTask[]): Promise<CatalogState["jev"]> {
-  const settings = (await getEnterprise()).catalog_jev;
+async function classify(
+  entries: CatalogEntryPlan[],
+  tasks: JevTask[],
+  settings: JevSettings | undefined,
+): Promise<CatalogState["jev"]> {
   const result = { configured: jevReady(settings), asked: 0, matched: 0, pending: tasks.length, cost: 0, error: "" };
   if (!jevReady(settings) || !tasks.length) return result;
   const byKey = new Map(entries.map((entry) => [entryKey(entry), entry]));
@@ -288,7 +292,6 @@ export async function addRoute(target: RouteTarget): Promise<"created" | "added"
           numRetries: IMPORT_RETRIES,
           vendor: target.vendor,
           displayName: target.displayName,
-          autoRoutes: target.autoRoutes ?? false,
           deployments: { create: deployment },
         },
       });
@@ -338,8 +341,9 @@ async function applyAutoRoutes(
   actor: string,
   entries: CatalogEntryPlan[],
   inputs: Awaited<ReturnType<typeof catalogInputs>>,
+  routing: CatalogRouting,
 ): Promise<number> {
-  const due = autoRouteEntries(entries, inputs.groups);
+  const due = autoRouteEntries(entries, inputs.groups, routing);
   const routed: { provider: string; model: string; alias: string; source: CatalogSource; confidence: number }[] = [];
   for (const entry of due) {
     const model = inputs.discovered.get(entry.providerId)?.find((item) => item.id === entry.upstreamId);
@@ -363,10 +367,10 @@ async function applyAutoRoutes(
 }
 
 async function rebuildCatalog(actor: string) {
-  const inputs = await catalogInputs();
+  const [inputs, enterprise] = await Promise.all([catalogInputs(), getEnterprise()]);
   const { entries, jev } = inputs.plan;
-  const classified = await classify(entries, jev);
-  const autoRouted = await applyAutoRoutes(actor, entries, inputs);
+  const classified = await classify(entries, jev, enterprise.catalog_jev);
+  const autoRouted = await applyAutoRoutes(actor, entries, inputs, catalogRouting(enterprise));
   await persist(entries, inputs.stored);
   return { entries: entries.length, autoRouted, jev: classified };
 }
@@ -443,6 +447,26 @@ function entryView(
   };
 }
 
+function familiesOf(groups: CatalogGroupView[]): CatalogFamilyView[] {
+  const byFamily = new Map<string, CatalogGroupView[]>();
+  for (const group of groups) {
+    const family = splitTag(group.alias).base;
+    byFamily.set(family, [...(byFamily.get(family) ?? []), group]);
+  }
+  const families = [...byFamily].map(([family, variants]) => {
+    variants.sort((a, b) => Number(Boolean(a.tag)) - Number(Boolean(b.tag)) || a.tag.localeCompare(b.tag));
+    const lead = variants[0]!;
+    return {
+      family,
+      vendor: variants.find((variant) => variant.vendor)?.vendor ?? "",
+      displayName: lead.tag ? "" : lead.displayName,
+      variants,
+    };
+  });
+  const rank = (family: CatalogFamilyView) => Math.min(...family.variants.map((variant) => STATE_ORDER[variant.state]));
+  return families.sort((a, b) => rank(a) - rank(b) || a.family.localeCompare(b.family));
+}
+
 export async function loadCatalogView(): Promise<Omit<CatalogView, "canManage">> {
   const [rows, providers, groups, state, enterprise] = await Promise.all([
     prisma.catalogEntry.findMany({ select: storedSelect }),
@@ -459,6 +483,7 @@ export async function loadCatalogView(): Promise<Omit<CatalogView, "canManage">>
   for (const group of groups) {
     views.set(group.alias, {
       alias: group.alias,
+      tag: splitTag(group.alias).tag,
       vendor: group.vendor,
       displayName: group.displayName,
       state: group.enabled ? "active" : "disabled",
@@ -471,10 +496,11 @@ export async function loadCatalogView(): Promise<Omit<CatalogView, "canManage">>
     if (!provider || !row.alias) continue;
     const view = views.get(row.alias) ?? {
       alias: row.alias,
+      tag: splitTag(row.alias).tag,
       vendor: "",
       displayName: "",
       state: "missing" as const,
-      autoRoutes: false,
+      autoRoutes: null,
       entries: [],
     };
     view.entries.push(entryView(row, provider));
@@ -493,12 +519,13 @@ export async function loadCatalogView(): Promise<Omit<CatalogView, "canManage">>
         a.upstreamId.localeCompare(b.upstreamId),
     );
   }
-  list.sort((a, b) => STATE_ORDER[a.state] - STATE_ORDER[b.state] || a.alias.localeCompare(b.alias));
   return {
-    groups: list,
+    families: familiesOf(list),
+    tags: [...new Set(list.map((view) => view.tag).filter(Boolean))].sort(),
     state,
     refreshMs: CATALOG_REFRESH_MS,
     jevReady: jevReady(enterprise.catalog_jev),
+    autoRoutesDefault: catalogRouting(enterprise).autoRoutes,
   };
 }
 
@@ -550,7 +577,6 @@ export async function setEntryActive(actor: string, ref: EntryRef, active: boole
       alias: entry.alias,
       vendor: entry.vendor,
       displayName: entry.name,
-      autoRoutes: true,
     });
     await markRouted(entry);
     await writeAudit({
@@ -588,7 +614,7 @@ export async function assignEntry(actor: string, ref: EntryRef, alias: string): 
     data: { alias, source: "manual", confidence: 1, disabled: false },
   });
   if (wasRouted) {
-    await addRoute({ provider, model, alias, vendor: entry.vendor, displayName: entry.name, autoRoutes: true });
+    await addRoute({ provider, model, alias, vendor: entry.vendor, displayName: entry.name });
     await markRouted({ ...entry, alias });
   }
   await writeAudit({
@@ -619,6 +645,7 @@ export async function setGroupActive(actor: string, alias: string, active: boole
   }
   if (!active) return;
   const rows = await prisma.catalogEntry.findMany({ where: { alias }, select: storedSelect });
+  const routing = catalogRouting(await getEnterprise());
   const providers = await prisma.providerConnection.findMany({
     where: { id: { in: [...new Set(rows.map((row) => row.providerId))] } },
     select: { id: true, kind: true, discovered: true },
@@ -629,6 +656,7 @@ export async function setGroupActive(actor: string, alias: string, active: boole
       const provider = byId.get(row.providerId);
       return provider ? [{ ...row, source: row.source as CatalogSource, trusted: trustedKind(provider.kind), provider }] : [];
     }),
+    routing.minConfidence,
   );
   if (!due.length) throw new Error("CATALOG_NOTHING_TO_ACTIVATE");
   for (const row of due) {
@@ -640,7 +668,6 @@ export async function setGroupActive(actor: string, alias: string, active: boole
       alias,
       vendor: row.vendor,
       displayName: row.name,
-      autoRoutes: true,
     });
     await markRouted(row);
   }
@@ -654,7 +681,7 @@ export async function setGroupActive(actor: string, alias: string, active: boole
   await reconcile();
 }
 
-export async function setGroupAutoRoutes(actor: string, alias: string, autoRoutes: boolean): Promise<void> {
+export async function setGroupAutoRoutes(actor: string, alias: string, autoRoutes: boolean | null): Promise<void> {
   const group = await prisma.modelGroup.findUnique({ where: { alias }, select: { autoRoutes: true } });
   if (!group) throw new Error("NOT_FOUND");
   if (group.autoRoutes === autoRoutes) return;

@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
-import { Button, Description, Input, Label, ListBox, Select, Separator, Spinner, TextField, toast } from "@heroui/react";
+import { Button, Description, Input, Label, ListBox, NumberField, Select, Separator, Spinner, TextField, toast } from "@heroui/react";
 import { useTranslations } from "next-intl";
+import { formats } from "@/i18n/formats";
 import PageHeader from "@/components/console/page-header";
 import SearchSelect from "@/components/console/search-select";
 import { Link } from "@/i18n/routing";
@@ -178,6 +179,33 @@ export default function AdminSettingsPage() {
 
       <SettingSection title={t("jev.title")} subtitle={t("jev.subtitle")}>
         <SettingSwitch
+          label={t("jev.autoRoutes")}
+          isSelected={settings.catalog_auto_routes}
+          onChange={(catalog_auto_routes) => update({ catalog_auto_routes })}
+          disabled={disabled}
+          hint={t("jev.autoRoutesHint")}
+        />
+        <NumberField
+          fullWidth
+          value={settings.catalog_min_confidence}
+          onChange={(value) => update({ catalog_min_confidence: value })}
+          minValue={0.5}
+          maxValue={1}
+          step={0.01}
+          formatOptions={formats.number.percent}
+          isDisabled={disabled}
+          className="max-w-xs"
+        >
+          <Label>{t("jev.minConfidence")}</Label>
+          <NumberField.Group>
+            <NumberField.DecrementButton />
+            <NumberField.Input />
+            <NumberField.IncrementButton />
+          </NumberField.Group>
+          <Description>{t("jev.minConfidenceHint")}</Description>
+        </NumberField>
+        <Separator />
+        <SettingSwitch
           label={t("jev.enabled")}
           isSelected={settings.catalog_jev.enabled}
           onChange={(enabled) => jev({ enabled })}
@@ -276,6 +304,33 @@ export default function AdminSettingsPage() {
       </SettingSection>
 
       <ScimSection initiallySet={view.scimTokenSet} canManage={view.canManageScim} />
+
+      <SettingSection title={t("updates.title")} subtitle={t("updates.subtitle")}>
+        <SettingSwitch
+          label={t("updates.enabled")}
+          isSelected={settings.update_check}
+          onChange={(update_check) => update({ update_check })}
+          disabled={disabled}
+          hint={t("updates.hint")}
+        />
+        <p className="text-sm text-foreground">
+          {t("updates.state", {
+            current: view.updates.current,
+            latest: view.updates.latest ?? "",
+            state: view.updates.available ? "available" : view.updates.latest ? "current" : "unknown",
+          })}
+        </p>
+        {view.updates.available && view.updates.url ? (
+          <a
+            href={view.updates.url}
+            target="_blank"
+            rel="noreferrer noopener"
+            className="text-sm font-medium text-accent"
+          >
+            {t("updates.open")}
+          </a>
+        ) : null}
+      </SettingSection>
 
       <SettingSection title={t("env.title")} subtitle={t("env.subtitle")}>
         <ul className="divide-y divide-border">

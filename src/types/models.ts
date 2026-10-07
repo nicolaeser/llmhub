@@ -40,7 +40,7 @@ export type Group = {
   enabled: boolean;
   vendor: string;
   displayName: string;
-  autoRoutes: boolean;
+  autoRoutes: boolean | null;
   strategy: string;
   billingMode: string;
   priceInput: number;

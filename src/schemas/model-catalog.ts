@@ -10,7 +10,7 @@ const entryRef = {
 
 export const catalogGroupActiveSchema = z.object({ alias, active: z.boolean() });
 
-export const catalogGroupAutoRoutesSchema = z.object({ alias, autoRoutes: z.boolean() });
+export const catalogGroupAutoRoutesSchema = z.object({ alias, autoRoutes: z.boolean().nullable() });
 
 export const catalogEntryActiveSchema = z.object({ ...entryRef, active: z.boolean() });
 
