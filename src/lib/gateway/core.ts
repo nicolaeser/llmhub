@@ -107,7 +107,7 @@ export function modelEntry(
   id: string,
   created: Date,
   pricing?: ModelPricing | null,
-  origin?: Pick<PublicModel, "vendor" | "displayName">,
+  origin?: Pick<PublicModel, "vendor" | "displayName" | "tags">,
 ): JsonMap {
   return {
     id,
@@ -117,11 +117,12 @@ export function modelEntry(
     type: "model",
     display_name: origin?.displayName || id,
     created_at: created.toISOString(),
+    ...(origin?.tags.length ? { tags: origin.tags } : {}),
     ...(pricing ? { pricing } : {}),
   };
 }
 
-export const AUTO_MODEL: PublicModel = { alias: "auto", vendor: "", displayName: "", pricing: null };
+export const AUTO_MODEL: PublicModel = { alias: "auto", vendor: "", displayName: "", tags: [], pricing: null };
 
 export const VERSION = packageJson.version;
 

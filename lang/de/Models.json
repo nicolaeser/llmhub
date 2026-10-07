@@ -44,7 +44,8 @@
     "displayName": "Anzeigename",
     "displayNameHint": "Erscheint als display_name in /v1/models. Leer lassen, um den Alias zu verwenden.",
     "autoRoutes": "Neue Anbieter automatisch aufnehmen",
-    "autoRoutesHint": "Findet der Modellkatalog dieses Modell bei einem weiteren vertrauenswürdigen Anbieter, wird es nach der nächsten Aktualisierung dorthin geroutet."
+    "autoRoutesHint": "Findet der Modellkatalog dieses Modell bei einem weiteren vertrauenswürdigen Anbieter, wird es nach der nächsten Aktualisierung dorthin geroutet.",
+    "autoRoutesMode": "{mode, select, inherit {Standard aus den Einstellungen} on {An} other {Aus}}"
   },
   "billingModes": {
     "average": "Durchschnitt der Endpunkte",

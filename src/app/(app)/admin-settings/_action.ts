@@ -9,8 +9,9 @@ import { requireStepUp } from "@/lib/auth/second-factor";
 import { actionFail, runAction } from "@/lib/http/action-result";
 import { writeAudit } from "@/lib/gateway/audit";
 import { issueScimToken, revokeScimToken, scimTokenSet } from "@/lib/gateway/scim";
-import { DEFAULT_JEV_MODEL, getEnterprise, patchEnterprise } from "@/lib/gateway/settings";
+import { catalogRouting, DEFAULT_JEV_MODEL, getEnterprise, patchEnterprise } from "@/lib/gateway/settings";
 import { assistantModelLocked } from "@/lib/assistant/parse";
+import { checkForUpdate } from "@/lib/updates/update-check";
 import { resolveS3Config } from "@/lib/s3/config";
 import { env } from "@/lib/env";
 import { stepUpSchema } from "@/schemas/auth";
@@ -31,6 +32,9 @@ async function view(enterprise: Enterprise, session: AuthenticatedSession) {
       registration_enabled: enterprise.registration_enabled === true,
       assistant_model: enterprise.assistant_model ?? "",
       assistant_model_locked: assistantModelLocked(enterprise),
+      update_check: enterprise.update_check !== false,
+      catalog_auto_routes: catalogRouting(enterprise).autoRoutes,
+      catalog_min_confidence: catalogRouting(enterprise).minConfidence,
       catalog_jev: {
         enabled: enterprise.catalog_jev?.enabled === true,
         model: enterprise.catalog_jev?.model ?? DEFAULT_JEV_MODEL,
@@ -58,6 +62,7 @@ async function view(enterprise: Enterprise, session: AuthenticatedSession) {
     canManage,
     canManageScim: canManage && canGrant(grantActor(session), permissions),
     jevKeySet: Boolean(enterprise.catalog_jev?.api_key),
+    updates: await checkForUpdate(enterprise.update_check !== false),
     scimTokenSet: scimToken,
     s3Ready: Boolean(s3Ready),
     oidcEnv: Boolean(env.OIDC_CLIENT_SECRET),

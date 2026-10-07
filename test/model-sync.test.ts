@@ -36,7 +36,7 @@ type FakeGroup = {
   alias: string;
   vendor: string;
   displayName: string;
-  autoRoutes: boolean;
+  autoRoutes: boolean | null;
   enabled: boolean;
   strategy?: string;
 };
@@ -120,11 +120,14 @@ const fakePrisma = {
     create: async ({
       data,
     }: {
-      data: Omit<FakeGroup, "enabled"> & { deployments: { create: Omit<FakeDeployment, "id" | "groupAlias"> } };
+      data: Omit<FakeGroup, "enabled" | "autoRoutes"> & {
+        autoRoutes?: boolean | null;
+        deployments: { create: Omit<FakeDeployment, "id" | "groupAlias"> };
+      };
     }) => {
       if (db.groups.some((row) => row.alias === data.alias)) throw duplicate();
       const { deployments, ...group } = data;
-      db.groups.push({ enabled: true, ...group });
+      db.groups.push({ enabled: true, autoRoutes: null, ...group });
       db.deployments.push({ id: `d${db.deployments.length + 1}`, groupAlias: data.alias, ...deployments.create });
       return group;
     },
@@ -632,7 +635,7 @@ test("turning a provider off removes its route and keeps it off across refreshes
   assert.equal(db.entries.get(`${router.id}|openai/gpt-4o:free`)?.alias, "gpt-4o:free");
 
   await setGroupActive("user-1", "gpt-4o", true);
-  assert.deepEqual(db.groups.map((g) => [g.alias, g.vendor, g.autoRoutes]), [["gpt-4o", "openai", true]]);
+  assert.deepEqual(db.groups.map((g) => [g.alias, g.vendor, g.autoRoutes]), [["gpt-4o", "openai", null]]);
   assert.deepEqual(db.deployments.map((d) => d.model), ["openai/gpt-4o"]);
 
   await setEntryActive("user-1", { providerId: router.id, upstreamId: "openai/gpt-4o" }, false);
@@ -667,6 +670,27 @@ test("moving a provider model to another alias carries its active route along", 
 
   await refreshCatalog({ actor: "worker", force: true });
   assert.equal(db.entries.get(`${router.id}|openai/gpt-4o`)?.alias, "chat-default");
+});
+
+test("the global default decides for aliases without their own automatic routing setting", async () => {
+  const { refreshCatalog } = await import("@/lib/gateway/catalog-sync");
+  db.groups.push(
+    { alias: "gpt-4o", vendor: "openai", displayName: "", autoRoutes: null, enabled: true },
+    { alias: "grok-4", vendor: "xai", displayName: "", autoRoutes: false, enabled: true },
+  );
+  const router = seedProvider([], { name: "OpenRouter" });
+  respondWith(() => modelsResponse(["openai/gpt-4o", "x-ai/grok-4"]));
+  db.enterprise = { catalog_auto_routes: false };
+  await refreshCatalog({ actor: "worker", force: true });
+  assert.equal(db.deployments.length, 0);
+
+  db.entries.clear();
+  db.enterprise = {};
+  await refreshCatalog({ actor: "worker", force: true });
+  assert.deepEqual(
+    db.deployments.map((d) => [d.groupAlias, d.providerId]),
+    [["gpt-4o", router.id]],
+  );
 });
 
 test("worker schedules the model catalog every two hours with a deduplicated boot run", async () => {

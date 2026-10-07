@@ -44,7 +44,8 @@
     "displayName": "Display name",
     "displayNameHint": "Shown as display_name in /v1/models. Leave empty to use the alias.",
     "autoRoutes": "Add new providers automatically",
-    "autoRoutesHint": "When the model catalog finds this model at another trusted provider, it routes there after the next refresh."
+    "autoRoutesHint": "When the model catalog finds this model at another trusted provider, it routes there after the next refresh.",
+    "autoRoutesMode": "{mode, select, inherit {Default from Admin settings} on {On} other {Off}}"
   },
   "billingModes": {
     "average": "Average of endpoints",

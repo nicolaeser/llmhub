@@ -841,6 +841,9 @@ test("admin settings carry the model lock", async () => {
   const settings = {
     registration_enabled: false,
     assistant_model: "house-model",
+    update_check: true,
+    catalog_auto_routes: true,
+    catalog_min_confidence: 0.9,
     catalog_jev: { enabled: false, model: "jev-latest", api_key: "", clear_api_key: false },
     oidc: { enabled: false, issuer: "", client_id: "", redirect_url: "" },
     s3: {

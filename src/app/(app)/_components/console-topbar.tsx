@@ -2,8 +2,11 @@
 
 import { useEffect, useState, useTransition } from "react";
 import { Button, Separator } from "@heroui/react";
-import { LogOut, Menu, RefreshCw } from "lucide-react";
+import { ArrowUpCircle, LogOut, Menu, RefreshCw } from "lucide-react";
 import { useTranslations } from "next-intl";
+import { loadUpdateStatusAction } from "@/app/(app)/_action";
+import { isActionFail } from "@/lib/http/action-result";
+import type { UpdateStatus } from "@/types/updates";
 import { AssistantTrigger } from "./assistant-session";
 import { useConsoleNav } from "./sidebar";
 
@@ -14,7 +17,7 @@ export default function ConsoleTopbar() {
   const [health, setHealth] = useState<"connecting" | "ok" | "down">(
     "connecting",
   );
-  const [version, setVersion] = useState<string>("");
+  const [updates, setUpdates] = useState<UpdateStatus | null>(null);
   const [pending, start] = useTransition();
 
   function ping() {
@@ -22,9 +25,8 @@ export default function ConsoleTopbar() {
       try {
         const res = await fetch("/internal-api/health");
         if (!res.ok) throw new Error("down");
-        const body = (await res.json()) as { status?: string; version?: string };
+        const body = (await res.json()) as { status?: string };
         setHealth(body.status === "ok" ? "ok" : "down");
-        setVersion(body.version ?? "");
       } catch {
         setHealth("down");
       }
@@ -35,6 +37,12 @@ export default function ConsoleTopbar() {
     ping();
     const id = setInterval(ping, 30_000);
     return () => clearInterval(id);
+  }, []);
+
+  useEffect(() => {
+    loadUpdateStatusAction().then((result) => {
+      if (!isActionFail(result)) setUpdates(result);
+    });
   }, []);
 
   const healthLabel = t("health.status", { status: health });
@@ -64,13 +72,25 @@ export default function ConsoleTopbar() {
             aria-hidden
           />
           {health === "ok" ? (
-            version ? <span>v{version}</span> : null
+            updates ? <span>{updates.current}</span> : null
           ) : (
             <span className={health === "down" ? "text-danger" : undefined}>
               {healthLabel}
             </span>
           )}
         </div>
+        {updates?.available && updates.url ? (
+          <a
+            href={updates.url}
+            target="_blank"
+            rel="noreferrer noopener"
+            aria-label={t("version.updateLabel", { version: updates.latest ?? "" })}
+            className="inline-flex items-center gap-1 text-sm font-medium text-accent"
+          >
+            <ArrowUpCircle size={14} aria-hidden />
+            {t("version.updateAvailable")}
+          </a>
+        ) : null}
         <div className="flex-1" />
         <AssistantTrigger />
         <Button

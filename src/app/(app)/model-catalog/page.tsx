@@ -6,10 +6,7 @@ import {
   Button,
   Card,
   DisclosureGroup,
-  Label,
-  ListBox,
   SearchField,
-  Select,
   Separator,
   Spinner,
   toast,
@@ -20,6 +17,7 @@ import { useFormatter, useNow, useTranslations } from "next-intl";
 import { Link } from "@/i18n/routing";
 import EmptyState from "@/components/console/empty-state";
 import PageHeader from "@/components/console/page-header";
+import SearchSelect from "@/components/console/search-select";
 import {
   loadCatalogAction,
   refreshCatalogAction,
@@ -30,9 +28,9 @@ import {
 import { isActionFail } from "@/lib/http/action-result";
 import { catalogEntryKey } from "@/lib/gateway/model-catalog";
 import type { ActionFail } from "@/types/actions";
-import type { CatalogEntryView, CatalogGroupView, CatalogView } from "@/types/model-catalog";
+import type { CatalogEntryView, CatalogFamilyView, CatalogGroupView, CatalogView } from "@/types/model-catalog";
 import AssignDialog from "./_components/assign-dialog";
-import CatalogGroup from "./_components/catalog-group";
+import CatalogFamily from "./_components/catalog-family";
 
 const FILTERS = ["all", "active", "fresh", "missing", "disabled"] as const;
 const PAGE_SIZE = 40;
@@ -40,17 +38,34 @@ const HOUR_MS = 3_600_000;
 
 type Filter = (typeof FILTERS)[number];
 
+const STANDARD_TAG = "standard";
+const ALL_TAGS = "all";
+
 function matchesFilter(group: CatalogGroupView, filter: Filter): boolean {
   if (filter === "all") return true;
   if (filter === "fresh") return group.state !== "missing" && group.entries.some((entry) => entry.status === "new");
   return group.state === filter;
 }
 
-function matchesQuery(group: CatalogGroupView, query: string): boolean {
+function matchesTag(group: CatalogGroupView, tag: string): boolean {
+  if (tag === ALL_TAGS) return true;
+  return tag === STANDARD_TAG ? !group.tag : group.tag === tag;
+}
+
+function matchesQuery(family: CatalogFamilyView, group: CatalogGroupView, query: string): boolean {
   if (!query) return true;
-  return [group.alias, group.vendor, group.displayName]
+  return [family.family, group.alias, group.vendor, group.displayName]
     .concat(group.entries.flatMap((entry) => [entry.upstreamId, entry.providerName]))
     .some((value) => value.toLowerCase().includes(query));
+}
+
+function visibleFamilies(families: CatalogFamilyView[], filter: Filter, tag: string, query: string) {
+  return families.flatMap((family) => {
+    const variants = family.variants.filter(
+      (group) => matchesFilter(group, filter) && matchesTag(group, tag) && matchesQuery(family, group, query),
+    );
+    return variants.length ? [{ ...family, variants }] : [];
+  });
 }
 
 export default function ModelCatalogPage() {
@@ -62,6 +77,7 @@ export default function ModelCatalogPage() {
   const [view, setView] = useState<CatalogView | null>(null);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
+  const [tag, setTag] = useState(ALL_TAGS);
   const [limit, setLimit] = useState(PAGE_SIZE);
   const [busy, setBusy] = useState<string | null>(null);
   const [assigning, setAssigning] = useState<{ entry: CatalogEntryView; alias: string } | null>(null);
@@ -124,8 +140,22 @@ export default function ModelCatalogPage() {
   const state = view.state;
   const hours = view.refreshMs / HOUR_MS;
   const needle = query.trim().toLowerCase();
-  const visible = view.groups.filter((group) => matchesFilter(group, filter) && matchesQuery(group, needle));
+  const visible = visibleFamilies(view.families, filter, tag, needle);
   const shown = visible.slice(0, limit);
+  const handlers = {
+    canManage: view.canManage,
+    busy,
+    autoRoutesDefault: view.autoRoutesDefault,
+    onGroupActive: (alias: string, active: boolean) =>
+      change(`group:${alias}`, () => setCatalogGroupActiveAction({ alias, active })),
+    onAutoRoutes: (alias: string, autoRoutes: boolean | null) =>
+      change(`auto:${alias}`, () => setCatalogGroupAutoRoutesAction({ alias, autoRoutes })),
+    onEntryActive: (entry: CatalogEntryView, active: boolean) =>
+      change(`entry:${catalogEntryKey(entry)}`, () =>
+        setCatalogEntryActiveAction({ providerId: entry.providerId, upstreamId: entry.upstreamId, active }),
+      ),
+    onAssign: openAssign,
+  };
   const refreshButton = view.canManage ? (
     <Button isPending={refreshing} onPress={refresh}>
       {({ isPending }) => (
@@ -215,7 +245,7 @@ export default function ModelCatalogPage() {
         </Alert>
       ) : null}
 
-      {view.groups.length === 0 ? (
+      {view.families.length === 0 ? (
         <EmptyState icon={BookOpen} title={t("emptyTitle")} description={t("empty")} action={refreshButton} />
       ) : (
         <div className="space-y-4">
@@ -235,30 +265,31 @@ export default function ModelCatalogPage() {
                 <SearchField.ClearButton aria-label={tCommon("close")} />
               </SearchField.Group>
             </SearchField>
-            <Select
-              selectedKey={filter}
-              onSelectionChange={(key) => {
-                setFilter(String(key) as Filter);
+            <SearchSelect
+              label={t("filter.label")}
+              items={FILTERS.map((option) => ({ id: option, label: t("filter.option", { filter: option }) }))}
+              value={filter}
+              onChange={(key) => {
+                setFilter(key as Filter);
                 setLimit(PAGE_SIZE);
               }}
               className="w-full sm:w-56"
-            >
-              <Label>{t("filter.label")}</Label>
-              <Select.Trigger>
-                <Select.Value />
-                <Select.Indicator />
-              </Select.Trigger>
-              <Select.Popover>
-                <ListBox aria-label={t("filter.label")}>
-                  {FILTERS.map((option) => (
-                    <ListBox.Item key={option} id={option} textValue={t("filter.option", { filter: option })}>
-                      {t("filter.option", { filter: option })}
-                      <ListBox.ItemIndicator />
-                    </ListBox.Item>
-                  ))}
-                </ListBox>
-              </Select.Popover>
-            </Select>
+            />
+            {view.tags.length ? (
+              <SearchSelect
+                label={t("tagFilter")}
+                items={[ALL_TAGS, STANDARD_TAG, ...view.tags].map((option) => ({
+                  id: option,
+                  label: t("tagOption", { tag: option }),
+                }))}
+                value={tag}
+                onChange={(key) => {
+                  setTag(key);
+                  setLimit(PAGE_SIZE);
+                }}
+                className="w-full sm:w-56"
+              />
+            ) : null}
           </div>
           <Card>
             <Card.Content>
@@ -266,30 +297,10 @@ export default function ModelCatalogPage() {
                 <p className="py-6 text-center text-sm text-muted">{t("noResults")}</p>
               ) : (
                 <DisclosureGroup allowsMultipleExpanded>
-                  {shown.map((group, index) => (
-                    <div key={group.alias}>
+                  {shown.map((family, index) => (
+                    <div key={family.family}>
                       {index ? <Separator /> : null}
-                      <CatalogGroup
-                        group={group}
-                        canManage={view.canManage}
-                        busy={busy}
-                        onGroupActive={(alias, active) =>
-                          change(`group:${alias}`, () => setCatalogGroupActiveAction({ alias, active }))
-                        }
-                        onAutoRoutes={(alias, autoRoutes) =>
-                          change(`auto:${alias}`, () => setCatalogGroupAutoRoutesAction({ alias, autoRoutes }))
-                        }
-                        onEntryActive={(entry, active) =>
-                          change(`entry:${catalogEntryKey(entry)}`, () =>
-                            setCatalogEntryActiveAction({
-                              providerId: entry.providerId,
-                              upstreamId: entry.upstreamId,
-                              active,
-                            }),
-                          )
-                        }
-                        onAssign={openAssign}
-                      />
+                      <CatalogFamily family={family} handlers={handlers} />
                     </div>
                   ))}
                 </DisclosureGroup>
@@ -311,7 +322,7 @@ export default function ModelCatalogPage() {
         state={assignState}
         entry={assigning?.entry ?? null}
         current={assigning?.alias ?? ""}
-        aliases={view.groups.map((group) => group.alias)}
+        aliases={view.families.flatMap((family) => family.variants.map((group) => group.alias))}
         onSaved={setView}
       />
     </div>

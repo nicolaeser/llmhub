@@ -26,7 +26,7 @@
   "providers": "{active} von {total, plural, one {# Anbieter} other {# Anbietern}} aktiv",
   "newProviders": "{count, plural, one {# neuer Anbieter} other {# neue Anbieter}}",
   "autoRoutes": "Neue Anbieter automatisch aufnehmen",
-  "autoRoutesHint": "Anbieter, die dieses Modell neu anbieten, werden bei der nächsten Aktualisierung geroutet. Eigene OpenAI-kompatible Server schaltest du immer von Hand ein.",
+  "autoRoutesHint": "Routet vertrauenswürdige Anbieter, die dieses Modell neu anbieten, nach der nächsten Aktualisierung. Der Standard kommt aus den Einstellungen. Eigene OpenAI-kompatible Server schaltest du immer von Hand ein.",
   "openModels": "Routing und Preise",
   "columns": {
     "provider": "Anbieter",
@@ -49,5 +49,9 @@
   "empty": "Verbinde einen Anbieter und aktualisiere dann den Katalog, um seine Modelle zu gruppieren.",
   "noResults": "Kein Modell passt zum Filter.",
   "more": "{count, plural, one {# weiteres anzeigen} other {# weitere anzeigen}}",
-  "readOnly": "Du kannst den Katalog ansehen. Zum Ändern brauchst du die Berechtigung models:manage."
+  "readOnly": "Du kannst den Katalog ansehen. Zum Ändern brauchst du die Berechtigung models:manage.",
+  "tag": "{tag, select, free {Free} batch {Batch} thinking {Thinking} online {Online} extended {Extended} nitro {Nitro} floor {Floor} beta {Beta} other {{tag}}}",
+  "tagFilter": "Variante",
+  "tagOption": "{tag, select, all {Alle Varianten} standard {Standard} free {Free} batch {Batch} thinking {Thinking} online {Online} extended {Extended} nitro {Nitro} floor {Floor} beta {Beta} other {{tag}}}",
+  "autoRoutesMode": "{mode, select, inherit {Standard ({value, select, true {an} other {aus}})} on {An} other {Aus}}"
 }

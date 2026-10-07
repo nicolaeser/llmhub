@@ -1,6 +1,7 @@
 import type { z } from "zod";
 import type { adminSettingsSchema, alertWebhooksSchema } from "@/schemas/settings";
 import type { WebhookEvent } from "@/types/gateway";
+import type { UpdateStatus } from "@/types/updates";
 
 export type AdminSettings = z.infer<typeof adminSettingsSchema>;
 
@@ -24,6 +25,7 @@ export type AdminSettingsView = {
   canManage: boolean;
   canManageScim: boolean;
   jevKeySet: boolean;
+  updates: UpdateStatus;
   scimTokenSet: boolean;
   s3Ready: boolean;
   oidcEnv: boolean;
