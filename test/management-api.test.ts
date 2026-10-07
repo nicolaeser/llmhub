@@ -19,6 +19,7 @@ import {
   createManagementKeySchema,
   logsQuerySchema,
   modelAliasCreateSchema,
+  modelAliasUpdateSchema,
   teamUpdateSchema,
 } from "@/schemas/management";
 import type { AuthenticatedSession, Permission } from "@/types/auth";
@@ -148,6 +149,19 @@ test("request bodies are strict, typed, and reported with JSON pointers", async 
   assert.equal(form instanceof ApiProblem && form.code, "UNSUPPORTED_MEDIA_TYPE");
 
   assert.equal(modelAliasCreateSchema.safeParse({ alias: "a", strategy: "random" }).success, false);
+  const priced = modelAliasCreateSchema.parse({ alias: "a", billing_mode: "custom", price_input_per_1k: 0.002 });
+  assert.deepEqual([priced.enabled, priced.price_input_per_1k, priced.price_output_per_1k], [true, 0.002, 0]);
+  assert.equal(modelAliasCreateSchema.safeParse({ alias: "a", price_output_per_1k: -1 }).success, false);
+  assert.equal(modelAliasUpdateSchema.safeParse({ enabled: false }).success, true);
+  const night = { start: "22:00", end: "06:00", price_input_per_1k: 0.001, price_output_per_1k: 0.003 };
+  assert.equal(
+    modelAliasUpdateSchema.safeParse({ price_time_zone: "Europe/Berlin", price_schedule: [night] }).success,
+    true,
+  );
+  assert.equal(modelAliasUpdateSchema.safeParse({ price_time_zone: "Mars/Olympus" }).success, false);
+  assert.equal(modelAliasUpdateSchema.safeParse({ price_schedule: [{ ...night, start: "25:00" }] }).success, false);
+  assert.equal(priced.price_time_zone, "UTC");
+  assert.deepEqual(priced.price_schedule, []);
   assert.equal(teamUpdateSchema.safeParse({}).success, true);
   assert.equal(budgetUpdateSchema.safeParse({ max_budget: 10, budget_duration: "30d" }).success, true);
   assert.equal(budgetUpdateSchema.safeParse({ max_budget: 10, budget_duration: "fortnight" }).success, false);

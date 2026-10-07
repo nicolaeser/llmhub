@@ -7,6 +7,7 @@ import { sessionPrincipal } from "@/lib/gateway/principal";
 import { getEnterprise } from "@/lib/gateway/settings";
 import { getTranslations } from "next-intl/server";
 import { asRecord } from "@/lib/gateway/core";
+import { modelAlias } from "@/lib/gateway/model-alias";
 import { ASSISTANT_STEP_LIMIT_NOTE, assistantSystemPrompt } from "@/lib/assistant/prompt";
 import { callMcpTool, mcpToolsForModel } from "@/lib/assistant/mcp";
 import { setupStatus } from "@/lib/assistant/tools/general";
@@ -98,7 +99,10 @@ function isAbortError(err: unknown): boolean {
 async function resolveAssistantAlias(requested: string): Promise<string | null> {
   const alias = assistantAlias(requested, await getEnterprise());
   if (!alias) return null;
-  const match = await prisma.modelGroup.findUnique({ where: { alias }, select: { alias: true } });
+  const match = await prisma.modelGroup.findUnique({
+    where: { alias: modelAlias(alias), enabled: true },
+    select: { alias: true },
+  });
   return match?.alias ?? null;
 }
 

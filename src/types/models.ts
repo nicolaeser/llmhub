@@ -20,10 +20,30 @@ export type DeploymentDraft = {
   providerId: string;
 };
 
+export type PriceWindow = {
+  start: string;
+  end: string;
+  priceInput: number;
+  priceOutput: number;
+};
+
+export type PriceWindowDraft = {
+  key: number;
+  start: string;
+  end: string;
+  priceInput: number;
+  priceOutput: number;
+};
+
 export type Group = {
   alias: string;
+  enabled: boolean;
   strategy: string;
   billingMode: string;
+  priceInput: number;
+  priceOutput: number;
+  priceTimeZone: string;
+  priceWindows: PriceWindow[];
   overflowGroup: string;
   numRetries: number;
   fallbackGroups: string[];

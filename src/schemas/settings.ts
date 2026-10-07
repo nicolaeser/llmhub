@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { modelAlias } from "@/lib/gateway/model-alias";
 import { MAX_ALERT_WEBHOOKS, WEBHOOK_EVENTS } from "@/lib/gateway/webhook-events";
 
 function isHttpUrl(value: string): boolean {
@@ -20,7 +21,7 @@ const text = z.string().trim().max(200);
 
 export const adminSettingsSchema = z.object({
   registration_enabled: z.boolean(),
-  assistant_model: text,
+  assistant_model: text.transform(modelAlias),
   assistant_model_locked: z.boolean().default(false),
   oidc: z.object({
     enabled: z.boolean(),

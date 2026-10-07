@@ -8,6 +8,7 @@ import { writeAudit } from "@/lib/gateway/audit";
 import { PROVIDER_CATALOG } from "@/lib/gateway/catalog";
 import { seal } from "@/lib/crypto";
 import { KNOWN_KINDS } from "@/lib/gateway/core";
+import { modelAlias } from "@/lib/gateway/model-alias";
 import { refreshProviderModels } from "@/lib/gateway/discovery";
 import { discoveredOf } from "@/lib/gateway/provider-prices";
 import { providerPolicySchema } from "@/schemas/providers";
@@ -18,9 +19,9 @@ function specFor(kind: string) {
 }
 
 function publicAlias(id: string): string {
-  const trimmed = id.trim();
-  const i = trimmed.lastIndexOf("/");
-  return i >= 0 ? trimmed.slice(i + 1) : trimmed;
+  const alias = modelAlias(id);
+  const i = alias.lastIndexOf("/");
+  return i >= 0 ? alias.slice(i + 1) : alias;
 }
 
 function publicProvider(row: ProviderRecord) {

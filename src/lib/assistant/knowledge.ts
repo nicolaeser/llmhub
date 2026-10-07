@@ -37,7 +37,7 @@ export const ASSISTANT_EXPLAIN = {
   providers:
     "A provider connection stores the upstream kind, base URL, sealed API key, and data policy (zero data retention, retention days, region, no training). OpenAI, Anthropic, OpenRouter, xAI, and any OpenAI-compatible server are supported. Model lists sync hourly and on demand.",
   models:
-    "A model alias is the public name clients send as model. It load-balances across deployments on connected providers.",
+    "A model alias is the public name clients send as model. Aliases are case-insensitive and stored in lowercase; upstream model ids keep their exact case. It load-balances across deployments on connected providers. A disabled alias is hidden from /v1/models and answers model_not_found, also as a fallback or overflow target; its configuration is kept.",
   v1: "OpenAI-compatible API is at /v1 on this origin. Point the OpenAI SDK baseURL at origin/v1 and use a virtual key. Anthropic Messages is at /v1/messages.",
   playground:
     "Playground streams chat through the gateway as the signed-in operator. It does not need a virtual key. A model alias must exist.",
@@ -64,7 +64,7 @@ export const ASSISTANT_EXPLAIN = {
   security:
     "Every account needs a second factor: an authenticator app, recovery codes, or passkeys. Sessions expire after 7 idle days or 30 days. Replacing the authenticator, adding passkeys, or resetting another user's second factor requires a fresh step-up code.",
   costs:
-    "Spend is computed from each deployment's input and output price per 1K tokens, or from the provider's reported cost on OpenRouter. Cache writes and reads, service tiers such as priority or flex, and fast mode change the price according to what the provider reports it served.",
+    "Spend is computed from each deployment's input and output price per 1K tokens, or from the provider's reported cost on OpenRouter. A model alias with the custom price billing mode bills its own input and output price per 1K tokens instead, whatever endpoint served the request. Cache writes and reads, service tiers such as priority or flex, and fast mode change the price according to what the provider reports it served.",
 } as const satisfies Record<string, string>;
 
 export const assistantPages = Object.keys(ASSISTANT_PAGES) as AssistantPage[];

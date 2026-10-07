@@ -1,14 +1,18 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
-import { Button, Spinner, Table, toast, useOverlayState } from "@heroui/react";
+import { Button, Label, Spinner, Switch, Table, toast, useOverlayState } from "@heroui/react";
 import { Network, Plus, Trash2 } from "lucide-react";
 import { useFormatter, useTranslations } from "next-intl";
 import { Link } from "@/i18n/routing";
 import ConfirmDialog from "@/components/console/confirm-dialog";
 import EmptyState from "@/components/console/empty-state";
 import PageHeader from "@/components/console/page-header";
-import { deleteModelGroupAction, loadModelsAction } from "@/app/(app)/models/_action";
+import {
+  deleteModelGroupAction,
+  loadModelsAction,
+  setModelGroupEnabledAction,
+} from "@/app/(app)/models/_action";
 import { isActionFail } from "@/lib/http/action-result";
 import type { Group, ProviderOpt } from "@/types/models";
 import ModelGroupDialog from "./_components/model-group-dialog";
@@ -24,7 +28,9 @@ export default function ModelsPage() {
   const [editing, setEditing] = useState<Group | null>(null);
   const [dialogKey, setDialogKey] = useState(0);
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [toggling, setToggling] = useState<string | null>(null);
   const [, startDelete] = useTransition();
+  const [, startToggle] = useTransition();
   const formState = useOverlayState();
 
   useEffect(() => {
@@ -49,6 +55,22 @@ export default function ModelsPage() {
         ? cur.map((g) => (g.alias === group.alias ? group : g))
         : [...cur, group].sort((a, b) => a.alias.localeCompare(b.alias)),
     );
+  }
+
+  function toggle(alias: string, enabled: boolean) {
+    setToggling(alias);
+    startToggle(async () => {
+      const result = await setModelGroupEnabledAction({ alias, enabled });
+      setToggling(null);
+      if (isActionFail(result)) {
+        toast.danger(tError("code", { code: result.error }));
+        return;
+      }
+      saved(result);
+      toast(t("toasts.enabled", { alias: result.alias, enabled: String(result.enabled) }), {
+        variant: "success",
+      });
+    });
   }
 
   function remove(alias: string) {
@@ -126,7 +148,9 @@ export default function ModelsPage() {
             <Table.Content>
               <Table.Header>
                 <Table.Column isRowHeader>{t("columns.alias")}</Table.Column>
+                <Table.Column>{t("columns.enabled")}</Table.Column>
                 <Table.Column>{t("columns.strategy")}</Table.Column>
+                <Table.Column>{t("columns.billing")}</Table.Column>
                 <Table.Column>{t("columns.endpoints")}</Table.Column>
                 <Table.Column>{t("columns.overflow")}</Table.Column>
                 <Table.Column>{tCommon("actions")}</Table.Column>
@@ -144,7 +168,31 @@ export default function ModelsPage() {
                         {g.alias}
                       </Button>
                     </Table.Cell>
+                    <Table.Cell>
+                      <Switch
+                        size="sm"
+                        isSelected={g.enabled}
+                        onChange={(next) => toggle(g.alias, next)}
+                        isDisabled={toggling === g.alias}
+                        aria-label={t("enabledToggle", { alias: g.alias })}
+                      >
+                        <Switch.Content>
+                          <Switch.Control>
+                            <Switch.Thumb />
+                          </Switch.Control>
+                          <Label>{t("enabledState", { enabled: String(g.enabled) })}</Label>
+                        </Switch.Content>
+                      </Switch>
+                    </Table.Cell>
                     <Table.Cell>{t("strategyLabel", { strategy: g.strategy })}</Table.Cell>
+                    <Table.Cell>
+                      {t("billingSummary", {
+                        mode: g.billingMode,
+                        input: g.priceInput,
+                        output: g.priceOutput,
+                        windows: g.priceWindows.length,
+                      })}
+                    </Table.Cell>
                     <Table.Cell>{format.number(g.endpoints, "integer")}</Table.Cell>
                     <Table.Cell>{g.overflowGroup || tCommon("none")}</Table.Cell>
                     <Table.Cell>

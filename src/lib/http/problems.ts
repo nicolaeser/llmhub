@@ -32,6 +32,7 @@ export const PROBLEMS = {
   UNSUPPORTED_MEDIA_TYPE: { status: 415, title: "Unsupported media type" },
   VALIDATION: { status: 422, title: "Validation failed" },
   ALIAS_REQUIRED: { status: 422, title: "Alias required" },
+  PRICE_WINDOWS_OVERLAP: { status: 422, title: "Price windows overlap" },
   TEAM_NOT_FOUND: { status: 422, title: "Referenced team not found" },
   ORG_NOT_FOUND: { status: 422, title: "Referenced organization not found" },
   PROJECT_NOT_FOUND: { status: 422, title: "Referenced project not found" },

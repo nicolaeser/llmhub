@@ -13,12 +13,15 @@
   "deleteEndpoint": "Endpunkt entfernen",
   "columns": {
     "alias": "Öffentlicher Name",
+    "enabled": "Status",
     "strategy": "Modus",
+    "billing": "Abrechnung",
     "endpoints": "Endpunkte",
     "overflow": "Überlauf"
   },
   "fields": {
     "alias": "Öffentlicher Modellname",
+    "aliasHint": "Wird kleingeschrieben gespeichert. Clients können jede Schreibweise senden, etwa Gemma-3-27B oder gemma-3-27b.",
     "strategy": "Lastverteilungsmodus",
     "baseUrl": "API-Basis-URL",
     "upstream": "Upstream-Modell-ID",
@@ -30,14 +33,24 @@
     "noProvider": "Eigener Endpunkt",
     "costIn": "Input-Kosten / 1k",
     "costOut": "Output-Kosten / 1k",
-    "billingMode": "Abrechnung"
+    "billingMode": "Abrechnung",
+    "priceIn": "Input-Preis / 1k Tokens",
+    "priceOut": "Output-Preis / 1k Tokens",
+    "enabled": "Über die API verfügbar",
+    "enabledHint": "Wenn aus, ist das Modell in /v1/models ausgeblendet und Anfragen daran schlagen mit „Modell nicht gefunden“ fehl, auch als Fallback. Die Einstellungen bleiben erhalten."
   },
   "billingModes": {
     "average": "Durchschnitt der Endpunkte",
-    "routed": "Gerouteter Anbieter"
+    "routed": "Gerouteter Anbieter",
+    "custom": "Eigener Preis"
   },
-  "billingModeLabel": "{mode, select, average {Durchschnitt der Endpunkte} routed {Gerouteter Anbieter} other {{mode}}}",
-  "billingModeHint": "{mode, select, average {Abgerechnet wird der Durchschnitt der Endpunktpreise. Dieser Durchschnitt ist die Untergrenze: eine günstigere Route wird trotzdem mit dem Durchschnitt berechnet.} routed {Abgerechnet wird der Endpunkt, der die Anfrage bedient hat.} other {}}",
+  "billingModeLabel": "{mode, select, average {Durchschnitt der Endpunkte} routed {Gerouteter Anbieter} custom {Eigener Preis} other {{mode}}}",
+  "billingModeHint": "{mode, select, average {Abgerechnet wird der Durchschnitt der Endpunktpreise. Dieser Durchschnitt ist die Untergrenze: eine günstigere Route wird trotzdem mit dem Durchschnitt berechnet.} routed {Abgerechnet wird der Endpunkt, der die Anfrage bedient hat.} custom {Abgerechnet wird dein eigener Preis pro 1k Tokens, egal welcher Endpunkt die Anfrage bedient.} other {}}",
+  "billingSummary": "{mode, select, custom {{input, number, price} Input · {output, number, price} Output / 1k{windows, plural, =0 {} one { · # Zeitfenster} other { · # Zeitfenster}}} average {Durchschnitt der Endpunkte} routed {Gerouteter Anbieter} other {{mode}}}",
+  "priceHint": "Wird Keys, Nutzern, Teams und Budgets statt der Endpunktkosten berechnet. Cache- und Service-Tier-Regeln gelten weiterhin.",
+  "priceInvalid": "Gib einen Preis von 0 oder mehr ein.",
+  "enabledState": "{enabled, select, true {Aktiv} other {Deaktiviert}}",
+  "enabledToggle": "{alias} über die API verfügbar machen",
   "priceFromProvider": "Preise von {source}",
   "strategies": {
     "weighted_random": "Gewichteter Zufall",
@@ -50,6 +63,19 @@
   "removeConfirm": "Modell-Alias {alias} entfernen?",
   "toasts": {
     "saved": "{mode, select, edit {Modell aktualisiert} add {Modell hinzugefügt} other {Modell hinzugefügt}}",
-    "deleted": "Modell entfernt"
+    "deleted": "Modell entfernt",
+    "enabled": "{enabled, select, true {{alias} aktiviert} other {{alias} deaktiviert}}"
+  },
+  "schedule": {
+    "title": "Zeitabhängige Preise",
+    "hint": "Zu festen Uhrzeiten einen anderen Preis berechnen, zum Beispiel nachts günstiger. Außerhalb dieser Fenster gilt der Preis oben. Ein Fenster darf über Mitternacht laufen, etwa 22:00 bis 06:00.",
+    "start": "Von",
+    "end": "Bis",
+    "sameTime": "Beginn und Ende müssen sich unterscheiden.",
+    "overlap": "Zwei Fenster decken dieselbe Zeit ab. Passe Beginn oder Ende an.",
+    "timeZone": "Zeitzone",
+    "timeZoneHint": "Die Uhrzeiten gelten in dieser Zeitzone, inklusive Sommer- und Winterzeit. Eine Anfrage wird nach ihrem Startzeitpunkt berechnet.",
+    "add": "Zeitfenster hinzufügen",
+    "remove": "Fenster {index, number} entfernen"
   }
 }

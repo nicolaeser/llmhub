@@ -1,6 +1,7 @@
 import "server-only";
 import prisma from "@/lib/db/prisma";
 import { costOf } from "@/lib/gateway/cost";
+import { priceAt, priceWindowQuery, priceWindowRates } from "@/lib/gateway/price-schedule";
 import { capExceeded, periodElapsed } from "@/lib/gateway/period";
 import { incrementRateWindow } from "@/lib/rate-limit/shared";
 import { money } from "@/lib/utils/money";
@@ -8,7 +9,14 @@ import { ownerId } from "@/lib/gateway/core";
 import { writeRequestLog } from "@/lib/gateway/request-log";
 import { GateError } from "@/lib/gateway/errors";
 import type { Prisma } from "@/generated/prisma/client";
-import type { SpendHolder, BillingGroup, CostRates, Usage, Deployment, Principal } from "@/types/gateway";
+import type {
+  SpendHolder,
+  BillingContext,
+  BillingGroup,
+  Usage,
+  Deployment,
+  Principal,
+} from "@/types/gateway";
 import type { BudgetKind } from "@/types/structure";
 
 const HOLDER_SELECT = {
@@ -124,10 +132,25 @@ export async function assertRate(principal: Principal): Promise<void> {
   }
 }
 
-async function billingContext(dep: Deployment | null | undefined): Promise<{
-  mode: string;
-  peers: CostRates[];
-}> {
+function groupBilling(group: BillingGroup, at: Date): BillingContext {
+  return {
+    mode: group.billing_mode || "routed",
+    peers: group.deployments,
+    price: priceAt(
+      {
+        price: {
+          cost_input_per_1k: group.price_input_per_1k,
+          cost_output_per_1k: group.price_output_per_1k,
+        },
+        time_zone: group.price_time_zone,
+        windows: group.price_windows,
+      },
+      at,
+    ),
+  };
+}
+
+async function billingContext(dep: Deployment | null | undefined, at: Date): Promise<BillingContext> {
   if (!dep?.id) return { mode: "routed", peers: dep ? [dep] : [] };
   const row = await prisma.deployment.findUnique({
     where: { id: dep.id },
@@ -135,6 +158,10 @@ async function billingContext(dep: Deployment | null | undefined): Promise<{
       group: {
         select: {
           billingMode: true,
+          priceInput: true,
+          priceOutput: true,
+          priceTimeZone: true,
+          priceWindows: priceWindowQuery,
           deployments: { select: { costInput: true, costOutput: true } },
         },
       },
@@ -148,6 +175,17 @@ async function billingContext(dep: Deployment | null | undefined): Promise<{
       cost_input_per_1k: money(item.costInput),
       cost_output_per_1k: money(item.costOutput),
     })),
+    price: priceAt(
+      {
+        price: {
+          cost_input_per_1k: money(group.priceInput),
+          cost_output_per_1k: money(group.priceOutput),
+        },
+        time_zone: group.priceTimeZone,
+        windows: group.priceWindows.map(priceWindowRates),
+      },
+      at,
+    ),
   };
 }
 
@@ -169,12 +207,11 @@ export async function recordUsage(input: {
   const usage = input.usage ?? {};
   const prompt = usage.prompt_tokens ?? 0;
   const completion = usage.completion_tokens ?? 0;
-  const billing = input.group
-    ? {
-        mode: input.group.billing_mode || "routed",
-        peers: input.group.deployments,
-      }
-    : await billingContext(input.deployment);
+  const startedAt = new Date(Date.now() - Math.max(0, input.latencyMs));
+  const billing =
+    input.group && input.group.alias !== "auto"
+      ? groupBilling(input.group, startedAt)
+      : await billingContext(input.deployment, startedAt);
   const cost = costOf(input.deployment, usage, billing);
   const keyId = input.principal.key?.token_id ?? "";
   const userId = input.principal.userId;

@@ -350,7 +350,7 @@ export async function loadAliasesAction() {
   return runAction(async () => {
     await requirePermission(PERMISSIONS.PLAYGROUND_USE);
     const [models, providers] = await Promise.all([
-      prisma.modelGroup.findMany({ select: { alias: true } }),
+      prisma.modelGroup.findMany({ where: { enabled: true }, select: { alias: true } }),
       prisma.providerConnection.count(),
     ]);
     return { models: models.map((m) => m.alias), providers };
