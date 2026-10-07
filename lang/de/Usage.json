@@ -26,6 +26,7 @@
     "key": "Key",
     "user": "Konsolen-Benutzer"
   },
+  "deleted": "{group, select, org {Gelöschtes Unternehmen} team {Gelöschte Abteilung} project {Gelöschtes Projekt} member {Gelöschte Person} key {Gelöschter Key} user {Gelöschter Konsolen-Benutzer} other {Gelöscht}}",
   "chargeback": "Chargeback-CSV",
   "columns": {
     "name": "Name",

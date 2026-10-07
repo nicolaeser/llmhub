@@ -15,8 +15,6 @@ export type UsageQuery = {
   userId: string;
 };
 
-export type FilterOption = { id: string; label: string };
-
 export type TipItem = {
   name?: unknown;
   value?: unknown;

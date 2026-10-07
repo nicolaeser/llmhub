@@ -12,6 +12,7 @@ import {
   type useOverlayState,
 } from "@heroui/react";
 import { useTranslations } from "next-intl";
+import SearchSelect from "@/components/console/search-select";
 import { isActionFail } from "@/lib/http/action-result";
 import type { PiiOverrideView, PiiPolicy, PiiScope, PiiTarget } from "@/types/guardrails";
 import { savePiiOverrideAction } from "../_action";
@@ -49,6 +50,7 @@ export default function PiiOverrideDialog({
   });
   const [pending, start] = useTransition();
   const options = targets.filter((row) => row.scope === scope);
+  const companies = new Map(targets.filter((row) => row.scope === "org").map((row) => [row.id, row.alias]));
 
   function pickTarget(id: string) {
     setTargetId(id);
@@ -115,36 +117,18 @@ export default function PiiOverrideDialog({
                           </ListBox>
                         </Select.Popover>
                       </Select>
-                      <Select
-                        selectedKey={targetId || "none"}
-                        onSelectionChange={(key) => pickTarget(String(key) === "none" ? "" : String(key))}
-                        aria-label={t("scopeLabel", { scope })}
-                        isDisabled={pending}
-                        fullWidth
-                      >
-                        <Label>{t("scopeLabel", { scope })}</Label>
-                        <Select.Trigger>
-                          <Select.Value />
-                          <Select.Indicator />
-                        </Select.Trigger>
-                        <Select.Popover>
-                          <ListBox aria-label={t("scopeLabel", { scope })}>
-                            {options.length === 0 ? (
-                              <ListBox.Item id="none" textValue={tCommon("none")}>
-                                {tCommon("none")}
-                                <ListBox.ItemIndicator />
-                              </ListBox.Item>
-                            ) : (
-                              options.map((row) => (
-                                <ListBox.Item key={row.id} id={row.id} textValue={row.alias}>
-                                  {row.alias}
-                                  <ListBox.ItemIndicator />
-                                </ListBox.Item>
-                              ))
-                            )}
-                          </ListBox>
-                        </Select.Popover>
-                      </Select>
+                      <SearchSelect
+                        label={t("scopeLabel", { scope })}
+                        placeholder={tCommon("none")}
+                        items={options.map((row) => ({
+                          id: row.id,
+                          label: row.alias,
+                          detail: row.scope === "key" ? companies.get(row.orgId) : undefined,
+                        }))}
+                        value={targetId}
+                        onChange={pickTarget}
+                        isDisabled={pending || options.length === 0}
+                      />
                     </div>
                   )}
                   <PiiPolicyFields value={policy} onChange={setPolicy} isDisabled={pending} />

@@ -27,6 +27,7 @@ export type LogPayload = { value: unknown; truncated: boolean };
 export type LogOption = { id: string; label: string };
 
 export type LogOptions = {
+  models: string[];
   keys: LogOption[];
   users: LogOption[];
 };

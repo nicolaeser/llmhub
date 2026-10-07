@@ -7,9 +7,7 @@ import {
   Description,
   Input,
   Label,
-  ListBox,
   Modal,
-  Select,
   Separator,
   Spinner,
   Switch,
@@ -23,6 +21,7 @@ import {
 import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/routing";
 import MultiPicker from "@/components/console/multi-picker";
+import SearchSelect from "@/components/console/search-select";
 import { createKeyAction, updateKeyAction } from "@/app/(app)/_action";
 import { isActionFail } from "@/lib/http/action-result";
 import type { KeyBindingKind, KeyOptions, KeyPreset } from "@/types/keys";
@@ -178,51 +177,30 @@ export function KeyDialog({
                     </p>
                   </div>
                   {kind === "internal" ? null : (
-                    <Select
+                    <SearchSelect
                       isRequired
-                      selectedKey={targetId || null}
-                      onSelectionChange={(key) => {
-                        const next = key == null ? "" : String(key);
+                      label={t("binding.kind", { kind })}
+                      placeholder={t("binding.pick", { kind })}
+                      items={targets.map((target) => {
+                        const place = placeOf(options, target.orgId, target.teamId);
+                        return {
+                          id: target.id,
+                          label: target.alias,
+                          detail: t("binding.place", {
+                            org: place.org,
+                            team: place.team,
+                            hasTeam: place.team ? "yes" : "no",
+                          }),
+                        };
+                      })}
+                      value={targetId}
+                      onChange={(next) => {
                         if (kind === "project") setProjectId(next);
                         else setMemberId(next);
                       }}
-                      placeholder={t("binding.pick", { kind })}
                       isDisabled={pending || !canBind || targets.length === 0}
-                      fullWidth
-                    >
-                      <Label>{t("binding.kind", { kind })}</Label>
-                      <Select.Trigger>
-                        <Select.Value />
-                        <Select.Indicator />
-                      </Select.Trigger>
-                      <Select.Popover>
-                        <ListBox aria-label={t("binding.kind", { kind })}>
-                          {targets.map((target) => {
-                            const place = placeOf(options, target.orgId, target.teamId);
-                            return (
-                              <ListBox.Item
-                                key={target.id}
-                                id={target.id}
-                                textValue={`${target.alias} ${place.org} ${place.team}`}
-                              >
-                                <div className="min-w-0">
-                                  <p className="text-sm">{target.alias}</p>
-                                  <p className="text-xs text-muted">
-                                    {t("binding.place", {
-                                      org: place.org,
-                                      team: place.team,
-                                      hasTeam: place.team ? "yes" : "no",
-                                    })}
-                                  </p>
-                                </div>
-                                <ListBox.ItemIndicator />
-                              </ListBox.Item>
-                            );
-                          })}
-                        </ListBox>
-                      </Select.Popover>
-                      <Description>
-                        {targets.length
+                      description={
+                        targets.length
                           ? t("binding.targetHint", { kind })
                           : t.rich("binding.empty", {
                               kind,
@@ -231,9 +209,9 @@ export function KeyDialog({
                                   {chunks}
                                 </Link>
                               ),
-                            })}
-                      </Description>
-                    </Select>
+                            })
+                      }
+                    />
                   )}
                   <Separator />
                   <p className="text-sm font-medium text-foreground">{t("fields.access")}</p>

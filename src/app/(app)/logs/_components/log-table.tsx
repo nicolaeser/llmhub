@@ -54,9 +54,17 @@ export default function LogTable({
                     <p className="font-mono text-xs text-muted">{row.endpoint || tCommon("none")}</p>
                   </Table.Cell>
                   <Table.Cell>
-                    <p className="text-sm">{row.keyLabel || t("caller.noKey")}</p>
+                    <p className="text-sm">
+                      {row.keyLabel || (row.keyId ? t("deleted", { kind: "key" }) : t("caller.noKey"))}
+                    </p>
                     <p className="text-xs text-muted">
-                      {row.memberLabel || row.userLabel || row.memberId || row.userId || tCommon("none")}
+                      {row.memberLabel ||
+                        row.userLabel ||
+                        (row.memberId
+                          ? t("deleted", { kind: "member" })
+                          : row.userId
+                            ? t("deleted", { kind: "user" })
+                            : tCommon("none"))}
                     </p>
                   </Table.Cell>
                   <Table.Cell>

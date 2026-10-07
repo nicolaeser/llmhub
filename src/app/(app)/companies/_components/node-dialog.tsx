@@ -6,10 +6,8 @@ import {
   Description,
   Input,
   Label,
-  ListBox,
   Modal,
   NumberField,
-  Select,
   Spinner,
   Switch,
   TextField,
@@ -17,6 +15,7 @@ import {
   type useOverlayState,
 } from "@heroui/react";
 import { useTranslations } from "next-intl";
+import SearchSelect from "@/components/console/search-select";
 import { formats } from "@/i18n/formats";
 import { isActionFail } from "@/lib/http/action-result";
 import type { NodeKind, NodeRef, StructurePayload } from "@/types/structure";
@@ -112,34 +111,19 @@ export default function NodeDialog({
                 </Modal.Header>
                 <Modal.Body className="space-y-4">
                   {needsOrg ? (
-                    <Select
+                    <SearchSelect
                       isRequired
-                      selectedKey={orgId || null}
-                      onSelectionChange={(key) => {
-                        setOrgId(key == null ? "" : String(key));
+                      label={t("org")}
+                      placeholder={t("orgPlaceholder")}
+                      items={data.orgs.map((item) => ({ id: item.id, label: item.alias }))}
+                      value={orgId}
+                      onChange={(next) => {
+                        setOrgId(next);
                         setTeamId("");
                       }}
                       isDisabled={pending || editing || data.orgs.length < 2}
-                      placeholder={t("orgPlaceholder")}
-                      fullWidth
-                    >
-                      <Label>{t("org")}</Label>
-                      <Select.Trigger>
-                        <Select.Value />
-                        <Select.Indicator />
-                      </Select.Trigger>
-                      <Select.Popover>
-                        <ListBox aria-label={t("org")}>
-                          {data.orgs.map((item) => (
-                            <ListBox.Item key={item.id} id={item.id} textValue={item.alias}>
-                              {item.alias}
-                              <ListBox.ItemIndicator />
-                            </ListBox.Item>
-                          ))}
-                        </ListBox>
-                      </Select.Popover>
-                      {editing ? <Description>{t("orgLocked", { kind })}</Description> : null}
-                    </Select>
+                      description={editing ? t("orgLocked", { kind }) : undefined}
+                    />
                   ) : null}
 
                   <TextField
@@ -155,33 +139,17 @@ export default function NodeDialog({
                   </TextField>
 
                   {hasDepartment ? (
-                    <Select
-                      selectedKey={teamId || "none"}
-                      onSelectionChange={(key) => setTeamId(key == null || key === "none" ? "" : String(key))}
+                    <SearchSelect
+                      label={t("team")}
+                      items={[
+                        { id: "none", label: t("noTeam") },
+                        ...departments.map((item) => ({ id: item.id, label: item.alias })),
+                      ]}
+                      value={teamId || "none"}
+                      onChange={(next) => setTeamId(next === "none" ? "" : next)}
                       isDisabled={pending || !orgId}
-                      fullWidth
-                    >
-                      <Label>{t("team")}</Label>
-                      <Select.Trigger>
-                        <Select.Value />
-                        <Select.Indicator />
-                      </Select.Trigger>
-                      <Select.Popover>
-                        <ListBox aria-label={t("team")}>
-                          <ListBox.Item id="none" textValue={t("noTeam")}>
-                            {t("noTeam")}
-                            <ListBox.ItemIndicator />
-                          </ListBox.Item>
-                          {departments.map((item) => (
-                            <ListBox.Item key={item.id} id={item.id} textValue={item.alias}>
-                              {item.alias}
-                              <ListBox.ItemIndicator />
-                            </ListBox.Item>
-                          ))}
-                        </ListBox>
-                      </Select.Popover>
-                      <Description>{t("teamHint", { kind })}</Description>
-                    </Select>
+                      description={t("teamHint", { kind })}
+                    />
                   ) : null}
 
                   {kind === "member" ? (

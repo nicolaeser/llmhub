@@ -6,9 +6,7 @@ import {
   Description,
   Input,
   Label,
-  ListBox,
   Modal,
-  Select,
   Spinner,
   Switch,
   TextField,
@@ -16,6 +14,7 @@ import {
   useOverlayState,
 } from "@heroui/react";
 import { useTranslations } from "next-intl";
+import SearchSelect from "@/components/console/search-select";
 import { isActionFail } from "@/lib/http/action-result";
 import { useRoleName } from "@/components/security/use-role-name";
 import { StepUpDialog } from "@/components/security/step-up-dialog";
@@ -50,29 +49,14 @@ function RoleSelect({
   const t = useTranslations("Users");
   const roleName = useRoleName();
   return (
-    <Select
-      selectedKey={value || null}
-      onSelectionChange={(key) => onChange(String(key))}
+    <SearchSelect
+      label={t("fields.role")}
+      items={roles.map((role) => ({ id: role.id, label: roleName(role) }))}
+      value={value}
+      onChange={onChange}
       disabledKeys={roles.filter((role) => !role.assignable).map((role) => role.id)}
       isDisabled={isDisabled}
-      fullWidth
-    >
-      <Label>{t("fields.role")}</Label>
-      <Select.Trigger>
-        <Select.Value />
-        <Select.Indicator />
-      </Select.Trigger>
-      <Select.Popover>
-        <ListBox aria-label={t("fields.role")}>
-          {roles.map((role) => (
-            <ListBox.Item key={role.id} id={role.id} textValue={roleName(role)}>
-              {roleName(role)}
-              <ListBox.ItemIndicator />
-            </ListBox.Item>
-          ))}
-        </ListBox>
-      </Select.Popover>
-    </Select>
+    />
   );
 }
 
@@ -89,33 +73,17 @@ function AccessSelect({
 }) {
   const t = useTranslations("Users");
   return (
-    <Select
-      selectedKey={value || "platform"}
-      onSelectionChange={(key) => onChange(key == null || key === "platform" ? "" : String(key))}
+    <SearchSelect
+      label={t("fields.access")}
+      items={[
+        { id: "platform", label: t("access", { scope: "platform", org: "" }) },
+        ...orgs.map((org) => ({ id: org.id, label: t("access", { scope: "company", org: org.alias }) })),
+      ]}
+      value={value || "platform"}
+      onChange={(next) => onChange(next === "platform" ? "" : next)}
       isDisabled={isDisabled}
-      fullWidth
-    >
-      <Label>{t("fields.access")}</Label>
-      <Select.Trigger>
-        <Select.Value />
-        <Select.Indicator />
-      </Select.Trigger>
-      <Select.Popover>
-        <ListBox aria-label={t("fields.access")}>
-          <ListBox.Item id="platform" textValue={t("access", { scope: "platform", org: "" })}>
-            {t("access", { scope: "platform", org: "" })}
-            <ListBox.ItemIndicator />
-          </ListBox.Item>
-          {orgs.map((org) => (
-            <ListBox.Item key={org.id} id={org.id} textValue={org.alias}>
-              {t("access", { scope: "company", org: org.alias })}
-              <ListBox.ItemIndicator />
-            </ListBox.Item>
-          ))}
-        </ListBox>
-      </Select.Popover>
-      <Description>{t("fields.accessHint", { scope: value ? "company" : "platform" })}</Description>
-    </Select>
+      description={t("fields.accessHint", { scope: value ? "company" : "platform" })}
+    />
   );
 }
 

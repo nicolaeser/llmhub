@@ -4,6 +4,7 @@ import { useEffect, useState, useTransition } from "react";
 import { Button, Label, ListBox, Select, Separator, Spinner, toast } from "@heroui/react";
 import { useTranslations } from "next-intl";
 import PageHeader from "@/components/console/page-header";
+import SearchSelect from "@/components/console/search-select";
 import { Link } from "@/i18n/routing";
 import { loadAdminSettingsAction, saveAdminSettingsAction } from "./_action";
 import { SettingSection, SettingSwitch, SettingText } from "./_components/fields";
@@ -133,10 +134,17 @@ export default function AdminSettingsPage() {
       </SettingSection>
 
       <SettingSection title={t("assistant.title")} subtitle={t("assistant.subtitle")}>
-        <Select
-          selectedKey={settings.assistant_model || "none"}
-          onSelectionChange={(key) => {
-            const assistant_model = String(key) === "none" ? "" : String(key);
+        <SearchSelect
+          label={t("assistant.model")}
+          items={[
+            { id: "none", label: t("assistant.none") },
+            ...[...new Set([...view.aliases, ...(settings.assistant_model ? [settings.assistant_model] : [])])].map(
+              (alias) => ({ id: alias, label: alias }),
+            ),
+          ]}
+          value={settings.assistant_model || "none"}
+          onChange={(key) => {
+            const assistant_model = key === "none" ? "" : key;
             update({
               assistant_model,
               assistant_model_locked: assistant_model ? settings.assistant_model_locked : false,
@@ -144,28 +152,7 @@ export default function AdminSettingsPage() {
           }}
           isDisabled={disabled}
           className="max-w-md"
-          fullWidth
-        >
-          <Label>{t("assistant.model")}</Label>
-          <Select.Trigger>
-            <Select.Value />
-            <Select.Indicator />
-          </Select.Trigger>
-          <Select.Popover>
-            <ListBox aria-label={t("assistant.model")}>
-              <ListBox.Item id="none" textValue={t("assistant.none")}>
-                {t("assistant.none")}
-                <ListBox.ItemIndicator />
-              </ListBox.Item>
-              {view.aliases.map((alias) => (
-                <ListBox.Item key={alias} id={alias} textValue={alias}>
-                  {alias}
-                  <ListBox.ItemIndicator />
-                </ListBox.Item>
-              ))}
-            </ListBox>
-          </Select.Popover>
-        </Select>
+        />
         <SettingSwitch
           label={t("assistant.lock")}
           isSelected={settings.assistant_model_locked}

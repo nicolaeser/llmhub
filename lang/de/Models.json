@@ -29,6 +29,7 @@
     "retries": "Wiederholungen",
     "overflow": "Überlauf-Alias",
     "fallbacks": "Fallback-Aliasse",
+    "fallbacksPlaceholder": "Keine Fallbacks",
     "provider": "Anbieterverbindung",
     "noProvider": "Eigener Endpunkt",
     "costIn": "Input-Kosten / 1k",
