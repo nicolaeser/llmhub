@@ -160,7 +160,7 @@ export default function ModelsPage() {
       ) : (
         <Table aria-label={t("title")}>
           <Table.ScrollContainer>
-            <Table.Content>
+            <Table.Content className="min-w-4xl">
               <Table.Header>
                 <Table.Column isRowHeader>{t("columns.alias")}</Table.Column>
                 <Table.Column>{t("columns.enabled")}</Table.Column>
@@ -183,7 +183,7 @@ export default function ModelsPage() {
                         {g.alias}
                       </Button>
                       {splitTag(g.alias).tag ? (
-                        <Chip size="sm" variant="soft" color="warning">
+                        <Chip size="sm" variant="soft" color="warning" className="whitespace-nowrap">
                           {tCatalog("tag", { tag: splitTag(g.alias).tag })}
                         </Chip>
                       ) : null}
@@ -221,7 +221,7 @@ export default function ModelsPage() {
                     <Table.Cell>
                       <div className="flex flex-wrap gap-1">
                         {routeLabels(g).map((label) => (
-                          <Chip key={label} size="sm" variant="soft">
+                          <Chip key={label} size="sm" variant="soft" className="whitespace-nowrap">
                             {label}
                           </Chip>
                         ))}
