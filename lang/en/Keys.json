@@ -44,6 +44,8 @@
     "days": "Expires in days",
     "rpm": "Requests per minute",
     "tpm": "Tokens per minute",
+    "maxRequestCost": "Maximum cost per request",
+    "maxRequestCostHint": "Requests whose estimated cost (input tokens plus max_tokens at the output price) exceeds this amount are rejected before forwarding. Callers can lower it per request with the x-hub-max-cost header. 0 is unlimited.",
     "allowedIps": "Allowed client IPs",
     "allowedIpsHint": "One IP address per line. Leave empty to allow any address.",
     "endpoints": "Allowed endpoints",

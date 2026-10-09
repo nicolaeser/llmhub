@@ -131,6 +131,7 @@ model VirtualKey {
   spend            Decimal       @default(0) @db.Decimal(20, 10)
   rpmLimit         Int           @default(0)
   tpmLimit         Int           @default(0)
+  maxRequestCost   Decimal       @default(0) @db.Decimal(20, 10)
   budgetDuration   String        @default("")
   expiresAt        DateTime?
   allowedIps       Json          @default("[]")

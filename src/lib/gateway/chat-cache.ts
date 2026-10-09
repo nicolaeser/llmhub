@@ -37,7 +37,7 @@ async function embedPrompt(principal: Principal, model: string, text: string, ta
   }
   const traced = withTrace(principal, EMBEDDINGS_ENDPOINT);
   const started = Date.now();
-  const hit = await forwardToModel(aliases, principal.routeLimits, "/embeddings", body).catch(async (err) => {
+  const hit = await forwardToModel(aliases, principal, "/embeddings", body).catch(async (err) => {
     await recordUsage({
       principal: traced,
       model,

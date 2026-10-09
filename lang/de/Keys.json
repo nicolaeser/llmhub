@@ -44,6 +44,8 @@
     "days": "Läuft ab in Tagen",
     "rpm": "Anfragen pro Minute",
     "tpm": "Tokens pro Minute",
+    "maxRequestCost": "Maximale Kosten pro Anfrage",
+    "maxRequestCostHint": "Anfragen, deren geschätzte Kosten (Input-Tokens plus max_tokens zum Output-Preis) diesen Betrag übersteigen, werden vor dem Weiterleiten abgelehnt. Aufrufer können das Limit pro Anfrage mit dem Header x-hub-max-cost senken. 0 bedeutet unbegrenzt.",
     "allowedIps": "Erlaubte Client-IPs",
     "allowedIpsHint": "Eine IP-Adresse pro Zeile. Leer lassen, um jede Adresse zu erlauben.",
     "endpoints": "Erlaubte Endpunkte",

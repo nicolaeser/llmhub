@@ -22,6 +22,7 @@ export const POST = managementRoute(PERMISSIONS.KEYS_MANAGE, async ({ req }) => 
       templateIds: body.template_ids,
       rpm: body.rpm_limit,
       tpm: body.tpm_limit,
+      maxRequestCost: body.max_request_cost,
       allowedIps: body.allowed_ips,
       allowedEndpoints: body.allowed_endpoints,
       accessWindows: body.access_windows,

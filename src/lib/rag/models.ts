@@ -53,7 +53,7 @@ export async function forwardModelCall(input: {
   const aliases = modelChain(principal, model, clean);
   const usage = meter(principal, model, input.body);
   try {
-    const hit = await forwardToModel(aliases, principal.routeLimits, input.path, clean);
+    const hit = await forwardToModel(aliases, principal, input.path, clean);
     await usage.ok(hit, input.usage(hit.json));
     return hit;
   } catch (err) {

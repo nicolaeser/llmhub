@@ -1,6 +1,6 @@
 import type { Prisma } from "@/generated/prisma/client";
 import { money } from "@/lib/utils/money";
-import type { CostRates, PriceSchedule, PriceWindowRates } from "@/types/gateway";
+import type { BillingContext, BillingGroup, CostRates, PriceSchedule, PriceWindowRates } from "@/types/gateway";
 import type { Weekday } from "@/types/keys";
 import type { PriceWindow } from "@/types/models";
 
@@ -134,4 +134,22 @@ export function localMinute(at: Date, timeZone: string): number {
 export function priceAt(schedule: PriceSchedule, at: Date): CostRates {
   if (!schedule.windows.length) return schedule.price;
   return scheduledPrice(schedule.price, schedule.windows, localMinute(at, schedule.time_zone));
+}
+
+export function groupBilling(group: BillingGroup, at: Date): BillingContext {
+  return {
+    mode: group.billing_mode || "routed",
+    peers: group.deployments,
+    price: priceAt(
+      {
+        price: {
+          cost_input_per_1k: group.price_input_per_1k,
+          cost_output_per_1k: group.price_output_per_1k,
+        },
+        time_zone: group.price_time_zone,
+        windows: group.price_windows,
+      },
+      at,
+    ),
+  };
 }
