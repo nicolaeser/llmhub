@@ -1,8 +1,38 @@
 {
   "title": "Caching",
-  "subtitle": "Identische Chat-Anfragen ohne Streaming vom selben Key werden für die eingestellte Zeit aus dem Speicher beantwortet.",
+  "subtitle": "Identische Chat-Anfragen ohne Streaming vom selben Key werden für die eingestellte Zeit aus dem Cache beantwortet.",
   "ttl": "TTL in Sekunden",
-  "ttlHint": "0 schaltet den Cache aus. Der Cache liegt im Speicher jedes App-Prozesses und hält bis zu 1000 Antworten.",
+  "ttlHint": "0 schaltet den Cache aus. Clients umgehen den Cache mit dem Header x-hub-bypass-cache oder \"cache\": false.",
   "save": "Speichern",
-  "saved": "Cache-Einstellungen gespeichert"
+  "saved": "Cache-Einstellungen gespeichert",
+  "store": {
+    "title": "Antwort-Cache",
+    "description": "Antworten werden pro Key, Modell und Anfrage-Body gespeichert. Treffer kosten den Key nichts und werden als Cache-Treffer protokolliert.",
+    "backend": "{backend, select, redis {Redis, gemeinsam} memory {Im Speicher} other {Redis nicht erreichbar}}",
+    "backendHint": "{backend, select, redis {Alle App-Instanzen teilen sich den Cache, und er übersteht Neustarts. Antworten bleiben in Redis, bis sie ablaufen.} memory {Jeder App-Prozess hält einen eigenen Cache, der beim Neustart geleert wird. Setze REDIS_URL, um ihn zu teilen.} other {REDIS_URL ist gesetzt, aber Redis antwortet nicht. Jeder App-Prozess nutzt seinen eigenen Speicher-Cache, bis Redis wieder da ist.}}"
+  },
+  "semantic": {
+    "title": "Semantischer Abgleich",
+    "description": "Beantwortet eine Anfrage aus dem Cache, wenn nur die letzte Nutzernachricht abweicht und fast dasselbe bedeutet. Systemprompt, frühere Nachrichten, Modell und Parameter müssen weiterhin genau übereinstimmen.",
+    "enabled": "Ähnliche Prompts erkennen",
+    "enabledHint": "{ready, select, true {Bei jedem Cache-Fehltreffer wird zuerst die letzte Nutzernachricht eingebettet. Das kostet Latenz und Embedding-Kosten.} other {Wähle zuerst ein Embedding-Modell.}}",
+    "model": "Embedding-Modell",
+    "none": "Keins",
+    "modelHint": "Embeddings laufen über diesen Alias mit den Routing-Regeln des aufrufenden Keys und werden diesem Key berechnet. Keys, die dieses Modell nicht nutzen dürfen, bekommen nur exakte Treffer.",
+    "threshold": "Ähnlichkeitsschwelle",
+    "thresholdHint": "Minimale Kosinus-Ähnlichkeit. Niedrigere Werte beantworten mehr Anfragen, können aber die Antwort auf eine andere Frage liefern."
+  },
+  "stats": {
+    "title": "Cache-Statistik",
+    "range": "Zeitraum",
+    "days": "{n, plural, one {Letzter # Tag} other {Letzte # Tage}}",
+    "hitRate": "Trefferquote",
+    "hits": "Aus dem Cache beantwortet",
+    "hitsValue": "{hits, number} von {lookups, number}",
+    "netSaved": "Netto eingespart",
+    "savedTokens": "Eingesparte Tokens",
+    "semanticHits": "Semantische Treffer",
+    "lookupCost": "Embedding-Kosten",
+    "hint": "Zählt cachefähige Anfragen über alle Keys. Netto eingespart sind die Kosten der ursprünglichen Antworten, die erneut aus dem Cache kamen, abzüglich der Embedding-Kosten semantischer Abfragen."
+  }
 }

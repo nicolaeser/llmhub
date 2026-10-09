@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { assistantPages, assistantTopics } from "@/lib/assistant/knowledge";
+import { CACHE_TTL_MAX_SECONDS } from "@/lib/gateway/cache-settings";
 import { BILLING_MODES } from "@/lib/gateway/core";
 import { clockMinute, isTimeZone, MAX_PRICE_WINDOWS } from "@/lib/gateway/price-schedule";
 import { DATA_REGIONS } from "@/lib/gateway/model-policy";
@@ -305,7 +306,7 @@ export const updateGuardrailsToolInput = z.object({
 });
 
 export const gatewaySettingsToolInput = z.object({
-  cacheTtlSeconds: z.number().int().min(0).max(86_400 * 30).optional(),
+  cacheTtlSeconds: z.number().int().min(0).max(CACHE_TTL_MAX_SECONDS).optional(),
   logRetentionDays: days.optional(),
   spendRetentionDays: days.optional(),
   auditRetentionDays: days.optional(),

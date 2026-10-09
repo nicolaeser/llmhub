@@ -1,6 +1,7 @@
 import type { Prisma } from "@/generated/prisma/client";
 import type { OPENAPI_METHODS } from "@/lib/gateway/openapi";
 import type { WEBHOOK_EVENTS } from "@/lib/gateway/webhook-events";
+import type { SemanticCacheSettings } from "@/types/cache";
 import type { PiiPolicy } from "@/types/guardrails";
 import type { RouteLimits } from "@/types/model-templates";
 
@@ -60,8 +61,6 @@ export type BillingContext = {
   peers: CostRates[];
   price?: CostRates;
 };
-
-export type Entry = { expires: number; body: Uint8Array };
 
 export type KindSpec = {
   kind: string;
@@ -291,6 +290,7 @@ export type Enterprise = {
   object_retention_days?: number;
   file_retention_days?: number;
   cache_ttl_seconds?: number;
+  cache_semantic?: SemanticCacheSettings;
   log_archive?: boolean;
   log_content?: boolean;
   content_retention_days?: number;
@@ -445,8 +445,3 @@ export type SliceRow = {
 };
 
 export type Bucket = { start: number; rpm: number; tpm: number };
-
-export type RedisLike = {
-  incrby(key: string, amount: number): Promise<number>;
-  expire(key: string, seconds: number): Promise<number>;
-};

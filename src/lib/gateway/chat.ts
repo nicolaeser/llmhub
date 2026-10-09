@@ -22,6 +22,7 @@ import { ChatStreamTranscript } from "@/lib/gateway/log-content";
 import { estimateTokens, requestText } from "@/lib/gateway/tokens";
 import type { Group, ResolvedDeployment, JsonMap, Usage, Principal } from "@/types/gateway";
 import type { RouteLimits } from "@/types/model-templates";
+import type { CacheUsage } from "@/types/cache";
 
 export const UPSTREAM_TIMEOUT_MS = 300_000;
 
@@ -239,7 +240,8 @@ export async function dispatchChat(input: {
   body: JsonMap;
   aliases: string[];
   outputPii: string[] | null;
-}): Promise<{ json: JsonMap; dep: ResolvedDeployment; alias: string; usage: Partial<Usage> }> {
+  cache?: CacheUsage;
+}): Promise<{ json: JsonMap; dep: ResolvedDeployment; alias: string; usage: Partial<Usage>; cost: number }> {
   const started = Date.now();
   const routed = await withDeployment(
     input.aliases,
@@ -261,7 +263,7 @@ export async function dispatchChat(input: {
   if (!json.object) json.object = "chat.completion";
   if (!json.id) json.id = `chatcmpl_${newId()}`;
   const usage = usageFromUnknown(json.usage, json);
-  await recordUsage({
+  const cost = await recordUsage({
     principal: input.principal,
     model: input.model,
     deployment: dep,
@@ -273,8 +275,9 @@ export async function dispatchChat(input: {
     tag: spendTag(input.body),
     request: input.body,
     response: json,
+    cache: input.cache,
   });
-  return { json, dep, alias, usage };
+  return { json, dep, alias, usage, cost };
 }
 
 export async function streamChat(input: {

@@ -11,6 +11,7 @@ import {
   asStringMap,
 } from "@/lib/gateway/core";
 import { modelAlias } from "@/lib/gateway/model-alias";
+import { SEMANTIC_THRESHOLD_DEFAULT, SEMANTIC_THRESHOLD_MIN } from "@/lib/gateway/cache-settings";
 import { DEFAULT_AUTO_CONFIDENCE, JEV_SUGGEST_CONFIDENCE } from "@/lib/gateway/model-catalog";
 import { WEBHOOK_EVENTS } from "@/lib/gateway/webhook-events";
 import type {
@@ -26,6 +27,7 @@ import type {
   Principal,
 } from "@/types/gateway";
 import type { PiiPolicy } from "@/types/guardrails";
+import type { SemanticCacheSettings } from "@/types/cache";
 
 const SETTING_ENTERPRISE = "enterprise";
 const SETTING_BUDGET_ALERTS = "budget_alert_state";
@@ -42,8 +44,15 @@ export const DEFAULT_JEV_MODEL = "jev-latest";
 
 const DEFAULT_JEV: JevSettings = { enabled: false, model: DEFAULT_JEV_MODEL, api_key: "" };
 
+const DEFAULT_SEMANTIC_CACHE: SemanticCacheSettings = {
+  enabled: false,
+  model: "",
+  threshold: SEMANTIC_THRESHOLD_DEFAULT,
+};
+
 const DEFAULT_ENTERPRISE: Enterprise = {
   cache_ttl_seconds: 0,
+  cache_semantic: DEFAULT_SEMANTIC_CACHE,
   log_retention_days: 0,
   spend_retention_days: 0,
   audit_retention_days: 0,
@@ -122,6 +131,17 @@ export function normalizeJev(raw: unknown): JevSettings {
   };
 }
 
+export function normalizeSemanticCache(raw: unknown): SemanticCacheSettings {
+  const rec = asRecord(raw) ?? {};
+  const model = modelAlias(asString(rec.model).trim());
+  const threshold = asNumber(rec.threshold, SEMANTIC_THRESHOLD_DEFAULT);
+  return {
+    enabled: asBool(rec.enabled, false) && Boolean(model),
+    model,
+    threshold: Math.min(1, Math.max(SEMANTIC_THRESHOLD_MIN, threshold)),
+  };
+}
+
 export function catalogConfidence(value: unknown): number {
   const confidence = asNumber(value, DEFAULT_AUTO_CONFIDENCE);
   return Math.min(1, Math.max(JEV_SUGGEST_CONFIDENCE, confidence));
@@ -138,6 +158,7 @@ export function normalizeEnterprise(raw: unknown): Enterprise {
   const rec = asRecord(raw) ?? {};
   return {
     cache_ttl_seconds: asNumber(rec.cache_ttl_seconds, 0),
+    cache_semantic: normalizeSemanticCache(rec.cache_semantic),
     log_retention_days: asNumber(rec.log_retention_days, 0),
     spend_retention_days: asNumber(rec.spend_retention_days, 0),
     audit_retention_days: asNumber(rec.audit_retention_days, 0),
@@ -279,5 +300,6 @@ export async function loadSettings() {
   const enterprise = await getEnterprise();
   return {
     cacheTtlSeconds: enterprise.cache_ttl_seconds ?? 0,
+    semanticCache: normalizeSemanticCache(enterprise.cache_semantic),
   };
 }

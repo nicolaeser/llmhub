@@ -1,61 +1,12 @@
 import "server-only";
-import { redisUrl } from "@/lib/jobs/connection";
+import { sharedRedis, withTimeout } from "@/lib/jobs/redis-client";
 import { logger } from "@/lib/logging/logger";
-import type { Bucket, RedisLike } from "@/types/gateway";
+import type { Bucket } from "@/types/gateway";
 
 const WINDOW_MS = 60_000;
 const REDIS_DECISION_TIMEOUT_MS = 2_000;
 const REDIS_KEY_PREFIX = "llmhub:rate:v1";
 const memory = new Map<string, Bucket>();
-const globalForRate = globalThis as unknown as {
-  __llmhubRateRedis?: RedisLike | null;
-  __llmhubRateRedisTried?: boolean;
-};
-
-async function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  try {
-    return await Promise.race([
-      promise,
-      new Promise<T>((_, reject) => {
-        timer = setTimeout(() => reject(new Error("redis timeout")), ms);
-      }),
-    ]);
-  } finally {
-    if (timer) clearTimeout(timer);
-  }
-}
-
-async function getRedis(): Promise<RedisLike | null> {
-  if (globalForRate.__llmhubRateRedis) return globalForRate.__llmhubRateRedis;
-  if (globalForRate.__llmhubRateRedisTried) return null;
-  const url = redisUrl();
-  if (!url) return null;
-  globalForRate.__llmhubRateRedisTried = true;
-  try {
-    const { default: IORedis } = await import("ioredis");
-    const client = new IORedis(url, {
-      maxRetriesPerRequest: 1,
-      connectTimeout: 2_000,
-      commandTimeout: 2_000,
-      enableOfflineQueue: false,
-      lazyConnect: true,
-    });
-    client.on("error", (err) => {
-      logger.warn("rate_limit.redis_error", {
-        err: err instanceof Error ? err.message : String(err),
-      });
-    });
-    await withTimeout(client.connect(), REDIS_DECISION_TIMEOUT_MS);
-    globalForRate.__llmhubRateRedis = client;
-    return client;
-  } catch (err) {
-    logger.warn("rate_limit.redis_unavailable", {
-      err: err instanceof Error ? err.message : String(err),
-    });
-    return null;
-  }
-}
 
 function memoryIncrement(id: string, requests: number, tokens: number, now: number): Bucket {
   let bucket = memory.get(id);
@@ -78,7 +29,7 @@ export async function incrementRateWindow(
   tokens: number,
   now = Date.now(),
 ): Promise<{ rpm: number; tpm: number; backend: "redis" | "memory" }> {
-  const redis = await getRedis();
+  const redis = await sharedRedis();
   if (redis) {
     const minute = Math.floor(now / WINDOW_MS);
     const rpmKey = redisKey(id, "rpm", minute);
@@ -100,7 +51,7 @@ export async function incrementRateWindow(
 }
 
 export async function redisCounter(key: string, ttlSeconds: number): Promise<number | null> {
-  const redis = await getRedis();
+  const redis = await sharedRedis();
   if (!redis) return null;
   try {
     const count = await withTimeout(redis.incrby(key, 1), REDIS_DECISION_TIMEOUT_MS);

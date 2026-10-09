@@ -2,6 +2,7 @@ import "server-only";
 import prisma from "@/lib/db/prisma";
 import { money } from "@/lib/utils/money";
 import type { Prisma } from "@/generated/prisma/client";
+import type { CacheStats } from "@/types/cache";
 import type { UsageSlice } from "@/types/gateway";
 import type { SpendScope } from "@/types/structure";
 
@@ -41,4 +42,39 @@ export async function usageTotals(days: number, scope: SpendScope = {}) {
     requests7d: totals._sum.requests ?? 0,
     errors7d: totals._sum.errors ?? 0,
   };
+}
+
+export function cacheStats(
+  days: number,
+  sums: { hits: number; semanticHits: number; misses: number; savedTokens: number; savedCost: number; lookupCost: number },
+): CacheStats {
+  const lookups = sums.hits + sums.misses;
+  return {
+    days,
+    ...sums,
+    hitRate: lookups ? sums.hits / lookups : 0,
+    netSaved: sums.savedCost - sums.lookupCost,
+  };
+}
+
+export async function cacheTotals(days: number): Promise<CacheStats> {
+  const totals = await prisma.usageDaily.aggregate({
+    where: { day: { gte: usageWindowStart(days) } },
+    _sum: {
+      cacheHits: true,
+      cacheSemanticHits: true,
+      cacheMisses: true,
+      cacheSavedTokens: true,
+      cacheSavedCost: true,
+      cacheLookupCost: true,
+    },
+  });
+  return cacheStats(days, {
+    hits: totals._sum.cacheHits ?? 0,
+    semanticHits: totals._sum.cacheSemanticHits ?? 0,
+    misses: totals._sum.cacheMisses ?? 0,
+    savedTokens: Number(totals._sum.cacheSavedTokens ?? 0),
+    savedCost: money(totals._sum.cacheSavedCost),
+    lookupCost: money(totals._sum.cacheLookupCost),
+  });
 }

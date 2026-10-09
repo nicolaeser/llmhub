@@ -18,6 +18,7 @@ import type {
   Principal,
 } from "@/types/gateway";
 import type { BudgetKind } from "@/types/structure";
+import type { CacheColumns, CacheUsage } from "@/types/cache";
 
 const HOLDER_SELECT = {
   id: true,
@@ -195,6 +196,18 @@ async function billingContext(dep: Deployment | null | undefined, at: Date): Pro
   };
 }
 
+export function cacheColumns(cache: CacheUsage | undefined, cost: number): CacheColumns {
+  const hit = cache && (cache.event === "hit" || cache.event === "semantic_hit") ? cache : null;
+  return {
+    cacheHits: hit ? 1 : 0,
+    cacheSemanticHits: cache?.event === "semantic_hit" ? 1 : 0,
+    cacheMisses: cache?.event === "miss" ? 1 : 0,
+    cacheSavedTokens: hit ? Math.max(0, Math.round(hit.savedTokens ?? 0)) : 0,
+    cacheSavedCost: hit ? Math.max(0, hit.savedCost ?? 0) : 0,
+    cacheLookupCost: cache?.event === "lookup" ? cost : 0,
+  };
+}
+
 export async function recordUsage(input: {
   principal: Principal;
   model: string;
@@ -209,7 +222,8 @@ export async function recordUsage(input: {
   request?: unknown;
   response?: unknown;
   error?: unknown;
-}): Promise<void> {
+  cache?: CacheUsage;
+}): Promise<number> {
   const usage = input.usage ?? {};
   const prompt = usage.prompt_tokens ?? 0;
   const completion = usage.completion_tokens ?? 0;
@@ -231,6 +245,7 @@ export async function recordUsage(input: {
   const slice = { day, keyId, teamId, orgId, projectId, memberId, userId, model: input.model };
   const failed = input.status >= 400 ? 1 : 0;
   const limited = input.status === 429 ? 1 : 0;
+  const cache = cacheColumns(input.cache, cost);
   const writes: Prisma.PrismaPromise<unknown>[] = [
     prisma.usageDaily.upsert({
       where: { slice },
@@ -243,6 +258,7 @@ export async function recordUsage(input: {
         promptTokens: prompt,
         completionTokens: completion,
         cost,
+        ...cache,
       },
       update: {
         requests: { increment: 1 },
@@ -252,6 +268,12 @@ export async function recordUsage(input: {
         promptTokens: { increment: prompt },
         completionTokens: { increment: completion },
         cost: { increment: cost },
+        cacheHits: { increment: cache.cacheHits },
+        cacheSemanticHits: { increment: cache.cacheSemanticHits },
+        cacheMisses: { increment: cache.cacheMisses },
+        cacheSavedTokens: { increment: cache.cacheSavedTokens },
+        cacheSavedCost: { increment: cache.cacheSavedCost },
+        cacheLookupCost: { increment: cache.cacheLookupCost },
       },
     }),
   ];
@@ -308,6 +330,7 @@ export async function recordUsage(input: {
     response: input.response,
     error: input.error,
   });
+  return cost;
 }
 
 function tokenCount(value: unknown): number {
