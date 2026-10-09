@@ -123,6 +123,7 @@ export async function dispatchMessages(input: MessagesInput): Promise<JsonMap> {
     if (screen?.blocked) withholdChatJson(chat);
     usage = usageFromUnknown(chat.usage, chat);
     message = chatToMessage(chat, input.model);
+    if (screen?.blocked) message.content = [];
   }
   await recordUsage({
     principal: input.principal,
