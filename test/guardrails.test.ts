@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
-import { screenChatJson, withholdChatJson } from "@/lib/gateway/chat";
+import { screenChatJson, screenChatOutput, withholdChatJson } from "@/lib/gateway/chat";
 import { GateError } from "@/lib/gateway/errors";
 import { applyGuardrails, withTrace } from "@/lib/gateway/gate";
 import {
@@ -71,6 +72,7 @@ function principal(guardrails: GuardrailPolicy, pii: PiiPolicy = PII_OFF): Princ
         models: [],
         templates: [],
         max_budget: 0,
+        max_request_cost: 0,
         spend: 0,
         rpm_limit: 0,
         tpm_limit: 0,
@@ -309,4 +311,39 @@ test("the policy schema and the shared validator reject unsafe patterns and dupl
   assert.equal(guardrailPolicySchema.safeParse(duplicate).success, false);
   assert.deepEqual(ruleIssue(duplicate.rules[1]!, duplicate.rules), { field: "name", issue: "duplicate", line: 0 });
   assert.equal(guardrailPolicySchema.safeParse(policy({ rules: [rule({})] })).success, true);
+});
+
+test("cached chat responses are screened again under the current output policy", () => {
+  const cached = {
+    choices: [{ index: 0, message: { role: "assistant", content: "Key sk-proj-abcdefghijklmnop1234" }, finish_reason: "stop" }],
+  };
+  const masked = structuredClone(cached);
+  const maskTrace = trace();
+  const maskGuard = outputGuard(policy({ secrets: { enabled: true, action: "mask", entities: [] } }), null);
+  assert.equal(screenChatOutput(masked, maskGuard, maskTrace), false);
+  assert.equal((masked.choices[0]!.message as JsonMap).content, "Key [SECRET]");
+  assert.deepEqual([...maskTrace.guardOutput], ["secret:SECRET"]);
+  const blocked = structuredClone(cached);
+  const blockGuard = outputGuard(policy({ secrets: { enabled: true, action: "block", entities: [] } }), null);
+  assert.equal(screenChatOutput(blocked, blockGuard, trace()), true);
+  assert.equal(blocked.choices[0]!.finish_reason, "content_filter");
+  assert.equal(screenChatOutput(structuredClone(cached), null), false);
+});
+
+test("the chat completions route screens prompts before the response cache and never caches blocked output", async () => {
+  const source = await readFile(new URL("../src/lib/gateway/chat-completions-route.ts", import.meta.url), "utf8");
+  const guard = source.indexOf("await applyGuardrails(");
+  const lookup = source.indexOf("await lookupChatCache(");
+  const hit = source.indexOf("lookup?.hit");
+  assert.ok(guard > 0 && lookup > guard, "applyGuardrails must run before the cache lookup");
+  assert.ok(source.indexOf("screenChatOutput(response, output", hit) > hit, "cache hits must be screened");
+  assert.match(source, /if \(lookup && !principal\.trace\?\.guardBlocked\)/);
+});
+
+test("file search results pass through guardrails before they reach the model", async () => {
+  const source = await readFile(new URL("../src/lib/rag/file-search-tool.ts", import.meta.url), "utf8");
+  const start = source.indexOf("async function screenRetrieved");
+  const body = source.slice(start, source.indexOf("\n}\n", start));
+  assert.ok(body.indexOf("screenRequest(") > 0 && body.indexOf("redactJSON(") > body.indexOf("screenRequest("));
+  assert.match(source, /content: await screenRetrieved\(ctx\.principal, searchResultText\(hits\)\)/);
 });

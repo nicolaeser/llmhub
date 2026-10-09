@@ -4,7 +4,7 @@
   "empty": "No matching endpoints.",
   "baseUrl": "baseURL",
   "sdkTitle": "{style, select, openai {OpenAI SDK} anthropic {Anthropic SDK} subscription {Subscriptions} management {Management API} other {API}}",
-  "sdkDescription": "{style, select, openai {Chat, Responses, embeddings, images, audio, files, and batches.} anthropic {Messages and token counting with native Anthropic requests and errors.} subscription {Chat, Responses, Messages, and models served only by signed-in ChatGPT and SuperGrok subscriptions.} management {Keys, model aliases, providers, tenancy, budgets, usage, and logs.} other {Gateway endpoints.}}",
+  "sdkDescription": "{style, select, openai {Chat, Responses, embeddings, images, audio, files, and batches.} anthropic {Messages and token counting with native Anthropic requests and errors.} subscription {Chat, Responses, Messages, and models served only by signed-in ChatGPT and SuperGrok subscriptions.} management {Keys, model aliases, providers, tenancy, budgets, markups, usage, and logs.} other {Gateway endpoints.}}",
   "auth": "Authenticate with Authorization: Bearer and an API key from the console.",
   "anthropicAuth": "Use this origin as baseURL; the SDK adds /v1/messages. Send the same API key as x-api-key with anthropic-version: {version}. anthropic-beta passes through.",
   "subscriptionAuth": "Use the same API keys as on /v1. Requests here reach only subscription providers, and /v1 never uses them. Anthropic clients such as Claude Code use {anthropic} as baseURL.",

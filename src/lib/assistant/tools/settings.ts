@@ -124,7 +124,7 @@ async function updateGatewaySettings(
 export const settingsTools = {
   get_settings: defineTool({
     description:
-      "Gateway settings: response cache TTL, retention days, content logging, S3 archive, alert webhooks (host, format, and events only), alert rules, registration, single sign-on, S3 storage, and the assistant model policy. Never secrets.",
+      "Gateway settings: response cache TTL, semantic response cache matching, response cache statistics for the last 30 days (with spend:read-all), retention days, content logging, S3 archive, alert webhooks (host, format, and events only), alert rules, registration, single sign-on, S3 storage, and the assistant model policy. Never secrets.",
     input: emptyToolInput,
     run: async () => {
       const [logging, cache, admin] = await Promise.all([
@@ -138,6 +138,9 @@ export const settingsTools = {
       return {
         result: {
           cacheTtlSeconds: cache.cacheTtlSeconds,
+          responseCacheBackend: cache.backend,
+          responseCacheSemantic: cache.semantic,
+          responseCacheStats: cache.stats,
           retentionDays: {
             logs: logging.logRetentionDays,
             spend: logging.spendRetentionDays,

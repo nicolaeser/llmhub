@@ -14,7 +14,9 @@
   },
   "items": {
     "companies": "Companies",
+    "knowledge": "Knowledge bases",
     "keys": "API keys",
+    "markups": "Markups",
     "playground": "Playground",
     "assistant": "Assistant",
     "providers": "Providers",
@@ -28,7 +30,7 @@
     "providerHealth": "Provider health",
     "users": "Console users",
     "apiRef": "API reference",
-    "cache": "Cache",
+    "cache": "Response cache",
     "logging": "Logging & alerts",
     "roles": "Roles",
     "adminSettings": "Settings"

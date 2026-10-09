@@ -7,6 +7,8 @@ import { fireAlert } from "@/lib/gateway/alerts";
 import { runPendingBatches } from "@/lib/gateway/batches";
 import { crossedThresholds, forecastBudget } from "@/lib/gateway/forecast";
 import { purgeStoredObjects } from "@/lib/gateway/objects";
+import { runPendingIngests } from "@/lib/rag/ingest";
+import { expireVectorStores, purgeOrphanUploads } from "@/lib/rag/stores";
 import { getAlertState, getEnterprise, saveAlertState } from "@/lib/gateway/settings";
 import { runUsageReports } from "@/lib/reports/usage-report";
 import { runKeyExpiryAlerts, runSpendAnomalyAlerts } from "./alert-checks";
@@ -49,6 +51,8 @@ export async function runMaintenanceSweep(
     auditLogs: 0,
     storedObjects: 0,
     batches: 0,
+    vectorFiles: 0,
+    vectorStores: 0,
     reports: 0,
   };
 
@@ -86,6 +90,9 @@ export async function runMaintenanceSweep(
     uploadsBefore: retentionCutoff(enterprise?.file_retention_days ?? 0, now),
   }).catch(() => 0);
   result.batches = await runPendingBatches().catch(() => 0);
+  result.vectorStores = await expireVectorStores(now).catch(() => 0);
+  result.storedObjects += await purgeOrphanUploads(now).catch(() => 0);
+  result.vectorFiles = await runPendingIngests().catch(() => 0);
   await runSpendResets(now).catch(() => 0);
   await runBudgetAlerts().catch(() => 0);
   await runSpendAnomalyAlerts(now).catch(() => 0);

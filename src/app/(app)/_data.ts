@@ -29,6 +29,7 @@ export function toKeyView(row: {
   spend: Prisma.Decimal;
   rpmLimit: number;
   tpmLimit: number;
+  maxRequestCost: Prisma.Decimal;
   budgetDuration: string;
   expiresAt: Date | null;
   allowedIps: unknown;
@@ -56,6 +57,7 @@ export function toKeyView(row: {
     spend: money(row.spend),
     rpm_limit: row.rpmLimit,
     tpm_limit: row.tpmLimit,
+    max_request_cost: money(row.maxRequestCost),
     budget_duration: row.budgetDuration,
     expires: row.expiresAt?.toISOString() ?? "",
     allowed_ips: jsonArray(row.allowedIps),

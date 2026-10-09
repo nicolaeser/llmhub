@@ -44,6 +44,8 @@
     "days": "Expires in days",
     "rpm": "Requests per minute",
     "tpm": "Tokens per minute",
+    "maxRequestCost": "Maximum cost per request",
+    "maxRequestCostHint": "Requests whose estimated cost (input tokens plus max_tokens at the output price) exceeds this amount are rejected before forwarding. Callers can lower it per request with the x-hub-max-cost header. 0 is unlimited.",
     "allowedIps": "Allowed client IPs",
     "allowedIpsHint": "One IP address per line. Leave empty to allow any address.",
     "endpoints": "Allowed endpoints",
@@ -54,8 +56,8 @@
     "logContentHint": "When off, request logs for this key keep only metadata, no prompts or responses."
   },
   "endpoints": {
-    "name": "{endpoint, select, chat {Chat and text} embeddings {Embeddings} moderations {Moderations} images {Images} audio {Audio} videos {Videos} ocr {OCR} files {Files} batches {Batches} other {SystemOne}}",
-    "paths": "{endpoint, select, chat {/v1/chat/completions, /v1/completions, /v1/messages, /v1/responses} embeddings {/v1/embeddings} moderations {/v1/moderations} images {/v1/images} audio {/v1/audio} videos {/v1/videos} ocr {/v1/ocr} files {/v1/files} batches {/v1/batches} other {/v1/systemone}}"
+    "name": "{endpoint, select, chat {Chat and text} embeddings {Embeddings} moderations {Moderations} images {Images} audio {Audio} videos {Videos} ocr {OCR} files {Files} batches {Batches} rerank {Rerank} vector_stores {Vector stores and file search} other {SystemOne}}",
+    "paths": "{endpoint, select, chat {/v1/chat/completions, /v1/completions, /v1/messages, /v1/responses} embeddings {/v1/embeddings} moderations {/v1/moderations} images {/v1/images} audio {/v1/audio} videos {/v1/videos} ocr {/v1/ocr} files {/v1/files} batches {/v1/batches} rerank {/v1/rerank} vector_stores {/v1/vector_stores, file_search in /v1/responses} other {/v1/systemone}}"
   },
   "windows": {
     "title": "Allowed times",

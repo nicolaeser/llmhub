@@ -21,12 +21,14 @@ export type KeyPlace = { org: string; team: string };
 export type KeyEndpoint =
   | "chat"
   | "embeddings"
+  | "rerank"
   | "moderations"
   | "images"
   | "audio"
   | "videos"
   | "ocr"
   | "files"
+  | "vector_stores"
   | "batches"
   | "systemone";
 

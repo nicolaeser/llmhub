@@ -98,6 +98,7 @@ export async function createKeyAction(raw: unknown) {
         templates: { create: templates.map((templateId) => ({ templateId })) },
         rpmLimit: input.rpm,
         tpmLimit: input.tpm,
+        maxRequestCost: input.maxRequestCost,
         allowedIps: input.allowedIps,
         allowedEndpoints: input.allowedEndpoints,
         accessWindows: input.accessWindows,
@@ -147,6 +148,7 @@ export async function updateKeyAction(raw: unknown) {
       models: input.models,
       rpmLimit: input.rpm,
       tpmLimit: input.tpm,
+      maxRequestCost: input.maxRequestCost,
       allowedIps: input.allowedIps,
       allowedEndpoints: input.allowedEndpoints,
       accessWindows: input.accessWindows,
@@ -337,8 +339,9 @@ export async function loadUsageAction(
       ...(userId ? { userId } : {}),
       ...spendScope(session),
     };
+    const priced = hasPerm(session.permissions, PERMISSIONS.PRICING_READ);
     const [rows, p95] = await Promise.all([
-      usageSlices({ ...filters, day: { gte: since } }),
+      usageSlices({ ...filters, day: { gte: since } }, { purchase: priced }),
       p95Latency({ ...filters, createdAt: { gte: since } }),
     ]);
     const summary = summarizeUsage(rows, usageDays(since, days));
@@ -362,6 +365,7 @@ export async function loadUsageAction(
       keys: distinct((row) => row.keyId),
       users: distinct((row) => row.userId),
       spend: summary.spend,
+      purchase: priced ? rows.reduce((sum, row) => sum + (row.purchaseCost ?? 0), 0) : null,
       tokens: summary.tokens,
       count: summary.count,
       errors: summary.errors,

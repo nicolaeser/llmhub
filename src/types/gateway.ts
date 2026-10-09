@@ -1,9 +1,12 @@
 import type { Prisma } from "@/generated/prisma/client";
 import type { OPENAPI_METHODS } from "@/lib/gateway/openapi";
 import type { WEBHOOK_EVENTS, WEBHOOK_FORMATS } from "@/lib/gateway/webhook-events";
+import type { SemanticCacheSettings } from "@/types/cache";
 import type { GuardrailPolicy, PiiPolicy } from "@/types/guardrails";
 import type { AccessWindow, KeyEndpoint } from "@/types/keys";
+import type { VectorStoreDefaults } from "@/types/rag";
 import type { RouteLimits } from "@/types/model-templates";
+import type { BudgetKind } from "@/types/structure";
 
 export type SpendHolder = {
   id: string;
@@ -64,8 +67,6 @@ export type BillingContext = {
   peers: CostRates[];
   price?: CostRates;
 };
-
-export type Entry = { expires: number; body: Uint8Array };
 
 export type ProviderAuth = "api_key" | "sign_in";
 
@@ -180,6 +181,22 @@ export type RequestTrace = {
   guardInput: Set<string>;
   guardOutput: Set<string>;
   guardBlocked: boolean;
+  costCap?: CostCap | null;
+};
+
+export type CostCap = {
+  limit: number;
+  budget: BudgetKind | null;
+};
+
+export type RequestTokens = {
+  prompt: number;
+  completion: number;
+};
+
+export type CostFilter = {
+  cap: CostCap;
+  estimate: (dep: ResolvedDeployment, group: Group) => number;
 };
 
 export type DiscoveredModel = {
@@ -334,6 +351,7 @@ export type Enterprise = {
   object_retention_days?: number;
   file_retention_days?: number;
   cache_ttl_seconds?: number;
+  cache_semantic?: SemanticCacheSettings;
   log_archive?: boolean;
   log_content?: boolean;
   content_retention_days?: number;
@@ -351,6 +369,7 @@ export type Enterprise = {
   catalog_auto_routes?: boolean;
   catalog_min_confidence?: number;
   update_check?: boolean;
+  vector_stores?: VectorStoreDefaults;
 };
 
 export type CatalogRouting = {
@@ -404,6 +423,7 @@ export type VirtualKeyView = {
   spend: number;
   rpm_limit: number;
   tpm_limit: number;
+  max_request_cost: number;
   budget_duration: string;
   expires: string;
   allowed_ips: string[];
@@ -476,6 +496,7 @@ export type UsageSlice = {
   cacheWriteTokens: number;
   cost: number;
   cacheSavings: number;
+  purchaseCost?: number;
 };
 
 export type ChargebackParts = {
@@ -491,6 +512,7 @@ export type ChargebackParts = {
 export type SliceRow = {
   name: string;
   spend: number;
+  purchase?: number;
   prompt: number;
   completion: number;
   requests?: number;

@@ -19,7 +19,10 @@ model Organization {
   members  Member[]
   users    User[]
   keys     VirtualKey[]
+  markups  PriceMarkup[]
   reports  UsageReport[]
+
+  vectorStores VectorStore[]
 }
 
 model Team {
@@ -38,6 +41,7 @@ model Team {
   members  Member[]
   projects Project[]
   keys     VirtualKey[]
+  markups  PriceMarkup[]
   reports  UsageReport[]
 
   @@index([orgId])
@@ -81,7 +85,9 @@ model Project {
   guardrailPolicy Json?
   createdAt       DateTime      @default(now())
 
-  keys VirtualKey[]
+  keys         VirtualKey[]
+  markups      PriceMarkup[]
+  vectorStores VectorStore[]
 
   @@index([orgId])
   @@index([teamId])
@@ -104,7 +110,8 @@ model Member {
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 
-  keys VirtualKey[]
+  keys         VirtualKey[]
+  vectorStores VectorStore[]
 
   @@index([orgId])
   @@index([teamId])
@@ -130,6 +137,7 @@ model VirtualKey {
   spend            Decimal       @default(0) @db.Decimal(20, 10)
   rpmLimit         Int           @default(0)
   tpmLimit         Int           @default(0)
+  maxRequestCost   Decimal       @default(0) @db.Decimal(20, 10)
   budgetDuration   String        @default("")
   expiresAt        DateTime?
   allowedIps       Json          @default("[]")
@@ -262,6 +270,25 @@ model ModelPriceWindow {
   @@index([groupAlias])
 }
 
+model PriceMarkup {
+  id        String        @id @default(cuid())
+  orgId     String?
+  org       Organization? @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  teamId    String?
+  team      Team?         @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  projectId String?
+  project   Project?      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  model     String        @default("")
+  percent   Decimal       @db.Decimal(9, 4)
+  note      String        @default("")
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  @@index([orgId])
+  @@index([teamId])
+  @@index([projectId])
+}
+
 model Deployment {
   id         String              @id @default(cuid())
   groupAlias String
@@ -306,24 +333,31 @@ model SpendEvent {
 }
 
 model UsageDaily {
-  day              DateTime @db.Date
-  keyId            String   @default("")
-  teamId           String   @default("")
-  orgId            String   @default("")
-  projectId        String   @default("")
-  memberId         String   @default("")
-  userId           String   @default("")
-  model            String   @default("")
-  requests         Int      @default(0)
-  errors           Int      @default(0)
-  rateLimited      Int      @default(0)
-  latencyMs        BigInt   @default(0)
-  promptTokens     BigInt   @default(0)
-  completionTokens BigInt   @default(0)
-  cacheReadTokens  BigInt   @default(0)
-  cacheWriteTokens BigInt   @default(0)
-  cost             Decimal  @default(0) @db.Decimal(20, 10)
-  cacheSavings     Decimal  @default(0) @db.Decimal(20, 10)
+  day                       DateTime @db.Date
+  keyId                     String   @default("")
+  teamId                    String   @default("")
+  orgId                     String   @default("")
+  projectId                 String   @default("")
+  memberId                  String   @default("")
+  userId                    String   @default("")
+  model                     String   @default("")
+  requests                  Int      @default(0)
+  errors                    Int      @default(0)
+  rateLimited               Int      @default(0)
+  latencyMs                 BigInt   @default(0)
+  promptTokens              BigInt   @default(0)
+  completionTokens          BigInt   @default(0)
+  cacheReadTokens           BigInt   @default(0)
+  cacheWriteTokens          BigInt   @default(0)
+  cost                      Decimal  @default(0) @db.Decimal(20, 10)
+  cacheSavings              Decimal  @default(0) @db.Decimal(20, 10)
+  purchaseCost              Decimal  @default(0) @db.Decimal(20, 10)
+  responseCacheHits         Int      @default(0)
+  responseCacheSemanticHits Int      @default(0)
+  responseCacheMisses       Int      @default(0)
+  responseCacheSavedTokens  BigInt   @default(0)
+  responseCacheSavedCost    Decimal  @default(0) @db.Decimal(20, 10)
+  responseCacheLookupCost   Decimal  @default(0) @db.Decimal(20, 10)
 
   @@id([day, keyId, teamId, orgId, projectId, memberId, userId, model], name: "slice")
   @@index([day])
@@ -395,7 +429,88 @@ model StoredObject {
   meta        Json     @default("{}")
   createdAt   DateTime @default(now())
 
+  vectorFiles VectorStoreFile[]
+
   @@index([kind, owner])
+}
+
+model VectorStore {
+  id                  String        @id
+  orgId               String?
+  org                 Organization? @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  projectId           String?
+  project             Project?      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  memberId            String?
+  member              Member?       @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  userId              String?
+  user                User?         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdBy           String        @default("")
+  name                String        @default("")
+  description         String        @default("")
+  embeddingModel      String
+  embeddingDimensions Int           @default(0)
+  dimensions          Int           @default(0)
+  rerankModel         String        @default("")
+  ocrModel            String        @default("")
+  chunkMaxTokens      Int           @default(800)
+  chunkOverlapTokens  Int           @default(400)
+  metadata            Json          @default("{}")
+  expiresAfterDays    Int?
+  expiresAt           DateTime?
+  lastActiveAt        DateTime      @default(now())
+  createdAt           DateTime      @default(now())
+
+  files VectorStoreFile[]
+
+  @@index([orgId])
+  @@index([projectId])
+  @@index([memberId])
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model VectorStoreFile {
+  storeId            String
+  store              VectorStore  @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  fileId             String
+  file               StoredObject @relation(fields: [fileId], references: [id], onDelete: Cascade)
+  batchId            String       @default("")
+  status             String       @default("in_progress")
+  filename           String       @default("")
+  attributes         Json         @default("{}")
+  chunkingType       String       @default("auto")
+  chunkMaxTokens     Int
+  chunkOverlapTokens Int
+  usageBytes         Int          @default(0)
+  chunkCount         Int          @default(0)
+  lastError          Json?
+  ingestBy           Json         @default("{}")
+  attempts           Int          @default(0)
+  leaseUntil         DateTime?
+  indexedAt          DateTime?
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+
+  chunks VectorChunk[]
+
+  @@id([storeId, fileId])
+  @@index([fileId])
+  @@index([status, leaseUntil])
+  @@index([storeId, batchId])
+}
+
+model VectorChunk {
+  id        String          @id @default(cuid())
+  storeId   String
+  fileId    String
+  file      VectorStoreFile @relation(fields: [storeId, fileId], references: [storeId, fileId], onDelete: Cascade)
+  position  Int
+  text      String
+  tokens    Int
+  embedding Bytes
+  terms     Bytes
+
+  @@index([storeId, fileId, position])
 }
 
 model TempBudget {

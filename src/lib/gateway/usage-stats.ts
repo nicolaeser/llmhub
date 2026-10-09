@@ -8,7 +8,7 @@ type SliceKey = keyof Pick<
 const CHARGEBACK_PARTS = ["orgId", "teamId", "projectId", "memberId", "keyId", "userId", "model"] as const;
 
 function rollUp(rows: UsageSlice[], nameOf: (row: UsageSlice) => string): SliceRow[] {
-  const map = new Map<string, Required<SliceRow> & { latencySum: number }>();
+  const map = new Map<string, Omit<Required<SliceRow>, "purchase"> & SliceRow & { latencySum: number }>();
   for (const row of rows) {
     const name = nameOf(row);
     const cur = map.get(name) ?? {
@@ -26,6 +26,7 @@ function rollUp(rows: UsageSlice[], nameOf: (row: UsageSlice) => string): SliceR
       latencySum: 0,
     };
     cur.spend += row.cost;
+    if (row.purchaseCost !== undefined) cur.purchase = (cur.purchase ?? 0) + row.purchaseCost;
     cur.prompt += row.promptTokens;
     cur.completion += row.completionTokens;
     cur.requests += row.requests;
@@ -100,10 +101,33 @@ export const CHARGEBACK_COLUMNS = [
   "completion_tokens",
 ] as const;
 
+export const CHARGEBACK_MARGIN_COLUMNS = [
+  "org_id",
+  "org",
+  "team_id",
+  "team",
+  "project_id",
+  "project",
+  "member_id",
+  "member",
+  "key_id",
+  "user_id",
+  "model",
+  "purchase_cost",
+  "spend",
+  "margin",
+  "prompt_tokens",
+  "completion_tokens",
+] as const;
+
+export function chargebackColumns(priced: boolean): readonly string[] {
+  return priced ? CHARGEBACK_MARGIN_COLUMNS : CHARGEBACK_COLUMNS;
+}
+
 export function chargebackTable(
   rows: SliceRow[],
   names: Record<string, string>,
-): Record<(typeof CHARGEBACK_COLUMNS)[number], string | number>[] {
+): (Record<(typeof CHARGEBACK_COLUMNS)[number], string | number> & Partial<Record<"purchase_cost" | "margin", number>>)[] {
   return rows.map((row) => {
     const parts = chargebackParts(row.name);
     return {
@@ -119,6 +143,7 @@ export function chargebackTable(
       user_id: parts.userId,
       model: parts.model,
       spend: row.spend,
+      ...(row.purchase === undefined ? {} : { purchase_cost: row.purchase, margin: row.spend - row.purchase }),
       prompt_tokens: row.prompt,
       completion_tokens: row.completion,
     };

@@ -1,11 +1,13 @@
 import "server-only";
+import type { Redis } from "ioredis";
 import { redisUrl } from "@/lib/jobs/connection";
 import { logger } from "@/lib/logging/logger";
-import type { RedisLike } from "@/types/gateway";
 
 const REDIS_DECISION_TIMEOUT_MS = 2_000;
+const RECONNECT_AFTER_MS = 30_000;
 const globalForRedis = globalThis as unknown as {
-  __llmhubRedis?: Promise<RedisLike | null>;
+  __llmhubRedis?: Promise<Redis | null>;
+  __llmhubRedisRetryAt?: number;
 };
 
 export async function withRedisTimeout<T>(promise: Promise<T>, ms = REDIS_DECISION_TIMEOUT_MS): Promise<T> {
@@ -22,10 +24,11 @@ export async function withRedisTimeout<T>(promise: Promise<T>, ms = REDIS_DECISI
   }
 }
 
-async function connect(url: string): Promise<RedisLike | null> {
+async function connect(url: string): Promise<Redis | null> {
+  let client: Redis | undefined;
   try {
     const { default: IORedis } = await import("ioredis");
-    const client = new IORedis(url, {
+    client = new IORedis(url, {
       maxRetriesPerRequest: 1,
       connectTimeout: 2_000,
       commandTimeout: 2_000,
@@ -40,6 +43,8 @@ async function connect(url: string): Promise<RedisLike | null> {
     await withRedisTimeout(client.connect());
     return client;
   } catch (err) {
+    client?.disconnect();
+    globalForRedis.__llmhubRedisRetryAt = Date.now() + RECONNECT_AFTER_MS;
     logger.warn("redis.unavailable", {
       err: err instanceof Error ? err.message : String(err),
     });
@@ -47,9 +52,14 @@ async function connect(url: string): Promise<RedisLike | null> {
   }
 }
 
-export function sharedRedis(): Promise<RedisLike | null> {
+export function sharedRedis(now = Date.now()): Promise<Redis | null> {
   const url = redisUrl();
   if (!url) return Promise.resolve(null);
+  const retryAt = globalForRedis.__llmhubRedisRetryAt;
+  if (retryAt !== undefined && retryAt <= now) {
+    globalForRedis.__llmhubRedis = undefined;
+    globalForRedis.__llmhubRedisRetryAt = undefined;
+  }
   globalForRedis.__llmhubRedis ??= connect(url);
   return globalForRedis.__llmhubRedis;
 }

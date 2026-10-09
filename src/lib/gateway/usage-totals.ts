@@ -3,7 +3,9 @@ import prisma from "@/lib/db/prisma";
 import { percentileIndex } from "@/lib/gateway/usage-stats";
 import { money } from "@/lib/utils/money";
 import type { Prisma } from "@/generated/prisma/client";
+import type { ResponseCacheStats } from "@/types/cache";
 import type { UsageSlice } from "@/types/gateway";
+import type { MarginTotals } from "@/types/pricing";
 import type { SpendScope } from "@/types/structure";
 
 export function usageWindowStart(days: number, now = new Date()): Date {
@@ -11,7 +13,10 @@ export function usageWindowStart(days: number, now = new Date()): Date {
   return new Date(today - (days - 1) * 86400000);
 }
 
-export async function usageSlices(where: Prisma.UsageDailyWhereInput): Promise<UsageSlice[]> {
+export async function usageSlices(
+  where: Prisma.UsageDailyWhereInput,
+  options: { purchase?: boolean } = {},
+): Promise<UsageSlice[]> {
   const rows = await prisma.usageDaily.findMany({ where });
   return rows.map((row) => ({
     day: row.day.toISOString().slice(0, 10),
@@ -32,7 +37,16 @@ export async function usageSlices(where: Prisma.UsageDailyWhereInput): Promise<U
     cacheWriteTokens: Number(row.cacheWriteTokens),
     cost: money(row.cost),
     cacheSavings: money(row.cacheSavings),
+    ...(options.purchase ? { purchaseCost: money(row.purchaseCost) } : {}),
   }));
+}
+
+export async function marginTotals(days: number): Promise<MarginTotals> {
+  const totals = await prisma.usageDaily.aggregate({
+    where: { day: { gte: usageWindowStart(days) } },
+    _sum: { cost: true, purchaseCost: true },
+  });
+  return { purchase: money(totals._sum.purchaseCost), sale: money(totals._sum.cost) };
 }
 
 export async function usageTotals(days: number, scope: SpendScope = {}) {
@@ -80,4 +94,39 @@ export async function p95Latency(where: Prisma.RequestLogWhereInput): Promise<nu
     select: { latencyMs: true },
   });
   return row?.latencyMs ?? 0;
+}
+
+export function responseCacheStats(
+  days: number,
+  sums: { hits: number; semanticHits: number; misses: number; savedTokens: number; savedCost: number; lookupCost: number },
+): ResponseCacheStats {
+  const lookups = sums.hits + sums.misses;
+  return {
+    days,
+    ...sums,
+    hitRate: lookups ? sums.hits / lookups : 0,
+    netSaved: sums.savedCost - sums.lookupCost,
+  };
+}
+
+export async function responseCacheTotals(days: number): Promise<ResponseCacheStats> {
+  const totals = await prisma.usageDaily.aggregate({
+    where: { day: { gte: usageWindowStart(days) } },
+    _sum: {
+      responseCacheHits: true,
+      responseCacheSemanticHits: true,
+      responseCacheMisses: true,
+      responseCacheSavedTokens: true,
+      responseCacheSavedCost: true,
+      responseCacheLookupCost: true,
+    },
+  });
+  return responseCacheStats(days, {
+    hits: totals._sum.responseCacheHits ?? 0,
+    semanticHits: totals._sum.responseCacheSemanticHits ?? 0,
+    misses: totals._sum.responseCacheMisses ?? 0,
+    savedTokens: Number(totals._sum.responseCacheSavedTokens ?? 0),
+    savedCost: money(totals._sum.responseCacheSavedCost),
+    lookupCost: money(totals._sum.responseCacheLookupCost),
+  });
 }

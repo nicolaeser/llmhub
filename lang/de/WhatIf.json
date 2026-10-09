@@ -12,7 +12,7 @@
   "noTargetsHint": "Hinterlege Deployment-Kosten oder einen eigenen Preis auf der Seite <link>Modelle</link> oder aktualisiere den <catalog>Modellkatalog</catalog>.",
   "verdict": "{direction, select, saved {{all, select, true {Mit {target} statt deiner bisherigen Modelle hättest du {share, number, percent} gespart.} other {Mit {target} statt {source} hättest du {share, number, percent} gespart.}}} more {{all, select, true {Mit {target} statt deiner bisherigen Modelle hättest du {share, number, percent} mehr bezahlt.} other {Mit {target} statt {source} hättest du {share, number, percent} mehr bezahlt.}}} same {{all, select, true {Mit {target} statt deiner bisherigen Modelle hättest du etwa gleich viel bezahlt.} other {Mit {target} statt {source} hättest du etwa gleich viel bezahlt.}}} other {Mit {target} hätte dieser Traffic {amount, number, money} gekostet.}}",
   "basis": "{count, plural, one {Grundlage: # Anfrage} other {Grundlage: # Anfragen}} mit {tokens, number, integer} Token seit {since, date, short}.",
-  "method": "Prompt- und Completion-Token werden zum Listenpreis des Zielmodells neu berechnet, einschließlich seiner Preisfenster. Cache-Rabatte, Service-Tiers und vom Anbieter gemeldete Kosten fließen nicht ein.",
+  "method": "Prompt- und Completion-Token werden zum Listenpreis des Zielmodells neu berechnet, einschließlich seiner Preisfenster und des Aufschlags oder Rabatts, den jedes Unternehmen, jede Abteilung oder jedes Projekt auf dieses Modell bekommt. Cache-Rabatte, Service-Tiers und vom Anbieter gemeldete Kosten fließen nicht ein.",
   "metrics": {
     "billed": "Abgerechnet",
     "simulated": "Mit {target}",

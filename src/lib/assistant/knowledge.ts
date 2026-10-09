@@ -15,6 +15,8 @@ export const ASSISTANT_PAGES = {
   logs: "/logs",
   "provider-health": "/provider-health",
   companies: "/companies",
+  knowledge: "/knowledge",
+  "vector-stores": "/knowledge",
   structure: "/companies",
   organizations: "/companies",
   departments: "/companies",
@@ -56,7 +58,7 @@ export const ASSISTANT_EXPLAIN = {
   guardrails:
     "Guardrails are a gateway-wide PII policy that masks or blocks matches in prompts before they reach the upstream model and can redact model output. A company or a single API key can override it with its own mode, output setting, and entity list; a key override wins over its company.",
   cache:
-    "The response cache answers identical non-streaming chat requests from the same key from memory for the configured TTL. Configure it under Cache.",
+    "The response cache answers identical non-streaming chat requests from the same key for the configured TTL. With REDIS_URL all app instances share it in Redis; otherwise each process keeps its own memory cache. Optional semantic matching also answers when only the last user message differs and its embedding is at least as similar as the threshold; the embedding call is billed to the calling key and only runs for keys allowed to use the embedding model. The Response cache page shows hit rate and net savings for operators with spend:read-all; provider prompt caching is separate and not counted there. Configure it under Response cache.",
   router:
     "Each model alias has a routing strategy (least_inflight, weighted_random, cost_lowest, priority, fast), retries, fallback aliases, and an overflow alias used when no deployment is healthy. Deployments are the upstream endpoints behind that alias and cool down only on retryable failures. Provider health shows each deployment's recent error rate, p50 and p95 latency, and cooldowns, shared across instances when Redis is configured.",
   logging:

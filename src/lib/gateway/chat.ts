@@ -21,19 +21,23 @@ import {
   upstreamHeaders,
 } from "@/lib/gateway/upstream";
 import { asRecord, isRouterError, newId, stringifyContent } from "@/lib/gateway/core";
+import { costFilter, costRejected } from "@/lib/gateway/cost-cap";
 import { ChatStreamTranscript } from "@/lib/gateway/log-content";
 import { estimateTokens, requestText } from "@/lib/gateway/tokens";
 import type {
   ChatSseTranslator,
+  CostFilter,
   Group,
   ResolvedDeployment,
   JsonMap,
   Usage,
   Principal,
+  RequestTrace,
   RoutePool,
 } from "@/types/gateway";
 import type { OutputGuard } from "@/types/guardrails";
 import type { RouteLimits } from "@/types/model-templates";
+import type { ResponseCacheUsage } from "@/types/cache";
 
 export const UPSTREAM_TIMEOUT_MS = 300_000;
 
@@ -76,7 +80,7 @@ export async function withDeployment<T>(
   aliases: string[],
   limits: RouteLimits,
   fn: (dep: ResolvedDeployment, group: Group) => Promise<T>,
-  opts?: { deferRelease?: boolean; strategy?: string; pool?: RoutePool },
+  opts?: { deferRelease?: boolean; strategy?: string; pool?: RoutePool; cost?: CostFilter },
 ): Promise<{
   result: T;
   dep: ResolvedDeployment;
@@ -103,7 +107,7 @@ export async function withDeployment<T>(
     let stopAlias = false;
     for (let i = 0; i < attempts; i++) {
       try {
-        const acquired = await acquireGroup(group, limits[root], routable, opts?.strategy);
+        const acquired = await acquireGroup(group, limits[root], routable, opts?.strategy, opts?.cost);
         try {
           const started = Date.now();
           const result = await fn(acquired.dep, group);
@@ -131,7 +135,7 @@ export async function withDeployment<T>(
         }
       } catch (err) {
         last = err;
-        if (!fallbackable(err)) throw err;
+        if (!fallbackable(err) || costRejected(err)) throw err;
         break;
       }
     }
@@ -176,6 +180,13 @@ export function withholdChatJson(json: JsonMap): JsonMap {
     return filtered;
   });
   return json;
+}
+
+export function screenChatOutput(json: JsonMap, guard: OutputGuard | null, trace?: RequestTrace): boolean {
+  const screen = outputScreen(guard, trace);
+  screenChatJson(json, screen);
+  if (screen?.blocked) withholdChatJson(json);
+  return screen?.blocked ?? false;
 }
 
 function contentFilterChunk(json: JsonMap, model: string): JsonMap {
@@ -280,40 +291,45 @@ export async function dispatchChat(input: {
   body: JsonMap;
   aliases: string[];
   outputGuard: OutputGuard | null;
-}): Promise<{ json: JsonMap; dep: ResolvedDeployment; alias: string; usage: Partial<Usage> }> {
+  responseCache?: ResponseCacheUsage;
+}): Promise<{ json: JsonMap; dep: ResolvedDeployment; alias: string; usage: Partial<Usage>; cost: number }> {
   const started = Date.now();
   const routed = await withDeployment(
     input.aliases,
     input.principal.routeLimits,
     (dep, group) => chatOnce(dep, group, input.body, input.model),
-    { strategy: requestRoutingOverride(input.body), pool: input.principal.pool },
+    {
+      strategy: requestRoutingOverride(input.body),
+      pool: input.principal.pool,
+      cost: costFilter(input.principal, input.body),
+    },
   ).catch(async (err) => {
     await recordFailure(input, err, started);
     throw err;
   });
   const { result, dep, alias, group } = routed;
 
-  const screen = outputScreen(input.outputGuard, input.principal.trace);
-  const json = screenChatJson({ ...(asRecord(result) ?? {}), model: input.model }, screen);
-  if (screen?.blocked) withholdChatJson(json);
+  const json: JsonMap = { ...(asRecord(result) ?? {}), model: input.model };
+  const blocked = screenChatOutput(json, input.outputGuard, input.principal.trace);
   json.model = input.model;
   if (!json.object) json.object = "chat.completion";
   if (!json.id) json.id = `chatcmpl_${newId()}`;
   const usage = usageFromUnknown(json.usage, json);
-  await recordUsage({
+  const cost = await recordUsage({
     principal: input.principal,
     model: input.model,
     deployment: dep,
     group,
     usage,
     status: 200,
-    outcome: screen?.blocked ? "guardrail_blocked" : "ok",
+    outcome: blocked ? "guardrail_blocked" : "ok",
     latencyMs: Date.now() - started,
     tag: spendTag(input.body),
     request: input.body,
     response: json,
+    responseCache: input.responseCache,
   });
-  return { json, dep, alias, usage };
+  return { json, dep, alias, usage, cost };
 }
 
 export async function streamChat(input: {
@@ -329,7 +345,12 @@ export async function streamChat(input: {
     input.aliases,
     input.principal.routeLimits,
     (dep, group) => openChatStream(dep, group, input),
-    { deferRelease: true, strategy: requestRoutingOverride(input.body), pool: input.principal.pool },
+    {
+      deferRelease: true,
+      strategy: requestRoutingOverride(input.body),
+      pool: input.principal.pool,
+      cost: costFilter(input.principal, input.body),
+    },
   ).catch(async (err) => {
     await recordFailure(input, err, started);
     throw err;

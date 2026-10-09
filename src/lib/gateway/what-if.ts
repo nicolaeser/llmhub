@@ -1,9 +1,13 @@
+import { applyMarkup, pickMarkup } from "@/lib/gateway/markup-policy";
 import { localMinute, scheduledPrice } from "@/lib/gateway/price-schedule";
 import type { CostRates, PriceSchedule } from "@/types/gateway";
+import type { MarkupRule, MarkupTenancy } from "@/types/pricing";
 import type {
   MinuteTokens,
   PricedDeployment,
   TargetPrice,
+  TenantMinutes,
+  TenantTraffic,
   TrafficTotals,
   WhatIfDirection,
 } from "@/types/what-if";
@@ -107,6 +111,50 @@ export function isScheduled(price: TargetPrice): boolean {
 export function targetCost(price: TargetPrice, traffic: TrafficTotals, minutes: MinuteTokens[]): number {
   const routed = scheduleCost(price.schedule, traffic, minutes);
   return price.floor ? Math.max(routed, flatCost(price.floor, traffic.prompt, traffic.completion)) : routed;
+}
+
+export function markupFactor(rules: readonly MarkupRule[], tenancy: MarkupTenancy, model: string): number {
+  const percent = pickMarkup(rules, { ...tenancy, model })?.percent ?? 0;
+  return applyMarkup(1, percent);
+}
+
+export function weightedMinutes(
+  tenants: TenantMinutes[],
+  factor: (tenancy: MarkupTenancy) => number,
+): MinuteTokens[] {
+  const buckets = new Map<number, MinuteTokens>();
+  for (const tenant of tenants) {
+    const weight = factor(tenant);
+    for (const row of tenant.minutes) {
+      const bucket = buckets.get(row.minute) ?? { minute: row.minute, prompt: 0, completion: 0 };
+      bucket.prompt += row.prompt * weight;
+      bucket.completion += row.completion * weight;
+      buckets.set(row.minute, bucket);
+    }
+  }
+  return [...buckets.values()];
+}
+
+export function markedUpCost(
+  price: TargetPrice,
+  model: string,
+  rules: readonly MarkupRule[],
+  tenants: TenantTraffic[],
+  minutes: TenantMinutes[],
+): number {
+  const factor = (tenancy: MarkupTenancy) => markupFactor(rules, tenancy, model);
+  const traffic = tenants.reduce(
+    (sum, tenant) => {
+      const weight = factor(tenant);
+      return {
+        ...sum,
+        prompt: sum.prompt + tenant.prompt * weight,
+        completion: sum.completion + tenant.completion * weight,
+      };
+    },
+    { requests: 0, prompt: 0, completion: 0, cost: 0 },
+  );
+  return targetCost(price, traffic, isScheduled(price) ? weightedMinutes(minutes, factor) : []);
 }
 
 export function compareCost(

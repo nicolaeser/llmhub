@@ -6,6 +6,7 @@ import { outputGuard, screenRequest } from "@/lib/gateway/guardrails";
 import { alertPiiBlocked, alertUpstreamFailure } from "@/lib/gateway/alerts";
 import { resolvePolicies } from "@/lib/gateway/settings";
 import { assertBudget, assertRate, recordUsage } from "@/lib/gateway/billing";
+import { capRequestCost, maxCostHeader } from "@/lib/gateway/cost-cap";
 import { asRecord, isRouterError, newRequestId } from "@/lib/gateway/core";
 import { anthropicErrorBody, GateError, openAIErrorBody } from "@/lib/gateway/errors";
 import { logger } from "@/lib/logging/logger";
@@ -92,7 +93,7 @@ export async function gateRequest(req: Request, pool: RoutePool = "api"): Promis
   }
   allowEndpoint(principal, gatewayPath(path));
   allowAccessTime(principal, new Date());
-  await admit(principal);
+  await admit(principal, maxCostHeader(req.headers));
   return principal;
 }
 
@@ -109,9 +110,10 @@ export function allowAccessTime(principal: Principal, at: Date): void {
   }
 }
 
-export async function admit(principal: Principal): Promise<void> {
-  await assertBudget(principal);
+export async function admit(principal: Principal, maxCost: number | null = null): Promise<void> {
+  const budget = await assertBudget(principal);
   await assertRate(principal);
+  capRequestCost(principal, budget, maxCost);
 }
 
 export function modelPermitted(principal: Principal, model: string): boolean {
