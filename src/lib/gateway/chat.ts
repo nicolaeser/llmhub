@@ -6,7 +6,10 @@ import { spendTag } from "@/lib/gateway/gate";
 import { GateError } from "@/lib/gateway/errors";
 import { outputScreen, type OutputScreen } from "@/lib/gateway/guardrails";
 import { requestRoutingOverride, serviceModeHeaders } from "@/lib/gateway/service-mode";
-import { acquireGroup, loadGroup, markFailure, markSuccess, secretFor } from "@/lib/gateway/runtime";
+import { acquireGroup, loadGroup, markFailure, markSuccess } from "@/lib/gateway/runtime";
+import { CodexSseTranslator } from "@/lib/gateway/codex";
+import { deploymentAuth } from "@/lib/gateway/credentials";
+import { inPool, outsidePool } from "@/lib/gateway/route-pool";
 import { SSE_HEADERS } from "@/lib/gateway/sse";
 import {
   joinPath,
@@ -20,7 +23,15 @@ import {
 import { asRecord, isRouterError, newId, stringifyContent } from "@/lib/gateway/core";
 import { ChatStreamTranscript } from "@/lib/gateway/log-content";
 import { estimateTokens, requestText } from "@/lib/gateway/tokens";
-import type { Group, ResolvedDeployment, JsonMap, Usage, Principal } from "@/types/gateway";
+import type {
+  ChatSseTranslator,
+  Group,
+  ResolvedDeployment,
+  JsonMap,
+  Usage,
+  Principal,
+  RoutePool,
+} from "@/types/gateway";
 import type { OutputGuard } from "@/types/guardrails";
 import type { RouteLimits } from "@/types/model-templates";
 
@@ -65,7 +76,7 @@ export async function withDeployment<T>(
   aliases: string[],
   limits: RouteLimits,
   fn: (dep: ResolvedDeployment, group: Group) => Promise<T>,
-  opts?: { deferRelease?: boolean; strategy?: string },
+  opts?: { deferRelease?: boolean; strategy?: string; pool?: RoutePool },
 ): Promise<{
   result: T;
   dep: ResolvedDeployment;
@@ -74,6 +85,8 @@ export async function withDeployment<T>(
   release: () => void;
 }> {
   let last: unknown = new GateError(404, "model_not_found", "no deployment for model", { param: "model" });
+  const pool = opts?.pool ?? "api";
+  const routable = inPool(pool);
   const queue = aliases.map((alias) => ({ alias, root: alias }));
   for (let qi = 0; qi < queue.length; qi++) {
     const { alias, root } = queue[qi]!;
@@ -84,11 +97,13 @@ export async function withDeployment<T>(
       last = err;
       continue;
     }
-    const attempts = Math.max(0, group.num_retries) + 1;
+    const reachable = !group.mapped.length || group.mapped.some(routable) || Boolean(group.overflow_group);
+    if (!reachable) last = outsidePool(pool);
+    const attempts = reachable ? Math.max(0, group.num_retries) + 1 : 0;
     let stopAlias = false;
     for (let i = 0; i < attempts; i++) {
       try {
-        const acquired = await acquireGroup(group, limits[root], undefined, opts?.strategy);
+        const acquired = await acquireGroup(group, limits[root], routable, opts?.strategy);
         try {
           const started = Date.now();
           const result = await fn(acquired.dep, group);
@@ -106,7 +121,7 @@ export async function withDeployment<T>(
           };
         } catch (err) {
           acquired.release();
-          if (retryable(err)) markFailure(acquired.dep);
+          if (retryable(err)) markFailure(acquired.dep, err instanceof GateError ? err.retryAt : null);
           last = err;
           if (!retryable(err)) {
             stopAlias = true;
@@ -179,18 +194,10 @@ function contentFilterChunk(json: JsonMap, model: string): JsonMap {
   };
 }
 
-export function deploymentKey(dep: ResolvedDeployment): string {
-  const apiKey = secretFor(dep);
-  if (!apiKey && dep.kind !== "openai_compat") {
-    throw new GateError(503, "no_provider_key", "no API key for deployment");
-  }
-  return apiKey;
-}
-
 export async function chatOnce(dep: ResolvedDeployment, group: Group, body: JsonMap, model: string): Promise<unknown> {
   const proxied = await proxyJson({
     dep,
-    apiKey: deploymentKey(dep),
+    auth: await deploymentAuth(dep),
     path: "/chat/completions",
     body: { ...body, model: dep.model || model, stream: false },
     timeoutMs: UPSTREAM_TIMEOUT_MS,
@@ -209,12 +216,12 @@ export async function openUpstreamStream(input: {
   form?: FormData;
   headers?: Record<string, string>;
 }): Promise<Response> {
-  const apiKey = deploymentKey(input.dep);
+  const auth = await deploymentAuth(input.dep);
   const signals: AbortSignal[] = [AbortSignal.timeout(UPSTREAM_TIMEOUT_MS)];
   if (input.req.signal) signals.push(input.req.signal);
   const headers: Record<string, string> = {
     ...mergeUpstreamHeaders(
-      upstreamHeaders(input.dep, apiKey, input.headers),
+      upstreamHeaders(input.dep, auth, input.headers),
       serviceModeHeaders(input.dep.kind, input.payload, input.group.strategy, input.dep.model),
     ),
     Accept: "text/event-stream",
@@ -257,6 +264,12 @@ export function openChatStream(
   return openUpstreamStream({ dep, group, req: input.req, path: "/chat/completions", payload });
 }
 
+function streamTranslator(dep: ResolvedDeployment, model: string): ChatSseTranslator | null {
+  if (dep.kind === "anthropic") return new AnthropicSseTranslator(model);
+  if (dep.kind === "codex") return new CodexSseTranslator(model);
+  return null;
+}
+
 function sseData(payload: string): string {
   return `data: ${payload}\n\n`;
 }
@@ -273,7 +286,7 @@ export async function dispatchChat(input: {
     input.aliases,
     input.principal.routeLimits,
     (dep, group) => chatOnce(dep, group, input.body, input.model),
-    { strategy: requestRoutingOverride(input.body) },
+    { strategy: requestRoutingOverride(input.body), pool: input.principal.pool },
   ).catch(async (err) => {
     await recordFailure(input, err, started);
     throw err;
@@ -316,7 +329,7 @@ export async function streamChat(input: {
     input.aliases,
     input.principal.routeLimits,
     (dep, group) => openChatStream(dep, group, input),
-    { deferRelease: true, strategy: requestRoutingOverride(input.body) },
+    { deferRelease: true, strategy: requestRoutingOverride(input.body), pool: input.principal.pool },
   ).catch(async (err) => {
     await recordFailure(input, err, started);
     throw err;
@@ -352,7 +365,7 @@ export function relayChatStream(input: {
   const encoder = new TextEncoder();
   const decoder = new TextDecoder();
   const reader = input.res.body!.getReader();
-  const translator = dep.kind === "anthropic" ? new AnthropicSseTranslator(input.model) : null;
+  const translator = streamTranslator(dep, input.model);
   let leftover = "";
   let billed = false;
   let ended = false;

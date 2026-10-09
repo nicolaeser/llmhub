@@ -336,6 +336,9 @@ export default function LogDetailDialog({
                     <Field label={t("columns.tokens")}>
                       {t("tokenSplit", { prompt: detail.promptTokens, completion: detail.completionTokens })}
                     </Field>
+                    <Field label={tDetail("cache")}>
+                      {tDetail("cacheValue", { read: detail.cacheReadTokens, written: detail.cacheWriteTokens })}
+                    </Field>
                     <Field label={t("columns.cost")}>{format.number(detail.cost, "money")}</Field>
                   </dl>
                   <Separator />

@@ -9,9 +9,11 @@ import { hasPerm, PERMISSIONS } from "@/lib/auth/permissions";
 import { companyOf, inCompany, keyVisibleTo, spendScope } from "@/lib/auth/scope";
 import {
   chargebackRows,
+  groupCache,
   groupRequestHealth,
   groupSpend,
-  percentileIndex,
+  summarizeUsage,
+  usageDays,
 } from "@/lib/gateway/usage-stats";
 import { actionFail, runAction } from "@/lib/http/action-result";
 import { listKeys, toKeyView } from "@/app/(app)/_data";
@@ -19,7 +21,7 @@ import { alertKeyBlocked } from "@/lib/gateway/alerts";
 import { writeAudit } from "@/lib/gateway/audit";
 import { getEnterprise } from "@/lib/gateway/settings";
 import { checkForUpdate } from "@/lib/updates/update-check";
-import { usageSlices, usageTotals } from "@/lib/gateway/usage-totals";
+import { p95Latency, usageNames, usageSlices, usageTotals } from "@/lib/gateway/usage-totals";
 import { isInternalKey } from "@/lib/gateway/key-tenancy";
 import { loadModelPolicies, templateRuleSelect } from "@/lib/gateway/model-access";
 import { templateModels, templateRulesOf } from "@/lib/gateway/model-policy";
@@ -97,6 +99,9 @@ export async function createKeyAction(raw: unknown) {
         rpmLimit: input.rpm,
         tpmLimit: input.tpm,
         allowedIps: input.allowedIps,
+        allowedEndpoints: input.allowedEndpoints,
+        accessWindows: input.accessWindows,
+        accessTimeZone: input.accessTimeZone,
         logContent: input.logContent,
         expiresAt: input.days ? new Date(Date.now() + input.days * 86400000) : null,
       },
@@ -113,6 +118,9 @@ export async function createKeyAction(raw: unknown) {
         models: input.models,
         templateIds: templates,
         allowedIps: input.allowedIps,
+        allowedEndpoints: input.allowedEndpoints,
+        accessWindows: input.accessWindows,
+        accessTimeZone: input.accessTimeZone,
         logContent: input.logContent,
       },
     });
@@ -140,6 +148,9 @@ export async function updateKeyAction(raw: unknown) {
       rpmLimit: input.rpm,
       tpmLimit: input.tpm,
       allowedIps: input.allowedIps,
+      allowedEndpoints: input.allowedEndpoints,
+      accessWindows: input.accessWindows,
+      accessTimeZone: input.accessTimeZone,
       logContent: input.logContent,
       blocked: input.blocked,
     };
@@ -287,29 +298,6 @@ export async function loadKeysPageAction() {
   });
 }
 
-async function usageNames(rows: UsageSlice[]): Promise<Record<string, string>> {
-  const ids = (pick: (row: UsageSlice) => string) => [...new Set(rows.map(pick).filter(Boolean))];
-  const [orgs, teams, projects, members, keys, users] = await Promise.all([
-    prisma.organization.findMany({ where: { id: { in: ids((row) => row.orgId) } }, select: { id: true, alias: true } }),
-    prisma.team.findMany({ where: { id: { in: ids((row) => row.teamId) } }, select: { id: true, alias: true } }),
-    prisma.project.findMany({ where: { id: { in: ids((row) => row.projectId) } }, select: { id: true, alias: true } }),
-    prisma.member.findMany({ where: { id: { in: ids((row) => row.memberId) } }, select: { id: true, name: true } }),
-    prisma.virtualKey.findMany({
-      where: { id: { in: ids((row) => row.keyId) } },
-      select: { id: true, keyAlias: true, prefix: true },
-    }),
-    prisma.user.findMany({ where: { id: { in: ids((row) => row.userId) } }, select: { id: true, username: true } }),
-  ]);
-  return Object.fromEntries([
-    ...orgs.map((row) => [row.id, row.alias]),
-    ...teams.map((row) => [row.id, row.alias]),
-    ...projects.map((row) => [row.id, row.alias]),
-    ...members.map((row) => [row.id, row.name]),
-    ...keys.map((row) => [row.id, row.keyAlias || row.prefix]),
-    ...users.map((row) => [row.id, row.username]),
-  ]);
-}
-
 export async function loadUsageAction(
   input:
     | number
@@ -349,42 +337,11 @@ export async function loadUsageAction(
       ...(userId ? { userId } : {}),
       ...spendScope(session),
     };
-    const requestWhere = { ...filters, createdAt: { gte: since } };
-    const [rows, logged] = await Promise.all([
+    const [rows, p95] = await Promise.all([
       usageSlices({ ...filters, day: { gte: since } }),
-      prisma.requestLog.count({ where: requestWhere }),
+      p95Latency({ ...filters, createdAt: { gte: since } }),
     ]);
-    const p95Row = logged
-      ? await prisma.requestLog.findFirst({
-          where: requestWhere,
-          orderBy: { latencyMs: "asc" },
-          skip: percentileIndex(logged, 95),
-          select: { latencyMs: true },
-        })
-      : null;
-    const daily = new Map<string, { spend: number; requests: number; errors: number }>();
-    for (let i = days - 1; i >= 0; i--) {
-      daily.set(new Date(today - i * 86400000).toISOString().slice(0, 10), {
-        spend: 0,
-        requests: 0,
-        errors: 0,
-      });
-    }
-    const totals = { spend: 0, tokens: 0, count: 0, errors: 0, rate429: 0, latencySum: 0 };
-    for (const row of rows) {
-      const bucket = daily.get(row.day);
-      if (bucket) {
-        bucket.spend += row.cost;
-        bucket.requests += row.requests;
-        bucket.errors += row.errors;
-      }
-      totals.spend += row.cost;
-      totals.tokens += row.promptTokens + row.completionTokens;
-      totals.count += row.requests;
-      totals.errors += row.errors;
-      totals.rate429 += row.rateLimited;
-      totals.latencySum += row.latencyMs;
-    }
+    const summary = summarizeUsage(rows, usageDays(since, days));
     const distinct = (pick: (row: UsageSlice) => string) =>
       [...new Set(rows.map(pick).filter(Boolean))].sort();
     return {
@@ -404,14 +361,18 @@ export async function loadUsageAction(
       members: distinct((row) => row.memberId),
       keys: distinct((row) => row.keyId),
       users: distinct((row) => row.userId),
-      spend: totals.spend,
-      tokens: totals.tokens,
-      count: totals.count,
-      errors: totals.errors,
-      rate429: totals.rate429,
-      latency: totals.count ? totals.latencySum / totals.count : 0,
-      p95Latency: p95Row?.latencyMs ?? 0,
-      daily: [...daily.entries()].map(([day, v]) => ({ day, ...v })),
+      spend: summary.spend,
+      tokens: summary.tokens,
+      count: summary.count,
+      errors: summary.errors,
+      rate429: summary.rate429,
+      latency: summary.latency,
+      p95Latency: p95,
+      cacheRead: summary.cacheRead,
+      cacheWrite: summary.cacheWrite,
+      cacheSavings: summary.cacheSavings,
+      cacheHitRate: summary.cacheHitRate,
+      daily: summary.daily,
       byModel: groupSpend(rows, "model").slice(0, 12),
       byTeam: groupSpend(rows, "teamId").slice(0, 12),
       byOrg: groupSpend(rows, "orgId").slice(0, 12),
@@ -421,6 +382,7 @@ export async function loadUsageAction(
       byUser: groupSpend(rows, "userId").slice(0, 12),
       healthByModel: groupRequestHealth(rows, "model").slice(0, 12),
       healthByTeam: groupRequestHealth(rows, "teamId").slice(0, 12),
+      cacheByProject: groupCache(rows, "projectId").slice(0, 12),
       chargeback: chargebackRows(rows),
     };
   });

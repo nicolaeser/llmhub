@@ -20,6 +20,8 @@ export type RequestLogEntry = {
   tag: string;
   promptTokens: number;
   completionTokens: number;
+  cacheReadTokens: number;
+  cacheWriteTokens: number;
   cost: number;
   stream?: boolean;
   request?: unknown;
@@ -104,6 +106,8 @@ export async function writeRequestLog(entry: RequestLogEntry): Promise<void> {
     latencyMs: entry.latencyMs,
     promptTokens: entry.promptTokens,
     completionTokens: entry.completionTokens,
+    cacheReadTokens: entry.cacheReadTokens,
+    cacheWriteTokens: entry.cacheWriteTokens,
     piiMode: trace?.piiMode ?? "",
     piiInput: [...piiInput],
     piiOutput: [...piiOutput],
@@ -139,6 +143,8 @@ export async function writeRequestLog(entry: RequestLogEntry): Promise<void> {
       latency_ms: meta.latencyMs,
       prompt_tokens: meta.promptTokens,
       completion_tokens: meta.completionTokens,
+      cache_read_tokens: meta.cacheReadTokens,
+      cache_write_tokens: meta.cacheWriteTokens,
       cost: entry.cost,
       tag: meta.tag,
       pii_mode: meta.piiMode,

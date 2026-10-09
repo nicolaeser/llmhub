@@ -171,5 +171,53 @@
     "add": "Neue Schwelle",
     "addHint": "Zwischen 1 und 100 Prozent eines Budgets.",
     "addButton": "Schwelle hinzufügen"
+  },
+  "reports": {
+    "title": "Geplante Berichte ({count, number, integer})",
+    "hint": "{kind, select, org {Ein wöchentlicher oder monatlicher Nutzungsbericht dieses Unternehmens und seiner Abteilungen, per E-Mail mit PDF oder CSV im Anhang.} other {Ein wöchentlicher oder monatlicher Nutzungsbericht dieser Abteilung, per E-Mail mit PDF oder CSV im Anhang.}}",
+    "add": "Bericht hinzufügen",
+    "empty": "Noch keine geplanten Berichte.",
+    "mailDisabled": "Auf diesem Server ist kein E-Mail-Versand eingerichtet, daher werden keine Berichte verschickt. Setze SMTP_URL, um sie zuzustellen.",
+    "columns": {
+      "schedule": "Zeitplan",
+      "recipients": "Empfänger"
+    },
+    "schedule": "{cadence, select, weekly {Wöchentlich} other {Monatlich}} · {format, select, csv {CSV} both {PDF und CSV} other {PDF}}",
+    "language": "Auf {language}",
+    "paused": "Pausiert",
+    "next": "Nächster am {date, date, stamp}",
+    "lastSent": "Zuletzt gesendet {date, date, stamp}",
+    "never": "Noch nicht gesendet",
+    "failed": "Letzte Zustellung fehlgeschlagen ({code})",
+    "sendNow": "Letzten Zeitraum jetzt senden: {report}",
+    "sent": "Bericht gesendet",
+    "sendFailed": "Der Bericht konnte nicht gesendet werden ({code}).",
+    "edit": "{report} bearbeiten",
+    "delete": "{report} löschen",
+    "deleteTitle": "Diesen Bericht löschen?",
+    "deleteHint": "Die Empfänger bekommen ihn nicht mehr. Die Nutzungsdaten bleiben unverändert.",
+    "deleted": "Bericht gelöscht",
+    "dialog": {
+      "title": "{mode, select, edit {Bericht bearbeiten} other {Neuer Bericht}}",
+      "hint": "{kind, select, org {Nutzung von {name} und allen Abteilungen.} other {Nutzung der Abteilung {name}.}} Zeiträume verwenden UTC-Tage. Ein neuer Bericht geht erst nach Ende des laufenden Zeitraums raus. Zum Testen kannst du den letzten Zeitraum aus der Liste senden.",
+      "cadence": "Zeitplan",
+      "cadenceOption": "{cadence, select, weekly {Wöchentlich} other {Monatlich}}",
+      "cadenceHint": "{cadence, select, weekly {Montag bis Sonntag, versendet früh am Montag.} other {Der vorige Kalendermonat, versendet früh am Ersten des Monats.}}",
+      "format": "Anhang",
+      "formatOption": "{format, select, csv {CSV} both {PDF und CSV} other {PDF}}",
+      "formatHint": "{format, select, csv {Ausgaben nach Projekt, Person, Key und Modell.} both {Die PDF-Übersicht und die CSV-Details.} other {Summen, tägliche Ausgaben und Ausgaben nach Modell.}}",
+      "language": "Sprache",
+      "recipients": "Empfänger",
+      "recipientsHint": "E-Mail-Adressen, eine pro Zeile oder durch Kommas getrennt. Höchstens {max, number, integer}.",
+      "recipientsInvalid": "Prüfe {list}.",
+      "recipientsTooMany": "Gib höchstens {max, number, integer} Adressen ein.",
+      "addPerson": "Person hinzufügen",
+      "addPersonPlaceholder": "Person mit E-Mail auswählen",
+      "enabled": "Diesen Bericht senden",
+      "enabledHint": "Ausschalten pausiert ihn, ohne die Einstellungen zu verlieren.",
+      "submit": "{mode, select, edit {Speichern} other {Bericht hinzufügen}}",
+      "saved": "{mode, select, edit {Bericht gespeichert} other {Bericht hinzugefügt}}"
+    },
+    "row": "{cadence, select, weekly {Wöchentlicher Bericht} other {Monatlicher Bericht}} an {first}{more, plural, =0 {} other { und # weitere}}"
   }
 }

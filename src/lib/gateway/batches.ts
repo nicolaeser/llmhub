@@ -23,7 +23,7 @@ import { assertBudget, usageFromUnknown } from "@/lib/gateway/billing";
 import { dispatchChat } from "@/lib/gateway/chat";
 import { asRecord, asStringMap, newId, ownerId } from "@/lib/gateway/core";
 import { resolveChatFiles, resolveResponsesFiles } from "@/lib/gateway/file-refs";
-import { allowModel, applyGuardrails, modelChain, modelOf, toGateError, withTrace } from "@/lib/gateway/gate";
+import { allowEndpoint, allowModel, applyGuardrails, modelChain, modelOf, toGateError, withTrace } from "@/lib/gateway/gate";
 import { GateError, openAIErrorBody } from "@/lib/gateway/errors";
 import { meter } from "@/lib/gateway/meter";
 import {
@@ -137,6 +137,7 @@ export async function createBatch(principal: Principal, body: JsonMap): Promise<
   if (!isBatchEndpoint(endpoint)) {
     throw invalid(`endpoint must be one of ${Object.keys(BATCH_ENDPOINTS).join(", ")}`, "endpoint", "unsupported_endpoint");
   }
+  allowEndpoint(principal, endpoint, "endpoint");
   if (body.completion_window !== undefined && body.completion_window !== BATCH_WINDOW) {
     throw invalid(`completion_window must be ${BATCH_WINDOW}`, "completion_window");
   }
@@ -264,6 +265,7 @@ async function respondLine(principal: Principal, model: string, body: JsonMap, o
 export async function runBatchLine(owner: Principal, endpoint: BatchEndpoint, raw: JsonMap): Promise<BatchLineResult> {
   const principal = withTrace(owner, `batch:${endpoint}`);
   try {
+    allowEndpoint(principal, endpoint);
     await assertBudget(principal);
     const model = modelOf(raw);
     allowModel(principal, model);

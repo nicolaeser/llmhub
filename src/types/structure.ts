@@ -1,4 +1,5 @@
 import type { SpendHolder } from "@/types/gateway";
+import type { UsageReportView } from "@/types/reports";
 
 export type BudgetKind = "org" | "team" | "project" | "member" | "user" | "key";
 
@@ -96,6 +97,10 @@ export type StructurePayload = {
   canManage: boolean;
   canBudget: boolean;
   canCreateKeys: boolean;
+  reports: UsageReportView[];
+  canSeeReports: boolean;
+  canReport: boolean;
+  mailEnabled: boolean;
 };
 
 export type MemberInput = {

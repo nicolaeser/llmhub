@@ -18,6 +18,8 @@ export const NATIVE_VENDORS: Readonly<Record<string, string>> = {
   anthropic: "anthropic",
   xai: "xai",
   typesafe: "typesafe",
+  codex: "openai",
+  grok_build: "xai",
 };
 
 const AGGREGATOR_KINDS = new Set(["openrouter", "openrouter_eu"]);

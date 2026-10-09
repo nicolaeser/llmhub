@@ -10,7 +10,17 @@ test("recordUsage hands every request to writeRequestLog with tokens, cost, and 
   const start = source.indexOf("await writeRequestLog({");
   assert.notEqual(start, -1);
   const call = source.slice(start, source.indexOf("});", start) + 3);
-  for (const field of ["promptTokens", "completionTokens", "cost", "request", "response", "error", "stream"]) {
+  for (const field of [
+    "promptTokens",
+    "completionTokens",
+    "cacheReadTokens",
+    "cacheWriteTokens",
+    "cost",
+    "request",
+    "response",
+    "error",
+    "stream",
+  ]) {
     assert.match(call, new RegExp(`\\b${field}\\b`), field);
   }
 });
@@ -28,6 +38,8 @@ test("requestLog.create stores tenancy, routing, PII markers, and nested content
     "piiInput",
     "piiOutput",
     "contentSkip",
+    "cacheReadTokens",
+    "cacheWriteTokens",
   ]) {
     assert.match(source, new RegExp(`\\b${field}:`), field);
   }

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { anthropicCountBody } from "@/lib/gateway/anthropic";
-import { deploymentKey, withDeployment } from "@/lib/gateway/chat";
+import { withDeployment } from "@/lib/gateway/chat";
+import { deploymentAuth } from "@/lib/gateway/credentials";
 import { asNumber, asRecord } from "@/lib/gateway/core";
 import {
   allowModel,
@@ -45,7 +46,7 @@ export async function POST(req: Request) {
         }
         const proxied = await proxyJson({
           dep,
-          apiKey: deploymentKey(dep),
+          auth: await deploymentAuth(dep),
           path: anthropic ? "/v1/messages/count_tokens" : "/responses/input_tokens",
           body: anthropic
             ? anthropicCountBody(clean)

@@ -52,6 +52,8 @@ export type RequestLogRow = {
   projectId: string;
   promptTokens: number;
   completionTokens: number;
+  cacheReadTokens: number;
+  cacheWriteTokens: number;
   cost: number;
   piiMode: string;
   piiInput: string[];
