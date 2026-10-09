@@ -32,7 +32,17 @@
     "name": "Name",
     "spend": "Ausgaben",
     "prompt": "Prompt-Token",
-    "completion": "Completion-Token"
+    "completion": "Completion-Token",
+    "cacheRead": "Gelesene Cache-Token",
+    "cacheWrite": "Geschriebene Cache-Token",
+    "hitRate": "Trefferquote",
+    "savings": "Ersparnis"
+  },
+  "cache": {
+    "title": "Prompt-Caching",
+    "description": "Die Trefferquote ist der Anteil der Prompt-Token, die aus dem Cache des Anbieters gelesen wurden. Die Ersparnis vergleicht die abgerechneten Kosten mit denselben Prompt-Token zum vollen Input-Preis, abzüglich der Cache-Schreibkosten.",
+    "empty": "Keine Cache-Lese- oder Schreibvorgänge in diesem Zeitraum.",
+    "byProject": "Prompt-Caching nach Projekt"
   },
   "range": "Zeitraum",
   "empty": "Noch keine Ausgaben. Sende eine Spielwiesen-Anfrage.",
@@ -54,5 +64,11 @@
     "colCompletion": "Completion",
     "total": "Gesamt",
     "noSpend": "Keine Ausgaben in diesem Zeitraum."
+  },
+  "report": {
+    "scope": "{hasTeam, select, yes {{org} / {team}} other {{org}}}",
+    "period": "{cadence, select, weekly {Woche {range}} other {{start, date, month}}}",
+    "subject": "{brand} Nutzungsbericht: {scope}, {period}",
+    "body": "Nutzungsbericht für {scope}\nZeitraum: {period}\n\nAusgaben: {spend, number, money}\nAnfragen: {requests, number, integer} ({errors, plural, =0 {keine Fehler} one {# Fehler} other {# Fehler}})\nTokens: {tokens, number, integer}\n\n{format, select, csv {Die angehängte CSV listet die Ausgaben nach Projekt, Person, Key und Modell.} both {Das angehängte PDF zeigt die täglichen Ausgaben und die Ausgaben nach Modell. Die CSV listet die Ausgaben nach Projekt, Person, Key und Modell.} other {Das angehängte PDF zeigt die täglichen Ausgaben und die Ausgaben nach Modell.}}\n\nZeiträume verwenden UTC-Tage. Dieser Bericht ist in {brand} auf der Seite Unternehmen geplant."
   }
 }

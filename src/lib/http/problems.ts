@@ -55,12 +55,15 @@ export const PROBLEMS = {
   WEAK_PASSWORD: { status: 422, title: "Password is too weak" },
   PASSWORD_GUESSABLE: { status: 422, title: "Password is too easy to guess" },
   PASSWORD_REUSED: { status: 422, title: "Password was used before" },
+  RECIPIENTS_REQUIRED: { status: 422, title: "At least one report recipient is required" },
+  RECIPIENTS_INVALID: { status: 422, title: "Report recipients must be valid email addresses" },
   RATE_LIMITED: { status: 429, title: "Too many requests" },
   INTERNAL_ERROR: { status: 500, title: "Internal server error" },
   UPSTREAM_FAILED: { status: 502, title: "Upstream request failed" },
   UPSTREAM_EMPTY: { status: 502, title: "Upstream returned no models" },
   SIGN_IN_FAILED: { status: 502, title: "Provider sign-in failed" },
   SERVICE_UNAVAILABLE: { status: 503, title: "Service unavailable" },
+  MAIL_DISABLED: { status: 503, title: "Email delivery is not configured" },
 } as const satisfies Record<string, ProblemSpec>;
 
 const STATUS_TITLES: Record<number, string> = {

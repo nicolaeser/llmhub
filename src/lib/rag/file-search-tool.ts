@@ -2,6 +2,7 @@ import "server-only";
 import { dispatchChat, streamChat } from "@/lib/gateway/chat";
 import { asNumber, asRecord, newId, stringifyContent } from "@/lib/gateway/core";
 import { GateError } from "@/lib/gateway/errors";
+import { allowEndpoint } from "@/lib/gateway/gate";
 import { defaultEntityIds, redactJSON } from "@/lib/gateway/pii";
 import { parseRequest, type ResponsesStreamEncoder } from "@/lib/gateway/responses";
 import { SSE_HEADERS } from "@/lib/gateway/sse";
@@ -58,6 +59,7 @@ export function takeFileSearchTool(body: JsonMap): { body: JsonMap; tool: FileSe
 }
 
 export async function fileSearchStores(principal: Principal, tool: FileSearchTool): Promise<SearchableStore[]> {
+  allowEndpoint(principal, "/v1/vector_stores", "tools");
   const rows = [];
   for (const id of tool.vectorStoreIds) rows.push(usableStore(await readableStore(principal, id)));
   return rows.map(searchableStore);

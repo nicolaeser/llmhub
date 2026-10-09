@@ -55,6 +55,10 @@ export type UsageSource = {
   rate429: number;
   latency: number;
   p95Latency: number;
+  cacheRead: number;
+  cacheWrite: number;
+  cacheSavings: number;
+  cacheHitRate: number;
   daily: { day: string; spend: number; requests: number; errors: number }[];
   byModel: SliceRow[];
   byTeam: SliceRow[];

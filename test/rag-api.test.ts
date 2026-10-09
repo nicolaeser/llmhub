@@ -1,10 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { GateError } from "@/lib/gateway/errors";
+import { endpointAllowed, endpointOf } from "@/lib/gateway/key-restrictions";
 import { searchRequest } from "@/lib/rag/api";
 import {
   addChatUsage,
   assistantMessage,
+  fileSearchStores,
   searchQueries,
   searchResultText,
   takeFileSearchTool,
@@ -18,7 +20,7 @@ import {
   rerankRequestSchema,
   searchVectorStoreSchema,
 } from "@/schemas/rag";
-import type { JsonMap } from "@/types/gateway";
+import type { JsonMap, Principal, VirtualKeyView } from "@/types/gateway";
 
 test("vector store schemas enforce OpenAI limits", () => {
   assert.equal(createVectorStoreSchema.safeParse({ name: "kb", embedding_model: "Text-Embed" }).data?.embedding_model, "text-embed");
@@ -157,4 +159,28 @@ test("search arguments, results, usage, and assistant turns are normalized", () 
   const [call] = turn.tool_calls as JsonMap[];
   assert.match(String(call!.id), /^call_/);
   assert.deepEqual(call!.function, { name: "file_search", arguments: '{"queries":["x"]}' });
+});
+
+test("vector stores and rerank are their own key endpoint groups", async () => {
+  assert.equal(endpointOf("/v1/vector_stores"), "vector_stores");
+  assert.equal(endpointOf("/v1/vector_stores/vs_1/files/f1/content"), "vector_stores");
+  assert.equal(endpointOf("/v1/rerank"), "rerank");
+  assert.equal(endpointAllowed(["files"], "/v1/vector_stores/vs_1/search"), false);
+  assert.equal(endpointAllowed(["embeddings"], "/v1/rerank"), false);
+  assert.equal(endpointAllowed(["vector_stores", "rerank"], "/v1/vector_stores/vs_1/search"), true);
+  const chatOnly: Principal = {
+    actor: "sk",
+    key: { token_id: "k", project_id: "p", member_id: "", allowed_endpoints: ["chat"] } as unknown as VirtualKeyView,
+    teamId: "",
+    orgId: "acme",
+    userId: "",
+    memberId: "",
+    models: [],
+    routeLimits: {},
+  };
+  const tool = takeFileSearchTool({ tools: [{ type: "file_search", vector_store_ids: ["vs_1"] }] }).tool!;
+  await assert.rejects(
+    fileSearchStores(chatOnly, tool),
+    (err: unknown) => err instanceof GateError && err.code === "endpoint_not_allowed" && err.param === "tools",
+  );
 });

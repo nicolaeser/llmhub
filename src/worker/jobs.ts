@@ -10,6 +10,7 @@ import { purgeStoredObjects } from "@/lib/gateway/objects";
 import { runPendingIngests } from "@/lib/rag/ingest";
 import { expireVectorStores, purgeOrphanUploads } from "@/lib/rag/stores";
 import { getAlertState, getEnterprise, saveAlertState } from "@/lib/gateway/settings";
+import { runUsageReports } from "@/lib/reports/usage-report";
 import { runKeyExpiryAlerts, runSpendAnomalyAlerts } from "./alert-checks";
 import { retentionCutoff } from "./retention";
 import type { MaintenanceSweepResult } from "@/types/jobs";
@@ -52,6 +53,7 @@ export async function runMaintenanceSweep(
     batches: 0,
     vectorFiles: 0,
     vectorStores: 0,
+    reports: 0,
   };
 
   const enterprise = await getEnterprise().catch(() => null);
@@ -95,6 +97,7 @@ export async function runMaintenanceSweep(
   await runBudgetAlerts().catch(() => 0);
   await runSpendAnomalyAlerts(now).catch(() => 0);
   await runKeyExpiryAlerts(now).catch(() => 0);
+  result.reports = await runUsageReports(now).catch(() => 0);
   return result;
 }
 
