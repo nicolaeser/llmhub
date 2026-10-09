@@ -49,6 +49,7 @@ export type UsageSource = {
   keyId: string;
   userId: string;
   spend: number;
+  purchase?: number | null;
   tokens: number;
   count: number;
   errors: number;

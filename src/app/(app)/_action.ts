@@ -346,8 +346,9 @@ export async function loadUsageAction(
       ...spendScope(session),
     };
     const requestWhere = { ...filters, createdAt: { gte: since } };
+    const priced = hasPerm(session.permissions, PERMISSIONS.PRICING_READ);
     const [rows, logged] = await Promise.all([
-      usageSlices({ ...filters, day: { gte: since } }),
+      usageSlices({ ...filters, day: { gte: since } }, { purchase: priced }),
       prisma.requestLog.count({ where: requestWhere }),
     ]);
     const p95Row = logged
@@ -366,7 +367,7 @@ export async function loadUsageAction(
         errors: 0,
       });
     }
-    const totals = { spend: 0, tokens: 0, count: 0, errors: 0, rate429: 0, latencySum: 0 };
+    const totals = { spend: 0, purchase: 0, tokens: 0, count: 0, errors: 0, rate429: 0, latencySum: 0 };
     for (const row of rows) {
       const bucket = daily.get(row.day);
       if (bucket) {
@@ -375,6 +376,7 @@ export async function loadUsageAction(
         bucket.errors += row.errors;
       }
       totals.spend += row.cost;
+      totals.purchase += row.purchaseCost ?? 0;
       totals.tokens += row.promptTokens + row.completionTokens;
       totals.count += row.requests;
       totals.errors += row.errors;
@@ -401,6 +403,7 @@ export async function loadUsageAction(
       keys: distinct((row) => row.keyId),
       users: distinct((row) => row.userId),
       spend: totals.spend,
+      purchase: priced ? totals.purchase : null,
       tokens: totals.tokens,
       count: totals.count,
       errors: totals.errors,

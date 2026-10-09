@@ -18,6 +18,7 @@ model Organization {
   members  Member[]
   users    User[]
   keys     VirtualKey[]
+  markups  PriceMarkup[]
 }
 
 model Team {
@@ -36,6 +37,7 @@ model Team {
   members  Member[]
   projects Project[]
   keys     VirtualKey[]
+  markups  PriceMarkup[]
 
   @@index([orgId])
 }
@@ -54,7 +56,8 @@ model Project {
   spendResetAt   DateTime?
   createdAt      DateTime      @default(now())
 
-  keys VirtualKey[]
+  keys    VirtualKey[]
+  markups PriceMarkup[]
 
   @@index([orgId])
   @@index([teamId])
@@ -216,6 +219,25 @@ model ModelPriceWindow {
   @@index([groupAlias])
 }
 
+model PriceMarkup {
+  id        String        @id @default(cuid())
+  orgId     String?
+  org       Organization? @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  teamId    String?
+  team      Team?         @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  projectId String?
+  project   Project?      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  model     String        @default("")
+  percent   Decimal       @db.Decimal(9, 4)
+  note      String        @default("")
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  @@index([orgId])
+  @@index([teamId])
+  @@index([projectId])
+}
+
 model Deployment {
   id         String              @id @default(cuid())
   groupAlias String
@@ -275,6 +297,7 @@ model UsageDaily {
   promptTokens     BigInt   @default(0)
   completionTokens BigInt   @default(0)
   cost             Decimal  @default(0) @db.Decimal(20, 10)
+  purchaseCost     Decimal  @default(0) @db.Decimal(20, 10)
 
   @@id([day, keyId, teamId, orgId, projectId, memberId, userId, model], name: "slice")
   @@index([day])

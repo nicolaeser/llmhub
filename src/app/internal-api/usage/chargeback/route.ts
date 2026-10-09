@@ -32,7 +32,9 @@ export async function GET(req: NextRequest) {
       key_id: parts.keyId,
       user_id: parts.userId,
       model: parts.model,
-      spend: row.spend,
+      ...(row.purchase === undefined
+        ? { spend: row.spend }
+        : { purchase_cost: row.purchase, spend: row.spend, margin: row.spend - row.purchase }),
       prompt_tokens: row.prompt,
       completion_tokens: row.completion,
     };

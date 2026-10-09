@@ -4,7 +4,7 @@
   "empty": "Keine passenden Endpunkte.",
   "baseUrl": "baseURL",
   "sdkTitle": "{style, select, openai {OpenAI-SDK} anthropic {Anthropic-SDK} management {Management-API} other {API}}",
-  "sdkDescription": "{style, select, openai {Chat, Responses, Embeddings, Bilder, Audio, Dateien und Batches.} anthropic {Messages und Token-Zählung mit nativen Anthropic-Anfragen und -Fehlern.} management {Keys, Modell-Aliase, Anbieter, Mandanten, Budgets, Nutzung und Logs.} other {Gateway-Endpunkte.}}",
+  "sdkDescription": "{style, select, openai {Chat, Responses, Embeddings, Bilder, Audio, Dateien und Batches.} anthropic {Messages und Token-Zählung mit nativen Anthropic-Anfragen und -Fehlern.} management {Keys, Modell-Aliase, Anbieter, Mandanten, Budgets, Aufschläge, Nutzung und Logs.} other {Gateway-Endpunkte.}}",
   "auth": "Authentifiziere dich mit Authorization: Bearer und einem API-Key aus der Konsole.",
   "anthropicAuth": "Nutze diesen Origin als baseURL; das SDK hängt /v1/messages an. Sende denselben API-Key als x-api-key mit anthropic-version: {version}. anthropic-beta wird durchgereicht.",
   "managementAuth": "Sende Authorization: Bearer mit einem Management-Key (sk-mgmt-…) von <account>deiner Kontoseite</account>. Fehler folgen RFC 9457 (Problem Details).",

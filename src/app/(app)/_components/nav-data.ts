@@ -1,5 +1,6 @@
 import {
   Activity,
+  BadgePercent,
   BarChart3,
   Bell,
   BookOpen,
@@ -27,6 +28,7 @@ export const NAV: NavSection[] = [
     items: [
       { href: "/companies", labelKey: "items.companies", icon: Building2, permission: PERMISSIONS.TENANCY_READ },
       { href: "/keys", labelKey: "items.keys", icon: KeyRound, permission: PERMISSIONS.KEYS_READ },
+      { href: "/markups", labelKey: "items.markups", icon: BadgePercent, permission: PERMISSIONS.PRICING_READ },
     ],
   },
   {

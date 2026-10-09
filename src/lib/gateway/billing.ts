@@ -8,6 +8,7 @@ import { money } from "@/lib/utils/money";
 import { ownerId } from "@/lib/gateway/core";
 import { writeRequestLog } from "@/lib/gateway/request-log";
 import { GateError } from "@/lib/gateway/errors";
+import { applyMarkup, markupRuleOf, pickMarkup } from "@/lib/gateway/markup-policy";
 import type { Prisma } from "@/generated/prisma/client";
 import type {
   SpendHolder,
@@ -18,6 +19,7 @@ import type {
   Principal,
 } from "@/types/gateway";
 import type { BudgetKind } from "@/types/structure";
+import type { MarkupTarget } from "@/types/pricing";
 
 const HOLDER_SELECT = {
   id: true,
@@ -195,6 +197,21 @@ async function billingContext(dep: Deployment | null | undefined, at: Date): Pro
   };
 }
 
+export async function markupPercent(target: MarkupTarget): Promise<number> {
+  const holders = [
+    { orgId: null, teamId: null, projectId: null },
+    ...(target.orgId ? [{ orgId: target.orgId }] : []),
+    ...(target.teamId ? [{ teamId: target.teamId }] : []),
+    ...(target.projectId ? [{ projectId: target.projectId }] : []),
+  ];
+  const rows = await prisma.priceMarkup.findMany({
+    where: { OR: holders },
+    orderBy: { createdAt: "asc" },
+    select: { id: true, orgId: true, teamId: true, projectId: true, model: true, percent: true },
+  });
+  return pickMarkup(rows.map(markupRuleOf), target)?.percent ?? 0;
+}
+
 export async function recordUsage(input: {
   principal: Principal;
   model: string;
@@ -218,13 +235,16 @@ export async function recordUsage(input: {
     input.group && input.group.alias !== "auto"
       ? groupBilling(input.group, startedAt)
       : await billingContext(input.deployment, startedAt);
-  const cost = costOf(input.deployment, usage, billing);
   const keyId = input.principal.key?.token_id ?? "";
   const userId = input.principal.userId;
   const teamId = input.principal.teamId;
   const orgId = input.principal.orgId;
   const projectId = input.principal.key?.project_id ?? "";
   const memberId = input.principal.memberId;
+  const purchaseCost = costOf(input.deployment, usage);
+  const listed = costOf(input.deployment, usage, billing);
+  const percent = listed ? await markupPercent({ orgId, teamId, projectId, model: input.model }) : 0;
+  const cost = percent ? applyMarkup(listed, percent) : listed;
 
   const now = new Date();
   const day = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
@@ -243,6 +263,7 @@ export async function recordUsage(input: {
         promptTokens: prompt,
         completionTokens: completion,
         cost,
+        purchaseCost,
       },
       update: {
         requests: { increment: 1 },
@@ -252,6 +273,7 @@ export async function recordUsage(input: {
         promptTokens: { increment: prompt },
         completionTokens: { increment: completion },
         cost: { increment: cost },
+        purchaseCost: { increment: purchaseCost },
       },
     }),
   ];

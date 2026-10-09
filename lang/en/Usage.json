@@ -54,5 +54,18 @@
     "colCompletion": "Completion",
     "total": "Total",
     "noSpend": "No spend in this period."
+  },
+  "margin": {
+    "title": "Margin",
+    "description": "Purchase cost from providers next to the sale price billed to customers, after markups and discounts.",
+    "groupBy": "Group margin by",
+    "metrics": {
+      "purchase": "Purchase",
+      "sale": "Sale",
+      "margin": "Margin"
+    },
+    "value": "{amount, number, money} · {share, number, percent}",
+    "share": "Margin %",
+    "empty": "No billable usage in this period."
   }
 }

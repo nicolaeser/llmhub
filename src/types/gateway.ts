@@ -421,6 +421,7 @@ export type UsageSlice = {
   promptTokens: number;
   completionTokens: number;
   cost: number;
+  purchaseCost?: number;
 };
 
 export type ChargebackParts = {
@@ -436,6 +437,7 @@ export type ChargebackParts = {
 export type SliceRow = {
   name: string;
   spend: number;
+  purchase?: number;
   prompt: number;
   completion: number;
   requests?: number;

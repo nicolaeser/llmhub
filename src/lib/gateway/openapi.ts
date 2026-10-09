@@ -136,6 +136,8 @@ export function exampleRequestBody(
     "/api/budgets/alerts": { thresholds: [50, 80, 100] },
     "/api/budgets/{entity_type}/{entity_id}": { max_budget: 250, budget_duration: "30d" },
     "/api/budgets/{entity_type}/{entity_id}/temporary": { amount: 50, hours: 24 },
+    "/api/markups": { scope: "org", target_id: "org_id", model: "claude-*", percent: 15, note: "Contract 2026" },
+    "/api/markups/{id}": { percent: -5 },
   };
   const value = examples[path];
   if (value === undefined) return path.startsWith("/api/") ? null : "{\n  \n}";
@@ -222,6 +224,11 @@ export const OPENAPI_PATHS: OpenApiPath[] = [
   { method: "PUT", path: "/api/budgets/alerts", summary: "Set budget alert thresholds", style: "management" },
   { method: "PUT", path: "/api/budgets/{entity_type}/{entity_id}", summary: "Set a budget", style: "management" },
   { method: "POST", path: "/api/budgets/{entity_type}/{entity_id}/temporary", summary: "Add a temporary budget", style: "management" },
+  { method: "GET", path: "/api/markups", summary: "List markups and discounts", style: "management" },
+  { method: "POST", path: "/api/markups", summary: "Create a markup or discount", style: "management" },
+  { method: "GET", path: "/api/markups/{id}", summary: "Retrieve a markup", style: "management" },
+  { method: "PATCH", path: "/api/markups/{id}", summary: "Update a markup", style: "management" },
+  { method: "DELETE", path: "/api/markups/{id}", summary: "Delete a markup", style: "management" },
   { method: "GET", path: "/api/usage", summary: "Summarize usage and spend", style: "management" },
   { method: "GET", path: "/api/logs/requests", summary: "List request logs", style: "management" },
   { method: "GET", path: "/api/logs/spend", summary: "List spend events", style: "management" },

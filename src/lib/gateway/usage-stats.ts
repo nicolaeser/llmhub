@@ -8,7 +8,7 @@ type SliceKey = keyof Pick<
 const CHARGEBACK_PARTS = ["orgId", "teamId", "projectId", "memberId", "keyId", "userId", "model"] as const;
 
 function rollUp(rows: UsageSlice[], nameOf: (row: UsageSlice) => string): SliceRow[] {
-  const map = new Map<string, Required<SliceRow> & { latencySum: number }>();
+  const map = new Map<string, Omit<Required<SliceRow>, "purchase"> & SliceRow & { latencySum: number }>();
   for (const row of rows) {
     const name = nameOf(row);
     const cur = map.get(name) ?? {
@@ -23,6 +23,7 @@ function rollUp(rows: UsageSlice[], nameOf: (row: UsageSlice) => string): SliceR
       latencySum: 0,
     };
     cur.spend += row.cost;
+    if (row.purchaseCost !== undefined) cur.purchase = (cur.purchase ?? 0) + row.purchaseCost;
     cur.prompt += row.promptTokens;
     cur.completion += row.completionTokens;
     cur.requests += row.requests;

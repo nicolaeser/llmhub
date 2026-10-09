@@ -54,5 +54,18 @@
     "colCompletion": "Completion",
     "total": "Gesamt",
     "noSpend": "Keine Ausgaben in diesem Zeitraum."
+  },
+  "margin": {
+    "title": "Marge",
+    "description": "Einkauf bei den Anbietern neben dem Verkaufspreis an die Kunden, nach Aufschlägen und Rabatten.",
+    "groupBy": "Marge gruppieren nach",
+    "metrics": {
+      "purchase": "Einkauf",
+      "sale": "Verkauf",
+      "margin": "Marge"
+    },
+    "value": "{amount, number, money} · {share, number, percent}",
+    "share": "Marge %",
+    "empty": "Keine abrechenbare Nutzung in diesem Zeitraum."
   }
 }

@@ -15,6 +15,7 @@
   "items": {
     "companies": "Companies",
     "keys": "API keys",
+    "markups": "Markups",
     "playground": "Playground",
     "assistant": "Assistant",
     "providers": "Providers",

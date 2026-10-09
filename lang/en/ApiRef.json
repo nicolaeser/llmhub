@@ -4,7 +4,7 @@
   "empty": "No matching endpoints.",
   "baseUrl": "baseURL",
   "sdkTitle": "{style, select, openai {OpenAI SDK} anthropic {Anthropic SDK} management {Management API} other {API}}",
-  "sdkDescription": "{style, select, openai {Chat, Responses, embeddings, images, audio, files, and batches.} anthropic {Messages and token counting with native Anthropic requests and errors.} management {Keys, model aliases, providers, tenancy, budgets, usage, and logs.} other {Gateway endpoints.}}",
+  "sdkDescription": "{style, select, openai {Chat, Responses, embeddings, images, audio, files, and batches.} anthropic {Messages and token counting with native Anthropic requests and errors.} management {Keys, model aliases, providers, tenancy, budgets, markups, usage, and logs.} other {Gateway endpoints.}}",
   "auth": "Authenticate with Authorization: Bearer and an API key from the console.",
   "anthropicAuth": "Use this origin as baseURL; the SDK adds /v1/messages. Send the same API key as x-api-key with anthropic-version: {version}. anthropic-beta passes through.",
   "managementAuth": "Send Authorization: Bearer with a management key (sk-mgmt-…) from <account>your account page</account>. Errors use RFC 9457 problem details.",

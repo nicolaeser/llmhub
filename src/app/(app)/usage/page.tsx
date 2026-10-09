@@ -19,6 +19,7 @@ import EmptyState from "@/components/console/empty-state";
 import PageHeader from "@/components/console/page-header";
 import SearchSelect from "@/components/console/search-select";
 import StatCard from "@/components/console/stat-card";
+import MarginCard from "./_components/margin-card";
 import UsageCharts from "./_components/usage-charts";
 import type { PickerItem } from "@/types/console";
 import type { SliceRow } from "@/types/gateway";
@@ -236,6 +237,14 @@ export default function UsagePage() {
           <StatCard key={key} label={label} value={value} />
         ))}
       </div>
+      {stats.purchase === null ? null : (
+        <MarginCard
+          chargeback={stats.chargeback}
+          names={stats.names}
+          purchase={stats.purchase}
+          sale={stats.spend}
+        />
+      )}
       <UsageCharts
         daily={stats.daily}
         byModel={stats.byModel}

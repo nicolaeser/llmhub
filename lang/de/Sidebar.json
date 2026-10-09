@@ -15,6 +15,7 @@
   "items": {
     "companies": "Unternehmen",
     "keys": "API-Keys",
+    "markups": "Aufschläge",
     "playground": "Spielwiese",
     "assistant": "Assistent",
     "providers": "Anbieter",
