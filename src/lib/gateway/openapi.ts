@@ -143,6 +143,7 @@ export function exampleRequestBody(
     "/api/keys": { alias: "ci-pipeline", project_id: "project_id", models: [alias], rpm_limit: 60, expires_in_days: 90 },
     "/api/keys/{id}": {
       rpm_limit: 120,
+      max_request_cost: 0.5,
       allowed_endpoints: ["embeddings"],
       access_windows: [{ days: ["mon", "tue", "wed", "thu", "fri"], start: "07:00", end: "19:00" }],
       access_time_zone: "Europe/Berlin",

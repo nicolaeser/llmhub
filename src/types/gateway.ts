@@ -5,6 +5,7 @@ import type { PiiPolicy } from "@/types/guardrails";
 import type { AccessWindow, KeyEndpoint } from "@/types/keys";
 import type { VectorStoreDefaults } from "@/types/rag";
 import type { RouteLimits } from "@/types/model-templates";
+import type { BudgetKind } from "@/types/structure";
 
 export type SpendHolder = {
   id: string;
@@ -178,6 +179,22 @@ export type RequestTrace = {
   piiMode: PiiMode | "";
   piiInput: Set<string>;
   piiOutput: Set<string>;
+  costCap?: CostCap | null;
+};
+
+export type CostCap = {
+  limit: number;
+  budget: BudgetKind | null;
+};
+
+export type RequestTokens = {
+  prompt: number;
+  completion: number;
+};
+
+export type CostFilter = {
+  cap: CostCap;
+  estimate: (dep: ResolvedDeployment, group: Group) => number;
 };
 
 export type DiscoveredModel = {
@@ -402,6 +419,7 @@ export type VirtualKeyView = {
   spend: number;
   rpm_limit: number;
   tpm_limit: number;
+  max_request_cost: number;
   budget_duration: string;
   expires: string;
   allowed_ips: string[];

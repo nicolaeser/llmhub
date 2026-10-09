@@ -1,18 +1,20 @@
 import "server-only";
 import prisma from "@/lib/db/prisma";
 import { cacheSavingsOf, cacheTokens, costOf } from "@/lib/gateway/cost";
-import { priceAt, priceWindowQuery, priceWindowRates } from "@/lib/gateway/price-schedule";
+import { groupBilling, priceAt, priceWindowQuery, priceWindowRates } from "@/lib/gateway/price-schedule";
 import { capExceeded, periodElapsed } from "@/lib/gateway/period";
 import { incrementRateWindow } from "@/lib/rate-limit/shared";
 import { money } from "@/lib/utils/money";
 import { ownerId } from "@/lib/gateway/core";
 import { writeRequestLog } from "@/lib/gateway/request-log";
 import { GateError } from "@/lib/gateway/errors";
+import { tighterCap } from "@/lib/gateway/cost-cap";
 import type { Prisma } from "@/generated/prisma/client";
 import type {
   SpendHolder,
   BillingContext,
   BillingGroup,
+  CostCap,
   Usage,
   Deployment,
   Principal,
@@ -94,20 +96,24 @@ export function budgetChain(principal: Principal): { kind: BudgetKind; id: strin
   return chain.filter((link) => link.id);
 }
 
-export async function assertBudget(principal: Principal): Promise<void> {
+export async function assertBudget(principal: Principal): Promise<CostCap | null> {
   const now = new Date();
   const chain = budgetChain(principal);
   const rows = await Promise.all(chain.map((link) => loadHolder(link.kind, link.id)));
+  let tightest: CostCap | null = null;
   for (const [index, link] of chain.entries()) {
     const row = rows[index];
     if (!row) continue;
     const spend = await spendAfterReset(link.kind, row, now);
     const maxBudget = money(row.maxBudget);
     if (!(maxBudget > 0)) continue;
-    if (capExceeded(spend, maxBudget, await extraCap(link.kind, row.id, now))) {
+    const extra = await extraCap(link.kind, row.id, now);
+    if (capExceeded(spend, maxBudget, extra)) {
       throw new GateError(429, "budget_exceeded", `${link.kind} budget exceeded`);
     }
+    tightest = tighterCap(tightest, { limit: maxBudget + extra - spend, budget: link.kind });
   }
+  return tightest;
 }
 
 export async function assertRate(principal: Principal): Promise<void> {
@@ -136,24 +142,6 @@ export async function assertRate(principal: Principal): Promise<void> {
       }
     }
   }
-}
-
-function groupBilling(group: BillingGroup, at: Date): BillingContext {
-  return {
-    mode: group.billing_mode || "routed",
-    peers: group.deployments,
-    price: priceAt(
-      {
-        price: {
-          cost_input_per_1k: group.price_input_per_1k,
-          cost_output_per_1k: group.price_output_per_1k,
-        },
-        time_zone: group.price_time_zone,
-        windows: group.price_windows,
-      },
-      at,
-    ),
-  };
 }
 
 async function billingContext(dep: Deployment | null | undefined, at: Date): Promise<BillingContext> {

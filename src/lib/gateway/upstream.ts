@@ -8,8 +8,8 @@ import { deploymentAuth } from "@/lib/gateway/credentials";
 import { acquireGroup, defaultBase, loadGroup, markFailure, markSuccess, openaiRoot } from "@/lib/gateway/runtime";
 import { applyProviderServiceMode, requestRoutingOverride, serviceModeHeaders } from "@/lib/gateway/service-mode";
 import { asRecord } from "@/lib/gateway/core";
-import type { ResolvedDeployment, JsonMap, ProxyFirstResult, UpstreamAuth } from "@/types/gateway";
-import type { RouteLimits } from "@/types/model-templates";
+import { costFilter, costRejected } from "@/lib/gateway/cost-cap";
+import type { ResolvedDeployment, JsonMap, Principal, ProxyFirstResult, UpstreamAuth } from "@/types/gateway";
 
 export function upstreamHeaders(
   dep: ResolvedDeployment,
@@ -315,7 +315,7 @@ const apiRoute = inPool("api");
 
 export async function forwardToModel(
   aliases: string[],
-  limits: RouteLimits,
+  principal: Principal,
   path: string,
   body: JsonMap | null,
   opts?: {
@@ -327,6 +327,7 @@ export async function forwardToModel(
   },
 ): Promise<ProxyFirstResult> {
   let last: GateError = new GateError(404, "model_not_found", "no deployment for model", { param: "model" });
+  const cost = costFilter(principal, body);
   for (const alias of aliases) {
     if (!alias || alias === "auto") continue;
     let group;
@@ -343,8 +344,15 @@ export async function forwardToModel(
     for (let attempt = 0; attempt < attempts; attempt++) {
       let acquired;
       try {
-        acquired = await acquireGroup(group, limits[alias], apiRoute, requestRoutingOverride(body));
-      } catch {
+        acquired = await acquireGroup(
+          group,
+          principal.routeLimits[alias],
+          apiRoute,
+          requestRoutingOverride(body),
+          cost,
+        );
+      } catch (err) {
+        if (costRejected(err)) throw err;
         last = new GateError(503, "no_healthy_deployment", "no healthy deployment for model");
         break;
       }

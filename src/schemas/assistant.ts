@@ -26,6 +26,11 @@ const price = z.number().min(0).max(1_000_000_000);
 const clock = z.string().refine((value) => clockMinute(value) !== null, "expected HH:MM");
 const rpm = z.number().int().min(0).max(1_000_000);
 const tpm = z.number().int().min(0).max(1_000_000_000);
+const maxRequestCost = z
+  .number()
+  .min(0)
+  .max(1_000_000)
+  .describe("Maximum estimated cost of a single request, checked before forwarding. 0 is unlimited.");
 const keyEndpoints = z
   .array(z.enum(KEY_ENDPOINTS))
   .max(KEY_ENDPOINTS.length)
@@ -217,6 +222,7 @@ export const createKeyToolInput = z.object({
   templateIds: z.array(id).max(50).optional(),
   rpm: rpm.optional(),
   tpm: tpm.optional(),
+  maxRequestCost: maxRequestCost.optional(),
   days: days.optional().describe("Expiry in days. 0 never expires."),
   allowedIps: z.array(z.string().trim().max(64)).max(100).optional(),
   allowedEndpoints: keyEndpoints.optional(),
@@ -234,6 +240,7 @@ export const updateKeyToolInput = z.object({
   templateIds: z.array(id).max(50).optional(),
   rpm: rpm.optional(),
   tpm: tpm.optional(),
+  maxRequestCost: maxRequestCost.optional(),
   allowedIps: z.array(z.string().trim().max(64)).max(100).optional(),
   allowedEndpoints: keyEndpoints.optional(),
   accessWindows: keyWindows.optional(),

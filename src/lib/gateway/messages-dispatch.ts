@@ -12,6 +12,7 @@ import {
   withDeployment,
 } from "@/lib/gateway/chat";
 import { asRecord } from "@/lib/gateway/core";
+import { costFilter } from "@/lib/gateway/cost-cap";
 import { deploymentAuth } from "@/lib/gateway/credentials";
 import { spendTag } from "@/lib/gateway/gate";
 import { GateError } from "@/lib/gateway/errors";
@@ -105,7 +106,11 @@ export async function dispatchMessages(input: MessagesInput): Promise<JsonMap> {
       if (proxied.status >= 400) throw upstreamError(proxied.status, proxied.json);
       return { native: true, json: asRecord(proxied.json) ?? {} };
     },
-    { strategy: requestRoutingOverride(input.body), pool: input.principal.pool },
+    {
+      strategy: requestRoutingOverride(input.body),
+      pool: input.principal.pool,
+      cost: costFilter(input.principal, input.body),
+    },
   ).catch(async (err) => {
     await recordFailure(input, err, started);
     throw err;
@@ -163,7 +168,12 @@ export async function streamMessages(input: MessagesInput & { req: Request }): P
         res: await openUpstreamStream({ dep, group, req: input.req, path: NATIVE_PATH, payload, headers: input.headers }),
       };
     },
-    { deferRelease: true, strategy: requestRoutingOverride(input.body), pool: input.principal.pool },
+    {
+      deferRelease: true,
+      strategy: requestRoutingOverride(input.body),
+      pool: input.principal.pool,
+      cost: costFilter(input.principal, input.body),
+    },
   ).catch(async (err) => {
     await recordFailure(input, err, started);
     throw err;

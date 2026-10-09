@@ -4,6 +4,7 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { GateError } from "@/lib/gateway/errors";
+import type { Principal } from "@/types/gateway";
 
 type FakeRoute = { id: string; kind: string };
 
@@ -115,6 +116,15 @@ test("/v1 never routes to subscriptions and /subscription/v1 never routes to API
   const { withDeployment } = await import("@/lib/gateway/chat");
   const { forwardToModel } = await import("@/lib/gateway/upstream");
   const pick = async (dep: { id: string }) => dep.id;
+  const apiCaller: Principal = {
+    actor: "u1",
+    teamId: "",
+    orgId: "",
+    userId: "u1",
+    memberId: "",
+    models: [],
+    routeLimits: {},
+  };
 
   assert.equal((await withDeployment(["gpt-5.5"], {}, pick)).result, "openai");
   assert.equal((await withDeployment(["gpt-5.5"], {}, pick, { pool: "subscription" })).result, "chatgpt");
@@ -129,7 +139,7 @@ test("/v1 never routes to subscriptions and /subscription/v1 never routes to API
     (err: unknown) => err instanceof GateError && err.status === 404 && err.message === "model has no subscription route",
   );
   await assert.rejects(
-    forwardToModel(["grok-build"], {}, "/embeddings", { input: "hi" }),
+    forwardToModel(["grok-build"], apiCaller, "/embeddings", { input: "hi" }),
     (err: unknown) => err instanceof GateError && err.status === 404 && err.message.includes("/subscription/v1"),
   );
 });
