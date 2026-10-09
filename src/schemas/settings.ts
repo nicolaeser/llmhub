@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { CACHE_STATS_RANGES, CACHE_TTL_MAX_SECONDS, SEMANTIC_THRESHOLD_MIN } from "@/lib/gateway/cache-settings";
 import { modelAlias } from "@/lib/gateway/model-alias";
-import { MAX_ALERT_WEBHOOKS, WEBHOOK_EVENTS } from "@/lib/gateway/webhook-events";
+import { MAX_ALERT_WEBHOOKS, WEBHOOK_EVENTS, WEBHOOK_FORMATS } from "@/lib/gateway/webhook-events";
 
 function isHttpUrl(value: string): boolean {
   try {
@@ -58,6 +58,7 @@ export const alertWebhooksSchema = z
       url: z.string().trim().max(500).refine(isHttpUrl, "must be an http(s) URL"),
       secret: z.string().trim().max(500),
       clearSecret: z.boolean(),
+      format: z.enum(WEBHOOK_FORMATS),
       events: z.array(z.enum(WEBHOOK_EVENTS)).min(1),
     }),
   )

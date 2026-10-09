@@ -1,10 +1,9 @@
 import "server-only";
-import { sharedRedis, withTimeout } from "@/lib/jobs/redis-client";
 import { logger } from "@/lib/logging/logger";
+import { sharedRedis, withRedisTimeout } from "@/lib/redis/client";
 import type { Bucket } from "@/types/gateway";
 
 const WINDOW_MS = 60_000;
-const REDIS_DECISION_TIMEOUT_MS = 2_000;
 const REDIS_KEY_PREFIX = "llmhub:rate:v1";
 const memory = new Map<string, Bucket>();
 
@@ -35,9 +34,9 @@ export async function incrementRateWindow(
     const rpmKey = redisKey(id, "rpm", minute);
     const tpmKey = redisKey(id, "tpm", minute);
     try {
-      const rpm = await withTimeout(redis.incrby(rpmKey, requests), REDIS_DECISION_TIMEOUT_MS);
+      const rpm = await withRedisTimeout(redis.incrby(rpmKey, requests));
       if (rpm === requests) await redis.expire(rpmKey, 120);
-      const tpm = await withTimeout(redis.incrby(tpmKey, tokens), REDIS_DECISION_TIMEOUT_MS);
+      const tpm = await withRedisTimeout(redis.incrby(tpmKey, tokens));
       if (tpm === tokens) await redis.expire(tpmKey, 120);
       return { rpm, tpm, backend: "redis" };
     } catch (err) {
@@ -54,8 +53,8 @@ export async function redisCounter(key: string, ttlSeconds: number): Promise<num
   const redis = await sharedRedis();
   if (!redis) return null;
   try {
-    const count = await withTimeout(redis.incrby(key, 1), REDIS_DECISION_TIMEOUT_MS);
-    if (count === 1) await withTimeout(redis.expire(key, ttlSeconds), REDIS_DECISION_TIMEOUT_MS);
+    const count = await withRedisTimeout(redis.incrby(key, 1));
+    if (count === 1) await withRedisTimeout(redis.expire(key, ttlSeconds));
     return count;
   } catch (err) {
     logger.warn("rate_limit.redis_fallback", {

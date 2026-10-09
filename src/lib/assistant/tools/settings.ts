@@ -74,6 +74,9 @@ async function updateGatewaySettings(
     args.contentRetentionDays,
     args.logArchive,
     args.logContent,
+    args.spendAnomalyFactor,
+    args.spendAnomalyMinCost,
+    args.keyExpiryWarningDays,
   ].some((value) => value !== undefined);
   if (loggingChanged) {
     const current = await loadLoggingAction();
@@ -82,10 +85,16 @@ async function updateGatewaySettings(
       alertWebhooks: current.alertWebhooks.map((hook) => ({
         id: hook.id,
         url: hook.url,
+        format: hook.format,
         events: hook.events,
         secret: "",
         clearSecret: false,
       })),
+      alertRules: {
+        spendAnomalyFactor: args.spendAnomalyFactor ?? current.alertRules.spendAnomalyFactor,
+        spendAnomalyMinCost: args.spendAnomalyMinCost ?? current.alertRules.spendAnomalyMinCost,
+        keyExpiryWarningDays: args.keyExpiryWarningDays ?? current.alertRules.keyExpiryWarningDays,
+      },
       logRetentionDays: args.logRetentionDays ?? current.logRetentionDays,
       spendRetentionDays: args.spendRetentionDays ?? current.spendRetentionDays,
       auditRetentionDays: args.auditRetentionDays ?? current.auditRetentionDays,
@@ -105,6 +114,7 @@ async function updateGatewaySettings(
       contentRetentionDays: saved.contentRetentionDays,
       logArchive: saved.logArchive,
       logContent: saved.logContent,
+      alertRules: saved.alertRules,
     });
   }
   if (!Object.keys(changed).length) return toolFail("nothing_to_change");
@@ -114,7 +124,7 @@ async function updateGatewaySettings(
 export const settingsTools = {
   get_settings: defineTool({
     description:
-      "Gateway settings: response cache TTL, semantic cache, cache statistics for the last 30 days (with spend:read-all), retention days, content logging, S3 archive, alert webhooks (host and events only), registration, single sign-on, S3 storage, and the assistant model policy. Never secrets.",
+      "Gateway settings: response cache TTL, semantic cache, cache statistics for the last 30 days (with spend:read-all), retention days, content logging, S3 archive, alert webhooks (host, format, and events only), alert rules, registration, single sign-on, S3 storage, and the assistant model policy. Never secrets.",
     input: emptyToolInput,
     run: async () => {
       const [logging, cache, admin] = await Promise.all([
@@ -141,10 +151,12 @@ export const settingsTools = {
           },
           logContent: logging.logContent,
           logArchive: logging.logArchive,
+          alertRules: logging.alertRules,
           s3Ready: logging.s3Ready,
           alertWebhooks: logging.alertWebhooks.map((hook) => ({
             id: hook.id,
             host: webhookHost(hook.url),
+            format: hook.format,
             events: hook.events,
             signed: hook.secretSet,
           })),
@@ -194,7 +206,7 @@ export const settingsTools = {
   }),
   update_gateway_settings: defineTool({
     description:
-      "Change the response cache TTL, retention days, request content logging, or S3 log archiving. Omitted fields stay unchanged. Alert webhooks are edited on the Logging page.",
+      "Change the response cache TTL, retention days, request content logging, S3 log archiving, or the spend anomaly and key expiry alert rules. Omitted fields stay unchanged. Alert webhooks are edited on the Logging page.",
     input: gatewaySettingsToolInput,
     run: async (args) => updateGatewaySettings(args),
   }),

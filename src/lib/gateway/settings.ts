@@ -13,8 +13,15 @@ import {
 import { modelAlias } from "@/lib/gateway/model-alias";
 import { SEMANTIC_THRESHOLD_DEFAULT, SEMANTIC_THRESHOLD_MIN } from "@/lib/gateway/cache-settings";
 import { DEFAULT_AUTO_CONFIDENCE, JEV_SUGGEST_CONFIDENCE } from "@/lib/gateway/model-catalog";
-import { WEBHOOK_EVENTS } from "@/lib/gateway/webhook-events";
+import {
+  anomalyFactor,
+  DEFAULT_KEY_EXPIRY_WARNING_DAYS,
+  DEFAULT_SPEND_ANOMALY_FACTOR,
+  DEFAULT_SPEND_ANOMALY_MIN_COST,
+} from "@/lib/gateway/alert-rules";
+import { WEBHOOK_EVENTS, WEBHOOK_FORMATS } from "@/lib/gateway/webhook-events";
 import type {
+  AlertStateKind,
   AlertWebhook,
   CatalogRouting,
   JsonMap,
@@ -25,12 +32,17 @@ import type {
   Enterprise,
   JevSettings,
   Principal,
+  WebhookFormat,
 } from "@/types/gateway";
 import type { PiiPolicy } from "@/types/guardrails";
 import type { SemanticCacheSettings } from "@/types/cache";
 
 const SETTING_ENTERPRISE = "enterprise";
-const SETTING_BUDGET_ALERTS = "budget_alert_state";
+const ALERT_STATE_SETTINGS: Record<AlertStateKind, string> = {
+  budget: "budget_alert_state",
+  spend_anomaly: "spend_anomaly_state",
+  key_expiry: "key_expiry_alert_state",
+};
 const LEGACY_WEBHOOK_ID = "legacy";
 
 const DEFAULT_PII: PIIConfig = {
@@ -71,6 +83,9 @@ const DEFAULT_ENTERPRISE: Enterprise = {
   update_check: true,
   pii: DEFAULT_PII,
   budget_alert_thresholds: [50, 80, 100],
+  spend_anomaly_factor: DEFAULT_SPEND_ANOMALY_FACTOR,
+  spend_anomaly_min_cost: DEFAULT_SPEND_ANOMALY_MIN_COST,
+  key_expiry_warning_days: DEFAULT_KEY_EXPIRY_WARNING_DAYS,
   oidc: {
     enabled: false,
     issuer: "",
@@ -100,6 +115,10 @@ function normalizePii(raw: unknown): PiiPolicy {
   };
 }
 
+export function webhookFormat(value: unknown): WebhookFormat {
+  return WEBHOOK_FORMATS.find((format) => format === value) ?? "json";
+}
+
 function normalizeWebhooks(rec: JsonMap): AlertWebhook[] {
   const list = (Array.isArray(rec.alert_webhooks) ? rec.alert_webhooks : []).flatMap((entry) => {
     const hook = asRecord(entry);
@@ -107,7 +126,15 @@ function normalizeWebhooks(rec: JsonMap): AlertWebhook[] {
     const url = asString(hook?.url).trim();
     if (!hook || !id || !url) return [];
     const events = asStringArray(hook.events);
-    return [{ id, url, secret: asString(hook.secret), events: WEBHOOK_EVENTS.filter((e) => events.includes(e)) }];
+    return [
+      {
+        id,
+        url,
+        secret: asString(hook.secret),
+        format: webhookFormat(hook.format),
+        events: WEBHOOK_EVENTS.filter((e) => events.includes(e)),
+      },
+    ];
   });
   if (list.length) return list;
   const legacy = asString(rec.alert_webhook).trim();
@@ -117,6 +144,7 @@ function normalizeWebhooks(rec: JsonMap): AlertWebhook[] {
       id: LEGACY_WEBHOOK_ID,
       url: legacy,
       secret: asString(rec.alert_webhook_secret),
+      format: "json",
       events: [...WEBHOOK_EVENTS],
     },
   ];
@@ -182,6 +210,12 @@ export function normalizeEnterprise(raw: unknown): Enterprise {
       const list = asNumberArray(rec.budget_alert_thresholds);
       return list.length ? list : [50, 80, 100];
     })(),
+    spend_anomaly_factor: anomalyFactor(asNumber(rec.spend_anomaly_factor, DEFAULT_SPEND_ANOMALY_FACTOR)),
+    spend_anomaly_min_cost: Math.max(0, asNumber(rec.spend_anomaly_min_cost, DEFAULT_SPEND_ANOMALY_MIN_COST)),
+    key_expiry_warning_days: Math.max(
+      0,
+      Math.trunc(asNumber(rec.key_expiry_warning_days, DEFAULT_KEY_EXPIRY_WARNING_DAYS)),
+    ),
   };
 }
 
@@ -263,12 +297,12 @@ export async function resolvePii(principal: Principal): Promise<PiiPolicy> {
   return piiOverride(org?.piiPolicy) ?? getPii();
 }
 
-export async function getBudgetAlertState(): Promise<Record<string, string>> {
-  return asStringMap(await readJson(SETTING_BUDGET_ALERTS));
+export async function getAlertState(kind: AlertStateKind): Promise<Record<string, string>> {
+  return asStringMap(await readJson(ALERT_STATE_SETTINGS[kind]));
 }
 
-export async function saveBudgetAlertState(state: Record<string, string>): Promise<void> {
-  await writeJson(SETTING_BUDGET_ALERTS, state);
+export async function saveAlertState(kind: AlertStateKind, state: Record<string, string>): Promise<void> {
+  await writeJson(ALERT_STATE_SETTINGS[kind], state);
 }
 
 export async function patchEnterprise(patch: Partial<Enterprise>): Promise<Enterprise> {

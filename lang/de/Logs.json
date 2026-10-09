@@ -97,6 +97,11 @@
     "exportFormat": "{format, select, pdf {PDF} md {Markdown} other {JSON}}",
     "markdown": "Markdown darstellen",
     "generated": "Erstellt am {at, date, zoned}",
-    "page": "Seite {page, number, integer} von {total, number, integer}"
+    "page": "Seite {page, number, integer} von {total, number, integer}",
+    "replay": "In der Spielwiese öffnen",
+    "replayModel": "Modell für die Wiederholung",
+    "replayHint": "Lädt diese Anfrage in die Spielwiese, damit du sie erneut senden kannst. Behalte das ursprüngliche Modell oder wähle ein anderes zum Vergleich.",
+    "replayPick": "Modell wählen",
+    "replayNoModels": "Keine Modelle verfügbar"
   }
 }
