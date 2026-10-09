@@ -22,6 +22,7 @@ export const formats = {
   },
   number: {
     integer: { maximumFractionDigits: 0 },
+    factor: { maximumFractionDigits: 1 },
     percent: { style: "percent", maximumFractionDigits: 1 },
     percentPoints: { style: "unit", unit: "percent", maximumFractionDigits: 0 },
     axis: { notation: "compact", maximumSignificantDigits: 3 },

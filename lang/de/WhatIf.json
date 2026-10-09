@@ -1,0 +1,35 @@
+{
+  "title": "Was wäre wenn",
+  "subtitle": "Berechnet den Traffic {days, plural, one {des letzten Tages} other {der letzten # Tage}} mit den Preisen eines anderen Modells neu.",
+  "source": "Aktuelles Modell",
+  "allModels": "Alle Modelle",
+  "sourceDetail": "{count, plural, one {# Anfrage} other {# Anfragen}} · {cost, number, money}",
+  "target": "Vergleichen mit",
+  "targetPlaceholder": "Modell wählen",
+  "empty": "Kein Token-Traffic {days, plural, one {am letzten Tag} other {in den letzten # Tagen}}.",
+  "emptyHint": "Der Rechner bewertet Anfragen aus dem Anfrageprotokoll neu. Leite zuerst Traffic über das Gateway.",
+  "noTargets": "Noch kein Modell hat einen Preis.",
+  "noTargetsHint": "Hinterlege Deployment-Kosten oder einen eigenen Preis auf der Seite <link>Modelle</link> oder aktualisiere den <catalog>Modellkatalog</catalog>.",
+  "verdict": "{direction, select, saved {{all, select, true {Mit {target} statt deiner bisherigen Modelle hättest du {share, number, percent} gespart.} other {Mit {target} statt {source} hättest du {share, number, percent} gespart.}}} more {{all, select, true {Mit {target} statt deiner bisherigen Modelle hättest du {share, number, percent} mehr bezahlt.} other {Mit {target} statt {source} hättest du {share, number, percent} mehr bezahlt.}}} same {{all, select, true {Mit {target} statt deiner bisherigen Modelle hättest du etwa gleich viel bezahlt.} other {Mit {target} statt {source} hättest du etwa gleich viel bezahlt.}}} other {Mit {target} hätte dieser Traffic {amount, number, money} gekostet.}}",
+  "basis": "{count, plural, one {Grundlage: # Anfrage} other {Grundlage: # Anfragen}} mit {tokens, number, integer} Token seit {since, date, short}.",
+  "method": "Prompt- und Completion-Token werden zum Listenpreis des Zielmodells neu berechnet, einschließlich seiner Preisfenster. Cache-Rabatte, Service-Tiers und vom Anbieter gemeldete Kosten fließen nicht ein.",
+  "metrics": {
+    "billed": "Abgerechnet",
+    "simulated": "Mit {target}",
+    "difference": "Differenz"
+  },
+  "difference": "{direction, select, saved {{amount, number, money} weniger} more {{amount, number, money} mehr} same {Etwa gleich} other {Keine abgerechneten Ausgaben}}",
+  "table": {
+    "title": "Modelle mit Preis",
+    "description": "Wähle eine Zeile, um mit diesem Modell zu vergleichen.",
+    "model": "Modell",
+    "cost": "Kosten für diesen Traffic",
+    "change": "Veränderung",
+    "withCatalog": "Katalogmodelle ohne Route einbeziehen"
+  },
+  "change": "{direction, select, saved {{share, number, percent} weniger} more {{share, number, percent} mehr} same {Gleich} other {Nicht vergleichbar}}",
+  "state": "{state, select, disabled {Ausgeschaltet} missing {Noch nicht geroutet} other {Aktiv}}",
+  "current": "Aktuell",
+  "scheduled": "Preisfenster",
+  "more": "{count, plural, one {# weiteres Modell anzeigen} other {# weitere Modelle anzeigen}}"
+}
