@@ -34,6 +34,7 @@ import type {
   WebhookFormat,
 } from "@/types/gateway";
 import type { PiiPolicy } from "@/types/guardrails";
+import type { VectorStoreDefaults } from "@/types/rag";
 
 const SETTING_ENTERPRISE = "enterprise";
 const ALERT_STATE_SETTINGS: Record<AlertStateKind, string> = {
@@ -54,6 +55,13 @@ export const DEFAULT_JEV_MODEL = "jev-latest";
 
 const DEFAULT_JEV: JevSettings = { enabled: false, model: DEFAULT_JEV_MODEL, api_key: "" };
 
+const DEFAULT_VECTOR_STORES: VectorStoreDefaults = {
+  embedding_model: "",
+  embedding_dimensions: 0,
+  ocr_model: "",
+  rerank_model: "",
+};
+
 const DEFAULT_ENTERPRISE: Enterprise = {
   cache_ttl_seconds: 0,
   log_retention_days: 0,
@@ -72,6 +80,7 @@ const DEFAULT_ENTERPRISE: Enterprise = {
   catalog_auto_routes: true,
   catalog_min_confidence: DEFAULT_AUTO_CONFIDENCE,
   update_check: true,
+  vector_stores: DEFAULT_VECTOR_STORES,
   pii: DEFAULT_PII,
   budget_alert_thresholds: [50, 80, 100],
   spend_anomaly_factor: DEFAULT_SPEND_ANOMALY_FACTOR,
@@ -150,6 +159,17 @@ export function normalizeJev(raw: unknown): JevSettings {
   };
 }
 
+export function normalizeVectorDefaults(raw: unknown): VectorStoreDefaults {
+  const rec = asRecord(raw) ?? {};
+  const dimensions = Math.trunc(asNumber(rec.embedding_dimensions, 0));
+  return {
+    embedding_model: modelAlias(asString(rec.embedding_model)),
+    embedding_dimensions: dimensions > 0 ? dimensions : 0,
+    ocr_model: modelAlias(asString(rec.ocr_model)),
+    rerank_model: modelAlias(asString(rec.rerank_model)),
+  };
+}
+
 export function catalogConfidence(value: unknown): number {
   const confidence = asNumber(value, DEFAULT_AUTO_CONFIDENCE);
   return Math.min(1, Math.max(JEV_SUGGEST_CONFIDENCE, confidence));
@@ -182,6 +202,7 @@ export function normalizeEnterprise(raw: unknown): Enterprise {
     catalog_auto_routes: asBool(rec.catalog_auto_routes, true),
     catalog_min_confidence: catalogConfidence(rec.catalog_min_confidence),
     update_check: asBool(rec.update_check, true),
+    vector_stores: normalizeVectorDefaults(rec.vector_stores),
     oidc: normalizeOidc(rec.oidc),
     pii: normalizePii(rec.pii ?? DEFAULT_PII),
     s3: normalizeS3(rec.s3),
@@ -293,6 +314,9 @@ export async function patchEnterprise(patch: Partial<Enterprise>): Promise<Enter
     pii: patch.pii ? { ...current.pii, ...patch.pii } : current.pii,
     s3: patch.s3 ? { ...current.s3, ...patch.s3 } : current.s3,
     catalog_jev: patch.catalog_jev ? { ...current.catalog_jev, ...patch.catalog_jev } : current.catalog_jev,
+    vector_stores: patch.vector_stores
+      ? normalizeVectorDefaults({ ...current.vector_stores, ...patch.vector_stores })
+      : current.vector_stores,
   };
   const jev = next.catalog_jev ?? DEFAULT_JEV;
   await writeJson(SETTING_ENTERPRISE, {

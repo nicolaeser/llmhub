@@ -14,6 +14,7 @@
   },
   "items": {
     "companies": "Companies",
+    "knowledge": "Knowledge bases",
     "keys": "API keys",
     "playground": "Playground",
     "assistant": "Assistant",

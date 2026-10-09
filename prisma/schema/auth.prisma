@@ -33,6 +33,7 @@ model User {
   ceremonies      AuthCeremony[]
   securityEvents  UserSecurityEvent[]
   managementKeys  ManagementKey[]
+  vectorStores    VectorStore[]
 
   @@index([roleId])
   @@index([orgId])
