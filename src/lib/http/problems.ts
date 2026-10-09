@@ -15,6 +15,7 @@ export const PROBLEMS = {
   FORBIDDEN: { status: 403, title: "Permission denied" },
   PLATFORM_ONLY: { status: 403, title: "Only platform users can change this" },
   INVALID_SCOPE: { status: 403, title: "Requested permissions exceed your own" },
+  SIGN_IN_DENIED: { status: 403, title: "Provider sign-in was declined" },
   SETUP_REQUIRED: { status: 403, title: "First administrator setup required" },
   REGISTRATION_DISABLED: { status: 403, title: "Registration is disabled" },
   NOT_FOUND: { status: 404, title: "Resource not found" },
@@ -22,6 +23,7 @@ export const PROBLEMS = {
   UNKNOWN_ENDPOINT: { status: 404, title: "Unknown endpoint" },
   RESET_DISABLED: { status: 404, title: "Password reset is disabled" },
   CONFLICT: { status: 409, title: "Conflict with current state" },
+  SIGN_IN_EXPIRED: { status: 409, title: "Provider sign-in expired; sign in again in the console" },
   ALIAS_EXISTS: { status: 409, title: "Alias already exists" },
   PROVIDER_IN_USE: { status: 409, title: "Provider is used by deployments" },
   TEMPLATE_IN_USE: { status: 409, title: "Model template is used by API keys" },
@@ -49,6 +51,7 @@ export const PROBLEMS = {
   BUDGET_NOT_CAPPED: { status: 422, title: "Set a budget before adding a temporary boost" },
   UNKNOWN_PROVIDER_KIND: { status: 422, title: "Unknown provider kind" },
   INVALID_URL: { status: 422, title: "Invalid URL" },
+  SIGN_IN_REQUIRED: { status: 422, title: "This provider connects by signing in from the console" },
   WEAK_PASSWORD: { status: 422, title: "Password is too weak" },
   PASSWORD_GUESSABLE: { status: 422, title: "Password is too easy to guess" },
   PASSWORD_REUSED: { status: 422, title: "Password was used before" },
@@ -56,6 +59,7 @@ export const PROBLEMS = {
   INTERNAL_ERROR: { status: 500, title: "Internal server error" },
   UPSTREAM_FAILED: { status: 502, title: "Upstream request failed" },
   UPSTREAM_EMPTY: { status: 502, title: "Upstream returned no models" },
+  SIGN_IN_FAILED: { status: 502, title: "Provider sign-in failed" },
   SERVICE_UNAVAILABLE: { status: 503, title: "Service unavailable" },
 } as const satisfies Record<string, ProblemSpec>;
 

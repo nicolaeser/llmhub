@@ -29,12 +29,15 @@ export type TokenPricing = {
   completion: string;
 };
 
+export type RoutePool = "api" | "subscription";
+
 export type PublicModel = {
   alias: string;
   vendor: string;
   displayName: string;
   tags: string[];
   pricing: ModelPricing | null;
+  pools: RoutePool[];
 };
 
 export type ModelPricing = TokenPricing & {
@@ -63,10 +66,23 @@ export type BillingContext = {
 
 export type Entry = { expires: number; body: Uint8Array };
 
+export type ProviderAuth = "api_key" | "sign_in";
+
 export type KindSpec = {
   kind: string;
   name: string;
   default_base_url?: string;
+  auth?: ProviderAuth;
+};
+
+export type UpstreamAuth = {
+  key: string;
+  headers: Record<string, string>;
+};
+
+export type ChatSseTranslator = {
+  pushLine(line: string): string[];
+  flush(): string | null;
 };
 
 export type Group = ModelGroup & { mapped: ResolvedDeployment[] };
@@ -411,6 +427,7 @@ export type Principal = {
   memberId: string;
   models: string[];
   routeLimits: RouteLimits;
+  pool?: RoutePool;
   trace?: RequestTrace;
 };
 

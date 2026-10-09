@@ -96,6 +96,9 @@ export function serializeProvider(provider: ProviderSource) {
     kind: provider.kind,
     base_url: orNull(provider.baseUrl),
     has_api_key: provider.hasApiKey,
+    sign_in: provider.signIn
+      ? { account: orNull(provider.signIn.account), plan: orNull(provider.signIn.plan), status: provider.signIn.status }
+      : null,
     models: provider.discovered.map((model) => ({
       id: model.id,
       name: model.name,

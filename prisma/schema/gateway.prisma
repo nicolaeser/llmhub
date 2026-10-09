@@ -166,6 +166,21 @@ model ProviderConnection {
 
   deployments    Deployment[]
   catalogEntries CatalogEntry[]
+  login          ProviderLogin?
+}
+
+model ProviderLogin {
+  providerId String             @id
+  provider   ProviderConnection @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  account    String             @default("")
+  plan       String             @default("")
+  tokens     String
+  expiresAt  DateTime
+  status     String             @default("active")
+  version    Int                @default(0)
+  leaseUntil DateTime?
+  createdAt  DateTime           @default(now())
+  updatedAt  DateTime           @updatedAt
 }
 
 model ModelGroup {
