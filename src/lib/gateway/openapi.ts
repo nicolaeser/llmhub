@@ -1,3 +1,4 @@
+import { gatewayPath } from "@/lib/gateway/route-pool";
 import type { OpenApiMethod, OpenApiPath, TryTarget } from "@/types/gateway";
 
 export const ANTHROPIC_VERSION = "2023-06-01";
@@ -47,7 +48,7 @@ export function resolveTryTarget(
   const path = fillOpenApiPath(spec.path, filled);
   if (
     path.includes("{") ||
-    !path.startsWith("/v1/") ||
+    !gatewayPath(path).startsWith("/v1/") ||
     path.includes("..") ||
     path.includes("//")
   ) {
@@ -137,7 +138,7 @@ export function exampleRequestBody(
     "/api/budgets/{entity_type}/{entity_id}": { max_budget: 250, budget_duration: "30d" },
     "/api/budgets/{entity_type}/{entity_id}/temporary": { amount: 50, hours: 24 },
   };
-  const value = examples[path];
+  const value = examples[gatewayPath(path)];
   if (value === undefined) return path.startsWith("/api/") ? null : "{\n  \n}";
   return JSON.stringify(value, null, 2);
 }
@@ -179,6 +180,11 @@ export const OPENAPI_PATHS: OpenApiPath[] = [
   { method: "POST", path: "/v1/systemone", summary: "Answer typed decision questions (TypeSafe Jev)", style: "openai" },
   { method: "POST", path: "/v1/moderations", summary: "Classify content", style: "openai" },
   { method: "POST", path: "/v1/ocr", summary: "Extract text from images", style: "openai" },
+  { method: "POST", path: "/subscription/v1/chat/completions", summary: "Create a chat completion on a subscription", style: "openai" },
+  { method: "POST", path: "/subscription/v1/responses", summary: "Create a response on a subscription", style: "openai" },
+  { method: "POST", path: "/subscription/v1/messages", summary: "Create an Anthropic Messages response on a subscription", style: "anthropic" },
+  { method: "GET", path: "/subscription/v1/models", summary: "List models served by subscriptions", style: "dual" },
+  { method: "GET", path: "/subscription/v1/models/{id}", summary: "Retrieve a model served by subscriptions", style: "dual" },
   { method: "GET", path: "/api/me", summary: "Show the key's user and effective permissions", style: "management" },
   { method: "GET", path: "/api/keys", summary: "List API keys", style: "management" },
   { method: "POST", path: "/api/keys", summary: "Create an API key", style: "management" },

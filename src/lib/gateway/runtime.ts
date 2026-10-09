@@ -1,6 +1,5 @@
 import "server-only";
 import prisma from "@/lib/db/prisma";
-import { open } from "@/lib/crypto";
 import { PROVIDER_CATALOG } from "@/lib/gateway/catalog";
 import {
   nextLatencyEwma,
@@ -19,6 +18,7 @@ import type { DeploymentRule, RoutePolicy } from "@/types/model-templates";
 import { money } from "@/lib/utils/money";
 
 const COOLDOWN_MS = 15_000;
+const MAX_LIMIT_COOLDOWN_MS = 7 * 24 * 60 * 60_000;
 const ALLOWED_FAILS = 2;
 const inflight = new Map<string, number>();
 const cooldownUntil = new Map<string, number>();
@@ -142,17 +142,14 @@ function pick(items: ResolvedDeployment[], strategy: string): ResolvedDeployment
 export async function acquireGroup(
   group: ModelGroup & { mapped: ResolvedDeployment[] },
   rules: DeploymentRule[] | undefined,
-  exclude: Set<string> = new Set(),
+  serves: (dep: ResolvedDeployment) => boolean = () => true,
   strategy = "",
 ): Promise<{ dep: ResolvedDeployment; release: () => void; overflow: boolean }> {
-  const ready = healthy(
-    permittedDeployments(group.mapped, rules).filter((d) => !exclude.has(d.id)),
-    Date.now(),
-  );
+  const ready = healthy(permittedDeployments(group.mapped, rules).filter(serves), Date.now());
   if (!ready.length) {
     if (group.overflow_group && group.overflow_group !== group.alias) {
       const overflow = await loadGroup(group.overflow_group);
-      const acquired = await acquireGroup(overflow, rules, exclude, strategy);
+      const acquired = await acquireGroup(overflow, rules, serves, strategy);
       return { ...acquired, overflow: true };
     }
     throw ERR_NO_HEALTHY;
@@ -168,7 +165,13 @@ export async function acquireGroup(
   };
 }
 
-export function markFailure(dep: Deployment): void {
+export function markFailure(dep: Deployment, retryAt: number | null = null): void {
+  const now = Date.now();
+  if (retryAt && retryAt > now) {
+    cooldownUntil.set(dep.id, Math.min(retryAt, now + MAX_LIMIT_COOLDOWN_MS));
+    failCount.set(dep.id, 0);
+    return;
+  }
   const fails = (failCount.get(dep.id) ?? 0) + 1;
   failCount.set(dep.id, fails);
   if (fails >= ALLOWED_FAILS) {
@@ -183,16 +186,10 @@ export function markSuccess(dep: Deployment, latencyMs?: number): void {
   latencyEwma.set(dep.id, nextLatencyEwma(latencyEwma.get(dep.id), latencyMs));
 }
 
-export function secretFor(dep: ResolvedDeployment): string {
-  return dep.provider ? open(dep.provider.apiKey) : "";
-}
-
 export function defaultBase(dep: ResolvedDeployment): string {
-  const base =
-    dep.base_url ||
-    dep.provider?.baseUrl ||
-    PROVIDER_CATALOG.find((spec) => spec.kind === dep.kind)?.default_base_url ||
-    "";
+  const spec = PROVIDER_CATALOG.find((item) => item.kind === dep.kind);
+  const pinned = spec?.auth === "sign_in" ? spec.default_base_url : "";
+  const base = pinned || dep.base_url || dep.provider?.baseUrl || spec?.default_base_url || "";
   if (!base) throw new Error(`deployment ${dep.id} has no base URL`);
   return base.replace(/\/$/, "");
 }

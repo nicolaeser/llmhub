@@ -23,6 +23,7 @@ import {
   exampleRequestBody,
   openApiPathParams,
 } from "@/lib/gateway/openapi";
+import { gatewayPath } from "@/lib/gateway/route-pool";
 import type { OpenApiPath } from "@/types/gateway";
 import type { OverlayState, TrySnapshot } from "@/types/api-ref";
 
@@ -97,7 +98,7 @@ async function snapshotOf(res: Response, started: number): Promise<TrySnapshot> 
 function defaultParams(path: string, models: string[]): Record<string, string> {
   const out: Record<string, string> = {};
   for (const name of openApiPathParams(path)) {
-    if (name === "id" && path.startsWith("/v1/models")) {
+    if (name === "id" && gatewayPath(path).startsWith("/v1/models")) {
       out[name] = models[0] || "auto";
     } else if (name === "name") {
       out[name] = "web";
