@@ -11,6 +11,7 @@ export const ASSISTANT_PAGES = {
   catalog: "/model-catalog",
   guardrails: "/guardrails",
   usage: "/usage",
+  "what-if": "/what-if",
   logs: "/logs",
   companies: "/companies",
   structure: "/companies",

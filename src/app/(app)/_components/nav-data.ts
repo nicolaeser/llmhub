@@ -4,6 +4,7 @@ import {
   Bell,
   BookOpen,
   Building2,
+  Calculator,
   Code2,
   Database,
   KeyRound,
@@ -47,6 +48,7 @@ export const NAV: NavSection[] = [
     labelKey: "sections.observe",
     items: [
       { href: "/usage", labelKey: "items.usage", icon: BarChart3, permission: PERMISSIONS.SPEND_READ },
+      { href: "/what-if", labelKey: "items.whatIf", icon: Calculator, permission: PERMISSIONS.SPEND_READ },
       { href: "/logs", labelKey: "items.logs", icon: Activity, permission: PERMISSIONS.SPEND_READ },
     ],
   },
