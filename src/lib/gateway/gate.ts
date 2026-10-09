@@ -2,8 +2,9 @@ import "server-only";
 import { bearerToken, clientIp, readJSON } from "@/lib/http/api";
 import { authenticateBearer } from "@/lib/gateway/principal";
 import { defaultEntityIds, redactJSON } from "@/lib/gateway/pii";
+import { outputGuard, screenRequest } from "@/lib/gateway/guardrails";
 import { alertUpstreamFailure } from "@/lib/gateway/alerts";
-import { resolvePii } from "@/lib/gateway/settings";
+import { resolvePolicies } from "@/lib/gateway/settings";
 import { assertBudget, assertRate, recordUsage } from "@/lib/gateway/billing";
 import { asRecord, isRouterError, newRequestId } from "@/lib/gateway/core";
 import { anthropicErrorBody, GateError, openAIErrorBody } from "@/lib/gateway/errors";
@@ -12,6 +13,7 @@ import { modelAlias } from "@/lib/gateway/model-alias";
 import { aliasChain } from "@/lib/gateway/runtime";
 import { NextResponse } from "next/server";
 import type { JsonMap, Principal } from "@/types/gateway";
+import type { OutputGuard } from "@/types/guardrails";
 
 export function toGateError(err: unknown): GateError {
   if (err instanceof GateError) return err;
@@ -64,7 +66,15 @@ export function requestPath(req: Request): string {
 export function withTrace(principal: Principal, endpoint: string): Principal {
   return {
     ...principal,
-    trace: { endpoint, piiMode: "", piiInput: new Set(), piiOutput: new Set() },
+    trace: {
+      endpoint,
+      piiMode: "",
+      piiInput: new Set(),
+      piiOutput: new Set(),
+      guardInput: new Set(),
+      guardOutput: new Set(),
+      guardBlocked: false,
+    },
   };
 }
 
@@ -113,36 +123,55 @@ export function modelChain(principal: Principal, model: string, body: JsonMap): 
   return aliases;
 }
 
-export async function applyPii(
+async function rejectRequest(principal: Principal, body: JsonMap, error: GateError, outcome: string): Promise<never> {
+  await recordUsage({
+    principal,
+    model: modelOf(body),
+    status: error.status,
+    outcome,
+    latencyMs: 0,
+    tag: spendTag(body),
+    error,
+  }).catch(() => undefined);
+  throw error;
+}
+
+export async function applyGuardrails(
   body: JsonMap,
   principal: Principal,
-): Promise<{ body: JsonMap; output: string[] | null }> {
+): Promise<{ body: JsonMap; output: OutputGuard | null }> {
   const trace = principal.trace;
   if (trace) trace.request = body;
-  const pii = await resolvePii(principal);
-  if (!pii.enabled) return { body, output: null };
+  const { pii, guardrails } = await resolvePolicies(principal);
+  const screened = screenRequest(body, guardrails, trace?.guardInput ?? new Set());
+  if (trace) trace.request = screened.body;
+  if (screened.blocked) {
+    if (trace) trace.guardBlocked = true;
+    await rejectRequest(
+      principal,
+      body,
+      new GateError(400, "guardrail_blocked", "request blocked by guardrail policy"),
+      "guardrail_blocked",
+    );
+  }
+  if (!pii.enabled) return { body: screened.body, output: outputGuard(guardrails, null) };
   const entities = pii.entities.length ? pii.entities : defaultEntityIds();
   const found = new Set<string>();
-  const redacted = redactJSON(body, entities, "", found) as JsonMap;
+  const redacted = redactJSON(screened.body, entities, "", found) as JsonMap;
   if (trace) {
     trace.request = redacted;
     trace.piiMode = pii.mode;
     for (const id of found) trace.piiInput.add(id);
   }
   if (pii.mode === "block" && found.size) {
-    const blocked = new GateError(400, "pii_blocked", "request blocked by PII policy");
-    await recordUsage({
+    await rejectRequest(
       principal,
-      model: modelOf(body),
-      status: blocked.status,
-      outcome: "pii_blocked",
-      latencyMs: 0,
-      tag: spendTag(body),
-      error: blocked,
-    }).catch(() => undefined);
-    throw blocked;
+      body,
+      new GateError(400, "pii_blocked", "request blocked by PII policy"),
+      "pii_blocked",
+    );
   }
-  return { body: redacted, output: pii.output ? entities : null };
+  return { body: redacted, output: outputGuard(guardrails, pii.output ? entities : null) };
 }
 
 export async function readBody(req: Request): Promise<JsonMap> {

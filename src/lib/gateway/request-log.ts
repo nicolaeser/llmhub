@@ -107,6 +107,8 @@ export async function writeRequestLog(entry: RequestLogEntry): Promise<void> {
     piiMode: trace?.piiMode ?? "",
     piiInput: [...piiInput],
     piiOutput: [...piiOutput],
+    guardInput: [...(trace?.guardInput ?? [])],
+    guardOutput: [...(trace?.guardOutput ?? [])],
     contentSkip: skip,
   };
   const log = await prisma.requestLog.create({
@@ -142,6 +144,8 @@ export async function writeRequestLog(entry: RequestLogEntry): Promise<void> {
       pii_mode: meta.piiMode,
       pii_input: meta.piiInput,
       pii_output: meta.piiOutput,
+      guardrail_input: meta.guardInput,
+      guardrail_output: meta.guardOutput,
       content_skip: skip,
       ...(stored?.request ? { request: stored.request.value } : {}),
       ...(stored?.response ? { response: stored.response.value } : {}),

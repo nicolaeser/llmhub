@@ -62,6 +62,8 @@ export function requestLogRow(
     piiMode: row.piiMode,
     piiInput: row.piiInput,
     piiOutput: row.piiOutput,
+    guardInput: row.guardInput,
+    guardOutput: row.guardOutput,
     hasContent: Boolean(row.content),
     contentSkip: row.contentSkip,
   };

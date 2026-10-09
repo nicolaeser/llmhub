@@ -10,6 +10,16 @@ import {
   asStringArray,
   asStringMap,
 } from "@/lib/gateway/core";
+import {
+  defaultGuardrails,
+  GUARDRAIL_ACTIONS,
+  INJECTION_CHECKS,
+  MAX_RULE_PATTERNS,
+  MAX_RULES,
+  RULE_KINDS,
+  RULE_TARGETS,
+  SECRET_ENTITIES,
+} from "@/lib/gateway/guardrails";
 import { modelAlias } from "@/lib/gateway/model-alias";
 import { DEFAULT_AUTO_CONFIDENCE, JEV_SUGGEST_CONFIDENCE } from "@/lib/gateway/model-catalog";
 import { WEBHOOK_EVENTS } from "@/lib/gateway/webhook-events";
@@ -25,7 +35,7 @@ import type {
   JevSettings,
   Principal,
 } from "@/types/gateway";
-import type { PiiPolicy } from "@/types/guardrails";
+import type { GuardrailPolicy, GuardrailRule, PiiPolicy } from "@/types/guardrails";
 
 const SETTING_ENTERPRISE = "enterprise";
 const SETTING_BUDGET_ALERTS = "budget_alert_state";
@@ -61,6 +71,7 @@ const DEFAULT_ENTERPRISE: Enterprise = {
   catalog_min_confidence: DEFAULT_AUTO_CONFIDENCE,
   update_check: true,
   pii: DEFAULT_PII,
+  guardrails: defaultGuardrails(),
   budget_alert_thresholds: [50, 80, 100],
   oidc: {
     enabled: false,
@@ -88,6 +99,58 @@ function normalizePii(raw: unknown): PiiPolicy {
     mode: mode === "block" ? "block" : "mask",
     output: rec.output == null ? true : asBool(rec.output, true),
     entities: asStringArray(rec.entities),
+  };
+}
+
+function pick<T extends string>(value: unknown, allowed: readonly T[], fallback: T): T {
+  return allowed.find((item) => item === value) ?? fallback;
+}
+
+function normalizeRule(raw: unknown, index: number): GuardrailRule[] {
+  const rec = asRecord(raw);
+  if (!rec) return [];
+  const patterns = asStringArray(rec.patterns)
+    .map((pattern) => pattern.trim())
+    .filter(Boolean)
+    .slice(0, MAX_RULE_PATTERNS);
+  const name = asString(rec.name).trim();
+  if (!patterns.length || !name) return [];
+  return [
+    {
+      id: asString(rec.id).trim() || `rule_${index + 1}`,
+      name,
+      kind: pick(rec.kind, RULE_KINDS, "denylist"),
+      target: pick(rec.target, RULE_TARGETS, "input"),
+      action: pick(rec.action, GUARDRAIL_ACTIONS, "block"),
+      patterns,
+      caseSensitive: asBool(rec.caseSensitive, false),
+    },
+  ];
+}
+
+export function normalizeGuardrails(raw: unknown): GuardrailPolicy {
+  const rec = asRecord(raw) ?? {};
+  const fallback = defaultGuardrails();
+  const injection = asRecord(rec.injection) ?? {};
+  const secrets = asRecord(rec.secrets) ?? {};
+  const checks = asStringArray(injection.checks);
+  const entities = asStringArray(secrets.entities);
+  return {
+    injection: {
+      enabled: asBool(injection.enabled, fallback.injection.enabled),
+      action: pick(injection.action, ["block", "flag"] as const, fallback.injection.action),
+      checks: Array.isArray(injection.checks)
+        ? INJECTION_CHECKS.filter((check) => checks.includes(check))
+        : fallback.injection.checks,
+    },
+    secrets: {
+      enabled: asBool(secrets.enabled, fallback.secrets.enabled),
+      action: pick(secrets.action, GUARDRAIL_ACTIONS, fallback.secrets.action),
+      entities: Array.isArray(secrets.entities)
+        ? SECRET_ENTITIES.filter((id) => entities.includes(id))
+        : fallback.secrets.entities,
+    },
+    rules: (Array.isArray(rec.rules) ? rec.rules : []).slice(0, MAX_RULES).flatMap(normalizeRule),
   };
 }
 
@@ -156,6 +219,7 @@ export function normalizeEnterprise(raw: unknown): Enterprise {
     update_check: asBool(rec.update_check, true),
     oidc: normalizeOidc(rec.oidc),
     pii: normalizePii(rec.pii ?? DEFAULT_PII),
+    guardrails: normalizeGuardrails(rec.guardrails),
     s3: normalizeS3(rec.s3),
     budget_alert_thresholds: (() => {
       const list = asNumberArray(rec.budget_alert_thresholds);
@@ -231,15 +295,43 @@ export function piiOverride(raw: unknown): PiiPolicy | null {
   return asRecord(raw) ? normalizePii(raw) : null;
 }
 
+export async function getGuardrails(): Promise<GuardrailPolicy> {
+  return normalizeGuardrails((await getEnterprise()).guardrails);
+}
+
+export function guardrailOverride(raw: unknown): GuardrailPolicy | null {
+  return asRecord(raw) ? normalizeGuardrails(raw) : null;
+}
+
+const POLICY_SELECT = { piiPolicy: true, guardrailPolicy: true } as const;
+
+async function inheritedPolicies(principal: Principal) {
+  const projectId = principal.key?.project_id;
+  const [project, org] = await Promise.all([
+    projectId ? prisma.project.findUnique({ where: { id: projectId }, select: POLICY_SELECT }) : null,
+    principal.orgId ? prisma.organization.findUnique({ where: { id: principal.orgId }, select: POLICY_SELECT }) : null,
+  ]);
+  return { project, org };
+}
+
+export async function resolvePolicies(principal: Principal): Promise<{ pii: PiiPolicy; guardrails: GuardrailPolicy }> {
+  const keyPii = principal.key?.pii ?? null;
+  const keyGuardrails = principal.guardrails ?? null;
+  const { project, org } =
+    keyPii && keyGuardrails ? { project: null, org: null } : await inheritedPolicies(principal);
+  const pii = keyPii ?? piiOverride(project?.piiPolicy) ?? piiOverride(org?.piiPolicy);
+  const guardrails =
+    keyGuardrails ?? guardrailOverride(project?.guardrailPolicy) ?? guardrailOverride(org?.guardrailPolicy);
+  if (pii && guardrails) return { pii, guardrails };
+  const enterprise = await getEnterprise();
+  return {
+    pii: pii ?? normalizePii(enterprise.pii),
+    guardrails: guardrails ?? normalizeGuardrails(enterprise.guardrails),
+  };
+}
+
 export async function resolvePii(principal: Principal): Promise<PiiPolicy> {
-  if (principal.key?.pii) return principal.key.pii;
-  const org = principal.orgId
-    ? await prisma.organization.findUnique({
-        where: { id: principal.orgId },
-        select: { piiPolicy: true },
-      })
-    : null;
-  return piiOverride(org?.piiPolicy) ?? getPii();
+  return (await resolvePolicies(principal)).pii;
 }
 
 export async function getBudgetAlertState(): Promise<Record<string, string>> {
@@ -272,6 +364,12 @@ export async function patchEnterprise(patch: Partial<Enterprise>): Promise<Enter
 export async function savePii(pii: PIIConfig): Promise<PiiPolicy> {
   const normalized = normalizePii(pii);
   await patchEnterprise({ pii: normalized });
+  return normalized;
+}
+
+export async function saveGuardrails(policy: GuardrailPolicy): Promise<GuardrailPolicy> {
+  const normalized = normalizeGuardrails(policy);
+  await patchEnterprise({ guardrails: normalized });
   return normalized;
 }
 

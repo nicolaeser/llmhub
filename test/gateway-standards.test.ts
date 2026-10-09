@@ -6,7 +6,8 @@ import { PROVIDER_CATALOG } from "@/lib/gateway/catalog";
 import { modelEntry } from "@/lib/gateway/core";
 import { costOf } from "@/lib/gateway/cost";
 import { mediaTypeOf } from "@/lib/gateway/file-refs";
-import { mergeStreamUsage, redactMessage, redactMessageEvent } from "@/lib/gateway/messages-dispatch";
+import { OutputScreen } from "@/lib/gateway/guardrails";
+import { mergeStreamUsage, screenMessage, screenMessageEvent } from "@/lib/gateway/messages-dispatch";
 import { redactJSON } from "@/lib/gateway/pii";
 import { applyProviderServiceMode } from "@/lib/gateway/service-mode";
 import { normalizeEnterprise } from "@/lib/gateway/settings";
@@ -171,24 +172,27 @@ test("input redaction leaves signed reasoning and opaque ids untouched", () => {
 });
 
 test("native Messages output redaction covers text but never signed thinking", () => {
-  const entities = ["EMAIL_ADDRESS"];
-  const message = redactMessage(
+  const screen = new OutputScreen({ pii: ["EMAIL_ADDRESS"], rules: [] });
+  const message = screenMessage(
     {
       content: [
         { type: "thinking", thinking: "jane@example.com", signature: "s" },
         { type: "text", text: "write to jane@example.com" },
       ],
     },
-    entities,
+    screen,
   );
   const blocks = message.content as JsonMap[];
   assert.equal(blocks[0]!.thinking, "jane@example.com");
   assert.doesNotMatch(String(blocks[1]!.text), /jane@example\.com/);
-  const delta = redactMessageEvent({ type: "content_block_delta", delta: { type: "text_delta", text: "jane@example.com" } }, entities);
+  const delta = screenMessageEvent(
+    { type: "content_block_delta", delta: { type: "text_delta", text: "jane@example.com" } },
+    new OutputScreen({ pii: ["EMAIL_ADDRESS"], rules: [] }),
+  );
   assert.doesNotMatch(String((delta.delta as JsonMap).text), /jane@example\.com/);
-  const thinking = redactMessageEvent(
+  const thinking = screenMessageEvent(
     { type: "content_block_delta", delta: { type: "thinking_delta", thinking: "jane@example.com" } },
-    entities,
+    screen,
   );
   assert.equal((thinking.delta as JsonMap).thinking, "jane@example.com");
 });

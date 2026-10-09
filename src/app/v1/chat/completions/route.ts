@@ -5,7 +5,7 @@ import { dispatchChat, streamChat } from "@/lib/gateway/chat";
 import { resolveChatFiles } from "@/lib/gateway/file-refs";
 import {
   allowModel,
-  applyPii,
+  applyGuardrails,
   gateRequest,
   gateResponse,
   modelOf,
@@ -24,7 +24,7 @@ export async function POST(req: Request) {
     const body = await readBody(req);
     const model = modelOf(body);
     allowModel(principal, model);
-    const { body: redacted, output } = await applyPii(body, principal);
+    const { body: redacted, output } = await applyGuardrails(body, principal);
     const clean = await resolveChatFiles(redacted, principal);
     const aliases = modelChain(principal, model, clean);
     const settings = await loadSettings();
@@ -36,7 +36,7 @@ export async function POST(req: Request) {
         model,
         body: clean,
         aliases,
-        outputPii: output,
+        outputGuard: output,
       });
     }
     if (!cacheBypassed(req.headers, clean) && settings.cacheTtlSeconds > 0) {
@@ -70,7 +70,7 @@ export async function POST(req: Request) {
       model,
       body: clean,
       aliases,
-      outputPii: output,
+      outputGuard: output,
     });
     if (!cacheBypassed(req.headers, clean) && settings.cacheTtlSeconds > 0) {
       cachePut(

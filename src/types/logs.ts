@@ -56,6 +56,8 @@ export type RequestLogRow = {
   piiMode: string;
   piiInput: string[];
   piiOutput: string[];
+  guardInput: string[];
+  guardOutput: string[];
   hasContent: boolean;
   contentSkip: string;
 };

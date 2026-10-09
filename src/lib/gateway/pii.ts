@@ -569,9 +569,13 @@ export function isOpaqueText(value: string): boolean {
   return value.startsWith("data:") || (value.length > 512 && /^[A-Za-z0-9+/=\r\n_-]+$/.test(value));
 }
 
+export function skipsScan(key: string, value: string): boolean {
+  return STRUCTURAL_KEYS.has(key) || isOpaqueText(value);
+}
+
 export function redactJSON(value: unknown, entities?: string[], key = "", found?: Set<string>): unknown {
   if (typeof value === "string") {
-    return STRUCTURAL_KEYS.has(key) || isOpaqueText(value) ? value : redactPii(value, entities, found);
+    return skipsScan(key, value) ? value : redactPii(value, entities, found);
   }
   if (Array.isArray(value)) return value.map((item) => redactJSON(item, entities, key, found));
   if (value && typeof value === "object") {

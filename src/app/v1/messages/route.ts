@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import {
   allowModel,
-  applyPii,
+  applyGuardrails,
   gateRequest,
   gateResponse,
   modelOf,
@@ -22,7 +22,7 @@ export async function POST(req: Request) {
     const body = await readBody(req);
     const model = modelOf(body);
     allowModel(principal, model);
-    const { body: clean, output } = await applyPii(body, principal);
+    const { body: clean, output } = await applyGuardrails(body, principal);
     const parsed = parseRequest(messagesRequestSchema, clean);
     if (!parsed.ok) {
       throw new GateError(400, "invalid_request", parsed.message, { param: parsed.param });
@@ -33,7 +33,7 @@ export async function POST(req: Request) {
       body: clean,
       request: parsed.data,
       aliases: modelChain(principal, model, clean),
-      outputPii: output,
+      outputGuard: output,
       headers: anthropicPassthroughHeaders(req.headers),
     };
     if (parsed.data.stream === true) return await streamMessages({ ...input, req });

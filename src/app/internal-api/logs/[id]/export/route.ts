@@ -3,6 +3,7 @@ import { getFormatter, getNow, getTranslations } from "next-intl/server";
 import { getSession } from "@/lib/auth/session";
 import { hasPerm, PERMISSIONS } from "@/lib/auth/permissions";
 import { writeAudit } from "@/lib/gateway/audit";
+import { parseHit } from "@/lib/gateway/guardrails";
 import { findRequestLogDetail } from "@/lib/gateway/request-log-detail";
 import { fileResponse } from "@/lib/http/export";
 import { problemResponse } from "@/lib/http/problem";
@@ -33,6 +34,17 @@ async function requestLogDocument(detail: RequestLogDetail): Promise<RequestLogD
   const label = (name: string, id: string) => name || id || none;
   const entities = (ids: string[]) =>
     ids.length ? format.list(ids.map((id) => tPii("entityLabel", { id })), "enumeration") : none;
+  const hitLabel = (hit: string) => {
+    const { kind, value } = parseHit(hit);
+    const name =
+      kind === "injection"
+        ? tPii("injection.check", { check: value })
+        : kind === "secret"
+          ? tPii("entityLabel", { id: value })
+          : value;
+    return tPii("hitLabel", { kind, label: name });
+  };
+  const hits = (list: string[]) => (list.length ? format.list(list.map(hitLabel), "enumeration") : none);
   const entry = (item: TranscriptEntry): RequestLogDocumentEntry => ({
     role: tDetail("role", { role: item.role }),
     assistant: item.role === "assistant",
@@ -91,6 +103,8 @@ async function requestLogDocument(detail: RequestLogDetail): Promise<RequestLogD
         { label: tDetail("piiFilter"), value: tDetail("piiMode", { mode: detail.piiMode || "none" }) },
         { label: tDetail("piiPrompt"), value: entities(detail.piiInput) },
         { label: tDetail("piiResponse"), value: entities(detail.piiOutput) },
+        { label: tDetail("guardPrompt"), value: hits(detail.guardInput) },
+        { label: tDetail("guardResponse"), value: hits(detail.guardOutput) },
       ],
       note: detail.piiMode ? tDetail("piiStored") : "",
     },

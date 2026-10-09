@@ -4,7 +4,7 @@ import { deploymentKey, withDeployment } from "@/lib/gateway/chat";
 import { asNumber, asRecord } from "@/lib/gateway/core";
 import {
   allowModel,
-  applyPii,
+  applyGuardrails,
   gateRequest,
   gateResponse,
   modelOf,
@@ -29,7 +29,7 @@ export async function POST(req: Request) {
     const body = await readBody(req);
     const model = modelOf(body);
     allowModel(principal, model);
-    const { body: clean } = await applyPii(body, principal);
+    const { body: clean } = await applyGuardrails(body, principal);
     const parsed = parseRequest(messagesRequestSchema, clean);
     if (!parsed.ok) {
       throw new GateError(400, "invalid_request", parsed.message, { param: parsed.param });

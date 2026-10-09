@@ -3,14 +3,14 @@
 import { useState, useTransition } from "react";
 import { Button, Modal, Spinner, toast, type useOverlayState } from "@heroui/react";
 import { useTranslations } from "next-intl";
+import { defaultGuardrails, guardrailsValid } from "@/lib/gateway/guardrails";
 import { isActionFail } from "@/lib/http/action-result";
-import type { PiiOverrideView, PiiPolicy, PolicyScope, PolicyTarget } from "@/types/guardrails";
-import { savePiiOverrideAction } from "../_action";
-import PiiEntityPicker from "./pii-entity-picker";
-import PiiPolicyFields from "./pii-policy-fields";
+import type { GuardrailOverrideView, GuardrailPolicy, PolicyScope, PolicyTarget } from "@/types/guardrails";
+import { saveGuardrailOverrideAction } from "../_action";
+import GuardrailPolicyFields from "./guardrail-policy-fields";
 import PolicyTargetPicker from "./policy-target-picker";
 
-export default function PiiOverrideDialog({
+export default function GuardrailOverrideDialog({
   state,
   editing,
   targets,
@@ -18,10 +18,10 @@ export default function PiiOverrideDialog({
   onSaved,
 }: {
   state: ReturnType<typeof useOverlayState>;
-  editing: PiiOverrideView | null;
+  editing: GuardrailOverrideView | null;
   targets: PolicyTarget[];
-  inherited: (target: PolicyTarget) => PiiPolicy;
-  onSaved: (result: { scope: PolicyScope; id: string; override: PiiOverrideView | null }) => void;
+  inherited: (target: PolicyTarget) => GuardrailPolicy;
+  onSaved: (result: { scope: PolicyScope; id: string; override: GuardrailOverrideView | null }) => void;
 }) {
   const t = useTranslations("Guardrails");
   const tError = useTranslations("Error");
@@ -30,10 +30,10 @@ export default function PiiOverrideDialog({
   const [targetId, setTargetId] = useState(
     () => editing?.id ?? targets.find((row) => row.scope === scope)?.id ?? "",
   );
-  const [policy, setPolicy] = useState<PiiPolicy>(() => {
+  const [policy, setPolicy] = useState<GuardrailPolicy>(() => {
     if (editing) return editing.policy;
     const first = targets.find((row) => row.id === targetId);
-    return first ? inherited(first) : { enabled: true, mode: "mask", output: true, entities: [] };
+    return first ? inherited(first) : defaultGuardrails();
   });
   const [pending, start] = useTransition();
 
@@ -45,7 +45,7 @@ export default function PiiOverrideDialog({
 
   function save(close: () => void) {
     start(async () => {
-      const result = await savePiiOverrideAction({ scope, id: targetId, policy });
+      const result = await saveGuardrailOverrideAction({ scope, id: targetId, policy });
       if (isActionFail(result)) {
         toast.danger(tError("code", { code: result.error }));
         return;
@@ -60,14 +60,14 @@ export default function PiiOverrideDialog({
     <Modal state={state}>
       <Modal.Backdrop>
         <Modal.Container>
-          <Modal.Dialog className="max-w-2xl">
+          <Modal.Dialog className="max-w-3xl">
             {({ close }) => (
               <>
                 <Modal.Header>
                   <Modal.Heading>{t("overrideTitle", { mode: editing ? "edit" : "create" })}</Modal.Heading>
                 </Modal.Header>
                 <Modal.Body className="space-y-4">
-                  <p className="text-sm text-muted">{t("overrideHint")}</p>
+                  <p className="text-sm text-muted">{t("content.overrideHint")}</p>
                   {editing ? (
                     <p className="text-sm">
                       {t("overrideTarget", { scope: editing.scope, alias: editing.alias })}
@@ -85,18 +85,17 @@ export default function PiiOverrideDialog({
                       isDisabled={pending}
                     />
                   )}
-                  <PiiPolicyFields value={policy} onChange={setPolicy} isDisabled={pending} />
-                  <PiiEntityPicker
-                    value={policy.entities}
-                    onChange={(entities) => setPolicy((cur) => ({ ...cur, entities }))}
-                    isDisabled={pending}
-                  />
+                  <GuardrailPolicyFields value={policy} onChange={setPolicy} isDisabled={pending} />
                 </Modal.Body>
                 <Modal.Footer>
                   <Button variant="tertiary" onPress={close} isDisabled={pending}>
                     {tCommon("cancel")}
                   </Button>
-                  <Button isPending={pending} isDisabled={!targetId} onPress={() => save(close)}>
+                  <Button
+                    isPending={pending}
+                    isDisabled={!targetId || !guardrailsValid(policy)}
+                    onPress={() => save(close)}
+                  >
                     {({ isPending }) => (
                       <>
                         {isPending ? <Spinner color="current" size="sm" /> : null}

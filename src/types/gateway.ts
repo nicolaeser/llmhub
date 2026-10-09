@@ -1,7 +1,7 @@
 import type { Prisma } from "@/generated/prisma/client";
 import type { OPENAPI_METHODS } from "@/lib/gateway/openapi";
 import type { WEBHOOK_EVENTS } from "@/lib/gateway/webhook-events";
-import type { PiiPolicy } from "@/types/guardrails";
+import type { GuardrailPolicy, PiiPolicy } from "@/types/guardrails";
 import type { RouteLimits } from "@/types/model-templates";
 
 export type SpendHolder = {
@@ -154,6 +154,9 @@ export type RequestTrace = {
   piiMode: PiiMode | "";
   piiInput: Set<string>;
   piiOutput: Set<string>;
+  guardInput: Set<string>;
+  guardOutput: Set<string>;
+  guardBlocked: boolean;
 };
 
 export type DiscoveredModel = {
@@ -295,6 +298,7 @@ export type Enterprise = {
   log_content?: boolean;
   content_retention_days?: number;
   pii?: PIIConfig;
+  guardrails?: GuardrailPolicy;
   s3?: S3Settings;
   budget_alert_thresholds?: number[];
   registration_enabled?: boolean;
@@ -391,6 +395,7 @@ export type Principal = {
   memberId: string;
   models: string[];
   routeLimits: RouteLimits;
+  guardrails?: GuardrailPolicy | null;
   trace?: RequestTrace;
 };
 

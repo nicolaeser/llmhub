@@ -5,7 +5,7 @@ import { loadAdminSettingsAction } from "@/app/(app)/admin-settings/_action";
 import { loadCacheAction, saveCacheAction } from "@/app/(app)/cache/_action";
 import {
   loadGuardrailsAction,
-  saveGuardrailsAction,
+  savePiiAction,
   savePiiOverrideAction,
   testPiiAction,
 } from "@/app/(app)/guardrails/_action";
@@ -42,13 +42,13 @@ async function updateGuardrails(args: z.output<typeof updateGuardrailsToolInput>
   const current = await loadGuardrailsAction();
   if (isActionFail(current)) return toolFail(actionCode(current));
   if (args.scope === "global") {
-    return viaAction(saveGuardrailsAction(mergePii(current.pii, args)), ({ pii }) => ({
+    return viaAction(savePiiAction(mergePii(current.pii, args)), ({ pii }) => ({
       result: { ok: true, scope: "global", policy: pii },
       navigate: "/guardrails",
     }));
   }
   if (!args.id) return toolFail("invalid_arguments", { issues: [{ path: "id", message: "required" }] });
-  const existing = current.overrides.find((row) => row.scope === args.scope && row.id === args.id);
+  const existing = current.piiOverrides.find((row) => row.scope === args.scope && row.id === args.id);
   const policy = args.inherit ? null : mergePii(existing?.policy ?? current.pii, args);
   return viaAction(savePiiOverrideAction({ scope: args.scope, id: args.id, policy }), (saved) => ({
     result: { ok: true, scope: saved.scope, id: saved.id, override: saved.override?.policy ?? null },
@@ -167,13 +167,23 @@ export const settingsTools = {
     },
   }),
   get_guardrails: defineTool({
-    description: "The global PII policy and every organization and key override.",
+    description:
+      "The global PII policy and every company, project, and key override, plus the global content guardrails (denylist and regex rules, prompt injection detection, output secret checks) and their overrides.",
     input: emptyToolInput,
     run: async () =>
-      viaAction(loadGuardrailsAction(), ({ pii, overrides }) => ({
+      viaAction(loadGuardrailsAction(), ({ pii, piiOverrides, guardrails, guardrailOverrides }) => ({
         result: {
           global: pii,
-          overrides: overrides.map((row) => ({ scope: row.scope, id: row.id, alias: row.alias, policy: row.policy })),
+          overrides: piiOverrides.map((row) => ({ scope: row.scope, id: row.id, alias: row.alias, policy: row.policy })),
+          guardrails: {
+            global: guardrails,
+            overrides: guardrailOverrides.map((row) => ({
+              scope: row.scope,
+              id: row.id,
+              alias: row.alias,
+              policy: row.policy,
+            })),
+          },
         },
       })),
   }),
@@ -185,7 +195,7 @@ export const settingsTools = {
   }),
   update_guardrails: defineTool({
     description:
-      "Change the global PII policy, or set or remove (inherit) an override for one organization or key. Omitted fields keep their current value.",
+      "Change the global PII policy, or set or remove (inherit) an override for one organization, project, or key. Omitted fields keep their current value.",
     input: updateGuardrailsToolInput,
     run: async (args) => updateGuardrails(args),
   }),

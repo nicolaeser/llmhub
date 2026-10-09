@@ -18,8 +18,10 @@ import {
 import { Braces, ChevronDown, Download, FileCode, FileText, type LucideIcon } from "lucide-react";
 import { useFormatter, useTranslations } from "next-intl";
 import Markdown from "@/components/console/markdown";
+import { useGuardrailHitLabel } from "@/components/guardrails/guardrail-hit";
 import { splitPiiPlaceholders } from "@/lib/gateway/pii";
 import type { RequestLogDetail, RequestLogExportFormat, TranscriptEntry } from "@/types/logs";
+import GuardrailChip from "./guardrail-chip";
 import PiiChip from "./pii-chip";
 
 const EXPORT_FORMATS: { id: RequestLogExportFormat; icon: LucideIcon }[] = [
@@ -192,8 +194,10 @@ export default function LogDetailDialog({
   const tPii = useTranslations("Guardrails");
   const tCommon = useTranslations("Common");
   const format = useFormatter();
+  const hitLabel = useGuardrailHitLabel();
   const entities = (ids: string[]) =>
     ids.length ? format.list(ids.map((id) => tPii("entityLabel", { id })), "enumeration") : tCommon("none");
+  const hits = (list: string[]) => (list.length ? format.list(list.map(hitLabel), "enumeration") : tCommon("none"));
   const label = (kind: "key" | "user" | "member" | "org" | "team" | "project", name: string, id: string) =>
     name || (id ? t("deleted", { kind }) : tCommon("none"));
 
@@ -301,6 +305,11 @@ export default function LogDetailDialog({
                         piiInput={detail.piiInput}
                         piiOutput={detail.piiOutput}
                       />
+                      <GuardrailChip
+                        outcome={detail.outcome}
+                        guardInput={detail.guardInput}
+                        guardOutput={detail.guardOutput}
+                      />
                     </div>
                     <dl className="grid gap-x-4 gap-y-3 sm:grid-cols-3">
                       <Field label={tDetail("piiFilter")}>
@@ -308,6 +317,8 @@ export default function LogDetailDialog({
                       </Field>
                       <Field label={tDetail("piiPrompt")}>{entities(detail.piiInput)}</Field>
                       <Field label={tDetail("piiResponse")}>{entities(detail.piiOutput)}</Field>
+                      <Field label={tDetail("guardPrompt")}>{hits(detail.guardInput)}</Field>
+                      <Field label={tDetail("guardResponse")}>{hits(detail.guardOutput)}</Field>
                     </dl>
                     {detail.piiMode ? (
                       <p className="text-xs text-muted">{tDetail("piiStored")}</p>

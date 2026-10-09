@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { dispatchChat, streamChat } from "@/lib/gateway/chat";
 import {
   allowModel,
-  applyPii,
+  applyGuardrails,
   gateRequest,
   gateResponse,
   modelOf,
@@ -56,7 +56,7 @@ export async function POST(req: Request) {
     const body = await readBody(req);
     const model = modelOf(body);
     allowModel(principal, model);
-    const { body: redacted, output } = await applyPii(body, principal);
+    const { body: redacted, output } = await applyGuardrails(body, principal);
     const clean = await resolveResponsesFiles(redacted, principal);
     const parsed = parseRequest(responsesRequestSchema, clean);
     if (!parsed.ok) {
@@ -80,7 +80,7 @@ export async function POST(req: Request) {
         model,
         body: chatBody,
         aliases,
-        outputPii: output,
+        outputGuard: output,
       });
       let id = responseId(newId());
       let storedId = "";
@@ -117,7 +117,7 @@ export async function POST(req: Request) {
       model,
       body: chatBody,
       aliases,
-      outputPii: output,
+      outputGuard: output,
     });
     const response = chatToResponse(dispatched.json, responseSkeleton(request, "", createdAt));
     const include = request.include ?? null;

@@ -4,14 +4,15 @@ model Setting {
 }
 
 model Organization {
-  id             String    @id @default(cuid())
-  alias          String
-  maxBudget      Decimal   @default(0) @db.Decimal(20, 10)
-  spend          Decimal   @default(0) @db.Decimal(20, 10)
-  budgetDuration String    @default("")
-  spendResetAt   DateTime?
-  piiPolicy      Json?
-  createdAt      DateTime  @default(now())
+  id              String    @id @default(cuid())
+  alias           String
+  maxBudget       Decimal   @default(0) @db.Decimal(20, 10)
+  spend           Decimal   @default(0) @db.Decimal(20, 10)
+  budgetDuration  String    @default("")
+  spendResetAt    DateTime?
+  piiPolicy       Json?
+  guardrailPolicy Json?
+  createdAt       DateTime  @default(now())
 
   teams    Team[]
   projects Project[]
@@ -41,18 +42,20 @@ model Team {
 }
 
 model Project {
-  id             String        @id @default(cuid())
-  orgId          String?
-  org            Organization? @relation(fields: [orgId], references: [id], onDelete: SetNull)
-  teamId         String?
-  team           Team?         @relation(fields: [teamId], references: [id], onDelete: SetNull)
-  alias          String
-  owner          String        @default("")
-  maxBudget      Decimal       @default(0) @db.Decimal(20, 10)
-  spend          Decimal       @default(0) @db.Decimal(20, 10)
-  budgetDuration String        @default("")
-  spendResetAt   DateTime?
-  createdAt      DateTime      @default(now())
+  id              String        @id @default(cuid())
+  orgId           String?
+  org             Organization? @relation(fields: [orgId], references: [id], onDelete: SetNull)
+  teamId          String?
+  team            Team?         @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  alias           String
+  owner           String        @default("")
+  maxBudget       Decimal       @default(0) @db.Decimal(20, 10)
+  spend           Decimal       @default(0) @db.Decimal(20, 10)
+  budgetDuration  String        @default("")
+  spendResetAt    DateTime?
+  piiPolicy       Json?
+  guardrailPolicy Json?
+  createdAt       DateTime      @default(now())
 
   keys VirtualKey[]
 
@@ -84,35 +87,36 @@ model Member {
 }
 
 model VirtualKey {
-  id             String        @id @default(cuid())
-  hash           String        @unique
-  prefix         String
-  keyAlias       String        @default("")
-  userId         String?
-  user           User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
-  teamId         String?
-  team           Team?         @relation(fields: [teamId], references: [id], onDelete: SetNull)
-  orgId          String?
-  org            Organization? @relation(fields: [orgId], references: [id], onDelete: SetNull)
-  projectId      String?
-  project        Project?      @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  memberId       String?
-  member         Member?       @relation(fields: [memberId], references: [id], onDelete: Cascade)
-  models         Json          @default("[]")
-  maxBudget      Decimal       @default(0) @db.Decimal(20, 10)
-  spend          Decimal       @default(0) @db.Decimal(20, 10)
-  rpmLimit       Int           @default(0)
-  tpmLimit       Int           @default(0)
-  budgetDuration String        @default("")
-  expiresAt      DateTime?
-  allowedIps     Json          @default("[]")
-  blocked        Boolean       @default(false)
-  logContent     Boolean       @default(true)
-  prevHash       String        @default("")
-  prevHashUntil  DateTime?
-  spendResetAt   DateTime?
-  piiPolicy      Json?
-  createdAt      DateTime      @default(now())
+  id              String        @id @default(cuid())
+  hash            String        @unique
+  prefix          String
+  keyAlias        String        @default("")
+  userId          String?
+  user            User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+  teamId          String?
+  team            Team?         @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  orgId           String?
+  org             Organization? @relation(fields: [orgId], references: [id], onDelete: SetNull)
+  projectId       String?
+  project         Project?      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  memberId        String?
+  member          Member?       @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  models          Json          @default("[]")
+  maxBudget       Decimal       @default(0) @db.Decimal(20, 10)
+  spend           Decimal       @default(0) @db.Decimal(20, 10)
+  rpmLimit        Int           @default(0)
+  tpmLimit        Int           @default(0)
+  budgetDuration  String        @default("")
+  expiresAt       DateTime?
+  allowedIps      Json          @default("[]")
+  blocked         Boolean       @default(false)
+  logContent      Boolean       @default(true)
+  prevHash        String        @default("")
+  prevHashUntil   DateTime?
+  spendResetAt    DateTime?
+  piiPolicy       Json?
+  guardrailPolicy Json?
+  createdAt       DateTime      @default(now())
 
   templates VirtualKeyTemplate[]
 
@@ -169,18 +173,18 @@ model ProviderConnection {
 }
 
 model ModelGroup {
-  alias          String  @id
-  enabled        Boolean @default(true)
-  strategy       String  @default("least_inflight")
-  billingMode    String  @default("routed")
-  priceInput     Decimal @default(0) @db.Decimal(20, 10)
-  priceOutput    Decimal @default(0) @db.Decimal(20, 10)
-  priceTimeZone  String  @default("UTC")
-  overflowGroup  String  @default("")
-  numRetries     Int     @default(0)
-  fallbackGroups Json    @default("[]")
-  vendor         String  @default("")
-  displayName    String  @default("")
+  alias          String   @id
+  enabled        Boolean  @default(true)
+  strategy       String   @default("least_inflight")
+  billingMode    String   @default("routed")
+  priceInput     Decimal  @default(0) @db.Decimal(20, 10)
+  priceOutput    Decimal  @default(0) @db.Decimal(20, 10)
+  priceTimeZone  String   @default("UTC")
+  overflowGroup  String   @default("")
+  numRetries     Int      @default(0)
+  fallbackGroups Json     @default("[]")
+  vendor         String   @default("")
+  displayName    String   @default("")
   autoRoutes     Boolean?
 
   deployments  Deployment[]
@@ -305,6 +309,8 @@ model RequestLog {
   piiMode          String             @default("")
   piiInput         String[]           @default([])
   piiOutput        String[]           @default([])
+  guardInput       String[]           @default([])
+  guardOutput      String[]           @default([])
   contentSkip      String             @default("")
   createdAt        DateTime           @default(now())
   content          RequestLogContent?

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { usageFromUnknown } from "@/lib/gateway/billing";
 import { asRecord } from "@/lib/gateway/core";
-import { allowModel, applyPii, gateRequest, gateResponse, modelChain, modelOf, readBody } from "@/lib/gateway/gate";
+import { allowModel, applyGuardrails, gateRequest, gateResponse, modelChain, modelOf, readBody } from "@/lib/gateway/gate";
 import { GateError } from "@/lib/gateway/errors";
 import { meter } from "@/lib/gateway/meter";
 import { parseRequest } from "@/lib/gateway/responses";
@@ -14,7 +14,7 @@ export async function POST(req: Request) {
     const body = await readBody(req);
     const model = modelOf(body);
     allowModel(principal, model);
-    const { body: clean } = await applyPii(body, principal);
+    const { body: clean } = await applyGuardrails(body, principal);
     const aliases = modelChain(principal, model, clean);
     const parsed = parseRequest(systemOneRequestSchema, clean);
     if (!parsed.ok) {

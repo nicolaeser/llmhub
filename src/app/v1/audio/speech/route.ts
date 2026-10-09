@@ -1,4 +1,4 @@
-import { allowModel, applyPii, gateRequest, gateResponse, modelOf, readBody, modelChain } from "@/lib/gateway/gate";
+import { allowModel, applyGuardrails, gateRequest, gateResponse, modelOf, readBody, modelChain } from "@/lib/gateway/gate";
 import { meter } from "@/lib/gateway/meter";
 import { estimateTokens } from "@/lib/gateway/tokens";
 import { bytesBody } from "@/lib/http/api";
@@ -10,7 +10,7 @@ export async function POST(req: Request) {
     const body = await readBody(req);
     const model = modelOf(body);
     allowModel(principal, model);
-    const { body: clean } = await applyPii(body, principal);
+    const { body: clean } = await applyGuardrails(body, principal);
     const aliases = modelChain(principal, model, clean);
     const usage = meter(principal, model, body);
     try {

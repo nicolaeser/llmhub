@@ -295,8 +295,8 @@ export const confirmUserToolInput = z.object({ userId: id, confirm });
 export const testPiiToolInput = z.object({ text: z.string().max(2000) });
 
 export const updateGuardrailsToolInput = z.object({
-  scope: z.enum(["global", "org", "key"]).default("global"),
-  id: id.optional().describe("Organization or key id for an override."),
+  scope: z.enum(["global", "org", "project", "key"]).default("global"),
+  id: id.optional().describe("Organization, project, or key id for an override."),
   inherit: z.boolean().default(false).describe("Remove the override so the target inherits again."),
   enabled: z.boolean().optional(),
   mode: z.enum(["mask", "block"]).optional(),

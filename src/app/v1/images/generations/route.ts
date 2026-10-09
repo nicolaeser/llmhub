@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { usageFromUnknown } from "@/lib/gateway/billing";
 import { asRecord } from "@/lib/gateway/core";
-import { allowModel, applyPii, gateRequest, gateResponse, modelOf, modelChain } from "@/lib/gateway/gate";
+import { allowModel, applyGuardrails, gateRequest, gateResponse, modelOf, modelChain } from "@/lib/gateway/gate";
 import { streamMedia, wantsStream } from "@/lib/gateway/media-stream";
 import { meter } from "@/lib/gateway/meter";
 import { readModelRequest } from "@/lib/gateway/multipart";
@@ -15,7 +15,7 @@ export async function POST(req: Request) {
     const { body, rawBody, contentType } = await readModelRequest(req);
     const model = modelOf(body);
     allowModel(principal, model);
-    const clean = rawBody ? body : (await applyPii(body, principal)).body;
+    const clean = rawBody ? body : (await applyGuardrails(body, principal)).body;
     const aliases = modelChain(principal, model, clean);
     if (wantsStream(clean)) {
       return await streamMedia({

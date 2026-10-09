@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { usageFromUnknown } from "@/lib/gateway/billing";
 import { asRecord } from "@/lib/gateway/core";
-import { allowModel, applyPii, gateRequest, gateResponse, readBody } from "@/lib/gateway/gate";
+import { allowModel, applyGuardrails, gateRequest, gateResponse, readBody } from "@/lib/gateway/gate";
 import { meter } from "@/lib/gateway/meter";
 import { forwardToModel } from "@/lib/gateway/upstream";
 import { storeVideo, videoRecord } from "@/lib/gateway/videos";
@@ -14,7 +14,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     const { id } = await ctx.params;
     const { model, upstreamId } = await videoRecord(principal, id);
     allowModel(principal, model);
-    const { body: clean } = await applyPii(await readBody(req), principal);
+    const { body: clean } = await applyGuardrails(await readBody(req), principal);
     const usage = meter(principal, model, clean);
     try {
       const hit = await forwardToModel([model], principal.routeLimits, `/videos/${upstreamId}/remix`, clean);

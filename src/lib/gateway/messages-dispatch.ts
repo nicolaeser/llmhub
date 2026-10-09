@@ -7,8 +7,9 @@ import {
   openChatStream,
   openUpstreamStream,
   recordFailure,
-  redactChatJson,
   relayChatStream,
+  screenChatJson,
+  withholdChatJson,
   UPSTREAM_TIMEOUT_MS,
   withDeployment,
 } from "@/lib/gateway/chat";
@@ -17,7 +18,7 @@ import { spendTag } from "@/lib/gateway/gate";
 import { GateError } from "@/lib/gateway/errors";
 import { chatIncompatibility, chatToMessage, messagesToChat, MessagesStreamEncoder } from "@/lib/gateway/messages";
 import { MessagesStreamTranscript } from "@/lib/gateway/log-content";
-import { redactPii } from "@/lib/gateway/pii";
+import { outputScreen, type OutputScreen } from "@/lib/gateway/guardrails";
 import { pipeChatStream } from "@/lib/gateway/responses";
 import { requestRoutingOverride } from "@/lib/gateway/service-mode";
 import { relaySse } from "@/lib/gateway/sse";
@@ -25,6 +26,7 @@ import { estimateTokens, requestText } from "@/lib/gateway/tokens";
 import { prepareBody, proxyJson, upstreamError } from "@/lib/gateway/upstream";
 import type { MessagesRequest } from "@/types/anthropic";
 import type { JsonMap, Principal, Usage } from "@/types/gateway";
+import type { OutputGuard } from "@/types/guardrails";
 
 const NATIVE_PATH = "/v1/messages";
 
@@ -34,7 +36,7 @@ type MessagesInput = {
   body: JsonMap;
   request: MessagesRequest;
   aliases: string[];
-  outputPii: string[] | null;
+  outputGuard: OutputGuard | null;
   headers: Record<string, string>;
 };
 
@@ -49,28 +51,26 @@ function chatFallback(request: MessagesRequest): () => JsonMap {
   };
 }
 
-function redactBlock(block: JsonMap, entities: string[], found?: Set<string>): void {
-  if (block.type === "text" && typeof block.text === "string") block.text = redactPii(block.text, entities, found);
+function screenBlock(block: JsonMap, apply: (text: string) => string): void {
+  if (block.type === "text" && typeof block.text === "string") block.text = apply(block.text);
 }
 
-export function redactMessage(message: JsonMap, entities: string[] | null, found?: Set<string>): JsonMap {
-  if (!entities) return message;
+export function screenMessage(message: JsonMap, screen: OutputScreen | null): JsonMap {
+  if (!screen) return message;
   const content = Array.isArray(message.content) ? message.content : [];
   for (const raw of content) {
     const block = asRecord(raw);
-    if (block) redactBlock(block, entities, found);
+    if (block) screenBlock(block, (text) => screen.text(text));
   }
   return message;
 }
 
-export function redactMessageEvent(event: JsonMap, entities: string[] | null, found?: Set<string>): JsonMap {
-  if (!entities) return event;
+export function screenMessageEvent(event: JsonMap, screen: OutputScreen | null): JsonMap {
+  if (!screen) return event;
   const delta = asRecord(event.delta);
-  if (delta?.type === "text_delta" && typeof delta.text === "string") {
-    delta.text = redactPii(delta.text, entities, found);
-  }
+  if (delta?.type === "text_delta" && typeof delta.text === "string") delta.text = screen.delta(delta.text);
   const block = asRecord(event.content_block);
-  if (block) redactBlock(block, entities, found);
+  if (block) screenBlock(block, (text) => screen.delta(text));
   return event;
 }
 
@@ -111,15 +111,16 @@ export async function dispatchMessages(input: MessagesInput): Promise<JsonMap> {
     throw err;
   });
   const { result, dep, group } = routed;
-  const entities = input.outputPii;
-  const found = input.principal.trace?.piiOutput;
+  const screen = outputScreen(input.outputGuard, input.principal.trace);
   let message: JsonMap;
   let usage: Partial<Usage>;
   if (result.native) {
-    message = redactMessage({ ...result.json, model: input.model }, entities, found);
+    message = screenMessage({ ...result.json, model: input.model }, screen);
+    if (screen?.blocked) Object.assign(message, { content: [], stop_reason: "refusal", stop_sequence: null });
     usage = usageFromUnknown(chatUsageFromAnthropic(asRecord(result.json.usage)));
   } else {
-    const chat = redactChatJson({ ...result.json }, entities, found);
+    const chat = screenChatJson({ ...result.json }, screen);
+    if (screen?.blocked) withholdChatJson(chat);
     usage = usageFromUnknown(chat.usage, chat);
     message = chatToMessage(chat, input.model);
   }
@@ -130,7 +131,7 @@ export async function dispatchMessages(input: MessagesInput): Promise<JsonMap> {
     group,
     usage,
     status: 200,
-    outcome: "ok",
+    outcome: screen?.blocked ? "guardrail_blocked" : "ok",
     latencyMs: Date.now() - started,
     tag: spendTag(input.body),
     request: input.body,
@@ -169,7 +170,6 @@ export async function streamMessages(input: MessagesInput & { req: Request }): P
     throw err;
   });
   const { result, dep, group, release } = routed;
-  const entities = input.outputPii;
 
   if (!result.native) {
     const chatBody = fallback();
@@ -182,7 +182,7 @@ export async function streamMessages(input: MessagesInput & { req: Request }): P
         principal: input.principal,
         model: input.model,
         body: chatBody,
-        entities,
+        outputGuard: input.outputGuard,
         started,
       }),
       new MessagesStreamEncoder(input.model, { inputTokens: estimateTokens(requestText(chatBody)) }),
@@ -190,7 +190,7 @@ export async function streamMessages(input: MessagesInput & { req: Request }): P
   }
 
   const usage: JsonMap = {};
-  const found = input.principal.trace?.piiOutput;
+  const screen = outputScreen(input.outputGuard, input.principal.trace);
   const transcript = new MessagesStreamTranscript();
   let streamed = "";
   return relaySse(result.res, {
@@ -209,7 +209,12 @@ export async function streamMessages(input: MessagesInput & { req: Request }): P
         if (typeof delta?.thinking === "string") streamed += delta.thinking;
         if (typeof delta?.partial_json === "string") streamed += delta.partial_json;
       }
-      const mapped = redactMessageEvent(json, entities, found);
+      const mapped = screenMessageEvent(json, screen);
+      if (screen?.blocked) {
+        if (event === "content_block_start" || event === "content_block_delta") return null;
+        const delta = asRecord(mapped.delta);
+        if (event === "message_delta" && delta) Object.assign(delta, { stop_reason: "refusal", stop_sequence: null });
+      }
       transcript.push(mapped, event);
       return mapped;
     },
@@ -228,7 +233,7 @@ export async function streamMessages(input: MessagesInput & { req: Request }): P
             ? reported
             : { prompt_tokens: prompt, completion_tokens: completion, total_tokens: prompt + completion },
         status: 200,
-        outcome: "ok",
+        outcome: screen?.blocked ? "guardrail_blocked" : "ok",
         latencyMs: Date.now() - started,
         tag: spendTag(input.body),
         stream: true,
