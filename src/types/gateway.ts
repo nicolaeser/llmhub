@@ -2,6 +2,7 @@ import type { Prisma } from "@/generated/prisma/client";
 import type { OPENAPI_METHODS } from "@/lib/gateway/openapi";
 import type { WEBHOOK_EVENTS, WEBHOOK_FORMATS } from "@/lib/gateway/webhook-events";
 import type { PiiPolicy } from "@/types/guardrails";
+import type { AccessWindow, KeyEndpoint } from "@/types/keys";
 import type { RouteLimits } from "@/types/model-templates";
 
 export type SpendHolder = {
@@ -402,6 +403,9 @@ export type VirtualKeyView = {
   budget_duration: string;
   expires: string;
   allowed_ips: string[];
+  allowed_endpoints: KeyEndpoint[];
+  access_windows: AccessWindow[];
+  access_time_zone: string;
   blocked: boolean;
   pii: PiiPolicy | null;
   log_content: boolean;

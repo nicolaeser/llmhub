@@ -116,7 +116,12 @@ export function exampleRequestBody(
     "/v1/moderations": { model: alias, input: "Hello" },
     "/v1/ocr": { model: alias, image: { url: "https://example.com/image.png" } },
     "/api/keys": { alias: "ci-pipeline", project_id: "project_id", models: [alias], rpm_limit: 60, expires_in_days: 90 },
-    "/api/keys/{id}": { blocked: false, rpm_limit: 120 },
+    "/api/keys/{id}": {
+      rpm_limit: 120,
+      allowed_endpoints: ["embeddings"],
+      access_windows: [{ days: ["mon", "tue", "wed", "thu", "fri"], start: "07:00", end: "19:00" }],
+      access_time_zone: "Europe/Berlin",
+    },
     "/api/models": {
       alias: "my-new-alias",
       strategy: "least_inflight",
