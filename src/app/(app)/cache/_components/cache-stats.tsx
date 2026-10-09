@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useId, useState, useTransition } from "react";
 import { Label, ListBox, Select, toast } from "@heroui/react";
 import { useFormatter, useTranslations } from "next-intl";
 import StatCard from "@/components/console/stat-card";
@@ -15,6 +15,7 @@ export default function CacheStats({ initial, semanticOn }: { initial: CacheStat
   const format = useFormatter();
   const [stats, setStats] = useState(initial);
   const [pending, start] = useTransition();
+  const headingId = useId();
   const showSemantic = semanticOn || stats.semanticHits > 0 || stats.lookupCost > 0;
   const tiles = [
     { key: "hitRate", label: t("stats.hitRate"), value: format.number(stats.hitRate, "percent") },
@@ -38,7 +39,10 @@ export default function CacheStats({ initial, semanticOn }: { initial: CacheStat
   ];
 
   return (
-    <section aria-label={t("stats.title")} className="space-y-3">
+    <section aria-labelledby={headingId} className="space-y-3">
+      <h2 id={headingId} className="text-sm font-medium">
+        {t("stats.title")}
+      </h2>
       <Select
         selectedKey={String(stats.days)}
         onSelectionChange={(key) => {

@@ -51,7 +51,7 @@
   "caller": {
     "noKey": "Console-Sitzung"
   },
-  "statusOutcome": "{status} · {outcome, select, ok {OK} error {Fehler} cache_hit {Cache-Treffer} pii_blocked {Wegen PII blockiert} other {{outcome}}}",
+  "statusOutcome": "{status} · {outcome, select, ok {OK} error {Fehler} cache_hit {Treffer im Antwort-Cache} pii_blocked {Wegen PII blockiert} other {{outcome}}}",
   "openDetails": "Details zu {model} anzeigen",
   "pii": {
     "blocked": "Blockiert",

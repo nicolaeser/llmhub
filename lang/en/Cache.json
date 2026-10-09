@@ -1,19 +1,19 @@
 {
-  "title": "Caching",
-  "subtitle": "Identical non-streaming chat requests from the same key are answered from the cache for the configured time.",
+  "title": "Response cache",
+  "subtitle": "The gateway answers identical non-streaming chat requests from the same key with a stored response for the configured time. Provider prompt caching is separate and not configured here.",
   "ttl": "TTL seconds",
   "ttlHint": "0 turns the cache off. Clients skip the cache with the x-hub-bypass-cache header or \"cache\": false.",
   "save": "Save",
-  "saved": "Cache settings saved",
+  "saved": "Response cache settings saved",
   "store": {
-    "title": "Response cache",
-    "description": "Responses are stored per key, model, and request body. Hits are free for the key and logged as cache hits.",
+    "title": "Storage and lifetime",
+    "description": "Responses are stored per key, model, and request body. Hits are free for the key and logged as response cache hits.",
     "backend": "{backend, select, redis {Redis, shared} memory {In memory} other {Redis unreachable}}",
-    "backendHint": "{backend, select, redis {All app instances share the cache, and it survives restarts. Responses stay in Redis until they expire.} memory {Each app process keeps its own cache, which is emptied on restart. Set REDIS_URL to share it.} other {REDIS_URL is set, but Redis does not answer. Each app process uses its own memory cache until Redis is back.}}"
+    "backendHint": "{backend, select, redis {All app instances share the response cache, and it survives restarts. Responses stay in Redis until they expire.} memory {Each app process keeps its own response cache, which is emptied on restart. Set REDIS_URL to share it.} other {REDIS_URL is set, but Redis does not answer. Each app process uses its own memory cache until Redis is back.}}"
   },
   "semantic": {
     "title": "Semantic matching",
-    "description": "Answers a request from the cache when only the last user message differs and means nearly the same. System prompt, earlier messages, model, and parameters must still match exactly.",
+    "description": "Answers a request from the response cache when only the last user message differs and means nearly the same. System prompt, earlier messages, model, and parameters must still match exactly.",
     "enabled": "Match similar prompts",
     "enabledHint": "{ready, select, true {Every cache miss first embeds the last user message. That adds latency and embedding cost.} other {Choose an embedding model first.}}",
     "model": "Embedding model",
@@ -23,16 +23,16 @@
     "thresholdHint": "Minimum cosine similarity. Lower values answer more requests but can return an answer to a different question."
   },
   "stats": {
-    "title": "Cache statistics",
+    "title": "Response cache statistics",
     "range": "Period",
     "days": "{n, plural, one {Last # day} other {Last # days}}",
     "hitRate": "Hit rate",
-    "hits": "Answered from cache",
+    "hits": "Answered from response cache",
     "hitsValue": "{hits, number} of {lookups, number}",
     "netSaved": "Net savings",
     "savedTokens": "Tokens saved",
     "semanticHits": "Semantic hits",
     "lookupCost": "Embedding cost",
-    "hint": "Counts cacheable requests across all keys. Net savings are the cost of the original responses served again from the cache, minus the embedding cost of semantic lookups."
+    "hint": "Counts requests that were eligible for the response cache, across all keys. Net savings are the cost of the original responses served again from the response cache, minus the embedding cost of semantic lookups. Provider prompt caching is not included."
   }
 }

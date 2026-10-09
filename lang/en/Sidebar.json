@@ -28,7 +28,7 @@
     "providerHealth": "Provider health",
     "users": "Console users",
     "apiRef": "API reference",
-    "cache": "Cache",
+    "cache": "Response cache",
     "logging": "Logging & alerts",
     "roles": "Roles",
     "adminSettings": "Settings"
