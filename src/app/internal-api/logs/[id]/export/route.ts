@@ -83,6 +83,10 @@ async function requestLogDocument(detail: RequestLogDetail): Promise<RequestLogD
         label: t("columns.tokens"),
         value: t("tokenSplit", { prompt: detail.promptTokens, completion: detail.completionTokens }),
       },
+      {
+        label: tDetail("cache"),
+        value: tDetail("cacheValue", { read: detail.cacheReadTokens, written: detail.cacheWriteTokens }),
+      },
       { label: t("columns.cost"), value: format.number(detail.cost, "money") },
     ],
     privacy: {

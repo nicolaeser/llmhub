@@ -227,8 +227,25 @@ test("serializers expose snake_case resources with nulls for unset references", 
     rate429: 0,
     latency: 12,
     p95Latency: 30,
+    cacheRead: 3,
+    cacheWrite: 1,
+    cacheSavings: 0.25,
+    cacheHitRate: 0.5,
     daily: [],
-    byModel: [{ name: "gpt", spend: 2, prompt: 6, completion: 4, requests: 3, errors: 1, rate429: 0 }],
+    byModel: [
+      {
+        name: "gpt",
+        spend: 2,
+        prompt: 6,
+        completion: 4,
+        requests: 3,
+        errors: 1,
+        rate429: 0,
+        cacheRead: 3,
+        cacheWrite: 1,
+        cacheSavings: 0.25,
+      },
+    ],
     byTeam: [],
     byOrg: [],
     byProject: [],
@@ -239,6 +256,10 @@ test("serializers expose snake_case resources with nulls for unset references", 
   });
   assert.deepEqual(usage.filters.team_id, "t1");
   assert.equal(usage.totals.requests, 3);
+  assert.equal(usage.totals.cache_hit_rate, 0.5);
+  assert.equal(usage.totals.cache_savings, 0.25);
+  assert.equal(usage.by_model[0]?.cache_read_tokens, 3);
+  assert.equal(usage.by_model[0]?.cache_write_tokens, 1);
   assert.deepEqual(usage.chargeback[0], {
     org_id: null,
     team_id: "t1",

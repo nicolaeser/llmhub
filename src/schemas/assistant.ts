@@ -53,7 +53,7 @@ export const explainToolInput = z.object({ topic: z.enum(assistantTopics) });
 export const openPageToolInput = z.object({ page: z.enum(assistantPages) });
 
 export const apiEndpointsToolInput = z.object({
-  scope: z.enum(["all", "v1", "api"]).default("all"),
+  scope: z.enum(["all", "v1", "subscription", "api"]).default("all"),
 });
 
 export const codeExampleToolInput = z.object({

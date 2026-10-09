@@ -1,6 +1,6 @@
 import "server-only";
 import { digest } from "@/lib/crypto";
-import type { Entry } from "@/types/gateway";
+import type { Entry, RoutePool } from "@/types/gateway";
 
 const MAX_ENTRIES = 1000;
 const store = new Map<string, Entry>();
@@ -39,6 +39,6 @@ export function cacheBypassed(headers: Headers, body: Record<string, unknown>): 
   return false;
 }
 
-export function cacheKey(owner: string, model: string, raw: string): string {
-  return digest(`${owner}\n${model}\n${raw}`);
+export function cacheKey(pool: RoutePool, owner: string, model: string, raw: string): string {
+  return digest(`${pool}\n${owner}\n${model}\n${raw}`);
 }

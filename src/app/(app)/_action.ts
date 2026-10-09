@@ -8,7 +8,9 @@ import { requireAuth, requirePermission } from "@/lib/auth/guards";
 import { hasPerm, PERMISSIONS } from "@/lib/auth/permissions";
 import { companyOf, inCompany, keyVisibleTo, spendScope } from "@/lib/auth/scope";
 import {
+  cacheHitRate,
   chargebackRows,
+  groupCache,
   groupRequestHealth,
   groupSpend,
   percentileIndex,
@@ -379,7 +381,18 @@ export async function loadUsageAction(
         errors: 0,
       });
     }
-    const totals = { spend: 0, tokens: 0, count: 0, errors: 0, rate429: 0, latencySum: 0 };
+    const totals = {
+      spend: 0,
+      tokens: 0,
+      prompt: 0,
+      count: 0,
+      errors: 0,
+      rate429: 0,
+      latencySum: 0,
+      cacheRead: 0,
+      cacheWrite: 0,
+      cacheSavings: 0,
+    };
     for (const row of rows) {
       const bucket = daily.get(row.day);
       if (bucket) {
@@ -389,10 +402,14 @@ export async function loadUsageAction(
       }
       totals.spend += row.cost;
       totals.tokens += row.promptTokens + row.completionTokens;
+      totals.prompt += row.promptTokens;
       totals.count += row.requests;
       totals.errors += row.errors;
       totals.rate429 += row.rateLimited;
       totals.latencySum += row.latencyMs;
+      totals.cacheRead += row.cacheReadTokens;
+      totals.cacheWrite += row.cacheWriteTokens;
+      totals.cacheSavings += row.cacheSavings;
     }
     const distinct = (pick: (row: UsageSlice) => string) =>
       [...new Set(rows.map(pick).filter(Boolean))].sort();
@@ -420,6 +437,10 @@ export async function loadUsageAction(
       rate429: totals.rate429,
       latency: totals.count ? totals.latencySum / totals.count : 0,
       p95Latency: p95Row?.latencyMs ?? 0,
+      cacheRead: totals.cacheRead,
+      cacheWrite: totals.cacheWrite,
+      cacheSavings: totals.cacheSavings,
+      cacheHitRate: cacheHitRate(totals.cacheRead, totals.prompt),
       daily: [...daily.entries()].map(([day, v]) => ({ day, ...v })),
       byModel: groupSpend(rows, "model").slice(0, 12),
       byTeam: groupSpend(rows, "teamId").slice(0, 12),
@@ -430,6 +451,7 @@ export async function loadUsageAction(
       byUser: groupSpend(rows, "userId").slice(0, 12),
       healthByModel: groupRequestHealth(rows, "model").slice(0, 12),
       healthByTeam: groupRequestHealth(rows, "teamId").slice(0, 12),
+      cacheByProject: groupCache(rows, "projectId").slice(0, 12),
       chargeback: chargebackRows(rows),
     };
   });

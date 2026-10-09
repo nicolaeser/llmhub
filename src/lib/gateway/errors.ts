@@ -38,6 +38,7 @@ export const GATEWAY_ERRORS = {
 export class GateError extends Error {
   readonly code: string;
   readonly param: string | null;
+  readonly retryAt: number | null;
 
   constructor(
     readonly status: number,
@@ -49,6 +50,7 @@ export class GateError extends Error {
     this.name = "GateError";
     this.code = options.upstreamCode || code;
     this.param = options.param ?? null;
+    this.retryAt = options.retryAt ?? null;
   }
 
   get type(): GatewayErrorType {

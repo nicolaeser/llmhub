@@ -27,7 +27,10 @@ export async function usageSlices(where: Prisma.UsageDailyWhereInput): Promise<U
     latencyMs: Number(row.latencyMs),
     promptTokens: Number(row.promptTokens),
     completionTokens: Number(row.completionTokens),
+    cacheReadTokens: Number(row.cacheReadTokens),
+    cacheWriteTokens: Number(row.cacheWriteTokens),
     cost: money(row.cost),
+    cacheSavings: money(row.cacheSavings),
   }));
 }
 

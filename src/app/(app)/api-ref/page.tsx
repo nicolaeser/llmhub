@@ -22,6 +22,7 @@ import { isActionFail } from "@/lib/http/action-result";
 import { useOrigin } from "@/lib/hooks/use-origin";
 import { GATEWAY_ERRORS } from "@/lib/gateway/errors";
 import { ANTHROPIC_VERSION } from "@/lib/gateway/openapi";
+import { SUBSCRIPTION_PREFIX } from "@/lib/gateway/route-pool";
 import { PROBLEMS } from "@/lib/http/problems";
 import CopyButton from "./_components/copy-button";
 import TryEndpoint from "./_components/try-endpoint";
@@ -123,6 +124,11 @@ export default function ApiRefPage() {
   const bases = [
     { id: "openai", value: `${origin}/v1`, hint: t("auth") },
     { id: "anthropic", value: origin, hint: t("anthropicAuth", { version: ANTHROPIC_VERSION }) },
+    {
+      id: "subscription",
+      value: `${origin}${SUBSCRIPTION_PREFIX}/v1`,
+      hint: t("subscriptionAuth", { anthropic: `${origin}${SUBSCRIPTION_PREFIX}` }),
+    },
     { id: "management", value: `${origin}/api`, hint: null },
   ];
 
@@ -130,7 +136,7 @@ export default function ApiRefPage() {
     <div className="space-y-5">
       <PageHeader title={t("title")} subtitle={t("subtitle")} />
 
-      <div className="grid gap-5 xl:grid-cols-3">
+      <div className="grid gap-5 lg:grid-cols-2">
         {bases.map((base) => (
           <Card key={base.id} className="gap-3">
             <Card.Header>
