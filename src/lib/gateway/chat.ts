@@ -18,9 +18,10 @@ import {
   upstreamHeaders,
 } from "@/lib/gateway/upstream";
 import { asRecord, isRouterError, newId, stringifyContent } from "@/lib/gateway/core";
+import { costFilter, costRejected } from "@/lib/gateway/cost-cap";
 import { ChatStreamTranscript } from "@/lib/gateway/log-content";
 import { estimateTokens, requestText } from "@/lib/gateway/tokens";
-import type { Group, ResolvedDeployment, JsonMap, Usage, Principal } from "@/types/gateway";
+import type { CostFilter, Group, ResolvedDeployment, JsonMap, Usage, Principal } from "@/types/gateway";
 import type { RouteLimits } from "@/types/model-templates";
 
 export const UPSTREAM_TIMEOUT_MS = 300_000;
@@ -64,7 +65,7 @@ export async function withDeployment<T>(
   aliases: string[],
   limits: RouteLimits,
   fn: (dep: ResolvedDeployment, group: Group) => Promise<T>,
-  opts?: { deferRelease?: boolean; strategy?: string },
+  opts?: { deferRelease?: boolean; strategy?: string; cost?: CostFilter },
 ): Promise<{
   result: T;
   dep: ResolvedDeployment;
@@ -87,7 +88,7 @@ export async function withDeployment<T>(
     let stopAlias = false;
     for (let i = 0; i < attempts; i++) {
       try {
-        const acquired = await acquireGroup(group, limits[root], undefined, opts?.strategy);
+        const acquired = await acquireGroup(group, limits[root], undefined, opts?.strategy, opts?.cost);
         try {
           const started = Date.now();
           const result = await fn(acquired.dep, group);
@@ -115,7 +116,7 @@ export async function withDeployment<T>(
         }
       } catch (err) {
         last = err;
-        if (!fallbackable(err)) throw err;
+        if (!fallbackable(err) || costRejected(err)) throw err;
         break;
       }
     }
@@ -245,7 +246,7 @@ export async function dispatchChat(input: {
     input.aliases,
     input.principal.routeLimits,
     (dep, group) => chatOnce(dep, group, input.body, input.model),
-    { strategy: requestRoutingOverride(input.body) },
+    { strategy: requestRoutingOverride(input.body), cost: costFilter(input.principal, input.body) },
   ).catch(async (err) => {
     await recordFailure(input, err, started);
     throw err;
@@ -290,7 +291,11 @@ export async function streamChat(input: {
     input.aliases,
     input.principal.routeLimits,
     (dep, group) => openChatStream(dep, group, input),
-    { deferRelease: true, strategy: requestRoutingOverride(input.body) },
+    {
+      deferRelease: true,
+      strategy: requestRoutingOverride(input.body),
+      cost: costFilter(input.principal, input.body),
+    },
   ).catch(async (err) => {
     await recordFailure(input, err, started);
     throw err;

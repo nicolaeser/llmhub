@@ -20,6 +20,7 @@ import {
   resultLine,
 } from "@/lib/gateway/batch-format";
 import { assertBudget, usageFromUnknown } from "@/lib/gateway/billing";
+import { capRequestCost } from "@/lib/gateway/cost-cap";
 import { dispatchChat } from "@/lib/gateway/chat";
 import { asRecord, asStringMap, newId, ownerId } from "@/lib/gateway/core";
 import { resolveChatFiles, resolveResponsesFiles } from "@/lib/gateway/file-refs";
@@ -218,7 +219,7 @@ async function forwardLine(principal: Principal, model: string, path: string, bo
   const aliases = modelChain(principal, model, body);
   const usage = meter(principal, model, body);
   try {
-    const hit = await forwardToModel(aliases, principal.routeLimits, path, body);
+    const hit = await forwardToModel(aliases, principal, path, body);
     await usage.ok(hit, usageFromUnknown(asRecord(hit.json)?.usage, hit.json));
     return asRecord(hit.json) ?? {};
   } catch (err) {
@@ -263,7 +264,7 @@ async function respondLine(principal: Principal, model: string, body: JsonMap, o
 export async function runBatchLine(owner: Principal, endpoint: BatchEndpoint, raw: JsonMap): Promise<BatchLineResult> {
   const principal = withTrace(owner, `batch:${endpoint}`);
   try {
-    await assertBudget(principal);
+    capRequestCost(principal, await assertBudget(principal), null);
     const model = modelOf(raw);
     allowModel(principal, model);
     const { body, output } = await applyPii(raw, principal);

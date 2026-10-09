@@ -2,6 +2,7 @@ import "server-only";
 import { usageFromUnknown } from "@/lib/gateway/billing";
 import { openUpstreamStream, withDeployment } from "@/lib/gateway/chat";
 import { asRecord } from "@/lib/gateway/core";
+import { costFilter } from "@/lib/gateway/cost-cap";
 import { meter } from "@/lib/gateway/meter";
 import { relaySse } from "@/lib/gateway/sse";
 import { prepareBody, withDeploymentModel } from "@/lib/gateway/upstream";
@@ -35,7 +36,7 @@ export async function streamMedia(input: {
         form: form instanceof FormData ? form : undefined,
       });
     },
-    { deferRelease: true },
+    { deferRelease: true, cost: costFilter(input.principal, input.body) },
   ).catch(async (err) => {
     await usage.fail(err);
     throw err;

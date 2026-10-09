@@ -10,6 +10,7 @@ const keyFields = {
   templateIds: z.array(z.string().trim().min(1).max(64)).max(50).default([]),
   rpm: z.number().int().min(0).max(1_000_000).default(0),
   tpm: z.number().int().min(0).max(1_000_000_000).default(0),
+  maxRequestCost: z.number().min(0).max(1_000_000).default(0),
   allowedIps: z
     .array(z.string().trim().refine((ip) => isIP(ip) !== 0, "invalid IP address"))
     .max(100)

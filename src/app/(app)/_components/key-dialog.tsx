@@ -8,6 +8,7 @@ import {
   Input,
   Label,
   Modal,
+  NumberField,
   Separator,
   Spinner,
   Switch,
@@ -19,6 +20,7 @@ import {
   type useOverlayState,
 } from "@heroui/react";
 import { useTranslations } from "next-intl";
+import { formats } from "@/i18n/formats";
 import { Link } from "@/i18n/routing";
 import MultiPicker from "@/components/console/multi-picker";
 import SearchSelect from "@/components/console/search-select";
@@ -81,6 +83,7 @@ export function KeyDialog({
   const [templateIds, setTemplateIds] = useState<string[]>(editing?.templates ?? []);
   const [rpm, setRpm] = useState(String(editing?.rpm_limit ?? 0));
   const [tpm, setTpm] = useState(String(editing?.tpm_limit ?? 0));
+  const [maxRequestCost, setMaxRequestCost] = useState(editing?.max_request_cost ?? 0);
   const [days, setDays] = useState("");
   const [ips, setIps] = useState((editing?.allowed_ips ?? []).join("\n"));
   const [blocked, setBlocked] = useState(editing?.blocked ?? false);
@@ -108,6 +111,7 @@ export function KeyDialog({
         templateIds,
         rpm: Number(rpm) || 0,
         tpm: Number(tpm) || 0,
+        maxRequestCost: Number.isFinite(maxRequestCost) ? maxRequestCost : 0,
         allowedIps: splitList(ips),
         logContent,
       };
@@ -269,6 +273,23 @@ export function KeyDialog({
                       <Input inputMode="numeric" />
                     </TextField>
                   </div>
+                  <NumberField
+                    fullWidth
+                    value={maxRequestCost}
+                    onChange={setMaxRequestCost}
+                    minValue={0}
+                    step={0.01}
+                    formatOptions={formats.number.price}
+                    isDisabled={pending}
+                  >
+                    <Label>{t("fields.maxRequestCost")}</Label>
+                    <NumberField.Group>
+                      <NumberField.DecrementButton />
+                      <NumberField.Input />
+                      <NumberField.IncrementButton />
+                    </NumberField.Group>
+                    <Description>{t("fields.maxRequestCostHint")}</Description>
+                  </NumberField>
                   {editing ? null : (
                     <TextField fullWidth value={days} onChange={setDays} isDisabled={pending}>
                       <Label>{t("fields.days")}</Label>

@@ -53,6 +53,7 @@ function keyPrincipal(models: string[], templates: string[]): Principal {
     spend: 0,
     rpm_limit: 0,
     tpm_limit: 0,
+    max_request_cost: 0,
     budget_duration: "",
     expires: "",
     allowed_ips: [],

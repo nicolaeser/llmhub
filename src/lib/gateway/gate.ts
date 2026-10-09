@@ -5,6 +5,7 @@ import { defaultEntityIds, redactJSON } from "@/lib/gateway/pii";
 import { alertUpstreamFailure } from "@/lib/gateway/alerts";
 import { resolvePii } from "@/lib/gateway/settings";
 import { assertBudget, assertRate, recordUsage } from "@/lib/gateway/billing";
+import { capRequestCost, maxCostHeader } from "@/lib/gateway/cost-cap";
 import { asRecord, isRouterError, newRequestId } from "@/lib/gateway/core";
 import { anthropicErrorBody, GateError, openAIErrorBody } from "@/lib/gateway/errors";
 import { logger } from "@/lib/logging/logger";
@@ -77,13 +78,14 @@ export async function gateRequest(req: Request): Promise<Principal> {
       throw new GateError(403, "ip_not_allowed", "ip not allowed for this key");
     }
   }
-  await admit(principal);
+  await admit(principal, maxCostHeader(req.headers));
   return principal;
 }
 
-export async function admit(principal: Principal): Promise<void> {
-  await assertBudget(principal);
+export async function admit(principal: Principal, maxCost: number | null = null): Promise<void> {
+  const budget = await assertBudget(principal);
   await assertRate(principal);
+  capRequestCost(principal, budget, maxCost);
 }
 
 export function modelPermitted(principal: Principal, model: string): boolean {

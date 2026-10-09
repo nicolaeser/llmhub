@@ -14,7 +14,8 @@ import { asRecord, asStringArray, ERR_NO_HEALTHY, ERR_UNKNOWN_GROUP } from "@/li
 import { modelAlias } from "@/lib/gateway/model-alias";
 import { routePermitted } from "@/lib/gateway/model-policy";
 import { priceWindowQuery, priceWindowRates } from "@/lib/gateway/price-schedule";
-import type { DbDeployment, ResolvedDeployment, Deployment, ModelGroup } from "@/types/gateway";
+import { costRejection } from "@/lib/gateway/cost-cap";
+import type { CostFilter, DbDeployment, Group, ResolvedDeployment, Deployment } from "@/types/gateway";
 import type { DeploymentRule, RoutePolicy } from "@/types/model-templates";
 import { money } from "@/lib/utils/money";
 
@@ -71,7 +72,7 @@ export function permittedDeployments(
   return rules ? items.filter((dep) => routePermitted(rules, routeOf(dep))) : items;
 }
 
-export async function loadGroup(requested: string): Promise<ModelGroup & { mapped: ResolvedDeployment[] }> {
+export async function loadGroup(requested: string): Promise<Group> {
   const alias = modelAlias(requested);
   if (alias === "auto") {
     const rows = await prisma.deployment.findMany({
@@ -139,11 +140,20 @@ function pick(items: ResolvedDeployment[], strategy: string): ResolvedDeployment
   }
 }
 
+function affordable(group: Group, ready: ResolvedDeployment[], cost: CostFilter | undefined): ResolvedDeployment[] {
+  if (!cost) return ready;
+  const estimates = ready.map((dep) => cost.estimate(dep, group));
+  const fitting = ready.filter((_, index) => estimates[index]! <= cost.cap.limit);
+  if (!fitting.length) throw costRejection(cost.cap, Math.min(...estimates));
+  return fitting;
+}
+
 export async function acquireGroup(
-  group: ModelGroup & { mapped: ResolvedDeployment[] },
+  group: Group,
   rules: DeploymentRule[] | undefined,
   exclude: Set<string> = new Set(),
   strategy = "",
+  cost?: CostFilter,
 ): Promise<{ dep: ResolvedDeployment; release: () => void; overflow: boolean }> {
   const ready = healthy(
     permittedDeployments(group.mapped, rules).filter((d) => !exclude.has(d.id)),
@@ -152,12 +162,12 @@ export async function acquireGroup(
   if (!ready.length) {
     if (group.overflow_group && group.overflow_group !== group.alias) {
       const overflow = await loadGroup(group.overflow_group);
-      const acquired = await acquireGroup(overflow, rules, exclude, strategy);
+      const acquired = await acquireGroup(overflow, rules, exclude, strategy, cost);
       return { ...acquired, overflow: true };
     }
     throw ERR_NO_HEALTHY;
   }
-  const dep = pick(ready, strategy || group.strategy);
+  const dep = pick(affordable(group, ready, cost), strategy || group.strategy);
   inflight.set(dep.id, (inflight.get(dep.id) ?? 0) + 1);
   return {
     dep,

@@ -130,7 +130,7 @@ export const keyTools = {
   }),
   create_key: defineTool({
     description:
-      "Create a virtual key for a project (projectId) or a person (memberId) of a company, or an internal key of the operator when neither is given; optionally limited to models, templates, IPs, RPM, TPM, and an expiry. Binding to a project or person needs tenancy:manage. The console shows the secret to the operator once; you never see it.",
+      "Create a virtual key for a project (projectId) or a person (memberId) of a company, or an internal key of the operator when neither is given; optionally limited to models, templates, IPs, RPM, TPM, a maximum cost per request, and an expiry. Binding to a project or person needs tenancy:manage. The console shows the secret to the operator once; you never see it.",
     input: createKeyToolInput,
     run: async (args) =>
       viaAction(createKeyAction(args), ({ key }) => ({
@@ -141,7 +141,7 @@ export const keyTools = {
   }),
   update_key: defineTool({
     description:
-      "Change a virtual key: alias, who it belongs to (projectId or memberId; sending either replaces the binding, both empty makes it internal), models, templates, RPM, TPM, allowed IPs, content logging, or blocked state. Omitted fields stay unchanged. Budgets use set_budget.",
+      "Change a virtual key: alias, who it belongs to (projectId or memberId; sending either replaces the binding, both empty makes it internal), models, templates, RPM, TPM, maximum cost per request, allowed IPs, content logging, or blocked state. Omitted fields stay unchanged. Budgets use set_budget.",
     input: updateKeyToolInput,
     run: async (args, ctx) =>
       withKey(args.key, ctx, async (row) => {
@@ -157,6 +157,7 @@ export const keyTools = {
             templateIds: args.templateIds ?? view.templates,
             rpm: args.rpm ?? view.rpm_limit,
             tpm: args.tpm ?? view.tpm_limit,
+            maxRequestCost: args.maxRequestCost ?? view.max_request_cost,
             allowedIps: args.allowedIps ?? view.allowed_ips,
             logContent: args.logContent ?? view.log_content,
             blocked: args.blocked ?? view.blocked,
@@ -171,6 +172,7 @@ export const keyTools = {
               templates: key.templates,
               rpm_limit: key.rpm_limit,
               tpm_limit: key.tpm_limit,
+              max_request_cost: key.max_request_cost,
             },
           }),
         );

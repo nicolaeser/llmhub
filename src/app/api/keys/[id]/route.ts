@@ -34,6 +34,7 @@ export const PATCH = managementRoute<{ id: string }>(PERMISSIONS.KEYS_MANAGE, as
       templateIds: body.template_ids ?? current.templates,
       rpm: body.rpm_limit ?? current.rpm_limit,
       tpm: body.tpm_limit ?? current.tpm_limit,
+      maxRequestCost: body.max_request_cost ?? current.max_request_cost,
       allowedIps: body.allowed_ips ?? current.allowed_ips,
       logContent: body.log_content ?? current.log_content,
       blocked: body.blocked ?? current.blocked,
