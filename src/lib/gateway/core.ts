@@ -122,7 +122,14 @@ export function modelEntry(
   };
 }
 
-export const AUTO_MODEL: PublicModel = { alias: "auto", vendor: "", displayName: "", tags: [], pricing: null };
+export const AUTO_MODEL: PublicModel = {
+  alias: "auto",
+  vendor: "",
+  displayName: "",
+  tags: [],
+  pricing: null,
+  pools: ["api", "subscription"],
+};
 
 export const VERSION = packageJson.version;
 

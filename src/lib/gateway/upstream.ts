@@ -2,31 +2,26 @@ import "server-only";
 import { env } from "@/lib/env";
 import { GateError } from "@/lib/gateway/errors";
 import { anthropicToChat, chatToAnthropic } from "@/lib/gateway/anthropic";
-import {
-  acquireGroup,
-  defaultBase,
-  loadGroup,
-  markFailure,
-  markSuccess,
-  openaiRoot,
-  secretFor,
-} from "@/lib/gateway/runtime";
+import { inPool, outsidePool } from "@/lib/gateway/route-pool";
+import { chatToCodex, codexCompletion } from "@/lib/gateway/codex";
+import { deploymentAuth } from "@/lib/gateway/credentials";
+import { acquireGroup, defaultBase, loadGroup, markFailure, markSuccess, openaiRoot } from "@/lib/gateway/runtime";
 import { applyProviderServiceMode, requestRoutingOverride, serviceModeHeaders } from "@/lib/gateway/service-mode";
 import { asRecord } from "@/lib/gateway/core";
 import { costFilter, costRejected } from "@/lib/gateway/cost-cap";
-import type { ResolvedDeployment, JsonMap, Principal, ProxyFirstResult } from "@/types/gateway";
+import type { ResolvedDeployment, JsonMap, Principal, ProxyFirstResult, UpstreamAuth } from "@/types/gateway";
 
 export function upstreamHeaders(
   dep: ResolvedDeployment,
-  apiKey: string,
+  auth: UpstreamAuth,
   extra?: HeadersInit,
 ): Record<string, string> {
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (dep.kind === "anthropic") {
-    headers["x-api-key"] = apiKey;
+    headers["x-api-key"] = auth.key;
     headers["anthropic-version"] = "2023-06-01";
-  } else if (apiKey) {
-    headers.Authorization = `Bearer ${apiKey}`;
+  } else if (auth.key) {
+    headers.Authorization = `Bearer ${auth.key}`;
   }
   if (dep.kind === "openrouter" || dep.kind === "openrouter_eu") {
     headers["HTTP-Referer"] = env.NEXT_PUBLIC_APP_URL;
@@ -39,6 +34,12 @@ export function upstreamHeaders(
         headers[key] = value;
       }
     });
+  }
+  for (const [key, value] of Object.entries(auth.headers)) {
+    for (const name of Object.keys(headers)) {
+      if (name.toLowerCase() === key.toLowerCase()) delete headers[name];
+    }
+    headers[key] = value;
   }
   return headers;
 }
@@ -86,8 +87,9 @@ function withoutThinkingBlocks(messages: unknown): unknown {
 }
 
 export function joinPath(dep: ResolvedDeployment, rel: string): string {
-  const root = openaiRoot(defaultBase(dep));
   const path = rel.startsWith("/") ? rel : `/${rel}`;
+  if (dep.kind === "codex") return `${defaultBase(dep)}${nativeChatPath(path) ? "/responses" : path}`;
+  const root = openaiRoot(defaultBase(dep));
   if (dep.kind === "anthropic") {
     if (path === "/chat/completions" || path === "/v1/chat/completions") {
       return `${root.replace(/\/v1$/, "")}/v1/messages`;
@@ -121,7 +123,7 @@ export function prepareBody(
   let payload: JsonMap = { ...body, model: dep.model || body.model };
   for (const key of GATEWAY_ONLY_KEYS) delete payload[key];
   payload = applyProviderServiceMode(dep.kind, payload, groupStrategy).body;
-  if (dep.kind === "xai" && payload.reasoning_effort !== undefined) {
+  if ((dep.kind === "xai" || dep.kind === "grok_build") && payload.reasoning_effort !== undefined) {
     payload.reasoning_effort = xaiReasoningEffort(String(payload.model ?? ""), payload.reasoning_effort);
   }
   if (dep.kind !== "anthropic" && Array.isArray(payload.messages)) {
@@ -135,6 +137,7 @@ export function prepareBody(
     }
     return converted;
   }
+  if (dep.kind === "codex" && nativeChatPath(path)) return chatToCodex(payload);
   return payload;
 }
 
@@ -142,18 +145,22 @@ function decodeBody(
   dep: ResolvedDeployment,
   path: string,
   json: unknown,
+  raw: Uint8Array,
   model: string,
 ): unknown {
   if (dep.kind === "anthropic" && nativeChatPath(path)) {
     const rec = asRecord(json);
     if (rec && rec.type === "message") return anthropicToChat(rec, model);
   }
+  if (dep.kind === "codex" && nativeChatPath(path)) {
+    return codexCompletion(new TextDecoder().decode(raw), model);
+  }
   return json;
 }
 
 export async function proxyJson(input: {
   dep: ResolvedDeployment;
-  apiKey: string;
+  auth: UpstreamAuth;
   method?: string;
   path: string;
   body?: JsonMap | null;
@@ -166,7 +173,7 @@ export async function proxyJson(input: {
   const method = input.method ?? "POST";
   const url = joinPath(input.dep, input.path);
   const headers = mergeUpstreamHeaders(
-    upstreamHeaders(input.dep, input.apiKey, input.headers),
+    upstreamHeaders(input.dep, input.auth, input.headers),
     serviceModeHeaders(input.dep.kind, input.body ?? {}, input.groupStrategy, input.dep.model),
   );
   if (input.rawBody instanceof FormData) {
@@ -197,13 +204,13 @@ export async function proxyJson(input: {
       json = {};
     }
   }
-  json = decodeBody(input.dep, input.path, json, input.dep.model);
+  if (res.ok) json = decodeBody(input.dep, input.path, json, raw, input.dep.model);
   return { status: res.status, json, headers: res.headers, raw };
 }
 
 async function proxyRaw(input: {
   dep: ResolvedDeployment;
-  apiKey: string;
+  auth: UpstreamAuth;
   method?: string;
   path: string;
   body?: JsonMap | null;
@@ -216,7 +223,7 @@ async function proxyRaw(input: {
   const method = input.method ?? "POST";
   const url = joinPath(input.dep, input.path);
   const headers = mergeUpstreamHeaders(
-    upstreamHeaders(input.dep, input.apiKey, input.headers),
+    upstreamHeaders(input.dep, input.auth, input.headers),
     serviceModeHeaders(input.dep.kind, input.body ?? {}, input.groupStrategy, input.dep.model),
   );
   if (input.rawBody instanceof FormData) {
@@ -277,12 +284,22 @@ export function upstreamErrorMessage(status: number, json: unknown): string {
   );
 }
 
+export function upstreamRetryAt(status: number, json: unknown, now = Date.now()): number | null {
+  if (status !== 429) return null;
+  const error = asRecord(asRecord(json)?.error);
+  const resetsAt = Number(error?.resets_at);
+  if (Number.isFinite(resetsAt) && resetsAt > 0) return resetsAt * 1000;
+  const resetsIn = Number(error?.resets_in_seconds);
+  return Number.isFinite(resetsIn) && resetsIn > 0 ? now + resetsIn * 1000 : null;
+}
+
 export function upstreamError(status: number, json: unknown): GateError {
   const error = asRecord(asRecord(json)?.error);
   const passCode = status !== 401 && status !== 403 && typeof error?.code === "string" && error.code;
   return new GateError(status || 502, "upstream_error", upstreamErrorMessage(status, json), {
     param: typeof error?.param === "string" ? error.param : null,
     upstreamCode: passCode || undefined,
+    retryAt: upstreamRetryAt(status, json),
   });
 }
 
@@ -293,6 +310,8 @@ export function withDeploymentModel(raw: BodyInit | undefined, model: string): B
   form.set("model", model);
   return form;
 }
+
+const apiRoute = inPool("api");
 
 export async function forwardToModel(
   aliases: string[],
@@ -317,6 +336,10 @@ export async function forwardToModel(
     } catch {
       continue;
     }
+    if (group.mapped.length && !group.mapped.some(apiRoute) && !group.overflow_group) {
+      last = outsidePool("api");
+      continue;
+    }
     const attempts = Math.max(0, group.num_retries) + 1;
     for (let attempt = 0; attempt < attempts; attempt++) {
       let acquired;
@@ -324,7 +347,7 @@ export async function forwardToModel(
         acquired = await acquireGroup(
           group,
           principal.routeLimits[alias],
-          undefined,
+          apiRoute,
           requestRoutingOverride(body),
           cost,
         );
@@ -335,15 +358,17 @@ export async function forwardToModel(
       }
       const { dep, release } = acquired;
       try {
-        const apiKey = secretFor(dep);
-        if (!apiKey && dep.kind !== "openai_compat") {
-          last = new GateError(503, "no_provider_key", "no API key for deployment");
+        let auth: UpstreamAuth;
+        try {
+          auth = await deploymentAuth(dep);
+        } catch (err) {
+          last = err instanceof GateError ? err : new GateError(503, "no_provider_key", "no API key for deployment");
           break;
         }
         const started = Date.now();
         const request = {
           dep,
-          apiKey,
+          auth,
           path,
           body,
           rawBody: withDeploymentModel(opts?.rawBody, dep.model),
@@ -381,10 +406,10 @@ export async function forwardToModel(
           : proxied.json;
         last = upstreamError(proxied.status, json);
         if (!retryableStatus(proxied.status)) throw last;
-        markFailure(dep);
+        markFailure(dep, last.retryAt);
       } catch (err) {
         if (err instanceof GateError && !retryableStatus(err.status)) throw err;
-        markFailure(dep);
+        markFailure(dep, err instanceof GateError ? err.retryAt : null);
         last = err instanceof GateError ? err : new GateError(502, "upstream_error", "upstream request failed");
       } finally {
         release();

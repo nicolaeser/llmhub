@@ -48,9 +48,31 @@
     "maxRequestCostHint": "Anfragen, deren geschätzte Kosten (Input-Tokens plus max_tokens zum Output-Preis) diesen Betrag übersteigen, werden vor dem Weiterleiten abgelehnt. Aufrufer können das Limit pro Anfrage mit dem Header x-hub-max-cost senken. 0 bedeutet unbegrenzt.",
     "allowedIps": "Erlaubte Client-IPs",
     "allowedIpsHint": "Eine IP-Adresse pro Zeile. Leer lassen, um jede Adresse zu erlauben.",
+    "endpoints": "Erlaubte Endpunkte",
+    "endpointsHint": "Leer lassen, um alle Endpunkte zu erlauben. Die Modellliste (/v1/models) bleibt immer erreichbar.",
+    "endpointsPlaceholder": "Alle Endpunkte",
     "blocked": "Diesen Key sperren",
     "logContent": "Anfrageinhalte speichern",
     "logContentHint": "Wenn aus, speichern die Request-Logs für diesen Key nur Metadaten, keine Prompts oder Antworten."
+  },
+  "endpoints": {
+    "name": "{endpoint, select, chat {Chat und Text} embeddings {Embeddings} moderations {Moderation} images {Bilder} audio {Audio} videos {Videos} ocr {Texterkennung (OCR)} files {Dateien} batches {Batches} other {SystemOne}}",
+    "paths": "{endpoint, select, chat {/v1/chat/completions, /v1/completions, /v1/messages, /v1/responses} embeddings {/v1/embeddings} moderations {/v1/moderations} images {/v1/images} audio {/v1/audio} videos {/v1/videos} ocr {/v1/ocr} files {/v1/files} batches {/v1/batches} other {/v1/systemone}}"
+  },
+  "windows": {
+    "title": "Erlaubte Zeiten",
+    "hint": "Ohne Zeitfenster ist der Key jederzeit nutzbar. Mit Zeitfenstern werden Anfragen außerhalb aller Fenster abgelehnt. Eingereihte Batches laufen trotzdem zu Ende.",
+    "days": "Tage",
+    "dayShort": "{day, select, mon {Mo} tue {Di} wed {Mi} thu {Do} fri {Fr} sat {Sa} other {So}}",
+    "dayName": "{day, select, mon {Montag} tue {Dienstag} wed {Mittwoch} thu {Donnerstag} fri {Freitag} sat {Samstag} other {Sonntag}}",
+    "allDay": "Ganztägig",
+    "start": "Von",
+    "end": "Bis",
+    "nextDay": "Endet am Folgetag.",
+    "timeZone": "Zeitzone",
+    "timeZoneHint": "Tage und Uhrzeiten gelten in dieser Zeitzone, inklusive Sommer- und Winterzeit.",
+    "add": "Zeitfenster hinzufügen",
+    "remove": "Fenster {index, number} entfernen"
   },
   "revoke": "Widerrufen",
   "rotate": "Rotieren",
@@ -67,6 +89,8 @@
   "modelCount": "{count, plural, one {# Modell} other {# Modelle}}",
   "budget": "Budget festlegen",
   "contentOff": "Inhalte nicht protokolliert",
+  "endpointChip": "Nur {endpoints}",
+  "windowChip": "Zeitlich begrenzt",
   "binding": {
     "kind": "{kind, select, project {Projekt} member {Person} other {Intern}}",
     "hint": "{kind, select, project {Für eine Anwendung. Wird dem Projekt, seiner Abteilung und dem Unternehmen berechnet.} member {Persönlicher Key für einen Benutzer des Unternehmens. Wird der Person, ihrer Abteilung und dem Unternehmen berechnet.} other {{scope, select, company {Für deine eigene Nutzung. Wird deinem Budget und deinem Unternehmen berechnet.} other {Für deine eigene Nutzung. Wird deinem persönlichen Budget berechnet, keinem Kunden.}}}}",

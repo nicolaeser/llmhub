@@ -11,8 +11,10 @@ import { anthropicErrorBody, GateError, openAIErrorBody } from "@/lib/gateway/er
 import { logger } from "@/lib/logging/logger";
 import { modelAlias } from "@/lib/gateway/model-alias";
 import { aliasChain } from "@/lib/gateway/runtime";
+import { accessOpen, endpointAllowed } from "@/lib/gateway/key-restrictions";
+import { gatewayPath } from "@/lib/gateway/route-pool";
 import { NextResponse } from "next/server";
-import type { JsonMap, Principal } from "@/types/gateway";
+import type { JsonMap, Principal, RoutePool } from "@/types/gateway";
 
 export function toGateError(err: unknown): GateError {
   if (err instanceof GateError) return err;
@@ -36,7 +38,7 @@ export function toGateError(err: unknown): GateError {
 }
 
 export function wantsAnthropicErrors(req: Request): boolean {
-  return new URL(req.url).pathname.startsWith("/v1/messages") || req.headers.has("anthropic-version");
+  return gatewayPath(new URL(req.url).pathname).startsWith("/v1/messages") || req.headers.has("anthropic-version");
 }
 
 export function gateResponse(err: unknown, req: Request): NextResponse {
@@ -69,17 +71,33 @@ export function withTrace(principal: Principal, endpoint: string): Principal {
   };
 }
 
-export async function gateRequest(req: Request): Promise<Principal> {
+export async function gateRequest(req: Request, pool: RoutePool = "api"): Promise<Principal> {
   const token = bearerToken(req);
   const ip = clientIp(req.headers);
-  const principal = withTrace(await authenticateBearer(token), requestPath(req));
+  const path = requestPath(req);
+  const principal = { ...withTrace(await authenticateBearer(token), path), pool };
   if (principal.key?.allowed_ips.length) {
     if (!ip || !principal.key.allowed_ips.includes(ip)) {
       throw new GateError(403, "ip_not_allowed", "ip not allowed for this key");
     }
   }
+  allowEndpoint(principal, gatewayPath(path));
+  allowAccessTime(principal, new Date());
   await admit(principal, maxCostHeader(req.headers));
   return principal;
+}
+
+export function allowEndpoint(principal: Principal, path: string, param?: string): void {
+  if (principal.key && !endpointAllowed(principal.key.allowed_endpoints, path)) {
+    throw new GateError(403, "endpoint_not_allowed", "endpoint not allowed for this key", { param });
+  }
+}
+
+export function allowAccessTime(principal: Principal, at: Date): void {
+  const key = principal.key;
+  if (key && !accessOpen(key.access_windows, key.access_time_zone, at)) {
+    throw new GateError(403, "outside_access_window", "this key is outside its allowed time windows");
+  }
 }
 
 export async function admit(principal: Principal, maxCost: number | null = null): Promise<void> {

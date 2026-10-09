@@ -5,6 +5,7 @@ export const formats = {
     short: { day: "numeric", month: "short", year: "numeric" },
     chart: { day: "numeric", month: "short" },
     long: { day: "numeric", month: "long", year: "numeric" },
+    month: { month: "long", year: "numeric" },
     full: { dateStyle: "full", timeStyle: "short" },
     time: { timeStyle: "medium" },
     dateTime: { dateStyle: "medium", timeStyle: "medium" },

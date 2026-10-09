@@ -27,6 +27,7 @@ import CompanyTree from "./_components/company-tree";
 import KeysCard from "./_components/keys-card";
 import MembersCard from "./_components/members-card";
 import NodeDialog from "./_components/node-dialog";
+import ReportsCard from "./_components/reports-card";
 import SetupSteps, { setupDone } from "./_components/setup-steps";
 import { budgetOf, chainOf, nodeExists, parseNodeRef, withBudget } from "./_components/tree-model";
 
@@ -423,6 +424,25 @@ export default function CompaniesPage() {
               }
               onBudget={(target) => openBudget(target, budgetState)}
             />
+
+            {(org || team) && data.canSeeReports ? (
+              <ReportsCard
+                key={`reports-${selected.kind}:${node.id}`}
+                kind={org ? "org" : "team"}
+                name={node.alias}
+                orgId={orgId}
+                teamId={team?.id ?? ""}
+                reports={data.reports.filter(
+                  (row) => row.orgId === orgId && row.teamId === (team?.id ?? ""),
+                )}
+                people={membersIn(org ? { orgId: org.id } : { teamId })}
+                canReport={data.canReport}
+                mailEnabled={data.mailEnabled}
+                onChange={(reports) =>
+                  setData((current) => (current ? { ...current, reports } : current))
+                }
+              />
+            ) : null}
           </div>
         </div>
       )}

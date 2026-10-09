@@ -3,6 +3,7 @@ import { costOf } from "@/lib/gateway/cost";
 import { GateError } from "@/lib/gateway/errors";
 import { isOpaqueText } from "@/lib/gateway/pii";
 import { groupBilling } from "@/lib/gateway/price-schedule";
+import { routePool } from "@/lib/gateway/route-pool";
 import { applyProviderServiceMode } from "@/lib/gateway/service-mode";
 import { tokensForLength } from "@/lib/gateway/tokens";
 import type {
@@ -66,6 +67,7 @@ export function estimateCost(
   tokens: RequestTokens,
   at: Date,
 ): number {
+  if (routePool(dep) === "subscription") return 0;
   const served = applyProviderServiceMode(dep.kind, body, group.strategy, dep.model).body;
   const usage: Partial<Usage> = {
     prompt_tokens: tokens.prompt,

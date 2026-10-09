@@ -1,11 +1,13 @@
 import "server-only";
 import prisma from "@/lib/db/prisma";
 import { isPrismaCode } from "@/lib/auth/errors";
-import { open } from "@/lib/crypto";
 import { env } from "@/lib/env";
 import { fireAlert } from "@/lib/gateway/alerts";
 import { PROVIDER_CATALOG } from "@/lib/gateway/catalog";
+import { CODEX_CLIENT_VERSION } from "@/lib/gateway/codex";
 import { asNumber, asRecord, asString } from "@/lib/gateway/core";
+import { providerAuth } from "@/lib/gateway/credentials";
+import { GateError } from "@/lib/gateway/errors";
 import { discoveredOf, parsePricing } from "@/lib/gateway/provider-prices";
 import { logger } from "@/lib/logging/logger";
 import type { DiscoveredDiff, DiscoveredModel, RepricedModel } from "@/types/gateway";
@@ -21,6 +23,7 @@ function modelsUrl(kind: string, base: string): string {
     b = (PROVIDER_CATALOG.find((k) => k.kind === kind)?.default_base_url ?? "").replace(/\/$/, "");
   }
   if (!b) throw new Error("BASE_URL_REQUIRED");
+  if (kind === "codex") return `${b}/models?client_version=${CODEX_CLIENT_VERSION}`;
   if (b.endsWith("/models")) return b;
   if (b.endsWith("/v1")) return `${b}/models`;
   return `${b}/v1/models`;
@@ -30,9 +33,10 @@ export async function fetchProviderModels(
   kind: string,
   baseUrl: string,
   apiKey: string,
+  authHeaders: Record<string, string> = {},
 ): Promise<DiscoveredModel[]> {
   const url = modelsUrl(kind, baseUrl);
-  const headers: Record<string, string> = { Accept: "application/json" };
+  const headers: Record<string, string> = { ...authHeaders, Accept: "application/json" };
   if (apiKey) {
     if (kind === "anthropic") {
       headers["x-api-key"] = apiKey;
@@ -62,14 +66,14 @@ export async function fetchProviderModels(
   for (const item of data) {
     const m = asRecord(item);
     if (!m) continue;
-    const id = asString(m.id) || asString(m.name);
-    if (!id) continue;
+    const id = asString(m.id) || asString(m.slug) || asString(m.name);
+    if (!id || (kind === "codex" && m.visibility !== undefined && m.visibility !== "list")) continue;
     const pricing = parsePricing(m.pricing);
     out.push({
       id,
       name: asString(m.display_name) || asString(m.name) || id,
       ownedBy: asString(m.owned_by) || kind,
-      contextLength: asNumber(m.context_length, 0),
+      contextLength: asNumber(m.context_length, asNumber(m.context_window, 0)),
       costInputPer1k: pricing?.in ?? 0,
       costOutputPer1k: pricing?.out ?? 0,
       priceSource: pricing ? "provider" : "none",
@@ -131,7 +135,10 @@ export async function refreshProviderModels(
   row: ProviderSyncRecord,
   actor: string,
 ): Promise<{ provider: ProviderSyncRecord; diff: DiscoveredDiff }> {
-  const models = await fetchProviderModels(row.kind, row.baseUrl, open(row.apiKey));
+  const auth = await providerAuth(row).catch((error: unknown) => {
+    throw error instanceof GateError ? new Error("SIGN_IN_EXPIRED", { cause: error }) : error;
+  });
+  const models = await fetchProviderModels(row.kind, row.baseUrl, auth.key, auth.headers);
   const before = discoveredOf(row.discovered);
   if (models.length === 0 && before.length > 0) throw new Error("UPSTREAM_EMPTY");
   const diff = diffDiscovered(before, models);

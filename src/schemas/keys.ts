@@ -1,6 +1,31 @@
 import { isIP } from "node:net";
 import { z } from "zod";
 import { modelAlias } from "@/lib/gateway/model-alias";
+import { KEY_ENDPOINTS, MAX_ACCESS_WINDOWS } from "@/lib/gateway/key-restrictions";
+import { clockMinute, isTimeZone, WEEKDAYS } from "@/lib/gateway/price-schedule";
+
+const clock = z.string().refine((value) => clockMinute(value) !== null, "expected HH:MM");
+
+export const accessWindowSchema = z
+  .object({
+    days: z
+      .array(z.enum(WEEKDAYS))
+      .min(1)
+      .max(WEEKDAYS.length)
+      .transform((days) => WEEKDAYS.filter((day) => days.includes(day))),
+    start: clock,
+    end: clock,
+  })
+  .strict();
+
+export const accessWindowsSchema = z.array(accessWindowSchema).max(MAX_ACCESS_WINDOWS);
+
+export const allowedEndpointsSchema = z
+  .array(z.enum(KEY_ENDPOINTS))
+  .max(KEY_ENDPOINTS.length)
+  .transform((endpoints) => KEY_ENDPOINTS.filter((endpoint) => endpoints.includes(endpoint)));
+
+export const accessTimeZoneSchema = z.string().trim().max(64).refine(isTimeZone, "unknown IANA time zone");
 
 const keyFields = {
   alias: z.string().trim().min(1).max(80),
@@ -15,6 +40,9 @@ const keyFields = {
     .array(z.string().trim().refine((ip) => isIP(ip) !== 0, "invalid IP address"))
     .max(100)
     .default([]),
+  allowedEndpoints: allowedEndpointsSchema.default([]),
+  accessWindows: accessWindowsSchema.default([]),
+  accessTimeZone: accessTimeZoneSchema.default("UTC"),
   logContent: z.boolean().default(true),
 };
 

@@ -6,6 +6,7 @@ import { keyScope } from "@/lib/auth/scope";
 import type { VirtualKeyView } from "@/types/gateway";
 import { money } from "@/lib/utils/money";
 import { piiOverride } from "@/lib/gateway/settings";
+import { accessTimeZoneOf, accessWindowsOf, allowedEndpointsOf } from "@/lib/gateway/key-restrictions";
 import type { Prisma } from "@/generated/prisma/client";
 
 function jsonArray(v: unknown): string[] {
@@ -32,6 +33,9 @@ export function toKeyView(row: {
   budgetDuration: string;
   expiresAt: Date | null;
   allowedIps: unknown;
+  allowedEndpoints: unknown;
+  accessWindows: unknown;
+  accessTimeZone: string;
   blocked: boolean;
   piiPolicy: unknown;
   logContent: boolean;
@@ -57,6 +61,9 @@ export function toKeyView(row: {
     budget_duration: row.budgetDuration,
     expires: row.expiresAt?.toISOString() ?? "",
     allowed_ips: jsonArray(row.allowedIps),
+    allowed_endpoints: allowedEndpointsOf(row.allowedEndpoints),
+    access_windows: accessWindowsOf(row.accessWindows),
+    access_time_zone: accessTimeZoneOf(row.accessTimeZone),
     blocked: row.blocked,
     pii: piiOverride(row.piiPolicy),
     log_content: row.logContent,

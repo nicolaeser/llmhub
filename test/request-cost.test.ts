@@ -82,6 +82,14 @@ test("estimateCost prices input and max output at the deployment rates", () => {
   assert.equal(estimateCost(dep, custom, {}, tokens, new Date()), 5);
 });
 
+test("subscription routes are never priced by the estimate", () => {
+  const codex = deployment("codex-1", 0, 0, "codex");
+  const tokens = { prompt: 1_000_000, completion: 1_000_000 };
+  assert.equal(estimateCost(codex, group([codex]), {}, tokens, new Date()), 0);
+  const unpriced = deployment("compat", 0, 0, "openai_compat");
+  assert.ok(estimateCost(unpriced, group([unpriced]), {}, tokens, new Date()) > 0);
+});
+
 test("x-hub-max-cost accepts only positive numbers", () => {
   assert.equal(maxCostHeader(new Headers()), null);
   assert.equal(maxCostHeader(new Headers({ "x-hub-max-cost": " 0.25 " })), 0.25);
