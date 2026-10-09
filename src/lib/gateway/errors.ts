@@ -19,6 +19,8 @@ export const GATEWAY_ERRORS = {
   invalid_api_key: 401,
   permission_denied: 403,
   ip_not_allowed: 403,
+  endpoint_not_allowed: 403,
+  outside_access_window: 403,
   model_access_denied: 403,
   model_not_found: 404,
   not_found: 404,
