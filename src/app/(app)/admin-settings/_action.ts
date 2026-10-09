@@ -9,7 +9,13 @@ import { requireStepUp } from "@/lib/auth/second-factor";
 import { actionFail, runAction } from "@/lib/http/action-result";
 import { writeAudit } from "@/lib/gateway/audit";
 import { issueScimToken, revokeScimToken, scimTokenSet } from "@/lib/gateway/scim";
-import { catalogRouting, DEFAULT_JEV_MODEL, getEnterprise, patchEnterprise } from "@/lib/gateway/settings";
+import {
+  catalogRouting,
+  DEFAULT_JEV_MODEL,
+  getEnterprise,
+  normalizeVectorDefaults,
+  patchEnterprise,
+} from "@/lib/gateway/settings";
 import { assistantModelLocked } from "@/lib/assistant/parse";
 import { checkForUpdate } from "@/lib/updates/update-check";
 import { resolveS3Config } from "@/lib/s3/config";
@@ -19,6 +25,7 @@ import type { AuthenticatedSession } from "@/types/auth";
 import { adminSettingsSchema } from "@/schemas/settings";
 import type { AdminSettings } from "@/types/settings";
 import type { Enterprise } from "@/types/gateway";
+import type { VectorStoreDefaults } from "@/types/rag";
 
 async function view(enterprise: Enterprise, session: AuthenticatedSession) {
   const canManage = hasPerm(session.permissions, PERMISSIONS.SETTINGS_MANAGE);
@@ -41,6 +48,7 @@ async function view(enterprise: Enterprise, session: AuthenticatedSession) {
         api_key: "",
         clear_api_key: false,
       },
+      vector_stores: normalizeVectorDefaults(enterprise.vector_stores),
       oidc: {
         enabled: enterprise.oidc?.enabled === true,
         issuer: enterprise.oidc?.issuer ?? "",
@@ -71,6 +79,16 @@ async function view(enterprise: Enterprise, session: AuthenticatedSession) {
   };
 }
 
+async function assertNewAliases(next: VectorStoreDefaults, previous: VectorStoreDefaults) {
+  const known = new Set([previous.embedding_model, previous.ocr_model, previous.rerank_model]);
+  const wanted = [...new Set([next.embedding_model, next.ocr_model, next.rerank_model])].filter(
+    (alias) => alias && !known.has(alias),
+  );
+  if (!wanted.length) return;
+  const found = await prisma.modelGroup.count({ where: { alias: { in: wanted } } });
+  if (found !== wanted.length) throw new Error("UNKNOWN_MODEL");
+}
+
 export async function loadAdminSettingsAction() {
   return runAction(async () => {
     const session = await requirePermission(PERMISSIONS.SETTINGS_READ);
@@ -87,6 +105,7 @@ export async function saveAdminSettingsAction(raw: unknown) {
     const current = await getEnterprise();
     const apiKey = jevInput.clear_api_key ? "" : jevInput.api_key || current.catalog_jev?.api_key || "";
     if (jevInput.enabled && !apiKey) return actionFail("JEV_KEY_REQUIRED");
+    await assertNewAliases(rest.vector_stores, normalizeVectorDefaults(current.vector_stores));
     const jev = { enabled: jevInput.enabled, model: jevInput.model || DEFAULT_JEV_MODEL };
     const settings = { ...rest, assistant_model_locked: assistantModelLocked(rest) };
     const enterprise = await patchEnterprise({ ...settings, catalog_jev: { ...jev, api_key: apiKey } });

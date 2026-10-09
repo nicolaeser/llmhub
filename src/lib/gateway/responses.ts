@@ -887,6 +887,23 @@ export class ResponsesStreamEncoder implements ChatStreamEncoder {
     ];
   }
 
+  beginItem(item: JsonMap, progress: string[]): { index: number; events: string[] } {
+    const out = [...this.closeReasoning(), ...this.closeMessage("completed"), ...this.closeCall()];
+    const index = this.items.length;
+    this.items.push(item);
+    out.push(this.event("response.output_item.added", { output_index: index, item: { ...item } }));
+    for (const type of progress) out.push(this.event(type, { output_index: index, item_id: item.id }));
+    return { index, events: out };
+  }
+
+  endItem(index: number, item: JsonMap, progress: string[]): string[] {
+    this.items[index] = item;
+    return [
+      ...progress.map((type) => this.event(type, { output_index: index, item_id: item.id })),
+      this.event("response.output_item.done", { output_index: index, item }),
+    ];
+  }
+
   push(chunk: JsonMap): string[] {
     const out: string[] = [];
     if (asRecord(chunk.usage)) this.usage = chunk.usage;
