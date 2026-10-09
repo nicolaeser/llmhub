@@ -3,10 +3,12 @@ import { createHmac, randomUUID } from "node:crypto";
 import { jobsEnabled } from "@/lib/jobs/connection";
 import { enqueueWebhook } from "@/lib/jobs/queues";
 import { isRouterError } from "@/lib/gateway/core";
+import { claimCooldown, PII_ALERT_COOLDOWN_MS } from "@/lib/gateway/alert-rules";
 import { getEnterprise } from "@/lib/gateway/settings";
 import { writeAudit } from "@/lib/gateway/audit";
+import { webhookBody } from "@/lib/gateway/webhook-format";
 import { logger } from "@/lib/logging/logger";
-import type { WebhookEvent } from "@/types/gateway";
+import type { Principal, WebhookEvent } from "@/types/gateway";
 import type { WebhookJobData } from "@/types/jobs";
 
 export function webhookHeaders(
@@ -25,11 +27,10 @@ export function webhookHeaders(
 export async function deliverWebhook(data: WebhookJobData, attempts = 1): Promise<void> {
   const hook = (await getEnterprise()).alert_webhooks?.find((h) => h.id === data.webhookId);
   if (!hook?.events.includes(data.event)) return;
-  const body = JSON.stringify({
+  const body = webhookBody(hook.format, {
     id: data.id,
     event: data.event,
     message: data.message,
-    source: "llm-hub",
     ts: new Date().toISOString(),
   });
   try {
@@ -45,7 +46,7 @@ export async function deliverWebhook(data: WebhookJobData, attempts = 1): Promis
       action: "alert_delivered",
       objectType: "alert",
       objectId: data.id,
-      after: { webhook: hook.id, event: data.event, status: res.status, attempts },
+      after: { webhook: hook.id, event: data.event, format: hook.format, status: res.status, attempts },
     });
   } catch (err) {
     await writeAudit({
@@ -101,3 +102,17 @@ export async function alertUpstreamFailure(err: unknown): Promise<void> {
   await fireAlert("upstream_exhaustion", message);
 }
 
+const piiAlerts = new Map<string, number>();
+
+export async function alertPiiBlocked(principal: Principal, entities: Iterable<string>, now = Date.now()): Promise<void> {
+  const key = principal.key;
+  const subject = key ? `key:${key.token_id}` : `user:${principal.userId}`;
+  if (!claimCooldown(piiAlerts, subject, now, PII_ALERT_COOLDOWN_MS)) return;
+  const who = key ? `key ${key.key_alias || key.key_name}` : `console user ${principal.userId}`;
+  const where = principal.trace?.endpoint ? ` on ${principal.trace.endpoint}` : "";
+  await fireAlert("pii_blocked", `${who}: request${where} blocked by PII policy (${[...entities].sort().join(", ")})`);
+}
+
+export async function alertKeyBlocked(key: { keyAlias: string; prefix: string }, actor: string): Promise<void> {
+  await fireAlert("key_blocked", `key ${key.keyAlias || key.prefix} was blocked by ${actor}`);
+}

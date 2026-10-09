@@ -25,5 +25,14 @@
   "toolsHint": "Optionales JSON-Array, das als tools gesendet wird. Leer lassen, um keines zu senden.",
   "toolsPlaceholder": "[]",
   "toolsError": "Werkzeuge-JSON muss ein JSON-Array sein.",
-  "storageError": "Sitzungen konnten in diesem Browser nicht gespeichert werden."
+  "storageError": "Sitzungen konnten in diesem Browser nicht gespeichert werden.",
+  "pickModel": "Modell wählen",
+  "system": "Systemprompt",
+  "systemHint": "Optionale Anweisungen, die als erste Systemnachricht gesendet werden. Leer lassen, um keine zu senden.",
+  "systemPlaceholder": "Anweisungen für das Modell…",
+  "replayTitle": "Wiederholung aus dem Anfrageprotokoll",
+  "replayLoaded": "Anfrage {id} geladen, ursprünglich an {model} gesendet. Prüfe Prompt und Modell und sende dann.",
+  "replayDropped": "Tool-Aufrufe, Tool-Ergebnisse und Anhänge, die die Spielwiese nicht senden kann, wurden weggelassen.",
+  "replayTruncated": "Lange Werte wurden beim Protokollieren gekürzt, daher kann die Wiederholung abweichen.",
+  "replayMasked": "Personenbezogene Daten wurden im gespeicherten Prompt maskiert. Die Platzhalter werden unverändert gesendet."
 }

@@ -80,6 +80,7 @@ export type RequestLogDetail = RequestLogRow & {
   tag: string;
   error: string;
   canViewContent: boolean;
+  replayable: boolean;
   content: RequestLogContentView | null;
 };
 

@@ -3,7 +3,7 @@ import { bearerToken, clientIp, readJSON } from "@/lib/http/api";
 import { authenticateBearer } from "@/lib/gateway/principal";
 import { defaultEntityIds, redactJSON } from "@/lib/gateway/pii";
 import { outputGuard, screenRequest } from "@/lib/gateway/guardrails";
-import { alertUpstreamFailure } from "@/lib/gateway/alerts";
+import { alertPiiBlocked, alertUpstreamFailure } from "@/lib/gateway/alerts";
 import { resolvePolicies } from "@/lib/gateway/settings";
 import { assertBudget, assertRate, recordUsage } from "@/lib/gateway/billing";
 import { asRecord, isRouterError, newRequestId } from "@/lib/gateway/core";
@@ -164,6 +164,7 @@ export async function applyGuardrails(
     for (const id of found) trace.piiInput.add(id);
   }
   if (pii.mode === "block" && found.size) {
+    void alertPiiBlocked(principal, found);
     await rejectRequest(
       principal,
       body,
