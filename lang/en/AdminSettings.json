@@ -1,6 +1,6 @@
 {
   "title": "Settings",
-  "subtitle": "Sign-in, assistant, model catalog, object storage, and SCIM. Infrastructure secrets stay in the environment.",
+  "subtitle": "Sign-in, assistant, model catalog, knowledge bases, object storage, and SCIM. Infrastructure secrets stay in the environment.",
   "save": "Save settings",
   "saved": "Settings saved",
   "updates": {
@@ -88,5 +88,19 @@
     "autoRoutesHint": "Default for every alias that does not set its own value. Only trusted providers that start offering a model are routed; own OpenAI-compatible servers are always turned on by hand.",
     "minConfidence": "Minimum Jev confidence",
     "minConfidenceHint": "Jev matches below this value are shown in the catalog but never routed on their own. Matches by name always count as certain."
+  },
+  "vectorStores": {
+    "title": "Knowledge bases",
+    "subtitle": "Defaults for vector stores created in the console or through /v1/vector_stores without their own models.",
+    "embeddingModel": "Default embedding model",
+    "embeddingHint": "Used when a new knowledge base does not name an embedding model. Existing knowledge bases keep their model.",
+    "dimensions": "Default embedding dimensions",
+    "dimensionsHint": "0 uses the model's native size. Applies only together with the default embedding model.",
+    "ocrModel": "Default OCR model",
+    "ocrHint": "Reads text from PDFs and images for knowledge bases without their own OCR model.",
+    "rerankModel": "Default rerank model",
+    "rerankHint": "Reorders search results for knowledge bases without their own rerank model.",
+    "none": "None",
+    "manageHint": "Create knowledge bases and upload files under <link>Knowledge bases</link>."
   }
 }

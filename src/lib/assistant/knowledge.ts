@@ -13,6 +13,8 @@ export const ASSISTANT_PAGES = {
   usage: "/usage",
   logs: "/logs",
   companies: "/companies",
+  knowledge: "/knowledge",
+  "vector-stores": "/knowledge",
   structure: "/companies",
   organizations: "/companies",
   departments: "/companies",

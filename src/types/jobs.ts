@@ -27,6 +27,8 @@ export type MaintenanceSweepResult = {
   auditLogs: number;
   storedObjects: number;
   batches: number;
+  vectorFiles: number;
+  vectorStores: number;
 };
 
 export type QueueName = (typeof QUEUE_NAMES)[keyof typeof QUEUE_NAMES];
