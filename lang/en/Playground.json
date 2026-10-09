@@ -25,5 +25,14 @@
   "toolsHint": "Optional JSON array sent as tools. Leave empty to omit.",
   "toolsPlaceholder": "[]",
   "toolsError": "Tools JSON must be a JSON array.",
-  "storageError": "Could not save sessions in this browser."
+  "storageError": "Could not save sessions in this browser.",
+  "pickModel": "Choose a model",
+  "system": "System prompt",
+  "systemHint": "Optional instructions sent as the first system message. Leave empty to omit.",
+  "systemPlaceholder": "Instructions for the model…",
+  "replayTitle": "Replay from the request log",
+  "replayLoaded": "Loaded request {id}, originally sent to {model}. Check the prompt and model, then send.",
+  "replayDropped": "Tool calls, tool results, and attachments that the Playground cannot send were left out.",
+  "replayTruncated": "Long values were shortened when the request was logged, so the replay can differ.",
+  "replayMasked": "Personal data was masked in the stored prompt. The placeholders are sent as they are."
 }

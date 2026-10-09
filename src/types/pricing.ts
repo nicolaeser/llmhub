@@ -2,10 +2,13 @@ import type { loadMarkupsAction } from "@/app/(app)/markups/_action";
 
 export type MarkupScope = "all" | "org" | "team" | "project";
 
-export type MarkupTarget = {
+export type MarkupTenancy = {
   orgId: string;
   teamId: string;
   projectId: string;
+};
+
+export type MarkupTarget = MarkupTenancy & {
   model: string;
 };
 

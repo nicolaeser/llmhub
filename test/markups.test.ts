@@ -11,11 +11,13 @@ import {
   pickMarkup,
 } from "@/lib/gateway/markup-policy";
 import { chargebackRows, groupSpend } from "@/lib/gateway/usage-stats";
+import { markedUpCost, targetCost } from "@/lib/gateway/what-if";
 import { serializeUsage } from "@/lib/management/serialize";
 import { markupSchema } from "@/schemas/pricing";
 import { markupCreateSchema, markupUpdateSchema } from "@/schemas/management";
 import type { UsageSlice } from "@/types/gateway";
 import type { MarkupRule, MarkupTarget } from "@/types/pricing";
+import type { TargetPrice, TenantMinutes, TenantTraffic } from "@/types/what-if";
 
 const rule = (id: string, scope: MarkupRule["scope"], targetId: string, model: string, percent: number): MarkupRule => ({
   id,
@@ -205,4 +207,43 @@ test("usage loads purchase cost only with the margins permission", async () => {
   assert.match(source, /const priced = hasPerm\(session\.permissions, PERMISSIONS\.PRICING_READ\);/);
   assert.match(source, /usageSlices\(\{ \.\.\.filters, day: \{ gte: since \} \}, \{ purchase: priced \}\)/);
   assert.match(source, /purchase: priced \? totals\.purchase : null/);
+});
+
+const flat: TargetPrice = {
+  schedule: { price: { cost_input_per_1k: 0.002, cost_output_per_1k: 0.006 }, time_zone: "UTC", windows: [] },
+  floor: null,
+};
+
+const tenants: TenantTraffic[] = [
+  { orgId: "o1", teamId: "", projectId: "", prompt: 1000, completion: 1000 },
+  { orgId: "o2", teamId: "", projectId: "", prompt: 1000, completion: 1000 },
+];
+
+function near(actual: number, expected: number) {
+  assert.ok(Math.abs(actual - expected) < 1e-12, `${actual} != ${expected}`);
+}
+
+test("what-if reprices each tenant with the markup it would get on the target model", () => {
+  const plain = targetCost(flat, { requests: 2, prompt: 2000, completion: 2000, cost: 0 }, []);
+  near(markedUpCost(flat, "gpt-5", [], tenants, []), plain);
+  const markups = [rule("acme-gpt", "org", "o1", "gpt-*", 20), rule("beta", "org", "o2", "", -100)];
+  near(markedUpCost(flat, "gpt-5", markups, tenants, []), (plain / 2) * 1.2);
+  near(markedUpCost(flat, "claude-opus-5-5", markups, tenants, []), plain / 2);
+});
+
+test("what-if weights scheduled minutes by each tenant's markup", () => {
+  const scheduled: TargetPrice = {
+    schedule: {
+      price: { cost_input_per_1k: 0.002, cost_output_per_1k: 0.006 },
+      time_zone: "UTC",
+      windows: [{ start_minute: 0, end_minute: 720, cost_input_per_1k: 0.001, cost_output_per_1k: 0.003 }],
+    },
+    floor: null,
+  };
+  const minute = Math.floor(Date.parse("2026-10-09T01:00:00Z") / 60_000);
+  const minutes: TenantMinutes[] = [
+    { orgId: "o1", teamId: "", projectId: "", minutes: [{ minute, prompt: 1000, completion: 1000 }] },
+    { orgId: "o2", teamId: "", projectId: "", minutes: [{ minute, prompt: 1000, completion: 1000 }] },
+  ];
+  near(markedUpCost(scheduled, "gpt-5", [rule("acme", "org", "o1", "", 50)], tenants, minutes), 0.004 * 1.5 + 0.004);
 });

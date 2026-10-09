@@ -1,0 +1,35 @@
+{
+  "title": "What if",
+  "subtitle": "Reprice the last {days, plural, one {# day} other {# days}} of traffic with another model's prices.",
+  "source": "Current model",
+  "allModels": "All models",
+  "sourceDetail": "{count, plural, one {# request} other {# requests}} · {cost, number, money}",
+  "target": "Compare with",
+  "targetPlaceholder": "Choose a model",
+  "empty": "No token traffic in the last {days, plural, one {# day} other {# days}}.",
+  "emptyHint": "The calculator reprices requests from the request log. Send traffic through the gateway first.",
+  "noTargets": "No model has a price yet.",
+  "noTargetsHint": "Set deployment costs or a custom price on the <link>Models</link> page, or refresh the <catalog>Model catalog</catalog>.",
+  "verdict": "{direction, select, saved {{all, select, true {With {target} instead of your current models you would have saved {share, number, percent}.} other {With {target} instead of {source} you would have saved {share, number, percent}.}}} more {{all, select, true {With {target} instead of your current models you would have paid {share, number, percent} more.} other {With {target} instead of {source} you would have paid {share, number, percent} more.}}} same {{all, select, true {With {target} instead of your current models you would have paid about the same.} other {With {target} instead of {source} you would have paid about the same.}}} other {With {target} this traffic would have cost {amount, number, money}.}}",
+  "basis": "{count, plural, one {Based on # request} other {Based on # requests}} with {tokens, number, integer} tokens since {since, date, short}.",
+  "method": "Prompt and completion tokens are repriced at the target's list price, including its price windows and the markup or discount each company, department, or project gets on that model. Cache discounts, service tiers, and provider-reported costs are not applied.",
+  "metrics": {
+    "billed": "Billed",
+    "simulated": "With {target}",
+    "difference": "Difference"
+  },
+  "difference": "{direction, select, saved {{amount, number, money} less} more {{amount, number, money} more} same {About the same} other {No billed spend}}",
+  "table": {
+    "title": "Priced models",
+    "description": "Select a row to compare with that model.",
+    "model": "Model",
+    "cost": "Cost for this traffic",
+    "change": "Change",
+    "withCatalog": "Include catalog models that are not routed yet"
+  },
+  "change": "{direction, select, saved {{share, number, percent} less} more {{share, number, percent} more} same {Same} other {Not comparable}}",
+  "state": "{state, select, disabled {Turned off} missing {Not routed yet} other {Active}}",
+  "current": "Current",
+  "scheduled": "Price windows",
+  "more": "Show {count, plural, one {# more model} other {# more models}}"
+}
