@@ -195,14 +195,14 @@ test("xAI device sign-in follows the RFC 8628 polling states", async () => {
 test("sealed tickets and credentials are bound to the user, kind, and lifetime", async () => {
   const { openCredential, openTicket, sealCredential, sealTicket } = await import("@/lib/gateway/sign-in");
   const device = {
-    grant: { kind: "grok_build" as const, deviceCode: "dc" },
+    grant: { kind: "grok_build" as const, deviceCode: "plaintext-device-code" },
     verificationUrl: "https://accounts.x.ai/device",
     userCode: "X",
     interval: 5,
     expiresIn: 600,
   };
   const ticket = sealTicket("u1", device, 0);
-  assert.equal(ticket.includes("dc"), false);
+  assert.equal(ticket.includes("plaintext-device-code"), false);
   assert.deepEqual(openTicket(ticket, "u1", 1)?.grant, device.grant);
   assert.equal(openTicket(ticket, "u2", 1), null);
   assert.equal(openTicket(ticket, "u1", 600_001), null);

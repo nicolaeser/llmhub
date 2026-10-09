@@ -30,6 +30,13 @@ const ROUTES = [
   "images/variations",
   "videos",
   "models/[id]",
+  "rerank",
+  "vector_stores",
+  "vector_stores/[id]",
+  "vector_stores/[id]/search",
+  "vector_stores/[id]/files",
+  "vector_stores/[id]/files/[file_id]",
+  "vector_stores/[id]/file_batches",
 ] as const;
 
 function v1Path(rel: string) {

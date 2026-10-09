@@ -10,6 +10,7 @@ import {
   Database,
   HeartPulse,
   KeyRound,
+  Library,
   ListChecks,
   Network,
   PlayCircle,
@@ -29,6 +30,7 @@ export const NAV: NavSection[] = [
     labelKey: "sections.customers",
     items: [
       { href: "/companies", labelKey: "items.companies", icon: Building2, permission: PERMISSIONS.TENANCY_READ },
+      { href: "/knowledge", labelKey: "items.knowledge", icon: Library, permission: PERMISSIONS.TENANCY_READ },
       { href: "/keys", labelKey: "items.keys", icon: KeyRound, permission: PERMISSIONS.KEYS_READ },
       { href: "/markups", labelKey: "items.markups", icon: BadgePercent, permission: PERMISSIONS.PRICING_READ },
     ],

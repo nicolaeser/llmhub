@@ -27,8 +27,17 @@ import {
   visibleResponse,
 } from "@/lib/gateway/responses";
 import { newId, ownerId } from "@/lib/gateway/core";
+import {
+  fileSearchStores,
+  runFileSearch,
+  streamFileSearch,
+  takeFileSearchTool,
+  withFileSearch,
+  withoutFileSearchHistory,
+} from "@/lib/rag/file-search-tool";
 import { responsesRequestSchema } from "@/schemas/responses";
 import type { JsonMap, RoutePool } from "@/types/gateway";
+import type { FileSearchContext } from "@/types/rag";
 
 function storedPayload(response: JsonMap, messages: JsonMap[], input: JsonMap[]): Buffer {
   return Buffer.from(JSON.stringify({ response, messages, input }));
@@ -43,7 +52,8 @@ export function createResponseRoute(pool: RoutePool) {
       allowModel(principal, model);
       const { body: redacted, output } = await applyPii(body, principal);
       const clean = await resolveResponsesFiles(redacted, principal);
-      const parsed = parseRequest(responsesRequestSchema, clean);
+      const { body: requestBody, tool: searchTool } = takeFileSearchTool(clean);
+      const parsed = parseRequest(responsesRequestSchema, requestBody);
       if (!parsed.ok) {
         throw new GateError(400, "invalid_request", parsed.message, { param: parsed.param });
       }
@@ -52,11 +62,81 @@ export function createResponseRoute(pool: RoutePool) {
       const history = request.previous_response_id
         ? await previousConversation(request.previous_response_id, principal)
         : [];
-      const { body: chatBody, conversation } = responsesToChat(request, history);
+      const { body: baseChat, conversation } = responsesToChat(
+        request,
+        searchTool ? history : withoutFileSearchHistory(history),
+      );
       const aliases = modelChain(principal, model, clean);
       const store = request.store !== false;
       const createdAt = Math.floor(Date.now() / 1000);
       const items = inputItems(request.input);
+      const skeleton = (id: string): JsonMap => {
+        const base = responseSkeleton(request, id, createdAt);
+        return searchTool ? { ...base, tools: clean.tools, tool_choice: clean.tool_choice ?? "auto" } : base;
+      };
+      const search: FileSearchContext | null = searchTool
+        ? {
+            principal,
+            model,
+            aliases,
+            outputPii: output,
+            tool: searchTool,
+            stores: await fileSearchStores(principal, searchTool),
+            include: request.include ?? null,
+          }
+        : null;
+      const chatBody = search ? withFileSearch(baseChat, clean.tool_choice, request.parallel_tool_calls) : baseChat;
+
+      if (request.stream === true && search) {
+        return streamFileSearch({
+          req,
+          ctx: search,
+          body: chatBody,
+          prepare: async () => {
+            let id = responseId(newId());
+            let storedId = "";
+            if (store) {
+              const stored = await putObject({
+                kind: "response",
+                owner,
+                contentType: "application/json",
+                payload: storedPayload(skeleton(""), conversation, items),
+                meta: { model },
+              });
+              storedId = stored.id;
+              id = responseId(stored.id);
+            }
+            const encoder = new ResponsesStreamEncoder(skeleton(id), request.include ?? null);
+            return {
+              encoder,
+              onDone: async (transcript) => {
+                if (!storedId) return;
+                await updateObjectPayload(
+                  storedId,
+                  storedPayload(encoder.result(), [...conversation, ...transcript], items),
+                  { model },
+                );
+              },
+            };
+          },
+        });
+      }
+
+      if (search) {
+        const run = await runFileSearch(search, chatBody);
+        const answered = chatToResponse(run.final, skeleton(""));
+        const response = { ...answered, output: [...run.items, ...(answered.output as JsonMap[])] };
+        const include = request.include ?? null;
+        if (!store) return NextResponse.json(visibleResponse({ ...response, id: responseId(newId()) }, include));
+        const stored = await putObject({
+          kind: "response",
+          owner,
+          contentType: "application/json",
+          payload: storedPayload(response, [...conversation, ...run.transcript], items),
+          meta: { model },
+        });
+        return NextResponse.json(visibleResponse({ ...response, id: responseId(stored.id) }, include));
+      }
 
       if (request.stream === true) {
         const streamed = await streamChat({

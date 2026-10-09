@@ -3,6 +3,7 @@ import type { OPENAPI_METHODS } from "@/lib/gateway/openapi";
 import type { WEBHOOK_EVENTS, WEBHOOK_FORMATS } from "@/lib/gateway/webhook-events";
 import type { PiiPolicy } from "@/types/guardrails";
 import type { AccessWindow, KeyEndpoint } from "@/types/keys";
+import type { VectorStoreDefaults } from "@/types/rag";
 import type { RouteLimits } from "@/types/model-templates";
 
 export type SpendHolder = {
@@ -347,6 +348,7 @@ export type Enterprise = {
   catalog_auto_routes?: boolean;
   catalog_min_confidence?: number;
   update_check?: boolean;
+  vector_stores?: VectorStoreDefaults;
 };
 
 export type CatalogRouting = {
