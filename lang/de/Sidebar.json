@@ -30,7 +30,7 @@
     "providerHealth": "Anbieterstatus",
     "users": "Konsolen-Benutzer",
     "apiRef": "API-Referenz",
-    "cache": "Cache",
+    "cache": "Antwort-Cache",
     "logging": "Logging & Alarme",
     "roles": "Rollen",
     "adminSettings": "Einstellungen"

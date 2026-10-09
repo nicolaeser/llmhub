@@ -40,7 +40,7 @@
   },
   "cache": {
     "title": "Prompt caching",
-    "description": "Hit rate is the share of prompt tokens read from the provider cache. Savings compare billed cost with the same prompt tokens at the full input price, net of cache writes.",
+    "description": "Hit rate is the share of prompt tokens read from the provider cache. Savings compare billed cost with the same prompt tokens at the full input price, net of cache writes. Gateway response cache hits are not included; they are reported on the Response cache page.",
     "empty": "No prompt cache reads or writes in this period.",
     "byProject": "Prompt caching by project"
   },

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { assistantPages, assistantTopics } from "@/lib/assistant/knowledge";
+import { CACHE_TTL_MAX_SECONDS } from "@/lib/gateway/cache-settings";
 import { BILLING_MODES } from "@/lib/gateway/core";
 import { clockMinute, isTimeZone, MAX_PRICE_WINDOWS } from "@/lib/gateway/price-schedule";
 import { DATA_REGIONS } from "@/lib/gateway/model-policy";
@@ -26,6 +27,11 @@ const price = z.number().min(0).max(1_000_000_000);
 const clock = z.string().refine((value) => clockMinute(value) !== null, "expected HH:MM");
 const rpm = z.number().int().min(0).max(1_000_000);
 const tpm = z.number().int().min(0).max(1_000_000_000);
+const maxRequestCost = z
+  .number()
+  .min(0)
+  .max(1_000_000)
+  .describe("Maximum estimated cost of a single request, checked before forwarding. 0 is unlimited.");
 const keyEndpoints = z
   .array(z.enum(KEY_ENDPOINTS))
   .max(KEY_ENDPOINTS.length)
@@ -217,6 +223,7 @@ export const createKeyToolInput = z.object({
   templateIds: z.array(id).max(50).optional(),
   rpm: rpm.optional(),
   tpm: tpm.optional(),
+  maxRequestCost: maxRequestCost.optional(),
   days: days.optional().describe("Expiry in days. 0 never expires."),
   allowedIps: z.array(z.string().trim().max(64)).max(100).optional(),
   allowedEndpoints: keyEndpoints.optional(),
@@ -234,6 +241,7 @@ export const updateKeyToolInput = z.object({
   templateIds: z.array(id).max(50).optional(),
   rpm: rpm.optional(),
   tpm: tpm.optional(),
+  maxRequestCost: maxRequestCost.optional(),
   allowedIps: z.array(z.string().trim().max(64)).max(100).optional(),
   allowedEndpoints: keyEndpoints.optional(),
   accessWindows: keyWindows.optional(),
@@ -321,7 +329,7 @@ export const updateGuardrailsToolInput = z.object({
 });
 
 export const gatewaySettingsToolInput = z.object({
-  cacheTtlSeconds: z.number().int().min(0).max(86_400 * 30).optional(),
+  cacheTtlSeconds: z.number().int().min(0).max(CACHE_TTL_MAX_SECONDS).optional(),
   logRetentionDays: days.optional(),
   spendRetentionDays: days.optional(),
   auditRetentionDays: days.optional(),

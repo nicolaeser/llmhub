@@ -46,6 +46,7 @@ export function serializeApiKey(key: VirtualKeyView) {
     budget_duration: orNull(key.budget_duration),
     rpm_limit: key.rpm_limit,
     tpm_limit: key.tpm_limit,
+    max_request_cost: key.max_request_cost,
     allowed_ips: key.allowed_ips,
     allowed_endpoints: key.allowed_endpoints,
     access_windows: key.access_windows,

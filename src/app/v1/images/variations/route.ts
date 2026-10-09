@@ -18,7 +18,7 @@ export async function POST(req: Request) {
     const aliases = modelChain(principal, model, clean);
     const usage = meter(principal, model, body);
     try {
-      const hit = await forwardToModel(aliases, principal.routeLimits, "/images/variations", rawBody ? null : clean, {
+      const hit = await forwardToModel(aliases, principal, "/images/variations", rawBody ? null : clean, {
         rawBody,
         contentType: rawBody ? undefined : contentType,
       });

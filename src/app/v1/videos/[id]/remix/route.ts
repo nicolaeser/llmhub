@@ -17,7 +17,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     const { body: clean } = await applyPii(await readBody(req), principal);
     const usage = meter(principal, model, clean);
     try {
-      const hit = await forwardToModel([model], principal.routeLimits, `/videos/${upstreamId}/remix`, clean);
+      const hit = await forwardToModel([model], principal, `/videos/${upstreamId}/remix`, clean);
       await usage.ok(hit, usageFromUnknown(asRecord(hit.json)?.usage, hit.json));
       return NextResponse.json(await storeVideo(principal, model, hit.json));
     } catch (err) {
