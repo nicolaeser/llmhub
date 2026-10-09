@@ -12,7 +12,7 @@
   "noTargetsHint": "Set deployment costs or a custom price on the <link>Models</link> page, or refresh the <catalog>Model catalog</catalog>.",
   "verdict": "{direction, select, saved {{all, select, true {With {target} instead of your current models you would have saved {share, number, percent}.} other {With {target} instead of {source} you would have saved {share, number, percent}.}}} more {{all, select, true {With {target} instead of your current models you would have paid {share, number, percent} more.} other {With {target} instead of {source} you would have paid {share, number, percent} more.}}} same {{all, select, true {With {target} instead of your current models you would have paid about the same.} other {With {target} instead of {source} you would have paid about the same.}}} other {With {target} this traffic would have cost {amount, number, money}.}}",
   "basis": "{count, plural, one {Based on # request} other {Based on # requests}} with {tokens, number, integer} tokens since {since, date, short}.",
-  "method": "Prompt and completion tokens are repriced at the target's list price, including its price windows. Cache discounts, service tiers, and provider-reported costs are not applied.",
+  "method": "Prompt and completion tokens are repriced at the target's list price, including its price windows and the markup or discount each company, department, or project gets on that model. Cache discounts, service tiers, and provider-reported costs are not applied.",
   "metrics": {
     "billed": "Billed",
     "simulated": "With {target}",

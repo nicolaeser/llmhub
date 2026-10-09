@@ -28,6 +28,8 @@ export type Permission =
   | "spend:read-all"
   | "logs:content"
   | "budgets:manage"
+  | "pricing:read"
+  | "pricing:manage"
   | "users:read"
   | "users:manage"
   | "users:security"

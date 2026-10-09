@@ -70,5 +70,18 @@
     "period": "{cadence, select, weekly {Woche {range}} other {{start, date, month}}}",
     "subject": "{brand} Nutzungsbericht: {scope}, {period}",
     "body": "Nutzungsbericht für {scope}\nZeitraum: {period}\n\nAusgaben: {spend, number, money}\nAnfragen: {requests, number, integer} ({errors, plural, =0 {keine Fehler} one {# Fehler} other {# Fehler}})\nTokens: {tokens, number, integer}\n\n{format, select, csv {Die angehängte CSV listet die Ausgaben nach Projekt, Person, Key und Modell.} both {Das angehängte PDF zeigt die täglichen Ausgaben und die Ausgaben nach Modell. Die CSV listet die Ausgaben nach Projekt, Person, Key und Modell.} other {Das angehängte PDF zeigt die täglichen Ausgaben und die Ausgaben nach Modell.}}\n\nZeiträume verwenden UTC-Tage. Dieser Bericht ist in {brand} auf der Seite Unternehmen geplant."
+  },
+  "margin": {
+    "title": "Marge",
+    "description": "Einkauf bei den Anbietern neben dem Verkaufspreis an die Kunden, nach Aufschlägen und Rabatten.",
+    "groupBy": "Marge gruppieren nach",
+    "metrics": {
+      "purchase": "Einkauf",
+      "sale": "Verkauf",
+      "margin": "Marge"
+    },
+    "value": "{amount, number, money} · {share, number, percent}",
+    "share": "Marge %",
+    "empty": "Keine abrechenbare Nutzung in diesem Zeitraum."
   }
 }

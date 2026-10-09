@@ -70,5 +70,18 @@
     "period": "{cadence, select, weekly {Week {range}} other {{start, date, month}}}",
     "subject": "{brand} usage report: {scope}, {period}",
     "body": "Usage report for {scope}\nPeriod: {period}\n\nSpend: {spend, number, money}\nRequests: {requests, number, integer} ({errors, plural, =0 {no errors} one {# error} other {# errors}})\nTokens: {tokens, number, integer}\n\n{format, select, csv {The attached CSV lists spend by project, person, key, and model.} both {The attached PDF shows daily spend and spend by model. The CSV lists spend by project, person, key, and model.} other {The attached PDF shows daily spend and spend by model.}}\n\nPeriods use UTC days. This report is scheduled on the Companies page in {brand}."
+  },
+  "margin": {
+    "title": "Margin",
+    "description": "Purchase cost from providers next to the sale price billed to customers, after markups and discounts.",
+    "groupBy": "Group margin by",
+    "metrics": {
+      "purchase": "Purchase",
+      "sale": "Sale",
+      "margin": "Margin"
+    },
+    "value": "{amount, number, money} · {share, number, percent}",
+    "share": "Margin %",
+    "empty": "No billable usage in this period."
   }
 }

@@ -1,5 +1,6 @@
 import type { CostRates, PriceSchedule } from "@/types/gateway";
 import type { CatalogGroupState } from "@/types/model-catalog";
+import type { MarkupTenancy } from "@/types/pricing";
 
 export type MinuteTokens = {
   minute: number;
@@ -12,6 +13,15 @@ export type TrafficTotals = {
   prompt: number;
   completion: number;
   cost: number;
+};
+
+export type TenantTraffic = MarkupTenancy & {
+  prompt: number;
+  completion: number;
+};
+
+export type TenantMinutes = MarkupTenancy & {
+  minutes: MinuteTokens[];
 };
 
 export type WhatIfSource = TrafficTotals & {

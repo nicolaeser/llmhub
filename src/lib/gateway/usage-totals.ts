@@ -5,6 +5,7 @@ import { money } from "@/lib/utils/money";
 import type { Prisma } from "@/generated/prisma/client";
 import type { ResponseCacheStats } from "@/types/cache";
 import type { UsageSlice } from "@/types/gateway";
+import type { MarginTotals } from "@/types/pricing";
 import type { SpendScope } from "@/types/structure";
 
 export function usageWindowStart(days: number, now = new Date()): Date {
@@ -12,7 +13,10 @@ export function usageWindowStart(days: number, now = new Date()): Date {
   return new Date(today - (days - 1) * 86400000);
 }
 
-export async function usageSlices(where: Prisma.UsageDailyWhereInput): Promise<UsageSlice[]> {
+export async function usageSlices(
+  where: Prisma.UsageDailyWhereInput,
+  options: { purchase?: boolean } = {},
+): Promise<UsageSlice[]> {
   const rows = await prisma.usageDaily.findMany({ where });
   return rows.map((row) => ({
     day: row.day.toISOString().slice(0, 10),
@@ -33,7 +37,16 @@ export async function usageSlices(where: Prisma.UsageDailyWhereInput): Promise<U
     cacheWriteTokens: Number(row.cacheWriteTokens),
     cost: money(row.cost),
     cacheSavings: money(row.cacheSavings),
+    ...(options.purchase ? { purchaseCost: money(row.purchaseCost) } : {}),
   }));
+}
+
+export async function marginTotals(days: number): Promise<MarginTotals> {
+  const totals = await prisma.usageDaily.aggregate({
+    where: { day: { gte: usageWindowStart(days) } },
+    _sum: { cost: true, purchaseCost: true },
+  });
+  return { purchase: money(totals._sum.purchaseCost), sale: money(totals._sum.cost) };
 }
 
 export async function usageTotals(days: number, scope: SpendScope = {}) {

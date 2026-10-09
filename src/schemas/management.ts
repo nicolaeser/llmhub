@@ -1,6 +1,7 @@
 import { isIP } from "node:net";
 import { z } from "zod";
 import { KNOWN_BILLING_MODES, KNOWN_KINDS, KNOWN_STRATEGIES } from "@/lib/gateway/core";
+import { MARKUP_SCOPES, MAX_MARKUP_PERCENT, MIN_MARKUP_PERCENT } from "@/lib/gateway/markup-policy";
 import { clockMinute, isTimeZone, MAX_PRICE_WINDOWS } from "@/lib/gateway/price-schedule";
 import { MANAGEMENT_PERMISSIONS } from "@/lib/management/scope";
 import { accessWindowsSchema, allowedEndpointsSchema } from "@/schemas/keys";
@@ -170,6 +171,20 @@ export const teamUpdateSchema = z
   .strict();
 
 export const orgWriteSchema = z.object({ alias }).strict();
+
+const markupFields = {
+  scope: z.enum(MARKUP_SCOPES),
+  target_id: optionalId,
+  model: z.string().trim().max(200).nullable().optional(),
+  percent: z.number().min(MIN_MARKUP_PERCENT).max(MAX_MARKUP_PERCENT),
+  note: z.string().trim().max(200),
+};
+
+export const markupCreateSchema = z
+  .object({ ...markupFields, note: markupFields.note.default("") })
+  .strict();
+
+export const markupUpdateSchema = z.object(markupFields).partial().strict();
 
 export const projectCreateSchema = z
   .object({

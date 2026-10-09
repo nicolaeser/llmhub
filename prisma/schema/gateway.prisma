@@ -18,6 +18,7 @@ model Organization {
   members  Member[]
   users    User[]
   keys     VirtualKey[]
+  markups  PriceMarkup[]
   reports  UsageReport[]
 
   vectorStores VectorStore[]
@@ -39,6 +40,7 @@ model Team {
   members  Member[]
   projects Project[]
   keys     VirtualKey[]
+  markups  PriceMarkup[]
   reports  UsageReport[]
 
   @@index([orgId])
@@ -81,6 +83,7 @@ model Project {
   createdAt      DateTime      @default(now())
 
   keys         VirtualKey[]
+  markups      PriceMarkup[]
   vectorStores VectorStore[]
 
   @@index([orgId])
@@ -216,18 +219,18 @@ model ProviderLogin {
 }
 
 model ModelGroup {
-  alias          String  @id
-  enabled        Boolean @default(true)
-  strategy       String  @default("least_inflight")
-  billingMode    String  @default("routed")
-  priceInput     Decimal @default(0) @db.Decimal(20, 10)
-  priceOutput    Decimal @default(0) @db.Decimal(20, 10)
-  priceTimeZone  String  @default("UTC")
-  overflowGroup  String  @default("")
-  numRetries     Int     @default(0)
-  fallbackGroups Json    @default("[]")
-  vendor         String  @default("")
-  displayName    String  @default("")
+  alias          String   @id
+  enabled        Boolean  @default(true)
+  strategy       String   @default("least_inflight")
+  billingMode    String   @default("routed")
+  priceInput     Decimal  @default(0) @db.Decimal(20, 10)
+  priceOutput    Decimal  @default(0) @db.Decimal(20, 10)
+  priceTimeZone  String   @default("UTC")
+  overflowGroup  String   @default("")
+  numRetries     Int      @default(0)
+  fallbackGroups Json     @default("[]")
+  vendor         String   @default("")
+  displayName    String   @default("")
   autoRoutes     Boolean?
 
   deployments  Deployment[]
@@ -261,6 +264,25 @@ model ModelPriceWindow {
   priceOutput Decimal    @db.Decimal(20, 10)
 
   @@index([groupAlias])
+}
+
+model PriceMarkup {
+  id        String        @id @default(cuid())
+  orgId     String?
+  org       Organization? @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  teamId    String?
+  team      Team?         @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  projectId String?
+  project   Project?      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  model     String        @default("")
+  percent   Decimal       @db.Decimal(9, 4)
+  note      String        @default("")
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  @@index([orgId])
+  @@index([teamId])
+  @@index([projectId])
 }
 
 model Deployment {
@@ -325,6 +347,7 @@ model UsageDaily {
   cacheWriteTokens          BigInt   @default(0)
   cost                      Decimal  @default(0) @db.Decimal(20, 10)
   cacheSavings              Decimal  @default(0) @db.Decimal(20, 10)
+  purchaseCost              Decimal  @default(0) @db.Decimal(20, 10)
   responseCacheHits         Int      @default(0)
   responseCacheSemanticHits Int      @default(0)
   responseCacheMisses       Int      @default(0)

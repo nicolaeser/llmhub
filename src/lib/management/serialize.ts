@@ -3,6 +3,7 @@ import type { SliceRow, VirtualKeyView } from "@/types/gateway";
 import type { RequestLogRow } from "@/types/logs";
 import type { AuditLogSource, ProviderSource, SpendLogSource, UsageSource } from "@/types/management";
 import type { Group } from "@/types/models";
+import type { MarkupView } from "@/types/pricing";
 import type {
   BudgetKind,
   BudgetView,
@@ -198,10 +199,15 @@ export function serializeBudget(kind: BudgetKind, holder: { id: string; alias: s
   };
 }
 
+function margin(spend: number, purchase: number | null | undefined) {
+  return purchase === null || purchase === undefined ? {} : { purchase_cost: purchase, margin: spend - purchase };
+}
+
 function slice(row: SliceRow) {
   return {
     name: row.name,
     spend: row.spend,
+    ...margin(row.spend, row.purchase),
     prompt_tokens: row.prompt,
     completion_tokens: row.completion,
     requests: row.requests ?? 0,
@@ -228,6 +234,7 @@ export function serializeUsage(usage: UsageSource) {
     },
     totals: {
       spend: usage.spend,
+      ...margin(usage.spend, usage.purchase),
       tokens: usage.tokens,
       requests: usage.count,
       errors: usage.errors,
@@ -258,10 +265,24 @@ export function serializeUsage(usage: UsageSource) {
         user_id: orNull(parts.userId),
         model: orNull(parts.model),
         spend: row.spend,
+        ...margin(row.spend, row.purchase),
         prompt_tokens: row.prompt,
         completion_tokens: row.completion,
       };
     }),
+  };
+}
+
+export function serializeMarkup(markup: MarkupView) {
+  return {
+    object: "markup",
+    id: markup.id,
+    scope: markup.scope,
+    target_id: orNull(markup.targetId),
+    model: orNull(markup.model),
+    percent: markup.percent,
+    note: markup.note,
+    updated_at: markup.updatedAt,
   };
 }
 

@@ -1,5 +1,6 @@
 import "server-only";
 import prisma from "@/lib/db/prisma";
+import { markupRuleOf } from "@/lib/gateway/markup-policy";
 import { priceWindowQuery, priceWindowRates } from "@/lib/gateway/price-schedule";
 import { catalogPricesOf } from "@/lib/gateway/provider-prices";
 import { usageWindowStart } from "@/lib/gateway/usage-totals";
@@ -7,17 +8,20 @@ import {
   addMinutes,
   expectedRates,
   isScheduled,
+  markedUpCost,
   meanRates,
   ratesPriced,
-  targetCost,
 } from "@/lib/gateway/what-if";
 import { money } from "@/lib/utils/money";
 import type { Prisma } from "@/generated/prisma/client";
 import type { CostRates } from "@/types/gateway";
+import type { MarkupTenancy } from "@/types/pricing";
 import type { SpendScope } from "@/types/structure";
 import type {
   MinuteTokens,
   TargetPrice,
+  TenantMinutes,
+  TenantTraffic,
   TrafficTotals,
   WhatIfSource,
   WhatIfTargetInput,
@@ -126,22 +130,62 @@ async function whatIfTargets(): Promise<WhatIfTargetInput[]> {
   return targets;
 }
 
-async function minuteTraffic(where: Prisma.RequestLogWhereInput): Promise<MinuteTokens[]> {
-  const buckets = new Map<number, MinuteTokens>();
+function tenancyKey(row: MarkupTenancy): string {
+  return `${row.orgId}/${row.teamId}/${row.projectId}`;
+}
+
+async function minuteTraffic(where: Prisma.RequestLogWhereInput): Promise<TenantMinutes[]> {
+  const tenants = new Map<string, MarkupTenancy & { buckets: Map<number, MinuteTokens> }>();
   let cursor: string | undefined;
-  let batch: { id: string; createdAt: Date; promptTokens: number; completionTokens: number }[];
+  let batch: (MarkupTenancy & { id: string; createdAt: Date; promptTokens: number; completionTokens: number })[];
   do {
     batch = await prisma.requestLog.findMany({
       where,
       orderBy: { id: "asc" },
       take: SCAN_BATCH,
       ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
-      select: { id: true, createdAt: true, promptTokens: true, completionTokens: true },
+      select: {
+        id: true,
+        createdAt: true,
+        promptTokens: true,
+        completionTokens: true,
+        orgId: true,
+        teamId: true,
+        projectId: true,
+      },
     });
-    addMinutes(buckets, batch);
+    for (const row of batch) {
+      const key = tenancyKey(row);
+      const tenant = tenants.get(key) ?? {
+        orgId: row.orgId,
+        teamId: row.teamId,
+        projectId: row.projectId,
+        buckets: new Map<number, MinuteTokens>(),
+      };
+      addMinutes(tenant.buckets, [row]);
+      tenants.set(key, tenant);
+    }
     cursor = batch.at(-1)?.id;
   } while (batch.length === SCAN_BATCH);
-  return [...buckets.values()];
+  return [...tenants.values()].map(({ buckets, ...tenancy }) => ({ ...tenancy, minutes: [...buckets.values()] }));
+}
+
+function tenantTraffic(rows: (MarkupTenancy & { prompt: number; completion: number })[]): TenantTraffic[] {
+  const tenants = new Map<string, TenantTraffic>();
+  for (const row of rows) {
+    const key = tenancyKey(row);
+    const tenant = tenants.get(key) ?? {
+      orgId: row.orgId,
+      teamId: row.teamId,
+      projectId: row.projectId,
+      prompt: 0,
+      completion: 0,
+    };
+    tenant.prompt += row.prompt;
+    tenant.completion += row.completion;
+    tenants.set(key, tenant);
+  }
+  return [...tenants.values()];
 }
 
 function sumTraffic(rows: TrafficTotals[]): TrafficTotals {
@@ -163,38 +207,57 @@ export async function loadWhatIf(scope: SpendScope, model: string, now = new Dat
     createdAt: { gte: since, lt: now },
     OR: [{ promptTokens: { gt: 0 } }, { completionTokens: { gt: 0 } }],
   };
-  const [rows, targets] = await Promise.all([
+  const [grouped, targets, markups] = await Promise.all([
     prisma.requestLog.groupBy({
-      by: ["model"],
+      by: ["model", "orgId", "teamId", "projectId"],
       where,
       _count: { _all: true },
       _sum: { promptTokens: true, completionTokens: true, cost: true },
       _min: { createdAt: true },
     }),
     whatIfTargets(),
+    prisma.priceMarkup.findMany({
+      orderBy: { createdAt: "asc" },
+      select: { id: true, orgId: true, teamId: true, projectId: true, model: true, percent: true },
+    }),
   ]);
-  const sources: WhatIfSource[] = rows
-    .map((row) => ({
-      model: row.model,
-      requests: row._count._all,
-      prompt: row._sum.promptTokens ?? 0,
-      completion: row._sum.completionTokens ?? 0,
-      cost: money(row._sum.cost),
-    }))
-    .sort((a, b) => b.cost - a.cost || b.requests - a.requests || a.model.localeCompare(b.model));
-  const selected = sources.some((source) => source.model === model) ? model : "";
+  const rows = grouped.map((row) => ({
+    model: row.model,
+    orgId: row.orgId,
+    teamId: row.teamId,
+    projectId: row.projectId,
+    requests: row._count._all,
+    prompt: row._sum.promptTokens ?? 0,
+    completion: row._sum.completionTokens ?? 0,
+    cost: money(row._sum.cost),
+    firstAt: row._min.createdAt,
+  }));
+  const byModel = new Map<string, WhatIfSource>();
+  for (const row of rows) {
+    const source = byModel.get(row.model) ?? { model: row.model, requests: 0, prompt: 0, completion: 0, cost: 0 };
+    source.requests += row.requests;
+    source.prompt += row.prompt;
+    source.completion += row.completion;
+    source.cost += row.cost;
+    byModel.set(row.model, source);
+  }
+  const sources = [...byModel.values()].sort(
+    (a, b) => b.cost - a.cost || b.requests - a.requests || a.model.localeCompare(b.model),
+  );
+  const selected = byModel.has(model) ? model : "";
   const picked = selected ? sources.filter((source) => source.model === selected) : sources;
+  const pickedRows = selected ? rows.filter((row) => row.model === selected) : rows;
   const traffic = sumTraffic(picked);
+  const tenants = tenantTraffic(pickedRows);
+  const rules = markups.map(markupRuleOf);
   const minutes =
     traffic.requests && targets.some((target) => isScheduled(target.price))
       ? await minuteTraffic(selected ? { ...where, model: selected } : where)
       : [];
-  const firstAt = rows
-    .filter((row) => !selected || row.model === selected)
-    .reduce<Date | null>((first, row) => {
-      const at = row._min.createdAt;
-      return at && (!first || at < first) ? at : first;
-    }, null);
+  const firstAt = pickedRows.reduce<Date | null>(
+    (first, row) => (row.firstAt && (!first || row.firstAt < first) ? row.firstAt : first),
+    null,
+  );
   return {
     days: WHAT_IF_DAYS,
     since: since.toISOString(),
@@ -209,7 +272,7 @@ export async function loadWhatIf(scope: SpendScope, model: string, now = new Dat
         displayName: target.displayName,
         state: target.state,
         scheduled: isScheduled(target.price),
-        cost: targetCost(target.price, traffic, minutes),
+        cost: markedUpCost(target.price, target.alias, rules, tenants, minutes),
       }))
       .sort((a, b) => a.cost - b.cost || a.alias.localeCompare(b.alias)),
   };
