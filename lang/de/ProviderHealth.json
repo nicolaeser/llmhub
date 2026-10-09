@@ -1,0 +1,35 @@
+{
+  "title": "Anbieterstatus",
+  "subtitle": "Jeder Upstream-Versuch zählt, auch Wiederholungen. Wiederholte Fehler pausieren einen Endpunkt für {seconds, plural, one {# Sekunde} other {# Sekunden}}.",
+  "backend": "{backend, select, redis {Über Redis geteilt} other {Nur diese Instanz}}",
+  "window": "Zeitraum",
+  "lastMinutes": "{n, plural, one {Letzte Minute} other {Letzte # Minuten}}",
+  "metrics": {
+    "active": "Endpunkte mit Traffic",
+    "cooling": "In Abkühlung",
+    "attempts": "Upstream-Versuche",
+    "errorRate": "Fehlerquote"
+  },
+  "activeValue": "{active, number, integer} / {total, number, integer}",
+  "endpoints": "Endpunkte",
+  "updated": "{n, plural, one {Letzte Minute} other {Letzte # Minuten}}, aktualisiert {time}",
+  "latencyNote": "Latenz ist die Zeit bis zur Antwort des Upstreams (bei Streams das erste Byte), geschätzt aus Zeitklassen.",
+  "showIdle": "{n, plural, =0 {Inaktive Endpunkte zeigen} one {# inaktiven Endpunkt zeigen} other {# inaktive Endpunkte zeigen}}",
+  "columns": {
+    "model": "Modell",
+    "provider": "Anbieter",
+    "attempts": "Versuche",
+    "errorRate": "Fehlerquote",
+    "p50": "p50-Latenz",
+    "p95": "p95-Latenz",
+    "trips": "Abkühlungen"
+  },
+  "state": "{state, select, cooling {Abkühlung} degraded {Fehler} healthy {Gesund} other {Inaktiv}}",
+  "ready": "Bereit {when}",
+  "latencyValue": "{ms, number, integer} ms",
+  "quiet": "{n, plural, one {Keine Upstream-Versuche in der letzten Minute.} other {Keine Upstream-Versuche in den letzten # Minuten.}}",
+  "emptyTitle": "Noch keine Endpunkte",
+  "empty": "Lege ein Modell mit mindestens einem Endpunkt an, um hier seinen Status zu sehen.",
+  "openModels": "Modelle öffnen",
+  "loadFailed": "Anbieterstatus konnte nicht geladen werden."
+}

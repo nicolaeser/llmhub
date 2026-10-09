@@ -1,4 +1,4 @@
-import type { Msg, Session } from "@/types/playground";
+import type { Msg, PlaygroundReplay, Session } from "@/types/playground";
 
 export const STORAGE_KEY = "llmhub.playground.sessions";
 
@@ -7,6 +7,7 @@ export function makeSession(model: string): Session {
     id: crypto.randomUUID(),
     title: "",
     model,
+    system: "",
     messages: [],
     updatedAt: Date.now(),
   };
@@ -31,6 +32,7 @@ export function parseSessions(raw: string): Session[] {
       id: row.id,
       title: typeof row.title === "string" ? row.title : "",
       model: typeof row.model === "string" ? row.model : "",
+      system: typeof row.system === "string" ? row.system : "",
       messages: Array.isArray(row.messages) ? row.messages.filter(isMsg) : [],
       updatedAt: row.updatedAt,
     });
@@ -48,6 +50,15 @@ export function titleFrom(messages: Msg[]): string {
     .join(" ")
     .trim();
   return text.slice(0, 48);
+}
+
+export function replaySession(replay: PlaygroundReplay, model: string): Session {
+  return {
+    ...makeSession(model),
+    title: titleFrom([...replay.history, { role: "user", content: replay.prompt.text }]),
+    system: replay.system,
+    messages: replay.history,
+  };
 }
 
 export function parseTools(raw: string): unknown[] | undefined | "error" {

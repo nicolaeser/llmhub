@@ -54,7 +54,16 @@ test("normalizeEnterprise migrates the single legacy webhook to every event", as
       id: "legacy",
       url: "https://hooks.example.test/legacy",
       secret: "whsec",
-      events: ["upstream_exhaustion", "budget_threshold", "provider_models_changed"],
+      format: "json",
+      events: [
+        "upstream_exhaustion",
+        "budget_threshold",
+        "provider_models_changed",
+        "spend_anomaly",
+        "key_expiring",
+        "key_blocked",
+        "pii_blocked",
+      ],
     },
   ]);
   assert.deepEqual(normalizeEnterprise({}).alert_webhooks, []);
@@ -65,14 +74,16 @@ test("normalizeEnterprise keeps the webhook list and drops unknown events and br
   const ent = normalizeEnterprise({
     alert_webhook: "https://hooks.example.test/legacy",
     alert_webhooks: [
-      { id: "a", url: "https://a.test", secret: "", events: ["budget_threshold", "nope", 3] },
+      { id: "a", url: "https://a.test", secret: "", format: "discord", events: ["budget_threshold", "nope", 3] },
+      { id: "s", url: "https://s.test", secret: "", format: "slack", events: ["pii_blocked"] },
       { id: "", url: "https://missing-id.test", events: ["budget_threshold"] },
       { id: "b", url: "  ", events: ["budget_threshold"] },
       "garbage",
     ],
   });
   assert.deepEqual(ent.alert_webhooks, [
-    { id: "a", url: "https://a.test", secret: "", events: ["budget_threshold"] },
+    { id: "a", url: "https://a.test", secret: "", format: "json", events: ["budget_threshold"] },
+    { id: "s", url: "https://s.test", secret: "", format: "slack", events: ["pii_blocked"] },
   ]);
 });
 
@@ -82,9 +93,11 @@ test("alertWebhooksSchema requires an http(s) URL, at least one known event, and
     url: "https://hooks.example.test",
     secret: "",
     clearSecret: false,
-    events: ["budget_threshold"],
+    format: "teams",
+    events: ["budget_threshold", "spend_anomaly"],
   };
   assert.equal(alertWebhooksSchema.safeParse([valid]).success, true);
+  assert.equal(alertWebhooksSchema.safeParse([{ ...valid, format: "discord" }]).success, false);
   assert.equal(alertWebhooksSchema.safeParse([{ ...valid, url: "" }]).success, false);
   assert.equal(alertWebhooksSchema.safeParse([{ ...valid, url: "ftp://hooks.example.test" }]).success, false);
   assert.equal(alertWebhooksSchema.safeParse([{ ...valid, events: [] }]).success, false);
@@ -143,4 +156,77 @@ test("deliverWebhook skips a queued job whose webhook was removed or unsubscribe
   await deliverWebhook({ id: "e1", webhookId: "gone", event: "upstream_exhaustion", message: "x" });
   await deliverWebhook({ id: "e2", webhookId: "ops", event: "budget_threshold", message: "x" });
   assert.equal(calls.length, 0);
+});
+
+test("deliverWebhook sends Slack and Teams payloads and signs the exact body", async () => {
+  const { fireAlert } = await import("@/lib/gateway/alerts");
+  db.enterprise = {
+    alert_webhooks: [
+      { id: "slack", url: "https://hooks.slack.test/x", secret: "s", format: "slack", events: ["key_blocked"] },
+      { id: "teams", url: "https://teams.test/x", secret: "", format: "teams", events: ["key_blocked"] },
+      { id: "raw", url: "https://raw.test/x", secret: "", events: ["key_blocked"] },
+    ],
+  };
+
+  await fireAlert("key_blocked", "key <!channel> & co was blocked by ops");
+
+  const slack = calls.find((c) => c.url === "https://hooks.slack.test/x");
+  const teams = calls.find((c) => c.url === "https://teams.test/x");
+  const raw = calls.find((c) => c.url === "https://raw.test/x");
+  assert.ok(slack && teams && raw);
+
+  const slackBody = JSON.parse(slack.body);
+  assert.equal(slackBody.text, "LLM Hub: API key blocked: key &lt;!channel&gt; &amp; co was blocked by ops");
+  assert.deepEqual(slackBody.blocks[0], { type: "header", text: { type: "plain_text", text: "LLM Hub: API key blocked" } });
+  assert.deepEqual(slackBody.blocks[1].text, {
+    type: "plain_text",
+    text: "key <!channel> & co was blocked by ops",
+  });
+  const expected = createHmac("sha256", "s")
+    .update(`${slack.headers["X-LLMHub-Timestamp"]}.${slack.body}`)
+    .digest("hex");
+  assert.equal(slack.headers["X-LLMHub-Signature"], `sha256=${expected}`);
+
+  const teamsBody = JSON.parse(teams.body);
+  assert.equal(teamsBody.type, "message");
+  const card = teamsBody.attachments[0];
+  assert.equal(card.contentType, "application/vnd.microsoft.card.adaptive");
+  assert.equal(card.content.type, "AdaptiveCard");
+  assert.equal(card.content.body[0].text, "LLM Hub: API key blocked");
+  assert.equal(card.content.body[1].text, "key <!channel> & co was blocked by ops");
+
+  const rawBody = JSON.parse(raw.body);
+  assert.deepEqual(Object.keys(rawBody).sort(), ["event", "id", "message", "source", "ts"]);
+  assert.equal(rawBody.event, "key_blocked");
+  assert.equal(rawBody.source, "llm-hub");
+});
+
+test("alertPiiBlocked names the key and entity types once per cooldown, never the content", async () => {
+  const { alertPiiBlocked } = await import("@/lib/gateway/alerts");
+  db.enterprise = {
+    alert_webhooks: [{ id: "sec", url: "https://sec.test/hook", secret: "", events: ["pii_blocked"] }],
+  };
+  const principal = {
+    actor: "sk-hub-abcde",
+    key: { token_id: "k1", key_alias: "billing-bot", key_name: "sk-hub-abcde" },
+    teamId: "",
+    orgId: "",
+    userId: "",
+    memberId: "",
+    models: [],
+    routeLimits: {},
+    trace: { endpoint: "/v1/chat/completions", piiMode: "block", piiInput: new Set(), piiOutput: new Set() },
+  } as unknown as Parameters<typeof alertPiiBlocked>[0];
+  const start = 1_000_000;
+
+  await alertPiiBlocked(principal, new Set(["PHONE_NUMBER", "EMAIL_ADDRESS"]), start);
+  await alertPiiBlocked(principal, new Set(["EMAIL_ADDRESS"]), start + 60_000);
+  assert.equal(calls.length, 1);
+  assert.equal(
+    JSON.parse(calls[0].body).message,
+    "key billing-bot: request on /v1/chat/completions blocked by PII policy (EMAIL_ADDRESS, PHONE_NUMBER)",
+  );
+
+  await alertPiiBlocked(principal, new Set(["EMAIL_ADDRESS"]), start + 15 * 60_000);
+  assert.equal(calls.length, 2);
 });
