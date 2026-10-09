@@ -20,6 +20,9 @@ function rollUp(rows: UsageSlice[], nameOf: (row: UsageSlice) => string): SliceR
       errors: 0,
       rate429: 0,
       latency: 0,
+      cacheRead: 0,
+      cacheWrite: 0,
+      cacheSavings: 0,
       latencySum: 0,
     };
     cur.spend += row.cost;
@@ -29,6 +32,9 @@ function rollUp(rows: UsageSlice[], nameOf: (row: UsageSlice) => string): SliceR
     cur.errors += row.errors;
     cur.rate429 += row.rateLimited;
     cur.latencySum += row.latencyMs;
+    cur.cacheRead += row.cacheReadTokens;
+    cur.cacheWrite += row.cacheWriteTokens;
+    cur.cacheSavings += row.cacheSavings;
     map.set(name, cur);
   }
   return [...map.values()].map(({ latencySum, ...row }) => ({
@@ -49,6 +55,16 @@ export function groupRequestHealth(rows: UsageSlice[], key: SliceKey): SliceRow[
   return rollUp(rows, (row) => row[key] || "unassigned").sort(
     (a, b) => (b.requests ?? 0) - (a.requests ?? 0),
   );
+}
+
+export function groupCache(rows: UsageSlice[], key: SliceKey): SliceRow[] {
+  return groupSpend(rows, key)
+    .filter((row) => (row.cacheRead ?? 0) > 0 || (row.cacheWrite ?? 0) > 0)
+    .sort((a, b) => (b.cacheSavings ?? 0) - (a.cacheSavings ?? 0));
+}
+
+export function cacheHitRate(cacheRead: number, prompt: number): number {
+  return prompt > 0 ? cacheRead / prompt : 0;
 }
 
 export function chargebackRows(rows: UsageSlice[]): SliceRow[] {

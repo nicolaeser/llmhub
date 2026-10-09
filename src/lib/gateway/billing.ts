@@ -1,6 +1,6 @@
 import "server-only";
 import prisma from "@/lib/db/prisma";
-import { costOf } from "@/lib/gateway/cost";
+import { cacheSavingsOf, cacheTokens, costOf } from "@/lib/gateway/cost";
 import { priceAt, priceWindowQuery, priceWindowRates } from "@/lib/gateway/price-schedule";
 import { capExceeded, periodElapsed } from "@/lib/gateway/period";
 import { incrementRateWindow } from "@/lib/rate-limit/shared";
@@ -219,6 +219,8 @@ export async function recordUsage(input: {
       ? groupBilling(input.group, startedAt)
       : await billingContext(input.deployment, startedAt);
   const cost = costOf(input.deployment, usage, billing);
+  const cache = cacheTokens(usage);
+  const cacheSavings = cacheSavingsOf(input.deployment, usage, billing);
   const keyId = input.principal.key?.token_id ?? "";
   const userId = input.principal.userId;
   const teamId = input.principal.teamId;
@@ -242,7 +244,10 @@ export async function recordUsage(input: {
         latencyMs: input.latencyMs,
         promptTokens: prompt,
         completionTokens: completion,
+        cacheReadTokens: cache.read,
+        cacheWriteTokens: cache.written,
         cost,
+        cacheSavings,
       },
       update: {
         requests: { increment: 1 },
@@ -251,7 +256,10 @@ export async function recordUsage(input: {
         latencyMs: { increment: input.latencyMs },
         promptTokens: { increment: prompt },
         completionTokens: { increment: completion },
+        cacheReadTokens: { increment: cache.read },
+        cacheWriteTokens: { increment: cache.written },
         cost: { increment: cost },
+        cacheSavings: { increment: cacheSavings },
       },
     }),
   ];
@@ -302,6 +310,8 @@ export async function recordUsage(input: {
     tag: input.tag ?? "",
     promptTokens: prompt,
     completionTokens: completion,
+    cacheReadTokens: cache.read,
+    cacheWriteTokens: cache.written,
     cost,
     stream: input.stream,
     request: input.request,

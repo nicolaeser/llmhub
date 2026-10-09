@@ -203,6 +203,9 @@ function slice(row: SliceRow) {
     requests: row.requests ?? 0,
     errors: row.errors ?? 0,
     rate_limited: row.rate429 ?? 0,
+    cache_read_tokens: row.cacheRead ?? 0,
+    cache_write_tokens: row.cacheWrite ?? 0,
+    cache_savings: row.cacheSavings ?? 0,
   };
 }
 
@@ -227,6 +230,10 @@ export function serializeUsage(usage: UsageSource) {
       rate_limited: usage.rate429,
       avg_latency_ms: usage.latency,
       p95_latency_ms: usage.p95Latency,
+      cache_read_tokens: usage.cacheRead,
+      cache_write_tokens: usage.cacheWrite,
+      cache_savings: usage.cacheSavings,
+      cache_hit_rate: usage.cacheHitRate,
     },
     daily: usage.daily,
     by_model: usage.byModel.map(slice),
@@ -273,6 +280,8 @@ export function serializeRequestLog(row: RequestLogRow) {
     project_id: orNull(row.projectId),
     prompt_tokens: row.promptTokens,
     completion_tokens: row.completionTokens,
+    cache_read_tokens: row.cacheReadTokens,
+    cache_write_tokens: row.cacheWriteTokens,
     cost: row.cost,
     pii_input: row.piiInput,
     pii_output: row.piiOutput,

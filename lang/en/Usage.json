@@ -32,7 +32,17 @@
     "name": "Name",
     "spend": "Spend",
     "prompt": "Prompt tokens",
-    "completion": "Completion tokens"
+    "completion": "Completion tokens",
+    "cacheRead": "Cache read tokens",
+    "cacheWrite": "Cache write tokens",
+    "hitRate": "Hit rate",
+    "savings": "Savings"
+  },
+  "cache": {
+    "title": "Prompt caching",
+    "description": "Hit rate is the share of prompt tokens read from the provider cache. Savings compare billed cost with the same prompt tokens at the full input price, net of cache writes.",
+    "empty": "No prompt cache reads or writes in this period.",
+    "byProject": "Prompt caching by project"
   },
   "range": "Range",
   "empty": "No spend yet. Send a playground request.",
