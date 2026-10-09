@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { modelAlias } from "@/lib/gateway/model-alias";
 import { MAX_ALERT_WEBHOOKS, WEBHOOK_EVENTS, WEBHOOK_FORMATS } from "@/lib/gateway/webhook-events";
+import { vectorDefaultsSchema } from "@/schemas/rag";
 
 function isHttpUrl(value: string): boolean {
   try {
@@ -31,6 +32,12 @@ export const adminSettingsSchema = z.object({
     model: z.string().trim().max(120).regex(/^[\w.~:/-]*$/),
     api_key: z.string().trim().max(500),
     clear_api_key: z.boolean(),
+  }),
+  vector_stores: vectorDefaultsSchema.default({
+    embedding_model: "",
+    embedding_dimensions: 0,
+    ocr_model: "",
+    rerank_model: "",
   }),
   oidc: z.object({
     enabled: z.boolean(),

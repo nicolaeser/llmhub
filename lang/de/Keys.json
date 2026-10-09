@@ -56,8 +56,8 @@
     "logContentHint": "Wenn aus, speichern die Request-Logs für diesen Key nur Metadaten, keine Prompts oder Antworten."
   },
   "endpoints": {
-    "name": "{endpoint, select, chat {Chat und Text} embeddings {Embeddings} moderations {Moderation} images {Bilder} audio {Audio} videos {Videos} ocr {Texterkennung (OCR)} files {Dateien} batches {Batches} other {SystemOne}}",
-    "paths": "{endpoint, select, chat {/v1/chat/completions, /v1/completions, /v1/messages, /v1/responses} embeddings {/v1/embeddings} moderations {/v1/moderations} images {/v1/images} audio {/v1/audio} videos {/v1/videos} ocr {/v1/ocr} files {/v1/files} batches {/v1/batches} other {/v1/systemone}}"
+    "name": "{endpoint, select, chat {Chat und Text} embeddings {Embeddings} moderations {Moderation} images {Bilder} audio {Audio} videos {Videos} ocr {Texterkennung (OCR)} files {Dateien} batches {Batches} rerank {Reranking} vector_stores {Vektorspeicher und Dateisuche} other {SystemOne}}",
+    "paths": "{endpoint, select, chat {/v1/chat/completions, /v1/completions, /v1/messages, /v1/responses} embeddings {/v1/embeddings} moderations {/v1/moderations} images {/v1/images} audio {/v1/audio} videos {/v1/videos} ocr {/v1/ocr} files {/v1/files} batches {/v1/batches} rerank {/v1/rerank} vector_stores {/v1/vector_stores, file_search in /v1/responses} other {/v1/systemone}}"
   },
   "windows": {
     "title": "Erlaubte Zeiten",
