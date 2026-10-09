@@ -444,6 +444,24 @@ export type SliceRow = {
   latency?: number;
 };
 
+export type UsageDay = { day: string; spend: number; requests: number; errors: number };
+
+export type UsageSummary = {
+  daily: UsageDay[];
+  spend: number;
+  tokens: number;
+  count: number;
+  errors: number;
+  rate429: number;
+  latency: number;
+};
+
+export type UsagePdfStats = UsageSummary & {
+  p95Latency: number;
+  byModel: SliceRow[];
+  chargeback: SliceRow[];
+};
+
 export type Bucket = { start: number; rpm: number; tpm: number };
 
 export type RedisLike = {

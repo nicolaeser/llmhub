@@ -1,4 +1,4 @@
-import type { ChargebackParts, SliceRow, UsageSlice } from "@/types/gateway";
+import type { ChargebackParts, SliceRow, UsageSlice, UsageSummary } from "@/types/gateway";
 
 type SliceKey = keyof Pick<
   UsageSlice,
@@ -65,6 +65,82 @@ export function chargebackParts(name: string): ChargebackParts {
     parts[part] = value && value !== "-" ? value : "";
   });
   return parts;
+}
+
+export const CHARGEBACK_COLUMNS = [
+  "org_id",
+  "org",
+  "team_id",
+  "team",
+  "project_id",
+  "project",
+  "member_id",
+  "member",
+  "key_id",
+  "user_id",
+  "model",
+  "spend",
+  "prompt_tokens",
+  "completion_tokens",
+] as const;
+
+export function chargebackTable(
+  rows: SliceRow[],
+  names: Record<string, string>,
+): Record<(typeof CHARGEBACK_COLUMNS)[number], string | number>[] {
+  return rows.map((row) => {
+    const parts = chargebackParts(row.name);
+    return {
+      org_id: parts.orgId,
+      org: names[parts.orgId] ?? "",
+      team_id: parts.teamId,
+      team: names[parts.teamId] ?? "",
+      project_id: parts.projectId,
+      project: names[parts.projectId] ?? "",
+      member_id: parts.memberId,
+      member: names[parts.memberId] ?? "",
+      key_id: parts.keyId,
+      user_id: parts.userId,
+      model: parts.model,
+      spend: row.spend,
+      prompt_tokens: row.prompt,
+      completion_tokens: row.completion,
+    };
+  });
+}
+
+export function usageDays(start: Date, count: number): string[] {
+  return Array.from({ length: count }, (_, index) =>
+    new Date(start.getTime() + index * 86400000).toISOString().slice(0, 10),
+  );
+}
+
+export function summarizeUsage(rows: UsageSlice[], days: string[]): UsageSummary {
+  const daily = new Map(days.map((day) => [day, { spend: 0, requests: 0, errors: 0 }]));
+  const totals = { spend: 0, tokens: 0, count: 0, errors: 0, rate429: 0, latencySum: 0 };
+  for (const row of rows) {
+    const bucket = daily.get(row.day);
+    if (bucket) {
+      bucket.spend += row.cost;
+      bucket.requests += row.requests;
+      bucket.errors += row.errors;
+    }
+    totals.spend += row.cost;
+    totals.tokens += row.promptTokens + row.completionTokens;
+    totals.count += row.requests;
+    totals.errors += row.errors;
+    totals.rate429 += row.rateLimited;
+    totals.latencySum += row.latencyMs;
+  }
+  return {
+    daily: [...daily.entries()].map(([day, value]) => ({ day, ...value })),
+    spend: totals.spend,
+    tokens: totals.tokens,
+    count: totals.count,
+    errors: totals.errors,
+    rate429: totals.rate429,
+    latency: totals.count ? totals.latencySum / totals.count : 0,
+  };
 }
 
 export function percentileIndex(count: number, p: number): number {
