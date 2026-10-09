@@ -1,16 +1,41 @@
 {
   "title": "Providers",
-  "subtitle": "Connect OpenAI, Anthropic, OpenRouter, xAI, and any OpenAI-compatible endpoint.",
+  "subtitle": "Connect OpenAI, Anthropic, OpenRouter, xAI, and any OpenAI-compatible endpoint, or sign in with a ChatGPT or SuperGrok subscription.",
   "connect": "Connect",
   "edit": "Edit {name}",
   "formTitle": "{mode, select, edit {Edit {name}} connect {Connect {name}} other {Connect {name}}}",
   "formSubmit": "{mode, select, save {Save} connect {Connect} other {Connect}}",
-  "kindName": "{kind, select, openai {OpenAI} anthropic {Anthropic} openrouter {OpenRouter} openrouter_eu {OpenRouter EU} xai {xAI Grok} typesafe {TypeSafe AI} openai_compat {OpenAI-compatible} other {{kind}}}",
-  "kindDescription": "{kind, select, openai {Official OpenAI API.} anthropic {Native Anthropic Messages API.} openrouter {One key for hundreds of models.} openrouter_eu {OpenRouter with EU in-region routing.} xai {Grok over the xAI API.} typesafe {Jev decision model over the TypeSafe API.} openai_compat {vLLM, SGLang, Ollama, or any OpenAI-compatible server.} other {}}",
+  "kindName": "{kind, select, openai {OpenAI} anthropic {Anthropic} openrouter {OpenRouter} openrouter_eu {OpenRouter EU} xai {xAI Grok} typesafe {TypeSafe AI} openai_compat {OpenAI-compatible} codex {ChatGPT subscription (Codex)} grok_build {SuperGrok subscription (Grok Build)} other {{kind}}}",
+  "kindDescription": "{kind, select, openai {Official OpenAI API.} anthropic {Native Anthropic Messages API.} openrouter {One key for hundreds of models.} openrouter_eu {OpenRouter with EU in-region routing.} xai {Grok over the xAI API.} typesafe {Jev decision model over the TypeSafe API.} openai_compat {vLLM, SGLang, Ollama, or any OpenAI-compatible server.} codex {Sign in with ChatGPT Plus, Pro, or Business. Chat requests use the plan's Codex limits.} grok_build {Sign in with SuperGrok or X Premium+. Requests use the subscription's Grok limits.} other {}}",
   "displayName": "Display name",
   "baseUrl": "API base URL",
   "apiKey": "API key",
   "apiKeyKeep": "Leave blank to keep the stored key.",
+  "signIn": {
+    "title": "{kind, select, codex {ChatGPT account} grok_build {xAI account} other {Account}}",
+    "hint": "{kind, select, codex {Sign in with the ChatGPT account whose plan should serve requests. Usage counts against that plan's Codex limits. Clients reach it only through /subscription/v1, never through /v1.} grok_build {Sign in with the xAI account that has SuperGrok or X Premium+. Usage counts against that subscription. Clients reach it only through /subscription/v1, never through /v1.} other {Sign in to the provider account.}}",
+    "account": "{named, select, true {Signed in as {account}} other {Signed in}}",
+    "plan": "{plan, select, free {Free} go {Go} plus {Plus} pro {Pro} team {Business} business {Business} enterprise {Enterprise} edu {Edu} other {{plan}}}",
+    "status": "{status, select, active {Active} other {Expired}}",
+    "start": "{again, select, true {{kind, select, codex {Sign in to ChatGPT again} grok_build {Sign in to xAI again} other {Sign in again}}} other {{kind, select, codex {Sign in with ChatGPT} grok_build {Sign in with xAI} other {Sign in}}}}",
+    "codeTitle": "Enter this code",
+    "codeHint": "{kind, select, codex {Open the ChatGPT sign-in page, sign in, and enter the code.} grok_build {Open the xAI sign-in page, sign in, and enter the code.} other {Open the sign-in page and enter the code.}}",
+    "open": "{kind, select, codex {Open ChatGPT sign-in} grok_build {Open xAI sign-in} other {Open sign-in page}}",
+    "waiting": "Waiting for approval…",
+    "cancel": "Cancel sign-in",
+    "copy": "Copy code",
+    "copied": "Code copied",
+    "copyFailed": "Could not copy the code."
+  },
+  "limits": {
+    "title": "Usage limits",
+    "refresh": "Refresh usage limits",
+    "window": "{unit, select, hour {{count, plural, one {Hourly limit} other {#-hour limit}}} day {{count, plural, one {Daily limit} =7 {Weekly limit} other {#-day limit}}} other {Usage limit}}",
+    "resets": "Resets {when}",
+    "reached": "Limit reached",
+    "credits": "{unlimited, select, true {Unlimited credits} other {Credits: {balance}}}",
+    "none": "The provider reported no limits for this plan."
+  },
   "toasts": {
     "saved": "{mode, select, created {Provider connected} updated {Provider updated} deleted {Disconnected} other {Provider connected}}"
   },
@@ -18,7 +43,7 @@
   "empty": "No providers connected yet.",
   "emptyTitle": "Connect a provider",
   "moreProviders": "More providers",
-  "keyState": "{state, select, stored {API key stored} other {No API key}}",
+  "keyState": "{state, select, stored {API key stored} signed_in {Signed in as {account}} expired {Sign-in expired} other {No API key}}",
   "connectedCount": "{count, plural, =0 {Not connected} one {# connection} other {# connections}}",
   "policy": {
     "title": "Data policy",

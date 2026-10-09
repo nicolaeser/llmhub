@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { once } from "node:events";
 import { connect, createServer, Socket, type AddressInfo, type Server } from "node:net";
 import test from "node:test";
-import { buildMessage, encodeSubject, sendMail } from "@/lib/mail/send";
+import { buildMessage, encodeSubject, mailErrorCode, sendMail } from "@/lib/mail/send";
 
 delete process.env.SMTP_URL;
 
@@ -299,4 +299,65 @@ test("a silent server times out and the socket is closed", async () => {
   } finally {
     server.close();
   }
+});
+
+test("attachments build a multipart message with a base64 part per file", () => {
+  const pdf = Uint8Array.from([0x25, 0x50, 0x44, 0x46, 0x00, 0xff, ...Array.from({ length: 120 }, (_, i) => i)]);
+  const message = buildMessage({
+    ...input,
+    from: "hub@example.org",
+    text: "Summary\n.dot",
+    attachments: [
+      { filename: "llmhub-usage-2026-09.pdf", contentType: "application/pdf", content: pdf },
+      { filename: "usage ä/../x.csv", contentType: "text/csv; charset=utf-8", content: "a,b\n1,2\n" },
+    ],
+  });
+  const boundary = /^Content-Type: multipart\/mixed; boundary="([^"]+)"$/m.exec(message)?.[1];
+  assert.ok(boundary);
+  assert.equal(header(message, "MIME-Version"), "1.0");
+  const parts = message.split(`--${boundary}`);
+  assert.equal(parts.length, 5);
+  assert.equal(parts[4], "--");
+  assert.match(parts[1], /Content-Type: text\/plain; charset=utf-8\r\nContent-Transfer-Encoding: 8bit\r\n\r\nSummary\r\n\.\.dot\r\n$/);
+  const decode = (part: string) => Buffer.from(part.split("\r\n\r\n")[1].replace(/\r\n/g, ""), "base64");
+  assert.match(parts[2], /Content-Type: application\/pdf; name="llmhub-usage-2026-09\.pdf"/);
+  assert.match(parts[2], /Content-Disposition: attachment; filename="llmhub-usage-2026-09\.pdf"/);
+  assert.deepEqual(new Uint8Array(decode(parts[2])), pdf);
+  assert.ok(parts[2].split("\r\n").every((line) => line.length <= 76));
+  assert.match(parts[3], /filename="usage___\.\._x\.csv"/);
+  assert.equal(decode(parts[3]).toString("utf8"), "a,b\n1,2\n");
+  assert.throws(
+    () =>
+      buildMessage({
+        ...input,
+        from: "hub@example.org",
+        attachments: [{ filename: "x", contentType: "text/plain\r\nBcc: x@y.z", content: "" }],
+      }),
+    /line break/,
+  );
+});
+
+test("several recipients share one message and each gets a RCPT", async () => {
+  const to = ["a@example.com", "b@example.com"];
+  const message = buildMessage({ ...input, to, from: "hub@example.org" });
+  assert.match(message, /\r\nTo: a@example\.com,\r\n b@example\.com\r\n/);
+  assert.throws(() => buildMessage({ ...input, to: [], from: "hub@example.org" }), /no recipient/);
+  const smtp = await fakeSmtp({ caps: [] });
+  try {
+    await sendMail({ ...input, to }, { url: `smtp://127.0.0.1:${smtp.port}`, from: "hub@example.org" });
+    const [session] = smtp.sessions;
+    assert.deepEqual(verbs(session), ["EHLO", "MAIL", "RCPT", "RCPT", "DATA", "QUIT"]);
+    assert.equal(session.commands[2], "RCPT TO:<a@example.com>");
+    assert.equal(session.commands[3], "RCPT TO:<b@example.com>");
+  } finally {
+    smtp.server.close();
+  }
+});
+
+test("mail errors reduce to codes without addresses", () => {
+  assert.equal(mailErrorCode(new Error("smtp 550 5.1.1 <x@y.z> unknown user")), "SMTP_550");
+  assert.equal(mailErrorCode(new Error("smtp timeout")), "SMTP_TIMEOUT");
+  assert.equal(mailErrorCode(Object.assign(new Error("connect ECONNREFUSED"), { code: "ECONNREFUSED" })), "ECONNREFUSED");
+  assert.equal(mailErrorCode(new Error("something with a@b.c")), "MAIL_FAILED");
+  assert.equal(mailErrorCode("nope"), "MAIL_FAILED");
 });

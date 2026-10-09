@@ -80,8 +80,12 @@ export function pickMarkup<T extends MarkupRule>(rules: readonly T[], target: Ma
   return best;
 }
 
+export function scaleByMarkup(amount: number, percent: number): number {
+  return amount + (amount * percent) / 100;
+}
+
 export function applyMarkup(amount: number, percent: number): number {
-  return Math.max(0, amount + (amount * percent) / 100);
+  return Math.max(0, scaleByMarkup(amount, percent));
 }
 
 export function marginShare(purchase: number, sale: number): number | null {

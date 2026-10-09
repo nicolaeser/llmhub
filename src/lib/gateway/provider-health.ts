@@ -10,6 +10,7 @@ import type {
 } from "@/types/provider-health";
 
 export const COOLDOWN_MS = 15_000;
+export const MAX_LIMIT_COOLDOWN_MS = 7 * 24 * 60 * 60_000;
 export const HEALTH_RETENTION_MINUTES = 60;
 export const LATENCY_BOUNDS_MS = [
   50, 100, 200, 300, 500, 750, 1_000, 1_500, 2_000, 3_000, 5_000, 7_500, 10_000, 15_000, 20_000,
@@ -152,11 +153,12 @@ function count(fields: string[], now: number): void {
   void countShared(fields, minute);
 }
 
-async function shareCooldown(id: string, until: number): Promise<void> {
+async function shareCooldown(id: string, until: number, now: number): Promise<void> {
   const redis = await sharedRedis();
   if (!redis) return;
   try {
-    await withRedisTimeout(redis.set(cooldownKey(id), String(until), "PX", COOLDOWN_MS));
+    const ttlMs = Math.max(1, Math.ceil(until - now));
+    await withRedisTimeout(redis.set(cooldownKey(id), String(until), "PX", ttlMs));
   } catch (err) {
     logger.warn("provider_health.redis_fallback", { err: errText(err) });
   }
@@ -169,16 +171,17 @@ export function recordSuccess(id: string, latencyMs?: number, now = Date.now()):
   count(fields, now);
 }
 
-export function recordFailure(id: string, now = Date.now()): void {
+export function recordFailure(id: string, now = Date.now(), retryAt: number | null = null): void {
   const state = memory();
   const fails = (state.failCount.get(id) ?? 0) + 1;
   const fields = [`${id}|fail`];
-  if (fails >= ALLOWED_FAILS) {
-    const until = now + COOLDOWN_MS;
+  const limited = retryAt != null && retryAt > now;
+  if (limited || fails >= ALLOWED_FAILS) {
+    const until = limited ? Math.min(retryAt, now + MAX_LIMIT_COOLDOWN_MS) : now + COOLDOWN_MS;
     state.failCount.delete(id);
     state.cooldownUntil.set(id, until);
     fields.push(`${id}|trip`);
-    if (redisUrl()) void shareCooldown(id, until);
+    if (redisUrl()) void shareCooldown(id, until, now);
   } else {
     state.failCount.set(id, fails);
   }

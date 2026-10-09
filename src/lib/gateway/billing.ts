@@ -1,6 +1,6 @@
 import "server-only";
 import prisma from "@/lib/db/prisma";
-import { costOf } from "@/lib/gateway/cost";
+import { cacheSavingsOf, cacheTokens, costOf } from "@/lib/gateway/cost";
 import { priceAt, priceWindowQuery, priceWindowRates } from "@/lib/gateway/price-schedule";
 import { capExceeded, periodElapsed } from "@/lib/gateway/period";
 import { incrementRateWindow } from "@/lib/rate-limit/shared";
@@ -8,7 +8,7 @@ import { money } from "@/lib/utils/money";
 import { ownerId } from "@/lib/gateway/core";
 import { writeRequestLog } from "@/lib/gateway/request-log";
 import { GateError } from "@/lib/gateway/errors";
-import { applyMarkup, markupRuleOf, pickMarkup } from "@/lib/gateway/markup-policy";
+import { applyMarkup, markupRuleOf, pickMarkup, scaleByMarkup } from "@/lib/gateway/markup-policy";
 import type { Prisma } from "@/generated/prisma/client";
 import type {
   SpendHolder,
@@ -235,6 +235,7 @@ export async function recordUsage(input: {
     input.group && input.group.alias !== "auto"
       ? groupBilling(input.group, startedAt)
       : await billingContext(input.deployment, startedAt);
+  const cache = cacheTokens(usage);
   const keyId = input.principal.key?.token_id ?? "";
   const userId = input.principal.userId;
   const teamId = input.principal.teamId;
@@ -245,6 +246,7 @@ export async function recordUsage(input: {
   const listed = costOf(input.deployment, usage, billing);
   const percent = listed ? await markupPercent({ orgId, teamId, projectId, model: input.model }) : 0;
   const cost = percent ? applyMarkup(listed, percent) : listed;
+  const cacheSavings = scaleByMarkup(cacheSavingsOf(input.deployment, usage, billing), percent);
 
   const now = new Date();
   const day = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
@@ -262,8 +264,11 @@ export async function recordUsage(input: {
         latencyMs: input.latencyMs,
         promptTokens: prompt,
         completionTokens: completion,
+        cacheReadTokens: cache.read,
+        cacheWriteTokens: cache.written,
         cost,
         purchaseCost,
+        cacheSavings,
       },
       update: {
         requests: { increment: 1 },
@@ -272,8 +277,11 @@ export async function recordUsage(input: {
         latencyMs: { increment: input.latencyMs },
         promptTokens: { increment: prompt },
         completionTokens: { increment: completion },
+        cacheReadTokens: { increment: cache.read },
+        cacheWriteTokens: { increment: cache.written },
         cost: { increment: cost },
         purchaseCost: { increment: purchaseCost },
+        cacheSavings: { increment: cacheSavings },
       },
     }),
   ];
@@ -324,6 +332,8 @@ export async function recordUsage(input: {
     tag: input.tag ?? "",
     promptTokens: prompt,
     completionTokens: completion,
+    cacheReadTokens: cache.read,
+    cacheWriteTokens: cache.written,
     cost,
     stream: input.stream,
     request: input.request,

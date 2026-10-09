@@ -9,6 +9,7 @@ import {
   LATENCY_BOUNDS_MS,
   latencyBucket,
   latencyPercentile,
+  MAX_LIMIT_COOLDOWN_MS,
   recordFailure,
   recordSuccess,
   resetProviderHealthMemory,
@@ -68,6 +69,19 @@ test("two failures in a row start a cooldown that expires", async () => {
   recordFailure("dep-cool", NOW + 1);
   assert.deepEqual([...(await coolingDown(["dep-cool", "dep-other"], NOW + 2))], ["dep-cool"]);
   assert.equal((await coolingDown(["dep-cool"], NOW + 1 + COOLDOWN_MS)).size, 0);
+});
+
+test("a failure with a reset time parks the deployment until then, at most seven days", async () => {
+  resetProviderHealthMemory();
+  recordFailure("dep-limited", NOW, NOW + 3_600_000);
+  assert.deepEqual([...(await coolingDown(["dep-limited"], NOW + 3_599_999))], ["dep-limited"]);
+  assert.equal((await coolingDown(["dep-limited"], NOW + 3_600_000)).size, 0);
+  recordFailure("dep-far", NOW, NOW + 30 * 24 * 60 * 60_000);
+  const far = (await deploymentHealth(["dep-far"], 1, NOW)).states.get("dep-far")!;
+  assert.equal(far.cooldownUntil, NOW + MAX_LIMIT_COOLDOWN_MS);
+  assert.equal(far.trips, 1);
+  recordFailure("dep-past", NOW, NOW - 1);
+  assert.equal((await coolingDown(["dep-past"], NOW)).size, 0);
 });
 
 test("a success between failures resets the failure streak", async () => {

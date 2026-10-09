@@ -4,6 +4,7 @@ import { KNOWN_BILLING_MODES, KNOWN_KINDS, KNOWN_STRATEGIES } from "@/lib/gatewa
 import { MARKUP_SCOPES, MAX_MARKUP_PERCENT, MIN_MARKUP_PERCENT } from "@/lib/gateway/markup-policy";
 import { clockMinute, isTimeZone, MAX_PRICE_WINDOWS } from "@/lib/gateway/price-schedule";
 import { MANAGEMENT_PERMISSIONS } from "@/lib/management/scope";
+import { accessWindowsSchema, allowedEndpointsSchema } from "@/schemas/keys";
 import { budgetPeriod, MAX_BOOST_HOURS } from "@/lib/utils/budget";
 
 const id = z.string().trim().min(1).max(64);
@@ -49,6 +50,9 @@ export const apiKeyCreateSchema = z
     rpm_limit: rpm.default(0),
     tpm_limit: tpm.default(0),
     allowed_ips: ips.default([]),
+    allowed_endpoints: allowedEndpointsSchema.default([]),
+    access_windows: accessWindowsSchema.default([]),
+    access_time_zone: timeZone.default("UTC"),
     log_content: z.boolean().default(true),
     expires_in_days: z.number().int().min(0).max(3650).default(0),
   })
@@ -64,6 +68,9 @@ export const apiKeyUpdateSchema = z
     rpm_limit: rpm,
     tpm_limit: tpm,
     allowed_ips: ips,
+    allowed_endpoints: allowedEndpointsSchema,
+    access_windows: accessWindowsSchema,
+    access_time_zone: timeZone,
     log_content: z.boolean(),
     blocked: z.boolean(),
   })

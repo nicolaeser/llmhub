@@ -8,6 +8,7 @@ import { runPendingBatches } from "@/lib/gateway/batches";
 import { crossedThresholds, forecastBudget } from "@/lib/gateway/forecast";
 import { purgeStoredObjects } from "@/lib/gateway/objects";
 import { getAlertState, getEnterprise, saveAlertState } from "@/lib/gateway/settings";
+import { runUsageReports } from "@/lib/reports/usage-report";
 import { runKeyExpiryAlerts, runSpendAnomalyAlerts } from "./alert-checks";
 import { retentionCutoff } from "./retention";
 import type { MaintenanceSweepResult } from "@/types/jobs";
@@ -48,6 +49,7 @@ export async function runMaintenanceSweep(
     auditLogs: 0,
     storedObjects: 0,
     batches: 0,
+    reports: 0,
   };
 
   const enterprise = await getEnterprise().catch(() => null);
@@ -88,6 +90,7 @@ export async function runMaintenanceSweep(
   await runBudgetAlerts().catch(() => 0);
   await runSpendAnomalyAlerts(now).catch(() => 0);
   await runKeyExpiryAlerts(now).catch(() => 0);
+  result.reports = await runUsageReports(now).catch(() => 0);
   return result;
 }
 

@@ -1,21 +1,10 @@
 "use client";
 
-import {
-  Alert,
-  Button,
-  Card,
-  ComboBox,
-  Description,
-  FieldError,
-  Input,
-  Label,
-  ListBox,
-  NumberField,
-  TimeField,
-} from "@heroui/react";
+import { Alert, Button, Card, FieldError, Label, NumberField, TimeField } from "@heroui/react";
 import { parseTime } from "@internationalized/date";
 import { Plus, Trash2 } from "lucide-react";
 import { useTranslations } from "next-intl";
+import TimeZonePicker from "@/components/console/time-zone-picker";
 import { formats } from "@/i18n/formats";
 import {
   clockMinute,
@@ -25,11 +14,6 @@ import {
   validPrice,
 } from "@/lib/gateway/price-schedule";
 import type { PriceWindowDraft } from "@/types/models";
-
-function timeZones(current: string): string[] {
-  const zones = ["UTC", ...Intl.supportedValuesOf("timeZone").filter((zone) => zone !== "UTC")];
-  return zones.includes(current) ? zones : [current, ...zones];
-}
 
 function clockValue(value: string) {
   return clockMinute(value) === null ? null : parseTime(value);
@@ -165,31 +149,13 @@ export default function PriceScheduleFields({
         </Alert>
       ) : null}
       {windows.length ? (
-        <ComboBox
-          fullWidth
-          selectedKey={timeZone}
-          onSelectionChange={(key) => {
-            if (key !== null) onTimeZoneChange(String(key));
-          }}
+        <TimeZonePicker
+          label={t("timeZone")}
+          description={t("timeZoneHint")}
+          value={timeZone}
           isDisabled={isDisabled}
-        >
-          <Label>{t("timeZone")}</Label>
-          <ComboBox.InputGroup>
-            <Input />
-            <ComboBox.Trigger />
-          </ComboBox.InputGroup>
-          <Description>{t("timeZoneHint")}</Description>
-          <ComboBox.Popover>
-            <ListBox aria-label={t("timeZone")}>
-              {timeZones(timeZone).map((zone) => (
-                <ListBox.Item key={zone} id={zone} textValue={zone}>
-                  {zone}
-                  <ListBox.ItemIndicator />
-                </ListBox.Item>
-              ))}
-            </ListBox>
-          </ComboBox.Popover>
-        </ComboBox>
+          onChange={onTimeZoneChange}
+        />
       ) : null}
       <Button
         size="sm"

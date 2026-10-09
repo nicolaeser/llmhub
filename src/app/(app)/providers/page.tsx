@@ -15,7 +15,7 @@ import { useTranslations } from "next-intl";
 import ConfirmDialog from "@/components/console/confirm-dialog";
 import EmptyState from "@/components/console/empty-state";
 import PageHeader from "@/components/console/page-header";
-import { PROVIDER_CATALOG } from "@/lib/gateway/catalog";
+import { PROVIDER_CATALOG, reportsLimits } from "@/lib/gateway/catalog";
 import {
   deleteProviderAction,
   discoverProviderAction,
@@ -25,8 +25,14 @@ import { isActionFail } from "@/lib/http/action-result";
 import type { ImportCandidate, ProviderView } from "@/types/providers";
 import ProviderDialog from "./_components/provider-dialog";
 import ImportModelsDialog from "./_components/import-models-dialog";
+import SubscriptionLimitsView from "./_components/subscription-limits";
 
 const STARTER_KINDS = new Set(["openai", "anthropic", "openrouter", "openai_compat"]);
+
+function credentialState(row: ProviderView): string {
+  if (row.signIn) return row.signIn.status === "active" ? "signed_in" : "expired";
+  return row.hasApiKey ? "stored" : "missing";
+}
 const STARTER_CATALOG = PROVIDER_CATALOG.filter((spec) => STARTER_KINDS.has(spec.kind));
 const MORE_CATALOG = PROVIDER_CATALOG.filter((spec) => !STARTER_KINDS.has(spec.kind));
 
@@ -142,8 +148,10 @@ export default function ProvidersPage() {
                   >
                     <div className="min-w-0">
                       <div className="truncate text-sm font-medium">{row.name}</div>
-                      <div className="truncate text-xs text-muted">
-                        {t("keyState", { state: row.hasApiKey ? "stored" : "missing" })}
+                      <div
+                        className={`truncate text-xs ${credentialState(row) === "expired" ? "text-warning" : "text-muted"}`}
+                      >
+                        {t("keyState", { state: credentialState(row), account: row.signIn?.account ?? "" })}
                       </div>
                       <div className="mt-1 flex flex-wrap gap-1">
                         {row.policy.zdr ? (
@@ -216,6 +224,9 @@ export default function ProvidersPage() {
                         </Button>
                       </ConfirmDialog>
                     </div>
+                    {reportsLimits(row.kind) && row.signIn?.status === "active" ? (
+                      <SubscriptionLimitsView providerId={row.id} />
+                    ) : null}
                   </Card>
                 ))}
               </Card.Content>

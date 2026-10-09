@@ -9,8 +9,17 @@ import {
   markupRuleOf,
   markupScopeOf,
   pickMarkup,
+  scaleByMarkup,
 } from "@/lib/gateway/markup-policy";
-import { chargebackRows, groupSpend } from "@/lib/gateway/usage-stats";
+import {
+  CHARGEBACK_COLUMNS,
+  CHARGEBACK_MARGIN_COLUMNS,
+  chargebackColumns,
+  chargebackRows,
+  chargebackTable,
+  groupSpend,
+} from "@/lib/gateway/usage-stats";
+import { toCsv } from "@/lib/http/export";
 import { markedUpCost, targetCost } from "@/lib/gateway/what-if";
 import { serializeUsage } from "@/lib/management/serialize";
 import { markupSchema } from "@/schemas/pricing";
@@ -130,7 +139,10 @@ const slice = (row: Partial<UsageSlice>): UsageSlice => ({
   latencyMs: 0,
   promptTokens: 10,
   completionTokens: 5,
+  cacheReadTokens: 0,
+  cacheWriteTokens: 0,
   cost: 0,
+  cacheSavings: 0,
   ...row,
 });
 
@@ -172,6 +184,10 @@ const usage = {
   byMember: [],
   byKey: [],
   byUser: [],
+  cacheRead: 0,
+  cacheWrite: 0,
+  cacheSavings: 0,
+  cacheHitRate: 0,
 };
 
 test("management usage shows purchase cost and margin only when present", () => {
@@ -206,7 +222,7 @@ test("usage loads purchase cost only with the margins permission", async () => {
   const source = await readFile(new URL("../src/app/(app)/_action.ts", import.meta.url), "utf8");
   assert.match(source, /const priced = hasPerm\(session\.permissions, PERMISSIONS\.PRICING_READ\);/);
   assert.match(source, /usageSlices\(\{ \.\.\.filters, day: \{ gte: since \} \}, \{ purchase: priced \}\)/);
-  assert.match(source, /purchase: priced \? totals\.purchase : null/);
+  assert.match(source, /purchase: priced \? rows\.reduce\(\(sum, row\) => sum \+ \(row\.purchaseCost \?\? 0\), 0\) : null/);
 });
 
 const flat: TargetPrice = {
@@ -246,4 +262,37 @@ test("what-if weights scheduled minutes by each tenant's markup", () => {
     { orgId: "o2", teamId: "", projectId: "", minutes: [{ minute, prompt: 1000, completion: 1000 }] },
   ];
   near(markedUpCost(scheduled, "gpt-5", [rule("acme", "org", "o1", "", 50)], tenants, minutes), 0.004 * 1.5 + 0.004);
+});
+
+test("prompt cache savings follow the markup without clamping negative savings", async () => {
+  assert.equal(scaleByMarkup(2, 25), 2.5);
+  assert.equal(scaleByMarkup(-2, 25), -2.5);
+  assert.equal(scaleByMarkup(2, -100), 0);
+  const source = await readFile(new URL("../src/lib/gateway/billing.ts", import.meta.url), "utf8");
+  assert.match(source, /const cacheSavings = scaleByMarkup\(cacheSavingsOf\(input\.deployment, usage, billing\), percent\);/);
+});
+
+test("chargeback CSV puts purchase cost, sale, and margin side by side only when priced", () => {
+  const priced = chargebackRows([slice({ orgId: "o1", model: "gpt-5", cost: 1.2, purchaseCost: 1 })]);
+  const csv = toCsv(chargebackTable(priced, { o1: "Acme" }), chargebackColumns(true));
+  const [header, line] = csv.split("\n");
+  assert.equal(header, CHARGEBACK_MARGIN_COLUMNS.join(","));
+  assert.match(header ?? "", /,model,purchase_cost,spend,margin,prompt_tokens,/);
+  const cells = (line ?? "").split(",");
+  assert.equal(Number(cells[CHARGEBACK_MARGIN_COLUMNS.indexOf("purchase_cost")]), 1);
+  assert.equal(Number(cells[CHARGEBACK_MARGIN_COLUMNS.indexOf("spend")]), 1.2);
+  assert.ok(Math.abs(Number(cells[CHARGEBACK_MARGIN_COLUMNS.indexOf("margin")]) - 0.2) < 1e-9);
+  const blind = chargebackRows([slice({ orgId: "o1", model: "gpt-5", cost: 1.2 })]);
+  assert.equal(chargebackColumns(false), CHARGEBACK_COLUMNS);
+  assert.equal("purchase_cost" in (chargebackTable(blind, {})[0] ?? {}), false);
+  assert.doesNotMatch(toCsv(chargebackTable(blind, {}), chargebackColumns(false)), /purchase_cost|margin/);
+});
+
+test("scheduled usage reports stay on the sale price like company users", async () => {
+  const report = await readFile(new URL("../src/lib/reports/usage-report.ts", import.meta.url), "utf8");
+  assert.match(report, /usageSlices\(\{ \.\.\.scope, day: \{ gte: period\.start, lt: period\.end \} \}\)/);
+  assert.doesNotMatch(report, /purchase|MARGIN/);
+  assert.match(report, /toCsv\(chargebackTable\(chargeback, await usageNames\(rows\)\), CHARGEBACK_COLUMNS\)/);
+  const route = await readFile(new URL("../src/app/internal-api/usage/chargeback/route.ts", import.meta.url), "utf8");
+  assert.match(route, /chargebackColumns\(result\.purchase !== null\)/);
 });
