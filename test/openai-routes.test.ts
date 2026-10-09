@@ -50,6 +50,7 @@ function apiPath(rel: string) {
 function exportsPostOrGet(source: string) {
   return (
     /\bexport\s+(async\s+)?function\s+(POST|GET)\b/.test(source) ||
+    /\bexport\s+const\s+(POST|GET)\s*=/.test(source) ||
     /\bexport\s+\{[^}]*(POST|GET)[^}]*\}/.test(source)
   );
 }

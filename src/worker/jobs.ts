@@ -9,7 +9,8 @@ import { crossedThresholds, forecastBudget } from "@/lib/gateway/forecast";
 import { purgeStoredObjects } from "@/lib/gateway/objects";
 import { runPendingIngests } from "@/lib/rag/ingest";
 import { expireVectorStores, purgeOrphanUploads } from "@/lib/rag/stores";
-import { getBudgetAlertState, getEnterprise, saveBudgetAlertState } from "@/lib/gateway/settings";
+import { getAlertState, getEnterprise, saveAlertState } from "@/lib/gateway/settings";
+import { runKeyExpiryAlerts, runSpendAnomalyAlerts } from "./alert-checks";
 import { retentionCutoff } from "./retention";
 import type { MaintenanceSweepResult } from "@/types/jobs";
 import { money } from "@/lib/utils/money";
@@ -92,6 +93,8 @@ export async function runMaintenanceSweep(
   result.vectorFiles = await runPendingIngests().catch(() => 0);
   await runSpendResets(now).catch(() => 0);
   await runBudgetAlerts().catch(() => 0);
+  await runSpendAnomalyAlerts(now).catch(() => 0);
+  await runKeyExpiryAlerts(now).catch(() => 0);
   return result;
 }
 
@@ -197,7 +200,7 @@ export async function runBudgetAlerts(): Promise<number> {
   const thresholds = enterprise.budget_alert_thresholds?.length
     ? enterprise.budget_alert_thresholds
     : [50, 80, 100];
-  const state = await getBudgetAlertState();
+  const state = await getAlertState("budget");
   const [keys, users, members, teams, orgs, projects] = await Promise.all([
     prisma.virtualKey.findMany({
       select: {
@@ -302,6 +305,6 @@ export async function runBudgetAlerts(): Promise<number> {
     state[key] = stamp;
     fired += 1;
   }
-  if (fired) await saveBudgetAlertState(state);
+  if (fired) await saveAlertState("budget", state);
   return fired;
 }
