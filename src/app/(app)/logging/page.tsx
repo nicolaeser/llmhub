@@ -1,18 +1,36 @@
 "use client";
 
 import { useEffect, useRef, useState, useTransition } from "react";
-import { Button, Card, Description, Input, Label, Spinner, Switch, TextField, toast } from "@heroui/react";
+import {
+  Button,
+  Card,
+  Description,
+  Input,
+  Label,
+  NumberField,
+  Spinner,
+  Switch,
+  TextField,
+  toast,
+} from "@heroui/react";
 import { Plus } from "lucide-react";
 import { useTranslations } from "next-intl";
 import PageHeader from "@/components/console/page-header";
+import { formats } from "@/i18n/formats";
 import { loadLoggingAction, saveLoggingAction } from "@/app/(app)/logging/_action";
 import WebhookCard from "@/app/(app)/logging/_components/webhook-card";
 import { isActionFail } from "@/lib/http/action-result";
+import {
+  DEFAULT_KEY_EXPIRY_WARNING_DAYS,
+  DEFAULT_SPEND_ANOMALY_FACTOR,
+  DEFAULT_SPEND_ANOMALY_MIN_COST,
+} from "@/lib/gateway/alert-rules";
 import { MAX_ALERT_WEBHOOKS, WEBHOOK_EVENTS } from "@/lib/gateway/webhook-events";
-import type { AlertWebhookDraft, AlertWebhookView } from "@/types/settings";
+import type { AlertRules, AlertWebhookDraft, AlertWebhookView } from "@/types/settings";
 
 type LoggingView = {
   alertWebhooks: AlertWebhookView[];
+  alertRules: AlertRules;
   logRetentionDays: number;
   spendRetentionDays: number;
   auditRetentionDays: number;
@@ -31,6 +49,11 @@ export default function LoggingPage() {
   const tCommon = useTranslations("Common");
   const [view, setView] = useState<LoggingView | null>(null);
   const [webhooks, setWebhooks] = useState<AlertWebhookDraft[]>([]);
+  const [rules, setRules] = useState<AlertRules>({
+    spendAnomalyFactor: DEFAULT_SPEND_ANOMALY_FACTOR,
+    spendAnomalyMinCost: DEFAULT_SPEND_ANOMALY_MIN_COST,
+    keyExpiryWarningDays: DEFAULT_KEY_EXPIRY_WARNING_DAYS,
+  });
   const draftSeq = useRef(0);
   const [retention, setRetention] = useState("0");
   const [spendRetention, setSpendRetention] = useState("0");
@@ -52,9 +75,11 @@ export default function LoggingPage() {
         secret: "",
         clearSecret: false,
         secretSet: hook.secretSet,
+        format: hook.format,
         events: hook.events,
       })),
     );
+    setRules(next.alertRules);
     setRetention(String(next.logRetentionDays));
     setSpendRetention(String(next.spendRetentionDays));
     setAuditRetention(String(next.auditRetentionDays));
@@ -89,9 +114,42 @@ export default function LoggingPage() {
     const key = `new-${draftSeq.current}`;
     setWebhooks((current) => [
       ...current,
-      { key, id: null, url: "", secret: "", clearSecret: false, secretSet: false, events: [...WEBHOOK_EVENTS] },
+      {
+        key,
+        id: null,
+        url: "",
+        secret: "",
+        clearSecret: false,
+        secretSet: false,
+        format: "json",
+        events: [...WEBHOOK_EVENTS],
+      },
     ]);
   };
+  const ruleField = (
+    field: keyof AlertRules,
+    label: string,
+    hint: string,
+    options: { step: number; format: Intl.NumberFormatOptions },
+  ) => (
+    <NumberField
+      fullWidth
+      value={rules[field]}
+      onChange={(value) => setRules((current) => ({ ...current, [field]: Number.isFinite(value) ? value : 0 }))}
+      minValue={0}
+      step={options.step}
+      formatOptions={options.format}
+      isDisabled={disabled}
+    >
+      <Label>{label}</Label>
+      <NumberField.Group>
+        <NumberField.DecrementButton />
+        <NumberField.Input />
+        <NumberField.IncrementButton />
+      </NumberField.Group>
+      <Description>{hint}</Description>
+    </NumberField>
+  );
   const numberField = (value: string, onChange: (next: string) => void, label: string, hint: string) => (
     <TextField fullWidth value={value} onChange={onChange} isDisabled={disabled}>
       <Label>{label}</Label>
@@ -117,8 +175,10 @@ export default function LoggingPage() {
                       url: hook.url,
                       secret: hook.secret,
                       clearSecret: hook.clearSecret,
+                      format: hook.format,
                       events: hook.events,
                     })),
+                    alertRules: rules,
                     logRetentionDays: Number(retention) || 0,
                     spendRetentionDays: Number(spendRetention) || 0,
                     auditRetentionDays: Number(auditRetention) || 0,
@@ -180,6 +240,26 @@ export default function LoggingPage() {
             </Button>
           </Card.Footer>
         ) : null}
+      </Card>
+      <Card className="gap-4">
+        <Card.Header>
+          <Card.Title>{t("rulesTitle")}</Card.Title>
+          <Card.Description>{t("rulesHint")}</Card.Description>
+        </Card.Header>
+        <div className="grid gap-4 md:grid-cols-3 md:items-start">
+          {ruleField("spendAnomalyFactor", t("anomalyFactor"), t("anomalyFactorHint"), {
+            step: 0.5,
+            format: formats.number.factor,
+          })}
+          {ruleField("spendAnomalyMinCost", t("anomalyMinCost"), t("anomalyMinCostHint"), {
+            step: 1,
+            format: formats.number.currency,
+          })}
+          {ruleField("keyExpiryWarningDays", t("expiryDays"), t("expiryDaysHint"), {
+            step: 1,
+            format: formats.number.integer,
+          })}
+        </div>
       </Card>
       <Card className="gap-4">
         <Card.Header>
