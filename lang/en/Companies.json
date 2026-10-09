@@ -171,5 +171,53 @@
     "add": "New threshold",
     "addHint": "Between 1 and 100 percent of a budget.",
     "addButton": "Add threshold"
+  },
+  "reports": {
+    "title": "Scheduled reports ({count, number, integer})",
+    "hint": "{kind, select, org {A weekly or monthly usage report of this company and its departments, sent by email with a PDF or CSV attached.} other {A weekly or monthly usage report of this department, sent by email with a PDF or CSV attached.}}",
+    "add": "Add report",
+    "empty": "No scheduled reports yet.",
+    "mailDisabled": "Email is not set up on this server, so reports are not sent. Set SMTP_URL to deliver them.",
+    "columns": {
+      "schedule": "Schedule",
+      "recipients": "Recipients"
+    },
+    "schedule": "{cadence, select, weekly {Weekly} other {Monthly}} · {format, select, csv {CSV} both {PDF and CSV} other {PDF}}",
+    "language": "In {language}",
+    "paused": "Paused",
+    "next": "Next on {date, date, stamp}",
+    "lastSent": "Last sent {date, date, stamp}",
+    "never": "Not sent yet",
+    "failed": "Last delivery failed ({code})",
+    "sendNow": "Send last period now: {report}",
+    "sent": "Report sent",
+    "sendFailed": "The report could not be sent ({code}).",
+    "edit": "Edit {report}",
+    "delete": "Delete {report}",
+    "deleteTitle": "Delete this report?",
+    "deleteHint": "Its recipients stop getting it. Usage data stays as it is.",
+    "deleted": "Report deleted",
+    "dialog": {
+      "title": "{mode, select, edit {Edit report} other {New report}}",
+      "hint": "{kind, select, org {Usage of {name} and all its departments.} other {Usage of the department {name}.}} Periods use UTC days. A new report first goes out after the current period ends. To test it, send the last period from the list.",
+      "cadence": "Schedule",
+      "cadenceOption": "{cadence, select, weekly {Weekly} other {Monthly}}",
+      "cadenceHint": "{cadence, select, weekly {Monday to Sunday, sent early on Monday.} other {The previous calendar month, sent early on the first day of the month.}}",
+      "format": "Attachment",
+      "formatOption": "{format, select, csv {CSV} both {PDF and CSV} other {PDF}}",
+      "formatHint": "{format, select, csv {Spend by project, person, key, and model.} both {The PDF summary and the CSV details.} other {Totals, daily spend, and spend by model.}}",
+      "language": "Language",
+      "recipients": "Recipients",
+      "recipientsHint": "Email addresses, one per line or separated by commas. Up to {max, number, integer}.",
+      "recipientsInvalid": "Check {list}.",
+      "recipientsTooMany": "Enter at most {max, number, integer} addresses.",
+      "addPerson": "Add a person",
+      "addPersonPlaceholder": "Choose a person with an email",
+      "enabled": "Send this report",
+      "enabledHint": "Turn off to pause it without losing the settings.",
+      "submit": "{mode, select, edit {Save} other {Add report}}",
+      "saved": "{mode, select, edit {Report saved} other {Report added}}"
+    },
+    "row": "{cadence, select, weekly {Weekly report} other {Monthly report}} to {first}{more, plural, =0 {} other { and # more}}"
   }
 }

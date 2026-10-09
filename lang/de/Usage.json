@@ -64,5 +64,11 @@
     "colCompletion": "Completion",
     "total": "Gesamt",
     "noSpend": "Keine Ausgaben in diesem Zeitraum."
+  },
+  "report": {
+    "scope": "{hasTeam, select, yes {{org} / {team}} other {{org}}}",
+    "period": "{cadence, select, weekly {Woche {range}} other {{start, date, month}}}",
+    "subject": "{brand} Nutzungsbericht: {scope}, {period}",
+    "body": "Nutzungsbericht für {scope}\nZeitraum: {period}\n\nAusgaben: {spend, number, money}\nAnfragen: {requests, number, integer} ({errors, plural, =0 {keine Fehler} one {# Fehler} other {# Fehler}})\nTokens: {tokens, number, integer}\n\n{format, select, csv {Die angehängte CSV listet die Ausgaben nach Projekt, Person, Key und Modell.} both {Das angehängte PDF zeigt die täglichen Ausgaben und die Ausgaben nach Modell. Die CSV listet die Ausgaben nach Projekt, Person, Key und Modell.} other {Das angehängte PDF zeigt die täglichen Ausgaben und die Ausgaben nach Modell.}}\n\nZeiträume verwenden UTC-Tage. Dieser Bericht ist in {brand} auf der Seite Unternehmen geplant."
   }
 }

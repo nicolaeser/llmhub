@@ -18,6 +18,7 @@ model Organization {
   members  Member[]
   users    User[]
   keys     VirtualKey[]
+  reports  UsageReport[]
 }
 
 model Team {
@@ -36,8 +37,31 @@ model Team {
   members  Member[]
   projects Project[]
   keys     VirtualKey[]
+  reports  UsageReport[]
 
   @@index([orgId])
+}
+
+model UsageReport {
+  id           String       @id @default(cuid())
+  orgId        String
+  org          Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  teamId       String?
+  team         Team?        @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  cadence      String       @default("monthly")
+  format       String       @default("pdf")
+  locale       String       @default("en")
+  recipients   String[]     @default([])
+  enabled      Boolean      @default(true)
+  lastPeriod   String       @default("")
+  lastSentAt   DateTime?
+  lastError    String       @default("")
+  claimedUntil DateTime?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  @@index([orgId])
+  @@index([teamId])
 }
 
 model Project {
