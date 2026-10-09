@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import {
   Alert,
   Button,
@@ -15,10 +15,14 @@ import {
   Tabs,
   type useOverlayState,
 } from "@heroui/react";
-import { Braces, ChevronDown, Download, FileCode, FileText, type LucideIcon } from "lucide-react";
+import { Braces, ChevronDown, Download, FileCode, FileText, Play, type LucideIcon } from "lucide-react";
 import { useFormatter, useTranslations } from "next-intl";
+import { loadAliasesAction } from "@/app/(app)/_action";
 import Markdown from "@/components/console/markdown";
+import SearchSelect from "@/components/console/search-select";
+import { useRouter } from "@/i18n/routing";
 import { splitPiiPlaceholders } from "@/lib/gateway/pii";
+import { isActionFail } from "@/lib/http/action-result";
 import type { RequestLogDetail, RequestLogExportFormat, TranscriptEntry } from "@/types/logs";
 import PiiChip from "./pii-chip";
 
@@ -178,6 +182,45 @@ function Content({ detail }: { detail: RequestLogDetail }) {
   );
 }
 
+function Replay({ detail }: { detail: RequestLogDetail }) {
+  const t = useTranslations("Logs.detail");
+  const router = useRouter();
+  const [models, setModels] = useState<string[] | null>(null);
+  const [model, setModel] = useState("");
+
+  useEffect(() => {
+    loadAliasesAction().then((res) => {
+      const aliases = isActionFail(res) ? [] : res.models;
+      setModels(aliases);
+      setModel(aliases.includes(detail.model) ? detail.model : "");
+    });
+  }, [detail.model]);
+
+  return (
+    <Modal.Footer className="flex-col items-stretch">
+      <p className="text-xs text-muted">{t("replayHint")}</p>
+      <div className="flex flex-wrap items-end gap-3">
+        <SearchSelect
+          label={t("replayModel")}
+          placeholder={models?.length === 0 ? t("replayNoModels") : t("replayPick")}
+          items={(models ?? []).map((alias) => ({ id: alias, label: alias }))}
+          value={model}
+          onChange={setModel}
+          isDisabled={!models?.length}
+          className="min-w-44 flex-1"
+        />
+        <Button
+          isDisabled={!model}
+          onPress={() => router.push(`/playground?${new URLSearchParams({ replay: detail.id, model })}`)}
+        >
+          <Play size={14} aria-hidden />
+          {t("replay")}
+        </Button>
+      </div>
+    </Modal.Footer>
+  );
+}
+
 export default function LogDetailDialog({
   state,
   detail,
@@ -321,6 +364,7 @@ export default function LogDetailDialog({
                 </>
               )}
             </Modal.Body>
+            {detail?.replayable ? <Replay detail={detail} /> : null}
           </Modal.Dialog>
         </Modal.Container>
       </Modal.Backdrop>

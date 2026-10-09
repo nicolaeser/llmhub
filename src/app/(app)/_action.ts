@@ -15,6 +15,7 @@ import {
 } from "@/lib/gateway/usage-stats";
 import { actionFail, runAction } from "@/lib/http/action-result";
 import { listKeys, toKeyView } from "@/app/(app)/_data";
+import { alertKeyBlocked } from "@/lib/gateway/alerts";
 import { writeAudit } from "@/lib/gateway/audit";
 import { getEnterprise } from "@/lib/gateway/settings";
 import { checkForUpdate } from "@/lib/updates/update-check";
@@ -159,6 +160,9 @@ export async function updateKeyAction(raw: unknown) {
       objectId: existing.id,
       after: { ...after, templateIds: templates },
     });
+    if (row.blocked && !existing.blocked) {
+      void alertKeyBlocked(row, session.user.username || session.user.email);
+    }
     return { key: toKeyView(row) };
   });
 }

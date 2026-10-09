@@ -15,15 +15,12 @@ import { modelAlias } from "@/lib/gateway/model-alias";
 import { routePermitted } from "@/lib/gateway/model-policy";
 import { priceWindowQuery, priceWindowRates } from "@/lib/gateway/price-schedule";
 import { costRejection } from "@/lib/gateway/cost-cap";
+import { coolingDown, recordFailure, recordSuccess } from "@/lib/gateway/provider-health";
 import type { CostFilter, DbDeployment, Group, ResolvedDeployment, Deployment } from "@/types/gateway";
 import type { DeploymentRule, RoutePolicy } from "@/types/model-templates";
 import { money } from "@/lib/utils/money";
 
-const COOLDOWN_MS = 15_000;
-const ALLOWED_FAILS = 2;
 const inflight = new Map<string, number>();
-const cooldownUntil = new Map<string, number>();
-const failCount = new Map<string, number>();
 const latencyEwma = new Map<string, number>();
 
 function mapDeployment(row: DbDeployment): ResolvedDeployment {
@@ -121,8 +118,9 @@ export async function loadGroup(requested: string): Promise<Group> {
   };
 }
 
-function healthy(items: ResolvedDeployment[], now: number): ResolvedDeployment[] {
-  return items.filter((d) => (cooldownUntil.get(d.id) ?? 0) <= now);
+async function healthy(items: ResolvedDeployment[]): Promise<ResolvedDeployment[]> {
+  const cooling = await coolingDown(items.map((d) => d.id));
+  return items.filter((d) => !cooling.has(d.id));
 }
 
 function pick(items: ResolvedDeployment[], strategy: string): ResolvedDeployment {
@@ -155,9 +153,8 @@ export async function acquireGroup(
   strategy = "",
   cost?: CostFilter,
 ): Promise<{ dep: ResolvedDeployment; release: () => void; overflow: boolean }> {
-  const ready = healthy(
+  const ready = await healthy(
     permittedDeployments(group.mapped, rules).filter((d) => !exclude.has(d.id)),
-    Date.now(),
   );
   if (!ready.length) {
     if (group.overflow_group && group.overflow_group !== group.alias) {
@@ -179,16 +176,11 @@ export async function acquireGroup(
 }
 
 export function markFailure(dep: Deployment): void {
-  const fails = (failCount.get(dep.id) ?? 0) + 1;
-  failCount.set(dep.id, fails);
-  if (fails >= ALLOWED_FAILS) {
-    cooldownUntil.set(dep.id, Date.now() + COOLDOWN_MS);
-    failCount.set(dep.id, 0);
-  }
+  recordFailure(dep.id);
 }
 
 export function markSuccess(dep: Deployment, latencyMs?: number): void {
-  failCount.set(dep.id, 0);
+  recordSuccess(dep.id, latencyMs);
   if (latencyMs == null || !(latencyMs >= 0)) return;
   latencyEwma.set(dep.id, nextLatencyEwma(latencyEwma.get(dep.id), latencyMs));
 }
