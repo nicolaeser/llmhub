@@ -314,4 +314,12 @@ export const gatewaySettingsToolInput = z.object({
   contentRetentionDays: days.optional(),
   logContent: z.boolean().optional(),
   logArchive: z.boolean().optional(),
+  spendAnomalyFactor: z
+    .number()
+    .min(0)
+    .max(1000)
+    .optional()
+    .describe("Alert when a key or project spends this many times its usual amount for the hour. 0 turns it off."),
+  spendAnomalyMinCost: z.number().min(0).max(1_000_000).optional().describe("Minimum USD per hour for a spend anomaly."),
+  keyExpiryWarningDays: days.optional().describe("Days before key expiry to fire key_expiring. 0 turns it off."),
 });

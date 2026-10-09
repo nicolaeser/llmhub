@@ -1,6 +1,6 @@
 import type { Prisma } from "@/generated/prisma/client";
 import type { OPENAPI_METHODS } from "@/lib/gateway/openapi";
-import type { WEBHOOK_EVENTS } from "@/lib/gateway/webhook-events";
+import type { WEBHOOK_EVENTS, WEBHOOK_FORMATS } from "@/lib/gateway/webhook-events";
 import type { PiiPolicy } from "@/types/guardrails";
 import type { RouteLimits } from "@/types/model-templates";
 
@@ -275,11 +275,28 @@ export type S3Settings = {
 
 export type WebhookEvent = (typeof WEBHOOK_EVENTS)[number];
 
+export type WebhookFormat = (typeof WEBHOOK_FORMATS)[number];
+
 export type AlertWebhook = {
   id: string;
   url: string;
   secret: string;
+  format: WebhookFormat;
   events: WebhookEvent[];
+};
+
+export type AlertPayload = {
+  id: string;
+  event: WebhookEvent;
+  message: string;
+  ts: string;
+};
+
+export type AlertStateKind = "budget" | "spend_anomaly" | "key_expiry";
+
+export type SpendAnomalyRule = {
+  factor: number;
+  minCost: number;
 };
 
 export type Enterprise = {
@@ -297,6 +314,9 @@ export type Enterprise = {
   pii?: PIIConfig;
   s3?: S3Settings;
   budget_alert_thresholds?: number[];
+  spend_anomaly_factor?: number;
+  spend_anomaly_min_cost?: number;
+  key_expiry_warning_days?: number;
   registration_enabled?: boolean;
   assistant_model?: string;
   assistant_model_locked?: boolean;
