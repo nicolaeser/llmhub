@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { CACHE_STATS_RANGES, CACHE_TTL_MAX_SECONDS, SEMANTIC_THRESHOLD_MIN } from "@/lib/gateway/cache-settings";
 import { modelAlias } from "@/lib/gateway/model-alias";
 import { MAX_ALERT_WEBHOOKS, WEBHOOK_EVENTS, WEBHOOK_FORMATS } from "@/lib/gateway/webhook-events";
 import { vectorDefaultsSchema } from "@/schemas/rag";
@@ -69,3 +70,19 @@ export const alertWebhooksSchema = z
     }),
   )
   .max(MAX_ALERT_WEBHOOKS);
+
+export const cacheSettingsSchema = z.object({
+  cacheTtlSeconds: z.number().int().min(0).max(CACHE_TTL_MAX_SECONDS).optional(),
+  semantic: z
+    .object({
+      enabled: z.boolean(),
+      model: text.transform(modelAlias),
+      threshold: z.number().min(SEMANTIC_THRESHOLD_MIN).max(1),
+    })
+    .refine((semantic) => !semantic.enabled || Boolean(semantic.model), { path: ["model"] })
+    .optional(),
+});
+
+export const cacheStatsSchema = z.object({
+  days: z.union(CACHE_STATS_RANGES.map((days) => z.literal(days))),
+});

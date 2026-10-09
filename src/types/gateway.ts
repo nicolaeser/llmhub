@@ -1,6 +1,7 @@
 import type { Prisma } from "@/generated/prisma/client";
 import type { OPENAPI_METHODS } from "@/lib/gateway/openapi";
 import type { WEBHOOK_EVENTS, WEBHOOK_FORMATS } from "@/lib/gateway/webhook-events";
+import type { SemanticCacheSettings } from "@/types/cache";
 import type { PiiPolicy } from "@/types/guardrails";
 import type { AccessWindow, KeyEndpoint } from "@/types/keys";
 import type { VectorStoreDefaults } from "@/types/rag";
@@ -66,8 +67,6 @@ export type BillingContext = {
   peers: CostRates[];
   price?: CostRates;
 };
-
-export type Entry = { expires: number; body: Uint8Array };
 
 export type ProviderAuth = "api_key" | "sign_in";
 
@@ -349,6 +348,7 @@ export type Enterprise = {
   object_retention_days?: number;
   file_retention_days?: number;
   cache_ttl_seconds?: number;
+  cache_semantic?: SemanticCacheSettings;
   log_archive?: boolean;
   log_content?: boolean;
   content_retention_days?: number;

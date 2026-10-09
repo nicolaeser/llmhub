@@ -20,6 +20,7 @@ import type {
   Principal,
 } from "@/types/gateway";
 import type { BudgetKind } from "@/types/structure";
+import type { ResponseCacheColumns, ResponseCacheUsage } from "@/types/cache";
 
 const HOLDER_SELECT = {
   id: true,
@@ -183,6 +184,22 @@ async function billingContext(dep: Deployment | null | undefined, at: Date): Pro
   };
 }
 
+export function responseCacheColumns(
+  responseCache: ResponseCacheUsage | undefined,
+  cost: number,
+): ResponseCacheColumns {
+  const event = responseCache?.event;
+  const hit = responseCache && (event === "hit" || event === "semantic_hit") ? responseCache : null;
+  return {
+    responseCacheHits: hit ? 1 : 0,
+    responseCacheSemanticHits: event === "semantic_hit" ? 1 : 0,
+    responseCacheMisses: event === "miss" ? 1 : 0,
+    responseCacheSavedTokens: hit ? Math.max(0, Math.round(hit.savedTokens ?? 0)) : 0,
+    responseCacheSavedCost: hit ? Math.max(0, hit.savedCost ?? 0) : 0,
+    responseCacheLookupCost: event === "lookup" ? cost : 0,
+  };
+}
+
 export async function recordUsage(input: {
   principal: Principal;
   model: string;
@@ -197,7 +214,8 @@ export async function recordUsage(input: {
   request?: unknown;
   response?: unknown;
   error?: unknown;
-}): Promise<void> {
+  responseCache?: ResponseCacheUsage;
+}): Promise<number> {
   const usage = input.usage ?? {};
   const prompt = usage.prompt_tokens ?? 0;
   const completion = usage.completion_tokens ?? 0;
@@ -221,6 +239,7 @@ export async function recordUsage(input: {
   const slice = { day, keyId, teamId, orgId, projectId, memberId, userId, model: input.model };
   const failed = input.status >= 400 ? 1 : 0;
   const limited = input.status === 429 ? 1 : 0;
+  const responseCache = responseCacheColumns(input.responseCache, cost);
   const writes: Prisma.PrismaPromise<unknown>[] = [
     prisma.usageDaily.upsert({
       where: { slice },
@@ -236,6 +255,7 @@ export async function recordUsage(input: {
         cacheWriteTokens: cache.written,
         cost,
         cacheSavings,
+        ...responseCache,
       },
       update: {
         requests: { increment: 1 },
@@ -248,6 +268,12 @@ export async function recordUsage(input: {
         cacheWriteTokens: { increment: cache.written },
         cost: { increment: cost },
         cacheSavings: { increment: cacheSavings },
+        responseCacheHits: { increment: responseCache.responseCacheHits },
+        responseCacheSemanticHits: { increment: responseCache.responseCacheSemanticHits },
+        responseCacheMisses: { increment: responseCache.responseCacheMisses },
+        responseCacheSavedTokens: { increment: responseCache.responseCacheSavedTokens },
+        responseCacheSavedCost: { increment: responseCache.responseCacheSavedCost },
+        responseCacheLookupCost: { increment: responseCache.responseCacheLookupCost },
       },
     }),
   ];
@@ -306,6 +332,7 @@ export async function recordUsage(input: {
     response: input.response,
     error: input.error,
   });
+  return cost;
 }
 
 function tokenCount(value: unknown): number {

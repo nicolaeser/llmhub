@@ -3,6 +3,7 @@ import prisma from "@/lib/db/prisma";
 import { percentileIndex } from "@/lib/gateway/usage-stats";
 import { money } from "@/lib/utils/money";
 import type { Prisma } from "@/generated/prisma/client";
+import type { ResponseCacheStats } from "@/types/cache";
 import type { UsageSlice } from "@/types/gateway";
 import type { SpendScope } from "@/types/structure";
 
@@ -80,4 +81,39 @@ export async function p95Latency(where: Prisma.RequestLogWhereInput): Promise<nu
     select: { latencyMs: true },
   });
   return row?.latencyMs ?? 0;
+}
+
+export function responseCacheStats(
+  days: number,
+  sums: { hits: number; semanticHits: number; misses: number; savedTokens: number; savedCost: number; lookupCost: number },
+): ResponseCacheStats {
+  const lookups = sums.hits + sums.misses;
+  return {
+    days,
+    ...sums,
+    hitRate: lookups ? sums.hits / lookups : 0,
+    netSaved: sums.savedCost - sums.lookupCost,
+  };
+}
+
+export async function responseCacheTotals(days: number): Promise<ResponseCacheStats> {
+  const totals = await prisma.usageDaily.aggregate({
+    where: { day: { gte: usageWindowStart(days) } },
+    _sum: {
+      responseCacheHits: true,
+      responseCacheSemanticHits: true,
+      responseCacheMisses: true,
+      responseCacheSavedTokens: true,
+      responseCacheSavedCost: true,
+      responseCacheLookupCost: true,
+    },
+  });
+  return responseCacheStats(days, {
+    hits: totals._sum.responseCacheHits ?? 0,
+    semanticHits: totals._sum.responseCacheSemanticHits ?? 0,
+    misses: totals._sum.responseCacheMisses ?? 0,
+    savedTokens: Number(totals._sum.responseCacheSavedTokens ?? 0),
+    savedCost: money(totals._sum.responseCacheSavedCost),
+    lookupCost: money(totals._sum.responseCacheLookupCost),
+  });
 }
