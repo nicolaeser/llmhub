@@ -6,7 +6,12 @@ import { useFormatter, useTranslations } from "next-intl";
 import EmptyState from "@/components/console/empty-state";
 import type { loadLogsAction } from "../_action";
 import type { Kind, RequestLogRow } from "@/types/logs";
+import GuardrailChip from "./guardrail-chip";
 import PiiChip from "./pii-chip";
+
+function guarded(row: RequestLogRow): boolean {
+  return row.outcome === "guardrail_blocked" || row.guardInput.length > 0 || row.guardOutput.length > 0;
+}
 
 export type LogsPayload = Exclude<Awaited<ReturnType<typeof loadLogsAction>>, { ok: false }>;
 
@@ -78,12 +83,17 @@ export default function LogTable({
                   </Table.Cell>
                   <Table.Cell>{format.number(row.cost, "money")}</Table.Cell>
                   <Table.Cell>
-                    <PiiChip
-                      outcome={row.outcome}
-                      piiMode={row.piiMode}
-                      piiInput={row.piiInput}
-                      piiOutput={row.piiOutput}
-                    />
+                    <div className="flex flex-wrap gap-1">
+                      {row.piiMode || !guarded(row) ? (
+                        <PiiChip
+                          outcome={row.outcome}
+                          piiMode={row.piiMode}
+                          piiInput={row.piiInput}
+                          piiOutput={row.piiOutput}
+                        />
+                      ) : null}
+                      <GuardrailChip outcome={row.outcome} guardInput={row.guardInput} guardOutput={row.guardOutput} />
+                    </div>
                   </Table.Cell>
                   <Table.Cell>
                     <Button

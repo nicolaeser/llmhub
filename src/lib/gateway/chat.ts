@@ -4,7 +4,7 @@ import { recordUsage, usageFromUnknown } from "@/lib/gateway/billing";
 import { alertUpstreamFailure } from "@/lib/gateway/alerts";
 import { spendTag } from "@/lib/gateway/gate";
 import { GateError } from "@/lib/gateway/errors";
-import { redactPii } from "@/lib/gateway/pii";
+import { outputScreen, type OutputScreen } from "@/lib/gateway/guardrails";
 import { requestRoutingOverride, serviceModeHeaders } from "@/lib/gateway/service-mode";
 import { acquireGroup, loadGroup, markFailure, markSuccess } from "@/lib/gateway/runtime";
 import { CodexSseTranslator } from "@/lib/gateway/codex";
@@ -32,8 +32,10 @@ import type {
   JsonMap,
   Usage,
   Principal,
+  RequestTrace,
   RoutePool,
 } from "@/types/gateway";
+import type { OutputGuard } from "@/types/guardrails";
 import type { RouteLimits } from "@/types/model-templates";
 import type { ResponseCacheUsage } from "@/types/cache";
 
@@ -148,25 +150,59 @@ export async function withDeployment<T>(
   throw last;
 }
 
-function redactMessage(message: JsonMap | null, entities: string[], found?: Set<string>): void {
+function screenMessage(message: JsonMap | null, apply: (text: string) => string): void {
   if (!message) return;
-  if (typeof message.content === "string") message.content = redactPii(message.content, entities, found);
-  if (typeof message.reasoning_content === "string") {
-    message.reasoning_content = redactPii(message.reasoning_content, entities, found);
-  }
+  if (typeof message.content === "string") message.content = apply(message.content);
+  if (typeof message.reasoning_content === "string") message.reasoning_content = apply(message.reasoning_content);
 }
 
-export function redactChatJson(json: JsonMap, entities: string[] | null, found?: Set<string>): JsonMap {
-  if (!entities) return json;
+export function screenChatJson(json: JsonMap, screen: OutputScreen | null, stream = false): JsonMap {
+  if (!screen) return json;
+  const apply = (text: string) => (stream ? screen.delta(text) : screen.text(text));
   const choices = Array.isArray(json.choices) ? json.choices : [];
   for (const choice of choices) {
     if (!choice || typeof choice !== "object") continue;
     const rec = choice as JsonMap;
-    redactMessage(asRecord(rec.message), entities, found);
-    redactMessage(asRecord(rec.delta), entities, found);
-    if (typeof rec.text === "string") rec.text = redactPii(rec.text, entities, found);
+    screenMessage(asRecord(rec.message), apply);
+    screenMessage(asRecord(rec.delta), apply);
+    if (typeof rec.text === "string") rec.text = apply(rec.text);
   }
   return json;
+}
+
+export function withholdChatJson(json: JsonMap): JsonMap {
+  const choices = Array.isArray(json.choices) ? json.choices : [];
+  json.choices = choices.map((choice) => {
+    const rec = asRecord(choice) ?? {};
+    const filtered: JsonMap = { ...rec, finish_reason: "content_filter" };
+    if (asRecord(rec.message)) filtered.message = { role: "assistant", content: "" };
+    if (typeof rec.text === "string") filtered.text = "";
+    return filtered;
+  });
+  return json;
+}
+
+export function screenChatOutput(json: JsonMap, guard: OutputGuard | null, trace?: RequestTrace): boolean {
+  const screen = outputScreen(guard, trace);
+  screenChatJson(json, screen);
+  if (screen?.blocked) withholdChatJson(json);
+  return screen?.blocked ?? false;
+}
+
+function contentFilterChunk(json: JsonMap, model: string): JsonMap {
+  const choices = Array.isArray(json.choices) ? json.choices : [];
+  const indexes = choices.map((choice) => Number(asRecord(choice)?.index ?? 0) || 0);
+  return {
+    id: json.id,
+    object: "chat.completion.chunk",
+    created: json.created,
+    model,
+    choices: (indexes.length ? [...new Set(indexes)] : [0]).map((index) => ({
+      index,
+      delta: {},
+      finish_reason: "content_filter",
+    })),
+  };
 }
 
 export async function chatOnce(dep: ResolvedDeployment, group: Group, body: JsonMap, model: string): Promise<unknown> {
@@ -254,7 +290,7 @@ export async function dispatchChat(input: {
   model: string;
   body: JsonMap;
   aliases: string[];
-  outputPii: string[] | null;
+  outputGuard: OutputGuard | null;
   responseCache?: ResponseCacheUsage;
 }): Promise<{ json: JsonMap; dep: ResolvedDeployment; alias: string; usage: Partial<Usage>; cost: number }> {
   const started = Date.now();
@@ -273,11 +309,8 @@ export async function dispatchChat(input: {
   });
   const { result, dep, alias, group } = routed;
 
-  const json = redactChatJson(
-    { ...(asRecord(result) ?? {}), model: input.model },
-    input.outputPii,
-    input.principal.trace?.piiOutput,
-  );
+  const json: JsonMap = { ...(asRecord(result) ?? {}), model: input.model };
+  const blocked = screenChatOutput(json, input.outputGuard, input.principal.trace);
   json.model = input.model;
   if (!json.object) json.object = "chat.completion";
   if (!json.id) json.id = `chatcmpl_${newId()}`;
@@ -289,7 +322,7 @@ export async function dispatchChat(input: {
     group,
     usage,
     status: 200,
-    outcome: "ok",
+    outcome: blocked ? "guardrail_blocked" : "ok",
     latencyMs: Date.now() - started,
     tag: spendTag(input.body),
     request: input.body,
@@ -305,7 +338,7 @@ export async function streamChat(input: {
   model: string;
   body: JsonMap;
   aliases: string[];
-  outputPii: string[] | null;
+  outputGuard: OutputGuard | null;
 }): Promise<Response> {
   const started = Date.now();
   const routed = await withDeployment(
@@ -330,7 +363,7 @@ export async function streamChat(input: {
     principal: input.principal,
     model: input.model,
     body: input.body,
-    entities: input.outputPii,
+    outputGuard: input.outputGuard,
     started,
   });
 }
@@ -343,11 +376,11 @@ export function relayChatStream(input: {
   principal: Principal;
   model: string;
   body: JsonMap;
-  entities: string[] | null;
+  outputGuard: OutputGuard | null;
   started: number;
 }): Response {
-  const { dep, group, release, entities, started } = input;
-  const found = input.principal.trace?.piiOutput;
+  const { dep, group, release, started } = input;
+  const screen = outputScreen(input.outputGuard, input.principal.trace);
   const transcript = new ChatStreamTranscript();
   const wantsUsage = asRecord(input.body.stream_options)?.include_usage === true;
   const encoder = new TextEncoder();
@@ -359,6 +392,7 @@ export function relayChatStream(input: {
   let ended = false;
   let reported: Partial<Usage> | null = null;
   let streamedText = "";
+  let filtered = false;
 
   const observe = (json: JsonMap): boolean => {
     transcript.push(json);
@@ -393,13 +427,29 @@ export function relayChatStream(input: {
         total_tokens: prompt + completion,
       },
       status: 200,
-      outcome: "ok",
+      outcome: screen?.blocked ? "guardrail_blocked" : "ok",
       latencyMs: Date.now() - started,
       tag: spendTag(input.body),
       stream: true,
       request: input.body,
       response: transcript.result(),
     });
+  };
+
+  const forward = (json: JsonMap, controller: ReadableStreamDefaultController<Uint8Array>) => {
+    screenChatJson(json, screen, true);
+    json.model = input.model;
+    if (screen?.blocked) {
+      if (!filtered) {
+        filtered = true;
+        const stop = contentFilterChunk(json, input.model);
+        transcript.push(stop);
+        controller.enqueue(encoder.encode(sseData(JSON.stringify(stop))));
+      }
+      json.choices = [];
+      if (!asRecord(json.usage)) return;
+    }
+    if (observe(json)) controller.enqueue(encoder.encode(sseData(JSON.stringify(json))));
   };
 
   const end = (controller: ReadableStreamDefaultController<Uint8Array>) => {
@@ -415,13 +465,14 @@ export function relayChatStream(input: {
           end(controller);
           continue;
         }
+        let json: JsonMap;
         try {
-          const json = redactChatJson(JSON.parse(payload) as JsonMap, entities, found);
-          json.model = input.model;
-          if (observe(json)) controller.enqueue(encoder.encode(sseData(JSON.stringify(json))));
+          json = JSON.parse(payload) as JsonMap;
         } catch {
           controller.enqueue(encoder.encode(sseData(payload)));
+          continue;
         }
+        forward(json, controller);
       }
       return;
     }
@@ -432,14 +483,14 @@ export function relayChatStream(input: {
       end(controller);
       return;
     }
+    let json: JsonMap;
     try {
-      const json = JSON.parse(data) as JsonMap;
-      json.model = input.model;
-      redactChatJson(json, entities, found);
-      if (observe(json)) controller.enqueue(encoder.encode(sseData(JSON.stringify(json))));
+      json = JSON.parse(data) as JsonMap;
     } catch {
       controller.enqueue(encoder.encode(sseData(data)));
+      return;
     }
+    forward(json, controller);
   };
 
   const step = async (controller: ReadableStreamDefaultController<Uint8Array>) => {
@@ -452,11 +503,11 @@ export function relayChatStream(input: {
       if (translator) {
         const flushed = translator.flush();
         if (flushed && flushed !== "[DONE]") {
+          let json: JsonMap | null = null;
           try {
-            const json = redactChatJson(JSON.parse(flushed) as JsonMap, entities, found);
-            json.model = input.model;
-            if (observe(json)) controller.enqueue(encoder.encode(sseData(JSON.stringify(json))));
+            json = JSON.parse(flushed) as JsonMap;
           } catch {}
+          if (json) forward(json, controller);
         }
       }
       end(controller);

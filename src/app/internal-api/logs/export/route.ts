@@ -74,6 +74,8 @@ export async function GET(req: NextRequest) {
       pii_mode: r.piiMode,
       pii_input: format === "csv" ? r.piiInput.join(" ") : r.piiInput,
       pii_output: format === "csv" ? r.piiOutput.join(" ") : r.piiOutput,
+      guardrail_input: format === "csv" ? r.guardInput.join("; ") : r.guardInput,
+      guardrail_output: format === "csv" ? r.guardOutput.join("; ") : r.guardOutput,
       content_skip: r.contentSkip,
       ...(r.content
         ? { request: r.content.request, response: r.content.response, content_truncated: r.content.truncated }

@@ -24,7 +24,7 @@ import { capRequestCost } from "@/lib/gateway/cost-cap";
 import { dispatchChat } from "@/lib/gateway/chat";
 import { asRecord, asStringMap, newId, ownerId } from "@/lib/gateway/core";
 import { resolveChatFiles, resolveResponsesFiles } from "@/lib/gateway/file-refs";
-import { allowEndpoint, allowModel, applyPii, modelChain, modelOf, toGateError, withTrace } from "@/lib/gateway/gate";
+import { allowEndpoint, allowModel, applyGuardrails, modelChain, modelOf, toGateError, withTrace } from "@/lib/gateway/gate";
 import { GateError, openAIErrorBody } from "@/lib/gateway/errors";
 import { meter } from "@/lib/gateway/meter";
 import {
@@ -55,6 +55,7 @@ import { responsesRequestSchema } from "@/schemas/responses";
 import type { BatchEndpoint, BatchLineResult, BatchSnapshot } from "@/types/batches";
 import type { GatewayErrorCode } from "@/types/errors";
 import type { JsonMap, Principal } from "@/types/gateway";
+import type { OutputGuard } from "@/types/guardrails";
 
 const QUEUED = BATCH_QUEUED;
 const DONE = BATCH_DONE;
@@ -229,7 +230,7 @@ async function forwardLine(principal: Principal, model: string, path: string, bo
   }
 }
 
-async function completeLine(principal: Principal, model: string, body: JsonMap, outputPii: string[] | null): Promise<JsonMap> {
+async function completeLine(principal: Principal, model: string, body: JsonMap, outputGuard: OutputGuard | null): Promise<JsonMap> {
   const parsed = parseRequest(completionsRequestSchema, body);
   if (!parsed.ok) throw invalid(parsed.message, parsed.param);
   const prompts = completionPrompts(parsed.data);
@@ -240,7 +241,7 @@ async function completeLine(principal: Principal, model: string, body: JsonMap, 
         model,
         body: completionToChat(parsed.data, prompt),
         aliases: modelChain(principal, model, body),
-        outputPii,
+        outputGuard,
       }),
     ),
   );
@@ -250,14 +251,14 @@ async function completeLine(principal: Principal, model: string, body: JsonMap, 
   );
 }
 
-async function respondLine(principal: Principal, model: string, body: JsonMap, outputPii: string[] | null): Promise<JsonMap> {
+async function respondLine(principal: Principal, model: string, body: JsonMap, outputGuard: OutputGuard | null): Promise<JsonMap> {
   const clean = await resolveResponsesFiles(body, principal);
   const parsed = parseRequest(responsesRequestSchema, clean);
   if (!parsed.ok) throw invalid(parsed.message, parsed.param);
   const request = parsed.data;
   const history = request.previous_response_id ? await previousConversation(request.previous_response_id, principal) : [];
   const { body: chatBody } = responsesToChat(request, history);
-  const dispatched = await dispatchChat({ principal, model, body: chatBody, aliases: modelChain(principal, model, clean), outputPii });
+  const dispatched = await dispatchChat({ principal, model, body: chatBody, aliases: modelChain(principal, model, clean), outputGuard });
   const response = chatToResponse(dispatched.json, responseSkeleton(request, responseId(newId()), now()));
   return visibleResponse({ ...response, store: false }, request.include ?? null);
 }
@@ -269,10 +270,10 @@ export async function runBatchLine(owner: Principal, endpoint: BatchEndpoint, ra
     capRequestCost(principal, await assertBudget(principal), null);
     const model = modelOf(raw);
     allowModel(principal, model);
-    const { body, output } = await applyPii(raw, principal);
+    const { body, output } = await applyGuardrails(raw, principal);
     if (endpoint === "/v1/chat/completions") {
       const clean = await resolveChatFiles(body, principal);
-      const dispatched = await dispatchChat({ principal, model, body: clean, aliases: modelChain(principal, model, clean), outputPii: output });
+      const dispatched = await dispatchChat({ principal, model, body: clean, aliases: modelChain(principal, model, clean), outputGuard: output });
       return { ok: true, body: dispatched.json, usage: dispatched.json.usage };
     }
     const json =

@@ -310,6 +310,8 @@ export function serializeRequestLog(row: RequestLogRow) {
     cost: row.cost,
     pii_input: row.piiInput,
     pii_output: row.piiOutput,
+    guardrail_input: row.guardInput,
+    guardrail_output: row.guardOutput,
     has_content: row.hasContent,
   };
 }

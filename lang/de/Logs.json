@@ -23,7 +23,7 @@
     "changes": "Änderungen",
     "endpoint": "Endpunkt",
     "caller": "Aufrufer",
-    "pii": "PII"
+    "pii": "Prüfungen"
   },
   "emptyRequests": "Noch keine Anfrageprotokolle.",
   "emptySpend": "Keine Ausgabenereignisse.",
@@ -51,13 +51,17 @@
   "caller": {
     "noKey": "Console-Sitzung"
   },
-  "statusOutcome": "{status} · {outcome, select, ok {OK} error {Fehler} cache_hit {Treffer im Antwort-Cache} pii_blocked {Wegen PII blockiert} other {{outcome}}}",
+  "statusOutcome": "{status} · {outcome, select, ok {OK} error {Fehler} cache_hit {Treffer im Antwort-Cache} pii_blocked {Wegen PII blockiert} guardrail_blocked {Durch Guardrail blockiert} other {{outcome}}}",
   "openDetails": "Details zu {model} anzeigen",
   "pii": {
     "blocked": "Blockiert",
     "found": "{entity}{more, plural, =0 {} other { +#}}",
     "clean": "Keine PII",
     "none": "—"
+  },
+  "guard": {
+    "blocked": "Guardrail",
+    "flagged": "{count, plural, one {# Treffer} other {# Treffer}}"
   },
   "detail": {
     "title": "Anfragedetails",
@@ -80,6 +84,8 @@
     "piiMode": "{mode, select, mask {Vor dem Modell maskiert} block {Vor dem Modell blockiert} other {Nicht gefiltert}}",
     "piiPrompt": "Im Prompt gefunden",
     "piiResponse": "In der Antwort gefunden",
+    "guardPrompt": "Guardrail-Treffer im Prompt",
+    "guardResponse": "Guardrail-Treffer in der Antwort",
     "piiStored": "Gespeicherte Inhalte sind maskiert. Markierte Platzhalter zeigen, wo PII entfernt wurde.",
     "content": "Inhalt",
     "conversation": "Verlauf",

@@ -1,4 +1,5 @@
 import type { JsonMap, Principal } from "@/types/gateway";
+import type { OutputGuard } from "@/types/guardrails";
 
 export type VectorScope = "project" | "member" | "user" | "organization";
 
@@ -173,7 +174,7 @@ export type FileSearchContext = {
   principal: Principal;
   model: string;
   aliases: string[];
-  outputPii: string[] | null;
+  outputGuard: OutputGuard | null;
   tool: FileSearchTool;
   stores: SearchableStore[];
   include: string[] | null;

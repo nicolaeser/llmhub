@@ -4,14 +4,15 @@ model Setting {
 }
 
 model Organization {
-  id             String    @id @default(cuid())
-  alias          String
-  maxBudget      Decimal   @default(0) @db.Decimal(20, 10)
-  spend          Decimal   @default(0) @db.Decimal(20, 10)
-  budgetDuration String    @default("")
-  spendResetAt   DateTime?
-  piiPolicy      Json?
-  createdAt      DateTime  @default(now())
+  id              String    @id @default(cuid())
+  alias           String
+  maxBudget       Decimal   @default(0) @db.Decimal(20, 10)
+  spend           Decimal   @default(0) @db.Decimal(20, 10)
+  budgetDuration  String    @default("")
+  spendResetAt    DateTime?
+  piiPolicy       Json?
+  guardrailPolicy Json?
+  createdAt       DateTime  @default(now())
 
   teams    Team[]
   projects Project[]
@@ -69,18 +70,20 @@ model UsageReport {
 }
 
 model Project {
-  id             String        @id @default(cuid())
-  orgId          String?
-  org            Organization? @relation(fields: [orgId], references: [id], onDelete: SetNull)
-  teamId         String?
-  team           Team?         @relation(fields: [teamId], references: [id], onDelete: SetNull)
-  alias          String
-  owner          String        @default("")
-  maxBudget      Decimal       @default(0) @db.Decimal(20, 10)
-  spend          Decimal       @default(0) @db.Decimal(20, 10)
-  budgetDuration String        @default("")
-  spendResetAt   DateTime?
-  createdAt      DateTime      @default(now())
+  id              String        @id @default(cuid())
+  orgId           String?
+  org             Organization? @relation(fields: [orgId], references: [id], onDelete: SetNull)
+  teamId          String?
+  team            Team?         @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  alias           String
+  owner           String        @default("")
+  maxBudget       Decimal       @default(0) @db.Decimal(20, 10)
+  spend           Decimal       @default(0) @db.Decimal(20, 10)
+  budgetDuration  String        @default("")
+  spendResetAt    DateTime?
+  piiPolicy       Json?
+  guardrailPolicy Json?
+  createdAt       DateTime      @default(now())
 
   keys         VirtualKey[]
   markups      PriceMarkup[]
@@ -147,6 +150,7 @@ model VirtualKey {
   prevHashUntil    DateTime?
   spendResetAt     DateTime?
   piiPolicy        Json?
+  guardrailPolicy  Json?
   createdAt        DateTime      @default(now())
 
   templates VirtualKeyTemplate[]
@@ -386,6 +390,8 @@ model RequestLog {
   piiMode          String             @default("")
   piiInput         String[]           @default([])
   piiOutput        String[]           @default([])
+  guardInput       String[]           @default([])
+  guardOutput      String[]           @default([])
   contentSkip      String             @default("")
   createdAt        DateTime           @default(now())
   content          RequestLogContent?

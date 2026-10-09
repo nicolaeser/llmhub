@@ -2,7 +2,7 @@ import type { Prisma } from "@/generated/prisma/client";
 import type { OPENAPI_METHODS } from "@/lib/gateway/openapi";
 import type { WEBHOOK_EVENTS, WEBHOOK_FORMATS } from "@/lib/gateway/webhook-events";
 import type { SemanticCacheSettings } from "@/types/cache";
-import type { PiiPolicy } from "@/types/guardrails";
+import type { GuardrailPolicy, PiiPolicy } from "@/types/guardrails";
 import type { AccessWindow, KeyEndpoint } from "@/types/keys";
 import type { VectorStoreDefaults } from "@/types/rag";
 import type { RouteLimits } from "@/types/model-templates";
@@ -178,6 +178,9 @@ export type RequestTrace = {
   piiMode: PiiMode | "";
   piiInput: Set<string>;
   piiOutput: Set<string>;
+  guardInput: Set<string>;
+  guardOutput: Set<string>;
+  guardBlocked: boolean;
   costCap?: CostCap | null;
 };
 
@@ -353,6 +356,7 @@ export type Enterprise = {
   log_content?: boolean;
   content_retention_days?: number;
   pii?: PIIConfig;
+  guardrails?: GuardrailPolicy;
   s3?: S3Settings;
   budget_alert_thresholds?: number[];
   spend_anomaly_factor?: number;
@@ -457,6 +461,7 @@ export type Principal = {
   memberId: string;
   models: string[];
   routeLimits: RouteLimits;
+  guardrails?: GuardrailPolicy | null;
   pool?: RoutePool;
   trace?: RequestTrace;
 };

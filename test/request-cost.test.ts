@@ -53,7 +53,15 @@ function traced(key?: Partial<VirtualKeyView>): Principal {
     memberId: "",
     models: [],
     routeLimits: {},
-    trace: { endpoint: "/v1/chat/completions", piiMode: "", piiInput: new Set(), piiOutput: new Set() },
+    trace: {
+      endpoint: "/v1/chat/completions",
+      piiMode: "",
+      piiInput: new Set(),
+      piiOutput: new Set(),
+      guardInput: new Set(),
+      guardOutput: new Set(),
+      guardBlocked: false,
+    },
   };
 }
 

@@ -1,9 +1,10 @@
 {
-  "title": "PII redaction",
-  "subtitle": "Mask or block identifiers before a model sees the prompt.",
+  "title": "Guardrails",
+  "subtitle": "Check prompts and responses for personal data, banned content, prompt injection, and leaked secrets.",
+  "tabs": "{tab, select, pii {PII} content {Rules and checks} other {{tab}}}",
   "save": "Save policy",
   "enabledState": "{enabled, select, true {Active} other {Paused}}",
-  "policy": "Policy",
+  "policy": "PII policy",
   "enable": "Redact PII in prompts",
   "enableHint": "Applies to text in chat, completions, messages, responses, batches, embeddings, moderations, image prompts, speech input, the playground, and the assistant. Uploaded files and audio are not scanned.",
   "mode": "When PII is found",
@@ -24,17 +25,17 @@
   "testerHint": "Uses the saved global policy.",
   "redact": "Redact sample",
   "saved": "PII policy saved",
-  "policyHint": "Applies to every request unless its company or API key has an override.",
+  "policyHint": "Applies to every request unless its API key, project, or company has an override.",
   "entitiesHint": "Without a selection, the default set applies.",
   "overrides": "Overrides",
-  "overridesHint": "Give a company or a single API key its own policy. Each request uses exactly one policy, chosen in this order:",
+  "overridesHint": "Give a company, a project, or a single API key its own policy. Each request uses exactly one policy, chosen in this order:",
   "overridesEmpty": "No overrides yet. Every request uses the global policy.",
   "addOverride": "Add override",
   "scope": "Applies to",
-  "scopeLabel": "{scope, select, org {Company} key {API key} other {{scope}}}",
-  "overrideTarget": "{scope, select, org {Company} key {API key} other {{scope}}}: {alias}",
+  "scopeLabel": "{scope, select, org {Company} project {Project} key {API key} other {{scope}}}",
+  "overrideTarget": "{scope, select, org {Company} project {Project} key {API key} other {{scope}}}: {alias}",
   "overrideTitle": "{mode, select, edit {Edit override} other {Add override}}",
-  "overrideHint": "This policy fully replaces the inherited one for the selected company or API key: mode, output redaction, and entities.",
+  "overrideHint": "This policy fully replaces the inherited one for the selected company, project, or API key: mode, output redaction, and entities.",
   "saveOverride": "Save override",
   "overrideSaved": "{mode, select, removed {Override removed} other {Override saved}}",
   "removeOverride": "Remove override",
@@ -53,7 +54,11 @@
     "number": "{n, number}",
     "key": {
       "title": "API key override",
-      "hint": "If the request's API key has an override, only that applies. Its company's override is ignored."
+      "hint": "If the request's API key has an override, only that applies. Project and company overrides are ignored."
+    },
+    "project": {
+      "title": "Project override",
+      "hint": "Otherwise the override of the project the key belongs to applies."
     },
     "org": {
       "title": "Company override",
@@ -61,8 +66,70 @@
     },
     "global": {
       "title": "Global policy",
-      "hint": "Otherwise the global policy at the top of this page applies."
+      "hint": "Otherwise the global policy at the top of this tab applies."
     },
     "replace": "An override fully replaces the inherited policy, including mode, output redaction, and entities. An override without selected entities uses the default set."
+  },
+  "actionLabel": "{action, select, block {Block} mask {Mask} flag {Flag only} other {{action}}}",
+  "actionHint": "Block rejects prompts with 400 guardrail_blocked and withholds responses. Mask replaces the match. Flag only lets it through and marks the request log.",
+  "hitLabel": "{kind, select, rule {Rule} injection {Injection} secret {Secret} other {Match}}: {label}",
+  "injection": {
+    "title": "Prompt injection",
+    "hint": "Heuristics for common injection phrases in English and German, checked in user and tool content. System and developer instructions are not checked.",
+    "enable": "Detect prompt injection",
+    "action": "When injection is found",
+    "actionHint": "Block rejects the request with 400 guardrail_blocked before it reaches the model. Flag only lets it through and marks the request log.",
+    "checks": "Checks",
+    "checksHint": "Without a selection, every check runs.",
+    "check": "{check, select, instruction_override {Overriding instructions} prompt_leak {System prompt extraction} role_hijack {Jailbreak role play} delimiter {Fake chat delimiters} hidden_text {Hidden Unicode text} other {{check}}}",
+    "example": "{check, select, instruction_override {“Ignore all previous instructions”} prompt_leak {“Reveal your system prompt”} role_hijack {“You are now in developer mode”} delimiter {<|im_start|>, [INST]} hidden_text {Tag characters, zero-width runs} other {}}"
+  },
+  "secrets": {
+    "title": "Secrets in responses",
+    "hint": "Checks model output for credentials before it reaches the client. This works independently of PII output redaction.",
+    "enable": "Check responses for secrets",
+    "action": "When a secret is found",
+    "entities": "Detectors",
+    "entitiesHint": "Without a selection, every detector runs."
+  },
+  "rules": {
+    "title": "Denylists and regex rules",
+    "hint": "Match your own terms or patterns in prompts, responses, or both.",
+    "add": "Add rule",
+    "empty": "No rules yet.",
+    "name": "Name",
+    "kind": "Type",
+    "kindLabel": "{kind, select, denylist {Denylist} regex {Regular expression} other {{kind}}}",
+    "target": "Checks",
+    "targetLabel": "{target, select, input {Prompts} output {Responses} both {Prompts and responses} other {{target}}}",
+    "action": "Action",
+    "patterns": "{kind, select, regex {Patterns, one per line} other {Terms, one per line}}",
+    "patternsHint": "{kind, select, regex {JavaScript syntax with the u flag. Nested quantifiers such as (a+)+ are rejected.} other {Whole words or phrases. Spaces match any whitespace.}}",
+    "caseSensitive": "Case-sensitive",
+    "remove": "Remove {name}",
+    "defaultName": "Rule {n, number}",
+    "issue": "{issue, select, invalid {Line {line, number} is not a valid pattern.} nested_quantifier {Line {line, number} nests quantifiers and could stall the gateway.} matches_empty {Line {line, number} matches empty text.} empty {This field is required.} duplicate {Another rule already uses this name.} other {Check this rule.}}",
+    "count": "{count, plural, =0 {No rules} one {# rule} other {# rules}}"
+  },
+  "content": {
+    "policy": "Global guardrails",
+    "policyHint": "Applies to every request unless its API key, project, or company has an override.",
+    "saved": "Guardrails saved",
+    "logsHint": "Request logs list every match in prompts and responses. A blocked response ends with finish reason content_filter (stop reason refusal on Messages), and stored log content keeps masked text masked.",
+    "streamHint": "Streams are checked chunk by chunk with a short look-back. A blocked stream stops at the match, so text sent before it has already reached the client. Masking only covers matches within one chunk.",
+    "overridesHint": "Give a company, a project, or a single API key its own guardrails. Each request uses exactly one set, chosen in this order:",
+    "overridesEmpty": "No overrides yet. Every request uses the global guardrails.",
+    "overrideHint": "These guardrails fully replace the inherited ones for the selected company, project, or API key: prompt injection, secret checks, and every rule.",
+    "replace": "An override fully replaces the inherited guardrails. Rules are not merged, so copy the rules you want to keep.",
+    "state": "{enabled, select, true {{action, select, block {Block} mask {Mask} flag {Flag only} other {On}}} other {Off}}"
+  },
+  "guardTester": {
+    "title": "Live tester",
+    "hint": "Uses the global guardrails as edited above, before saving.",
+    "sample": "Sample text",
+    "direction": "Check as",
+    "directionLabel": "{direction, select, input {Prompt} output {Response} other {{direction}}}",
+    "run": "Run check",
+    "result": "{blocked, select, true {Blocked} other {{hits, plural, =0 {No matches} one {# match} other {# matches}}}}"
   }
 }

@@ -3,11 +3,11 @@ import { NextResponse } from "next/server";
 import { recordUsage } from "@/lib/gateway/billing";
 import { cacheBypassed } from "@/lib/gateway/cache";
 import { cachedTokens, lookupChatCache, storeChatCache } from "@/lib/gateway/chat-cache";
-import { dispatchChat, streamChat } from "@/lib/gateway/chat";
+import { dispatchChat, screenChatOutput, streamChat } from "@/lib/gateway/chat";
 import { resolveChatFiles } from "@/lib/gateway/file-refs";
 import {
   allowModel,
-  applyPii,
+  applyGuardrails,
   gateRequest,
   gateResponse,
   modelOf,
@@ -25,7 +25,7 @@ export function chatCompletionsRoute(pool: RoutePool) {
       const body = await readBody(req);
       const model = modelOf(body);
       allowModel(principal, model);
-      const { body: redacted, output } = await applyPii(body, principal);
+      const { body: redacted, output } = await applyGuardrails(body, principal);
       const clean = await resolveChatFiles(redacted, principal);
       const aliases = modelChain(principal, model, clean);
       const settings = await loadSettings();
@@ -36,7 +36,7 @@ export function chatCompletionsRoute(pool: RoutePool) {
           model,
           body: clean,
           aliases,
-          outputPii: output,
+          outputGuard: output,
         });
       }
       const started = Date.now();
@@ -53,21 +53,23 @@ export function chatCompletionsRoute(pool: RoutePool) {
           : null;
       if (lookup?.hit) {
         const { entry, similarity } = lookup.hit;
+        const response = structuredClone(entry.response);
+        const blocked = screenChatOutput(response, output, principal.trace);
         await recordUsage({
           principal,
           model,
           status: 200,
-          outcome: "cache_hit",
+          outcome: blocked ? "guardrail_blocked" : "cache_hit",
           latencyMs: Date.now() - started,
           tag: spendTag(clean),
-          response: entry.response,
+          response,
           responseCache: {
             event: similarity === null ? "hit" : "semantic_hit",
             savedTokens: entry.tokens,
             savedCost: entry.cost,
           },
         });
-        return NextResponse.json(entry.response, {
+        return NextResponse.json(response, {
           headers: {
             "X-Hub-Cache": "HIT",
             ...(similarity === null ? {} : { "X-Hub-Cache-Similarity": similarity.toFixed(4) }),
@@ -79,10 +81,10 @@ export function chatCompletionsRoute(pool: RoutePool) {
         model,
         body: clean,
         aliases,
-        outputPii: output,
+        outputGuard: output,
         responseCache: lookup ? { event: "miss" } : undefined,
       });
-      if (lookup) {
+      if (lookup && !principal.trace?.guardBlocked) {
         await storeChatCache(lookup.slot, {
           response: dispatched.json,
           cost: dispatched.cost,

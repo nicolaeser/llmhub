@@ -3,10 +3,11 @@ import { dispatchChat, streamChat } from "@/lib/gateway/chat";
 import { asNumber, asRecord, newId, stringifyContent } from "@/lib/gateway/core";
 import { GateError } from "@/lib/gateway/errors";
 import { allowEndpoint } from "@/lib/gateway/gate";
+import { screenRequest } from "@/lib/gateway/guardrails";
 import { defaultEntityIds, redactJSON } from "@/lib/gateway/pii";
 import { parseRequest, type ResponsesStreamEncoder } from "@/lib/gateway/responses";
 import { SSE_HEADERS } from "@/lib/gateway/sse";
-import { resolvePii } from "@/lib/gateway/settings";
+import { resolvePolicies } from "@/lib/gateway/settings";
 import { searchableStore } from "@/lib/rag/api";
 import { rankingOptions } from "@/lib/rag/rank";
 import { searchStores } from "@/lib/rag/search";
@@ -229,11 +230,17 @@ export function searchResultText(hits: SearchHit[]): string {
     .join("\n\n");
 }
 
-async function redactRetrieved(principal: Principal, text: string): Promise<string> {
-  const pii = await resolvePii(principal);
-  if (!pii.enabled) return text;
+async function screenRetrieved(principal: Principal, text: string): Promise<string> {
+  const { pii, guardrails } = await resolvePolicies(principal);
+  const screened = screenRequest({ content: text }, guardrails, principal.trace?.guardInput ?? new Set());
+  if (screened.blocked) {
+    if (principal.trace) principal.trace.guardBlocked = true;
+    throw new GateError(400, "guardrail_blocked", "file search results were blocked by the guardrail policy");
+  }
+  const content = typeof screened.body.content === "string" ? screened.body.content : text;
+  if (!pii.enabled) return content;
   const found = new Set<string>();
-  const redacted = redactJSON(text, pii.entities.length ? pii.entities : defaultEntityIds(), "", found) as string;
+  const redacted = redactJSON(content, pii.entities.length ? pii.entities : defaultEntityIds(), "", found) as string;
   for (const id of found) principal.trace?.piiInput.add(id);
   if (pii.mode === "block" && found.size) {
     throw new GateError(400, "pii_blocked", "file search results were blocked by the PII policy");
@@ -278,7 +285,7 @@ async function runSearch(ctx: FileSearchContext, call: JsonMap): Promise<{ item:
     message: {
       role: "tool",
       tool_call_id: typeof call.id === "string" ? call.id : "",
-      content: await redactRetrieved(ctx.principal, searchResultText(hits)),
+      content: await screenRetrieved(ctx.principal, searchResultText(hits)),
     },
   };
 }
@@ -314,7 +321,7 @@ export async function runFileSearch(ctx: FileSearchContext, body: JsonMap): Prom
       model: ctx.model,
       body: roundBody(body, transcript, round),
       aliases: ctx.aliases,
-      outputPii: ctx.outputPii,
+      outputGuard: ctx.outputGuard,
     });
     usage = addChatUsage(usage, json.usage);
     const message = firstMessage(json);
@@ -426,7 +433,7 @@ export async function streamFileSearch(input: {
       model: ctx.model,
       body: roundBody(input.body, transcript, round),
       aliases: ctx.aliases,
-      outputPii: ctx.outputPii,
+      outputGuard: ctx.outputGuard,
     });
   const first = await open(0, []);
   let prepared: Awaited<ReturnType<typeof input.prepare>>;

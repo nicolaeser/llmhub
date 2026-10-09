@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { dispatchChat, streamChat } from "@/lib/gateway/chat";
 import {
   allowModel,
-  applyPii,
+  applyGuardrails,
   gateRequest,
   gateResponse,
   modelOf,
@@ -50,7 +50,7 @@ export function createResponseRoute(pool: RoutePool) {
       const body = await readBody(req);
       const model = modelOf(body);
       allowModel(principal, model);
-      const { body: redacted, output } = await applyPii(body, principal);
+      const { body: redacted, output } = await applyGuardrails(body, principal);
       const clean = await resolveResponsesFiles(redacted, principal);
       const { body: requestBody, tool: searchTool } = takeFileSearchTool(clean);
       const parsed = parseRequest(responsesRequestSchema, requestBody);
@@ -79,7 +79,7 @@ export function createResponseRoute(pool: RoutePool) {
             principal,
             model,
             aliases,
-            outputPii: output,
+            outputGuard: output,
             tool: searchTool,
             stores: await fileSearchStores(principal, searchTool),
             include: request.include ?? null,
@@ -145,7 +145,7 @@ export function createResponseRoute(pool: RoutePool) {
           model,
           body: chatBody,
           aliases,
-          outputPii: output,
+          outputGuard: output,
         });
         let id = responseId(newId());
         let storedId = "";
@@ -182,7 +182,7 @@ export function createResponseRoute(pool: RoutePool) {
         model,
         body: chatBody,
         aliases,
-        outputPii: output,
+        outputGuard: output,
       });
       const response = chatToResponse(dispatched.json, responseSkeleton(request, "", createdAt));
       const include = request.include ?? null;

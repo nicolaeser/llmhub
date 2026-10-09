@@ -2,7 +2,7 @@ import "server-only";
 import { usageFromUnknown } from "@/lib/gateway/billing";
 import { asNumber, asRecord } from "@/lib/gateway/core";
 import { GateError } from "@/lib/gateway/errors";
-import { allowModel, applyPii, modelChain, withTrace } from "@/lib/gateway/gate";
+import { allowModel, applyGuardrails, modelChain, withTrace } from "@/lib/gateway/gate";
 import { meter } from "@/lib/gateway/meter";
 import { forwardToModel } from "@/lib/gateway/upstream";
 import { ocrText } from "@/lib/rag/extract";
@@ -49,7 +49,7 @@ export async function forwardModelCall(input: {
 }): Promise<ProxyFirstResult> {
   const { principal, model } = input;
   allowModel(principal, model);
-  const { body: clean } = await applyPii(input.body, principal);
+  const { body: clean } = await applyGuardrails(input.body, principal);
   const aliases = modelChain(principal, model, clean);
   const usage = meter(principal, model, input.body);
   try {
