@@ -7,6 +7,7 @@ import {
   Calculator,
   Code2,
   Database,
+  HeartPulse,
   KeyRound,
   ListChecks,
   Network,
@@ -50,6 +51,7 @@ export const NAV: NavSection[] = [
       { href: "/usage", labelKey: "items.usage", icon: BarChart3, permission: PERMISSIONS.SPEND_READ },
       { href: "/what-if", labelKey: "items.whatIf", icon: Calculator, permission: PERMISSIONS.SPEND_READ },
       { href: "/logs", labelKey: "items.logs", icon: Activity, permission: PERMISSIONS.SPEND_READ },
+      { href: "/provider-health", labelKey: "items.providerHealth", icon: HeartPulse, permission: PERMISSIONS.PROVIDERS_READ },
     ],
   },
   {
