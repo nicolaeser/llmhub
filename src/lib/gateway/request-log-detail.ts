@@ -58,6 +58,8 @@ export function requestLogRow(
     projectId: row.projectId,
     promptTokens: row.promptTokens,
     completionTokens: row.completionTokens,
+    cacheReadTokens: row.cacheReadTokens,
+    cacheWriteTokens: row.cacheWriteTokens,
     cost: money(row.cost),
     piiMode: row.piiMode,
     piiInput: row.piiInput,

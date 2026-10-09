@@ -68,6 +68,8 @@ export async function GET(req: NextRequest) {
       tag: r.tag,
       prompt_tokens: r.promptTokens,
       completion_tokens: r.completionTokens,
+      cache_read_tokens: r.cacheReadTokens,
+      cache_write_tokens: r.cacheWriteTokens,
       cost: r.cost,
       pii_mode: r.piiMode,
       pii_input: format === "csv" ? r.piiInput.join(" ") : r.piiInput,

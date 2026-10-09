@@ -82,6 +82,12 @@ export type PriceFactors = {
   cacheRead: number;
 };
 
+export type CacheTokens = {
+  read: number;
+  written: number;
+  writtenLong: number;
+};
+
 export type BudgetForecast = {
   dailyAvg: number;
   projectedMonth: number;
@@ -420,7 +426,10 @@ export type UsageSlice = {
   latencyMs: number;
   promptTokens: number;
   completionTokens: number;
+  cacheReadTokens: number;
+  cacheWriteTokens: number;
   cost: number;
+  cacheSavings: number;
 };
 
 export type ChargebackParts = {
@@ -442,6 +451,9 @@ export type SliceRow = {
   errors?: number;
   rate429?: number;
   latency?: number;
+  cacheRead?: number;
+  cacheWrite?: number;
+  cacheSavings?: number;
 };
 
 export type Bucket = { start: number; rpm: number; tpm: number };

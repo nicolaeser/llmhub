@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  cacheHitRate,
   chargebackParts,
   chargebackRows,
+  groupCache,
   groupRequestHealth,
   groupSpend,
   percentileIndex,
@@ -24,7 +26,10 @@ const slice = (row: Partial<UsageSlice>): UsageSlice => ({
   latencyMs: 0,
   promptTokens: 0,
   completionTokens: 0,
+  cacheReadTokens: 0,
+  cacheWriteTokens: 0,
   cost: 0,
+  cacheSavings: 0,
   ...row,
 });
 
@@ -67,6 +72,26 @@ test("chargeback rows keep the tenant path and skip non-billable slices", () => 
     model: "a",
   });
   assert.equal(groupSpend(rows, "memberId")[0]?.name, "m1");
+});
+
+test("groupCache keeps projects with cache activity and rates hits against all their prompt tokens", () => {
+  const cached = [
+    slice({ projectId: "p1", model: "a", promptTokens: 100, cacheReadTokens: 60, cacheWriteTokens: 10, cacheSavings: 0.5 }),
+    slice({ projectId: "p1", model: "b", promptTokens: 100 }),
+    slice({ projectId: "p2", promptTokens: 50, cacheWriteTokens: 50, cacheSavings: -0.1 }),
+    slice({ projectId: "p3", promptTokens: 80 }),
+  ];
+  const byProject = groupCache(cached, "projectId");
+  assert.deepEqual(
+    byProject.map((row) => row.name),
+    ["p1", "p2"],
+  );
+  assert.equal(byProject[0]?.prompt, 200);
+  assert.equal(byProject[0]?.cacheRead, 60);
+  assert.equal(byProject[0]?.cacheWrite, 10);
+  assert.equal(byProject[1]?.cacheSavings, -0.1);
+  assert.equal(cacheHitRate(byProject[0]?.cacheRead ?? 0, byProject[0]?.prompt ?? 0), 0.3);
+  assert.equal(cacheHitRate(10, 0), 0);
 });
 
 test("percentileIndex picks the nearest-rank position", () => {
