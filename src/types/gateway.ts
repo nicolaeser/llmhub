@@ -3,6 +3,7 @@ import type { OPENAPI_METHODS } from "@/lib/gateway/openapi";
 import type { WEBHOOK_EVENTS, WEBHOOK_FORMATS } from "@/lib/gateway/webhook-events";
 import type { SemanticCacheSettings } from "@/types/cache";
 import type { PiiPolicy } from "@/types/guardrails";
+import type { AccessWindow, KeyEndpoint } from "@/types/keys";
 import type { RouteLimits } from "@/types/model-templates";
 
 export type SpendHolder = {
@@ -30,12 +31,15 @@ export type TokenPricing = {
   completion: string;
 };
 
+export type RoutePool = "api" | "subscription";
+
 export type PublicModel = {
   alias: string;
   vendor: string;
   displayName: string;
   tags: string[];
   pricing: ModelPricing | null;
+  pools: RoutePool[];
 };
 
 export type ModelPricing = TokenPricing & {
@@ -62,10 +66,23 @@ export type BillingContext = {
   price?: CostRates;
 };
 
+export type ProviderAuth = "api_key" | "sign_in";
+
 export type KindSpec = {
   kind: string;
   name: string;
   default_base_url?: string;
+  auth?: ProviderAuth;
+};
+
+export type UpstreamAuth = {
+  key: string;
+  headers: Record<string, string>;
+};
+
+export type ChatSseTranslator = {
+  pushLine(line: string): string[];
+  flush(): string | null;
 };
 
 export type Group = ModelGroup & { mapped: ResolvedDeployment[] };
@@ -79,6 +96,12 @@ export type PriceFactors = {
   input: number;
   output: number;
   cacheRead: number;
+};
+
+export type CacheTokens = {
+  read: number;
+  written: number;
+  writtenLong: number;
 };
 
 export type BudgetForecast = {
@@ -380,6 +403,9 @@ export type VirtualKeyView = {
   budget_duration: string;
   expires: string;
   allowed_ips: string[];
+  allowed_endpoints: KeyEndpoint[];
+  access_windows: AccessWindow[];
+  access_time_zone: string;
   blocked: boolean;
   pii: PiiPolicy | null;
   log_content: boolean;
@@ -411,6 +437,7 @@ export type Principal = {
   memberId: string;
   models: string[];
   routeLimits: RouteLimits;
+  pool?: RoutePool;
   trace?: RequestTrace;
 };
 
@@ -440,7 +467,10 @@ export type UsageSlice = {
   latencyMs: number;
   promptTokens: number;
   completionTokens: number;
+  cacheReadTokens: number;
+  cacheWriteTokens: number;
   cost: number;
+  cacheSavings: number;
 };
 
 export type ChargebackParts = {
@@ -462,6 +492,31 @@ export type SliceRow = {
   errors?: number;
   rate429?: number;
   latency?: number;
+  cacheRead?: number;
+  cacheWrite?: number;
+  cacheSavings?: number;
+};
+
+export type UsageDay = { day: string; spend: number; requests: number; errors: number };
+
+export type UsageSummary = {
+  daily: UsageDay[];
+  spend: number;
+  tokens: number;
+  count: number;
+  errors: number;
+  rate429: number;
+  latency: number;
+  cacheRead: number;
+  cacheWrite: number;
+  cacheSavings: number;
+  cacheHitRate: number;
+};
+
+export type UsagePdfStats = UsageSummary & {
+  p95Latency: number;
+  byModel: SliceRow[];
+  chargeback: SliceRow[];
 };
 
 export type Bucket = { start: number; rpm: number; tpm: number };

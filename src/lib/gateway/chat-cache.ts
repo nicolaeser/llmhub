@@ -4,10 +4,11 @@ import { cacheGet, cacheKey, cachePut, semanticAdd, semanticFind, semanticProbe,
 import { asRecord, ownerId } from "@/lib/gateway/core";
 import { GateError } from "@/lib/gateway/errors";
 import { modelChain, modelPermitted, spendTag, withTrace } from "@/lib/gateway/gate";
+import { endpointAllowed } from "@/lib/gateway/key-restrictions";
 import { forwardToModel } from "@/lib/gateway/upstream";
 import { logger } from "@/lib/logging/logger";
 import type { CachedResponse, ChatCacheLookup, ChatCacheSlot, SemanticCacheSettings } from "@/types/cache";
-import type { JsonMap, Principal, Usage } from "@/types/gateway";
+import type { JsonMap, Principal, RoutePool, Usage } from "@/types/gateway";
 
 const EMBEDDINGS_ENDPOINT = "/v1/embeddings";
 
@@ -16,8 +17,14 @@ export function embeddingVector(json: unknown): Float32Array | null {
   return Array.isArray(data) ? unitVector(asRecord(data[0])?.embedding) : null;
 }
 
-export function semanticAllowed(principal: Principal, semantic: SemanticCacheSettings): boolean {
-  return semantic.enabled && Boolean(semantic.model) && modelPermitted(principal, semantic.model);
+export function semanticAllowed(pool: RoutePool, principal: Principal, semantic: SemanticCacheSettings): boolean {
+  return (
+    pool === "api" &&
+    semantic.enabled &&
+    Boolean(semantic.model) &&
+    modelPermitted(principal, semantic.model) &&
+    endpointAllowed(principal.key?.allowed_endpoints ?? [], EMBEDDINGS_ENDPOINT)
+  );
 }
 
 async function embedPrompt(principal: Principal, model: string, text: string, tag: string): Promise<Float32Array | null> {
@@ -57,12 +64,13 @@ async function embedPrompt(principal: Principal, model: string, text: string, ta
     tag,
     request: body,
     response: hit.json,
-    cache: { event: "lookup" },
+    responseCache: { event: "lookup" },
   });
   return embeddingVector(hit.json);
 }
 
 export async function lookupChatCache(input: {
+  pool: RoutePool;
   principal: Principal;
   model: string;
   body: JsonMap;
@@ -71,14 +79,14 @@ export async function lookupChatCache(input: {
 }): Promise<ChatCacheLookup> {
   const owner = ownerId(input.principal);
   const slot: ChatCacheSlot = {
-    key: cacheKey(owner, input.model, JSON.stringify(input.body)),
+    key: cacheKey(input.pool, owner, input.model, JSON.stringify(input.body)),
     ttlSeconds: input.ttlSeconds,
     semantic: null,
   };
   const exact = await cacheGet(slot.key);
   if (exact) return { slot, hit: { entry: exact, similarity: null } };
-  if (!semanticAllowed(input.principal, input.semantic)) return { slot, hit: null };
-  const probe = semanticProbe(owner, input.model, input.semantic.model, input.body);
+  if (!semanticAllowed(input.pool, input.principal, input.semantic)) return { slot, hit: null };
+  const probe = semanticProbe(input.pool, owner, input.model, input.semantic.model, input.body);
   if (!probe) return { slot, hit: null };
   const vector = await embedPrompt(input.principal, input.semantic.model, probe.text, spendTag(input.body));
   if (!vector) return { slot, hit: null };

@@ -73,6 +73,8 @@
     "user": "Console user",
     "member": "Person",
     "team": "Department",
+    "cache": "Prompt cache",
+    "cacheValue": "{read, number, integer} read · {written, number, integer} written",
     "privacy": "Privacy",
     "piiFilter": "Prompt filter",
     "piiMode": "{mode, select, mask {Masked before the model} block {Blocked before the model} other {Not filtered}}",

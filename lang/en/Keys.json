@@ -46,9 +46,31 @@
     "tpm": "Tokens per minute",
     "allowedIps": "Allowed client IPs",
     "allowedIpsHint": "One IP address per line. Leave empty to allow any address.",
+    "endpoints": "Allowed endpoints",
+    "endpointsHint": "Leave empty to allow every endpoint. The model list (/v1/models) always stays available.",
+    "endpointsPlaceholder": "All endpoints",
     "blocked": "Block this key",
     "logContent": "Store request content",
     "logContentHint": "When off, request logs for this key keep only metadata, no prompts or responses."
+  },
+  "endpoints": {
+    "name": "{endpoint, select, chat {Chat and text} embeddings {Embeddings} moderations {Moderations} images {Images} audio {Audio} videos {Videos} ocr {OCR} files {Files} batches {Batches} other {SystemOne}}",
+    "paths": "{endpoint, select, chat {/v1/chat/completions, /v1/completions, /v1/messages, /v1/responses} embeddings {/v1/embeddings} moderations {/v1/moderations} images {/v1/images} audio {/v1/audio} videos {/v1/videos} ocr {/v1/ocr} files {/v1/files} batches {/v1/batches} other {/v1/systemone}}"
+  },
+  "windows": {
+    "title": "Allowed times",
+    "hint": "Without time windows, the key works at any time. With windows, requests outside all of them are rejected. Queued batches still finish.",
+    "days": "Days",
+    "dayShort": "{day, select, mon {Mon} tue {Tue} wed {Wed} thu {Thu} fri {Fri} sat {Sat} other {Sun}}",
+    "dayName": "{day, select, mon {Monday} tue {Tuesday} wed {Wednesday} thu {Thursday} fri {Friday} sat {Saturday} other {Sunday}}",
+    "allDay": "All day",
+    "start": "From",
+    "end": "Until",
+    "nextDay": "Ends on the following day.",
+    "timeZone": "Time zone",
+    "timeZoneHint": "Days and times follow this time zone, including daylight saving changes.",
+    "add": "Add time window",
+    "remove": "Remove window {index, number}"
   },
   "revoke": "Revoke",
   "rotate": "Rotate",
@@ -65,6 +87,8 @@
   "modelCount": "{count, plural, one {# model} other {# models}}",
   "budget": "Set budget",
   "contentOff": "Content not logged",
+  "endpointChip": "Only {endpoints}",
+  "windowChip": "Time-limited",
   "binding": {
     "kind": "{kind, select, project {Project} member {Person} other {Internal}}",
     "hint": "{kind, select, project {For an application. Billed to the project, its department, and the company.} member {Personal key for a user of the company. Billed to the person, their department, and the company.} other {{scope, select, company {For your own use. Billed to your budget and your company.} other {For your own use. Billed to your personal budget, not to a customer.}}}}",

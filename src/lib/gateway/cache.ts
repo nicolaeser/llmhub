@@ -6,7 +6,7 @@ import { redisUrl } from "@/lib/jobs/connection";
 import { sharedRedis, withRedisTimeout } from "@/lib/redis/client";
 import { logger } from "@/lib/logging/logger";
 import type { CacheBackend, CachedResponse, SemanticMatch, SemanticProbe } from "@/types/cache";
-import type { JsonMap } from "@/types/gateway";
+import type { JsonMap, RoutePool } from "@/types/gateway";
 
 const MAX_MEMORY_ENTRIES = 1000;
 const MAX_MEMORY_SCOPES = 50;
@@ -140,6 +140,7 @@ function promptText(content: unknown): string {
 }
 
 export function semanticProbe(
+  pool: RoutePool,
   owner: string,
   model: string,
   embeddingModel: string,
@@ -151,7 +152,7 @@ export function semanticProbe(
   const text = promptText(last.content);
   if (!text || text.length > SEMANTIC_TEXT_LIMIT) return null;
   const context = JSON.stringify({ ...body, messages: [...messages.slice(0, -1), { ...last, content: null }] });
-  return { scope: digest(`${owner}\n${model}\n${embeddingModel}\n${context}`), text };
+  return { scope: digest(`${pool}\n${owner}\n${model}\n${embeddingModel}\n${context}`), text };
 }
 
 export function unitVector(values: unknown): Float32Array | null {
@@ -272,6 +273,6 @@ export function cacheBypassed(headers: Headers, body: Record<string, unknown>): 
   return false;
 }
 
-export function cacheKey(owner: string, model: string, raw: string): string {
-  return digest(`${owner}\n${model}\n${raw}`);
+export function cacheKey(pool: RoutePool, owner: string, model: string, raw: string): string {
+  return digest(`${pool}\n${owner}\n${model}\n${raw}`);
 }

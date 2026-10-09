@@ -6,6 +6,7 @@ import { readJSON } from "@/lib/http/api";
 import { problemResponse } from "@/lib/http/problem";
 import { asRecord, asString } from "@/lib/gateway/core";
 import { ANTHROPIC_VERSION, resolveTryTarget } from "@/lib/gateway/openapi";
+import { gatewayPath } from "@/lib/gateway/route-pool";
 import { mintTryBearer } from "@/lib/gateway/try-bearer";
 import type { JsonMap } from "@/types/gateway";
 import { env } from "@/lib/env";
@@ -55,7 +56,7 @@ export async function POST(req: Request) {
 
   const origin = new URL(env.NEXT_PUBLIC_APP_URL).origin;
   const url = new URL(target.path, origin);
-  if (url.origin !== origin || !url.pathname.startsWith("/v1/")) {
+  if (url.origin !== origin || !gatewayPath(url.pathname).startsWith("/v1/")) {
     return problemResponse(req, "INVALID_PATH");
   }
 

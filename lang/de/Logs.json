@@ -73,6 +73,8 @@
     "user": "Konsolen-Benutzer",
     "member": "Person",
     "team": "Abteilung",
+    "cache": "Prompt-Cache",
+    "cacheValue": "{read, number, integer} gelesen · {written, number, integer} geschrieben",
     "privacy": "Datenschutz",
     "piiFilter": "Prompt-Filter",
     "piiMode": "{mode, select, mask {Vor dem Modell maskiert} block {Vor dem Modell blockiert} other {Nicht gefiltert}}",

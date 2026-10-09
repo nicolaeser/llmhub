@@ -7,9 +7,9 @@ import StatCard from "@/components/console/stat-card";
 import { loadCacheStatsAction } from "@/app/(app)/cache/_action";
 import { CACHE_STATS_RANGES } from "@/lib/gateway/cache-settings";
 import { isActionFail } from "@/lib/http/action-result";
-import type { CacheStats as CacheStatsData } from "@/types/cache";
+import type { ResponseCacheStats } from "@/types/cache";
 
-export default function CacheStats({ initial, semanticOn }: { initial: CacheStatsData; semanticOn: boolean }) {
+export default function CacheStats({ initial, semanticOn }: { initial: ResponseCacheStats; semanticOn: boolean }) {
   const t = useTranslations("Cache");
   const tError = useTranslations("Error");
   const format = useFormatter();

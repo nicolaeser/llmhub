@@ -32,7 +32,17 @@
     "name": "Name",
     "spend": "Spend",
     "prompt": "Prompt tokens",
-    "completion": "Completion tokens"
+    "completion": "Completion tokens",
+    "cacheRead": "Cache read tokens",
+    "cacheWrite": "Cache write tokens",
+    "hitRate": "Hit rate",
+    "savings": "Savings"
+  },
+  "cache": {
+    "title": "Prompt caching",
+    "description": "Hit rate is the share of prompt tokens read from the provider cache. Savings compare billed cost with the same prompt tokens at the full input price, net of cache writes. Gateway response cache hits are not included; they are reported on the Response cache page.",
+    "empty": "No prompt cache reads or writes in this period.",
+    "byProject": "Prompt caching by project"
   },
   "range": "Range",
   "empty": "No spend yet. Send a playground request.",
@@ -54,5 +64,11 @@
     "colCompletion": "Completion",
     "total": "Total",
     "noSpend": "No spend in this period."
+  },
+  "report": {
+    "scope": "{hasTeam, select, yes {{org} / {team}} other {{org}}}",
+    "period": "{cadence, select, weekly {Week {range}} other {{start, date, month}}}",
+    "subject": "{brand} usage report: {scope}, {period}",
+    "body": "Usage report for {scope}\nPeriod: {period}\n\nSpend: {spend, number, money}\nRequests: {requests, number, integer} ({errors, plural, =0 {no errors} one {# error} other {# errors}})\nTokens: {tokens, number, integer}\n\n{format, select, csv {The attached CSV lists spend by project, person, key, and model.} both {The attached PDF shows daily spend and spend by model. The CSV lists spend by project, person, key, and model.} other {The attached PDF shows daily spend and spend by model.}}\n\nPeriods use UTC days. This report is scheduled on the Companies page in {brand}."
   }
 }

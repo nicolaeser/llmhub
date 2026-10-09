@@ -1,6 +1,13 @@
 import type { Socket } from "node:net";
 
-export type MailInput = { to: string; subject: string; text: string };
+export type MailAttachment = { filename: string; contentType: string; content: Uint8Array | string };
+
+export type MailInput = {
+  to: string | string[];
+  subject: string;
+  text: string;
+  attachments?: MailAttachment[];
+};
 
 export type MailMessage = MailInput & { from: string };
 

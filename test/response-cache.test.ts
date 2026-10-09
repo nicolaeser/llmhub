@@ -1,9 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { cacheColumns } from "@/lib/gateway/billing";
+import { responseCacheColumns } from "@/lib/gateway/billing";
 import {
   cacheBackend,
   cacheGet,
+  cacheKey,
   cachePut,
   resetCacheMemory,
   semanticAdd,
@@ -14,7 +15,7 @@ import {
 } from "@/lib/gateway/cache";
 import { cachedTokens, embeddingVector, semanticAllowed } from "@/lib/gateway/chat-cache";
 import { normalizeEnterprise, normalizeSemanticCache } from "@/lib/gateway/settings";
-import { cacheStats } from "@/lib/gateway/usage-totals";
+import { responseCacheStats } from "@/lib/gateway/usage-totals";
 import { cacheSettingsSchema, cacheStatsSchema } from "@/schemas/settings";
 import type { Principal } from "@/types/gateway";
 
@@ -41,8 +42,11 @@ function chat(last: unknown, system = "You answer billing questions.") {
   };
 }
 
-function principal(models: string[]): Principal {
-  return { models, key: null } as unknown as Principal;
+function principal(models: string[], allowedEndpoints?: string[]): Principal {
+  return {
+    models,
+    key: allowedEndpoints ? { templates: [], allowed_endpoints: allowedEndpoints } : null,
+  } as unknown as Principal;
 }
 
 test("memory backend is used without REDIS_URL", async () => {
@@ -78,17 +82,17 @@ test("memory cache evicts the least recently used entry beyond 1000", async () =
 });
 
 test("semantic probe compares only the last user message", () => {
-  const a = semanticProbe("key1", "gpt-x", "embed", chat("How do I reset my password?"));
-  const b = semanticProbe("key1", "gpt-x", "embed", chat("How can I reset my password"));
+  const a = semanticProbe("api", "key1", "gpt-x", "embed", chat("How do I reset my password?"));
+  const b = semanticProbe("api", "key1", "gpt-x", "embed", chat("How can I reset my password"));
   assert.ok(a && b);
   assert.equal(a.scope, b.scope);
   assert.equal(a.text, "How do I reset my password?");
   const scopes = [
-    semanticProbe("key2", "gpt-x", "embed", chat("How do I reset my password?")),
-    semanticProbe("key1", "gpt-y", "embed", chat("How do I reset my password?")),
-    semanticProbe("key1", "gpt-x", "embed-2", chat("How do I reset my password?")),
-    semanticProbe("key1", "gpt-x", "embed", chat("How do I reset my password?", "You write poems.")),
-    semanticProbe("key1", "gpt-x", "embed", { ...chat("How do I reset my password?"), temperature: 1 }),
+    semanticProbe("api", "key2", "gpt-x", "embed", chat("How do I reset my password?")),
+    semanticProbe("api", "key1", "gpt-y", "embed", chat("How do I reset my password?")),
+    semanticProbe("api", "key1", "gpt-x", "embed-2", chat("How do I reset my password?")),
+    semanticProbe("api", "key1", "gpt-x", "embed", chat("How do I reset my password?", "You write poems.")),
+    semanticProbe("api", "key1", "gpt-x", "embed", { ...chat("How do I reset my password?"), temperature: 1 }),
   ].map((probe) => probe?.scope);
   for (const scope of scopes) {
     assert.ok(scope);
@@ -98,20 +102,20 @@ test("semantic probe compares only the last user message", () => {
 
 test("semantic probe only takes plain user text", () => {
   assert.equal(
-    semanticProbe("k", "m", "e", chat([{ type: "text", text: "Hello" }, { type: "text", text: "there" }]))?.text,
+    semanticProbe("api", "k", "m", "e", chat([{ type: "text", text: "Hello" }, { type: "text", text: "there" }]))?.text,
     "Hello\nthere",
   );
   assert.equal(
-    semanticProbe("k", "m", "e", chat([{ type: "text", text: "What is this?" }, { type: "image_url", image_url: { url: "x" } }])),
+    semanticProbe("api", "k", "m", "e", chat([{ type: "text", text: "What is this?" }, { type: "image_url", image_url: { url: "x" } }])),
     null,
   );
-  assert.equal(semanticProbe("k", "m", "e", chat("   ")), null);
-  assert.equal(semanticProbe("k", "m", "e", chat("x".repeat(8_001))), null);
+  assert.equal(semanticProbe("api", "k", "m", "e", chat("   ")), null);
+  assert.equal(semanticProbe("api", "k", "m", "e", chat("x".repeat(8_001))), null);
   assert.equal(
-    semanticProbe("k", "m", "e", { messages: [{ role: "user", content: "hi" }, { role: "assistant", content: "yo" }] }),
+    semanticProbe("api", "k", "m", "e", { messages: [{ role: "user", content: "hi" }, { role: "assistant", content: "yo" }] }),
     null,
   );
-  assert.equal(semanticProbe("k", "m", "e", { prompt: "hi" }), null);
+  assert.equal(semanticProbe("api", "k", "m", "e", { prompt: "hi" }), null);
 });
 
 test("vectors are normalized for cosine similarity", () => {
@@ -154,42 +158,55 @@ test("embedding responses become unit vectors", () => {
   assert.equal(embeddingVector({ error: "nope" }), null);
 });
 
-test("semantic matching needs a model the key may use", () => {
+test("semantic matching needs a model and endpoint the key may use on the api pool", () => {
   const on = { enabled: true, model: "embed", threshold: 0.95 };
-  assert.equal(semanticAllowed(principal([]), on), true);
-  assert.equal(semanticAllowed(principal(["gpt-x", "embed"]), on), true);
-  assert.equal(semanticAllowed(principal(["gpt-x"]), on), false);
-  assert.equal(semanticAllowed(principal([]), { ...on, enabled: false }), false);
-  assert.equal(semanticAllowed(principal([]), { ...on, model: "" }), false);
+  assert.equal(semanticAllowed("api", principal([]), on), true);
+  assert.equal(semanticAllowed("api", principal(["gpt-x", "embed"]), on), true);
+  assert.equal(semanticAllowed("api", principal(["gpt-x"]), on), false);
+  assert.equal(semanticAllowed("api", principal([]), { ...on, enabled: false }), false);
+  assert.equal(semanticAllowed("api", principal([]), { ...on, model: "" }), false);
+  assert.equal(semanticAllowed("subscription", principal([]), on), false);
+  assert.equal(semanticAllowed("api", principal([], ["chat"]), on), false);
+  assert.equal(semanticAllowed("api", principal([], ["chat", "embeddings"]), on), true);
+  assert.equal(semanticAllowed("api", principal([], []), on), true);
+});
+
+test("response cache keys and semantic scopes are separate per route pool", () => {
+  const body = chat("How do I reset my password?");
+  assert.notEqual(cacheKey("api", "key1", "gpt-x", "{}"), cacheKey("subscription", "key1", "gpt-x", "{}"));
+  assert.notEqual(
+    semanticProbe("api", "key1", "gpt-x", "embed", body)?.scope,
+    semanticProbe("subscription", "key1", "gpt-x", "embed", body)?.scope,
+  );
 });
 
 test("cache events map to usage columns", () => {
-  assert.deepEqual(cacheColumns(undefined, 0.5), {
-    cacheHits: 0,
-    cacheSemanticHits: 0,
-    cacheMisses: 0,
-    cacheSavedTokens: 0,
-    cacheSavedCost: 0,
-    cacheLookupCost: 0,
+  assert.deepEqual(responseCacheColumns(undefined, 0.5), {
+    responseCacheHits: 0,
+    responseCacheSemanticHits: 0,
+    responseCacheMisses: 0,
+    responseCacheSavedTokens: 0,
+    responseCacheSavedCost: 0,
+    responseCacheLookupCost: 0,
   });
-  assert.deepEqual(cacheColumns({ event: "hit", savedTokens: 120, savedCost: 0.002 }, 0), {
-    cacheHits: 1,
-    cacheSemanticHits: 0,
-    cacheMisses: 0,
-    cacheSavedTokens: 120,
-    cacheSavedCost: 0.002,
-    cacheLookupCost: 0,
+  assert.deepEqual(responseCacheColumns({ event: "hit", savedTokens: 120, savedCost: 0.002 }, 0), {
+    responseCacheHits: 1,
+    responseCacheSemanticHits: 0,
+    responseCacheMisses: 0,
+    responseCacheSavedTokens: 120,
+    responseCacheSavedCost: 0.002,
+    responseCacheLookupCost: 0,
   });
-  assert.equal(cacheColumns({ event: "semantic_hit", savedTokens: 5 }, 0).cacheSemanticHits, 1);
-  assert.equal(cacheColumns({ event: "semantic_hit", savedTokens: 5 }, 0).cacheHits, 1);
-  assert.equal(cacheColumns({ event: "miss" }, 0.4).cacheMisses, 1);
-  assert.equal(cacheColumns({ event: "miss" }, 0.4).cacheSavedCost, 0);
-  assert.equal(cacheColumns({ event: "lookup" }, 0.0001).cacheLookupCost, 0.0001);
-  assert.equal(cacheColumns({ event: "lookup", savedCost: 3 }, 0).cacheSavedCost, 0);
+  assert.equal(responseCacheColumns({ event: "semantic_hit", savedTokens: 5 }, 0).responseCacheSemanticHits, 1);
+  assert.equal(responseCacheColumns({ event: "semantic_hit", savedTokens: 5 }, 0).responseCacheHits, 1);
+  assert.equal(responseCacheColumns({ event: "miss" }, 0.4).responseCacheMisses, 1);
+  assert.equal(responseCacheColumns({ event: "miss" }, 0.4).responseCacheSavedCost, 0);
+  assert.equal(responseCacheColumns({ event: "lookup" }, 0.0001).responseCacheLookupCost, 0.0001);
+  assert.equal(responseCacheColumns({ event: "lookup", savedCost: 3 }, 0).responseCacheSavedCost, 0);
 });
 
 test("cache stats compute hit rate and net savings", () => {
-  const stats = cacheStats(30, {
+  const stats = responseCacheStats(30, {
     hits: 30,
     semanticHits: 10,
     misses: 70,
@@ -199,7 +216,7 @@ test("cache stats compute hit rate and net savings", () => {
   });
   assert.equal(stats.hitRate, 0.3);
   assert.equal(stats.netSaved, 1.25);
-  assert.equal(cacheStats(7, { hits: 0, semanticHits: 0, misses: 0, savedTokens: 0, savedCost: 0, lookupCost: 0 }).hitRate, 0);
+  assert.equal(responseCacheStats(7, { hits: 0, semanticHits: 0, misses: 0, savedTokens: 0, savedCost: 0, lookupCost: 0 }).hitRate, 0);
 });
 
 test("cached tokens count prompt and completion", () => {

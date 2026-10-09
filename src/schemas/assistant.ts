@@ -4,6 +4,8 @@ import { CACHE_TTL_MAX_SECONDS } from "@/lib/gateway/cache-settings";
 import { BILLING_MODES } from "@/lib/gateway/core";
 import { clockMinute, isTimeZone, MAX_PRICE_WINDOWS } from "@/lib/gateway/price-schedule";
 import { DATA_REGIONS } from "@/lib/gateway/model-policy";
+import { KEY_ENDPOINTS } from "@/lib/gateway/key-restrictions";
+import { accessWindowsSchema } from "@/schemas/keys";
 import type { UsageBreakdownGroup, UsageBreakdownSort } from "@/types/assistant";
 
 const id = z.string().trim().min(1).max(64);
@@ -25,6 +27,14 @@ const price = z.number().min(0).max(1_000_000_000);
 const clock = z.string().refine((value) => clockMinute(value) !== null, "expected HH:MM");
 const rpm = z.number().int().min(0).max(1_000_000);
 const tpm = z.number().int().min(0).max(1_000_000_000);
+const keyEndpoints = z
+  .array(z.enum(KEY_ENDPOINTS))
+  .max(KEY_ENDPOINTS.length)
+  .describe("Endpoint groups the key may call. chat covers chat completions, completions, messages, and responses. Empty allows every endpoint; /v1/models always stays open.");
+const keyWindows = accessWindowsSchema.describe(
+  "Times the key may be used, in accessTimeZone. Each window has days (mon to sun), start and end as HH:MM; an end at or before start runs into the next day, and equal start and end cover 24 hours. Empty allows any time.",
+);
+const keyTimeZone = z.string().trim().max(64).refine(isTimeZone, "unknown IANA time zone").describe("IANA time zone of accessWindows.");
 const providerPolicy = {
   zdr: z.boolean().optional().describe("Zero data retention."),
   retentionDays: days.optional().describe("Days the provider keeps prompts."),
@@ -44,7 +54,7 @@ export const explainToolInput = z.object({ topic: z.enum(assistantTopics) });
 export const openPageToolInput = z.object({ page: z.enum(assistantPages) });
 
 export const apiEndpointsToolInput = z.object({
-  scope: z.enum(["all", "v1", "api"]).default("all"),
+  scope: z.enum(["all", "v1", "subscription", "api"]).default("all"),
 });
 
 export const codeExampleToolInput = z.object({
@@ -210,6 +220,9 @@ export const createKeyToolInput = z.object({
   tpm: tpm.optional(),
   days: days.optional().describe("Expiry in days. 0 never expires."),
   allowedIps: z.array(z.string().trim().max(64)).max(100).optional(),
+  allowedEndpoints: keyEndpoints.optional(),
+  accessWindows: keyWindows.optional(),
+  accessTimeZone: keyTimeZone.optional(),
   logContent: z.boolean().optional(),
 });
 
@@ -223,6 +236,9 @@ export const updateKeyToolInput = z.object({
   rpm: rpm.optional(),
   tpm: tpm.optional(),
   allowedIps: z.array(z.string().trim().max(64)).max(100).optional(),
+  allowedEndpoints: keyEndpoints.optional(),
+  accessWindows: keyWindows.optional(),
+  accessTimeZone: keyTimeZone.optional(),
   logContent: z.boolean().optional(),
   blocked: z.boolean().optional(),
 });

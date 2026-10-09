@@ -8,7 +8,7 @@ import { writeAudit } from "@/lib/gateway/audit";
 import { cacheBackend } from "@/lib/gateway/cache";
 import { CACHE_STATS_DEFAULT_DAYS } from "@/lib/gateway/cache-settings";
 import { getEnterprise, normalizeSemanticCache, patchEnterprise } from "@/lib/gateway/settings";
-import { cacheTotals } from "@/lib/gateway/usage-totals";
+import { responseCacheTotals } from "@/lib/gateway/usage-totals";
 import { cacheSettingsSchema, cacheStatsSchema } from "@/schemas/settings";
 import type { Permission } from "@/types/auth";
 import type { CacheSettingsInput, CacheView } from "@/types/cache";
@@ -24,7 +24,7 @@ async function view(permissions: readonly Permission[]): Promise<CacheView> {
     semantic: normalizeSemanticCache(enterprise.cache_semantic),
     backend,
     aliases: aliases.map((row) => row.alias),
-    stats: hasPerm(permissions, PERMISSIONS.SPEND_READ_ALL) ? await cacheTotals(CACHE_STATS_DEFAULT_DAYS) : null,
+    stats: hasPerm(permissions, PERMISSIONS.SPEND_READ_ALL) ? await responseCacheTotals(CACHE_STATS_DEFAULT_DAYS) : null,
     canManage: hasPerm(permissions, PERMISSIONS.SETTINGS_MANAGE),
   };
 }
@@ -42,7 +42,7 @@ export async function loadCacheStatsAction(input: { days: number }) {
     if (!hasPerm(session.permissions, PERMISSIONS.SPEND_READ_ALL)) return actionFail("FORBIDDEN");
     const parsed = cacheStatsSchema.safeParse(input);
     if (!parsed.success) return actionFail("VALIDATION");
-    return cacheTotals(parsed.data.days);
+    return responseCacheTotals(parsed.data.days);
   });
 }
 

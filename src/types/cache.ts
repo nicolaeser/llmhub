@@ -5,17 +5,17 @@ import type { JsonMap } from "@/types/gateway";
 
 export type CachedResponse = { response: JsonMap; cost: number; tokens: number };
 
-export type CacheEvent = "hit" | "semantic_hit" | "miss" | "lookup";
+export type ResponseCacheEvent = "hit" | "semantic_hit" | "miss" | "lookup";
 
-export type CacheUsage = { event: CacheEvent; savedTokens?: number; savedCost?: number };
+export type ResponseCacheUsage = { event: ResponseCacheEvent; savedTokens?: number; savedCost?: number };
 
-export type CacheColumns = {
-  cacheHits: number;
-  cacheSemanticHits: number;
-  cacheMisses: number;
-  cacheSavedTokens: number;
-  cacheSavedCost: number;
-  cacheLookupCost: number;
+export type ResponseCacheColumns = {
+  responseCacheHits: number;
+  responseCacheSemanticHits: number;
+  responseCacheMisses: number;
+  responseCacheSavedTokens: number;
+  responseCacheSavedCost: number;
+  responseCacheLookupCost: number;
 };
 
 export type SemanticCacheSettings = { enabled: boolean; model: string; threshold: number };
@@ -37,9 +37,9 @@ export type ChatCacheLookup = {
 
 export type CacheBackend = "redis" | "memory" | "fallback";
 
-export type CacheStatsRange = (typeof CACHE_STATS_RANGES)[number];
+export type ResponseCacheStatsRange = (typeof CACHE_STATS_RANGES)[number];
 
-export type CacheStats = {
+export type ResponseCacheStats = {
   days: number;
   hits: number;
   semanticHits: number;
@@ -56,7 +56,7 @@ export type CacheView = {
   semantic: SemanticCacheSettings;
   backend: CacheBackend;
   aliases: string[];
-  stats: CacheStats | null;
+  stats: ResponseCacheStats | null;
   canManage: boolean;
 };
 
