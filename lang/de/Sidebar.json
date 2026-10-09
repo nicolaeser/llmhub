@@ -24,6 +24,7 @@
     "guardrails": "Leitplanken",
     "usage": "Nutzung",
     "logs": "Protokolle",
+    "providerHealth": "Anbieterstatus",
     "users": "Konsolen-Benutzer",
     "apiRef": "API-Referenz",
     "cache": "Cache",

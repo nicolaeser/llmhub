@@ -24,6 +24,7 @@
     "guardrails": "Guardrails",
     "usage": "Usage",
     "logs": "Logs",
+    "providerHealth": "Provider health",
     "users": "Console users",
     "apiRef": "API reference",
     "cache": "Cache",

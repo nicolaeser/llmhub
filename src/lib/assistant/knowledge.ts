@@ -12,6 +12,7 @@ export const ASSISTANT_PAGES = {
   guardrails: "/guardrails",
   usage: "/usage",
   logs: "/logs",
+  "provider-health": "/provider-health",
   companies: "/companies",
   structure: "/companies",
   organizations: "/companies",
@@ -56,7 +57,7 @@ export const ASSISTANT_EXPLAIN = {
   cache:
     "The response cache answers identical non-streaming chat requests from the same key from memory for the configured TTL. Configure it under Cache.",
   router:
-    "Each model alias has a routing strategy (least_inflight, weighted_random, cost_lowest, priority, fast), retries, fallback aliases, and an overflow alias used when no deployment is healthy. Deployments are the upstream endpoints behind that alias and cool down only on retryable failures.",
+    "Each model alias has a routing strategy (least_inflight, weighted_random, cost_lowest, priority, fast), retries, fallback aliases, and an overflow alias used when no deployment is healthy. Deployments are the upstream endpoints behind that alias and cool down only on retryable failures. Provider health shows each deployment's recent error rate, p50 and p95 latency, and cooldowns, shared across instances when Redis is configured.",
   logging:
     "Request logs record metadata, usage powers the charts, and alert webhooks fire for the events each one subscribes to: upstream exhaustion, budget thresholds, and provider model changes. Retention and S3 archiving are configured under Logging & alerts. Prompt and response content is logged unless switched off globally, per key, per person, or per console user.",
   usage:
