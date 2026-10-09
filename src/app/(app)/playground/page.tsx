@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { Button, Card, Spinner, toast } from "@heroui/react";
+import { Alert, Button, Card, Spinner, toast } from "@heroui/react";
 import { PlayCircle, Plus } from "lucide-react";
 import { useTranslations } from "next-intl";
 import EmptyState from "@/components/console/empty-state";
@@ -10,12 +10,14 @@ import { Link } from "@/i18n/routing";
 import { loadAliasesAction } from "@/app/(app)/_action";
 import { isActionFail } from "@/lib/http/action-result";
 import type { Msg, Session } from "@/types/playground";
+import { loadReplayAction } from "./_action";
 import {
   STORAGE_KEY,
   makeSession,
   parseSessions,
   parseTools,
   readAssistantStream,
+  replaySession,
   titleFrom,
 } from "./_components/chat-session";
 import SessionSidebar, { SessionPicker } from "./_components/session-nav";
@@ -23,9 +25,22 @@ import ChatSettings from "./_components/chat-settings";
 import ChatTranscript from "./_components/chat-transcript";
 import ChatComposer from "./_components/chat-composer";
 
+type ReplayNotice =
+  | { kind: "failed"; sessionId: string; error: string }
+  | {
+      kind: "loaded";
+      sessionId: string;
+      id: string;
+      model: string;
+      dropped: boolean;
+      truncated: boolean;
+      masked: boolean;
+    };
+
 export default function PlaygroundPage() {
   const t = useTranslations("Playground");
   const tCommon = useTranslations("Common");
+  const tError = useTranslations("Error");
   const [models, setModels] = useState<string[]>([]);
   const [providerCount, setProviderCount] = useState(0);
   const [sessions, setSessions] = useState<Session[]>([]);
@@ -33,6 +48,7 @@ export default function PlaygroundPage() {
   const [input, setInput] = useState("");
   const [toolsJson, setToolsJson] = useState("");
   const [images, setImages] = useState<string[]>([]);
+  const [replay, setReplay] = useState<ReplayNotice | null>(null);
   const [loading, setLoading] = useState(true);
   const [pending, start] = useTransition();
   const bottom = useRef<HTMLDivElement>(null);
@@ -46,6 +62,9 @@ export default function PlaygroundPage() {
   );
 
   useEffect(() => {
+    let active = true;
+    const params = new URLSearchParams(window.location.search);
+    const replayId = params.get("replay");
     let stored: Session[] = [];
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
@@ -53,26 +72,47 @@ export default function PlaygroundPage() {
     } catch {
       stored = [];
     }
-    loadAliasesAction().then((res) => {
+    loadAliasesAction().then(async (res) => {
       const aliases = isActionFail(res) ? [] : res.models;
+      const replayed = replayId && aliases.length ? await loadReplayAction(replayId) : null;
+      if (!active) return;
+      if (replayId) window.history.replaceState(null, "", window.location.pathname);
       setModels(aliases);
       setProviderCount(isActionFail(res) ? 0 : res.providers);
       const fallback = aliases[0] ?? "";
-      if (stored.length === 0) {
-        const created = makeSession(fallback);
-        setSessions([created]);
+      const hydrated = stored.map((s) => ({
+        ...s,
+        model: s.model || fallback,
+      }));
+      if (replayed && !isActionFail(replayed)) {
+        const requested = params.get("model") || replayed.model;
+        const created = replaySession(replayed, aliases.includes(requested) ? requested : "");
+        setSessions([created, ...hydrated]);
         setCurrentId(created.id);
+        setInput(replayed.prompt.text);
+        setImages(replayed.prompt.images);
+        setToolsJson(replayed.tools.length ? JSON.stringify(replayed.tools, null, 2) : "");
+        setReplay({
+          kind: "loaded",
+          sessionId: created.id,
+          id: replayed.id,
+          model: replayed.model,
+          dropped: replayed.dropped,
+          truncated: replayed.truncated,
+          masked: replayed.masked,
+        });
       } else {
-        const hydrated = stored.map((s) => ({
-          ...s,
-          model: s.model || fallback,
-        }));
-        setSessions(hydrated);
-        const newest = [...hydrated].sort((a, b) => b.updatedAt - a.updatedAt)[0];
-        setCurrentId(newest?.id ?? hydrated[0]!.id);
+        const list = hydrated.length ? hydrated : [makeSession(fallback)];
+        const newest = [...list].sort((a, b) => b.updatedAt - a.updatedAt)[0]!;
+        setSessions(list);
+        setCurrentId(newest.id);
+        if (replayed) setReplay({ kind: "failed", sessionId: newest.id, error: replayed.error });
       }
       setLoading(false);
     });
+    return () => {
+      active = false;
+    };
   }, []);
 
   useEffect(() => {
@@ -155,7 +195,9 @@ export default function PlaygroundPage() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             model,
-            messages: next,
+            messages: current.system.trim()
+              ? [{ role: "system", content: current.system }, ...next]
+              : next,
             stream: true,
             ...(tools ? { tools } : {}),
           }),
@@ -272,14 +314,45 @@ export default function PlaygroundPage() {
           <ChatSettings
             models={models}
             model={model}
+            system={current?.system ?? ""}
             toolsJson={toolsJson}
             pending={pending}
             onModelChange={(next) => {
               if (current) patchSession(current.id, { model: next });
             }}
+            onSystemChange={(next) => {
+              if (current) patchSession(current.id, { system: next });
+            }}
             onToolsChange={setToolsJson}
             onClear={() => current && patchSession(current.id, { messages: [], title: "" })}
           />
+          {replay && replay.sessionId === current?.id ? (
+            <Alert
+              status={
+                replay.kind === "failed"
+                  ? "danger"
+                  : replay.dropped || replay.truncated || replay.masked
+                    ? "warning"
+                    : "accent"
+              }
+              className="mb-3"
+            >
+              <Alert.Indicator />
+              <Alert.Content>
+                {replay.kind === "failed" ? (
+                  <Alert.Description>{tError("code", { code: replay.error })}</Alert.Description>
+                ) : (
+                  <>
+                    <Alert.Title>{t("replayTitle")}</Alert.Title>
+                    <Alert.Description>{t("replayLoaded", { id: replay.id, model: replay.model })}</Alert.Description>
+                    {replay.dropped ? <Alert.Description>{t("replayDropped")}</Alert.Description> : null}
+                    {replay.truncated ? <Alert.Description>{t("replayTruncated")}</Alert.Description> : null}
+                    {replay.masked ? <Alert.Description>{t("replayMasked")}</Alert.Description> : null}
+                  </>
+                )}
+              </Alert.Content>
+            </Alert>
+          ) : null}
           <Card className="min-h-0 flex-1 gap-0 p-0">
             <ChatTranscript messages={msgs} pending={pending} bottomRef={bottom} />
             <ChatComposer

@@ -9,12 +9,14 @@ import {
   FieldError,
   Input,
   Label,
+  ListBox,
+  Select,
   Switch,
   TextField,
 } from "@heroui/react";
 import { Trash2 } from "lucide-react";
 import { useTranslations } from "next-intl";
-import { WEBHOOK_EVENTS } from "@/lib/gateway/webhook-events";
+import { WEBHOOK_EVENTS, WEBHOOK_FORMATS } from "@/lib/gateway/webhook-events";
 import type { AlertWebhookDraft } from "@/types/settings";
 
 export default function WebhookCard({
@@ -86,6 +88,31 @@ export default function WebhookCard({
             </Switch>
           ) : null}
         </div>
+        <Select
+          fullWidth
+          selectedKey={draft.format}
+          onSelectionChange={(key) =>
+            onChange({ ...draft, format: WEBHOOK_FORMATS.find((format) => format === key) ?? "json" })
+          }
+          isDisabled={isDisabled}
+        >
+          <Label>{t("format")}</Label>
+          <Select.Trigger>
+            <Select.Value />
+            <Select.Indicator />
+          </Select.Trigger>
+          <Select.Popover>
+            <ListBox aria-label={t("format")}>
+              {WEBHOOK_FORMATS.map((format) => (
+                <ListBox.Item key={format} id={format} textValue={t("formatLabel", { format })}>
+                  {t("formatLabel", { format })}
+                  <ListBox.ItemIndicator />
+                </ListBox.Item>
+              ))}
+            </ListBox>
+          </Select.Popover>
+          <Description>{t("formatHint", { format: draft.format })}</Description>
+        </Select>
       </div>
       <CheckboxGroup
         value={draft.events}

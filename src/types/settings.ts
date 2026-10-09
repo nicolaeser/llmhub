@@ -1,6 +1,6 @@
 import type { z } from "zod";
 import type { adminSettingsSchema, alertWebhooksSchema } from "@/schemas/settings";
-import type { WebhookEvent } from "@/types/gateway";
+import type { WebhookEvent, WebhookFormat } from "@/types/gateway";
 import type { UpdateStatus } from "@/types/updates";
 
 export type AdminSettings = z.infer<typeof adminSettingsSchema>;
@@ -10,8 +10,15 @@ export type AlertWebhookInput = z.infer<typeof alertWebhooksSchema>[number];
 export type AlertWebhookView = {
   id: string;
   url: string;
+  format: WebhookFormat;
   events: WebhookEvent[];
   secretSet: boolean;
+};
+
+export type AlertRules = {
+  spendAnomalyFactor: number;
+  spendAnomalyMinCost: number;
+  keyExpiryWarningDays: number;
 };
 
 export type AlertWebhookDraft = AlertWebhookInput & {

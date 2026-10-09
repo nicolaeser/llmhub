@@ -13,16 +13,12 @@ import { asRecord, asStringArray, ERR_NO_HEALTHY, ERR_UNKNOWN_GROUP } from "@/li
 import { modelAlias } from "@/lib/gateway/model-alias";
 import { routePermitted } from "@/lib/gateway/model-policy";
 import { priceWindowQuery, priceWindowRates } from "@/lib/gateway/price-schedule";
+import { coolingDown, recordFailure, recordSuccess } from "@/lib/gateway/provider-health";
 import type { DbDeployment, ResolvedDeployment, Deployment, ModelGroup } from "@/types/gateway";
 import type { DeploymentRule, RoutePolicy } from "@/types/model-templates";
 import { money } from "@/lib/utils/money";
 
-const COOLDOWN_MS = 15_000;
-const MAX_LIMIT_COOLDOWN_MS = 7 * 24 * 60 * 60_000;
-const ALLOWED_FAILS = 2;
 const inflight = new Map<string, number>();
-const cooldownUntil = new Map<string, number>();
-const failCount = new Map<string, number>();
 const latencyEwma = new Map<string, number>();
 
 function mapDeployment(row: DbDeployment): ResolvedDeployment {
@@ -120,8 +116,9 @@ export async function loadGroup(requested: string): Promise<ModelGroup & { mappe
   };
 }
 
-function healthy(items: ResolvedDeployment[], now: number): ResolvedDeployment[] {
-  return items.filter((d) => (cooldownUntil.get(d.id) ?? 0) <= now);
+async function healthy(items: ResolvedDeployment[]): Promise<ResolvedDeployment[]> {
+  const cooling = await coolingDown(items.map((d) => d.id));
+  return items.filter((d) => !cooling.has(d.id));
 }
 
 function pick(items: ResolvedDeployment[], strategy: string): ResolvedDeployment {
@@ -145,7 +142,7 @@ export async function acquireGroup(
   serves: (dep: ResolvedDeployment) => boolean = () => true,
   strategy = "",
 ): Promise<{ dep: ResolvedDeployment; release: () => void; overflow: boolean }> {
-  const ready = healthy(permittedDeployments(group.mapped, rules).filter(serves), Date.now());
+  const ready = await healthy(permittedDeployments(group.mapped, rules).filter(serves));
   if (!ready.length) {
     if (group.overflow_group && group.overflow_group !== group.alias) {
       const overflow = await loadGroup(group.overflow_group);
@@ -166,22 +163,11 @@ export async function acquireGroup(
 }
 
 export function markFailure(dep: Deployment, retryAt: number | null = null): void {
-  const now = Date.now();
-  if (retryAt && retryAt > now) {
-    cooldownUntil.set(dep.id, Math.min(retryAt, now + MAX_LIMIT_COOLDOWN_MS));
-    failCount.set(dep.id, 0);
-    return;
-  }
-  const fails = (failCount.get(dep.id) ?? 0) + 1;
-  failCount.set(dep.id, fails);
-  if (fails >= ALLOWED_FAILS) {
-    cooldownUntil.set(dep.id, Date.now() + COOLDOWN_MS);
-    failCount.set(dep.id, 0);
-  }
+  recordFailure(dep.id, Date.now(), retryAt);
 }
 
 export function markSuccess(dep: Deployment, latencyMs?: number): void {
-  failCount.set(dep.id, 0);
+  recordSuccess(dep.id, latencyMs);
   if (latencyMs == null || !(latencyMs >= 0)) return;
   latencyEwma.set(dep.id, nextLatencyEwma(latencyEwma.get(dep.id), latencyMs));
 }

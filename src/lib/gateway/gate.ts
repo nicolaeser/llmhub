@@ -2,7 +2,7 @@ import "server-only";
 import { bearerToken, clientIp, readJSON } from "@/lib/http/api";
 import { authenticateBearer } from "@/lib/gateway/principal";
 import { defaultEntityIds, redactJSON } from "@/lib/gateway/pii";
-import { alertUpstreamFailure } from "@/lib/gateway/alerts";
+import { alertPiiBlocked, alertUpstreamFailure } from "@/lib/gateway/alerts";
 import { resolvePii } from "@/lib/gateway/settings";
 import { assertBudget, assertRate, recordUsage } from "@/lib/gateway/billing";
 import { asRecord, isRouterError, newRequestId } from "@/lib/gateway/core";
@@ -141,6 +141,7 @@ export async function applyPii(
       tag: spendTag(body),
       error: blocked,
     }).catch(() => undefined);
+    void alertPiiBlocked(principal, found);
     throw blocked;
   }
   return { body: redacted, output: pii.output ? entities : null };
