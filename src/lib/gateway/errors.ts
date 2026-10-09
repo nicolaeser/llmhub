@@ -19,6 +19,8 @@ export const GATEWAY_ERRORS = {
   invalid_api_key: 401,
   permission_denied: 403,
   ip_not_allowed: 403,
+  endpoint_not_allowed: 403,
+  outside_access_window: 403,
   model_access_denied: 403,
   model_not_found: 404,
   not_found: 404,
@@ -36,6 +38,7 @@ export const GATEWAY_ERRORS = {
 export class GateError extends Error {
   readonly code: string;
   readonly param: string | null;
+  readonly retryAt: number | null;
 
   constructor(
     readonly status: number,
@@ -47,6 +50,7 @@ export class GateError extends Error {
     this.name = "GateError";
     this.code = options.upstreamCode || code;
     this.param = options.param ?? null;
+    this.retryAt = options.retryAt ?? null;
   }
 
   get type(): GatewayErrorType {

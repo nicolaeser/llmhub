@@ -20,6 +20,9 @@ function rollUp(rows: UsageSlice[], nameOf: (row: UsageSlice) => string): SliceR
       errors: 0,
       rate429: 0,
       latency: 0,
+      cacheRead: 0,
+      cacheWrite: 0,
+      cacheSavings: 0,
       latencySum: 0,
     };
     cur.spend += row.cost;
@@ -29,6 +32,9 @@ function rollUp(rows: UsageSlice[], nameOf: (row: UsageSlice) => string): SliceR
     cur.errors += row.errors;
     cur.rate429 += row.rateLimited;
     cur.latencySum += row.latencyMs;
+    cur.cacheRead += row.cacheReadTokens;
+    cur.cacheWrite += row.cacheWriteTokens;
+    cur.cacheSavings += row.cacheSavings;
     map.set(name, cur);
   }
   return [...map.values()].map(({ latencySum, ...row }) => ({
@@ -49,6 +55,16 @@ export function groupRequestHealth(rows: UsageSlice[], key: SliceKey): SliceRow[
   return rollUp(rows, (row) => row[key] || "unassigned").sort(
     (a, b) => (b.requests ?? 0) - (a.requests ?? 0),
   );
+}
+
+export function groupCache(rows: UsageSlice[], key: SliceKey): SliceRow[] {
+  return groupSpend(rows, key)
+    .filter((row) => (row.cacheRead ?? 0) > 0 || (row.cacheWrite ?? 0) > 0)
+    .sort((a, b) => (b.cacheSavings ?? 0) - (a.cacheSavings ?? 0));
+}
+
+export function cacheHitRate(cacheRead: number, prompt: number): number {
+  return prompt > 0 ? cacheRead / prompt : 0;
 }
 
 export function chargebackRows(rows: UsageSlice[]): SliceRow[] {
@@ -117,7 +133,18 @@ export function usageDays(start: Date, count: number): string[] {
 
 export function summarizeUsage(rows: UsageSlice[], days: string[]): UsageSummary {
   const daily = new Map(days.map((day) => [day, { spend: 0, requests: 0, errors: 0 }]));
-  const totals = { spend: 0, tokens: 0, count: 0, errors: 0, rate429: 0, latencySum: 0 };
+  const totals = {
+    spend: 0,
+    tokens: 0,
+    prompt: 0,
+    count: 0,
+    errors: 0,
+    rate429: 0,
+    latencySum: 0,
+    cacheRead: 0,
+    cacheWrite: 0,
+    cacheSavings: 0,
+  };
   for (const row of rows) {
     const bucket = daily.get(row.day);
     if (bucket) {
@@ -127,10 +154,14 @@ export function summarizeUsage(rows: UsageSlice[], days: string[]): UsageSummary
     }
     totals.spend += row.cost;
     totals.tokens += row.promptTokens + row.completionTokens;
+    totals.prompt += row.promptTokens;
     totals.count += row.requests;
     totals.errors += row.errors;
     totals.rate429 += row.rateLimited;
     totals.latencySum += row.latencyMs;
+    totals.cacheRead += row.cacheReadTokens;
+    totals.cacheWrite += row.cacheWriteTokens;
+    totals.cacheSavings += row.cacheSavings;
   }
   return {
     daily: [...daily.entries()].map(([day, value]) => ({ day, ...value })),
@@ -140,6 +171,10 @@ export function summarizeUsage(rows: UsageSlice[], days: string[]): UsageSummary
     errors: totals.errors,
     rate429: totals.rate429,
     latency: totals.count ? totals.latencySum / totals.count : 0,
+    cacheRead: totals.cacheRead,
+    cacheWrite: totals.cacheWrite,
+    cacheSavings: totals.cacheSavings,
+    cacheHitRate: cacheHitRate(totals.cacheRead, totals.prompt),
   };
 }
 

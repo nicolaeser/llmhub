@@ -3,6 +3,7 @@ import prisma from "@/lib/db/prisma";
 import { REPORTED_COST_KINDS } from "@/lib/gateway/cost";
 import { splitTag } from "@/lib/gateway/model-catalog";
 import { minuteClock, priceAt, priceWindowQuery, priceWindowRates } from "@/lib/gateway/price-schedule";
+import { routePool } from "@/lib/gateway/route-pool";
 import { money } from "@/lib/utils/money";
 import type { CostRates, ModelPricing, PriceSchedule, PublicModel, TokenPricing } from "@/types/gateway";
 
@@ -15,7 +16,7 @@ const pricedGroupSelect = {
   priceOutput: true,
   priceTimeZone: true,
   priceWindows: priceWindowQuery,
-  deployments: { select: { kind: true, costInput: true, costOutput: true } },
+  deployments: { select: { kind: true, costInput: true, costOutput: true, provider: { select: { kind: true } } } },
 } as const;
 
 function perToken(per1k: number): string {
@@ -68,6 +69,7 @@ export async function pricedModels(at: Date, aliases?: string[]): Promise<Public
     vendor: group.vendor,
     displayName: group.displayName,
     tags: [splitTag(group.alias).tag].filter(Boolean),
+    pools: [...new Set(group.deployments.map(routePool))],
     pricing: modelPricing(
       {
         billing_mode: group.billingMode,

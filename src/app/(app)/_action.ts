@@ -9,6 +9,7 @@ import { hasPerm, PERMISSIONS } from "@/lib/auth/permissions";
 import { companyOf, inCompany, keyVisibleTo, spendScope } from "@/lib/auth/scope";
 import {
   chargebackRows,
+  groupCache,
   groupRequestHealth,
   groupSpend,
   summarizeUsage,
@@ -98,6 +99,9 @@ export async function createKeyAction(raw: unknown) {
         rpmLimit: input.rpm,
         tpmLimit: input.tpm,
         allowedIps: input.allowedIps,
+        allowedEndpoints: input.allowedEndpoints,
+        accessWindows: input.accessWindows,
+        accessTimeZone: input.accessTimeZone,
         logContent: input.logContent,
         expiresAt: input.days ? new Date(Date.now() + input.days * 86400000) : null,
       },
@@ -114,6 +118,9 @@ export async function createKeyAction(raw: unknown) {
         models: input.models,
         templateIds: templates,
         allowedIps: input.allowedIps,
+        allowedEndpoints: input.allowedEndpoints,
+        accessWindows: input.accessWindows,
+        accessTimeZone: input.accessTimeZone,
         logContent: input.logContent,
       },
     });
@@ -141,6 +148,9 @@ export async function updateKeyAction(raw: unknown) {
       rpmLimit: input.rpm,
       tpmLimit: input.tpm,
       allowedIps: input.allowedIps,
+      allowedEndpoints: input.allowedEndpoints,
+      accessWindows: input.accessWindows,
+      accessTimeZone: input.accessTimeZone,
       logContent: input.logContent,
       blocked: input.blocked,
     };
@@ -358,6 +368,10 @@ export async function loadUsageAction(
       rate429: summary.rate429,
       latency: summary.latency,
       p95Latency: p95,
+      cacheRead: summary.cacheRead,
+      cacheWrite: summary.cacheWrite,
+      cacheSavings: summary.cacheSavings,
+      cacheHitRate: summary.cacheHitRate,
       daily: summary.daily,
       byModel: groupSpend(rows, "model").slice(0, 12),
       byTeam: groupSpend(rows, "teamId").slice(0, 12),
@@ -368,6 +382,7 @@ export async function loadUsageAction(
       byUser: groupSpend(rows, "userId").slice(0, 12),
       healthByModel: groupRequestHealth(rows, "model").slice(0, 12),
       healthByTeam: groupRequestHealth(rows, "teamId").slice(0, 12),
+      cacheByProject: groupCache(rows, "projectId").slice(0, 12),
       chargeback: chargebackRows(rows),
     };
   });

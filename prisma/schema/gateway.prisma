@@ -108,35 +108,38 @@ model Member {
 }
 
 model VirtualKey {
-  id             String        @id @default(cuid())
-  hash           String        @unique
-  prefix         String
-  keyAlias       String        @default("")
-  userId         String?
-  user           User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
-  teamId         String?
-  team           Team?         @relation(fields: [teamId], references: [id], onDelete: SetNull)
-  orgId          String?
-  org            Organization? @relation(fields: [orgId], references: [id], onDelete: SetNull)
-  projectId      String?
-  project        Project?      @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  memberId       String?
-  member         Member?       @relation(fields: [memberId], references: [id], onDelete: Cascade)
-  models         Json          @default("[]")
-  maxBudget      Decimal       @default(0) @db.Decimal(20, 10)
-  spend          Decimal       @default(0) @db.Decimal(20, 10)
-  rpmLimit       Int           @default(0)
-  tpmLimit       Int           @default(0)
-  budgetDuration String        @default("")
-  expiresAt      DateTime?
-  allowedIps     Json          @default("[]")
-  blocked        Boolean       @default(false)
-  logContent     Boolean       @default(true)
-  prevHash       String        @default("")
-  prevHashUntil  DateTime?
-  spendResetAt   DateTime?
-  piiPolicy      Json?
-  createdAt      DateTime      @default(now())
+  id               String        @id @default(cuid())
+  hash             String        @unique
+  prefix           String
+  keyAlias         String        @default("")
+  userId           String?
+  user             User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+  teamId           String?
+  team             Team?         @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  orgId            String?
+  org              Organization? @relation(fields: [orgId], references: [id], onDelete: SetNull)
+  projectId        String?
+  project          Project?      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  memberId         String?
+  member           Member?       @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  models           Json          @default("[]")
+  maxBudget        Decimal       @default(0) @db.Decimal(20, 10)
+  spend            Decimal       @default(0) @db.Decimal(20, 10)
+  rpmLimit         Int           @default(0)
+  tpmLimit         Int           @default(0)
+  budgetDuration   String        @default("")
+  expiresAt        DateTime?
+  allowedIps       Json          @default("[]")
+  allowedEndpoints Json          @default("[]")
+  accessWindows    Json          @default("[]")
+  accessTimeZone   String        @default("UTC")
+  blocked          Boolean       @default(false)
+  logContent       Boolean       @default(true)
+  prevHash         String        @default("")
+  prevHashUntil    DateTime?
+  spendResetAt     DateTime?
+  piiPolicy        Json?
+  createdAt        DateTime      @default(now())
 
   templates VirtualKeyTemplate[]
 
@@ -190,6 +193,21 @@ model ProviderConnection {
 
   deployments    Deployment[]
   catalogEntries CatalogEntry[]
+  login          ProviderLogin?
+}
+
+model ProviderLogin {
+  providerId String             @id
+  provider   ProviderConnection @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  account    String             @default("")
+  plan       String             @default("")
+  tokens     String
+  expiresAt  DateTime
+  status     String             @default("active")
+  version    Int                @default(0)
+  leaseUntil DateTime?
+  createdAt  DateTime           @default(now())
+  updatedAt  DateTime           @updatedAt
 }
 
 model ModelGroup {
@@ -298,7 +316,10 @@ model UsageDaily {
   latencyMs        BigInt   @default(0)
   promptTokens     BigInt   @default(0)
   completionTokens BigInt   @default(0)
+  cacheReadTokens  BigInt   @default(0)
+  cacheWriteTokens BigInt   @default(0)
   cost             Decimal  @default(0) @db.Decimal(20, 10)
+  cacheSavings     Decimal  @default(0) @db.Decimal(20, 10)
 
   @@id([day, keyId, teamId, orgId, projectId, memberId, userId, model], name: "slice")
   @@index([day])
@@ -325,6 +346,8 @@ model RequestLog {
   error            String             @default("")
   promptTokens     Int                @default(0)
   completionTokens Int                @default(0)
+  cacheReadTokens  Int                @default(0)
+  cacheWriteTokens Int                @default(0)
   cost             Decimal            @default(0) @db.Decimal(20, 10)
   piiMode          String             @default("")
   piiInput         String[]           @default([])

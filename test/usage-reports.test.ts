@@ -31,7 +31,10 @@ const slice = (row: Partial<UsageSlice>): UsageSlice => ({
   latencyMs: 0,
   promptTokens: 0,
   completionTokens: 0,
+  cacheReadTokens: 0,
+  cacheWriteTokens: 0,
   cost: 0,
+  cacheSavings: 0,
   ...row,
 });
 

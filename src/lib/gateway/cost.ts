@@ -1,4 +1,11 @@
-import type { BillingContext, CostRates, Deployment, PriceFactors, Usage } from "@/types/gateway";
+import type {
+  BillingContext,
+  CacheTokens,
+  CostRates,
+  Deployment,
+  PriceFactors,
+  Usage,
+} from "@/types/gateway";
 
 const TOKEN_FALLBACK = 0.000002;
 const CACHE_READ_RATE = 0.1;
@@ -61,6 +68,14 @@ function averageCostRates(peers: CostRates[]): CostRates | null {
   };
 }
 
+export function cacheTokens(usage: Partial<Usage>): CacheTokens {
+  const prompt = usage.prompt_tokens ?? 0;
+  const read = Math.min(prompt, usage.cache_read_input_tokens ?? 0);
+  const written = Math.min(prompt - read, usage.cache_creation_input_tokens ?? 0);
+  const writtenLong = Math.min(written, usage.cache_creation_1h_input_tokens ?? 0);
+  return { read, written, writtenLong };
+}
+
 function rawCost(
   rates: CostRates | null | undefined,
   usage: Partial<Usage>,
@@ -69,9 +84,7 @@ function rawCost(
   if (!rates) return 0;
   const prompt = usage.prompt_tokens ?? 0;
   const completion = usage.completion_tokens ?? 0;
-  const cached = Math.min(prompt, usage.cache_read_input_tokens ?? 0);
-  const written = Math.min(prompt - cached, usage.cache_creation_input_tokens ?? 0);
-  const writtenLong = Math.min(written, usage.cache_creation_1h_input_tokens ?? 0);
+  const { read: cached, written, writtenLong } = cacheTokens(usage);
   const billed = Math.max(0, prompt - cached - written);
   const rate = (rates.cost_input_per_1k / 1000) * factors.input;
   const input = billed * rate;
@@ -107,4 +120,19 @@ export function costOf(
       : null;
   const sum = average ? Math.max(rawCost(average, usage, factors), routed) : routed;
   return reported === undefined ? withTokenFallback(sum, usage) : sum;
+}
+
+export function cacheSavingsOf(
+  dep: Deployment | null | undefined,
+  usage: Partial<Usage>,
+  opts?: Partial<BillingContext>,
+): number {
+  const estimated = { ...usage, cost: undefined };
+  const uncached = {
+    ...estimated,
+    cache_read_input_tokens: 0,
+    cache_creation_input_tokens: 0,
+    cache_creation_1h_input_tokens: 0,
+  };
+  return costOf(dep, uncached, opts) - costOf(dep, estimated, opts);
 }
