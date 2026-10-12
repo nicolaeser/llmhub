@@ -1,3 +1,5 @@
+import type { z } from "zod";
+import type { accessWindowSchema } from "@/schemas/keys";
 import type { PiiPolicy } from "@/types/guardrails";
 import type { TemplateOption } from "@/types/model-templates";
 
@@ -35,7 +37,7 @@ export type KeyEndpoint =
 
 export type Weekday = "mon" | "tue" | "wed" | "thu" | "fri" | "sat" | "sun";
 
-export type AccessWindow = { days: Weekday[]; start: string; end: string };
+export type AccessWindow = z.infer<typeof accessWindowSchema>;
 
 export type AccessWindowDraft = AccessWindow & { key: number };
 

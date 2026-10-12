@@ -1,3 +1,6 @@
+import type { z } from "zod";
+import type { signInCredentialSchema, signInTicketSchema } from "@/schemas/providers";
+
 export type ProviderRecord = {
   id: string;
   name: string;
@@ -31,7 +34,7 @@ export type ImportCandidate = {
   exists: boolean;
 };
 
-export type SignInKind = "codex" | "grok_build" | "claude" | "antigravity";
+export type SignInKind = SignInCredential["kind"];
 
 export type SignInMethod = "device" | "code";
 
@@ -104,25 +107,11 @@ export type ProviderView = {
   policy: ProviderPolicyInput;
 };
 
-export type SignInTokens = {
-  access: string;
-  refresh: string;
-  accountId: string;
-  residency: string;
-};
+export type SignInSession = SignInCredential["session"];
 
-export type SignInSession = {
-  tokens: SignInTokens;
-  expiresAt: number;
-  account: string;
-  plan: string;
-};
+export type SignInTokens = SignInSession["tokens"];
 
-export type DeviceGrant =
-  | { kind: "codex"; deviceAuthId: string; userCode: string }
-  | { kind: "grok_build"; deviceCode: string }
-  | { kind: "claude"; verifier: string; state: string }
-  | { kind: "antigravity"; verifier: string; state: string };
+export type DeviceGrant = SignInTicket["grant"];
 
 export type DeviceAuthorization = {
   grant: DeviceGrant;
@@ -142,21 +131,9 @@ export type TokenRefresh =
   | { ok: true; session: SignInSession }
   | { ok: false; fatal: boolean };
 
-export type SignInTicket = {
-  purpose: "sign_in_device";
-  uid: string;
-  exp: number;
-  interval: number;
-  grant: DeviceGrant;
-};
+export type SignInTicket = z.infer<typeof signInTicketSchema>;
 
-export type SignInCredential = {
-  purpose: "sign_in_credential";
-  uid: string;
-  kind: SignInKind;
-  exp: number;
-  session: SignInSession;
-};
+export type SignInCredential = z.infer<typeof signInCredentialSchema>;
 
 export type SignInStart = {
   method: SignInMethod;

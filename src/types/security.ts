@@ -1,10 +1,13 @@
+import type { z } from "zod";
+import type { secondFactorProofSchema } from "@/schemas/auth";
+
 export type SecondFactorMethod = "TOTP" | "RECOVERY" | "PASSKEY";
 
 export type SessionFactor = SecondFactorMethod | "SSO";
 
 export type ChallengePurpose = "VERIFY" | "ENROLL" | "PASSWORD";
 
-export type SecondFactorProof = { method: "totp" | "recovery"; code: string };
+export type SecondFactorProof = z.infer<typeof secondFactorProofSchema>;
 
 export type LoginChallengeRecord = {
   id: string;
