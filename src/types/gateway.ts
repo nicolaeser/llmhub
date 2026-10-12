@@ -2,7 +2,7 @@ import type { Prisma } from "@/generated/prisma/client";
 import type { OPENAPI_METHODS } from "@/lib/gateway/endpoints/openapi";
 import type { WEBHOOK_EVENTS, WEBHOOK_FORMATS } from "@/lib/alerts/events";
 import type { SemanticCacheSettings } from "@/types/cache";
-import type { GuardrailPolicy, PiiPolicy } from "@/types/guardrails";
+import type { GuardrailPolicy, OutputGuard, PiiPolicy } from "@/types/guardrails";
 import type { AccessWindow, KeyEndpoint } from "@/types/keys";
 import type { AssignmentRow } from "@/types/providers";
 import type { VectorStoreDefaults } from "@/types/rag";
@@ -475,6 +475,19 @@ export type Principal = {
   guardrails?: GuardrailPolicy | null;
   pool?: RoutePool;
   trace?: RequestTrace;
+};
+
+export type ScreenedRequest = {
+  principal: Principal;
+  model: string;
+  body: JsonMap;
+  clean: JsonMap;
+  output: OutputGuard | null;
+};
+
+export type ScreenOptions = {
+  pool?: RoutePool;
+  auth?: Request;
 };
 
 export type ProxyFirstResult = {

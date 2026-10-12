@@ -1,29 +1,26 @@
 import "server-only";
 import { chatUsageFromAnthropic, nativeMessagesBody } from "@/lib/gateway/protocols/anthropic";
-import { recordUsage, usageFromUnknown } from "@/lib/gateway/billing/billing";
+import { usageFromUnknown } from "@/lib/gateway/billing/billing";
 import {
   chatOnce,
   openChatStream,
   openUpstreamStream,
-  recordFailure,
+  recordSuccess,
   relayChatStream,
+  routeMetered,
   screenChatJson,
   withholdChatJson,
   UPSTREAM_TIMEOUT_MS,
-  withDeployment,
 } from "@/lib/gateway/dispatch/chat";
 import { speaksAnthropic } from "@/lib/gateway/upstreams/provider-kinds";
 import { asRecord } from "@/lib/gateway/core";
 import { plainModel } from "@/lib/gateway/catalog/model-alias";
-import { costFilter } from "@/lib/gateway/billing/cost-cap";
 import { deploymentAuth } from "@/lib/gateway/upstreams/credentials";
-import { spendTag } from "@/lib/gateway/access/gate";
 import { GateError } from "@/lib/gateway/errors";
 import { chatIncompatibility, chatToMessage, messagesToChat, MessagesStreamEncoder } from "@/lib/gateway/protocols/messages";
 import { MessagesStreamTranscript } from "@/lib/gateway/request-logs/log-content";
 import { outputScreen, type OutputScreen } from "@/lib/gateway/safety/guardrails";
 import { pipeChatStream } from "@/lib/gateway/protocols/chat-stream";
-import { requestRoutingOverride } from "@/lib/gateway/dispatch/service-mode";
 import { relaySse } from "@/lib/gateway/protocols/sse";
 import { estimateTokens, requestText } from "@/lib/gateway/billing/tokens";
 import { prepareBody, proxyJson, upstreamError } from "@/lib/gateway/dispatch/upstream";
@@ -89,35 +86,23 @@ export function mergeStreamUsage(target: JsonMap, usage: unknown): JsonMap {
 export async function dispatchMessages(input: MessagesInput): Promise<JsonMap> {
   const started = Date.now();
   const fallback = chatFallback(input.request);
-  const routed = await withDeployment(
-    input.aliases,
-    input.principal.routeLimits,
-    async (dep, group) => {
-      if (!speaksAnthropic(dep.kind)) {
-        return { native: false, json: asRecord(await chatOnce(dep, group, fallback(), input.model)) ?? {} };
-      }
-      const proxied = await proxyJson({
-        dep,
-        auth: await deploymentAuth(dep),
-        path: NATIVE_PATH,
-        body: { ...nativeMessagesBody(input.body), model: dep.model || plainModel(input.model), stream: false },
-        timeoutMs: UPSTREAM_TIMEOUT_MS,
-        groupStrategy: group.strategy,
-        headers: input.headers,
-      });
-      if (proxied.status >= 400) throw upstreamError(proxied.status, proxied.json, proxied.headers);
-      return { native: true, json: asRecord(proxied.json) ?? {} };
-    },
-    {
-      strategy: requestRoutingOverride(input.body),
-      principal: input.principal,
-      cost: costFilter(input.principal, input.body),
-    },
-  ).catch(async (err) => {
-    await recordFailure(input, err, started);
-    throw err;
+  const routed = await routeMetered(input, started, async (dep, group) => {
+    if (!speaksAnthropic(dep.kind)) {
+      return { native: false, json: asRecord(await chatOnce(dep, group, fallback(), input.model)) ?? {} };
+    }
+    const proxied = await proxyJson({
+      dep,
+      auth: await deploymentAuth(dep),
+      path: NATIVE_PATH,
+      body: { ...nativeMessagesBody(input.body), model: dep.model || plainModel(input.model), stream: false },
+      timeoutMs: UPSTREAM_TIMEOUT_MS,
+      groupStrategy: group.strategy,
+      headers: input.headers,
+    });
+    if (proxied.status >= 400) throw upstreamError(proxied.status, proxied.json, proxied.headers);
+    return { native: true, json: asRecord(proxied.json) ?? {} };
   });
-  const { result, dep, group } = routed;
+  const { result } = routed;
   const screen = outputScreen(input.outputGuard, input.principal.trace);
   let message: JsonMap;
   let usage: Partial<Usage>;
@@ -132,28 +117,16 @@ export async function dispatchMessages(input: MessagesInput): Promise<JsonMap> {
     message = chatToMessage(chat, input.model);
     if (screen?.blocked) message.content = [];
   }
-  await recordUsage({
-    principal: input.principal,
-    model: input.model,
-    deployment: dep,
-    group,
-    usage,
-    status: 200,
-    outcome: screen?.blocked ? "guardrail_blocked" : "ok",
-    latencyMs: Date.now() - started,
-    tag: spendTag(input.body),
-    request: input.body,
-    response: message,
-  });
+  await recordSuccess(input, routed, { usage, blocked: screen?.blocked ?? false, started, response: message });
   return message;
 }
 
 export async function streamMessages(input: MessagesInput & { req: Request }): Promise<Response> {
   const started = Date.now();
   const fallback = chatFallback(input.request);
-  const routed = await withDeployment(
-    input.aliases,
-    input.principal.routeLimits,
+  const routed = await routeMetered(
+    input,
+    started,
     async (dep, group) => {
       if (!speaksAnthropic(dep.kind)) {
         return {
@@ -172,16 +145,8 @@ export async function streamMessages(input: MessagesInput & { req: Request }): P
         res: await openUpstreamStream({ dep, group, req: input.req, path: NATIVE_PATH, payload, headers: input.headers }),
       };
     },
-    {
-      deferRelease: true,
-      strategy: requestRoutingOverride(input.body),
-      principal: input.principal,
-      cost: costFilter(input.principal, input.body),
-    },
-  ).catch(async (err) => {
-    await recordFailure(input, err, started);
-    throw err;
-  });
+    { deferRelease: true },
+  );
   const { result, dep, group, release } = routed;
 
   if (!result.native) {
@@ -236,21 +201,14 @@ export async function streamMessages(input: MessagesInput & { req: Request }): P
       const reported = usageFromUnknown(chatUsageFromAnthropic(usage));
       const prompt = estimateTokens(requestText(input.body));
       const completion = estimateTokens(streamed);
-      await recordUsage({
-        principal: input.principal,
-        model: input.model,
-        deployment: dep,
-        group,
+      await recordSuccess(input, routed, {
         usage:
           (reported.prompt_tokens ?? 0) + (reported.completion_tokens ?? 0) > 0
             ? reported
             : { prompt_tokens: prompt, completion_tokens: completion, total_tokens: prompt + completion },
-        status: 200,
-        outcome: screen?.blocked ? "guardrail_blocked" : "ok",
-        latencyMs: Date.now() - started,
-        tag: spendTag(input.body),
+        blocked: screen?.blocked ?? false,
+        started,
         stream: true,
-        request: input.body,
         response: transcript.result(),
       });
     },

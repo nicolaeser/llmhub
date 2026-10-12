@@ -68,6 +68,57 @@ export async function recordFailure(
   }).catch(() => undefined);
 }
 
+type MeteredCall = { principal: Principal; model: string; body: JsonMap; aliases: string[] };
+
+export async function routeMetered<T>(
+  input: MeteredCall,
+  started: number,
+  fn: (dep: ResolvedDeployment, group: Group) => Promise<T>,
+  opts: { deferRelease?: boolean } = {},
+) {
+  const routing = {
+    ...opts,
+    strategy: requestRoutingOverride(input.body),
+    principal: input.principal,
+    cost: costFilter(input.principal, input.body),
+  };
+  try {
+    return await withDeployment(input.aliases, input.principal.routeLimits, fn, routing);
+  } catch (err) {
+    await recordFailure(input, err, started);
+    throw err;
+  }
+}
+
+export function recordSuccess(
+  input: { principal: Principal; model: string; body: JsonMap },
+  routed: { dep: ResolvedDeployment; group: Group },
+  outcome: {
+    usage: Partial<Usage>;
+    blocked: boolean;
+    started: number;
+    response: unknown;
+    stream?: true;
+    responseCache?: ResponseCacheUsage;
+  },
+): Promise<number> {
+  return recordUsage({
+    principal: input.principal,
+    model: input.model,
+    deployment: routed.dep,
+    group: routed.group,
+    usage: outcome.usage,
+    status: 200,
+    outcome: outcome.blocked ? "guardrail_blocked" : "ok",
+    latencyMs: Date.now() - outcome.started,
+    tag: spendTag(input.body),
+    stream: outcome.stream,
+    request: input.body,
+    response: outcome.response,
+    responseCache: outcome.responseCache,
+  });
+}
+
 function retryable(err: unknown): boolean {
   if (err instanceof GateError) return retryableStatus(err.status);
   if (isRouterError(err)) return true;
@@ -303,20 +354,8 @@ export async function dispatchChat(input: {
   responseCache?: ResponseCacheUsage;
 }): Promise<{ json: JsonMap; dep: ResolvedDeployment; alias: string; usage: Partial<Usage>; cost: number }> {
   const started = Date.now();
-  const routed = await withDeployment(
-    input.aliases,
-    input.principal.routeLimits,
-    (dep, group) => chatOnce(dep, group, input.body, input.model),
-    {
-      strategy: requestRoutingOverride(input.body),
-      principal: input.principal,
-      cost: costFilter(input.principal, input.body),
-    },
-  ).catch(async (err) => {
-    await recordFailure(input, err, started);
-    throw err;
-  });
-  const { result, dep, alias, group } = routed;
+  const routed = await routeMetered(input, started, (dep, group) => chatOnce(dep, group, input.body, input.model));
+  const { result, dep, alias } = routed;
 
   const json: JsonMap = { ...(asRecord(result) ?? {}), model: input.model };
   const blocked = screenChatOutput(json, input.outputGuard, input.principal.trace);
@@ -324,17 +363,10 @@ export async function dispatchChat(input: {
   if (!json.object) json.object = "chat.completion";
   if (!json.id) json.id = `chatcmpl_${newId()}`;
   const usage = usageFromUnknown(json.usage, json);
-  const cost = await recordUsage({
-    principal: input.principal,
-    model: input.model,
-    deployment: dep,
-    group,
+  const cost = await recordSuccess(input, routed, {
     usage,
-    status: 200,
-    outcome: blocked ? "guardrail_blocked" : "ok",
-    latencyMs: Date.now() - started,
-    tag: spendTag(input.body),
-    request: input.body,
+    blocked,
+    started,
     response: json,
     responseCache: input.responseCache,
   });
@@ -350,19 +382,8 @@ export async function streamChat(input: {
   outputGuard: OutputGuard | null;
 }): Promise<Response> {
   const started = Date.now();
-  const routed = await withDeployment(
-    input.aliases,
-    input.principal.routeLimits,
-    (dep, group) => openChatStream(dep, group, input),
-    {
-      deferRelease: true,
-      strategy: requestRoutingOverride(input.body),
-      principal: input.principal,
-      cost: costFilter(input.principal, input.body),
-    },
-  ).catch(async (err) => {
-    await recordFailure(input, err, started);
-    throw err;
+  const routed = await routeMetered(input, started, (dep, group) => openChatStream(dep, group, input), {
+    deferRelease: true,
   });
   return relayChatStream({
     res: routed.result,
@@ -425,22 +446,15 @@ export function relayChatStream(input: {
     billed = true;
     const prompt = estimateTokens(requestText(input.body));
     const completion = estimateTokens(streamedText);
-    await recordUsage({
-      principal: input.principal,
-      model: input.model,
-      deployment: dep,
-      group,
+    await recordSuccess(input, { dep, group }, {
       usage: reported ?? {
         prompt_tokens: prompt,
         completion_tokens: completion,
         total_tokens: prompt + completion,
       },
-      status: 200,
-      outcome: screen?.blocked ? "guardrail_blocked" : "ok",
-      latencyMs: Date.now() - started,
-      tag: spendTag(input.body),
+      blocked: screen?.blocked ?? false,
+      started,
       stream: true,
-      request: input.body,
       response: transcript.result(),
     });
   };

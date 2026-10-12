@@ -136,8 +136,10 @@ test("every gateway route applies guardrails for the caller", async () => {
   await walk(path.join(root, "src/app"));
   await walk(path.join(root, "src/lib"));
   let calls = 0;
+  let screened = 0;
   for (const file of files) {
     const source = await readFile(file, "utf8");
+    screened += [...source.matchAll(/(?<!function )screenModelRequest\(/g)].length;
     for (const match of source.matchAll(/(?<!function )applyGuardrails\(/g)) {
       const open = (match.index ?? 0) + match[0].length;
       let depth = 1;
@@ -152,5 +154,7 @@ test("every gateway route applies guardrails for the caller", async () => {
       calls++;
     }
   }
-  assert.ok(calls > 10);
+  const pipeline = await readFile(path.join(root, "src/lib/gateway/endpoints/pipeline.ts"), "utf8");
+  assert.match(pipeline, /export async function screenModelRequest[\s\S]*?await applyGuardrails\(body, principal\)/);
+  assert.ok(calls + screened > 10);
 });

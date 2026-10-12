@@ -1,46 +1,26 @@
 import "server-only";
 import { NextResponse } from "next/server";
-import {
-  allowModel,
-  applyGuardrails,
-  gateRequest,
-  gateResponse,
-  modelOf,
-  readBody,
-  modelChain,
-} from "@/lib/gateway/access/gate";
-import { GateError } from "@/lib/gateway/errors";
+import { modelChain } from "@/lib/gateway/access/gate";
+import { gatewayRoute, screenModelRequest, validRequest } from "@/lib/gateway/endpoints/pipeline";
 import { anthropicPassthroughHeaders, apiKeyRequest } from "@/lib/gateway/protocols/messages";
 import { dispatchMessages, streamMessages } from "@/lib/gateway/dispatch/messages-dispatch";
-import { parseRequest } from "@/lib/gateway/protocols/parse-request";
 import { messagesRequestSchema } from "@/schemas/anthropic";
 import type { RoutePool } from "@/types/gateway";
 
 export function messagesRoute(pool: RoutePool) {
-  return async (req: Request): Promise<Response> => {
-    try {
-      const principal = await gateRequest(apiKeyRequest(req), pool);
-      const body = await readBody(req);
-      const model = modelOf(body);
-      allowModel(principal, model);
-      const { body: clean, output } = await applyGuardrails(body, principal);
-      const parsed = parseRequest(messagesRequestSchema, clean);
-      if (!parsed.ok) {
-        throw new GateError(400, "invalid_request", parsed.message, { param: parsed.param });
-      }
-      const input = {
-        principal,
-        model,
-        body: clean,
-        request: parsed.data,
-        aliases: modelChain(principal, model, clean),
-        outputGuard: output,
-        headers: anthropicPassthroughHeaders(req.headers),
-      };
-      if (parsed.data.stream === true) return await streamMessages({ ...input, req });
-      return NextResponse.json(await dispatchMessages(input));
-    } catch (err) {
-      return gateResponse(err, req);
-    }
-  };
+  return gatewayRoute(async (req) => {
+    const { principal, model, clean, output } = await screenModelRequest(req, { pool, auth: apiKeyRequest(req) });
+    const request = validRequest(messagesRequestSchema, clean);
+    const input = {
+      principal,
+      model,
+      body: clean,
+      request,
+      aliases: modelChain(principal, model, clean),
+      outputGuard: output,
+      headers: anthropicPassthroughHeaders(req.headers),
+    };
+    if (request.stream === true) return streamMessages({ ...input, req });
+    return NextResponse.json(await dispatchMessages(input));
+  });
 }

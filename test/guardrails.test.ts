@@ -331,11 +331,17 @@ test("cached chat responses are screened again under the current output policy",
 });
 
 test("the chat completions route screens prompts before the response cache and never caches blocked output", async () => {
-  const source = await readFile(new URL("../src/lib/gateway/endpoints/chat-completions-route.ts", import.meta.url), "utf8");
-  const guard = source.indexOf("await applyGuardrails(");
+  const [source, pipeline] = await Promise.all([
+    readFile(new URL("../src/lib/gateway/endpoints/chat-completions-route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../src/lib/gateway/endpoints/pipeline.ts", import.meta.url), "utf8"),
+  ]);
+  const screenStart = pipeline.indexOf("export async function screenModelRequest");
+  const screen = pipeline.slice(screenStart, pipeline.indexOf("\n}\n", screenStart));
+  assert.match(screen, /await applyGuardrails\(body, principal\)/);
+  const guard = source.indexOf("await screenModelRequest(");
   const lookup = source.indexOf("await lookupChatCache(");
   const hit = source.indexOf("lookup?.hit");
-  assert.ok(guard > 0 && lookup > guard, "applyGuardrails must run before the cache lookup");
+  assert.ok(guard > 0 && lookup > guard, "the request must be screened before the cache lookup");
   assert.ok(source.indexOf("screenChatOutput(response, output", hit) > hit, "cache hits must be screened");
   assert.match(source, /if \(lookup && !principal\.trace\?\.guardBlocked\)/);
 });
