@@ -1,6 +1,7 @@
 import "server-only";
 import { ANTIGRAVITY_BASE_URL, antigravityHeaders } from "@/lib/gateway/upstreams/antigravity";
 import { asRecord } from "@/lib/gateway/core";
+import { readJsonOr } from "@/lib/utils/json";
 import type { UpstreamAuth } from "@/types/gateway";
 
 const MODELS_TIMEOUT_MS = 30_000;
@@ -23,7 +24,7 @@ export async function fetchAvailableModels(
       signal: AbortSignal.timeout(MODELS_TIMEOUT_MS),
       redirect: "error",
     });
-    const json: unknown = res.ok ? asRecord(await res.json().catch(() => null)) : null;
+    const json: unknown = res.ok ? asRecord(await readJsonOr(res, null)) : null;
     return { status: res.status, json };
   } catch {
     return { status: 0, json: null };

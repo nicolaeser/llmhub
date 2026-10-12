@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import type { ZodType } from "zod";
 import { runAsPrincipal } from "@/lib/auth/delegation";
 import { hasPerm } from "@/lib/auth/permissions";
-import { readJSON } from "@/lib/http/api";
+import { isPayloadTooLarge, readJSON } from "@/lib/http/api";
 import { ApiProblem, fieldErrors, problemFromError } from "@/lib/http/problem";
 import { authenticateManagementKey } from "@/lib/management/auth";
 import type { Permission } from "@/types/auth";
@@ -39,7 +39,7 @@ export async function readBody<T>(req: Request, schema: ZodType<T>): Promise<T> 
   try {
     raw = await readJSON(req, MAX_BODY_BYTES);
   } catch (err) {
-    if ((err as { status?: number }).status === 413) throw new ApiProblem("PAYLOAD_TOO_LARGE");
+    if (isPayloadTooLarge(err)) throw new ApiProblem("PAYLOAD_TOO_LARGE");
     throw new ApiProblem("INVALID_JSON");
   }
   const parsed = schema.safeParse(raw);

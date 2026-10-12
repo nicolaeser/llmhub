@@ -1,6 +1,6 @@
 import "server-only";
 import { AnthropicSseTranslator } from "@/lib/gateway/protocols/anthropic";
-import { recordUsage, usageFromUnknown } from "@/lib/gateway/billing/billing";
+import { recordUsage, recordUsageOrLog, usageFromUnknown } from "@/lib/gateway/billing/billing";
 import { alertUpstreamFailure } from "@/lib/alerts/notify";
 import { spendTag } from "@/lib/gateway/access/gate";
 import { GateError } from "@/lib/gateway/errors";
@@ -24,10 +24,11 @@ import {
   upstreamError,
   upstreamHeaders,
 } from "@/lib/gateway/dispatch/upstream";
-import { asRecord, isRouterError, newId, stringifyContent } from "@/lib/gateway/core";
+import { asRecord, isRouterError, newId, routerGateError, stringifyContent } from "@/lib/gateway/core";
 import { costFilter, costRejected } from "@/lib/gateway/billing/cost-cap";
 import { ChatStreamTranscript } from "@/lib/gateway/request-logs/log-content";
 import { estimateTokens, requestText } from "@/lib/gateway/billing/tokens";
+import { parseJsonOrNull, readTextOr } from "@/lib/utils/json";
 import type {
   ChatSseTranslator,
   CostFilter,
@@ -47,8 +48,9 @@ export const UPSTREAM_TIMEOUT_MS = 300_000;
 
 function failureStatus(err: unknown): number {
   if (err instanceof GateError) return err.status;
-  if (isRouterError(err)) return err.code === "unknown_group" ? 404 : err.code === "not_assigned" ? 403 : 503;
-  return 502;
+  const routed = routerGateError(err);
+  if (routed) return routed.status;
+  return isRouterError(err) ? 503 : 502;
 }
 
 export async function recordFailure(
@@ -56,7 +58,7 @@ export async function recordFailure(
   err: unknown,
   started: number,
 ) {
-  await recordUsage({
+  await recordUsageOrLog({
     principal: input.principal,
     model: input.model,
     status: failureStatus(err),
@@ -65,7 +67,7 @@ export async function recordFailure(
     tag: spendTag(input.body),
     request: input.body,
     error: err,
-  }).catch(() => undefined);
+  });
 }
 
 type MeteredCall = { principal: Principal; model: string; body: JsonMap; aliases: string[] };
@@ -308,11 +310,8 @@ export async function openUpstreamStream(input: {
     signal: AbortSignal.any(signals),
   });
   if (!res.ok || !res.body) {
-    const text = await res.text().catch(() => "");
-    let json: unknown = null;
-    try {
-      json = JSON.parse(text);
-    } catch {}
+    const text = await readTextOr(res);
+    const json = parseJsonOrNull(text);
     if (json) throw upstreamError(res.status, json, res.headers);
     throw new GateError(res.status || 502, "upstream_error", text.slice(0, 512) || "upstream error");
   }
@@ -526,10 +525,7 @@ export function relayChatStream(input: {
       if (translator) {
         const flushed = translator.flush();
         if (flushed && flushed !== "[DONE]") {
-          let json: JsonMap | null = null;
-          try {
-            json = JSON.parse(flushed) as JsonMap;
-          } catch {}
+          const json = parseJsonOrNull(flushed) as JsonMap | null;
           if (json) forward(json, controller);
         }
       }

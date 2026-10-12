@@ -2,6 +2,8 @@ import "server-only";
 
 import { env } from "@/lib/env";
 import { getEnterprise } from "@/lib/settings/enterprise";
+import { errorFields } from "@/lib/logging/format";
+import { logger } from "@/lib/logging/logger";
 import {
   defaultAwsEndpoint,
   originOf,
@@ -46,7 +48,10 @@ export function s3FromParts(
 }
 
 export async function resolveS3Config(): Promise<S3Runtime | null> {
-  const enterprise = await getEnterprise().catch(() => null);
+  const enterprise = await getEnterprise().catch((err) => {
+    logger.error("s3.settings_failed", errorFields(err));
+    return null;
+  });
   return s3FromParts(enterprise?.s3, {
     S3_ACCESS_KEY_ID: env.S3_ACCESS_KEY_ID,
     S3_SECRET_ACCESS_KEY: env.S3_SECRET_ACCESS_KEY,

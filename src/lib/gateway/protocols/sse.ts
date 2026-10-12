@@ -1,3 +1,7 @@
+import { errorFields } from "@/lib/logging/format";
+import { logger } from "@/lib/logging/logger";
+import { parseJsonOrNull } from "@/lib/utils/json";
+import { cancelQuietly } from "@/lib/utils/streams";
 import type { JsonMap } from "@/types/gateway";
 import type { SseRelayOptions } from "@/types/responses";
 
@@ -33,11 +37,8 @@ export function relayEvent(block: string, options: SseRelayOptions): string | nu
   }
   if (!data.length) return other || event ? `${block}\n\n` : null;
   const payload = data.join("\n");
-  let json: JsonMap | null = null;
-  try {
-    const parsed = JSON.parse(payload) as unknown;
-    json = parsed && typeof parsed === "object" && !Array.isArray(parsed) ? (parsed as JsonMap) : null;
-  } catch {}
+  const parsed = parseJsonOrNull(payload);
+  const json = parsed && typeof parsed === "object" && !Array.isArray(parsed) ? (parsed as JsonMap) : null;
   if (!json) return serialize(event, payload);
   const type = event || (typeof json.type === "string" ? json.type : "");
   const mapped = options.map ? options.map(json, type) : json;
@@ -57,7 +58,9 @@ export function relaySse(source: Response, options: SseRelayOptions): Response {
     ended = true;
     try {
       await options.onEnd?.();
-    } catch {}
+    } catch (err) {
+      logger.error("gateway.stream_finish_failed", errorFields(err));
+    }
   };
 
   const drain = (final: boolean): string[] => {
@@ -102,7 +105,7 @@ export function relaySse(source: Response, options: SseRelayOptions): Response {
       }
     },
     cancel() {
-      void reader?.cancel().catch(() => undefined);
+      void cancelQuietly(reader);
       void end();
     },
   });

@@ -2,6 +2,7 @@ import { asRecord, newId } from "@/lib/gateway/core";
 import { modelAlias } from "@/lib/gateway/catalog/model-alias";
 import { tokenCount } from "@/lib/gateway/billing/tokens";
 import type { BatchEndpoint, BatchLine, BatchLineError, BatchLineResult } from "@/types/batches";
+import { parseJsonOrNull } from "@/lib/utils/json";
 import type { JsonMap } from "@/types/gateway";
 
 export const BATCH_ENDPOINTS: Record<BatchEndpoint, string> = {
@@ -42,10 +43,7 @@ export function parseBatchInput(
     const trimmed = raw.trim();
     if (!trimmed) return;
     const line = index + 1;
-    let rec: JsonMap | null = null;
-    try {
-      rec = asRecord(JSON.parse(trimmed));
-    } catch {}
+    const rec = asRecord(parseJsonOrNull(trimmed));
     if (!rec) {
       errors.push(lineError(line, "invalid_json", "line is not a JSON object"));
       return;

@@ -17,6 +17,7 @@ import {
 import { antigravityClientSecret } from "@/lib/gateway/upstreams/antigravity-config";
 import { CLAUDE_OAUTH_BETAS, claudeIdentityHeaders } from "@/lib/gateway/upstreams/claude";
 import { asNumber, asRecord, asString } from "@/lib/gateway/core";
+import { readJsonOr } from "@/lib/utils/json";
 import { signInCredentialSchema, signInTicketSchema } from "@/schemas/providers";
 import type { JsonMap } from "@/types/gateway";
 import type {
@@ -178,7 +179,7 @@ async function claudeProfilePlan(access: string): Promise<string> {
       redirect: "error",
     });
     if (!res.ok) return "";
-    return claudePlan(asRecord(await res.json().catch(() => null)) ?? {});
+    return claudePlan(asRecord(await readJsonOr(res, null)) ?? {});
   } catch {
     return "";
   }
@@ -203,7 +204,7 @@ async function postAuth(
   }).catch(() => {
     throw new Error("SIGN_IN_FAILED");
   });
-  const json = asRecord(await res.json().catch(() => null)) ?? {};
+  const json = asRecord(await readJsonOr(res, null)) ?? {};
   return { status: res.status, json };
 }
 
@@ -310,7 +311,7 @@ async function googleEmail(access: string): Promise<string> {
       redirect: "error",
     });
     if (!res.ok) return "";
-    return asString(asRecord(await res.json().catch(() => null))?.email);
+    return asString(asRecord(await readJsonOr(res, null))?.email);
   } catch {
     return "";
   }

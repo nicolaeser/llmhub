@@ -4,6 +4,8 @@ import { gateRequest, gateResponse } from "@/lib/gateway/access/gate";
 import { deleteObject } from "@/lib/gateway/storage/objects";
 import { forwardToModel } from "@/lib/gateway/dispatch/upstream";
 import { refreshVideo, videoRecord } from "@/lib/gateway/endpoints/videos";
+import { errorFields } from "@/lib/logging/format";
+import { logger } from "@/lib/logging/logger";
 
 export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }) {
   try {
@@ -22,7 +24,9 @@ export async function DELETE(req: Request, ctx: { params: Promise<{ id: string }
     const principal = await gateRequest(req);
     const { id } = await ctx.params;
     const { model, upstreamId } = await videoRecord(principal, id);
-    await forwardToModel([model], principal, `/videos/${upstreamId}`, null, { method: "DELETE" }).catch(() => null);
+    await forwardToModel([model], principal, `/videos/${upstreamId}`, null, { method: "DELETE" }).catch((err) => {
+      logger.warn("video.upstream_delete_failed", { videoId: id, model, ...errorFields(err) });
+    });
     await deleteObject(id, ownerId(principal));
     return NextResponse.json({ id, object: "video", deleted: true });
   } catch (err) {

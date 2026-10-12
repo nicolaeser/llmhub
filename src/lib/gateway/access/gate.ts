@@ -1,13 +1,13 @@
 import "server-only";
-import { bearerToken, clientIp, readJSON } from "@/lib/http/api";
+import { bearerToken, clientIp, isPayloadTooLarge, readJSON } from "@/lib/http/api";
 import { authenticateBearer } from "@/lib/gateway/access/principal";
 import { defaultEntityIds, redactJSON } from "@/lib/gateway/safety/pii";
 import { outputGuard, screenRequest } from "@/lib/gateway/safety/guardrails";
 import { alertPiiBlocked, alertUpstreamFailure } from "@/lib/alerts/notify";
 import { resolvePolicies } from "@/lib/settings/enterprise";
-import { assertBudget, assertRate, recordUsage } from "@/lib/gateway/billing/billing";
+import { assertBudget, assertRate, recordUsageOrLog } from "@/lib/gateway/billing/billing";
 import { capRequestCost, maxCostHeader } from "@/lib/gateway/billing/cost-cap";
-import { asRecord, isRouterError, isUnavailableError, newRequestId } from "@/lib/gateway/core";
+import { asRecord, newRequestId, routerGateError } from "@/lib/gateway/core";
 import { anthropicErrorBody, GateError, openAIErrorBody } from "@/lib/gateway/errors";
 import { logger } from "@/lib/logging/logger";
 import { modelAlias } from "@/lib/gateway/catalog/model-alias";
@@ -21,15 +21,8 @@ import type { OutputGuard } from "@/types/guardrails";
 
 export function toGateError(err: unknown): GateError {
   if (err instanceof GateError) return err;
-  if (isRouterError(err, "unknown_group")) {
-    return new GateError(404, "model_not_found", "no deployment for model", { param: "model" });
-  }
-  if (isRouterError(err, "not_assigned")) {
-    return new GateError(403, "account_not_assigned", "no subscription account is assigned to this key");
-  }
-  if (isUnavailableError(err)) {
-    return new GateError(503, "no_healthy_deployment", "no healthy deployment for model");
-  }
+  const routed = routerGateError(err);
+  if (routed) return routed;
   const name = err instanceof Error ? err.name : "";
   if (name === "TimeoutError") {
     return new GateError(504, "upstream_timeout", "upstream request timed out");
@@ -37,7 +30,7 @@ export function toGateError(err: unknown): GateError {
   if (err instanceof TypeError && err.message === "fetch failed") {
     return new GateError(502, "upstream_error", "upstream request failed");
   }
-  if ((err as { status?: number }).status === 413) {
+  if (isPayloadTooLarge(err)) {
     return new GateError(413, "payload_too_large", "request body is too large");
   }
   return new GateError(500, "internal_error", "internal server error");
@@ -148,7 +141,7 @@ export function modelChain(principal: Principal, model: string, body: JsonMap): 
 }
 
 async function rejectRequest(principal: Principal, body: JsonMap, error: GateError, outcome: string): Promise<never> {
-  await recordUsage({
+  await recordUsageOrLog({
     principal,
     model: modelOf(body),
     status: error.status,
@@ -156,7 +149,7 @@ async function rejectRequest(principal: Principal, body: JsonMap, error: GateErr
     latencyMs: 0,
     tag: spendTag(body),
     error,
-  }).catch(() => undefined);
+  });
   throw error;
 }
 
@@ -205,7 +198,7 @@ export async function readBody(req: Request): Promise<JsonMap> {
     if (!json || typeof json !== "object" || Array.isArray(json)) return {};
     return json as JsonMap;
   } catch (err) {
-    if ((err as { status?: number }).status === 413) {
+    if (isPayloadTooLarge(err)) {
       throw new GateError(413, "payload_too_large", "request body is too large");
     }
     throw new GateError(400, "invalid_json", "request body must be JSON");

@@ -16,6 +16,7 @@ import {
 import { p95Latency, usageNames, usageSlices } from "@/lib/usage/usage-totals";
 import { toCsv } from "@/lib/export/csv";
 import { usageStatsPdf } from "@/lib/export/usage-pdf";
+import { errorFields } from "@/lib/logging/format";
 import { logger } from "@/lib/logging/logger";
 import { mailEnabled, mailErrorCode, sendMail } from "@/lib/mail/send";
 import { lastCompletedPeriod, nextReportAt, REPORT_FORMATS, reportCadence } from "@/lib/reports/period";
@@ -186,7 +187,9 @@ export async function runUsageReports(now = new Date()): Promise<number> {
           where: { id: report.id },
           data: { lastError: code, claimedUntil: new Date(now.getTime() + RETRY_MS) },
         })
-        .catch(() => undefined);
+        .catch((stateErr) => {
+          logger.error("report.state_update_failed", { reportId: report.id, ...errorFields(stateErr) });
+        });
     }
   }
   return sent;

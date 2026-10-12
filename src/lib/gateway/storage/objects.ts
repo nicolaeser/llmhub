@@ -5,6 +5,8 @@ import { BATCH_QUEUED, BATCH_RESULT_PURPOSE, BATCH_RUNNING } from "@/lib/gateway
 import { ownerId } from "@/lib/gateway/core";
 import { objectStorageKey, resolveS3Config } from "@/lib/s3/config";
 import { s3Delete, s3Get, s3PublicUrl, s3Put } from "@/lib/s3/client";
+import { errorFields } from "@/lib/logging/format";
+import { logger } from "@/lib/logging/logger";
 import type { Stored, StorageMeta, Principal } from "@/types/gateway";
 import type { S3Runtime } from "@/types/s3";
 
@@ -183,7 +185,11 @@ export async function deleteObject(id: string, owner: string): Promise<boolean> 
   const storage = storageOf(asMeta(row.meta));
   if (storage) {
     const runtime = await resolveS3Config();
-    if (runtime) await s3Delete(runtime, storage.key).catch(() => undefined);
+    if (runtime) {
+      await s3Delete(runtime, storage.key).catch((err) => {
+        logger.error("storage.s3_delete_failed", { objectId: id, ...errorFields(err) });
+      });
+    }
   }
   await prisma.storedObject.delete({ where: { id } });
   return true;

@@ -10,11 +10,31 @@ import { purgeStoredObjects } from "@/lib/gateway/storage/objects";
 import { runPendingIngests } from "@/lib/rag/ingest";
 import { expireVectorStores, purgeOrphanUploads } from "@/lib/rag/stores";
 import { getAlertState, getEnterprise, saveAlertState } from "@/lib/settings/enterprise";
+import { errorFields } from "@/lib/logging/format";
+import { logger } from "@/lib/logging/logger";
 import { runUsageReports } from "@/lib/reports/usage-report";
 import { runKeyExpiryAlerts, runSpendAnomalyAlerts } from "./alert-checks";
 import { retentionCutoff } from "./retention";
 import type { MaintenanceSweepResult } from "@/types/jobs";
 import { money } from "@/lib/utils/money";
+
+export async function runSweepJob(name: string, job: () => Promise<number>): Promise<number> {
+  try {
+    return await job();
+  } catch (err) {
+    logger.error("worker.job_failed", { job: name, ...errorFields(err) });
+    return 0;
+  }
+}
+
+async function sweepSettings() {
+  try {
+    return await getEnterprise();
+  } catch (err) {
+    logger.error("worker.settings_failed", errorFields(err));
+    return null;
+  }
+}
 
 export async function runMaintenanceSweep(
   now = new Date(),
@@ -56,7 +76,7 @@ export async function runMaintenanceSweep(
     reports: 0,
   };
 
-  const enterprise = await getEnterprise().catch(() => null);
+  const enterprise = await sweepSettings();
   const logCutoff = retentionCutoff(enterprise?.log_retention_days ?? 0, now);
   if (logCutoff) {
     const requestLogs = await prisma.requestLog.deleteMany({
@@ -85,19 +105,21 @@ export async function runMaintenanceSweep(
     });
     result.auditLogs = auditLogs.count;
   }
-  result.storedObjects = await purgeStoredObjects({
-    generatedBefore: retentionCutoff(enterprise?.object_retention_days ?? 30, now),
-    uploadsBefore: retentionCutoff(enterprise?.file_retention_days ?? 0, now),
-  }).catch(() => 0);
-  result.batches = await runPendingBatches().catch(() => 0);
-  result.vectorStores = await expireVectorStores(now).catch(() => 0);
-  result.storedObjects += await purgeOrphanUploads(now).catch(() => 0);
-  result.vectorFiles = await runPendingIngests().catch(() => 0);
-  await runSpendResets(now).catch(() => 0);
-  await runBudgetAlerts().catch(() => 0);
-  await runSpendAnomalyAlerts(now).catch(() => 0);
-  await runKeyExpiryAlerts(now).catch(() => 0);
-  result.reports = await runUsageReports(now).catch(() => 0);
+  result.storedObjects = await runSweepJob("stored_objects", () =>
+    purgeStoredObjects({
+      generatedBefore: retentionCutoff(enterprise?.object_retention_days ?? 30, now),
+      uploadsBefore: retentionCutoff(enterprise?.file_retention_days ?? 0, now),
+    }),
+  );
+  result.batches = await runSweepJob("batches", () => runPendingBatches());
+  result.vectorStores = await runSweepJob("vector_stores", () => expireVectorStores(now));
+  result.storedObjects += await runSweepJob("orphan_uploads", () => purgeOrphanUploads(now));
+  result.vectorFiles = await runSweepJob("vector_ingests", () => runPendingIngests());
+  await runSweepJob("spend_resets", () => runSpendResets(now));
+  await runSweepJob("budget_alerts", () => runBudgetAlerts());
+  await runSweepJob("spend_anomaly_alerts", () => runSpendAnomalyAlerts(now));
+  await runSweepJob("key_expiry_alerts", () => runKeyExpiryAlerts(now));
+  result.reports = await runSweepJob("usage_reports", () => runUsageReports(now));
   return result;
 }
 

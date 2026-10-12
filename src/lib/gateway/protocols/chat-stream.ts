@@ -1,5 +1,8 @@
 import { asRecord, newId } from "@/lib/gateway/core";
 import { SSE_HEADERS } from "@/lib/gateway/protocols/sse";
+import { errorFields } from "@/lib/logging/format";
+import { logger } from "@/lib/logging/logger";
+import { cancelQuietly } from "@/lib/utils/streams";
 import type { JsonMap } from "@/types/gateway";
 import type { ChatStreamEncoder, ToolCallEntry, ToolCallEvent } from "@/types/responses";
 
@@ -42,7 +45,9 @@ export function pipeChatStream(
     for (const event of events) controller.enqueue(bytes.encode(event));
     try {
       await onDone?.();
-    } catch {}
+    } catch (err) {
+      logger.error("gateway.stream_finish_failed", errorFields(err));
+    }
     controller.close();
   };
 
@@ -82,7 +87,7 @@ export function pipeChatStream(
       for (const event of out) controller.enqueue(bytes.encode(event));
     },
     cancel() {
-      void reader?.cancel().catch(() => undefined);
+      void cancelQuietly(reader);
     },
   });
 

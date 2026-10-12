@@ -8,6 +8,7 @@ import { asRecord, asString, VERSION } from "@/lib/gateway/core";
 import { GateError } from "@/lib/gateway/errors";
 import { refreshSession } from "@/lib/gateway/upstreams/subscription-sign-in";
 import { logger } from "@/lib/logging/logger";
+import { parseJsonOrNull } from "@/lib/utils/json";
 import type { ResolvedDeployment, UpstreamAuth } from "@/types/gateway";
 import type { SignInKind, SignInSession, SignInTokens } from "@/types/providers";
 
@@ -37,11 +38,9 @@ export function sealTokens(tokens: SignInTokens): string {
   return seal(JSON.stringify(tokens));
 }
 
-function openTokens(sealed: string): SignInTokens {
-  let rec: Record<string, unknown> | null = null;
-  try {
-    rec = asRecord(JSON.parse(open(sealed)));
-  } catch {}
+function openTokens(sealed: string, providerId: string): SignInTokens {
+  const rec = asRecord(parseJsonOrNull(open(sealed)));
+  if (!rec) logger.warn("provider_login.tokens_unreadable", { providerId });
   return {
     access: asString(rec?.access),
     refresh: asString(rec?.refresh),
@@ -51,7 +50,7 @@ function openTokens(sealed: string): SignInTokens {
 }
 
 function sessionOf(row: LoginRow): SignInSession {
-  return { tokens: openTokens(row.tokens), expiresAt: row.expiresAt.getTime(), account: row.account, plan: row.plan };
+  return { tokens: openTokens(row.tokens, row.providerId), expiresAt: row.expiresAt.getTime(), account: row.account, plan: row.plan };
 }
 
 function fresh(session: SignInSession, now = Date.now()): boolean {

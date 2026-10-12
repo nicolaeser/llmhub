@@ -122,7 +122,7 @@ test("chargeback CSV names tenants and keeps its header when there is no usage",
 
 test("the maintenance sweep delivers due usage reports", async () => {
   const source = await readFile(new URL("../src/worker/jobs.ts", import.meta.url), "utf8");
-  assert.match(source, /result\.reports = await runUsageReports\(now\)/);
+  assert.match(source, /result\.reports = await runSweepJob\("usage_reports", \(\) => runUsageReports\(now\)\)/);
 });
 
 test("report delivery claims a row before sending so parallel sweeps cannot send twice", async () => {

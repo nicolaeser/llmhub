@@ -18,6 +18,7 @@ import {
 import { pipeChatStream } from "@/lib/gateway/protocols/chat-stream";
 import { ResponsesStreamEncoder } from "@/lib/gateway/protocols/responses-stream";
 import { newId, ownerId } from "@/lib/gateway/core";
+import { cancelQuietly } from "@/lib/utils/streams";
 import {
   fileSearchStores,
   runFileSearch,
@@ -143,7 +144,7 @@ export function createResponseRoute(pool: RoutePool) {
           storedId = stored.id;
           id = responseId(stored.id);
         } catch (err) {
-          await streamed.body?.cancel().catch(() => undefined);
+          await cancelQuietly(streamed.body);
           throw err;
         }
       }

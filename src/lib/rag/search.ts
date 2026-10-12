@@ -8,6 +8,8 @@ import { queryTerms } from "@/lib/rag/lexical";
 import { embedTexts, rerankTexts } from "@/lib/rag/models";
 import { scoreFiles } from "@/lib/rag/rank";
 import { touchStores, vectorDefaults } from "@/lib/rag/stores";
+import { errorFields } from "@/lib/logging/format";
+import { logger } from "@/lib/logging/logger";
 import type { Principal } from "@/types/gateway";
 import type { IndexedFile, SearchableStore, SearchHit, SearchRequest } from "@/types/rag";
 
@@ -90,6 +92,14 @@ async function chunkTexts(ids: string[]): Promise<Map<string, string>> {
   return new Map(rows.map((row) => [row.id, row.text]));
 }
 
+async function markStoresActive(stores: SearchableStore[]): Promise<void> {
+  try {
+    await touchStores(stores);
+  } catch (err) {
+    logger.warn("rag.touch_stores_failed", { stores: stores.map((store) => store.id), ...errorFields(err) });
+  }
+}
+
 export async function searchStores(input: {
   principal: Principal;
   endpoint: string;
@@ -101,7 +111,7 @@ export async function searchStores(input: {
   for (const store of input.stores) files.set(store.id, await indexedFiles(store, request));
   const searchable = input.stores.filter((store) => files.get(store.id)?.length);
   if (!searchable.length) {
-    void touchStores(input.stores).catch(() => undefined);
+    void markStoresActive(input.stores);
     return [];
   }
   const vectors = await queryVectors(principal, input.endpoint, searchable, request.queries);
@@ -140,7 +150,7 @@ export async function searchStores(input: {
   const top = ranked.filter((candidate) => candidate.score >= request.ranking.scoreThreshold).slice(0, request.maxResults);
   const missing = top.map(candidateKey).filter((id) => !texts.has(id));
   for (const [id, text] of await chunkTexts(missing)) texts.set(id, text);
-  void touchStores(input.stores).catch(() => undefined);
+  void markStoresActive(input.stores);
   return top.map((candidate) => {
     const chunkId = candidateKey(candidate);
     return {

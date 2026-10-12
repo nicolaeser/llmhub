@@ -20,7 +20,7 @@ test("runSpendResets exists and is called from runMaintenanceSweep", async () =>
     reset,
     /export async function runSpendResets\([\s\S]*?\): Promise<number>/,
   );
-  assert.match(sweep, /await runSpendResets\(now\)/);
+  assert.match(sweep, /await runSweepJob\("spend_resets", \(\) => runSpendResets\(now\)\)/);
 });
 
 test("runSpendResets zeros virtualKey, user, member, team, organization, and project spend", async () => {

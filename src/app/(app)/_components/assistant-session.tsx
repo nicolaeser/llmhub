@@ -22,6 +22,15 @@ import type { AssistantChatMessage } from "@/types/assistant";
 
 const STORAGE_KEY = "llmhub.assistant.model";
 
+function rememberModel(model: string): boolean {
+  try {
+    localStorage.setItem(STORAGE_KEY, model);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 type AssistantSession = {
   enabled: boolean;
   messages: AssistantChatMessage[];
@@ -92,9 +101,7 @@ export default function AssistantProvider({
   function setModel(next: string) {
     setModelState(next);
     if (!next) return;
-    try {
-      localStorage.setItem(STORAGE_KEY, next);
-    } catch {}
+    rememberModel(next);
   }
 
   function patchLast(

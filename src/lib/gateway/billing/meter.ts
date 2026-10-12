@@ -1,5 +1,5 @@
 import "server-only";
-import { recordUsage } from "@/lib/gateway/billing/billing";
+import { recordUsage, recordUsageOrLog } from "@/lib/gateway/billing/billing";
 import { spendTag } from "@/lib/gateway/access/gate";
 import { GateError } from "@/lib/gateway/errors";
 import type { JsonMap, Principal, ProxyFirstResult, Usage } from "@/types/gateway";
@@ -20,12 +20,12 @@ export function meter(principal: Principal, model: string, body: JsonMap = {}) {
         response,
       }),
     fail: (err: unknown) =>
-      recordUsage({
+      recordUsageOrLog({
         ...base,
         status: err instanceof GateError ? err.status : 502,
         outcome: "error",
         latencyMs: Date.now() - started,
         error: err,
-      }).catch(() => undefined),
+      }),
   };
 }

@@ -3,8 +3,11 @@ import { getSession } from "@/lib/auth/session";
 import { hasPerm, PERMISSIONS } from "@/lib/auth/permissions";
 import { isSameOriginRequest } from "@/lib/auth/request-origin";
 import { env } from "@/lib/env";
-import { readJSON } from "@/lib/http/api";
+import { isPayloadTooLarge, readJSON } from "@/lib/http/api";
 import { problemResponse } from "@/lib/http/problem";
+import { errorFields } from "@/lib/logging/format";
+import { logger } from "@/lib/logging/logger";
+import { closeQuietly, enqueueQuietly } from "@/lib/utils/streams";
 import { asRecord, asString } from "@/lib/gateway/core";
 import {
   parseAssistantLocale,
@@ -43,7 +46,7 @@ export async function POST(req: Request) {
   try {
     body = await readJSON<JsonMap>(req);
   } catch (err) {
-    if ((err as { status?: number }).status === 413) return problemResponse(req, "PAYLOAD_TOO_LARGE");
+    if (isPayloadTooLarge(err)) return problemResponse(req, "PAYLOAD_TOO_LARGE");
     return problemResponse(req, "INVALID_JSON");
   }
 
@@ -60,11 +63,7 @@ export async function POST(req: Request) {
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
       const send = (obj: unknown) => {
-        try {
-          controller.enqueue(
-            encoder.encode(`data: ${JSON.stringify(obj)}\n\n`),
-          );
-        } catch {}
+        enqueueQuietly(controller, encoder.encode(`data: ${JSON.stringify(obj)}\n\n`));
       };
       try {
         for await (const event of runAssistant({
@@ -83,12 +82,11 @@ export async function POST(req: Request) {
           if (req.signal.aborted) break;
           send(event);
         }
-      } catch {
+      } catch (err) {
+        logger.error("assistant.run_failed", errorFields(err));
         send({ type: "error", message: "llm_failed" });
       } finally {
-        try {
-          controller.close();
-        } catch {}
+        closeQuietly(controller);
       }
     },
   });

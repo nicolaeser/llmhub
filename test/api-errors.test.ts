@@ -72,6 +72,8 @@ test("unknown failures map to fixed gateway codes without leaking internals", ()
   assert.equal(toGateError(ERR_NOT_ASSIGNED).status, 403);
   assert.equal(toGateError(new TypeError("fetch failed")).status, 502);
   assert.equal(toGateError(Object.assign(new Error("slow"), { name: "TimeoutError" })).status, 504);
+  assert.equal(toGateError(Object.assign(new Error("big"), { status: 413 })).code, "payload_too_large");
+  assert.equal(toGateError(null).code, "internal_error");
   const hidden = toGateError(new Error("password=hunter2 in query"));
   assert.equal(hidden.status, 500);
   assert.equal(hidden.code, "internal_error");
@@ -125,6 +127,9 @@ test("problemFromError normalizes every error source", async () => {
     [new Error("TEAM_NOT_FOUND"), 422, "TEAM_NOT_FOUND"],
     [new GateError(502, "upstream_error", "provider down"), 502, "UPSTREAM_ERROR"],
     [ERR_UNKNOWN_GROUP, 404, "MODEL_NOT_FOUND"],
+    [ERR_NOT_ASSIGNED, 403, "ACCOUNT_NOT_ASSIGNED"],
+    [ERR_ALL_PAUSED, 503, "NO_HEALTHY_DEPLOYMENT"],
+    [Object.assign(new Error("request body is too large"), { status: 413 }), 413, "PAYLOAD_TOO_LARGE"],
     [new Error("connect ECONNREFUSED 10.0.0.1"), 500, "INTERNAL_ERROR"],
   ];
   for (const [err, status, code] of cases) {

@@ -12,6 +12,8 @@ import { GateError } from "@/lib/gateway/errors";
 import { applyMarkup, markupRuleOf, pickMarkup, scaleByMarkup } from "@/lib/gateway/billing/markup-policy";
 import { tighterCap } from "@/lib/gateway/billing/cost-cap";
 import { tokenCount } from "@/lib/gateway/billing/tokens";
+import { errorFields } from "@/lib/logging/format";
+import { logger } from "@/lib/logging/logger";
 import type { Prisma } from "@/generated/prisma/client";
 import type {
   SpendHolder,
@@ -358,6 +360,20 @@ export async function recordUsage(input: {
     error: input.error,
   });
   return cost;
+}
+
+export async function recordUsageOrLog(input: Parameters<typeof recordUsage>[0]): Promise<void> {
+  try {
+    await recordUsage(input);
+  } catch (err) {
+    logger.error("billing.record_failed", {
+      model: input.model,
+      status: input.status,
+      outcome: input.outcome,
+      keyId: input.principal.key?.token_id ?? "",
+      ...errorFields(err),
+    });
+  }
 }
 
 function detail(rec: Record<string, unknown>, key: string, field: string): number {

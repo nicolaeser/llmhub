@@ -7,6 +7,9 @@ import { CLAUDE_OAUTH_BETAS } from "@/lib/gateway/upstreams/claude";
 import { asNumber, asRecord, asString } from "@/lib/gateway/core";
 import { providerAuth } from "@/lib/gateway/upstreams/credentials";
 import { GateError } from "@/lib/gateway/errors";
+import { errorFields } from "@/lib/logging/format";
+import { logger } from "@/lib/logging/logger";
+import { readJsonOr } from "@/lib/utils/json";
 import {
   XAI_BILLING_MONTHLY_URL,
   XAI_BILLING_WEEKLY_URL,
@@ -165,7 +168,7 @@ async function getJson(
       signal: AbortSignal.timeout(LIMITS_TIMEOUT_MS),
       redirect: "error",
     });
-    return { status: res.status, json: res.ok ? asRecord(await res.json().catch(() => null)) : null };
+    return { status: res.status, json: res.ok ? asRecord(await readJsonOr(res, null)) : null };
   } catch {
     return { status: 0, json: null };
   }
@@ -247,8 +250,9 @@ export async function warmLimits(providers: LimitProvider[]): Promise<void> {
     if (now - (failedAt.get(provider.id) ?? 0) < LIMITS_TTL_MS) continue;
     const refresh =
       refreshing.get(provider.id) ??
-      subscriptionLimits(provider).catch(() => {
+      subscriptionLimits(provider).catch((err) => {
         failedAt.set(provider.id, Date.now());
+        logger.warn("subscription.limits_failed", { providerId: provider.id, kind: provider.kind, ...errorFields(err) });
         return null;
       });
     refreshing.set(provider.id, refresh);

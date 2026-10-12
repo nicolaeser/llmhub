@@ -1,4 +1,5 @@
 import packageJson from "../../../package.json";
+import { GateError } from "@/lib/gateway/errors";
 import { PROVIDER_CATALOG } from "@/lib/gateway/upstreams/provider-kinds";
 import type { JsonMap, ModelPricing, Principal, PublicModel, RoutePool } from "@/types/gateway";
 
@@ -35,6 +36,19 @@ export function isRouterError(err: unknown, code?: RouterError["code"]): err is 
 
 export function isUnavailableError(err: unknown): err is RouterError {
   return isRouterError(err, "no_healthy") || isRouterError(err, "all_paused");
+}
+
+export function routerGateError(err: unknown): GateError | null {
+  if (isRouterError(err, "unknown_group")) {
+    return new GateError(404, "model_not_found", "no deployment for model", { param: "model" });
+  }
+  if (isRouterError(err, "not_assigned")) {
+    return new GateError(403, "account_not_assigned", "no subscription account is assigned to this key");
+  }
+  if (isUnavailableError(err)) {
+    return new GateError(503, "no_healthy_deployment", "no healthy deployment for model");
+  }
+  return null;
 }
 
 export function ownerId(pr: Principal | null | undefined): string {

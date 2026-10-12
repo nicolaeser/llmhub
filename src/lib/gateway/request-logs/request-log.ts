@@ -4,6 +4,8 @@ import { asRecord } from "@/lib/gateway/core";
 import { logPayload } from "@/lib/gateway/request-logs/log-content";
 import { defaultEntityIds, redactJSON, redactPii } from "@/lib/gateway/safety/pii";
 import { getEnterprise, resolvePii } from "@/lib/settings/enterprise";
+import { errorFields } from "@/lib/logging/format";
+import { logger } from "@/lib/logging/logger";
 import type { Prisma } from "@/generated/prisma/client";
 import type { Deployment, Enterprise, Principal } from "@/types/gateway";
 import type { ContentSkip } from "@/types/logs";
@@ -156,5 +158,7 @@ export async function writeRequestLog(entry: RequestLogEntry): Promise<void> {
       ...(stored?.request ? { request: stored.request.value } : {}),
       ...(stored?.response ? { response: stored.response.value } : {}),
     });
-  } catch {}
+  } catch (err) {
+    logger.error("request_log.archive_failed", { logId: log.id, ...errorFields(err) });
+  }
 }

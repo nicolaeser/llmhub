@@ -11,6 +11,7 @@ import { CODEX_CLIENT_VERSION } from "@/lib/gateway/upstreams/codex";
 import { asNumber, asRecord, asString } from "@/lib/gateway/core";
 import { providerAuth } from "@/lib/gateway/upstreams/credentials";
 import { GateError } from "@/lib/gateway/errors";
+import { readJsonOr } from "@/lib/utils/json";
 import { discoveredOf, parsePricing } from "@/lib/gateway/upstreams/provider-prices";
 import { logger } from "@/lib/logging/logger";
 import type { DiscoveredDiff, DiscoveredModel, RepricedModel, UpstreamAuth } from "@/types/gateway";
@@ -66,7 +67,7 @@ export async function fetchProviderModels(
   }).catch(() => {
     throw new Error("UPSTREAM_FAILED");
   });
-  const json = (await resp.json().catch(() => ({}))) as unknown;
+  const json = await readJsonOr(resp, {});
   if (!resp.ok) {
     throw new Error(resp.status === 401 || resp.status === 403 ? "UPSTREAM_AUTH" : "UPSTREAM_FAILED");
   }

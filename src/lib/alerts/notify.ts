@@ -7,6 +7,7 @@ import { claimCooldown, PII_ALERT_COOLDOWN_MS } from "@/lib/alerts/rules";
 import { getEnterprise } from "@/lib/settings/enterprise";
 import { writeAudit } from "@/lib/audit";
 import { webhookBody } from "@/lib/alerts/format";
+import { errorFields } from "@/lib/logging/format";
 import { logger } from "@/lib/logging/logger";
 import type { Principal, WebhookEvent } from "@/types/gateway";
 import type { WebhookJobData } from "@/types/jobs";
@@ -86,7 +87,9 @@ export async function fireAlert(event: WebhookEvent, message: string): Promise<v
     if (!hooks.length) return;
     const id = randomUUID();
     await Promise.allSettled(hooks.map((h) => dispatchWebhook({ id, webhookId: h.id, event, message })));
-  } catch {}
+  } catch (err) {
+    logger.error("alert.fire_failed", { alertEvent: event, ...errorFields(err) });
+  }
 }
 
 export function shouldAlert(err: unknown): boolean {

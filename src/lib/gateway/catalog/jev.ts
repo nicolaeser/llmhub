@@ -2,6 +2,7 @@ import "server-only";
 import { env } from "@/lib/env";
 import { PROVIDER_CATALOG } from "@/lib/gateway/upstreams/provider-kinds";
 import { asNumber, asRecord } from "@/lib/gateway/core";
+import { readJsonOr } from "@/lib/utils/json";
 import { JEV_NONE } from "@/lib/gateway/catalog/model-catalog";
 import type { JevSettings } from "@/types/gateway";
 import type { JevTask, JevVerdict } from "@/types/model-catalog";
@@ -76,7 +77,7 @@ export async function askJev(
   }).catch(() => {
     throw new Error("JEV_FAILED");
   });
-  const json = (await res.json().catch(() => null)) as unknown;
+  const json = await readJsonOr(res, null);
   if (!res.ok) throw new Error(failureCode(res.status));
   return {
     verdict: jevVerdict(task, json),

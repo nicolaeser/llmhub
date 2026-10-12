@@ -1,5 +1,5 @@
 import "server-only";
-import { recordUsage, usageFromUnknown } from "@/lib/gateway/billing/billing";
+import { recordUsage, recordUsageOrLog, usageFromUnknown } from "@/lib/gateway/billing/billing";
 import { cacheGet, cacheKey, cachePut, semanticAdd, semanticFind, semanticProbe, unitVector } from "@/lib/gateway/cache/response-cache";
 import { asRecord, ownerId } from "@/lib/gateway/core";
 import { GateError } from "@/lib/gateway/errors";
@@ -38,7 +38,7 @@ async function embedPrompt(principal: Principal, model: string, text: string, ta
   const traced = withTrace(principal, EMBEDDINGS_ENDPOINT);
   const started = Date.now();
   const hit = await forwardToModel(aliases, principal, "/embeddings", body).catch(async (err) => {
-    await recordUsage({
+    await recordUsageOrLog({
       principal: traced,
       model,
       status: err instanceof GateError ? err.status : 502,
@@ -47,7 +47,7 @@ async function embedPrompt(principal: Principal, model: string, text: string, ta
       tag,
       request: body,
       error: err,
-    }).catch(() => undefined);
+    });
     logger.warn("cache.semantic_embedding_failed", { model, err: err instanceof Error ? err.message : String(err) });
     return null;
   });

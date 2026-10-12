@@ -4,6 +4,7 @@ import { pkceChallenge, signingSecret } from "@/lib/crypto";
 import { env } from "@/lib/env";
 import { asRecord, asString } from "@/lib/gateway/core";
 import { verifyJwt } from "@/lib/auth/jwks";
+import { readJsonOr } from "@/lib/utils/json";
 import type {
   DiscCache,
   OidcDiscovery,
@@ -231,7 +232,7 @@ export async function exchangeOidcCode(input: {
     body: tokenRequestBody(input.resolved, input.code, input.verifier),
     signal: AbortSignal.timeout(8_000),
   });
-  const rec = asRecord(await res.json().catch(() => null)) ?? {};
+  const rec = asRecord(await readJsonOr(res, null)) ?? {};
   const idToken = asString(rec.id_token);
   if (!idToken) {
     const detail = asString(rec.error_description) || asString(rec.error) || `oidc token ${res.status}`;
