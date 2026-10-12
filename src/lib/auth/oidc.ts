@@ -28,7 +28,7 @@ export function trimIssuer(issuer: string): string {
 }
 
 export function resolveOidc(
-  cfg: OidcSettings | undefined,
+  cfg: Partial<OidcSettings> | undefined,
   envOverride: OidcEnv = {},
 ): ResolvedOidc {
   const appUrl = (envOverride.appUrl ?? env.NEXT_PUBLIC_APP_URL).replace(/\/+$/, "");
@@ -46,7 +46,7 @@ export function resolveOidc(
 }
 
 export function oidcIsReady(
-  cfg: OidcSettings | undefined,
+  cfg: Partial<OidcSettings> | undefined,
   envOverride: OidcEnv = {},
 ): boolean {
   const resolved = resolveOidc(cfg, envOverride);

@@ -1,6 +1,7 @@
 import type { Role, User } from "@/generated/prisma/client";
 import type { SessionFactor } from "@/types/security";
 import type { AssistantToolName } from "@/types/assistant";
+import type { AdminSettings } from "@/types/settings";
 
 export type PermissionDomain =
   | "keys"
@@ -186,12 +187,7 @@ export type TargetRow = {
   role: { permissions: string[] } | null;
 };
 
-export type OidcSettings = {
-  enabled?: boolean;
-  issuer?: string;
-  client_id?: string;
-  redirect_url?: string;
-};
+export type OidcSettings = AdminSettings["oidc"];
 
 export type Jwk = {
   kty?: string;

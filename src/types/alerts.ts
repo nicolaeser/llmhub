@@ -1,8 +1,8 @@
-import type { WEBHOOK_EVENTS, WEBHOOK_FORMATS } from "@/lib/alerts/events";
+import type { AlertWebhookInput } from "@/types/settings";
 
-export type WebhookEvent = (typeof WEBHOOK_EVENTS)[number];
+export type WebhookEvent = AlertWebhookInput["events"][number];
 
-export type WebhookFormat = (typeof WEBHOOK_FORMATS)[number];
+export type WebhookFormat = AlertWebhookInput["format"];
 
 export type AlertWebhook = {
   id: string;

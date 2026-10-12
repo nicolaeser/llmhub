@@ -13,7 +13,7 @@ import {
 import type { S3Runtime, S3Settings } from "@/types/s3";
 
 export function s3FromParts(
-  settings: S3Settings | undefined,
+  settings: Partial<S3Settings> | undefined,
   source: { S3_ACCESS_KEY_ID?: string; S3_SECRET_ACCESS_KEY?: string },
 ): S3Runtime | null {
   const bucket = (settings?.bucket || "").trim();
