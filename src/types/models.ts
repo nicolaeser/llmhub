@@ -1,3 +1,4 @@
+import type { DiscoveredModel } from "@/types/providers";
 import type { RoutePool } from "@/types/routing";
 
 export type DeploymentInput = {
@@ -29,13 +30,7 @@ export type PriceWindow = {
   priceOutput: number;
 };
 
-export type PriceWindowDraft = {
-  key: number;
-  start: string;
-  end: string;
-  priceInput: number;
-  priceOutput: number;
-};
+export type PriceWindowDraft = PriceWindow & { key: number };
 
 export type ModelGroupView = {
   alias: string;
@@ -65,12 +60,7 @@ export type ModelGroupView = {
   }[];
 };
 
-export type DiscoveredPrice = {
-  id: string;
-  costInputPer1k: number;
-  costOutputPer1k: number;
-  priceSource: string;
-};
+export type DiscoveredPrice = Pick<DiscoveredModel, "id" | "costInputPer1k" | "costOutputPer1k" | "priceSource">;
 
 export type ProviderOpt = {
   id: string;
