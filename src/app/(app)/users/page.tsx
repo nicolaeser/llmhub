@@ -1,8 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import {
-  Alert,
   Button,
   Chip,
   Dropdown,
@@ -17,6 +16,8 @@ import { useFormatter, useNow, useTranslations } from "next-intl";
 import BudgetDialog from "@/components/budget/budget-dialog";
 import EmptyState from "@/components/console/empty-state";
 import PageHeader from "@/components/console/page-header";
+import PageStatus from "@/components/console/page-status";
+import { useActionData } from "@/lib/hooks/use-action-data";
 import { isActionFail } from "@/lib/http/action-result";
 import type { ActionFail } from "@/types/actions";
 import { StepUpDialog } from "@/components/security/step-up-dialog";
@@ -60,8 +61,6 @@ export default function UsersPage() {
   const now = useNow({ updateInterval: 30_000 });
   const roleName = useRoleName();
   const errorText = useSecurityError();
-  const [data, setData] = useState<UsersConsolePayload | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [target, setTarget] = useState<ConsoleUser | null>(null);
   const [dialogKey, setDialogKey] = useState(0);
@@ -73,16 +72,8 @@ export default function UsersPage() {
   const budgetState = useOverlayState();
   const deleteState = useOverlayState();
   const resetState = useOverlayState();
-
-  useEffect(() => {
-    loadConsoleUsersAction().then((result) => {
-      if (isActionFail(result)) {
-        setLoadError(result.error);
-        return;
-      }
-      setData(result);
-    });
-  }, []);
+  const page = useActionData(loadConsoleUsersAction);
+  const { data, setData } = page;
 
   const filtered = useMemo(() => {
     const q = query.toLowerCase();
@@ -117,49 +108,23 @@ export default function UsersPage() {
   }
 
   function applyBudget(result: BudgetResult) {
-    setData((current) =>
-      current
-        ? {
-            ...current,
-            users: current.users.map((user) =>
-              user.id === result.id
-                ? {
-                    ...user,
-                    maxBudget: result.budget.maxBudget,
-                    spend: result.budget.spend,
-                    budgetDuration: result.budget.budgetDuration,
-                  }
-                : user,
-            ),
-          }
-        : current,
-    );
-  }
-
-  if (loadError) {
-    return (
-      <div>
-        <PageHeader title={t("title")} subtitle={t("subtitle")} />
-        <Alert status="danger">
-          <Alert.Indicator />
-          <Alert.Content>
-            <Alert.Description>{errorText(loadError)}</Alert.Description>
-          </Alert.Content>
-        </Alert>
-      </div>
-    );
+    setData((current) => ({
+      ...current,
+      users: current.users.map((user) =>
+        user.id === result.id
+          ? {
+              ...user,
+              maxBudget: result.budget.maxBudget,
+              spend: result.budget.spend,
+              budgetDuration: result.budget.budgetDuration,
+            }
+          : user,
+      ),
+    }));
   }
 
   if (!data) {
-    return (
-      <output
-        aria-live="polite"
-        aria-label={tCommon("loading")}
-        className="flex min-h-[40vh] items-center justify-center text-accent"
-      >
-        <Spinner color="current" size="lg" />
-      </output>
-    );
+    return <PageStatus title={t("title")} subtitle={t("subtitle")} state={page} />;
   }
 
   const createButton = data.canManage ? (
@@ -424,9 +389,7 @@ export default function UsersPage() {
         state={deleteState}
         target={target}
         onDeleted={(id) =>
-          setData((current) =>
-            current ? { ...current, users: current.users.filter((user) => user.id !== id) } : current,
-          )
+          setData((current) => ({ ...current, users: current.users.filter((user) => user.id !== id) }))
         }
       />
       <StepUpDialog

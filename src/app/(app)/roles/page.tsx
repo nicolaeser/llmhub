@@ -1,13 +1,11 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 import {
-  Alert,
   Button,
   Card,
   Chip,
   Dropdown,
-  Spinner,
   Table,
   toast,
   useOverlayState,
@@ -15,11 +13,13 @@ import {
 import { MoreHorizontal, Plus, RotateCcw } from "lucide-react";
 import { useTranslations } from "next-intl";
 import PageHeader from "@/components/console/page-header";
+import PageStatus from "@/components/console/page-status";
+import { useActionData } from "@/lib/hooks/use-action-data";
 import { isActionFail } from "@/lib/http/action-result";
 import { permissionCatalog, roleTemplateKeys } from "@/lib/auth/permissions";
 import { useRoleName } from "@/components/security/use-role-name";
 import { useSecurityError } from "@/components/security/use-security-error";
-import type { RoleSummary, RoleTemplateKey, RolesConsolePayload } from "@/types/auth";
+import type { RoleSummary, RoleTemplateKey } from "@/types/auth";
 import RoleEditorDialog from "./_components/role-editor-dialog";
 import DeleteRoleDialog from "./_components/delete-role-dialog";
 import { loadRolesAction, resetRoleAction, restoreTemplateAction } from "./_action";
@@ -41,24 +41,14 @@ export default function RolesPage() {
   const tCommon = useTranslations("Common");
   const roleName = useRoleName();
   const errorText = useSecurityError();
-  const [data, setData] = useState<RolesConsolePayload | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
   const [editing, setEditing] = useState<RoleSummary | null>(null);
   const [editorKey, setEditorKey] = useState(0);
   const [target, setTarget] = useState<RoleSummary | null>(null);
   const [pending, start] = useTransition();
   const editor = useOverlayState();
   const deleteState = useOverlayState();
-
-  useEffect(() => {
-    loadRolesAction().then((result) => {
-      if (isActionFail(result)) {
-        setLoadError(result.error);
-        return;
-      }
-      setData(result);
-    });
-  }, []);
+  const page = useActionData(loadRolesAction);
+  const { data, setData } = page;
 
   function openEditor(role: RoleSummary | null) {
     setEditing(role);
@@ -67,20 +57,17 @@ export default function RolesPage() {
   }
 
   function saved(role: RoleSummary) {
-    setData((current) => current && { ...current, roles: placeRole(current.roles, role) });
+    setData((current) => ({ ...current, roles: placeRole(current.roles, role) }));
   }
 
   function deleted(role: RoleSummary) {
-    setData(
-      (current) =>
-        current && {
-          ...current,
-          roles: current.roles.filter((row) => row.id !== role.id),
-          missingTemplates: roleTemplateKeys.filter(
-            (key) => key === role.templateKey || current.missingTemplates.includes(key),
-          ),
-        },
-    );
+    setData((current) => ({
+      ...current,
+      roles: current.roles.filter((row) => row.id !== role.id),
+      missingTemplates: roleTemplateKeys.filter(
+        (key) => key === role.templateKey || current.missingTemplates.includes(key),
+      ),
+    }));
   }
 
   function reset(role: RoleSummary) {
@@ -102,42 +89,17 @@ export default function RolesPage() {
         toast.danger(errorText(result.error));
         return;
       }
-      setData(
-        (current) =>
-          current && {
-            ...current,
-            roles: placeRole(current.roles, result.role),
-            missingTemplates: current.missingTemplates.filter((item) => item !== key),
-          },
-      );
+      setData((current) => ({
+        ...current,
+        roles: placeRole(current.roles, result.role),
+        missingTemplates: current.missingTemplates.filter((item) => item !== key),
+      }));
       toast(t("toasts.restored"), { variant: "success" });
     });
   }
 
-  if (loadError) {
-    return (
-      <div>
-        <PageHeader title={t("title")} subtitle={t("subtitle")} />
-        <Alert status="danger">
-          <Alert.Indicator />
-          <Alert.Content>
-            <Alert.Description>{errorText(loadError)}</Alert.Description>
-          </Alert.Content>
-        </Alert>
-      </div>
-    );
-  }
-
   if (!data) {
-    return (
-      <output
-        aria-live="polite"
-        aria-label={tCommon("loading")}
-        className="flex min-h-[40vh] items-center justify-center text-accent"
-      >
-        <Spinner color="current" size="lg" />
-      </output>
-    );
+    return <PageStatus title={t("title")} subtitle={t("subtitle")} state={page} />;
   }
 
   return (

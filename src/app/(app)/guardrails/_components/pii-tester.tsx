@@ -1,17 +1,18 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Button, Card, Spinner, Surface, TextArea, toast } from "@heroui/react";
+import { Button, Card, Spinner, Surface, TextArea } from "@heroui/react";
 import { useTranslations } from "next-intl";
 import { isActionFail } from "@/lib/http/action-result";
 import { testPiiAction } from "../_action";
+import { useErrorToast } from "@/components/console/use-error-toast";
 
 const SAMPLE =
   "Email jane@acme.com, SSN 123-45-6789, card 4111 1111 1111 1111, JWT eyJhbGciOiJIUzI1NiJ9.aa.bb, sk-hub-examplekey";
 
 export default function PiiTester() {
   const t = useTranslations("Guardrails");
-  const tError = useTranslations("Error");
+  const showError = useErrorToast();
   const [sample, setSample] = useState(SAMPLE);
   const [preview, setPreview] = useState("");
   const [pending, start] = useTransition();
@@ -38,7 +39,7 @@ export default function PiiTester() {
           start(async () => {
             const result = await testPiiAction(sample);
             if (isActionFail(result)) {
-              toast.danger(tError("code", { code: result.error }));
+              showError(result.error);
               return;
             }
             setPreview(result.redacted);

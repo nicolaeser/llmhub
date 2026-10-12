@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState, useTransition } from "react";
+import { useState } from "react";
 import {
   Button,
   buttonVariants,
@@ -8,22 +8,21 @@ import {
   Label,
   ListBox,
   Select,
-  Spinner,
   Table,
 } from "@heroui/react";
-import { BarChart3, Download } from "lucide-react";
+import { Download } from "lucide-react";
 import { useFormatter, useTranslations } from "next-intl";
 import { loadUsageAction } from "./_action";
-import { isActionFail } from "@/lib/http/action-result";
-import EmptyState from "@/components/console/empty-state";
+import { useActionData } from "@/lib/hooks/use-action-data";
 import PageHeader from "@/components/console/page-header";
+import PageStatus, { LoadError } from "@/components/console/page-status";
 import SearchSelect from "@/components/console/search-select";
 import StatCard from "@/components/console/stat-card";
 import MarginCard from "./_components/margin-card";
 import UsageCharts from "./_components/usage-charts";
 import type { PickerItem } from "@/types/console";
 import type { SliceRow } from "@/types/gateway";
-import type { OkStats, UsageQuery } from "@/types/usage";
+import type { UsageQuery } from "@/types/usage";
 
 const RANGES = [7, 14, 30, 90] as const;
 
@@ -58,49 +57,19 @@ export default function UsagePage() {
   const t = useTranslations("Usage");
   const tCommon = useTranslations("Common");
   const format = useFormatter();
-  const [loading, setLoading] = useState(true);
-  const [pending, start] = useTransition();
   const [query, setQuery] = useState<UsageQuery>(INITIAL_QUERY);
-  const [stats, setStats] = useState<OkStats | null>(null);
   const [picked, setPicked] = useState<Partial<Record<FilterKey, PickerItem>>>({});
-
-  const load = useCallback((next: UsageQuery) => {
-    start(async () => {
-      const res = await loadUsageAction(next);
-      if (!isActionFail(res)) setStats(res);
-      setLoading(false);
-    });
-  }, []);
+  const usage = useActionData(() => loadUsageAction(INITIAL_QUERY));
+  const { data: stats, pending } = usage;
 
   function apply(patch: Partial<UsageQuery>) {
     const next = { ...query, ...patch };
     setQuery(next);
-    load(next);
-  }
-
-  useEffect(() => {
-    load(INITIAL_QUERY);
-  }, [load]);
-
-  if (loading && !stats) {
-    return (
-      <output
-        aria-live="polite"
-        aria-label={tCommon("loading")}
-        className="flex min-h-[40vh] items-center justify-center text-accent"
-      >
-        <Spinner color="current" size="lg" />
-      </output>
-    );
+    usage.reloadWith(() => loadUsageAction(next));
   }
 
   if (!stats) {
-    return (
-      <div>
-        <PageHeader title={t("title")} subtitle={t("subtitle")} />
-        <EmptyState icon={BarChart3} title={t("empty")} />
-      </div>
-    );
+    return <PageStatus title={t("title")} subtitle={t("subtitle")} state={usage} />;
   }
 
   const label = (group: TenantGroup, id: string) =>
@@ -200,6 +169,7 @@ export default function UsagePage() {
           );
         })}
       </div>
+      <LoadError state={usage} className="mb-5" />
       <p className="sr-only">
         {t("summary", {
           spend: stats.spend,

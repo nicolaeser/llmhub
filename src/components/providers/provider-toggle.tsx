@@ -1,11 +1,12 @@
 "use client";
 
 import { useTransition } from "react";
-import { Label, Switch, toast } from "@heroui/react";
+import { Label, Switch } from "@heroui/react";
 import { useTranslations } from "next-intl";
 import { updateProviderAction } from "@/app/(app)/providers/_action";
 import { isActionFail } from "@/lib/http/action-result";
 import type { ProviderView } from "@/types/providers";
+import { useErrorToast } from "@/components/console/use-error-toast";
 
 export default function ProviderToggle({
   row,
@@ -17,14 +18,14 @@ export default function ProviderToggle({
   showLabel?: boolean;
 }) {
   const t = useTranslations("Providers");
-  const tError = useTranslations("Error");
+  const showError = useErrorToast();
   const [pending, start] = useTransition();
 
   function change(enabled: boolean) {
     start(async () => {
       const result = await updateProviderAction({ id: row.id, name: "", baseUrl: "", apiKey: "", enabled });
       if (isActionFail(result)) {
-        toast.danger(tError("code", { code: result.error }));
+        showError(result.error);
         return;
       }
       onChanged(result.provider);

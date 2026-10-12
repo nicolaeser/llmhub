@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import {
   Button,
   Card,
@@ -16,9 +16,11 @@ import {
 import { Plus } from "lucide-react";
 import { useTranslations } from "next-intl";
 import PageHeader from "@/components/console/page-header";
+import PageStatus from "@/components/console/page-status";
 import { formats } from "@/i18n/formats";
 import { loadLoggingAction, saveLoggingAction } from "./_action";
 import WebhookCard from "./_components/webhook-card";
+import { useActionData } from "@/lib/hooks/use-action-data";
 import { isActionFail } from "@/lib/http/action-result";
 import {
   DEFAULT_KEY_EXPIRY_WARNING_DAYS,
@@ -27,6 +29,7 @@ import {
 } from "@/lib/alerts/rules";
 import { MAX_ALERT_WEBHOOKS, WEBHOOK_EVENTS } from "@/lib/alerts/events";
 import type { AlertRules, AlertWebhookDraft, AlertWebhookView } from "@/types/settings";
+import { useErrorToast } from "@/components/console/use-error-toast";
 
 type LoggingView = {
   alertWebhooks: AlertWebhookView[];
@@ -45,9 +48,7 @@ type LoggingView = {
 
 export default function LoggingPage() {
   const t = useTranslations("Logging");
-  const tError = useTranslations("Error");
-  const tCommon = useTranslations("Common");
-  const [view, setView] = useState<LoggingView | null>(null);
+  const showError = useErrorToast();
   const [webhooks, setWebhooks] = useState<AlertWebhookDraft[]>([]);
   const [rules, setRules] = useState<AlertRules>({
     spendAnomalyFactor: DEFAULT_SPEND_ANOMALY_FACTOR,
@@ -65,8 +66,7 @@ export default function LoggingPage() {
   const [content, setContent] = useState(true);
   const [pending, start] = useTransition();
 
-  function apply(next: LoggingView) {
-    setView(next);
+  function seed(next: LoggingView) {
     setWebhooks(
       next.alertWebhooks.map((hook) => ({
         key: hook.id,
@@ -90,22 +90,11 @@ export default function LoggingPage() {
     setContent(next.logContent);
   }
 
-  useEffect(() => {
-    loadLoggingAction().then((res) => {
-      if (!isActionFail(res)) apply(res);
-    });
-  }, []);
+  const page = useActionData<LoggingView>(loadLoggingAction, seed);
+  const { data: view, setData: setView } = page;
 
   if (!view) {
-    return (
-      <output
-        aria-live="polite"
-        aria-label={tCommon("loading")}
-        className="flex min-h-[40vh] items-center justify-center text-accent"
-      >
-        <Spinner color="current" size="lg" />
-      </output>
-    );
+    return <PageStatus title={t("title")} subtitle={t("subtitle")} state={page} />;
   }
 
   const disabled = !view.canManage || pending;
@@ -189,10 +178,11 @@ export default function LoggingPage() {
                     logContent: content,
                   });
                   if (isActionFail(result)) {
-                    toast.danger(tError("code", { code: result.error }));
+                    showError(result.error);
                     return;
                   }
-                  apply(result);
+                  setView(result);
+                  seed(result);
                   toast(t("saved"), { variant: "success" });
                 })
               }

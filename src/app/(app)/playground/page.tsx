@@ -1,12 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { Alert, Button, Card, Spinner, toast } from "@heroui/react";
+import { Alert, Button, Card, toast } from "@heroui/react";
 import { PlayCircle, Plus } from "lucide-react";
 import { useTranslations } from "next-intl";
 import EmptyState from "@/components/console/empty-state";
 import PageHeader from "@/components/console/page-header";
+import PageStatus from "@/components/console/page-status";
 import { Link } from "@/i18n/routing";
+import { useActionData } from "@/lib/hooks/use-action-data";
 import { isActionFail } from "@/lib/http/action-result";
 import type { Msg, Session } from "@/types/playground";
 import { loadAliasesAction, loadReplayAction } from "./_action";
@@ -38,17 +40,14 @@ type ReplayNotice =
 
 export default function PlaygroundPage() {
   const t = useTranslations("Playground");
-  const tCommon = useTranslations("Common");
   const tError = useTranslations("Error");
-  const [models, setModels] = useState<string[]>([]);
-  const [providerCount, setProviderCount] = useState(0);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [currentId, setCurrentId] = useState("");
   const [input, setInput] = useState("");
   const [toolsJson, setToolsJson] = useState("");
   const [images, setImages] = useState<string[]>([]);
   const [replay, setReplay] = useState<ReplayNotice | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [ready, setReady] = useState(false);
   const [pending, start] = useTransition();
   const bottom = useRef<HTMLDivElement>(null);
 
@@ -60,8 +59,7 @@ export default function PlaygroundPage() {
     [sessions],
   );
 
-  useEffect(() => {
-    let active = true;
+  async function hydrate({ models: aliases }: { models: string[] }) {
     const params = new URLSearchParams(window.location.search);
     const replayId = params.get("replay");
     let stored: Session[] = [];
@@ -71,57 +69,52 @@ export default function PlaygroundPage() {
     } catch {
       stored = [];
     }
-    loadAliasesAction().then(async (res) => {
-      const aliases = isActionFail(res) ? [] : res.models;
-      const replayed = replayId && aliases.length ? await loadReplayAction(replayId) : null;
-      if (!active) return;
-      if (replayId) window.history.replaceState(null, "", window.location.pathname);
-      setModels(aliases);
-      setProviderCount(isActionFail(res) ? 0 : res.providers);
-      const fallback = aliases[0] ?? "";
-      const hydrated = stored.map((s) => ({
-        ...s,
-        model: s.model || fallback,
-      }));
-      if (replayed && !isActionFail(replayed)) {
-        const requested = params.get("model") || replayed.model;
-        const created = replaySession(replayed, aliases.includes(requested) ? requested : "");
-        setSessions([created, ...hydrated]);
-        setCurrentId(created.id);
-        setInput(replayed.prompt.text);
-        setImages(replayed.prompt.images);
-        setToolsJson(replayed.tools.length ? JSON.stringify(replayed.tools, null, 2) : "");
-        setReplay({
-          kind: "loaded",
-          sessionId: created.id,
-          id: replayed.id,
-          model: replayed.model,
-          dropped: replayed.dropped,
-          truncated: replayed.truncated,
-          masked: replayed.masked,
-        });
-      } else {
-        const list = hydrated.length ? hydrated : [makeSession(fallback)];
-        const newest = [...list].sort((a, b) => b.updatedAt - a.updatedAt)[0]!;
-        setSessions(list);
-        setCurrentId(newest.id);
-        if (replayed) setReplay({ kind: "failed", sessionId: newest.id, error: replayed.error });
-      }
-      setLoading(false);
-    });
-    return () => {
-      active = false;
-    };
-  }, []);
+    const replayed = replayId && aliases.length ? await loadReplayAction(replayId) : null;
+    if (replayId) window.history.replaceState(null, "", window.location.pathname);
+    const fallback = aliases[0] ?? "";
+    const hydrated = stored.map((s) => ({
+      ...s,
+      model: s.model || fallback,
+    }));
+    if (replayed && !isActionFail(replayed)) {
+      const requested = params.get("model") || replayed.model;
+      const created = replaySession(replayed, aliases.includes(requested) ? requested : "");
+      setSessions([created, ...hydrated]);
+      setCurrentId(created.id);
+      setInput(replayed.prompt.text);
+      setImages(replayed.prompt.images);
+      setToolsJson(replayed.tools.length ? JSON.stringify(replayed.tools, null, 2) : "");
+      setReplay({
+        kind: "loaded",
+        sessionId: created.id,
+        id: replayed.id,
+        model: replayed.model,
+        dropped: replayed.dropped,
+        truncated: replayed.truncated,
+        masked: replayed.masked,
+      });
+    } else {
+      const list = hydrated.length ? hydrated : [makeSession(fallback)];
+      const newest = [...list].sort((a, b) => b.updatedAt - a.updatedAt)[0]!;
+      setSessions(list);
+      setCurrentId(newest.id);
+      if (replayed) setReplay({ kind: "failed", sessionId: newest.id, error: replayed.error });
+    }
+    setReady(true);
+  }
+
+  const page = useActionData(loadAliasesAction, hydrate);
+  const models = page.data?.models ?? [];
+  const providerCount = page.data?.providers ?? 0;
 
   useEffect(() => {
-    if (loading || pending) return;
+    if (!ready || pending) return;
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(sessions));
     } catch {
       toast.danger(t("storageError"));
     }
-  }, [sessions, loading, pending, t]);
+  }, [sessions, ready, pending, t]);
 
   function patchSession(id: string, patch: Partial<Session>) {
     setSessions((prev) =>
@@ -231,16 +224,8 @@ export default function PlaygroundPage() {
     });
   }
 
-  if (loading) {
-    return (
-      <output
-        aria-live="polite"
-        aria-label={tCommon("loading")}
-        className="flex min-h-[40vh] items-center justify-center text-accent"
-      >
-        <Spinner color="current" size="lg" />
-      </output>
-    );
+  if (!page.data || !ready) {
+    return <PageStatus title={t("title")} subtitle={t("subtitle")} state={page} />;
   }
 
   if (!models.length) {

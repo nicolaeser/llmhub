@@ -29,6 +29,7 @@ import type {
   BudgetView,
   CapLink,
 } from "@/types/structure";
+import { useErrorToast } from "@/components/console/use-error-toast";
 
 const PRESETS = [10, 50, 100, 500, 1000];
 
@@ -56,7 +57,7 @@ export default function BudgetDialog({
 }) {
   const t = useTranslations("Budgets");
   const tCommon = useTranslations("Common");
-  const tError = useTranslations("Error");
+  const showError = useErrorToast();
   const format = useFormatter();
   const current = budget?.maxBudget ?? 0;
   const [limited, setLimited] = useState(current > 0);
@@ -81,7 +82,7 @@ export default function BudgetDialog({
         budgetDuration: period,
       });
       if (isActionFail(result)) {
-        toast.danger(tError("code", { code: result.error }));
+        showError(result.error);
         return;
       }
       onSaved(result);

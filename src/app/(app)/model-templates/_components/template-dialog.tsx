@@ -32,6 +32,7 @@ import type {
   TemplateProviderOption,
   TemplateRules,
 } from "@/types/model-templates";
+import { useErrorToast } from "@/components/console/use-error-toast";
 
 const PRESETS = {
   blank: {},
@@ -71,7 +72,7 @@ export default function TemplateDialog({
   const t = useTranslations("ModelTemplates");
   const tProviders = useTranslations("Providers");
   const tCommon = useTranslations("Common");
-  const tError = useTranslations("Error");
+  const showError = useErrorToast();
   const [preset, setPreset] = useState<Preset>("blank");
   const [name, setName] = useState(editing?.name ?? "");
   const [description, setDescription] = useState(editing?.description ?? "");
@@ -121,7 +122,7 @@ export default function TemplateDialog({
         ? await updateTemplateAction({ ...body, id: editing.id })
         : await createTemplateAction(body);
       if (isActionFail(result)) {
-        toast.danger(tError("code", { code: result.error }));
+        showError(result.error);
         return;
       }
       onSaved(result.template);

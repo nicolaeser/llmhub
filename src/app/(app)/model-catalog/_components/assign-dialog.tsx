@@ -17,6 +17,7 @@ import { useTranslations } from "next-intl";
 import { assignCatalogEntryAction } from "../_action";
 import { isActionFail } from "@/lib/http/action-result";
 import type { CatalogEntryView, CatalogView } from "@/types/model-catalog";
+import { useErrorToast } from "@/components/console/use-error-toast";
 
 export default function AssignDialog({
   state,
@@ -33,7 +34,7 @@ export default function AssignDialog({
 }) {
   const t = useTranslations("ModelCatalog");
   const tCommon = useTranslations("Common");
-  const tError = useTranslations("Error");
+  const showError = useErrorToast();
   const [alias, setAlias] = useState(current);
   const [pending, start] = useTransition();
   const target = alias.trim().toLowerCase();
@@ -47,7 +48,7 @@ export default function AssignDialog({
         alias: target,
       });
       if (isActionFail(result)) {
-        toast.danger(tError("code", { code: result.error }));
+        showError(result.error);
         return;
       }
       onSaved(result);

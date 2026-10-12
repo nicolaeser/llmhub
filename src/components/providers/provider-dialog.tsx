@@ -24,6 +24,7 @@ import { isActionFail } from "@/lib/http/action-result";
 import { createProviderAction, updateProviderAction } from "@/app/(app)/providers/_action";
 import type { ProviderView } from "@/types/providers";
 import SignInPanel from "./sign-in-panel";
+import { useErrorToast } from "@/components/console/use-error-toast";
 
 export default function ProviderDialog({
   state,
@@ -38,7 +39,7 @@ export default function ProviderDialog({
 }) {
   const t = useTranslations("Providers");
   const tCommon = useTranslations("Common");
-  const tError = useTranslations("Error");
+  const showError = useErrorToast();
   const [name, setName] = useState(
     editing?.name ?? (spec ? t("kindName", { kind: spec.kind }) : ""),
   );
@@ -73,7 +74,7 @@ export default function ProviderDialog({
         ? await updateProviderAction({ id: editing.id, ...body })
         : await createProviderAction(body);
       if (isActionFail(result)) {
-        toast.danger(tError("code", { code: result.error }));
+        showError(result.error);
         return;
       }
       onSaved(result.provider);

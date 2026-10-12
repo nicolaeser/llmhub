@@ -1,14 +1,17 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
-import { Button, Card, Chip, Separator, Spinner, toast, useOverlayState } from "@heroui/react";
+import { Button, Card, Chip, Separator, Spinner, useOverlayState } from "@heroui/react";
 import { Plus, RefreshCw } from "lucide-react";
 import { useFormatter, useNow, useTranslations } from "next-intl";
 import PageHeader from "@/components/console/page-header";
+import PageStatus from "@/components/console/page-status";
 import StatCard from "@/components/console/stat-card";
+import { useErrorToast } from "@/components/console/use-error-toast";
 import ImportModelsDialog from "@/components/providers/import-models-dialog";
 import ProviderDialog from "@/components/providers/provider-dialog";
 import { isSignInKind, PROVIDER_CATALOG, reportsLimits } from "@/lib/gateway/upstreams/provider-kinds";
+import { useActionData } from "@/lib/hooks/use-action-data";
 import { isActionFail } from "@/lib/http/action-result";
 import type { AccountLimits, AccountRouting, ImportCandidate, ProviderView } from "@/types/providers";
 import {
@@ -31,12 +34,9 @@ const SUBSCRIPTION_CATALOG = PROVIDER_CATALOG.filter((spec) => isSignInKind(spec
 export default function SubscriptionsPage() {
   const t = useTranslations("Subscriptions");
   const tProviders = useTranslations("Providers");
-  const tCommon = useTranslations("Common");
-  const tError = useTranslations("Error");
+  const showError = useErrorToast();
   const format = useFormatter();
   const now = useNow({ updateInterval: 60_000 });
-  const [loading, setLoading] = useState(true);
-  const [connected, setConnected] = useState<ProviderView[]>([]);
   const [limits, setLimits] = useState<Record<string, AccountLimits>>({});
   const [routing, setRouting] = useState<AccountRouting>({});
   const [access, setAccess] = useState<ProviderView | null>(null);
@@ -53,6 +53,11 @@ export default function SubscriptionsPage() {
   const formState = useOverlayState();
   const discoverState = useOverlayState();
   const accessState = useOverlayState();
+  const page = useActionData<ProviderView[]>(async () => {
+    const res = await loadProvidersAction();
+    return isActionFail(res) ? res : res.connected.filter((row) => isSignInKind(row.kind));
+  });
+  const { data: connected, setData: setConnected } = page;
 
   function storeLimits(items: AccountLimits[]) {
     setLimits((cur) => ({ ...cur, ...Object.fromEntries(items.map((item) => [item.id, item])) }));
@@ -60,11 +65,6 @@ export default function SubscriptionsPage() {
 
   useEffect(() => {
     let active = true;
-    loadProvidersAction().then((res) => {
-      if (!active) return;
-      if (!isActionFail(res)) setConnected(res.connected.filter((row) => isSignInKind(row.kind)));
-      setLoading(false);
-    });
     loadSubscriptionLimitsAction().then((res) => {
       if (active && !isActionFail(res)) storeLimits(res.items);
     });
@@ -83,7 +83,7 @@ export default function SubscriptionsPage() {
     startRefreshAll(async () => {
       const result = await loadSubscriptionLimitsAction({ refresh: true });
       if (isActionFail(result)) {
-        toast.danger(tError("code", { code: result.error }));
+        showError(result.error);
         return;
       }
       storeLimits(result.items);
@@ -129,7 +129,7 @@ export default function SubscriptionsPage() {
       const result = await discoverProviderAction(row.id);
       if (isActionFail(result)) {
         setModels([]);
-        toast.danger(tError("code", { code: result.error }));
+        showError(result.error);
         return;
       }
       replaceProvider(result.provider);
@@ -137,16 +137,8 @@ export default function SubscriptionsPage() {
     });
   }
 
-  if (loading) {
-    return (
-      <output
-        aria-live="polite"
-        aria-label={tCommon("loading")}
-        className="flex min-h-[40vh] items-center justify-center text-accent"
-      >
-        <Spinner color="current" size="lg" />
-      </output>
-    );
+  if (!connected) {
+    return <PageStatus title={t("title")} subtitle={t("subtitle")} state={page} />;
   }
 
   const states = connected.map((row) => accountState(row, limits[row.id], reportsLimits(row.kind)));

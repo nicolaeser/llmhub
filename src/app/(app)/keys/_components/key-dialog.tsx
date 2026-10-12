@@ -37,6 +37,7 @@ import type {
 import type { VirtualKeyView } from "@/types/gateway";
 import AccessWindowFields from "./access-window-fields";
 import { bindingKind, placeOf } from "./key-binding";
+import { useErrorToast } from "@/components/console/use-error-toast";
 
 const KINDS: KeyBindingKind[] = ["project", "member", "internal"];
 
@@ -76,7 +77,7 @@ export function KeyDialog({
 }) {
   const t = useTranslations("Keys");
   const tTemplates = useTranslations("ModelTemplates");
-  const tError = useTranslations("Error");
+  const showError = useErrorToast();
   const tCommon = useTranslations("Common");
   const bindingLabel = useId();
   const [alias, setAlias] = useState(editing?.key_alias ?? "");
@@ -134,14 +135,14 @@ export function KeyDialog({
       if (editing) {
         const result = await updateKeyAction({ ...shared, id: editing.token_id, blocked });
         if (isActionFail(result)) {
-          toast.danger(tError("code", { code: result.error }));
+          showError(result.error);
           return;
         }
         onSaved(result.key, null);
       } else {
         const result = await createKeyAction({ ...shared, days: Number(days) || 0 });
         if (isActionFail(result)) {
-          toast.danger(tError("code", { code: result.error }));
+          showError(result.error);
           return;
         }
         const { key: secret, ...created } = result.key;

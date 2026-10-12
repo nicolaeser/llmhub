@@ -22,6 +22,7 @@ import { formats } from "@/i18n/formats";
 import { isActionFail } from "@/lib/http/action-result";
 import { MAX_CHUNK_TOKENS, MIN_CHUNK_TOKENS } from "@/schemas/rag";
 import type { KnowledgeCompany, KnowledgeProject, VectorStoreDefaults, VectorStoreView } from "@/types/rag";
+import { useErrorToast } from "@/components/console/use-error-toast";
 
 const DEFAULT_KEY = ":default";
 const WHOLE_COMPANY_KEY = ":company";
@@ -55,7 +56,7 @@ export default function StoreDialog({
 }) {
   const t = useTranslations("Knowledge");
   const tCommon = useTranslations("Common");
-  const tError = useTranslations("Error");
+  const showError = useErrorToast();
   const [orgId, setOrgId] = useState(
     () => initialCompany || (companies.length === 1 ? companies[0].id : ""),
   );
@@ -118,7 +119,7 @@ export default function StoreDialog({
             expiresAfterDays,
           });
       if (isActionFail(result)) {
-        toast.danger(tError("code", { code: result.error }));
+        showError(result.error);
         return;
       }
       onSaved(result.store);

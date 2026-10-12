@@ -5,7 +5,6 @@
   "emptyTitle": "No knowledge bases yet",
   "empty": "Create a knowledge base, upload documents, and let the company's API keys search them with file_search.",
   "readOnly": "You can view knowledge bases and their files. Changing them needs the tenancy:manage permission.",
-  "loadFailed": "Knowledge bases could not be loaded. Reload the page.",
   "noMatches": "No knowledge base matches the filters.",
   "search": "Search by name",
   "companyFilter": "Company",

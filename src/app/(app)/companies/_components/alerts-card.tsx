@@ -16,6 +16,7 @@ import { useFormatter, useTranslations } from "next-intl";
 import { formats } from "@/i18n/formats";
 import { isActionFail } from "@/lib/http/action-result";
 import { saveBudgetAlertsAction } from "../_action";
+import { useErrorToast } from "@/components/console/use-error-toast";
 
 export default function AlertsCard({
   thresholds,
@@ -25,7 +26,7 @@ export default function AlertsCard({
   onSaved: (thresholds: number[]) => void;
 }) {
   const t = useTranslations("Companies.alerts");
-  const tError = useTranslations("Error");
+  const showError = useErrorToast();
   const format = useFormatter();
   const [draft, setDraft] = useState(90);
   const [pending, start] = useTransition();
@@ -36,7 +37,7 @@ export default function AlertsCard({
     start(async () => {
       const result = await saveBudgetAlertsAction(list);
       if (isActionFail(result)) {
-        toast.danger(tError("code", { code: result.error }));
+        showError(result.error);
         return;
       }
       onSaved(result.thresholds);

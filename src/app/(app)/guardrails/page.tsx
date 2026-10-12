@@ -1,11 +1,14 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
-import { Alert, Button, Card, Chip, Disclosure, Spinner, Tabs, toast } from "@heroui/react";
+import { useState, useTransition } from "react";
+import { Alert, Button, Card, Chip, Disclosure, Tabs, toast } from "@heroui/react";
 import { useTranslations } from "next-intl";
 import PageHeader from "@/components/console/page-header";
-import { defaultGuardrails, guardrailsValid } from "@/lib/gateway/safety/guardrails";
+import PageStatus from "@/components/console/page-status";
+import { useErrorToast } from "@/components/console/use-error-toast";
+import { guardrailsValid } from "@/lib/gateway/safety/guardrails";
 import { defaultEntityIds } from "@/lib/gateway/safety/pii";
+import { useActionData } from "@/lib/hooks/use-action-data";
 import { loadGuardrailsAction, saveGuardrailPolicyAction, savePiiAction } from "./_action";
 import GuardrailOverrides from "./_components/guardrail-overrides";
 import GuardrailPolicyFields from "./_components/guardrail-policy-fields";
@@ -15,14 +18,7 @@ import PiiOverrides from "./_components/pii-overrides";
 import PiiPolicyFields from "./_components/pii-policy-fields";
 import PiiTester from "./_components/pii-tester";
 import { isActionFail } from "@/lib/http/action-result";
-import type {
-  GuardrailOverrideView,
-  GuardrailPolicy,
-  PiiOverrideView,
-  PiiPolicy,
-  PolicyScope,
-  PolicyTarget,
-} from "@/types/guardrails";
+import type { GuardrailPolicy, PiiPolicy, PolicyScope, PolicyTarget } from "@/types/guardrails";
 
 const TABS = ["pii", "content"] as const;
 
@@ -49,75 +45,47 @@ function replaceOverride<V extends PolicyTarget>(
 
 export default function GuardrailsPage() {
   const t = useTranslations("Guardrails");
-  const tError = useTranslations("Error");
+  const showError = useErrorToast();
   const tCommon = useTranslations("Common");
-  const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<GuardrailsTab>("pii");
-  const [policy, setPolicy] = useState<PiiPolicy>({
-    enabled: true,
-    mode: "mask",
-    output: true,
-    entities: defaultEntityIds(),
-  });
-  const [saved, setSaved] = useState(policy);
-  const [guardrails, setGuardrails] = useState<GuardrailPolicy>(defaultGuardrails);
-  const [savedGuardrails, setSavedGuardrails] = useState<GuardrailPolicy>(defaultGuardrails);
-  const [piiOverrides, setPiiOverrides] = useState<PiiOverrideView[]>([]);
-  const [guardrailOverrides, setGuardrailOverrides] = useState<GuardrailOverrideView[]>([]);
-  const [targets, setTargets] = useState<PolicyTarget[]>([]);
-  const [canManage, setCanManage] = useState(false);
+  const [policyDraft, setPolicy] = useState<PiiPolicy | null>(null);
+  const [guardrailsDraft, setGuardrails] = useState<GuardrailPolicy | null>(null);
   const [pending, start] = useTransition();
+  const page = useActionData(loadGuardrailsAction);
+  const { data, setData } = page;
 
-  useEffect(() => {
-    loadGuardrailsAction().then((res) => {
-      if (!isActionFail(res)) {
-        setPolicy(withDefaults(res.pii));
-        setSaved(withDefaults(res.pii));
-        setGuardrails(res.guardrails);
-        setSavedGuardrails(res.guardrails);
-        setPiiOverrides(res.piiOverrides);
-        setGuardrailOverrides(res.guardrailOverrides);
-        setTargets(res.targets);
-        setCanManage(res.canManage);
-      }
-      setLoading(false);
-    });
-  }, []);
+  if (!data) {
+    return <PageStatus title={t("title")} subtitle={t("subtitle")} state={page} />;
+  }
+
+  const { canManage, targets, piiOverrides, guardrailOverrides } = data;
+  const saved = withDefaults(data.pii);
+  const savedGuardrails = data.guardrails;
+  const policy = policyDraft ?? saved;
+  const guardrails = guardrailsDraft ?? savedGuardrails;
 
   function save() {
     start(async () => {
       if (tab === "pii") {
         const result = await savePiiAction(policy);
         if (isActionFail(result)) {
-          toast.danger(tError("code", { code: result.error }));
+          showError(result.error);
           return;
         }
-        setPolicy(result.pii);
-        setSaved(withDefaults(result.pii));
+        setData((current) => ({ ...current, pii: result.pii }));
+        setPolicy(null);
         toast(t("saved"), { variant: "success" });
         return;
       }
       const result = await saveGuardrailPolicyAction(guardrails);
       if (isActionFail(result)) {
-        toast.danger(tError("code", { code: result.error }));
+        showError(result.error);
         return;
       }
-      setGuardrails(result.guardrails);
-      setSavedGuardrails(result.guardrails);
+      setData((current) => ({ ...current, guardrails: result.guardrails }));
+      setGuardrails(null);
       toast(t("content.saved"), { variant: "success" });
     });
-  }
-
-  if (loading) {
-    return (
-      <output
-        aria-live="polite"
-        aria-label={tCommon("loading")}
-        className="flex min-h-[40vh] items-center justify-center text-accent"
-      >
-        <Spinner color="current" size="lg" />
-      </output>
-    );
   }
 
   return (
@@ -177,7 +145,9 @@ export default function GuardrailsPage() {
             targets={targets}
             global={saved}
             canManage={canManage}
-            onChanged={(result) => setPiiOverrides((cur) => replaceOverride(cur, result))}
+            onChanged={(result) =>
+              setData((current) => ({ ...current, piiOverrides: replaceOverride(current.piiOverrides, result) }))
+            }
           />
 
           <Card className="mb-6">
@@ -192,7 +162,7 @@ export default function GuardrailsPage() {
                 <Disclosure.Body className="flex flex-col gap-4 pt-4">
                   <PiiEntityPicker
                     value={policy.entities}
-                    onChange={(entities) => setPolicy((cur) => ({ ...cur, entities }))}
+                    onChange={(entities) => setPolicy({ ...policy, entities })}
                     isDisabled={!canManage}
                     wide
                   />
@@ -224,7 +194,12 @@ export default function GuardrailsPage() {
             targets={targets}
             global={savedGuardrails}
             canManage={canManage}
-            onChanged={(result) => setGuardrailOverrides((cur) => replaceOverride(cur, result))}
+            onChanged={(result) =>
+              setData((current) => ({
+                ...current,
+                guardrailOverrides: replaceOverride(current.guardrailOverrides, result),
+              }))
+            }
           />
 
           <div className="mb-6">

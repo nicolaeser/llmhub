@@ -1,18 +1,21 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
-import { Alert, Button, Card, Spinner, Table, toast, useOverlayState } from "@heroui/react";
+import { useState, useTransition } from "react";
+import { Alert, Button, Card, Table, toast, useOverlayState } from "@heroui/react";
 import { BadgePercent, Building2, FolderKanban, Globe, Pencil, Plus, Trash2, Users } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useFormatter, useTranslations } from "next-intl";
 import ConfirmDialog from "@/components/console/confirm-dialog";
 import EmptyState from "@/components/console/empty-state";
 import PageHeader from "@/components/console/page-header";
+import PageStatus from "@/components/console/page-status";
 import StatCard from "@/components/console/stat-card";
+import { useErrorToast } from "@/components/console/use-error-toast";
 import { deleteMarkupAction, loadMarkupsAction } from "./_action";
+import { useActionData } from "@/lib/hooks/use-action-data";
 import { isActionFail } from "@/lib/http/action-result";
 import { isModelPattern, marginShare, markupScopeRank } from "@/lib/gateway/billing/markup-policy";
-import type { MarkupRule, MarkupScope, MarkupsPayload, MarkupView } from "@/types/pricing";
+import type { MarkupRule, MarkupScope, MarkupView } from "@/types/pricing";
 import MarkupDialog from "./_components/markup-dialog";
 import MarkupLookup from "./_components/markup-lookup";
 
@@ -27,43 +30,19 @@ const PRECEDENCE = ["project", "team", "org", "all"] as const satisfies readonly
 
 export default function MarkupsPage() {
   const t = useTranslations("Markups");
-  const tError = useTranslations("Error");
+  const showError = useErrorToast();
   const tCommon = useTranslations("Common");
   const format = useFormatter();
-  const [loading, setLoading] = useState(true);
-  const [data, setData] = useState<MarkupsPayload | null>(null);
   const [editing, setEditing] = useState<MarkupView | null>(null);
   const [dialogKey, setDialogKey] = useState(0);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [, startDelete] = useTransition();
   const formState = useOverlayState();
-
-  useEffect(() => {
-    loadMarkupsAction().then((res) => {
-      if (!isActionFail(res)) setData(res);
-      setLoading(false);
-    });
-  }, []);
-
-  if (loading) {
-    return (
-      <output
-        aria-live="polite"
-        aria-label={tCommon("loading")}
-        className="flex min-h-[40vh] items-center justify-center text-accent"
-      >
-        <Spinner color="current" size="lg" />
-      </output>
-    );
-  }
+  const page = useActionData(loadMarkupsAction);
+  const { data, setData } = page;
 
   if (!data) {
-    return (
-      <div>
-        <PageHeader title={t("title")} subtitle={t("subtitle")} />
-        <EmptyState icon={BadgePercent} title={t("loadFailed")} />
-      </div>
-    );
+    return <PageStatus title={t("title")} subtitle={t("subtitle")} state={page} />;
   }
 
   const orgAlias = (id: string) => data.orgs.find((org) => org.id === id)?.alias ?? "";
@@ -104,16 +83,12 @@ export default function MarkupsPage() {
   }
 
   function saved(markup: MarkupView) {
-    setData((current) =>
-      current
-        ? {
-            ...current,
-            markups: current.markups.some((row) => row.id === markup.id)
-              ? current.markups.map((row) => (row.id === markup.id ? markup : row))
-              : [...current.markups, markup],
-          }
-        : current,
-    );
+    setData((current) => ({
+      ...current,
+      markups: current.markups.some((row) => row.id === markup.id)
+        ? current.markups.map((row) => (row.id === markup.id ? markup : row))
+        : [...current.markups, markup],
+    }));
   }
 
   function remove(id: string) {
@@ -122,12 +97,10 @@ export default function MarkupsPage() {
       const result = await deleteMarkupAction(id);
       setDeleting(null);
       if (isActionFail(result)) {
-        toast.danger(tError("code", { code: result.error }));
+        showError(result.error);
         return;
       }
-      setData((current) =>
-        current ? { ...current, markups: current.markups.filter((row) => row.id !== result.id) } : current,
-      );
+      setData((current) => ({ ...current, markups: current.markups.filter((row) => row.id !== result.id) }));
       toast(t("toasts.deleted"), { variant: "success" });
     });
   }

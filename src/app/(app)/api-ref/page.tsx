@@ -1,24 +1,25 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import {
   Alert,
   Button,
   Card,
   Chip,
   SearchField,
-  Spinner,
   Surface,
   Table,
   Tabs,
-  toast,
   useOverlayState,
 } from "@heroui/react";
+import { Code2, KeyRound } from "lucide-react";
 import { useTranslations } from "next-intl";
+import EmptyState from "@/components/console/empty-state";
 import PageHeader from "@/components/console/page-header";
+import PageStatus from "@/components/console/page-status";
 import { loadApiRefAction } from "./_action";
 import { Link } from "@/i18n/routing";
-import { isActionFail } from "@/lib/http/action-result";
+import { useActionData } from "@/lib/hooks/use-action-data";
 import { useOrigin } from "@/lib/hooks/use-origin";
 import { GATEWAY_ERRORS } from "@/lib/gateway/errors";
 import { ANTHROPIC_VERSION } from "@/lib/gateway/endpoints/openapi";
@@ -27,7 +28,6 @@ import { PROBLEMS } from "@/lib/http/problem-codes";
 import CopyButton from "./_components/copy-button";
 import TryEndpoint from "./_components/try-endpoint";
 import type { OpenApiPath } from "@/types/gateway";
-import type { KeyPrefix } from "@/types/api-ref";
 
 const CHAT_CURL_BODY =
   '\'{"model":"my-alias","messages":[{"role":"user","content":"Hello"}]}\'';
@@ -62,38 +62,20 @@ const ERROR_EXAMPLES = {
 
 export default function ApiRefPage() {
   const t = useTranslations("ApiRef");
-  const tError = useTranslations("Error");
   const tCommon = useTranslations("Common");
-  const [loading, setLoading] = useState(true);
   const origin = useOrigin();
-  const [paths, setPaths] = useState<OpenApiPath[]>([]);
-  const [keys, setKeys] = useState<KeyPrefix[]>([]);
-  const [models, setModels] = useState<string[]>([]);
-  const [canTry, setCanTry] = useState(false);
   const [query, setQuery] = useState("");
   const [copied, setCopied] = useState<string | null>(null);
   const [selected, setSelected] = useState<OpenApiPath | null>(null);
   const [example, setExample] = useState<string>("openai");
   const [errorShape, setErrorShape] = useState<string>("openai");
   const tryState = useOverlayState();
-
-  useEffect(() => {
-    loadApiRefAction().then((res) => {
-      if (!isActionFail(res)) {
-        setPaths(res.paths);
-        setKeys(res.keys);
-        setModels(res.models);
-        setCanTry(res.canTry);
-      } else {
-        toast.danger(tError("code", { code: res.error }));
-      }
-      setLoading(false);
-    });
-  }, [tError]);
+  const page = useActionData(loadApiRefAction);
+  const paths = page.data?.paths;
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return paths;
+    if (!paths || !q) return paths ?? [];
     return paths.filter(
       (p) =>
         p.method.toLowerCase().includes(q) ||
@@ -103,17 +85,11 @@ export default function ApiRefPage() {
     );
   }, [paths, query]);
 
-  if (loading) {
-    return (
-      <output
-        aria-live="polite"
-        aria-label={tCommon("loading")}
-        className="flex min-h-[40vh] items-center justify-center text-accent"
-      >
-        <Spinner color="current" size="lg" />
-      </output>
-    );
+  if (!page.data) {
+    return <PageStatus title={t("title")} subtitle={t("subtitle")} state={page} />;
   }
+
+  const { keys, models, canTry } = page.data;
 
   const curl =
     example === "anthropic"
@@ -220,9 +196,7 @@ export default function ApiRefPage() {
           </SearchField.Group>
         </SearchField>
         {filtered.length === 0 ? (
-          <Card className="items-center py-10 text-center">
-            <Card.Description>{t("empty")}</Card.Description>
-          </Card>
+          <EmptyState icon={Code2} title={t("empty")} />
         ) : (
           <Table aria-label={t("endpoints")}>
             <Table.ScrollContainer>
@@ -374,9 +348,7 @@ export default function ApiRefPage() {
           <p className="mt-1 text-sm text-muted">{t("keysHint")}</p>
         </div>
         {keys.length === 0 ? (
-          <Card className="items-center py-10 text-center">
-            <Card.Description>{t("noKeys")}</Card.Description>
-          </Card>
+          <EmptyState icon={KeyRound} title={t("noKeys")} />
         ) : (
           <ul className="flex flex-col gap-2">
             {keys.map((key) => (

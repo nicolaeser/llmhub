@@ -8,6 +8,7 @@ import MultiPicker from "@/components/console/multi-picker";
 import { ASSIGNMENT_SCOPES } from "@/lib/gateway/routing/account-access";
 import { isActionFail } from "@/lib/http/action-result";
 import type { AssignmentOptions, AssignmentScope, ProviderView } from "@/types/providers";
+import { useErrorToast } from "@/components/console/use-error-toast";
 
 type Mode = "open" | "limited";
 
@@ -30,7 +31,7 @@ export default function AccessDialog({
 }) {
   const t = useTranslations("Subscriptions.access");
   const tCommon = useTranslations("Common");
-  const tError = useTranslations("Error");
+  const showError = useErrorToast();
   const [mode, setMode] = useState<Mode>(provider?.restricted ? "limited" : "open");
   const [picked, setPicked] = useState(() => pickedFrom(provider));
   const [options, setOptions] = useState<AssignmentOptions | null>(null);
@@ -44,7 +45,7 @@ export default function AccessDialog({
     loadAssignmentOptionsAction().then((result) => {
       if (!active) return;
       if (isActionFail(result)) {
-        toast.danger(tError("code", { code: result.error }));
+        showError(result.error);
         setOptions({ org: [], team: [], project: [], member: [], key: [] });
         return;
       }
@@ -53,7 +54,7 @@ export default function AccessDialog({
     return () => {
       active = false;
     };
-  }, [isOpen, tError]);
+  }, [isOpen, showError]);
 
   const total = ASSIGNMENT_SCOPES.reduce((sum, scope) => sum + picked[scope].length, 0);
 
@@ -74,7 +75,7 @@ export default function AccessDialog({
         targets: ASSIGNMENT_SCOPES.flatMap((scope) => picked[scope].map((id) => ({ scope, id }))),
       });
       if (isActionFail(result)) {
-        toast.danger(tError("code", { code: result.error }));
+        showError(result.error);
         return;
       }
       onSaved({ ...provider, restricted: result.restricted, assignments: result.assignments });

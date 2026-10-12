@@ -1,45 +1,37 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
-import { Alert, Button, Spinner, Table, toast, useOverlayState } from "@heroui/react";
+import { useState, useTransition } from "react";
+import { Alert, Button, Table, toast, useOverlayState } from "@heroui/react";
 import { ListChecks, Pencil, Plus, Trash2 } from "lucide-react";
 import { useFormatter, useTranslations } from "next-intl";
 import ConfirmDialog from "@/components/console/confirm-dialog";
 import EmptyState from "@/components/console/empty-state";
 import PageHeader from "@/components/console/page-header";
+import PageStatus from "@/components/console/page-status";
+import { useErrorToast } from "@/components/console/use-error-toast";
 import { deleteTemplateAction, loadTemplatesAction } from "./_action";
+import { useActionData } from "@/lib/hooks/use-action-data";
 import { isActionFail } from "@/lib/http/action-result";
 import { templateModels } from "@/lib/gateway/access/model-policy";
-import type { ModelPolicy, ModelTemplateView, TemplateProviderOption } from "@/types/model-templates";
+import type { ModelTemplateView } from "@/types/model-templates";
 import TemplateDialog from "./_components/template-dialog";
 
 export default function ModelTemplatesPage() {
   const t = useTranslations("ModelTemplates");
-  const tError = useTranslations("Error");
+  const showError = useErrorToast();
   const tCommon = useTranslations("Common");
   const format = useFormatter();
-  const [loading, setLoading] = useState(true);
-  const [templates, setTemplates] = useState<ModelTemplateView[]>([]);
-  const [policies, setPolicies] = useState<ModelPolicy[]>([]);
-  const [providers, setProviders] = useState<TemplateProviderOption[]>([]);
-  const [canManage, setCanManage] = useState(false);
   const [editing, setEditing] = useState<ModelTemplateView | null>(null);
   const [dialogKey, setDialogKey] = useState(0);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [, startDelete] = useTransition();
   const formState = useOverlayState();
+  const page = useActionData(loadTemplatesAction);
+  const { data, setData } = page;
 
-  useEffect(() => {
-    loadTemplatesAction().then((res) => {
-      if (!isActionFail(res)) {
-        setTemplates(res.templates);
-        setPolicies(res.policies);
-        setProviders(res.providers);
-        setCanManage(res.canManage);
-      }
-      setLoading(false);
-    });
-  }, []);
+  function setTemplates(update: (current: ModelTemplateView[]) => ModelTemplateView[]) {
+    setData((current) => ({ ...current, templates: update(current.templates) }));
+  }
 
   function openDialog(template: ModelTemplateView | null) {
     setEditing(template);
@@ -61,7 +53,7 @@ export default function ModelTemplatesPage() {
       const result = await deleteTemplateAction(id);
       setDeleting(null);
       if (isActionFail(result)) {
-        toast.danger(tError("code", { code: result.error }));
+        showError(result.error);
         return;
       }
       setTemplates((current) => current.filter((row) => row.id !== result.id));
@@ -86,18 +78,11 @@ export default function ModelTemplatesPage() {
     return format.list(parts, { type: "unit" });
   }
 
-  if (loading) {
-    return (
-      <output
-        aria-live="polite"
-        aria-label={tCommon("loading")}
-        className="flex min-h-[40vh] items-center justify-center text-accent"
-      >
-        <Spinner color="current" size="lg" />
-      </output>
-    );
+  if (!data) {
+    return <PageStatus title={t("title")} subtitle={t("subtitle")} state={page} />;
   }
 
+  const { templates, policies, providers, canManage } = data;
   const createButton = canManage ? (
     <Button onPress={() => openDialog(null)}>
       <Plus size={16} aria-hidden />

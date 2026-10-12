@@ -20,6 +20,7 @@ import { formats } from "@/i18n/formats";
 import { isActionFail } from "@/lib/http/action-result";
 import type { NodeKind, NodeRef, StructurePayload } from "@/types/structure";
 import { saveMemberAction, saveOrgAction, saveProjectAction, saveTeamAction } from "../_action";
+import { useErrorToast } from "@/components/console/use-error-toast";
 
 function idsOf(data: StructurePayload, kind: NodeKind): Set<string> {
   const rows =
@@ -46,7 +47,7 @@ export default function NodeDialog({
 }) {
   const t = useTranslations("Companies.node");
   const tCommon = useTranslations("Common");
-  const tError = useTranslations("Error");
+  const showError = useErrorToast();
   const org = kind === "org" ? data.orgs.find((row) => row.id === editingId) : undefined;
   const team = kind === "team" ? data.teams.find((row) => row.id === editingId) : undefined;
   const project = kind === "project" ? data.projects.find((row) => row.id === editingId) : undefined;
@@ -87,7 +88,7 @@ export default function NodeDialog({
               ? await saveProjectAction({ id, alias, orgId, teamId, owner })
               : await saveMemberAction({ id, alias, email, orgId, teamId, blocked, logContent });
       if (isActionFail(result)) {
-        toast.danger(tError("code", { code: result.error }));
+        showError(result.error);
         return;
       }
       const created = [...idsOf(result, kind)].find((row) => !before.has(row));

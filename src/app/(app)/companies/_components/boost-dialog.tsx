@@ -21,6 +21,7 @@ import { formats } from "@/i18n/formats";
 import { isActionFail } from "@/lib/http/action-result";
 import type { BudgetResult, BudgetTarget, BudgetView } from "@/types/structure";
 import { addBoostAction, removeBoostAction } from "../_action";
+import { useErrorToast } from "@/components/console/use-error-toast";
 
 const PRESETS = [10, 25, 50, 100];
 const DURATIONS = [
@@ -43,7 +44,7 @@ export default function BoostDialog({
 }) {
   const t = useTranslations("Companies.boost");
   const tCommon = useTranslations("Common");
-  const tError = useTranslations("Error");
+  const showError = useErrorToast();
   const format = useFormatter();
   const now = useNow({ updateInterval: 60_000 });
   const durationLabel = useId();
@@ -60,7 +61,7 @@ export default function BoostDialog({
     start(async () => {
       const result = await addBoostAction({ kind: target.kind, id: target.id, amount, hours });
       if (isActionFail(result)) {
-        toast.danger(tError("code", { code: result.error }));
+        showError(result.error);
         return;
       }
       onSaved(result);
@@ -75,7 +76,7 @@ export default function BoostDialog({
       const result = await removeBoostAction(id);
       setRemoving(null);
       if (isActionFail(result)) {
-        toast.danger(tError("code", { code: result.error }));
+        showError(result.error);
         return;
       }
       onSaved(result);

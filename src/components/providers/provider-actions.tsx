@@ -8,6 +8,7 @@ import { deleteProviderAction } from "@/app/(app)/providers/_action";
 import ConfirmDialog from "@/components/console/confirm-dialog";
 import { isActionFail } from "@/lib/http/action-result";
 import type { ProviderView } from "@/types/providers";
+import { useErrorToast } from "@/components/console/use-error-toast";
 
 export default function ProviderActions({
   row,
@@ -22,7 +23,7 @@ export default function ProviderActions({
 }) {
   const t = useTranslations("Providers");
   const tCommon = useTranslations("Common");
-  const tError = useTranslations("Error");
+  const showError = useErrorToast();
   const [pending, start] = useTransition();
 
   return (
@@ -43,7 +44,7 @@ export default function ProviderActions({
           start(async () => {
             const result = await deleteProviderAction(row.id);
             if (isActionFail(result)) {
-              toast.danger(tError("code", { code: result.error }));
+              showError(result.error);
               return;
             }
             onDeleted(result.id);

@@ -11,6 +11,7 @@ import { saveGuardrailOverrideAction } from "../_action";
 import GuardrailOverrideDialog from "./guardrail-override-dialog";
 import PolicyPrecedence from "./policy-precedence";
 import { inheritedPolicy } from "./policy-target-picker";
+import { useErrorToast } from "@/components/console/use-error-toast";
 
 type OverrideResult = { scope: PolicyScope; id: string; override: GuardrailOverrideView | null };
 
@@ -29,7 +30,7 @@ export default function GuardrailOverrides({
 }) {
   const t = useTranslations("Guardrails");
   const tCommon = useTranslations("Common");
-  const tError = useTranslations("Error");
+  const showError = useErrorToast();
   const [editing, setEditing] = useState<GuardrailOverrideView | null>(null);
   const [dialogKey, setDialogKey] = useState(0);
   const [pending, start] = useTransition();
@@ -47,7 +48,7 @@ export default function GuardrailOverrides({
     start(async () => {
       const result = await saveGuardrailOverrideAction({ scope: row.scope, id: row.id, policy: null });
       if (isActionFail(result)) {
-        toast.danger(tError("code", { code: result.error }));
+        showError(result.error);
         return;
       }
       onChanged(result);

@@ -43,6 +43,7 @@ import type {
   MarkupTeamOption,
   MarkupView,
 } from "@/types/pricing";
+import { useErrorToast } from "@/components/console/use-error-toast";
 
 const KINDS = ["markup", "discount"] as const satisfies readonly MarkupKind[];
 
@@ -76,7 +77,7 @@ export default function MarkupDialog({
 }) {
   const t = useTranslations("Markups");
   const tCommon = useTranslations("Common");
-  const tError = useTranslations("Error");
+  const showError = useErrorToast();
   const format = useFormatter();
   const modelModeLabel = useId();
   const kindLabel = useId();
@@ -141,7 +142,7 @@ export default function MarkupDialog({
         note,
       });
       if (isActionFail(result)) {
-        toast.danger(tError("code", { code: result.error }));
+        showError(result.error);
         return;
       }
       onSaved(result.markup);

@@ -10,6 +10,7 @@ import type { MemberNode } from "@/types/structure";
 import type { UsageReportView } from "@/types/reports";
 import { deleteReportAction, sendReportNowAction } from "../_action";
 import ReportDialog from "./report-dialog";
+import { useErrorToast } from "@/components/console/use-error-toast";
 
 export default function ReportsCard({
   kind,
@@ -34,7 +35,7 @@ export default function ReportsCard({
 }) {
   const t = useTranslations("Companies.reports");
   const tCommon = useTranslations("Common");
-  const tError = useTranslations("Error");
+  const showError = useErrorToast();
   const format = useFormatter();
   const dialogState = useOverlayState();
   const [editing, setEditing] = useState<UsageReportView | null>(null);
@@ -53,7 +54,7 @@ export default function ReportsCard({
     start(async () => {
       const result = await sendReportNowAction(report.id);
       if (isActionFail(result)) {
-        toast.danger(tError("code", { code: result.error }));
+        showError(result.error);
         return;
       }
       onChange(result.reports);
@@ -67,7 +68,7 @@ export default function ReportsCard({
     start(async () => {
       const result = await deleteReportAction(report.id);
       if (isActionFail(result)) {
-        toast.danger(tError("code", { code: result.error }));
+        showError(result.error);
         return;
       }
       onChange(result.reports);

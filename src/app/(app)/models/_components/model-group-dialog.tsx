@@ -35,6 +35,7 @@ import type {
   ProviderOpt,
 } from "@/types/models";
 import PriceScheduleFields from "./price-schedule-fields";
+import { useErrorToast } from "@/components/console/use-error-toast";
 
 const BILLING_MODES = ["routed", "average", "custom"] as const;
 
@@ -195,7 +196,7 @@ export default function ModelGroupDialog({
 }) {
   const t = useTranslations("Models");
   const tCommon = useTranslations("Common");
-  const tError = useTranslations("Error");
+  const showError = useErrorToast();
   const [alias, setAlias] = useState(editing?.alias ?? "gpt-4o");
   const [strategy, setStrategy] = useState(editing?.strategy || "least_inflight");
   const [retries, setRetries] = useState(String(editing?.numRetries ?? 2));
@@ -276,7 +277,7 @@ export default function ModelGroupDialog({
         ? await updateModelGroupAction(body)
         : await createModelGroupAction(body);
       if (isActionFail(result)) {
-        toast.danger(tError("code", { code: result.error }));
+        showError(result.error);
         return;
       }
       onSaved(result);

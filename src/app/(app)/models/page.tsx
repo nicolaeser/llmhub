@@ -1,18 +1,21 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
-import { Button, Chip, Label, Spinner, Switch, Table, toast, useOverlayState } from "@heroui/react";
+import { useState, useTransition } from "react";
+import { Button, Chip, Label, Switch, Table, toast, useOverlayState } from "@heroui/react";
 import { Network, Plus, Trash2 } from "lucide-react";
 import { useFormatter, useTranslations } from "next-intl";
 import { Link } from "@/i18n/routing";
 import ConfirmDialog from "@/components/console/confirm-dialog";
 import EmptyState from "@/components/console/empty-state";
 import PageHeader from "@/components/console/page-header";
+import PageStatus from "@/components/console/page-status";
+import { useErrorToast } from "@/components/console/use-error-toast";
 import {
   deleteModelGroupAction,
   loadModelsAction,
   setModelGroupEnabledAction,
 } from "./_action";
+import { useActionData } from "@/lib/hooks/use-action-data";
 import { isActionFail } from "@/lib/http/action-result";
 import { splitTag } from "@/lib/gateway/catalog/model-catalog";
 import type { Group, ProviderOpt } from "@/types/models";
@@ -22,12 +25,9 @@ export default function ModelsPage() {
   const t = useTranslations("Models");
   const tProviders = useTranslations("Providers");
   const tCatalog = useTranslations("ModelCatalog");
-  const tError = useTranslations("Error");
+  const showError = useErrorToast();
   const tCommon = useTranslations("Common");
   const format = useFormatter();
-  const [loading, setLoading] = useState(true);
-  const [groups, setGroups] = useState<Group[]>([]);
-  const [providers, setProviders] = useState<ProviderOpt[]>([]);
   const [editing, setEditing] = useState<Group | null>(null);
   const [dialogKey, setDialogKey] = useState(0);
   const [deleting, setDeleting] = useState<string | null>(null);
@@ -35,16 +35,18 @@ export default function ModelsPage() {
   const [, startDelete] = useTransition();
   const [, startToggle] = useTransition();
   const formState = useOverlayState();
+  const page = useActionData<{ groups: Group[]; providers: ProviderOpt[] }>(loadModelsAction);
+  const { data, setData } = page;
 
-  useEffect(() => {
-    loadModelsAction().then((res) => {
-      if (!isActionFail(res)) {
-        setGroups(res.groups);
-        setProviders(res.providers);
-      }
-      setLoading(false);
-    });
-  }, []);
+  function setGroups(update: (current: Group[]) => Group[]) {
+    setData((current) => ({ ...current, groups: update(current.groups) }));
+  }
+
+  if (!data) {
+    return <PageStatus title={t("title")} subtitle={t("subtitle")} state={page} />;
+  }
+
+  const { groups, providers } = data;
 
   function routeLabels(group: Group): string[] {
     return [
@@ -78,7 +80,7 @@ export default function ModelsPage() {
       const result = await setModelGroupEnabledAction({ alias, enabled });
       setToggling(null);
       if (isActionFail(result)) {
-        toast.danger(tError("code", { code: result.error }));
+        showError(result.error);
         return;
       }
       saved(result);
@@ -94,24 +96,12 @@ export default function ModelsPage() {
       const result = await deleteModelGroupAction(alias);
       setDeleting(null);
       if (isActionFail(result)) {
-        toast.danger(tError("code", { code: result.error }));
+        showError(result.error);
         return;
       }
       setGroups((cur) => cur.filter((g) => g.alias !== result.alias));
       toast(t("toasts.deleted"), { variant: "success" });
     });
-  }
-
-  if (loading) {
-    return (
-      <output
-        aria-live="polite"
-        aria-label={tCommon("loading")}
-        className="flex min-h-[40vh] items-center justify-center text-accent"
-      >
-        <Spinner color="current" size="lg" />
-      </output>
-    );
   }
 
   const createButton = (

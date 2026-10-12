@@ -25,6 +25,7 @@ import { reportRecipientSchema } from "@/schemas/reports";
 import type { MemberNode } from "@/types/structure";
 import type { ReportCadence, ReportFormat, UsageReportView } from "@/types/reports";
 import { saveReportAction } from "../_action";
+import { useErrorToast } from "@/components/console/use-error-toast";
 
 function splitRecipients(value: string): string[] {
   return value.split(/[\s,;]+/).filter(Boolean);
@@ -51,7 +52,7 @@ export default function ReportDialog({
 }) {
   const t = useTranslations("Companies.reports.dialog");
   const tCommon = useTranslations("Common");
-  const tError = useTranslations("Error");
+  const showError = useErrorToast();
   const format = useFormatter();
   const locale = useLocale();
   const [cadence, setCadence] = useState<ReportCadence>(report?.cadence ?? "monthly");
@@ -80,7 +81,7 @@ export default function ReportDialog({
         enabled,
       });
       if (isActionFail(result)) {
-        toast.danger(tError("code", { code: result.error }));
+        showError(result.error);
         return;
       }
       onSaved(result.reports);

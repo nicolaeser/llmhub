@@ -1,17 +1,18 @@
 "use client";
 
 import { useId, useState, useTransition } from "react";
-import { Label, ListBox, Select, toast } from "@heroui/react";
+import { Label, ListBox, Select } from "@heroui/react";
 import { useFormatter, useTranslations } from "next-intl";
 import StatCard from "@/components/console/stat-card";
 import { loadCacheStatsAction } from "../_action";
 import { CACHE_STATS_RANGES } from "@/lib/gateway/cache/cache-settings";
 import { isActionFail } from "@/lib/http/action-result";
 import type { ResponseCacheStats } from "@/types/cache";
+import { useErrorToast } from "@/components/console/use-error-toast";
 
 export default function CacheStats({ initial, semanticOn }: { initial: ResponseCacheStats; semanticOn: boolean }) {
   const t = useTranslations("Cache");
-  const tError = useTranslations("Error");
+  const showError = useErrorToast();
   const format = useFormatter();
   const [stats, setStats] = useState(initial);
   const [pending, start] = useTransition();
@@ -50,7 +51,7 @@ export default function CacheStats({ initial, semanticOn }: { initial: ResponseC
           start(async () => {
             const result = await loadCacheStatsAction({ days });
             if (isActionFail(result)) {
-              toast.danger(tError("code", { code: result.error }));
+              showError(result.error);
               return;
             }
             setStats(result);

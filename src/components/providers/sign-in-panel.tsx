@@ -7,6 +7,7 @@ import { useTranslations } from "next-intl";
 import { completeSignInAction, pollSignInAction, startSignInAction } from "@/app/(app)/providers/_action";
 import { isActionFail } from "@/lib/http/action-result";
 import type { ProviderSignIn, SignInKind, SignInStart } from "@/types/providers";
+import { useErrorToast } from "@/components/console/use-error-toast";
 
 type Waiting = SignInStart & { delay: number };
 
@@ -22,7 +23,7 @@ export default function SignInPanel({
   onSignedIn: (credential: string) => void;
 }) {
   const t = useTranslations("Providers");
-  const tError = useTranslations("Error");
+  const showError = useErrorToast();
   const [waiting, setWaiting] = useState<Waiting | null>(null);
   const [fresh, setFresh] = useState<ProviderSignIn | null>(null);
   const [pasted, setPasted] = useState("");
@@ -38,7 +39,7 @@ export default function SignInPanel({
       if (!active) return;
       if (isActionFail(result)) {
         setWaiting(null);
-        toast.danger(tError("code", { code: result.error }));
+        showError(result.error);
         return;
       }
       if (result.state === "pending") {
@@ -53,13 +54,13 @@ export default function SignInPanel({
       active = false;
       clearTimeout(timer);
     };
-  }, [waiting, onSignedIn, tError]);
+  }, [waiting, onSignedIn, showError]);
 
   function begin() {
     start(async () => {
       const result = await startSignInAction(kind);
       if (isActionFail(result)) {
-        toast.danger(tError("code", { code: result.error }));
+        showError(result.error);
         return;
       }
       setPasted("");
@@ -71,7 +72,7 @@ export default function SignInPanel({
     finish(async () => {
       const result = await completeSignInAction({ ticket, code: pasted });
       if (isActionFail(result)) {
-        toast.danger(tError("code", { code: result.error }));
+        showError(result.error);
         return;
       }
       if (result.state !== "done") return;

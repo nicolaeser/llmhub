@@ -9,6 +9,7 @@ import { savePiiOverrideAction } from "../_action";
 import PiiEntityPicker from "./pii-entity-picker";
 import PiiPolicyFields from "./pii-policy-fields";
 import PolicyTargetPicker from "./policy-target-picker";
+import { useErrorToast } from "@/components/console/use-error-toast";
 
 export default function PiiOverrideDialog({
   state,
@@ -24,7 +25,7 @@ export default function PiiOverrideDialog({
   onSaved: (result: { scope: PolicyScope; id: string; override: PiiOverrideView | null }) => void;
 }) {
   const t = useTranslations("Guardrails");
-  const tError = useTranslations("Error");
+  const showError = useErrorToast();
   const tCommon = useTranslations("Common");
   const [scope, setScope] = useState<PolicyScope>(() => editing?.scope ?? targets[0]?.scope ?? "org");
   const [targetId, setTargetId] = useState(
@@ -47,7 +48,7 @@ export default function PiiOverrideDialog({
     start(async () => {
       const result = await savePiiOverrideAction({ scope, id: targetId, policy });
       if (isActionFail(result)) {
-        toast.danger(tError("code", { code: result.error }));
+        showError(result.error);
         return;
       }
       onSaved(result);
