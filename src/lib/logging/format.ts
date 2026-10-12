@@ -1,8 +1,8 @@
-import type { LogLevel, Meta } from "@/types/logging";
+import type { LogLevel, LogMeta } from "@/types/logging";
 
 const MAX_ERROR_TEXT = 300;
 
-export function writeLogLine(level: LogLevel, event: string, meta?: Meta): void {
+export function writeLogLine(level: LogLevel, event: string, meta?: LogMeta): void {
   const line = JSON.stringify({
     ts: new Date().toISOString(),
     level,
@@ -16,7 +16,7 @@ export function writeLogLine(level: LogLevel, event: string, meta?: Meta): void 
   }
 }
 
-export function errorFields(err: unknown): Meta {
+export function errorFields(err: unknown): LogMeta {
   const text = err instanceof Error ? err.message : String(err);
   const summary = text.split("\n").map((part) => part.trim()).find(Boolean) ?? "";
   const code = err !== null && typeof err === "object" ? (err as { code?: unknown }).code : undefined;

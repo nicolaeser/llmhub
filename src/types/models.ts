@@ -35,7 +35,7 @@ export type PriceWindowDraft = {
   priceOutput: number;
 };
 
-export type Group = {
+export type ModelGroupView = {
   alias: string;
   enabled: boolean;
   vendor: string;

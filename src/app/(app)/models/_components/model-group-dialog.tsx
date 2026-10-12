@@ -22,7 +22,7 @@ import { useErrorToast } from "@/components/console/use-error-toast";
 import { createModelGroupAction, updateModelGroupAction } from "../_action";
 import { isActionFail } from "@/lib/http/action-result";
 import { scheduleOverlaps, validPrice, windowValid } from "@/lib/gateway/billing/price-schedule";
-import type { DeploymentDraft, Group, PriceWindowDraft, ProviderOpt } from "@/types/models";
+import type { DeploymentDraft, ModelGroupView, PriceWindowDraft, ProviderOpt } from "@/types/models";
 import CustomPriceFields from "./custom-price-fields";
 import DeploymentCard from "./deployment-card";
 import {
@@ -58,10 +58,10 @@ export default function ModelGroupDialog({
   onSaved,
 }: {
   state: ReturnType<typeof useOverlayState>;
-  editing: Group | null;
+  editing: ModelGroupView | null;
   providers: ProviderOpt[];
   aliases: string[];
-  onSaved: (group: Group) => void;
+  onSaved: (group: ModelGroupView) => void;
 }) {
   const t = useTranslations("Models");
   const tCommon = useTranslations("Common");

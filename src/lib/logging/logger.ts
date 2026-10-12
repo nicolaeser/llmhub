@@ -1,15 +1,15 @@
 import "server-only";
 import { writeLogLine } from "@/lib/logging/format";
-import type { Meta } from "@/types/logging";
+import type { LogMeta } from "@/types/logging";
 
 export const logger = {
-  info(event: string, meta?: Meta) {
+  info(event: string, meta?: LogMeta) {
     writeLogLine("info", event, meta);
   },
-  warn(event: string, meta?: Meta) {
+  warn(event: string, meta?: LogMeta) {
     writeLogLine("warn", event, meta);
   },
-  error(event: string, meta?: Meta) {
+  error(event: string, meta?: LogMeta) {
     writeLogLine("error", event, meta);
   },
 };

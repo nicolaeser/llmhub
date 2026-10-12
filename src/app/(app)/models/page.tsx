@@ -18,7 +18,7 @@ import {
 import { useActionData } from "@/lib/hooks/use-action-data";
 import { isActionFail } from "@/lib/http/action-result";
 import { splitTag } from "@/lib/gateway/catalog/model-catalog";
-import type { Group, ProviderOpt } from "@/types/models";
+import type { ModelGroupView, ProviderOpt } from "@/types/models";
 import ModelGroupDialog from "./_components/model-group-dialog";
 
 export default function ModelsPage() {
@@ -28,17 +28,17 @@ export default function ModelsPage() {
   const showError = useErrorToast();
   const tCommon = useTranslations("Common");
   const format = useFormatter();
-  const [editing, setEditing] = useState<Group | null>(null);
+  const [editing, setEditing] = useState<ModelGroupView | null>(null);
   const [dialogKey, setDialogKey] = useState(0);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [toggling, setToggling] = useState<string | null>(null);
   const [, startDelete] = useTransition();
   const [, startToggle] = useTransition();
   const formState = useOverlayState();
-  const page = useActionData<{ groups: Group[]; providers: ProviderOpt[] }>(loadModelsAction);
+  const page = useActionData<{ groups: ModelGroupView[]; providers: ProviderOpt[] }>(loadModelsAction);
   const { data, setData } = page;
 
-  function setGroups(update: (current: Group[]) => Group[]) {
+  function setGroups(update: (current: ModelGroupView[]) => ModelGroupView[]) {
     setData((current) => ({ ...current, groups: update(current.groups) }));
   }
 
@@ -48,7 +48,7 @@ export default function ModelsPage() {
 
   const { groups, providers } = data;
 
-  function routeLabels(group: Group): string[] {
+  function routeLabels(group: ModelGroupView): string[] {
     return [
       ...new Set(
         group.deployments.map(
@@ -60,13 +60,13 @@ export default function ModelsPage() {
     ];
   }
 
-  function openDialog(group: Group | null) {
+  function openDialog(group: ModelGroupView | null) {
     setEditing(group);
     setDialogKey((n) => n + 1);
     formState.open();
   }
 
-  function saved(group: Group) {
+  function saved(group: ModelGroupView) {
     setGroups((cur) =>
       cur.some((g) => g.alias === group.alias)
         ? cur.map((g) => (g.alias === group.alias ? group : g))

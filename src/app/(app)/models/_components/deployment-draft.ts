@@ -1,4 +1,4 @@
-import type { DeploymentDraft, DiscoveredPrice, Group, ProviderOpt } from "@/types/models";
+import type { DeploymentDraft, DiscoveredPrice, ModelGroupView, ProviderOpt } from "@/types/models";
 
 export const BILLING_MODES = ["routed", "average", "custom"] as const;
 
@@ -60,7 +60,7 @@ export function emptyDep(providers: ProviderOpt[]): DeploymentDraft {
   };
 }
 
-export function draftsOf(group: Group | null, providers: ProviderOpt[]): DeploymentDraft[] {
+export function draftsOf(group: ModelGroupView | null, providers: ProviderOpt[]): DeploymentDraft[] {
   if (!group?.deployments.length) return [emptyDep(providers)];
   return group.deployments.map((d) => ({
     id: d.id,

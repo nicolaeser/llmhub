@@ -9,7 +9,7 @@ import PageStatus, { LoadError } from "@/components/console/page-status";
 import { useErrorToast } from "@/components/console/use-error-toast";
 import { useActionData } from "@/lib/hooks/use-action-data";
 import { isActionFail } from "@/lib/http/action-result";
-import type { Kind, LogFilterValues, LogOptions, RequestLogDetail, RequestLogRow } from "@/types/logs";
+import type { LogKind, LogFilterValues, LogOptions, RequestLogDetail, RequestLogRow } from "@/types/logs";
 import { loadLogDetailAction, loadLogOptionsAction, loadLogsAction } from "./_action";
 import LogDetailDialog from "./_components/log-detail-dialog";
 import LogFilters, { NO_FILTERS } from "./_components/log-filters";
@@ -25,7 +25,7 @@ function download(href: string) {
   link.click();
 }
 
-function exportHref(kind: Kind, format: "csv" | "jsonl", filters: LogFilterValues) {
+function exportHref(kind: LogKind, format: "csv" | "jsonl", filters: LogFilterValues) {
   const params = new URLSearchParams({ kind, format });
   for (const [key, value] of Object.entries(filters)) {
     if (value === true) params.set(key, "1");
@@ -37,7 +37,7 @@ function exportHref(kind: Kind, format: "csv" | "jsonl", filters: LogFilterValue
 export default function LogsPage() {
   const t = useTranslations("Logs");
   const showError = useErrorToast();
-  const [kind, setKind] = useState<Kind>("requests");
+  const [kind, setKind] = useState<LogKind>("requests");
   const [filters, setFilters] = useState<LogFilterValues>(NO_FILTERS);
   const [options, setOptions] = useState<LogOptions>(NO_OPTIONS);
   const [detail, setDetail] = useState<RequestLogDetail | null>(null);
@@ -130,7 +130,7 @@ export default function LogsPage() {
       />
       <Tabs
         selectedKey={kind}
-        onSelectionChange={(key) => setKind(String(key) as Kind)}
+        onSelectionChange={(key) => setKind(String(key) as LogKind)}
         aria-label={t("title")}
         className="mb-4 w-fit"
       >

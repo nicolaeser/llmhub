@@ -162,7 +162,7 @@ export type OidcEnv = {
   appUrl?: string;
 };
 
-export type DiscCache = { issuer: string; disc: OidcDiscovery; fetched: number };
+export type OidcDiscoveryCache = { issuer: string; disc: OidcDiscovery; fetched: number };
 
 export type OidcState = {
   state: string;

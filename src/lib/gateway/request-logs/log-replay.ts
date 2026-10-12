@@ -1,10 +1,10 @@
 import { asArray, asRecord, asString } from "@/lib/gateway/core";
 import type { JsonMap } from "@/types/gateway";
-import type { Msg, ReplayDraft } from "@/types/playground";
+import type { PlaygroundMessage, ReplayDraft } from "@/types/playground";
 
-type Part = Exclude<Msg["content"], string>[number];
+type Part = Exclude<PlaygroundMessage["content"], string>[number];
 
-type Draft = { system: string[]; messages: Msg[]; dropped: boolean };
+type Draft = { system: string[]; messages: PlaygroundMessage[]; dropped: boolean };
 
 const REPLAY_ENDPOINT = /\/(?:chat\/completions|completions|messages|responses|playground\/chat|assistant\/chat)$/;
 const IMAGE_TYPES = new Set(["image", "image_url", "input_image"]);
@@ -98,7 +98,7 @@ function chatTool(raw: unknown): JsonMap | null {
   };
 }
 
-function promptOf(message: Msg): ReplayDraft["prompt"] {
+function promptOf(message: PlaygroundMessage): ReplayDraft["prompt"] {
   if (typeof message.content === "string") return { text: message.content, images: [] };
   return {
     text: textOf(message.content),

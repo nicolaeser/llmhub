@@ -4,10 +4,10 @@ import { Button, Card } from "@heroui/react";
 import { Trash2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import SearchSelect from "@/components/console/search-select";
-import type { Session } from "@/types/playground";
+import type { PlaygroundSession } from "@/types/playground";
 
 type SessionNavProps = {
-  sessions: Session[];
+  sessions: PlaygroundSession[];
   currentId: string | undefined;
   pending: boolean;
   onSelect: (id: string) => void;

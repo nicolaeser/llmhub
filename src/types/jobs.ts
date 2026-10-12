@@ -12,7 +12,7 @@ export type GlobalWithWorkerBoot = typeof globalThis & {
 
 export type WorkerMode = "bullmq" | "local" | "unavailable";
 
-export type HealthState = {
+export type WorkerHealth = {
   mode: WorkerMode;
 };
 

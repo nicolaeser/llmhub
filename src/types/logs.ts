@@ -1,4 +1,4 @@
-export type Kind = "requests" | "spend" | "audit";
+export type LogKind = "requests" | "spend" | "audit";
 
 export type LogFilterValues = {
   model: string;

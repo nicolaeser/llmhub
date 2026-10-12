@@ -17,14 +17,14 @@ export type SignInput = {
   now?: Date;
 };
 
-export type AddressingStyle = "path" | "virtual-hosted";
+export type S3AddressingStyle = "path" | "virtual-hosted";
 
 export type S3Location = {
   bucket: string;
   region: string;
   endpoint: string;
   prefix: string;
-  addressing: AddressingStyle;
+  addressing: S3AddressingStyle;
   domainBucket: boolean;
   publicBaseUrl: string;
 };

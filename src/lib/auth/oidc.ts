@@ -6,7 +6,7 @@ import { asRecord, asString } from "@/lib/gateway/core";
 import { verifyJwt } from "@/lib/auth/jwks";
 import { readJsonOr } from "@/lib/utils/json";
 import type {
-  DiscCache,
+  OidcDiscoveryCache,
   OidcDiscovery,
   OidcEnv,
   OidcState,
@@ -19,7 +19,7 @@ export const OIDC_STATE_COOKIE =
   process.env.NODE_ENV === "production" ? "__Host-llmhub-oidc" : "llmhub_oidc";
 const OIDC_STATE_TTL_SECONDS = 600;
 const STATE_PART = /^[A-Za-z0-9_-]{16,128}$/;
-let discCache: DiscCache | null = null;
+let discCache: OidcDiscoveryCache | null = null;
 
 export function trimIssuer(issuer: string): string {
   return issuer.trim().replace(/\/+$/, "");

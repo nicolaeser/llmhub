@@ -5,7 +5,7 @@ import { sharedRedis, withRedisTimeout } from "@/lib/redis/client";
 import type {
   HealthBackend,
   HealthCounts,
-  HealthState,
+  DeploymentHealthState,
   HealthSummary,
 } from "@/types/provider-health";
 
@@ -210,7 +210,7 @@ export async function deploymentHealth(
   ids: string[],
   minutes: number,
   now = Date.now(),
-): Promise<{ backend: HealthBackend; states: Map<string, HealthState> }> {
+): Promise<{ backend: HealthBackend; states: Map<string, DeploymentHealthState> }> {
   const span = Math.min(HEALTH_RETENTION_MINUTES, Math.max(1, Math.trunc(minutes) || 1));
   const current = Math.floor(now / MINUTE_MS);
   const slots = Array.from({ length: span }, (_, offset) => current - offset);
@@ -237,7 +237,7 @@ export async function deploymentHealth(
   const counts = foldHealth(
     hashes ?? slots.map((slot) => Object.fromEntries(state.minutes.get(slot) ?? [])),
   );
-  const states = new Map<string, HealthState>();
+  const states = new Map<string, DeploymentHealthState>();
   ids.forEach((id, index) => {
     const until = Math.max(state.cooldownUntil.get(id) ?? 0, Number(shared[index]) || 0);
     states.set(id, { ...(counts.get(id) ?? emptyCounts()), cooldownUntil: until > now ? until : null });

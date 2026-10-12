@@ -10,7 +10,7 @@ import PageStatus from "@/components/console/page-status";
 import { Link } from "@/i18n/routing";
 import { useActionData } from "@/lib/hooks/use-action-data";
 import { isActionFail } from "@/lib/http/action-result";
-import type { Msg, Session } from "@/types/playground";
+import type { PlaygroundMessage, PlaygroundSession } from "@/types/playground";
 import { loadAliasesAction, loadReplayAction } from "./_action";
 import {
   STORAGE_KEY,
@@ -41,7 +41,7 @@ type ReplayNotice =
 export default function PlaygroundPage() {
   const t = useTranslations("Playground");
   const tError = useTranslations("Error");
-  const [sessions, setSessions] = useState<Session[]>([]);
+  const [sessions, setSessions] = useState<PlaygroundSession[]>([]);
   const [currentId, setCurrentId] = useState("");
   const [input, setInput] = useState("");
   const [toolsJson, setToolsJson] = useState("");
@@ -62,7 +62,7 @@ export default function PlaygroundPage() {
   async function hydrate({ models: aliases }: { models: string[] }) {
     const params = new URLSearchParams(window.location.search);
     const replayId = params.get("replay");
-    let stored: Session[] = [];
+    let stored: PlaygroundSession[] = [];
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (raw) stored = parseSessions(raw);
@@ -116,7 +116,7 @@ export default function PlaygroundPage() {
     }
   }, [sessions, ready, pending, t]);
 
-  function patchSession(id: string, patch: Partial<Session>) {
+  function patchSession(id: string, patch: Partial<PlaygroundSession>) {
     setSessions((prev) =>
       prev.map((s) =>
         s.id === id ? { ...s, ...patch, updatedAt: Date.now() } : s,
@@ -161,7 +161,7 @@ export default function PlaygroundPage() {
       toast.danger(t("toolsError"));
       return;
     }
-    const content: Msg["content"] =
+    const content: PlaygroundMessage["content"] =
       images.length === 0
         ? text
         : [
@@ -172,7 +172,7 @@ export default function PlaygroundPage() {
             })),
           ];
     const sessionId = current.id;
-    const next: Msg[] = [...msgs, { role: "user", content }];
+    const next: PlaygroundMessage[] = [...msgs, { role: "user", content }];
     const title = current.title || titleFrom(next);
     patchSession(sessionId, {
       title,

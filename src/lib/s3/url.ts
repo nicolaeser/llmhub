@@ -1,6 +1,6 @@
 import "server-only";
 import type { S3Addressing } from "@/types/gateway";
-import type { AddressingStyle, S3Location } from "@/types/s3";
+import type { S3AddressingStyle, S3Location } from "@/types/s3";
 
 const IPV4 = /^(?:\d{1,3}\.){3}\d{1,3}$/;
 
@@ -59,7 +59,7 @@ export function resolveAddressing(input: {
   domainBucket?: boolean;
   bucket: string;
   endpoint: string;
-}): AddressingStyle {
+}): S3AddressingStyle {
   if (input.forcePathStyle) return "path";
   if (input.domainBucket) return "virtual-hosted";
   const mode = (input.addressing || "auto").toLowerCase();

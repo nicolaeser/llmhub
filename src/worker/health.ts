@@ -1,10 +1,10 @@
 import "server-only";
-import type { WorkerMode, HealthState } from "@/types/jobs";
+import type { WorkerMode, WorkerHealth } from "@/types/jobs";
 
 const BOOT_KEY = Symbol.for("llmhub.worker.health");
 
-function state(): HealthState {
-  const g = globalThis as unknown as Record<symbol, HealthState>;
+function state(): WorkerHealth {
+  const g = globalThis as unknown as Record<symbol, WorkerHealth>;
   if (!g[BOOT_KEY]) g[BOOT_KEY] = { mode: "unavailable" };
   return g[BOOT_KEY];
 }
