@@ -15,7 +15,7 @@ import {
 } from "@/lib/gateway/router";
 import { quotaBottleneckReset, quotaExhausted, quotaPressure } from "@/lib/gateway/quota";
 import { limitsSnapshot, warmLimits } from "@/lib/gateway/subscription-limits";
-import { asRecord, asStringArray, ERR_NO_HEALTHY, ERR_UNKNOWN_GROUP } from "@/lib/gateway/core";
+import { asRecord, asStringArray, ERR_ALL_PAUSED, ERR_NO_HEALTHY, ERR_UNKNOWN_GROUP } from "@/lib/gateway/core";
 import { modelAlias } from "@/lib/gateway/model-alias";
 import { routePermitted } from "@/lib/gateway/model-policy";
 import { priceWindowQuery, priceWindowRates } from "@/lib/gateway/price-schedule";
@@ -191,16 +191,16 @@ export async function acquireGroup(
   strategy = "",
   cost?: CostFilter,
 ): Promise<{ dep: ResolvedDeployment; release: () => void; overflow: boolean }> {
-  const ready = await healthy(
-    permittedDeployments(group.mapped, rules).filter(serves).filter((dep) => dep.provider?.enabled !== false),
-  );
+  const permitted = permittedDeployments(group.mapped, rules).filter(serves);
+  const active = permitted.filter((dep) => dep.provider?.enabled !== false);
+  const ready = await healthy(active);
   if (!ready.length) {
     if (group.overflow_group && group.overflow_group !== group.alias) {
       const overflow = await loadGroup(group.overflow_group);
       const acquired = await acquireGroup(overflow, rules, serves, strategy, cost);
       return { ...acquired, overflow: true };
     }
-    throw ERR_NO_HEALTHY;
+    throw permitted.length && !active.length ? ERR_ALL_PAUSED : ERR_NO_HEALTHY;
   }
   const quota = await withinQuota(affordable(group, ready, cost));
   const dep = pick(quota.items, strategy || group.strategy, quota.scores);

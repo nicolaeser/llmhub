@@ -39,7 +39,7 @@ export default function ConfirmDialog({
               <AlertDialog.CloseTrigger>
                 <Button variant="tertiary">{cancelLabel}</Button>
               </AlertDialog.CloseTrigger>
-              <Button slot="close" variant="danger" isDisabled={pending} onPress={onConfirm}>
+              <Button slot="close" variant="danger" isPending={pending} onPress={onConfirm}>
                 {confirmLabel}
               </Button>
             </AlertDialog.Footer>

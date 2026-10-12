@@ -22,6 +22,7 @@ test("confirm-dialog uses HeroUI AlertDialog compound parts", async () => {
   assert.match(source, /<Button\b[^>]*\bvariant=["']danger["']/);
   assert.match(source, /<Button\b[^>]*\bonPress=\{onConfirm\}/);
   assert.match(source, /<Button\b[^>]*\bisPending=\{pending\}/);
+  assert.match(source, /<Button\b[^>]*\bslot=["']close["'][^>]*\bonPress=\{onConfirm\}/);
   assert.doesNotMatch(source, /\bonClick\b/);
   assert.doesNotMatch(source, /window\.confirm/);
 });

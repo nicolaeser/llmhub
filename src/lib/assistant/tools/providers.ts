@@ -52,7 +52,7 @@ const NO_POLICY: ProviderPolicyInput = { zdr: false, retentionDays: null, region
 
 export const providerTools = {
   list_providers: defineTool({
-    description: "Connected providers with kind, base URL, data policy, whether a key is set or which subscription account is signed in, and how many upstream models were discovered. Never returns API keys or tokens.",
+    description: "Connected providers with kind, base URL, data policy, whether the provider is paused, whether a key is set or which subscription account is signed in, and how many upstream models were discovered. Never returns API keys or tokens.",
     input: emptyToolInput,
     run: async () =>
       viaAction(loadProvidersAction(), ({ connected }) => ({
@@ -61,6 +61,7 @@ export const providerTools = {
           name: row.name,
           kind: row.kind,
           baseUrl: row.baseUrl,
+          enabled: row.enabled,
           hasApiKey: row.hasApiKey,
           signIn: row.signIn,
           policy: row.policy,
@@ -70,7 +71,7 @@ export const providerTools = {
   }),
   get_provider: defineTool({
     description:
-      "One provider connection with its data policy and discovered upstream models (ids, context length, prices per 1K tokens). Never returns the API key.",
+      "One provider connection with its data policy, whether it is paused, and discovered upstream models (ids, context length, prices per 1K tokens). Never returns the API key.",
     input: providerToolInput,
     run: async ({ id, search }) =>
       viaAction(loadProvidersAction(), ({ connected }) => {
@@ -84,6 +85,7 @@ export const providerTools = {
             name: row.name,
             kind: row.kind,
             baseUrl: row.baseUrl,
+            enabled: row.enabled,
             hasApiKey: row.hasApiKey,
             policy: row.policy,
             discoveredTotal: matches.length,
@@ -99,7 +101,7 @@ export const providerTools = {
   }),
   create_provider: defineTool({
     description:
-      "Create a provider connection without a key and open the Providers page, where the operator enters the API key. Never ask for API keys in chat. Subscription kinds (codex, grok_build, claude) need the operator to sign in on the Providers page and cannot be created here.",
+      "Create a provider connection without a key and open the Providers page, where the operator enters the API key. Never ask for API keys in chat. Subscription kinds (codex, grok_build, claude) need the operator to sign in on the Subscriptions page and cannot be created here.",
     input: createProviderToolInput,
     run: async (args) =>
       viaAction(

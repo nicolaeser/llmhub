@@ -134,6 +134,7 @@ export default function SubscriptionsPage() {
   const paused = states.filter((state) => state === "paused").length;
   const limited = states.filter((state) => state === "limited").length;
   const recoveries = connected
+    .filter((_, index) => states[index] === "limited")
     .map((row) => recoveryAt(limits[row.id], now.getTime()))
     .filter((time): time is number => time !== null);
   const nextRecovery = recoveries.length ? Math.min(...recoveries) : null;
