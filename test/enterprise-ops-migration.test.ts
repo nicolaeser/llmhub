@@ -118,8 +118,8 @@ test("prisma models match the enterprise ops SQL", async () => {
   assert.match(requestLog, /promptTokens\s+Int\s+@default\(0\)/);
   assert.match(requestLog, /completionTokens\s+Int\s+@default\(0\)/);
   assert.match(requestLog, /cost\s+Decimal\s+@default\(0\) @db\.Decimal\(20, 10\)/);
-  assert.match(requestLog, /@@index\(\[orgId\]\)/);
-  assert.match(requestLog, /@@index\(\[projectId\]\)/);
+  assert.match(requestLog, /@@index\(\[orgId, createdAt\]\)/);
+  assert.match(requestLog, /@@index\(\[projectId, createdAt\]\)/);
 
 
   for (const table of SPEND_RESET_TABLES) {
