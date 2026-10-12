@@ -1,6 +1,6 @@
 import "server-only";
 import { redisCounter } from "@/lib/rate-limit/shared";
-import type { RequestWindow } from "@/types/security";
+import type { RequestWindow } from "@/types/rate-limit";
 
 const KEY_PREFIX = "llmhub:limit:v1";
 export const MAX_MEMORY_WINDOWS = 10_000;

@@ -141,11 +141,6 @@ export type AttemptLimit = {
   windowMs: number;
 };
 
-export type RequestWindow = {
-  count: number;
-  resetAt: number;
-};
-
 export type AuthCleanupResult = {
   sessions: number;
   challenges: number;
