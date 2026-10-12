@@ -17,9 +17,10 @@ import {
   toast,
   useOverlayState,
 } from "@heroui/react";
-import { Copy, KeyRound, Plus, Trash2 } from "lucide-react";
+import { KeyRound, Plus, Trash2 } from "lucide-react";
 import { useFormatter, useNow, useTranslations } from "next-intl";
 import ConfirmDialog from "@/components/console/confirm-dialog";
+import CopyButton from "@/components/console/copy-button";
 import FormDialog from "@/components/console/form-dialog";
 import { PERMISSION_KEYS } from "@/components/security/permission-keys";
 import { MANAGEMENT_PREFIX } from "@/lib/gateway/api-paths";
@@ -47,7 +48,6 @@ export default function ManagementKeysCard({
   const t = useTranslations("Account.managementKeys");
   const tRoles = useTranslations("Roles");
   const tCommon = useTranslations("Common");
-  const tSecurity = useTranslations("Security");
   const format = useFormatter();
   const now = useNow({ updateInterval: 30_000 });
   const errorText = useSecurityError();
@@ -129,22 +129,7 @@ export default function ManagementKeysCard({
               <Surface variant="secondary" className="min-w-0 flex-1 rounded-lg px-3 py-2">
                 <code className="font-mono text-sm break-all">{secret}</code>
               </Surface>
-              <Button
-                isIconOnly
-                size="sm"
-                variant="secondary"
-                aria-label={t("copy")}
-                onPress={async () => {
-                  try {
-                    await navigator.clipboard.writeText(secret);
-                    toast(tSecurity("copied"), { variant: "success" });
-                  } catch {
-                    toast.danger(tSecurity("copyFailed"));
-                  }
-                }}
-              >
-                <Copy size={14} aria-hidden />
-              </Button>
+              <CopyButton text={secret} label={t("copy")} variant="secondary" />
             </div>
           </Alert.Content>
         </Alert>

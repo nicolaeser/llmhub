@@ -10,7 +10,7 @@ import SearchSelect from "@/components/console/search-select";
 import { useErrorToast } from "@/components/console/use-error-toast";
 import { Link } from "@/i18n/routing";
 import { loadAdminSettingsAction, saveAdminSettingsAction } from "./_action";
-import { SettingSection, SettingSwitch, SettingText } from "./_components/fields";
+import { SettingSection, SettingSwitch, SettingText } from "@/components/console/setting-fields";
 import { ScimSection } from "./_components/scim-section";
 import { useActionData } from "@/lib/hooks/use-action-data";
 import { isActionFail } from "@/lib/http/action-result";
@@ -93,7 +93,7 @@ export default function AdminSettingsPage() {
           label={t("access.registration")}
           isSelected={settings.registration_enabled}
           onChange={(registration_enabled) => update({ registration_enabled })}
-          disabled={disabled}
+          isDisabled={disabled}
           hint={t("access.registrationHint")}
         />
         <Separator />
@@ -102,27 +102,27 @@ export default function AdminSettingsPage() {
             label={t("sso.enabled")}
             isSelected={settings.oidc.enabled}
             onChange={(enabled) => oidc({ enabled })}
-            disabled={disabled}
+            isDisabled={disabled}
           />
           <div className="grid gap-4 md:grid-cols-2">
             <SettingText
               label={t("sso.issuer")}
               value={settings.oidc.issuer}
               onChange={(issuer) => oidc({ issuer })}
-              disabled={disabled}
+              isDisabled={disabled}
               placeholder="https://login.example.com/realms/acme"
             />
             <SettingText
               label={t("sso.clientId")}
               value={settings.oidc.client_id}
               onChange={(client_id) => oidc({ client_id })}
-              disabled={disabled}
+              isDisabled={disabled}
             />
             <SettingText
               label={t("sso.redirectUrl")}
               value={settings.oidc.redirect_url}
               onChange={(redirect_url) => oidc({ redirect_url })}
-              disabled={disabled}
+              isDisabled={disabled}
               placeholder={`${appUrl}/sso/callback`}
               hint={t("sso.redirectHint")}
             />
@@ -157,7 +157,7 @@ export default function AdminSettingsPage() {
           label={t("assistant.lock")}
           isSelected={settings.assistant_model_locked}
           onChange={(assistant_model_locked) => update({ assistant_model_locked })}
-          disabled={disabled || !settings.assistant_model}
+          isDisabled={disabled || !settings.assistant_model}
           hint={t("assistant.lockHint", { state: settings.assistant_model ? "ready" : "missing" })}
         />
         <p className="text-xs text-muted">
@@ -176,7 +176,7 @@ export default function AdminSettingsPage() {
           label={t("jev.autoRoutes")}
           isSelected={settings.catalog_auto_routes}
           onChange={(catalog_auto_routes) => update({ catalog_auto_routes })}
-          disabled={disabled}
+          isDisabled={disabled}
           hint={t("jev.autoRoutesHint")}
         />
         <NumberField
@@ -203,7 +203,7 @@ export default function AdminSettingsPage() {
           label={t("jev.enabled")}
           isSelected={settings.catalog_jev.enabled}
           onChange={(enabled) => jev({ enabled })}
-          disabled={disabled || (!settings.catalog_jev.enabled && !jevKeyReady)}
+          isDisabled={disabled || (!settings.catalog_jev.enabled && !jevKeyReady)}
           hint={t("jev.enabledHint", { ready: jevKeyReady ? "true" : "false" })}
         />
         <div className="grid gap-4 md:grid-cols-2">
@@ -222,7 +222,7 @@ export default function AdminSettingsPage() {
             label={t("jev.model")}
             value={settings.catalog_jev.model}
             onChange={(model) => jev({ model })}
-            disabled={disabled}
+            isDisabled={disabled}
             placeholder="jev-latest"
             hint={t("jev.modelHint")}
           />
@@ -234,7 +234,7 @@ export default function AdminSettingsPage() {
             onChange={(clear_api_key) =>
               jev({ clear_api_key, api_key: "", enabled: clear_api_key ? false : settings.catalog_jev.enabled })
             }
-            disabled={disabled}
+            isDisabled={disabled}
           />
         ) : null}
         <p className="text-xs text-muted">
@@ -308,7 +308,7 @@ export default function AdminSettingsPage() {
           label={t("s3.enabled")}
           isSelected={settings.s3.enabled}
           onChange={(enabled) => s3({ enabled })}
-          disabled={disabled}
+          isDisabled={disabled}
         />
         <div className="grid gap-4 md:grid-cols-2">
           {(["bucket", "region", "endpoint", "prefix", "public_base_url"] as const).map((field) => (
@@ -317,7 +317,7 @@ export default function AdminSettingsPage() {
               label={t("s3.field", { field })}
               value={settings.s3[field]}
               onChange={(value) => s3({ [field]: value })}
-              disabled={disabled}
+              isDisabled={disabled}
             />
           ))}
           <Select
@@ -347,7 +347,7 @@ export default function AdminSettingsPage() {
           label={t("s3.domainBucket")}
           isSelected={settings.s3.domain_bucket}
           onChange={(domain_bucket) => s3({ domain_bucket })}
-          disabled={disabled}
+          isDisabled={disabled}
         />
         <p className="text-xs text-muted">{t("s3.keysHint")}</p>
       </SettingSection>
@@ -359,7 +359,7 @@ export default function AdminSettingsPage() {
           label={t("updates.enabled")}
           isSelected={settings.update_check}
           onChange={(update_check) => update({ update_check })}
-          disabled={disabled}
+          isDisabled={disabled}
           hint={t("updates.hint")}
         />
         <p className="text-sm text-foreground">

@@ -3,13 +3,11 @@
 import { useRef, useState, useTransition } from "react";
 import {
   Button,
-  Card,
   Description,
   Input,
   Label,
   NumberField,
   Spinner,
-  Switch,
   TextField,
   toast,
 } from "@heroui/react";
@@ -17,6 +15,7 @@ import { Plus } from "lucide-react";
 import { useTranslations } from "next-intl";
 import PageHeader from "@/components/console/page-header";
 import PageStatus from "@/components/console/page-status";
+import { SettingSection, SettingSwitch } from "@/components/console/setting-fields";
 import { formats } from "@/i18n/formats";
 import { loadLoggingAction, saveLoggingAction } from "./_action";
 import WebhookCard from "./_components/webhook-card";
@@ -197,11 +196,22 @@ export default function LoggingPage() {
           ) : undefined
         }
       />
-      <Card className="gap-4">
-        <Card.Header>
-          <Card.Title>{t("alerts")}</Card.Title>
-          <Card.Description>{t("alertsHint")}</Card.Description>
-        </Card.Header>
+      <SettingSection
+        title={t("alerts")}
+        subtitle={t("alertsHint")}
+        footer={
+          view.canManage ? (
+            <Button
+              variant="secondary"
+              isDisabled={disabled || webhooks.length >= MAX_ALERT_WEBHOOKS}
+              onPress={addWebhook}
+            >
+              <Plus size={16} aria-hidden />
+              {t("addWebhook")}
+            </Button>
+          ) : null
+        }
+      >
         {webhooks.length ? (
           webhooks.map((hook, index) => (
             <WebhookCard
@@ -218,24 +228,8 @@ export default function LoggingPage() {
         ) : (
           <p className="text-sm text-muted">{t("noWebhooks")}</p>
         )}
-        {view.canManage ? (
-          <Card.Footer>
-            <Button
-              variant="secondary"
-              isDisabled={disabled || webhooks.length >= MAX_ALERT_WEBHOOKS}
-              onPress={addWebhook}
-            >
-              <Plus size={16} aria-hidden />
-              {t("addWebhook")}
-            </Button>
-          </Card.Footer>
-        ) : null}
-      </Card>
-      <Card className="gap-4">
-        <Card.Header>
-          <Card.Title>{t("rulesTitle")}</Card.Title>
-          <Card.Description>{t("rulesHint")}</Card.Description>
-        </Card.Header>
+      </SettingSection>
+      <SettingSection title={t("rulesTitle")} subtitle={t("rulesHint")}>
         <div className="grid gap-4 md:grid-cols-3 md:items-start">
           {ruleField("spendAnomalyFactor", t("anomalyFactor"), t("anomalyFactorHint"), {
             step: 0.5,
@@ -250,29 +244,20 @@ export default function LoggingPage() {
             format: formats.number.integer,
           })}
         </div>
-      </Card>
-      <Card className="gap-4">
-        <Card.Header>
-          <Card.Title>{t("contentTitle")}</Card.Title>
-          <Card.Description>{t("contentSubtitle")}</Card.Description>
-        </Card.Header>
-        <Switch isSelected={content} onChange={setContent} isDisabled={disabled}>
-          <Switch.Content>
-            <Switch.Control>
-              <Switch.Thumb />
-            </Switch.Control>
-            <Label>{t("content")}</Label>
-          </Switch.Content>
-          <Description>{t("contentHint")}</Description>
-        </Switch>
+      </SettingSection>
+      <SettingSection title={t("contentTitle")} subtitle={t("contentSubtitle")}>
+        <SettingSwitch
+          label={t("content")}
+          isSelected={content}
+          onChange={setContent}
+          isDisabled={disabled}
+          hint={t("contentHint")}
+        />
         <div className="grid gap-4 md:grid-cols-3 md:items-start">
           {numberField(contentRetention, setContentRetention, t("contentRetention"), t("contentRetentionHint"))}
         </div>
-      </Card>
-      <Card className="gap-4">
-        <Card.Header>
-          <Card.Title>{t("retentionTitle")}</Card.Title>
-        </Card.Header>
+      </SettingSection>
+      <SettingSection title={t("retentionTitle")}>
         <div className="grid gap-4 md:grid-cols-3 md:items-start">
           {numberField(retention, setRetention, t("retention"), t("retentionHint"))}
           {numberField(spendRetention, setSpendRetention, t("spendRetention"), t("spendRetentionHint"))}
@@ -280,16 +265,14 @@ export default function LoggingPage() {
           {numberField(objectRetention, setObjectRetention, t("objectRetention"), t("objectRetentionHint"))}
           {numberField(fileRetention, setFileRetention, t("fileRetention"), t("fileRetentionHint"))}
         </div>
-        <Switch isSelected={archive} onChange={setArchive} isDisabled={disabled || !view.s3Ready}>
-          <Switch.Content>
-            <Switch.Control>
-              <Switch.Thumb />
-            </Switch.Control>
-            <Label>{t("archive")}</Label>
-          </Switch.Content>
-          <Description>{t("archiveHint", { ready: view.s3Ready ? "true" : "false" })}</Description>
-        </Switch>
-      </Card>
+        <SettingSwitch
+          label={t("archive")}
+          isSelected={archive}
+          onChange={setArchive}
+          isDisabled={disabled || !view.s3Ready}
+          hint={t("archiveHint", { ready: view.s3Ready ? "true" : "false" })}
+        />
+      </SettingSection>
     </div>
   );
 }

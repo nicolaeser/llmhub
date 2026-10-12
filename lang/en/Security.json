@@ -15,8 +15,6 @@
   "openInApp": "Open in authenticator app",
   "manualKey": "Setup key",
   "copyKey": "Copy setup key",
-  "copied": "Copied",
-  "copyFailed": "Could not copy",
   "recoveryTitle": "Save your recovery codes",
   "recoveryIntro": "Use one of these codes when you cannot reach your authenticator. They are shown only once.",
   "recoveryListLabel": "Recovery codes",

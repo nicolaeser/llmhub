@@ -1,8 +1,9 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { Alert, Button, Card, Checkbox, toast } from "@heroui/react";
-import { Copy, Download } from "lucide-react";
+import CopyButton from "@/components/console/copy-button";
+import { Alert, Button, Card, Checkbox } from "@heroui/react";
+import { Download } from "lucide-react";
 
 export function RecoveryCodesPanel({
   codes,
@@ -37,21 +38,7 @@ export function RecoveryCodesPanel({
         </ol>
       </Card>
       <div className="flex flex-wrap gap-2">
-        <Button
-          size="sm"
-          variant="secondary"
-          onPress={async () => {
-            try {
-              await navigator.clipboard.writeText(text);
-              toast(t("copied"), { variant: "success" });
-            } catch {
-              toast.danger(t("copyFailed"));
-            }
-          }}
-        >
-          <Copy size={14} aria-hidden />
-          {t("copyAll")}
-        </Button>
+        <CopyButton text={text} label={t("copyAll")} variant="secondary" showLabel />
         <Button
           size="sm"
           variant="secondary"

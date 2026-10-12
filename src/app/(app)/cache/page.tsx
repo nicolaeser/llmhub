@@ -1,12 +1,13 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Button, Card, Chip, Description, Label, NumberField, Spinner, Switch, toast } from "@heroui/react";
+import { Button, Chip, Description, Label, NumberField, Spinner, toast } from "@heroui/react";
 import { useTranslations } from "next-intl";
 import { formats } from "@/i18n/formats";
 import PageHeader from "@/components/console/page-header";
 import PageStatus from "@/components/console/page-status";
 import SearchSelect from "@/components/console/search-select";
+import { SettingSection, SettingSwitch } from "@/components/console/setting-fields";
 import { useErrorToast } from "@/components/console/use-error-toast";
 import { loadCacheAction, saveCacheAction } from "./_action";
 import {
@@ -74,11 +75,7 @@ export default function CachePage() {
         }
       />
       {view.stats ? <CacheStats initial={view.stats} semanticOn={view.semantic.enabled} /> : null}
-      <Card className="gap-4">
-        <Card.Header>
-          <Card.Title>{t("store.title")}</Card.Title>
-          <Card.Description>{t("store.description")}</Card.Description>
-        </Card.Header>
+      <SettingSection title={t("store.title")} subtitle={t("store.description")}>
         <div className="flex flex-wrap items-center gap-2">
           <Chip size="sm" variant="soft" color={BACKEND_COLOR[view.backend]}>
             {t("store.backend", { backend: view.backend })}
@@ -104,25 +101,15 @@ export default function CachePage() {
           </NumberField.Group>
           <Description>{t("ttlHint")}</Description>
         </NumberField>
-      </Card>
-      <Card className="gap-4">
-        <Card.Header>
-          <Card.Title>{t("semantic.title")}</Card.Title>
-          <Card.Description>{t("semantic.description")}</Card.Description>
-        </Card.Header>
-        <Switch
+      </SettingSection>
+      <SettingSection title={t("semantic.title")} subtitle={t("semantic.description")}>
+        <SettingSwitch
+          label={t("semantic.enabled")}
           isSelected={semantic.enabled}
           onChange={(enabled) => update({ enabled })}
           isDisabled={disabled || !semantic.model}
-        >
-          <Switch.Content>
-            <Switch.Control>
-              <Switch.Thumb />
-            </Switch.Control>
-            <Label>{t("semantic.enabled")}</Label>
-          </Switch.Content>
-          <Description>{t("semantic.enabledHint", { ready: semantic.model ? "true" : "false" })}</Description>
-        </Switch>
+          hint={t("semantic.enabledHint", { ready: semantic.model ? "true" : "false" })}
+        />
         <SearchSelect
           label={t("semantic.model")}
           description={t("semantic.modelHint")}
@@ -160,7 +147,7 @@ export default function CachePage() {
           </NumberField.Group>
           <Description>{t("semantic.thresholdHint")}</Description>
         </NumberField>
-      </Card>
+      </SettingSection>
     </div>
   );
 }

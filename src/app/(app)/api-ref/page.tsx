@@ -14,6 +14,7 @@ import {
 } from "@heroui/react";
 import { Code2, KeyRound } from "lucide-react";
 import { useTranslations } from "next-intl";
+import CopyButton from "@/components/console/copy-button";
 import EmptyState from "@/components/console/empty-state";
 import PageHeader from "@/components/console/page-header";
 import PageStatus from "@/components/console/page-status";
@@ -25,7 +26,6 @@ import { GATEWAY_ERRORS } from "@/lib/gateway/errors";
 import { ANTHROPIC_VERSION } from "@/lib/gateway/endpoints/openapi";
 import { API_PREFIX, MANAGEMENT_PREFIX, SUBSCRIPTION_PREFIX } from "@/lib/gateway/api-paths";
 import { PROBLEMS } from "@/lib/http/problem-codes";
-import CopyButton from "./_components/copy-button";
 import TryEndpoint from "./_components/try-endpoint";
 import type { OpenApiPath } from "@/types/gateway";
 
@@ -65,7 +65,6 @@ export default function ApiRefPage() {
   const tCommon = useTranslations("Common");
   const origin = useOrigin();
   const [query, setQuery] = useState("");
-  const [copied, setCopied] = useState<string | null>(null);
   const [selected, setSelected] = useState<OpenApiPath | null>(null);
   const [example, setExample] = useState<string>("openai");
   const [errorShape, setErrorShape] = useState<string>("openai");
@@ -124,14 +123,7 @@ export default function ApiRefPage() {
                 <p className="text-sm font-medium">{t("baseUrl")}</p>
                 <code className="mt-1 block break-all font-mono text-sm">{base.value}</code>
               </div>
-              <CopyButton
-                value={base.value}
-                id={`base:${base.id}`}
-                copied={copied}
-                copyLabel={tCommon("copy")}
-                copiedLabel={tCommon("copied")}
-                onCopied={setCopied}
-              />
+              <CopyButton text={base.value} label={tCommon("copy")} showLabel />
             </div>
             <Alert>
               <Alert.Content>
@@ -167,14 +159,7 @@ export default function ApiRefPage() {
               ))}
             </Tabs.List>
           </Tabs>
-          <CopyButton
-            value={curl}
-            id="curl"
-            copied={copied}
-            copyLabel={tCommon("copy")}
-            copiedLabel={tCommon("copied")}
-            onCopied={setCopied}
-          />
+          <CopyButton text={curl} label={tCommon("copy")} showLabel />
         </Card.Header>
         <Surface variant="secondary" className="overflow-x-auto rounded-xl p-4">
           <pre className="font-mono text-xs whitespace-pre-wrap">{curl}</pre>
@@ -358,14 +343,7 @@ export default function ApiRefPage() {
                     <div className="font-medium">{key.alias || t("keyAlias")}</div>
                     <code className="font-mono text-xs text-muted">{key.prefix}…</code>
                   </div>
-                  <CopyButton
-                    value={key.prefix}
-                    id={`key:${key.prefix}`}
-                    copied={copied}
-                    copyLabel={tCommon("copy")}
-                    copiedLabel={tCommon("copied")}
-                    onCopied={setCopied}
-                  />
+                  <CopyButton text={key.prefix} label={tCommon("copy")} showLabel />
                 </Card>
               </li>
             ))}

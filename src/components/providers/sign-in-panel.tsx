@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
-import { Alert, Button, Chip, Input, Label, Spinner, Surface, TextField, toast } from "@heroui/react";
-import { Copy, ExternalLink } from "lucide-react";
+import { Alert, Button, Chip, Input, Label, Spinner, Surface, TextField } from "@heroui/react";
+import { ExternalLink } from "lucide-react";
 import { useTranslations } from "next-intl";
+import CopyButton from "@/components/console/copy-button";
 import { completeSignInAction, pollSignInAction, startSignInAction } from "@/app/(app)/providers/_action";
 import { isActionFail } from "@/lib/http/action-result";
 import type { ProviderSignIn, SignInKind, SignInStart } from "@/types/providers";
@@ -82,15 +83,6 @@ export default function SignInPanel({
     });
   }
 
-  async function copyCode(code: string) {
-    try {
-      await navigator.clipboard.writeText(code);
-      toast(t("signIn.copied"), { variant: "success" });
-    } catch {
-      toast.danger(t("signIn.copyFailed"));
-    }
-  }
-
   return (
     <div className="space-y-3">
       <div className="space-y-1">
@@ -129,7 +121,16 @@ export default function SignInPanel({
             </a>
             <TextField fullWidth value={pasted} onChange={setPasted} isDisabled={finishing} aria-label={t("signIn.pasteLabel")}>
               <Label>{t("signIn.pasteLabel")}</Label>
-              <Input aria-label={t("signIn.pasteLabel")} autoComplete="off" spellCheck={false} />
+              <Input
+                aria-label={t("signIn.pasteLabel")}
+                autoComplete="off"
+                spellCheck={false}
+                onKeyDown={(event) => {
+                  if (event.key !== "Enter") return;
+                  event.preventDefault();
+                  if (pasted.trim() && !finishing) complete(waiting.ticket);
+                }}
+              />
             </TextField>
             <div className="flex flex-wrap gap-2">
               <Button
@@ -162,15 +163,7 @@ export default function SignInPanel({
               <Surface variant="secondary" className="min-w-0 flex-1 rounded-lg px-3 py-2">
                 <code className="font-mono text-lg break-all">{waiting.userCode}</code>
               </Surface>
-              <Button
-                isIconOnly
-                size="sm"
-                variant="secondary"
-                aria-label={t("signIn.copy")}
-                onPress={() => copyCode(waiting.userCode)}
-              >
-                <Copy size={14} aria-hidden />
-              </Button>
+              <CopyButton text={waiting.userCode} label={t("signIn.copy")} variant="secondary" />
             </div>
             <div className="flex flex-wrap items-center gap-3">
               <a

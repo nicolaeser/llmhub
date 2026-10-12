@@ -2,8 +2,9 @@
 
 import Image from "next/image";
 import { useTranslations } from "next-intl";
-import { Button, Card, toast } from "@heroui/react";
-import { Copy, ExternalLink } from "lucide-react";
+import CopyButton from "@/components/console/copy-button";
+import { Card } from "@heroui/react";
+import { ExternalLink } from "lucide-react";
 import type { TotpEnrollment } from "@/types/security";
 
 export function TotpEnrollmentPanel({ enrollment }: { enrollment: TotpEnrollment }) {
@@ -38,22 +39,7 @@ export function TotpEnrollmentPanel({ enrollment }: { enrollment: TotpEnrollment
             <Card variant="secondary" className="min-w-0 flex-1 px-3 py-2">
               <code className="font-mono text-sm break-all">{grouped}</code>
             </Card>
-            <Button
-              isIconOnly
-              size="sm"
-              variant="secondary"
-              aria-label={t("copyKey")}
-              onPress={async () => {
-                try {
-                  await navigator.clipboard.writeText(enrollment.secret);
-                  toast(t("copied"), { variant: "success" });
-                } catch {
-                  toast.danger(t("copyFailed"));
-                }
-              }}
-            >
-              <Copy size={14} aria-hidden />
-            </Button>
+            <CopyButton text={enrollment.secret} label={t("copyKey")} variant="secondary" />
           </div>
         </div>
       </div>

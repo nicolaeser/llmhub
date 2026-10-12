@@ -200,7 +200,7 @@ test("pages import colocated views and keep auth/data/composition", () => {
   assert.match(setup, /createFirstAdminAction/);
   assert.doesNotMatch(setup, /export \{ default \} from/);
 
-  assert.match(apiRef, /from "\.\/_components\/copy-button"/);
+  assert.match(apiRef, /from "@\/components\/console\/copy-button"/);
   assert.match(apiRef, /from "\.\/_components\/try-endpoint"/);
   assert.match(usage, /from "\.\/_components\/usage-charts"/);
   assert.match(usage, /from "@\/components\/console\/search-select"/);
@@ -257,6 +257,36 @@ test("route-only views are not in src/components", () => {
   ]) {
     assert.equal(existsSync(path.join(componentsRoot, name)), false, name);
   }
+});
+
+test("one shared CopyButton owns clipboard writes", () => {
+  assert.equal(existsSync(path.join(appRoot, "(app)", "api-ref", "_components", "copy-button.tsx")), false);
+  const writers = [...listSourceFiles(appRoot), ...listSourceFiles(componentsRoot)].filter((file) =>
+    read(file).includes("navigator.clipboard"),
+  );
+  assert.deepEqual(
+    writers.map((file) => path.relative(root, file)),
+    [path.join("src", "components", "console", "copy-button.tsx")],
+  );
+});
+
+test("settings pages share SettingSection from src/components/console", () => {
+  assert.equal(existsSync(path.join(appRoot, "(app)", "admin-settings", "_components", "fields.tsx")), false);
+  for (const slug of ["admin-settings", "cache", "logging"]) {
+    const page = read(path.join(appRoot, "(app)", slug, "page.tsx"));
+    assert.match(page, /from "@\/components\/console\/setting-fields"/, slug);
+    assert.match(page, /<SettingSection\b/, slug);
+  }
+});
+
+test("action errors toast through useErrorToast", () => {
+  const offenders = [...listSourceFiles(appRoot), ...listSourceFiles(componentsRoot)].filter((file) =>
+    /toast\.danger\(tError\(/.test(read(file)),
+  );
+  assert.deepEqual(
+    offenders.map((file) => path.relative(root, file)),
+    [path.join("src", "components", "console", "use-error-toast.ts")],
+  );
 });
 
 test("does not keep a src/lib/route-view-policy twin", () => {

@@ -6,10 +6,12 @@ import { Card, Description, Input, Label, Switch, TextField } from "@heroui/reac
 export function SettingSection({
   title,
   subtitle,
+  footer,
   children,
 }: {
   title: string;
   subtitle?: string;
+  footer?: ReactNode;
   children: ReactNode;
 }) {
   return (
@@ -19,6 +21,7 @@ export function SettingSection({
         {subtitle ? <Card.Description>{subtitle}</Card.Description> : null}
       </Card.Header>
       {children}
+      {footer ? <Card.Footer>{footer}</Card.Footer> : null}
     </Card>
   );
 }
@@ -27,19 +30,19 @@ export function SettingText({
   label,
   value,
   onChange,
-  disabled,
+  isDisabled,
   placeholder,
   hint,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
-  disabled: boolean;
+  isDisabled: boolean;
   placeholder?: string;
   hint?: string;
 }) {
   return (
-    <TextField fullWidth value={value} onChange={onChange} isDisabled={disabled}>
+    <TextField fullWidth value={value} onChange={onChange} isDisabled={isDisabled}>
       <Label>{label}</Label>
       <Input placeholder={placeholder} />
       {hint ? <Description>{hint}</Description> : null}
@@ -51,17 +54,17 @@ export function SettingSwitch({
   label,
   isSelected,
   onChange,
-  disabled,
+  isDisabled,
   hint,
 }: {
   label: string;
   isSelected: boolean;
   onChange: (value: boolean) => void;
-  disabled: boolean;
+  isDisabled: boolean;
   hint?: string;
 }) {
   return (
-    <Switch isSelected={isSelected} onChange={onChange} isDisabled={disabled}>
+    <Switch isSelected={isSelected} onChange={onChange} isDisabled={isDisabled}>
       <Switch.Content>
         <Switch.Control>
           <Switch.Thumb />

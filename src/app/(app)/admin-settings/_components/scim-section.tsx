@@ -2,11 +2,11 @@
 
 import { useState } from "react";
 import { Alert, Button, Surface, toast, useOverlayState } from "@heroui/react";
-import { Copy } from "lucide-react";
 import { useTranslations } from "next-intl";
+import CopyButton from "@/components/console/copy-button";
 import { StepUpDialog } from "@/components/security/step-up-dialog";
 import { issueScimTokenAction, revokeScimTokenAction } from "../_action";
-import { SettingSection } from "./fields";
+import { SettingSection } from "@/components/console/setting-fields";
 import { isActionFail } from "@/lib/http/action-result";
 import { useOrigin } from "@/lib/hooks/use-origin";
 
@@ -18,7 +18,6 @@ export function ScimSection({
   canManage: boolean;
 }) {
   const t = useTranslations("AdminSettings");
-  const tSecurity = useTranslations("Security");
   const origin = useOrigin();
   const [tokenSet, setTokenSet] = useState(initiallySet);
   const [token, setToken] = useState<string | null>(null);
@@ -48,22 +47,7 @@ export function ScimSection({
               <Surface variant="secondary" className="min-w-0 flex-1 rounded-lg px-3 py-2">
                 <code className="font-mono text-sm break-all">{token}</code>
               </Surface>
-              <Button
-                isIconOnly
-                size="sm"
-                variant="secondary"
-                aria-label={t("scim.copy")}
-                onPress={async () => {
-                  try {
-                    await navigator.clipboard.writeText(token);
-                    toast(tSecurity("copied"), { variant: "success" });
-                  } catch {
-                    toast.danger(tSecurity("copyFailed"));
-                  }
-                }}
-              >
-                <Copy size={14} aria-hidden />
-              </Button>
+              <CopyButton text={token} label={t("scim.copy")} variant="secondary" />
             </div>
           </Alert.Content>
         </Alert>
