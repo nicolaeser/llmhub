@@ -81,15 +81,6 @@ export function loginData(session: SignInSession) {
   };
 }
 
-export async function saveLogin(providerId: string, session: SignInSession): Promise<void> {
-  const data = loginData(session);
-  await prisma.providerLogin.upsert({
-    where: { providerId },
-    create: { providerId, ...data },
-    update: { ...data, version: { increment: 1 } },
-  });
-}
-
 async function loadLogin(providerId: string): Promise<LoginRow> {
   const row = await prisma.providerLogin.findUnique({ where: { providerId } });
   if (!row || row.status !== "active") throw signInRequired();

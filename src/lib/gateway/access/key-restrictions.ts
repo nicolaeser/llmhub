@@ -58,10 +58,6 @@ export function endpointAllowed(allowed: readonly KeyEndpoint[], path: string): 
   return endpoint !== null && allowed.includes(endpoint);
 }
 
-export function isKeyEndpoint(value: unknown): value is KeyEndpoint {
-  return KEY_ENDPOINTS.some((endpoint) => endpoint === value);
-}
-
 export function isWeekday(value: unknown): value is Weekday {
   return WEEKDAYS.some((weekday) => weekday === value);
 }

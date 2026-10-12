@@ -1,6 +1,5 @@
 import type { CapLink } from "@/types/structure";
 
-export const BUDGET_PERIODS = ["", "1d", "7d", "30d"] as const;
 export const MAX_BUDGET_AMOUNT = 1_000_000_000;
 export const MAX_BOOST_HOURS = 720;
 

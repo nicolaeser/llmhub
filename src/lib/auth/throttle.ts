@@ -6,7 +6,6 @@ import type { AttemptLimit } from "@/types/security";
 
 export const LOGIN_ATTEMPT_WINDOW_MS = 15 * 60 * 1000;
 export const ATTEMPT_RETENTION_MS = 24 * 60 * 60 * 1000;
-const MAX_FAILURES = 10;
 
 const SECOND_FACTOR_WINDOWS = [
   { limit: 10, ms: 15 * 60 * 1000 },
@@ -45,19 +44,6 @@ export async function reserveAttempts(
 
 export async function assertRequestRate(key: string, limit: number, windowMs: number) {
   if (!(await allowRequest(key, limit, windowMs))) throw new AuthError("RATE_LIMITED");
-}
-
-export async function checkAccountThrottle(key: string): Promise<{
-  blocked: boolean;
-  retryAfterSeconds: number;
-}> {
-  const failed = await attemptsSince(key, LOGIN_ATTEMPT_WINDOW_MS);
-  if (failed < MAX_FAILURES) return { blocked: false, retryAfterSeconds: 0 };
-  return { blocked: true, retryAfterSeconds: LOGIN_ATTEMPT_WINDOW_MS / 1000 };
-}
-
-export async function recordFailedAttempt(key: string) {
-  await prisma.loginAttempt.create({ data: { key } });
 }
 
 export async function consumeQuota(key: string, limit: number, windowMs: number): Promise<boolean> {
