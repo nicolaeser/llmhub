@@ -1,0 +1,55 @@
+{
+  "title": "Subscriptions",
+  "subtitle": "Serve requests from ChatGPT, Claude, and SuperGrok plans. Every signed-in account shows its own usage limits and when they reset.",
+  "addAccount": "Add account",
+  "noAccounts": "No account signed in yet.",
+  "refreshAll": "Refresh all limits",
+  "stats": {
+    "accounts": "Accounts",
+    "available": "Available now",
+    "limited": "At a limit",
+    "nextRecovery": "Next recovery",
+    "none": "None",
+    "paused": "Paused"
+  },
+  "status": "{status, select, paused {Paused} available {Available} limited {Limit reached} expired {Sign-in expired} unavailable {Limits unavailable} checking {Checking} other {Connected}}",
+  "backIn": "Available again {when}.",
+  "backInUnknown": "Limit reached. The provider did not say when it resets.",
+  "expiredHint": "Sign in again to use this account.",
+  "noLimits": "This provider does not report usage limits.",
+  "limits": {
+    "refresh": "Refresh usage limits",
+    "updated": "Updated {when}",
+    "window": "{unit, select, hour {{count, plural, one {Hourly limit} other {#-hour limit}}} day {{count, plural, one {Daily limit} =7 {Weekly limit} other {#-day limit}}} month {Monthly limit} other {Usage limit}}",
+    "scoped": "{scope}: {window}",
+    "resets": "Resets {when} ({date})",
+    "notStarted": "Starts with the next request",
+    "reached": "Limit reached",
+    "modelLimits": "{count, plural, one {# model limit} other {# model limits}}",
+    "credits": "{unlimited, select, true {Unlimited credits} other {Credits: {balance}}}",
+    "resetCredits": "{available, plural, =0 {No limit resets available} one {# limit reset available} other {# limit resets available}}{applicable, plural, =0 {} other { ({applicable} usable now)}}",
+    "extraUsage": "Extra usage: {used} of {limit}",
+    "none": "The provider reported no limits for this plan.",
+    "resetsShort": "Resets {when}",
+    "notStartedShort": "Not started"
+  },
+  "routing": {
+    "title": "Smart routing across accounts",
+    "description": "Pick the switching method per model alias. Whatever you choose, an account that has hit a usage limit is skipped while another account still has room.",
+    "openModels": "Choose a method on the Models page"
+  },
+  "pausedHint": "This account is paused and receives no requests. Its limits stay visible.",
+  "overview": {
+    "title": "Account overview",
+    "none": "No data",
+    "columns": {
+      "account": "Account",
+      "provider": "Provider",
+      "short": "5-hour",
+      "weekly": "Weekly",
+      "longer": "Monthly",
+      "state": "Status",
+      "active": "Active"
+    }
+  }
+}

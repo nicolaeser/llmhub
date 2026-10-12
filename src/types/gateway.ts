@@ -247,6 +247,7 @@ export type DbDeployment = {
     retentionDays: number | null;
     region: string;
     noTraining: boolean;
+    enabled: boolean;
   } | null;
 };
 

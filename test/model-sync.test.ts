@@ -18,6 +18,7 @@ type FakeProvider = {
   retentionDays: number | null;
   region: string;
   noTraining: boolean;
+  enabled: boolean;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -287,6 +288,7 @@ function seedProvider(discovered: DiscoveredModel[], extra: Partial<FakeProvider
     retentionDays: null,
     region: "",
     noTraining: false,
+    enabled: true,
     createdAt: new Date("2026-10-01T00:00:00.000Z"),
     updatedAt: new Date("2026-10-01T00:00:00.000Z"),
     ...extra,

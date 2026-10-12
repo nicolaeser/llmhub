@@ -16,6 +16,7 @@ import type {
 export const NATIVE_VENDORS: Readonly<Record<string, string>> = {
   openai: "openai",
   anthropic: "anthropic",
+  claude: "anthropic",
   xai: "xai",
   typesafe: "typesafe",
   codex: "openai",

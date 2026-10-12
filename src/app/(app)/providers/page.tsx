@@ -10,31 +10,22 @@ import {
   toast,
   useOverlayState,
 } from "@heroui/react";
-import { Plug, Plus, Trash2 } from "lucide-react";
+import { Plug, Plus } from "lucide-react";
 import { useTranslations } from "next-intl";
-import ConfirmDialog from "@/components/console/confirm-dialog";
 import EmptyState from "@/components/console/empty-state";
 import PageHeader from "@/components/console/page-header";
-import { PROVIDER_CATALOG, reportsLimits } from "@/lib/gateway/catalog";
-import {
-  deleteProviderAction,
-  discoverProviderAction,
-  loadProvidersAction,
-} from "@/app/(app)/providers/_action";
+import ImportModelsDialog from "@/components/providers/import-models-dialog";
+import ProviderCard from "./_components/provider-card";
+import ProviderDialog from "@/components/providers/provider-dialog";
+import { isSignInKind, PROVIDER_CATALOG } from "@/lib/gateway/catalog";
+import { discoverProviderAction, loadProvidersAction } from "@/app/(app)/providers/_action";
 import { isActionFail } from "@/lib/http/action-result";
 import type { ImportCandidate, ProviderView } from "@/types/providers";
-import ProviderDialog from "./_components/provider-dialog";
-import ImportModelsDialog from "./_components/import-models-dialog";
-import SubscriptionLimitsView from "./_components/subscription-limits";
 
 const STARTER_KINDS = new Set(["openai", "anthropic", "openrouter", "openai_compat"]);
-
-function credentialState(row: ProviderView): string {
-  if (row.signIn) return row.signIn.status === "active" ? "signed_in" : "expired";
-  return row.hasApiKey ? "stored" : "missing";
-}
-const STARTER_CATALOG = PROVIDER_CATALOG.filter((spec) => STARTER_KINDS.has(spec.kind));
-const MORE_CATALOG = PROVIDER_CATALOG.filter((spec) => !STARTER_KINDS.has(spec.kind));
+const API_CATALOG = PROVIDER_CATALOG.filter((spec) => !isSignInKind(spec.kind));
+const STARTER_CATALOG = API_CATALOG.filter((spec) => STARTER_KINDS.has(spec.kind));
+const MORE_CATALOG = API_CATALOG.filter((spec) => !STARTER_KINDS.has(spec.kind));
 
 export default function ProvidersPage() {
   const t = useTranslations("Providers");
@@ -48,14 +39,13 @@ export default function ProvidersPage() {
   const [models, setModels] = useState<ImportCandidate[] | null>(null);
   const [dialogKey, setDialogKey] = useState(0);
   const [browseCatalog, setBrowseCatalog] = useState(false);
-  const [pending, start] = useTransition();
   const [, startDiscover] = useTransition();
   const formState = useOverlayState();
   const discoverState = useOverlayState();
 
   useEffect(() => {
     loadProvidersAction().then((res) => {
-      if (!isActionFail(res)) setConnected(res.connected);
+      if (!isActionFail(res)) setConnected(res.connected.filter((row) => !isSignInKind(row.kind)));
       setLoading(false);
     });
   }, []);
@@ -100,7 +90,7 @@ export default function ProvidersPage() {
     );
   }
 
-  const catalog = connected.length > 0 ? PROVIDER_CATALOG : STARTER_CATALOG;
+  const catalog = connected.length > 0 ? API_CATALOG : STARTER_CATALOG;
   const showCatalog = connected.length > 0 || browseCatalog;
 
   return (
@@ -141,93 +131,16 @@ export default function ProvidersPage() {
               </Card.Header>
               <Card.Content className="space-y-2">
                 {items.map((row) => (
-                  <Card
+                  <ProviderCard
                     key={row.id}
-                    variant="secondary"
-                    className="flex-row flex-wrap items-center justify-between gap-2 px-3 py-2"
-                  >
-                    <div className="min-w-0">
-                      <div className="truncate text-sm font-medium">{row.name}</div>
-                      <div
-                        className={`truncate text-xs ${credentialState(row) === "expired" ? "text-warning" : "text-muted"}`}
-                      >
-                        {t("keyState", { state: credentialState(row), account: row.signIn?.account ?? "" })}
-                      </div>
-                      <div className="mt-1 flex flex-wrap gap-1">
-                        {row.policy.zdr ? (
-                          <Chip size="sm" variant="soft" color="success">
-                            {t("policy.zdrChip")}
-                          </Chip>
-                        ) : null}
-                        {row.policy.region ? (
-                          <Chip size="sm" variant="soft">
-                            {t("policy.regionOption", { region: row.policy.region })}
-                          </Chip>
-                        ) : null}
-                        {!row.policy.zdr && row.policy.retentionDays !== null ? (
-                          <Chip size="sm" variant="soft">
-                            {t("policy.retentionChip", { days: row.policy.retentionDays })}
-                          </Chip>
-                        ) : null}
-                        {!row.policy.zdr && row.policy.noTraining ? (
-                          <Chip size="sm" variant="soft">
-                            {t("policy.noTrainingChip")}
-                          </Chip>
-                        ) : null}
-                      </div>
-                    </div>
-                    <div className="flex flex-wrap gap-1">
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        aria-label={t("edit", { name: row.name })}
-                        onPress={() =>
-                          openForm(PROVIDER_CATALOG.find((k) => k.kind === row.kind) ?? null, row)
-                        }
-                      >
-                        {tCommon("edit")}
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        aria-label={tCommon("import")}
-                        onPress={() => openImport(row)}
-                      >
-                        {tCommon("import")}
-                      </Button>
-                      <ConfirmDialog
-                        title={tCommon("delete")}
-                        description={t("deleteConfirm", { name: row.name })}
-                        confirmLabel={tCommon("delete")}
-                        cancelLabel={tCommon("cancel")}
-                        pending={pending}
-                        onConfirm={() =>
-                          start(async () => {
-                            const result = await deleteProviderAction(row.id);
-                            if (isActionFail(result)) {
-                              toast.danger(tError("code", { code: result.error }));
-                              return;
-                            }
-                            setConnected((cur) => cur.filter((c) => c.id !== result.id));
-                            toast(t("toasts.saved", { mode: "deleted" }), { variant: "success" });
-                          })
-                        }
-                      >
-                        <Button
-                          isIconOnly
-                          size="sm"
-                          variant="danger-soft"
-                          aria-label={tCommon("delete")}
-                          isPending={pending}
-                        >
-                          <Trash2 size={14} aria-hidden />
-                        </Button>
-                      </ConfirmDialog>
-                    </div>
-                    {reportsLimits(row.kind) && row.signIn?.status === "active" ? (
-                      <SubscriptionLimitsView providerId={row.id} />
-                    ) : null}
-                  </Card>
+                    row={row}
+                    onEdit={(provider) =>
+                      openForm(PROVIDER_CATALOG.find((k) => k.kind === provider.kind) ?? null, provider)
+                    }
+                    onImport={openImport}
+                    onToggled={replaceProvider}
+                    onDeleted={(id) => setConnected((cur) => cur.filter((c) => c.id !== id))}
+                  />
                 ))}
               </Card.Content>
               <Card.Footer>

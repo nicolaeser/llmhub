@@ -63,7 +63,8 @@ export function applyProviderServiceMode(
   const headers: Record<string, string> = {};
 
   switch (kind) {
-    case "anthropic": {
+    case "anthropic":
+    case "claude": {
       delete payload.service_tier;
       delete payload.speed;
       if (mode === "fast" && anthropicFastSupported(upstreamModel)) {

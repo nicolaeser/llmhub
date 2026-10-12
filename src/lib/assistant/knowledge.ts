@@ -5,6 +5,7 @@ export const ASSISTANT_PAGES = {
   playground: "/playground",
   assistant: "/assistant",
   providers: "/providers",
+  subscriptions: "/subscriptions",
   models: "/models",
   "model-templates": "/model-templates",
   "model-catalog": "/model-catalog",
@@ -60,7 +61,7 @@ export const ASSISTANT_EXPLAIN = {
   cache:
     "The response cache answers identical non-streaming chat requests from the same key for the configured TTL. With REDIS_URL all app instances share it in Redis; otherwise each process keeps its own memory cache. Optional semantic matching also answers when only the last user message differs and its embedding is at least as similar as the threshold; the embedding call is billed to the calling key and only runs for keys allowed to use the embedding model. The Response cache page shows hit rate and net savings for operators with spend:read-all; provider prompt caching is separate and not counted there. Configure it under Response cache.",
   router:
-    "Each model alias has a routing strategy (least_inflight, weighted_random, cost_lowest, priority, fast), retries, fallback aliases, and an overflow alias used when no deployment is healthy. Deployments are the upstream endpoints behind that alias and cool down only on retryable failures. Provider health shows each deployment's recent error rate, p50 and p95 latency, and cooldowns, shared across instances when Redis is configured.",
+    "Each model alias has a routing strategy (least_inflight, weighted_random, cost_lowest, priority, fast, round_robin, quota_balanced, quota_expiring), retries, fallback aliases, and an overflow alias used when no deployment is healthy. The quota strategies only differ on signed-in subscription accounts: quota_balanced picks the account with the most headroom, quota_expiring the account whose tightest limit resets soonest, and every strategy skips accounts that have hit a usage limit while another account has room. Deployments are the upstream endpoints behind that alias and cool down only on retryable failures. Provider health shows each deployment's recent error rate, p50 and p95 latency, and cooldowns, shared across instances when Redis is configured.",
   logging:
     "Request logs record metadata, usage powers the charts, and alert webhooks fire for the events each one subscribes to: upstream exhaustion, budget thresholds, and provider model changes. Retention and S3 archiving are configured under Logging & alerts. Prompt and response content is logged unless switched off globally, per key, per person, or per console user.",
   usage:

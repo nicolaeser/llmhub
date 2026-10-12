@@ -1,5 +1,5 @@
 import type { KindSpec } from "@/types/gateway";
-import type { SignInKind } from "@/types/providers";
+import type { SignInKind, SignInMethod } from "@/types/providers";
 
 export const PROVIDER_CATALOG: KindSpec[] = [
   { kind: "openai", name: "OpenAI", default_base_url: "https://api.openai.com/v1" },
@@ -21,9 +21,15 @@ export const PROVIDER_CATALOG: KindSpec[] = [
     default_base_url: "https://api.x.ai/v1",
     auth: "sign_in",
   },
+  {
+    kind: "claude",
+    name: "Claude subscription (Claude Code)",
+    default_base_url: "https://api.anthropic.com",
+    auth: "sign_in",
+  },
 ];
 
-const LIMIT_KINDS = new Set(["codex"]);
+const LIMIT_KINDS = new Set(["codex", "claude", "grok_build"]);
 
 export function isSignInKind(kind: string): kind is SignInKind {
   return PROVIDER_CATALOG.some((spec) => spec.kind === kind && spec.auth === "sign_in");
@@ -31,4 +37,12 @@ export function isSignInKind(kind: string): kind is SignInKind {
 
 export function reportsLimits(kind: string): boolean {
   return LIMIT_KINDS.has(kind);
+}
+
+export function signInMethod(kind: SignInKind): SignInMethod {
+  return kind === "claude" ? "code" : "device";
+}
+
+export function speaksAnthropic(kind: string): boolean {
+  return kind === "anthropic" || kind === "claude";
 }

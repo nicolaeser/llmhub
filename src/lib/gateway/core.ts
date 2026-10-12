@@ -139,6 +139,9 @@ export const KNOWN_STRATEGIES = new Set([
   "cost_lowest",
   "priority",
   "fast",
+  "round_robin",
+  "quota_balanced",
+  "quota_expiring",
 ]);
 
 export const KNOWN_KINDS = new Set(PROVIDER_CATALOG.map((spec) => spec.kind));

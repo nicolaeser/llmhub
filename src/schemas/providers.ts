@@ -8,7 +8,7 @@ export const providerPolicySchema = z.object({
   noTraining: z.boolean().default(false),
 });
 
-const signInKindSchema = z.enum(["codex", "grok_build"]);
+const signInKindSchema = z.enum(["codex", "grok_build", "claude"]);
 
 const signInSessionSchema = z.object({
   tokens: z.object({
@@ -30,6 +30,7 @@ export const signInTicketSchema = z.object({
   grant: z.discriminatedUnion("kind", [
     z.object({ kind: z.literal("codex"), deviceAuthId: z.string().min(1), userCode: z.string().min(1) }),
     z.object({ kind: z.literal("grok_build"), deviceCode: z.string().min(1) }),
+    z.object({ kind: z.literal("claude"), verifier: z.string().min(1), state: z.string().min(1) }),
   ]),
 });
 

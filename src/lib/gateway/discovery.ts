@@ -4,6 +4,7 @@ import { isPrismaCode } from "@/lib/auth/errors";
 import { env } from "@/lib/env";
 import { fireAlert } from "@/lib/gateway/alerts";
 import { PROVIDER_CATALOG } from "@/lib/gateway/catalog";
+import { CLAUDE_OAUTH_BETAS } from "@/lib/gateway/claude";
 import { CODEX_CLIENT_VERSION } from "@/lib/gateway/codex";
 import { asNumber, asRecord, asString } from "@/lib/gateway/core";
 import { providerAuth } from "@/lib/gateway/credentials";
@@ -45,6 +46,7 @@ export async function fetchProviderModels(
       headers.Authorization = `Bearer ${apiKey}`;
     }
   }
+  if (kind === "claude") headers["anthropic-beta"] = CLAUDE_OAUTH_BETAS.join(",");
   if (kind === "openrouter" || kind === "openrouter_eu") {
     headers["HTTP-Referer"] = env.NEXT_PUBLIC_APP_URL;
     headers["X-Title"] = "LLM Hub";
