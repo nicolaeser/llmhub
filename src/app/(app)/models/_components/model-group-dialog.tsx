@@ -53,6 +53,9 @@ const STRATEGIES = [
   "cost_lowest",
   "fast",
   "priority",
+  "round_robin",
+  "quota_balanced",
+  "quota_expiring",
 ] as const;
 
 function catalogHit(
@@ -473,6 +476,7 @@ export default function ModelGroupDialog({
                               ))}
                             </ListBox>
                           </Select.Popover>
+                          <Description>{t("strategyHint", { strategy })}</Description>
                         </Select>
                         <TextField
                           fullWidth

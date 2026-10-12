@@ -1,5 +1,7 @@
 import "server-only";
+import { createHash, randomBytes } from "node:crypto";
 import { open, seal } from "@/lib/crypto";
+import { CLAUDE_OAUTH_BETAS, claudeIdentityHeaders } from "@/lib/gateway/claude";
 import { asNumber, asRecord, asString } from "@/lib/gateway/core";
 import { signInCredentialSchema, signInTicketSchema } from "@/schemas/providers";
 import type { JsonMap } from "@/types/gateway";
@@ -22,6 +24,14 @@ const OPENAI_DEVICE_TTL_S = 15 * 60;
 const XAI_ISSUER = "https://auth.x.ai";
 const XAI_CLIENT_ID = "b1a00492-073a-47ea-816f-4c329264a828";
 const XAI_SCOPE = "openid profile email offline_access grok-cli:access api:access";
+const CLAUDE_TOKEN_URL = "https://platform.claude.com/v1/oauth/token";
+const CLAUDE_AUTHORIZE_URL = "https://claude.ai/oauth/authorize";
+const CLAUDE_PROFILE_URL = "https://api.anthropic.com/api/oauth/profile";
+const CLAUDE_CLIENT_ID = "9d1c250a-e61b-44d9-88ed-5944d1962f5e";
+const CLAUDE_REDIRECT_URI = "http://localhost:54545/callback";
+const CLAUDE_SCOPE = "user:profile user:inference user:sessions:claude_code user:mcp_servers user:file_upload";
+const CLAUDE_AUTHORIZATION_TTL_S = 10 * 60;
+const CLAUDE_OAUTH_USER_AGENT = "axios/1.15.2";
 const DEVICE_GRANT_TYPE = "urn:ietf:params:oauth:grant-type:device_code";
 const AUTH_TIMEOUT_MS = 15_000;
 const DEFAULT_INTERVAL_S = 5;
@@ -103,13 +113,72 @@ export function xaiSession(payload: JsonMap, now = Date.now(), previous?: SignIn
   };
 }
 
-async function postAuth(url: string, body: URLSearchParams | JsonMap): Promise<{ status: number; json: JsonMap }> {
+export function claudeSession(
+  payload: JsonMap,
+  now = Date.now(),
+  previous?: SignInSession,
+  plan = "",
+): SignInSession {
+  const access = asString(payload.access_token);
+  if (!access) throw new Error("SIGN_IN_FAILED");
+  const account = asRecord(payload.account);
+  return {
+    tokens: {
+      access,
+      refresh: asString(payload.refresh_token) || previous?.tokens.refresh || "",
+      accountId: asString(account?.uuid) || previous?.tokens.accountId || "",
+      residency: "",
+    },
+    expiresAt: tokenExpiry(access, payload.expires_in, now),
+    account: asString(account?.email_address) || previous?.account || "",
+    plan: plan || previous?.plan || "",
+  };
+}
+
+export function claudePlan(profile: JsonMap): string {
+  const account = asRecord(profile.account) ?? {};
+  const organization = asRecord(profile.organization) ?? {};
+  const multiplier = /max_(\d+)x/.exec(asString(organization.rate_limit_tier))?.[1];
+  if (multiplier) return `max_${multiplier}x`;
+  if (account.has_claude_max === true) return "max";
+  if (account.has_claude_pro === true) return "pro";
+  const type = asString(organization.organization_type);
+  if (type === "claude_team") return "team";
+  if (type === "claude_enterprise") return "enterprise";
+  return "";
+}
+
+async function claudeProfilePlan(access: string): Promise<string> {
+  try {
+    const res = await fetch(CLAUDE_PROFILE_URL, {
+      headers: {
+        ...claudeIdentityHeaders(),
+        Authorization: `Bearer ${access}`,
+        "anthropic-beta": CLAUDE_OAUTH_BETAS.join(","),
+        Accept: "application/json",
+      },
+      signal: AbortSignal.timeout(AUTH_TIMEOUT_MS),
+      redirect: "error",
+    });
+    if (!res.ok) return "";
+    return claudePlan(asRecord(await res.json().catch(() => null)) ?? {});
+  } catch {
+    return "";
+  }
+}
+
+async function postAuth(
+  url: string,
+  body: URLSearchParams | JsonMap,
+  extraHeaders: Record<string, string> = {},
+): Promise<{ status: number; json: JsonMap }> {
   const form = body instanceof URLSearchParams;
   const res = await fetch(url, {
     method: "POST",
     headers: {
       "Content-Type": form ? "application/x-www-form-urlencoded" : "application/json",
       Accept: "application/json",
+      ...extraHeaders,
     },
     body: form ? body.toString() : JSON.stringify(body),
     signal: AbortSignal.timeout(AUTH_TIMEOUT_MS),
@@ -127,7 +196,71 @@ function errorCode(json: JsonMap): string {
   return asString(asRecord(error)?.code);
 }
 
-export async function requestDeviceCode(kind: SignInKind): Promise<DeviceAuthorization> {
+function pkceChallenge(verifier: string): string {
+  return createHash("sha256").update(verifier).digest("base64url");
+}
+
+export function requestAuthorizationCode(): DeviceAuthorization {
+  const verifier = randomBytes(32).toString("base64url");
+  const state = randomBytes(32).toString("base64url");
+  const query = new URLSearchParams({
+    code: "true",
+    client_id: CLAUDE_CLIENT_ID,
+    response_type: "code",
+    redirect_uri: CLAUDE_REDIRECT_URI,
+    scope: CLAUDE_SCOPE,
+    code_challenge: pkceChallenge(verifier),
+    code_challenge_method: "S256",
+    state,
+  });
+  return {
+    grant: { kind: "claude", verifier, state },
+    verificationUrl: `${CLAUDE_AUTHORIZE_URL}?${query.toString()}`,
+    userCode: "",
+    interval: DEFAULT_INTERVAL_S,
+    expiresIn: CLAUDE_AUTHORIZATION_TTL_S,
+  };
+}
+
+export function parseAuthorizationInput(input: string): { code: string; state: string } {
+  const trimmed = input.trim();
+  if (/^https?:\/\//i.test(trimmed)) {
+    try {
+      const url = new URL(trimmed);
+      return { code: url.searchParams.get("code") ?? "", state: url.searchParams.get("state") ?? "" };
+    } catch {
+      return { code: "", state: "" };
+    }
+  }
+  const [code = "", state = ""] = trimmed.split("#");
+  return { code: code.trim(), state: state.trim() };
+}
+
+export async function completeAuthorization(
+  grant: Extract<DeviceGrant, { kind: "claude" }>,
+  input: string,
+): Promise<SignInSession> {
+  const { code, state } = parseAuthorizationInput(input);
+  if (!code || (state && state !== grant.state)) throw new Error("SIGN_IN_FAILED");
+  const exchanged = await postAuth(
+    CLAUDE_TOKEN_URL,
+    {
+      grant_type: "authorization_code",
+      code,
+      redirect_uri: CLAUDE_REDIRECT_URI,
+      client_id: CLAUDE_CLIENT_ID,
+      code_verifier: grant.verifier,
+      state: grant.state,
+    },
+    { "User-Agent": CLAUDE_OAUTH_USER_AGENT },
+  );
+  if (exchanged.status >= 400) throw new Error("SIGN_IN_FAILED");
+  const session = claudeSession(exchanged.json);
+  if (!session.tokens.refresh) throw new Error("SIGN_IN_FAILED");
+  return { ...session, plan: await claudeProfilePlan(session.tokens.access) };
+}
+
+export async function requestDeviceCode(kind: Exclude<SignInKind, "claude">): Promise<DeviceAuthorization> {
   if (kind === "codex") {
     const { status, json } = await postAuth(`${OPENAI_ISSUER}/api/accounts/deviceauth/usercode`, {
       client_id: OPENAI_CLIENT_ID,
@@ -213,28 +346,63 @@ async function pollXai(grant: Extract<DeviceGrant, { kind: "grok_build" }>): Pro
 }
 
 export function pollDeviceCode(grant: DeviceGrant): Promise<DevicePoll> {
-  return grant.kind === "codex" ? pollOpenai(grant) : pollXai(grant);
+  switch (grant.kind) {
+    case "codex":
+      return pollOpenai(grant);
+    case "grok_build":
+      return pollXai(grant);
+    default:
+      return Promise.reject(new Error("SIGN_IN_FAILED"));
+  }
+}
+
+function refreshRequest(kind: SignInKind, current: SignInSession): Promise<{ status: number; json: JsonMap }> {
+  switch (kind) {
+    case "codex":
+      return postAuth(`${OPENAI_ISSUER}/oauth/token`, {
+        client_id: OPENAI_CLIENT_ID,
+        grant_type: "refresh_token",
+        refresh_token: current.tokens.refresh,
+      });
+    case "grok_build":
+      return postAuth(
+        `${XAI_ISSUER}/oauth2/token`,
+        new URLSearchParams({
+          grant_type: "refresh_token",
+          client_id: XAI_CLIENT_ID,
+          refresh_token: current.tokens.refresh,
+        }),
+      );
+    case "claude":
+      return postAuth(
+        CLAUDE_TOKEN_URL,
+        {
+          client_id: CLAUDE_CLIENT_ID,
+          grant_type: "refresh_token",
+          refresh_token: current.tokens.refresh,
+          scope: CLAUDE_SCOPE,
+        },
+        { "User-Agent": CLAUDE_OAUTH_USER_AGENT },
+      );
+  }
+}
+
+function refreshedSession(kind: SignInKind, json: JsonMap, current: SignInSession): SignInSession {
+  switch (kind) {
+    case "codex":
+      return openaiSession(json, Date.now(), current);
+    case "grok_build":
+      return xaiSession(json, Date.now(), current);
+    case "claude":
+      return claudeSession(json, Date.now(), current);
+  }
 }
 
 export async function refreshSession(kind: SignInKind, current: SignInSession): Promise<TokenRefresh> {
   if (!current.tokens.refresh) return { ok: false, fatal: true };
   let result: { status: number; json: JsonMap };
   try {
-    result =
-      kind === "codex"
-        ? await postAuth(`${OPENAI_ISSUER}/oauth/token`, {
-            client_id: OPENAI_CLIENT_ID,
-            grant_type: "refresh_token",
-            refresh_token: current.tokens.refresh,
-          })
-        : await postAuth(
-            `${XAI_ISSUER}/oauth2/token`,
-            new URLSearchParams({
-              grant_type: "refresh_token",
-              client_id: XAI_CLIENT_ID,
-              refresh_token: current.tokens.refresh,
-            }),
-          );
+    result = await refreshRequest(kind, current);
   } catch {
     return { ok: false, fatal: false };
   }
@@ -243,9 +411,7 @@ export async function refreshSession(kind: SignInKind, current: SignInSession): 
     return { ok: false, fatal };
   }
   try {
-    const session =
-      kind === "codex" ? openaiSession(result.json, Date.now(), current) : xaiSession(result.json, Date.now(), current);
-    return { ok: true, session };
+    return { ok: true, session: refreshedSession(kind, result.json, current) };
   } catch {
     return { ok: false, fatal: false };
   }

@@ -7,7 +7,7 @@ import { alertPiiBlocked, alertUpstreamFailure } from "@/lib/gateway/alerts";
 import { resolvePolicies } from "@/lib/gateway/settings";
 import { assertBudget, assertRate, recordUsage } from "@/lib/gateway/billing";
 import { capRequestCost, maxCostHeader } from "@/lib/gateway/cost-cap";
-import { asRecord, isRouterError, newRequestId } from "@/lib/gateway/core";
+import { asRecord, isRouterError, isUnavailableError, newRequestId } from "@/lib/gateway/core";
 import { anthropicErrorBody, GateError, openAIErrorBody } from "@/lib/gateway/errors";
 import { logger } from "@/lib/logging/logger";
 import { modelAlias } from "@/lib/gateway/model-alias";
@@ -23,7 +23,7 @@ export function toGateError(err: unknown): GateError {
   if (isRouterError(err, "unknown_group")) {
     return new GateError(404, "model_not_found", "no deployment for model", { param: "model" });
   }
-  if (isRouterError(err, "no_healthy")) {
+  if (isUnavailableError(err)) {
     return new GateError(503, "no_healthy_deployment", "no healthy deployment for model");
   }
   const name = err instanceof Error ? err.name : "";

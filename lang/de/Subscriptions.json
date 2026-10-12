@@ -1,0 +1,55 @@
+{
+  "title": "Abos",
+  "subtitle": "Anfragen über ChatGPT-, Claude- und SuperGrok-Abos bedienen. Jedes angemeldete Konto zeigt seine eigenen Nutzungslimits und wann sie zurückgesetzt werden.",
+  "addAccount": "Konto hinzufügen",
+  "noAccounts": "Noch kein Konto angemeldet.",
+  "refreshAll": "Alle Limits aktualisieren",
+  "stats": {
+    "accounts": "Konten",
+    "available": "Jetzt verfügbar",
+    "limited": "Am Limit",
+    "nextRecovery": "Nächste Erholung",
+    "none": "Keine",
+    "paused": "Pausiert"
+  },
+  "status": "{status, select, paused {Pausiert} available {Verfügbar} limited {Limit erreicht} expired {Anmeldung abgelaufen} unavailable {Limits nicht verfügbar} checking {Wird geprüft} other {Verbunden}}",
+  "backIn": "Wieder verfügbar {when}.",
+  "backInUnknown": "Limit erreicht. Der Anbieter nennt keinen Zeitpunkt für die Zurücksetzung.",
+  "expiredHint": "Melde dich erneut an, um dieses Konto zu nutzen.",
+  "noLimits": "Dieser Anbieter meldet keine Nutzungslimits.",
+  "limits": {
+    "refresh": "Nutzungslimits aktualisieren",
+    "updated": "Aktualisiert {when}",
+    "window": "{unit, select, hour {{count, plural, one {Stundenlimit} other {#-Stunden-Limit}}} day {{count, plural, one {Tageslimit} =7 {Wochenlimit} other {#-Tage-Limit}}} month {Monatslimit} other {Nutzungslimit}}",
+    "scoped": "{scope}: {window}",
+    "resets": "Wird {when} zurückgesetzt ({date})",
+    "notStarted": "Startet mit der nächsten Anfrage",
+    "reached": "Limit erreicht",
+    "modelLimits": "{count, plural, one {# Modelllimit} other {# Modelllimits}}",
+    "credits": "{unlimited, select, true {Unbegrenzte Credits} other {Credits: {balance}}}",
+    "resetCredits": "{available, plural, =0 {Keine Limit-Resets verfügbar} one {# Limit-Reset verfügbar} other {# Limit-Resets verfügbar}}{applicable, plural, =0 {} other { ({applicable} jetzt nutzbar)}}",
+    "extraUsage": "Zusatznutzung: {used} von {limit}",
+    "none": "Der Anbieter meldet für dieses Abo keine Limits.",
+    "resetsShort": "Zurücksetzung {when}",
+    "notStartedShort": "Nicht gestartet"
+  },
+  "routing": {
+    "title": "Intelligentes Routing über Konten",
+    "description": "Wähle die Wechselmethode pro Modell-Alias. Egal welche, ein Konto am Nutzungslimit wird übersprungen, solange ein anderes Konto noch Spielraum hat.",
+    "openModels": "Methode auf der Modelle-Seite wählen"
+  },
+  "pausedHint": "Dieses Konto ist pausiert und erhält keine Anfragen. Die Limits bleiben sichtbar.",
+  "overview": {
+    "title": "Kontenübersicht",
+    "none": "Keine Daten",
+    "columns": {
+      "account": "Konto",
+      "provider": "Anbieter",
+      "short": "5 Stunden",
+      "weekly": "Woche",
+      "longer": "Monat",
+      "state": "Status",
+      "active": "Aktiv"
+    }
+  }
+}

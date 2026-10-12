@@ -5,6 +5,7 @@ export const ASSISTANT_PAGES = {
   playground: "/playground",
   assistant: "/assistant",
   providers: "/providers",
+  subscriptions: "/subscriptions",
   models: "/models",
   "model-templates": "/model-templates",
   "model-catalog": "/model-catalog",
@@ -45,7 +46,7 @@ export const ASSISTANT_EXPLAIN = {
   templates:
     "Model templates are reusable model allowlists for API keys. A template combines rules (provider connections, name patterns such as claude-*, zero data retention, maximum provider data retention, data region, no training on prompts) with always-included models. Rules are evaluated on every request, so new matching models are allowed automatically. A model qualifies when at least one endpoint behind it, also through fallback and overflow aliases, meets every rule, and requests from that key are routed only to endpoints that meet the rules. Data policy is set per provider connection on the Providers page.",
   providers:
-    "A provider connection stores the upstream kind, base URL, sealed API key, and data policy (zero data retention, retention days, region, no training). OpenAI, Anthropic, OpenRouter, xAI, and any OpenAI-compatible server are supported. Model lists refresh every two hours with the model catalog and on demand.",
+    "A provider connection stores the upstream kind, base URL, sealed API key, and data policy (zero data retention, retention days, region, no training). OpenAI, Anthropic, OpenRouter, xAI, and any OpenAI-compatible server are supported. Model lists refresh every two hours with the model catalog and on demand. A paused provider keeps its configuration and is skipped by the router; when every deployment behind an alias is paused, requests answer no_healthy_deployment without an upstream exhaustion alert. Subscription accounts are signed in on the Subscriptions page, which also shows their usage limits and reset times.",
   catalog:
     "The model catalog groups every provider model into public aliases. Models with the same name, also spelled differently (dots or dashes, vendor prefixes, date snapshots), share one alias; with Jev set up in Admin settings on its own OpenRouter key, Jev also groups models that providers name differently. The catalog is cached and refreshes every two hours or with Refresh now. A whole model can be turned on or off for every key, and single providers inside it can be turned on or off; aliases keep their names across refreshes. Aliases with Add new providers automatically route trusted providers that start offering the model. Own OpenAI-compatible servers are always turned on by hand.",
   models:
@@ -60,7 +61,7 @@ export const ASSISTANT_EXPLAIN = {
   cache:
     "The response cache answers identical non-streaming chat requests from the same key for the configured TTL. With REDIS_URL all app instances share it in Redis; otherwise each process keeps its own memory cache. Optional semantic matching also answers when only the last user message differs and its embedding is at least as similar as the threshold; the embedding call is billed to the calling key and only runs for keys allowed to use the embedding model. The Response cache page shows hit rate and net savings for operators with spend:read-all; provider prompt caching is separate and not counted there. Configure it under Response cache.",
   router:
-    "Each model alias has a routing strategy (least_inflight, weighted_random, cost_lowest, priority, fast), retries, fallback aliases, and an overflow alias used when no deployment is healthy. Deployments are the upstream endpoints behind that alias and cool down only on retryable failures. Provider health shows each deployment's recent error rate, p50 and p95 latency, and cooldowns, shared across instances when Redis is configured.",
+    "Each model alias has a routing strategy (least_inflight, weighted_random, cost_lowest, priority, fast, round_robin, quota_balanced, quota_expiring), retries, fallback aliases, and an overflow alias used when no deployment is healthy. The quota strategies only differ on signed-in subscription accounts: quota_balanced picks the account with the most headroom, quota_expiring the account whose tightest limit resets soonest, and every strategy skips accounts that have hit a usage limit while another account has room. Deployments are the upstream endpoints behind that alias and cool down only on retryable failures. Provider health shows each deployment's recent error rate, p50 and p95 latency, and cooldowns, shared across instances when Redis is configured.",
   logging:
     "Request logs record metadata, usage powers the charts, and alert webhooks fire for the events each one subscribes to: upstream exhaustion, budget thresholds, and provider model changes. Retention and S3 archiving are configured under Logging & alerts. Prompt and response content is logged unless switched off globally, per key, per person, or per console user.",
   usage:

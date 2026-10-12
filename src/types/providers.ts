@@ -9,6 +9,7 @@ export type ProviderRecord = {
   retentionDays: number | null;
   region: string;
   noTraining: boolean;
+  enabled: boolean;
   login?: { account: string; plan: string; status: string } | null;
 };
 
@@ -28,7 +29,9 @@ export type ImportCandidate = {
   exists: boolean;
 };
 
-export type SignInKind = "codex" | "grok_build";
+export type SignInKind = "codex" | "grok_build" | "claude";
+
+export type SignInMethod = "device" | "code";
 
 export type SignInStatus = "active" | "expired";
 
@@ -44,6 +47,7 @@ export type ProviderView = {
   kind: string;
   baseUrl: string;
   hasApiKey: boolean;
+  enabled: boolean;
   signIn: ProviderSignIn | null;
   discovered: { id: string; name: string }[];
   policy: ProviderPolicyInput;
@@ -65,7 +69,8 @@ export type SignInSession = {
 
 export type DeviceGrant =
   | { kind: "codex"; deviceAuthId: string; userCode: string }
-  | { kind: "grok_build"; deviceCode: string };
+  | { kind: "grok_build"; deviceCode: string }
+  | { kind: "claude"; verifier: string; state: string };
 
 export type DeviceAuthorization = {
   grant: DeviceGrant;
@@ -102,6 +107,7 @@ export type SignInCredential = {
 };
 
 export type SignInStart = {
+  method: SignInMethod;
   ticket: string;
   verificationUrl: string;
   userCode: string;
@@ -121,7 +127,15 @@ export type SubscriptionLimits = {
   plan: string;
   windows: LimitWindow[];
   credits: { unlimited: boolean; balance: string } | null;
+  resetCredits: { available: number; applicable: number } | null;
+  extraUsage: { usedCents: number; limitCents: number; percent: number | null } | null;
   fetchedAt: string;
+};
+
+export type AccountLimits = {
+  id: string;
+  limits: SubscriptionLimits | null;
+  error: string;
 };
 
 export type SignInPollResult =

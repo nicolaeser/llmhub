@@ -7,6 +7,7 @@ import { GateError } from "@/lib/gateway/errors";
 import { outputScreen, type OutputScreen } from "@/lib/gateway/guardrails";
 import { requestRoutingOverride, serviceModeHeaders } from "@/lib/gateway/service-mode";
 import { acquireGroup, loadGroup, markFailure, markSuccess } from "@/lib/gateway/runtime";
+import { speaksAnthropic } from "@/lib/gateway/catalog";
 import { CodexSseTranslator } from "@/lib/gateway/codex";
 import { deploymentAuth } from "@/lib/gateway/credentials";
 import { inPool, outsidePool } from "@/lib/gateway/route-pool";
@@ -214,7 +215,7 @@ export async function chatOnce(dep: ResolvedDeployment, group: Group, body: Json
     timeoutMs: UPSTREAM_TIMEOUT_MS,
     groupStrategy: group.strategy,
   });
-  if (!proxied.status || proxied.status >= 400) throw upstreamError(proxied.status, proxied.json);
+  if (!proxied.status || proxied.status >= 400) throw upstreamError(proxied.status, proxied.json, proxied.headers);
   return proxied.json;
 }
 
@@ -250,7 +251,7 @@ export async function openUpstreamStream(input: {
     try {
       json = JSON.parse(text);
     } catch {}
-    if (json) throw upstreamError(res.status, json);
+    if (json) throw upstreamError(res.status, json, res.headers);
     throw new GateError(res.status || 502, "upstream_error", text.slice(0, 512) || "upstream error");
   }
   return res;
@@ -276,7 +277,7 @@ export function openChatStream(
 }
 
 function streamTranslator(dep: ResolvedDeployment, model: string): ChatSseTranslator | null {
-  if (dep.kind === "anthropic") return new AnthropicSseTranslator(model);
+  if (speaksAnthropic(dep.kind)) return new AnthropicSseTranslator(model);
   if (dep.kind === "codex") return new CodexSseTranslator(model);
   return null;
 }

@@ -16,7 +16,16 @@ const confirm = z
   .boolean()
   .default(false)
   .describe("Set true only after the operator explicitly confirmed this action in the conversation.");
-const strategy = z.enum(["least_inflight", "weighted_random", "cost_lowest", "priority", "fast"]);
+const strategy = z.enum([
+  "least_inflight",
+  "weighted_random",
+  "cost_lowest",
+  "priority",
+  "fast",
+  "round_robin",
+  "quota_balanced",
+  "quota_expiring",
+]);
 const budgetKind = z.enum(["org", "team", "project", "member", "user", "key"]);
 const nodeKind = z.enum(["org", "team", "project", "member"]);
 const usageGroups = ["model", "org", "team", "project", "member", "key", "user"] as const satisfies readonly UsageBreakdownGroup[];

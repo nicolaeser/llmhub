@@ -1,15 +1,21 @@
 import "server-only";
 import prisma from "@/lib/db/prisma";
-import { PROVIDER_CATALOG } from "@/lib/gateway/catalog";
+import { PROVIDER_CATALOG, reportsLimits } from "@/lib/gateway/catalog";
 import {
   nextLatencyEwma,
   pickCostLowest,
   pickLatencyEwma,
   pickLeastInflight,
   pickPriority,
+  pickQuotaBalanced,
+  pickQuotaExpiring,
+  pickRoundRobin,
   pickWeighted,
+  type QuotaScores,
 } from "@/lib/gateway/router";
-import { asRecord, asStringArray, ERR_NO_HEALTHY, ERR_UNKNOWN_GROUP } from "@/lib/gateway/core";
+import { quotaBottleneckReset, quotaExhausted, quotaPressure } from "@/lib/gateway/quota";
+import { limitsSnapshot, warmLimits } from "@/lib/gateway/subscription-limits";
+import { asRecord, asStringArray, ERR_ALL_PAUSED, ERR_NO_HEALTHY, ERR_UNKNOWN_GROUP } from "@/lib/gateway/core";
 import { modelAlias } from "@/lib/gateway/model-alias";
 import { routePermitted } from "@/lib/gateway/model-policy";
 import { priceWindowQuery, priceWindowRates } from "@/lib/gateway/price-schedule";
@@ -21,6 +27,7 @@ import { money } from "@/lib/utils/money";
 
 const inflight = new Map<string, number>();
 const latencyEwma = new Map<string, number>();
+const roundRobinCursors = new Map<string, number>();
 
 function mapDeployment(row: DbDeployment): ResolvedDeployment {
   return {
@@ -46,6 +53,7 @@ const providerSelect = {
     retentionDays: true,
     region: true,
     noTraining: true,
+    enabled: true,
   },
 } as const;
 
@@ -122,8 +130,14 @@ async function healthy(items: ResolvedDeployment[]): Promise<ResolvedDeployment[
   return items.filter((d) => !cooling.has(d.id));
 }
 
-function pick(items: ResolvedDeployment[], strategy: string): ResolvedDeployment {
+function pick(items: ResolvedDeployment[], strategy: string, scores: QuotaScores): ResolvedDeployment {
   switch (strategy) {
+    case "round_robin":
+      return pickRoundRobin(items, roundRobinCursors);
+    case "quota_balanced":
+      return pickQuotaBalanced(items, scores, inflight);
+    case "quota_expiring":
+      return pickQuotaExpiring(items, scores, inflight);
     case "weighted_random":
       return pickWeighted(items);
     case "cost_lowest":
@@ -135,6 +149,31 @@ function pick(items: ResolvedDeployment[], strategy: string): ResolvedDeployment
     default:
       return pickLeastInflight(items, inflight);
   }
+}
+
+function limitedProvider(dep: ResolvedDeployment) {
+  return dep.provider && reportsLimits(dep.provider.kind) ? dep.provider : null;
+}
+
+async function withinQuota(
+  items: ResolvedDeployment[],
+): Promise<{ items: ResolvedDeployment[]; scores: QuotaScores }> {
+  const scores: QuotaScores = new Map();
+  const providers = items.flatMap((dep) => limitedProvider(dep) ?? []);
+  if (!providers.length) return { items, scores };
+  await warmLimits(providers);
+  const now = Date.now();
+  const open = items.filter((dep) => {
+    const provider = limitedProvider(dep);
+    if (!provider) return true;
+    const limits = limitsSnapshot(provider.id);
+    scores.set(dep.id, {
+      pressure: quotaPressure(limits, dep.model, now),
+      reset: quotaBottleneckReset(limits, dep.model, now),
+    });
+    return !quotaExhausted(limits, dep.model, now);
+  });
+  return { items: open.length ? open : items, scores };
 }
 
 function affordable(group: Group, ready: ResolvedDeployment[], cost: CostFilter | undefined): ResolvedDeployment[] {
@@ -152,16 +191,19 @@ export async function acquireGroup(
   strategy = "",
   cost?: CostFilter,
 ): Promise<{ dep: ResolvedDeployment; release: () => void; overflow: boolean }> {
-  const ready = await healthy(permittedDeployments(group.mapped, rules).filter(serves));
+  const permitted = permittedDeployments(group.mapped, rules).filter(serves);
+  const active = permitted.filter((dep) => dep.provider?.enabled !== false);
+  const ready = await healthy(active);
   if (!ready.length) {
     if (group.overflow_group && group.overflow_group !== group.alias) {
       const overflow = await loadGroup(group.overflow_group);
       const acquired = await acquireGroup(overflow, rules, serves, strategy, cost);
       return { ...acquired, overflow: true };
     }
-    throw ERR_NO_HEALTHY;
+    throw permitted.length && !active.length ? ERR_ALL_PAUSED : ERR_NO_HEALTHY;
   }
-  const dep = pick(affordable(group, ready, cost), strategy || group.strategy);
+  const quota = await withinQuota(affordable(group, ready, cost));
+  const dep = pick(quota.items, strategy || group.strategy, quota.scores);
   inflight.set(dep.id, (inflight.get(dep.id) ?? 0) + 1);
   return {
     dep,

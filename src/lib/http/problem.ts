@@ -4,7 +4,7 @@ import { NextResponse } from "next/server";
 import { ZodError } from "zod";
 import { AuthError } from "@/lib/auth/errors";
 import { env } from "@/lib/env";
-import { isRouterError, newRequestId } from "@/lib/gateway/core";
+import { isRouterError, isUnavailableError, newRequestId } from "@/lib/gateway/core";
 import { GateError } from "@/lib/gateway/errors";
 import { normalizeProblemCode, problemSpec } from "@/lib/http/problems";
 import { logger } from "@/lib/logging/logger";
@@ -110,7 +110,7 @@ export function problemFromError(req: Request, err: unknown): NextResponse {
   if (isRouterError(err, "unknown_group")) {
     return problemResponse(req, "MODEL_NOT_FOUND", { status: 404, detail: "no deployment for model" });
   }
-  if (isRouterError(err, "no_healthy")) {
+  if (isUnavailableError(err)) {
     return problemResponse(req, "NO_HEALTHY_DEPLOYMENT", { status: 503, detail: "no healthy deployment for model" });
   }
   if ((err as { status?: number }).status === 413) return problemResponse(req, "PAYLOAD_TOO_LARGE");

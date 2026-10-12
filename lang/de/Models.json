@@ -65,9 +65,13 @@
     "least_inflight": "Wenigste laufende",
     "cost_lowest": "Günstigste Kosten",
     "fast": "Schnell (niedrigste Latenz)",
-    "priority": "Priorität"
+    "priority": "Priorität",
+    "round_robin": "Round Robin",
+    "quota_balanced": "Meiste Reserve (Abos)",
+    "quota_expiring": "Nächster Reset (Abos)"
   },
-  "strategyLabel": "{strategy, select, weighted_random {Gewichteter Zufall} least_inflight {Wenigste laufende} cost_lowest {Günstigste Kosten} fast {Schnell (niedrigste Latenz)} priority {Priorität} auto {Auto (Kosten)} other {{strategy}}}",
+  "strategyLabel": "{strategy, select, weighted_random {Gewichteter Zufall} least_inflight {Wenigste laufende} cost_lowest {Günstigste Kosten} fast {Schnell (niedrigste Latenz)} priority {Priorität} round_robin {Round Robin} quota_balanced {Meiste Reserve} quota_expiring {Nächster Reset} auto {Auto (Kosten)} other {{strategy}}}",
+  "strategyHint": "{strategy, select, weighted_random {Zufallswahl, gewichtet nach Endpunkt-Gewicht.} least_inflight {Schickt jede Anfrage an den Endpunkt mit den wenigsten laufenden Anfragen.} cost_lowest {Immer der günstigste Endpunkt.} fast {Der Endpunkt mit der niedrigsten gemessenen Latenz.} priority {Immer der Endpunkt mit dem höchsten Gewicht. Füllt zuerst ein Konto und wechselt, sobald es limitiert oder in Abkühlung ist.} round_robin {Wechselt reihum zwischen den Endpunkten, sodass Abo-Konten gleichmäßig genutzt werden.} quota_balanced {Abo-Konten: wählt das Konto mit dem meisten Spielraum bei seinem engsten Limit (5-Stunden-, Wochen- oder Modelllimit).} quota_expiring {Abo-Konten: wählt das Konto, dessen engstes Limit am frühesten zurückgesetzt wird, sodass bald erneuerte Kontingente zuerst genutzt werden.} other {}}",
   "removeConfirm": "Modell-Alias {alias} entfernen?",
   "toasts": {
     "saved": "{mode, select, edit {Modell aktualisiert} add {Modell hinzugefügt} other {Modell hinzugefügt}}",

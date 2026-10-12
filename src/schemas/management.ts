@@ -145,6 +145,7 @@ export const providerUpdateSchema = z
     name: z.string().trim().min(1).max(120),
     base_url: url,
     api_key: z.string().trim().min(1).max(4000),
+    enabled: z.boolean(),
   })
   .partial()
   .strict();

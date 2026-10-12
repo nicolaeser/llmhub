@@ -5,7 +5,7 @@ import type { JsonMap, ModelPricing, Principal, PublicModel } from "@/types/gate
 export class RouterError extends Error {
   constructor(
     message: string,
-    readonly code: "unknown_group" | "no_healthy" | "unknown_strategy",
+    readonly code: "unknown_group" | "no_healthy" | "all_paused" | "unknown_strategy",
   ) {
     super(message);
     this.name = "RouterError";
@@ -20,9 +20,17 @@ export const ERR_NO_HEALTHY = new RouterError(
   "router: no healthy deployment",
   "no_healthy",
 );
+export const ERR_ALL_PAUSED = new RouterError(
+  "router: every deployment is paused",
+  "all_paused",
+);
 
 export function isRouterError(err: unknown, code?: RouterError["code"]): err is RouterError {
   return err instanceof RouterError && (code ? err.code === code : true);
+}
+
+export function isUnavailableError(err: unknown): err is RouterError {
+  return isRouterError(err, "no_healthy") || isRouterError(err, "all_paused");
 }
 
 export function ownerId(pr: Principal | null | undefined): string {
@@ -139,6 +147,9 @@ export const KNOWN_STRATEGIES = new Set([
   "cost_lowest",
   "priority",
   "fast",
+  "round_robin",
+  "quota_balanced",
+  "quota_expiring",
 ]);
 
 export const KNOWN_KINDS = new Set(PROVIDER_CATALOG.map((spec) => spec.kind));
