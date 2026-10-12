@@ -20,12 +20,11 @@ import {
   storeUsage,
   updateVectorStore,
   vectorDefaults,
-  type StoreRow,
 } from "@/lib/rag/stores";
 import type { z } from "zod";
 import type { companyStoreSchema, updateCompanyStoreSchema } from "@/schemas/rag";
 import type { AuthenticatedSession } from "@/types/auth";
-import type { VectorFileStatus, VectorFileView, VectorStoreView } from "@/types/rag";
+import type { VectorFileStatus, VectorFileView, VectorStoreRow, VectorStoreView } from "@/types/rag";
 
 const storeInclude = {
   org: { select: { alias: true } },
@@ -82,7 +81,7 @@ async function viewOf(id: string): Promise<VectorStoreView> {
   return (await views([row]))[0]!;
 }
 
-export async function visibleStore(session: AuthenticatedSession, id: string): Promise<StoreRow> {
+export async function visibleStore(session: AuthenticatedSession, id: string): Promise<VectorStoreRow> {
   const row = id ? await prisma.vectorStore.findUnique({ where: { id } }) : null;
   if (!row || !inCompany(session, row.orgId)) throw new Error("NOT_FOUND");
   return row;

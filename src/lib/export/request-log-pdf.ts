@@ -8,26 +8,24 @@ import { splitPiiPlaceholders } from "@/lib/gateway/safety/pii";
 import type { RequestLogDocument, RequestLogDocumentEntry, RequestLogDocumentField } from "@/types/logs";
 import {
   canvas,
-  type Canvas,
   COLORS,
   CONTENT_W,
   drawFooter,
   drawHeader,
-  type Font,
   FOOTER_RULE,
   MARGIN,
   PAGE_H,
   pdfDocument,
-  type Rgb,
   textWidth,
 } from "./pdf";
+import type { PdfCanvas, PdfColor, PdfFont } from "@/types/export";
 
-type Style = { font: Font; size: number; color: Rgb };
-type Run = Style & { text: string; fill?: Rgb; strike?: boolean };
+type Style = { font: PdfFont; size: number; color: PdfColor };
+type Run = Style & { text: string; fill?: PdfColor; strike?: boolean };
 type Segment = Run & { width: number };
 type Line = { segments: Segment[]; width: number };
-type Frame = { x: number; width: number; color: Rgb; bars: number[] };
-type Draw = (page: Canvas, top: number) => void;
+type Frame = { x: number; width: number; color: PdfColor; bars: number[] };
+type Draw = (page: PdfCanvas, top: number) => void;
 
 const BODY = 9.5;
 const LEADING = 13.6;
@@ -48,8 +46,8 @@ const FIT_TOLERANCE = 0.01;
 
 const markdown = unified().use(remarkParse).use(remarkGfm);
 
-const italic = (font: Font): Font => (font === "bold" ? "boldItalic" : font === "regular" ? "italic" : font);
-const bold = (font: Font): Font => (font === "italic" ? "boldItalic" : font === "regular" ? "bold" : font);
+const italic = (font: PdfFont): PdfFont => (font === "bold" ? "boldItalic" : font === "regular" ? "italic" : font);
+const bold = (font: PdfFont): PdfFont => (font === "italic" ? "boldItalic" : font === "regular" ? "bold" : font);
 
 function clean(value: string): string {
   return value
@@ -127,7 +125,7 @@ function wrap(runs: Run[], width: number): Line[] {
   return lines;
 }
 
-function drawLine(page: Canvas, line: Line, x: number, baseline: number) {
+function drawLine(page: PdfCanvas, line: Line, x: number, baseline: number) {
   let cursor = x;
   for (const segment of line.segments) {
     const style = { size: segment.size, font: segment.font, color: segment.color };
@@ -166,7 +164,7 @@ function columnWidths(natural: number[], total: number): number[] {
 }
 
 export function requestLogPdf(doc: RequestLogDocument): Uint8Array {
-  const pages: Canvas[] = [];
+  const pages: PdfCanvas[] = [];
   let page = canvas();
   pages.push(page);
   let y = drawHeader(page, { brand: doc.brand, title: doc.title, subtitle: doc.subtitle, badge: doc.status }) - 22;
@@ -277,7 +275,7 @@ export function requestLogPdf(doc: RequestLogDocument): Uint8Array {
     }
   }
 
-  function boxed(runs: Run[], fill: Rgb, frame: Frame = root) {
+  function boxed(runs: Run[], fill: PdfColor, frame: Frame = root) {
     const pad = 7;
     const lines = wrap(runs, frame.width - pad * 2);
     lines.forEach((line, index) => {

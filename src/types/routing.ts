@@ -60,3 +60,5 @@ export type ResolvedDeployment = Deployment & {
 };
 
 export type WeightedChoice = { id: string; weight: number };
+
+export type QuotaScores = Map<string, { pressure: number; reset: number }>;

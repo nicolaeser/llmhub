@@ -1,3 +1,6 @@
+import type { Principal } from "@/types/gateway";
+import type { Deployment } from "@/types/routing";
+
 export type LogKind = "requests" | "spend" | "audit";
 
 export type LogFilterValues = {
@@ -120,4 +123,23 @@ export type RequestLogDocument = {
   };
   piiLabel: (entity: string) => string;
   pageLabel: (page: number, total: number) => string;
+};
+
+export type RequestLogEntry = {
+  principal: Principal;
+  model: string;
+  deployment?: Deployment | null;
+  status: number;
+  outcome: string;
+  latencyMs: number;
+  tag: string;
+  promptTokens: number;
+  completionTokens: number;
+  cacheReadTokens: number;
+  cacheWriteTokens: number;
+  cost: number;
+  stream?: boolean;
+  request?: unknown;
+  response?: unknown;
+  error?: unknown;
 };

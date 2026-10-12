@@ -1,17 +1,5 @@
 import "server-only";
-
-export type Rgb = readonly [number, number, number];
-export type Font = "regular" | "bold" | "italic" | "boldItalic" | "mono";
-
-export type TextStyle = {
-  size: number;
-  font?: Font;
-  color?: Rgb;
-  align?: "left" | "right" | "center";
-  maxWidth?: number;
-  shrink?: boolean;
-  tracking?: number;
-};
+import type { PdfCanvas, PdfColor, PdfFont, PdfTextStyle } from "@/types/export";
 
 export const PAGE_W = 595.28;
 export const PAGE_H = 841.89;
@@ -36,9 +24,9 @@ export const COLORS = {
   warningSoft: [253, 240, 214],
   danger: [196, 32, 38],
   dangerSoft: [253, 228, 226],
-} satisfies Record<string, Rgb>;
+} satisfies Record<string, PdfColor>;
 
-const FONTS: Record<Font, { resource: string; baseFont: string }> = {
+const FONTS: Record<PdfFont, { resource: string; baseFont: string }> = {
   regular: { resource: "F1", baseFont: "Helvetica" },
   bold: { resource: "F2", baseFont: "Helvetica-Bold" },
   italic: { resource: "F3", baseFont: "Helvetica-Oblique" },
@@ -109,9 +97,9 @@ export function encode(value: string): number[] {
   return bytes;
 }
 
-const isBold = (font: Font) => font === "bold" || font === "boldItalic";
+const isBold = (font: PdfFont) => font === "bold" || font === "boldItalic";
 
-function advance(byte: number, font: Font): number {
+function advance(byte: number, font: PdfFont): number {
   if (font === "mono") return MONO_WIDTH;
   const bold = isBold(font);
   const widths = bold ? BOLD_WIDTHS : REGULAR_WIDTHS;
@@ -122,15 +110,15 @@ function advance(byte: number, font: Font): number {
   return base >= 0x20 && base <= 0x7e ? widths[base - 0x20]! : 556;
 }
 
-export function measure(bytes: number[], font: Font, size: number, tracking = 0): number {
+export function measure(bytes: number[], font: PdfFont, size: number, tracking = 0): number {
   return (bytes.reduce((sum, byte) => sum + advance(byte, font), 0) * size) / 1000 + tracking * bytes.length;
 }
 
-export function textWidth(value: string, style: TextStyle): number {
+export function textWidth(value: string, style: PdfTextStyle): number {
   return measure(encode(value), style.font ?? "regular", style.size, style.tracking);
 }
 
-function truncate(bytes: number[], font: Font, size: number, maxWidth: number): number[] {
+function truncate(bytes: number[], font: PdfFont, size: number, maxWidth: number): number[] {
   if (measure(bytes, font, size) <= maxWidth) return bytes;
   const out = bytes.slice();
   while (out.length > 0 && measure([...out, ELLIPSIS], font, size) > maxWidth) out.pop();
@@ -139,14 +127,14 @@ function truncate(bytes: number[], font: Font, size: number, maxWidth: number): 
 }
 
 const num = (value: number) => Number(value.toFixed(2)).toString();
-const rgb = (color: Rgb) => color.map((channel) => num(channel / 255)).join(" ");
+const rgb = (color: PdfColor) => color.map((channel) => num(channel / 255)).join(" ");
 const hex = (bytes: number[]) => bytes.map((byte) => byte.toString(16).padStart(2, "0")).join("");
 
 export function canvas() {
   const ops: string[] = [];
-  const fonts = new Set<Font>();
+  const fonts = new Set<PdfFont>();
 
-  function rect(x: number, y: number, w: number, h: number, fill: Rgb) {
+  function rect(x: number, y: number, w: number, h: number, fill: PdfColor) {
     ops.push(`${rgb(fill)} rg ${num(x)} ${num(y)} ${num(w)} ${num(h)} re f`);
   }
 
@@ -156,7 +144,7 @@ export function canvas() {
     w: number,
     h: number,
     radii: number | [number, number, number, number],
-    fill: Rgb,
+    fill: PdfColor,
   ) {
     const k = 0.5523;
     const [bl, br, tr, tl] = (typeof radii === "number" ? [radii, radii, radii, radii] : radii).map(
@@ -173,11 +161,11 @@ export function canvas() {
     ops.push(`${rgb(fill)} rg ${path.join(" ")} h f`);
   }
 
-  function line(x1: number, y1: number, x2: number, y2: number, stroke: Rgb, width = 0.5) {
+  function line(x1: number, y1: number, x2: number, y2: number, stroke: PdfColor, width = 0.5) {
     ops.push(`${rgb(stroke)} RG ${num(width)} w ${num(x1)} ${num(y1)} m ${num(x2)} ${num(y2)} l S`);
   }
 
-  function text(value: string, x: number, y: number, style: TextStyle) {
+  function text(value: string, x: number, y: number, style: PdfTextStyle) {
     const font = style.font ?? "regular";
     let size = style.size;
     let bytes = encode(value);
@@ -197,10 +185,8 @@ export function canvas() {
   return { ops, fonts, rect, roundedRect, line, text, textWidth };
 }
 
-export type Canvas = ReturnType<typeof canvas>;
-
 export function drawHeader(
-  page: Canvas,
+  page: PdfCanvas,
   input: { brand: string; title: string; subtitle: string; badge?: string },
 ): number {
   const bottom = PAGE_H - HEADER_H;
@@ -227,7 +213,7 @@ export function drawHeader(
   });
 
   if (input.badge) {
-    const style = { size: 8.5, font: "bold", color: COLORS.onAccent, maxWidth: 220 } satisfies TextStyle;
+    const style = { size: 8.5, font: "bold", color: COLORS.onAccent, maxWidth: 220 } satisfies PdfTextStyle;
     const width = Math.min(page.textWidth(input.badge, style), style.maxWidth);
     page.roundedRect(PAGE_W - MARGIN - width - 20, markY + 1, width + 20, 20, 10, COLORS.accentRaised);
     page.text(input.badge, PAGE_W - MARGIN - 10, markY + 8, { ...style, align: "right" });
@@ -247,7 +233,7 @@ export function drawHeader(
   return bottom;
 }
 
-export function drawFooter(page: Canvas, input: { left: string; center?: string; right: string }) {
+export function drawFooter(page: PdfCanvas, input: { left: string; center?: string; right: string }) {
   page.line(MARGIN, FOOTER_RULE, PAGE_W - MARGIN, FOOTER_RULE, COLORS.border, 0.5);
   const third = CONTENT_W / 3 - 8;
   page.text(input.left, MARGIN, FOOTER_RULE - 14, { size: 8, color: COLORS.muted, maxWidth: input.center ? third : CONTENT_W / 2 });
@@ -269,8 +255,8 @@ function pdfString(value: string): string {
   return `<${out}>`;
 }
 
-export function pdfDocument(pages: Canvas[], info: { title: string; producer: string }): Uint8Array {
-  const used = (Object.keys(FONTS) as Font[]).filter((font) => pages.some((page) => page.fonts.has(font)));
+export function pdfDocument(pages: PdfCanvas[], info: { title: string; producer: string }): Uint8Array {
+  const used = (Object.keys(FONTS) as PdfFont[]).filter((font) => pages.some((page) => page.fonts.has(font)));
   const fontRefs = new Map(used.map((font, index) => [font, index + 3]));
   const firstPage = 3 + used.length;
   const pageRef = (index: number) => firstPage + index * 2;

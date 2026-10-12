@@ -1,3 +1,4 @@
+import type { Prisma } from "@/generated/prisma/client";
 import type { JsonMap, Principal } from "@/types/gateway";
 import type { OutputGuard } from "@/types/guardrails";
 
@@ -59,6 +60,16 @@ export type FileCounts = {
 };
 
 export type StoreUsage = { counts: FileCounts; usageBytes: number };
+
+export type VectorStoreRow = Prisma.VectorStoreGetPayload<object>;
+
+export type VectorStoreFileRow = Prisma.VectorStoreFileGetPayload<object>;
+
+export type FileAttachRequest = {
+  fileId: string;
+  chunk: ChunkSettings;
+  attributes: Attributes;
+};
 
 export type FileIndex = {
   stamp: number;

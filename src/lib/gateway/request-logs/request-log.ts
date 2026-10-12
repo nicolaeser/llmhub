@@ -8,30 +8,10 @@ import { errorFields } from "@/lib/logging/format";
 import { logger } from "@/lib/logging/logger";
 import type { Prisma } from "@/generated/prisma/client";
 import type { Principal } from "@/types/gateway";
-import type { Deployment } from "@/types/routing";
 import type { Enterprise } from "@/types/settings";
-import type { ContentSkip } from "@/types/logs";
+import type { ContentSkip, RequestLogEntry } from "@/types/logs";
 
 const ERROR_LIMIT = 2_000;
-
-export type RequestLogEntry = {
-  principal: Principal;
-  model: string;
-  deployment?: Deployment | null;
-  status: number;
-  outcome: string;
-  latencyMs: number;
-  tag: string;
-  promptTokens: number;
-  completionTokens: number;
-  cacheReadTokens: number;
-  cacheWriteTokens: number;
-  cost: number;
-  stream?: boolean;
-  request?: unknown;
-  response?: unknown;
-  error?: unknown;
-};
 
 export async function contentSkip(principal: Principal, enterprise: Enterprise): Promise<ContentSkip> {
   if (enterprise.log_content === false) return "gateway";

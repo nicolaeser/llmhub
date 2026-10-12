@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { type UsagePdfInput, usagePdf } from "@/lib/export/usage-pdf";
+import { usagePdf } from "@/lib/export/usage-pdf";
+import type { UsagePdfInput } from "@/types/export";
 
 function input(overrides: Partial<UsagePdfInput> = {}): UsagePdfInput {
   return {

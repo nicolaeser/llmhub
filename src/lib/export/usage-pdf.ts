@@ -2,7 +2,6 @@ import "server-only";
 
 import {
   canvas,
-  type Canvas,
   COLORS,
   CONTENT_W,
   drawFooter,
@@ -11,39 +10,9 @@ import {
   MARGIN,
   PAGE_W,
   pdfDocument,
-  type TextStyle,
 } from "./pdf";
-import type { UsagePdfStats } from "@/types/export";
+import type { PdfCanvas, PdfTextStyle, UsagePdfInput, UsagePdfStats } from "@/types/export";
 import type { Formatter, Translate } from "@/types/i18n";
-
-export type UsagePdfInput = {
-  brand: string;
-  title: string;
-  period: string;
-  filter?: string;
-  generated: string;
-  kpis: { label: string; value: string }[];
-  daily: {
-    heading: string;
-    days: { label: string; value: number }[];
-    formatTick: (value: number) => string;
-    empty: string;
-  };
-  byModel: {
-    heading: string;
-    columns: { model: string; share: string; spend: string; prompt: string; completion: string };
-    rows: {
-      name: string;
-      share: number;
-      shareLabel: string;
-      spend: string;
-      prompt: string;
-      completion: string;
-    }[];
-    total: { name: string; spend: string; prompt: string; completion: string };
-    empty: string;
-  };
-};
 
 function niceStep(max: number, count: number): number {
   const raw = max / count;
@@ -51,7 +20,7 @@ function niceStep(max: number, count: number): number {
   return ([1, 2, 2.5, 5, 10].find((factor) => factor * magnitude >= raw) ?? 10) * magnitude;
 }
 
-function drawKpis(page: Canvas, kpis: UsagePdfInput["kpis"], top: number): number {
+function drawKpis(page: PdfCanvas, kpis: UsagePdfInput["kpis"], top: number): number {
   const columns = 4;
   const gap = 10;
   const height = 56;
@@ -72,13 +41,13 @@ function drawKpis(page: Canvas, kpis: UsagePdfInput["kpis"], top: number): numbe
   return top - rows * height - Math.max(0, rows - 1) * gap;
 }
 
-function drawDailyChart(page: Canvas, daily: UsagePdfInput["daily"], top: number): number {
+function drawDailyChart(page: PdfCanvas, daily: UsagePdfInput["daily"], top: number): number {
   page.text(daily.heading, MARGIN, top - 12, { size: 11, font: "bold" });
   const plotTop = top - 32;
   const plotHeight = 110;
   const baseline = plotTop - plotHeight;
   const right = PAGE_W - MARGIN;
-  const tickStyle = { size: 7.5, color: COLORS.muted } satisfies TextStyle;
+  const tickStyle = { size: 7.5, color: COLORS.muted } satisfies PdfTextStyle;
   const values = daily.days.map((day) => Math.max(0, day.value));
   const max = Math.max(0, ...values);
 
@@ -134,7 +103,7 @@ function drawDailyChart(page: Canvas, daily: UsagePdfInput["daily"], top: number
   return baseline - 12;
 }
 
-function drawModelTable(page: Canvas, table: UsagePdfInput["byModel"], top: number) {
+function drawModelTable(page: PdfCanvas, table: UsagePdfInput["byModel"], top: number) {
   page.text(table.heading, MARGIN, top - 12, { size: 11, font: "bold" });
   const rowHeight = 19;
   const right = PAGE_W - MARGIN;
@@ -146,8 +115,8 @@ function drawModelTable(page: Canvas, table: UsagePdfInput["byModel"], top: numb
     completion: right - 10,
   };
   const shareBar = 64;
-  const header = { size: 7.5, font: "bold", color: COLORS.muted } satisfies TextStyle;
-  const cell = { size: 9 } satisfies TextStyle;
+  const header = { size: 7.5, font: "bold", color: COLORS.muted } satisfies PdfTextStyle;
+  const cell = { size: 9 } satisfies PdfTextStyle;
 
   let y = top - 24;
   page.roundedRect(MARGIN, y - rowHeight, CONTENT_W, rowHeight, 4, COLORS.surface);
@@ -181,7 +150,7 @@ function drawModelTable(page: Canvas, table: UsagePdfInput["byModel"], top: numb
 
   page.line(MARGIN, y, right, y, COLORS.ink, 0.75);
   const baseline = y - 12.5;
-  const total = { ...cell, font: "bold" } satisfies TextStyle;
+  const total = { ...cell, font: "bold" } satisfies PdfTextStyle;
   page.text(table.total.name, col.model, baseline, total);
   page.text(table.total.spend, col.spend, baseline, { ...total, align: "right" });
   page.text(table.total.prompt, col.prompt, baseline, { ...total, align: "right" });

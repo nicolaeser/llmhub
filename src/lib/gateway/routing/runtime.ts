@@ -14,7 +14,6 @@ import {
   pickQuotaSmart,
   pickRoundRobin,
   pickWeighted,
-  type QuotaScores,
 } from "@/lib/gateway/routing/router";
 import { quotaBottleneckReset, quotaExhausted, quotaPressure } from "@/lib/gateway/routing/quota";
 import { limitsSnapshot, warmLimits } from "@/lib/gateway/upstreams/subscription-limits";
@@ -32,7 +31,7 @@ import { priceWindowQuery, priceWindowRates } from "@/lib/gateway/billing/price-
 import { costRejection } from "@/lib/gateway/billing/cost-cap";
 import { coolingDown, recordFailure, recordSuccess } from "@/lib/gateway/routing/provider-health";
 import type { CostFilter } from "@/types/billing";
-import type { DeploymentRow, ResolvedModelGroup, ResolvedDeployment, Deployment } from "@/types/routing";
+import type { DeploymentRow, ResolvedModelGroup, ResolvedDeployment, Deployment, QuotaScores } from "@/types/routing";
 import type { AccountAccess } from "@/types/providers";
 import type { DeploymentRule, RoutePolicy } from "@/types/model-templates";
 import { money } from "@/lib/utils/money";

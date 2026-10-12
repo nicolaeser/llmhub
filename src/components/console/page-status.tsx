@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import { Alert, Button, Spinner } from "@heroui/react";
 import { RotateCcw } from "lucide-react";
 import { useTranslations } from "next-intl";
-import type { LoadStatus } from "@/lib/hooks/use-action-data";
+import type { LoadStatus } from "@/types/actions";
 import PageHeader from "./page-header";
 
 export function PageLoading() {

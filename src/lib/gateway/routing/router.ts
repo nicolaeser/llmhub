@@ -1,8 +1,6 @@
 import "server-only";
 import { ERR_NO_HEALTHY } from "@/lib/gateway/core";
-import type { WeightedChoice, Deployment } from "@/types/routing";
-
-export type QuotaScores = Map<string, { pressure: number; reset: number }>;
+import type { Deployment, QuotaScores, WeightedChoice } from "@/types/routing";
 
 export function pickWeighted<T extends WeightedChoice>(items: T[]): T {
   const eligible = items.filter((i) => (i.weight ?? 1) > 0);

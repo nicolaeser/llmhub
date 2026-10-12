@@ -14,6 +14,7 @@ import type { JsonMap, Principal } from "@/types/gateway";
 import type {
   Attributes,
   ChunkSettings,
+  FileAttachRequest,
   FileCounts,
   IngestSnapshot,
   ListQuery,
@@ -21,7 +22,9 @@ import type {
   VectorFileError,
   VectorFileStatus,
   VectorStoreDefaults,
+  VectorStoreFileRow,
   VectorStoreOwner,
+  VectorStoreRow,
   VectorStoreStatus,
 } from "@/types/rag";
 
@@ -30,9 +33,6 @@ export const BATCH_PREFIX = "vsfb_";
 export const MAX_STORE_FILES = 10_000;
 const DAY_MS = 86_400_000;
 const FILE_STATUSES = ["in_progress", "completed", "failed", "cancelled"] as const;
-
-export type StoreRow = Prisma.VectorStoreGetPayload<object>;
-export type StoreFileRow = Prisma.VectorStoreFileGetPayload<object>;
 
 export function unixSeconds(date: Date | null | undefined): number | null {
   return date ? Math.floor(date.getTime() / 1000) : null;
@@ -66,7 +66,7 @@ export async function storeUsage(ids: string[]): Promise<Map<string, StoreUsage>
   return out;
 }
 
-export function storeStatus(row: Pick<StoreRow, "expiresAt">, counts: FileCounts, now = new Date()): VectorStoreStatus {
+export function storeStatus(row: Pick<VectorStoreRow, "expiresAt">, counts: FileCounts, now = new Date()): VectorStoreStatus {
   if (row.expiresAt && row.expiresAt <= now) return "expired";
   return counts.in_progress > 0 ? "in_progress" : "completed";
 }
@@ -75,7 +75,7 @@ export function expiresAtOf(days: number | null | undefined, from: Date): Date |
   return days ? new Date(from.getTime() + days * DAY_MS) : null;
 }
 
-export function storeJson(row: StoreRow, usage: StoreUsage | undefined): JsonMap {
+export function storeJson(row: VectorStoreRow, usage: StoreUsage | undefined): JsonMap {
   const counts = usage?.counts ?? emptyCounts();
   return {
     id: row.id,
@@ -99,7 +99,7 @@ export function storeJson(row: StoreRow, usage: StoreUsage | undefined): JsonMap
   };
 }
 
-export async function storesJson(rows: StoreRow[]): Promise<JsonMap[]> {
+export async function storesJson(rows: VectorStoreRow[]): Promise<JsonMap[]> {
   const usage = await storeUsage(rows.map((row) => row.id));
   return rows.map((row) => storeJson(row, usage.get(row.id)));
 }
@@ -110,7 +110,7 @@ export function fileError(value: unknown): VectorFileError | null {
   return { code: rec.code as VectorFileError["code"], message: typeof rec.message === "string" ? rec.message : "" };
 }
 
-export function fileJson(row: StoreFileRow): JsonMap {
+export function fileJson(row: VectorStoreFileRow): JsonMap {
   return {
     id: row.fileId,
     object: "vector_store.file",
@@ -128,13 +128,13 @@ function notFound(id: string): GateError {
   return new GateError(404, "not_found", `vector store ${id} not found`, { param: "vector_store_id" });
 }
 
-export async function readableStore(principal: Principal, id: string): Promise<StoreRow> {
+export async function readableStore(principal: Principal, id: string): Promise<VectorStoreRow> {
   const row = await prisma.vectorStore.findUnique({ where: { id } });
   if (!row || !readsStore(principal, row)) throw notFound(id);
   return row;
 }
 
-export async function writableStore(principal: Principal, id: string): Promise<StoreRow> {
+export async function writableStore(principal: Principal, id: string): Promise<VectorStoreRow> {
   const row = await readableStore(principal, id);
   if (!ownsStore(principal, row)) {
     throw new GateError(403, "permission_denied", "company vector stores are read-only for API keys; manage them in the console");
@@ -142,7 +142,7 @@ export async function writableStore(principal: Principal, id: string): Promise<S
   return row;
 }
 
-export function usableStore(row: StoreRow): StoreRow {
+export function usableStore(row: VectorStoreRow): VectorStoreRow {
   if (row.expiresAt && row.expiresAt <= new Date()) {
     throw new GateError(400, "invalid_request", `vector store ${row.id} has expired`, { param: "vector_store_id" });
   }
@@ -161,7 +161,7 @@ export async function createVectorStore(input: {
   chunk: Pick<ChunkSettings, "maxTokens" | "overlapTokens">;
   metadata: Record<string, string>;
   expiresAfterDays: number | null;
-}): Promise<StoreRow> {
+}): Promise<VectorStoreRow> {
   const now = new Date();
   return prisma.vectorStore.create({
     data: {
@@ -185,7 +185,7 @@ export async function createVectorStore(input: {
 }
 
 export async function updateVectorStore(
-  row: StoreRow,
+  row: VectorStoreRow,
   patch: {
     name?: string;
     description?: string;
@@ -194,7 +194,7 @@ export async function updateVectorStore(
     rerankModel?: string;
     ocrModel?: string;
   },
-): Promise<StoreRow> {
+): Promise<VectorStoreRow> {
   const data: Prisma.VectorStoreUpdateInput = {};
   if (patch.name !== undefined) data.name = patch.name;
   if (patch.description !== undefined) data.description = patch.description;
@@ -214,7 +214,7 @@ export async function deleteVectorStore(id: string): Promise<boolean> {
   return deleted.count > 0;
 }
 
-export async function touchStores(rows: Pick<StoreRow, "id" | "expiresAfterDays">[]): Promise<void> {
+export async function touchStores(rows: Pick<VectorStoreRow, "id" | "expiresAfterDays">[]): Promise<void> {
   const now = new Date();
   await Promise.all(
     rows.map((row) =>
@@ -305,12 +305,6 @@ export async function ingestPrincipal(raw: unknown): Promise<Principal | null> {
   return { ...sessionPrincipal(user), orgId };
 }
 
-export type AttachRequest = {
-  fileId: string;
-  chunk: ChunkSettings;
-  attributes: Attributes;
-};
-
 const CONSOLE_OWNER = "vector-store:";
 const ORPHAN_GRACE_MS = 60 * 60_000;
 
@@ -343,12 +337,12 @@ async function readableFiles(owner: string, ids: string[]): Promise<Map<string, 
 }
 
 export async function attachFiles(input: {
-  store: StoreRow;
+  store: VectorStoreRow;
   fileOwner: string;
   snapshot: IngestSnapshot;
-  files: AttachRequest[];
+  files: FileAttachRequest[];
   batchId: string;
-}): Promise<StoreFileRow[]> {
+}): Promise<VectorStoreFileRow[]> {
   const ids = [...new Set(input.files.map((file) => file.fileId))];
   if (!ids.length) return [];
   const names = await readableFiles(input.fileOwner, ids);
@@ -363,7 +357,7 @@ export async function attachFiles(input: {
     });
   }
   const seen = new Set<string>();
-  const rows: StoreFileRow[] = [];
+  const rows: VectorStoreFileRow[] = [];
   for (const file of input.files) {
     if (seen.has(file.fileId)) continue;
     seen.add(file.fileId);
@@ -395,13 +389,13 @@ export async function attachFiles(input: {
   return rows;
 }
 
-export async function storeFile(storeId: string, fileId: string): Promise<StoreFileRow> {
+export async function storeFile(storeId: string, fileId: string): Promise<VectorStoreFileRow> {
   const row = await prisma.vectorStoreFile.findUnique({ where: { storeId_fileId: { storeId, fileId } } });
   if (!row) throw new GateError(404, "not_found", `file ${fileId} is not in vector store ${storeId}`, { param: "file_id" });
   return row;
 }
 
-export async function updateFileAttributes(row: StoreFileRow, attributes: Attributes): Promise<StoreFileRow> {
+export async function updateFileAttributes(row: VectorStoreFileRow, attributes: Attributes): Promise<VectorStoreFileRow> {
   return prisma.vectorStoreFile.update({
     where: { storeId_fileId: { storeId: row.storeId, fileId: row.fileId } },
     data: { attributes },
@@ -414,7 +408,7 @@ export async function detachFile(storeId: string, fileId: string): Promise<boole
   return deleted.count > 0;
 }
 
-export async function fileChunksJson(row: StoreFileRow): Promise<JsonMap> {
+export async function fileChunksJson(row: VectorStoreFileRow): Promise<JsonMap> {
   const chunks = await prisma.vectorChunk.findMany({
     where: { storeId: row.storeId, fileId: row.fileId },
     orderBy: { position: "asc" },

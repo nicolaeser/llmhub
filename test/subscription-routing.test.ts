@@ -12,11 +12,10 @@ import {
   pickQuotaExpiring,
   pickQuotaSmart,
   pickRoundRobin,
-  type QuotaScores,
 } from "@/lib/gateway/routing/router";
 import { claudeLimits } from "@/lib/gateway/upstreams/subscription-limits";
 import type { Principal } from "@/types/gateway";
-import type { Deployment } from "@/types/routing";
+import type { Deployment, QuotaScores } from "@/types/routing";
 import type { VirtualKeyView } from "@/types/keys";
 import type { LimitWindow, SubscriptionLimits } from "@/types/providers";
 

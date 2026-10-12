@@ -14,8 +14,6 @@ import {
   ingestSnapshot,
   storesJson,
   vectorDefaults,
-  type AttachRequest,
-  type StoreRow,
 } from "@/lib/rag/stores";
 import type { ZodType, z } from "zod";
 import type {
@@ -25,7 +23,7 @@ import type {
   searchVectorStoreSchema,
 } from "@/schemas/rag";
 import type { JsonMap, Principal } from "@/types/gateway";
-import type { SearchRequest, SearchableStore } from "@/types/rag";
+import type { FileAttachRequest, SearchRequest, SearchableStore, VectorStoreRow } from "@/types/rag";
 
 export async function parseBody<T>(req: Request, schema: ZodType<T>): Promise<T> {
   const parsed = parseRequest(schema, await readBody(req));
@@ -33,7 +31,7 @@ export async function parseBody<T>(req: Request, schema: ZodType<T>): Promise<T>
   return parsed.data;
 }
 
-export function searchableStore(row: StoreRow): SearchableStore {
+export function searchableStore(row: VectorStoreRow): SearchableStore {
   return {
     id: row.id,
     embeddingModel: row.embeddingModel,
@@ -97,7 +95,7 @@ export async function createStoreFor(
   return (await storesJson([store]))[0]!;
 }
 
-export async function attachFor(principal: Principal, store: StoreRow, files: AttachRequest[], batchId: string) {
+export async function attachFor(principal: Principal, store: VectorStoreRow, files: FileAttachRequest[], batchId: string) {
   const rows = await attachFiles({
     store,
     fileOwner: ownerId(principal),
@@ -109,7 +107,7 @@ export async function attachFor(principal: Principal, store: StoreRow, files: At
   return rows;
 }
 
-export function attachRequest(store: StoreRow, body: z.infer<typeof attachFileSchema>): AttachRequest {
+export function attachRequest(store: VectorStoreRow, body: z.infer<typeof attachFileSchema>): FileAttachRequest {
   return {
     fileId: body.file_id,
     chunk: chunkSettings(body.chunking_strategy, {
@@ -120,7 +118,7 @@ export function attachRequest(store: StoreRow, body: z.infer<typeof attachFileSc
   };
 }
 
-export function batchRequests(store: StoreRow, body: z.infer<typeof fileBatchSchema>): AttachRequest[] {
+export function batchRequests(store: VectorStoreRow, body: z.infer<typeof fileBatchSchema>): FileAttachRequest[] {
   const shared = { chunking_strategy: body.chunking_strategy, attributes: body.attributes };
   const files = body.files?.length
     ? body.files.map((file) => ({

@@ -190,6 +190,8 @@ export type AccountLimits = {
   error: string;
 };
 
+export type AccountState = "paused" | "available" | "limited" | "expired" | "unavailable" | "checking" | "connected";
+
 export type SignInPollResult =
   | { state: "pending"; interval: number }
   | { state: "done"; credential: string; account: string; plan: string };

@@ -1,30 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { actionFail, isActionFail } from "@/lib/http/action-result";
-import type { ActionFail } from "@/types/actions";
+import type { ActionData, ActionDataUpdate, ActionFail, ActionLoader, ActionSnapshot } from "@/types/actions";
 
-type Loader<T> = () => Promise<T | ActionFail>;
-
-type Snapshot<T> = {
-  data: T | null;
-  error: string | null;
-  pending: boolean;
-};
-
-export type LoadStatus = {
-  error: string | null;
-  pending: boolean;
-  reload: () => void;
-};
-
-type Update<T> = T | ((current: T) => T);
-
-export type ActionData<T> = Snapshot<T> &
-  LoadStatus & {
-    reloadWith: (next: Loader<T>) => void;
-    setData: (update: Update<T>) => void;
-  };
-
-async function settle<T>(load: Loader<T>): Promise<T | ActionFail> {
+async function settle<T>(load: ActionLoader<T>): Promise<T | ActionFail> {
   try {
     return await load();
   } catch {
@@ -32,12 +10,12 @@ async function settle<T>(load: Loader<T>): Promise<T | ActionFail> {
   }
 }
 
-function applyUpdate<T>(update: Update<T>, current: T): T {
+function applyUpdate<T>(update: ActionDataUpdate<T>, current: T): T {
   return typeof update === "function" ? (update as (current: T) => T)(current) : update;
 }
 
-export function useActionData<T>(load: Loader<T>, onLoad?: (data: T) => void): ActionData<T> {
-  const [snapshot, setSnapshot] = useState<Snapshot<T>>({ data: null, error: null, pending: true });
+export function useActionData<T>(load: ActionLoader<T>, onLoad?: (data: T) => void): ActionData<T> {
+  const [snapshot, setSnapshot] = useState<ActionSnapshot<T>>({ data: null, error: null, pending: true });
   const loader = useRef(load);
   const listener = useRef(onLoad);
   const latest = useRef(0);
@@ -69,14 +47,14 @@ export function useActionData<T>(load: Loader<T>, onLoad?: (data: T) => void): A
   }, [run]);
 
   const reloadWith = useCallback(
-    (next: Loader<T>) => {
+    (next: ActionLoader<T>) => {
       loader.current = next;
       reload();
     },
     [reload],
   );
 
-  const setData = useCallback((update: Update<T>) => {
+  const setData = useCallback((update: ActionDataUpdate<T>) => {
     setSnapshot((current) =>
       current.data === null ? current : { ...current, data: applyUpdate(update, current.data) },
     );
