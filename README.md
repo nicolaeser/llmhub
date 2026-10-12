@@ -17,18 +17,19 @@ It ships as one container image backed by PostgreSQL, with optional Redis and S3
 
 ## Quick start
 
-You need Docker with the Compose plugin and a domain that points to the server.
+You need Docker with the Compose plugin, bash 5, and a domain that points to the server.
 
 ```bash
 curl -fsSLO https://raw.githubusercontent.com/nicolaeser/llmhub/main/docker-compose.yml
 curl -fsSLO https://raw.githubusercontent.com/nicolaeser/llmhub/main/generate-env.sh
-sh generate-env.sh https://hub.example.com
+chmod +x generate-env.sh
+./generate-env.sh
 docker compose up -d
 ```
 
-`generate-env.sh` writes `.env` with `NEXT_PUBLIC_APP_URL`, a fresh `APP_SECRET`, the Postgres user and database name (`POSTGRES_USER` and `POSTGRES_DB`, both `llmhub`), and fresh `POSTGRES_PASSWORD` and `REDIS_PASSWORD`. It never overwrites an existing `.env`. Keep `APP_SECRET` stable: it encrypts stored provider keys and signs sessions.
+`generate-env.sh` writes the production `.env` next to `docker-compose.yml`. It asks for the image tag, the public URL, the host port, and the optional mail, single sign-on, and S3 values, sets `NODE_ENV=production`, and generates `APP_SECRET`, `POSTGRES_PASSWORD`, and `REDIS_PASSWORD`. It shows a summary with masked secrets and writes the file with mode 600. Without a terminal, or with `--yes`, it takes the defaults and reads answers from the environment (`NEXT_PUBLIC_APP_URL=https://hub.example.com ./generate-env.sh --yes`). An existing `.env` is replaced only with `--force`, which keeps its values and leaves the previous file in `.env.bak`. Keep `APP_SECRET` stable: it encrypts stored provider keys and signs sessions.
 
-The app listens on `127.0.0.1:3000`. Put a reverse proxy with TLS in front of it, for example Caddy:
+The app listens on `127.0.0.1:3000` (`LLMHUB_PORT`). Put a reverse proxy with TLS in front of it, for example Caddy:
 
 ```text
 hub.example.com {
@@ -51,10 +52,11 @@ Health and version probes are `GET /internal-api/health` (liveness, includes the
 
 ## Configuration
 
-The app reads the variables below. `.env.example` lists all of them with placeholder values. Everything else, such as S3 bucket settings, the OIDC issuer and client id, registration, retention, PII and guardrail policies, and alert webhooks, is configured in Admin settings and stored in the database.
+The app reads the variables below; `.env.example` is the template for local development. Everything else, such as S3 bucket settings, the OIDC issuer and client id, registration, retention, PII and guardrail policies, and alert webhooks, is configured in Admin settings and stored in the database.
 
 | Variable | Required | Default | Purpose |
 | --- | --- | --- | --- |
+| `NODE_ENV` | yes | none | `production` or `development`. Any other value stops the container before it starts. The compose file and the image set `production`. |
 | `DATABASE_URL` | yes | none | PostgreSQL connection string. The compose files build it from the `POSTGRES_*` values and override any value in `.env`. |
 | `APP_SECRET` | yes | none | At least 32 characters. Derives the keys that encrypt provider credentials, secret settings, and TOTP secrets, and signs sessions and sign-in state. Changing it invalidates all of these. |
 | `NEXT_PUBLIC_APP_URL` | no | `http://localhost:3000` | Public origin of the console. Used for same-origin checks, redirects, password reset links, the OIDC callback, and passkeys (which need HTTPS with a domain, or `localhost`). |
@@ -70,12 +72,14 @@ The compose files also read these values from `.env`. They configure the Postgre
 
 | Variable | Default from `generate-env.sh` | Purpose |
 | --- | --- | --- |
+| `LLMHUB_TAG` | `latest` | Image tag of `ghcr.io/nicolaeser/llmhub`. |
+| `LLMHUB_PORT` | `3000` | Host port on `127.0.0.1` for the reverse proxy. |
 | `POSTGRES_USER` | `llmhub` | Database user. |
 | `POSTGRES_DB` | `llmhub` | Database name. |
 | `POSTGRES_PASSWORD` | random | Database password. |
 | `REDIS_PASSWORD` | random | Redis password (`--requirepass`). |
 
-The image fixes `PORT=3000`, `HOSTNAME=0.0.0.0`, and `NODE_ENV=production`.
+The image sets `PORT=3000`, `HOSTNAME=0.0.0.0`, and `NODE_ENV=production`.
 
 ### Storage
 
@@ -103,10 +107,10 @@ Restore with the same or a newer image than the one that wrote the backup. A new
 
 ## Upgrading
 
-`docker-compose.yml` uses `ghcr.io/nicolaeser/llmhub:latest`. For controlled upgrades, pin a release tag instead, for example `ghcr.io/nicolaeser/llmhub:v2026.10.12.abc1234`. Every release on the [releases page](https://github.com/nicolaeser/llmhub/releases) lists its tags and image digest. The `dev` tag follows the `development` branch and is published as a prerelease.
+`docker-compose.yml` runs `ghcr.io/nicolaeser/llmhub:${LLMHUB_TAG}`, `latest` by default. For controlled upgrades, set `LLMHUB_TAG` in `.env` to a release tag instead, for example `v2026.10.12.abc1234`. Every release on the [releases page](https://github.com/nicolaeser/llmhub/releases) lists its tags and image digest. The `dev` tag follows the `development` branch and is published as a prerelease.
 
 1. Back up the database and `.env` as described above.
-2. Change the image tag in `docker-compose.yml`.
+2. Change `LLMHUB_TAG` in `.env`.
 3. Run `docker compose pull app && docker compose up -d`.
 4. Check `/internal-api/ready` and `/internal-api/version`.
 
@@ -117,7 +121,8 @@ Each container start applies pending migrations under a database lock before the
 Requirements: Node.js 24 or newer and Docker.
 
 ```bash
-sh generate-env.sh
+cp .env.example .env
+openssl rand -hex 32
 docker compose -f docker-compose.dev.yml up -d postgres redis rustfs
 npm ci
 npx prisma generate
@@ -125,7 +130,7 @@ npm run db:migrate
 npm run dev
 ```
 
-Without a URL, `generate-env.sh` writes a local `.env` that also points `DATABASE_URL` at Postgres on `127.0.0.1:5433`, `REDIS_URL` at password-protected Redis on `127.0.0.1:6379` (BullMQ), and carries the S3 keys for RustFS on `127.0.0.1:9000` (console on `127.0.0.1:9001`). `docker compose -f docker-compose.dev.yml up --build` builds and runs the image locally.
+Put the generated value into `APP_SECRET` in `.env`. `.env.example` sets `NODE_ENV=development` and points `DATABASE_URL` at Postgres on `127.0.0.1:5433`, `REDIS_URL` at Redis on `127.0.0.1:6379` (BullMQ), and the S3 keys at RustFS on `127.0.0.1:9000` (console on `127.0.0.1:9001`). `docker compose -f docker-compose.dev.yml up --build` builds and runs the production image locally.
 
 | Command | Purpose |
 | --- | --- |

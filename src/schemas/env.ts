@@ -15,6 +15,7 @@ const optionalTrimmedString = z
   .transform((v) => v?.trim() || undefined);
 
 export const envSchema = z.object({
+  NODE_ENV: z.enum(["development", "production"]),
   DATABASE_URL: z.string().min(1),
   APP_SECRET: z.string().min(32),
   NEXT_PUBLIC_APP_URL: z.preprocess(

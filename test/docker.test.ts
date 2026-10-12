@@ -115,11 +115,12 @@ test("deploy compose pulls the published image and dev compose builds it", async
     file("docker-compose.yml"),
     file("docker-compose.dev.yml"),
   ]);
-  assert.match(deploy, /image: ghcr\.io\/nicolaeser\/llmhub:latest/);
+  assert.match(deploy, /image: ghcr\.io\/nicolaeser\/llmhub:\$\{LLMHUB_TAG:-latest\}/);
   assert.doesNotMatch(deploy + dev, /:\?/);
   assert.doesNotMatch(deploy, /build:/);
   assert.match(dev, /build:\n {6}context: \./);
-  assert.match(deploy, /"127\.0\.0\.1:3000:3000"/);
+  assert.match(deploy, /"127\.0\.0\.1:\$\{LLMHUB_PORT:-3000\}:3000"/);
+  for (const source of [deploy, dev]) assert.match(source, /NODE_ENV: production/);
 });
 
 test("compose keeps postgres and redis data in bind mounts next to the compose file", async () => {
@@ -163,19 +164,17 @@ test("compose files read credentials from the generated .env", async () => {
   assert.match(dev, /RUSTFS_SECRET_KEY: \$\{S3_SECRET_ACCESS_KEY\}/);
 });
 
-test("generate-env.sh writes the minimal secrets and never overwrites .env", async () => {
+test("generate-env.sh writes the production .env and keeps an existing one", async () => {
   const script = await file("generate-env.sh");
-  assert.match(script, /\[ -e \.env \] && fail/);
-  assert.match(script, /umask 077/);
-  for (const name of [
-    "NEXT_PUBLIC_APP_URL",
-    "APP_SECRET",
-    "POSTGRES_USER",
-    "POSTGRES_DB",
-    "POSTGRES_PASSWORD",
-    "REDIS_PASSWORD",
-  ]) {
-    assert.match(script, new RegExp(`^${name}=`, "m"), name);
+  assert.match(script, /^#!\/usr\/bin\/env bash$/m);
+  assert.match(script, /^set_value NODE_ENV production$/m);
+  assert.match(script, /--force\) FORCE=true/);
+  assert.match(script, /chmod 600 "\$tmp"/);
+  for (const name of ["LLMHUB_TAG", "NEXT_PUBLIC_APP_URL", "LLMHUB_PORT", "POSTGRES_USER", "POSTGRES_DB", "SMTP_URL"]) {
+    assert.match(script, new RegExp(`^\\s*ask(_secret)? ${name} `, "m"), name);
   }
-  assert.doesNotMatch(script, /JWT_SECRET|HUB_DATA_KEY/);
+  for (const name of ["POSTGRES_PASSWORD", "REDIS_PASSWORD", "APP_SECRET"]) {
+    assert.match(script, new RegExp(`^generated ${name} `, "m"), name);
+  }
+  assert.doesNotMatch(script, /^\s*(set_value|ask|generated|keep_or) (DATABASE_URL|REDIS_URL) |127\.0\.0\.1:5433|NODE_ENV development/m);
 });
