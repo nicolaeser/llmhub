@@ -70,7 +70,7 @@ The collapsed rail widths (`w-16` / `w-64`), meter fills, and table `min-w-*` lo
 | Destructive | `variant="danger"` or `variant="danger-soft"` |
 | Icon-only | `Button isIconOnly` + `aria-label` |
 | Panel | `Card` + `Card.Header` / `Card.Title` / `Card.Description` / `Card.Content` / `Card.Footer` |
-| Menu | `Dropdown.Trigger` + `Dropdown.Popover` + `Dropdown.Menu` |
+| Menu | `Dropdown` with a `Button` child + `Dropdown.Popover` + `Dropdown.Menu`; `Dropdown.Trigger` only for a custom non-button trigger, never wrapping a `Button` |
 | Tabs | `Tabs`; `List` needs `aria-label` |
 | Fields | `TextField` + `Label` + `Input` + `Description` + `FieldError` |
 | Overlay | `Modal` with `Modal.Backdrop`; `useOverlayState` |

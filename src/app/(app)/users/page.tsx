@@ -259,23 +259,21 @@ export default function UsersPage() {
                         <Table.Cell>
                           {user.manageable && (data.canManage || data.canSecure || data.canBudget) ? (
                             <Dropdown>
-                              <Dropdown.Trigger>
-                                <Button
-                                  isIconOnly
-                                  size="sm"
-                                  variant="ghost"
-                                  isPending={busyId === user.id}
-                                  aria-label={t("actionsMenu", { username: user.username })}
-                                >
-                                  {({ isPending }) =>
-                                    isPending ? (
-                                      <Spinner color="current" size="sm" />
-                                    ) : (
-                                      <MoreHorizontal size={14} aria-hidden />
-                                    )
-                                  }
-                                </Button>
-                              </Dropdown.Trigger>
+                              <Button
+                                isIconOnly
+                                size="sm"
+                                variant="ghost"
+                                isPending={busyId === user.id}
+                                aria-label={t("actionsMenu", { username: user.username })}
+                              >
+                                {({ isPending }) =>
+                                  isPending ? (
+                                    <Spinner color="current" size="sm" />
+                                  ) : (
+                                    <MoreHorizontal size={14} aria-hidden />
+                                  )
+                                }
+                              </Button>
                               <Dropdown.Popover>
                                 <Dropdown.Menu
                                   aria-label={t("actionsMenu", { username: user.username })}

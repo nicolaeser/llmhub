@@ -180,19 +180,17 @@ export default function RolesPage() {
                   <Table.Cell>
                     {role.editable ? (
                       <Dropdown>
-                        <Dropdown.Trigger>
-                          <Button
-                            isIconOnly
-                            size="sm"
-                            variant="ghost"
-                            isPending={deletingId === role.id}
-                            aria-label={t("actionsMenu", { role: roleName(role) })}
-                          >
-                            {({ isPending }) =>
-                              isPending ? <Spinner color="current" size="sm" /> : <MoreHorizontal size={14} aria-hidden />
-                            }
-                          </Button>
-                        </Dropdown.Trigger>
+                        <Button
+                          isIconOnly
+                          size="sm"
+                          variant="ghost"
+                          isPending={deletingId === role.id}
+                          aria-label={t("actionsMenu", { role: roleName(role) })}
+                        >
+                          {({ isPending }) =>
+                            isPending ? <Spinner color="current" size="sm" /> : <MoreHorizontal size={14} aria-hidden />
+                          }
+                        </Button>
                         <Dropdown.Popover>
                           <Dropdown.Menu
                             aria-label={t("actionsMenu", { role: roleName(role) })}
