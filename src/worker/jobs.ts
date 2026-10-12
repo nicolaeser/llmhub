@@ -105,12 +105,14 @@ export async function runMaintenanceSweep(
     });
     result.auditLogs = auditLogs.count;
   }
-  result.storedObjects = await runSweepJob("stored_objects", () =>
-    purgeStoredObjects({
-      generatedBefore: retentionCutoff(enterprise?.object_retention_days ?? 30, now),
-      uploadsBefore: retentionCutoff(enterprise?.file_retention_days ?? 0, now),
-    }),
-  );
+  if (enterprise) {
+    result.storedObjects = await runSweepJob("stored_objects", () =>
+      purgeStoredObjects({
+        generatedBefore: retentionCutoff(enterprise.object_retention_days ?? 30, now),
+        uploadsBefore: retentionCutoff(enterprise.file_retention_days ?? 0, now),
+      }),
+    );
+  }
   result.batches = await runSweepJob("batches", () => runPendingBatches());
   result.vectorStores = await runSweepJob("vector_stores", () => expireVectorStores(now));
   result.storedObjects += await runSweepJob("orphan_uploads", () => purgeOrphanUploads(now));
