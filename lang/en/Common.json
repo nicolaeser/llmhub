@@ -25,7 +25,7 @@
   "all": "All",
   "none": "None",
   "empty": "Nothing here yet.",
-  "goHome": "Go to API keys",
+  "goHome": "Go to the start page",
   "signOut": "Sign out",
   "health": {
     "status": "{status, select, ok {Healthy} down {Down} other {Connecting}}"
