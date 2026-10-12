@@ -29,17 +29,9 @@ import { costFilter, costRejected } from "@/lib/gateway/billing/cost-cap";
 import { ChatStreamTranscript } from "@/lib/gateway/request-logs/log-content";
 import { estimateTokens, requestText } from "@/lib/gateway/billing/tokens";
 import { parseJsonOrNull, readTextOr } from "@/lib/utils/json";
-import type {
-  ChatSseTranslator,
-  CostFilter,
-  Group,
-  ResolvedDeployment,
-  JsonMap,
-  Usage,
-  Principal,
-  RequestTrace,
-  RoutePool,
-} from "@/types/gateway";
+import type { ChatSseTranslator, JsonMap, Principal, RequestTrace } from "@/types/gateway";
+import type { CostFilter, TokenUsage } from "@/types/billing";
+import type { ResolvedModelGroup, ResolvedDeployment, RoutePool } from "@/types/routing";
 import type { OutputGuard } from "@/types/guardrails";
 import type { RouteLimits } from "@/types/model-templates";
 import type { ResponseCacheUsage } from "@/types/cache";
@@ -75,7 +67,7 @@ type MeteredCall = { principal: Principal; model: string; body: JsonMap; aliases
 export async function routeMetered<T>(
   input: MeteredCall,
   started: number,
-  fn: (dep: ResolvedDeployment, group: Group) => Promise<T>,
+  fn: (dep: ResolvedDeployment, group: ResolvedModelGroup) => Promise<T>,
   opts: { deferRelease?: boolean } = {},
 ) {
   const routing = {
@@ -94,9 +86,9 @@ export async function routeMetered<T>(
 
 export function recordSuccess(
   input: { principal: Principal; model: string; body: JsonMap },
-  routed: { dep: ResolvedDeployment; group: Group },
+  routed: { dep: ResolvedDeployment; group: ResolvedModelGroup },
   outcome: {
-    usage: Partial<Usage>;
+    usage: Partial<TokenUsage>;
     blocked: boolean;
     started: number;
     response: unknown;
@@ -136,13 +128,13 @@ function fallbackable(err: unknown): boolean {
 export async function withDeployment<T>(
   aliases: string[],
   limits: RouteLimits,
-  fn: (dep: ResolvedDeployment, group: Group) => Promise<T>,
+  fn: (dep: ResolvedDeployment, group: ResolvedModelGroup) => Promise<T>,
   opts?: { deferRelease?: boolean; strategy?: string; pool?: RoutePool; cost?: CostFilter; principal?: Principal },
 ): Promise<{
   result: T;
   dep: ResolvedDeployment;
   alias: string;
-  group: Group;
+  group: ResolvedModelGroup;
   release: () => void;
 }> {
   let last: unknown = new GateError(404, "model_not_found", "no deployment for model", { param: "model" });
@@ -155,7 +147,7 @@ export async function withDeployment<T>(
   for (let qi = 0; qi < queue.length; qi++) {
     const { alias, root, pool } = queue[qi]!;
     const routable = inPool(pool);
-    let group: Group;
+    let group: ResolvedModelGroup;
     try {
       group = await loadGroup(alias);
     } catch (err) {
@@ -270,7 +262,12 @@ function contentFilterChunk(json: JsonMap, model: string): JsonMap {
   };
 }
 
-export async function chatOnce(dep: ResolvedDeployment, group: Group, body: JsonMap, model: string): Promise<unknown> {
+export async function chatOnce(
+  dep: ResolvedDeployment,
+  group: ResolvedModelGroup,
+  body: JsonMap,
+  model: string,
+): Promise<unknown> {
   const proxied = await proxyJson({
     dep,
     auth: await deploymentAuth(dep),
@@ -285,7 +282,7 @@ export async function chatOnce(dep: ResolvedDeployment, group: Group, body: Json
 
 export async function openUpstreamStream(input: {
   dep: ResolvedDeployment;
-  group: Group;
+  group: ResolvedModelGroup;
   req: Request;
   path: string;
   payload: JsonMap;
@@ -320,7 +317,7 @@ export async function openUpstreamStream(input: {
 
 export function openChatStream(
   dep: ResolvedDeployment,
-  group: Group,
+  group: ResolvedModelGroup,
   input: { req: Request; model: string; body: JsonMap },
 ): Promise<Response> {
   const payload = prepareBody(
@@ -351,7 +348,7 @@ export async function dispatchChat(input: {
   aliases: string[];
   outputGuard: OutputGuard | null;
   responseCache?: ResponseCacheUsage;
-}): Promise<{ json: JsonMap; dep: ResolvedDeployment; alias: string; usage: Partial<Usage>; cost: number }> {
+}): Promise<{ json: JsonMap; dep: ResolvedDeployment; alias: string; usage: Partial<TokenUsage>; cost: number }> {
   const started = Date.now();
   const routed = await routeMetered(input, started, (dep, group) => chatOnce(dep, group, input.body, input.model));
   const { result, dep, alias } = routed;
@@ -400,7 +397,7 @@ export async function streamChat(input: {
 export function relayChatStream(input: {
   res: Response;
   dep: ResolvedDeployment;
-  group: Group;
+  group: ResolvedModelGroup;
   release: () => void;
   principal: Principal;
   model: string;
@@ -419,7 +416,7 @@ export function relayChatStream(input: {
   let leftover = "";
   let billed = false;
   let ended = false;
-  let reported: Partial<Usage> | null = null;
+  let reported: Partial<TokenUsage> | null = null;
   let streamedText = "";
   let filtered = false;
 

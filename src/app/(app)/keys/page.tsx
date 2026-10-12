@@ -25,8 +25,7 @@ import { KeyDialog } from "./_components/key-dialog";
 import { loadKeysPageAction, revokeKeyAction, rotateKeyAction, setBudgetAction } from "./_action";
 import { useActionData } from "@/lib/hooks/use-action-data";
 import { isActionFail } from "@/lib/http/action-result";
-import type { VirtualKeyView } from "@/types/gateway";
-import type { KeyOptions, KeyPreset } from "@/types/keys";
+import type { KeyOptions, KeyPreset, VirtualKeyView } from "@/types/keys";
 import type { BudgetResult, BudgetView } from "@/types/structure";
 
 function keyBudget(row: VirtualKeyView): BudgetView {

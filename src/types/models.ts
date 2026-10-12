@@ -1,3 +1,5 @@
+import type { RoutePool } from "@/types/routing";
+
 export type DeploymentInput = {
   id?: string;
   kind: string;
@@ -77,4 +79,27 @@ export type ProviderOpt = {
   baseUrl: string;
   hasApiKey: boolean;
   discovered?: DiscoveredPrice[];
+};
+
+export type TokenPricing = {
+  prompt: string;
+  completion: string;
+};
+
+export type ModelPricing = TokenPricing & {
+  schedule?: {
+    time_zone: string;
+    default: TokenPricing;
+    windows: (TokenPricing & { start: string; end: string })[];
+  };
+};
+
+export type PublicModel = {
+  alias: string;
+  vendor: string;
+  displayName: string;
+  tags: string[];
+  pricing: ModelPricing | null;
+  subscriptionPricing?: ModelPricing | null;
+  pools: RoutePool[];
 };

@@ -1,4 +1,4 @@
-import type { ChargebackParts, SliceRow, UsageSlice, UsageSummary } from "@/types/gateway";
+import type { ChargebackParts, SliceRow, UsageSlice, UsageSummary } from "@/types/usage";
 
 type SliceKey = keyof Pick<
   UsageSlice,

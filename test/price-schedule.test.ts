@@ -11,7 +11,7 @@ import {
   scheduleOverlaps,
   windowValid,
 } from "@/lib/gateway/billing/price-schedule";
-import type { PriceSchedule } from "@/types/gateway";
+import type { PriceSchedule } from "@/types/billing";
 
 const day = { cost_input_per_1k: 0.002, cost_output_per_1k: 0.006 };
 const night = { start_minute: 22 * 60, end_minute: 6 * 60, cost_input_per_1k: 0.001, cost_output_per_1k: 0.003 };

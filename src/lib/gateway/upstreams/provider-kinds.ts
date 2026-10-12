@@ -1,7 +1,6 @@
-import type { KindSpec } from "@/types/gateway";
-import type { SignInKind, SignInMethod } from "@/types/providers";
+import type { SignInKind, SignInMethod, ProviderKindSpec } from "@/types/providers";
 
-export const PROVIDER_CATALOG: KindSpec[] = [
+export const PROVIDER_CATALOG: ProviderKindSpec[] = [
   { kind: "openai", name: "OpenAI", default_base_url: "https://api.openai.com/v1" },
   { kind: "anthropic", name: "Anthropic", default_base_url: "https://api.anthropic.com" },
   { kind: "openrouter", name: "OpenRouter", default_base_url: "https://openrouter.ai/api/v1" },

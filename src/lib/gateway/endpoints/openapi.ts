@@ -1,5 +1,5 @@
 import { gatewayPath, MANAGEMENT_PREFIX } from "@/lib/gateway/api-paths";
-import type { OpenApiMethod, OpenApiPath, TryTarget } from "@/types/gateway";
+import type { OpenApiMethod, OpenApiPath, TryTarget } from "@/types/api-ref";
 
 export const ANTHROPIC_VERSION = "2023-06-01";
 

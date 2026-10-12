@@ -4,7 +4,7 @@ import { CLAUDE_CODE_IDENTITY, withClaudeBetas, withClaudeIdentity } from "@/lib
 import { signInHeaders } from "@/lib/gateway/upstreams/credentials";
 import { joinPath, prepareBody, upstreamError, upstreamHeaders, upstreamRetryAt } from "@/lib/gateway/dispatch/upstream";
 import { routePool } from "@/lib/gateway/routing/route-pool";
-import type { ResolvedDeployment } from "@/types/gateway";
+import type { ResolvedDeployment } from "@/types/routing";
 
 const claudeDep: ResolvedDeployment = {
   id: "c1",

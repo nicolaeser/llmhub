@@ -1,6 +1,6 @@
-import type { PIIEntity, Rule } from "@/types/gateway";
+import type { PiiEntity, PiiRule } from "@/types/guardrails";
 
-export const PII_CATALOG: PIIEntity[] = [
+export const PII_CATALOG: PiiEntity[] = [
   { id: "CREDIT_CARD", label: "Credit card", category: "Finance", example: "4111 1111 1111 1111", default: true },
   { id: "CRYPTO", label: "Crypto wallet", category: "Finance", example: "bc1q…", default: true },
   { id: "EMAIL_ADDRESS", label: "Email", category: "General", example: "ada@acme.com", default: true },
@@ -455,7 +455,7 @@ function isChUid(raw: string): boolean {
   return check !== 10 && check === Number(digits[8]);
 }
 
-const RULES: Rule[] = [
+const RULES: PiiRule[] = [
   { id: "PRIVATE_KEY", apply: (t) => t.replace(PRIVATE_KEY, "[PRIVATE_KEY]") },
   { id: "CONNECTION_STRING", apply: replaceConnections },
   { id: "JWT", apply: (t) => t.replace(JWT, "[JWT]") },

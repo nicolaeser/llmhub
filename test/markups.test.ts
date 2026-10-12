@@ -24,7 +24,7 @@ import { markedUpCost, targetCost } from "@/lib/usage/what-if";
 import { serializeUsage } from "@/lib/management/serialize";
 import { markupSchema } from "@/schemas/pricing";
 import { markupCreateSchema, markupUpdateSchema } from "@/schemas/management";
-import type { UsageSlice } from "@/types/gateway";
+import type { UsageSlice } from "@/types/usage";
 import type { MarkupRule, MarkupTarget } from "@/types/pricing";
 import type { TargetPrice, TenantMinutes, TenantTraffic } from "@/types/what-if";
 

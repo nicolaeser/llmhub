@@ -15,15 +15,9 @@ import { tokenCount } from "@/lib/gateway/billing/tokens";
 import { errorFields } from "@/lib/logging/format";
 import { logger } from "@/lib/logging/logger";
 import type { Prisma } from "@/generated/prisma/client";
-import type {
-  SpendHolder,
-  BillingContext,
-  BillingGroup,
-  CostCap,
-  Usage,
-  Deployment,
-  Principal,
-} from "@/types/gateway";
+import type { Principal } from "@/types/gateway";
+import type { SpendHolder, BillingContext, BillingGroup, CostCap, TokenUsage } from "@/types/billing";
+import type { Deployment } from "@/types/routing";
 import type { BudgetKind } from "@/types/structure";
 import type { MarkupTarget } from "@/types/pricing";
 import type { ResponseCacheColumns, ResponseCacheUsage } from "@/types/cache";
@@ -226,7 +220,7 @@ export async function recordUsage(input: {
   model: string;
   deployment?: Deployment | null;
   group?: BillingGroup | null;
-  usage?: Partial<Usage>;
+  usage?: Partial<TokenUsage>;
   status: number;
   outcome: string;
   latencyMs: number;
@@ -390,7 +384,7 @@ function reportedCost(rec: Record<string, unknown>): number | undefined {
   return rec.cost + detail(rec, "cost_details", "upstream_inference_cost");
 }
 
-export function usageFromUnknown(value: unknown, envelope?: unknown): Partial<Usage> {
+export function usageFromUnknown(value: unknown, envelope?: unknown): Partial<TokenUsage> {
   if (!value || typeof value !== "object") return {};
   const rec = value as Record<string, unknown>;
   const top = envelope && typeof envelope === "object" ? (envelope as Record<string, unknown>) : {};

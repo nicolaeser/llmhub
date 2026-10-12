@@ -1,4 +1,5 @@
-import type { Enterprise, SpendAnomalyRule } from "@/types/gateway";
+import type { Enterprise } from "@/types/settings";
+import type { SpendAnomalyRule } from "@/types/alerts";
 
 export const DEFAULT_SPEND_ANOMALY_FACTOR = 3;
 export const DEFAULT_SPEND_ANOMALY_MIN_COST = 5;

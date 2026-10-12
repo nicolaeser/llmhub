@@ -21,8 +21,7 @@ import StatCard from "@/components/console/stat-card";
 import MarginCard from "./_components/margin-card";
 import UsageCharts from "./_components/usage-charts";
 import type { PickerItem } from "@/types/console";
-import type { SliceRow } from "@/types/gateway";
-import type { UsageQuery } from "@/types/usage";
+import type { UsageQuery, SliceRow } from "@/types/usage";
 
 const RANGES = [7, 14, 30, 90] as const;
 

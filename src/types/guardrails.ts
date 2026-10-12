@@ -80,3 +80,13 @@ export type GuardrailTestResult = {
   hits: string[];
   blocked: boolean;
 };
+
+export type PiiEntity = {
+  id: string;
+  label: string;
+  category: string;
+  example: string;
+  default?: boolean;
+};
+
+export type PiiRule = { id: string; apply: (text: string) => string };

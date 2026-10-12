@@ -1,6 +1,6 @@
 import type { QUEUE_NAMES } from "@/lib/jobs/queues";
 import type { BOOT_KEY } from "@/worker/boot";
-import type { WebhookEvent } from "@/types/gateway";
+import type { WebhookEvent } from "@/types/alerts";
 
 export type GlobalWithWorkerBoot = typeof globalThis & {
   [BOOT_KEY]?: Promise<void>;

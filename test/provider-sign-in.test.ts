@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test, { afterEach, beforeEach } from "node:test";
-import type { Group } from "@/types/gateway";
+import type { ResolvedModelGroup } from "@/types/routing";
 import type { SignInSession } from "@/types/providers";
 
 type FakeLogin = {
@@ -576,7 +576,7 @@ function poolDeployment(id: string, weight: number) {
   };
 }
 
-async function claudePool(): Promise<{ group: Group; mapped: PoolDeployment[] }> {
+async function claudePool(): Promise<{ group: ResolvedModelGroup; mapped: PoolDeployment[] }> {
   const { sealTokens } = await import("@/lib/gateway/upstreams/credentials");
   const usage: Record<string, unknown> = {
     "token-q1": { five_hour: { utilization: 100, resets_at: new Date(Date.now() + 2 * 3_600_000).toISOString() } },
@@ -606,7 +606,7 @@ async function claudePool(): Promise<{ group: Group; mapped: PoolDeployment[] }>
     return Response.json(usage[auth]);
   }) as typeof fetch;
   const mapped = [poolDeployment("q1", 10), poolDeployment("q2", 5), poolDeployment("q3", 1)];
-  const group: Group = {
+  const group: ResolvedModelGroup = {
     alias: "claude-pool",
     strategy: "priority",
     billing_mode: "routed",
@@ -634,7 +634,7 @@ test("routing skips subscription accounts at a limit and follows the quota strat
   assert.equal(await pickFor("priority"), "dep-q2");
   const paused = poolDeployment("q2", 5);
   paused.provider.enabled = false;
-  const withPaused: Group = { ...group, mapped: [mapped[0]!, paused, mapped[2]!] };
+  const withPaused: ResolvedModelGroup = { ...group, mapped: [mapped[0]!, paused, mapped[2]!] };
   const acquiredPaused = await acquireGroup(withPaused, undefined, undefined, "priority");
   acquiredPaused.release();
   assert.equal(acquiredPaused.dep.id, "dep-q3");

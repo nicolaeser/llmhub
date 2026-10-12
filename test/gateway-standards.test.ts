@@ -12,7 +12,8 @@ import { redactJSON } from "@/lib/gateway/safety/pii";
 import { applyProviderServiceMode } from "@/lib/gateway/dispatch/service-mode";
 import { normalizeEnterprise } from "@/lib/settings/enterprise";
 import { joinPath, mergeUpstreamHeaders, prepareBody, upstreamErrorMessage } from "@/lib/gateway/dispatch/upstream";
-import type { Deployment, JsonMap, ResolvedDeployment } from "@/types/gateway";
+import type { JsonMap } from "@/types/gateway";
+import type { Deployment, ResolvedDeployment } from "@/types/routing";
 
 function dep(kind: string, base_url = "", model = "m"): ResolvedDeployment {
   return {

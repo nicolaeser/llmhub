@@ -15,8 +15,8 @@ import {
 import { sessionPrincipal } from "@/lib/gateway/access/principal";
 import { apiKeyCreateSchema, apiKeyUpdateSchema } from "@/schemas/management";
 import { createKeySchema } from "@/schemas/keys";
-import type { Principal, VirtualKeyView } from "@/types/gateway";
-import type { AccessWindow, KeyEndpoint } from "@/types/keys";
+import type { Principal } from "@/types/gateway";
+import type { AccessWindow, KeyEndpoint, VirtualKeyView } from "@/types/keys";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 const v1 = path.join(root, "src/app/api/v1");

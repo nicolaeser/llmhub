@@ -1,6 +1,6 @@
 import { applyMarkup, pickMarkup } from "@/lib/gateway/billing/markup-policy";
 import { localMinute, scheduledPrice } from "@/lib/gateway/billing/price-schedule";
-import type { CostRates, PriceSchedule } from "@/types/gateway";
+import type { CostRates, PriceSchedule } from "@/types/billing";
 import type { MarkupRule, MarkupTenancy } from "@/types/pricing";
 import type {
   MinuteTokens,

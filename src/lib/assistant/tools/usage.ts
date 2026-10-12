@@ -18,7 +18,7 @@ import {
 } from "@/schemas/assistant";
 import { defineTool, toolFail, viaService } from "@/lib/assistant/tools/define";
 import { ownKeysWhere } from "@/lib/assistant/tools/general";
-import type { SliceRow } from "@/types/gateway";
+import type { SliceRow } from "@/types/usage";
 
 const TOP_ROWS = 10;
 

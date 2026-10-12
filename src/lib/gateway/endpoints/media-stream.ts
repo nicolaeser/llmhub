@@ -6,7 +6,8 @@ import { costFilter } from "@/lib/gateway/billing/cost-cap";
 import { meter } from "@/lib/gateway/billing/meter";
 import { relaySse } from "@/lib/gateway/protocols/sse";
 import { prepareBody, withDeploymentModel } from "@/lib/gateway/dispatch/upstream";
-import type { JsonMap, Principal, ProxyFirstResult, Usage } from "@/types/gateway";
+import type { JsonMap, Principal, ProxyFirstResult } from "@/types/gateway";
+import type { TokenUsage } from "@/types/billing";
 
 export function wantsStream(body: JsonMap): boolean {
   return body.stream === true || body.stream === "true";
@@ -42,7 +43,7 @@ export async function streamMedia(input: {
     throw err;
   });
   const { result, dep, group, alias, release } = routed;
-  let reported: Partial<Usage> = {};
+  let reported: Partial<TokenUsage> = {};
   let text = "";
   let last: JsonMap | null = null;
   return relaySse(result, {

@@ -10,7 +10,8 @@ import { GateError } from "@/lib/gateway/errors";
 import { guardrailOverride } from "@/lib/settings/enterprise";
 import { isManagementKey } from "@/lib/management/scope";
 import { resolveKeyTenancy } from "@/lib/gateway/access/key-tenancy";
-import type { VirtualKeyView, Principal } from "@/types/gateway";
+import type { Principal } from "@/types/gateway";
+import type { VirtualKeyView } from "@/types/keys";
 
 export function sessionPrincipal(user: { id: string; orgId: string | null }): Principal {
   return {

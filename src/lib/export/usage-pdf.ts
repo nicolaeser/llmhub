@@ -13,7 +13,7 @@ import {
   pdfDocument,
   type TextStyle,
 } from "./pdf";
-import type { UsagePdfStats } from "@/types/gateway";
+import type { UsagePdfStats } from "@/types/export";
 import type { Formatter, Translate } from "@/types/i18n";
 
 export type UsagePdfInput = {

@@ -1,5 +1,5 @@
 import { parseBudgetDurationMs } from "@/lib/gateway/billing/period";
-import type { BudgetForecast } from "@/types/gateway";
+import type { BudgetForecast } from "@/types/usage";
 
 const MS_PER_DAY = 86_400_000;
 

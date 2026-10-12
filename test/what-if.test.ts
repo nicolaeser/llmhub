@@ -11,7 +11,7 @@ import {
   targetCost,
   zonedMinute,
 } from "@/lib/usage/what-if";
-import type { PriceSchedule } from "@/types/gateway";
+import type { PriceSchedule } from "@/types/billing";
 import type { MinuteTokens, TrafficTotals } from "@/types/what-if";
 
 const cheap = { cost_input_per_1k: 0.001, cost_output_per_1k: 0.002, weight: 1 };

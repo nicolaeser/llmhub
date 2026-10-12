@@ -12,7 +12,7 @@ import {
   usageDays,
 } from "@/lib/usage/usage-stats";
 import { p95Latency, usageNames, usageSlices } from "@/lib/usage/usage-totals";
-import type { UsageSlice } from "@/types/gateway";
+import type { UsageSlice } from "@/types/usage";
 
 export async function loadUsage(
   input:

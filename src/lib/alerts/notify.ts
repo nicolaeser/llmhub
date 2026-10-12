@@ -9,7 +9,8 @@ import { writeAudit } from "@/lib/audit";
 import { webhookBody } from "@/lib/alerts/format";
 import { errorFields } from "@/lib/logging/format";
 import { logger } from "@/lib/logging/logger";
-import type { Principal, WebhookEvent } from "@/types/gateway";
+import type { Principal } from "@/types/gateway";
+import type { WebhookEvent } from "@/types/alerts";
 import type { WebhookJobData } from "@/types/jobs";
 
 export function webhookHeaders(

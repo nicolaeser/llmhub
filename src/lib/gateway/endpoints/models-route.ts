@@ -7,7 +7,9 @@ import { AUTO_MODEL, modelEntry } from "@/lib/gateway/core";
 import { API_ROUTE_PREFIX, modelAlias } from "@/lib/gateway/catalog/model-alias";
 import { pricedModels } from "@/lib/gateway/catalog/model-pricing";
 import { listedIn, routeOf } from "@/lib/gateway/routing/route-pool";
-import type { JsonMap, PublicModel, RoutePool } from "@/types/gateway";
+import type { JsonMap } from "@/types/gateway";
+import type { PublicModel } from "@/types/models";
+import type { RoutePool } from "@/types/routing";
 
 function apiEntry(model: PublicModel, created: Date) {
   const label = `${model.displayName || model.alias} (API)`;

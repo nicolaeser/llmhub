@@ -5,7 +5,7 @@ import { CHARGEBACK_COLUMNS, chargebackRows, chargebackTable, summarizeUsage, us
 import { toCsv } from "@/lib/export/csv";
 import { lastCompletedPeriod, nextReportAt, reportCadence } from "@/lib/reports/period";
 import { usageReportSchema } from "@/schemas/reports";
-import type { UsageSlice } from "@/types/gateway";
+import type { UsageSlice } from "@/types/usage";
 
 const at = (iso: string) => new Date(iso);
 

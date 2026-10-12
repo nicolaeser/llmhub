@@ -2,7 +2,8 @@ import { SUBSCRIPTION_PREFIX } from "@/lib/gateway/api-paths";
 import { isSignInKind } from "@/lib/gateway/upstreams/provider-kinds";
 import { GateError } from "@/lib/gateway/errors";
 import { plainModel } from "@/lib/gateway/catalog/model-alias";
-import type { PublicModel, RoutePool } from "@/types/gateway";
+import type { PublicModel } from "@/types/models";
+import type { RoutePool } from "@/types/routing";
 
 type PooledRoute = { kind: string; provider?: { kind: string } | null };
 

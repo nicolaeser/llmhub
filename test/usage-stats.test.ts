@@ -9,7 +9,7 @@ import {
   groupSpend,
   percentileIndex,
 } from "@/lib/usage/usage-stats";
-import type { UsageSlice } from "@/types/gateway";
+import type { UsageSlice } from "@/types/usage";
 
 const slice = (row: Partial<UsageSlice>): UsageSlice => ({
   day: "2026-10-05",

@@ -25,7 +25,8 @@ import { relaySse } from "@/lib/gateway/protocols/sse";
 import { estimateTokens, requestText } from "@/lib/gateway/billing/tokens";
 import { prepareBody, proxyJson, upstreamError } from "@/lib/gateway/dispatch/upstream";
 import type { MessagesRequest } from "@/types/anthropic";
-import type { JsonMap, Principal, Usage } from "@/types/gateway";
+import type { JsonMap, Principal } from "@/types/gateway";
+import type { TokenUsage } from "@/types/billing";
 import type { OutputGuard } from "@/types/guardrails";
 
 const NATIVE_PATH = "/v1/messages";
@@ -105,7 +106,7 @@ export async function dispatchMessages(input: MessagesInput): Promise<JsonMap> {
   const { result } = routed;
   const screen = outputScreen(input.outputGuard, input.principal.trace);
   let message: JsonMap;
-  let usage: Partial<Usage>;
+  let usage: Partial<TokenUsage>;
   if (result.native) {
     message = screenMessage({ ...result.json, model: input.model }, screen);
     if (screen?.blocked) Object.assign(message, { content: [], stop_reason: "refusal", stop_sequence: null });

@@ -1,5 +1,6 @@
 import { chargebackParts } from "@/lib/usage/usage-stats";
-import type { SliceRow, VirtualKeyView } from "@/types/gateway";
+import type { SliceRow } from "@/types/usage";
+import type { VirtualKeyView } from "@/types/keys";
 import type { RequestLogRow } from "@/types/logs";
 import type { AuditLogSource, ProviderSource, SpendLogSource, UsageSource } from "@/types/management";
 import type { ModelGroupView } from "@/types/models";

@@ -8,7 +8,7 @@ import { resolveChatFiles } from "@/lib/gateway/storage/file-refs";
 import { modelChain, spendTag } from "@/lib/gateway/access/gate";
 import { gatewayRoute, screenModelRequest } from "@/lib/gateway/endpoints/pipeline";
 import { loadSettings } from "@/lib/settings/enterprise";
-import type { RoutePool } from "@/types/gateway";
+import type { RoutePool } from "@/types/routing";
 
 export function chatCompletionsRoute(pool: RoutePool) {
   return gatewayRoute(async (req) => {

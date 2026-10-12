@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import test, { afterEach, beforeEach } from "node:test";
 import { fileURLToPath } from "node:url";
-import type { DiscoveredModel } from "@/types/gateway";
+import type { DiscoveredModel } from "@/types/providers";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 

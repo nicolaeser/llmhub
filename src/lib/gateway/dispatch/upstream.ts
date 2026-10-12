@@ -19,7 +19,9 @@ import { acquireGroup, defaultBase, loadGroup, markFailure, markSuccess, openaiR
 import { applyProviderServiceMode, requestRoutingOverride, serviceModeHeaders } from "@/lib/gateway/dispatch/service-mode";
 import { asRecord } from "@/lib/gateway/core";
 import { costFilter, costRejected } from "@/lib/gateway/billing/cost-cap";
-import type { ResolvedDeployment, JsonMap, Principal, ProxyFirstResult, UpstreamAuth } from "@/types/gateway";
+import type { JsonMap, Principal, ProxyFirstResult } from "@/types/gateway";
+import type { ResolvedDeployment } from "@/types/routing";
+import type { UpstreamAuth } from "@/types/providers";
 
 export function upstreamHeaders(
   dep: ResolvedDeployment,

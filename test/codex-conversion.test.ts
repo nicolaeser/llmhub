@@ -9,7 +9,8 @@ import {
 } from "@/lib/gateway/upstreams/codex";
 import { GateError } from "@/lib/gateway/errors";
 import { joinPath, prepareBody, upstreamHeaders } from "@/lib/gateway/dispatch/upstream";
-import type { JsonMap, ResolvedDeployment } from "@/types/gateway";
+import type { JsonMap } from "@/types/gateway";
+import type { ResolvedDeployment } from "@/types/routing";
 
 function sse(events: JsonMap[]): string {
   return events.map((event) => `event: ${String(event.type)}\ndata: ${JSON.stringify(event)}\n\n`).join("");

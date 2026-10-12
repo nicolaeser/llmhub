@@ -30,20 +30,13 @@ import {
   DEFAULT_SPEND_ANOMALY_MIN_COST,
 } from "@/lib/alerts/rules";
 import { WEBHOOK_EVENTS, WEBHOOK_FORMATS } from "@/lib/alerts/events";
-import type {
-  AlertStateKind,
-  AlertWebhook,
-  CatalogRouting,
-  JsonMap,
-  OIDCConfig,
-  S3Addressing,
-  S3Settings,
-  Enterprise,
-  AntigravitySettings,
-  JevSettings,
-  Principal,
-  WebhookFormat,
-} from "@/types/gateway";
+import type { JsonMap, Principal } from "@/types/gateway";
+import type { AlertStateKind, AlertWebhook, WebhookFormat } from "@/types/alerts";
+import type { CatalogRouting, JevSettings } from "@/types/model-catalog";
+import type { OidcSettings } from "@/types/auth";
+import type { S3AddressingSetting, S3Settings } from "@/types/s3";
+import type { Enterprise } from "@/types/settings";
+import type { AntigravitySettings } from "@/types/providers";
 import type { GuardrailPolicy, GuardrailRule, PiiPolicy } from "@/types/guardrails";
 import type { SemanticCacheSettings } from "@/types/cache";
 import type { VectorStoreDefaults } from "@/types/rag";
@@ -311,7 +304,7 @@ export function normalizeEnterprise(raw: unknown): Enterprise {
   };
 }
 
-export function normalizeOidc(raw: unknown): OIDCConfig {
+export function normalizeOidc(raw: unknown): OidcSettings {
   const rec = asRecord(raw) ?? {};
   return {
     enabled: asBool(rec.enabled, false),
@@ -324,7 +317,7 @@ export function normalizeOidc(raw: unknown): OIDCConfig {
 function normalizeS3(raw: unknown): S3Settings {
   const rec = asRecord(raw) ?? {};
   const addressingRaw = asString(rec.addressing, "auto");
-  const addressing: S3Addressing =
+  const addressing: S3AddressingSetting =
     addressingRaw === "path" || addressingRaw === "virtual-hosted"
       ? addressingRaw
       : "auto";

@@ -193,3 +193,50 @@ export type AccountLimits = {
 export type SignInPollResult =
   | { state: "pending"; interval: number }
   | { state: "done"; credential: string; account: string; plan: string };
+
+export type ProviderAuthMode = "api_key" | "sign_in";
+
+export type ProviderKindSpec = {
+  kind: string;
+  name: string;
+  default_base_url?: string;
+  auth?: ProviderAuthMode;
+};
+
+export type UpstreamAuth = {
+  key: string;
+  headers: Record<string, string>;
+  project?: string;
+};
+
+export type DiscoveredModel = {
+  id: string;
+  name: string;
+  ownedBy: string;
+  contextLength: number;
+  costInputPer1k: number;
+  costOutputPer1k: number;
+  priceSource: string;
+};
+
+export type ModelPrice = { in: number; out: number };
+
+export type RepricedModel = { id: string; from: ModelPrice; to: ModelPrice };
+
+export type DiscoveredDiff = {
+  added: string[];
+  removed: string[];
+  repriced: RepricedModel[];
+  changed: boolean;
+};
+
+export type ProviderModelPrice = {
+  id: string;
+  costInput: number;
+  costOutput: number;
+  priceSource: string;
+};
+
+export type AntigravitySettings = {
+  client_secret: string;
+};

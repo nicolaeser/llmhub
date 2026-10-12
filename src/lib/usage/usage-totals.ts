@@ -4,7 +4,7 @@ import { percentileIndex } from "@/lib/usage/usage-stats";
 import { money } from "@/lib/utils/money";
 import type { Prisma } from "@/generated/prisma/client";
 import type { ResponseCacheStats } from "@/types/cache";
-import type { UsageSlice } from "@/types/gateway";
+import type { UsageSlice } from "@/types/usage";
 import type { MarginTotals } from "@/types/pricing";
 import type { SpendScope } from "@/types/structure";
 

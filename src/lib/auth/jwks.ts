@@ -1,7 +1,7 @@
 import { createVerify } from "node:crypto";
-import type { Jwk, Cache, JwtClaims, JWTConfig } from "@/types/gateway";
+import type { Jwk, JwksCache, JwtClaims, JwtConfig } from "@/types/auth";
 
-let cache: Cache | null = null;
+let cache: JwksCache | null = null;
 
 function b64urlToBuf(value: string): Buffer {
   const padded = value.replace(/-/g, "+").replace(/_/g, "/") + "===".slice((value.length + 3) % 4);
@@ -68,7 +68,7 @@ function claimStrings(value: unknown): string[] {
   return [];
 }
 
-export async function verifyJwt(token: string, cfg: JWTConfig): Promise<JwtClaims> {
+export async function verifyJwt(token: string, cfg: JwtConfig): Promise<JwtClaims> {
   if (!cfg.jwks_url) throw new Error("jwks_url missing");
   const parts = token.split(".");
   if (parts.length !== 3) throw new Error("invalid jwt");

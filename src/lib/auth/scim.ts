@@ -15,13 +15,13 @@ import { isRoleTemplateKey } from "@/lib/auth/permissions";
 import type { RoleTemplateKey } from "@/types/auth";
 import { asRecord } from "@/lib/gateway/core";
 import { NextResponse } from "next/server";
-import type { ScimUser } from "@/types/gateway";
 import type {
   ScimErrorType,
   ScimPatchOperation,
   ScimUserChanges,
   ScimUserInput,
   ScimUserUpdate,
+  ScimUser,
 } from "@/types/scim";
 import {
   scimBooleanSchema,

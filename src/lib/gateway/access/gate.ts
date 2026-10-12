@@ -16,7 +16,8 @@ import { accessOpen, endpointAllowed } from "@/lib/gateway/access/key-restrictio
 import { gatewayPath } from "@/lib/gateway/api-paths";
 import { routeOf } from "@/lib/gateway/routing/route-pool";
 import { NextResponse } from "next/server";
-import type { JsonMap, Principal, RoutePool } from "@/types/gateway";
+import type { JsonMap, Principal } from "@/types/gateway";
+import type { RoutePool } from "@/types/routing";
 import type { OutputGuard } from "@/types/guardrails";
 
 export function toGateError(err: unknown): GateError {

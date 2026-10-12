@@ -1,4 +1,4 @@
-import type { AlertPayload, WebhookEvent, WebhookFormat } from "@/types/gateway";
+import type { AlertPayload, WebhookEvent, WebhookFormat } from "@/types/alerts";
 
 const EVENT_TITLES: Record<WebhookEvent, string> = {
   upstream_exhaustion: "Upstream exhaustion",

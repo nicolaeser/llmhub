@@ -1,12 +1,6 @@
 import { speaksAnthropic } from "@/lib/gateway/upstreams/provider-kinds";
-import type {
-  BillingContext,
-  CacheTokens,
-  CostRates,
-  Deployment,
-  PriceFactors,
-  Usage,
-} from "@/types/gateway";
+import type { BillingContext, CacheTokens, CostRates, PriceFactors, TokenUsage } from "@/types/billing";
+import type { Deployment } from "@/types/routing";
 
 const TOKEN_FALLBACK = 0.000002;
 const CACHE_READ_RATE = 0.1;
@@ -31,7 +25,7 @@ function cacheReadRate(model: string): number {
   return CACHE_READ_RATE;
 }
 
-function tierRate(dep: Deployment, usage: Partial<Usage>): number {
+function tierRate(dep: Deployment, usage: Partial<TokenUsage>): number {
   if (speaksAnthropic(dep.kind)) {
     return (
       (usage.speed === "fast" ? ANTHROPIC_FAST_RATE : 1) *
@@ -44,7 +38,7 @@ function tierRate(dep: Deployment, usage: Partial<Usage>): number {
   return 1;
 }
 
-export function priceFactors(dep: Deployment | null | undefined, usage: Partial<Usage>): PriceFactors {
+export function priceFactors(dep: Deployment | null | undefined, usage: Partial<TokenUsage>): PriceFactors {
   const model = modelName(dep);
   const tier = dep ? tierRate(dep, usage) : 1;
   const longContext =
@@ -69,7 +63,7 @@ function averageCostRates(peers: CostRates[]): CostRates | null {
   };
 }
 
-export function cacheTokens(usage: Partial<Usage>): CacheTokens {
+export function cacheTokens(usage: Partial<TokenUsage>): CacheTokens {
   const prompt = usage.prompt_tokens ?? 0;
   const read = Math.min(prompt, usage.cache_read_input_tokens ?? 0);
   const written = Math.min(prompt - read, usage.cache_creation_input_tokens ?? 0);
@@ -79,7 +73,7 @@ export function cacheTokens(usage: Partial<Usage>): CacheTokens {
 
 function rawCost(
   rates: CostRates | null | undefined,
-  usage: Partial<Usage>,
+  usage: Partial<TokenUsage>,
   factors: PriceFactors,
 ): number {
   if (!rates) return 0;
@@ -96,7 +90,7 @@ function rawCost(
   return input + cache + writes + output;
 }
 
-function withTokenFallback(sum: number, usage: Partial<Usage>): number {
+function withTokenFallback(sum: number, usage: Partial<TokenUsage>): number {
   const prompt = usage.prompt_tokens ?? 0;
   const completion = usage.completion_tokens ?? 0;
   if (sum === 0 && prompt + completion > 0) {
@@ -107,7 +101,7 @@ function withTokenFallback(sum: number, usage: Partial<Usage>): number {
 
 export function costOf(
   dep: Deployment | null | undefined,
-  usage: Partial<Usage>,
+  usage: Partial<TokenUsage>,
   opts?: Partial<BillingContext>,
 ): number {
   if (!dep) return 0;
@@ -125,7 +119,7 @@ export function costOf(
 
 export function cacheSavingsOf(
   dep: Deployment | null | undefined,
-  usage: Partial<Usage>,
+  usage: Partial<TokenUsage>,
   opts?: Partial<BillingContext>,
 ): number {
   const estimated = { ...usage, cost: undefined };

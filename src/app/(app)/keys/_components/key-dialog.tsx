@@ -30,8 +30,8 @@ import type {
   KeyEndpoint,
   KeyOptions,
   KeyPreset,
+  VirtualKeyView,
 } from "@/types/keys";
-import type { VirtualKeyView } from "@/types/gateway";
 import AccessWindowFields from "./access-window-fields";
 import { bindingKind, placeOf } from "./key-binding";
 import { useErrorToast } from "@/components/console/use-error-toast";

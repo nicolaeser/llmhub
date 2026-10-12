@@ -18,7 +18,7 @@ import { isReservedAlias } from "@/lib/gateway/catalog/model-alias";
 import { discoveredOf } from "@/lib/gateway/upstreams/provider-prices";
 import { catalogRouting, getEnterprise } from "@/lib/settings/enterprise";
 import { logger } from "@/lib/logging/logger";
-import type { CatalogRouting, DiscoveredModel, JevSettings } from "@/types/gateway";
+import type { DiscoveredModel } from "@/types/providers";
 import type {
   CatalogEntryPlan,
   CatalogEntryView,
@@ -29,6 +29,8 @@ import type {
   CatalogState,
   CatalogView,
   JevTask,
+  CatalogRouting,
+  JevSettings,
 } from "@/types/model-catalog";
 
 export const CATALOG_REFRESH_MS = 7_200_000;

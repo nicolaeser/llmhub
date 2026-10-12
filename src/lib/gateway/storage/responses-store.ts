@@ -2,10 +2,10 @@ import "server-only";
 import { GateError } from "@/lib/gateway/errors";
 import { canReadObject, getObject, payloadJson } from "@/lib/gateway/storage/objects";
 import { storedObjectId, storedResponse } from "@/lib/gateway/protocols/responses";
-import type { Principal, Stored } from "@/types/gateway";
+import type { Principal, StoredObjectRecord } from "@/types/gateway";
 import type { StoredResponse } from "@/types/responses";
 
-export async function findStoredResponse(id: string, principal: Principal): Promise<Stored> {
+export async function findStoredResponse(id: string, principal: Principal): Promise<StoredObjectRecord> {
   const object = await getObject(storedObjectId(id));
   if (!object || object.kind !== "response" || !canReadObject(object, principal)) {
     throw new GateError(404, "not_found", "response not found", { param: "id" });

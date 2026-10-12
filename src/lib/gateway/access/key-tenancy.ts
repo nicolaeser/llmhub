@@ -1,6 +1,6 @@
 import "server-only";
 import prisma from "@/lib/db/prisma";
-import type { KeyBindingRow, KeyTenancy } from "@/types/gateway";
+import type { KeyBindingRow, KeyTenancy } from "@/types/keys";
 
 const EMPTY: KeyTenancy = { userId: "", memberId: "", projectId: "", teamId: "", orgId: "" };
 

@@ -12,8 +12,10 @@ import type {
   OidcState,
   ResolvedOidc,
   VerifiedOidcState,
+  JwtClaims,
+  JwtConfig,
+  OidcSettings,
 } from "@/types/auth";
-import type { JwtClaims, JWTConfig, OIDCConfig } from "@/types/gateway";
 
 export const OIDC_STATE_COOKIE =
   process.env.NODE_ENV === "production" ? "__Host-llmhub-oidc" : "llmhub_oidc";
@@ -26,7 +28,7 @@ export function trimIssuer(issuer: string): string {
 }
 
 export function resolveOidc(
-  cfg: OIDCConfig | undefined,
+  cfg: OidcSettings | undefined,
   envOverride: OidcEnv = {},
 ): ResolvedOidc {
   const appUrl = (envOverride.appUrl ?? env.NEXT_PUBLIC_APP_URL).replace(/\/+$/, "");
@@ -44,7 +46,7 @@ export function resolveOidc(
 }
 
 export function oidcIsReady(
-  cfg: OIDCConfig | undefined,
+  cfg: OidcSettings | undefined,
   envOverride: OidcEnv = {},
 ): boolean {
   const resolved = resolveOidc(cfg, envOverride);
@@ -209,7 +211,7 @@ export function emailFromOidcClaims(claims: JwtClaims): string {
 export function jwtConfigForOidc(
   resolved: ResolvedOidc,
   disc: OidcDiscovery,
-): JWTConfig {
+): JwtConfig {
   return {
     issuer: disc.issuer || resolved.issuer,
     audience: resolved.clientId,

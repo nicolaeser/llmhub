@@ -14,7 +14,7 @@ import type {
   UsageBreakdownGroup,
   UsageBreakdownQuery,
 } from "@/types/assistant";
-import type { SliceRow, UsageSlice } from "@/types/gateway";
+import type { SliceRow, UsageSlice } from "@/types/usage";
 import type { SpendScope } from "@/types/structure";
 
 const HOUR_MS = 3_600_000;

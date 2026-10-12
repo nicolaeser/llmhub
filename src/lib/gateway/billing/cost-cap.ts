@@ -6,16 +6,9 @@ import { groupBilling } from "@/lib/gateway/billing/price-schedule";
 import { routePool } from "@/lib/gateway/routing/route-pool";
 import { applyProviderServiceMode } from "@/lib/gateway/dispatch/service-mode";
 import { tokensForLength } from "@/lib/gateway/billing/tokens";
-import type {
-  CostCap,
-  CostFilter,
-  Group,
-  JsonMap,
-  Principal,
-  RequestTokens,
-  ResolvedDeployment,
-  Usage,
-} from "@/types/gateway";
+import type { JsonMap, Principal } from "@/types/gateway";
+import type { CostCap, CostFilter, RequestTokens, TokenUsage } from "@/types/billing";
+import type { ResolvedModelGroup, ResolvedDeployment } from "@/types/routing";
 
 export const MAX_COST_HEADER = "x-hub-max-cost";
 
@@ -62,14 +55,14 @@ export function requestTokens(body: JsonMap): RequestTokens {
 
 export function estimateCost(
   dep: ResolvedDeployment,
-  group: Group,
+  group: ResolvedModelGroup,
   body: JsonMap,
   tokens: RequestTokens,
   at: Date,
 ): number {
   if (routePool(dep) === "subscription") return 0;
   const served = applyProviderServiceMode(dep.kind, body, group.strategy, dep.model).body;
-  const usage: Partial<Usage> = {
+  const usage: Partial<TokenUsage> = {
     prompt_tokens: tokens.prompt,
     completion_tokens: tokens.completion,
     ...(typeof served.service_tier === "string" ? { service_tier: served.service_tier } : {}),

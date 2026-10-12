@@ -14,7 +14,7 @@ import {
 } from "@/lib/usage/what-if";
 import { money } from "@/lib/utils/money";
 import type { Prisma } from "@/generated/prisma/client";
-import type { CostRates } from "@/types/gateway";
+import type { CostRates } from "@/types/billing";
 import type { MarkupTenancy } from "@/types/pricing";
 import type { SpendScope } from "@/types/structure";
 import type {

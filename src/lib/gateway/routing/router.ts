@@ -1,10 +1,10 @@
 import "server-only";
 import { ERR_NO_HEALTHY } from "@/lib/gateway/core";
-import type { Weighted, Deployment } from "@/types/gateway";
+import type { WeightedChoice, Deployment } from "@/types/routing";
 
 export type QuotaScores = Map<string, { pressure: number; reset: number }>;
 
-export function pickWeighted<T extends Weighted>(items: T[]): T {
+export function pickWeighted<T extends WeightedChoice>(items: T[]): T {
   const eligible = items.filter((i) => (i.weight ?? 1) > 0);
   const pool = eligible.length ? eligible : items;
   if (!pool.length) throw ERR_NO_HEALTHY;

@@ -1,6 +1,6 @@
 import type { AuthenticatedSession, Permission } from "@/types/auth";
-import type { DiscoveredModel, SliceRow } from "@/types/gateway";
-import type { ProviderView } from "@/types/providers";
+import type { SliceRow } from "@/types/usage";
+import type { ProviderView, DiscoveredModel } from "@/types/providers";
 
 export type ManagementKeyView = {
   id: string;

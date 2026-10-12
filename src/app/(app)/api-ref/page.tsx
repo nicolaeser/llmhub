@@ -27,7 +27,7 @@ import { ANTHROPIC_VERSION } from "@/lib/gateway/endpoints/openapi";
 import { API_PREFIX, MANAGEMENT_PREFIX, SUBSCRIPTION_PREFIX } from "@/lib/gateway/api-paths";
 import { PROBLEMS } from "@/lib/http/problem-codes";
 import TryEndpoint from "./_components/try-endpoint";
-import type { OpenApiPath } from "@/types/gateway";
+import type { OpenApiPath } from "@/types/api-ref";
 
 const CHAT_CURL_BODY =
   '\'{"model":"my-alias","messages":[{"role":"user","content":"Hello"}]}\'';

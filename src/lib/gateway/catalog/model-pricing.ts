@@ -5,7 +5,9 @@ import { splitTag } from "@/lib/gateway/catalog/model-catalog";
 import { minuteClock, priceAt, priceWindowQuery, priceWindowRates } from "@/lib/gateway/billing/price-schedule";
 import { routePool } from "@/lib/gateway/routing/route-pool";
 import { money } from "@/lib/utils/money";
-import type { CostRates, ModelPricing, PriceSchedule, PublicModel, RoutePool, TokenPricing } from "@/types/gateway";
+import type { CostRates, PriceSchedule } from "@/types/billing";
+import type { ModelPricing, PublicModel, TokenPricing } from "@/types/models";
+import type { RoutePool } from "@/types/routing";
 
 const pricedGroupSelect = {
   alias: true,

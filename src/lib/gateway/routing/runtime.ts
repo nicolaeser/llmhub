@@ -31,7 +31,8 @@ import { routePermitted } from "@/lib/gateway/access/model-policy";
 import { priceWindowQuery, priceWindowRates } from "@/lib/gateway/billing/price-schedule";
 import { costRejection } from "@/lib/gateway/billing/cost-cap";
 import { coolingDown, recordFailure, recordSuccess } from "@/lib/gateway/routing/provider-health";
-import type { CostFilter, DbDeployment, Group, ResolvedDeployment, Deployment } from "@/types/gateway";
+import type { CostFilter } from "@/types/billing";
+import type { DeploymentRow, ResolvedModelGroup, ResolvedDeployment, Deployment } from "@/types/routing";
 import type { AccountAccess } from "@/types/providers";
 import type { DeploymentRule, RoutePolicy } from "@/types/model-templates";
 import { money } from "@/lib/utils/money";
@@ -40,7 +41,7 @@ const inflight = new Map<string, number>();
 const latencyEwma = new Map<string, number>();
 const roundRobinCursors = new Map<string, number>();
 
-function mapDeployment(row: DbDeployment): ResolvedDeployment {
+function mapDeployment(row: DeploymentRow): ResolvedDeployment {
   return {
     id: row.id,
     kind: row.kind,
@@ -89,7 +90,7 @@ export function permittedDeployments(
   return rules ? items.filter((dep) => routePermitted(rules, routeOf(dep))) : items;
 }
 
-export async function loadGroup(requested: string): Promise<Group> {
+export async function loadGroup(requested: string): Promise<ResolvedModelGroup> {
   const alias = modelAlias(requested);
   if (alias === "auto") {
     const rows = await prisma.deployment.findMany({
@@ -209,7 +210,11 @@ async function byAccountPolicy(items: ResolvedDeployment[], scores: QuotaScores)
   return kept;
 }
 
-function affordable(group: Group, ready: ResolvedDeployment[], cost: CostFilter | undefined): ResolvedDeployment[] {
+function affordable(
+  group: ResolvedModelGroup,
+  ready: ResolvedDeployment[],
+  cost: CostFilter | undefined,
+): ResolvedDeployment[] {
   if (!cost) return ready;
   const estimates = ready.map((dep) => cost.estimate(dep, group));
   const fitting = ready.filter((_, index) => estimates[index]! <= cost.cap.limit);
@@ -218,7 +223,7 @@ function affordable(group: Group, ready: ResolvedDeployment[], cost: CostFilter 
 }
 
 export async function acquireGroup(
-  group: Group,
+  group: ResolvedModelGroup,
   rules: DeploymentRule[] | undefined,
   serves: (dep: ResolvedDeployment) => boolean = () => true,
   strategy = "",

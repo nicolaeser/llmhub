@@ -1,4 +1,4 @@
-import type { SpendHolder } from "@/types/gateway";
+import type { SpendHolder } from "@/types/billing";
 import type { UsageReportView } from "@/types/reports";
 
 export type BudgetKind = "org" | "team" | "project" | "member" | "user" | "key";

@@ -28,3 +28,16 @@ export type S3Location = {
   domainBucket: boolean;
   publicBaseUrl: string;
 };
+
+export type S3AddressingSetting = "auto" | "path" | "virtual-hosted";
+
+export type S3Settings = {
+  enabled?: boolean;
+  bucket?: string;
+  region?: string;
+  endpoint?: string;
+  prefix?: string;
+  addressing?: S3AddressingSetting;
+  public_base_url?: string;
+  domain_bucket?: boolean;
+};

@@ -5,7 +5,7 @@ import { gatewayRoute, screenModelRequest, validRequest } from "@/lib/gateway/en
 import { anthropicPassthroughHeaders, apiKeyRequest } from "@/lib/gateway/protocols/messages";
 import { dispatchMessages, streamMessages } from "@/lib/gateway/dispatch/messages-dispatch";
 import { messagesRequestSchema } from "@/schemas/anthropic";
-import type { RoutePool } from "@/types/gateway";
+import type { RoutePool } from "@/types/routing";
 
 export function messagesRoute(pool: RoutePool) {
   return gatewayRoute(async (req) => {

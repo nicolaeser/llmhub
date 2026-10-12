@@ -8,7 +8,9 @@ import { endpointAllowed } from "@/lib/gateway/access/key-restrictions";
 import { forwardToModel } from "@/lib/gateway/dispatch/upstream";
 import { logger } from "@/lib/logging/logger";
 import type { CachedResponse, ChatCacheLookup, ChatCacheSlot, SemanticCacheSettings } from "@/types/cache";
-import type { JsonMap, Principal, RoutePool, Usage } from "@/types/gateway";
+import type { JsonMap, Principal } from "@/types/gateway";
+import type { RoutePool } from "@/types/routing";
+import type { TokenUsage } from "@/types/billing";
 
 const EMBEDDINGS_ENDPOINT = "/v1/embeddings";
 
@@ -99,7 +101,7 @@ export async function lookupChatCache(input: {
   };
 }
 
-export function cachedTokens(usage: Partial<Usage>): number {
+export function cachedTokens(usage: Partial<TokenUsage>): number {
   return (usage.prompt_tokens ?? 0) + (usage.completion_tokens ?? 0);
 }
 

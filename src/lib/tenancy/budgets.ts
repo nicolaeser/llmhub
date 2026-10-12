@@ -12,7 +12,7 @@ import { patchEnterprise } from "@/lib/settings/enterprise";
 import { budgetAmount, budgetPeriod, capConflict, MAX_BOOST_HOURS } from "@/lib/utils/budget";
 import { money } from "@/lib/utils/money";
 import type { AuthenticatedSession } from "@/types/auth";
-import type { SpendHolder } from "@/types/gateway";
+import type { SpendHolder } from "@/types/billing";
 import type {
   BoostInput,
   BudgetInput,

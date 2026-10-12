@@ -10,8 +10,7 @@ import {
   resolveAddressing,
   trimSlashes
 } from "@/lib/s3/url";
-import type { S3Settings } from "@/types/gateway";
-import type { S3Runtime } from "@/types/s3";
+import type { S3Runtime, S3Settings } from "@/types/s3";
 
 export function s3FromParts(
   settings: S3Settings | undefined,

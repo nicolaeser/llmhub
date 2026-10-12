@@ -1,5 +1,5 @@
 import { asNumber, asRecord, asString } from "@/lib/gateway/core";
-import type { DiscoveredModel, CatalogPrice } from "@/types/gateway";
+import type { DiscoveredModel, ProviderModelPrice } from "@/types/providers";
 
 function anyFloat(v: unknown): number {
   if (typeof v === "number" && Number.isFinite(v)) return v;
@@ -48,7 +48,7 @@ export function discoveredOf(v: unknown): DiscoveredModel[] {
   return out;
 }
 
-export function catalogPricesOf(raw: unknown): CatalogPrice[] {
+export function catalogPricesOf(raw: unknown): ProviderModelPrice[] {
   return discoveredOf(raw)
     .filter(
       (row) =>
@@ -65,9 +65,9 @@ export function catalogPricesOf(raw: unknown): CatalogPrice[] {
 }
 
 export function priceForUpstream(
-  rows: CatalogPrice[],
+  rows: ProviderModelPrice[],
   model: string,
-): CatalogPrice | null {
+): ProviderModelPrice | null {
   const wanted = model.trim();
   if (!wanted) return null;
   const exact = rows.find((row) => row.id === wanted);

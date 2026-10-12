@@ -20,7 +20,8 @@ import {
   rerankRequestSchema,
   searchVectorStoreSchema,
 } from "@/schemas/rag";
-import type { JsonMap, Principal, VirtualKeyView } from "@/types/gateway";
+import type { JsonMap, Principal } from "@/types/gateway";
+import type { VirtualKeyView } from "@/types/keys";
 
 test("vector store schemas enforce OpenAI limits", () => {
   assert.equal(createVectorStoreSchema.safeParse({ name: "kb", embedding_model: "Text-Embed" }).data?.embedding_model, "text-embed");

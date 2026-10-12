@@ -1,6 +1,6 @@
 import type { Prisma } from "@/generated/prisma/client";
 import { money } from "@/lib/utils/money";
-import type { BillingContext, BillingGroup, CostRates, PriceSchedule, PriceWindowRates } from "@/types/gateway";
+import type { BillingContext, BillingGroup, CostRates, PriceSchedule, PriceWindowRates } from "@/types/billing";
 import type { Weekday } from "@/types/keys";
 import type { PriceWindow } from "@/types/models";
 

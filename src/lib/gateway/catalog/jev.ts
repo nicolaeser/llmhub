@@ -4,8 +4,7 @@ import { PROVIDER_CATALOG } from "@/lib/gateway/upstreams/provider-kinds";
 import { asNumber, asRecord } from "@/lib/gateway/core";
 import { readJsonOr } from "@/lib/utils/json";
 import { JEV_NONE } from "@/lib/gateway/catalog/model-catalog";
-import type { JevSettings } from "@/types/gateway";
-import type { JevTask, JevVerdict } from "@/types/model-catalog";
+import type { JevTask, JevVerdict, JevSettings } from "@/types/model-catalog";
 
 const JEV_TIMEOUT_MS = 30_000;
 const JEV_QUESTION = "same_model";

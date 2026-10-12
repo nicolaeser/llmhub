@@ -2,7 +2,7 @@ import "server-only";
 import { ANTIGRAVITY_BASE_URL, antigravityHeaders } from "@/lib/gateway/upstreams/antigravity";
 import { asRecord } from "@/lib/gateway/core";
 import { readJsonOr } from "@/lib/utils/json";
-import type { UpstreamAuth } from "@/types/gateway";
+import type { UpstreamAuth } from "@/types/providers";
 
 const MODELS_TIMEOUT_MS = 30_000;
 

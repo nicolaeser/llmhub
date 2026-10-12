@@ -27,8 +27,7 @@ import { env } from "@/lib/env";
 import { stepUpSchema } from "@/schemas/auth";
 import type { AuthenticatedSession } from "@/types/auth";
 import { adminSettingsSchema } from "@/schemas/settings";
-import type { AdminSettings } from "@/types/settings";
-import type { Enterprise } from "@/types/gateway";
+import type { AdminSettings, Enterprise } from "@/types/settings";
 import type { VectorStoreDefaults } from "@/types/rag";
 
 async function view(enterprise: Enterprise, session: AuthenticatedSession) {

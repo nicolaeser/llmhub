@@ -185,3 +185,29 @@ export type TargetRow = {
   orgId: string | null;
   role: { permissions: string[] } | null;
 };
+
+export type OidcSettings = {
+  enabled?: boolean;
+  issuer?: string;
+  client_id?: string;
+  redirect_url?: string;
+};
+
+export type Jwk = {
+  kty?: string;
+  kid?: string;
+  n?: string;
+  e?: string;
+  alg?: string;
+  use?: string;
+};
+
+export type JwksCache = { url: string; keys: Map<string, string>; fetched: number };
+
+export type JwtClaims = Record<string, unknown>;
+
+export type JwtConfig = {
+  issuer?: string;
+  audience?: string;
+  jwks_url?: string;
+};

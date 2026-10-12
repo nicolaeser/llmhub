@@ -10,7 +10,9 @@ import {
   requestTokens,
 } from "@/lib/gateway/billing/cost-cap";
 import { GateError } from "@/lib/gateway/errors";
-import type { Group, Principal, ResolvedDeployment, VirtualKeyView } from "@/types/gateway";
+import type { Principal } from "@/types/gateway";
+import type { ResolvedModelGroup, ResolvedDeployment } from "@/types/routing";
+import type { VirtualKeyView } from "@/types/keys";
 
 function deployment(id: string, input: number, output: number, kind = "openai"): ResolvedDeployment {
   return {
@@ -25,7 +27,7 @@ function deployment(id: string, input: number, output: number, kind = "openai"):
   };
 }
 
-function group(deployments: ResolvedDeployment[], over: Partial<Group> = {}): Group {
+function group(deployments: ResolvedDeployment[], over: Partial<ResolvedModelGroup> = {}): ResolvedModelGroup {
   return {
     alias: "gpt",
     strategy: "least_inflight",

@@ -6,7 +6,8 @@ import { redisUrl } from "@/lib/jobs/connection";
 import { sharedRedis, withRedisTimeout } from "@/lib/redis/client";
 import { logger } from "@/lib/logging/logger";
 import type { CacheBackend, CachedResponse, SemanticMatch, SemanticProbe } from "@/types/cache";
-import type { JsonMap, RoutePool } from "@/types/gateway";
+import type { JsonMap } from "@/types/gateway";
+import type { RoutePool } from "@/types/routing";
 
 const MAX_MEMORY_ENTRIES = 1000;
 const MAX_MEMORY_SCOPES = 50;

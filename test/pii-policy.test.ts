@@ -8,7 +8,8 @@ import { applyGuardrails } from "@/lib/gateway/access/gate";
 import { defaultGuardrails } from "@/lib/gateway/safety/guardrails";
 import { defaultEntityIds } from "@/lib/gateway/safety/pii";
 import { piiOverride } from "@/lib/settings/enterprise";
-import type { Principal, VirtualKeyView } from "@/types/gateway";
+import type { Principal } from "@/types/gateway";
+import type { VirtualKeyView } from "@/types/keys";
 import type { PiiPolicy } from "@/types/guardrails";
 
 const root = fileURLToPath(new URL("..", import.meta.url));

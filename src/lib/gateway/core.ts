@@ -1,7 +1,9 @@
 import packageJson from "../../../package.json";
 import { GateError } from "@/lib/gateway/errors";
 import { PROVIDER_CATALOG } from "@/lib/gateway/upstreams/provider-kinds";
-import type { JsonMap, ModelPricing, Principal, PublicModel, RoutePool } from "@/types/gateway";
+import type { JsonMap, Principal } from "@/types/gateway";
+import type { ModelPricing, PublicModel } from "@/types/models";
+import type { RoutePool } from "@/types/routing";
 
 export class RouterError extends Error {
   constructor(

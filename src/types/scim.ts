@@ -40,3 +40,13 @@ export type ScimUserUpdate = {
   blocked?: boolean;
   roleKey?: RoleTemplateKey;
 };
+
+export type ScimUser = {
+  schemas: string[];
+  id: string;
+  userName: string;
+  active: boolean;
+  name: { formatted: string };
+  emails: { value: string; primary: boolean }[];
+  roles?: { value: string }[];
+};

@@ -1,3 +1,5 @@
+import type { OPENAPI_METHODS } from "@/lib/gateway/endpoints/openapi";
+
 export type KeyPrefix = { prefix: string; alias: string };
 
 export type OverlayState = {
@@ -16,3 +18,18 @@ export type TrySnapshot = {
   binary: boolean;
   body: string;
 };
+
+export type OpenApiMethod = (typeof OPENAPI_METHODS)[number];
+
+export type OpenApiStyle = "openai" | "anthropic" | "dual" | "management";
+
+export type OpenApiPath = {
+  method: OpenApiMethod;
+  path: string;
+  summary: string;
+  style: OpenApiStyle;
+};
+
+export type TryTarget =
+  | { ok: true; method: OpenApiMethod; path: string }
+  | { ok: false; error: "UNKNOWN_ENDPOINT" | "MISSING_PARAM" };

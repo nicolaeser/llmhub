@@ -20,7 +20,8 @@ import {
 import { fetchAvailableModels } from "@/lib/gateway/upstreams/antigravity-api";
 import { GateError } from "@/lib/gateway/errors";
 import { routePool } from "@/lib/gateway/routing/route-pool";
-import type { JsonMap, ResolvedDeployment } from "@/types/gateway";
+import type { JsonMap } from "@/types/gateway";
+import type { ResolvedDeployment } from "@/types/routing";
 import type { SignInSession } from "@/types/providers";
 
 const settings = new Map<string, string>();

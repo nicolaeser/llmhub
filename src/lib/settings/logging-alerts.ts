@@ -14,7 +14,7 @@ import { getEnterprise, patchEnterprise } from "@/lib/settings/enterprise";
 import { WEBHOOK_EVENTS } from "@/lib/alerts/events";
 import { resolveS3Config } from "@/lib/s3/config";
 import { alertWebhooksSchema } from "@/schemas/settings";
-import type { AlertWebhook } from "@/types/gateway";
+import type { AlertWebhook } from "@/types/alerts";
 import type { AlertRules, AlertWebhookInput, AlertWebhookView } from "@/types/settings";
 
 async function view(canManage: boolean) {

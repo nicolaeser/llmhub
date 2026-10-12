@@ -24,8 +24,7 @@ import {
   openApiPathParams,
 } from "@/lib/gateway/endpoints/openapi";
 import { gatewayPath } from "@/lib/gateway/api-paths";
-import type { OpenApiPath } from "@/types/gateway";
-import type { OverlayState, TrySnapshot } from "@/types/api-ref";
+import type { OverlayState, TrySnapshot, OpenApiPath } from "@/types/api-ref";
 
 const KEY_STORAGE = "llmhub.api-ref.bearer";
 const MAX_SNAPSHOT = 1_000_000;

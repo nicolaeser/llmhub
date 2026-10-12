@@ -28,7 +28,8 @@ import {
   withoutFileSearchHistory,
 } from "@/lib/rag/file-search-tool";
 import { responsesRequestSchema } from "@/schemas/responses";
-import type { JsonMap, RoutePool } from "@/types/gateway";
+import type { JsonMap } from "@/types/gateway";
+import type { RoutePool } from "@/types/routing";
 import type { FileSearchContext } from "@/types/rag";
 
 function storedPayload(response: JsonMap, messages: JsonMap[], input: JsonMap[]): Buffer {

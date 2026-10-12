@@ -3,7 +3,7 @@ import "server-only";
 import prisma from "@/lib/db/prisma";
 import type { AuthenticatedSession } from "@/types/auth";
 import { keyScope } from "@/lib/auth/scope";
-import type { VirtualKeyView } from "@/types/gateway";
+import type { VirtualKeyView } from "@/types/keys";
 import { money } from "@/lib/utils/money";
 import { piiOverride } from "@/lib/settings/enterprise";
 import { accessTimeZoneOf, accessWindowsOf, allowedEndpointsOf } from "@/lib/gateway/access/key-restrictions";

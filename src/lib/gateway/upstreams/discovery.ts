@@ -14,8 +14,13 @@ import { GateError } from "@/lib/gateway/errors";
 import { readJsonOr } from "@/lib/utils/json";
 import { discoveredOf, parsePricing } from "@/lib/gateway/upstreams/provider-prices";
 import { logger } from "@/lib/logging/logger";
-import type { DiscoveredDiff, DiscoveredModel, RepricedModel, UpstreamAuth } from "@/types/gateway";
-import type { ProviderSyncRecord } from "@/types/providers";
+import type {
+  ProviderSyncRecord,
+  DiscoveredDiff,
+  DiscoveredModel,
+  RepricedModel,
+  UpstreamAuth,
+} from "@/types/providers";
 
 const ALERT_LIST_LIMIT = 10;
 

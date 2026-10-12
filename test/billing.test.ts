@@ -6,7 +6,7 @@ import {
   parsePricing,
   priceForUpstream,
 } from "@/lib/gateway/upstreams/provider-prices";
-import type { Deployment } from "@/types/gateway";
+import type { Deployment } from "@/types/routing";
 
 function deployment(
   over: Partial<Deployment> & Pick<Deployment, "id">,

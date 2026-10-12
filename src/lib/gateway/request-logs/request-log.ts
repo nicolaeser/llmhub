@@ -7,7 +7,9 @@ import { getEnterprise, resolvePii } from "@/lib/settings/enterprise";
 import { errorFields } from "@/lib/logging/format";
 import { logger } from "@/lib/logging/logger";
 import type { Prisma } from "@/generated/prisma/client";
-import type { Deployment, Enterprise, Principal } from "@/types/gateway";
+import type { Principal } from "@/types/gateway";
+import type { Deployment } from "@/types/routing";
+import type { Enterprise } from "@/types/settings";
 import type { ContentSkip } from "@/types/logs";
 
 const ERROR_LIMIT = 2_000;

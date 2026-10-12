@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { PolicyGroup, ProviderPolicy, TemplateRules } from "@/types/model-templates";
-import type { Principal, VirtualKeyView } from "@/types/gateway";
+import type { Principal } from "@/types/gateway";
+import type { VirtualKeyView } from "@/types/keys";
 
 const providers: ProviderPolicy[] = [
   { id: "zdr-eu", zdr: true, retentionDays: null, region: "eu", noTraining: false },

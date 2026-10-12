@@ -1,8 +1,9 @@
 import { asNumber, asRecord, asString, newId, stringifyContent } from "@/lib/gateway/core";
 import { GateError } from "@/lib/gateway/errors";
 import { completionFromSse } from "@/lib/gateway/protocols/sse-completion";
-import type { ChatSseTranslator, DiscoveredModel, JsonMap, ResolvedDeployment, UpstreamAuth } from "@/types/gateway";
-import type { LimitWindow, SubscriptionLimits } from "@/types/providers";
+import type { ChatSseTranslator, JsonMap } from "@/types/gateway";
+import type { ResolvedDeployment } from "@/types/routing";
+import type { LimitWindow, SubscriptionLimits, DiscoveredModel, UpstreamAuth } from "@/types/providers";
 
 export const ANTIGRAVITY_CLIENT_ID = "1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com";
 export const ANTIGRAVITY_AUTHORIZE_URL = "https://accounts.google.com/o/oauth2/v2/auth";

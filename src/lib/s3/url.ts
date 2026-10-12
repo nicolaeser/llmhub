@@ -1,6 +1,5 @@
 import "server-only";
-import type { S3Addressing } from "@/types/gateway";
-import type { S3AddressingStyle, S3Location } from "@/types/s3";
+import type { S3AddressingStyle, S3Location, S3AddressingSetting } from "@/types/s3";
 
 const IPV4 = /^(?:\d{1,3}\.){3}\d{1,3}$/;
 
@@ -54,7 +53,7 @@ function isAwsHost(host: string): boolean {
 }
 
 export function resolveAddressing(input: {
-  addressing?: S3Addressing | string;
+  addressing?: S3AddressingSetting | string;
   forcePathStyle?: boolean;
   domainBucket?: boolean;
   bucket: string;

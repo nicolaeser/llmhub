@@ -9,8 +9,8 @@ import { GateError } from "@/lib/gateway/errors";
 import { refreshSession } from "@/lib/gateway/upstreams/subscription-sign-in";
 import { logger } from "@/lib/logging/logger";
 import { parseJsonOrNull } from "@/lib/utils/json";
-import type { ResolvedDeployment, UpstreamAuth } from "@/types/gateway";
-import type { SignInKind, SignInSession, SignInTokens } from "@/types/providers";
+import type { ResolvedDeployment } from "@/types/routing";
+import type { SignInKind, SignInSession, SignInTokens, UpstreamAuth } from "@/types/providers";
 
 const REFRESH_SKEW_MS = 5 * 60_000;
 const LEASE_MS = 30_000;

@@ -15,7 +15,9 @@ import {
   type QuotaScores,
 } from "@/lib/gateway/routing/router";
 import { claudeLimits } from "@/lib/gateway/upstreams/subscription-limits";
-import type { Deployment, Principal, VirtualKeyView } from "@/types/gateway";
+import type { Principal } from "@/types/gateway";
+import type { Deployment } from "@/types/routing";
+import type { VirtualKeyView } from "@/types/keys";
 import type { LimitWindow, SubscriptionLimits } from "@/types/providers";
 
 const NOW = Date.parse("2026-10-12T12:00:00Z");
