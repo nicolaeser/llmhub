@@ -6,14 +6,13 @@ import {
   autoRouteEntries,
   catalogStatus,
   displayNameOf,
-  jevRequest,
-  jevVerdict,
   matchKey,
   nameSimilarity,
   planCatalog,
   snapshotNames,
   vendorOf,
 } from "@/lib/gateway/catalog/model-catalog";
+import { jevRequest, jevVerdict } from "@/lib/gateway/catalog/jev";
 import type {
   CatalogEntryPlan,
   CatalogGroupInput,

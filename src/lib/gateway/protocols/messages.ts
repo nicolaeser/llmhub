@@ -1,7 +1,9 @@
 import { parseToolInput } from "@/lib/gateway/protocols/anthropic";
 import { asRecord, newId, stringifyContent } from "@/lib/gateway/core";
+import { tokenCount } from "@/lib/gateway/billing/tokens";
 import { anthropicErrorBody } from "@/lib/gateway/errors";
-import { sseEvent, ToolCallDeltas } from "@/lib/gateway/protocols/responses";
+import { sseEvent } from "@/lib/gateway/protocols/sse";
+import { ToolCallDeltas } from "@/lib/gateway/protocols/chat-stream";
 import type {
   AnthropicUsage,
   MessagesContentBlock,
@@ -11,11 +13,6 @@ import type {
 } from "@/types/anthropic";
 import type { JsonMap } from "@/types/gateway";
 import type { ChatStreamEncoder, ToolCallEvent } from "@/types/responses";
-
-function count(value: unknown): number {
-  const n = Number(value ?? 0);
-  return Number.isFinite(n) && n > 0 ? n : 0;
-}
 
 function imagePart(source: JsonMap | null): JsonMap | null {
   if (source?.type === "base64" && typeof source.media_type === "string" && typeof source.data === "string") {
@@ -239,16 +236,16 @@ export function messagesToChat(request: MessagesRequest): JsonMap {
 
 function anthropicUsageFromChat(usage: unknown): AnthropicUsage {
   const rec = asRecord(usage);
-  const prompt = count(rec?.prompt_tokens ?? rec?.input_tokens);
-  const read = count(
+  const prompt = tokenCount(rec?.prompt_tokens ?? rec?.input_tokens);
+  const read = tokenCount(
     rec?.cache_read_input_tokens ??
       asRecord(rec?.prompt_tokens_details)?.cached_tokens ??
       asRecord(rec?.input_tokens_details)?.cached_tokens,
   );
-  const created = count(rec?.cache_creation_input_tokens);
+  const created = tokenCount(rec?.cache_creation_input_tokens);
   return {
     input_tokens: Math.max(0, prompt - read - created),
-    output_tokens: count(rec?.completion_tokens ?? rec?.output_tokens),
+    output_tokens: tokenCount(rec?.completion_tokens ?? rec?.output_tokens),
     cache_creation_input_tokens: created,
     cache_read_input_tokens: read,
   };

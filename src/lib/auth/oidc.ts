@@ -1,6 +1,6 @@
 import "server-only";
-import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
-import { signingSecret } from "@/lib/crypto";
+import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
+import { pkceChallenge, signingSecret } from "@/lib/crypto";
 import { env } from "@/lib/env";
 import { asRecord, asString } from "@/lib/gateway/core";
 import { verifyJwt } from "@/lib/auth/jwks";
@@ -94,10 +94,6 @@ export async function fetchOidcDiscovery(
   }
   discCache = { issuer: trimmed, disc, fetched: Date.now() };
   return disc;
-}
-
-export function pkceChallenge(verifier: string): string {
-  return createHash("sha256").update(verifier).digest("base64url");
 }
 
 export function buildAuthorizationUrl(

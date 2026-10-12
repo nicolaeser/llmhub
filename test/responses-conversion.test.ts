@@ -9,18 +9,18 @@ import {
   encodeThinking,
   inputItems,
   pageItems,
-  parseRequest,
-  pipeChatStream,
   responseId,
   responseMessages,
   responseSkeleton,
-  ResponsesStreamEncoder,
   responsesCountBody,
   responsesToChat,
   storedObjectId,
   storedResponse,
   visibleResponse,
 } from "@/lib/gateway/protocols/responses";
+import { parseRequest } from "@/lib/gateway/protocols/parse-request";
+import { pipeChatStream } from "@/lib/gateway/protocols/chat-stream";
+import { ResponsesStreamEncoder } from "@/lib/gateway/protocols/responses-stream";
 import { responsesRequestSchema } from "@/schemas/responses";
 import type { JsonMap } from "@/types/gateway";
 import type { ResponsesRequest } from "@/types/responses";

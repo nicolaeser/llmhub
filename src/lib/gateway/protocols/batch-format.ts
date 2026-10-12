@@ -1,5 +1,6 @@
 import { asRecord, newId } from "@/lib/gateway/core";
 import { modelAlias } from "@/lib/gateway/catalog/model-alias";
+import { tokenCount } from "@/lib/gateway/billing/tokens";
 import type { BatchEndpoint, BatchLine, BatchLineError, BatchLineResult } from "@/types/batches";
 import type { JsonMap } from "@/types/gateway";
 
@@ -160,30 +161,25 @@ export function emptyBatchUsage(): JsonMap {
   };
 }
 
-function tokens(value: unknown): number {
-  const n = Number(value ?? 0);
-  return Number.isFinite(n) && n > 0 ? n : 0;
-}
-
 export function addBatchUsage(total: JsonMap, usage: unknown): JsonMap {
   const rec = asRecord(usage);
   if (!rec) return total;
-  const input = tokens(rec.prompt_tokens ?? rec.input_tokens);
-  const output = tokens(rec.completion_tokens ?? rec.output_tokens);
-  const cached = tokens(
+  const input = tokenCount(rec.prompt_tokens ?? rec.input_tokens);
+  const output = tokenCount(rec.completion_tokens ?? rec.output_tokens);
+  const cached = tokenCount(
     asRecord(rec.prompt_tokens_details)?.cached_tokens ?? asRecord(rec.input_tokens_details)?.cached_tokens,
   );
-  const reasoning = tokens(
+  const reasoning = tokenCount(
     asRecord(rec.completion_tokens_details)?.reasoning_tokens ?? asRecord(rec.output_tokens_details)?.reasoning_tokens,
   );
   const inputDetails = asRecord(total.input_tokens_details) ?? {};
   const outputDetails = asRecord(total.output_tokens_details) ?? {};
   return {
-    input_tokens: tokens(total.input_tokens) + input,
-    input_tokens_details: { cached_tokens: tokens(inputDetails.cached_tokens) + cached },
-    output_tokens: tokens(total.output_tokens) + output,
-    output_tokens_details: { reasoning_tokens: tokens(outputDetails.reasoning_tokens) + reasoning },
-    total_tokens: tokens(total.total_tokens) + input + output,
+    input_tokens: tokenCount(total.input_tokens) + input,
+    input_tokens_details: { cached_tokens: tokenCount(inputDetails.cached_tokens) + cached },
+    output_tokens: tokenCount(total.output_tokens) + output,
+    output_tokens_details: { reasoning_tokens: tokenCount(outputDetails.reasoning_tokens) + reasoning },
+    total_tokens: tokenCount(total.total_tokens) + input + output,
   };
 }
 

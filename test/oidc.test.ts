@@ -6,7 +6,6 @@ import {
   fetchOidcDiscovery,
   jwtConfigForOidc,
   oidcIsReady,
-  pkceChallenge,
   resetOidcCache,
   resolveOidc,
   signOidcState,
@@ -14,6 +13,7 @@ import {
   trimIssuer,
   verifyOidcState,
 } from "@/lib/auth/oidc";
+import { pkceChallenge } from "@/lib/crypto";
 import type { OidcDiscovery } from "@/types/auth";
 
 test("trimIssuer drops trailing slashes", () => {

@@ -12,6 +12,14 @@ function serialize(event: string, data: string): string {
   return `${event ? `event: ${event}\n` : ""}data: ${data}\n\n`;
 }
 
+export function sseEvent(type: string, payload: JsonMap): string {
+  return `event: ${type}\ndata: ${JSON.stringify(payload)}\n\n`;
+}
+
+export function sseData(payload: unknown): string {
+  return `data: ${typeof payload === "string" ? payload : JSON.stringify(payload)}\n\n`;
+}
+
 export function relayEvent(block: string, options: SseRelayOptions): string | null {
   let event = "";
   const data: string[] = [];

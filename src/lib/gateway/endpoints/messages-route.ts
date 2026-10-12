@@ -12,7 +12,7 @@ import {
 import { GateError } from "@/lib/gateway/errors";
 import { anthropicPassthroughHeaders, apiKeyRequest } from "@/lib/gateway/protocols/messages";
 import { dispatchMessages, streamMessages } from "@/lib/gateway/dispatch/messages-dispatch";
-import { parseRequest } from "@/lib/gateway/protocols/responses";
+import { parseRequest } from "@/lib/gateway/protocols/parse-request";
 import { messagesRequestSchema } from "@/schemas/anthropic";
 import type { RoutePool } from "@/types/gateway";
 

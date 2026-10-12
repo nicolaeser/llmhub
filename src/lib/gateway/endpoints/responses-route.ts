@@ -17,15 +17,15 @@ import { resolveResponsesFiles } from "@/lib/gateway/storage/file-refs";
 import {
   chatToResponse,
   inputItems,
-  parseRequest,
-  pipeChatStream,
   responseId,
   responseMessages,
   responseSkeleton,
-  ResponsesStreamEncoder,
   responsesToChat,
   visibleResponse,
 } from "@/lib/gateway/protocols/responses";
+import { parseRequest } from "@/lib/gateway/protocols/parse-request";
+import { pipeChatStream } from "@/lib/gateway/protocols/chat-stream";
+import { ResponsesStreamEncoder } from "@/lib/gateway/protocols/responses-stream";
 import { newId, ownerId } from "@/lib/gateway/core";
 import {
   fileSearchStores,

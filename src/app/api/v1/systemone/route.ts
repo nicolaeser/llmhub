@@ -4,7 +4,7 @@ import { asRecord } from "@/lib/gateway/core";
 import { allowModel, applyGuardrails, gateRequest, gateResponse, modelChain, modelOf, readBody } from "@/lib/gateway/access/gate";
 import { GateError } from "@/lib/gateway/errors";
 import { meter } from "@/lib/gateway/billing/meter";
-import { parseRequest } from "@/lib/gateway/protocols/responses";
+import { parseRequest } from "@/lib/gateway/protocols/parse-request";
 import { forwardToModel } from "@/lib/gateway/dispatch/upstream";
 import { systemOneRequestSchema } from "@/schemas/decisions";
 

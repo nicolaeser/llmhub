@@ -15,9 +15,9 @@ import {
   completionPrompts,
   CompletionStreamEncoder,
   completionToChat,
-  parseRequest,
-  pipeChatStream,
-} from "@/lib/gateway/protocols/responses";
+} from "@/lib/gateway/protocols/completions";
+import { parseRequest } from "@/lib/gateway/protocols/parse-request";
+import { pipeChatStream } from "@/lib/gateway/protocols/chat-stream";
 import { newId } from "@/lib/gateway/core";
 import { completionsRequestSchema } from "@/schemas/completions";
 

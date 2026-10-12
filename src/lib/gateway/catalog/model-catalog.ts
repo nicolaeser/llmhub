@@ -9,7 +9,6 @@ import type {
   CatalogStatus,
   JevCandidate,
   JevTask,
-  JevVerdict,
   StoredCatalogEntry,
 } from "@/types/model-catalog";
 
@@ -34,7 +33,6 @@ const MAX_JEV_CANDIDATES = 8;
 
 export const JEV_SUGGEST_CONFIDENCE = 0.5;
 export const DEFAULT_AUTO_CONFIDENCE = 0.9;
-export const JEV_QUESTION = "same_model";
 export const JEV_NONE = "none";
 
 type Item = {
@@ -484,45 +482,4 @@ export function autoRouteEntries(
       open.has(entry.alias) &&
       (entry.source === "rule" || (entry.source === "jev" && entry.confidence >= routing.minConfidence)),
   );
-}
-
-export function jevRequest(task: JevTask, model: string) {
-  const criteria: Record<string, string> = {};
-  for (const candidate of task.candidates) criteria[candidate.alias] = candidate.label;
-  criteria[JEV_NONE] = "None of these. It is a different model, size, version, snapshot, or variant.";
-  return {
-    model,
-    state: {
-      provider_kind: task.kind,
-      provider_model_id: task.upstreamId,
-      provider_display_name: task.name || task.upstreamId,
-      vendor: task.vendor || "unknown",
-    },
-    questions: {
-      [JEV_QUESTION]: {
-        type: "choice",
-        instructions:
-          "Which public model alias serves exactly the same model as the provider model in the state? Different sizes, versions, snapshots, and variants such as free, thinking, online, or quantized builds are different models.",
-        criteria,
-      },
-    },
-  };
-}
-
-function record(value: unknown): Record<string, unknown> | null {
-  return value !== null && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : null;
-}
-
-export function jevVerdict(task: JevTask, json: unknown): JevVerdict | null {
-  const answer = record(record(record(json)?.answers)?.[JEV_QUESTION]);
-  const choice = typeof answer?.choice === "string" ? answer.choice : "";
-  if (!choice || choice === JEV_NONE || !task.candidates.some((candidate) => candidate.alias === choice)) {
-    return null;
-  }
-  const probability = record(answer?.probabilities)?.[choice];
-  const raw = typeof probability === "number" ? probability : answer?.confidence;
-  const confidence = typeof raw === "number" && Number.isFinite(raw) ? Math.min(1, Math.max(0, raw)) : 0;
-  return { alias: choice, confidence };
 }

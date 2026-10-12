@@ -1,4 +1,5 @@
 import { asRecord, newId } from "@/lib/gateway/core";
+import { tokenCount } from "@/lib/gateway/billing/tokens";
 import type { DataUrl } from "@/types/anthropic";
 import type { JsonMap } from "@/types/gateway";
 
@@ -25,11 +26,6 @@ const THINKING_BUDGETS: Record<string, number> = {
   xhigh: 8192,
   max: 16384,
 };
-
-function count(value: unknown): number {
-  const n = Number(value ?? 0);
-  return Number.isFinite(n) && n > 0 ? n : 0;
-}
 
 export function parseDataUrl(url: string): DataUrl | null {
   const match = /^data:([^;,]+)(?:;[^;,]*)*;base64,([\s\S]*)$/.exec(url.trim());
@@ -70,11 +66,11 @@ function finishFromStopReason(reason: unknown): string {
 }
 
 export function chatUsageFromAnthropic(usage: JsonMap | null | undefined): JsonMap {
-  const read = count(usage?.cache_read_input_tokens);
-  const created = count(usage?.cache_creation_input_tokens);
-  const prompt = count(usage?.input_tokens) + read + created;
-  const completion = count(usage?.output_tokens);
-  const thinking = count(asRecord(usage?.output_tokens_details)?.thinking_tokens);
+  const read = tokenCount(usage?.cache_read_input_tokens);
+  const created = tokenCount(usage?.cache_creation_input_tokens);
+  const prompt = tokenCount(usage?.input_tokens) + read + created;
+  const completion = tokenCount(usage?.output_tokens);
+  const thinking = tokenCount(asRecord(usage?.output_tokens_details)?.thinking_tokens);
   const out: JsonMap = {
     prompt_tokens: prompt,
     completion_tokens: completion,

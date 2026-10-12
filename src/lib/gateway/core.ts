@@ -54,6 +54,10 @@ export function asString(v: unknown, fallback = ""): string {
   return typeof v === "string" ? v : fallback;
 }
 
+export function asArray(v: unknown): unknown[] {
+  return Array.isArray(v) ? v : [];
+}
+
 export function asNumber(v: unknown, fallback = 0): number {
   if (typeof v === "number" && Number.isFinite(v)) return v;
   if (typeof v === "string" && v.trim()) {

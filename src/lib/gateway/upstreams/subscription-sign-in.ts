@@ -1,6 +1,6 @@
 import "server-only";
-import { createHash, randomBytes } from "node:crypto";
-import { open, seal } from "@/lib/crypto";
+import { randomBytes } from "node:crypto";
+import { open, pkceChallenge, seal } from "@/lib/crypto";
 import {
   ANTIGRAVITY_AUTHORIZE_URL,
   ANTIGRAVITY_BASE_URL,
@@ -211,10 +211,6 @@ function errorCode(json: JsonMap): string {
   const error = json.error;
   if (typeof error === "string") return error;
   return asString(asRecord(error)?.code);
-}
-
-function pkceChallenge(verifier: string): string {
-  return createHash("sha256").update(verifier).digest("base64url");
 }
 
 export async function startAuthorization(kind: SignInKind): Promise<DeviceAuthorization> {

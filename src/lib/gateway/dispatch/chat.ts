@@ -14,7 +14,7 @@ import { CodexSseTranslator } from "@/lib/gateway/upstreams/codex";
 import { deploymentAuth } from "@/lib/gateway/upstreams/credentials";
 import { plainModel } from "@/lib/gateway/catalog/model-alias";
 import { inPool, outsidePool, routeOf } from "@/lib/gateway/routing/route-pool";
-import { SSE_HEADERS } from "@/lib/gateway/protocols/sse";
+import { SSE_HEADERS, sseData } from "@/lib/gateway/protocols/sse";
 import {
   joinPath,
   mergeUpstreamHeaders,
@@ -294,10 +294,6 @@ function streamTranslator(dep: ResolvedDeployment, model: string): ChatSseTransl
   return null;
 }
 
-function sseData(payload: string): string {
-  return `data: ${payload}\n\n`;
-}
-
 export async function dispatchChat(input: {
   principal: Principal;
   model: string;
@@ -457,12 +453,12 @@ export function relayChatStream(input: {
         filtered = true;
         const stop = contentFilterChunk(json, input.model);
         transcript.push(stop);
-        controller.enqueue(encoder.encode(sseData(JSON.stringify(stop))));
+        controller.enqueue(encoder.encode(sseData(stop)));
       }
       json.choices = [];
       if (!asRecord(json.usage)) return;
     }
-    if (observe(json)) controller.enqueue(encoder.encode(sseData(JSON.stringify(json))));
+    if (observe(json)) controller.enqueue(encoder.encode(sseData(json)));
   };
 
   const end = (controller: ReadableStreamDefaultController<Uint8Array>) => {

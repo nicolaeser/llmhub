@@ -36,18 +36,16 @@ import {
   updateObjectPayload,
 } from "@/lib/gateway/storage/objects";
 import { keyPrincipal } from "@/lib/gateway/access/principal";
+import { chatToCompletion, completionPrompts, completionToChat } from "@/lib/gateway/protocols/completions";
 import {
-  chatToCompletion,
   chatToResponse,
-  completionPrompts,
-  completionToChat,
   pageItems,
-  parseRequest,
   responseId,
   responseSkeleton,
   responsesToChat,
   visibleResponse,
 } from "@/lib/gateway/protocols/responses";
+import { parseRequest } from "@/lib/gateway/protocols/parse-request";
 import { previousConversation } from "@/lib/gateway/storage/responses-store";
 import { forwardToModel } from "@/lib/gateway/dispatch/upstream";
 import { completionsRequestSchema } from "@/schemas/completions";

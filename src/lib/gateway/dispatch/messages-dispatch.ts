@@ -22,7 +22,7 @@ import { GateError } from "@/lib/gateway/errors";
 import { chatIncompatibility, chatToMessage, messagesToChat, MessagesStreamEncoder } from "@/lib/gateway/protocols/messages";
 import { MessagesStreamTranscript } from "@/lib/gateway/request-logs/log-content";
 import { outputScreen, type OutputScreen } from "@/lib/gateway/safety/guardrails";
-import { pipeChatStream } from "@/lib/gateway/protocols/responses";
+import { pipeChatStream } from "@/lib/gateway/protocols/chat-stream";
 import { requestRoutingOverride } from "@/lib/gateway/dispatch/service-mode";
 import { relaySse } from "@/lib/gateway/protocols/sse";
 import { estimateTokens, requestText } from "@/lib/gateway/billing/tokens";

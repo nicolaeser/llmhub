@@ -19,7 +19,8 @@ import {
   chatIncompatibility,
   messagesToChat,
 } from "@/lib/gateway/protocols/messages";
-import { chatToResponsesCountBody, parseRequest } from "@/lib/gateway/protocols/responses";
+import { chatToResponsesCountBody } from "@/lib/gateway/protocols/responses";
+import { parseRequest } from "@/lib/gateway/protocols/parse-request";
 import { requestRoutingOverride } from "@/lib/gateway/dispatch/service-mode";
 import { proxyJson, upstreamError } from "@/lib/gateway/dispatch/upstream";
 import { messagesRequestSchema } from "@/schemas/anthropic";

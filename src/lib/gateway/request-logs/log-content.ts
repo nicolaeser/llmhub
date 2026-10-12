@@ -1,3 +1,4 @@
+import { asArray, asRecord, asString } from "@/lib/gateway/core";
 import { isOpaqueText } from "@/lib/gateway/safety/pii";
 import type { JsonMap } from "@/types/gateway";
 import type { LogPayload, TranscriptEntry } from "@/types/logs";
@@ -7,18 +8,6 @@ const MAX_ITEMS = 1_000;
 const MAX_DEPTH = 32;
 const MAX_CHARS = 1_000_000;
 const VECTOR_MIN = 64;
-
-function record(value: unknown): JsonMap | null {
-  return value && typeof value === "object" && !Array.isArray(value) ? (value as JsonMap) : null;
-}
-
-function list(value: unknown): unknown[] {
-  return Array.isArray(value) ? value : [];
-}
-
-function str(value: unknown): string {
-  return typeof value === "string" ? value : "";
-}
 
 function clip(value: unknown, limit: number, state: { truncated: boolean }, depth: number): unknown {
   if (typeof value === "string") {
@@ -42,7 +31,7 @@ function clip(value: unknown, limit: number, state: { truncated: boolean }, dept
     }
     return items;
   }
-  const rec = record(value);
+  const rec = asRecord(value);
   if (rec) {
     const out: JsonMap = {};
     for (const [key, item] of Object.entries(rec)) {
@@ -73,25 +62,25 @@ export class ChatStreamTranscript {
   private slots = new Map<number, ChatSlot>();
 
   push(chunk: JsonMap): void {
-    for (const raw of list(chunk.choices)) {
-      const choice = record(raw);
-      const delta = record(choice?.delta) ?? record(choice?.message);
+    for (const raw of asArray(chunk.choices)) {
+      const choice = asRecord(raw);
+      const delta = asRecord(choice?.delta) ?? asRecord(choice?.message);
       if (!choice || !delta) {
         if (choice && typeof choice.text === "string") this.slot(choice).content += choice.text;
         continue;
       }
       const slot = this.slot(choice);
       slot.content += textOf(delta.content);
-      slot.reasoning += str(delta.reasoning_content);
-      for (const rawCall of list(delta.tool_calls)) {
-        const call = record(rawCall);
+      slot.reasoning += asString(delta.reasoning_content);
+      for (const rawCall of asArray(delta.tool_calls)) {
+        const call = asRecord(rawCall);
         if (!call) continue;
         const index = typeof call.index === "number" ? call.index : slot.tools.size;
         const tool = slot.tools.get(index) ?? { id: "", name: "", arguments: "" };
-        const fn = record(call.function);
-        tool.id ||= str(call.id);
-        tool.name ||= str(fn?.name);
-        tool.arguments += str(fn?.arguments);
+        const fn = asRecord(call.function);
+        tool.id ||= asString(call.id);
+        tool.name ||= asString(fn?.name);
+        tool.arguments += asString(fn?.arguments);
         slot.tools.set(index, tool);
       }
     }
@@ -137,16 +126,16 @@ export class MessagesStreamTranscript {
   push(event: JsonMap, type: string): void {
     const index = typeof event.index === "number" ? event.index : 0;
     if (type === "content_block_start") {
-      const block = record(event.content_block);
+      const block = asRecord(event.content_block);
       if (block) this.blocks.set(index, block.type === "tool_use" ? { ...block, input: "" } : { ...block });
       return;
     }
     if (type !== "content_block_delta") return;
-    const delta = record(event.delta);
+    const delta = asRecord(event.delta);
     const block = this.blocks.get(index) ?? { type: "text", text: "" };
-    if (typeof delta?.text === "string") block.text = str(block.text) + delta.text;
-    if (typeof delta?.thinking === "string") block.thinking = str(block.thinking) + delta.thinking;
-    if (typeof delta?.partial_json === "string") block.input = str(block.input) + delta.partial_json;
+    if (typeof delta?.text === "string") block.text = asString(block.text) + delta.text;
+    if (typeof delta?.thinking === "string") block.thinking = asString(block.thinking) + delta.thinking;
+    if (typeof delta?.partial_json === "string") block.input = asString(block.input) + delta.partial_json;
     this.blocks.set(index, block);
   }
 
@@ -168,10 +157,10 @@ export class MessagesStreamTranscript {
 
 function textOf(content: unknown): string {
   if (typeof content === "string") return content;
-  return list(content)
+  return asArray(content)
     .map((part) => {
-      const rec = record(part);
-      return typeof part === "string" ? part : str(rec?.text);
+      const rec = asRecord(part);
+      return typeof part === "string" ? part : asString(rec?.text);
     })
     .join("");
 }
@@ -196,21 +185,21 @@ const MEDIA_TYPES: Record<string, string> = {
 function contentEntries(role: string, content: unknown): TranscriptEntry[] {
   if (typeof content === "string") return content ? [{ role, kind: "text", text: content }] : [];
   const out: TranscriptEntry[] = [];
-  for (const raw of list(content)) {
+  for (const raw of asArray(content)) {
     if (typeof raw === "string") {
       if (raw) out.push({ role, kind: "text", text: raw });
       continue;
     }
-    const part = record(raw);
+    const part = asRecord(raw);
     if (!part) continue;
-    const type = str(part.type);
+    const type = asString(part.type);
     if (typeof part.text === "string" && (type === "" || type.endsWith("text"))) {
       if (part.text) out.push({ role, kind: "text", text: part.text });
     } else if (type === "thinking" || type === "reasoning") {
-      const text = str(part.thinking) || textOf(part.summary);
+      const text = asString(part.thinking) || textOf(part.summary);
       if (text) out.push({ role, kind: "reasoning", text });
     } else if (type === "tool_use" || type === "server_tool_use") {
-      out.push({ role, kind: "tool_call", name: str(part.name), text: compact(part.input) });
+      out.push({ role, kind: "tool_call", name: asString(part.name), text: compact(part.input) });
     } else if (type === "tool_result") {
       out.push({ role, kind: "tool_result", text: typeof part.content === "string" ? part.content : textOf(part.content) });
     } else if (MEDIA_TYPES[type]) {
@@ -221,11 +210,11 @@ function contentEntries(role: string, content: unknown): TranscriptEntry[] {
 }
 
 function messageEntries(raw: unknown): TranscriptEntry[] {
-  const message = record(raw);
+  const message = asRecord(raw);
   if (!message) return typeof raw === "string" && raw ? [{ role: "user", kind: "text", text: raw }] : [];
-  const type = str(message.type);
+  const type = asString(message.type);
   if (type === "function_call") {
-    return [{ role: "assistant", kind: "tool_call", name: str(message.name), text: compact(message.arguments) }];
+    return [{ role: "assistant", kind: "tool_call", name: asString(message.name), text: compact(message.arguments) }];
   }
   if (type === "function_call_output") {
     return [{ role: "tool", kind: "tool_result", text: compact(message.output) }];
@@ -234,37 +223,37 @@ function messageEntries(raw: unknown): TranscriptEntry[] {
     const text = textOf(message.summary);
     return text ? [{ role: "assistant", kind: "reasoning", text }] : [];
   }
-  const role = str(message.role) || "user";
+  const role = asString(message.role) || "user";
   if (role === "tool") {
-    return [{ role, kind: "tool_result", name: str(message.name), text: textOf(message.content) || compact(message.content) }];
+    return [{ role, kind: "tool_result", name: asString(message.name), text: textOf(message.content) || compact(message.content) }];
   }
   const out: TranscriptEntry[] = [];
   if (typeof message.reasoning_content === "string" && message.reasoning_content) {
     out.push({ role, kind: "reasoning", text: message.reasoning_content });
   }
   out.push(...contentEntries(role, message.content));
-  for (const rawCall of list(message.tool_calls)) {
-    const call = record(rawCall);
-    const fn = record(call?.function);
-    if (fn) out.push({ role, kind: "tool_call", name: str(fn.name), text: compact(fn.arguments) });
+  for (const rawCall of asArray(message.tool_calls)) {
+    const call = asRecord(rawCall);
+    const fn = asRecord(call?.function);
+    if (fn) out.push({ role, kind: "tool_call", name: asString(fn.name), text: compact(fn.arguments) });
   }
   return out;
 }
 
 function promptEntries(value: unknown): TranscriptEntry[] {
   if (typeof value === "string") return value ? [{ role: "user", kind: "text", text: value }] : [];
-  return list(value).flatMap((item) => (typeof item === "string" && item ? [{ role: "user", kind: "text" as const, text: item }] : []));
+  return asArray(value).flatMap((item) => (typeof item === "string" && item ? [{ role: "user", kind: "text" as const, text: item }] : []));
 }
 
 export function requestTranscript(request: unknown): TranscriptEntry[] {
-  const body = record(request);
+  const body = asRecord(request);
   if (!body) return promptEntries(request);
   const out: TranscriptEntry[] = [];
   if (body.system !== undefined) out.push(...contentEntries("system", body.system));
   if (typeof body.instructions === "string" && body.instructions) {
     out.push({ role: "system", kind: "text", text: body.instructions });
   }
-  for (const message of list(body.messages)) out.push(...messageEntries(message));
+  for (const message of asArray(body.messages)) out.push(...messageEntries(message));
   if (Array.isArray(body.input)) {
     for (const item of body.input) out.push(...messageEntries(item));
   } else {
@@ -275,29 +264,29 @@ export function requestTranscript(request: unknown): TranscriptEntry[] {
 }
 
 export function responseTranscript(response: unknown): TranscriptEntry[] {
-  const body = record(response);
+  const body = asRecord(response);
   if (!body) return promptEntries(response).map((entry) => ({ ...entry, role: "assistant" }));
   const out: TranscriptEntry[] = [];
-  for (const raw of list(body.choices)) {
-    const choice = record(raw);
+  for (const raw of asArray(body.choices)) {
+    const choice = asRecord(raw);
     if (!choice) continue;
     if (typeof choice.text === "string") {
       if (choice.text) out.push({ role: "assistant", kind: "text", text: choice.text });
       continue;
     }
-    out.push(...messageEntries({ role: "assistant", ...(record(choice.message) ?? {}) }));
+    out.push(...messageEntries({ role: "assistant", ...(asRecord(choice.message) ?? {}) }));
   }
-  if (body.type === "message" || (str(body.role) === "assistant" && Array.isArray(body.content))) {
+  if (body.type === "message" || (asString(body.role) === "assistant" && Array.isArray(body.content))) {
     out.push(...contentEntries("assistant", body.content));
   }
-  for (const item of list(body.output)) {
-    const rec = record(item);
-    if (rec && str(rec.type) === "message") out.push(...contentEntries(str(rec.role) || "assistant", rec.content));
+  for (const item of asArray(body.output)) {
+    const rec = asRecord(item);
+    if (rec && asString(rec.type) === "message") out.push(...contentEntries(asString(rec.role) || "assistant", rec.content));
     else out.push(...messageEntries(item).map((entry) => ({ ...entry, role: "assistant" })));
   }
   if (typeof body.text === "string" && body.text) out.push({ role: "assistant", kind: "text", text: body.text });
-  for (const raw of list(body.data)) {
-    const item = record(raw);
+  for (const raw of asArray(body.data)) {
+    const item = asRecord(raw);
     if (item && (typeof item.b64_json === "string" || typeof item.url === "string")) {
       out.push({ role: "assistant", kind: "media", text: "image" });
     }

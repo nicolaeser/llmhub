@@ -1,6 +1,11 @@
 import { asRecord, stringifyContent } from "@/lib/gateway/core";
 import type { JsonMap } from "@/types/gateway";
 
+export function tokenCount(value: unknown): number {
+  const n = Number(value ?? 0);
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
 export function tokensForLength(length: number): number {
   return length > 0 ? Math.max(1, Math.ceil(length / 4)) : 0;
 }

@@ -16,6 +16,10 @@ export const digest = (value: string) => createHash("sha256").update(value).dige
 
 export const randomToken = () => randomBytes(32).toString("hex");
 
+export function pkceChallenge(verifier: string): string {
+  return createHash("sha256").update(verifier).digest("base64url");
+}
+
 export function keyedDigest(purpose: DigestPurpose, value: string): string {
   return createHmac("sha256", dataKey()).update(`${purpose}:${value}`).digest("hex");
 }

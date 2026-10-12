@@ -2,7 +2,7 @@ import "server-only";
 import { asStringMap, ownerId } from "@/lib/gateway/core";
 import { GateError } from "@/lib/gateway/errors";
 import { allowModel, readBody } from "@/lib/gateway/access/gate";
-import { parseRequest } from "@/lib/gateway/protocols/responses";
+import { parseRequest } from "@/lib/gateway/protocols/parse-request";
 import { chunkSettings } from "@/lib/rag/chunking";
 import { kickIngest } from "@/lib/rag/ingest";
 import { rankingOptions } from "@/lib/rag/rank";

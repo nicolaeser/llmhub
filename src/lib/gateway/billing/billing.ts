@@ -11,6 +11,7 @@ import { writeRequestLog } from "@/lib/gateway/request-logs/request-log";
 import { GateError } from "@/lib/gateway/errors";
 import { applyMarkup, markupRuleOf, pickMarkup, scaleByMarkup } from "@/lib/gateway/billing/markup-policy";
 import { tighterCap } from "@/lib/gateway/billing/cost-cap";
+import { tokenCount } from "@/lib/gateway/billing/tokens";
 import type { Prisma } from "@/generated/prisma/client";
 import type {
   SpendHolder,
@@ -357,11 +358,6 @@ export async function recordUsage(input: {
     error: input.error,
   });
   return cost;
-}
-
-function tokenCount(value: unknown): number {
-  const n = Number(value ?? 0);
-  return Number.isFinite(n) && n > 0 ? n : 0;
 }
 
 function detail(rec: Record<string, unknown>, key: string, field: string): number {

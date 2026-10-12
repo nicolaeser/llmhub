@@ -9,7 +9,8 @@ import {
   messagesToChat,
   MessagesStreamEncoder,
 } from "@/lib/gateway/protocols/messages";
-import { parseRequest, pipeChatStream } from "@/lib/gateway/protocols/responses";
+import { parseRequest } from "@/lib/gateway/protocols/parse-request";
+import { pipeChatStream } from "@/lib/gateway/protocols/chat-stream";
 import { messagesRequestSchema } from "@/schemas/anthropic";
 import type { MessagesRequest } from "@/types/anthropic";
 import type { JsonMap } from "@/types/gateway";
