@@ -99,3 +99,12 @@ test(
     assert.equal(pickLeastInflight([busy, idle], inflight).id, "idle");
   },
 );
+
+test("openaiRoot keeps Anthropic hosts and adds /v1 for every other base", async () => {
+  const { openaiRoot } = await import("@/lib/gateway/routing/runtime");
+  assert.equal(openaiRoot("https://api.anthropic.com"), "https://api.anthropic.com");
+  assert.equal(openaiRoot("https://api.anthropic.com/"), "https://api.anthropic.com");
+  assert.equal(openaiRoot("https://api.openai.com/v1/"), "https://api.openai.com/v1");
+  assert.equal(openaiRoot("https://proxy.example/anthropic.com"), "https://proxy.example/anthropic.com/v1");
+  assert.equal(openaiRoot("https://anthropic.com.example.net"), "https://anthropic.com.example.net/v1");
+});

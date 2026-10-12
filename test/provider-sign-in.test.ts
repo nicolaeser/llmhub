@@ -134,7 +134,7 @@ test("xAI sessions use the id token email and expires_in", async () => {
 });
 
 test("Codex device sign-in polls until approval and exchanges the code with PKCE", async () => {
-  const { pollDeviceCode, requestDeviceCode } = await import("@/lib/gateway/upstreams/subscription-sign-in");
+  const { pollDeviceCode, requestOpenaiDeviceCode } = await import("@/lib/gateway/upstreams/subscription-sign-in");
   let approved = false;
   respondWith((url) => {
     if (url.endsWith("/deviceauth/usercode")) {
@@ -147,7 +147,7 @@ test("Codex device sign-in polls until approval and exchanges the code with PKCE
     }
     return Response.json({ access_token: jwt({ exp: inOneHour() }), refresh_token: "r1", id_token: openaiIdToken });
   });
-  const device = await requestDeviceCode("codex");
+  const device = await requestOpenaiDeviceCode();
   assert.equal(device.verificationUrl, "https://auth.openai.com/codex/device");
   assert.equal(device.userCode, "ABCD-1234");
   assert.equal(device.interval, 5);
@@ -167,7 +167,7 @@ test("Codex device sign-in polls until approval and exchanges the code with PKCE
 });
 
 test("xAI device sign-in follows the RFC 8628 polling states", async () => {
-  const { pollDeviceCode, requestDeviceCode } = await import("@/lib/gateway/upstreams/subscription-sign-in");
+  const { pollDeviceCode, requestXaiDeviceCode } = await import("@/lib/gateway/upstreams/subscription-sign-in");
   let reply: Response = Response.json({ error: "authorization_pending" }, { status: 400 });
   respondWith((url) =>
     url.endsWith("/device/code")
@@ -181,7 +181,7 @@ test("xAI device sign-in follows the RFC 8628 polling states", async () => {
         })
       : reply,
   );
-  const device = await requestDeviceCode("grok_build");
+  const device = await requestXaiDeviceCode();
   assert.equal(device.verificationUrl, "https://accounts.x.ai/device?code=WXYZ");
   assert.equal(device.expiresIn, 600);
   const request = new URLSearchParams(calls[0]!.body);

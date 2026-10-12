@@ -10,9 +10,12 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
+const UNSAFE_KEYS = new Set(["__proto__", "constructor", "prototype"]);
+
 function deepMerge(base: Messages, override: Messages): Messages {
   const merged: Messages = { ...base };
   for (const [key, value] of Object.entries(override)) {
+    if (UNSAFE_KEYS.has(key)) continue;
     const current = merged[key];
     if (isPlainObject(current) && isPlainObject(value)) {
       merged[key] = deepMerge(current, value);
@@ -29,6 +32,7 @@ function assignDottedNamespace(
   payload: Messages,
 ) {
   const segments = dottedPath.split(".");
+  if (segments.some((segment) => UNSAFE_KEYS.has(segment))) return;
   let cursor = target;
   for (let index = 0; index < segments.length - 1; index += 1) {
     const segment = segments[index];

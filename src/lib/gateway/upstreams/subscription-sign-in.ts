@@ -214,13 +214,20 @@ function errorCode(json: JsonMap): string {
   return asString(asRecord(error)?.code);
 }
 
-export async function startAuthorization(kind: SignInKind): Promise<DeviceAuthorization> {
-  if (kind === "antigravity") {
-    if (!(await antigravityClientSecret())) throw new Error("ANTIGRAVITY_NOT_CONFIGURED");
-    return requestAntigravityAuthorization();
-  }
-  if (kind === "claude") return requestAuthorizationCode();
-  return requestDeviceCode(kind);
+async function startAntigravityAuthorization(): Promise<DeviceAuthorization> {
+  if (!(await antigravityClientSecret())) throw new Error("ANTIGRAVITY_NOT_CONFIGURED");
+  return requestAntigravityAuthorization();
+}
+
+const AUTHORIZATION_STARTS: Record<SignInKind, () => Promise<DeviceAuthorization>> = {
+  antigravity: startAntigravityAuthorization,
+  claude: async () => requestAuthorizationCode(),
+  codex: () => requestOpenaiDeviceCode(),
+  grok_build: () => requestXaiDeviceCode(),
+};
+
+export function startAuthorization(kind: SignInKind): Promise<DeviceAuthorization> {
+  return AUTHORIZATION_STARTS[kind]();
 }
 
 export function requestAntigravityAuthorization(): DeviceAuthorization {
@@ -392,22 +399,23 @@ export async function completeAuthorization(
   return { ...session, plan: await claudeProfilePlan(session.tokens.access) };
 }
 
-export async function requestDeviceCode(kind: Exclude<SignInKind, "claude" | "antigravity">): Promise<DeviceAuthorization> {
-  if (kind === "codex") {
-    const { status, json } = await postAuth(`${OPENAI_ISSUER}/api/accounts/deviceauth/usercode`, {
-      client_id: OPENAI_CLIENT_ID,
-    });
-    const deviceAuthId = asString(json.device_auth_id);
-    const userCode = asString(json.user_code) || asString(json.usercode);
-    if (status >= 400 || !deviceAuthId || !userCode) throw new Error("SIGN_IN_FAILED");
-    return {
-      grant: { kind, deviceAuthId, userCode },
-      verificationUrl: `${OPENAI_ISSUER}/codex/device`,
-      userCode,
-      interval: intervalOf(json.interval),
-      expiresIn: OPENAI_DEVICE_TTL_S,
-    };
-  }
+export async function requestOpenaiDeviceCode(): Promise<DeviceAuthorization> {
+  const { status, json } = await postAuth(`${OPENAI_ISSUER}/api/accounts/deviceauth/usercode`, {
+    client_id: OPENAI_CLIENT_ID,
+  });
+  const deviceAuthId = asString(json.device_auth_id);
+  const userCode = asString(json.user_code) || asString(json.usercode);
+  if (status >= 400 || !deviceAuthId || !userCode) throw new Error("SIGN_IN_FAILED");
+  return {
+    grant: { kind: "codex", deviceAuthId, userCode },
+    verificationUrl: `${OPENAI_ISSUER}/codex/device`,
+    userCode,
+    interval: intervalOf(json.interval),
+    expiresIn: OPENAI_DEVICE_TTL_S,
+  };
+}
+
+export async function requestXaiDeviceCode(): Promise<DeviceAuthorization> {
   const { status, json } = await postAuth(
     `${XAI_ISSUER}/oauth2/device/code`,
     new URLSearchParams({ client_id: XAI_CLIENT_ID, scope: XAI_SCOPE }),
@@ -419,7 +427,7 @@ export async function requestDeviceCode(kind: Exclude<SignInKind, "claude" | "an
     throw new Error("SIGN_IN_FAILED");
   }
   return {
-    grant: { kind, deviceCode },
+    grant: { kind: "grok_build", deviceCode },
     verificationUrl,
     userCode,
     interval: intervalOf(json.interval),

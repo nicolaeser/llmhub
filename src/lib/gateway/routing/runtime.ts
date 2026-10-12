@@ -273,10 +273,16 @@ export function defaultBase(dep: ResolvedDeployment): string {
   return base.replace(/\/$/, "");
 }
 
+function isAnthropicHost(url: string): boolean {
+  if (!URL.canParse(url)) return false;
+  const host = new URL(url).hostname;
+  return host === "anthropic.com" || host.endsWith(".anthropic.com");
+}
+
 export function openaiRoot(base: string): string {
   const trimmed = base.replace(/\/$/, "");
   if (trimmed.endsWith("/v1")) return trimmed;
-  if (trimmed.includes("anthropic.com")) return trimmed;
+  if (isAnthropicHost(trimmed)) return trimmed;
   return `${trimmed}/v1`;
 }
 

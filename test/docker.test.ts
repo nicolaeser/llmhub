@@ -176,5 +176,7 @@ test("generate-env.sh writes the production .env and keeps an existing one", asy
   for (const name of ["POSTGRES_PASSWORD", "REDIS_PASSWORD", "APP_SECRET"]) {
     assert.match(script, new RegExp(`^generated ${name} `, "m"), name);
   }
-  assert.doesNotMatch(script, /^\s*(set_value|ask|generated|keep_or) (DATABASE_URL|REDIS_URL) |127\.0\.0\.1:5433|NODE_ENV development/m);
+  assert.doesNotMatch(script, /^\s*(?:set_value|ask|generated|keep_or) (?:DATABASE_URL|REDIS_URL) /m);
+  assert.doesNotMatch(script, /127\.0\.0\.1:5433/);
+  assert.doesNotMatch(script, /NODE_ENV development/);
 });
