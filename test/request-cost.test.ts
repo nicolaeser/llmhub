@@ -8,7 +8,7 @@ import {
   estimateCost,
   maxCostHeader,
   requestTokens,
-} from "@/lib/gateway/cost-cap";
+} from "@/lib/gateway/billing/cost-cap";
 import { GateError } from "@/lib/gateway/errors";
 import type { Group, Principal, ResolvedDeployment, VirtualKeyView } from "@/types/gateway";
 
@@ -189,7 +189,7 @@ const groups = new Map([
 const body = { messages: [{ role: "user", content: "x".repeat(4000) }], max_tokens: 1000 };
 
 test("routing skips deployments whose estimate exceeds the cap", async () => {
-  const { acquireGroup, loadGroup } = await import("@/lib/gateway/runtime");
+  const { acquireGroup, loadGroup } = await import("@/lib/gateway/routing/runtime");
   const mixed = await loadGroup("mixed");
   const principal = traced({ max_request_cost: 5 });
   capRequestCost(principal, null, null);
@@ -205,7 +205,7 @@ test("routing skips deployments whose estimate exceeds the cap", async () => {
 });
 
 test("a cost rejection stops routing instead of falling back", async () => {
-  const { withDeployment } = await import("@/lib/gateway/chat");
+  const { withDeployment } = await import("@/lib/gateway/dispatch/chat");
   const principal = traced();
   capRequestCost(principal, { limit: 1, budget: "key" }, null);
   const used: string[] = [];

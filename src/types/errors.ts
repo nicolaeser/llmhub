@@ -1,5 +1,5 @@
 import type { GATEWAY_ERRORS } from "@/lib/gateway/errors";
-import type { PROBLEMS } from "@/lib/http/problems";
+import type { PROBLEMS } from "@/lib/http/problem-codes";
 
 export type GatewayErrorCode = keyof typeof GATEWAY_ERRORS;
 

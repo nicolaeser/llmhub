@@ -14,7 +14,7 @@ import {
   setModelGroupEnabledAction,
 } from "@/app/(app)/models/_action";
 import { isActionFail } from "@/lib/http/action-result";
-import { splitTag } from "@/lib/gateway/model-catalog";
+import { splitTag } from "@/lib/gateway/catalog/model-catalog";
 import type { Group, ProviderOpt } from "@/types/models";
 import ModelGroupDialog from "./_components/model-group-dialog";
 

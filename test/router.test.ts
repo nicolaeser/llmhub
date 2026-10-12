@@ -20,7 +20,7 @@ function deployment(
 test(
   "weighted pick returns a deployment",
   async () => {
-    const { pickWeighted } = await import("@/lib/gateway/router");
+    const { pickWeighted } = await import("@/lib/gateway/routing/router");
     const picked = pickWeighted([{ id: "d1", weight: 1 }]);
     assert.ok(picked);
   },
@@ -29,7 +29,7 @@ test(
 test(
   "pickCostLowest selects the cheapest deployment",
   async () => {
-    const { pickCostLowest } = await import("@/lib/gateway/router");
+    const { pickCostLowest } = await import("@/lib/gateway/routing/router");
     const cheap = deployment({
       id: "cheap",
       cost_input_per_1k: 0.1,
@@ -47,7 +47,7 @@ test(
 test(
   "pickPriority selects the highest weight",
   async () => {
-    const { pickPriority } = await import("@/lib/gateway/router");
+    const { pickPriority } = await import("@/lib/gateway/routing/router");
     const low = deployment({ id: "low", weight: 1 });
     const high = deployment({ id: "high", weight: 10 });
     assert.equal(pickPriority([low, high]).id, "high");
@@ -58,7 +58,7 @@ test(
   "pickLatencyEwma prefers unexplored then the lowest EWMA",
   async () => {
     const { pickLatencyEwma, nextLatencyEwma } = await import(
-      "@/lib/gateway/router"
+      "@/lib/gateway/routing/router"
     );
     const slow = deployment({ id: "slow", weight: 1 });
     const fast = deployment({ id: "fast", weight: 1 });
@@ -77,7 +77,7 @@ test(
 test(
   "service_tier maps to fast and priority routing",
   async () => {
-    const { requestRoutingOverride } = await import("@/lib/gateway/service-mode");
+    const { requestRoutingOverride } = await import("@/lib/gateway/dispatch/service-mode");
     assert.equal(requestRoutingOverride({ service_tier: "priority" }), "priority");
     assert.equal(requestRoutingOverride({ service_tier: "fast" }), "fast");
     assert.equal(requestRoutingOverride({ service_tier: "flex" }), "cost_lowest");
@@ -89,7 +89,7 @@ test(
 test(
   "pickLeastInflight selects the lowest inflight count",
   async () => {
-    const { pickLeastInflight } = await import("@/lib/gateway/router");
+    const { pickLeastInflight } = await import("@/lib/gateway/routing/router");
     const busy = deployment({ id: "busy" });
     const idle = deployment({ id: "idle" });
     const inflight = new Map<string, number>([

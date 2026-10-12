@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { dispatchChat, streamChat } from "@/lib/gateway/chat";
+import { dispatchChat, streamChat } from "@/lib/gateway/dispatch/chat";
 import {
   allowModel,
   applyGuardrails,
@@ -8,7 +8,7 @@ import {
   modelOf,
   readBody,
   modelChain,
-} from "@/lib/gateway/gate";
+} from "@/lib/gateway/access/gate";
 import { GateError } from "@/lib/gateway/errors";
 import {
   chatToCompletion,
@@ -17,7 +17,7 @@ import {
   completionToChat,
   parseRequest,
   pipeChatStream,
-} from "@/lib/gateway/responses";
+} from "@/lib/gateway/protocols/responses";
 import { newId } from "@/lib/gateway/core";
 import { completionsRequestSchema } from "@/schemas/completions";
 

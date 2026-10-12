@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { cancelBatch } from "@/lib/gateway/batches";
-import { gateRequest, gateResponse } from "@/lib/gateway/gate";
+import { cancelBatch } from "@/lib/gateway/endpoints/batches";
+import { gateRequest, gateResponse } from "@/lib/gateway/access/gate";
 
 export async function POST(
   req: Request,

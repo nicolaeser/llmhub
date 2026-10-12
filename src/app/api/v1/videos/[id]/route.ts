@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import { ownerId } from "@/lib/gateway/core";
-import { gateRequest, gateResponse } from "@/lib/gateway/gate";
-import { deleteObject } from "@/lib/gateway/objects";
-import { forwardToModel } from "@/lib/gateway/upstream";
-import { refreshVideo, videoRecord } from "@/lib/gateway/videos";
+import { gateRequest, gateResponse } from "@/lib/gateway/access/gate";
+import { deleteObject } from "@/lib/gateway/storage/objects";
+import { forwardToModel } from "@/lib/gateway/dispatch/upstream";
+import { refreshVideo, videoRecord } from "@/lib/gateway/endpoints/videos";
 
 export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }) {
   try {

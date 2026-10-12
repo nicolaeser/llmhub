@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { modelAlias } from "@/lib/gateway/model-alias";
+import { modelAlias } from "@/lib/gateway/catalog/model-alias";
 
 const alias = z.string().trim().min(1).max(200).transform(modelAlias);
 

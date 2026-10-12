@@ -11,7 +11,7 @@ import {
   CACHE_TTL_MAX_SECONDS,
   SEMANTIC_THRESHOLD_DEFAULT,
   SEMANTIC_THRESHOLD_MIN,
-} from "@/lib/gateway/cache-settings";
+} from "@/lib/gateway/cache/cache-settings";
 import { isActionFail } from "@/lib/http/action-result";
 import CacheStats from "./_components/cache-stats";
 import type { CacheView, SemanticCacheSettings } from "@/types/cache";

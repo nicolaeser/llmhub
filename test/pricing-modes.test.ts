@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { chatToAnthropic, chatUsageFromAnthropic } from "@/lib/gateway/anthropic";
-import { usageFromUnknown } from "@/lib/gateway/billing";
-import { cacheSavingsOf, cacheTokens, costOf, priceFactors } from "@/lib/gateway/cost";
-import { xaiReasoningEffort } from "@/lib/gateway/upstream";
+import { chatToAnthropic, chatUsageFromAnthropic } from "@/lib/gateway/protocols/anthropic";
+import { usageFromUnknown } from "@/lib/gateway/billing/billing";
+import { cacheSavingsOf, cacheTokens, costOf, priceFactors } from "@/lib/gateway/billing/cost";
+import { xaiReasoningEffort } from "@/lib/gateway/dispatch/upstream";
 import type { Deployment, Usage } from "@/types/gateway";
 
 function dep(kind: string, model: string, input = 1, output = 2): Deployment {

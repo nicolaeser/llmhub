@@ -1,4 +1,4 @@
-import { earliestRecovery, quotaExhausted } from "@/lib/gateway/quota";
+import { earliestRecovery, quotaExhausted } from "@/lib/gateway/routing/quota";
 import type { AccountLimits, ProviderView } from "@/types/providers";
 
 export type AccountState = "paused" | "available" | "limited" | "expired" | "unavailable" | "checking" | "connected";

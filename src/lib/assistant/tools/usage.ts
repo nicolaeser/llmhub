@@ -2,7 +2,7 @@ import "server-only";
 
 import prisma from "@/lib/db/prisma";
 import { hasPerm, PERMISSIONS } from "@/lib/auth/permissions";
-import { usageTotals } from "@/lib/gateway/usage-totals";
+import { usageTotals } from "@/lib/usage/usage-totals";
 import { money } from "@/lib/utils/money";
 import { loadUsageAction } from "@/app/(app)/_action";
 import { loadLogsAction } from "@/app/(app)/logs/_action";

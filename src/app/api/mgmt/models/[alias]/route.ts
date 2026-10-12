@@ -6,7 +6,7 @@ import {
 import prisma from "@/lib/db/prisma";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { asStringArray } from "@/lib/gateway/core";
-import { modelAlias } from "@/lib/gateway/model-alias";
+import { modelAlias } from "@/lib/gateway/catalog/model-alias";
 import { deploymentInputs, priceWindowInputs } from "@/lib/management/deployments";
 import { managementRoute, notFound, readBody, respond, unwrap } from "@/lib/management/http";
 import { serializeModelAlias } from "@/lib/management/serialize";

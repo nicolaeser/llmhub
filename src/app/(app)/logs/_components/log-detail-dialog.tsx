@@ -22,7 +22,7 @@ import Markdown from "@/components/console/markdown";
 import SearchSelect from "@/components/console/search-select";
 import { useGuardrailHitLabel } from "@/components/guardrails/guardrail-hit";
 import { useRouter } from "@/i18n/routing";
-import { splitPiiPlaceholders } from "@/lib/gateway/pii";
+import { splitPiiPlaceholders } from "@/lib/gateway/safety/pii";
 import { isActionFail } from "@/lib/http/action-result";
 import type { RequestLogDetail, RequestLogExportFormat, TranscriptEntry } from "@/types/logs";
 import GuardrailChip from "./guardrail-chip";

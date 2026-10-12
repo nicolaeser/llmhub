@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { DATA_REGIONS } from "@/lib/gateway/model-policy";
+import { DATA_REGIONS } from "@/lib/gateway/access/model-policy";
 
 export const providerPolicySchema = z.object({
   zdr: z.boolean().default(false),

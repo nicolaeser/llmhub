@@ -2,13 +2,13 @@ import type { NextRequest } from "next/server";
 import { getFormatter, getNow, getTranslations } from "next-intl/server";
 import { getSession } from "@/lib/auth/session";
 import { hasPerm, PERMISSIONS } from "@/lib/auth/permissions";
-import { writeAudit } from "@/lib/gateway/audit";
-import { parseHit } from "@/lib/gateway/guardrails";
-import { findRequestLogDetail } from "@/lib/gateway/request-log-detail";
-import { fileResponse } from "@/lib/http/export";
+import { writeAudit } from "@/lib/audit";
+import { parseHit } from "@/lib/gateway/safety/guardrails";
+import { findRequestLogDetail } from "@/lib/gateway/request-logs/request-log-detail";
+import { fileResponse } from "@/lib/export/csv";
 import { problemResponse } from "@/lib/http/problem";
-import { requestLogMarkdown } from "@/lib/http/request-log-markdown";
-import { requestLogPdf } from "@/lib/http/request-log-pdf";
+import { requestLogMarkdown } from "@/lib/export/request-log-markdown";
+import { requestLogPdf } from "@/lib/export/request-log-pdf";
 import type {
   RequestLogDetail,
   RequestLogDocument,

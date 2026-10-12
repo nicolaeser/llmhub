@@ -4,10 +4,10 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { GateError } from "@/lib/gateway/errors";
-import { applyGuardrails } from "@/lib/gateway/gate";
-import { defaultGuardrails } from "@/lib/gateway/guardrails";
-import { defaultEntityIds } from "@/lib/gateway/pii";
-import { piiOverride } from "@/lib/gateway/settings";
+import { applyGuardrails } from "@/lib/gateway/access/gate";
+import { defaultGuardrails } from "@/lib/gateway/safety/guardrails";
+import { defaultEntityIds } from "@/lib/gateway/safety/pii";
+import { piiOverride } from "@/lib/settings/enterprise";
 import type { Principal, VirtualKeyView } from "@/types/gateway";
 import type { PiiPolicy } from "@/types/guardrails";
 
@@ -112,7 +112,7 @@ test("an override without entities uses the default set", async () => {
 });
 
 test("resolvePolicies prefers the key, then the project, then the organization, then the global policy", async () => {
-  const settings = await readFile(path.join(root, "src/lib/gateway/settings.ts"), "utf8");
+  const settings = await readFile(path.join(root, "src/lib/settings/enterprise.ts"), "utf8");
   const start = settings.indexOf("export async function resolvePolicies");
   const body = settings.slice(start, settings.indexOf("\n}\n", start));
   for (const [key, project, org, global] of [

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { anthropicCountBody } from "@/lib/gateway/anthropic";
+import { anthropicCountBody } from "@/lib/gateway/protocols/anthropic";
 import {
   chatMessagesToItems,
   chatToResponsesCountBody,
@@ -20,7 +20,7 @@ import {
   storedObjectId,
   storedResponse,
   visibleResponse,
-} from "@/lib/gateway/responses";
+} from "@/lib/gateway/protocols/responses";
 import { responsesRequestSchema } from "@/schemas/responses";
 import type { JsonMap } from "@/types/gateway";
 import type { ResponsesRequest } from "@/types/responses";

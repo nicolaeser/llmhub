@@ -10,7 +10,7 @@ import {
   markupScopeOf,
   pickMarkup,
   scaleByMarkup,
-} from "@/lib/gateway/markup-policy";
+} from "@/lib/gateway/billing/markup-policy";
 import {
   CHARGEBACK_COLUMNS,
   CHARGEBACK_MARGIN_COLUMNS,
@@ -18,9 +18,9 @@ import {
   chargebackRows,
   chargebackTable,
   groupSpend,
-} from "@/lib/gateway/usage-stats";
-import { toCsv } from "@/lib/http/export";
-import { markedUpCost, targetCost } from "@/lib/gateway/what-if";
+} from "@/lib/usage/usage-stats";
+import { toCsv } from "@/lib/export/csv";
+import { markedUpCost, targetCost } from "@/lib/usage/what-if";
 import { serializeUsage } from "@/lib/management/serialize";
 import { markupSchema } from "@/schemas/pricing";
 import { markupCreateSchema, markupUpdateSchema } from "@/schemas/management";
@@ -211,7 +211,7 @@ test("management usage shows purchase cost and margin only when present", () => 
 });
 
 test("recordUsage bills the marked-up price and stores the purchase cost beside it", async () => {
-  const source = await readFile(new URL("../src/lib/gateway/billing.ts", import.meta.url), "utf8");
+  const source = await readFile(new URL("../src/lib/gateway/billing/billing.ts", import.meta.url), "utf8");
   assert.match(source, /const purchaseCost = costOf\(input\.deployment, usage\);/);
   assert.match(source, /const listed = costOf\(input\.deployment, usage, billing\);/);
   assert.match(source, /const model = plainModel\(input\.model\);/);
@@ -269,7 +269,7 @@ test("prompt cache savings follow the markup without clamping negative savings",
   assert.equal(scaleByMarkup(2, 25), 2.5);
   assert.equal(scaleByMarkup(-2, 25), -2.5);
   assert.equal(scaleByMarkup(2, -100), 0);
-  const source = await readFile(new URL("../src/lib/gateway/billing.ts", import.meta.url), "utf8");
+  const source = await readFile(new URL("../src/lib/gateway/billing/billing.ts", import.meta.url), "utf8");
   assert.match(source, /const cacheSavings = scaleByMarkup\(cacheSavingsOf\(input\.deployment, usage, billing\), percent\);/);
 });
 

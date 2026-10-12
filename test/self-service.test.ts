@@ -6,7 +6,7 @@ const src = (relative: string) => readFile(new URL(`../src/${relative}`, import.
 
 test("self-registration is off unless an administrator enables it", async () => {
   const [settings, route, login] = await Promise.all([
-    src("lib/gateway/settings.ts"),
+    src("lib/settings/enterprise.ts"),
     src("app/internal-api/account/register/route.ts"),
     src("app/account/login/page.tsx"),
   ]);

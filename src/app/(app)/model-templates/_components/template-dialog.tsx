@@ -25,7 +25,7 @@ import { useTranslations } from "next-intl";
 import MultiPicker from "@/components/console/multi-picker";
 import { createTemplateAction, updateTemplateAction } from "@/app/(app)/model-templates/_action";
 import { isActionFail } from "@/lib/http/action-result";
-import { DATA_REGIONS, hasRules, templateModels } from "@/lib/gateway/model-policy";
+import { DATA_REGIONS, hasRules, templateModels } from "@/lib/gateway/access/model-policy";
 import type {
   ModelPolicy,
   ModelTemplateView,

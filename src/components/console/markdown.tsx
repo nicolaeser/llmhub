@@ -8,7 +8,7 @@ import { Card, Chip, Separator, Table } from "@heroui/react";
 import { Image as ImageGlyph, Square, SquareCheck } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/routing";
-import { splitPiiPlaceholders } from "@/lib/gateway/pii";
+import { splitPiiPlaceholders } from "@/lib/gateway/safety/pii";
 import CopyButton from "./copy-button";
 
 type MdNode = NonNullable<ExtraProps["node"]>;

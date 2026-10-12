@@ -10,7 +10,7 @@ import {
   setEntryActive,
   setGroupActive,
   setGroupAutoRoutes,
-} from "@/lib/gateway/catalog-sync";
+} from "@/lib/gateway/catalog/catalog-sync";
 import {
   catalogEntryActiveSchema,
   catalogEntryAssignSchema,

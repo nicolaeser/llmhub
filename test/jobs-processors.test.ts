@@ -42,7 +42,7 @@ test("schedules upsert the maintenance and model sync schedulers", async () => {
 
 test("fireAlert enqueues without secrets when Redis is set", async () => {
   const source = await readFile(
-    path.join(root, "src/lib/gateway/alerts.ts"),
+    path.join(root, "src/lib/alerts/notify.ts"),
     "utf8",
   );
   assert.doesNotMatch(source, /alertDelivery/);

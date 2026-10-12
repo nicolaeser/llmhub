@@ -6,8 +6,8 @@ import { requirePermission } from "@/lib/auth/guards";
 import { hasPerm, PERMISSIONS } from "@/lib/auth/permissions";
 import { keyScope, keyVisibleTo } from "@/lib/auth/scope";
 import { actionFail, runAction } from "@/lib/http/action-result";
-import { writeAudit } from "@/lib/gateway/audit";
-import { testGuardrails } from "@/lib/gateway/guardrails";
+import { writeAudit } from "@/lib/audit";
+import { testGuardrails } from "@/lib/gateway/safety/guardrails";
 import {
   getGuardrails,
   getPii,
@@ -15,8 +15,8 @@ import {
   piiOverride,
   saveGuardrails,
   savePii,
-} from "@/lib/gateway/settings";
-import { redactPii } from "@/lib/gateway/pii";
+} from "@/lib/settings/enterprise";
+import { redactPii } from "@/lib/gateway/safety/pii";
 import {
   guardrailOverrideSchema,
   guardrailPolicySchema,

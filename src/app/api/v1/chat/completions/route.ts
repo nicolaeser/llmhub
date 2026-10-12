@@ -1,4 +1,4 @@
-import { chatCompletionsRoute } from "@/lib/gateway/chat-completions-route";
+import { chatCompletionsRoute } from "@/lib/gateway/endpoints/chat-completions-route";
 
 export const maxDuration = 300;
 

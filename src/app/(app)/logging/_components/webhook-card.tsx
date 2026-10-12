@@ -16,7 +16,7 @@ import {
 } from "@heroui/react";
 import { Trash2 } from "lucide-react";
 import { useTranslations } from "next-intl";
-import { WEBHOOK_EVENTS, WEBHOOK_FORMATS } from "@/lib/gateway/webhook-events";
+import { WEBHOOK_EVENTS, WEBHOOK_FORMATS } from "@/lib/alerts/events";
 import type { AlertWebhookDraft } from "@/types/settings";
 
 export default function WebhookCard({

@@ -7,10 +7,10 @@ import { z } from "zod";
 import { AuthError } from "@/lib/auth/errors";
 import { ERR_ALL_PAUSED, ERR_NO_HEALTHY, ERR_NOT_ASSIGNED, ERR_UNKNOWN_GROUP } from "@/lib/gateway/core";
 import { anthropicErrorBody, GateError, gatewayErrorType, openAIErrorBody } from "@/lib/gateway/errors";
-import { gateResponse, toGateError } from "@/lib/gateway/gate";
-import { upstreamError } from "@/lib/gateway/upstream";
+import { gateResponse, toGateError } from "@/lib/gateway/access/gate";
+import { upstreamError } from "@/lib/gateway/dispatch/upstream";
 import { ApiProblem, PROBLEM_CONTENT_TYPE, problemFromError, problemResponse } from "@/lib/http/problem";
-import { isProblemCode, problemSpec } from "@/lib/http/problems";
+import { isProblemCode, problemSpec } from "@/lib/http/problem-codes";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { priceAt } from "@/lib/gateway/price-schedule";
+import { priceAt } from "@/lib/gateway/billing/price-schedule";
 import {
   addMinutes,
   compareCost,
@@ -10,7 +10,7 @@ import {
   scheduleCost,
   targetCost,
   zonedMinute,
-} from "@/lib/gateway/what-if";
+} from "@/lib/usage/what-if";
 import type { PriceSchedule } from "@/types/gateway";
 import type { MinuteTokens, TrafficTotals } from "@/types/what-if";
 

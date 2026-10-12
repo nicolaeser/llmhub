@@ -5,7 +5,7 @@ import { Button, Modal, Spinner, ToggleButton, ToggleButtonGroup, toast, type us
 import { useTranslations } from "next-intl";
 import { loadAssignmentOptionsAction, saveAssignmentsAction } from "@/app/(app)/subscriptions/_action";
 import MultiPicker from "@/components/console/multi-picker";
-import { ASSIGNMENT_SCOPES } from "@/lib/gateway/account-access";
+import { ASSIGNMENT_SCOPES } from "@/lib/gateway/routing/account-access";
 import { isActionFail } from "@/lib/http/action-result";
 import type { AssignmentOptions, AssignmentScope, ProviderView } from "@/types/providers";
 

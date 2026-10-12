@@ -22,7 +22,7 @@ import {
   ANTHROPIC_VERSION,
   exampleRequestBody,
   openApiPathParams,
-} from "@/lib/gateway/openapi";
+} from "@/lib/gateway/endpoints/openapi";
 import { gatewayPath } from "@/lib/gateway/api-paths";
 import type { OpenApiPath } from "@/types/gateway";
 import type { OverlayState, TrySnapshot } from "@/types/api-ref";

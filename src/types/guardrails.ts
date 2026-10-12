@@ -1,6 +1,6 @@
 import type { z } from "zod";
 import type { guardrailOverrideSchema, piiOverrideSchema, policyScopeSchema } from "@/schemas/guardrails";
-import type { GUARDRAIL_ACTIONS, INJECTION_CHECKS, RULE_KINDS, RULE_TARGETS } from "@/lib/gateway/guardrails";
+import type { GUARDRAIL_ACTIONS, INJECTION_CHECKS, RULE_KINDS, RULE_TARGETS } from "@/lib/gateway/safety/guardrails";
 
 export type PiiMode = "mask" | "block";
 

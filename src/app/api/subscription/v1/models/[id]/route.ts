@@ -1,3 +1,3 @@
-import { retrieveModelRoute } from "@/lib/gateway/models-route";
+import { retrieveModelRoute } from "@/lib/gateway/endpoints/models-route";
 
 export const GET = retrieveModelRoute("subscription");

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { GateError } from "@/lib/gateway/errors";
-import { endpointAllowed, endpointOf } from "@/lib/gateway/key-restrictions";
+import { endpointAllowed, endpointOf } from "@/lib/gateway/access/key-restrictions";
 import { searchRequest } from "@/lib/rag/api";
 import {
   addChatUsage,

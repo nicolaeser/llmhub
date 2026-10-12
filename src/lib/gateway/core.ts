@@ -1,5 +1,5 @@
 import packageJson from "../../../package.json";
-import { PROVIDER_CATALOG } from "@/lib/gateway/catalog";
+import { PROVIDER_CATALOG } from "@/lib/gateway/upstreams/provider-kinds";
 import type { JsonMap, ModelPricing, Principal, PublicModel, RoutePool } from "@/types/gateway";
 
 export class RouterError extends Error {

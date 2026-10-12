@@ -9,7 +9,7 @@ import {
   roleTemplates,
   sortPermissions,
 } from "@/lib/auth/permissions";
-import { writeAudit } from "@/lib/gateway/audit";
+import { writeAudit } from "@/lib/audit";
 import { assistantToolList } from "@/lib/assistant/catalog";
 import {
   idSchema,

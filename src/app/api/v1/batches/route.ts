@@ -1,6 +1,6 @@
 import { after, NextResponse } from "next/server";
-import { createBatch, listBatches, startBatch } from "@/lib/gateway/batches";
-import { gateRequest, gateResponse, readBody } from "@/lib/gateway/gate";
+import { createBatch, listBatches, startBatch } from "@/lib/gateway/endpoints/batches";
+import { gateRequest, gateResponse, readBody } from "@/lib/gateway/access/gate";
 
 export async function GET(req: Request) {
   try {

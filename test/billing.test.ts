@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { costOf } from "@/lib/gateway/cost";
+import { costOf } from "@/lib/gateway/billing/cost";
 import {
   catalogPricesOf,
   parsePricing,
   priceForUpstream,
-} from "@/lib/gateway/provider-prices";
+} from "@/lib/gateway/upstreams/provider-prices";
 import type { Deployment } from "@/types/gateway";
 
 function deployment(

@@ -5,16 +5,16 @@ import {
   quotaBottleneckReset,
   quotaExhausted,
   quotaPressure,
-} from "@/lib/gateway/quota";
-import { accessOf, accountAllowed, isAccountStrategy } from "@/lib/gateway/account-access";
+} from "@/lib/gateway/routing/quota";
+import { accessOf, accountAllowed, isAccountStrategy } from "@/lib/gateway/routing/account-access";
 import {
   pickQuotaBalanced,
   pickQuotaExpiring,
   pickQuotaSmart,
   pickRoundRobin,
   type QuotaScores,
-} from "@/lib/gateway/router";
-import { claudeLimits } from "@/lib/gateway/subscription-limits";
+} from "@/lib/gateway/routing/router";
+import { claudeLimits } from "@/lib/gateway/upstreams/subscription-limits";
 import type { Deployment, Principal, VirtualKeyView } from "@/types/gateway";
 import type { LimitWindow, SubscriptionLimits } from "@/types/providers";
 

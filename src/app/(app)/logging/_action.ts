@@ -4,15 +4,15 @@ import { randomUUID } from "node:crypto";
 import { requirePermission } from "@/lib/auth/guards";
 import { hasPerm, PERMISSIONS } from "@/lib/auth/permissions";
 import { actionFail, runAction } from "@/lib/http/action-result";
-import { writeAudit } from "@/lib/gateway/audit";
+import { writeAudit } from "@/lib/audit";
 import {
   anomalyFactor,
   DEFAULT_KEY_EXPIRY_WARNING_DAYS,
   DEFAULT_SPEND_ANOMALY_FACTOR,
   DEFAULT_SPEND_ANOMALY_MIN_COST,
-} from "@/lib/gateway/alert-rules";
-import { getEnterprise, patchEnterprise } from "@/lib/gateway/settings";
-import { WEBHOOK_EVENTS } from "@/lib/gateway/webhook-events";
+} from "@/lib/alerts/rules";
+import { getEnterprise, patchEnterprise } from "@/lib/settings/enterprise";
+import { WEBHOOK_EVENTS } from "@/lib/alerts/events";
 import { resolveS3Config } from "@/lib/s3/config";
 import { alertWebhooksSchema } from "@/schemas/settings";
 import type { AlertWebhook } from "@/types/gateway";

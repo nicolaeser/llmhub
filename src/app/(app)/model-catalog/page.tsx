@@ -26,7 +26,7 @@ import {
   setCatalogGroupAutoRoutesAction,
 } from "@/app/(app)/model-catalog/_action";
 import { isActionFail } from "@/lib/http/action-result";
-import { catalogEntryKey } from "@/lib/gateway/model-catalog";
+import { catalogEntryKey } from "@/lib/gateway/catalog/model-catalog";
 import type { ActionFail } from "@/types/actions";
 import type { CatalogEntryView, CatalogFamilyView, CatalogGroupView, CatalogView } from "@/types/model-catalog";
 import AssignDialog from "./_components/assign-dialog";

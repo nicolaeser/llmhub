@@ -1,5 +1,5 @@
 import type { z } from "zod";
-import type { CACHE_STATS_RANGES } from "@/lib/gateway/cache-settings";
+import type { CACHE_STATS_RANGES } from "@/lib/gateway/cache/cache-settings";
 import type { cacheSettingsSchema } from "@/schemas/settings";
 import type { JsonMap } from "@/types/gateway";
 

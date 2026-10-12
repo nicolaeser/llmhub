@@ -7,7 +7,7 @@ import {
   completionToChat,
   parseRequest,
   pipeChatStream,
-} from "@/lib/gateway/responses";
+} from "@/lib/gateway/protocols/responses";
 import { completionsRequestSchema } from "@/schemas/completions";
 import type { JsonMap } from "@/types/gateway";
 import type { CompletionsRequest } from "@/types/responses";

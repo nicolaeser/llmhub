@@ -5,8 +5,8 @@ import type { AuthenticatedSession } from "@/types/auth";
 import { keyScope } from "@/lib/auth/scope";
 import type { VirtualKeyView } from "@/types/gateway";
 import { money } from "@/lib/utils/money";
-import { piiOverride } from "@/lib/gateway/settings";
-import { accessTimeZoneOf, accessWindowsOf, allowedEndpointsOf } from "@/lib/gateway/key-restrictions";
+import { piiOverride } from "@/lib/settings/enterprise";
+import { accessTimeZoneOf, accessWindowsOf, allowedEndpointsOf } from "@/lib/gateway/access/key-restrictions";
 import type { Prisma } from "@/generated/prisma/client";
 
 function jsonArray(v: unknown): string[] {

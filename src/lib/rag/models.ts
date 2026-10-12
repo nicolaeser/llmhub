@@ -1,10 +1,10 @@
 import "server-only";
-import { usageFromUnknown } from "@/lib/gateway/billing";
+import { usageFromUnknown } from "@/lib/gateway/billing/billing";
 import { asNumber, asRecord } from "@/lib/gateway/core";
 import { GateError } from "@/lib/gateway/errors";
-import { allowModel, applyGuardrails, modelChain, withTrace } from "@/lib/gateway/gate";
-import { meter } from "@/lib/gateway/meter";
-import { forwardToModel } from "@/lib/gateway/upstream";
+import { allowModel, applyGuardrails, modelChain, withTrace } from "@/lib/gateway/access/gate";
+import { meter } from "@/lib/gateway/billing/meter";
+import { forwardToModel } from "@/lib/gateway/dispatch/upstream";
 import { ocrText } from "@/lib/rag/extract";
 import { parseEmbedding } from "@/lib/rag/vectors";
 import type { JsonMap, Principal, ProxyFirstResult, Usage } from "@/types/gateway";

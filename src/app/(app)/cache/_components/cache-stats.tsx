@@ -5,7 +5,7 @@ import { Label, ListBox, Select, toast } from "@heroui/react";
 import { useFormatter, useTranslations } from "next-intl";
 import StatCard from "@/components/console/stat-card";
 import { loadCacheStatsAction } from "@/app/(app)/cache/_action";
-import { CACHE_STATS_RANGES } from "@/lib/gateway/cache-settings";
+import { CACHE_STATS_RANGES } from "@/lib/gateway/cache/cache-settings";
 import { isActionFail } from "@/lib/http/action-result";
 import type { ResponseCacheStats } from "@/types/cache";
 

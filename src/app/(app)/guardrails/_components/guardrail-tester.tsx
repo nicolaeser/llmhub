@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { Button, Card, Chip, Label, Spinner, Surface, TextArea, TextField, toast } from "@heroui/react";
 import { useTranslations } from "next-intl";
 import GuardrailHit from "@/components/guardrails/guardrail-hit";
-import { guardrailsValid, MAX_TEST_TEXT } from "@/lib/gateway/guardrails";
+import { guardrailsValid, MAX_TEST_TEXT } from "@/lib/gateway/safety/guardrails";
 import { isActionFail } from "@/lib/http/action-result";
 import type { GuardrailDirection, GuardrailPolicy, GuardrailTestResult } from "@/types/guardrails";
 import { testGuardrailsAction } from "../_action";

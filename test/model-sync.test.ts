@@ -300,7 +300,7 @@ function seedProvider(discovered: DiscoveredModel[], extra: Partial<FakeProvider
 }
 
 function load() {
-  return import("@/lib/gateway/discovery");
+  return import("@/lib/gateway/upstreams/discovery");
 }
 
 beforeEach(() => {
@@ -496,7 +496,7 @@ test("runModelSync serves the cached catalog until two hours have passed", async
 });
 
 test("a manual refresh bypasses the cache but never runs twice at once", async () => {
-  const { refreshCatalog } = await import("@/lib/gateway/catalog-sync");
+  const { refreshCatalog } = await import("@/lib/gateway/catalog/catalog-sync");
   seedProvider([model("a")]);
   respondWith(() => modelsResponse(["a"]));
   await refreshCatalog({ actor: "worker", force: false });
@@ -512,7 +512,7 @@ test("a manual refresh bypasses the cache but never runs twice at once", async (
 });
 
 test("the catalog groups the same model across providers and keeps routes and aliases stable", async () => {
-  const { refreshCatalog } = await import("@/lib/gateway/catalog-sync");
+  const { refreshCatalog } = await import("@/lib/gateway/catalog/catalog-sync");
   const router = seedProvider([], { name: "OpenRouter" });
   respondWith(() => modelsResponse(["anthropic/claude-sonnet-4.5"]));
   await refreshCatalog({ actor: "worker", force: true });
@@ -537,7 +537,7 @@ test("the catalog groups the same model across providers and keeps routes and al
 });
 
 test("aliases with automatic routing take in trusted new providers only", async () => {
-  const { refreshCatalog } = await import("@/lib/gateway/catalog-sync");
+  const { refreshCatalog } = await import("@/lib/gateway/catalog/catalog-sync");
   db.groups.push({ alias: "gpt-4o", vendor: "openai", displayName: "", autoRoutes: true, enabled: true });
   const router = seedProvider([], { name: "OpenRouter" });
   const local = seedProvider([], {
@@ -565,7 +565,7 @@ test("aliases with automatic routing take in trusted new providers only", async 
 });
 
 test("Jev groups differently named models on its own OpenRouter key", async () => {
-  const { refreshCatalog } = await import("@/lib/gateway/catalog-sync");
+  const { refreshCatalog } = await import("@/lib/gateway/catalog/catalog-sync");
   db.enterprise = { catalog_jev: { enabled: true, model: "jev-latest", api_key: "sk-or-jev" } };
   db.groups.push({
     alias: "llama-3.3-70b-instruct",
@@ -618,7 +618,7 @@ test("Jev groups differently named models on its own OpenRouter key", async () =
 });
 
 test("a rejected Jev key stops the run and is reported", async () => {
-  const { refreshCatalog } = await import("@/lib/gateway/catalog-sync");
+  const { refreshCatalog } = await import("@/lib/gateway/catalog/catalog-sync");
   db.enterprise = { catalog_jev: { enabled: true, model: "jev-latest", api_key: "sk-or-bad" } };
   db.groups.push({ alias: "llama-3.3-70b-instruct", vendor: "", displayName: "", autoRoutes: false, enabled: true });
   seedProvider([], { name: "Groq", kind: "openai_compat", baseUrl: "https://groq.example.test/v1" });
@@ -632,7 +632,7 @@ test("a rejected Jev key stops the run and is reported", async () => {
 });
 
 test("turning a provider off removes its route and keeps it off across refreshes", async () => {
-  const { refreshCatalog, setEntryActive, setGroupActive } = await import("@/lib/gateway/catalog-sync");
+  const { refreshCatalog, setEntryActive, setGroupActive } = await import("@/lib/gateway/catalog/catalog-sync");
   const router = seedProvider([], { name: "OpenRouter" });
   respondWith(() => modelsResponse(["openai/gpt-4o", "openai/gpt-4o:free"]));
   await refreshCatalog({ actor: "worker", force: true });
@@ -658,7 +658,7 @@ test("turning a provider off removes its route and keeps it off across refreshes
 });
 
 test("moving a provider model to another alias carries its active route along", async () => {
-  const { assignEntry, refreshCatalog, setEntryActive } = await import("@/lib/gateway/catalog-sync");
+  const { assignEntry, refreshCatalog, setEntryActive } = await import("@/lib/gateway/catalog/catalog-sync");
   const router = seedProvider([], { name: "OpenRouter" });
   respondWith(() => modelsResponse(["openai/gpt-4o"]));
   await refreshCatalog({ actor: "worker", force: true });
@@ -677,7 +677,7 @@ test("moving a provider model to another alias carries its active route along", 
 });
 
 test("the global default decides for aliases without their own automatic routing setting", async () => {
-  const { refreshCatalog } = await import("@/lib/gateway/catalog-sync");
+  const { refreshCatalog } = await import("@/lib/gateway/catalog/catalog-sync");
   db.groups.push(
     { alias: "gpt-4o", vendor: "openai", displayName: "", autoRoutes: null, enabled: true },
     { alias: "grok-4", vendor: "xai", displayName: "", autoRoutes: false, enabled: true },

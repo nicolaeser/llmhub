@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-const billingPath = new URL("../src/lib/gateway/billing.ts", import.meta.url);
-const requestLogPath = new URL("../src/lib/gateway/request-log.ts", import.meta.url);
+const billingPath = new URL("../src/lib/gateway/billing/billing.ts", import.meta.url);
+const requestLogPath = new URL("../src/lib/gateway/request-logs/request-log.ts", import.meta.url);
 
 test("recordUsage hands every request to writeRequestLog with tokens, cost, and content", async () => {
   const source = await readFile(billingPath, "utf8");

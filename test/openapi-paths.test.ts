@@ -8,7 +8,7 @@ import {
   OPENAPI_PATHS,
   openApiPathParams,
   resolveTryTarget,
-} from "@/lib/gateway/openapi";
+} from "@/lib/gateway/endpoints/openapi";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 const app = path.join(root, "src/app");

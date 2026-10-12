@@ -4,8 +4,8 @@ import prisma from "@/lib/db/prisma";
 import { requirePermission } from "@/lib/auth/guards";
 import { hasPerm, PERMISSIONS } from "@/lib/auth/permissions";
 import { spendScope } from "@/lib/auth/scope";
-import { writeAudit } from "@/lib/gateway/audit";
-import { replayDraft } from "@/lib/gateway/log-replay";
+import { writeAudit } from "@/lib/audit";
+import { replayDraft } from "@/lib/gateway/request-logs/log-replay";
 import { actionFail, runAction } from "@/lib/http/action-result";
 import type { PlaygroundReplay } from "@/types/playground";
 

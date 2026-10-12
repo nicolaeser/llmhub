@@ -29,7 +29,7 @@ test("runSpendResets zeros virtualKey, user, member, team, organization, and pro
     "utf8",
   );
   const reset = exportedAsyncFn(source, "runSpendResets");
-  assert.match(reset, /await import\("@\/lib\/gateway\/period"\)/);
+  assert.match(reset, /await import\("@\/lib\/gateway\/billing\/period"\)/);
   assert.match(
     reset,
     /periodElapsed\(row\.budgetDuration, row\.spendResetAt, now, row\.createdAt\)/,

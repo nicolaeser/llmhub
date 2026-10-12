@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
-import { gateRequest, gateResponse } from "@/lib/gateway/gate";
-import { listObjects, payloadJson } from "@/lib/gateway/objects";
-import { storedResponse, visibleResponse } from "@/lib/gateway/responses";
-import { createResponseRoute } from "@/lib/gateway/responses-route";
+import { gateRequest, gateResponse } from "@/lib/gateway/access/gate";
+import { listObjects, payloadJson } from "@/lib/gateway/storage/objects";
+import { storedResponse, visibleResponse } from "@/lib/gateway/protocols/responses";
+import { createResponseRoute } from "@/lib/gateway/endpoints/responses-route";
 import { ownerId } from "@/lib/gateway/core";
 
 export const maxDuration = 300;

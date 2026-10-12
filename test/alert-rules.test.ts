@@ -7,7 +7,7 @@ import {
   isSpendAnomaly,
   nextAnomalyState,
   sameHourWindows,
-} from "@/lib/gateway/alert-rules";
+} from "@/lib/alerts/rules";
 
 const HOUR = 60 * 60 * 1000;
 const DAY = 24 * HOUR;

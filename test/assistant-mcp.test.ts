@@ -14,7 +14,7 @@ import {
 } from "@/lib/assistant/catalog";
 import { roleWriteSchema } from "@/schemas/auth";
 import { adminSettingsSchema } from "@/schemas/settings";
-import { normalizeEnterprise } from "@/lib/gateway/settings";
+import { normalizeEnterprise } from "@/lib/settings/enterprise";
 import {
   assistantAlias,
   assistantModelLocked,

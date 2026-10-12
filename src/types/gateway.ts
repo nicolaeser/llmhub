@@ -1,6 +1,6 @@
 import type { Prisma } from "@/generated/prisma/client";
-import type { OPENAPI_METHODS } from "@/lib/gateway/openapi";
-import type { WEBHOOK_EVENTS, WEBHOOK_FORMATS } from "@/lib/gateway/webhook-events";
+import type { OPENAPI_METHODS } from "@/lib/gateway/endpoints/openapi";
+import type { WEBHOOK_EVENTS, WEBHOOK_FORMATS } from "@/lib/alerts/events";
 import type { SemanticCacheSettings } from "@/types/cache";
 import type { GuardrailPolicy, PiiPolicy } from "@/types/guardrails";
 import type { AccessWindow, KeyEndpoint } from "@/types/keys";

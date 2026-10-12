@@ -82,7 +82,7 @@ function routeDirs(dir: string): string[] {
 
 test("subscription paths keep the gateway error shapes", async () => {
   const { gatewayPath } = await import("@/lib/gateway/api-paths");
-  const { wantsAnthropicErrors } = await import("@/lib/gateway/gate");
+  const { wantsAnthropicErrors } = await import("@/lib/gateway/access/gate");
   assert.equal(gatewayPath("/api/subscription/v1/messages"), "/v1/messages");
   assert.equal(gatewayPath("/api/v1/messages"), "/v1/messages");
   assert.equal(gatewayPath("/subscription/v1/messages"), "/v1/messages");
@@ -96,7 +96,7 @@ test("subscription paths keep the gateway error shapes", async () => {
 });
 
 test("signed-in providers form the subscription pool and every other route the API pool", async () => {
-  const { listedIn, routePool } = await import("@/lib/gateway/route-pool");
+  const { listedIn, routePool } = await import("@/lib/gateway/routing/route-pool");
   const { AUTO_MODEL } = await import("@/lib/gateway/core");
   assert.equal(routePool({ kind: "codex" }), "subscription");
   assert.equal(routePool({ kind: "grok_build", provider: { kind: "grok_build" } }), "subscription");
@@ -110,8 +110,8 @@ test("signed-in providers form the subscription pool and every other route the A
 });
 
 test("model lists show only the aliases each path can serve", async () => {
-  const { pricedModels } = await import("@/lib/gateway/model-pricing");
-  const { listedIn } = await import("@/lib/gateway/route-pool");
+  const { pricedModels } = await import("@/lib/gateway/catalog/model-pricing");
+  const { listedIn } = await import("@/lib/gateway/routing/route-pool");
   const models = await pricedModels(new Date());
   const listed = (pool: "api" | "subscription") =>
     models.filter((model) => listedIn(model, pool)).map((model) => model.alias).sort();
@@ -120,8 +120,8 @@ test("model lists show only the aliases each path can serve", async () => {
 });
 
 test("/api/v1 never routes to subscriptions and /api/subscription/v1 reaches API keys only through the api/ prefix", async () => {
-  const { withDeployment } = await import("@/lib/gateway/chat");
-  const { forwardToModel } = await import("@/lib/gateway/upstream");
+  const { withDeployment } = await import("@/lib/gateway/dispatch/chat");
+  const { forwardToModel } = await import("@/lib/gateway/dispatch/upstream");
   const pick = async (dep: { id: string }) => dep.id;
   const apiCaller: Principal = {
     actor: "u1",
@@ -165,8 +165,8 @@ test("subscription paths run the /api/v1 handlers in the subscription pool and e
 });
 
 test("the api/ prefix selects the API pool on the subscription surface only", async () => {
-  const { routeOf } = await import("@/lib/gateway/route-pool");
-  const { isReservedAlias, plainModel } = await import("@/lib/gateway/model-alias");
+  const { routeOf } = await import("@/lib/gateway/routing/route-pool");
+  const { isReservedAlias, plainModel } = await import("@/lib/gateway/catalog/model-alias");
   assert.deepEqual(routeOf("api/gpt-5.5", "subscription"), { alias: "gpt-5.5", pool: "api" });
   assert.deepEqual(routeOf("gpt-5.5", "subscription"), { alias: "gpt-5.5", pool: "subscription" });
   assert.deepEqual(routeOf(" API/GPT-5.5 ", "subscription"), { alias: "GPT-5.5", pool: "api" });
@@ -184,7 +184,7 @@ test("the api/ prefix selects the API pool on the subscription surface only", as
 });
 
 test("a prefixed model runs on the API pool and a fallback can move from plan quota to the API", async () => {
-  const { withDeployment } = await import("@/lib/gateway/chat");
+  const { withDeployment } = await import("@/lib/gateway/dispatch/chat");
   const { isRouterError } = await import("@/lib/gateway/core");
   const pick = async (dep: { id: string }) => dep.id;
   const surface = { pool: "subscription" as const };
@@ -214,7 +214,7 @@ test("a prefixed model runs on the API pool and a fallback can move from plan qu
 });
 
 test("model access follows the plain alias for prefixed models", async () => {
-  const { modelPermitted } = await import("@/lib/gateway/gate");
+  const { modelPermitted } = await import("@/lib/gateway/access/gate");
   const caller: Principal = {
     actor: "u1",
     teamId: "",
@@ -234,8 +234,8 @@ test("model access follows the plain alias for prefixed models", async () => {
 });
 
 test("the subscription model list adds the API models with the api/ prefix and a route field", async () => {
-  const { pricedModels } = await import("@/lib/gateway/model-pricing");
-  const { modelEntries } = await import("@/lib/gateway/models-route");
+  const { pricedModels } = await import("@/lib/gateway/catalog/model-pricing");
+  const { modelEntries } = await import("@/lib/gateway/endpoints/models-route");
   const { AUTO_MODEL } = await import("@/lib/gateway/core");
   const created = new Date("2026-10-12T12:00:00Z");
   const models = [...(await pricedModels(created)), AUTO_MODEL];
@@ -269,7 +269,7 @@ test("the subscription model list adds the API models with the api/ prefix and a
 });
 
 test("a model served by both pools is priced per pool", async () => {
-  const { pricedModels } = await import("@/lib/gateway/model-pricing");
+  const { pricedModels } = await import("@/lib/gateway/catalog/model-pricing");
   const row = groupRow("priced-mixed", [{ id: "p-sub", kind: "codex" }, { id: "p-api", kind: "openai" }]);
   row.deployments[1]!.costInput = 0.002;
   row.deployments[1]!.costOutput = 0.006;

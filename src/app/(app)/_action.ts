@@ -14,17 +14,17 @@ import {
   groupSpend,
   summarizeUsage,
   usageDays,
-} from "@/lib/gateway/usage-stats";
+} from "@/lib/usage/usage-stats";
 import { actionFail, runAction } from "@/lib/http/action-result";
 import { listKeys, toKeyView } from "@/app/(app)/_data";
-import { alertKeyBlocked } from "@/lib/gateway/alerts";
-import { writeAudit } from "@/lib/gateway/audit";
-import { getEnterprise } from "@/lib/gateway/settings";
+import { alertKeyBlocked } from "@/lib/alerts/notify";
+import { writeAudit } from "@/lib/audit";
+import { getEnterprise } from "@/lib/settings/enterprise";
 import { checkForUpdate } from "@/lib/updates/update-check";
-import { p95Latency, usageNames, usageSlices, usageTotals } from "@/lib/gateway/usage-totals";
-import { isInternalKey } from "@/lib/gateway/key-tenancy";
-import { loadModelPolicies, templateRuleSelect } from "@/lib/gateway/model-access";
-import { templateModels, templateRulesOf } from "@/lib/gateway/model-policy";
+import { p95Latency, usageNames, usageSlices, usageTotals } from "@/lib/usage/usage-totals";
+import { isInternalKey } from "@/lib/gateway/access/key-tenancy";
+import { loadModelPolicies, templateRuleSelect } from "@/lib/gateway/access/model-access";
+import { templateModels, templateRulesOf } from "@/lib/gateway/access/model-policy";
 import type { UsageSlice } from "@/types/gateway";
 import type { AuthenticatedSession } from "@/types/auth";
 

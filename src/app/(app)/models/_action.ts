@@ -4,8 +4,8 @@ import prisma from "@/lib/db/prisma";
 import { requirePermission } from "@/lib/auth/guards";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { actionFail, runAction } from "@/lib/http/action-result";
-import { writeAudit } from "@/lib/gateway/audit";
-import { isReservedAlias, modelAlias } from "@/lib/gateway/model-alias";
+import { writeAudit } from "@/lib/audit";
+import { isReservedAlias, modelAlias } from "@/lib/gateway/catalog/model-alias";
 import {
   asStringArray,
   KNOWN_BILLING_MODES,
@@ -15,7 +15,7 @@ import {
 import {
   catalogPricesOf,
   priceForUpstream,
-} from "@/lib/gateway/provider-prices";
+} from "@/lib/gateway/upstreams/provider-prices";
 import {
   clockMinute,
   isTimeZone,
@@ -25,7 +25,7 @@ import {
   scheduleOverlaps,
   validPrice,
   windowValid,
-} from "@/lib/gateway/price-schedule";
+} from "@/lib/gateway/billing/price-schedule";
 import type { DeploymentInput, PriceWindow } from "@/types/models";
 import { money } from "@/lib/utils/money";
 import type { Prisma } from "@/generated/prisma/client";

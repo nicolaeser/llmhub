@@ -3,7 +3,7 @@ import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypt
 import { signingSecret } from "@/lib/crypto";
 import { env } from "@/lib/env";
 import { asRecord, asString } from "@/lib/gateway/core";
-import { verifyJwt } from "@/lib/gateway/jwks";
+import { verifyJwt } from "@/lib/auth/jwks";
 import type {
   DiscCache,
   OidcDiscovery,

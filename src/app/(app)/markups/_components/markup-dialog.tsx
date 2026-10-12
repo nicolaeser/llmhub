@@ -32,7 +32,7 @@ import {
   MAX_MARKUP_PERCENT,
   MIN_MARKUP_PERCENT,
   marginShare,
-} from "@/lib/gateway/markup-policy";
+} from "@/lib/gateway/billing/markup-policy";
 import type { PickerItem } from "@/types/console";
 import type {
   MarkupKind,

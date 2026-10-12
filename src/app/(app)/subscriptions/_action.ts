@@ -4,12 +4,12 @@ import prisma from "@/lib/db/prisma";
 import { requirePermission } from "@/lib/auth/guards";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { actionFail, runAction } from "@/lib/http/action-result";
-import { writeAudit } from "@/lib/gateway/audit";
-import { isAccountStrategy, isAssignmentScope } from "@/lib/gateway/account-access";
-import { assignmentOptions, replaceAssignments } from "@/lib/gateway/account-assignments";
-import { forgetAccountPolicies } from "@/lib/gateway/account-routing";
-import { antigravityClientSecret, saveAntigravityClientSecret } from "@/lib/gateway/antigravity-config";
-import { isSignInKind } from "@/lib/gateway/catalog";
+import { writeAudit } from "@/lib/audit";
+import { isAccountStrategy, isAssignmentScope } from "@/lib/gateway/routing/account-access";
+import { assignmentOptions, replaceAssignments } from "@/lib/gateway/routing/account-assignments";
+import { forgetAccountPolicies } from "@/lib/gateway/routing/account-routing";
+import { antigravityClientSecret, saveAntigravityClientSecret } from "@/lib/gateway/upstreams/antigravity-config";
+import { isSignInKind } from "@/lib/gateway/upstreams/provider-kinds";
 import type { AccountRouting, AssignmentInput, SignInKind } from "@/types/providers";
 
 const MAX_TARGETS = 500;

@@ -1,15 +1,15 @@
 import { NextResponse } from "next/server";
-import { anthropicCountBody, chatToAnthropic } from "@/lib/gateway/anthropic";
-import { withDeployment } from "@/lib/gateway/chat";
-import { deploymentAuth } from "@/lib/gateway/credentials";
+import { anthropicCountBody, chatToAnthropic } from "@/lib/gateway/protocols/anthropic";
+import { withDeployment } from "@/lib/gateway/dispatch/chat";
+import { deploymentAuth } from "@/lib/gateway/upstreams/credentials";
 import { asNumber, asRecord } from "@/lib/gateway/core";
-import { resolveResponsesFiles } from "@/lib/gateway/file-refs";
-import { allowModel, applyGuardrails, gateRequest, gateResponse, modelChain, modelOf, readBody } from "@/lib/gateway/gate";
+import { resolveResponsesFiles } from "@/lib/gateway/storage/file-refs";
+import { allowModel, applyGuardrails, gateRequest, gateResponse, modelChain, modelOf, readBody } from "@/lib/gateway/access/gate";
 import { GateError } from "@/lib/gateway/errors";
-import { parseRequest, responsesCountBody, responsesToChat } from "@/lib/gateway/responses";
-import { previousConversation } from "@/lib/gateway/responses-store";
-import { requestRoutingOverride } from "@/lib/gateway/service-mode";
-import { proxyJson, upstreamError } from "@/lib/gateway/upstream";
+import { parseRequest, responsesCountBody, responsesToChat } from "@/lib/gateway/protocols/responses";
+import { previousConversation } from "@/lib/gateway/storage/responses-store";
+import { requestRoutingOverride } from "@/lib/gateway/dispatch/service-mode";
+import { proxyJson, upstreamError } from "@/lib/gateway/dispatch/upstream";
 import { responsesRequestSchema } from "@/schemas/responses";
 
 export async function POST(req: Request) {

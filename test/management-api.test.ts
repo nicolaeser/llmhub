@@ -7,7 +7,7 @@ import { runAsPrincipal } from "@/lib/auth/delegation";
 import { AuthError } from "@/lib/auth/errors";
 import { requirePermission } from "@/lib/auth/guards";
 import { GateError } from "@/lib/gateway/errors";
-import { authenticateBearer } from "@/lib/gateway/principal";
+import { authenticateBearer } from "@/lib/gateway/access/principal";
 import { ApiProblem, problemFromError } from "@/lib/http/problem";
 import { authenticateManagementKey } from "@/lib/management/auth";
 import { managementRoute, readBody, readQuery } from "@/lib/management/http";

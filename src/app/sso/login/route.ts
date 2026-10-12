@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getEnterprise } from "@/lib/gateway/settings";
+import { getEnterprise } from "@/lib/settings/enterprise";
 import {
   buildAuthorizationUrl,
   fetchOidcDiscovery,

@@ -4,17 +4,17 @@ import prisma from "@/lib/db/prisma";
 import { requirePermission } from "@/lib/auth/guards";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { actionFail, runAction } from "@/lib/http/action-result";
-import { writeAudit } from "@/lib/gateway/audit";
-import { isSignInKind, PROVIDER_CATALOG, reportsLimits, signInMethod } from "@/lib/gateway/catalog";
+import { writeAudit } from "@/lib/audit";
+import { isSignInKind, PROVIDER_CATALOG, reportsLimits, signInMethod } from "@/lib/gateway/upstreams/provider-kinds";
 import { seal } from "@/lib/crypto";
 import { KNOWN_KINDS } from "@/lib/gateway/core";
-import { addRoute, catalogTargets, markRouted } from "@/lib/gateway/catalog-sync";
-import { assignmentSelect, assignmentTargets } from "@/lib/gateway/account-assignments";
-import { loginData } from "@/lib/gateway/credentials";
-import { baseName, vendorOf } from "@/lib/gateway/model-catalog";
-import { refreshProviderModels } from "@/lib/gateway/discovery";
-import { discoveredOf } from "@/lib/gateway/provider-prices";
-import { subscriptionLimits } from "@/lib/gateway/subscription-limits";
+import { addRoute, catalogTargets, markRouted } from "@/lib/gateway/catalog/catalog-sync";
+import { assignmentSelect, assignmentTargets } from "@/lib/gateway/routing/account-assignments";
+import { loginData } from "@/lib/gateway/upstreams/credentials";
+import { baseName, vendorOf } from "@/lib/gateway/catalog/model-catalog";
+import { refreshProviderModels } from "@/lib/gateway/upstreams/discovery";
+import { discoveredOf } from "@/lib/gateway/upstreams/provider-prices";
+import { subscriptionLimits } from "@/lib/gateway/upstreams/subscription-limits";
 import {
   completeAuthorization,
   openCredential,
@@ -23,7 +23,7 @@ import {
   sealCredential,
   sealTicket,
   startAuthorization,
-} from "@/lib/gateway/sign-in";
+} from "@/lib/gateway/upstreams/subscription-sign-in";
 import { providerPolicySchema } from "@/schemas/providers";
 import type {
   AccountLimits,

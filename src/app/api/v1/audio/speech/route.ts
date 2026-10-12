@@ -1,8 +1,8 @@
-import { allowModel, applyGuardrails, gateRequest, gateResponse, modelOf, readBody, modelChain } from "@/lib/gateway/gate";
-import { meter } from "@/lib/gateway/meter";
-import { estimateTokens } from "@/lib/gateway/tokens";
+import { allowModel, applyGuardrails, gateRequest, gateResponse, modelOf, readBody, modelChain } from "@/lib/gateway/access/gate";
+import { meter } from "@/lib/gateway/billing/meter";
+import { estimateTokens } from "@/lib/gateway/billing/tokens";
 import { bytesBody } from "@/lib/http/api";
-import { forwardToModel } from "@/lib/gateway/upstream";
+import { forwardToModel } from "@/lib/gateway/dispatch/upstream";
 
 export async function POST(req: Request) {
   try {

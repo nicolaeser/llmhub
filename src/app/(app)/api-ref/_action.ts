@@ -3,7 +3,7 @@
 import prisma from "@/lib/db/prisma";
 import { requirePermission } from "@/lib/auth/guards";
 import { hasPerm, PERMISSIONS } from "@/lib/auth/permissions";
-import { OPENAPI_PATHS } from "@/lib/gateway/openapi";
+import { OPENAPI_PATHS } from "@/lib/gateway/endpoints/openapi";
 import { runAction } from "@/lib/http/action-result";
 import { listKeys } from "@/app/(app)/_data";
 

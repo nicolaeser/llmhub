@@ -12,7 +12,7 @@ import {
   minuteClock,
   scheduleOverlaps,
   validPrice,
-} from "@/lib/gateway/price-schedule";
+} from "@/lib/gateway/billing/price-schedule";
 import type { PriceWindowDraft } from "@/types/models";
 
 function clockValue(value: string) {

@@ -4,14 +4,14 @@ import prisma from "@/lib/db/prisma";
 import { requirePermission } from "@/lib/auth/guards";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { companyOf, seesAllSpend, spendScope } from "@/lib/auth/scope";
-import { writeAudit } from "@/lib/gateway/audit";
-import { findRequestLogDetail, requestLogLabels, requestLogRow } from "@/lib/gateway/request-log-detail";
+import { writeAudit } from "@/lib/audit";
+import { findRequestLogDetail, requestLogLabels, requestLogRow } from "@/lib/gateway/request-logs/request-log-detail";
 import {
   auditLogWhere,
   parseLogFilters,
   requestLogWhere,
   spendEventWhere,
-} from "@/lib/gateway/request-log-query";
+} from "@/lib/gateway/request-logs/request-log-query";
 import { actionFail, runAction } from "@/lib/http/action-result";
 import { money } from "@/lib/utils/money";
 import type { LogOptions } from "@/types/logs";

@@ -1,6 +1,6 @@
 import "server-only";
 
-import { refreshCatalog } from "@/lib/gateway/catalog-sync";
+import { refreshCatalog } from "@/lib/gateway/catalog/catalog-sync";
 import type { ModelSyncResult } from "@/types/jobs";
 
 export async function runModelSync(): Promise<ModelSyncResult> {

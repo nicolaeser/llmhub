@@ -2,7 +2,7 @@
 
 import { Checkbox, CheckboxGroup, Description, Label, Separator, Switch } from "@heroui/react";
 import { useTranslations } from "next-intl";
-import { GUARDRAIL_ACTIONS, INJECTION_CHECKS, SECRET_ENTITIES } from "@/lib/gateway/guardrails";
+import { GUARDRAIL_ACTIONS, INJECTION_CHECKS, SECRET_ENTITIES } from "@/lib/gateway/safety/guardrails";
 import type { GuardrailPolicy, InjectionAction, InjectionCheck } from "@/types/guardrails";
 import ChoiceSelect from "./choice-select";
 import GuardrailRules from "./guardrail-rules";

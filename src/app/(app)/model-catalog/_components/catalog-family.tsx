@@ -5,7 +5,7 @@ import { ArrowRightLeft } from "lucide-react";
 import { useFormatter, useTranslations } from "next-intl";
 import { Link } from "@/i18n/routing";
 import SearchSelect from "@/components/console/search-select";
-import { catalogEntryKey } from "@/lib/gateway/model-catalog";
+import { catalogEntryKey } from "@/lib/gateway/catalog/model-catalog";
 import type { CatalogEntryView, CatalogFamilyView, CatalogGroupView } from "@/types/model-catalog";
 
 type Handlers = {

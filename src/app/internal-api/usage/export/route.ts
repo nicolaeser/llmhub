@@ -3,7 +3,7 @@ import { getFormatter, getNow, getTranslations } from "next-intl/server";
 import { loadUsageAction } from "@/app/(app)/_action";
 import { isActionFail } from "@/lib/http/action-result";
 import { actionProblem } from "@/lib/http/problem";
-import { usageStatsPdf } from "@/lib/http/usage-pdf";
+import { usageStatsPdf } from "@/lib/export/usage-pdf";
 
 const toDate = (day: string) => new Date(`${day}T00:00:00`);
 

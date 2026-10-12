@@ -4,7 +4,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { toCsv } from "@/lib/http/export";
+import { toCsv } from "@/lib/export/csv";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 const route = path.join(root, "src/app/internal-api/usage/chargeback/route.ts");

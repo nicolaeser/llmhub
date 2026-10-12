@@ -7,15 +7,15 @@ import { requirePermission } from "@/lib/auth/guards";
 import { hasPerm, permissions, PERMISSIONS } from "@/lib/auth/permissions";
 import { requireStepUp } from "@/lib/auth/second-factor";
 import { actionFail, runAction } from "@/lib/http/action-result";
-import { writeAudit } from "@/lib/gateway/audit";
-import { issueScimToken, revokeScimToken, scimTokenSet } from "@/lib/gateway/scim";
+import { writeAudit } from "@/lib/audit";
+import { issueScimToken, revokeScimToken, scimTokenSet } from "@/lib/auth/scim";
 import {
   catalogRouting,
   DEFAULT_JEV_MODEL,
   getEnterprise,
   normalizeVectorDefaults,
   patchEnterprise,
-} from "@/lib/gateway/settings";
+} from "@/lib/settings/enterprise";
 import { assistantModelLocked } from "@/lib/assistant/parse";
 import { checkForUpdate } from "@/lib/updates/update-check";
 import { resolveS3Config } from "@/lib/s3/config";

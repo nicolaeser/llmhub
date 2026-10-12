@@ -15,8 +15,8 @@ import { parseTime } from "@internationalized/date";
 import { Plus, Trash2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import TimeZonePicker from "@/components/console/time-zone-picker";
-import { MAX_ACCESS_WINDOWS } from "@/lib/gateway/key-restrictions";
-import { clockMinute, minuteClock, WEEKDAYS } from "@/lib/gateway/price-schedule";
+import { MAX_ACCESS_WINDOWS } from "@/lib/gateway/access/key-restrictions";
+import { clockMinute, minuteClock, WEEKDAYS } from "@/lib/gateway/billing/price-schedule";
 import type { AccessWindowDraft, Weekday } from "@/types/keys";
 
 const MIDNIGHT = "00:00";

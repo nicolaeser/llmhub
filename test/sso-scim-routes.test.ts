@@ -38,7 +38,7 @@ test("SCIM Users routes use the dedicated SCIM token and scim+json", async () =>
   assert.match(colSrc, /requireScimToken/);
   assert.match(itemSrc, /requireScimToken/);
   assert.match(itemSrc, /export async function DELETE/);
-  const helper = await readFile(src("lib/gateway/scim.ts"), "utf8");
+  const helper = await readFile(src("lib/auth/scim.ts"), "utf8");
   assert.match(helper, /application\/scim\+json/);
   assert.match(helper, /scim_token_hash/);
   assert.doesNotMatch(helper, /authenticateBearer/);
@@ -73,7 +73,7 @@ test("SCIM collection handlers all check the SCIM token", async () => {
 });
 
 test("SCIM refuses to update or delete the owner account", async () => {
-  const helper = await readFile(src("lib/gateway/scim.ts"), "utf8");
+  const helper = await readFile(src("lib/auth/scim.ts"), "utf8");
   const update = helper.slice(helper.indexOf("export async function updateScimUser"));
   const remove = helper.slice(helper.indexOf("export async function deleteScimUser"));
   assert.match(update, /if \(user\.isOwner\) throw scimFailure\(403,/);
@@ -91,7 +91,7 @@ test("SCIM token management requires every permission and a step-up", async () =
 
 test("there is no master key", async () => {
   for (const file of [
-    "lib/gateway/principal.ts",
+    "lib/gateway/access/principal.ts",
     "lib/bootstrap/system-catalog.ts",
     "app/(app)/admin-settings/_action.ts",
   ]) {

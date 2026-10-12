@@ -18,8 +18,8 @@ import {
   type useOverlayState,
 } from "@heroui/react";
 import { useTranslations } from "next-intl";
-import { isSignInKind, PROVIDER_CATALOG } from "@/lib/gateway/catalog";
-import { DATA_REGIONS } from "@/lib/gateway/model-policy";
+import { isSignInKind, PROVIDER_CATALOG } from "@/lib/gateway/upstreams/provider-kinds";
+import { DATA_REGIONS } from "@/lib/gateway/access/model-policy";
 import { isActionFail } from "@/lib/http/action-result";
 import { createProviderAction, updateProviderAction } from "@/app/(app)/providers/_action";
 import type { ProviderView } from "@/types/providers";

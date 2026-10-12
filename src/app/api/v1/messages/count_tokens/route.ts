@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import { anthropicCountBody } from "@/lib/gateway/anthropic";
-import { withDeployment } from "@/lib/gateway/chat";
-import { deploymentAuth } from "@/lib/gateway/credentials";
+import { anthropicCountBody } from "@/lib/gateway/protocols/anthropic";
+import { withDeployment } from "@/lib/gateway/dispatch/chat";
+import { deploymentAuth } from "@/lib/gateway/upstreams/credentials";
 import { asNumber, asRecord } from "@/lib/gateway/core";
 import {
   allowModel,
@@ -11,17 +11,17 @@ import {
   modelOf,
   readBody,
   modelChain,
-} from "@/lib/gateway/gate";
+} from "@/lib/gateway/access/gate";
 import { GateError } from "@/lib/gateway/errors";
 import {
   anthropicPassthroughHeaders,
   apiKeyRequest,
   chatIncompatibility,
   messagesToChat,
-} from "@/lib/gateway/messages";
-import { chatToResponsesCountBody, parseRequest } from "@/lib/gateway/responses";
-import { requestRoutingOverride } from "@/lib/gateway/service-mode";
-import { proxyJson, upstreamError } from "@/lib/gateway/upstream";
+} from "@/lib/gateway/protocols/messages";
+import { chatToResponsesCountBody, parseRequest } from "@/lib/gateway/protocols/responses";
+import { requestRoutingOverride } from "@/lib/gateway/dispatch/service-mode";
+import { proxyJson, upstreamError } from "@/lib/gateway/dispatch/upstream";
 import { messagesRequestSchema } from "@/schemas/anthropic";
 
 export async function POST(req: Request) {

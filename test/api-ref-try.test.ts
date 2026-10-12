@@ -17,7 +17,7 @@ test("api-ref try route is session-gated and stays on catalog paths", async () =
 
 test("authenticateBearer accepts console try bearers", async () => {
   const source = await readFile(
-    new URL("../src/lib/gateway/principal.ts", import.meta.url),
+    new URL("../src/lib/gateway/access/principal.ts", import.meta.url),
     "utf8",
   );
   assert.match(source, /isTryBearer/);

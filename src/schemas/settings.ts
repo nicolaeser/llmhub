@@ -1,7 +1,7 @@
 import { z } from "zod";
-import { CACHE_STATS_RANGES, CACHE_TTL_MAX_SECONDS, SEMANTIC_THRESHOLD_MIN } from "@/lib/gateway/cache-settings";
-import { modelAlias } from "@/lib/gateway/model-alias";
-import { MAX_ALERT_WEBHOOKS, WEBHOOK_EVENTS, WEBHOOK_FORMATS } from "@/lib/gateway/webhook-events";
+import { CACHE_STATS_RANGES, CACHE_TTL_MAX_SECONDS, SEMANTIC_THRESHOLD_MIN } from "@/lib/gateway/cache/cache-settings";
+import { modelAlias } from "@/lib/gateway/catalog/model-alias";
+import { MAX_ALERT_WEBHOOKS, WEBHOOK_EVENTS, WEBHOOK_FORMATS } from "@/lib/alerts/events";
 import { vectorDefaultsSchema } from "@/schemas/rag";
 
 function isHttpUrl(value: string): boolean {

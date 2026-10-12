@@ -2,9 +2,9 @@ import "server-only";
 
 import prisma from "@/lib/db/prisma";
 import { asStringArray } from "@/lib/gateway/core";
-import { modelAlias } from "@/lib/gateway/model-alias";
-import { templateRuleSelect } from "@/lib/gateway/model-access";
-import { templateModels, templateRulesOf } from "@/lib/gateway/model-policy";
+import { modelAlias } from "@/lib/gateway/catalog/model-alias";
+import { templateRuleSelect } from "@/lib/gateway/access/model-access";
+import { templateModels, templateRulesOf } from "@/lib/gateway/access/model-policy";
 import { money } from "@/lib/utils/money";
 import {
   createModelGroupAction,

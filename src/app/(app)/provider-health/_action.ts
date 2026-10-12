@@ -9,7 +9,7 @@ import {
   deploymentHealth,
   HEALTH_RETENTION_MINUTES,
   summarizeHealth,
-} from "@/lib/gateway/provider-health";
+} from "@/lib/gateway/routing/provider-health";
 import type { DeploymentHealthView, HealthReport } from "@/types/provider-health";
 
 function severity(view: DeploymentHealthView): number {

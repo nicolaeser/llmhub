@@ -8,7 +8,7 @@ import {
   groupRequestHealth,
   groupSpend,
   percentileIndex,
-} from "@/lib/gateway/usage-stats";
+} from "@/lib/usage/usage-stats";
 import type { UsageSlice } from "@/types/gateway";
 
 const slice = (row: Partial<UsageSlice>): UsageSlice => ({

@@ -9,7 +9,7 @@ import {
   scimJson,
   toScimUser,
   updateScimUser,
-} from "@/lib/gateway/scim";
+} from "@/lib/auth/scim";
 import { clientIp } from "@/lib/http/api";
 import { logger } from "@/lib/logging/logger";
 

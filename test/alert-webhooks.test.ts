@@ -44,7 +44,7 @@ afterEach(() => {
 });
 
 test("normalizeEnterprise migrates the single legacy webhook to every event", async () => {
-  const { normalizeEnterprise } = await import("@/lib/gateway/settings");
+  const { normalizeEnterprise } = await import("@/lib/settings/enterprise");
   const ent = normalizeEnterprise({
     alert_webhook: " https://hooks.example.test/legacy ",
     alert_webhook_secret: "whsec",
@@ -70,7 +70,7 @@ test("normalizeEnterprise migrates the single legacy webhook to every event", as
 });
 
 test("normalizeEnterprise keeps the webhook list and drops unknown events and broken entries", async () => {
-  const { normalizeEnterprise } = await import("@/lib/gateway/settings");
+  const { normalizeEnterprise } = await import("@/lib/settings/enterprise");
   const ent = normalizeEnterprise({
     alert_webhook: "https://hooks.example.test/legacy",
     alert_webhooks: [
@@ -106,7 +106,7 @@ test("alertWebhooksSchema requires an http(s) URL, at least one known event, and
 });
 
 test("fireAlert delivers only to webhooks subscribed to the event, each with its own signature", async () => {
-  const { fireAlert } = await import("@/lib/gateway/alerts");
+  const { fireAlert } = await import("@/lib/alerts/notify");
   db.enterprise = {
     alert_webhooks: [
       { id: "ops", url: "https://ops.test/hook", secret: "ops-secret", events: ["upstream_exhaustion"] },
@@ -139,7 +139,7 @@ test("fireAlert delivers only to webhooks subscribed to the event, each with its
 });
 
 test("fireAlert sends nothing when no webhook subscribes to the event", async () => {
-  const { fireAlert } = await import("@/lib/gateway/alerts");
+  const { fireAlert } = await import("@/lib/alerts/notify");
   db.enterprise = {
     alert_webhooks: [{ id: "ops", url: "https://ops.test/hook", secret: "", events: ["upstream_exhaustion"] }],
   };
@@ -149,7 +149,7 @@ test("fireAlert sends nothing when no webhook subscribes to the event", async ()
 });
 
 test("deliverWebhook skips a queued job whose webhook was removed or unsubscribed", async () => {
-  const { deliverWebhook } = await import("@/lib/gateway/alerts");
+  const { deliverWebhook } = await import("@/lib/alerts/notify");
   db.enterprise = {
     alert_webhooks: [{ id: "ops", url: "https://ops.test/hook", secret: "", events: ["upstream_exhaustion"] }],
   };
@@ -159,7 +159,7 @@ test("deliverWebhook skips a queued job whose webhook was removed or unsubscribe
 });
 
 test("deliverWebhook sends Slack and Teams payloads and signs the exact body", async () => {
-  const { fireAlert } = await import("@/lib/gateway/alerts");
+  const { fireAlert } = await import("@/lib/alerts/notify");
   db.enterprise = {
     alert_webhooks: [
       { id: "slack", url: "https://hooks.slack.test/x", secret: "s", format: "slack", events: ["key_blocked"] },
@@ -202,7 +202,7 @@ test("deliverWebhook sends Slack and Teams payloads and signs the exact body", a
 });
 
 test("alertPiiBlocked names the key and entity types once per cooldown, never the content", async () => {
-  const { alertPiiBlocked } = await import("@/lib/gateway/alerts");
+  const { alertPiiBlocked } = await import("@/lib/alerts/notify");
   db.enterprise = {
     alert_webhooks: [{ id: "sec", url: "https://sec.test/hook", secret: "", events: ["pii_blocked"] }],
   };

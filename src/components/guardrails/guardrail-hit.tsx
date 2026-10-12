@@ -2,7 +2,7 @@
 
 import { Chip } from "@heroui/react";
 import { useTranslations } from "next-intl";
-import { parseHit } from "@/lib/gateway/guardrails";
+import { parseHit } from "@/lib/gateway/safety/guardrails";
 
 export function useGuardrailHitLabel(): (hit: string) => string {
   const t = useTranslations("Guardrails");

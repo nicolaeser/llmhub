@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { Button, Modal, Spinner, toast, type useOverlayState } from "@heroui/react";
 import { useTranslations } from "next-intl";
-import { defaultGuardrails, guardrailsValid } from "@/lib/gateway/guardrails";
+import { defaultGuardrails, guardrailsValid } from "@/lib/gateway/safety/guardrails";
 import { isActionFail } from "@/lib/http/action-result";
 import type { GuardrailOverrideView, GuardrailPolicy, PolicyScope, PolicyTarget } from "@/types/guardrails";
 import { saveGuardrailOverrideAction } from "../_action";

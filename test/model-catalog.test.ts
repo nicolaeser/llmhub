@@ -13,7 +13,7 @@ import {
   planCatalog,
   snapshotNames,
   vendorOf,
-} from "@/lib/gateway/model-catalog";
+} from "@/lib/gateway/catalog/model-catalog";
 import type {
   CatalogEntryPlan,
   CatalogGroupInput,

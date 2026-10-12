@@ -1,4 +1,4 @@
-import { chargebackParts } from "@/lib/gateway/usage-stats";
+import { chargebackParts } from "@/lib/usage/usage-stats";
 import type { SliceRow, VirtualKeyView } from "@/types/gateway";
 import type { RequestLogRow } from "@/types/logs";
 import type { AuditLogSource, ProviderSource, SpendLogSource, UsageSource } from "@/types/management";

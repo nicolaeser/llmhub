@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
-import { screenChatJson, screenChatOutput, withholdChatJson } from "@/lib/gateway/chat";
+import { screenChatJson, screenChatOutput, withholdChatJson } from "@/lib/gateway/dispatch/chat";
 import { GateError } from "@/lib/gateway/errors";
-import { applyGuardrails, withTrace } from "@/lib/gateway/gate";
+import { applyGuardrails, withTrace } from "@/lib/gateway/access/gate";
 import {
   compileRule,
   defaultGuardrails,
@@ -19,8 +19,8 @@ import {
   ruleIssue,
   screenRequest,
   testGuardrails,
-} from "@/lib/gateway/guardrails";
-import { normalizeGuardrails } from "@/lib/gateway/settings";
+} from "@/lib/gateway/safety/guardrails";
+import { normalizeGuardrails } from "@/lib/settings/enterprise";
 import { guardrailPolicySchema } from "@/schemas/guardrails";
 import type { JsonMap, Principal, RequestTrace } from "@/types/gateway";
 import type { GuardrailPolicy, GuardrailRule, PiiPolicy } from "@/types/guardrails";
@@ -331,7 +331,7 @@ test("cached chat responses are screened again under the current output policy",
 });
 
 test("the chat completions route screens prompts before the response cache and never caches blocked output", async () => {
-  const source = await readFile(new URL("../src/lib/gateway/chat-completions-route.ts", import.meta.url), "utf8");
+  const source = await readFile(new URL("../src/lib/gateway/endpoints/chat-completions-route.ts", import.meta.url), "utf8");
   const guard = source.indexOf("await applyGuardrails(");
   const lookup = source.indexOf("await lookupChatCache(");
   const hit = source.indexOf("lookup?.hit");

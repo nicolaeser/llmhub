@@ -6,7 +6,7 @@ import { disabledAssistantTools } from "@/lib/assistant/access";
 import { assistantToolViews, isWriteAccess } from "@/lib/assistant/catalog";
 import { assistantModelLocked } from "@/lib/assistant/parse";
 import { PERMISSIONS } from "@/lib/auth/permissions";
-import { getEnterprise } from "@/lib/gateway/settings";
+import { getEnterprise } from "@/lib/settings/enterprise";
 import { runAction } from "@/lib/http/action-result";
 
 export async function loadAssistantAction() {

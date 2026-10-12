@@ -1,7 +1,7 @@
 import "server-only";
 import prisma from "@/lib/db/prisma";
 import { GateError } from "@/lib/gateway/errors";
-import { modelPermitted } from "@/lib/gateway/gate";
+import { modelPermitted } from "@/lib/gateway/access/gate";
 import { attributesOf, matchesFilter } from "@/lib/rag/filters";
 import { fileIndexes } from "@/lib/rag/index-cache";
 import { queryTerms } from "@/lib/rag/lexical";

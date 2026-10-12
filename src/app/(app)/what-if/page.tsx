@@ -7,7 +7,7 @@ import { useFormatter, useTranslations } from "next-intl";
 import { Link } from "@/i18n/routing";
 import { loadWhatIfAction } from "@/app/(app)/what-if/_action";
 import { isActionFail } from "@/lib/http/action-result";
-import { compareCost } from "@/lib/gateway/what-if";
+import { compareCost } from "@/lib/usage/what-if";
 import EmptyState from "@/components/console/empty-state";
 import PageHeader from "@/components/console/page-header";
 import SearchSelect from "@/components/console/search-select";

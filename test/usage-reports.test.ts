@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
-import { CHARGEBACK_COLUMNS, chargebackRows, chargebackTable, summarizeUsage, usageDays } from "@/lib/gateway/usage-stats";
-import { toCsv } from "@/lib/http/export";
+import { CHARGEBACK_COLUMNS, chargebackRows, chargebackTable, summarizeUsage, usageDays } from "@/lib/usage/usage-stats";
+import { toCsv } from "@/lib/export/csv";
 import { lastCompletedPeriod, nextReportAt, reportCadence } from "@/lib/reports/period";
 import { usageReportSchema } from "@/schemas/reports";
 import type { UsageSlice } from "@/types/gateway";

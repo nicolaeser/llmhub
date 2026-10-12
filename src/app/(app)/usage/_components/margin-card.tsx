@@ -3,8 +3,8 @@
 import { useState } from "react";
 import { Card, Table, ToggleButton, ToggleButtonGroup } from "@heroui/react";
 import { useFormatter, useTranslations } from "next-intl";
-import { marginShare } from "@/lib/gateway/markup-policy";
-import { chargebackParts } from "@/lib/gateway/usage-stats";
+import { marginShare } from "@/lib/gateway/billing/markup-policy";
+import { chargebackParts } from "@/lib/usage/usage-stats";
 import type { SliceRow } from "@/types/gateway";
 import type { MarginGroup, MarginRow } from "@/types/pricing";
 

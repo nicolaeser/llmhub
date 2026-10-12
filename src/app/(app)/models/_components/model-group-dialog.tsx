@@ -23,10 +23,10 @@ import { useTranslations } from "next-intl";
 import MultiPicker from "@/components/console/multi-picker";
 import SearchSelect from "@/components/console/search-select";
 import { formats } from "@/i18n/formats";
-import { PROVIDER_CATALOG } from "@/lib/gateway/catalog";
+import { PROVIDER_CATALOG } from "@/lib/gateway/upstreams/provider-kinds";
 import { createModelGroupAction, updateModelGroupAction } from "@/app/(app)/models/_action";
 import { isActionFail } from "@/lib/http/action-result";
-import { scheduleOverlaps, validPrice, windowValid } from "@/lib/gateway/price-schedule";
+import { scheduleOverlaps, validPrice, windowValid } from "@/lib/gateway/billing/price-schedule";
 import type {
   DeploymentDraft,
   DiscoveredPrice,

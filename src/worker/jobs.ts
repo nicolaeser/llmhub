@@ -3,13 +3,13 @@ import "server-only";
 import { purgeAuthRecords } from "@/lib/auth/cleanup";
 import { ATTEMPT_RETENTION_MS } from "@/lib/auth/throttle";
 import prisma from "@/lib/db/prisma";
-import { fireAlert } from "@/lib/gateway/alerts";
-import { runPendingBatches } from "@/lib/gateway/batches";
-import { crossedThresholds, forecastBudget } from "@/lib/gateway/forecast";
-import { purgeStoredObjects } from "@/lib/gateway/objects";
+import { fireAlert } from "@/lib/alerts/notify";
+import { runPendingBatches } from "@/lib/gateway/endpoints/batches";
+import { crossedThresholds, forecastBudget } from "@/lib/usage/forecast";
+import { purgeStoredObjects } from "@/lib/gateway/storage/objects";
 import { runPendingIngests } from "@/lib/rag/ingest";
 import { expireVectorStores, purgeOrphanUploads } from "@/lib/rag/stores";
-import { getAlertState, getEnterprise, saveAlertState } from "@/lib/gateway/settings";
+import { getAlertState, getEnterprise, saveAlertState } from "@/lib/settings/enterprise";
 import { runUsageReports } from "@/lib/reports/usage-report";
 import { runKeyExpiryAlerts, runSpendAnomalyAlerts } from "./alert-checks";
 import { retentionCutoff } from "./retention";
@@ -102,7 +102,7 @@ export async function runMaintenanceSweep(
 }
 
 export async function runSpendResets(now = new Date()): Promise<number> {
-  const { periodElapsed } = await import("@/lib/gateway/period");
+  const { periodElapsed } = await import("@/lib/gateway/billing/period");
   const data = { spend: 0, spendResetAt: now };
   let n = 0;
   const keys = await prisma.virtualKey.findMany({

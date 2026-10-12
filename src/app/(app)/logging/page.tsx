@@ -24,8 +24,8 @@ import {
   DEFAULT_KEY_EXPIRY_WARNING_DAYS,
   DEFAULT_SPEND_ANOMALY_FACTOR,
   DEFAULT_SPEND_ANOMALY_MIN_COST,
-} from "@/lib/gateway/alert-rules";
-import { MAX_ALERT_WEBHOOKS, WEBHOOK_EVENTS } from "@/lib/gateway/webhook-events";
+} from "@/lib/alerts/rules";
+import { MAX_ALERT_WEBHOOKS, WEBHOOK_EVENTS } from "@/lib/alerts/events";
 import type { AlertRules, AlertWebhookDraft, AlertWebhookView } from "@/types/settings";
 
 type LoggingView = {

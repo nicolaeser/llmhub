@@ -11,7 +11,7 @@ import PageHeader from "@/components/console/page-header";
 import StatCard from "@/components/console/stat-card";
 import { deleteMarkupAction, loadMarkupsAction } from "@/app/(app)/markups/_action";
 import { isActionFail } from "@/lib/http/action-result";
-import { isModelPattern, marginShare, markupScopeRank } from "@/lib/gateway/markup-policy";
+import { isModelPattern, marginShare, markupScopeRank } from "@/lib/gateway/billing/markup-policy";
 import type { MarkupRule, MarkupScope, MarkupsPayload, MarkupView } from "@/types/pricing";
 import MarkupDialog from "./_components/markup-dialog";
 import MarkupLookup from "./_components/markup-lookup";

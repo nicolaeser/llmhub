@@ -97,7 +97,7 @@ afterEach(() => {
 });
 
 test("sign-in kinds are the subscription providers", async () => {
-  const { isSignInKind } = await import("@/lib/gateway/catalog");
+  const { isSignInKind } = await import("@/lib/gateway/upstreams/provider-kinds");
   assert.equal(isSignInKind("codex"), true);
   assert.equal(isSignInKind("grok_build"), true);
   assert.equal(isSignInKind("claude"), true);
@@ -106,7 +106,7 @@ test("sign-in kinds are the subscription providers", async () => {
 });
 
 test("OpenAI sessions read the account, plan, residency, and token expiry from the JWTs", async () => {
-  const { openaiSession } = await import("@/lib/gateway/sign-in");
+  const { openaiSession } = await import("@/lib/gateway/upstreams/subscription-sign-in");
   const exp = inOneHour();
   const session = openaiSession({ access_token: jwt({ exp }), refresh_token: "r1", id_token: openaiIdToken });
   assert.deepEqual(session, {
@@ -123,7 +123,7 @@ test("OpenAI sessions read the account, plan, residency, and token expiry from t
 });
 
 test("xAI sessions use the id token email and expires_in", async () => {
-  const { xaiSession } = await import("@/lib/gateway/sign-in");
+  const { xaiSession } = await import("@/lib/gateway/upstreams/subscription-sign-in");
   const session = xaiSession(
     { access_token: "opaque", refresh_token: "r2", expires_in: 1800, id_token: jwt({ email: "grok@example.com" }) },
     0,
@@ -134,7 +134,7 @@ test("xAI sessions use the id token email and expires_in", async () => {
 });
 
 test("Codex device sign-in polls until approval and exchanges the code with PKCE", async () => {
-  const { pollDeviceCode, requestDeviceCode } = await import("@/lib/gateway/sign-in");
+  const { pollDeviceCode, requestDeviceCode } = await import("@/lib/gateway/upstreams/subscription-sign-in");
   let approved = false;
   respondWith((url) => {
     if (url.endsWith("/deviceauth/usercode")) {
@@ -167,7 +167,7 @@ test("Codex device sign-in polls until approval and exchanges the code with PKCE
 });
 
 test("xAI device sign-in follows the RFC 8628 polling states", async () => {
-  const { pollDeviceCode, requestDeviceCode } = await import("@/lib/gateway/sign-in");
+  const { pollDeviceCode, requestDeviceCode } = await import("@/lib/gateway/upstreams/subscription-sign-in");
   let reply: Response = Response.json({ error: "authorization_pending" }, { status: 400 });
   respondWith((url) =>
     url.endsWith("/device/code")
@@ -200,7 +200,7 @@ test("xAI device sign-in follows the RFC 8628 polling states", async () => {
 });
 
 test("sealed tickets and credentials are bound to the user, kind, and lifetime", async () => {
-  const { openCredential, openTicket, sealCredential, sealTicket } = await import("@/lib/gateway/sign-in");
+  const { openCredential, openTicket, sealCredential, sealTicket } = await import("@/lib/gateway/upstreams/subscription-sign-in");
   const device = {
     grant: { kind: "grok_build" as const, deviceCode: "plaintext-device-code" },
     verificationUrl: "https://accounts.x.ai/device",
@@ -228,7 +228,7 @@ test("sealed tickets and credentials are bound to the user, kind, and lifetime",
 });
 
 test("Codex requests identify LLM Hub and carry the ChatGPT workspace headers", async () => {
-  const { signInHeaders } = await import("@/lib/gateway/credentials");
+  const { signInHeaders } = await import("@/lib/gateway/upstreams/credentials");
   const headers = signInHeaders("codex", { access: "a", refresh: "r", accountId: "acct_1", residency: "eu" });
   assert.equal(headers["ChatGPT-Account-ID"], "acct_1");
   assert.equal(headers.originator, "llmhub");
@@ -238,7 +238,7 @@ test("Codex requests identify LLM Hub and carry the ChatGPT workspace headers", 
 });
 
 async function seedLogin(providerId: string, expiresAt: number, refresh = "r1") {
-  const { sealTokens } = await import("@/lib/gateway/credentials");
+  const { sealTokens } = await import("@/lib/gateway/upstreams/credentials");
   logins.set(providerId, {
     providerId,
     account: "dev@example.com",
@@ -252,7 +252,7 @@ async function seedLogin(providerId: string, expiresAt: number, refresh = "r1") 
 }
 
 test("provider auth uses a fresh session without refreshing", async () => {
-  const { providerAuth } = await import("@/lib/gateway/credentials");
+  const { providerAuth } = await import("@/lib/gateway/upstreams/credentials");
   await seedLogin("p1", Date.now() + 3_600_000);
   respondWith(() => {
     throw new Error("no refresh expected");
@@ -264,7 +264,7 @@ test("provider auth uses a fresh session without refreshing", async () => {
 });
 
 test("provider auth refreshes an expiring session once and stores the rotated tokens", async () => {
-  const { providerAuth } = await import("@/lib/gateway/credentials");
+  const { providerAuth } = await import("@/lib/gateway/upstreams/credentials");
   await seedLogin("p2", Date.now() + 60_000);
   const exp = inOneHour();
   respondWith(() => Response.json({ access_token: jwt({ exp }), refresh_token: "r2" }));
@@ -291,7 +291,7 @@ test("provider auth refreshes an expiring session once and stores the rotated to
 });
 
 test("a revoked refresh token marks the sign-in expired and fails closed", async () => {
-  const { providerAuth } = await import("@/lib/gateway/credentials");
+  const { providerAuth } = await import("@/lib/gateway/upstreams/credentials");
   const { GateError } = await import("@/lib/gateway/errors");
   await seedLogin("p3", Date.now() - 1_000);
   respondWith(() => Response.json({ error: "invalid_grant" }, { status: 400 }));
@@ -305,7 +305,7 @@ test("a revoked refresh token marks the sign-in expired and fails closed", async
 });
 
 test("a transient refresh failure keeps using a still valid access token", async () => {
-  const { providerAuth } = await import("@/lib/gateway/credentials");
+  const { providerAuth } = await import("@/lib/gateway/upstreams/credentials");
   await seedLogin("p4", Date.now() + 60_000);
   respondWith(() => new Response("bad gateway", { status: 502 }));
   const auth = await providerAuth({ id: "p4", kind: "grok_build", apiKey: "" });
@@ -315,7 +315,7 @@ test("a transient refresh failure keeps using a still valid access token", async
 });
 
 test("API key providers keep their sealed key and need no sign-in row", async () => {
-  const { providerAuth } = await import("@/lib/gateway/credentials");
+  const { providerAuth } = await import("@/lib/gateway/upstreams/credentials");
   const { seal } = await import("@/lib/crypto");
   const auth = await providerAuth({ id: "p5", kind: "openai", apiKey: seal("sk-test") });
   assert.deepEqual(auth, { key: "sk-test", headers: {} });
@@ -345,7 +345,7 @@ const usagePayload = {
 };
 
 test("Codex usage maps plan windows, model specific limits, and credits", async () => {
-  const { codexLimits } = await import("@/lib/gateway/subscription-limits");
+  const { codexLimits } = await import("@/lib/gateway/upstreams/subscription-limits");
   const limits = codexLimits(usagePayload, 1_000_000);
   assert.equal(limits.plan, "pro");
   assert.deepEqual(limits.windows, [
@@ -373,7 +373,7 @@ test("Codex usage maps plan windows, model specific limits, and credits", async 
 });
 
 test("subscription limits come from the ChatGPT usage endpoint and are cached", async () => {
-  const { subscriptionLimits } = await import("@/lib/gateway/subscription-limits");
+  const { subscriptionLimits } = await import("@/lib/gateway/upstreams/subscription-limits");
   await seedLogin("p6", Date.now() + 3_600_000);
   respondWith(() => Response.json(usagePayload));
   assert.equal(await subscriptionLimits({ id: "p7", kind: "openai", apiKey: "" }), null);
@@ -390,7 +390,7 @@ test("subscription limits come from the ChatGPT usage endpoint and are cached", 
 });
 
 test("subscription limits report rejected and expired sign-ins as codes", async () => {
-  const { subscriptionLimits } = await import("@/lib/gateway/subscription-limits");
+  const { subscriptionLimits } = await import("@/lib/gateway/upstreams/subscription-limits");
   await seedLogin("p8", Date.now() + 3_600_000);
   respondWith(() => new Response("", { status: 401 }));
   await assert.rejects(subscriptionLimits({ id: "p8", kind: "codex", apiKey: "" }), { message: "UPSTREAM_AUTH" });
@@ -407,8 +407,8 @@ const claudeUsagePayload = {
 };
 
 test("Claude sign-in builds a PKCE authorization URL and a sealed grant", async () => {
-  const { requestAuthorizationCode } = await import("@/lib/gateway/sign-in");
-  const { signInMethod } = await import("@/lib/gateway/catalog");
+  const { requestAuthorizationCode } = await import("@/lib/gateway/upstreams/subscription-sign-in");
+  const { signInMethod } = await import("@/lib/gateway/upstreams/provider-kinds");
   const device = requestAuthorizationCode();
   assert.equal(signInMethod("claude"), "code");
   assert.equal(signInMethod("codex"), "device");
@@ -426,7 +426,7 @@ test("Claude sign-in builds a PKCE authorization URL and a sealed grant", async 
 });
 
 test("pasted Claude authorization input accepts a callback URL, code#state, or a bare code", async () => {
-  const { parseAuthorizationInput } = await import("@/lib/gateway/sign-in");
+  const { parseAuthorizationInput } = await import("@/lib/gateway/upstreams/subscription-sign-in");
   assert.deepEqual(parseAuthorizationInput(" http://localhost:54545/callback?code=c1&state=s1 "), { code: "c1", state: "s1" });
   assert.deepEqual(parseAuthorizationInput("c2#s2"), { code: "c2", state: "s2" });
   assert.deepEqual(parseAuthorizationInput("c3"), { code: "c3", state: "" });
@@ -434,7 +434,7 @@ test("pasted Claude authorization input accepts a callback URL, code#state, or a
 });
 
 test("Claude authorization exchanges the code with the verifier and reads account and plan", async () => {
-  const { completeAuthorization, requestAuthorizationCode } = await import("@/lib/gateway/sign-in");
+  const { completeAuthorization, requestAuthorizationCode } = await import("@/lib/gateway/upstreams/subscription-sign-in");
   const device = requestAuthorizationCode();
   const grant = device.grant as { kind: "claude"; verifier: string; state: string };
   respondWith((url) =>
@@ -471,7 +471,7 @@ test("Claude authorization exchanges the code with the verifier and reads accoun
 });
 
 test("Claude authorization rejects a foreign state, an empty code, and a failed exchange", async () => {
-  const { completeAuthorization, requestAuthorizationCode } = await import("@/lib/gateway/sign-in");
+  const { completeAuthorization, requestAuthorizationCode } = await import("@/lib/gateway/upstreams/subscription-sign-in");
   const grant = requestAuthorizationCode().grant as { kind: "claude"; verifier: string; state: string };
   respondWith(() => Response.json({ error: "invalid_grant" }, { status: 400 }));
   await assert.rejects(completeAuthorization(grant, "code#other-state"), { message: "SIGN_IN_FAILED" });
@@ -482,7 +482,7 @@ test("Claude authorization rejects a foreign state, an empty code, and a failed 
 });
 
 test("Claude plans come from the rate limit tier, then the subscription flags", async () => {
-  const { claudePlan } = await import("@/lib/gateway/sign-in");
+  const { claudePlan } = await import("@/lib/gateway/upstreams/subscription-sign-in");
   assert.equal(claudePlan({ organization: { rate_limit_tier: "default_claude_max_20x" } }), "max_20x");
   assert.equal(claudePlan({ account: { has_claude_max: true } }), "max");
   assert.equal(claudePlan({ account: { has_claude_pro: true } }), "pro");
@@ -491,7 +491,7 @@ test("Claude plans come from the rate limit tier, then the subscription flags", 
 });
 
 test("Claude sign-in refresh rotates both tokens and keeps the account", async () => {
-  const { refreshSession } = await import("@/lib/gateway/sign-in");
+  const { refreshSession } = await import("@/lib/gateway/upstreams/subscription-sign-in");
   respondWith(() => Response.json({ access_token: "new-a", refresh_token: "new-r", expires_in: 100 }));
   const outcome = await refreshSession("claude", {
     tokens: { access: "old-a", refresh: "old-r", accountId: "acc-1", residency: "" },
@@ -512,7 +512,7 @@ test("Claude sign-in refresh rotates both tokens and keeps the account", async (
 });
 
 test("Claude usage maps the five hour, weekly, and model weekly windows", async () => {
-  const { claudeLimits } = await import("@/lib/gateway/subscription-limits");
+  const { claudeLimits } = await import("@/lib/gateway/upstreams/subscription-limits");
   const limits = claudeLimits(claudeUsagePayload, "max_5x", 0);
   assert.equal(limits.plan, "max_5x");
   assert.deepEqual(limits.windows, [
@@ -537,7 +537,7 @@ test("Claude usage maps the five hour, weekly, and model weekly windows", async 
 });
 
 test("Claude subscription limits call the OAuth usage endpoint with the beta header", async () => {
-  const { subscriptionLimits } = await import("@/lib/gateway/subscription-limits");
+  const { subscriptionLimits } = await import("@/lib/gateway/upstreams/subscription-limits");
   await seedLogin("p9", Date.now() + 3_600_000);
   respondWith(() => Response.json(claudeUsagePayload));
   const limits = await subscriptionLimits({ id: "p9", kind: "claude", apiKey: "" });
@@ -577,7 +577,7 @@ function poolDeployment(id: string, weight: number) {
 }
 
 async function claudePool(): Promise<{ group: Group; mapped: PoolDeployment[] }> {
-  const { sealTokens } = await import("@/lib/gateway/credentials");
+  const { sealTokens } = await import("@/lib/gateway/upstreams/credentials");
   const usage: Record<string, unknown> = {
     "token-q1": { five_hour: { utilization: 100, resets_at: new Date(Date.now() + 2 * 3_600_000).toISOString() } },
     "token-q2": {
@@ -624,7 +624,7 @@ async function claudePool(): Promise<{ group: Group; mapped: PoolDeployment[] }>
 }
 
 test("routing skips subscription accounts at a limit and follows the quota strategies", async () => {
-  const { acquireGroup } = await import("@/lib/gateway/runtime");
+  const { acquireGroup } = await import("@/lib/gateway/routing/runtime");
   const { group, mapped } = await claudePool();
   const pickFor = async (strategy: string) => {
     const acquired = await acquireGroup({ ...group, strategy }, undefined, undefined, "");
@@ -648,8 +648,8 @@ test("routing skips subscription accounts at a limit and follows the quota strat
 });
 
 test("a per provider account policy decides between accounts of that provider before the alias strategy", async () => {
-  const { acquireGroup } = await import("@/lib/gateway/runtime");
-  const { forgetAccountPolicies } = await import("@/lib/gateway/account-routing");
+  const { acquireGroup } = await import("@/lib/gateway/routing/runtime");
+  const { forgetAccountPolicies } = await import("@/lib/gateway/routing/account-routing");
   const { group } = await claudePool();
   const pickFor = async () => {
     const acquired = await acquireGroup(group, undefined, undefined, "");
@@ -679,7 +679,7 @@ test("a per provider account policy decides between accounts of that provider be
 });
 
 test("restricted accounts only serve the keys, people, projects, departments, and companies assigned to them", async () => {
-  const { acquireGroup } = await import("@/lib/gateway/runtime");
+  const { acquireGroup } = await import("@/lib/gateway/routing/runtime");
   const { ERR_NOT_ASSIGNED } = await import("@/lib/gateway/core");
   const { group, mapped } = await claudePool();
   const none = { orgId: null, teamId: null, projectId: null, memberId: null, keyId: null };
@@ -714,7 +714,7 @@ test("restricted accounts only serve the keys, people, projects, departments, an
 });
 
 test("xAI billing maps the weekly credits, the monthly spend cap, and on-demand usage", async () => {
-  const { xaiLimits } = await import("@/lib/gateway/xai-limits");
+  const { xaiLimits } = await import("@/lib/gateway/upstreams/xai-limits");
   const limits = xaiLimits(
     {
       config: {
@@ -744,7 +744,7 @@ test("xAI billing maps the weekly credits, the monthly spend cap, and on-demand 
 });
 
 test("subscription limits for SuperGrok call the billing endpoints with the Grok CLI headers", async () => {
-  const { subscriptionLimits } = await import("@/lib/gateway/subscription-limits");
+  const { subscriptionLimits } = await import("@/lib/gateway/upstreams/subscription-limits");
   await seedLogin("p10", Date.now() + 3_600_000);
   respondWith((url) =>
     url.endsWith("/v1/settings")

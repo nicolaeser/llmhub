@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
-import { capExceeded } from "@/lib/gateway/period";
+import { capExceeded } from "@/lib/gateway/billing/period";
 
 function exportedAsyncFn(source: string, name: string): string {
   const start = source.indexOf(`export async function ${name}`);
@@ -18,7 +18,7 @@ test("capExceeded treats 0 as unlimited and extra as headroom", () => {
 
 test("assertBudget checks the whole chain: key, user, member, project, team, and org", async () => {
   const billing = await readFile(
-    new URL("../src/lib/gateway/billing.ts", import.meta.url),
+    new URL("../src/lib/gateway/billing/billing.ts", import.meta.url),
     "utf8",
   );
   const fn = exportedAsyncFn(billing, "assertBudget");
@@ -36,7 +36,7 @@ test("assertBudget checks the whole chain: key, user, member, project, team, and
 
 test("recordUsage charges the user and member budgets alongside key, team, org, and project", async () => {
   const billing = await readFile(
-    new URL("../src/lib/gateway/billing.ts", import.meta.url),
+    new URL("../src/lib/gateway/billing/billing.ts", import.meta.url),
     "utf8",
   );
   const fn = exportedAsyncFn(billing, "recordUsage");
@@ -49,7 +49,7 @@ test("recordUsage charges the user and member budgets alongside key, team, org, 
 
 test("period resets only win once under concurrency", async () => {
   const billing = await readFile(
-    new URL("../src/lib/gateway/billing.ts", import.meta.url),
+    new URL("../src/lib/gateway/billing/billing.ts", import.meta.url),
     "utf8",
   );
   const start = billing.indexOf("async function spendAfterReset");
@@ -60,8 +60,8 @@ test("period resets only win once under concurrency", async () => {
 
 test("key principals resolve tenancy live and reject inactive owners", async () => {
   const [principal, tenancy] = await Promise.all([
-    readFile(new URL("../src/lib/gateway/principal.ts", import.meta.url), "utf8"),
-    readFile(new URL("../src/lib/gateway/key-tenancy.ts", import.meta.url), "utf8"),
+    readFile(new URL("../src/lib/gateway/access/principal.ts", import.meta.url), "utf8"),
+    readFile(new URL("../src/lib/gateway/access/key-tenancy.ts", import.meta.url), "utf8"),
   ]);
   assert.match(principal, /const \{ tenancy, active \} = await resolveKeyTenancy\(row\);\n\s+if \(!active\) return null;/);
   assert.match(principal, /api key owner is not active/);
@@ -74,7 +74,7 @@ test("key principals resolve tenancy live and reject inactive owners", async () 
 });
 
 test("customer keys are never billed to the console user who created them", async () => {
-  const tenancy = await readFile(new URL("../src/lib/gateway/key-tenancy.ts", import.meta.url), "utf8");
+  const tenancy = await readFile(new URL("../src/lib/gateway/access/key-tenancy.ts", import.meta.url), "utf8");
   const memberBranch = tenancy.slice(tenancy.indexOf("if (row.memberId)"), tenancy.indexOf("if (row.projectId)"));
   const projectBranch = tenancy.slice(tenancy.indexOf("if (row.projectId)"), tenancy.indexOf("const owner"));
   for (const branch of [memberBranch, projectBranch]) {
@@ -85,7 +85,7 @@ test("customer keys are never billed to the console user who created them", asyn
 
 test("gateRequest and session callers admit through budgets and rate limits", async () => {
   const [gate, playground, assistant] = await Promise.all([
-    readFile(new URL("../src/lib/gateway/gate.ts", import.meta.url), "utf8"),
+    readFile(new URL("../src/lib/gateway/access/gate.ts", import.meta.url), "utf8"),
     readFile(new URL("../src/app/internal-api/playground/chat/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../src/lib/assistant/run.ts", import.meta.url), "utf8"),
   ]);

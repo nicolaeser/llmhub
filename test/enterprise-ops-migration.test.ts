@@ -85,7 +85,7 @@ test("init migration creates RequestLog dimensions, the usage rollup, and spendR
 test("spend and audit retention stay in enterprise settings JSON, not SQL", async () => {
   const [sql, settings] = await Promise.all([
     file(MIGRATION),
-    file("src/lib/gateway/settings.ts"),
+    file("src/lib/settings/enterprise.ts"),
   ]);
   assert.doesNotMatch(
     sql,

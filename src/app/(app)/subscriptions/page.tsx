@@ -8,7 +8,7 @@ import PageHeader from "@/components/console/page-header";
 import StatCard from "@/components/console/stat-card";
 import ImportModelsDialog from "@/components/providers/import-models-dialog";
 import ProviderDialog from "@/components/providers/provider-dialog";
-import { isSignInKind, PROVIDER_CATALOG, reportsLimits } from "@/lib/gateway/catalog";
+import { isSignInKind, PROVIDER_CATALOG, reportsLimits } from "@/lib/gateway/upstreams/provider-kinds";
 import {
   discoverProviderAction,
   loadProviderLimitsAction,

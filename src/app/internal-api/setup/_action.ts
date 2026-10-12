@@ -13,7 +13,7 @@ import {
   reserveAttempts,
 } from "@/lib/auth/throttle";
 import { ensureSystemCatalog } from "@/lib/bootstrap/system-catalog";
-import { writeAudit } from "@/lib/gateway/audit";
+import { writeAudit } from "@/lib/audit";
 import { SetupAlreadyCompleteError } from "@/lib/bootstrap/operators";
 import { clientIp } from "@/lib/http/api";
 import { logger } from "@/lib/logging/logger";

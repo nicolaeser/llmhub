@@ -10,7 +10,7 @@ import {
   jsonl,
   parseBatchInput,
   resultLine,
-} from "@/lib/gateway/batch-format";
+} from "@/lib/gateway/protocols/batch-format";
 import type { JsonMap } from "@/types/gateway";
 
 function line(custom: string, body: JsonMap, url = "/v1/chat/completions"): string {

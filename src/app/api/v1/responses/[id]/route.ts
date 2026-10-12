@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
-import { gateRequest, gateResponse } from "@/lib/gateway/gate";
+import { gateRequest, gateResponse } from "@/lib/gateway/access/gate";
 import { GateError } from "@/lib/gateway/errors";
-import { deleteObject } from "@/lib/gateway/objects";
-import { responseId, visibleResponse } from "@/lib/gateway/responses";
-import { findStoredResponse, loadStoredResponse } from "@/lib/gateway/responses-store";
+import { deleteObject } from "@/lib/gateway/storage/objects";
+import { responseId, visibleResponse } from "@/lib/gateway/protocols/responses";
+import { findStoredResponse, loadStoredResponse } from "@/lib/gateway/storage/responses-store";
 import { ownerId } from "@/lib/gateway/core";
 
 export async function GET(

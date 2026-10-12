@@ -12,10 +12,10 @@ import {
   groupSpend,
   summarizeUsage,
   usageDays,
-} from "@/lib/gateway/usage-stats";
-import { p95Latency, usageNames, usageSlices } from "@/lib/gateway/usage-totals";
-import { toCsv } from "@/lib/http/export";
-import { usageStatsPdf } from "@/lib/http/usage-pdf";
+} from "@/lib/usage/usage-stats";
+import { p95Latency, usageNames, usageSlices } from "@/lib/usage/usage-totals";
+import { toCsv } from "@/lib/export/csv";
+import { usageStatsPdf } from "@/lib/export/usage-pdf";
 import { logger } from "@/lib/logging/logger";
 import { mailEnabled, mailErrorCode, sendMail } from "@/lib/mail/send";
 import { lastCompletedPeriod, nextReportAt, REPORT_FORMATS, reportCadence } from "@/lib/reports/period";

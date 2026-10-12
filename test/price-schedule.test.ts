@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { modelEntry } from "@/lib/gateway/core";
-import { modelPricing } from "@/lib/gateway/model-pricing";
+import { modelPricing } from "@/lib/gateway/catalog/model-pricing";
 import {
   clockMinute,
   isTimeZone,
@@ -10,7 +10,7 @@ import {
   priceAt,
   scheduleOverlaps,
   windowValid,
-} from "@/lib/gateway/price-schedule";
+} from "@/lib/gateway/billing/price-schedule";
 import type { PriceSchedule } from "@/types/gateway";
 
 const day = { cost_input_per_1k: 0.002, cost_output_per_1k: 0.006 };

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { shouldAlert } from "@/lib/gateway/alerts";
+import { shouldAlert } from "@/lib/alerts/notify";
 import { ERR_ALL_PAUSED, ERR_NOT_ASSIGNED, RouterError } from "@/lib/gateway/core";
 
 test("alerts on saturation and 5xx", () => {

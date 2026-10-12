@@ -57,7 +57,7 @@ test("public registration and SSO cannot create the first user", async () => {
     file("src/app/internal-api/account/register/route.ts"),
     file("src/app/account/login/page.tsx"),
     file("src/lib/auth/sso-user.ts"),
-    file("src/lib/gateway/scim.ts"),
+    file("src/lib/auth/scim.ts"),
     file("src/proxy.ts"),
   ]);
   assert.match(register, /SETUP_REQUIRED/);

@@ -8,7 +8,7 @@ import {
   scimJson,
   toScimUser,
   SCIM_LIST_SCHEMA,
-} from "@/lib/gateway/scim";
+} from "@/lib/auth/scim";
 import { logger } from "@/lib/logging/logger";
 
 export const dynamic = "force-dynamic";

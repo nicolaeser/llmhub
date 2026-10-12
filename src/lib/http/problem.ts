@@ -6,7 +6,7 @@ import { AuthError } from "@/lib/auth/errors";
 import { env } from "@/lib/env";
 import { isRouterError, isUnavailableError, newRequestId } from "@/lib/gateway/core";
 import { GateError } from "@/lib/gateway/errors";
-import { normalizeProblemCode, problemSpec } from "@/lib/http/problems";
+import { normalizeProblemCode, problemSpec } from "@/lib/http/problem-codes";
 import { logger } from "@/lib/logging/logger";
 import type { ActionFail } from "@/types/actions";
 import type {
