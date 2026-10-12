@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
-import { Alert, Button, Chip, Spinner, Surface, toast } from "@heroui/react";
+import { Alert, Button, Chip, Input, Label, Spinner, Surface, TextField, toast } from "@heroui/react";
 import { Copy, ExternalLink } from "lucide-react";
 import { useTranslations } from "next-intl";
-import { pollSignInAction, startSignInAction } from "@/app/(app)/providers/_action";
+import { completeSignInAction, pollSignInAction, startSignInAction } from "@/app/(app)/providers/_action";
 import { isActionFail } from "@/lib/http/action-result";
 import type { ProviderSignIn, SignInKind, SignInStart } from "@/types/providers";
 
@@ -25,11 +25,13 @@ export default function SignInPanel({
   const tError = useTranslations("Error");
   const [waiting, setWaiting] = useState<Waiting | null>(null);
   const [fresh, setFresh] = useState<ProviderSignIn | null>(null);
+  const [pasted, setPasted] = useState("");
   const [pending, start] = useTransition();
+  const [finishing, finish] = useTransition();
   const shown = fresh ?? current;
 
   useEffect(() => {
-    if (!waiting) return;
+    if (!waiting || waiting.method === "code") return;
     let active = true;
     const timer = setTimeout(async () => {
       const result = await pollSignInAction({ ticket: waiting.ticket, interval: waiting.delay });
@@ -60,7 +62,22 @@ export default function SignInPanel({
         toast.danger(tError("code", { code: result.error }));
         return;
       }
+      setPasted("");
       setWaiting({ ...result, delay: result.interval });
+    });
+  }
+
+  function complete(ticket: string) {
+    finish(async () => {
+      const result = await completeSignInAction({ ticket, code: pasted });
+      if (isActionFail(result)) {
+        toast.danger(tError("code", { code: result.error }));
+        return;
+      }
+      if (result.state !== "done") return;
+      setWaiting(null);
+      setFresh({ account: result.account, plan: result.plan, status: "active" });
+      onSignedIn(result.credential);
     });
   }
 
@@ -94,7 +111,47 @@ export default function SignInPanel({
           </Chip>
         </div>
       ) : null}
-      {waiting ? (
+      {waiting?.method === "code" ? (
+        <Alert status="accent">
+          <Alert.Indicator />
+          <Alert.Content className="min-w-0 space-y-3">
+            <Alert.Title>{t("signIn.pasteTitle")}</Alert.Title>
+            <Alert.Description>{t("signIn.pasteHint", { kind })}</Alert.Description>
+            <a
+              href={waiting.verificationUrl}
+              target="_blank"
+              rel="noreferrer noopener"
+              className="inline-flex items-center gap-1 text-sm font-medium text-accent"
+            >
+              <ExternalLink size={14} aria-hidden />
+              {t("signIn.open", { kind })}
+            </a>
+            <TextField fullWidth value={pasted} onChange={setPasted} isDisabled={finishing} aria-label={t("signIn.pasteLabel")}>
+              <Label>{t("signIn.pasteLabel")}</Label>
+              <Input aria-label={t("signIn.pasteLabel")} autoComplete="off" spellCheck={false} />
+            </TextField>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                size="sm"
+                aria-label={t("signIn.finish")}
+                isPending={finishing}
+                isDisabled={!pasted.trim()}
+                onPress={() => complete(waiting.ticket)}
+              >
+                {({ isPending }) => (
+                  <>
+                    {isPending ? <Spinner color="current" size="sm" /> : null}
+                    {t("signIn.finish")}
+                  </>
+                )}
+              </Button>
+              <Button size="sm" variant="tertiary" aria-label={t("signIn.cancel")} onPress={() => setWaiting(null)}>
+                {t("signIn.cancel")}
+              </Button>
+            </div>
+          </Alert.Content>
+        </Alert>
+      ) : waiting ? (
         <Alert status="accent">
           <Alert.Indicator />
           <Alert.Content className="min-w-0 space-y-2">

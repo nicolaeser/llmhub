@@ -200,6 +200,7 @@ model ProviderConnection {
   retentionDays Int?
   region        String   @default("")
   noTraining    Boolean  @default(false)
+  enabled       Boolean  @default(true)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 

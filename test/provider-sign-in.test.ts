@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test, { afterEach, beforeEach } from "node:test";
+import type { Group } from "@/types/gateway";
 import type { SignInSession } from "@/types/providers";
 
 type FakeLogin = {
@@ -94,6 +95,7 @@ test("sign-in kinds are the subscription providers", async () => {
   const { isSignInKind } = await import("@/lib/gateway/catalog");
   assert.equal(isSignInKind("codex"), true);
   assert.equal(isSignInKind("grok_build"), true);
+  assert.equal(isSignInKind("claude"), true);
   assert.equal(isSignInKind("openai"), false);
   assert.equal(isSignInKind("anthropic"), false);
 });
@@ -334,6 +336,7 @@ const usagePayload = {
     },
   ],
   credits: { has_credits: true, unlimited: false, balance: "12.5" },
+  rate_limit_reset_credits: { available_count: 3, applicable_available_count: 1 },
 };
 
 test("Codex usage maps plan windows, model specific limits, and credits", async () => {
@@ -358,15 +361,17 @@ test("Codex usage maps plan windows, model specific limits, and credits", async 
     },
   ]);
   assert.deepEqual(limits.credits, { unlimited: false, balance: "12.5" });
+  assert.deepEqual(limits.resetCredits, { available: 3, applicable: 1 });
   assert.deepEqual(codexLimits({}, 0).windows, []);
   assert.equal(codexLimits({}, 0).credits, null);
+  assert.equal(codexLimits({}, 0).resetCredits, null);
 });
 
 test("subscription limits come from the ChatGPT usage endpoint and are cached", async () => {
   const { subscriptionLimits } = await import("@/lib/gateway/subscription-limits");
   await seedLogin("p6", Date.now() + 3_600_000);
   respondWith(() => Response.json(usagePayload));
-  assert.equal(await subscriptionLimits({ id: "p7", kind: "grok_build", apiKey: "" }), null);
+  assert.equal(await subscriptionLimits({ id: "p7", kind: "openai", apiKey: "" }), null);
   assert.equal(calls.length, 0);
   const first = await subscriptionLimits({ id: "p6", kind: "codex", apiKey: "" });
   assert.equal(first?.windows.length, 3);
@@ -385,4 +390,283 @@ test("subscription limits report rejected and expired sign-ins as codes", async 
   respondWith(() => new Response("", { status: 401 }));
   await assert.rejects(subscriptionLimits({ id: "p8", kind: "codex", apiKey: "" }), { message: "UPSTREAM_AUTH" });
   await assert.rejects(subscriptionLimits({ id: "missing", kind: "codex", apiKey: "" }), { message: "SIGN_IN_EXPIRED" });
+});
+
+const claudeUsagePayload = {
+  five_hour: { utilization: 100, resets_at: "2026-10-12T15:00:00.000000+00:00" },
+  seven_day: { utilization: 41.5, resets_at: "2026-10-15T09:00:00+00:00" },
+  seven_day_oauth_apps: null,
+  seven_day_opus: null,
+  seven_day_sonnet: { utilization: 12, resets_at: null },
+  extra_usage: { is_enabled: false },
+};
+
+test("Claude sign-in builds a PKCE authorization URL and a sealed grant", async () => {
+  const { requestAuthorizationCode } = await import("@/lib/gateway/sign-in");
+  const { signInMethod } = await import("@/lib/gateway/catalog");
+  const device = requestAuthorizationCode();
+  assert.equal(signInMethod("claude"), "code");
+  assert.equal(signInMethod("codex"), "device");
+  assert.equal(device.userCode, "");
+  const url = new URL(device.verificationUrl);
+  assert.equal(url.origin + url.pathname, "https://claude.ai/oauth/authorize");
+  assert.equal(url.searchParams.get("client_id"), "9d1c250a-e61b-44d9-88ed-5944d1962f5e");
+  assert.equal(url.searchParams.get("code_challenge_method"), "S256");
+  assert.match(url.searchParams.get("scope") ?? "", /user:inference/);
+  assert.equal(device.grant.kind, "claude");
+  const grant = device.grant as { kind: "claude"; verifier: string; state: string };
+  assert.equal(url.searchParams.get("state"), grant.state);
+  const { createHash } = await import("node:crypto");
+  assert.equal(url.searchParams.get("code_challenge"), createHash("sha256").update(grant.verifier).digest("base64url"));
+});
+
+test("pasted Claude authorization input accepts a callback URL, code#state, or a bare code", async () => {
+  const { parseAuthorizationInput } = await import("@/lib/gateway/sign-in");
+  assert.deepEqual(parseAuthorizationInput(" http://localhost:54545/callback?code=c1&state=s1 "), { code: "c1", state: "s1" });
+  assert.deepEqual(parseAuthorizationInput("c2#s2"), { code: "c2", state: "s2" });
+  assert.deepEqual(parseAuthorizationInput("c3"), { code: "c3", state: "" });
+  assert.deepEqual(parseAuthorizationInput("http://%"), { code: "", state: "" });
+});
+
+test("Claude authorization exchanges the code with the verifier and reads account and plan", async () => {
+  const { completeAuthorization, requestAuthorizationCode } = await import("@/lib/gateway/sign-in");
+  const device = requestAuthorizationCode();
+  const grant = device.grant as { kind: "claude"; verifier: string; state: string };
+  respondWith((url) =>
+    url.endsWith("/oauth/profile")
+      ? Response.json({
+          account: { has_claude_max: true, has_claude_pro: false },
+          organization: { rate_limit_tier: "default_claude_max_5x" },
+        })
+      : Response.json({
+          access_token: "sk-ant-oat01-a",
+          refresh_token: "sk-ant-ort01-r",
+          expires_in: 28_800,
+          account: { uuid: "acc-1", email_address: "dev@example.com" },
+        }),
+  );
+  const session = await completeAuthorization(grant, `code-1#${grant.state}`);
+  assert.equal(session.account, "dev@example.com");
+  assert.equal(session.plan, "max_5x");
+  assert.equal(session.tokens.access, "sk-ant-oat01-a");
+  assert.equal(session.tokens.refresh, "sk-ant-ort01-r");
+  assert.equal(session.tokens.accountId, "acc-1");
+  const exchange = calls[0]!;
+  assert.equal(exchange.url, "https://platform.claude.com/v1/oauth/token");
+  assert.deepEqual(JSON.parse(exchange.body), {
+    grant_type: "authorization_code",
+    code: "code-1",
+    redirect_uri: "http://localhost:54545/callback",
+    client_id: "9d1c250a-e61b-44d9-88ed-5944d1962f5e",
+    code_verifier: grant.verifier,
+    state: grant.state,
+  });
+  assert.equal(calls[1]!.headers.Authorization, "Bearer sk-ant-oat01-a");
+  assert.match(calls[1]!.headers["anthropic-beta"] ?? "", /oauth-2025-04-20/);
+});
+
+test("Claude authorization rejects a foreign state, an empty code, and a failed exchange", async () => {
+  const { completeAuthorization, requestAuthorizationCode } = await import("@/lib/gateway/sign-in");
+  const grant = requestAuthorizationCode().grant as { kind: "claude"; verifier: string; state: string };
+  respondWith(() => Response.json({ error: "invalid_grant" }, { status: 400 }));
+  await assert.rejects(completeAuthorization(grant, "code#other-state"), { message: "SIGN_IN_FAILED" });
+  await assert.rejects(completeAuthorization(grant, "   "), { message: "SIGN_IN_FAILED" });
+  assert.equal(calls.length, 0);
+  await assert.rejects(completeAuthorization(grant, "code"), { message: "SIGN_IN_FAILED" });
+  assert.equal(calls.length, 1);
+});
+
+test("Claude plans come from the rate limit tier, then the subscription flags", async () => {
+  const { claudePlan } = await import("@/lib/gateway/sign-in");
+  assert.equal(claudePlan({ organization: { rate_limit_tier: "default_claude_max_20x" } }), "max_20x");
+  assert.equal(claudePlan({ account: { has_claude_max: true } }), "max");
+  assert.equal(claudePlan({ account: { has_claude_pro: true } }), "pro");
+  assert.equal(claudePlan({ organization: { organization_type: "claude_team" } }), "team");
+  assert.equal(claudePlan({}), "");
+});
+
+test("Claude sign-in refresh rotates both tokens and keeps the account", async () => {
+  const { refreshSession } = await import("@/lib/gateway/sign-in");
+  respondWith(() => Response.json({ access_token: "new-a", refresh_token: "new-r", expires_in: 100 }));
+  const outcome = await refreshSession("claude", {
+    tokens: { access: "old-a", refresh: "old-r", accountId: "acc-1", residency: "" },
+    expiresAt: 0,
+    account: "dev@example.com",
+    plan: "pro",
+  });
+  assert.equal(outcome.ok, true);
+  if (!outcome.ok) return;
+  assert.equal(outcome.session.tokens.refresh, "new-r");
+  assert.equal(outcome.session.tokens.accountId, "acc-1");
+  assert.equal(outcome.session.account, "dev@example.com");
+  assert.equal(outcome.session.plan, "pro");
+  const body = JSON.parse(calls[0]!.body) as Record<string, string>;
+  assert.equal(calls[0]!.url, "https://platform.claude.com/v1/oauth/token");
+  assert.equal(body.grant_type, "refresh_token");
+  assert.equal(body.refresh_token, "old-r");
+});
+
+test("Claude usage maps the five hour, weekly, and model weekly windows", async () => {
+  const { claudeLimits } = await import("@/lib/gateway/subscription-limits");
+  const limits = claudeLimits(claudeUsagePayload, "max_5x", 0);
+  assert.equal(limits.plan, "max_5x");
+  assert.deepEqual(limits.windows, [
+    {
+      scope: "",
+      usedPercent: 100,
+      windowSeconds: 18_000,
+      resetsAt: "2026-10-12T15:00:00.000Z",
+      limitReached: true,
+    },
+    {
+      scope: "",
+      usedPercent: 41.5,
+      windowSeconds: 604_800,
+      resetsAt: "2026-10-15T09:00:00.000Z",
+      limitReached: false,
+    },
+    { scope: "Sonnet", usedPercent: 12, windowSeconds: 604_800, resetsAt: null, limitReached: false },
+  ]);
+  assert.equal(limits.resetCredits, null);
+  assert.deepEqual(claudeLimits({}, "", 0).windows, []);
+});
+
+test("Claude subscription limits call the OAuth usage endpoint with the beta header", async () => {
+  const { subscriptionLimits } = await import("@/lib/gateway/subscription-limits");
+  await seedLogin("p9", Date.now() + 3_600_000);
+  respondWith(() => Response.json(claudeUsagePayload));
+  const limits = await subscriptionLimits({ id: "p9", kind: "claude", apiKey: "" });
+  assert.equal(limits?.plan, "pro");
+  assert.equal(limits?.windows.length, 3);
+  assert.equal(calls[0]!.url, "https://api.anthropic.com/api/oauth/usage");
+  assert.equal(calls[0]!.headers.Authorization, "Bearer old-access");
+  assert.match(calls[0]!.headers["anthropic-beta"] ?? "", /oauth-2025-04-20/);
+});
+
+test("routing skips subscription accounts at a limit and follows the quota strategies", async () => {
+  const { acquireGroup } = await import("@/lib/gateway/runtime");
+  const { sealTokens } = await import("@/lib/gateway/credentials");
+  const usage: Record<string, unknown> = {
+    "token-q1": { five_hour: { utilization: 100, resets_at: new Date(Date.now() + 2 * 3_600_000).toISOString() } },
+    "token-q2": {
+      five_hour: { utilization: 20, resets_at: new Date(Date.now() + 4 * 3_600_000).toISOString() },
+      seven_day: { utilization: 60, resets_at: new Date(Date.now() + 72 * 3_600_000).toISOString() },
+    },
+    "token-q3": {
+      five_hour: { utilization: 10, resets_at: new Date(Date.now() + 1 * 3_600_000).toISOString() },
+      seven_day: { utilization: 30, resets_at: new Date(Date.now() + 1 * 3_600_000).toISOString() },
+    },
+  };
+  for (const id of ["q1", "q2", "q3"]) {
+    logins.set(`prov-${id}`, {
+      providerId: `prov-${id}`,
+      account: `${id}@example.com`,
+      plan: "max",
+      tokens: sealTokens({ access: `token-${id}`, refresh: "r", accountId: "", residency: "" }),
+      expiresAt: new Date(Date.now() + 3_600_000),
+      status: "active",
+      version: 0,
+      leaseUntil: null,
+    });
+  }
+  globalThis.fetch = (async (_input: string | URL | Request, init?: RequestInit) => {
+    const auth = String((init?.headers as Record<string, string>).Authorization).replace("Bearer ", "");
+    return Response.json(usage[auth]);
+  }) as typeof fetch;
+  const dep = (id: string, weight: number) => ({
+    id: `dep-${id}`,
+    kind: "claude",
+    base_url: "",
+    model: "claude-sonnet-4-5",
+    weight,
+    cost_input_per_1k: 0,
+    cost_output_per_1k: 0,
+    provider_id: `prov-${id}`,
+    provider: { id: `prov-${id}`, kind: "claude", baseUrl: "", apiKey: "", zdr: false, retentionDays: null, region: "", noTraining: false, enabled: true },
+  });
+  const mapped = [dep("q1", 10), dep("q2", 5), dep("q3", 1)];
+  const group: Group = {
+    alias: "claude-pool",
+    strategy: "priority",
+    billing_mode: "routed",
+    price_input_per_1k: 0,
+    price_output_per_1k: 0,
+    price_time_zone: "UTC",
+    price_windows: [],
+    overflow_group: "",
+    num_retries: 0,
+    fallback_groups: [],
+    deployments: mapped,
+    mapped,
+  };
+  const pickFor = async (strategy: string) => {
+    const acquired = await acquireGroup({ ...group, strategy }, undefined, undefined, "");
+    acquired.release();
+    return acquired.dep.id;
+  };
+  assert.equal(await pickFor("priority"), "dep-q2");
+  const paused = dep("q2", 5);
+  paused.provider.enabled = false;
+  const withPaused: Group = { ...group, mapped: [mapped[0]!, paused, mapped[2]!] };
+  const acquiredPaused = await acquireGroup(withPaused, undefined, undefined, "priority");
+  acquiredPaused.release();
+  assert.equal(acquiredPaused.dep.id, "dep-q3");
+  assert.equal(await pickFor("quota_balanced"), "dep-q3");
+  assert.equal(await pickFor("quota_expiring"), "dep-q3");
+  const rotation = [await pickFor("round_robin"), await pickFor("round_robin"), await pickFor("round_robin")];
+  assert.deepEqual(rotation, [rotation[0], rotation[1], rotation[0]]);
+  assert.notEqual(rotation[0], rotation[1]);
+  assert.equal(new Set(rotation).size, 2);
+  assert.equal(rotation.includes("dep-q1"), false);
+});
+
+test("xAI billing maps the weekly credits, the monthly spend cap, and on-demand usage", async () => {
+  const { xaiLimits } = await import("@/lib/gateway/xai-limits");
+  const limits = xaiLimits(
+    {
+      config: {
+        currentPeriod: { type: "weekly", start: "2026-10-05T00:00:00Z", end: "2026-10-12T00:00:00Z" },
+        creditUsagePercent: 37.5,
+      },
+    },
+    {
+      config: {
+        monthlyLimit: { val: 3000 },
+        used: { val: 4500 },
+        onDemandCap: { val: 2000 },
+        billingPeriodStart: "2026-10-01T00:00:00Z",
+        billingPeriodEnd: "2026-11-01T00:00:00Z",
+      },
+    },
+    "SuperGrok",
+    0,
+  );
+  assert.equal(limits.plan, "SuperGrok");
+  assert.deepEqual(limits.windows, [
+    { scope: "", usedPercent: 37.5, windowSeconds: 604_800, resetsAt: "2026-10-12T00:00:00.000Z", limitReached: false },
+    { scope: "", usedPercent: 100, windowSeconds: 2_678_400, resetsAt: "2026-11-01T00:00:00.000Z", limitReached: true },
+  ]);
+  assert.deepEqual(limits.extraUsage, { usedCents: 1500, limitCents: 2000, percent: 75 });
+  assert.deepEqual(xaiLimits(null, null, "", 0).windows, []);
+});
+
+test("subscription limits for SuperGrok call the billing endpoints with the Grok CLI headers", async () => {
+  const { subscriptionLimits } = await import("@/lib/gateway/subscription-limits");
+  await seedLogin("p10", Date.now() + 3_600_000);
+  respondWith((url) =>
+    url.endsWith("/v1/settings")
+      ? Response.json({ subscription_tier_display: "SuperGrok Heavy" })
+      : url.includes("format=credits")
+        ? Response.json({ config: { currentPeriod: { start: "2026-10-05T00:00:00Z", end: "2026-10-12T00:00:00Z" }, creditUsagePercent: 10 } })
+        : new Response("", { status: 404 }),
+  );
+  const limits = await subscriptionLimits({ id: "p10", kind: "grok_build", apiKey: "" });
+  assert.equal(limits?.plan, "SuperGrok Heavy");
+  assert.equal(limits?.windows.length, 1);
+  assert.equal(calls.length, 3);
+  assert.equal(calls[0]!.headers["x-xai-token-auth"], "xai-grok-cli");
+  assert.equal(calls[0]!.headers.Authorization, "Bearer old-access");
+  await seedLogin("p11", Date.now() + 3_600_000);
+  respondWith(() => new Response("", { status: 401 }));
+  await assert.rejects(subscriptionLimits({ id: "p11", kind: "grok_build", apiKey: "" }), { message: "UPSTREAM_AUTH" });
 });

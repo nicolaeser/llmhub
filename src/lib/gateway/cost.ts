@@ -1,3 +1,4 @@
+import { speaksAnthropic } from "@/lib/gateway/catalog";
 import type {
   BillingContext,
   CacheTokens,
@@ -31,7 +32,7 @@ function cacheReadRate(model: string): number {
 }
 
 function tierRate(dep: Deployment, usage: Partial<Usage>): number {
-  if (dep.kind === "anthropic") {
+  if (speaksAnthropic(dep.kind)) {
     return (
       (usage.speed === "fast" ? ANTHROPIC_FAST_RATE : 1) *
       (usage.inference_geo === "us" ? US_INFERENCE_RATE : 1)

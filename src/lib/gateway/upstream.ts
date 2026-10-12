@@ -3,6 +3,8 @@ import { env } from "@/lib/env";
 import { GateError } from "@/lib/gateway/errors";
 import { anthropicToChat, chatToAnthropic } from "@/lib/gateway/anthropic";
 import { inPool, outsidePool } from "@/lib/gateway/route-pool";
+import { speaksAnthropic } from "@/lib/gateway/catalog";
+import { withClaudeBetas, withClaudeIdentity } from "@/lib/gateway/claude";
 import { chatToCodex, codexCompletion } from "@/lib/gateway/codex";
 import { deploymentAuth } from "@/lib/gateway/credentials";
 import { acquireGroup, defaultBase, loadGroup, markFailure, markSuccess, openaiRoot } from "@/lib/gateway/runtime";
@@ -35,13 +37,14 @@ export function upstreamHeaders(
       }
     });
   }
+  const merged = dep.kind === "claude" ? withClaudeBetas(headers) : headers;
   for (const [key, value] of Object.entries(auth.headers)) {
-    for (const name of Object.keys(headers)) {
-      if (name.toLowerCase() === key.toLowerCase()) delete headers[name];
+    for (const name of Object.keys(merged)) {
+      if (name.toLowerCase() === key.toLowerCase()) delete merged[name];
     }
-    headers[key] = value;
+    merged[key] = value;
   }
-  return headers;
+  return merged;
 }
 
 export function mergeUpstreamHeaders(
@@ -90,7 +93,7 @@ export function joinPath(dep: ResolvedDeployment, rel: string): string {
   const path = rel.startsWith("/") ? rel : `/${rel}`;
   if (dep.kind === "codex") return `${defaultBase(dep)}${nativeChatPath(path) ? "/responses" : path}`;
   const root = openaiRoot(defaultBase(dep));
-  if (dep.kind === "anthropic") {
+  if (speaksAnthropic(dep.kind)) {
     if (path === "/chat/completions" || path === "/v1/chat/completions") {
       return `${root.replace(/\/v1$/, "")}/v1/messages`;
     }
@@ -126,16 +129,17 @@ export function prepareBody(
   if ((dep.kind === "xai" || dep.kind === "grok_build") && payload.reasoning_effort !== undefined) {
     payload.reasoning_effort = xaiReasoningEffort(String(payload.model ?? ""), payload.reasoning_effort);
   }
-  if (dep.kind !== "anthropic" && Array.isArray(payload.messages)) {
+  if (!speaksAnthropic(dep.kind) && Array.isArray(payload.messages)) {
     payload.messages = withoutThinkingBlocks(payload.messages);
   }
-  if (dep.kind === "anthropic" && nativeChatPath(path)) {
-    const converted = chatToAnthropic(payload);
-    if (typeof payload.speed === "string") converted.speed = payload.speed;
-    if (typeof payload.service_tier === "string") {
-      converted.service_tier = payload.service_tier;
+  if (speaksAnthropic(dep.kind)) {
+    let native = payload;
+    if (nativeChatPath(path)) {
+      native = chatToAnthropic(payload);
+      if (typeof payload.speed === "string") native.speed = payload.speed;
+      if (typeof payload.service_tier === "string") native.service_tier = payload.service_tier;
     }
-    return converted;
+    return dep.kind === "claude" ? withClaudeIdentity(native) : native;
   }
   if (dep.kind === "codex" && nativeChatPath(path)) return chatToCodex(payload);
   return payload;
@@ -148,7 +152,7 @@ function decodeBody(
   raw: Uint8Array,
   model: string,
 ): unknown {
-  if (dep.kind === "anthropic" && nativeChatPath(path)) {
+  if (speaksAnthropic(dep.kind) && nativeChatPath(path)) {
     const rec = asRecord(json);
     if (rec && rec.type === "message") return anthropicToChat(rec, model);
   }
@@ -284,8 +288,15 @@ export function upstreamErrorMessage(status: number, json: unknown): string {
   );
 }
 
-export function upstreamRetryAt(status: number, json: unknown, now = Date.now()): number | null {
+export function upstreamRetryAt(
+  status: number,
+  json: unknown,
+  now = Date.now(),
+  headers?: Headers,
+): number | null {
   if (status !== 429) return null;
+  const unifiedReset = Number(headers?.get("anthropic-ratelimit-unified-reset"));
+  if (Number.isFinite(unifiedReset) && unifiedReset > 0) return unifiedReset * 1000;
   const error = asRecord(asRecord(json)?.error);
   const resetsAt = Number(error?.resets_at);
   if (Number.isFinite(resetsAt) && resetsAt > 0) return resetsAt * 1000;
@@ -293,13 +304,13 @@ export function upstreamRetryAt(status: number, json: unknown, now = Date.now())
   return Number.isFinite(resetsIn) && resetsIn > 0 ? now + resetsIn * 1000 : null;
 }
 
-export function upstreamError(status: number, json: unknown): GateError {
+export function upstreamError(status: number, json: unknown, headers?: Headers): GateError {
   const error = asRecord(asRecord(json)?.error);
   const passCode = status !== 401 && status !== 403 && typeof error?.code === "string" && error.code;
   return new GateError(status || 502, "upstream_error", upstreamErrorMessage(status, json), {
     param: typeof error?.param === "string" ? error.param : null,
     upstreamCode: passCode || undefined,
-    retryAt: upstreamRetryAt(status, json),
+    retryAt: upstreamRetryAt(status, json, Date.now(), headers),
   });
 }
 
@@ -404,7 +415,7 @@ export async function forwardToModel(
               }
             })()
           : proxied.json;
-        last = upstreamError(proxied.status, json);
+        last = upstreamError(proxied.status, json, proxied.headers);
         if (!retryableStatus(proxied.status)) throw last;
         markFailure(dep, last.retryAt);
       } catch (err) {

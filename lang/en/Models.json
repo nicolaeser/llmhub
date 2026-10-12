@@ -65,9 +65,13 @@
     "least_inflight": "Least in-flight",
     "cost_lowest": "Lowest cost",
     "fast": "Fast (lowest latency)",
-    "priority": "Priority"
+    "priority": "Priority",
+    "round_robin": "Round robin",
+    "quota_balanced": "Most headroom (subscriptions)",
+    "quota_expiring": "Soonest reset (subscriptions)"
   },
-  "strategyLabel": "{strategy, select, weighted_random {Weighted random} least_inflight {Least in-flight} cost_lowest {Lowest cost} fast {Fast (lowest latency)} priority {Priority} auto {Auto (cost)} other {{strategy}}}",
+  "strategyLabel": "{strategy, select, weighted_random {Weighted random} least_inflight {Least in-flight} cost_lowest {Lowest cost} fast {Fast (lowest latency)} priority {Priority} round_robin {Round robin} quota_balanced {Most headroom} quota_expiring {Soonest reset} auto {Auto (cost)} other {{strategy}}}",
+  "strategyHint": "{strategy, select, weighted_random {Random pick, biased by endpoint weight.} least_inflight {Sends each request to the endpoint with the fewest running requests.} cost_lowest {Always the cheapest endpoint.} fast {The endpoint with the lowest measured latency.} priority {Always the endpoint with the highest weight. Fills one account first and moves on when it is limited or cooling down.} round_robin {Rotates through the endpoints in turn, so subscription accounts wear evenly.} quota_balanced {Subscription accounts: picks the account with the most room left on its tightest limit (5-hour, weekly, or model limit).} quota_expiring {Subscription accounts: picks the account whose tightest limit resets soonest, so quota that is about to renew gets used first.} other {}}",
   "removeConfirm": "Remove model alias {alias}?",
   "toasts": {
     "saved": "{mode, select, edit {Model updated} add {Model added} other {Model added}}",

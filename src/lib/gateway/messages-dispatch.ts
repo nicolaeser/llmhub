@@ -12,6 +12,7 @@ import {
   UPSTREAM_TIMEOUT_MS,
   withDeployment,
 } from "@/lib/gateway/chat";
+import { speaksAnthropic } from "@/lib/gateway/catalog";
 import { asRecord } from "@/lib/gateway/core";
 import { costFilter } from "@/lib/gateway/cost-cap";
 import { deploymentAuth } from "@/lib/gateway/credentials";
@@ -91,7 +92,7 @@ export async function dispatchMessages(input: MessagesInput): Promise<JsonMap> {
     input.aliases,
     input.principal.routeLimits,
     async (dep, group) => {
-      if (dep.kind !== "anthropic") {
+      if (!speaksAnthropic(dep.kind)) {
         return { native: false, json: asRecord(await chatOnce(dep, group, fallback(), input.model)) ?? {} };
       }
       const proxied = await proxyJson({
@@ -103,7 +104,7 @@ export async function dispatchMessages(input: MessagesInput): Promise<JsonMap> {
         groupStrategy: group.strategy,
         headers: input.headers,
       });
-      if (proxied.status >= 400) throw upstreamError(proxied.status, proxied.json);
+      if (proxied.status >= 400) throw upstreamError(proxied.status, proxied.json, proxied.headers);
       return { native: true, json: asRecord(proxied.json) ?? {} };
     },
     {
@@ -153,7 +154,7 @@ export async function streamMessages(input: MessagesInput & { req: Request }): P
     input.aliases,
     input.principal.routeLimits,
     async (dep, group) => {
-      if (dep.kind !== "anthropic") {
+      if (!speaksAnthropic(dep.kind)) {
         return {
           native: false,
           res: await openChatStream(dep, group, { req: input.req, model: input.model, body: fallback() }),

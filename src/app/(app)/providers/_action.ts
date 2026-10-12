@@ -5,7 +5,7 @@ import { requirePermission } from "@/lib/auth/guards";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { actionFail, runAction } from "@/lib/http/action-result";
 import { writeAudit } from "@/lib/gateway/audit";
-import { isSignInKind, PROVIDER_CATALOG } from "@/lib/gateway/catalog";
+import { isSignInKind, PROVIDER_CATALOG, reportsLimits, signInMethod } from "@/lib/gateway/catalog";
 import { seal } from "@/lib/crypto";
 import { KNOWN_KINDS } from "@/lib/gateway/core";
 import { addRoute, catalogTargets, markRouted } from "@/lib/gateway/catalog-sync";
@@ -15,15 +15,18 @@ import { refreshProviderModels } from "@/lib/gateway/discovery";
 import { discoveredOf } from "@/lib/gateway/provider-prices";
 import { subscriptionLimits } from "@/lib/gateway/subscription-limits";
 import {
+  completeAuthorization,
   openCredential,
   openTicket,
   pollDeviceCode,
+  requestAuthorizationCode,
   requestDeviceCode,
   sealCredential,
   sealTicket,
 } from "@/lib/gateway/sign-in";
 import { providerPolicySchema } from "@/schemas/providers";
 import type {
+  AccountLimits,
   ImportCandidate,
   ProviderPolicyInput,
   ProviderRecord,
@@ -57,6 +60,7 @@ function publicProvider(row: ProviderRecord) {
     kind: row.kind,
     baseUrl: row.baseUrl,
     hasApiKey: Boolean(row.apiKey),
+    enabled: row.enabled,
     signIn: signInOf(row),
     discovered: discoveredOf(row.discovered),
     policy: policyOf(row),
@@ -161,6 +165,7 @@ export async function updateProviderAction(input: {
   name: string;
   baseUrl: string;
   apiKey: string;
+  enabled?: boolean;
   signIn?: string;
   policy?: ProviderPolicyInput;
 }) {
@@ -179,6 +184,7 @@ export async function updateProviderAction(input: {
         name: input.name.trim() || existing.name,
         baseUrl: validBaseUrl(baseUrl || existing.baseUrl),
         ...(apiKey ? { apiKey: seal(apiKey) } : {}),
+        ...(input.enabled === undefined ? {} : { enabled: input.enabled }),
         ...(input.policy ? parsePolicy(input.policy) : {}),
         ...(login ? { login: { upsert: { create: login, update: { ...login, version: { increment: 1 } } } } } : {}),
       },
@@ -190,6 +196,7 @@ export async function updateProviderAction(input: {
       objectType: "provider",
       objectId: row.id,
       after: providerAuditAfter(row, {
+        enabled: row.enabled,
         keyReplaced: Boolean(apiKey),
         ...(credential ? { signInAccount: credential.session.account } : {}),
       }),
@@ -210,12 +217,40 @@ export async function loadProviderLimitsAction(input: { id: string; refresh?: bo
   });
 }
 
+const LIMIT_ERRORS = new Set(["SIGN_IN_EXPIRED", "UPSTREAM_AUTH", "UPSTREAM_FAILED"]);
+
+export async function loadSubscriptionLimitsAction(input: { refresh?: boolean } = {}) {
+  return runAction(async (): Promise<{ items: AccountLimits[] }> => {
+    await requirePermission(PERMISSIONS.PROVIDERS_READ);
+    const rows = await prisma.providerConnection.findMany({
+      where: {
+        kind: { in: PROVIDER_CATALOG.filter((spec) => reportsLimits(spec.kind)).map((spec) => spec.kind) },
+        login: { is: { status: "active" } },
+      },
+      select: { id: true, kind: true, apiKey: true },
+    });
+    const items = await Promise.all(
+      rows.map(async (row): Promise<AccountLimits> => {
+        try {
+          return { id: row.id, limits: await subscriptionLimits(row, { force: input.refresh === true }), error: "" };
+        } catch (error) {
+          const code = error instanceof Error ? error.message : "";
+          return { id: row.id, limits: null, error: LIMIT_ERRORS.has(code) ? code : "UPSTREAM_FAILED" };
+        }
+      }),
+    );
+    return { items };
+  });
+}
+
 export async function startSignInAction(kind: string) {
   return runAction(async (): Promise<SignInStart> => {
     const session = await requirePermission(PERMISSIONS.PROVIDERS_MANAGE);
     if (!isSignInKind(kind)) throw new Error("UNKNOWN_PROVIDER_KIND");
-    const device = await requestDeviceCode(kind);
+    const method = signInMethod(kind);
+    const device = kind === "claude" ? requestAuthorizationCode() : await requestDeviceCode(kind);
     return {
+      method,
       ticket: sealTicket(session.user.id, device),
       verificationUrl: device.verificationUrl,
       userCode: device.userCode,
@@ -242,6 +277,22 @@ export async function pollSignInAction(input: { ticket: string; interval: number
       credential: sealCredential(session.user.id, ticket.grant.kind, polled.session),
       account: polled.session.account,
       plan: polled.session.plan,
+    };
+  });
+}
+
+export async function completeSignInAction(input: { ticket: string; code: string }) {
+  return runAction(async (): Promise<SignInPollResult> => {
+    const session = await requirePermission(PERMISSIONS.PROVIDERS_MANAGE);
+    const ticket = openTicket(input.ticket, session.user.id);
+    if (!ticket) throw new Error("SIGN_IN_EXPIRED");
+    if (ticket.grant.kind !== "claude") throw new Error("SIGN_IN_FAILED");
+    const completed = await completeAuthorization(ticket.grant, input.code);
+    return {
+      state: "done",
+      credential: sealCredential(session.user.id, ticket.grant.kind, completed),
+      account: completed.account,
+      plan: completed.plan,
     };
   });
 }

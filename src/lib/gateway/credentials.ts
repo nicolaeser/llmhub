@@ -2,6 +2,7 @@ import "server-only";
 import prisma from "@/lib/db/prisma";
 import { open, seal } from "@/lib/crypto";
 import { isSignInKind } from "@/lib/gateway/catalog";
+import { claudeIdentityHeaders } from "@/lib/gateway/claude";
 import { asRecord, asString, VERSION } from "@/lib/gateway/core";
 import { GateError } from "@/lib/gateway/errors";
 import { refreshSession } from "@/lib/gateway/sign-in";
@@ -57,6 +58,7 @@ function fresh(session: SignInSession, now = Date.now()): boolean {
 }
 
 export function signInHeaders(kind: SignInKind, tokens: SignInTokens): Record<string, string> {
+  if (kind === "claude") return claudeIdentityHeaders();
   if (kind !== "codex") return {};
   const headers: Record<string, string> = {
     "ChatGPT-Account-ID": tokens.accountId,

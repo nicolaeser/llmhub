@@ -20,6 +20,7 @@
     "playground": "Playground",
     "assistant": "Assistant",
     "providers": "Providers",
+    "subscriptions": "Subscriptions",
     "modelCatalog": "Model catalog",
     "models": "Models",
     "modelTemplates": "Model templates",
