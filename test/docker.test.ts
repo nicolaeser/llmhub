@@ -38,13 +38,53 @@ test("CI bakes the release version into the image as BUILD_ID", async () => {
   const dockerfile = await file("Dockerfile");
   const runner = dockerfile.slice(dockerfile.indexOf("AS runner"));
   assert.match(runner, /ARG BUILD_ID=development\nENV BUILD_ID=\$\{BUILD_ID\}/);
-  for (const workflow of [".github/workflows/main.yml", ".github/workflows/development.yml"]) {
-    assert.match(
-      await file(workflow),
-      /build-args: \|\n {12}BUILD_ID=\$\{\{ steps\.version\.outputs\.version \}\}/,
-      workflow,
-    );
+  const pipeline = await file(".github/workflows/pipeline.yml");
+  assert.match(pipeline, /^ {2}workflow_call:$/m);
+  assert.match(pipeline, /version="\$\{VERSION_PREFIX\}\$\(date -u \+%Y\.%m\.%d\)\.\$\{short_sha\}"/);
+  assert.match(
+    pipeline,
+    /build-args: \|\n {12}BUILD_ID=\$\{\{ steps\.version\.outputs\.version \}\}/,
+  );
+  for (const [workflow, prefix] of [
+    [".github/workflows/main.yml", "v"],
+    [".github/workflows/development.yml", "dev-"],
+  ]) {
+    const source = await file(workflow);
+    assert.equal(source.match(/uses: \.\/\.github\/workflows\/pipeline\.yml/g)?.length, 2, workflow);
+    assert.equal(source.match(new RegExp(`version-prefix: ${prefix}\\n`, "g"))?.length, 2, workflow);
   }
+});
+
+test("only pushes get write permissions in CI", async () => {
+  const pipeline = await file(".github/workflows/pipeline.yml");
+  assert.doesNotMatch(pipeline, /: write/);
+  assert.match(pipeline, /push: \$\{\{ inputs\.publish \}\}/);
+  for (const workflow of [".github/workflows/main.yml", ".github/workflows/development.yml"]) {
+    const source = await file(workflow);
+    const verify = source.slice(source.indexOf("  verify:"), source.indexOf("  release:"));
+    const release = source.slice(source.indexOf("  release:"));
+    assert.match(source, /^permissions:\n {2}contents: read$/m, workflow);
+    assert.match(verify, /if: github\.event_name == 'pull_request'/, workflow);
+    assert.doesNotMatch(verify, /: write|publish: true/, workflow);
+    assert.match(release, /if: github\.event_name == 'push'/, workflow);
+    assert.match(release, /packages: write/, workflow);
+    assert.match(release, /publish: true/, workflow);
+  }
+});
+
+test("CI migrates a real Postgres, checks schema drift, and runs integration tests", async () => {
+  const pipeline = await file(".github/workflows/pipeline.yml");
+  const quality = pipeline.slice(pipeline.indexOf("\n  quality:\n"), pipeline.indexOf("\n  image:\n"));
+  assert.match(quality, /image: postgres:18-alpine/);
+  const steps = [
+    "npx prisma migrate deploy",
+    "npx prisma migrate diff --from-config-datasource --to-schema prisma/schema --exit-code",
+    "npm test",
+    "npm run test:integration",
+    "npx tsc --noEmit",
+    "npm run lint",
+  ].map((step) => quality.indexOf(step));
+  assert.ok(steps.every((index, i) => index > 0 && (i === 0 || index > steps[i - 1])), String(steps));
 });
 
 test("the container applies migrations before the web server starts", async () => {
