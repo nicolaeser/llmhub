@@ -6,6 +6,7 @@
 /redis-data/
 
 .env*
+!.env.example
 *.tsbuildinfo
 next-env.d.ts
 npm-debug.log*

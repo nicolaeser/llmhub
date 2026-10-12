@@ -2,6 +2,10 @@
   "name": "llmhub",
   "version": "0.1.0",
   "private": true,
+  "license": "UNLICENSED",
+  "engines": {
+    "node": ">=24"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
