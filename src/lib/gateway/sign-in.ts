@@ -1,6 +1,20 @@
 import "server-only";
 import { createHash, randomBytes } from "node:crypto";
 import { open, seal } from "@/lib/crypto";
+import {
+  ANTIGRAVITY_AUTHORIZE_URL,
+  ANTIGRAVITY_BASE_URL,
+  ANTIGRAVITY_CLIENT_ID,
+  ANTIGRAVITY_REDIRECT_URI,
+  ANTIGRAVITY_SCOPE,
+  ANTIGRAVITY_TOKEN_URL,
+  ANTIGRAVITY_USERINFO_URL,
+  antigravityHeaders,
+  antigravityPlan,
+  antigravityProject,
+  antigravityTier,
+} from "@/lib/gateway/antigravity";
+import { antigravityClientSecret } from "@/lib/gateway/antigravity-config";
 import { CLAUDE_OAUTH_BETAS, claudeIdentityHeaders } from "@/lib/gateway/claude";
 import { asNumber, asRecord, asString } from "@/lib/gateway/core";
 import { signInCredentialSchema, signInTicketSchema } from "@/schemas/providers";
@@ -32,6 +46,9 @@ const CLAUDE_REDIRECT_URI = "http://localhost:54545/callback";
 const CLAUDE_SCOPE = "user:profile user:inference user:sessions:claude_code user:mcp_servers user:file_upload";
 const CLAUDE_AUTHORIZATION_TTL_S = 10 * 60;
 const CLAUDE_OAUTH_USER_AGENT = "axios/1.15.2";
+const ANTIGRAVITY_AUTHORIZATION_TTL_S = 10 * 60;
+const ONBOARD_ATTEMPTS = 5;
+const ONBOARD_POLL_MS = 2_000;
 const DEVICE_GRANT_TYPE = "urn:ietf:params:oauth:grant-type:device_code";
 const AUTH_TIMEOUT_MS = 15_000;
 const DEFAULT_INTERVAL_S = 5;
@@ -200,6 +217,38 @@ function pkceChallenge(verifier: string): string {
   return createHash("sha256").update(verifier).digest("base64url");
 }
 
+export async function startAuthorization(kind: SignInKind): Promise<DeviceAuthorization> {
+  if (kind === "antigravity") {
+    if (!(await antigravityClientSecret())) throw new Error("ANTIGRAVITY_NOT_CONFIGURED");
+    return requestAntigravityAuthorization();
+  }
+  if (kind === "claude") return requestAuthorizationCode();
+  return requestDeviceCode(kind);
+}
+
+export function requestAntigravityAuthorization(): DeviceAuthorization {
+  const verifier = randomBytes(32).toString("base64url");
+  const state = randomBytes(32).toString("base64url");
+  const query = new URLSearchParams({
+    client_id: ANTIGRAVITY_CLIENT_ID,
+    response_type: "code",
+    redirect_uri: ANTIGRAVITY_REDIRECT_URI,
+    scope: ANTIGRAVITY_SCOPE,
+    code_challenge: pkceChallenge(verifier),
+    code_challenge_method: "S256",
+    state,
+    access_type: "offline",
+    prompt: "consent",
+  });
+  return {
+    grant: { kind: "antigravity", verifier, state },
+    verificationUrl: `${ANTIGRAVITY_AUTHORIZE_URL}?${query.toString()}`,
+    userCode: "",
+    interval: DEFAULT_INTERVAL_S,
+    expiresIn: ANTIGRAVITY_AUTHORIZATION_TTL_S,
+  };
+}
+
 export function requestAuthorizationCode(): DeviceAuthorization {
   const verifier = randomBytes(32).toString("base64url");
   const state = randomBytes(32).toString("base64url");
@@ -236,12 +285,98 @@ export function parseAuthorizationInput(input: string): { code: string; state: s
   return { code: code.trim(), state: state.trim() };
 }
 
+export function antigravitySession(
+  payload: JsonMap,
+  now = Date.now(),
+  previous?: SignInSession,
+  details: { account?: string; plan?: string; project?: string } = {},
+): SignInSession {
+  const access = asString(payload.access_token);
+  if (!access) throw new Error("SIGN_IN_FAILED");
+  return {
+    tokens: {
+      access,
+      refresh: asString(payload.refresh_token) || previous?.tokens.refresh || "",
+      accountId: details.project || previous?.tokens.accountId || "",
+      residency: "",
+    },
+    expiresAt: tokenExpiry(access, payload.expires_in, now),
+    account: details.account || previous?.account || "",
+    plan: details.plan || previous?.plan || "",
+  };
+}
+
+async function googleEmail(access: string): Promise<string> {
+  try {
+    const res = await fetch(ANTIGRAVITY_USERINFO_URL, {
+      headers: { Authorization: `Bearer ${access}`, Accept: "application/json" },
+      signal: AbortSignal.timeout(AUTH_TIMEOUT_MS),
+      redirect: "error",
+    });
+    if (!res.ok) return "";
+    return asString(asRecord(await res.json().catch(() => null))?.email);
+  } catch {
+    return "";
+  }
+}
+
+async function codeAssist(access: string, method: string, body: JsonMap): Promise<{ status: number; json: JsonMap }> {
+  return postAuth(`${ANTIGRAVITY_BASE_URL}/v1internal:${method}`, body, {
+    ...antigravityHeaders(),
+    Authorization: `Bearer ${access}`,
+  });
+}
+
+export async function antigravityAccount(access: string): Promise<{ project: string; plan: string }> {
+  const metadata = { ideType: "ANTIGRAVITY" };
+  const loaded = await codeAssist(access, "loadCodeAssist", { metadata });
+  if (loaded.status >= 400) throw new Error("SIGN_IN_FAILED");
+  const tier = antigravityTier(loaded.json);
+  let project = antigravityProject(loaded.json);
+  for (let attempt = 0; !project && attempt < ONBOARD_ATTEMPTS; attempt++) {
+    if (attempt > 0) await new Promise((resolve) => setTimeout(resolve, ONBOARD_POLL_MS));
+    const onboarded = await codeAssist(access, "onboardUser", { tierId: tier.onboardId, metadata });
+    if (onboarded.status >= 400) throw new Error("SIGN_IN_FAILED");
+    if (onboarded.json.done === true) {
+      project = antigravityProject(asRecord(onboarded.json.response));
+      break;
+    }
+  }
+  if (!project) throw new Error("ANTIGRAVITY_NO_PROJECT");
+  return { project, plan: antigravityPlan(tier.id) };
+}
+
+async function completeAntigravity(
+  grant: Extract<DeviceGrant, { kind: "antigravity" }>,
+  code: string,
+): Promise<SignInSession> {
+  const secret = await antigravityClientSecret();
+  if (!secret) throw new Error("ANTIGRAVITY_NOT_CONFIGURED");
+  const exchanged = await postAuth(
+    ANTIGRAVITY_TOKEN_URL,
+    new URLSearchParams({
+      grant_type: "authorization_code",
+      code,
+      redirect_uri: ANTIGRAVITY_REDIRECT_URI,
+      client_id: ANTIGRAVITY_CLIENT_ID,
+      client_secret: secret,
+      code_verifier: grant.verifier,
+    }),
+  );
+  if (exchanged.status >= 400) throw new Error("SIGN_IN_FAILED");
+  const session = antigravitySession(exchanged.json);
+  if (!session.tokens.refresh) throw new Error("SIGN_IN_FAILED");
+  const [account, details] = await Promise.all([googleEmail(session.tokens.access), antigravityAccount(session.tokens.access)]);
+  return antigravitySession(exchanged.json, Date.now(), undefined, { account, plan: details.plan, project: details.project });
+}
+
 export async function completeAuthorization(
-  grant: Extract<DeviceGrant, { kind: "claude" }>,
+  grant: Extract<DeviceGrant, { kind: "claude" | "antigravity" }>,
   input: string,
 ): Promise<SignInSession> {
   const { code, state } = parseAuthorizationInput(input);
   if (!code || (state && state !== grant.state)) throw new Error("SIGN_IN_FAILED");
+  if (grant.kind === "antigravity") return completeAntigravity(grant, code);
   const exchanged = await postAuth(
     CLAUDE_TOKEN_URL,
     {
@@ -260,7 +395,7 @@ export async function completeAuthorization(
   return { ...session, plan: await claudeProfilePlan(session.tokens.access) };
 }
 
-export async function requestDeviceCode(kind: Exclude<SignInKind, "claude">): Promise<DeviceAuthorization> {
+export async function requestDeviceCode(kind: Exclude<SignInKind, "claude" | "antigravity">): Promise<DeviceAuthorization> {
   if (kind === "codex") {
     const { status, json } = await postAuth(`${OPENAI_ISSUER}/api/accounts/deviceauth/usercode`, {
       client_id: OPENAI_CLIENT_ID,
@@ -356,8 +491,18 @@ export function pollDeviceCode(grant: DeviceGrant): Promise<DevicePoll> {
   }
 }
 
-function refreshRequest(kind: SignInKind, current: SignInSession): Promise<{ status: number; json: JsonMap }> {
+async function refreshRequest(kind: SignInKind, current: SignInSession): Promise<{ status: number; json: JsonMap }> {
   switch (kind) {
+    case "antigravity":
+      return postAuth(
+        ANTIGRAVITY_TOKEN_URL,
+        new URLSearchParams({
+          grant_type: "refresh_token",
+          client_id: ANTIGRAVITY_CLIENT_ID,
+          client_secret: await antigravityClientSecret(),
+          refresh_token: current.tokens.refresh,
+        }),
+      );
     case "codex":
       return postAuth(`${OPENAI_ISSUER}/oauth/token`, {
         client_id: OPENAI_CLIENT_ID,
@@ -395,6 +540,8 @@ function refreshedSession(kind: SignInKind, json: JsonMap, current: SignInSessio
       return xaiSession(json, Date.now(), current);
     case "claude":
       return claudeSession(json, Date.now(), current);
+    case "antigravity":
+      return antigravitySession(json, Date.now(), current);
   }
 }
 

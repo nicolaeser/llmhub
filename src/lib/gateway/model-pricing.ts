@@ -5,7 +5,7 @@ import { splitTag } from "@/lib/gateway/model-catalog";
 import { minuteClock, priceAt, priceWindowQuery, priceWindowRates } from "@/lib/gateway/price-schedule";
 import { routePool } from "@/lib/gateway/route-pool";
 import { money } from "@/lib/utils/money";
-import type { CostRates, ModelPricing, PriceSchedule, PublicModel, TokenPricing } from "@/types/gateway";
+import type { CostRates, ModelPricing, PriceSchedule, PublicModel, RoutePool, TokenPricing } from "@/types/gateway";
 
 const pricedGroupSelect = {
   alias: true,
@@ -64,27 +64,34 @@ export async function pricedModels(at: Date, aliases?: string[]): Promise<Public
     orderBy: { alias: "asc" },
     select: pricedGroupSelect,
   });
-  return groups.map((group) => ({
-    alias: group.alias,
-    vendor: group.vendor,
-    displayName: group.displayName,
-    tags: [splitTag(group.alias).tag].filter(Boolean),
-    pools: [...new Set(group.deployments.map(routePool))],
-    pricing: modelPricing(
-      {
-        billing_mode: group.billingMode,
-        schedule: {
-          price: { cost_input_per_1k: money(group.priceInput), cost_output_per_1k: money(group.priceOutput) },
-          time_zone: group.priceTimeZone,
-          windows: group.priceWindows.map(priceWindowRates),
+  return groups.map((group) => {
+    const priced = (pool: RoutePool) =>
+      modelPricing(
+        {
+          billing_mode: group.billingMode,
+          schedule: {
+            price: { cost_input_per_1k: money(group.priceInput), cost_output_per_1k: money(group.priceOutput) },
+            time_zone: group.priceTimeZone,
+            windows: group.priceWindows.map(priceWindowRates),
+          },
+          deployments: group.deployments
+            .filter((dep) => routePool(dep) === pool)
+            .map((dep) => ({
+              kind: dep.kind,
+              cost_input_per_1k: money(dep.costInput),
+              cost_output_per_1k: money(dep.costOutput),
+            })),
         },
-        deployments: group.deployments.map((dep) => ({
-          kind: dep.kind,
-          cost_input_per_1k: money(dep.costInput),
-          cost_output_per_1k: money(dep.costOutput),
-        })),
-      },
-      at,
-    ),
-  }));
+        at,
+      );
+    return {
+      alias: group.alias,
+      vendor: group.vendor,
+      displayName: group.displayName,
+      tags: [splitTag(group.alias).tag].filter(Boolean),
+      pools: [...new Set(group.deployments.map(routePool))],
+      pricing: priced("api"),
+      subscriptionPricing: priced("subscription"),
+    };
+  });
 }

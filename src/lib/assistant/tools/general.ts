@@ -17,13 +17,14 @@ import {
   openPageToolInput,
 } from "@/schemas/assistant";
 import { defineTool } from "@/lib/assistant/tools/define";
+import { API_PREFIX } from "@/lib/gateway/api-paths";
 import type { AssistantContext, SetupNext } from "@/types/assistant";
 
 const ENDPOINT_PATHS = {
-  chat: "/v1/chat/completions",
-  responses: "/v1/responses",
-  messages: "/v1/messages",
-  embeddings: "/v1/embeddings",
+  chat: `${API_PREFIX}/v1/chat/completions`,
+  responses: `${API_PREFIX}/v1/responses`,
+  messages: `${API_PREFIX}/v1/messages`,
+  embeddings: `${API_PREFIX}/v1/embeddings`,
 } as const;
 
 export function nextSetupStep(counts: {
@@ -83,7 +84,7 @@ export function codeExample(input: {
         "import os",
         "from anthropic import Anthropic",
         "",
-        `client = Anthropic(base_url="${origin}", api_key=os.environ["LLMHUB_API_KEY"])`,
+        `client = Anthropic(base_url="${origin}${API_PREFIX}", api_key=os.environ["LLMHUB_API_KEY"])`,
         `message = client.messages.create(model="${model}", max_tokens=256, messages=[{"role": "user", "content": "Hello"}])`,
         "print(message.content[0].text)",
       ].join("\n");
@@ -97,7 +98,7 @@ export function codeExample(input: {
       "import os",
       "from openai import OpenAI",
       "",
-      `client = OpenAI(base_url="${origin}/v1", api_key=os.environ["LLMHUB_API_KEY"])`,
+      `client = OpenAI(base_url="${origin}${API_PREFIX}/v1", api_key=os.environ["LLMHUB_API_KEY"])`,
       `result = ${call}`,
       "print(result)",
     ].join("\n");
@@ -106,7 +107,7 @@ export function codeExample(input: {
     return [
       'import Anthropic from "@anthropic-ai/sdk";',
       "",
-      `const client = new Anthropic({ baseURL: "${origin}", apiKey: process.env.LLMHUB_API_KEY });`,
+      `const client = new Anthropic({ baseURL: "${origin}${API_PREFIX}", apiKey: process.env.LLMHUB_API_KEY });`,
       `const message = await client.messages.create(${JSON.stringify(body)});`,
       "console.log(message.content);",
     ].join("\n");
@@ -119,7 +120,7 @@ export function codeExample(input: {
   return [
     'import OpenAI from "openai";',
     "",
-    `const client = new OpenAI({ baseURL: "${origin}/v1", apiKey: process.env.LLMHUB_API_KEY });`,
+    `const client = new OpenAI({ baseURL: "${origin}${API_PREFIX}/v1", apiKey: process.env.LLMHUB_API_KEY });`,
     `const result = await client.${method}(${JSON.stringify(body)});`,
     "console.log(result);",
   ].join("\n");
@@ -201,13 +202,13 @@ export const generalTools = {
   }),
   list_api_endpoints: defineTool({
     description:
-      "Gateway HTTP endpoints with method and summary: /v1 is the OpenAI and Anthropic compatible API for virtual keys, /subscription/v1 is the same API served only by signed-in subscription providers, /api is the management API for management keys.",
+      "Gateway HTTP endpoints with method and summary: /api/v1 is the OpenAI and Anthropic compatible API for virtual keys, /api/subscription/v1 is the same API served only by signed-in subscription providers, /api/mgmt is the management API for management keys.",
     input: apiEndpointsToolInput,
     run: async ({ scope }) => ({
       result: {
         origin: appOrigin(),
         endpoints: OPENAPI_PATHS.filter(
-          (row) => scope === "all" || row.path.startsWith(`/${scope}/`),
+          (row) => scope === "all" || row.path.startsWith(`${API_PREFIX}/${scope}/`),
         ).map((row) => ({ method: row.method, path: row.path, summary: row.summary })),
       },
     }),

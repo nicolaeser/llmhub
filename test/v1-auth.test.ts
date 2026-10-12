@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 const root = fileURLToPath(new URL("..", import.meta.url));
 const chatCompletions = path.join(
   root,
-  "src/app/v1/chat/completions/route.ts",
+  "src/app/api/v1/chat/completions/route.ts",
 );
 
 test(

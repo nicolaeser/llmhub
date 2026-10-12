@@ -1,6 +1,6 @@
 # LLM Hub
 
-Self-hosted OpenAI-compatible LLM gateway (`/v1`) with an admin console.
+Self-hosted OpenAI-compatible LLM gateway (`/api/v1`) with an admin console.
 
 ## Run
 

@@ -19,7 +19,7 @@ import type { Principal, VirtualKeyView } from "@/types/gateway";
 import type { AccessWindow, KeyEndpoint } from "@/types/keys";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
-const v1 = path.join(root, "src/app/v1");
+const v1 = path.join(root, "src/app/api/v1");
 
 function routePaths(dir: string): string[] {
   return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {

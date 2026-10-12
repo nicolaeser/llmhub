@@ -40,11 +40,11 @@ const ROUTES = [
 ] as const;
 
 function v1Path(rel: string) {
-  return path.join(root, "src/app/v1", rel, "route.ts");
+  return path.join(root, "src/app/api/v1", rel, "route.ts");
 }
 
 function apiPath(rel: string) {
-  return path.join(root, "src/app/api", rel, "route.ts");
+  return path.join(root, "src/app/api/mgmt", rel, "route.ts");
 }
 
 function exportsPostOrGet(source: string) {
@@ -82,18 +82,18 @@ for (const rel of ROUTES) {
   const file = v1Path(rel);
   const misplaced = apiPath(rel);
   test(
-    `${rel} lives under src/app/v1, exports POST and/or GET, uses NextResponse.json`,
+    `${rel} lives under src/app/api/v1, exports POST and/or GET, uses NextResponse.json`,
     { skip: !existsSync(file) && !existsSync(misplaced) },
     async () => {
       assert.equal(
         existsSync(misplaced),
         false,
-        `${rel} must live under src/app/v1 not src/app/api`,
+        `${rel} must live under src/app/api/v1 not src/app/api/mgmt`,
       );
       assert.equal(existsSync(file), true);
       const source = await readFile(file, "utf8");
-      assert.equal(file.includes(`${path.sep}app${path.sep}v1${path.sep}`), true);
-      assert.equal(file.includes(`${path.sep}app${path.sep}api${path.sep}`), false);
+      assert.equal(file.includes(`${path.sep}app${path.sep}api${path.sep}v1${path.sep}`), true);
+      assert.equal(file.includes(`${path.sep}app${path.sep}api${path.sep}mgmt${path.sep}`), false);
       assert.equal(exportsPostOrGet(source), true, "must export POST and/or GET");
       const combined = await contractSource(source);
       assert.match(combined, /NextResponse\.json/);

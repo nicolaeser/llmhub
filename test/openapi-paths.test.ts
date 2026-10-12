@@ -12,7 +12,7 @@ import {
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 const app = path.join(root, "src/app");
-const SURFACES = ["v1", "subscription", "api"] as const;
+const SURFACES = ["api/v1", "api/subscription", "api/mgmt"] as const;
 const METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"] as const;
 
 function walk(dir: string): string[] {
@@ -30,7 +30,7 @@ function fileToPath(file: string): string {
   return `/${rel.replace(/\[([^\]]+)\]/g, "{$1}")}`;
 }
 
-test("OPENAPI_PATHS covers every src/app/v1, src/app/subscription, and src/app/api route method", () => {
+test("OPENAPI_PATHS covers every src/app/api/v1, src/app/api/subscription, and src/app/api/mgmt route method", () => {
   const expected = new Set<string>();
   for (const file of SURFACES.flatMap((surface) => walk(path.join(app, surface)))) {
     const source = readFileSync(file, "utf8");
@@ -45,23 +45,29 @@ test("OPENAPI_PATHS covers every src/app/v1, src/app/subscription, and src/app/a
 });
 
 test("resolveTryTarget fills path params and rejects unknown routes", () => {
-  assert.deepEqual(openApiPathParams("/v1/models/{id}"), ["id"]);
-  assert.deepEqual(resolveTryTarget("GET", "/v1/models/{id}", { id: "auto" }), {
+  assert.deepEqual(openApiPathParams("/api/v1/models/{id}"), ["id"]);
+  assert.deepEqual(resolveTryTarget("GET", "/api/v1/models/{id}", { id: "auto" }), {
     ok: true,
     method: "GET",
-    path: "/v1/models/auto",
+    path: "/api/v1/models/auto",
   });
-  assert.deepEqual(resolveTryTarget("GET", "/v1/models/{id}", {}), {
+  assert.deepEqual(resolveTryTarget("GET", "/api/v1/models/{id}", {}), {
     ok: false,
     error: "MISSING_PARAM",
   });
-  assert.deepEqual(resolveTryTarget("POST", "/v1/not-a-route", {}), {
+  assert.deepEqual(resolveTryTarget("POST", "/api/v1/not-a-route", {}), {
     ok: false,
     error: "UNKNOWN_ENDPOINT",
   });
-  assert.equal(exampleRequestBody("GET", "/v1/models", "gpt"), null);
+  assert.equal(exampleRequestBody("GET", "/api/v1/models", "gpt"), null);
   assert.match(
-    exampleRequestBody("POST", "/v1/chat/completions", "gpt") ?? "",
+    exampleRequestBody("POST", "/api/v1/chat/completions", "gpt") ?? "",
     /"model": "gpt"/,
   );
+  assert.match(
+    exampleRequestBody("POST", "/api/subscription/v1/chat/completions", "gpt") ?? "",
+    /"model": "gpt"/,
+  );
+  assert.match(exampleRequestBody("POST", "/api/mgmt/keys", "gpt") ?? "", /"alias": "ci-pipeline"/);
+  assert.equal(exampleRequestBody("POST", "/api/mgmt/unknown", "gpt"), null);
 });

@@ -1,6 +1,6 @@
 {
   "title": "Abos",
-  "subtitle": "Anfragen über ChatGPT-, Claude- und SuperGrok-Abos bedienen. Jedes angemeldete Konto zeigt seine eigenen Nutzungslimits und wann sie zurückgesetzt werden.",
+  "subtitle": "Anfragen über ChatGPT-, Claude-, Google-Antigravity- und SuperGrok-Abos bedienen. Jedes angemeldete Konto zeigt seine eigenen Nutzungslimits und wann sie zurückgesetzt werden.",
   "addAccount": "Konto hinzufügen",
   "noAccounts": "Noch kein Konto angemeldet.",
   "refreshAll": "Alle Limits aktualisieren",
@@ -34,9 +34,14 @@
     "notStartedShort": "Nicht gestartet"
   },
   "routing": {
-    "title": "Intelligentes Routing über Konten",
-    "description": "Wähle die Wechselmethode pro Modell-Alias. Egal welche, ein Konto am Nutzungslimit wird übersprungen, solange ein anderes Konto noch Spielraum hat.",
-    "openModels": "Methode auf der Modelle-Seite wählen"
+    "title": "Konto-Routing",
+    "description": "Lege pro Anbieter fest, wie Anfragen auf seine angemeldeten Konten verteilt werden. Ein Konto, das sein Nutzungslimit erreicht hat, wird immer übersprungen, solange ein anderes noch Luft hat.",
+    "accounts": "{count, plural, =0 {Keine Konten} one {# Konto} other {# Konten}}",
+    "method": "{strategy, select, inherit {Pro Modell-Alias} smart {Intelligent} quota_balanced {Meiste Reserve} quota_expiring {Nächster Reset} round_robin {Reihum} priority {Priorität} least_inflight {Wenigste laufende Anfragen} other {{strategy}}}",
+    "hint": "{strategy, select, inherit {Jeder Modell-Alias entscheidet selbst, mit der Methode von der Modelle-Seite.} smart {Verbraucht Kontingent, das bald zurückgesetzt wird, und meidet Konten nahe am Limit. Wägt Reserve, Reset-Zeit und laufende Anfragen ab.} quota_balanced {Wählt das Konto mit der meisten Reserve beim engsten Limit.} quota_expiring {Wählt das Konto, dessen engstes Limit zuerst zurückgesetzt wird, damit bald erneuertes Kontingent genutzt wird.} round_robin {Wechselt reihum zwischen den Konten, damit sie gleichmäßig genutzt werden.} priority {Nutzt zuerst das Konto mit dem höchsten Gewicht und wechselt, sobald es limitiert oder in Abkühlung ist.} least_inflight {Schickt jede Anfrage an das Konto mit den wenigsten laufenden Anfragen.} other {}}",
+    "label": "Methode für {provider}",
+    "single": "Es ist nur ein Konto angemeldet, die Methode macht daher noch keinen Unterschied.",
+    "saved": "Routing für {provider} gespeichert"
   },
   "pausedHint": "Dieses Konto ist pausiert und erhält keine Anfragen. Die Limits bleiben sichtbar.",
   "overview": {
@@ -51,5 +56,30 @@
       "state": "Status",
       "active": "Aktiv"
     }
+  },
+  "access": {
+    "summary": "{restricted, select, true {{count, plural, =0 {Kein Key darf es nutzen} one {Auf # Zuordnung beschränkt} other {Auf # Zuordnungen beschränkt}}} other {Für jeden Key offen}}",
+    "manage": "Zugriff verwalten",
+    "title": "Wer {name} nutzen darf",
+    "description": "Anfragen über /api/subscription erreichen dieses Konto standardmäßig. Beschränke es auf Unternehmen, Abteilungen, Projekte, Personen oder einzelne API-Keys.",
+    "mode": "Zugriff",
+    "modes": "{mode, select, open {Jeder Key} limited {Nur Ausgewählte} other {{mode}}}",
+    "nothing": "Nichts ist ausgewählt, daher kann kein Key dieses Konto nutzen.",
+    "scope": "{scope, select, org {Unternehmen} team {Abteilungen} project {Projekte} member {Personen} key {API-Keys} other {{scope}}}",
+    "search": "Suchen",
+    "empty": "Nichts gefunden",
+    "save": "Zugriff speichern",
+    "saved": "Zugriff für {name} gespeichert"
+  },
+  "antigravity": {
+    "title": "Google-OAuth-Client",
+    "description": "Die Antigravity-Anmeldung braucht das Secret des öffentlichen Google-OAuth-Clients. Es wird versiegelt gespeichert und nie wieder angezeigt.",
+    "status": "{configured, select, true {Konfiguriert} other {Nicht konfiguriert}}",
+    "label": "OAuth-Client-Secret",
+    "hint": "Füge das Client-Secret des Antigravity-Desktop-OAuth-Clients ein. Ohne es ist die Anmeldung gesperrt.",
+    "save": "Secret speichern",
+    "remove": "Secret entfernen",
+    "saved": "Client-Secret gespeichert",
+    "removed": "Client-Secret entfernt"
   }
 }

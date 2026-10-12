@@ -1,6 +1,6 @@
 {
   "title": "Knowledge bases",
-  "subtitle": "Vector stores for retrieval-augmented generation. API keys search them with file_search and /v1/vector_stores. Every knowledge base belongs to exactly one company and optionally one project, and is never visible to another company or project.",
+  "subtitle": "Vector stores for retrieval-augmented generation. API keys search them with file_search and /api/v1/vector_stores. Every knowledge base belongs to exactly one company and optionally one project, and is never visible to another company or project.",
   "add": "New knowledge base",
   "emptyTitle": "No knowledge bases yet",
   "empty": "Create a knowledge base, upload documents, and let the company's API keys search them with file_search.",

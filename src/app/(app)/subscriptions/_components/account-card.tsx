@@ -1,7 +1,7 @@
 "use client";
 
 import { Button, Card, Chip, Disclosure, Skeleton, Spinner } from "@heroui/react";
-import { RefreshCw } from "lucide-react";
+import { RefreshCw, Users } from "lucide-react";
 import { useFormatter, useNow, useTranslations } from "next-intl";
 import PolicyChips from "@/components/providers/policy-chips";
 import ProviderActions from "@/components/providers/provider-actions";
@@ -32,6 +32,7 @@ export default function AccountCard({
   onRefresh,
   onEdit,
   onImport,
+  onAccess,
   onDeleted,
   onToggled,
 }: {
@@ -42,6 +43,7 @@ export default function AccountCard({
   onRefresh: (id: string) => void;
   onEdit: (row: ProviderView) => void;
   onImport: (row: ProviderView) => void;
+  onAccess: (row: ProviderView) => void;
   onDeleted: (id: string) => void;
   onToggled: (provider: ProviderView) => void;
 }) {
@@ -157,6 +159,15 @@ export default function AccountCard({
             ) : null}
           </div>
         ) : null}
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <Chip size="sm" variant="soft" color={row.restricted ? "warning" : "default"}>
+            {t("access.summary", { restricted: String(row.restricted), count: row.assignments.length })}
+          </Chip>
+          <Button size="sm" variant="tertiary" aria-label={t("access.manage")} onPress={() => onAccess(row)}>
+            <Users size={14} aria-hidden />
+            {t("access.manage")}
+          </Button>
+        </div>
       </Card.Content>
       <Card.Footer className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">

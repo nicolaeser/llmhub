@@ -98,3 +98,40 @@ export function pickQuotaExpiring(
     return (inflight.get(a.id) ?? 0) - (inflight.get(b.id) ?? 0);
   })[0]!;
 }
+
+const SAFE_PRESSURE = 85;
+const MIN_HOURS_TO_RESET = 0.25;
+const MAX_HOURS_TO_RESET = 24 * 14;
+const UNKNOWN_HOURS_TO_RESET = 24;
+const UNKNOWN_PRESSURE = 50;
+const HOUR_MS = 3_600_000;
+
+function expiringValue(
+  item: Deployment,
+  scores: QuotaScores,
+  inflight: Map<string, number>,
+  now: number,
+): { pressure: number; value: number } {
+  const score = scores.get(item.id);
+  const pressure = score?.pressure ?? UNKNOWN_PRESSURE;
+  const reset = score?.reset ?? Infinity;
+  const hours = Number.isFinite(reset)
+    ? Math.min(MAX_HOURS_TO_RESET, Math.max(MIN_HOURS_TO_RESET, (reset - now) / HOUR_MS))
+    : UNKNOWN_HOURS_TO_RESET;
+  const headroom = Math.max(0, 100 - pressure) / 100;
+  return { pressure, value: headroom / hours / (1 + (inflight.get(item.id) ?? 0)) };
+}
+
+export function pickQuotaSmart(
+  items: Deployment[],
+  scores: QuotaScores,
+  inflight: Map<string, number>,
+  now = Date.now(),
+): Deployment {
+  if (!items.length) throw ERR_NO_HEALTHY;
+  const rated = items.map((item) => ({ item, ...expiringValue(item, scores, inflight, now) }));
+  const roomy = rated.filter((entry) => entry.pressure < SAFE_PRESSURE);
+  return [...(roomy.length ? roomy : rated)].sort(
+    (a, b) => b.value - a.value || (inflight.get(a.item.id) ?? 0) - (inflight.get(b.item.id) ?? 0) || b.item.weight - a.item.weight,
+  )[0]!.item;
+}

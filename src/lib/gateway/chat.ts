@@ -6,11 +6,14 @@ import { spendTag } from "@/lib/gateway/gate";
 import { GateError } from "@/lib/gateway/errors";
 import { outputScreen, type OutputScreen } from "@/lib/gateway/guardrails";
 import { requestRoutingOverride, serviceModeHeaders } from "@/lib/gateway/service-mode";
+import { accessOf } from "@/lib/gateway/account-access";
 import { acquireGroup, loadGroup, markFailure, markSuccess } from "@/lib/gateway/runtime";
 import { speaksAnthropic } from "@/lib/gateway/catalog";
+import { AntigravitySseTranslator, withProject } from "@/lib/gateway/antigravity";
 import { CodexSseTranslator } from "@/lib/gateway/codex";
 import { deploymentAuth } from "@/lib/gateway/credentials";
-import { inPool, outsidePool } from "@/lib/gateway/route-pool";
+import { plainModel } from "@/lib/gateway/model-alias";
+import { inPool, outsidePool, routeOf } from "@/lib/gateway/route-pool";
 import { SSE_HEADERS } from "@/lib/gateway/sse";
 import {
   joinPath,
@@ -44,7 +47,7 @@ export const UPSTREAM_TIMEOUT_MS = 300_000;
 
 function failureStatus(err: unknown): number {
   if (err instanceof GateError) return err.status;
-  if (isRouterError(err)) return err.code === "unknown_group" ? 404 : 503;
+  if (isRouterError(err)) return err.code === "unknown_group" ? 404 : err.code === "not_assigned" ? 403 : 503;
   return 502;
 }
 
@@ -81,7 +84,7 @@ export async function withDeployment<T>(
   aliases: string[],
   limits: RouteLimits,
   fn: (dep: ResolvedDeployment, group: Group) => Promise<T>,
-  opts?: { deferRelease?: boolean; strategy?: string; pool?: RoutePool; cost?: CostFilter },
+  opts?: { deferRelease?: boolean; strategy?: string; pool?: RoutePool; cost?: CostFilter; principal?: Principal },
 ): Promise<{
   result: T;
   dep: ResolvedDeployment;
@@ -90,11 +93,15 @@ export async function withDeployment<T>(
   release: () => void;
 }> {
   let last: unknown = new GateError(404, "model_not_found", "no deployment for model", { param: "model" });
-  const pool = opts?.pool ?? "api";
-  const routable = inPool(pool);
-  const queue = aliases.map((alias) => ({ alias, root: alias }));
+  const surface = opts?.pool ?? opts?.principal?.pool ?? "api";
+  const access = accessOf(opts?.principal);
+  const queue = aliases.map((entry) => {
+    const route = routeOf(entry, surface);
+    return { alias: route.alias, root: route.alias, pool: route.pool };
+  });
   for (let qi = 0; qi < queue.length; qi++) {
-    const { alias, root } = queue[qi]!;
+    const { alias, root, pool } = queue[qi]!;
+    const routable = inPool(pool);
     let group: Group;
     try {
       group = await loadGroup(alias);
@@ -103,12 +110,12 @@ export async function withDeployment<T>(
       continue;
     }
     const reachable = !group.mapped.length || group.mapped.some(routable) || Boolean(group.overflow_group);
-    if (!reachable) last = outsidePool(pool);
+    if (!reachable) last = outsidePool(pool, surface);
     const attempts = reachable ? Math.max(0, group.num_retries) + 1 : 0;
     let stopAlias = false;
     for (let i = 0; i < attempts; i++) {
       try {
-        const acquired = await acquireGroup(group, limits[root], routable, opts?.strategy, opts?.cost);
+        const acquired = await acquireGroup(group, limits[root], routable, opts?.strategy, opts?.cost, access);
         try {
           const started = Date.now();
           const result = await fn(acquired.dep, group);
@@ -141,10 +148,14 @@ export async function withDeployment<T>(
       }
     }
     for (const fb of group.fallback_groups) {
-      if (!queue.some((entry) => entry.alias === fb)) queue.push({ alias: fb, root });
+      if (!queue.some((entry) => entry.alias === fb && entry.pool === pool)) queue.push({ alias: fb, root, pool });
     }
-    if (!stopAlias && group.overflow_group && !queue.some((entry) => entry.alias === group.overflow_group)) {
-      queue.push({ alias: group.overflow_group, root });
+    if (
+      !stopAlias &&
+      group.overflow_group &&
+      !queue.some((entry) => entry.alias === group.overflow_group && entry.pool === pool)
+    ) {
+      queue.push({ alias: group.overflow_group, root, pool });
     }
   }
   await alertUpstreamFailure(last);
@@ -211,7 +222,7 @@ export async function chatOnce(dep: ResolvedDeployment, group: Group, body: Json
     dep,
     auth: await deploymentAuth(dep),
     path: "/chat/completions",
-    body: { ...body, model: dep.model || model, stream: false },
+    body: { ...body, model: dep.model || plainModel(model), stream: false },
     timeoutMs: UPSTREAM_TIMEOUT_MS,
     groupStrategy: group.strategy,
   });
@@ -242,7 +253,7 @@ export async function openUpstreamStream(input: {
   const res = await fetch(joinPath(input.dep, input.path), {
     method: "POST",
     headers,
-    body: input.form ?? JSON.stringify(input.payload),
+    body: input.form ?? JSON.stringify(withProject(input.dep, auth, input.payload)),
     signal: AbortSignal.any(signals),
   });
   if (!res.ok || !res.body) {
@@ -267,7 +278,7 @@ export function openChatStream(
     "/chat/completions",
     {
       ...input.body,
-      model: dep.model || input.model,
+      model: dep.model || plainModel(input.model),
       stream: true,
       stream_options: { ...(asRecord(input.body.stream_options) ?? {}), include_usage: true },
     },
@@ -279,6 +290,7 @@ export function openChatStream(
 function streamTranslator(dep: ResolvedDeployment, model: string): ChatSseTranslator | null {
   if (speaksAnthropic(dep.kind)) return new AnthropicSseTranslator(model);
   if (dep.kind === "codex") return new CodexSseTranslator(model);
+  if (dep.kind === "antigravity") return new AntigravitySseTranslator(model);
   return null;
 }
 
@@ -301,7 +313,7 @@ export async function dispatchChat(input: {
     (dep, group) => chatOnce(dep, group, input.body, input.model),
     {
       strategy: requestRoutingOverride(input.body),
-      pool: input.principal.pool,
+      principal: input.principal,
       cost: costFilter(input.principal, input.body),
     },
   ).catch(async (err) => {
@@ -349,7 +361,7 @@ export async function streamChat(input: {
     {
       deferRelease: true,
       strategy: requestRoutingOverride(input.body),
-      pool: input.principal.pool,
+      principal: input.principal,
       cost: costFilter(input.principal, input.body),
     },
   ).catch(async (err) => {

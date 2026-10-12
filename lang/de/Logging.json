@@ -12,7 +12,7 @@
   "objectRetention": "Aufbewahrung erzeugter Objekte in Tagen",
   "objectRetentionHint": "Gespeicherte Responses, Batches, Batch-Ergebnisse und Videos. 0 behält sie unbegrenzt; laufende Batches werden nie gelöscht.",
   "fileRetention": "Aufbewahrung hochgeladener Dateien in Tagen",
-  "fileRetentionHint": "Über /v1/files hochgeladene Dateien. 0 behält sie unbegrenzt.",
+  "fileRetentionHint": "Über /api/v1/files hochgeladene Dateien. 0 behält sie unbegrenzt.",
   "save": "Speichern",
   "saved": "Protokollierung gespeichert",
   "alerts": "Alarm-Webhooks",

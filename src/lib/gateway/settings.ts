@@ -40,6 +40,7 @@ import type {
   S3Addressing,
   S3Settings,
   Enterprise,
+  AntigravitySettings,
   JevSettings,
   Principal,
   WebhookFormat,
@@ -66,6 +67,7 @@ const DEFAULT_PII: PIIConfig = {
 export const DEFAULT_JEV_MODEL = "jev-latest";
 
 const DEFAULT_JEV: JevSettings = { enabled: false, model: DEFAULT_JEV_MODEL, api_key: "" };
+const DEFAULT_ANTIGRAVITY: AntigravitySettings = { client_secret: "" };
 
 const DEFAULT_SEMANTIC_CACHE: SemanticCacheSettings = {
   enabled: false,
@@ -96,6 +98,7 @@ const DEFAULT_ENTERPRISE: Enterprise = {
   assistant_model: "",
   assistant_model_locked: false,
   catalog_jev: DEFAULT_JEV,
+  antigravity: DEFAULT_ANTIGRAVITY,
   catalog_auto_routes: true,
   catalog_min_confidence: DEFAULT_AUTO_CONFIDENCE,
   update_check: true,
@@ -231,6 +234,10 @@ export function normalizeJev(raw: unknown): JevSettings {
   };
 }
 
+export function normalizeAntigravity(raw: unknown): AntigravitySettings {
+  return { client_secret: asString(asRecord(raw)?.client_secret) };
+}
+
 export function normalizeSemanticCache(raw: unknown): SemanticCacheSettings {
   const rec = asRecord(raw) ?? {};
   const model = modelAlias(asString(rec.model).trim());
@@ -283,6 +290,7 @@ export function normalizeEnterprise(raw: unknown): Enterprise {
     assistant_model: modelAlias(asString(rec.assistant_model)),
     assistant_model_locked: asBool(rec.assistant_model_locked, false),
     catalog_jev: normalizeJev(rec.catalog_jev),
+    antigravity: normalizeAntigravity(rec.antigravity),
     catalog_auto_routes: asBool(rec.catalog_auto_routes, true),
     catalog_min_confidence: catalogConfidence(rec.catalog_min_confidence),
     update_check: asBool(rec.update_check, true),
@@ -356,10 +364,12 @@ export async function getEnterprise(): Promise<Enterprise> {
   const raw = await readJson(SETTING_ENTERPRISE);
   const enterprise = normalizeEnterprise({ ...DEFAULT_ENTERPRISE, ...(asRecord(raw) ?? {}) });
   const jev = enterprise.catalog_jev ?? DEFAULT_JEV;
+  const antigravity = enterprise.antigravity ?? DEFAULT_ANTIGRAVITY;
   return {
     ...enterprise,
     alert_webhooks: (enterprise.alert_webhooks ?? []).map((hook) => ({ ...hook, secret: open(hook.secret) })),
     catalog_jev: { ...jev, api_key: open(jev.api_key) },
+    antigravity: { client_secret: open(antigravity.client_secret) },
   };
 }
 
@@ -427,15 +437,18 @@ export async function patchEnterprise(patch: Partial<Enterprise>): Promise<Enter
     pii: patch.pii ? { ...current.pii, ...patch.pii } : current.pii,
     s3: patch.s3 ? { ...current.s3, ...patch.s3 } : current.s3,
     catalog_jev: patch.catalog_jev ? { ...current.catalog_jev, ...patch.catalog_jev } : current.catalog_jev,
+    antigravity: patch.antigravity ? { ...current.antigravity, ...patch.antigravity } : current.antigravity,
     vector_stores: patch.vector_stores
       ? normalizeVectorDefaults({ ...current.vector_stores, ...patch.vector_stores })
       : current.vector_stores,
   };
   const jev = next.catalog_jev ?? DEFAULT_JEV;
+  const antigravity = next.antigravity ?? DEFAULT_ANTIGRAVITY;
   await writeJson(SETTING_ENTERPRISE, {
     ...next,
     alert_webhooks: (next.alert_webhooks ?? []).map((hook) => ({ ...hook, secret: seal(hook.secret) })),
     catalog_jev: { ...jev, api_key: seal(jev.api_key) },
+    antigravity: { client_secret: seal(antigravity.client_secret) },
   });
   return next;
 }

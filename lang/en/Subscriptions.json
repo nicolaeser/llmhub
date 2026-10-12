@@ -1,6 +1,6 @@
 {
   "title": "Subscriptions",
-  "subtitle": "Serve requests from ChatGPT, Claude, and SuperGrok plans. Every signed-in account shows its own usage limits and when they reset.",
+  "subtitle": "Serve requests from ChatGPT, Claude, Google Antigravity, and SuperGrok plans. Every signed-in account shows its own usage limits and when they reset.",
   "addAccount": "Add account",
   "noAccounts": "No account signed in yet.",
   "refreshAll": "Refresh all limits",
@@ -34,9 +34,14 @@
     "notStartedShort": "Not started"
   },
   "routing": {
-    "title": "Smart routing across accounts",
-    "description": "Pick the switching method per model alias. Whatever you choose, an account that has hit a usage limit is skipped while another account still has room.",
-    "openModels": "Choose a method on the Models page"
+    "title": "Account routing",
+    "description": "Choose per provider how requests are spread across its signed-in accounts. An account that has hit a usage limit is always skipped while another account still has room.",
+    "accounts": "{count, plural, =0 {No accounts} one {# account} other {# accounts}}",
+    "method": "{strategy, select, inherit {Per model alias} smart {Smart} quota_balanced {Most headroom} quota_expiring {Soonest reset} round_robin {Round robin} priority {Priority} least_inflight {Least in-flight} other {{strategy}}}",
+    "hint": "{strategy, select, inherit {Each model alias decides, using the method set on the Models page.} smart {Spends quota that is about to reset and avoids accounts close to their limit. Weighs headroom, reset time, and running requests.} quota_balanced {Picks the account with the most room left on its tightest limit.} quota_expiring {Picks the account whose tightest limit resets first, so quota about to renew gets used.} round_robin {Rotates through the accounts in turn so they wear evenly.} priority {Uses the account with the highest weight first and moves on when it is limited or cooling down.} least_inflight {Sends each request to the account with the fewest running requests.} other {}}",
+    "label": "Method for {provider}",
+    "single": "Only one account is signed in, so the method makes no difference yet.",
+    "saved": "Routing for {provider} saved"
   },
   "pausedHint": "This account is paused and receives no requests. Its limits stay visible.",
   "overview": {
@@ -51,5 +56,30 @@
       "state": "Status",
       "active": "Active"
     }
+  },
+  "access": {
+    "summary": "{restricted, select, true {{count, plural, =0 {No key can use it} one {Limited to # assignment} other {Limited to # assignments}}} other {Open to every key}}",
+    "manage": "Manage access",
+    "title": "Who can use {name}",
+    "description": "Requests through /api/subscription can reach this account by default. Limit it to companies, departments, projects, people, or single API keys.",
+    "mode": "Access",
+    "modes": "{mode, select, open {Every key} limited {Only selected} other {{mode}}}",
+    "nothing": "Nothing is selected, so no key can use this account.",
+    "scope": "{scope, select, org {Companies} team {Departments} project {Projects} member {People} key {API keys} other {{scope}}}",
+    "search": "Search",
+    "empty": "Nothing found",
+    "save": "Save access",
+    "saved": "Access for {name} saved"
+  },
+  "antigravity": {
+    "title": "Google OAuth client",
+    "description": "Antigravity sign-in needs the secret of Google's public OAuth client. It is stored sealed and never shown again.",
+    "status": "{configured, select, true {Configured} other {Not configured}}",
+    "label": "OAuth client secret",
+    "hint": "Paste the client secret of the Antigravity desktop OAuth client. Without it, signing in is disabled.",
+    "save": "Save secret",
+    "remove": "Remove secret",
+    "saved": "Client secret saved",
+    "removed": "Client secret removed"
   }
 }

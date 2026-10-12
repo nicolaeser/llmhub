@@ -5,7 +5,7 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
 import { AuthError } from "@/lib/auth/errors";
-import { ERR_ALL_PAUSED, ERR_NO_HEALTHY, ERR_UNKNOWN_GROUP } from "@/lib/gateway/core";
+import { ERR_ALL_PAUSED, ERR_NO_HEALTHY, ERR_NOT_ASSIGNED, ERR_UNKNOWN_GROUP } from "@/lib/gateway/core";
 import { anthropicErrorBody, GateError, gatewayErrorType, openAIErrorBody } from "@/lib/gateway/errors";
 import { gateResponse, toGateError } from "@/lib/gateway/gate";
 import { upstreamError } from "@/lib/gateway/upstream";
@@ -68,6 +68,8 @@ test("unknown failures map to fixed gateway codes without leaking internals", ()
   assert.equal(toGateError(ERR_NO_HEALTHY).code, "no_healthy_deployment");
   assert.equal(toGateError(ERR_ALL_PAUSED).code, "no_healthy_deployment");
   assert.equal(toGateError(ERR_ALL_PAUSED).status, 503);
+  assert.equal(toGateError(ERR_NOT_ASSIGNED).code, "account_not_assigned");
+  assert.equal(toGateError(ERR_NOT_ASSIGNED).status, 403);
   assert.equal(toGateError(new TypeError("fetch failed")).status, 502);
   assert.equal(toGateError(Object.assign(new Error("slow"), { name: "TimeoutError" })).status, 504);
   const hidden = toGateError(new Error("password=hunter2 in query"));

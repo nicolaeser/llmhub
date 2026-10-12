@@ -4,6 +4,7 @@ import type { WEBHOOK_EVENTS, WEBHOOK_FORMATS } from "@/lib/gateway/webhook-even
 import type { SemanticCacheSettings } from "@/types/cache";
 import type { GuardrailPolicy, PiiPolicy } from "@/types/guardrails";
 import type { AccessWindow, KeyEndpoint } from "@/types/keys";
+import type { AssignmentRow } from "@/types/providers";
 import type { VectorStoreDefaults } from "@/types/rag";
 import type { RouteLimits } from "@/types/model-templates";
 import type { BudgetKind } from "@/types/structure";
@@ -41,6 +42,7 @@ export type PublicModel = {
   displayName: string;
   tags: string[];
   pricing: ModelPricing | null;
+  subscriptionPricing?: ModelPricing | null;
   pools: RoutePool[];
 };
 
@@ -80,6 +82,7 @@ export type KindSpec = {
 export type UpstreamAuth = {
   key: string;
   headers: Record<string, string>;
+  project?: string;
 };
 
 export type ChatSseTranslator = {
@@ -248,6 +251,8 @@ export type DbDeployment = {
     region: string;
     noTraining: boolean;
     enabled: boolean;
+    restricted: boolean;
+    assignments: AssignmentRow[];
   } | null;
 };
 
@@ -367,6 +372,7 @@ export type Enterprise = {
   assistant_model?: string;
   assistant_model_locked?: boolean;
   catalog_jev?: JevSettings;
+  antigravity?: AntigravitySettings;
   catalog_auto_routes?: boolean;
   catalog_min_confidence?: number;
   update_check?: boolean;
@@ -376,6 +382,10 @@ export type Enterprise = {
 export type CatalogRouting = {
   autoRoutes: boolean;
   minConfidence: number;
+};
+
+export type AntigravitySettings = {
+  client_secret: string;
 };
 
 export type JevSettings = {

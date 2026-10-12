@@ -1,6 +1,7 @@
 import "server-only";
 import prisma from "@/lib/db/prisma";
 import { open, seal } from "@/lib/crypto";
+import { antigravityHeaders } from "@/lib/gateway/antigravity";
 import { isSignInKind } from "@/lib/gateway/catalog";
 import { claudeIdentityHeaders } from "@/lib/gateway/claude";
 import { asRecord, asString, VERSION } from "@/lib/gateway/core";
@@ -59,6 +60,7 @@ function fresh(session: SignInSession, now = Date.now()): boolean {
 
 export function signInHeaders(kind: SignInKind, tokens: SignInTokens): Record<string, string> {
   if (kind === "claude") return claudeIdentityHeaders();
+  if (kind === "antigravity") return antigravityHeaders();
   if (kind !== "codex") return {};
   const headers: Record<string, string> = {
     "ChatGPT-Account-ID": tokens.accountId,
@@ -151,7 +153,11 @@ async function activeSession(providerId: string, kind: SignInKind): Promise<Sign
 export async function providerAuth(provider: { id: string; kind: string; apiKey: string }): Promise<UpstreamAuth> {
   if (!isSignInKind(provider.kind)) return { key: open(provider.apiKey), headers: {} };
   const session = await activeSession(provider.id, provider.kind);
-  return { key: session.tokens.access, headers: signInHeaders(provider.kind, session.tokens) };
+  return {
+    key: session.tokens.access,
+    headers: signInHeaders(provider.kind, session.tokens),
+    ...(provider.kind === "antigravity" ? { project: session.tokens.accountId } : {}),
+  };
 }
 
 export async function deploymentAuth(dep: ResolvedDeployment): Promise<UpstreamAuth> {

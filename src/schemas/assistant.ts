@@ -25,6 +25,7 @@ const strategy = z.enum([
   "round_robin",
   "quota_balanced",
   "quota_expiring",
+  "smart",
 ]);
 const budgetKind = z.enum(["org", "team", "project", "member", "user", "key"]);
 const nodeKind = z.enum(["org", "team", "project", "member"]);
@@ -44,7 +45,7 @@ const maxRequestCost = z
 const keyEndpoints = z
   .array(z.enum(KEY_ENDPOINTS))
   .max(KEY_ENDPOINTS.length)
-  .describe("Endpoint groups the key may call. chat covers chat completions, completions, messages, and responses. Empty allows every endpoint; /v1/models always stays open.");
+  .describe("Endpoint groups the key may call. chat covers chat completions, completions, messages, and responses. Empty allows every endpoint; /api/v1/models always stays open.");
 const keyWindows = accessWindowsSchema.describe(
   "Times the key may be used, in accessTimeZone. Each window has days (mon to sun), start and end as HH:MM; an end at or before start runs into the next day, and equal start and end cover 24 hours. Empty allows any time.",
 );
@@ -68,7 +69,7 @@ export const explainToolInput = z.object({ topic: z.enum(assistantTopics) });
 export const openPageToolInput = z.object({ page: z.enum(assistantPages) });
 
 export const apiEndpointsToolInput = z.object({
-  scope: z.enum(["all", "v1", "subscription", "api"]).default("all"),
+  scope: z.enum(["all", "v1", "subscription", "mgmt"]).default("all"),
 });
 
 export const codeExampleToolInput = z.object({
@@ -92,7 +93,7 @@ export const searchLogsToolInput = z.object({
   model: label.optional().describe("Public model alias."),
   status: z.number().int().optional().describe("HTTP status, for example 502."),
   errorsOnly: z.boolean().optional().describe("Only requests whose outcome is not ok."),
-  endpoint: label.optional().describe("Part of the endpoint path, for example /v1/chat/completions."),
+  endpoint: label.optional().describe("Part of the endpoint path, for example /api/v1/chat/completions."),
   hours: z
     .number()
     .int()
@@ -164,7 +165,7 @@ export const createModelToolInput = z.object({
 
 export const updateModelToolInput = z.object({
   alias: name,
-  enabled: z.boolean().optional().describe("False hides the alias from /v1 and rejects requests to it."),
+  enabled: z.boolean().optional().describe("False hides the alias from /api/v1 and rejects requests to it."),
   strategy: strategy.optional(),
   billingMode: z
     .enum(BILLING_MODES)

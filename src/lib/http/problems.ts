@@ -64,6 +64,8 @@ export const PROBLEMS = {
   UPSTREAM_FAILED: { status: 502, title: "Upstream request failed" },
   UPSTREAM_EMPTY: { status: 502, title: "Upstream returned no models" },
   SIGN_IN_FAILED: { status: 502, title: "Provider sign-in failed" },
+  ANTIGRAVITY_NO_PROJECT: { status: 502, title: "Google assigned no Cloud Code project to the account" },
+  ANTIGRAVITY_NOT_CONFIGURED: { status: 409, title: "Google OAuth client secret is not configured" },
   SERVICE_UNAVAILABLE: { status: 503, title: "Service unavailable" },
   MAIL_DISABLED: { status: 503, title: "Email delivery is not configured" },
 } as const satisfies Record<string, ProblemSpec>;

@@ -6,6 +6,7 @@ import { capExceeded, periodElapsed } from "@/lib/gateway/period";
 import { incrementRateWindow } from "@/lib/rate-limit/shared";
 import { money } from "@/lib/utils/money";
 import { ownerId } from "@/lib/gateway/core";
+import { plainModel } from "@/lib/gateway/model-alias";
 import { writeRequestLog } from "@/lib/gateway/request-log";
 import { GateError } from "@/lib/gateway/errors";
 import { applyMarkup, markupRuleOf, pickMarkup, scaleByMarkup } from "@/lib/gateway/markup-policy";
@@ -233,6 +234,7 @@ export async function recordUsage(input: {
   error?: unknown;
   responseCache?: ResponseCacheUsage;
 }): Promise<number> {
+  const model = plainModel(input.model);
   const usage = input.usage ?? {};
   const prompt = usage.prompt_tokens ?? 0;
   const completion = usage.completion_tokens ?? 0;
@@ -250,13 +252,13 @@ export async function recordUsage(input: {
   const memberId = input.principal.memberId;
   const purchaseCost = costOf(input.deployment, usage);
   const listed = costOf(input.deployment, usage, billing);
-  const percent = listed ? await markupPercent({ orgId, teamId, projectId, model: input.model }) : 0;
+  const percent = listed ? await markupPercent({ orgId, teamId, projectId, model }) : 0;
   const cost = percent ? applyMarkup(listed, percent) : listed;
   const cacheSavings = scaleByMarkup(cacheSavingsOf(input.deployment, usage, billing), percent);
 
   const now = new Date();
   const day = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-  const slice = { day, keyId, teamId, orgId, projectId, memberId, userId, model: input.model };
+  const slice = { day, keyId, teamId, orgId, projectId, memberId, userId, model };
   const failed = input.status >= 400 ? 1 : 0;
   const limited = input.status === 429 ? 1 : 0;
   const responseCache = responseCacheColumns(input.responseCache, cost);
@@ -309,7 +311,7 @@ export async function recordUsage(input: {
           projectId,
           memberId,
           userId,
-          model: input.model,
+          model,
           deployment: input.deployment?.id ?? "",
           tag: input.tag ?? "",
           promptTokens: prompt,
@@ -338,7 +340,7 @@ export async function recordUsage(input: {
 
   await writeRequestLog({
     principal: input.principal,
-    model: input.model,
+    model,
     deployment: input.deployment,
     status: input.status,
     outcome: input.outcome,

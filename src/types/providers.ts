@@ -10,6 +10,8 @@ export type ProviderRecord = {
   region: string;
   noTraining: boolean;
   enabled: boolean;
+  restricted: boolean;
+  assignments?: AssignmentSource[];
   login?: { account: string; plan: string; status: string } | null;
 };
 
@@ -29,7 +31,7 @@ export type ImportCandidate = {
   exists: boolean;
 };
 
-export type SignInKind = "codex" | "grok_build" | "claude";
+export type SignInKind = "codex" | "grok_build" | "claude" | "antigravity";
 
 export type SignInMethod = "device" | "code";
 
@@ -41,6 +43,53 @@ export type ProviderSignIn = {
   status: SignInStatus;
 };
 
+export type AssignmentScope = "org" | "team" | "project" | "member" | "key";
+
+export type AssignmentRow = {
+  orgId: string | null;
+  teamId: string | null;
+  projectId: string | null;
+  memberId: string | null;
+  keyId: string | null;
+};
+
+export type AssignmentSource = AssignmentRow & {
+  org?: { alias: string } | null;
+  team?: { alias: string } | null;
+  project?: { alias: string } | null;
+  member?: { name: string; email: string } | null;
+  key?: { keyAlias: string; prefix: string } | null;
+};
+
+export type AccountAccess = {
+  orgId: string;
+  teamId: string;
+  projectId: string;
+  memberId: string;
+  keyId: string;
+};
+
+export type AssignmentTarget = {
+  scope: AssignmentScope;
+  id: string;
+  label: string;
+};
+
+export type AssignmentInput = { scope: AssignmentScope; id: string };
+
+export type AssignmentOptions = Record<AssignmentScope, { id: string; label: string; detail?: string }[]>;
+
+export type AccountStrategy =
+  | "inherit"
+  | "smart"
+  | "quota_balanced"
+  | "quota_expiring"
+  | "round_robin"
+  | "priority"
+  | "least_inflight";
+
+export type AccountRouting = Partial<Record<SignInKind, AccountStrategy>>;
+
 export type ProviderView = {
   id: string;
   name: string;
@@ -48,6 +97,8 @@ export type ProviderView = {
   baseUrl: string;
   hasApiKey: boolean;
   enabled: boolean;
+  restricted: boolean;
+  assignments: AssignmentTarget[];
   signIn: ProviderSignIn | null;
   discovered: { id: string; name: string }[];
   policy: ProviderPolicyInput;
@@ -70,7 +121,8 @@ export type SignInSession = {
 export type DeviceGrant =
   | { kind: "codex"; deviceAuthId: string; userCode: string }
   | { kind: "grok_build"; deviceCode: string }
-  | { kind: "claude"; verifier: string; state: string };
+  | { kind: "claude"; verifier: string; state: string }
+  | { kind: "antigravity"; verifier: string; state: string };
 
 export type DeviceAuthorization = {
   grant: DeviceGrant;

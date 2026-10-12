@@ -40,7 +40,8 @@ test("recordUsage charges the user and member budgets alongside key, team, org, 
     "utf8",
   );
   const fn = exportedAsyncFn(billing, "recordUsage");
-  assert.match(fn, /const slice = \{ day, keyId, teamId, orgId, projectId, memberId, userId, model: input\.model \}/);
+  assert.match(fn, /const model = plainModel\(input\.model\);/);
+  assert.match(fn, /const slice = \{ day, keyId, teamId, orgId, projectId, memberId, userId, model \}/);
   for (const model of ["virtualKey", "user", "member", "team", "organization", "project"]) {
     assert.match(fn, new RegExp(`prisma\\.${model}\\.updateMany\\(\\{ where: \\{ id: \\w+ \\}, data: increment \\}\\)`), model);
   }

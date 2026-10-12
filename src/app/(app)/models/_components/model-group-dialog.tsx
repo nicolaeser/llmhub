@@ -56,6 +56,7 @@ const STRATEGIES = [
   "round_robin",
   "quota_balanced",
   "quota_expiring",
+  "smart",
 ] as const;
 
 function catalogHit(

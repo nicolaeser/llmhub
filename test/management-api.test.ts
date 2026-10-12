@@ -82,19 +82,19 @@ test("the /v1 gateway rejects management keys before any lookup", async () => {
 });
 
 test("/api rejects missing and foreign credentials with a bearer challenge", async () => {
-  await assert.rejects(authenticateManagementKey(new Request("http://hub.local/api/me")), (err: unknown) => {
+  await assert.rejects(authenticateManagementKey(new Request("http://hub.local/api/mgmt/me")), (err: unknown) => {
     assert.ok(err instanceof ApiProblem);
     assert.equal(err.code, "UNAUTHORIZED");
     return true;
   });
   await assert.rejects(
     authenticateManagementKey(
-      new Request("http://hub.local/api/me", { headers: { authorization: "Bearer sk-hub-gateway" } }),
+      new Request("http://hub.local/api/mgmt/me", { headers: { authorization: "Bearer sk-hub-gateway" } }),
     ),
     (err: unknown) => err instanceof ApiProblem && err.code === "INVALID_API_KEY",
   );
   const handler = managementRoute(null, async () => new Response("unreachable"));
-  const res = await handler(new Request("http://hub.local/api/me"), { params: Promise.resolve({}) });
+  const res = await handler(new Request("http://hub.local/api/mgmt/me"), { params: Promise.resolve({}) });
   assert.equal(res.status, 401);
   assert.equal(res.headers.get("content-type"), "application/problem+json");
   assert.match(res.headers.get("www-authenticate") ?? "", /^Bearer /);
@@ -112,8 +112,8 @@ test("delegated principals satisfy requirePermission only within their scope", a
   assert.doesNotMatch(requireSession, /delegatedPrincipal/);
 });
 
-test("every /api handler goes through managementRoute", () => {
-  const files = routeFiles(path.join(root, "src/app/api"));
+test("every /api/mgmt handler goes through managementRoute", () => {
+  const files = routeFiles(path.join(root, "src/app/api/mgmt"));
   assert.ok(files.length >= 20);
   for (const file of files) {
     const source = readFileSync(file, "utf8");
@@ -129,18 +129,18 @@ test("every /api handler goes through managementRoute", () => {
 
 test("request bodies are strict, typed, and reported with JSON pointers", async () => {
   const req = (body: string, type = "application/json") =>
-    new Request("http://hub.local/api/keys", { method: "POST", headers: { "content-type": type }, body });
+    new Request("http://hub.local/api/mgmt/keys", { method: "POST", headers: { "content-type": type }, body });
   const created = await readBody(req('{"alias":"ci"}'), apiKeyCreateSchema);
   assert.deepEqual(created.models, []);
   assert.equal(created.expires_in_days, 0);
 
   const unknown = await readBody(req('{"alias":"ci","rpm":5}'), apiKeyCreateSchema).catch((err) => err);
-  const unknownBody = await problemFromError(new Request("http://hub.local/api/keys"), unknown).json();
+  const unknownBody = await problemFromError(new Request("http://hub.local/api/mgmt/keys"), unknown).json();
   assert.equal(unknownBody.status, 422);
   assert.deepEqual(unknownBody.errors, [{ pointer: "#/rpm", detail: 'unknown field "rpm"' }]);
 
   const badIp = await readBody(req('{"alias":"ci","allowed_ips":["nope"]}'), apiKeyCreateSchema).catch((err) => err);
-  const badIpBody = await problemFromError(new Request("http://hub.local/api/keys"), badIp).json();
+  const badIpBody = await problemFromError(new Request("http://hub.local/api/mgmt/keys"), badIp).json();
   assert.deepEqual(badIpBody.errors[0].pointer, "#/allowed_ips/0");
 
   const notJson = await readBody(req("{", "application/json"), apiKeyCreateSchema).catch((err) => err);
@@ -168,10 +168,10 @@ test("request bodies are strict, typed, and reported with JSON pointers", async 
 });
 
 test("query parameters are coerced and invalid ones answer INVALID_PARAMETER", () => {
-  const parsed = readQuery(new Request("http://hub.local/api/logs/requests?page=2&page_size=20&status=429"), logsQuerySchema);
+  const parsed = readQuery(new Request("http://hub.local/api/mgmt/logs/requests?page=2&page_size=20&status=429"), logsQuerySchema);
   assert.deepEqual([parsed.page, parsed.page_size, parsed.status], [2, 20, 429]);
   assert.throws(
-    () => readQuery(new Request("http://hub.local/api/logs/requests?page_size=5000"), logsQuerySchema),
+    () => readQuery(new Request("http://hub.local/api/mgmt/logs/requests?page_size=5000"), logsQuerySchema),
     (err: unknown) =>
       err instanceof ApiProblem &&
       err.code === "INVALID_PARAMETER" &&

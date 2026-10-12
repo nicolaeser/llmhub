@@ -13,7 +13,8 @@ import { logger } from "@/lib/logging/logger";
 import { modelAlias } from "@/lib/gateway/model-alias";
 import { aliasChain } from "@/lib/gateway/runtime";
 import { accessOpen, endpointAllowed } from "@/lib/gateway/key-restrictions";
-import { gatewayPath } from "@/lib/gateway/route-pool";
+import { gatewayPath } from "@/lib/gateway/api-paths";
+import { routeOf } from "@/lib/gateway/route-pool";
 import { NextResponse } from "next/server";
 import type { JsonMap, Principal, RoutePool } from "@/types/gateway";
 import type { OutputGuard } from "@/types/guardrails";
@@ -22,6 +23,9 @@ export function toGateError(err: unknown): GateError {
   if (err instanceof GateError) return err;
   if (isRouterError(err, "unknown_group")) {
     return new GateError(404, "model_not_found", "no deployment for model", { param: "model" });
+  }
+  if (isRouterError(err, "not_assigned")) {
+    return new GateError(403, "account_not_assigned", "no subscription account is assigned to this key");
   }
   if (isUnavailableError(err)) {
     return new GateError(503, "no_healthy_deployment", "no healthy deployment for model");
@@ -119,7 +123,7 @@ export async function admit(principal: Principal, maxCost: number | null = null)
 export function modelPermitted(principal: Principal, model: string): boolean {
   const allowed = principal.models;
   if (!allowed.length && !principal.key?.templates.length) return true;
-  return allowed.includes("*") || allowed.includes(modelAlias(model));
+  return allowed.includes("*") || allowed.includes(modelAlias(routeOf(model, principal.pool ?? "api").alias));
 }
 
 export function allowModel(principal: Principal, model: string): void {

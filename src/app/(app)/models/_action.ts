@@ -5,7 +5,7 @@ import { requirePermission } from "@/lib/auth/guards";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { actionFail, runAction } from "@/lib/http/action-result";
 import { writeAudit } from "@/lib/gateway/audit";
-import { modelAlias, RESERVED_ALIASES } from "@/lib/gateway/model-alias";
+import { isReservedAlias, modelAlias } from "@/lib/gateway/model-alias";
 import {
   asStringArray,
   KNOWN_BILLING_MODES,
@@ -304,7 +304,7 @@ export async function createModelGroupAction(input: {
     const session = await requirePermission(PERMISSIONS.MODELS_MANAGE);
     const alias = modelAlias(input.alias);
     if (!alias) return actionFail("ALIAS_REQUIRED");
-    if (RESERVED_ALIASES.has(alias)) return actionFail("ALIAS_RESERVED");
+    if (isReservedAlias(alias)) return actionFail("ALIAS_RESERVED");
     const existing = await prisma.modelGroup.findUnique({ where: { alias } });
     if (existing) return actionFail("ALIAS_EXISTS");
     const deployments = await withCatalogPrices(

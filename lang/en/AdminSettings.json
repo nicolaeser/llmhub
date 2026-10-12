@@ -91,7 +91,7 @@
   },
   "vectorStores": {
     "title": "Knowledge bases",
-    "subtitle": "Defaults for vector stores created in the console or through /v1/vector_stores without their own models.",
+    "subtitle": "Defaults for vector stores created in the console or through /api/v1/vector_stores without their own models.",
     "embeddingModel": "Default embedding model",
     "embeddingHint": "Used when a new knowledge base does not name an embedding model. Existing knowledge bases keep their model.",
     "dimensions": "Default embedding dimensions",

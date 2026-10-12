@@ -14,7 +14,7 @@ import {
   splitTag,
   trustedKind,
 } from "@/lib/gateway/model-catalog";
-import { RESERVED_ALIASES } from "@/lib/gateway/model-alias";
+import { isReservedAlias } from "@/lib/gateway/model-alias";
 import { discoveredOf } from "@/lib/gateway/provider-prices";
 import { catalogRouting, getEnterprise } from "@/lib/gateway/settings";
 import { logger } from "@/lib/logging/logger";
@@ -606,7 +606,7 @@ export async function setEntryActive(actor: string, ref: EntryRef, active: boole
 export async function assignEntry(actor: string, ref: EntryRef, alias: string): Promise<void> {
   const { entry, provider, model } = await routeTarget(ref);
   if (!alias) throw new Error("ALIAS_REQUIRED");
-  if (RESERVED_ALIASES.has(alias)) throw new Error("ALIAS_RESERVED");
+  if (isReservedAlias(alias)) throw new Error("ALIAS_RESERVED");
   if (alias === entry.alias) return;
   const wasRouted = entry.source === "route" && (await unroute(entry)) > 0;
   await prisma.catalogEntry.update({
