@@ -2,13 +2,10 @@
 
 import { useState, useTransition } from "react";
 import {
-  Button,
   Description,
   Input,
   Label,
-  Modal,
   NumberField,
-  Spinner,
   Switch,
   TextField,
   toast,
@@ -21,6 +18,7 @@ import { isActionFail } from "@/lib/http/action-result";
 import type { NodeKind, NodeRef, StructurePayload } from "@/types/structure";
 import { saveMemberAction, saveOrgAction, saveProjectAction, saveTeamAction } from "../_action";
 import { useErrorToast } from "@/components/console/use-error-toast";
+import FormDialog from "@/components/console/form-dialog";
 
 function idsOf(data: StructurePayload, kind: NodeKind): Set<string> {
   const rows =
@@ -46,7 +44,6 @@ export default function NodeDialog({
   onSaved: (payload: StructurePayload, ref: NodeRef | null) => void;
 }) {
   const t = useTranslations("Companies.node");
-  const tCommon = useTranslations("Common");
   const showError = useErrorToast();
   const org = kind === "org" ? data.orgs.find((row) => row.id === editingId) : undefined;
   const team = kind === "team" ? data.teams.find((row) => row.id === editingId) : undefined;
@@ -100,166 +97,141 @@ export default function NodeDialog({
   }
 
   return (
-    <Modal state={state}>
-      <Modal.Backdrop>
-        <Modal.Container>
-          <Modal.Dialog className="max-w-lg">
-            {({ close }) => (
-              <>
-                <Modal.Header>
-                  <Modal.Heading>{t("title", { kind, mode })}</Modal.Heading>
-                  <p className="text-sm text-muted">{t("hint", { kind })}</p>
-                </Modal.Header>
-                <Modal.Body className="space-y-4">
-                  {needsOrg ? (
-                    <SearchSelect
-                      isRequired
-                      label={t("org")}
-                      placeholder={t("orgPlaceholder")}
-                      items={data.orgs.map((item) => ({ id: item.id, label: item.alias }))}
-                      value={orgId}
-                      onChange={(next) => {
-                        setOrgId(next);
-                        setTeamId("");
-                      }}
-                      isDisabled={pending || editing || data.orgs.length < 2}
-                      description={editing ? t("orgLocked", { kind }) : undefined}
-                    />
-                  ) : null}
+    <FormDialog
+      state={state}
+      title={t("title", { kind, mode })}
+      description={t("hint", { kind })}
+      submitLabel={t("submit", { kind, mode })}
+      pending={pending}
+      isSubmitDisabled={!alias.trim() || (needsOrg && !orgId)}
+      onSubmit={save}
+    >
+      {needsOrg ? (
+        <SearchSelect
+          isRequired
+          label={t("org")}
+          placeholder={t("orgPlaceholder")}
+          items={data.orgs.map((item) => ({ id: item.id, label: item.alias }))}
+          value={orgId}
+          onChange={(next) => {
+            setOrgId(next);
+            setTeamId("");
+          }}
+          isDisabled={pending || editing || data.orgs.length < 2}
+          description={editing ? t("orgLocked", { kind }) : undefined}
+        />
+      ) : null}
 
-                  <TextField
-                    fullWidth
-                    isRequired
-                    value={alias}
-                    onChange={setAlias}
-                    isDisabled={pending}
-                    maxLength={80}
-                  >
-                    <Label>{t("name", { kind })}</Label>
-                    <Input placeholder={t("placeholder", { kind })} />
-                  </TextField>
+      <TextField
+        fullWidth
+        isRequired
+        value={alias}
+        onChange={setAlias}
+        isDisabled={pending}
+        maxLength={80}
+      >
+        <Label>{t("name", { kind })}</Label>
+        <Input placeholder={t("placeholder", { kind })} />
+      </TextField>
 
-                  {hasDepartment ? (
-                    <SearchSelect
-                      label={t("team")}
-                      items={[
-                        { id: "none", label: t("noTeam") },
-                        ...departments.map((item) => ({ id: item.id, label: item.alias })),
-                      ]}
-                      value={teamId || "none"}
-                      onChange={(next) => setTeamId(next === "none" ? "" : next)}
-                      isDisabled={pending || !orgId}
-                      description={t("teamHint", { kind })}
-                    />
-                  ) : null}
+      {hasDepartment ? (
+        <SearchSelect
+          label={t("team")}
+          items={[
+            { id: "none", label: t("noTeam") },
+            ...departments.map((item) => ({ id: item.id, label: item.alias })),
+          ]}
+          value={teamId || "none"}
+          onChange={(next) => setTeamId(next === "none" ? "" : next)}
+          isDisabled={pending || !orgId}
+          description={t("teamHint", { kind })}
+        />
+      ) : null}
 
-                  {kind === "member" ? (
-                    <TextField
-                      fullWidth
-                      type="email"
-                      value={email}
-                      onChange={setEmail}
-                      isDisabled={pending}
-                      maxLength={254}
-                    >
-                      <Label>{t("email")}</Label>
-                      <Input placeholder="alex@example.com" />
-                      <Description>{t("emailHint")}</Description>
-                    </TextField>
-                  ) : null}
+      {kind === "member" ? (
+        <TextField
+          fullWidth
+          type="email"
+          value={email}
+          onChange={setEmail}
+          isDisabled={pending}
+          maxLength={254}
+        >
+          <Label>{t("email")}</Label>
+          <Input placeholder="alex@example.com" />
+          <Description>{t("emailHint")}</Description>
+        </TextField>
+      ) : null}
 
-                  {kind === "team" ? (
-                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                      <NumberField
-                        fullWidth
-                        value={rpm}
-                        onChange={setRpm}
-                        minValue={0}
-                        formatOptions={formats.number.integer}
-                        isDisabled={pending}
-                      >
-                        <Label>{t("rpm")}</Label>
-                        <NumberField.Group>
-                          <NumberField.DecrementButton />
-                          <NumberField.Input />
-                          <NumberField.IncrementButton />
-                        </NumberField.Group>
-                        <Description>{t("rpmHint")}</Description>
-                      </NumberField>
-                      <NumberField
-                        fullWidth
-                        value={tpm}
-                        onChange={setTpm}
-                        minValue={0}
-                        formatOptions={formats.number.integer}
-                        isDisabled={pending}
-                      >
-                        <Label>{t("tpm")}</Label>
-                        <NumberField.Group>
-                          <NumberField.DecrementButton />
-                          <NumberField.Input />
-                          <NumberField.IncrementButton />
-                        </NumberField.Group>
-                        <Description>{t("tpmHint")}</Description>
-                      </NumberField>
-                    </div>
-                  ) : null}
+      {kind === "team" ? (
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <NumberField
+            fullWidth
+            value={rpm}
+            onChange={setRpm}
+            minValue={0}
+            formatOptions={formats.number.integer}
+            isDisabled={pending}
+          >
+            <Label>{t("rpm")}</Label>
+            <NumberField.Group>
+              <NumberField.DecrementButton />
+              <NumberField.Input />
+              <NumberField.IncrementButton />
+            </NumberField.Group>
+            <Description>{t("rpmHint")}</Description>
+          </NumberField>
+          <NumberField
+            fullWidth
+            value={tpm}
+            onChange={setTpm}
+            minValue={0}
+            formatOptions={formats.number.integer}
+            isDisabled={pending}
+          >
+            <Label>{t("tpm")}</Label>
+            <NumberField.Group>
+              <NumberField.DecrementButton />
+              <NumberField.Input />
+              <NumberField.IncrementButton />
+            </NumberField.Group>
+            <Description>{t("tpmHint")}</Description>
+          </NumberField>
+        </div>
+      ) : null}
 
-                  {kind === "project" ? (
-                    <TextField fullWidth value={owner} onChange={setOwner} isDisabled={pending} maxLength={200}>
-                      <Label>{t("owner")}</Label>
-                      <Input placeholder="ops@example.com" />
-                      <Description>{t("ownerHint")}</Description>
-                    </TextField>
-                  ) : null}
+      {kind === "project" ? (
+        <TextField fullWidth value={owner} onChange={setOwner} isDisabled={pending} maxLength={200}>
+          <Label>{t("owner")}</Label>
+          <Input placeholder="ops@example.com" />
+          <Description>{t("ownerHint")}</Description>
+        </TextField>
+      ) : null}
 
-                  {kind === "member" ? (
-                    <>
-                      <Switch isSelected={logContent} onChange={setLogContent} isDisabled={pending}>
-                        <Switch.Content>
-                          <Switch.Control>
-                            <Switch.Thumb />
-                          </Switch.Control>
-                          <Label>{t("logContent")}</Label>
-                        </Switch.Content>
-                        <Description>{t("logContentHint")}</Description>
-                      </Switch>
-                      {editing ? (
-                        <Switch isSelected={blocked} onChange={setBlocked} isDisabled={pending}>
-                          <Switch.Content>
-                            <Switch.Control>
-                              <Switch.Thumb />
-                            </Switch.Control>
-                            <Label>{t("blocked")}</Label>
-                          </Switch.Content>
-                          <Description>{t("blockedHint")}</Description>
-                        </Switch>
-                      ) : null}
-                    </>
-                  ) : null}
-                </Modal.Body>
-                <Modal.Footer>
-                  <Button variant="tertiary" onPress={close} isDisabled={pending}>
-                    {tCommon("cancel")}
-                  </Button>
-                  <Button
-                    isPending={pending}
-                    isDisabled={!alias.trim() || (needsOrg && !orgId)}
-                    onPress={() => save(close)}
-                  >
-                    {({ isPending }) => (
-                      <>
-                        {isPending ? <Spinner color="current" size="sm" /> : null}
-                        {t("submit", { kind, mode })}
-                      </>
-                    )}
-                  </Button>
-                </Modal.Footer>
-              </>
-            )}
-          </Modal.Dialog>
-        </Modal.Container>
-      </Modal.Backdrop>
-    </Modal>
+      {kind === "member" ? (
+        <>
+          <Switch isSelected={logContent} onChange={setLogContent} isDisabled={pending}>
+            <Switch.Content>
+              <Switch.Control>
+                <Switch.Thumb />
+              </Switch.Control>
+              <Label>{t("logContent")}</Label>
+            </Switch.Content>
+            <Description>{t("logContentHint")}</Description>
+          </Switch>
+          {editing ? (
+            <Switch isSelected={blocked} onChange={setBlocked} isDisabled={pending}>
+              <Switch.Content>
+                <Switch.Control>
+                  <Switch.Thumb />
+                </Switch.Control>
+                <Label>{t("blocked")}</Label>
+              </Switch.Content>
+              <Description>{t("blockedHint")}</Description>
+            </Switch>
+          ) : null}
+        </>
+      ) : null}
+    </FormDialog>
   );
 }

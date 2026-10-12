@@ -7,7 +7,6 @@ import {
   Description,
   FieldError,
   Label,
-  Modal,
   NumberField,
   Spinner,
   ToggleButton,
@@ -22,6 +21,7 @@ import { isActionFail } from "@/lib/http/action-result";
 import type { BudgetResult, BudgetTarget, BudgetView } from "@/types/structure";
 import { addBoostAction, removeBoostAction } from "../_action";
 import { useErrorToast } from "@/components/console/use-error-toast";
+import FormDialog from "@/components/console/form-dialog";
 
 const PRESETS = [10, 25, 50, 100];
 const DURATIONS = [
@@ -43,7 +43,6 @@ export default function BoostDialog({
   onSaved: (result: BudgetResult) => void;
 }) {
   const t = useTranslations("Companies.boost");
-  const tCommon = useTranslations("Common");
   const showError = useErrorToast();
   const format = useFormatter();
   const now = useNow({ updateInterval: 60_000 });
@@ -85,144 +84,119 @@ export default function BoostDialog({
   }
 
   return (
-    <Modal state={state}>
-      <Modal.Backdrop>
-        <Modal.Container>
-          <Modal.Dialog className="max-w-lg">
-            {({ close }) => (
-              <>
-                <Modal.Header>
-                  <Modal.Heading>{t("title", { alias: target?.alias ?? "" })}</Modal.Heading>
-                  <p className="text-sm text-muted">{t("hint")}</p>
-                </Modal.Header>
-                <Modal.Body className="space-y-5">
-                  <div className="space-y-3">
-                    <NumberField
-                      fullWidth
-                      value={amount}
-                      onChange={setAmount}
-                      minValue={0}
-                      formatOptions={formats.number.currency}
-                      isInvalid={!valid}
-                      isDisabled={pending}
-                    >
-                      <Label>{t("amount")}</Label>
-                      <NumberField.Group>
-                        <NumberField.DecrementButton />
-                        <NumberField.Input />
-                        <NumberField.IncrementButton />
-                      </NumberField.Group>
-                      {valid ? (
-                        <Description>{t("amountHint")}</Description>
-                      ) : (
-                        <FieldError>{t("amountInvalid")}</FieldError>
-                      )}
-                    </NumberField>
-                    <div className="flex flex-wrap gap-2" role="group" aria-label={t("presets")}>
-                      {PRESETS.map((preset) => (
-                        <Button
-                          key={preset}
-                          size="sm"
-                          variant={amount === preset ? "secondary" : "tertiary"}
-                          isDisabled={pending}
-                          onPress={() => setAmount(preset)}
-                        >
-                          {format.number(preset, "currencyWhole")}
-                        </Button>
-                      ))}
-                    </div>
-                  </div>
+    <FormDialog
+      state={state}
+      title={t("title", { alias: target?.alias ?? "" })}
+      description={t("hint")}
+      submitLabel={t("submit")}
+      pending={pending}
+      isSubmitDisabled={!target || !valid || removing !== null}
+      onSubmit={add}
+    >
+      <div className="space-y-3">
+        <NumberField
+          fullWidth
+          value={amount}
+          onChange={setAmount}
+          minValue={0}
+          formatOptions={formats.number.currency}
+          isInvalid={!valid}
+          isDisabled={pending}
+        >
+          <Label>{t("amount")}</Label>
+          <NumberField.Group>
+            <NumberField.DecrementButton />
+            <NumberField.Input />
+            <NumberField.IncrementButton />
+          </NumberField.Group>
+          {valid ? (
+            <Description>{t("amountHint")}</Description>
+          ) : (
+            <FieldError>{t("amountInvalid")}</FieldError>
+          )}
+        </NumberField>
+        <div className="flex flex-wrap gap-2" role="group" aria-label={t("presets")}>
+          {PRESETS.map((preset) => (
+            <Button
+              key={preset}
+              size="sm"
+              variant={amount === preset ? "secondary" : "tertiary"}
+              isDisabled={pending}
+              onPress={() => setAmount(preset)}
+            >
+              {format.number(preset, "currencyWhole")}
+            </Button>
+          ))}
+        </div>
+      </div>
 
-                  <div className="space-y-2">
-                    <p id={durationLabel} className="text-sm font-medium">
-                      {t("duration")}
+      <div className="space-y-2">
+        <p id={durationLabel} className="text-sm font-medium">
+          {t("duration")}
+        </p>
+        <ToggleButtonGroup
+          fullWidth
+          selectionMode="single"
+          disallowEmptySelection
+          aria-labelledby={durationLabel}
+          selectedKeys={[String(hours)]}
+          onSelectionChange={(keys) => {
+            const next = DURATIONS.find((item) => item.id === [...keys][0]);
+            if (next) setHours(next.hours);
+          }}
+          isDisabled={pending}
+        >
+          {DURATIONS.map((item, index) => (
+            <ToggleButton key={item.id} id={item.id}>
+              {index > 0 ? <ToggleButtonGroup.Separator /> : null}
+              {t("hours", { hours: item.hours })}
+            </ToggleButton>
+          ))}
+        </ToggleButtonGroup>
+        <p className="text-xs text-muted">{t("until", { date: until })}</p>
+      </div>
+
+      {budget?.boosts.length ? (
+        <div className="space-y-2">
+          <p className="text-sm font-medium">{t("active")}</p>
+          <ul className="space-y-2">
+            {budget.boosts.map((boost) => (
+              <li key={boost.id}>
+                <Card
+                  variant="secondary"
+                  className="flex-row items-center justify-between gap-3 px-3 py-2"
+                >
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium tabular-nums">
+                      {format.number(boost.amount, "currency")}
                     </p>
-                    <ToggleButtonGroup
-                      fullWidth
-                      selectionMode="single"
-                      disallowEmptySelection
-                      aria-labelledby={durationLabel}
-                      selectedKeys={[String(hours)]}
-                      onSelectionChange={(keys) => {
-                        const next = DURATIONS.find((item) => item.id === [...keys][0]);
-                        if (next) setHours(next.hours);
-                      }}
-                      isDisabled={pending}
-                    >
-                      {DURATIONS.map((item, index) => (
-                        <ToggleButton key={item.id} id={item.id}>
-                          {index > 0 ? <ToggleButtonGroup.Separator /> : null}
-                          {t("hours", { hours: item.hours })}
-                        </ToggleButton>
-                      ))}
-                    </ToggleButtonGroup>
-                    <p className="text-xs text-muted">{t("until", { date: until })}</p>
+                    <p className="text-xs text-muted">
+                      {t("expires", { date: new Date(boost.until) })}
+                    </p>
                   </div>
-
-                  {budget?.boosts.length ? (
-                    <div className="space-y-2">
-                      <p className="text-sm font-medium">{t("active")}</p>
-                      <ul className="space-y-2">
-                        {budget.boosts.map((boost) => (
-                          <li key={boost.id}>
-                            <Card
-                              variant="secondary"
-                              className="flex-row items-center justify-between gap-3 px-3 py-2"
-                            >
-                              <div className="min-w-0">
-                                <p className="text-sm font-medium tabular-nums">
-                                  {format.number(boost.amount, "currency")}
-                                </p>
-                                <p className="text-xs text-muted">
-                                  {t("expires", { date: new Date(boost.until) })}
-                                </p>
-                              </div>
-                              <Button
-                                isIconOnly
-                                size="sm"
-                                variant="danger-soft"
-                                aria-label={t("remove")}
-                                isPending={removing === boost.id}
-                                isDisabled={pending || (removing !== null && removing !== boost.id)}
-                                onPress={() => remove(boost.id)}
-                              >
-                                {({ isPending }) =>
-                                  isPending ? (
-                                    <Spinner color="current" size="sm" />
-                                  ) : (
-                                    <Trash2 size={14} aria-hidden />
-                                  )
-                                }
-                              </Button>
-                            </Card>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  ) : null}
-                </Modal.Body>
-                <Modal.Footer>
-                  <Button variant="tertiary" onPress={close} isDisabled={pending}>
-                    {tCommon("cancel")}
-                  </Button>
                   <Button
-                    isPending={pending}
-                    isDisabled={!target || !valid || removing !== null}
-                    onPress={() => add(close)}
+                    isIconOnly
+                    size="sm"
+                    variant="danger-soft"
+                    aria-label={t("remove")}
+                    isPending={removing === boost.id}
+                    isDisabled={pending || (removing !== null && removing !== boost.id)}
+                    onPress={() => remove(boost.id)}
                   >
-                    {({ isPending }) => (
-                      <>
-                        {isPending ? <Spinner color="current" size="sm" /> : null}
-                        {t("submit")}
-                      </>
-                    )}
+                    {({ isPending }) =>
+                      isPending ? (
+                        <Spinner color="current" size="sm" />
+                      ) : (
+                        <Trash2 size={14} aria-hidden />
+                      )
+                    }
                   </Button>
-                </Modal.Footer>
-              </>
-            )}
-          </Modal.Dialog>
-        </Modal.Container>
-      </Modal.Backdrop>
-    </Modal>
+                </Card>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+    </FormDialog>
   );
 }

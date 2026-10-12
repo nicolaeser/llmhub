@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
-import { Button, Modal, Spinner, ToggleButton, ToggleButtonGroup, toast, type useOverlayState } from "@heroui/react";
+import { Spinner, ToggleButton, ToggleButtonGroup, toast, type useOverlayState } from "@heroui/react";
 import { useTranslations } from "next-intl";
 import { loadAssignmentOptionsAction, saveAssignmentsAction } from "../_action";
+import FormDialog from "@/components/console/form-dialog";
 import MultiPicker from "@/components/console/multi-picker";
 import { ASSIGNMENT_SCOPES } from "@/lib/gateway/routing/account-access";
 import { isActionFail } from "@/lib/http/action-result";
@@ -85,88 +86,62 @@ export default function AccessDialog({
   }
 
   return (
-    <Modal state={state}>
-      <Modal.Backdrop>
-        <Modal.Container>
-          <Modal.Dialog className="max-w-lg">
-            {({ close }) => (
-              <>
-                <Modal.Header>
-                  <Modal.Heading>{t("title", { name: provider?.name ?? "" })}</Modal.Heading>
-                </Modal.Header>
-                <Modal.Body className="space-y-4">
-                  <p className="text-sm text-muted">{t("description")}</p>
-                  <ToggleButtonGroup
-                    fullWidth
-                    selectionMode="single"
-                    disallowEmptySelection
-                    aria-label={modeLabel}
-                    selectedKeys={[mode]}
-                    onSelectionChange={(keys) => {
-                      const next = MODES.find((item) => item === [...keys][0]);
-                      if (next) setMode(next);
-                    }}
-                    isDisabled={pending}
-                  >
-                    {MODES.map((item, index) => (
-                      <ToggleButton key={item} id={item}>
-                        {index > 0 ? <ToggleButtonGroup.Separator /> : null}
-                        {t("modes", { mode: item })}
-                      </ToggleButton>
-                    ))}
-                  </ToggleButtonGroup>
-                  {mode === "limited" ? (
-                    options === null ? (
-                      <output
-                        aria-live="polite"
-                        aria-label={tCommon("loading")}
-                        className="flex justify-center py-6 text-accent"
-                      >
-                        <Spinner color="current" />
-                      </output>
-                    ) : (
-                      <div className="space-y-4">
-                        {ASSIGNMENT_SCOPES.map((scope) => (
-                          <MultiPicker
-                            key={scope}
-                            label={t("scope", { scope })}
-                            placeholder={t("scope", { scope })}
-                            searchLabel={t("search")}
-                            emptyLabel={t("empty")}
-                            items={itemsFor(scope)}
-                            selected={picked[scope]}
-                            onChange={(ids) => setPicked((cur) => ({ ...cur, [scope]: ids }))}
-                            isDisabled={pending}
-                          />
-                        ))}
-                        {total === 0 ? <p className="text-sm text-warning">{t("nothing")}</p> : null}
-                      </div>
-                    )
-                  ) : null}
-                </Modal.Body>
-                <Modal.Footer>
-                  <Button variant="tertiary" onPress={close} isDisabled={pending} aria-label={tCommon("cancel")}>
-                    {tCommon("cancel")}
-                  </Button>
-                  <Button
-                    aria-label={t("save")}
-                    isPending={pending}
-                    isDisabled={!provider || (mode === "limited" && options === null)}
-                    onPress={() => save(close)}
-                  >
-                    {({ isPending }) => (
-                      <>
-                        {isPending ? <Spinner color="current" size="sm" /> : null}
-                        {t("save")}
-                      </>
-                    )}
-                  </Button>
-                </Modal.Footer>
-              </>
-            )}
-          </Modal.Dialog>
-        </Modal.Container>
-      </Modal.Backdrop>
-    </Modal>
+    <FormDialog
+      state={state}
+      title={t("title", { name: provider?.name ?? "" })}
+      description={t("description")}
+      submitLabel={t("save")}
+      pending={pending}
+      isSubmitDisabled={!provider || (mode === "limited" && options === null)}
+      onSubmit={save}
+    >
+      <ToggleButtonGroup
+        fullWidth
+        selectionMode="single"
+        disallowEmptySelection
+        aria-label={modeLabel}
+        selectedKeys={[mode]}
+        onSelectionChange={(keys) => {
+          const next = MODES.find((item) => item === [...keys][0]);
+          if (next) setMode(next);
+        }}
+        isDisabled={pending}
+      >
+        {MODES.map((item, index) => (
+          <ToggleButton key={item} id={item}>
+            {index > 0 ? <ToggleButtonGroup.Separator /> : null}
+            {t("modes", { mode: item })}
+          </ToggleButton>
+        ))}
+      </ToggleButtonGroup>
+      {mode === "limited" ? (
+        options === null ? (
+          <output
+            aria-live="polite"
+            aria-label={tCommon("loading")}
+            className="flex justify-center py-6 text-accent"
+          >
+            <Spinner color="current" />
+          </output>
+        ) : (
+          <div className="space-y-4">
+            {ASSIGNMENT_SCOPES.map((scope) => (
+              <MultiPicker
+                key={scope}
+                label={t("scope", { scope })}
+                placeholder={t("scope", { scope })}
+                searchLabel={t("search")}
+                emptyLabel={t("empty")}
+                items={itemsFor(scope)}
+                selected={picked[scope]}
+                onChange={(ids) => setPicked((cur) => ({ ...cur, [scope]: ids }))}
+                isDisabled={pending}
+              />
+            ))}
+            {total === 0 ? <p className="text-sm text-warning">{t("nothing")}</p> : null}
+          </div>
+        )
+      ) : null}
+    </FormDialog>
   );
 }

@@ -8,9 +8,7 @@ import {
   FieldError,
   Label,
   Meter,
-  Modal,
   NumberField,
-  Spinner,
   Switch,
   ToggleButton,
   ToggleButtonGroup,
@@ -30,6 +28,7 @@ import type {
   CapLink,
 } from "@/types/structure";
 import { useErrorToast } from "@/components/console/use-error-toast";
+import FormDialog from "@/components/console/form-dialog";
 
 const PRESETS = [10, 50, 100, 500, 1000];
 
@@ -56,7 +55,6 @@ export default function BudgetDialog({
   onSaved: (result: BudgetResult) => void;
 }) {
   const t = useTranslations("Budgets");
-  const tCommon = useTranslations("Common");
   const showError = useErrorToast();
   const format = useFormatter();
   const current = budget?.maxBudget ?? 0;
@@ -92,160 +90,133 @@ export default function BudgetDialog({
   }
 
   return (
-    <Modal state={state}>
-      <Modal.Backdrop>
-        <Modal.Container>
-          <Modal.Dialog className="max-w-lg">
-            {({ close }) => (
-              <>
-                <Modal.Header>
-                  <Modal.Heading>{t("title", { alias: target?.alias ?? "" })}</Modal.Heading>
-                  <p className="text-sm text-muted">
-                    {t("kindHint", { kind: target?.kind ?? "org" })}
-                  </p>
-                </Modal.Header>
-                <Modal.Body className="space-y-5">
-                  <Switch isSelected={limited} onChange={setLimited} isDisabled={pending}>
-                    <Switch.Content>
-                      <Switch.Control>
-                        <Switch.Thumb />
-                      </Switch.Control>
-                      <Label>{t("limitSpend")}</Label>
-                    </Switch.Content>
-                  </Switch>
+    <FormDialog
+      state={state}
+      title={t("title", { alias: target?.alias ?? "" })}
+      description={t("kindHint", { kind: target?.kind ?? "org" })}
+      submitLabel={t("saveBudget")}
+      pending={pending}
+      isSubmitDisabled={!target || Boolean(conflict) || (limited && !valid)}
+      onSubmit={save}
+    >
+      <Switch isSelected={limited} onChange={setLimited} isDisabled={pending}>
+        <Switch.Content>
+          <Switch.Control>
+            <Switch.Thumb />
+          </Switch.Control>
+          <Label>{t("limitSpend")}</Label>
+        </Switch.Content>
+      </Switch>
 
-                  {limited ? (
-                    <div className="space-y-3">
-                      <NumberField
-                        fullWidth
-                        value={amount}
-                        onChange={setAmount}
-                        minValue={0}
-                        formatOptions={formats.number.currency}
-                        isInvalid={Boolean(conflict) || !valid}
-                        isDisabled={pending}
-                      >
-                        <Label>{t("amount")}</Label>
-                        <NumberField.Group>
-                          <NumberField.DecrementButton />
-                          <NumberField.Input />
-                          <NumberField.IncrementButton />
-                        </NumberField.Group>
-                        {conflict ? (
-                          <FieldError>
-                            {t("exceedsParent", {
-                              kind: conflict.kind,
-                              alias: conflict.alias,
-                              cap: conflict.cap,
-                            })}
-                          </FieldError>
-                        ) : valid ? (
-                          <Description>{t("amountHint")}</Description>
-                        ) : (
-                          <FieldError>{t("amountInvalid")}</FieldError>
-                        )}
-                      </NumberField>
-                      <div className="flex flex-wrap gap-2" role="group" aria-label={t("presets")}>
-                        {PRESETS.map((preset) => (
-                          <Button
-                            key={preset}
-                            size="sm"
-                            variant={amount === preset ? "secondary" : "tertiary"}
-                            isDisabled={pending}
-                            onPress={() => setAmount(preset)}
-                          >
-                            {format.number(preset, "currencyWhole")}
-                          </Button>
-                        ))}
-                      </div>
-                    </div>
-                  ) : (
-                    <p className="text-sm text-muted">{t("unlimitedHint")}</p>
-                  )}
-
-                  <div className="space-y-2">
-                    <p id={periodLabel} className="text-sm font-medium">
-                      {t("period")}
-                    </p>
-                    <ToggleButtonGroup
-                      fullWidth
-                      selectionMode="single"
-                      disallowEmptySelection
-                      aria-labelledby={periodLabel}
-                      selectedKeys={[custom ?? PERIODS.find((item) => item.value === period)?.id ?? "none"]}
-                      onSelectionChange={(keys) => {
-                        const id = [...keys][0];
-                        const next = PERIODS.find((item) => item.id === id);
-                        if (next) setPeriod(next.value);
-                      }}
-                      isDisabled={pending}
-                    >
-                      {PERIODS.map((item, index) => (
-                        <ToggleButton key={item.id} id={item.id}>
-                          {index > 0 ? <ToggleButtonGroup.Separator /> : null}
-                          {t("periods", { period: item.label })}
-                        </ToggleButton>
-                      ))}
-                      {custom ? (
-                        <ToggleButton id={custom}>
-                          <ToggleButtonGroup.Separator />
-                          {t("periodCustom", { days: Number.parseInt(custom, 10) })}
-                        </ToggleButton>
-                      ) : null}
-                    </ToggleButtonGroup>
-                    <p className="text-xs text-muted">{t("periodHint")}</p>
-                  </div>
-
-                  <Card variant="secondary">
-                    <Card.Content className="space-y-3">
-                      {cap > 0 ? (
-                        <Meter
-                          value={ratio * 100}
-                          color={meterColor(ratio)}
-                          size="sm"
-                          aria-label={t("preview")}
-                        >
-                          <Label>{t("preview")}</Label>
-                          <Meter.Output />
-                          <Meter.Track>
-                            <Meter.Fill />
-                          </Meter.Track>
-                        </Meter>
-                      ) : null}
-                      <p className="text-sm text-muted">
-                        {t("previewText", {
-                          spend,
-                          capped: cap > 0 ? "yes" : "no",
-                          cap,
-                          boost: budget?.boost ?? 0,
-                          hasBoost: (budget?.boost ?? 0) > 0 ? "yes" : "no",
-                        })}
-                      </p>
-                    </Card.Content>
-                  </Card>
-                </Modal.Body>
-                <Modal.Footer>
-                  <Button variant="tertiary" onPress={close} isDisabled={pending}>
-                    {tCommon("cancel")}
-                  </Button>
-                  <Button
-                    isPending={pending}
-                    isDisabled={!target || Boolean(conflict) || (limited && !valid)}
-                    onPress={() => save(close)}
-                  >
-                    {({ isPending }) => (
-                      <>
-                        {isPending ? <Spinner color="current" size="sm" /> : null}
-                        {t("saveBudget")}
-                      </>
-                    )}
-                  </Button>
-                </Modal.Footer>
-              </>
+      {limited ? (
+        <div className="space-y-3">
+          <NumberField
+            fullWidth
+            value={amount}
+            onChange={setAmount}
+            minValue={0}
+            formatOptions={formats.number.currency}
+            isInvalid={Boolean(conflict) || !valid}
+            isDisabled={pending}
+          >
+            <Label>{t("amount")}</Label>
+            <NumberField.Group>
+              <NumberField.DecrementButton />
+              <NumberField.Input />
+              <NumberField.IncrementButton />
+            </NumberField.Group>
+            {conflict ? (
+              <FieldError>
+                {t("exceedsParent", {
+                  kind: conflict.kind,
+                  alias: conflict.alias,
+                  cap: conflict.cap,
+                })}
+              </FieldError>
+            ) : valid ? (
+              <Description>{t("amountHint")}</Description>
+            ) : (
+              <FieldError>{t("amountInvalid")}</FieldError>
             )}
-          </Modal.Dialog>
-        </Modal.Container>
-      </Modal.Backdrop>
-    </Modal>
+          </NumberField>
+          <div className="flex flex-wrap gap-2" role="group" aria-label={t("presets")}>
+            {PRESETS.map((preset) => (
+              <Button
+                key={preset}
+                size="sm"
+                variant={amount === preset ? "secondary" : "tertiary"}
+                isDisabled={pending}
+                onPress={() => setAmount(preset)}
+              >
+                {format.number(preset, "currencyWhole")}
+              </Button>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <p className="text-sm text-muted">{t("unlimitedHint")}</p>
+      )}
+
+      <div className="space-y-2">
+        <p id={periodLabel} className="text-sm font-medium">
+          {t("period")}
+        </p>
+        <ToggleButtonGroup
+          fullWidth
+          selectionMode="single"
+          disallowEmptySelection
+          aria-labelledby={periodLabel}
+          selectedKeys={[custom ?? PERIODS.find((item) => item.value === period)?.id ?? "none"]}
+          onSelectionChange={(keys) => {
+            const id = [...keys][0];
+            const next = PERIODS.find((item) => item.id === id);
+            if (next) setPeriod(next.value);
+          }}
+          isDisabled={pending}
+        >
+          {PERIODS.map((item, index) => (
+            <ToggleButton key={item.id} id={item.id}>
+              {index > 0 ? <ToggleButtonGroup.Separator /> : null}
+              {t("periods", { period: item.label })}
+            </ToggleButton>
+          ))}
+          {custom ? (
+            <ToggleButton id={custom}>
+              <ToggleButtonGroup.Separator />
+              {t("periodCustom", { days: Number.parseInt(custom, 10) })}
+            </ToggleButton>
+          ) : null}
+        </ToggleButtonGroup>
+        <p className="text-xs text-muted">{t("periodHint")}</p>
+      </div>
+
+      <Card variant="secondary">
+        <Card.Content className="space-y-3">
+          {cap > 0 ? (
+            <Meter
+              value={ratio * 100}
+              color={meterColor(ratio)}
+              size="sm"
+              aria-label={t("preview")}
+            >
+              <Label>{t("preview")}</Label>
+              <Meter.Output />
+              <Meter.Track>
+                <Meter.Fill />
+              </Meter.Track>
+            </Meter>
+          ) : null}
+          <p className="text-sm text-muted">
+            {t("previewText", {
+              spend,
+              capped: cap > 0 ? "yes" : "no",
+              cap,
+              boost: budget?.boost ?? 0,
+              hasBoost: (budget?.boost ?? 0) > 0 ? "yes" : "no",
+            })}
+          </p>
+        </Card.Content>
+      </Card>
+    </FormDialog>
   );
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Button, Modal, Spinner, toast, type useOverlayState } from "@heroui/react";
+import { toast, type useOverlayState } from "@heroui/react";
 import { useTranslations } from "next-intl";
 import { defaultGuardrails, guardrailsValid } from "@/lib/gateway/safety/guardrails";
 import { isActionFail } from "@/lib/http/action-result";
@@ -10,6 +10,7 @@ import { saveGuardrailOverrideAction } from "../_action";
 import GuardrailPolicyFields from "./guardrail-policy-fields";
 import PolicyTargetPicker from "./policy-target-picker";
 import { useErrorToast } from "@/components/console/use-error-toast";
+import FormDialog from "@/components/console/form-dialog";
 
 export default function GuardrailOverrideDialog({
   state,
@@ -26,7 +27,6 @@ export default function GuardrailOverrideDialog({
 }) {
   const t = useTranslations("Guardrails");
   const showError = useErrorToast();
-  const tCommon = useTranslations("Common");
   const [scope, setScope] = useState<PolicyScope>(() => editing?.scope ?? targets[0]?.scope ?? "org");
   const [targetId, setTargetId] = useState(
     () => editing?.id ?? targets.find((row) => row.scope === scope)?.id ?? "",
@@ -58,58 +58,34 @@ export default function GuardrailOverrideDialog({
   }
 
   return (
-    <Modal state={state}>
-      <Modal.Backdrop>
-        <Modal.Container>
-          <Modal.Dialog className="max-w-3xl">
-            {({ close }) => (
-              <>
-                <Modal.Header>
-                  <Modal.Heading>{t("overrideTitle", { mode: editing ? "edit" : "create" })}</Modal.Heading>
-                </Modal.Header>
-                <Modal.Body className="space-y-4">
-                  <p className="text-sm text-muted">{t("content.overrideHint")}</p>
-                  {editing ? (
-                    <p className="text-sm">
-                      {t("overrideTarget", { scope: editing.scope, alias: editing.alias })}
-                    </p>
-                  ) : (
-                    <PolicyTargetPicker
-                      targets={targets}
-                      scope={scope}
-                      targetId={targetId}
-                      onScopeChange={(next) => {
-                        setScope(next);
-                        pickTarget(targets.find((row) => row.scope === next)?.id ?? "");
-                      }}
-                      onTargetChange={pickTarget}
-                      isDisabled={pending}
-                    />
-                  )}
-                  <GuardrailPolicyFields value={policy} onChange={setPolicy} isDisabled={pending} />
-                </Modal.Body>
-                <Modal.Footer>
-                  <Button variant="tertiary" onPress={close} isDisabled={pending}>
-                    {tCommon("cancel")}
-                  </Button>
-                  <Button
-                    isPending={pending}
-                    isDisabled={!targetId || !guardrailsValid(policy)}
-                    onPress={() => save(close)}
-                  >
-                    {({ isPending }) => (
-                      <>
-                        {isPending ? <Spinner color="current" size="sm" /> : null}
-                        {t("saveOverride")}
-                      </>
-                    )}
-                  </Button>
-                </Modal.Footer>
-              </>
-            )}
-          </Modal.Dialog>
-        </Modal.Container>
-      </Modal.Backdrop>
-    </Modal>
+    <FormDialog
+      state={state}
+      size="xl"
+      title={t("overrideTitle", { mode: editing ? "edit" : "create" })}
+      description={t("content.overrideHint")}
+      submitLabel={t("saveOverride")}
+      pending={pending}
+      isSubmitDisabled={!targetId || !guardrailsValid(policy)}
+      onSubmit={save}
+    >
+      {editing ? (
+        <p className="text-sm">
+          {t("overrideTarget", { scope: editing.scope, alias: editing.alias })}
+        </p>
+      ) : (
+        <PolicyTargetPicker
+          targets={targets}
+          scope={scope}
+          targetId={targetId}
+          onScopeChange={(next) => {
+            setScope(next);
+            pickTarget(targets.find((row) => row.scope === next)?.id ?? "");
+          }}
+          onTargetChange={pickTarget}
+          isDisabled={pending}
+        />
+      )}
+      <GuardrailPolicyFields value={policy} onChange={setPolicy} isDisabled={pending} />
+    </FormDialog>
   );
 }
