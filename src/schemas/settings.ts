@@ -1,6 +1,8 @@
 import { z } from "zod";
+import { CACHE_STATS_RANGES, CACHE_TTL_MAX_SECONDS, SEMANTIC_THRESHOLD_MIN } from "@/lib/gateway/cache-settings";
 import { modelAlias } from "@/lib/gateway/model-alias";
-import { MAX_ALERT_WEBHOOKS, WEBHOOK_EVENTS } from "@/lib/gateway/webhook-events";
+import { MAX_ALERT_WEBHOOKS, WEBHOOK_EVENTS, WEBHOOK_FORMATS } from "@/lib/gateway/webhook-events";
+import { vectorDefaultsSchema } from "@/schemas/rag";
 
 function isHttpUrl(value: string): boolean {
   try {
@@ -32,6 +34,12 @@ export const adminSettingsSchema = z.object({
     api_key: z.string().trim().max(500),
     clear_api_key: z.boolean(),
   }),
+  vector_stores: vectorDefaultsSchema.default({
+    embedding_model: "",
+    embedding_dimensions: 0,
+    ocr_model: "",
+    rerank_model: "",
+  }),
   oidc: z.object({
     enabled: z.boolean(),
     issuer: optionalUrl,
@@ -57,7 +65,24 @@ export const alertWebhooksSchema = z
       url: z.string().trim().max(500).refine(isHttpUrl, "must be an http(s) URL"),
       secret: z.string().trim().max(500),
       clearSecret: z.boolean(),
+      format: z.enum(WEBHOOK_FORMATS),
       events: z.array(z.enum(WEBHOOK_EVENTS)).min(1),
     }),
   )
   .max(MAX_ALERT_WEBHOOKS);
+
+export const cacheSettingsSchema = z.object({
+  cacheTtlSeconds: z.number().int().min(0).max(CACHE_TTL_MAX_SECONDS).optional(),
+  semantic: z
+    .object({
+      enabled: z.boolean(),
+      model: text.transform(modelAlias),
+      threshold: z.number().min(SEMANTIC_THRESHOLD_MIN).max(1),
+    })
+    .refine((semantic) => !semantic.enabled || Boolean(semantic.model), { path: ["model"] })
+    .optional(),
+});
+
+export const cacheStatsSchema = z.object({
+  days: z.union(CACHE_STATS_RANGES.map((days) => z.literal(days))),
+});

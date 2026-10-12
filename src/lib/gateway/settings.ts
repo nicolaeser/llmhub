@@ -10,10 +10,28 @@ import {
   asStringArray,
   asStringMap,
 } from "@/lib/gateway/core";
+import {
+  defaultGuardrails,
+  GUARDRAIL_ACTIONS,
+  INJECTION_CHECKS,
+  MAX_RULE_PATTERNS,
+  MAX_RULES,
+  RULE_KINDS,
+  RULE_TARGETS,
+  SECRET_ENTITIES,
+} from "@/lib/gateway/guardrails";
 import { modelAlias } from "@/lib/gateway/model-alias";
+import { SEMANTIC_THRESHOLD_DEFAULT, SEMANTIC_THRESHOLD_MIN } from "@/lib/gateway/cache-settings";
 import { DEFAULT_AUTO_CONFIDENCE, JEV_SUGGEST_CONFIDENCE } from "@/lib/gateway/model-catalog";
-import { WEBHOOK_EVENTS } from "@/lib/gateway/webhook-events";
+import {
+  anomalyFactor,
+  DEFAULT_KEY_EXPIRY_WARNING_DAYS,
+  DEFAULT_SPEND_ANOMALY_FACTOR,
+  DEFAULT_SPEND_ANOMALY_MIN_COST,
+} from "@/lib/gateway/alert-rules";
+import { WEBHOOK_EVENTS, WEBHOOK_FORMATS } from "@/lib/gateway/webhook-events";
 import type {
+  AlertStateKind,
   AlertWebhook,
   CatalogRouting,
   JsonMap,
@@ -24,11 +42,18 @@ import type {
   Enterprise,
   JevSettings,
   Principal,
+  WebhookFormat,
 } from "@/types/gateway";
-import type { PiiPolicy } from "@/types/guardrails";
+import type { GuardrailPolicy, GuardrailRule, PiiPolicy } from "@/types/guardrails";
+import type { SemanticCacheSettings } from "@/types/cache";
+import type { VectorStoreDefaults } from "@/types/rag";
 
 const SETTING_ENTERPRISE = "enterprise";
-const SETTING_BUDGET_ALERTS = "budget_alert_state";
+const ALERT_STATE_SETTINGS: Record<AlertStateKind, string> = {
+  budget: "budget_alert_state",
+  spend_anomaly: "spend_anomaly_state",
+  key_expiry: "key_expiry_alert_state",
+};
 const LEGACY_WEBHOOK_ID = "legacy";
 
 const DEFAULT_PII: PIIConfig = {
@@ -42,8 +67,22 @@ export const DEFAULT_JEV_MODEL = "jev-latest";
 
 const DEFAULT_JEV: JevSettings = { enabled: false, model: DEFAULT_JEV_MODEL, api_key: "" };
 
+const DEFAULT_SEMANTIC_CACHE: SemanticCacheSettings = {
+  enabled: false,
+  model: "",
+  threshold: SEMANTIC_THRESHOLD_DEFAULT,
+};
+
+const DEFAULT_VECTOR_STORES: VectorStoreDefaults = {
+  embedding_model: "",
+  embedding_dimensions: 0,
+  ocr_model: "",
+  rerank_model: "",
+};
+
 const DEFAULT_ENTERPRISE: Enterprise = {
   cache_ttl_seconds: 0,
+  cache_semantic: DEFAULT_SEMANTIC_CACHE,
   log_retention_days: 0,
   spend_retention_days: 0,
   audit_retention_days: 0,
@@ -60,8 +99,13 @@ const DEFAULT_ENTERPRISE: Enterprise = {
   catalog_auto_routes: true,
   catalog_min_confidence: DEFAULT_AUTO_CONFIDENCE,
   update_check: true,
+  vector_stores: DEFAULT_VECTOR_STORES,
   pii: DEFAULT_PII,
+  guardrails: defaultGuardrails(),
   budget_alert_thresholds: [50, 80, 100],
+  spend_anomaly_factor: DEFAULT_SPEND_ANOMALY_FACTOR,
+  spend_anomaly_min_cost: DEFAULT_SPEND_ANOMALY_MIN_COST,
+  key_expiry_warning_days: DEFAULT_KEY_EXPIRY_WARNING_DAYS,
   oidc: {
     enabled: false,
     issuer: "",
@@ -91,6 +135,62 @@ function normalizePii(raw: unknown): PiiPolicy {
   };
 }
 
+function pick<T extends string>(value: unknown, allowed: readonly T[], fallback: T): T {
+  return allowed.find((item) => item === value) ?? fallback;
+}
+
+function normalizeRule(raw: unknown, index: number): GuardrailRule[] {
+  const rec = asRecord(raw);
+  if (!rec) return [];
+  const patterns = asStringArray(rec.patterns)
+    .map((pattern) => pattern.trim())
+    .filter(Boolean)
+    .slice(0, MAX_RULE_PATTERNS);
+  const name = asString(rec.name).trim();
+  if (!patterns.length || !name) return [];
+  return [
+    {
+      id: asString(rec.id).trim() || `rule_${index + 1}`,
+      name,
+      kind: pick(rec.kind, RULE_KINDS, "denylist"),
+      target: pick(rec.target, RULE_TARGETS, "input"),
+      action: pick(rec.action, GUARDRAIL_ACTIONS, "block"),
+      patterns,
+      caseSensitive: asBool(rec.caseSensitive, false),
+    },
+  ];
+}
+
+export function normalizeGuardrails(raw: unknown): GuardrailPolicy {
+  const rec = asRecord(raw) ?? {};
+  const fallback = defaultGuardrails();
+  const injection = asRecord(rec.injection) ?? {};
+  const secrets = asRecord(rec.secrets) ?? {};
+  const checks = asStringArray(injection.checks);
+  const entities = asStringArray(secrets.entities);
+  return {
+    injection: {
+      enabled: asBool(injection.enabled, fallback.injection.enabled),
+      action: pick(injection.action, ["block", "flag"] as const, fallback.injection.action),
+      checks: Array.isArray(injection.checks)
+        ? INJECTION_CHECKS.filter((check) => checks.includes(check))
+        : fallback.injection.checks,
+    },
+    secrets: {
+      enabled: asBool(secrets.enabled, fallback.secrets.enabled),
+      action: pick(secrets.action, GUARDRAIL_ACTIONS, fallback.secrets.action),
+      entities: Array.isArray(secrets.entities)
+        ? SECRET_ENTITIES.filter((id) => entities.includes(id))
+        : fallback.secrets.entities,
+    },
+    rules: (Array.isArray(rec.rules) ? rec.rules : []).slice(0, MAX_RULES).flatMap(normalizeRule),
+  };
+}
+
+export function webhookFormat(value: unknown): WebhookFormat {
+  return WEBHOOK_FORMATS.find((format) => format === value) ?? "json";
+}
+
 function normalizeWebhooks(rec: JsonMap): AlertWebhook[] {
   const list = (Array.isArray(rec.alert_webhooks) ? rec.alert_webhooks : []).flatMap((entry) => {
     const hook = asRecord(entry);
@@ -98,7 +198,15 @@ function normalizeWebhooks(rec: JsonMap): AlertWebhook[] {
     const url = asString(hook?.url).trim();
     if (!hook || !id || !url) return [];
     const events = asStringArray(hook.events);
-    return [{ id, url, secret: asString(hook.secret), events: WEBHOOK_EVENTS.filter((e) => events.includes(e)) }];
+    return [
+      {
+        id,
+        url,
+        secret: asString(hook.secret),
+        format: webhookFormat(hook.format),
+        events: WEBHOOK_EVENTS.filter((e) => events.includes(e)),
+      },
+    ];
   });
   if (list.length) return list;
   const legacy = asString(rec.alert_webhook).trim();
@@ -108,6 +216,7 @@ function normalizeWebhooks(rec: JsonMap): AlertWebhook[] {
       id: LEGACY_WEBHOOK_ID,
       url: legacy,
       secret: asString(rec.alert_webhook_secret),
+      format: "json",
       events: [...WEBHOOK_EVENTS],
     },
   ];
@@ -119,6 +228,28 @@ export function normalizeJev(raw: unknown): JevSettings {
     enabled: asBool(rec.enabled, false),
     model: asString(rec.model).trim() || DEFAULT_JEV_MODEL,
     api_key: asString(rec.api_key),
+  };
+}
+
+export function normalizeSemanticCache(raw: unknown): SemanticCacheSettings {
+  const rec = asRecord(raw) ?? {};
+  const model = modelAlias(asString(rec.model).trim());
+  const threshold = asNumber(rec.threshold, SEMANTIC_THRESHOLD_DEFAULT);
+  return {
+    enabled: asBool(rec.enabled, false) && Boolean(model),
+    model,
+    threshold: Math.min(1, Math.max(SEMANTIC_THRESHOLD_MIN, threshold)),
+  };
+}
+
+export function normalizeVectorDefaults(raw: unknown): VectorStoreDefaults {
+  const rec = asRecord(raw) ?? {};
+  const dimensions = Math.trunc(asNumber(rec.embedding_dimensions, 0));
+  return {
+    embedding_model: modelAlias(asString(rec.embedding_model)),
+    embedding_dimensions: dimensions > 0 ? dimensions : 0,
+    ocr_model: modelAlias(asString(rec.ocr_model)),
+    rerank_model: modelAlias(asString(rec.rerank_model)),
   };
 }
 
@@ -138,6 +269,7 @@ export function normalizeEnterprise(raw: unknown): Enterprise {
   const rec = asRecord(raw) ?? {};
   return {
     cache_ttl_seconds: asNumber(rec.cache_ttl_seconds, 0),
+    cache_semantic: normalizeSemanticCache(rec.cache_semantic),
     log_retention_days: asNumber(rec.log_retention_days, 0),
     spend_retention_days: asNumber(rec.spend_retention_days, 0),
     audit_retention_days: asNumber(rec.audit_retention_days, 0),
@@ -154,13 +286,21 @@ export function normalizeEnterprise(raw: unknown): Enterprise {
     catalog_auto_routes: asBool(rec.catalog_auto_routes, true),
     catalog_min_confidence: catalogConfidence(rec.catalog_min_confidence),
     update_check: asBool(rec.update_check, true),
+    vector_stores: normalizeVectorDefaults(rec.vector_stores),
     oidc: normalizeOidc(rec.oidc),
     pii: normalizePii(rec.pii ?? DEFAULT_PII),
+    guardrails: normalizeGuardrails(rec.guardrails),
     s3: normalizeS3(rec.s3),
     budget_alert_thresholds: (() => {
       const list = asNumberArray(rec.budget_alert_thresholds);
       return list.length ? list : [50, 80, 100];
     })(),
+    spend_anomaly_factor: anomalyFactor(asNumber(rec.spend_anomaly_factor, DEFAULT_SPEND_ANOMALY_FACTOR)),
+    spend_anomaly_min_cost: Math.max(0, asNumber(rec.spend_anomaly_min_cost, DEFAULT_SPEND_ANOMALY_MIN_COST)),
+    key_expiry_warning_days: Math.max(
+      0,
+      Math.trunc(asNumber(rec.key_expiry_warning_days, DEFAULT_KEY_EXPIRY_WARNING_DAYS)),
+    ),
   };
 }
 
@@ -231,23 +371,51 @@ export function piiOverride(raw: unknown): PiiPolicy | null {
   return asRecord(raw) ? normalizePii(raw) : null;
 }
 
+export async function getGuardrails(): Promise<GuardrailPolicy> {
+  return normalizeGuardrails((await getEnterprise()).guardrails);
+}
+
+export function guardrailOverride(raw: unknown): GuardrailPolicy | null {
+  return asRecord(raw) ? normalizeGuardrails(raw) : null;
+}
+
+const POLICY_SELECT = { piiPolicy: true, guardrailPolicy: true } as const;
+
+async function inheritedPolicies(principal: Principal) {
+  const projectId = principal.key?.project_id;
+  const [project, org] = await Promise.all([
+    projectId ? prisma.project.findUnique({ where: { id: projectId }, select: POLICY_SELECT }) : null,
+    principal.orgId ? prisma.organization.findUnique({ where: { id: principal.orgId }, select: POLICY_SELECT }) : null,
+  ]);
+  return { project, org };
+}
+
+export async function resolvePolicies(principal: Principal): Promise<{ pii: PiiPolicy; guardrails: GuardrailPolicy }> {
+  const keyPii = principal.key?.pii ?? null;
+  const keyGuardrails = principal.guardrails ?? null;
+  const { project, org } =
+    keyPii && keyGuardrails ? { project: null, org: null } : await inheritedPolicies(principal);
+  const pii = keyPii ?? piiOverride(project?.piiPolicy) ?? piiOverride(org?.piiPolicy);
+  const guardrails =
+    keyGuardrails ?? guardrailOverride(project?.guardrailPolicy) ?? guardrailOverride(org?.guardrailPolicy);
+  if (pii && guardrails) return { pii, guardrails };
+  const enterprise = await getEnterprise();
+  return {
+    pii: pii ?? normalizePii(enterprise.pii),
+    guardrails: guardrails ?? normalizeGuardrails(enterprise.guardrails),
+  };
+}
+
 export async function resolvePii(principal: Principal): Promise<PiiPolicy> {
-  if (principal.key?.pii) return principal.key.pii;
-  const org = principal.orgId
-    ? await prisma.organization.findUnique({
-        where: { id: principal.orgId },
-        select: { piiPolicy: true },
-      })
-    : null;
-  return piiOverride(org?.piiPolicy) ?? getPii();
+  return (await resolvePolicies(principal)).pii;
 }
 
-export async function getBudgetAlertState(): Promise<Record<string, string>> {
-  return asStringMap(await readJson(SETTING_BUDGET_ALERTS));
+export async function getAlertState(kind: AlertStateKind): Promise<Record<string, string>> {
+  return asStringMap(await readJson(ALERT_STATE_SETTINGS[kind]));
 }
 
-export async function saveBudgetAlertState(state: Record<string, string>): Promise<void> {
-  await writeJson(SETTING_BUDGET_ALERTS, state);
+export async function saveAlertState(kind: AlertStateKind, state: Record<string, string>): Promise<void> {
+  await writeJson(ALERT_STATE_SETTINGS[kind], state);
 }
 
 export async function patchEnterprise(patch: Partial<Enterprise>): Promise<Enterprise> {
@@ -259,6 +427,9 @@ export async function patchEnterprise(patch: Partial<Enterprise>): Promise<Enter
     pii: patch.pii ? { ...current.pii, ...patch.pii } : current.pii,
     s3: patch.s3 ? { ...current.s3, ...patch.s3 } : current.s3,
     catalog_jev: patch.catalog_jev ? { ...current.catalog_jev, ...patch.catalog_jev } : current.catalog_jev,
+    vector_stores: patch.vector_stores
+      ? normalizeVectorDefaults({ ...current.vector_stores, ...patch.vector_stores })
+      : current.vector_stores,
   };
   const jev = next.catalog_jev ?? DEFAULT_JEV;
   await writeJson(SETTING_ENTERPRISE, {
@@ -275,9 +446,16 @@ export async function savePii(pii: PIIConfig): Promise<PiiPolicy> {
   return normalized;
 }
 
+export async function saveGuardrails(policy: GuardrailPolicy): Promise<GuardrailPolicy> {
+  const normalized = normalizeGuardrails(policy);
+  await patchEnterprise({ guardrails: normalized });
+  return normalized;
+}
+
 export async function loadSettings() {
   const enterprise = await getEnterprise();
   return {
     cacheTtlSeconds: enterprise.cache_ttl_seconds ?? 0,
+    semanticCache: normalizeSemanticCache(enterprise.cache_semantic),
   };
 }

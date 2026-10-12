@@ -7,7 +7,11 @@ import { fireAlert } from "@/lib/gateway/alerts";
 import { runPendingBatches } from "@/lib/gateway/batches";
 import { crossedThresholds, forecastBudget } from "@/lib/gateway/forecast";
 import { purgeStoredObjects } from "@/lib/gateway/objects";
-import { getBudgetAlertState, getEnterprise, saveBudgetAlertState } from "@/lib/gateway/settings";
+import { runPendingIngests } from "@/lib/rag/ingest";
+import { expireVectorStores, purgeOrphanUploads } from "@/lib/rag/stores";
+import { getAlertState, getEnterprise, saveAlertState } from "@/lib/gateway/settings";
+import { runUsageReports } from "@/lib/reports/usage-report";
+import { runKeyExpiryAlerts, runSpendAnomalyAlerts } from "./alert-checks";
 import { retentionCutoff } from "./retention";
 import type { MaintenanceSweepResult } from "@/types/jobs";
 import { money } from "@/lib/utils/money";
@@ -47,6 +51,9 @@ export async function runMaintenanceSweep(
     auditLogs: 0,
     storedObjects: 0,
     batches: 0,
+    vectorFiles: 0,
+    vectorStores: 0,
+    reports: 0,
   };
 
   const enterprise = await getEnterprise().catch(() => null);
@@ -83,8 +90,14 @@ export async function runMaintenanceSweep(
     uploadsBefore: retentionCutoff(enterprise?.file_retention_days ?? 0, now),
   }).catch(() => 0);
   result.batches = await runPendingBatches().catch(() => 0);
+  result.vectorStores = await expireVectorStores(now).catch(() => 0);
+  result.storedObjects += await purgeOrphanUploads(now).catch(() => 0);
+  result.vectorFiles = await runPendingIngests().catch(() => 0);
   await runSpendResets(now).catch(() => 0);
   await runBudgetAlerts().catch(() => 0);
+  await runSpendAnomalyAlerts(now).catch(() => 0);
+  await runKeyExpiryAlerts(now).catch(() => 0);
+  result.reports = await runUsageReports(now).catch(() => 0);
   return result;
 }
 
@@ -190,7 +203,7 @@ export async function runBudgetAlerts(): Promise<number> {
   const thresholds = enterprise.budget_alert_thresholds?.length
     ? enterprise.budget_alert_thresholds
     : [50, 80, 100];
-  const state = await getBudgetAlertState();
+  const state = await getAlertState("budget");
   const [keys, users, members, teams, orgs, projects] = await Promise.all([
     prisma.virtualKey.findMany({
       select: {
@@ -295,6 +308,6 @@ export async function runBudgetAlerts(): Promise<number> {
     state[key] = stamp;
     fired += 1;
   }
-  if (fired) await saveBudgetAlertState(state);
+  if (fired) await saveAlertState("budget", state);
   return fired;
 }

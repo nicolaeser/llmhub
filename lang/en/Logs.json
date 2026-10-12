@@ -23,7 +23,7 @@
     "changes": "Changes",
     "endpoint": "Endpoint",
     "caller": "Caller",
-    "pii": "PII"
+    "pii": "Checks"
   },
   "emptyRequests": "No request logs yet.",
   "emptySpend": "No spend events.",
@@ -51,13 +51,17 @@
   "caller": {
     "noKey": "Console session"
   },
-  "statusOutcome": "{status} · {outcome, select, ok {OK} error {Error} cache_hit {Cache hit} pii_blocked {Blocked by PII} other {{outcome}}}",
+  "statusOutcome": "{status} · {outcome, select, ok {OK} error {Error} cache_hit {Response cache hit} pii_blocked {Blocked by PII} guardrail_blocked {Blocked by guardrail} other {{outcome}}}",
   "openDetails": "Show details for {model}",
   "pii": {
     "blocked": "Blocked",
     "found": "{entity}{more, plural, =0 {} other { +#}}",
     "clean": "No PII",
     "none": "—"
+  },
+  "guard": {
+    "blocked": "Guardrail",
+    "flagged": "{count, plural, one {# match} other {# matches}}"
   },
   "detail": {
     "title": "Request details",
@@ -73,11 +77,15 @@
     "user": "Console user",
     "member": "Person",
     "team": "Department",
+    "cache": "Prompt cache",
+    "cacheValue": "{read, number, integer} read · {written, number, integer} written",
     "privacy": "Privacy",
     "piiFilter": "Prompt filter",
     "piiMode": "{mode, select, mask {Masked before the model} block {Blocked before the model} other {Not filtered}}",
     "piiPrompt": "Found in prompt",
     "piiResponse": "Found in response",
+    "guardPrompt": "Guardrail matches in prompt",
+    "guardResponse": "Guardrail matches in response",
     "piiStored": "Stored content is masked. Highlighted placeholders show where PII was removed.",
     "content": "Content",
     "conversation": "Conversation",
@@ -97,6 +105,11 @@
     "exportFormat": "{format, select, pdf {PDF} md {Markdown} other {JSON}}",
     "markdown": "Render Markdown",
     "generated": "Generated {at, date, zoned}",
-    "page": "Page {page, number, integer} of {total, number, integer}"
+    "page": "Page {page, number, integer} of {total, number, integer}",
+    "replay": "Open in Playground",
+    "replayModel": "Replay model",
+    "replayHint": "Load this request into the Playground to send it again. Keep the original model or pick another to compare.",
+    "replayPick": "Choose a model",
+    "replayNoModels": "No models available"
   }
 }

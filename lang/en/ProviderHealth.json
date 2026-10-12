@@ -1,0 +1,35 @@
+{
+  "title": "Provider health",
+  "subtitle": "Every upstream attempt counts, including retries. Repeated failures pause an endpoint for {seconds, plural, one {# second} other {# seconds}}.",
+  "backend": "{backend, select, redis {Shared through Redis} other {This instance only}}",
+  "window": "Window",
+  "lastMinutes": "{n, plural, one {Last minute} other {Last # minutes}}",
+  "metrics": {
+    "active": "Endpoints with traffic",
+    "cooling": "Cooling down",
+    "attempts": "Upstream attempts",
+    "errorRate": "Error rate"
+  },
+  "activeValue": "{active, number, integer} / {total, number, integer}",
+  "endpoints": "Endpoints",
+  "updated": "{n, plural, one {Last minute} other {Last # minutes}}, updated {time}",
+  "latencyNote": "Latency is the time until the upstream answers (first byte for streams), estimated from time buckets.",
+  "showIdle": "{n, plural, =0 {Show idle endpoints} one {Show # idle endpoint} other {Show # idle endpoints}}",
+  "columns": {
+    "model": "Model",
+    "provider": "Provider",
+    "attempts": "Attempts",
+    "errorRate": "Error rate",
+    "p50": "p50 latency",
+    "p95": "p95 latency",
+    "trips": "Cooldowns"
+  },
+  "state": "{state, select, cooling {Cooling down} degraded {Errors} healthy {Healthy} other {Idle}}",
+  "ready": "Ready {when}",
+  "latencyValue": "{ms, number, integer} ms",
+  "quiet": "{n, plural, one {No upstream attempts in the last minute.} other {No upstream attempts in the last # minutes.}}",
+  "emptyTitle": "No endpoints yet",
+  "empty": "Add a model with at least one endpoint to see its health here.",
+  "openModels": "Open models",
+  "loadFailed": "Could not load provider health."
+}

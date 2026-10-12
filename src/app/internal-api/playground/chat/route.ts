@@ -8,7 +8,7 @@ import { streamChat } from "@/lib/gateway/chat";
 import {
   admit,
   allowModel,
-  applyPii,
+  applyGuardrails,
   modelChain,
   modelOf,
   requestPath,
@@ -34,14 +34,14 @@ export async function POST(req: Request) {
     const principal = withTrace(sessionPrincipal(session.user), requestPath(req));
     allowModel(principal, model);
     await admit(principal);
-    const { body: clean, output } = await applyPii(body, principal);
+    const { body: clean, output } = await applyGuardrails(body, principal);
     return await streamChat({
       req,
       principal,
       model,
       body: { ...clean, stream: true },
       aliases: modelChain(principal, model, clean),
-      outputPii: output,
+      outputGuard: output,
     });
   } catch (err) {
     return problemFromError(req, err);

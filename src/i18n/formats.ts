@@ -5,6 +5,7 @@ export const formats = {
     short: { day: "numeric", month: "short", year: "numeric" },
     chart: { day: "numeric", month: "short" },
     long: { day: "numeric", month: "long", year: "numeric" },
+    month: { month: "long", year: "numeric" },
     full: { dateStyle: "full", timeStyle: "short" },
     time: { timeStyle: "medium" },
     dateTime: { dateStyle: "medium", timeStyle: "medium" },
@@ -21,8 +22,10 @@ export const formats = {
   },
   number: {
     integer: { maximumFractionDigits: 0 },
+    factor: { maximumFractionDigits: 1 },
     percent: { style: "percent", maximumFractionDigits: 1 },
     percentPoints: { style: "unit", unit: "percent", maximumFractionDigits: 0 },
+    markup: { style: "percent", signDisplay: "exceptZero", maximumFractionDigits: 2 },
     axis: { notation: "compact", maximumSignificantDigits: 3 },
     currency: {
       style: "currency",

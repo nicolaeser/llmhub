@@ -2,16 +2,21 @@ import "server-only";
 import { bearerToken, clientIp, readJSON } from "@/lib/http/api";
 import { authenticateBearer } from "@/lib/gateway/principal";
 import { defaultEntityIds, redactJSON } from "@/lib/gateway/pii";
-import { alertUpstreamFailure } from "@/lib/gateway/alerts";
-import { resolvePii } from "@/lib/gateway/settings";
+import { outputGuard, screenRequest } from "@/lib/gateway/guardrails";
+import { alertPiiBlocked, alertUpstreamFailure } from "@/lib/gateway/alerts";
+import { resolvePolicies } from "@/lib/gateway/settings";
 import { assertBudget, assertRate, recordUsage } from "@/lib/gateway/billing";
+import { capRequestCost, maxCostHeader } from "@/lib/gateway/cost-cap";
 import { asRecord, isRouterError, newRequestId } from "@/lib/gateway/core";
 import { anthropicErrorBody, GateError, openAIErrorBody } from "@/lib/gateway/errors";
 import { logger } from "@/lib/logging/logger";
 import { modelAlias } from "@/lib/gateway/model-alias";
 import { aliasChain } from "@/lib/gateway/runtime";
+import { accessOpen, endpointAllowed } from "@/lib/gateway/key-restrictions";
+import { gatewayPath } from "@/lib/gateway/route-pool";
 import { NextResponse } from "next/server";
-import type { JsonMap, Principal } from "@/types/gateway";
+import type { JsonMap, Principal, RoutePool } from "@/types/gateway";
+import type { OutputGuard } from "@/types/guardrails";
 
 export function toGateError(err: unknown): GateError {
   if (err instanceof GateError) return err;
@@ -35,7 +40,7 @@ export function toGateError(err: unknown): GateError {
 }
 
 export function wantsAnthropicErrors(req: Request): boolean {
-  return new URL(req.url).pathname.startsWith("/v1/messages") || req.headers.has("anthropic-version");
+  return gatewayPath(new URL(req.url).pathname).startsWith("/v1/messages") || req.headers.has("anthropic-version");
 }
 
 export function gateResponse(err: unknown, req: Request): NextResponse {
@@ -64,26 +69,51 @@ export function requestPath(req: Request): string {
 export function withTrace(principal: Principal, endpoint: string): Principal {
   return {
     ...principal,
-    trace: { endpoint, piiMode: "", piiInput: new Set(), piiOutput: new Set() },
+    trace: {
+      endpoint,
+      piiMode: "",
+      piiInput: new Set(),
+      piiOutput: new Set(),
+      guardInput: new Set(),
+      guardOutput: new Set(),
+      guardBlocked: false,
+    },
   };
 }
 
-export async function gateRequest(req: Request): Promise<Principal> {
+export async function gateRequest(req: Request, pool: RoutePool = "api"): Promise<Principal> {
   const token = bearerToken(req);
   const ip = clientIp(req.headers);
-  const principal = withTrace(await authenticateBearer(token), requestPath(req));
+  const path = requestPath(req);
+  const principal = { ...withTrace(await authenticateBearer(token), path), pool };
   if (principal.key?.allowed_ips.length) {
     if (!ip || !principal.key.allowed_ips.includes(ip)) {
       throw new GateError(403, "ip_not_allowed", "ip not allowed for this key");
     }
   }
-  await admit(principal);
+  allowEndpoint(principal, gatewayPath(path));
+  allowAccessTime(principal, new Date());
+  await admit(principal, maxCostHeader(req.headers));
   return principal;
 }
 
-export async function admit(principal: Principal): Promise<void> {
-  await assertBudget(principal);
+export function allowEndpoint(principal: Principal, path: string, param?: string): void {
+  if (principal.key && !endpointAllowed(principal.key.allowed_endpoints, path)) {
+    throw new GateError(403, "endpoint_not_allowed", "endpoint not allowed for this key", { param });
+  }
+}
+
+export function allowAccessTime(principal: Principal, at: Date): void {
+  const key = principal.key;
+  if (key && !accessOpen(key.access_windows, key.access_time_zone, at)) {
+    throw new GateError(403, "outside_access_window", "this key is outside its allowed time windows");
+  }
+}
+
+export async function admit(principal: Principal, maxCost: number | null = null): Promise<void> {
+  const budget = await assertBudget(principal);
   await assertRate(principal);
+  capRequestCost(principal, budget, maxCost);
 }
 
 export function modelPermitted(principal: Principal, model: string): boolean {
@@ -113,36 +143,56 @@ export function modelChain(principal: Principal, model: string, body: JsonMap): 
   return aliases;
 }
 
-export async function applyPii(
+async function rejectRequest(principal: Principal, body: JsonMap, error: GateError, outcome: string): Promise<never> {
+  await recordUsage({
+    principal,
+    model: modelOf(body),
+    status: error.status,
+    outcome,
+    latencyMs: 0,
+    tag: spendTag(body),
+    error,
+  }).catch(() => undefined);
+  throw error;
+}
+
+export async function applyGuardrails(
   body: JsonMap,
   principal: Principal,
-): Promise<{ body: JsonMap; output: string[] | null }> {
+): Promise<{ body: JsonMap; output: OutputGuard | null }> {
   const trace = principal.trace;
   if (trace) trace.request = body;
-  const pii = await resolvePii(principal);
-  if (!pii.enabled) return { body, output: null };
+  const { pii, guardrails } = await resolvePolicies(principal);
+  const screened = screenRequest(body, guardrails, trace?.guardInput ?? new Set());
+  if (trace) trace.request = screened.body;
+  if (screened.blocked) {
+    if (trace) trace.guardBlocked = true;
+    await rejectRequest(
+      principal,
+      body,
+      new GateError(400, "guardrail_blocked", "request blocked by guardrail policy"),
+      "guardrail_blocked",
+    );
+  }
+  if (!pii.enabled) return { body: screened.body, output: outputGuard(guardrails, null) };
   const entities = pii.entities.length ? pii.entities : defaultEntityIds();
   const found = new Set<string>();
-  const redacted = redactJSON(body, entities, "", found) as JsonMap;
+  const redacted = redactJSON(screened.body, entities, "", found) as JsonMap;
   if (trace) {
     trace.request = redacted;
     trace.piiMode = pii.mode;
     for (const id of found) trace.piiInput.add(id);
   }
   if (pii.mode === "block" && found.size) {
-    const blocked = new GateError(400, "pii_blocked", "request blocked by PII policy");
-    await recordUsage({
+    void alertPiiBlocked(principal, found);
+    await rejectRequest(
       principal,
-      model: modelOf(body),
-      status: blocked.status,
-      outcome: "pii_blocked",
-      latencyMs: 0,
-      tag: spendTag(body),
-      error: blocked,
-    }).catch(() => undefined);
-    throw blocked;
+      body,
+      new GateError(400, "pii_blocked", "request blocked by PII policy"),
+      "pii_blocked",
+    );
   }
-  return { body: redacted, output: pii.output ? entities : null };
+  return { body: redacted, output: outputGuard(guardrails, pii.output ? entities : null) };
 }
 
 export async function readBody(req: Request): Promise<JsonMap> {

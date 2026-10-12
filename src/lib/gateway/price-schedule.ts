@@ -1,9 +1,14 @@
 import type { Prisma } from "@/generated/prisma/client";
 import { money } from "@/lib/utils/money";
-import type { CostRates, PriceSchedule, PriceWindowRates } from "@/types/gateway";
+import type { BillingContext, BillingGroup, CostRates, PriceSchedule, PriceWindowRates } from "@/types/gateway";
+import type { Weekday } from "@/types/keys";
 import type { PriceWindow } from "@/types/models";
 
 export const MAX_PRICE_WINDOWS = 24;
+
+export const WEEKDAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"] as const satisfies readonly Weekday[];
+
+const UTC_WEEKDAYS: readonly Weekday[] = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
 
 export const priceWindowQuery = {
   select: { startMinute: true, endMinute: true, priceInput: true, priceOutput: true },
@@ -92,6 +97,7 @@ function clockFormatter(timeZone: string): Intl.DateTimeFormat | null {
   try {
     const formatter = new Intl.DateTimeFormat("en-US", {
       timeZone,
+      weekday: "short",
       hour: "2-digit",
       minute: "2-digit",
       hourCycle: "h23",
@@ -107,15 +113,43 @@ export function isTimeZone(value: string): boolean {
   return Boolean(value) && clockFormatter(value) !== null;
 }
 
-export function localMinute(at: Date, timeZone: string): number {
+function weekdayOf(value: string | undefined): Weekday | null {
+  const day = value?.toLowerCase();
+  return WEEKDAYS.find((weekday) => weekday === day) ?? null;
+}
+
+export function localTime(at: Date, timeZone: string): { weekday: Weekday; minute: number } {
   const formatter = clockFormatter(timeZone) ?? clockFormatter("UTC");
   const parts = formatter?.formatToParts(at) ?? [];
   const hour = Number(parts.find((part) => part.type === "hour")?.value ?? at.getUTCHours());
   const minute = Number(parts.find((part) => part.type === "minute")?.value ?? at.getUTCMinutes());
-  return (hour % 24) * 60 + minute;
+  const weekday = weekdayOf(parts.find((part) => part.type === "weekday")?.value) ?? UTC_WEEKDAYS[at.getUTCDay()];
+  return { weekday, minute: (hour % 24) * 60 + minute };
+}
+
+export function localMinute(at: Date, timeZone: string): number {
+  return localTime(at, timeZone).minute;
 }
 
 export function priceAt(schedule: PriceSchedule, at: Date): CostRates {
   if (!schedule.windows.length) return schedule.price;
   return scheduledPrice(schedule.price, schedule.windows, localMinute(at, schedule.time_zone));
+}
+
+export function groupBilling(group: BillingGroup, at: Date): BillingContext {
+  return {
+    mode: group.billing_mode || "routed",
+    peers: group.deployments,
+    price: priceAt(
+      {
+        price: {
+          cost_input_per_1k: group.price_input_per_1k,
+          cost_output_per_1k: group.price_output_per_1k,
+        },
+        time_zone: group.price_time_zone,
+        windows: group.price_windows,
+      },
+      at,
+    ),
+  };
 }

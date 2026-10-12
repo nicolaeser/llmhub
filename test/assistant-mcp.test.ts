@@ -357,7 +357,7 @@ test("write tools wrap console actions and re-check manage perms", async () => {
   assert.doesNotMatch(structure, /placeMemberAction/);
   assert.match(keys, /const rebinds = args\.projectId !== undefined \|\| args\.memberId !== undefined;/);
   assert.match(access, /setUserBlockedAction/);
-  assert.match(settings, /saveGuardrailsAction/);
+  assert.match(settings, /savePiiAction/);
   for (const source of [providers, models, keys, structure, access, settings]) {
     assert.doesNotMatch(source, /prisma\.\w+\.(create|update|upsert|delete)(Many)?\(/);
     assert.doesNotMatch(source, /master_key/);

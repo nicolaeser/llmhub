@@ -1,8 +1,10 @@
 import { isIP } from "node:net";
 import { z } from "zod";
 import { KNOWN_BILLING_MODES, KNOWN_KINDS, KNOWN_STRATEGIES } from "@/lib/gateway/core";
+import { MARKUP_SCOPES, MAX_MARKUP_PERCENT, MIN_MARKUP_PERCENT } from "@/lib/gateway/markup-policy";
 import { clockMinute, isTimeZone, MAX_PRICE_WINDOWS } from "@/lib/gateway/price-schedule";
 import { MANAGEMENT_PERMISSIONS } from "@/lib/management/scope";
+import { accessWindowsSchema, allowedEndpointsSchema } from "@/schemas/keys";
 import { budgetPeriod, MAX_BOOST_HOURS } from "@/lib/utils/budget";
 
 const id = z.string().trim().min(1).max(64);
@@ -47,7 +49,11 @@ export const apiKeyCreateSchema = z
     template_ids: templateIds.default([]),
     rpm_limit: rpm.default(0),
     tpm_limit: tpm.default(0),
+    max_request_cost: money.default(0),
     allowed_ips: ips.default([]),
+    allowed_endpoints: allowedEndpointsSchema.default([]),
+    access_windows: accessWindowsSchema.default([]),
+    access_time_zone: timeZone.default("UTC"),
     log_content: z.boolean().default(true),
     expires_in_days: z.number().int().min(0).max(3650).default(0),
   })
@@ -62,7 +68,11 @@ export const apiKeyUpdateSchema = z
     template_ids: templateIds,
     rpm_limit: rpm,
     tpm_limit: tpm,
+    max_request_cost: money,
     allowed_ips: ips,
+    allowed_endpoints: allowedEndpointsSchema,
+    access_windows: accessWindowsSchema,
+    access_time_zone: timeZone,
     log_content: z.boolean(),
     blocked: z.boolean(),
   })
@@ -161,6 +171,20 @@ export const teamUpdateSchema = z
   .strict();
 
 export const orgWriteSchema = z.object({ alias }).strict();
+
+const markupFields = {
+  scope: z.enum(MARKUP_SCOPES),
+  target_id: optionalId,
+  model: z.string().trim().max(200).nullable().optional(),
+  percent: z.number().min(MIN_MARKUP_PERCENT).max(MAX_MARKUP_PERCENT),
+  note: z.string().trim().max(200),
+};
+
+export const markupCreateSchema = z
+  .object({ ...markupFields, note: markupFields.note.default("") })
+  .strict();
+
+export const markupUpdateSchema = z.object(markupFields).partial().strict();
 
 export const projectCreateSchema = z
   .object({

@@ -1,0 +1,78 @@
+{
+  "title": "Markups",
+  "subtitle": "Resell with a margin: a percentage markup or discount on purchase cost, per company, department, project, or model.",
+  "loadFailed": "Markups could not be loaded.",
+  "add": "Add markup",
+  "readOnly": "You can view markups. Changing them needs the Manage markups permission.",
+  "emptyTitle": "No markups yet",
+  "empty": "Every customer is billed the model price unchanged. Add a markup to resell with a margin, or a discount for a contract.",
+  "summary": {
+    "purchase": "Purchase cost, {days, plural, one {last # day} other {last # days}}",
+    "sale": "Sale, {days, plural, one {last # day} other {last # days}}",
+    "margin": "Margin, {days, plural, one {last # day} other {last # days}}",
+    "marginValue": "{amount, number, currency} · {share, number, percent}"
+  },
+  "metrics": {
+    "purchase": "Purchase",
+    "sale": "Sale",
+    "margin": "Margin"
+  },
+  "scope": "{scope, select, all {All customers} org {Company} team {Department} project {Project} other {Scope}}",
+  "deletedTarget": "{scope, select, org {Deleted company} team {Deleted department} project {Deleted project} other {Deleted}}",
+  "ruleName": "{target} · {models}",
+  "allModels": "All models",
+  "modelKind": "{kind, select, pattern {Pattern} other {Model}}",
+  "kind": "{kind, select, markup {Markup} discount {Discount} other {No change}}",
+  "columns": {
+    "scope": "Applies to",
+    "model": "Models",
+    "percent": "Markup",
+    "note": "Note"
+  },
+  "deleteConfirm": "Delete the markup {rule}?",
+  "deleteHint": "Requests then get the next matching rule, or the plain price if no rule matches.",
+  "toasts": {
+    "saved": "{mode, select, create {Markup added.} other {Markup saved.}}",
+    "deleted": "Markup deleted."
+  },
+  "precedence": {
+    "title": "How a markup is chosen",
+    "body": "Exactly one rule applies per request. Rules never add up: the most specific level wins.",
+    "models": "Within the same level, an exact model beats a pattern, a longer pattern beats a shorter one, and both beat all models. Set 0 % on a project to exempt it from its company markup.",
+    "billing": "The markup goes on top of the price the model group bills, which is the provider's purchase cost unless the group uses an average or custom price. Spend, budgets, and the usage PDF show the sale price. Purchase cost and margin stay with the View margins permission and are never shown to company users."
+  },
+  "dialog": {
+    "title": "{mode, select, create {Add markup} other {Edit markup}}",
+    "submit": "{mode, select, create {Add markup} other {Save}}",
+    "hint": "Applies to requests recorded from now on. Past usage keeps the price it was billed.",
+    "scope": "Applies to",
+    "allHint": "Every company, department, and project without a more specific rule.",
+    "target": "{scope, select, org {Company} team {Department} project {Project} other {Target}}",
+    "targetPlaceholder": "Search",
+    "models": "Models",
+    "modelMode": "{mode, select, all {All models} one {One model} pattern {Pattern} other {Models}}",
+    "allModelsHint": "Every model alias, unless a rule on the same level names the model.",
+    "model": "Model",
+    "modelPlaceholder": "Search models",
+    "pattern": "Model pattern",
+    "patternHint": "Use * as a wildcard, for example claude-* or *-mini.",
+    "patternInvalid": "A pattern needs at least one *. Pick One model for an exact alias.",
+    "kind": "Type",
+    "percent": "Percent",
+    "percentHint": "{kind, select, discount {Customers pay this much less than the price. 100 % makes requests free.} other {Added on top of the price.}}",
+    "percentInvalid": "Enter a value between 0 % and {max, number, percent}.",
+    "presets": "Common values",
+    "note": "Note",
+    "notePlaceholder": "Contract, reason, or ticket",
+    "preview": "Preview",
+    "previewHint": "For {purchase, number, currency} of purchase cost."
+  },
+  "lookup": {
+    "title": "Check a request",
+    "description": "Pick where a request comes from to see the markup it gets.",
+    "model": "Model",
+    "example": "{purchase, number, currency} becomes {sale, number, currency}",
+    "matched": "From the rule {rule}.",
+    "unmatched": "No rule matches. The price is billed unchanged."
+  }
+}

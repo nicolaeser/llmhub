@@ -5,7 +5,7 @@ import { loadAdminSettingsAction } from "@/app/(app)/admin-settings/_action";
 import { loadCacheAction, saveCacheAction } from "@/app/(app)/cache/_action";
 import {
   loadGuardrailsAction,
-  saveGuardrailsAction,
+  savePiiAction,
   savePiiOverrideAction,
   testPiiAction,
 } from "@/app/(app)/guardrails/_action";
@@ -42,13 +42,13 @@ async function updateGuardrails(args: z.output<typeof updateGuardrailsToolInput>
   const current = await loadGuardrailsAction();
   if (isActionFail(current)) return toolFail(actionCode(current));
   if (args.scope === "global") {
-    return viaAction(saveGuardrailsAction(mergePii(current.pii, args)), ({ pii }) => ({
+    return viaAction(savePiiAction(mergePii(current.pii, args)), ({ pii }) => ({
       result: { ok: true, scope: "global", policy: pii },
       navigate: "/guardrails",
     }));
   }
   if (!args.id) return toolFail("invalid_arguments", { issues: [{ path: "id", message: "required" }] });
-  const existing = current.overrides.find((row) => row.scope === args.scope && row.id === args.id);
+  const existing = current.piiOverrides.find((row) => row.scope === args.scope && row.id === args.id);
   const policy = args.inherit ? null : mergePii(existing?.policy ?? current.pii, args);
   return viaAction(savePiiOverrideAction({ scope: args.scope, id: args.id, policy }), (saved) => ({
     result: { ok: true, scope: saved.scope, id: saved.id, override: saved.override?.policy ?? null },
@@ -74,6 +74,9 @@ async function updateGatewaySettings(
     args.contentRetentionDays,
     args.logArchive,
     args.logContent,
+    args.spendAnomalyFactor,
+    args.spendAnomalyMinCost,
+    args.keyExpiryWarningDays,
   ].some((value) => value !== undefined);
   if (loggingChanged) {
     const current = await loadLoggingAction();
@@ -82,10 +85,16 @@ async function updateGatewaySettings(
       alertWebhooks: current.alertWebhooks.map((hook) => ({
         id: hook.id,
         url: hook.url,
+        format: hook.format,
         events: hook.events,
         secret: "",
         clearSecret: false,
       })),
+      alertRules: {
+        spendAnomalyFactor: args.spendAnomalyFactor ?? current.alertRules.spendAnomalyFactor,
+        spendAnomalyMinCost: args.spendAnomalyMinCost ?? current.alertRules.spendAnomalyMinCost,
+        keyExpiryWarningDays: args.keyExpiryWarningDays ?? current.alertRules.keyExpiryWarningDays,
+      },
       logRetentionDays: args.logRetentionDays ?? current.logRetentionDays,
       spendRetentionDays: args.spendRetentionDays ?? current.spendRetentionDays,
       auditRetentionDays: args.auditRetentionDays ?? current.auditRetentionDays,
@@ -105,6 +114,7 @@ async function updateGatewaySettings(
       contentRetentionDays: saved.contentRetentionDays,
       logArchive: saved.logArchive,
       logContent: saved.logContent,
+      alertRules: saved.alertRules,
     });
   }
   if (!Object.keys(changed).length) return toolFail("nothing_to_change");
@@ -114,7 +124,7 @@ async function updateGatewaySettings(
 export const settingsTools = {
   get_settings: defineTool({
     description:
-      "Gateway settings: response cache TTL, retention days, content logging, S3 archive, alert webhooks (host and events only), registration, single sign-on, S3 storage, and the assistant model policy. Never secrets.",
+      "Gateway settings: response cache TTL, semantic response cache matching, response cache statistics for the last 30 days (with spend:read-all), retention days, content logging, S3 archive, alert webhooks (host, format, and events only), alert rules, registration, single sign-on, S3 storage, and the assistant model policy. Never secrets.",
     input: emptyToolInput,
     run: async () => {
       const [logging, cache, admin] = await Promise.all([
@@ -128,6 +138,9 @@ export const settingsTools = {
       return {
         result: {
           cacheTtlSeconds: cache.cacheTtlSeconds,
+          responseCacheBackend: cache.backend,
+          responseCacheSemantic: cache.semantic,
+          responseCacheStats: cache.stats,
           retentionDays: {
             logs: logging.logRetentionDays,
             spend: logging.spendRetentionDays,
@@ -138,10 +151,12 @@ export const settingsTools = {
           },
           logContent: logging.logContent,
           logArchive: logging.logArchive,
+          alertRules: logging.alertRules,
           s3Ready: logging.s3Ready,
           alertWebhooks: logging.alertWebhooks.map((hook) => ({
             id: hook.id,
             host: webhookHost(hook.url),
+            format: hook.format,
             events: hook.events,
             signed: hook.secretSet,
           })),
@@ -167,13 +182,23 @@ export const settingsTools = {
     },
   }),
   get_guardrails: defineTool({
-    description: "The global PII policy and every organization and key override.",
+    description:
+      "The global PII policy and every company, project, and key override, plus the global content guardrails (denylist and regex rules, prompt injection detection, output secret checks) and their overrides.",
     input: emptyToolInput,
     run: async () =>
-      viaAction(loadGuardrailsAction(), ({ pii, overrides }) => ({
+      viaAction(loadGuardrailsAction(), ({ pii, piiOverrides, guardrails, guardrailOverrides }) => ({
         result: {
           global: pii,
-          overrides: overrides.map((row) => ({ scope: row.scope, id: row.id, alias: row.alias, policy: row.policy })),
+          overrides: piiOverrides.map((row) => ({ scope: row.scope, id: row.id, alias: row.alias, policy: row.policy })),
+          guardrails: {
+            global: guardrails,
+            overrides: guardrailOverrides.map((row) => ({
+              scope: row.scope,
+              id: row.id,
+              alias: row.alias,
+              policy: row.policy,
+            })),
+          },
         },
       })),
   }),
@@ -185,13 +210,13 @@ export const settingsTools = {
   }),
   update_guardrails: defineTool({
     description:
-      "Change the global PII policy, or set or remove (inherit) an override for one organization or key. Omitted fields keep their current value.",
+      "Change the global PII policy, or set or remove (inherit) an override for one organization, project, or key. Omitted fields keep their current value.",
     input: updateGuardrailsToolInput,
     run: async (args) => updateGuardrails(args),
   }),
   update_gateway_settings: defineTool({
     description:
-      "Change the response cache TTL, retention days, request content logging, or S3 log archiving. Omitted fields stay unchanged. Alert webhooks are edited on the Logging page.",
+      "Change the response cache TTL, retention days, request content logging, S3 log archiving, or the spend anomaly and key expiry alert rules. Omitted fields stay unchanged. Alert webhooks are edited on the Logging page.",
     input: gatewaySettingsToolInput,
     run: async (args) => updateGatewaySettings(args),
   }),

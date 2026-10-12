@@ -22,7 +22,7 @@ test("assertBudget checks the whole chain: key, user, member, project, team, and
     "utf8",
   );
   const fn = exportedAsyncFn(billing, "assertBudget");
-  assert.match(fn, /export async function assertBudget\(principal: Principal\): Promise<void>/);
+  assert.match(fn, /export async function assertBudget\(principal: Principal\): Promise<CostCap \| null>/);
   assert.match(fn, /budgetChain\(principal\)/);
   assert.match(fn, /spendAfterReset\(link\.kind/);
   assert.match(fn, /extraCap\(link\.kind/);
@@ -88,10 +88,11 @@ test("gateRequest and session callers admit through budgets and rate limits", as
     readFile(new URL("../src/app/internal-api/playground/chat/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../src/lib/assistant/run.ts", import.meta.url), "utf8"),
   ]);
-  assert.match(exportedAsyncFn(gate, "gateRequest"), /await admit\(principal\)/);
+  assert.match(exportedAsyncFn(gate, "gateRequest"), /await admit\(principal, maxCostHeader\(req\.headers\)\)/);
   const admit = exportedAsyncFn(gate, "admit");
   assert.match(admit, /await assertBudget\(principal\)/);
   assert.match(admit, /await assertRate\(principal\)/);
+  assert.match(admit, /capRequestCost\(principal, budget, maxCost\)/);
   assert.match(playground, /await admit\(principal\)/);
   assert.match(assistant, /await admit\(principal\)/);
 });

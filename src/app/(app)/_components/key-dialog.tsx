@@ -8,6 +8,7 @@ import {
   Input,
   Label,
   Modal,
+  NumberField,
   Separator,
   Spinner,
   Switch,
@@ -19,13 +20,16 @@ import {
   type useOverlayState,
 } from "@heroui/react";
 import { useTranslations } from "next-intl";
+import { formats } from "@/i18n/formats";
 import { Link } from "@/i18n/routing";
 import MultiPicker from "@/components/console/multi-picker";
 import SearchSelect from "@/components/console/search-select";
 import { createKeyAction, updateKeyAction } from "@/app/(app)/_action";
 import { isActionFail } from "@/lib/http/action-result";
-import type { KeyBindingKind, KeyOptions, KeyPreset } from "@/types/keys";
+import { accessWindowValid, KEY_ENDPOINTS } from "@/lib/gateway/key-restrictions";
+import type { AccessWindowDraft, KeyBindingKind, KeyEndpoint, KeyOptions, KeyPreset } from "@/types/keys";
 import type { VirtualKeyView } from "@/types/gateway";
+import AccessWindowFields from "./access-window-fields";
 import { bindingKind, placeOf } from "./key-binding";
 
 const KINDS: KeyBindingKind[] = ["project", "member", "internal"];
@@ -81,8 +85,14 @@ export function KeyDialog({
   const [templateIds, setTemplateIds] = useState<string[]>(editing?.templates ?? []);
   const [rpm, setRpm] = useState(String(editing?.rpm_limit ?? 0));
   const [tpm, setTpm] = useState(String(editing?.tpm_limit ?? 0));
+  const [maxRequestCost, setMaxRequestCost] = useState(editing?.max_request_cost ?? 0);
   const [days, setDays] = useState("");
   const [ips, setIps] = useState((editing?.allowed_ips ?? []).join("\n"));
+  const [endpoints, setEndpoints] = useState<KeyEndpoint[]>(editing?.allowed_endpoints ?? []);
+  const [windows, setWindows] = useState<AccessWindowDraft[]>(
+    () => editing?.access_windows.map((w, i) => ({ ...w, key: i + 1 })) ?? [],
+  );
+  const [timeZone, setTimeZone] = useState(editing?.access_time_zone ?? "UTC");
   const [blocked, setBlocked] = useState(editing?.blocked ?? false);
   const [logContent, setLogContent] = useState(editing?.log_content ?? true);
   const [pending, start] = useTransition();
@@ -108,7 +118,11 @@ export function KeyDialog({
         templateIds,
         rpm: Number(rpm) || 0,
         tpm: Number(tpm) || 0,
+        maxRequestCost: Number.isFinite(maxRequestCost) ? maxRequestCost : 0,
         allowedIps: splitList(ips),
+        allowedEndpoints: endpoints,
+        accessWindows: windows.map(({ days, start, end }) => ({ days, start, end })),
+        accessTimeZone: timeZone,
         logContent,
       };
       if (editing) {
@@ -269,6 +283,23 @@ export function KeyDialog({
                       <Input inputMode="numeric" />
                     </TextField>
                   </div>
+                  <NumberField
+                    fullWidth
+                    value={maxRequestCost}
+                    onChange={setMaxRequestCost}
+                    minValue={0}
+                    step={0.01}
+                    formatOptions={formats.number.price}
+                    isDisabled={pending}
+                  >
+                    <Label>{t("fields.maxRequestCost")}</Label>
+                    <NumberField.Group>
+                      <NumberField.DecrementButton />
+                      <NumberField.Input />
+                      <NumberField.IncrementButton />
+                    </NumberField.Group>
+                    <Description>{t("fields.maxRequestCostHint")}</Description>
+                  </NumberField>
                   {editing ? null : (
                     <TextField fullWidth value={days} onChange={setDays} isDisabled={pending}>
                       <Label>{t("fields.days")}</Label>
@@ -280,6 +311,29 @@ export function KeyDialog({
                     <TextArea rows={3} placeholder="203.0.113.10" />
                     <Description>{t("fields.allowedIpsHint")}</Description>
                   </TextField>
+                  <MultiPicker
+                    label={t("fields.endpoints")}
+                    description={t("fields.endpointsHint")}
+                    placeholder={t("fields.endpointsPlaceholder")}
+                    searchLabel={t("fields.search")}
+                    emptyLabel={t("fields.noResults")}
+                    items={KEY_ENDPOINTS.map((endpoint) => ({
+                      id: endpoint,
+                      label: t("endpoints.name", { endpoint }),
+                      detail: t("endpoints.paths", { endpoint }),
+                    }))}
+                    selected={endpoints}
+                    onChange={(ids) => setEndpoints(KEY_ENDPOINTS.filter((endpoint) => ids.includes(endpoint)))}
+                    isDisabled={pending}
+                  />
+                  <AccessWindowFields
+                    windows={windows}
+                    timeZone={timeZone}
+                    isDisabled={pending}
+                    onWindowsChange={setWindows}
+                    onTimeZoneChange={setTimeZone}
+                  />
+                  <Separator />
                   <Switch isSelected={logContent} onChange={setLogContent} isDisabled={pending}>
                     <Switch.Content>
                       <Switch.Control>
@@ -306,7 +360,7 @@ export function KeyDialog({
                   </Button>
                   <Button
                     isPending={pending}
-                    isDisabled={!alias.trim() || !bound}
+                    isDisabled={!alias.trim() || !bound || !windows.every(accessWindowValid)}
                     onPress={() => save(close)}
                   >
                     {({ isPending }) => (

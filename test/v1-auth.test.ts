@@ -15,13 +15,23 @@ test(
   "chat/completions route source must call authenticateBearer",
   { skip: !existsSync(chatCompletions) },
   async () => {
-    const source = await readFile(chatCompletions, "utf8");
-    const chunks = [source];
-    for (const match of source.matchAll(/from\s+["'](@\/lib\/[^"']+)["']/g)) {
-      const spec = match[1];
-      if (!spec) continue;
-      const resolved = path.join(root, spec.replace(/^@\//, "src/") + ".ts");
-      if (existsSync(resolved)) chunks.push(await readFile(resolved, "utf8"));
+    const chunks: string[] = [];
+    const seen = new Set<string>();
+    let frontier = [await readFile(chatCompletions, "utf8")];
+    for (let depth = 0; depth < 3 && frontier.length; depth++) {
+      chunks.push(...frontier);
+      const next: string[] = [];
+      for (const source of frontier) {
+        for (const match of source.matchAll(/from\s+["'](@\/lib\/[^"']+)["']/g)) {
+          const spec = match[1];
+          if (!spec) continue;
+          const resolved = path.join(root, spec.replace(/^@\//, "src/") + ".ts");
+          if (seen.has(resolved) || !existsSync(resolved)) continue;
+          seen.add(resolved);
+          next.push(await readFile(resolved, "utf8"));
+        }
+      }
+      frontier = next;
     }
     assert.match(chunks.join("\n"), /authenticateBearer/);
   },

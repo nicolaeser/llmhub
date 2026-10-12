@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
 import { anthropicCountBody } from "@/lib/gateway/anthropic";
-import { deploymentKey, withDeployment } from "@/lib/gateway/chat";
+import { withDeployment } from "@/lib/gateway/chat";
+import { deploymentAuth } from "@/lib/gateway/credentials";
 import { asNumber, asRecord } from "@/lib/gateway/core";
 import {
   allowModel,
-  applyPii,
+  applyGuardrails,
   gateRequest,
   gateResponse,
   modelOf,
@@ -29,7 +30,7 @@ export async function POST(req: Request) {
     const body = await readBody(req);
     const model = modelOf(body);
     allowModel(principal, model);
-    const { body: clean } = await applyPii(body, principal);
+    const { body: clean } = await applyGuardrails(body, principal);
     const parsed = parseRequest(messagesRequestSchema, clean);
     if (!parsed.ok) {
       throw new GateError(400, "invalid_request", parsed.message, { param: parsed.param });
@@ -45,7 +46,7 @@ export async function POST(req: Request) {
         }
         const proxied = await proxyJson({
           dep,
-          apiKey: deploymentKey(dep),
+          auth: await deploymentAuth(dep),
           path: anthropic ? "/v1/messages/count_tokens" : "/responses/input_tokens",
           body: anthropic
             ? anthropicCountBody(clean)

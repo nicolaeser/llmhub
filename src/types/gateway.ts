@@ -1,8 +1,12 @@
 import type { Prisma } from "@/generated/prisma/client";
 import type { OPENAPI_METHODS } from "@/lib/gateway/openapi";
-import type { WEBHOOK_EVENTS } from "@/lib/gateway/webhook-events";
-import type { PiiPolicy } from "@/types/guardrails";
+import type { WEBHOOK_EVENTS, WEBHOOK_FORMATS } from "@/lib/gateway/webhook-events";
+import type { SemanticCacheSettings } from "@/types/cache";
+import type { GuardrailPolicy, PiiPolicy } from "@/types/guardrails";
+import type { AccessWindow, KeyEndpoint } from "@/types/keys";
+import type { VectorStoreDefaults } from "@/types/rag";
 import type { RouteLimits } from "@/types/model-templates";
+import type { BudgetKind } from "@/types/structure";
 
 export type SpendHolder = {
   id: string;
@@ -29,12 +33,15 @@ export type TokenPricing = {
   completion: string;
 };
 
+export type RoutePool = "api" | "subscription";
+
 export type PublicModel = {
   alias: string;
   vendor: string;
   displayName: string;
   tags: string[];
   pricing: ModelPricing | null;
+  pools: RoutePool[];
 };
 
 export type ModelPricing = TokenPricing & {
@@ -61,12 +68,23 @@ export type BillingContext = {
   price?: CostRates;
 };
 
-export type Entry = { expires: number; body: Uint8Array };
+export type ProviderAuth = "api_key" | "sign_in";
 
 export type KindSpec = {
   kind: string;
   name: string;
   default_base_url?: string;
+  auth?: ProviderAuth;
+};
+
+export type UpstreamAuth = {
+  key: string;
+  headers: Record<string, string>;
+};
+
+export type ChatSseTranslator = {
+  pushLine(line: string): string[];
+  flush(): string | null;
 };
 
 export type Group = ModelGroup & { mapped: ResolvedDeployment[] };
@@ -80,6 +98,12 @@ export type PriceFactors = {
   input: number;
   output: number;
   cacheRead: number;
+};
+
+export type CacheTokens = {
+  read: number;
+  written: number;
+  writtenLong: number;
 };
 
 export type BudgetForecast = {
@@ -154,6 +178,25 @@ export type RequestTrace = {
   piiMode: PiiMode | "";
   piiInput: Set<string>;
   piiOutput: Set<string>;
+  guardInput: Set<string>;
+  guardOutput: Set<string>;
+  guardBlocked: boolean;
+  costCap?: CostCap | null;
+};
+
+export type CostCap = {
+  limit: number;
+  budget: BudgetKind | null;
+};
+
+export type RequestTokens = {
+  prompt: number;
+  completion: number;
+};
+
+export type CostFilter = {
+  cap: CostCap;
+  estimate: (dep: ResolvedDeployment, group: Group) => number;
 };
 
 export type DiscoveredModel = {
@@ -275,11 +318,28 @@ export type S3Settings = {
 
 export type WebhookEvent = (typeof WEBHOOK_EVENTS)[number];
 
+export type WebhookFormat = (typeof WEBHOOK_FORMATS)[number];
+
 export type AlertWebhook = {
   id: string;
   url: string;
   secret: string;
+  format: WebhookFormat;
   events: WebhookEvent[];
+};
+
+export type AlertPayload = {
+  id: string;
+  event: WebhookEvent;
+  message: string;
+  ts: string;
+};
+
+export type AlertStateKind = "budget" | "spend_anomaly" | "key_expiry";
+
+export type SpendAnomalyRule = {
+  factor: number;
+  minCost: number;
 };
 
 export type Enterprise = {
@@ -291,12 +351,17 @@ export type Enterprise = {
   object_retention_days?: number;
   file_retention_days?: number;
   cache_ttl_seconds?: number;
+  cache_semantic?: SemanticCacheSettings;
   log_archive?: boolean;
   log_content?: boolean;
   content_retention_days?: number;
   pii?: PIIConfig;
+  guardrails?: GuardrailPolicy;
   s3?: S3Settings;
   budget_alert_thresholds?: number[];
+  spend_anomaly_factor?: number;
+  spend_anomaly_min_cost?: number;
+  key_expiry_warning_days?: number;
   registration_enabled?: boolean;
   assistant_model?: string;
   assistant_model_locked?: boolean;
@@ -304,6 +369,7 @@ export type Enterprise = {
   catalog_auto_routes?: boolean;
   catalog_min_confidence?: number;
   update_check?: boolean;
+  vector_stores?: VectorStoreDefaults;
 };
 
 export type CatalogRouting = {
@@ -357,9 +423,13 @@ export type VirtualKeyView = {
   spend: number;
   rpm_limit: number;
   tpm_limit: number;
+  max_request_cost: number;
   budget_duration: string;
   expires: string;
   allowed_ips: string[];
+  allowed_endpoints: KeyEndpoint[];
+  access_windows: AccessWindow[];
+  access_time_zone: string;
   blocked: boolean;
   pii: PiiPolicy | null;
   log_content: boolean;
@@ -391,6 +461,8 @@ export type Principal = {
   memberId: string;
   models: string[];
   routeLimits: RouteLimits;
+  guardrails?: GuardrailPolicy | null;
+  pool?: RoutePool;
   trace?: RequestTrace;
 };
 
@@ -420,7 +492,11 @@ export type UsageSlice = {
   latencyMs: number;
   promptTokens: number;
   completionTokens: number;
+  cacheReadTokens: number;
+  cacheWriteTokens: number;
   cost: number;
+  cacheSavings: number;
+  purchaseCost?: number;
 };
 
 export type ChargebackParts = {
@@ -436,12 +512,38 @@ export type ChargebackParts = {
 export type SliceRow = {
   name: string;
   spend: number;
+  purchase?: number;
   prompt: number;
   completion: number;
   requests?: number;
   errors?: number;
   rate429?: number;
   latency?: number;
+  cacheRead?: number;
+  cacheWrite?: number;
+  cacheSavings?: number;
+};
+
+export type UsageDay = { day: string; spend: number; requests: number; errors: number };
+
+export type UsageSummary = {
+  daily: UsageDay[];
+  spend: number;
+  tokens: number;
+  count: number;
+  errors: number;
+  rate429: number;
+  latency: number;
+  cacheRead: number;
+  cacheWrite: number;
+  cacheSavings: number;
+  cacheHitRate: number;
+};
+
+export type UsagePdfStats = UsageSummary & {
+  p95Latency: number;
+  byModel: SliceRow[];
+  chargeback: SliceRow[];
 };
 
 export type Bucket = { start: number; rpm: number; tpm: number };
@@ -449,4 +551,8 @@ export type Bucket = { start: number; rpm: number; tpm: number };
 export type RedisLike = {
   incrby(key: string, amount: number): Promise<number>;
   expire(key: string, seconds: number): Promise<number>;
+  hincrby(key: string, field: string, amount: number): Promise<number>;
+  hgetall(key: string): Promise<Record<string, string>>;
+  mget(keys: string[]): Promise<(string | null)[]>;
+  set(key: string, value: string, mode: "PX", milliseconds: number): Promise<unknown>;
 };

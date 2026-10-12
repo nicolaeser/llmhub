@@ -12,7 +12,7 @@ import {
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 const app = path.join(root, "src/app");
-const SURFACES = ["v1", "api"] as const;
+const SURFACES = ["v1", "subscription", "api"] as const;
 const METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"] as const;
 
 function walk(dir: string): string[] {
@@ -30,7 +30,7 @@ function fileToPath(file: string): string {
   return `/${rel.replace(/\[([^\]]+)\]/g, "{$1}")}`;
 }
 
-test("OPENAPI_PATHS covers every src/app/v1 and src/app/api route method", () => {
+test("OPENAPI_PATHS covers every src/app/v1, src/app/subscription, and src/app/api route method", () => {
   const expected = new Set<string>();
   for (const file of SURFACES.flatMap((surface) => walk(path.join(app, surface)))) {
     const source = readFileSync(file, "utf8");

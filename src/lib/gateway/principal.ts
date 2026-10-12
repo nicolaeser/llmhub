@@ -7,6 +7,7 @@ import { isTryBearer, verifyTryBearer } from "@/lib/gateway/try-bearer";
 import { modelAccess, templateRuleSelect } from "@/lib/gateway/model-access";
 import { templateRulesOf } from "@/lib/gateway/model-policy";
 import { GateError } from "@/lib/gateway/errors";
+import { guardrailOverride } from "@/lib/gateway/settings";
 import { isManagementKey } from "@/lib/management/scope";
 import { resolveKeyTenancy } from "@/lib/gateway/key-tenancy";
 import type { VirtualKeyView, Principal } from "@/types/gateway";
@@ -29,6 +30,7 @@ const keyInclude = {
 
 async function principalFromKey(
   row: Omit<Parameters<typeof toKeyView>[0], "templates"> & {
+    guardrailPolicy: unknown;
     templates: { templateId: string; template: Parameters<typeof templateRulesOf>[0] }[];
   },
 ): Promise<Principal | null> {
@@ -48,6 +50,7 @@ async function principalFromKey(
     memberId: tenancy.memberId,
     models: access.models,
     routeLimits: access.limits,
+    guardrails: guardrailOverride(row.guardrailPolicy),
   };
 }
 

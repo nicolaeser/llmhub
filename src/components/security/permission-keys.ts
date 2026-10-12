@@ -14,6 +14,8 @@ export const PERMISSION_KEYS = {
   "spend:read-all": "spendReadAll",
   "logs:content": "logsContent",
   "budgets:manage": "budgetsManage",
+  "pricing:read": "pricingRead",
+  "pricing:manage": "pricingManage",
   "users:read": "usersRead",
   "users:manage": "usersManage",
   "users:security": "usersSecurity",

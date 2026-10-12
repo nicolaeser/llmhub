@@ -16,6 +16,8 @@ export const MANAGEMENT_PERMISSIONS = [
   "spend:read",
   "spend:read-all",
   "budgets:manage",
+  "pricing:read",
+  "pricing:manage",
 ] as const satisfies readonly Permission[];
 
 const ALLOWED = new Set<Permission>(MANAGEMENT_PERMISSIONS);

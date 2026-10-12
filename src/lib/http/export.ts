@@ -8,9 +8,9 @@ function csvEscape(value: unknown): string {
   return s;
 }
 
-export function toCsv(rows: Record<string, unknown>[]): string {
-  if (rows.length === 0) return "";
-  const headers = [...new Set(rows.flatMap((row) => Object.keys(row)))];
+export function toCsv(rows: Record<string, unknown>[], columns?: readonly string[]): string {
+  if (rows.length === 0 && !columns) return "";
+  const headers = columns ?? [...new Set(rows.flatMap((row) => Object.keys(row)))];
   const lines = [headers.join(",")];
   for (const row of rows) {
     lines.push(headers.map((h) => csvEscape(row[h])).join(","));

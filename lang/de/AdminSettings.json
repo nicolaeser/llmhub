@@ -1,6 +1,6 @@
 {
   "title": "Einstellungen",
-  "subtitle": "Anmeldung, Assistant, Modellkatalog, Objektspeicher und SCIM. Infrastruktur-Secrets bleiben in der Umgebung.",
+  "subtitle": "Anmeldung, Assistant, Modellkatalog, Wissensbasen, Objektspeicher und SCIM. Infrastruktur-Secrets bleiben in der Umgebung.",
   "save": "Einstellungen speichern",
   "saved": "Einstellungen gespeichert",
   "updates": {
@@ -88,5 +88,19 @@
     "autoRoutesHint": "Standard für jeden Alias ohne eigene Einstellung. Geroutet werden nur vertrauenswürdige Anbieter, die ein Modell neu anbieten; eigene OpenAI-kompatible Server schaltest du immer von Hand ein.",
     "minConfidence": "Mindestsicherheit für Jev",
     "minConfidenceHint": "Jev-Zuordnungen unter diesem Wert erscheinen im Katalog, werden aber nie selbst geroutet. Zuordnungen über den Namen gelten immer als sicher."
+  },
+  "vectorStores": {
+    "title": "Wissensbasen",
+    "subtitle": "Standards für Vektorspeicher, die in der Konsole oder über /v1/vector_stores ohne eigene Modelle angelegt werden.",
+    "embeddingModel": "Standard-Embedding-Modell",
+    "embeddingHint": "Wird verwendet, wenn eine neue Wissensbasis kein Embedding-Modell angibt. Bestehende Wissensbasen behalten ihr Modell.",
+    "dimensions": "Standard-Embedding-Dimensionen",
+    "dimensionsHint": "0 verwendet die native Größe des Modells. Gilt nur zusammen mit dem Standard-Embedding-Modell.",
+    "ocrModel": "Standard-OCR-Modell",
+    "ocrHint": "Liest Text aus PDFs und Bildern für Wissensbasen ohne eigenes OCR-Modell.",
+    "rerankModel": "Standard-Reranking-Modell",
+    "rerankHint": "Sortiert Suchergebnisse für Wissensbasen ohne eigenes Reranking-Modell neu.",
+    "none": "Keines",
+    "manageHint": "Wissensbasen legst du unter <link>Wissensbasen</link> an, dort lädst du auch Dateien hoch."
   }
 }

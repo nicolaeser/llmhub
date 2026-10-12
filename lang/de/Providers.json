@@ -1,16 +1,41 @@
 {
   "title": "Anbieter",
-  "subtitle": "Verbinde OpenAI, Anthropic, OpenRouter, xAI und beliebige OpenAI-kompatible Endpunkte.",
+  "subtitle": "Verbinde OpenAI, Anthropic, OpenRouter, xAI und beliebige OpenAI-kompatible Endpunkte oder melde dich mit einem ChatGPT- oder SuperGrok-Abo an.",
   "connect": "Verbinden",
   "edit": "{name} bearbeiten",
   "formTitle": "{mode, select, edit {{name} bearbeiten} connect {{name} verbinden} other {{name} verbinden}}",
   "formSubmit": "{mode, select, save {Speichern} connect {Verbinden} other {Verbinden}}",
-  "kindName": "{kind, select, openai {OpenAI} anthropic {Anthropic} openrouter {OpenRouter} openrouter_eu {OpenRouter EU} xai {xAI Grok} typesafe {TypeSafe AI} openai_compat {OpenAI-kompatibel} other {{kind}}}",
-  "kindDescription": "{kind, select, openai {Offizielle OpenAI-API.} anthropic {Native Anthropic-Messages-API.} openrouter {Ein Key für Hunderte Modelle.} openrouter_eu {OpenRouter mit Routing innerhalb der EU.} xai {Grok über die xAI-API.} typesafe {Jev-Entscheidungsmodell über die TypeSafe-API.} openai_compat {vLLM, SGLang, Ollama oder jeder OpenAI-kompatible Server.} other {}}",
+  "kindName": "{kind, select, openai {OpenAI} anthropic {Anthropic} openrouter {OpenRouter} openrouter_eu {OpenRouter EU} xai {xAI Grok} typesafe {TypeSafe AI} openai_compat {OpenAI-kompatibel} codex {ChatGPT-Abo (Codex)} grok_build {SuperGrok-Abo (Grok Build)} other {{kind}}}",
+  "kindDescription": "{kind, select, openai {Offizielle OpenAI-API.} anthropic {Native Anthropic-Messages-API.} openrouter {Ein Key für Hunderte Modelle.} openrouter_eu {OpenRouter mit Routing innerhalb der EU.} xai {Grok über die xAI-API.} typesafe {Jev-Entscheidungsmodell über die TypeSafe-API.} openai_compat {vLLM, SGLang, Ollama oder jeder OpenAI-kompatible Server.} codex {Mit ChatGPT Plus, Pro oder Business anmelden. Chat-Anfragen nutzen die Codex-Limits des Abos.} grok_build {Mit SuperGrok oder X Premium+ anmelden. Anfragen nutzen die Grok-Limits des Abos.} other {}}",
   "displayName": "Anzeigename",
   "baseUrl": "API-Basis-URL",
   "apiKey": "API-Schlüssel",
   "apiKeyKeep": "Leer lassen, um den gespeicherten Schlüssel zu behalten.",
+  "signIn": {
+    "title": "{kind, select, codex {ChatGPT-Konto} grok_build {xAI-Konto} other {Konto}}",
+    "hint": "{kind, select, codex {Melde dich mit dem ChatGPT-Konto an, dessen Abo die Anfragen bedienen soll. Die Nutzung zählt auf die Codex-Limits dieses Abos. Clients erreichen es nur über /subscription/v1, nie über /v1.} grok_build {Melde dich mit dem xAI-Konto an, das SuperGrok oder X Premium+ hat. Die Nutzung zählt auf dieses Abo. Clients erreichen es nur über /subscription/v1, nie über /v1.} other {Melde dich beim Konto des Anbieters an.}}",
+    "account": "{named, select, true {Angemeldet als {account}} other {Angemeldet}}",
+    "plan": "{plan, select, free {Free} go {Go} plus {Plus} pro {Pro} team {Business} business {Business} enterprise {Enterprise} edu {Edu} other {{plan}}}",
+    "status": "{status, select, active {Aktiv} other {Abgelaufen}}",
+    "start": "{again, select, true {{kind, select, codex {Erneut bei ChatGPT anmelden} grok_build {Erneut bei xAI anmelden} other {Erneut anmelden}}} other {{kind, select, codex {Mit ChatGPT anmelden} grok_build {Mit xAI anmelden} other {Anmelden}}}}",
+    "codeTitle": "Gib diesen Code ein",
+    "codeHint": "{kind, select, codex {Öffne die ChatGPT-Anmeldeseite, melde dich an und gib den Code ein.} grok_build {Öffne die xAI-Anmeldeseite, melde dich an und gib den Code ein.} other {Öffne die Anmeldeseite und gib den Code ein.}}",
+    "open": "{kind, select, codex {ChatGPT-Anmeldung öffnen} grok_build {xAI-Anmeldung öffnen} other {Anmeldeseite öffnen}}",
+    "waiting": "Warte auf Freigabe…",
+    "cancel": "Anmeldung abbrechen",
+    "copy": "Code kopieren",
+    "copied": "Code kopiert",
+    "copyFailed": "Der Code konnte nicht kopiert werden."
+  },
+  "limits": {
+    "title": "Nutzungslimits",
+    "refresh": "Nutzungslimits aktualisieren",
+    "window": "{unit, select, hour {{count, plural, one {Stundenlimit} other {#-Stunden-Limit}}} day {{count, plural, one {Tageslimit} =7 {Wochenlimit} other {#-Tage-Limit}}} other {Nutzungslimit}}",
+    "resets": "Wird {when} zurückgesetzt",
+    "reached": "Limit erreicht",
+    "credits": "{unlimited, select, true {Unbegrenzte Credits} other {Credits: {balance}}}",
+    "none": "Der Anbieter meldet für dieses Abo keine Limits."
+  },
   "toasts": {
     "saved": "{mode, select, created {Anbieter verbunden} updated {Anbieter aktualisiert} deleted {Getrennt} other {Anbieter verbunden}}"
   },
@@ -18,7 +43,7 @@
   "empty": "Noch keine Anbieter verbunden.",
   "emptyTitle": "Einen Anbieter verbinden",
   "moreProviders": "Weitere Anbieter",
-  "keyState": "{state, select, stored {API-Key hinterlegt} other {Kein API-Key}}",
+  "keyState": "{state, select, stored {API-Key hinterlegt} signed_in {Angemeldet als {account}} expired {Anmeldung abgelaufen} other {Kein API-Key}}",
   "connectedCount": "{count, plural, =0 {Nicht verbunden} one {# Verbindung} other {# Verbindungen}}",
   "policy": {
     "title": "Datenschutz",

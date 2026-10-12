@@ -122,7 +122,7 @@ async function completeGateway(
     principal,
     model: alias,
     aliases: [alias],
-    outputPii: null,
+    outputGuard: null,
     body: {
       model: alias,
       messages: toProviderMessages(messages),

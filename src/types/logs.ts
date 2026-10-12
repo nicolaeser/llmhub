@@ -52,10 +52,14 @@ export type RequestLogRow = {
   projectId: string;
   promptTokens: number;
   completionTokens: number;
+  cacheReadTokens: number;
+  cacheWriteTokens: number;
   cost: number;
   piiMode: string;
   piiInput: string[];
   piiOutput: string[];
+  guardInput: string[];
+  guardOutput: string[];
   hasContent: boolean;
   contentSkip: string;
 };
@@ -78,6 +82,7 @@ export type RequestLogDetail = RequestLogRow & {
   tag: string;
   error: string;
   canViewContent: boolean;
+  replayable: boolean;
   content: RequestLogContentView | null;
 };
 

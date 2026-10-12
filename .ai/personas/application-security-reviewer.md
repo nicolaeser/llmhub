@@ -22,7 +22,7 @@ Fail closed. Viewers must not see others' keys. The first operator must only com
 - Register / SSO / SCIM refuse empty operator table.
 - Setup action recounts inside a serializable transaction.
 - No secrets in logs or client payloads.
-- Request handling and logging use the effective PII policy from `resolvePii(principal)`, never only the global one.
+- Request handling and logging use the effective PII and guardrail policies from `resolvePolicies(principal)`, never only the global ones.
 - Assistant write tools stay behind the per-session write switch and the operator's own permissions.
 - Stored prompts and responses reach a client only with `logs:content`, inside the actor's log scope, and every view or export is audited.
 

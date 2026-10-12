@@ -1,0 +1,1 @@
+ALTER TABLE "VirtualKey" ADD COLUMN     "maxRequestCost" DECIMAL(20,10) NOT NULL DEFAULT 0;

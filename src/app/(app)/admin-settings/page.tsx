@@ -49,6 +49,13 @@ export default function AdminSettingsPage() {
   const s3 = (patch: Partial<AdminSettings["s3"]>) => update({ s3: { ...settings.s3, ...patch } });
   const jev = (patch: Partial<AdminSettings["catalog_jev"]>) =>
     update({ catalog_jev: { ...settings.catalog_jev, ...patch } });
+  const vectors = (patch: Partial<AdminSettings["vector_stores"]>) =>
+    update({ vector_stores: { ...settings.vector_stores, ...patch } });
+  const vectorModels = (current: string) => [
+    { id: "none", label: t("vectorStores.none") },
+    ...[...new Set([...view.aliases, ...(current ? [current] : [])])].map((alias) => ({ id: alias, label: alias })),
+  ];
+  const pickModel = (key: string) => (key === "none" ? "" : key);
   const jevKeyReady = settings.catalog_jev.clear_api_key
     ? Boolean(settings.catalog_jev.api_key)
     : view.jevKeySet || Boolean(settings.catalog_jev.api_key);
@@ -247,6 +254,61 @@ export default function AdminSettingsPage() {
           {t.rich("jev.catalogHint", {
             link: (chunks) => (
               <Link href="/model-catalog" className="text-accent">
+                {chunks}
+              </Link>
+            ),
+          })}
+        </p>
+      </SettingSection>
+
+      <SettingSection title={t("vectorStores.title")} subtitle={t("vectorStores.subtitle")}>
+        <div className="grid gap-4 md:grid-cols-2">
+          <SearchSelect
+            label={t("vectorStores.embeddingModel")}
+            description={t("vectorStores.embeddingHint")}
+            items={vectorModels(settings.vector_stores.embedding_model)}
+            value={settings.vector_stores.embedding_model || "none"}
+            onChange={(key) => vectors({ embedding_model: pickModel(key) })}
+            isDisabled={disabled}
+          />
+          <NumberField
+            fullWidth
+            value={settings.vector_stores.embedding_dimensions}
+            onChange={(value) => vectors({ embedding_dimensions: Number.isFinite(value) ? value : 0 })}
+            minValue={0}
+            maxValue={8192}
+            formatOptions={formats.number.integer}
+            isDisabled={disabled || !settings.vector_stores.embedding_model}
+          >
+            <Label>{t("vectorStores.dimensions")}</Label>
+            <NumberField.Group>
+              <NumberField.DecrementButton />
+              <NumberField.Input />
+              <NumberField.IncrementButton />
+            </NumberField.Group>
+            <Description>{t("vectorStores.dimensionsHint")}</Description>
+          </NumberField>
+          <SearchSelect
+            label={t("vectorStores.ocrModel")}
+            description={t("vectorStores.ocrHint")}
+            items={vectorModels(settings.vector_stores.ocr_model)}
+            value={settings.vector_stores.ocr_model || "none"}
+            onChange={(key) => vectors({ ocr_model: pickModel(key) })}
+            isDisabled={disabled}
+          />
+          <SearchSelect
+            label={t("vectorStores.rerankModel")}
+            description={t("vectorStores.rerankHint")}
+            items={vectorModels(settings.vector_stores.rerank_model)}
+            value={settings.vector_stores.rerank_model || "none"}
+            onChange={(key) => vectors({ rerank_model: pickModel(key) })}
+            isDisabled={disabled}
+          />
+        </div>
+        <p className="text-xs text-muted">
+          {t.rich("vectorStores.manageHint", {
+            link: (chunks) => (
+              <Link href="/knowledge" className="text-accent">
                 {chunks}
               </Link>
             ),

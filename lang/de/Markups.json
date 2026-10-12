@@ -1,0 +1,78 @@
+{
+  "title": "Aufschläge",
+  "subtitle": "Mit Marge weiterverkaufen: ein prozentualer Aufschlag oder Rabatt auf den Einkauf, pro Unternehmen, Abteilung, Projekt oder Modell.",
+  "loadFailed": "Die Aufschläge konnten nicht geladen werden.",
+  "add": "Aufschlag hinzufügen",
+  "readOnly": "Du kannst Aufschläge ansehen. Zum Ändern brauchst du die Berechtigung Aufschläge verwalten.",
+  "emptyTitle": "Noch keine Aufschläge",
+  "empty": "Jeder Kunde zahlt den Modellpreis unverändert. Lege einen Aufschlag an, um mit Marge weiterzuverkaufen, oder einen Rabatt für einen Vertrag.",
+  "summary": {
+    "purchase": "Einkauf, {days, plural, one {letzter Tag} other {letzte # Tage}}",
+    "sale": "Verkauf, {days, plural, one {letzter Tag} other {letzte # Tage}}",
+    "margin": "Marge, {days, plural, one {letzter Tag} other {letzte # Tage}}",
+    "marginValue": "{amount, number, currency} · {share, number, percent}"
+  },
+  "metrics": {
+    "purchase": "Einkauf",
+    "sale": "Verkauf",
+    "margin": "Marge"
+  },
+  "scope": "{scope, select, all {Alle Kunden} org {Unternehmen} team {Abteilung} project {Projekt} other {Bereich}}",
+  "deletedTarget": "{scope, select, org {Gelöschtes Unternehmen} team {Gelöschte Abteilung} project {Gelöschtes Projekt} other {Gelöscht}}",
+  "ruleName": "{target} · {models}",
+  "allModels": "Alle Modelle",
+  "modelKind": "{kind, select, pattern {Muster} other {Modell}}",
+  "kind": "{kind, select, markup {Aufschlag} discount {Rabatt} other {Keine Änderung}}",
+  "columns": {
+    "scope": "Gilt für",
+    "model": "Modelle",
+    "percent": "Aufschlag",
+    "note": "Notiz"
+  },
+  "deleteConfirm": "Aufschlag {rule} löschen?",
+  "deleteHint": "Anfragen erhalten dann die nächste passende Regel oder den normalen Preis, wenn keine Regel passt.",
+  "toasts": {
+    "saved": "{mode, select, create {Aufschlag hinzugefügt.} other {Aufschlag gespeichert.}}",
+    "deleted": "Aufschlag gelöscht."
+  },
+  "precedence": {
+    "title": "Welcher Aufschlag gilt",
+    "body": "Pro Anfrage gilt genau eine Regel. Regeln addieren sich nie: die spezifischste Ebene gewinnt.",
+    "models": "Auf derselben Ebene schlägt ein genaues Modell ein Muster, ein längeres Muster ein kürzeres, und beide schlagen alle Modelle. Setze 0 % auf ein Projekt, um es vom Aufschlag seines Unternehmens auszunehmen.",
+    "billing": "Der Aufschlag kommt auf den Preis, den die Modellgruppe abrechnet. Das ist der Einkauf beim Anbieter, außer die Gruppe nutzt einen Durchschnitts- oder eigenen Preis. Ausgaben, Budgets und das Nutzungs-PDF zeigen den Verkaufspreis. Einkauf und Marge sieht nur, wer die Berechtigung Margen ansehen hat, Unternehmensbenutzer nie."
+  },
+  "dialog": {
+    "title": "{mode, select, create {Aufschlag hinzufügen} other {Aufschlag bearbeiten}}",
+    "submit": "{mode, select, create {Aufschlag hinzufügen} other {Speichern}}",
+    "hint": "Gilt für Anfragen ab jetzt. Vergangene Nutzung behält den abgerechneten Preis.",
+    "scope": "Gilt für",
+    "allHint": "Jedes Unternehmen, jede Abteilung und jedes Projekt ohne spezifischere Regel.",
+    "target": "{scope, select, org {Unternehmen} team {Abteilung} project {Projekt} other {Ziel}}",
+    "targetPlaceholder": "Suchen",
+    "models": "Modelle",
+    "modelMode": "{mode, select, all {Alle Modelle} one {Ein Modell} pattern {Muster} other {Modelle}}",
+    "allModelsHint": "Jeder Modell-Alias, außer eine Regel derselben Ebene nennt das Modell.",
+    "model": "Modell",
+    "modelPlaceholder": "Modelle suchen",
+    "pattern": "Modellmuster",
+    "patternHint": "Nutze * als Platzhalter, zum Beispiel claude-* oder *-mini.",
+    "patternInvalid": "Ein Muster braucht mindestens ein *. Wähle Ein Modell für einen genauen Alias.",
+    "kind": "Art",
+    "percent": "Prozent",
+    "percentHint": "{kind, select, discount {Kunden zahlen so viel weniger als den Preis. 100 % macht Anfragen kostenlos.} other {Kommt auf den Preis drauf.}}",
+    "percentInvalid": "Gib einen Wert zwischen 0 % und {max, number, percent} ein.",
+    "presets": "Übliche Werte",
+    "note": "Notiz",
+    "notePlaceholder": "Vertrag, Grund oder Ticket",
+    "preview": "Vorschau",
+    "previewHint": "Für {purchase, number, currency} Einkauf."
+  },
+  "lookup": {
+    "title": "Anfrage prüfen",
+    "description": "Wähle, woher eine Anfrage kommt, und sieh, welcher Aufschlag gilt.",
+    "model": "Modell",
+    "example": "{purchase, number, currency} werden zu {sale, number, currency}",
+    "matched": "Aus der Regel {rule}.",
+    "unmatched": "Keine Regel passt. Der Preis wird unverändert abgerechnet."
+  }
+}

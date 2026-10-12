@@ -201,7 +201,7 @@ export const generalTools = {
   }),
   list_api_endpoints: defineTool({
     description:
-      "Gateway HTTP endpoints with method and summary: /v1 is the OpenAI and Anthropic compatible API for virtual keys, /api is the management API for management keys.",
+      "Gateway HTTP endpoints with method and summary: /v1 is the OpenAI and Anthropic compatible API for virtual keys, /subscription/v1 is the same API served only by signed-in subscription providers, /api is the management API for management keys.",
     input: apiEndpointsToolInput,
     run: async ({ scope }) => ({
       result: {

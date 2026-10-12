@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { chatToAnthropic, chatUsageFromAnthropic } from "@/lib/gateway/anthropic";
 import { usageFromUnknown } from "@/lib/gateway/billing";
-import { costOf, priceFactors } from "@/lib/gateway/cost";
+import { cacheSavingsOf, cacheTokens, costOf, priceFactors } from "@/lib/gateway/cost";
 import { xaiReasoningEffort } from "@/lib/gateway/upstream";
 import type { Deployment, Usage } from "@/types/gateway";
 
@@ -86,6 +86,23 @@ test("a custom model price replaces endpoint and reported cost but keeps cache a
   );
   const free = { mode: "custom", peers: [], price: { cost_input_per_1k: 0, cost_output_per_1k: 0 } };
   close(costOf(dep("openai_compat", "self-hosted/llama", 0, 0), base, free), 0);
+});
+
+test("cache tokens stay inside the prompt and savings net cache writes against reads", () => {
+  assert.deepEqual(
+    cacheTokens({ prompt_tokens: 100, cache_read_input_tokens: 70, cache_creation_input_tokens: 50, cache_creation_1h_input_tokens: 40 }),
+    { read: 70, written: 30, writtenLong: 30 },
+  );
+  const sonnet = dep("anthropic", "claude-sonnet-5-5");
+  close(cacheSavingsOf(sonnet, { prompt_tokens: 1000, completion_tokens: 0, cache_read_input_tokens: 1000 }), 0.9);
+  close(cacheSavingsOf(sonnet, { prompt_tokens: 1000, completion_tokens: 0, cache_creation_input_tokens: 1000 }), -0.25);
+  close(cacheSavingsOf(sonnet, base), 0);
+  close(cacheSavingsOf(null, { prompt_tokens: 1000, completion_tokens: 0, cache_read_input_tokens: 1000 }), 0);
+  const router = dep("openrouter", "anthropic/claude-opus-5-5", 4, 20);
+  close(
+    cacheSavingsOf(router, { prompt_tokens: 1000, completion_tokens: 0, cache_read_input_tokens: 1000, cost: 0.2 }),
+    3.8,
+  );
 });
 
 test("reasoning tokens reported outside completion_tokens are billed as output", () => {

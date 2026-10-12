@@ -356,6 +356,21 @@ export default function KeysPage() {
                                   {t("contentOff")}
                                 </Chip>
                               )}
+                              {row.allowed_endpoints.length ? (
+                                <Chip size="sm" variant="soft">
+                                  {t("endpointChip", {
+                                    endpoints: format.list(
+                                      row.allowed_endpoints.map((endpoint) => t("endpoints.name", { endpoint })),
+                                      { type: "conjunction" },
+                                    ),
+                                  })}
+                                </Chip>
+                              ) : null}
+                              {row.access_windows.length ? (
+                                <Chip size="sm" variant="soft">
+                                  {t("windowChip")}
+                                </Chip>
+                              ) : null}
                             </div>
                           </Table.Cell>
                           <Table.Cell>

@@ -6,13 +6,13 @@ import { Plus, Trash2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import ConfirmDialog from "@/components/console/confirm-dialog";
 import { isActionFail } from "@/lib/http/action-result";
-import type { PiiOverrideView, PiiPolicy, PiiScope, PiiTarget } from "@/types/guardrails";
+import type { PiiOverrideView, PiiPolicy, PolicyScope, PolicyTarget } from "@/types/guardrails";
 import { savePiiOverrideAction } from "../_action";
 import PiiOverrideDialog from "./pii-override-dialog";
+import PolicyPrecedence from "./policy-precedence";
+import { inheritedPolicy } from "./policy-target-picker";
 
-type OverrideResult = { scope: PiiScope; id: string; override: PiiOverrideView | null };
-
-const PRECEDENCE = ["key", "org", "global"] as const;
+type OverrideResult = { scope: PolicyScope; id: string; override: PiiOverrideView | null };
 
 export default function PiiOverrides({
   overrides,
@@ -22,7 +22,7 @@ export default function PiiOverrides({
   onChanged,
 }: {
   overrides: PiiOverrideView[];
-  targets: PiiTarget[];
+  targets: PolicyTarget[];
   global: PiiPolicy;
   canManage: boolean;
   onChanged: (result: OverrideResult) => void;
@@ -37,12 +37,8 @@ export default function PiiOverrides({
   const taken = new Set(overrides.map((row) => `${row.scope}:${row.id}`));
   const available = targets.filter((row) => !taken.has(`${row.scope}:${row.id}`));
 
-  function inherited(target: PiiTarget): PiiPolicy {
-    const org =
-      target.scope === "key"
-        ? overrides.find((row) => row.scope === "org" && row.id === target.orgId)
-        : undefined;
-    return org?.policy ?? global;
+  function inherited(target: PolicyTarget): PiiPolicy {
+    return inheritedPolicy(target, overrides, global);
   }
 
   function openDialog(row: PiiOverrideView | null) {
@@ -77,18 +73,7 @@ export default function PiiOverrides({
           </Button>
         ) : null}
       </Card.Header>
-      <ol className="grid gap-3 md:grid-cols-3" aria-label={t("precedence.title")}>
-        {PRECEDENCE.map((level, index) => (
-          <li key={level}>
-            <Card variant="secondary" className="h-full gap-1">
-              <span className="text-xs tabular-nums text-muted">{t("precedence.number", { n: index + 1 })}</span>
-              <p className="text-sm font-medium">{t(`precedence.${level}.title`)}</p>
-              <p className="text-xs text-muted">{t(`precedence.${level}.hint`)}</p>
-            </Card>
-          </li>
-        ))}
-      </ol>
-      <p className="text-xs text-muted">{t("precedence.replace")}</p>
+      <PolicyPrecedence note={t("precedence.replace")} />
       {overrides.length === 0 ? (
         <p className="text-sm text-muted">{t("overridesEmpty")}</p>
       ) : (

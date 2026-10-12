@@ -5,18 +5,49 @@ import { requirePermission } from "@/lib/auth/guards";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { actionFail, runAction } from "@/lib/http/action-result";
 import { writeAudit } from "@/lib/gateway/audit";
-import { PROVIDER_CATALOG } from "@/lib/gateway/catalog";
+import { isSignInKind, PROVIDER_CATALOG } from "@/lib/gateway/catalog";
 import { seal } from "@/lib/crypto";
 import { KNOWN_KINDS } from "@/lib/gateway/core";
 import { addRoute, catalogTargets, markRouted } from "@/lib/gateway/catalog-sync";
+import { loginData } from "@/lib/gateway/credentials";
 import { baseName, vendorOf } from "@/lib/gateway/model-catalog";
 import { refreshProviderModels } from "@/lib/gateway/discovery";
 import { discoveredOf } from "@/lib/gateway/provider-prices";
+import { subscriptionLimits } from "@/lib/gateway/subscription-limits";
+import {
+  openCredential,
+  openTicket,
+  pollDeviceCode,
+  requestDeviceCode,
+  sealCredential,
+  sealTicket,
+} from "@/lib/gateway/sign-in";
 import { providerPolicySchema } from "@/schemas/providers";
-import type { ImportCandidate, ProviderPolicyInput, ProviderRecord, ProviderSyncRecord } from "@/types/providers";
+import type {
+  ImportCandidate,
+  ProviderPolicyInput,
+  ProviderRecord,
+  ProviderSignIn,
+  ProviderSyncRecord,
+  SignInCredential,
+  SignInPollResult,
+  SignInStart,
+  SubscriptionLimits,
+} from "@/types/providers";
+
+const SLOW_DOWN_STEP_S = 5;
 
 function specFor(kind: string) {
   return PROVIDER_CATALOG.find((k) => k.kind === kind);
+}
+
+function signInOf(row: ProviderRecord): ProviderSignIn | null {
+  if (!row.login) return null;
+  return {
+    account: row.login.account,
+    plan: row.login.plan,
+    status: row.login.status === "active" ? "active" : "expired",
+  };
 }
 
 function publicProvider(row: ProviderRecord) {
@@ -26,9 +57,19 @@ function publicProvider(row: ProviderRecord) {
     kind: row.kind,
     baseUrl: row.baseUrl,
     hasApiKey: Boolean(row.apiKey),
+    signIn: signInOf(row),
     discovered: discoveredOf(row.discovered),
     policy: policyOf(row),
   };
+}
+
+const loginSelect = { select: { account: true, plan: true, status: true } } as const;
+
+function signInCredential(raw: string | undefined, uid: string, kind: string): SignInCredential | null {
+  if (!raw) return null;
+  const credential = openCredential(raw, uid, kind);
+  if (!credential) throw new Error("SIGN_IN_EXPIRED");
+  return credential;
 }
 
 function policyOf(row: ProviderRecord): ProviderPolicyInput {
@@ -61,7 +102,10 @@ function validBaseUrl(value: string): string {
 }
 
 async function listConnected() {
-  const rows = await prisma.providerConnection.findMany({ orderBy: { createdAt: "desc" } });
+  const rows = await prisma.providerConnection.findMany({
+    orderBy: { createdAt: "desc" },
+    include: { login: loginSelect },
+  });
   return rows.map(publicProvider);
 }
 
@@ -77,6 +121,7 @@ export async function createProviderAction(input: {
   kind: string;
   baseUrl: string;
   apiKey: string;
+  signIn?: string;
   policy?: ProviderPolicyInput;
 }) {
   return runAction(async () => {
@@ -84,22 +129,28 @@ export async function createProviderAction(input: {
     const kind = input.kind.trim();
     if (!KNOWN_KINDS.has(kind)) return actionFail("UNKNOWN_PROVIDER_KIND");
     const spec = specFor(kind);
-    const apiKey = input.apiKey.trim();
+    const signedIn = isSignInKind(kind);
+    const credential = signedIn ? signInCredential(input.signIn, session.user.id, kind) : null;
+    if (signedIn && !credential) return actionFail("SIGN_IN_REQUIRED");
+    const apiKey = signedIn ? "" : input.apiKey.trim();
+    const baseUrl = signedIn ? "" : input.baseUrl.trim();
     const row = await prisma.providerConnection.create({
       data: {
         name: input.name.trim() || spec?.name || kind,
         kind,
-        baseUrl: validBaseUrl(input.baseUrl.trim() || spec?.default_base_url || ""),
+        baseUrl: validBaseUrl(baseUrl || spec?.default_base_url || ""),
         apiKey: apiKey ? seal(apiKey) : "",
         ...parsePolicy(input.policy),
+        ...(credential ? { login: { create: loginData(credential.session) } } : {}),
       },
+      include: { login: loginSelect },
     });
     await writeAudit({
       actor: session.user.id,
       action: "provider.connect",
       objectType: "provider",
       objectId: row.id,
-      after: providerAuditAfter(row),
+      after: providerAuditAfter(row, credential ? { signInAccount: credential.session.account } : undefined),
     });
     return { provider: publicProvider(row) };
   });
@@ -110,30 +161,88 @@ export async function updateProviderAction(input: {
   name: string;
   baseUrl: string;
   apiKey: string;
+  signIn?: string;
   policy?: ProviderPolicyInput;
 }) {
   return runAction(async () => {
     const session = await requirePermission(PERMISSIONS.PROVIDERS_MANAGE);
     const existing = await prisma.providerConnection.findUnique({ where: { id: input.id } });
     if (!existing) return actionFail("NOT_FOUND");
-    const apiKey = input.apiKey.trim();
+    const signedIn = isSignInKind(existing.kind);
+    const credential = signedIn ? signInCredential(input.signIn, session.user.id, existing.kind) : null;
+    const apiKey = signedIn ? "" : input.apiKey.trim();
+    const baseUrl = signedIn ? specFor(existing.kind)?.default_base_url ?? existing.baseUrl : input.baseUrl.trim();
+    const login = credential ? loginData(credential.session) : null;
     const row = await prisma.providerConnection.update({
       where: { id: input.id },
       data: {
         name: input.name.trim() || existing.name,
-        baseUrl: validBaseUrl(input.baseUrl.trim() || existing.baseUrl),
+        baseUrl: validBaseUrl(baseUrl || existing.baseUrl),
         ...(apiKey ? { apiKey: seal(apiKey) } : {}),
         ...(input.policy ? parsePolicy(input.policy) : {}),
+        ...(login ? { login: { upsert: { create: login, update: { ...login, version: { increment: 1 } } } } } : {}),
       },
+      include: { login: loginSelect },
     });
     await writeAudit({
       actor: session.user.id,
       action: "provider.update",
       objectType: "provider",
       objectId: row.id,
-      after: providerAuditAfter(row, { keyReplaced: Boolean(apiKey) }),
+      after: providerAuditAfter(row, {
+        keyReplaced: Boolean(apiKey),
+        ...(credential ? { signInAccount: credential.session.account } : {}),
+      }),
     });
     return { provider: publicProvider(row) };
+  });
+}
+
+export async function loadProviderLimitsAction(input: { id: string; refresh?: boolean }) {
+  return runAction(async (): Promise<{ limits: SubscriptionLimits | null }> => {
+    await requirePermission(PERMISSIONS.PROVIDERS_READ);
+    const row = await prisma.providerConnection.findUnique({
+      where: { id: input.id },
+      select: { id: true, kind: true, apiKey: true },
+    });
+    if (!row) throw new Error("NOT_FOUND");
+    return { limits: await subscriptionLimits(row, { force: input.refresh === true }) };
+  });
+}
+
+export async function startSignInAction(kind: string) {
+  return runAction(async (): Promise<SignInStart> => {
+    const session = await requirePermission(PERMISSIONS.PROVIDERS_MANAGE);
+    if (!isSignInKind(kind)) throw new Error("UNKNOWN_PROVIDER_KIND");
+    const device = await requestDeviceCode(kind);
+    return {
+      ticket: sealTicket(session.user.id, device),
+      verificationUrl: device.verificationUrl,
+      userCode: device.userCode,
+      interval: device.interval,
+      expiresIn: device.expiresIn,
+    };
+  });
+}
+
+export async function pollSignInAction(input: { ticket: string; interval: number }) {
+  return runAction(async (): Promise<SignInPollResult> => {
+    const session = await requirePermission(PERMISSIONS.PROVIDERS_MANAGE);
+    const ticket = openTicket(input.ticket, session.user.id);
+    if (!ticket) throw new Error("SIGN_IN_EXPIRED");
+    const polled = await pollDeviceCode(ticket.grant);
+    if (polled.state === "denied") throw new Error("SIGN_IN_DENIED");
+    if (polled.state === "expired") throw new Error("SIGN_IN_EXPIRED");
+    if (polled.state === "pending") {
+      const interval = Math.max(ticket.interval, Math.round(input.interval) || ticket.interval);
+      return { state: "pending", interval: polled.slowDown ? interval + SLOW_DOWN_STEP_S : interval };
+    }
+    return {
+      state: "done",
+      credential: sealCredential(session.user.id, ticket.grant.kind, polled.session),
+      account: polled.session.account,
+      plan: polled.session.plan,
+    };
   });
 }
 
@@ -163,10 +272,10 @@ export async function deleteProviderAction(id: string) {
 export async function discoverProviderAction(id: string) {
   return runAction(async () => {
     const session = await requirePermission(PERMISSIONS.PROVIDERS_MANAGE);
-    const row = await prisma.providerConnection.findUnique({ where: { id } });
+    const row = await prisma.providerConnection.findUnique({ where: { id }, include: { login: loginSelect } });
     if (!row) return actionFail("NOT_FOUND");
     const refreshed = await refreshProviderModels(row, session.user.id);
-    const provider = publicProvider(refreshed.provider);
+    const provider = publicProvider({ ...refreshed.provider, login: row.login });
     const [targets, groups] = await Promise.all([
       catalogTargets(row.id),
       prisma.modelGroup.findMany({ select: { alias: true } }),
@@ -189,6 +298,7 @@ export async function importProviderModelsAction(input: {
     const session = await requirePermission(PERMISSIONS.PROVIDERS_MANAGE);
     const row = await prisma.providerConnection.findUnique({
       where: { id: input.id },
+      include: { login: loginSelect },
     });
     if (!row) return actionFail("NOT_FOUND");
     let current: ProviderSyncRecord = row;
@@ -242,6 +352,6 @@ export async function importProviderModelsAction(input: {
       objectId: row.id,
       after: providerAuditAfter(row, { added, updated, strategy }),
     });
-    return { provider: publicProvider(current), added, updated, strategy };
+    return { provider: publicProvider({ ...current, login: row.login }), added, updated, strategy };
   });
 }

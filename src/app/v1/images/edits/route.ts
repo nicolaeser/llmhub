@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { usageFromUnknown } from "@/lib/gateway/billing";
 import { asRecord } from "@/lib/gateway/core";
 import { resolveImageFiles } from "@/lib/gateway/file-refs";
-import { allowModel, applyPii, gateRequest, gateResponse, modelOf, modelChain } from "@/lib/gateway/gate";
+import { allowModel, applyGuardrails, gateRequest, gateResponse, modelOf, modelChain } from "@/lib/gateway/gate";
 import { streamMedia, wantsStream } from "@/lib/gateway/media-stream";
 import { meter } from "@/lib/gateway/meter";
 import { readModelRequest } from "@/lib/gateway/multipart";
@@ -16,7 +16,7 @@ export async function POST(req: Request) {
     const { body, rawBody, contentType } = await readModelRequest(req);
     const model = modelOf(body);
     allowModel(principal, model);
-    const clean = rawBody ? body : await resolveImageFiles((await applyPii(body, principal)).body, principal);
+    const clean = rawBody ? body : await resolveImageFiles((await applyGuardrails(body, principal)).body, principal);
     const aliases = modelChain(principal, model, clean);
     if (wantsStream(clean)) {
       return await streamMedia({
@@ -31,7 +31,7 @@ export async function POST(req: Request) {
     }
     const usage = meter(principal, model, body);
     try {
-      const hit = await forwardToModel(aliases, principal.routeLimits, "/images/edits", rawBody ? null : clean, {
+      const hit = await forwardToModel(aliases, principal, "/images/edits", rawBody ? null : clean, {
         rawBody,
         contentType: rawBody ? undefined : contentType,
       });

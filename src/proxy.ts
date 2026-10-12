@@ -114,6 +114,6 @@ function forwardRequestHeaders(
 
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|apple-icon|internal-api/(?!setup(?:/|$))|api/|v1/|scim/|sso/|.*\\.(?:png|jpg|jpeg|svg|gif|ico|webp|woff2?|txt)).*)",
+    "/((?!_next/static|_next/image|favicon.ico|apple-icon|internal-api/(?!setup(?:/|$))|api/|v1/|subscription/|scim/|sso/|.*\\.(?:png|jpg|jpeg|svg|gif|ico|webp|woff2?|txt)).*)",
   ],
 };

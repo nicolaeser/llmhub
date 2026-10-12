@@ -5,7 +5,7 @@ import { connect, isIP, type Socket } from "node:net";
 import { hostname } from "node:os";
 import { connect as tlsConnect } from "node:tls";
 import { env } from "@/lib/env";
-import type { MailInput, MailMessage, MailOptions } from "@/types/mail";
+import type { MailAttachment, MailInput, MailMessage, MailOptions } from "@/types/mail";
 
 const LOOPBACK = new Set(["localhost", "127.0.0.1", "::1"]);
 
@@ -42,24 +42,77 @@ export function encodeSubject(subject: string): string {
   return words.map((word) => `=?UTF-8?B?${b64(word)}?=`).join("\r\n ");
 }
 
+export function mailEnabled(): boolean {
+  return Boolean(env.SMTP_URL);
+}
+
+export function mailErrorCode(err: unknown): string {
+  if (!(err instanceof Error)) return "MAIL_FAILED";
+  const reply = /^smtp (\d{3})\b/.exec(err.message);
+  if (reply) return `SMTP_${reply[1]}`;
+  if (err.message === "smtp timeout") return "SMTP_TIMEOUT";
+  if ("code" in err && typeof err.code === "string" && /^[A-Z][A-Z0-9_]{1,40}$/.test(err.code)) return err.code;
+  return "MAIL_FAILED";
+}
+
+export function recipientsOf(to: MailInput["to"]): string[] {
+  const list = (Array.isArray(to) ? to : [to]).map((value) => value.trim()).filter(Boolean);
+  if (!list.length) throw new Error("smtp message has no recipient");
+  return list;
+}
+
+function attachmentName(filename: string): string {
+  return filename.replace(/[^A-Za-z0-9._-]/g, "_") || "attachment";
+}
+
+function attachmentPart(attachment: MailAttachment, boundary: string): string[] {
+  const content =
+    typeof attachment.content === "string" ? Buffer.from(attachment.content, "utf8") : Buffer.from(attachment.content);
+  const name = attachmentName(attachment.filename);
+  return [
+    `--${boundary}`,
+    `Content-Type: ${attachment.contentType}; name="${name}"`,
+    "Content-Transfer-Encoding: base64",
+    `Content-Disposition: attachment; filename="${name}"`,
+    "",
+    ...(content.toString("base64").match(/.{1,76}/g) ?? []),
+  ];
+}
+
 export function buildMessage(message: MailMessage, now = new Date()): string {
-  const { from, to, subject, text } = message;
-  if ([from, to, subject].some((value) => /[\r\n]/.test(value))) {
+  const { from, subject, text } = message;
+  const to = recipientsOf(message.to);
+  const attachments = message.attachments ?? [];
+  const headerValues = [from, subject, ...to, ...attachments.map((item) => item.contentType)];
+  if (headerValues.some((value) => /[\r\n]/.test(value))) {
     throw new Error("smtp header contains a line break");
+  }
+  if (attachments.some((item) => /["\\]/.test(item.contentType))) {
+    throw new Error("smtp attachment content type is invalid");
   }
   const domain = /@([^@\s]+)$/.exec(address(from))?.[1] ?? "localhost";
   const body = text.split(/\r\n|\r|\n/).map((line) => (line.startsWith(".") ? `.${line}` : line));
-  return [
+  const headers = [
     `From: ${from}`,
-    `To: ${to}`,
+    `To: ${to.join(",\r\n ")}`,
     `Subject: ${encodeSubject(subject)}`,
     `Date: ${now.toUTCString().replace("GMT", "+0000")}`,
     `Message-ID: <${randomUUID()}@${domain}>`,
     "MIME-Version: 1.0",
-    "Content-Type: text/plain; charset=utf-8",
-    "Content-Transfer-Encoding: 8bit",
+  ];
+  const textHeaders = ["Content-Type: text/plain; charset=utf-8", "Content-Transfer-Encoding: 8bit"];
+  if (!attachments.length) return [...headers, ...textHeaders, "", ...body].join("\r\n");
+  const boundary = `llmhub-${randomUUID()}`;
+  return [
+    ...headers,
+    `Content-Type: multipart/mixed; boundary="${boundary}"`,
+    "",
+    `--${boundary}`,
+    ...textHeaders,
     "",
     ...body,
+    ...attachments.flatMap((attachment) => attachmentPart(attachment, boundary)),
+    `--${boundary}--`,
   ].join("\r\n");
 }
 
@@ -165,6 +218,7 @@ export async function sendMail(
   const pass = decodeURIComponent(url.password);
   const from = options.from ?? (env.SMTP_FROM || "llmhub@localhost");
   const message = buildMessage({ ...input, from });
+  const recipients = recipientsOf(input.to);
   const smtp = new SmtpSession((options.connect ?? open)(host, port, secure), options.timeoutMs ?? 20_000);
   const ehlo = async () =>
     new Set((await smtp.cmd(`EHLO ${heloName()}`, 250)).slice(1).flatMap((line) => line.toUpperCase().split(/[ =]/)));
@@ -188,7 +242,7 @@ export async function sendMail(
       }
     }
     await smtp.cmd(`MAIL FROM:<${address(from)}>${caps.has("8BITMIME") ? " BODY=8BITMIME" : ""}`, 250);
-    await smtp.cmd(`RCPT TO:<${input.to}>`, 250, 251);
+    for (const recipient of recipients) await smtp.cmd(`RCPT TO:<${address(recipient)}>`, 250, 251);
     await smtp.cmd("DATA", 354);
     await smtp.cmd(`${message}\r\n.`, 250);
     await smtp.cmd("QUIT", 221).catch(() => undefined);

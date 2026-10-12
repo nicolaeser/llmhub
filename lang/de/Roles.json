@@ -11,7 +11,7 @@
   "noRole": "Keine Rolle",
   "actionsMenu": "Aktionen für {role}",
   "templateName": "{key, select, admin {Admin} operator {Operator} finance {Finance} viewer {Viewer} other {Rolle}}",
-  "templateDescription": "{key, select, admin {Voller Zugriff inklusive Rollen, Einstellungen und Benutzersicherheit.} operator {Betreibt Schlüssel, Provider, Modelle, Mandanten und Benutzer. Keine Rollen oder Einstellungen.} finance {Nutzung, Logs und Chargeback aller. Sonst nur lesend.} viewer {Lesende Konsole mit eigenen Schlüsseln, eigener Nutzung, Playground und Assistent.} other {}}",
+  "templateDescription": "{key, select, admin {Voller Zugriff inklusive Rollen, Einstellungen und Benutzersicherheit.} operator {Betreibt Schlüssel, Provider, Modelle, Mandanten und Benutzer. Keine Rollen oder Einstellungen.} finance {Nutzung, Logs, Chargeback, Margen und Aufschläge aller. Sonst nur lesend.} viewer {Lesende Konsole mit eigenen Schlüsseln, eigener Nutzung, Playground und Assistent.} other {}}",
   "members": "{count, plural, =0 {Keine Mitglieder} one {# Mitglied} other {# Mitglieder}}",
   "permissionCount": "{count, plural, one {# Berechtigung} other {# Berechtigungen}}",
   "toolsOff": "{count, plural, one {# Assistent-Werkzeug aus} other {# Assistent-Werkzeuge aus}}",
@@ -102,6 +102,14 @@
     "budgetsManage": {
       "label": "Budgets verwalten",
       "description": "Budgets und temporäre Limits festlegen."
+    },
+    "pricingRead": {
+      "label": "Margen ansehen",
+      "description": "Einkauf, Verkauf, Marge und Aufschlagsregeln sehen. Für Unternehmensbenutzer nie verfügbar."
+    },
+    "pricingManage": {
+      "label": "Aufschläge verwalten",
+      "description": "Aufschläge und Rabatte auf den Einkauf pro Unternehmen, Abteilung, Projekt oder Modell festlegen."
     },
     "usersRead": {
       "label": "Benutzer ansehen",

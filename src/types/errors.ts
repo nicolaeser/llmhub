@@ -27,6 +27,7 @@ export type AnthropicErrorType =
 export type GateErrorOptions = {
   param?: string | null;
   upstreamCode?: string;
+  retryAt?: number | null;
 };
 
 export type OpenAIErrorBody = {

@@ -5,12 +5,18 @@ import { requirePermission } from "@/lib/auth/guards";
 import { hasPerm, PERMISSIONS } from "@/lib/auth/permissions";
 import { actionFail, runAction } from "@/lib/http/action-result";
 import { writeAudit } from "@/lib/gateway/audit";
+import {
+  anomalyFactor,
+  DEFAULT_KEY_EXPIRY_WARNING_DAYS,
+  DEFAULT_SPEND_ANOMALY_FACTOR,
+  DEFAULT_SPEND_ANOMALY_MIN_COST,
+} from "@/lib/gateway/alert-rules";
 import { getEnterprise, patchEnterprise } from "@/lib/gateway/settings";
 import { WEBHOOK_EVENTS } from "@/lib/gateway/webhook-events";
 import { resolveS3Config } from "@/lib/s3/config";
 import { alertWebhooksSchema } from "@/schemas/settings";
 import type { AlertWebhook } from "@/types/gateway";
-import type { AlertWebhookInput, AlertWebhookView } from "@/types/settings";
+import type { AlertRules, AlertWebhookInput, AlertWebhookView } from "@/types/settings";
 
 async function view(canManage: boolean) {
   const enterprise = await getEnterprise();
@@ -19,10 +25,16 @@ async function view(canManage: boolean) {
       (hook): AlertWebhookView => ({
         id: hook.id,
         url: hook.url,
+        format: hook.format,
         events: hook.events,
         secretSet: Boolean(hook.secret),
       }),
     ),
+    alertRules: {
+      spendAnomalyFactor: enterprise.spend_anomaly_factor ?? DEFAULT_SPEND_ANOMALY_FACTOR,
+      spendAnomalyMinCost: enterprise.spend_anomaly_min_cost ?? DEFAULT_SPEND_ANOMALY_MIN_COST,
+      keyExpiryWarningDays: enterprise.key_expiry_warning_days ?? DEFAULT_KEY_EXPIRY_WARNING_DAYS,
+    },
     logRetentionDays: enterprise.log_retention_days ?? 0,
     spendRetentionDays: enterprise.spend_retention_days ?? 0,
     auditRetentionDays: enterprise.audit_retention_days ?? 0,
@@ -45,6 +57,7 @@ export async function loadLoggingAction() {
 
 export async function saveLoggingAction(input: {
   alertWebhooks: AlertWebhookInput[];
+  alertRules: AlertRules;
   logRetentionDays: number;
   spendRetentionDays: number;
   auditRetentionDays: number;
@@ -69,6 +82,7 @@ export async function saveLoggingAction(input: {
         id: previous?.id ?? randomUUID(),
         url: hook.url,
         secret: hook.clearSecret ? "" : hook.secret || previous?.secret || "",
+        format: hook.format,
         events: WEBHOOK_EVENTS.filter((event) => hook.events.includes(event)),
       };
     });
@@ -81,6 +95,9 @@ export async function saveLoggingAction(input: {
       content_retention_days: Math.max(0, Math.trunc(input.contentRetentionDays) || 0),
       log_archive: input.logArchive,
       log_content: input.logContent,
+      spend_anomaly_factor: anomalyFactor(Number(input.alertRules.spendAnomalyFactor) || 0),
+      spend_anomaly_min_cost: Math.max(0, Number(input.alertRules.spendAnomalyMinCost) || 0),
+      key_expiry_warning_days: Math.max(0, Math.trunc(input.alertRules.keyExpiryWarningDays) || 0),
     };
     await patchEnterprise({ ...after, alert_webhooks: alertWebhooks });
     await writeAudit({
@@ -93,6 +110,7 @@ export async function saveLoggingAction(input: {
         alert_webhooks: alertWebhooks.map((hook, i) => ({
           id: hook.id,
           url: hook.url,
+          format: hook.format,
           events: hook.events,
           secretChanged: Boolean(parsed.data[i].secret) || parsed.data[i].clearSecret,
         })),

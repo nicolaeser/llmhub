@@ -4,6 +4,7 @@ import prisma from "@/lib/db/prisma";
 import { hasPerm, PERMISSIONS } from "@/lib/auth/permissions";
 import { spendScope } from "@/lib/auth/scope";
 import { requestTranscript, responseTranscript } from "@/lib/gateway/log-content";
+import { replayDraft } from "@/lib/gateway/log-replay";
 import { money } from "@/lib/utils/money";
 import type { RequestLog } from "@/generated/prisma/client";
 import type { AuthenticatedSession } from "@/types/auth";
@@ -58,10 +59,14 @@ export function requestLogRow(
     projectId: row.projectId,
     promptTokens: row.promptTokens,
     completionTokens: row.completionTokens,
+    cacheReadTokens: row.cacheReadTokens,
+    cacheWriteTokens: row.cacheWriteTokens,
     cost: money(row.cost),
     piiMode: row.piiMode,
     piiInput: row.piiInput,
     piiOutput: row.piiOutput,
+    guardInput: row.guardInput,
+    guardOutput: row.guardOutput,
     hasContent: Boolean(row.content),
     contentSkip: row.contentSkip,
   };
@@ -95,6 +100,11 @@ export async function findRequestLogDetail(
     tag: row.tag,
     error: row.error,
     canViewContent,
+    replayable: Boolean(
+      content &&
+        hasPerm(session.permissions, PERMISSIONS.PLAYGROUND_USE) &&
+        replayDraft(row.endpoint, content.request),
+    ),
     content: content
       ? {
           request: content.request,

@@ -1,9 +1,10 @@
 {
-  "title": "PII-Schwärzung",
-  "subtitle": "Kennungen maskieren oder blockieren, bevor ein Modell den Prompt sieht.",
+  "title": "Guardrails",
+  "subtitle": "Prompts und Antworten auf personenbezogene Daten, verbotene Inhalte, Prompt-Injection und geleakte Secrets prüfen.",
+  "tabs": "{tab, select, pii {PII} content {Regeln und Prüfungen} other {{tab}}}",
   "save": "Richtlinie speichern",
   "enabledState": "{enabled, select, true {Aktiv} other {Pausiert}}",
-  "policy": "Richtlinie",
+  "policy": "PII-Richtlinie",
   "enable": "PII in Prompts schwärzen",
   "enableHint": "Gilt für Text in Chat, Completions, Messages, Responses, Batches, Embeddings, Moderation, Bild-Prompts, Sprachausgabe-Eingaben, Playground und Assistant. Hochgeladene Dateien und Audio werden nicht geprüft.",
   "mode": "Wenn PII gefunden wird",
@@ -24,17 +25,17 @@
   "testerHint": "Verwendet die gespeicherte globale Richtlinie.",
   "redact": "Beispiel schwärzen",
   "saved": "PII-Richtlinie gespeichert",
-  "policyHint": "Gilt für jede Anfrage, sofern ihr Unternehmen oder ihr API-Key keine Überschreibung hat.",
+  "policyHint": "Gilt für jede Anfrage, sofern ihr API-Key, ihr Projekt oder ihr Unternehmen keine Überschreibung hat.",
   "entitiesHint": "Ohne Auswahl gilt die Standardauswahl.",
   "overrides": "Überschreibungen",
-  "overridesHint": "Gib einem Unternehmen oder einem einzelnen API-Key eine eigene Richtlinie. Für jede Anfrage gilt genau eine Richtlinie, gewählt in dieser Reihenfolge:",
+  "overridesHint": "Gib einem Unternehmen, einem Projekt oder einem einzelnen API-Key eine eigene Richtlinie. Für jede Anfrage gilt genau eine Richtlinie, gewählt in dieser Reihenfolge:",
   "overridesEmpty": "Noch keine Überschreibungen. Jede Anfrage nutzt die globale Richtlinie.",
   "addOverride": "Überschreibung hinzufügen",
   "scope": "Gilt für",
-  "scopeLabel": "{scope, select, org {Unternehmen} key {API-Key} other {{scope}}}",
-  "overrideTarget": "{scope, select, org {Unternehmen} key {API-Key} other {{scope}}}: {alias}",
+  "scopeLabel": "{scope, select, org {Unternehmen} project {Projekt} key {API-Key} other {{scope}}}",
+  "overrideTarget": "{scope, select, org {Unternehmen} project {Projekt} key {API-Key} other {{scope}}}: {alias}",
   "overrideTitle": "{mode, select, edit {Überschreibung bearbeiten} other {Überschreibung hinzufügen}}",
-  "overrideHint": "Diese Richtlinie ersetzt die geerbte für das gewählte Unternehmen oder den API-Key vollständig: Modus, Schwärzung der Ausgabe und Entitäten.",
+  "overrideHint": "Diese Richtlinie ersetzt die geerbte für das gewählte Unternehmen, Projekt oder den API-Key vollständig: Modus, Schwärzung der Ausgabe und Entitäten.",
   "saveOverride": "Überschreibung speichern",
   "overrideSaved": "{mode, select, removed {Überschreibung entfernt} other {Überschreibung gespeichert}}",
   "removeOverride": "Überschreibung entfernen",
@@ -53,7 +54,11 @@
     "number": "{n, number}",
     "key": {
       "title": "Überschreibung des API-Keys",
-      "hint": "Hat der API-Key der Anfrage eine Überschreibung, gilt nur diese. Die Überschreibung seines Unternehmens wird dann nicht beachtet."
+      "hint": "Hat der API-Key der Anfrage eine Überschreibung, gilt nur diese. Überschreibungen von Projekt und Unternehmen werden dann nicht beachtet."
+    },
+    "project": {
+      "title": "Überschreibung des Projekts",
+      "hint": "Sonst gilt die Überschreibung des Projekts, zu dem der Key gehört."
     },
     "org": {
       "title": "Überschreibung des Unternehmens",
@@ -61,8 +66,70 @@
     },
     "global": {
       "title": "Globale Richtlinie",
-      "hint": "Sonst gilt die globale Richtlinie oben auf dieser Seite."
+      "hint": "Sonst gilt die globale Richtlinie oben in diesem Tab."
     },
     "replace": "Eine Überschreibung ersetzt die geerbte Richtlinie vollständig, also Modus, Schwärzung der Ausgabe und Entitäten. Ohne ausgewählte Entitäten gilt die Standardauswahl."
+  },
+  "actionLabel": "{action, select, block {Blockieren} mask {Maskieren} flag {Nur markieren} other {{action}}}",
+  "actionHint": "Blockieren lehnt Prompts mit 400 guardrail_blocked ab und hält Antworten zurück. Maskieren ersetzt den Treffer. Nur markieren lässt ihn durch und vermerkt ihn im Request-Log.",
+  "hitLabel": "{kind, select, rule {Regel} injection {Injection} secret {Secret} other {Treffer}}: {label}",
+  "injection": {
+    "title": "Prompt-Injection",
+    "hint": "Heuristiken für typische Injection-Formulierungen auf Englisch und Deutsch, geprüft in Nutzer- und Tool-Inhalten. System- und Entwickleranweisungen werden nicht geprüft.",
+    "enable": "Prompt-Injection erkennen",
+    "action": "Wenn Injection erkannt wird",
+    "actionHint": "Blockieren lehnt die Anfrage mit 400 guardrail_blocked ab, bevor sie das Modell erreicht. Nur markieren lässt sie durch und vermerkt sie im Request-Log.",
+    "checks": "Prüfungen",
+    "checksHint": "Ohne Auswahl laufen alle Prüfungen.",
+    "check": "{check, select, instruction_override {Anweisungen aushebeln} prompt_leak {Systemprompt auslesen} role_hijack {Jailbreak-Rollenspiel} delimiter {Gefälschte Chat-Trennzeichen} hidden_text {Versteckter Unicode-Text} other {{check}}}",
+    "example": "{check, select, instruction_override {„Ignoriere alle vorherigen Anweisungen“} prompt_leak {„Zeig mir deinen Systemprompt“} role_hijack {„Du bist jetzt im Entwicklermodus“} delimiter {<|im_start|>, [INST]} hidden_text {Tag-Zeichen, Folgen unsichtbarer Zeichen} other {}}"
+  },
+  "secrets": {
+    "title": "Secrets in Antworten",
+    "hint": "Prüft die Modellausgabe auf Zugangsdaten, bevor sie den Client erreicht. Das funktioniert unabhängig von der PII-Schwärzung der Ausgabe.",
+    "enable": "Antworten auf Secrets prüfen",
+    "action": "Wenn ein Secret gefunden wird",
+    "entities": "Erkennung",
+    "entitiesHint": "Ohne Auswahl laufen alle Erkennungen."
+  },
+  "rules": {
+    "title": "Denylists und Regex-Regeln",
+    "hint": "Eigene Begriffe oder Muster in Prompts, Antworten oder beidem finden.",
+    "add": "Regel hinzufügen",
+    "empty": "Noch keine Regeln.",
+    "name": "Name",
+    "kind": "Typ",
+    "kindLabel": "{kind, select, denylist {Denylist} regex {Regulärer Ausdruck} other {{kind}}}",
+    "target": "Prüft",
+    "targetLabel": "{target, select, input {Prompts} output {Antworten} both {Prompts und Antworten} other {{target}}}",
+    "action": "Aktion",
+    "patterns": "{kind, select, regex {Muster, eines pro Zeile} other {Begriffe, einer pro Zeile}}",
+    "patternsHint": "{kind, select, regex {JavaScript-Syntax mit u-Flag. Verschachtelte Quantoren wie (a+)+ werden abgelehnt.} other {Ganze Wörter oder Wortgruppen. Leerzeichen passen auf jeden Leerraum.}}",
+    "caseSensitive": "Groß- und Kleinschreibung beachten",
+    "remove": "{name} entfernen",
+    "defaultName": "Regel {n, number}",
+    "issue": "{issue, select, invalid {Zeile {line, number} ist kein gültiges Muster.} nested_quantifier {Zeile {line, number} verschachtelt Quantoren und könnte das Gateway blockieren.} matches_empty {Zeile {line, number} passt auf leeren Text.} empty {Dieses Feld ist erforderlich.} duplicate {Eine andere Regel nutzt diesen Namen bereits.} other {Prüfe diese Regel.}}",
+    "count": "{count, plural, =0 {Keine Regeln} one {# Regel} other {# Regeln}}"
+  },
+  "content": {
+    "policy": "Globale Guardrails",
+    "policyHint": "Gelten für jede Anfrage, sofern ihr API-Key, ihr Projekt oder ihr Unternehmen keine Überschreibung hat.",
+    "saved": "Guardrails gespeichert",
+    "logsHint": "Request-Logs listen jeden Treffer in Prompts und Antworten. Eine blockierte Antwort endet mit dem Finish-Reason content_filter (Stop-Reason refusal bei Messages), und maskierter Text bleibt auch in gespeicherten Log-Inhalten maskiert.",
+    "streamHint": "Streams werden Chunk für Chunk mit kurzem Rückblick geprüft. Ein blockierter Stream endet beim Treffer, Text davor hat den Client also schon erreicht. Maskiert werden nur Treffer innerhalb eines Chunks.",
+    "overridesHint": "Gib einem Unternehmen, einem Projekt oder einem einzelnen API-Key eigene Guardrails. Für jede Anfrage gilt genau ein Satz, gewählt in dieser Reihenfolge:",
+    "overridesEmpty": "Noch keine Überschreibungen. Jede Anfrage nutzt die globalen Guardrails.",
+    "overrideHint": "Diese Guardrails ersetzen die geerbten für das gewählte Unternehmen, Projekt oder den API-Key vollständig: Prompt-Injection, Secret-Prüfung und alle Regeln.",
+    "replace": "Eine Überschreibung ersetzt die geerbten Guardrails vollständig. Regeln werden nicht zusammengeführt, übernimm also die Regeln, die weiter gelten sollen.",
+    "state": "{enabled, select, true {{action, select, block {Blockieren} mask {Maskieren} flag {Nur markieren} other {An}}} other {Aus}}"
+  },
+  "guardTester": {
+    "title": "Live-Tester",
+    "hint": "Verwendet die globalen Guardrails wie oben bearbeitet, auch vor dem Speichern.",
+    "sample": "Beispieltext",
+    "direction": "Prüfen als",
+    "directionLabel": "{direction, select, input {Prompt} output {Antwort} other {{direction}}}",
+    "run": "Prüfung starten",
+    "result": "{blocked, select, true {Blockiert} other {{hits, plural, =0 {Keine Treffer} one {# Treffer} other {# Treffer}}}}"
   }
 }

@@ -13,6 +13,8 @@ import {
   pdfDocument,
   type TextStyle,
 } from "./pdf";
+import type { UsagePdfStats } from "@/types/gateway";
+import type { Formatter, Translate } from "@/types/i18n";
 
 export type UsagePdfInput = {
   brand: string;
@@ -199,4 +201,78 @@ export function usagePdf(input: UsagePdfInput): Uint8Array {
   drawModelTable(page, input.byModel, chartBottom - 26);
   drawFooter(page, { left: input.generated, right: input.brand });
   return pdfDocument([page], { title: input.title, producer: input.brand });
+}
+
+export function usageStatsPdf(input: {
+  stats: UsagePdfStats;
+  t: Translate;
+  format: Formatter;
+  brand: string;
+  period: string;
+  filter?: string;
+  generatedAt: Date;
+  dayDate: (day: string) => Date;
+}): Uint8Array {
+  const { stats, t, format } = input;
+  const totals = stats.chargeback.reduce(
+    (sum, row) => ({ prompt: sum.prompt + row.prompt, completion: sum.completion + row.completion }),
+    { prompt: 0, completion: 0 },
+  );
+  return usagePdf({
+    brand: input.brand,
+    title: t("pdf.title"),
+    period: input.period,
+    filter: input.filter,
+    generated: t("pdf.generated", { at: input.generatedAt }),
+    kpis: [
+      { label: t("metrics.spend"), value: format.number(stats.spend, "money") },
+      { label: t("metrics.requests"), value: format.number(stats.count, "integer") },
+      { label: t("metrics.tokens"), value: format.number(stats.tokens, "integer") },
+      {
+        label: t("successRate"),
+        value: format.number(stats.count > 0 ? (stats.count - stats.errors) / stats.count : 0, "percent"),
+      },
+      { label: t("metrics.errors"), value: format.number(stats.errors, "integer") },
+      { label: t("metrics.rate429"), value: format.number(stats.rate429, "integer") },
+      { label: t("metrics.latency"), value: t("latencyValue", { ms: Math.round(stats.latency) }) },
+      { label: t("metrics.p95"), value: t("latencyValue", { ms: Math.round(stats.p95Latency) }) },
+    ],
+    daily: {
+      heading: t("charts.dailySpend"),
+      days: stats.daily.map((day) => ({
+        label: format.dateTime(input.dayDate(day.day), "chart"),
+        value: day.spend,
+      })),
+      formatTick: (value) => format.number(value, "axis"),
+      empty: t("pdf.noSpend"),
+    },
+    byModel: {
+      heading: t("pdf.byModel"),
+      columns: {
+        model: t("pdf.colModel"),
+        share: t("pdf.colShare"),
+        spend: t("pdf.colSpend"),
+        prompt: t("pdf.colPrompt"),
+        completion: t("pdf.colCompletion"),
+      },
+      rows: stats.byModel.map((row) => {
+        const share = stats.spend > 0 ? row.spend / stats.spend : 0;
+        return {
+          name: row.name,
+          share,
+          shareLabel: format.number(share, "percent"),
+          spend: format.number(row.spend, "money"),
+          prompt: format.number(row.prompt, "integer"),
+          completion: format.number(row.completion, "integer"),
+        };
+      }),
+      total: {
+        name: t("pdf.total"),
+        spend: format.number(stats.spend, "money"),
+        prompt: format.number(totals.prompt, "integer"),
+        completion: format.number(totals.completion, "integer"),
+      },
+      empty: t("pdf.noSpend"),
+    },
+  });
 }

@@ -4,9 +4,12 @@ import { recordUsage, usageFromUnknown } from "@/lib/gateway/billing";
 import { alertUpstreamFailure } from "@/lib/gateway/alerts";
 import { spendTag } from "@/lib/gateway/gate";
 import { GateError } from "@/lib/gateway/errors";
-import { redactPii } from "@/lib/gateway/pii";
+import { outputScreen, type OutputScreen } from "@/lib/gateway/guardrails";
 import { requestRoutingOverride, serviceModeHeaders } from "@/lib/gateway/service-mode";
-import { acquireGroup, loadGroup, markFailure, markSuccess, secretFor } from "@/lib/gateway/runtime";
+import { acquireGroup, loadGroup, markFailure, markSuccess } from "@/lib/gateway/runtime";
+import { CodexSseTranslator } from "@/lib/gateway/codex";
+import { deploymentAuth } from "@/lib/gateway/credentials";
+import { inPool, outsidePool } from "@/lib/gateway/route-pool";
 import { SSE_HEADERS } from "@/lib/gateway/sse";
 import {
   joinPath,
@@ -18,10 +21,23 @@ import {
   upstreamHeaders,
 } from "@/lib/gateway/upstream";
 import { asRecord, isRouterError, newId, stringifyContent } from "@/lib/gateway/core";
+import { costFilter, costRejected } from "@/lib/gateway/cost-cap";
 import { ChatStreamTranscript } from "@/lib/gateway/log-content";
 import { estimateTokens, requestText } from "@/lib/gateway/tokens";
-import type { Group, ResolvedDeployment, JsonMap, Usage, Principal } from "@/types/gateway";
+import type {
+  ChatSseTranslator,
+  CostFilter,
+  Group,
+  ResolvedDeployment,
+  JsonMap,
+  Usage,
+  Principal,
+  RequestTrace,
+  RoutePool,
+} from "@/types/gateway";
+import type { OutputGuard } from "@/types/guardrails";
 import type { RouteLimits } from "@/types/model-templates";
+import type { ResponseCacheUsage } from "@/types/cache";
 
 export const UPSTREAM_TIMEOUT_MS = 300_000;
 
@@ -64,7 +80,7 @@ export async function withDeployment<T>(
   aliases: string[],
   limits: RouteLimits,
   fn: (dep: ResolvedDeployment, group: Group) => Promise<T>,
-  opts?: { deferRelease?: boolean; strategy?: string },
+  opts?: { deferRelease?: boolean; strategy?: string; pool?: RoutePool; cost?: CostFilter },
 ): Promise<{
   result: T;
   dep: ResolvedDeployment;
@@ -73,6 +89,8 @@ export async function withDeployment<T>(
   release: () => void;
 }> {
   let last: unknown = new GateError(404, "model_not_found", "no deployment for model", { param: "model" });
+  const pool = opts?.pool ?? "api";
+  const routable = inPool(pool);
   const queue = aliases.map((alias) => ({ alias, root: alias }));
   for (let qi = 0; qi < queue.length; qi++) {
     const { alias, root } = queue[qi]!;
@@ -83,11 +101,13 @@ export async function withDeployment<T>(
       last = err;
       continue;
     }
-    const attempts = Math.max(0, group.num_retries) + 1;
+    const reachable = !group.mapped.length || group.mapped.some(routable) || Boolean(group.overflow_group);
+    if (!reachable) last = outsidePool(pool);
+    const attempts = reachable ? Math.max(0, group.num_retries) + 1 : 0;
     let stopAlias = false;
     for (let i = 0; i < attempts; i++) {
       try {
-        const acquired = await acquireGroup(group, limits[root], undefined, opts?.strategy);
+        const acquired = await acquireGroup(group, limits[root], routable, opts?.strategy, opts?.cost);
         try {
           const started = Date.now();
           const result = await fn(acquired.dep, group);
@@ -105,7 +125,7 @@ export async function withDeployment<T>(
           };
         } catch (err) {
           acquired.release();
-          if (retryable(err)) markFailure(acquired.dep);
+          if (retryable(err)) markFailure(acquired.dep, err instanceof GateError ? err.retryAt : null);
           last = err;
           if (!retryable(err)) {
             stopAlias = true;
@@ -115,7 +135,7 @@ export async function withDeployment<T>(
         }
       } catch (err) {
         last = err;
-        if (!fallbackable(err)) throw err;
+        if (!fallbackable(err) || costRejected(err)) throw err;
         break;
       }
     }
@@ -130,39 +150,65 @@ export async function withDeployment<T>(
   throw last;
 }
 
-function redactMessage(message: JsonMap | null, entities: string[], found?: Set<string>): void {
+function screenMessage(message: JsonMap | null, apply: (text: string) => string): void {
   if (!message) return;
-  if (typeof message.content === "string") message.content = redactPii(message.content, entities, found);
-  if (typeof message.reasoning_content === "string") {
-    message.reasoning_content = redactPii(message.reasoning_content, entities, found);
-  }
+  if (typeof message.content === "string") message.content = apply(message.content);
+  if (typeof message.reasoning_content === "string") message.reasoning_content = apply(message.reasoning_content);
 }
 
-export function redactChatJson(json: JsonMap, entities: string[] | null, found?: Set<string>): JsonMap {
-  if (!entities) return json;
+export function screenChatJson(json: JsonMap, screen: OutputScreen | null, stream = false): JsonMap {
+  if (!screen) return json;
+  const apply = (text: string) => (stream ? screen.delta(text) : screen.text(text));
   const choices = Array.isArray(json.choices) ? json.choices : [];
   for (const choice of choices) {
     if (!choice || typeof choice !== "object") continue;
     const rec = choice as JsonMap;
-    redactMessage(asRecord(rec.message), entities, found);
-    redactMessage(asRecord(rec.delta), entities, found);
-    if (typeof rec.text === "string") rec.text = redactPii(rec.text, entities, found);
+    screenMessage(asRecord(rec.message), apply);
+    screenMessage(asRecord(rec.delta), apply);
+    if (typeof rec.text === "string") rec.text = apply(rec.text);
   }
   return json;
 }
 
-export function deploymentKey(dep: ResolvedDeployment): string {
-  const apiKey = secretFor(dep);
-  if (!apiKey && dep.kind !== "openai_compat") {
-    throw new GateError(503, "no_provider_key", "no API key for deployment");
-  }
-  return apiKey;
+export function withholdChatJson(json: JsonMap): JsonMap {
+  const choices = Array.isArray(json.choices) ? json.choices : [];
+  json.choices = choices.map((choice) => {
+    const rec = asRecord(choice) ?? {};
+    const filtered: JsonMap = { ...rec, finish_reason: "content_filter" };
+    if (asRecord(rec.message)) filtered.message = { role: "assistant", content: "" };
+    if (typeof rec.text === "string") filtered.text = "";
+    return filtered;
+  });
+  return json;
+}
+
+export function screenChatOutput(json: JsonMap, guard: OutputGuard | null, trace?: RequestTrace): boolean {
+  const screen = outputScreen(guard, trace);
+  screenChatJson(json, screen);
+  if (screen?.blocked) withholdChatJson(json);
+  return screen?.blocked ?? false;
+}
+
+function contentFilterChunk(json: JsonMap, model: string): JsonMap {
+  const choices = Array.isArray(json.choices) ? json.choices : [];
+  const indexes = choices.map((choice) => Number(asRecord(choice)?.index ?? 0) || 0);
+  return {
+    id: json.id,
+    object: "chat.completion.chunk",
+    created: json.created,
+    model,
+    choices: (indexes.length ? [...new Set(indexes)] : [0]).map((index) => ({
+      index,
+      delta: {},
+      finish_reason: "content_filter",
+    })),
+  };
 }
 
 export async function chatOnce(dep: ResolvedDeployment, group: Group, body: JsonMap, model: string): Promise<unknown> {
   const proxied = await proxyJson({
     dep,
-    apiKey: deploymentKey(dep),
+    auth: await deploymentAuth(dep),
     path: "/chat/completions",
     body: { ...body, model: dep.model || model, stream: false },
     timeoutMs: UPSTREAM_TIMEOUT_MS,
@@ -181,12 +227,12 @@ export async function openUpstreamStream(input: {
   form?: FormData;
   headers?: Record<string, string>;
 }): Promise<Response> {
-  const apiKey = deploymentKey(input.dep);
+  const auth = await deploymentAuth(input.dep);
   const signals: AbortSignal[] = [AbortSignal.timeout(UPSTREAM_TIMEOUT_MS)];
   if (input.req.signal) signals.push(input.req.signal);
   const headers: Record<string, string> = {
     ...mergeUpstreamHeaders(
-      upstreamHeaders(input.dep, apiKey, input.headers),
+      upstreamHeaders(input.dep, auth, input.headers),
       serviceModeHeaders(input.dep.kind, input.payload, input.group.strategy, input.dep.model),
     ),
     Accept: "text/event-stream",
@@ -229,6 +275,12 @@ export function openChatStream(
   return openUpstreamStream({ dep, group, req: input.req, path: "/chat/completions", payload });
 }
 
+function streamTranslator(dep: ResolvedDeployment, model: string): ChatSseTranslator | null {
+  if (dep.kind === "anthropic") return new AnthropicSseTranslator(model);
+  if (dep.kind === "codex") return new CodexSseTranslator(model);
+  return null;
+}
+
 function sseData(payload: string): string {
   return `data: ${payload}\n\n`;
 }
@@ -238,43 +290,46 @@ export async function dispatchChat(input: {
   model: string;
   body: JsonMap;
   aliases: string[];
-  outputPii: string[] | null;
-}): Promise<{ json: JsonMap; dep: ResolvedDeployment; alias: string; usage: Partial<Usage> }> {
+  outputGuard: OutputGuard | null;
+  responseCache?: ResponseCacheUsage;
+}): Promise<{ json: JsonMap; dep: ResolvedDeployment; alias: string; usage: Partial<Usage>; cost: number }> {
   const started = Date.now();
   const routed = await withDeployment(
     input.aliases,
     input.principal.routeLimits,
     (dep, group) => chatOnce(dep, group, input.body, input.model),
-    { strategy: requestRoutingOverride(input.body) },
+    {
+      strategy: requestRoutingOverride(input.body),
+      pool: input.principal.pool,
+      cost: costFilter(input.principal, input.body),
+    },
   ).catch(async (err) => {
     await recordFailure(input, err, started);
     throw err;
   });
   const { result, dep, alias, group } = routed;
 
-  const json = redactChatJson(
-    { ...(asRecord(result) ?? {}), model: input.model },
-    input.outputPii,
-    input.principal.trace?.piiOutput,
-  );
+  const json: JsonMap = { ...(asRecord(result) ?? {}), model: input.model };
+  const blocked = screenChatOutput(json, input.outputGuard, input.principal.trace);
   json.model = input.model;
   if (!json.object) json.object = "chat.completion";
   if (!json.id) json.id = `chatcmpl_${newId()}`;
   const usage = usageFromUnknown(json.usage, json);
-  await recordUsage({
+  const cost = await recordUsage({
     principal: input.principal,
     model: input.model,
     deployment: dep,
     group,
     usage,
     status: 200,
-    outcome: "ok",
+    outcome: blocked ? "guardrail_blocked" : "ok",
     latencyMs: Date.now() - started,
     tag: spendTag(input.body),
     request: input.body,
     response: json,
+    responseCache: input.responseCache,
   });
-  return { json, dep, alias, usage };
+  return { json, dep, alias, usage, cost };
 }
 
 export async function streamChat(input: {
@@ -283,14 +338,19 @@ export async function streamChat(input: {
   model: string;
   body: JsonMap;
   aliases: string[];
-  outputPii: string[] | null;
+  outputGuard: OutputGuard | null;
 }): Promise<Response> {
   const started = Date.now();
   const routed = await withDeployment(
     input.aliases,
     input.principal.routeLimits,
     (dep, group) => openChatStream(dep, group, input),
-    { deferRelease: true, strategy: requestRoutingOverride(input.body) },
+    {
+      deferRelease: true,
+      strategy: requestRoutingOverride(input.body),
+      pool: input.principal.pool,
+      cost: costFilter(input.principal, input.body),
+    },
   ).catch(async (err) => {
     await recordFailure(input, err, started);
     throw err;
@@ -303,7 +363,7 @@ export async function streamChat(input: {
     principal: input.principal,
     model: input.model,
     body: input.body,
-    entities: input.outputPii,
+    outputGuard: input.outputGuard,
     started,
   });
 }
@@ -316,22 +376,23 @@ export function relayChatStream(input: {
   principal: Principal;
   model: string;
   body: JsonMap;
-  entities: string[] | null;
+  outputGuard: OutputGuard | null;
   started: number;
 }): Response {
-  const { dep, group, release, entities, started } = input;
-  const found = input.principal.trace?.piiOutput;
+  const { dep, group, release, started } = input;
+  const screen = outputScreen(input.outputGuard, input.principal.trace);
   const transcript = new ChatStreamTranscript();
   const wantsUsage = asRecord(input.body.stream_options)?.include_usage === true;
   const encoder = new TextEncoder();
   const decoder = new TextDecoder();
   const reader = input.res.body!.getReader();
-  const translator = dep.kind === "anthropic" ? new AnthropicSseTranslator(input.model) : null;
+  const translator = streamTranslator(dep, input.model);
   let leftover = "";
   let billed = false;
   let ended = false;
   let reported: Partial<Usage> | null = null;
   let streamedText = "";
+  let filtered = false;
 
   const observe = (json: JsonMap): boolean => {
     transcript.push(json);
@@ -366,13 +427,29 @@ export function relayChatStream(input: {
         total_tokens: prompt + completion,
       },
       status: 200,
-      outcome: "ok",
+      outcome: screen?.blocked ? "guardrail_blocked" : "ok",
       latencyMs: Date.now() - started,
       tag: spendTag(input.body),
       stream: true,
       request: input.body,
       response: transcript.result(),
     });
+  };
+
+  const forward = (json: JsonMap, controller: ReadableStreamDefaultController<Uint8Array>) => {
+    screenChatJson(json, screen, true);
+    json.model = input.model;
+    if (screen?.blocked) {
+      if (!filtered) {
+        filtered = true;
+        const stop = contentFilterChunk(json, input.model);
+        transcript.push(stop);
+        controller.enqueue(encoder.encode(sseData(JSON.stringify(stop))));
+      }
+      json.choices = [];
+      if (!asRecord(json.usage)) return;
+    }
+    if (observe(json)) controller.enqueue(encoder.encode(sseData(JSON.stringify(json))));
   };
 
   const end = (controller: ReadableStreamDefaultController<Uint8Array>) => {
@@ -388,13 +465,14 @@ export function relayChatStream(input: {
           end(controller);
           continue;
         }
+        let json: JsonMap;
         try {
-          const json = redactChatJson(JSON.parse(payload) as JsonMap, entities, found);
-          json.model = input.model;
-          if (observe(json)) controller.enqueue(encoder.encode(sseData(JSON.stringify(json))));
+          json = JSON.parse(payload) as JsonMap;
         } catch {
           controller.enqueue(encoder.encode(sseData(payload)));
+          continue;
         }
+        forward(json, controller);
       }
       return;
     }
@@ -405,14 +483,14 @@ export function relayChatStream(input: {
       end(controller);
       return;
     }
+    let json: JsonMap;
     try {
-      const json = JSON.parse(data) as JsonMap;
-      json.model = input.model;
-      redactChatJson(json, entities, found);
-      if (observe(json)) controller.enqueue(encoder.encode(sseData(JSON.stringify(json))));
+      json = JSON.parse(data) as JsonMap;
     } catch {
       controller.enqueue(encoder.encode(sseData(data)));
+      return;
     }
+    forward(json, controller);
   };
 
   const step = async (controller: ReadableStreamDefaultController<Uint8Array>) => {
@@ -425,11 +503,11 @@ export function relayChatStream(input: {
       if (translator) {
         const flushed = translator.flush();
         if (flushed && flushed !== "[DONE]") {
+          let json: JsonMap | null = null;
           try {
-            const json = redactChatJson(JSON.parse(flushed) as JsonMap, entities, found);
-            json.model = input.model;
-            if (observe(json)) controller.enqueue(encoder.encode(sseData(JSON.stringify(json))));
+            json = JSON.parse(flushed) as JsonMap;
           } catch {}
+          if (json) forward(json, controller);
         }
       }
       end(controller);

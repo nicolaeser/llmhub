@@ -1,12 +1,16 @@
 import {
   Activity,
+  BadgePercent,
   BarChart3,
   Bell,
   BookOpen,
   Building2,
+  Calculator,
   Code2,
   Database,
+  HeartPulse,
   KeyRound,
+  Library,
   ListChecks,
   Network,
   PlayCircle,
@@ -26,7 +30,9 @@ export const NAV: NavSection[] = [
     labelKey: "sections.customers",
     items: [
       { href: "/companies", labelKey: "items.companies", icon: Building2, permission: PERMISSIONS.TENANCY_READ },
+      { href: "/knowledge", labelKey: "items.knowledge", icon: Library, permission: PERMISSIONS.TENANCY_READ },
       { href: "/keys", labelKey: "items.keys", icon: KeyRound, permission: PERMISSIONS.KEYS_READ },
+      { href: "/markups", labelKey: "items.markups", icon: BadgePercent, permission: PERMISSIONS.PRICING_READ },
     ],
   },
   {
@@ -47,7 +53,9 @@ export const NAV: NavSection[] = [
     labelKey: "sections.observe",
     items: [
       { href: "/usage", labelKey: "items.usage", icon: BarChart3, permission: PERMISSIONS.SPEND_READ },
+      { href: "/what-if", labelKey: "items.whatIf", icon: Calculator, permission: PERMISSIONS.SPEND_READ },
       { href: "/logs", labelKey: "items.logs", icon: Activity, permission: PERMISSIONS.SPEND_READ },
+      { href: "/provider-health", labelKey: "items.providerHealth", icon: HeartPulse, permission: PERMISSIONS.PROVIDERS_READ },
     ],
   },
   {

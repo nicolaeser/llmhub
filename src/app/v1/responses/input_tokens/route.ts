@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { anthropicCountBody, chatToAnthropic } from "@/lib/gateway/anthropic";
-import { deploymentKey, withDeployment } from "@/lib/gateway/chat";
+import { withDeployment } from "@/lib/gateway/chat";
+import { deploymentAuth } from "@/lib/gateway/credentials";
 import { asNumber, asRecord } from "@/lib/gateway/core";
 import { resolveResponsesFiles } from "@/lib/gateway/file-refs";
-import { allowModel, applyPii, gateRequest, gateResponse, modelChain, modelOf, readBody } from "@/lib/gateway/gate";
+import { allowModel, applyGuardrails, gateRequest, gateResponse, modelChain, modelOf, readBody } from "@/lib/gateway/gate";
 import { GateError } from "@/lib/gateway/errors";
 import { parseRequest, responsesCountBody, responsesToChat } from "@/lib/gateway/responses";
 import { previousConversation } from "@/lib/gateway/responses-store";
@@ -17,7 +18,7 @@ export async function POST(req: Request) {
     const body = await readBody(req);
     const model = modelOf(body);
     allowModel(principal, model);
-    const { body: redacted } = await applyPii(body, principal);
+    const { body: redacted } = await applyGuardrails(body, principal);
     const clean = await resolveResponsesFiles(redacted, principal);
     const parsed = parseRequest(responsesRequestSchema, clean);
     if (!parsed.ok) {
@@ -34,7 +35,7 @@ export async function POST(req: Request) {
         const anthropic = dep.kind === "anthropic";
         const proxied = await proxyJson({
           dep,
-          apiKey: deploymentKey(dep),
+          auth: await deploymentAuth(dep),
           path: anthropic ? "/v1/messages/count_tokens" : "/responses/input_tokens",
           body: anthropic
             ? anthropicCountBody(chatToAnthropic({ ...responsesToChat(request, history).body, model: dep.model || model }))

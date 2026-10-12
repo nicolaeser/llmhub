@@ -49,12 +49,17 @@ export type UsageSource = {
   keyId: string;
   userId: string;
   spend: number;
+  purchase?: number | null;
   tokens: number;
   count: number;
   errors: number;
   rate429: number;
   latency: number;
   p95Latency: number;
+  cacheRead: number;
+  cacheWrite: number;
+  cacheSavings: number;
+  cacheHitRate: number;
   daily: { day: string; spend: number; requests: number; errors: number }[];
   byModel: SliceRow[];
   byTeam: SliceRow[];

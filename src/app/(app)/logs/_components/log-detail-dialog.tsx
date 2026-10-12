@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import {
   Alert,
   Button,
@@ -15,11 +15,17 @@ import {
   Tabs,
   type useOverlayState,
 } from "@heroui/react";
-import { Braces, ChevronDown, Download, FileCode, FileText, type LucideIcon } from "lucide-react";
+import { Braces, ChevronDown, Download, FileCode, FileText, Play, type LucideIcon } from "lucide-react";
 import { useFormatter, useTranslations } from "next-intl";
+import { loadAliasesAction } from "@/app/(app)/_action";
 import Markdown from "@/components/console/markdown";
+import SearchSelect from "@/components/console/search-select";
+import { useGuardrailHitLabel } from "@/components/guardrails/guardrail-hit";
+import { useRouter } from "@/i18n/routing";
 import { splitPiiPlaceholders } from "@/lib/gateway/pii";
+import { isActionFail } from "@/lib/http/action-result";
 import type { RequestLogDetail, RequestLogExportFormat, TranscriptEntry } from "@/types/logs";
+import GuardrailChip from "./guardrail-chip";
 import PiiChip from "./pii-chip";
 
 const EXPORT_FORMATS: { id: RequestLogExportFormat; icon: LucideIcon }[] = [
@@ -178,6 +184,45 @@ function Content({ detail }: { detail: RequestLogDetail }) {
   );
 }
 
+function Replay({ detail }: { detail: RequestLogDetail }) {
+  const t = useTranslations("Logs.detail");
+  const router = useRouter();
+  const [models, setModels] = useState<string[] | null>(null);
+  const [model, setModel] = useState("");
+
+  useEffect(() => {
+    loadAliasesAction().then((res) => {
+      const aliases = isActionFail(res) ? [] : res.models;
+      setModels(aliases);
+      setModel(aliases.includes(detail.model) ? detail.model : "");
+    });
+  }, [detail.model]);
+
+  return (
+    <Modal.Footer className="flex-col items-stretch">
+      <p className="text-xs text-muted">{t("replayHint")}</p>
+      <div className="flex flex-wrap items-end gap-3">
+        <SearchSelect
+          label={t("replayModel")}
+          placeholder={models?.length === 0 ? t("replayNoModels") : t("replayPick")}
+          items={(models ?? []).map((alias) => ({ id: alias, label: alias }))}
+          value={model}
+          onChange={setModel}
+          isDisabled={!models?.length}
+          className="min-w-44 flex-1"
+        />
+        <Button
+          isDisabled={!model}
+          onPress={() => router.push(`/playground?${new URLSearchParams({ replay: detail.id, model })}`)}
+        >
+          <Play size={14} aria-hidden />
+          {t("replay")}
+        </Button>
+      </div>
+    </Modal.Footer>
+  );
+}
+
 export default function LogDetailDialog({
   state,
   detail,
@@ -192,8 +237,10 @@ export default function LogDetailDialog({
   const tPii = useTranslations("Guardrails");
   const tCommon = useTranslations("Common");
   const format = useFormatter();
+  const hitLabel = useGuardrailHitLabel();
   const entities = (ids: string[]) =>
     ids.length ? format.list(ids.map((id) => tPii("entityLabel", { id })), "enumeration") : tCommon("none");
+  const hits = (list: string[]) => (list.length ? format.list(list.map(hitLabel), "enumeration") : tCommon("none"));
   const label = (kind: "key" | "user" | "member" | "org" | "team" | "project", name: string, id: string) =>
     name || (id ? t("deleted", { kind }) : tCommon("none"));
 
@@ -289,6 +336,9 @@ export default function LogDetailDialog({
                     <Field label={t("columns.tokens")}>
                       {t("tokenSplit", { prompt: detail.promptTokens, completion: detail.completionTokens })}
                     </Field>
+                    <Field label={tDetail("cache")}>
+                      {tDetail("cacheValue", { read: detail.cacheReadTokens, written: detail.cacheWriteTokens })}
+                    </Field>
                     <Field label={t("columns.cost")}>{format.number(detail.cost, "money")}</Field>
                   </dl>
                   <Separator />
@@ -301,6 +351,11 @@ export default function LogDetailDialog({
                         piiInput={detail.piiInput}
                         piiOutput={detail.piiOutput}
                       />
+                      <GuardrailChip
+                        outcome={detail.outcome}
+                        guardInput={detail.guardInput}
+                        guardOutput={detail.guardOutput}
+                      />
                     </div>
                     <dl className="grid gap-x-4 gap-y-3 sm:grid-cols-3">
                       <Field label={tDetail("piiFilter")}>
@@ -308,6 +363,8 @@ export default function LogDetailDialog({
                       </Field>
                       <Field label={tDetail("piiPrompt")}>{entities(detail.piiInput)}</Field>
                       <Field label={tDetail("piiResponse")}>{entities(detail.piiOutput)}</Field>
+                      <Field label={tDetail("guardPrompt")}>{hits(detail.guardInput)}</Field>
+                      <Field label={tDetail("guardResponse")}>{hits(detail.guardOutput)}</Field>
                     </dl>
                     {detail.piiMode ? (
                       <p className="text-xs text-muted">{tDetail("piiStored")}</p>
@@ -321,6 +378,7 @@ export default function LogDetailDialog({
                 </>
               )}
             </Modal.Body>
+            {detail?.replayable ? <Replay detail={detail} /> : null}
           </Modal.Dialog>
         </Modal.Container>
       </Modal.Backdrop>

@@ -30,6 +30,13 @@ const ROUTES = [
   "images/variations",
   "videos",
   "models/[id]",
+  "rerank",
+  "vector_stores",
+  "vector_stores/[id]",
+  "vector_stores/[id]/search",
+  "vector_stores/[id]/files",
+  "vector_stores/[id]/files/[file_id]",
+  "vector_stores/[id]/file_batches",
 ] as const;
 
 function v1Path(rel: string) {
@@ -43,6 +50,7 @@ function apiPath(rel: string) {
 function exportsPostOrGet(source: string) {
   return (
     /\bexport\s+(async\s+)?function\s+(POST|GET)\b/.test(source) ||
+    /\bexport\s+const\s+(POST|GET)\s*=/.test(source) ||
     /\bexport\s+\{[^}]*(POST|GET)[^}]*\}/.test(source)
   );
 }

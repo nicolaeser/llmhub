@@ -19,6 +19,7 @@ import EmptyState from "@/components/console/empty-state";
 import PageHeader from "@/components/console/page-header";
 import SearchSelect from "@/components/console/search-select";
 import StatCard from "@/components/console/stat-card";
+import MarginCard from "./_components/margin-card";
 import UsageCharts from "./_components/usage-charts";
 import type { PickerItem } from "@/types/console";
 import type { SliceRow } from "@/types/gateway";
@@ -236,6 +237,14 @@ export default function UsagePage() {
           <StatCard key={key} label={label} value={value} />
         ))}
       </div>
+      {stats.purchase === null ? null : (
+        <MarginCard
+          chargeback={stats.chargeback}
+          names={stats.names}
+          purchase={stats.purchase}
+          sale={stats.spend}
+        />
+      )}
       <UsageCharts
         daily={stats.daily}
         byModel={stats.byModel}
@@ -272,6 +281,66 @@ export default function UsagePage() {
                       <Table.Cell>
                         {format.number(row.completion, "integer")}
                       </Table.Cell>
+                    </Table.Row>
+                  ))}
+                </Table.Body>
+              </Table.Content>
+            </Table.ScrollContainer>
+          </Table>
+        </Card>
+      ) : null}
+      <Card className="mt-5 gap-4">
+        <Card.Header>
+          <Card.Title>{t("cache.title")}</Card.Title>
+          <Card.Description>{t("cache.description")}</Card.Description>
+        </Card.Header>
+        {stats.cacheRead || stats.cacheWrite ? (
+          <dl aria-busy={pending} className="grid grid-cols-2 gap-4 md:grid-cols-4">
+            {(
+              [
+                ["hitRate", t("columns.hitRate"), format.number(stats.cacheHitRate, "percent")],
+                ["cacheRead", t("columns.cacheRead"), format.number(stats.cacheRead, "integer")],
+                ["cacheWrite", t("columns.cacheWrite"), format.number(stats.cacheWrite, "integer")],
+                ["savings", t("columns.savings"), format.number(stats.cacheSavings, "money")],
+              ] as const
+            ).map(([key, label, value]) => (
+              <div key={key}>
+                <dt className="text-xs text-muted">{label}</dt>
+                <dd className="text-xl font-semibold tracking-tight">{value}</dd>
+              </div>
+            ))}
+          </dl>
+        ) : (
+          <Card.Description>{t("cache.empty")}</Card.Description>
+        )}
+      </Card>
+      {stats.cacheByProject.length ? (
+        <Card className="mt-5 gap-4">
+          <Card.Header>
+            <Card.Title>{t("cache.byProject")}</Card.Title>
+          </Card.Header>
+          <Table aria-label={t("cache.byProject")}>
+            <Table.ScrollContainer>
+              <Table.Content>
+                <Table.Header>
+                  <Table.Column isRowHeader>{t("group.project")}</Table.Column>
+                  <Table.Column>{t("columns.prompt")}</Table.Column>
+                  <Table.Column>{t("columns.cacheRead")}</Table.Column>
+                  <Table.Column>{t("columns.cacheWrite")}</Table.Column>
+                  <Table.Column>{t("columns.hitRate")}</Table.Column>
+                  <Table.Column>{t("columns.savings")}</Table.Column>
+                </Table.Header>
+                <Table.Body>
+                  {stats.cacheByProject.map((row) => (
+                    <Table.Row key={row.name} id={row.name}>
+                      <Table.Cell>{label("project", row.name) || tCommon("none")}</Table.Cell>
+                      <Table.Cell>{format.number(row.prompt, "integer")}</Table.Cell>
+                      <Table.Cell>{format.number(row.cacheRead ?? 0, "integer")}</Table.Cell>
+                      <Table.Cell>{format.number(row.cacheWrite ?? 0, "integer")}</Table.Cell>
+                      <Table.Cell>
+                        {format.number(row.prompt ? (row.cacheRead ?? 0) / row.prompt : 0, "percent")}
+                      </Table.Cell>
+                      <Table.Cell>{format.number(row.cacheSavings ?? 0, "money")}</Table.Cell>
                     </Table.Row>
                   ))}
                 </Table.Body>

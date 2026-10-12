@@ -18,11 +18,12 @@ import {
   type useOverlayState,
 } from "@heroui/react";
 import { useTranslations } from "next-intl";
-import { PROVIDER_CATALOG } from "@/lib/gateway/catalog";
+import { isSignInKind, PROVIDER_CATALOG } from "@/lib/gateway/catalog";
 import { DATA_REGIONS } from "@/lib/gateway/model-policy";
 import { isActionFail } from "@/lib/http/action-result";
 import { createProviderAction, updateProviderAction } from "@/app/(app)/providers/_action";
 import type { ProviderView } from "@/types/providers";
+import SignInPanel from "./sign-in-panel";
 
 export default function ProviderDialog({
   state,
@@ -43,6 +44,8 @@ export default function ProviderDialog({
   );
   const [baseUrl, setBaseUrl] = useState(editing?.baseUrl ?? spec?.default_base_url ?? "");
   const [apiKey, setApiKey] = useState("");
+  const [signIn, setSignIn] = useState("");
+  const signInKind = spec && isSignInKind(spec.kind) ? spec.kind : null;
   const [zdr, setZdr] = useState(editing?.policy.zdr ?? false);
   const [retention, setRetention] = useState(
     !editing || editing.policy.zdr || editing.policy.retentionDays === null
@@ -65,7 +68,7 @@ export default function ProviderDialog({
         region,
         noTraining: zdr || noTraining,
       };
-      const body = { name, kind: spec.kind, baseUrl, apiKey, policy };
+      const body = { name, kind: spec.kind, baseUrl, apiKey, signIn: signIn || undefined, policy };
       const result = editing
         ? await updateProviderAction({ id: editing.id, ...body })
         : await createProviderAction(body);
@@ -95,14 +98,23 @@ export default function ProviderDialog({
                   </Modal.Heading>
                 </Modal.Header>
                 <Modal.Body className="max-h-[70vh] space-y-4 overflow-y-auto">
-                  <TextField fullWidth value={apiKey} onChange={setApiKey} isDisabled={pending} aria-label={t("apiKey")}>
-                    <Label>{t("apiKey")}</Label>
-                    <Input
-                      type="password"
-                      aria-label={t("apiKey")}
-                      placeholder={editing?.hasApiKey ? t("apiKeyKeep") : "sk-…"}
+                  {signInKind ? (
+                    <SignInPanel
+                      kind={signInKind}
+                      current={editing?.signIn ?? null}
+                      isDisabled={pending}
+                      onSignedIn={setSignIn}
                     />
-                  </TextField>
+                  ) : (
+                    <TextField fullWidth value={apiKey} onChange={setApiKey} isDisabled={pending} aria-label={t("apiKey")}>
+                      <Label>{t("apiKey")}</Label>
+                      <Input
+                        type="password"
+                        aria-label={t("apiKey")}
+                        placeholder={editing?.hasApiKey ? t("apiKeyKeep") : "sk-…"}
+                      />
+                    </TextField>
+                  )}
                   <Separator />
                   <div className="space-y-1">
                     <p className="text-sm font-medium text-foreground">{t("policy.title")}</p>
@@ -180,10 +192,12 @@ export default function ProviderDialog({
                           <Label>{t("displayName")}</Label>
                           <Input aria-label={t("displayName")} />
                         </TextField>
-                        <TextField fullWidth value={baseUrl} onChange={setBaseUrl} isDisabled={pending} aria-label={t("baseUrl")}>
-                          <Label>{t("baseUrl")}</Label>
-                          <Input aria-label={t("baseUrl")} />
-                        </TextField>
+                        {signInKind ? null : (
+                          <TextField fullWidth value={baseUrl} onChange={setBaseUrl} isDisabled={pending} aria-label={t("baseUrl")}>
+                            <Label>{t("baseUrl")}</Label>
+                            <Input aria-label={t("baseUrl")} />
+                          </TextField>
+                        )}
                       </Disclosure.Body>
                     </Disclosure.Content>
                   </Disclosure>
@@ -195,7 +209,7 @@ export default function ProviderDialog({
                   <Button
                     aria-label={t("formSubmit", { mode: editing ? "save" : "connect" })}
                     isPending={pending}
-                    isDisabled={!spec || !retentionValid}
+                    isDisabled={!spec || !retentionValid || Boolean(signInKind && !editing && !signIn)}
                     onPress={() => save(close)}
                   >
                     {({ isPending }) => (
