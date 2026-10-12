@@ -7,6 +7,7 @@ import { refuseIfNoOperators } from "@/lib/bootstrap/operators";
 import { templateRoleId } from "@/lib/auth/roles";
 import { isPrismaCode } from "@/lib/auth/errors";
 import { securityEvent } from "@/lib/auth/security-events";
+import { removeUserWithInternalKeys } from "@/lib/auth/user-removal";
 import { writeAudit } from "@/lib/audit";
 import { digest, randomToken } from "@/lib/crypto";
 import { bearerToken } from "@/lib/http/api";
@@ -432,5 +433,13 @@ export async function deleteScimUser(id: string) {
   const user = await prisma.user.findUnique({ where: { id } });
   if (!user) throw scimFailure(404, "not found");
   if (user.isOwner) throw scimFailure(403, OWNER_DETAIL);
-  await prisma.user.delete({ where: { id, isOwner: false } });
+  const { revokedKeys } = await removeUserWithInternalKeys(user.id);
+  await writeAudit({
+    actor: SCIM_ACTOR,
+    action: "scim.user.delete",
+    objectType: "user",
+    objectId: user.id,
+    before: { username: user.username, email: user.email, orgId: user.orgId },
+    after: { revokedKeys },
+  });
 }
