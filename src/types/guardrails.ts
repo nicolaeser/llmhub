@@ -1,9 +1,7 @@
 import type { z } from "zod";
 import type {
-  guardrailOverrideSchema,
   guardrailPolicySchema,
   guardrailRuleSchema,
-  piiOverrideSchema,
   piiPolicySchema,
   policyScopeSchema,
 } from "@/schemas/guardrails";
@@ -13,8 +11,6 @@ export type PolicyScope = z.infer<typeof policyScopeSchema>;
 export type PiiPolicy = z.infer<typeof piiPolicySchema>;
 
 export type PiiMode = PiiPolicy["mode"];
-
-export type PiiOverrideInput = z.infer<typeof piiOverrideSchema>;
 
 export type PolicyTarget = {
   scope: PolicyScope;
@@ -30,10 +26,6 @@ export type GuardrailRule = z.infer<typeof guardrailRuleSchema>;
 
 export type GuardrailAction = GuardrailRule["action"];
 
-export type RuleKind = GuardrailRule["kind"];
-
-export type RuleTarget = GuardrailRule["target"];
-
 export type GuardrailPolicy = z.infer<typeof guardrailPolicySchema>;
 
 export type InjectionPolicy = GuardrailPolicy["injection"];
@@ -41,10 +33,6 @@ export type InjectionPolicy = GuardrailPolicy["injection"];
 export type InjectionAction = InjectionPolicy["action"];
 
 export type InjectionCheck = InjectionPolicy["checks"][number];
-
-export type SecretPolicy = GuardrailPolicy["secrets"];
-
-export type GuardrailOverrideInput = z.infer<typeof guardrailOverrideSchema>;
 
 export type GuardrailOverrideView = PolicyTarget & { policy: GuardrailPolicy };
 

@@ -82,11 +82,3 @@ export type StoredPayloadLocation = {
   url?: string;
 };
 
-export type RedisLike = {
-  incrby(key: string, amount: number): Promise<number>;
-  expire(key: string, seconds: number): Promise<number>;
-  hincrby(key: string, field: string, amount: number): Promise<number>;
-  hgetall(key: string): Promise<Record<string, string>>;
-  mget(keys: string[]): Promise<(string | null)[]>;
-  set(key: string, value: string, mode: "PX", milliseconds: number): Promise<unknown>;
-};

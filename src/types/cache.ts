@@ -1,5 +1,4 @@
 import type { z } from "zod";
-import type { CACHE_STATS_RANGES } from "@/lib/gateway/cache/cache-settings";
 import type { cacheSettingsSchema, semanticCacheSchema } from "@/schemas/settings";
 import type { JsonMap } from "@/types/gateway";
 
@@ -36,8 +35,6 @@ export type ChatCacheLookup = {
 };
 
 export type CacheBackend = "redis" | "memory" | "fallback";
-
-export type ResponseCacheStatsRange = (typeof CACHE_STATS_RANGES)[number];
 
 export type ResponseCacheStats = {
   days: number;

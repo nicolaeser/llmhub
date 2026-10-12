@@ -1,7 +1,3 @@
-import type { loadUsage } from "@/lib/usage/dashboard";
-
-export type OkStats = Awaited<ReturnType<typeof loadUsage>>;
-
 export type UsageQuery = {
   days: number;
   model: string;

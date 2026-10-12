@@ -8,7 +8,6 @@ import type { JevSettings } from "@/types/model-catalog";
 import type { AntigravitySettings } from "@/types/providers";
 import type { VectorStoreDefaults } from "@/types/rag";
 import type { S3Settings } from "@/types/s3";
-import type { UpdateStatus } from "@/types/updates";
 
 export type AdminSettings = z.infer<typeof adminSettingsSchema>;
 
@@ -31,20 +30,6 @@ export type AlertRules = {
 export type AlertWebhookDraft = AlertWebhookInput & {
   key: string;
   secretSet: boolean;
-};
-
-export type AdminSettingsView = {
-  settings: AdminSettings;
-  aliases: string[];
-  canManage: boolean;
-  canManageScim: boolean;
-  jevKeySet: boolean;
-  updates: UpdateStatus;
-  scimTokenSet: boolean;
-  s3Ready: boolean;
-  oidcEnv: boolean;
-  smtpEnv: boolean;
-  appUrl: string;
 };
 
 export type Enterprise = {

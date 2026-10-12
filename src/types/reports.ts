@@ -27,17 +27,6 @@ export type UsageReportView = {
   nextRunAt: string;
 };
 
-export type UsageReportInput = {
-  id?: string;
-  orgId: string;
-  teamId: string;
-  cadence: ReportCadence;
-  format: ReportFormat;
-  locale: string;
-  recipients: string[];
-  enabled: boolean;
-};
-
 export type UsageReportTarget = {
   id: string;
   orgId: string;

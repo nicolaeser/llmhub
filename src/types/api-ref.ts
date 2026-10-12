@@ -1,7 +1,5 @@
 import type { OPENAPI_METHODS } from "@/lib/gateway/endpoints/openapi";
 
-export type KeyPrefix = { prefix: string; alias: string };
-
 export type OverlayState = {
   isOpen: boolean;
   open: () => void;
