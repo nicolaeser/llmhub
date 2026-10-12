@@ -1,5 +1,5 @@
 import { asNumber, asRecord, asString } from "@/lib/gateway/core";
-import type { DiscoveredModel, ProviderModelPrice } from "@/types/providers";
+import type { DiscoveredModel, ModelPrice, ProviderModelPrice } from "@/types/providers";
 
 function anyFloat(v: unknown): number {
   if (typeof v === "number" && Number.isFinite(v)) return v;
@@ -10,7 +10,7 @@ function anyFloat(v: unknown): number {
   return 0;
 }
 
-export function parsePricing(raw: unknown): { in: number; out: number } | null {
+export function parsePricing(raw: unknown): ModelPrice | null {
   const rec = asRecord(raw);
   if (!rec) return null;
   let pin = anyFloat(rec.prompt) || anyFloat(rec.input);

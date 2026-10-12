@@ -19,13 +19,6 @@ export type TipItem = {
   dataKey?: unknown;
 };
 
-export type DailyPoint = {
-  day: string;
-  spend: number;
-  requests: number;
-  errors: number;
-};
-
 export type ModelPoint = {
   name: string;
   spend: number;

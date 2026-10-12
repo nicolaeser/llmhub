@@ -11,14 +11,12 @@ import { touchStores, vectorDefaults } from "@/lib/rag/stores";
 import { errorFields } from "@/lib/logging/format";
 import { logger } from "@/lib/logging/logger";
 import type { Principal } from "@/types/gateway";
-import type { IndexedFile, SearchableStore, SearchHit, SearchRequest } from "@/types/rag";
+import type { IndexedFile, ScoredChunk, SearchableStore, SearchHit, SearchRequest } from "@/types/rag";
 
 const RERANK_POOL = 50;
 const MIN_RERANK_POOL = 20;
 
-type Candidate = { storeId: string; file: IndexedFile; slot: number; score: number };
-
-function candidateKey(candidate: Candidate): string {
+function candidateKey(candidate: ScoredChunk): string {
   return candidate.file.index.ids[candidate.slot]!;
 }
 
@@ -116,12 +114,12 @@ export async function searchStores(input: {
   }
   const vectors = await queryVectors(principal, input.endpoint, searchable, request.queries);
   const terms = queryTerms(request.queries);
-  const best = new Map<string, Candidate>();
+  const best = new Map<string, ScoredChunk>();
   for (const store of searchable) {
     const storeVectors = vectors.get(store.id) ?? [];
     for (const query of storeVectors) {
       for (const scored of scoreFiles(files.get(store.id) ?? [], query, terms, request.ranking)) {
-        const candidate: Candidate = { storeId: store.id, ...scored };
+        const candidate: ScoredChunk = { storeId: store.id, ...scored };
         const key = candidateKey(candidate);
         const seen = best.get(key);
         if (!seen || seen.score < candidate.score) best.set(key, candidate);

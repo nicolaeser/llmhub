@@ -18,7 +18,7 @@ import {
   YAxis,
 } from "recharts";
 import ChartTooltip from "./chart-tooltip";
-import type { DailyPoint, ModelPoint, SpendPoint, HealthPoint } from "@/types/usage";
+import type { HealthPoint, ModelPoint, SpendPoint, UsageDay } from "@/types/usage";
 
 const TICK = { fill: "var(--muted)", fontSize: 12 } as const;
 const GRID = { stroke: "var(--border)", vertical: false as const };
@@ -144,7 +144,7 @@ export default function UsageCharts({
   requests,
   errors,
 }: {
-  daily: DailyPoint[];
+  daily: UsageDay[];
   byModel: ModelPoint[];
   byTeam?: SpendPoint[];
   byOrg?: SpendPoint[];
