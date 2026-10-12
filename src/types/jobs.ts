@@ -6,6 +6,7 @@ export type GlobalWithWorkerBoot = typeof globalThis & {
   [BOOT_KEY]?: Promise<void>;
   __llmhubWorkerTimer?: ReturnType<typeof setInterval>;
   __llmhubModelSyncTimer?: ReturnType<typeof setInterval>;
+  __llmhubBullmqRetry?: ReturnType<typeof setTimeout>;
   __llmhubQueueWorkers?: { close: () => Promise<void> }[];
 };
 
