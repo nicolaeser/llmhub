@@ -22,7 +22,7 @@ import {
 } from "@heroui/react";
 import { useFormatter, useTranslations } from "next-intl";
 import SearchSelect from "@/components/console/search-select";
-import { saveMarkupAction } from "@/app/(app)/markups/_action";
+import { saveMarkupAction } from "../_action";
 import { formats } from "@/i18n/formats";
 import { isActionFail } from "@/lib/http/action-result";
 import {

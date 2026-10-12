@@ -17,7 +17,7 @@ import {
 } from "@heroui/react";
 import { Braces, ChevronDown, Download, FileCode, FileText, Play, type LucideIcon } from "lucide-react";
 import { useFormatter, useTranslations } from "next-intl";
-import { loadAliasesAction } from "@/app/(app)/_action";
+import { loadAliasesAction } from "../_action";
 import Markdown from "@/components/console/markdown";
 import SearchSelect from "@/components/console/search-select";
 import { useGuardrailHitLabel } from "@/components/guardrails/guardrail-hit";

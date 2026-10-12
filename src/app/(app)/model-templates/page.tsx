@@ -7,7 +7,7 @@ import { useFormatter, useTranslations } from "next-intl";
 import ConfirmDialog from "@/components/console/confirm-dialog";
 import EmptyState from "@/components/console/empty-state";
 import PageHeader from "@/components/console/page-header";
-import { deleteTemplateAction, loadTemplatesAction } from "@/app/(app)/model-templates/_action";
+import { deleteTemplateAction, loadTemplatesAction } from "./_action";
 import { isActionFail } from "@/lib/http/action-result";
 import { templateModels } from "@/lib/gateway/access/model-policy";
 import type { ModelPolicy, ModelTemplateView, TemplateProviderOption } from "@/types/model-templates";

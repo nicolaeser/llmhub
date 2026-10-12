@@ -148,9 +148,19 @@ test("every error code the HTTP surfaces can emit is in the problem catalog", ()
   const sources = [
     ...walk(path.join(root, "src/app/api")),
     ...walk(path.join(root, "src/app/internal-api")),
-    ...["", "models", "providers", "companies", "logs", "model-templates"].map((dir) =>
-      path.join(root, "src/app/(app)", dir, "_action.ts"),
-    ),
+    ...[
+      "keys/manage.ts",
+      "usage/dashboard.ts",
+      "models/groups.ts",
+      "models/templates.ts",
+      "providers/connections.ts",
+      "tenancy/structure.ts",
+      "tenancy/budgets.ts",
+      "tenancy/guards.ts",
+      "reports/manage.ts",
+      "pricing/markups.ts",
+      "gateway/request-logs/explorer.ts",
+    ].map((file) => path.join(root, "src/lib", file)),
   ];
   const codes = new Set<string>();
   for (const file of sources) {

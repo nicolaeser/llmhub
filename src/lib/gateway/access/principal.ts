@@ -1,7 +1,7 @@
 import "server-only";
 import prisma from "@/lib/db/prisma";
 import { digest } from "@/lib/crypto";
-import { toKeyView } from "@/app/(app)/_data";
+import { toKeyView } from "@/lib/keys/view";
 import { effectivePermissions, hasPerm, PERMISSIONS } from "@/lib/auth/permissions";
 import { isTryBearer, verifyTryBearer } from "@/lib/gateway/access/try-bearer";
 import { modelAccess, templateRuleSelect } from "@/lib/gateway/access/model-access";

@@ -3,7 +3,7 @@
 import { useEffect, useState, useTransition } from "react";
 import { Button, Modal, Spinner, ToggleButton, ToggleButtonGroup, toast, type useOverlayState } from "@heroui/react";
 import { useTranslations } from "next-intl";
-import { loadAssignmentOptionsAction, saveAssignmentsAction } from "@/app/(app)/subscriptions/_action";
+import { loadAssignmentOptionsAction, saveAssignmentsAction } from "../_action";
 import MultiPicker from "@/components/console/multi-picker";
 import { ASSIGNMENT_SCOPES } from "@/lib/gateway/routing/account-access";
 import { isActionFail } from "@/lib/http/action-result";

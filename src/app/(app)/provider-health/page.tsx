@@ -15,7 +15,7 @@ import {
 import { HeartPulse, RefreshCw } from "lucide-react";
 import { useFormatter, useTranslations } from "next-intl";
 import { Link } from "@/i18n/routing";
-import { loadProviderHealthAction } from "@/app/(app)/provider-health/_action";
+import { loadProviderHealthAction } from "./_action";
 import { isActionFail } from "@/lib/http/action-result";
 import EmptyState from "@/components/console/empty-state";
 import PageHeader from "@/components/console/page-header";

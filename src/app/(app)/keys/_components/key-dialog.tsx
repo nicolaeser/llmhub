@@ -24,10 +24,16 @@ import { formats } from "@/i18n/formats";
 import { Link } from "@/i18n/routing";
 import MultiPicker from "@/components/console/multi-picker";
 import SearchSelect from "@/components/console/search-select";
-import { createKeyAction, updateKeyAction } from "@/app/(app)/_action";
+import { createKeyAction, updateKeyAction } from "../_action";
 import { isActionFail } from "@/lib/http/action-result";
 import { accessWindowValid, KEY_ENDPOINTS } from "@/lib/gateway/access/key-restrictions";
-import type { AccessWindowDraft, KeyBindingKind, KeyEndpoint, KeyOptions, KeyPreset } from "@/types/keys";
+import type {
+  AccessWindowDraft,
+  KeyBindingKind,
+  KeyEndpoint,
+  KeyOptions,
+  KeyPreset,
+} from "@/types/keys";
 import type { VirtualKeyView } from "@/types/gateway";
 import AccessWindowFields from "./access-window-fields";
 import { bindingKind, placeOf } from "./key-binding";

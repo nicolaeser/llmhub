@@ -10,7 +10,7 @@ const root = fileURLToPath(new URL("..", import.meta.url));
 const route = path.join(root, "src/app/internal-api/usage/chargeback/route.ts");
 const misplaced = path.join(root, "src/app/api/mgmt/usage/chargeback/route.ts");
 
-test("chargeback CSV lives under internal-api and uses loadUsageAction", async () => {
+test("chargeback CSV lives under internal-api and uses the usage service", async () => {
   assert.equal(existsSync(route), true);
   assert.equal(
     existsSync(misplaced),
@@ -23,7 +23,7 @@ test("chargeback CSV lives under internal-api and uses loadUsageAction", async (
   );
   assert.equal(route.includes(`${path.sep}app${path.sep}api${path.sep}`), false);
   const source = await readFile(route, "utf8");
-  assert.match(source, /loadUsageAction/);
+  assert.match(source, /loadUsage\(/);
   assert.match(source, /toCsv/);
   assert.match(source, /llmhub-chargeback\.csv/);
 });

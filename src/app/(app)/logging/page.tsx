@@ -17,8 +17,8 @@ import { Plus } from "lucide-react";
 import { useTranslations } from "next-intl";
 import PageHeader from "@/components/console/page-header";
 import { formats } from "@/i18n/formats";
-import { loadLoggingAction, saveLoggingAction } from "@/app/(app)/logging/_action";
-import WebhookCard from "@/app/(app)/logging/_components/webhook-card";
+import { loadLoggingAction, saveLoggingAction } from "./_action";
+import WebhookCard from "./_components/webhook-card";
 import { isActionFail } from "@/lib/http/action-result";
 import {
   DEFAULT_KEY_EXPIRY_WARNING_DAYS,

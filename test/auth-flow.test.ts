@@ -79,7 +79,7 @@ test("passwordless passkey sign-in is rate limited before it stores a ceremony",
 
 test("setup and registration start two-factor enrollment instead of a session", async () => {
   const [setup, register] = await Promise.all([
-    file("src/app/internal-api/setup/_action.ts"),
+    file("src/lib/bootstrap/first-admin.ts"),
     file("src/app/internal-api/account/register/route.ts"),
   ]);
   for (const source of [setup, register]) {

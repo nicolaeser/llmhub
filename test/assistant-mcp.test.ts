@@ -300,7 +300,7 @@ test("assistant lives on internal-api not public /api", async () => {
   assert.match(page, /<SearchSelect/);
   assert.match(page, /<Switch/);
   const action = await readFile(
-    new URL("../src/app/(app)/assistant/_action.ts", import.meta.url),
+    new URL("../src/lib/assistant/console.ts", import.meta.url),
     "utf8",
   );
   assert.match(action, /requirePermission\(PERMISSIONS\.ASSISTANT_USE\)/);
@@ -336,7 +336,7 @@ test("parseAssistantModel keeps gateway aliases and drops junk", () => {
   assert.equal(parseAssistantModel(""), "");
 });
 
-test("write tools wrap console actions and re-check manage perms", async () => {
+test("write tools call the console services and re-check manage perms", async () => {
   const read = (file: string) => readFile(new URL(`../src/lib/assistant/tools/${file}`, import.meta.url), "utf8");
   const [providers, models, keys, structure, access, settings] = await Promise.all([
     read("providers.ts"),
@@ -346,18 +346,18 @@ test("write tools wrap console actions and re-check manage perms", async () => {
     read("access.ts"),
     read("settings.ts"),
   ]);
-  assert.match(providers, /createProviderAction/);
+  assert.match(providers, /createProvider\(/);
   assert.match(providers, /apiKey: ""/);
-  assert.match(models, /createModelGroupAction/);
-  assert.match(models, /updateModelGroupAction/);
-  assert.match(keys, /createKeyAction/);
-  assert.match(keys, /rotateKeyAction/);
-  assert.match(structure, /setBudgetAction/);
-  assert.match(structure, /saveMemberAction/);
-  assert.doesNotMatch(structure, /placeMemberAction/);
+  assert.match(models, /createModelGroup\(/);
+  assert.match(models, /updateModelGroup\(/);
+  assert.match(keys, /createKey\(/);
+  assert.match(keys, /rotateKey\(/);
+  assert.match(structure, /setBudget\(/);
+  assert.match(structure, /saveMember\(/);
+  assert.doesNotMatch(structure, /placeMember/);
   assert.match(keys, /const rebinds = args\.projectId !== undefined \|\| args\.memberId !== undefined;/);
-  assert.match(access, /setUserBlockedAction/);
-  assert.match(settings, /savePiiAction/);
+  assert.match(access, /setUserBlocked\(/);
+  assert.match(settings, /savePii\(/);
   for (const source of [providers, models, keys, structure, access, settings]) {
     assert.doesNotMatch(source, /prisma\.\w+\.(create|update|upsert|delete)(Many)?\(/);
     assert.doesNotMatch(source, /master_key/);
@@ -862,7 +862,7 @@ test("admin settings carry the model lock", async () => {
   const locked = adminSettingsSchema.safeParse({ ...settings, assistant_model_locked: true });
   assert.equal(locked.success && locked.data.assistant_model_locked, true);
   const action = await readFile(
-    new URL("../src/app/(app)/assistant/_action.ts", import.meta.url),
+    new URL("../src/lib/assistant/console.ts", import.meta.url),
     "utf8",
   );
   assert.match(action, /assistantModelLocked\(enterprise\)/);

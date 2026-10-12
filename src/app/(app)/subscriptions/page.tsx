@@ -9,15 +9,16 @@ import StatCard from "@/components/console/stat-card";
 import ImportModelsDialog from "@/components/providers/import-models-dialog";
 import ProviderDialog from "@/components/providers/provider-dialog";
 import { isSignInKind, PROVIDER_CATALOG, reportsLimits } from "@/lib/gateway/upstreams/provider-kinds";
+import { isActionFail } from "@/lib/http/action-result";
+import type { AccountLimits, AccountRouting, ImportCandidate, ProviderView } from "@/types/providers";
 import {
   discoverProviderAction,
+  loadAccountRoutingAction,
+  loadAntigravityConfigAction,
   loadProviderLimitsAction,
   loadProvidersAction,
   loadSubscriptionLimitsAction,
-} from "@/app/(app)/providers/_action";
-import { isActionFail } from "@/lib/http/action-result";
-import type { AccountLimits, AccountRouting, ImportCandidate, ProviderView } from "@/types/providers";
-import { loadAccountRoutingAction, loadAntigravityConfigAction } from "./_action";
+} from "./_action";
 import AccessDialog from "./_components/access-dialog";
 import AntigravitySetup from "./_components/antigravity-setup";
 import AccountCard from "./_components/account-card";

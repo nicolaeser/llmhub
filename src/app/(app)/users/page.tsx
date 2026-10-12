@@ -24,7 +24,6 @@ import { useRoleName } from "@/components/security/use-role-name";
 import { useSecurityError } from "@/components/security/use-security-error";
 import type { BudgetResult, BudgetView } from "@/types/structure";
 import type { ConsoleUser, UsersConsolePayload } from "@/types/users";
-import { setBudgetAction } from "@/app/(app)/companies/_action";
 import {
   ChangeAccessDialog,
   CreateUserDialog,
@@ -36,6 +35,7 @@ import {
   resetUserTwoFactorAction,
   revokeUserSessionsAction,
   setUserBlockedAction,
+  setBudgetAction,
   setUserContentLoggingAction,
 } from "./_action";
 

@@ -3,7 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import { NextIntlClientProvider } from "next-intl";
 import { headers } from "next/headers";
 import { getLocale, getMessages, getTranslations } from "next-intl/server";
-import AppProviders from "@/app/_components/app-providers";
+import AppProviders from "./_components/app-providers";
 import { formats } from "@/i18n/formats";
 import "@/styles/globals.css";
 

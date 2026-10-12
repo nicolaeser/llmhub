@@ -8,7 +8,7 @@ import ConfirmDialog from "@/components/console/confirm-dialog";
 import EmptyState from "@/components/console/empty-state";
 import PageHeader from "@/components/console/page-header";
 import SearchSelect from "@/components/console/search-select";
-import { deleteKnowledgeAction, loadKnowledgeAction } from "@/app/(app)/knowledge/_action";
+import { deleteKnowledgeAction, loadKnowledgeAction } from "./_action";
 import { isActionFail } from "@/lib/http/action-result";
 import { formatBytes } from "@/lib/utils/bytes";
 import type { KnowledgeView, VectorStoreStatus, VectorStoreView } from "@/types/rag";

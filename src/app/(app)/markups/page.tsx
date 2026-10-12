@@ -9,7 +9,7 @@ import ConfirmDialog from "@/components/console/confirm-dialog";
 import EmptyState from "@/components/console/empty-state";
 import PageHeader from "@/components/console/page-header";
 import StatCard from "@/components/console/stat-card";
-import { deleteMarkupAction, loadMarkupsAction } from "@/app/(app)/markups/_action";
+import { deleteMarkupAction, loadMarkupsAction } from "./_action";
 import { isActionFail } from "@/lib/http/action-result";
 import { isModelPattern, marginShare, markupScopeRank } from "@/lib/gateway/billing/markup-policy";
 import type { MarkupRule, MarkupScope, MarkupsPayload, MarkupView } from "@/types/pricing";

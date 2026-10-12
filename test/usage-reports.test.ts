@@ -136,9 +136,13 @@ test("report delivery claims a row before sending so parallel sweeps cannot send
 });
 
 test("report actions need budgets:manage and spend:read-all and stay in the company scope", async () => {
-  const source = await readFile(new URL("../src/app/(app)/companies/_action.ts", import.meta.url), "utf8");
+  const [reports, structure] = await Promise.all([
+    readFile(new URL("../src/lib/reports/manage.ts", import.meta.url), "utf8"),
+    readFile(new URL("../src/lib/tenancy/structure.ts", import.meta.url), "utf8"),
+  ]);
+  const source = `${reports}\n${structure}`;
   assert.match(source, /PERMISSIONS\.BUDGETS_MANAGE\) &&\s*hasPerm\(session\.permissions, PERMISSIONS\.SPEND_READ_ALL\)/);
-  for (const name of ["saveReportAction", "deleteReportAction", "sendReportNowAction"]) {
+  for (const name of ["saveReport", "deleteReport", "sendReportNow"]) {
     assert.match(exportedAsyncFn(source, name), /await reportSession\(\)/, name);
   }
   assert.match(source, /if \(!row \|\| !inCompany\(session, row\.orgId\)\) throw new Error\("NOT_FOUND"\)/);

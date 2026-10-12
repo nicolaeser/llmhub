@@ -14,7 +14,7 @@ import {
   type useOverlayState,
 } from "@heroui/react";
 import { useTranslations } from "next-intl";
-import { assignCatalogEntryAction } from "@/app/(app)/model-catalog/_action";
+import { assignCatalogEntryAction } from "../_action";
 import { isActionFail } from "@/lib/http/action-result";
 import type { CatalogEntryView, CatalogView } from "@/types/model-catalog";
 

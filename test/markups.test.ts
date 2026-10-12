@@ -220,7 +220,7 @@ test("recordUsage bills the marked-up price and stores the purchase cost beside 
 });
 
 test("usage loads purchase cost only with the margins permission", async () => {
-  const source = await readFile(new URL("../src/app/(app)/_action.ts", import.meta.url), "utf8");
+  const source = await readFile(new URL("../src/lib/usage/dashboard.ts", import.meta.url), "utf8");
   assert.match(source, /const priced = hasPerm\(session\.permissions, PERMISSIONS\.PRICING_READ\);/);
   assert.match(source, /usageSlices\(\{ \.\.\.filters, day: \{ gte: since \} \}, \{ purchase: priced \}\)/);
   assert.match(source, /purchase: priced \? rows\.reduce\(\(sum, row\) => sum \+ \(row\.purchaseCost \?\? 0\), 0\) : null/);

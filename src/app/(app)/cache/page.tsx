@@ -6,7 +6,7 @@ import { useTranslations } from "next-intl";
 import { formats } from "@/i18n/formats";
 import PageHeader from "@/components/console/page-header";
 import SearchSelect from "@/components/console/search-select";
-import { loadCacheAction, saveCacheAction } from "@/app/(app)/cache/_action";
+import { loadCacheAction, saveCacheAction } from "./_action";
 import {
   CACHE_TTL_MAX_SECONDS,
   SEMANTIC_THRESHOLD_DEFAULT,

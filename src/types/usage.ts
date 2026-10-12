@@ -1,8 +1,6 @@
-import type { loadUsageAction } from "@/app/(app)/_action";
+import type { loadUsage } from "@/lib/usage/dashboard";
 
-type Stats = Awaited<ReturnType<typeof loadUsageAction>>;
-
-export type OkStats = Exclude<Stats, { ok: false }>;
+export type OkStats = Awaited<ReturnType<typeof loadUsage>>;
 
 export type UsageQuery = {
   days: number;

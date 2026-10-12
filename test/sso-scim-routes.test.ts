@@ -83,7 +83,7 @@ test("SCIM refuses to update or delete the owner account", async () => {
 });
 
 test("SCIM token management requires every permission and a step-up", async () => {
-  const action = await readFile(src("app/(app)/admin-settings/_action.ts"), "utf8");
+  const action = await readFile(src("lib/settings/admin.ts"), "utf8");
   assert.match(action, /assertCanGrant\(grantActor\(session\), permissions\)/);
   assert.match(action, /requireStepUp/);
   assert.match(action, /PERMISSIONS\.SETTINGS_MANAGE/);
@@ -93,7 +93,7 @@ test("there is no master key", async () => {
   for (const file of [
     "lib/gateway/access/principal.ts",
     "lib/bootstrap/system-catalog.ts",
-    "app/(app)/admin-settings/_action.ts",
+    "lib/settings/admin.ts",
   ]) {
     assert.doesNotMatch(await readFile(src(file), "utf8"), /master/i);
   }
@@ -101,7 +101,7 @@ test("there is no master key", async () => {
 
 test("admin settings validate and save sso without jwt or custom auth", async () => {
   const [action, schema] = await Promise.all([
-    readFile(src("app/(app)/admin-settings/_action.ts"), "utf8"),
+    readFile(src("lib/settings/admin.ts"), "utf8"),
     readFile(src("schemas/settings.ts"), "utf8"),
   ]);
   assert.match(action, /adminSettingsSchema\.safeParse/);

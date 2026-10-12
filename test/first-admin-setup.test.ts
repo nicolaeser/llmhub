@@ -14,7 +14,7 @@ test("first-admin setup is gated on empty user table at layout and action", asyn
   const [layout, page, action, dockerfile] = await Promise.all([
     file("src/app/internal-api/setup/layout.tsx"),
     file("src/app/internal-api/setup/page.tsx"),
-    file("src/app/internal-api/setup/_action.ts"),
+    file("src/lib/bootstrap/first-admin.ts"),
     file("Dockerfile"),
   ]);
 
@@ -83,7 +83,7 @@ test("boot ensures the catalog without migrating or seeding operators", async ()
 
 test("app source does not use Prisma raw SQL", async () => {
   const files = [
-    "src/app/internal-api/setup/_action.ts",
+    "src/lib/bootstrap/first-admin.ts",
     "src/app/internal-api/ready/route.ts",
     "src/lib/bootstrap/operators.ts",
     "src/lib/bootstrap/system-catalog.ts",

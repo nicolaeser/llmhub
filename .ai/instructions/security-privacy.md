@@ -25,7 +25,7 @@ Load before changing sign-in, sessions, account security, roles, permissions, fi
 - Management keys (`ManagementKey`, `src/lib/management/auth.ts`) are personal `/api/mgmt` credentials: created on the account page with a step-up code and `assertCanGrant`, limited to `MANAGEMENT_PERMISSIONS` (no users, roles, settings, or tools), stored as `sha256` with an 8-character prefix, shown once, at most 25 per user, optional expiry. At request time the scope is intersected with the owner's current role; blocked owners and expired keys fail with `INVALID_API_KEY`. Create and revoke write `management_key.*` security events and the audit log.
 - The Google OAuth client secret for Antigravity sign-in is sealed in `Enterprise.antigravity` (`src/lib/settings/enterprise.ts`), set through `saveAntigravityConfigAction` (needs `providers:manage`), written to the audit log without its value, and never returned to the browser.
 - Security-relevant changes write `UserSecurityEvent` rows; console mutations also write the gateway audit log.
-- First operator: `/internal-api/setup` (`src/app/internal-api/setup/_action.ts`). The layout redirects home when `prisma.user.count() > 0`; the action recounts inside a serializable transaction. Login and register must not redirect to setup.
+- First operator: `/internal-api/setup` (`createFirstAdmin` in `src/lib/bootstrap/first-admin.ts`, called by the setup page action). The layout redirects home when `prisma.user.count() > 0`; the service recounts inside a serializable transaction. Login and register must not redirect to setup.
 - Public registration, invites, SSO upsert, and SCIM create must not insert the first user; they answer `SETUP_REQUIRED` while the user table is empty.
 - OIDC uses the authorization code flow with PKCE (`S256`), a random `state` distinct from the `nonce`, and a signed, 10-minute state cookie that carries the nonce and code verifier (`src/lib/auth/oidc.ts`).
 - Cookie-authenticated `POST` routes under `/internal-api/account` reject cross-site requests with `FORBIDDEN` (`isSameOriginRequest`, `src/lib/auth/request-origin.ts`). `/internal-api/account/expired` clears the cookie only when the session is invalid; logout also drops the pending login challenge and passkey ceremony.
@@ -41,7 +41,7 @@ Load before changing sign-in, sessions, account security, roles, permissions, fi
 
 ## Sources of truth
 
-- `src/lib/auth/`, `src/lib/management/auth.ts`, `src/lib/settings/enterprise.ts` (`resolvePolicies`), `src/lib/rate-limit/window.ts`, `src/proxy.ts`, `src/types/auth.ts`, `src/types/security.ts`, `src/schemas/auth.ts`, `prisma/schema/auth.prisma`, `src/app/internal-api/setup/_action.ts`, `src/app/internal-api/account/`, `src/app/sso/`.
+- `src/lib/auth/`, `src/lib/management/auth.ts`, `src/lib/settings/enterprise.ts` (`resolvePolicies`), `src/lib/rate-limit/window.ts`, `src/proxy.ts`, `src/types/auth.ts`, `src/types/security.ts`, `src/schemas/auth.ts`, `prisma/schema/auth.prisma`, `src/lib/bootstrap/first-admin.ts`, `src/app/internal-api/account/`, `src/app/sso/`.
 
 ## Validation
 

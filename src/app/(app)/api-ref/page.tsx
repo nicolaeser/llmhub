@@ -16,7 +16,7 @@ import {
 } from "@heroui/react";
 import { useTranslations } from "next-intl";
 import PageHeader from "@/components/console/page-header";
-import { loadApiRefAction } from "@/app/(app)/api-ref/_action";
+import { loadApiRefAction } from "./_action";
 import { Link } from "@/i18n/routing";
 import { isActionFail } from "@/lib/http/action-result";
 import { useOrigin } from "@/lib/hooks/use-origin";

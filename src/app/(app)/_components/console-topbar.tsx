@@ -4,7 +4,7 @@ import { useEffect, useState, useTransition } from "react";
 import { Button, Separator } from "@heroui/react";
 import { ArrowUpCircle, LogOut, Menu, RefreshCw } from "lucide-react";
 import { useTranslations } from "next-intl";
-import { loadUpdateStatusAction } from "@/app/(app)/_action";
+import { loadUpdateStatusAction } from "../_action";
 import { isActionFail } from "@/lib/http/action-result";
 import type { UpdateStatus } from "@/types/updates";
 import { AssistantTrigger } from "./assistant-session";

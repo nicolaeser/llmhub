@@ -17,7 +17,7 @@ import {
 } from "@heroui/react";
 import { useTranslations } from "next-intl";
 import SearchSelect from "@/components/console/search-select";
-import { createKnowledgeAction, updateKnowledgeAction } from "@/app/(app)/knowledge/_action";
+import { createKnowledgeAction, updateKnowledgeAction } from "../_action";
 import { formats } from "@/i18n/formats";
 import { isActionFail } from "@/lib/http/action-result";
 import { MAX_CHUNK_TOKENS, MIN_CHUNK_TOKENS } from "@/schemas/rag";

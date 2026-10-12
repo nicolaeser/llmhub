@@ -5,7 +5,7 @@ import { Alert, Card, Spinner, toast } from "@heroui/react";
 import { Calculator } from "lucide-react";
 import { useFormatter, useTranslations } from "next-intl";
 import { Link } from "@/i18n/routing";
-import { loadWhatIfAction } from "@/app/(app)/what-if/_action";
+import { loadWhatIfAction } from "./_action";
 import { isActionFail } from "@/lib/http/action-result";
 import { compareCost } from "@/lib/usage/what-if";
 import EmptyState from "@/components/console/empty-state";

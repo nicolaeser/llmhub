@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { Button, Card, Chip, Description, Input, Label, Spinner, TextField, toast } from "@heroui/react";
 import { useTranslations } from "next-intl";
-import { saveAntigravityConfigAction } from "@/app/(app)/subscriptions/_action";
+import { saveAntigravityConfigAction } from "../_action";
 import { isActionFail } from "@/lib/http/action-result";
 
 export default function AntigravitySetup({

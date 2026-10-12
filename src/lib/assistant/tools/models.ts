@@ -1,23 +1,23 @@
 import "server-only";
 
+import {
+  createModelGroup,
+  deleteModelGroup,
+  loadModels,
+  updateModelGroup,
+} from "@/lib/models/groups";
+import {
+  createTemplate,
+  deleteTemplate,
+  loadTemplates,
+  updateTemplate,
+} from "@/lib/models/templates";
 import prisma from "@/lib/db/prisma";
 import { asStringArray } from "@/lib/gateway/core";
 import { modelAlias } from "@/lib/gateway/catalog/model-alias";
 import { templateRuleSelect } from "@/lib/gateway/access/model-access";
 import { templateModels, templateRulesOf } from "@/lib/gateway/access/model-policy";
 import { money } from "@/lib/utils/money";
-import {
-  createModelGroupAction,
-  deleteModelGroupAction,
-  loadModelsAction,
-  updateModelGroupAction,
-} from "@/app/(app)/models/_action";
-import {
-  createTemplateAction,
-  deleteTemplateAction,
-  loadTemplatesAction,
-  updateTemplateAction,
-} from "@/app/(app)/model-templates/_action";
 import {
   aliasToolInput,
   confirmAliasToolInput,
@@ -27,7 +27,7 @@ import {
   saveTemplateToolInput,
   updateModelToolInput,
 } from "@/schemas/assistant";
-import { defineTool, needsConfirmation, toolFail, viaAction } from "@/lib/assistant/tools/define";
+import { defineTool, needsConfirmation, toolFail, viaService } from "@/lib/assistant/tools/define";
 import type { DeploymentInput, PriceWindow } from "@/types/models";
 
 const MAX_TEMPLATE_MATCHES = 100;
@@ -78,7 +78,7 @@ export const modelTools = {
     input: emptyToolInput,
     run: async () => {
       const names = await providerNames();
-      return viaAction(loadModelsAction(), ({ groups }) => ({
+      return viaService(loadModels(), ({ groups }) => ({
         result: groups.map((group) => ({
           alias: group.alias,
           enabled: group.enabled,
@@ -105,7 +105,7 @@ export const modelTools = {
     input: aliasToolInput,
     run: async ({ alias }) => {
       const names = await providerNames();
-      return viaAction(loadModelsAction(), ({ groups }) => {
+      return viaService(loadModels(), ({ groups }) => {
         const group = groups.find((row) => row.alias === modelAlias(alias));
         if (!group) return toolFail("not_found");
         return {
@@ -131,8 +131,8 @@ export const modelTools = {
     run: async (args) => {
       const deployments = await newDeployments([args]);
       if (!deployments) return toolFail("provider_not_found");
-      return viaAction(
-        createModelGroupAction({
+      return viaService(
+        createModelGroup({
           alias: args.alias,
           strategy: args.strategy ?? "least_inflight",
           numRetries: args.numRetries ?? 2,
@@ -180,8 +180,8 @@ export const modelTools = {
             ...added,
           ]
         : undefined;
-      return viaAction(
-        updateModelGroupAction({
+      return viaService(
+        updateModelGroup({
           alias: existing.alias,
           enabled: args.enabled,
           strategy: args.strategy ?? existing.strategy,
@@ -227,13 +227,13 @@ export const modelTools = {
     input: confirmAliasToolInput,
     run: async ({ alias, confirm }) =>
       needsConfirmation(confirm) ??
-      viaAction(deleteModelGroupAction(alias), (deleted) => ({ result: { ok: true, alias: deleted.alias } })),
+      viaService(deleteModelGroup(alias), (deleted) => ({ result: { ok: true, alias: deleted.alias } })),
   }),
   list_model_templates: defineTool({
     description: "Model templates (reusable model allowlists for keys) with their rules, how many keys use them, and which aliases they currently allow.",
     input: emptyToolInput,
     run: async () =>
-      viaAction(loadTemplatesAction(), ({ templates, policies }) => ({
+      viaService(loadTemplates(), ({ templates, policies }) => ({
         result: templates.map((template) => ({
           ...template,
           matches: templateModels(template, policies).slice(0, MAX_TEMPLATE_MATCHES),
@@ -247,8 +247,8 @@ export const modelTools = {
     run: async (args) => {
       if (!args.id) {
         if (!args.name) return toolFail("invalid_arguments", { issues: [{ path: "name", message: "required" }] });
-        return viaAction(
-          createTemplateAction({
+        return viaService(
+          createTemplate({
             name: args.name,
             description: args.description ?? "",
             models: args.models ?? [],
@@ -268,8 +268,8 @@ export const modelTools = {
       });
       if (!existing) return toolFail("not_found");
       const rules = templateRulesOf(existing);
-      return viaAction(
-        updateTemplateAction({
+      return viaService(
+        updateTemplate({
           id: existing.id,
           name: args.name ?? existing.name,
           description: args.description ?? existing.description,
@@ -291,6 +291,6 @@ export const modelTools = {
     input: confirmIdToolInput,
     run: async ({ id, confirm }) =>
       needsConfirmation(confirm) ??
-      viaAction(deleteTemplateAction(id), (deleted) => ({ result: { ok: true, id: deleted.id } })),
+      viaService(deleteTemplate(id), (deleted) => ({ result: { ok: true, id: deleted.id } })),
   }),
 };

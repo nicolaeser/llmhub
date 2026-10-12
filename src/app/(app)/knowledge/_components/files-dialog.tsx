@@ -16,7 +16,7 @@ import {
 import { RefreshCw, Trash2, Upload } from "lucide-react";
 import { useFormatter, useNow, useTranslations } from "next-intl";
 import ConfirmDialog from "@/components/console/confirm-dialog";
-import { listKnowledgeFilesAction, removeKnowledgeFileAction } from "@/app/(app)/knowledge/_action";
+import { listKnowledgeFilesAction, removeKnowledgeFileAction } from "../_action";
 import { isActionFail } from "@/lib/http/action-result";
 import { formatBytes } from "@/lib/utils/bytes";
 import type { UploadItem, UploadStatus, VectorFileStatus, VectorFileView, VectorStoreView } from "@/types/rag";

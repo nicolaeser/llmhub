@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
+import { loadUsage } from "@/lib/usage/dashboard";
 import { getFormatter, getNow, getTranslations } from "next-intl/server";
-import { loadUsageAction } from "@/app/(app)/_action";
-import { isActionFail } from "@/lib/http/action-result";
+import { isActionFail, runAction } from "@/lib/http/action-result";
 import { actionProblem } from "@/lib/http/problem";
 import { usageStatsPdf } from "@/lib/export/usage-pdf";
 
@@ -9,10 +9,12 @@ const toDate = (day: string) => new Date(`${day}T00:00:00`);
 
 export async function GET(req: NextRequest) {
   const days = Number(req.nextUrl.searchParams.get("days") ?? 14) || 14;
-  const result = await loadUsageAction({
-    days,
-    model: req.nextUrl.searchParams.get("model") ?? "",
-  });
+  const result = await runAction(() =>
+    loadUsage({
+      days,
+      model: req.nextUrl.searchParams.get("model") ?? "",
+    }),
+  );
   if (isActionFail(result)) return actionProblem(req, result);
   const t = await getTranslations("Usage");
   const tCommon = await getTranslations("Common");

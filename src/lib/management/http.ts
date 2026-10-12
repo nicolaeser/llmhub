@@ -3,11 +3,9 @@ import { NextResponse } from "next/server";
 import type { ZodType } from "zod";
 import { runAsPrincipal } from "@/lib/auth/delegation";
 import { hasPerm } from "@/lib/auth/permissions";
-import { isActionFail } from "@/lib/http/action-result";
 import { readJSON } from "@/lib/http/api";
 import { ApiProblem, fieldErrors, problemFromError } from "@/lib/http/problem";
 import { authenticateManagementKey } from "@/lib/management/auth";
-import type { ActionFail } from "@/types/actions";
 import type { Permission } from "@/types/auth";
 import type { ManagementHandler, ManagementRouteContext } from "@/types/management";
 
@@ -58,11 +56,6 @@ export function readQuery<T>(req: Request, schema: ZodType<T>): T {
     });
   }
   return parsed.data;
-}
-
-export function unwrap<T>(result: T | ActionFail): T {
-  if (isActionFail(result)) throw new Error(result.error);
-  return result;
 }
 
 export function respond(body: unknown, status = 200): NextResponse {

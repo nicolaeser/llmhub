@@ -13,7 +13,7 @@ import {
 } from "@heroui/react";
 import { BarChart3, Download } from "lucide-react";
 import { useFormatter, useTranslations } from "next-intl";
-import { loadUsageAction } from "@/app/(app)/_action";
+import { loadUsageAction } from "./_action";
 import { isActionFail } from "@/lib/http/action-result";
 import EmptyState from "@/components/console/empty-state";
 import PageHeader from "@/components/console/page-header";

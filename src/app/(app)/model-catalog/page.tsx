@@ -24,7 +24,7 @@ import {
   setCatalogEntryActiveAction,
   setCatalogGroupActiveAction,
   setCatalogGroupAutoRoutesAction,
-} from "@/app/(app)/model-catalog/_action";
+} from "./_action";
 import { isActionFail } from "@/lib/http/action-result";
 import { catalogEntryKey } from "@/lib/gateway/catalog/model-catalog";
 import type { ActionFail } from "@/types/actions";

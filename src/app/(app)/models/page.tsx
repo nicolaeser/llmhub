@@ -12,7 +12,7 @@ import {
   deleteModelGroupAction,
   loadModelsAction,
   setModelGroupEnabledAction,
-} from "@/app/(app)/models/_action";
+} from "./_action";
 import { isActionFail } from "@/lib/http/action-result";
 import { splitTag } from "@/lib/gateway/catalog/model-catalog";
 import type { Group, ProviderOpt } from "@/types/models";

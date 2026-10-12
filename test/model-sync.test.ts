@@ -708,9 +708,9 @@ test("worker schedules the model catalog every two hours with a deduplicated boo
   assert.match(boot, /clearInterval\(g\.__llmhubModelSyncTimer\)/);
 });
 
-test("provider actions share discovery instead of fetching inline", async () => {
+test("provider services share discovery instead of fetching inline", async () => {
   const source = await readFile(
-    path.join(root, "src/app/(app)/providers/_action.ts"),
+    path.join(root, "src/lib/providers/connections.ts"),
     "utf8",
   );
   assert.match(source, /refreshProviderModels\(row, session\.user\.id\)/);

@@ -18,7 +18,7 @@ import ImportModelsDialog from "@/components/providers/import-models-dialog";
 import ProviderCard from "./_components/provider-card";
 import ProviderDialog from "@/components/providers/provider-dialog";
 import { isSignInKind, PROVIDER_CATALOG } from "@/lib/gateway/upstreams/provider-kinds";
-import { discoverProviderAction, loadProvidersAction } from "@/app/(app)/providers/_action";
+import { discoverProviderAction, loadProvidersAction } from "./_action";
 import { isActionFail } from "@/lib/http/action-result";
 import type { ImportCandidate, ProviderView } from "@/types/providers";
 

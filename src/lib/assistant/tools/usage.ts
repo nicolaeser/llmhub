@@ -1,11 +1,11 @@
 import "server-only";
 
+import { loadUsage } from "@/lib/usage/dashboard";
+import { loadLogs } from "@/lib/gateway/request-logs/explorer";
 import prisma from "@/lib/db/prisma";
 import { hasPerm, PERMISSIONS } from "@/lib/auth/permissions";
 import { usageTotals } from "@/lib/usage/usage-totals";
 import { money } from "@/lib/utils/money";
-import { loadUsageAction } from "@/app/(app)/_action";
-import { loadLogsAction } from "@/app/(app)/logs/_action";
 import { parseLogSearch, parseUsageBreakdown, searchLogs, usageBreakdown } from "@/lib/assistant/insights";
 import { redactSecrets } from "@/lib/assistant/parse";
 import {
@@ -16,7 +16,7 @@ import {
   usageBreakdownToolInput,
   usageToolInput,
 } from "@/schemas/assistant";
-import { defineTool, toolFail, viaAction } from "@/lib/assistant/tools/define";
+import { defineTool, toolFail, viaService } from "@/lib/assistant/tools/define";
 import { ownKeysWhere } from "@/lib/assistant/tools/general";
 import type { SliceRow } from "@/types/gateway";
 
@@ -60,7 +60,7 @@ export const usageTools = {
       "Spend, tokens, requests, errors, latency, daily series, and top models, companies, departments, projects, people, keys, and console users for the last N days. Filters narrow the result. Operators without spend:read-all only see their own internal keys and playground use.",
     input: usageToolInput,
     run: async (args) =>
-      viaAction(loadUsageAction(args), (usage) => ({
+      viaService(loadUsage(args), (usage) => ({
         result: {
           days: usage.days,
           filters: {
@@ -109,8 +109,8 @@ export const usageTools = {
       "The console audit log, newest first: who created, changed, or deleted keys, providers, models, structure, budgets, users, roles, and settings, with before and after values.",
     input: auditLogToolInput,
     run: async ({ from, to, limit, page }) =>
-      viaAction(
-        loadLogsAction({ page, pageSize: limit, filters: { from: from ?? "", to: to ?? "" } }),
+      viaService(
+        loadLogs({ page, pageSize: limit, filters: { from: from ?? "", to: to ?? "" } }),
         (logs) => {
           if (!logs.canAudit) return toolFail("forbidden");
           return { result: { total: logs.auditTotal, page, rows: logs.audit } };

@@ -7,10 +7,9 @@ import { useTranslations } from "next-intl";
 import EmptyState from "@/components/console/empty-state";
 import PageHeader from "@/components/console/page-header";
 import { Link } from "@/i18n/routing";
-import { loadAliasesAction } from "@/app/(app)/_action";
 import { isActionFail } from "@/lib/http/action-result";
 import type { Msg, Session } from "@/types/playground";
-import { loadReplayAction } from "./_action";
+import { loadAliasesAction, loadReplayAction } from "./_action";
 import {
   STORAGE_KEY,
   makeSession,

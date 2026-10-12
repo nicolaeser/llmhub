@@ -10,6 +10,7 @@ import {
   permissionList,
   PERMISSIONS,
 } from "@/lib/auth/permissions";
+import { requirePermission } from "@/lib/auth/guards";
 import { assertPasswordPolicy, hashPassword } from "@/lib/auth/password";
 import { roleOptions } from "@/lib/auth/roles";
 import { requestMeta } from "@/lib/auth/session";
@@ -25,7 +26,7 @@ import {
   userPasswordSchema,
   userSecurityResetSchema,
 } from "@/schemas/auth";
-import type { AuthenticatedSession, GrantActor, TargetRow } from "@/types/auth";
+import type { AuthenticatedSession, GrantActor, Permission, TargetRow } from "@/types/auth";
 import type { ConsoleUser, UsersConsolePayload } from "@/types/users";
 
 function targetPermissions(target: TargetRow) {
@@ -358,4 +359,17 @@ export async function revokeUserSessions(session: AuthenticatedSession, userId: 
     after: { revoked: count },
   });
   return { revoked: count };
+}
+
+export async function loadUsersConsole(): Promise<UsersConsolePayload> {
+  return usersConsole(await requirePermission(PERMISSIONS.USERS_READ));
+}
+
+export async function changeUsers(
+  permission: Permission,
+  mutation: (session: AuthenticatedSession) => Promise<unknown>,
+): Promise<UsersConsolePayload> {
+  const session = await requirePermission(permission);
+  await mutation(session);
+  return usersConsole(session);
 }

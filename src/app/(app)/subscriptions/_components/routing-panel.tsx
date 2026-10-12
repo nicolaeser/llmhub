@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { Card, Chip, Description, Label, ListBox, Select, toast } from "@heroui/react";
 import { useTranslations } from "next-intl";
-import { saveAccountRoutingAction } from "@/app/(app)/subscriptions/_action";
+import { saveAccountRoutingAction } from "../_action";
 import { ACCOUNT_STRATEGIES, DEFAULT_ACCOUNT_STRATEGY } from "@/lib/gateway/routing/account-access";
 import { isSignInKind, PROVIDER_CATALOG } from "@/lib/gateway/upstreams/provider-kinds";
 import { isActionFail } from "@/lib/http/action-result";

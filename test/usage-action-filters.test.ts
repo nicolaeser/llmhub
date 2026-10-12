@@ -9,12 +9,12 @@ function exportedAsyncFn(source: string, name: string): string {
   return next === -1 ? source.slice(start) : source.slice(start, next);
 }
 
-test("loadUsageAction accepts tenant filters, applies the spend scope last, and returns rollups", async () => {
+test("loadUsage accepts tenant filters, applies the spend scope last, and returns rollups", async () => {
   const source = await readFile(
-    new URL("../src/app/(app)/_action.ts", import.meta.url),
+    new URL("../src/lib/usage/dashboard.ts", import.meta.url),
     "utf8",
   );
-  const fn = exportedAsyncFn(source, "loadUsageAction");
+  const fn = exportedAsyncFn(source, "loadUsage");
   for (const field of ["teamId", "orgId", "projectId", "memberId", "keyId", "userId"]) {
     assert.match(fn, new RegExp(`${field}\\?: string`), field);
     assert.match(fn, new RegExp(`\\.\\.\\.\\(${field} \\? \\{ ${field} \\} : \\{\\}\\)`), field);

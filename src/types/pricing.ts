@@ -1,4 +1,4 @@
-import type { loadMarkupsAction } from "@/app/(app)/markups/_action";
+import type { loadMarkups } from "@/lib/pricing/markups";
 
 export type MarkupScope = "all" | "org" | "team" | "project";
 
@@ -36,7 +36,7 @@ export type MarkupTeamOption = { id: string; alias: string; orgId: string };
 
 export type MarkupProjectOption = { id: string; alias: string; orgId: string; teamId: string };
 
-export type MarkupsPayload = Exclude<Awaited<ReturnType<typeof loadMarkupsAction>>, { ok: false }>;
+export type MarkupsPayload = Awaited<ReturnType<typeof loadMarkups>>;
 
 export type MarkupKind = "markup" | "discount";
 
