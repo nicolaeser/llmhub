@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
 import test from "node:test";
-import { jobsEnabled, redisUrl } from "@/lib/jobs/connection";
+import { parseEnvironment } from "@/lib/env";
+import { getQueueConnectionOptions, jobsEnabled, redisUrl } from "@/lib/jobs/connection";
+
+process.env.REDIS_URL = "  redis://cache:6379  ";
 
 test("jobsEnabled is false without Redis", () => {
   assert.equal(jobsEnabled({}), false);
@@ -14,9 +16,19 @@ test("REDIS_URL is the only Redis setting", () => {
   assert.equal(jobsEnabled({ REDIS_URL: "redis://redis:6379" }), true);
 });
 
-test("Redis settings come from the validated environment", async () => {
-  const source = await readFile(new URL("../src/lib/jobs/connection.ts", import.meta.url), "utf8");
-  assert.doesNotMatch(source, /process\.env/);
-  assert.match(source, /from "@\/lib\/env"/);
-  assert.match(source, /envSchema\.pick\(\{ REDIS_URL: true \}\)/);
+test("Redis settings come from the validated environment", () => {
+  assert.equal(redisUrl(), "redis://cache:6379");
+  assert.equal(jobsEnabled(), true);
+  process.env.REDIS_URL = "redis://changed-after-boot:6379";
+  assert.equal(redisUrl(), "redis://cache:6379");
+  assert.deepEqual(getQueueConnectionOptions(), {
+    url: "redis://cache:6379",
+    maxRetriesPerRequest: null,
+    connectTimeout: 5_000,
+    enableOfflineQueue: false,
+  });
+  for (const value of ["", "   ", " redis://a:1 ", "rediss://user:pass@b:6380/2"]) {
+    assert.equal(redisUrl({ REDIS_URL: value }), parseEnvironment({ ...process.env, REDIS_URL: value }).REDIS_URL, value);
+  }
+  assert.equal(redisUrl({ REDIS_URL: "redis://a:1", DATABASE_URL: "", APP_SECRET: "" }), "redis://a:1");
 });

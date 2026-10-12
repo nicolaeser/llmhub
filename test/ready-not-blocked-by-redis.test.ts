@@ -1,28 +1,54 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
-import test from "node:test";
+import net from "node:net";
+import { fileURLToPath } from "node:url";
+import test, { mock } from "node:test";
 
-const redisImport =
-  /(?:from|import\s*\()\s*["'][^"']*(?:ioredis|bullmq|redis)[^"']*["']/;
+process.env.REDIS_URL = "redis://127.0.0.1:1";
 
-test("ready probe does not import redis/bullmq/ioredis and still uses prisma.user.count", async () => {
-  const ready = await readFile(
-    new URL("../src/app/internal-api/ready/route.ts", import.meta.url),
-    "utf8",
-  );
-  assert.match(ready, /prisma\.user\.count\(\)/);
-  assert.doesNotMatch(ready, redisImport);
-  assert.doesNotMatch(ready, /\bioredis\b|\bbullmq\b|\bredis\b/i);
+const queries: string[] = [];
+
+(globalThis as { prisma?: unknown }).prisma = {
+  user: {
+    count: async () => {
+      queries.push("user.count");
+      return 1;
+    },
+  },
+};
+
+const socketConnects = mock.method(net.Socket.prototype, "connect");
+
+const redisModule = /[\\/](?:ioredis|bullmq)[\\/]|[\\/]lib[\\/](?:redis|jobs)[\\/]/;
+
+function moduleGraph(relativePath: string): string[] {
+  const seen = new Set<string>();
+  const visit = (mod: NodeJS.Module | undefined) => {
+    if (!mod || seen.has(mod.id)) return;
+    seen.add(mod.id);
+    mod.children.forEach(visit);
+  };
+  visit(require.cache[fileURLToPath(new URL(relativePath, import.meta.url))]);
+  assert.ok(seen.size > 1, relativePath);
+  return [...seen];
+}
+
+test("the ready probe answers from the database alone while Redis is configured but unreachable", async () => {
+  const { GET } = await import("@/app/internal-api/ready/route");
+  const res = await GET();
+  assert.equal(res.status, 200);
+  assert.deepEqual(await res.json(), { status: "ready" });
+  assert.deepEqual(queries, ["user.count"]);
+  assert.equal(socketConnects.mock.callCount(), 0);
+  assert.deepEqual(moduleGraph("../src/app/internal-api/ready/route.ts").filter((id) => redisModule.test(id)), []);
 });
 
-test("health may mention worker but must not await Redis", async () => {
-  const health = await readFile(
-    new URL("../src/app/internal-api/health/route.ts", import.meta.url),
-    "utf8",
-  );
-  assert.match(health, /worker/);
-  assert.doesNotMatch(health, /await\s+getQueueConnectionOptions/);
-  assert.doesNotMatch(health, /getQueueConnectionOptions/);
-  assert.doesNotMatch(health, /await[\s\S]*\bping\s*\(/);
-  assert.doesNotMatch(health, /\.ping\s*\(/);
+test("the health probe reports the worker without loading or contacting Redis", async () => {
+  const { GET } = await import("@/app/internal-api/health/route");
+  const res = await GET();
+  assert.equal(res.status, 200);
+  const body = await res.json();
+  assert.equal(body.status, "ok");
+  assert.deepEqual(body.worker, { mode: "unavailable" });
+  assert.equal(socketConnects.mock.callCount(), 0);
+  assert.deepEqual(moduleGraph("../src/app/internal-api/health/route.ts").filter((id) => redisModule.test(id)), []);
 });
