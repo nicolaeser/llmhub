@@ -38,9 +38,9 @@ export default function ConfirmDialog({
               </AlertDialog.Body>
             ) : null}
             <AlertDialog.Footer>
-              <AlertDialog.CloseTrigger>
-                <Button variant="tertiary">{cancelLabel}</Button>
-              </AlertDialog.CloseTrigger>
+              <Button slot="close" variant="tertiary">
+                {cancelLabel}
+              </Button>
               <Button slot="close" variant="danger" isPending={pending} onPress={onConfirm}>
                 {confirmLabel}
               </Button>

@@ -86,7 +86,7 @@ export default function CompaniesPage() {
   }
 
   if (!data) {
-    return <PageStatus title={t("title")} subtitle={t("subtitle")} state={page} />;
+    return <PageStatus title={t("title")} state={page} />;
   }
 
   const platform = !data.companyId;
