@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import test, { afterEach, beforeEach } from "node:test";
 import { fileURLToPath } from "node:url";
+import type { AuthenticatedSession } from "@/types/auth";
 import type { DiscoveredModel } from "@/types/providers";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
@@ -708,12 +709,33 @@ test("worker schedules the model catalog every two hours with a deduplicated boo
   assert.match(boot, /clearInterval\(g\.__llmhubModelSyncTimer\)/);
 });
 
-test("provider services share discovery instead of fetching inline", async () => {
-  const source = await readFile(
-    path.join(root, "src/lib/providers/connections.ts"),
-    "utf8",
+test("provider discovery in the console runs the shared refresh as the signed-in user", async () => {
+  const { runAsPrincipal } = await import("@/lib/auth/delegation");
+  const { discoverProvider } = await import("@/lib/providers/connections");
+  const admin: AuthenticatedSession = {
+    error: false,
+    sessionId: "s1",
+    user: { id: "admin-1", username: "admin", orgId: null } as AuthenticatedSession["user"],
+    isOwner: true,
+    role: null,
+    permissions: ["providers:manage"],
+    secondFactor: "TOTP",
+    ipAddress: null,
+    userAgent: null,
+  };
+  const row = seedProvider([]);
+  respondWith(() => modelsResponse(["openai/gpt-x", "anthropic/claude-x"]));
+  const first = await runAsPrincipal(admin, () => discoverProvider(row.id));
+  assert.deepEqual(first.models.map((candidate) => candidate.id), ["openai/gpt-x", "anthropic/claude-x"]);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].url, "https://openrouter.ai/api/v1/models");
+  assert.equal((calls[0].init?.headers as Record<string, string>)["X-Title"], "LLM Hub");
+  assert.equal((db.providers.get(row.id)!.discovered as DiscoveredModel[]).length, 2);
+  assert.deepEqual(
+    db.audit.map((entry) => [entry.action, entry.actor]),
+    [["provider.models_discovered", "admin-1"]],
   );
-  assert.match(source, /refreshProviderModels\(row, session\.user\.id\)/);
-  assert.doesNotMatch(source, /async function fetchModels/);
-  assert.doesNotMatch(source, /fetch\(/);
+  await runAsPrincipal(admin, () => discoverProvider(row.id));
+  assert.equal(calls.length, 2);
+  assert.equal(db.audit.length, 1);
 });

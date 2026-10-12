@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import test, { beforeEach } from "node:test";
 import { GateError } from "@/lib/gateway/errors";
-import type { Deployment, Principal, RequestTrace, VirtualKeyView } from "@/types/gateway";
+import type { Principal, RequestTrace } from "@/types/gateway";
+import type { VirtualKeyView } from "@/types/keys";
+import type { Deployment } from "@/types/routing";
 import type { PiiPolicy } from "@/types/guardrails";
 
 type Row = Record<string, unknown>;

@@ -1,10 +1,11 @@
+import { API_KEY, errorOf, gateway, gatewayRequest } from "./support/gateway-harness";
 import assert from "node:assert/strict";
-import { readdirSync, readFileSync } from "node:fs";
+import { readdirSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { GateError } from "@/lib/gateway/errors";
-import type { Principal } from "@/types/gateway";
+import type { JsonMap, Principal } from "@/types/gateway";
 
 type FakeRoute = { id: string; kind: string };
 
@@ -46,25 +47,38 @@ function groupRow(alias: string, routes: FakeRoute[]) {
   };
 }
 
-const groups = new Map(
-  [
-    groupRow("gpt-5.5", [
-      { id: "chatgpt", kind: "codex" },
-      { id: "openai", kind: "openai" },
-    ]),
-    groupRow("grok-build", [{ id: "supergrok", kind: "grok_build" }]),
-    groupRow("gpt-api", [{ id: "openai-only", kind: "openai" }]),
-    groupRow("overflow-only", []),
-  ].map((row) => [row.alias, row]),
-);
+const groups = gateway.groups;
+groups.clear();
+for (const row of [
+  groupRow("gpt-5.5", [
+    { id: "chatgpt", kind: "codex" },
+    { id: "openai", kind: "openai" },
+  ]),
+  groupRow("grok-build", [{ id: "supergrok", kind: "grok_build" }]),
+  groupRow("gpt-api", [{ id: "openai-only", kind: "openai" }]),
+  groupRow("overflow-only", []),
+]) {
+  groups.set(row.alias, row);
+}
 
-(globalThis as { prisma?: unknown }).prisma = {
-  accountRouting: { findMany: async () => [] },
-  modelGroup: {
-    findUnique: async ({ where }: { where: { alias: string } }) => groups.get(where.alias) ?? null,
-    findMany: async () => [...groups.values()],
-  },
+type RouteModule = Record<string, unknown> & {
+  POST?: (req: Request) => Promise<Response>;
+  GET?: (req: Request, ctx: { params: Promise<{ id: string }> }) => Promise<Response>;
 };
+
+const MODEL_BODIES: Record<string, (model: string) => JsonMap> = {
+  "v1/chat/completions": (model) => ({ model, messages: [{ role: "user", content: "hi" }] }),
+  "v1/messages": (model) => ({ model, max_tokens: 16, messages: [{ role: "user", content: "hi" }] }),
+  "v1/responses": (model) => ({ model, input: "hi" }),
+};
+
+async function surfaceRoute(surface: string, dir: string): Promise<RouteModule> {
+  return (await import(path.join(surface, dir, "route.ts"))) as RouteModule;
+}
+
+function getRequest(url: string): Request {
+  return new Request(`http://hub.local${url}`, { headers: { authorization: `Bearer ${API_KEY}` } });
+}
 
 const app = fileURLToPath(new URL("../src/app", import.meta.url));
 const gatewayApp = path.join(app, "api");
@@ -151,17 +165,45 @@ test("/api/v1 never routes to subscriptions and /api/subscription/v1 reaches API
   );
 });
 
-test("subscription paths run the /api/v1 handlers in the subscription pool and expose only text endpoints", () => {
+test("subscription paths expose only text endpoints that /api/v1 serves with the same limits", async () => {
   const dirs = routeDirs(subscriptionApp);
   assert.deepEqual(dirs, ["v1/chat/completions", "v1/messages", "v1/models", "v1/models/[id]", "v1/responses"]);
+  const methods = (mod: RouteModule) => ["GET", "POST", "PUT", "PATCH", "DELETE"].filter((method) => typeof mod[method] === "function");
   for (const dir of dirs) {
-    const subscription = readFileSync(path.join(subscriptionApp, dir, "route.ts"), "utf8");
-    const v1 = readFileSync(path.join(gatewayApp, dir, "route.ts"), "utf8");
-    const factory = /export const (GET|POST) = (\w+)\("subscription"\);/.exec(subscription);
-    assert.ok(factory, dir);
-    assert.match(v1, new RegExp(`export const ${factory[1]} = ${factory[2]}\\("api"\\);`), dir);
-    assert.equal(/maxDuration = 300/.test(subscription), /maxDuration = 300/.test(v1), dir);
+    const subscription = await surfaceRoute(subscriptionApp, dir);
+    const v1 = await surfaceRoute(gatewayApp, dir);
+    assert.equal(methods(subscription).length, 1, dir);
+    assert.ok(methods(v1).includes(methods(subscription)[0]!), dir);
+    assert.equal(subscription.maxDuration, v1.maxDuration, dir);
   }
+});
+
+test("subscription model requests run in the subscription pool and /api/v1 requests in the API pool", async () => {
+  for (const [dir, body] of Object.entries(MODEL_BODIES)) {
+    const v1 = await surfaceRoute(gatewayApp, dir);
+    const subscription = await surfaceRoute(subscriptionApp, dir);
+    const viaApi = await errorOf(await v1.POST!(gatewayRequest(`/api/${dir}`, body("grok-build"))));
+    assert.equal(viaApi.status, 404, dir);
+    assert.match(viaApi.message, /\/api\/subscription\/v1/, dir);
+    const viaPlan = await errorOf(await subscription.POST!(gatewayRequest(`/api/subscription/${dir}`, body("gpt-api"))));
+    assert.deepEqual([viaPlan.status, viaPlan.message], [404, "model has no subscription route"], dir);
+  }
+  assert.deepEqual(gateway.upstream, []);
+});
+
+test("subscription model listings come from the subscription pool", async () => {
+  const list = async (surface: string, url: string) => {
+    const res = await (await surfaceRoute(surface, "v1/models")).GET!(getRequest(url), { params: Promise.resolve({ id: "" }) });
+    return ((await res.json()) as { data: { id: string }[] }).data.map((entry) => entry.id);
+  };
+  const plan = await list(subscriptionApp, "/api/subscription/v1/models");
+  assert.ok(plan.includes("grok-build") && plan.includes("api/gpt-api") && !plan.includes("gpt-api"), plan.join());
+  const api = await list(gatewayApp, "/api/v1/models");
+  assert.ok(api.includes("gpt-api") && !api.includes("grok-build"), api.join());
+  const retrieve = async (surface: string, url: string) =>
+    (await (await surfaceRoute(surface, "v1/models/[id]")).GET!(getRequest(url), { params: Promise.resolve({ id: "grok-build" }) })).status;
+  assert.equal(await retrieve(subscriptionApp, "/api/subscription/v1/models/grok-build"), 200);
+  assert.equal(await retrieve(gatewayApp, "/api/v1/models/grok-build"), 404);
 });
 
 test("the api/ prefix selects the API pool on the subscription surface only", async () => {

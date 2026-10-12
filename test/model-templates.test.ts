@@ -1,8 +1,20 @@
+import {
+  callRoute,
+  errorOf,
+  gateway,
+  gatewayPostRoutes,
+  MODEL,
+  MODEL_ROUTES,
+  OTHER_POST_ROUTES,
+  resetGateway,
+} from "./support/gateway-harness";
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { PolicyGroup, ProviderPolicy, TemplateRules } from "@/types/model-templates";
 import type { Principal } from "@/types/gateway";
 import type { VirtualKeyView } from "@/types/keys";
+
+const FIXED_MODEL_ROUTES = new Set(["/api/v1/videos/[id]/remix"]);
 
 const providers: ProviderPolicy[] = [
   { id: "zdr-eu", zdr: true, retentionDays: null, region: "eu", noTraining: false },
@@ -224,15 +236,34 @@ test("request fallbacks must be allowed for the key", async () => {
   assert.deepEqual(modelChain(keyPrincipal([], []), "any", { fallbacks: ["other"] }), ["any", "other"]);
 });
 
-test("no gateway route resolves model chains without the key check", async () => {
-  const { readdir, readFile } = await import("node:fs/promises");
-  const path = await import("node:path");
-  const root = path.join(import.meta.dirname, "..", "src");
-  const files = (await readdir(root, { recursive: true })).filter((file) => file.endsWith(".ts"));
-  const offenders: string[] = [];
-  for (const file of files) {
-    if (file.endsWith(path.join("gateway", "routing", "runtime.ts")) || file.endsWith(path.join("gateway", "access", "gate.ts"))) continue;
-    if (/\baliasChain\b/.test(await readFile(path.join(root, file), "utf8"))) offenders.push(file);
+test("the fallback sweep covers every gateway POST route", async () => {
+  assert.deepEqual(
+    [...MODEL_ROUTES.map((route) => route.path), ...OTHER_POST_ROUTES].sort(),
+    await gatewayPostRoutes(),
+  );
+});
+
+test("every gateway model route checks request fallbacks against the key before contacting a provider", async () => {
+  for (const route of MODEL_ROUTES.filter((candidate) => !FIXED_MODEL_ROUTES.has(candidate.path))) {
+    resetGateway();
+    gateway.key = { ...gateway.key, models: [MODEL] };
+    const denied = await errorOf(await callRoute(route, { ...route.body("hello"), fallbacks: ["denied-model"] }));
+    assert.equal(denied.status, 403, route.path);
+    assert.match(denied.message, /fallback model denied-model not allowed/, route.path);
+    assert.deepEqual(gateway.upstream, [], route.path);
+    const allowed = await callRoute(route, { ...route.body("hello"), fallbacks: [MODEL] });
+    assert.notEqual(allowed.status, 403, route.path);
   }
-  assert.deepEqual(offenders, []);
+});
+
+test("batch lines check request fallbacks against the key", async () => {
+  const { runBatchLine } = await import("@/lib/gateway/endpoints/batches");
+  resetGateway();
+  const line = await runBatchLine(keyPrincipal([MODEL], ["template"]), "/v1/chat/completions", {
+    model: MODEL,
+    messages: [{ role: "user", content: "hello" }],
+    fallbacks: ["denied-model"],
+  });
+  assert.deepEqual(line.ok ? null : [line.status, line.error.code], [403, "model_access_denied"]);
+  assert.deepEqual(gateway.upstream, []);
 });

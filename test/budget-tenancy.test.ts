@@ -3,7 +3,8 @@ import test, { beforeEach } from "node:test";
 import { digest } from "@/lib/crypto";
 import { GateError } from "@/lib/gateway/errors";
 import { capExceeded } from "@/lib/gateway/billing/period";
-import type { Deployment, Principal } from "@/types/gateway";
+import type { Principal } from "@/types/gateway";
+import type { Deployment } from "@/types/routing";
 
 type Row = Record<string, unknown>;
 type Args = { where?: Row; data?: Row; select?: Row };

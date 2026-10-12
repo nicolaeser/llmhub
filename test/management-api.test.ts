@@ -1,11 +1,15 @@
+import { recordedPrisma } from "./support/recorded-prisma";
+import { setRequest } from "./support/next-headers-stub";
+import "next/dist/server/node-environment-baseline";
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
+import { SESSION_COOKIE, signSessionToken } from "@/lib/auth/cookie";
 import { runAsPrincipal } from "@/lib/auth/delegation";
 import { AuthError } from "@/lib/auth/errors";
-import { requirePermission } from "@/lib/auth/guards";
+import { requirePermission, requireSession } from "@/lib/auth/guards";
 import { GateError } from "@/lib/gateway/errors";
 import { authenticateBearer } from "@/lib/gateway/access/principal";
 import { ApiProblem, problemFromError } from "@/lib/http/problem";
@@ -24,7 +28,23 @@ import {
 } from "@/schemas/management";
 import type { AuthenticatedSession, Permission } from "@/types/auth";
 
-const root = fileURLToPath(new URL("..", import.meta.url));
+type RouteHandler = (req: Request, ctx: { params: Promise<Record<string, string>> }) => Promise<Response>;
+
+const appRoot = fileURLToPath(new URL("../src/app", import.meta.url));
+const mgmtRoot = path.join(appRoot, "api/mgmt");
+const HTTP_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"] as const;
+
+function consoleSession() {
+  return {
+    id: "s1",
+    expiresAt: new Date(Date.now() + 3_600_000),
+    lastActive: new Date(),
+    secondFactor: "TOTP",
+    ipAddress: null,
+    userAgent: null,
+    user: { id: "owner", username: "owner", blocked: false, isOwner: true, orgId: null, roleId: null, role: null },
+  };
+}
 
 function routeFiles(dir: string): string[] {
   return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
@@ -107,24 +127,53 @@ test("delegated principals satisfy requirePermission only within their scope", a
     runAsPrincipal(scoped, () => requirePermission("keys:manage")),
     (err: unknown) => err instanceof AuthError && err.code === "FORBIDDEN",
   );
-  const guards = readFileSync(path.join(root, "src/lib/auth/guards.ts"), "utf8");
-  const requireSession = guards.slice(guards.indexOf("export async function requireSession"), guards.indexOf("export async function requirePermission"));
-  assert.doesNotMatch(requireSession, /delegatedPrincipal/);
+  setRequest();
+  await assert.rejects(runAsPrincipal(scoped, () => requireSession()), { message: "Unauthorized" });
 });
 
-test("every /api/mgmt handler goes through managementRoute", () => {
-  const files = routeFiles(path.join(root, "src/app/api/mgmt"));
+test("every /api/mgmt handler refuses a console session with a bearer challenge before touching the database", async () => {
+  const cookie = await signSessionToken("a".repeat(64));
+  setRequest({ cookies: { [SESSION_COOKIE]: cookie } });
+  recordedPrisma.reset();
+  recordedPrisma.handlers = { session: { findUnique: () => consoleSession() } };
+  const files = routeFiles(mgmtRoot);
   assert.ok(files.length >= 20);
+  let handlers = 0;
   for (const file of files) {
-    const source = readFileSync(file, "utf8");
-    assert.doesNotMatch(source, /export\s+async\s+function/, file);
-    assert.doesNotMatch(source, /getSession|cookies\(/, file);
-    for (const match of source.matchAll(/export const (GET|POST|PUT|PATCH|DELETE) = (\w+)/g)) {
-      assert.equal(match[2], "managementRoute", `${file} ${match[1]}`);
+    const mod = (await import(file)) as Record<string, unknown>;
+    const url = `http://hub.local/${path.relative(appRoot, path.dirname(file)).split(path.sep).join("/").replace(/\[\w+\]/g, "x")}`;
+    for (const method of HTTP_METHODS) {
+      const handler = mod[method] as RouteHandler | undefined;
+      if (!handler) continue;
+      const label = `${method} ${url}`;
+      recordedPrisma.calls.length = 0;
+      const res = await handler(new Request(url, { method, headers: { cookie: `${SESSION_COOKIE}=${cookie}` } }), {
+        params: Promise.resolve({}),
+      });
+      assert.equal(res.status, 401, label);
+      assert.equal(res.headers.get("content-type"), "application/problem+json", label);
+      assert.match(res.headers.get("www-authenticate") ?? "", /^Bearer /, label);
+      assert.equal((await res.json()).code, "UNAUTHORIZED", label);
+      assert.deepEqual(recordedPrisma.calls, [], label);
+      handlers += 1;
     }
   }
-  const proxy = readFileSync(path.join(root, "src/proxy.ts"), "utf8");
-  assert.match(proxy, /\|api\/\|/);
+  assert.ok(handlers >= files.length);
+});
+
+test("/api/mgmt route modules never read the console session", () => {
+  for (const file of routeFiles(mgmtRoot)) {
+    assert.doesNotMatch(readFileSync(file, "utf8"), /\b(?:getSession|requireSession|requireAuth|cookies)\b/, file);
+  }
+});
+
+test("the console proxy never runs on the API surfaces", async () => {
+  const { unstable_doesMiddlewareMatch } = await import("next/experimental/testing/server");
+  const { config } = await import("@/proxy");
+  for (const url of ["/api/mgmt/keys", "/api/mgmt/me", "/api/v1/chat/completions", "/api/subscription/v1/messages"]) {
+    assert.equal(unstable_doesMiddlewareMatch({ config, url }), false, url);
+  }
+  assert.equal(unstable_doesMiddlewareMatch({ config, url: "/keys" }), true);
 });
 
 test("request bodies are strict, typed, and reported with JSON pointers", async () => {
