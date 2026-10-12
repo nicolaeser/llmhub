@@ -9,7 +9,7 @@ export const OPENAPI_METHODS = [
   "PUT",
   "PATCH",
   "DELETE",
-] as const;
+] as const satisfies readonly OpenApiMethod[];
 
 function isOpenApiMethod(value: string): value is OpenApiMethod {
   return (OPENAPI_METHODS as readonly string[]).includes(value);

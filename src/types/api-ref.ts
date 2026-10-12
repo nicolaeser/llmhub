@@ -1,5 +1,3 @@
-import type { OPENAPI_METHODS } from "@/lib/gateway/endpoints/openapi";
-
 export type OverlayState = {
   isOpen: boolean;
   open: () => void;
@@ -17,7 +15,7 @@ export type TrySnapshot = {
   body: string;
 };
 
-export type OpenApiMethod = (typeof OPENAPI_METHODS)[number];
+export type OpenApiMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
 export type OpenApiStyle = "openai" | "anthropic" | "dual" | "management";
 
