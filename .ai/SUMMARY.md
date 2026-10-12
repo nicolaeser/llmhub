@@ -19,7 +19,7 @@ Load `BASE.md` first. Then open only the documents below that match the task.
 - [instructions/frontend.md](instructions/frontend.md) — Next.js 16, client state, HeroUI, `_components/`, console navigation, and proxy; load for App Router or component work.
 - [instructions/backend.md](instructions/backend.md) — Server actions, gateway libraries, budgets, model access, PII resolution, alerts, model sync, request logging, and serializable writes; load for `src/lib` or `_action.ts`.
 - [instructions/data-persistence.md](instructions/data-persistence.md) — Prisma split schema, auth, tenancy, budget, and template models, catalog boot, and migration history; load when changing schema or migrations.
-- [instructions/api.md](instructions/api.md) — `/v1`, `/api`, `/internal-api`, SCIM, and SSO contracts plus error formats; load when changing HTTP routes or errors.
+- [instructions/api.md](instructions/api.md) — `/api/v1`, `/api/mgmt`, `/internal-api`, SCIM, and SSO contracts plus error formats; load when changing HTTP routes or errors.
 - [instructions/security-privacy.md](instructions/security-privacy.md) — Sessions, mandatory two-factor, passkeys, roles, permissions, management keys, setup, PII policy overrides, and request-content logging; load for login, account security, roles, keys, PII, logs, or data rights.
 - [instructions/quality-testing.md](instructions/quality-testing.md) — node:test and prebuild gates; load when adding tests or CI-facing checks.
 - [instructions/operations.md](instructions/operations.md) — Env, Docker and compose data mounts, boot migrate, worker schedules, build version, and probes; load for deploy or runtime config.

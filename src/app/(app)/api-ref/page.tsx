@@ -22,7 +22,7 @@ import { isActionFail } from "@/lib/http/action-result";
 import { useOrigin } from "@/lib/hooks/use-origin";
 import { GATEWAY_ERRORS } from "@/lib/gateway/errors";
 import { ANTHROPIC_VERSION } from "@/lib/gateway/openapi";
-import { SUBSCRIPTION_PREFIX } from "@/lib/gateway/route-pool";
+import { API_PREFIX, MANAGEMENT_PREFIX, SUBSCRIPTION_PREFIX } from "@/lib/gateway/api-paths";
 import { PROBLEMS } from "@/lib/http/problems";
 import CopyButton from "./_components/copy-button";
 import TryEndpoint from "./_components/try-endpoint";
@@ -53,7 +53,7 @@ const ERROR_EXAMPLES = {
     title: "Validation failed",
     status: 422,
     detail: "Validation failed",
-    instance: "/api/teams",
+    instance: `${MANAGEMENT_PREFIX}/teams`,
     code: "VALIDATION",
     request_id: "req_0123456789abcdef01234567",
     errors: [{ pointer: "#/alias", detail: "Too small: expected string to have >=1 characters" }],
@@ -122,14 +122,14 @@ export default function ApiRefPage() {
         ? t("curlManagement", { origin })
         : t("curl", { origin, body: CHAT_CURL_BODY });
   const bases = [
-    { id: "openai", value: `${origin}/v1`, hint: t("auth") },
-    { id: "anthropic", value: origin, hint: t("anthropicAuth", { version: ANTHROPIC_VERSION }) },
+    { id: "openai", value: `${origin}${API_PREFIX}/v1`, hint: t("auth") },
+    { id: "anthropic", value: `${origin}${API_PREFIX}`, hint: t("anthropicAuth", { version: ANTHROPIC_VERSION }) },
     {
       id: "subscription",
       value: `${origin}${SUBSCRIPTION_PREFIX}/v1`,
       hint: t("subscriptionAuth", { anthropic: `${origin}${SUBSCRIPTION_PREFIX}` }),
     },
-    { id: "management", value: `${origin}/api`, hint: null },
+    { id: "management", value: `${origin}${MANAGEMENT_PREFIX}`, hint: null },
   ];
 
   return (

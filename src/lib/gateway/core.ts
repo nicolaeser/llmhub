@@ -1,11 +1,11 @@
 import packageJson from "../../../package.json";
 import { PROVIDER_CATALOG } from "@/lib/gateway/catalog";
-import type { JsonMap, ModelPricing, Principal, PublicModel } from "@/types/gateway";
+import type { JsonMap, ModelPricing, Principal, PublicModel, RoutePool } from "@/types/gateway";
 
 export class RouterError extends Error {
   constructor(
     message: string,
-    readonly code: "unknown_group" | "no_healthy" | "all_paused" | "unknown_strategy",
+    readonly code: "unknown_group" | "no_healthy" | "all_paused" | "not_assigned" | "unknown_strategy",
   ) {
     super(message);
     this.name = "RouterError";
@@ -23,6 +23,10 @@ export const ERR_NO_HEALTHY = new RouterError(
 export const ERR_ALL_PAUSED = new RouterError(
   "router: every deployment is paused",
   "all_paused",
+);
+export const ERR_NOT_ASSIGNED = new RouterError(
+  "router: no subscription account is assigned to this caller",
+  "not_assigned",
 );
 
 export function isRouterError(err: unknown, code?: RouterError["code"]): err is RouterError {
@@ -116,6 +120,7 @@ export function modelEntry(
   created: Date,
   pricing?: ModelPricing | null,
   origin?: Pick<PublicModel, "vendor" | "displayName" | "tags">,
+  route?: RoutePool,
 ): JsonMap {
   return {
     id,
@@ -127,6 +132,7 @@ export function modelEntry(
     created_at: created.toISOString(),
     ...(origin?.tags.length ? { tags: origin.tags } : {}),
     ...(pricing ? { pricing } : {}),
+    ...(route ? { route } : {}),
   };
 }
 
@@ -150,6 +156,7 @@ export const KNOWN_STRATEGIES = new Set([
   "round_robin",
   "quota_balanced",
   "quota_expiring",
+  "smart",
 ]);
 
 export const KNOWN_KINDS = new Set(PROVIDER_CATALOG.map((spec) => spec.kind));

@@ -91,7 +91,7 @@
   },
   "vectorStores": {
     "title": "Wissensbasen",
-    "subtitle": "Standards für Vektorspeicher, die in der Konsole oder über /v1/vector_stores ohne eigene Modelle angelegt werden.",
+    "subtitle": "Standards für Vektorspeicher, die in der Konsole oder über /api/v1/vector_stores ohne eigene Modelle angelegt werden.",
     "embeddingModel": "Standard-Embedding-Modell",
     "embeddingHint": "Wird verwendet, wenn eine neue Wissensbasis kein Embedding-Modell angibt. Bestehende Wissensbasen behalten ihr Modell.",
     "dimensions": "Standard-Embedding-Dimensionen",

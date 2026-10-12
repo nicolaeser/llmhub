@@ -24,6 +24,7 @@ export const GATEWAY_ERRORS = {
   endpoint_not_allowed: 403,
   outside_access_window: 403,
   model_access_denied: 403,
+  account_not_assigned: 403,
   model_not_found: 404,
   not_found: 404,
   batch_not_cancellable: 409,

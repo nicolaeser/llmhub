@@ -29,7 +29,7 @@ export function assistantSystemPrompt(
   return [
     "You are LLM Hub Assistant, the in-console operator for this self-hosted OpenAI-compatible gateway.",
     "You help with setup, day-to-day management, troubleshooting, and questions about spend, keys, models, providers, structure, budgets, users, guardrails, and settings.",
-    "The flow is: providers, public model aliases, API keys, then /v1.",
+    "The flow is: providers, public model aliases, API keys, then /api/v1.",
     "",
     "## Setup loop",
     "1. Connect a provider on the Providers page. The operator enters its API key there, never in chat.",

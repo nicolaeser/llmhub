@@ -23,6 +23,7 @@ import { Copy, KeyRound, Plus, Trash2 } from "lucide-react";
 import { useFormatter, useNow, useTranslations } from "next-intl";
 import ConfirmDialog from "@/components/console/confirm-dialog";
 import { PERMISSION_KEYS } from "@/components/security/permission-keys";
+import { MANAGEMENT_PREFIX } from "@/lib/gateway/api-paths";
 import {
   SecondFactorInput,
   emptySecondFactor,
@@ -109,7 +110,7 @@ export default function ManagementKeysCard({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <Card.Header className="min-w-0">
           <Card.Title>{t("title")}</Card.Title>
-          <Card.Description>{t("description", { path: "/api" })}</Card.Description>
+          <Card.Description>{t("description", { path: MANAGEMENT_PREFIX })}</Card.Description>
         </Card.Header>
         {payload.grantable.length ? (
           <Button size="sm" variant="secondary" onPress={openCreate}>
@@ -124,7 +125,7 @@ export default function ManagementKeysCard({
           <Alert.Indicator />
           <Alert.Content className="min-w-0">
             <Alert.Title>{t("secretTitle")}</Alert.Title>
-            <Alert.Description>{t("secretHint", { path: "/api" })}</Alert.Description>
+            <Alert.Description>{t("secretHint", { path: MANAGEMENT_PREFIX })}</Alert.Description>
             <div className="mt-2 flex min-w-0 items-start gap-2">
               <Surface variant="secondary" className="min-w-0 flex-1 rounded-lg px-3 py-2">
                 <code className="font-mono text-sm break-all">{secret}</code>

@@ -1,5 +1,7 @@
 import "server-only";
 import prisma from "@/lib/db/prisma";
+import { antigravityLimits } from "@/lib/gateway/antigravity";
+import { fetchAvailableModels } from "@/lib/gateway/antigravity-api";
 import { reportsLimits } from "@/lib/gateway/catalog";
 import { CLAUDE_OAUTH_BETAS } from "@/lib/gateway/claude";
 import { asNumber, asRecord, asString } from "@/lib/gateway/core";
@@ -200,7 +202,16 @@ async function storedPlan(providerId: string): Promise<string> {
   return row?.plan ?? "";
 }
 
+async function fetchAntigravityLimits(provider: LimitProvider): Promise<SubscriptionLimits> {
+  const auth = await usageAuth(provider);
+  const { status, json } = await fetchAvailableModels(auth);
+  if (status === 401 || status === 403) throw new Error("UPSTREAM_AUTH");
+  if (status < 200 || status >= 300) throw new Error("UPSTREAM_FAILED");
+  return antigravityLimits(json, await storedPlan(provider.id));
+}
+
 async function fetchLimits(provider: LimitProvider): Promise<SubscriptionLimits> {
+  if (provider.kind === "antigravity") return fetchAntigravityLimits(provider);
   if (provider.kind === "claude") {
     const json = await fetchUsage(provider, CLAUDE_USAGE_URL, { "anthropic-beta": CLAUDE_OAUTH_BETAS.join(",") });
     return claudeLimits(json, await storedPlan(provider.id));

@@ -6,7 +6,7 @@ import { readJSON } from "@/lib/http/api";
 import { problemResponse } from "@/lib/http/problem";
 import { asRecord, asString } from "@/lib/gateway/core";
 import { ANTHROPIC_VERSION, resolveTryTarget } from "@/lib/gateway/openapi";
-import { gatewayPath } from "@/lib/gateway/route-pool";
+import { gatewayPath } from "@/lib/gateway/api-paths";
 import { mintTryBearer } from "@/lib/gateway/try-bearer";
 import type { JsonMap } from "@/types/gateway";
 import { env } from "@/lib/env";

@@ -214,7 +214,8 @@ test("recordUsage bills the marked-up price and stores the purchase cost beside 
   const source = await readFile(new URL("../src/lib/gateway/billing.ts", import.meta.url), "utf8");
   assert.match(source, /const purchaseCost = costOf\(input\.deployment, usage\);/);
   assert.match(source, /const listed = costOf\(input\.deployment, usage, billing\);/);
-  assert.match(source, /markupPercent\(\{ orgId, teamId, projectId, model: input\.model \}\)/);
+  assert.match(source, /const model = plainModel\(input\.model\);/);
+  assert.match(source, /markupPercent\(\{ orgId, teamId, projectId, model \}\)/);
   assert.match(source, /purchaseCost: \{ increment: purchaseCost \}/);
 });
 

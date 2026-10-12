@@ -38,11 +38,11 @@
     "priceIn": "Input-Preis / 1k Tokens",
     "priceOut": "Output-Preis / 1k Tokens",
     "enabled": "Über die API verfügbar",
-    "enabledHint": "Wenn aus, ist das Modell in /v1/models ausgeblendet und Anfragen daran schlagen mit „Modell nicht gefunden“ fehl, auch als Fallback. Die Einstellungen bleiben erhalten.",
+    "enabledHint": "Wenn aus, ist das Modell in /api/v1/models ausgeblendet und Anfragen daran schlagen mit „Modell nicht gefunden“ fehl, auch als Fallback. Die Einstellungen bleiben erhalten.",
     "vendor": "Hersteller",
-    "vendorHint": "Erscheint als owned_by in /v1/models, zum Beispiel anthropic oder openai.",
+    "vendorHint": "Erscheint als owned_by in /api/v1/models, zum Beispiel anthropic oder openai.",
     "displayName": "Anzeigename",
-    "displayNameHint": "Erscheint als display_name in /v1/models. Leer lassen, um den Alias zu verwenden.",
+    "displayNameHint": "Erscheint als display_name in /api/v1/models. Leer lassen, um den Alias zu verwenden.",
     "autoRoutes": "Neue Anbieter automatisch aufnehmen",
     "autoRoutesHint": "Findet der Modellkatalog dieses Modell bei einem weiteren vertrauenswürdigen Anbieter, wird es nach der nächsten Aktualisierung dorthin geroutet.",
     "autoRoutesMode": "{mode, select, inherit {Standard aus den Einstellungen} on {An} other {Aus}}"
@@ -68,10 +68,11 @@
     "priority": "Priorität",
     "round_robin": "Round Robin",
     "quota_balanced": "Meiste Reserve (Abos)",
-    "quota_expiring": "Nächster Reset (Abos)"
+    "quota_expiring": "Nächster Reset (Abos)",
+    "smart": "Intelligent (Abos)"
   },
-  "strategyLabel": "{strategy, select, weighted_random {Gewichteter Zufall} least_inflight {Wenigste laufende} cost_lowest {Günstigste Kosten} fast {Schnell (niedrigste Latenz)} priority {Priorität} round_robin {Round Robin} quota_balanced {Meiste Reserve} quota_expiring {Nächster Reset} auto {Auto (Kosten)} other {{strategy}}}",
-  "strategyHint": "{strategy, select, weighted_random {Zufallswahl, gewichtet nach Endpunkt-Gewicht.} least_inflight {Schickt jede Anfrage an den Endpunkt mit den wenigsten laufenden Anfragen.} cost_lowest {Immer der günstigste Endpunkt.} fast {Der Endpunkt mit der niedrigsten gemessenen Latenz.} priority {Immer der Endpunkt mit dem höchsten Gewicht. Füllt zuerst ein Konto und wechselt, sobald es limitiert oder in Abkühlung ist.} round_robin {Wechselt reihum zwischen den Endpunkten, sodass Abo-Konten gleichmäßig genutzt werden.} quota_balanced {Abo-Konten: wählt das Konto mit dem meisten Spielraum bei seinem engsten Limit (5-Stunden-, Wochen- oder Modelllimit).} quota_expiring {Abo-Konten: wählt das Konto, dessen engstes Limit am frühesten zurückgesetzt wird, sodass bald erneuerte Kontingente zuerst genutzt werden.} other {}}",
+  "strategyLabel": "{strategy, select, weighted_random {Gewichteter Zufall} least_inflight {Wenigste laufende} cost_lowest {Günstigste Kosten} fast {Schnell (niedrigste Latenz)} priority {Priorität} round_robin {Round Robin} quota_balanced {Meiste Reserve} quota_expiring {Nächster Reset} smart {Intelligent} auto {Auto (Kosten)} other {{strategy}}}",
+  "strategyHint": "{strategy, select, weighted_random {Zufallswahl, gewichtet nach Endpunkt-Gewicht.} least_inflight {Schickt jede Anfrage an den Endpunkt mit den wenigsten laufenden Anfragen.} cost_lowest {Immer der günstigste Endpunkt.} fast {Der Endpunkt mit der niedrigsten gemessenen Latenz.} priority {Immer der Endpunkt mit dem höchsten Gewicht. Füllt zuerst ein Konto und wechselt, sobald es limitiert oder in Abkühlung ist.} round_robin {Wechselt reihum zwischen den Endpunkten, sodass Abo-Konten gleichmäßig genutzt werden.} quota_balanced {Abo-Konten: wählt das Konto mit dem meisten Spielraum bei seinem engsten Limit (5-Stunden-, Wochen- oder Modelllimit).} quota_expiring {Abo-Konten: wählt das Konto, dessen engstes Limit am frühesten zurückgesetzt wird, sodass bald erneuerte Kontingente zuerst genutzt werden.} smart {Abo-Konten: verbraucht Kontingent, das bald zurückgesetzt wird, und meidet Konten nahe am Limit.} other {}}",
   "removeConfirm": "Modell-Alias {alias} entfernen?",
   "toasts": {
     "saved": "{mode, select, edit {Modell aktualisiert} add {Modell hinzugefügt} other {Modell hinzugefügt}}",

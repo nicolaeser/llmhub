@@ -12,7 +12,7 @@
   "objectRetention": "Generated object retention days",
   "objectRetentionHint": "Stored responses, batches, batch results, and videos. 0 keeps them indefinitely; running batches are never deleted.",
   "fileRetention": "Uploaded file retention days",
-  "fileRetentionHint": "Files uploaded through /v1/files. 0 keeps them indefinitely.",
+  "fileRetentionHint": "Files uploaded through /api/v1/files. 0 keeps them indefinitely.",
   "save": "Save",
   "saved": "Logging settings saved",
   "alerts": "Alert webhooks",

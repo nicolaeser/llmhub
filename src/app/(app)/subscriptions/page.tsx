@@ -16,11 +16,14 @@ import {
   loadSubscriptionLimitsAction,
 } from "@/app/(app)/providers/_action";
 import { isActionFail } from "@/lib/http/action-result";
-import type { AccountLimits, ImportCandidate, ProviderView } from "@/types/providers";
+import type { AccountLimits, AccountRouting, ImportCandidate, ProviderView } from "@/types/providers";
+import { loadAccountRoutingAction, loadAntigravityConfigAction } from "./_action";
+import AccessDialog from "./_components/access-dialog";
+import AntigravitySetup from "./_components/antigravity-setup";
 import AccountCard from "./_components/account-card";
 import { accountState, recoveryAt } from "./_components/account-status";
 import OverviewTable from "./_components/overview-table";
-import RoutingCard from "./_components/routing-card";
+import RoutingPanel from "./_components/routing-panel";
 
 const SUBSCRIPTION_CATALOG = PROVIDER_CATALOG.filter((spec) => isSignInKind(spec.kind));
 
@@ -34,6 +37,9 @@ export default function SubscriptionsPage() {
   const [loading, setLoading] = useState(true);
   const [connected, setConnected] = useState<ProviderView[]>([]);
   const [limits, setLimits] = useState<Record<string, AccountLimits>>({});
+  const [routing, setRouting] = useState<AccountRouting>({});
+  const [access, setAccess] = useState<ProviderView | null>(null);
+  const [antigravityReady, setAntigravityReady] = useState<boolean | null>(null);
   const [refreshingId, setRefreshingId] = useState("");
   const [kind, setKind] = useState<(typeof PROVIDER_CATALOG)[number] | null>(null);
   const [edit, setEdit] = useState<ProviderView | null>(null);
@@ -45,6 +51,7 @@ export default function SubscriptionsPage() {
   const [, startRefreshOne] = useTransition();
   const formState = useOverlayState();
   const discoverState = useOverlayState();
+  const accessState = useOverlayState();
 
   function storeLimits(items: AccountLimits[]) {
     setLimits((cur) => ({ ...cur, ...Object.fromEntries(items.map((item) => [item.id, item])) }));
@@ -59,6 +66,12 @@ export default function SubscriptionsPage() {
     });
     loadSubscriptionLimitsAction().then((res) => {
       if (active && !isActionFail(res)) storeLimits(res.items);
+    });
+    loadAccountRoutingAction().then((res) => {
+      if (active && !isActionFail(res)) setRouting(res.routing);
+    });
+    loadAntigravityConfigAction().then((res) => {
+      if (active && !isActionFail(res)) setAntigravityReady(res.configured);
     });
     return () => {
       active = false;
@@ -98,6 +111,12 @@ export default function SubscriptionsPage() {
     setEdit(row);
     setDialogKey((n) => n + 1);
     formState.open();
+  }
+
+  function openAccess(row: ProviderView) {
+    setAccess(row);
+    setDialogKey((n) => n + 1);
+    accessState.open();
   }
 
   function openImport(row: ProviderView) {
@@ -173,6 +192,12 @@ export default function SubscriptionsPage() {
         />
       </div>
 
+      <RoutingPanel
+        counts={Object.fromEntries(SUBSCRIPTION_CATALOG.map((spec) => [spec.kind, connected.filter((row) => row.kind === spec.kind).length]))}
+        routing={routing}
+        onSaved={setRouting}
+      />
+
       {connected.length > 0 ? (
         <OverviewTable
           rows={connected}
@@ -202,6 +227,7 @@ export default function SubscriptionsPage() {
               <Button
                 size="sm"
                 variant={items.length ? "secondary" : undefined}
+                isDisabled={spec.kind === "antigravity" && antigravityReady === false}
                 aria-label={tProviders("formTitle", {
                   mode: "connect",
                   name: tProviders("kindName", { kind: spec.kind }),
@@ -212,6 +238,9 @@ export default function SubscriptionsPage() {
                 {t("addAccount")}
               </Button>
             </div>
+            {spec.kind === "antigravity" ? (
+              <AntigravitySetup configured={antigravityReady} onChanged={setAntigravityReady} />
+            ) : null}
             {items.length > 0 ? (
               <div className="grid gap-4 lg:grid-cols-2 2xl:grid-cols-3">
                 {items.map((row) => (
@@ -224,6 +253,7 @@ export default function SubscriptionsPage() {
                     onRefresh={refreshOne}
                     onEdit={(provider) => openForm(spec, provider)}
                     onImport={openImport}
+                    onAccess={openAccess}
                     onToggled={replaceProvider}
                     onDeleted={(id) => setConnected((cur) => cur.filter((c) => c.id !== id))}
                   />
@@ -240,9 +270,6 @@ export default function SubscriptionsPage() {
         );
       })}
 
-      <Separator />
-      <RoutingCard />
-
       <ProviderDialog
         key={`form-${dialogKey}`}
         state={formState}
@@ -256,6 +283,13 @@ export default function SubscriptionsPage() {
           );
           if (reportsLimits(provider.kind)) refreshOne(provider.id);
         }}
+      />
+
+      <AccessDialog
+        key={`access-${dialogKey}`}
+        state={accessState}
+        provider={access}
+        onSaved={replaceProvider}
       />
 
       <ImportModelsDialog

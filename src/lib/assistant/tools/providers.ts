@@ -101,7 +101,7 @@ export const providerTools = {
   }),
   create_provider: defineTool({
     description:
-      "Create a provider connection without a key and open the Providers page, where the operator enters the API key. Never ask for API keys in chat. Subscription kinds (codex, grok_build, claude) need the operator to sign in on the Subscriptions page and cannot be created here.",
+      "Create a provider connection without a key and open the Providers page, where the operator enters the API key. Never ask for API keys in chat. Subscription kinds (codex, grok_build, claude, antigravity) need the operator to sign in on the Subscriptions page and cannot be created here.",
     input: createProviderToolInput,
     run: async (args) =>
       viaAction(

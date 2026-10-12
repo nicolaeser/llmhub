@@ -31,8 +31,7 @@ Load before changing `src/app/`, `src/proxy.ts`, `src/i18n/` navigation, or Next
 - `src/app/(app)/` authenticated console.
 - `src/app/account/` public account screens.
 - `src/app/internal-api/` private HTTP plus the first-operator page `setup/`.
-- `src/app/v1/` gateway.
-- `src/app/api/` management-key API; see [api.md](api.md).
+- `src/app/api/v1/` and `src/app/api/subscription/` gateway; `src/app/api/mgmt/` management-key API; see [api.md](api.md).
 - Colocated walk policy: `test/route-view-policy.ts`.
 
 ## Prohibited patterns

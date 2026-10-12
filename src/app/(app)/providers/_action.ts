@@ -9,6 +9,7 @@ import { isSignInKind, PROVIDER_CATALOG, reportsLimits, signInMethod } from "@/l
 import { seal } from "@/lib/crypto";
 import { KNOWN_KINDS } from "@/lib/gateway/core";
 import { addRoute, catalogTargets, markRouted } from "@/lib/gateway/catalog-sync";
+import { assignmentSelect, assignmentTargets } from "@/lib/gateway/account-assignments";
 import { loginData } from "@/lib/gateway/credentials";
 import { baseName, vendorOf } from "@/lib/gateway/model-catalog";
 import { refreshProviderModels } from "@/lib/gateway/discovery";
@@ -19,10 +20,9 @@ import {
   openCredential,
   openTicket,
   pollDeviceCode,
-  requestAuthorizationCode,
-  requestDeviceCode,
   sealCredential,
   sealTicket,
+  startAuthorization,
 } from "@/lib/gateway/sign-in";
 import { providerPolicySchema } from "@/schemas/providers";
 import type {
@@ -61,6 +61,8 @@ function publicProvider(row: ProviderRecord) {
     baseUrl: row.baseUrl,
     hasApiKey: Boolean(row.apiKey),
     enabled: row.enabled,
+    restricted: row.restricted,
+    assignments: assignmentTargets(row.assignments ?? []),
     signIn: signInOf(row),
     discovered: discoveredOf(row.discovered),
     policy: policyOf(row),
@@ -68,6 +70,7 @@ function publicProvider(row: ProviderRecord) {
 }
 
 const loginSelect = { select: { account: true, plan: true, status: true } } as const;
+const providerInclude = { login: loginSelect, assignments: assignmentSelect } as const;
 
 function signInCredential(raw: string | undefined, uid: string, kind: string): SignInCredential | null {
   if (!raw) return null;
@@ -108,7 +111,7 @@ function validBaseUrl(value: string): string {
 async function listConnected() {
   const rows = await prisma.providerConnection.findMany({
     orderBy: { createdAt: "desc" },
-    include: { login: loginSelect },
+    include: providerInclude,
   });
   return rows.map(publicProvider);
 }
@@ -147,7 +150,7 @@ export async function createProviderAction(input: {
         ...parsePolicy(input.policy),
         ...(credential ? { login: { create: loginData(credential.session) } } : {}),
       },
-      include: { login: loginSelect },
+      include: providerInclude,
     });
     await writeAudit({
       actor: session.user.id,
@@ -188,7 +191,7 @@ export async function updateProviderAction(input: {
         ...(input.policy ? parsePolicy(input.policy) : {}),
         ...(login ? { login: { upsert: { create: login, update: { ...login, version: { increment: 1 } } } } } : {}),
       },
-      include: { login: loginSelect },
+      include: providerInclude,
     });
     await writeAudit({
       actor: session.user.id,
@@ -248,7 +251,7 @@ export async function startSignInAction(kind: string) {
     const session = await requirePermission(PERMISSIONS.PROVIDERS_MANAGE);
     if (!isSignInKind(kind)) throw new Error("UNKNOWN_PROVIDER_KIND");
     const method = signInMethod(kind);
-    const device = kind === "claude" ? requestAuthorizationCode() : await requestDeviceCode(kind);
+    const device = await startAuthorization(kind);
     return {
       method,
       ticket: sealTicket(session.user.id, device),
@@ -286,7 +289,7 @@ export async function completeSignInAction(input: { ticket: string; code: string
     const session = await requirePermission(PERMISSIONS.PROVIDERS_MANAGE);
     const ticket = openTicket(input.ticket, session.user.id);
     if (!ticket) throw new Error("SIGN_IN_EXPIRED");
-    if (ticket.grant.kind !== "claude") throw new Error("SIGN_IN_FAILED");
+    if (ticket.grant.kind !== "claude" && ticket.grant.kind !== "antigravity") throw new Error("SIGN_IN_FAILED");
     const completed = await completeAuthorization(ticket.grant, input.code);
     return {
       state: "done",
@@ -323,10 +326,10 @@ export async function deleteProviderAction(id: string) {
 export async function discoverProviderAction(id: string) {
   return runAction(async () => {
     const session = await requirePermission(PERMISSIONS.PROVIDERS_MANAGE);
-    const row = await prisma.providerConnection.findUnique({ where: { id }, include: { login: loginSelect } });
+    const row = await prisma.providerConnection.findUnique({ where: { id }, include: providerInclude });
     if (!row) return actionFail("NOT_FOUND");
     const refreshed = await refreshProviderModels(row, session.user.id);
-    const provider = publicProvider({ ...refreshed.provider, login: row.login });
+    const provider = publicProvider({ ...refreshed.provider, login: row.login, assignments: row.assignments });
     const [targets, groups] = await Promise.all([
       catalogTargets(row.id),
       prisma.modelGroup.findMany({ select: { alias: true } }),
@@ -349,7 +352,7 @@ export async function importProviderModelsAction(input: {
     const session = await requirePermission(PERMISSIONS.PROVIDERS_MANAGE);
     const row = await prisma.providerConnection.findUnique({
       where: { id: input.id },
-      include: { login: loginSelect },
+      include: providerInclude,
     });
     if (!row) return actionFail("NOT_FOUND");
     let current: ProviderSyncRecord = row;
@@ -403,6 +406,6 @@ export async function importProviderModelsAction(input: {
       objectId: row.id,
       after: providerAuditAfter(row, { added, updated, strategy }),
     });
-    return { provider: publicProvider({ ...current, login: row.login }), added, updated, strategy };
+    return { provider: publicProvider({ ...current, login: row.login, assignments: row.assignments }), added, updated, strategy };
   });
 }

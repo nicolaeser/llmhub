@@ -23,7 +23,7 @@ import {
   exampleRequestBody,
   openApiPathParams,
 } from "@/lib/gateway/openapi";
-import { gatewayPath } from "@/lib/gateway/route-pool";
+import { gatewayPath } from "@/lib/gateway/api-paths";
 import type { OpenApiPath } from "@/types/gateway";
 import type { OverlayState, TrySnapshot } from "@/types/api-ref";
 

@@ -14,6 +14,7 @@ import {
 } from "@/lib/gateway/chat";
 import { speaksAnthropic } from "@/lib/gateway/catalog";
 import { asRecord } from "@/lib/gateway/core";
+import { plainModel } from "@/lib/gateway/model-alias";
 import { costFilter } from "@/lib/gateway/cost-cap";
 import { deploymentAuth } from "@/lib/gateway/credentials";
 import { spendTag } from "@/lib/gateway/gate";
@@ -99,7 +100,7 @@ export async function dispatchMessages(input: MessagesInput): Promise<JsonMap> {
         dep,
         auth: await deploymentAuth(dep),
         path: NATIVE_PATH,
-        body: { ...nativeMessagesBody(input.body), model: dep.model || input.model, stream: false },
+        body: { ...nativeMessagesBody(input.body), model: dep.model || plainModel(input.model), stream: false },
         timeoutMs: UPSTREAM_TIMEOUT_MS,
         groupStrategy: group.strategy,
         headers: input.headers,
@@ -109,7 +110,7 @@ export async function dispatchMessages(input: MessagesInput): Promise<JsonMap> {
     },
     {
       strategy: requestRoutingOverride(input.body),
-      pool: input.principal.pool,
+      principal: input.principal,
       cost: costFilter(input.principal, input.body),
     },
   ).catch(async (err) => {
@@ -163,7 +164,7 @@ export async function streamMessages(input: MessagesInput & { req: Request }): P
       const payload = prepareBody(
         dep,
         NATIVE_PATH,
-        { ...nativeMessagesBody(input.body), model: dep.model || input.model, stream: true },
+        { ...nativeMessagesBody(input.body), model: dep.model || plainModel(input.model), stream: true },
         group.strategy,
       );
       return {
@@ -174,7 +175,7 @@ export async function streamMessages(input: MessagesInput & { req: Request }): P
     {
       deferRelease: true,
       strategy: requestRoutingOverride(input.body),
-      pool: input.principal.pool,
+      principal: input.principal,
       cost: costFilter(input.principal, input.body),
     },
   ).catch(async (err) => {

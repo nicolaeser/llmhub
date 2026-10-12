@@ -1,19 +1,19 @@
 {
   "title": "API-Referenz",
-  "subtitle": "Richte das OpenAI- oder Anthropic-SDK auf dieses Gateway oder automatisiere die Konsole über /api. Teste jeden Eintrag.",
+  "subtitle": "Richte das OpenAI- oder Anthropic-SDK auf dieses Gateway oder automatisiere die Konsole über /api/mgmt. Teste jeden Eintrag.",
   "empty": "Keine passenden Endpunkte.",
   "baseUrl": "baseURL",
   "sdkTitle": "{style, select, openai {OpenAI-SDK} anthropic {Anthropic-SDK} subscription {Abos} management {Management-API} other {API}}",
   "sdkDescription": "{style, select, openai {Chat, Responses, Embeddings, Bilder, Audio, Dateien und Batches.} anthropic {Messages und Token-Zählung mit nativen Anthropic-Anfragen und -Fehlern.} subscription {Chat, Responses, Messages und Modelle, die nur über angemeldete ChatGPT- und SuperGrok-Abos laufen.} management {Keys, Modell-Aliase, Anbieter, Mandanten, Budgets, Aufschläge, Nutzung und Logs.} other {Gateway-Endpunkte.}}",
   "auth": "Authentifiziere dich mit Authorization: Bearer und einem API-Key aus der Konsole.",
-  "anthropicAuth": "Nutze diesen Origin als baseURL; das SDK hängt /v1/messages an. Sende denselben API-Key als x-api-key mit anthropic-version: {version}. anthropic-beta wird durchgereicht.",
-  "subscriptionAuth": "Nutze dieselben API-Keys wie auf /v1. Anfragen hier erreichen nur Abo-Anbieter, und /v1 nutzt diese nie. Anthropic-Clients wie Claude Code nutzen {anthropic} als baseURL.",
+  "anthropicAuth": "Nutze diese URL als baseURL; das SDK hängt /v1/messages an. Sende denselben API-Key als x-api-key mit anthropic-version: {version}. anthropic-beta wird durchgereicht.",
+  "subscriptionAuth": "Nutze dieselben API-Keys wie auf /api/v1. Anfragen hier erreichen nur Abo-Anbieter, und /api/v1 nutzt diese nie. Anthropic-Clients wie Claude Code nutzen {anthropic} als baseURL. Normale Modelle gibt es hier ebenfalls mit dem Präfix api/ (zum Beispiel api/claude-sonnet-4-6); sie werden zu API-Preisen abgerechnet. /models listet beide.",
   "managementAuth": "Sende Authorization: Bearer mit einem Management-Key (sk-mgmt-…) von <account>deiner Kontoseite</account>. Fehler folgen RFC 9457 (Problem Details).",
   "examplesLabel": "Anfragebeispiele",
   "curlTitle": "{style, select, anthropic {Anthropic Messages} management {Management-API} other {Chat-Completions}}",
-  "curl": "curl {origin}/v1/chat/completions \\\n  -H \"Authorization: Bearer sk-hub-…\" \\\n  -H \"Content-Type: application/json\" \\\n  -d {body}",
-  "curlAnthropic": "curl {origin}/v1/messages \\\n  -H \"x-api-key: sk-hub-…\" \\\n  -H \"anthropic-version: {version}\" \\\n  -H \"Content-Type: application/json\" \\\n  -d {body}",
-  "curlManagement": "curl {origin}/api/keys \\\n  -H \"Authorization: Bearer sk-mgmt-…\"",
+  "curl": "curl {origin}/api/v1/chat/completions \\\n  -H \"Authorization: Bearer sk-hub-…\" \\\n  -H \"Content-Type: application/json\" \\\n  -d {body}",
+  "curlAnthropic": "curl {origin}/api/v1/messages \\\n  -H \"x-api-key: sk-hub-…\" \\\n  -H \"anthropic-version: {version}\" \\\n  -H \"Content-Type: application/json\" \\\n  -d {body}",
+  "curlManagement": "curl {origin}/api/mgmt/keys \\\n  -H \"Authorization: Bearer sk-mgmt-…\"",
   "searchPlaceholder": "Methode, Pfad oder Zusammenfassung suchen…",
   "columns": {
     "method": "Methode",
@@ -29,7 +29,7 @@
   "errorsHint": "Jeder Fehler hat einen stabilen Code und einen x-request-id-Header. Gib die Request-ID an, wenn du ein Problem meldest.",
   "errorShapesLabel": "Fehlerformate",
   "errorShape": "{style, select, anthropic {Anthropic} management {Problem Details} other {OpenAI}}",
-  "errorShapeHint": "{style, select, anthropic {Gilt für /v1/messages und jede /v1-Anfrage mit anthropic-version.} management {Gilt für /api und Konsolen-Endpunkte: application/problem+json (RFC 9457). Der type verweist auf den Code unten.} other {Gilt für die übrigen /v1-Endpunkte. param nennt das fehlerhafte Feld, wenn bekannt.}}",
+  "errorShapeHint": "{style, select, anthropic {Gilt für /api/v1/messages und jede /api/v1-Anfrage mit anthropic-version.} management {Gilt für /api/mgmt und Konsolen-Endpunkte: application/problem+json (RFC 9457). Der type verweist auf den Code unten.} other {Gilt für die übrigen /api/v1-Endpunkte. param nennt das fehlerhafte Feld, wenn bekannt.}}",
   "problemCodes": "Problem-Codes",
   "gatewayCodes": "Gateway-Codes",
   "keysTitle": "Deine Schlüsselpräfixe",
@@ -54,5 +54,5 @@
   "latency": "{ms, number, integer} ms",
   "statusCode": "{status, number, integer}",
   "binaryResponse": "Binärantwort ({type}), {bytes, number, integer} Byte.",
-  "tryError": "{code, select, MISSING_PARAM {Fülle jeden Pfadparameter aus.} UNKNOWN_ENDPOINT {Dieser Pfad steht nicht im Katalog.} INVALID_PATH {Dieser Pfad ist nicht erlaubt.} INVALID_JSON {Der Body muss gültiges JSON sein.} UNAUTHORIZED {Melde dich an, um die Konsole zu nutzen.} FORBIDDEN {Mit dieser Rolle kannst du keine Testanfragen senden.} PAYLOAD_TOO_LARGE {Der Anfragebody ist zu groß.} UPSTREAM_FAILED {Das Gateway hat nicht geantwortet.} MANAGEMENT_KEY_REQUIRED {Füge einen Management-Key (sk-mgmt-…) ein, um /api aufzurufen.} other {Anfrage fehlgeschlagen.}}"
+  "tryError": "{code, select, MISSING_PARAM {Fülle jeden Pfadparameter aus.} UNKNOWN_ENDPOINT {Dieser Pfad steht nicht im Katalog.} INVALID_PATH {Dieser Pfad ist nicht erlaubt.} INVALID_JSON {Der Body muss gültiges JSON sein.} UNAUTHORIZED {Melde dich an, um die Konsole zu nutzen.} FORBIDDEN {Mit dieser Rolle kannst du keine Testanfragen senden.} PAYLOAD_TOO_LARGE {Der Anfragebody ist zu groß.} UPSTREAM_FAILED {Das Gateway hat nicht geantwortet.} MANAGEMENT_KEY_REQUIRED {Füge einen Management-Key (sk-mgmt-…) ein, um /api/mgmt aufzurufen.} other {Anfrage fehlgeschlagen.}}"
 }

@@ -1,6 +1,8 @@
 import "server-only";
 import prisma from "@/lib/db/prisma";
-import { PROVIDER_CATALOG, reportsLimits } from "@/lib/gateway/catalog";
+import { accountAllowed } from "@/lib/gateway/account-access";
+import { accountPolicies } from "@/lib/gateway/account-routing";
+import { isSignInKind, PROVIDER_CATALOG, reportsLimits } from "@/lib/gateway/catalog";
 import {
   nextLatencyEwma,
   pickCostLowest,
@@ -9,19 +11,28 @@ import {
   pickPriority,
   pickQuotaBalanced,
   pickQuotaExpiring,
+  pickQuotaSmart,
   pickRoundRobin,
   pickWeighted,
   type QuotaScores,
 } from "@/lib/gateway/router";
 import { quotaBottleneckReset, quotaExhausted, quotaPressure } from "@/lib/gateway/quota";
 import { limitsSnapshot, warmLimits } from "@/lib/gateway/subscription-limits";
-import { asRecord, asStringArray, ERR_ALL_PAUSED, ERR_NO_HEALTHY, ERR_UNKNOWN_GROUP } from "@/lib/gateway/core";
+import {
+  asRecord,
+  asStringArray,
+  ERR_ALL_PAUSED,
+  ERR_NO_HEALTHY,
+  ERR_NOT_ASSIGNED,
+  ERR_UNKNOWN_GROUP,
+} from "@/lib/gateway/core";
 import { modelAlias } from "@/lib/gateway/model-alias";
 import { routePermitted } from "@/lib/gateway/model-policy";
 import { priceWindowQuery, priceWindowRates } from "@/lib/gateway/price-schedule";
 import { costRejection } from "@/lib/gateway/cost-cap";
 import { coolingDown, recordFailure, recordSuccess } from "@/lib/gateway/provider-health";
 import type { CostFilter, DbDeployment, Group, ResolvedDeployment, Deployment } from "@/types/gateway";
+import type { AccountAccess } from "@/types/providers";
 import type { DeploymentRule, RoutePolicy } from "@/types/model-templates";
 import { money } from "@/lib/utils/money";
 
@@ -54,6 +65,8 @@ const providerSelect = {
     region: true,
     noTraining: true,
     enabled: true,
+    restricted: true,
+    assignments: { select: { orgId: true, teamId: true, projectId: true, memberId: true, keyId: true } },
   },
 } as const;
 
@@ -138,6 +151,8 @@ function pick(items: ResolvedDeployment[], strategy: string, scores: QuotaScores
       return pickQuotaBalanced(items, scores, inflight);
     case "quota_expiring":
       return pickQuotaExpiring(items, scores, inflight);
+    case "smart":
+      return pickQuotaSmart(items, scores, inflight);
     case "weighted_random":
       return pickWeighted(items);
     case "cost_lowest":
@@ -176,6 +191,24 @@ async function withinQuota(
   return { items: open.length ? open : items, scores };
 }
 
+async function byAccountPolicy(items: ResolvedDeployment[], scores: QuotaScores): Promise<ResolvedDeployment[]> {
+  if (!items.some((dep) => isSignInKind(dep.provider?.kind ?? ""))) return items;
+  const policies = await accountPolicies();
+  const kept: ResolvedDeployment[] = [];
+  const accounts = new Map<string, ResolvedDeployment[]>();
+  for (const dep of items) {
+    const kind = dep.provider?.kind ?? "";
+    const policy = policies.get(kind);
+    if (!policy || policy === "inherit") {
+      kept.push(dep);
+      continue;
+    }
+    accounts.set(kind, [...(accounts.get(kind) ?? []), dep]);
+  }
+  for (const [kind, deps] of accounts) kept.push(pick(deps, policies.get(kind)!, scores));
+  return kept;
+}
+
 function affordable(group: Group, ready: ResolvedDeployment[], cost: CostFilter | undefined): ResolvedDeployment[] {
   if (!cost) return ready;
   const estimates = ready.map((dep) => cost.estimate(dep, group));
@@ -190,20 +223,24 @@ export async function acquireGroup(
   serves: (dep: ResolvedDeployment) => boolean = () => true,
   strategy = "",
   cost?: CostFilter,
+  access: AccountAccess | null = null,
 ): Promise<{ dep: ResolvedDeployment; release: () => void; overflow: boolean }> {
   const permitted = permittedDeployments(group.mapped, rules).filter(serves);
   const active = permitted.filter((dep) => dep.provider?.enabled !== false);
-  const ready = await healthy(active);
+  const assigned = active.filter((dep) => accountAllowed(dep.provider, access));
+  const ready = await healthy(assigned);
   if (!ready.length) {
     if (group.overflow_group && group.overflow_group !== group.alias) {
       const overflow = await loadGroup(group.overflow_group);
-      const acquired = await acquireGroup(overflow, rules, serves, strategy, cost);
+      const acquired = await acquireGroup(overflow, rules, serves, strategy, cost, access);
       return { ...acquired, overflow: true };
     }
-    throw permitted.length && !active.length ? ERR_ALL_PAUSED : ERR_NO_HEALTHY;
+    if (permitted.length && !active.length) throw ERR_ALL_PAUSED;
+    throw active.length && !assigned.length ? ERR_NOT_ASSIGNED : ERR_NO_HEALTHY;
   }
   const quota = await withinQuota(affordable(group, ready, cost));
-  const dep = pick(quota.items, strategy || group.strategy, quota.scores);
+  const candidates = await byAccountPolicy(quota.items, quota.scores);
+  const dep = pick(candidates, strategy || group.strategy, quota.scores);
   inflight.set(dep.id, (inflight.get(dep.id) ?? 0) + 1);
   return {
     dep,

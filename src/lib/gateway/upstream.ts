@@ -2,9 +2,17 @@ import "server-only";
 import { env } from "@/lib/env";
 import { GateError } from "@/lib/gateway/errors";
 import { anthropicToChat, chatToAnthropic } from "@/lib/gateway/anthropic";
+import { plainModel } from "@/lib/gateway/model-alias";
 import { inPool, outsidePool } from "@/lib/gateway/route-pool";
 import { speaksAnthropic } from "@/lib/gateway/catalog";
 import { withClaudeBetas, withClaudeIdentity } from "@/lib/gateway/claude";
+import {
+  ANTIGRAVITY_STREAM_PATH,
+  antigravityCompletion,
+  chatToAntigravity,
+  googleRetryAt,
+  withProject,
+} from "@/lib/gateway/antigravity";
 import { chatToCodex, codexCompletion } from "@/lib/gateway/codex";
 import { deploymentAuth } from "@/lib/gateway/credentials";
 import { acquireGroup, defaultBase, loadGroup, markFailure, markSuccess, openaiRoot } from "@/lib/gateway/runtime";
@@ -92,6 +100,10 @@ function withoutThinkingBlocks(messages: unknown): unknown {
 export function joinPath(dep: ResolvedDeployment, rel: string): string {
   const path = rel.startsWith("/") ? rel : `/${rel}`;
   if (dep.kind === "codex") return `${defaultBase(dep)}${nativeChatPath(path) ? "/responses" : path}`;
+  if (dep.kind === "antigravity") {
+    if (!nativeChatPath(path)) throw new GateError(400, "unsupported_endpoint", "this endpoint is not available on antigravity accounts");
+    return `${defaultBase(dep)}${ANTIGRAVITY_STREAM_PATH}`;
+  }
   const root = openaiRoot(defaultBase(dep));
   if (speaksAnthropic(dep.kind)) {
     if (path === "/chat/completions" || path === "/v1/chat/completions") {
@@ -123,7 +135,7 @@ export function prepareBody(
   body: JsonMap,
   groupStrategy = "",
 ): JsonMap {
-  let payload: JsonMap = { ...body, model: dep.model || body.model };
+  let payload: JsonMap = { ...body, model: dep.model || (typeof body.model === "string" ? plainModel(body.model) : body.model) };
   for (const key of GATEWAY_ONLY_KEYS) delete payload[key];
   payload = applyProviderServiceMode(dep.kind, payload, groupStrategy).body;
   if ((dep.kind === "xai" || dep.kind === "grok_build") && payload.reasoning_effort !== undefined) {
@@ -142,6 +154,7 @@ export function prepareBody(
     return dep.kind === "claude" ? withClaudeIdentity(native) : native;
   }
   if (dep.kind === "codex" && nativeChatPath(path)) return chatToCodex(payload);
+  if (dep.kind === "antigravity" && nativeChatPath(path)) return chatToAntigravity(payload);
   return payload;
 }
 
@@ -158,6 +171,9 @@ function decodeBody(
   }
   if (dep.kind === "codex" && nativeChatPath(path)) {
     return codexCompletion(new TextDecoder().decode(raw), model);
+  }
+  if (dep.kind === "antigravity" && nativeChatPath(path)) {
+    return antigravityCompletion(new TextDecoder().decode(raw), model);
   }
   return json;
 }
@@ -194,7 +210,7 @@ export async function proxyJson(input: {
     init.body = input.rawBody;
   } else if (input.body && method !== "GET" && method !== "HEAD") {
     init.body = JSON.stringify(
-      prepareBody(input.dep, input.path, input.body, input.groupStrategy),
+      withProject(input.dep, input.auth, prepareBody(input.dep, input.path, input.body, input.groupStrategy)),
     );
   }
   const res = await fetch(url, init);
@@ -242,7 +258,7 @@ async function proxyRaw(input: {
       input.rawBody ??
       (input.body && method !== "GET"
         ? JSON.stringify(
-            prepareBody(input.dep, input.path, input.body, input.groupStrategy),
+            withProject(input.dep, input.auth, prepareBody(input.dep, input.path, input.body, input.groupStrategy)),
           )
         : undefined),
     signal: AbortSignal.timeout(input.timeoutMs && input.timeoutMs > 0 ? input.timeoutMs : 120_000),
@@ -301,7 +317,8 @@ export function upstreamRetryAt(
   const resetsAt = Number(error?.resets_at);
   if (Number.isFinite(resetsAt) && resetsAt > 0) return resetsAt * 1000;
   const resetsIn = Number(error?.resets_in_seconds);
-  return Number.isFinite(resetsIn) && resetsIn > 0 ? now + resetsIn * 1000 : null;
+  if (Number.isFinite(resetsIn) && resetsIn > 0) return now + resetsIn * 1000;
+  return googleRetryAt(error, now);
 }
 
 export function upstreamError(status: number, json: unknown, headers?: Headers): GateError {

@@ -102,6 +102,8 @@ export function serializeProvider(provider: ProviderSource) {
     base_url: orNull(provider.baseUrl),
     has_api_key: provider.hasApiKey,
     enabled: provider.enabled,
+    restricted: provider.restricted,
+    assigned_to: provider.assignments.map((target) => ({ scope: target.scope, id: target.id })),
     sign_in: provider.signIn
       ? { account: orNull(provider.signIn.account), plan: orNull(provider.signIn.plan), status: provider.signIn.status }
       : null,

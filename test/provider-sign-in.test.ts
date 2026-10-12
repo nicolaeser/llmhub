@@ -15,8 +15,12 @@ type FakeLogin = {
 };
 
 const logins = new Map<string, FakeLogin>();
+const policyRows: { kind: string; strategy: string }[] = [];
 
 const fakePrisma = {
+  accountRouting: {
+    findMany: async () => policyRows.map((row) => ({ ...row })),
+  },
   providerLogin: {
     findUnique: async ({ where }: { where: { providerId: string } }) => {
       const row = logins.get(where.providerId);
@@ -85,6 +89,7 @@ const openaiIdToken = jwt({
 beforeEach(() => {
   calls = [];
   logins.clear();
+  policyRows.length = 0;
 });
 
 afterEach(() => {
@@ -543,8 +548,35 @@ test("Claude subscription limits call the OAuth usage endpoint with the beta hea
   assert.match(calls[0]!.headers["anthropic-beta"] ?? "", /oauth-2025-04-20/);
 });
 
-test("routing skips subscription accounts at a limit and follows the quota strategies", async () => {
-  const { acquireGroup } = await import("@/lib/gateway/runtime");
+type PoolDeployment = ReturnType<typeof poolDeployment>;
+
+function poolDeployment(id: string, weight: number) {
+  return {
+    id: `dep-${id}`,
+    kind: "claude",
+    base_url: "",
+    model: "claude-sonnet-4-5",
+    weight,
+    cost_input_per_1k: 0,
+    cost_output_per_1k: 0,
+    provider_id: `prov-${id}`,
+    provider: {
+      id: `prov-${id}`,
+      kind: "claude",
+      baseUrl: "",
+      apiKey: "",
+      zdr: false,
+      retentionDays: null,
+      region: "",
+      noTraining: false,
+      enabled: true,
+      restricted: false,
+      assignments: [] as { orgId: string | null; teamId: string | null; projectId: string | null; memberId: string | null; keyId: string | null }[],
+    },
+  };
+}
+
+async function claudePool(): Promise<{ group: Group; mapped: PoolDeployment[] }> {
   const { sealTokens } = await import("@/lib/gateway/credentials");
   const usage: Record<string, unknown> = {
     "token-q1": { five_hour: { utilization: 100, resets_at: new Date(Date.now() + 2 * 3_600_000).toISOString() } },
@@ -573,18 +605,7 @@ test("routing skips subscription accounts at a limit and follows the quota strat
     const auth = String((init?.headers as Record<string, string>).Authorization).replace("Bearer ", "");
     return Response.json(usage[auth]);
   }) as typeof fetch;
-  const dep = (id: string, weight: number) => ({
-    id: `dep-${id}`,
-    kind: "claude",
-    base_url: "",
-    model: "claude-sonnet-4-5",
-    weight,
-    cost_input_per_1k: 0,
-    cost_output_per_1k: 0,
-    provider_id: `prov-${id}`,
-    provider: { id: `prov-${id}`, kind: "claude", baseUrl: "", apiKey: "", zdr: false, retentionDays: null, region: "", noTraining: false, enabled: true },
-  });
-  const mapped = [dep("q1", 10), dep("q2", 5), dep("q3", 1)];
+  const mapped = [poolDeployment("q1", 10), poolDeployment("q2", 5), poolDeployment("q3", 1)];
   const group: Group = {
     alias: "claude-pool",
     strategy: "priority",
@@ -599,13 +620,19 @@ test("routing skips subscription accounts at a limit and follows the quota strat
     deployments: mapped,
     mapped,
   };
+  return { group, mapped };
+}
+
+test("routing skips subscription accounts at a limit and follows the quota strategies", async () => {
+  const { acquireGroup } = await import("@/lib/gateway/runtime");
+  const { group, mapped } = await claudePool();
   const pickFor = async (strategy: string) => {
     const acquired = await acquireGroup({ ...group, strategy }, undefined, undefined, "");
     acquired.release();
     return acquired.dep.id;
   };
   assert.equal(await pickFor("priority"), "dep-q2");
-  const paused = dep("q2", 5);
+  const paused = poolDeployment("q2", 5);
   paused.provider.enabled = false;
   const withPaused: Group = { ...group, mapped: [mapped[0]!, paused, mapped[2]!] };
   const acquiredPaused = await acquireGroup(withPaused, undefined, undefined, "priority");
@@ -618,6 +645,72 @@ test("routing skips subscription accounts at a limit and follows the quota strat
   assert.notEqual(rotation[0], rotation[1]);
   assert.equal(new Set(rotation).size, 2);
   assert.equal(rotation.includes("dep-q1"), false);
+});
+
+test("a per provider account policy decides between accounts of that provider before the alias strategy", async () => {
+  const { acquireGroup } = await import("@/lib/gateway/runtime");
+  const { forgetAccountPolicies } = await import("@/lib/gateway/account-routing");
+  const { group } = await claudePool();
+  const pickFor = async () => {
+    const acquired = await acquireGroup(group, undefined, undefined, "");
+    acquired.release();
+    return acquired.dep.id;
+  };
+  forgetAccountPolicies();
+  assert.equal(await pickFor(), "dep-q2");
+  policyRows.push({ kind: "claude", strategy: "inherit" });
+  forgetAccountPolicies();
+  assert.equal(await pickFor(), "dep-q2");
+  policyRows[0] = { kind: "claude", strategy: "quota_balanced" };
+  forgetAccountPolicies();
+  assert.equal(await pickFor(), "dep-q3");
+  policyRows[0] = { kind: "claude", strategy: "smart" };
+  forgetAccountPolicies();
+  assert.equal(await pickFor(), "dep-q3");
+  policyRows[0] = { kind: "claude", strategy: "round_robin" };
+  forgetAccountPolicies();
+  const rotation = [await pickFor(), await pickFor(), await pickFor()];
+  assert.equal(new Set(rotation).size, 2);
+  assert.equal(rotation.includes("dep-q1"), false);
+  policyRows[0] = { kind: "codex", strategy: "round_robin" };
+  forgetAccountPolicies();
+  assert.equal(await pickFor(), "dep-q2");
+  forgetAccountPolicies();
+});
+
+test("restricted accounts only serve the keys, people, projects, departments, and companies assigned to them", async () => {
+  const { acquireGroup } = await import("@/lib/gateway/runtime");
+  const { ERR_NOT_ASSIGNED } = await import("@/lib/gateway/core");
+  const { group, mapped } = await claudePool();
+  const none = { orgId: null, teamId: null, projectId: null, memberId: null, keyId: null };
+  const caller = { orgId: "org-1", teamId: "team-1", projectId: "proj-1", memberId: "mem-1", keyId: "key-1" };
+  const pickFor = async (access: typeof caller | null) => {
+    const acquired = await acquireGroup(group, undefined, undefined, "priority", undefined, access);
+    acquired.release();
+    return acquired.dep.id;
+  };
+  const q2 = mapped[1]!.provider;
+  q2.restricted = true;
+  q2.assignments = [{ ...none, keyId: "key-9" }];
+  assert.equal(await pickFor(null), "dep-q3");
+  assert.equal(await pickFor(caller), "dep-q3");
+  q2.assignments = [{ ...none, keyId: "key-1" }];
+  assert.equal(await pickFor(caller), "dep-q2");
+  assert.equal(await pickFor(null), "dep-q3");
+  for (const assigned of [{ memberId: "mem-1" }, { projectId: "proj-1" }, { teamId: "team-1" }, { orgId: "org-1" }]) {
+    q2.assignments = [{ ...none, ...assigned }];
+    assert.equal(await pickFor(caller), "dep-q2", JSON.stringify(assigned));
+    assert.equal(await pickFor({ ...caller, orgId: "org-2", teamId: "team-2", projectId: "p", memberId: "m", keyId: "k" }), "dep-q3");
+  }
+  q2.assignments = [];
+  assert.equal(await pickFor(caller), "dep-q3");
+  for (const row of [mapped[0]!, mapped[2]!]) {
+    row.provider.restricted = true;
+    row.provider.assignments = [];
+  }
+  await assert.rejects(pickFor(caller), (err: unknown) => err === ERR_NOT_ASSIGNED);
+  q2.restricted = false;
+  assert.equal(await pickFor(caller), "dep-q2");
 });
 
 test("xAI billing maps the weekly credits, the monthly spend cap, and on-demand usage", async () => {

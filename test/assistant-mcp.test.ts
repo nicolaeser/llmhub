@@ -881,7 +881,7 @@ test("code examples call this gateway with a key from the environment", () => {
     language: "python",
     endpoint: "chat",
   });
-  assert.match(python, /base_url="https:\/\/hub\.example\.com\/v1"/);
+  assert.match(python, /base_url="https:\/\/hub\.example\.com\/api\/v1"/);
   assert.match(python, /LLMHUB_API_KEY/);
   assert.match(python, /gpt-house/);
   const curl = codeExample({
@@ -890,7 +890,7 @@ test("code examples call this gateway with a key from the environment", () => {
     language: "curl",
     endpoint: "messages",
   });
-  assert.match(curl, /\/v1\/messages/);
+  assert.match(curl, /\/api\/v1\/messages/);
   assert.match(curl, /x-api-key/);
   assert.doesNotMatch(curl, /sk-hub-/);
 });

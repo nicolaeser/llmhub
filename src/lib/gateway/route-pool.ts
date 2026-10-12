@@ -1,14 +1,10 @@
+import { SUBSCRIPTION_PREFIX } from "@/lib/gateway/api-paths";
 import { isSignInKind } from "@/lib/gateway/catalog";
 import { GateError } from "@/lib/gateway/errors";
+import { plainModel } from "@/lib/gateway/model-alias";
 import type { PublicModel, RoutePool } from "@/types/gateway";
 
 type PooledRoute = { kind: string; provider?: { kind: string } | null };
-
-export const SUBSCRIPTION_PREFIX = "/subscription";
-
-export function gatewayPath(pathname: string): string {
-  return pathname.startsWith(`${SUBSCRIPTION_PREFIX}/`) ? pathname.slice(SUBSCRIPTION_PREFIX.length) : pathname;
-}
 
 export function routePool(route: PooledRoute): RoutePool {
   return isSignInKind(route.kind) || isSignInKind(route.provider?.kind ?? "") ? "subscription" : "api";
@@ -23,12 +19,19 @@ export function listedIn(model: Pick<PublicModel, "pools">, pool: RoutePool): bo
   return !model.pools.length || model.pools.includes("api");
 }
 
-export function outsidePool(pool: RoutePool): GateError {
+export function routeOf(model: string, surface: RoutePool): { alias: string; pool: RoutePool } {
+  const alias = plainModel(model);
+  const prefixed = alias !== model.trim();
+  return surface === "subscription" && prefixed ? { alias, pool: "api" } : { alias: model.trim(), pool: surface };
+}
+
+export function outsidePool(pool: RoutePool, surface: RoutePool = pool): GateError {
+  if (pool === "subscription") return new GateError(404, "model_not_found", "model has no subscription route", { param: "model" });
   return new GateError(
     404,
     "model_not_found",
-    pool === "subscription"
-      ? "model has no subscription route"
+    surface === "subscription"
+      ? "model has no API route"
       : `model is only served by subscriptions; call it through ${SUBSCRIPTION_PREFIX}/v1`,
     { param: "model" },
   );

@@ -8,14 +8,14 @@ import { toCsv } from "@/lib/http/export";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 const route = path.join(root, "src/app/internal-api/usage/chargeback/route.ts");
-const misplaced = path.join(root, "src/app/api/usage/chargeback/route.ts");
+const misplaced = path.join(root, "src/app/api/mgmt/usage/chargeback/route.ts");
 
 test("chargeback CSV lives under internal-api and uses loadUsageAction", async () => {
   assert.equal(existsSync(route), true);
   assert.equal(
     existsSync(misplaced),
     false,
-    "chargeback must live under src/app/internal-api not src/app/api",
+    "chargeback must live under src/app/internal-api not src/app/api/mgmt",
   );
   assert.equal(
     route.includes(`${path.sep}app${path.sep}internal-api${path.sep}`),

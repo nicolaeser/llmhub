@@ -6,14 +6,16 @@ import {
   quotaExhausted,
   quotaPressure,
 } from "@/lib/gateway/quota";
+import { accessOf, accountAllowed, isAccountStrategy } from "@/lib/gateway/account-access";
 import {
   pickQuotaBalanced,
   pickQuotaExpiring,
+  pickQuotaSmart,
   pickRoundRobin,
   type QuotaScores,
 } from "@/lib/gateway/router";
 import { claudeLimits } from "@/lib/gateway/subscription-limits";
-import type { Deployment } from "@/types/gateway";
+import type { Deployment, Principal, VirtualKeyView } from "@/types/gateway";
 import type { LimitWindow, SubscriptionLimits } from "@/types/providers";
 
 const NOW = Date.parse("2026-10-12T12:00:00Z");
@@ -159,4 +161,62 @@ test("Claude usage keeps every window, the extra usage budget, and new model lim
   );
   assert.deepEqual(result.extraUsage, { usedCents: 1250, limitCents: 5000, percent: 25 });
   assert.equal(claudeLimits({ extra_usage: { is_enabled: false } }, "", NOW).extraUsage, null);
+});
+
+test("smart spends quota that is about to reset and protects accounts close to their limit", () => {
+  const scores: QuotaScores = new Map([
+    ["soon", { pressure: 80, reset: NOW + 1 * 3_600_000 }],
+    ["roomy", { pressure: 10, reset: NOW + 100 * 3_600_000 }],
+    ["full", { pressure: 95, reset: NOW + 0.5 * 3_600_000 }],
+  ]);
+  const all = [deployment("soon"), deployment("roomy"), deployment("full")];
+  assert.equal(pickQuotaSmart(all, scores, new Map(), NOW).id, "soon");
+  assert.equal(pickQuotaSmart([deployment("roomy"), deployment("full")], scores, new Map(), NOW).id, "roomy");
+  assert.equal(pickQuotaSmart([deployment("full")], scores, new Map(), NOW).id, "full");
+  const busy = new Map([["soon", 30]]);
+  assert.equal(pickQuotaSmart(all, scores, busy, NOW).id, "roomy");
+});
+
+test("smart treats unknown limits as average and breaks ties by load, then weight", () => {
+  const unknown: QuotaScores = new Map();
+  assert.equal(pickQuotaSmart([deployment("a"), deployment("b", 5)], unknown, new Map(), NOW).id, "b");
+  assert.equal(pickQuotaSmart([deployment("a"), deployment("b", 5)], unknown, new Map([["b", 1]]), NOW).id, "a");
+  assert.throws(() => pickQuotaSmart([], unknown, new Map(), NOW));
+});
+
+test("account strategies are validated by name", () => {
+  for (const name of ["inherit", "smart", "quota_balanced", "quota_expiring", "round_robin", "priority", "least_inflight"]) {
+    assert.equal(isAccountStrategy(name), true, name);
+  }
+  assert.equal(isAccountStrategy("cost_lowest"), false);
+  assert.equal(isAccountStrategy(""), false);
+});
+
+test("account access follows the caller's company, department, project, person, and key", () => {
+  const none = { orgId: null, teamId: null, projectId: null, memberId: null, keyId: null };
+  const key = { token_id: "key-1", project_id: "proj-1" } as VirtualKeyView;
+  const caller: Principal = {
+    actor: "key-1",
+    key,
+    orgId: "org-1",
+    teamId: "team-1",
+    userId: "",
+    memberId: "mem-1",
+    models: [],
+    routeLimits: {},
+  };
+  const access = accessOf(caller);
+  assert.deepEqual(access, { orgId: "org-1", teamId: "team-1", projectId: "proj-1", memberId: "mem-1", keyId: "key-1" });
+  assert.equal(accessOf({ ...caller, key: undefined }), null);
+  assert.equal(accessOf(undefined), null);
+  assert.equal(accountAllowed({ restricted: false, assignments: [] }, null), true);
+  assert.equal(accountAllowed(null, null), true);
+  assert.equal(accountAllowed({ restricted: true, assignments: [] }, access), false);
+  assert.equal(accountAllowed({ restricted: true, assignments: [{ ...none, keyId: "key-1" }] }, null), false);
+  assert.equal(accountAllowed({ restricted: true, assignments: [{ ...none, keyId: "key-2" }] }, access), false);
+  for (const hit of [{ keyId: "key-1" }, { memberId: "mem-1" }, { projectId: "proj-1" }, { teamId: "team-1" }, { orgId: "org-1" }]) {
+    assert.equal(accountAllowed({ restricted: true, assignments: [{ ...none, ...hit }] }, access), true, JSON.stringify(hit));
+  }
+  const unbound = { orgId: "", teamId: "", projectId: "", memberId: "", keyId: "key-1" };
+  assert.equal(accountAllowed({ restricted: true, assignments: [{ ...none, orgId: "org-1" }] }, unbound), false);
 });

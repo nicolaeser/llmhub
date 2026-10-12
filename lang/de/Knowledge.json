@@ -1,6 +1,6 @@
 {
   "title": "Wissensbasen",
-  "subtitle": "Vektorspeicher für Retrieval-Augmented Generation. API-Keys durchsuchen sie mit file_search und /v1/vector_stores. Jede Wissensbasis gehört zu genau einem Unternehmen und optional zu einem Projekt und ist für andere Unternehmen und Projekte nie sichtbar.",
+  "subtitle": "Vektorspeicher für Retrieval-Augmented Generation. API-Keys durchsuchen sie mit file_search und /api/v1/vector_stores. Jede Wissensbasis gehört zu genau einem Unternehmen und optional zu einem Projekt und ist für andere Unternehmen und Projekte nie sichtbar.",
   "add": "Neue Wissensbasis",
   "emptyTitle": "Noch keine Wissensbasen",
   "empty": "Lege eine Wissensbasis an, lade Dokumente hoch und lass die API-Keys des Unternehmens sie mit file_search durchsuchen.",

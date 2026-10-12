@@ -18,7 +18,7 @@ Read [SUMMARY.md](SUMMARY.md) before starting work. Load only the documents that
 
 - Must not write exploits, malware, or attack any system.
 - Must not put secrets, credentials, personal data, or private machine paths into the repository or into `.ai/` documents.
-- Must treat `src/app/internal-api/`, `/api`, `/v1`, `/scim`, and `/sso` as gated surfaces. `src/app/api/` is only the management-key API; must not expose internal or session-cookie routes there.
+- Must treat `src/app/internal-api/`, `/api` (`/api/v1`, `/api/subscription`, `/api/mgmt`), `/scim`, and `/sso` as gated surfaces. `src/app/api/mgmt/` is only the management-key API; must not expose internal or session-cookie routes under `src/app/api/`.
 
 ## Precedence
 

@@ -27,9 +27,15 @@ export const PROVIDER_CATALOG: KindSpec[] = [
     default_base_url: "https://api.anthropic.com",
     auth: "sign_in",
   },
+  {
+    kind: "antigravity",
+    name: "Google subscription (Antigravity)",
+    default_base_url: "https://cloudcode-pa.googleapis.com",
+    auth: "sign_in",
+  },
 ];
 
-const LIMIT_KINDS = new Set(["codex", "claude", "grok_build"]);
+const LIMIT_KINDS = new Set(["codex", "claude", "grok_build", "antigravity"]);
 
 export function isSignInKind(kind: string): kind is SignInKind {
   return PROVIDER_CATALOG.some((spec) => spec.kind === kind && spec.auth === "sign_in");
@@ -40,7 +46,7 @@ export function reportsLimits(kind: string): boolean {
 }
 
 export function signInMethod(kind: SignInKind): SignInMethod {
-  return kind === "claude" ? "code" : "device";
+  return kind === "claude" || kind === "antigravity" ? "code" : "device";
 }
 
 export function speaksAnthropic(kind: string): boolean {

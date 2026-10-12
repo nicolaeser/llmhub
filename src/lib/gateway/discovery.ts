@@ -3,6 +3,8 @@ import prisma from "@/lib/db/prisma";
 import { isPrismaCode } from "@/lib/auth/errors";
 import { env } from "@/lib/env";
 import { fireAlert } from "@/lib/gateway/alerts";
+import { antigravityModels } from "@/lib/gateway/antigravity";
+import { fetchAvailableModels } from "@/lib/gateway/antigravity-api";
 import { PROVIDER_CATALOG } from "@/lib/gateway/catalog";
 import { CLAUDE_OAUTH_BETAS } from "@/lib/gateway/claude";
 import { CODEX_CLIENT_VERSION } from "@/lib/gateway/codex";
@@ -11,7 +13,7 @@ import { providerAuth } from "@/lib/gateway/credentials";
 import { GateError } from "@/lib/gateway/errors";
 import { discoveredOf, parsePricing } from "@/lib/gateway/provider-prices";
 import { logger } from "@/lib/logging/logger";
-import type { DiscoveredDiff, DiscoveredModel, RepricedModel } from "@/types/gateway";
+import type { DiscoveredDiff, DiscoveredModel, RepricedModel, UpstreamAuth } from "@/types/gateway";
 import type { ProviderSyncRecord } from "@/types/providers";
 
 const ALERT_LIST_LIMIT = 10;
@@ -28,6 +30,13 @@ function modelsUrl(kind: string, base: string): string {
   if (b.endsWith("/models")) return b;
   if (b.endsWith("/v1")) return `${b}/models`;
   return `${b}/v1/models`;
+}
+
+async function fetchAntigravityModels(baseUrl: string, auth: UpstreamAuth): Promise<DiscoveredModel[]> {
+  const { status, json } = await fetchAvailableModels(auth, baseUrl);
+  if (status === 401 || status === 403) throw new Error("UPSTREAM_AUTH");
+  if (status < 200 || status >= 300) throw new Error("UPSTREAM_FAILED");
+  return antigravityModels(json);
 }
 
 export async function fetchProviderModels(
@@ -140,7 +149,10 @@ export async function refreshProviderModels(
   const auth = await providerAuth(row).catch((error: unknown) => {
     throw error instanceof GateError ? new Error("SIGN_IN_EXPIRED", { cause: error }) : error;
   });
-  const models = await fetchProviderModels(row.kind, row.baseUrl, auth.key, auth.headers);
+  const models =
+    row.kind === "antigravity"
+      ? await fetchAntigravityModels(row.baseUrl, auth)
+      : await fetchProviderModels(row.kind, row.baseUrl, auth.key, auth.headers);
   const before = discoveredOf(row.discovered);
   if (models.length === 0 && before.length > 0) throw new Error("UPSTREAM_EMPTY");
   const diff = diffDiscovered(before, models);
