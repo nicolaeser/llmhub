@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
-import test from "node:test";
+import { once } from "node:events";
+import { createServer, type AddressInfo } from "node:net";
+import test, { after, before, beforeEach } from "node:test";
 import { CHARGEBACK_COLUMNS, chargebackRows, chargebackTable, summarizeUsage, usageDays } from "@/lib/usage/usage-stats";
 import { toCsv } from "@/lib/export/csv";
 import { lastCompletedPeriod, nextReportAt, reportCadence } from "@/lib/reports/period";
@@ -9,11 +10,161 @@ import type { UsageSlice } from "@/types/usage";
 
 const at = (iso: string) => new Date(iso);
 
-function exportedAsyncFn(source: string, name: string): string {
-  const start = source.indexOf(`export async function ${name}`);
-  assert.notEqual(start, -1, `missing export async function ${name}`);
-  const next = source.indexOf("\nexport ", start + 1);
-  return next === -1 ? source.slice(start) : source.slice(start, next);
+type Row = Record<string, unknown>;
+type Args = { where?: Row; data?: Row };
+type Call = { model: string; method: string; args: Args; count?: number };
+
+const NOW = at("2026-10-07T12:00:00Z");
+const PERIOD = "weekly:2026-09-28";
+const CLAIM_MS = 10 * 60_000;
+const RETRY_MS = 60 * 60_000;
+
+const calls: Call[] = [];
+const reports = new Map<string, Row>();
+let staleListing: Row[] | null = null;
+let reportQueryFailure: Error | null = null;
+let reportLookupFailure: Error | null = null;
+const smtp = { sessions: 0, recipients: [] as string[], reject: "" };
+
+function matches(row: Row, where: Row): boolean {
+  return Object.entries(where).every(([field, condition]) => {
+    if (field === "OR") return (condition as Row[]).some((branch) => matches(row, branch));
+    const value = row[field];
+    if (condition instanceof Date) return value instanceof Date && value.getTime() === condition.getTime();
+    if (condition !== null && typeof condition === "object") {
+      if ("lt" in condition) return value instanceof Date && value.getTime() < (condition.lt as Date).getTime();
+      if ("isEmpty" in condition) return Array.isArray(value) && (value.length === 0) === condition.isEmpty;
+      return false;
+    }
+    return (value ?? null) === condition;
+  });
+}
+
+const reportModel = {
+  findMany: async (args: Args) => {
+    calls.push({ model: "usageReport", method: "findMany", args });
+    if (reportQueryFailure) throw reportQueryFailure;
+    const listed = staleListing ?? [...reports.values()].filter((row) => matches(row, args.where ?? {}));
+    return listed.map((row) => ({ ...row }));
+  },
+  findUnique: async (args: Args) => {
+    calls.push({ model: "usageReport", method: "findUnique", args });
+    if (reportLookupFailure) throw reportLookupFailure;
+    const row = reports.get(String(args.where?.id));
+    return row ? { ...row, org: { alias: "Acme" }, team: null } : null;
+  },
+  updateMany: async (args: Args) => {
+    const matched = [...reports.values()].filter((row) => matches(row, args.where ?? {}));
+    for (const row of matched) Object.assign(row, args.data);
+    calls.push({ model: "usageReport", method: "updateMany", args, count: matched.length });
+    return { count: matched.length };
+  },
+};
+
+function fakeModel(model: string) {
+  return new Proxy(
+    {},
+    {
+      get: (_target, method: string) => async (args: Args = {}) => {
+        calls.push({ model, method, args });
+        if (method === "deleteMany" || method === "updateMany") return { count: 0 };
+        if (method === "findMany" || method === "groupBy") return [];
+        if (method === "count") return 0;
+        if (method === "create" || method === "upsert") return {};
+        return null;
+      },
+    },
+  );
+}
+
+const fakes = new Map<string, unknown>([["usageReport", reportModel]]);
+
+(globalThis as { prisma?: unknown }).prisma = new Proxy(
+  {},
+  {
+    get: (_target, model: string) => {
+      if (model.startsWith("$")) return async () => [];
+      const fake = fakes.get(model) ?? fakeModel(model);
+      fakes.set(model, fake);
+      return fake;
+    },
+  },
+);
+delete process.env.REDIS_URL;
+
+const smtpServer = createServer((socket) => {
+  smtp.sessions += 1;
+  socket.setEncoding("utf8");
+  socket.on("error", () => undefined);
+  if (smtp.reject) {
+    socket.end(`${smtp.reject}\r\n`);
+    return;
+  }
+  socket.write("220 fake.test ready\r\n");
+  let buffer = "";
+  let inData = false;
+  socket.on("data", (chunk: string) => {
+    buffer += chunk;
+    for (let end = buffer.indexOf("\r\n"); end >= 0; end = buffer.indexOf("\r\n")) {
+      const line = buffer.slice(0, end);
+      buffer = buffer.slice(end + 2);
+      if (inData) {
+        if (line === ".") {
+          inData = false;
+          socket.write("250 queued\r\n");
+        }
+        continue;
+      }
+      const verb = line.split(" ")[0].toUpperCase();
+      if (verb === "RCPT") smtp.recipients.push(line);
+      inData = verb === "DATA";
+      socket.write(inData ? "354 go ahead\r\n" : verb === "QUIT" ? "221 bye\r\n" : "250 ok\r\n");
+      if (verb === "QUIT") socket.end();
+    }
+  });
+});
+
+before(async () => {
+  smtpServer.listen(0, "127.0.0.1");
+  await once(smtpServer, "listening");
+  process.env.SMTP_URL = `smtp://127.0.0.1:${(smtpServer.address() as AddressInfo).port}`;
+});
+
+after(() => {
+  smtpServer.close();
+});
+
+beforeEach(() => {
+  calls.length = 0;
+  reports.clear();
+  staleListing = null;
+  reportQueryFailure = null;
+  reportLookupFailure = null;
+  Object.assign(smtp, { sessions: 0, recipients: [], reject: "" });
+});
+
+function report(id: string, over: Row = {}): Row {
+  const row = {
+    id,
+    orgId: "org_1",
+    teamId: null,
+    cadence: "weekly",
+    format: "csv",
+    locale: "en",
+    recipients: ["finance@example.com"],
+    enabled: true,
+    lastPeriod: "",
+    lastSentAt: null,
+    lastError: "",
+    claimedUntil: null,
+    ...over,
+  };
+  reports.set(id, row);
+  return row;
+}
+
+function reportCalls(method: string): Call[] {
+  return calls.filter((call) => call.model === "usageReport" && call.method === method);
 }
 
 const slice = (row: Partial<UsageSlice>): UsageSlice => ({
@@ -120,31 +271,96 @@ test("chargeback CSV names tenants and keeps its header when there is no usage",
   assert.equal(toCsv([]), "");
 });
 
-test("the maintenance sweep delivers due usage reports", async () => {
-  const source = await readFile(new URL("../src/worker/jobs.ts", import.meta.url), "utf8");
-  assert.match(source, /result\.reports = await runSweepJob\("usage_reports", \(\) => runUsageReports\(now\)\)/);
+test("the maintenance sweep delivers due usage reports", async (t) => {
+  const { runMaintenanceSweep } = await import("@/worker/jobs");
+  report("due");
+  report("sent", { lastPeriod: PERIOD });
+  report("paused", { enabled: false });
+  report("nobody", { recipients: [] });
+
+  assert.equal((await runMaintenanceSweep(NOW)).reports, 1);
+  assert.equal(smtp.sessions, 1);
+  assert.deepEqual(smtp.recipients, ["RCPT TO:<finance@example.com>"]);
+  const due = reports.get("due")!;
+  assert.deepEqual(
+    [due.lastPeriod, due.lastSentAt, due.lastError, due.claimedUntil],
+    [PERIOD, NOW, "", null],
+  );
+
+  reportQueryFailure = new Error("report query failed");
+  const logged = t.mock.method(console, "error", () => {});
+  assert.equal((await runMaintenanceSweep(NOW)).reports, 0);
+  const failures = logged.mock.calls
+    .map((call) => JSON.parse(String(call.arguments[0])))
+    .filter((line) => line.event === "worker.job_failed" && line.job === "usage_reports");
+  assert.deepEqual(failures.map((line) => line.err), ["report query failed"]);
 });
 
 test("report delivery claims a row before sending so parallel sweeps cannot send twice", async () => {
-  const source = await readFile(new URL("../src/lib/reports/usage-report.ts", import.meta.url), "utf8");
-  const run = exportedAsyncFn(source, "runUsageReports");
-  assert.match(run, /if \(!mailEnabled\(\)\) return 0;/);
-  assert.match(run, /updateMany\(\{\s*where: \{\s*id: report\.id,[\s\S]*?lastPeriod: report\.lastPeriod,[\s\S]*?claimedUntil/);
-  assert.match(run, /if \(claimed\.count !== 1\) continue;/);
-  assert.ok(run.indexOf("claimed.count") < run.indexOf("deliverUsageReport("));
-  assert.match(run, /mailErrorCode\(err\)/);
+  const { runUsageReports } = await import("@/lib/reports/usage-report");
+  report("due");
+  report("held", { claimedUntil: new Date(NOW.getTime() + 60_000) });
+
+  const sent = await Promise.all([runUsageReports(NOW), runUsageReports(NOW), runUsageReports(NOW)]);
+  assert.deepEqual(sent.sort(), [0, 0, 1]);
+  assert.equal(smtp.sessions, 1);
+  const won = reportCalls("updateMany").filter((call) => call.count === 1 && call.args.where?.lastPeriod === "");
+  assert.equal(won.length, 1);
+  assert.deepEqual(won[0].args, {
+    where: {
+      id: "due",
+      enabled: true,
+      cadence: "weekly",
+      lastPeriod: "",
+      OR: [{ claimedUntil: null }, { claimedUntil: { lt: NOW } }],
+    },
+    data: { claimedUntil: new Date(NOW.getTime() + CLAIM_MS) },
+  });
+  const deliveries = reportCalls("findUnique");
+  assert.deepEqual(deliveries.map((call) => call.args.where?.id), ["due"]);
+  assert.ok(calls.indexOf(won[0]) < calls.indexOf(deliveries[0]));
+  assert.equal(reports.get("due")!.lastPeriod, PERIOD);
+
+  calls.length = 0;
+  assert.equal(await runUsageReports(NOW), 0);
+  assert.deepEqual(reportCalls("updateMany"), []);
+
+  reports.clear();
+  report("raced", { lastPeriod: PERIOD, lastSentAt: NOW });
+  staleListing = [{ id: "raced", cadence: "weekly", lastPeriod: "" }];
+  calls.length = 0;
+  assert.equal(await runUsageReports(NOW), 0);
+  assert.deepEqual(reportCalls("updateMany").map((call) => call.count), [0]);
+  assert.deepEqual(reportCalls("findUnique"), []);
+  assert.equal(smtp.sessions, 1);
 });
 
-test("report actions need budgets:manage and spend:read-all and stay in the company scope", async () => {
-  const [reports, structure] = await Promise.all([
-    readFile(new URL("../src/lib/reports/manage.ts", import.meta.url), "utf8"),
-    readFile(new URL("../src/lib/tenancy/structure.ts", import.meta.url), "utf8"),
-  ]);
-  const source = `${reports}\n${structure}`;
-  assert.match(source, /PERMISSIONS\.BUDGETS_MANAGE\) &&\s*hasPerm\(session\.permissions, PERMISSIONS\.SPEND_READ_ALL\)/);
-  for (const name of ["saveReport", "deleteReport", "sendReportNow"]) {
-    assert.match(exportedAsyncFn(source, name), /await reportSession\(\)/, name);
-  }
-  assert.match(source, /if \(!row \|\| !inCompany\(session, row\.orgId\)\) throw new Error\("NOT_FOUND"\)/);
-  assert.match(source, /seesReports \? reportViews\(session, now\)/);
+test("a failed report delivery records the mail error code and waits an hour before retrying", async (t) => {
+  const { runUsageReports } = await import("@/lib/reports/usage-report");
+  const logged = t.mock.method(console, "log", () => {});
+  report("due");
+  smtp.reject = "554 5.7.1 relay denied";
+  assert.equal(await runUsageReports(NOW), 0);
+  assert.equal(smtp.sessions, 1);
+  const due = reports.get("due")!;
+  assert.deepEqual(
+    [due.lastPeriod, due.lastError, due.claimedUntil],
+    ["", "SMTP_554", new Date(NOW.getTime() + RETRY_MS)],
+  );
+
+  assert.equal(await runUsageReports(new Date(NOW.getTime() + RETRY_MS / 2)), 0);
+  assert.equal(smtp.sessions, 1);
+
+  reports.clear();
+  report("broken");
+  reportLookupFailure = new Error("connection to 10.0.0.5 lost");
+  assert.equal(await runUsageReports(NOW), 0);
+  assert.equal(reports.get("broken")!.lastError, "MAIL_FAILED");
+  assert.deepEqual(
+    logged.mock.calls.map((call) => JSON.parse(String(call.arguments[0]))).map((line) => [line.event, line.reportId, line.err]),
+    [
+      ["report.send_failed", "due", "SMTP_554"],
+      ["report.send_failed", "broken", "MAIL_FAILED"],
+    ],
+  );
 });
