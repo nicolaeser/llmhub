@@ -1,17 +1,18 @@
 import type { z } from "zod";
-import type { guardrailOverrideSchema, piiOverrideSchema, policyScopeSchema } from "@/schemas/guardrails";
-import type { GUARDRAIL_ACTIONS, INJECTION_CHECKS, RULE_KINDS, RULE_TARGETS } from "@/lib/gateway/safety/guardrails";
-
-export type PiiMode = "mask" | "block";
+import type {
+  guardrailOverrideSchema,
+  guardrailPolicySchema,
+  guardrailRuleSchema,
+  piiOverrideSchema,
+  piiPolicySchema,
+  policyScopeSchema,
+} from "@/schemas/guardrails";
 
 export type PolicyScope = z.infer<typeof policyScopeSchema>;
 
-export type PiiPolicy = {
-  enabled: boolean;
-  mode: PiiMode;
-  output: boolean;
-  entities: string[];
-};
+export type PiiPolicy = z.infer<typeof piiPolicySchema>;
+
+export type PiiMode = PiiPolicy["mode"];
 
 export type PiiOverrideInput = z.infer<typeof piiOverrideSchema>;
 
@@ -25,43 +26,23 @@ export type PolicyTarget = {
 
 export type PiiOverrideView = PolicyTarget & { policy: PiiPolicy };
 
-export type GuardrailAction = (typeof GUARDRAIL_ACTIONS)[number];
+export type GuardrailRule = z.infer<typeof guardrailRuleSchema>;
 
-export type InjectionAction = Exclude<GuardrailAction, "mask">;
+export type GuardrailAction = GuardrailRule["action"];
 
-export type InjectionCheck = (typeof INJECTION_CHECKS)[number];
+export type RuleKind = GuardrailRule["kind"];
 
-export type RuleKind = (typeof RULE_KINDS)[number];
+export type RuleTarget = GuardrailRule["target"];
 
-export type RuleTarget = (typeof RULE_TARGETS)[number];
+export type GuardrailPolicy = z.infer<typeof guardrailPolicySchema>;
 
-export type GuardrailRule = {
-  id: string;
-  name: string;
-  kind: RuleKind;
-  target: RuleTarget;
-  action: GuardrailAction;
-  patterns: string[];
-  caseSensitive: boolean;
-};
+export type InjectionPolicy = GuardrailPolicy["injection"];
 
-export type InjectionPolicy = {
-  enabled: boolean;
-  action: InjectionAction;
-  checks: InjectionCheck[];
-};
+export type InjectionAction = InjectionPolicy["action"];
 
-export type SecretPolicy = {
-  enabled: boolean;
-  action: GuardrailAction;
-  entities: string[];
-};
+export type InjectionCheck = InjectionPolicy["checks"][number];
 
-export type GuardrailPolicy = {
-  injection: InjectionPolicy;
-  secrets: SecretPolicy;
-  rules: GuardrailRule[];
-};
+export type SecretPolicy = GuardrailPolicy["secrets"];
 
 export type GuardrailOverrideInput = z.infer<typeof guardrailOverrideSchema>;
 

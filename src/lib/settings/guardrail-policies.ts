@@ -22,7 +22,6 @@ import {
   guardrailTestSchema,
   piiOverrideSchema,
 } from "@/schemas/guardrails";
-import type { PIIConfig } from "@/types/gateway";
 import type {
   GuardrailOverrideView,
   GuardrailPolicy,
@@ -170,7 +169,7 @@ export async function loadGuardrails() {
   return payload(session);
 }
 
-export async function savePii(pii: PIIConfig) {
+export async function savePii(pii: PiiPolicy) {
   const session = await requirePermission(PERMISSIONS.SETTINGS_MANAGE);
   const saved = await storePii(pii);
   await writeAudit({

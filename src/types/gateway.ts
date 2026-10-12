@@ -2,7 +2,7 @@ import type { Prisma } from "@/generated/prisma/client";
 import type { OPENAPI_METHODS } from "@/lib/gateway/endpoints/openapi";
 import type { WEBHOOK_EVENTS, WEBHOOK_FORMATS } from "@/lib/alerts/events";
 import type { SemanticCacheSettings } from "@/types/cache";
-import type { GuardrailPolicy, OutputGuard, PiiPolicy } from "@/types/guardrails";
+import type { GuardrailPolicy, OutputGuard, PiiMode, PiiPolicy } from "@/types/guardrails";
 import type { AccessWindow, KeyEndpoint } from "@/types/keys";
 import type { AssignmentRow } from "@/types/providers";
 import type { VectorStoreDefaults } from "@/types/rag";
@@ -173,8 +173,6 @@ export type PIIEntity = {
 
 export type Rule = { id: string; apply: (text: string) => string };
 
-export type PiiMode = "mask" | "block";
-
 export type RequestTrace = {
   endpoint: string;
   request?: unknown;
@@ -289,13 +287,6 @@ export type Usage = {
   inference_geo?: string;
   cost?: number;
 };
-export type PIIConfig = {
-  enabled?: boolean | null;
-  mode?: string;
-  output?: boolean | null;
-  entities?: string[];
-};
-
 export type JWTConfig = {
   issuer?: string;
   audience?: string;
@@ -361,7 +352,7 @@ export type Enterprise = {
   log_archive?: boolean;
   log_content?: boolean;
   content_retention_days?: number;
-  pii?: PIIConfig;
+  pii?: PiiPolicy;
   guardrails?: GuardrailPolicy;
   s3?: S3Settings;
   budget_alert_thresholds?: number[];

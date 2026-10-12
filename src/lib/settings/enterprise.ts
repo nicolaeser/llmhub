@@ -35,7 +35,6 @@ import type {
   AlertWebhook,
   CatalogRouting,
   JsonMap,
-  PIIConfig,
   OIDCConfig,
   S3Addressing,
   S3Settings,
@@ -57,7 +56,7 @@ const ALERT_STATE_SETTINGS: Record<AlertStateKind, string> = {
 };
 const LEGACY_WEBHOOK_ID = "legacy";
 
-const DEFAULT_PII: PIIConfig = {
+const DEFAULT_PII: PiiPolicy = {
   enabled: true,
   mode: "mask",
   output: true,
@@ -453,7 +452,7 @@ export async function patchEnterprise(patch: Partial<Enterprise>): Promise<Enter
   return next;
 }
 
-export async function savePii(pii: PIIConfig): Promise<PiiPolicy> {
+export async function savePii(pii: PiiPolicy): Promise<PiiPolicy> {
   const normalized = normalizePii(pii);
   await patchEnterprise({ pii: normalized });
   return normalized;
