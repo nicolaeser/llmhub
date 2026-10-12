@@ -12,6 +12,7 @@ const NOW = new Date("2026-10-12T12:00:00Z");
 const calls: Call[] = [];
 const tables = new Map<string, Map<string, Row>>();
 let failSpendResets = false;
+let beforeUpdate: ((model: string, id: string) => void) | null = null;
 
 function table(model: string): Map<string, Row> {
   const rows = tables.get(model) ?? new Map<string, Row>();
@@ -29,10 +30,13 @@ function fakeModel(model: string) {
           if (failSpendResets && args.select?.budgetDuration) throw new Error("spend reset query failed");
           return [...table(model).values()].map((row) => ({ ...row }));
         }
-        if (method === "update") {
-          const row = table(model).get(String(args.where?.id));
-          if (row) Object.assign(row, args.data);
-          return row ?? null;
+        if (method === "updateMany" && args.where?.id !== undefined && args.data?.spend === 0) {
+          const id = String(args.where.id);
+          beforeUpdate?.(model, id);
+          const row = table(model).get(id);
+          const matches = row && Object.entries(args.where).every(([field, value]) => row[field] === value);
+          if (matches) Object.assign(row, args.data);
+          return { count: matches ? 1 : 0 };
         }
         if (method === "deleteMany" || method === "updateMany") return { count: 0 };
         if (method === "count") return 0;
@@ -64,6 +68,7 @@ beforeEach(() => {
   calls.length = 0;
   tables.clear();
   failSpendResets = false;
+  beforeUpdate = null;
 });
 
 function holder(model: string, id: string, over: Row = {}): Row {
@@ -81,13 +86,16 @@ function holder(model: string, id: string, over: Row = {}): Row {
 }
 
 function updates(model?: string): Call[] {
-  return calls.filter((call) => call.method === "update" && (!model || call.model === model));
+  return calls.filter(
+    (call) => call.method === "updateMany" && call.args.data?.spend === 0 && (!model || call.model === model),
+  );
 }
 
 test("runSpendResets zeroes spend on every budget holder whose period elapsed", async () => {
   const { runSpendResets } = await import("@/worker/jobs");
+  const lastReset = new Date(NOW.getTime() - 2 * DAY_MS);
   for (const model of HOLDER_TABLES) {
-    holder(model, `${model}_elapsed`, { budgetDuration: "1d", spendResetAt: new Date(NOW.getTime() - 2 * DAY_MS) });
+    holder(model, `${model}_elapsed`, { budgetDuration: "1d", spendResetAt: lastReset });
     holder(model, `${model}_fresh`, { budgetDuration: "1d", spendResetAt: new Date(NOW.getTime() - 3_600_000) });
     holder(model, `${model}_never_reset`, { budgetDuration: "7d", createdAt: new Date(NOW.getTime() - 8 * DAY_MS) });
     holder(model, `${model}_young`, { budgetDuration: "7d", createdAt: new Date(NOW.getTime() - DAY_MS) });
@@ -102,8 +110,8 @@ test("runSpendResets zeroes spend on every budget holder whose period elapsed", 
     assert.deepEqual(
       updates(model).map((call) => call.args),
       [
-        { where: { id: `${model}_elapsed` }, data: { spend: 0, spendResetAt: NOW } },
-        { where: { id: `${model}_never_reset` }, data: { spend: 0, spendResetAt: NOW } },
+        { where: { id: `${model}_elapsed`, spendResetAt: lastReset }, data: { spend: 0, spendResetAt: NOW } },
+        { where: { id: `${model}_never_reset`, spendResetAt: null }, data: { spend: 0, spendResetAt: NOW } },
       ],
       model,
     );
@@ -113,13 +121,29 @@ test("runSpendResets zeroes spend on every budget holder whose period elapsed", 
   }
 });
 
+test("the spend reset sweep keeps a charge made after the gateway already reset the period", async () => {
+  const { runSpendResets } = await import("@/worker/jobs");
+  const elapsed = { budgetDuration: "1d", spendResetAt: new Date(NOW.getTime() - 2 * DAY_MS) };
+  holder("user", "first", { ...elapsed, spend: 5 });
+  holder("user", "racing", { ...elapsed, spend: 90 });
+  const gatewayReset = new Date(NOW.getTime() + 1_000);
+  beforeUpdate = (model, id) => {
+    if (model === "user" && id === "first") Object.assign(table("user").get("racing")!, { spend: 3, spendResetAt: gatewayReset });
+  };
+  assert.equal(await runSpendResets(NOW), 1);
+  assert.equal(table("user").get("first")!.spend, 0);
+  assert.equal(table("user").get("racing")!.spend, 3);
+  assert.equal(table("user").get("racing")!.spendResetAt, gatewayReset);
+});
+
 test("the maintenance sweep runs spend resets with its clock and survives their failure", async (t) => {
   const { runMaintenanceSweep } = await import("@/worker/jobs");
-  holder("user", "user_elapsed", { budgetDuration: "1d", spendResetAt: new Date(NOW.getTime() - 2 * DAY_MS) });
+  const lastReset = new Date(NOW.getTime() - 2 * DAY_MS);
+  holder("user", "user_elapsed", { budgetDuration: "1d", spendResetAt: lastReset });
   await runMaintenanceSweep(NOW);
   assert.deepEqual(
     updates().map((call) => [call.model, call.args]),
-    [["user", { where: { id: "user_elapsed" }, data: { spend: 0, spendResetAt: NOW } }]],
+    [["user", { where: { id: "user_elapsed", spendResetAt: lastReset }, data: { spend: 0, spendResetAt: NOW } }]],
   );
   assert.equal(table("user").get("user_elapsed")!.spend, 0);
 

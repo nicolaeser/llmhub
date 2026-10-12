@@ -52,3 +52,10 @@ export type WebhookJobData = {
   event: WebhookEvent;
   message: string;
 };
+
+export type SpendResetRow = {
+  id: string;
+  budgetDuration: string;
+  spendResetAt: Date | null;
+  createdAt: Date;
+};

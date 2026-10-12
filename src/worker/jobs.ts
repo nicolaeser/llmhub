@@ -15,7 +15,7 @@ import { logger } from "@/lib/logging/logger";
 import { runUsageReports } from "@/lib/reports/usage-report";
 import { runKeyExpiryAlerts, runSpendAnomalyAlerts } from "./alert-checks";
 import { retentionCutoff } from "./retention";
-import type { MaintenanceSweepResult } from "@/types/jobs";
+import type { MaintenanceSweepResult, SpendResetRow } from "@/types/jobs";
 import { money } from "@/lib/utils/money";
 
 export async function runSweepJob(name: string, job: () => Promise<number>): Promise<number> {
@@ -125,100 +125,43 @@ export async function runMaintenanceSweep(
   return result;
 }
 
-export async function runSpendResets(now = new Date()): Promise<number> {
+const RESET_SELECT = { id: true, budgetDuration: true, spendResetAt: true, createdAt: true } as const;
+
+async function resetElapsedPeriods(
+  rows: SpendResetRow[],
+  now: Date,
+  reset: (where: { id: string; spendResetAt: Date | null }) => Promise<{ count: number }>,
+): Promise<number> {
   const { periodElapsed } = await import("@/lib/gateway/billing/period");
+  let n = 0;
+  for (const row of rows) {
+    if (!periodElapsed(row.budgetDuration, row.spendResetAt, now, row.createdAt)) continue;
+    n += (await reset({ id: row.id, spendResetAt: row.spendResetAt })).count;
+  }
+  return n;
+}
+
+export async function runSpendResets(now = new Date()): Promise<number> {
   const data = { spend: 0, spendResetAt: now };
   let n = 0;
-  const keys = await prisma.virtualKey.findMany({
-    select: {
-      id: true,
-      budgetDuration: true,
-      spendResetAt: true,
-      createdAt: true,
-    },
-  });
-  for (const row of keys) {
-    if (!periodElapsed(row.budgetDuration, row.spendResetAt, now, row.createdAt)) {
-      continue;
-    }
-    await prisma.virtualKey.update({ where: { id: row.id }, data });
-    n += 1;
-  }
-  const users = await prisma.user.findMany({
-    select: {
-      id: true,
-      budgetDuration: true,
-      spendResetAt: true,
-      createdAt: true,
-    },
-  });
-  for (const row of users) {
-    if (!periodElapsed(row.budgetDuration, row.spendResetAt, now, row.createdAt)) {
-      continue;
-    }
-    await prisma.user.update({ where: { id: row.id }, data });
-    n += 1;
-  }
-  const members = await prisma.member.findMany({
-    select: {
-      id: true,
-      budgetDuration: true,
-      spendResetAt: true,
-      createdAt: true,
-    },
-  });
-  for (const row of members) {
-    if (!periodElapsed(row.budgetDuration, row.spendResetAt, now, row.createdAt)) {
-      continue;
-    }
-    await prisma.member.update({ where: { id: row.id }, data });
-    n += 1;
-  }
-  const teams = await prisma.team.findMany({
-    select: {
-      id: true,
-      budgetDuration: true,
-      spendResetAt: true,
-      createdAt: true,
-    },
-  });
-  for (const row of teams) {
-    if (!periodElapsed(row.budgetDuration, row.spendResetAt, now, row.createdAt)) {
-      continue;
-    }
-    await prisma.team.update({ where: { id: row.id }, data });
-    n += 1;
-  }
-  const orgs = await prisma.organization.findMany({
-    select: {
-      id: true,
-      budgetDuration: true,
-      spendResetAt: true,
-      createdAt: true,
-    },
-  });
-  for (const row of orgs) {
-    if (!periodElapsed(row.budgetDuration, row.spendResetAt, now, row.createdAt)) {
-      continue;
-    }
-    await prisma.organization.update({ where: { id: row.id }, data });
-    n += 1;
-  }
-  const projects = await prisma.project.findMany({
-    select: {
-      id: true,
-      budgetDuration: true,
-      spendResetAt: true,
-      createdAt: true,
-    },
-  });
-  for (const row of projects) {
-    if (!periodElapsed(row.budgetDuration, row.spendResetAt, now, row.createdAt)) {
-      continue;
-    }
-    await prisma.project.update({ where: { id: row.id }, data });
-    n += 1;
-  }
+  n += await resetElapsedPeriods(await prisma.virtualKey.findMany({ select: RESET_SELECT }), now, (where) =>
+    prisma.virtualKey.updateMany({ where, data }),
+  );
+  n += await resetElapsedPeriods(await prisma.user.findMany({ select: RESET_SELECT }), now, (where) =>
+    prisma.user.updateMany({ where, data }),
+  );
+  n += await resetElapsedPeriods(await prisma.member.findMany({ select: RESET_SELECT }), now, (where) =>
+    prisma.member.updateMany({ where, data }),
+  );
+  n += await resetElapsedPeriods(await prisma.team.findMany({ select: RESET_SELECT }), now, (where) =>
+    prisma.team.updateMany({ where, data }),
+  );
+  n += await resetElapsedPeriods(await prisma.organization.findMany({ select: RESET_SELECT }), now, (where) =>
+    prisma.organization.updateMany({ where, data }),
+  );
+  n += await resetElapsedPeriods(await prisma.project.findMany({ select: RESET_SELECT }), now, (where) =>
+    prisma.project.updateMany({ where, data }),
+  );
   return n;
 }
 
