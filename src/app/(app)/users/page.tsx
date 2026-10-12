@@ -14,6 +14,7 @@ import {
 import { MoreHorizontal, Plus, User } from "lucide-react";
 import { useFormatter, useNow, useTranslations } from "next-intl";
 import BudgetDialog from "@/components/budget/budget-dialog";
+import ConfirmDialog from "@/components/console/confirm-dialog";
 import EmptyState from "@/components/console/empty-state";
 import PageHeader from "@/components/console/page-header";
 import PageStatus from "@/components/console/page-status";
@@ -28,10 +29,10 @@ import type { ConsoleUser, UsersConsolePayload } from "@/types/users";
 import {
   ChangeAccessDialog,
   CreateUserDialog,
-  DeleteUserDialog,
   SetPasswordDialog,
 } from "./_components/user-dialogs";
 import {
+  deleteUserAction,
   loadConsoleUsersAction,
   resetUserTwoFactorAction,
   revokeUserSessionsAction,
@@ -104,6 +105,20 @@ export default function UsersPage() {
       }
       setData(result);
       toast(success, { variant: "success" });
+    });
+  }
+
+  function remove(user: ConsoleUser) {
+    setBusyId(user.id);
+    start(async () => {
+      const result = await deleteUserAction(user.id);
+      setBusyId(null);
+      if (isActionFail(result)) {
+        toast.danger(errorText(result.error));
+        return;
+      }
+      setData((current) => ({ ...current, users: current.users.filter((row) => row.id !== result.id) }));
+      toast(t("toasts.deleted"), { variant: "success" });
     });
   }
 
@@ -384,13 +399,15 @@ export default function UsersPage() {
         target={target}
         onSaved={setData}
       />
-      <DeleteUserDialog
-        key={`delete-${dialogKey}`}
+      <ConfirmDialog
         state={deleteState}
-        target={target}
-        onDeleted={(id) =>
-          setData((current) => ({ ...current, users: current.users.filter((user) => user.id !== id) }))
-        }
+        title={t("deleteTitle")}
+        description={t("deleteConfirm", { username: target?.username ?? "" })}
+        confirmLabel={tCommon("delete")}
+        cancelLabel={tCommon("cancel")}
+        onConfirm={() => {
+          if (target) remove(target);
+        }}
       />
       <StepUpDialog
         state={resetState}

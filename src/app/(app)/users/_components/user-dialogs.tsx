@@ -24,7 +24,6 @@ import type { ConsoleUser, UsersConsolePayload } from "@/types/users";
 import {
   assignUserAccessAction,
   createUserAction,
-  deleteUserAction,
   setUserPasswordAction,
 } from "../_action";
 
@@ -329,71 +328,6 @@ export function SetPasswordDialog({
           return null;
         }}
       />
-    </Modal>
-  );
-}
-
-export function DeleteUserDialog({
-  state,
-  target,
-  onDeleted,
-}: {
-  state: OverlayState;
-  target: ConsoleUser | null;
-  onDeleted: (id: string) => void;
-}) {
-  const t = useTranslations("Users");
-  const tCommon = useTranslations("Common");
-  const errorText = useSecurityError();
-  const [pending, start] = useTransition();
-
-  function remove(close: () => void) {
-    if (!target) return;
-    start(async () => {
-      const result = await deleteUserAction(target.id);
-      if (isActionFail(result)) {
-        toast.danger(errorText(result.error));
-        return;
-      }
-      onDeleted(result.id);
-      toast(t("toasts.deleted"), { variant: "success" });
-      close();
-    });
-  }
-
-  return (
-    <Modal state={state}>
-      <Modal.Backdrop>
-        <Modal.Container>
-          <Modal.Dialog className="max-w-md">
-            {({ close }) => (
-              <>
-                <Modal.Header>
-                  <Modal.Heading>{t("deleteTitle")}</Modal.Heading>
-                </Modal.Header>
-                <Modal.Body>
-                  <p className="text-sm text-muted">
-                    {t("deleteConfirm", { username: target?.username ?? "" })}
-                  </p>
-                </Modal.Body>
-                <Modal.Footer>
-                  <Button variant="tertiary" onPress={close} isDisabled={pending}>
-                    {tCommon("cancel")}
-                  </Button>
-                  <Button variant="danger" isPending={pending} onPress={() => remove(close)}>
-                    {({ isPending }) => (
-                      <>
-                        {isPending ? <Spinner color="current" size="sm" /> : null}
-                        {tCommon("delete")}
-                      </>
-                    )}
-                  </Button>
-                </Modal.Footer>
-              </>
-            )}
-          </Modal.Dialog>
-        </Modal.Container>
-      </Modal.Backdrop>
     </Modal>
   );
 }

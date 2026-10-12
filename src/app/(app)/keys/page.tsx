@@ -13,6 +13,7 @@ import {
 import { KeyRound, Pencil, Plus, RefreshCw, Trash2, Wallet } from "lucide-react";
 import { useFormatter, useTranslations } from "next-intl";
 import BudgetDialog from "@/components/budget/budget-dialog";
+import ConfirmDialog from "@/components/console/confirm-dialog";
 import EmptyState from "@/components/console/empty-state";
 import PageHeader from "@/components/console/page-header";
 import PageStatus from "@/components/console/page-status";
@@ -362,28 +363,42 @@ export default function KeysPage() {
                               ) : null}
                               {canManage ? (
                                 <>
-                                  <Button
-                                    isIconOnly
-                                    size="sm"
-                                    variant="ghost"
-                                    aria-label={t("rotate")}
-                                    isPending={busy?.id === row.token_id && busy.action === "rotate"}
-                                    isDisabled={busy !== null && busy.id !== row.token_id}
-                                    onPress={() => rotate(row.token_id)}
+                                  <ConfirmDialog
+                                    title={t("rotateConfirm.title", { name: row.key_alias || row.key_name })}
+                                    description={t("rotateConfirm.description")}
+                                    confirmLabel={t("rotate")}
+                                    cancelLabel={tCommon("cancel")}
+                                    onConfirm={() => rotate(row.token_id)}
                                   >
-                                    <RefreshCw size={14} aria-hidden />
-                                  </Button>
-                                  <Button
-                                    isIconOnly
-                                    size="sm"
-                                    variant="danger-soft"
-                                    aria-label={t("revoke")}
-                                    isPending={busy?.id === row.token_id && busy.action === "revoke"}
-                                    isDisabled={busy !== null && busy.id !== row.token_id}
-                                    onPress={() => revoke(row.token_id)}
+                                    <Button
+                                      isIconOnly
+                                      size="sm"
+                                      variant="ghost"
+                                      aria-label={t("rotate")}
+                                      isPending={busy?.id === row.token_id && busy.action === "rotate"}
+                                      isDisabled={busy !== null && busy.id !== row.token_id}
+                                    >
+                                      <RefreshCw size={14} aria-hidden />
+                                    </Button>
+                                  </ConfirmDialog>
+                                  <ConfirmDialog
+                                    title={t("revokeConfirm.title", { name: row.key_alias || row.key_name })}
+                                    description={t("revokeConfirm.description")}
+                                    confirmLabel={t("revoke")}
+                                    cancelLabel={tCommon("cancel")}
+                                    onConfirm={() => revoke(row.token_id)}
                                   >
-                                    <Trash2 size={14} aria-hidden />
-                                  </Button>
+                                    <Button
+                                      isIconOnly
+                                      size="sm"
+                                      variant="danger-soft"
+                                      aria-label={t("revoke")}
+                                      isPending={busy?.id === row.token_id && busy.action === "revoke"}
+                                      isDisabled={busy !== null && busy.id !== row.token_id}
+                                    >
+                                      <Trash2 size={14} aria-hidden />
+                                    </Button>
+                                  </ConfirmDialog>
                                 </>
                               ) : null}
                             </div>

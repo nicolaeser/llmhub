@@ -6,12 +6,14 @@ import {
   Card,
   Chip,
   Dropdown,
+  Spinner,
   Table,
   toast,
   useOverlayState,
 } from "@heroui/react";
 import { MoreHorizontal, Plus, RotateCcw } from "lucide-react";
 import { useTranslations } from "next-intl";
+import ConfirmDialog from "@/components/console/confirm-dialog";
 import PageHeader from "@/components/console/page-header";
 import PageStatus from "@/components/console/page-status";
 import { useActionData } from "@/lib/hooks/use-action-data";
@@ -21,8 +23,7 @@ import { useRoleName } from "@/components/security/use-role-name";
 import { useSecurityError } from "@/components/security/use-security-error";
 import type { RoleSummary, RoleTemplateKey } from "@/types/auth";
 import RoleEditorDialog from "./_components/role-editor-dialog";
-import DeleteRoleDialog from "./_components/delete-role-dialog";
-import { loadRolesAction, resetRoleAction, restoreTemplateAction } from "./_action";
+import { deleteRoleAction, loadRolesAction, resetRoleAction, restoreTemplateAction } from "./_action";
 
 function templateRank(key: RoleTemplateKey | null) {
   const index = key ? roleTemplateKeys.indexOf(key) : -1;
@@ -44,7 +45,9 @@ export default function RolesPage() {
   const [editing, setEditing] = useState<RoleSummary | null>(null);
   const [editorKey, setEditorKey] = useState(0);
   const [target, setTarget] = useState<RoleSummary | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [pending, start] = useTransition();
+  const [, startDelete] = useTransition();
   const editor = useOverlayState();
   const deleteState = useOverlayState();
   const page = useActionData(loadRolesAction);
@@ -68,6 +71,20 @@ export default function RolesPage() {
         (key) => key === role.templateKey || current.missingTemplates.includes(key),
       ),
     }));
+  }
+
+  function remove(role: RoleSummary) {
+    setDeletingId(role.id);
+    startDelete(async () => {
+      const result = await deleteRoleAction(role.id);
+      setDeletingId(null);
+      if (isActionFail(result)) {
+        toast.danger(errorText(result.error));
+        return;
+      }
+      deleted(role);
+      toast(t("toasts.deleted"), { variant: "success" });
+    });
   }
 
   function reset(role: RoleSummary) {
@@ -168,9 +185,12 @@ export default function RolesPage() {
                             isIconOnly
                             size="sm"
                             variant="ghost"
+                            isPending={deletingId === role.id}
                             aria-label={t("actionsMenu", { role: roleName(role) })}
                           >
-                            <MoreHorizontal size={14} aria-hidden />
+                            {({ isPending }) =>
+                              isPending ? <Spinner color="current" size="sm" /> : <MoreHorizontal size={14} aria-hidden />
+                            }
                           </Button>
                         </Dropdown.Trigger>
                         <Dropdown.Popover>
@@ -244,7 +264,16 @@ export default function RolesPage() {
         grantable={data.grantable}
         onSaved={saved}
       />
-      <DeleteRoleDialog state={deleteState} role={target} onDeleted={deleted} />
+      <ConfirmDialog
+        state={deleteState}
+        title={t("deleteTitle")}
+        description={t("deleteConfirm", { role: target ? roleName(target) : "" })}
+        confirmLabel={tCommon("delete")}
+        cancelLabel={tCommon("cancel")}
+        onConfirm={() => {
+          if (target) remove(target);
+        }}
+      />
     </div>
   );
 }
