@@ -6,7 +6,7 @@ import {
   hubServiceMode,
   requestRoutingOverride,
   serviceModeHeaders,
-} from "@/lib/gateway/service-mode";
+} from "@/lib/gateway/dispatch/service-mode";
 
 test("hubServiceMode reads OpenAI service_tier and group strategy", () => {
   assert.equal(hubServiceMode({ service_tier: "fast" }), "fast");

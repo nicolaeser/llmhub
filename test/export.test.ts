@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { toCsv, toJsonl } from "@/lib/http/export";
+import { toCsv, toJsonl } from "@/lib/export/csv";
 
 test("toCsv writes headers and escaped values", () => {
   const csv = toCsv([

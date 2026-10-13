@@ -11,7 +11,7 @@ import {
   RULE_KINDS,
   RULE_TARGETS,
   SECRET_ENTITIES,
-} from "@/lib/gateway/guardrails";
+} from "@/lib/gateway/safety/guardrails";
 
 export const policyScopeSchema = z.enum(["org", "project", "key"]);
 

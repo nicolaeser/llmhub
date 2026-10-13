@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { modelAlias } from "@/lib/gateway/model-alias";
-import { DATA_REGIONS } from "@/lib/gateway/model-policy";
+import { modelAlias } from "@/lib/gateway/catalog/model-alias";
+import { DATA_REGIONS } from "@/lib/gateway/access/model-policy";
 
 const templateFields = {
   name: z.string().trim().min(1).max(80),

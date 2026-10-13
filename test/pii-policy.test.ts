@@ -1,17 +1,44 @@
+import {
+  callRoute,
+  errorOf,
+  gateway,
+  gatewayPostRoutes,
+  MODEL,
+  MODEL_ROUTES,
+  OTHER_POST_ROUTES,
+  resetGateway,
+} from "./support/gateway-harness";
+import { recordedPrisma } from "./support/recorded-prisma";
+import { setRequest } from "./support/next-headers-stub";
 import assert from "node:assert/strict";
-import { readdir, readFile } from "node:fs/promises";
-import path from "node:path";
 import test from "node:test";
-import { fileURLToPath } from "node:url";
+import { SESSION_COOKIE, signSessionToken } from "@/lib/auth/cookie";
 import { GateError } from "@/lib/gateway/errors";
-import { applyGuardrails } from "@/lib/gateway/gate";
-import { defaultGuardrails } from "@/lib/gateway/guardrails";
-import { defaultEntityIds } from "@/lib/gateway/pii";
-import { piiOverride } from "@/lib/gateway/settings";
-import type { Principal, VirtualKeyView } from "@/types/gateway";
-import type { PiiPolicy } from "@/types/guardrails";
+import { applyGuardrails } from "@/lib/gateway/access/gate";
+import { defaultGuardrails } from "@/lib/gateway/safety/guardrails";
+import { defaultEntityIds } from "@/lib/gateway/safety/pii";
+import { piiOverride, resolvePolicies } from "@/lib/settings/enterprise";
+import type { Principal } from "@/types/gateway";
+import type { GuardrailPolicy, GuardrailRule, PiiPolicy } from "@/types/guardrails";
+import type { VirtualKeyView } from "@/types/keys";
 
-const root = fileURLToPath(new URL("..", import.meta.url));
+const UNSCREENED_ROUTES = new Set(["/api/v1/ocr"]);
+const BLOCKED = "request blocked by guardrail policy";
+const PII_OFF: PiiPolicy = { enabled: false, mode: "mask", output: false, entities: [] };
+
+function blockRule(name: string, pattern: string): GuardrailRule {
+  return { id: name, name, kind: "denylist", target: "input", action: "block", patterns: [pattern], caseSensitive: false };
+}
+
+function piiLayer(entity: string): PiiPolicy {
+  return { enabled: true, mode: "mask", output: false, entities: [entity] };
+}
+
+function guardLayer(name: string, pattern = name): GuardrailPolicy {
+  return { ...defaultGuardrails(), rules: [blockRule(name, pattern)] };
+}
+
+const CODENAMES = guardLayer("Codenames", "Project Falcon");
 
 function keyPrincipal(pii: PiiPolicy): Principal {
   const key: VirtualKeyView = {
@@ -112,45 +139,113 @@ test("an override without entities uses the default set", async () => {
 });
 
 test("resolvePolicies prefers the key, then the project, then the organization, then the global policy", async () => {
-  const settings = await readFile(path.join(root, "src/lib/gateway/settings.ts"), "utf8");
-  const start = settings.indexOf("export async function resolvePolicies");
-  const body = settings.slice(start, settings.indexOf("\n}\n", start));
-  for (const [key, project, org, global] of [
-    ["principal.key?.pii", "project?.piiPolicy", "org?.piiPolicy", "enterprise.pii"],
-    ["principal.guardrails", "project?.guardrailPolicy", "org?.guardrailPolicy", "enterprise.guardrails"],
-  ]) {
-    const order = [key, project, org, global].map((needle) => body.indexOf(needle));
-    assert.ok(order[0]! > 0 && order.every((at, i) => i === 0 || at > order[i - 1]!), order.join(","));
+  resetGateway();
+  gateway.enterprise = { pii: piiLayer("CREDIT_CARD"), guardrails: guardLayer("global") };
+  const project = { piiPolicy: piiLayer("IP_ADDRESS") as unknown, guardrailPolicy: guardLayer("project") as unknown };
+  const org = { piiPolicy: piiLayer("PHONE_NUMBER") as unknown, guardrailPolicy: guardLayer("org") as unknown };
+  recordedPrisma.handlers = {
+    project: { findUnique: () => project },
+    organization: { findUnique: () => org },
+  };
+  const resolved = async (pii: PiiPolicy | null, guardrails: GuardrailPolicy | null) => {
+    const caller = keyPrincipal(PII_OFF);
+    const { pii: chosenPii, guardrails: chosenGuardrails } = await resolvePolicies({
+      ...caller,
+      key: { ...caller.key!, pii, project_id: "p1" },
+      guardrails,
+    });
+    return [chosenPii.entities[0], chosenGuardrails.rules[0]?.name];
+  };
+  assert.deepEqual(await resolved(piiLayer("EMAIL_ADDRESS"), guardLayer("key")), ["EMAIL_ADDRESS", "key"]);
+  assert.deepEqual(await resolved(piiLayer("EMAIL_ADDRESS"), null), ["EMAIL_ADDRESS", "project"]);
+  assert.deepEqual(await resolved(null, null), ["IP_ADDRESS", "project"]);
+  project.piiPolicy = null;
+  project.guardrailPolicy = null;
+  assert.deepEqual(await resolved(null, guardLayer("key")), ["PHONE_NUMBER", "key"]);
+  assert.deepEqual(await resolved(null, null), ["PHONE_NUMBER", "org"]);
+  org.piiPolicy = null;
+  org.guardrailPolicy = null;
+  assert.deepEqual(await resolved(null, null), ["CREDIT_CARD", "global"]);
+});
+
+test("the guardrail sweep covers every gateway POST route", async () => {
+  assert.deepEqual(
+    [...MODEL_ROUTES.map((route) => route.path), ...OTHER_POST_ROUTES].sort(),
+    await gatewayPostRoutes(),
+  );
+});
+
+test("every gateway model route applies the caller's guardrails before contacting a provider", async () => {
+  for (const route of MODEL_ROUTES.filter((candidate) => !UNSCREENED_ROUTES.has(candidate.path))) {
+    resetGateway();
+    gateway.key = { ...gateway.key, guardrailPolicy: CODENAMES };
+    const blocked = await errorOf(await callRoute(route, route.body("status of Project Falcon")));
+    assert.equal(blocked.status, 400, route.path);
+    assert.equal(blocked.message, BLOCKED, route.path);
+    assert.deepEqual(gateway.upstream, [], route.path);
+    resetGateway();
+    const open = await callRoute(route, route.body("status of Project Falcon"));
+    assert.doesNotMatch(await open.text(), /guardrail/, route.path);
   }
 });
 
-test("every gateway route applies guardrails for the caller", async () => {
-  const files: string[] = [];
-  async function walk(dir: string) {
-    for (const entry of await readdir(dir, { withFileTypes: true })) {
-      const full = path.join(dir, entry.name);
-      if (entry.isDirectory()) await walk(full);
-      else if (entry.name.endsWith(".ts")) files.push(full);
-    }
-  }
-  await walk(path.join(root, "src/app"));
-  await walk(path.join(root, "src/lib"));
-  let calls = 0;
-  for (const file of files) {
-    const source = await readFile(file, "utf8");
-    for (const match of source.matchAll(/(?<!function )applyGuardrails\(/g)) {
-      const open = (match.index ?? 0) + match[0].length;
-      let depth = 1;
-      let end = open;
-      while (depth > 0 && end < source.length) {
-        const ch = source[end++];
-        if (ch === "(") depth++;
-        if (ch === ")") depth--;
-      }
-      const args = source.slice(open, end - 1).trim();
-      assert.match(args, /,\s*principal$/, `${path.relative(root, file)}: applyGuardrails(${args})`);
-      calls++;
-    }
-  }
-  assert.ok(calls > 10);
+test("batch lines apply the batch owner's guardrails", async () => {
+  const { runBatchLine } = await import("@/lib/gateway/endpoints/batches");
+  resetGateway();
+  const owner = { ...keyPrincipal(PII_OFF), guardrails: CODENAMES };
+  const line = await runBatchLine(owner, "/v1/chat/completions", {
+    model: MODEL,
+    messages: [{ role: "user", content: "status of Project Falcon" }],
+  });
+  assert.deepEqual(line.ok ? null : [line.status, line.error.code], [400, "guardrail_blocked"]);
+  assert.deepEqual(gateway.upstream, []);
+});
+
+test("the playground applies the signed-in user's organization guardrails", async () => {
+  const { POST } = await import("@/app/internal-api/playground/chat/route");
+  resetGateway();
+  setRequest({ cookies: { [SESSION_COOKIE]: await signSessionToken("b".repeat(64)) } });
+  recordedPrisma.handlers = {
+    session: {
+      findUnique: () => ({
+        id: "s1",
+        expiresAt: new Date(Date.now() + 3_600_000),
+        lastActive: new Date(),
+        secondFactor: "TOTP",
+        ipAddress: null,
+        userAgent: null,
+        user: {
+          id: "member-1",
+          username: "member",
+          blocked: false,
+          isOwner: false,
+          orgId: "o1",
+          roleId: "r1",
+          role: { id: "r1", templateKey: null, name: "Member", permissions: ["playground:use"] },
+        },
+      }),
+    },
+    organization: {
+      findUnique: () => ({
+        id: "o1",
+        spend: 0,
+        maxBudget: 0,
+        budgetDuration: "",
+        spendResetAt: null,
+        createdAt: new Date(0),
+        piiPolicy: null,
+        guardrailPolicy: CODENAMES,
+      }),
+    },
+  };
+  const res = await POST(
+    new Request("http://hub.local/internal-api/playground/chat", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ model: MODEL, messages: [{ role: "user", content: "status of Project Falcon" }] }),
+    }),
+  );
+  assert.equal(res.status, 400);
+  assert.equal((await res.json()).code, "GUARDRAIL_BLOCKED");
+  assert.deepEqual(gateway.upstream, []);
 });

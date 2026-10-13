@@ -1,8 +1,9 @@
-import { chargebackParts } from "@/lib/gateway/usage-stats";
-import type { SliceRow, VirtualKeyView } from "@/types/gateway";
+import { chargebackParts } from "@/lib/usage/usage-stats";
+import type { SliceRow } from "@/types/usage";
+import type { VirtualKeyView } from "@/types/keys";
 import type { RequestLogRow } from "@/types/logs";
 import type { AuditLogSource, ProviderSource, SpendLogSource, UsageSource } from "@/types/management";
-import type { Group } from "@/types/models";
+import type { ModelGroupView } from "@/types/models";
 import type { MarkupView } from "@/types/pricing";
 import type {
   BudgetKind,
@@ -58,7 +59,7 @@ export function serializeApiKey(key: VirtualKeyView) {
   };
 }
 
-export function serializeModelAlias(group: Group) {
+export function serializeModelAlias(group: ModelGroupView) {
   return {
     object: "model_alias",
     alias: group.alias,

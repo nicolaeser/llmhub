@@ -1,1 +1,3 @@
-export type Meta = Record<string, unknown>;
+export type LogMeta = Record<string, unknown>;
+
+export type LogLevel = "info" | "warn" | "error";

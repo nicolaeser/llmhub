@@ -4,7 +4,7 @@ import {
   capExceeded,
   parseBudgetDurationMs,
   periodElapsed,
-} from "@/lib/gateway/period";
+} from "@/lib/gateway/billing/period";
 
 test("parseBudgetDurationMs understands common periods", () => {
   assert.equal(parseBudgetDurationMs(""), null);

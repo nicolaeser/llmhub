@@ -11,14 +11,11 @@ const nextConfig: NextConfig = {
   },
   allowedDevOrigins: ["localhost", "127.0.0.1"],
   redirects() {
-    return [
-      { source: "/", destination: "/keys", permanent: false },
-      ...["/structure", "/organizations", "/teams", "/projects", "/budgets"].map((source) => ({
-        source,
-        destination: "/companies",
-        permanent: false,
-      })),
-    ];
+    return ["/structure", "/organizations", "/teams", "/projects", "/budgets"].map((source) => ({
+      source,
+      destination: "/companies",
+      permanent: false,
+    }));
   },
 };
 

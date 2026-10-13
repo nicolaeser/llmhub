@@ -7,7 +7,7 @@ export type HealthCounts = {
   latency: number[];
 };
 
-export type HealthState = HealthCounts & { cooldownUntil: number | null };
+export type DeploymentHealthState = HealthCounts & { cooldownUntil: number | null };
 
 export type HealthSummary = {
   attempts: number;

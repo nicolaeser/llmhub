@@ -9,6 +9,7 @@ import { clientIp } from "@/lib/http/api";
 import { fieldErrors, problemResponse } from "@/lib/http/problem";
 import { logger } from "@/lib/logging/logger";
 import { sendMail } from "@/lib/mail/send";
+import { readJsonOr } from "@/lib/utils/json";
 import { forgotPasswordSchema } from "@/schemas/auth";
 
 const HOUR_MS = 60 * 60 * 1000;
@@ -57,7 +58,7 @@ export async function POST(req: NextRequest) {
   if (!passwordResetEnabled()) {
     return problemResponse(req, "RESET_DISABLED");
   }
-  const body = forgotPasswordSchema.safeParse(await req.json().catch(() => ({})));
+  const body = forgotPasswordSchema.safeParse(await readJsonOr(req, {}));
   if (!body.success) {
     return problemResponse(req, "VALIDATION", { errors: fieldErrors(body.error) });
   }

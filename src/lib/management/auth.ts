@@ -7,7 +7,7 @@ import { effectivePermissions } from "@/lib/auth/permissions";
 import { requireStepUp } from "@/lib/auth/second-factor";
 import { recordSecurityEvent, userActor } from "@/lib/auth/security-events";
 import { requestMeta } from "@/lib/auth/session";
-import { writeAudit } from "@/lib/gateway/audit";
+import { writeAudit } from "@/lib/audit";
 import { bearerToken, clientIp } from "@/lib/http/api";
 import { ApiProblem } from "@/lib/http/problem";
 import {

@@ -1,32 +1,34 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import {
   Button,
-  Card,
   Description,
   Input,
   Label,
   NumberField,
   Spinner,
-  Switch,
   TextField,
   toast,
 } from "@heroui/react";
 import { Plus } from "lucide-react";
 import { useTranslations } from "next-intl";
 import PageHeader from "@/components/console/page-header";
+import PageStatus from "@/components/console/page-status";
+import { SettingSection, SettingSwitch } from "@/components/console/setting-fields";
 import { formats } from "@/i18n/formats";
-import { loadLoggingAction, saveLoggingAction } from "@/app/(app)/logging/_action";
-import WebhookCard from "@/app/(app)/logging/_components/webhook-card";
+import { loadLoggingAction, saveLoggingAction } from "./_action";
+import WebhookCard from "./_components/webhook-card";
+import { useActionData } from "@/lib/hooks/use-action-data";
 import { isActionFail } from "@/lib/http/action-result";
 import {
   DEFAULT_KEY_EXPIRY_WARNING_DAYS,
   DEFAULT_SPEND_ANOMALY_FACTOR,
   DEFAULT_SPEND_ANOMALY_MIN_COST,
-} from "@/lib/gateway/alert-rules";
-import { MAX_ALERT_WEBHOOKS, WEBHOOK_EVENTS } from "@/lib/gateway/webhook-events";
+} from "@/lib/alerts/rules";
+import { MAX_ALERT_WEBHOOKS, WEBHOOK_EVENTS } from "@/lib/alerts/events";
 import type { AlertRules, AlertWebhookDraft, AlertWebhookView } from "@/types/settings";
+import { useErrorToast } from "@/components/console/use-error-toast";
 
 type LoggingView = {
   alertWebhooks: AlertWebhookView[];
@@ -45,9 +47,7 @@ type LoggingView = {
 
 export default function LoggingPage() {
   const t = useTranslations("Logging");
-  const tError = useTranslations("Error");
-  const tCommon = useTranslations("Common");
-  const [view, setView] = useState<LoggingView | null>(null);
+  const showError = useErrorToast();
   const [webhooks, setWebhooks] = useState<AlertWebhookDraft[]>([]);
   const [rules, setRules] = useState<AlertRules>({
     spendAnomalyFactor: DEFAULT_SPEND_ANOMALY_FACTOR,
@@ -65,8 +65,7 @@ export default function LoggingPage() {
   const [content, setContent] = useState(true);
   const [pending, start] = useTransition();
 
-  function apply(next: LoggingView) {
-    setView(next);
+  function seed(next: LoggingView) {
     setWebhooks(
       next.alertWebhooks.map((hook) => ({
         key: hook.id,
@@ -90,22 +89,11 @@ export default function LoggingPage() {
     setContent(next.logContent);
   }
 
-  useEffect(() => {
-    loadLoggingAction().then((res) => {
-      if (!isActionFail(res)) apply(res);
-    });
-  }, []);
+  const page = useActionData<LoggingView>(loadLoggingAction, seed);
+  const { data: view, setData: setView } = page;
 
   if (!view) {
-    return (
-      <output
-        aria-live="polite"
-        aria-label={tCommon("loading")}
-        className="flex min-h-[40vh] items-center justify-center text-accent"
-      >
-        <Spinner color="current" size="lg" />
-      </output>
-    );
+    return <PageStatus title={t("title")} subtitle={t("subtitle")} state={page} />;
   }
 
   const disabled = !view.canManage || pending;
@@ -189,10 +177,11 @@ export default function LoggingPage() {
                     logContent: content,
                   });
                   if (isActionFail(result)) {
-                    toast.danger(tError("code", { code: result.error }));
+                    showError(result.error);
                     return;
                   }
-                  apply(result);
+                  setView(result);
+                  seed(result);
                   toast(t("saved"), { variant: "success" });
                 })
               }
@@ -207,11 +196,22 @@ export default function LoggingPage() {
           ) : undefined
         }
       />
-      <Card className="gap-4">
-        <Card.Header>
-          <Card.Title>{t("alerts")}</Card.Title>
-          <Card.Description>{t("alertsHint")}</Card.Description>
-        </Card.Header>
+      <SettingSection
+        title={t("alerts")}
+        subtitle={t("alertsHint")}
+        footer={
+          view.canManage ? (
+            <Button
+              variant="secondary"
+              isDisabled={disabled || webhooks.length >= MAX_ALERT_WEBHOOKS}
+              onPress={addWebhook}
+            >
+              <Plus size={16} aria-hidden />
+              {t("addWebhook")}
+            </Button>
+          ) : null
+        }
+      >
         {webhooks.length ? (
           webhooks.map((hook, index) => (
             <WebhookCard
@@ -228,24 +228,8 @@ export default function LoggingPage() {
         ) : (
           <p className="text-sm text-muted">{t("noWebhooks")}</p>
         )}
-        {view.canManage ? (
-          <Card.Footer>
-            <Button
-              variant="secondary"
-              isDisabled={disabled || webhooks.length >= MAX_ALERT_WEBHOOKS}
-              onPress={addWebhook}
-            >
-              <Plus size={16} aria-hidden />
-              {t("addWebhook")}
-            </Button>
-          </Card.Footer>
-        ) : null}
-      </Card>
-      <Card className="gap-4">
-        <Card.Header>
-          <Card.Title>{t("rulesTitle")}</Card.Title>
-          <Card.Description>{t("rulesHint")}</Card.Description>
-        </Card.Header>
+      </SettingSection>
+      <SettingSection title={t("rulesTitle")} subtitle={t("rulesHint")}>
         <div className="grid gap-4 md:grid-cols-3 md:items-start">
           {ruleField("spendAnomalyFactor", t("anomalyFactor"), t("anomalyFactorHint"), {
             step: 0.5,
@@ -260,29 +244,20 @@ export default function LoggingPage() {
             format: formats.number.integer,
           })}
         </div>
-      </Card>
-      <Card className="gap-4">
-        <Card.Header>
-          <Card.Title>{t("contentTitle")}</Card.Title>
-          <Card.Description>{t("contentSubtitle")}</Card.Description>
-        </Card.Header>
-        <Switch isSelected={content} onChange={setContent} isDisabled={disabled}>
-          <Switch.Content>
-            <Switch.Control>
-              <Switch.Thumb />
-            </Switch.Control>
-            <Label>{t("content")}</Label>
-          </Switch.Content>
-          <Description>{t("contentHint")}</Description>
-        </Switch>
+      </SettingSection>
+      <SettingSection title={t("contentTitle")} subtitle={t("contentSubtitle")}>
+        <SettingSwitch
+          label={t("content")}
+          isSelected={content}
+          onChange={setContent}
+          isDisabled={disabled}
+          hint={t("contentHint")}
+        />
         <div className="grid gap-4 md:grid-cols-3 md:items-start">
           {numberField(contentRetention, setContentRetention, t("contentRetention"), t("contentRetentionHint"))}
         </div>
-      </Card>
-      <Card className="gap-4">
-        <Card.Header>
-          <Card.Title>{t("retentionTitle")}</Card.Title>
-        </Card.Header>
+      </SettingSection>
+      <SettingSection title={t("retentionTitle")}>
         <div className="grid gap-4 md:grid-cols-3 md:items-start">
           {numberField(retention, setRetention, t("retention"), t("retentionHint"))}
           {numberField(spendRetention, setSpendRetention, t("spendRetention"), t("spendRetentionHint"))}
@@ -290,16 +265,14 @@ export default function LoggingPage() {
           {numberField(objectRetention, setObjectRetention, t("objectRetention"), t("objectRetentionHint"))}
           {numberField(fileRetention, setFileRetention, t("fileRetention"), t("fileRetentionHint"))}
         </div>
-        <Switch isSelected={archive} onChange={setArchive} isDisabled={disabled || !view.s3Ready}>
-          <Switch.Content>
-            <Switch.Control>
-              <Switch.Thumb />
-            </Switch.Control>
-            <Label>{t("archive")}</Label>
-          </Switch.Content>
-          <Description>{t("archiveHint", { ready: view.s3Ready ? "true" : "false" })}</Description>
-        </Switch>
-      </Card>
+        <SettingSwitch
+          label={t("archive")}
+          isSelected={archive}
+          onChange={setArchive}
+          isDisabled={disabled || !view.s3Ready}
+          hint={t("archiveHint", { ready: view.s3Ready ? "true" : "false" })}
+        />
+      </SettingSection>
     </div>
   );
 }

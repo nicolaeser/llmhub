@@ -1,14 +1,14 @@
 import "server-only";
 
-import prisma from "@/lib/db/prisma";
 import {
-  createProviderAction,
-  deleteProviderAction,
-  discoverProviderAction,
-  importProviderModelsAction,
-  loadProvidersAction,
-  updateProviderAction,
-} from "@/app/(app)/providers/_action";
+  createProvider,
+  deleteProvider,
+  discoverProvider,
+  importProviderModels,
+  loadProviders,
+  updateProvider,
+} from "@/lib/providers/connections";
+import prisma from "@/lib/db/prisma";
 import {
   confirmIdToolInput,
   createProviderToolInput,
@@ -18,7 +18,7 @@ import {
   providerToolInput,
   updateProviderToolInput,
 } from "@/schemas/assistant";
-import { defineTool, needsConfirmation, toolFail, viaAction } from "@/lib/assistant/tools/define";
+import { defineTool, needsConfirmation, toolFail, viaService } from "@/lib/assistant/tools/define";
 import type { ProviderPolicyInput } from "@/types/providers";
 
 const MAX_DISCOVERED = 150;
@@ -55,7 +55,7 @@ export const providerTools = {
     description: "Connected providers with kind, base URL, data policy, whether the provider is paused, whether a key is set or which subscription account is signed in, and how many upstream models were discovered. Never returns API keys or tokens.",
     input: emptyToolInput,
     run: async () =>
-      viaAction(loadProvidersAction(), ({ connected }) => ({
+      viaService(loadProviders(), ({ connected }) => ({
         result: connected.map((row) => ({
           id: row.id,
           name: row.name,
@@ -74,7 +74,7 @@ export const providerTools = {
       "One provider connection with its data policy, whether it is paused, and discovered upstream models (ids, context length, prices per 1K tokens). Never returns the API key.",
     input: providerToolInput,
     run: async ({ id, search }) =>
-      viaAction(loadProvidersAction(), ({ connected }) => {
+      viaService(loadProviders(), ({ connected }) => {
         const row = connected.find((item) => item.id === id);
         if (!row) return toolFail("not_found");
         const needle = search?.toLowerCase() ?? "";
@@ -104,8 +104,8 @@ export const providerTools = {
       "Create a provider connection without a key and open the Providers page, where the operator enters the API key. Never ask for API keys in chat. Subscription kinds (codex, grok_build, claude, antigravity) need the operator to sign in on the Subscriptions page and cannot be created here.",
     input: createProviderToolInput,
     run: async (args) =>
-      viaAction(
-        createProviderAction({
+      viaService(
+        createProvider({
           name: args.name ?? "",
           kind: args.kind,
           baseUrl: args.baseUrl ?? "",
@@ -134,8 +134,8 @@ export const providerTools = {
         select: { zdr: true, retentionDays: true, region: true, noTraining: true },
       });
       if (!existing) return toolFail("not_found");
-      return viaAction(
-        updateProviderAction({
+      return viaService(
+        updateProvider({
           id: args.id,
           name: args.name ?? "",
           baseUrl: args.baseUrl ?? "",
@@ -152,7 +152,7 @@ export const providerTools = {
     description: "Fetch the provider's current upstream model list now.",
     input: idToolInput,
     run: async ({ id }) =>
-      viaAction(discoverProviderAction(id), ({ provider, models }) => ({
+      viaService(discoverProvider(id), ({ provider, models }) => ({
         result: {
           ok: true,
           id: provider.id,
@@ -166,8 +166,8 @@ export const providerTools = {
       "Create public model aliases from a provider's discovered models, or add the provider as another deployment to existing aliases with the same name.",
     input: importModelsToolInput,
     run: async (args) =>
-      viaAction(
-        importProviderModelsAction({ id: args.id, models: args.models, strategy: args.strategy }),
+      viaService(
+        importProviderModels({ id: args.id, models: args.models, strategy: args.strategy }),
         ({ added, updated, strategy }) => ({
           result: { ok: true, added, updated, strategy },
           navigate: "/models",
@@ -180,6 +180,6 @@ export const providerTools = {
     input: confirmIdToolInput,
     run: async ({ id, confirm }) =>
       needsConfirmation(confirm) ??
-      viaAction(deleteProviderAction(id), (deleted) => ({ result: { ok: true, id: deleted.id } })),
+      viaService(deleteProvider(id), (deleted) => ({ result: { ok: true, id: deleted.id } })),
   }),
 };

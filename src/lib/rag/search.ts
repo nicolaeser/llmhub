@@ -1,22 +1,22 @@
 import "server-only";
 import prisma from "@/lib/db/prisma";
 import { GateError } from "@/lib/gateway/errors";
-import { modelPermitted } from "@/lib/gateway/gate";
+import { modelPermitted } from "@/lib/gateway/access/gate";
 import { attributesOf, matchesFilter } from "@/lib/rag/filters";
 import { fileIndexes } from "@/lib/rag/index-cache";
 import { queryTerms } from "@/lib/rag/lexical";
 import { embedTexts, rerankTexts } from "@/lib/rag/models";
 import { scoreFiles } from "@/lib/rag/rank";
 import { touchStores, vectorDefaults } from "@/lib/rag/stores";
+import { errorFields } from "@/lib/logging/format";
+import { logger } from "@/lib/logging/logger";
 import type { Principal } from "@/types/gateway";
-import type { IndexedFile, SearchableStore, SearchHit, SearchRequest } from "@/types/rag";
+import type { IndexedFile, ScoredChunk, SearchableStore, SearchHit, SearchRequest } from "@/types/rag";
 
 const RERANK_POOL = 50;
 const MIN_RERANK_POOL = 20;
 
-type Candidate = { storeId: string; file: IndexedFile; slot: number; score: number };
-
-function candidateKey(candidate: Candidate): string {
+function candidateKey(candidate: ScoredChunk): string {
   return candidate.file.index.ids[candidate.slot]!;
 }
 
@@ -90,6 +90,14 @@ async function chunkTexts(ids: string[]): Promise<Map<string, string>> {
   return new Map(rows.map((row) => [row.id, row.text]));
 }
 
+async function markStoresActive(stores: SearchableStore[]): Promise<void> {
+  try {
+    await touchStores(stores);
+  } catch (err) {
+    logger.warn("rag.touch_stores_failed", { stores: stores.map((store) => store.id), ...errorFields(err) });
+  }
+}
+
 export async function searchStores(input: {
   principal: Principal;
   endpoint: string;
@@ -101,17 +109,17 @@ export async function searchStores(input: {
   for (const store of input.stores) files.set(store.id, await indexedFiles(store, request));
   const searchable = input.stores.filter((store) => files.get(store.id)?.length);
   if (!searchable.length) {
-    void touchStores(input.stores).catch(() => undefined);
+    void markStoresActive(input.stores);
     return [];
   }
   const vectors = await queryVectors(principal, input.endpoint, searchable, request.queries);
   const terms = queryTerms(request.queries);
-  const best = new Map<string, Candidate>();
+  const best = new Map<string, ScoredChunk>();
   for (const store of searchable) {
     const storeVectors = vectors.get(store.id) ?? [];
     for (const query of storeVectors) {
       for (const scored of scoreFiles(files.get(store.id) ?? [], query, terms, request.ranking)) {
-        const candidate: Candidate = { storeId: store.id, ...scored };
+        const candidate: ScoredChunk = { storeId: store.id, ...scored };
         const key = candidateKey(candidate);
         const seen = best.get(key);
         if (!seen || seen.score < candidate.score) best.set(key, candidate);
@@ -140,7 +148,7 @@ export async function searchStores(input: {
   const top = ranked.filter((candidate) => candidate.score >= request.ranking.scoreThreshold).slice(0, request.maxResults);
   const missing = top.map(candidateKey).filter((id) => !texts.has(id));
   for (const [id, text] of await chunkTexts(missing)) texts.set(id, text);
-  void touchStores(input.stores).catch(() => undefined);
+  void markStoresActive(input.stores);
   return top.map((candidate) => {
     const chunkId = candidateKey(candidate);
     return {

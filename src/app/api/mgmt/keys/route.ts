@@ -1,20 +1,19 @@
-import { createKeyAction, loadKeysPageAction } from "@/app/(app)/_action";
 import { PERMISSIONS } from "@/lib/auth/permissions";
-import { managementRoute, readBody, respond, respondList, unwrap } from "@/lib/management/http";
+import { createKey, loadKeysPage } from "@/lib/keys/manage";
+import { managementRoute, readBody, respond, respondList } from "@/lib/management/http";
 import { serializeApiKey } from "@/lib/management/serialize";
 import { apiKeyCreateSchema } from "@/schemas/management";
 
 export const dynamic = "force-dynamic";
 
 export const GET = managementRoute(PERMISSIONS.KEYS_READ, async () => {
-  const page = unwrap(await loadKeysPageAction());
+  const page = await loadKeysPage();
   return respondList(page.keys.map(serializeApiKey));
 });
 
 export const POST = managementRoute(PERMISSIONS.KEYS_MANAGE, async ({ req }) => {
   const body = await readBody(req, apiKeyCreateSchema);
-  const created = unwrap(
-    await createKeyAction({
+  const created = await createKey({
       alias: body.alias,
       projectId: body.project_id ?? "",
       memberId: body.member_id ?? "",
@@ -29,7 +28,6 @@ export const POST = managementRoute(PERMISSIONS.KEYS_MANAGE, async ({ req }) => 
       accessTimeZone: body.access_time_zone,
       logContent: body.log_content,
       days: body.expires_in_days,
-    }),
-  );
+    });
   return respond(serializeApiKey(created.key), 201);
 });

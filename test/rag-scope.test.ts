@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { companyStores, ownedStores, ownsStore, readableStores, readsStore, scopeOf, storeOwner } from "@/lib/rag/scope";
-import type { Principal, VirtualKeyView } from "@/types/gateway";
+import type { Principal } from "@/types/gateway";
+import type { VirtualKeyView } from "@/types/keys";
 import type { VectorStoreOwner } from "@/types/rag";
 
 function principal(input: { orgId?: string; userId?: string; memberId?: string; projectId?: string; keyed?: boolean }): Principal {

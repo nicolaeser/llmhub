@@ -14,7 +14,7 @@ import {
   recordSuccess,
   resetProviderHealthMemory,
   summarizeHealth,
-} from "@/lib/gateway/provider-health";
+} from "@/lib/gateway/routing/provider-health";
 
 const NOW = Date.UTC(2026, 9, 9, 12, 0, 30);
 

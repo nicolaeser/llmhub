@@ -1,74 +1,34 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
-  Alert,
   Button,
   Card,
   Description,
   Label,
-  Spinner,
   Switch,
 } from "@heroui/react";
 import { Plus, Sparkles } from "lucide-react";
 import { useTranslations } from "next-intl";
 import EmptyState from "@/components/console/empty-state";
 import PageHeader from "@/components/console/page-header";
+import PageStatus from "@/components/console/page-status";
 import SearchSelect from "@/components/console/search-select";
-import { isActionFail } from "@/lib/http/action-result";
+import { useActionData } from "@/lib/hooks/use-action-data";
 import { useAssistantSession } from "@/app/(app)/_components/assistant-session";
 import { loadAssistantAction } from "./_action";
-import type { AssistantToolView } from "@/types/assistant";
 import AssistantComposer from "./_components/assistant-composer";
 import AssistantTools from "./_components/assistant-tools";
 import AssistantTranscript from "./_components/assistant-transcript";
 
 export default function AssistantPage() {
   const t = useTranslations("Assistant");
-  const tCommon = useTranslations("Common");
   const session = useAssistantSession();
   const chooseModel = session?.chooseModel;
-  const [models, setModels] = useState<string[]>([]);
-  const [modelLocked, setModelLocked] = useState(false);
-  const [tools, setTools] = useState<AssistantToolView[]>([]);
-  const [canWrite, setCanWrite] = useState(false);
-  const [failure, setFailure] = useState("");
-  const [loading, setLoading] = useState(true);
   const [input, setInput] = useState("");
+  const page = useActionData(loadAssistantAction, (res) => chooseModel?.(res.models, res.defaultModel));
 
-  useEffect(() => {
-    let cancelled = false;
-    loadAssistantAction().then((res) => {
-      if (cancelled) return;
-      if (isActionFail(res)) {
-        setFailure(res.error);
-      } else {
-        setModels(res.models);
-        setModelLocked(res.modelLocked);
-        setTools(res.tools);
-        setCanWrite(res.canWrite);
-        chooseModel?.(res.models, res.defaultModel);
-      }
-      setLoading(false);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [chooseModel]);
-
-  if (loading) {
-    return (
-      <output
-        aria-live="polite"
-        aria-label={tCommon("loading")}
-        className="flex min-h-[40vh] items-center justify-center text-accent"
-      >
-        <Spinner color="current" size="lg" />
-      </output>
-    );
-  }
-
-  if (!session?.enabled || failure === "FORBIDDEN") {
+  if (!session?.enabled || page.error === "FORBIDDEN") {
     return (
       <div>
         <PageHeader title={t("title")} subtitle={t("subtitle")} />
@@ -81,18 +41,11 @@ export default function AssistantPage() {
     );
   }
 
-  if (failure) {
-    return (
-      <div>
-        <PageHeader title={t("title")} subtitle={t("subtitle")} />
-        <Alert status="danger">
-          <Alert.Content>
-            <Alert.Description>{t("loadFailed")}</Alert.Description>
-          </Alert.Content>
-        </Alert>
-      </div>
-    );
+  if (!page.data) {
+    return <PageStatus title={t("title")} subtitle={t("subtitle")} state={page} />;
   }
+
+  const { models, modelLocked, tools, canWrite } = page.data;
 
   function send(text = input) {
     if (!text.trim() || session?.pending) return;

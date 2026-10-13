@@ -1,6 +1,6 @@
 import type { AuthenticatedSession, Permission } from "@/types/auth";
-import type { DiscoveredModel, SliceRow } from "@/types/gateway";
-import type { ProviderView } from "@/types/providers";
+import type { SliceRow, UsageDay } from "@/types/usage";
+import type { ProviderView, DiscoveredModel } from "@/types/providers";
 
 export type ManagementKeyView = {
   id: string;
@@ -60,7 +60,7 @@ export type UsageSource = {
   cacheWrite: number;
   cacheSavings: number;
   cacheHitRate: number;
-  daily: { day: string; spend: number; requests: number; errors: number }[];
+  daily: UsageDay[];
   byModel: SliceRow[];
   byTeam: SliceRow[];
   byOrg: SliceRow[];

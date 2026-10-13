@@ -138,3 +138,14 @@ export type CatalogView = {
   autoRoutesDefault: boolean;
   canManage: boolean;
 };
+
+export type CatalogRouting = {
+  autoRoutes: boolean;
+  minConfidence: number;
+};
+
+export type JevSettings = {
+  enabled: boolean;
+  model: string;
+  api_key: string;
+};

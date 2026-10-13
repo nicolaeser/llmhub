@@ -4,19 +4,19 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { GateError } from "@/lib/gateway/errors";
-import { allowAccessTime, allowEndpoint } from "@/lib/gateway/gate";
+import { allowAccessTime, allowEndpoint } from "@/lib/gateway/access/gate";
 import {
   accessOpen,
   accessWindowsOf,
   allowedEndpointsOf,
   endpointAllowed,
   endpointOf,
-} from "@/lib/gateway/key-restrictions";
-import { sessionPrincipal } from "@/lib/gateway/principal";
+} from "@/lib/gateway/access/key-restrictions";
+import { sessionPrincipal } from "@/lib/gateway/access/principal";
 import { apiKeyCreateSchema, apiKeyUpdateSchema } from "@/schemas/management";
 import { createKeySchema } from "@/schemas/keys";
-import type { Principal, VirtualKeyView } from "@/types/gateway";
-import type { AccessWindow, KeyEndpoint } from "@/types/keys";
+import type { Principal } from "@/types/gateway";
+import type { AccessWindow, KeyEndpoint, VirtualKeyView } from "@/types/keys";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 const v1 = path.join(root, "src/app/api/v1");

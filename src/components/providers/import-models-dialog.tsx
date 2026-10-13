@@ -15,6 +15,7 @@ import { useTranslations } from "next-intl";
 import { isActionFail } from "@/lib/http/action-result";
 import { importProviderModelsAction } from "@/app/(app)/providers/_action";
 import type { ImportCandidate, ProviderView } from "@/types/providers";
+import { useErrorToast } from "@/components/console/use-error-toast";
 
 export default function ImportModelsDialog({
   state,
@@ -29,7 +30,7 @@ export default function ImportModelsDialog({
 }) {
   const t = useTranslations("Providers");
   const tCommon = useTranslations("Common");
-  const tError = useTranslations("Error");
+  const showError = useErrorToast();
   const [query, setQuery] = useState("");
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [pending, start] = useTransition();
@@ -43,7 +44,7 @@ export default function ImportModelsDialog({
     start(async () => {
       const result = await importProviderModelsAction({ id: provider.id, models: [...picked] });
       if (isActionFail(result)) {
-        toast.danger(tError("code", { code: result.error }));
+        showError(result.error);
         return;
       }
       onImported(result.provider);

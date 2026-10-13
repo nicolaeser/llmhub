@@ -8,11 +8,12 @@ import { hashPassword, verifyPassword } from "@/lib/auth/password";
 import { passwordPolicyIssue } from "@/lib/auth/password-policy";
 import { isSameOriginRequest } from "@/lib/auth/request-origin";
 import { SYSTEM_ACTOR, securityEvent } from "@/lib/auth/security-events";
+import { readJsonOr } from "@/lib/utils/json";
 import { resetPasswordSchema } from "@/schemas/auth";
 
 export async function POST(req: NextRequest) {
   if (!isSameOriginRequest(req.headers, env.NEXT_PUBLIC_APP_URL)) return problemResponse(req, "FORBIDDEN");
-  const body = resetPasswordSchema.safeParse(await req.json().catch(() => null));
+  const body = resetPasswordSchema.safeParse(await readJsonOr(req, null));
   if (!body.success) {
     return problemResponse(req, inputErrorCode(body.error), { errors: fieldErrors(body.error) });
   }

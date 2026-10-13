@@ -1,18 +1,19 @@
 import "server-only";
 
 import { env } from "@/lib/env";
-import { getEnterprise } from "@/lib/gateway/settings";
+import { getEnterprise } from "@/lib/settings/enterprise";
+import { errorFields } from "@/lib/logging/format";
+import { logger } from "@/lib/logging/logger";
 import {
   defaultAwsEndpoint,
   originOf,
   resolveAddressing,
   trimSlashes
 } from "@/lib/s3/url";
-import type { S3Settings } from "@/types/gateway";
-import type { S3Runtime } from "@/types/s3";
+import type { S3Runtime, S3Settings } from "@/types/s3";
 
 export function s3FromParts(
-  settings: S3Settings | undefined,
+  settings: Partial<S3Settings> | undefined,
   source: { S3_ACCESS_KEY_ID?: string; S3_SECRET_ACCESS_KEY?: string },
 ): S3Runtime | null {
   const bucket = (settings?.bucket || "").trim();
@@ -46,7 +47,10 @@ export function s3FromParts(
 }
 
 export async function resolveS3Config(): Promise<S3Runtime | null> {
-  const enterprise = await getEnterprise().catch(() => null);
+  const enterprise = await getEnterprise().catch((err) => {
+    logger.error("s3.settings_failed", errorFields(err));
+    return null;
+  });
   return s3FromParts(enterprise?.s3, {
     S3_ACCESS_KEY_ID: env.S3_ACCESS_KEY_ID,
     S3_SECRET_ACCESS_KEY: env.S3_SECRET_ACCESS_KEY,

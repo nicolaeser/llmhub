@@ -16,10 +16,11 @@ import {
 import { RefreshCw, Trash2, Upload } from "lucide-react";
 import { useFormatter, useNow, useTranslations } from "next-intl";
 import ConfirmDialog from "@/components/console/confirm-dialog";
-import { listKnowledgeFilesAction, removeKnowledgeFileAction } from "@/app/(app)/knowledge/_action";
+import { listKnowledgeFilesAction, removeKnowledgeFileAction } from "../_action";
 import { isActionFail } from "@/lib/http/action-result";
 import { formatBytes } from "@/lib/utils/bytes";
 import type { UploadItem, UploadStatus, VectorFileStatus, VectorFileView, VectorStoreView } from "@/types/rag";
+import { useErrorToast } from "@/components/console/use-error-toast";
 
 const POLL_MS = 3000;
 
@@ -66,7 +67,7 @@ export default function FilesDialog({
 }) {
   const t = useTranslations("Knowledge");
   const tCommon = useTranslations("Common");
-  const tError = useTranslations("Error");
+  const showError = useErrorToast();
   const format = useFormatter();
   const now = useNow({ updateInterval: 30_000 });
   const [files, setFiles] = useState<VectorFileView[]>([]);
@@ -120,7 +121,7 @@ export default function FilesDialog({
     startRefresh(async () => {
       const res = await listKnowledgeFilesAction(storeId);
       if (isActionFail(res)) {
-        toast.danger(tError("code", { code: res.error }));
+        showError(res.error);
         return;
       }
       setLoadFailed(false);
@@ -178,7 +179,7 @@ export default function FilesDialog({
       const res = await removeKnowledgeFileAction(storeId, file.fileId);
       setRemoving(null);
       if (isActionFail(res)) {
-        toast.danger(tError("code", { code: res.error }));
+        showError(res.error);
         return;
       }
       setFiles((current) => current.filter((row) => row.fileId !== res.fileId));

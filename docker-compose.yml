@@ -1,6 +1,6 @@
 services:
   app:
-    image: ghcr.io/nicolaeser/llmhub:latest
+    image: ghcr.io/nicolaeser/llmhub:${LLMHUB_TAG:-latest}
     restart: unless-stopped
     depends_on:
       postgres:
@@ -10,10 +10,11 @@ services:
     env_file:
       - .env
     environment:
+      NODE_ENV: production
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
     ports:
-      - "127.0.0.1:3000:3000"
+      - "127.0.0.1:${LLMHUB_PORT:-3000}:3000"
 
   postgres:
     image: postgres:18-alpine

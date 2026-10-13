@@ -1,17 +1,18 @@
 import "server-only";
-import { usageFromUnknown } from "@/lib/gateway/billing";
+import { usageFromUnknown } from "@/lib/gateway/billing/billing";
 import { asNumber, asRecord } from "@/lib/gateway/core";
 import { GateError } from "@/lib/gateway/errors";
-import { allowModel, applyGuardrails, modelChain, withTrace } from "@/lib/gateway/gate";
-import { meter } from "@/lib/gateway/meter";
-import { forwardToModel } from "@/lib/gateway/upstream";
+import { allowModel, applyGuardrails, modelChain, withTrace } from "@/lib/gateway/access/gate";
+import { meter } from "@/lib/gateway/billing/meter";
+import { forwardToModel } from "@/lib/gateway/dispatch/upstream";
 import { ocrText } from "@/lib/rag/extract";
 import { parseEmbedding } from "@/lib/rag/vectors";
-import type { JsonMap, Principal, ProxyFirstResult, Usage } from "@/types/gateway";
+import type { JsonMap, Principal, ProxyFirstResult } from "@/types/gateway";
+import type { TokenUsage } from "@/types/billing";
 
 export const RERANK_PATH = "/rerank";
 
-export function rerankUsage(json: unknown): Partial<Usage> {
+export function rerankUsage(json: unknown): Partial<TokenUsage> {
   const rec = asRecord(json);
   const usage = asRecord(rec?.usage);
   const billed = asRecord(asRecord(rec?.meta)?.billed_units);
@@ -45,7 +46,7 @@ export async function forwardModelCall(input: {
   model: string;
   path: string;
   body: JsonMap;
-  usage: (json: unknown) => Partial<Usage>;
+  usage: (json: unknown) => Partial<TokenUsage>;
 }): Promise<ProxyFirstResult> {
   const { principal, model } = input;
   allowModel(principal, model);
@@ -62,7 +63,7 @@ export async function forwardModelCall(input: {
   }
 }
 
-function embeddingUsage(json: unknown): Partial<Usage> {
+function embeddingUsage(json: unknown): Partial<TokenUsage> {
   return usageFromUnknown(asRecord(json)?.usage, json);
 }
 

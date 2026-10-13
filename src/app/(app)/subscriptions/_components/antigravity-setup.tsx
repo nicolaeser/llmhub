@@ -3,8 +3,9 @@
 import { useState, useTransition } from "react";
 import { Button, Card, Chip, Description, Input, Label, Spinner, TextField, toast } from "@heroui/react";
 import { useTranslations } from "next-intl";
-import { saveAntigravityConfigAction } from "@/app/(app)/subscriptions/_action";
+import { saveAntigravityConfigAction } from "../_action";
 import { isActionFail } from "@/lib/http/action-result";
+import { useErrorToast } from "@/components/console/use-error-toast";
 
 export default function AntigravitySetup({
   configured,
@@ -14,7 +15,7 @@ export default function AntigravitySetup({
   onChanged: (configured: boolean) => void;
 }) {
   const t = useTranslations("Subscriptions.antigravity");
-  const tError = useTranslations("Error");
+  const showError = useErrorToast();
   const [secret, setSecret] = useState("");
   const [pending, start] = useTransition();
 
@@ -22,7 +23,7 @@ export default function AntigravitySetup({
     start(async () => {
       const result = await saveAntigravityConfigAction({ clientSecret: value });
       if (isActionFail(result)) {
-        toast.danger(tError("code", { code: result.error }));
+        showError(result.error);
         return;
       }
       setSecret("");

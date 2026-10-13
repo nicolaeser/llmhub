@@ -1,6 +1,6 @@
-import { gateRequest, gateResponse } from "@/lib/gateway/gate";
+import { gateRequest, gateResponse } from "@/lib/gateway/access/gate";
 import { GateError } from "@/lib/gateway/errors";
-import { canReadObject, getObject } from "@/lib/gateway/objects";
+import { canReadObject, getObject } from "@/lib/gateway/storage/objects";
 import { bytesBody } from "@/lib/http/api";
 
 export async function GET(

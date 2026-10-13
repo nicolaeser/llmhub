@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { priceAt } from "@/lib/gateway/price-schedule";
+import { priceAt } from "@/lib/gateway/billing/price-schedule";
 import {
   addMinutes,
   compareCost,
@@ -10,8 +10,8 @@ import {
   scheduleCost,
   targetCost,
   zonedMinute,
-} from "@/lib/gateway/what-if";
-import type { PriceSchedule } from "@/types/gateway";
+} from "@/lib/usage/what-if";
+import type { PriceSchedule } from "@/types/billing";
 import type { MinuteTokens, TrafficTotals } from "@/types/what-if";
 
 const cheap = { cost_input_per_1k: 0.001, cost_output_per_1k: 0.002, weight: 1 };

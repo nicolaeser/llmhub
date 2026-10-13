@@ -1,3 +1,6 @@
+import type { z } from "zod";
+import type { Prisma } from "@/generated/prisma/client";
+import type { chunkingStrategySchema, vectorDefaultsSchema } from "@/schemas/rag";
 import type { JsonMap, Principal } from "@/types/gateway";
 import type { OutputGuard } from "@/types/guardrails";
 
@@ -20,9 +23,7 @@ export type VectorFileError = { code: VectorFileErrorCode; message: string };
 
 export type ChunkingType = "auto" | "static";
 
-export type ChunkingStrategy =
-  | { type: "auto" }
-  | { type: "static"; static: { max_chunk_size_tokens: number; chunk_overlap_tokens: number } };
+export type ChunkingStrategy = z.infer<typeof chunkingStrategySchema>;
 
 export type ChunkSettings = {
   type: ChunkingType;
@@ -59,6 +60,16 @@ export type FileCounts = {
 };
 
 export type StoreUsage = { counts: FileCounts; usageBytes: number };
+
+export type VectorStoreRow = Prisma.VectorStoreGetPayload<object>;
+
+export type VectorStoreFileRow = Prisma.VectorStoreFileGetPayload<object>;
+
+export type FileAttachRequest = {
+  fileId: string;
+  chunk: ChunkSettings;
+  attributes: Attributes;
+};
 
 export type FileIndex = {
   stamp: number;
@@ -142,12 +153,7 @@ export type ZipEntry = {
   localOffset: number;
 };
 
-export type VectorStoreDefaults = {
-  embedding_model: string;
-  embedding_dimensions: number;
-  ocr_model: string;
-  rerank_model: string;
-};
+export type VectorStoreDefaults = z.infer<typeof vectorDefaultsSchema>;
 
 export type ListQuery = {
   limit: number;

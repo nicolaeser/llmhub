@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import { gateRequest, gateResponse, modelOf, readBody } from "@/lib/gateway/gate";
+import { gateRequest, gateResponse, modelOf, readBody } from "@/lib/gateway/access/gate";
 import { GateError } from "@/lib/gateway/errors";
-import { parseRequest } from "@/lib/gateway/responses";
+import { parseRequest } from "@/lib/gateway/protocols/parse-request";
 import { forwardModelCall, RERANK_PATH, rerankUsage } from "@/lib/rag/models";
 import { rerankRequestSchema } from "@/schemas/rag";
 

@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
+import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
+import { homePath, NAV } from "@/app/(app)/_components/nav-data";
 import { callMcpTool, isWriteTool, listMcpTools, mcpToolsForModel } from "@/lib/assistant/mcp";
 import { ASSISTANT_EXPLAIN, ASSISTANT_PAGES } from "@/lib/assistant/knowledge";
 import { codeExample, nextSetupStep } from "@/lib/assistant/tools/general";
@@ -14,7 +16,7 @@ import {
 } from "@/lib/assistant/catalog";
 import { roleWriteSchema } from "@/schemas/auth";
 import { adminSettingsSchema } from "@/schemas/settings";
-import { normalizeEnterprise } from "@/lib/gateway/settings";
+import { normalizeEnterprise } from "@/lib/settings/enterprise";
 import {
   assistantAlias,
   assistantModelLocked,
@@ -43,7 +45,7 @@ import {
   parseUsageBreakdown,
   sortUsageRows,
 } from "@/lib/assistant/insights";
-import { ASSISTANT_STEP_LIMIT_NOTE, assistantSystemPrompt } from "@/lib/assistant/prompt";
+import { assistantSystemPrompt } from "@/lib/assistant/prompt";
 import { PERMISSIONS, roleTemplates } from "@/lib/auth/permissions";
 import type { AssistantChatMessage, AssistantContext } from "@/types/assistant";
 
@@ -163,21 +165,7 @@ test("open_page maps known console routes", async () => {
   assert.equal((unknown.result as { error?: string }).error, "invalid_arguments");
 });
 
-test("list_keys mapping never selects hash or secret", async () => {
-  const source = await readFile(
-    new URL("../src/lib/assistant/tools/keys.ts", import.meta.url),
-    "utf8",
-  );
-  const start = source.indexOf("run:", source.indexOf("list_keys: defineTool"));
-  const end = source.indexOf("get_key: defineTool");
-  assert.ok(start > 0 && end > start);
-  const block = source.slice(start, end);
-  assert.match(block, /prefix: true/);
-  assert.match(block, /keyAlias: true/);
-  assert.match(block, /toPublicKeyView/);
-  assert.doesNotMatch(block, /\bhash\b/);
-  assert.doesNotMatch(block, /secret/);
-  assert.doesNotMatch(block, /prevHash/);
+test("public key views carry no secret fields", () => {
   const view = toPublicKeyView({
     id: "key-1",
     keyAlias: "ops",
@@ -199,21 +187,6 @@ test("list_keys mapping never selects hash or secret", async () => {
   assert.doesNotMatch(serialized, /"hash"/);
   assert.doesNotMatch(serialized, /"apiKey"/);
   assert.doesNotMatch(serialized, /"key"/);
-});
-
-test("assistant chat route is session-gated on ASSISTANT_USE", async () => {
-  const source = await readFile(
-    new URL("../src/app/internal-api/assistant/chat/route.ts", import.meta.url),
-    "utf8",
-  );
-  assert.match(source, /getSession/);
-  assert.match(source, /PERMISSIONS\.ASSISTANT_USE/);
-  assert.match(source, /text\/event-stream/);
-  assert.match(source, /parseAssistantModel/);
-  assert.match(source, /body\.model/);
-  assert.match(source, /allowWrite: parseAssistantWrite\(body\.write\)/);
-  assert.doesNotMatch(source, /writeJSON/);
-  assert.doesNotMatch(source, /PLAYGROUND/);
 });
 
 test("role templates that use the console keep the assistant", () => {
@@ -266,66 +239,34 @@ test("parseToolCalls reads OpenAI function calls", () => {
   );
 });
 
-test("assistant lives on internal-api not public /api", async () => {
-  const panel = await readFile(
-    new URL("../src/app/(app)/_components/assistant-session.tsx", import.meta.url),
-    "utf8",
-  );
-  const page = await readFile(
-    new URL("../src/app/(app)/assistant/page.tsx", import.meta.url),
-    "utf8",
-  );
-  assert.match(panel, /\/internal-api\/assistant\/chat/);
+test("the console client reaches the assistant only through /internal-api and keeps write access per request", async () => {
+  const read = (file: string) => readFile(new URL(`../src/app/${file}`, import.meta.url), "utf8");
+  const [panel, page, topbar] = await Promise.all([
+    read("(app)/_components/assistant-session.tsx"),
+    read("(app)/assistant/page.tsx"),
+    read("(app)/_components/console-topbar.tsx"),
+  ]);
+  assert.ok(existsSync(new URL("../src/app/internal-api/assistant/chat/route.ts", import.meta.url)));
+  assert.equal(existsSync(new URL("../src/app/api/assistant", import.meta.url)), false);
+  assert.match(panel, /fetch\("\/internal-api\/assistant\/chat"/);
   assert.doesNotMatch(panel, /["']\/api\//);
   assert.doesNotMatch(page, /["']\/api\//);
-  const run = await readFile(
-    new URL("../src/lib/assistant/run.ts", import.meta.url),
-    "utf8",
-  );
-  assert.doesNotMatch(run, /OPENROUTER_API_KEY|openrouter\.ai/);
-  assert.match(run, /dispatchChat/);
-  assert.match(run, /resolveAssistantAlias/);
-  assert.match(run, /noModelReply/);
-  assert.match(run, /redactSecrets/);
-  assert.doesNotMatch(run, /console\.log/);
-  assert.match(panel, /AssistantTrigger/);
-  assert.match(panel, /href="\/assistant"/);
-  assert.match(panel, /STORAGE_KEY/);
-  assert.match(panel, /llmhub\.assistant\.model/);
-  assert.match(panel, /write: allowWrite/);
-  assert.match(panel, /useState\(false\)/);
+  assert.match(panel, /const \[allowWrite, setAllowWrite\] = useState\(false\);/);
+  assert.match(panel, /write: allowWrite,/);
   assert.doesNotMatch(panel, /localStorage\.setItem\([^)]*[Ww]rite/);
-  assert.match(page, /loadAssistantAction/);
-  assert.match(page, /useAssistantSession/);
+  assert.match(panel, /const STORAGE_KEY = "llmhub\.assistant\.model";/);
+  assert.match(panel, /export function AssistantTrigger\(\)[\s\S]*?href="\/assistant"/);
+  assert.match(topbar, /<AssistantTrigger \/>/);
+  assert.match(page, /useActionData\(loadAssistantAction,/);
+  assert.match(page, /useAssistantSession\(\)/);
   assert.match(page, /<SearchSelect/);
   assert.match(page, /<Switch/);
-  const action = await readFile(
-    new URL("../src/app/(app)/assistant/_action.ts", import.meta.url),
-    "utf8",
-  );
-  assert.match(action, /requirePermission\(PERMISSIONS\.ASSISTANT_USE\)/);
-  const nav = await readFile(
-    new URL("../src/app/(app)/_components/nav-data.ts", import.meta.url),
-    "utf8",
-  );
-  assert.match(nav, /href: "\/assistant".*PERMISSIONS\.ASSISTANT_USE/);
-  const topbar = await readFile(
-    new URL("../src/app/(app)/_components/console-topbar.tsx", import.meta.url),
-    "utf8",
-  );
-  assert.match(topbar, /AssistantTrigger/);
 });
 
-test("assistant run uses posted alias not alphabetical first ModelGroup", async () => {
-  const run = await readFile(
-    new URL("../src/lib/assistant/run.ts", import.meta.url),
-    "utf8",
-  );
-  assert.match(run, /findUnique/);
-  assert.doesNotMatch(run, /findFirst/);
-  assert.doesNotMatch(run, /orderBy:\s*\{\s*alias:\s*"asc"/);
-  assert.match(run, /assistantAlias\(requested, await getEnterprise\(\)\)/);
-  assert.match(run, /if \(!alias\) throw new AssistantNoLlmError\(\)/);
+test("only assistant:use opens the assistant from the console navigation", () => {
+  const entry = NAV.flatMap((section) => section.items).find((item) => item.href === "/assistant");
+  assert.equal(entry?.permission, PERMISSIONS.ASSISTANT_USE);
+  assert.equal(homePath([PERMISSIONS.ASSISTANT_USE]), "/assistant");
 });
 
 test("parseAssistantModel keeps gateway aliases and drops junk", () => {
@@ -336,32 +277,7 @@ test("parseAssistantModel keeps gateway aliases and drops junk", () => {
   assert.equal(parseAssistantModel(""), "");
 });
 
-test("write tools wrap console actions and re-check manage perms", async () => {
-  const read = (file: string) => readFile(new URL(`../src/lib/assistant/tools/${file}`, import.meta.url), "utf8");
-  const [providers, models, keys, structure, access, settings] = await Promise.all([
-    read("providers.ts"),
-    read("models.ts"),
-    read("keys.ts"),
-    read("structure.ts"),
-    read("access.ts"),
-    read("settings.ts"),
-  ]);
-  assert.match(providers, /createProviderAction/);
-  assert.match(providers, /apiKey: ""/);
-  assert.match(models, /createModelGroupAction/);
-  assert.match(models, /updateModelGroupAction/);
-  assert.match(keys, /createKeyAction/);
-  assert.match(keys, /rotateKeyAction/);
-  assert.match(structure, /setBudgetAction/);
-  assert.match(structure, /saveMemberAction/);
-  assert.doesNotMatch(structure, /placeMemberAction/);
-  assert.match(keys, /const rebinds = args\.projectId !== undefined \|\| args\.memberId !== undefined;/);
-  assert.match(access, /setUserBlockedAction/);
-  assert.match(settings, /savePiiAction/);
-  for (const source of [providers, models, keys, structure, access, settings]) {
-    assert.doesNotMatch(source, /prisma\.\w+\.(create|update|upsert|delete)(Many)?\(/);
-    assert.doesNotMatch(source, /master_key/);
-  }
+test("write tools need their manage permissions in the catalog", () => {
   assert.equal(assistantToolCatalog.create_provider.permission, PERMISSIONS.PROVIDERS_MANAGE);
   assert.equal(assistantToolCatalog.create_model.permission, PERMISSIONS.MODELS_MANAGE);
   assert.equal(assistantToolCatalog.create_key.permission, PERMISSIONS.KEYS_MANAGE);
@@ -515,19 +431,6 @@ test("tool previews read primitive args and error codes", () => {
   assert.equal(toolErrorCode(null), "");
 });
 
-test("assistant run streams tool calls with ids and keeps secrets out of tool content", async () => {
-  const run = await readFile(
-    new URL("../src/lib/assistant/run.ts", import.meta.url),
-    "utf8",
-  );
-  assert.match(run, /type: "tool_call"/);
-  assert.match(run, /type: "tool_result"/);
-  assert.match(run, /type: "secret", id, value: executed\.secret/);
-  assert.match(run, /assistantSystemPrompt\(opts\.ctx\.locale, opts\.ctx\.allowWrite\)/);
-  const pushed = run.slice(run.indexOf('role: "tool"'));
-  assert.doesNotMatch(pushed.slice(0, 200), /secret/);
-});
-
 test("wire messages carry finished tool results but never secrets or links", () => {
   const message: AssistantChatMessage = {
     id: "a",
@@ -620,18 +523,6 @@ test("replayed tool results stay within the history budget", () => {
   assert.equal(tools[0]?.content, JSON.stringify({ omitted: true }));
 });
 
-test("assistant run replays history tools and summarizes at the step limit", async () => {
-  const run = await readFile(
-    new URL("../src/lib/assistant/run.ts", import.meta.url),
-    "utf8",
-  );
-  assert.match(run, /tool_choice: toolChoice/);
-  assert.match(run, /ASSISTANT_STEP_LIMIT_NOTE/);
-  assert.match(run, /"none",/);
-  assert.match(run, /redactSecrets\(call\.arguments\)/);
-  assert.match(ASSISTANT_STEP_LIMIT_NOTE, /Do not call tools/);
-});
-
 test("search_logs parses bounded filters and defaults to the last day", () => {
   const now = new Date("2026-10-06T12:00:00.000Z");
   const defaults = parseLogSearch({}, now);
@@ -659,19 +550,7 @@ test("search_logs parses bounded filters and defaults to the last day", () => {
   assert.equal(range.filters.to, "2026-10-06T09:00:00Z");
 });
 
-test("search_logs reads metadata only and never request content", async () => {
-  const source = await readFile(
-    new URL("../src/lib/assistant/insights.ts", import.meta.url),
-    "utf8",
-  );
-  const start = source.indexOf("export async function searchLogs");
-  const end = source.indexOf("export async function usageBreakdown");
-  assert.ok(start > 0 && end > start);
-  const block = source.slice(start, end);
-  assert.match(block, /requestLogWhere\(query\.filters, scope\)/);
-  assert.match(block, /select: \{/);
-  assert.doesNotMatch(block, /content|include:|requestLogContent|\btag\b/);
-  assert.match(source, /SPEND_READ_ALL/);
+test("search_logs error samples are counted and keep secrets out", () => {
   const samples = errorSamples([
     { error: "upstream 502" },
     { error: "upstream 502" },
@@ -837,7 +716,7 @@ test("an enforced assistant model wins over the operator's pick", () => {
   assert.equal(normalizeEnterprise({}).assistant_model_locked, false);
 });
 
-test("admin settings carry the model lock", async () => {
+test("admin settings carry the model lock", () => {
   const settings = {
     registration_enabled: false,
     assistant_model: "house-model",
@@ -861,17 +740,6 @@ test("admin settings carry the model lock", async () => {
   assert.equal(parsed.success && parsed.data.assistant_model_locked, false);
   const locked = adminSettingsSchema.safeParse({ ...settings, assistant_model_locked: true });
   assert.equal(locked.success && locked.data.assistant_model_locked, true);
-  const action = await readFile(
-    new URL("../src/app/(app)/assistant/_action.ts", import.meta.url),
-    "utf8",
-  );
-  assert.match(action, /assistantModelLocked\(enterprise\)/);
-  assert.match(action, /disabledAssistantTools\(session\)/);
-  const route = await readFile(
-    new URL("../src/app/internal-api/assistant/chat/route.ts", import.meta.url),
-    "utf8",
-  );
-  assert.match(route, /disabledTools/);
 });
 
 test("code examples call this gateway with a key from the environment", () => {

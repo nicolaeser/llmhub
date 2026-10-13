@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { crossedThresholds, forecastBudget, spendWindow } from "@/lib/gateway/forecast";
+import { crossedThresholds, forecastBudget, spendWindow } from "@/lib/usage/forecast";
 
 const DAY = 86_400_000;
 

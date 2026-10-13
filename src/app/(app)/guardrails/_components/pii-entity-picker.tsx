@@ -2,7 +2,7 @@
 
 import { Button, Card, Checkbox, Description, Label, Tag, TagGroup } from "@heroui/react";
 import { useTranslations } from "next-intl";
-import { PII_CATALOG } from "@/lib/gateway/pii";
+import { PII_CATALOG } from "@/lib/gateway/safety/pii";
 
 function groupByCategory() {
   const map = new Map<string, typeof PII_CATALOG>();

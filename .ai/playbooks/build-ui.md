@@ -23,7 +23,7 @@ Inspect the existing page, colocated `_action.ts`, and chrome (`(app)/_component
 2. Read installed HeroUI v3 types (`node_modules/@heroui/react/dist/components/`) for any component you add.
 3. Compose HeroUI components first (`Card`, `Separator`, `Chip`, `Alert`, `Table`, fields with `Description`), with `onPress` and their own props. Keep `className` to layout and token text colors. No `dark:`, no overflow clip, no new CSS.
 4. Put route-only UI in `_components/` (kebab-case). Keep orchestration on `page.tsx`.
-5. Keep mutations in `_action.ts`. Client state holds the result.
+5. Keep mutations in the page's `_action.ts` as thin wrappers over a `src/lib` service. Client state holds the result.
 6. Add or update `lang/en` and `lang/de` keys together.
 
 ## Change-impact analysis

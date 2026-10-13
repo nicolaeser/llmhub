@@ -1,4 +1,4 @@
-import type { CostRates, PriceSchedule } from "@/types/gateway";
+import type { CostRates, PriceSchedule } from "@/types/billing";
 import type { CatalogGroupState } from "@/types/model-catalog";
 import type { MarkupTenancy } from "@/types/pricing";
 

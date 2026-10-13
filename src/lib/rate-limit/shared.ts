@@ -1,13 +1,13 @@
 import "server-only";
 import { logger } from "@/lib/logging/logger";
 import { sharedRedis, withRedisTimeout } from "@/lib/redis/client";
-import type { Bucket } from "@/types/gateway";
+import type { RateWindow } from "@/types/rate-limit";
 
 const WINDOW_MS = 60_000;
 const REDIS_KEY_PREFIX = "llmhub:rate:v1";
-const memory = new Map<string, Bucket>();
+const memory = new Map<string, RateWindow>();
 
-function memoryIncrement(id: string, requests: number, tokens: number, now: number): Bucket {
+function memoryIncrement(id: string, requests: number, tokens: number, now: number): RateWindow {
   let bucket = memory.get(id);
   if (!bucket || now - bucket.start > WINDOW_MS) {
     bucket = { start: now, rpm: 0, tpm: 0 };

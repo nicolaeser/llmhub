@@ -1,4 +1,4 @@
-import { createResponseRoute } from "@/lib/gateway/responses-route";
+import { createResponseRoute } from "@/lib/gateway/endpoints/responses-route";
 
 export const maxDuration = 300;
 

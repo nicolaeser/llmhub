@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { CLAUDE_CODE_IDENTITY, withClaudeBetas, withClaudeIdentity } from "@/lib/gateway/claude";
-import { signInHeaders } from "@/lib/gateway/credentials";
-import { joinPath, prepareBody, upstreamError, upstreamHeaders, upstreamRetryAt } from "@/lib/gateway/upstream";
-import { routePool } from "@/lib/gateway/route-pool";
-import type { ResolvedDeployment } from "@/types/gateway";
+import { CLAUDE_CODE_IDENTITY, withClaudeBetas, withClaudeIdentity } from "@/lib/gateway/upstreams/claude";
+import { signInHeaders } from "@/lib/gateway/upstreams/credentials";
+import { joinPath, prepareBody, upstreamError, upstreamHeaders, upstreamRetryAt } from "@/lib/gateway/dispatch/upstream";
+import { routePool } from "@/lib/gateway/routing/route-pool";
+import type { ResolvedDeployment } from "@/types/routing";
 
 const claudeDep: ResolvedDeployment = {
   id: "c1",

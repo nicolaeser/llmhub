@@ -12,7 +12,7 @@ import {
   scimUserUpdate,
   toScimUser,
   SCIM_USER_SCHEMA,
-} from "@/lib/gateway/scim";
+} from "@/lib/auth/scim";
 import type { ScimPatchOperation } from "@/types/scim";
 
 const PATCH_OP = "urn:ietf:params:scim:api:messages:2.0:PatchOp";

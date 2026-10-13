@@ -24,8 +24,6 @@
     "waiting": "Waiting for approval…",
     "cancel": "Cancel sign-in",
     "copy": "Copy code",
-    "copied": "Code copied",
-    "copyFailed": "Could not copy the code.",
     "pasteTitle": "Paste the authorization result",
     "pasteHint": "{kind, select, antigravity {After you approve access, the browser tries to open a page on localhost that does not load. Copy the full address from the address bar and paste it below.} claude {After you approve access, the browser tries to open a page on localhost that does not load. Copy the full address from the address bar, or the authorization code, and paste it below.} other {Paste the authorization result below.}}",
     "pasteLabel": "Callback address or authorization code",

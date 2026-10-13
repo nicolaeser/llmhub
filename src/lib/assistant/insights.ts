@@ -2,10 +2,10 @@ import "server-only";
 
 import prisma from "@/lib/db/prisma";
 import { hasPerm, PERMISSIONS } from "@/lib/auth/permissions";
-import { redactPii } from "@/lib/gateway/pii";
-import { parseLogFilters, requestLogWhere } from "@/lib/gateway/request-log-query";
-import { groupRequestHealth } from "@/lib/gateway/usage-stats";
-import { usageSlices, usageWindowStart } from "@/lib/gateway/usage-totals";
+import { redactPii } from "@/lib/gateway/safety/pii";
+import { parseLogFilters, requestLogWhere } from "@/lib/gateway/request-logs/request-log-query";
+import { groupRequestHealth } from "@/lib/usage/usage-stats";
+import { usageSlices, usageWindowStart } from "@/lib/usage/usage-totals";
 import { money } from "@/lib/utils/money";
 import type { Prisma } from "@/generated/prisma/client";
 import type {
@@ -14,7 +14,7 @@ import type {
   UsageBreakdownGroup,
   UsageBreakdownQuery,
 } from "@/types/assistant";
-import type { SliceRow, UsageSlice } from "@/types/gateway";
+import type { SliceRow, UsageSlice } from "@/types/usage";
 import type { SpendScope } from "@/types/structure";
 
 const HOUR_MS = 3_600_000;

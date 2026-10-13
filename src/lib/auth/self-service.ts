@@ -1,6 +1,6 @@
 import "server-only";
 import { env } from "@/lib/env";
-import { getEnterprise } from "@/lib/gateway/settings";
+import { getEnterprise } from "@/lib/settings/enterprise";
 
 export async function registrationEnabled(): Promise<boolean> {
   return (await getEnterprise()).registration_enabled === true;

@@ -1,26 +1,19 @@
 import { NextResponse } from "next/server";
-import { allowModel, applyGuardrails, gateRequest, gateResponse, modelOf, readBody, modelChain } from "@/lib/gateway/gate";
-import { meter } from "@/lib/gateway/meter";
-import { forwardToModel } from "@/lib/gateway/upstream";
+import { modelChain } from "@/lib/gateway/access/gate";
+import { gatewayRoute, screenModelRequest } from "@/lib/gateway/endpoints/pipeline";
+import { meter } from "@/lib/gateway/billing/meter";
+import { forwardToModel } from "@/lib/gateway/dispatch/upstream";
 
-export async function POST(req: Request) {
+export const POST = gatewayRoute(async (req) => {
+  const { principal, model, body, clean } = await screenModelRequest(req);
+  const aliases = modelChain(principal, model, clean);
+  const usage = meter(principal, model, body);
   try {
-    const principal = await gateRequest(req);
-    const body = await readBody(req);
-    const model = modelOf(body);
-    allowModel(principal, model);
-    const { body: clean } = await applyGuardrails(body, principal);
-    const aliases = modelChain(principal, model, clean);
-    const usage = meter(principal, model, body);
-    try {
-      const hit = await forwardToModel(aliases, principal, "/moderations", clean);
-      await usage.ok(hit);
-      return NextResponse.json(hit.json);
-    } catch (err) {
-      await usage.fail(err);
-      throw err;
-    }
+    const hit = await forwardToModel(aliases, principal, "/moderations", clean);
+    await usage.ok(hit);
+    return NextResponse.json(hit.json);
   } catch (err) {
-    return gateResponse(err, req);
+    await usage.fail(err);
+    throw err;
   }
-}
+});

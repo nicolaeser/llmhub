@@ -4,7 +4,7 @@ import {
   MAX_MARKUP_PERCENT,
   MIN_MARKUP_PERCENT,
   markupModel,
-} from "@/lib/gateway/markup-policy";
+} from "@/lib/gateway/billing/markup-policy";
 
 export const markupSchema = z
   .object({

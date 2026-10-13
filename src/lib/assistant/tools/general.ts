@@ -6,9 +6,9 @@ import { hasPerm, PERMISSIONS } from "@/lib/auth/permissions";
 import { assistantToolViews } from "@/lib/assistant/catalog";
 import { assistantModelLocked } from "@/lib/assistant/parse";
 import { ASSISTANT_EXPLAIN, ASSISTANT_PAGES } from "@/lib/assistant/knowledge";
-import { PROVIDER_CATALOG } from "@/lib/gateway/catalog";
-import { ANTHROPIC_VERSION, OPENAPI_PATHS } from "@/lib/gateway/openapi";
-import { getEnterprise } from "@/lib/gateway/settings";
+import { PROVIDER_CATALOG } from "@/lib/gateway/upstreams/provider-kinds";
+import { ANTHROPIC_VERSION, OPENAPI_PATHS } from "@/lib/gateway/endpoints/openapi";
+import { getEnterprise } from "@/lib/settings/enterprise";
 import {
   apiEndpointsToolInput,
   codeExampleToolInput,

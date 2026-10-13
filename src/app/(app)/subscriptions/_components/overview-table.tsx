@@ -3,8 +3,8 @@
 import { Chip, Table } from "@heroui/react";
 import { useTranslations } from "next-intl";
 import ProviderToggle from "@/components/providers/provider-toggle";
-import type { AccountLimits, LimitWindow, ProviderView } from "@/types/providers";
-import { accountState, type AccountState } from "./account-status";
+import type { AccountLimits, AccountState, LimitWindow, ProviderView } from "@/types/providers";
+import { accountState } from "./account-status";
 import LimitMeter from "./limit-meter";
 
 const SHORT_MAX_SECONDS = 6 * 3_600;

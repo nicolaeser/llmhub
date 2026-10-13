@@ -1,4 +1,4 @@
-import { messagesRoute } from "@/lib/gateway/messages-route";
+import { messagesRoute } from "@/lib/gateway/endpoints/messages-route";
 
 export const maxDuration = 300;
 

@@ -1,5 +1,3 @@
-import type { loadMarkupsAction } from "@/app/(app)/markups/_action";
-
 export type MarkupScope = "all" | "org" | "team" | "project";
 
 export type MarkupTenancy = {
@@ -35,8 +33,6 @@ export type MarkupOrgOption = { id: string; alias: string };
 export type MarkupTeamOption = { id: string; alias: string; orgId: string };
 
 export type MarkupProjectOption = { id: string; alias: string; orgId: string; teamId: string };
-
-export type MarkupsPayload = Exclude<Awaited<ReturnType<typeof loadMarkupsAction>>, { ok: false }>;
 
 export type MarkupKind = "markup" | "discount";
 

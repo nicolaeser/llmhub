@@ -8,8 +8,9 @@ import {
   scimJson,
   toScimUser,
   SCIM_LIST_SCHEMA,
-} from "@/lib/gateway/scim";
+} from "@/lib/auth/scim";
 import { logger } from "@/lib/logging/logger";
+import { readJsonOr } from "@/lib/utils/json";
 
 export const dynamic = "force-dynamic";
 
@@ -43,7 +44,7 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   try {
     await requireScimToken(req);
-    const body = parseScimUserBody(await req.json().catch(() => null));
+    const body = parseScimUserBody(await readJsonOr(req, null));
     const user = await createScimUser(body);
     return scimJson(toScimUser(user), 201);
   } catch (err) {

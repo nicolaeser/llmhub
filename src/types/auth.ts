@@ -1,6 +1,7 @@
 import type { Role, User } from "@/generated/prisma/client";
 import type { SessionFactor } from "@/types/security";
 import type { AssistantToolName } from "@/types/assistant";
+import type { AdminSettings } from "@/types/settings";
 
 export type PermissionDomain =
   | "keys"
@@ -162,7 +163,7 @@ export type OidcEnv = {
   appUrl?: string;
 };
 
-export type DiscCache = { issuer: string; disc: OidcDiscovery; fetched: number };
+export type OidcDiscoveryCache = { issuer: string; disc: OidcDiscovery; fetched: number };
 
 export type OidcState = {
   state: string;
@@ -184,4 +185,25 @@ export type TargetRow = {
   isOwner: boolean;
   orgId: string | null;
   role: { permissions: string[] } | null;
+};
+
+export type OidcSettings = AdminSettings["oidc"];
+
+export type Jwk = {
+  kty?: string;
+  kid?: string;
+  n?: string;
+  e?: string;
+  alg?: string;
+  use?: string;
+};
+
+export type JwksCache = { url: string; keys: Map<string, string>; fetched: number };
+
+export type JwtClaims = Record<string, unknown>;
+
+export type JwtConfig = {
+  issuer?: string;
+  audience?: string;
+  jwks_url?: string;
 };

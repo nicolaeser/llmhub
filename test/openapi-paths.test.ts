@@ -1,5 +1,6 @@
+import "./support/recorded-prisma";
 import assert from "node:assert/strict";
-import { readdirSync, readFileSync } from "node:fs";
+import { readdirSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
@@ -8,7 +9,7 @@ import {
   OPENAPI_PATHS,
   openApiPathParams,
   resolveTryTarget,
-} from "@/lib/gateway/openapi";
+} from "@/lib/gateway/endpoints/openapi";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 const app = path.join(root, "src/app");
@@ -30,14 +31,12 @@ function fileToPath(file: string): string {
   return `/${rel.replace(/\[([^\]]+)\]/g, "{$1}")}`;
 }
 
-test("OPENAPI_PATHS covers every src/app/api/v1, src/app/api/subscription, and src/app/api/mgmt route method", () => {
+test("OPENAPI_PATHS covers every src/app/api/v1, src/app/api/subscription, and src/app/api/mgmt route method", async () => {
   const expected = new Set<string>();
   for (const file of SURFACES.flatMap((surface) => walk(path.join(app, surface)))) {
-    const source = readFileSync(file, "utf8");
-    const routePath = fileToPath(file);
+    const handlers = (await import(file)) as Record<string, unknown>;
     for (const method of METHODS) {
-      const re = new RegExp(String.raw`export\s+(?:async\s+function\s+${method}\b|const\s+${method}\s*=)`);
-      if (re.test(source)) expected.add(`${method} ${routePath}`);
+      if (typeof handlers[method] === "function") expected.add(`${method} ${fileToPath(file)}`);
     }
   }
   const actual = new Set(OPENAPI_PATHS.map((p) => `${p.method} ${p.path}`));

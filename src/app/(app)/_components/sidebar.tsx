@@ -19,7 +19,7 @@ import ThemeSwitcher from "./theme-switcher";
 import { hasPerm } from "@/lib/auth/permissions";
 import type { Permission } from "@/types/auth";
 import type { NavSection } from "@/types/console";
-import { NAV } from "./nav-data";
+import { homePath, NAV } from "./nav-data";
 
 const ConsoleNav = createContext<{ open: () => void } | null>(null);
 
@@ -197,7 +197,7 @@ export default function Sidebar({
           className={`hidden shrink-0 flex-col bg-surface md:flex ${collapsed ? "w-16" : "w-64"}`}
         >
           <Link
-            href="/keys"
+            href={homePath(permissions)}
             aria-label={t("goHome")}
             className="flex h-14 items-center gap-2.5 px-3"
           >

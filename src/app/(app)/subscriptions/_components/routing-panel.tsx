@@ -3,11 +3,12 @@
 import { useState, useTransition } from "react";
 import { Card, Chip, Description, Label, ListBox, Select, toast } from "@heroui/react";
 import { useTranslations } from "next-intl";
-import { saveAccountRoutingAction } from "@/app/(app)/subscriptions/_action";
-import { ACCOUNT_STRATEGIES, DEFAULT_ACCOUNT_STRATEGY } from "@/lib/gateway/account-access";
-import { isSignInKind, PROVIDER_CATALOG } from "@/lib/gateway/catalog";
+import { saveAccountRoutingAction } from "../_action";
+import { ACCOUNT_STRATEGIES, DEFAULT_ACCOUNT_STRATEGY } from "@/lib/gateway/routing/account-access";
+import { isSignInKind, PROVIDER_CATALOG } from "@/lib/gateway/upstreams/provider-kinds";
 import { isActionFail } from "@/lib/http/action-result";
 import type { AccountRouting, AccountStrategy } from "@/types/providers";
+import { useErrorToast } from "@/components/console/use-error-toast";
 
 const KINDS = PROVIDER_CATALOG.flatMap((spec) => (isSignInKind(spec.kind) ? [spec.kind] : []));
 
@@ -22,7 +23,7 @@ export default function RoutingPanel({
 }) {
   const t = useTranslations("Subscriptions.routing");
   const tProviders = useTranslations("Providers");
-  const tError = useTranslations("Error");
+  const showError = useErrorToast();
   const [savingKind, setSavingKind] = useState("");
   const [, start] = useTransition();
 
@@ -32,7 +33,7 @@ export default function RoutingPanel({
       const result = await saveAccountRoutingAction({ kind, strategy });
       setSavingKind("");
       if (isActionFail(result)) {
-        toast.danger(tError("code", { code: result.error }));
+        showError(result.error);
         return;
       }
       onSaved(result.routing);

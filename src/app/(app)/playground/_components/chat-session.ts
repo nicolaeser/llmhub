@@ -1,8 +1,8 @@
-import type { Msg, PlaygroundReplay, Session } from "@/types/playground";
+import type { PlaygroundMessage, PlaygroundReplay, PlaygroundSession } from "@/types/playground";
 
 export const STORAGE_KEY = "llmhub.playground.sessions";
 
-export function makeSession(model: string): Session {
+export function makeSession(model: string): PlaygroundSession {
   return {
     id: crypto.randomUUID(),
     title: "",
@@ -13,17 +13,17 @@ export function makeSession(model: string): Session {
   };
 }
 
-function isMsg(value: unknown): value is Msg {
+function isMsg(value: unknown): value is PlaygroundMessage {
   if (!value || typeof value !== "object") return false;
   const row = value as { role?: unknown; content?: unknown };
   if (row.role !== "user" && row.role !== "assistant") return false;
   return typeof row.content === "string" || Array.isArray(row.content);
 }
 
-export function parseSessions(raw: string): Session[] {
+export function parseSessions(raw: string): PlaygroundSession[] {
   const data = JSON.parse(raw) as unknown;
   if (!Array.isArray(data)) return [];
-  const out: Session[] = [];
+  const out: PlaygroundSession[] = [];
   for (const item of data) {
     if (!item || typeof item !== "object") continue;
     const row = item as Record<string, unknown>;
@@ -40,7 +40,7 @@ export function parseSessions(raw: string): Session[] {
   return out;
 }
 
-export function titleFrom(messages: Msg[]): string {
+export function titleFrom(messages: PlaygroundMessage[]): string {
   const first = messages.find((m) => m.role === "user");
   if (!first) return "";
   if (typeof first.content === "string") return first.content.trim().slice(0, 48);
@@ -52,7 +52,7 @@ export function titleFrom(messages: Msg[]): string {
   return text.slice(0, 48);
 }
 
-export function replaySession(replay: PlaygroundReplay, model: string): Session {
+export function replaySession(replay: PlaygroundReplay, model: string): PlaygroundSession {
   return {
     ...makeSession(model),
     title: titleFrom([...replay.history, { role: "user", content: replay.prompt.text }]),

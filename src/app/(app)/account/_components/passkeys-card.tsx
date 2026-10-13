@@ -8,14 +8,13 @@ import {
   Chip,
   Input,
   Label,
-  Modal,
-  Spinner,
   TextField,
   toast,
   useOverlayState,
 } from "@heroui/react";
 import { KeyRound, Pencil, Plus, Trash2 } from "lucide-react";
 import { useFormatter, useNow, useTranslations } from "next-intl";
+import FormDialog from "@/components/console/form-dialog";
 import { isActionFail } from "@/lib/http/action-result";
 import {
   SecondFactorInput,
@@ -98,6 +97,19 @@ export default function PasskeysCard({
     });
   }
 
+  function rename() {
+    if (!target) return;
+    startRenaming(async () => {
+      const result = await renamePasskeyAction({ id: target.id, name });
+      if (isActionFail(result)) {
+        toast.danger(errorText(result.error));
+        return;
+      }
+      onChange(result);
+      renameModal.close();
+    });
+  }
+
   const canAdd = available && browserSupport;
 
   return (
@@ -174,104 +186,54 @@ export default function PasskeysCard({
         <p className="text-sm text-muted">{t("empty")}</p>
       )}
 
-      <Modal state={addModal}>
-        <Modal.Backdrop>
-          <Modal.Container>
-            <Modal.Dialog className="max-w-md">
-              <Modal.Header>
-                <Modal.Heading>{t("add")}</Modal.Heading>
-              </Modal.Header>
-              <Modal.Body className="space-y-4">
-                <p className="text-sm text-muted">{t("addHint")}</p>
-                <TextField fullWidth value={name} onChange={setName} isDisabled={adding} maxLength={64}>
-                  <Label>{t("name")}</Label>
-                  <Input />
-                </TextField>
-                <SecondFactorInput
-                  value={proof}
-                  onChange={(next) => {
-                    setProof(next);
-                    setError(null);
-                  }}
-                  isDisabled={adding}
-                  isInvalid={Boolean(error)}
-                  label={t("stepUpLabel")}
-                />
-                {error ? (
-                  <Alert status="danger">
-                    <Alert.Content>
-                      <Alert.Description>{errorText(error)}</Alert.Description>
-                    </Alert.Content>
-                  </Alert>
-                ) : null}
-              </Modal.Body>
-              <Modal.Footer>
-                <Button variant="tertiary" isDisabled={adding} onPress={addModal.close}>
-                  {tCommon("cancel")}
-                </Button>
-                <Button
-                  isPending={adding}
-                  isDisabled={!name.trim() || !secondFactorComplete(proof)}
-                  onPress={add}
-                >
-                  {({ isPending }) => (
-                    <>
-                      {isPending ? <Spinner color="current" size="sm" /> : <KeyRound size={16} aria-hidden />}
-                      {t("create")}
-                    </>
-                  )}
-                </Button>
-              </Modal.Footer>
-            </Modal.Dialog>
-          </Modal.Container>
-        </Modal.Backdrop>
-      </Modal>
+      <FormDialog
+        state={addModal}
+        size="sm"
+        title={t("add")}
+        description={t("addHint")}
+        submitLabel={t("create")}
+        submitIcon={<KeyRound size={16} aria-hidden />}
+        pending={adding}
+        isSubmitDisabled={!name.trim() || !secondFactorComplete(proof)}
+        onSubmit={add}
+      >
+        <TextField fullWidth value={name} onChange={setName} isDisabled={adding} maxLength={64}>
+          <Label>{t("name")}</Label>
+          <Input />
+        </TextField>
+        <SecondFactorInput
+          value={proof}
+          onChange={(next) => {
+            setProof(next);
+            setError(null);
+          }}
+          isDisabled={adding}
+          isInvalid={Boolean(error)}
+          label={t("stepUpLabel")}
+        />
+        {error ? (
+          <Alert status="danger">
+            <Alert.Content>
+              <Alert.Description>{errorText(error)}</Alert.Description>
+            </Alert.Content>
+          </Alert>
+        ) : null}
+      </FormDialog>
 
-      <Modal state={renameModal}>
-        <Modal.Backdrop>
-          <Modal.Container>
-            <Modal.Dialog className="max-w-md">
-              <Modal.Header>
-                <Modal.Heading>{t("rename")}</Modal.Heading>
-              </Modal.Header>
-              <Modal.Body>
-                <TextField fullWidth value={name} onChange={setName} isDisabled={renaming} maxLength={64}>
-                  <Label>{t("name")}</Label>
-                  <Input />
-                </TextField>
-              </Modal.Body>
-              <Modal.Footer>
-                <Button variant="tertiary" isDisabled={renaming} onPress={renameModal.close}>
-                  {tCommon("cancel")}
-                </Button>
-                <Button
-                  isPending={renaming}
-                  isDisabled={!name.trim()}
-                  onPress={() => {
-                    if (!target) return;
-                    startRenaming(async () => {
-                      const result = await renamePasskeyAction({ id: target.id, name });
-                      if (isActionFail(result)) {
-                        toast.danger(errorText(result.error));
-                        return;
-                      }
-                      onChange(result);
-                      renameModal.close();
-                    });
-                  }}
-                >
-                  {({ isPending }) => (
-                    <>
-                      {isPending ? <Spinner color="current" size="sm" /> : null}
-                      {tCommon("save")}
-                    </>
-                  )}
-                </Button>
-              </Modal.Footer>
-            </Modal.Dialog>
-          </Modal.Container>
-        </Modal.Backdrop>
-      </Modal>
+      <FormDialog
+        state={renameModal}
+        size="sm"
+        title={t("rename")}
+        submitLabel={tCommon("save")}
+        pending={renaming}
+        isSubmitDisabled={!name.trim()}
+        onSubmit={rename}
+      >
+        <TextField fullWidth value={name} onChange={setName} isDisabled={renaming} maxLength={64}>
+          <Label>{t("name")}</Label>
+          <Input />
+        </TextField>
+      </FormDialog>
 
       <StepUpDialog
         state={removeStepUp}

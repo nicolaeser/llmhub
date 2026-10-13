@@ -3,14 +3,14 @@ import prisma from "@/lib/db/prisma";
 import { getSession } from "@/lib/auth/session";
 import { hasPerm, PERMISSIONS } from "@/lib/auth/permissions";
 import { companyOf, seesAllSpend, spendScope } from "@/lib/auth/scope";
-import { writeAudit } from "@/lib/gateway/audit";
+import { writeAudit } from "@/lib/audit";
 import {
   auditLogWhere,
   parseLogFilters,
   requestLogWhere,
   spendEventWhere,
-} from "@/lib/gateway/request-log-query";
-import { fileResponse, toCsv, toJsonl } from "@/lib/http/export";
+} from "@/lib/gateway/request-logs/request-log-query";
+import { fileResponse, toCsv, toJsonl } from "@/lib/export/csv";
 import { problemResponse } from "@/lib/http/problem";
 
 const KINDS = new Set(["requests", "spend", "audit"]);

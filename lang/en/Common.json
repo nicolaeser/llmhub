@@ -7,9 +7,11 @@
   "delete": "Delete",
   "edit": "Edit",
   "refresh": "Refresh",
+  "retry": "Retry",
   "search": "Search",
   "noResults": "No matches",
   "loading": "Loading",
+  "loadFailed": "This page could not be loaded",
   "advanced": "Advanced",
   "copy": "Copy",
   "copied": "Copied",
@@ -23,7 +25,7 @@
   "all": "All",
   "none": "None",
   "empty": "Nothing here yet.",
-  "goHome": "Go to API keys",
+  "goHome": "Go to the start page",
   "signOut": "Sign out",
   "health": {
     "status": "{status, select, ok {Healthy} down {Down} other {Connecting}}"

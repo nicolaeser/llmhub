@@ -75,7 +75,15 @@
     "remove": "Remove window {index, number}"
   },
   "revoke": "Revoke",
+  "revokeConfirm": {
+    "title": "Revoke {name}?",
+    "description": "The key is deleted and every request that uses it is rejected right away. This cannot be undone."
+  },
   "rotate": "Rotate",
+  "rotateConfirm": {
+    "title": "Rotate {name}?",
+    "description": "A new secret is created and shown once. The current secret keeps working for one hour and is then rejected, so update every client within that hour."
+  },
   "toasts": {
     "saved": "{mode, select, updated {Key updated} other {Key created}}",
     "revoked": "Key revoked",

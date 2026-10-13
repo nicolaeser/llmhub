@@ -4,7 +4,7 @@ import {
   asString,
   stringifyContent
 } from "@/lib/gateway/core";
-import { redactPii } from "@/lib/gateway/pii";
+import { redactPii } from "@/lib/gateway/safety/pii";
 import type {
   AssistantLocale,
   AssistantMessage,

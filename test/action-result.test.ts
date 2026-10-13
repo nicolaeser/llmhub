@@ -41,3 +41,29 @@ test("runAction never forwards raw exception text", async () => {
     assert.deepEqual(fail, actionFail("REQUEST_FAILED"));
   }
 });
+
+test("runAction logs the name and message of unexpected errors but not of action codes", async () => {
+  const lines: string[] = [];
+  const original = console.error;
+  console.error = (line: unknown) => {
+    lines.push(String(line));
+  };
+  try {
+    await runAction(async () => {
+      throw new Error("TEAM_NOT_FOUND");
+    });
+    assert.deepEqual(lines, []);
+    await runAction(async () => {
+      throw new TypeError("cannot read properties of undefined\n    at secret stack frame");
+    });
+  } finally {
+    console.error = original;
+  }
+  assert.equal(lines.length, 1);
+  const entry = JSON.parse(lines[0]!);
+  assert.equal(entry.level, "error");
+  assert.equal(entry.event, "action.failed");
+  assert.equal(entry.errName, "TypeError");
+  assert.equal(entry.err, "cannot read properties of undefined");
+  assert.deepEqual(Object.keys(entry).sort(), ["err", "errName", "event", "level", "ts"]);
+});

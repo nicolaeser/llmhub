@@ -10,13 +10,15 @@ import {
   permissionList,
   PERMISSIONS,
 } from "@/lib/auth/permissions";
+import { requirePermission } from "@/lib/auth/guards";
 import { assertPasswordPolicy, hashPassword } from "@/lib/auth/password";
 import { roleOptions } from "@/lib/auth/roles";
 import { requestMeta } from "@/lib/auth/session";
 import { requireStepUp } from "@/lib/auth/second-factor";
 import { securityEvent, userActor } from "@/lib/auth/security-events";
 import { clearSecondFactorFailures } from "@/lib/auth/throttle";
-import { writeAudit } from "@/lib/gateway/audit";
+import { removeUserWithInternalKeys } from "@/lib/auth/user-removal";
+import { writeAudit } from "@/lib/audit";
 import { money } from "@/lib/utils/money";
 import {
   idSchema,
@@ -25,7 +27,7 @@ import {
   userPasswordSchema,
   userSecurityResetSchema,
 } from "@/schemas/auth";
-import type { AuthenticatedSession, GrantActor, TargetRow } from "@/types/auth";
+import type { AuthenticatedSession, GrantActor, Permission, TargetRow } from "@/types/auth";
 import type { ConsoleUser, UsersConsolePayload } from "@/types/users";
 
 function targetPermissions(target: TargetRow) {
@@ -225,7 +227,7 @@ export async function setUserContentLogging(
 export async function deleteUser(session: AuthenticatedSession, userId: unknown) {
   const target = await loadTarget(userId);
   assertManageable(session, target);
-  await prisma.user.delete({ where: { id: target.id } });
+  const { revokedKeys } = await removeUserWithInternalKeys(target.id);
   await writeAudit({
     actor: session.user.id,
     action: "user.delete",
@@ -238,6 +240,7 @@ export async function deleteUser(session: AuthenticatedSession, userId: unknown)
       blocked: target.blocked,
       orgId: target.orgId,
     },
+    after: { revokedKeys },
   });
 }
 
@@ -358,4 +361,17 @@ export async function revokeUserSessions(session: AuthenticatedSession, userId: 
     after: { revoked: count },
   });
   return { revoked: count };
+}
+
+export async function loadUsersConsole(): Promise<UsersConsolePayload> {
+  return usersConsole(await requirePermission(PERMISSIONS.USERS_READ));
+}
+
+export async function changeUsers(
+  permission: Permission,
+  mutation: (session: AuthenticatedSession) => Promise<unknown>,
+): Promise<UsersConsolePayload> {
+  const session = await requirePermission(permission);
+  await mutation(session);
+  return usersConsole(session);
 }

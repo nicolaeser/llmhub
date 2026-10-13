@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { gateRequest, gateResponse } from "@/lib/gateway/gate";
+import { gateRequest, gateResponse } from "@/lib/gateway/access/gate";
 import { createStoreFor, parseBody } from "@/lib/rag/api";
 import { listQuery, listStores } from "@/lib/rag/stores";
 import { createVectorStoreSchema } from "@/schemas/rag";

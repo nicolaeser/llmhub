@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { replayDraft } from "@/lib/gateway/log-replay";
+import { replayDraft } from "@/lib/gateway/request-logs/log-replay";
 
 test("replayDraft splits a chat request into system, history, and the last user prompt", () => {
   const draft = replayDraft("/v1/chat/completions", {

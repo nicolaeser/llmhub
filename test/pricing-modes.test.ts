@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { chatToAnthropic, chatUsageFromAnthropic } from "@/lib/gateway/anthropic";
-import { usageFromUnknown } from "@/lib/gateway/billing";
-import { cacheSavingsOf, cacheTokens, costOf, priceFactors } from "@/lib/gateway/cost";
-import { xaiReasoningEffort } from "@/lib/gateway/upstream";
-import type { Deployment, Usage } from "@/types/gateway";
+import { chatToAnthropic, chatUsageFromAnthropic } from "@/lib/gateway/protocols/anthropic";
+import { usageFromUnknown } from "@/lib/gateway/billing/billing";
+import { cacheSavingsOf, cacheTokens, costOf, priceFactors } from "@/lib/gateway/billing/cost";
+import { xaiReasoningEffort } from "@/lib/gateway/dispatch/upstream";
+import type { Deployment } from "@/types/routing";
+import type { TokenUsage } from "@/types/billing";
 
 function dep(kind: string, model: string, input = 1, output = 2): Deployment {
   return {
@@ -19,7 +20,7 @@ function dep(kind: string, model: string, input = 1, output = 2): Deployment {
   };
 }
 
-const base: Partial<Usage> = { prompt_tokens: 1000, completion_tokens: 1000 };
+const base: Partial<TokenUsage> = { prompt_tokens: 1000, completion_tokens: 1000 };
 
 function close(actual: number, expected: number) {
   assert.ok(Math.abs(actual - expected) < 1e-9, `${actual} != ${expected}`);

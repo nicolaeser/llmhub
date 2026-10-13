@@ -1,15 +1,24 @@
 import "server-only";
 import prisma from "@/lib/db/prisma";
 import { AuthError, isPrismaCode, parseAuthInput } from "@/lib/auth/errors";
-import { assertCanGrant, assertCanManage, canGrant, canManage } from "@/lib/auth/grants";
+import {
+  assertCanGrant,
+  assertCanManage,
+  canGrant,
+  canManage,
+  grantActor,
+} from "@/lib/auth/grants";
+import { requirePermission } from "@/lib/auth/guards";
 import {
   isRoleTemplateKey,
   permissionList,
+  permissions,
+  PERMISSIONS,
   roleTemplateKeys,
   roleTemplates,
   sortPermissions,
 } from "@/lib/auth/permissions";
-import { writeAudit } from "@/lib/gateway/audit";
+import { writeAudit } from "@/lib/audit";
 import { assistantToolList } from "@/lib/assistant/catalog";
 import {
   idSchema,
@@ -18,7 +27,14 @@ import {
   roleUpdateSchema,
   roleWriteSchema,
 } from "@/schemas/auth";
-import type { GrantActor, RoleOption, RoleSummary, RoleTemplateKey } from "@/types/auth";
+import type {
+  AuthenticatedSession,
+  GrantActor,
+  RoleOption,
+  RoleSummary,
+  RolesConsolePayload,
+  RoleTemplateKey,
+} from "@/types/auth";
 
 const templateOrder = (key: string | null) => {
   const index = roleTemplateKeys.indexOf(key as RoleTemplateKey);
@@ -227,4 +243,28 @@ export async function restoreRoleTemplate(actor: GrantActor, actorUserId: string
 export async function templateRoleId(key: RoleTemplateKey): Promise<string | null> {
   const role = await prisma.role.findUnique({ where: { templateKey: key }, select: { id: true } });
   return role?.id ?? null;
+}
+
+export async function loadRolesConsole(): Promise<RolesConsolePayload> {
+  const actor = grantActor(await requirePermission(PERMISSIONS.ROLES_MANAGE));
+  const [roles, templates] = await Promise.all([
+    listRoles(actor),
+    prisma.role.findMany({ where: { templateKey: { not: null } }, select: { templateKey: true } }),
+  ]);
+  const present = new Set(templates.map((row) => row.templateKey));
+  return {
+    roles,
+    grantable: actor.isOwner ? [...permissions] : [...actor.permissions],
+    missingTemplates: roleTemplateKeys.filter((key) => !present.has(key)),
+  };
+}
+
+export async function changeRole(
+  mutation: (session: AuthenticatedSession) => Promise<{ id: string }>,
+): Promise<{ role: RoleSummary }> {
+  const session = await requirePermission(PERMISSIONS.ROLES_MANAGE);
+  const { id } = await mutation(session);
+  const role = (await listRoles(grantActor(session))).find((row) => row.id === id);
+  if (!role) throw new AuthError("ROLE_NOT_FOUND");
+  return { role };
 }

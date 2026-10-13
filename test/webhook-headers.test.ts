@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { createHmac } from "node:crypto";
 import test from "node:test";
-import { webhookHeaders } from "@/lib/gateway/alerts";
+import { webhookHeaders } from "@/lib/alerts/notify";
 
 test("webhook headers omit the signature when the secret is empty", () => {
   assert.deepEqual(webhookHeaders("", "{}"), { "Content-Type": "application/json" });

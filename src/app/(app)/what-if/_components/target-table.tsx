@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Button, Card, Chip, Label, Switch, Table } from "@heroui/react";
 import { useFormatter, useTranslations } from "next-intl";
-import { compareCost } from "@/lib/gateway/what-if";
+import { compareCost } from "@/lib/usage/what-if";
 import type { WhatIfTarget } from "@/types/what-if";
 
 const PAGE_SIZE = 25;

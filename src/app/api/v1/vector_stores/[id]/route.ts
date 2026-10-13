@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { allowModel, gateRequest, gateResponse } from "@/lib/gateway/gate";
+import { allowModel, gateRequest, gateResponse } from "@/lib/gateway/access/gate";
 import { asStringMap } from "@/lib/gateway/core";
 import { parseBody } from "@/lib/rag/api";
 import {

@@ -1,15 +1,16 @@
 "use client";
 
-import { useCallback, useEffect, useState, useTransition } from "react";
-import { Alert, Card, Spinner, toast } from "@heroui/react";
+import { useState } from "react";
+import { Alert, Card } from "@heroui/react";
 import { Calculator } from "lucide-react";
 import { useFormatter, useTranslations } from "next-intl";
 import { Link } from "@/i18n/routing";
-import { loadWhatIfAction } from "@/app/(app)/what-if/_action";
-import { isActionFail } from "@/lib/http/action-result";
-import { compareCost } from "@/lib/gateway/what-if";
+import { loadWhatIfAction } from "./_action";
+import { useActionData } from "@/lib/hooks/use-action-data";
+import { compareCost } from "@/lib/usage/what-if";
 import EmptyState from "@/components/console/empty-state";
 import PageHeader from "@/components/console/page-header";
+import PageStatus, { LoadError } from "@/components/console/page-status";
 import SearchSelect from "@/components/console/search-select";
 import StatCard from "@/components/console/stat-card";
 import TargetTable from "./_components/target-table";
@@ -24,49 +25,17 @@ function defaultTarget(view: WhatIfView): WhatIfTarget | null {
 
 export default function WhatIfPage() {
   const t = useTranslations("WhatIf");
-  const tCommon = useTranslations("Common");
-  const tError = useTranslations("Error");
   const format = useFormatter();
-  const [loading, setLoading] = useState(true);
-  const [pending, start] = useTransition();
-  const [view, setView] = useState<WhatIfView | null>(null);
   const [target, setTarget] = useState("");
+  const whatIf = useActionData(() => loadWhatIfAction({ model: "" }));
+  const { data: view, pending } = whatIf;
 
-  const load = useCallback(
-    (model: string) => {
-      start(async () => {
-        const res = await loadWhatIfAction({ model });
-        if (isActionFail(res)) toast.danger(tError("code", { code: res.error }));
-        else setView(res);
-        setLoading(false);
-      });
-    },
-    [tError],
-  );
-
-  useEffect(() => {
-    load("");
-  }, [load]);
-
-  if (loading && !view) {
-    return (
-      <output
-        aria-live="polite"
-        aria-label={tCommon("loading")}
-        className="flex min-h-[40vh] items-center justify-center text-accent"
-      >
-        <Spinner color="current" size="lg" />
-      </output>
-    );
+  function load(model: string) {
+    whatIf.reloadWith(() => loadWhatIfAction({ model }));
   }
 
   if (!view) {
-    return (
-      <div>
-        <PageHeader title={t("title")} />
-        <EmptyState icon={Calculator} title={tError("code", { code: "REQUEST_FAILED" })} />
-      </div>
-    );
+    return <PageStatus title={t("title")} state={whatIf} />;
   }
 
   const chosen = view.targets.find((item) => item.alias === target) ?? defaultTarget(view);
@@ -90,6 +59,7 @@ export default function WhatIfPage() {
   return (
     <div className="space-y-5">
       <PageHeader title={t("title")} subtitle={t("subtitle", { days: view.days })} />
+      <LoadError state={whatIf} />
 
       {view.traffic.requests === 0 ? (
         <EmptyState icon={Calculator} title={t("empty", { days: view.days })} description={t("emptyHint")} />

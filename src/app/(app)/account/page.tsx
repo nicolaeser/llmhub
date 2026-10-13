@@ -1,14 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Alert, Card, Chip, Skeleton } from "@heroui/react";
+import { useEffect } from "react";
+import { Card, Chip, Skeleton } from "@heroui/react";
 import { useTranslations } from "next-intl";
 import PageHeader from "@/components/console/page-header";
+import { LoadError } from "@/components/console/page-status";
+import { useActionData } from "@/lib/hooks/use-action-data";
 import { isActionFail } from "@/lib/http/action-result";
 import { useRoleName } from "@/components/security/use-role-name";
-import { useSecurityError } from "@/components/security/use-security-error";
-import type { ManagementKeysPayload } from "@/types/management";
-import type { SecurityOverview } from "@/types/security";
 import PasswordCard from "./_components/password-card";
 import TwoFactorCard from "./_components/two-factor-card";
 import PasskeysCard from "./_components/passkeys-card";
@@ -20,24 +19,13 @@ import { loadManagementKeysAction, loadSecurityOverviewAction } from "./_action"
 export default function AccountPage() {
   const t = useTranslations("Account");
   const roleName = useRoleName();
-  const errorText = useSecurityError();
-  const [overview, setOverview] = useState<SecurityOverview | null>(null);
-  const [managementKeys, setManagementKeys] = useState<ManagementKeysPayload | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const page = useActionData(loadSecurityOverviewAction);
+  const keys = useActionData(loadManagementKeysAction);
+  const { data: overview, setData: setOverview } = page;
+  const { data: managementKeys, setData: setManagementKeys } = keys;
 
   useEffect(() => {
     let active = true;
-    loadSecurityOverviewAction().then((result) => {
-      if (!active) return;
-      if (isActionFail(result)) {
-        setError(result.error);
-        return;
-      }
-      setOverview(result);
-    });
-    loadManagementKeysAction().then((result) => {
-      if (active && !isActionFail(result)) setManagementKeys(result);
-    });
     function refresh() {
       if (document.visibilityState !== "visible") return;
       loadSecurityOverviewAction().then((result) => {
@@ -51,18 +39,13 @@ export default function AccountPage() {
       clearInterval(timer);
       document.removeEventListener("visibilitychange", refresh);
     };
-  }, []);
+  }, [setOverview]);
 
   return (
     <div>
       <PageHeader title={t("title")} subtitle={t("subtitle")} />
-      {error ? (
-        <Alert status="danger">
-          <Alert.Indicator />
-          <Alert.Content>
-            <Alert.Description>{errorText(error)}</Alert.Description>
-          </Alert.Content>
-        </Alert>
+      {page.error && !overview ? (
+        <LoadError state={page} />
       ) : !overview ? (
         <div aria-busy className="space-y-5">
           <Skeleton className="h-20 w-full rounded-3xl" />
@@ -109,6 +92,8 @@ export default function AccountPage() {
               <SessionsCard sessions={overview.sessions} onChange={setOverview} />
               {managementKeys ? (
                 <ManagementKeysCard payload={managementKeys} onChange={setManagementKeys} />
+              ) : keys.error ? (
+                <LoadError state={keys} />
               ) : (
                 <Skeleton className="h-40 w-full rounded-3xl" />
               )}

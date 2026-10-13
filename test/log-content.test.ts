@@ -6,8 +6,8 @@ import {
   MessagesStreamTranscript,
   requestTranscript,
   responseTranscript,
-} from "@/lib/gateway/log-content";
-import { withTrace } from "@/lib/gateway/gate";
+} from "@/lib/gateway/request-logs/log-content";
+import { withTrace } from "@/lib/gateway/access/gate";
 import type { Principal } from "@/types/gateway";
 
 test("logPayload elides binary data and embedding vectors without marking truncation", () => {

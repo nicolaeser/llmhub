@@ -7,10 +7,10 @@ import { z } from "zod";
 import { AuthError } from "@/lib/auth/errors";
 import { ERR_ALL_PAUSED, ERR_NO_HEALTHY, ERR_NOT_ASSIGNED, ERR_UNKNOWN_GROUP } from "@/lib/gateway/core";
 import { anthropicErrorBody, GateError, gatewayErrorType, openAIErrorBody } from "@/lib/gateway/errors";
-import { gateResponse, toGateError } from "@/lib/gateway/gate";
-import { upstreamError } from "@/lib/gateway/upstream";
+import { gateResponse, toGateError } from "@/lib/gateway/access/gate";
+import { upstreamError } from "@/lib/gateway/dispatch/upstream";
 import { ApiProblem, PROBLEM_CONTENT_TYPE, problemFromError, problemResponse } from "@/lib/http/problem";
-import { isProblemCode, problemSpec } from "@/lib/http/problems";
+import { isProblemCode, problemSpec } from "@/lib/http/problem-codes";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 
@@ -72,6 +72,8 @@ test("unknown failures map to fixed gateway codes without leaking internals", ()
   assert.equal(toGateError(ERR_NOT_ASSIGNED).status, 403);
   assert.equal(toGateError(new TypeError("fetch failed")).status, 502);
   assert.equal(toGateError(Object.assign(new Error("slow"), { name: "TimeoutError" })).status, 504);
+  assert.equal(toGateError(Object.assign(new Error("big"), { status: 413 })).code, "payload_too_large");
+  assert.equal(toGateError(null).code, "internal_error");
   const hidden = toGateError(new Error("password=hunter2 in query"));
   assert.equal(hidden.status, 500);
   assert.equal(hidden.code, "internal_error");
@@ -125,6 +127,9 @@ test("problemFromError normalizes every error source", async () => {
     [new Error("TEAM_NOT_FOUND"), 422, "TEAM_NOT_FOUND"],
     [new GateError(502, "upstream_error", "provider down"), 502, "UPSTREAM_ERROR"],
     [ERR_UNKNOWN_GROUP, 404, "MODEL_NOT_FOUND"],
+    [ERR_NOT_ASSIGNED, 403, "ACCOUNT_NOT_ASSIGNED"],
+    [ERR_ALL_PAUSED, 503, "NO_HEALTHY_DEPLOYMENT"],
+    [Object.assign(new Error("request body is too large"), { status: 413 }), 413, "PAYLOAD_TOO_LARGE"],
     [new Error("connect ECONNREFUSED 10.0.0.1"), 500, "INTERNAL_ERROR"],
   ];
   for (const [err, status, code] of cases) {
@@ -148,9 +153,19 @@ test("every error code the HTTP surfaces can emit is in the problem catalog", ()
   const sources = [
     ...walk(path.join(root, "src/app/api")),
     ...walk(path.join(root, "src/app/internal-api")),
-    ...["", "models", "providers", "companies", "logs", "model-templates"].map((dir) =>
-      path.join(root, "src/app/(app)", dir, "_action.ts"),
-    ),
+    ...[
+      "keys/manage.ts",
+      "usage/dashboard.ts",
+      "models/groups.ts",
+      "models/templates.ts",
+      "providers/connections.ts",
+      "tenancy/structure.ts",
+      "tenancy/budgets.ts",
+      "tenancy/guards.ts",
+      "reports/manage.ts",
+      "pricing/markups.ts",
+      "gateway/request-logs/explorer.ts",
+    ].map((file) => path.join(root, "src/lib", file)),
   ];
   const codes = new Set<string>();
   for (const file of sources) {

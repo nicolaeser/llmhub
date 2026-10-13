@@ -1,7 +1,6 @@
 {
   "title": "Aufschläge",
   "subtitle": "Mit Marge weiterverkaufen: ein prozentualer Aufschlag oder Rabatt auf den Einkauf, pro Unternehmen, Abteilung, Projekt oder Modell.",
-  "loadFailed": "Die Aufschläge konnten nicht geladen werden.",
   "add": "Aufschlag hinzufügen",
   "readOnly": "Du kannst Aufschläge ansehen. Zum Ändern brauchst du die Berechtigung Aufschläge verwalten.",
   "emptyTitle": "Noch keine Aufschläge",

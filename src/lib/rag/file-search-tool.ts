@@ -1,13 +1,17 @@
 import "server-only";
-import { dispatchChat, streamChat } from "@/lib/gateway/chat";
+import { dispatchChat, streamChat } from "@/lib/gateway/dispatch/chat";
 import { asNumber, asRecord, newId, stringifyContent } from "@/lib/gateway/core";
 import { GateError } from "@/lib/gateway/errors";
-import { allowEndpoint } from "@/lib/gateway/gate";
-import { screenRequest } from "@/lib/gateway/guardrails";
-import { defaultEntityIds, redactJSON } from "@/lib/gateway/pii";
-import { parseRequest, type ResponsesStreamEncoder } from "@/lib/gateway/responses";
-import { SSE_HEADERS } from "@/lib/gateway/sse";
-import { resolvePolicies } from "@/lib/gateway/settings";
+import { allowEndpoint } from "@/lib/gateway/access/gate";
+import { screenRequest } from "@/lib/gateway/safety/guardrails";
+import { defaultEntityIds, redactJSON } from "@/lib/gateway/safety/pii";
+import { parseRequest } from "@/lib/gateway/protocols/parse-request";
+import type { ResponsesStreamEncoder } from "@/lib/gateway/protocols/responses-stream";
+import { SSE_HEADERS } from "@/lib/gateway/protocols/sse";
+import { resolvePolicies } from "@/lib/settings/enterprise";
+import { errorFields } from "@/lib/logging/format";
+import { logger } from "@/lib/logging/logger";
+import { cancelQuietly } from "@/lib/utils/streams";
 import { searchableStore } from "@/lib/rag/api";
 import { rankingOptions } from "@/lib/rag/rank";
 import { searchStores } from "@/lib/rag/search";
@@ -368,7 +372,7 @@ function readLines(body: ReadableStream<Uint8Array> | null): AsyncGenerator<stri
       leftover += decoder.decode();
       if (leftover) yield leftover;
     } finally {
-      if (!drained) await reader.cancel().catch(() => undefined);
+      if (!drained) await cancelQuietly(reader);
     }
   })();
 }
@@ -440,7 +444,7 @@ export async function streamFileSearch(input: {
   try {
     prepared = await input.prepare();
   } catch (err) {
-    await first.body?.cancel().catch(() => undefined);
+    await cancelQuietly(first.body);
     throw err;
   }
   const { encoder, onDone } = prepared;
@@ -518,12 +522,14 @@ export async function streamFileSearch(input: {
         const gate = err instanceof GateError ? err : null;
         emit(encoder.fail(gate?.message ?? "file search failed"));
       }
-      await onDone(transcript).catch(() => undefined);
+      await onDone(transcript).catch((err) => {
+        logger.error("gateway.stream_finish_failed", errorFields(err));
+      });
       if (!cancelled) controller.close();
     },
     cancel() {
       cancelled = true;
-      void current?.body?.cancel().catch(() => undefined);
+      void cancelQuietly(current?.body);
     },
   });
   return new Response(stream, { headers: SSE_HEADERS });

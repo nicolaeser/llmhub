@@ -1,8 +1,9 @@
-import type { REPORT_CADENCES, REPORT_FORMATS } from "@/lib/reports/period";
+import type { z } from "zod";
+import type { usageReportSchema } from "@/schemas/reports";
 
-export type ReportCadence = (typeof REPORT_CADENCES)[number];
+export type ReportCadence = z.infer<typeof usageReportSchema>["cadence"];
 
-export type ReportFormat = (typeof REPORT_FORMATS)[number];
+export type ReportFormat = z.infer<typeof usageReportSchema>["format"];
 
 export type ReportPeriod = {
   cadence: ReportCadence;
@@ -24,17 +25,6 @@ export type UsageReportView = {
   lastSentAt: string | null;
   lastError: string;
   nextRunAt: string;
-};
-
-export type UsageReportInput = {
-  id?: string;
-  orgId: string;
-  teamId: string;
-  cadence: ReportCadence;
-  format: ReportFormat;
-  locale: string;
-  recipients: string[];
-  enabled: boolean;
 };
 
 export type UsageReportTarget = {

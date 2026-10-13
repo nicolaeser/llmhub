@@ -1,6 +1,9 @@
 import packageJson from "../../../package.json";
-import { PROVIDER_CATALOG } from "@/lib/gateway/catalog";
-import type { JsonMap, ModelPricing, Principal, PublicModel, RoutePool } from "@/types/gateway";
+import { GateError } from "@/lib/gateway/errors";
+import { PROVIDER_CATALOG } from "@/lib/gateway/upstreams/provider-kinds";
+import type { JsonMap, Principal } from "@/types/gateway";
+import type { ModelPricing, PublicModel } from "@/types/models";
+import type { RoutePool } from "@/types/routing";
 
 export class RouterError extends Error {
   constructor(
@@ -37,6 +40,19 @@ export function isUnavailableError(err: unknown): err is RouterError {
   return isRouterError(err, "no_healthy") || isRouterError(err, "all_paused");
 }
 
+export function routerGateError(err: unknown): GateError | null {
+  if (isRouterError(err, "unknown_group")) {
+    return new GateError(404, "model_not_found", "no deployment for model", { param: "model" });
+  }
+  if (isRouterError(err, "not_assigned")) {
+    return new GateError(403, "account_not_assigned", "no subscription account is assigned to this key");
+  }
+  if (isUnavailableError(err)) {
+    return new GateError(503, "no_healthy_deployment", "no healthy deployment for model");
+  }
+  return null;
+}
+
 export function ownerId(pr: Principal | null | undefined): string {
   if (!pr) return "";
   if (pr.key?.token_id) return pr.key.token_id;
@@ -52,6 +68,10 @@ export function asRecord(v: unknown): JsonMap | null {
 
 export function asString(v: unknown, fallback = ""): string {
   return typeof v === "string" ? v : fallback;
+}
+
+export function asArray(v: unknown): unknown[] {
+  return Array.isArray(v) ? v : [];
 }
 
 export function asNumber(v: unknown, fallback = 0): number {

@@ -1,13 +1,13 @@
+import "./support/recorded-prisma";
 import assert from "node:assert/strict";
 import { existsSync } from "node:fs";
-import { readFile } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 
-const ROUTES = [
+const OPENAI_ROUTES = [
   "chat/completions",
   "completions",
   "embeddings",
@@ -18,8 +18,6 @@ const ROUTES = [
   "audio/speech",
   "audio/transcriptions",
   "audio/translations",
-  "messages",
-  "messages/count_tokens",
   "systemone",
   "responses/input_tokens",
   "responses/[id]/input_items",
@@ -39,65 +37,54 @@ const ROUTES = [
   "vector_stores/[id]/file_batches",
 ] as const;
 
-function v1Path(rel: string) {
-  return path.join(root, "src/app/api/v1", rel, "route.ts");
+const ANTHROPIC_ROUTES = ["messages", "messages/count_tokens"] as const;
+
+type Handler = (req: Request, ctx: { params: Promise<Record<string, string>> }) => Promise<Response>;
+
+async function handlersOf(route: string) {
+  assert.equal(existsSync(path.join(root, "src/app/api/mgmt", route, "route.ts")), false, `${route} under /api/mgmt`);
+  const file = path.join(root, "src/app/api/v1", route, "route.ts");
+  assert.equal(existsSync(file), true, `${route} under /api/v1`);
+  const mod = (await import(file)) as Record<string, unknown>;
+  const handlers = (["GET", "POST"] as const).filter((method) => typeof mod[method] === "function");
+  assert.ok(handlers.length > 0, `${route} exports GET or POST`);
+  return handlers.map((method) => ({ method, handler: mod[method] as Handler }));
 }
 
-function apiPath(rel: string) {
-  return path.join(root, "src/app/api/mgmt", rel, "route.ts");
-}
-
-function exportsPostOrGet(source: string) {
-  return (
-    /\bexport\s+(async\s+)?function\s+(POST|GET)\b/.test(source) ||
-    /\bexport\s+const\s+(POST|GET)\s*=/.test(source) ||
-    /\bexport\s+\{[^}]*(POST|GET)[^}]*\}/.test(source)
+async function unauthenticated(route: string, method: string, handler: Handler) {
+  const res = await handler(
+    new Request(`http://hub.local/api/v1/${route}`, {
+      method,
+      headers: { "content-type": "application/json" },
+      body: method === "POST" ? "{}" : undefined,
+    }),
+    { params: Promise.resolve({ id: "id-1", file_id: "file-1" }) },
   );
+  assert.match(res.headers.get("content-type") ?? "", /^application\/json/, route);
+  assert.match(res.headers.get("x-request-id") ?? "", /^req_/, route);
+  return { status: res.status, body: await res.json() };
 }
 
-async function collectLibSources(
-  source: string,
-  depth: number,
-  seen: Set<string>,
-): Promise<string[]> {
-  const chunks = [source];
-  if (depth <= 0) return chunks;
-  for (const match of source.matchAll(/from\s+["'](@\/lib\/[^"']+)["']/g)) {
-    const spec = match[1];
-    if (!spec) continue;
-    const resolved = path.join(root, spec.replace(/^@\//, "src/") + ".ts");
-    if (!existsSync(resolved) || seen.has(resolved)) continue;
-    seen.add(resolved);
-    const next = await readFile(resolved, "utf8");
-    chunks.push(...(await collectLibSources(next, depth - 1, seen)));
+test("OpenAI-compatible routes live under /api/v1 and answer OpenAI JSON errors", async () => {
+  for (const route of OPENAI_ROUTES) {
+    for (const { method, handler } of await handlersOf(route)) {
+      const { status, body } = await unauthenticated(route, method, handler);
+      assert.equal(status, 401, route);
+      assert.deepEqual(Object.keys(body), ["error"], route);
+      assert.equal(body.error.type, "authentication_error", route);
+      assert.equal(body.error.code, "invalid_api_key", route);
+      assert.equal(typeof body.error.message, "string", route);
+    }
   }
-  return chunks;
-}
+});
 
-async function contractSource(source: string): Promise<string> {
-  return (await collectLibSources(source, 2, new Set())).join("\n");
-}
-
-for (const rel of ROUTES) {
-  const file = v1Path(rel);
-  const misplaced = apiPath(rel);
-  test(
-    `${rel} lives under src/app/api/v1, exports POST and/or GET, uses NextResponse.json`,
-    { skip: !existsSync(file) && !existsSync(misplaced) },
-    async () => {
-      assert.equal(
-        existsSync(misplaced),
-        false,
-        `${rel} must live under src/app/api/v1 not src/app/api/mgmt`,
-      );
-      assert.equal(existsSync(file), true);
-      const source = await readFile(file, "utf8");
-      assert.equal(file.includes(`${path.sep}app${path.sep}api${path.sep}v1${path.sep}`), true);
-      assert.equal(file.includes(`${path.sep}app${path.sep}api${path.sep}mgmt${path.sep}`), false);
-      assert.equal(exportsPostOrGet(source), true, "must export POST and/or GET");
-      const combined = await contractSource(source);
-      assert.match(combined, /NextResponse\.json/);
-      assert.doesNotMatch(combined, /writeJSON/);
-    },
-  );
-}
+test("Anthropic-compatible routes live under /api/v1 and answer Anthropic JSON errors", async () => {
+  for (const route of ANTHROPIC_ROUTES) {
+    for (const { method, handler } of await handlersOf(route)) {
+      const { status, body } = await unauthenticated(route, method, handler);
+      assert.equal(status, 401, route);
+      assert.equal(body.type, "error", route);
+      assert.equal(body.error.type, "authentication_error", route);
+    }
+  }
+});

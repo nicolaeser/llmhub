@@ -1,8 +1,8 @@
 import { isIP } from "node:net";
 import { z } from "zod";
 import { KNOWN_BILLING_MODES, KNOWN_KINDS, KNOWN_STRATEGIES } from "@/lib/gateway/core";
-import { MARKUP_SCOPES, MAX_MARKUP_PERCENT, MIN_MARKUP_PERCENT } from "@/lib/gateway/markup-policy";
-import { clockMinute, isTimeZone, MAX_PRICE_WINDOWS } from "@/lib/gateway/price-schedule";
+import { MARKUP_SCOPES, MAX_MARKUP_PERCENT, MIN_MARKUP_PERCENT } from "@/lib/gateway/billing/markup-policy";
+import { clockMinute, isTimeZone, MAX_PRICE_WINDOWS } from "@/lib/gateway/billing/price-schedule";
 import { MANAGEMENT_PERMISSIONS } from "@/lib/management/scope";
 import { accessWindowsSchema, allowedEndpointsSchema } from "@/schemas/keys";
 import { budgetPeriod, MAX_BOOST_HOURS } from "@/lib/utils/budget";

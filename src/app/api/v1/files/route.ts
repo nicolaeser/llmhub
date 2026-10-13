@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import { gateRequest, gateResponse, readBody } from "@/lib/gateway/gate";
+import { gateRequest, gateResponse, readBody } from "@/lib/gateway/access/gate";
 import { GateError } from "@/lib/gateway/errors";
-import { fileJson, listObjects, putObject } from "@/lib/gateway/objects";
+import { fileJson, listObjects, putObject } from "@/lib/gateway/storage/objects";
 import { ownerId } from "@/lib/gateway/core";
 import { assertContentLength, MAX_UPLOAD_BYTES } from "@/lib/http/api";
 

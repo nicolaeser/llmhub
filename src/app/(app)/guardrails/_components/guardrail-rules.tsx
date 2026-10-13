@@ -3,7 +3,7 @@
 import { Button, Card, Description, FieldError, Input, Label, Switch, TextArea, TextField } from "@heroui/react";
 import { Plus, Trash2 } from "lucide-react";
 import { useTranslations } from "next-intl";
-import { GUARDRAIL_ACTIONS, MAX_RULES, RULE_KINDS, RULE_TARGETS, ruleIssue } from "@/lib/gateway/guardrails";
+import { GUARDRAIL_ACTIONS, MAX_RULES, RULE_KINDS, RULE_TARGETS, ruleIssue } from "@/lib/gateway/safety/guardrails";
 import type { GuardrailRule } from "@/types/guardrails";
 import ChoiceSelect from "./choice-select";
 

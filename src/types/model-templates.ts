@@ -1,12 +1,8 @@
+import type { ProviderPolicyInput } from "@/types/providers";
+
 export type DataRegion = "eu" | "us" | "global";
 
-export type ProviderPolicy = {
-  id: string;
-  zdr: boolean;
-  retentionDays: number | null;
-  region: string;
-  noTraining: boolean;
-};
+export type ProviderPolicy = ProviderPolicyInput & { id: string };
 
 export type PolicyGroup = {
   alias: string;

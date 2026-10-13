@@ -12,7 +12,7 @@ import {
 import { sanitizeReturnPath } from "@/lib/auth/return-path";
 import { upsertUserByEmail } from "@/lib/auth/sso-user";
 import { SetupRequiredError } from "@/lib/bootstrap/operators";
-import { getEnterprise } from "@/lib/gateway/settings";
+import { getEnterprise } from "@/lib/settings/enterprise";
 import { clientIp } from "@/lib/http/api";
 import { logger } from "@/lib/logging/logger";
 

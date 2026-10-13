@@ -10,6 +10,7 @@ import { releaseAttempts, reserveAttempts } from "@/lib/auth/throttle";
 import { env } from "@/lib/env";
 import { clientIp } from "@/lib/http/api";
 import { fieldErrors, problemResponse } from "@/lib/http/problem";
+import { readJsonOr } from "@/lib/utils/json";
 import { registerSchema } from "@/schemas/auth";
 
 const HOUR_MS = 60 * 60 * 1000;
@@ -28,7 +29,7 @@ export async function POST(req: NextRequest) {
     if (error instanceof AuthError) return problemResponse(req, "RATE_LIMITED");
     throw error;
   }
-  const body = registerSchema.safeParse(await req.json().catch(() => null));
+  const body = registerSchema.safeParse(await readJsonOr(req, null));
   if (!body.success) {
     await releaseAttempts(reservation);
     return problemResponse(req, inputErrorCode(body.error), { errors: fieldErrors(body.error) });

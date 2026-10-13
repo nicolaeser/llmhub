@@ -36,7 +36,7 @@ Must not use remembered HeroUI v2, `HeroUIProvider`, `classNames` objects, `isLo
 | Status | `text-success` / `text-warning` / `text-danger` / `text-accent` |
 | Charts | `var(--accent)`, `var(--danger)`, `var(--warning)`, `var(--success)`, `var(--muted)`, `var(--border)` |
 
-There is no `default-N` scale. Must not use raw Tailwind palette colors (`text-zinc-500`, `bg-indigo-600`, …), `text-white`, `text-black`, or gradients. The brand mark (`src/components/brand/brand-mark.tsx`, hub-and-nodes glyph) uses `bg-accent text-accent-foreground`; `src/app/icon.svg`, `src/app/apple-icon.tsx`, `src/app/favicon.ico`, and the usage PDF header in `src/lib/http/usage-pdf.ts` carry the same glyph and must change with it. They cannot read CSS variables: `src/app/icon.svg` and `src/app/apple-icon.tsx` hardcode the light `--accent` (`oklch(0.585 0.2 277)`) as `#6367ef`, and `COLORS` in `src/lib/http/usage-pdf.ts` holds sRGB copies of the light tokens (`accent` is `[99, 103, 239]`). Update them in the same change as `src/styles/globals.css`. Primary actions use the default `Button` variant.
+There is no `default-N` scale. Must not use raw Tailwind palette colors (`text-zinc-500`, `bg-indigo-600`, …), `text-white`, `text-black`, or gradients. The brand mark (`src/components/brand/brand-mark.tsx`, hub-and-nodes glyph) uses `bg-accent text-accent-foreground`; `src/app/icon.svg`, `src/app/apple-icon.tsx`, `src/app/favicon.ico`, and the usage PDF header in `src/lib/export/usage-pdf.ts` carry the same glyph and must change with it. They cannot read CSS variables: `src/app/icon.svg` and `src/app/apple-icon.tsx` hardcode the light `--accent` (`oklch(0.585 0.2 277)`) as `#6367ef`, and `COLORS` in `src/lib/export/usage-pdf.ts` holds sRGB copies of the light tokens (`accent` is `[99, 103, 239]`). Update them in the same change as `src/styles/globals.css`. Primary actions use the default `Button` variant.
 
 ## Typography and document outline
 
@@ -70,7 +70,7 @@ The collapsed rail widths (`w-16` / `w-64`), meter fills, and table `min-w-*` lo
 | Destructive | `variant="danger"` or `variant="danger-soft"` |
 | Icon-only | `Button isIconOnly` + `aria-label` |
 | Panel | `Card` + `Card.Header` / `Card.Title` / `Card.Description` / `Card.Content` / `Card.Footer` |
-| Menu | `Dropdown.Trigger` + `Dropdown.Popover` + `Dropdown.Menu` |
+| Menu | `Dropdown` with a `Button` child + `Dropdown.Popover` + `Dropdown.Menu`; `Dropdown.Trigger` only for a custom non-button trigger, never wrapping a `Button` |
 | Tabs | `Tabs`; `List` needs `aria-label` |
 | Fields | `TextField` + `Label` + `Input` + `Description` + `FieldError` |
 | Overlay | `Modal` with `Modal.Backdrop`; `useOverlayState` |

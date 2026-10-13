@@ -45,7 +45,12 @@ function required(name) {
   return value;
 }
 
+const NODE_ENVS = ["development", "production"];
+
 function validateStartupEnv() {
+  if (!NODE_ENVS.includes(required("NODE_ENV"))) {
+    throw new Error(`NODE_ENV must be ${NODE_ENVS.join(" or ")}`);
+  }
   required("DATABASE_URL");
   if (required("APP_SECRET").length < 32) {
     throw new Error("APP_SECRET must be at least 32 characters");

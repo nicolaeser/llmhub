@@ -3,18 +3,38 @@ import "server-only";
 import { purgeAuthRecords } from "@/lib/auth/cleanup";
 import { ATTEMPT_RETENTION_MS } from "@/lib/auth/throttle";
 import prisma from "@/lib/db/prisma";
-import { fireAlert } from "@/lib/gateway/alerts";
-import { runPendingBatches } from "@/lib/gateway/batches";
-import { crossedThresholds, forecastBudget } from "@/lib/gateway/forecast";
-import { purgeStoredObjects } from "@/lib/gateway/objects";
+import { fireAlert } from "@/lib/alerts/notify";
+import { runPendingBatches } from "@/lib/gateway/endpoints/batches";
+import { crossedThresholds, forecastBudget } from "@/lib/usage/forecast";
+import { purgeStoredObjects } from "@/lib/gateway/storage/objects";
 import { runPendingIngests } from "@/lib/rag/ingest";
 import { expireVectorStores, purgeOrphanUploads } from "@/lib/rag/stores";
-import { getAlertState, getEnterprise, saveAlertState } from "@/lib/gateway/settings";
+import { getAlertState, getEnterprise, saveAlertState } from "@/lib/settings/enterprise";
+import { errorFields } from "@/lib/logging/format";
+import { logger } from "@/lib/logging/logger";
 import { runUsageReports } from "@/lib/reports/usage-report";
 import { runKeyExpiryAlerts, runSpendAnomalyAlerts } from "./alert-checks";
 import { retentionCutoff } from "./retention";
-import type { MaintenanceSweepResult } from "@/types/jobs";
+import type { MaintenanceSweepResult, SpendResetRow } from "@/types/jobs";
 import { money } from "@/lib/utils/money";
+
+export async function runSweepJob(name: string, job: () => Promise<number>): Promise<number> {
+  try {
+    return await job();
+  } catch (err) {
+    logger.error("worker.job_failed", { job: name, ...errorFields(err) });
+    return 0;
+  }
+}
+
+async function sweepSettings() {
+  try {
+    return await getEnterprise();
+  } catch (err) {
+    logger.error("worker.settings_failed", errorFields(err));
+    return null;
+  }
+}
 
 export async function runMaintenanceSweep(
   now = new Date(),
@@ -56,7 +76,7 @@ export async function runMaintenanceSweep(
     reports: 0,
   };
 
-  const enterprise = await getEnterprise().catch(() => null);
+  const enterprise = await sweepSettings();
   const logCutoff = retentionCutoff(enterprise?.log_retention_days ?? 0, now);
   if (logCutoff) {
     const requestLogs = await prisma.requestLog.deleteMany({
@@ -85,116 +105,63 @@ export async function runMaintenanceSweep(
     });
     result.auditLogs = auditLogs.count;
   }
-  result.storedObjects = await purgeStoredObjects({
-    generatedBefore: retentionCutoff(enterprise?.object_retention_days ?? 30, now),
-    uploadsBefore: retentionCutoff(enterprise?.file_retention_days ?? 0, now),
-  }).catch(() => 0);
-  result.batches = await runPendingBatches().catch(() => 0);
-  result.vectorStores = await expireVectorStores(now).catch(() => 0);
-  result.storedObjects += await purgeOrphanUploads(now).catch(() => 0);
-  result.vectorFiles = await runPendingIngests().catch(() => 0);
-  await runSpendResets(now).catch(() => 0);
-  await runBudgetAlerts().catch(() => 0);
-  await runSpendAnomalyAlerts(now).catch(() => 0);
-  await runKeyExpiryAlerts(now).catch(() => 0);
-  result.reports = await runUsageReports(now).catch(() => 0);
+  if (enterprise) {
+    result.storedObjects = await runSweepJob("stored_objects", () =>
+      purgeStoredObjects({
+        generatedBefore: retentionCutoff(enterprise.object_retention_days ?? 30, now),
+        uploadsBefore: retentionCutoff(enterprise.file_retention_days ?? 0, now),
+      }),
+    );
+  }
+  result.batches = await runSweepJob("batches", () => runPendingBatches());
+  result.vectorStores = await runSweepJob("vector_stores", () => expireVectorStores(now));
+  result.storedObjects += await runSweepJob("orphan_uploads", () => purgeOrphanUploads(now));
+  result.vectorFiles = await runSweepJob("vector_ingests", () => runPendingIngests());
+  await runSweepJob("spend_resets", () => runSpendResets(now));
+  await runSweepJob("budget_alerts", () => runBudgetAlerts());
+  await runSweepJob("spend_anomaly_alerts", () => runSpendAnomalyAlerts(now));
+  await runSweepJob("key_expiry_alerts", () => runKeyExpiryAlerts(now));
+  result.reports = await runSweepJob("usage_reports", () => runUsageReports(now));
   return result;
 }
 
+const RESET_SELECT = { id: true, budgetDuration: true, spendResetAt: true, createdAt: true } as const;
+
+async function resetElapsedPeriods(
+  rows: SpendResetRow[],
+  now: Date,
+  reset: (where: { id: string; spendResetAt: Date | null }) => Promise<{ count: number }>,
+): Promise<number> {
+  const { periodElapsed } = await import("@/lib/gateway/billing/period");
+  let n = 0;
+  for (const row of rows) {
+    if (!periodElapsed(row.budgetDuration, row.spendResetAt, now, row.createdAt)) continue;
+    n += (await reset({ id: row.id, spendResetAt: row.spendResetAt })).count;
+  }
+  return n;
+}
+
 export async function runSpendResets(now = new Date()): Promise<number> {
-  const { periodElapsed } = await import("@/lib/gateway/period");
   const data = { spend: 0, spendResetAt: now };
   let n = 0;
-  const keys = await prisma.virtualKey.findMany({
-    select: {
-      id: true,
-      budgetDuration: true,
-      spendResetAt: true,
-      createdAt: true,
-    },
-  });
-  for (const row of keys) {
-    if (!periodElapsed(row.budgetDuration, row.spendResetAt, now, row.createdAt)) {
-      continue;
-    }
-    await prisma.virtualKey.update({ where: { id: row.id }, data });
-    n += 1;
-  }
-  const users = await prisma.user.findMany({
-    select: {
-      id: true,
-      budgetDuration: true,
-      spendResetAt: true,
-      createdAt: true,
-    },
-  });
-  for (const row of users) {
-    if (!periodElapsed(row.budgetDuration, row.spendResetAt, now, row.createdAt)) {
-      continue;
-    }
-    await prisma.user.update({ where: { id: row.id }, data });
-    n += 1;
-  }
-  const members = await prisma.member.findMany({
-    select: {
-      id: true,
-      budgetDuration: true,
-      spendResetAt: true,
-      createdAt: true,
-    },
-  });
-  for (const row of members) {
-    if (!periodElapsed(row.budgetDuration, row.spendResetAt, now, row.createdAt)) {
-      continue;
-    }
-    await prisma.member.update({ where: { id: row.id }, data });
-    n += 1;
-  }
-  const teams = await prisma.team.findMany({
-    select: {
-      id: true,
-      budgetDuration: true,
-      spendResetAt: true,
-      createdAt: true,
-    },
-  });
-  for (const row of teams) {
-    if (!periodElapsed(row.budgetDuration, row.spendResetAt, now, row.createdAt)) {
-      continue;
-    }
-    await prisma.team.update({ where: { id: row.id }, data });
-    n += 1;
-  }
-  const orgs = await prisma.organization.findMany({
-    select: {
-      id: true,
-      budgetDuration: true,
-      spendResetAt: true,
-      createdAt: true,
-    },
-  });
-  for (const row of orgs) {
-    if (!periodElapsed(row.budgetDuration, row.spendResetAt, now, row.createdAt)) {
-      continue;
-    }
-    await prisma.organization.update({ where: { id: row.id }, data });
-    n += 1;
-  }
-  const projects = await prisma.project.findMany({
-    select: {
-      id: true,
-      budgetDuration: true,
-      spendResetAt: true,
-      createdAt: true,
-    },
-  });
-  for (const row of projects) {
-    if (!periodElapsed(row.budgetDuration, row.spendResetAt, now, row.createdAt)) {
-      continue;
-    }
-    await prisma.project.update({ where: { id: row.id }, data });
-    n += 1;
-  }
+  n += await resetElapsedPeriods(await prisma.virtualKey.findMany({ select: RESET_SELECT }), now, (where) =>
+    prisma.virtualKey.updateMany({ where, data }),
+  );
+  n += await resetElapsedPeriods(await prisma.user.findMany({ select: RESET_SELECT }), now, (where) =>
+    prisma.user.updateMany({ where, data }),
+  );
+  n += await resetElapsedPeriods(await prisma.member.findMany({ select: RESET_SELECT }), now, (where) =>
+    prisma.member.updateMany({ where, data }),
+  );
+  n += await resetElapsedPeriods(await prisma.team.findMany({ select: RESET_SELECT }), now, (where) =>
+    prisma.team.updateMany({ where, data }),
+  );
+  n += await resetElapsedPeriods(await prisma.organization.findMany({ select: RESET_SELECT }), now, (where) =>
+    prisma.organization.updateMany({ where, data }),
+  );
+  n += await resetElapsedPeriods(await prisma.project.findMany({ select: RESET_SELECT }), now, (where) =>
+    prisma.project.updateMany({ where, data }),
+  );
   return n;
 }
 

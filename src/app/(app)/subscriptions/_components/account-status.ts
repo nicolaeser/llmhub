@@ -1,7 +1,5 @@
-import { earliestRecovery, quotaExhausted } from "@/lib/gateway/quota";
-import type { AccountLimits, ProviderView } from "@/types/providers";
-
-export type AccountState = "paused" | "available" | "limited" | "expired" | "unavailable" | "checking" | "connected";
+import { earliestRecovery, quotaExhausted } from "@/lib/gateway/routing/quota";
+import type { AccountLimits, AccountState, ProviderView } from "@/types/providers";
 
 export function accountState(row: ProviderView, entry: AccountLimits | undefined, reports: boolean): AccountState {
   if (!row.enabled) return "paused";

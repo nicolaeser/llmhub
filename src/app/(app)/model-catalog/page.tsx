@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 import {
   Alert,
   Button,
@@ -17,16 +17,19 @@ import { useFormatter, useNow, useTranslations } from "next-intl";
 import { Link } from "@/i18n/routing";
 import EmptyState from "@/components/console/empty-state";
 import PageHeader from "@/components/console/page-header";
+import PageStatus from "@/components/console/page-status";
 import SearchSelect from "@/components/console/search-select";
+import { useErrorToast } from "@/components/console/use-error-toast";
 import {
   loadCatalogAction,
   refreshCatalogAction,
   setCatalogEntryActiveAction,
   setCatalogGroupActiveAction,
   setCatalogGroupAutoRoutesAction,
-} from "@/app/(app)/model-catalog/_action";
+} from "./_action";
+import { useActionData } from "@/lib/hooks/use-action-data";
 import { isActionFail } from "@/lib/http/action-result";
-import { catalogEntryKey } from "@/lib/gateway/model-catalog";
+import { catalogEntryKey } from "@/lib/gateway/catalog/model-catalog";
 import type { ActionFail } from "@/types/actions";
 import type { CatalogEntryView, CatalogFamilyView, CatalogGroupView, CatalogView } from "@/types/model-catalog";
 import AssignDialog from "./_components/assign-dialog";
@@ -70,11 +73,10 @@ function visibleFamilies(families: CatalogFamilyView[], filter: Filter, tag: str
 
 export default function ModelCatalogPage() {
   const t = useTranslations("ModelCatalog");
-  const tError = useTranslations("Error");
+  const showError = useErrorToast();
   const tCommon = useTranslations("Common");
   const format = useFormatter();
   const now = useNow({ updateInterval: 30_000 });
-  const [view, setView] = useState<CatalogView | null>(null);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
   const [tag, setTag] = useState(ALL_TAGS);
@@ -85,20 +87,12 @@ export default function ModelCatalogPage() {
   const [refreshing, startRefresh] = useTransition();
   const [, startChange] = useTransition();
   const assignState = useOverlayState();
-
-  useEffect(() => {
-    loadCatalogAction().then((res) => {
-      if (isActionFail(res)) {
-        toast.danger(tError("code", { code: res.error }));
-        return;
-      }
-      setView(res);
-    });
-  }, [tError]);
+  const page = useActionData(loadCatalogAction);
+  const { data: view, setData: setView } = page;
 
   function apply(result: CatalogView | ActionFail, success?: string) {
     if (isActionFail(result)) {
-      toast.danger(tError("code", { code: result.error }));
+      showError(result.error);
       return;
     }
     setView(result);
@@ -126,15 +120,7 @@ export default function ModelCatalogPage() {
   }
 
   if (!view) {
-    return (
-      <output
-        aria-live="polite"
-        aria-label={tCommon("loading")}
-        className="flex min-h-[40vh] items-center justify-center text-accent"
-      >
-        <Spinner color="current" size="lg" />
-      </output>
-    );
+    return <PageStatus title={t("title")} subtitle={t("subtitle")} state={page} />;
   }
 
   const state = view.state;
@@ -291,11 +277,11 @@ export default function ModelCatalogPage() {
               />
             ) : null}
           </div>
-          <Card>
-            <Card.Content>
-              {shown.length === 0 ? (
-                <p className="py-6 text-center text-sm text-muted">{t("noResults")}</p>
-              ) : (
+          {shown.length === 0 ? (
+            <EmptyState icon={BookOpen} title={t("noResults")} />
+          ) : (
+            <Card>
+              <Card.Content>
                 <DisclosureGroup allowsMultipleExpanded>
                   {shown.map((family, index) => (
                     <div key={family.family}>
@@ -304,16 +290,16 @@ export default function ModelCatalogPage() {
                     </div>
                   ))}
                 </DisclosureGroup>
-              )}
-            </Card.Content>
-            {visible.length > shown.length ? (
-              <Card.Footer>
-                <Button variant="secondary" onPress={() => setLimit((n) => n + PAGE_SIZE)}>
-                  {t("more", { count: Math.min(PAGE_SIZE, visible.length - shown.length) })}
-                </Button>
-              </Card.Footer>
-            ) : null}
-          </Card>
+              </Card.Content>
+              {visible.length > shown.length ? (
+                <Card.Footer>
+                  <Button variant="secondary" onPress={() => setLimit((n) => n + PAGE_SIZE)}>
+                    {t("more", { count: Math.min(PAGE_SIZE, visible.length - shown.length) })}
+                  </Button>
+                </Card.Footer>
+              ) : null}
+            </Card>
+          )}
         </div>
       )}
 

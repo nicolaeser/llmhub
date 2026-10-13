@@ -1,53 +1,42 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
-import { Button, Card, Chip, Description, Label, NumberField, Spinner, Switch, toast } from "@heroui/react";
+import { useState, useTransition } from "react";
+import { Button, Chip, Description, Label, NumberField, Spinner, toast } from "@heroui/react";
 import { useTranslations } from "next-intl";
 import { formats } from "@/i18n/formats";
 import PageHeader from "@/components/console/page-header";
+import PageStatus from "@/components/console/page-status";
 import SearchSelect from "@/components/console/search-select";
-import { loadCacheAction, saveCacheAction } from "@/app/(app)/cache/_action";
+import { SettingSection, SettingSwitch } from "@/components/console/setting-fields";
+import { useErrorToast } from "@/components/console/use-error-toast";
+import { loadCacheAction, saveCacheAction } from "./_action";
 import {
   CACHE_TTL_MAX_SECONDS,
   SEMANTIC_THRESHOLD_DEFAULT,
   SEMANTIC_THRESHOLD_MIN,
-} from "@/lib/gateway/cache-settings";
+} from "@/lib/gateway/cache/cache-settings";
+import { useActionData } from "@/lib/hooks/use-action-data";
 import { isActionFail } from "@/lib/http/action-result";
 import CacheStats from "./_components/cache-stats";
-import type { CacheView, SemanticCacheSettings } from "@/types/cache";
+import type { SemanticCacheSettings } from "@/types/cache";
 
 const BACKEND_COLOR = { redis: "success", memory: "default", fallback: "warning" } as const;
 
 export default function CachePage() {
   const t = useTranslations("Cache");
-  const tError = useTranslations("Error");
-  const tCommon = useTranslations("Common");
-  const [view, setView] = useState<CacheView | null>(null);
-  const [ttl, setTtl] = useState(0);
-  const [semantic, setSemantic] = useState<SemanticCacheSettings | null>(null);
+  const showError = useErrorToast();
+  const [ttlDraft, setTtl] = useState<number | null>(null);
+  const [semanticDraft, setSemantic] = useState<SemanticCacheSettings | null>(null);
   const [pending, start] = useTransition();
+  const page = useActionData(loadCacheAction);
+  const { data: view, setData: setView } = page;
 
-  useEffect(() => {
-    loadCacheAction().then((res) => {
-      if (isActionFail(res)) return;
-      setView(res);
-      setTtl(res.cacheTtlSeconds);
-      setSemantic(res.semantic);
-    });
-  }, []);
-
-  if (!view || !semantic) {
-    return (
-      <output
-        aria-live="polite"
-        aria-label={tCommon("loading")}
-        className="flex min-h-[40vh] items-center justify-center text-accent"
-      >
-        <Spinner color="current" size="lg" />
-      </output>
-    );
+  if (!view) {
+    return <PageStatus title={t("title")} subtitle={t("subtitle")} state={page} />;
   }
 
+  const ttl = ttlDraft ?? view.cacheTtlSeconds;
+  const semantic = semanticDraft ?? view.semantic;
   const disabled = !view.canManage;
   const update = (patch: Partial<SemanticCacheSettings>) => setSemantic({ ...semantic, ...patch });
 
@@ -65,12 +54,12 @@ export default function CachePage() {
                 start(async () => {
                   const result = await saveCacheAction({ cacheTtlSeconds: ttl, semantic });
                   if (isActionFail(result)) {
-                    toast.danger(tError("code", { code: result.error }));
+                    showError(result.error);
                     return;
                   }
                   setView(result);
-                  setTtl(result.cacheTtlSeconds);
-                  setSemantic(result.semantic);
+                  setTtl(null);
+                  setSemantic(null);
                   toast(t("saved"), { variant: "success" });
                 })
               }
@@ -86,11 +75,7 @@ export default function CachePage() {
         }
       />
       {view.stats ? <CacheStats initial={view.stats} semanticOn={view.semantic.enabled} /> : null}
-      <Card className="gap-4">
-        <Card.Header>
-          <Card.Title>{t("store.title")}</Card.Title>
-          <Card.Description>{t("store.description")}</Card.Description>
-        </Card.Header>
+      <SettingSection title={t("store.title")} subtitle={t("store.description")}>
         <div className="flex flex-wrap items-center gap-2">
           <Chip size="sm" variant="soft" color={BACKEND_COLOR[view.backend]}>
             {t("store.backend", { backend: view.backend })}
@@ -116,25 +101,15 @@ export default function CachePage() {
           </NumberField.Group>
           <Description>{t("ttlHint")}</Description>
         </NumberField>
-      </Card>
-      <Card className="gap-4">
-        <Card.Header>
-          <Card.Title>{t("semantic.title")}</Card.Title>
-          <Card.Description>{t("semantic.description")}</Card.Description>
-        </Card.Header>
-        <Switch
+      </SettingSection>
+      <SettingSection title={t("semantic.title")} subtitle={t("semantic.description")}>
+        <SettingSwitch
+          label={t("semantic.enabled")}
           isSelected={semantic.enabled}
           onChange={(enabled) => update({ enabled })}
           isDisabled={disabled || !semantic.model}
-        >
-          <Switch.Content>
-            <Switch.Control>
-              <Switch.Thumb />
-            </Switch.Control>
-            <Label>{t("semantic.enabled")}</Label>
-          </Switch.Content>
-          <Description>{t("semantic.enabledHint", { ready: semantic.model ? "true" : "false" })}</Description>
-        </Switch>
+          hint={t("semantic.enabledHint", { ready: semantic.model ? "true" : "false" })}
+        />
         <SearchSelect
           label={t("semantic.model")}
           description={t("semantic.modelHint")}
@@ -172,7 +147,7 @@ export default function CachePage() {
           </NumberField.Group>
           <Description>{t("semantic.thresholdHint")}</Description>
         </NumberField>
-      </Card>
+      </SettingSection>
     </div>
   );
 }

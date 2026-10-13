@@ -5,7 +5,7 @@ import { Activity, FileText } from "lucide-react";
 import { useFormatter, useTranslations } from "next-intl";
 import EmptyState from "@/components/console/empty-state";
 import type { loadLogsAction } from "../_action";
-import type { Kind, RequestLogRow } from "@/types/logs";
+import type { LogKind, RequestLogRow } from "@/types/logs";
 import GuardrailChip from "./guardrail-chip";
 import PiiChip from "./pii-chip";
 
@@ -20,7 +20,7 @@ export default function LogTable({
   logs,
   onOpen,
 }: {
-  kind: Kind;
+  kind: LogKind;
   logs: LogsPayload;
   onOpen: (row: RequestLogRow) => void;
 }) {

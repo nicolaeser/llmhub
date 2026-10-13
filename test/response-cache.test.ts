@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { responseCacheColumns } from "@/lib/gateway/billing";
+import { responseCacheColumns } from "@/lib/gateway/billing/billing";
 import {
   cacheBackend,
   cacheGet,
@@ -12,10 +12,10 @@ import {
   semanticProbe,
   similarity,
   unitVector,
-} from "@/lib/gateway/cache";
-import { cachedTokens, embeddingVector, semanticAllowed } from "@/lib/gateway/chat-cache";
-import { normalizeEnterprise, normalizeSemanticCache } from "@/lib/gateway/settings";
-import { responseCacheStats } from "@/lib/gateway/usage-totals";
+} from "@/lib/gateway/cache/response-cache";
+import { cachedTokens, embeddingVector, semanticAllowed } from "@/lib/gateway/cache/chat-cache";
+import { normalizeEnterprise, normalizeSemanticCache } from "@/lib/settings/enterprise";
+import { responseCacheStats } from "@/lib/usage/usage-totals";
 import { cacheSettingsSchema, cacheStatsSchema } from "@/schemas/settings";
 import type { Principal } from "@/types/gateway";
 
