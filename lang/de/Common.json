@@ -41,6 +41,12 @@
   "continue": "Weiter",
   "version": {
     "updateAvailable": "Update verfügbar",
-    "updateLabel": "Update auf {version} verfügbar, Release öffnen"
+    "updateLabel": "Update auf {version} verfügbar, Release öffnen",
+    "current": "Version {version}",
+    "installed": "Neue Version installiert",
+    "reloadHint": "Lade die Seite neu, um die neue Version zu verwenden. Nicht gespeicherte Änderungen auf dieser Seite gehen verloren.",
+    "ready": "Neue Version bereit",
+    "reload": "Neu laden",
+    "reloadLabel": "Neue Version installiert, Seite neu laden"
   }
 }

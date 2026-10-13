@@ -1,6 +1,15 @@
 "use server";
 
 import { runAction } from "@/lib/http/action-result";
+import { loadProviderHealth } from "@/lib/gateway/routing/health-report";
+import {
+  loadAccountRouting,
+  loadAntigravityConfig,
+  loadAssignmentOptions,
+  saveAccountRouting,
+  saveAntigravityConfig,
+  saveAssignments,
+} from "@/lib/providers/account-routing";
 import {
   completeSignIn,
   createProvider,
@@ -27,12 +36,16 @@ export async function updateProviderAction(...args: Parameters<typeof updateProv
   return runAction(() => updateProvider(...args));
 }
 
-export async function loadProviderLimitsAction(...args: Parameters<typeof loadProviderLimits>) {
-  return runAction(() => loadProviderLimits(...args));
+export async function deleteProviderAction(...args: Parameters<typeof deleteProvider>) {
+  return runAction(() => deleteProvider(...args));
 }
 
-export async function loadSubscriptionLimitsAction(...args: Parameters<typeof loadSubscriptionLimits>) {
-  return runAction(() => loadSubscriptionLimits(...args));
+export async function discoverProviderAction(...args: Parameters<typeof discoverProvider>) {
+  return runAction(() => discoverProvider(...args));
+}
+
+export async function importProviderModelsAction(...args: Parameters<typeof importProviderModels>) {
+  return runAction(() => importProviderModels(...args));
 }
 
 export async function startSignInAction(...args: Parameters<typeof startSignIn>) {
@@ -47,14 +60,38 @@ export async function completeSignInAction(...args: Parameters<typeof completeSi
   return runAction(() => completeSignIn(...args));
 }
 
-export async function deleteProviderAction(...args: Parameters<typeof deleteProvider>) {
-  return runAction(() => deleteProvider(...args));
+export async function loadProviderLimitsAction(...args: Parameters<typeof loadProviderLimits>) {
+  return runAction(() => loadProviderLimits(...args));
 }
 
-export async function discoverProviderAction(...args: Parameters<typeof discoverProvider>) {
-  return runAction(() => discoverProvider(...args));
+export async function loadSubscriptionLimitsAction(...args: Parameters<typeof loadSubscriptionLimits>) {
+  return runAction(() => loadSubscriptionLimits(...args));
 }
 
-export async function importProviderModelsAction(...args: Parameters<typeof importProviderModels>) {
-  return runAction(() => importProviderModels(...args));
+export async function loadAccountRoutingAction(...args: Parameters<typeof loadAccountRouting>) {
+  return runAction(() => loadAccountRouting(...args));
+}
+
+export async function saveAccountRoutingAction(...args: Parameters<typeof saveAccountRouting>) {
+  return runAction(() => saveAccountRouting(...args));
+}
+
+export async function loadAssignmentOptionsAction(...args: Parameters<typeof loadAssignmentOptions>) {
+  return runAction(() => loadAssignmentOptions(...args));
+}
+
+export async function saveAssignmentsAction(...args: Parameters<typeof saveAssignments>) {
+  return runAction(() => saveAssignments(...args));
+}
+
+export async function loadAntigravityConfigAction(...args: Parameters<typeof loadAntigravityConfig>) {
+  return runAction(() => loadAntigravityConfig(...args));
+}
+
+export async function saveAntigravityConfigAction(...args: Parameters<typeof saveAntigravityConfig>) {
+  return runAction(() => saveAntigravityConfig(...args));
+}
+
+export async function loadProviderHealthAction(...args: Parameters<typeof loadProviderHealth>) {
+  return runAction(() => loadProviderHealth(...args));
 }

@@ -175,6 +175,7 @@ async function bootWorker(): Promise<void> {
         g.__llmhubBullmqRetry = undefined;
       }
       stopLocalTimers(g);
+      await import("@/lib/gateway/catalog/catalog-tasks").then(({ stopLocalCatalogTasks }) => stopLocalCatalogTasks());
       await closeQueueWorkers(g);
       await closeQueues().catch(() => undefined);
     };

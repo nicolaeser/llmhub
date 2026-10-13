@@ -1,0 +1,5 @@
+{
+  "title": "Developer",
+  "subtitle": "Try models in the playground, then connect clients with the API reference.",
+  "tab": "{tab, select, playground {Playground} api {API reference} other {}}"
+}

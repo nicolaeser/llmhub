@@ -1,6 +1,7 @@
 {
   "title": "Nutzung",
-  "subtitle": "Ausgaben, Token, Fehler und Anfragevolumen.",
+  "subtitle": "Ausgaben, Token, Fehler, Anfragevolumen und Aufschläge für den Weiterverkauf.",
+  "tab": "{tab, select, overview {Übersicht} markups {Aufschläge} other {}}",
   "days": "{n, plural, one {# Tag} other {# Tage}}",
   "metrics": {
     "spend": "Ausgaben",

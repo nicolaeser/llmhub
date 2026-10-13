@@ -1,50 +1,17 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
 import { Button, Separator } from "@heroui/react";
-import { ArrowUpCircle, LogOut, Menu, RefreshCw } from "lucide-react";
+import { LogOut, Menu, RefreshCw } from "lucide-react";
 import { useTranslations } from "next-intl";
-import { loadUpdateStatusAction } from "../_action";
-import { isActionFail } from "@/lib/http/action-result";
-import type { UpdateStatus } from "@/types/updates";
-import { AssistantTrigger } from "./assistant-session";
+import { useBuildStatus } from "./build-status";
 import { useConsoleNav } from "./sidebar";
 
 export default function ConsoleTopbar() {
   const t = useTranslations("Common");
   const tNav = useTranslations("Sidebar");
   const nav = useConsoleNav();
-  const [health, setHealth] = useState<"connecting" | "ok" | "down">(
-    "connecting",
-  );
-  const [updates, setUpdates] = useState<UpdateStatus | null>(null);
-  const [pending, start] = useTransition();
-
-  function ping() {
-    start(async () => {
-      try {
-        const res = await fetch("/internal-api/health");
-        if (!res.ok) throw new Error("down");
-        const body = (await res.json()) as { status?: string };
-        setHealth(body.status === "ok" ? "ok" : "down");
-      } catch {
-        setHealth("down");
-      }
-    });
-  }
-
-  useEffect(() => {
-    ping();
-    const id = setInterval(ping, 30_000);
-    return () => clearInterval(id);
-  }, []);
-
-  useEffect(() => {
-    loadUpdateStatusAction().then((result) => {
-      if (!isActionFail(result)) setUpdates(result);
-    });
-  }, []);
-
+  const build = useBuildStatus();
+  const health = build?.health ?? "connecting";
   const healthLabel = t("health.status", { status: health });
 
   return (
@@ -71,35 +38,19 @@ export default function ConsoleTopbar() {
             className={`h-2 w-2 rounded-full ${health === "ok" ? "bg-success" : health === "down" ? "bg-danger" : "bg-accent"}`}
             aria-hidden
           />
-          {health === "ok" ? (
-            updates ? <span>{updates.current}</span> : null
-          ) : (
-            <span className={health === "down" ? "text-danger" : undefined}>
-              {healthLabel}
-            </span>
-          )}
+          <span className={health === "down" ? "text-danger" : undefined}>
+            {healthLabel}
+          </span>
         </div>
-        {updates?.available && updates.url ? (
-          <a
-            href={updates.url}
-            target="_blank"
-            rel="noreferrer noopener"
-            aria-label={t("version.updateLabel", { version: updates.latest ?? "" })}
-            className="inline-flex items-center gap-1 text-sm font-medium text-accent"
-          >
-            <ArrowUpCircle size={14} aria-hidden />
-            {t("version.updateAvailable")}
-          </a>
-        ) : null}
         <div className="flex-1" />
-        <AssistantTrigger />
         <Button
           isIconOnly
           size="sm"
           variant="ghost"
           aria-label={t("refresh")}
-          isPending={pending}
-          onPress={ping}
+          isPending={build?.checking}
+          isDisabled={!build}
+          onPress={build?.check}
         >
           <RefreshCw size={14} aria-hidden />
         </Button>

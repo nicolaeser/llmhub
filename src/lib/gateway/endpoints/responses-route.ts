@@ -27,6 +27,10 @@ import {
   withFileSearch,
   withoutFileSearchHistory,
 } from "@/lib/rag/file-search-tool";
+import { maxCostHeader } from "@/lib/gateway/billing/cost-cap";
+import { runMcpChat, streamMcpChat, withMcpTools, withoutMcpHistory } from "@/lib/mcp/chat-loop";
+import { mcpResponse, responsesSink } from "@/lib/mcp/responses";
+import { mcpToolsetFor } from "@/lib/mcp/toolset";
 import { responsesRequestSchema } from "@/schemas/responses";
 import type { JsonMap } from "@/types/gateway";
 import type { RoutePool } from "@/types/routing";
@@ -46,9 +50,12 @@ export function createResponseRoute(pool: RoutePool) {
     const history = request.previous_response_id
       ? await previousConversation(request.previous_response_id, principal)
       : [];
+    const callerTools = (request.tools ?? []).map((tool) => tool.name);
+    const toolset = searchTool ? null : await mcpToolsetFor(req, principal, callerTools);
+    const kept = new Set([...callerTools, ...(toolset?.tools.map((tool) => tool.name) ?? [])]);
     const { body: baseChat, conversation } = responsesToChat(
       request,
-      searchTool ? history : withoutFileSearchHistory(history),
+      withoutMcpHistory(searchTool ? history : withoutFileSearchHistory(history), kept),
     );
     const aliases = modelChain(principal, model, clean);
     const store = request.store !== false;
@@ -69,7 +76,61 @@ export function createResponseRoute(pool: RoutePool) {
           include: request.include ?? null,
         }
       : null;
-    const chatBody = search ? withFileSearch(baseChat, clean.tool_choice, request.parallel_tool_calls) : baseChat;
+    const chatBody = search
+      ? withFileSearch(baseChat, clean.tool_choice, request.parallel_tool_calls)
+      : toolset
+        ? withMcpTools(baseChat, toolset)
+        : baseChat;
+    const mcp = toolset
+      ? { principal, model, aliases, outputGuard: output, toolset, maxCost: maxCostHeader(req.headers), signal: req.signal }
+      : null;
+
+    if (mcp && request.stream === true) {
+      return streamMcpChat({
+        req,
+        ctx: mcp,
+        body: chatBody,
+        sink: async () => {
+          let id = responseId(newId());
+          let storedId = "";
+          if (store) {
+            const stored = await putObject({
+              kind: "response",
+              owner,
+              contentType: "application/json",
+              payload: storedPayload(responseSkeleton(request, "", createdAt), conversation, items),
+              meta: { model },
+            });
+            storedId = stored.id;
+            id = responseId(stored.id);
+          }
+          const encoder = new ResponsesStreamEncoder(responseSkeleton(request, id, createdAt), request.include ?? null);
+          return responsesSink(encoder, async (transcript) => {
+            if (!storedId) return;
+            await updateObjectPayload(
+              storedId,
+              storedPayload(encoder.result(), [...conversation, ...transcript], items),
+              { model },
+            );
+          });
+        },
+      });
+    }
+
+    if (mcp) {
+      const run = await runMcpChat(mcp, chatBody);
+      const response = mcpResponse(run, responseSkeleton(request, "", createdAt));
+      const include = request.include ?? null;
+      if (!store) return NextResponse.json(visibleResponse({ ...response, id: responseId(newId()) }, include));
+      const stored = await putObject({
+        kind: "response",
+        owner,
+        contentType: "application/json",
+        payload: storedPayload(response, [...conversation, ...run.transcript], items),
+        meta: { model },
+      });
+      return NextResponse.json(visibleResponse({ ...response, id: responseId(stored.id) }, include));
+    }
 
     if (request.stream === true && search) {
       return streamFileSearch({

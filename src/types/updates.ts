@@ -13,3 +13,10 @@ export type UpdateStatus = {
   url: string | null;
   available: boolean;
 };
+
+export type BuildInfo = {
+  version: string;
+  startedAt: string;
+};
+
+export type ServerHealth = "connecting" | "ok" | "down";

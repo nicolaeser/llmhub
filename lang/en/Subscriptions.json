@@ -1,17 +1,17 @@
 {
-  "title": "Subscriptions",
-  "subtitle": "Serve requests from ChatGPT, Claude, Google Antigravity, and SuperGrok plans. Every signed-in account shows its own usage limits and when they reset.",
+  "intro": "Serve requests to /api/subscription from ChatGPT, Claude, Google Antigravity, and SuperGrok plans. Each account shows its own limits and when they reset.",
   "addAccount": "Add account",
-  "noAccounts": "No account signed in yet.",
+  "connectTitle": "{first, select, true {Connect a subscription} other {Add another subscription}}",
   "refreshAll": "Refresh all limits",
   "stats": {
-    "accounts": "Accounts",
     "available": "Available now",
     "limited": "At a limit",
     "nextRecovery": "Next recovery",
     "none": "None",
-    "paused": "Paused"
+    "paused": "Paused",
+    "total": "{count, plural, one {of # account} other {of # accounts}}"
   },
+  "stateCount": "{state, select, available {{count, plural, other {# available}}} limited {{count, plural, other {# at a limit}}} expired {{count, plural, one {# sign-in expired} other {# sign-ins expired}}} paused {{count, plural, other {# paused}}} other {{count, plural, other {#}}}}",
   "status": "{status, select, paused {Paused} available {Available} limited {Limit reached} expired {Sign-in expired} unavailable {Limits unavailable} checking {Checking} other {Connected}}",
   "backIn": "Available again {when}.",
   "backInUnknown": "Limit reached. The provider did not say when it resets.",
@@ -29,34 +29,22 @@
     "credits": "{unlimited, select, true {Unlimited credits} other {Credits: {balance}}}",
     "resetCredits": "{available, plural, =0 {No limit resets available} one {# limit reset available} other {# limit resets available}}{applicable, plural, =0 {} other { ({applicable} usable now)}}",
     "extraUsage": "Extra usage: {used} of {limit}",
-    "none": "The provider reported no limits for this plan.",
-    "resetsShort": "Resets {when}",
-    "notStartedShort": "Not started"
+    "none": "The provider reported no limits for this plan."
   },
   "routing": {
-    "title": "Account routing",
-    "description": "Choose per provider how requests are spread across its signed-in accounts. An account that has hit a usage limit is always skipped while another account still has room.",
-    "accounts": "{count, plural, =0 {No accounts} one {# account} other {# accounts}}",
-    "method": "{strategy, select, inherit {Per model alias} smart {Smart} quota_balanced {Most headroom} quota_expiring {Soonest reset} round_robin {Round robin} priority {Priority} least_inflight {Least in-flight} other {{strategy}}}",
-    "hint": "{strategy, select, inherit {Each model alias decides, using the method set on the Models page.} smart {Spends quota that is about to reset and avoids accounts close to their limit. Weighs headroom, reset time, and running requests.} quota_balanced {Picks the account with the most room left on its tightest limit.} quota_expiring {Picks the account whose tightest limit resets first, so quota about to renew gets used.} round_robin {Rotates through the accounts in turn so they wear evenly.} priority {Uses the account with the highest weight first and moves on when it is limited or cooling down.} least_inflight {Sends each request to the account with the fewest running requests.} other {}}",
-    "label": "Method for {provider}",
-    "single": "Only one account is signed in, so the method makes no difference yet.",
-    "saved": "Routing for {provider} saved"
+    "title": "Account distribution",
+    "description": "How requests spread across these accounts. An account at a usage limit is skipped while another still has room.",
+    "label": "Account distribution for {provider}",
+    "group": "{group, select, quota {Uses plan limits} simple {Simple} other {{group}}}",
+    "recommended": "Recommended",
+    "method": "{strategy, select, inherit {Per model alias} smart {Smart} quota_balanced {Most headroom} quota_expiring {Soonest reset} round_robin {Round robin} priority {Priority} least_inflight {Least busy} other {{strategy}}}",
+    "hint": "{strategy, select, inherit {Each model alias uses its own load-balance mode from Models.} smart {Spends quota that resets soon and steers clear of accounts close to a limit.} quota_balanced {Picks the account with the most room left on its tightest limit.} quota_expiring {Picks the account whose tightest limit resets first.} round_robin {Takes turns so all accounts wear evenly.} priority {Fills the account with the highest endpoint weight first, then moves on.} least_inflight {Sends each request to the account with the fewest running requests.} other {}}",
+    "priorityNote": "Weights are set per endpoint on the model groups in <link>Models</link>.",
+    "single": "Only one account, so it serves every request. With more accounts, this method applies: {method}.",
+    "choose": "Change method",
+    "saved": "Account distribution for {provider} saved"
   },
   "pausedHint": "This account is paused and receives no requests. Its limits stay visible.",
-  "overview": {
-    "title": "Account overview",
-    "none": "No data",
-    "columns": {
-      "account": "Account",
-      "provider": "Provider",
-      "short": "5-hour",
-      "weekly": "Weekly",
-      "longer": "Monthly",
-      "state": "Status",
-      "active": "Active"
-    }
-  },
   "access": {
     "summary": "{restricted, select, true {{count, plural, =0 {No key can use it} one {Limited to # assignment} other {Limited to # assignments}}} other {Open to every key}}",
     "manage": "Manage access",
@@ -78,6 +66,7 @@
     "label": "OAuth client secret",
     "hint": "Paste the client secret of the Antigravity desktop OAuth client. Without it, signing in is disabled.",
     "save": "Save secret",
+    "replace": "Replace secret",
     "remove": "Remove secret",
     "saved": "Client secret saved",
     "removed": "Client secret removed"

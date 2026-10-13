@@ -1,7 +1,8 @@
 import type { Role, User } from "@/generated/prisma/client";
 import type { SessionFactor } from "@/types/security";
-import type { AssistantToolName } from "@/types/assistant";
-import type { AdminSettings } from "@/types/settings";
+import type { KeyObject } from "node:crypto";
+import type { z } from "zod";
+import type { oidcSettingsSchema } from "@/schemas/settings";
 
 export type PermissionDomain =
   | "keys"
@@ -37,8 +38,7 @@ export type Permission =
   | "roles:manage"
   | "settings:read"
   | "settings:manage"
-  | "playground:use"
-  | "assistant:use";
+  | "playground:use";
 
 export type PermissionMeta = {
   domain: PermissionDomain;
@@ -85,6 +85,7 @@ export type AuthErrorCode =
   | "USER_NOT_FOUND"
   | "USER_CHANGED"
   | "KEY_LIMIT"
+  | "SSO_REQUIRED"
   | "NOT_FOUND";
 
 type SessionRole = Pick<Role, "id" | "templateKey" | "name">;
@@ -121,7 +122,6 @@ export type RoleSummary = {
   name: string | null;
   description: string | null;
   permissions: Permission[];
-  assistantToolsDisabled: AssistantToolName[];
   memberCount: number;
   revision: number;
   editable: boolean;
@@ -148,7 +148,11 @@ export type OidcDiscovery = {
   token_endpoint: string;
   jwks_uri: string;
   userinfo_endpoint: string;
+  token_endpoint_auth_methods_supported: string[];
+  id_token_signing_alg_values_supported: string[];
 };
+
+export type OidcTokenAuth = "client_secret_basic" | "client_secret_post";
 
 export type ResolvedOidc = {
   enabled: boolean;
@@ -156,6 +160,8 @@ export type ResolvedOidc = {
   clientId: string;
   clientSecret: string;
   redirectUrl: string;
+  scopes: string;
+  groupsClaim: string;
 };
 
 export type OidcEnv = {
@@ -187,18 +193,53 @@ export type TargetRow = {
   role: { permissions: string[] } | null;
 };
 
-export type OidcSettings = AdminSettings["oidc"];
+export type OidcSettings = z.infer<typeof oidcSettingsSchema>;
+
+export type OidcProviderId = "entra" | "google" | "okta" | "keycloak" | "authentik" | "auth0" | "generic";
+
+export type OidcPreset = {
+  issuer: string;
+  scopes: string;
+  groupsClaim: string;
+  docs: string;
+};
+
+export type RoleMapping = OidcSettings["role_mappings"][number];
+
+export type OidcIdentity = {
+  issuer: string;
+  subject: string;
+  email: string;
+  groups: string[];
+  externalIds: string[];
+};
+
+export type SsoFailure = "owner" | "domain" | "conflict" | "email";
 
 export type Jwk = {
   kty?: string;
   kid?: string;
-  n?: string;
-  e?: string;
+  crv?: string;
   alg?: string;
   use?: string;
 };
 
-export type JwksCache = { url: string; keys: Map<string, string>; fetched: number };
+export type JwtAlgorithm = {
+  kty: "RSA" | "EC" | "OKP";
+  hash: string | null;
+  curves?: readonly string[];
+  saltLength?: number;
+};
+
+export type VerificationKey = {
+  kid: string;
+  kty: string;
+  crv: string;
+  alg: string;
+  key: KeyObject;
+};
+
+export type JwksCache = { url: string; keys: VerificationKey[]; fetched: number };
 
 export type JwtClaims = Record<string, unknown>;
 

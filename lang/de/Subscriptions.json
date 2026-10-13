@@ -1,17 +1,17 @@
 {
-  "title": "Abos",
-  "subtitle": "Anfragen über ChatGPT-, Claude-, Google-Antigravity- und SuperGrok-Abos bedienen. Jedes angemeldete Konto zeigt seine eigenen Nutzungslimits und wann sie zurückgesetzt werden.",
+  "intro": "Bediene Anfragen an /api/subscription mit ChatGPT-, Claude-, Google-Antigravity- und SuperGrok-Abos. Jedes Konto zeigt seine eigenen Limits und wann sie zurückgesetzt werden.",
   "addAccount": "Konto hinzufügen",
-  "noAccounts": "Noch kein Konto angemeldet.",
+  "connectTitle": "{first, select, true {Abo verbinden} other {Weiteres Abo verbinden}}",
   "refreshAll": "Alle Limits aktualisieren",
   "stats": {
-    "accounts": "Konten",
     "available": "Jetzt verfügbar",
     "limited": "Am Limit",
     "nextRecovery": "Nächste Erholung",
     "none": "Keine",
-    "paused": "Pausiert"
+    "paused": "Pausiert",
+    "total": "{count, plural, one {von # Konto} other {von # Konten}}"
   },
+  "stateCount": "{state, select, available {{count, plural, other {# verfügbar}}} limited {{count, plural, other {# am Limit}}} expired {{count, plural, one {# Anmeldung abgelaufen} other {# Anmeldungen abgelaufen}}} paused {{count, plural, other {# pausiert}}} other {{count, plural, other {#}}}}",
   "status": "{status, select, paused {Pausiert} available {Verfügbar} limited {Limit erreicht} expired {Anmeldung abgelaufen} unavailable {Limits nicht verfügbar} checking {Wird geprüft} other {Verbunden}}",
   "backIn": "Wieder verfügbar {when}.",
   "backInUnknown": "Limit erreicht. Der Anbieter nennt keinen Zeitpunkt für die Zurücksetzung.",
@@ -29,34 +29,22 @@
     "credits": "{unlimited, select, true {Unbegrenzte Credits} other {Credits: {balance}}}",
     "resetCredits": "{available, plural, =0 {Keine Limit-Resets verfügbar} one {# Limit-Reset verfügbar} other {# Limit-Resets verfügbar}}{applicable, plural, =0 {} other { ({applicable} jetzt nutzbar)}}",
     "extraUsage": "Zusatznutzung: {used} von {limit}",
-    "none": "Der Anbieter meldet für dieses Abo keine Limits.",
-    "resetsShort": "Zurücksetzung {when}",
-    "notStartedShort": "Nicht gestartet"
+    "none": "Der Anbieter meldet für dieses Abo keine Limits."
   },
   "routing": {
-    "title": "Konto-Routing",
-    "description": "Lege pro Anbieter fest, wie Anfragen auf seine angemeldeten Konten verteilt werden. Ein Konto, das sein Nutzungslimit erreicht hat, wird immer übersprungen, solange ein anderes noch Luft hat.",
-    "accounts": "{count, plural, =0 {Keine Konten} one {# Konto} other {# Konten}}",
-    "method": "{strategy, select, inherit {Pro Modell-Alias} smart {Intelligent} quota_balanced {Meiste Reserve} quota_expiring {Nächster Reset} round_robin {Reihum} priority {Priorität} least_inflight {Wenigste laufende Anfragen} other {{strategy}}}",
-    "hint": "{strategy, select, inherit {Jeder Modell-Alias entscheidet selbst, mit der Methode von der Modelle-Seite.} smart {Verbraucht Kontingent, das bald zurückgesetzt wird, und meidet Konten nahe am Limit. Wägt Reserve, Reset-Zeit und laufende Anfragen ab.} quota_balanced {Wählt das Konto mit der meisten Reserve beim engsten Limit.} quota_expiring {Wählt das Konto, dessen engstes Limit zuerst zurückgesetzt wird, damit bald erneuertes Kontingent genutzt wird.} round_robin {Wechselt reihum zwischen den Konten, damit sie gleichmäßig genutzt werden.} priority {Nutzt zuerst das Konto mit dem höchsten Gewicht und wechselt, sobald es limitiert oder in Abkühlung ist.} least_inflight {Schickt jede Anfrage an das Konto mit den wenigsten laufenden Anfragen.} other {}}",
-    "label": "Methode für {provider}",
-    "single": "Es ist nur ein Konto angemeldet, die Methode macht daher noch keinen Unterschied.",
-    "saved": "Routing für {provider} gespeichert"
+    "title": "Kontoverteilung",
+    "description": "Wie Anfragen auf diese Konten verteilt werden. Ein Konto am Nutzungslimit wird übersprungen, solange ein anderes noch Luft hat.",
+    "label": "Kontoverteilung für {provider}",
+    "group": "{group, select, quota {Nach Abo-Limits} simple {Einfach} other {{group}}}",
+    "recommended": "Empfohlen",
+    "method": "{strategy, select, inherit {Pro Modell-Alias} smart {Intelligent} quota_balanced {Meiste Reserve} quota_expiring {Nächster Reset} round_robin {Reihum} priority {Priorität} least_inflight {Geringste Last} other {{strategy}}}",
+    "hint": "{strategy, select, inherit {Jeder Modell-Alias nutzt seinen eigenen Lastverteilungsmodus aus Modelle.} smart {Verbraucht Kontingent, das bald zurückgesetzt wird, und meidet Konten nahe am Limit.} quota_balanced {Wählt das Konto mit der meisten Reserve beim engsten Limit.} quota_expiring {Wählt das Konto, dessen engstes Limit zuerst zurückgesetzt wird.} round_robin {Wechselt reihum, damit alle Konten gleichmäßig genutzt werden.} priority {Füllt zuerst das Konto mit dem höchsten Endpunkt-Gewicht und wechselt dann weiter.} least_inflight {Schickt jede Anfrage an das Konto mit den wenigsten laufenden Anfragen.} other {}}",
+    "priorityNote": "Die Gewichte legst du pro Endpunkt in den Modellgruppen unter <link>Modelle</link> fest.",
+    "single": "Nur ein Konto, es bedient alle Anfragen. Mit weiteren Konten gilt diese Methode: {method}.",
+    "choose": "Methode ändern",
+    "saved": "Kontoverteilung für {provider} gespeichert"
   },
   "pausedHint": "Dieses Konto ist pausiert und erhält keine Anfragen. Die Limits bleiben sichtbar.",
-  "overview": {
-    "title": "Kontenübersicht",
-    "none": "Keine Daten",
-    "columns": {
-      "account": "Konto",
-      "provider": "Anbieter",
-      "short": "5 Stunden",
-      "weekly": "Woche",
-      "longer": "Monat",
-      "state": "Status",
-      "active": "Aktiv"
-    }
-  },
   "access": {
     "summary": "{restricted, select, true {{count, plural, =0 {Kein Key darf es nutzen} one {Auf # Zuordnung beschränkt} other {Auf # Zuordnungen beschränkt}}} other {Für jeden Key offen}}",
     "manage": "Zugriff verwalten",
@@ -78,6 +66,7 @@
     "label": "OAuth-Client-Secret",
     "hint": "Füge das Client-Secret des Antigravity-Desktop-OAuth-Clients ein. Ohne es ist die Anmeldung gesperrt.",
     "save": "Secret speichern",
+    "replace": "Secret ersetzen",
     "remove": "Secret entfernen",
     "saved": "Client-Secret gespeichert",
     "removed": "Client-Secret entfernt"

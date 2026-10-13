@@ -2,7 +2,8 @@ import "server-only";
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { pkceChallenge, signingSecret } from "@/lib/crypto";
 import { env } from "@/lib/env";
-import { asRecord, asString } from "@/lib/gateway/core";
+import { asRecord, asString, asStringArray } from "@/lib/gateway/core";
+import { DEFAULT_OIDC_SCOPES, oidcScopes } from "@/lib/auth/oidc-presets";
 import { verifyJwt } from "@/lib/auth/jwks";
 import { readJsonOr } from "@/lib/utils/json";
 import type {
@@ -14,7 +15,9 @@ import type {
   VerifiedOidcState,
   JwtClaims,
   JwtConfig,
+  OidcIdentity,
   OidcSettings,
+  OidcTokenAuth,
 } from "@/types/auth";
 
 export const OIDC_STATE_COOKIE =
@@ -27,21 +30,23 @@ export function trimIssuer(issuer: string): string {
   return issuer.trim().replace(/\/+$/, "");
 }
 
+export function oidcCallbackUrl(appUrl: string = env.NEXT_PUBLIC_APP_URL): string {
+  return `${appUrl.replace(/\/+$/, "")}/sso/callback`;
+}
+
 export function resolveOidc(
   cfg: Partial<OidcSettings> | undefined,
   envOverride: OidcEnv = {},
 ): ResolvedOidc {
-  const appUrl = (envOverride.appUrl ?? env.NEXT_PUBLIC_APP_URL).replace(/\/+$/, "");
-  const clientId = cfg?.client_id ?? "";
   const clientSecret = envOverride.clientSecret ?? env.OIDC_CLIENT_SECRET ?? "";
-  const redirectUrl =
-    (cfg?.redirect_url ?? "").trim() || `${appUrl}/sso/callback`;
   return {
     enabled: Boolean(cfg?.enabled),
     issuer: trimIssuer(cfg?.issuer ?? ""),
-    clientId: clientId.trim(),
+    clientId: (cfg?.client_id ?? "").trim(),
     clientSecret: clientSecret.trim(),
-    redirectUrl,
+    redirectUrl: oidcCallbackUrl(envOverride.appUrl ?? env.NEXT_PUBLIC_APP_URL),
+    scopes: oidcScopes(cfg?.scopes ?? DEFAULT_OIDC_SCOPES),
+    groupsClaim: (cfg?.groups_claim ?? "").trim(),
   };
 }
 
@@ -56,6 +61,13 @@ export function oidcIsReady(
     Boolean(resolved.clientId) &&
     Boolean(resolved.clientSecret)
   );
+}
+
+export function ssoOnlyActive(
+  cfg: Partial<OidcSettings> | undefined,
+  envOverride: OidcEnv = {},
+): boolean {
+  return cfg?.sso_only === true && oidcIsReady(cfg, envOverride);
 }
 
 export function resetOidcCache(): void {
@@ -80,12 +92,17 @@ export async function fetchOidcDiscovery(
   if (!res.ok) throw new Error(`oidc discovery ${res.status}`);
   const rec = asRecord(await res.json()) ?? {};
   const disc: OidcDiscovery = {
-    issuer: trimIssuer(asString(rec.issuer, trimmed)),
+    issuer: asString(rec.issuer, trimmed),
     authorization_endpoint: asString(rec.authorization_endpoint),
     token_endpoint: asString(rec.token_endpoint),
     jwks_uri: asString(rec.jwks_uri),
     userinfo_endpoint: asString(rec.userinfo_endpoint),
+    token_endpoint_auth_methods_supported: asStringArray(rec.token_endpoint_auth_methods_supported),
+    id_token_signing_alg_values_supported: asStringArray(rec.id_token_signing_alg_values_supported),
   };
+  if (trimIssuer(disc.issuer) !== trimmed) {
+    throw new Error("oidc discovery issuer mismatch");
+  }
   if (!disc.authorization_endpoint) {
     throw new Error("oidc discovery missing authorization_endpoint");
   }
@@ -108,7 +125,7 @@ export function buildAuthorizationUrl(
     response_type: "code",
     client_id: resolved.clientId,
     redirect_uri: resolved.redirectUrl,
-    scope: "openid email profile",
+    scope: resolved.scopes,
     state: state.state,
     nonce: state.nonce,
     code_challenge: state.codeChallenge,
@@ -117,19 +134,39 @@ export function buildAuthorizationUrl(
   return `${disc.authorization_endpoint}?${q.toString()}`;
 }
 
-export function tokenRequestBody(
+export function tokenAuthMethod(supported: readonly string[]): OidcTokenAuth {
+  const basic = supported.indexOf("client_secret_basic");
+  const post = supported.indexOf("client_secret_post");
+  if (basic === -1) return "client_secret_post";
+  if (post === -1 || basic < post) return "client_secret_basic";
+  return "client_secret_post";
+}
+
+function formEncode(value: string): string {
+  return new URLSearchParams({ v: value }).toString().slice(2);
+}
+
+export function tokenRequest(
   resolved: ResolvedOidc,
   code: string,
   verifier: string,
-): URLSearchParams {
-  return new URLSearchParams({
+  method: OidcTokenAuth = "client_secret_post",
+): { headers: Record<string, string>; body: URLSearchParams } {
+  const body = new URLSearchParams({
     grant_type: "authorization_code",
     code,
     redirect_uri: resolved.redirectUrl,
-    client_id: resolved.clientId,
-    client_secret: resolved.clientSecret,
     code_verifier: verifier,
   });
+  const headers: Record<string, string> = { "Content-Type": "application/x-www-form-urlencoded" };
+  if (method === "client_secret_basic") {
+    const credentials = `${formEncode(resolved.clientId)}:${formEncode(resolved.clientSecret)}`;
+    headers.Authorization = `Basic ${Buffer.from(credentials, "utf8").toString("base64")}`;
+  } else {
+    body.set("client_id", resolved.clientId);
+    body.set("client_secret", resolved.clientSecret);
+  }
+  return { headers, body };
 }
 
 function hmacHex(secret: string, payload: string): string {
@@ -202,10 +239,42 @@ export function verifyOidcState(input: {
   return { nonce, verifier, returnPath };
 }
 
+const MAX_CLAIM_VALUES = 500;
+
+function isTrue(value: unknown): boolean {
+  return value === true || value === "true" || value === 1;
+}
+
 export function emailFromOidcClaims(claims: JwtClaims): string {
-  const verified = claims.email_verified === true || claims.email_verified === "true";
+  const verified = isTrue(claims.email_verified) || isTrue(claims.xms_edov);
   if (!verified || typeof claims.email !== "string") return "";
   return claims.email.trim().toLowerCase();
+}
+
+export function claimValues(claims: JwtClaims, name: string): string[] {
+  const key = name.trim();
+  if (!key) return [];
+  const value = Object.hasOwn(claims, key)
+    ? claims[key]
+    : key.split(".").reduce<unknown>((node, part) => asRecord(node)?.[part], claims);
+  const list = Array.isArray(value) ? value : [value];
+  return list
+    .flatMap((item) => (typeof item === "string" || typeof item === "number" ? [String(item).trim()] : []))
+    .filter((item) => item && item.length <= 256)
+    .slice(0, MAX_CLAIM_VALUES);
+}
+
+export function identityFromClaims(claims: JwtClaims, groupsClaim: string): OidcIdentity {
+  const subject = typeof claims.sub === "string" ? claims.sub.trim() : "";
+  if (!subject) throw new Error("oidc token missing sub");
+  const oid = typeof claims.oid === "string" ? claims.oid.trim() : "";
+  return {
+    issuer: String(claims.iss ?? ""),
+    subject,
+    email: emailFromOidcClaims(claims),
+    groups: claimValues(claims, groupsClaim),
+    externalIds: [...new Set([subject, oid].filter(Boolean))],
+  };
 }
 
 export function jwtConfigForOidc(
@@ -225,26 +294,29 @@ export async function exchangeOidcCode(input: {
   nonce: string;
   verifier: string;
   fetchFn?: typeof fetch;
-}): Promise<string> {
+}): Promise<OidcIdentity> {
   const fetchFn = input.fetchFn ?? fetch;
   const disc = await fetchOidcDiscovery(input.resolved.issuer, fetchFn);
+  const request = tokenRequest(
+    input.resolved,
+    input.code,
+    input.verifier,
+    tokenAuthMethod(disc.token_endpoint_auth_methods_supported),
+  );
   const res = await fetchFn(disc.token_endpoint, {
     method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: tokenRequestBody(input.resolved, input.code, input.verifier),
+    headers: request.headers,
+    body: request.body,
     signal: AbortSignal.timeout(8_000),
   });
   const rec = asRecord(await readJsonOr(res, null)) ?? {};
   const idToken = asString(rec.id_token);
   if (!idToken) {
-    const detail = asString(rec.error_description) || asString(rec.error) || `oidc token ${res.status}`;
-    throw new Error(detail);
+    throw new Error(`oidc token ${res.status} ${asString(rec.error).slice(0, 80)}`.trim());
   }
   const claims = await verifyJwt(idToken, jwtConfigForOidc(input.resolved, disc));
   if (claims.nonce !== input.nonce) throw new Error("oidc nonce mismatch");
-  const email = emailFromOidcClaims(claims);
-  if (!email.includes("@")) throw new Error("oidc token missing verified email");
-  return email;
+  return identityFromClaims(claims, input.resolved.groupsClaim);
 }
 
 export function oidcStateCookieOptions(maxAge = OIDC_STATE_TTL_SECONDS) {

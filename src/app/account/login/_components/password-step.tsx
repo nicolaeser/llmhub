@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Button, Form, Input, Label, Spinner, TextField, toast } from "@heroui/react";
+import { Button, Disclosure, Form, Input, Label, Spinner, TextField, toast } from "@heroui/react";
 import { KeyRound } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Link, useRouter } from "@/i18n/routing";
@@ -22,12 +22,14 @@ import {
 
 export default function PasswordStep({
   ssoEnabled,
+  ssoOnly,
   passkeysEnabled,
   passwordResetEnabled,
   returnParam,
   onResult,
 }: {
   ssoEnabled: boolean;
+  ssoOnly: boolean;
   passkeysEnabled: boolean;
   passwordResetEnabled: boolean;
   returnParam: string | null;
@@ -78,100 +80,132 @@ export default function PasswordStep({
     });
   }
 
-  return (
-    <>
-      <Form
-        validationBehavior="native"
-        onSubmit={handleSubmit}
-        className="space-y-5"
-        aria-label={t("signIn")}
-      >
-        <TextField fullWidth isRequired name="email" type="email" value={email} onChange={setEmail}>
-          <Label>{t("email")}</Label>
+  const passwordForm = (
+    <Form
+      validationBehavior="native"
+      onSubmit={handleSubmit}
+      className="space-y-5"
+      aria-label={t("signIn")}
+    >
+      <TextField fullWidth isRequired name="email" type="email" value={email} onChange={setEmail}>
+        <Label>{t("email")}</Label>
+        <Input
+          autoComplete="username webauthn"
+          placeholder={t("emailPlaceholder")}
+        />
+      </TextField>
+      <div className="space-y-1">
+        <TextField fullWidth
+          isRequired
+          name="password"
+          type="password"
+          value={password}
+          onChange={setPassword}
+        >
+          <Label>{t("password")}</Label>
           <Input
-            autoComplete="username webauthn"
-            placeholder={t("emailPlaceholder")}
+            autoComplete="current-password"
+            placeholder={t("passwordPlaceholder")}
           />
         </TextField>
-        <div className="space-y-1">
-          <TextField fullWidth
-            isRequired
-            name="password"
-            type="password"
-            value={password}
-            onChange={setPassword}
-          >
-            <Label>{t("password")}</Label>
-            <Input
-              autoComplete="current-password"
-              placeholder={t("passwordPlaceholder")}
-            />
-          </TextField>
-          {passwordResetEnabled ? (
-            <div className="flex justify-end">
-              <Link
-                href={withReturnQuery("/account/forgot-password", returnParam)}
-                className="mt-1 text-xs text-muted hover:text-accent"
-              >
-                {t("forgotPassword")}
-              </Link>
-            </div>
-          ) : null}
-        </div>
-        <Button
-          type="submit"
-          fullWidth
-          size="lg"
-          isPending={pending}
-          isDisabled={busy}
-        >
-          {({ isPending }) => (
-            <>
-              {isPending ? <Spinner color="current" size="sm" /> : null}
-              {t("signIn")}
-            </>
-          )}
-        </Button>
-      </Form>
-      {(passkeysEnabled && browserPasskeys) || ssoEnabled ? (
+        {passwordResetEnabled ? (
+          <div className="flex justify-end">
+            <Link
+              href={withReturnQuery("/account/forgot-password", returnParam)}
+              className="mt-1 text-xs text-muted hover:text-accent"
+            >
+              {t("forgotPassword")}
+            </Link>
+          </div>
+        ) : null}
+      </div>
+      <Button
+        type="submit"
+        fullWidth
+        size="lg"
+        isPending={pending}
+        isDisabled={busy}
+      >
+        {({ isPending }) => (
+          <>
+            {isPending ? <Spinner color="current" size="sm" /> : null}
+            {t("signIn")}
+          </>
+        )}
+      </Button>
+    </Form>
+  );
+
+  const ssoButton = (
+    <Button
+      variant={ssoOnly ? "primary" : "secondary"}
+      fullWidth
+      size="lg"
+      isDisabled={busy}
+      onPress={() => {
+        router.replace(withReturnQuery("/sso/login", returnParam));
+      }}
+    >
+      {t("sso")}
+    </Button>
+  );
+
+  const passkeyButton =
+    passkeysEnabled && browserPasskeys ? (
+      <Button
+        variant="secondary"
+        fullWidth
+        size="lg"
+        isPending={passkeyPending}
+        isDisabled={busy}
+        onPress={signInWithPasskey}
+      >
+        {({ isPending }) => (
+          <>
+            {isPending ? (
+              <Spinner color="current" size="sm" />
+            ) : (
+              <KeyRound size={16} aria-hidden />
+            )}
+            {t("passkey")}
+          </>
+        )}
+      </Button>
+    ) : null;
+
+  if (ssoOnly) {
+    return (
+      <div className="space-y-5">
+        <p className="text-sm text-muted">{t("ssoOnlyHint")}</p>
+        {ssoButton}
+        <Disclosure>
+          <Disclosure.Heading>
+            <Disclosure.Trigger className="flex w-full items-center justify-between gap-2 text-sm text-muted">
+              {t("ownerSignIn")}
+              <Disclosure.Indicator />
+            </Disclosure.Trigger>
+          </Disclosure.Heading>
+          <Disclosure.Content>
+            <Disclosure.Body className="space-y-3 pt-4">
+              {passwordForm}
+              {passkeyButton}
+            </Disclosure.Body>
+          </Disclosure.Content>
+        </Disclosure>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      {passwordForm}
+      {passkeyButton || ssoEnabled ? (
         <div className="mt-5 space-y-3">
           <p className="text-center text-xs uppercase tracking-widest text-muted">
             {t("or")}
           </p>
-          {passkeysEnabled && browserPasskeys ? (
-            <Button
-              variant="secondary"
-              fullWidth
-              size="lg"
-              isPending={passkeyPending}
-              isDisabled={busy}
-              onPress={signInWithPasskey}
-            >
-              {({ isPending }) => (
-                <>
-                  {isPending ? (
-                    <Spinner color="current" size="sm" />
-                  ) : (
-                    <KeyRound size={16} aria-hidden />
-                  )}
-                  {t("passkey")}
-                </>
-              )}
-            </Button>
-          ) : null}
-          {ssoEnabled ? (
-            <Button
-              variant="secondary"
-              fullWidth
-              size="lg"
-              isDisabled={busy}
-              onPress={() => {
-                router.replace(withReturnQuery("/sso/login", returnParam));
-              }}
-            >
-              {t("sso")}
-            </Button>
-          ) : null}
+          {passkeyButton}
+          {ssoEnabled ? ssoButton : null}
         </div>
       ) : null}
     </>

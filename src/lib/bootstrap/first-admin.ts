@@ -21,11 +21,11 @@ import { setupSchema } from "@/schemas/auth";
 import type { CreateFirstAdminResult } from "@/types/setup";
 
 function isSerializableConflict(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  if ("code" in error && error.code === "P2034") return true;
+  const cause = "cause" in error ? error.cause : null;
   return Boolean(
-    error &&
-      typeof error === "object" &&
-      "code" in error &&
-      error.code === "P2034",
+    cause && typeof cause === "object" && "kind" in cause && cause.kind === "TransactionWriteConflict",
   );
 }
 

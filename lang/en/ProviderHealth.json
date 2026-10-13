@@ -1,5 +1,4 @@
 {
-  "title": "Provider health",
   "subtitle": "Every upstream attempt counts, including retries. Repeated failures pause an endpoint for {seconds, plural, one {# second} other {# seconds}}.",
   "backend": "{backend, select, redis {Shared through Redis} other {This instance only}}",
   "window": "Window",

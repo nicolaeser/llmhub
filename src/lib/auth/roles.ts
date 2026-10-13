@@ -19,7 +19,6 @@ import {
   sortPermissions,
 } from "@/lib/auth/permissions";
 import { writeAudit } from "@/lib/audit";
-import { assistantToolList } from "@/lib/assistant/catalog";
 import {
   idSchema,
   roleRevisionSchema,
@@ -63,7 +62,6 @@ export async function listRoles(actor: GrantActor): Promise<RoleSummary[]> {
         name: role.name,
         description: role.description,
         permissions: granted,
-        assistantToolsDisabled: assistantToolList(role.assistantToolsDisabled),
         memberCount: role._count.users,
         revision: role.revision,
         editable: canManage(actor, granted),
@@ -87,7 +85,6 @@ export async function createRole(actor: GrantActor, actorUserId: string, raw: un
   const input = parseAuthInput(roleWriteSchema, raw);
   if (!input.name) throw new AuthError("NAME_REQUIRED");
   const granted = sortPermissions(input.permissions);
-  const toolsOff = assistantToolList(input.assistantToolsDisabled);
   assertCanGrant(actor, granted);
   try {
     const role = await prisma.role.create({
@@ -95,7 +92,6 @@ export async function createRole(actor: GrantActor, actorUserId: string, raw: un
         name: input.name,
         description: input.description || null,
         permissions: granted,
-        assistantToolsDisabled: toolsOff,
       },
       select: { id: true },
     });
@@ -104,7 +100,7 @@ export async function createRole(actor: GrantActor, actorUserId: string, raw: un
       action: "role.create",
       objectType: "role",
       objectId: role.id,
-      after: { name: input.name, permissions: granted, assistantToolsDisabled: toolsOff },
+      after: { name: input.name, permissions: granted },
     });
     return role;
   } catch (error) {
@@ -124,7 +120,6 @@ export async function updateRole(
   assertCanManage(actor, permissionList(role.permissions), "ROLE_PROTECTED");
   if (!role.templateKey && !input.name) throw new AuthError("NAME_REQUIRED");
   const granted = sortPermissions(input.permissions);
-  const toolsOff = assistantToolList(input.assistantToolsDisabled);
   assertCanGrant(actor, granted);
   let count: number;
   try {
@@ -134,7 +129,6 @@ export async function updateRole(
         name: input.name,
         description: input.description || null,
         permissions: granted,
-        assistantToolsDisabled: toolsOff,
         revision: { increment: 1 },
       },
     }));
@@ -148,12 +142,8 @@ export async function updateRole(
     action: "role.update",
     objectType: "role",
     objectId: role.id,
-    before: {
-      name: role.name,
-      permissions: permissionList(role.permissions),
-      assistantToolsDisabled: assistantToolList(role.assistantToolsDisabled),
-    },
-    after: { name: input.name, permissions: granted, assistantToolsDisabled: toolsOff },
+    before: { name: role.name, permissions: permissionList(role.permissions) },
+    after: { name: input.name, permissions: granted },
   });
   return { id: role.id };
 }
@@ -202,7 +192,6 @@ export async function resetRoleToTemplate(
       name: null,
       description: null,
       permissions: granted,
-      assistantToolsDisabled: [],
       revision: { increment: 1 },
     },
   });

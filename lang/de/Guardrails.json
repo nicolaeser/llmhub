@@ -6,7 +6,7 @@
   "enabledState": "{enabled, select, true {Aktiv} other {Pausiert}}",
   "policy": "PII-Richtlinie",
   "enable": "PII in Prompts schwärzen",
-  "enableHint": "Gilt für Text in Chat, Completions, Messages, Responses, Batches, Embeddings, Moderation, Bild-Prompts, Sprachausgabe-Eingaben, Playground und Assistant. Hochgeladene Dateien und Audio werden nicht geprüft.",
+  "enableHint": "Gilt für Text in Chat, Completions, Messages, Responses, Batches, Embeddings, Moderation, Bild-Prompts, Sprachausgabe-Eingaben und Playground. Hochgeladene Dateien und Audio werden nicht geprüft.",
   "mode": "Wenn PII gefunden wird",
   "mask": "Mit Platzhaltern maskieren",
   "block": "Anfrage blockieren (400)",

@@ -1,0 +1,50 @@
+"use server";
+
+import { runAction } from "@/lib/http/action-result";
+import {
+  createMcpServer,
+  deleteMcpServer,
+  loadMcpServerList,
+  loadMcpTargets,
+  probeMcpServer,
+  refreshMcpServer,
+  saveMcpAssignments,
+  setMcpServerEnabled,
+  updateMcpServer,
+} from "@/lib/mcp/servers";
+
+export async function loadMcpServersAction(...args: Parameters<typeof loadMcpServerList>) {
+  return runAction(() => loadMcpServerList(...args));
+}
+
+export async function createMcpServerAction(...args: Parameters<typeof createMcpServer>) {
+  return runAction(() => createMcpServer(...args));
+}
+
+export async function updateMcpServerAction(...args: Parameters<typeof updateMcpServer>) {
+  return runAction(() => updateMcpServer(...args));
+}
+
+export async function setMcpServerEnabledAction(...args: Parameters<typeof setMcpServerEnabled>) {
+  return runAction(() => setMcpServerEnabled(...args));
+}
+
+export async function deleteMcpServerAction(...args: Parameters<typeof deleteMcpServer>) {
+  return runAction(() => deleteMcpServer(...args));
+}
+
+export async function probeMcpServerAction(...args: Parameters<typeof probeMcpServer>) {
+  return runAction(() => probeMcpServer(...args));
+}
+
+export async function refreshMcpServerAction(...args: Parameters<typeof refreshMcpServer>) {
+  return runAction(() => refreshMcpServer(...args));
+}
+
+export async function loadMcpTargetsAction(...args: Parameters<typeof loadMcpTargets>) {
+  return runAction(() => loadMcpTargets(...args));
+}
+
+export async function saveMcpAssignmentsAction(...args: Parameters<typeof saveMcpAssignments>) {
+  return runAction(() => saveMcpAssignments(...args));
+}

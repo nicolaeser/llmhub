@@ -1,5 +1,4 @@
 {
-  "title": "Anbieterstatus",
   "subtitle": "Jeder Upstream-Versuch zählt, auch Wiederholungen. Wiederholte Fehler pausieren einen Endpunkt für {seconds, plural, one {# Sekunde} other {# Sekunden}}.",
   "backend": "{backend, select, redis {Über Redis geteilt} other {Nur diese Instanz}}",
   "window": "Zeitraum",

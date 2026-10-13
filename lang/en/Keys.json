@@ -1,6 +1,7 @@
 {
   "title": "API keys",
   "subtitle": "Keys authenticate applications against the /api/v1 API. Every key belongs to a project or a person of a company, or internally to you.",
+  "tab": "{tab, select, keys {API keys} templates {Model templates} other {}}",
   "create": "Create key",
   "gettingStarted": {
     "title": "Getting started",

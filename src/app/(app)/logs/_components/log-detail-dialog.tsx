@@ -18,7 +18,7 @@ import {
 import { Braces, ChevronDown, Download, FileCode, FileText, Play, type LucideIcon } from "lucide-react";
 import { useFormatter, useTranslations } from "next-intl";
 import { loadAliasesAction } from "../_action";
-import Markdown from "@/components/console/markdown";
+import Markdown from "./markdown";
 import SearchSelect from "@/components/console/search-select";
 import { useGuardrailHitLabel } from "@/components/guardrails/guardrail-hit";
 import { useRouter } from "@/i18n/routing";
@@ -213,7 +213,7 @@ function Replay({ detail }: { detail: RequestLogDetail }) {
         />
         <Button
           isDisabled={!model}
-          onPress={() => router.push(`/playground?${new URLSearchParams({ replay: detail.id, model })}`)}
+          onPress={() => router.push(`/developer?${new URLSearchParams({ tab: "playground", replay: detail.id, model })}`)}
         >
           <Play size={14} aria-hidden />
           {t("replay")}

@@ -14,12 +14,12 @@ import { useTranslations } from "next-intl";
 import type { Key } from "react-aria-components";
 import { Link, usePathname } from "@/i18n/routing";
 import BrandMark from "@/components/brand/brand-mark";
+import { BuildNotice, BuildVersion } from "./build-status";
 import LanguageSwitcher from "./language-switcher";
 import ThemeSwitcher from "./theme-switcher";
-import { hasPerm } from "@/lib/auth/permissions";
 import type { Permission } from "@/types/auth";
 import type { NavSection } from "@/types/console";
-import { homePath, NAV } from "./nav-data";
+import { canSee, homePath, NAV } from "./nav-data";
 
 const ConsoleNav = createContext<{ open: () => void } | null>(null);
 
@@ -75,7 +75,7 @@ function NavList({
   const t = useTranslations("Sidebar");
   const sections = NAV.map((section) => ({
     ...section,
-    items: section.items.filter((item) => hasPerm(permissions, item.permission)),
+    items: section.items.filter((item) => canSee(permissions, item)),
   })).filter((section) => section.items.length > 0);
 
   return (
@@ -129,6 +129,7 @@ function RailFooter({
     <>
       <Separator />
       <div className="space-y-2 p-2">
+        <BuildNotice collapsed={collapsed} />
         {!collapsed ? <LanguageSwitcher /> : null}
         <div className="flex items-center justify-between gap-1">
           <ThemeSwitcher />
@@ -161,6 +162,7 @@ function RailFooter({
           <UserRound size={14} aria-hidden />
           {!collapsed ? <span className="truncate">{user.username}</span> : null}
         </Link>
+        {!collapsed ? <BuildVersion /> : null}
       </div>
     </>
   );

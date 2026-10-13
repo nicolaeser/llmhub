@@ -14,15 +14,19 @@ import { GateError } from "@/lib/gateway/errors";
 import { readJsonOr } from "@/lib/utils/json";
 import { discoveredOf, parsePricing } from "@/lib/gateway/upstreams/provider-prices";
 import { logger } from "@/lib/logging/logger";
+import { money } from "@/lib/utils/money";
+import type { Prisma } from "@/generated/prisma/client";
 import type {
   ProviderSyncRecord,
   DiscoveredDiff,
   DiscoveredModel,
+  ModelPrice,
   RepricedModel,
   UpstreamAuth,
 } from "@/types/providers";
 
 const ALERT_LIST_LIMIT = 10;
+const PRICE_EPSILON = 1e-9;
 
 const UNCHANGED: DiscoveredDiff = { added: [], removed: [], repriced: [], changed: false };
 
@@ -134,6 +138,24 @@ export function diffDiscovered(
   };
 }
 
+function samePrice(route: { costInput: Prisma.Decimal | number; costOutput: Prisma.Decimal | number }, price: ModelPrice) {
+  return (
+    Math.abs(money(route.costInput) - price.in) < PRICE_EPSILON &&
+    Math.abs(money(route.costOutput) - price.out) < PRICE_EPSILON
+  );
+}
+
+export function followingRoutes<
+  T extends { id: string; model: string; costInput: Prisma.Decimal | number; costOutput: Prisma.Decimal | number },
+>(routes: T[], repriced: RepricedModel[]): { id: string; model: string; to: ModelPrice }[] {
+  const byModel = new Map(repriced.map((row) => [row.id, row]));
+  return routes.flatMap((route) => {
+    const change = byModel.get(route.model);
+    if (!change || (change.to.in === 0 && change.to.out === 0) || !samePrice(route, change.from)) return [];
+    return [{ id: route.id, model: route.model, to: change.to }];
+  });
+}
+
 function preview(ids: string[]): string {
   const head = ids.slice(0, ALERT_LIST_LIMIT).join(", ");
   const rest = ids.length - ALERT_LIST_LIMIT;
@@ -167,6 +189,7 @@ export async function refreshProviderModels(
   const baseline = before.length === 0;
   const notable = diff.added.length + diff.removed.length + diff.repriced.length > 0;
   let groups: string[] = [];
+  let repricedRoutes = 0;
   let provider: ProviderSyncRecord;
   try {
     provider = await prisma.$transaction(async (tx) => {
@@ -194,6 +217,20 @@ export async function refreshProviderModels(
           })
         : [];
       groups = [...new Set(affected.map((d) => d.groupAlias))].sort();
+      const priced = diff.repriced.length
+        ? await tx.deployment.findMany({
+            where: { providerId: row.id, model: { in: diff.repriced.map((item) => item.id) } },
+            select: { id: true, groupAlias: true, model: true, costInput: true, costOutput: true },
+          })
+        : [];
+      const following = followingRoutes(priced, diff.repriced);
+      for (const route of following) {
+        await tx.deployment.update({
+          where: { id: route.id },
+          data: { costInput: route.to.in, costOutput: route.to.out },
+        });
+      }
+      repricedRoutes = following.length;
       await tx.gatewayAuditLog.create({
         data: {
           actor,
@@ -206,6 +243,7 @@ export async function refreshProviderModels(
             added: diff.added,
             removed: diff.removed,
             repriced: diff.repriced,
+            repricedRoutes: following.map((route) => route.id),
             affected: affected.map((d) => ({
               deployment: d.id,
               group: d.groupAlias,
@@ -230,6 +268,7 @@ export async function refreshProviderModels(
       added: diff.added.length,
       removed: diff.removed.length,
       repriced: diff.repriced.length,
+      repricedRoutes,
       affectedGroups: groups.length,
     });
   }

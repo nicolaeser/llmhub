@@ -1,6 +1,7 @@
 {
   "title": "Usage",
-  "subtitle": "Spend, tokens, errors, and request volume.",
+  "subtitle": "Spend, tokens, errors, request volume, and resale markups.",
+  "tab": "{tab, select, overview {Overview} markups {Markups} other {}}",
   "days": "{n, plural, one {# day} other {# days}}",
   "metrics": {
     "spend": "Spend",

@@ -49,7 +49,7 @@
     "description": "Description",
     "embeddingModel": "Embedding model",
     "embeddingPlaceholder": "Choose an embedding model",
-    "embeddingHint": "{hasDefault, select, true {Turns text into vectors. It cannot be changed later.} other {Turns text into vectors. It cannot be changed later. A default in Admin settings preselects one.}}",
+    "embeddingHint": "{hasDefault, select, true {Turns text into vectors. It cannot be changed later.} other {Turns text into vectors. It cannot be changed later. A default in Settings preselects one.}}",
     "modelDefault": "{hasDefault, select, true {Default ({alias})} other {None}}",
     "dimensions": "Embedding dimensions",
     "dimensionsHint": "0 uses the model's native size. Only models with adjustable output size accept other values.",
