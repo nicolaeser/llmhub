@@ -40,36 +40,58 @@ test("CI bakes the release version into the image as BUILD_ID", async () => {
   assert.match(runner, /ARG BUILD_ID=development\nENV BUILD_ID=\$\{BUILD_ID\}/);
   const pipeline = await file(".github/workflows/pipeline.yml");
   assert.match(pipeline, /^ {2}workflow_call:$/m);
+  assert.match(pipeline, /main\)\n {14}VERSION_PREFIX=v\n/);
+  assert.match(pipeline, /development\)\n {14}VERSION_PREFIX=dev-\n/);
   assert.match(pipeline, /version="\$\{VERSION_PREFIX\}\$\(date -u \+%Y\.%m\.%d\)\.\$\{short_sha\}"/);
-  assert.match(
-    pipeline,
-    /build-args: \|\n {12}BUILD_ID=\$\{\{ steps\.version\.outputs\.version \}\}/,
-  );
-  for (const [workflow, prefix] of [
-    [".github/workflows/main.yml", "v"],
-    [".github/workflows/development.yml", "dev-"],
+  assert.match(pipeline, /BUILD_ID: \$\{\{ needs\.version\.outputs\.version \}\}/);
+  assert.match(pipeline, /build-args: \|\n {12}BUILD_ID=\$\{\{ env\.BUILD_ID \}\}/);
+  for (const [workflow, channel] of [
+    [".github/workflows/verify.yml", "github.base_ref"],
+    [".github/workflows/release.yml", "github.ref_name"],
   ]) {
     const source = await file(workflow);
-    assert.equal(source.match(/uses: \.\/\.github\/workflows\/pipeline\.yml/g)?.length, 2, workflow);
-    assert.equal(source.match(new RegExp(`version-prefix: ${prefix}\\n`, "g"))?.length, 2, workflow);
+    assert.equal(source.match(/uses: \.\/\.github\/workflows\/pipeline\.yml/g)?.length, 1, workflow);
+    assert.ok(source.includes(`channel: \${{ ${channel} }}`), workflow);
   }
 });
 
 test("only pushes get write permissions in CI", async () => {
   const pipeline = await file(".github/workflows/pipeline.yml");
   assert.doesNotMatch(pipeline, /: write/);
-  assert.match(pipeline, /push: \$\{\{ inputs\.publish \}\}/);
-  for (const workflow of [".github/workflows/main.yml", ".github/workflows/development.yml"]) {
-    const source = await file(workflow);
-    const verify = source.slice(source.indexOf("  verify:"), source.indexOf("  release:"));
-    const release = source.slice(source.indexOf("  release:"));
-    assert.match(source, /^permissions:\n {2}contents: read$/m, workflow);
-    assert.match(verify, /if: github\.event_name == 'pull_request'/, workflow);
-    assert.doesNotMatch(verify, /: write|publish: true/, workflow);
-    assert.match(release, /if: github\.event_name == 'push'/, workflow);
-    assert.match(release, /packages: write/, workflow);
-    assert.match(release, /publish: true/, workflow);
+  assert.match(pipeline, /outputs: \$\{\{ inputs\.publish && format\('type=image,[^']*push=true'/);
+  const verify = await file(".github/workflows/verify.yml");
+  assert.match(verify, /^on:\n {2}pull_request:$/m);
+  assert.match(verify, /^permissions:\n {2}contents: read$/m);
+  assert.doesNotMatch(verify, /push:|: write|publish: true/);
+  const release = await file(".github/workflows/release.yml");
+  assert.match(release, /^on:\n {2}push:$/m);
+  assert.match(release, /^permissions:\n {2}contents: read$/m);
+  assert.doesNotMatch(release, /pull_request/);
+  assert.match(release, /packages: write/);
+  assert.match(release, /publish: true/);
+  assert.match(release, /cancel-in-progress: false/);
+});
+
+test("CI smoke-tests each platform image natively before tagging it", async () => {
+  const pipeline = await file(".github/workflows/pipeline.yml");
+  const image = pipeline.slice(pipeline.indexOf("\n  image:\n"));
+  assert.match(image, /runner: ubuntu-24\.04\n/);
+  assert.match(image, /runner: ubuntu-24\.04-arm\n/);
+  assert.doesNotMatch(pipeline, /setup-qemu-action/);
+  const smoke = image.indexOf("scripts/smoke-image.sh");
+  assert.ok(smoke > image.indexOf("docker/build-push-action"), "smoke test after build");
+  assert.ok(smoke < image.indexOf("actions/upload-artifact"), "smoke test before digest upload");
+  const release = await file(".github/workflows/release.yml");
+  const publish = release.slice(release.indexOf("\n  publish:\n"), release.indexOf("\n  scan:\n"));
+  assert.match(publish, /needs: \[build\]/);
+  assert.match(publish, /docker buildx imagetools create/);
+  assert.ok(publish.indexOf("imagetools create") < publish.indexOf("gh release create"));
+  assert.match(release.slice(release.indexOf("\n  scan:\n")), /needs: \[publish\]/);
+  const script = await file("scripts/smoke-image.sh");
+  for (const probe of ["/internal-api/ready", "/internal-api/health", "/internal-api/version", "/internal-api/setup"]) {
+    assert.ok(script.includes(probe), probe);
   }
+  assert.match(script, /docker restart/);
 });
 
 test("CI migrates a real Postgres, checks schema drift, and runs integration tests", async () => {

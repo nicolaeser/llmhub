@@ -147,7 +147,7 @@ To run the integration tests against the development database:
 DATABASE_URL="postgresql://llmhub:<POSTGRES_PASSWORD>@127.0.0.1:5433/llmhub" npm run test:integration
 ```
 
-CI runs the same checks and the integration tests against a fresh PostgreSQL 18 database, verifies that the migrations match the Prisma schema, and publishes the image to GitHub Container Registry on pushes to `main` and `development`.
+CI runs the same checks and the integration tests against a fresh PostgreSQL 18 database, verifies that the migrations match the Prisma schema, builds the image natively for `linux/amd64` and `linux/arm64`, and starts each build against PostgreSQL to check health, readiness, and the reported version (`scripts/smoke-image.sh <image> <expected-version>` runs the same check locally). On pushes to `main` and `development` the image is tagged and published to GitHub Container Registry only after both architectures pass.
 
 Contributor and architecture notes live in [`.ai/`](.ai/SUMMARY.md).
 

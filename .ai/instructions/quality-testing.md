@@ -20,7 +20,7 @@ Load before adding tests or changing the check scripts that CI and `prebuild` ru
 - `npm run i18n:check` checks en/de key parity and that every message parses as ICU. ICU select keys must not contain `-`.
 - Install scripts are denied in `package.json` `allowScripts`; nothing in the build needs them. Review new entries with `npm install-scripts ls` before approving.
 - Colocation policy lives in `src/tests/route-view-policy.ts`; it skips `src/tests` and `src/generated` when it walks the source tree. Tests live in `src/tests/` (excluded from the image by `.dockerignore`) and reach the repository root with `new URL("../..", import.meta.url)`, one level deeper from `src/tests/integration/`. Tests must not read `.ai/`; it is documentation only and never enters the image.
-- CI (`.github/workflows/pipeline.yml`, called by `main.yml` and `development.yml`) runs the `quality` job on a `postgres:18-alpine` service: generate, `prisma migrate deploy`, the schema drift check, `npm test`, `npm run test:integration`, i18n, styles, heroui, tsc, and lint, before the `image` job. `codeql.yml` runs CodeQL separately.
+- CI (`.github/workflows/pipeline.yml`, called by `verify.yml` for pull requests and `release.yml` for pushes) runs the `quality` job on a `postgres:18-alpine` service: generate, `prisma migrate deploy`, the schema drift check, `npm test`, `npm run test:integration`, i18n, styles, heroui, tsc, and lint, before the `image` job builds both architectures and runs `scripts/smoke-image.sh` against each. `codeql.yml` runs CodeQL separately.
 
 ## Prohibited patterns
 
