@@ -5,13 +5,17 @@ import { readTextOr } from "@/lib/utils/json";
 import { objectUrl, publicObjectUrl } from "@/lib/s3/url";
 import type { S3Runtime } from "@/types/s3";
 
-class S3Error extends Error {
+export class S3Error extends Error {
+  readonly code: string;
+
   constructor(
     readonly status: number,
-    message: string,
+    body: string,
   ) {
-    super(message);
+    const code = body.match(/<Code>([^<]{1,80})<\/Code>/)?.[1] ?? "";
+    super(code || `s3 ${status}`);
     this.name = "S3Error";
+    this.code = code;
   }
 }
 
@@ -19,7 +23,7 @@ async function signedFetch(
   runtime: S3Runtime,
   method: string,
   key: string,
-  opts?: { body?: Uint8Array; contentType?: string },
+  opts?: { body?: Uint8Array; contentType?: string; signal?: AbortSignal },
 ): Promise<Response> {
   const url = objectUrl(runtime, key);
   const body = opts?.body;
@@ -31,7 +35,6 @@ async function signedFetch(
     region: runtime.region,
     accessKeyId: runtime.accessKeyId,
     secretAccessKey: runtime.secretAccessKey,
-    sessionToken: runtime.sessionToken || undefined,
     headers: extra,
     bodySha256: sha256Hex(body ? Buffer.from(body) : ""),
   });
@@ -41,7 +44,13 @@ async function signedFetch(
     method,
     headers,
     body: body ? Buffer.from(body) : undefined,
+    redirect: "manual",
+    signal: opts?.signal,
   });
+}
+
+async function failure(res: Response): Promise<S3Error> {
+  return new S3Error(res.status, (await readTextOr(res)).slice(0, 2000));
 }
 
 export async function s3Put(
@@ -49,40 +58,29 @@ export async function s3Put(
   key: string,
   body: Uint8Array | Buffer,
   contentType = "application/octet-stream",
+  signal?: AbortSignal,
 ): Promise<void> {
-  const res = await signedFetch(runtime, "PUT", key, {
-    body: Buffer.from(body),
-    contentType,
-  });
-  if (!res.ok) {
-    const text = await readTextOr(res);
-    throw new S3Error(res.status, text.slice(0, 400) || `s3 put ${res.status}`);
-  }
+  const res = await signedFetch(runtime, "PUT", key, { body: Buffer.from(body), contentType, signal });
+  if (!res.ok) throw await failure(res);
 }
 
 export async function s3Get(
   runtime: S3Runtime,
   key: string,
+  signal?: AbortSignal,
 ): Promise<{ body: Uint8Array; contentType: string }> {
-  const res = await signedFetch(runtime, "GET", key);
-  if (res.status === 404) throw new S3Error(404, "s3 object not found");
-  if (!res.ok) {
-    const text = await readTextOr(res);
-    throw new S3Error(res.status, text.slice(0, 400) || `s3 get ${res.status}`);
-  }
+  const res = await signedFetch(runtime, "GET", key, { signal });
+  if (!res.ok) throw await failure(res);
   return {
     body: new Uint8Array(await res.arrayBuffer()),
     contentType: res.headers.get("content-type") ?? "application/octet-stream",
   };
 }
 
-export async function s3Delete(runtime: S3Runtime, key: string): Promise<void> {
-  const res = await signedFetch(runtime, "DELETE", key);
+export async function s3Delete(runtime: S3Runtime, key: string, signal?: AbortSignal): Promise<void> {
+  const res = await signedFetch(runtime, "DELETE", key, { signal });
   if (res.status === 404) return;
-  if (!res.ok) {
-    const text = await readTextOr(res);
-    throw new S3Error(res.status, text.slice(0, 400) || `s3 delete ${res.status}`);
-  }
+  if (!res.ok) throw await failure(res);
 }
 
 export function s3PublicUrl(runtime: S3Runtime, key: string): string {

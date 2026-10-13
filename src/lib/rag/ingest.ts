@@ -101,7 +101,7 @@ async function documentText(
   if (!model) {
     fail(
       "unsupported_file",
-      "PDF and image files need an OCR model; set ocr_model on the vector store or a default in Admin settings",
+      "PDF and image files need an OCR model; set ocr_model on the vector store or a default in Settings",
     );
   }
   await assertBudget(principal);

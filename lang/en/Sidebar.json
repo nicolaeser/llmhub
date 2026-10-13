@@ -9,32 +9,21 @@
     "models": "Models & providers",
     "policies": "Policies",
     "insights": "Insights",
-    "settings": "Settings",
-    "tools": "Tools"
+    "system": "Platform"
   },
   "items": {
     "companies": "Companies",
     "keys": "API keys",
-    "users": "Console users",
-    "roles": "Roles",
+    "users": "Users",
     "providers": "Providers",
-    "subscriptions": "Subscriptions",
-    "providerHealth": "Provider health",
-    "modelCatalog": "Model catalog",
     "models": "Models",
-    "modelTemplates": "Model templates",
-    "markups": "Markups",
     "guardrails": "Guardrails",
-    "cache": "Response cache",
     "knowledge": "Knowledge bases",
+    "mcp": "MCP servers",
     "usage": "Usage",
-    "whatIf": "What if",
     "logs": "Logs",
-    "logging": "Logging & alerts",
-    "adminSettings": "Admin settings",
-    "playground": "Playground",
-    "assistant": "Assistant",
-    "apiRef": "API reference"
+    "settings": "Settings",
+    "developer": "Developer"
   },
   "account": "Account and security"
 }

@@ -1,7 +1,7 @@
 import "server-only";
 import { asRecord, asString } from "@/lib/gateway/core";
-import { env } from "@/lib/env";
 import { logger } from "@/lib/logging/logger";
+import { currentBuild } from "@/lib/updates/build";
 import { noUpdate, releaseChannel, updateStatus } from "@/lib/updates/release-status";
 import type { PublishedRelease, UpdateStatus } from "@/types/updates";
 
@@ -14,10 +14,6 @@ const CHECK_TIMEOUT_MS = 10_000;
 type CachedReleases = { releases: PublishedRelease[]; until: number };
 
 const cacheHolder = globalThis as typeof globalThis & { __llmhubReleaseCache?: CachedReleases };
-
-export function currentBuild(): string {
-  return env.BUILD_ID ?? "development";
-}
 
 function releasesOf(json: unknown): PublishedRelease[] {
   if (!Array.isArray(json)) return [];

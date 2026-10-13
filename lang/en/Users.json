@@ -1,6 +1,7 @@
 {
   "title": "Console users",
   "subtitle": "People who sign in to this console. Platform users see every company; users assigned to a company see only that company. A customer's own people are managed under Companies.",
+  "tab": "{tab, select, users {Users} roles {Roles and permissions} other {}}",
   "emptyTitle": "No console users",
   "empty": "Add people who can sign in to the console.",
   "noMatches": "No users match the search.",

@@ -1,6 +1,7 @@
 {
   "title": "Models",
-  "subtitle": "One public name, many providers. Load-balance across healthy endpoints.",
+  "subtitle": "Every model your providers offer, grouped under public names. Turn models on in the catalog, then tune routing and prices per group.",
+  "tab": "{tab, select, catalog {Catalog} groups {Groups and routing} other {}}",
   "add": "Add model",
   "formTitle": "{mode, select, edit {Edit model} add {Add model} other {Add model}}",
   "formSubmit": "{mode, select, save {Save} create {Add model} other {Add model}}",
@@ -9,6 +10,9 @@
   "empty": "Add a public name clients can send as model.",
   "needProvider": "Connect a <providers>provider</providers> first, then add a public model name.",
   "connectProvider": "Connect a provider",
+  "openCatalog": "Open the catalog",
+  "search": "Search model groups",
+  "noMatches": "No model groups match that search.",
   "addEndpoint": "Add endpoint",
   "deleteEndpoint": "Remove endpoint",
   "columns": {
@@ -45,7 +49,7 @@
     "displayNameHint": "Shown as display_name in /api/v1/models. Leave empty to use the alias.",
     "autoRoutes": "Add new providers automatically",
     "autoRoutesHint": "When the model catalog finds this model at another trusted provider, it routes there after the next refresh.",
-    "autoRoutesMode": "{mode, select, inherit {Default from Admin settings} on {On} other {Off}}"
+    "autoRoutesMode": "{mode, select, inherit {Default from Settings} on {On} other {Off}}"
   },
   "billingModes": {
     "average": "Average of endpoints",
@@ -62,7 +66,7 @@
   "priceFromProvider": "Prices from {source}",
   "strategies": {
     "weighted_random": "Weighted random",
-    "least_inflight": "Least in-flight",
+    "least_inflight": "Least busy",
     "cost_lowest": "Lowest cost",
     "fast": "Fast (lowest latency)",
     "priority": "Priority",
@@ -71,7 +75,7 @@
     "quota_expiring": "Soonest reset (subscriptions)",
     "smart": "Smart (subscriptions)"
   },
-  "strategyLabel": "{strategy, select, weighted_random {Weighted random} least_inflight {Least in-flight} cost_lowest {Lowest cost} fast {Fast (lowest latency)} priority {Priority} round_robin {Round robin} quota_balanced {Most headroom} quota_expiring {Soonest reset} smart {Smart} auto {Auto (cost)} other {{strategy}}}",
+  "strategyLabel": "{strategy, select, weighted_random {Weighted random} least_inflight {Least busy} cost_lowest {Lowest cost} fast {Fast (lowest latency)} priority {Priority} round_robin {Round robin} quota_balanced {Most headroom} quota_expiring {Soonest reset} smart {Smart} auto {Auto (cost)} other {{strategy}}}",
   "strategyHint": "{strategy, select, weighted_random {Random pick, biased by endpoint weight.} least_inflight {Sends each request to the endpoint with the fewest running requests.} cost_lowest {Always the cheapest endpoint.} fast {The endpoint with the lowest measured latency.} priority {Always the endpoint with the highest weight. Fills one account first and moves on when it is limited or cooling down.} round_robin {Rotates through the endpoints in turn, so subscription accounts wear evenly.} quota_balanced {Subscription accounts: picks the account with the most room left on its tightest limit (5-hour, weekly, or model limit).} quota_expiring {Subscription accounts: picks the account whose tightest limit resets soonest, so quota that is about to renew gets used first.} smart {Subscription accounts: spends quota that is about to reset and avoids accounts close to their limit.} other {}}",
   "removeConfirm": "Remove model alias {alias}?",
   "toasts": {

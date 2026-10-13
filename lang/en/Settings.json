@@ -1,0 +1,272 @@
+{
+  "title": "Settings",
+  "subtitle": "Sign-in, storage, logging, caching, and the model catalog. Infrastructure secrets stay in the environment.",
+  "tabs": "{tab, select, general {General} sign_in {Sign-in} storage {Storage} logging {Logging & alerts} cache {Response cache} catalog {Model catalog} other {Settings}}",
+  "save": "Save",
+  "saved": "Settings saved",
+  "readOnly": "You can view these settings. Changing them needs the Manage settings permission.",
+  "advanced": "Advanced",
+  "general": {
+    "access": {
+      "registration": "Allow self-registration",
+      "title": "Self-registration",
+      "subtitle": "People can create their own console account from the sign-in page.",
+      "registrationHint": "Off by default. New accounts get the Viewer role and must set up two-factor authentication. It is ignored while sign-in is limited to SSO."
+    },
+    "updates": {
+      "title": "Updates",
+      "subtitle": "Compares this build with the releases published on GitHub for the same channel.",
+      "enabled": "Check for updates",
+      "hint": "Asks the GitHub releases API at most every six hours and shows Update available in the top bar. Turn it off in networks without internet access.",
+      "state": "{state, select, available {Running {current}. {latest} is available.} current {Running {current}, the newest release.} other {Running {current}.}}",
+      "open": "Open the release on GitHub"
+    },
+    "env": {
+      "title": "Environment",
+      "subtitle": "These values come from process env. They are not edited in the console.",
+      "appUrl": "App URL",
+      "item": "{item, select, s3 {Object storage keys} oidc {OIDC client secret} smtp {Mail (SMTP_URL)} redis {Redis (REDIS_URL)} other {Setting}}",
+      "state": "{ready, select, true {Set} other {Not set}}",
+      "hint": "Secrets come from the environment: S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY, OIDC_CLIENT_SECRET, SMTP_URL, and REDIS_URL."
+    },
+    "description": "Self-registration, update checks, and the server environment."
+  },
+  "signIn": {
+    "scim": {
+      "title": "SCIM provisioning",
+      "subtitle": "Your identity provider creates, updates, and blocks console users and groups through SCIM 2.0. Creating the token needs every permission because group rules can assign any role.",
+      "endpoint": "Base URL",
+      "token": "Bearer token",
+      "state": "{set, select, true {Active} other {Not created}}",
+      "issue": "{set, select, true {Replace token} other {Create token}}",
+      "issueDescription": "{set, select, true {Confirm with your authenticator. The current token stops working immediately.} other {Confirm with your authenticator. The token is shown only once.}}",
+      "revoke": "Revoke token",
+      "revokeDescription": "Confirm with your authenticator. SCIM requests fail until you create a new token.",
+      "tokenTitle": "Copy the token now",
+      "tokenHint": "It is shown only once. Paste it into your identity provider as the bearer token.",
+      "copy": "Copy token",
+      "issued": "SCIM token created",
+      "revoked": "SCIM token revoked",
+      "manageHint": "Only people who hold every permission can create or revoke the SCIM token.",
+      "copyEndpoint": "Copy SCIM base URL",
+      "groups": "Provisioned groups",
+      "groupCount": "{count, plural, =0 {None} one {# group} other {# groups}}",
+      "mappingHint": "Point your provider at /Users and /Groups below this URL. Groups use the same rules as single sign-on, and provisioned users land on the same account when they sign in."
+    },
+    "description": "Single sign-on with OpenID Connect, group to role rules, and SCIM provisioning. The owner always keeps password sign-in with two-factor authentication.",
+    "sso": {
+      "title": "Single sign-on",
+      "subtitle": "Connect an OpenID Connect identity provider. The client secret stays in the environment as OIDC_CLIENT_SECRET.",
+      "enabled": "Sign in with OpenID Connect",
+      "enabledHint": "{ready, select, true {OIDC_CLIENT_SECRET is set.} other {Set OIDC_CLIENT_SECRET in the environment first.}}",
+      "provider": "Identity provider",
+      "issuer": "Issuer URL",
+      "issuerHint": "The provider publishes /.well-known/openid-configuration below this URL.",
+      "check": "Check issuer",
+      "clientId": "Client ID",
+      "scopes": "Scopes",
+      "scopesHint": "openid is always requested. Add groups when your provider needs a scope for the groups claim."
+    },
+    "check": {
+      "title": "{state, select, ok {Issuer found} unsupported {Issuer found, but its signing algorithms are not supported} other {Issuer not reachable}}",
+      "found": "{issuer} answers. The client authenticates with {method}. ID tokens are signed with {algorithms}.",
+      "failed": "The discovery document could not be loaded or names a different issuer. Check the URL and that this server can reach the provider."
+    },
+    "presets": {
+      "name": "{id, select, entra {Microsoft Entra ID} google {Google Workspace} okta {Okta} keycloak {Keycloak} authentik {authentik} auth0 {Auth0} other {Other OpenID Connect provider}}",
+      "note": "{id, select, entra {Issuer https://login.microsoftonline.com/TENANT_ID/v2.0. Add the optional claims email and xms_edov, and a groups claim (group object IDs) or app roles (claim roles).} google {Google sends no groups. Everyone gets the default role; limit sign-in with allowed email domains.} okta {Use your Okta domain as issuer and add a groups claim filter to the ID token of the app.} keycloak {Issuer https://HOST/realms/REALM. Add a Group Membership mapper (claim groups, full group path off) to the client.} authentik {Use the OpenID configuration issuer of the application. The profile scope carries the groups claim.} auth0 {Issuer https://TENANT.auth0.com/. Groups or roles need an Action that adds a namespaced claim such as https://llmhub/roles.} other {Any provider with discovery, the authorization code flow, and PKCE.}}",
+      "docs": "Provider setup guide"
+    },
+    "checklist": {
+      "title": "Setup checklist",
+      "subtitle": "Register LLM Hub at your provider as a confidential web application with the authorization code flow.",
+      "step": "{step, select, callback {{position}. Register this redirect URI at the provider} secret {{position}. Put the client secret into OIDC_CLIENT_SECRET} client {{position}. Enter the issuer URL and client ID} issuer {{position}. Check the issuer} enabled {{position}. Turn on sign-in with OpenID Connect} other {{position}.}}",
+      "state": "{ok, select, true {Done} other {Open}}",
+      "copyCallback": "Copy redirect URI",
+      "secretHint": "Restart LLM Hub after changing the environment. The secret is never stored in the database or shown here."
+    },
+    "accounts": {
+      "title": "Accounts and roles",
+      "subtitle": "Applies to people who sign in with SSO or are provisioned through SCIM.",
+      "defaultRole": "Default role",
+      "viewerDefault": "Viewer (built-in)",
+      "defaultRoleHint": "New accounts get this role when no group rule matches.",
+      "defaultCompany": "Default company",
+      "platform": "None (platform user)",
+      "defaultCompanyHint": "New accounts are limited to this company. Existing accounts keep theirs.",
+      "domains": "Allowed email domains",
+      "domainsHint": "Separate with commas. Leave empty to allow every account your provider signs in."
+    },
+    "mapping": {
+      "title": "Group to role rules",
+      "subtitle": "The first rule whose group matches decides the role. While rules exist, roles follow the identity provider at every sign-in and SCIM change. The owner is never changed.",
+      "claim": "Groups claim",
+      "claimHint": "ID token claim that lists groups or roles, for example groups, roles, or realm_access.roles. SCIM groups match by display name or external ID.",
+      "group": "Group {position}",
+      "groupPlaceholder": "Group name or ID",
+      "role": "Role {position}",
+      "remove": "Remove rule {position}",
+      "empty": "No rules yet. Everyone gets the default role.",
+      "add": "Add rule"
+    },
+    "ssoOnly": {
+      "title": "SSO only",
+      "subtitle": "Hide password sign-in for everyone except the owner.",
+      "enabled": "Only allow single sign-on",
+      "hint": "{ready, select, true {Password sign-in, passkey sign-in, and self-registration stop for everyone except the owner, who keeps password and two-factor authentication as a fallback.} other {Finish the single sign-on setup first so nobody gets locked out.}}"
+    },
+    "matching": {
+      "title": "How accounts are matched",
+      "body": "Sign-in first looks for an account already linked to the subject at this issuer, then for an account whose SCIM external ID equals the subject or the Entra object ID, then for the verified email address. The first match is linked permanently. An account already linked to another subject of the same issuer is refused."
+    }
+  },
+  "storage": {
+    "description": "Files, batch outputs, videos, and log archives go to S3-compatible storage when a bucket and keys are set. Otherwise they stay in Postgres.",
+    "test": "Test connection",
+    "probe": {
+      "title": "{ok, select, true {Connection works} other {Connection failed}}",
+      "ok": "Wrote, read, and deleted {key} in {ms, number} ms.",
+      "failed": "{code, select, KEYS_MISSING {Set S3_ACCESS_KEY_ID and S3_SECRET_ACCESS_KEY in the environment first.} BUCKET_MISSING {Enter a bucket first.} UNREACHABLE {The endpoint did not answer. Check the URL, port, and network.} AUTH {The access key was rejected.} SIGNATURE {The secret key or the region does not match.} DENIED {These keys may not write, read, or delete objects in this bucket.} NO_BUCKET {The bucket does not exist at this endpoint.} REGION {The bucket lives in another region or needs another endpoint.} MISMATCH {The object read back differs from the one written.} other {The storage answered with an error.}} {step, select, put {It failed while writing.} get {It failed while reading.} delete {It failed while deleting.} other {}} {status, select, none {} other {HTTP {status}.}}"
+    },
+    "bucket": {
+      "title": "Bucket",
+      "subtitle": "Pick a provider to fill in the endpoint, region, and addressing. Every field stays editable."
+    },
+    "state": "{active, select, true {Active} other {Not active}}",
+    "preset": "Provider",
+    "presets": {
+      "name": "{id, select, aws {Amazon S3} r2 {Cloudflare R2} minio {MinIO} rustfs {RustFS} hetzner {Hetzner Object Storage} b2 {Backblaze B2} wasabi {Wasabi} spaces {DigitalOcean Spaces} scaleway {Scaleway Object Storage} ionos {IONOS Object Storage} other {Other S3-compatible storage}}",
+      "note": "{id, select, aws {Regional endpoint with virtual-hosted buckets.} r2 {Replace the account ID in the endpoint. The region is always auto.} minio {Your MinIO server URL including the port.} rustfs {Your RustFS server URL, for example the development container on port 9000.} hetzner {Regions fsn1, nbg1, and hel1.} b2 {Use the region of the bucket endpoint, for example us-west-004.} wasabi {Regions such as us-east-1, eu-central-1, or ap-northeast-1.} spaces {Regions such as nyc3, fra1, or sgp1.} scaleway {Regions fr-par, nl-ams, and pl-waw.} ionos {Regions such as eu-central-3 (Berlin) or eu-central-1 (Frankfurt).} other {Any S3-compatible service. Enter the endpoint yourself.}}",
+      "docs": "Provider documentation"
+    },
+    "field": "{field, select, bucket {Bucket} region {Region} endpoint {Endpoint} prefix {Key prefix} public_base_url {Public base URL} addressing {Addressing} other {Setting}}",
+    "bucketHint": "With custom domain addressing, the bucket is the host name.",
+    "endpointHint": "Leave empty for Amazon S3 in the selected region.",
+    "endpointPlaceholder": "Replace the part in braces with your own value.",
+    "addressing": "{mode, select, path {Path style} virtual_hosted {Virtual-hosted} domain {Custom domain} other {Automatic}}",
+    "addressingHint": "{mode, select, path {endpoint/bucket/key} virtual_hosted {bucket.endpoint/key} domain {The endpoint host is the bucket (CNAME bucket).} other {Virtual-hosted on Amazon S3, path style elsewhere.}}",
+    "publicHint": "Optional CDN or public origin for object URLs returned to clients.",
+    "keys": {
+      "title": "Access keys",
+      "subtitle": "Keys stay in the environment and are never shown or stored in the database.",
+      "state": "{set, select, true {Set} other {Missing}}",
+      "hint": "Restart LLM Hub after changing S3_ACCESS_KEY_ID or S3_SECRET_ACCESS_KEY."
+    }
+  },
+  "logging": {
+    "webhook": "Endpoint URL",
+    "webhookSecret": "Signing secret",
+    "retention": "Request log retention days",
+    "retentionHint": "0 keeps request logs indefinitely. Spend and audit use their own retention.",
+    "spendRetention": "Spend retention days",
+    "spendRetentionHint": "0 keeps finance spend events indefinitely, even if request logs expire.",
+    "auditRetention": "Audit retention days",
+    "auditRetentionHint": "0 keeps the console audit trail indefinitely.",
+    "objectRetention": "Generated object retention days",
+    "objectRetentionHint": "Stored responses, batches, batch results, and videos. 0 keeps them indefinitely; running batches are never deleted.",
+    "fileRetention": "Uploaded file retention days",
+    "fileRetentionHint": "Files uploaded through /api/v1/files. 0 keeps them indefinitely.",
+    "alerts": "Alert webhooks",
+    "webhookSecretState": "{set, select, true {A secret is stored. Enter a new one to replace it.} other {No secret stored}}",
+    "clearSecret": "Remove the stored secret",
+    "retentionTitle": "Retention",
+    "archive": "Archive request logs to object storage",
+    "archiveHint": "{ready, select, true {Each request log is also written as JSON under logs/requests/ in the configured bucket.} other {Set up object storage in the Storage tab first.}}",
+    "alertsHint": "Each webhook receives only the events selected for it. With a signing secret, requests carry X-LLMHub-Timestamp and X-LLMHub-Signature: sha256=HMAC(secret, timestamp.body).",
+    "noWebhooks": "No webhooks yet. Alerts are not delivered.",
+    "addWebhook": "Add webhook",
+    "webhookTitle": "Webhook {position, number}",
+    "removeWebhook": "Remove webhook {position, number}",
+    "events": "Events",
+    "eventLabel": "{event, select, upstream_exhaustion {Upstream exhaustion} budget_threshold {Budget threshold} provider_models_changed {Provider models changed} spend_anomaly {Spend anomaly} key_expiring {Key expiring} key_blocked {Key blocked} pii_blocked {PII blocked} other {Event}}",
+    "eventHint": "{event, select, upstream_exhaustion {No healthy deployment answered, or the upstream returned 5xx or 429.} budget_threshold {A key, person, project, department, or company crossed a budget alert threshold.} provider_models_changed {The hourly sync found added or removed provider models.} spend_anomaly {A key or project spent far more in the last hour than it usually does at that hour.} key_expiring {A key expires within the warning window set under Alert rules.} key_blocked {Someone blocked a key in the console, the management API, or the assistant.} pii_blocked {The PII policy blocked a request. At most one alert per key every 15 minutes, without the request content.} other {}}",
+    "eventsRequired": "Choose at least one event.",
+    "format": "Message format",
+    "formatLabel": "{format, select, json {JSON} slack {Slack} teams {Microsoft Teams} other {Format}}",
+    "formatHint": "{format, select, json {JSON with id, event, message, source, and ts.} slack {Message for a Slack incoming webhook.} teams {Adaptive Card for a Teams workflow webhook.} other {}}",
+    "rulesTitle": "Alert rules",
+    "rulesHint": "When spend anomaly and key expiry alerts fire. Budget thresholds are set on the Companies page.",
+    "anomalyFactor": "Spend anomaly factor",
+    "anomalyFactorHint": "Alert when a key or project spends at least this many times its average for the same hour over the previous 7 days. 0 turns it off.",
+    "anomalyMinCost": "Minimum spend per hour",
+    "anomalyMinCostHint": "Smaller amounts never count as an anomaly.",
+    "expiryDays": "Key expiry warning in days",
+    "expiryDaysHint": "Warn this many days before a key expires. 0 turns it off.",
+    "contentTitle": "Request content",
+    "contentSubtitle": "Prompts and responses stored with each request log.",
+    "content": "Store prompts and responses",
+    "contentHint": "Turn it off for a single person in Users or for a single key in its key settings. While PII redaction is active, stored content is masked and every log shows the entities it found.",
+    "contentRetention": "Content retention days",
+    "contentRetentionHint": "0 keeps content as long as the request log. A lower value removes prompts and responses earlier and keeps the metadata.",
+    "description": "Alert webhooks and rules, request content, retention, and log archiving."
+  },
+  "cache": {
+    "ttl": "TTL seconds",
+    "ttlHint": "0 turns the cache off. Clients skip the cache with the x-hub-bypass-cache header or \"cache\": false.",
+    "store": {
+      "title": "Storage and lifetime",
+      "description": "Responses are stored per key, model, and request body. Hits are free for the key and logged as response cache hits.",
+      "backend": "{backend, select, redis {Redis, shared} memory {In memory} other {Redis unreachable}}",
+      "backendHint": "{backend, select, redis {All app instances share the response cache, and it survives restarts. Responses stay in Redis until they expire.} memory {Each app process keeps its own response cache, which is emptied on restart. Set REDIS_URL to share it.} other {REDIS_URL is set, but Redis does not answer. Each app process uses its own memory cache until Redis is back.}}"
+    },
+    "semantic": {
+      "title": "Semantic matching",
+      "description": "Answers a request from the response cache when only the last user message differs and means nearly the same. System prompt, earlier messages, model, and parameters must still match exactly.",
+      "enabled": "Match similar prompts",
+      "enabledHint": "{ready, select, true {Every cache miss first embeds the last user message. That adds latency and embedding cost.} other {Choose an embedding model first.}}",
+      "model": "Embedding model",
+      "none": "None",
+      "modelHint": "Embeddings run on this alias with the calling key's routing rules and are billed to that key. Keys that may not use this model only get exact matches.",
+      "threshold": "Similarity threshold",
+      "thresholdHint": "Minimum cosine similarity. Lower values answer more requests but can return an answer to a different question."
+    },
+    "stats": {
+      "title": "Response cache statistics",
+      "range": "Period",
+      "days": "{n, plural, one {Last # day} other {Last # days}}",
+      "hitRate": "Hit rate",
+      "hits": "Answered from response cache",
+      "hitsValue": "{hits, number} of {lookups, number}",
+      "netSaved": "Net savings",
+      "savedTokens": "Tokens saved",
+      "semanticHits": "Semantic hits",
+      "lookupCost": "Embedding cost",
+      "hint": "Counts requests that were eligible for the response cache, across all keys. Net savings are the cost of the original responses served again from the response cache, minus the embedding cost of semantic lookups. Provider prompt caching is not included."
+    },
+    "description": "The gateway answers identical non-streaming chat requests from the same key with a stored response for the configured time. Provider prompt caching is separate."
+  },
+  "catalog": {
+    "jev": {
+      "title": "Model catalog",
+      "subtitle": "How the catalog groups provider models and when it routes new providers on its own.",
+      "enabled": "Group models with Jev",
+      "enabledHint": "{ready, select, true {Runs during each catalog refresh and only checks models that are new or could not be grouped by name.} other {Enter an OpenRouter API key first.}}",
+      "apiKey": "OpenRouter API key for Jev",
+      "apiKeyState": "{set, select, true {Stored. Leave empty to keep it.} other {sk-or-…}}",
+      "apiKeyHint": "Use a separate OpenRouter key so Jev costs stay apart from your provider connections. The key is stored encrypted and never shown again.",
+      "model": "Jev model",
+      "modelHint": "OpenRouter System One model id. jev-latest follows the newest release.",
+      "clearKey": "Remove the stored key and turn Jev off",
+      "catalogHint": "Results and refresh status are on the <link>Model catalog</link> page.",
+      "autoRoutes": "Add new providers automatically",
+      "autoRoutesHint": "Default for every alias that does not set its own value. Only trusted providers that start offering a model are routed; own OpenAI-compatible servers are always turned on by hand.",
+      "minConfidence": "Minimum Jev confidence",
+      "minConfidenceHint": "Jev matches below this value are shown in the catalog but never routed on their own. Matches by name always count as certain."
+    },
+    "knowledge": {
+      "title": "Knowledge bases",
+      "subtitle": "Defaults for vector stores created in the console or through /api/v1/vector_stores without their own models.",
+      "embeddingModel": "Default embedding model",
+      "embeddingHint": "Used when a new knowledge base does not name an embedding model. Existing knowledge bases keep their model.",
+      "dimensions": "Default embedding dimensions",
+      "dimensionsHint": "0 uses the model's native size. Applies only together with the default embedding model.",
+      "ocrModel": "Default OCR model",
+      "ocrHint": "Reads text from PDFs and images for knowledge bases without their own OCR model.",
+      "rerankModel": "Default rerank model",
+      "rerankHint": "Reorders search results for knowledge bases without their own rerank model.",
+      "none": "None",
+      "manageHint": "Create knowledge bases and upload files under <link>Knowledge bases</link>."
+    },
+    "description": "How the catalog groups provider models, and the default models for knowledge bases."
+  }
+}

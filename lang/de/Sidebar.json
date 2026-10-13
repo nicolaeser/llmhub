@@ -9,32 +9,21 @@
     "models": "Modelle & Anbieter",
     "policies": "Richtlinien",
     "insights": "Auswertungen",
-    "settings": "Einstellungen",
-    "tools": "Werkzeuge"
+    "system": "Plattform"
   },
   "items": {
     "companies": "Unternehmen",
     "keys": "API-Keys",
-    "users": "Konsolen-Benutzer",
-    "roles": "Rollen",
+    "users": "Benutzer",
     "providers": "Anbieter",
-    "subscriptions": "Abos",
-    "providerHealth": "Anbieterstatus",
-    "modelCatalog": "Modellkatalog",
     "models": "Modelle",
-    "modelTemplates": "Modellvorlagen",
-    "markups": "Aufschläge",
     "guardrails": "Leitplanken",
-    "cache": "Antwort-Cache",
     "knowledge": "Wissensbasen",
+    "mcp": "MCP-Server",
     "usage": "Nutzung",
-    "whatIf": "Was wäre wenn",
     "logs": "Protokolle",
-    "logging": "Logging & Alarme",
-    "adminSettings": "Admin-Einstellungen",
-    "playground": "Spielwiese",
-    "assistant": "Assistent",
-    "apiRef": "API-Referenz"
+    "settings": "Einstellungen",
+    "developer": "Entwickler"
   },
   "account": "Konto und Sicherheit"
 }

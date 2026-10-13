@@ -1,5 +1,5 @@
 import "server-only";
-import type { S3AddressingStyle, S3Location, S3AddressingSetting } from "@/types/s3";
+import type { S3AddressingSetting, S3AddressingStyle, S3Location } from "@/types/s3";
 
 const IPV4 = /^(?:\d{1,3}\.){3}\d{1,3}$/;
 
@@ -53,75 +53,35 @@ function isAwsHost(host: string): boolean {
 }
 
 export function resolveAddressing(input: {
-  addressing?: S3AddressingSetting | string;
-  forcePathStyle?: boolean;
-  domainBucket?: boolean;
+  addressing: S3AddressingSetting;
   bucket: string;
   endpoint: string;
 }): S3AddressingStyle {
-  if (input.forcePathStyle) return "path";
-  if (input.domainBucket) return "virtual-hosted";
-  const mode = (input.addressing || "auto").toLowerCase();
-  if (mode === "path") return "path";
-  if (mode === "virtual-hosted" || mode === "virtual_hosted" || mode === "vhost") {
-    return "virtual-hosted";
-  }
-  let host: string;
-  try {
-    host = new URL(originOf(input.endpoint)).hostname;
-  } catch {
-    host = "";
-  }
+  if (input.addressing !== "auto") return input.addressing;
+  const endpoint = originOf(input.endpoint);
+  const host = new URL(endpoint).hostname;
   if (IPV4.test(host) || host.includes(":")) return "path";
-  if (input.bucket.includes(".") && originOf(input.endpoint).startsWith("https:")) {
-    return "path";
-  }
-  if (host && !isAwsHost(host)) return "path";
+  if (input.bucket.includes(".") && endpoint.startsWith("https:")) return "path";
+  if (!isAwsHost(host)) return "path";
   return "virtual-hosted";
 }
 
-
 export function objectUrl(location: S3Location, key: string): URL {
-  const fullKey = joinKey(location.prefix, key);
-  const encoded = encodeObjectKey(fullKey);
-  if (location.domainBucket) {
-    const base = location.publicBaseUrl || location.endpoint;
-    const url = new URL(originOf(base));
-    const extra = publicPath(location.publicBaseUrl);
-    url.pathname = `/${joinKey(extra, encoded)}`;
-    return url;
-  }
-  const endpoint = originOf(location.endpoint, defaultAwsEndpoint(location.region));
+  const encoded = encodeObjectKey(joinKey(location.prefix, key));
+  const url = new URL(originOf(location.endpoint, defaultAwsEndpoint(location.region)));
   if (location.addressing === "path") {
-    const url = new URL(endpoint);
     url.pathname = `/${encodeURIComponent(location.bucket)}/${encoded}`;
     return url;
   }
-  const root = new URL(endpoint);
-  const url = new URL(endpoint);
-  if (!root.hostname.startsWith(`${location.bucket}.`)) {
-    url.hostname = `${location.bucket}.${root.hostname}`;
+  if (location.addressing === "virtual-hosted" && !url.hostname.startsWith(`${location.bucket}.`)) {
+    url.hostname = `${location.bucket}.${url.hostname}`;
   }
   url.pathname = `/${encoded}`;
   return url;
 }
 
 export function publicObjectUrl(location: S3Location, key: string): string {
-  const fullKey = joinKey(location.prefix, key);
-  if (location.publicBaseUrl) {
-    const base = location.publicBaseUrl.endsWith("/")
-      ? location.publicBaseUrl
-      : `${location.publicBaseUrl}/`;
-    return new URL(encodeObjectKey(fullKey), base).toString();
-  }
-  return objectUrl(location, key).toString();
-}
-
-function publicPath(publicBaseUrl: string): string {
-  if (!publicBaseUrl) return "";
-  try {
-    return trimSlashes(new URL(publicBaseUrl).pathname);
-  } catch {
-    return "";
-  }
+  if (!location.publicBaseUrl) return objectUrl(location, key).toString();
+  const base = location.publicBaseUrl.endsWith("/") ? location.publicBaseUrl : `${location.publicBaseUrl}/`;
+  return new URL(encodeObjectKey(joinKey(location.prefix, key)), base).toString();
 }

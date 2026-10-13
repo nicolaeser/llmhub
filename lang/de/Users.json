@@ -1,6 +1,7 @@
 {
   "title": "Konsolen-Benutzer",
   "subtitle": "Personen, die sich an dieser Konsole anmelden. Plattform-Benutzer sehen alle Unternehmen; einem Unternehmen zugeordnete Benutzer sehen nur dieses. Die Personen eines Kunden werden unter Unternehmen gepflegt.",
+  "tab": "{tab, select, users {Benutzer} roles {Rollen und Berechtigungen} other {}}",
   "emptyTitle": "Keine Konsolen-Benutzer",
   "empty": "Lege Personen an, die sich an der Konsole anmelden können.",
   "noMatches": "Keine Benutzer passen zur Suche.",

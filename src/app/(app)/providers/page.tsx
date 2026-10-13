@@ -1,216 +1,161 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import {
-  Button,
-  Card,
-  Chip,
-  Disclosure,
-  useOverlayState,
-} from "@heroui/react";
-import { Plug, Plus } from "lucide-react";
+import { useRef, useState, useTransition } from "react";
+import { Tabs, useOverlayState } from "@heroui/react";
+import { HeartPulse, KeyRound, Plug, UserRound, type LucideIcon } from "lucide-react";
 import { useTranslations } from "next-intl";
-import EmptyState from "@/components/console/empty-state";
 import PageHeader from "@/components/console/page-header";
-import PageStatus from "@/components/console/page-status";
+import { LoadError, PageLoading } from "@/components/console/page-status";
 import { useErrorToast } from "@/components/console/use-error-toast";
-import ImportModelsDialog from "@/components/providers/import-models-dialog";
-import ProviderCard from "./_components/provider-card";
-import ProviderDialog from "@/components/providers/provider-dialog";
-import { isSignInKind, PROVIDER_CATALOG } from "@/lib/gateway/upstreams/provider-kinds";
-import { discoverProviderAction, loadProvidersAction } from "./_action";
+import ImportModelsDialog from "./_components/import-models-dialog";
+import ProviderDialog from "./_components/provider-dialog";
+import { isSignInKind } from "@/lib/gateway/upstreams/provider-kinds";
 import { useActionData } from "@/lib/hooks/use-action-data";
+import { useSearchParam } from "@/lib/hooks/use-search-param";
 import { isActionFail } from "@/lib/http/action-result";
-import type { ImportCandidate, ProviderView } from "@/types/providers";
+import type {
+  ImportCandidate,
+  ProviderKindSpec,
+  ProviderListActions,
+  ProvidersTab,
+  ProviderView,
+} from "@/types/providers";
+import { discoverProviderAction, loadProvidersAction } from "./_action";
+import ApiProviders from "./_components/api-providers";
+import ProviderHealth from "./_components/provider-health";
+import SubscriptionAccounts from "./_components/subscription-accounts";
 
-const STARTER_KINDS = new Set(["openai", "anthropic", "openrouter", "openai_compat"]);
-const API_CATALOG = PROVIDER_CATALOG.filter((spec) => !isSignInKind(spec.kind));
-const STARTER_CATALOG = API_CATALOG.filter((spec) => STARTER_KINDS.has(spec.kind));
-const MORE_CATALOG = API_CATALOG.filter((spec) => !STARTER_KINDS.has(spec.kind));
+const TABS = [
+  { id: "api", icon: KeyRound },
+  { id: "subscriptions", icon: UserRound },
+  { id: "health", icon: HeartPulse },
+] as const satisfies readonly { id: ProvidersTab; icon: LucideIcon }[];
+
+function tabOf(value: unknown): ProvidersTab {
+  return TABS.find((tab) => tab.id === value)?.id ?? "api";
+}
 
 export default function ProvidersPage() {
   const t = useTranslations("Providers");
   const showError = useErrorToast();
-  const [kind, setKind] = useState<(typeof PROVIDER_CATALOG)[number] | null>(null);
+  const tabParam = useSearchParam("tab");
+  const [picked, setPicked] = useState<ProvidersTab | null>(null);
+  const [spec, setSpec] = useState<ProviderKindSpec | null>(null);
   const [edit, setEdit] = useState<ProviderView | null>(null);
   const [discover, setDiscover] = useState<ProviderView | null>(null);
   const [models, setModels] = useState<ImportCandidate[] | null>(null);
   const [dialogKey, setDialogKey] = useState(0);
-  const [browseCatalog, setBrowseCatalog] = useState(false);
   const [, startDiscover] = useTransition();
+  const afterSave = useRef<((provider: ProviderView) => void) | undefined>(undefined);
   const formState = useOverlayState();
   const discoverState = useOverlayState();
   const page = useActionData<ProviderView[]>(async () => {
     const res = await loadProvidersAction();
-    return isActionFail(res) ? res : res.connected.filter((row) => !isSignInKind(row.kind));
+    return isActionFail(res) ? res : res.connected;
   });
   const { data: connected, setData: setConnected } = page;
+  const tab = picked ?? tabOf(tabParam);
 
-  function replaceProvider(provider: ProviderView) {
+  function selectTab(next: ProvidersTab) {
+    setPicked(next);
+    window.history.replaceState(null, "", next === "api" ? window.location.pathname : `?tab=${next}`);
+  }
+
+  function replace(provider: ProviderView) {
     setConnected((cur) => cur.map((row) => (row.id === provider.id ? provider : row)));
   }
 
-  function openForm(spec: (typeof PROVIDER_CATALOG)[number] | null, row: ProviderView | null) {
-    setKind(spec);
-    setEdit(row);
-    setDialogKey((n) => n + 1);
-    formState.open();
+  function saved(provider: ProviderView) {
+    setConnected((cur) =>
+      cur.some((row) => row.id === provider.id)
+        ? cur.map((row) => (row.id === provider.id ? provider : row))
+        : [provider, ...cur],
+    );
+    afterSave.current?.(provider);
   }
 
-  function openImport(row: ProviderView) {
-    setDiscover(row);
-    setModels(null);
-    setDialogKey((n) => n + 1);
-    discoverState.open();
-    startDiscover(async () => {
-      const result = await discoverProviderAction(row.id);
-      if (isActionFail(result)) {
-        setModels([]);
-        showError(result.error);
-        return;
-      }
-      replaceProvider(result.provider);
-      setModels(result.models);
-    });
-  }
+  const actions: ProviderListActions = {
+    openForm(next, row, onSaved) {
+      setSpec(next);
+      setEdit(row);
+      afterSave.current = onSaved;
+      setDialogKey((n) => n + 1);
+      formState.open();
+    },
+    openImport(row) {
+      setDiscover(row);
+      setModels(null);
+      setDialogKey((n) => n + 1);
+      discoverState.open();
+      startDiscover(async () => {
+        const result = await discoverProviderAction(row.id);
+        if (isActionFail(result)) {
+          setModels([]);
+          showError(result.error);
+          return;
+        }
+        replace(result.provider);
+        setModels(result.models);
+      });
+    },
+    replace,
+    remove(id) {
+      setConnected((cur) => cur.filter((row) => row.id !== id));
+    },
+  };
 
-  if (!connected) {
-    return <PageStatus title={t("title")} subtitle={t("subtitle")} state={page} />;
-  }
-
-  const catalog = connected.length > 0 ? API_CATALOG : STARTER_CATALOG;
-  const showCatalog = connected.length > 0 || browseCatalog;
+  const status = page.error === null ? <PageLoading /> : <LoadError state={page} />;
 
   return (
     <div>
-      <PageHeader title={t("title")} subtitle={t("subtitle")} />
+      <PageHeader icon={Plug} title={t("title")} subtitle={t("subtitle")} />
 
-      {!showCatalog ? (
-        <EmptyState
-          icon={Plug}
-          title={t("emptyTitle")}
-          description={t("empty")}
-          action={
-            <Button
-              aria-label={t("connect")}
-              onPress={() => setBrowseCatalog(true)}
-            >
-              {t("connect")}
-            </Button>
-          }
-        />
+      {tabParam === undefined ? (
+        <PageLoading />
       ) : (
-        <>
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-        {catalog.map((spec) => {
-          const items = connected.filter((c) => c.kind === spec.kind);
-          return (
-            <Card key={spec.kind}>
-              <Card.Header>
-                <div className="flex items-center justify-between gap-2">
-                  <Card.Title>{t("kindName", { kind: spec.kind })}</Card.Title>
-                  <Chip size="sm" variant="soft">
-                    {t("connectedCount", { count: items.length })}
-                  </Chip>
-                </div>
-                <Card.Description>
-                  {t("kindDescription", { kind: spec.kind })}
-                </Card.Description>
-              </Card.Header>
-              <Card.Content className="space-y-2">
-                {items.map((row) => (
-                  <ProviderCard
-                    key={row.id}
-                    row={row}
-                    onEdit={(provider) =>
-                      openForm(PROVIDER_CATALOG.find((k) => k.kind === provider.kind) ?? null, provider)
-                    }
-                    onImport={openImport}
-                    onToggled={replaceProvider}
-                    onDeleted={(id) => setConnected((cur) => cur.filter((c) => c.id !== id))}
-                  />
-                ))}
-              </Card.Content>
-              <Card.Footer>
-                <Button
-                  size="sm"
-                  variant={items.length ? "secondary" : undefined}
-                  aria-label={t("formTitle", {
-                    mode: "connect",
-                    name: t("kindName", { kind: spec.kind }),
-                  })}
-                  onPress={() => openForm(spec, null)}
-                >
-                  <Plus size={14} aria-hidden />
-                  {t("connect")}
-                </Button>
-              </Card.Footer>
-            </Card>
-          );
-        })}
-      </div>
-      {connected.length === 0 && MORE_CATALOG.length > 0 ? (
-        <Disclosure className="mt-5">
-          <Disclosure.Heading>
-            <Disclosure.Trigger className="flex w-full items-center justify-between text-sm text-muted">
-              {t("moreProviders")}
-              <Disclosure.Indicator />
-            </Disclosure.Trigger>
-          </Disclosure.Heading>
-          <Disclosure.Content>
-            <Disclosure.Body className="pt-3">
-              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                {MORE_CATALOG.map((spec) => (
-                  <Card key={spec.kind}>
-                    <Card.Header>
-                      <Card.Title>{t("kindName", { kind: spec.kind })}</Card.Title>
-                      <Card.Description>
-                        {t("kindDescription", { kind: spec.kind })}
-                      </Card.Description>
-                    </Card.Header>
-                    <Card.Footer>
-                      <Button
-                        size="sm"
-                        aria-label={t("formTitle", {
-                          mode: "connect",
-                          name: t("kindName", { kind: spec.kind }),
-                        })}
-                        onPress={() => openForm(spec, null)}
-                      >
-                        <Plus size={14} aria-hidden />
-                        {t("connect")}
-                      </Button>
-                    </Card.Footer>
-                  </Card>
-                ))}
-              </div>
-            </Disclosure.Body>
-          </Disclosure.Content>
-        </Disclosure>
-      ) : null}
-        </>
+        <Tabs selectedKey={tab} onSelectionChange={(key) => selectTab(tabOf(key))} aria-label={t("tabsLabel")}>
+          <Tabs.ListContainer className="w-fit max-w-full">
+            <Tabs.List aria-label={t("tabsLabel")}>
+              {TABS.map(({ id, icon: Icon }) => (
+                <Tabs.Tab key={id} id={id} className="gap-2 whitespace-nowrap">
+                  <Icon size={14} aria-hidden />
+                  {t("tabs", { tab: id })}
+                  <Tabs.Indicator />
+                </Tabs.Tab>
+              ))}
+            </Tabs.List>
+          </Tabs.ListContainer>
+  
+          <Tabs.Panel id="api">
+            {connected ? (
+              <ApiProviders rows={connected.filter((row) => !isSignInKind(row.kind))} actions={actions} />
+            ) : (
+              status
+            )}
+          </Tabs.Panel>
+  
+          <Tabs.Panel id="subscriptions">
+            {connected ? (
+              <SubscriptionAccounts rows={connected.filter((row) => isSignInKind(row.kind))} actions={actions} />
+            ) : (
+              status
+            )}
+          </Tabs.Panel>
+  
+          <Tabs.Panel id="health">
+            <ProviderHealth />
+          </Tabs.Panel>
+        </Tabs>
       )}
 
-      <ProviderDialog
-        key={`form-${dialogKey}`}
-        state={formState}
-        spec={kind}
-        editing={edit}
-        onSaved={(provider) =>
-          setConnected((cur) =>
-            cur.some((row) => row.id === provider.id)
-              ? cur.map((row) => (row.id === provider.id ? provider : row))
-              : [provider, ...cur],
-          )
-        }
-      />
+      <ProviderDialog key={`form-${dialogKey}`} state={formState} spec={spec} editing={edit} onSaved={saved} />
 
       <ImportModelsDialog
         key={`import-${dialogKey}`}
         state={discoverState}
         provider={discover}
         models={models}
-        onImported={replaceProvider}
+        onImported={replace}
       />
     </div>
   );

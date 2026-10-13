@@ -1,8 +1,8 @@
 import "server-only";
-import { randomBytes } from "node:crypto";
 import prisma from "@/lib/db/prisma";
-import { hashPassword } from "@/lib/auth/password";
-import { uniqueUsername } from "@/lib/auth/sso-user";
+import { uniqueUsername, unusablePassword } from "@/lib/auth/sso-user";
+import { directoryOrgId, directoryRoleId } from "@/lib/auth/directory-roles";
+import { getEnterprise, normalizeOidc } from "@/lib/settings/enterprise";
 import { refuseIfNoOperators } from "@/lib/bootstrap/operators";
 import { templateRoleId } from "@/lib/auth/roles";
 import { isPrismaCode } from "@/lib/auth/errors";
@@ -11,12 +11,15 @@ import { removeUserWithInternalKeys } from "@/lib/auth/user-removal";
 import { writeAudit } from "@/lib/audit";
 import { digest, randomToken } from "@/lib/crypto";
 import { bearerToken } from "@/lib/http/api";
+import { logger } from "@/lib/logging/logger";
 import { isRoleTemplateKey } from "@/lib/auth/permissions";
 import type { RoleTemplateKey } from "@/types/auth";
 import { asRecord } from "@/lib/gateway/core";
 import { NextResponse } from "next/server";
 import type {
   ScimErrorType,
+  ScimFilter,
+  ScimPage,
   ScimPatchOperation,
   ScimUserChanges,
   ScimUserInput,
@@ -40,6 +43,8 @@ const SCIM_TOKEN_KEY = "scim_token_hash";
 const SCIM_ACTOR = "scim";
 const SCIM_USER_PATH_PREFIX = `${SCIM_USER_SCHEMA}:`.toLowerCase();
 const OWNER_DETAIL = "the owner account cannot be managed through SCIM";
+const SCIM_DEFAULT_COUNT = 100;
+const SCIM_MAX_COUNT = 200;
 
 export function scimJson(body: unknown, status = 200): NextResponse {
   const res = NextResponse.json(body, { status });
@@ -63,7 +68,7 @@ export function scimError(
   );
 }
 
-function scimFailure(status: number, detail: string, scimType?: ScimErrorType): Error {
+export function scimFailure(status: number, detail: string, scimType?: ScimErrorType): Error {
   return Object.assign(new Error(detail), { status, scimType });
 }
 
@@ -76,6 +81,7 @@ export function scimCaught(err: unknown): NextResponse {
   ) {
     return scimError(403, "SETUP_REQUIRED");
   }
+  if (status >= 500) return scimError(500, "internal error");
   return scimError(
     status,
     err instanceof Error ? err.message : "scim error",
@@ -91,6 +97,23 @@ export async function requireScimToken(req: Request): Promise<void> {
   if (!stored || digest(token) !== stored.value) {
     throw Object.assign(new Error("SCIM requires a valid bearer token"), { status: 401 });
   }
+}
+
+export function scimHandler<A extends unknown[]>(
+  name: string,
+  handler: (req: Request, ...args: A) => Promise<Response>,
+) {
+  return async (req: Request, ...args: A): Promise<Response> => {
+    try {
+      await requireScimToken(req);
+      return await handler(req, ...args);
+    } catch (err) {
+      if (((err as { status?: number }).status ?? 500) >= 500) {
+        logger.error(`scim.${name}.failed`, { err: String(err) });
+      }
+      return scimCaught(err);
+    }
+  };
 }
 
 export async function scimTokenSet(): Promise<boolean> {
@@ -123,29 +146,78 @@ export function scimRoleKey(input: { roles?: { value?: string }[] }): RoleTempla
   return isRoleTemplateKey(raw) ? raw : "viewer";
 }
 
+export function scimMeta(
+  resourceType: "User" | "Group",
+  row: { createdAt?: Date; updatedAt?: Date },
+) {
+  return {
+    resourceType,
+    ...(row.createdAt ? { created: row.createdAt.toISOString() } : {}),
+    ...(row.updatedAt ? { lastModified: row.updatedAt.toISOString() } : {}),
+  };
+}
+
 export function toScimUser(user: {
   id: string;
   email: string;
   blocked: boolean;
+  externalId?: string | null;
+  createdAt?: Date;
+  updatedAt?: Date;
   role?: { templateKey: string | null; name: string | null } | null;
+  scimGroups?: { group: { id: string; displayName: string } }[];
 }): ScimUser {
   const role = user.role?.templateKey ?? user.role?.name ?? "";
   return {
     schemas: [SCIM_USER_SCHEMA],
     id: user.id,
+    ...(user.externalId ? { externalId: user.externalId } : {}),
     userName: user.email,
     active: !user.blocked,
     name: { formatted: user.email },
     emails: [{ value: user.email, primary: true }],
     roles: role ? [{ value: role }] : [],
+    ...(user.scimGroups
+      ? { groups: user.scimGroups.map(({ group }) => ({ value: group.id, display: group.displayName })) }
+      : {}),
+    meta: scimMeta("User", user),
   };
 }
 
-export function parseScimFilter(filter: string | null): { email?: string } {
+export function parseScimFilter(filter: string | null, attributes: readonly string[]): ScimFilter {
+  if (!filter?.trim()) return null;
+  const match = filter.trim().match(/^([A-Za-z][\w.]*)\s+eq\s+"((?:[^"\\]|\\.)*)"$/i);
+  const attribute = match?.[1] ? attributes.find((name) => name.toLowerCase() === match[1]!.toLowerCase()) : undefined;
+  if (!match || !attribute) {
+    throw scimFailure(400, "only <attribute> eq \"value\" filters on supported attributes are allowed", "invalidFilter");
+  }
+  return { attribute, value: match[2]!.replace(/\\(.)/g, "$1").trim() };
+}
+
+export function parseScimPage(url: URL): ScimPage {
+  const startIndex = Math.max(1, Math.trunc(Number(url.searchParams.get("startIndex") ?? 1)) || 1);
+  const countRaw = Number(url.searchParams.get("count") ?? SCIM_DEFAULT_COUNT);
+  const count = Number.isFinite(countRaw) ? Math.min(Math.max(Math.trunc(countRaw), 0), SCIM_MAX_COUNT) : SCIM_DEFAULT_COUNT;
+  return { startIndex, count };
+}
+
+export function scimList<T>(resources: T[], total: number, page: ScimPage) {
+  return {
+    schemas: [SCIM_LIST_SCHEMA],
+    totalResults: total,
+    startIndex: page.startIndex,
+    itemsPerPage: resources.length,
+    Resources: resources,
+  };
+}
+
+const USER_FILTERS = ["userName", "emails.value", "externalId", "id"] as const;
+
+function userWhere(filter: ScimFilter) {
   if (!filter) return {};
-  const match = filter.match(/(?:userName|emails\.value)\s+eq\s+"([^"]+)"/i);
-  if (!match?.[1]) return {};
-  return { email: match[1].trim().toLowerCase() };
+  if (filter.attribute === "externalId") return { externalId: filter.value };
+  if (filter.attribute === "id") return { id: filter.value };
+  return { email: filter.value.toLowerCase() };
 }
 
 export function parseScimUserBody(raw: unknown): ScimUserInput {
@@ -154,9 +226,10 @@ export function parseScimUserBody(raw: unknown): ScimUserInput {
   }
   const parsed = scimUserResourceSchema.safeParse(raw);
   if (!parsed.success) throw scimFailure(400, "invalid SCIM User resource", "invalidValue");
-  const { userName, emails, roles, active } = parsed.data;
+  const { userName, externalId, emails, roles, active } = parsed.data;
   return {
     userName: userName || undefined,
+    externalId: externalId || undefined,
     emails: emails ?? undefined,
     roles: roles ?? undefined,
     active: active ?? undefined,
@@ -171,6 +244,7 @@ export function parseScimPut(raw: unknown): ScimPatchOperation[] {
   }
   const operations: ScimPatchOperation[] = [];
   if (input.userName) operations.push({ op: "replace", attribute: "userName", value: input.userName });
+  if (input.externalId) operations.push({ op: "replace", attribute: "externalId", value: input.externalId });
   if (email) operations.push({ op: "replace", attribute: "email", value: email });
   if (input.active !== undefined) {
     operations.push({ op: "replace", attribute: "active", value: input.active });
@@ -217,6 +291,13 @@ function scimPatchTarget(
       const active = scimBooleanSchema.safeParse(value);
       if (!active.success) throw scimFailure(400, "active must be a boolean", "invalidValue");
       return [{ op: "replace", attribute: "active", value: active.data }];
+    }
+    case "externalid": {
+      if (!simple) throw scimFailure(400, `unsupported path ${path}`, "invalidPath");
+      if (op === "remove") return [{ op: "replace", attribute: "externalId", value: null }];
+      const externalId = scimUserNameSchema.safeParse(value);
+      if (!externalId.success) throw scimFailure(400, "externalId must be a non-empty string", "invalidValue");
+      return [{ op: "replace", attribute: "externalId", value: externalId.data }];
     }
     case "username": {
       if (!simple || op === "remove") throw scimFailure(400, `unsupported path ${path}`, "invalidPath");
@@ -285,6 +366,8 @@ export function applyScimPatch(
         return { ...changes, email: operation.value };
       case "roles":
         return { ...changes, roles: operation.value };
+      case "externalId":
+        return { ...changes, externalId: operation.value };
     }
   }, {});
 }
@@ -298,7 +381,7 @@ function scimHandle(userName: string): string {
 }
 
 export function scimUserUpdate(
-  current: { email: string; username: string; blocked: boolean; roles: string[] },
+  current: { email: string; username: string; blocked: boolean; roles: string[]; externalId?: string | null },
   changes: ScimUserChanges,
 ): ScimUserUpdate {
   const userName = changes.userName?.trim() ?? "";
@@ -313,6 +396,9 @@ export function scimUserUpdate(
     throw scimFailure(400, "emails.value must be an email address", "invalidValue");
   }
   const update: ScimUserUpdate = {};
+  if (changes.externalId !== undefined && changes.externalId !== (current.externalId ?? null)) {
+    update.externalId = changes.externalId;
+  }
   if (email?.success && email.data !== current.email) update.email = email.data;
   if (handle && handle !== current.username) update.username = handle;
   if (changes.active !== undefined && changes.active === current.blocked) {
@@ -327,18 +413,34 @@ export function scimUserUpdate(
   return update;
 }
 
-const userInclude = { role: { select: { templateKey: true, name: true } } } as const;
+const userInclude = {
+  role: { select: { templateKey: true, name: true } },
+  scimGroups: { select: { group: { select: { id: true, displayName: true } } } },
+} as const;
 
-export async function listScimUsers(filter: { email?: string }) {
-  return prisma.user.findMany({
-    where: filter.email ? { email: filter.email } : undefined,
-    orderBy: { email: "asc" },
-    include: userInclude,
-  });
+export async function listScimUsers(filterParam: string | null, page: ScimPage) {
+  const where = userWhere(parseScimFilter(filterParam, USER_FILTERS));
+  const [total, users] = await Promise.all([
+    prisma.user.count({ where }),
+    page.count
+      ? prisma.user.findMany({
+          where,
+          orderBy: { email: "asc" },
+          skip: page.startIndex - 1,
+          take: page.count,
+          include: userInclude,
+        })
+      : [],
+  ]);
+  return { total, users };
 }
 
 export async function getScimUser(id: string) {
   return prisma.user.findUnique({ where: { id }, include: userInclude });
+}
+
+async function directorySettings() {
+  return normalizeOidc((await getEnterprise()).oidc);
 }
 
 export async function createScimUser(input: ScimUserInput) {
@@ -349,20 +451,39 @@ export async function createScimUser(input: ScimUserInput) {
   const exists = await prisma.user.findUnique({ where: { email } });
   if (exists) throw scimFailure(409, "User already exists", "uniqueness");
   await refuseIfNoOperators();
-  const roleId = await templateRoleId(scimRoleKey(input));
+  const oidc = await directorySettings();
+  const roleId =
+    input.roles && !oidc.role_mappings.length
+      ? await templateRoleId(scimRoleKey(input))
+      : await directoryRoleId(oidc, []);
   const local = (input.userName && !input.userName.includes("@")
     ? input.userName
     : email.split("@")[0]) ?? "user";
-  return prisma.user.create({
-    data: {
-      username: await uniqueUsername(local),
-      email,
-      password: await hashPassword(randomBytes(24).toString("base64url")),
-      blocked: input.active === false,
-      roleId,
-    },
-    include: userInclude,
-  });
+  try {
+    const user = await prisma.user.create({
+      data: {
+        username: await uniqueUsername(local),
+        email,
+        externalId: input.externalId ?? null,
+        password: await unusablePassword(),
+        blocked: input.active === false,
+        roleId,
+        orgId: await directoryOrgId(oidc),
+      },
+      include: userInclude,
+    });
+    await writeAudit({
+      actor: SCIM_ACTOR,
+      action: "scim.user.create",
+      objectType: "user",
+      objectId: user.id,
+      after: { roleId, orgId: user.orgId, externalId: user.externalId, blocked: user.blocked },
+    });
+    return user;
+  } catch (err) {
+    if (isPrismaCode(err, "P2002")) throw scimFailure(409, "User already exists", "uniqueness");
+    throw err;
+  }
 }
 
 export async function updateScimUser(
@@ -374,15 +495,20 @@ export async function updateScimUser(
   if (!user) throw scimFailure(404, "not found");
   if (user.isOwner) throw scimFailure(403, OWNER_DETAIL);
   const roles = toScimUser(user).roles?.map((role) => role.value) ?? [];
+  const directoryRoles = (await directorySettings()).role_mappings.length > 0;
   const update = scimUserUpdate(
-    { email: user.email, username: user.username, blocked: user.blocked, roles },
-    applyScimPatch(operations, roles),
+    { email: user.email, username: user.username, blocked: user.blocked, roles, externalId: user.externalId },
+    applyScimPatch(
+      directoryRoles ? operations.filter((operation) => operation.attribute !== "roles") : operations,
+      roles,
+    ),
   );
   const roleId = update.roleKey ? await templateRoleId(update.roleKey) : user.roleId;
   if (update.roleKey && !roleId) {
     throw scimFailure(500, `role template ${update.roleKey} is missing`);
   }
   const next = {
+    ...(update.externalId !== undefined ? { externalId: update.externalId } : {}),
     ...(update.email ? { email: update.email } : {}),
     ...(update.username ? { username: update.username } : {}),
     ...(update.blocked !== undefined ? { blocked: update.blocked } : {}),
@@ -413,7 +539,7 @@ export async function updateScimUser(
     });
   } catch (err) {
     if (isPrismaCode(err, "P2002")) {
-      throw scimFailure(409, "userName or email is already in use", "uniqueness");
+      throw scimFailure(409, "userName, email, or externalId is already in use", "uniqueness");
     }
     if (isPrismaCode(err, "P2025")) throw scimFailure(404, "not found");
     throw err;

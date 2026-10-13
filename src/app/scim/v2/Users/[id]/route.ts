@@ -3,86 +3,38 @@ import {
   getScimUser,
   parseScimPatch,
   parseScimPut,
-  requireScimToken,
-  scimCaught,
   scimError,
+  scimHandler,
   scimJson,
   toScimUser,
   updateScimUser,
 } from "@/lib/auth/scim";
 import { clientIp } from "@/lib/http/api";
-import { logger } from "@/lib/logging/logger";
 import { readJsonOr } from "@/lib/utils/json";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(
-  req: Request,
-  ctx: { params: Promise<{ id: string }> },
-) {
-  try {
-    await requireScimToken(req);
-    const { id } = await ctx.params;
-    const user = await getScimUser(id);
-    if (!user) return scimError(404, "not found");
-    return scimJson(toScimUser(user));
-  } catch (err) {
-    if (((err as { status?: number }).status ?? 500) >= 500) {
-      logger.error("scim.get.failed", { err: String(err) });
-    }
-    return scimCaught(err);
-  }
-}
+type Context = { params: Promise<{ id: string }> };
 
-export async function PUT(
-  req: Request,
-  ctx: { params: Promise<{ id: string }> },
-) {
-  try {
-    await requireScimToken(req);
-    const { id } = await ctx.params;
-    const operations = parseScimPut(await readJsonOr(req, null));
-    const user = await updateScimUser(id, operations, clientIp(req.headers) || null);
-    return scimJson(toScimUser(user));
-  } catch (err) {
-    if (((err as { status?: number }).status ?? 500) >= 500) {
-      logger.error("scim.replace.failed", { err: String(err) });
-    }
-    return scimCaught(err);
-  }
-}
+export const GET = scimHandler("get", async (_req, ctx: Context) => {
+  const user = await getScimUser((await ctx.params).id);
+  if (!user) return scimError(404, "not found");
+  return scimJson(toScimUser(user));
+});
 
-export async function PATCH(
-  req: Request,
-  ctx: { params: Promise<{ id: string }> },
-) {
-  try {
-    await requireScimToken(req);
-    const { id } = await ctx.params;
-    const operations = parseScimPatch(await readJsonOr(req, null));
-    const user = await updateScimUser(id, operations, clientIp(req.headers) || null);
-    return scimJson(toScimUser(user));
-  } catch (err) {
-    if (((err as { status?: number }).status ?? 500) >= 500) {
-      logger.error("scim.patch.failed", { err: String(err) });
-    }
-    return scimCaught(err);
-  }
-}
+export const PUT = scimHandler("replace", async (req, ctx: Context) => {
+  const operations = parseScimPut(await readJsonOr(req, null));
+  const user = await updateScimUser((await ctx.params).id, operations, clientIp(req.headers) || null);
+  return scimJson(toScimUser(user));
+});
 
-export async function DELETE(
-  req: Request,
-  ctx: { params: Promise<{ id: string }> },
-) {
-  try {
-    await requireScimToken(req);
-    const { id } = await ctx.params;
-    await deleteScimUser(id);
-    return new Response(null, { status: 204 });
-  } catch (err) {
-    if (((err as { status?: number }).status ?? 500) >= 500) {
-      logger.error("scim.delete.failed", { err: String(err) });
-    }
-    return scimCaught(err);
-  }
-}
+export const PATCH = scimHandler("patch", async (req, ctx: Context) => {
+  const operations = parseScimPatch(await readJsonOr(req, null));
+  const user = await updateScimUser((await ctx.params).id, operations, clientIp(req.headers) || null);
+  return scimJson(toScimUser(user));
+});
+
+export const DELETE = scimHandler("delete", async (_req, ctx: Context) => {
+  await deleteScimUser((await ctx.params).id);
+  return new Response(null, { status: 204 });
+});

@@ -1,8 +1,8 @@
 import Sidebar from "./_components/sidebar";
 import ConsoleTopbar from "./_components/console-topbar";
-import AssistantProvider from "./_components/assistant-session";
+import BuildStatusProvider from "./_components/build-status";
 import { requireAuth } from "@/lib/auth/guards";
-import { hasPerm, PERMISSIONS } from "@/lib/auth/permissions";
+import { currentBuild } from "@/lib/updates/build";
 
 export default async function AppLayout({
   children,
@@ -12,9 +12,7 @@ export default async function AppLayout({
   const session = await requireAuth();
 
   return (
-    <AssistantProvider
-      enabled={hasPerm(session.permissions, PERMISSIONS.ASSISTANT_USE)}
-    >
+    <BuildStatusProvider version={currentBuild()}>
       <Sidebar
         user={{
           email: session.user.email,
@@ -27,6 +25,6 @@ export default async function AppLayout({
           <div className="mx-auto max-w-[1400px]">{children}</div>
         </main>
       </Sidebar>
-    </AssistantProvider>
+    </BuildStatusProvider>
   );
 }

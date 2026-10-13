@@ -15,7 +15,7 @@ LLM Hub is a Next.js 16 App Router app: OpenAI- and Anthropic-compatible `/api/v
 
 - `src/app/(app)/` — authenticated console. Layout requires a session.
 - `src/app/account/` — login, register, password reset. Public except when a session already exists.
-- `src/app/internal-api/` — health, ready, version, account HTTP, playground and assistant chat, API reference try-out, log/usage export, first-admin setup.
+- `src/app/internal-api/` — health, ready, version (polled by the console for new builds), account HTTP, playground chat, API reference try-out, log/usage export, first-admin setup.
 - `src/app/api/v1/` — OpenAI-compatible gateway. Virtual keys only (plus console try-tokens). `src/app/api/subscription/v1/` serves the same API from signed-in subscription accounts.
 - `src/app/api/mgmt/` — management API over the console actions. Management keys only.
 - `src/app/sso/` and `src/app/scim/` — enterprise login and provisioning.
@@ -33,8 +33,8 @@ LLM Hub is a Next.js 16 App Router app: OpenAI- and Anthropic-compatible `/api/v
 - Model template (`ModelTemplate`): reusable model-access rule set (aliases, glob patterns, providers, data regions, ZDR, no-training, maximum retention) attached to keys; matching aliases are resolved at authentication time.
 - Request log: one `RequestLog` row per metered gateway request, including cache hits, upstream failures, and PII blocks (tenancy, endpoint, routing, status, tokens, cost, PII markers). Prompt and response bodies live in `RequestLogContent`.
 - Management key (`ManagementKey`): hashed personal credential for `/api/mgmt`, scoped to a subset of the owner's permissions.
-- SCIM token: hashed in `Setting` `scim_token_hash`; created in Admin settings.
-- Enterprise: JSON settings in `Setting` `enterprise` (registration, OIDC, assistant model, S3, global PII policy, cache TTL, retention, alert webhooks, budget alert thresholds, log archive, request-content logging). Webhook secrets are sealed and never sent to the client.
+- SCIM token: hashed in `Setting` `scim_token_hash`; created in Settings → Sign-in.
+- Enterprise: JSON settings in `Setting` `enterprise` (registration, OIDC, S3, global PII policy, cache TTL, retention, alert webhooks, budget alert thresholds, log archive, request-content logging). Webhook secrets are sealed and never sent to the client.
 
 ## Boot
 

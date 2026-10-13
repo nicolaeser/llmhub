@@ -1,6 +1,12 @@
 {
   "title": "Providers",
-  "subtitle": "Connect OpenAI, Anthropic, OpenRouter, xAI, and any OpenAI-compatible endpoint with an API key. Subscription sign-ins live under Subscriptions.",
+  "subtitle": "Connect model providers by API key or subscription sign-in and keep an eye on their health.",
+  "tabsLabel": "Provider views",
+  "tabs": "{tab, select, api {API keys} subscriptions {Subscriptions} health {Health} other {{tab}}}",
+  "connectedTitle": "Connected",
+  "catalogTitle": "Add a provider",
+  "catalogHint": "Each connection uses its own API key. ChatGPT, Claude, Google, and SuperGrok plans sign in under Subscriptions.",
+  "modelCount": "{count, plural, one {# model} other {# models}}",
   "connect": "Connect",
   "edit": "Edit {name}",
   "formTitle": "{mode, select, edit {Edit {name}} connect {Connect {name}} other {Connect {name}}}",
@@ -32,7 +38,7 @@
   "toasts": {
     "saved": "{mode, select, created {Provider connected} updated {Provider updated} deleted {Disconnected} other {Provider connected}}"
   },
-  "deleteConfirm": "Disconnect {name}?",
+  "deleteConfirm": "Disconnect {name}? Its routes and catalog entries are removed, and model groups left without routes are deleted unless they have their own settings.",
   "empty": "No providers connected yet.",
   "emptyTitle": "Connect a provider",
   "moreProviders": "More providers",

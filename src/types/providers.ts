@@ -219,3 +219,12 @@ export type ProviderModelPrice = {
 export type AntigravitySettings = {
   client_secret: string;
 };
+
+export type ProviderListActions = {
+  openForm: (spec: ProviderKindSpec | null, row: ProviderView | null, onSaved?: (provider: ProviderView) => void) => void;
+  openImport: (row: ProviderView) => void;
+  replace: (provider: ProviderView) => void;
+  remove: (id: string) => void;
+};
+
+export type ProvidersTab = "api" | "subscriptions" | "health";

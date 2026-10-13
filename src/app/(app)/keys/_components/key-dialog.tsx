@@ -235,7 +235,7 @@ export function KeyDialog({
         label={t("fields.templates")}
         description={t.rich("fields.templatesHint", {
           link: (chunks) => (
-            <Link href="/model-templates" className="text-accent">
+            <Link href="/keys?tab=templates" className="text-accent">
               {chunks}
             </Link>
           ),

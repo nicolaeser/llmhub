@@ -1,7 +1,7 @@
 "use server";
 
 import { runAction } from "@/lib/http/action-result";
-import { oidcIsReady } from "@/lib/auth/oidc";
+import { oidcIsReady, ssoOnlyActive } from "@/lib/auth/oidc";
 import { passkeysAvailable } from "@/lib/auth/passkeys";
 import { passwordResetEnabled } from "@/lib/auth/self-service";
 import { getEnterprise } from "@/lib/settings/enterprise";
@@ -27,11 +27,13 @@ export async function passwordSignInAction(input: unknown) {
 export async function loginContextAction() {
   return runAction(async (): Promise<LoginContext> => {
     const enterprise = await getEnterprise().catch(() => null);
+    const ssoOnly = enterprise ? ssoOnlyActive(enterprise.oidc) : false;
     return {
       step: await loginState(),
       ssoEnabled: enterprise ? oidcIsReady(enterprise.oidc) : false,
+      ssoOnly,
       passkeysEnabled: passkeysAvailable(),
-      registrationEnabled: enterprise?.registration_enabled === true,
+      registrationEnabled: enterprise?.registration_enabled === true && !ssoOnly,
       passwordResetEnabled: passwordResetEnabled(),
     };
   });

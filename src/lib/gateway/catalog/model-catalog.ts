@@ -7,7 +7,6 @@ import type {
   CatalogRouteInput,
   CatalogSource,
   CatalogStatus,
-  JevCandidate,
   JevTask,
   StoredCatalogEntry,
 } from "@/types/model-catalog";
@@ -29,7 +28,9 @@ const COLON_TAG = /^([^:]+):([a-z][a-z0-9-]{0,23})$/;
 const DASH_TAGS = ["batch", "free"] as const;
 const DISPLAY_VENDOR_PREFIX = /^[^:]{1,40}:\s+/;
 const MIN_CANDIDATE_SIMILARITY = 0.34;
-const MAX_JEV_CANDIDATES = 8;
+const MAX_JEV_CANDIDATES = 24;
+
+export const JEV_ROUND_SIZE = 8;
 
 export const JEV_SUGGEST_CONFIDENCE = 0.5;
 export const DEFAULT_AUTO_CONFIDENCE = 0.9;
@@ -169,6 +170,14 @@ function tokens(name: string): Set<string> {
   return new Set(matchKey(name).split(/[^a-z0-9]+/).filter(Boolean));
 }
 
+function familyToken(token: string): boolean {
+  return token.length >= 3 && /[a-z]/.test(token);
+}
+
+function familyTokens(name: string): string[] {
+  return [...tokens(name)].filter(familyToken);
+}
+
 export function nameSimilarity(a: string, b: string): number {
   const left = tokens(a);
   const right = tokens(b);
@@ -177,7 +186,7 @@ export function nameSimilarity(a: string, b: string): number {
   for (const token of left) {
     if (!right.has(token)) continue;
     shared += 1;
-    if (token.length >= 3 && /[a-z]/.test(token)) family = true;
+    if (familyToken(token)) family = true;
   }
   if (!family) return 0;
   return shared / (left.size + right.size - shared);
@@ -302,8 +311,21 @@ function better(a: Target, b: Target): boolean {
   return a.alias < b.alias;
 }
 
-function candidatesFor(item: Item, own: Target, targets: Target[]): JevCandidate[] {
-  return targets
+type ScoredCandidate = { target: Target; score: number };
+
+type RankedTask = { task: JevTask; trusted: boolean; best: ScoredCandidate };
+
+function targetIndex(targets: Target[]): Map<string, Target[]> {
+  const index = new Map<string, Target[]>();
+  for (const target of targets) {
+    for (const token of familyTokens(target.name)) index.set(token, [...(index.get(token) ?? []), target]);
+  }
+  return index;
+}
+
+function candidatesFor(item: Item, own: Target, index: Map<string, Target[]>): ScoredCandidate[] {
+  const pool = new Set(familyTokens(item.name).flatMap((token) => index.get(token) ?? []));
+  return [...pool]
     .filter(
       (target) =>
         target.alias !== own.alias && target.alias !== JEV_NONE && target.tag === item.tag && better(target, own),
@@ -312,8 +334,17 @@ function candidatesFor(item: Item, own: Target, targets: Target[]): JevCandidate
     .map((target) => ({ target, score: nameSimilarity(item.name, target.name) }))
     .filter((row) => row.score >= MIN_CANDIDATE_SIMILARITY)
     .sort((a, b) => b.score - a.score || a.target.alias.localeCompare(b.target.alias))
-    .slice(0, MAX_JEV_CANDIDATES)
-    .map(({ target }) => ({ alias: target.alias, label: target.label }));
+    .slice(0, MAX_JEV_CANDIDATES);
+}
+
+function jevOrder(a: RankedTask, b: RankedTask): number {
+  return (
+    Number(b.trusted) - Number(a.trusted) ||
+    a.best.target.tier - b.best.target.tier ||
+    b.best.score - a.best.score ||
+    a.task.providerId.localeCompare(b.task.providerId) ||
+    a.task.upstreamId.localeCompare(b.task.upstreamId)
+  );
 }
 
 export function planCatalog(input: {
@@ -391,10 +422,10 @@ export function planCatalog(input: {
       rank: kindRank(lead.kind),
     });
   }
-  const targetList = [...targets.values()];
+  const index = targetIndex([...targets.values()]);
 
   const entries: CatalogEntryPlan[] = [];
-  const jev: JevTask[] = [];
+  const jev: RankedTask[] = [];
   for (const item of items) {
     const key = entryKey(item.providerId, item.upstreamId);
     const prior = stored.get(key);
@@ -451,19 +482,23 @@ export function planCatalog(input: {
     }
     push(cluster.alias, "", 0);
     if (base.classifiedAt) continue;
-    const candidates = candidatesFor(item, targets.get(cluster.alias)!, targetList);
+    const candidates = candidatesFor(item, targets.get(cluster.alias)!, index);
     if (candidates.length) {
       jev.push({
-        providerId: item.providerId,
-        upstreamId: item.upstreamId,
-        kind: item.kind,
-        vendor: item.vendor,
-        name: item.display,
-        candidates,
+        trusted: base.trusted,
+        best: candidates[0]!,
+        task: {
+          providerId: item.providerId,
+          upstreamId: item.upstreamId,
+          kind: item.kind,
+          vendor: item.vendor,
+          name: item.display,
+          candidates: candidates.map(({ target }) => ({ alias: target.alias, label: target.label })),
+        },
       });
     }
   }
-  return { entries, jev };
+  return { entries, jev: jev.sort(jevOrder).map((row) => row.task) };
 }
 
 export function autoRouteEntries(

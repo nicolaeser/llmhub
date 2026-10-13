@@ -1,15 +1,73 @@
 import type { z } from "zod";
-import type { adminSettingsSchema, alertWebhooksSchema } from "@/schemas/settings";
+import type { alertWebhooksSchema, catalogSettingsSchema, generalSettingsSchema } from "@/schemas/settings";
 import type { AlertWebhook, WebhookEvent, WebhookFormat } from "@/types/alerts";
-import type { OidcSettings } from "@/types/auth";
+import type { OidcSettings, OidcTokenAuth, RoleOption } from "@/types/auth";
 import type { SemanticCacheSettings } from "@/types/cache";
 import type { GuardrailPolicy, PiiPolicy } from "@/types/guardrails";
 import type { JevSettings } from "@/types/model-catalog";
 import type { AntigravitySettings } from "@/types/providers";
 import type { VectorStoreDefaults } from "@/types/rag";
 import type { S3Settings } from "@/types/s3";
+import type { UpdateStatus } from "@/types/updates";
 
-export type AdminSettings = z.infer<typeof adminSettingsSchema>;
+export type SettingsTab = "general" | "sign-in" | "storage" | "logging" | "cache" | "catalog";
+
+export type GeneralSettings = z.infer<typeof generalSettingsSchema>;
+
+export type GeneralSettingsView = {
+  settings: GeneralSettings;
+  updates: UpdateStatus;
+  env: { appUrl: string; s3Keys: boolean; oidcSecret: boolean; smtp: boolean; redis: boolean };
+  canManage: boolean;
+};
+
+export type SignInSettingsView = {
+  oidc: OidcSettings;
+  callbackUrl: string;
+  scimUrl: string;
+  secretSet: boolean;
+  roles: RoleOption[];
+  orgs: { id: string; alias: string }[];
+  scimTokenSet: boolean;
+  scimGroups: number;
+  canManage: boolean;
+  canManageScim: boolean;
+};
+
+export type IssuerCheck =
+  | { ok: true; issuer: string; tokenAuth: OidcTokenAuth; algorithms: string[]; supported: boolean }
+  | { ok: false };
+
+export type StorageSettingsView = {
+  settings: S3Settings;
+  keys: { accessKeyId: boolean; secretAccessKey: boolean };
+  active: boolean;
+  canManage: boolean;
+};
+
+export type CatalogSettings = z.infer<typeof catalogSettingsSchema>;
+
+export type CatalogSettingsView = {
+  settings: CatalogSettings;
+  jevKeySet: boolean;
+  aliases: string[];
+  canManage: boolean;
+};
+
+export type LoggingSettingsView = {
+  alertWebhooks: AlertWebhookView[];
+  alertRules: AlertRules;
+  logRetentionDays: number;
+  spendRetentionDays: number;
+  auditRetentionDays: number;
+  objectRetentionDays: number;
+  fileRetentionDays: number;
+  contentRetentionDays: number;
+  logArchive: boolean;
+  logContent: boolean;
+  s3Ready: boolean;
+  canManage: boolean;
+};
 
 export type AlertWebhookInput = z.infer<typeof alertWebhooksSchema>[number];
 
@@ -53,8 +111,6 @@ export type Enterprise = {
   spend_anomaly_min_cost?: number;
   key_expiry_warning_days?: number;
   registration_enabled?: boolean;
-  assistant_model?: string;
-  assistant_model_locked?: boolean;
   catalog_jev?: JevSettings;
   antigravity?: AntigravitySettings;
   catalog_auto_routes?: boolean;

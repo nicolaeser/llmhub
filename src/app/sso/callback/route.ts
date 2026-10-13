@@ -10,9 +10,9 @@ import {
   verifyOidcState,
 } from "@/lib/auth/oidc";
 import { sanitizeReturnPath } from "@/lib/auth/return-path";
-import { upsertUserByEmail } from "@/lib/auth/sso-user";
+import { signInWithSso, SsoError } from "@/lib/auth/sso-user";
 import { SetupRequiredError } from "@/lib/bootstrap/operators";
-import { getEnterprise } from "@/lib/settings/enterprise";
+import { getEnterprise, normalizeOidc } from "@/lib/settings/enterprise";
 import { clientIp } from "@/lib/http/api";
 import { logger } from "@/lib/logging/logger";
 
@@ -45,13 +45,13 @@ export async function GET(req: NextRequest) {
     const enterprise = await getEnterprise();
     if (!oidcIsReady(enterprise.oidc)) return fail();
     const resolved = resolveOidc(enterprise.oidc);
-    const email = await exchangeOidcCode({
+    const identity = await exchangeOidcCode({
       resolved,
       code,
       nonce: verified.nonce,
       verifier: verified.verifier,
     });
-    const user = await upsertUserByEmail(email);
+    const user = await signInWithSso(identity, normalizeOidc(enterprise.oidc), clientIp(req.headers) || null);
     if (user.blocked) {
       loginError.searchParams.set("sso", "blocked");
       const res = NextResponse.redirect(loginError);
@@ -71,8 +71,8 @@ export async function GET(req: NextRequest) {
     clearOidcCookie(res);
     return res;
   } catch (err) {
-    if (err instanceof Error && err.message === "SSO_OWNER") {
-      loginError.searchParams.set("sso", "owner");
+    if (err instanceof SsoError) {
+      loginError.searchParams.set("sso", err.reason);
       const res = NextResponse.redirect(loginError);
       clearOidcCookie(res);
       return res;

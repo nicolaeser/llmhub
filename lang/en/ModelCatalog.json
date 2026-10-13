@@ -6,13 +6,18 @@
   "saved": "Saved",
   "lastRefresh": "Last refreshed {when}. Refreshes automatically every {hours, plural, one {hour} other {# hours}}.",
   "neverRefreshed": "Not refreshed yet. Refreshes automatically every {hours, plural, one {hour} other {# hours}}.",
+  "stats": {
+    "aliases": "Models",
+    "active": "Active",
+    "fresh": "With new providers"
+  },
   "jev": {
     "summary": "Jev checked {asked, plural, =0 {no models} one {# model} other {# models}} in the last refresh and grouped {matched, plural, =0 {none} one {# of them} other {# of them}} ({cost}).",
     "pending": "{count, plural, one {# model waits} other {# models wait}} for Jev in the next refresh.",
     "missingTitle": "Jev is not set up",
     "missing": "Models are grouped by naming rules only. Add a separate OpenRouter key for Jev under <link>Settings</link> to also group models that providers name differently.",
     "errorTitle": "Jev stopped",
-    "error": "{code, select, JEV_AUTH {OpenRouter rejected the Jev API key.} JEV_CREDITS {The OpenRouter account for Jev has no credits left.} JEV_RATE_LIMITED {OpenRouter rate-limited the Jev requests.} other {The Jev request failed.}} The remaining models are checked in the next refresh."
+    "error": "{code, select, JEV_AUTH {OpenRouter rejected the Jev API key.} JEV_CREDITS {The OpenRouter account for Jev has no credits left.} JEV_RATE_LIMITED {OpenRouter rate-limited the Jev requests.} other {The Jev request failed.}} {code, select, JEV_AUTH {Check the Jev key under Settings. This notice goes away as soon as the key is changed.} JEV_CREDITS {Top up the OpenRouter credits, then press Refresh now.} other {Jev tries again automatically in a few minutes.}}"
   },
   "failedTitle": "Some providers could not be refreshed",
   "failed": "{name}: {code, select, UPSTREAM_AUTH {the provider rejected the API key} UPSTREAM_EMPTY {the provider returned no models, the previous list is kept} BASE_URL_REQUIRED {the base URL is missing} other {the request failed}}",
@@ -26,8 +31,8 @@
   "providers": "{active} of {total, plural, one {# provider} other {# providers}} active",
   "newProviders": "{count, plural, one {# new provider} other {# new providers}}",
   "autoRoutes": "Add new providers automatically",
-  "autoRoutesHint": "Routes trusted providers that start offering this model after the next refresh. The default comes from Admin settings. Own OpenAI-compatible servers are always turned on by hand.",
-  "openModels": "Routing and prices",
+  "autoRoutesHint": "Routes trusted providers that start offering this model after the next refresh. The default comes from Settings. Own OpenAI-compatible servers are always turned on by hand.",
+  "openModels": "Open group",
   "columns": {
     "provider": "Provider",
     "model": "Provider model",

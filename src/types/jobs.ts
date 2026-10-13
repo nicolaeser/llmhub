@@ -6,6 +6,7 @@ export type GlobalWithWorkerBoot = typeof globalThis & {
   [BOOT_KEY]?: Promise<void>;
   __llmhubWorkerTimer?: ReturnType<typeof setInterval>;
   __llmhubModelSyncTimer?: ReturnType<typeof setInterval>;
+  __llmhubCatalogTimers?: Map<string, ReturnType<typeof setTimeout>>;
   __llmhubBullmqRetry?: ReturnType<typeof setTimeout>;
   __llmhubQueueWorkers?: { close: () => Promise<void> }[];
 };
@@ -37,7 +38,12 @@ export type QueueName = (typeof QUEUE_NAMES)[keyof typeof QUEUE_NAMES];
 
 export type MaintenanceJobData = Record<string, never>;
 
-export type ModelSyncJobData = Record<string, never>;
+export type CatalogTask = "refresh" | "provider" | "rebuild";
+
+export type ModelSyncJobData = {
+  task?: CatalogTask;
+  providerId?: string;
+};
 
 export type ModelSyncResult = {
   providers: number;

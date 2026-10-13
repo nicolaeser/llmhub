@@ -34,7 +34,7 @@ export default defineConfig([
     },
   },
   {
-    files: ["scripts/**/*.mjs", "test/**/*.mjs", "*.mjs"],
+    files: ["scripts/**/*.mjs", "src/tests/**/*.mjs", "*.mjs"],
     languageOptions: { globals: { process: "readonly", console: "readonly", URL: "readonly", setTimeout: "readonly", Buffer: "readonly" } },
   },
 ]);

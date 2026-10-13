@@ -10,6 +10,7 @@ model User {
   logContent         Boolean   @default(true)
   passwordChangedAt  DateTime?
   revision           Int       @default(0)
+  externalId         String?   @unique
 
   orgId String?
 
@@ -34,22 +35,56 @@ model User {
   securityEvents  UserSecurityEvent[]
   managementKeys  ManagementKey[]
   vectorStores    VectorStore[]
+  identities      UserIdentity[]
+  scimGroups      ScimGroupMember[]
 
   @@index([roleId])
   @@index([orgId])
 }
 
+model UserIdentity {
+  id          String    @id @default(cuid())
+  userId      String
+  issuer      String
+  subject     String
+  createdAt   DateTime  @default(now())
+  lastLoginAt DateTime?
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([issuer, subject])
+  @@unique([userId, issuer])
+}
+
+model ScimGroup {
+  id          String            @id @default(uuid())
+  displayName String            @unique
+  externalId  String?           @unique
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  members     ScimGroupMember[]
+}
+
+model ScimGroupMember {
+  groupId   String
+  userId    String
+  createdAt DateTime  @default(now())
+  group     ScimGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([groupId, userId])
+  @@index([userId])
+}
+
 model Role {
-  id                     String   @id @default(cuid())
-  templateKey            String?  @unique
-  name                   String?  @unique
-  description            String?
-  permissions            String[] @default([])
-  assistantToolsDisabled String[] @default([])
-  revision               Int      @default(0)
-  createdAt              DateTime @default(now())
-  updatedAt              DateTime @updatedAt
-  users                  User[]
+  id          String   @id @default(cuid())
+  templateKey String?  @unique
+  name        String?  @unique
+  description String?
+  permissions String[] @default([])
+  revision    Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  users       User[]
 }
 
 model Session {

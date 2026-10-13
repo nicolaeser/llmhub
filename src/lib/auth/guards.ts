@@ -32,3 +32,8 @@ export async function requirePermission(
   }
   return session;
 }
+
+export async function grantedPermissions(wanted: readonly Permission[]): Promise<Permission[]> {
+  const session = await requireSession();
+  return wanted.filter((permission) => hasPerm(session.permissions, permission));
+}

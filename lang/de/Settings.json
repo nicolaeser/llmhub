@@ -1,0 +1,272 @@
+{
+  "title": "Einstellungen",
+  "subtitle": "Anmeldung, Speicher, Protokollierung, Cache und Modellkatalog. Infrastruktur-Secrets bleiben in der Umgebung.",
+  "tabs": "{tab, select, general {Allgemein} sign_in {Anmeldung} storage {Speicher} logging {Protokollierung & Alarme} cache {Antwort-Cache} catalog {Modellkatalog} other {Einstellungen}}",
+  "save": "Speichern",
+  "saved": "Einstellungen gespeichert",
+  "readOnly": "Du kannst diese Einstellungen ansehen. Zum Ändern brauchst du die Berechtigung Einstellungen verwalten.",
+  "advanced": "Erweitert",
+  "general": {
+    "access": {
+      "registration": "Selbstregistrierung erlauben",
+      "title": "Selbstregistrierung",
+      "subtitle": "Personen können auf der Anmeldeseite selbst ein Konsolenkonto anlegen.",
+      "registrationHint": "Standardmäßig aus. Neue Konten bekommen die Rolle Viewer und müssen die Zwei-Faktor-Authentifizierung einrichten. Solange nur SSO erlaubt ist, gilt die Einstellung nicht."
+    },
+    "updates": {
+      "title": "Updates",
+      "subtitle": "Vergleicht diesen Build mit den Releases desselben Kanals auf GitHub.",
+      "enabled": "Nach Updates suchen",
+      "hint": "Fragt höchstens alle sechs Stunden die GitHub-Releases ab und zeigt oben „Update verfügbar“. Schalte es in Netzen ohne Internetzugang aus.",
+      "state": "{state, select, available {Installiert ist {current}. Verfügbar ist {latest}.} current {Installiert ist {current}, das neueste Release.} other {Installiert ist {current}.}}",
+      "open": "Release auf GitHub öffnen"
+    },
+    "env": {
+      "title": "Umgebung",
+      "subtitle": "Diese Werte kommen aus der Prozessumgebung. Sie werden nicht in der Konsole bearbeitet.",
+      "appUrl": "App-URL",
+      "item": "{item, select, s3 {Objektspeicher-Schlüssel} oidc {OIDC-Client-Secret} smtp {Mail (SMTP_URL)} redis {Redis (REDIS_URL)} other {Einstellung}}",
+      "state": "{ready, select, true {Gesetzt} other {Nicht gesetzt}}",
+      "hint": "Secrets kommen aus der Umgebung: S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY, OIDC_CLIENT_SECRET, SMTP_URL und REDIS_URL."
+    },
+    "description": "Selbstregistrierung, Update-Prüfung und die Serverumgebung."
+  },
+  "signIn": {
+    "scim": {
+      "title": "SCIM-Provisionierung",
+      "subtitle": "Dein Identitätsanbieter legt Konsolen-Benutzer und Gruppen per SCIM 2.0 an, aktualisiert und sperrt sie. Für den Token brauchst du alle Berechtigungen, weil Gruppenregeln jede Rolle vergeben können.",
+      "endpoint": "Basis-URL",
+      "token": "Bearer-Token",
+      "state": "{set, select, true {Aktiv} other {Nicht erstellt}}",
+      "issue": "{set, select, true {Token ersetzen} other {Token erstellen}}",
+      "issueDescription": "{set, select, true {Bestätige mit deinem Authenticator. Der aktuelle Token funktioniert danach sofort nicht mehr.} other {Bestätige mit deinem Authenticator. Der Token wird nur einmal angezeigt.}}",
+      "revoke": "Token widerrufen",
+      "revokeDescription": "Bestätige mit deinem Authenticator. SCIM-Anfragen schlagen fehl, bis du einen neuen Token erstellst.",
+      "tokenTitle": "Token jetzt kopieren",
+      "tokenHint": "Er wird nur einmal angezeigt. Trage ihn in deinem Identity Provider als Bearer-Token ein.",
+      "copy": "Token kopieren",
+      "issued": "SCIM-Token erstellt",
+      "revoked": "SCIM-Token widerrufen",
+      "manageHint": "Nur Personen mit allen Berechtigungen können den SCIM-Token erstellen oder widerrufen.",
+      "copyEndpoint": "SCIM-Basis-URL kopieren",
+      "groups": "Provisionierte Gruppen",
+      "groupCount": "{count, plural, =0 {Keine} one {# Gruppe} other {# Gruppen}}",
+      "mappingHint": "Richte deinen Anbieter auf /Users und /Groups unter dieser URL aus. Gruppen nutzen dieselben Regeln wie das Single Sign-on, und provisionierte Benutzer landen bei der Anmeldung im selben Konto."
+    },
+    "description": "Single Sign-on mit OpenID Connect, Regeln von Gruppen zu Rollen und SCIM-Provisionierung. Der Owner behält immer die Anmeldung mit Passwort und Zwei-Faktor-Authentifizierung.",
+    "sso": {
+      "title": "Single Sign-on",
+      "subtitle": "Verbinde einen OpenID-Connect-Identitätsanbieter. Das Client-Secret bleibt als OIDC_CLIENT_SECRET in der Umgebung.",
+      "enabled": "Mit OpenID Connect anmelden",
+      "enabledHint": "{ready, select, true {OIDC_CLIENT_SECRET ist gesetzt.} other {Setze zuerst OIDC_CLIENT_SECRET in der Umgebung.}}",
+      "provider": "Identitätsanbieter",
+      "issuer": "Issuer-URL",
+      "issuerHint": "Der Anbieter veröffentlicht /.well-known/openid-configuration unter dieser URL.",
+      "check": "Issuer prüfen",
+      "clientId": "Client-ID",
+      "scopes": "Scopes",
+      "scopesHint": "openid wird immer angefragt. Ergänze groups, wenn dein Anbieter für den Gruppen-Claim einen Scope braucht."
+    },
+    "check": {
+      "title": "{state, select, ok {Issuer gefunden} unsupported {Issuer gefunden, aber seine Signaturverfahren werden nicht unterstützt} other {Issuer nicht erreichbar}}",
+      "found": "{issuer} antwortet. Der Client authentifiziert sich mit {method}. ID-Tokens werden mit {algorithms} signiert.",
+      "failed": "Das Discovery-Dokument ließ sich nicht laden oder nennt einen anderen Issuer. Prüfe die URL und ob dieser Server den Anbieter erreicht."
+    },
+    "presets": {
+      "name": "{id, select, entra {Microsoft Entra ID} google {Google Workspace} okta {Okta} keycloak {Keycloak} authentik {authentik} auth0 {Auth0} other {Anderer OpenID-Connect-Anbieter}}",
+      "note": "{id, select, entra {Issuer https://login.microsoftonline.com/TENANT_ID/v2.0. Ergänze die optionalen Claims email und xms_edov sowie einen Gruppen-Claim (Gruppen-Objekt-IDs) oder App-Rollen (Claim roles).} google {Google sendet keine Gruppen. Alle bekommen die Standardrolle; beschränke die Anmeldung über erlaubte E-Mail-Domains.} okta {Nutze deine Okta-Domain als Issuer und ergänze im ID-Token der App einen Gruppen-Claim-Filter.} keycloak {Issuer https://HOST/realms/REALM. Ergänze am Client einen Group-Membership-Mapper (Claim groups, vollständiger Gruppenpfad aus).} authentik {Nutze den Issuer aus der OpenID-Konfiguration der Anwendung. Der Scope profile enthält den Gruppen-Claim.} auth0 {Issuer https://TENANT.auth0.com/. Gruppen oder Rollen brauchen eine Action, die einen Claim mit Namespace ergänzt, etwa https://llmhub/roles.} other {Jeder Anbieter mit Discovery, Authorization-Code-Flow und PKCE.}}",
+      "docs": "Einrichtungsanleitung des Anbieters"
+    },
+    "checklist": {
+      "title": "Checkliste zur Einrichtung",
+      "subtitle": "Registriere LLM Hub bei deinem Anbieter als vertrauliche Webanwendung mit Authorization-Code-Flow.",
+      "step": "{step, select, callback {{position}. Diese Redirect-URI beim Anbieter eintragen} secret {{position}. Client-Secret als OIDC_CLIENT_SECRET hinterlegen} client {{position}. Issuer-URL und Client-ID eintragen} issuer {{position}. Issuer prüfen} enabled {{position}. Anmeldung mit OpenID Connect einschalten} other {{position}.}}",
+      "state": "{ok, select, true {Erledigt} other {Offen}}",
+      "copyCallback": "Redirect-URI kopieren",
+      "secretHint": "Starte LLM Hub nach Änderungen an der Umgebung neu. Das Secret wird nie in der Datenbank gespeichert oder hier angezeigt."
+    },
+    "accounts": {
+      "title": "Konten und Rollen",
+      "subtitle": "Gilt für Personen, die sich per SSO anmelden oder per SCIM angelegt werden.",
+      "defaultRole": "Standardrolle",
+      "viewerDefault": "Viewer (eingebaut)",
+      "defaultRoleHint": "Neue Konten bekommen diese Rolle, wenn keine Gruppenregel passt.",
+      "defaultCompany": "Standardfirma",
+      "platform": "Keine (Plattform-Benutzer)",
+      "defaultCompanyHint": "Neue Konten sind auf diese Firma beschränkt. Bestehende Konten behalten ihre.",
+      "domains": "Erlaubte E-Mail-Domains",
+      "domainsHint": "Mit Kommas trennen. Leer lassen, um jedes Konto zuzulassen, das dein Anbieter anmeldet."
+    },
+    "mapping": {
+      "title": "Regeln von Gruppen zu Rollen",
+      "subtitle": "Die erste Regel mit passender Gruppe bestimmt die Rolle. Solange Regeln bestehen, folgen Rollen bei jeder Anmeldung und jeder SCIM-Änderung dem Identitätsanbieter. Der Owner wird nie geändert.",
+      "claim": "Gruppen-Claim",
+      "claimHint": "Claim im ID-Token mit Gruppen oder Rollen, etwa groups, roles oder realm_access.roles. SCIM-Gruppen passen über Anzeigename oder externe ID.",
+      "group": "Gruppe {position}",
+      "groupPlaceholder": "Gruppenname oder ID",
+      "role": "Rolle {position}",
+      "remove": "Regel {position} entfernen",
+      "empty": "Noch keine Regeln. Alle bekommen die Standardrolle.",
+      "add": "Regel hinzufügen"
+    },
+    "ssoOnly": {
+      "title": "Nur SSO",
+      "subtitle": "Blendet die Passwort-Anmeldung für alle außer dem Owner aus.",
+      "enabled": "Nur Single Sign-on erlauben",
+      "hint": "{ready, select, true {Anmeldung mit Passwort oder Passkey und Selbstregistrierung enden für alle außer dem Owner, der Passwort und Zwei-Faktor-Authentifizierung als Notzugang behält.} other {Schließe zuerst die SSO-Einrichtung ab, damit sich niemand aussperrt.}}"
+    },
+    "matching": {
+      "title": "So werden Konten zugeordnet",
+      "body": "Die Anmeldung sucht zuerst ein Konto, das schon mit dem Subject dieses Issuers verknüpft ist, dann ein Konto, dessen SCIM-externe-ID dem Subject oder der Entra-Objekt-ID entspricht, dann die bestätigte E-Mail-Adresse. Der erste Treffer wird dauerhaft verknüpft. Ein Konto, das schon mit einem anderen Subject desselben Issuers verknüpft ist, wird abgelehnt."
+    }
+  },
+  "storage": {
+    "description": "Dateien, Batch-Ausgaben, Videos und Log-Archive landen in S3-kompatiblem Speicher, wenn Bucket und Schlüssel gesetzt sind. Sonst bleiben sie in Postgres.",
+    "test": "Verbindung testen",
+    "probe": {
+      "title": "{ok, select, true {Verbindung funktioniert} other {Verbindung fehlgeschlagen}}",
+      "ok": "{key} in {ms, number} ms geschrieben, gelesen und gelöscht.",
+      "failed": "{code, select, KEYS_MISSING {Setze zuerst S3_ACCESS_KEY_ID und S3_SECRET_ACCESS_KEY in der Umgebung.} BUCKET_MISSING {Trage zuerst einen Bucket ein.} UNREACHABLE {Der Endpunkt hat nicht geantwortet. Prüfe URL, Port und Netzwerk.} AUTH {Der Access Key wurde abgelehnt.} SIGNATURE {Secret Key oder Region passen nicht.} DENIED {Diese Schlüssel dürfen in diesem Bucket keine Objekte schreiben, lesen oder löschen.} NO_BUCKET {Den Bucket gibt es an diesem Endpunkt nicht.} REGION {Der Bucket liegt in einer anderen Region oder braucht einen anderen Endpunkt.} MISMATCH {Das gelesene Objekt weicht vom geschriebenen ab.} other {Der Speicher hat mit einem Fehler geantwortet.}} {step, select, put {Fehler beim Schreiben.} get {Fehler beim Lesen.} delete {Fehler beim Löschen.} other {}} {status, select, none {} other {HTTP {status}.}}"
+    },
+    "bucket": {
+      "title": "Bucket",
+      "subtitle": "Wähle einen Anbieter, um Endpunkt, Region und Adressierung vorzubelegen. Alle Felder bleiben änderbar."
+    },
+    "state": "{active, select, true {Aktiv} other {Nicht aktiv}}",
+    "preset": "Anbieter",
+    "presets": {
+      "name": "{id, select, aws {Amazon S3} r2 {Cloudflare R2} minio {MinIO} rustfs {RustFS} hetzner {Hetzner Object Storage} b2 {Backblaze B2} wasabi {Wasabi} spaces {DigitalOcean Spaces} scaleway {Scaleway Object Storage} ionos {IONOS Object Storage} other {Anderer S3-kompatibler Speicher}}",
+      "note": "{id, select, aws {Regionaler Endpunkt mit Virtual-hosted-Buckets.} r2 {Ersetze die Account-ID im Endpunkt. Die Region ist immer auto.} minio {Die URL deines MinIO-Servers samt Port.} rustfs {Die URL deines RustFS-Servers, etwa der Entwicklungscontainer auf Port 9000.} hetzner {Regionen fsn1, nbg1 und hel1.} b2 {Nutze die Region des Bucket-Endpunkts, etwa us-west-004.} wasabi {Regionen wie us-east-1, eu-central-1 oder ap-northeast-1.} spaces {Regionen wie nyc3, fra1 oder sgp1.} scaleway {Regionen fr-par, nl-ams und pl-waw.} ionos {Regionen wie eu-central-3 (Berlin) oder eu-central-1 (Frankfurt).} other {Jeder S3-kompatible Dienst. Trage den Endpunkt selbst ein.}}",
+      "docs": "Dokumentation des Anbieters"
+    },
+    "field": "{field, select, bucket {Bucket} region {Region} endpoint {Endpunkt} prefix {Schlüsselpräfix} public_base_url {Öffentliche Basis-URL} addressing {Adressierung} other {Einstellung}}",
+    "bucketHint": "Bei eigener Domain als Adressierung ist der Bucket der Hostname.",
+    "endpointHint": "Für Amazon S3 in der gewählten Region leer lassen.",
+    "endpointPlaceholder": "Ersetze den Teil in geschweiften Klammern durch deinen Wert.",
+    "addressing": "{mode, select, path {Pfad-Stil} virtual_hosted {Virtual-hosted} domain {Eigene Domain} other {Automatisch}}",
+    "addressingHint": "{mode, select, path {endpunkt/bucket/schlüssel} virtual_hosted {bucket.endpunkt/schlüssel} domain {Der Host des Endpunkts ist der Bucket (CNAME-Bucket).} other {Virtual-hosted bei Amazon S3, sonst Pfad-Stil.}}",
+    "publicHint": "Optionales CDN oder öffentlicher Ursprung für Objekt-URLs, die Clients bekommen.",
+    "keys": {
+      "title": "Zugangsschlüssel",
+      "subtitle": "Die Schlüssel bleiben in der Umgebung und werden nie angezeigt oder in der Datenbank gespeichert.",
+      "state": "{set, select, true {Gesetzt} other {Fehlt}}",
+      "hint": "Starte LLM Hub nach Änderungen an S3_ACCESS_KEY_ID oder S3_SECRET_ACCESS_KEY neu."
+    }
+  },
+  "logging": {
+    "webhook": "Endpunkt-URL",
+    "webhookSecret": "Signatur-Secret",
+    "retention": "Request-Log-Aufbewahrung in Tagen",
+    "retentionHint": "0 behält Request-Logs unbegrenzt. Spend und Audit haben eigene Aufbewahrung.",
+    "spendRetention": "Spend-Aufbewahrung in Tagen",
+    "spendRetentionHint": "0 behält Finanz-Spend-Events unbegrenzt, auch wenn Request-Logs ablaufen.",
+    "auditRetention": "Audit-Aufbewahrung in Tagen",
+    "auditRetentionHint": "0 behält das Console-Audit unbegrenzt.",
+    "objectRetention": "Aufbewahrung erzeugter Objekte in Tagen",
+    "objectRetentionHint": "Gespeicherte Responses, Batches, Batch-Ergebnisse und Videos. 0 behält sie unbegrenzt; laufende Batches werden nie gelöscht.",
+    "fileRetention": "Aufbewahrung hochgeladener Dateien in Tagen",
+    "fileRetentionHint": "Über /api/v1/files hochgeladene Dateien. 0 behält sie unbegrenzt.",
+    "alerts": "Alarm-Webhooks",
+    "webhookSecretState": "{set, select, true {Ein Secret ist hinterlegt. Gib ein neues ein, um es zu ersetzen.} other {Kein Secret hinterlegt}}",
+    "clearSecret": "Hinterlegtes Secret entfernen",
+    "retentionTitle": "Aufbewahrung",
+    "archive": "Request-Logs im Objektspeicher archivieren",
+    "archiveHint": "{ready, select, true {Jedes Request-Log wird zusätzlich als JSON unter logs/requests/ im konfigurierten Bucket abgelegt.} other {Richte zuerst im Tab Speicher den Objektspeicher ein.}}",
+    "alertsHint": "Jeder Webhook erhält nur die für ihn ausgewählten Events. Mit Signatur-Secret enthalten Requests X-LLMHub-Timestamp und X-LLMHub-Signature: sha256=HMAC(Secret, Zeitstempel.Body).",
+    "noWebhooks": "Noch keine Webhooks. Alarme werden nicht zugestellt.",
+    "addWebhook": "Webhook hinzufügen",
+    "webhookTitle": "Webhook {position, number}",
+    "removeWebhook": "Webhook {position, number} entfernen",
+    "events": "Events",
+    "eventLabel": "{event, select, upstream_exhaustion {Upstream erschöpft} budget_threshold {Budget-Schwelle} provider_models_changed {Provider-Modelle geändert} spend_anomaly {Kosten-Anomalie} key_expiring {Key läuft ab} key_blocked {Key gesperrt} pii_blocked {PII blockiert} other {Event}}",
+    "eventHint": "{event, select, upstream_exhaustion {Kein gesundes Deployment hat geantwortet oder der Upstream lieferte 5xx oder 429.} budget_threshold {Ein Key, eine Person, ein Projekt, eine Abteilung oder ein Unternehmen hat eine Budget-Alarmschwelle überschritten.} provider_models_changed {Der stündliche Sync hat hinzugefügte oder entfernte Provider-Modelle gefunden.} spend_anomaly {Ein Key oder Projekt hat in der letzten Stunde deutlich mehr ausgegeben als sonst um diese Uhrzeit.} key_expiring {Ein Key läuft innerhalb der Vorwarnzeit aus den Alarmregeln ab.} key_blocked {Jemand hat einen Key in der Konsole, über die Management-API oder den Assistenten gesperrt.} pii_blocked {Die PII-Richtlinie hat eine Anfrage blockiert. Höchstens ein Alarm pro Key alle 15 Minuten, ohne Anfrageinhalt.} other {}}",
+    "eventsRequired": "Wähle mindestens ein Event.",
+    "format": "Nachrichtenformat",
+    "formatLabel": "{format, select, json {JSON} slack {Slack} teams {Microsoft Teams} other {Format}}",
+    "formatHint": "{format, select, json {JSON mit id, event, message, source und ts.} slack {Nachricht für einen eingehenden Slack-Webhook.} teams {Adaptive Card für einen Teams-Workflow-Webhook.} other {}}",
+    "rulesTitle": "Alarmregeln",
+    "rulesHint": "Wann Kosten-Anomalie- und Key-Ablauf-Alarme ausgelöst werden. Budget-Schwellen stehen auf der Seite Unternehmen.",
+    "anomalyFactor": "Faktor für Kosten-Anomalien",
+    "anomalyFactorHint": "Alarm, wenn ein Key oder Projekt in der letzten Stunde mindestens Faktor × den Durchschnitt derselben Stunde der letzten 7 Tage ausgibt. 0 schaltet ihn aus.",
+    "anomalyMinCost": "Mindestausgaben pro Stunde",
+    "anomalyMinCostHint": "Kleinere Beträge zählen nie als Anomalie.",
+    "expiryDays": "Vorwarnung vor Key-Ablauf in Tagen",
+    "expiryDaysHint": "So viele Tage vor dem Ablauf eines Keys warnen. 0 schaltet sie aus.",
+    "contentTitle": "Anfrageinhalte",
+    "contentSubtitle": "Prompts und Antworten, die mit jedem Request-Log gespeichert werden.",
+    "content": "Prompts und Antworten speichern",
+    "contentHint": "Für einzelne Personen unter Benutzer oder für einzelne Keys in deren Einstellungen ausschaltbar. Solange die PII-Schwärzung aktiv ist, werden gespeicherte Inhalte maskiert und jedes Log zeigt die gefundenen Entitäten.",
+    "contentRetention": "Aufbewahrung der Inhalte in Tagen",
+    "contentRetentionHint": "0 behält Inhalte so lange wie das Request-Log. Ein kleinerer Wert entfernt Prompts und Antworten früher und behält die Metadaten.",
+    "description": "Alarm-Webhooks und -Regeln, Anfrageinhalte, Aufbewahrung und Log-Archivierung."
+  },
+  "cache": {
+    "ttl": "TTL in Sekunden",
+    "ttlHint": "0 schaltet den Cache aus. Clients umgehen den Cache mit dem Header x-hub-bypass-cache oder \"cache\": false.",
+    "store": {
+      "title": "Speicher und Lebensdauer",
+      "description": "Antworten werden pro Key, Modell und Anfrage-Body gespeichert. Treffer kosten den Key nichts und werden als Treffer im Antwort-Cache protokolliert.",
+      "backend": "{backend, select, redis {Redis, gemeinsam} memory {Im Speicher} other {Redis nicht erreichbar}}",
+      "backendHint": "{backend, select, redis {Alle App-Instanzen teilen sich den Antwort-Cache, und er übersteht Neustarts. Antworten bleiben in Redis, bis sie ablaufen.} memory {Jeder App-Prozess hält einen eigenen Antwort-Cache, der beim Neustart geleert wird. Setze REDIS_URL, um ihn zu teilen.} other {REDIS_URL ist gesetzt, aber Redis antwortet nicht. Jeder App-Prozess nutzt seinen eigenen Speicher-Cache, bis Redis wieder da ist.}}"
+    },
+    "semantic": {
+      "title": "Semantischer Abgleich",
+      "description": "Beantwortet eine Anfrage aus dem Antwort-Cache, wenn nur die letzte Nutzernachricht abweicht und fast dasselbe bedeutet. Systemprompt, frühere Nachrichten, Modell und Parameter müssen weiterhin genau übereinstimmen.",
+      "enabled": "Ähnliche Prompts erkennen",
+      "enabledHint": "{ready, select, true {Bei jedem Cache-Fehltreffer wird zuerst die letzte Nutzernachricht eingebettet. Das kostet Latenz und Embedding-Kosten.} other {Wähle zuerst ein Embedding-Modell.}}",
+      "model": "Embedding-Modell",
+      "none": "Keins",
+      "modelHint": "Embeddings laufen über diesen Alias mit den Routing-Regeln des aufrufenden Keys und werden diesem Key berechnet. Keys, die dieses Modell nicht nutzen dürfen, bekommen nur exakte Treffer.",
+      "threshold": "Ähnlichkeitsschwelle",
+      "thresholdHint": "Minimale Kosinus-Ähnlichkeit. Niedrigere Werte beantworten mehr Anfragen, können aber die Antwort auf eine andere Frage liefern."
+    },
+    "stats": {
+      "title": "Statistik des Antwort-Caches",
+      "range": "Zeitraum",
+      "days": "{n, plural, one {Letzter # Tag} other {Letzte # Tage}}",
+      "hitRate": "Trefferquote",
+      "hits": "Aus dem Antwort-Cache beantwortet",
+      "hitsValue": "{hits, number} von {lookups, number}",
+      "netSaved": "Netto eingespart",
+      "savedTokens": "Eingesparte Tokens",
+      "semanticHits": "Semantische Treffer",
+      "lookupCost": "Embedding-Kosten",
+      "hint": "Zählt Anfragen, die für den Antwort-Cache in Frage kamen, über alle Keys. Netto eingespart sind die Kosten der ursprünglichen Antworten, die erneut aus dem Antwort-Cache kamen, abzüglich der Embedding-Kosten semantischer Abfragen. Das Prompt-Caching der Anbieter ist nicht enthalten."
+    },
+    "description": "Das Gateway beantwortet identische Chat-Anfragen ohne Streaming vom selben Schlüssel für die eingestellte Zeit mit einer gespeicherten Antwort. Prompt-Caching der Anbieter ist davon getrennt."
+  },
+  "catalog": {
+    "jev": {
+      "title": "Modellkatalog",
+      "subtitle": "Wie der Katalog Anbieter-Modelle gruppiert und wann er neue Anbieter selbst routet.",
+      "enabled": "Modelle mit Jev gruppieren",
+      "enabledHint": "{ready, select, true {Läuft bei jeder Katalog-Aktualisierung und prüft nur Modelle, die neu sind oder sich nicht über den Namen zuordnen ließen.} other {Trage zuerst einen OpenRouter-API-Key ein.}}",
+      "apiKey": "OpenRouter-API-Key für Jev",
+      "apiKeyState": "{set, select, true {Gespeichert. Leer lassen, um ihn zu behalten.} other {sk-or-…}}",
+      "apiKeyHint": "Nutze einen eigenen OpenRouter-Key, damit die Jev-Kosten getrennt von deinen Anbieter-Verbindungen bleiben. Der Key wird verschlüsselt gespeichert und nie wieder angezeigt.",
+      "model": "Jev-Modell",
+      "modelHint": "Modell-ID für OpenRouter System One. jev-latest folgt der neuesten Version.",
+      "clearKey": "Gespeicherten Key entfernen und Jev ausschalten",
+      "catalogHint": "Ergebnisse und Status der Aktualisierung findest du im <link>Modellkatalog</link>.",
+      "autoRoutes": "Neue Anbieter automatisch aufnehmen",
+      "autoRoutesHint": "Standard für jeden Alias ohne eigene Einstellung. Geroutet werden nur vertrauenswürdige Anbieter, die ein Modell neu anbieten; eigene OpenAI-kompatible Server schaltest du immer von Hand ein.",
+      "minConfidence": "Mindestsicherheit für Jev",
+      "minConfidenceHint": "Jev-Zuordnungen unter diesem Wert erscheinen im Katalog, werden aber nie selbst geroutet. Zuordnungen über den Namen gelten immer als sicher."
+    },
+    "knowledge": {
+      "title": "Wissensbasen",
+      "subtitle": "Standards für Vektorspeicher, die in der Konsole oder über /api/v1/vector_stores ohne eigene Modelle angelegt werden.",
+      "embeddingModel": "Standard-Embedding-Modell",
+      "embeddingHint": "Wird verwendet, wenn eine neue Wissensbasis kein Embedding-Modell angibt. Bestehende Wissensbasen behalten ihr Modell.",
+      "dimensions": "Standard-Embedding-Dimensionen",
+      "dimensionsHint": "0 verwendet die native Größe des Modells. Gilt nur zusammen mit dem Standard-Embedding-Modell.",
+      "ocrModel": "Standard-OCR-Modell",
+      "ocrHint": "Liest Text aus PDFs und Bildern für Wissensbasen ohne eigenes OCR-Modell.",
+      "rerankModel": "Standard-Reranking-Modell",
+      "rerankHint": "Sortiert Suchergebnisse für Wissensbasen ohne eigenes Reranking-Modell neu.",
+      "none": "Keines",
+      "manageHint": "Wissensbasen legst du unter <link>Wissensbasen</link> an, dort lädst du auch Dateien hoch."
+    },
+    "description": "Wie der Katalog Anbietermodelle gruppiert, und die Standardmodelle für Wissensdatenbanken."
+  }
+}

@@ -8,6 +8,10 @@ import { resolveChatFiles } from "@/lib/gateway/storage/file-refs";
 import { modelChain, spendTag } from "@/lib/gateway/access/gate";
 import { gatewayRoute, screenModelRequest } from "@/lib/gateway/endpoints/pipeline";
 import { loadSettings } from "@/lib/settings/enterprise";
+import { maxCostHeader } from "@/lib/gateway/billing/cost-cap";
+import { asRecord } from "@/lib/gateway/core";
+import { chatStreamSink, chatToolNames, runMcpChat, streamMcpChat, withMcpTools } from "@/lib/mcp/chat-loop";
+import { mcpToolsetFor } from "@/lib/mcp/toolset";
 import type { RoutePool } from "@/types/routing";
 
 export function chatCompletionsRoute(pool: RoutePool) {
@@ -15,6 +19,25 @@ export function chatCompletionsRoute(pool: RoutePool) {
     const { principal, model, clean: redacted, output } = await screenModelRequest(req, { pool });
     const clean = await resolveChatFiles(redacted, principal);
     const aliases = modelChain(principal, model, clean);
+    const toolset = typeof clean.n === "number" && clean.n > 1 ? null : await mcpToolsetFor(req, principal, chatToolNames(clean));
+    if (toolset) {
+      const ctx = {
+        principal,
+        model,
+        aliases,
+        outputGuard: output,
+        toolset,
+        maxCost: maxCostHeader(req.headers),
+        signal: req.signal,
+      };
+      const body = withMcpTools(clean, toolset);
+      if (clean.stream === true) {
+        const wantsUsage = asRecord(clean.stream_options)?.include_usage === true;
+        return streamMcpChat({ req, ctx, body, sink: async () => chatStreamSink(wantsUsage) });
+      }
+      const run = await runMcpChat(ctx, body);
+      return NextResponse.json(run.final, { headers: { "X-Hub-Cache": "BYPASS" } });
+    }
     const settings = await loadSettings();
     if (clean.stream === true) {
       return streamChat({

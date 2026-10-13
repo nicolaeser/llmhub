@@ -1,7 +1,6 @@
 "use client";
 
 import { Alert, Button, Card, FieldError, Label, NumberField, TimeField } from "@heroui/react";
-import { parseTime } from "@internationalized/date";
 import { Plus, Trash2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import TimeZonePicker from "@/components/console/time-zone-picker";
@@ -13,11 +12,8 @@ import {
   scheduleOverlaps,
   validPrice,
 } from "@/lib/gateway/billing/price-schedule";
+import { clockTime } from "@/lib/utils/clock";
 import type { PriceWindowDraft } from "@/types/models";
-
-function clockValue(value: string) {
-  return clockMinute(value) === null ? null : parseTime(value);
-}
 
 export default function PriceScheduleFields({
   windows,
@@ -69,7 +65,7 @@ export default function PriceScheduleFields({
             <div className="grid gap-3 sm:grid-cols-2 sm:items-start">
               <TimeField
                 fullWidth
-                value={clockValue(w.start)}
+                value={clockTime(w.start)}
                 onChange={(value) =>
                   patch(w.key, { start: value ? minuteClock(value.hour * 60 + value.minute) : "" })
                 }
@@ -84,7 +80,7 @@ export default function PriceScheduleFields({
               </TimeField>
               <TimeField
                 fullWidth
-                value={clockValue(w.end)}
+                value={clockTime(w.end)}
                 onChange={(value) =>
                   patch(w.key, { end: value ? minuteClock(value.hour * 60 + value.minute) : "" })
                 }

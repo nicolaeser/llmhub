@@ -4,7 +4,7 @@ import { isPrismaCode } from "@/lib/auth/errors";
 import { writeAudit } from "@/lib/audit";
 import { asRecord, asNumber, asString } from "@/lib/gateway/core";
 import { refreshProviderModels } from "@/lib/gateway/upstreams/discovery";
-import { askJev, jevReady } from "@/lib/gateway/catalog/jev";
+import { askJevStaged, jevFingerprint, jevReady } from "@/lib/gateway/catalog/jev";
 import {
   activationEntries,
   autoRouteEntries,
@@ -39,7 +39,7 @@ const CATALOG_STATE = "model_catalog_state";
 const CATALOG_LOCK = "model_catalog_lock";
 const LOCK_TTL_MS = 600_000;
 const FRESH_SLACK_MS = 300_000;
-const JEV_MAX_TASKS = 100;
+const JEV_STEP_TASKS = 100;
 const JEV_CONCURRENCY = 4;
 const IMPORT_STRATEGY = "cost_lowest";
 const IMPORT_RETRIES = 2;
@@ -109,6 +109,7 @@ function parseState(raw: unknown): CatalogState | null {
       pending: asNumber(jev.pending),
       cost: asNumber(jev.cost),
       error: asString(jev.error),
+      settings: asString(jev.settings),
     },
   };
 }
@@ -191,14 +192,22 @@ async function classify(
   tasks: JevTask[],
   settings: JevSettings | undefined,
 ): Promise<CatalogState["jev"]> {
-  const result = { configured: jevReady(settings), asked: 0, matched: 0, pending: tasks.length, cost: 0, error: "" };
+  const result = {
+    configured: jevReady(settings),
+    asked: 0,
+    matched: 0,
+    pending: tasks.length,
+    cost: 0,
+    error: "",
+    settings: jevFingerprint(settings),
+  };
   if (!jevReady(settings) || !tasks.length) return result;
   const byKey = new Map(entries.map((entry) => [entryKey(entry), entry]));
   const classifiedAt = new Date();
-  await runLimited(tasks.slice(0, JEV_MAX_TASKS), JEV_CONCURRENCY, async (task) => {
+  await runLimited(tasks.slice(0, JEV_STEP_TASKS), JEV_CONCURRENCY, async (task) => {
     if (result.error) return;
     try {
-      const { verdict, cost } = await askJev(settings, task);
+      const { verdict, cost } = await askJevStaged(settings, task);
       result.asked += 1;
       result.cost += cost;
       const entry = byKey.get(entryKey(task));
@@ -377,13 +386,35 @@ async function rebuildCatalog(actor: string) {
   return { entries: entries.length, autoRouted, jev: classified };
 }
 
+function partialState(
+  previous: CatalogState,
+  refreshed: Set<string>,
+  failed: CatalogProviderFailure[],
+  providers: { id: string }[],
+  rebuilt: Awaited<ReturnType<typeof rebuildCatalog>>,
+): CatalogState {
+  const present = new Set(providers.map((provider) => provider.id));
+  return {
+    ...previous,
+    providers: providers.length,
+    failed: [
+      ...previous.failed.filter((row) => present.has(row.providerId) && !refreshed.has(row.providerId)),
+      ...failed,
+    ],
+    ...rebuilt,
+  };
+}
+
 export async function refreshCatalog(input: {
   actor: string;
   force: boolean;
+  providers?: string[];
 }): Promise<{ state: CatalogState | null; skipped: boolean; changed: number }> {
   const previous = await getCatalogState();
+  const partial = input.providers !== undefined && previous !== null;
   if (
     !input.force &&
+    !partial &&
     previous &&
     Date.now() - Date.parse(previous.refreshedAt) < CATALOG_REFRESH_MS - FRESH_SLACK_MS
   ) {
@@ -391,12 +422,14 @@ export async function refreshCatalog(input: {
   }
   const lock = await acquireLock();
   if (!lock) {
-    if (input.force) throw new Error("CATALOG_BUSY");
+    if (input.force || partial) throw new Error("CATALOG_BUSY");
     return { state: previous, skipped: true, changed: 0 };
   }
   try {
     const started = Date.now();
-    const providers = await prisma.providerConnection.findMany({ orderBy: { createdAt: "asc" } });
+    const all = await prisma.providerConnection.findMany({ orderBy: { createdAt: "asc" } });
+    const refreshed = new Set(partial ? input.providers : all.map((row) => row.id));
+    const providers = all.filter((row) => refreshed.has(row.id));
     const failed: CatalogProviderFailure[] = [];
     let changedProviders = 0;
     for (const row of providers) {
@@ -410,13 +443,15 @@ export async function refreshCatalog(input: {
       }
     }
     const rebuilt = await rebuildCatalog(input.actor);
-    const state: CatalogState = {
-      refreshedAt: new Date().toISOString(),
-      durationMs: Date.now() - started,
-      providers: providers.length,
-      failed,
-      ...rebuilt,
-    };
+    const state: CatalogState = partial
+      ? partialState(previous, refreshed, failed, all, rebuilt)
+      : {
+          refreshedAt: new Date().toISOString(),
+          durationMs: Date.now() - started,
+          providers: all.length,
+          failed,
+          ...rebuilt,
+        };
     await saveState(state);
     return { state, skipped: false, changed: changedProviders };
   } finally {
@@ -467,6 +502,17 @@ function familiesOf(groups: CatalogGroupView[]): CatalogFamilyView[] {
   });
   const rank = (family: CatalogFamilyView) => Math.min(...family.variants.map((variant) => STATE_ORDER[variant.state]));
   return families.sort((a, b) => rank(a) - rank(b) || a.family.localeCompare(b.family));
+}
+
+export function jevErrorOutdated(state: CatalogState | null, settings: JevSettings | undefined): boolean {
+  return Boolean(state?.jev.error) && state?.jev.settings !== jevFingerprint(settings);
+}
+
+async function withCurrentJev(state: CatalogState | null, settings: JevSettings | undefined) {
+  if (!state || !jevErrorOutdated(state, settings)) return state;
+  const { scheduleCatalogTask } = await import("@/lib/gateway/catalog/catalog-tasks");
+  await scheduleCatalogTask({ task: "rebuild" });
+  return { ...state, jev: { ...state.jev, error: "", configured: jevReady(settings) } };
 }
 
 export async function loadCatalogView(): Promise<Omit<CatalogView, "canManage">> {
@@ -524,7 +570,7 @@ export async function loadCatalogView(): Promise<Omit<CatalogView, "canManage">>
   return {
     families: familiesOf(list),
     tags: [...new Set(list.map((view) => view.tag).filter(Boolean))].sort(),
-    state,
+    state: await withCurrentJev(state, enterprise.catalog_jev),
     refreshMs: CATALOG_REFRESH_MS,
     jevReady: jevReady(enterprise.catalog_jev),
     autoRoutesDefault: catalogRouting(enterprise).autoRoutes,

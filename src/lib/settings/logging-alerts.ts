@@ -15,9 +15,9 @@ import { WEBHOOK_EVENTS } from "@/lib/alerts/events";
 import { resolveS3Config } from "@/lib/s3/config";
 import { alertWebhooksSchema } from "@/schemas/settings";
 import type { AlertWebhook } from "@/types/alerts";
-import type { AlertRules, AlertWebhookInput, AlertWebhookView } from "@/types/settings";
+import type { AlertRules, AlertWebhookInput, AlertWebhookView, LoggingSettingsView } from "@/types/settings";
 
-async function view(canManage: boolean) {
+async function view(canManage: boolean): Promise<LoggingSettingsView> {
   const enterprise = await getEnterprise();
   return {
     alertWebhooks: (enterprise.alert_webhooks ?? []).map(

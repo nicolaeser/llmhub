@@ -1,9 +1,10 @@
 import type { ReactNode } from "react";
 import { Card } from "@heroui/react";
 import type { LucideIcon } from "lucide-react";
+import IconTile from "@/components/console/icon-tile";
 
 export default function EmptyState({
-  icon: Icon,
+  icon,
   title,
   description,
   action,
@@ -15,9 +16,7 @@ export default function EmptyState({
 }) {
   return (
     <Card className="w-full items-center gap-4 px-6 py-16 text-center">
-      <div className="grid size-12 place-items-center rounded-xl bg-accent/10 text-accent">
-        <Icon size={20} aria-hidden />
-      </div>
+      <IconTile icon={icon} size="lg" />
       <Card.Header className="items-center gap-2">
         <Card.Title className="text-lg font-semibold tracking-tight">{title}</Card.Title>
         {description ? (

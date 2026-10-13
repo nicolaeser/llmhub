@@ -1,0 +1,299 @@
+"use client";
+
+import { useState, useTransition } from "react";
+import { Button, Chip, Label, SearchField, Switch, Table, toast, useOverlayState } from "@heroui/react";
+import { BookOpen, Network, Plus, Trash2 } from "lucide-react";
+import { useFormatter, useTranslations } from "next-intl";
+import { Link } from "@/i18n/routing";
+import ConfirmDialog from "@/components/console/confirm-dialog";
+import EmptyState from "@/components/console/empty-state";
+import PageStatus from "@/components/console/page-status";
+import { useErrorToast } from "@/components/console/use-error-toast";
+import {
+  deleteModelGroupAction,
+  loadModelsAction,
+  setModelGroupEnabledAction,
+} from "../_action";
+import { useActionData } from "@/lib/hooks/use-action-data";
+import { setSearchParams, useSearchParam } from "@/lib/hooks/use-search-param";
+import { isActionFail } from "@/lib/http/action-result";
+import { splitTag } from "@/lib/gateway/catalog/model-catalog";
+import type { ModelGroupView, ProviderOpt } from "@/types/models";
+import ModelGroupDialog from "./model-group-dialog";
+
+function matchesGroup(group: ModelGroupView, query: string): boolean {
+  if (!query) return true;
+  return [group.alias, group.vendor, group.displayName].some((value) => value?.toLowerCase().includes(query));
+}
+
+export default function GroupsTab() {
+  const t = useTranslations("Models");
+  const tProviders = useTranslations("Providers");
+  const tCatalog = useTranslations("ModelCatalog");
+  const showError = useErrorToast();
+  const tCommon = useTranslations("Common");
+  const format = useFormatter();
+  const [editing, setEditing] = useState<ModelGroupView | null>(null);
+  const [dialogKey, setDialogKey] = useState(0);
+  const [deleting, setDeleting] = useState<string | null>(null);
+  const [toggling, setToggling] = useState<string | null>(null);
+  const [, startDelete] = useTransition();
+  const [, startToggle] = useTransition();
+  const groupParam = useSearchParam("group");
+  const [typed, setTyped] = useState<string | null>(null);
+  const query = typed ?? groupParam ?? "";
+  const formState = useOverlayState();
+  const page = useActionData<{ groups: ModelGroupView[]; providers: ProviderOpt[] }>(loadModelsAction);
+  const { data, setData } = page;
+
+  function setGroups(update: (current: ModelGroupView[]) => ModelGroupView[]) {
+    setData((current) => ({ ...current, groups: update(current.groups) }));
+  }
+
+  if (!data) {
+    return <PageStatus state={page} />;
+  }
+
+  const { groups, providers } = data;
+  const needle = query.trim().toLowerCase();
+  const shown = groups.filter((group) => matchesGroup(group, needle));
+
+  function search(value: string) {
+    setTyped(value);
+    if (groupParam) setSearchParams({ group: null });
+  }
+
+  function routeLabels(group: ModelGroupView): string[] {
+    return [
+      ...new Set(
+        group.deployments.map(
+          (dep) =>
+            providers.find((provider) => provider.id === dep.providerId)?.name ??
+            tProviders("kindName", { kind: dep.kind }),
+        ),
+      ),
+    ];
+  }
+
+  function openDialog(group: ModelGroupView | null) {
+    setEditing(group);
+    setDialogKey((n) => n + 1);
+    formState.open();
+  }
+
+  function saved(group: ModelGroupView) {
+    setGroups((cur) =>
+      cur.some((g) => g.alias === group.alias)
+        ? cur.map((g) => (g.alias === group.alias ? group : g))
+        : [...cur, group].sort((a, b) => a.alias.localeCompare(b.alias)),
+    );
+  }
+
+  function toggle(alias: string, enabled: boolean) {
+    setToggling(alias);
+    startToggle(async () => {
+      const result = await setModelGroupEnabledAction({ alias, enabled });
+      setToggling(null);
+      if (isActionFail(result)) {
+        showError(result.error);
+        return;
+      }
+      saved(result);
+      toast(t("toasts.enabled", { alias: result.alias, enabled: String(result.enabled) }), {
+        variant: "success",
+      });
+    });
+  }
+
+  function remove(alias: string) {
+    setDeleting(alias);
+    startDelete(async () => {
+      const result = await deleteModelGroupAction(alias);
+      setDeleting(null);
+      if (isActionFail(result)) {
+        showError(result.error);
+        return;
+      }
+      setGroups((cur) => cur.filter((g) => g.alias !== result.alias));
+      toast(t("toasts.deleted"), { variant: "success" });
+    });
+  }
+
+  const createButton = (
+    <Button
+      aria-label={t("add")}
+      onPress={() => openDialog(null)}
+    >
+      <Plus size={16} aria-hidden />
+      {t("add")}
+    </Button>
+  );
+
+  return (
+    <div>
+      {groups.length === 0 ? (
+        <EmptyState
+          icon={Network}
+          title={t("emptyTitle")}
+          description={
+            providers.length === 0
+              ? t.rich("needProvider", {
+                  providers: (chunks) => (
+                    <Link href="/providers" className="text-accent">
+                      {chunks}
+                    </Link>
+                  ),
+                })
+              : t("empty")
+          }
+          action={
+            providers.length === 0 ? (
+              <Link href="/providers" className="text-sm font-medium text-accent">
+                {t("connectProvider")}
+              </Link>
+            ) : (
+              <div className="flex flex-wrap justify-center gap-2">
+                <Button variant="secondary" onPress={() => setSearchParams({ tab: null, group: null })}>
+                  <BookOpen size={16} aria-hidden />
+                  {t("openCatalog")}
+                </Button>
+                {createButton}
+              </div>
+            )
+          }
+        />
+      ) : (
+        <div className="space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <SearchField value={query} onChange={search} aria-label={t("search")} className="w-full max-w-sm">
+              <SearchField.Group>
+                <SearchField.SearchIcon />
+                <SearchField.Input placeholder={t("search")} />
+                <SearchField.ClearButton aria-label={tCommon("close")} />
+              </SearchField.Group>
+            </SearchField>
+            {createButton}
+          </div>
+          {shown.length === 0 ? (
+            <EmptyState icon={Network} title={t("noMatches")} />
+          ) : (
+            <Table aria-label={t("title")}>
+              <Table.ScrollContainer>
+                <Table.Content className="min-w-4xl">
+                  <Table.Header>
+                    <Table.Column isRowHeader>{t("columns.alias")}</Table.Column>
+                    <Table.Column>{t("columns.enabled")}</Table.Column>
+                    <Table.Column>{t("columns.strategy")}</Table.Column>
+                    <Table.Column>{t("columns.billing")}</Table.Column>
+                    <Table.Column>{t("columns.endpoints")}</Table.Column>
+                    <Table.Column>{t("columns.overflow")}</Table.Column>
+                    <Table.Column>{tCommon("actions")}</Table.Column>
+                  </Table.Header>
+                  <Table.Body>
+                    {shown.map((g) => (
+                      <Table.Row key={g.alias} id={g.alias}>
+                        <Table.Cell>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="font-medium"
+                            onPress={() => openDialog(g)}
+                          >
+                            {g.alias}
+                          </Button>
+                          {splitTag(g.alias).tag ? (
+                            <Chip size="sm" variant="soft" color="warning" className="whitespace-nowrap">
+                              {tCatalog("tag", { tag: splitTag(g.alias).tag })}
+                            </Chip>
+                          ) : null}
+                          {g.vendor || g.displayName ? (
+                            <div className="px-3 text-xs text-muted">
+                              {format.list([g.vendor, g.displayName].filter(Boolean), { type: "unit" })}
+                            </div>
+                          ) : null}
+                        </Table.Cell>
+                        <Table.Cell>
+                          <Switch
+                            size="sm"
+                            isSelected={g.enabled}
+                            onChange={(next) => toggle(g.alias, next)}
+                            isDisabled={toggling === g.alias}
+                            aria-label={t("enabledToggle", { alias: g.alias })}
+                          >
+                            <Switch.Content>
+                              <Switch.Control>
+                                <Switch.Thumb />
+                              </Switch.Control>
+                              <Label>{t("enabledState", { enabled: String(g.enabled) })}</Label>
+                            </Switch.Content>
+                          </Switch>
+                        </Table.Cell>
+                        <Table.Cell>{t("strategyLabel", { strategy: g.strategy })}</Table.Cell>
+                        <Table.Cell>
+                          {t("billingSummary", {
+                            mode: g.billingMode,
+                            input: g.priceInput,
+                            output: g.priceOutput,
+                            windows: g.priceWindows.length,
+                          })}
+                        </Table.Cell>
+                        <Table.Cell>
+                          <div className="flex flex-wrap gap-1">
+                            {routeLabels(g).map((label) => (
+                              <Chip key={label} size="sm" variant="soft" className="whitespace-nowrap">
+                                {label}
+                              </Chip>
+                            ))}
+                          </div>
+                        </Table.Cell>
+                        <Table.Cell>{g.overflowGroup || tCommon("none")}</Table.Cell>
+                        <Table.Cell>
+                          <div className="flex gap-1">
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              aria-label={tCommon("edit")}
+                              onPress={() => openDialog(g)}
+                            >
+                              {tCommon("edit")}
+                            </Button>
+                            <ConfirmDialog
+                              title={t("removeConfirm", { alias: g.alias })}
+                              confirmLabel={tCommon("delete")}
+                              cancelLabel={tCommon("cancel")}
+                              pending={deleting === g.alias}
+                              onConfirm={() => remove(g.alias)}
+                            >
+                              <Button
+                                isIconOnly
+                                size="sm"
+                                variant="danger-soft"
+                                aria-label={tCommon("delete")}
+                                isPending={deleting === g.alias}
+                              >
+                                <Trash2 size={14} aria-hidden />
+                              </Button>
+                            </ConfirmDialog>
+                          </div>
+                        </Table.Cell>
+                      </Table.Row>
+                    ))}
+                  </Table.Body>
+                </Table.Content>
+              </Table.ScrollContainer>
+            </Table>
+          )}
+        </div>
+      )}
+
+      <ModelGroupDialog
+        key={dialogKey}
+        state={formState}
+        editing={editing}
+        providers={providers}
+        aliases={groups.map((group) => group.alias)}
+        onSaved={saved}
+      />
+    </div>
+  );
+}

@@ -11,11 +11,26 @@ const nextConfig: NextConfig = {
   },
   allowedDevOrigins: ["localhost", "127.0.0.1"],
   redirects() {
-    return ["/structure", "/organizations", "/teams", "/projects", "/budgets"].map((source) => ({
-      source,
-      destination: "/companies",
-      permanent: false,
-    }));
+    const moved: [string, string][] = [
+      ...["/structure", "/organizations", "/teams", "/projects", "/budgets"].map((source): [string, string] => [
+        source,
+        "/companies",
+      ]),
+      ["/subscriptions", "/providers?tab=subscriptions"],
+      ["/provider-health", "/providers?tab=health"],
+      ["/model-catalog", "/models"],
+      ["/model-templates", "/keys?tab=templates"],
+      ["/roles", "/users?tab=roles"],
+      ["/markups", "/usage?tab=markups"],
+      ["/what-if", "/usage"],
+      ["/admin-settings", "/settings"],
+      ["/logging", "/settings?tab=logging"],
+      ["/cache", "/settings?tab=cache"],
+      ["/playground", "/developer?tab=playground"],
+      ["/api-ref", "/developer?tab=api"],
+      ["/assistant", "/"],
+    ];
+    return moved.map(([source, destination]) => ({ source, destination, permanent: false }));
   },
 };
 

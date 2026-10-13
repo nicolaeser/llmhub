@@ -1,13 +1,8 @@
 import { NextResponse } from "next/server";
-import { env } from "@/lib/env";
+import { buildInfo } from "@/lib/updates/build";
 
 export const dynamic = "force-dynamic";
 
-const STARTED_AT = new Date(Date.now() - process.uptime() * 1000).toISOString();
-
 export async function GET() {
-  return NextResponse.json(
-    { version: env.BUILD_ID ?? "development", startedAt: STARTED_AT },
-    { headers: { "Cache-Control": "no-store" } },
-  );
+  return NextResponse.json(buildInfo(), { headers: { "Cache-Control": "no-store" } });
 }

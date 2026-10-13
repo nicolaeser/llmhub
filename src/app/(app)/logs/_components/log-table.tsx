@@ -73,7 +73,12 @@ export default function LogTable({
                     </p>
                   </Table.Cell>
                   <Table.Cell>
-                    <Chip size="sm" variant="soft" color={row.status >= 400 ? "danger" : "default"} className="whitespace-nowrap">
+                    <Chip
+                      size="sm"
+                      variant="soft"
+                      color={row.status >= 500 ? "danger" : row.status >= 400 ? "warning" : "success"}
+                      className="whitespace-nowrap"
+                    >
                       {t("statusOutcome", { status: row.status, outcome: row.outcome })}
                     </Chip>
                   </Table.Cell>
