@@ -2,11 +2,38 @@ import type { AssignmentScope, AssignmentSource } from "@/types/providers";
 import type { JsonMap, Principal } from "@/types/gateway";
 import type { OutputGuard } from "@/types/guardrails";
 
-export type McpAuthType = "none" | "bearer" | "header";
+export type McpAuthType = "none" | "bearer" | "header" | "oauth";
+
+export type McpOAuthGrant = "authorization_code" | "client_credentials";
+
+export type McpTransport = "streamable_http" | "sse";
+
+export type McpEra = "modern" | "legacy" | "sse";
 
 export type McpAssignmentMode = "allow" | "block";
 
-export type McpServerStatus = "connected" | "error" | "disabled" | "unchecked";
+export type McpServerStatus = "connected" | "error" | "disabled" | "unchecked" | "signin";
+
+export type McpChallenge = {
+  resourceMetadata: string;
+  scope: string;
+  error: string;
+};
+
+export type McpAuth = {
+  headers(signal?: AbortSignal): Promise<Record<string, string>>;
+  rejected(challenge: McpChallenge | null, signal?: AbortSignal): Promise<boolean>;
+};
+
+export type McpConnection = {
+  transport: McpTransport;
+  protocolVersion: string;
+};
+
+export type McpHeaderParam = {
+  path: string[];
+  header: string;
+};
 
 export type McpToolSpec = {
   name: string;
@@ -23,6 +50,11 @@ export type McpServerRecord = {
   authHeader: string;
   authSecret: string;
   internal: boolean;
+  oauthGrant: McpOAuthGrant;
+  oauthClientId: string;
+  oauthScopes: string;
+  transport: McpTransport;
+  protocolVersion: string;
 };
 
 export type McpAssignmentRule = {
@@ -94,6 +126,13 @@ export type McpFetch = (
   init: { method: string; headers: Record<string, string>; body?: string; signal: AbortSignal },
 ) => Promise<Response>;
 
+export type McpSseEvent = {
+  event: string;
+  data: string;
+  id: string | null;
+  retry: number | null;
+};
+
 export type JsonRpcMessage = {
   jsonrpc?: string;
   id?: string | number | null;
@@ -111,17 +150,31 @@ export type McpServerView = {
   authType: McpAuthType;
   authHeader: string;
   hasSecret: boolean;
+  oauthGrant: McpOAuthGrant;
+  oauthClientId: string;
+  oauthScopes: string;
+  oauth: McpOAuthView | null;
   internal: boolean;
   enabled: boolean;
   global: boolean;
   toolsRestricted: boolean;
   allowedTools: string[];
   tools: McpToolSpec[];
+  transport: McpTransport;
+  protocolVersion: string;
+  era: McpEra | null;
   refreshedAt: string | null;
   lastError: string;
   status: McpServerStatus;
   assignments: McpAssignmentView[];
   updatedAt: string;
+};
+
+export type McpOAuthView = {
+  status: "active" | "expired";
+  scope: string;
+  expiresAt: string | null;
+  connectedAt: string;
 };
 
 export type McpAssignmentView = {
@@ -159,6 +212,9 @@ export type McpServerInput = {
   authHeader: string;
   secret: string;
   clearSecret: boolean;
+  oauthGrant: McpOAuthGrant;
+  oauthClientId: string;
+  oauthScopes: string;
   internal: boolean;
   enabled: boolean;
   global: boolean;
@@ -171,6 +227,9 @@ export type McpProbeResult = {
   tools: McpToolSpec[];
   serverName: string;
   error: string;
+  transport: McpTransport | null;
+  protocolVersion: string;
+  era: McpEra | null;
 };
 
 export type McpExplanation = {
@@ -246,3 +305,70 @@ export type McpMessagesBlock = {
 };
 
 export type McpAssignmentSource = AssignmentSource & { mode: string; blockedTools: string[] };
+
+export type McpTokenAuthMethod = "none" | "client_secret_basic" | "client_secret_post";
+
+export type McpOAuthClient = {
+  clientId: string;
+  clientSecret: string;
+  authMethod: McpTokenAuthMethod;
+  registration: "manual" | "metadata" | "dynamic";
+  redirectUri: string;
+};
+
+export type McpResourceMetadata = {
+  resource: string;
+  authorizationServers: string[];
+  scopesSupported: string[];
+};
+
+export type McpAuthServer = {
+  issuer: string;
+  authorizationEndpoint: string;
+  tokenEndpoint: string;
+  registrationEndpoint: string;
+  scopesSupported: string[];
+  codeChallengeMethods: string[];
+  tokenAuthMethods: string[];
+  clientMetadataDocuments: boolean;
+  issParameter: boolean;
+};
+
+export type McpOAuthDiscovery = {
+  resource: string;
+  scope: string;
+  server: McpAuthServer;
+};
+
+export type McpTokenGrant = {
+  access: string;
+  refresh: string;
+  scope: string;
+  expiresAt: Date | null;
+};
+
+export type McpOAuthPending = {
+  serverId: string;
+  userId: string;
+  url: string;
+  state: string;
+  verifier: string;
+  issuer: string;
+  issParameter: boolean;
+  tokenEndpoint: string;
+  resource: string;
+  scope: string;
+  client: McpOAuthClient;
+  issuedAt: number;
+};
+
+export type McpOAuthLoginState = {
+  issuer: string;
+  tokenEndpoint: string;
+  resource: string;
+  client: McpOAuthClient;
+  tokens: { access: string; refresh: string };
+  scope: string;
+  expiresAt: number | null;
+  version: number;
+};
