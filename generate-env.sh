@@ -7,17 +7,29 @@ OUTPUT=${ENV_OUTPUT:-.env}
 FORCE=false
 ASSUME_DEFAULTS=false
 APP_NAME="LLM Hub"
+REPOSITORY=nicolaeser/llmhub
+COMPOSE_URL="https://raw.githubusercontent.com/$REPOSITORY/main/docker-compose.yml"
+IMAGE_TAG='^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$'
+URL_SAFE='^[A-Za-z0-9._~-]+$'
+SMTP_PATTERN='^(smtps?)://(([^:@/]*)(:([^@/]*))?@)?([^:@/]+)(:([0-9]+))?/?$'
+
+usage() {
+  printf 'Usage: %s [--force] [--yes]\n\n' "$0"
+  printf 'Writes the production %s for docker-compose.yml. In a terminal it asks for the\n' "$OUTPUT"
+  printf 'domain, release channel, port, mail, single sign-on, and object storage, and it\n'
+  printf 'generates every password and secret.\n\n'
+  printf '  --force  update an existing %s and keep its values\n' "$OUTPUT"
+  printf '  --yes    accept every default without asking\n\n'
+  printf 'Variables already set in the environment are used as answers.\n'
+  printf 'ENV_OUTPUT=path writes somewhere other than %s.\n' "$OUTPUT"
+}
 
 for arg in "$@"; do
   case "$arg" in
     -f | --force) FORCE=true ;;
     -y | --yes) ASSUME_DEFAULTS=true ;;
     -h | --help)
-      printf 'Usage: %s [--force] [--yes]\n\n' "$0"
-      printf '  --force  regenerate an existing %s and keep its values\n' "$OUTPUT"
-      printf '  --yes    accept every default without asking\n\n'
-      printf 'Variables already set in the environment are used as answers.\n'
-      printf 'ENV_OUTPUT=path writes somewhere other than %s.\n' "$OUTPUT"
+      usage
       exit 0
       ;;
     *)
@@ -32,9 +44,13 @@ if ((BASH_VERSINFO[0] < 5)); then
   exit 1
 fi
 
-if [[ -f $OUTPUT && $FORCE != true ]]; then
-  printf '%s already exists. Run with --force to regenerate it and keep its values.\n' "$OUTPUT" >&2
-  exit 1
+UPDATING=false
+if [[ -f $OUTPUT ]]; then
+  if [[ $FORCE != true ]]; then
+    printf '%s already exists. Run %s --force to update it; its values are kept.\n' "$OUTPUT" "$0" >&2
+    exit 1
+  fi
+  UPDATING=true
 fi
 
 INTERACTIVE=false
@@ -53,8 +69,16 @@ declare -A VALUES=()
 declare -A HIDDEN=()
 ORDER=()
 REQUIRED_MISSING=()
+ANSWER=""
 
 say() { printf '%s\n' "$*" >&2; }
+note() {
+  if $INTERACTIVE; then say "  ${DIM}$*${RESET}"; fi
+}
+ok() {
+  if $INTERACTIVE; then say "  ${GREEN}✔${RESET} $*"; fi
+}
+warn() { say "  ${YELLOW}!${RESET} $*"; }
 fail() {
   say "${RED}✖${RESET} $*"
   exit 1
@@ -91,8 +115,16 @@ remember() {
 }
 
 value_of() { printf '%s' "${VALUES[$1]-}"; }
+set_value() { remember "$1" "$2"; }
 hide() { HIDDEN[$1]=1; }
 is_hidden() { [[ -v HIDDEN[$1] ]]; }
+
+drop() {
+  local key
+  for key in "$@"; do
+    remember "$key" ""
+  done
+}
 
 section() {
   ORDER+=("@$1")
@@ -109,8 +141,8 @@ validate() {
     required) [[ -n $value ]] || { printf 'a value is required'; return 1; } ;;
     url) [[ $value =~ ^https?://[^[:space:]/]+(/[^[:space:]]*)?$ ]] || { printf 'enter a URL like https://example.com'; return 1; } ;;
     https) [[ $value =~ ^https://[^[:space:]/]+(/[^[:space:]]*)?$ ]] || { printf 'enter an https:// URL'; return 1; } ;;
-    origin) [[ $value =~ ^https?://[^[:space:]/]+$ ]] || { printf 'enter an origin like https://example.com (no path, no trailing slash)'; return 1; } ;;
-    email) [[ $value =~ ^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$ ]] || { printf 'enter an email address'; return 1; } ;;
+    origin) [[ $value =~ ^https?://[^[:space:]/]+$ ]] || { printf 'enter a domain like hub.example.com or an origin like https://hub.example.com (no path)'; return 1; } ;;
+    email) [[ $value =~ ^([^<>]*<[^[:space:]@<>]+@[^[:space:]@<>]+\.[^[:space:]@<>]+>|[^[:space:]@<>]+@[^[:space:]@<>]+\.[^[:space:]@<>]+)$ ]] || { printf 'enter an email address, optionally as Name <address>'; return 1; } ;;
     host) [[ $value =~ ^[A-Za-z0-9.-]+$ ]] || { printf 'enter a host name'; return 1; } ;;
     port) [[ $value =~ ^[0-9]+$ ]] && ((value >= 1 && value <= 65535)) || { printf 'enter a port between 1 and 65535'; return 1; } ;;
     int) [[ $value =~ ^[0-9]+$ ]] || { printf 'enter a whole number'; return 1; } ;;
@@ -120,109 +152,100 @@ validate() {
   esac
 }
 
-check_all() {
+accept() {
   local value=$1 rule message
   shift
   for rule in "$@"; do
-    if ! message=$(validate "$rule" "$value"); then
+    if [[ $rule == to:* ]]; then
+      value=$("${rule#to:}" "$value")
+    elif ! message=$(validate "$rule" "$value"); then
       printf '%s' "$message"
       return 1
     fi
   done
+  printf '%s' "$value"
 }
 
-ask() {
-  local key=$1 label=$2 fallback=${3-} value input message
-  shift 3 || shift $#
-  local rules=("$@")
-  value=$(current "$key")
-  value=${value:-$fallback}
-  if ! $INTERACTIVE; then
-    if message=$(check_all "$value" ${rules[@]+"${rules[@]}"}); then
-      remember "$key" "$value"
-      return
-    fi
-    [[ -z $value ]] && REQUIRED_MISSING+=("$key")
-    [[ -n $value ]] && fail "$key: $message"
-    remember "$key" "$value"
-    return
-  fi
+requires_value() {
+  local rule
+  for rule in "$@"; do
+    [[ $rule == required ]] && return 0
+  done
+  return 1
+}
+
+public_origin() {
+  local value=$1
+  [[ -n $value ]] || return 0
+  [[ $value == *://* ]] || value="https://$value"
+  while [[ $value == */ ]]; do
+    value=${value%/}
+  done
+  printf '%s' "${value,,}"
+}
+
+prompt() {
+  local label=$1 value=$2 input result
+  shift 2
   while true; do
     read -r -e -i "$value" -p "${P_CYAN}?${P_RESET} ${P_BOLD}${label}${P_RESET} " input || exit 130
-    if message=$(check_all "$input" ${rules[@]+"${rules[@]}"}); then
-      remember "$key" "$input"
+    if result=$(accept "$input" "$@"); then
+      ANSWER=$result
       return
     fi
-    say "  ${RED}${message}${RESET}"
+    say "  ${RED}${result}${RESET}"
   done
 }
 
-ask_secret() {
-  local key=$1 label=$2 value input message hint
+prompt_secret() {
+  local label=$1 value=$2 input result hint="hidden, Enter skips"
   shift 2
-  local rules=("$@")
-  value=$(current "$key")
-  hide "$key"
-  if ! $INTERACTIVE; then
-    if message=$(check_all "$value" ${rules[@]+"${rules[@]}"}); then
-      remember "$key" "$value"
-      return
-    fi
-    [[ -z $value ]] && REQUIRED_MISSING+=("$key")
-    [[ -n $value ]] && fail "$key: $message"
-    remember "$key" "$value"
-    return
+  if [[ -n $value ]]; then
+    hint="hidden, Enter keeps the current value"
+  elif requires_value "$@"; then
+    hint="hidden"
   fi
-  hint="leave empty to skip"
-  [[ -n $value ]] && hint="leave empty to keep the current value"
   while true; do
-    read -r -s -p "${P_CYAN}?${P_RESET} ${P_BOLD}${label}${P_RESET} ${P_DIM}(${hint})${P_RESET} " input || exit 130
+    IFS= read -r -s -p "${P_CYAN}?${P_RESET} ${P_BOLD}${label}${P_RESET} ${P_DIM}(${hint})${P_RESET} " input || exit 130
     printf '\n' >&2
     input=${input:-$value}
-    if message=$(check_all "$input" ${rules[@]+"${rules[@]}"}); then
-      remember "$key" "$input"
+    if result=$(accept "$input" "$@"); then
+      ANSWER=$result
       return
     fi
-    say "  ${RED}${message}${RESET}"
+    say "  ${RED}${result}${RESET}"
   done
 }
 
-choose() {
-  local key=$1 label=$2 fallback=$3 value input index option
-  shift 3
-  local options=("$@")
-  value=$(current "$key")
-  value=${value:-$fallback}
-  if ! $INTERACTIVE; then
-    for option in "${options[@]}"; do
-      if [[ $option == "$value" ]]; then
-        remember "$key" "$value"
-        return
-      fi
-    done
-    fail "$key must be one of: ${options[*]}"
-  fi
+pick() {
+  local label=$1 value=$2 input index name line
+  shift 2
+  local options=("$@") names=()
+  for index in "${!options[@]}"; do
+    names+=("${options[$index]%%|*}")
+  done
   say "${CYAN}?${RESET} ${BOLD}${label}${RESET}"
   for index in "${!options[@]}"; do
-    if [[ ${options[$index]} == "$value" ]]; then
-      say "  ${GREEN}$((index + 1))) ${options[$index]}${RESET} ${DIM}(current)${RESET}"
+    line=$(printf '%d) %-8s' $((index + 1)) "${names[$index]}")
+    if [[ ${names[$index]} == "$value" ]]; then
+      say "  ${GREEN}${line}${RESET} ${DIM}${options[$index]#*|}${RESET}"
     else
-      say "  $((index + 1))) ${options[$index]}"
+      say "  ${line} ${DIM}${options[$index]#*|}${RESET}"
     fi
   done
   while true; do
     read -r -e -p "  ${P_DIM}number or name, Enter keeps ${value}${P_RESET} " input || exit 130
     input=${input:-$value}
-    if [[ $input =~ ^[0-9]+$ ]] && ((input >= 1 && input <= ${#options[@]})); then
-      input=${options[$((input - 1))]}
+    if [[ $input =~ ^[0-9]+$ ]] && ((input >= 1 && input <= ${#names[@]})); then
+      input=${names[input - 1]}
     fi
-    for option in "${options[@]}"; do
-      if [[ $option == "$input" ]]; then
-        remember "$key" "$input"
+    for name in "${names[@]}"; do
+      if [[ $name == "$input" ]]; then
+        ANSWER=$name
         return
       fi
     done
-    say "  ${RED}choose one of: ${options[*]}${RESET}"
+    say "  ${RED}choose one of: ${names[*]}${RESET}"
   done
 }
 
@@ -244,21 +267,62 @@ confirm() {
   done
 }
 
-set_value() { remember "$1" "$2"; }
-
-keep_or() {
-  local key=$1 value
+ask() {
+  local key=$1 label=$2 fallback=$3 value result
+  shift 3
   value=$(current "$key")
-  remember "$key" "${value:-$2}"
+  value=${value:-$fallback}
+  if $INTERACTIVE; then
+    prompt "$label" "$value" "$@"
+    remember "$key" "$ANSWER"
+  elif result=$(accept "$value" "$@"); then
+    remember "$key" "$result"
+  elif [[ -n $value ]]; then
+    fail "$key: $result"
+  else
+    REQUIRED_MISSING+=("$key")
+    remember "$key" ""
+  fi
+}
+
+ask_secret() {
+  local key=$1 label=$2 value result
+  shift 2
+  value=$(current "$key")
+  hide "$key"
+  if $INTERACTIVE; then
+    prompt_secret "$label" "$value" "$@"
+    remember "$key" "$ANSWER"
+  elif result=$(accept "$value" "$@"); then
+    remember "$key" "$result"
+  elif [[ -n $value ]]; then
+    fail "$key: $result"
+  else
+    REQUIRED_MISSING+=("$key")
+    remember "$key" ""
+  fi
+}
+
+wanted() {
+  local label=$1 key=$2 fallback=n
+  [[ -n $(current "$key") ]] && fallback=y
+  if $INTERACTIVE; then
+    confirm "$label" "$fallback"
+  else
+    [[ $fallback == y ]]
+  fi
 }
 
 generated() {
   local key=$1 generator=$2 minimum=${3:-32} value
   value=$(current "$key")
   hide "$key"
-  if ((${#value} < minimum)); then
+  if ((${#value} >= minimum)); then
+    ok "$key kept"
+  else
     value=$($generator)
     [[ -n $value ]] || fail "could not generate $key"
+    ok "$key generated"
   fi
   remember "$key" "$value"
 }
@@ -266,6 +330,151 @@ generated() {
 random_bytes() { head -c "$1" /dev/urandom; }
 gen_hex32() { random_bytes 32 | od -An -v -tx1 | tr -d ' \n'; }
 gen_password() { random_bytes 24 | base64 -w0 | tr '+/' '-_' | tr -d '='; }
+
+percent() {
+  local LC_ALL=C value=$1 index char
+  for ((index = 0; index < ${#value}; index++)); do
+    char=${value:index:1}
+    if [[ $char == [A-Za-z0-9._~-] ]]; then
+      printf '%s' "$char"
+    else
+      printf '%%%02X' "'$char"
+    fi
+  done
+}
+
+unpercent() { printf '%b' "${1//%/\\x}"; }
+
+latest_release() {
+  command -v curl >/dev/null || return 0
+  curl -fsS --max-time 5 "https://api.github.com/repos/$REPOSITORY/releases/latest" 2>/dev/null |
+    sed -n 's/^ *"tag_name": *"\([^"]*\)".*/\1/p'
+}
+
+release_tag() {
+  local value channel
+  if ! $INTERACTIVE; then
+    ask LLMHUB_TAG "Image tag" latest required "regex:$IMAGE_TAG"
+    return
+  fi
+  value=$(current LLMHUB_TAG)
+  value=${value:-latest}
+  case $value in
+    latest | dev) channel=$value ;;
+    *) channel=pinned ;;
+  esac
+  pick "Release channel" "$channel" \
+    "latest|stable releases; docker compose pull fetches the newest" \
+    "dev|prereleases from the development branch" \
+    "pinned|one release tag that changes only when you edit it"
+  if [[ $ANSWER == pinned ]]; then
+    if [[ $channel != pinned ]]; then
+      value=$(latest_release) || value=""
+      [[ $value =~ $IMAGE_TAG ]] || value=""
+    fi
+    note "Release tags are listed at https://github.com/$REPOSITORY/releases"
+    prompt "Release tag" "$value" required "regex:$IMAGE_TAG"
+  fi
+  remember LLMHUB_TAG "$ANSWER"
+}
+
+smtp_label() {
+  if [[ $1 =~ $SMTP_PATTERN ]]; then
+    printf '%s%s' "${BASH_REMATCH[6]}" "${BASH_REMATCH[7]}"
+  else
+    printf 'the current SMTP URL'
+  fi
+}
+
+smtp_server() {
+  local current=$1 scheme=smtp host="" port="" user="" password="" security next_scheme fallback_port credentials=""
+  if [[ $current =~ $SMTP_PATTERN ]]; then
+    scheme=${BASH_REMATCH[1]} host=${BASH_REMATCH[6]} port=${BASH_REMATCH[8]}
+    user=$(unpercent "${BASH_REMATCH[3]}")
+    password=$(unpercent "${BASH_REMATCH[5]}")
+  fi
+  prompt "SMTP host" "$host" required host
+  host=$ANSWER
+  security=starttls
+  [[ $scheme == smtps ]] && security=tls
+  pick "Encryption" "$security" \
+    "starttls|STARTTLS, usually port 587" \
+    "tls|TLS from the first byte, usually port 465"
+  next_scheme=smtp fallback_port=587
+  if [[ $ANSWER == tls ]]; then
+    next_scheme=smtps fallback_port=465
+  fi
+  if [[ $next_scheme == "$scheme" && -n $port ]]; then
+    fallback_port=$port
+  fi
+  prompt "SMTP port" "$fallback_port" required port
+  port=$ANSWER
+  prompt "SMTP user (Enter skips when the server needs no login)" "$user"
+  user=$ANSWER
+  if [[ -n $user ]]; then
+    prompt_secret "SMTP password" "$password" required
+    credentials="$(percent "$user"):$(percent "$ANSWER")@"
+  fi
+  remember SMTP_URL "$next_scheme://$credentials$host:$port"
+}
+
+smtp_url() {
+  local url
+  if ! $INTERACTIVE; then
+    ask_secret SMTP_URL "SMTP URL" required "regex:^smtps?://[^[:space:]]+$"
+    return
+  fi
+  url=$(current SMTP_URL)
+  hide SMTP_URL
+  if [[ -n $url ]] && confirm "Keep sending through $(smtp_label "$url")?" y; then
+    remember SMTP_URL "$url"
+  else
+    smtp_server "$url"
+  fi
+}
+
+sender_default() {
+  local url origin user=""
+  url=$(value_of SMTP_URL)
+  if [[ $url =~ $SMTP_PATTERN ]]; then
+    user=$(unpercent "${BASH_REMATCH[3]}")
+  fi
+  if [[ $user =~ ^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$ ]]; then
+    printf '%s' "$user"
+    return
+  fi
+  origin=$(value_of NEXT_PUBLIC_APP_URL)
+  [[ -n $origin ]] && printf 'llmhub@%s' "${origin#*://}"
+  return 0
+}
+
+preflight() {
+  local version
+  if version=$(docker compose version --short 2>/dev/null); then
+    ok "Docker Compose $version"
+  else
+    warn "Docker with the Compose plugin was not found. Install it before you start ${APP_NAME}."
+  fi
+  if [[ -f docker-compose.yml ]]; then
+    ok "docker-compose.yml found"
+  else
+    warn "docker-compose.yml is not next to this script. Download it with: curl -fsSLO $COMPOSE_URL"
+  fi
+}
+
+database_drift() {
+  [[ -d postgres-data ]] || return 0
+  local key changed=()
+  for key in POSTGRES_USER POSTGRES_DB POSTGRES_PASSWORD APP_SECRET; do
+    [[ $(existing "$key") == "$(value_of "$key")" ]] || changed+=("$key")
+  done
+  ((${#changed[@]})) || return 0
+  if $UPDATING; then
+    warn "./postgres-data already holds a database created with the previous values. Changing ${changed[*]} locks ${APP_NAME} out of it."
+  else
+    warn "./postgres-data already holds a database, but $OUTPUT is missing. Restore the original $OUTPUT and run with --force; new passwords and a new APP_SECRET lock ${APP_NAME} out of the existing data."
+  fi
+}
 
 quote() {
   local value=$1
@@ -286,9 +495,7 @@ quote() {
 
 mask() {
   local value=$1
-  if [[ -z $value ]]; then
-    printf '%s' "${DIM}(empty)${RESET}"
-  elif [[ $value == *$'\n'* ]]; then
+  if [[ $value == *$'\n'* ]]; then
     printf '%s' "${DIM}(key, $(wc -l <<<"$value" | tr -d ' ') lines)${RESET}"
   else
     printf '%s' "${DIM}••••••${value: -4}${RESET}"
@@ -296,18 +503,21 @@ mask() {
 }
 
 summary() {
-  local entry
+  local entry value
   say ""
   say "${BOLD}Summary${RESET}"
   for entry in "${ORDER[@]}"; do
-    [[ $entry == @* ]] && continue
-    if is_hidden "$entry"; then
-      say "  ${entry} = $(mask "$(value_of "$entry")")"
-    else
-      local shown
-      shown=$(value_of "$entry")
-      say "  ${entry} = ${shown:-${DIM}(empty)${RESET}}"
+    if [[ $entry == @* ]]; then
+      say "  ${DIM}${entry#@}${RESET}"
+      continue
     fi
+    value=$(value_of "$entry")
+    if [[ -z $value ]]; then
+      value="${DIM}(not set)${RESET}"
+    elif is_hidden "$entry"; then
+      value=$(mask "$value")
+    fi
+    say "$(printf '    %-21s' "$entry") $value"
   done
 }
 
@@ -322,18 +532,25 @@ unmanaged_lines() {
 }
 
 write_env() {
-  local tmp entry separator="" backup="" unmanaged
+  local tmp entry value line backup="" unmanaged gap=false wrote=false
   unmanaged=$(unmanaged_lines)
   tmp=$(mktemp "${OUTPUT}.XXXXXX")
   trap 'rm -f "$tmp"' EXIT
   {
     for entry in "${ORDER[@]}"; do
       if [[ $entry == @* ]]; then
-        printf '%s' "$separator"
-        separator=$'\n'
+        if $wrote; then gap=true; fi
         continue
       fi
-      printf '%s=%s\n' "$entry" "$(quote "$(value_of "$entry")")"
+      value=$(value_of "$entry")
+      [[ -n $value ]] || continue
+      line=$(quote "$value")
+      if $gap; then
+        printf '\n'
+        gap=false
+      fi
+      printf '%s=%s\n' "$entry" "$line"
+      wrote=true
     done
     if [[ -n $unmanaged ]]; then
       printf '\n%s\n' "$unmanaged"
@@ -353,17 +570,50 @@ write_env() {
   say "${GREEN}✔${RESET} Wrote ${BOLD}$OUTPUT${RESET}$backup"
 }
 
-if $INTERACTIVE; then
-  say "${BOLD}${APP_NAME}${RESET} production environment"
-  say "${DIM}Enter accepts the value shown. Secrets are generated automatically.${RESET}"
-fi
+next_steps() {
+  local origin port host step=1
+  origin=$(value_of NEXT_PUBLIC_APP_URL)
+  port=$(value_of LLMHUB_PORT)
+  host=${origin#*://}
+  say ""
+  say "${BOLD}Next steps${RESET}"
+  if $UPDATING; then
+    say "  Apply the changes with ${BOLD}docker compose up -d${RESET}."
+    return
+  fi
+  if [[ ! -f docker-compose.yml ]]; then
+    say "  $step. Download the compose file: ${BOLD}curl -fsSLO $COMPOSE_URL${RESET}"
+    step=$((step + 1))
+  fi
+  say "  $step. Point $host at this server and serve it through a reverse proxy with TLS, for example Caddy:"
+  say ""
+  say "       $host {"
+  say "         reverse_proxy 127.0.0.1:$port"
+  say "       }"
+  say ""
+  step=$((step + 1))
+  say "  $step. Start ${APP_NAME}: ${BOLD}docker compose up -d${RESET}"
+  step=$((step + 1))
+  say "  $step. Open ${BOLD}$origin/internal-api/setup${RESET} and create the owner account."
+  say ""
+  say "${DIM}Back up $OUTPUT together with the database. Without the same APP_SECRET, stored provider keys and two-factor secrets cannot be read.${RESET}"
+}
 
-URL_SAFE='^[A-Za-z0-9._~-]+$'
+if $INTERACTIVE; then
+  say "${BOLD}${APP_NAME}${RESET} production setup"
+  say "${DIM}Writes $OUTPUT for docker-compose.yml. Enter accepts the value shown; passwords and secrets are generated.${RESET}"
+  if $UPDATING; then
+    say "${DIM}Updating the existing $OUTPUT: its values are the defaults, and secrets stay as they are.${RESET}"
+  fi
+  say ""
+  preflight
+fi
 
 section "Application"
 set_value NODE_ENV production
-ask LLMHUB_TAG "Image tag (ghcr.io/nicolaeser/llmhub)" latest required "regex:^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$"
-ask NEXT_PUBLIC_APP_URL "Public URL" "" required origin https
+note "The domain people and applications use. Your reverse proxy serves it with TLS."
+ask NEXT_PUBLIC_APP_URL "Domain or public URL" "" to:public_origin required origin https
+release_tag
 ask LLMHUB_PORT "Port on 127.0.0.1 for the reverse proxy" 3000 required port
 
 section "Database and Redis"
@@ -376,20 +626,35 @@ generated REDIS_PASSWORD gen_password 1
 
 section "Secrets"
 generated APP_SECRET gen_hex32 32
+note "APP_SECRET encrypts provider keys and two-factor secrets and signs sessions. It must never change."
+database_drift
 
 section "Mail"
-ask_secret SMTP_URL "SMTP URL for password resets and usage reports, smtp://user:password@host:587 (optional)" "regex:^(smtps?://[^[:space:]]+)?$"
-if [[ -n $(value_of SMTP_URL) ]]; then
-  ask SMTP_FROM "Sender address" "" required email
+note "Mail sends password reset links and usage reports. Without it, password reset is off."
+if wanted "Send email?" SMTP_URL; then
+  smtp_url
+  ask SMTP_FROM "Sender address" "$(sender_default)" required email
+else
+  drop SMTP_URL SMTP_FROM
 fi
 
 section "Single sign-on"
-ask_secret OIDC_CLIENT_SECRET "OpenID Connect client secret (optional; issuer and client ID live in Admin settings)" optional
+note "OpenID Connect is set up in Settings → Sign-in after the first start; only its client secret goes into $OUTPUT."
+note "Redirect URI for the identity provider: $(value_of NEXT_PUBLIC_APP_URL)/sso/callback"
+if wanted "Add an OpenID Connect client secret?" OIDC_CLIENT_SECRET; then
+  ask_secret OIDC_CLIENT_SECRET "Client secret" required
+else
+  drop OIDC_CLIENT_SECRET
+fi
 
 section "Object storage"
-ask S3_ACCESS_KEY_ID "S3 access key ID (optional; without S3, files are stored in PostgreSQL)" "" "regex:^[^[:space:]]*$"
-if [[ -n $(value_of S3_ACCESS_KEY_ID) ]]; then
-  ask_secret S3_SECRET_ACCESS_KEY "S3 secret access key" required
+note "Without S3, uploads, generated media, and batch files are stored in PostgreSQL."
+if wanted "Use S3-compatible object storage?" S3_ACCESS_KEY_ID; then
+  ask S3_ACCESS_KEY_ID "Access key ID" "" required "regex:^[^[:space:]]+$"
+  ask_secret S3_SECRET_ACCESS_KEY "Secret access key" required
+  note "Choose the provider, bucket, region, and endpoint in Settings → Storage."
+else
+  drop S3_ACCESS_KEY_ID S3_SECRET_ACCESS_KEY
 fi
 
 summary
@@ -402,3 +667,6 @@ if $INTERACTIVE && ! confirm "Write $OUTPUT?" y; then
   exit 1
 fi
 write_env
+if $INTERACTIVE; then
+  next_steps
+fi
