@@ -227,6 +227,7 @@ const AUTHORIZATION_STARTS: Record<SignInKind, () => Promise<DeviceAuthorization
 };
 
 export function startAuthorization(kind: SignInKind): Promise<DeviceAuthorization> {
+  if (!Object.hasOwn(AUTHORIZATION_STARTS, kind)) throw new Error("UNKNOWN_PROVIDER_KIND");
   return AUTHORIZATION_STARTS[kind]();
 }
 

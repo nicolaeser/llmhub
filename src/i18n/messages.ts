@@ -10,12 +10,14 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
-const UNSAFE_KEYS = new Set(["__proto__", "constructor", "prototype"]);
+function isUnsafeKey(key: string): boolean {
+  return key === "__proto__" || key === "constructor" || key === "prototype";
+}
 
 function deepMerge(base: Messages, override: Messages): Messages {
   const merged: Messages = { ...base };
   for (const [key, value] of Object.entries(override)) {
-    if (UNSAFE_KEYS.has(key)) continue;
+    if (isUnsafeKey(key)) continue;
     const current = merged[key];
     if (isPlainObject(current) && isPlainObject(value)) {
       merged[key] = deepMerge(current, value);
@@ -32,10 +34,10 @@ function assignDottedNamespace(
   payload: Messages,
 ) {
   const segments = dottedPath.split(".");
-  if (segments.some((segment) => UNSAFE_KEYS.has(segment))) return;
   let cursor = target;
   for (let index = 0; index < segments.length - 1; index += 1) {
     const segment = segments[index];
+    if (isUnsafeKey(segment)) return;
     const existing = cursor[segment];
     if (!isPlainObject(existing)) {
       cursor[segment] = {};
@@ -43,6 +45,7 @@ function assignDottedNamespace(
     cursor = cursor[segment] as Messages;
   }
   const leaf = segments[segments.length - 1];
+  if (isUnsafeKey(leaf)) return;
   const existingLeaf = cursor[leaf];
   cursor[leaf] = isPlainObject(existingLeaf)
     ? deepMerge(existingLeaf, payload)
