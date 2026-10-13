@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { Card, Chip, Skeleton } from "@heroui/react";
+import { CircleUser } from "lucide-react";
 import { useTranslations } from "next-intl";
 import PageHeader from "@/components/console/page-header";
 import { LoadError } from "@/components/console/page-status";
@@ -43,7 +44,7 @@ export default function AccountPage() {
 
   return (
     <div>
-      <PageHeader title={t("title")} subtitle={t("subtitle")} />
+      <PageHeader icon={CircleUser} title={t("title")} subtitle={t("subtitle")} />
       {page.error && !overview ? (
         <LoadError state={page} />
       ) : !overview ? (

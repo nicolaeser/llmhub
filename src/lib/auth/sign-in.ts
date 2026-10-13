@@ -50,6 +50,8 @@ import {
   totpEnrollment,
 } from "@/lib/auth/totp";
 import { securityEvent, userActor } from "@/lib/auth/security-events";
+import { ssoOnlyActive } from "@/lib/auth/oidc";
+import { getEnterprise } from "@/lib/settings/enterprise";
 import {
   passkeyAssertionSchema,
   passwordSignInSchema,
@@ -94,6 +96,11 @@ async function checkCredentials(email: string, password: string) {
   return user && !user.blocked && valid ? user : null;
 }
 
+async function assertPasswordAllowed(isOwner: boolean) {
+  if (isOwner) return;
+  if (ssoOnlyActive((await getEnterprise()).oidc)) throw new AuthError("SSO_REQUIRED");
+}
+
 export async function issueEnrollmentChallenge(userId: string): Promise<LoginStep> {
   const { expiresAt } = await issueLoginChallenge(userId, "ENROLL");
   return { step: "enroll", expiresAt: expiresAt.toISOString() };
@@ -117,6 +124,7 @@ export async function passwordSignIn(raw: unknown): Promise<LoginResult> {
   if (!user) throw new AuthError("INVALID_CREDENTIALS");
   await clearFailedAttempts(throttleKey);
   await releaseAttempts(reservation);
+  await assertPasswordAllowed(user.isOwner);
   if ((await secondFactorThrottle(user.id)).blocked) throw new AuthError("SECOND_FACTOR_LOCKED");
   const totp = await prisma.userTotp.findUnique({
     where: { userId: user.id },
@@ -345,11 +353,13 @@ export async function verifyPasswordless(raw: unknown): Promise<LoginResult> {
     where: { id: userId },
     select: {
       blocked: true,
+      isOwner: true,
       mustChangePassword: true,
       totp: { select: { enabledAt: true } },
     },
   });
   if (!user || user.blocked || !user.totp?.enabledAt) throw passkeyFailed();
+  await assertPasswordAllowed(user.isOwner);
   if (user.mustChangePassword) {
     const { expiresAt } = await issueLoginChallenge(userId, "PASSWORD", "PASSKEY");
     return { step: "password", expiresAt: expiresAt.toISOString() };

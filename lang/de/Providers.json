@@ -1,6 +1,12 @@
 {
   "title": "Anbieter",
-  "subtitle": "Verbinde OpenAI, Anthropic, OpenRouter, xAI und jeden OpenAI-kompatiblen Endpunkt per API-Key. Abo-Anmeldungen findest du unter Abos.",
+  "subtitle": "Verbinde Modellanbieter per API-Key oder Abo-Anmeldung und behalte ihren Zustand im Blick.",
+  "tabsLabel": "Anbieteransichten",
+  "tabs": "{tab, select, api {API-Keys} subscriptions {Abos} health {Status} other {{tab}}}",
+  "connectedTitle": "Verbunden",
+  "catalogTitle": "Anbieter hinzufügen",
+  "catalogHint": "Jede Verbindung nutzt einen eigenen API-Key. ChatGPT-, Claude-, Google- und SuperGrok-Abos meldest du unter Abos an.",
+  "modelCount": "{count, plural, one {# Modell} other {# Modelle}}",
   "connect": "Verbinden",
   "edit": "{name} bearbeiten",
   "formTitle": "{mode, select, edit {{name} bearbeiten} connect {{name} verbinden} other {{name} verbinden}}",
@@ -32,7 +38,7 @@
   "toasts": {
     "saved": "{mode, select, created {Anbieter verbunden} updated {Anbieter aktualisiert} deleted {Getrennt} other {Anbieter verbunden}}"
   },
-  "deleteConfirm": "{name} trennen?",
+  "deleteConfirm": "{name} trennen? Seine Routen und Katalogeinträge werden entfernt, und Modellgruppen ohne verbleibende Routen werden gelöscht, sofern sie keine eigenen Einstellungen haben.",
   "empty": "Noch keine Anbieter verbunden.",
   "emptyTitle": "Einen Anbieter verbinden",
   "moreProviders": "Weitere Anbieter",

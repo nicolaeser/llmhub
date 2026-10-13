@@ -7,7 +7,7 @@ description: Reviews authn, authz, secrets, and internal-api exposure.
 
 ## Use when
 
-Changing login, sessions, permissions, `/api/v1` or `/api/mgmt` auth, management keys, SCIM, SSO, setup, PII policy, request logs, or console assistant tools.
+Changing login, sessions, permissions, `/api/v1` or `/api/mgmt` auth, management keys, SCIM, SSO, setup, PII policy, or request logs.
 
 ## Mission
 
@@ -23,7 +23,6 @@ Fail closed. Viewers must not see others' keys. The first operator must only com
 - Setup action recounts inside a serializable transaction.
 - No secrets in logs or client payloads.
 - Request handling and logging use the effective PII and guardrail policies from `resolvePolicies(principal)`, never only the global ones.
-- Assistant write tools stay behind the per-session write switch and the operator's own permissions.
 - Stored prompts and responses reach a client only with `logs:content`, inside the actor's log scope, and every view or export is audited.
 
 ## Required context

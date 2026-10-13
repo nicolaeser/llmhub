@@ -38,6 +38,17 @@ Must not use remembered HeroUI v2, `HeroUIProvider`, `classNames` objects, `isLo
 
 There is no `default-N` scale. Must not use raw Tailwind palette colors (`text-zinc-500`, `bg-indigo-600`, …), `text-white`, `text-black`, or gradients. The brand mark (`src/components/brand/brand-mark.tsx`, hub-and-nodes glyph) uses `bg-accent text-accent-foreground`; `src/app/icon.svg`, `src/app/apple-icon.tsx`, `src/app/favicon.ico`, and the usage PDF header in `src/lib/export/usage-pdf.ts` carry the same glyph and must change with it. They cannot read CSS variables: `src/app/icon.svg` and `src/app/apple-icon.tsx` hardcode the light `--accent` (`oklch(0.585 0.2 277)`) as `#6367ef`, and `COLORS` in `src/lib/export/usage-pdf.ts` holds sRGB copies of the light tokens (`accent` is `[99, 103, 239]`). Update them in the same change as `src/styles/globals.css`. Primary actions use the default `Button` variant.
 
+## Color
+
+The console is calm but not grey. Color comes from the HeroUI status tokens at low opacity, never from new hues.
+
+- Every console page passes its nav icon to `PageHeader` (`icon`), which renders an accent `IconTile` next to the `h1`.
+- `IconTile` (`src/components/console/icon-tile.tsx`) is the only tinted icon box: tones `accent`, `success`, `warning`, `danger`, `neutral`, sizes `sm` / `md` / `lg`. Must not hand-roll `bg-*/N` icon boxes.
+- `StatCard` takes an `icon` and a `tone` that matches the meaning of the number (`success` for healthy or available, `warning` for limited or nearing a cap, `danger` for failures, `accent` for neutral totals).
+- Real state uses colored `Chip`s (`color="success" | "warning" | "danger" | "accent"`, `variant="soft"`); counts and labels stay `variant="soft"` without color.
+- Selected options in choice cards use `bg-accent/8` with `border-accent`; unselected ones stay on `Card variant="secondary"`.
+- Token fills with an opacity modifier (`bg-accent/8` to `bg-accent/14`, same for `success`, `warning`, `danger`) are allowed for tiles, selected states, and highlighted rows only. One tinted emphasis per card.
+
 ## Typography and document outline
 
 - Use Geist via `--font-geist-sans` / `--font-geist-mono` from `src/app/layout.tsx`.

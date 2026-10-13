@@ -83,7 +83,7 @@ export function authorizationHeader(input: SignInput): {
 } {
   const now = input.now ?? new Date();
   const { amz, day } = amzDate(now);
-  const service = input.service ?? "s3";
+  const service = "s3";
   const payloadHash = input.bodySha256 ?? sha256Hex("");
   const headers: Record<string, string> = {
     host: input.url.host,
@@ -91,7 +91,6 @@ export function authorizationHeader(input: SignInput): {
     "x-amz-content-sha256": payloadHash,
     ...(input.headers ?? {}),
   };
-  if (input.sessionToken) headers["x-amz-security-token"] = input.sessionToken;
   const { canonical, signedHeaders } = canonicalRequest({
     method: input.method,
     url: input.url,

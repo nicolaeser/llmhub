@@ -1,6 +1,7 @@
 {
   "title": "Modelle",
-  "subtitle": "Ein öffentlicher Name, viele Anbieter. Lastverteilung über gesunde Endpunkte.",
+  "subtitle": "Alle Modelle deiner Anbieter, gruppiert unter öffentlichen Namen. Schalte Modelle im Katalog ein und passe dann Routing und Preise pro Gruppe an.",
+  "tab": "{tab, select, catalog {Katalog} groups {Gruppen und Routing} other {}}",
   "add": "Modell hinzufügen",
   "formTitle": "{mode, select, edit {Modell bearbeiten} add {Modell hinzufügen} other {Modell hinzufügen}}",
   "formSubmit": "{mode, select, save {Speichern} create {Modell hinzufügen} other {Modell hinzufügen}}",
@@ -9,6 +10,9 @@
   "empty": "Lege einen öffentlichen Namen an, den Clients als model senden.",
   "needProvider": "Verbinde zuerst einen <providers>Anbieter</providers>, dann lege ein öffentliches Modell an.",
   "connectProvider": "Anbieter verbinden",
+  "openCatalog": "Katalog öffnen",
+  "search": "Modellgruppen durchsuchen",
+  "noMatches": "Keine Modellgruppe passt zur Suche.",
   "addEndpoint": "Endpunkt hinzufügen",
   "deleteEndpoint": "Endpunkt entfernen",
   "columns": {
@@ -62,16 +66,16 @@
   "priceFromProvider": "Preise von {source}",
   "strategies": {
     "weighted_random": "Gewichteter Zufall",
-    "least_inflight": "Wenigste laufende",
+    "least_inflight": "Geringste Last",
     "cost_lowest": "Günstigste Kosten",
     "fast": "Schnell (niedrigste Latenz)",
     "priority": "Priorität",
-    "round_robin": "Round Robin",
+    "round_robin": "Reihum",
     "quota_balanced": "Meiste Reserve (Abos)",
     "quota_expiring": "Nächster Reset (Abos)",
     "smart": "Intelligent (Abos)"
   },
-  "strategyLabel": "{strategy, select, weighted_random {Gewichteter Zufall} least_inflight {Wenigste laufende} cost_lowest {Günstigste Kosten} fast {Schnell (niedrigste Latenz)} priority {Priorität} round_robin {Round Robin} quota_balanced {Meiste Reserve} quota_expiring {Nächster Reset} smart {Intelligent} auto {Auto (Kosten)} other {{strategy}}}",
+  "strategyLabel": "{strategy, select, weighted_random {Gewichteter Zufall} least_inflight {Geringste Last} cost_lowest {Günstigste Kosten} fast {Schnell (niedrigste Latenz)} priority {Priorität} round_robin {Reihum} quota_balanced {Meiste Reserve} quota_expiring {Nächster Reset} smart {Intelligent} auto {Auto (Kosten)} other {{strategy}}}",
   "strategyHint": "{strategy, select, weighted_random {Zufallswahl, gewichtet nach Endpunkt-Gewicht.} least_inflight {Schickt jede Anfrage an den Endpunkt mit den wenigsten laufenden Anfragen.} cost_lowest {Immer der günstigste Endpunkt.} fast {Der Endpunkt mit der niedrigsten gemessenen Latenz.} priority {Immer der Endpunkt mit dem höchsten Gewicht. Füllt zuerst ein Konto und wechselt, sobald es limitiert oder in Abkühlung ist.} round_robin {Wechselt reihum zwischen den Endpunkten, sodass Abo-Konten gleichmäßig genutzt werden.} quota_balanced {Abo-Konten: wählt das Konto mit dem meisten Spielraum bei seinem engsten Limit (5-Stunden-, Wochen- oder Modelllimit).} quota_expiring {Abo-Konten: wählt das Konto, dessen engstes Limit am frühesten zurückgesetzt wird, sodass bald erneuerte Kontingente zuerst genutzt werden.} smart {Abo-Konten: verbraucht Kontingent, das bald zurückgesetzt wird, und meidet Konten nahe am Limit.} other {}}",
   "removeConfirm": "Modell-Alias {alias} entfernen?",
   "toasts": {

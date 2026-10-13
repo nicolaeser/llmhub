@@ -2,7 +2,7 @@
 
 import type { ReactNode } from "react";
 import { Alert, Button, Spinner } from "@heroui/react";
-import { RotateCcw } from "lucide-react";
+import { RotateCcw, type LucideIcon } from "lucide-react";
 import { useTranslations } from "next-intl";
 import type { LoadStatus } from "@/types/actions";
 import PageHeader from "./page-header";
@@ -46,16 +46,19 @@ export function LoadError({ state, className }: { state: LoadStatus; className?:
 export default function PageStatus({
   title,
   subtitle,
+  icon,
   state,
 }: {
-  title: ReactNode;
+  title?: ReactNode;
   subtitle?: ReactNode;
+  icon?: LucideIcon;
   state: LoadStatus;
 }) {
   if (state.error === null) return <PageLoading />;
+  if (!title) return <LoadError state={state} />;
   return (
     <div>
-      <PageHeader title={title} subtitle={subtitle} />
+      <PageHeader icon={icon} title={title} subtitle={subtitle} />
       <LoadError state={state} />
     </div>
   );

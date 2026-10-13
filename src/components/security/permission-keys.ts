@@ -23,5 +23,4 @@ export const PERMISSION_KEYS = {
   "settings:read": "settingsRead",
   "settings:manage": "settingsManage",
   "playground:use": "playgroundUse",
-  "assistant:use": "assistantUse",
 } as const satisfies Record<Permission, string>;

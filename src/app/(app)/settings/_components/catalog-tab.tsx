@@ -1,0 +1,224 @@
+"use client";
+
+import { useState, useTransition, type ReactNode } from "react";
+import {
+  Description,
+  Disclosure,
+  Input,
+  Label,
+  NumberField,
+  Separator,
+  TextField,
+  toast,
+} from "@heroui/react";
+import { BookOpen, Library } from "lucide-react";
+import { useTranslations } from "next-intl";
+import IconTile from "@/components/console/icon-tile";
+import SearchSelect from "@/components/console/search-select";
+import { SettingSection, SettingSwitch, SettingText } from "./setting-fields";
+import { useErrorToast } from "@/components/console/use-error-toast";
+import { formats } from "@/i18n/formats";
+import { Link } from "@/i18n/routing";
+import { useActionData } from "@/lib/hooks/use-action-data";
+import { isActionFail } from "@/lib/http/action-result";
+import type { CatalogSettings } from "@/types/settings";
+import { loadCatalogSettingsAction, saveCatalogSettingsAction } from "../_action";
+import SaveBar from "./save-bar";
+import TabState from "./tab-state";
+
+export default function CatalogTab() {
+  const t = useTranslations("Settings.catalog");
+  const tSettings = useTranslations("Settings");
+  const showError = useErrorToast();
+  const [draft, setDraft] = useState<CatalogSettings | null>(null);
+  const [pending, start] = useTransition();
+  const page = useActionData(loadCatalogSettingsAction);
+  const { data: view, setData } = page;
+
+  if (!view) return <TabState state={page} />;
+
+  const settings = draft ?? view.settings;
+  const disabled = !view.canManage || pending;
+  const update = (patch: Partial<CatalogSettings>) => setDraft({ ...settings, ...patch });
+  const jev = (patch: Partial<CatalogSettings["catalog_jev"]>) =>
+    update({ catalog_jev: { ...settings.catalog_jev, ...patch } });
+  const vectors = (patch: Partial<CatalogSettings["vector_stores"]>) =>
+    update({ vector_stores: { ...settings.vector_stores, ...patch } });
+  const modelItems = (current: string) => [
+    { id: "none", label: t("knowledge.none") },
+    ...[...new Set([...view.aliases, ...(current ? [current] : [])])].map((alias) => ({ id: alias, label: alias })),
+  ];
+  const pickModel = (key: string) => (key === "none" ? "" : key);
+  const jevKeyReady = settings.catalog_jev.clear_api_key
+    ? Boolean(settings.catalog_jev.api_key)
+    : view.jevKeySet || Boolean(settings.catalog_jev.api_key);
+  const link = (href: string) => (chunks: ReactNode) => (
+    <Link href={href} className="text-accent">
+      {chunks}
+    </Link>
+  );
+
+  function save() {
+    start(async () => {
+      const result = await saveCatalogSettingsAction(settings);
+      if (isActionFail(result)) {
+        showError(result.error);
+        return;
+      }
+      setData(result);
+      setDraft(null);
+      toast(tSettings("saved"), { variant: "success" });
+    });
+  }
+
+  return (
+    <div className="space-y-5">
+      <SaveBar description={t("description")} canManage={view.canManage} pending={pending} onSave={save} />
+
+      <SettingSection title={t("jev.title")} subtitle={t("jev.subtitle")}>
+        <div className="flex items-start gap-3">
+          <IconTile icon={BookOpen} tone={settings.catalog_jev.enabled ? "success" : "accent"} />
+          <SettingSwitch
+            label={t("jev.autoRoutes")}
+            isSelected={settings.catalog_auto_routes}
+            onChange={(catalog_auto_routes) => update({ catalog_auto_routes })}
+            isDisabled={disabled}
+            hint={t("jev.autoRoutesHint")}
+          />
+        </div>
+        <Separator />
+        <SettingSwitch
+          label={t("jev.enabled")}
+          isSelected={settings.catalog_jev.enabled}
+          onChange={(enabled) => jev({ enabled })}
+          isDisabled={disabled || (!settings.catalog_jev.enabled && !jevKeyReady)}
+          hint={t("jev.enabledHint", { ready: jevKeyReady ? "true" : "false" })}
+        />
+        <TextField
+          fullWidth
+          type="password"
+          value={settings.catalog_jev.api_key}
+          onChange={(api_key) => jev({ api_key, clear_api_key: false })}
+          isDisabled={disabled}
+          className="max-w-xl"
+        >
+          <Label>{t("jev.apiKey")}</Label>
+          <Input autoComplete="off" placeholder={t("jev.apiKeyState", { set: view.jevKeySet ? "true" : "false" })} />
+          <Description>{t("jev.apiKeyHint")}</Description>
+        </TextField>
+        {view.jevKeySet ? (
+          <SettingSwitch
+            label={t("jev.clearKey")}
+            isSelected={settings.catalog_jev.clear_api_key}
+            onChange={(clear_api_key) =>
+              jev({ clear_api_key, api_key: "", enabled: clear_api_key ? false : settings.catalog_jev.enabled })
+            }
+            isDisabled={disabled}
+          />
+        ) : null}
+        <Disclosure>
+          <Disclosure.Heading>
+            <Disclosure.Trigger className="flex w-full items-center justify-between gap-2 text-sm text-muted">
+              {tSettings("advanced")}
+              <Disclosure.Indicator />
+            </Disclosure.Trigger>
+          </Disclosure.Heading>
+          <Disclosure.Content>
+            <Disclosure.Body className="grid gap-4 pt-3 md:grid-cols-2 md:items-start">
+              <NumberField
+                fullWidth
+                value={settings.catalog_min_confidence}
+                onChange={(value) => update({ catalog_min_confidence: Number.isFinite(value) ? value : 0.9 })}
+                minValue={0.5}
+                maxValue={1}
+                step={0.01}
+                formatOptions={formats.number.percent}
+                isDisabled={disabled}
+              >
+                <Label>{t("jev.minConfidence")}</Label>
+                <NumberField.Group>
+                  <NumberField.DecrementButton />
+                  <NumberField.Input />
+                  <NumberField.IncrementButton />
+                </NumberField.Group>
+                <Description>{t("jev.minConfidenceHint")}</Description>
+              </NumberField>
+              <SettingText
+                label={t("jev.model")}
+                value={settings.catalog_jev.model}
+                onChange={(model) => jev({ model })}
+                isDisabled={disabled}
+                placeholder="jev-latest"
+                hint={t("jev.modelHint")}
+              />
+            </Disclosure.Body>
+          </Disclosure.Content>
+        </Disclosure>
+        <p className="text-xs text-muted">{t.rich("jev.catalogHint", { link: link("/model-catalog") })}</p>
+      </SettingSection>
+
+      <SettingSection title={t("knowledge.title")} subtitle={t("knowledge.subtitle")}>
+        <div className="flex items-start gap-3">
+          <IconTile icon={Library} />
+          <div className="grid min-w-0 flex-1 gap-4 md:grid-cols-2 md:items-start">
+            <SearchSelect
+              label={t("knowledge.embeddingModel")}
+              description={t("knowledge.embeddingHint")}
+              items={modelItems(settings.vector_stores.embedding_model)}
+              value={settings.vector_stores.embedding_model || "none"}
+              onChange={(key) => vectors({ embedding_model: pickModel(key) })}
+              isDisabled={disabled}
+            />
+            <SearchSelect
+              label={t("knowledge.ocrModel")}
+              description={t("knowledge.ocrHint")}
+              items={modelItems(settings.vector_stores.ocr_model)}
+              value={settings.vector_stores.ocr_model || "none"}
+              onChange={(key) => vectors({ ocr_model: pickModel(key) })}
+              isDisabled={disabled}
+            />
+            <SearchSelect
+              label={t("knowledge.rerankModel")}
+              description={t("knowledge.rerankHint")}
+              items={modelItems(settings.vector_stores.rerank_model)}
+              value={settings.vector_stores.rerank_model || "none"}
+              onChange={(key) => vectors({ rerank_model: pickModel(key) })}
+              isDisabled={disabled}
+            />
+          </div>
+        </div>
+        <Disclosure>
+          <Disclosure.Heading>
+            <Disclosure.Trigger className="flex w-full items-center justify-between gap-2 text-sm text-muted">
+              {tSettings("advanced")}
+              <Disclosure.Indicator />
+            </Disclosure.Trigger>
+          </Disclosure.Heading>
+          <Disclosure.Content>
+            <Disclosure.Body className="pt-3">
+              <NumberField
+                fullWidth
+                value={settings.vector_stores.embedding_dimensions}
+                onChange={(value) => vectors({ embedding_dimensions: Number.isFinite(value) ? value : 0 })}
+                minValue={0}
+                maxValue={8192}
+                formatOptions={formats.number.integer}
+                isDisabled={disabled || !settings.vector_stores.embedding_model}
+                className="max-w-sm"
+              >
+                <Label>{t("knowledge.dimensions")}</Label>
+                <NumberField.Group>
+                  <NumberField.DecrementButton />
+                  <NumberField.Input />
+                  <NumberField.IncrementButton />
+                </NumberField.Group>
+                <Description>{t("knowledge.dimensionsHint")}</Description>
+              </NumberField>
+            </Disclosure.Body>
+          </Disclosure.Content>
+        </Disclosure>
+        <p className="text-xs text-muted">{t.rich("knowledge.manageHint", { link: link("/knowledge") })}</p>
+      </SettingSection>
+    </div>
+  );
+}

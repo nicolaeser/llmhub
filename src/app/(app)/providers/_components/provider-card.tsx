@@ -1,11 +1,13 @@
 "use client";
 
-import { Card } from "@heroui/react";
+import { Card, Chip } from "@heroui/react";
 import { useTranslations } from "next-intl";
-import PolicyChips from "@/components/providers/policy-chips";
-import ProviderActions from "@/components/providers/provider-actions";
-import ProviderToggle from "@/components/providers/provider-toggle";
+import IconTile from "@/components/console/icon-tile";
+import PolicyChips from "./policy-chips";
+import ProviderActions from "./provider-actions";
+import ProviderToggle from "./provider-toggle";
 import type { ProviderView } from "@/types/providers";
+import { kindIcon } from "./kind-icons";
 
 export default function ProviderCard({
   row,
@@ -21,21 +23,31 @@ export default function ProviderCard({
   onToggled: (provider: ProviderView) => void;
 }) {
   const t = useTranslations("Providers");
-  const state = row.hasApiKey ? "stored" : "missing";
 
   return (
-    <Card variant="secondary" className="flex-row flex-wrap items-center justify-between gap-2 px-3 py-2">
-      <div className="min-w-0">
-        <div className="truncate text-sm font-medium">{row.name}</div>
-        <div className="truncate text-xs text-muted">{t("keyState", { state, account: "" })}</div>
-        <div className="mt-1 flex flex-wrap gap-1">
-          <PolicyChips policy={row.policy} />
+    <Card>
+      <Card.Header className="flex-row items-start gap-3">
+        <IconTile icon={kindIcon(row.kind)} tone={row.enabled ? "accent" : "neutral"} />
+        <div className="min-w-0 flex-1">
+          <Card.Title className="truncate">{row.name}</Card.Title>
+          <Card.Description className="truncate">{t("kindName", { kind: row.kind })}</Card.Description>
         </div>
-        <div className="mt-2">
-          <ProviderToggle row={row} onChanged={onToggled} />
-        </div>
-      </div>
-      <ProviderActions row={row} onEdit={onEdit} onImport={onImport} onDeleted={onDeleted} />
+      </Card.Header>
+      <Card.Content className="flex-row flex-wrap gap-1">
+        <Chip size="sm" variant="soft" color={row.hasApiKey ? "success" : "warning"}>
+          {t("keyState", { state: row.hasApiKey ? "stored" : "missing", account: "" })}
+        </Chip>
+        {row.discovered.length > 0 ? (
+          <Chip size="sm" variant="soft">
+            {t("modelCount", { count: row.discovered.length })}
+          </Chip>
+        ) : null}
+        <PolicyChips policy={row.policy} />
+      </Card.Content>
+      <Card.Footer className="mt-auto flex-wrap items-center justify-between gap-2">
+        <ProviderToggle row={row} onChanged={onToggled} />
+        <ProviderActions row={row} onEdit={onEdit} onImport={onImport} onDeleted={onDeleted} />
+      </Card.Footer>
     </Card>
   );
 }

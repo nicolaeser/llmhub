@@ -7,7 +7,7 @@ src/generated
 rustfs-data
 postgres-data
 redis-data
-test
+src/tests
 .env*
 *.tsbuildinfo
 next-env.d.ts

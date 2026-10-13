@@ -11,21 +11,17 @@ import {
   ToggleButton,
   ToggleButtonGroup,
 } from "@heroui/react";
-import { parseTime } from "@internationalized/date";
 import { Plus, Trash2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import TimeZonePicker from "@/components/console/time-zone-picker";
 import { MAX_ACCESS_WINDOWS } from "@/lib/gateway/access/key-restrictions";
 import { clockMinute, minuteClock, WEEKDAYS } from "@/lib/gateway/billing/price-schedule";
+import { clockTime } from "@/lib/utils/clock";
 import type { AccessWindowDraft, Weekday } from "@/types/keys";
 
 const MIDNIGHT = "00:00";
 const WORK_DAYS: Weekday[] = ["mon", "tue", "wed", "thu", "fri"];
 const WORK_HOURS = { start: "08:00", end: "18:00" };
-
-function clockValue(value: string) {
-  return clockMinute(value) === null ? null : parseTime(value);
-}
 
 function coversWholeDays(window: AccessWindowDraft): boolean {
   return window.start === MIDNIGHT && window.end === MIDNIGHT;
@@ -111,7 +107,7 @@ export default function AccessWindowFields({
               <div className="grid gap-3 sm:grid-cols-2 sm:items-start">
                 <TimeField
                   fullWidth
-                  value={clockValue(w.start)}
+                  value={clockTime(w.start)}
                   onChange={(value) =>
                     patch(w.key, { start: value ? minuteClock(value.hour * 60 + value.minute) : "" })
                   }
@@ -125,7 +121,7 @@ export default function AccessWindowFields({
                 </TimeField>
                 <TimeField
                   fullWidth
-                  value={clockValue(w.end)}
+                  value={clockTime(w.end)}
                   onChange={(value) =>
                     patch(w.key, { end: value ? minuteClock(value.hour * 60 + value.minute) : "" })
                   }

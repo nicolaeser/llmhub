@@ -4,12 +4,7 @@ import { env } from "@/lib/env";
 import { getEnterprise } from "@/lib/settings/enterprise";
 import { errorFields } from "@/lib/logging/format";
 import { logger } from "@/lib/logging/logger";
-import {
-  defaultAwsEndpoint,
-  originOf,
-  resolveAddressing,
-  trimSlashes
-} from "@/lib/s3/url";
+import { defaultAwsEndpoint, originOf, resolveAddressing, trimSlashes } from "@/lib/s3/url";
 import type { S3Runtime, S3Settings } from "@/types/s3";
 
 export function s3FromParts(
@@ -19,30 +14,25 @@ export function s3FromParts(
   const bucket = (settings?.bucket || "").trim();
   const accessKeyId = (source.S3_ACCESS_KEY_ID || "").trim();
   const secretAccessKey = (source.S3_SECRET_ACCESS_KEY || "").trim();
-  const enabled = settings?.enabled !== false;
-  if (!enabled || !bucket || !accessKeyId || !secretAccessKey) return null;
-
+  if (!bucket || !accessKeyId || !secretAccessKey) return null;
   const region = (settings?.region || "us-east-1").trim();
   const endpoint = originOf(settings?.endpoint || "", defaultAwsEndpoint(region));
-  const domainBucket = Boolean(settings?.domain_bucket);
-  const addressing = resolveAddressing({
-    addressing: settings?.addressing || "auto",
-    forcePathStyle: false,
-    domainBucket,
-    bucket,
-    endpoint,
-  });
   return {
     bucket,
     region,
     endpoint,
     prefix: trimSlashes(settings?.prefix || ""),
-    addressing,
-    domainBucket,
+    addressing: resolveAddressing({ addressing: settings?.addressing || "auto", bucket, endpoint }),
     publicBaseUrl: (settings?.public_base_url || "").trim(),
     accessKeyId,
     secretAccessKey,
-    sessionToken: "",
+  };
+}
+
+export function s3KeysPresent(): { accessKeyId: boolean; secretAccessKey: boolean } {
+  return {
+    accessKeyId: Boolean(env.S3_ACCESS_KEY_ID?.trim()),
+    secretAccessKey: Boolean(env.S3_SECRET_ACCESS_KEY?.trim()),
   };
 }
 

@@ -2,11 +2,12 @@
 
 import { useState, useTransition } from "react";
 import { Breadcrumbs, Button, Card, toast, useOverlayState } from "@heroui/react";
-import { Building2, Pencil, Plus, Trash2 } from "lucide-react";
+import { Building2, Folder, Pencil, Plus, Trash2, User, Users, type LucideIcon } from "lucide-react";
 import { useFormatter, useTranslations } from "next-intl";
 import BudgetDialog from "@/components/budget/budget-dialog";
 import ConfirmDialog from "@/components/console/confirm-dialog";
 import EmptyState from "@/components/console/empty-state";
+import IconTile from "@/components/console/icon-tile";
 import PageHeader from "@/components/console/page-header";
 import PageStatus from "@/components/console/page-status";
 import { useErrorToast } from "@/components/console/use-error-toast";
@@ -33,6 +34,8 @@ import NodeDialog from "./_components/node-dialog";
 import ReportsCard from "./_components/reports-card";
 import SetupSteps, { setupDone } from "./_components/setup-steps";
 import { budgetOf, chainOf, nodeExists, parseNodeRef, withBudget } from "./_components/tree-model";
+
+const NODE_ICONS: Record<NodeKind, LucideIcon> = { org: Building2, team: Users, project: Folder, member: User };
 
 function firstNode(data: StructurePayload): NodeRef | null {
   return data.orgs[0] ? { kind: "org", id: data.orgs[0].id } : null;
@@ -86,7 +89,7 @@ export default function CompaniesPage() {
   }
 
   if (!data) {
-    return <PageStatus title={t("title")} state={page} />;
+    return <PageStatus icon={Building2} title={t("title")} state={page} />;
   }
 
   const platform = !data.companyId;
@@ -198,6 +201,7 @@ export default function CompaniesPage() {
   return (
     <div className="space-y-5">
       <PageHeader
+        icon={Building2}
         title={t("title")}
         subtitle={t("subtitle", { scope: platform ? "platform" : "company" })}
         actions={
@@ -234,27 +238,30 @@ export default function CompaniesPage() {
 
           <div className="min-w-0 space-y-5">
             <div className="flex flex-wrap items-start justify-between gap-3">
-              <div className="min-w-0 space-y-1">
-                {crumbs.length > 1 ? (
-                  <Breadcrumbs
-                    onAction={(key) => {
-                      const ref = parseNodeRef(String(key));
-                      if (ref) select(ref);
-                    }}
-                  >
-                    {crumbs.map((crumb) => (
-                      <Breadcrumbs.Item key={crumb.ref} id={crumb.ref}>
-                        {crumb.alias}
-                      </Breadcrumbs.Item>
-                    ))}
-                  </Breadcrumbs>
-                ) : null}
-                <h2 className="text-lg font-semibold tracking-tight break-words">{node.alias}</h2>
-                <p className="text-sm text-muted">
-                  {t("detail.kind", { kind: selected.kind })}
-                  {" · "}
-                  {summary}
-                </p>
+              <div className="flex min-w-0 items-start gap-3">
+                <IconTile icon={NODE_ICONS[selected.kind]} />
+                <div className="min-w-0 space-y-1">
+                  {crumbs.length > 1 ? (
+                    <Breadcrumbs
+                      onAction={(key) => {
+                        const ref = parseNodeRef(String(key));
+                        if (ref) select(ref);
+                      }}
+                    >
+                      {crumbs.map((crumb) => (
+                        <Breadcrumbs.Item key={crumb.ref} id={crumb.ref}>
+                          {crumb.alias}
+                        </Breadcrumbs.Item>
+                      ))}
+                    </Breadcrumbs>
+                  ) : null}
+                  <h2 className="text-lg font-semibold tracking-tight break-words">{node.alias}</h2>
+                  <p className="text-sm text-muted">
+                    {t("detail.kind", { kind: selected.kind })}
+                    {" · "}
+                    {summary}
+                  </p>
+                </div>
               </div>
               {canEditNode ? (
                 <div className="flex flex-wrap gap-2">

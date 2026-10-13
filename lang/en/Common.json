@@ -41,6 +41,12 @@
   "continue": "Continue",
   "version": {
     "updateAvailable": "Update available",
-    "updateLabel": "Update to {version} available, open the release"
+    "updateLabel": "Update to {version} available, open the release",
+    "current": "Version {version}",
+    "installed": "New version installed",
+    "reloadHint": "Reload the page to start using it. Unsaved changes on this page will be lost.",
+    "ready": "New version ready",
+    "reload": "Reload",
+    "reloadLabel": "New version installed, reload the page"
   }
 }

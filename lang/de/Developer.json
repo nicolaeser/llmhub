@@ -1,0 +1,5 @@
+{
+  "title": "Entwickler",
+  "subtitle": "Probiere Modelle in der Spielwiese aus und binde dann Clients mit der API-Referenz an.",
+  "tab": "{tab, select, playground {Spielwiese} api {API-Referenz} other {}}"
+}

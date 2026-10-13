@@ -97,6 +97,7 @@ export type CatalogState = {
     pending: number;
     cost: number;
     error: string;
+    settings: string;
   };
 };
 

@@ -1,10 +1,11 @@
 import "server-only";
 import { env } from "@/lib/env";
+import { digest } from "@/lib/crypto";
 import { PROVIDER_CATALOG } from "@/lib/gateway/upstreams/provider-kinds";
 import { asNumber, asRecord } from "@/lib/gateway/core";
 import { readJsonOr } from "@/lib/utils/json";
-import { JEV_NONE } from "@/lib/gateway/catalog/model-catalog";
-import type { JevTask, JevVerdict, JevSettings } from "@/types/model-catalog";
+import { JEV_NONE, JEV_ROUND_SIZE, JEV_SUGGEST_CONFIDENCE } from "@/lib/gateway/catalog/model-catalog";
+import type { JevCandidate, JevTask, JevVerdict, JevSettings } from "@/types/model-catalog";
 
 const JEV_TIMEOUT_MS = 30_000;
 const JEV_QUESTION = "same_model";
@@ -47,6 +48,11 @@ export function jevVerdict(task: JevTask, json: unknown): JevVerdict | null {
   return { alias: choice, confidence };
 }
 
+export function jevFingerprint(settings: JevSettings | undefined): string {
+  if (!settings) return "";
+  return digest(`${settings.enabled}|${settings.model}|${settings.api_key}`).slice(0, 16);
+}
+
 export function jevReady(settings: JevSettings | undefined): settings is JevSettings {
   return Boolean(settings?.enabled && settings.api_key);
 }
@@ -82,4 +88,33 @@ export async function askJev(
     verdict: jevVerdict(task, json),
     cost: asNumber(asRecord(asRecord(json)?.usage)?.cost, 0),
   };
+}
+
+export function jevRounds(candidates: JevCandidate[]): JevCandidate[][] {
+  const rounds: JevCandidate[][] = [];
+  for (let start = 0; start < candidates.length; start += JEV_ROUND_SIZE) {
+    rounds.push(candidates.slice(start, start + JEV_ROUND_SIZE));
+  }
+  return rounds;
+}
+
+export async function askJevStaged(
+  settings: JevSettings,
+  task: JevTask,
+): Promise<{ verdict: JevVerdict | null; cost: number; calls: number }> {
+  if (task.candidates.length <= JEV_ROUND_SIZE) return { ...(await askJev(settings, task)), calls: 1 };
+  let cost = 0;
+  let calls = 0;
+  const finalists: { candidate: JevCandidate; verdict: JevVerdict }[] = [];
+  for (const round of jevRounds(task.candidates)) {
+    const answer = await askJev(settings, { ...task, candidates: round });
+    cost += answer.cost;
+    calls += 1;
+    const verdict = answer.verdict;
+    const candidate = verdict && round.find((item) => item.alias === verdict.alias);
+    if (verdict && candidate && verdict.confidence >= JEV_SUGGEST_CONFIDENCE) finalists.push({ candidate, verdict });
+  }
+  if (finalists.length <= 1) return { verdict: finalists[0]?.verdict ?? null, cost, calls };
+  const final = await askJev(settings, { ...task, candidates: finalists.map((row) => row.candidate) });
+  return { verdict: final.verdict, cost: cost + final.cost, calls: calls + 1 };
 }

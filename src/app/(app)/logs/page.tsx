@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Button, Tabs, useOverlayState } from "@heroui/react";
-import { Download } from "lucide-react";
+import { Activity, Download } from "lucide-react";
 import { useTranslations } from "next-intl";
 import PageHeader from "@/components/console/page-header";
 import PageStatus, { LoadError } from "@/components/console/page-status";
@@ -96,7 +96,7 @@ export default function LogsPage() {
   }, [page, filters, setLogs]);
 
   if (!logs) {
-    return <PageStatus title={t("title")} subtitle={t("subtitle")} state={logsState} />;
+    return <PageStatus icon={Activity} title={t("title")} subtitle={t("subtitle")} state={logsState} />;
   }
 
   const total =
@@ -105,6 +105,7 @@ export default function LogsPage() {
   return (
     <div>
       <PageHeader
+        icon={Activity}
         title={t("title")}
         subtitle={t("subtitle")}
         actions={

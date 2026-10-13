@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { Alert, Button, Card, Chip, Disclosure, Tabs, toast } from "@heroui/react";
+import { Shield } from "lucide-react";
 import { useTranslations } from "next-intl";
 import PageHeader from "@/components/console/page-header";
 import PageStatus from "@/components/console/page-status";
@@ -55,7 +56,7 @@ export default function GuardrailsPage() {
   const { data, setData } = page;
 
   if (!data) {
-    return <PageStatus title={t("title")} subtitle={t("subtitle")} state={page} />;
+    return <PageStatus icon={Shield} title={t("title")} subtitle={t("subtitle")} state={page} />;
   }
 
   const { canManage, targets, piiOverrides, guardrailOverrides } = data;
@@ -91,6 +92,7 @@ export default function GuardrailsPage() {
   return (
     <div>
       <PageHeader
+        icon={Shield}
         title={t("title")}
         subtitle={t("subtitle")}
         actions={

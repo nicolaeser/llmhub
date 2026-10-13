@@ -105,7 +105,7 @@ export default function KnowledgePage() {
   }
 
   if (!view || !stores) {
-    return <PageStatus title={t("title")} subtitle={t("subtitle")} state={page} />;
+    return <PageStatus icon={Library} title={t("title")} subtitle={t("subtitle")} state={page} />;
   }
 
   const canManage = view.canManage;
@@ -120,7 +120,12 @@ export default function KnowledgePage() {
 
   return (
     <div className="space-y-5">
-      <PageHeader title={t("title")} subtitle={t("subtitle")} actions={stores.length ? createButton : undefined} />
+      <PageHeader
+        icon={Library}
+        title={t("title")}
+        subtitle={t("subtitle")}
+        actions={stores.length ? createButton : undefined}
+      />
 
       {canManage ? null : (
         <Alert status="accent">

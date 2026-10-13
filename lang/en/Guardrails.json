@@ -6,7 +6,7 @@
   "enabledState": "{enabled, select, true {Active} other {Paused}}",
   "policy": "PII policy",
   "enable": "Redact PII in prompts",
-  "enableHint": "Applies to text in chat, completions, messages, responses, batches, embeddings, moderations, image prompts, speech input, the playground, and the assistant. Uploaded files and audio are not scanned.",
+  "enableHint": "Applies to text in chat, completions, messages, responses, batches, embeddings, moderations, image prompts, speech input, and the playground. Uploaded files and audio are not scanned.",
   "mode": "When PII is found",
   "mask": "Mask with placeholders",
   "block": "Block the request (400)",

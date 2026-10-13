@@ -50,9 +50,20 @@ export const scimEmailSchema = z
 
 export const scimUserResourceSchema = z.object({
   userName: scimTextSchema.nullish(),
+  externalId: scimTextSchema.nullish(),
   emails: scimValuesSchema.nullish(),
   roles: scimValuesSchema.nullish(),
   active: scimBooleanSchema.nullish(),
+});
+
+export const scimMembersSchema = z
+  .union([z.object({ value: scimTextSchema.min(1) }).transform((member) => [member]), z.array(z.object({ value: scimTextSchema.min(1) })).max(1000)])
+  .transform((members) => [...new Set(members.map((member) => member.value))]);
+
+export const scimGroupResourceSchema = z.object({
+  displayName: z.string().trim().min(1).max(256),
+  externalId: scimTextSchema.nullish(),
+  members: scimMembersSchema.nullish(),
 });
 
 export const scimPatchSchema = z.object({

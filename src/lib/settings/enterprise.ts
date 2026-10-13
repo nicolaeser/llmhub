@@ -33,7 +33,9 @@ import { WEBHOOK_EVENTS, WEBHOOK_FORMATS } from "@/lib/alerts/events";
 import type { JsonMap, Principal } from "@/types/gateway";
 import type { AlertStateKind, AlertWebhook, WebhookFormat } from "@/types/alerts";
 import type { CatalogRouting, JevSettings } from "@/types/model-catalog";
-import type { OidcSettings } from "@/types/auth";
+import { DEFAULT_OIDC_SCOPES, MAX_ALLOWED_DOMAINS, MAX_ROLE_MAPPINGS, OIDC_PROVIDER_IDS, oidcScopes } from "@/lib/auth/oidc-presets";
+import { S3_ADDRESSING, S3_PRESET_IDS } from "@/lib/s3/presets";
+import type { OidcSettings, RoleMapping } from "@/types/auth";
 import type { S3AddressingSetting, S3Settings } from "@/types/s3";
 import type { Enterprise } from "@/types/settings";
 import type { AntigravitySettings } from "@/types/providers";
@@ -87,8 +89,6 @@ const DEFAULT_ENTERPRISE: Enterprise = {
   log_archive: false,
   log_content: true,
   registration_enabled: false,
-  assistant_model: "",
-  assistant_model_locked: false,
   catalog_jev: DEFAULT_JEV,
   antigravity: DEFAULT_ANTIGRAVITY,
   catalog_auto_routes: true,
@@ -101,22 +101,8 @@ const DEFAULT_ENTERPRISE: Enterprise = {
   spend_anomaly_factor: DEFAULT_SPEND_ANOMALY_FACTOR,
   spend_anomaly_min_cost: DEFAULT_SPEND_ANOMALY_MIN_COST,
   key_expiry_warning_days: DEFAULT_KEY_EXPIRY_WARNING_DAYS,
-  oidc: {
-    enabled: false,
-    issuer: "",
-    client_id: "",
-    redirect_url: "",
-  },
-  s3: {
-    enabled: false,
-    bucket: "",
-    region: "us-east-1",
-    endpoint: "",
-    prefix: "",
-    addressing: "auto",
-    public_base_url: "",
-    domain_bucket: false,
-  },
+  oidc: normalizeOidc({}),
+  s3: normalizeS3({}),
 };
 
 function normalizePii(raw: unknown): PiiPolicy {
@@ -279,8 +265,6 @@ export function normalizeEnterprise(raw: unknown): Enterprise {
     log_archive: asBool(rec.log_archive, false),
     log_content: asBool(rec.log_content, true),
     registration_enabled: asBool(rec.registration_enabled, false),
-    assistant_model: modelAlias(asString(rec.assistant_model)),
-    assistant_model_locked: asBool(rec.assistant_model_locked, false),
     catalog_jev: normalizeJev(rec.catalog_jev),
     antigravity: normalizeAntigravity(rec.antigravity),
     catalog_auto_routes: asBool(rec.catalog_auto_routes, true),
@@ -304,32 +288,52 @@ export function normalizeEnterprise(raw: unknown): Enterprise {
   };
 }
 
+function normalizeRoleMappings(raw: unknown): RoleMapping[] {
+  return (Array.isArray(raw) ? raw : []).flatMap((entry) => {
+    const rec = asRecord(entry);
+    const group = asString(rec?.group).trim();
+    const roleId = asString(rec?.role_id).trim();
+    return group && roleId ? [{ group, role_id: roleId }] : [];
+  }).slice(0, MAX_ROLE_MAPPINGS);
+}
+
 export function normalizeOidc(raw: unknown): OidcSettings {
   const rec = asRecord(raw) ?? {};
   return {
     enabled: asBool(rec.enabled, false),
+    provider: pick(rec.provider, OIDC_PROVIDER_IDS, "generic"),
     issuer: asString(rec.issuer),
     client_id: asString(rec.client_id),
-    redirect_url: asString(rec.redirect_url),
+    scopes: oidcScopes(asString(rec.scopes, DEFAULT_OIDC_SCOPES)),
+    groups_claim: asString(rec.groups_claim).trim(),
+    role_mappings: normalizeRoleMappings(rec.role_mappings),
+    default_role_id: asString(rec.default_role_id).trim(),
+    default_org_id: asString(rec.default_org_id).trim(),
+    allowed_domains: asStringArray(rec.allowed_domains)
+      .map((domain) => domain.trim().toLowerCase())
+      .filter(Boolean)
+      .slice(0, MAX_ALLOWED_DOMAINS),
+    sso_only: asBool(rec.sso_only, false),
   };
 }
 
-function normalizeS3(raw: unknown): S3Settings {
+function legacyAddressing(rec: JsonMap): S3AddressingSetting {
+  if (asBool(rec.domain_bucket, false)) return "domain";
+  return pick(rec.addressing, S3_ADDRESSING, "auto");
+}
+
+export function normalizeS3(raw: unknown): S3Settings {
   const rec = asRecord(raw) ?? {};
-  const addressingRaw = asString(rec.addressing, "auto");
-  const addressing: S3AddressingSetting =
-    addressingRaw === "path" || addressingRaw === "virtual-hosted"
-      ? addressingRaw
-      : "auto";
+  const endpoint = asString(rec.endpoint).trim();
+  const disabled = rec.enabled === false;
   return {
-    enabled: asBool(rec.enabled, false),
-    bucket: asString(rec.bucket),
-    region: asString(rec.region, "us-east-1"),
-    endpoint: asString(rec.endpoint),
-    prefix: asString(rec.prefix),
-    addressing,
-    public_base_url: asString(rec.public_base_url),
-    domain_bucket: asBool(rec.domain_bucket, false),
+    preset: pick(rec.preset, S3_PRESET_IDS, endpoint ? "custom" : "aws"),
+    bucket: disabled ? "" : asString(rec.bucket).trim(),
+    region: asString(rec.region).trim() || "us-east-1",
+    endpoint,
+    prefix: asString(rec.prefix).trim(),
+    addressing: legacyAddressing(rec),
+    public_base_url: asString(rec.public_base_url).trim(),
   };
 }
 
@@ -425,9 +429,9 @@ export async function patchEnterprise(patch: Partial<Enterprise>): Promise<Enter
   const next: Enterprise = {
     ...current,
     ...patch,
-    oidc: patch.oidc ? { ...current.oidc, ...patch.oidc } : current.oidc,
+    oidc: patch.oidc ? normalizeOidc({ ...current.oidc, ...patch.oidc }) : current.oidc,
     pii: patch.pii ? { ...current.pii, ...patch.pii } : current.pii,
-    s3: patch.s3 ? { ...current.s3, ...patch.s3 } : current.s3,
+    s3: patch.s3 ? normalizeS3({ ...current.s3, ...patch.s3 }) : current.s3,
     catalog_jev: patch.catalog_jev ? { ...current.catalog_jev, ...patch.catalog_jev } : current.catalog_jev,
     antigravity: patch.antigravity ? { ...current.antigravity, ...patch.antigravity } : current.antigravity,
     vector_stores: patch.vector_stores

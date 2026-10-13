@@ -32,6 +32,7 @@ export default function LoginPage() {
       if (isActionFail(result)) {
         setContext({
           ssoEnabled: false,
+          ssoOnly: false,
           passkeysEnabled: false,
           registrationEnabled: false,
           passwordResetEnabled: false,
@@ -41,6 +42,7 @@ export default function LoginPage() {
       setStep(result.step);
       setContext({
         ssoEnabled: result.ssoEnabled,
+        ssoOnly: result.ssoOnly,
         passkeysEnabled: result.passkeysEnabled,
         registrationEnabled: result.registrationEnabled,
         passwordResetEnabled: result.passwordResetEnabled,
@@ -97,6 +99,7 @@ export default function LoginPage() {
       ) : step.step === null ? (
         <PasswordStep
           ssoEnabled={context.ssoEnabled}
+          ssoOnly={context.ssoOnly}
           passkeysEnabled={context.passkeysEnabled}
           passwordResetEnabled={context.passwordResetEnabled}
           returnParam={returnParam}
