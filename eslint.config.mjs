@@ -8,7 +8,31 @@ export default defineConfig([
   js.configs.recommended,
   tseslint.configs.recommended,
   reactHooks.configs.flat["recommended-latest"],
-  { rules: { "no-empty": ["error", { allowEmptyCatch: true }] } },
+  {
+    files: [
+      "src/lib/**",
+      "src/types/**",
+      "src/schemas/**",
+      "src/worker/**",
+      "src/app/api/**",
+      "src/app/internal-api/**",
+      "src/app/scim/**",
+      "src/app/sso/**",
+    ],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: ["@/app/*", "@/app/**"],
+              message: "Server actions and route modules belong to their page. Import the service from src/lib instead.",
+            },
+          ],
+        },
+      ],
+    },
+  },
   {
     files: ["scripts/**/*.mjs", "test/**/*.mjs", "*.mjs"],
     languageOptions: { globals: { process: "readonly", console: "readonly", URL: "readonly", setTimeout: "readonly", Buffer: "readonly" } },

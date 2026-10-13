@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { gateRequest, gateResponse } from "@/lib/gateway/gate";
+import { gateRequest, gateResponse } from "@/lib/gateway/access/gate";
 import { batchJson, cancelBatch, writableStore } from "@/lib/rag/stores";
 
 export async function POST(req: Request, ctx: { params: Promise<{ id: string; batch_id: string }> }) {

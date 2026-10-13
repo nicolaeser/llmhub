@@ -1,7 +1,6 @@
 {
   "title": "Markups",
   "subtitle": "Resell with a margin: a percentage markup or discount on purchase cost, per company, department, project, or model.",
-  "loadFailed": "Markups could not be loaded.",
   "add": "Add markup",
   "readOnly": "You can view markups. Changing them needs the Manage markups permission.",
   "emptyTitle": "No markups yet",

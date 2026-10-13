@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { normalizeEnterprise, normalizeOidc } from "@/lib/gateway/settings";
+import { normalizeEnterprise, normalizeOidc } from "@/lib/settings/enterprise";
 
 test("normalizeOidc fills defaults", () => {
   assert.deepEqual(normalizeOidc({}), {

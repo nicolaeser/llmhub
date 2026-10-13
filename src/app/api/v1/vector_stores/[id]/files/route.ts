@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { gateRequest, gateResponse } from "@/lib/gateway/gate";
+import { gateRequest, gateResponse } from "@/lib/gateway/access/gate";
 import { attachFor, attachRequest, parseBody } from "@/lib/rag/api";
 import { fileJson, listQuery, listStoreFiles, readableStore, usableStore, writableStore } from "@/lib/rag/stores";
 import { attachFileSchema } from "@/schemas/rag";

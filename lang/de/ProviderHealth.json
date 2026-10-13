@@ -30,6 +30,5 @@
   "quiet": "{n, plural, one {Keine Upstream-Versuche in der letzten Minute.} other {Keine Upstream-Versuche in den letzten # Minuten.}}",
   "emptyTitle": "Noch keine Endpunkte",
   "empty": "Lege ein Modell mit mindestens einem Endpunkt an, um hier seinen Status zu sehen.",
-  "openModels": "Modelle öffnen",
-  "loadFailed": "Anbieterstatus konnte nicht geladen werden."
+  "openModels": "Modelle öffnen"
 }

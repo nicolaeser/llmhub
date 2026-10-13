@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { relayEvent, relaySse } from "@/lib/gateway/sse";
+import { relayEvent, relaySse } from "@/lib/gateway/protocols/sse";
 import type { JsonMap } from "@/types/gateway";
 
 function chunked(text: string, size = 5): Response {

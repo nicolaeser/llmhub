@@ -1,9 +1,10 @@
-import { addBoostAction } from "@/app/(app)/companies/_action";
 import { PERMISSIONS } from "@/lib/auth/permissions";
+import { addBoost } from "@/lib/tenancy/budgets";
 import { ApiProblem } from "@/lib/http/problem";
-import { managementRoute, readBody, respond, unwrap } from "@/lib/management/http";
+import { managementRoute, readBody, respond } from "@/lib/management/http";
 import { serializeBudget } from "@/lib/management/serialize";
-import { budgetHolder, loadStructure } from "@/lib/management/structure";
+import { budgetHolder } from "@/lib/management/structure";
+import { loadStructure } from "@/lib/tenancy/structure";
 import { budgetEntitySchema, temporaryBudgetSchema } from "@/schemas/management";
 
 export const POST = managementRoute<{ entity_type: string; entity_id: string }>(
@@ -16,7 +17,7 @@ export const POST = managementRoute<{ entity_type: string; entity_id: string }>(
     const { entity_type: kind, entity_id: id } = entity.data;
     const body = await readBody(req, temporaryBudgetSchema);
     const holder = budgetHolder(await loadStructure(), kind, id);
-    const updated = unwrap(await addBoostAction({ kind, id, amount: body.amount, hours: body.hours }));
+    const updated = await addBoost({ kind, id, amount: body.amount, hours: body.hours });
     return respond(serializeBudget(kind, { id, alias: holder.alias, budget: updated.budget }), 201);
   },
 );

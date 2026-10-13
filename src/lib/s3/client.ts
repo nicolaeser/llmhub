@@ -1,6 +1,7 @@
 import "server-only";
 
 import { authorizationHeader, sha256Hex } from "@/lib/s3/sign";
+import { readTextOr } from "@/lib/utils/json";
 import { objectUrl, publicObjectUrl } from "@/lib/s3/url";
 import type { S3Runtime } from "@/types/s3";
 
@@ -54,7 +55,7 @@ export async function s3Put(
     contentType,
   });
   if (!res.ok) {
-    const text = await res.text().catch(() => "");
+    const text = await readTextOr(res);
     throw new S3Error(res.status, text.slice(0, 400) || `s3 put ${res.status}`);
   }
 }
@@ -66,7 +67,7 @@ export async function s3Get(
   const res = await signedFetch(runtime, "GET", key);
   if (res.status === 404) throw new S3Error(404, "s3 object not found");
   if (!res.ok) {
-    const text = await res.text().catch(() => "");
+    const text = await readTextOr(res);
     throw new S3Error(res.status, text.slice(0, 400) || `s3 get ${res.status}`);
   }
   return {
@@ -79,7 +80,7 @@ export async function s3Delete(runtime: S3Runtime, key: string): Promise<void> {
   const res = await signedFetch(runtime, "DELETE", key);
   if (res.status === 404) return;
   if (!res.ok) {
-    const text = await res.text().catch(() => "");
+    const text = await readTextOr(res);
     throw new S3Error(res.status, text.slice(0, 400) || `s3 delete ${res.status}`);
   }
 }

@@ -1,7 +1,7 @@
 import "server-only";
 
 import type { Job } from "bullmq";
-import { deliverWebhook } from "@/lib/gateway/alerts";
+import { deliverWebhook } from "@/lib/alerts/notify";
 import { runMaintenanceSweep } from "@/worker/jobs";
 import { runModelSync } from "@/worker/model-sync";
 import type { WebhookJobData } from "@/types/jobs";

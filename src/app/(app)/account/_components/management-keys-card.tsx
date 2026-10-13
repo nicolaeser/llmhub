@@ -11,17 +11,17 @@ import {
   Input,
   Label,
   ListBox,
-  Modal,
   Select,
-  Spinner,
   Surface,
   TextField,
   toast,
   useOverlayState,
 } from "@heroui/react";
-import { Copy, KeyRound, Plus, Trash2 } from "lucide-react";
+import { KeyRound, Plus, Trash2 } from "lucide-react";
 import { useFormatter, useNow, useTranslations } from "next-intl";
 import ConfirmDialog from "@/components/console/confirm-dialog";
+import CopyButton from "@/components/console/copy-button";
+import FormDialog from "@/components/console/form-dialog";
 import { PERMISSION_KEYS } from "@/components/security/permission-keys";
 import { MANAGEMENT_PREFIX } from "@/lib/gateway/api-paths";
 import {
@@ -48,7 +48,6 @@ export default function ManagementKeysCard({
   const t = useTranslations("Account.managementKeys");
   const tRoles = useTranslations("Roles");
   const tCommon = useTranslations("Common");
-  const tSecurity = useTranslations("Security");
   const format = useFormatter();
   const now = useNow({ updateInterval: 30_000 });
   const errorText = useSecurityError();
@@ -130,22 +129,7 @@ export default function ManagementKeysCard({
               <Surface variant="secondary" className="min-w-0 flex-1 rounded-lg px-3 py-2">
                 <code className="font-mono text-sm break-all">{secret}</code>
               </Surface>
-              <Button
-                isIconOnly
-                size="sm"
-                variant="secondary"
-                aria-label={t("copy")}
-                onPress={async () => {
-                  try {
-                    await navigator.clipboard.writeText(secret);
-                    toast(tSecurity("copied"), { variant: "success" });
-                  } catch {
-                    toast.danger(tSecurity("copyFailed"));
-                  }
-                }}
-              >
-                <Copy size={14} aria-hidden />
-              </Button>
+              <CopyButton text={secret} label={t("copy")} variant="secondary" />
             </div>
           </Alert.Content>
         </Alert>
@@ -200,108 +184,88 @@ export default function ManagementKeysCard({
         <p className="text-sm text-muted">{t("empty")}</p>
       )}
 
-      <Modal state={createModal}>
-        <Modal.Backdrop>
-          <Modal.Container>
-            <Modal.Dialog className="max-w-lg">
-              <Modal.Header>
-                <Modal.Heading>{t("create")}</Modal.Heading>
-              </Modal.Header>
-              <Modal.Body className="space-y-4">
-                <p className="text-sm text-muted">{t("createHint")}</p>
-                <TextField fullWidth value={name} onChange={setName} isDisabled={creating} maxLength={80}>
-                  <Label>{t("name")}</Label>
-                  <Input />
-                </TextField>
-                <Fieldset className="gap-2">
-                  <Fieldset.Legend>{t("permissions")}</Fieldset.Legend>
-                  <div className="grid gap-2 sm:grid-cols-2">
-                    {payload.grantable.map((permission) => (
-                      <Checkbox
-                        key={permission}
-                        isSelected={selected.includes(permission)}
-                        isDisabled={creating}
-                        onChange={(checked) =>
-                          setSelected((current) =>
-                            checked ? [...current, permission] : current.filter((item) => item !== permission),
-                          )
-                        }
-                      >
-                        <Checkbox.Content>
-                          <Checkbox.Control>
-                            <Checkbox.Indicator />
-                          </Checkbox.Control>
-                          <span className="text-sm">{tRoles(`permissions.${PERMISSION_KEYS[permission]}.label`)}</span>
-                        </Checkbox.Content>
-                      </Checkbox>
-                    ))}
-                  </div>
-                </Fieldset>
-                <Select
-                  selectedKey={String(days)}
-                  onSelectionChange={(key) => setDays(Number(key))}
-                  isDisabled={creating}
-                  fullWidth
+      <FormDialog
+        state={createModal}
+        title={t("create")}
+        description={t("createHint")}
+        submitLabel={t("create")}
+        submitIcon={<KeyRound size={16} aria-hidden />}
+        pending={creating}
+        isSubmitDisabled={!name.trim() || !selected.length || !secondFactorComplete(proof)}
+        onSubmit={create}
+      >
+        <TextField fullWidth value={name} onChange={setName} isDisabled={creating} maxLength={80}>
+          <Label>{t("name")}</Label>
+          <Input />
+        </TextField>
+        <Fieldset className="gap-2">
+          <Fieldset.Legend>{t("permissions")}</Fieldset.Legend>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {payload.grantable.map((permission) => (
+              <Checkbox
+                key={permission}
+                isSelected={selected.includes(permission)}
+                isDisabled={creating}
+                onChange={(checked) =>
+                  setSelected((current) =>
+                    checked ? [...current, permission] : current.filter((item) => item !== permission),
+                  )
+                }
+              >
+                <Checkbox.Content>
+                  <Checkbox.Control>
+                    <Checkbox.Indicator />
+                  </Checkbox.Control>
+                  <span className="text-sm">{tRoles(`permissions.${PERMISSION_KEYS[permission]}.label`)}</span>
+                </Checkbox.Content>
+              </Checkbox>
+            ))}
+          </div>
+        </Fieldset>
+        <Select
+          selectedKey={String(days)}
+          onSelectionChange={(key) => setDays(Number(key))}
+          isDisabled={creating}
+          fullWidth
+        >
+          <Label>{t("expiry")}</Label>
+          <Select.Trigger>
+            <Select.Value />
+            <Select.Indicator />
+          </Select.Trigger>
+          <Select.Popover>
+            <ListBox aria-label={t("expiry")}>
+              {EXPIRY_DAYS.map((option) => (
+                <ListBox.Item
+                  key={option}
+                  id={String(option)}
+                  textValue={t("expiryOption", { days: option })}
                 >
-                  <Label>{t("expiry")}</Label>
-                  <Select.Trigger>
-                    <Select.Value />
-                    <Select.Indicator />
-                  </Select.Trigger>
-                  <Select.Popover>
-                    <ListBox aria-label={t("expiry")}>
-                      {EXPIRY_DAYS.map((option) => (
-                        <ListBox.Item
-                          key={option}
-                          id={String(option)}
-                          textValue={t("expiryOption", { days: option })}
-                        >
-                          {t("expiryOption", { days: option })}
-                          <ListBox.ItemIndicator />
-                        </ListBox.Item>
-                      ))}
-                    </ListBox>
-                  </Select.Popover>
-                </Select>
-                <SecondFactorInput
-                  value={proof}
-                  onChange={(next) => {
-                    setProof(next);
-                    setError(null);
-                  }}
-                  isDisabled={creating}
-                  isInvalid={Boolean(error)}
-                  label={t("stepUpLabel")}
-                />
-                {error ? (
-                  <Alert status="danger">
-                    <Alert.Content>
-                      <Alert.Description>{errorText(error)}</Alert.Description>
-                    </Alert.Content>
-                  </Alert>
-                ) : null}
-              </Modal.Body>
-              <Modal.Footer>
-                <Button variant="tertiary" isDisabled={creating} onPress={createModal.close}>
-                  {tCommon("cancel")}
-                </Button>
-                <Button
-                  isPending={creating}
-                  isDisabled={!name.trim() || !selected.length || !secondFactorComplete(proof)}
-                  onPress={create}
-                >
-                  {({ isPending }) => (
-                    <>
-                      {isPending ? <Spinner color="current" size="sm" /> : <KeyRound size={16} aria-hidden />}
-                      {t("create")}
-                    </>
-                  )}
-                </Button>
-              </Modal.Footer>
-            </Modal.Dialog>
-          </Modal.Container>
-        </Modal.Backdrop>
-      </Modal>
+                  {t("expiryOption", { days: option })}
+                  <ListBox.ItemIndicator />
+                </ListBox.Item>
+              ))}
+            </ListBox>
+          </Select.Popover>
+        </Select>
+        <SecondFactorInput
+          value={proof}
+          onChange={(next) => {
+            setProof(next);
+            setError(null);
+          }}
+          isDisabled={creating}
+          isInvalid={Boolean(error)}
+          label={t("stepUpLabel")}
+        />
+        {error ? (
+          <Alert status="danger">
+            <Alert.Content>
+              <Alert.Description>{errorText(error)}</Alert.Description>
+            </Alert.Content>
+          </Alert>
+        ) : null}
+      </FormDialog>
     </Card>
   );
 }

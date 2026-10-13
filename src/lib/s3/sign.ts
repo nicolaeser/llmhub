@@ -40,6 +40,10 @@ function signingKey(
   return hmac(kService, "aws4_request");
 }
 
+function uriEncode(value: string): string {
+  return encodeURIComponent(value).replace(/[!'()*]/g, (char) => `%${char.charCodeAt(0).toString(16).toUpperCase()}`);
+}
+
 function canonicalQuery(url: URL): string {
   const params = [...url.searchParams.entries()].sort(([a], [b]) =>
     a < b ? -1 : a > b ? 1 : 0,
@@ -47,7 +51,7 @@ function canonicalQuery(url: URL): string {
   return params
     .map(
       ([k, v]) =>
-        `${encodeURIComponent(k)}=${encodeURIComponent(v).replace(/%20/g, "%20")}`,
+        `${uriEncode(k)}=${uriEncode(v)}`,
     )
     .join("&");
 }

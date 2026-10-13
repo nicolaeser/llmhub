@@ -3,7 +3,8 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import test, { afterEach, beforeEach } from "node:test";
 import { fileURLToPath } from "node:url";
-import type { DiscoveredModel } from "@/types/gateway";
+import type { AuthenticatedSession } from "@/types/auth";
+import type { DiscoveredModel } from "@/types/providers";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 
@@ -300,7 +301,7 @@ function seedProvider(discovered: DiscoveredModel[], extra: Partial<FakeProvider
 }
 
 function load() {
-  return import("@/lib/gateway/discovery");
+  return import("@/lib/gateway/upstreams/discovery");
 }
 
 beforeEach(() => {
@@ -496,7 +497,7 @@ test("runModelSync serves the cached catalog until two hours have passed", async
 });
 
 test("a manual refresh bypasses the cache but never runs twice at once", async () => {
-  const { refreshCatalog } = await import("@/lib/gateway/catalog-sync");
+  const { refreshCatalog } = await import("@/lib/gateway/catalog/catalog-sync");
   seedProvider([model("a")]);
   respondWith(() => modelsResponse(["a"]));
   await refreshCatalog({ actor: "worker", force: false });
@@ -512,7 +513,7 @@ test("a manual refresh bypasses the cache but never runs twice at once", async (
 });
 
 test("the catalog groups the same model across providers and keeps routes and aliases stable", async () => {
-  const { refreshCatalog } = await import("@/lib/gateway/catalog-sync");
+  const { refreshCatalog } = await import("@/lib/gateway/catalog/catalog-sync");
   const router = seedProvider([], { name: "OpenRouter" });
   respondWith(() => modelsResponse(["anthropic/claude-sonnet-4.5"]));
   await refreshCatalog({ actor: "worker", force: true });
@@ -537,7 +538,7 @@ test("the catalog groups the same model across providers and keeps routes and al
 });
 
 test("aliases with automatic routing take in trusted new providers only", async () => {
-  const { refreshCatalog } = await import("@/lib/gateway/catalog-sync");
+  const { refreshCatalog } = await import("@/lib/gateway/catalog/catalog-sync");
   db.groups.push({ alias: "gpt-4o", vendor: "openai", displayName: "", autoRoutes: true, enabled: true });
   const router = seedProvider([], { name: "OpenRouter" });
   const local = seedProvider([], {
@@ -565,7 +566,7 @@ test("aliases with automatic routing take in trusted new providers only", async 
 });
 
 test("Jev groups differently named models on its own OpenRouter key", async () => {
-  const { refreshCatalog } = await import("@/lib/gateway/catalog-sync");
+  const { refreshCatalog } = await import("@/lib/gateway/catalog/catalog-sync");
   db.enterprise = { catalog_jev: { enabled: true, model: "jev-latest", api_key: "sk-or-jev" } };
   db.groups.push({
     alias: "llama-3.3-70b-instruct",
@@ -618,7 +619,7 @@ test("Jev groups differently named models on its own OpenRouter key", async () =
 });
 
 test("a rejected Jev key stops the run and is reported", async () => {
-  const { refreshCatalog } = await import("@/lib/gateway/catalog-sync");
+  const { refreshCatalog } = await import("@/lib/gateway/catalog/catalog-sync");
   db.enterprise = { catalog_jev: { enabled: true, model: "jev-latest", api_key: "sk-or-bad" } };
   db.groups.push({ alias: "llama-3.3-70b-instruct", vendor: "", displayName: "", autoRoutes: false, enabled: true });
   seedProvider([], { name: "Groq", kind: "openai_compat", baseUrl: "https://groq.example.test/v1" });
@@ -632,7 +633,7 @@ test("a rejected Jev key stops the run and is reported", async () => {
 });
 
 test("turning a provider off removes its route and keeps it off across refreshes", async () => {
-  const { refreshCatalog, setEntryActive, setGroupActive } = await import("@/lib/gateway/catalog-sync");
+  const { refreshCatalog, setEntryActive, setGroupActive } = await import("@/lib/gateway/catalog/catalog-sync");
   const router = seedProvider([], { name: "OpenRouter" });
   respondWith(() => modelsResponse(["openai/gpt-4o", "openai/gpt-4o:free"]));
   await refreshCatalog({ actor: "worker", force: true });
@@ -658,7 +659,7 @@ test("turning a provider off removes its route and keeps it off across refreshes
 });
 
 test("moving a provider model to another alias carries its active route along", async () => {
-  const { assignEntry, refreshCatalog, setEntryActive } = await import("@/lib/gateway/catalog-sync");
+  const { assignEntry, refreshCatalog, setEntryActive } = await import("@/lib/gateway/catalog/catalog-sync");
   const router = seedProvider([], { name: "OpenRouter" });
   respondWith(() => modelsResponse(["openai/gpt-4o"]));
   await refreshCatalog({ actor: "worker", force: true });
@@ -677,7 +678,7 @@ test("moving a provider model to another alias carries its active route along", 
 });
 
 test("the global default decides for aliases without their own automatic routing setting", async () => {
-  const { refreshCatalog } = await import("@/lib/gateway/catalog-sync");
+  const { refreshCatalog } = await import("@/lib/gateway/catalog/catalog-sync");
   db.groups.push(
     { alias: "gpt-4o", vendor: "openai", displayName: "", autoRoutes: null, enabled: true },
     { alias: "grok-4", vendor: "xai", displayName: "", autoRoutes: false, enabled: true },
@@ -708,12 +709,33 @@ test("worker schedules the model catalog every two hours with a deduplicated boo
   assert.match(boot, /clearInterval\(g\.__llmhubModelSyncTimer\)/);
 });
 
-test("provider actions share discovery instead of fetching inline", async () => {
-  const source = await readFile(
-    path.join(root, "src/app/(app)/providers/_action.ts"),
-    "utf8",
+test("provider discovery in the console runs the shared refresh as the signed-in user", async () => {
+  const { runAsPrincipal } = await import("@/lib/auth/delegation");
+  const { discoverProvider } = await import("@/lib/providers/connections");
+  const admin: AuthenticatedSession = {
+    error: false,
+    sessionId: "s1",
+    user: { id: "admin-1", username: "admin", orgId: null } as AuthenticatedSession["user"],
+    isOwner: true,
+    role: null,
+    permissions: ["providers:manage"],
+    secondFactor: "TOTP",
+    ipAddress: null,
+    userAgent: null,
+  };
+  const row = seedProvider([]);
+  respondWith(() => modelsResponse(["openai/gpt-x", "anthropic/claude-x"]));
+  const first = await runAsPrincipal(admin, () => discoverProvider(row.id));
+  assert.deepEqual(first.models.map((candidate) => candidate.id), ["openai/gpt-x", "anthropic/claude-x"]);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].url, "https://openrouter.ai/api/v1/models");
+  assert.equal((calls[0].init?.headers as Record<string, string>)["X-Title"], "LLM Hub");
+  assert.equal((db.providers.get(row.id)!.discovered as DiscoveredModel[]).length, 2);
+  assert.deepEqual(
+    db.audit.map((entry) => [entry.action, entry.actor]),
+    [["provider.models_discovered", "admin-1"]],
   );
-  assert.match(source, /refreshProviderModels\(row, session\.user\.id\)/);
-  assert.doesNotMatch(source, /async function fetchModels/);
-  assert.doesNotMatch(source, /fetch\(/);
+  await runAsPrincipal(admin, () => discoverProvider(row.id));
+  assert.equal(calls.length, 2);
+  assert.equal(db.audit.length, 1);
 });

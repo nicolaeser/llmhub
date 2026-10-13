@@ -2,12 +2,12 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth/session";
 import { hasPerm, PERMISSIONS } from "@/lib/auth/permissions";
 import { isSameOriginRequest } from "@/lib/auth/request-origin";
-import { readJSON } from "@/lib/http/api";
+import { isPayloadTooLarge, readJSON } from "@/lib/http/api";
 import { problemResponse } from "@/lib/http/problem";
 import { asRecord, asString } from "@/lib/gateway/core";
-import { ANTHROPIC_VERSION, resolveTryTarget } from "@/lib/gateway/openapi";
+import { ANTHROPIC_VERSION, resolveTryTarget } from "@/lib/gateway/endpoints/openapi";
 import { gatewayPath } from "@/lib/gateway/api-paths";
-import { mintTryBearer } from "@/lib/gateway/try-bearer";
+import { mintTryBearer } from "@/lib/gateway/access/try-bearer";
 import type { JsonMap } from "@/types/gateway";
 import { env } from "@/lib/env";
 
@@ -40,7 +40,7 @@ export async function POST(req: Request) {
   try {
     payload = await readJSON<JsonMap>(req);
   } catch (err) {
-    if ((err as { status?: number }).status === 413) return problemResponse(req, "PAYLOAD_TOO_LARGE");
+    if (isPayloadTooLarge(err)) return problemResponse(req, "PAYLOAD_TOO_LARGE");
     return problemResponse(req, "INVALID_JSON");
   }
 

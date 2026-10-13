@@ -1,7 +1,20 @@
+import {
+  callRoute,
+  errorOf,
+  gateway,
+  gatewayPostRoutes,
+  MODEL,
+  MODEL_ROUTES,
+  OTHER_POST_ROUTES,
+  resetGateway,
+} from "./support/gateway-harness";
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { PolicyGroup, ProviderPolicy, TemplateRules } from "@/types/model-templates";
-import type { Principal, VirtualKeyView } from "@/types/gateway";
+import type { Principal } from "@/types/gateway";
+import type { VirtualKeyView } from "@/types/keys";
+
+const FIXED_MODEL_ROUTES = new Set(["/api/v1/videos/[id]/remix"]);
 
 const providers: ProviderPolicy[] = [
   { id: "zdr-eu", zdr: true, retentionDays: null, region: "eu", noTraining: false },
@@ -69,7 +82,7 @@ function keyPrincipal(models: string[], templates: string[]): Principal {
 }
 
 test("patternMatches supports * wildcards case-insensitively", async () => {
-  const { patternMatches } = await import("@/lib/gateway/model-policy");
+  const { patternMatches } = await import("@/lib/gateway/access/model-policy");
   assert.equal(patternMatches("claude-*", "claude-3-5-sonnet"), true);
   assert.equal(patternMatches("CLAUDE-*", "claude-opus"), true);
   assert.equal(patternMatches("*mini*", "gpt-4o-mini-2024"), true);
@@ -82,7 +95,7 @@ test("patternMatches supports * wildcards case-insensitively", async () => {
 });
 
 test("modelPolicies lists every route behind an alias, including fallback and overflow", async () => {
-  const { modelPolicies } = await import("@/lib/gateway/model-policy");
+  const { modelPolicies } = await import("@/lib/gateway/access/model-policy");
   const byAlias = new Map(modelPolicies(groups, providers).map((policy) => [policy.alias, policy]));
   const ids = (alias: string) => byAlias.get(alias)?.routes.map((route) => route?.id ?? null);
 
@@ -97,7 +110,7 @@ test("modelPolicies lists every route behind an alias, including fallback and ov
 });
 
 test("routeAllowed applies provider, ZDR, training, retention, and region rules to one route", async () => {
-  const { routeAllowed } = await import("@/lib/gateway/model-policy");
+  const { routeAllowed } = await import("@/lib/gateway/access/model-policy");
   const [zdrEu, us30, unknown] = providers;
   const rule = (over: Partial<TemplateRules>) => ({ ...rules(over) });
   assert.equal(routeAllowed(rule({ zdrOnly: true }), zdrEu!), true);
@@ -115,7 +128,7 @@ test("routeAllowed applies provider, ZDR, training, retention, and region rules 
 });
 
 test("templates match a model when at least one route meets every rule", async () => {
-  const { modelPolicies, templateModels } = await import("@/lib/gateway/model-policy");
+  const { modelPolicies, templateModels } = await import("@/lib/gateway/access/model-policy");
   const policies = modelPolicies(groups, providers);
   const match = (over: Partial<TemplateRules>) => templateModels(rules(over), policies).sort();
   const viaZdrEu = ["claude-auto", "claude-eu", "claude-fallback", "gpt-4o-mini"];
@@ -139,7 +152,7 @@ test("templates match a model when at least one route meets every rule", async (
 });
 
 test("resolveAccess limits routes only for aliases granted by data rules", async () => {
-  const { modelPolicies, resolveAccess } = await import("@/lib/gateway/model-policy");
+  const { modelPolicies, resolveAccess } = await import("@/lib/gateway/access/model-policy");
   const policies = modelPolicies(groups, providers);
   const zdr = rules({ zdrOnly: true });
   const us = rules({ providerIds: ["us-30"] });
@@ -162,7 +175,7 @@ test("resolveAccess limits routes only for aliases granted by data rules", async
 });
 
 test("templateRulesOf drops malformed JSON entries and unknown regions", async () => {
-  const { templateRulesOf } = await import("@/lib/gateway/model-policy");
+  const { templateRulesOf } = await import("@/lib/gateway/access/model-policy");
   assert.deepEqual(
     templateRulesOf({
       models: ["a", 3, "", null],
@@ -178,7 +191,7 @@ test("templateRulesOf drops malformed JSON entries and unknown regions", async (
 });
 
 test("keys bound to templates fail closed when nothing resolves", async () => {
-  const { modelPermitted } = await import("@/lib/gateway/gate");
+  const { modelPermitted } = await import("@/lib/gateway/access/gate");
   assert.equal(modelPermitted(keyPrincipal([], []), "gpt-4o"), true);
   assert.equal(modelPermitted(keyPrincipal([], ["template"]), "gpt-4o"), false);
   assert.equal(modelPermitted(keyPrincipal(["claude-eu"], ["template"]), "claude-eu"), true);
@@ -187,7 +200,7 @@ test("keys bound to templates fail closed when nothing resolves", async () => {
 });
 
 test("model names are matched case-insensitively and normalized to lowercase", async () => {
-  const { modelChain, modelOf, modelPermitted } = await import("@/lib/gateway/gate");
+  const { modelChain, modelOf, modelPermitted } = await import("@/lib/gateway/access/gate");
   const { createKeySchema } = await import("@/schemas/keys");
   const { createTemplateSchema } = await import("@/schemas/model-templates");
   const { adminSettingsSchema } = await import("@/schemas/settings");
@@ -205,7 +218,7 @@ test("model names are matched case-insensitively and normalized to lowercase", a
 });
 
 test("request fallbacks must be allowed for the key", async () => {
-  const { modelChain } = await import("@/lib/gateway/gate");
+  const { modelChain } = await import("@/lib/gateway/access/gate");
   const { GateError } = await import("@/lib/gateway/errors");
   const principal = keyPrincipal(["claude-eu", "claude-fallback"], ["template"]);
   assert.deepEqual(
@@ -223,15 +236,34 @@ test("request fallbacks must be allowed for the key", async () => {
   assert.deepEqual(modelChain(keyPrincipal([], []), "any", { fallbacks: ["other"] }), ["any", "other"]);
 });
 
-test("no gateway route resolves model chains without the key check", async () => {
-  const { readdir, readFile } = await import("node:fs/promises");
-  const path = await import("node:path");
-  const root = path.join(import.meta.dirname, "..", "src");
-  const files = (await readdir(root, { recursive: true })).filter((file) => file.endsWith(".ts"));
-  const offenders: string[] = [];
-  for (const file of files) {
-    if (file.endsWith(path.join("gateway", "runtime.ts")) || file.endsWith(path.join("gateway", "gate.ts"))) continue;
-    if (/\baliasChain\b/.test(await readFile(path.join(root, file), "utf8"))) offenders.push(file);
+test("the fallback sweep covers every gateway POST route", async () => {
+  assert.deepEqual(
+    [...MODEL_ROUTES.map((route) => route.path), ...OTHER_POST_ROUTES].sort(),
+    await gatewayPostRoutes(),
+  );
+});
+
+test("every gateway model route checks request fallbacks against the key before contacting a provider", async () => {
+  for (const route of MODEL_ROUTES.filter((candidate) => !FIXED_MODEL_ROUTES.has(candidate.path))) {
+    resetGateway();
+    gateway.key = { ...gateway.key, models: [MODEL] };
+    const denied = await errorOf(await callRoute(route, { ...route.body("hello"), fallbacks: ["denied-model"] }));
+    assert.equal(denied.status, 403, route.path);
+    assert.match(denied.message, /fallback model denied-model not allowed/, route.path);
+    assert.deepEqual(gateway.upstream, [], route.path);
+    const allowed = await callRoute(route, { ...route.body("hello"), fallbacks: [MODEL] });
+    assert.notEqual(allowed.status, 403, route.path);
   }
-  assert.deepEqual(offenders, []);
+});
+
+test("batch lines check request fallbacks against the key", async () => {
+  const { runBatchLine } = await import("@/lib/gateway/endpoints/batches");
+  resetGateway();
+  const line = await runBatchLine(keyPrincipal([MODEL], ["template"]), "/v1/chat/completions", {
+    model: MODEL,
+    messages: [{ role: "user", content: "hello" }],
+    fallbacks: ["denied-model"],
+  });
+  assert.deepEqual(line.ok ? null : [line.status, line.error.code], [403, "model_access_denied"]);
+  assert.deepEqual(gateway.upstream, []);
 });

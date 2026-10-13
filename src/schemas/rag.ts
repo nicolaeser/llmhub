@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { modelAlias } from "@/lib/gateway/model-alias";
+import { modelAlias } from "@/lib/gateway/catalog/model-alias";
 import type { AttributeFilter } from "@/types/rag";
 
 export const MAX_STORE_KEYS = 16;

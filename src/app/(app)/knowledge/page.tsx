@@ -1,17 +1,20 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
-import { Alert, Button, Chip, SearchField, Spinner, Table, toast, useOverlayState } from "@heroui/react";
+import { useCallback, useMemo, useState, useTransition } from "react";
+import { Alert, Button, Chip, SearchField, Table, toast, useOverlayState } from "@heroui/react";
 import { FolderOpen, Library, Pencil, Plus, Trash2 } from "lucide-react";
 import { useFormatter, useNow, useTranslations } from "next-intl";
 import ConfirmDialog from "@/components/console/confirm-dialog";
 import EmptyState from "@/components/console/empty-state";
 import PageHeader from "@/components/console/page-header";
+import PageStatus from "@/components/console/page-status";
 import SearchSelect from "@/components/console/search-select";
-import { deleteKnowledgeAction, loadKnowledgeAction } from "@/app/(app)/knowledge/_action";
+import { useErrorToast } from "@/components/console/use-error-toast";
+import { deleteKnowledgeAction, loadKnowledgeAction } from "./_action";
+import { useActionData } from "@/lib/hooks/use-action-data";
 import { isActionFail } from "@/lib/http/action-result";
 import { formatBytes } from "@/lib/utils/bytes";
-import type { KnowledgeView, VectorStoreStatus, VectorStoreView } from "@/types/rag";
+import type { VectorStoreStatus, VectorStoreView } from "@/types/rag";
 import FilesDialog from "./_components/files-dialog";
 import StoreDialog from "./_components/store-dialog";
 
@@ -32,13 +35,10 @@ function ownerName(store: VectorStoreView): string {
 
 export default function KnowledgePage() {
   const t = useTranslations("Knowledge");
-  const tError = useTranslations("Error");
+  const showError = useErrorToast();
   const tCommon = useTranslations("Common");
   const format = useFormatter();
   const now = useNow({ updateInterval: 30_000 });
-  const [loading, setLoading] = useState(true);
-  const [view, setView] = useState<KnowledgeView | null>(null);
-  const [stores, setStores] = useState<VectorStoreView[]>([]);
   const [query, setQuery] = useState("");
   const [company, setCompany] = useState(ALL_COMPANIES);
   const [editing, setEditing] = useState<VectorStoreView | null>(null);
@@ -49,28 +49,30 @@ export default function KnowledgePage() {
   const [, startDelete] = useTransition();
   const formState = useOverlayState();
   const filesState = useOverlayState();
+  const page = useActionData(loadKnowledgeAction);
+  const { data: view, setData } = page;
+  const stores = view?.stores;
 
-  useEffect(() => {
-    loadKnowledgeAction().then((res) => {
-      if (!isActionFail(res)) {
-        setView(res);
-        setStores(res.stores);
-      }
-      setLoading(false);
-    });
-  }, []);
+  const setStores = useCallback(
+    (update: (current: VectorStoreView[]) => VectorStoreView[]) =>
+      setData((current) => ({ ...current, stores: update(current.stores) })),
+    [setData],
+  );
 
-  const upsert = useCallback((store: VectorStoreView) => {
-    setStores((current) =>
-      current.some((row) => row.id === store.id)
-        ? current.map((row) => (row.id === store.id ? store : row))
-        : [store, ...current],
-    );
-  }, []);
+  const upsert = useCallback(
+    (store: VectorStoreView) => {
+      setStores((current) =>
+        current.some((row) => row.id === store.id)
+          ? current.map((row) => (row.id === store.id ? store : row))
+          : [store, ...current],
+      );
+    },
+    [setStores],
+  );
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return stores.filter(
+    return (stores ?? []).filter(
       (store) =>
         (company === ALL_COMPANIES || store.orgId === company) && (!q || store.name.toLowerCase().includes(q)),
     );
@@ -94,7 +96,7 @@ export default function KnowledgePage() {
       const result = await deleteKnowledgeAction(id);
       setDeleting(null);
       if (isActionFail(result)) {
-        toast.danger(tError("code", { code: result.error }));
+        showError(result.error);
         return;
       }
       setStores((current) => current.filter((row) => row.id !== result.id));
@@ -102,29 +104,8 @@ export default function KnowledgePage() {
     });
   }
 
-  if (loading) {
-    return (
-      <output
-        aria-live="polite"
-        aria-label={tCommon("loading")}
-        className="flex min-h-[40vh] items-center justify-center text-accent"
-      >
-        <Spinner color="current" size="lg" />
-      </output>
-    );
-  }
-
-  if (!view) {
-    return (
-      <div className="space-y-5">
-        <PageHeader title={t("title")} subtitle={t("subtitle")} />
-        <Alert status="danger">
-          <Alert.Content>
-            <Alert.Description>{t("loadFailed")}</Alert.Description>
-          </Alert.Content>
-        </Alert>
-      </div>
-    );
+  if (!view || !stores) {
+    return <PageStatus title={t("title")} subtitle={t("subtitle")} state={page} />;
   }
 
   const canManage = view.canManage;

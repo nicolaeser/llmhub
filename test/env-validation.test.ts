@@ -3,9 +3,18 @@ import test from "node:test";
 import { parseEnvironment } from "@/lib/env";
 
 const valid: Record<string, string | undefined> = {
+  NODE_ENV: "production",
   DATABASE_URL: "postgresql://llmhub:llmhub@localhost:5432/llmhub",
   APP_SECRET: "test-app-secret-aaaaaaaaaaaaaaaaaaaa",
 };
+
+test("NODE_ENV accepts only production or development", () => {
+  assert.equal(parseEnvironment(valid).NODE_ENV, "production");
+  assert.equal(parseEnvironment({ ...valid, NODE_ENV: "development" }).NODE_ENV, "development");
+  for (const value of [undefined, "", "test", "staging", "Production"]) {
+    assert.throws(() => parseEnvironment({ ...valid, NODE_ENV: value }), /NODE_ENV/, String(value));
+  }
+});
 
 test("missing DATABASE_URL throws", () => {
   assert.throws(

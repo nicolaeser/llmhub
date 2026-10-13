@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { gateRequest, gateResponse } from "@/lib/gateway/gate";
+import { gateRequest, gateResponse } from "@/lib/gateway/access/gate";
 import { fileChunksJson, readableStore, storeFile } from "@/lib/rag/stores";
 
 export async function GET(req: Request, ctx: { params: Promise<{ id: string; file_id: string }> }) {

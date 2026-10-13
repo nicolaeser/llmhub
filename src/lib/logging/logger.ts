@@ -1,28 +1,15 @@
 import "server-only";
-import type { Meta } from "@/types/logging";
-
-function write(level: string, event: string, meta?: Meta) {
-  const line = JSON.stringify({
-    ts: new Date().toISOString(),
-    level,
-    event,
-    ...meta,
-  });
-  if (level === "error") {
-    console.error(line);
-  } else {
-    console.log(line);
-  }
-}
+import { writeLogLine } from "@/lib/logging/format";
+import type { LogMeta } from "@/types/logging";
 
 export const logger = {
-  info(event: string, meta?: Meta) {
-    write("info", event, meta);
+  info(event: string, meta?: LogMeta) {
+    writeLogLine("info", event, meta);
   },
-  warn(event: string, meta?: Meta) {
-    write("warn", event, meta);
+  warn(event: string, meta?: LogMeta) {
+    writeLogLine("warn", event, meta);
   },
-  error(event: string, meta?: Meta) {
-    write("error", event, meta);
+  error(event: string, meta?: LogMeta) {
+    writeLogLine("error", event, meta);
   },
 };

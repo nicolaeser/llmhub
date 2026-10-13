@@ -1,3 +1,3 @@
-import { listModelsRoute } from "@/lib/gateway/models-route";
+import { listModelsRoute } from "@/lib/gateway/endpoints/models-route";
 
 export const GET = listModelsRoute("api");

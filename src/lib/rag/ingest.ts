@@ -1,9 +1,9 @@
 import "server-only";
 import prisma from "@/lib/db/prisma";
 import { Prisma } from "@/generated/prisma/client";
-import { assertBudget } from "@/lib/gateway/billing";
+import { assertBudget } from "@/lib/gateway/billing/billing";
 import { GateError } from "@/lib/gateway/errors";
-import { getObject } from "@/lib/gateway/objects";
+import { getObject } from "@/lib/gateway/storage/objects";
 import { logger } from "@/lib/logging/logger";
 import { chunkText } from "@/lib/rag/chunking";
 import { extractDocument } from "@/lib/rag/extract";

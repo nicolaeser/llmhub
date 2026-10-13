@@ -6,7 +6,7 @@ import {
   chatToAnthropic,
   claudeVersion,
   parseDataUrl,
-} from "@/lib/gateway/anthropic";
+} from "@/lib/gateway/protocols/anthropic";
 import type { JsonMap } from "@/types/gateway";
 
 function translate(lines: string[]): JsonMap[] {

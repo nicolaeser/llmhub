@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { requestLogMarkdown } from "@/lib/http/request-log-markdown";
-import { requestLogPdf } from "@/lib/http/request-log-pdf";
+import { requestLogMarkdown } from "@/lib/export/request-log-markdown";
+import { requestLogPdf } from "@/lib/export/request-log-pdf";
 import type { RequestLogDocument } from "@/types/logs";
 
 function doc(overrides: Partial<RequestLogDocument["content"]> = {}): RequestLogDocument {

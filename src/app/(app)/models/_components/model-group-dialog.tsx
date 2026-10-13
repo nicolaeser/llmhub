@@ -3,49 +3,40 @@
 import { useState, useTransition } from "react";
 import {
   Button,
-  Card,
   Description,
   Disclosure,
-  FieldError,
   Input,
   Label,
   ListBox,
-  Modal,
-  NumberField,
   Select,
-  Spinner,
   Switch,
   TextField,
   toast,
   type useOverlayState,
 } from "@heroui/react";
 import { useTranslations } from "next-intl";
+import FormDialog from "@/components/console/form-dialog";
 import MultiPicker from "@/components/console/multi-picker";
 import SearchSelect from "@/components/console/search-select";
-import { formats } from "@/i18n/formats";
-import { PROVIDER_CATALOG } from "@/lib/gateway/catalog";
-import { createModelGroupAction, updateModelGroupAction } from "@/app/(app)/models/_action";
+import { useErrorToast } from "@/components/console/use-error-toast";
+import { createModelGroupAction, updateModelGroupAction } from "../_action";
 import { isActionFail } from "@/lib/http/action-result";
-import { scheduleOverlaps, validPrice, windowValid } from "@/lib/gateway/price-schedule";
-import type {
-  DeploymentDraft,
-  DiscoveredPrice,
-  Group,
-  PriceWindowDraft,
-  ProviderOpt,
-} from "@/types/models";
-import PriceScheduleFields from "./price-schedule-fields";
-
-const BILLING_MODES = ["routed", "average", "custom"] as const;
+import { scheduleOverlaps, validPrice, windowValid } from "@/lib/gateway/billing/price-schedule";
+import type { DeploymentDraft, ModelGroupView, PriceWindowDraft, ProviderOpt } from "@/types/models";
+import CustomPriceFields from "./custom-price-fields";
+import DeploymentCard from "./deployment-card";
+import {
+  BILLING_MODES,
+  billingModeOf,
+  deploymentInput,
+  draftsOf,
+  emptyDep,
+  withCatalogPrice,
+  type BillingMode,
+} from "./deployment-draft";
+import ProviderSelect from "./provider-select";
 
 const AUTO_ROUTE_MODES = ["inherit", "on", "off"] as const;
-
-type BillingMode = (typeof BILLING_MODES)[number];
-
-function billingModeOf(value: string | undefined): BillingMode {
-  return BILLING_MODES.find((mode) => mode === value) ?? "routed";
-}
-
 
 const STRATEGIES = [
   "weighted_random",
@@ -59,127 +50,6 @@ const STRATEGIES = [
   "smart",
 ] as const;
 
-function catalogHit(
-  providers: ProviderOpt[],
-  providerId: string,
-  model: string,
-): DiscoveredPrice | null {
-  const wanted = model.trim();
-  if (!providerId || !wanted) return null;
-  const rows = providers.find((p) => p.id === providerId)?.discovered ?? [];
-  const hit =
-    rows.find((row) => row.id === wanted) ??
-    rows.find((row) => row.id.endsWith(`/${wanted}`)) ??
-    null;
-  if (!hit) return null;
-  if (
-    hit.priceSource === "provider" ||
-    hit.costInputPer1k > 0 ||
-    hit.costOutputPer1k > 0
-  ) {
-    return hit;
-  }
-  return null;
-}
-
-function withCatalogPrice(
-  current: DeploymentDraft,
-  patch: Partial<DeploymentDraft>,
-  providers: ProviderOpt[],
-): Partial<DeploymentDraft> {
-  if (patch.model === undefined && patch.providerId === undefined) return patch;
-  const next = { ...current, ...patch };
-  const hit = catalogHit(providers, next.providerId, next.model);
-  if (!hit) return patch;
-  return {
-    ...patch,
-    costInput: String(hit.costInputPer1k),
-    costOutput: String(hit.costOutputPer1k),
-  };
-}
-
-function emptyDep(providers: ProviderOpt[]): DeploymentDraft {
-  const p = providers.find((x) => x.hasApiKey) ?? providers[0];
-  return {
-    kind: p?.kind || "openai_compat",
-    baseUrl: p?.baseUrl || "",
-    model: "",
-    weight: "1",
-    costInput: "0",
-    costOutput: "0",
-    providerId: p?.id || "",
-  };
-}
-
-function draftsOf(group: Group | null, providers: ProviderOpt[]): DeploymentDraft[] {
-  if (!group?.deployments.length) return [emptyDep(providers)];
-  return group.deployments.map((d) => ({
-    id: d.id,
-    kind: d.kind,
-    baseUrl: d.baseUrl,
-    model: d.model,
-    weight: String(d.weight),
-    costInput: String(d.costInput || 0),
-    costOutput: String(d.costOutput || 0),
-    providerId: d.providerId ?? "",
-  }));
-}
-
-function ProviderSelect({
-  dep,
-  providers,
-  withCatalog,
-  isDisabled,
-  onChange,
-}: {
-  dep: DeploymentDraft;
-  providers: ProviderOpt[];
-  withCatalog: boolean;
-  isDisabled: boolean;
-  onChange: (patch: Partial<DeploymentDraft>) => void;
-}) {
-  const t = useTranslations("Models");
-  const tProviders = useTranslations("Providers");
-  const value = dep.providerId || (dep.kind ? `kind:${dep.kind}` : "none");
-  const kinds = PROVIDER_CATALOG.filter(
-    (k) => `kind:${k.kind}` === value || (withCatalog && !providers.some((p) => p.kind === k.kind)),
-  );
-  return (
-    <SearchSelect
-      label={t("fields.provider")}
-      items={[
-        { id: "none", label: t("fields.noProvider") },
-        ...providers.map((p) => ({ id: p.id, label: p.name, detail: tProviders("kindName", { kind: p.kind }) })),
-        ...kinds.map((k) => ({ id: `kind:${k.kind}`, label: tProviders("kindName", { kind: k.kind }) })),
-      ]}
-      value={value}
-      onChange={(raw) => {
-        if (raw === "none") {
-          onChange({ providerId: "", kind: "openai_compat" });
-          return;
-        }
-        if (raw.startsWith("kind:")) {
-          const nextKind = raw.slice(5);
-          const spec = PROVIDER_CATALOG.find((k) => k.kind === nextKind);
-          onChange({
-            providerId: "",
-            kind: nextKind,
-            baseUrl: spec?.default_base_url || "",
-          });
-          return;
-        }
-        const p = providers.find((x) => x.id === raw);
-        onChange({
-          providerId: raw,
-          kind: p?.kind || dep.kind,
-          baseUrl: p?.baseUrl || dep.baseUrl,
-        });
-      }}
-      isDisabled={isDisabled}
-    />
-  );
-}
-
 export default function ModelGroupDialog({
   state,
   editing,
@@ -188,14 +58,14 @@ export default function ModelGroupDialog({
   onSaved,
 }: {
   state: ReturnType<typeof useOverlayState>;
-  editing: Group | null;
+  editing: ModelGroupView | null;
   providers: ProviderOpt[];
   aliases: string[];
-  onSaved: (group: Group) => void;
+  onSaved: (group: ModelGroupView) => void;
 }) {
   const t = useTranslations("Models");
   const tCommon = useTranslations("Common");
-  const tError = useTranslations("Error");
+  const showError = useErrorToast();
   const [alias, setAlias] = useState(editing?.alias ?? "gpt-4o");
   const [strategy, setStrategy] = useState(editing?.strategy || "least_inflight");
   const [retries, setRetries] = useState(String(editing?.numRetries ?? 2));
@@ -206,8 +76,7 @@ export default function ModelGroupDialog({
   const [displayName, setDisplayName] = useState(editing?.displayName ?? "");
   const [autoRoutes, setAutoRoutes] = useState<boolean | null>(editing ? editing.autoRoutes : null);
   const [billingMode, setBillingMode] = useState<BillingMode>(billingModeOf(editing?.billingMode));
-  const [priceIn, setPriceIn] = useState(editing?.priceInput ?? 0);
-  const [priceOut, setPriceOut] = useState(editing?.priceOutput ?? 0);
+  const [price, setPrice] = useState({ input: editing?.priceInput ?? 0, output: editing?.priceOutput ?? 0 });
   const [priceTimeZone, setPriceTimeZone] = useState(editing?.priceTimeZone || "UTC");
   const [priceWindows, setPriceWindows] = useState<PriceWindowDraft[]>(
     () => editing?.priceWindows.map((w, i) => ({ ...w, key: i + 1 })) ?? [],
@@ -223,8 +92,8 @@ export default function ModelGroupDialog({
   const customPrice = billingMode === "custom";
   const pricesValid =
     !customPrice ||
-    (validPrice(priceIn) &&
-      validPrice(priceOut) &&
+    (validPrice(price.input) &&
+      validPrice(price.output) &&
       priceWindows.every(windowValid) &&
       !scheduleOverlaps(priceWindows));
 
@@ -244,8 +113,8 @@ export default function ModelGroupDialog({
         autoRoutes,
         strategy,
         billingMode,
-        priceInput: validPrice(priceIn) ? priceIn : undefined,
-        priceOutput: validPrice(priceOut) ? priceOut : undefined,
+        priceInput: validPrice(price.input) ? price.input : undefined,
+        priceOutput: validPrice(price.output) ? price.output : undefined,
         priceTimeZone: customPrice ? priceTimeZone : undefined,
         priceWindows: customPrice
           ? priceWindows.map((w) => ({
@@ -258,25 +127,13 @@ export default function ModelGroupDialog({
         numRetries: Number(retries) || 0,
         overflowGroup: overflow,
         fallbackGroups: fallbacks,
-        deployments: deps
-          .filter((d) => d.model.trim())
-          .map((d) => ({
-            id: d.id,
-            kind: d.kind.startsWith("kind:") ? d.kind.slice(5) : d.kind,
-            baseUrl: d.baseUrl,
-            model: d.model,
-            weight: Number(d.weight) || 1,
-            costInput: Number(d.costInput) || 0,
-            costOutput: Number(d.costOutput) || 0,
-            providerId:
-              !d.providerId || d.providerId.startsWith("kind:") ? null : d.providerId,
-          })),
+        deployments: deps.filter((d) => d.model.trim()).map(deploymentInput),
       };
       const result = editing
         ? await updateModelGroupAction(body)
         : await createModelGroupAction(body);
       if (isActionFail(result)) {
-        toast.danger(tError("code", { code: result.error }));
+        showError(result.error);
         return;
       }
       onSaved(result);
@@ -288,340 +145,213 @@ export default function ModelGroupDialog({
   const first = deps[0];
 
   return (
-    <Modal state={state}>
-      <Modal.Backdrop>
-        <Modal.Container>
-          <Modal.Dialog className="max-w-lg">
-            {({ close }) => (
-              <>
-                <Modal.Header>
-                  <Modal.Heading>{t("formTitle", { mode: editing ? "edit" : "add" })}</Modal.Heading>
-                </Modal.Header>
-                <Modal.Body className="max-h-[70vh] space-y-4 overflow-y-auto">
-                  <p className="text-sm text-muted">{t("addHint")}</p>
-                  <TextField
-                    fullWidth
-                    value={alias}
-                    onChange={(value) => setAlias(value.toLowerCase())}
-                    isDisabled={Boolean(editing) || pending}
-                    aria-label={t("fields.alias")}
-                  >
-                    <Label>{t("fields.alias")}</Label>
-                    <Input aria-label={t("fields.alias")} />
-                    <Description>{t("fields.aliasHint")}</Description>
-                  </TextField>
-                  {first ? (
-                    <>
-                      <ProviderSelect
-                        dep={first}
-                        providers={providers}
-                        withCatalog
-                        isDisabled={pending}
-                        onChange={(patch) => setDep(0, patch)}
-                      />
-                      <TextField
-                        fullWidth
-                        value={first.model}
-                        onChange={(v) => setDep(0, { model: v })}
-                        isDisabled={pending}
-                        aria-label={t("fields.upstream")}
-                      >
-                        <Label>{t("fields.upstream")}</Label>
-                        <Input aria-label={t("fields.upstream")} />
-                      </TextField>
-                      {first.providerId ? null : (
-                        <TextField
-                          fullWidth
-                          value={first.baseUrl}
-                          onChange={(v) => setDep(0, { baseUrl: v })}
-                          isDisabled={pending}
-                          aria-label={t("fields.baseUrl")}
-                        >
-                          <Label>{t("fields.baseUrl")}</Label>
-                          <Input aria-label={t("fields.baseUrl")} />
-                        </TextField>
-                      )}
-                    </>
-                  ) : null}
-                  <Select
-                    selectedKey={billingMode}
-                    onSelectionChange={(key) => setBillingMode(billingModeOf(String(key)))}
-                    isDisabled={pending}
-                    aria-label={t("fields.billingMode")}
-                    fullWidth
-                  >
-                    <Label>{t("fields.billingMode")}</Label>
-                    <Select.Trigger>
-                      <Select.Value />
-                      <Select.Indicator />
-                    </Select.Trigger>
-                    <Select.Popover>
-                      <ListBox aria-label={t("fields.billingMode")}>
-                        {BILLING_MODES.map((billing) => (
-                          <ListBox.Item
-                            key={billing}
-                            id={billing}
-                            textValue={t(`billingModes.${billing}`)}
-                          >
-                            {t("billingModeLabel", { mode: billing })}
-                            <ListBox.ItemIndicator />
-                          </ListBox.Item>
-                        ))}
-                      </ListBox>
-                    </Select.Popover>
-                    <Description>{t("billingModeHint", { mode: billingMode })}</Description>
-                  </Select>
-                  {customPrice ? (
-                    <div className="grid gap-3 sm:grid-cols-2 sm:items-start">
-                      <NumberField
-                        fullWidth
-                        value={priceIn}
-                        onChange={setPriceIn}
-                        minValue={0}
-                        formatOptions={formats.number.price}
-                        isInvalid={!validPrice(priceIn)}
-                        isDisabled={pending}
-                      >
-                        <Label>{t("fields.priceIn")}</Label>
-                        <NumberField.Group>
-                          <NumberField.Input />
-                        </NumberField.Group>
-                        {validPrice(priceIn) ? null : <FieldError>{t("priceInvalid")}</FieldError>}
-                      </NumberField>
-                      <NumberField
-                        fullWidth
-                        value={priceOut}
-                        onChange={setPriceOut}
-                        minValue={0}
-                        formatOptions={formats.number.price}
-                        isInvalid={!validPrice(priceOut)}
-                        isDisabled={pending}
-                      >
-                        <Label>{t("fields.priceOut")}</Label>
-                        <NumberField.Group>
-                          <NumberField.Input />
-                        </NumberField.Group>
-                        {validPrice(priceOut) ? null : <FieldError>{t("priceInvalid")}</FieldError>}
-                      </NumberField>
-                      <p className="text-sm text-muted sm:col-span-2">{t("priceHint")}</p>
-                      <PriceScheduleFields
-                        windows={priceWindows}
-                        timeZone={priceTimeZone}
-                        basePrice={{ input: priceIn, output: priceOut }}
-                        isDisabled={pending}
-                        onWindowsChange={setPriceWindows}
-                        onTimeZoneChange={setPriceTimeZone}
-                      />
-                    </div>
-                  ) : null}
-                  <Switch isSelected={enabled} onChange={setEnabled} isDisabled={pending}>
-                    <Switch.Content>
-                      <Switch.Control>
-                        <Switch.Thumb />
-                      </Switch.Control>
-                      <Label>{t("fields.enabled")}</Label>
-                    </Switch.Content>
-                    <Description>{t("fields.enabledHint")}</Description>
-                  </Switch>
-                  <Disclosure>
-                    <Disclosure.Heading>
-                      <Disclosure.Trigger className="flex w-full items-center justify-between text-sm text-muted">
-                        {tCommon("advanced")}
-                        <Disclosure.Indicator />
-                      </Disclosure.Trigger>
-                    </Disclosure.Heading>
-                    <Disclosure.Content>
-                      <Disclosure.Body className="space-y-4 pt-3">
-                        <div className="grid gap-3 sm:grid-cols-2 sm:items-start">
-                          <TextField fullWidth value={vendor} onChange={setVendor} isDisabled={pending}>
-                            <Label>{t("fields.vendor")}</Label>
-                            <Input placeholder="anthropic" />
-                            <Description>{t("fields.vendorHint")}</Description>
-                          </TextField>
-                          <TextField fullWidth value={displayName} onChange={setDisplayName} isDisabled={pending}>
-                            <Label>{t("fields.displayName")}</Label>
-                            <Input />
-                            <Description>{t("fields.displayNameHint")}</Description>
-                          </TextField>
-                        </div>
-                        <SearchSelect
-                          label={t("fields.autoRoutes")}
-                          description={t("fields.autoRoutesHint")}
-                          items={AUTO_ROUTE_MODES.map((mode) => ({
-                            id: mode,
-                            label: t("fields.autoRoutesMode", { mode }),
-                          }))}
-                          value={autoRoutes === null ? "inherit" : autoRoutes ? "on" : "off"}
-                          onChange={(mode) => setAutoRoutes(mode === "inherit" ? null : mode === "on")}
-                          isDisabled={pending}
-                        />
-                        <Select
-                          selectedKey={strategy}
-                          onSelectionChange={(key) => setStrategy(String(key))}
-                          isDisabled={pending}
-                          aria-label={t("fields.strategy")}
-                          fullWidth
-                        >
-                          <Label>{t("fields.strategy")}</Label>
-                          <Select.Trigger>
-                            <Select.Value />
-                            <Select.Indicator />
-                          </Select.Trigger>
-                          <Select.Popover>
-                            <ListBox aria-label={t("fields.strategy")}>
-                              {STRATEGIES.map((s) => (
-                                <ListBox.Item key={s} id={s} textValue={t(`strategies.${s}`)}>
-                                  {t(`strategies.${s}`)}
-                                  <ListBox.ItemIndicator />
-                                </ListBox.Item>
-                              ))}
-                            </ListBox>
-                          </Select.Popover>
-                          <Description>{t("strategyHint", { strategy })}</Description>
-                        </Select>
-                        <TextField
-                          fullWidth
-                          value={retries}
-                          onChange={setRetries}
-                          isDisabled={pending}
-                          aria-label={t("fields.retries")}
-                        >
-                          <Label>{t("fields.retries")}</Label>
-                          <Input aria-label={t("fields.retries")} />
-                        </TextField>
-                        <SearchSelect
-                          label={t("fields.overflow")}
-                          items={overflowItems}
-                          value={overflow || "none"}
-                          onChange={(next) => setOverflow(next === "none" ? "" : next)}
-                          isDisabled={pending}
-                        />
-                        <MultiPicker
-                          label={t("fields.fallbacks")}
-                          placeholder={t("fields.fallbacksPlaceholder")}
-                          searchLabel={tCommon("search")}
-                          emptyLabel={tCommon("noResults")}
-                          items={otherAliases.map((item) => ({ id: item, label: item }))}
-                          selected={fallbacks}
-                          onChange={setFallbacks}
-                          isDisabled={pending}
-                        />
-                        {deps.map((d, i) => (
-                          <Card key={d.id ?? i} variant="secondary">
-                            {i > 0 ? (
-                              <>
-                                <ProviderSelect
-                                  dep={d}
-                                  providers={providers}
-                                  withCatalog={false}
-                                  isDisabled={pending}
-                                  onChange={(patch) => setDep(i, patch)}
-                                />
-                                <TextField
-                                  fullWidth
-                                  value={d.model}
-                                  onChange={(v) => setDep(i, { model: v })}
-                                  isDisabled={pending}
-                                  aria-label={t("fields.upstream")}
-                                >
-                                  <Label>{t("fields.upstream")}</Label>
-                                  <Input aria-label={t("fields.upstream")} />
-                                </TextField>
-                              </>
-                            ) : null}
-                            <TextField
-                              fullWidth
-                              value={d.weight}
-                              onChange={(v) => setDep(i, { weight: v })}
-                              isDisabled={pending}
-                              aria-label={t("fields.weight")}
-                            >
-                              <Label>{t("fields.weight")}</Label>
-                              <Input aria-label={t("fields.weight")} />
-                            </TextField>
-                            <div className="grid grid-cols-2 gap-3">
-                              <TextField
-                                fullWidth
-                                value={d.costInput}
-                                onChange={(v) => setDep(i, { costInput: v })}
-                                isDisabled={pending}
-                                aria-label={t("fields.costIn")}
-                              >
-                                <Label>{t("fields.costIn")}</Label>
-                                <Input aria-label={t("fields.costIn")} />
-                              </TextField>
-                              <TextField
-                                fullWidth
-                                value={d.costOutput}
-                                onChange={(v) => setDep(i, { costOutput: v })}
-                                isDisabled={pending}
-                                aria-label={t("fields.costOut")}
-                              >
-                                <Label>{t("fields.costOut")}</Label>
-                                <Input aria-label={t("fields.costOut")} />
-                              </TextField>
-                            </div>
-                            {catalogHit(providers, d.providerId, d.model) ? (
-                              <p className="text-sm text-muted">
-                                {t("priceFromProvider", {
-                                  source: providers.find((p) => p.id === d.providerId)?.name ?? "",
-                                })}
-                              </p>
-                            ) : null}
-                            {i > 0 ? (
-                              <Button
-                                size="sm"
-                                variant="danger-soft"
-                                aria-label={t("deleteEndpoint")}
-                                isDisabled={pending}
-                                onPress={() => setDeps((cur) => cur.filter((_, idx) => idx !== i))}
-                              >
-                                {t("deleteEndpoint")}
-                              </Button>
-                            ) : null}
-                          </Card>
-                        ))}
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          aria-label={t("addEndpoint")}
-                          isDisabled={pending}
-                          onPress={() => setDeps((cur) => [...cur, emptyDep(providers)])}
-                        >
-                          {t("addEndpoint")}
-                        </Button>
-                      </Disclosure.Body>
-                    </Disclosure.Content>
-                  </Disclosure>
-                </Modal.Body>
-                <Modal.Footer>
-                  <Button
-                    variant="tertiary"
-                    onPress={close}
-                    isDisabled={pending}
-                    aria-label={tCommon("cancel")}
-                  >
-                    {tCommon("cancel")}
-                  </Button>
-                  <Button
-                    aria-label={t("formSubmit", { mode })}
-                    isPending={pending}
-                    isDisabled={!alias.trim() || !pricesValid}
-                    onPress={() => save(close)}
-                  >
-                    {({ isPending }) => (
-                      <>
-                        {isPending ? <Spinner color="current" size="sm" /> : null}
-                        {t("formSubmit", { mode })}
-                      </>
-                    )}
-                  </Button>
-                </Modal.Footer>
-              </>
-            )}
-          </Modal.Dialog>
-        </Modal.Container>
-      </Modal.Backdrop>
-    </Modal>
+    <FormDialog
+      state={state}
+      title={t("formTitle", { mode: editing ? "edit" : "add" })}
+      description={t("addHint")}
+      submitLabel={t("formSubmit", { mode })}
+      pending={pending}
+      isSubmitDisabled={!alias.trim() || !pricesValid}
+      onSubmit={save}
+    >
+      <TextField
+        fullWidth
+        value={alias}
+        onChange={(value) => setAlias(value.toLowerCase())}
+        isDisabled={Boolean(editing) || pending}
+        aria-label={t("fields.alias")}
+      >
+        <Label>{t("fields.alias")}</Label>
+        <Input aria-label={t("fields.alias")} />
+        <Description>{t("fields.aliasHint")}</Description>
+      </TextField>
+      {first ? (
+        <>
+          <ProviderSelect
+            dep={first}
+            providers={providers}
+            withCatalog
+            isDisabled={pending}
+            onChange={(patch) => setDep(0, patch)}
+          />
+          <TextField
+            fullWidth
+            value={first.model}
+            onChange={(v) => setDep(0, { model: v })}
+            isDisabled={pending}
+            aria-label={t("fields.upstream")}
+          >
+            <Label>{t("fields.upstream")}</Label>
+            <Input aria-label={t("fields.upstream")} />
+          </TextField>
+          {first.providerId ? null : (
+            <TextField
+              fullWidth
+              value={first.baseUrl}
+              onChange={(v) => setDep(0, { baseUrl: v })}
+              isDisabled={pending}
+              aria-label={t("fields.baseUrl")}
+            >
+              <Label>{t("fields.baseUrl")}</Label>
+              <Input aria-label={t("fields.baseUrl")} />
+            </TextField>
+          )}
+        </>
+      ) : null}
+      <Select
+        selectedKey={billingMode}
+        onSelectionChange={(key) => setBillingMode(billingModeOf(String(key)))}
+        isDisabled={pending}
+        aria-label={t("fields.billingMode")}
+        fullWidth
+      >
+        <Label>{t("fields.billingMode")}</Label>
+        <Select.Trigger>
+          <Select.Value />
+          <Select.Indicator />
+        </Select.Trigger>
+        <Select.Popover>
+          <ListBox aria-label={t("fields.billingMode")}>
+            {BILLING_MODES.map((billing) => (
+              <ListBox.Item
+                key={billing}
+                id={billing}
+                textValue={t(`billingModes.${billing}`)}
+              >
+                {t("billingModeLabel", { mode: billing })}
+                <ListBox.ItemIndicator />
+              </ListBox.Item>
+            ))}
+          </ListBox>
+        </Select.Popover>
+        <Description>{t("billingModeHint", { mode: billingMode })}</Description>
+      </Select>
+      {customPrice ? (
+        <CustomPriceFields
+          price={price}
+          windows={priceWindows}
+          timeZone={priceTimeZone}
+          isDisabled={pending}
+          onPriceChange={setPrice}
+          onWindowsChange={setPriceWindows}
+          onTimeZoneChange={setPriceTimeZone}
+        />
+      ) : null}
+      <Switch isSelected={enabled} onChange={setEnabled} isDisabled={pending}>
+        <Switch.Content>
+          <Switch.Control>
+            <Switch.Thumb />
+          </Switch.Control>
+          <Label>{t("fields.enabled")}</Label>
+        </Switch.Content>
+        <Description>{t("fields.enabledHint")}</Description>
+      </Switch>
+      <Disclosure>
+        <Disclosure.Heading>
+          <Disclosure.Trigger className="flex w-full items-center justify-between text-sm text-muted">
+            {tCommon("advanced")}
+            <Disclosure.Indicator />
+          </Disclosure.Trigger>
+        </Disclosure.Heading>
+        <Disclosure.Content>
+          <Disclosure.Body className="space-y-4 pt-3">
+            <div className="grid gap-3 sm:grid-cols-2 sm:items-start">
+              <TextField fullWidth value={vendor} onChange={setVendor} isDisabled={pending}>
+                <Label>{t("fields.vendor")}</Label>
+                <Input placeholder="anthropic" />
+                <Description>{t("fields.vendorHint")}</Description>
+              </TextField>
+              <TextField fullWidth value={displayName} onChange={setDisplayName} isDisabled={pending}>
+                <Label>{t("fields.displayName")}</Label>
+                <Input />
+                <Description>{t("fields.displayNameHint")}</Description>
+              </TextField>
+            </div>
+            <SearchSelect
+              label={t("fields.autoRoutes")}
+              description={t("fields.autoRoutesHint")}
+              items={AUTO_ROUTE_MODES.map((mode) => ({
+                id: mode,
+                label: t("fields.autoRoutesMode", { mode }),
+              }))}
+              value={autoRoutes === null ? "inherit" : autoRoutes ? "on" : "off"}
+              onChange={(mode) => setAutoRoutes(mode === "inherit" ? null : mode === "on")}
+              isDisabled={pending}
+            />
+            <Select
+              selectedKey={strategy}
+              onSelectionChange={(key) => setStrategy(String(key))}
+              isDisabled={pending}
+              aria-label={t("fields.strategy")}
+              fullWidth
+            >
+              <Label>{t("fields.strategy")}</Label>
+              <Select.Trigger>
+                <Select.Value />
+                <Select.Indicator />
+              </Select.Trigger>
+              <Select.Popover>
+                <ListBox aria-label={t("fields.strategy")}>
+                  {STRATEGIES.map((s) => (
+                    <ListBox.Item key={s} id={s} textValue={t(`strategies.${s}`)}>
+                      {t(`strategies.${s}`)}
+                      <ListBox.ItemIndicator />
+                    </ListBox.Item>
+                  ))}
+                </ListBox>
+              </Select.Popover>
+              <Description>{t("strategyHint", { strategy })}</Description>
+            </Select>
+            <TextField
+              fullWidth
+              value={retries}
+              onChange={setRetries}
+              isDisabled={pending}
+              aria-label={t("fields.retries")}
+            >
+              <Label>{t("fields.retries")}</Label>
+              <Input aria-label={t("fields.retries")} />
+            </TextField>
+            <SearchSelect
+              label={t("fields.overflow")}
+              items={overflowItems}
+              value={overflow || "none"}
+              onChange={(next) => setOverflow(next === "none" ? "" : next)}
+              isDisabled={pending}
+            />
+            <MultiPicker
+              label={t("fields.fallbacks")}
+              placeholder={t("fields.fallbacksPlaceholder")}
+              searchLabel={tCommon("search")}
+              emptyLabel={tCommon("noResults")}
+              items={otherAliases.map((item) => ({ id: item, label: item }))}
+              selected={fallbacks}
+              onChange={setFallbacks}
+              isDisabled={pending}
+            />
+            {deps.map((d, i) => (
+              <DeploymentCard
+                key={d.id ?? i}
+                dep={d}
+                primary={i === 0}
+                providers={providers}
+                isDisabled={pending}
+                onChange={(patch) => setDep(i, patch)}
+                onRemove={() => setDeps((cur) => cur.filter((_, idx) => idx !== i))}
+              />
+            ))}
+            <Button
+              size="sm"
+              variant="secondary"
+              aria-label={t("addEndpoint")}
+              isDisabled={pending}
+              onPress={() => setDeps((cur) => [...cur, emptyDep(providers)])}
+            >
+              {t("addEndpoint")}
+            </Button>
+          </Disclosure.Body>
+        </Disclosure.Content>
+      </Disclosure>
+    </FormDialog>
   );
 }

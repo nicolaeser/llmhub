@@ -1,13 +1,16 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
-import { Alert, Breadcrumbs, Button, Card, Spinner, toast, useOverlayState } from "@heroui/react";
+import { useState, useTransition } from "react";
+import { Breadcrumbs, Button, Card, toast, useOverlayState } from "@heroui/react";
 import { Building2, Pencil, Plus, Trash2 } from "lucide-react";
 import { useFormatter, useTranslations } from "next-intl";
 import BudgetDialog from "@/components/budget/budget-dialog";
 import ConfirmDialog from "@/components/console/confirm-dialog";
 import EmptyState from "@/components/console/empty-state";
 import PageHeader from "@/components/console/page-header";
+import PageStatus from "@/components/console/page-status";
+import { useErrorToast } from "@/components/console/use-error-toast";
+import { useActionData } from "@/lib/hooks/use-action-data";
 import { useSearchParam } from "@/lib/hooks/use-search-param";
 import { isActionFail } from "@/lib/http/action-result";
 import type {
@@ -38,11 +41,9 @@ function firstNode(data: StructurePayload): NodeRef | null {
 export default function CompaniesPage() {
   const t = useTranslations("Companies");
   const tCommon = useTranslations("Common");
-  const tError = useTranslations("Error");
+  const showError = useErrorToast();
   const format = useFormatter();
   const nodeParam = useSearchParam("node");
-  const [data, setData] = useState<StructurePayload | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
   const [picked, setPicked] = useState<NodeRef | null>(null);
   const [nodeForm, setNodeForm] = useState<{
     kind: NodeKind;
@@ -56,16 +57,8 @@ export default function CompaniesPage() {
   const nodeState = useOverlayState();
   const budgetState = useOverlayState();
   const boostState = useOverlayState();
-
-  useEffect(() => {
-    loadStructureAction().then((result) => {
-      if (isActionFail(result)) {
-        setLoadError(result.error);
-        return;
-      }
-      setData(result);
-    });
-  }, []);
+  const page = useActionData(loadStructureAction);
+  const { data, setData } = page;
 
   function select(ref: NodeRef | null) {
     setPicked(ref);
@@ -89,35 +82,11 @@ export default function CompaniesPage() {
   }
 
   function applyBudget(result: BudgetResult) {
-    setData((current) =>
-      current ? withBudget(current, result.kind, result.id, result.budget) : current,
-    );
-  }
-
-  if (loadError) {
-    return (
-      <div>
-        <PageHeader title={t("title")} subtitle={t("subtitle")} />
-        <Alert status="danger">
-          <Alert.Indicator />
-          <Alert.Content>
-            <Alert.Description>{tError("code", { code: loadError })}</Alert.Description>
-          </Alert.Content>
-        </Alert>
-      </div>
-    );
+    setData((current) => withBudget(current, result.kind, result.id, result.budget));
   }
 
   if (!data) {
-    return (
-      <output
-        aria-live="polite"
-        aria-label={tCommon("loading")}
-        className="flex min-h-[40vh] items-center justify-center text-accent"
-      >
-        <Spinner color="current" size="lg" />
-      </output>
-    );
+    return <PageStatus title={t("title")} state={page} />;
   }
 
   const platform = !data.companyId;
@@ -182,7 +151,7 @@ export default function CompaniesPage() {
     startDelete(async () => {
       const result = await deleteNodeAction(ref);
       if (isActionFail(result)) {
-        toast.danger(tError("code", { code: result.error }));
+        showError(result.error);
         return;
       }
       setData(result);
@@ -439,7 +408,7 @@ export default function CompaniesPage() {
                 canReport={data.canReport}
                 mailEnabled={data.mailEnabled}
                 onChange={(reports) =>
-                  setData((current) => (current ? { ...current, reports } : current))
+                  setData((current) => ({ ...current, reports }))
                 }
               />
             ) : null}
@@ -451,7 +420,7 @@ export default function CompaniesPage() {
         <AlertsCard
           thresholds={data.thresholds}
           onSaved={(thresholds) =>
-            setData((current) => (current ? { ...current, thresholds } : current))
+            setData((current) => ({ ...current, thresholds }))
           }
         />
       ) : null}

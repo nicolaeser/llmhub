@@ -1,8 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import {
-  Alert,
   Button,
   Chip,
   Dropdown,
@@ -15,8 +14,11 @@ import {
 import { MoreHorizontal, Plus, User } from "lucide-react";
 import { useFormatter, useNow, useTranslations } from "next-intl";
 import BudgetDialog from "@/components/budget/budget-dialog";
+import ConfirmDialog from "@/components/console/confirm-dialog";
 import EmptyState from "@/components/console/empty-state";
 import PageHeader from "@/components/console/page-header";
+import PageStatus from "@/components/console/page-status";
+import { useActionData } from "@/lib/hooks/use-action-data";
 import { isActionFail } from "@/lib/http/action-result";
 import type { ActionFail } from "@/types/actions";
 import { StepUpDialog } from "@/components/security/step-up-dialog";
@@ -24,18 +26,18 @@ import { useRoleName } from "@/components/security/use-role-name";
 import { useSecurityError } from "@/components/security/use-security-error";
 import type { BudgetResult, BudgetView } from "@/types/structure";
 import type { ConsoleUser, UsersConsolePayload } from "@/types/users";
-import { setBudgetAction } from "@/app/(app)/companies/_action";
 import {
   ChangeAccessDialog,
   CreateUserDialog,
-  DeleteUserDialog,
   SetPasswordDialog,
 } from "./_components/user-dialogs";
 import {
+  deleteUserAction,
   loadConsoleUsersAction,
   resetUserTwoFactorAction,
   revokeUserSessionsAction,
   setUserBlockedAction,
+  setBudgetAction,
   setUserContentLoggingAction,
 } from "./_action";
 
@@ -60,8 +62,6 @@ export default function UsersPage() {
   const now = useNow({ updateInterval: 30_000 });
   const roleName = useRoleName();
   const errorText = useSecurityError();
-  const [data, setData] = useState<UsersConsolePayload | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [target, setTarget] = useState<ConsoleUser | null>(null);
   const [dialogKey, setDialogKey] = useState(0);
@@ -73,16 +73,8 @@ export default function UsersPage() {
   const budgetState = useOverlayState();
   const deleteState = useOverlayState();
   const resetState = useOverlayState();
-
-  useEffect(() => {
-    loadConsoleUsersAction().then((result) => {
-      if (isActionFail(result)) {
-        setLoadError(result.error);
-        return;
-      }
-      setData(result);
-    });
-  }, []);
+  const page = useActionData(loadConsoleUsersAction);
+  const { data, setData } = page;
 
   const filtered = useMemo(() => {
     const q = query.toLowerCase();
@@ -116,50 +108,38 @@ export default function UsersPage() {
     });
   }
 
-  function applyBudget(result: BudgetResult) {
-    setData((current) =>
-      current
-        ? {
-            ...current,
-            users: current.users.map((user) =>
-              user.id === result.id
-                ? {
-                    ...user,
-                    maxBudget: result.budget.maxBudget,
-                    spend: result.budget.spend,
-                    budgetDuration: result.budget.budgetDuration,
-                  }
-                : user,
-            ),
-          }
-        : current,
-    );
+  function remove(user: ConsoleUser) {
+    setBusyId(user.id);
+    start(async () => {
+      const result = await deleteUserAction(user.id);
+      setBusyId(null);
+      if (isActionFail(result)) {
+        toast.danger(errorText(result.error));
+        return;
+      }
+      setData((current) => ({ ...current, users: current.users.filter((row) => row.id !== result.id) }));
+      toast(t("toasts.deleted"), { variant: "success" });
+    });
   }
 
-  if (loadError) {
-    return (
-      <div>
-        <PageHeader title={t("title")} subtitle={t("subtitle")} />
-        <Alert status="danger">
-          <Alert.Indicator />
-          <Alert.Content>
-            <Alert.Description>{errorText(loadError)}</Alert.Description>
-          </Alert.Content>
-        </Alert>
-      </div>
-    );
+  function applyBudget(result: BudgetResult) {
+    setData((current) => ({
+      ...current,
+      users: current.users.map((user) =>
+        user.id === result.id
+          ? {
+              ...user,
+              maxBudget: result.budget.maxBudget,
+              spend: result.budget.spend,
+              budgetDuration: result.budget.budgetDuration,
+            }
+          : user,
+      ),
+    }));
   }
 
   if (!data) {
-    return (
-      <output
-        aria-live="polite"
-        aria-label={tCommon("loading")}
-        className="flex min-h-[40vh] items-center justify-center text-accent"
-      >
-        <Spinner color="current" size="lg" />
-      </output>
-    );
+    return <PageStatus title={t("title")} subtitle={t("subtitle")} state={page} />;
   }
 
   const createButton = data.canManage ? (
@@ -279,23 +259,21 @@ export default function UsersPage() {
                         <Table.Cell>
                           {user.manageable && (data.canManage || data.canSecure || data.canBudget) ? (
                             <Dropdown>
-                              <Dropdown.Trigger>
-                                <Button
-                                  isIconOnly
-                                  size="sm"
-                                  variant="ghost"
-                                  isPending={busyId === user.id}
-                                  aria-label={t("actionsMenu", { username: user.username })}
-                                >
-                                  {({ isPending }) =>
-                                    isPending ? (
-                                      <Spinner color="current" size="sm" />
-                                    ) : (
-                                      <MoreHorizontal size={14} aria-hidden />
-                                    )
-                                  }
-                                </Button>
-                              </Dropdown.Trigger>
+                              <Button
+                                isIconOnly
+                                size="sm"
+                                variant="ghost"
+                                isPending={busyId === user.id}
+                                aria-label={t("actionsMenu", { username: user.username })}
+                              >
+                                {({ isPending }) =>
+                                  isPending ? (
+                                    <Spinner color="current" size="sm" />
+                                  ) : (
+                                    <MoreHorizontal size={14} aria-hidden />
+                                  )
+                                }
+                              </Button>
                               <Dropdown.Popover>
                                 <Dropdown.Menu
                                   aria-label={t("actionsMenu", { username: user.username })}
@@ -419,15 +397,15 @@ export default function UsersPage() {
         target={target}
         onSaved={setData}
       />
-      <DeleteUserDialog
-        key={`delete-${dialogKey}`}
+      <ConfirmDialog
         state={deleteState}
-        target={target}
-        onDeleted={(id) =>
-          setData((current) =>
-            current ? { ...current, users: current.users.filter((user) => user.id !== id) } : current,
-          )
-        }
+        title={t("deleteTitle")}
+        description={t("deleteConfirm", { username: target?.username ?? "" })}
+        confirmLabel={tCommon("delete")}
+        cancelLabel={tCommon("cancel")}
+        onConfirm={() => {
+          if (target) remove(target);
+        }}
       />
       <StepUpDialog
         state={resetState}

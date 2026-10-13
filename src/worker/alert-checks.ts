@@ -1,7 +1,7 @@
 import "server-only";
 
 import prisma from "@/lib/db/prisma";
-import { fireAlert } from "@/lib/gateway/alerts";
+import { fireAlert } from "@/lib/alerts/notify";
 import {
   anomalyLookbackDays,
   daysUntil,
@@ -15,8 +15,8 @@ import {
   sameState,
   spendAnomalyRule,
   usd,
-} from "@/lib/gateway/alert-rules";
-import { getAlertState, getEnterprise, saveAlertState } from "@/lib/gateway/settings";
+} from "@/lib/alerts/rules";
+import { getAlertState, getEnterprise, saveAlertState } from "@/lib/settings/enterprise";
 import { money } from "@/lib/utils/money";
 import type { Prisma } from "@/generated/prisma/client";
 

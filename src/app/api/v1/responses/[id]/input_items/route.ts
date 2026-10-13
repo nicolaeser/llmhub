@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import { gateRequest, gateResponse } from "@/lib/gateway/gate";
-import { pageItems } from "@/lib/gateway/responses";
-import { loadStoredResponse } from "@/lib/gateway/responses-store";
+import { gateRequest, gateResponse } from "@/lib/gateway/access/gate";
+import { pageItems } from "@/lib/gateway/protocols/responses";
+import { loadStoredResponse } from "@/lib/gateway/storage/responses-store";
 
 export async function GET(
   req: Request,

@@ -1,12 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import {
   Alert,
   Button,
   Chip,
   SearchField,
-  Spinner,
   Table,
   toast,
   useOverlayState,
@@ -14,17 +13,19 @@ import {
 import { KeyRound, Pencil, Plus, RefreshCw, Trash2, Wallet } from "lucide-react";
 import { useFormatter, useTranslations } from "next-intl";
 import BudgetDialog from "@/components/budget/budget-dialog";
+import ConfirmDialog from "@/components/console/confirm-dialog";
 import EmptyState from "@/components/console/empty-state";
 import PageHeader from "@/components/console/page-header";
+import PageStatus from "@/components/console/page-status";
 import StatCard from "@/components/console/stat-card";
-import GettingStarted from "@/app/(app)/_components/getting-started";
-import { bindingKind, parsePreset, placeOf } from "@/app/(app)/_components/key-binding";
-import { KeyDialog } from "@/app/(app)/_components/key-dialog";
-import { loadKeysPageAction, revokeKeyAction, rotateKeyAction } from "@/app/(app)/_action";
-import { setBudgetAction } from "@/app/(app)/companies/_action";
+import { useErrorToast } from "@/components/console/use-error-toast";
+import GettingStarted from "./_components/getting-started";
+import { bindingKind, parsePreset, placeOf } from "./_components/key-binding";
+import { KeyDialog } from "./_components/key-dialog";
+import { loadKeysPageAction, revokeKeyAction, rotateKeyAction, setBudgetAction } from "./_action";
+import { useActionData } from "@/lib/hooks/use-action-data";
 import { isActionFail } from "@/lib/http/action-result";
-import type { VirtualKeyView } from "@/types/gateway";
-import type { KeyOptions, KeyPreset } from "@/types/keys";
+import type { KeyOptions, KeyPreset, VirtualKeyView } from "@/types/keys";
 import type { BudgetResult, BudgetView } from "@/types/structure";
 
 function keyBudget(row: VirtualKeyView): BudgetView {
@@ -43,31 +44,10 @@ function keyBudget(row: VirtualKeyView): BudgetView {
 
 export default function KeysPage() {
   const t = useTranslations("Keys");
-  const tError = useTranslations("Error");
+  const showError = useErrorToast();
   const tCommon = useTranslations("Common");
   const format = useFormatter();
-  const [loading, setLoading] = useState(true);
-  const [keys, setKeys] = useState<VirtualKeyView[]>([]);
-  const [options, setOptions] = useState<KeyOptions>({
-    companyId: "",
-    orgs: [],
-    teams: [],
-    projects: [],
-    members: [],
-    models: [],
-    templates: [],
-  });
-  const [owners, setOwners] = useState<Record<string, string>>({});
-  const [providerCount, setProviderCount] = useState(0);
-  const [canManage, setCanManage] = useState(false);
-  const [canBind, setCanBind] = useState(false);
-  const [canBudget, setCanBudget] = useState(false);
   const [budgetKey, setBudgetKey] = useState<VirtualKeyView | null>(null);
-  const [overview, setOverview] = useState({
-    spend7d: 0,
-    requests7d: 0,
-    errors7d: 0,
-  });
   const [query, setQuery] = useState("");
   const [secret, setSecret] = useState<string | null>(null);
   const [editing, setEditing] = useState<VirtualKeyView | null>(null);
@@ -77,7 +57,6 @@ export default function KeysPage() {
   const [, start] = useTransition();
   const dialogState = useOverlayState();
   const budgetState = useOverlayState();
-  const openKeyDialog = dialogState.open;
 
   function openDialog(row: VirtualKeyView | null, next: KeyPreset | null = null) {
     setEditing(row);
@@ -86,10 +65,23 @@ export default function KeysPage() {
     dialogState.open();
   }
 
+  const page = useActionData(loadKeysPageAction, (loaded) => {
+    const requested = parsePreset(new URLSearchParams(window.location.search).get("new"));
+    if (!requested || !loaded.canManage) return;
+    window.history.replaceState(null, "", window.location.pathname);
+    openDialog(null, requested);
+  });
+  const { data, setData } = page;
+  const keys = data?.keys;
+
   function openBudget(row: VirtualKeyView) {
     setBudgetKey(row);
     setDialogKey((n) => n + 1);
     budgetState.open();
+  }
+
+  function setKeys(update: (current: VirtualKeyView[]) => VirtualKeyView[]) {
+    setData((current) => ({ ...current, keys: update(current.keys) }));
   }
 
   function applyBudget(result: BudgetResult) {
@@ -121,7 +113,7 @@ export default function KeysPage() {
       const result = await rotateKeyAction(id);
       setBusy(null);
       if (isActionFail(result)) {
-        toast.danger(tError("code", { code: result.error }));
+        showError(result.error);
         return;
       }
       const { key: rotated, ...row } = result.key;
@@ -137,7 +129,7 @@ export default function KeysPage() {
       const result = await revokeKeyAction(id);
       setBusy(null);
       if (isActionFail(result)) {
-        toast.danger(tError("code", { code: result.error }));
+        showError(result.error);
         return;
       }
       setKeys((current) => current.filter((k) => k.token_id !== result.id));
@@ -145,37 +137,31 @@ export default function KeysPage() {
     });
   }
 
-  useEffect(() => {
-    loadKeysPageAction().then((res) => {
-      if (!isActionFail(res)) {
-        setKeys(res.keys);
-        setOptions({
-          companyId: res.companyId,
-          orgs: res.orgs,
-          teams: res.teams,
-          projects: res.projects,
-          members: res.members,
-          models: res.models,
-          templates: res.templates,
-        });
-        setOwners(res.owners);
-        setProviderCount(res.providers);
-        setCanManage(res.canManage);
-        setCanBind(res.canBind);
-        setCanBudget(res.canBudget);
-        setOverview(res.overview);
-        const requested = parsePreset(new URLSearchParams(window.location.search).get("new"));
-        if (requested && res.canManage) {
-          window.history.replaceState(null, "", window.location.pathname);
-          setEditing(null);
-          setPreset(requested);
-          setDialogKey((n) => n + 1);
-          openKeyDialog();
-        }
-      }
-      setLoading(false);
-    });
-  }, [openKeyDialog]);
+  const filtered = useMemo(() => {
+    const q = query.toLowerCase();
+    return (keys ?? []).filter(
+      (k) =>
+        !q ||
+        k.key_alias.toLowerCase().includes(q) ||
+        k.key_name.toLowerCase().includes(q) ||
+        k.token_id.toLowerCase().includes(q),
+    );
+  }, [keys, query]);
+
+  if (!data) {
+    return <PageStatus title={t("title")} subtitle={t("subtitle")} state={page} />;
+  }
+
+  const { canManage, canBind, canBudget, overview, owners } = data;
+  const options: KeyOptions = {
+    companyId: data.companyId,
+    orgs: data.orgs,
+    teams: data.teams,
+    projects: data.projects,
+    members: data.members,
+    models: data.models,
+    templates: data.templates,
+  };
 
   function accessLabel(row: VirtualKeyView): string {
     if (!row.templates.length && !row.models.length) return t("allModels");
@@ -208,29 +194,6 @@ export default function KeysPage() {
     };
   }
 
-  const filtered = useMemo(() => {
-    const q = query.toLowerCase();
-    return keys.filter(
-      (k) =>
-        !q ||
-        k.key_alias.toLowerCase().includes(q) ||
-        k.key_name.toLowerCase().includes(q) ||
-        k.token_id.toLowerCase().includes(q),
-    );
-  }, [keys, query]);
-
-  if (loading) {
-    return (
-      <output
-        aria-live="polite"
-        aria-label={tCommon("loading")}
-        className="flex min-h-[40vh] items-center justify-center text-accent"
-      >
-        <Spinner color="current" size="lg" />
-      </output>
-    );
-  }
-
   const createButton = canManage ? (
     <Button onPress={() => openDialog(null)}>
       <Plus size={16} aria-hidden />
@@ -238,21 +201,21 @@ export default function KeysPage() {
     </Button>
   ) : undefined;
   const setupIncomplete =
-    canManage && (providerCount === 0 || options.models.length === 0 || keys.length === 0);
+    canManage && (data.providers === 0 || options.models.length === 0 || data.keys.length === 0);
 
   return (
     <div className="space-y-5">
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
-        actions={keys.length ? createButton : undefined}
+        actions={data.keys.length ? createButton : undefined}
       />
 
       {setupIncomplete ? (
         <GettingStarted
-          providers={providerCount}
+          providers={data.providers}
           models={options.models.length}
-          keys={keys.length}
+          keys={data.keys.length}
           onCreateKey={() => openDialog(null)}
         />
       ) : null}
@@ -269,7 +232,7 @@ export default function KeysPage() {
         </Alert>
       ) : null}
 
-      {keys.length === 0 ? (
+      {data.keys.length === 0 ? (
         <EmptyState
           icon={KeyRound}
           title={t("emptyTitle")}
@@ -279,7 +242,7 @@ export default function KeysPage() {
       ) : (
         <>
           <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-            <StatCard label={t("overview.keys")} value={format.number(keys.length, "integer")} />
+            <StatCard label={t("overview.keys")} value={format.number(data.keys.length, "integer")} />
             <StatCard
               label={t("overview.spend")}
               value={format.number(overview.spend7d, "money")}
@@ -399,28 +362,42 @@ export default function KeysPage() {
                               ) : null}
                               {canManage ? (
                                 <>
-                                  <Button
-                                    isIconOnly
-                                    size="sm"
-                                    variant="ghost"
-                                    aria-label={t("rotate")}
-                                    isPending={busy?.id === row.token_id && busy.action === "rotate"}
-                                    isDisabled={busy !== null && busy.id !== row.token_id}
-                                    onPress={() => rotate(row.token_id)}
+                                  <ConfirmDialog
+                                    title={t("rotateConfirm.title", { name: row.key_alias || row.key_name })}
+                                    description={t("rotateConfirm.description")}
+                                    confirmLabel={t("rotate")}
+                                    cancelLabel={tCommon("cancel")}
+                                    onConfirm={() => rotate(row.token_id)}
                                   >
-                                    <RefreshCw size={14} aria-hidden />
-                                  </Button>
-                                  <Button
-                                    isIconOnly
-                                    size="sm"
-                                    variant="danger-soft"
-                                    aria-label={t("revoke")}
-                                    isPending={busy?.id === row.token_id && busy.action === "revoke"}
-                                    isDisabled={busy !== null && busy.id !== row.token_id}
-                                    onPress={() => revoke(row.token_id)}
+                                    <Button
+                                      isIconOnly
+                                      size="sm"
+                                      variant="ghost"
+                                      aria-label={t("rotate")}
+                                      isPending={busy?.id === row.token_id && busy.action === "rotate"}
+                                      isDisabled={busy !== null && busy.id !== row.token_id}
+                                    >
+                                      <RefreshCw size={14} aria-hidden />
+                                    </Button>
+                                  </ConfirmDialog>
+                                  <ConfirmDialog
+                                    title={t("revokeConfirm.title", { name: row.key_alias || row.key_name })}
+                                    description={t("revokeConfirm.description")}
+                                    confirmLabel={t("revoke")}
+                                    cancelLabel={tCommon("cancel")}
+                                    onConfirm={() => revoke(row.token_id)}
                                   >
-                                    <Trash2 size={14} aria-hidden />
-                                  </Button>
+                                    <Button
+                                      isIconOnly
+                                      size="sm"
+                                      variant="danger-soft"
+                                      aria-label={t("revoke")}
+                                      isPending={busy?.id === row.token_id && busy.action === "revoke"}
+                                      isDisabled={busy !== null && busy.id !== row.token_id}
+                                    >
+                                      <Trash2 size={14} aria-hidden />
+                                    </Button>
+                                  </ConfirmDialog>
                                 </>
                               ) : null}
                             </div>

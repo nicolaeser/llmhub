@@ -86,7 +86,7 @@ const zdrOnly: DeploymentRule = { providerIds: [], regions: [], zdrOnly: true, n
 const usOnly: DeploymentRule = { providerIds: [], regions: ["us"], zdrOnly: false, noTrainingOnly: false, maxRetentionDays: null };
 
 test("acquireGroup only hands out deployments that meet the caller's rules", async () => {
-  const { acquireGroup, loadGroup } = await import("@/lib/gateway/runtime");
+  const { acquireGroup, loadGroup } = await import("@/lib/gateway/routing/runtime");
   const group = await loadGroup("claude");
   const open = await acquireGroup(group, undefined);
   assert.equal(open.dep.id, "claude-us");
@@ -100,7 +100,7 @@ test("acquireGroup only hands out deployments that meet the caller's rules", asy
 });
 
 test("permittedDeployments drops custom endpoints under any data rule", async () => {
-  const { loadGroup, permittedDeployments } = await import("@/lib/gateway/runtime");
+  const { loadGroup, permittedDeployments } = await import("@/lib/gateway/routing/runtime");
   const backup = await loadGroup("backup");
   assert.deepEqual(
     permittedDeployments(backup.mapped, undefined).map((dep) => dep.id),
@@ -111,7 +111,7 @@ test("permittedDeployments drops custom endpoints under any data rule", async ()
 });
 
 test("fallback aliases inherit the rules of the alias the caller asked for", async () => {
-  const { withDeployment } = await import("@/lib/gateway/chat");
+  const { withDeployment } = await import("@/lib/gateway/dispatch/chat");
   const used: string[] = [];
   const failing = async (dep: { id: string }) => {
     used.push(dep.id);

@@ -6,7 +6,7 @@ import {
   parseLogFilters,
   requestLogWhere,
   spendEventWhere,
-} from "@/lib/gateway/request-log-query";
+} from "@/lib/gateway/request-logs/request-log-query";
 
 test("parseLogFilters trims strings, caps lengths, and reads the PII flag from query strings", () => {
   const filters = parseLogFilters({ model: "  gpt  ", status: "4001", pii: "1", keyId: 7, extra: "x" });

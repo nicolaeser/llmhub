@@ -1,7 +1,7 @@
 import "server-only";
 
 import type { z } from "zod";
-import { isActionFail } from "@/lib/http/action-result";
+import { isActionFail, runAction } from "@/lib/http/action-result";
 import type { ActionFail } from "@/types/actions";
 import type { AssistantContext, AssistantToolResult, AssistantToolSpec } from "@/types/assistant";
 
@@ -38,11 +38,15 @@ export function actionCode(fail: ActionFail): string {
   return fail.error.toLowerCase();
 }
 
-export async function viaAction<T>(
-  pending: Promise<T | ActionFail>,
+export function settle<T>(pending: Promise<T>): Promise<T | ActionFail> {
+  return runAction(() => pending);
+}
+
+export async function viaService<T>(
+  pending: Promise<T>,
   map: (value: T) => AssistantToolResult | Promise<AssistantToolResult>,
 ): Promise<AssistantToolResult> {
-  const value = await pending;
+  const value = await settle(pending);
   if (isActionFail(value)) return toolFail(actionCode(value));
   return map(value);
 }

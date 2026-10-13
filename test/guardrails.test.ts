@@ -1,9 +1,10 @@
+import { chatReply, gateway, gatewayRequest, MODEL, resetGateway } from "./support/gateway-harness";
+import { recordedPrisma } from "./support/recorded-prisma";
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
 import test from "node:test";
-import { screenChatJson, screenChatOutput, withholdChatJson } from "@/lib/gateway/chat";
+import { screenChatJson, screenChatOutput, withholdChatJson } from "@/lib/gateway/dispatch/chat";
 import { GateError } from "@/lib/gateway/errors";
-import { applyGuardrails, withTrace } from "@/lib/gateway/gate";
+import { applyGuardrails, withTrace } from "@/lib/gateway/access/gate";
 import {
   compileRule,
   defaultGuardrails,
@@ -19,8 +20,11 @@ import {
   ruleIssue,
   screenRequest,
   testGuardrails,
-} from "@/lib/gateway/guardrails";
-import { normalizeGuardrails } from "@/lib/gateway/settings";
+} from "@/lib/gateway/safety/guardrails";
+import { encodeTerms, termBag } from "@/lib/rag/lexical";
+import { rankingOptions } from "@/lib/rag/rank";
+import { encodeVector, normalizeVector } from "@/lib/rag/vectors";
+import { normalizeGuardrails } from "@/lib/settings/enterprise";
 import { guardrailPolicySchema } from "@/schemas/guardrails";
 import type { JsonMap, Principal, RequestTrace } from "@/types/gateway";
 import type { GuardrailPolicy, GuardrailRule, PiiPolicy } from "@/types/guardrails";
@@ -330,20 +334,159 @@ test("cached chat responses are screened again under the current output policy",
   assert.equal(screenChatOutput(structuredClone(cached), null), false);
 });
 
-test("the chat completions route screens prompts before the response cache and never caches blocked output", async () => {
-  const source = await readFile(new URL("../src/lib/gateway/chat-completions-route.ts", import.meta.url), "utf8");
-  const guard = source.indexOf("await applyGuardrails(");
-  const lookup = source.indexOf("await lookupChatCache(");
-  const hit = source.indexOf("lookup?.hit");
-  assert.ok(guard > 0 && lookup > guard, "applyGuardrails must run before the cache lookup");
-  assert.ok(source.indexOf("screenChatOutput(response, output", hit) > hit, "cache hits must be screened");
-  assert.match(source, /if \(lookup && !principal\.trace\?\.guardBlocked\)/);
+async function chatRoute(content: string) {
+  const { POST } = await import("@/app/api/v1/chat/completions/route");
+  const res = await POST(gatewayRequest("/api/v1/chat/completions", { model: MODEL, messages: [{ role: "user", content }] }));
+  return { status: res.status, cache: res.headers.get("x-hub-cache"), json: (await res.json()) as JsonMap };
+}
+
+function firstChoice(json: JsonMap): JsonMap {
+  return (json.choices as JsonMap[])[0]!;
+}
+
+test("the chat completions route screens prompts before serving a cached response", async () => {
+  resetGateway();
+  gateway.enterprise = { cache_ttl_seconds: 300 };
+  const first = await chatRoute("Cached status of Project Falcon?");
+  assert.deepEqual([first.status, first.cache], [200, "MISS"]);
+  gateway.key = { ...gateway.key, guardrailPolicy: policy({ rules: [rule({ target: "input" })] }) };
+  const again = await chatRoute("Cached status of Project Falcon?");
+  assert.equal(again.status, 400);
+  assert.equal((again.json.error as JsonMap).code, "guardrail_blocked");
+  assert.equal(gateway.upstream.length, 1);
 });
 
-test("file search results pass through guardrails before they reach the model", async () => {
-  const source = await readFile(new URL("../src/lib/rag/file-search-tool.ts", import.meta.url), "utf8");
-  const start = source.indexOf("async function screenRetrieved");
-  const body = source.slice(start, source.indexOf("\n}\n", start));
-  assert.ok(body.indexOf("screenRequest(") > 0 && body.indexOf("redactJSON(") > body.indexOf("screenRequest("));
-  assert.match(source, /content: await screenRetrieved\(ctx\.principal, searchResultText\(hits\)\)/);
+test("the chat completions route screens cache hits under the current output policy", async () => {
+  resetGateway();
+  gateway.enterprise = { cache_ttl_seconds: 300 };
+  gateway.reply = () => chatReply("Key sk-proj-abcdefghijklmnop1234");
+  const first = await chatRoute("Which key did we rotate?");
+  assert.deepEqual([first.status, first.cache], [200, "MISS"]);
+  gateway.key = { ...gateway.key, guardrailPolicy: policy({ secrets: { enabled: true, action: "mask", entities: [] } }) };
+  const hit = await chatRoute("Which key did we rotate?");
+  assert.deepEqual([hit.status, hit.cache], [200, "HIT"]);
+  assert.equal((firstChoice(hit.json).message as JsonMap).content, "Key [SECRET]");
+  assert.equal(gateway.upstream.length, 1);
+});
+
+test("the chat completions route never caches blocked output", async () => {
+  resetGateway();
+  gateway.enterprise = { cache_ttl_seconds: 300 };
+  gateway.key = { ...gateway.key, guardrailPolicy: policy({ secrets: { enabled: true, action: "block", entities: [] } }) };
+  gateway.reply = () => chatReply("Key sk-proj-abcdefghijklmnop1234");
+  for (const attempt of [1, 2]) {
+    const res = await chatRoute("Print the deploy key");
+    assert.deepEqual([res.status, res.cache], [200, "MISS"]);
+    assert.equal(firstChoice(res.json).finish_reason, "content_filter");
+    assert.equal(gateway.upstream.length, attempt);
+  }
+});
+
+const SEARCH_CALL = {
+  id: "chatcmpl-search",
+  object: "chat.completion",
+  created: 1,
+  model: MODEL,
+  choices: [
+    {
+      index: 0,
+      message: {
+        role: "assistant",
+        content: null,
+        tool_calls: [
+          { id: "call_1", type: "function", function: { name: "file_search", arguments: '{"queries":["launch date"]}' } },
+        ],
+      },
+      finish_reason: "tool_calls",
+    },
+  ],
+  usage: { prompt_tokens: 3, completion_tokens: 2, total_tokens: 5 },
+};
+
+const EMAIL_MASK: PiiPolicy = { enabled: true, mode: "mask", output: false, entities: ["EMAIL_ADDRESS"] };
+
+async function searchFiles(chunk: string, guardrails: GuardrailPolicy, pii: PiiPolicy) {
+  const { runFileSearch, withFileSearch } = await import("@/lib/rag/file-search-tool");
+  resetGateway();
+  recordedPrisma.handlers = {
+    vectorStoreFile: {
+      findMany: () => [{ fileId: "file-1", filename: "plan.md", attributes: {}, indexedAt: new Date(1) }],
+    },
+    vectorChunk: {
+      findMany: (args: { select: { text?: boolean } }) =>
+        args.select.text
+          ? [{ id: "chunk-1", text: chunk }]
+          : [
+              {
+                id: "chunk-1",
+                fileId: "file-1",
+                position: 0,
+                embedding: encodeVector(normalizeVector([1, 0, 0])),
+                terms: encodeTerms(termBag(chunk)),
+              },
+            ],
+    },
+  };
+  const modelCalls: JsonMap[] = [];
+  gateway.reply = (call) => {
+    if (call.url.endsWith("/embeddings")) {
+      return Response.json({ data: [{ index: 0, embedding: [1, 0, 0] }], usage: { prompt_tokens: 1, total_tokens: 1 } });
+    }
+    modelCalls.push(call.body ?? {});
+    return modelCalls.length === 1 ? Response.json(SEARCH_CALL) : chatReply("It launches in May.");
+  };
+  const question = { model: MODEL, messages: [{ role: "user", content: "When do we launch?" }] };
+  const failure = await runFileSearch(
+    {
+      principal: principal(guardrails, pii),
+      model: MODEL,
+      aliases: [MODEL],
+      outputGuard: null,
+      include: null,
+      tool: {
+        vectorStoreIds: ["vs-1"],
+        maxResults: 5,
+        filters: null,
+        ranking: rankingOptions({ ranker: "none" }),
+        original: { type: "file_search" },
+      },
+      stores: [{ id: "vs-1", embeddingModel: MODEL, embeddingDimensions: 0, dimensions: 3, rerankModel: "", expiresAfterDays: null }],
+    },
+    withFileSearch(question, "auto", undefined),
+  ).then(
+    () => null,
+    (err: unknown) => err,
+  );
+  const followUp = (modelCalls[1]?.messages ?? []) as JsonMap[];
+  return { failure, modelCalls, toolMessages: followUp.filter((message) => message.role === "tool") };
+}
+
+function retrievalBlocked(err: unknown): boolean {
+  return (
+    err instanceof GateError &&
+    err.status === 400 &&
+    err.code === "guardrail_blocked" &&
+    err.message === "file search results were blocked by the guardrail policy"
+  );
+}
+
+test("file search results that hit a guardrail never reach the model", async () => {
+  const { failure, modelCalls } = await searchFiles("Project Falcon launches in May.", policy({ rules: [rule({})] }), PII_OFF);
+  assert.ok(retrievalBlocked(failure), String(failure));
+  assert.equal(modelCalls.length, 1);
+});
+
+test("file search results reach the model with PII masked", async () => {
+  const { failure, toolMessages } = await searchFiles("Ask ada@acme.com about the launch.", policy({}), EMAIL_MASK);
+  assert.equal(failure, null);
+  assert.equal(toolMessages.length, 1);
+  assert.match(String(toolMessages[0]!.content), /about the launch/);
+  assert.doesNotMatch(String(toolMessages[0]!.content), /ada@acme\.com/);
+});
+
+test("file search guardrails see retrieved text before PII masking", async () => {
+  const guardrails = policy({ rules: [rule({ name: "Contacts", patterns: ["ada@acme.com"] })] });
+  const { failure, modelCalls } = await searchFiles("Ask ada@acme.com about the launch.", guardrails, EMAIL_MASK);
+  assert.ok(retrievalBlocked(failure), String(failure));
+  assert.equal(modelCalls.length, 1);
 });

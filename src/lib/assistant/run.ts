@@ -1,13 +1,13 @@
 import "server-only";
 
 import prisma from "@/lib/db/prisma";
-import { dispatchChat } from "@/lib/gateway/chat";
-import { admit, withTrace } from "@/lib/gateway/gate";
-import { sessionPrincipal } from "@/lib/gateway/principal";
-import { getEnterprise } from "@/lib/gateway/settings";
+import { dispatchChat } from "@/lib/gateway/dispatch/chat";
+import { admit, withTrace } from "@/lib/gateway/access/gate";
+import { sessionPrincipal } from "@/lib/gateway/access/principal";
+import { getEnterprise } from "@/lib/settings/enterprise";
 import { getTranslations } from "next-intl/server";
 import { asRecord } from "@/lib/gateway/core";
-import { modelAlias } from "@/lib/gateway/model-alias";
+import { modelAlias } from "@/lib/gateway/catalog/model-alias";
 import { ASSISTANT_STEP_LIMIT_NOTE, assistantSystemPrompt } from "@/lib/assistant/prompt";
 import { callMcpTool, mcpToolsForModel } from "@/lib/assistant/mcp";
 import { setupStatus } from "@/lib/assistant/tools/general";

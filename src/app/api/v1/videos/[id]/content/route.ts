@@ -1,7 +1,7 @@
-import { gateRequest, gateResponse } from "@/lib/gateway/gate";
+import { gateRequest, gateResponse } from "@/lib/gateway/access/gate";
 import { bytesBody } from "@/lib/http/api";
-import { forwardToModel } from "@/lib/gateway/upstream";
-import { videoRecord } from "@/lib/gateway/videos";
+import { forwardToModel } from "@/lib/gateway/dispatch/upstream";
+import { videoRecord } from "@/lib/gateway/endpoints/videos";
 
 export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }) {
   try {

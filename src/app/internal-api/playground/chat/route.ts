@@ -4,7 +4,7 @@ import { isSameOriginRequest } from "@/lib/auth/request-origin";
 import { env } from "@/lib/env";
 import { readJSON } from "@/lib/http/api";
 import { problemFromError, problemResponse } from "@/lib/http/problem";
-import { streamChat } from "@/lib/gateway/chat";
+import { streamChat } from "@/lib/gateway/dispatch/chat";
 import {
   admit,
   allowModel,
@@ -13,8 +13,8 @@ import {
   modelOf,
   requestPath,
   withTrace,
-} from "@/lib/gateway/gate";
-import { sessionPrincipal } from "@/lib/gateway/principal";
+} from "@/lib/gateway/access/gate";
+import { sessionPrincipal } from "@/lib/gateway/access/principal";
 import type { JsonMap } from "@/types/gateway";
 
 export const maxDuration = 300;

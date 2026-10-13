@@ -21,6 +21,10 @@ function tooLarge(): Error {
   return Object.assign(new Error("request body is too large"), { status: 413 });
 }
 
+export function isPayloadTooLarge(err: unknown): boolean {
+  return err !== null && typeof err === "object" && (err as { status?: unknown }).status === 413;
+}
+
 export function assertContentLength(req: Request, limit: number): void {
   if (Number(req.headers.get("content-length") ?? 0) > limit) throw tooLarge();
 }

@@ -1,13 +1,15 @@
 import "server-only";
 
+import { loadRolesConsole } from "@/lib/auth/roles";
 import prisma from "@/lib/db/prisma";
+import { PERMISSIONS } from "@/lib/auth/permissions";
 import {
-  assignUserAccessAction,
-  loadConsoleUsersAction,
-  revokeUserSessionsAction,
-  setUserBlockedAction,
-} from "@/app/(app)/users/_action";
-import { loadRolesAction } from "@/app/(app)/roles/_action";
+  assignUserAccess,
+  changeUsers,
+  loadUsersConsole,
+  revokeUserSessions,
+  setUserBlocked,
+} from "@/lib/auth/users";
 import {
   assignRoleToolInput,
   confirmUserToolInput,
@@ -15,7 +17,7 @@ import {
   listUsersToolInput,
   userBlockedToolInput,
 } from "@/schemas/assistant";
-import { defineTool, needsConfirmation, toolFail, viaAction } from "@/lib/assistant/tools/define";
+import { defineTool, needsConfirmation, toolFail, viaService } from "@/lib/assistant/tools/define";
 import type { ConsoleUser } from "@/types/users";
 
 function userView(user: ConsoleUser) {
@@ -48,7 +50,7 @@ export const accessTools = {
       "Console users with role, the company they are limited to (null for platform users), blocked state, second-factor status, active sessions, and last activity. No email addresses or secrets.",
     input: listUsersToolInput,
     run: async ({ search }) =>
-      viaAction(loadConsoleUsersAction(), ({ users, roles }) => {
+      viaService(loadUsersConsole(), ({ users, roles }) => {
         const needle = search?.toLowerCase() ?? "";
         return {
           result: {
@@ -68,7 +70,7 @@ export const accessTools = {
     description: "Roles with their permissions, member counts, and the assistant tools each role has switched off.",
     input: emptyToolInput,
     run: async () =>
-      viaAction(loadRolesAction(), ({ roles }) => ({
+      viaService(loadRolesConsole(), ({ roles }) => ({
         result: roles.map((role) => ({
           id: role.id,
           name: role.name ?? role.templateKey,
@@ -87,7 +89,10 @@ export const accessTools = {
     input: userBlockedToolInput,
     run: async ({ userId, blocked, confirm }) =>
       needsConfirmation(confirm || !blocked) ??
-      viaAction(setUserBlockedAction(userId, blocked), updatedUser(userId)),
+      viaService(
+        changeUsers(PERMISSIONS.USERS_MANAGE, (session) => setUserBlocked(session, userId, blocked)),
+        updatedUser(userId),
+      ),
   }),
   assign_user_role: defineTool({
     description:
@@ -99,13 +104,15 @@ export const accessTools = {
         select: { revision: true, orgId: true },
       });
       if (!user) return toolFail("user_not_found");
-      return viaAction(
-        assignUserAccessAction({
-          userId,
-          roleId,
-          orgId: orgId ?? user.orgId ?? "",
-          revision: user.revision,
-        }),
+      return viaService(
+        changeUsers(PERMISSIONS.USERS_MANAGE, (session) =>
+          assignUserAccess(session, {
+            userId,
+            roleId,
+            orgId: orgId ?? user.orgId ?? "",
+            revision: user.revision,
+          }),
+        ),
         updatedUser(userId),
       );
     },
@@ -116,6 +123,9 @@ export const accessTools = {
     input: confirmUserToolInput,
     run: async ({ userId, confirm }) =>
       needsConfirmation(confirm) ??
-      viaAction(revokeUserSessionsAction(userId), updatedUser(userId)),
+      viaService(
+        changeUsers(PERMISSIONS.USERS_SECURITY, (session) => revokeUserSessions(session, userId)),
+        updatedUser(userId),
+      ),
   }),
 };

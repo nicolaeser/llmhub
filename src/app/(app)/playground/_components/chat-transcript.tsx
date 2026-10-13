@@ -3,9 +3,9 @@
 import type { RefObject } from "react";
 import { Spinner } from "@heroui/react";
 import { useTranslations } from "next-intl";
-import type { Msg } from "@/types/playground";
+import type { PlaygroundMessage } from "@/types/playground";
 
-function visibleText(content: Msg["content"], imageMarker: string): string {
+function visibleText(content: PlaygroundMessage["content"], imageMarker: string): string {
   if (typeof content === "string") return content;
   if (!Array.isArray(content)) return "";
   const chunks: string[] = [];
@@ -22,7 +22,7 @@ export default function ChatTranscript({
   pending,
   bottomRef,
 }: {
-  messages: Msg[];
+  messages: PlaygroundMessage[];
   pending: boolean;
   bottomRef: RefObject<HTMLDivElement | null>;
 }) {

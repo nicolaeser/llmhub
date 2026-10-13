@@ -1,8 +1,8 @@
 import { isIP } from "node:net";
 import { z } from "zod";
-import { modelAlias } from "@/lib/gateway/model-alias";
-import { KEY_ENDPOINTS, MAX_ACCESS_WINDOWS } from "@/lib/gateway/key-restrictions";
-import { clockMinute, isTimeZone, WEEKDAYS } from "@/lib/gateway/price-schedule";
+import { modelAlias } from "@/lib/gateway/catalog/model-alias";
+import { KEY_ENDPOINTS, MAX_ACCESS_WINDOWS } from "@/lib/gateway/access/key-restrictions";
+import { clockMinute, isTimeZone, WEEKDAYS } from "@/lib/gateway/billing/price-schedule";
 
 const clock = z.string().refine((value) => clockMinute(value) !== null, "expected HH:MM");
 

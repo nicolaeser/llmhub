@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { gateRequest, gateResponse, requestPath } from "@/lib/gateway/gate";
+import { gateRequest, gateResponse, requestPath } from "@/lib/gateway/access/gate";
 import { parseBody, searchableStore, searchRequest } from "@/lib/rag/api";
 import { hitJson, searchStores } from "@/lib/rag/search";
 import { readableStore, usableStore } from "@/lib/rag/stores";

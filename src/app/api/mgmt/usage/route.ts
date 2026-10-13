@@ -1,6 +1,6 @@
-import { loadUsageAction } from "@/app/(app)/_action";
 import { PERMISSIONS } from "@/lib/auth/permissions";
-import { managementRoute, readQuery, respond, unwrap } from "@/lib/management/http";
+import { loadUsage } from "@/lib/usage/dashboard";
+import { managementRoute, readQuery, respond } from "@/lib/management/http";
 import { serializeUsage } from "@/lib/management/serialize";
 import { usageQuerySchema } from "@/schemas/management";
 
@@ -8,8 +8,7 @@ export const dynamic = "force-dynamic";
 
 export const GET = managementRoute(PERMISSIONS.SPEND_READ, async ({ req }) => {
   const query = readQuery(req, usageQuerySchema);
-  const usage = unwrap(
-    await loadUsageAction({
+  const usage = await loadUsage({
       days: query.days,
       model: query.model,
       teamId: query.team_id,
@@ -18,7 +17,6 @@ export const GET = managementRoute(PERMISSIONS.SPEND_READ, async ({ req }) => {
       memberId: query.member_id,
       keyId: query.key_id,
       userId: query.user_id,
-    }),
-  );
+    });
   return respond(serializeUsage(usage));
 });

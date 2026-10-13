@@ -1,7 +1,13 @@
 import type { z } from "zod";
 import type { adminSettingsSchema, alertWebhooksSchema } from "@/schemas/settings";
-import type { WebhookEvent, WebhookFormat } from "@/types/gateway";
-import type { UpdateStatus } from "@/types/updates";
+import type { AlertWebhook, WebhookEvent, WebhookFormat } from "@/types/alerts";
+import type { OidcSettings } from "@/types/auth";
+import type { SemanticCacheSettings } from "@/types/cache";
+import type { GuardrailPolicy, PiiPolicy } from "@/types/guardrails";
+import type { JevSettings } from "@/types/model-catalog";
+import type { AntigravitySettings } from "@/types/providers";
+import type { VectorStoreDefaults } from "@/types/rag";
+import type { S3Settings } from "@/types/s3";
 
 export type AdminSettings = z.infer<typeof adminSettingsSchema>;
 
@@ -26,16 +32,33 @@ export type AlertWebhookDraft = AlertWebhookInput & {
   secretSet: boolean;
 };
 
-export type AdminSettingsView = {
-  settings: AdminSettings;
-  aliases: string[];
-  canManage: boolean;
-  canManageScim: boolean;
-  jevKeySet: boolean;
-  updates: UpdateStatus;
-  scimTokenSet: boolean;
-  s3Ready: boolean;
-  oidcEnv: boolean;
-  smtpEnv: boolean;
-  appUrl: string;
+export type Enterprise = {
+  oidc?: OidcSettings;
+  alert_webhooks?: AlertWebhook[];
+  log_retention_days?: number;
+  spend_retention_days?: number;
+  audit_retention_days?: number;
+  object_retention_days?: number;
+  file_retention_days?: number;
+  cache_ttl_seconds?: number;
+  cache_semantic?: SemanticCacheSettings;
+  log_archive?: boolean;
+  log_content?: boolean;
+  content_retention_days?: number;
+  pii?: PiiPolicy;
+  guardrails?: GuardrailPolicy;
+  s3?: S3Settings;
+  budget_alert_thresholds?: number[];
+  spend_anomaly_factor?: number;
+  spend_anomaly_min_cost?: number;
+  key_expiry_warning_days?: number;
+  registration_enabled?: boolean;
+  assistant_model?: string;
+  assistant_model_locked?: boolean;
+  catalog_jev?: JevSettings;
+  antigravity?: AntigravitySettings;
+  catalog_auto_routes?: boolean;
+  catalog_min_confidence?: number;
+  update_check?: boolean;
+  vector_stores?: VectorStoreDefaults;
 };

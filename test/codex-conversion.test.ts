@@ -6,10 +6,11 @@ import {
   CODEX_DEFAULT_INSTRUCTIONS,
   codexCompletion,
   CodexSseTranslator,
-} from "@/lib/gateway/codex";
+} from "@/lib/gateway/upstreams/codex";
 import { GateError } from "@/lib/gateway/errors";
-import { joinPath, prepareBody, upstreamHeaders } from "@/lib/gateway/upstream";
-import type { JsonMap, ResolvedDeployment } from "@/types/gateway";
+import { joinPath, prepareBody, upstreamHeaders } from "@/lib/gateway/dispatch/upstream";
+import type { JsonMap } from "@/types/gateway";
+import type { ResolvedDeployment } from "@/types/routing";
 
 function sse(events: JsonMap[]): string {
   return events.map((event) => `event: ${String(event.type)}\ndata: ${JSON.stringify(event)}\n\n`).join("");
@@ -241,9 +242,9 @@ test("SuperGrok deployments keep the xAI wire format without premium tiers", () 
 });
 
 test("usage limit errors carry the reset time and park the route until then", async () => {
-  const { upstreamError, upstreamRetryAt } = await import("@/lib/gateway/upstream");
-  const { acquireGroup, markFailure } = await import("@/lib/gateway/runtime");
-  const { inPool } = await import("@/lib/gateway/route-pool");
+  const { upstreamError, upstreamRetryAt } = await import("@/lib/gateway/dispatch/upstream");
+  const { acquireGroup, markFailure } = await import("@/lib/gateway/routing/runtime");
+  const { inPool } = await import("@/lib/gateway/routing/route-pool");
   const limited = upstreamError(429, { error: { type: "usage_limit_reached", resets_at: 1_900_000_000 } });
   assert.equal(limited.status, 429);
   assert.equal(limited.retryAt, 1_900_000_000_000);

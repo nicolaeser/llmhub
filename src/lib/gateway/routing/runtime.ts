@@ -1,0 +1,311 @@
+import "server-only";
+import prisma from "@/lib/db/prisma";
+import { accountAllowed } from "@/lib/gateway/routing/account-access";
+import { accountPolicies } from "@/lib/gateway/routing/account-routing";
+import { isSignInKind, PROVIDER_CATALOG, reportsLimits } from "@/lib/gateway/upstreams/provider-kinds";
+import {
+  nextLatencyEwma,
+  pickCostLowest,
+  pickLatencyEwma,
+  pickLeastInflight,
+  pickPriority,
+  pickQuotaBalanced,
+  pickQuotaExpiring,
+  pickQuotaSmart,
+  pickRoundRobin,
+  pickWeighted,
+} from "@/lib/gateway/routing/router";
+import { quotaBottleneckReset, quotaExhausted, quotaPressure } from "@/lib/gateway/routing/quota";
+import { limitsSnapshot, warmLimits } from "@/lib/gateway/upstreams/subscription-limits";
+import {
+  asRecord,
+  asStringArray,
+  ERR_ALL_PAUSED,
+  ERR_NO_HEALTHY,
+  ERR_NOT_ASSIGNED,
+  ERR_UNKNOWN_GROUP,
+} from "@/lib/gateway/core";
+import { modelAlias } from "@/lib/gateway/catalog/model-alias";
+import { routePermitted } from "@/lib/gateway/access/model-policy";
+import { priceWindowQuery, priceWindowRates } from "@/lib/gateway/billing/price-schedule";
+import { costRejection } from "@/lib/gateway/billing/cost-cap";
+import { coolingDown, recordFailure, recordSuccess } from "@/lib/gateway/routing/provider-health";
+import type { CostFilter } from "@/types/billing";
+import type { DeploymentRow, ResolvedModelGroup, ResolvedDeployment, Deployment, QuotaScores } from "@/types/routing";
+import type { AccountAccess } from "@/types/providers";
+import type { DeploymentRule, RoutePolicy } from "@/types/model-templates";
+import { money } from "@/lib/utils/money";
+
+const inflight = new Map<string, number>();
+const latencyEwma = new Map<string, number>();
+const roundRobinCursors = new Map<string, number>();
+
+function mapDeployment(row: DeploymentRow): ResolvedDeployment {
+  return {
+    id: row.id,
+    kind: row.kind,
+    base_url: row.baseUrl || row.provider?.baseUrl || "",
+    model: row.model,
+    weight: row.weight,
+    cost_input_per_1k: money(row.costInput),
+    cost_output_per_1k: money(row.costOutput),
+    provider_id: row.providerId ?? "",
+    provider: row.provider,
+  };
+}
+
+const providerSelect = {
+  select: {
+    id: true,
+    kind: true,
+    baseUrl: true,
+    apiKey: true,
+    zdr: true,
+    retentionDays: true,
+    region: true,
+    noTraining: true,
+    enabled: true,
+    restricted: true,
+    assignments: { select: { orgId: true, teamId: true, projectId: true, memberId: true, keyId: true } },
+  },
+} as const;
+
+function routeOf(dep: ResolvedDeployment): RoutePolicy {
+  const provider = dep.provider;
+  if (!provider) return null;
+  return {
+    id: provider.id,
+    zdr: provider.zdr,
+    retentionDays: provider.retentionDays,
+    region: provider.region,
+    noTraining: provider.noTraining,
+  };
+}
+
+export function permittedDeployments(
+  items: ResolvedDeployment[],
+  rules: DeploymentRule[] | undefined,
+): ResolvedDeployment[] {
+  return rules ? items.filter((dep) => routePermitted(rules, routeOf(dep))) : items;
+}
+
+export async function loadGroup(requested: string): Promise<ResolvedModelGroup> {
+  const alias = modelAlias(requested);
+  if (alias === "auto") {
+    const rows = await prisma.deployment.findMany({
+      where: { group: { enabled: true } },
+      include: { provider: providerSelect },
+    });
+    const mapped = rows.map(mapDeployment);
+    return {
+      alias: "auto",
+      strategy: "cost_lowest",
+      billing_mode: "routed",
+      price_input_per_1k: 0,
+      price_output_per_1k: 0,
+      price_time_zone: "UTC",
+      price_windows: [],
+      overflow_group: "",
+      num_retries: 1,
+      fallback_groups: [],
+      deployments: mapped,
+      mapped,
+    };
+  }
+
+  const group = await prisma.modelGroup.findUnique({
+    where: { alias },
+    include: {
+      deployments: { include: { provider: providerSelect } },
+      priceWindows: priceWindowQuery,
+    },
+  });
+  if (!group?.enabled) throw ERR_UNKNOWN_GROUP;
+  const mapped = group.deployments.map(mapDeployment);
+  return {
+    alias: group.alias,
+    strategy: group.strategy,
+    billing_mode: group.billingMode,
+    price_input_per_1k: money(group.priceInput),
+    price_output_per_1k: money(group.priceOutput),
+    price_time_zone: group.priceTimeZone,
+    price_windows: group.priceWindows.map(priceWindowRates),
+    overflow_group: group.overflowGroup,
+    num_retries: group.numRetries,
+    fallback_groups: asStringArray(group.fallbackGroups),
+    deployments: mapped,
+    mapped,
+  };
+}
+
+async function healthy(items: ResolvedDeployment[]): Promise<ResolvedDeployment[]> {
+  const cooling = await coolingDown(items.map((d) => d.id));
+  return items.filter((d) => !cooling.has(d.id));
+}
+
+function pick(items: ResolvedDeployment[], strategy: string, scores: QuotaScores): ResolvedDeployment {
+  switch (strategy) {
+    case "round_robin":
+      return pickRoundRobin(items, roundRobinCursors);
+    case "quota_balanced":
+      return pickQuotaBalanced(items, scores, inflight);
+    case "quota_expiring":
+      return pickQuotaExpiring(items, scores, inflight);
+    case "smart":
+      return pickQuotaSmart(items, scores, inflight);
+    case "weighted_random":
+      return pickWeighted(items);
+    case "cost_lowest":
+      return pickCostLowest(items);
+    case "priority":
+      return pickPriority(items);
+    case "fast":
+      return pickLatencyEwma(items, latencyEwma);
+    default:
+      return pickLeastInflight(items, inflight);
+  }
+}
+
+function limitedProvider(dep: ResolvedDeployment) {
+  return dep.provider && reportsLimits(dep.provider.kind) ? dep.provider : null;
+}
+
+async function withinQuota(
+  items: ResolvedDeployment[],
+): Promise<{ items: ResolvedDeployment[]; scores: QuotaScores }> {
+  const scores: QuotaScores = new Map();
+  const providers = items.flatMap((dep) => limitedProvider(dep) ?? []);
+  if (!providers.length) return { items, scores };
+  await warmLimits(providers);
+  const now = Date.now();
+  const open = items.filter((dep) => {
+    const provider = limitedProvider(dep);
+    if (!provider) return true;
+    const limits = limitsSnapshot(provider.id);
+    scores.set(dep.id, {
+      pressure: quotaPressure(limits, dep.model, now),
+      reset: quotaBottleneckReset(limits, dep.model, now),
+    });
+    return !quotaExhausted(limits, dep.model, now);
+  });
+  return { items: open.length ? open : items, scores };
+}
+
+async function byAccountPolicy(items: ResolvedDeployment[], scores: QuotaScores): Promise<ResolvedDeployment[]> {
+  if (!items.some((dep) => isSignInKind(dep.provider?.kind ?? ""))) return items;
+  const policies = await accountPolicies();
+  const kept: ResolvedDeployment[] = [];
+  const accounts = new Map<string, ResolvedDeployment[]>();
+  for (const dep of items) {
+    const kind = dep.provider?.kind ?? "";
+    const policy = policies.get(kind);
+    if (!policy || policy === "inherit") {
+      kept.push(dep);
+      continue;
+    }
+    accounts.set(kind, [...(accounts.get(kind) ?? []), dep]);
+  }
+  for (const [kind, deps] of accounts) kept.push(pick(deps, policies.get(kind)!, scores));
+  return kept;
+}
+
+function affordable(
+  group: ResolvedModelGroup,
+  ready: ResolvedDeployment[],
+  cost: CostFilter | undefined,
+): ResolvedDeployment[] {
+  if (!cost) return ready;
+  const estimates = ready.map((dep) => cost.estimate(dep, group));
+  const fitting = ready.filter((_, index) => estimates[index]! <= cost.cap.limit);
+  if (!fitting.length) throw costRejection(cost.cap, Math.min(...estimates));
+  return fitting;
+}
+
+export async function acquireGroup(
+  group: ResolvedModelGroup,
+  rules: DeploymentRule[] | undefined,
+  serves: (dep: ResolvedDeployment) => boolean = () => true,
+  strategy = "",
+  cost?: CostFilter,
+  access: AccountAccess | null = null,
+): Promise<{ dep: ResolvedDeployment; release: () => void; overflow: boolean }> {
+  const permitted = permittedDeployments(group.mapped, rules).filter(serves);
+  const active = permitted.filter((dep) => dep.provider?.enabled !== false);
+  const assigned = active.filter((dep) => accountAllowed(dep.provider, access));
+  const ready = await healthy(assigned);
+  if (!ready.length) {
+    if (group.overflow_group && group.overflow_group !== group.alias) {
+      const overflow = await loadGroup(group.overflow_group);
+      const acquired = await acquireGroup(overflow, rules, serves, strategy, cost, access);
+      return { ...acquired, overflow: true };
+    }
+    if (permitted.length && !active.length) throw ERR_ALL_PAUSED;
+    throw active.length && !assigned.length ? ERR_NOT_ASSIGNED : ERR_NO_HEALTHY;
+  }
+  const quota = await withinQuota(affordable(group, ready, cost));
+  const candidates = await byAccountPolicy(quota.items, quota.scores);
+  const dep = pick(candidates, strategy || group.strategy, quota.scores);
+  inflight.set(dep.id, (inflight.get(dep.id) ?? 0) + 1);
+  return {
+    dep,
+    overflow: false,
+    release: () => {
+      inflight.set(dep.id, Math.max(0, (inflight.get(dep.id) ?? 1) - 1));
+    },
+  };
+}
+
+export function markFailure(dep: Deployment, retryAt: number | null = null): void {
+  recordFailure(dep.id, Date.now(), retryAt);
+}
+
+export function markSuccess(dep: Deployment, latencyMs?: number): void {
+  recordSuccess(dep.id, latencyMs);
+  if (latencyMs == null || !(latencyMs >= 0)) return;
+  latencyEwma.set(dep.id, nextLatencyEwma(latencyEwma.get(dep.id), latencyMs));
+}
+
+export function defaultBase(dep: ResolvedDeployment): string {
+  const spec = PROVIDER_CATALOG.find((item) => item.kind === dep.kind);
+  const pinned = spec?.auth === "sign_in" ? spec.default_base_url : "";
+  const base = pinned || dep.base_url || dep.provider?.baseUrl || spec?.default_base_url || "";
+  if (!base) throw new Error(`deployment ${dep.id} has no base URL`);
+  return base.replace(/\/$/, "");
+}
+
+function isAnthropicHost(url: string): boolean {
+  if (!URL.canParse(url)) return false;
+  const host = new URL(url).hostname;
+  return host === "anthropic.com" || host.endsWith(".anthropic.com");
+}
+
+export function openaiRoot(base: string): string {
+  const trimmed = base.replace(/\/$/, "");
+  if (trimmed.endsWith("/v1")) return trimmed;
+  if (isAnthropicHost(trimmed)) return trimmed;
+  return `${trimmed}/v1`;
+}
+
+export function aliasChain(model: string, body: Record<string, unknown>): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  const add = (value: unknown) => {
+    if (typeof value === "string") {
+      const alias = modelAlias(value);
+      if (!alias || seen.has(alias)) return;
+      seen.add(alias);
+      out.push(alias);
+      return;
+    }
+    if (Array.isArray(value)) {
+      for (const item of value) add(item);
+      return;
+    }
+    const rec = asRecord(value);
+    if (rec?.model) add(rec.model);
+  };
+  add(model);
+  add(body.fallbacks);
+  add(body.fallback);
+  return out;
+}

@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { AlertDialog, Button } from "@heroui/react";
+import { AlertDialog, Button, type useOverlayState } from "@heroui/react";
 
 export default function ConfirmDialog({
   title,
@@ -10,6 +10,7 @@ export default function ConfirmDialog({
   cancelLabel,
   pending,
   onConfirm,
+  state,
   children,
 }: {
   title: string;
@@ -18,11 +19,12 @@ export default function ConfirmDialog({
   cancelLabel: string;
   pending?: boolean;
   onConfirm: () => void;
-  children: ReactNode;
+  state?: ReturnType<typeof useOverlayState>;
+  children?: ReactNode;
 }) {
   return (
-    <AlertDialog>
-      <AlertDialog.Trigger>{children}</AlertDialog.Trigger>
+    <AlertDialog isOpen={state?.isOpen} onOpenChange={state?.setOpen}>
+      {children ? <AlertDialog.Trigger>{children}</AlertDialog.Trigger> : null}
       <AlertDialog.Backdrop variant="blur">
         <AlertDialog.Container>
           <AlertDialog.Dialog className="max-w-md">
@@ -36,9 +38,9 @@ export default function ConfirmDialog({
               </AlertDialog.Body>
             ) : null}
             <AlertDialog.Footer>
-              <AlertDialog.CloseTrigger>
-                <Button variant="tertiary">{cancelLabel}</Button>
-              </AlertDialog.CloseTrigger>
+              <Button slot="close" variant="tertiary">
+                {cancelLabel}
+              </Button>
               <Button slot="close" variant="danger" isPending={pending} onPress={onConfirm}>
                 {confirmLabel}
               </Button>

@@ -30,6 +30,5 @@
   "quiet": "{n, plural, one {No upstream attempts in the last minute.} other {No upstream attempts in the last # minutes.}}",
   "emptyTitle": "No endpoints yet",
   "empty": "Add a model with at least one endpoint to see its health here.",
-  "openModels": "Open models",
-  "loadFailed": "Could not load provider health."
+  "openModels": "Open models"
 }

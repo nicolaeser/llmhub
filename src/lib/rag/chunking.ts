@@ -1,4 +1,4 @@
-import { estimateTokens } from "@/lib/gateway/tokens";
+import { estimateTokens } from "@/lib/gateway/billing/tokens";
 import type { ChunkSettings, ChunkingStrategy, TextChunk } from "@/types/rag";
 
 export const AUTO_CHUNK_TOKENS = 800;

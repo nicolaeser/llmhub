@@ -5,17 +5,18 @@ import {
   quotaBottleneckReset,
   quotaExhausted,
   quotaPressure,
-} from "@/lib/gateway/quota";
-import { accessOf, accountAllowed, isAccountStrategy } from "@/lib/gateway/account-access";
+} from "@/lib/gateway/routing/quota";
+import { accessOf, accountAllowed, isAccountStrategy } from "@/lib/gateway/routing/account-access";
 import {
   pickQuotaBalanced,
   pickQuotaExpiring,
   pickQuotaSmart,
   pickRoundRobin,
-  type QuotaScores,
-} from "@/lib/gateway/router";
-import { claudeLimits } from "@/lib/gateway/subscription-limits";
-import type { Deployment, Principal, VirtualKeyView } from "@/types/gateway";
+} from "@/lib/gateway/routing/router";
+import { claudeLimits } from "@/lib/gateway/upstreams/subscription-limits";
+import type { Principal } from "@/types/gateway";
+import type { Deployment, QuotaScores } from "@/types/routing";
+import type { VirtualKeyView } from "@/types/keys";
 import type { LimitWindow, SubscriptionLimits } from "@/types/providers";
 
 const NOW = Date.parse("2026-10-12T12:00:00Z");

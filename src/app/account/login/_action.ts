@@ -4,7 +4,7 @@ import { runAction } from "@/lib/http/action-result";
 import { oidcIsReady } from "@/lib/auth/oidc";
 import { passkeysAvailable } from "@/lib/auth/passkeys";
 import { passwordResetEnabled } from "@/lib/auth/self-service";
-import { getEnterprise } from "@/lib/gateway/settings";
+import { getEnterprise } from "@/lib/settings/enterprise";
 import type { LoginContext } from "@/types/security";
 import {
   cancelSignIn,

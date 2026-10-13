@@ -1,3 +1,6 @@
+import type { DiscoveredModel } from "@/types/providers";
+import type { RoutePool } from "@/types/routing";
+
 export type DeploymentInput = {
   id?: string;
   kind: string;
@@ -27,15 +30,9 @@ export type PriceWindow = {
   priceOutput: number;
 };
 
-export type PriceWindowDraft = {
-  key: number;
-  start: string;
-  end: string;
-  priceInput: number;
-  priceOutput: number;
-};
+export type PriceWindowDraft = PriceWindow & { key: number };
 
-export type Group = {
+export type ModelGroupView = {
   alias: string;
   enabled: boolean;
   vendor: string;
@@ -63,12 +60,7 @@ export type Group = {
   }[];
 };
 
-export type DiscoveredPrice = {
-  id: string;
-  costInputPer1k: number;
-  costOutputPer1k: number;
-  priceSource: string;
-};
+export type DiscoveredPrice = Pick<DiscoveredModel, "id" | "costInputPer1k" | "costOutputPer1k" | "priceSource">;
 
 export type ProviderOpt = {
   id: string;
@@ -77,4 +69,27 @@ export type ProviderOpt = {
   baseUrl: string;
   hasApiKey: boolean;
   discovered?: DiscoveredPrice[];
+};
+
+export type TokenPricing = {
+  prompt: string;
+  completion: string;
+};
+
+export type ModelPricing = TokenPricing & {
+  schedule?: {
+    time_zone: string;
+    default: TokenPricing;
+    windows: (TokenPricing & { start: string; end: string })[];
+  };
+};
+
+export type PublicModel = {
+  alias: string;
+  vendor: string;
+  displayName: string;
+  tags: string[];
+  pricing: ModelPricing | null;
+  subscriptionPricing?: ModelPricing | null;
+  pools: RoutePool[];
 };

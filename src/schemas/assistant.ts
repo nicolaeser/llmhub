@@ -1,10 +1,10 @@
 import { z } from "zod";
 import { assistantPages, assistantTopics } from "@/lib/assistant/knowledge";
-import { CACHE_TTL_MAX_SECONDS } from "@/lib/gateway/cache-settings";
+import { CACHE_TTL_MAX_SECONDS } from "@/lib/gateway/cache/cache-settings";
 import { BILLING_MODES } from "@/lib/gateway/core";
-import { clockMinute, isTimeZone, MAX_PRICE_WINDOWS } from "@/lib/gateway/price-schedule";
-import { DATA_REGIONS } from "@/lib/gateway/model-policy";
-import { KEY_ENDPOINTS } from "@/lib/gateway/key-restrictions";
+import { clockMinute, isTimeZone, MAX_PRICE_WINDOWS } from "@/lib/gateway/billing/price-schedule";
+import { DATA_REGIONS } from "@/lib/gateway/access/model-policy";
+import { KEY_ENDPOINTS } from "@/lib/gateway/access/key-restrictions";
 import { accessWindowsSchema } from "@/schemas/keys";
 import type { UsageBreakdownGroup, UsageBreakdownSort } from "@/types/assistant";
 

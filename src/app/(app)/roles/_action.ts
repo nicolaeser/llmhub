@@ -1,56 +1,30 @@
 "use server";
 
-import prisma from "@/lib/db/prisma";
 import { requirePermission } from "@/lib/auth/guards";
-import { AuthError } from "@/lib/auth/errors";
 import { grantActor } from "@/lib/auth/grants";
-import { permissions, PERMISSIONS, roleTemplateKeys } from "@/lib/auth/permissions";
+import { PERMISSIONS } from "@/lib/auth/permissions";
 import {
+  changeRole,
   createRole,
   deleteRole,
-  listRoles,
+  loadRolesConsole,
   resetRoleToTemplate,
   restoreRoleTemplate,
   updateRole,
 } from "@/lib/auth/roles";
 import { runAction } from "@/lib/http/action-result";
-import type { AuthenticatedSession, RoleSummary, RolesConsolePayload } from "@/types/auth";
-
-async function payload(session: AuthenticatedSession): Promise<RolesConsolePayload> {
-  const actor = grantActor(session);
-  const [roles, templates] = await Promise.all([
-    listRoles(actor),
-    prisma.role.findMany({ where: { templateKey: { not: null } }, select: { templateKey: true } }),
-  ]);
-  const present = new Set(templates.map((row) => row.templateKey));
-  return {
-    roles,
-    grantable: actor.isOwner ? [...permissions] : [...actor.permissions],
-    missingTemplates: roleTemplateKeys.filter((key) => !present.has(key)),
-  };
-}
-
-async function mutate(
-  mutation: (session: AuthenticatedSession) => Promise<{ id: string }>,
-): Promise<{ role: RoleSummary }> {
-  const session = await requirePermission(PERMISSIONS.ROLES_MANAGE);
-  const { id } = await mutation(session);
-  const role = (await listRoles(grantActor(session))).find((row) => row.id === id);
-  if (!role) throw new AuthError("ROLE_NOT_FOUND");
-  return { role };
-}
 
 export async function loadRolesAction() {
-  return runAction(async () => payload(await requirePermission(PERMISSIONS.ROLES_MANAGE)));
+  return runAction(() => loadRolesConsole());
 }
 
 export async function createRoleAction(input: unknown) {
-  return runAction(() => mutate((session) => createRole(grantActor(session), session.user.id, input)));
+  return runAction(() => changeRole((session) => createRole(grantActor(session), session.user.id, input)));
 }
 
 export async function updateRoleAction(roleId: string, input: unknown) {
   return runAction(() =>
-    mutate((session) => updateRole(grantActor(session), session.user.id, roleId, input)),
+    changeRole((session) => updateRole(grantActor(session), session.user.id, roleId, input)),
   );
 }
 
@@ -64,12 +38,12 @@ export async function deleteRoleAction(roleId: string) {
 
 export async function resetRoleAction(roleId: string, revision: number) {
   return runAction(() =>
-    mutate((session) => resetRoleToTemplate(grantActor(session), session.user.id, roleId, revision)),
+    changeRole((session) => resetRoleToTemplate(grantActor(session), session.user.id, roleId, revision)),
   );
 }
 
 export async function restoreTemplateAction(key: string) {
   return runAction(() =>
-    mutate((session) => restoreRoleTemplate(grantActor(session), session.user.id, key)),
+    changeRole((session) => restoreRoleTemplate(grantActor(session), session.user.id, key)),
   );
 }

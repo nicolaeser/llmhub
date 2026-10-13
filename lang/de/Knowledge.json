@@ -5,7 +5,6 @@
   "emptyTitle": "Noch keine Wissensbasen",
   "empty": "Lege eine Wissensbasis an, lade Dokumente hoch und lass die API-Keys des Unternehmens sie mit file_search durchsuchen.",
   "readOnly": "Du kannst Wissensbasen und ihre Dateien ansehen. Zum Ändern brauchst du die Berechtigung tenancy:manage.",
-  "loadFailed": "Die Wissensbasen konnten nicht geladen werden. Lade die Seite neu.",
   "noMatches": "Keine Wissensbasis passt zu den Filtern.",
   "search": "Nach Name suchen",
   "companyFilter": "Unternehmen",

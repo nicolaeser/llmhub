@@ -4,16 +4,16 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 
 const piiPath = fileURLToPath(
-  new URL("../src/lib/gateway/pii.ts", import.meta.url),
+  new URL("../src/lib/gateway/safety/pii.ts", import.meta.url),
 );
 
 if (!existsSync(piiPath)) {
-  test("pii redaction pending until src/lib/gateway/pii.ts exists", () => {
+  test("pii redaction pending until src/lib/gateway/safety/pii.ts exists", () => {
     assert.ok(true);
   });
 } else {
   test("redacts emails and sk- keys", async () => {
-    const pii = await import("@/lib/gateway/pii");
+    const pii = await import("@/lib/gateway/safety/pii");
     const redact = (pii as { redactPii?: (value: string) => string }).redactPii;
     assert.equal(typeof redact, "function");
     const out = redact!(
@@ -24,7 +24,7 @@ if (!existsSync(piiPath)) {
   });
 
   test("masks phone, IP, and Luhn credit cards", async () => {
-    const { redactPii } = await import("@/lib/gateway/pii");
+    const { redactPii } = await import("@/lib/gateway/safety/pii");
     const out = redactPii(
       "Call +14155552671 from 8.8.8.8 card 4111 1111 1111 1111",
       ["PHONE_NUMBER", "IP_ADDRESS", "CREDIT_CARD"],
@@ -38,7 +38,7 @@ if (!existsSync(piiPath)) {
   });
 
   test("masks spaced, national, and international phone formats", async () => {
-    const { redactPii } = await import("@/lib/gateway/pii");
+    const { redactPii } = await import("@/lib/gateway/safety/pii");
     const samples = [
       "+49 170 1234567",
       "+49 170 123 45 67",
@@ -60,7 +60,7 @@ if (!existsSync(piiPath)) {
   });
 
   test("leaves dates, versions, and plain numbers alone", async () => {
-    const { redactPii } = await import("@/lib/gateway/pii");
+    const { redactPii } = await import("@/lib/gateway/safety/pii");
     const samples = [
       "2026-08-21",
       "01.02.2026",
@@ -77,7 +77,7 @@ if (!existsSync(piiPath)) {
   });
 
   test("masks full, compressed, zoned, and IPv4-mapped IPv6 addresses", async () => {
-    const { redactPii } = await import("@/lib/gateway/pii");
+    const { redactPii } = await import("@/lib/gateway/safety/pii");
     const samples = [
       "2001:0db8:85a3:0000:0000:8a2e:0370:7334",
       "2001:db8:85a3::8a2e:370:7334",
@@ -94,14 +94,14 @@ if (!existsSync(piiPath)) {
   });
 
   test("leaves code scopes, times, and MAC addresses alone", async () => {
-    const { redactPii } = await import("@/lib/gateway/pii");
+    const { redactPii } = await import("@/lib/gateway/safety/pii");
     for (const sample of ["std::vector", "Cafe::Bean", "12:30:45", "00:1A:2B:3C:4D:5E", "Ratio 1:2:3"]) {
       assert.equal(redactPii(sample, ["IP_ADDRESS"]), sample);
     }
   });
 
   test("does not mask unselected entities", async () => {
-    const { redactPii } = await import("@/lib/gateway/pii");
+    const { redactPii } = await import("@/lib/gateway/safety/pii");
     const src = "ada@acme.com 8.8.8.8";
     const out = redactPii(src, ["EMAIL_ADDRESS"]);
     assert.equal(out.includes("ada@acme.com"), false);
@@ -110,7 +110,7 @@ if (!existsSync(piiPath)) {
 }
 
 test("redactPii reports which entities it masked", async () => {
-  const { redactPii } = await import("@/lib/gateway/pii");
+  const { redactPii } = await import("@/lib/gateway/safety/pii");
   const found = new Set<string>();
   const out = redactPii("Mail ada@acme.com from 8.8.8.8", ["EMAIL_ADDRESS", "IP_ADDRESS", "PHONE_NUMBER"], found);
   assert.equal(out, "Mail [EMAIL_ADDRESS] from [IP_ADDRESS]");
@@ -118,7 +118,7 @@ test("redactPii reports which entities it masked", async () => {
 });
 
 test("redactJSON collects entities but skips structural keys", async () => {
-  const { redactJSON } = await import("@/lib/gateway/pii");
+  const { redactJSON } = await import("@/lib/gateway/safety/pii");
   const found = new Set<string>();
   const out = redactJSON(
     { model: "ada@acme.com", messages: [{ role: "user", content: "call +14155552671" }] },
@@ -132,7 +132,7 @@ test("redactJSON collects entities but skips structural keys", async () => {
 });
 
 test("splitPiiPlaceholders marks catalog placeholders only", async () => {
-  const { splitPiiPlaceholders } = await import("@/lib/gateway/pii");
+  const { splitPiiPlaceholders } = await import("@/lib/gateway/safety/pii");
   assert.deepEqual(splitPiiPlaceholders("Hi [EMAIL_ADDRESS], see [NOTE] and [IBAN_CODE]"), [
     { text: "Hi ", entity: null },
     { text: "[EMAIL_ADDRESS]", entity: "EMAIL_ADDRESS" },
@@ -143,7 +143,7 @@ test("splitPiiPlaceholders marks catalog placeholders only", async () => {
 });
 
 test("long prose without punctuation is still scanned while base64 blobs are skipped", async () => {
-  const { isOpaqueText, redactJSON } = await import("@/lib/gateway/pii");
+  const { isOpaqueText, redactJSON } = await import("@/lib/gateway/safety/pii");
   const prose = `${"please call me back ".repeat(40)}+14155552671`;
   const out = redactJSON({ content: prose }, ["PHONE_NUMBER"]) as { content: string };
   assert.equal(out.content.includes("+14155552671"), false);
@@ -154,7 +154,7 @@ test("long prose without punctuation is still scanned while base64 blobs are ski
 });
 
 test("masks DACH identifiers that pass their check digits", async () => {
-  const { redactPii } = await import("@/lib/gateway/pii");
+  const { redactPii } = await import("@/lib/gateway/safety/pii");
   const samples: [string, string][] = [
     ["12 345 678 995", "DE_TAX_ID"],
     ["65929970489", "DE_TAX_ID"],
@@ -184,7 +184,7 @@ test("masks DACH identifiers that pass their check digits", async () => {
 });
 
 test("leaves DACH-shaped numbers with wrong check digits alone", async () => {
-  const { redactPii } = await import("@/lib/gateway/pii");
+  const { redactPii } = await import("@/lib/gateway/safety/pii");
   const ids = [
     "DE_TAX_ID",
     "DE_TAX_NUMBER",
@@ -219,7 +219,7 @@ test("leaves DACH-shaped numbers with wrong check digits alone", async () => {
 });
 
 test("a German phone number keeps its phone label when DACH entities are on", async () => {
-  const { redactPii } = await import("@/lib/gateway/pii");
+  const { redactPii } = await import("@/lib/gateway/safety/pii");
   assert.equal(
     redactPii("Ruf an: +49 89 123456789", ["DE_TAX_ID", "AT_SOCIAL_SECURITY", "PHONE_NUMBER"]),
     "Ruf an: [PHONE_NUMBER]",
@@ -227,7 +227,7 @@ test("a German phone number keeps its phone label when DACH entities are on", as
 });
 
 test("masks provider API keys, webhooks, and authorization headers", async () => {
-  const { redactPii } = await import("@/lib/gateway/pii");
+  const { redactPii } = await import("@/lib/gateway/safety/pii");
   const tokens = [
     `sk_${"live"}_${"a1B2c3D4".repeat(3)}`,
     `${"AKIA"}${"ABCDEFGH12345678"}`,
@@ -258,14 +258,14 @@ test("masks provider API keys, webhooks, and authorization headers", async () =>
 });
 
 test("leaves short sk- words, hyphenated words, and prose bearer mentions alone", async () => {
-  const { redactPii } = await import("@/lib/gateway/pii");
+  const { redactPii } = await import("@/lib/gateway/safety/pii");
   for (const sample of ["sk-learn", "risk-assessment-framework", "Bearer instruments", "Basic understanding"]) {
     assert.equal(redactPii(sample, ["SECRET"]), sample);
   }
 });
 
 test("masks private key blocks, raw and JSON-escaped", async () => {
-  const { redactPii } = await import("@/lib/gateway/pii");
+  const { redactPii } = await import("@/lib/gateway/safety/pii");
   const begin = ["-----BEGIN", "RSA PRIVATE KEY-----"].join(" ");
   const end = ["-----END", "RSA PRIVATE KEY-----"].join(" ");
   assert.equal(redactPii(`${begin}\nMIIEowIBAAKC\n${end}\nnext`, ["PRIVATE_KEY"]), "[PRIVATE_KEY]\nnext");
@@ -275,7 +275,7 @@ test("masks private key blocks, raw and JSON-escaped", async () => {
 });
 
 test("masks connection strings that carry credentials", async () => {
-  const { redactPii } = await import("@/lib/gateway/pii");
+  const { redactPii } = await import("@/lib/gateway/safety/pii");
   const samples = [
     "postgres://admin:hunter2@db.internal:5432/prod",
     "redis://:s3cret@cache:6379",
@@ -297,7 +297,7 @@ test("masks connection strings that carry credentials", async () => {
 });
 
 test("leaves connection strings without credentials alone", async () => {
-  const { redactPii } = await import("@/lib/gateway/pii");
+  const { redactPii } = await import("@/lib/gateway/safety/pii");
   const samples = [
     "postgres://localhost:5432/app",
     "ssh://git@github.com/acme/repo",
@@ -311,7 +311,7 @@ test("leaves connection strings without credentials alone", async () => {
 });
 
 test("masks secret values in env, JSON, YAML, and flag assignments", async () => {
-  const { redactPii } = await import("@/lib/gateway/pii");
+  const { redactPii } = await import("@/lib/gateway/safety/pii");
   const samples: [string, string][] = [
     ["DB_PASSWORD=supersecret", "DB_PASSWORD=[ENV_SECRET]"],
     ["export AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG", "export AWS_SECRET_ACCESS_KEY=[ENV_SECRET]"],
@@ -332,7 +332,7 @@ test("masks secret values in env, JSON, YAML, and flag assignments", async () =>
 });
 
 test("leaves code, type hints, references, and token counts alone", async () => {
-  const { redactPii } = await import("@/lib/gateway/pii");
+  const { redactPii } = await import("@/lib/gateway/safety/pii");
   const samples = [
     "max_tokens: 4096",
     "MAX_TOKENS=4096",
@@ -361,7 +361,7 @@ test("leaves code, type hints, references, and token counts alone", async () => 
 });
 
 test("masks EVM, bech32, and base58 wallet addresses", async () => {
-  const { redactPii } = await import("@/lib/gateway/pii");
+  const { redactPii } = await import("@/lib/gateway/safety/pii");
   const samples = [
     "0x52908400098527886E0F7030069857D2E4169EE7",
     "ltc1qg82vl0d3ksvtt8hdla4xq9wqstvqt5u5en2zay",

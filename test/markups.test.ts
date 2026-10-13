@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
 import test from "node:test";
+import { NextRequest } from "next/server";
 import { COMPANY_PERMISSIONS, effectivePermissions, roleTemplates } from "@/lib/auth/permissions";
 import {
   applyMarkup,
@@ -10,7 +10,7 @@ import {
   markupScopeOf,
   pickMarkup,
   scaleByMarkup,
-} from "@/lib/gateway/markup-policy";
+} from "@/lib/gateway/billing/markup-policy";
 import {
   CHARGEBACK_COLUMNS,
   CHARGEBACK_MARGIN_COLUMNS,
@@ -18,15 +18,151 @@ import {
   chargebackRows,
   chargebackTable,
   groupSpend,
-} from "@/lib/gateway/usage-stats";
-import { toCsv } from "@/lib/http/export";
-import { markedUpCost, targetCost } from "@/lib/gateway/what-if";
+} from "@/lib/usage/usage-stats";
+import { toCsv } from "@/lib/export/csv";
+import { markedUpCost, targetCost } from "@/lib/usage/what-if";
 import { serializeUsage } from "@/lib/management/serialize";
 import { markupSchema } from "@/schemas/pricing";
 import { markupCreateSchema, markupUpdateSchema } from "@/schemas/management";
-import type { UsageSlice } from "@/types/gateway";
+import type { AuthenticatedSession, Permission } from "@/types/auth";
+import type { BillingGroup, TokenUsage } from "@/types/billing";
+import type { Principal } from "@/types/gateway";
+import type { Deployment } from "@/types/routing";
+import type { UsageSlice } from "@/types/usage";
 import type { MarkupRule, MarkupTarget } from "@/types/pricing";
 import type { TargetPrice, TenantMinutes, TenantTraffic } from "@/types/what-if";
+
+type PrismaCall = { model: string; method: string; args: unknown };
+type MarkupRow = { id: string; orgId: string | null; teamId: string | null; projectId: string | null; model: string; percent: number };
+
+const db = {
+  calls: [] as PrismaCall[],
+  markups: [] as MarkupRow[],
+  usage: [] as Record<string, unknown>[],
+};
+
+(globalThis as { prisma?: unknown }).prisma = new Proxy(
+  {},
+  {
+    get: (_client, model: string) => {
+      if (model === "$transaction") return async (writes: Promise<unknown>[]) => Promise.all(writes);
+      return new Proxy(
+        {},
+        {
+          get: (_delegate, method: string) => async (args: unknown) => {
+            db.calls.push({ model, method, args });
+            if (method === "findMany") {
+              if (model === "priceMarkup") return db.markups;
+              if (model === "usageDaily") return db.usage;
+              return [];
+            }
+            if (method === "count") return 0;
+            if (method === "create" || method === "upsert") return { id: "row-1" };
+            return null;
+          },
+        },
+      );
+    },
+  },
+);
+
+function recorded(model: string, method: string): unknown[] {
+  return db.calls.filter((call) => call.model === model && call.method === method).map((call) => call.args);
+}
+
+function markupRow(id: string, orgId: string | null, model: string, percent: number): MarkupRow {
+  return { id, orgId, teamId: null, projectId: null, model, percent };
+}
+
+function usageRow(row: Record<string, unknown>): Record<string, unknown> {
+  return {
+    day: new Date("2026-10-09T00:00:00Z"),
+    keyId: "",
+    teamId: "",
+    orgId: "o1",
+    projectId: "",
+    memberId: "",
+    userId: "u1",
+    model: "gpt-5",
+    requests: 1,
+    errors: 0,
+    rateLimited: 0,
+    latencyMs: 0,
+    promptTokens: 10,
+    completionTokens: 5,
+    cacheReadTokens: 0,
+    cacheWriteTokens: 0,
+    cost: 0,
+    cacheSavings: 0,
+    purchaseCost: 0,
+    ...row,
+  };
+}
+
+function session(permissions: Permission[]): AuthenticatedSession {
+  return {
+    error: false,
+    sessionId: "",
+    user: { id: "u1", username: "finance", orgId: null } as AuthenticatedSession["user"],
+    isOwner: false,
+    role: null,
+    permissions,
+    secondFactor: "TOTP",
+    ipAddress: null,
+    userAgent: null,
+  };
+}
+
+async function asCaller<T>(permissions: Permission[], fn: () => Promise<T>): Promise<T> {
+  const { runAsPrincipal } = await import("@/lib/auth/delegation");
+  db.calls.length = 0;
+  return runAsPrincipal(session(permissions), fn);
+}
+
+const tenant: Principal = { actor: "sk-hub-abc", teamId: "", orgId: "o1", userId: "", memberId: "", models: [], routeLimits: {} };
+
+const sonnet: Deployment = {
+  id: "dep-1",
+  kind: "openai_compat",
+  base_url: "",
+  model: "claude-sonnet-5",
+  weight: 1,
+  cost_input_per_1k: 1,
+  cost_output_per_1k: 2,
+  provider_id: "",
+};
+
+const customPrice: BillingGroup = {
+  alias: "claude",
+  billing_mode: "custom",
+  price_input_per_1k: 3,
+  price_output_per_1k: 6,
+  price_time_zone: "UTC",
+  price_windows: [],
+  deployments: [],
+};
+
+type DailyWrite = {
+  create: Record<string, number | string>;
+  update: Record<string, { increment: number }>;
+};
+
+async function bill(usage: Partial<TokenUsage>): Promise<{ cost: number; daily: DailyWrite }> {
+  const { recordUsage } = await import("@/lib/gateway/billing/billing");
+  db.calls.length = 0;
+  const cost = await recordUsage({
+    principal: tenant,
+    model: "api/claude-sonnet-5",
+    deployment: sonnet,
+    group: customPrice,
+    usage,
+    status: 200,
+    outcome: "ok",
+    latencyMs: 5,
+  });
+  const [daily] = recorded("usageDaily", "upsert") as DailyWrite[];
+  return { cost, daily: daily! };
+}
 
 const rule = (id: string, scope: MarkupRule["scope"], targetId: string, model: string, percent: number): MarkupRule => ({
   id,
@@ -211,19 +347,54 @@ test("management usage shows purchase cost and margin only when present", () => 
 });
 
 test("recordUsage bills the marked-up price and stores the purchase cost beside it", async () => {
-  const source = await readFile(new URL("../src/lib/gateway/billing.ts", import.meta.url), "utf8");
-  assert.match(source, /const purchaseCost = costOf\(input\.deployment, usage\);/);
-  assert.match(source, /const listed = costOf\(input\.deployment, usage, billing\);/);
-  assert.match(source, /const model = plainModel\(input\.model\);/);
-  assert.match(source, /markupPercent\(\{ orgId, teamId, projectId, model \}\)/);
-  assert.match(source, /purchaseCost: \{ increment: purchaseCost \}/);
+  db.markups = [markupRow("global", null, "", 10), markupRow("acme-claude", "o1", "claude-*", 20)];
+  const { cost, daily } = await bill({ prompt_tokens: 1000, completion_tokens: 1000 });
+  near(cost, 9 * 1.2);
+  assert.equal(daily.create.model, "claude-sonnet-5");
+  assert.equal(daily.create.orgId, "o1");
+  near(Number(daily.create.cost), 9 * 1.2);
+  near(Number(daily.create.purchaseCost), 3);
+  near(daily.update.cost!.increment, 9 * 1.2);
+  near(daily.update.purchaseCost!.increment, 3);
+  const [spend] = recorded("spendEvent", "create") as { data: { cost: number; model: string } }[];
+  near(spend!.data.cost, 9 * 1.2);
+  const [lookup] = recorded("priceMarkup", "findMany") as { where: { OR: object[] } }[];
+  assert.deepEqual(lookup!.where.OR, [{ orgId: null, teamId: null, projectId: null }, { orgId: "o1" }]);
+});
+
+test("recordUsage bills the listed price when no markup applies", async () => {
+  db.markups = [];
+  const { cost, daily } = await bill({ prompt_tokens: 1000, completion_tokens: 1000 });
+  near(cost, 9);
+  near(Number(daily.create.purchaseCost), 3);
 });
 
 test("usage loads purchase cost only with the margins permission", async () => {
-  const source = await readFile(new URL("../src/app/(app)/_action.ts", import.meta.url), "utf8");
-  assert.match(source, /const priced = hasPerm\(session\.permissions, PERMISSIONS\.PRICING_READ\);/);
-  assert.match(source, /usageSlices\(\{ \.\.\.filters, day: \{ gte: since \} \}, \{ purchase: priced \}\)/);
-  assert.match(source, /purchase: priced \? rows\.reduce\(\(sum, row\) => sum \+ \(row\.purchaseCost \?\? 0\), 0\) : null/);
+  const { loadUsage } = await import("@/lib/usage/dashboard");
+  db.usage = [usageRow({ cost: 1.2, purchaseCost: 1 }), usageRow({ cost: 2.4, purchaseCost: 2, model: "claude-x" })];
+  const priced = await asCaller(["spend:read", "pricing:read"], () => loadUsage(7));
+  near(priced.purchase ?? -1, 3);
+  assert.deepEqual(priced.chargeback.map((row) => row.purchase), [2, 1]);
+  near(priced.byOrg[0]?.purchase ?? -1, 3);
+  const blind = await asCaller(["spend:read"], () => loadUsage(7));
+  assert.equal(blind.purchase, null);
+  near(blind.spend, 3.6);
+  assert.equal(blind.chargeback.some((row) => "purchase" in row), false);
+  assert.equal(blind.byOrg.some((row) => "purchase" in row), false);
+});
+
+test("the chargeback export adds purchase cost and margin only for callers who may see margins", async () => {
+  const { GET } = await import("@/app/internal-api/usage/chargeback/route");
+  db.usage = [usageRow({ cost: 1.2, purchaseCost: 1 })];
+  const download = (permissions: Permission[]) =>
+    asCaller(permissions, async () =>
+      (await GET(new NextRequest("http://hub.local/internal-api/usage/chargeback"))).text(),
+    );
+  const [pricedHeader] = (await download(["spend:read", "pricing:read"])).split("\n");
+  assert.equal(pricedHeader, CHARGEBACK_MARGIN_COLUMNS.join(","));
+  const [blindHeader, blindLine] = (await download(["spend:read"])).split("\n");
+  assert.equal(blindHeader, CHARGEBACK_COLUMNS.join(","));
+  assert.equal(blindLine?.split(",")[CHARGEBACK_COLUMNS.indexOf("spend")], "1.2");
 });
 
 const flat: TargetPrice = {
@@ -269,8 +440,15 @@ test("prompt cache savings follow the markup without clamping negative savings",
   assert.equal(scaleByMarkup(2, 25), 2.5);
   assert.equal(scaleByMarkup(-2, 25), -2.5);
   assert.equal(scaleByMarkup(2, -100), 0);
-  const source = await readFile(new URL("../src/lib/gateway/billing.ts", import.meta.url), "utf8");
-  assert.match(source, /const cacheSavings = scaleByMarkup\(cacheSavingsOf\(input\.deployment, usage, billing\), percent\);/);
+  db.markups = [markupRow("acme", "o1", "", 20)];
+  const cached = { prompt_tokens: 1000, completion_tokens: 0, cache_read_input_tokens: 500 };
+  const { daily } = await bill(cached);
+  near(Number(daily.create.cacheSavings), (3 - 1.65) * 1.2);
+  near(daily.update.cacheSavings!.increment, (3 - 1.65) * 1.2);
+  db.markups = [markupRow("acme", "o1", "", -100)];
+  const free = await bill(cached);
+  near(free.cost, 0);
+  near(Number(free.daily.create.cacheSavings), 0);
 });
 
 test("chargeback CSV puts purchase cost, sale, and margin side by side only when priced", () => {
@@ -290,10 +468,31 @@ test("chargeback CSV puts purchase cost, sale, and margin side by side only when
 });
 
 test("scheduled usage reports stay on the sale price like company users", async () => {
-  const report = await readFile(new URL("../src/lib/reports/usage-report.ts", import.meta.url), "utf8");
-  assert.match(report, /usageSlices\(\{ \.\.\.scope, day: \{ gte: period\.start, lt: period\.end \} \}\)/);
-  assert.doesNotMatch(report, /purchase|MARGIN/);
-  assert.match(report, /toCsv\(chargebackTable\(chargeback, await usageNames\(rows\)\), CHARGEBACK_COLUMNS\)/);
-  const route = await readFile(new URL("../src/app/internal-api/usage/chargeback/route.ts", import.meta.url), "utf8");
-  assert.match(route, /chargebackColumns\(result\.purchase !== null\)/);
+  const { buildReportMail } = await import("@/lib/reports/usage-report");
+  const { lastCompletedPeriod } = await import("@/lib/reports/period");
+  db.usage = [usageRow({ cost: 1.2, purchaseCost: 1 })];
+  db.calls.length = 0;
+  const now = new Date("2026-10-12T12:00:00Z");
+  const period = lastCompletedPeriod("monthly", now);
+  const mail = await buildReportMail(
+    {
+      id: "r1",
+      orgId: "o1",
+      teamId: null,
+      format: "csv",
+      locale: "en",
+      recipients: ["finance@example.com"],
+      org: { alias: "Acme" },
+      team: null,
+    },
+    period,
+    now,
+  );
+  assert.deepEqual(recorded("usageDaily", "findMany"), [
+    { where: { orgId: "o1", day: { gte: period.start, lt: period.end } } },
+  ]);
+  assert.equal(mail.attachments?.length, 1);
+  const [header, line] = String(mail.attachments?.[0]?.content).split("\n");
+  assert.equal(header, CHARGEBACK_COLUMNS.join(","));
+  assert.equal(line?.split(",")[CHARGEBACK_COLUMNS.indexOf("spend")], "1.2");
 });

@@ -1,22 +1,22 @@
 import "server-only";
 
-import { isActionFail } from "@/lib/http/action-result";
-import { loadAdminSettingsAction } from "@/app/(app)/admin-settings/_action";
-import { loadCacheAction, saveCacheAction } from "@/app/(app)/cache/_action";
 import {
-  loadGuardrailsAction,
-  savePiiAction,
-  savePiiOverrideAction,
-  testPiiAction,
-} from "@/app/(app)/guardrails/_action";
-import { loadLoggingAction, saveLoggingAction } from "@/app/(app)/logging/_action";
+  loadGuardrails,
+  savePii,
+  savePiiOverride,
+  testPii,
+} from "@/lib/settings/guardrail-policies";
+import { loadCache, saveCache } from "@/lib/settings/caching";
+import { loadLogging, saveLogging } from "@/lib/settings/logging-alerts";
+import { loadAdminSettings } from "@/lib/settings/admin";
+import { isActionFail } from "@/lib/http/action-result";
 import {
   emptyToolInput,
   gatewaySettingsToolInput,
   testPiiToolInput,
   updateGuardrailsToolInput,
 } from "@/schemas/assistant";
-import { actionCode, defineTool, toolFail, viaAction } from "@/lib/assistant/tools/define";
+import { actionCode, defineTool, settle, toolFail, viaService } from "@/lib/assistant/tools/define";
 import type { AssistantToolResult } from "@/types/assistant";
 import type { PiiPolicy } from "@/types/guardrails";
 import type { z } from "zod";
@@ -39,10 +39,10 @@ function mergePii(base: PiiPolicy, args: z.output<typeof updateGuardrailsToolInp
 }
 
 async function updateGuardrails(args: z.output<typeof updateGuardrailsToolInput>): Promise<AssistantToolResult> {
-  const current = await loadGuardrailsAction();
+  const current = await settle(loadGuardrails());
   if (isActionFail(current)) return toolFail(actionCode(current));
   if (args.scope === "global") {
-    return viaAction(savePiiAction(mergePii(current.pii, args)), ({ pii }) => ({
+    return viaService(savePii(mergePii(current.pii, args)), ({ pii }) => ({
       result: { ok: true, scope: "global", policy: pii },
       navigate: "/guardrails",
     }));
@@ -50,7 +50,7 @@ async function updateGuardrails(args: z.output<typeof updateGuardrailsToolInput>
   if (!args.id) return toolFail("invalid_arguments", { issues: [{ path: "id", message: "required" }] });
   const existing = current.piiOverrides.find((row) => row.scope === args.scope && row.id === args.id);
   const policy = args.inherit ? null : mergePii(existing?.policy ?? current.pii, args);
-  return viaAction(savePiiOverrideAction({ scope: args.scope, id: args.id, policy }), (saved) => ({
+  return viaService(savePiiOverride({ scope: args.scope, id: args.id, policy }), (saved) => ({
     result: { ok: true, scope: saved.scope, id: saved.id, override: saved.override?.policy ?? null },
     navigate: "/guardrails",
   }));
@@ -61,7 +61,7 @@ async function updateGatewaySettings(
 ): Promise<AssistantToolResult> {
   const changed: Record<string, unknown> = {};
   if (args.cacheTtlSeconds !== undefined) {
-    const saved = await saveCacheAction({ cacheTtlSeconds: args.cacheTtlSeconds });
+    const saved = await settle(saveCache({ cacheTtlSeconds: args.cacheTtlSeconds }));
     if (isActionFail(saved)) return toolFail(actionCode(saved));
     changed.cacheTtlSeconds = saved.cacheTtlSeconds;
   }
@@ -79,9 +79,9 @@ async function updateGatewaySettings(
     args.keyExpiryWarningDays,
   ].some((value) => value !== undefined);
   if (loggingChanged) {
-    const current = await loadLoggingAction();
+    const current = await settle(loadLogging());
     if (isActionFail(current)) return toolFail(actionCode(current));
-    const saved = await saveLoggingAction({
+    const saved = await settle(saveLogging({
       alertWebhooks: current.alertWebhooks.map((hook) => ({
         id: hook.id,
         url: hook.url,
@@ -103,7 +103,7 @@ async function updateGatewaySettings(
       contentRetentionDays: args.contentRetentionDays ?? current.contentRetentionDays,
       logArchive: args.logArchive ?? current.logArchive,
       logContent: args.logContent ?? current.logContent,
-    });
+    }));
     if (isActionFail(saved)) return toolFail(actionCode(saved));
     Object.assign(changed, {
       logRetentionDays: saved.logRetentionDays,
@@ -128,9 +128,9 @@ export const settingsTools = {
     input: emptyToolInput,
     run: async () => {
       const [logging, cache, admin] = await Promise.all([
-        loadLoggingAction(),
-        loadCacheAction(),
-        loadAdminSettingsAction(),
+        settle(loadLogging()),
+        settle(loadCache()),
+        settle(loadAdminSettings()),
       ]);
       if (isActionFail(logging)) return toolFail(actionCode(logging));
       if (isActionFail(cache)) return toolFail(actionCode(cache));
@@ -186,7 +186,7 @@ export const settingsTools = {
       "The global PII policy and every company, project, and key override, plus the global content guardrails (denylist and regex rules, prompt injection detection, output secret checks) and their overrides.",
     input: emptyToolInput,
     run: async () =>
-      viaAction(loadGuardrailsAction(), ({ pii, piiOverrides, guardrails, guardrailOverrides }) => ({
+      viaService(loadGuardrails(), ({ pii, piiOverrides, guardrails, guardrailOverrides }) => ({
         result: {
           global: pii,
           overrides: piiOverrides.map((row) => ({ scope: row.scope, id: row.id, alias: row.alias, policy: row.policy })),
@@ -206,7 +206,7 @@ export const settingsTools = {
     description: "Show how the global PII policy would mask a sample text.",
     input: testPiiToolInput,
     run: async ({ text }) =>
-      viaAction(testPiiAction(text), ({ redacted }) => ({ result: { redacted } })),
+      viaService(testPii(text), ({ redacted }) => ({ result: { redacted } })),
   }),
   update_guardrails: defineTool({
     description:

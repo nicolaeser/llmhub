@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
-import { usageFromUnknown } from "@/lib/gateway/billing";
+import { usageFromUnknown } from "@/lib/gateway/billing/billing";
 import { asRecord } from "@/lib/gateway/core";
-import { resolveImageFiles } from "@/lib/gateway/file-refs";
-import { allowModel, applyGuardrails, gateRequest, gateResponse, modelOf, modelChain } from "@/lib/gateway/gate";
-import { streamMedia, wantsStream } from "@/lib/gateway/media-stream";
-import { meter } from "@/lib/gateway/meter";
-import { readModelRequest } from "@/lib/gateway/multipart";
-import { forwardToModel } from "@/lib/gateway/upstream";
+import { resolveImageFiles } from "@/lib/gateway/storage/file-refs";
+import { allowModel, applyGuardrails, gateRequest, gateResponse, modelOf, modelChain } from "@/lib/gateway/access/gate";
+import { streamMedia, wantsStream } from "@/lib/gateway/endpoints/media-stream";
+import { meter } from "@/lib/gateway/billing/meter";
+import { readModelRequest } from "@/lib/gateway/endpoints/multipart";
+import { forwardToModel } from "@/lib/gateway/dispatch/upstream";
 
 export const maxDuration = 300;
 

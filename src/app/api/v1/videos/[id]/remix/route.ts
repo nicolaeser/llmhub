@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
-import { usageFromUnknown } from "@/lib/gateway/billing";
+import { usageFromUnknown } from "@/lib/gateway/billing/billing";
 import { asRecord } from "@/lib/gateway/core";
-import { allowModel, applyGuardrails, gateRequest, gateResponse, readBody } from "@/lib/gateway/gate";
-import { meter } from "@/lib/gateway/meter";
-import { forwardToModel } from "@/lib/gateway/upstream";
-import { storeVideo, videoRecord } from "@/lib/gateway/videos";
+import { allowModel, applyGuardrails, gateRequest, gateResponse, readBody } from "@/lib/gateway/access/gate";
+import { meter } from "@/lib/gateway/billing/meter";
+import { forwardToModel } from "@/lib/gateway/dispatch/upstream";
+import { storeVideo, videoRecord } from "@/lib/gateway/endpoints/videos";
 
 export const maxDuration = 300;
 

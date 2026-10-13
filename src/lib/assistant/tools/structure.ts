@@ -1,18 +1,15 @@
 import "server-only";
 
-import prisma from "@/lib/db/prisma";
+import { addBoost, removeBoost, saveBudgetAlerts, setBudget } from "@/lib/tenancy/budgets";
 import {
-  addBoostAction,
-  deleteNodeAction,
-  loadStructureAction,
-  removeBoostAction,
-  saveBudgetAlertsAction,
-  saveMemberAction,
-  saveOrgAction,
-  saveProjectAction,
-  saveTeamAction,
-  setBudgetAction,
-} from "@/app/(app)/companies/_action";
+  deleteNode,
+  loadStructure,
+  saveMember,
+  saveOrg,
+  saveProject,
+  saveTeam,
+} from "@/lib/tenancy/structure";
+import prisma from "@/lib/db/prisma";
 import {
   boostToolInput,
   budgetAlertsToolInput,
@@ -22,10 +19,15 @@ import {
   setBudgetToolInput,
   structureToolInput,
 } from "@/schemas/assistant";
-import { defineTool, needsConfirmation, toolFail, viaAction } from "@/lib/assistant/tools/define";
+import {
+  defineTool,
+  needsConfirmation,
+  settle,
+  toolFail,
+  viaService,
+} from "@/lib/assistant/tools/define";
 import { isActionFail } from "@/lib/http/action-result";
 import type { AssistantToolResult } from "@/types/assistant";
-import type { ActionFail } from "@/types/actions";
 import type { BudgetResult, BudgetView, NodeKind, StructurePayload } from "@/types/structure";
 import type { z } from "zod";
 
@@ -126,21 +128,21 @@ function savedNode(kind: NodeKind, id: string, before: Set<string>) {
 
 async function saveNode(args: z.output<typeof saveNodeToolInput>): Promise<AssistantToolResult> {
   const id = args.id ?? "";
-  const current = await loadStructureAction();
+  const current = await settle(loadStructure());
   const before = new Set(isActionFail(current) ? [] : idsOf(current, args.kind));
   if (args.kind === "org") {
     const existing = id ? await prisma.organization.findUnique({ where: { id } }) : null;
     if (id && !existing) return toolFail("not_found");
-    return viaAction(
-      saveOrgAction({ id, alias: args.alias ?? existing?.alias ?? "" }),
+    return viaService(
+      saveOrg({ id, alias: args.alias ?? existing?.alias ?? "" }),
       savedNode("org", id, before),
     );
   }
   if (args.kind === "team") {
     const existing = id ? await prisma.team.findUnique({ where: { id } }) : null;
     if (id && !existing) return toolFail("not_found");
-    return viaAction(
-      saveTeamAction({
+    return viaService(
+      saveTeam({
         id,
         alias: args.alias ?? existing?.alias ?? "",
         orgId: args.orgId ?? existing?.orgId ?? "",
@@ -153,8 +155,8 @@ async function saveNode(args: z.output<typeof saveNodeToolInput>): Promise<Assis
   if (args.kind === "project") {
     const existing = id ? await prisma.project.findUnique({ where: { id } }) : null;
     if (id && !existing) return toolFail("not_found");
-    return viaAction(
-      saveProjectAction({
+    return viaService(
+      saveProject({
         id,
         alias: args.alias ?? existing?.alias ?? "",
         orgId: args.orgId ?? existing?.orgId ?? "",
@@ -166,8 +168,8 @@ async function saveNode(args: z.output<typeof saveNodeToolInput>): Promise<Assis
   }
   const existing = id ? await prisma.member.findUnique({ where: { id } }) : null;
   if (id && !existing) return toolFail("not_found");
-  return viaAction(
-    saveMemberAction({
+  return viaService(
+    saveMember({
       id,
       alias: args.alias ?? existing?.name ?? "",
       email: args.email ?? existing?.email ?? "",
@@ -180,8 +182,8 @@ async function saveNode(args: z.output<typeof saveNodeToolInput>): Promise<Assis
   );
 }
 
-function budgetSaved(pending: Promise<BudgetResult | ActionFail>) {
-  return viaAction(pending, (saved) => ({
+function budgetSaved(pending: Promise<BudgetResult>) {
+  return viaService(pending, (saved) => ({
     result: { ok: true, kind: saved.kind, id: saved.id, budget: budget(saved.budget) },
   }));
 }
@@ -192,7 +194,7 @@ export const structureTools = {
       "Customer companies (org) with their departments (team, with RPM and TPM limits), projects, people (member, the company's own users), console users, and keys with ids, parents, key binding (project, member, or internal), and budgets (cap, spend, period, boosts, percent used, forecast). Pass kind to keep the answer short.",
     input: structureToolInput,
     run: async ({ kind }) =>
-      viaAction(loadStructureAction(), (payload) => {
+      viaService(loadStructure(), (payload) => {
         const compact = compactStructure(payload);
         if (!kind) return { result: { ...compact, budgetAlertThresholds: payload.thresholds } };
         return { result: { [KIND_FIELD[kind]]: compact[KIND_FIELD[kind]] } };
@@ -210,7 +212,7 @@ export const structureTools = {
     input: deleteNodeToolInput,
     run: async ({ kind, id, confirm }) =>
       needsConfirmation(confirm) ??
-      viaAction(deleteNodeAction({ kind, id }), () => ({
+      viaService(deleteNode({ kind, id }), () => ({
         result: { ok: true, kind, id },
         navigate: "/companies",
       })),
@@ -219,23 +221,23 @@ export const structureTools = {
     description:
       "Set the spend cap and reset period of a company, department, project, person, console user, or key. A cap cannot exceed a capped parent.",
     input: setBudgetToolInput,
-    run: async (args) => budgetSaved(setBudgetAction(args)),
+    run: async (args) => budgetSaved(setBudget(args)),
   }),
   add_budget_boost: defineTool({
     description:
       "Add a temporary budget boost on a capped company, department, project, person, console user, or key for up to 720 hours.",
     input: boostToolInput,
-    run: async (args) => budgetSaved(addBoostAction(args)),
+    run: async (args) => budgetSaved(addBoost(args)),
   }),
   remove_budget_boost: defineTool({
     description: "Remove a temporary budget boost by its id (from get_structure).",
     input: removeBoostToolInput,
-    run: async ({ boostId }) => budgetSaved(removeBoostAction(boostId)),
+    run: async ({ boostId }) => budgetSaved(removeBoost(boostId)),
   }),
   set_budget_alerts: defineTool({
     description: "Set the budget usage percentages that fire budget_threshold alert webhooks.",
     input: budgetAlertsToolInput,
     run: async ({ thresholds }) =>
-      viaAction(saveBudgetAlertsAction(thresholds), (saved) => ({ result: { ok: true, thresholds: saved.thresholds } })),
+      viaService(saveBudgetAlerts(thresholds), (saved) => ({ result: { ok: true, thresholds: saved.thresholds } })),
   }),
 };

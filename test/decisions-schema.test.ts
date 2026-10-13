@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { parseRequest } from "@/lib/gateway/responses";
+import { parseRequest } from "@/lib/gateway/protocols/parse-request";
 import { systemOneRequestSchema } from "@/schemas/decisions";
 
 test("systemone accepts noul, choice, and score questions with free-form state", () => {

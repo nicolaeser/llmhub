@@ -8,8 +8,8 @@ import {
   groupRequestHealth,
   groupSpend,
   percentileIndex,
-} from "@/lib/gateway/usage-stats";
-import type { UsageSlice } from "@/types/gateway";
+} from "@/lib/usage/usage-stats";
+import type { UsageSlice } from "@/types/usage";
 
 const slice = (row: Partial<UsageSlice>): UsageSlice => ({
   day: "2026-10-05",

@@ -9,7 +9,13 @@ const optionalString = z
   .optional()
   .transform((v) => (v && v.trim() !== "" ? v : undefined));
 
+const optionalTrimmedString = z
+  .string()
+  .optional()
+  .transform((v) => v?.trim() || undefined);
+
 export const envSchema = z.object({
+  NODE_ENV: z.enum(["development", "production"]),
   DATABASE_URL: z.string().min(1),
   APP_SECRET: z.string().min(32),
   NEXT_PUBLIC_APP_URL: z.preprocess(
@@ -21,6 +27,6 @@ export const envSchema = z.object({
   SMTP_URL: optionalString,
   SMTP_FROM: optionalString,
   OIDC_CLIENT_SECRET: optionalString,
-  REDIS_URL: optionalString,
+  REDIS_URL: optionalTrimmedString,
   BUILD_ID: optionalString,
 });

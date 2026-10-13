@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Card } from "@heroui/react";
 import { useFormatter, useTranslations } from "next-intl";
 import SearchSelect from "@/components/console/search-select";
-import { applyMarkup, pickMarkup } from "@/lib/gateway/markup-policy";
+import { applyMarkup, pickMarkup } from "@/lib/gateway/billing/markup-policy";
 import type { PickerItem } from "@/types/console";
 import type {
   MarkupOrgOption,

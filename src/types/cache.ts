@@ -1,6 +1,5 @@
 import type { z } from "zod";
-import type { CACHE_STATS_RANGES } from "@/lib/gateway/cache-settings";
-import type { cacheSettingsSchema } from "@/schemas/settings";
+import type { cacheSettingsSchema, semanticCacheSchema } from "@/schemas/settings";
 import type { JsonMap } from "@/types/gateway";
 
 export type CachedResponse = { response: JsonMap; cost: number; tokens: number };
@@ -18,7 +17,7 @@ export type ResponseCacheColumns = {
   responseCacheLookupCost: number;
 };
 
-export type SemanticCacheSettings = { enabled: boolean; model: string; threshold: number };
+export type SemanticCacheSettings = z.infer<typeof semanticCacheSchema>;
 
 export type SemanticProbe = { scope: string; text: string };
 
@@ -36,8 +35,6 @@ export type ChatCacheLookup = {
 };
 
 export type CacheBackend = "redis" | "memory" | "fallback";
-
-export type ResponseCacheStatsRange = (typeof CACHE_STATS_RANGES)[number];
 
 export type ResponseCacheStats = {
   days: number;

@@ -1,31 +1,34 @@
 import "server-only";
-import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
-import { signingSecret } from "@/lib/crypto";
+import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
+import { pkceChallenge, signingSecret } from "@/lib/crypto";
 import { env } from "@/lib/env";
 import { asRecord, asString } from "@/lib/gateway/core";
-import { verifyJwt } from "@/lib/gateway/jwks";
+import { verifyJwt } from "@/lib/auth/jwks";
+import { readJsonOr } from "@/lib/utils/json";
 import type {
-  DiscCache,
+  OidcDiscoveryCache,
   OidcDiscovery,
   OidcEnv,
   OidcState,
   ResolvedOidc,
   VerifiedOidcState,
+  JwtClaims,
+  JwtConfig,
+  OidcSettings,
 } from "@/types/auth";
-import type { JwtClaims, JWTConfig, OIDCConfig } from "@/types/gateway";
 
 export const OIDC_STATE_COOKIE =
   process.env.NODE_ENV === "production" ? "__Host-llmhub-oidc" : "llmhub_oidc";
 const OIDC_STATE_TTL_SECONDS = 600;
 const STATE_PART = /^[A-Za-z0-9_-]{16,128}$/;
-let discCache: DiscCache | null = null;
+let discCache: OidcDiscoveryCache | null = null;
 
 export function trimIssuer(issuer: string): string {
   return issuer.trim().replace(/\/+$/, "");
 }
 
 export function resolveOidc(
-  cfg: OIDCConfig | undefined,
+  cfg: Partial<OidcSettings> | undefined,
   envOverride: OidcEnv = {},
 ): ResolvedOidc {
   const appUrl = (envOverride.appUrl ?? env.NEXT_PUBLIC_APP_URL).replace(/\/+$/, "");
@@ -43,7 +46,7 @@ export function resolveOidc(
 }
 
 export function oidcIsReady(
-  cfg: OIDCConfig | undefined,
+  cfg: Partial<OidcSettings> | undefined,
   envOverride: OidcEnv = {},
 ): boolean {
   const resolved = resolveOidc(cfg, envOverride);
@@ -94,10 +97,6 @@ export async function fetchOidcDiscovery(
   }
   discCache = { issuer: trimmed, disc, fetched: Date.now() };
   return disc;
-}
-
-export function pkceChallenge(verifier: string): string {
-  return createHash("sha256").update(verifier).digest("base64url");
 }
 
 export function buildAuthorizationUrl(
@@ -212,7 +211,7 @@ export function emailFromOidcClaims(claims: JwtClaims): string {
 export function jwtConfigForOidc(
   resolved: ResolvedOidc,
   disc: OidcDiscovery,
-): JWTConfig {
+): JwtConfig {
   return {
     issuer: disc.issuer || resolved.issuer,
     audience: resolved.clientId,
@@ -235,7 +234,7 @@ export async function exchangeOidcCode(input: {
     body: tokenRequestBody(input.resolved, input.code, input.verifier),
     signal: AbortSignal.timeout(8_000),
   });
-  const rec = asRecord(await res.json().catch(() => null)) ?? {};
+  const rec = asRecord(await readJsonOr(res, null)) ?? {};
   const idToken = asString(rec.id_token);
   if (!idToken) {
     const detail = asString(rec.error_description) || asString(rec.error) || `oidc token ${res.status}`;

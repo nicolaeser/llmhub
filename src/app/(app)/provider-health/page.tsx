@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState, useTransition } from "react";
+import { useEffect, useState } from "react";
 import {
   Button,
   Card,
@@ -15,13 +15,14 @@ import {
 import { HeartPulse, RefreshCw } from "lucide-react";
 import { useFormatter, useTranslations } from "next-intl";
 import { Link } from "@/i18n/routing";
-import { loadProviderHealthAction } from "@/app/(app)/provider-health/_action";
+import { loadProviderHealthAction } from "./_action";
+import { useActionData } from "@/lib/hooks/use-action-data";
 import { isActionFail } from "@/lib/http/action-result";
 import EmptyState from "@/components/console/empty-state";
 import PageHeader from "@/components/console/page-header";
+import PageStatus, { LoadError } from "@/components/console/page-status";
 import StatCard from "@/components/console/stat-card";
-import type { ActionFail } from "@/types/actions";
-import type { DeploymentHealthView, HealthReport } from "@/types/provider-health";
+import type { DeploymentHealthView } from "@/types/provider-health";
 
 const WINDOWS = [5, 15, 60] as const;
 const POLL_MS = 15_000;
@@ -47,78 +48,31 @@ export default function ProviderHealthPage() {
   const tProviders = useTranslations("Providers");
   const tCommon = useTranslations("Common");
   const format = useFormatter();
-  const [report, setReport] = useState<HealthReport | null>(null);
-  const [failed, setFailed] = useState(false);
   const [minutes, setMinutes] = useState<number>(15);
   const [showIdle, setShowIdle] = useState(false);
-  const [pending, start] = useTransition();
+  const health = useActionData(() => loadProviderHealthAction(15));
+  const { data: report, setData: setReport, pending } = health;
 
-  const receive = useCallback((res: HealthReport | ActionFail) => {
-    if (isActionFail(res)) {
-      setFailed(true);
-      return;
-    }
-    setFailed(false);
-    setReport(res);
-  }, []);
-
-  const refresh = useCallback(
-    (span: number) => {
-      start(async () => receive(await loadProviderHealthAction(span)));
-    },
-    [receive],
-  );
-
-  useEffect(() => {
-    refresh(15);
-  }, [refresh]);
+  function refresh(span: number) {
+    health.reloadWith(() => loadProviderHealthAction(span));
+  }
 
   useEffect(() => {
     let active = true;
     const timer = setInterval(() => {
       if (document.visibilityState !== "visible") return;
       loadProviderHealthAction(minutes).then((res) => {
-        if (active) receive(res);
+        if (active && !isActionFail(res)) setReport(res);
       });
     }, POLL_MS);
     return () => {
       active = false;
       clearInterval(timer);
     };
-  }, [minutes, receive]);
-
-  if (!report && !failed) {
-    return (
-      <output
-        aria-live="polite"
-        aria-label={tCommon("loading")}
-        className="flex min-h-[40vh] items-center justify-center text-accent"
-      >
-        <Spinner color="current" size="lg" />
-      </output>
-    );
-  }
+  }, [minutes, setReport]);
 
   if (!report) {
-    return (
-      <div>
-        <PageHeader title={t("title")} subtitle={t("subtitle")} />
-        <EmptyState
-          icon={HeartPulse}
-          title={t("loadFailed")}
-          action={
-            <Button variant="secondary" isPending={pending} onPress={() => refresh(minutes)}>
-              {({ isPending }) => (
-                <>
-                  {isPending ? <Spinner size="sm" color="current" /> : <RefreshCw size={14} aria-hidden />}
-                  {tCommon("refresh")}
-                </>
-              )}
-            </Button>
-          }
-        />
-      </div>
-    );
+    return <PageStatus title={t("title")} state={health} />;
   }
 
   const active = report.deployments.filter((row) => row.attempts > 0 || row.cooldownUntil);
@@ -134,6 +88,7 @@ export default function ProviderHealthPage() {
         title={t("title")}
         subtitle={t("subtitle", { seconds: Math.round(report.cooldownMs / 1000) })}
       />
+      <LoadError state={health} className="mb-5" />
 
       {report.deployments.length === 0 ? (
         <EmptyState

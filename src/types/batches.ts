@@ -1,4 +1,4 @@
-import type { JsonMap, Principal } from "@/types/gateway";
+import type { JsonMap } from "@/types/gateway";
 
 export type BatchEndpoint =
   | "/v1/chat/completions"
@@ -35,7 +35,3 @@ export type BatchLineResult =
   | { ok: true; body: JsonMap; usage: unknown }
   | { ok: false; status: number; error: JsonMap };
 
-export type BatchRun = {
-  principal: Principal;
-  endpoint: BatchEndpoint;
-};

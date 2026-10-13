@@ -1,5 +1,5 @@
 {
-  "title": "Settings",
+  "title": "Admin settings",
   "subtitle": "Sign-in, assistant, model catalog, knowledge bases, object storage, and SCIM. Infrastructure secrets stay in the environment.",
   "save": "Save settings",
   "saved": "Settings saved",

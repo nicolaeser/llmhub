@@ -24,8 +24,6 @@
     "waiting": "Warte auf Freigabe…",
     "cancel": "Anmeldung abbrechen",
     "copy": "Code kopieren",
-    "copied": "Code kopiert",
-    "copyFailed": "Der Code konnte nicht kopiert werden.",
     "pasteTitle": "Autorisierungsergebnis einfügen",
     "pasteHint": "{kind, select, antigravity {Nach der Bestätigung versucht der Browser, eine Seite auf localhost zu öffnen, die nicht lädt. Kopiere die vollständige Adresse aus der Adressleiste und füge sie unten ein.} claude {Nach der Freigabe versucht der Browser, eine Seite auf localhost zu öffnen, die nicht lädt. Kopiere die vollständige Adresse aus der Adressleiste oder den Autorisierungscode und füge sie unten ein.} other {Füge das Autorisierungsergebnis unten ein.}}",
     "pasteLabel": "Callback-Adresse oder Autorisierungscode",

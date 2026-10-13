@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
-import { usageFromUnknown } from "@/lib/gateway/billing";
+import { usageFromUnknown } from "@/lib/gateway/billing/billing";
 import { asRecord } from "@/lib/gateway/core";
-import { allowModel, gateRequest, gateResponse, modelOf, modelChain } from "@/lib/gateway/gate";
-import { meter } from "@/lib/gateway/meter";
-import { readModelRequest } from "@/lib/gateway/multipart";
-import { forwardToModel } from "@/lib/gateway/upstream";
+import { allowModel, gateRequest, gateResponse, modelOf, modelChain } from "@/lib/gateway/access/gate";
+import { meter } from "@/lib/gateway/billing/meter";
+import { readModelRequest } from "@/lib/gateway/endpoints/multipart";
+import { forwardToModel } from "@/lib/gateway/dispatch/upstream";
+import { parseJsonOrNull } from "@/lib/utils/json";
 
 export async function POST(req: Request) {
   try {
@@ -21,10 +22,7 @@ export async function POST(req: Request) {
         binary: true,
       });
       const text = new TextDecoder().decode(hit.raw);
-      let json: unknown = null;
-      try {
-        json = JSON.parse(text);
-      } catch {}
+      const json = parseJsonOrNull(text);
       await usage.ok(hit, usageFromUnknown(asRecord(json)?.usage, json), json ?? text);
       return json === null
         ? new Response(text, { status: hit.status, headers: { "Content-Type": hit.contentType } })

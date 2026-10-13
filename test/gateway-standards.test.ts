@@ -1,18 +1,19 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { nativeMessagesBody } from "@/lib/gateway/anthropic";
-import { usageFromUnknown } from "@/lib/gateway/billing";
-import { PROVIDER_CATALOG } from "@/lib/gateway/catalog";
+import { nativeMessagesBody } from "@/lib/gateway/protocols/anthropic";
+import { usageFromUnknown } from "@/lib/gateway/billing/billing";
+import { PROVIDER_CATALOG } from "@/lib/gateway/upstreams/provider-kinds";
 import { modelEntry } from "@/lib/gateway/core";
-import { costOf } from "@/lib/gateway/cost";
-import { mediaTypeOf } from "@/lib/gateway/file-refs";
-import { OutputScreen } from "@/lib/gateway/guardrails";
-import { mergeStreamUsage, screenMessage, screenMessageEvent } from "@/lib/gateway/messages-dispatch";
-import { redactJSON } from "@/lib/gateway/pii";
-import { applyProviderServiceMode } from "@/lib/gateway/service-mode";
-import { normalizeEnterprise } from "@/lib/gateway/settings";
-import { joinPath, mergeUpstreamHeaders, prepareBody, upstreamErrorMessage } from "@/lib/gateway/upstream";
-import type { Deployment, JsonMap, ResolvedDeployment } from "@/types/gateway";
+import { costOf } from "@/lib/gateway/billing/cost";
+import { mediaTypeOf } from "@/lib/gateway/storage/file-refs";
+import { OutputScreen } from "@/lib/gateway/safety/guardrails";
+import { mergeStreamUsage, screenMessage, screenMessageEvent } from "@/lib/gateway/dispatch/messages-dispatch";
+import { redactJSON } from "@/lib/gateway/safety/pii";
+import { applyProviderServiceMode } from "@/lib/gateway/dispatch/service-mode";
+import { normalizeEnterprise } from "@/lib/settings/enterprise";
+import { joinPath, mergeUpstreamHeaders, prepareBody, upstreamErrorMessage } from "@/lib/gateway/dispatch/upstream";
+import type { JsonMap } from "@/types/gateway";
+import type { Deployment, ResolvedDeployment } from "@/types/routing";
 
 function dep(kind: string, base_url = "", model = "m"): ResolvedDeployment {
   return {

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import { gateRequest, gateResponse } from "@/lib/gateway/gate";
+import { gateRequest, gateResponse } from "@/lib/gateway/access/gate";
 import { GateError } from "@/lib/gateway/errors";
-import { canReadObject, deleteObject, fileJson, getObject } from "@/lib/gateway/objects";
+import { canReadObject, deleteObject, fileJson, getObject } from "@/lib/gateway/storage/objects";
 import { ownerId } from "@/lib/gateway/core";
 
 export async function GET(

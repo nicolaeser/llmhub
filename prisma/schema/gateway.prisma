@@ -365,13 +365,13 @@ model SpendEvent {
   createdAt        DateTime @default(now())
 
   @@index([createdAt])
-  @@index([keyId])
+  @@index([keyId, createdAt])
   @@index([model])
   @@index([teamId])
-  @@index([orgId])
-  @@index([projectId])
+  @@index([orgId, createdAt])
+  @@index([projectId, createdAt])
   @@index([memberId])
-  @@index([userId])
+  @@index([userId, createdAt])
 }
 
 model UsageDaily {
@@ -439,12 +439,12 @@ model RequestLog {
   content          RequestLogContent?
 
   @@index([createdAt])
-  @@index([keyId])
-  @@index([userId])
-  @@index([teamId])
-  @@index([orgId])
-  @@index([projectId])
-  @@index([memberId])
+  @@index([keyId, createdAt])
+  @@index([userId, createdAt])
+  @@index([teamId, createdAt])
+  @@index([orgId, createdAt])
+  @@index([projectId, createdAt])
+  @@index([memberId, createdAt])
   @@index([status])
 }
 

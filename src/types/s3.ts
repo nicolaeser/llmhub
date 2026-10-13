@@ -1,3 +1,5 @@
+import type { AdminSettings } from "@/types/settings";
+
 export type S3Runtime = S3Location & {
   accessKeyId: string;
   secretAccessKey: string;
@@ -17,14 +19,18 @@ export type SignInput = {
   now?: Date;
 };
 
-export type AddressingStyle = "path" | "virtual-hosted";
-
 export type S3Location = {
   bucket: string;
   region: string;
   endpoint: string;
   prefix: string;
-  addressing: AddressingStyle;
+  addressing: S3AddressingStyle;
   domainBucket: boolean;
   publicBaseUrl: string;
 };
+
+export type S3Settings = AdminSettings["s3"];
+
+export type S3AddressingSetting = S3Settings["addressing"];
+
+export type S3AddressingStyle = Exclude<S3AddressingSetting, "auto">;

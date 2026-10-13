@@ -16,11 +16,12 @@ import {
   googleDurationSeconds,
   googleRetryAt,
   withProject,
-} from "@/lib/gateway/antigravity";
-import { fetchAvailableModels } from "@/lib/gateway/antigravity-api";
+} from "@/lib/gateway/upstreams/antigravity";
+import { fetchAvailableModels } from "@/lib/gateway/upstreams/antigravity-api";
 import { GateError } from "@/lib/gateway/errors";
-import { routePool } from "@/lib/gateway/route-pool";
-import type { JsonMap, ResolvedDeployment } from "@/types/gateway";
+import { routePool } from "@/lib/gateway/routing/route-pool";
+import type { JsonMap } from "@/types/gateway";
+import type { ResolvedDeployment } from "@/types/routing";
 import type { SignInSession } from "@/types/providers";
 
 const settings = new Map<string, string>();
@@ -409,7 +410,7 @@ test("usage metadata maps thinking tokens into completion tokens", () => {
 });
 
 test("Google durations and 429 details become a retry time", async () => {
-  const { upstreamError, upstreamRetryAt } = await import("@/lib/gateway/upstream");
+  const { upstreamError, upstreamRetryAt } = await import("@/lib/gateway/dispatch/upstream");
   assert.equal(googleDurationSeconds("3s"), 3);
   assert.equal(googleDurationSeconds("0.479s"), 0.479);
   assert.equal(googleDurationSeconds("1h2m3.5s"), 3723.5);
@@ -512,8 +513,8 @@ test("the models call posts the project and reports the status", async () => {
 });
 
 test("antigravity deployments belong to the subscription pool and use the streaming endpoint", async () => {
-  const { joinPath, prepareBody, upstreamHeaders } = await import("@/lib/gateway/upstream");
-  const { signInHeaders } = await import("@/lib/gateway/credentials");
+  const { joinPath, prepareBody, upstreamHeaders } = await import("@/lib/gateway/dispatch/upstream");
+  const { signInHeaders } = await import("@/lib/gateway/upstreams/credentials");
   assert.equal(routePool({ kind: "antigravity" }), "subscription");
   assert.equal(routePool({ kind: "openai", provider: { kind: "antigravity" } }), "subscription");
   assert.equal(joinPath(dep, "/chat/completions"), "https://cloudcode-pa.googleapis.com/v1internal:streamGenerateContent?alt=sse");
@@ -530,8 +531,8 @@ test("antigravity deployments belong to the subscription pool and use the stream
 });
 
 test("a chat request goes out as a Cloud Code envelope and the SSE reply returns as a chat completion", async () => {
-  const { proxyJson } = await import("@/lib/gateway/upstream");
-  const { signInHeaders } = await import("@/lib/gateway/credentials");
+  const { proxyJson } = await import("@/lib/gateway/dispatch/upstream");
+  const { signInHeaders } = await import("@/lib/gateway/upstreams/credentials");
   respondWith(
     () =>
       new Response(
@@ -559,7 +560,7 @@ test("a chat request goes out as a Cloud Code envelope and the SSE reply returns
 });
 
 test("a rate limited reply keeps Google's message and reset time", async () => {
-  const { proxyJson, upstreamError } = await import("@/lib/gateway/upstream");
+  const { proxyJson, upstreamError } = await import("@/lib/gateway/dispatch/upstream");
   respondWith(
     () =>
       Response.json(
@@ -580,7 +581,7 @@ test("a rate limited reply keeps Google's message and reset time", async () => {
 });
 
 test("the authorization link carries PKCE, offline access, and the loopback redirect", async () => {
-  const { requestAntigravityAuthorization } = await import("@/lib/gateway/sign-in");
+  const { requestAntigravityAuthorization } = await import("@/lib/gateway/upstreams/subscription-sign-in");
   const device = requestAntigravityAuthorization();
   const url = new URL(device.verificationUrl);
   assert.equal(`${url.origin}${url.pathname}`, "https://accounts.google.com/o/oauth2/v2/auth");
@@ -600,7 +601,7 @@ test("the authorization link carries PKCE, offline access, and the loopback redi
 });
 
 test("signing in with Antigravity needs the client secret to be configured first", async () => {
-  const { startAuthorization } = await import("@/lib/gateway/sign-in");
+  const { startAuthorization } = await import("@/lib/gateway/upstreams/subscription-sign-in");
   await assert.rejects(startAuthorization("antigravity"), /ANTIGRAVITY_NOT_CONFIGURED/);
   configure("client-secret");
   const device = await startAuthorization("antigravity");
@@ -610,7 +611,7 @@ test("signing in with Antigravity needs the client secret to be configured first
 });
 
 test("the client secret is stored sealed and read back", async () => {
-  const { saveAntigravityClientSecret, antigravityClientSecret } = await import("@/lib/gateway/antigravity-config");
+  const { saveAntigravityClientSecret, antigravityClientSecret } = await import("@/lib/gateway/upstreams/antigravity-config");
   assert.equal(await antigravityClientSecret(), "");
   await saveAntigravityClientSecret("test-client-secret");
   assert.doesNotMatch(settings.get(ENTERPRISE_KEY) ?? "", /test-client-secret/);
@@ -632,7 +633,7 @@ function googleFlow(loaded: JsonMap, onboard?: JsonMap) {
 }
 
 test("signing in exchanges the code, reads the email, and stores the Cloud Code project", async () => {
-  const { requestAntigravityAuthorization, completeAuthorization } = await import("@/lib/gateway/sign-in");
+  const { requestAntigravityAuthorization, completeAuthorization } = await import("@/lib/gateway/upstreams/subscription-sign-in");
   configure("client-secret");
   googleFlow({ cloudaicompanionProject: "proj-9", paidTier: { id: "g1-pro-tier" } });
   const device = requestAntigravityAuthorization();
@@ -660,7 +661,7 @@ test("signing in exchanges the code, reads the email, and stores the Cloud Code 
 });
 
 test("an account without a project is onboarded before it is stored", async () => {
-  const { requestAntigravityAuthorization, completeAuthorization } = await import("@/lib/gateway/sign-in");
+  const { requestAntigravityAuthorization, completeAuthorization } = await import("@/lib/gateway/upstreams/subscription-sign-in");
   configure("client-secret");
   googleFlow(
     { currentTier: { id: "free-tier" }, allowedTiers: [{ id: "free-tier", isDefault: true }] },
@@ -676,7 +677,7 @@ test("an account without a project is onboarded before it is stored", async () =
 });
 
 test("an account Google gives no project fails with a clear code", async () => {
-  const { requestAntigravityAuthorization, completeAuthorization } = await import("@/lib/gateway/sign-in");
+  const { requestAntigravityAuthorization, completeAuthorization } = await import("@/lib/gateway/upstreams/subscription-sign-in");
   configure("client-secret");
   googleFlow({ currentTier: { id: "free-tier" } }, { done: true });
   const device = requestAntigravityAuthorization();
@@ -685,7 +686,7 @@ test("an account Google gives no project fails with a clear code", async () => {
 });
 
 test("a wrong state, a missing code, or a missing secret stop the sign-in", async () => {
-  const { requestAntigravityAuthorization, completeAuthorization } = await import("@/lib/gateway/sign-in");
+  const { requestAntigravityAuthorization, completeAuthorization } = await import("@/lib/gateway/upstreams/subscription-sign-in");
   googleFlow({ cloudaicompanionProject: "p" });
   const device = requestAntigravityAuthorization();
   if (device.grant.kind !== "antigravity") throw new Error("kind");
@@ -700,7 +701,7 @@ test("a wrong state, a missing code, or a missing secret stop the sign-in", asyn
 });
 
 test("refreshing keeps the project, account, and plan and replaces the access token", async () => {
-  const { refreshSession } = await import("@/lib/gateway/sign-in");
+  const { refreshSession } = await import("@/lib/gateway/upstreams/subscription-sign-in");
   configure("client-secret");
   respondWith(() => Response.json({ access_token: "access-2", expires_in: 3600 }));
   const current: SignInSession = {

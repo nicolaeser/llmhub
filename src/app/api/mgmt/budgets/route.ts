@@ -1,7 +1,8 @@
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { managementRoute, respondList } from "@/lib/management/http";
 import { serializeBudget } from "@/lib/management/serialize";
-import { budgetHolders, loadStructure } from "@/lib/management/structure";
+import { budgetHolders } from "@/lib/management/structure";
+import { loadStructure } from "@/lib/tenancy/structure";
 
 export const dynamic = "force-dynamic";
 

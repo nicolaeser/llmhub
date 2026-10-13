@@ -23,21 +23,19 @@ export default function LanguageSwitcher() {
 
   return (
     <Dropdown>
-      <Dropdown.Trigger>
-        <Button
-          fullWidth
-          size="sm"
-          variant="secondary"
-          aria-label={t("selector")}
-          className="justify-between"
-        >
-          <span className="inline-flex items-center gap-1.5">
-            <Globe size={14} aria-hidden />
-            {localeName(locale)}
-          </span>
-          <ChevronDown size={14} aria-hidden />
-        </Button>
-      </Dropdown.Trigger>
+      <Button
+        fullWidth
+        size="sm"
+        variant="secondary"
+        aria-label={t("selector")}
+        className="justify-between"
+      >
+        <span className="inline-flex items-center gap-1.5">
+          <Globe size={14} aria-hidden />
+          {localeName(locale)}
+        </span>
+        <ChevronDown size={14} aria-hidden />
+      </Button>
       <Dropdown.Popover>
         <Dropdown.Menu
           aria-label={t("selector")}

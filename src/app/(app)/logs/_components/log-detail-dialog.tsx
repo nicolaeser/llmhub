@@ -17,12 +17,12 @@ import {
 } from "@heroui/react";
 import { Braces, ChevronDown, Download, FileCode, FileText, Play, type LucideIcon } from "lucide-react";
 import { useFormatter, useTranslations } from "next-intl";
-import { loadAliasesAction } from "@/app/(app)/_action";
+import { loadAliasesAction } from "../_action";
 import Markdown from "@/components/console/markdown";
 import SearchSelect from "@/components/console/search-select";
 import { useGuardrailHitLabel } from "@/components/guardrails/guardrail-hit";
 import { useRouter } from "@/i18n/routing";
-import { splitPiiPlaceholders } from "@/lib/gateway/pii";
+import { splitPiiPlaceholders } from "@/lib/gateway/safety/pii";
 import { isActionFail } from "@/lib/http/action-result";
 import type { RequestLogDetail, RequestLogExportFormat, TranscriptEntry } from "@/types/logs";
 import GuardrailChip from "./guardrail-chip";

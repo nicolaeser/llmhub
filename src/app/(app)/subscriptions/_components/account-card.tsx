@@ -6,8 +6,8 @@ import { useFormatter, useNow, useTranslations } from "next-intl";
 import PolicyChips from "@/components/providers/policy-chips";
 import ProviderActions from "@/components/providers/provider-actions";
 import ProviderToggle from "@/components/providers/provider-toggle";
-import type { AccountLimits, LimitWindow, ProviderView } from "@/types/providers";
-import { accountState, recoveryAt, type AccountState } from "./account-status";
+import type { AccountLimits, AccountState, LimitWindow, ProviderView } from "@/types/providers";
+import { accountState, recoveryAt } from "./account-status";
 import LimitMeter from "./limit-meter";
 
 const STATE_COLOR = {

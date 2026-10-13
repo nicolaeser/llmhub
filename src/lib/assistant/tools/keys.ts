@@ -1,14 +1,9 @@
 import "server-only";
 
+import { createKey, revokeKey, rotateKey, updateKey } from "@/lib/keys/manage";
 import prisma from "@/lib/db/prisma";
 import { money } from "@/lib/utils/money";
-import { toKeyView } from "@/app/(app)/_data";
-import {
-  createKeyAction,
-  revokeKeyAction,
-  rotateKeyAction,
-  updateKeyAction,
-} from "@/app/(app)/_action";
+import { toKeyView } from "@/lib/keys/view";
 import {
   confirmKeyToolInput,
   createKeyToolInput,
@@ -16,7 +11,7 @@ import {
   listKeysToolInput,
   updateKeyToolInput,
 } from "@/schemas/assistant";
-import { defineTool, needsConfirmation, toolFail, viaAction } from "@/lib/assistant/tools/define";
+import { defineTool, needsConfirmation, toolFail, viaService } from "@/lib/assistant/tools/define";
 import { ownKeysWhere } from "@/lib/assistant/tools/general";
 import type { Prisma } from "@/generated/prisma/client";
 import type { AssistantContext, AssistantToolResult, PublicKeyView } from "@/types/assistant";
@@ -133,7 +128,7 @@ export const keyTools = {
       "Create a virtual key for a project (projectId) or a person (memberId) of a company, or an internal key of the operator when neither is given; optionally limited to models, templates, IPs, endpoints, access time windows, RPM, TPM, a maximum cost per request, and an expiry. Binding to a project or person needs tenancy:manage. The console shows the secret to the operator once; you never see it.",
     input: createKeyToolInput,
     run: async (args) =>
-      viaAction(createKeyAction(args), ({ key }) => ({
+      viaService(createKey(args), ({ key }) => ({
         result: { ok: true, id: key.token_id, alias: key.key_alias, prefix: key.key_name, note: SECRET_NOTE },
         secret: key.key,
         navigate: "/keys",
@@ -147,8 +142,8 @@ export const keyTools = {
       withKey(args.key, ctx, async (row) => {
         const view = toKeyView(row);
         const rebinds = args.projectId !== undefined || args.memberId !== undefined;
-        return viaAction(
-          updateKeyAction({
+        return viaService(
+          updateKey({
             id: row.id,
             alias: args.alias ?? (row.keyAlias || row.prefix),
             projectId: rebinds ? (args.projectId ?? "") : view.project_id,
@@ -191,7 +186,7 @@ export const keyTools = {
     run: async ({ key, confirm }, ctx) =>
       needsConfirmation(confirm) ??
       withKey(key, ctx, async (row) =>
-        viaAction(rotateKeyAction(row.id), ({ key: rotated }) => ({
+        viaService(rotateKey(row.id), ({ key: rotated }) => ({
           result: { ok: true, id: rotated.token_id, alias: rotated.key_alias, prefix: rotated.key_name, note: SECRET_NOTE },
           secret: rotated.key,
           navigate: "/keys",
@@ -205,7 +200,7 @@ export const keyTools = {
     run: async ({ key, confirm }, ctx) =>
       needsConfirmation(confirm) ??
       withKey(key, ctx, async (row) =>
-        viaAction(revokeKeyAction(row.id), (deleted) => ({
+        viaService(revokeKey(row.id), (deleted) => ({
           result: { ok: true, id: deleted.id, alias: row.keyAlias, prefix: row.prefix },
         })),
       ),

@@ -75,7 +75,15 @@
     "remove": "Fenster {index, number} entfernen"
   },
   "revoke": "Widerrufen",
+  "revokeConfirm": {
+    "title": "{name} widerrufen?",
+    "description": "Der Key wird gelöscht und jede Anfrage damit sofort abgelehnt. Das lässt sich nicht rückgängig machen."
+  },
   "rotate": "Rotieren",
+  "rotateConfirm": {
+    "title": "{name} rotieren?",
+    "description": "Ein neues Secret wird erstellt und einmal angezeigt. Das aktuelle Secret funktioniert noch eine Stunde und wird danach abgelehnt. Aktualisiere alle Clients innerhalb dieser Stunde."
+  },
   "toasts": {
     "saved": "{mode, select, updated {Key aktualisiert} other {Key erstellt}}",
     "revoked": "Key widerrufen",

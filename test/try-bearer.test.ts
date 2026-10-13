@@ -5,7 +5,7 @@ import {
   mintTryBearer,
   TRY_BEARER_TTL_SEC,
   verifyTryBearer,
-} from "@/lib/gateway/try-bearer";
+} from "@/lib/gateway/access/try-bearer";
 
 test("mintTryBearer verifies and expires", () => {
   const now = 1_700_000_000;

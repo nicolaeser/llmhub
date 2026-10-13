@@ -15,8 +15,6 @@
   "openInApp": "In Authenticator-App öffnen",
   "manualKey": "Einrichtungsschlüssel",
   "copyKey": "Einrichtungsschlüssel kopieren",
-  "copied": "Kopiert",
-  "copyFailed": "Kopieren fehlgeschlagen",
   "recoveryTitle": "Speichere deine Wiederherstellungscodes",
   "recoveryIntro": "Nutze einen dieser Codes, wenn du deinen Authenticator nicht erreichst. Sie werden nur einmal angezeigt.",
   "recoveryListLabel": "Wiederherstellungscodes",

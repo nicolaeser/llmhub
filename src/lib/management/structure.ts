@@ -1,11 +1,7 @@
 import "server-only";
-import { loadStructureAction } from "@/app/(app)/companies/_action";
-import { notFound, unwrap } from "@/lib/management/http";
-import type { BudgetKind, BudgetView, StructurePayload } from "@/types/structure";
 
-export async function loadStructure(): Promise<StructurePayload> {
-  return unwrap(await loadStructureAction());
-}
+import { notFound } from "@/lib/management/http";
+import type { BudgetKind, BudgetView, StructurePayload } from "@/types/structure";
 
 export function byId<T extends { id: string }>(rows: T[], id: string, what: string): T {
   const row = rows.find((item) => item.id === id);

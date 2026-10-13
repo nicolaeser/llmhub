@@ -1,24 +1,25 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 import {
   Button,
   Card,
   Chip,
   Disclosure,
-  Spinner,
-  toast,
   useOverlayState,
 } from "@heroui/react";
 import { Plug, Plus } from "lucide-react";
 import { useTranslations } from "next-intl";
 import EmptyState from "@/components/console/empty-state";
 import PageHeader from "@/components/console/page-header";
+import PageStatus from "@/components/console/page-status";
+import { useErrorToast } from "@/components/console/use-error-toast";
 import ImportModelsDialog from "@/components/providers/import-models-dialog";
 import ProviderCard from "./_components/provider-card";
 import ProviderDialog from "@/components/providers/provider-dialog";
-import { isSignInKind, PROVIDER_CATALOG } from "@/lib/gateway/catalog";
-import { discoverProviderAction, loadProvidersAction } from "@/app/(app)/providers/_action";
+import { isSignInKind, PROVIDER_CATALOG } from "@/lib/gateway/upstreams/provider-kinds";
+import { discoverProviderAction, loadProvidersAction } from "./_action";
+import { useActionData } from "@/lib/hooks/use-action-data";
 import { isActionFail } from "@/lib/http/action-result";
 import type { ImportCandidate, ProviderView } from "@/types/providers";
 
@@ -29,10 +30,7 @@ const MORE_CATALOG = API_CATALOG.filter((spec) => !STARTER_KINDS.has(spec.kind))
 
 export default function ProvidersPage() {
   const t = useTranslations("Providers");
-  const tCommon = useTranslations("Common");
-  const tError = useTranslations("Error");
-  const [loading, setLoading] = useState(true);
-  const [connected, setConnected] = useState<ProviderView[]>([]);
+  const showError = useErrorToast();
   const [kind, setKind] = useState<(typeof PROVIDER_CATALOG)[number] | null>(null);
   const [edit, setEdit] = useState<ProviderView | null>(null);
   const [discover, setDiscover] = useState<ProviderView | null>(null);
@@ -42,13 +40,11 @@ export default function ProvidersPage() {
   const [, startDiscover] = useTransition();
   const formState = useOverlayState();
   const discoverState = useOverlayState();
-
-  useEffect(() => {
-    loadProvidersAction().then((res) => {
-      if (!isActionFail(res)) setConnected(res.connected.filter((row) => !isSignInKind(row.kind)));
-      setLoading(false);
-    });
-  }, []);
+  const page = useActionData<ProviderView[]>(async () => {
+    const res = await loadProvidersAction();
+    return isActionFail(res) ? res : res.connected.filter((row) => !isSignInKind(row.kind));
+  });
+  const { data: connected, setData: setConnected } = page;
 
   function replaceProvider(provider: ProviderView) {
     setConnected((cur) => cur.map((row) => (row.id === provider.id ? provider : row)));
@@ -70,7 +66,7 @@ export default function ProvidersPage() {
       const result = await discoverProviderAction(row.id);
       if (isActionFail(result)) {
         setModels([]);
-        toast.danger(tError("code", { code: result.error }));
+        showError(result.error);
         return;
       }
       replaceProvider(result.provider);
@@ -78,16 +74,8 @@ export default function ProvidersPage() {
     });
   }
 
-  if (loading) {
-    return (
-      <output
-        aria-live="polite"
-        aria-label={tCommon("loading")}
-        className="flex min-h-[40vh] items-center justify-center text-accent"
-      >
-        <Spinner color="current" size="lg" />
-      </output>
-    );
+  if (!connected) {
+    return <PageStatus title={t("title")} subtitle={t("subtitle")} state={page} />;
   }
 
   const catalog = connected.length > 0 ? API_CATALOG : STARTER_CATALOG;
