@@ -3,24 +3,19 @@ name: pipeline
 on:
   workflow_call:
     inputs:
+      channel:
+        type: string
+        required: true
       publish:
         type: boolean
         default: false
-      version-prefix:
-        type: string
-        required: true
-      channel-tag:
-        type: string
-        required: true
-      sha-tag-prefix:
-        type: string
-        required: true
-      extra-tags:
-        type: string
-        default: ""
+    outputs:
+      version:
+        value: ${{ jobs.version.outputs.version }}
       prerelease:
-        type: boolean
-        default: false
+        value: ${{ jobs.version.outputs.prerelease }}
+      tags:
+        value: ${{ jobs.version.outputs.tags }}
 
 env:
   NODE_VERSION: "24"
@@ -28,8 +23,55 @@ env:
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
+  version:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      prerelease: ${{ steps.version.outputs.prerelease }}
+      tags: ${{ steps.version.outputs.tags }}
+      labels: ${{ steps.meta.outputs.labels }}
+    steps:
+      - name: Version
+        id: version
+        env:
+          CHANNEL: ${{ inputs.channel }}
+        run: |
+          short_sha="$(echo "${GITHUB_SHA}" | cut -c1-7)"
+          case "${CHANNEL}" in
+            main)
+              VERSION_PREFIX=v
+              prerelease=false
+              aliases=(latest "sha-${short_sha}" "sha-${GITHUB_SHA}")
+              ;;
+            development)
+              VERSION_PREFIX=dev-
+              prerelease=true
+              aliases=(dev development "dev-${short_sha}")
+              ;;
+            *)
+              echo "Unknown channel ${CHANNEL}" >&2
+              exit 1
+              ;;
+          esac
+          version="${VERSION_PREFIX}$(date -u +%Y.%m.%d).${short_sha}"
+          {
+            echo "version=${version}"
+            echo "prerelease=${prerelease}"
+            echo "tags=$(printf '%s\n' "${version}" "${aliases[@]}" | jq -Rnc '[inputs]')"
+          } >> "${GITHUB_OUTPUT}"
+
+      - uses: docker/metadata-action@v6
+        id: meta
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: type=raw,value=${{ steps.version.outputs.version }}
+
   quality:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
     permissions:
       contents: read
     services:
@@ -69,14 +111,22 @@ jobs:
       - run: npm run lint
 
   image:
-    needs: [quality]
-    runs-on: ubuntu-latest
-    outputs:
-      digest: ${{ steps.build.outputs.digest }}
+    name: image (${{ matrix.arch }})
+    needs: [version, quality]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    strategy:
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    env:
+      BUILD_ID: ${{ needs.version.outputs.version }}
     steps:
       - uses: actions/checkout@v7
 
-      - uses: docker/setup-qemu-action@v4
       - uses: docker/setup-buildx-action@v4
 
       - uses: docker/login-action@v4
@@ -86,96 +136,37 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Version
-        id: version
-        env:
-          VERSION_PREFIX: ${{ inputs.version-prefix }}
-        run: |
-          short_sha="$(echo "${GITHUB_SHA}" | cut -c1-7)"
-          version="${VERSION_PREFIX}$(date -u +%Y.%m.%d).${short_sha}"
-          echo "version=${version}" >> "${GITHUB_OUTPUT}"
-          echo "short_sha=${short_sha}" >> "${GITHUB_OUTPUT}"
-
-      - uses: docker/metadata-action@v6
-        id: meta
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          tags: |
-            type=raw,value=${{ inputs.channel-tag }}
-            type=raw,value=${{ steps.version.outputs.version }}
-            type=raw,value=${{ inputs.sha-tag-prefix }}${{ steps.version.outputs.short_sha }}
-            ${{ inputs.extra-tags }}
-
       - uses: docker/build-push-action@v7
         id: build
         with:
           context: .
-          push: ${{ inputs.publish }}
-          platforms: ${{ inputs.publish && 'linux/amd64,linux/arm64' || 'linux/amd64' }}
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          platforms: linux/${{ matrix.arch }}
+          outputs: ${{ inputs.publish && format('type=image,name={0}/{1},push-by-digest=true,name-canonical=true,push=true', env.REGISTRY, env.IMAGE_NAME) || 'type=docker,name=llmhub:verify' }}
+          labels: ${{ needs.version.outputs.labels }}
           build-args: |
-            BUILD_ID=${{ steps.version.outputs.version }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-          provenance: true
-          sbom: true
+            BUILD_ID=${{ env.BUILD_ID }}
+          cache-from: type=gha,scope=image-${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=image-${{ matrix.arch }}
+          provenance: ${{ inputs.publish }}
+          sbom: ${{ inputs.publish }}
 
-      - name: Publish GitHub release
+      - name: Smoke test
+        env:
+          IMAGE_REF: ${{ inputs.publish && format('{0}/{1}@{2}', env.REGISTRY, env.IMAGE_NAME, steps.build.outputs.digest) || 'llmhub:verify' }}
+        run: scripts/smoke-image.sh "${IMAGE_REF}" "${BUILD_ID}"
+
+      - name: Export digest
         if: inputs.publish
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          VERSION: ${{ steps.version.outputs.version }}
           DIGEST: ${{ steps.build.outputs.digest }}
-          IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          CHANNEL_TAG: ${{ inputs.channel-tag }}
-          PRERELEASE: ${{ inputs.prerelease }}
         run: |
-          if gh release view "${VERSION}" >/dev/null 2>&1; then
-            echo "Release ${VERSION} already exists"
-            exit 0
-          fi
-          kind="release"
-          set --
-          if [ "${PRERELEASE}" = "true" ]; then
-            kind="prerelease"
-            set -- --prerelease
-          fi
-          body="$(printf '%s\n\n## Container\n\n```text\n%s:%s\n%s:%s\n%s@%s\n```\n' \
-            "Automated ${kind} from \`${GITHUB_SHA}\` on \`${GITHUB_REF_NAME}\`." \
-            "${IMAGE}" \
-            "${CHANNEL_TAG}" \
-            "${IMAGE}" \
-            "${VERSION}" \
-            "${IMAGE}" \
-            "${DIGEST}")"
-          gh release create "${VERSION}" \
-            --target "${GITHUB_SHA}" \
-            --title "${VERSION}" \
-            --notes "${body}" \
-            --generate-notes \
-            "$@"
+          mkdir -p "${RUNNER_TEMP}/digests"
+          touch "${RUNNER_TEMP}/digests/${DIGEST#sha256:}"
 
-  scan:
-    needs: [image]
-    if: inputs.publish
-    runs-on: ubuntu-latest
-    continue-on-error: true
-    steps:
-      - uses: actions/checkout@v7
-
-      - uses: aquasecurity/trivy-action@v0.36.0
-        env:
-          TRIVY_USERNAME: ${{ github.actor }}
-          TRIVY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/upload-artifact@v7
+        if: inputs.publish
         with:
-          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ needs.image.outputs.digest }}
-          format: sarif
-          output: trivy-results.sarif
-          ignore-unfixed: true
-          exit-code: "0"
-
-      - uses: github/codeql-action/upload-sarif@v4
-        with:
-          sarif_file: trivy-results.sarif
-          category: container-image
+          name: digests-${{ matrix.arch }}
+          path: ${{ runner.temp }}/digests/*
+          if-no-files-found: error
+          retention-days: 1
