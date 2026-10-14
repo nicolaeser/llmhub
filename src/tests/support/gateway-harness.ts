@@ -222,6 +222,7 @@ export const MODEL_ROUTES: ModelRoute[] = [
 ];
 
 export const OTHER_POST_ROUTES = [
+  "/api/v1/integrations/mcp",
   "/api/v1/audio/transcriptions",
   "/api/v1/audio/translations",
   "/api/v1/batches",

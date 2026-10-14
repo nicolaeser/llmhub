@@ -110,7 +110,7 @@ function normalizePii(raw: unknown): PiiPolicy {
   const mode = asString(rec.mode, "mask");
   return {
     enabled: rec.enabled == null ? true : asBool(rec.enabled, true),
-    mode: mode === "block" ? "block" : "mask",
+    mode: mode === "block" ? "block" : mode === "restore" ? "restore" : "mask",
     output: rec.output == null ? true : asBool(rec.output, true),
     entities: asStringArray(rec.entities),
   };

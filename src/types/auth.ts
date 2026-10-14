@@ -12,7 +12,8 @@ export type PermissionDomain =
   | "spend"
   | "access"
   | "settings"
-  | "tools";
+  | "tools"
+  | "integrations";
 
 export type PermissionLevel = "view" | "work" | "sensitive";
 
@@ -38,7 +39,11 @@ export type Permission =
   | "roles:manage"
   | "settings:read"
   | "settings:manage"
-  | "playground:use";
+  | "playground:use"
+  | "integrations:read"
+  | "integrations:manage"
+  | "integrations:publish"
+  | "integrations:credentials";
 
 export type PermissionMeta = {
   domain: PermissionDomain;

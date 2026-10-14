@@ -14,6 +14,7 @@ export const KEY_ENDPOINTS = [
   "vector_stores",
   "batches",
   "systemone",
+  "integrations",
 ] as const satisfies readonly KeyEndpoint[];
 
 export const MAX_ACCESS_WINDOWS = 20;
@@ -36,6 +37,7 @@ const ENDPOINT_SEGMENTS = new Map<string, KeyEndpoint>([
   ["vector_stores", "vector_stores"],
   ["batches", "batches"],
   ["systemone", "systemone"],
+  ["integrations", "integrations"],
 ]);
 
 const OPEN_SEGMENTS = new Set(["models"]);

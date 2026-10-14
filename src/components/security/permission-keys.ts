@@ -23,4 +23,8 @@ export const PERMISSION_KEYS = {
   "settings:read": "settingsRead",
   "settings:manage": "settingsManage",
   "playground:use": "playgroundUse",
+  "integrations:read": "integrationsRead",
+  "integrations:manage": "integrationsManage",
+  "integrations:publish": "integrationsPublish",
+  "integrations:credentials": "integrationsCredentials",
 } as const satisfies Record<Permission, string>;

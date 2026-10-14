@@ -57,8 +57,8 @@
     "logContentHint": "Wenn aus, speichern die Request-Logs für diesen Key nur Metadaten, keine Prompts oder Antworten."
   },
   "endpoints": {
-    "name": "{endpoint, select, chat {Chat und Text} embeddings {Embeddings} moderations {Moderation} images {Bilder} audio {Audio} videos {Videos} ocr {Texterkennung (OCR)} files {Dateien} batches {Batches} rerank {Reranking} vector_stores {Vektorspeicher und Dateisuche} other {SystemOne}}",
-    "paths": "{endpoint, select, chat {/api/v1/chat/completions, /api/v1/completions, /api/v1/messages, /api/v1/responses} embeddings {/api/v1/embeddings} moderations {/api/v1/moderations} images {/api/v1/images} audio {/api/v1/audio} videos {/api/v1/videos} ocr {/api/v1/ocr} files {/api/v1/files} batches {/api/v1/batches} rerank {/api/v1/rerank} vector_stores {/api/v1/vector_stores, file_search in /api/v1/responses} other {/api/v1/systemone}}"
+    "name": "{endpoint, select, chat {Chat und Text} embeddings {Embeddings} moderations {Moderation} images {Bilder} audio {Audio} videos {Videos} ocr {Texterkennung (OCR)} files {Dateien} batches {Batches} rerank {Reranking} vector_stores {Vektorspeicher und Dateisuche} integrations {Integrationen} other {SystemOne}}",
+    "paths": "{endpoint, select, chat {/api/v1/chat/completions, /api/v1/completions, /api/v1/messages, /api/v1/responses} embeddings {/api/v1/embeddings} moderations {/api/v1/moderations} images {/api/v1/images} audio {/api/v1/audio} videos {/api/v1/videos} ocr {/api/v1/ocr} files {/api/v1/files} batches {/api/v1/batches} rerank {/api/v1/rerank} vector_stores {/api/v1/vector_stores, file_search in /api/v1/responses} integrations {/api/v1/integrations/mcp} other {/api/v1/systemone}}"
   },
   "windows": {
     "title": "Erlaubte Zeiten",

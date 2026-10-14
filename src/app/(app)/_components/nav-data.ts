@@ -9,6 +9,7 @@ import {
   Network,
   Plug,
   Settings,
+  Waypoints,
   Shield,
   User,
 } from "lucide-react";
@@ -51,6 +52,7 @@ export const NAV: NavSection[] = [
       { href: "/guardrails", labelKey: "items.guardrails", icon: Shield, permission: PERMISSIONS.SETTINGS_READ },
       { href: "/knowledge", labelKey: "items.knowledge", icon: Library, permission: PERMISSIONS.TENANCY_READ },
       { href: "/mcp", labelKey: "items.mcp", icon: Blocks, permission: PERMISSIONS.SETTINGS_READ },
+      { href: "/integrations", labelKey: "items.integrations", icon: Waypoints, permission: PERMISSIONS.INTEGRATIONS_READ },
     ],
   },
   {

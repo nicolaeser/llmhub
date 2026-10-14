@@ -9,6 +9,7 @@ const permissionDomains = [
   "access",
   "settings",
   "tools",
+  "integrations",
 ] as const satisfies readonly PermissionDomain[];
 const meta = (domain: PermissionDomain, level: PermissionLevel): PermissionMeta => ({
   domain,
@@ -38,6 +39,10 @@ export const permissionCatalog = {
   "settings:read": meta("settings", "view"),
   "settings:manage": meta("settings", "sensitive"),
   "playground:use": meta("tools", "work"),
+  "integrations:read": meta("integrations", "view"),
+  "integrations:manage": meta("integrations", "work"),
+  "integrations:publish": meta("integrations", "sensitive"),
+  "integrations:credentials": meta("integrations", "sensitive"),
 } as const satisfies Record<Permission, PermissionMeta>;
 
 export const permissions = Object.keys(permissionCatalog) as Permission[];
@@ -65,6 +70,10 @@ export const PERMISSIONS = {
   SETTINGS_READ: "settings:read",
   SETTINGS_MANAGE: "settings:manage",
   PLAYGROUND_USE: "playground:use",
+  INTEGRATIONS_READ: "integrations:read",
+  INTEGRATIONS_MANAGE: "integrations:manage",
+  INTEGRATIONS_PUBLISH: "integrations:publish",
+  INTEGRATIONS_CREDENTIALS: "integrations:credentials",
 } as const satisfies Record<string, Permission>;
 
 export const roleTemplateKeys = ["admin", "operator", "finance", "viewer"] as const satisfies readonly RoleTemplateKey[];
@@ -94,6 +103,7 @@ export const roleTemplates: Readonly<Record<RoleTemplateKey, readonly Permission
     "pricing:read",
     "pricing:manage",
     "settings:read",
+    "integrations:read",
   ]),
   viewer: template([
     "keys:read",
@@ -104,6 +114,7 @@ export const roleTemplates: Readonly<Record<RoleTemplateKey, readonly Permission
     "spend:read",
     "settings:read",
     "playground:use",
+    "integrations:read",
   ]),
 };
 
@@ -118,6 +129,10 @@ export const COMPANY_PERMISSIONS = [
   "logs:content",
   "budgets:manage",
   "playground:use",
+  "integrations:read",
+  "integrations:manage",
+  "integrations:publish",
+  "integrations:credentials",
 ] as const satisfies readonly Permission[];
 
 export function isRoleTemplateKey(value: unknown): value is RoleTemplateKey {
