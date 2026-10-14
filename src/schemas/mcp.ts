@@ -88,6 +88,19 @@ export const hostedServerSchema = z
         message: "invalid characters",
       }),
     tools: z.array(hostedToolSchema).min(1).max(30),
+    global: z.boolean().default(false),
+    assignments: z
+      .array(
+        z.object({
+          scope: z.enum(MCP_SCOPES),
+          id: z.string().min(1).max(64),
+          mode: z.enum(MCP_MODES),
+          blockedTools: toolNames,
+          blockedActions: actions.default([]),
+        }),
+      )
+      .max(MAX_MCP_ASSIGNMENTS)
+      .default([]),
   })
   .superRefine((value, ctx) => {
     if (value.authType === "header" && !/^[A-Za-z0-9-]{1,64}$/.test(value.authHeader)) {

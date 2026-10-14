@@ -36,6 +36,32 @@ test("parseDraft reads fenced JSON, drops bad tools, and adds path parameters", 
   assert.deepEqual(empty, { ok: false, code: "MCP_BUILDER_EMPTY" });
 });
 
+test("a hosted server accepts per-key tool and action blocks", async () => {
+  const { hostedServerSchema } = await import("@/schemas/mcp");
+  const parsed = hostedServerSchema.parse({
+    name: "Pets",
+    description: "",
+    baseUrl: "https://api.example.com",
+    internal: false,
+    authType: "none",
+    tools: [pet],
+    global: false,
+    assignments: [{ scope: "key", id: "key_1", mode: "allow", blockedTools: ["get_pet"], blockedActions: ["delete"] }],
+  });
+  assert.equal(parsed.assignments[0]?.scope, "key");
+  assert.deepEqual(parsed.assignments[0]?.blockedActions, ["delete"]);
+  const bare = hostedServerSchema.parse({
+    name: "Pets",
+    description: "",
+    baseUrl: "https://api.example.com",
+    internal: false,
+    authType: "none",
+    tools: [pet],
+  });
+  assert.equal(bare.global, false);
+  assert.deepEqual(bare.assignments, []);
+});
+
 test("buildHostedRequest keeps the base path and sends the leftover fields", () => {
   const get = buildHostedRequest("https://api.example.com/v1/", pet, { id: "a/b", limit: 5, extra: "no" });
   assert.deepEqual(get, { url: "https://api.example.com/v1/pets/a%2Fb?limit=5", method: "GET" });
