@@ -1,7 +1,9 @@
 "use server";
 
 import { runAction } from "@/lib/http/action-result";
+import { draftMcpServer, setBuilderModel } from "@/lib/mcp/builder";
 import {
+  createHostedMcpServer,
   createMcpServer,
   deleteMcpServer,
   disconnectMcpOAuth,
@@ -57,4 +59,16 @@ export async function loadMcpTargetsAction(...args: Parameters<typeof loadMcpTar
 
 export async function saveMcpAssignmentsAction(...args: Parameters<typeof saveMcpAssignments>) {
   return runAction(() => saveMcpAssignments(...args));
+}
+
+export async function setBuilderModelAction(model: string) {
+  return runAction(() => setBuilderModel(model));
+}
+
+export async function draftMcpServerAction(input: unknown) {
+  return runAction(() => draftMcpServer(input));
+}
+
+export async function createHostedMcpServerAction(input: unknown) {
+  return runAction(() => createHostedMcpServer(input));
 }

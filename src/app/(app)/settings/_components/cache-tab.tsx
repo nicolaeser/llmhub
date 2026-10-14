@@ -5,6 +5,7 @@ import { Chip, Description, Label, NumberField, toast } from "@heroui/react";
 import { useTranslations } from "next-intl";
 import { formats } from "@/i18n/formats";
 import SearchSelect from "@/components/console/search-select";
+import { choicesForRole } from "@/lib/models/model-role";
 import { SettingSection, SettingSwitch } from "./setting-fields";
 import { useErrorToast } from "@/components/console/use-error-toast";
 import { loadCacheAction, saveCacheAction } from "../_action";
@@ -16,7 +17,7 @@ import {
 import { useActionData } from "@/lib/hooks/use-action-data";
 import { isActionFail } from "@/lib/http/action-result";
 import CacheStats from "./cache-stats";
-import SaveBar from "./save-bar";
+import SaveBar, { SettingsLead } from "./save-bar";
 import TabState from "./tab-state";
 import type { SemanticCacheSettings } from "@/types/cache";
 
@@ -41,24 +42,7 @@ export default function CacheTab() {
 
   return (
     <div className="space-y-5">
-      <SaveBar
-        description={t("description")}
-        canManage={view.canManage}
-        pending={pending}
-        onSave={() =>
-          start(async () => {
-            const result = await saveCacheAction({ cacheTtlSeconds: ttl, semantic });
-            if (isActionFail(result)) {
-              showError(result.error);
-              return;
-            }
-            setView(result);
-            setTtl(null);
-            setSemantic(null);
-            toast(tSettings("saved"), { variant: "success" });
-          })
-        }
-      />
+      <SettingsLead description={t("description")} canManage={view.canManage} />
       {view.stats ? <CacheStats initial={view.stats} semanticOn={view.semantic.enabled} /> : null}
       <SettingSection title={t("store.title")} subtitle={t("store.description")}>
         <div className="flex flex-wrap items-center gap-2">
@@ -92,7 +76,7 @@ export default function CacheTab() {
           label={t("semantic.enabled")}
           isSelected={semantic.enabled}
           onChange={(enabled) => update({ enabled })}
-          isDisabled={disabled || !semantic.model}
+          isDisabled={disabled || (!semantic.enabled && !semantic.model)}
           hint={t("semantic.enabledHint", { ready: semantic.model ? "true" : "false" })}
         />
         <SearchSelect
@@ -100,9 +84,10 @@ export default function CacheTab() {
           description={t("semantic.modelHint")}
           items={[
             { id: "none", label: t("semantic.none") },
-            ...[...new Set([...view.aliases, ...(semantic.model ? [semantic.model] : [])])].map((alias) => ({
-              id: alias,
-              label: alias,
+            ...choicesForRole(view.models, "embedding", semantic.model).map((model) => ({
+              id: model.alias,
+              label: model.label,
+              detail: model.label === model.alias ? undefined : model.alias,
             })),
           ]}
           value={semantic.model || "none"}
@@ -133,6 +118,23 @@ export default function CacheTab() {
           <Description>{t("semantic.thresholdHint")}</Description>
         </NumberField>
       </SettingSection>
+      <SaveBar
+        canManage={view.canManage}
+        pending={pending}
+        onSave={() =>
+          start(async () => {
+            const result = await saveCacheAction({ cacheTtlSeconds: ttl, semantic });
+            if (isActionFail(result)) {
+              showError(result.error);
+              return;
+            }
+            setView(result);
+            setTtl(null);
+            setSemantic(null);
+            toast(tSettings("saved"), { variant: "success" });
+          })
+        }
+      />
     </div>
   );
 }

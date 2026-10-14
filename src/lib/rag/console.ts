@@ -2,6 +2,7 @@ import "server-only";
 import prisma from "@/lib/db/prisma";
 import type { Prisma } from "@/generated/prisma/client";
 import { companyOf, inCompany } from "@/lib/auth/scope";
+import { assertModelRoles } from "@/lib/models/aliases";
 import { writeAudit } from "@/lib/audit";
 import { deleteObject, putObject } from "@/lib/gateway/storage/objects";
 import { chunkSettings } from "@/lib/rag/chunking";
@@ -91,13 +92,6 @@ export async function consoleStoreView(session: AuthenticatedSession, id: string
   return viewOf((await visibleStore(session, id)).id);
 }
 
-async function assertModels(aliases: string[]): Promise<void> {
-  const wanted = [...new Set(aliases.filter(Boolean))];
-  if (!wanted.length) return;
-  const found = await prisma.modelGroup.count({ where: { alias: { in: wanted } } });
-  if (found !== wanted.length) throw new Error("UNKNOWN_MODEL");
-}
-
 export async function listConsoleStores(session: AuthenticatedSession) {
   const company = companyOf(session);
   const [rows, companies, projects, defaults] = await Promise.all([
@@ -141,7 +135,11 @@ export async function createConsoleStore(
   const defaults = await vectorDefaults();
   const embeddingModel = input.embeddingModel || defaults.embedding_model;
   if (!embeddingModel) throw new Error("EMBEDDING_MODEL_REQUIRED");
-  await assertModels([embeddingModel, input.rerankModel, input.ocrModel]);
+  await assertModelRoles([
+    { alias: embeddingModel, role: "embedding" },
+    { alias: input.rerankModel, role: "rerank" },
+    { alias: input.ocrModel, role: "ocr" },
+  ]);
   const chunk = chunkSettings(null, { maxTokens: input.chunkMaxTokens, overlapTokens: input.chunkOverlapTokens });
   const row = await createVectorStore({
     owner: { orgId: input.orgId, projectId: input.projectId, memberId: null, userId: null },
@@ -171,7 +169,10 @@ export async function updateConsoleStore(
   input: z.infer<typeof updateCompanyStoreSchema>,
 ): Promise<VectorStoreView> {
   const row = await visibleStore(session, input.id);
-  await assertModels([input.rerankModel, input.ocrModel]);
+  await assertModelRoles([
+    { alias: input.rerankModel === row.rerankModel ? "" : input.rerankModel, role: "rerank" },
+    { alias: input.ocrModel === row.ocrModel ? "" : input.ocrModel, role: "ocr" },
+  ]);
   await updateVectorStore(row, {
     name: input.name,
     description: input.description,

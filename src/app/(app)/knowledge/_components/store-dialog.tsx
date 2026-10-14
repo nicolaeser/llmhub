@@ -14,6 +14,7 @@ import {
 } from "@heroui/react";
 import { useTranslations } from "next-intl";
 import SearchSelect from "@/components/console/search-select";
+import { choicesForRole, type ModelChoice, type ModelRole } from "@/lib/models/model-role";
 import { createKnowledgeAction, updateKnowledgeAction } from "../_action";
 import { formats } from "@/i18n/formats";
 import { isActionFail } from "@/lib/http/action-result";
@@ -39,7 +40,7 @@ export default function StoreDialog({
   companies,
   projects,
   defaults,
-  aliases,
+  models,
   initialCompany,
   onSaved,
 }: {
@@ -48,7 +49,7 @@ export default function StoreDialog({
   companies: KnowledgeCompany[];
   projects: KnowledgeProject[];
   defaults: VectorStoreDefaults;
-  aliases: string[];
+  models: ModelChoice[];
   initialCompany: string;
   onSaved: (store: VectorStoreView) => void;
 }) {
@@ -78,13 +79,17 @@ export default function StoreDialog({
   const valid = nameValid && (editing !== null || (Boolean(orgId) && embeddingValid && chunkValid && overlapValid));
   const companyProjects = projects.filter((project) => project.orgId === orgId);
 
-  function modelItems(current: string, fallback: string) {
+  function modelItems(role: ModelRole, current: string, fallback: string) {
     return [
       {
         id: DEFAULT_KEY,
         label: t("dialog.modelDefault", { hasDefault: fallback ? "true" : "false", alias: fallback }),
       },
-      ...[...new Set([...aliases, ...(current ? [current] : [])])].map((alias) => ({ id: alias, label: alias })),
+      ...choicesForRole(models, role, current).map((model) => ({
+        id: model.alias,
+        label: model.label,
+        detail: model.label === model.alias ? undefined : model.alias,
+      })),
     ];
   }
 
@@ -199,8 +204,12 @@ export default function StoreDialog({
               placeholder={t("dialog.embeddingPlaceholder")}
               items={
                 defaults.embedding_model
-                  ? modelItems(embeddingModel, defaults.embedding_model)
-                  : aliases.map((alias) => ({ id: alias, label: alias }))
+                  ? modelItems("embedding", embeddingModel, defaults.embedding_model)
+                  : choicesForRole(models, "embedding", embeddingModel).map((model) => ({
+                      id: model.alias,
+                      label: model.label,
+                      detail: model.label === model.alias ? undefined : model.alias,
+                    }))
               }
               value={embeddingModel || (defaults.embedding_model ? DEFAULT_KEY : "")}
               onChange={(key) => setEmbeddingModel(pickModel(key))}
@@ -280,7 +289,7 @@ export default function StoreDialog({
       )}
       <SearchSelect
         label={t("dialog.rerankModel")}
-        items={modelItems(rerankModel, defaults.rerank_model)}
+        items={modelItems("rerank", rerankModel, defaults.rerank_model)}
         value={rerankModel || DEFAULT_KEY}
         onChange={(key) => setRerankModel(pickModel(key))}
         isDisabled={pending}
@@ -288,7 +297,7 @@ export default function StoreDialog({
       />
       <SearchSelect
         label={t("dialog.ocrModel")}
-        items={modelItems(ocrModel, defaults.ocr_model)}
+        items={modelItems("ocr", ocrModel, defaults.ocr_model)}
         value={ocrModel || DEFAULT_KEY}
         onChange={(key) => setOcrModel(pickModel(key))}
         isDisabled={pending}

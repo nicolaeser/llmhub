@@ -64,6 +64,19 @@ test("sign-in pages and setup stay reachable without a session and never redirec
   }
 });
 
+test("a signed-in locale prefix redirects to the page without the prefix", async () => {
+  const cookie = await signSessionToken(randomToken());
+  assert.equal(redirectTarget(await proxy(request("/en/keys?tab=templates", cookie))), "/keys?tab=templates");
+  assert.equal(redirectTarget(await proxy(request("/de", cookie))), "/");
+  assert.equal(redirectTarget(await proxy(request("/en/keys", cookie))), "/keys");
+});
+
+test("an unsigned locale prefix still reaches login with the real return path", async () => {
+  const res = await proxy(request("/en/keys"));
+  assert.equal(res.status, 307);
+  assert.equal(redirectTarget(res), "/account/login?return=%2Fkeys");
+});
+
 test("a signed session cookie passes through with locale and security headers", async () => {
   const cookie = await signSessionToken(randomToken());
   const res = await proxy(request("/keys", cookie, { "accept-language": "de-DE,de;q=0.9" }));

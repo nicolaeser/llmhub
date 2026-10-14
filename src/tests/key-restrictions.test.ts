@@ -73,6 +73,7 @@ test("every /v1 route belongs to an endpoint group except the always-open model 
   assert.equal(endpointOf("/v1/messages/count_tokens"), "chat");
   assert.equal(endpointOf("/v1/responses/x/input_items"), "chat");
   assert.equal(endpointOf("/v1/images/edits"), "images");
+  assert.equal(endpointOf("/v1/mcp"), "mcp");
   assert.equal(endpointOf("/v1/constructor"), null);
 });
 
@@ -87,6 +88,8 @@ test("endpoint restrictions allow only the listed groups and fail closed on unkn
   assert.equal(endpointAllowed(embeddings, "/v1/unknown"), false);
   assert.equal(endpointAllowed(embeddings, "/internal-api/playground/chat"), false);
   assert.equal(endpointAllowed(["chat", "files", "batches"], "/v1/files/x/content"), true);
+  assert.equal(endpointAllowed(["mcp"], "/v1/mcp"), true);
+  assert.equal(endpointAllowed(["chat"], "/v1/mcp"), false);
 });
 
 test("an all-day weekday window follows the key's time zone", () => {

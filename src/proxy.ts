@@ -50,7 +50,11 @@ export async function proxy(req: NextRequest) {
 
   let response: NextResponse;
 
-  if (!signedIn && !AUTH_PATTERN.test(routePath) && !SETUP_PATTERN.test(routePath)) {
+  if (signedIn && routePath !== pathname) {
+    const url = req.nextUrl.clone();
+    url.pathname = routePath;
+    response = NextResponse.redirect(url);
+  } else if (!signedIn && !AUTH_PATTERN.test(routePath) && !SETUP_PATTERN.test(routePath)) {
     const loginUrl = new URL("/account/login", req.url);
     loginUrl.searchParams.set("return", routePath);
     response = NextResponse.redirect(loginUrl);

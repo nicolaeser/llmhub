@@ -4,6 +4,8 @@ import { Button, Card, Chip, Disclosure, Label, Switch, Table } from "@heroui/re
 import { ArrowRight, ArrowRightLeft } from "lucide-react";
 import { useFormatter, useTranslations } from "next-intl";
 import SearchSelect from "@/components/console/search-select";
+import SubscriptionBadge from "@/components/console/subscription-badge";
+import { isSignInKind } from "@/lib/gateway/upstreams/provider-kinds";
 import { catalogEntryKey } from "@/lib/gateway/catalog/model-catalog";
 import { setSearchParams } from "@/lib/hooks/use-search-param";
 import type { CatalogEntryView, CatalogFamilyView, CatalogGroupView } from "@/types/model-catalog";
@@ -94,8 +96,15 @@ function VariantBody({ group, handlers }: { group: CatalogGroupView; handlers: H
                   return (
                     <Table.Row key={key} id={key}>
                       <Table.Cell>
-                        <div className="font-medium">{entry.providerName}</div>
-                        <div className="text-xs text-muted">{tProviders("kindName", { kind: entry.kind })}</div>
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span className="font-medium">{entry.providerName}</span>
+                          {isSignInKind(entry.kind) ? <SubscriptionBadge /> : null}
+                        </div>
+                        <div className="text-xs text-muted">
+                          {isSignInKind(entry.kind)
+                            ? tProviders("channel", { kind: entry.kind })
+                            : tProviders("kindName", { kind: entry.kind })}
+                        </div>
                       </Table.Cell>
                       <Table.Cell>
                         <div className="break-all font-mono text-xs">{entry.upstreamId}</div>

@@ -1,18 +1,21 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { Button, Spinner } from "@heroui/react";
 import { useTranslations } from "next-intl";
+import FormActions from "@/components/console/form-actions";
+
+export function SettingsLead({ description, canManage }: { description: ReactNode; canManage: boolean }) {
+  const t = useTranslations("Settings");
+  return <p className="text-sm text-muted">{canManage ? description : t("readOnly")}</p>;
+}
 
 export default function SaveBar({
-  description,
   canManage,
   pending,
   isDisabled,
   onSave,
   extra,
 }: {
-  description: ReactNode;
   canManage: boolean;
   pending: boolean;
   isDisabled?: boolean;
@@ -20,22 +23,6 @@ export default function SaveBar({
   extra?: ReactNode;
 }) {
   const t = useTranslations("Settings");
-  return (
-    <div className="flex flex-wrap items-center justify-between gap-3">
-      <p className="min-w-0 flex-1 text-sm text-muted">{canManage ? description : t("readOnly")}</p>
-      {canManage ? (
-        <div className="flex flex-wrap items-center gap-2">
-          {extra}
-          <Button isPending={pending} isDisabled={isDisabled} onPress={onSave}>
-            {({ isPending }) => (
-              <>
-                {isPending ? <Spinner color="current" size="sm" /> : null}
-                {t("save")}
-              </>
-            )}
-          </Button>
-        </div>
-      ) : null}
-    </div>
-  );
+  if (!canManage) return null;
+  return <FormActions label={t("save")} pending={pending} isDisabled={isDisabled} onSave={onSave} extra={extra} />;
 }

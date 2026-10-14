@@ -1,13 +1,14 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
-import { Alert, Button, Chip, Input, Label, Spinner, Surface, TextField } from "@heroui/react";
+import { Alert, Badge, Button, Input, Label, Spinner, Surface, TextField } from "@heroui/react";
 import { ExternalLink } from "lucide-react";
 import { useTranslations } from "next-intl";
 import CopyButton from "@/components/console/copy-button";
 import { completeSignInAction, pollSignInAction, startSignInAction } from "../_action";
 import { isActionFail } from "@/lib/http/action-result";
 import type { ProviderSignIn, SignInKind, SignInStart } from "@/types/providers";
+import { PlanBadge } from "@/components/console/subscription-badge";
 import { useErrorToast } from "@/components/console/use-error-toast";
 
 type Waiting = SignInStart & { delay: number };
@@ -94,14 +95,15 @@ export default function SignInPanel({
           <span className="min-w-0 break-all text-foreground">
             {t("signIn.account", { named: shown.account ? "true" : "false", account: shown.account })}
           </span>
-          {shown.plan ? (
-            <Chip size="sm" variant="soft">
-              {t("signIn.plan", { plan: shown.plan })}
-            </Chip>
-          ) : null}
-          <Chip size="sm" variant="soft" color={shown.status === "active" ? "success" : "warning"}>
+          <PlanBadge plan={shown.plan} />
+          <Badge
+            size="sm"
+            variant="soft"
+            color={shown.status === "active" ? "success" : "warning"}
+            className="px-1.5 whitespace-nowrap"
+          >
             {t("signIn.status", { status: shown.status })}
-          </Chip>
+          </Badge>
         </div>
       ) : null}
       {waiting?.method === "code" ? (

@@ -1,6 +1,6 @@
 import "server-only";
 
-import { enabledAliases } from "@/lib/models/aliases";
+import { enabledModelChoices } from "@/lib/models/aliases";
 import { requirePermission } from "@/lib/auth/guards";
 import { hasPerm, PERMISSIONS } from "@/lib/auth/permissions";
 import { MAX_UPLOAD_BYTES } from "@/lib/http/api";
@@ -30,13 +30,13 @@ function idOf(value: unknown): string {
 
 export async function loadKnowledge(): Promise<KnowledgeView> {
   const session = await requirePermission(PERMISSIONS.TENANCY_READ);
-  const [data, aliases] = await Promise.all([
+  const [data, models] = await Promise.all([
     listConsoleStores(session),
-    enabledAliases(),
+    enabledModelChoices(),
   ]);
   return {
     ...data,
-    aliases,
+    models,
     canManage: hasPerm(session.permissions, PERMISSIONS.TENANCY_MANAGE),
     maxUploadBytes: MAX_UPLOAD_BYTES,
   };

@@ -25,7 +25,7 @@ import SearchSelect from "@/components/console/search-select";
 import { useErrorToast } from "@/components/console/use-error-toast";
 import { isActionFail } from "@/lib/http/action-result";
 import { explainAccess } from "@/lib/mcp/resolve";
-import { MCP_MODES, MCP_SCOPES } from "@/schemas/mcp";
+import { MCP_ACTIONS, MCP_MODES, MCP_SCOPES } from "@/schemas/mcp";
 import type { McpAssignmentMode, McpAssignmentView, McpChain, McpServerView, McpTargetOption, McpTargetOptions } from "@/types/mcp";
 import type { AssignmentScope } from "@/types/providers";
 import { loadMcpTargetsAction, saveMcpAssignmentsAction } from "../_action";
@@ -54,7 +54,7 @@ function ancestorsOf(rule: McpAssignmentView, options: McpTargetOptions): McpAss
   ];
   return levels
     .filter(([scope, id]) => id && !(scope === rule.scope && id === rule.id))
-    .map(([scope, id]) => ({ scope, id, label: "", mode: "allow", blockedTools: [] }));
+    .map(([scope, id]) => ({ scope, id, label: "", mode: "allow" as const, blockedTools: [], blockedActions: [] }));
 }
 
 export default function AccessDialog({
@@ -66,6 +66,7 @@ export default function AccessDialog({
   server: McpServerView | null;
   onSaved: (server: McpServerView) => void;
 }) {
+  const tPage = useTranslations("Mcp");
   const t = useTranslations("Mcp.assign");
   const tCommon = useTranslations("Common");
   const format = useFormatter();
@@ -80,7 +81,11 @@ export default function AccessDialog({
   const [previewId, setPreviewId] = useState("");
   const [pending, start] = useTransition();
   const isOpen = state.isOpen;
-  const toolItems = (server?.tools ?? []).map((tool) => ({ id: tool.name, label: tool.name }));
+  const toolItems = (server?.tools ?? []).map((tool) => ({
+    id: tool.name,
+    label: tool.action ? `${tool.name} (${tPage("action", { action: tool.action })})` : tool.name,
+  }));
+  const actionItems = MCP_ACTIONS.map((action) => ({ id: action, label: tPage("action", { action }) }));
 
   useEffect(() => {
     if (!isOpen) return;
@@ -124,7 +129,7 @@ export default function AccessDialog({
       return match ? [match] : [];
     });
     const grants = ancestors.filter((item) => item.mode === "allow");
-    const blocks = ancestors.filter((item) => item.mode === "block" && item.blockedTools.length === 0);
+    const blocks = ancestors.filter((item) => item.mode === "block" && item.blockedTools.length === 0 && item.blockedActions.length === 0);
     const granted = [grants.length ? sources(grants) : "", global ? t("allCallers") : ""].filter(Boolean);
     return {
       granted: granted.length ? format.list(granted, { type: "conjunction" }) : "",
@@ -135,7 +140,7 @@ export default function AccessDialog({
   function addRule() {
     const option = known[scope].find((item) => item.id === target);
     if (!option) return;
-    setRules((current) => [...current, { scope, id: option.id, label: option.label, mode, blockedTools: [] }]);
+    setRules((current) => [...current, { scope, id: option.id, label: option.label, mode, blockedTools: [], blockedActions: [] }]);
     setTarget("");
   }
 
@@ -154,6 +159,7 @@ export default function AccessDialog({
           id: rule.id,
           mode: rule.mode,
           blockedTools: rule.blockedTools,
+          blockedActions: rule.blockedActions,
         })),
       });
       if (isActionFail(result)) {
@@ -276,7 +282,7 @@ export default function AccessDialog({
                             {t("scope", { scope: rule.scope })}
                           </Chip>
                           <Chip size="sm" variant="soft" color={rule.mode === "allow" ? "success" : "danger"}>
-                            {rule.mode === "block" && rule.blockedTools.length === 0
+                            {rule.mode === "block" && rule.blockedTools.length === 0 && rule.blockedActions.length === 0
                               ? t("blockServer")
                               : t("mode", { mode: rule.mode })}
                           </Chip>
@@ -333,6 +339,17 @@ export default function AccessDialog({
                         isDisabled={pending}
                       />
                     ) : null}
+                    <MultiPicker
+                      label={t("blockedActions")}
+                      description={t("blockedActionsHint")}
+                      placeholder={t("blockedActionsPlaceholder")}
+                      searchLabel={tCommon("search")}
+                      emptyLabel={tCommon("noResults")}
+                      items={actionItems}
+                      selected={rule.blockedActions}
+                      onChange={(ids) => updateRule(index, { blockedActions: MCP_ACTIONS.filter((action) => ids.includes(action)) })}
+                      isDisabled={pending}
+                    />
                   </Card.Content>
                 </Card>
               );
@@ -382,6 +399,16 @@ export default function AccessDialog({
                   ) : null}
                   {explanation.blockedBy.length ? (
                     <p className="text-sm text-danger">{t("blockedAbove", { sources: sources(explanation.blockedBy) })}</p>
+                  ) : null}
+                  {explanation.blockedActions.length ? (
+                    <p className="text-sm text-muted">
+                      {t("previewActions", {
+                        list: format.list(
+                          explanation.blockedActions.map((action) => tPage("action", { action })),
+                          { type: "conjunction" },
+                        ),
+                      })}
+                    </p>
                   ) : null}
                   {explanation.state === "granted" ? (
                     <p className="text-sm text-muted">

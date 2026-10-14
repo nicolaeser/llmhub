@@ -18,6 +18,7 @@ import { useTranslations } from "next-intl";
 import FormDialog from "@/components/console/form-dialog";
 import MultiPicker from "@/components/console/multi-picker";
 import SearchSelect from "@/components/console/search-select";
+import { modelRole, type ModelChoice } from "@/lib/models/model-role";
 import { useErrorToast } from "@/components/console/use-error-toast";
 import { createModelGroupAction, updateModelGroupAction } from "../_action";
 import { isActionFail } from "@/lib/http/action-result";
@@ -54,13 +55,13 @@ export default function ModelGroupDialog({
   state,
   editing,
   providers,
-  aliases,
+  models,
   onSaved,
 }: {
   state: ReturnType<typeof useOverlayState>;
   editing: ModelGroupView | null;
   providers: ProviderOpt[];
-  aliases: string[];
+  models: ModelChoice[];
   onSaved: (group: ModelGroupView) => void;
 }) {
   const t = useTranslations("Models");
@@ -84,11 +85,22 @@ export default function ModelGroupDialog({
   const [deps, setDeps] = useState<DeploymentDraft[]>(() => draftsOf(editing, providers));
   const [pending, start] = useTransition();
   const mode = editing ? "save" : "create";
-  const otherAliases = aliases.filter((item) => item !== alias);
-  const overflowItems = [
-    { id: "none", label: tCommon("none") },
-    ...[...new Set([...otherAliases, ...(overflow ? [overflow] : [])])].map((item) => ({ id: item, label: item })),
+  const currentRole = modelRole([...deps.map((dep) => dep.model), alias, displayName]);
+  const known = new Map(models.map((model) => [model.alias, model]));
+  const sameKind = models.filter((model) => model.alias !== alias && model.role === currentRole);
+  const kept = [...new Set([overflow, ...fallbacks].filter(Boolean))].filter(
+    (id) => id !== alias && !sameKind.some((model) => model.alias === id),
+  );
+  const otherModels = [
+    ...sameKind,
+    ...kept.map((id) => known.get(id) ?? { alias: id, label: id, role: currentRole }),
   ];
+  const modelOption = (model: ModelChoice) => ({
+    id: model.alias,
+    label: model.label,
+    detail: model.label === model.alias ? undefined : model.alias,
+  });
+  const overflowItems = [{ id: "none", label: tCommon("none") }, ...otherModels.map(modelOption)];
   const customPrice = billingMode === "custom";
   const pricesValid =
     !customPrice ||
@@ -324,7 +336,7 @@ export default function ModelGroupDialog({
               placeholder={t("fields.fallbacksPlaceholder")}
               searchLabel={tCommon("search")}
               emptyLabel={tCommon("noResults")}
-              items={otherAliases.map((item) => ({ id: item, label: item }))}
+              items={otherModels.map(modelOption)}
               selected={fallbacks}
               onChange={setFallbacks}
               isDisabled={pending}
