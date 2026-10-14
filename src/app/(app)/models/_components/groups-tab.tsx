@@ -6,6 +6,7 @@ import { BookOpen, Network, Plus, Trash2 } from "lucide-react";
 import { useFormatter, useTranslations } from "next-intl";
 import { Link } from "@/i18n/routing";
 import ConfirmDialog from "@/components/console/confirm-dialog";
+import SubscriptionBadge from "@/components/console/subscription-badge";
 import EmptyState from "@/components/console/empty-state";
 import PageStatus from "@/components/console/page-status";
 import { useErrorToast } from "@/components/console/use-error-toast";
@@ -19,6 +20,8 @@ import { setSearchParams, useSearchParam } from "@/lib/hooks/use-search-param";
 import { isActionFail } from "@/lib/http/action-result";
 import { splitTag } from "@/lib/gateway/catalog/model-catalog";
 import type { ModelGroupView, ProviderOpt } from "@/types/models";
+import { isSignInKind } from "@/lib/gateway/upstreams/provider-kinds";
+import { modelRole } from "@/lib/models/model-role";
 import ModelGroupDialog from "./model-group-dialog";
 
 function matchesGroup(group: ModelGroupView, query: string): boolean {
@@ -63,16 +66,17 @@ export default function GroupsTab() {
     if (groupParam) setSearchParams({ group: null });
   }
 
-  function routeLabels(group: ModelGroupView): string[] {
-    return [
-      ...new Set(
-        group.deployments.map(
-          (dep) =>
-            providers.find((provider) => provider.id === dep.providerId)?.name ??
-            tProviders("kindName", { kind: dep.kind }),
-        ),
-      ),
-    ];
+  function routes(group: ModelGroupView) {
+    const seen = new Map<string, { name: string; subscription: boolean }>();
+    for (const dep of group.deployments) {
+      const provider = providers.find((item) => item.id === dep.providerId);
+      const subscription = isSignInKind(dep.kind) || isSignInKind(provider?.kind ?? "");
+      const name =
+        provider?.name ?? tProviders(subscription ? "kindShort" : "kindName", { kind: dep.kind });
+      const key = `${name}:${subscription ? "subscription" : "api"}`;
+      if (!seen.has(key)) seen.set(key, { name, subscription });
+    }
+    return [...seen.entries()].map(([key, route]) => ({ key, ...route }));
   }
 
   function openDialog(group: ModelGroupView | null) {
@@ -238,11 +242,12 @@ export default function GroupsTab() {
                           })}
                         </Table.Cell>
                         <Table.Cell>
-                          <div className="flex flex-wrap gap-1">
-                            {routeLabels(g).map((label) => (
-                              <Chip key={label} size="sm" variant="soft" className="whitespace-nowrap">
-                                {label}
-                              </Chip>
+                          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                            {routes(g).map((route) => (
+                              <span key={route.key} className="inline-flex items-center gap-1.5 text-sm">
+                                <span>{route.name}</span>
+                                {route.subscription ? <SubscriptionBadge /> : null}
+                              </span>
                             ))}
                           </div>
                         </Table.Cell>
@@ -291,7 +296,11 @@ export default function GroupsTab() {
         state={formState}
         editing={editing}
         providers={providers}
-        aliases={groups.map((group) => group.alias)}
+        models={groups.map((group) => ({
+          alias: group.alias,
+          label: group.displayName || group.alias,
+          role: modelRole([...group.deployments.map((deployment) => deployment.model), group.alias, group.displayName]),
+        }))}
         onSaved={saved}
       />
     </div>

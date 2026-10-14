@@ -28,12 +28,17 @@ import {
   sealPending,
   tokenRequest,
 } from "@/lib/mcp/oauth";
+import { toolSpecOf } from "@/lib/mcp/hosted";
 import { isOAuthGrant, mcpClientFor, serverRecord } from "@/lib/mcp/toolset";
 import { guardedFetch } from "@/lib/mcp/transport";
 import { checkServerUrl } from "@/lib/mcp/url-guard";
 import { errorFields } from "@/lib/logging/format";
+import { enabledModelChoices } from "@/lib/models/aliases";
+import { chatChoices } from "@/lib/models/model-role";
 import { logger } from "@/lib/logging/logger";
 import {
+  BUILDER_MODEL_KEY,
+  hostedServerSchema,
   mcpAssignmentsSchema,
   mcpOAuthCallbackSchema,
   mcpProbeSchema,
@@ -52,6 +57,8 @@ const serverSelect = {
   url: true,
   transport: true,
   protocolVersion: true,
+  kind: true,
+  spec: true,
   authType: true,
   authHeader: true,
   authSecret: true,
@@ -115,6 +122,7 @@ function viewOf(row: ServerRow, canManage = true): McpServerView {
     oauthScopes: row.oauthScopes,
     oauth: oauthView(row),
     internal: row.internal,
+    kind: row.kind === "hosted" ? "hosted" : "remote",
     enabled: row.enabled,
     global: row.global,
     toolsRestricted: row.toolsRestricted,
@@ -276,12 +284,18 @@ function connectionFields(input: {
 
 export async function loadMcpServerList() {
   const session = await requirePermission(PERMISSIONS.SETTINGS_READ);
-  const rows = await prisma.mcpServer.findMany({ select: serverSelect, orderBy: { name: "asc" } });
+  const [rows, setting, choices] = await Promise.all([
+    prisma.mcpServer.findMany({ select: serverSelect, orderBy: { name: "asc" } }),
+    prisma.setting.findUnique({ where: { key: BUILDER_MODEL_KEY } }),
+    enabledModelChoices(),
+  ]);
   const canManage = hasPerm(session.permissions, PERMISSIONS.SETTINGS_MANAGE);
   return {
     servers: rows.map((row) => viewOf(row, canManage)),
     canManage,
     redirectUri: canManage ? mcpOAuthRedirectUri() : "",
+    builderModel: setting?.value ?? "",
+    models: chatChoices(choices).map((choice) => ({ alias: choice.alias, label: choice.label })),
   };
 }
 
@@ -324,12 +338,89 @@ export async function createMcpServer(raw: unknown) {
   return { server: viewOf(refreshed) };
 }
 
+export async function createHostedMcpServer(raw: unknown) {
+  const session = await requirePermission(PERMISSIONS.SETTINGS_MANAGE);
+  const input = parse(hostedServerSchema, raw);
+  assertUrl(input.baseUrl, input.internal);
+  const tools = input.tools.map(toolSpecOf);
+  let created: ServerRow;
+  try {
+    created = await prisma.mcpServer.create({
+      data: {
+        name: input.name,
+        description: input.description,
+        url: input.baseUrl,
+        kind: "hosted",
+        spec: { tools: input.tools } as Prisma.InputJsonValue,
+        authType: input.authType,
+        authHeader: input.authType === "header" ? input.authHeader : "",
+        authSecret: input.secret.trim() ? seal(input.secret.trim()) : "",
+        internal: input.internal,
+        enabled: true,
+        tools: tools as unknown as Prisma.InputJsonValue,
+        refreshedAt: new Date(),
+      },
+      select: serverSelect,
+    });
+  } catch (err) {
+    if (isPrismaCode(err, "P2002")) throw new Error("NAME_EXISTS", { cause: err });
+    throw err;
+  }
+  await writeAudit({
+    actor: session.user.id,
+    action: "mcp_server.create",
+    objectType: "mcp_server",
+    objectId: created.id,
+    after: { ...auditShape(created), kind: "hosted", tools: tools.map((tool) => tool.name) },
+  });
+  return { server: viewOf(created) };
+}
+
 export async function updateMcpServer(raw: { id: string } & Record<string, unknown>) {
   const session = await requirePermission(PERMISSIONS.SETTINGS_MANAGE);
   if (!raw?.id || typeof raw.id !== "string") throw new Error("MISSING_ID");
   const input = parse(mcpServerInputSchema, raw);
   assertUrl(input.url, input.internal);
   const before = await loadRow(raw.id);
+  if (before.kind === "hosted") {
+    if (input.authType === "oauth") throw new Error("VALIDATION");
+    const authSecret = secretFor(input.authType, input, before.authSecret);
+    if (secretRequired(input) && !authSecret) throw new Error("MCP_SECRET_REQUIRED");
+    const fields = connectionFields(input);
+    let updated: ServerRow;
+    try {
+      updated = await prisma.mcpServer.update({
+        where: { id: raw.id },
+        data: {
+          name: input.name,
+          description: input.description,
+          url: input.url,
+          authType: input.authType,
+          ...fields,
+          authSecret,
+          internal: input.internal,
+          enabled: input.enabled,
+          global: input.global,
+          toolsRestricted: input.toolsRestricted,
+          allowedTools: [...new Set(input.allowedTools)],
+        },
+        select: serverSelect,
+      });
+    } catch (err) {
+      if (isPrismaCode(err, "P2002")) throw new Error("NAME_EXISTS", { cause: err });
+      if (isPrismaCode(err, "P2025")) throw new Error("NOT_FOUND", { cause: err });
+      throw err;
+    }
+    await writeAudit({
+      actor: session.user.id,
+      action: "mcp_server.update",
+      objectType: "mcp_server",
+      objectId: updated.id,
+      before: auditShape(before),
+      after: auditShape(updated),
+    });
+    return { server: viewOf(updated) };
+  }
   const authSecret = secretFor(input.authType, input, before.authSecret);
   if (secretRequired(input) && !authSecret) throw new Error("MCP_SECRET_REQUIRED");
   const fields = connectionFields(input);
@@ -458,6 +549,7 @@ export async function refreshMcpServer(id: string) {
   const session = await requirePermission(PERMISSIONS.SETTINGS_MANAGE);
   if (!id) throw new Error("MISSING_ID");
   const row = await loadRow(id);
+  if (row.kind === "hosted") return { server: viewOf(row) };
   const result = await probe(serverRecord(row));
   const updated = await storeProbe(id, result);
   await writeAudit({
@@ -599,6 +691,7 @@ export async function saveMcpAssignments(raw: unknown) {
         id: row.id,
         mode: row.mode,
         blockedTools: row.blockedTools,
+        blockedActions: row.blockedActions,
       })),
     },
   });

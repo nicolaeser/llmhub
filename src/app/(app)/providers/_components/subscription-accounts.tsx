@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
-import { Button, Card, Chip, Spinner, useOverlayState } from "@heroui/react";
+import { Badge, Button, Card, Spinner, useOverlayState } from "@heroui/react";
 import { CircleCheck, CirclePause, Gauge, Plus, RefreshCw, TimerReset } from "lucide-react";
 import { useFormatter, useNow, useTranslations } from "next-intl";
 import IconTile from "@/components/console/icon-tile";
+import SubscriptionBadge from "@/components/console/subscription-badge";
 import StatCard from "@/components/console/stat-card";
 import { useErrorToast } from "@/components/console/use-error-toast";
 import { DEFAULT_ACCOUNT_STRATEGY } from "@/lib/gateway/routing/account-access";
@@ -202,16 +203,25 @@ export default function SubscriptionAccounts({
                 <IconTile icon={kindIcon(spec.kind)} />
                 <div className="min-w-0 flex-1 space-y-2">
                   <div>
-                    <Card.Title>{tProviders("kindName", { kind: spec.kind })}</Card.Title>
-                    <Card.Description>{tProviders("kindDescription", { kind: spec.kind })}</Card.Description>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Card.Title>{tProviders("kindShort", { kind: spec.kind })}</Card.Title>
+                      <SubscriptionBadge />
+                    </div>
+                    <Card.Description>{tProviders("channel", { kind: spec.kind })}</Card.Description>
                   </div>
                   <div className="flex flex-wrap gap-1">
                     {COUNTED_STATES.map((state) => {
                       const count = tally(state, items);
                       return count ? (
-                        <Chip key={state} size="sm" variant="soft" color={ACCOUNT_STATE_COLOR[state]}>
+                        <Badge
+                          key={state}
+                          size="sm"
+                          variant="soft"
+                          color={ACCOUNT_STATE_COLOR[state]}
+                          className="px-1.5 whitespace-nowrap"
+                        >
                           {t("stateCount", { state, count })}
-                        </Chip>
+                        </Badge>
                       ) : null;
                     })}
                   </div>
@@ -262,7 +272,10 @@ export default function SubscriptionAccounts({
                 <Card.Header className="flex-row items-start gap-3">
                   <IconTile icon={kindIcon(spec.kind)} tone="neutral" />
                   <div className="min-w-0 flex-1">
-                    <Card.Title>{tProviders("kindName", { kind: spec.kind })}</Card.Title>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Card.Title>{tProviders("kindShort", { kind: spec.kind })}</Card.Title>
+                      <SubscriptionBadge />
+                    </div>
                     <Card.Description>{tProviders("kindDescription", { kind: spec.kind })}</Card.Description>
                   </div>
                 </Card.Header>

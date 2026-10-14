@@ -66,6 +66,8 @@ export default function ServerDialog({
   const [probe, setProbe] = useState<McpProbeResult | null>(null);
   const [testing, startTest] = useTransition();
   const [saving, startSave] = useTransition();
+  const hosted = editing?.kind === "hosted";
+  const authTypes = hosted ? MCP_AUTH_TYPES.filter((type) => type !== "oauth") : MCP_AUTH_TYPES;
   const keepsSecret = Boolean(editing?.hasSecret && editing.authType === authType);
   const oauth = authType === "oauth";
   const secretRequired = secretNeeded(authType, oauthGrant);
@@ -160,9 +162,9 @@ export default function ServerDialog({
         </TextField>
       </div>
       <TextField fullWidth isRequired value={url} onChange={setUrl} isDisabled={pending}>
-        <Label>{t("form.url")}</Label>
-        <Input inputMode="url" placeholder="https://mcp.example.com/mcp" />
-        <Description>{t("form.urlHint")}</Description>
+        <Label>{hosted ? t("builder.baseUrl") : t("form.url")}</Label>
+        <Input inputMode="url" placeholder={hosted ? "https://api.example.com" : "https://mcp.example.com/mcp"} />
+        <Description>{hosted ? t("builder.baseHint") : t("form.urlHint")}</Description>
       </TextField>
       <Switch isSelected={internal} onChange={setInternal} isDisabled={pending}>
         <Switch.Content>
@@ -191,7 +193,7 @@ export default function ServerDialog({
           </Select.Trigger>
           <Select.Popover>
             <ListBox aria-label={t("form.authType")}>
-              {MCP_AUTH_TYPES.map((type) => (
+              {authTypes.map((type) => (
                 <ListBox.Item key={type} id={type} textValue={t("form.authOption", { type })}>
                   {t("form.authOption", { type })}
                   <ListBox.ItemIndicator />
@@ -293,20 +295,22 @@ export default function ServerDialog({
           <p className="text-sm font-medium text-foreground">{t("form.tools")}</p>
           <p className="text-sm text-muted">{t("form.toolsHint")}</p>
         </div>
-        <Button
-          variant="secondary"
-          size="sm"
-          isPending={testing}
-          isDisabled={!url.trim() || !headerValid || !clientValid || saving}
-          onPress={test}
-        >
-          {({ isPending }) => (
-            <>
-              {isPending ? <Spinner color="current" size="sm" /> : <PlugZap size={14} aria-hidden />}
-              {t("form.test")}
-            </>
-          )}
-        </Button>
+        {hosted ? null : (
+          <Button
+            variant="secondary"
+            size="sm"
+            isPending={testing}
+            isDisabled={!url.trim() || !headerValid || !clientValid || saving}
+            onPress={test}
+          >
+            {({ isPending }) => (
+              <>
+                {isPending ? <Spinner color="current" size="sm" /> : <PlugZap size={14} aria-hidden />}
+                {t("form.test")}
+              </>
+            )}
+          </Button>
+        )}
       </div>
       {probe && signInPending ? (
         <Alert status="accent">

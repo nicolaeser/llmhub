@@ -93,6 +93,7 @@ test("retired console paths redirect to the tab that replaced them", async () =>
   assert.equal(target.get("/logging"), "/settings?tab=logging");
   assert.equal(target.get("/playground"), "/developer?tab=playground");
   assert.equal(target.get("/api-ref"), "/developer?tab=api");
+  assert.equal(target.get("/integrations"), "/mcp");
   for (const rule of redirects) {
     assert.equal(rule.permanent, false, rule.source);
     assert.equal(existsSync(path.join(root, "src/app/(app)", rule.source, "page.tsx")), false, rule.source);

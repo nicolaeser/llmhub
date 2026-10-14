@@ -34,7 +34,8 @@ export type KeyEndpoint =
   | "vector_stores"
   | "batches"
   | "systemone"
-  | "integrations";
+  | "integrations"
+  | "mcp";
 
 export type Weekday = "mon" | "tue" | "wed" | "thu" | "fri" | "sat" | "sun";
 

@@ -4,10 +4,8 @@ import { useRef, useState, useTransition } from "react";
 import {
   Button,
   Description,
-  Input,
   Label,
   NumberField,
-  TextField,
   toast,
 } from "@heroui/react";
 import { Plus } from "lucide-react";
@@ -16,7 +14,7 @@ import { SettingSection, SettingSwitch } from "./setting-fields";
 import { formats } from "@/i18n/formats";
 import { loadLoggingAction, saveLoggingAction } from "../_action";
 import WebhookCard from "./webhook-card";
-import SaveBar from "./save-bar";
+import SaveBar, { SettingsLead } from "./save-bar";
 import TabState from "./tab-state";
 import { useActionData } from "@/lib/hooks/use-action-data";
 import { isActionFail } from "@/lib/http/action-result";
@@ -29,6 +27,8 @@ import { MAX_ALERT_WEBHOOKS, WEBHOOK_EVENTS } from "@/lib/alerts/events";
 import type { AlertRules, AlertWebhookDraft, LoggingSettingsView } from "@/types/settings";
 import { useErrorToast } from "@/components/console/use-error-toast";
 
+const RETENTION_MAX_DAYS = 36500;
+
 export default function LoggingTab() {
   const t = useTranslations("Settings.logging");
   const tSettings = useTranslations("Settings");
@@ -40,12 +40,12 @@ export default function LoggingTab() {
     keyExpiryWarningDays: DEFAULT_KEY_EXPIRY_WARNING_DAYS,
   });
   const draftSeq = useRef(0);
-  const [retention, setRetention] = useState("0");
-  const [spendRetention, setSpendRetention] = useState("0");
-  const [auditRetention, setAuditRetention] = useState("0");
-  const [objectRetention, setObjectRetention] = useState("30");
-  const [fileRetention, setFileRetention] = useState("0");
-  const [contentRetention, setContentRetention] = useState("0");
+  const [retention, setRetention] = useState(0);
+  const [spendRetention, setSpendRetention] = useState(0);
+  const [auditRetention, setAuditRetention] = useState(0);
+  const [objectRetention, setObjectRetention] = useState(30);
+  const [fileRetention, setFileRetention] = useState(0);
+  const [contentRetention, setContentRetention] = useState(0);
   const [archive, setArchive] = useState(false);
   const [content, setContent] = useState(true);
   const [pending, start] = useTransition();
@@ -64,12 +64,12 @@ export default function LoggingTab() {
       })),
     );
     setRules(next.alertRules);
-    setRetention(String(next.logRetentionDays));
-    setSpendRetention(String(next.spendRetentionDays));
-    setAuditRetention(String(next.auditRetentionDays));
-    setObjectRetention(String(next.objectRetentionDays));
-    setFileRetention(String(next.fileRetentionDays));
-    setContentRetention(String(next.contentRetentionDays));
+    setRetention(next.logRetentionDays);
+    setSpendRetention(next.spendRetentionDays);
+    setAuditRetention(next.auditRetentionDays);
+    setObjectRetention(next.objectRetentionDays);
+    setFileRetention(next.fileRetentionDays);
+    setContentRetention(next.contentRetentionDays);
     setArchive(next.logArchive);
     setContent(next.logContent);
   }
@@ -121,51 +121,30 @@ export default function LoggingTab() {
       <Description>{hint}</Description>
     </NumberField>
   );
-  const numberField = (value: string, onChange: (next: string) => void, label: string, hint: string) => (
-    <TextField fullWidth value={value} onChange={onChange} isDisabled={disabled}>
+  const numberField = (value: number, onChange: (next: number) => void, label: string, hint: string) => (
+    <NumberField
+      fullWidth
+      value={value}
+      onChange={(next) => onChange(Number.isFinite(next) ? next : 0)}
+      minValue={0}
+      maxValue={RETENTION_MAX_DAYS}
+      step={1}
+      formatOptions={formats.number.integer}
+      isDisabled={disabled}
+    >
       <Label>{label}</Label>
-      <Input inputMode="numeric" />
+      <NumberField.Group>
+        <NumberField.DecrementButton />
+        <NumberField.Input />
+        <NumberField.IncrementButton />
+      </NumberField.Group>
       <Description>{hint}</Description>
-    </TextField>
+    </NumberField>
   );
 
   return (
     <div className="space-y-5">
-      <SaveBar
-        description={t("description")}
-        canManage={view.canManage}
-        pending={pending}
-        onSave={() =>
-          start(async () => {
-            const result = await saveLoggingAction({
-              alertWebhooks: webhooks.map((hook) => ({
-                id: hook.id,
-                url: hook.url,
-                secret: hook.secret,
-                clearSecret: hook.clearSecret,
-                format: hook.format,
-                events: hook.events,
-              })),
-              alertRules: rules,
-              logRetentionDays: Number(retention) || 0,
-              spendRetentionDays: Number(spendRetention) || 0,
-              auditRetentionDays: Number(auditRetention) || 0,
-              objectRetentionDays: Number(objectRetention) || 0,
-              fileRetentionDays: Number(fileRetention) || 0,
-              contentRetentionDays: Number(contentRetention) || 0,
-              logArchive: archive,
-              logContent: content,
-            });
-            if (isActionFail(result)) {
-              showError(result.error);
-              return;
-            }
-            setView(result);
-            seed(result);
-            toast(tSettings("saved"), { variant: "success" });
-          })
-        }
-      />
+      <SettingsLead description={t("description")} canManage={view.canManage} />
       <SettingSection
         title={t("alerts")}
         subtitle={t("alertsHint")}
@@ -239,10 +218,44 @@ export default function LoggingTab() {
           label={t("archive")}
           isSelected={archive}
           onChange={setArchive}
-          isDisabled={disabled || !view.s3Ready}
+          isDisabled={disabled || (!archive && !view.s3Ready)}
           hint={t("archiveHint", { ready: view.s3Ready ? "true" : "false" })}
         />
       </SettingSection>
+      <SaveBar
+        canManage={view.canManage}
+        pending={pending}
+        onSave={() =>
+          start(async () => {
+            const result = await saveLoggingAction({
+              alertWebhooks: webhooks.map((hook) => ({
+                id: hook.id,
+                url: hook.url,
+                secret: hook.secret,
+                clearSecret: hook.clearSecret,
+                format: hook.format,
+                events: hook.events,
+              })),
+              alertRules: rules,
+              logRetentionDays: retention,
+              spendRetentionDays: spendRetention,
+              auditRetentionDays: auditRetention,
+              objectRetentionDays: objectRetention,
+              fileRetentionDays: fileRetention,
+              contentRetentionDays: contentRetention,
+              logArchive: archive,
+              logContent: content,
+            });
+            if (isActionFail(result)) {
+              showError(result.error);
+              return;
+            }
+            setView(result);
+            seed(result);
+            toast(tSettings("saved"), { variant: "success" });
+          })
+        }
+      />
     </div>
   );
 }

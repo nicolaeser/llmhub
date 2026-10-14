@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Button, Card, Chip, Description, Input, Label, Spinner, TextField, toast } from "@heroui/react";
+import { Badge, Button, Card, Description, Input, Label, Spinner, TextField, toast } from "@heroui/react";
 import { useTranslations } from "next-intl";
 import { useErrorToast } from "@/components/console/use-error-toast";
 import { isActionFail } from "@/lib/http/action-result";
@@ -45,9 +45,14 @@ export default function AntigravitySetup({
           <Card.Title>{t("title")}</Card.Title>
           <Card.Description>{t("description")}</Card.Description>
         </div>
-        <Chip size="sm" variant="soft" color={configured ? "success" : "warning"}>
+        <Badge
+          size="sm"
+          variant="soft"
+          color={configured ? "success" : "warning"}
+          className="px-1.5 whitespace-nowrap"
+        >
           {t("status", { configured: String(configured) })}
-        </Chip>
+        </Badge>
       </Card.Header>
       {editing ? (
         <Card.Content>

@@ -72,6 +72,7 @@ export function exampleRequestBody(
     },
     "/v1/completions": { model: alias, prompt: "Hello", stream: false },
     "/v1/embeddings": { model: alias, input: "Hello" },
+    "/v1/mcp": { jsonrpc: "2.0", id: 1, method: "tools/list" },
     "/v1/rerank": {
       model: alias,
       query: "How do I reset my password?",
@@ -229,6 +230,7 @@ export const OPENAPI_PATHS: OpenApiPath[] = [
   { method: "POST", path: "/api/v1/messages/count_tokens", summary: "Count Anthropic Messages input tokens", style: "anthropic" },
   { method: "POST", path: "/api/v1/systemone", summary: "Answer typed decision questions (TypeSafe Jev)", style: "openai" },
   { method: "POST", path: "/api/v1/integrations/mcp", summary: "Call a published integration tool over MCP", style: "openai" },
+  { method: "POST", path: "/api/v1/mcp", summary: "List and call the caller's MCP tools", style: "openai" },
   { method: "POST", path: "/api/v1/moderations", summary: "Classify content", style: "openai" },
   { method: "POST", path: "/api/v1/ocr", summary: "Extract text from images", style: "openai" },
   { method: "POST", path: "/api/subscription/v1/chat/completions", summary: "Create a chat completion on a subscription", style: "openai" },

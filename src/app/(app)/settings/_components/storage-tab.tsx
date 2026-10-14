@@ -13,7 +13,7 @@ import { isActionFail } from "@/lib/http/action-result";
 import type { S3PresetId, S3ProbeResult, S3Settings } from "@/types/s3";
 import { loadStorageSettingsAction, saveStorageSettingsAction, testStorageSettingsAction } from "../_action";
 import OptionSelect from "./option-select";
-import SaveBar from "./save-bar";
+import SaveBar, { SettingsLead } from "./save-bar";
 import TabState from "./tab-state";
 
 export default function StorageTab() {
@@ -80,23 +80,7 @@ export default function StorageTab() {
 
   return (
     <div className="space-y-5">
-      <SaveBar
-        description={t("description")}
-        canManage={view.canManage}
-        pending={pending}
-        isDisabled={endpointPending}
-        onSave={save}
-        extra={
-          <Button variant="secondary" isPending={testing} isDisabled={endpointPending || pending} onPress={test}>
-            {({ isPending }) => (
-              <>
-                {isPending ? <Spinner color="current" size="sm" /> : null}
-                {t("test")}
-              </>
-            )}
-          </Button>
-        }
-      />
+      <SettingsLead description={t("description")} canManage={view.canManage} />
 
       {probe ? (
         <Alert status={probe.ok ? "success" : "danger"}>
@@ -223,6 +207,22 @@ export default function StorageTab() {
         </div>
         <p className="text-xs text-muted">{t("keys.hint")}</p>
       </SettingSection>
+      <SaveBar
+        canManage={view.canManage}
+        pending={pending}
+        isDisabled={endpointPending}
+        onSave={save}
+        extra={
+          <Button variant="secondary" isPending={testing} isDisabled={endpointPending || pending} onPress={test}>
+            {({ isPending }) => (
+              <>
+                {isPending ? <Spinner color="current" size="sm" /> : null}
+                {t("test")}
+              </>
+            )}
+          </Button>
+        }
+      />
     </div>
   );
 }

@@ -1,6 +1,9 @@
 import { z } from "zod";
 
+export const BUILDER_MODEL_KEY = "mcp_builder_model";
 export const MCP_SCOPES = ["org", "team", "project", "member", "key"] as const;
+export const MCP_ACTIONS = ["read", "write", "delete"] as const;
+export const MCP_HTTP_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"] as const;
 export const MCP_AUTH_TYPES = ["none", "bearer", "header", "oauth"] as const;
 export const MCP_OAUTH_GRANTS = ["authorization_code", "client_credentials"] as const;
 export const MCP_MODES = ["allow", "block"] as const;
@@ -20,6 +23,80 @@ const RESERVED_HEADERS = new Set([
 ]);
 
 const toolNames = z.array(z.string().trim().min(1).max(128)).max(200);
+const actions = z.array(z.enum(MCP_ACTIONS)).max(MCP_ACTIONS.length);
+
+const PATH_PARAM = /\{([A-Za-z][A-Za-z0-9_]*)\}/g;
+
+export const hostedToolSchema = z
+  .object({
+    name: z.string().trim().regex(/^[A-Za-z][A-Za-z0-9_]{0,63}$/),
+    title: z.string().trim().max(200).default(""),
+    description: z.string().trim().max(2000).default(""),
+    action: z.enum(MCP_ACTIONS),
+    method: z.enum(MCP_HTTP_METHODS),
+    path: z
+      .string()
+      .trim()
+      .min(1)
+      .max(512)
+      .regex(/^\/(?!\/)(?!.*\.\.)[A-Za-z0-9._~{}:/-]*$/),
+    inputSchema: z.record(z.string(), z.unknown()).default({}),
+  })
+  .superRefine((tool, ctx) => {
+    if (JSON.stringify(tool.inputSchema).length > 32_000) {
+      ctx.addIssue({ code: "custom", path: ["inputSchema"], message: "schema too large" });
+    }
+    const properties =
+      tool.inputSchema.properties && typeof tool.inputSchema.properties === "object"
+        ? (tool.inputSchema.properties as Record<string, unknown>)
+        : {};
+    for (const match of tool.path.matchAll(PATH_PARAM)) {
+      if (!properties[match[1]!]) ctx.addIssue({ code: "custom", path: ["path"], message: "missing path parameter" });
+    }
+  });
+
+export const mcpDraftBaseSchema = z.object({
+  name: z.string().trim().min(1).max(48),
+  description: z.string().trim().max(500).default(""),
+  baseUrl: z.string().trim().min(1).max(2048),
+  internal: z.boolean().default(false),
+  authType: z.enum(["none", "bearer", "header"]).default("none"),
+  authHeader: z.string().trim().max(64).default(""),
+  notes: z.string().trim().max(2000).default(""),
+});
+
+export const builderModelSchema = z.string().trim().max(200);
+
+export const builderDraftSchema = z.object({
+  instruction: z.string().trim().min(1).max(2_000),
+  docs: z.string().trim().min(1).max(60_000),
+});
+
+export const hostedServerSchema = z
+  .object({
+    name: z.string().trim().min(1).max(48),
+    description: z.string().trim().max(500),
+    baseUrl: z.string().trim().min(1).max(2048),
+    internal: z.boolean(),
+    authType: z.enum(["none", "bearer", "header"]),
+    authHeader: z.string().trim().max(64).default(""),
+    secret: z
+      .string()
+      .max(4096)
+      .default("")
+      .refine((value) => ![...value].some((char) => char.charCodeAt(0) < 32 || char.charCodeAt(0) === 127), {
+        message: "invalid characters",
+      }),
+    tools: z.array(hostedToolSchema).min(1).max(30),
+  })
+  .superRefine((value, ctx) => {
+    if (value.authType === "header" && !/^[A-Za-z0-9-]{1,64}$/.test(value.authHeader)) {
+      ctx.addIssue({ code: "custom", path: ["authHeader"], message: "invalid header name" });
+    }
+    if (value.authType !== "none" && !value.secret.trim()) {
+      ctx.addIssue({ code: "custom", path: ["secret"], message: "secret required" });
+    }
+  });
 
 const connectionShape = {
   url: z.string().trim().min(1).max(2048),
@@ -91,6 +168,7 @@ export const mcpAssignmentsSchema = z.object({
         id: z.string().min(1).max(64),
         mode: z.enum(MCP_MODES),
         blockedTools: toolNames,
+        blockedActions: actions.default([]),
       }),
     )
     .max(MAX_MCP_ASSIGNMENTS),

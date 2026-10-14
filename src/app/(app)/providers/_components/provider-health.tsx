@@ -5,6 +5,8 @@ import { Button, Card, Chip, Label, ListBox, Select, Spinner, Switch, Table } fr
 import { Activity, CircleCheck, HeartPulse, RefreshCw, Send, Snowflake, TriangleAlert } from "lucide-react";
 import { useFormatter, useTranslations } from "next-intl";
 import EmptyState from "@/components/console/empty-state";
+import SubscriptionBadge from "@/components/console/subscription-badge";
+import { isSignInKind } from "@/lib/gateway/upstreams/provider-kinds";
 import { LoadError, PageLoading } from "@/components/console/page-status";
 import StatCard from "@/components/console/stat-card";
 import { Link } from "@/i18n/routing";
@@ -207,7 +209,15 @@ export default function ProviderHealth() {
                         <div className="font-medium">{row.alias}</div>
                         <div className="text-xs text-muted">{row.model}</div>
                       </Table.Cell>
-                      <Table.Cell>{row.provider || tProviders("kindName", { kind: row.kind })}</Table.Cell>
+                      <Table.Cell>
+                        <span className="inline-flex items-center gap-1.5">
+                          <span>
+                            {row.provider ||
+                              tProviders(isSignInKind(row.kind) ? "kindShort" : "kindName", { kind: row.kind })}
+                          </span>
+                          {isSignInKind(row.kind) ? <SubscriptionBadge /> : null}
+                        </span>
+                      </Table.Cell>
                       <Table.Cell>
                         <Chip size="sm" variant="soft" color={STATE_COLOR[state]} className="whitespace-nowrap">
                           {t("state", { state })}

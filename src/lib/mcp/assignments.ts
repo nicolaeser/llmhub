@@ -25,6 +25,7 @@ export const mcpAssignmentSelect = {
     keyId: true,
     mode: true,
     blockedTools: true,
+    blockedActions: true,
     org: { select: { alias: true } },
     team: { select: { alias: true } },
     project: { select: { alias: true } },
@@ -47,7 +48,12 @@ export function assignmentViews(rows: McpAssignmentSource[]): McpAssignmentView[
   return rows.flatMap((row) => {
     const found = target(row);
     if (!found) return [];
-    return [{ ...found, mode: isAssignmentMode(row.mode) ? row.mode : "block", blockedTools: row.blockedTools }];
+    return [{
+      ...found,
+      mode: isAssignmentMode(row.mode) ? row.mode : "block",
+      blockedTools: row.blockedTools,
+      blockedActions: Array.isArray(row.blockedActions) ? row.blockedActions : [],
+    }];
   });
 }
 
@@ -133,7 +139,11 @@ async function targetsExist(ids: Record<AssignmentScope, string[]>): Promise<boo
 export function uniqueAssignments(assignments: McpAssignmentInput[]): McpAssignmentInput[] {
   const seen = new Map<string, McpAssignmentInput>();
   for (const row of assignments) {
-    seen.set(`${row.scope}:${row.id}`, { ...row, blockedTools: [...new Set(row.blockedTools)] });
+    seen.set(`${row.scope}:${row.id}`, {
+      ...row,
+      blockedTools: [...new Set(row.blockedTools)],
+      blockedActions: [...new Set(row.blockedActions)],
+    });
   }
   return [...seen.values()];
 }
@@ -150,6 +160,7 @@ export async function replaceMcpAssignments(
     [COLUMN[row.scope]]: row.id,
     mode: row.mode,
     blockedTools: row.blockedTools,
+    blockedActions: row.blockedActions,
   }));
   const saved = await prisma.$transaction(async (tx) => {
     const exists = await tx.mcpServer.findUnique({ where: { id: serverId }, select: { id: true } });

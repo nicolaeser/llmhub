@@ -29,7 +29,7 @@ import type { IssuerCheck, SignInSettingsView } from "@/types/settings";
 import { checkOidcIssuerAction, loadSignInSettingsAction, saveSignInSettingsAction } from "../_action";
 import OptionSelect from "./option-select";
 import RoleMappings, { type MappingRow } from "./role-mappings";
-import SaveBar from "./save-bar";
+import SaveBar, { SettingsLead } from "./save-bar";
 import ScimSection from "./scim-section";
 import TabState from "./tab-state";
 
@@ -128,7 +128,7 @@ export default function SignInTab() {
 
   return (
     <div className="space-y-5">
-      <SaveBar description={t("description")} canManage={view.canManage} pending={pending} onSave={save} />
+      <SettingsLead description={t("description")} canManage={view.canManage} />
 
       <SettingSection title={t("sso.title")} subtitle={t("sso.subtitle")}>
         <div className="flex items-start gap-3">
@@ -346,6 +346,7 @@ export default function SignInTab() {
           <Disclosure.Body className="pt-3 text-sm text-muted">{t("matching.body")}</Disclosure.Body>
         </Disclosure.Content>
       </Disclosure>
+      <SaveBar canManage={view.canManage} pending={pending} onSave={save} />
     </div>
   );
 }

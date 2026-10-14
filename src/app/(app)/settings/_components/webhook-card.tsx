@@ -11,7 +11,6 @@ import {
   Label,
   ListBox,
   Select,
-  Switch,
   TextField,
 } from "@heroui/react";
 import { Trash2 } from "lucide-react";
@@ -74,18 +73,14 @@ export default function WebhookCard({
             />
           </TextField>
           {draft.secretSet ? (
-            <Switch
-              isSelected={draft.clearSecret}
-              onChange={(clearSecret) => onChange({ ...draft, clearSecret })}
+            <Button
+              size="sm"
+              variant={draft.clearSecret ? "secondary" : "danger-soft"}
               isDisabled={isDisabled}
+              onPress={() => onChange({ ...draft, clearSecret: !draft.clearSecret, secret: "" })}
             >
-              <Switch.Content>
-                <Switch.Control>
-                  <Switch.Thumb />
-                </Switch.Control>
-                <Label>{t("clearSecret")}</Label>
-              </Switch.Content>
-            </Switch>
+              {draft.clearSecret ? t("keepSecret") : t("clearSecret")}
+            </Button>
           ) : null}
         </div>
         <Select

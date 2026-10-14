@@ -57,8 +57,8 @@
     "logContentHint": "When off, request logs for this key keep only metadata, no prompts or responses."
   },
   "endpoints": {
-    "name": "{endpoint, select, chat {Chat and text} embeddings {Embeddings} moderations {Moderations} images {Images} audio {Audio} videos {Videos} ocr {OCR} files {Files} batches {Batches} rerank {Rerank} vector_stores {Vector stores and file search} integrations {Integrations} other {SystemOne}}",
-    "paths": "{endpoint, select, chat {/api/v1/chat/completions, /api/v1/completions, /api/v1/messages, /api/v1/responses} embeddings {/api/v1/embeddings} moderations {/api/v1/moderations} images {/api/v1/images} audio {/api/v1/audio} videos {/api/v1/videos} ocr {/api/v1/ocr} files {/api/v1/files} batches {/api/v1/batches} rerank {/api/v1/rerank} vector_stores {/api/v1/vector_stores, file_search in /api/v1/responses} integrations {/api/v1/integrations/mcp} other {/api/v1/systemone}}"
+    "name": "{endpoint, select, chat {Chat and text} embeddings {Embeddings} moderations {Moderations} images {Images} audio {Audio} videos {Videos} ocr {OCR} files {Files} batches {Batches} rerank {Rerank} vector_stores {Vector stores and file search} integrations {Integrations} mcp {MCP} other {SystemOne}}",
+    "paths": "{endpoint, select, chat {/api/v1/chat/completions, /api/v1/completions, /api/v1/messages, /api/v1/responses} embeddings {/api/v1/embeddings} moderations {/api/v1/moderations} images {/api/v1/images} audio {/api/v1/audio} videos {/api/v1/videos} ocr {/api/v1/ocr} files {/api/v1/files} batches {/api/v1/batches} rerank {/api/v1/rerank} vector_stores {/api/v1/vector_stores, file_search in /api/v1/responses} integrations {/api/v1/integrations/mcp} mcp {/api/v1/mcp} other {/api/v1/systemone}}"
   },
   "windows": {
     "title": "Allowed times",

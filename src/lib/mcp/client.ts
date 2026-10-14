@@ -140,11 +140,13 @@ export function toolSpecs(raw: unknown, onReject?: (name: string, reason: string
       continue;
     }
     seen.add(name);
+    const action = tool.action === "read" || tool.action === "write" || tool.action === "delete" ? tool.action : undefined;
     out.push({
       name,
       title: typeof tool.title === "string" ? clip(tool.title, 200) : "",
       description: typeof tool.description === "string" ? clip(tool.description, MAX_DESCRIPTION) : "",
       inputSchema: schema.type === "object" ? schema : { ...schema, type: "object" },
+      ...(action ? { action } : {}),
     });
     if (out.length >= MCP_MAX_TOOLS) break;
   }

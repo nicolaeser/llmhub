@@ -1,9 +1,10 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Alert, Button, Card, Chip, Disclosure, Tabs, toast } from "@heroui/react";
+import { Alert, Card, Chip, Disclosure, Tabs, toast } from "@heroui/react";
 import { Shield } from "lucide-react";
 import { useTranslations } from "next-intl";
+import FormActions from "@/components/console/form-actions";
 import PageHeader from "@/components/console/page-header";
 import PageStatus from "@/components/console/page-status";
 import { useErrorToast } from "@/components/console/use-error-toast";
@@ -65,19 +66,21 @@ export default function GuardrailsPage() {
   const policy = policyDraft ?? saved;
   const guardrails = guardrailsDraft ?? savedGuardrails;
 
-  function save() {
+  function savePii() {
     start(async () => {
-      if (tab === "pii") {
-        const result = await savePiiAction(policy);
-        if (isActionFail(result)) {
-          showError(result.error);
-          return;
-        }
-        setData((current) => ({ ...current, pii: result.pii }));
-        setPolicy(null);
-        toast(t("saved"), { variant: "success" });
+      const result = await savePiiAction(policy);
+      if (isActionFail(result)) {
+        showError(result.error);
         return;
       }
+      setData((current) => ({ ...current, pii: result.pii }));
+      setPolicy(null);
+      toast(t("saved"), { variant: "success" });
+    });
+  }
+
+  function saveContent() {
+    start(async () => {
       const result = await saveGuardrailPolicyAction(guardrails);
       if (isActionFail(result)) {
         showError(result.error);
@@ -91,23 +94,7 @@ export default function GuardrailsPage() {
 
   return (
     <div>
-      <PageHeader
-        icon={Shield}
-        title={t("title")}
-        subtitle={t("subtitle")}
-        actions={
-          canManage ? (
-            <Button
-              aria-label={t("save")}
-              isPending={pending}
-              isDisabled={tab === "content" && !guardrailsValid(guardrails)}
-              onPress={save}
-            >
-              {t("save")}
-            </Button>
-          ) : undefined
-        }
-      />
+      <PageHeader icon={Shield} title={t("title")} subtitle={t("subtitle")} />
 
       <Tabs
         selectedKey={tab}
@@ -173,6 +160,7 @@ export default function GuardrailsPage() {
               </Disclosure.Content>
             </Disclosure>
           </Card>
+          {canManage ? <FormActions label={t("save")} pending={pending} onSave={savePii} /> : null}
         </Tabs.Panel>
 
         <Tabs.Panel id="content">
@@ -207,6 +195,14 @@ export default function GuardrailsPage() {
           <div className="mb-6">
             <GuardrailTester policy={guardrails} />
           </div>
+          {canManage ? (
+            <FormActions
+              label={t("save")}
+              pending={pending}
+              isDisabled={!guardrailsValid(guardrails)}
+              onSave={saveContent}
+            />
+          ) : null}
         </Tabs.Panel>
       </Tabs>
     </div>

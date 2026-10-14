@@ -1,33 +1,39 @@
 "use client";
 
-import { Chip } from "@heroui/react";
+import { Badge } from "@heroui/react";
 import { useTranslations } from "next-intl";
 import type { ProviderPolicyInput } from "@/types/providers";
 
+const BADGE = "px-1.5 whitespace-nowrap";
+
 export default function PolicyChips({ policy }: { policy: ProviderPolicyInput }) {
   const t = useTranslations("Providers");
+  const items = [
+    policy.zdr ? { key: "zdr", color: "success" as const, label: t("policy.zdrChip") } : null,
+    policy.region
+      ? { key: "region", color: "default" as const, label: t("policy.regionOption", { region: policy.region }) }
+      : null,
+    !policy.zdr && policy.retentionDays !== null
+      ? {
+          key: "retention",
+          color: "default" as const,
+          label: t("policy.retentionChip", { days: policy.retentionDays }),
+        }
+      : null,
+    !policy.zdr && policy.noTraining
+      ? { key: "training", color: "default" as const, label: t("policy.noTrainingChip") }
+      : null,
+  ].filter((item) => item !== null);
+
+  if (!items.length) return null;
+
   return (
-    <>
-      {policy.zdr ? (
-        <Chip size="sm" variant="soft" color="success">
-          {t("policy.zdrChip")}
-        </Chip>
-      ) : null}
-      {policy.region ? (
-        <Chip size="sm" variant="soft">
-          {t("policy.regionOption", { region: policy.region })}
-        </Chip>
-      ) : null}
-      {!policy.zdr && policy.retentionDays !== null ? (
-        <Chip size="sm" variant="soft">
-          {t("policy.retentionChip", { days: policy.retentionDays })}
-        </Chip>
-      ) : null}
-      {!policy.zdr && policy.noTraining ? (
-        <Chip size="sm" variant="soft">
-          {t("policy.noTrainingChip")}
-        </Chip>
-      ) : null}
-    </>
+    <div className="flex flex-wrap gap-1">
+      {items.map((item) => (
+        <Badge key={item.key} size="sm" variant="soft" color={item.color} className={BADGE}>
+          {item.label}
+        </Badge>
+      ))}
+    </div>
   );
 }

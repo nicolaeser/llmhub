@@ -1,0 +1,4 @@
+ALTER TABLE "McpServer" ADD COLUMN "kind" TEXT NOT NULL DEFAULT 'remote',
+ADD COLUMN "spec" JSONB NOT NULL DEFAULT '{}';
+
+ALTER TABLE "McpAssignment" ADD COLUMN "blockedActions" TEXT[] DEFAULT ARRAY[]::TEXT[];

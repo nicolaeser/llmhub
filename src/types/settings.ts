@@ -7,6 +7,7 @@ import type { GuardrailPolicy, PiiPolicy } from "@/types/guardrails";
 import type { JevSettings } from "@/types/model-catalog";
 import type { AntigravitySettings } from "@/types/providers";
 import type { VectorStoreDefaults } from "@/types/rag";
+import type { ModelChoice } from "@/lib/models/model-role";
 import type { S3Settings } from "@/types/s3";
 import type { UpdateStatus } from "@/types/updates";
 
@@ -50,7 +51,7 @@ export type CatalogSettings = z.infer<typeof catalogSettingsSchema>;
 export type CatalogSettingsView = {
   settings: CatalogSettings;
   jevKeySet: boolean;
-  aliases: string[];
+  models: ModelChoice[];
   canManage: boolean;
 };
 
