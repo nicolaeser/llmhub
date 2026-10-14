@@ -25,6 +25,12 @@ model Organization {
   mcp      McpAssignment[]
 
   vectorStores VectorStore[]
+
+  integrationAudiences IntegrationAudience[]
+  companyIntegrations  CompanyIntegration[]
+  hubAgents            HubAgent[]
+  toolExecutions       ToolExecution[]
+  integrationApprovals ApprovalRequest[]
 }
 
 model Team {
@@ -590,9 +596,13 @@ model McpServer {
   description     String    @default("")
   url             String
   transport       String    @default("streamable_http")
+  protocolVersion String    @default("")
   authType        String    @default("none")
   authHeader      String    @default("")
   authSecret      String    @default("")
+  oauthGrant      String    @default("authorization_code")
+  oauthClientId   String    @default("")
+  oauthScopes     String    @default("")
   internal        Boolean   @default(false)
   enabled         Boolean   @default(true)
   global          Boolean   @default(false)
@@ -605,6 +615,24 @@ model McpServer {
   updatedAt       DateTime  @updatedAt
 
   assignments McpAssignment[]
+  oauthLogin  McpOAuthLogin?
+}
+
+model McpOAuthLogin {
+  serverId      String    @id
+  server        McpServer @relation(fields: [serverId], references: [id], onDelete: Cascade)
+  issuer        String
+  tokenEndpoint String
+  resource      String
+  client        String
+  tokens        String
+  scope         String    @default("")
+  expiresAt     DateTime?
+  status        String    @default("active")
+  version       Int       @default(0)
+  leaseUntil    DateTime?
+  connectedAt   DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 }
 
 model McpAssignment {
@@ -635,4 +663,289 @@ model McpAssignment {
   @@index([projectId])
   @@index([memberId])
   @@index([keyId])
+}
+
+model IntegrationBlueprint {
+  id          String   @id @default(cuid())
+  slug        String   @unique
+  name        String
+  description String   @default("")
+  visibility  String   @default("internal")
+  protocol    String   @default("rest")
+  specKind    String   @default("manual")
+  spec        Json     @default("{}")
+  authMethods Json     @default("[]")
+  limitations Json     @default("[]")
+  baseUrl     String   @default("")
+  status      String   @default("draft")
+  version     Int      @default(1)
+  createdById String   @default("")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  audiences    IntegrationAudience[]
+  endpoints    EndpointDefinition[]
+  tools        ToolDefinition[]
+  integrations CompanyIntegration[]
+  policies     PermissionPolicy[]
+}
+
+model IntegrationAudience {
+  id          String               @id @default(cuid())
+  blueprintId String
+  blueprint   IntegrationBlueprint @relation(fields: [blueprintId], references: [id], onDelete: Cascade)
+  orgId       String
+  org         Organization         @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@unique([blueprintId, orgId])
+  @@index([orgId])
+}
+
+model CompanyIntegration {
+  id          String                @id @default(cuid())
+  orgId       String
+  org         Organization          @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  blueprintId String?
+  blueprint   IntegrationBlueprint? @relation(fields: [blueprintId], references: [id], onDelete: SetNull)
+  slug        String
+  name        String
+  description String                @default("")
+  overrides   Json                  @default("{}")
+  status      String                @default("draft")
+  version     Int                   @default(1)
+  createdById String                @default("")
+  createdAt   DateTime              @default(now())
+  updatedAt   DateTime              @updatedAt
+
+  endpoints   EndpointDefinition[]
+  tools       ToolDefinition[]
+  connections Connection[]
+  policies    PermissionPolicy[]
+
+  @@unique([orgId, slug])
+  @@index([blueprintId])
+  @@index([orgId, updatedAt])
+}
+
+model Connection {
+  id                   String             @id @default(cuid())
+  orgId                String
+  companyIntegrationId String
+  companyIntegration   CompanyIntegration @relation(fields: [companyIntegrationId], references: [id], onDelete: Cascade)
+  name                 String
+  authMethod           String             @default("none")
+  baseUrl              String             @default("")
+  internal             Boolean            @default(false)
+  status               String             @default("unconfigured")
+  healthCheckedAt      DateTime?
+  healthError          String             @default("")
+  providerScopes       Json               @default("[]")
+  createdById          String             @default("")
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+
+  credential CredentialReference?
+  bindings   AgentBinding[]
+  executions ToolExecution[]
+
+  @@index([orgId, createdAt])
+  @@index([companyIntegrationId])
+}
+
+model CredentialReference {
+  id           String     @id @default(cuid())
+  orgId        String
+  connectionId String     @unique
+  connection   Connection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  kind         String
+  label        String     @default("")
+  sealedSecret String     @default("")
+  expiresAt    DateTime?
+  rotatedAt    DateTime?
+  revokedAt    DateTime?
+  metadata     Json       @default("{}")
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  @@index([orgId])
+}
+
+model EndpointDefinition {
+  id                   String                @id @default(cuid())
+  blueprintId          String?
+  blueprint            IntegrationBlueprint? @relation(fields: [blueprintId], references: [id], onDelete: Cascade)
+  companyIntegrationId String?
+  companyIntegration   CompanyIntegration?   @relation(fields: [companyIntegrationId], references: [id], onDelete: Cascade)
+  operationId          String
+  method               String
+  path                 String
+  summary              String                @default("")
+  parameters           Json                  @default("[]")
+  headers              Json                  @default("{}")
+  requestSchema        Json                  @default("{}")
+  responseSchema       Json                  @default("{}")
+  authRequired         Boolean               @default(true)
+  errors               Json                  @default("[]")
+  rateLimit            Json?
+  sideEffect           String                @default("read")
+  enabled              Boolean               @default(false)
+  origin               String                @default("local")
+  protocolExtras       Json                  @default("{}")
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+
+  @@index([blueprintId])
+  @@index([companyIntegrationId])
+}
+
+model ToolDefinition {
+  id                   String                @id @default(cuid())
+  blueprintId          String?
+  blueprint            IntegrationBlueprint? @relation(fields: [blueprintId], references: [id], onDelete: Cascade)
+  companyIntegrationId String?
+  companyIntegration   CompanyIntegration?   @relation(fields: [companyIntegrationId], references: [id], onDelete: Cascade)
+  slug                 String
+  name                 String
+  description          String                @default("")
+  inputSchema          Json                  @default("{}")
+  outputSchema         Json                  @default("{}")
+  status               String                @default("draft")
+  version              Int                   @default(1)
+  publishedVersion     Int                   @default(0)
+  executionPolicy      Json                  @default("{}")
+  kind                 String                @default("operation")
+  createdById          String                @default("")
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+
+  versions ToolVersion[]
+  bindings AgentBinding[]
+  policies PermissionPolicy[]
+
+  @@unique([blueprintId, slug])
+  @@unique([companyIntegrationId, slug])
+  @@index([status])
+}
+
+model ToolVersion {
+  id             String         @id @default(cuid())
+  toolId         String
+  tool           ToolDefinition @relation(fields: [toolId], references: [id], onDelete: Cascade)
+  version        Int
+  status         String         @default("draft")
+  graph          Json
+  inputSchema    Json
+  outputSchema   Json
+  policySnapshot Json           @default("{}")
+  notes          String         @default("")
+  createdById    String         @default("")
+  publishedAt    DateTime?
+  createdAt      DateTime       @default(now())
+
+  @@unique([toolId, version])
+}
+
+model PermissionPolicy {
+  id                   String                @id @default(cuid())
+  orgId                String?
+  scope                String
+  blueprintId          String?
+  blueprint            IntegrationBlueprint? @relation(fields: [blueprintId], references: [id], onDelete: Cascade)
+  companyIntegrationId String?
+  companyIntegration   CompanyIntegration?   @relation(fields: [companyIntegrationId], references: [id], onDelete: Cascade)
+  toolId               String?
+  tool                 ToolDefinition?       @relation(fields: [toolId], references: [id], onDelete: Cascade)
+  agentId              String?
+  agent                HubAgent?             @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  version              Int                   @default(1)
+  rules                Json                  @default("[]")
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+
+  bindings AgentBinding[]
+
+  @@index([orgId])
+  @@index([scope])
+}
+
+model HubAgent {
+  id          String       @id @default(cuid())
+  orgId       String
+  org         Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  slug        String
+  name        String
+  description String       @default("")
+  createdById String       @default("")
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  bindings AgentBinding[]
+  policies PermissionPolicy[]
+
+  @@unique([orgId, slug])
+}
+
+model AgentBinding {
+  id           String            @id @default(cuid())
+  orgId        String
+  agentId      String
+  agent        HubAgent          @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  connectionId String
+  connection   Connection        @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  toolId       String
+  tool         ToolDefinition    @relation(fields: [toolId], references: [id], onDelete: Cascade)
+  policyId     String?
+  policy       PermissionPolicy? @relation(fields: [policyId], references: [id], onDelete: SetNull)
+  status       String            @default("active")
+  createdAt    DateTime          @default(now())
+
+  @@unique([agentId, connectionId, toolId])
+  @@index([orgId])
+  @@index([connectionId])
+  @@index([toolId])
+}
+
+model ApprovalRequest {
+  id          String        @id @default(cuid())
+  orgId       String?
+  org         Organization? @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  kind        String
+  subjectType String
+  subjectId   String
+  status      String        @default("pending")
+  requestedBy String
+  decidedBy   String        @default("")
+  reason      String        @default("")
+  snapshot    Json          @default("{}")
+  createdAt   DateTime      @default(now())
+  decidedAt   DateTime?
+
+  @@index([orgId, status])
+  @@index([subjectType, subjectId])
+}
+
+model ToolExecution {
+  id            String         @id @default(cuid())
+  orgId         String?
+  org           Organization?  @relation(fields: [orgId], references: [id], onDelete: SetNull)
+  toolId        String
+  toolVersion   Int            @default(0)
+  agentId       String         @default("")
+  connectionId  String?
+  connection    Connection?    @relation(fields: [connectionId], references: [id], onDelete: SetNull)
+  actor         String
+  correlationId String
+  decision      String
+  policyVersion Int            @default(0)
+  status        String
+  operation     String         @default("")
+  startedAt     DateTime       @default(now())
+  finishedAt    DateTime?
+  durationMs    Int            @default(0)
+  error         String         @default("")
+  summary       Json           @default("{}")
+
+  @@index([orgId, startedAt])
+  @@index([toolId, startedAt])
+  @@index([status, startedAt])
 }

@@ -5,7 +5,7 @@
   "readOnly": "Du kannst MCP-Server ansehen. Zum Ändern brauchst du die Berechtigung, Einstellungen zu verwalten.",
   "empty": {
     "title": "Noch keine MCP-Server",
-    "description": "Verbinde einen MCP-Server über Streamable HTTP. Das Gateway ruft seine Tools für jedes Modell und jeden Anbieter auf, und die Zugangsdaten verlassen das Gateway nie."
+    "description": "Verbinde einen MCP-Server über HTTP. Das Gateway ruft seine Tools für jedes Modell und jeden Anbieter auf, und die Zugangsdaten verlassen das Gateway nie."
   },
   "stats": {
     "servers": "Server",
@@ -13,7 +13,8 @@
     "tools": "Angebotene Tools",
     "errors": "Mit Fehlern"
   },
-  "status": "{status, select, connected {Verbunden} error {Fehler} disabled {Deaktiviert} other {Nicht geprüft}}",
+  "status": "{status, select, connected {Verbunden} error {Fehler} disabled {Deaktiviert} signin {Anmeldung nötig} other {Nicht geprüft}}",
+  "protocol": "{era, select, modern {Zustandsloses MCP, Version {version}} legacy {MCP mit Sessions, Version {version}} sse {Altes HTTP+SSE, Version {version}} other {Protokoll nicht erkannt}}",
   "toolCount": "{count, plural, =0 {Keine Tools} one {# Tool} other {# Tools}}",
   "allowedCount": "{allowed, number} von {count, plural, one {# Tool} other {# Tools}} aktiv",
   "refreshed": "Tools geladen {when}",
@@ -25,7 +26,8 @@
     "button": "Zugriff"
   },
   "card": {
-    "auth": "{type, select, bearer {Bearer-Token} header {Eigener Header} other {Keine Authentifizierung}}",
+    "auth": "{type, select, bearer {Bearer-Token} header {Eigener Header} oauth {OAuth} other {Keine Authentifizierung}}",
+    "protocol": "{era, select, modern {Zustandslos {version}} legacy {Sessions {version}} sse {HTTP+SSE {version}} other {{version}}}",
     "enabled": "{name} aktivieren",
     "enabledState": "{enabled, select, true {Aktiv} other {Deaktiviert}}",
     "refresh": "Tools neu laden",
@@ -33,12 +35,21 @@
     "edit": "{name} bearbeiten",
     "deleteConfirm": "{name} löschen? Aufrufer verlieren seine Tools sofort."
   },
+  "oauth": {
+    "state": "{grant, select, client_credentials {{state, select, active {Token ausgestellt {when}} expired {Token abgelehnt} other {Noch kein Token}}} other {{state, select, active {Angemeldet {when}} expired {Anmeldung abgelaufen} other {Nicht angemeldet}}}}",
+    "signIn": "{again, select, true {Erneut anmelden} other {Anmelden}}",
+    "signOut": "Abmelden",
+    "signOutConfirm": "Von {name} abmelden? Aufrufer verlieren seine Tools, bis sich jemand erneut anmeldet.",
+    "signedOut": "Abgemeldet",
+    "result": "{result, select, connected {{named, select, true {Bei {name} angemeldet.} other {Angemeldet.}}} other {Die Anmeldung wurde nicht abgeschlossen.}}",
+    "dismiss": "Schließen"
+  },
   "errors": {
-    "code": "{code, select, MCP_URL_INVALID {Gib eine gültige http- oder https-URL ohne Zugangsdaten ein.} MCP_URL_INSECURE {Nutze https oder markiere den Server als intern, um http zu erlauben.} MCP_URL_BLOCKED {Diese Adresse ist nicht erlaubt. Private Adressen brauchen den Schalter „Intern“, Cloud-Metadaten-Adressen sind immer gesperrt.} MCP_UNREACHABLE {Der Server war nicht erreichbar.} MCP_TIMEOUT {Der Server hat nicht rechtzeitig geantwortet.} MCP_AUTH_FAILED {Der Server hat die Zugangsdaten abgelehnt.} MCP_HTTP_ERROR {Der Server hat mit einem HTTP-Fehler geantwortet.} MCP_PROTOCOL_ERROR {Der Server hat nicht wie ein MCP-Server geantwortet.} MCP_RPC_ERROR {Der Server hat einen MCP-Fehler gemeldet.} MCP_RESPONSE_TOO_LARGE {Die Antwort des Servers war zu groß.} other {Der Server war nicht erreichbar.}}"
+    "code": "{code, select, MCP_URL_INVALID {Gib eine gültige http- oder https-URL ohne Zugangsdaten ein.} MCP_URL_INSECURE {Nutze https oder markiere den Server als intern, um http zu erlauben.} MCP_URL_BLOCKED {Diese Adresse ist nicht erlaubt. Private Adressen brauchen den Schalter „Intern“, Cloud-Metadaten-Adressen sind immer gesperrt.} MCP_UNREACHABLE {Der Server war nicht erreichbar.} MCP_TIMEOUT {Der Server hat nicht rechtzeitig geantwortet.} MCP_HTTP_ERROR {Der Server hat mit einem HTTP-Fehler geantwortet.} MCP_PROTOCOL_ERROR {Der Server hat nicht wie ein MCP-Server geantwortet.} MCP_RPC_ERROR {Der Server hat einen MCP-Fehler gemeldet.} MCP_RESPONSE_TOO_LARGE {Die Antwort des Servers war zu groß.} MCP_AUTH_FAILED {Der Server hat die Zugangsdaten abgelehnt.} MCP_AUTH_REQUIRED {Der Server braucht eine Anmeldung. Speichere ihn und nutze „Anmelden“ auf seiner Karte.} MCP_AUTH_SCOPE {Dem Token fehlt eine Berechtigung, die der Server braucht. Ergänze den Scope und melde dich erneut an.} MCP_OAUTH_SUGGESTED {Der Server verlangt OAuth. Wähle OAuth als Authentifizierung.} MCP_OAUTH_DISCOVERY {Der Autorisierungsserver wurde nicht gefunden. Läuft er im privaten Netz, markiere den Server als intern.} MCP_OAUTH_UNSUPPORTED {Der Autorisierungsserver unterstützt die sichere Anmeldung nicht, die das Gateway braucht (Authorization Code mit PKCE).} MCP_OAUTH_CLIENT_REQUIRED {Der Autorisierungsserver registriert Clients nicht automatisch. Gib eine Client-ID ein.} MCP_OAUTH_REGISTRATION {Der Autorisierungsserver hat die Client-Registrierung abgelehnt.} MCP_OAUTH_TOKEN {Der Autorisierungsserver hat kein Token ausgestellt.} MCP_OAUTH_STATE {Die Anmeldung ist abgelaufen oder wurde woanders gestartet. Starte sie erneut.} MCP_OAUTH_DENIED {Die Anmeldung wurde abgelehnt.} MCP_OAUTH_APP_URL {Die Anmeldung braucht die Konsole unter https oder localhost. Prüfe NEXT_PUBLIC_APP_URL.} MCP_VERSION_UNSUPPORTED {Der Server spricht keine MCP-Version, die das Gateway unterstützt.} MCP_INPUT_REQUIRED {Das Tool hat eine interaktive Eingabe verlangt, die das Gateway nicht liefern kann.} other {Der Server war nicht erreichbar.}}"
   },
   "form": {
     "title": "{mode, select, edit {{name} bearbeiten} other {MCP-Server hinzufügen}}",
-    "description": "Das Gateway verbindet sich über Streamable HTTP, listet die Tools und führt sie aus, wenn ein Modell sie aufruft.",
+    "description": "Das Gateway spricht zustandsloses MCP und weicht bei älteren Servern auf Sessions oder HTTP+SSE aus. Es listet die Tools und führt sie aus, wenn ein Modell sie aufruft.",
     "submit": "{mode, select, edit {Speichern} other {Server hinzufügen}}",
     "name": "Name",
     "nameHint": "Modelle sehen ihn als Teil jedes Tool-Namens.",
@@ -48,11 +59,20 @@
     "internal": "Interner Server",
     "internalHint": "Erlaubt http und Adressen im privaten Netz. Cloud-Metadaten-Adressen bleiben gesperrt.",
     "authType": "Authentifizierung",
-    "authOption": "{type, select, bearer {Bearer-Token} header {Eigener Header} other {Keine}}",
+    "authOption": "{type, select, bearer {Bearer-Token} header {Eigener Header} oauth {OAuth} other {Keine}}",
     "header": "Header-Name",
-    "secret": "{type, select, bearer {Token} other {Header-Wert}}",
+    "grant": "Anmeldeverfahren",
+    "grantOption": "{grant, select, client_credentials {Client Credentials} other {Im Browser anmelden}}",
+    "grantHint": "{grant, select, client_credentials {Das Gateway holt sich mit Client-ID und Secret ein eigenes Token. Keine Person meldet sich an.} other {Eine Person aus dem Betrieb meldet sich einmal an. Alle zugewiesenen Aufrufer nutzen dann diese Anmeldung, Tokens werden automatisch erneuert.}}",
+    "clientId": "Client-ID",
+    "clientIdHint": "{grant, select, client_credentials {Der beim Autorisierungsserver registrierte Client.} other {Optional. Leer lassen, um das Gateway automatisch zu registrieren.}}",
+    "secret": "{type, select, bearer {Token} oauth {Client-Secret} other {Header-Wert}}",
     "secretKeep": "Gesetzt. Leer lassen, um ihn zu behalten.",
-    "secretHint": "Wird verschlüsselt gespeichert und nie wieder angezeigt.",
+    "secretHint": "{type, select, oauth {Wird verschlüsselt gespeichert und nie wieder angezeigt. Nötig für Client Credentials und vertrauliche Clients.} other {Wird verschlüsselt gespeichert und nie wieder angezeigt.}}",
+    "scopes": "Scopes",
+    "scopesHint": "Optional. Leer lassen, um die Scopes anzufordern, die der Server verlangt.",
+    "redirectUri": "Redirect-URI für einen selbst registrierten Client",
+    "copyRedirectUri": "Redirect-URI kopieren",
     "enabled": "Aktiv",
     "enabledHint": "Deaktivierte Server bieten niemandem Tools an.",
     "tools": "Tools",
@@ -60,9 +80,12 @@
     "test": "Testen und Tools laden",
     "testOk": "{named, select, true {Mit {name} verbunden.} other {Verbunden.}} {count, plural, =0 {Keine Tools gefunden.} one {# Tool gefunden.} other {# Tools gefunden.}}",
     "testFailed": "Verbindung fehlgeschlagen",
+    "oauthReady": "Bereit zur Anmeldung",
+    "oauthReadyHint": "Der Autorisierungsserver wurde gefunden. Speichere den Server und nutze dann „Anmelden“ auf seiner Karte.",
     "noTools": "Teste die Verbindung, um die Tool-Liste zu laden.",
     "toggleTool": "{name} aktivieren",
     "saved": "{mode, select, edit {Server gespeichert} other {Server hinzugefügt}}",
+    "signInNext": "Nutze „Anmelden“ auf der Server-Karte, um die Verbindung abzuschließen.",
     "deleted": "Server gelöscht"
   },
   "assign": {

@@ -1,19 +1,25 @@
 import "server-only";
 import prisma from "@/lib/db/prisma";
-import { open } from "@/lib/crypto";
+import { mcpAuthFor, mcpCapabilities } from "@/lib/mcp/auth";
 import { McpClient, toolSpecs } from "@/lib/mcp/client";
 import { chainOf, effectiveServers } from "@/lib/mcp/resolve";
 import { bindTools } from "@/lib/mcp/tool-names";
 import { guardedFetch } from "@/lib/mcp/transport";
+import { errorFields } from "@/lib/logging/format";
+import { logger } from "@/lib/logging/logger";
 import type { Principal } from "@/types/gateway";
 import type {
   McpAssignmentMode,
+  McpAuth,
   McpAuthType,
   McpChain,
+  McpConnection,
   McpExecutor,
   McpFetch,
+  McpOAuthGrant,
   McpServerRecord,
   McpToolset,
+  McpTransport,
 } from "@/types/mcp";
 
 export const MCP_OPT_OUT_HEADER = "x-llmhub-mcp";
@@ -25,19 +31,72 @@ export function mcpOptedOut(headers: Headers): boolean {
 }
 
 export function isAuthType(value: string): value is McpAuthType {
-  return value === "none" || value === "bearer" || value === "header";
+  return value === "none" || value === "bearer" || value === "header" || value === "oauth";
+}
+
+export function isOAuthGrant(value: string): value is McpOAuthGrant {
+  return value === "authorization_code" || value === "client_credentials";
+}
+
+export function isTransport(value: string): value is McpTransport {
+  return value === "streamable_http" || value === "sse";
 }
 
 export function isAssignmentMode(value: string): value is McpAssignmentMode {
   return value === "allow" || value === "block";
 }
 
-export function authHeaders(server: Pick<McpServerRecord, "authType" | "authHeader" | "authSecret">): Record<string, string> {
-  const secret = server.authSecret ? open(server.authSecret) : "";
-  if (!secret) return {};
-  if (server.authType === "bearer") return { Authorization: `Bearer ${secret}` };
-  if (server.authType === "header" && server.authHeader) return { [server.authHeader]: secret };
-  return {};
+export function serverRecord(row: {
+  id: string;
+  name: string;
+  url: string;
+  authType: string;
+  authHeader: string;
+  authSecret: string;
+  internal: boolean;
+  oauthGrant: string;
+  oauthClientId: string;
+  oauthScopes: string;
+  transport: string;
+  protocolVersion: string;
+}): McpServerRecord {
+  return {
+    id: row.id,
+    name: row.name,
+    url: row.url,
+    authType: isAuthType(row.authType) ? row.authType : "none",
+    authHeader: row.authHeader,
+    authSecret: row.authSecret,
+    internal: row.internal,
+    oauthGrant: isOAuthGrant(row.oauthGrant) ? row.oauthGrant : "authorization_code",
+    oauthClientId: row.oauthClientId,
+    oauthScopes: row.oauthScopes,
+    transport: isTransport(row.transport) ? row.transport : "streamable_http",
+    protocolVersion: row.protocolVersion,
+  };
+}
+
+export function connectionOf(record: Pick<McpServerRecord, "transport" | "protocolVersion">): McpConnection {
+  return { transport: record.transport, protocolVersion: record.protocolVersion };
+}
+
+export function mcpClientFor(
+  record: McpServerRecord,
+  fetch: McpFetch,
+  options: { timeoutMs?: number; auth?: McpAuth } = {},
+): McpClient {
+  return new McpClient({
+    url: record.url,
+    fetch,
+    auth: options.auth ?? mcpAuthFor(record, fetch),
+    connection: connectionOf(record),
+    capabilities: mcpCapabilities(record),
+    timeoutMs: options.timeoutMs,
+  });
+}
+
+export async function rememberConnection(serverId: string, connection: McpConnection): Promise<void> {
+  await prisma.mcpServer.updateMany({ where: { id: serverId }, data: connection });
 }
 
 function chainConditions(chain: McpChain) {
@@ -48,6 +107,11 @@ function chainConditions(chain: McpChain) {
     ...(chain.memberId ? [{ memberId: chain.memberId }] : []),
     ...(chain.keyId ? [{ keyId: chain.keyId }] : []),
   ];
+}
+
+function signedIn(row: { authType: string; oauthGrant: string; oauthLogin?: { status: string } | null }): boolean {
+  if (row.authType !== "oauth" || row.oauthGrant === "client_credentials") return true;
+  return row.oauthLogin?.status === "active";
 }
 
 export async function loadMcpServers(chain: McpChain) {
@@ -64,12 +128,18 @@ export async function loadMcpServers(chain: McpChain) {
       authType: true,
       authHeader: true,
       authSecret: true,
+      oauthGrant: true,
+      oauthClientId: true,
+      oauthScopes: true,
+      transport: true,
+      protocolVersion: true,
       internal: true,
       enabled: true,
       global: true,
       toolsRestricted: true,
       allowedTools: true,
       tools: true,
+      oauthLogin: { select: { status: true } },
       assignments: {
         where: { OR: conditions },
         select: {
@@ -87,23 +157,13 @@ export async function loadMcpServers(chain: McpChain) {
     orderBy: { name: "asc" },
   });
   const records = new Map<string, McpServerRecord>();
-  for (const row of rows) {
-    records.set(row.id, {
-      id: row.id,
-      name: row.name,
-      url: row.url,
-      authType: isAuthType(row.authType) ? row.authType : "none",
-      authHeader: row.authHeader,
-      authSecret: row.authSecret,
-      internal: row.internal,
-    });
-  }
+  for (const row of rows) records.set(row.id, serverRecord(row));
   const servers = effectiveServers(
     rows.map((row) => ({
       id: row.id,
       name: row.name,
       global: row.global,
-      enabled: row.enabled,
+      enabled: row.enabled && signedIn(row),
       toolsRestricted: row.toolsRestricted,
       allowedTools: row.allowedTools,
       tools: toolSpecs(row.tools),
@@ -116,15 +176,22 @@ export async function loadMcpServers(chain: McpChain) {
   return { servers, records };
 }
 
+function changed(record: McpServerRecord, connection: McpConnection | null): connection is McpConnection {
+  return Boolean(
+    connection && (connection.transport !== record.transport || connection.protocolVersion !== record.protocolVersion),
+  );
+}
+
 export function createExecutor(
   records: Map<string, McpServerRecord>,
   fetchFor: (internal: boolean) => McpFetch = guardedFetch,
+  remember: (serverId: string, connection: McpConnection) => Promise<void> = rememberConnection,
 ): McpExecutor {
   const sessions = new Map<string, McpClient>();
   const session = (record: McpServerRecord) => {
     const existing = sessions.get(record.id);
     if (existing) return existing;
-    const client = new McpClient({ url: record.url, headers: authHeaders(record), fetch: fetchFor(record.internal) });
+    const client = mcpClientFor(record, fetchFor(record.internal));
     sessions.set(record.id, client);
     return client;
   };
@@ -132,11 +199,20 @@ export function createExecutor(
     async call(bound, args, signal) {
       const record = records.get(bound.serverId);
       if (!record) return { text: "This tool is no longer available.", isError: true };
-      return session(record).callTool(bound.tool.name, args, signal);
+      return session(record).callTool(bound.tool.name, args, signal, bound.tool.inputSchema);
     },
     async close() {
-      await Promise.all([...sessions.values()].map((client) => client.close()));
+      const open = [...sessions.entries()];
       sessions.clear();
+      await Promise.all(open.map(([, client]) => client.close()));
+      for (const [serverId, client] of open) {
+        const record = records.get(serverId);
+        const connection = client.connection;
+        if (!record || !changed(record, connection)) continue;
+        await remember(serverId, connection).catch((err) => {
+          logger.warn("mcp.connection_store_failed", { serverId, ...errorFields(err) });
+        });
+      }
     },
   };
 }

@@ -5,6 +5,7 @@ import { env } from "@/lib/env";
 import { readJSON } from "@/lib/http/api";
 import { problemFromError, problemResponse } from "@/lib/http/problem";
 import { streamChat } from "@/lib/gateway/dispatch/chat";
+import { restoreClientStream } from "@/lib/gateway/safety/restore-client";
 import {
   admit,
   allowModel,
@@ -35,14 +36,17 @@ export async function POST(req: Request) {
     allowModel(principal, model);
     await admit(principal);
     const { body: clean, output } = await applyGuardrails(body, principal);
-    return await streamChat({
-      req,
-      principal,
-      model,
-      body: { ...clean, stream: true },
-      aliases: modelChain(principal, model, clean),
-      outputGuard: output,
-    });
+    return restoreClientStream(
+      principal.trace,
+      await streamChat({
+        req,
+        principal,
+        model,
+        body: { ...clean, stream: true },
+        aliases: modelChain(principal, model, clean),
+        outputGuard: output,
+      }),
+    );
   } catch (err) {
     return problemFromError(req, err);
   }

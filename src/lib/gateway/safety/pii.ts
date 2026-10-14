@@ -1,4 +1,9 @@
 import type { PiiEntity, PiiRule } from "@/types/guardrails";
+import { activeVault, type PiiVault, withActiveVault } from "@/lib/gateway/safety/pii-vault";
+
+function mark(id: string, value: string): string {
+  return activeVault()?.placeholder(id, value) ?? `[${id}]`;
+}
 
 export const PII_CATALOG: PiiEntity[] = [
   { id: "CREDIT_CARD", label: "Credit card", category: "Finance", example: "4111 1111 1111 1111", default: true },
@@ -239,8 +244,8 @@ function isIpv6(raw: string): boolean {
 
 function replaceIps(text: string): string {
   return text
-    .replace(IPV6, (match) => (isIpv6(match) ? "[IP_ADDRESS]" : match))
-    .replace(IPV4, "[IP_ADDRESS]");
+    .replace(IPV6, (match) => (isIpv6(match) ? mark("IP_ADDRESS", match) : match))
+    .replace(IPV4, (match) => mark("IP_ADDRESS", match));
 }
 
 function isPhone(raw: string): boolean {
@@ -253,7 +258,7 @@ function isPhone(raw: string): boolean {
 
 function replacePhones(text: string): string {
   return text.replace(PHONE, (match, offset: number) =>
-    /\w/.test(text[offset + match.length] ?? "") || !isPhone(match) ? match : "[PHONE_NUMBER]",
+    /\w/.test(text[offset + match.length] ?? "") || !isPhone(match) ? match : mark("PHONE_NUMBER", match),
   );
 }
 
@@ -261,12 +266,12 @@ function replaceCards(text: string): string {
   return text.replace(CARD, (match) => {
     const digits = match.replace(/\D/g, "");
     if (digits.length < 13 || digits.length > 19) return match;
-    return luhnOk(digits) ? "[CREDIT_CARD]" : match;
+    return luhnOk(digits) ? mark("CREDIT_CARD", match) : match;
   });
 }
 
 function replaceValid(text: string, pattern: RegExp, id: string, valid: (match: string) => boolean): string {
-  return text.replace(pattern, (match) => (valid(match) ? `[${id}]` : match));
+  return text.replace(pattern, (match) => (valid(match) ? mark(id, match) : match));
 }
 
 function keepTrailingPunctuation(match: string, id: string): string {
@@ -353,10 +358,10 @@ function hasBase58Mix(value: string): boolean {
 
 function replaceCrypto(text: string): string {
   return text
-    .replace(BTC, "[CRYPTO]")
-    .replace(EVM_ADDRESS, "[CRYPTO]")
-    .replace(BECH32_ADDRESS, "[CRYPTO]")
-    .replace(BASE58_ADDRESS, (match) => (hasBase58Mix(match) ? "[CRYPTO]" : match));
+    .replace(BTC, (match) => mark("CRYPTO", match))
+    .replace(EVM_ADDRESS, (match) => mark("CRYPTO", match))
+    .replace(BECH32_ADDRESS, (match) => mark("CRYPTO", match))
+    .replace(BASE58_ADDRESS, (match) => (hasBase58Mix(match) ? mark("CRYPTO", match) : match));
 }
 
 function digitsOf(value: string): string {
@@ -461,7 +466,7 @@ const RULES: PiiRule[] = [
   { id: "JWT", apply: (t) => t.replace(JWT, "[JWT]") },
   { id: "SECRET", apply: replaceSecrets },
   { id: "ENV_SECRET", apply: replaceAssignments },
-  { id: "EMAIL_ADDRESS", apply: (t) => t.replace(EMAIL, "[EMAIL_ADDRESS]") },
+  { id: "EMAIL_ADDRESS", apply: (t) => t.replace(EMAIL, (match) => mark("EMAIL_ADDRESS", match)) },
   { id: "DE_TAX_ID", apply: (t) => replaceValid(t, DE_TAX_ID, "DE_TAX_ID", isDeTaxId) },
   { id: "DE_TAX_NUMBER", apply: (t) => replaceValid(t, DE_TAX_NUMBER, "DE_TAX_NUMBER", isDeTaxNumber) },
   { id: "DE_VAT_ID", apply: (t) => replaceValid(t, DE_VAT, "DE_VAT_ID", isDeVatId) },
@@ -480,55 +485,56 @@ const RULES: PiiRule[] = [
   { id: "CH_AHV", apply: (t) => replaceValid(t, CH_AHV, "CH_AHV", isChAhv) },
   { id: "CH_UID", apply: (t) => replaceValid(t, CH_UID, "CH_UID", isChUid) },
   { id: "CREDIT_CARD", apply: replaceCards },
-  { id: "IBAN_CODE", apply: (t) => t.replace(IBAN, "[IBAN_CODE]") },
+  { id: "IBAN_CODE", apply: (t) => t.replace(IBAN, (match) => mark("IBAN_CODE", match)) },
   { id: "CRYPTO", apply: replaceCrypto },
   { id: "IP_ADDRESS", apply: replaceIps },
   { id: "PHONE_NUMBER", apply: replacePhones },
-  { id: "US_SSN", apply: (t) => t.replace(SSN, "[US_SSN]") },
-  { id: "US_ITIN", apply: (t) => t.replace(ITIN, "[US_ITIN]") },
-  { id: "US_PASSPORT", apply: (t) => t.replace(US_PASSPORT, "[US_PASSPORT]") },
-  { id: "US_BANK_NUMBER", apply: (t) => t.replace(US_BANK, "[US_BANK_NUMBER]") },
-  { id: "US_DRIVER_LICENSE", apply: (t) => t.replace(US_DL, "[US_DRIVER_LICENSE]") },
-  { id: "MEDICAL_LICENSE", apply: (t) => t.replace(MEDICAL, "[MEDICAL_LICENSE]") },
-  { id: "UK_NHS", apply: (t) => t.replace(UK_NHS, "[UK_NHS]") },
-  { id: "UK_NINO", apply: (t) => t.replace(UK_NINO, "[UK_NINO]") },
-  { id: "ES_NIF", apply: (t) => t.replace(ES_NIF, "[ES_NIF]") },
-  { id: "ES_NIE", apply: (t) => t.replace(ES_NIE, "[ES_NIE]") },
-  { id: "IT_FISCAL_CODE", apply: (t) => t.replace(IT_CF, "[IT_FISCAL_CODE]") },
-  { id: "IT_VAT_CODE", apply: (t) => t.replace(IT_VAT, "[IT_VAT_CODE]") },
-  { id: "PL_PESEL", apply: (t) => t.replace(PESEL, "[PL_PESEL]") },
-  { id: "SG_NRIC_FIN", apply: (t) => t.replace(SG_NRIC, "[SG_NRIC_FIN]") },
-  { id: "AU_ABN", apply: (t) => t.replace(AU_ABN, "[AU_ABN]") },
-  { id: "AU_ACN", apply: (t) => t.replace(AU_ACN, "[AU_ACN]") },
-  { id: "AU_TFN", apply: (t) => t.replace(AU_TFN, "[AU_TFN]") },
-  { id: "AU_MEDICARE", apply: (t) => t.replace(AU_MEDICARE, "[AU_MEDICARE]") },
-  { id: "IN_PAN", apply: (t) => t.replace(IN_PAN, "[IN_PAN]") },
-  { id: "IN_AADHAAR", apply: (t) => t.replace(IN_AADHAAR, "[IN_AADHAAR]") },
-  { id: "IN_PASSPORT", apply: (t) => t.replace(IN_PASS, "[IN_PASSPORT]") },
-  { id: "FI_PERSONAL_IDENTITY_CODE", apply: (t) => t.replace(FI_HETU, "[FI_PERSONAL_IDENTITY_CODE]") },
-  { id: "URL", apply: (t) => t.replace(URL, "[URL]") },
-  { id: "DATE_TIME", apply: (t) => t.replace(ISO_DATE, "[DATE_TIME]") },
+  { id: "US_SSN", apply: (t) => t.replace(SSN, (match) => mark("US_SSN", match)) },
+  { id: "US_ITIN", apply: (t) => t.replace(ITIN, (match) => mark("US_ITIN", match)) },
+  { id: "US_PASSPORT", apply: (t) => t.replace(US_PASSPORT, (match) => mark("US_PASSPORT", match)) },
+  { id: "US_BANK_NUMBER", apply: (t) => t.replace(US_BANK, (match) => mark("US_BANK_NUMBER", match)) },
+  { id: "US_DRIVER_LICENSE", apply: (t) => t.replace(US_DL, (match) => mark("US_DRIVER_LICENSE", match)) },
+  { id: "MEDICAL_LICENSE", apply: (t) => t.replace(MEDICAL, (match) => mark("MEDICAL_LICENSE", match)) },
+  { id: "UK_NHS", apply: (t) => t.replace(UK_NHS, (match) => mark("UK_NHS", match)) },
+  { id: "UK_NINO", apply: (t) => t.replace(UK_NINO, (match) => mark("UK_NINO", match)) },
+  { id: "ES_NIF", apply: (t) => t.replace(ES_NIF, (match) => mark("ES_NIF", match)) },
+  { id: "ES_NIE", apply: (t) => t.replace(ES_NIE, (match) => mark("ES_NIE", match)) },
+  { id: "IT_FISCAL_CODE", apply: (t) => t.replace(IT_CF, (match) => mark("IT_FISCAL_CODE", match)) },
+  { id: "IT_VAT_CODE", apply: (t) => t.replace(IT_VAT, (match) => mark("IT_VAT_CODE", match)) },
+  { id: "PL_PESEL", apply: (t) => t.replace(PESEL, (match) => mark("PL_PESEL", match)) },
+  { id: "SG_NRIC_FIN", apply: (t) => t.replace(SG_NRIC, (match) => mark("SG_NRIC_FIN", match)) },
+  { id: "AU_ABN", apply: (t) => t.replace(AU_ABN, (match) => mark("AU_ABN", match)) },
+  { id: "AU_ACN", apply: (t) => t.replace(AU_ACN, (match) => mark("AU_ACN", match)) },
+  { id: "AU_TFN", apply: (t) => t.replace(AU_TFN, (match) => mark("AU_TFN", match)) },
+  { id: "AU_MEDICARE", apply: (t) => t.replace(AU_MEDICARE, (match) => mark("AU_MEDICARE", match)) },
+  { id: "IN_PAN", apply: (t) => t.replace(IN_PAN, (match) => mark("IN_PAN", match)) },
+  { id: "IN_AADHAAR", apply: (t) => t.replace(IN_AADHAAR, (match) => mark("IN_AADHAAR", match)) },
+  { id: "IN_PASSPORT", apply: (t) => t.replace(IN_PASS, (match) => mark("IN_PASSPORT", match)) },
+  { id: "FI_PERSONAL_IDENTITY_CODE", apply: (t) => t.replace(FI_HETU, (match) => mark("FI_PERSONAL_IDENTITY_CODE", match)) },
+  { id: "URL", apply: (t) => t.replace(URL, (match) => mark("URL", match)) },
+  { id: "DATE_TIME", apply: (t) => t.replace(ISO_DATE, (match) => mark("DATE_TIME", match)) },
 ];
 
 export function defaultEntityIds(): string[] {
   return PII_CATALOG.filter((e) => e.default).map((e) => e.id);
 }
 
-export function redactPii(text: string, entities?: string[], found?: Set<string>): string {
-  const enabled = new Set(
-    entities?.length ? entities : defaultEntityIds(),
-  );
-  let out = text;
-  for (const rule of RULES) {
-    if (!enabled.has(rule.id)) continue;
-    const next = rule.apply(out);
-    if (found && next !== out) found.add(rule.id);
-    out = next;
-  }
-  return out;
+export function redactPii(text: string, entities?: string[], found?: Set<string>, vault?: PiiVault | null): string {
+  const run = () => {
+    const enabled = new Set(entities?.length ? entities : defaultEntityIds());
+    let out = text;
+    for (const rule of RULES) {
+      if (!enabled.has(rule.id)) continue;
+      const next = rule.apply(out);
+      if (found && next !== out) found.add(rule.id);
+      out = next;
+    }
+    return out;
+  };
+  return vault === undefined ? run() : withActiveVault(vault, run);
 }
 
-const PLACEHOLDER = new RegExp(`\\[(${PII_CATALOG.map((e) => e.id).join("|")})\\]`, "g");
+const PLACEHOLDER = new RegExp(`\\[(${PII_CATALOG.map((e) => e.id).join("|")})(?:_\\d+)?\\]`, "g");
 
 export function splitPiiPlaceholders(text: string): { text: string; entity: string | null }[] {
   const parts: { text: string; entity: string | null }[] = [];
@@ -573,7 +579,8 @@ export function skipsScan(key: string, value: string): boolean {
   return STRUCTURAL_KEYS.has(key) || isOpaqueText(value);
 }
 
-export function redactJSON(value: unknown, entities?: string[], key = "", found?: Set<string>): unknown {
+export function redactJSON(value: unknown, entities?: string[], key = "", found?: Set<string>, vault?: PiiVault | null): unknown {
+  if (vault !== undefined) return withActiveVault(vault, () => redactJSON(value, entities, key, found));
   if (typeof value === "string") {
     return skipsScan(key, value) ? value : redactPii(value, entities, found);
   }

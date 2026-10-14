@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { spawnSync } from "node:child_process";
+import { appendFile, mkdtemp, readFile, rm, stat } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
@@ -192,13 +194,75 @@ test("generate-env.sh writes the production .env and keeps an existing one", asy
   assert.match(script, /^set_value NODE_ENV production$/m);
   assert.match(script, /--force\) FORCE=true/);
   assert.match(script, /chmod 600 "\$tmp"/);
-  for (const name of ["LLMHUB_TAG", "NEXT_PUBLIC_APP_URL", "LLMHUB_PORT", "POSTGRES_USER", "POSTGRES_DB", "SMTP_URL"]) {
+  for (const name of [
+    "LLMHUB_TAG",
+    "NEXT_PUBLIC_APP_URL",
+    "LLMHUB_PORT",
+    "POSTGRES_USER",
+    "POSTGRES_DB",
+    "SMTP_URL",
+    "SMTP_FROM",
+    "OIDC_CLIENT_SECRET",
+    "S3_ACCESS_KEY_ID",
+    "S3_SECRET_ACCESS_KEY",
+  ]) {
     assert.match(script, new RegExp(`^\\s*ask(_secret)? ${name} `, "m"), name);
   }
   for (const name of ["POSTGRES_PASSWORD", "REDIS_PASSWORD", "APP_SECRET"]) {
     assert.match(script, new RegExp(`^generated ${name} `, "m"), name);
   }
-  assert.doesNotMatch(script, /^\s*(?:set_value|ask|generated|keep_or) (?:DATABASE_URL|REDIS_URL) /m);
+  assert.doesNotMatch(script, /^\s*(?:set_value|ask|generated|remember) (?:DATABASE_URL|REDIS_URL) /m);
   assert.doesNotMatch(script, /127\.0\.0\.1:5433/);
   assert.doesNotMatch(script, /NODE_ENV development/);
+});
+
+const modernBash = spawnSync("bash", ["-c", "((BASH_VERSINFO[0] >= 5))"]).status === 0;
+
+test("generate-env.sh --yes builds the production .env from the environment", { skip: !modernBash }, async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), "llmhub-env-"));
+  const output = path.join(dir, ".env");
+  const run = (args: string[], answers: Record<string, string> = {}) =>
+    spawnSync("bash", [path.join(root, "generate-env.sh"), ...args], {
+      encoding: "utf8",
+      input: "",
+      env: { NODE_ENV: "production", PATH: process.env.PATH ?? "", ENV_OUTPUT: output, ...answers },
+    });
+  try {
+    const missing = run(["--yes"]);
+    assert.equal(missing.status, 1);
+    assert.match(missing.stderr, /Missing required values: NEXT_PUBLIC_APP_URL/);
+
+    const first = run(["--yes"], {
+      NEXT_PUBLIC_APP_URL: "Hub.Example.com/",
+      SMTP_URL: "smtp://mailer%40example.com:p%40ss@mail.example.com:587",
+    });
+    assert.equal(first.status, 0, first.stderr);
+    const written = await readFile(output, "utf8");
+    assert.match(written, /^NODE_ENV=production$/m);
+    assert.match(written, /^NEXT_PUBLIC_APP_URL=https:\/\/hub\.example\.com$/m);
+    assert.match(written, /^LLMHUB_TAG=latest$/m);
+    assert.match(written, /^POSTGRES_PASSWORD=[A-Za-z0-9_-]{32}$/m);
+    assert.match(written, /^APP_SECRET=[0-9a-f]{64}$/m);
+    assert.match(written, /^SMTP_FROM=mailer@example\.com$/m);
+    assert.doesNotMatch(written, /^(?:DATABASE_URL|REDIS_URL|OIDC_CLIENT_SECRET|S3_ACCESS_KEY_ID)=/m);
+
+    const refused = run(["--yes"], { NEXT_PUBLIC_APP_URL: "https://other.example.com" });
+    assert.equal(refused.status, 1);
+    assert.equal(await readFile(output, "utf8"), written);
+
+    await appendFile(output, "EXTRA_SETTING=kept\n");
+    const updated = run(["--yes", "--force"], { OIDC_CLIENT_SECRET: "sso-secret" });
+    assert.equal(updated.status, 0, updated.stderr);
+    const next = await readFile(output, "utf8");
+    for (const name of ["APP_SECRET", "POSTGRES_PASSWORD", "REDIS_PASSWORD", "SMTP_URL", "NEXT_PUBLIC_APP_URL"]) {
+      const line = new RegExp(`^${name}=.*$`, "m");
+      assert.equal(line.exec(next)?.[0], line.exec(written)?.[0], name);
+    }
+    assert.match(next, /^OIDC_CLIENT_SECRET=sso-secret$/m);
+    assert.match(next, /^EXTRA_SETTING=kept$/m);
+    assert.equal(await readFile(`${output}.bak`, "utf8"), `${written}EXTRA_SETTING=kept\n`);
+    assert.equal((await stat(output)).mode & 0o777, 0o600);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
 });

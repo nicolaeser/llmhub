@@ -4,6 +4,7 @@ import { recordUsage } from "@/lib/gateway/billing/billing";
 import { cacheBypassed } from "@/lib/gateway/cache/response-cache";
 import { cachedTokens, lookupChatCache, storeChatCache } from "@/lib/gateway/cache/chat-cache";
 import { dispatchChat, screenChatOutput, streamChat } from "@/lib/gateway/dispatch/chat";
+import { restoreClientJson, restoreClientStream } from "@/lib/gateway/safety/restore-client";
 import { resolveChatFiles } from "@/lib/gateway/storage/file-refs";
 import { modelChain, spendTag } from "@/lib/gateway/access/gate";
 import { gatewayRoute, screenModelRequest } from "@/lib/gateway/endpoints/pipeline";
@@ -33,21 +34,24 @@ export function chatCompletionsRoute(pool: RoutePool) {
       const body = withMcpTools(clean, toolset);
       if (clean.stream === true) {
         const wantsUsage = asRecord(clean.stream_options)?.include_usage === true;
-        return streamMcpChat({ req, ctx, body, sink: async () => chatStreamSink(wantsUsage) });
+        return restoreClientStream(principal.trace, await streamMcpChat({ req, ctx, body, sink: async () => chatStreamSink(wantsUsage) }));
       }
       const run = await runMcpChat(ctx, body);
-      return NextResponse.json(run.final, { headers: { "X-Hub-Cache": "BYPASS" } });
+      return NextResponse.json(restoreClientJson(principal.trace, run.final), { headers: { "X-Hub-Cache": "BYPASS" } });
     }
     const settings = await loadSettings();
     if (clean.stream === true) {
-      return streamChat({
-        req,
-        principal,
-        model,
-        body: clean,
-        aliases,
-        outputGuard: output,
-      });
+      return restoreClientStream(
+        principal.trace,
+        await streamChat({
+          req,
+          principal,
+          model,
+          body: clean,
+          aliases,
+          outputGuard: output,
+        }),
+      );
     }
     const started = Date.now();
     const lookup =
@@ -79,7 +83,7 @@ export function chatCompletionsRoute(pool: RoutePool) {
           savedCost: entry.cost,
         },
       });
-      return NextResponse.json(response, {
+      return NextResponse.json(restoreClientJson(principal.trace, response), {
         headers: {
           "X-Hub-Cache": "HIT",
           ...(similarity === null ? {} : { "X-Hub-Cache-Similarity": similarity.toFixed(4) }),
@@ -101,7 +105,7 @@ export function chatCompletionsRoute(pool: RoutePool) {
         tokens: cachedTokens(dispatched.usage),
       });
     }
-    return NextResponse.json(dispatched.json, {
+    return NextResponse.json(restoreClientJson(principal.trace, dispatched.json), {
       headers: { "X-Hub-Cache": "MISS" },
     });
   });

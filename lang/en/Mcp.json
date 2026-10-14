@@ -5,7 +5,7 @@
   "readOnly": "You can view MCP servers. Changing them needs the permission to manage settings.",
   "empty": {
     "title": "No MCP servers yet",
-    "description": "Connect a Streamable HTTP MCP server. The gateway calls its tools for every model and provider, and the server credentials never leave the gateway."
+    "description": "Connect an MCP server over HTTP. The gateway calls its tools for every model and provider, and the server credentials never leave the gateway."
   },
   "stats": {
     "servers": "Servers",
@@ -13,7 +13,8 @@
     "tools": "Tools offered",
     "errors": "With errors"
   },
-  "status": "{status, select, connected {Connected} error {Error} disabled {Disabled} other {Not checked}}",
+  "status": "{status, select, connected {Connected} error {Error} disabled {Disabled} signin {Sign-in needed} other {Not checked}}",
+  "protocol": "{era, select, modern {Stateless MCP, version {version}} legacy {MCP with sessions, version {version}} sse {Legacy HTTP+SSE, version {version}} other {Protocol not detected}}",
   "toolCount": "{count, plural, =0 {No tools} one {# tool} other {# tools}}",
   "allowedCount": "{allowed, number} of {count, plural, one {# tool} other {# tools}} on",
   "refreshed": "Tools loaded {when}",
@@ -25,7 +26,8 @@
     "button": "Access"
   },
   "card": {
-    "auth": "{type, select, bearer {Bearer token} header {Custom header} other {No authentication}}",
+    "auth": "{type, select, bearer {Bearer token} header {Custom header} oauth {OAuth} other {No authentication}}",
+    "protocol": "{era, select, modern {Stateless {version}} legacy {Sessions {version}} sse {HTTP+SSE {version}} other {{version}}}",
     "enabled": "Enable {name}",
     "enabledState": "{enabled, select, true {Enabled} other {Disabled}}",
     "refresh": "Reload tools",
@@ -33,12 +35,21 @@
     "edit": "Edit {name}",
     "deleteConfirm": "Delete {name}? Callers lose its tools immediately."
   },
+  "oauth": {
+    "state": "{grant, select, client_credentials {{state, select, active {Token issued {when}} expired {Token rejected} other {No token yet}}} other {{state, select, active {Signed in {when}} expired {Sign-in expired} other {Not signed in}}}}",
+    "signIn": "{again, select, true {Sign in again} other {Sign in}}",
+    "signOut": "Sign out",
+    "signOutConfirm": "Sign out of {name}? Callers lose its tools until someone signs in again.",
+    "signedOut": "Signed out",
+    "result": "{result, select, connected {{named, select, true {Signed in to {name}.} other {Signed in.}}} other {The sign-in did not finish.}}",
+    "dismiss": "Dismiss"
+  },
   "errors": {
-    "code": "{code, select, MCP_URL_INVALID {Enter a valid http or https URL without credentials.} MCP_URL_INSECURE {Use https, or mark the server as internal to allow http.} MCP_URL_BLOCKED {This address is not allowed. Private addresses need the internal switch, and cloud metadata addresses are always blocked.} MCP_UNREACHABLE {The server could not be reached.} MCP_TIMEOUT {The server did not answer in time.} MCP_AUTH_FAILED {The server rejected the credentials.} MCP_HTTP_ERROR {The server answered with an HTTP error.} MCP_PROTOCOL_ERROR {The server did not answer like an MCP server.} MCP_RPC_ERROR {The server returned an MCP error.} MCP_RESPONSE_TOO_LARGE {The server answer was too large.} other {The server could not be reached.}}"
+    "code": "{code, select, MCP_URL_INVALID {Enter a valid http or https URL without credentials.} MCP_URL_INSECURE {Use https, or mark the server as internal to allow http.} MCP_URL_BLOCKED {This address is not allowed. Private addresses need the internal switch, and cloud metadata addresses are always blocked.} MCP_UNREACHABLE {The server could not be reached.} MCP_TIMEOUT {The server did not answer in time.} MCP_HTTP_ERROR {The server answered with an HTTP error.} MCP_PROTOCOL_ERROR {The server did not answer like an MCP server.} MCP_RPC_ERROR {The server returned an MCP error.} MCP_RESPONSE_TOO_LARGE {The server answer was too large.} MCP_AUTH_FAILED {The server rejected the credentials.} MCP_AUTH_REQUIRED {The server needs a sign-in. Save it and use Sign in on its card.} MCP_AUTH_SCOPE {The token lacks a permission the server needs. Add the scope and sign in again.} MCP_OAUTH_SUGGESTED {The server asks for OAuth. Choose OAuth as authentication.} MCP_OAUTH_DISCOVERY {The authorization server could not be found. If it runs on a private network, mark the server as internal.} MCP_OAUTH_UNSUPPORTED {The authorization server does not support the secure sign-in this gateway needs (authorization code with PKCE).} MCP_OAUTH_CLIENT_REQUIRED {The authorization server does not register clients automatically. Enter a client ID.} MCP_OAUTH_REGISTRATION {The authorization server rejected the client registration.} MCP_OAUTH_TOKEN {The authorization server did not issue a token.} MCP_OAUTH_STATE {The sign-in expired or was started elsewhere. Start it again.} MCP_OAUTH_DENIED {The sign-in was declined.} MCP_OAUTH_APP_URL {Sign-in needs the console on https or localhost. Check NEXT_PUBLIC_APP_URL.} MCP_VERSION_UNSUPPORTED {The server speaks no MCP version this gateway supports.} MCP_INPUT_REQUIRED {The tool asked for interactive input, which the gateway cannot provide.} other {The server could not be reached.}}"
   },
   "form": {
     "title": "{mode, select, edit {Edit {name}} other {Add MCP server}}",
-    "description": "The gateway connects over Streamable HTTP, lists the tools, and runs them when a model calls them.",
+    "description": "The gateway speaks stateless MCP and falls back to sessions or HTTP+SSE for older servers. It lists the tools and runs them when a model calls them.",
     "submit": "{mode, select, edit {Save} other {Add server}}",
     "name": "Name",
     "nameHint": "Models see it as part of each tool name.",
@@ -48,11 +59,20 @@
     "internal": "Internal server",
     "internalHint": "Allows http and private network addresses. Cloud metadata addresses stay blocked.",
     "authType": "Authentication",
-    "authOption": "{type, select, bearer {Bearer token} header {Custom header} other {None}}",
+    "authOption": "{type, select, bearer {Bearer token} header {Custom header} oauth {OAuth} other {None}}",
     "header": "Header name",
-    "secret": "{type, select, bearer {Token} other {Header value}}",
+    "grant": "Sign-in method",
+    "grantOption": "{grant, select, client_credentials {Client credentials} other {Sign in with a browser}}",
+    "grantHint": "{grant, select, client_credentials {The gateway gets its own token with a client ID and secret. No person signs in.} other {An operator signs in once. Every assigned caller then uses that sign-in, and tokens renew automatically.}}",
+    "clientId": "Client ID",
+    "clientIdHint": "{grant, select, client_credentials {The client registered with the authorization server.} other {Optional. Leave empty to register the gateway automatically.}}",
+    "secret": "{type, select, bearer {Token} oauth {Client secret} other {Header value}}",
     "secretKeep": "Set. Leave empty to keep it.",
-    "secretHint": "Stored encrypted and never shown again.",
+    "secretHint": "{type, select, oauth {Stored encrypted and never shown again. Needed for client credentials and for confidential clients.} other {Stored encrypted and never shown again.}}",
+    "scopes": "Scopes",
+    "scopesHint": "Optional. Leave empty to request the scopes the server asks for.",
+    "redirectUri": "Redirect URI for a client you register yourself",
+    "copyRedirectUri": "Copy redirect URI",
     "enabled": "Enabled",
     "enabledHint": "Disabled servers offer no tools to anyone.",
     "tools": "Tools",
@@ -60,9 +80,12 @@
     "test": "Test & load tools",
     "testOk": "{named, select, true {Connected to {name}.} other {Connected.}} {count, plural, =0 {No tools found.} one {# tool found.} other {# tools found.}}",
     "testFailed": "Connection failed",
+    "oauthReady": "Ready to sign in",
+    "oauthReadyHint": "The authorization server was found. Save the server, then use Sign in on its card.",
     "noTools": "Test the connection to load the tool list.",
     "toggleTool": "Enable {name}",
     "saved": "{mode, select, edit {Server saved} other {Server added}}",
+    "signInNext": "Use Sign in on the server card to finish connecting.",
     "deleted": "Server deleted"
   },
   "assign": {

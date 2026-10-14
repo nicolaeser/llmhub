@@ -34,7 +34,9 @@ export default function PiiPolicyFields({
         </Switch>
         <Select
           selectedKey={value.mode}
-          onSelectionChange={(key) => onChange({ ...value, mode: key === "block" ? "block" : "mask" })}
+          onSelectionChange={(key) =>
+            onChange({ ...value, mode: key === "block" ? "block" : key === "restore" ? "restore" : "mask" })
+          }
           isDisabled={isDisabled}
           aria-label={t("mode")}
           fullWidth
@@ -52,6 +54,10 @@ export default function PiiPolicyFields({
               </ListBox.Item>
               <ListBox.Item id="block" textValue={t("block")}>
                 {t("block")}
+                <ListBox.ItemIndicator />
+              </ListBox.Item>
+              <ListBox.Item id="restore" textValue={t("restore")}>
+                {t("restore")}
                 <ListBox.ItemIndicator />
               </ListBox.Item>
             </ListBox>

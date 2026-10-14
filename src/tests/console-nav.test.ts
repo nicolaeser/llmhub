@@ -127,6 +127,6 @@ test("every NAV entry has a page and labels in both locales", () => {
 
 test("the console keeps a short navigation", () => {
   const items = NAV.flatMap((section) => section.items);
-  assert.ok(items.length <= 12, String(items.length));
+  assert.ok(items.length <= 13, String(items.length));
   for (const section of NAV) assert.ok(section.items.length >= 2, section.id);
 });

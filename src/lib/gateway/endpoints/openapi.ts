@@ -228,6 +228,7 @@ export const OPENAPI_PATHS: OpenApiPath[] = [
   { method: "POST", path: "/api/v1/messages", summary: "Create an Anthropic Messages response", style: "anthropic" },
   { method: "POST", path: "/api/v1/messages/count_tokens", summary: "Count Anthropic Messages input tokens", style: "anthropic" },
   { method: "POST", path: "/api/v1/systemone", summary: "Answer typed decision questions (TypeSafe Jev)", style: "openai" },
+  { method: "POST", path: "/api/v1/integrations/mcp", summary: "Call a published integration tool over MCP", style: "openai" },
   { method: "POST", path: "/api/v1/moderations", summary: "Classify content", style: "openai" },
   { method: "POST", path: "/api/v1/ocr", summary: "Extract text from images", style: "openai" },
   { method: "POST", path: "/api/subscription/v1/chat/completions", summary: "Create a chat completion on a subscription", style: "openai" },

@@ -19,7 +19,7 @@ const targetId = z.string().trim().min(1).max(64);
 
 export const piiPolicySchema = z.object({
   enabled: z.boolean(),
-  mode: z.enum(["mask", "block"]),
+  mode: z.enum(["mask", "block", "restore"]),
   output: z.boolean(),
   entities: z.array(z.string().trim().min(1).max(64)).max(100),
 });

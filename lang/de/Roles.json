@@ -15,7 +15,7 @@
   "members": "{count, plural, =0 {Keine Mitglieder} one {# Mitglied} other {# Mitglieder}}",
   "permissionCount": "{count, plural, one {# Berechtigung} other {# Berechtigungen}}",
   "level": "{level, select, view {Lesen} work {Arbeiten} sensitive {Sensibel} other {}}",
-  "domain": "{domain, select, keys {API-Keys} providers {Provider} models {Modelle} tenancy {Mandanten} spend {Nutzung und Budgets} access {Benutzer und Rollen} settings {Einstellungen} tools {Werkzeuge} other {Sonstiges}}",
+  "domain": "{domain, select, keys {API-Keys} providers {Provider} models {Modelle} tenancy {Mandanten} spend {Nutzung und Budgets} access {Benutzer und Rollen} settings {Einstellungen} tools {Werkzeuge} integrations {Integrationen} other {Sonstiges}}",
   "columns": {
     "role": "Rolle",
     "members": "Mitglieder",
@@ -123,6 +123,22 @@
     "playgroundUse": {
       "label": "Playground nutzen",
       "description": "Anfragen aus Playground und API-Referenz senden."
+    },
+    "integrationsRead": {
+      "label": "Integrationen ansehen",
+      "description": "Blaupausen, Werkzeuge, Richtlinien und Ausführungen ohne Geheimnisse sehen."
+    },
+    "integrationsManage": {
+      "label": "Integrationen verwalten",
+      "description": "Spezifikationen importieren, Entwürfe bearbeiten und Werkzeuge zusammensetzen."
+    },
+    "integrationsPublish": {
+      "label": "Integrationen veröffentlichen",
+      "description": "Werkzeuge und ihre Richtlinien freigeben, veröffentlichen und zurücksetzen."
+    },
+    "integrationsCredentials": {
+      "label": "Integrations-Zugangsdaten verwalten",
+      "description": "Verbindungsgeheimnisse speichern, rotieren und widerrufen."
     }
   }
 }

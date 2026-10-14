@@ -16,6 +16,7 @@ import {
   visibleResponse,
 } from "@/lib/gateway/protocols/responses";
 import { pipeChatStream } from "@/lib/gateway/protocols/chat-stream";
+import { restoreClientJson, restoreClientStream } from "@/lib/gateway/safety/restore-client";
 import { ResponsesStreamEncoder } from "@/lib/gateway/protocols/responses-stream";
 import { newId, ownerId } from "@/lib/gateway/core";
 import { cancelQuietly } from "@/lib/utils/streams";
@@ -121,7 +122,7 @@ export function createResponseRoute(pool: RoutePool) {
       const run = await runMcpChat(mcp, chatBody);
       const response = mcpResponse(run, responseSkeleton(request, "", createdAt));
       const include = request.include ?? null;
-      if (!store) return NextResponse.json(visibleResponse({ ...response, id: responseId(newId()) }, include));
+      if (!store) return NextResponse.json(restoreClientJson(principal.trace, visibleResponse({ ...response, id: responseId(newId()) }, include)));
       const stored = await putObject({
         kind: "response",
         owner,
@@ -129,7 +130,7 @@ export function createResponseRoute(pool: RoutePool) {
         payload: storedPayload(response, [...conversation, ...run.transcript], items),
         meta: { model },
       });
-      return NextResponse.json(visibleResponse({ ...response, id: responseId(stored.id) }, include));
+      return NextResponse.json(restoreClientJson(principal.trace, visibleResponse({ ...response, id: responseId(stored.id) }, include)));
     }
 
     if (request.stream === true && search) {
@@ -172,7 +173,7 @@ export function createResponseRoute(pool: RoutePool) {
       const answered = chatToResponse(run.final, skeleton(""));
       const response = { ...answered, output: [...run.items, ...(answered.output as JsonMap[])] };
       const include = request.include ?? null;
-      if (!store) return NextResponse.json(visibleResponse({ ...response, id: responseId(newId()) }, include));
+      if (!store) return NextResponse.json(restoreClientJson(principal.trace, visibleResponse({ ...response, id: responseId(newId()) }, include)));
       const stored = await putObject({
         kind: "response",
         owner,
@@ -180,7 +181,7 @@ export function createResponseRoute(pool: RoutePool) {
         payload: storedPayload(response, [...conversation, ...run.transcript], items),
         meta: { model },
       });
-      return NextResponse.json(visibleResponse({ ...response, id: responseId(stored.id) }, include));
+      return NextResponse.json(restoreClientJson(principal.trace, visibleResponse({ ...response, id: responseId(stored.id) }, include)));
     }
 
     if (request.stream === true) {
@@ -211,7 +212,7 @@ export function createResponseRoute(pool: RoutePool) {
         }
       }
       const encoder = new ResponsesStreamEncoder(responseSkeleton(request, id, createdAt), request.include ?? null);
-      return pipeChatStream(streamed, encoder, async () => {
+      return restoreClientStream(principal.trace, pipeChatStream(streamed, encoder, async () => {
         if (!storedId) return;
         const response = encoder.result();
         await updateObjectPayload(
@@ -219,7 +220,7 @@ export function createResponseRoute(pool: RoutePool) {
           storedPayload(response, [...conversation, ...responseMessages(response)], items),
           { model },
         );
-      });
+      }));
     }
 
     const dispatched = await dispatchChat({
@@ -231,7 +232,7 @@ export function createResponseRoute(pool: RoutePool) {
     });
     const response = chatToResponse(dispatched.json, responseSkeleton(request, "", createdAt));
     const include = request.include ?? null;
-    if (!store) return NextResponse.json(visibleResponse({ ...response, id: responseId(newId()) }, include));
+    if (!store) return NextResponse.json(restoreClientJson(principal.trace, visibleResponse({ ...response, id: responseId(newId()) }, include)));
     const stored = await putObject({
       kind: "response",
       owner,
@@ -239,6 +240,6 @@ export function createResponseRoute(pool: RoutePool) {
       payload: storedPayload(response, [...conversation, ...responseMessages(response)], items),
       meta: { model },
     });
-    return NextResponse.json(visibleResponse({ ...response, id: responseId(stored.id) }, include));
+    return NextResponse.json(restoreClientJson(principal.trace, visibleResponse({ ...response, id: responseId(stored.id) }, include)));
   });
 }

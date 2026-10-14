@@ -15,7 +15,7 @@
   "members": "{count, plural, =0 {No members} one {# member} other {# members}}",
   "permissionCount": "{count, plural, one {# permission} other {# permissions}}",
   "level": "{level, select, view {View} work {Work} sensitive {Sensitive} other {}}",
-  "domain": "{domain, select, keys {API keys} providers {Providers} models {Models} tenancy {Tenancy} spend {Usage and budgets} access {Users and roles} settings {Settings} tools {Tools} other {Other}}",
+  "domain": "{domain, select, keys {API keys} providers {Providers} models {Models} tenancy {Tenancy} spend {Usage and budgets} access {Users and roles} settings {Settings} tools {Tools} integrations {Integrations} other {Other}}",
   "columns": {
     "role": "Role",
     "members": "Members",
@@ -123,6 +123,22 @@
     "playgroundUse": {
       "label": "Use playground",
       "description": "Send requests from the playground and API reference."
+    },
+    "integrationsRead": {
+      "label": "View integrations",
+      "description": "See integration blueprints, tools, policies, and execution history without secrets."
+    },
+    "integrationsManage": {
+      "label": "Manage integrations",
+      "description": "Import specifications, edit drafts, and compose tools."
+    },
+    "integrationsPublish": {
+      "label": "Publish integrations",
+      "description": "Approve, publish, and roll back tools and their policies."
+    },
+    "integrationsCredentials": {
+      "label": "Manage integration credentials",
+      "description": "Store, rotate, and revoke connection secrets."
     }
   }
 }

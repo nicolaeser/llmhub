@@ -2,19 +2,26 @@
 
 import { useTransition } from "react";
 import { Button, Card, Chip, Label, Spinner, Switch, toast } from "@heroui/react";
-import { Pencil, RefreshCw, Trash2, Users } from "lucide-react";
+import { LogIn, LogOut, Pencil, RefreshCw, Trash2, Users } from "lucide-react";
 import { useFormatter, useNow, useTranslations } from "next-intl";
 import ConfirmDialog from "@/components/console/confirm-dialog";
 import { useErrorToast } from "@/components/console/use-error-toast";
 import { isActionFail } from "@/lib/http/action-result";
 import type { McpServerStatus, McpServerView } from "@/types/mcp";
-import { deleteMcpServerAction, refreshMcpServerAction, setMcpServerEnabledAction } from "../_action";
+import {
+  deleteMcpServerAction,
+  disconnectMcpOAuthAction,
+  refreshMcpServerAction,
+  setMcpServerEnabledAction,
+  startMcpOAuthAction,
+} from "../_action";
 
 const STATUS_COLOR = {
   connected: "success",
   error: "danger",
   disabled: "default",
   unchecked: "warning",
+  signin: "warning",
 } as const satisfies Record<McpServerStatus, "success" | "danger" | "warning" | "default">;
 
 function enabledTools(server: McpServerView): number {
@@ -45,7 +52,11 @@ export default function ServerCard({
   const [toggling, startToggle] = useTransition();
   const [refreshing, startRefresh] = useTransition();
   const [deleting, startDelete] = useTransition();
+  const [signingIn, startSignIn] = useTransition();
+  const [signingOut, startSignOut] = useTransition();
   const allowed = enabledTools(server);
+  const browserSignIn = server.authType === "oauth" && server.oauthGrant === "authorization_code";
+  const signedIn = server.oauth?.status === "active";
 
   function toggle(enabled: boolean) {
     startToggle(async () => {
@@ -68,6 +79,29 @@ export default function ServerCard({
       onChanged(result.server);
       if (result.server.lastError) toast.danger(t("errors.code", { code: result.server.lastError }));
       else toast(t("card.reloaded", { count: result.server.tools.length }), { variant: "success" });
+    });
+  }
+
+  function signIn() {
+    startSignIn(async () => {
+      const result = await startMcpOAuthAction(server.id);
+      if (isActionFail(result)) {
+        showError(result.error);
+        return;
+      }
+      window.location.assign(result.url);
+    });
+  }
+
+  function signOut() {
+    startSignOut(async () => {
+      const result = await disconnectMcpOAuthAction(server.id);
+      if (isActionFail(result)) {
+        showError(result.error);
+        return;
+      }
+      onChanged(result.server);
+      toast(t("oauth.signedOut"), { variant: "success" });
     });
   }
 
@@ -107,13 +141,73 @@ export default function ServerCard({
           <Chip size="sm" variant="soft">
             {t("card.auth", { type: server.authType })}
           </Chip>
+          {server.era ? (
+            <Chip size="sm" variant="soft">
+              {t("card.protocol", { era: server.era, version: server.protocolVersion })}
+            </Chip>
+          ) : null}
           {server.internal ? (
             <Chip size="sm" variant="soft" color="warning">
               {t("internal")}
             </Chip>
           ) : null}
         </div>
-        {server.lastError ? <p className="text-sm text-danger">{t("errors.code", { code: server.lastError })}</p> : null}
+        {server.lastError && server.status !== "signin" ? (
+          <p className="text-sm text-danger">{t("errors.code", { code: server.lastError })}</p>
+        ) : null}
+        {server.authType === "oauth" ? (
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="min-w-0 space-y-1 text-sm">
+              <p className={signedIn ? "text-foreground" : "text-warning"}>
+                {t("oauth.state", {
+                  grant: server.oauthGrant,
+                  state: signedIn ? "active" : (server.oauth?.status ?? "none"),
+                  when: server.oauth ? format.relativeTime(new Date(server.oauth.connectedAt), now) : "",
+                })}
+              </p>
+              {signedIn && server.oauth?.scope ? (
+                <p className="font-mono text-xs break-all text-muted">{server.oauth.scope}</p>
+              ) : null}
+            </div>
+            {canManage && browserSignIn ? (
+              <div className="flex flex-wrap gap-1">
+                {signedIn ? (
+                  <ConfirmDialog
+                    title={t("oauth.signOut")}
+                    description={t("oauth.signOutConfirm", { name: server.name })}
+                    confirmLabel={t("oauth.signOut")}
+                    cancelLabel={tCommon("cancel")}
+                    pending={signingOut}
+                    onConfirm={signOut}
+                  >
+                    <Button size="sm" variant="tertiary" isPending={signingOut}>
+                      {({ isPending }) => (
+                        <>
+                          {isPending ? <Spinner color="current" size="sm" /> : <LogOut size={14} aria-hidden />}
+                          {t("oauth.signOut")}
+                        </>
+                      )}
+                    </Button>
+                  </ConfirmDialog>
+                ) : null}
+                <Button
+                  size="sm"
+                  variant={signedIn ? "secondary" : undefined}
+                  isPending={signingIn}
+                  isDisabled={!server.enabled}
+                  onPress={signIn}
+                >
+                  {({ isPending }) => (
+                    <>
+                      {isPending ? <Spinner color="current" size="sm" /> : <LogIn size={14} aria-hidden />}
+                      {t("oauth.signIn", { again: String(signedIn) })}
+                    </>
+                  )}
+                </Button>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
         <div className="flex flex-wrap items-center justify-between gap-2">
           <Chip size="sm" variant="soft" color={server.global || server.assignments.length ? "accent" : "default"}>
             {t("access.summary", { global: String(server.global), count: server.assignments.length })}

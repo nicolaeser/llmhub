@@ -2,6 +2,7 @@ import "server-only";
 import { bearerToken, clientIp, isPayloadTooLarge, readJSON } from "@/lib/http/api";
 import { authenticateBearer } from "@/lib/gateway/access/principal";
 import { defaultEntityIds, redactJSON } from "@/lib/gateway/safety/pii";
+import { bindPiiVault, PiiVault } from "@/lib/gateway/safety/pii-vault";
 import { outputGuard, screenRequest } from "@/lib/gateway/safety/guardrails";
 import { alertPiiBlocked, alertUpstreamFailure } from "@/lib/alerts/notify";
 import { resolvePolicies } from "@/lib/settings/enterprise";
@@ -175,10 +176,12 @@ export async function applyGuardrails(
   if (!pii.enabled) return { body: screened.body, output: outputGuard(guardrails, null) };
   const entities = pii.entities.length ? pii.entities : defaultEntityIds();
   const found = new Set<string>();
-  const redacted = redactJSON(screened.body, entities, "", found) as JsonMap;
+  const vault = pii.mode === "restore" ? new PiiVault() : null;
+  const redacted = redactJSON(screened.body, entities, "", found, vault) as JsonMap;
   if (trace) {
     trace.request = redacted;
     trace.piiMode = pii.mode;
+    if (vault) bindPiiVault(trace, vault);
     for (const id of found) trace.piiInput.add(id);
   }
   if (pii.mode === "block" && found.size) {
