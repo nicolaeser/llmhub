@@ -113,7 +113,7 @@ export default function McpPage() {
         </Alert>
       )}
       {servers.length === 0 ? (
-        <EmptyState icon={Blocks} title={t("empty.title")} description={t("empty.description")} />
+        <EmptyState icon={Blocks} title={t("empty.title")} description={t("empty.description")} action={actions ?? undefined} />
       ) : (
         <>
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">

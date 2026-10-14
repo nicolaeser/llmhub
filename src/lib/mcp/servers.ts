@@ -366,14 +366,32 @@ export async function createHostedMcpServer(raw: unknown) {
     if (isPrismaCode(err, "P2002")) throw new Error("NAME_EXISTS", { cause: err });
     throw err;
   }
+  const names = new Set(input.tools.map((tool) => tool.name));
+  const assignments = input.assignments.map((row) => ({
+    ...row,
+    blockedTools: row.blockedTools.filter((name) => names.has(name)),
+  }));
+  if (input.global || assignments.length) {
+    const saved = await replaceMcpAssignments(created.id, input.global, assignments);
+    if (!saved) {
+      await prisma.mcpServer.delete({ where: { id: created.id } });
+      throw new Error("VALIDATION");
+    }
+  }
   await writeAudit({
     actor: session.user.id,
     action: "mcp_server.create",
     objectType: "mcp_server",
     objectId: created.id,
-    after: { ...auditShape(created), kind: "hosted", tools: tools.map((tool) => tool.name) },
+    after: {
+      ...auditShape(created),
+      kind: "hosted",
+      tools: tools.map((tool) => tool.name),
+      global: input.global,
+      assignments: assignments.length,
+    },
   });
-  return { server: viewOf(created) };
+  return { server: viewOf(await loadRow(created.id)) };
 }
 
 export async function updateMcpServer(raw: { id: string } & Record<string, unknown>) {
