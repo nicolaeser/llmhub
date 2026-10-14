@@ -39,7 +39,7 @@ export const hostedToolSchema = z
       .trim()
       .min(1)
       .max(512)
-      .regex(/^\/(?!\/)(?!.*\.\.)[A-Za-z0-9._~{}:\/-]*$/),
+      .regex(/^\/(?!\/)(?!.*\.\.)[A-Za-z0-9._~{}:/-]*$/),
     inputSchema: z.record(z.string(), z.unknown()).default({}),
   })
   .superRefine((tool, ctx) => {
