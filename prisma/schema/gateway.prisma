@@ -596,9 +596,13 @@ model McpServer {
   description     String    @default("")
   url             String
   transport       String    @default("streamable_http")
+  protocolVersion String    @default("")
   authType        String    @default("none")
   authHeader      String    @default("")
   authSecret      String    @default("")
+  oauthGrant      String    @default("authorization_code")
+  oauthClientId   String    @default("")
+  oauthScopes     String    @default("")
   internal        Boolean   @default(false)
   enabled         Boolean   @default(true)
   global          Boolean   @default(false)
@@ -611,6 +615,24 @@ model McpServer {
   updatedAt       DateTime  @updatedAt
 
   assignments McpAssignment[]
+  oauthLogin  McpOAuthLogin?
+}
+
+model McpOAuthLogin {
+  serverId      String    @id
+  server        McpServer @relation(fields: [serverId], references: [id], onDelete: Cascade)
+  issuer        String
+  tokenEndpoint String
+  resource      String
+  client        String
+  tokens        String
+  scope         String    @default("")
+  expiresAt     DateTime?
+  status        String    @default("active")
+  version       Int       @default(0)
+  leaseUntil    DateTime?
+  connectedAt   DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 }
 
 model McpAssignment {

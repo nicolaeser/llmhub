@@ -8,8 +8,9 @@ import { seal } from "@/lib/crypto";
 import type { JsonMap } from "@/types/gateway";
 
 const TOOL = "mcp__weather__forecast";
-const mcpCalls: { method: string; auth: string; session: string; params: JsonMap }[] = [];
+const mcpCalls: { method: string; auth: string; session: string; version: string; name: string; params: JsonMap }[] = [];
 let toolText = (city: string) => `Sunny in ${city}`;
+let stateless = false;
 let port = 0;
 
 const server = createServer(async (req: IncomingMessage, res) => {
@@ -24,8 +25,15 @@ const server = createServer(async (req: IncomingMessage, res) => {
     method: String(body.method),
     auth: String(req.headers.authorization ?? ""),
     session: String(req.headers["mcp-session-id"] ?? ""),
+    version: String(req.headers["mcp-protocol-version"] ?? ""),
+    name: String(req.headers["mcp-name"] ?? ""),
     params: (body.params as JsonMap) ?? {},
   });
+  if (!stateless && body.method !== "initialize" && !req.headers["mcp-session-id"]) {
+    res.writeHead(400, { "content-type": "application/json" });
+    res.end(JSON.stringify({ jsonrpc: "2.0", id: null, error: { code: -32000, message: "Bad Request: No valid session ID provided" } }));
+    return;
+  }
   if (body.method === "initialize") {
     res.writeHead(200, { "content-type": "application/json", "mcp-session-id": "sess-1" });
     res.end(JSON.stringify({ jsonrpc: "2.0", id: body.id, result: { protocolVersion: "2025-06-18", capabilities: {}, serverInfo: { name: "w" } } }));
@@ -58,6 +66,11 @@ function serverRow() {
     authType: "bearer",
     authHeader: "",
     authSecret: seal("mcp-secret"),
+    oauthGrant: "authorization_code",
+    oauthClientId: "",
+    oauthScopes: "",
+    transport: "streamable_http",
+    protocolVersion: stateless ? "2026-07-28" : "",
     internal: true,
     enabled: true,
     global: false,
@@ -73,6 +86,7 @@ function serverRow() {
 function reset(): JsonMap[] {
   resetGateway();
   mcpCalls.length = 0;
+  stateless = false;
   toolText = (city) => `Sunny in ${city}`;
   recordedPrisma.handlers = { mcpServer: { findMany: () => [serverRow()] } };
   const bodies: JsonMap[] = [];
@@ -145,13 +159,35 @@ test("chat completions run MCP tool calls inside the gateway and return the fina
   const second = bodies[1]!.messages as JsonMap[];
   assert.deepEqual(second.at(-1), { role: "tool", tool_call_id: "call_1", content: "Sunny in Bern" });
   assert.equal(((second.at(-2)!.tool_calls as JsonMap[])[0]!.function as JsonMap).name, TOOL);
-  const call = mcpCalls.find((item) => item.method === "tools/call")!;
+  const call = mcpCalls.filter((item) => item.method === "tools/call").at(-1)!;
   assert.deepEqual(call.params, { name: "forecast", arguments: { city: "Bern" } });
   assert.equal(call.auth, "Bearer mcp-secret");
   assert.equal(call.session, "sess-1");
+  assert.deepEqual(
+    mcpCalls.map((item) => item.method),
+    ["tools/call", "initialize", "notifications/initialized", "tools/call"],
+  );
+  const remembered = recordedPrisma.called("mcpServer", "updateMany").map((item) => item.args);
+  assert.deepEqual(remembered, [{ where: { id: "srv1" }, data: { transport: "streamable_http", protocolVersion: "2025-06-18" } }]);
   const logged = recordedPrisma.called("requestLog", "create").length + recordedPrisma.called("usageDaily", "upsert").length;
   assert.ok(logged >= 2);
   assert.ok(!JSON.stringify(json).includes("mcp-secret"));
+});
+
+test("a stateless MCP server gets one request per tool call without a handshake", async () => {
+  const bodies = reset();
+  stateless = true;
+  recordedPrisma.handlers = { mcpServer: { findMany: () => [serverRow()] } };
+  scripted(bodies, [() => toolCallReply([forecast]), () => chatReply("It is sunny in Bern.")]);
+  const res = await post("/api/v1/chat/completions", question);
+  assert.equal(res.status, 200);
+  assert.deepEqual(mcpCalls.map((item) => item.method), ["tools/call"]);
+  const call = mcpCalls[0]!;
+  assert.equal(call.session, "");
+  assert.equal(call.version, "2026-07-28");
+  assert.equal(call.name, "forecast");
+  assert.equal(((call.params._meta as JsonMap)["io.modelcontextprotocol/protocolVersion"]), "2026-07-28");
+  assert.equal(recordedPrisma.called("mcpServer", "updateMany").length, 0);
 });
 
 test("the opt-out header and keys without assignments leave the request untouched", async () => {

@@ -4,12 +4,14 @@ import { runAction } from "@/lib/http/action-result";
 import {
   createMcpServer,
   deleteMcpServer,
+  disconnectMcpOAuth,
   loadMcpServerList,
   loadMcpTargets,
   probeMcpServer,
   refreshMcpServer,
   saveMcpAssignments,
   setMcpServerEnabled,
+  startMcpOAuth,
   updateMcpServer,
 } from "@/lib/mcp/servers";
 
@@ -39,6 +41,14 @@ export async function probeMcpServerAction(...args: Parameters<typeof probeMcpSe
 
 export async function refreshMcpServerAction(...args: Parameters<typeof refreshMcpServer>) {
   return runAction(() => refreshMcpServer(...args));
+}
+
+export async function startMcpOAuthAction(...args: Parameters<typeof startMcpOAuth>) {
+  return runAction(() => startMcpOAuth(...args));
+}
+
+export async function disconnectMcpOAuthAction(...args: Parameters<typeof disconnectMcpOAuth>) {
+  return runAction(() => disconnectMcpOAuth(...args));
 }
 
 export async function loadMcpTargetsAction(...args: Parameters<typeof loadMcpTargets>) {

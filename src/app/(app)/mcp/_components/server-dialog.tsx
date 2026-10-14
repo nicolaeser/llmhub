@@ -19,11 +19,12 @@ import {
 } from "@heroui/react";
 import { PlugZap } from "lucide-react";
 import { useTranslations } from "next-intl";
+import CopyButton from "@/components/console/copy-button";
 import FormDialog from "@/components/console/form-dialog";
 import { useErrorToast } from "@/components/console/use-error-toast";
 import { isActionFail } from "@/lib/http/action-result";
-import { MCP_AUTH_TYPES } from "@/schemas/mcp";
-import type { McpAuthType, McpProbeResult, McpServerView, McpToolSpec } from "@/types/mcp";
+import { MCP_AUTH_TYPES, MCP_OAUTH_GRANTS } from "@/schemas/mcp";
+import type { McpAuthType, McpOAuthGrant, McpProbeResult, McpServerView, McpToolSpec } from "@/types/mcp";
 import { createMcpServerAction, probeMcpServerAction, updateMcpServerAction } from "../_action";
 
 function initiallyDisabled(server: McpServerView | null): string[] {
@@ -31,13 +32,20 @@ function initiallyDisabled(server: McpServerView | null): string[] {
   return server.tools.filter((tool) => !server.allowedTools.includes(tool.name)).map((tool) => tool.name);
 }
 
+function secretNeeded(authType: McpAuthType, grant: McpOAuthGrant): boolean {
+  if (authType === "oauth") return grant === "client_credentials";
+  return authType !== "none";
+}
+
 export default function ServerDialog({
   state,
   editing,
+  redirectUri,
   onSaved,
 }: {
   state: ReturnType<typeof useOverlayState>;
   editing: McpServerView | null;
+  redirectUri: string;
   onSaved: (server: McpServerView) => void;
 }) {
   const t = useTranslations("Mcp");
@@ -49,6 +57,9 @@ export default function ServerDialog({
   const [authType, setAuthType] = useState<McpAuthType>(editing?.authType ?? "none");
   const [authHeader, setAuthHeader] = useState(editing?.authHeader ?? "");
   const [secret, setSecret] = useState("");
+  const [oauthGrant, setOauthGrant] = useState<McpOAuthGrant>(editing?.oauthGrant ?? "authorization_code");
+  const [oauthClientId, setOauthClientId] = useState(editing?.oauthClientId ?? "");
+  const [oauthScopes, setOauthScopes] = useState(editing?.oauthScopes ?? "");
   const [enabled, setEnabled] = useState(editing?.enabled ?? true);
   const [tools, setTools] = useState<McpToolSpec[]>(editing?.tools ?? []);
   const [disabled, setDisabled] = useState<string[]>(() => initiallyDisabled(editing));
@@ -56,9 +67,13 @@ export default function ServerDialog({
   const [testing, startTest] = useTransition();
   const [saving, startSave] = useTransition();
   const keepsSecret = Boolean(editing?.hasSecret && editing.authType === authType);
-  const needsSecret = authType !== "none" && !secret.trim() && !keepsSecret;
+  const oauth = authType === "oauth";
+  const secretRequired = secretNeeded(authType, oauthGrant);
+  const needsSecret = secretRequired && !secret.trim() && !keepsSecret;
   const headerValid = authType !== "header" || /^[A-Za-z0-9-]{1,64}$/.test(authHeader.trim());
-  const ready = name.trim() !== "" && url.trim() !== "" && headerValid && !needsSecret;
+  const clientValid = !oauth || oauthGrant !== "client_credentials" || oauthClientId.trim() !== "";
+  const ready = name.trim() !== "" && url.trim() !== "" && headerValid && clientValid && !needsSecret;
+  const signInPending = probe?.error === "MCP_AUTH_REQUIRED" && oauth && oauthGrant === "authorization_code";
 
   function test() {
     startTest(async () => {
@@ -69,6 +84,9 @@ export default function ServerDialog({
         authHeader: authHeader.trim(),
         secret,
         internal,
+        oauthGrant,
+        oauthClientId: oauthClientId.trim(),
+        oauthScopes: oauthScopes.trim(),
       });
       if (isActionFail(result)) {
         showError(result.error);
@@ -95,6 +113,9 @@ export default function ServerDialog({
         authHeader: authHeader.trim(),
         secret,
         clearSecret: false,
+        oauthGrant,
+        oauthClientId: oauthClientId.trim(),
+        oauthScopes: oauthScopes.trim(),
         internal,
         enabled,
         global: editing?.global ?? false,
@@ -108,7 +129,8 @@ export default function ServerDialog({
       }
       onSaved(result.server);
       toast(t("form.saved", { mode: editing ? "edit" : "create" }), { variant: "success" });
-      if (result.server.lastError) toast.danger(t("errors.code", { code: result.server.lastError }));
+      if (result.server.status === "signin") toast(t("form.signInNext"));
+      else if (result.server.lastError) toast.danger(t("errors.code", { code: result.server.lastError }));
       close();
     });
   }
@@ -192,12 +214,69 @@ export default function ServerDialog({
           </TextField>
         ) : null}
       </div>
+      {oauth ? (
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Select
+            fullWidth
+            selectedKey={oauthGrant}
+            onSelectionChange={(key) => {
+              const next = MCP_OAUTH_GRANTS.find((grant) => grant === String(key));
+              if (next) setOauthGrant(next);
+            }}
+            isDisabled={pending}
+          >
+            <Label>{t("form.grant")}</Label>
+            <Select.Trigger>
+              <Select.Value />
+              <Select.Indicator />
+            </Select.Trigger>
+            <Select.Popover>
+              <ListBox aria-label={t("form.grant")}>
+                {MCP_OAUTH_GRANTS.map((grant) => (
+                  <ListBox.Item key={grant} id={grant} textValue={t("form.grantOption", { grant })}>
+                    {t("form.grantOption", { grant })}
+                    <ListBox.ItemIndicator />
+                  </ListBox.Item>
+                ))}
+              </ListBox>
+            </Select.Popover>
+            <Description>{t("form.grantHint", { grant: oauthGrant })}</Description>
+          </Select>
+          <TextField
+            fullWidth
+            value={oauthClientId}
+            onChange={setOauthClientId}
+            isRequired={oauthGrant === "client_credentials"}
+            isDisabled={pending}
+          >
+            <Label>{t("form.clientId")}</Label>
+            <Input autoComplete="off" />
+            <Description>{t("form.clientIdHint", { grant: oauthGrant })}</Description>
+          </TextField>
+        </div>
+      ) : null}
       {authType !== "none" ? (
-        <TextField fullWidth value={secret} onChange={setSecret} isDisabled={pending} isRequired={!keepsSecret}>
+        <TextField fullWidth value={secret} onChange={setSecret} isDisabled={pending} isRequired={secretRequired && !keepsSecret}>
           <Label>{t("form.secret", { type: authType })}</Label>
           <Input type="password" autoComplete="off" placeholder={keepsSecret ? t("form.secretKeep") : ""} />
-          <Description>{t("form.secretHint")}</Description>
+          <Description>{t("form.secretHint", { type: authType })}</Description>
         </TextField>
+      ) : null}
+      {oauth ? (
+        <TextField fullWidth value={oauthScopes} onChange={setOauthScopes} isDisabled={pending}>
+          <Label>{t("form.scopes")}</Label>
+          <Input autoComplete="off" placeholder="files:read files:write" />
+          <Description>{t("form.scopesHint")}</Description>
+        </TextField>
+      ) : null}
+      {oauth && oauthGrant === "authorization_code" && redirectUri ? (
+        <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+          <div className="min-w-0 space-y-1">
+            <p className="text-muted">{t("form.redirectUri")}</p>
+            <code className="min-w-0 font-mono text-xs break-all text-foreground">{redirectUri}</code>
+          </div>
+          <CopyButton text={redirectUri} label={t("form.copyRedirectUri")} />
+        </div>
       ) : null}
       <Switch isSelected={enabled} onChange={setEnabled} isDisabled={pending}>
         <Switch.Content>
@@ -218,7 +297,7 @@ export default function ServerDialog({
           variant="secondary"
           size="sm"
           isPending={testing}
-          isDisabled={!url.trim() || !headerValid || saving}
+          isDisabled={!url.trim() || !headerValid || !clientValid || saving}
           onPress={test}
         >
           {({ isPending }) => (
@@ -229,7 +308,15 @@ export default function ServerDialog({
           )}
         </Button>
       </div>
-      {probe ? (
+      {probe && signInPending ? (
+        <Alert status="accent">
+          <Alert.Indicator />
+          <Alert.Content>
+            <Alert.Title>{t("form.oauthReady")}</Alert.Title>
+            <Alert.Description>{t("form.oauthReadyHint")}</Alert.Description>
+          </Alert.Content>
+        </Alert>
+      ) : probe ? (
         <Alert status={probe.connected ? "success" : "danger"}>
           <Alert.Indicator />
           <Alert.Content>
@@ -238,7 +325,11 @@ export default function ServerDialog({
                 ? t("form.testOk", { named: String(Boolean(probe.serverName)), name: probe.serverName, count: probe.tools.length })
                 : t("form.testFailed")}
             </Alert.Title>
-            {probe.connected ? null : <Alert.Description>{t("errors.code", { code: probe.error })}</Alert.Description>}
+            <Alert.Description>
+              {probe.connected
+                ? t("protocol", { era: probe.era ?? "unknown", version: probe.protocolVersion })
+                : t("errors.code", { code: probe.error })}
+            </Alert.Description>
           </Alert.Content>
         </Alert>
       ) : null}
