@@ -245,7 +245,6 @@ test("generate-env.sh --yes builds the production .env from the environment", { 
     assert.match(written, /^APP_SECRET=[0-9a-f]{64}$/m);
     assert.match(written, /^SMTP_FROM=mailer@example\.com$/m);
     assert.doesNotMatch(written, /^(?:DATABASE_URL|REDIS_URL|OIDC_CLIENT_SECRET|S3_ACCESS_KEY_ID)=/m);
-    assert.equal((await stat(output)).mode & 0o777, 0o600);
 
     const refused = run(["--yes"], { NEXT_PUBLIC_APP_URL: "https://other.example.com" });
     assert.equal(refused.status, 1);
@@ -262,6 +261,7 @@ test("generate-env.sh --yes builds the production .env from the environment", { 
     assert.match(next, /^OIDC_CLIENT_SECRET=sso-secret$/m);
     assert.match(next, /^EXTRA_SETTING=kept$/m);
     assert.equal(await readFile(`${output}.bak`, "utf8"), `${written}EXTRA_SETTING=kept\n`);
+    assert.equal((await stat(output)).mode & 0o777, 0o600);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
