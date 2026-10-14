@@ -1,7 +1,8 @@
 import "server-only";
 import prisma from "@/lib/db/prisma";
-import { mcpAuthFor, mcpCapabilities } from "@/lib/mcp/auth";
+import { authHeaders, mcpAuthFor, mcpCapabilities } from "@/lib/mcp/auth";
 import { McpClient, toolSpecs } from "@/lib/mcp/client";
+import { callHosted, hostedSpec } from "@/lib/mcp/hosted";
 import { chainOf, effectiveServers } from "@/lib/mcp/resolve";
 import { bindTools } from "@/lib/mcp/tool-names";
 import { guardedFetch } from "@/lib/mcp/transport";
@@ -59,6 +60,8 @@ export function serverRecord(row: {
   oauthScopes: string;
   transport: string;
   protocolVersion: string;
+  kind?: string;
+  spec?: unknown;
 }): McpServerRecord {
   return {
     id: row.id,
@@ -73,6 +76,8 @@ export function serverRecord(row: {
     oauthScopes: row.oauthScopes,
     transport: isTransport(row.transport) ? row.transport : "streamable_http",
     protocolVersion: row.protocolVersion,
+    kind: row.kind === "hosted" ? "hosted" : "remote",
+    spec: hostedSpec(row.spec),
   };
 }
 
@@ -133,6 +138,8 @@ export async function loadMcpServers(chain: McpChain) {
       oauthScopes: true,
       transport: true,
       protocolVersion: true,
+      kind: true,
+      spec: true,
       internal: true,
       enabled: true,
       global: true,
@@ -151,6 +158,7 @@ export async function loadMcpServers(chain: McpChain) {
           keyId: true,
           mode: true,
           blockedTools: true,
+          blockedActions: true,
         },
       },
     },
@@ -169,7 +177,11 @@ export async function loadMcpServers(chain: McpChain) {
       tools: toolSpecs(row.tools),
     })),
     rows.flatMap((row) =>
-      row.assignments.map((rule) => ({ ...rule, mode: isAssignmentMode(rule.mode) ? rule.mode : "block" })),
+      row.assignments.map((rule) => ({
+        ...rule,
+        mode: isAssignmentMode(rule.mode) ? rule.mode : "block",
+        blockedActions: Array.isArray(rule.blockedActions) ? rule.blockedActions : [],
+      })),
     ),
     chain,
   );
@@ -199,6 +211,9 @@ export function createExecutor(
     async call(bound, args, signal) {
       const record = records.get(bound.serverId);
       if (!record) return { text: "This tool is no longer available.", isError: true };
+      if (record.kind === "hosted") {
+        return callHosted(record.url, record.internal, record.spec, bound.tool.name, args, signal, fetchFor(record.internal), authHeaders(record));
+      }
       return session(record).callTool(bound.tool.name, args, signal, bound.tool.inputSchema);
     },
     async close() {

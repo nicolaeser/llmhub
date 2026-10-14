@@ -146,6 +146,11 @@ export default function ServerCard({
               {t("card.protocol", { era: server.era, version: server.protocolVersion })}
             </Chip>
           ) : null}
+          {server.kind === "hosted" ? (
+            <Chip size="sm" variant="soft" color="accent">
+              {t("hosted")}
+            </Chip>
+          ) : null}
           {server.internal ? (
             <Chip size="sm" variant="soft" color="warning">
               {t("internal")}
@@ -242,17 +247,19 @@ export default function ServerCard({
             </Switch.Content>
           </Switch>
           <div className="flex flex-wrap gap-1">
-            <Button
-              isIconOnly
-              size="sm"
-              variant="tertiary"
-              aria-label={t("card.refresh")}
-              isPending={refreshing}
-              isDisabled={!server.enabled}
-              onPress={refresh}
-            >
-              {({ isPending }) => (isPending ? <Spinner color="current" size="sm" /> : <RefreshCw size={14} aria-hidden />)}
-            </Button>
+            {server.kind === "hosted" ? null : (
+              <Button
+                isIconOnly
+                size="sm"
+                variant="tertiary"
+                aria-label={t("card.refresh")}
+                isPending={refreshing}
+                isDisabled={!server.enabled}
+                onPress={refresh}
+              >
+                {({ isPending }) => (isPending ? <Spinner color="current" size="sm" /> : <RefreshCw size={14} aria-hidden />)}
+              </Button>
+            )}
             <Button isIconOnly size="sm" variant="secondary" aria-label={t("card.edit", { name: server.name })} onPress={() => onEdit(server)}>
               <Pencil size={14} aria-hidden />
             </Button>

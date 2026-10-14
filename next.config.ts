@@ -29,6 +29,7 @@ const nextConfig: NextConfig = {
       ["/playground", "/developer?tab=playground"],
       ["/api-ref", "/developer?tab=api"],
       ["/assistant", "/"],
+      ["/integrations", "/mcp"],
     ];
     return moved.map(([source, destination]) => ({ source, destination, permanent: false }));
   },

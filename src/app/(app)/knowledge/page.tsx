@@ -296,7 +296,7 @@ export default function KnowledgePage() {
         companies={view.companies}
         projects={view.projects}
         defaults={view.defaults}
-        aliases={view.aliases}
+        models={view.models}
         initialCompany={company === ALL_COMPANIES ? "" : company}
         onSaved={upsert}
       />

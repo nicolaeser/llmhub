@@ -1,6 +1,6 @@
 import "server-only";
 
-import { enabledAliases } from "@/lib/models/aliases";
+import { assertModelRoles, enabledModelChoices } from "@/lib/models/aliases";
 import { requirePermission } from "@/lib/auth/guards";
 import { hasPerm, PERMISSIONS } from "@/lib/auth/permissions";
 import { writeAudit } from "@/lib/audit";
@@ -13,16 +13,16 @@ import type { Permission } from "@/types/auth";
 import type { CacheSettingsInput, CacheView } from "@/types/cache";
 
 async function view(permissions: readonly Permission[]): Promise<CacheView> {
-  const [enterprise, backend, aliases] = await Promise.all([
+  const [enterprise, backend, models] = await Promise.all([
     getEnterprise(),
     cacheBackend(),
-    enabledAliases(),
+    enabledModelChoices(),
   ]);
   return {
     cacheTtlSeconds: enterprise.cache_ttl_seconds ?? 0,
     semantic: normalizeSemanticCache(enterprise.cache_semantic),
     backend,
-    aliases,
+    models,
     stats: hasPerm(permissions, PERMISSIONS.SPEND_READ_ALL) ? await responseCacheTotals(CACHE_STATS_DEFAULT_DAYS) : null,
     canManage: hasPerm(permissions, PERMISSIONS.SETTINGS_MANAGE),
   };
@@ -45,6 +45,9 @@ export async function saveCache(input: CacheSettingsInput) {
   const session = await requirePermission(PERMISSIONS.SETTINGS_MANAGE);
   const parsed = cacheSettingsSchema.safeParse(input);
   if (!parsed.success) throw new Error("VALIDATION");
+  const previous = normalizeSemanticCache((await getEnterprise()).cache_semantic).model;
+  const nextModel = parsed.data.semantic?.model ?? "";
+  if (nextModel && nextModel !== previous) await assertModelRoles([{ alias: nextModel, role: "embedding" }]);
   const after = {
     ...(parsed.data.cacheTtlSeconds === undefined ? {} : { cache_ttl_seconds: parsed.data.cacheTtlSeconds }),
     ...(parsed.data.semantic ? { cache_semantic: normalizeSemanticCache(parsed.data.semantic) } : {}),

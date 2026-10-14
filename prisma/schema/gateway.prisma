@@ -597,6 +597,8 @@ model McpServer {
   url             String
   transport       String    @default("streamable_http")
   protocolVersion String    @default("")
+  kind            String    @default("remote")
+  spec            Json      @default("{}")
   authType        String    @default("none")
   authHeader      String    @default("")
   authSecret      String    @default("")
@@ -649,9 +651,10 @@ model McpAssignment {
   member       Member?       @relation(fields: [memberId], references: [id], onDelete: Cascade)
   keyId        String?
   key          VirtualKey?   @relation(fields: [keyId], references: [id], onDelete: Cascade)
-  mode         String        @default("allow")
-  blockedTools String[]      @default([])
-  createdAt    DateTime      @default(now())
+  mode           String        @default("allow")
+  blockedTools   String[]      @default([])
+  blockedActions String[]      @default([])
+  createdAt      DateTime      @default(now())
 
   @@unique([serverId, orgId])
   @@unique([serverId, teamId])

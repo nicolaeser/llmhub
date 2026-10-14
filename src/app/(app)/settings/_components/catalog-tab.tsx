@@ -2,6 +2,7 @@
 
 import { useState, useTransition, type ReactNode } from "react";
 import {
+  Button,
   Description,
   Disclosure,
   Input,
@@ -18,12 +19,13 @@ import SearchSelect from "@/components/console/search-select";
 import { SettingSection, SettingSwitch, SettingText } from "./setting-fields";
 import { useErrorToast } from "@/components/console/use-error-toast";
 import { formats } from "@/i18n/formats";
+import { choicesForRole, type ModelRole } from "@/lib/models/model-role";
 import { Link } from "@/i18n/routing";
 import { useActionData } from "@/lib/hooks/use-action-data";
 import { isActionFail } from "@/lib/http/action-result";
 import type { CatalogSettings } from "@/types/settings";
 import { loadCatalogSettingsAction, saveCatalogSettingsAction } from "../_action";
-import SaveBar from "./save-bar";
+import SaveBar, { SettingsLead } from "./save-bar";
 import TabState from "./tab-state";
 
 export default function CatalogTab() {
@@ -44,9 +46,13 @@ export default function CatalogTab() {
     update({ catalog_jev: { ...settings.catalog_jev, ...patch } });
   const vectors = (patch: Partial<CatalogSettings["vector_stores"]>) =>
     update({ vector_stores: { ...settings.vector_stores, ...patch } });
-  const modelItems = (current: string) => [
+  const modelItems = (role: ModelRole, current: string) => [
     { id: "none", label: t("knowledge.none") },
-    ...[...new Set([...view.aliases, ...(current ? [current] : [])])].map((alias) => ({ id: alias, label: alias })),
+    ...choicesForRole(view.models, role, current).map((model) => ({
+      id: model.alias,
+      label: model.label,
+      detail: model.label === model.alias ? undefined : model.alias,
+    })),
   ];
   const pickModel = (key: string) => (key === "none" ? "" : key);
   const jevKeyReady = settings.catalog_jev.clear_api_key
@@ -73,7 +79,7 @@ export default function CatalogTab() {
 
   return (
     <div className="space-y-5">
-      <SaveBar description={t("description")} canManage={view.canManage} pending={pending} onSave={save} />
+      <SettingsLead description={t("description")} canManage={view.canManage} />
 
       <SettingSection title={t("jev.title")} subtitle={t("jev.subtitle")}>
         <div className="flex items-start gap-3">
@@ -107,14 +113,22 @@ export default function CatalogTab() {
           <Description>{t("jev.apiKeyHint")}</Description>
         </TextField>
         {view.jevKeySet ? (
-          <SettingSwitch
-            label={t("jev.clearKey")}
-            isSelected={settings.catalog_jev.clear_api_key}
-            onChange={(clear_api_key) =>
-              jev({ clear_api_key, api_key: "", enabled: clear_api_key ? false : settings.catalog_jev.enabled })
-            }
-            isDisabled={disabled}
-          />
+          <div className="flex flex-wrap items-center gap-3">
+            <Button
+              size="sm"
+              variant={settings.catalog_jev.clear_api_key ? "secondary" : "danger-soft"}
+              isDisabled={disabled}
+              onPress={() =>
+                jev({
+                  clear_api_key: !settings.catalog_jev.clear_api_key,
+                  api_key: "",
+                  enabled: settings.catalog_jev.clear_api_key ? settings.catalog_jev.enabled : false,
+                })
+              }
+            >
+              {settings.catalog_jev.clear_api_key ? t("jev.keepKey") : t("jev.clearKey")}
+            </Button>
+          </div>
         ) : null}
         <Disclosure>
           <Disclosure.Heading>
@@ -164,7 +178,7 @@ export default function CatalogTab() {
             <SearchSelect
               label={t("knowledge.embeddingModel")}
               description={t("knowledge.embeddingHint")}
-              items={modelItems(settings.vector_stores.embedding_model)}
+              items={modelItems("embedding", settings.vector_stores.embedding_model)}
               value={settings.vector_stores.embedding_model || "none"}
               onChange={(key) => vectors({ embedding_model: pickModel(key) })}
               isDisabled={disabled}
@@ -172,7 +186,7 @@ export default function CatalogTab() {
             <SearchSelect
               label={t("knowledge.ocrModel")}
               description={t("knowledge.ocrHint")}
-              items={modelItems(settings.vector_stores.ocr_model)}
+              items={modelItems("ocr", settings.vector_stores.ocr_model)}
               value={settings.vector_stores.ocr_model || "none"}
               onChange={(key) => vectors({ ocr_model: pickModel(key) })}
               isDisabled={disabled}
@@ -180,7 +194,7 @@ export default function CatalogTab() {
             <SearchSelect
               label={t("knowledge.rerankModel")}
               description={t("knowledge.rerankHint")}
-              items={modelItems(settings.vector_stores.rerank_model)}
+              items={modelItems("rerank", settings.vector_stores.rerank_model)}
               value={settings.vector_stores.rerank_model || "none"}
               onChange={(key) => vectors({ rerank_model: pickModel(key) })}
               isDisabled={disabled}
@@ -219,6 +233,7 @@ export default function CatalogTab() {
         </Disclosure>
         <p className="text-xs text-muted">{t.rich("knowledge.manageHint", { link: link("/knowledge") })}</p>
       </SettingSection>
+      <SaveBar canManage={view.canManage} pending={pending} onSave={save} />
     </div>
   );
 }

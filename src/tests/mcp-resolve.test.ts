@@ -21,7 +21,13 @@ function server(id: string, change: Partial<McpServerPolicy> = {}): McpServerPol
   };
 }
 
-function rule(serverId: string, target: Partial<McpAssignmentRule>, mode: "allow" | "block" = "allow", blockedTools: string[] = []): McpAssignmentRule {
+function rule(
+  serverId: string,
+  target: Partial<McpAssignmentRule>,
+  mode: "allow" | "block" = "allow",
+  blockedTools: string[] = [],
+  blockedActions: string[] = [],
+): McpAssignmentRule {
   return {
     serverId,
     orgId: null,
@@ -31,8 +37,13 @@ function rule(serverId: string, target: Partial<McpAssignmentRule>, mode: "allow
     keyId: null,
     mode,
     blockedTools,
+    blockedActions,
     ...target,
   };
+}
+
+function acted(name: string, action?: McpToolSpec["action"]): McpToolSpec {
+  return { ...tool(name), ...(action ? { action } : {}) };
 }
 
 const CHAIN: McpChain = { orgId: "org1", teamId: "team1", projectId: "", memberId: "mem1", keyId: "key1" };
@@ -96,18 +107,47 @@ test("chainOf reads the principal's key tenancy", () => {
 
 test("explainAccess names where access comes from", () => {
   const views: McpAssignmentView[] = [
-    { scope: "org", id: "org1", label: "Acme", mode: "allow", blockedTools: [] },
-    { scope: "team", id: "team1", label: "Sales", mode: "block", blockedTools: ["delete"] },
+    { scope: "org", id: "org1", label: "Acme", mode: "allow", blockedTools: [], blockedActions: [] },
+    { scope: "team", id: "team1", label: "Sales", mode: "block", blockedTools: ["delete"], blockedActions: [] },
   ];
   const policy = server("a");
   const granted = explainAccess(policy, views, CHAIN);
   assert.equal(granted.state, "granted");
   assert.deepEqual(granted.grantedBy.map((v) => v.label), ["Acme"]);
   assert.deepEqual(granted.tools, ["search", "fetch"]);
-  const blocked = explainAccess(policy, [...views, { scope: "key", id: "key1", label: "ci", mode: "block", blockedTools: [] }], CHAIN);
+  const blocked = explainAccess(
+    policy,
+    [...views, { scope: "key", id: "key1", label: "ci", mode: "block", blockedTools: [], blockedActions: [] }],
+    CHAIN,
+  );
   assert.equal(blocked.state, "blocked");
   assert.deepEqual(blocked.tools, []);
   assert.equal(explainAccess(policy, views, { ...CHAIN, orgId: "other", teamId: "" }).state, "none");
+});
+
+test("action blocks remove matching tools and leave the server available", () => {
+  const pets = server("pets", {
+    tools: [acted("list", "read"), acted("save", "write"), acted("remove", "delete"), acted("ping")],
+  });
+  const rules = [
+    rule("pets", { orgId: "org1" }),
+    rule("pets", { keyId: "key1" }, "allow", [], ["write", "delete"]),
+  ];
+  assert.deepEqual(names(CHAIN, [pets], rules), { pets: ["list", "ping"] });
+  const deleteOnly = [rule("pets", { orgId: "org1" }), rule("pets", { keyId: "key1" }, "block", [], ["delete"])];
+  assert.deepEqual(names(CHAIN, [pets], deleteOnly), { pets: ["list", "save", "ping"] });
+  const explained = explainAccess(
+    pets,
+    [
+      { scope: "org", id: "org1", label: "Acme", mode: "allow", blockedTools: [], blockedActions: [] },
+      { scope: "key", id: "key1", label: "ci", mode: "block", blockedTools: [], blockedActions: ["delete"] },
+    ],
+    CHAIN,
+  );
+  assert.equal(explained.state, "granted");
+  assert.deepEqual(explained.blockedActions, ["delete"]);
+  assert.deepEqual(explained.blockedBy, []);
+  assert.deepEqual(explained.tools, ["list", "save", "ping"]);
 });
 
 test("tool names are namespaced, valid for providers, and unique", () => {

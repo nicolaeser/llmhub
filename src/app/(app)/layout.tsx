@@ -1,6 +1,7 @@
 import Sidebar from "./_components/sidebar";
 import ConsoleTopbar from "./_components/console-topbar";
 import BuildStatusProvider from "./_components/build-status";
+import IgnoreAutofill from "@/components/console/ignore-autofill";
 import { requireAuth } from "@/lib/auth/guards";
 import { currentBuild } from "@/lib/updates/build";
 
@@ -13,6 +14,7 @@ export default async function AppLayout({
 
   return (
     <BuildStatusProvider version={currentBuild()}>
+      <IgnoreAutofill />
       <Sidebar
         user={{
           email: session.user.email,

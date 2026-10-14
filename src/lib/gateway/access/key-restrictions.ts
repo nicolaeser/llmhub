@@ -15,6 +15,7 @@ export const KEY_ENDPOINTS = [
   "batches",
   "systemone",
   "integrations",
+  "mcp",
 ] as const satisfies readonly KeyEndpoint[];
 
 export const MAX_ACCESS_WINDOWS = 20;
@@ -38,6 +39,7 @@ const ENDPOINT_SEGMENTS = new Map<string, KeyEndpoint>([
   ["batches", "batches"],
   ["systemone", "systemone"],
   ["integrations", "integrations"],
+  ["mcp", "mcp"],
 ]);
 
 const OPEN_SEGMENTS = new Set(["models"]);

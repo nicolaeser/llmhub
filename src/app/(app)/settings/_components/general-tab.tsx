@@ -11,7 +11,7 @@ import { useActionData } from "@/lib/hooks/use-action-data";
 import { isActionFail } from "@/lib/http/action-result";
 import type { GeneralSettings } from "@/types/settings";
 import { loadGeneralSettingsAction, saveGeneralSettingsAction } from "../_action";
-import SaveBar from "./save-bar";
+import SaveBar, { SettingsLead } from "./save-bar";
 import TabState from "./tab-state";
 
 export default function GeneralTab() {
@@ -50,7 +50,7 @@ export default function GeneralTab() {
 
   return (
     <div className="space-y-5">
-      <SaveBar description={t("description")} canManage={view.canManage} pending={pending} onSave={save} />
+      <SettingsLead description={t("description")} canManage={view.canManage} />
 
       <SettingSection title={t("access.title")} subtitle={t("access.subtitle")}>
         <div className="flex items-start gap-3">
@@ -117,6 +117,7 @@ export default function GeneralTab() {
         </div>
         <p className="text-xs text-muted">{t("env.hint")}</p>
       </SettingSection>
+      <SaveBar canManage={view.canManage} pending={pending} onSave={save} />
     </div>
   );
 }

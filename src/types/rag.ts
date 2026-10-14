@@ -1,5 +1,6 @@
 import type { z } from "zod";
 import type { Prisma } from "@/generated/prisma/client";
+import type { ModelChoice } from "@/lib/models/model-role";
 import type { chunkingStrategySchema, vectorDefaultsSchema } from "@/schemas/rag";
 import type { JsonMap, Principal } from "@/types/gateway";
 import type { OutputGuard } from "@/types/guardrails";
@@ -234,7 +235,7 @@ export type KnowledgeView = {
   companies: KnowledgeCompany[];
   projects: KnowledgeProject[];
   defaults: VectorStoreDefaults;
-  aliases: string[];
+  models: ModelChoice[];
   canManage: boolean;
   maxUploadBytes: number;
 };

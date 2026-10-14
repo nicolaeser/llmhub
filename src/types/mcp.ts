@@ -35,11 +35,46 @@ export type McpHeaderParam = {
   header: string;
 };
 
+export type McpToolAction = "read" | "write" | "delete";
+
+export type McpServerKind = "remote" | "hosted";
+
 export type McpToolSpec = {
   name: string;
   title: string;
   description: string;
   inputSchema: JsonMap;
+  action?: McpToolAction;
+};
+
+export type HostedTool = {
+  name: string;
+  title: string;
+  description: string;
+  action: McpToolAction;
+  method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+  path: string;
+  inputSchema: JsonMap;
+};
+
+export type HostedSpec = {
+  tools: HostedTool[];
+};
+
+export type McpDraft = {
+  name: string;
+  description: string;
+  baseUrl: string;
+  internal: boolean;
+  authType: "none" | "bearer" | "header";
+  authHeader: string;
+  notes: string;
+  tools: HostedTool[];
+};
+
+export type McpBuilderModel = {
+  alias: string;
+  label: string;
 };
 
 export type McpServerRecord = {
@@ -55,6 +90,8 @@ export type McpServerRecord = {
   oauthScopes: string;
   transport: McpTransport;
   protocolVersion: string;
+  kind: McpServerKind;
+  spec: HostedSpec;
 };
 
 export type McpAssignmentRule = {
@@ -66,6 +103,7 @@ export type McpAssignmentRule = {
   keyId: string | null;
   mode: McpAssignmentMode;
   blockedTools: string[];
+  blockedActions: string[];
 };
 
 export type McpChain = {
@@ -155,6 +193,7 @@ export type McpServerView = {
   oauthScopes: string;
   oauth: McpOAuthView | null;
   internal: boolean;
+  kind: McpServerKind;
   enabled: boolean;
   global: boolean;
   toolsRestricted: boolean;
@@ -183,6 +222,7 @@ export type McpAssignmentView = {
   label: string;
   mode: McpAssignmentMode;
   blockedTools: string[];
+  blockedActions: string[];
 };
 
 export type McpAssignmentInput = {
@@ -190,6 +230,7 @@ export type McpAssignmentInput = {
   id: string;
   mode: McpAssignmentMode;
   blockedTools: string[];
+  blockedActions: string[];
 };
 
 export type McpTargetOption = {
@@ -238,6 +279,7 @@ export type McpExplanation = {
   blockedBy: McpAssignmentView[];
   global: boolean;
   blockedTools: string[];
+  blockedActions: string[];
   tools: string[];
 };
 
@@ -304,7 +346,11 @@ export type McpMessagesBlock = {
   json: string;
 };
 
-export type McpAssignmentSource = AssignmentSource & { mode: string; blockedTools: string[] };
+export type McpAssignmentSource = AssignmentSource & {
+  mode: string;
+  blockedTools: string[];
+  blockedActions: string[];
+};
 
 export type McpTokenAuthMethod = "none" | "client_secret_basic" | "client_secret_post";
 

@@ -36,6 +36,7 @@ const OPENAI_ROUTES = [
   "vector_stores/[id]/files/[file_id]",
   "vector_stores/[id]/file_batches",
   "integrations/mcp",
+  "mcp",
 ] as const;
 
 const ANTHROPIC_ROUTES = ["messages", "messages/count_tokens"] as const;

@@ -1,10 +1,9 @@
 import "server-only";
 
-import prisma from "@/lib/db/prisma";
 import { requirePermission } from "@/lib/auth/guards";
 import { hasPerm, PERMISSIONS } from "@/lib/auth/permissions";
 import { writeAudit } from "@/lib/audit";
-import { enabledAliases } from "@/lib/models/aliases";
+import { assertModelRoles, enabledModelChoices } from "@/lib/models/aliases";
 import {
   catalogRouting,
   DEFAULT_JEV_MODEL,
@@ -32,19 +31,17 @@ async function view(enterprise: Enterprise, permissions: readonly Permission[]):
       vector_stores: normalizeVectorDefaults(enterprise.vector_stores),
     },
     jevKeySet: Boolean(enterprise.catalog_jev?.api_key),
-    aliases: await enabledAliases(),
+    models: await enabledModelChoices(),
     canManage: hasPerm(permissions, PERMISSIONS.SETTINGS_MANAGE),
   };
 }
 
 async function assertNewAliases(next: VectorStoreDefaults, previous: VectorStoreDefaults) {
-  const known = new Set([previous.embedding_model, previous.ocr_model, previous.rerank_model]);
-  const wanted = [...new Set([next.embedding_model, next.ocr_model, next.rerank_model])].filter(
-    (alias) => alias && !known.has(alias),
-  );
-  if (!wanted.length) return;
-  const found = await prisma.modelGroup.count({ where: { alias: { in: wanted } } });
-  if (found !== wanted.length) throw new Error("UNKNOWN_MODEL");
+  await assertModelRoles([
+    { alias: next.embedding_model === previous.embedding_model ? "" : next.embedding_model, role: "embedding" },
+    { alias: next.ocr_model === previous.ocr_model ? "" : next.ocr_model, role: "ocr" },
+    { alias: next.rerank_model === previous.rerank_model ? "" : next.rerank_model, role: "rerank" },
+  ]);
 }
 
 export async function loadCatalogSettings() {

@@ -35,8 +35,12 @@ export function inChain(rule: Pick<McpAssignmentRule, (typeof CHAIN_COLUMNS)[num
   return CHAIN_COLUMNS.some(([column]) => Boolean(rule[column]) && rule[column] === chain[column]);
 }
 
-function blocksServer(rule: McpAssignmentRule): boolean {
-  return rule.mode === "block" && rule.blockedTools.length === 0;
+function deniesServer(rule: Pick<McpAssignmentRule, "mode" | "blockedTools" | "blockedActions">): boolean {
+  return rule.mode === "block" && rule.blockedTools.length === 0 && rule.blockedActions.length === 0;
+}
+
+function actionBlocked(tool: McpToolSpec, blocked: ReadonlySet<string>): boolean {
+  return Boolean(tool.action && blocked.has(tool.action));
 }
 
 function allowedTools(server: McpServerPolicy): McpToolSpec[] {
@@ -55,9 +59,10 @@ export function effectiveServers(
     if (!server.enabled) continue;
     const matching = rules.filter((rule) => rule.serverId === server.id && inChain(rule, chain));
     const granted = server.global || matching.some((rule) => rule.mode === "allow");
-    if (!granted || matching.some(blocksServer)) continue;
+    if (!granted || matching.some(deniesServer)) continue;
     const blocked = new Set(matching.flatMap((rule) => rule.blockedTools));
-    const tools = allowedTools(server).filter((tool) => !blocked.has(tool.name));
+    const blockedActions = new Set(matching.flatMap((rule) => rule.blockedActions));
+    const tools = allowedTools(server).filter((tool) => !blocked.has(tool.name) && !actionBlocked(tool, blockedActions));
     if (tools.length) out.push({ serverId: server.id, serverName: server.name, tools });
   }
   return out;
@@ -75,13 +80,18 @@ export function explainAccess(
 ): McpExplanation {
   const matching = assignments.filter((view) => chainMatch(view, chain));
   const grantedBy = matching.filter((view) => view.mode === "allow");
-  const blockedBy = matching.filter((view) => view.mode === "block" && view.blockedTools.length === 0);
+  const blockedBy = matching.filter(deniesServer);
   const blockedTools = [...new Set(matching.flatMap((view) => view.blockedTools))];
+  const blockedActions = [...new Set(matching.flatMap((view) => view.blockedActions))];
   const granted = server.global || grantedBy.length > 0;
   const state = blockedBy.length ? "blocked" : granted ? "granted" : "none";
   const listed = server.toolsRestricted
     ? server.tools.filter((tool) => server.allowedTools.includes(tool.name))
     : server.tools;
-  const tools = state === "granted" ? listed.map((tool) => tool.name).filter((name) => !blockedTools.includes(name)) : [];
-  return { state, grantedBy, blockedBy, global: server.global, blockedTools, tools };
+  const hidden = new Set(blockedActions);
+  const tools =
+    state === "granted"
+      ? listed.filter((tool) => !blockedTools.includes(tool.name) && !actionBlocked(tool, hidden)).map((tool) => tool.name)
+      : [];
+  return { state, grantedBy, blockedBy, global: server.global, blockedTools, blockedActions, tools };
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { Card, Chip } from "@heroui/react";
+import { Card } from "@heroui/react";
 import { useTranslations } from "next-intl";
 import IconTile from "@/components/console/icon-tile";
 import PolicyChips from "./policy-chips";
@@ -33,15 +33,21 @@ export default function ProviderCard({
           <Card.Description className="truncate">{t("kindName", { kind: row.kind })}</Card.Description>
         </div>
       </Card.Header>
-      <Card.Content className="flex-row flex-wrap gap-1">
-        <Chip size="sm" variant="soft" color={row.hasApiKey ? "success" : "warning"}>
-          {t("keyState", { state: row.hasApiKey ? "stored" : "missing", account: "" })}
-        </Chip>
-        {row.discovered.length > 0 ? (
-          <Chip size="sm" variant="soft">
-            {t("modelCount", { count: row.discovered.length })}
-          </Chip>
-        ) : null}
+      <Card.Content className="gap-2">
+        <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted">
+          <span
+            className={
+              row.hasApiKey ? "inline-flex items-center gap-1.5" : "inline-flex items-center gap-1.5 text-warning"
+            }
+          >
+            <span
+              className={`size-1.5 rounded-full ${row.hasApiKey ? "bg-success" : "bg-warning"}`}
+              aria-hidden
+            />
+            {t("keyState", { state: row.hasApiKey ? "stored" : "missing", account: "" })}
+          </span>
+          {row.discovered.length > 0 ? <span>{t("modelCount", { count: row.discovered.length })}</span> : null}
+        </p>
         <PolicyChips policy={row.policy} />
       </Card.Content>
       <Card.Footer className="mt-auto flex-wrap items-center justify-between gap-2">

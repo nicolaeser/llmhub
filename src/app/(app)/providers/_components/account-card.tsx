@@ -1,8 +1,9 @@
 "use client";
 
-import { Button, Card, Chip, Disclosure, Skeleton, Spinner } from "@heroui/react";
+import { Badge, Button, Card, Disclosure, Skeleton, Spinner } from "@heroui/react";
 import { RefreshCw, Users } from "lucide-react";
 import { useFormatter, useNow, useTranslations } from "next-intl";
+import SubscriptionBadge, { PlanBadge } from "@/components/console/subscription-badge";
 import PolicyChips from "./policy-chips";
 import ProviderActions from "./provider-actions";
 import ProviderToggle from "./provider-toggle";
@@ -63,21 +64,21 @@ export default function AccountCard({
             </Card.Description>
           </div>
           <div className="flex shrink-0 flex-wrap justify-end gap-1">
-            {plan ? (
-              <Chip size="sm" variant="soft" color="accent">
-                {tProviders("signIn.plan", { plan })}
-              </Chip>
-            ) : null}
-            <Chip size="sm" variant="soft" color={ACCOUNT_STATE_COLOR[state]}>
+            <SubscriptionBadge />
+            <PlanBadge plan={plan} />
+            <Badge
+              size="sm"
+              variant="soft"
+              color={ACCOUNT_STATE_COLOR[state]}
+              className="px-1.5 whitespace-nowrap"
+            >
               {t("status", { status: state })}
-            </Chip>
+            </Badge>
           </div>
-        </div>
-        <div className="flex flex-wrap gap-1">
-          <PolicyChips policy={row.policy} />
         </div>
       </Card.Header>
       <Card.Content className="space-y-4">
+        <PolicyChips policy={row.policy} />
         {state === "paused" ? <p className="text-sm text-muted">{t("pausedHint")}</p> : null}
         {state === "limited" ? (
           <p className="text-sm text-warning">
@@ -125,34 +126,30 @@ export default function AccountCard({
           </Disclosure>
         ) : null}
         {limits?.resetCredits || limits?.extraUsage || limits?.credits ? (
-          <div className="flex flex-wrap items-center gap-2">
-            {limits.resetCredits ? (
-              <Chip size="sm" variant="soft" color={limits.resetCredits.available > 0 ? "success" : "default"}>
-                {t("limits.resetCredits", limits.resetCredits)}
-              </Chip>
-            ) : null}
+          <ul className="space-y-1 text-sm text-muted">
+            {limits.resetCredits ? <li>{t("limits.resetCredits", limits.resetCredits)}</li> : null}
             {limits.extraUsage ? (
-              <Chip size="sm" variant="soft">
+              <li>
                 {t("limits.extraUsage", {
                   used: format.number(limits.extraUsage.usedCents / 100, { style: "currency", currency: "USD" }),
                   limit: format.number(limits.extraUsage.limitCents / 100, { style: "currency", currency: "USD" }),
                 })}
-              </Chip>
+              </li>
             ) : null}
             {limits.credits ? (
-              <Chip size="sm" variant="soft">
+              <li>
                 {t("limits.credits", {
                   unlimited: limits.credits.unlimited ? "true" : "false",
                   balance: limits.credits.balance,
                 })}
-              </Chip>
+              </li>
             ) : null}
-          </div>
+          </ul>
         ) : null}
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <Chip size="sm" variant="soft" color={row.restricted ? "warning" : "default"}>
+          <p className={row.restricted ? "text-sm text-warning" : "text-sm text-muted"}>
             {t("access.summary", { restricted: String(row.restricted), count: row.assignments.length })}
-          </Chip>
+          </p>
           <Button size="sm" variant="tertiary" aria-label={t("access.manage")} onPress={() => onAccess(row)}>
             <Users size={14} aria-hidden />
             {t("access.manage")}

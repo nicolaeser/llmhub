@@ -1,6 +1,6 @@
 "use client";
 
-import { Chip, Label, Meter } from "@heroui/react";
+import { Badge, Label, Meter } from "@heroui/react";
 import { useFormatter, useNow, useTranslations } from "next-intl";
 import { meterColor } from "@/lib/utils/budget";
 import type { LimitWindow } from "@/types/providers";
@@ -62,9 +62,9 @@ export default function LimitMeter({
         ) : null}
         {!resetsAt && used === 0 ? <span>{t("notStarted")}</span> : null}
         {!renewed && window.limitReached ? (
-          <Chip size="sm" variant="soft" color="danger">
+          <Badge size="sm" variant="soft" color="danger" className="px-1.5 whitespace-nowrap">
             {t("reached")}
-          </Chip>
+          </Badge>
         ) : null}
       </div>
     </div>
