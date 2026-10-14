@@ -1,7 +1,7 @@
 import Sidebar from "./_components/sidebar";
 import ConsoleTopbar from "./_components/console-topbar";
 import BuildStatusProvider from "./_components/build-status";
-import IgnoreAutofill from "@/components/console/ignore-autofill";
+import IgnoreAutofill from "./_components/ignore-autofill";
 import { requireAuth } from "@/lib/auth/guards";
 import { currentBuild } from "@/lib/updates/build";
 
