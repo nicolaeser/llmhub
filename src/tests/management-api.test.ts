@@ -9,7 +9,7 @@ import { fileURLToPath } from "node:url";
 import { SESSION_COOKIE, signSessionToken } from "@/lib/auth/cookie";
 import { runAsPrincipal } from "@/lib/auth/delegation";
 import { AuthError } from "@/lib/auth/errors";
-import { requirePermission, requireSession } from "@/lib/auth/guards";
+import { requireActor, requirePermission, requireSession } from "@/lib/auth/guards";
 import { GateError } from "@/lib/gateway/errors";
 import { authenticateBearer } from "@/lib/gateway/access/principal";
 import { ApiProblem, problemFromError } from "@/lib/http/problem";
@@ -128,6 +128,7 @@ test("delegated principals satisfy requirePermission only within their scope", a
     (err: unknown) => err instanceof AuthError && err.code === "FORBIDDEN",
   );
   setRequest();
+  assert.equal(await runAsPrincipal(scoped, () => requireActor()), scoped);
   await assert.rejects(runAsPrincipal(scoped, () => requireSession()), { message: "Unauthorized" });
 });
 

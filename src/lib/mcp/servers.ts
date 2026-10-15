@@ -2,7 +2,7 @@ import "server-only";
 import { timingSafeEqual } from "node:crypto";
 import { cookies } from "next/headers";
 import prisma from "@/lib/db/prisma";
-import { requirePermission, requireSession } from "@/lib/auth/guards";
+import { requireActor, requirePermission } from "@/lib/auth/guards";
 import { hasPerm, PERMISSIONS } from "@/lib/auth/permissions";
 import { companyOf } from "@/lib/auth/scope";
 import { AuthError, isPrismaCode } from "@/lib/auth/errors";
@@ -327,7 +327,7 @@ function scopedView(row: ServerRow, session: AuthenticatedSession): McpServerVie
 }
 
 export async function loadMcpServerList() {
-  const session = await requireSession();
+  const session = await requireActor();
   if (!seesMcp(session)) throw new AuthError("FORBIDDEN");
   const company = companyOf(session);
   const [rows, setting, choices, companies] = await Promise.all([
@@ -380,7 +380,7 @@ export async function loadMcpServerList() {
 }
 
 export async function presentMcpServer(id: string) {
-  const session = await requireSession();
+  const session = await requireActor();
   if (!seesMcp(session)) throw new AuthError("FORBIDDEN");
   const company = companyOf(session);
   return { server: viewOf(await loadRow(id), managesMcp(session), company) };
@@ -782,7 +782,7 @@ export async function disconnectMcpOAuth(rawId: unknown) {
 }
 
 export async function loadMcpTargets() {
-  const session = await requireSession();
+  const session = await requireActor();
   const company = companyOf(session);
   if (!managesMcp(session) && !(company && hasPerm(session.permissions, PERMISSIONS.MCP_INSTALL))) throw new AuthError("FORBIDDEN");
   const options = await targetOptions();
@@ -799,7 +799,7 @@ export async function loadMcpTargets() {
 }
 
 export async function saveMcpAssignments(raw: unknown) {
-  const session = await requireSession();
+  const session = await requireActor();
   const company = companyOf(session);
   if (!managesMcp(session) && !(company && hasPerm(session.permissions, PERMISSIONS.MCP_INSTALL))) throw new AuthError("FORBIDDEN");
   const input = parse(mcpAssignmentsSchema, raw);

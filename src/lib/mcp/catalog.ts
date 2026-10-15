@@ -2,7 +2,7 @@ import "server-only";
 import prisma from "@/lib/db/prisma";
 import { writeAudit } from "@/lib/audit";
 import { AuthError, isPrismaCode } from "@/lib/auth/errors";
-import { requireSession } from "@/lib/auth/guards";
+import { requireActor } from "@/lib/auth/guards";
 import { hasPerm, PERMISSIONS } from "@/lib/auth/permissions";
 import { companyOf } from "@/lib/auth/scope";
 import { seal } from "@/lib/crypto";
@@ -116,7 +116,7 @@ function nextRoleKey(name: string, taken: ReadonlySet<string>): string {
 }
 
 async function requireCatalogManager() {
-  const session = await requireSession();
+  const session = await requireActor();
   if (!hasPerm(session.permissions, PERMISSIONS.MCP_MANAGE) && !hasPerm(session.permissions, PERMISSIONS.SETTINGS_MANAGE)) {
     throw new AuthError("FORBIDDEN");
   }
@@ -208,7 +208,7 @@ export async function setMcpTemplate(raw: unknown) {
 }
 
 export async function saveMcpInstallation(raw: unknown) {
-  const session = await requireSession();
+  const session = await requireActor();
   const canManage = hasPerm(session.permissions, PERMISSIONS.MCP_MANAGE);
   const canInstall = hasPerm(session.permissions, PERMISSIONS.MCP_INSTALL);
   if (!canManage && !canInstall) throw new AuthError("FORBIDDEN");
