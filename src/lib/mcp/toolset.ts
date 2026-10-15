@@ -143,12 +143,17 @@ export async function loadMcpServers(chain: McpChain) {
       internal: true,
       enabled: true,
       global: true,
+      template: true,
       toolsRestricted: true,
       allowedTools: true,
       tools: true,
       oauthLogin: { select: { status: true } },
+      installations: {
+        where: { orgId: chain.orgId || "__none__", enabled: true },
+        select: { baseUrl: true, authType: true, authHeader: true, authSecret: true },
+      },
       assignments: {
-        where: { OR: conditions },
+        where: conditions.length ? { OR: conditions } : { id: "__none__" },
         select: {
           serverId: true,
           orgId: true,
@@ -159,6 +164,7 @@ export async function loadMcpServers(chain: McpChain) {
           mode: true,
           blockedTools: true,
           blockedActions: true,
+          role: { select: { allTools: true, tools: true, allActions: true, actions: true } },
         },
       },
     },
@@ -181,11 +187,38 @@ export async function loadMcpServers(chain: McpChain) {
         ...rule,
         mode: isAssignmentMode(rule.mode) ? rule.mode : "block",
         blockedActions: Array.isArray(rule.blockedActions) ? rule.blockedActions : [],
+        role: rule.role
+          ? {
+              allTools: rule.role.allTools,
+              tools: rule.role.tools,
+              allActions: rule.role.allActions,
+              actions: rule.role.actions,
+            }
+          : null,
       })),
     ),
     chain,
   );
-  return { servers, records };
+  const offered = new Map(rows.map((row) => [row.id, row]));
+  const visible = servers.filter((server) => {
+    const row = offered.get(server.serverId);
+    const record = records.get(server.serverId);
+    if (!row || !record || !row.template) return true;
+    const installation = row.installations[0];
+    if (!installation) return false;
+    if (record.kind !== "hosted") return true;
+    const authType = installation.authType === "none" || installation.authType === "header" ? installation.authType : "bearer";
+    if (authType !== "none" && !installation.authSecret) return false;
+    records.set(server.serverId, {
+      ...record,
+      url: installation.baseUrl || record.url,
+      authType,
+      authHeader: authType === "header" ? installation.authHeader : "",
+      authSecret: installation.authSecret,
+    });
+    return true;
+  });
+  return { servers: visible, records };
 }
 
 function changed(record: McpServerRecord, connection: McpConnection | null): connection is McpConnection {

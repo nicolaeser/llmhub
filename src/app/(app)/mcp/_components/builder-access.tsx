@@ -23,12 +23,18 @@ import SearchSelect from "@/components/console/search-select";
 import { useErrorToast } from "@/components/console/use-error-toast";
 import { isActionFail } from "@/lib/http/action-result";
 import { explainAccess } from "@/lib/mcp/resolve";
-import { MCP_ACTIONS, MCP_MODES, MCP_SCOPES } from "@/schemas/mcp";
-import type { HostedTool, McpAssignmentMode, McpAssignmentView, McpChain, McpTargetOption, McpTargetOptions } from "@/types/mcp";
+import { MCP_ACTIONS, MCP_MODES, MCP_ROLE_KEYS, MCP_SCOPES } from "@/schemas/mcp";
+import type { HostedTool, McpAssignmentMode, McpAssignmentView, McpChain, McpRoleGrant, McpTargetOption, McpTargetOptions } from "@/types/mcp";
 import type { AssignmentScope } from "@/types/providers";
 import { loadMcpTargetsAction } from "../_action";
 
 const EMPTY_OPTIONS: McpTargetOptions = { org: [], team: [], project: [], member: [], key: [] };
+
+const PRESET_ROLES: Record<(typeof MCP_ROLE_KEYS)[number], McpRoleGrant & { key: string; name: string }> = {
+  reader: { key: "reader", name: "Reader", allTools: true, tools: [], allActions: false, actions: ["read"] },
+  operator: { key: "operator", name: "Operator", allTools: true, tools: [], allActions: false, actions: ["read", "write"] },
+  admin: { key: "admin", name: "Admin", allTools: true, tools: [], allActions: true, actions: [] },
+};
 
 function chainFor(scope: AssignmentScope, option: McpTargetOption): McpChain {
   return {
@@ -52,7 +58,7 @@ function ancestorsOf(rule: McpAssignmentView, options: McpTargetOptions): McpAss
   ];
   return levels
     .filter(([scope, id]) => id && !(scope === rule.scope && id === rule.id))
-    .map(([scope, id]) => ({ scope, id, label: "", mode: "allow", blockedTools: [], blockedActions: [] }));
+    .map(([scope, id]) => ({ scope, id, label: "", mode: "allow" as const, blockedTools: [], blockedActions: [], roleId: "", role: null }));
 }
 
 export default function BuilderAccess({
@@ -147,7 +153,7 @@ export default function BuilderAccess({
   function addRule() {
     const option = known[scope].find((item) => item.id === target);
     if (!option) return;
-    onRules([...rules, { scope, id: option.id, label: option.label, mode, blockedTools: [], blockedActions: [] }]);
+    onRules([...rules, { scope, id: option.id, label: option.label, mode, blockedTools: [], blockedActions: [], roleId: "", role: null }]);
     setPreviewScope(scope);
     setPreviewId(option.id);
     setTarget("");
@@ -293,6 +299,37 @@ export default function BuilderAccess({
                     </Button>
                   </div>
                 </div>
+                {rule.mode === "allow" ? (
+                  <Select
+                    fullWidth
+                    selectedKey={rule.role?.key || "none"}
+                    onSelectionChange={(key) => {
+                      const preset = MCP_ROLE_KEYS.find((item) => item === String(key));
+                      updateRule(index, { roleId: "", role: preset ? PRESET_ROLES[preset] : null });
+                    }}
+                    isDisabled={pending}
+                  >
+                    <Label>{tAssign("role")}</Label>
+                    <Select.Trigger>
+                      <Select.Value />
+                      <Select.Indicator />
+                    </Select.Trigger>
+                    <Select.Popover>
+                      <ListBox>
+                        <ListBox.Item id="none" textValue={tAssign("roleNone")}>
+                          {tAssign("roleNone")}
+                          <ListBox.ItemIndicator />
+                        </ListBox.Item>
+                        {MCP_ROLE_KEYS.map((item) => (
+                          <ListBox.Item key={item} id={item} textValue={tAssign("rolePreset", { role: item })}>
+                            {tAssign("rolePreset", { role: item })}
+                            <ListBox.ItemIndicator />
+                          </ListBox.Item>
+                        ))}
+                      </ListBox>
+                    </Select.Popover>
+                  </Select>
+                ) : null}
                 <MultiPicker
                   label={tAssign("blockedTools")}
                   description={tAssign("blockedToolsHint", { mode: rule.mode })}

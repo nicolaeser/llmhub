@@ -3,6 +3,7 @@
   "subtitle": "Verbinde einen öffentlichen MCP-Server oder lass einen Assistenten einen aus einer API-Dokumentation bauen. Zugewiesene Aufrufer nutzen die Tools bei jedem Modellaufruf und über POST /api/v1/mcp.",
   "add": "Server hinzufügen",
   "readOnly": "Du kannst MCP-Server ansehen. Zum Ändern brauchst du die Berechtigung, Einstellungen zu verwalten.",
+  "installOnly": "Du kannst einen API-Key des Unternehmens hinterlegen und den Zugriff innerhalb des Unternehmens festlegen. Den Server selbst zu ändern braucht die Berechtigung, MCP zu verwalten.",
   "empty": {
     "title": "Noch keine MCP-Server",
     "description": "Verbinde einen öffentlichen MCP-Server oder baue einen aus einer API-Dokumentation. Das Gateway ruft die Tools für jedes Modell und jeden Anbieter auf, und die Zugangsdaten verlassen das Gateway nie."
@@ -35,6 +36,8 @@
     "modelEmpty": "Lege zuerst unter Modelle ein aktives Chat-Modell an.",
     "template": "Vorlage für die Anweisung",
     "templateHint": "Die Vorlage füllt die Anweisung. Du kannst sie vor dem Entwurf ändern.",
+    "share": "Für Unternehmen anbieten",
+    "shareHint": "Jedes Unternehmen verbindet einen eigenen API-Key. Aufrufe nutzen dann diesen Key, nicht das Geheimnis des Servers.",
     "templateName": "{template, select, readonly {Nur lesen} writes {Lesen und ändern} full {Alles, auch Löschen} custom {Eigene Anweisung} other {Vorlage}}",
     "templateText": "{template, select, readonly {Baue nur sichere Lesevorgänge aus dieser Dokumentation. Lege keine Tools an, die Daten ändern oder löschen. Setze bei jedem Tool action auf read.} writes {Baue die Lese- und Schreibvorgänge aus dieser Dokumentation. Baue keine Löschvorgänge und keine anderen unumkehrbaren Aufrufe. Setze Lesevorgänge auf action read und Anlegen oder Aktualisieren auf action write.} full {Baue jeden Vorgang aus dieser Dokumentation. Setze sichere Lesevorgänge auf action read, Anlegen und Aktualisieren auf action write, und Löschen oder unumkehrbare Aufrufe auf action delete.} other {}}",
     "instruction": "Anweisung",
@@ -70,6 +73,51 @@
     "manage": "Zugriff auf {name} verwalten",
     "button": "Zugriff"
   },
+  "roles": {
+    "title": "Rollen für {name}",
+    "description": "Eine Rolle begrenzt die Tools und Aktionen, die eine Erlaubnis vergibt. Die speziellste Erlaubnis bestimmt die Rolle. Sperren aus jeder passenden Regel gelten weiter.",
+    "open": "Rollen",
+    "manage": "Rollen für {name}",
+    "saved": "Rolle gespeichert",
+    "deleted": "Rolle gelöscht",
+    "create": "Neue Rolle",
+    "name": "Name",
+    "builtinHint": "Eingebaute Rollen behalten ihren Namen. Du kannst ändern, welche Tools und Aktionen sie gewähren.",
+    "nameHint": "Wird angezeigt, wenn du die Rolle zuweist.",
+    "roleDescription": "Beschreibung",
+    "allTools": "Alle Tools",
+    "tools": "Tools",
+    "toolsHint": "Nur diese Tools werden gewährt.",
+    "toolsEmpty": "Keine Tools ausgewählt",
+    "allActions": "Alle Aktionen",
+    "actions": "Aktionen",
+    "actionsHint": "Tools ohne Aktion fallen weg, wenn Aktionen begrenzt sind.",
+    "delete": "Rolle löschen"
+  },
+  "install": {
+    "title": "API-Key für {name}",
+    "description": "Ein Unternehmen nutzt seinen eigenen Key. Zugriffsregeln entscheiden weiter, wer den Server aufrufen darf. Ein globaler Server steht jedem Key eines Unternehmens offen, das einen verbunden hat.",
+    "open": "API-Key",
+    "manage": "API-Key für {name}",
+    "company": "Unternehmen",
+    "companyEmpty": "Lege zuerst ein Unternehmen an, bevor du einen Key verbindest.",
+    "enabled": "Verbunden",
+    "enabledHint": "Schalt das aus, damit dieses Unternehmen die Vorlage nicht mehr nutzt.",
+    "authType": "Authentifizierung",
+    "authOption": "{type, select, bearer {Bearer-Token} header {Eigener Header} other {Keine Authentifizierung}}",
+    "header": "Header-Name",
+    "secret": "{type, select, bearer {Token} other {Header-Wert}}",
+    "secretKeep": "Ein Key ist gespeichert. Leer lassen, um ihn zu behalten.",
+    "secretHint": "Verschlüsselt gespeichert und nie wieder angezeigt.",
+    "baseUrl": "API-Basis-URL",
+    "baseHint": "Optional. Leer lassen, um die URL des Servers zu nutzen.",
+    "template": "Als Vorlage anbieten",
+    "templateHint": "Unternehmen können einen eigenen API-Key verbinden. Gehostete Aufrufe nutzen diesen Key, nicht das Geheimnis des Servers.",
+    "saved": "Unternehmens-Key gespeichert",
+    "connected": "API-Key verbunden",
+    "missing": "Noch kein API-Key",
+    "companies": "{count, plural, =0 {Keine Unternehmens-Keys} one {# Unternehmen} other {# Unternehmen}}"
+  },
   "card": {
     "auth": "{type, select, bearer {Bearer-Token} header {Eigener Header} oauth {OAuth} other {Keine Authentifizierung}}",
     "protocol": "{era, select, modern {Zustandslos {version}} legacy {Sessions {version}} sse {HTTP+SSE {version}} other {{version}}}",
@@ -77,6 +125,7 @@
     "enabledState": "{enabled, select, true {Aktiv} other {Deaktiviert}}",
     "refresh": "Tools neu laden",
     "reloaded": "{count, plural, =0 {Keine Tools gefunden} one {# Tool geladen} other {# Tools geladen}}",
+    "template": "Vorlage",
     "edit": "{name} bearbeiten",
     "deleteConfirm": "{name} löschen? Aufrufer verlieren seine Tools sofort."
   },
@@ -165,6 +214,9 @@
     "allCallers": "alle Aufrufer",
     "source": "{scope, select, org {Firma} team {Abteilung} project {Projekt} member {Person} key {Schlüssel} other {Ziel}} {label}",
     "save": "Zugriff speichern",
-    "saved": "Zugriff gespeichert"
+    "saved": "Zugriff gespeichert",
+    "role": "Rolle",
+    "roleNone": "Jedes Tool",
+    "rolePreset": "{role, select, reader {Lesen} operator {Betreiben} admin {Verwalten} other {Rolle}}"
   }
 }

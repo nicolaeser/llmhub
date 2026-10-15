@@ -3,6 +3,8 @@
   "primaryNav": "Primary navigation",
   "toggleCollapsed": "{collapsed, select, true {Expand sidebar} other {Collapse sidebar}}",
   "openMenu": "Open navigation menu",
+  "workspaceLabel": "Workspace",
+  "workspaceAll": "All companies",
   "goHome": "Go to the start page",
   "sections": {
     "organization": "Organization",

@@ -5,6 +5,7 @@ import type {
   McpChain,
   McpEffectiveServer,
   McpExplanation,
+  McpRoleGrant,
   McpServerPolicy,
   McpToolSpec,
 } from "@/types/mcp";
@@ -43,6 +44,49 @@ function actionBlocked(tool: McpToolSpec, blocked: ReadonlySet<string>): boolean
   return Boolean(tool.action && blocked.has(tool.action));
 }
 
+const SCOPE_RANK = ["key", "member", "project", "team", "org"] as const;
+
+function columnScope(rule: {
+  keyId?: string | null;
+  memberId?: string | null;
+  projectId?: string | null;
+  teamId?: string | null;
+  orgId?: string | null;
+}): (typeof SCOPE_RANK)[number] | null {
+  if (rule.keyId) return "key";
+  if (rule.memberId) return "member";
+  if (rule.projectId) return "project";
+  if (rule.teamId) return "team";
+  if (rule.orgId) return "org";
+  return null;
+}
+
+function mostSpecificAllow<T extends { mode: string; scope?: string; keyId?: string | null; memberId?: string | null; projectId?: string | null; teamId?: string | null; orgId?: string | null }>(
+  rules: T[],
+): T | null {
+  let best: T | null = null;
+  let rank: number = SCOPE_RANK.length;
+  for (const rule of rules) {
+    if (rule.mode !== "allow") continue;
+    const scope = rule.scope && SCOPE_RANK.includes(rule.scope as (typeof SCOPE_RANK)[number])
+      ? (rule.scope as (typeof SCOPE_RANK)[number])
+      : columnScope(rule);
+    const next = scope ? SCOPE_RANK.indexOf(scope) : SCOPE_RANK.length;
+    if (next < rank) {
+      best = rule;
+      rank = next;
+    }
+  }
+  return best;
+}
+
+export function roleAllowsTool(role: McpRoleGrant | null | undefined, tool: McpToolSpec): boolean {
+  if (!role) return true;
+  if (!role.allTools && !role.tools.includes(tool.name)) return false;
+  if (role.allActions) return true;
+  return Boolean(tool.action && role.actions.includes(tool.action));
+}
+
 function allowedTools(server: McpServerPolicy): McpToolSpec[] {
   if (!server.toolsRestricted) return server.tools;
   const allowed = new Set(server.allowedTools);
@@ -62,7 +106,10 @@ export function effectiveServers(
     if (!granted || matching.some(deniesServer)) continue;
     const blocked = new Set(matching.flatMap((rule) => rule.blockedTools));
     const blockedActions = new Set(matching.flatMap((rule) => rule.blockedActions));
-    const tools = allowedTools(server).filter((tool) => !blocked.has(tool.name) && !actionBlocked(tool, blockedActions));
+    const role = mostSpecificAllow(matching)?.role;
+    const tools = allowedTools(server).filter(
+      (tool) => roleAllowsTool(role, tool) && !blocked.has(tool.name) && !actionBlocked(tool, blockedActions),
+    );
     if (tools.length) out.push({ serverId: server.id, serverName: server.name, tools });
   }
   return out;
@@ -89,9 +136,12 @@ export function explainAccess(
     ? server.tools.filter((tool) => server.allowedTools.includes(tool.name))
     : server.tools;
   const hidden = new Set(blockedActions);
+  const role = mostSpecificAllow(matching)?.role;
   const tools =
     state === "granted"
-      ? listed.filter((tool) => !blockedTools.includes(tool.name) && !actionBlocked(tool, hidden)).map((tool) => tool.name)
+      ? listed
+          .filter((tool) => roleAllowsTool(role, tool) && !blockedTools.includes(tool.name) && !actionBlocked(tool, hidden))
+          .map((tool) => tool.name)
       : [];
   return { state, grantedBy, blockedBy, global: server.global, blockedTools, blockedActions, tools };
 }

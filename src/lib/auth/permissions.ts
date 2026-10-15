@@ -10,6 +10,7 @@ const permissionDomains = [
   "settings",
   "tools",
   "integrations",
+  "mcp",
 ] as const satisfies readonly PermissionDomain[];
 const meta = (domain: PermissionDomain, level: PermissionLevel): PermissionMeta => ({
   domain,
@@ -43,6 +44,9 @@ export const permissionCatalog = {
   "integrations:manage": meta("integrations", "work"),
   "integrations:publish": meta("integrations", "sensitive"),
   "integrations:credentials": meta("integrations", "sensitive"),
+  "mcp:read": meta("mcp", "view"),
+  "mcp:install": meta("mcp", "work"),
+  "mcp:manage": meta("mcp", "sensitive"),
 } as const satisfies Record<Permission, PermissionMeta>;
 
 export const permissions = Object.keys(permissionCatalog) as Permission[];
@@ -74,6 +78,9 @@ export const PERMISSIONS = {
   INTEGRATIONS_MANAGE: "integrations:manage",
   INTEGRATIONS_PUBLISH: "integrations:publish",
   INTEGRATIONS_CREDENTIALS: "integrations:credentials",
+  MCP_READ: "mcp:read",
+  MCP_INSTALL: "mcp:install",
+  MCP_MANAGE: "mcp:manage",
 } as const satisfies Record<string, Permission>;
 
 export const roleTemplateKeys = ["admin", "operator", "finance", "viewer"] as const satisfies readonly RoleTemplateKey[];
@@ -88,6 +95,7 @@ export const roleTemplates: Readonly<Record<RoleTemplateKey, readonly Permission
       (permission) =>
         permission !== "roles:manage" &&
         permission !== "settings:manage" &&
+        permission !== "mcp:manage" &&
         permission !== "users:security" &&
         permission !== "logs:content",
     ),
@@ -104,6 +112,7 @@ export const roleTemplates: Readonly<Record<RoleTemplateKey, readonly Permission
     "pricing:manage",
     "settings:read",
     "integrations:read",
+    "mcp:read",
   ]),
   viewer: template([
     "keys:read",
@@ -115,6 +124,7 @@ export const roleTemplates: Readonly<Record<RoleTemplateKey, readonly Permission
     "settings:read",
     "playground:use",
     "integrations:read",
+    "mcp:read",
   ]),
 };
 
@@ -133,6 +143,8 @@ export const COMPANY_PERMISSIONS = [
   "integrations:manage",
   "integrations:publish",
   "integrations:credentials",
+  "mcp:read",
+  "mcp:install",
 ] as const satisfies readonly Permission[];
 
 export function isRoleTemplateKey(value: unknown): value is RoleTemplateKey {

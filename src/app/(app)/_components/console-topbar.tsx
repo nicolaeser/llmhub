@@ -1,18 +1,48 @@
 "use client";
 
-import { Button, Separator } from "@heroui/react";
+import { useState, useTransition } from "react";
+import { Button, Label, ListBox, Select, Separator } from "@heroui/react";
 import { LogOut, Menu, RefreshCw } from "lucide-react";
 import { useTranslations } from "next-intl";
+import { notifyWorkspace } from "@/lib/auth/workspace-event";
+import { useErrorToast } from "@/components/console/use-error-toast";
+import { isActionFail } from "@/lib/http/action-result";
+import { setWorkspaceAction } from "../_action";
 import { useBuildStatus } from "./build-status";
 import { useConsoleNav } from "./sidebar";
 
-export default function ConsoleTopbar() {
+export default function ConsoleTopbar({
+  companies = [],
+  workspaceOrgId = null,
+}: {
+  companies?: { id: string; alias: string }[];
+  workspaceOrgId?: string | null;
+}) {
   const t = useTranslations("Common");
   const tNav = useTranslations("Sidebar");
   const nav = useConsoleNav();
   const build = useBuildStatus();
+  const showError = useErrorToast();
+  const [pending, start] = useTransition();
+  const [override, setOverride] = useState<string | null>(null);
+  const chosen = override !== null && override !== (workspaceOrgId ?? "") ? override : (workspaceOrgId ?? "");
   const health = build?.health ?? "connecting";
   const healthLabel = t("health.status", { status: health });
+
+  function choose(key: string) {
+    const next = key === "all" ? "" : key;
+    if (next === chosen) return;
+    setOverride(next);
+    start(async () => {
+      const result = await setWorkspaceAction(next);
+      if (isActionFail(result)) {
+        setOverride(null);
+        showError(result.error);
+        return;
+      }
+      notifyWorkspace(result.orgId);
+    });
+  }
 
   return (
     <>
@@ -43,6 +73,38 @@ export default function ConsoleTopbar() {
           </span>
         </div>
         <div className="flex-1" />
+        {companies.length ? (
+          <Select
+            aria-label={tNav("workspaceLabel")}
+            className="w-56"
+            selectedKey={chosen && companies.some((company) => company.id === chosen) ? chosen : "all"}
+            onSelectionChange={(key) => {
+              if (key == null) return;
+              choose(String(key));
+            }}
+            isDisabled={pending}
+          >
+            <Label className="sr-only">{tNav("workspaceLabel")}</Label>
+            <Select.Trigger>
+              <Select.Value />
+              <Select.Indicator />
+            </Select.Trigger>
+            <Select.Popover>
+              <ListBox>
+                <ListBox.Item id="all" textValue={tNav("workspaceAll")}>
+                  {tNav("workspaceAll")}
+                  <ListBox.ItemIndicator />
+                </ListBox.Item>
+                {companies.map((company) => (
+                  <ListBox.Item key={company.id} id={company.id} textValue={company.alias}>
+                    {company.alias}
+                    <ListBox.ItemIndicator />
+                  </ListBox.Item>
+                ))}
+              </ListBox>
+            </Select.Popover>
+          </Select>
+        ) : null}
         <Button
           isIconOnly
           size="sm"

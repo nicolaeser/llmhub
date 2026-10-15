@@ -26,11 +26,13 @@ export const mcpAssignmentSelect = {
     mode: true,
     blockedTools: true,
     blockedActions: true,
+    roleId: true,
+    role: { select: { key: true, name: true, allTools: true, tools: true, allActions: true, actions: true } },
     org: { select: { alias: true } },
-    team: { select: { alias: true } },
-    project: { select: { alias: true } },
-    member: { select: { name: true, email: true } },
-    key: { select: { keyAlias: true, prefix: true } },
+    team: { select: { alias: true, orgId: true } },
+    project: { select: { alias: true, orgId: true } },
+    member: { select: { name: true, email: true, orgId: true } },
+    key: { select: { keyAlias: true, prefix: true, orgId: true } },
   },
   orderBy: { createdAt: "asc" },
 } as const;
@@ -53,6 +55,17 @@ export function assignmentViews(rows: McpAssignmentSource[]): McpAssignmentView[
       mode: isAssignmentMode(row.mode) ? row.mode : "block",
       blockedTools: row.blockedTools,
       blockedActions: Array.isArray(row.blockedActions) ? row.blockedActions : [],
+      roleId: row.roleId ?? "",
+      role: row.role
+        ? {
+            key: row.role.key,
+            name: row.role.name,
+            allTools: row.role.allTools,
+            tools: row.role.tools,
+            allActions: row.role.allActions,
+            actions: row.role.actions,
+          }
+        : null,
     }];
   });
 }
@@ -148,6 +161,35 @@ export function uniqueAssignments(assignments: McpAssignmentInput[]): McpAssignm
   return [...seen.values()];
 }
 
+async function rolesBelong(serverId: string, rows: McpAssignmentInput[]): Promise<boolean> {
+  const roleIds = [...new Set(rows.map((row) => row.roleId).filter((id): id is string => Boolean(id)))];
+  if (!roleIds.length) return true;
+  const found = await prisma.mcpRole.count({ where: { serverId, id: { in: roleIds } } });
+  return found === roleIds.length;
+}
+
+async function targetsInCompany(rows: McpAssignmentInput[], orgId: string): Promise<boolean> {
+  const ids = idsByScope(rows);
+  if (ids.org.some((id) => id !== orgId)) return false;
+  const [teams, projects, members, keys] = await Promise.all([
+    prisma.team.count({ where: { id: { in: ids.team }, orgId } }),
+    prisma.project.count({ where: { id: { in: ids.project }, orgId } }),
+    prisma.member.count({ where: { id: { in: ids.member }, orgId } }),
+    prisma.virtualKey.count({ where: { id: { in: ids.key }, orgId } }),
+  ]);
+  return teams === ids.team.length && projects === ids.project.length && members === ids.member.length && keys === ids.key.length;
+}
+
+function holderOrg(row: {
+  orgId: string | null;
+  team: { orgId: string | null } | null;
+  project: { orgId: string | null } | null;
+  member: { orgId: string } | null;
+  key: { orgId: string | null } | null;
+}): string | null {
+  return row.orgId || row.team?.orgId || row.project?.orgId || row.member?.orgId || row.key?.orgId || null;
+}
+
 export async function replaceMcpAssignments(
   serverId: string,
   global: boolean,
@@ -155,12 +197,14 @@ export async function replaceMcpAssignments(
 ): Promise<{ global: boolean; assignments: McpAssignmentView[] } | null> {
   const rows = uniqueAssignments(assignments);
   if (!(await targetsExist(idsByScope(rows)))) return null;
+  if (!(await rolesBelong(serverId, rows))) return null;
   const data: Prisma.McpAssignmentCreateManyInput[] = rows.map((row) => ({
     serverId,
     [COLUMN[row.scope]]: row.id,
     mode: row.mode,
     blockedTools: row.blockedTools,
     blockedActions: row.blockedActions,
+    roleId: row.mode === "allow" ? row.roleId || null : null,
   }));
   const saved = await prisma.$transaction(async (tx) => {
     const exists = await tx.mcpServer.findUnique({ where: { id: serverId }, select: { id: true } });
@@ -170,6 +214,48 @@ export async function replaceMcpAssignments(
     return tx.mcpServer.update({
       where: { id: serverId },
       data: { global },
+      select: { global: true, assignments: mcpAssignmentSelect },
+    });
+  });
+  return saved ? { global: saved.global, assignments: assignmentViews(saved.assignments) } : null;
+}
+
+export async function replaceCompanyMcpAssignments(
+  serverId: string,
+  orgId: string,
+  assignments: McpAssignmentInput[],
+): Promise<{ global: boolean; assignments: McpAssignmentView[] } | null> {
+  const rows = uniqueAssignments(assignments);
+  if (!(await targetsExist(idsByScope(rows)))) return null;
+  if (!(await targetsInCompany(rows, orgId))) return null;
+  if (!(await rolesBelong(serverId, rows))) return null;
+  const current = await prisma.mcpAssignment.findMany({
+    where: { serverId },
+    select: {
+      id: true,
+      orgId: true,
+      team: { select: { orgId: true } },
+      project: { select: { orgId: true } },
+      member: { select: { orgId: true } },
+      key: { select: { orgId: true } },
+    },
+  });
+  const drop = current.filter((row) => holderOrg(row) === orgId).map((row) => row.id);
+  const data: Prisma.McpAssignmentCreateManyInput[] = rows.map((row) => ({
+    serverId,
+    [COLUMN[row.scope]]: row.id,
+    mode: row.mode,
+    blockedTools: row.blockedTools,
+    blockedActions: row.blockedActions,
+    roleId: row.mode === "allow" ? row.roleId || null : null,
+  }));
+  const saved = await prisma.$transaction(async (tx) => {
+    const exists = await tx.mcpServer.findUnique({ where: { id: serverId }, select: { id: true } });
+    if (!exists) return null;
+    if (drop.length) await tx.mcpAssignment.deleteMany({ where: { id: { in: drop } } });
+    if (data.length) await tx.mcpAssignment.createMany({ data });
+    return tx.mcpServer.findUnique({
+      where: { id: serverId },
       select: { global: true, assignments: mcpAssignmentSelect },
     });
   });

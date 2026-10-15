@@ -23,6 +23,7 @@ model Organization {
   reports  UsageReport[]
   accounts ProviderAssignment[]
   mcp      McpAssignment[]
+  mcpInstallations McpInstallation[]
 
   vectorStores VectorStore[]
 
@@ -608,6 +609,7 @@ model McpServer {
   internal        Boolean   @default(false)
   enabled         Boolean   @default(true)
   global          Boolean   @default(false)
+  template        Boolean   @default(false)
   toolsRestricted Boolean   @default(false)
   allowedTools    String[]  @default([])
   tools           Json      @default("[]")
@@ -616,8 +618,49 @@ model McpServer {
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
+  assignments   McpAssignment[]
+  roles         McpRole[]
+  installations McpInstallation[]
+  oauthLogin    McpOAuthLogin?
+}
+
+model McpRole {
+  id          String   @id @default(cuid())
+  serverId    String
+  server      McpServer @relation(fields: [serverId], references: [id], onDelete: Cascade)
+  key         String
+  name        String
+  description String   @default("")
+  allTools    Boolean  @default(false)
+  tools       String[] @default([])
+  allActions  Boolean  @default(false)
+  actions     String[] @default([])
+  builtin     Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
   assignments McpAssignment[]
-  oauthLogin  McpOAuthLogin?
+
+  @@unique([serverId, key])
+  @@index([serverId])
+}
+
+model McpInstallation {
+  id         String       @id @default(cuid())
+  serverId   String
+  server     McpServer    @relation(fields: [serverId], references: [id], onDelete: Cascade)
+  orgId      String
+  org        Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  enabled    Boolean      @default(true)
+  baseUrl    String       @default("")
+  authType   String       @default("bearer")
+  authHeader String       @default("")
+  authSecret String       @default("")
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+
+  @@unique([serverId, orgId])
+  @@index([orgId])
 }
 
 model McpOAuthLogin {
@@ -654,6 +697,8 @@ model McpAssignment {
   mode           String        @default("allow")
   blockedTools   String[]      @default([])
   blockedActions String[]      @default([])
+  roleId         String?
+  role           McpRole?      @relation(fields: [roleId], references: [id], onDelete: SetNull)
   createdAt      DateTime      @default(now())
 
   @@unique([serverId, orgId])
@@ -666,6 +711,7 @@ model McpAssignment {
   @@index([projectId])
   @@index([memberId])
   @@index([keyId])
+  @@index([roleId])
 }
 
 model IntegrationBlueprint {

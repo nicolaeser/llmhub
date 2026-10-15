@@ -15,7 +15,7 @@
   "members": "{count, plural, =0 {No members} one {# member} other {# members}}",
   "permissionCount": "{count, plural, one {# permission} other {# permissions}}",
   "level": "{level, select, view {View} work {Work} sensitive {Sensitive} other {}}",
-  "domain": "{domain, select, keys {API keys} providers {Providers} models {Models} tenancy {Tenancy} spend {Usage and budgets} access {Users and roles} settings {Settings} tools {Tools} integrations {Integrations} other {Other}}",
+  "domain": "{domain, select, keys {API keys} providers {Providers} models {Models} tenancy {Tenancy} spend {Usage and budgets} access {Users and roles} settings {Settings} tools {Tools} integrations {Integrations} mcp {MCP} other {Other}}",
   "columns": {
     "role": "Role",
     "members": "Members",
@@ -139,6 +139,18 @@
     "integrationsCredentials": {
       "label": "Manage integration credentials",
       "description": "Store, rotate, and revoke connection secrets."
+    },
+    "mcpRead": {
+      "label": "View MCP",
+      "description": "See MCP servers, roles, and connected companies without secrets."
+    },
+    "mcpInstall": {
+      "label": "Connect MCP for a company",
+      "description": "Store a company API key and set access inside that company."
+    },
+    "mcpManage": {
+      "label": "Manage MCP",
+      "description": "Build servers, offer templates, and change a server's roles."
     }
   }
 }

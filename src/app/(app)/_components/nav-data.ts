@@ -50,7 +50,7 @@ export const NAV: NavSection[] = [
     items: [
       { href: "/guardrails", labelKey: "items.guardrails", icon: Shield, permission: PERMISSIONS.SETTINGS_READ },
       { href: "/knowledge", labelKey: "items.knowledge", icon: Library, permission: PERMISSIONS.TENANCY_READ },
-      { href: "/mcp", labelKey: "items.mcp", icon: Blocks, permission: PERMISSIONS.SETTINGS_READ },
+      { href: "/mcp", labelKey: "items.mcp", icon: Blocks, permission: [PERMISSIONS.SETTINGS_READ, PERMISSIONS.MCP_READ] },
     ],
   },
   {

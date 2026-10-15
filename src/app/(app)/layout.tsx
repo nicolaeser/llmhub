@@ -3,6 +3,7 @@ import ConsoleTopbar from "./_components/console-topbar";
 import BuildStatusProvider from "./_components/build-status";
 import IgnoreAutofill from "./_components/ignore-autofill";
 import { requireAuth } from "@/lib/auth/guards";
+import prisma from "@/lib/db/prisma";
 import { currentBuild } from "@/lib/updates/build";
 
 export default async function AppLayout({
@@ -11,6 +12,9 @@ export default async function AppLayout({
   children: React.ReactNode;
 }) {
   const session = await requireAuth();
+  const companies = session.isOwner
+    ? await prisma.organization.findMany({ select: { id: true, alias: true }, orderBy: { alias: "asc" } })
+    : [];
 
   return (
     <BuildStatusProvider version={currentBuild()}>
@@ -22,7 +26,7 @@ export default async function AppLayout({
         }}
         permissions={session.permissions}
       >
-        <ConsoleTopbar />
+        <ConsoleTopbar companies={companies} workspaceOrgId={session.workspaceOrgId ?? null} />
         <main className="min-h-0 flex-1 scroll-pt-6 overflow-auto bg-background p-6 lg:scroll-pt-8 lg:px-10 lg:py-8">
           <div className="mx-auto max-w-[1400px]">{children}</div>
         </main>
