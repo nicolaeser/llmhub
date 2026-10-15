@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
-import { Alert, Badge, Button, Input, Label, Spinner, Surface, TextField } from "@heroui/react";
+import { Alert, Button, Chip, Input, Label, Spinner, Surface, TextField } from "@heroui/react";
 import { ExternalLink } from "lucide-react";
 import { useTranslations } from "next-intl";
 import CopyButton from "@/components/console/copy-button";
@@ -96,14 +96,14 @@ export default function SignInPanel({
             {t("signIn.account", { named: shown.account ? "true" : "false", account: shown.account })}
           </span>
           <PlanBadge plan={shown.plan} />
-          <Badge
+          <Chip
             size="sm"
             variant="soft"
             color={shown.status === "active" ? "success" : "warning"}
-            className="px-1.5 whitespace-nowrap"
+            className="whitespace-nowrap"
           >
             {t("signIn.status", { status: shown.status })}
-          </Badge>
+          </Chip>
         </div>
       ) : null}
       {waiting?.method === "code" ? (

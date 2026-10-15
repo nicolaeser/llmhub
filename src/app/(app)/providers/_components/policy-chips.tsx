@@ -1,10 +1,10 @@
 "use client";
 
-import { Badge } from "@heroui/react";
+import { Chip } from "@heroui/react";
 import { useTranslations } from "next-intl";
 import type { ProviderPolicyInput } from "@/types/providers";
 
-const BADGE = "px-1.5 whitespace-nowrap";
+const CHIP = "whitespace-nowrap";
 
 export default function PolicyChips({ policy }: { policy: ProviderPolicyInput }) {
   const t = useTranslations("Providers");
@@ -30,9 +30,9 @@ export default function PolicyChips({ policy }: { policy: ProviderPolicyInput })
   return (
     <div className="flex flex-wrap gap-1">
       {items.map((item) => (
-        <Badge key={item.key} size="sm" variant="soft" color={item.color} className={BADGE}>
+        <Chip key={item.key} size="sm" variant="soft" color={item.color} className={CHIP}>
           {item.label}
-        </Badge>
+        </Chip>
       ))}
     </div>
   );

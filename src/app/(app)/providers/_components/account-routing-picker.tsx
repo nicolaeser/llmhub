@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Badge, Button, Card, Description, Label, Radio, RadioGroup, Separator, Spinner, toast } from "@heroui/react";
+import { Button, Card, Chip, Description, Label, Radio, RadioGroup, Separator, Spinner, toast } from "@heroui/react";
 import {
   Activity,
   BatteryMedium,
@@ -124,9 +124,9 @@ export default function AccountRoutingPicker({
                         <span className="flex flex-wrap items-center gap-2">
                           <Label>{t("method", { strategy: item })}</Label>
                           {item === RECOMMENDED ? (
-                            <Badge size="sm" variant="soft" color="accent" className="px-1.5 whitespace-nowrap">
+                            <Chip size="sm" variant="soft" color="accent" className="whitespace-nowrap">
                               {t("recommended")}
-                            </Badge>
+                            </Chip>
                           ) : null}
                         </span>
                         <span className="block text-xs font-normal text-muted">{t("hint", { strategy: item })}</span>

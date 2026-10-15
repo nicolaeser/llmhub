@@ -1,16 +1,16 @@
 "use client";
 
-import { Badge } from "@heroui/react";
+import { Chip } from "@heroui/react";
 import { useTranslations } from "next-intl";
 
-const BADGE = "px-1.5 whitespace-nowrap";
+const CHIP = "whitespace-nowrap";
 
 export default function SubscriptionBadge() {
   const t = useTranslations("Providers");
   return (
-    <Badge size="sm" variant="soft" color="accent" className={BADGE} title={t("poolHint", { pool: "subscription" })}>
+    <Chip size="sm" variant="soft" color="accent" className={CHIP} title={t("poolHint", { pool: "subscription" })}>
       {t("pool", { pool: "subscription" })}
-    </Badge>
+    </Chip>
   );
 }
 
@@ -18,8 +18,8 @@ export function PlanBadge({ plan }: { plan: string }) {
   const t = useTranslations("Providers");
   if (!plan) return null;
   return (
-    <Badge size="sm" variant="primary" color="accent" className={BADGE}>
+    <Chip size="sm" variant="primary" color="accent" className={CHIP}>
       {t("signIn.plan", { plan })}
-    </Badge>
+    </Chip>
   );
 }
