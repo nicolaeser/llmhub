@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
-import { Badge, Button, Card, Spinner, useOverlayState } from "@heroui/react";
+import { Button, Card, Chip, Spinner, useOverlayState } from "@heroui/react";
 import { CircleCheck, CirclePause, Gauge, Plus, RefreshCw, TimerReset } from "lucide-react";
 import { useFormatter, useNow, useTranslations } from "next-intl";
 import IconTile from "@/components/console/icon-tile";
@@ -213,15 +213,15 @@ export default function SubscriptionAccounts({
                     {COUNTED_STATES.map((state) => {
                       const count = tally(state, items);
                       return count ? (
-                        <Badge
+                        <Chip
                           key={state}
                           size="sm"
                           variant="soft"
                           color={ACCOUNT_STATE_COLOR[state]}
-                          className="px-1.5 whitespace-nowrap"
+                          className="whitespace-nowrap"
                         >
                           {t("stateCount", { state, count })}
-                        </Badge>
+                        </Chip>
                       ) : null;
                     })}
                   </div>
