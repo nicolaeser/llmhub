@@ -1,6 +1,7 @@
 "use server";
 
 import { runAction } from "@/lib/http/action-result";
+import { ensureMcpRoles, saveMcpInstallation, saveMcpPermissions, setMcpTemplate } from "@/lib/mcp/catalog";
 import { draftMcpServer, setBuilderModel } from "@/lib/mcp/builder";
 import {
   createHostedMcpServer,
@@ -9,6 +10,7 @@ import {
   disconnectMcpOAuth,
   loadMcpServerList,
   loadMcpTargets,
+  presentMcpServer,
   probeMcpServer,
   refreshMcpServer,
   saveMcpAssignments,
@@ -71,4 +73,32 @@ export async function draftMcpServerAction(input: unknown) {
 
 export async function createHostedMcpServerAction(input: unknown) {
   return runAction(() => createHostedMcpServer(input));
+}
+
+export async function ensureMcpRolesAction(id: string) {
+  return runAction(async () => {
+    const saved = await ensureMcpRoles(id);
+    return presentMcpServer(saved.serverId);
+  });
+}
+
+export async function saveMcpPermissionsAction(input: unknown) {
+  return runAction(async () => {
+    const saved = await saveMcpPermissions(input);
+    return presentMcpServer(saved.serverId);
+  });
+}
+
+export async function setMcpTemplateAction(input: unknown) {
+  return runAction(async () => {
+    const saved = await setMcpTemplate(input);
+    return presentMcpServer(saved.serverId);
+  });
+}
+
+export async function saveMcpInstallationAction(input: unknown) {
+  return runAction(async () => {
+    const saved = await saveMcpInstallation(input);
+    return presentMcpServer(saved.serverId);
+  });
 }

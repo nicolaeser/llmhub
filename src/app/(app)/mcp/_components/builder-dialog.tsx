@@ -25,7 +25,7 @@ import { Sparkles } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useErrorToast } from "@/components/console/use-error-toast";
 import { isActionFail } from "@/lib/http/action-result";
-import { MCP_ACTIONS } from "@/schemas/mcp";
+import { MCP_ACTIONS, MCP_ROLE_KEYS } from "@/schemas/mcp";
 import type { HostedTool, McpAssignmentView, McpBuilderModel, McpDraft, McpServerView, McpToolAction } from "@/types/mcp";
 import { createHostedMcpServerAction, draftMcpServerAction, setBuilderModelAction } from "../_action";
 import BuilderAccess from "./builder-access";
@@ -72,6 +72,7 @@ export default function BuilderDialog({
   const [secret, setSecret] = useState("");
   const [tools, setTools] = useState<HostedTool[]>([]);
   const [enabled, setEnabled] = useState<string[]>([]);
+  const [shared, setShared] = useState(false);
   const [global, setGlobal] = useState(false);
   const [rules, setRules] = useState<McpAssignmentView[]>([]);
   const [savingModel, startModel] = useTransition();
@@ -148,6 +149,7 @@ export default function BuilderDialog({
         authHeader,
         secret,
         tools: chosen,
+        template: shared,
         global,
         assignments: rules.map((rule) => ({
           scope: rule.scope,
@@ -155,6 +157,7 @@ export default function BuilderDialog({
           mode: rule.mode,
           blockedTools: rule.blockedTools.filter((id) => included.has(id)),
           blockedActions: rule.blockedActions,
+          roleKey: rule.mode === "allow" && rule.role && MCP_ROLE_KEYS.includes(rule.role.key as (typeof MCP_ROLE_KEYS)[number]) ? rule.role.key : "",
         })),
       });
       if (isActionFail(result)) {
@@ -430,6 +433,16 @@ export default function BuilderDialog({
                     ) : null}
 
                     {step === "access" ? (
+                      <>
+                      <Switch isSelected={shared} onChange={setShared} isDisabled={pending}>
+                        <Switch.Content>
+                          <Switch.Control>
+                            <Switch.Thumb />
+                          </Switch.Control>
+                          <Label>{t("builder.share")}</Label>
+                        </Switch.Content>
+                        <Description>{t("builder.shareHint")}</Description>
+                      </Switch>
                       <BuilderAccess
                         tools={chosen}
                         global={global}
@@ -438,6 +451,7 @@ export default function BuilderDialog({
                         onGlobal={setGlobal}
                         onRules={setRules}
                       />
+                      </>
                     ) : null}
                   </div>
                 </Modal.Body>

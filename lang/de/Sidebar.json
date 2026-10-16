@@ -3,6 +3,8 @@
   "primaryNav": "Hauptnavigation",
   "toggleCollapsed": "{collapsed, select, true {Seitenleiste ausklappen} other {Seitenleiste einklappen}}",
   "openMenu": "Navigationsmenü öffnen",
+  "workspaceLabel": "Arbeitsbereich",
+  "workspaceAll": "Alle Unternehmen",
   "goHome": "Zur Startseite",
   "sections": {
     "organization": "Organisation",

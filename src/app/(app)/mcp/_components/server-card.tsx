@@ -2,7 +2,7 @@
 
 import { useTransition } from "react";
 import { Button, Card, Chip, Label, Spinner, Switch, toast } from "@heroui/react";
-import { LogIn, LogOut, Pencil, RefreshCw, Trash2, Users } from "lucide-react";
+import { KeyRound, LogIn, LogOut, Pencil, RefreshCw, Shield, Trash2, Users } from "lucide-react";
 import { useFormatter, useNow, useTranslations } from "next-intl";
 import ConfirmDialog from "@/components/console/confirm-dialog";
 import { useErrorToast } from "@/components/console/use-error-toast";
@@ -32,15 +32,23 @@ function enabledTools(server: McpServerView): number {
 export default function ServerCard({
   server,
   canManage,
+  canInstall,
+  companyId,
   onEdit,
   onAccess,
+  onPermissions,
+  onInstall,
   onChanged,
   onDeleted,
 }: {
   server: McpServerView;
   canManage: boolean;
+  canInstall: boolean;
+  companyId: string | null;
   onEdit: (server: McpServerView) => void;
   onAccess: (server: McpServerView) => void;
+  onPermissions: (server: McpServerView) => void;
+  onInstall: (server: McpServerView) => void;
   onChanged: (server: McpServerView) => void;
   onDeleted: (id: string) => void;
 }) {
@@ -57,6 +65,9 @@ export default function ServerCard({
   const allowed = enabledTools(server);
   const browserSignIn = server.authType === "oauth" && server.oauthGrant === "authorization_code";
   const signedIn = server.oauth?.status === "active";
+  const canAccess = canManage || canInstall;
+  const installation = companyId ? server.installations.find((row) => row.orgId === companyId) : null;
+  const connected = Boolean(installation?.enabled && (installation.authType === "none" || installation.hasSecret));
 
   function toggle(enabled: boolean) {
     startToggle(async () => {
@@ -151,6 +162,21 @@ export default function ServerCard({
               {t("hosted")}
             </Chip>
           ) : null}
+          {server.template ? (
+            <Chip size="sm" variant="soft" color="accent">
+              {t("card.template")}
+            </Chip>
+          ) : null}
+          {server.template && companyId ? (
+            <Chip size="sm" variant="soft" color={connected ? "success" : "warning"}>
+              {connected ? t("install.connected") : t("install.missing")}
+            </Chip>
+          ) : null}
+          {!companyId && server.installations.length ? (
+            <Chip size="sm" variant="soft">
+              {t("install.companies", { count: server.installations.length })}
+            </Chip>
+          ) : null}
           {server.internal ? (
             <Chip size="sm" variant="soft" color="warning">
               {t("internal")}
@@ -217,11 +243,30 @@ export default function ServerCard({
           <Chip size="sm" variant="soft" color={server.global || server.assignments.length ? "accent" : "default"}>
             {t("access.summary", { global: String(server.global), count: server.assignments.length })}
           </Chip>
-          {canManage ? (
-            <Button size="sm" variant="tertiary" aria-label={t("access.manage", { name: server.name })} onPress={() => onAccess(server)}>
-              <Users size={14} aria-hidden />
-              {t("access.button")}
-            </Button>
+          {canAccess ? (
+            <div className="flex flex-wrap gap-1">
+              <Button size="sm" variant="tertiary" aria-label={t("access.manage", { name: server.name })} onPress={() => onAccess(server)}>
+                <Users size={14} aria-hidden />
+                {t("access.button")}
+              </Button>
+              {canManage ? (
+                <Button
+                  size="sm"
+                  variant="tertiary"
+                  aria-label={t("permissions.manage", { name: server.name })}
+                  onPress={() => onPermissions(server)}
+                >
+                  <Shield size={14} aria-hidden />
+                  {t("permissions.open")}
+                </Button>
+              ) : null}
+              {canAccess && (server.template || canManage) ? (
+                <Button size="sm" variant="tertiary" aria-label={t("install.manage", { name: server.name })} onPress={() => onInstall(server)}>
+                  <KeyRound size={14} aria-hidden />
+                  {t("install.open")}
+                </Button>
+              ) : null}
+            </div>
           ) : null}
         </div>
         <p className="text-xs text-muted">

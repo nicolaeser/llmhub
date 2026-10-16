@@ -12,6 +12,7 @@ import {
   signSessionToken,
   verifySessionCookie,
 } from "@/lib/auth/cookie";
+import { readWorkspaceOrgId } from "@/lib/auth/workspace-cookie";
 import type { RequestMeta, SessionResult } from "@/types/auth";
 import type { SessionFactor } from "@/types/security";
 
@@ -134,6 +135,7 @@ export async function getSession(): Promise<SessionResult> {
     sessionId: row.id,
     user: { ...user, roleId: user.roleId },
     isOwner: user.isOwner,
+    workspaceOrgId: await readWorkspaceOrgId(user.isOwner),
     role: role ? { id: role.id, templateKey: role.templateKey, name: role.name } : null,
     permissions: effectivePermissions({
       isOwner: user.isOwner,

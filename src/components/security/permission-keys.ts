@@ -27,4 +27,7 @@ export const PERMISSION_KEYS = {
   "integrations:manage": "integrationsManage",
   "integrations:publish": "integrationsPublish",
   "integrations:credentials": "integrationsCredentials",
+  "mcp:read": "mcpRead",
+  "mcp:install": "mcpInstall",
+  "mcp:manage": "mcpManage",
 } as const satisfies Record<Permission, string>;

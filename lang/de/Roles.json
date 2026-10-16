@@ -15,7 +15,7 @@
   "members": "{count, plural, =0 {Keine Mitglieder} one {# Mitglied} other {# Mitglieder}}",
   "permissionCount": "{count, plural, one {# Berechtigung} other {# Berechtigungen}}",
   "level": "{level, select, view {Lesen} work {Arbeiten} sensitive {Sensibel} other {}}",
-  "domain": "{domain, select, keys {API-Keys} providers {Provider} models {Modelle} tenancy {Mandanten} spend {Nutzung und Budgets} access {Benutzer und Rollen} settings {Einstellungen} tools {Werkzeuge} integrations {Integrationen} other {Sonstiges}}",
+  "domain": "{domain, select, keys {API-Keys} providers {Provider} models {Modelle} tenancy {Mandanten} spend {Nutzung und Budgets} access {Benutzer und Rollen} settings {Einstellungen} tools {Werkzeuge} integrations {Integrationen} mcp {MCP} other {Sonstiges}}",
   "columns": {
     "role": "Rolle",
     "members": "Mitglieder",
@@ -139,6 +139,18 @@
     "integrationsCredentials": {
       "label": "Integrations-Zugangsdaten verwalten",
       "description": "Verbindungsgeheimnisse speichern, rotieren und widerrufen."
+    },
+    "mcpRead": {
+      "label": "MCP ansehen",
+      "description": "MCP-Server, Rollen und verbundene Unternehmen ohne Geheimnisse sehen."
+    },
+    "mcpInstall": {
+      "label": "MCP für das Unternehmen verbinden",
+      "description": "Einen eigenen API-Key hinterlegen und den Zugriff innerhalb des Unternehmens festlegen."
+    },
+    "mcpManage": {
+      "label": "MCP verwalten",
+      "description": "Server bauen, Vorlagen anbieten und die Rollen eines MCP-Servers ändern."
     }
   }
 }

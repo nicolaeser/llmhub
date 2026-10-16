@@ -50,6 +50,8 @@ test("a hosted server accepts per-key tool and action blocks", async () => {
   });
   assert.equal(parsed.assignments[0]?.scope, "key");
   assert.deepEqual(parsed.assignments[0]?.blockedActions, ["delete"]);
+  assert.equal(parsed.assignments[0]?.roleKey, "");
+  assert.equal(parsed.template, false);
   const bare = hostedServerSchema.parse({
     name: "Pets",
     description: "",
@@ -59,6 +61,7 @@ test("a hosted server accepts per-key tool and action blocks", async () => {
     tools: [pet],
   });
   assert.equal(bare.global, false);
+  assert.equal(bare.template, false);
   assert.deepEqual(bare.assignments, []);
 });
 

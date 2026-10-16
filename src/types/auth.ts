@@ -13,7 +13,8 @@ export type PermissionDomain =
   | "access"
   | "settings"
   | "tools"
-  | "integrations";
+  | "integrations"
+  | "mcp";
 
 export type PermissionLevel = "view" | "work" | "sensitive";
 
@@ -43,7 +44,10 @@ export type Permission =
   | "integrations:read"
   | "integrations:manage"
   | "integrations:publish"
-  | "integrations:credentials";
+  | "integrations:credentials"
+  | "mcp:read"
+  | "mcp:install"
+  | "mcp:manage";
 
 export type PermissionMeta = {
   domain: PermissionDomain;
@@ -105,6 +109,7 @@ export type AuthenticatedSession = {
   secondFactor: SessionFactor | "MANAGEMENT_KEY";
   ipAddress: string | null;
   userAgent: string | null;
+  workspaceOrgId?: string | null;
 };
 
 export type SessionResult =
