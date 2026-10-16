@@ -613,6 +613,7 @@ model McpServer {
   toolsRestricted Boolean   @default(false)
   allowedTools    String[]  @default([])
   tools           Json      @default("[]")
+  toolActions     Json      @default("{}")
   refreshedAt     DateTime?
   lastError       String    @default("")
   createdAt       DateTime  @default(now())
@@ -631,8 +632,8 @@ model McpRole {
   key         String
   name        String
   description String   @default("")
-  allTools    Boolean  @default(false)
   tools       String[] @default([])
+  deniedTools String[] @default([])
   allActions  Boolean  @default(false)
   actions     String[] @default([])
   builtin     Boolean  @default(false)

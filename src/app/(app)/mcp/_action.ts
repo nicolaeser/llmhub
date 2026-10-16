@@ -1,7 +1,7 @@
 "use server";
 
 import { runAction } from "@/lib/http/action-result";
-import { deleteMcpRole, ensureMcpRoles, saveMcpInstallation, saveMcpRole, setMcpTemplate } from "@/lib/mcp/catalog";
+import { ensureMcpRoles, saveMcpInstallation, saveMcpPermissions, setMcpTemplate } from "@/lib/mcp/catalog";
 import { draftMcpServer, setBuilderModel } from "@/lib/mcp/builder";
 import {
   createHostedMcpServer,
@@ -82,16 +82,9 @@ export async function ensureMcpRolesAction(id: string) {
   });
 }
 
-export async function saveMcpRoleAction(input: unknown) {
+export async function saveMcpPermissionsAction(input: unknown) {
   return runAction(async () => {
-    const saved = await saveMcpRole(input);
-    return presentMcpServer(saved.serverId);
-  });
-}
-
-export async function deleteMcpRoleAction(id: string) {
-  return runAction(async () => {
-    const saved = await deleteMcpRole(id);
+    const saved = await saveMcpPermissions(input);
     return presentMcpServer(saved.serverId);
   });
 }

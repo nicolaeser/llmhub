@@ -36,7 +36,7 @@ export default function ServerCard({
   companyId,
   onEdit,
   onAccess,
-  onRoles,
+  onPermissions,
   onInstall,
   onChanged,
   onDeleted,
@@ -47,7 +47,7 @@ export default function ServerCard({
   companyId: string | null;
   onEdit: (server: McpServerView) => void;
   onAccess: (server: McpServerView) => void;
-  onRoles: (server: McpServerView) => void;
+  onPermissions: (server: McpServerView) => void;
   onInstall: (server: McpServerView) => void;
   onChanged: (server: McpServerView) => void;
   onDeleted: (id: string) => void;
@@ -250,9 +250,14 @@ export default function ServerCard({
                 {t("access.button")}
               </Button>
               {canManage ? (
-                <Button size="sm" variant="tertiary" aria-label={t("roles.manage", { name: server.name })} onPress={() => onRoles(server)}>
+                <Button
+                  size="sm"
+                  variant="tertiary"
+                  aria-label={t("permissions.manage", { name: server.name })}
+                  onPress={() => onPermissions(server)}
+                >
                   <Shield size={14} aria-hidden />
-                  {t("roles.open")}
+                  {t("permissions.open")}
                 </Button>
               ) : null}
               {canAccess && (server.template || canManage) ? (

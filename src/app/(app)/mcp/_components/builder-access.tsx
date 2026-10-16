@@ -31,9 +31,9 @@ import { loadMcpTargetsAction } from "../_action";
 const EMPTY_OPTIONS: McpTargetOptions = { org: [], team: [], project: [], member: [], key: [] };
 
 const PRESET_ROLES: Record<(typeof MCP_ROLE_KEYS)[number], McpRoleGrant & { key: string; name: string }> = {
-  reader: { key: "reader", name: "Reader", allTools: true, tools: [], allActions: false, actions: ["read"] },
-  operator: { key: "operator", name: "Operator", allTools: true, tools: [], allActions: false, actions: ["read", "write"] },
-  admin: { key: "admin", name: "Admin", allTools: true, tools: [], allActions: true, actions: [] },
+  reader: { key: "reader", name: "Reader", allActions: false, actions: ["read"], tools: [], deniedTools: [] },
+  operator: { key: "operator", name: "Operator", allActions: false, actions: ["read", "write"], tools: [], deniedTools: [] },
+  admin: { key: "admin", name: "Admin", allActions: true, actions: [], tools: [], deniedTools: [] },
 };
 
 function chainFor(scope: AssignmentScope, option: McpTargetOption): McpChain {

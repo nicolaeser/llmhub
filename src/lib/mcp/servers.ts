@@ -31,6 +31,7 @@ import {
   tokenRequest,
 } from "@/lib/mcp/oauth";
 import { toolSpecOf } from "@/lib/mcp/hosted";
+import { toolActionsOf } from "@/lib/mcp/resolve";
 import { isOAuthGrant, mcpClientFor, serverRecord } from "@/lib/mcp/toolset";
 import { guardedFetch } from "@/lib/mcp/transport";
 import { checkServerUrl } from "@/lib/mcp/url-guard";
@@ -75,11 +76,12 @@ const serverSelect = {
   toolsRestricted: true,
   allowedTools: true,
   tools: true,
+  toolActions: true,
   refreshedAt: true,
   lastError: true,
   updatedAt: true,
   assignments: mcpAssignmentSelect,
-  roles: { orderBy: { name: "asc" } },
+  roles: { orderBy: { name: "asc" }, include: { _count: { select: { assignments: true } } } },
   installations: {
     select: {
       id: true,
@@ -147,6 +149,7 @@ function viewOf(row: ServerRow, canManage = true, companyId: string | null = nul
     toolsRestricted: row.toolsRestricted,
     allowedTools: row.allowedTools,
     tools: toolSpecs(row.tools),
+    toolActions: toolActionsOf(row.toolActions),
     roles: roleViews(row.roles),
     installations: installationViews(row.installations, companyId),
     transport: record.transport,

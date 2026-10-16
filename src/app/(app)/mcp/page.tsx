@@ -15,7 +15,7 @@ import { loadMcpServersAction } from "./_action";
 import AccessDialog from "./_components/access-dialog";
 import BuilderDialog from "./_components/builder-dialog";
 import InstallDialog from "./_components/install-dialog";
-import RolesDialog from "./_components/roles-dialog";
+import PermissionsDialog from "./_components/permissions-dialog";
 import ServerCard from "./_components/server-card";
 import ServerDialog from "./_components/server-dialog";
 
@@ -30,12 +30,12 @@ export default function McpPage() {
   const { data, setData } = page;
   const [editing, setEditing] = useState<McpServerView | null>(null);
   const [access, setAccess] = useState<McpServerView | null>(null);
-  const [roles, setRoles] = useState<McpServerView | null>(null);
+  const [permissions, setPermissions] = useState<McpServerView | null>(null);
   const [install, setInstall] = useState<McpServerView | null>(null);
   const [dialogKey, setDialogKey] = useState(0);
   const formState = useOverlayState();
   const accessState = useOverlayState();
-  const rolesState = useOverlayState();
+  const permissionsState = useOverlayState();
   const installState = useOverlayState();
   const builderState = useOverlayState();
 
@@ -55,7 +55,7 @@ export default function McpPage() {
         : [...current.servers, server].sort((a, b) => a.name.localeCompare(b.name)),
     }));
     setAccess((current) => (current?.id === server.id ? server : current));
-    setRoles((current) => (current?.id === server.id ? server : current));
+    setPermissions((current) => (current?.id === server.id ? server : current));
     setInstall((current) => (current?.id === server.id ? server : current));
   }
 
@@ -71,10 +71,10 @@ export default function McpPage() {
     accessState.open();
   }
 
-  function openRoles(server: McpServerView) {
-    setRoles(server);
+  function openPermissions(server: McpServerView) {
+    setPermissions(server);
     setDialogKey((n) => n + 1);
-    rolesState.open();
+    permissionsState.open();
   }
 
   function openInstall(server: McpServerView) {
@@ -158,7 +158,7 @@ export default function McpPage() {
                 companyId={companyId}
                 onEdit={openForm}
                 onAccess={openAccess}
-                onRoles={openRoles}
+                onPermissions={openPermissions}
                 onInstall={openInstall}
                 onChanged={replace}
                 onDeleted={(id) => setData((current) => ({ ...current, servers: current.servers.filter((row) => row.id !== id) }))}
@@ -175,7 +175,7 @@ export default function McpPage() {
         onSaved={replace}
       />
       <AccessDialog key={`access-${dialogKey}`} state={accessState} server={access} onSaved={replace} />
-      <RolesDialog key={`roles-${dialogKey}`} state={rolesState} server={roles} onSaved={replace} />
+      <PermissionsDialog key={`permissions-${dialogKey}`} state={permissionsState} server={permissions} onSaved={replace} />
       <InstallDialog
         key={`install-${dialogKey}`}
         state={installState}

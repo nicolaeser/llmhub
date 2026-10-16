@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { addressAllowed, checkServerUrl } from "@/lib/mcp/url-guard";
 import { bindTools, isMcpToolName, MAX_TOOL_NAME_LENGTH, mcpToolName } from "@/lib/mcp/tool-names";
-import { chainOf, effectiveServers, explainAccess } from "@/lib/mcp/resolve";
+import { chainOf, classifyTools, effectiveServers, explainAccess, roleAllowsTool, toolActionsOf, toolGrant } from "@/lib/mcp/resolve";
 import type { Principal } from "@/types/gateway";
 import type { McpAssignmentRule, McpAssignmentView, McpChain, McpServerPolicy, McpToolSpec } from "@/types/mcp";
 
@@ -151,9 +151,9 @@ test("action blocks remove matching tools and leave the server available", () =>
 });
 
 function grant(kind: "reader" | "operator" | "admin"): NonNullable<McpAssignmentRule["role"]> {
-  if (kind === "reader") return { allTools: true, tools: [], allActions: false, actions: ["read"] };
-  if (kind === "operator") return { allTools: true, tools: [], allActions: false, actions: ["read", "write"] };
-  return { allTools: true, tools: [], allActions: true, actions: [] };
+  if (kind === "reader") return { allActions: false, actions: ["read"], tools: [], deniedTools: [] };
+  if (kind === "operator") return { allActions: false, actions: ["read", "write"], tools: [], deniedTools: [] };
+  return { allActions: true, actions: [], tools: [], deniedTools: [] };
 }
 
 test("the most specific allow role narrows tools, and a role-less allow keeps every tool", () => {
@@ -197,6 +197,62 @@ test("the most specific allow role narrows tools, and a role-less allow keeps ev
   );
   assert.equal(explained.state, "granted");
   assert.deepEqual(explained.tools, ["list"]);
+});
+
+test("per-tool grants beat the role's actions: a block always wins, an allow always grants", () => {
+  const pets = server("pets", {
+    tools: [acted("list", "read"), acted("save", "write"), acted("remove", "delete"), acted("ping")],
+  });
+  const reader = { ...grant("reader"), tools: ["ping", "remove"], deniedTools: ["list"] };
+  assert.equal(toolGrant(reader, "list"), "deny");
+  assert.equal(toolGrant(reader, "ping"), "allow");
+  assert.equal(toolGrant(reader, "save"), "inherit");
+  assert.deepEqual(names(CHAIN, [pets], [rule("pets", { orgId: "org1", role: reader })]), { pets: ["remove", "ping"] });
+  const admin = { ...grant("admin"), deniedTools: ["remove"] };
+  assert.deepEqual(names(CHAIN, [pets], [rule("pets", { orgId: "org1", role: admin })]), { pets: ["list", "save", "ping"] });
+  const pinned = { allActions: false, actions: [], tools: ["save"], deniedTools: [] };
+  assert.deepEqual(names(CHAIN, [pets], [rule("pets", { keyId: "key1", role: pinned })]), { pets: ["save"] });
+  assert.deepEqual(
+    names(CHAIN, [pets], [rule("pets", { keyId: "key1", role: reader }, "allow", ["ping"])]),
+    { pets: ["remove"] },
+  );
+  assert.deepEqual(
+    names(CHAIN, [pets], [rule("pets", { keyId: "key1", role: reader }, "allow", [], ["delete"])]),
+    { pets: ["ping"] },
+  );
+  assert.deepEqual(
+    explainAccess(
+      pets,
+      [{ scope: "key", id: "key1", label: "ci", mode: "allow", blockedTools: [], blockedActions: [], roleId: "r", role: { ...reader, key: "custom", name: "Custom" } }],
+      CHAIN,
+    ).tools,
+    ["remove", "ping"],
+  );
+});
+
+test("operator classification decides which tools an action role reaches", () => {
+  const remote = [tool("issues_list"), tool("issue_close"), { ...tool("repo_delete"), hint: "read" as const }];
+  const reader = grant("reader");
+  assert.deepEqual(
+    remote.filter((item) => roleAllowsTool(reader, item)).map((item) => item.name),
+    [],
+  );
+  const actions = toolActionsOf({ issues_list: "read", issue_close: "write", repo_delete: "delete", junk: "admin", other: 3 });
+  assert.deepEqual(actions, { issues_list: "read", issue_close: "write", repo_delete: "delete" });
+  const classified = classifyTools(remote, actions);
+  assert.deepEqual(
+    classified.filter((item) => roleAllowsTool(reader, item)).map((item) => item.name),
+    ["issues_list"],
+  );
+  assert.deepEqual(
+    classified.filter((item) => roleAllowsTool(grant("operator"), item)).map((item) => item.name),
+    ["issues_list", "issue_close"],
+  );
+  const hosted = [acted("pets_list", "read")];
+  assert.deepEqual(classifyTools(hosted, { pets_list: "delete" })[0]?.action, "delete");
+  assert.deepEqual(classifyTools(hosted, {})[0]?.action, "read");
+  assert.deepEqual(toolActionsOf(null), {});
+  assert.deepEqual(toolActionsOf(["read"]), {});
 });
 
 test("tool names are namespaced, valid for providers, and unique", () => {

@@ -45,7 +45,10 @@ export type McpToolSpec = {
   description: string;
   inputSchema: JsonMap;
   action?: McpToolAction;
+  hint?: McpToolAction;
 };
+
+export type McpToolActions = Record<string, McpToolAction>;
 
 export type HostedTool = {
   name: string;
@@ -95,11 +98,13 @@ export type McpServerRecord = {
 };
 
 export type McpRoleGrant = {
-  allTools: boolean;
-  tools: string[];
   allActions: boolean;
   actions: string[];
+  tools: string[];
+  deniedTools: string[];
 };
+
+export type McpToolGrant = "inherit" | "allow" | "deny";
 
 export type McpRoleView = McpRoleGrant & {
   id: string;
@@ -107,6 +112,7 @@ export type McpRoleView = McpRoleGrant & {
   name: string;
   description: string;
   builtin: boolean;
+  assigned: number;
 };
 
 export type McpInstallationView = {
@@ -227,6 +233,7 @@ export type McpServerView = {
   toolsRestricted: boolean;
   allowedTools: string[];
   tools: McpToolSpec[];
+  toolActions: McpToolActions;
   roles: McpRoleView[];
   installations: McpInstallationView[];
   transport: McpTransport;
@@ -387,10 +394,10 @@ export type McpAssignmentSource = AssignmentSource & {
   role?: {
     key: string;
     name: string;
-    allTools: boolean;
-    tools: string[];
     allActions: boolean;
     actions: string[];
+    tools: string[];
+    deniedTools: string[];
   } | null;
 };
 

@@ -27,8 +27,8 @@ function toolCard(tool: McpBoundTool): JsonMap {
   const action = tool.tool.action;
   const annotations: JsonMap = {};
   if (action === "read") annotations.readOnlyHint = true;
-  if (action === "write") annotations.readOnlyHint = false;
-  if (action === "delete") annotations.destructiveHint = true;
+  if (action === "write") Object.assign(annotations, { readOnlyHint: false, destructiveHint: false });
+  if (action === "delete") Object.assign(annotations, { readOnlyHint: false, destructiveHint: true });
   return {
     name: tool.name,
     ...(tool.tool.title ? { title: tool.tool.title } : {}),

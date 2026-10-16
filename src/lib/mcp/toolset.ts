@@ -3,7 +3,7 @@ import prisma from "@/lib/db/prisma";
 import { authHeaders, mcpAuthFor, mcpCapabilities } from "@/lib/mcp/auth";
 import { McpClient, toolSpecs } from "@/lib/mcp/client";
 import { callHosted, hostedSpec } from "@/lib/mcp/hosted";
-import { chainOf, effectiveServers } from "@/lib/mcp/resolve";
+import { chainOf, classifyTools, effectiveServers, toolActionsOf } from "@/lib/mcp/resolve";
 import { bindTools } from "@/lib/mcp/tool-names";
 import { guardedFetch } from "@/lib/mcp/transport";
 import { errorFields } from "@/lib/logging/format";
@@ -147,6 +147,7 @@ export async function loadMcpServers(chain: McpChain) {
       toolsRestricted: true,
       allowedTools: true,
       tools: true,
+      toolActions: true,
       oauthLogin: { select: { status: true } },
       installations: {
         where: { orgId: chain.orgId || "__none__", enabled: true },
@@ -164,7 +165,7 @@ export async function loadMcpServers(chain: McpChain) {
           mode: true,
           blockedTools: true,
           blockedActions: true,
-          role: { select: { allTools: true, tools: true, allActions: true, actions: true } },
+          role: { select: { allActions: true, actions: true, tools: true, deniedTools: true } },
         },
       },
     },
@@ -180,7 +181,7 @@ export async function loadMcpServers(chain: McpChain) {
       enabled: row.enabled && signedIn(row),
       toolsRestricted: row.toolsRestricted,
       allowedTools: row.allowedTools,
-      tools: toolSpecs(row.tools),
+      tools: classifyTools(toolSpecs(row.tools), toolActionsOf(row.toolActions)),
     })),
     rows.flatMap((row) =>
       row.assignments.map((rule) => ({
@@ -189,10 +190,10 @@ export async function loadMcpServers(chain: McpChain) {
         blockedActions: Array.isArray(rule.blockedActions) ? rule.blockedActions : [],
         role: rule.role
           ? {
-              allTools: rule.role.allTools,
-              tools: rule.role.tools,
               allActions: rule.role.allActions,
               actions: rule.role.actions,
+              tools: rule.role.tools,
+              deniedTools: rule.role.deniedTools,
             }
           : null,
       })),

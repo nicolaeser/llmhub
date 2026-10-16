@@ -191,15 +191,27 @@ export const mcpAssignmentsSchema = z.object({
     .max(MAX_MCP_ASSIGNMENTS),
 });
 
-export const mcpRoleSchema = z.object({
+export const MAX_MCP_ROLES = 50;
+
+export const mcpPermissionsSchema = z.object({
   serverId: z.string().min(1).max(64),
-  id: z.string().max(64).default(""),
-  name: z.string().trim().min(1).max(48),
-  description: z.string().trim().max(200).default(""),
-  allTools: z.boolean(),
-  tools: toolNames,
-  allActions: z.boolean(),
-  actions: actions.default([]),
+  toolActions: z
+    .record(z.string().trim().min(1).max(128), z.enum(MCP_ACTIONS))
+    .refine((value) => Object.keys(value).length <= 200, { message: "too many tools" }),
+  roles: z
+    .array(
+      z.object({
+        id: z.string().max(64).default(""),
+        name: z.string().trim().min(1).max(48),
+        description: z.string().trim().max(200).default(""),
+        allActions: z.boolean(),
+        actions: actions.default([]),
+        tools: toolNames.default([]),
+        deniedTools: toolNames.default([]),
+      }),
+    )
+    .max(MAX_MCP_ROLES),
+  removed: z.array(z.string().min(1).max(64)).max(MAX_MCP_ROLES).default([]),
 });
 
 export const mcpInstallationSchema = z

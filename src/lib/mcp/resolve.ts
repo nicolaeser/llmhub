@@ -1,3 +1,4 @@
+import { MCP_ACTIONS } from "@/schemas/mcp";
 import type { Principal } from "@/types/gateway";
 import type {
   McpAssignmentRule,
@@ -7,6 +8,9 @@ import type {
   McpExplanation,
   McpRoleGrant,
   McpServerPolicy,
+  McpToolAction,
+  McpToolActions,
+  McpToolGrant,
   McpToolSpec,
 } from "@/types/mcp";
 
@@ -80,9 +84,32 @@ function mostSpecificAllow<T extends { mode: string; scope?: string; keyId?: str
   return best;
 }
 
+export function isToolAction(value: unknown): value is McpToolAction {
+  return typeof value === "string" && (MCP_ACTIONS as readonly string[]).includes(value);
+}
+
+export function toolActionsOf(raw: unknown): McpToolActions {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+  return Object.fromEntries(Object.entries(raw).filter((entry): entry is [string, McpToolAction] => isToolAction(entry[1])));
+}
+
+export function classifyTools(tools: McpToolSpec[], actions: McpToolActions): McpToolSpec[] {
+  return tools.map((tool) => {
+    const action = actions[tool.name];
+    return action ? { ...tool, action } : tool;
+  });
+}
+
+export function toolGrant(role: Pick<McpRoleGrant, "tools" | "deniedTools">, name: string): McpToolGrant {
+  if (role.deniedTools.includes(name)) return "deny";
+  if (role.tools.includes(name)) return "allow";
+  return "inherit";
+}
+
 export function roleAllowsTool(role: McpRoleGrant | null | undefined, tool: McpToolSpec): boolean {
   if (!role) return true;
-  if (!role.allTools && !role.tools.includes(tool.name)) return false;
+  const grant = toolGrant(role, tool.name);
+  if (grant !== "inherit") return grant === "allow";
   if (role.allActions) return true;
   return Boolean(tool.action && role.actions.includes(tool.action));
 }

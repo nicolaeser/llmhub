@@ -27,7 +27,7 @@ export const mcpAssignmentSelect = {
     blockedTools: true,
     blockedActions: true,
     roleId: true,
-    role: { select: { key: true, name: true, allTools: true, tools: true, allActions: true, actions: true } },
+    role: { select: { key: true, name: true, allActions: true, actions: true, tools: true, deniedTools: true } },
     org: { select: { alias: true } },
     team: { select: { alias: true, orgId: true } },
     project: { select: { alias: true, orgId: true } },
@@ -60,10 +60,10 @@ export function assignmentViews(rows: McpAssignmentSource[]): McpAssignmentView[
         ? {
             key: row.role.key,
             name: row.role.name,
-            allTools: row.role.allTools,
-            tools: row.role.tools,
             allActions: row.role.allActions,
             actions: row.role.actions,
+            tools: row.role.tools,
+            deniedTools: row.role.deniedTools,
           }
         : null,
     }];
