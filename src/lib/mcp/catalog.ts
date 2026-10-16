@@ -285,5 +285,5 @@ export async function saveMcpInstallation(raw: unknown) {
     objectId: input.serverId,
     after: { orgId: input.orgId, enabled: input.enabled, authType: input.authType, hosted: server.kind === "hosted" },
   });
-  return { serverId: input.serverId };
+  return { serverId: input.serverId, orgId: input.orgId };
 }

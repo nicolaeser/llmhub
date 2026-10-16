@@ -25,6 +25,8 @@ export default async function AppLayout({
           username: session.user.username,
         }}
         permissions={session.permissions}
+        isOwner={session.isOwner}
+        companyView={Boolean(session.isOwner && session.workspaceOrgId)}
       >
         <ConsoleTopbar companies={companies} workspaceOrgId={session.workspaceOrgId ?? null} />
         <main className="min-h-0 flex-1 scroll-pt-6 overflow-auto bg-background p-6 lg:scroll-pt-8 lg:px-10 lg:py-8">

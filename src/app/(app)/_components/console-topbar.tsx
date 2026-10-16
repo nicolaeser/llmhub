@@ -1,14 +1,16 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Button, Label, ListBox, Select, Separator } from "@heroui/react";
-import { LogOut, Menu, RefreshCw } from "lucide-react";
+import { Button, Description, Header, Label, ListBox, Select, Separator } from "@heroui/react";
+import { Building2, LogOut, Menu, RefreshCw, ShieldCheck } from "lucide-react";
 import { useTranslations } from "next-intl";
+import { usePathname, useRouter } from "@/i18n/routing";
 import { notifyWorkspace } from "@/lib/auth/workspace-event";
 import { useErrorToast } from "@/components/console/use-error-toast";
 import { isActionFail } from "@/lib/http/action-result";
 import { setWorkspaceAction } from "../_action";
 import { useBuildStatus } from "./build-status";
+import { adminOnlyPath } from "./nav-data";
 import { useConsoleNav } from "./sidebar";
 
 export default function ConsoleTopbar({
@@ -23,9 +25,12 @@ export default function ConsoleTopbar({
   const nav = useConsoleNav();
   const build = useBuildStatus();
   const showError = useErrorToast();
+  const router = useRouter();
+  const pathname = usePathname();
   const [pending, start] = useTransition();
   const [override, setOverride] = useState<string | null>(null);
   const chosen = override !== null && override !== (workspaceOrgId ?? "") ? override : (workspaceOrgId ?? "");
+  const selectedKey = chosen && companies.some((company) => company.id === chosen) ? chosen : "all";
   const health = build?.health ?? "connecting";
   const healthLabel = t("health.status", { status: health });
 
@@ -41,6 +46,7 @@ export default function ConsoleTopbar({
         return;
       }
       notifyWorkspace(result.orgId);
+      if (result.orgId && adminOnlyPath(pathname)) router.replace("/companies");
     });
   }
 
@@ -76,8 +82,8 @@ export default function ConsoleTopbar({
         {companies.length ? (
           <Select
             aria-label={tNav("workspaceLabel")}
-            className="w-56"
-            selectedKey={chosen && companies.some((company) => company.id === chosen) ? chosen : "all"}
+            className="w-44 sm:w-60"
+            selectedKey={selectedKey}
             onSelectionChange={(key) => {
               if (key == null) return;
               choose(String(key));
@@ -85,22 +91,38 @@ export default function ConsoleTopbar({
             isDisabled={pending}
           >
             <Label className="sr-only">{tNav("workspaceLabel")}</Label>
-            <Select.Trigger>
-              <Select.Value />
+            <Select.Trigger className="items-center gap-2">
+              {selectedKey === "all" ? (
+                <ShieldCheck size={14} aria-hidden className="shrink-0 text-accent" />
+              ) : (
+                <Building2 size={14} aria-hidden className="shrink-0 text-muted" />
+              )}
+              <Select.Value className="truncate">{({ selectedText }) => selectedText}</Select.Value>
               <Select.Indicator />
             </Select.Trigger>
-            <Select.Popover>
+            <Select.Popover className="min-w-64">
               <ListBox>
-                <ListBox.Item id="all" textValue={tNav("workspaceAll")}>
-                  {tNav("workspaceAll")}
+                <ListBox.Item id="all" textValue={tNav("workspaceAdmin")}>
+                  <ShieldCheck size={16} aria-hidden className="shrink-0 text-accent" />
+                  <div className="flex min-w-0 flex-col">
+                    <Label>{tNav("workspaceAdmin")}</Label>
+                    <Description>{tNav("workspaceAdminHint")}</Description>
+                  </div>
                   <ListBox.ItemIndicator />
                 </ListBox.Item>
-                {companies.map((company) => (
-                  <ListBox.Item key={company.id} id={company.id} textValue={company.alias}>
-                    {company.alias}
-                    <ListBox.ItemIndicator />
-                  </ListBox.Item>
-                ))}
+                <ListBox.Section>
+                  <Header>{tNav("workspaceCompanies")}</Header>
+                  {companies.map((company) => (
+                    <ListBox.Item key={company.id} id={company.id} textValue={company.alias}>
+                      <Building2 size={16} aria-hidden className="shrink-0 text-muted" />
+                      <div className="flex min-w-0 flex-col">
+                        <Label className="truncate">{company.alias}</Label>
+                        <Description>{tNav("workspaceCompanyHint")}</Description>
+                      </div>
+                      <ListBox.ItemIndicator />
+                    </ListBox.Item>
+                  ))}
+                </ListBox.Section>
               </ListBox>
             </Select.Popover>
           </Select>

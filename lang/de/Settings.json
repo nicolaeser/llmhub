@@ -1,7 +1,7 @@
 {
   "title": "Einstellungen",
   "subtitle": "Anmeldung, Speicher, Protokollierung, Cache und Modellkatalog. Infrastruktur-Secrets bleiben in der Umgebung.",
-  "tabs": "{tab, select, general {Allgemein} sign_in {Anmeldung} storage {Speicher} logging {Protokollierung & Alarme} cache {Antwort-Cache} catalog {Modellkatalog} other {Einstellungen}}",
+  "tabs": "{tab, select, company {Unternehmen} general {Allgemein} sign_in {Anmeldung} storage {Speicher} logging {Protokollierung & Alarme} cache {Antwort-Cache} catalog {Modellkatalog} other {Einstellungen}}",
   "save": "Speichern",
   "saved": "Einstellungen gespeichert",
   "readOnly": "Du kannst diese Einstellungen ansehen. Zum Ändern brauchst du die Berechtigung Einstellungen verwalten.",
@@ -270,5 +270,13 @@
       "manageHint": "Wissensbasen legst du unter <link>Wissensbasen</link> an, dort lädst du auch Dateien hoch."
     },
     "description": "Wie der Katalog Anbietermodelle gruppiert, und die Standardmodelle für Wissensdatenbanken."
+  },
+  "companySubtitle": "Einstellungen von {name}. Plattform-Einstellungen bleiben in der Admin-Ansicht.",
+  "company": {
+    "title": "Einstellungen für {name}",
+    "description": "Alles, was dieses Unternehmen selbst einstellt. Wähle einen Bereich, um ihn in der Unternehmensansicht zu öffnen.",
+    "open": "Öffnen",
+    "area": "{area, select, structure {Unternehmen und Budgets} keys {API-Keys} guardrails {Guardrails und PII} mcp {MCP-Server} other {Bereich}}",
+    "areaHint": "{area, select, structure {Abteilungen, Projekte, Personen, Budgets, Alarme und Berichte.} keys {Die Keys dieses Unternehmens und ihr MCP-Zugriff pro Tool.} guardrails {Richtlinien für dieses Unternehmen, seine Projekte und Keys.} mcp {Server, die dieses Unternehmen nutzt, seine Zugriffsregeln und Rollen.} other {}}"
   }
 }

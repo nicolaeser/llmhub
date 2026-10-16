@@ -10,7 +10,7 @@ import {
   toast,
   useOverlayState,
 } from "@heroui/react";
-import { Activity, AlertTriangle, CircleDollarSign, KeyRound, Pencil, Plus, RefreshCw, Trash2, Wallet } from "lucide-react";
+import { Activity, AlertTriangle, Blocks, CircleDollarSign, KeyRound, Pencil, Plus, RefreshCw, Trash2, Wallet } from "lucide-react";
 import { useFormatter, useTranslations } from "next-intl";
 import BudgetDialog from "@/components/budget/budget-dialog";
 import ConfirmDialog from "@/components/console/confirm-dialog";
@@ -21,6 +21,7 @@ import { useErrorToast } from "@/components/console/use-error-toast";
 import GettingStarted from "./getting-started";
 import { bindingKind, parsePreset, placeOf } from "./key-binding";
 import { KeyDialog } from "./key-dialog";
+import KeyMcpDialog from "./key-mcp-dialog";
 import { loadKeysPageAction, revokeKeyAction, rotateKeyAction, setBudgetAction } from "../_action";
 import { useActionData } from "@/lib/hooks/use-action-data";
 import { isActionFail } from "@/lib/http/action-result";
@@ -47,6 +48,7 @@ export default function KeysTab() {
   const tCommon = useTranslations("Common");
   const format = useFormatter();
   const [budgetKey, setBudgetKey] = useState<VirtualKeyView | null>(null);
+  const [mcpKey, setMcpKey] = useState<VirtualKeyView | null>(null);
   const [query, setQuery] = useState("");
   const [secret, setSecret] = useState<string | null>(null);
   const [editing, setEditing] = useState<VirtualKeyView | null>(null);
@@ -56,6 +58,7 @@ export default function KeysTab() {
   const [, start] = useTransition();
   const dialogState = useOverlayState();
   const budgetState = useOverlayState();
+  const mcpState = useOverlayState();
 
   function openDialog(row: VirtualKeyView | null, next: KeyPreset | null = null) {
     setEditing(row);
@@ -72,6 +75,12 @@ export default function KeysTab() {
   });
   const { data, setData } = page;
   const keys = data?.keys;
+
+  function openMcp(row: VirtualKeyView) {
+    setMcpKey(row);
+    setDialogKey((n) => n + 1);
+    mcpState.open();
+  }
 
   function openBudget(row: VirtualKeyView) {
     setBudgetKey(row);
@@ -151,7 +160,7 @@ export default function KeysTab() {
     return <PageStatus state={page} />;
   }
 
-  const { canManage, canBind, canBudget, overview, owners } = data;
+  const { canManage, canBind, canBudget, canMcp, overview, owners } = data;
   const options: KeyOptions = {
     companyId: data.companyId,
     orgs: data.orgs,
@@ -354,6 +363,17 @@ export default function KeysTab() {
                                   <Pencil size={14} aria-hidden />
                                 </Button>
                               ) : null}
+                              {canMcp ? (
+                                <Button
+                                  isIconOnly
+                                  size="sm"
+                                  variant="ghost"
+                                  aria-label={t("mcp.open", { name: row.key_alias || row.key_name })}
+                                  onPress={() => openMcp(row)}
+                                >
+                                  <Blocks size={14} aria-hidden />
+                                </Button>
+                              ) : null}
                               {canBudget ? (
                                 <Button
                                   isIconOnly
@@ -430,6 +450,12 @@ export default function KeysTab() {
         ancestors={[]}
         onSubmit={setBudgetAction}
         onSaved={applyBudget}
+      />
+      <KeyMcpDialog
+        key={`mcp-${dialogKey}`}
+        state={mcpState}
+        keyId={mcpKey?.token_id ?? null}
+        keyName={mcpKey ? mcpKey.key_alias || mcpKey.key_name : ""}
       />
       <KeyDialog
         key={dialogKey}

@@ -4,7 +4,6 @@
   "toggleCollapsed": "{collapsed, select, true {Seitenleiste ausklappen} other {Seitenleiste einklappen}}",
   "openMenu": "Navigationsmenü öffnen",
   "workspaceLabel": "Arbeitsbereich",
-  "workspaceAll": "Alle Unternehmen",
   "goHome": "Zur Startseite",
   "sections": {
     "organization": "Organisation",
@@ -25,7 +24,13 @@
     "usage": "Nutzung",
     "logs": "Protokolle",
     "settings": "Einstellungen",
-    "developer": "Entwickler"
+    "developer": "Entwickler",
+    "company": "Unternehmen",
+    "companySettings": "Unternehmenseinstellungen"
   },
-  "account": "Konto und Sicherheit"
+  "account": "Konto und Sicherheit",
+  "workspaceAdmin": "Admin",
+  "workspaceAdminHint": "Alle Unternehmen und die Plattform",
+  "workspaceCompanies": "Unternehmen",
+  "workspaceCompanyHint": "Unternehmensansicht"
 }

@@ -16,8 +16,10 @@ import { useTranslations } from "next-intl";
 import FormDialog from "@/components/console/form-dialog";
 import { useErrorToast } from "@/components/console/use-error-toast";
 import { isActionFail } from "@/lib/http/action-result";
+import type { ActionFail } from "@/types/actions";
 import type { McpInstallationView, McpServerView } from "@/types/mcp";
-import { saveMcpInstallationAction, setMcpTemplateAction } from "../_action";
+
+type ServerResult = Promise<{ server: McpServerView } | ActionFail>;
 
 const AUTH = ["none", "bearer", "header"] as const;
 type InstallAuth = (typeof AUTH)[number];
@@ -40,6 +42,8 @@ export default function InstallDialog({
   companies,
   companyId,
   canManage,
+  onInstall,
+  onTemplate,
   onSaved,
 }: {
   state: ReturnType<typeof useOverlayState>;
@@ -47,6 +51,16 @@ export default function InstallDialog({
   companies: { id: string; alias: string }[];
   companyId: string | null;
   canManage: boolean;
+  onInstall: (input: {
+    serverId: string;
+    orgId: string;
+    enabled: boolean;
+    baseUrl: string;
+    authType: "none" | "bearer" | "header";
+    authHeader: string;
+    secret: string;
+  }) => ServerResult;
+  onTemplate?: (input: { id: string; template: boolean }) => ServerResult;
   onSaved: (server: McpServerView) => void;
 }) {
   const t = useTranslations("Mcp");
@@ -65,9 +79,10 @@ export default function InstallDialog({
   const current = server?.installations.find((row) => row.orgId === orgId) ?? null;
   const keepsSecret = Boolean(current?.hasSecret && current.authType === authType);
   const needsSecret = enabled && authType !== "none" && !secret.trim() && !keepsSecret;
-  const connect = (canManage ? shared : Boolean(server?.template)) && Boolean(orgId);
+  const togglesTemplate = Boolean(canManage && onTemplate);
+  const connect = (togglesTemplate ? shared : Boolean(server?.template)) && Boolean(orgId);
   const fieldsOk = headerOk(authType, authHeader) && urlOk(baseUrl) && !needsSecret;
-  const templateChanged = Boolean(canManage && server && shared !== server.template);
+  const templateChanged = Boolean(togglesTemplate && server && shared !== server.template);
 
   function apply(row: McpInstallationView | null, fallback: InstallAuth) {
     setEnabled(row?.enabled ?? true);
@@ -86,8 +101,8 @@ export default function InstallDialog({
     if (!server) return;
     start(async () => {
       let latest = server;
-      if (canManage && shared && !server.template) {
-        const flipped = await setMcpTemplateAction({ id: server.id, template: true });
+      if (onTemplate && togglesTemplate && shared && !server.template) {
+        const flipped = await onTemplate({ id: server.id, template: true });
         if (isActionFail(flipped)) {
           showError(flipped.error);
           return;
@@ -95,7 +110,7 @@ export default function InstallDialog({
         latest = flipped.server;
       }
       if (connect) {
-        const saved = await saveMcpInstallationAction({
+        const saved = await onInstall({
           serverId: server.id,
           orgId,
           enabled,
@@ -110,8 +125,8 @@ export default function InstallDialog({
         }
         latest = saved.server;
       }
-      if (canManage && !shared && server.template) {
-        const flipped = await setMcpTemplateAction({ id: server.id, template: false });
+      if (onTemplate && togglesTemplate && !shared && server.template) {
+        const flipped = await onTemplate({ id: server.id, template: false });
         if (isActionFail(flipped)) {
           showError(flipped.error);
           return;
@@ -135,7 +150,7 @@ export default function InstallDialog({
       isSubmitDisabled={!server || (connect && !fieldsOk) || (!connect && !templateChanged)}
       onSubmit={save}
     >
-      {canManage ? (
+      {togglesTemplate ? (
         <Switch isSelected={shared} onChange={setShared} isDisabled={pending}>
           <Switch.Content>
             <Switch.Control>

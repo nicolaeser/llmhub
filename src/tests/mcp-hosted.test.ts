@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildHostedRequest, callHosted, parseDraft } from "@/lib/mcp/hosted";
+import { buildHostedRequest, callHosted, cleanToolName, mergeTools, readDraft, readPick } from "@/lib/mcp/hosted";
 import type { HostedTool, McpFetch } from "@/types/mcp";
 
 const pet: HostedTool = {
@@ -10,6 +10,7 @@ const pet: HostedTool = {
   action: "read",
   method: "GET",
   path: "/pets/{id}",
+  query: [],
   inputSchema: { type: "object", properties: { id: { type: "string" }, limit: { type: "number" } } },
 };
 
@@ -22,18 +23,66 @@ const fenced = `Here is the server.
 ]}
 \`\`\``;
 
-test("parseDraft reads fenced JSON, drops bad tools, and adds path parameters", () => {
-  const parsed = parseDraft(fenced);
-  assert.equal(parsed.ok, true);
-  if (!parsed.ok) return;
-  assert.equal(parsed.draft.name, "Pets");
-  assert.equal(parsed.draft.tools.length, 1);
-  assert.equal(parsed.draft.tools[0]!.name, "get_pet");
-  assert.deepEqual(parsed.draft.tools[0]!.inputSchema.properties, { id: { type: "string" } });
-  const garbage = parseDraft("not json");
-  assert.deepEqual(garbage, { ok: false, code: "MCP_BUILDER_DRAFT" });
-  const empty = parseDraft('{"name":"Pets","baseUrl":"https://api.example.com","tools":[{"name":"bad-name","action":"read","method":"GET","path":"/x"}]}');
-  assert.deepEqual(empty, { ok: false, code: "MCP_BUILDER_EMPTY" });
+test("readDraft reads fenced JSON, repairs tool names, and adds path parameters", () => {
+  const parsed = readDraft(fenced);
+  assert.equal(parsed.cut, false);
+  assert.equal(parsed.server?.name, "Pets");
+  assert.deepEqual(
+    parsed.tools.map((tool) => tool.name),
+    ["get_pet", "bad_name", "get_pet_2"],
+  );
+  assert.deepEqual(parsed.tools[0]!.inputSchema.properties, { id: { type: "string" } });
+  assert.deepEqual(parsed.tools[0]!.inputSchema.required, ["id"]);
+  assert.equal(parsed.tools[2]!.method, "POST");
+  assert.deepEqual(readDraft("not json"), { server: null, tools: [], cut: true });
+  const empty = readDraft('{"name":"Pets","baseUrl":"https://api.example.com","tools":[{"name":"x","action":"read","method":"HEAD","path":"/x"}]}');
+  assert.equal(empty.server?.name, "Pets");
+  assert.deepEqual(empty.tools, []);
+});
+
+test("readDraft keeps the complete tools of an answer that stopped early", () => {
+  const cut = `{"name":"Shop","description":"","baseUrl":"https://api.example.com/v2","authType":"apiKey","authHeader":"X-Key","tools":[
+  {"name":"listOrders","action":"read","method":"get","path":"https://api.example.com/v2/orders?status={status}&limit=10"},
+  {"name":"get-order","method":"GET","path":"/orders/:orderId"},
+  {"name":"update_order","action":"write","method":"PATCH","path":"/orders/{order-id}","inputSchema":{"type":"object","properties":{"order-id":{"type":"string","description":"Order"},"note":{"type":"string"}}}},
+  {"name":"delete_order","action":"delete","method":"DELETE","path":"/ord`;
+  const parsed = readDraft(cut);
+  assert.equal(parsed.cut, true);
+  assert.equal(parsed.server?.authType, "header");
+  assert.equal(parsed.server?.authHeader, "X-Key");
+  assert.deepEqual(
+    parsed.tools.map((tool) => [tool.name, tool.method, tool.path, tool.action]),
+    [
+      ["listOrders", "GET", "/orders", "read"],
+      ["get_order", "GET", "/orders/{orderId}", "read"],
+      ["update_order", "PATCH", "/orders/{order_id}", "write"],
+    ],
+  );
+  assert.deepEqual(Object.keys(parsed.tools[0]!.inputSchema.properties as object), ["status", "limit"]);
+  assert.deepEqual(parsed.tools[0]!.query, ["status", "limit"]);
+  assert.deepEqual(parsed.tools[2]!.inputSchema.properties, {
+    note: { type: "string" },
+    order_id: { type: "string", description: "Order" },
+  });
+});
+
+test("mergeTools skips repeated calls and renames clashing names", () => {
+  const list = { ...pet, name: "list_pets", path: "/pets" };
+  const merged = mergeTools([pet], [pet, list, { ...list, method: "POST", action: "write" }]);
+  assert.deepEqual(
+    merged.map((tool) => tool.name),
+    ["get_pet", "list_pets", "list_pets_2"],
+  );
+  assert.equal(mergeTools([], [pet, list], 1).length, 1);
+  assert.equal(cleanToolName("pets.list-all"), "pets_list_all");
+  assert.equal(cleanToolName("2fa/reset"), "op_2fa_reset");
+});
+
+test("readPick keeps only known operation names", () => {
+  const tools = [pet, { ...pet, name: "list_pets", path: "/pets" }];
+  assert.deepEqual(readPick('{"keep":["list_pets","nope"]}', tools), ["list_pets"]);
+  assert.equal(readPick('{"keep":[]}', tools), null);
+  assert.equal(readPick("no", tools), null);
 });
 
 test("a hosted server accepts per-key tool and action blocks", async () => {
@@ -63,6 +112,9 @@ test("a hosted server accepts per-key tool and action blocks", async () => {
   assert.equal(bare.global, false);
   assert.equal(bare.template, false);
   assert.deepEqual(bare.assignments, []);
+  const keyed = { name: "Pets", description: "", baseUrl: "https://api.example.com", internal: false, authType: "bearer", tools: [pet] };
+  assert.equal(hostedServerSchema.safeParse(keyed).success, false);
+  assert.equal(hostedServerSchema.safeParse({ ...keyed, template: true }).success, true);
 });
 
 test("buildHostedRequest keeps the base path and sends the leftover fields", () => {
@@ -78,6 +130,12 @@ test("buildHostedRequest keeps the base path and sends the leftover fields", () 
   };
   const post = buildHostedRequest("https://api.example.com/v1", create, { name: "Ada", extra: "no" });
   assert.deepEqual(post, { url: "https://api.example.com/v1/pets", method: "POST", body: '{"name":"Ada"}' });
+  const tagged = buildHostedRequest(
+    "https://api.example.com",
+    { ...create, query: ["dryRun"], inputSchema: { type: "object", properties: { name: {}, dryRun: {} } } },
+    { name: "Ada", dryRun: true },
+  );
+  assert.deepEqual(tagged, { url: "https://api.example.com/pets?dryRun=true", method: "POST", body: '{"name":"Ada"}' });
   assert.deepEqual(buildHostedRequest("https://api.example.com", { ...pet, path: "/pets/../admin" }, { id: "1" }), { error: "VALIDATION" });
 });
 

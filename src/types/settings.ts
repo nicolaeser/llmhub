@@ -11,7 +11,12 @@ import type { ModelChoice } from "@/lib/models/model-role";
 import type { S3Settings } from "@/types/s3";
 import type { UpdateStatus } from "@/types/updates";
 
-export type SettingsTab = "general" | "sign-in" | "storage" | "logging" | "cache" | "catalog";
+export type SettingsTab = "company" | "general" | "sign-in" | "storage" | "logging" | "cache" | "catalog";
+
+export type SettingsScope = {
+  company: { id: string; alias: string } | null;
+  platform: boolean;
+};
 
 export type GeneralSettings = z.infer<typeof generalSettingsSchema>;
 

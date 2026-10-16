@@ -1,7 +1,7 @@
 {
   "title": "Settings",
   "subtitle": "Sign-in, storage, logging, caching, and the model catalog. Infrastructure secrets stay in the environment.",
-  "tabs": "{tab, select, general {General} sign_in {Sign-in} storage {Storage} logging {Logging & alerts} cache {Response cache} catalog {Model catalog} other {Settings}}",
+  "tabs": "{tab, select, company {Company} general {General} sign_in {Sign-in} storage {Storage} logging {Logging & alerts} cache {Response cache} catalog {Model catalog} other {Settings}}",
   "save": "Save",
   "saved": "Settings saved",
   "readOnly": "You can view these settings. Changing them needs the Manage settings permission.",
@@ -270,5 +270,13 @@
       "manageHint": "Create knowledge bases and upload files under <link>Knowledge bases</link>."
     },
     "description": "How the catalog groups provider models, and the default models for knowledge bases."
+  },
+  "companySubtitle": "Settings of {name}. Platform settings stay in the Admin view.",
+  "company": {
+    "title": "Settings for {name}",
+    "description": "Everything this company configures for itself. Pick an area to open it in the company view.",
+    "open": "Open",
+    "area": "{area, select, structure {Company and budgets} keys {API keys} guardrails {Guardrails and PII} mcp {MCP servers} other {Area}}",
+    "areaHint": "{area, select, structure {Departments, projects, people, budgets, alerts, and reports.} keys {This company's keys, and MCP access for each tool.} guardrails {Policy overrides for this company, its projects, and keys.} mcp {Servers this company uses, its access rules, and roles.} other {}}"
   }
 }
