@@ -7,6 +7,7 @@ import type { ZodType } from "zod";
 import { requirePermission } from "@/lib/auth/guards";
 import { hasPerm, PERMISSIONS } from "@/lib/auth/permissions";
 import { companyOf, inCompany, keyVisibleTo, spendScope } from "@/lib/auth/scope";
+import { managesMcpRules } from "@/lib/mcp/scope";
 import { listKeys, toKeyView } from "@/lib/keys/view";
 import { alertKeyBlocked } from "@/lib/alerts/notify";
 import { writeAudit } from "@/lib/audit";
@@ -275,5 +276,6 @@ export async function loadKeysPage() {
     canManage: hasPerm(session.permissions, PERMISSIONS.KEYS_MANAGE),
     canBind: hasPerm(session.permissions, PERMISSIONS.TENANCY_MANAGE),
     canBudget: hasPerm(session.permissions, PERMISSIONS.BUDGETS_MANAGE),
+    canMcp: managesMcpRules(session, company ?? null),
   };
 }

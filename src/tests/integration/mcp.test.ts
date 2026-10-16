@@ -3,7 +3,15 @@ import { after, test } from "node:test";
 import prisma from "@/lib/db/prisma";
 import { runAsPrincipal } from "@/lib/auth/delegation";
 import { ensureMcpRoles, saveMcpPermissions } from "@/lib/mcp/catalog";
-import { createMcpServer, deleteMcpServer, loadMcpServerList, saveMcpAssignments } from "@/lib/mcp/servers";
+import { loadKeyMcpAccess, saveKeyMcpAccess } from "@/lib/mcp/key-access";
+import {
+  createMcpServer,
+  deleteMcpServer,
+  loadCompanyMcpServers,
+  loadMcpServerList,
+  saveCompanyMcpInstallation,
+  saveMcpAssignments,
+} from "@/lib/mcp/servers";
 import { loadMcpServers } from "@/lib/mcp/toolset";
 import { closeDatabase, ownerSession, uniqueName } from "./support/database";
 
@@ -250,6 +258,140 @@ test("per-tool role grants and operator classification decide what a key reaches
     await prisma.virtualKey.delete({ where: { id: key.id } });
     await prisma.organization.delete({ where: { id: org.id } });
     await prisma.gatewayAuditLog.deleteMany({ where: { objectType: "mcp_server", actor: owner.user.id } });
+    await prisma.user.delete({ where: { id: owner.user.id } });
+  }
+});
+
+test("a key's own MCP rule narrows, grants, or blocks a server tool by tool", async () => {
+  const owner = await ownerSession();
+  const org = await prisma.organization.create({ data: { alias: uniqueName("org") } });
+  const member = await prisma.member.create({ data: { name: uniqueName("person"), orgId: org.id } });
+  const key = await prisma.virtualKey.create({
+    data: { hash: uniqueName("hash"), prefix: "sk-it", memberId: member.id, orgId: org.id },
+  });
+  const servers = await Promise.all(
+    ["keyed", "other"].map((label) =>
+      prisma.mcpServer.create({
+        data: {
+          name: uniqueName(label).slice(0, 40),
+          url: "http://127.0.0.1:1/mcp",
+          internal: true,
+          tools: TOOLS,
+          toolActions: { search: "read", fetch: "read", delete: "delete" },
+          refreshedAt: new Date(),
+        },
+      }),
+    ),
+  );
+  const [server, other] = servers;
+  const chain = { orgId: org.id, teamId: "", projectId: "", memberId: member.id, keyId: key.id };
+  try {
+    await runAsPrincipal(owner, () => ensureMcpRoles(server!.id));
+    await runAsPrincipal(owner, () => ensureMcpRoles(other!.id));
+    await runAsPrincipal(owner, () =>
+      saveMcpAssignments({ serverId: server!.id, global: false, assignments: [{ scope: "org", id: org.id, mode: "allow", blockedTools: [] }] }),
+    );
+    const before = await runAsPrincipal(owner, () => loadKeyMcpAccess(key.id));
+    assert.deepEqual(before.chain, chain);
+    const entry = before.servers.find((row) => row.serverId === server!.id)!;
+    assert.equal(entry.rule, null);
+    assert.deepEqual(entry.inherited.map((rule) => rule.scope), ["org"]);
+    assert.equal(entry.tools.find((tool) => tool.name === "delete")?.action, "delete");
+    assert.deepEqual(toolNames(await loadMcpServers(chain), server!.id), ["search", "fetch", "delete"]);
+
+    const narrowed = await runAsPrincipal(owner, () =>
+      saveKeyMcpAccess({
+        keyId: key.id,
+        servers: [{ serverId: server!.id, mode: "inherit", blockedTools: ["fetch", "missing"], blockedActions: ["delete"] }],
+      }),
+    );
+    const narrowedRule = narrowed.servers.find((row) => row.serverId === server!.id)?.rule;
+    assert.equal(narrowedRule?.mode, "block");
+    assert.deepEqual(narrowedRule?.blockedTools, ["fetch"]);
+    assert.deepEqual(toolNames(await loadMcpServers(chain), server!.id), ["search"]);
+
+    const reader = await prisma.mcpRole.findFirstOrThrow({ where: { serverId: other!.id, key: "reader" } });
+    const granted = await runAsPrincipal(owner, () =>
+      saveKeyMcpAccess({ keyId: key.id, servers: [{ serverId: other!.id, mode: "allow", roleId: reader.id }] }),
+    );
+    assert.equal(granted.servers.find((row) => row.serverId === other!.id)?.rule?.role?.key, "reader");
+    assert.deepEqual(toolNames(await loadMcpServers(chain), other!.id), ["search", "fetch"]);
+    assert.deepEqual(toolNames(await loadMcpServers(chain), server!.id), ["search"]);
+
+    await assert.rejects(
+      runAsPrincipal(owner, () =>
+        saveKeyMcpAccess({ keyId: key.id, servers: [{ serverId: server!.id, mode: "allow", roleId: reader.id }] }),
+      ),
+      /ROLE_NOT_FOUND/,
+    );
+    await assert.rejects(
+      runAsPrincipal(owner, () => saveKeyMcpAccess({ keyId: "missing", servers: [] })),
+      /NOT_FOUND/,
+    );
+
+    await runAsPrincipal(owner, () =>
+      saveKeyMcpAccess({ keyId: key.id, servers: [{ serverId: server!.id, mode: "block" }] }),
+    );
+    assert.equal(toolNames(await loadMcpServers(chain), server!.id), null);
+
+    const cleared = await runAsPrincipal(owner, () =>
+      saveKeyMcpAccess({
+        keyId: key.id,
+        servers: [
+          { serverId: server!.id, mode: "inherit" },
+          { serverId: other!.id, mode: "inherit" },
+        ],
+      }),
+    );
+    assert.ok(cleared.servers.every((row) => row.rule === null));
+    assert.equal(await prisma.mcpAssignment.count({ where: { keyId: key.id } }), 0);
+    assert.deepEqual(toolNames(await loadMcpServers(chain), server!.id), ["search", "fetch", "delete"]);
+    assert.equal(toolNames(await loadMcpServers(chain), other!.id), null);
+  } finally {
+    await prisma.mcpServer.deleteMany({ where: { id: { in: servers.map((row) => row.id) } } });
+    await prisma.virtualKey.delete({ where: { id: key.id } });
+    await prisma.member.delete({ where: { id: member.id } });
+    await prisma.organization.delete({ where: { id: org.id } });
+    await prisma.gatewayAuditLog.deleteMany({ where: { actor: owner.user.id } });
+    await prisma.user.delete({ where: { id: owner.user.id } });
+  }
+});
+
+test("a company connects its own key to an offered server from the company pages", async () => {
+  const owner = await ownerSession();
+  const org = await prisma.organization.create({ data: { alias: uniqueName("org") } });
+  const offered = await prisma.mcpServer.create({
+    data: { name: uniqueName("offered").slice(0, 40), url: "http://127.0.0.1:1/mcp", internal: true, template: true, tools: TOOLS },
+  });
+  const plain = await prisma.mcpServer.create({
+    data: { name: uniqueName("plain").slice(0, 40), url: "http://127.0.0.1:1/mcp", internal: true, tools: TOOLS },
+  });
+  try {
+    const listed = await runAsPrincipal(owner, () => loadCompanyMcpServers(org.id));
+    assert.equal(listed.company.id, org.id);
+    assert.equal(listed.canInstall, true);
+    assert.ok(listed.servers.some((row) => row.id === offered.id));
+    assert.ok(!listed.servers.some((row) => row.id === plain.id));
+    const saved = await runAsPrincipal(owner, () =>
+      saveCompanyMcpInstallation({
+        serverId: offered.id,
+        orgId: org.id,
+        enabled: true,
+        baseUrl: "",
+        authType: "bearer",
+        authHeader: "",
+        secret: "company-secret-token",
+      }),
+    );
+    const installation = saved.server.installations.find((row) => row.orgId === org.id);
+    assert.equal(installation?.hasSecret, true);
+    assert.ok(saved.server.installations.every((row) => row.orgId === org.id));
+    assert.ok(!JSON.stringify(saved).includes("company-secret-token"));
+    await assert.rejects(runAsPrincipal(owner, () => loadCompanyMcpServers("missing-org")), /ORG_NOT_FOUND/);
+  } finally {
+    await prisma.mcpServer.deleteMany({ where: { id: { in: [offered.id, plain.id] } } });
+    await prisma.organization.delete({ where: { id: org.id } });
+    await prisma.gatewayAuditLog.deleteMany({ where: { actor: owner.user.id } });
     await prisma.user.delete({ where: { id: owner.user.id } });
   }
 });

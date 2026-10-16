@@ -4,7 +4,6 @@
   "toggleCollapsed": "{collapsed, select, true {Expand sidebar} other {Collapse sidebar}}",
   "openMenu": "Open navigation menu",
   "workspaceLabel": "Workspace",
-  "workspaceAll": "All companies",
   "goHome": "Go to the start page",
   "sections": {
     "organization": "Organization",
@@ -25,7 +24,13 @@
     "usage": "Usage",
     "logs": "Logs",
     "settings": "Settings",
-    "developer": "Developer"
+    "developer": "Developer",
+    "company": "Company",
+    "companySettings": "Company settings"
   },
-  "account": "Account and security"
+  "account": "Account and security",
+  "workspaceAdmin": "Admin",
+  "workspaceAdminHint": "Every company and the platform",
+  "workspaceCompanies": "Companies",
+  "workspaceCompanyHint": "Company view"
 }

@@ -3,14 +3,16 @@
 import { useState, useTransition } from "react";
 import {
   Alert,
-  Badge,
   Button,
   Card,
+  Chip,
   Description,
+  FieldError,
   Input,
   Label,
   ListBox,
   Modal,
+  SearchField,
   Select,
   Spinner,
   Switch,
@@ -21,18 +23,26 @@ import {
   toast,
   type useOverlayState,
 } from "@heroui/react";
-import { Sparkles } from "lucide-react";
+import { SearchX, Sparkles } from "lucide-react";
 import { useTranslations } from "next-intl";
+import EmptyState from "@/components/console/empty-state";
 import { useErrorToast } from "@/components/console/use-error-toast";
 import { isActionFail } from "@/lib/http/action-result";
-import { MCP_ACTIONS, MCP_ROLE_KEYS } from "@/schemas/mcp";
-import type { HostedTool, McpAssignmentView, McpBuilderModel, McpDraft, McpServerView, McpToolAction } from "@/types/mcp";
+import { MAX_BUILDER_DOCS, MAX_HOSTED_TOOLS, MCP_ACTIONS, MCP_BUILDER_TEMPLATES, MCP_ROLE_KEYS } from "@/schemas/mcp";
+import type {
+  HostedTool,
+  McpAssignmentView,
+  McpBuilderModel,
+  McpBuilderTemplate,
+  McpDraft,
+  McpServerView,
+  McpToolAction,
+} from "@/types/mcp";
 import { createHostedMcpServerAction, draftMcpServerAction, setBuilderModelAction } from "../_action";
 import BuilderAccess from "./builder-access";
 
-const TEMPLATES = ["readonly", "writes", "full", "custom"] as const;
 const STEPS = ["brief", "review", "access"] as const;
-type TemplateId = (typeof TEMPLATES)[number];
+const SEARCH_FROM = 8;
 type StepId = (typeof STEPS)[number];
 
 function methodColor(method: HostedTool["method"]): "success" | "warning" | "danger" {
@@ -59,7 +69,7 @@ export default function BuilderDialog({
   const showError = useErrorToast();
   const initial = t("builder.templateText", { template: "readonly" });
   const [step, setStep] = useState<StepId>("brief");
-  const [template, setTemplate] = useState<TemplateId>("readonly");
+  const [template, setTemplate] = useState<McpBuilderTemplate>("readonly");
   const [instruction, setInstruction] = useState(initial);
   const [docs, setDocs] = useState("");
   const [draft, setDraft] = useState<McpDraft | null>(null);
@@ -72,6 +82,7 @@ export default function BuilderDialog({
   const [secret, setSecret] = useState("");
   const [tools, setTools] = useState<HostedTool[]>([]);
   const [enabled, setEnabled] = useState<string[]>([]);
+  const [search, setSearch] = useState("");
   const [shared, setShared] = useState(false);
   const [global, setGlobal] = useState(false);
   const [rules, setRules] = useState<McpAssignmentView[]>([]);
@@ -81,18 +92,26 @@ export default function BuilderDialog({
   const pending = savingModel || drafting || saving;
   const selected = models.some((item) => item.alias === model) ? model : null;
   const chosen = tools.filter((tool) => enabled.includes(tool.name));
+  const needle = search.trim().toLowerCase();
+  const shown = needle
+    ? tools.filter((tool) => [tool.name, tool.title, tool.path].some((value) => value.toLowerCase().includes(needle)))
+    : tools;
+  const docsTooLong = docs.length > MAX_BUILDER_DOCS;
+  const baseValid = /^https?:\/\/[^\s/]+/i.test(baseUrl.trim());
+  const tooMany = chosen.length > MAX_HOSTED_TOOLS;
   const headerValid = authType !== "header" || /^[A-Za-z0-9-]{1,64}$/.test(authHeader.trim());
-  const needsSecret = authType !== "none" && !secret.trim();
-  const reviewReady = Boolean(name.trim() && baseUrl.trim() && chosen.length && headerValid && !needsSecret);
+  const needsSecret = authType !== "none" && !shared && !secret.trim();
+  const reviewReady = Boolean(name.trim() && baseValid && chosen.length && !tooMany && headerValid && !needsSecret);
+  const canDraft = Boolean(instruction.trim() && docs.trim() && !docsTooLong);
 
-  function chooseTemplate(next: TemplateId) {
+  function chooseTemplate(next: McpBuilderTemplate) {
     setTemplate(next);
     if (next !== "custom") setInstruction(t("builder.templateText", { template: next }));
   }
 
   function editInstruction(value: string) {
     setInstruction(value);
-    const match = TEMPLATES.find(
+    const match = MCP_BUILDER_TEMPLATES.find(
       (item) => item !== "custom" && t("builder.templateText", { template: item }) === value,
     );
     setTemplate(match ?? "custom");
@@ -118,13 +137,14 @@ export default function BuilderDialog({
     setAuthType(result.authType);
     setAuthHeader(result.authHeader);
     setTools(result.tools);
-    setEnabled(result.tools.map((tool) => tool.name));
+    setEnabled(result.included);
+    setSearch("");
     setStep("review");
   }
 
   function runDraft() {
     startDraft(async () => {
-      const result = await draftMcpServerAction({ instruction, docs });
+      const result = await draftMcpServerAction({ template, instruction, docs });
       if (isActionFail(result)) {
         showError(result.error);
         return;
@@ -147,7 +167,7 @@ export default function BuilderDialog({
         internal,
         authType,
         authHeader,
-        secret,
+        secret: shared ? "" : secret,
         tools: chosen,
         template: shared,
         global,
@@ -205,7 +225,12 @@ export default function BuilderDialog({
                     {step === "brief" ? (
                       <>
                         {models.length === 0 ? (
-                          <p className="text-sm text-muted">{t("builder.modelEmpty")}</p>
+                          <Alert status="warning">
+                            <Alert.Indicator />
+                            <Alert.Content>
+                              <Alert.Description>{t("builder.modelEmpty")}</Alert.Description>
+                            </Alert.Content>
+                          </Alert>
                         ) : (
                           <Select
                             fullWidth
@@ -231,24 +256,26 @@ export default function BuilderDialog({
                                 ))}
                               </ListBox>
                             </Select.Popover>
+                            <Description>{t("builder.modelHint")}</Description>
                           </Select>
                         )}
                         <div className="space-y-2">
                           <Label>{t("builder.template")}</Label>
                           <ToggleButtonGroup
+                            isDetached
+                            className="flex w-full flex-wrap justify-start"
                             selectionMode="single"
                             disallowEmptySelection
                             aria-label={t("builder.template")}
                             selectedKeys={[template]}
                             onSelectionChange={(keys) => {
-                              const next = TEMPLATES.find((item) => item === [...keys][0]);
+                              const next = MCP_BUILDER_TEMPLATES.find((item) => item === [...keys][0]);
                               if (next) chooseTemplate(next);
                             }}
                             isDisabled={pending}
                           >
-                            {TEMPLATES.map((item, index) => (
+                            {MCP_BUILDER_TEMPLATES.map((item) => (
                               <ToggleButton key={item} id={item}>
-                                {index > 0 ? <ToggleButtonGroup.Separator /> : null}
                                 {t("builder.templateName", { template: item })}
                               </ToggleButton>
                             ))}
@@ -260,10 +287,14 @@ export default function BuilderDialog({
                           <TextArea className="min-h-24" />
                           <Description>{t("builder.instructionHint")}</Description>
                         </TextField>
-                        <TextField fullWidth isRequired value={docs} onChange={setDocs} isDisabled={pending}>
+                        <TextField fullWidth isRequired value={docs} onChange={setDocs} isDisabled={pending} isInvalid={docsTooLong}>
                           <Label>{t("builder.docs")}</Label>
                           <TextArea className="min-h-40 font-mono text-xs" />
-                          <Description>{t("builder.docsHint")}</Description>
+                          {docsTooLong ? (
+                            <FieldError>{t("builder.docsLong", { max: MAX_BUILDER_DOCS })}</FieldError>
+                          ) : (
+                            <Description>{t("builder.docsHint")}</Description>
+                          )}
                         </TextField>
                         {drafting ? (
                           <output aria-live="polite" className="text-sm text-muted">
@@ -276,6 +307,18 @@ export default function BuilderDialog({
                     {step === "review" && draft ? (
                       <>
                         <p className="text-sm text-muted">{t("builder.endpoint")}</p>
+                        {draft.source === "openapi" ? (
+                          <Alert status="accent">
+                            <Alert.Indicator />
+                            <Alert.Content>
+                              <Alert.Title>{t("builder.imported")}</Alert.Title>
+                              <Alert.Description>
+                                {t("builder.importedCount", { count: draft.tools.length, total: draft.operations })}
+                                {draft.tools.length < draft.operations ? ` ${t("builder.importedLeft", { max: MAX_HOSTED_TOOLS })}` : ""}
+                              </Alert.Description>
+                            </Alert.Content>
+                          </Alert>
+                        ) : null}
                         {draft.notes ? (
                           <Alert status="accent">
                             <Alert.Indicator />
@@ -294,10 +337,21 @@ export default function BuilderDialog({
                           <Label>{t("form.descriptionField")}</Label>
                           <TextArea />
                         </TextField>
-                        <TextField fullWidth isRequired value={baseUrl} onChange={setBaseUrl} isDisabled={pending}>
+                        <TextField
+                          fullWidth
+                          isRequired
+                          value={baseUrl}
+                          onChange={setBaseUrl}
+                          isDisabled={pending}
+                          isInvalid={Boolean(baseUrl.trim()) && !baseValid}
+                        >
                           <Label>{t("builder.baseUrl")}</Label>
                           <Input inputMode="url" />
-                          <Description>{t("builder.baseHint")}</Description>
+                          {baseUrl.trim() && !baseValid ? (
+                            <FieldError>{t("builder.baseInvalid")}</FieldError>
+                          ) : (
+                            <Description>{t("builder.baseHint")}</Description>
+                          )}
                         </TextField>
                         <Switch isSelected={internal} onChange={setInternal} isDisabled={pending}>
                           <Switch.Content>
@@ -307,6 +361,15 @@ export default function BuilderDialog({
                             <Label>{t("form.internal")}</Label>
                           </Switch.Content>
                           <Description>{t("form.internalHint")}</Description>
+                        </Switch>
+                        <Switch isSelected={shared} onChange={setShared} isDisabled={pending}>
+                          <Switch.Content>
+                            <Switch.Control>
+                              <Switch.Thumb />
+                            </Switch.Control>
+                            <Label>{t("builder.share")}</Label>
+                          </Switch.Content>
+                          <Description>{t("builder.shareHint")}</Description>
                         </Switch>
                         <div className="grid gap-4 sm:grid-cols-2">
                           <Select
@@ -341,7 +404,8 @@ export default function BuilderDialog({
                             </TextField>
                           ) : null}
                         </div>
-                        {authType !== "none" ? (
+                        {authType !== "none" && shared ? <p className="text-sm text-muted">{t("builder.companyKey")}</p> : null}
+                        {authType !== "none" && !shared ? (
                           <TextField fullWidth isRequired value={secret} onChange={setSecret} isDisabled={pending}>
                             <Label>{t("form.secret", { type: authType })}</Label>
                             <Input type="password" autoComplete="off" />
@@ -365,14 +429,32 @@ export default function BuilderDialog({
                             <Button size="sm" variant="tertiary" isDisabled={pending} onPress={() => setEnabled(tools.map((tool) => tool.name))}>
                               {t("builder.includeAll")}
                             </Button>
-                            <Button size="sm" variant="secondary" isDisabled={pending || !instruction.trim() || !docs.trim() || !selected} onPress={runDraft}>
+                            <Button size="sm" variant="secondary" isDisabled={pending || !canDraft} onPress={runDraft}>
                               <Sparkles size={14} aria-hidden />
                               {t("builder.redraft")}
                             </Button>
                           </div>
                         </div>
                         <p className="text-sm text-muted">{t("builder.toolsHint")}</p>
-                        {tools.map((tool) => {
+                        {tooMany ? (
+                          <Alert status="warning">
+                            <Alert.Indicator />
+                            <Alert.Content>
+                              <Alert.Description>{t("builder.tooMany", { max: MAX_HOSTED_TOOLS })}</Alert.Description>
+                            </Alert.Content>
+                          </Alert>
+                        ) : null}
+                        {tools.length > SEARCH_FROM ? (
+                          <SearchField value={search} onChange={setSearch} aria-label={t("builder.searchTools")} className="w-full">
+                            <SearchField.Group>
+                              <SearchField.SearchIcon />
+                              <SearchField.Input placeholder={t("builder.searchTools")} />
+                              <SearchField.ClearButton aria-label={tCommon("close")} />
+                            </SearchField.Group>
+                          </SearchField>
+                        ) : null}
+                        {shown.length === 0 ? <EmptyState icon={SearchX} title={t("builder.noMatch")} /> : null}
+                        {shown.map((tool) => {
                           const on = enabled.includes(tool.name);
                           return (
                             <Card key={tool.name} variant="secondary">
@@ -381,12 +463,12 @@ export default function BuilderDialog({
                                   <div className="min-w-0 space-y-1">
                                     <div className="flex flex-wrap items-center gap-2">
                                       <span className="font-medium text-foreground">{tool.title || tool.name}</span>
-                                      <Badge size="sm" variant="soft" color={methodColor(tool.method)} className="px-1.5 whitespace-nowrap">
+                                      <Chip size="sm" variant="soft" color={methodColor(tool.method)}>
                                         {tool.method}
-                                      </Badge>
-                                      <span className="font-mono text-xs text-muted">{tool.path}</span>
+                                      </Chip>
+                                      <span className="font-mono text-xs break-all text-muted">{tool.path}</span>
                                     </div>
-                                    <p className="font-mono text-xs text-muted">{tool.name}</p>
+                                    <p className="font-mono text-xs break-all text-muted">{tool.name}</p>
                                     {tool.description ? <p className="text-sm text-muted">{tool.description}</p> : null}
                                   </div>
                                   <Switch
@@ -433,16 +515,6 @@ export default function BuilderDialog({
                     ) : null}
 
                     {step === "access" ? (
-                      <>
-                      <Switch isSelected={shared} onChange={setShared} isDisabled={pending}>
-                        <Switch.Content>
-                          <Switch.Control>
-                            <Switch.Thumb />
-                          </Switch.Control>
-                          <Label>{t("builder.share")}</Label>
-                        </Switch.Content>
-                        <Description>{t("builder.shareHint")}</Description>
-                      </Switch>
                       <BuilderAccess
                         tools={chosen}
                         global={global}
@@ -451,7 +523,6 @@ export default function BuilderDialog({
                         onGlobal={setGlobal}
                         onRules={setRules}
                       />
-                      </>
                     ) : null}
                   </div>
                 </Modal.Body>
@@ -473,7 +544,7 @@ export default function BuilderDialog({
                       variant="primary"
                       onPress={runDraft}
                       isPending={drafting}
-                      isDisabled={pending || !instruction.trim() || !docs.trim() || !selected}
+                      isDisabled={pending || !canDraft}
                     >
                       {({ isPending }) => (
                         <>

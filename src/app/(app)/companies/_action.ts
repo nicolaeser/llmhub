@@ -1,6 +1,7 @@
 "use server";
 
 import { runAction } from "@/lib/http/action-result";
+import { loadCompanyMcpServers, saveCompanyMcpInstallation } from "@/lib/mcp/servers";
 import { addBoost, removeBoost, saveBudgetAlerts, setBudget } from "@/lib/tenancy/budgets";
 import {
   deleteNode,
@@ -62,4 +63,12 @@ export async function deleteReportAction(...args: Parameters<typeof deleteReport
 
 export async function sendReportNowAction(...args: Parameters<typeof sendReportNow>) {
   return runAction(() => sendReportNow(...args));
+}
+
+export async function loadCompanyMcpAction(...args: Parameters<typeof loadCompanyMcpServers>) {
+  return runAction(() => loadCompanyMcpServers(...args));
+}
+
+export async function saveCompanyMcpInstallationAction(...args: Parameters<typeof saveCompanyMcpInstallation>) {
+  return runAction(() => saveCompanyMcpInstallation(...args));
 }

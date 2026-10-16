@@ -5,7 +5,7 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { homePath, NAV } from "@/app/(app)/_components/nav-data";
+import { adminOnlyPath, canSee, homePath, NAV } from "@/app/(app)/_components/nav-data";
 import { SESSION_COOKIE, signSessionToken } from "@/lib/auth/cookie";
 import { permissions, PERMISSIONS } from "@/lib/auth/permissions";
 import type { Permission } from "@/types/auth";
@@ -103,7 +103,7 @@ test("retired console paths redirect to the tab that replaced them", async () =>
 
 test("the sidebar brand links to the permission-aware console home", () => {
   const sidebar = readFileSync(path.join(root, "src/app/(app)/_components/sidebar.tsx"), "utf8");
-  assert.match(sidebar, /href=\{homePath\(permissions\)\}/);
+  assert.match(sidebar, /href=\{homePath\(permissions, companyView\)\}/);
 });
 
 test("every NAV entry has a page and labels in both locales", () => {
@@ -118,6 +118,9 @@ test("every NAV entry has a page and labels in both locales", () => {
       assert.equal(typeof lookup(tree, section.labelKey), "string", `${locale} ${section.labelKey}`);
       for (const item of section.items) {
         assert.equal(typeof lookup(tree, item.labelKey), "string", `${locale} ${item.labelKey}`);
+        if (item.companyLabelKey) {
+          assert.equal(typeof lookup(tree, item.companyLabelKey), "string", `${locale} ${item.companyLabelKey}`);
+        }
       }
     }
     const sectionLabels = NAV.map((section) => lookup(tree, section.labelKey));
@@ -130,4 +133,23 @@ test("the console keeps a short navigation", () => {
   const items = NAV.flatMap((section) => section.items);
   assert.ok(items.length <= 13, String(items.length));
   for (const section of NAV) assert.ok(section.items.length >= 2, section.id);
+});
+
+test("the company view hides platform pages and keeps company pages", () => {
+  const items = NAV.flatMap((section) => section.items);
+  assert.deepEqual(
+    items.filter((item) => item.adminOnly).map((item) => item.href).sort(),
+    ["/models", "/providers", "/users"],
+  );
+  const providers = items.find((item) => item.href === "/providers")!;
+  const keys = items.find((item) => item.href === "/keys")!;
+  assert.equal(canSee(permissions, providers), true);
+  assert.equal(canSee(permissions, providers, true), false);
+  assert.equal(canSee(permissions, keys, true), true);
+  assert.equal(homePath([PERMISSIONS.PROVIDERS_READ, PERMISSIONS.SPEND_READ]), "/providers");
+  assert.equal(homePath([PERMISSIONS.PROVIDERS_READ, PERMISSIONS.SPEND_READ], true), "/usage");
+  assert.equal(adminOnlyPath("/models"), true);
+  assert.equal(adminOnlyPath("/providers/health"), true);
+  assert.equal(adminOnlyPath("/keys"), false);
+  assert.equal(adminOnlyPath("/modelsx"), false);
 });

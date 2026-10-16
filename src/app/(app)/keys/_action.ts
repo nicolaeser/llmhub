@@ -4,6 +4,7 @@ import { grantedPermissions } from "@/lib/auth/guards";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { runAction } from "@/lib/http/action-result";
 import { createKey, loadKeysPage, revokeKey, rotateKey, updateKey } from "@/lib/keys/manage";
+import { loadKeyMcpAccess, saveKeyMcpAccess } from "@/lib/mcp/key-access";
 import {
   createTemplate,
   deleteTemplate,
@@ -54,4 +55,12 @@ export async function updateTemplateAction(...args: Parameters<typeof updateTemp
 
 export async function deleteTemplateAction(...args: Parameters<typeof deleteTemplate>) {
   return runAction(() => deleteTemplate(...args));
+}
+
+export async function loadKeyMcpAccessAction(...args: Parameters<typeof loadKeyMcpAccess>) {
+  return runAction(() => loadKeyMcpAccess(...args));
+}
+
+export async function saveKeyMcpAccessAction(...args: Parameters<typeof saveKeyMcpAccess>) {
+  return runAction(() => saveKeyMcpAccess(...args));
 }

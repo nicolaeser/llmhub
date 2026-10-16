@@ -8,13 +8,13 @@ import EmptyState from "@/components/console/empty-state";
 import PageHeader from "@/components/console/page-header";
 import PageStatus, { LoadError } from "@/components/console/page-status";
 import StatCard from "@/components/console/stat-card";
+import InstallDialog from "@/components/mcp/install-dialog";
 import { useActionData } from "@/lib/hooks/use-action-data";
 import { setSearchParams, useSearchParam } from "@/lib/hooks/use-search-param";
 import type { McpServerView } from "@/types/mcp";
-import { loadMcpServersAction } from "./_action";
+import { loadMcpServersAction, saveMcpInstallationAction, setMcpTemplateAction } from "./_action";
 import AccessDialog from "./_components/access-dialog";
 import BuilderDialog from "./_components/builder-dialog";
-import InstallDialog from "./_components/install-dialog";
 import PermissionsDialog from "./_components/permissions-dialog";
 import ServerCard from "./_components/server-card";
 import ServerDialog from "./_components/server-dialog";
@@ -183,6 +183,8 @@ export default function McpPage() {
         companies={companies}
         companyId={companyId}
         canManage={canManage}
+        onInstall={saveMcpInstallationAction}
+        onTemplate={setMcpTemplateAction}
         onSaved={replace}
       />
       <BuilderDialog

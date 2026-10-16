@@ -4,12 +4,14 @@ import { cookies } from "next/headers";
 import prisma from "@/lib/db/prisma";
 import { requireActor, requirePermission } from "@/lib/auth/guards";
 import { hasPerm, PERMISSIONS } from "@/lib/auth/permissions";
-import { companyOf } from "@/lib/auth/scope";
+import { companyOf, inCompany } from "@/lib/auth/scope";
 import { AuthError, isPrismaCode } from "@/lib/auth/errors";
 import { writeAudit } from "@/lib/audit";
 import { seal } from "@/lib/crypto";
 import { assignmentViews, mcpAssignmentSelect, replaceCompanyMcpAssignments, replaceMcpAssignments, targetOptions } from "@/lib/mcp/assignments";
-import { ensureBuiltinRoles, installationViews, roleViews } from "@/lib/mcp/catalog";
+import { builderModels } from "@/lib/mcp/builder";
+import { managesMcp, managesMcpRules, visibleToCompany } from "@/lib/mcp/scope";
+import { ensureBuiltinRoles, installationViews, roleViews, saveMcpInstallation } from "@/lib/mcp/catalog";
 import { loginData, trialClientCredentials } from "@/lib/mcp/auth";
 import { eraOf, toolSpecs } from "@/lib/mcp/client";
 import { McpError, mcpErrorCode, type McpErrorCode } from "@/lib/mcp/errors";
@@ -36,8 +38,6 @@ import { isOAuthGrant, mcpClientFor, serverRecord } from "@/lib/mcp/toolset";
 import { guardedFetch } from "@/lib/mcp/transport";
 import { checkServerUrl } from "@/lib/mcp/url-guard";
 import { errorFields } from "@/lib/logging/format";
-import { enabledModelChoices } from "@/lib/models/aliases";
-import { chatChoices } from "@/lib/models/model-role";
 import { logger } from "@/lib/logging/logger";
 import {
   BUILDER_MODEL_KEY,
@@ -317,10 +317,6 @@ function connectionFields(input: {
   };
 }
 
-function managesMcp(session: Pick<AuthenticatedSession, "permissions">): boolean {
-  return hasPerm(session.permissions, PERMISSIONS.SETTINGS_MANAGE) || hasPerm(session.permissions, PERMISSIONS.MCP_MANAGE);
-}
-
 function seesMcp(session: Pick<AuthenticatedSession, "permissions">): boolean {
   return hasPerm(session.permissions, PERMISSIONS.SETTINGS_READ) || hasPerm(session.permissions, PERMISSIONS.MCP_READ);
 }
@@ -333,35 +329,14 @@ export async function loadMcpServerList() {
   const session = await requireActor();
   if (!seesMcp(session)) throw new AuthError("FORBIDDEN");
   const company = companyOf(session);
-  const [rows, setting, choices, companies] = await Promise.all([
+  const [rows, setting, models, companies] = await Promise.all([
     prisma.mcpServer.findMany({
-      where: company
-        ? {
-            OR: [
-              { template: true },
-              { global: true },
-              { installations: { some: { orgId: company } } },
-              {
-                assignments: {
-                  some: {
-                    OR: [
-                      { orgId: company },
-                      { team: { orgId: company } },
-                      { project: { orgId: company } },
-                      { member: { orgId: company } },
-                      { key: { orgId: company } },
-                    ],
-                  },
-                },
-              },
-            ],
-          }
-        : undefined,
+      where: company ? visibleToCompany(company) : undefined,
       select: serverSelect,
       orderBy: { name: "asc" },
     }),
     prisma.setting.findUnique({ where: { key: BUILDER_MODEL_KEY } }),
-    enabledModelChoices(),
+    builderModels(),
     prisma.organization.findMany({
       where: company ? { id: company } : undefined,
       select: { id: true, alias: true },
@@ -378,8 +353,31 @@ export async function loadMcpServerList() {
     companies,
     redirectUri: canManage ? mcpOAuthRedirectUri() : "",
     builderModel: setting?.value ?? "",
-    models: chatChoices(choices).map((choice) => ({ alias: choice.alias, label: choice.label })),
+    models,
   };
+}
+
+export async function loadCompanyMcpServers(rawOrgId: unknown) {
+  const session = await requireActor();
+  if (!seesMcp(session)) throw new AuthError("FORBIDDEN");
+  const orgId = typeof rawOrgId === "string" ? rawOrgId : "";
+  if (!orgId) throw new Error("MISSING_ID");
+  if (!inCompany(session, orgId)) throw new AuthError("FORBIDDEN");
+  const org = await prisma.organization.findUnique({ where: { id: orgId }, select: { id: true, alias: true } });
+  if (!org) throw new Error("ORG_NOT_FOUND");
+  const rows = await prisma.mcpServer.findMany({ where: { template: true }, select: serverSelect, orderBy: { name: "asc" } });
+  const canManage = managesMcp(session);
+  return {
+    company: org,
+    servers: rows.map((row) => viewOf(row, canManage, org.id)),
+    canInstall: canManage || hasPerm(session.permissions, PERMISSIONS.MCP_INSTALL),
+  };
+}
+
+export async function saveCompanyMcpInstallation(raw: unknown) {
+  const saved = await saveMcpInstallation(raw);
+  const session = await requireActor();
+  return { server: viewOf(await loadRow(saved.serverId), managesMcp(session), saved.orgId) };
 }
 
 export async function presentMcpServer(id: string) {
@@ -787,7 +785,7 @@ export async function disconnectMcpOAuth(rawId: unknown) {
 export async function loadMcpTargets() {
   const session = await requireActor();
   const company = companyOf(session);
-  if (!managesMcp(session) && !(company && hasPerm(session.permissions, PERMISSIONS.MCP_INSTALL))) throw new AuthError("FORBIDDEN");
+  if (!managesMcpRules(session, company)) throw new AuthError("FORBIDDEN");
   const options = await targetOptions();
   if (!company) return { options };
   return {
@@ -804,7 +802,7 @@ export async function loadMcpTargets() {
 export async function saveMcpAssignments(raw: unknown) {
   const session = await requireActor();
   const company = companyOf(session);
-  if (!managesMcp(session) && !(company && hasPerm(session.permissions, PERMISSIONS.MCP_INSTALL))) throw new AuthError("FORBIDDEN");
+  if (!managesMcpRules(session, company)) throw new AuthError("FORBIDDEN");
   const input = parse(mcpAssignmentsSchema, raw);
   const before = await loadRow(input.serverId);
   const saved = company
