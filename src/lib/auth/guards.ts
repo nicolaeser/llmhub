@@ -23,10 +23,15 @@ export async function requireSession(): Promise<AuthenticatedSession> {
   return session;
 }
 
+/** Console cookie session, or the principal already bound by runAsPrincipal. */
+export async function requireActor(): Promise<AuthenticatedSession> {
+  return delegatedPrincipal() ?? requireSession();
+}
+
 export async function requirePermission(
   permission: Permission,
 ): Promise<AuthenticatedSession> {
-  const session = delegatedPrincipal() ?? (await requireSession());
+  const session = await requireActor();
   if (!hasPerm(session.permissions, permission)) {
     throw new AuthError("FORBIDDEN");
   }

@@ -12,7 +12,7 @@ export function seesAllSpend(session: AuthenticatedSession): boolean {
 }
 
 export function companyOf(session: AuthenticatedSession): string | null {
-  if (session.isOwner) return null;
+  if (session.isOwner) return session.workspaceOrgId || null;
   return session.user.orgId ?? null;
 }
 

@@ -1,12 +1,22 @@
 import { setTimeout as delay } from "node:timers/promises";
 import { McpError } from "@/lib/mcp/errors";
 import { bearerChallenge, headerParams, headerValue, paramHeaders } from "@/lib/mcp/headers";
+import { isToolAction } from "@/lib/mcp/resolve";
 import { readLimitedText, sseEvents } from "@/lib/mcp/sse";
 import { SseChannel } from "@/lib/mcp/sse-channel";
 import { parseJsonOrNull } from "@/lib/utils/json";
 import { cancelQuietly } from "@/lib/utils/streams";
 import type { JsonMap } from "@/types/gateway";
-import type { JsonRpcMessage, McpAuth, McpConnection, McpEra, McpFetch, McpToolOutcome, McpToolSpec } from "@/types/mcp";
+import type {
+  JsonRpcMessage,
+  McpAuth,
+  McpConnection,
+  McpEra,
+  McpFetch,
+  McpToolAction,
+  McpToolOutcome,
+  McpToolSpec,
+} from "@/types/mcp";
 
 export const MCP_PROTOCOL_VERSION = "2026-07-28";
 export const MCP_LEGACY_PROTOCOL_VERSION = "2025-11-25";
@@ -140,17 +150,38 @@ export function toolSpecs(raw: unknown, onReject?: (name: string, reason: string
       continue;
     }
     seen.add(name);
-    const action = tool.action === "read" || tool.action === "write" || tool.action === "delete" ? tool.action : undefined;
+    const action = isToolAction(tool.action) ? tool.action : undefined;
+    const hint = !action && isToolAction(tool.hint) ? tool.hint : undefined;
     out.push({
       name,
       title: typeof tool.title === "string" ? clip(tool.title, 200) : "",
       description: typeof tool.description === "string" ? clip(tool.description, MAX_DESCRIPTION) : "",
       inputSchema: schema.type === "object" ? schema : { ...schema, type: "object" },
       ...(action ? { action } : {}),
+      ...(hint ? { hint } : {}),
     });
     if (out.length >= MCP_MAX_TOOLS) break;
   }
   return out;
+}
+
+export function annotationHint(value: unknown): McpToolAction | undefined {
+  const annotations = asMap(value);
+  if (!annotations) return undefined;
+  if (annotations.readOnlyHint === true) return "read";
+  if (annotations.destructiveHint === false) return "write";
+  if (annotations.destructiveHint === true || annotations.readOnlyHint === false) return "delete";
+  return undefined;
+}
+
+function remoteTool(item: unknown): unknown {
+  const tool = asMap(item);
+  if (!tool) return item;
+  const reported: JsonMap = { ...tool };
+  delete reported.action;
+  delete reported.hint;
+  const hint = annotationHint(tool.annotations);
+  return hint ? { ...reported, hint } : reported;
 }
 
 function truncate(text: string): string {
@@ -538,7 +569,7 @@ export class McpClient {
       cursor = typeof result.nextCursor === "string" && result.nextCursor ? result.nextCursor : undefined;
       if (!cursor || raw.length >= MCP_MAX_TOOLS) break;
     }
-    return toolSpecs(raw, onReject);
+    return toolSpecs(raw.map(remoteTool), onReject);
   }
 
   async callTool(name: string, args: JsonMap, outer?: AbortSignal, schema?: JsonMap): Promise<McpToolOutcome> {

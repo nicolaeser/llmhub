@@ -45,7 +45,10 @@ export type McpToolSpec = {
   description: string;
   inputSchema: JsonMap;
   action?: McpToolAction;
+  hint?: McpToolAction;
 };
+
+export type McpToolActions = Record<string, McpToolAction>;
 
 export type HostedTool = {
   name: string;
@@ -94,6 +97,35 @@ export type McpServerRecord = {
   spec: HostedSpec;
 };
 
+export type McpRoleGrant = {
+  allActions: boolean;
+  actions: string[];
+  tools: string[];
+  deniedTools: string[];
+};
+
+export type McpToolGrant = "inherit" | "allow" | "deny";
+
+export type McpRoleView = McpRoleGrant & {
+  id: string;
+  key: string;
+  name: string;
+  description: string;
+  builtin: boolean;
+  assigned: number;
+};
+
+export type McpInstallationView = {
+  id: string;
+  orgId: string;
+  orgLabel: string;
+  enabled: boolean;
+  baseUrl: string;
+  authType: "none" | "bearer" | "header";
+  authHeader: string;
+  hasSecret: boolean;
+};
+
 export type McpAssignmentRule = {
   serverId: string;
   orgId: string | null;
@@ -104,6 +136,7 @@ export type McpAssignmentRule = {
   mode: McpAssignmentMode;
   blockedTools: string[];
   blockedActions: string[];
+  role?: McpRoleGrant | null;
 };
 
 export type McpChain = {
@@ -196,9 +229,13 @@ export type McpServerView = {
   kind: McpServerKind;
   enabled: boolean;
   global: boolean;
+  template: boolean;
   toolsRestricted: boolean;
   allowedTools: string[];
   tools: McpToolSpec[];
+  toolActions: McpToolActions;
+  roles: McpRoleView[];
+  installations: McpInstallationView[];
   transport: McpTransport;
   protocolVersion: string;
   era: McpEra | null;
@@ -223,6 +260,8 @@ export type McpAssignmentView = {
   mode: McpAssignmentMode;
   blockedTools: string[];
   blockedActions: string[];
+  roleId: string;
+  role: (McpRoleGrant & { key: string; name: string }) | null;
 };
 
 export type McpAssignmentInput = {
@@ -231,6 +270,7 @@ export type McpAssignmentInput = {
   mode: McpAssignmentMode;
   blockedTools: string[];
   blockedActions: string[];
+  roleId?: string;
 };
 
 export type McpTargetOption = {
@@ -350,6 +390,15 @@ export type McpAssignmentSource = AssignmentSource & {
   mode: string;
   blockedTools: string[];
   blockedActions: string[];
+  roleId?: string | null;
+  role?: {
+    key: string;
+    name: string;
+    allActions: boolean;
+    actions: string[];
+    tools: string[];
+    deniedTools: string[];
+  } | null;
 };
 
 export type McpTokenAuthMethod = "none" | "client_secret_basic" | "client_secret_post";

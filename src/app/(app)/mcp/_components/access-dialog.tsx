@@ -54,7 +54,7 @@ function ancestorsOf(rule: McpAssignmentView, options: McpTargetOptions): McpAss
   ];
   return levels
     .filter(([scope, id]) => id && !(scope === rule.scope && id === rule.id))
-    .map(([scope, id]) => ({ scope, id, label: "", mode: "allow" as const, blockedTools: [], blockedActions: [] }));
+    .map(([scope, id]) => ({ scope, id, label: "", mode: "allow" as const, blockedTools: [], blockedActions: [], roleId: "", role: null }));
 }
 
 export default function AccessDialog({
@@ -140,7 +140,7 @@ export default function AccessDialog({
   function addRule() {
     const option = known[scope].find((item) => item.id === target);
     if (!option) return;
-    setRules((current) => [...current, { scope, id: option.id, label: option.label, mode, blockedTools: [], blockedActions: [] }]);
+    setRules((current) => [...current, { scope, id: option.id, label: option.label, mode, blockedTools: [], blockedActions: [], roleId: "", role: null }]);
     setTarget("");
   }
 
@@ -160,6 +160,7 @@ export default function AccessDialog({
           mode: rule.mode,
           blockedTools: rule.blockedTools,
           blockedActions: rule.blockedActions,
+          roleId: rule.mode === "allow" ? rule.roleId : "",
         })),
       });
       if (isActionFail(result)) {
@@ -326,6 +327,42 @@ export default function AccessDialog({
                         </Button>
                       </div>
                     </div>
+                    {rule.mode === "allow" && server?.roles.length ? (
+                      <Select
+                        fullWidth
+                        selectedKey={rule.roleId || "none"}
+                        onSelectionChange={(key) => {
+                          const id = String(key);
+                          if (id === "none") {
+                            updateRule(index, { roleId: "", role: null });
+                            return;
+                          }
+                          const role = server.roles.find((item) => item.id === id);
+                          if (role) updateRule(index, { roleId: role.id, role });
+                        }}
+                        isDisabled={pending}
+                      >
+                        <Label>{t("role")}</Label>
+                        <Select.Trigger>
+                          <Select.Value />
+                          <Select.Indicator />
+                        </Select.Trigger>
+                        <Select.Popover>
+                          <ListBox>
+                            <ListBox.Item id="none" textValue={t("roleNone")}>
+                              {t("roleNone")}
+                              <ListBox.ItemIndicator />
+                            </ListBox.Item>
+                            {server.roles.map((role) => (
+                              <ListBox.Item key={role.id} id={role.id} textValue={role.name}>
+                                {role.builtin ? t("rolePreset", { role: role.key }) : role.name}
+                                <ListBox.ItemIndicator />
+                              </ListBox.Item>
+                            ))}
+                          </ListBox>
+                        </Select.Popover>
+                      </Select>
+                    ) : null}
                     {toolItems.length ? (
                       <MultiPicker
                         label={t("blockedTools")}

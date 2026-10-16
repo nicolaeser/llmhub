@@ -2,12 +2,14 @@ import "server-only";
 import { timingSafeEqual } from "node:crypto";
 import { cookies } from "next/headers";
 import prisma from "@/lib/db/prisma";
-import { requirePermission } from "@/lib/auth/guards";
+import { requireActor, requirePermission } from "@/lib/auth/guards";
 import { hasPerm, PERMISSIONS } from "@/lib/auth/permissions";
-import { isPrismaCode } from "@/lib/auth/errors";
+import { companyOf } from "@/lib/auth/scope";
+import { AuthError, isPrismaCode } from "@/lib/auth/errors";
 import { writeAudit } from "@/lib/audit";
 import { seal } from "@/lib/crypto";
-import { assignmentViews, mcpAssignmentSelect, replaceMcpAssignments, targetOptions } from "@/lib/mcp/assignments";
+import { assignmentViews, mcpAssignmentSelect, replaceCompanyMcpAssignments, replaceMcpAssignments, targetOptions } from "@/lib/mcp/assignments";
+import { ensureBuiltinRoles, installationViews, roleViews } from "@/lib/mcp/catalog";
 import { loginData, trialClientCredentials } from "@/lib/mcp/auth";
 import { eraOf, toolSpecs } from "@/lib/mcp/client";
 import { McpError, mcpErrorCode, type McpErrorCode } from "@/lib/mcp/errors";
@@ -29,6 +31,7 @@ import {
   tokenRequest,
 } from "@/lib/mcp/oauth";
 import { toolSpecOf } from "@/lib/mcp/hosted";
+import { toolActionsOf } from "@/lib/mcp/resolve";
 import { isOAuthGrant, mcpClientFor, serverRecord } from "@/lib/mcp/toolset";
 import { guardedFetch } from "@/lib/mcp/transport";
 import { checkServerUrl } from "@/lib/mcp/url-guard";
@@ -46,6 +49,7 @@ import {
   mcpServerInputSchema,
 } from "@/schemas/mcp";
 import type { Prisma } from "@/generated/prisma/client";
+import type { AuthenticatedSession } from "@/types/auth";
 import type { McpAuth, McpOAuthView, McpProbeResult, McpServerRecord, McpServerStatus, McpServerView } from "@/types/mcp";
 
 const PROBE_TIMEOUT_MS = 20_000;
@@ -68,13 +72,29 @@ const serverSelect = {
   internal: true,
   enabled: true,
   global: true,
+  template: true,
   toolsRestricted: true,
   allowedTools: true,
   tools: true,
+  toolActions: true,
   refreshedAt: true,
   lastError: true,
   updatedAt: true,
   assignments: mcpAssignmentSelect,
+  roles: { orderBy: { name: "asc" }, include: { _count: { select: { assignments: true } } } },
+  installations: {
+    select: {
+      id: true,
+      orgId: true,
+      enabled: true,
+      baseUrl: true,
+      authType: true,
+      authHeader: true,
+      authSecret: true,
+      org: { select: { alias: true } },
+    },
+    orderBy: { org: { alias: "asc" } },
+  },
   oauthLogin: { select: { status: true, scope: true, expiresAt: true, connectedAt: true, issuer: true, client: true } },
 } as const satisfies Prisma.McpServerSelect;
 
@@ -107,7 +127,7 @@ function oauthView(row: ServerRow): McpOAuthView | null {
   };
 }
 
-function viewOf(row: ServerRow, canManage = true): McpServerView {
+function viewOf(row: ServerRow, canManage = true, companyId: string | null = null): McpServerView {
   const record = serverRecord(row);
   return {
     id: row.id,
@@ -125,16 +145,31 @@ function viewOf(row: ServerRow, canManage = true): McpServerView {
     kind: row.kind === "hosted" ? "hosted" : "remote",
     enabled: row.enabled,
     global: row.global,
+    template: row.template,
     toolsRestricted: row.toolsRestricted,
     allowedTools: row.allowedTools,
     tools: toolSpecs(row.tools),
+    toolActions: toolActionsOf(row.toolActions),
+    roles: roleViews(row.roles),
+    installations: installationViews(row.installations, companyId),
     transport: record.transport,
     protocolVersion: row.protocolVersion,
     era: eraOf(record),
     refreshedAt: row.refreshedAt?.toISOString() ?? null,
     lastError: row.lastError,
     status: statusOf(row),
-    assignments: assignmentViews(row.assignments),
+    assignments: assignmentViews(
+      companyId
+        ? row.assignments.filter(
+            (assignment) =>
+              assignment.orgId === companyId ||
+              assignment.team?.orgId === companyId ||
+              assignment.project?.orgId === companyId ||
+              assignment.member?.orgId === companyId ||
+              assignment.key?.orgId === companyId,
+          )
+        : row.assignments,
+    ),
     updatedAt: row.updatedAt.toISOString(),
   };
 }
@@ -282,21 +317,76 @@ function connectionFields(input: {
   };
 }
 
+function managesMcp(session: Pick<AuthenticatedSession, "permissions">): boolean {
+  return hasPerm(session.permissions, PERMISSIONS.SETTINGS_MANAGE) || hasPerm(session.permissions, PERMISSIONS.MCP_MANAGE);
+}
+
+function seesMcp(session: Pick<AuthenticatedSession, "permissions">): boolean {
+  return hasPerm(session.permissions, PERMISSIONS.SETTINGS_READ) || hasPerm(session.permissions, PERMISSIONS.MCP_READ);
+}
+
+function scopedView(row: ServerRow, session: AuthenticatedSession): McpServerView {
+  return viewOf(row, managesMcp(session), companyOf(session));
+}
+
 export async function loadMcpServerList() {
-  const session = await requirePermission(PERMISSIONS.SETTINGS_READ);
-  const [rows, setting, choices] = await Promise.all([
-    prisma.mcpServer.findMany({ select: serverSelect, orderBy: { name: "asc" } }),
+  const session = await requireActor();
+  if (!seesMcp(session)) throw new AuthError("FORBIDDEN");
+  const company = companyOf(session);
+  const [rows, setting, choices, companies] = await Promise.all([
+    prisma.mcpServer.findMany({
+      where: company
+        ? {
+            OR: [
+              { template: true },
+              { global: true },
+              { installations: { some: { orgId: company } } },
+              {
+                assignments: {
+                  some: {
+                    OR: [
+                      { orgId: company },
+                      { team: { orgId: company } },
+                      { project: { orgId: company } },
+                      { member: { orgId: company } },
+                      { key: { orgId: company } },
+                    ],
+                  },
+                },
+              },
+            ],
+          }
+        : undefined,
+      select: serverSelect,
+      orderBy: { name: "asc" },
+    }),
     prisma.setting.findUnique({ where: { key: BUILDER_MODEL_KEY } }),
     enabledModelChoices(),
+    prisma.organization.findMany({
+      where: company ? { id: company } : undefined,
+      select: { id: true, alias: true },
+      orderBy: { alias: "asc" },
+    }),
   ]);
-  const canManage = hasPerm(session.permissions, PERMISSIONS.SETTINGS_MANAGE);
+  const canManage = managesMcp(session);
+  const canInstall = canManage || hasPerm(session.permissions, PERMISSIONS.MCP_INSTALL);
   return {
-    servers: rows.map((row) => viewOf(row, canManage)),
+    servers: rows.map((row) => viewOf(row, canManage, company)),
     canManage,
+    canInstall,
+    companyId: company,
+    companies,
     redirectUri: canManage ? mcpOAuthRedirectUri() : "",
     builderModel: setting?.value ?? "",
     models: chatChoices(choices).map((choice) => ({ alias: choice.alias, label: choice.label })),
   };
+}
+
+export async function presentMcpServer(id: string) {
+  const session = await requireActor();
+  if (!seesMcp(session)) throw new AuthError("FORBIDDEN");
+  const company = companyOf(session);
+  return { server: viewOf(await loadRow(id), managesMcp(session), company) };
 }
 
 export async function createMcpServer(raw: unknown) {
@@ -335,7 +425,7 @@ export async function createMcpServer(raw: unknown) {
     after: auditShape(created),
   });
   const refreshed = await storeProbe(created.id, await probe(serverRecord(created)));
-  return { server: viewOf(refreshed) };
+  return { server: scopedView(refreshed, session) };
 }
 
 export async function createHostedMcpServer(raw: unknown) {
@@ -357,6 +447,7 @@ export async function createHostedMcpServer(raw: unknown) {
         authSecret: input.secret.trim() ? seal(input.secret.trim()) : "",
         internal: input.internal,
         enabled: true,
+        template: input.template,
         tools: tools as unknown as Prisma.InputJsonValue,
         refreshedAt: new Date(),
       },
@@ -366,10 +457,17 @@ export async function createHostedMcpServer(raw: unknown) {
     if (isPrismaCode(err, "P2002")) throw new Error("NAME_EXISTS", { cause: err });
     throw err;
   }
+  await ensureBuiltinRoles(created.id);
+  const roles = await prisma.mcpRole.findMany({ where: { serverId: created.id }, select: { id: true, key: true } });
+  const roleIds = new Map(roles.map((role) => [role.key, role.id]));
   const names = new Set(input.tools.map((tool) => tool.name));
   const assignments = input.assignments.map((row) => ({
-    ...row,
+    scope: row.scope,
+    id: row.id,
+    mode: row.mode,
     blockedTools: row.blockedTools.filter((name) => names.has(name)),
+    blockedActions: row.blockedActions,
+    roleId: row.roleKey ? roleIds.get(row.roleKey) ?? "" : "",
   }));
   if (input.global || assignments.length) {
     const saved = await replaceMcpAssignments(created.id, input.global, assignments);
@@ -388,10 +486,11 @@ export async function createHostedMcpServer(raw: unknown) {
       kind: "hosted",
       tools: tools.map((tool) => tool.name),
       global: input.global,
+      template: input.template,
       assignments: assignments.length,
     },
   });
-  return { server: viewOf(await loadRow(created.id)) };
+  return { server: scopedView(await loadRow(created.id), session) };
 }
 
 export async function updateMcpServer(raw: { id: string } & Record<string, unknown>) {
@@ -437,7 +536,7 @@ export async function updateMcpServer(raw: { id: string } & Record<string, unkno
       before: auditShape(before),
       after: auditShape(updated),
     });
-    return { server: viewOf(updated) };
+    return { server: scopedView(updated, session) };
   }
   const authSecret = secretFor(input.authType, input, before.authSecret);
   if (secretRequired(input) && !authSecret) throw new Error("MCP_SECRET_REQUIRED");
@@ -490,9 +589,9 @@ export async function updateMcpServer(raw: { id: string } & Record<string, unkno
     before: auditShape(before),
     after: { ...auditShape(updated), ...(identityChanged && before.oauthLogin ? { oauthDisconnected: true } : {}) },
   });
-  if (!updated.enabled) return { server: viewOf(updated) };
+  if (!updated.enabled) return { server: scopedView(updated, session) };
   const refreshed = await storeProbe(updated.id, await probe(serverRecord(updated)));
-  return { server: viewOf(refreshed) };
+  return { server: scopedView(refreshed, session) };
 }
 
 export async function setMcpServerEnabled(input: { id: string; enabled: boolean }) {
@@ -512,7 +611,7 @@ export async function setMcpServerEnabled(input: { id: string; enabled: boolean 
     before: { enabled: before.enabled },
     after: { enabled: updated.enabled },
   });
-  return { server: viewOf(updated) };
+  return { server: scopedView(updated, session) };
 }
 
 export async function deleteMcpServer(id: string) {
@@ -567,7 +666,7 @@ export async function refreshMcpServer(id: string) {
   const session = await requirePermission(PERMISSIONS.SETTINGS_MANAGE);
   if (!id) throw new Error("MISSING_ID");
   const row = await loadRow(id);
-  if (row.kind === "hosted") return { server: viewOf(row) };
+  if (row.kind === "hosted") return { server: scopedView(row, session) };
   const result = await probe(serverRecord(row));
   const updated = await storeProbe(id, result);
   await writeAudit({
@@ -577,7 +676,7 @@ export async function refreshMcpServer(id: string) {
     objectId: id,
     after: { connected: result.connected, tools: result.tools.length, error: result.error },
   });
-  return { server: viewOf(updated) };
+  return { server: scopedView(updated, session) };
 }
 
 export async function startMcpOAuth(rawId: unknown) {
@@ -667,7 +766,7 @@ export async function completeMcpOAuth(raw: unknown) {
     after: { issuer: pending.issuer, scope: data.scope, registration: pending.client.registration },
   });
   const refreshed = await storeProbe(row.id, await probe(record));
-  return { server: viewOf(refreshed) };
+  return { server: scopedView(refreshed, session) };
 }
 
 export async function disconnectMcpOAuth(rawId: unknown) {
@@ -682,19 +781,35 @@ export async function disconnectMcpOAuth(rawId: unknown) {
     objectId: id,
     before: { connected: Boolean(before.oauthLogin), issuer: before.oauthLogin?.issuer ?? "" },
   });
-  return { server: viewOf(await loadRow(id)) };
+  return { server: scopedView(await loadRow(id), session) };
 }
 
 export async function loadMcpTargets() {
-  await requirePermission(PERMISSIONS.SETTINGS_MANAGE);
-  return { options: await targetOptions() };
+  const session = await requireActor();
+  const company = companyOf(session);
+  if (!managesMcp(session) && !(company && hasPerm(session.permissions, PERMISSIONS.MCP_INSTALL))) throw new AuthError("FORBIDDEN");
+  const options = await targetOptions();
+  if (!company) return { options };
+  return {
+    options: {
+      org: options.org.filter((item) => item.id === company),
+      team: options.team.filter((item) => item.orgId === company),
+      project: options.project.filter((item) => item.orgId === company),
+      member: options.member.filter((item) => item.orgId === company),
+      key: options.key.filter((item) => item.orgId === company),
+    },
+  };
 }
 
 export async function saveMcpAssignments(raw: unknown) {
-  const session = await requirePermission(PERMISSIONS.SETTINGS_MANAGE);
+  const session = await requireActor();
+  const company = companyOf(session);
+  if (!managesMcp(session) && !(company && hasPerm(session.permissions, PERMISSIONS.MCP_INSTALL))) throw new AuthError("FORBIDDEN");
   const input = parse(mcpAssignmentsSchema, raw);
   const before = await loadRow(input.serverId);
-  const saved = await replaceMcpAssignments(input.serverId, input.global, input.assignments);
+  const saved = company
+    ? await replaceCompanyMcpAssignments(input.serverId, company, input.assignments)
+    : await replaceMcpAssignments(input.serverId, input.global, input.assignments);
   if (!saved) throw new Error("NOT_FOUND");
   await writeAudit({
     actor: session.user.id,
@@ -713,5 +828,5 @@ export async function saveMcpAssignments(raw: unknown) {
       })),
     },
   });
-  return { server: viewOf(await loadRow(input.serverId)) };
+  return { server: scopedView(await loadRow(input.serverId), session) };
 }

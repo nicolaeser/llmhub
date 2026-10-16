@@ -59,12 +59,21 @@ test("role templates only contain catalog permissions", () => {
   assert.deepEqual([...roleTemplates.admin], permissions);
 });
 
-test("operator cannot manage roles, settings, or user security", () => {
-  for (const permission of ["roles:manage", "settings:manage", "users:security"] as const) {
+test("operator cannot manage roles, settings, user security, or MCP catalog", () => {
+  for (const permission of ["roles:manage", "settings:manage", "users:security", "mcp:manage"] as const) {
     assert.equal(roleTemplates.operator.includes(permission), false, permission);
   }
   assert.equal(roleTemplates.operator.includes("users:manage"), true);
   assert.equal(roleTemplates.operator.includes("keys:read-all"), true);
+  assert.equal(roleTemplates.operator.includes("mcp:read"), true);
+  assert.equal(roleTemplates.operator.includes("mcp:install"), true);
+  assert.equal(roleTemplates.finance.includes("mcp:read"), true);
+  assert.equal(roleTemplates.finance.includes("mcp:install"), false);
+  assert.equal(roleTemplates.viewer.includes("mcp:read"), true);
+  const companyPermissions = new Set<string>(COMPANY_PERMISSIONS);
+  assert.equal(companyPermissions.has("mcp:read"), true);
+  assert.equal(companyPermissions.has("mcp:install"), true);
+  assert.equal(companyPermissions.has("mcp:manage"), false);
 });
 
 test("only admins read stored request content by default", () => {
@@ -150,6 +159,8 @@ test("company scope narrows keys and spend to the assigned company", () => {
   assert.equal(companyOf(platform), null);
   assert.equal(companyOf(company), "org_a");
   assert.equal(companyOf(owner), null);
+  assert.equal(companyOf({ ...owner, workspaceOrgId: "org_a" }), "org_a");
+  assert.equal(companyOf({ ...company, workspaceOrgId: "org_x" }), "org_a");
   assert.equal(inCompany(platform, "org_b"), true);
   assert.equal(inCompany(company, "org_a"), true);
   assert.equal(inCompany(company, "org_b"), false);

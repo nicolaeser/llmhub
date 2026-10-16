@@ -1,6 +1,6 @@
 "use client";
 
-import { Badge, Button, Card, Disclosure, Skeleton, Spinner } from "@heroui/react";
+import { Button, Card, Chip, Disclosure, Skeleton, Spinner } from "@heroui/react";
 import { RefreshCw, Users } from "lucide-react";
 import { useFormatter, useNow, useTranslations } from "next-intl";
 import SubscriptionBadge, { PlanBadge } from "@/components/console/subscription-badge";
@@ -53,8 +53,8 @@ export default function AccountCard({
   return (
     <Card variant="secondary">
       <Card.Header>
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
+        <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
+          <div className="min-w-0 flex-1 basis-40">
             <Card.Title className="truncate">{row.name}</Card.Title>
             <Card.Description className="truncate">
               {tProviders("signIn.account", {
@@ -63,17 +63,12 @@ export default function AccountCard({
               })}
             </Card.Description>
           </div>
-          <div className="flex shrink-0 flex-wrap justify-end gap-1">
+          <div className="flex min-w-0 max-w-full flex-wrap justify-end gap-1">
             <SubscriptionBadge />
             <PlanBadge plan={plan} />
-            <Badge
-              size="sm"
-              variant="soft"
-              color={ACCOUNT_STATE_COLOR[state]}
-              className="px-1.5 whitespace-nowrap"
-            >
+            <Chip size="sm" variant="soft" color={ACCOUNT_STATE_COLOR[state]} className="whitespace-nowrap">
               {t("status", { status: state })}
-            </Badge>
+            </Chip>
           </div>
         </div>
       </Card.Header>

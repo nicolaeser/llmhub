@@ -7,6 +7,7 @@ export const MCP_HTTP_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"] as con
 export const MCP_AUTH_TYPES = ["none", "bearer", "header", "oauth"] as const;
 export const MCP_OAUTH_GRANTS = ["authorization_code", "client_credentials"] as const;
 export const MCP_MODES = ["allow", "block"] as const;
+export const MCP_ROLE_KEYS = ["reader", "operator", "admin"] as const;
 export const MAX_MCP_ASSIGNMENTS = 500;
 
 const RESERVED_HEADERS = new Set([
@@ -88,6 +89,7 @@ export const hostedServerSchema = z
         message: "invalid characters",
       }),
     tools: z.array(hostedToolSchema).min(1).max(30),
+    template: z.boolean().default(false),
     global: z.boolean().default(false),
     assignments: z
       .array(
@@ -97,6 +99,7 @@ export const hostedServerSchema = z
           mode: z.enum(MCP_MODES),
           blockedTools: toolNames,
           blockedActions: actions.default([]),
+          roleKey: z.enum(["", ...MCP_ROLE_KEYS]).default(""),
         }),
       )
       .max(MAX_MCP_ASSIGNMENTS)
@@ -182,9 +185,63 @@ export const mcpAssignmentsSchema = z.object({
         mode: z.enum(MCP_MODES),
         blockedTools: toolNames,
         blockedActions: actions.default([]),
+        roleId: z.string().max(64).default(""),
       }),
     )
     .max(MAX_MCP_ASSIGNMENTS),
+});
+
+export const MAX_MCP_ROLES = 50;
+
+export const mcpPermissionsSchema = z.object({
+  serverId: z.string().min(1).max(64),
+  toolActions: z
+    .record(z.string().trim().min(1).max(128), z.enum(MCP_ACTIONS))
+    .refine((value) => Object.keys(value).length <= 200, { message: "too many tools" }),
+  roles: z
+    .array(
+      z.object({
+        id: z.string().max(64).default(""),
+        name: z.string().trim().min(1).max(48),
+        description: z.string().trim().max(200).default(""),
+        allActions: z.boolean(),
+        actions: actions.default([]),
+        tools: toolNames.default([]),
+        deniedTools: toolNames.default([]),
+      }),
+    )
+    .max(MAX_MCP_ROLES),
+  removed: z.array(z.string().min(1).max(64)).max(MAX_MCP_ROLES).default([]),
+});
+
+export const mcpInstallationSchema = z
+  .object({
+    serverId: z.string().min(1).max(64),
+    orgId: z.string().min(1).max(64),
+    enabled: z.boolean(),
+    baseUrl: z.string().trim().max(2048).default(""),
+    authType: z.enum(["none", "bearer", "header"]),
+    authHeader: z.string().trim().max(64).default(""),
+    secret: z
+      .string()
+      .max(4096)
+      .default("")
+      .refine((value) => ![...value].some((char) => char.charCodeAt(0) < 32 || char.charCodeAt(0) === 127), {
+        message: "invalid characters",
+      }),
+  })
+  .superRefine((value, ctx) => {
+    if (value.baseUrl && !/^https?:\/\//.test(value.baseUrl)) {
+      ctx.addIssue({ code: "custom", path: ["baseUrl"], message: "invalid url" });
+    }
+    if (value.authType === "header" && !/^[A-Za-z0-9-]{1,64}$/.test(value.authHeader)) {
+      ctx.addIssue({ code: "custom", path: ["authHeader"], message: "invalid header name" });
+    }
+  });
+
+export const mcpTemplateSchema = z.object({
+  id: z.string().min(1).max(64),
+  template: z.boolean(),
 });
 
 export const mcpServerIdSchema = z.string().min(1).max(64);

@@ -4,6 +4,7 @@ import {
   MCP_MAX_TOOL_RESULT_CHARS,
   MCP_PROTOCOL_VERSION,
   McpClient,
+  annotationHint,
   staticAuth,
   toolOutcome,
   toolSpecs,
@@ -545,6 +546,45 @@ test("tool results become bounded text", () => {
   const long = toolOutcome({ content: [{ type: "text", text: "x".repeat(MCP_MAX_TOOL_RESULT_CHARS + 10) }] }).text;
   assert.ok(long.endsWith("[truncated: 10 more characters]"));
   assert.equal(long.length, MCP_MAX_TOOL_RESULT_CHARS + "\n[truncated: 10 more characters]".length);
+});
+
+test("remote servers cannot classify their own tools, and their annotations stay hints", async () => {
+  const server = modernServer({
+    result: (body) =>
+      body.method === "tools/list"
+        ? {
+            tools: [
+              { name: "read_only", inputSchema: { type: "object" }, annotations: { readOnlyHint: true } },
+              { name: "spoofed", action: "read", inputSchema: { type: "object" }, annotations: { readOnlyHint: false } },
+              { name: "writes", hint: "read", inputSchema: { type: "object" }, annotations: { destructiveHint: false } },
+              { name: "plain", inputSchema: { type: "object" } },
+            ],
+          }
+        : { supportedVersions: [MCP_PROTOCOL_VERSION], capabilities: { tools: {} } },
+  });
+  const client = new McpClient({ url: "https://mcp.test/mcp", fetch: server.fetch });
+  const tools = await client.listTools();
+  assert.deepEqual(
+    tools.map((item) => [item.name, item.action ?? null, item.hint ?? null]),
+    [
+      ["read_only", null, "read"],
+      ["spoofed", null, "delete"],
+      ["writes", null, "write"],
+      ["plain", null, null],
+    ],
+  );
+  assert.deepEqual(toolSpecs(tools).map((item) => item.hint ?? null), ["read", "delete", "write", null]);
+  assert.deepEqual(toolSpecs([{ name: "hosted", action: "write", hint: "read" }])[0], {
+    name: "hosted",
+    title: "",
+    description: "",
+    inputSchema: { type: "object", properties: {} },
+    action: "write",
+  });
+  assert.equal(annotationHint({ readOnlyHint: true, destructiveHint: true }), "read");
+  assert.equal(annotationHint({ destructiveHint: true }), "delete");
+  assert.equal(annotationHint({ title: "x" }), undefined);
+  assert.equal(annotationHint(null), undefined);
 });
 
 test("tool specs drop invalid and duplicate tools and force object schemas", () => {

@@ -14,6 +14,8 @@ import type { McpServerView } from "@/types/mcp";
 import { loadMcpServersAction } from "./_action";
 import AccessDialog from "./_components/access-dialog";
 import BuilderDialog from "./_components/builder-dialog";
+import InstallDialog from "./_components/install-dialog";
+import PermissionsDialog from "./_components/permissions-dialog";
 import ServerCard from "./_components/server-card";
 import ServerDialog from "./_components/server-dialog";
 
@@ -28,16 +30,20 @@ export default function McpPage() {
   const { data, setData } = page;
   const [editing, setEditing] = useState<McpServerView | null>(null);
   const [access, setAccess] = useState<McpServerView | null>(null);
+  const [permissions, setPermissions] = useState<McpServerView | null>(null);
+  const [install, setInstall] = useState<McpServerView | null>(null);
   const [dialogKey, setDialogKey] = useState(0);
   const formState = useOverlayState();
   const accessState = useOverlayState();
+  const permissionsState = useOverlayState();
+  const installState = useOverlayState();
   const builderState = useOverlayState();
 
   if (!data) {
     return <PageStatus title={t("title")} subtitle={t("subtitle")} state={page} />;
   }
 
-  const { servers, canManage, redirectUri } = data;
+  const { servers, canManage, canInstall, companyId, companies, redirectUri } = data;
   const connectedName = servers.find((row) => row.id === oauthServer)?.name ?? "";
   const dismissOAuth = () => setSearchParams({ oauth: null, reason: null, server: null });
 
@@ -48,6 +54,9 @@ export default function McpPage() {
         ? current.servers.map((row) => (row.id === server.id ? server : row))
         : [...current.servers, server].sort((a, b) => a.name.localeCompare(b.name)),
     }));
+    setAccess((current) => (current?.id === server.id ? server : current));
+    setPermissions((current) => (current?.id === server.id ? server : current));
+    setInstall((current) => (current?.id === server.id ? server : current));
   }
 
   function openForm(server: McpServerView | null) {
@@ -60,6 +69,18 @@ export default function McpPage() {
     setAccess(server);
     setDialogKey((n) => n + 1);
     accessState.open();
+  }
+
+  function openPermissions(server: McpServerView) {
+    setPermissions(server);
+    setDialogKey((n) => n + 1);
+    permissionsState.open();
+  }
+
+  function openInstall(server: McpServerView) {
+    setInstall(server);
+    setDialogKey((n) => n + 1);
+    installState.open();
   }
 
   const connected = servers.filter((row) => row.status === "connected").length;
@@ -108,7 +129,7 @@ export default function McpPage() {
         <Alert status="accent">
           <Alert.Indicator />
           <Alert.Content>
-            <Alert.Description>{t("readOnly")}</Alert.Description>
+            <Alert.Description>{canInstall ? t("installOnly") : t("readOnly")}</Alert.Description>
           </Alert.Content>
         </Alert>
       )}
@@ -133,8 +154,12 @@ export default function McpPage() {
                 key={server.id}
                 server={server}
                 canManage={canManage}
+                canInstall={canInstall}
+                companyId={companyId}
                 onEdit={openForm}
                 onAccess={openAccess}
+                onPermissions={openPermissions}
+                onInstall={openInstall}
                 onChanged={replace}
                 onDeleted={(id) => setData((current) => ({ ...current, servers: current.servers.filter((row) => row.id !== id) }))}
               />
@@ -150,6 +175,16 @@ export default function McpPage() {
         onSaved={replace}
       />
       <AccessDialog key={`access-${dialogKey}`} state={accessState} server={access} onSaved={replace} />
+      <PermissionsDialog key={`permissions-${dialogKey}`} state={permissionsState} server={permissions} onSaved={replace} />
+      <InstallDialog
+        key={`install-${dialogKey}`}
+        state={installState}
+        server={install}
+        companies={companies}
+        companyId={companyId}
+        canManage={canManage}
+        onSaved={replace}
+      />
       <BuilderDialog
         key={`builder-${dialogKey}`}
         state={builderState}
