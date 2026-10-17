@@ -5,6 +5,7 @@ import { requirePermission } from "@/lib/auth/guards";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { writeAudit } from "@/lib/audit";
 import { isReservedAlias, modelAlias } from "@/lib/gateway/catalog/model-alias";
+import { splitVariant, variantAlias, variantsOf } from "@/lib/gateway/catalog/model-variants";
 import {
   asStringArray,
   KNOWN_BILLING_MODES,
@@ -25,7 +26,7 @@ import {
   validPrice,
   windowValid,
 } from "@/lib/gateway/billing/price-schedule";
-import type { DeploymentInput, PriceWindow } from "@/types/models";
+import type { DeploymentInput, ModelVariant, PriceWindow } from "@/types/models";
 import { money } from "@/lib/utils/money";
 import type { Prisma } from "@/generated/prisma/client";
 
@@ -133,6 +134,7 @@ function groupAudit(g: {
   vendor: string;
   displayName: string;
   autoRoutes: boolean | null;
+  variants: string[];
   strategy: string;
   billingMode: string;
   priceInput: Prisma.Decimal;
@@ -150,6 +152,7 @@ function groupAudit(g: {
     vendor: g.vendor,
     displayName: g.displayName,
     autoRoutes: g.autoRoutes,
+    variants: variantsOf(g.variants),
     strategy: g.strategy,
     billingMode: g.billingMode,
     priceInput: money(g.priceInput),
@@ -169,6 +172,7 @@ function mapGroup(g: {
   vendor: string;
   displayName: string;
   autoRoutes: boolean | null;
+  variants: string[];
   strategy: string;
   billingMode: string;
   priceInput: Prisma.Decimal;
@@ -186,6 +190,7 @@ function mapGroup(g: {
     vendor: g.vendor,
     displayName: g.displayName,
     autoRoutes: g.autoRoutes,
+    variants: variantsOf(g.variants),
     strategy: g.strategy,
     billingMode: g.billingMode,
     priceInput: money(g.priceInput),
@@ -280,12 +285,28 @@ export async function loadModels() {
   return payload();
 }
 
+async function assertNotVariant(alias: string): Promise<void> {
+  const parent = splitVariant(alias);
+  if (!parent) return;
+  const base = await prisma.modelGroup.findUnique({ where: { alias: parent.alias }, select: { variants: true } });
+  if (base && variantsOf(base.variants).includes(parent.variant)) throw new Error("ALIAS_EXISTS");
+}
+
+async function assertVariantsFree(alias: string, variants: ModelVariant[]): Promise<void> {
+  if (!variants.length) return;
+  const taken = await prisma.modelGroup.count({
+    where: { alias: { in: variants.map((variant) => variantAlias(alias, variant)) } },
+  });
+  if (taken) throw new Error("VARIANT_TAKEN");
+}
+
 export async function createModelGroup(input: {
   alias: string;
   enabled?: boolean;
   vendor?: string;
   displayName?: string;
   autoRoutes?: boolean | null;
+  variants?: ModelVariant[];
   strategy: string;
   billingMode?: string;
   priceInput?: number;
@@ -303,6 +324,9 @@ export async function createModelGroup(input: {
   if (isReservedAlias(alias)) throw new Error("ALIAS_RESERVED");
   const existing = await prisma.modelGroup.findUnique({ where: { alias } });
   if (existing) throw new Error("ALIAS_EXISTS");
+  await assertNotVariant(alias);
+  const variants = variantsOf(input.variants);
+  await assertVariantsFree(alias, variants);
   const deployments = await withCatalogPrices(
     (input.deployments ?? []).filter((d) => d.model.trim()),
   );
@@ -313,6 +337,7 @@ export async function createModelGroup(input: {
       vendor: labelOf(input.vendor, "", VENDOR_MAX).toLowerCase(),
       displayName: labelOf(input.displayName, "", DISPLAY_NAME_MAX),
       autoRoutes: input.autoRoutes ?? null,
+      variants,
       strategy: strategyOf(input.strategy),
       billingMode: billingModeOf(input.billingMode),
       priceInput: priceOf(input.priceInput, 0),
@@ -344,6 +369,7 @@ export async function updateModelGroup(input: {
   vendor?: string;
   displayName?: string;
   autoRoutes?: boolean | null;
+  variants?: ModelVariant[];
   strategy: string;
   billingMode?: string;
   priceInput?: number;
@@ -363,6 +389,9 @@ export async function updateModelGroup(input: {
   });
   if (!existing) throw new Error("NOT_FOUND");
   const windows = priceWindowsOf(input.priceWindows);
+  const known = variantsOf(existing.variants);
+  const variants = input.variants === undefined ? known : variantsOf(input.variants);
+  await assertVariantsFree(alias, variants.filter((variant) => !known.includes(variant)));
   await prisma.modelGroup.update({
     where: { alias },
     data: {
@@ -370,6 +399,7 @@ export async function updateModelGroup(input: {
       vendor: labelOf(input.vendor, existing.vendor, VENDOR_MAX).toLowerCase(),
       displayName: labelOf(input.displayName, existing.displayName, DISPLAY_NAME_MAX),
       autoRoutes: input.autoRoutes === undefined ? existing.autoRoutes : input.autoRoutes,
+      variants,
       strategy: strategyOf(input.strategy, existing.strategy),
       billingMode: billingModeOf(input.billingMode, existing.billingMode),
       priceInput: priceOf(input.priceInput, money(existing.priceInput)),

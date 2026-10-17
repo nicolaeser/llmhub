@@ -15,7 +15,7 @@ const SPECIALTY: { role: Exclude<ModelRole, "chat">; pattern: RegExp }[] = [
   {
     role: "media",
     pattern:
-      /whisper|(?:^|[^a-z])tts(?:[^a-z]|$)|dall-e|gpt-image|(?:^|[^a-z])imagen(?:[^a-z]|$)|stable-diffusion|sdxl|(?:^|[^a-z])flux(?:[^a-z]|$)|transcri/,
+      /whisper|(?:^|[^a-z])tts(?:[^a-z]|$)|dall-e|gpt-image|(?:^|[^a-z])(?:imagen|imagine)(?:[^a-z]|$)|stable-diffusion|sdxl|(?:^|[^a-z])flux(?:[^a-z]|$)|transcri/,
   },
   { role: "moderation", pattern: /moderat/ },
 ];

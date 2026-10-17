@@ -84,7 +84,7 @@ test("chatToCodex moves system prompts to instructions and keeps the conversatio
   assert.equal("max_tokens" in body, false);
   assert.equal("max_output_tokens" in body, false);
   assert.equal("temperature" in body, false);
-  assert.equal("service_tier" in body, false);
+  assert.equal(body.service_tier, "priority");
   assert.deepEqual(body.reasoning, { summary: "auto" });
 });
 

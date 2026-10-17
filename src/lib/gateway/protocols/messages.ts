@@ -219,6 +219,7 @@ export function messagesToChat(request: MessagesRequest): JsonMap {
   if (request.stop_sequences?.length) body.stop = request.stop_sequences;
   if (request.metadata?.user_id) body.user = request.metadata.user_id;
   if (request.service_tier) body.service_tier = request.service_tier;
+  if (request.speed) body.speed = request.speed;
   if (request.tools?.length) {
     body.tools = request.tools.map(chatTool);
     const choice = chatToolChoice(request.tool_choice);

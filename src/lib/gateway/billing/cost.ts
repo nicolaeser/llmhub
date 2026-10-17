@@ -7,11 +7,12 @@ const CACHE_READ_RATE = 0.1;
 const CACHE_WRITE_RATE = 1.25;
 const CACHE_WRITE_1H_RATE = 2;
 const PREMIUM_TIER_RATE = 2;
+const ULTRAFAST_TIER_RATE = 6;
 const FLEX_TIER_RATE = 0.5;
 const ANTHROPIC_FAST_RATE = 2;
 const US_INFERENCE_RATE = 1.1;
 const OPENAI_LONG_CONTEXT = { threshold: 272_000, input: 2, output: 1.5 };
-const PREMIUM_TIERS = new Set(["priority", "fast", "ultrafast"]);
+const PREMIUM_TIERS = new Set(["priority", "fast"]);
 const TIERED_KINDS = new Set(["openai", "xai", "openrouter", "openrouter_eu"]);
 export const REPORTED_COST_KINDS = new Set(["openrouter", "openrouter_eu"]);
 
@@ -33,6 +34,7 @@ function tierRate(dep: Deployment, usage: Partial<TokenUsage>): number {
     );
   }
   if (!TIERED_KINDS.has(dep.kind)) return 1;
+  if (usage.service_tier === "ultrafast") return ULTRAFAST_TIER_RATE;
   if (PREMIUM_TIERS.has(usage.service_tier ?? "")) return PREMIUM_TIER_RATE;
   if (usage.service_tier === "flex") return FLEX_TIER_RATE;
   return 1;

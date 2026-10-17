@@ -33,6 +33,7 @@ const CHAT_CURL_BODY =
 const MESSAGES_CURL_BODY =
   '\'{"model":"my-alias","max_tokens":256,"messages":[{"role":"user","content":"Hello"}]}\'';
 const EXAMPLE_STYLES = ["openai", "anthropic", "management"] as const;
+const CLI_CLIENTS = ["claude", "codex"] as const;
 
 const ERROR_EXAMPLES = {
   openai: {
@@ -66,6 +67,7 @@ export default function ApiTab() {
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<OpenApiPath | null>(null);
   const [example, setExample] = useState<string>("openai");
+  const [cli, setCli] = useState<string>("claude");
   const [errorShape, setErrorShape] = useState<string>("openai");
   const tryState = useOverlayState();
   const page = useActionData(loadApiRefAction);
@@ -95,15 +97,34 @@ export default function ApiTab() {
       : example === "management"
         ? t("curlManagement", { origin })
         : t("curl", { origin, body: CHAT_CURL_BODY });
+  const cliSetup =
+    cli === "codex"
+      ? t("cliCodex", { openai: `${origin}${SUBSCRIPTION_PREFIX}/v1` })
+      : t("cliClaude", { anthropic: `${origin}${SUBSCRIPTION_PREFIX}` });
   const bases = [
-    { id: "openai", value: `${origin}${API_PREFIX}/v1`, hint: t("auth") },
-    { id: "anthropic", value: `${origin}${API_PREFIX}`, hint: t("anthropicAuth", { version: ANTHROPIC_VERSION }) },
+    {
+      id: "openai",
+      urls: [{ label: t("baseUrl"), value: `${origin}${API_PREFIX}/v1` }],
+      hint: t("auth"),
+    },
+    {
+      id: "anthropic",
+      urls: [{ label: t("baseUrl"), value: `${origin}${API_PREFIX}` }],
+      hint: t("anthropicAuth", { version: ANTHROPIC_VERSION }),
+    },
     {
       id: "subscription",
-      value: `${origin}${SUBSCRIPTION_PREFIX}/v1`,
-      hint: t("subscriptionAuth", { anthropic: `${origin}${SUBSCRIPTION_PREFIX}` }),
+      urls: [
+        { label: t("baseUrlFor", { client: "openai" }), value: `${origin}${SUBSCRIPTION_PREFIX}/v1` },
+        { label: t("baseUrlFor", { client: "anthropic" }), value: `${origin}${SUBSCRIPTION_PREFIX}` },
+      ],
+      hint: t("subscriptionAuth"),
     },
-    { id: "management", value: `${origin}${MANAGEMENT_PREFIX}`, hint: null },
+    {
+      id: "management",
+      urls: [{ label: t("baseUrl"), value: `${origin}${MANAGEMENT_PREFIX}` }],
+      hint: null,
+    },
   ];
 
   return (
@@ -117,13 +138,15 @@ export default function ApiTab() {
               <Card.Title>{t("sdkTitle", { style: base.id })}</Card.Title>
               <Card.Description>{t("sdkDescription", { style: base.id })}</Card.Description>
             </Card.Header>
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="min-w-0">
-                <p className="text-sm font-medium">{t("baseUrl")}</p>
-                <code className="mt-1 block break-all font-mono text-sm">{base.value}</code>
+            {base.urls.map((url) => (
+              <div key={url.value} className="flex flex-wrap items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium">{url.label}</p>
+                  <code className="mt-1 block break-all font-mono text-sm">{url.value}</code>
+                </div>
+                <CopyButton text={url.value} label={tCommon("copy")} showLabel />
               </div>
-              <CopyButton text={base.value} label={tCommon("copy")} showLabel />
-            </div>
+            ))}
             <Alert>
               <Alert.Content>
                 <Alert.Description>
@@ -141,6 +164,29 @@ export default function ApiTab() {
           </Card>
         ))}
       </div>
+
+      <Card className="gap-3">
+        <Card.Header>
+          <Card.Title>{t("cliTitle")}</Card.Title>
+          <Card.Description>{t("cliDescription")}</Card.Description>
+        </Card.Header>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <Tabs selectedKey={cli} onSelectionChange={(key) => setCli(String(key))} aria-label={t("cliLabel")} className="w-fit">
+            <Tabs.List className="w-fit min-w-0" aria-label={t("cliLabel")}>
+              {CLI_CLIENTS.map((client) => (
+                <Tabs.Tab key={client} id={client} className="w-auto">
+                  {t("cliName", { client })}
+                </Tabs.Tab>
+              ))}
+            </Tabs.List>
+          </Tabs>
+          <CopyButton text={cliSetup} label={tCommon("copy")} showLabel />
+        </div>
+        <Surface variant="secondary" className="overflow-x-auto rounded-xl p-4">
+          <pre className="font-mono text-xs whitespace-pre-wrap">{cliSetup}</pre>
+        </Surface>
+        <p className="text-sm text-muted">{t("cliHint", { client: cli })}</p>
+      </Card>
 
       <Card>
         <Card.Header className="flex-row flex-wrap items-center justify-between gap-2">

@@ -1,4 +1,4 @@
-import { asNumber, asRecord, asString } from "@/lib/gateway/core";
+import { asNumber, asRecord, asString, asStringArray } from "@/lib/gateway/core";
 import type { DiscoveredModel, ModelPrice, ProviderModelPrice } from "@/types/providers";
 
 function anyFloat(v: unknown): number {
@@ -43,6 +43,8 @@ export function discoveredOf(v: unknown): DiscoveredModel[] {
         asNumber(rec.cost_output_per_1k, 0),
       ),
       priceSource: asString(rec.priceSource) || asString(rec.price_source) || "none",
+      ...(Array.isArray(rec.serviceTiers) ? { serviceTiers: asStringArray(rec.serviceTiers) } : {}),
+      ...(Array.isArray(rec.accessPrograms) ? { accessPrograms: asStringArray(rec.accessPrograms) } : {}),
     });
   }
   return out;

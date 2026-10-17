@@ -49,7 +49,11 @@
     "displayNameHint": "Shown as display_name in /api/v1/models. Leave empty to use the alias.",
     "autoRoutes": "Add new providers automatically",
     "autoRoutesHint": "When the model catalog finds this model at another trusted provider, it routes there after the next refresh.",
-    "autoRoutesMode": "{mode, select, inherit {Default from Settings} on {On} other {Off}}"
+    "autoRoutesMode": "{mode, select, inherit {Default from Settings} on {On} other {Off}}",
+    "variants": "Separate aliases",
+    "variantsHint": "Each one is its own model in /models that always asks the provider for that mode. Access, usage, and budgets count toward this model.",
+    "variantLabel": "{variant, select, fast {Fast} ultrafast {Ultra Fast} other {Daybreak}} as {alias}",
+    "variantHint": "{variant, select, fast {Priority processing on OpenAI, ChatGPT, xAI, and OpenRouter, and fast mode on Claude Opus 4.8 and later. Bills at about twice the price and uses plan limits faster.} ultrafast {OpenAI Ultra Fast on models and ChatGPT plans that offer it. Bills at six times the price. Requests fail when no route offers it.} other {OpenAI Daybreak access for cybersecurity work: Blue when the account offers it, otherwise Red. Requests fail when no route offers it.}}"
   },
   "billingModes": {
     "average": "Average of endpoints",

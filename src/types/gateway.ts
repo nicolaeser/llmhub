@@ -56,7 +56,9 @@ export type ProxyFirstResult = {
   group: ResolvedModelGroup;
 };
 
-export type HubServiceMode = "fast" | "priority" | "flex" | "default" | "";
+export type HubServiceMode = "fast" | "ultrafast" | "priority" | "flex" | "default" | "";
+
+export type ModeSupport = "confirmed" | "unverified" | "none";
 
 export type ChatSseTranslator = {
   pushLine(line: string): string[];

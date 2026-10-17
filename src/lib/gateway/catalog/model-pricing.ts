@@ -4,10 +4,13 @@ import { REPORTED_COST_KINDS } from "@/lib/gateway/billing/cost";
 import { splitTag } from "@/lib/gateway/catalog/model-catalog";
 import { minuteClock, priceAt, priceWindowQuery, priceWindowRates } from "@/lib/gateway/billing/price-schedule";
 import { routePool } from "@/lib/gateway/routing/route-pool";
+import { attachModelFacts } from "@/lib/gateway/routing/model-facts";
+import { modeSupport } from "@/lib/gateway/dispatch/service-mode";
+import { variantsOf } from "@/lib/gateway/catalog/model-variants";
 import { money } from "@/lib/utils/money";
 import type { CostRates, PriceSchedule } from "@/types/billing";
-import type { ModelPricing, PublicModel, TokenPricing } from "@/types/models";
-import type { RoutePool } from "@/types/routing";
+import type { ModelPricing, ModelVariantRoute, PublicModel, TokenPricing } from "@/types/models";
+import type { PooledFactTarget, RoutePool } from "@/types/routing";
 
 const pricedGroupSelect = {
   alias: true,
@@ -18,8 +21,31 @@ const pricedGroupSelect = {
   priceOutput: true,
   priceTimeZone: true,
   priceWindows: priceWindowQuery,
-  deployments: { select: { kind: true, costInput: true, costOutput: true, provider: { select: { kind: true } } } },
+  variants: true,
+  deployments: {
+    select: {
+      kind: true,
+      model: true,
+      providerId: true,
+      costInput: true,
+      costOutput: true,
+      provider: { select: { kind: true } },
+    },
+  },
 } as const;
+
+const POOLS: readonly RoutePool[] = ["api", "subscription"];
+
+function variantPools(variants: unknown, routes: PooledFactTarget[]): ModelVariantRoute[] {
+  return variantsOf(variants)
+    .map((variant) => ({
+      variant,
+      pools: POOLS.filter((pool) =>
+        routes.some((route) => route.pool === pool && modeSupport(route, variant) !== "none"),
+      ),
+    }))
+    .filter((route) => route.pools.length);
+}
 
 function perToken(per1k: number): string {
   return (per1k / 1000).toFixed(13).replace(/\.?0+$/, "") || "0";
@@ -66,7 +92,16 @@ export async function pricedModels(at: Date, aliases?: string[]): Promise<Public
     orderBy: { alias: "asc" },
     select: pricedGroupSelect,
   });
-  return groups.map((group) => {
+  const targets = groups.map((group) =>
+    group.deployments.map((dep): PooledFactTarget => ({
+      kind: dep.kind,
+      model: dep.model,
+      provider_id: dep.providerId ?? "",
+      pool: routePool(dep),
+    })),
+  );
+  await attachModelFacts(targets.flat());
+  return groups.map((group, index) => {
     const priced = (pool: RoutePool) =>
       modelPricing(
         {
@@ -94,6 +129,7 @@ export async function pricedModels(at: Date, aliases?: string[]): Promise<Public
       pools: [...new Set(group.deployments.map(routePool))],
       pricing: priced("api"),
       subscriptionPricing: priced("subscription"),
+      variants: variantPools(group.variants, targets[index] ?? []),
     };
   });
 }

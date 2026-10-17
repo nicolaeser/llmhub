@@ -176,6 +176,7 @@ export const messagesRequestSchema = z.looseObject({
   tools: z.array(messagesToolSchema).nullish(),
   tool_choice: toolChoiceSchema.nullish(),
   service_tier: z.string().nullish(),
+  speed: z.string().nullish(),
   thinking: thinkingConfigSchema.nullish(),
   output_config: outputConfigSchema.nullish(),
 });

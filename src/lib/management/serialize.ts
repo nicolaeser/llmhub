@@ -67,6 +67,7 @@ export function serializeModelAlias(group: ModelGroupView) {
     vendor: orNull(group.vendor),
     display_name: orNull(group.displayName),
     auto_routes: group.autoRoutes,
+    variants: group.variants,
     strategy: group.strategy,
     billing_mode: group.billingMode,
     price_input_per_1k: group.priceInput,

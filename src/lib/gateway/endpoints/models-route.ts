@@ -5,6 +5,9 @@ import { GateError } from "@/lib/gateway/errors";
 import { apiKeyRequest } from "@/lib/gateway/protocols/messages";
 import { AUTO_MODEL, modelEntry } from "@/lib/gateway/core";
 import { API_ROUTE_PREFIX, modelAlias } from "@/lib/gateway/catalog/model-alias";
+import { splitVariant, VARIANT_LABELS, variantAlias } from "@/lib/gateway/catalog/model-variants";
+import { CODEX_VERSION_PARAM, codexCatalog } from "@/lib/gateway/catalog/codex-catalog";
+import { catalogFacts } from "@/lib/gateway/catalog/model-context";
 import { pricedModels } from "@/lib/gateway/catalog/model-pricing";
 import { listedIn, routeOf } from "@/lib/gateway/routing/route-pool";
 import type { JsonMap } from "@/types/gateway";
@@ -16,23 +19,38 @@ function apiEntry(model: PublicModel, created: Date) {
   return modelEntry(`${API_ROUTE_PREFIX}${model.alias}`, created, model.pricing, { ...model, displayName: label }, "api");
 }
 
+function variantEntries(model: PublicModel, pool: RoutePool, surface: RoutePool, created: Date, taken: ReadonlySet<string>) {
+  const viaApi = pool !== surface;
+  const name = model.displayName || model.alias;
+  return model.variants
+    .filter((route) => route.pools.includes(pool) && !taken.has(variantAlias(model.alias, route.variant)))
+    .map(({ variant }) => {
+      const label = viaApi ? `${name} (API, ${VARIANT_LABELS[variant]})` : `${name} (${VARIANT_LABELS[variant]})`;
+      const id = `${viaApi ? API_ROUTE_PREFIX : ""}${variantAlias(model.alias, variant)}`;
+      const route = viaApi ? "api" : surface === "subscription" ? "subscription" : undefined;
+      return { ...modelEntry(id, created, null, { ...model, displayName: label }, route), variant };
+    });
+}
+
 export function modelEntries(
   models: PublicModel[],
   pool: RoutePool,
   allowed: (alias: string) => boolean,
   created: Date,
 ): JsonMap[] {
+  const taken = new Set(models.map((model) => model.alias));
   const permitted = models.filter((model) => allowed(model.alias));
-  const own = permitted
-    .filter((model) => listedIn(model, pool))
-    .map((model) =>
-      pool === "subscription"
-        ? modelEntry(model.alias, created, model.subscriptionPricing, model, "subscription")
-        : modelEntry(model.alias, created, model.pricing, model),
-    );
-  const viaApi =
-    pool === "subscription" ? permitted.filter((model) => listedIn(model, "api")).map((model) => apiEntry(model, created)) : [];
-  return [...own, ...viaApi];
+  const listed = permitted.filter((model) => listedIn(model, pool));
+  const own = listed.map((model) =>
+    pool === "subscription"
+      ? modelEntry(model.alias, created, model.subscriptionPricing, model, "subscription")
+      : modelEntry(model.alias, created, model.pricing, model),
+  );
+  const ownVariants = listed.flatMap((model) => variantEntries(model, pool, pool, created, taken));
+  const api = pool === "subscription" ? permitted.filter((model) => listedIn(model, "api")) : [];
+  const viaApi = api.map((model) => apiEntry(model, created));
+  const apiVariants = api.flatMap((model) => variantEntries(model, "api", pool, created, taken));
+  return [...own, ...ownVariants, ...viaApi, ...apiVariants];
 }
 
 export function listModelsRoute(pool: RoutePool) {
@@ -42,6 +60,9 @@ export function listModelsRoute(pool: RoutePool) {
       const created = new Date();
       const models = [...(await pricedModels(created)), AUTO_MODEL];
       const data = modelEntries(models, pool, (alias) => modelPermitted(principal, alias), created);
+      if (new URL(req.url).searchParams.has(CODEX_VERSION_PARAM)) {
+        return NextResponse.json(codexCatalog(data, pool, await catalogFacts()));
+      }
       return NextResponse.json({
         object: "list",
         data,
@@ -60,18 +81,15 @@ export function retrieveModelRoute(pool: RoutePool) {
     try {
       const principal = await gateRequest(apiKeyRequest(req), pool);
       const requested = modelAlias((await ctx.params).id);
-      const route = routeOf(requested, pool);
-      const id = route.alias;
+      const { alias } = routeOf(requested, pool);
       const created = new Date();
-      const model = id === AUTO_MODEL.alias ? AUTO_MODEL : (await pricedModels(created, [id]))[0];
-      if (!model || !modelPermitted(principal, requested) || !listedIn(model, route.pool)) {
-        throw new GateError(404, "model_not_found", "model not found", { param: "id" });
-      }
-      if (route.pool !== pool) return NextResponse.json(apiEntry(model, created));
-      if (pool === "subscription") {
-        return NextResponse.json(modelEntry(id, created, model.subscriptionPricing, model, "subscription"));
-      }
-      return NextResponse.json(modelEntry(id, created, model.pricing, model));
+      const base = splitVariant(alias)?.alias;
+      const models = alias === AUTO_MODEL.alias ? [AUTO_MODEL] : await pricedModels(created, base ? [alias, base] : [alias]);
+      const entry = modelEntries(models, pool, (model) => modelPermitted(principal, model), created).find(
+        (candidate) => candidate.id === requested,
+      );
+      if (!entry) throw new GateError(404, "model_not_found", "model not found", { param: "id" });
+      return NextResponse.json(entry);
     } catch (err) {
       return gateResponse(err, req);
     }
