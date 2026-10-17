@@ -1,12 +1,16 @@
-import { asNumber, asRecord, asString, newId, stringifyContent } from "@/lib/gateway/core";
+import { asNumber, asRecord, asString, asStringArray, newId, stringifyContent } from "@/lib/gateway/core";
 import { GateError } from "@/lib/gateway/errors";
 import { chatMessagesToItems } from "@/lib/gateway/protocols/responses";
 import { completionFromSse } from "@/lib/gateway/protocols/sse-completion";
 import type { ChatSseTranslator, JsonMap } from "@/types/gateway";
+import type { ModelFacts } from "@/types/routing";
 
 export const CODEX_DEFAULT_INSTRUCTIONS = "You are a helpful assistant.";
 export const CODEX_CLIENT_VERSION = "0.161.0";
+export const CODEX_FAST_TIER = "priority";
+export const CODEX_ULTRAFAST_TIER = "ultrafast";
 
+const CODEX_LEGACY_FAST_TIER = "fast";
 const INSTRUCTION_ROLES = new Set(["system", "developer"]);
 const REASONING_DELTAS = new Set(["response.reasoning_summary_text.delta", "response.reasoning_text.delta"]);
 const FINAL_EVENTS = new Set(["response.completed", "response.incomplete"]);
@@ -81,7 +85,26 @@ export function chatToCodex(body: JsonMap): JsonMap {
   if (typeof body.prompt_cache_key === "string" && body.prompt_cache_key) {
     payload.prompt_cache_key = body.prompt_cache_key;
   }
+  if (typeof body.service_tier === "string" && body.service_tier) payload.service_tier = body.service_tier;
+  const programs = asRecord(body.access_programs);
+  if (typeof programs?.cyber === "string" && programs.cyber) payload.access_programs = { cyber: programs.cyber };
   return payload;
+}
+
+export function codexModelFacts(model: JsonMap): ModelFacts {
+  const facts: ModelFacts = {};
+  const tiers = Array.isArray(model.service_tiers)
+    ? model.service_tiers.map((tier) => asString(asRecord(tier)?.id)).filter(Boolean)
+    : null;
+  const legacy = Array.isArray(model.additional_speed_tiers)
+    ? asStringArray(model.additional_speed_tiers).includes(CODEX_LEGACY_FAST_TIER)
+      ? [CODEX_FAST_TIER]
+      : []
+    : null;
+  if (tiers || legacy) facts.serviceTiers = [...new Set([...(tiers ?? []), ...(legacy ?? [])])];
+  const programs = asRecord(model.available_access_programs);
+  if (programs && Array.isArray(programs.cyber)) facts.accessPrograms = asStringArray(programs.cyber);
+  return facts;
 }
 
 export function chatUsageFromResponses(usage: unknown): JsonMap {

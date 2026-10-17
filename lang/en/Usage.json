@@ -46,6 +46,7 @@
     "byProject": "Prompt caching by project"
   },
   "range": "Range",
+  "filters": "{count, plural, =0 {Filters} other {Filters · # active}}",
   "empty": "No spend yet. Send a playground request.",
   "ok": "OK",
   "successRate": "Success rate",

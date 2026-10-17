@@ -17,12 +17,14 @@ export default function StatCard({
   hint?: string;
 }) {
   return (
-    <Card className="flex-row items-center gap-3">
-      {icon ? <IconTile icon={icon} tone={tone} /> : null}
-      <div className="min-w-0">
-        <Card.Description>{label}</Card.Description>
-        <p className="text-xl font-semibold tracking-tight">{value}</p>
-        {hint ? <p className="text-xs text-muted">{hint}</p> : null}
+    <Card className="@container">
+      <div className="flex flex-col items-start gap-3 @min-[11rem]:flex-row @min-[11rem]:items-center">
+        {icon ? <IconTile icon={icon} tone={tone} /> : null}
+        <div className="min-w-0">
+          <Card.Description>{label}</Card.Description>
+          <p className="text-xl font-semibold tracking-tight wrap-anywhere">{value}</p>
+          {hint ? <p className="text-xs text-muted">{hint}</p> : null}
+        </div>
       </div>
     </Card>
   );

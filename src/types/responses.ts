@@ -57,6 +57,12 @@ export type CompletionStreamContext = {
   echo: string;
 };
 
+export type ToolNamespace = { namespace: string; name: string };
+
+export type ToolNamespaces = ReadonlyMap<string, ToolNamespace>;
+
+export type ClientTools = { body: JsonMap; namespaces: ToolNamespaces };
+
 export type SseRelayOptions = {
   map?: (json: JsonMap, event: string) => JsonMap | null;
   onEnd?: () => Promise<void> | void;

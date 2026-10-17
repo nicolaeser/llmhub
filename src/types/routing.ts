@@ -55,9 +55,18 @@ export type DeploymentRow = {
   } | null;
 };
 
+export type ModelFacts = { serviceTiers?: string[]; accessPrograms?: string[] };
+
 export type ResolvedDeployment = Deployment & {
   provider?: DeploymentRow["provider"];
+  facts?: ModelFacts;
 };
+
+export type FactTarget = Pick<ResolvedDeployment, "kind" | "model" | "provider_id" | "facts">;
+
+export type PooledFactTarget = FactTarget & { pool: RoutePool };
+
+export type ServiceTarget = { kind: string; model: string; facts?: ModelFacts };
 
 export type WeightedChoice = { id: string; weight: number };
 

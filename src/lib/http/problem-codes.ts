@@ -26,6 +26,7 @@ export const PROBLEMS = {
   CONFLICT: { status: 409, title: "Conflict with current state" },
   SIGN_IN_EXPIRED: { status: 409, title: "Provider sign-in expired; sign in again in the console" },
   ALIAS_EXISTS: { status: 409, title: "Alias already exists" },
+  VARIANT_TAKEN: { status: 409, title: "A model already uses this variant alias" },
   TEMPLATE_IN_USE: { status: 409, title: "Model template is used by API keys" },
   NAME_EXISTS: { status: 409, title: "Name already exists" },
   MARKUP_EXISTS: { status: 409, title: "A markup for this scope and model already exists" },

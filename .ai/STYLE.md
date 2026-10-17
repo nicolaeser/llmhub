@@ -72,6 +72,17 @@ HeroUI `size` maps control height. Must not mix `size` with a competing height c
 
 The collapsed rail widths (`w-16` / `w-64`), meter fills, and table `min-w-*` locks are allowed. Below `md`, the rail is hidden and navigation opens in a HeroUI `Drawer` (`placement="left"`, `Backdrop variant="blur"`). Expanded navigation groups sections in a `DisclosureGroup`; the collapsed rail shows icons only.
 
+## Responsive layout
+
+Every console screen must work at 390 px wide without horizontal page scroll.
+
+- Below `sm` the `(app)` layout pads `main` with `p-4`, the top bar shows only the health dot (its label stays visible when the status is down), and sign-out is icon-only.
+- `PageHeader` actions wrap under the title when they do not fit beside it. Must not force them onto the title row.
+- `StatCard` stacks the icon above the value through a container query when the card is narrow. Four-up stat grids must not start before `lg`, because the rail narrows the pane at `md`.
+- A list `Table` must have a card twin: `RowCards` with one `RowCard` per row (`src/components/console/row-cards.tsx`) below `lg`, and `className={TABLE_FROM_LG}` on the `Table`. Tables in a narrow column (the company detail pane) use `until="xl"` with `TABLE_FROM_XL`. Inside a `Card` the twin uses `variant="secondary"`, inside a secondary card `variant="tertiary"`. Row chips and actions live in one helper that the table cell and the card both call, so the two never drift. Markdown tables inside transcripts may scroll instead.
+- Long filter forms collapse below `md` into a `Disclosure` whose trigger counts active filters; the desktop form stays expanded. Breakpoint-dependent rendering reads `useMediaQuery` with `BELOW_MD` / `BELOW_LG` from `src/lib/hooks/use-media-query.ts`. Must not add resize listeners or set state in an effect for this.
+- Long values (emails, model ids, paths) wrap with `break-words`. Use `break-all` only where the table cell already did.
+
 ## HeroUI composition
 
 | Need | Use |
@@ -86,7 +97,7 @@ The collapsed rail widths (`w-16` / `w-64`), meter fills, and table `min-w-*` lo
 | Fields | `TextField` + `Label` + `Input` + `Description` + `FieldError` |
 | Overlay | `Modal` with `Modal.Backdrop`; `useOverlayState` |
 | Confirm | `AlertDialog` (`src/components/console/confirm-dialog.tsx`) |
-| Table | `Table.ScrollContainer` > `Table.Content` |
+| Table | `Table.ScrollContainer` > `Table.Content`, with a `RowCards` twin below `lg` (see Responsive layout) |
 | Status pill | `Chip` for real state only |
 | Notice | `Alert` with `status` |
 | Divider | `Separator` |
@@ -101,4 +112,4 @@ Motion comes from HeroUI components (overlays, skeleton shimmer, spinners) and r
 
 ## Verification
 
-Run `npm run styles:check` and `npm run heroui:check` for UI changes, plus `npm run i18n:check` when copy changes. `styles:check` enforces the single stylesheet, HeroUI-only tokens, and the bans above; `heroui:check` enforces compound APIs, `onPress`, and no native controls. Inspect desktop and a narrow mobile width, both themes when chrome or color changes, and both locales when copy can reflow.
+Run `npm run styles:check` and `npm run heroui:check` for UI changes, plus `npm run i18n:check` when copy changes. `styles:check` enforces the single stylesheet, HeroUI-only tokens, and the bans above; `heroui:check` enforces compound APIs, `onPress`, and no native controls. Inspect desktop, a tablet width with the rail (768 px), and a 390 px mobile width, both themes when chrome or color changes, and both locales when copy can reflow.

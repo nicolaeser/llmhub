@@ -290,6 +290,7 @@ model ModelGroup {
   vendor         String   @default("")
   displayName    String   @default("")
   autoRoutes     Boolean?
+  variants       String[] @default([])
 
   deployments  Deployment[]
   priceWindows ModelPriceWindow[]

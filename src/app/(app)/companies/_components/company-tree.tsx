@@ -110,7 +110,7 @@ export default function CompanyTree({
       {rows.length === 0 ? (
         <p className="px-1 text-sm text-muted">{t("tree.noMatches")}</p>
       ) : (
-        <div className="max-h-[60vh] overflow-y-auto">
+        <div className="max-h-[45vh] overflow-y-auto lg:max-h-[60vh]">
           <ListBox
             aria-label={t("tree.title")}
             selectionMode="single"

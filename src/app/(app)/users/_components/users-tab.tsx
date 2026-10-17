@@ -17,6 +17,7 @@ import BudgetDialog from "@/components/budget/budget-dialog";
 import ConfirmDialog from "@/components/console/confirm-dialog";
 import EmptyState from "@/components/console/empty-state";
 import PageStatus from "@/components/console/page-status";
+import RowCard, { RowCards, TABLE_FROM_LG } from "@/components/console/row-cards";
 import { useActionData } from "@/lib/hooks/use-action-data";
 import { isActionFail } from "@/lib/http/action-result";
 import type { ActionFail } from "@/types/actions";
@@ -141,6 +142,172 @@ export default function UsersTab() {
     return <PageStatus state={page} />;
   }
 
+  const { canManage, canSecure, canBudget } = data;
+
+  function roleLabel(user: ConsoleUser) {
+    if (user.isOwner) return t("ownerRole");
+    return roleName(user.roleId ? { name: user.roleName, templateKey: user.roleTemplateKey } : null);
+  }
+
+  function accessLabel(user: ConsoleUser) {
+    return t("access", { scope: user.orgId ? "company" : "platform", org: user.orgAlias });
+  }
+
+  function spendLabel(user: ConsoleUser) {
+    return tCommon("spendBudget", {
+      hasCap: user.maxBudget > 0 ? "yes" : "no",
+      spend: user.spend,
+      budget: user.maxBudget,
+    });
+  }
+
+  function lastActiveLabel(user: ConsoleUser) {
+    return user.lastActive ? format.relativeTime(new Date(user.lastActive), now) : tCommon("none");
+  }
+
+  function securityChips(user: ConsoleUser) {
+    return (
+      <>
+        <Chip size="sm" variant="soft" color={user.twoFactorEnabled ? "success" : "warning"}>
+          {t("twoFactor", { enabled: user.twoFactorEnabled ? "true" : "false" })}
+        </Chip>
+        {user.passkeys ? (
+          <Chip size="sm" variant="soft">
+            {t("passkeys", { count: user.passkeys })}
+          </Chip>
+        ) : null}
+      </>
+    );
+  }
+
+  function statusChips(user: ConsoleUser) {
+    return (
+      <>
+        {user.isOwner ? (
+          <Chip size="sm" variant="soft" color="accent">
+            {t("owner")}
+          </Chip>
+        ) : null}
+        <Chip size="sm" variant="soft" color={user.blocked ? "danger" : "success"}>
+          {tCommon("blockedState", { blocked: user.blocked ? "true" : "false" })}
+        </Chip>
+        {user.mustChangePassword ? (
+          <Chip size="sm" variant="soft" color="warning">
+            {t("mustChangePassword")}
+          </Chip>
+        ) : null}
+        {user.logContent ? null : (
+          <Chip size="sm" variant="soft" color="warning">
+            {t("contentOff")}
+          </Chip>
+        )}
+      </>
+    );
+  }
+
+  function userMenu(user: ConsoleUser) {
+    if (!user.manageable || !(canManage || canSecure || canBudget)) return null;
+    return (
+      <Dropdown>
+        <Button
+          isIconOnly
+          size="sm"
+          variant="ghost"
+          isPending={busyId === user.id}
+          aria-label={t("actionsMenu", { username: user.username })}
+        >
+          {({ isPending }) =>
+            isPending ? (
+              <Spinner color="current" size="sm" />
+            ) : (
+              <MoreHorizontal size={14} aria-hidden />
+            )
+          }
+        </Button>
+        <Dropdown.Popover>
+          <Dropdown.Menu
+            aria-label={t("actionsMenu", { username: user.username })}
+            onAction={(key) => {
+              if (key === "role") openDialog(roleState, user);
+              if (key === "budget") openDialog(budgetState, user);
+              if (key === "password") openDialog(passwordState, user);
+              if (key === "delete") openDialog(deleteState, user);
+              if (key === "reset") openDialog(resetState, user);
+              if (key === "block") {
+                runRowAction(
+                  user.id,
+                  () => setUserBlockedAction(user.id, !user.blocked),
+                  t("toasts.blocked", { blocked: !user.blocked ? "true" : "false" }),
+                );
+              }
+              if (key === "content") {
+                runRowAction(
+                  user.id,
+                  () => setUserContentLoggingAction(user.id, !user.logContent),
+                  t("toasts.contentLogging", { enabled: !user.logContent ? "true" : "false" }),
+                );
+              }
+              if (key === "sessions") {
+                runRowAction(
+                  user.id,
+                  () => revokeUserSessionsAction(user.id),
+                  t("toasts.sessionsRevoked"),
+                );
+              }
+            }}
+          >
+            {canManage ? (
+              <Dropdown.Item id="role" textValue={t("changeRole")}>
+                {t("changeRole")}
+              </Dropdown.Item>
+            ) : null}
+            {canBudget ? (
+              <Dropdown.Item id="budget" textValue={t("budget")}>
+                {t("budget")}
+              </Dropdown.Item>
+            ) : null}
+            {canManage ? (
+              <Dropdown.Item id="password" textValue={t("setPassword")}>
+                {t("setPassword")}
+              </Dropdown.Item>
+            ) : null}
+            {canManage ? (
+              <Dropdown.Item
+                id="content"
+                textValue={t("contentAction", { enabled: user.logContent ? "true" : "false" })}
+              >
+                {t("contentAction", { enabled: user.logContent ? "true" : "false" })}
+              </Dropdown.Item>
+            ) : null}
+            {canSecure ? (
+              <Dropdown.Item id="sessions" textValue={t("revokeSessions")}>
+                {t("revokeSessions")}
+              </Dropdown.Item>
+            ) : null}
+            {canSecure ? (
+              <Dropdown.Item id="reset" textValue={t("resetTwoFactor")}>
+                {t("resetTwoFactor")}
+              </Dropdown.Item>
+            ) : null}
+            {canManage ? (
+              <Dropdown.Item
+                id="block"
+                textValue={t("blockAction", { blocked: user.blocked ? "true" : "false" })}
+              >
+                {t("blockAction", { blocked: user.blocked ? "true" : "false" })}
+              </Dropdown.Item>
+            ) : null}
+            {canManage ? (
+              <Dropdown.Item id="delete" textValue={tCommon("delete")}>
+                {tCommon("delete")}
+              </Dropdown.Item>
+            ) : null}
+          </Dropdown.Menu>
+        </Dropdown.Popover>
+      </Dropdown>
+    );
+  }
+
   const createButton = data.canManage ? (
     <Button onPress={() => openDialog(createState, null)}>
       <Plus size={16} aria-hidden />
@@ -172,194 +339,78 @@ export default function UsersTab() {
           {filtered.length === 0 ? (
             <EmptyState icon={User} title={t("noMatches")} />
           ) : (
-            <Table aria-label={t("title")}>
-              <Table.ScrollContainer>
-                <Table.Content>
-                  <Table.Header>
-                    <Table.Column isRowHeader>{t("columns.user")}</Table.Column>
-                    <Table.Column>{t("columns.role")}</Table.Column>
-                    <Table.Column>{t("columns.access")}</Table.Column>
-                    <Table.Column>{t("columns.security")}</Table.Column>
-                    <Table.Column>{tCommon("status")}</Table.Column>
-                    <Table.Column>{t("columns.lastActive")}</Table.Column>
-                    <Table.Column>{tCommon("actions")}</Table.Column>
-                  </Table.Header>
-                  <Table.Body>
-                    {filtered.map((user) => (
-                      <Table.Row key={user.id} id={user.id}>
-                        <Table.Cell>
-                          <div className="min-w-0">
-                            <p className="text-sm font-medium">{user.username}</p>
-                            <p className="text-xs text-muted">{user.email}</p>
-                          </div>
-                        </Table.Cell>
-                        <Table.Cell>
-                          {user.isOwner
-                            ? t("ownerRole")
-                            : roleName(
-                                user.roleId
-                                  ? { name: user.roleName, templateKey: user.roleTemplateKey }
-                                  : null,
-                              )}
-                        </Table.Cell>
-                        <Table.Cell>
-                          <p className="text-sm">
-                            {t("access", { scope: user.orgId ? "company" : "platform", org: user.orgAlias })}
-                          </p>
-                          <p className="text-xs text-muted">
-                            {tCommon("spendBudget", {
-                              hasCap: user.maxBudget > 0 ? "yes" : "no",
-                              spend: user.spend,
-                              budget: user.maxBudget,
-                            })}
-                          </p>
-                        </Table.Cell>
-                        <Table.Cell>
-                          <div className="flex flex-wrap gap-1">
-                            <Chip size="sm" variant="soft" color={user.twoFactorEnabled ? "success" : "warning"}>
-                              {t("twoFactor", { enabled: user.twoFactorEnabled ? "true" : "false" })}
-                            </Chip>
-                            {user.passkeys ? (
-                              <Chip size="sm" variant="soft">
-                                {t("passkeys", { count: user.passkeys })}
-                              </Chip>
-                            ) : null}
-                          </div>
-                        </Table.Cell>
-                        <Table.Cell>
-                          <div className="flex flex-wrap gap-1">
-                            {user.isOwner ? (
-                              <Chip size="sm" variant="soft" color="accent">
-                                {t("owner")}
-                              </Chip>
-                            ) : null}
-                            <Chip size="sm" variant="soft" color={user.blocked ? "danger" : "success"}>
-                              {tCommon("blockedState", { blocked: user.blocked ? "true" : "false" })}
-                            </Chip>
-                            {user.mustChangePassword ? (
-                              <Chip size="sm" variant="soft" color="warning">
-                                {t("mustChangePassword")}
-                              </Chip>
-                            ) : null}
-                            {user.logContent ? null : (
-                              <Chip size="sm" variant="soft" color="warning">
-                                {t("contentOff")}
-                              </Chip>
-                            )}
-                          </div>
-                        </Table.Cell>
-                        <Table.Cell>
-                          {user.lastActive
-                            ? format.relativeTime(new Date(user.lastActive), now)
-                            : tCommon("none")}
-                        </Table.Cell>
-                        <Table.Cell>
-                          {user.manageable && (data.canManage || data.canSecure || data.canBudget) ? (
-                            <Dropdown>
-                              <Button
-                                isIconOnly
-                                size="sm"
-                                variant="ghost"
-                                isPending={busyId === user.id}
-                                aria-label={t("actionsMenu", { username: user.username })}
-                              >
-                                {({ isPending }) =>
-                                  isPending ? (
-                                    <Spinner color="current" size="sm" />
-                                  ) : (
-                                    <MoreHorizontal size={14} aria-hidden />
-                                  )
-                                }
-                              </Button>
-                              <Dropdown.Popover>
-                                <Dropdown.Menu
-                                  aria-label={t("actionsMenu", { username: user.username })}
-                                  onAction={(key) => {
-                                    if (key === "role") openDialog(roleState, user);
-                                    if (key === "budget") openDialog(budgetState, user);
-                                    if (key === "password") openDialog(passwordState, user);
-                                    if (key === "delete") openDialog(deleteState, user);
-                                    if (key === "reset") openDialog(resetState, user);
-                                    if (key === "block") {
-                                      runRowAction(
-                                        user.id,
-                                        () => setUserBlockedAction(user.id, !user.blocked),
-                                        t("toasts.blocked", { blocked: !user.blocked ? "true" : "false" }),
-                                      );
-                                    }
-                                    if (key === "content") {
-                                      runRowAction(
-                                        user.id,
-                                        () => setUserContentLoggingAction(user.id, !user.logContent),
-                                        t("toasts.contentLogging", { enabled: !user.logContent ? "true" : "false" }),
-                                      );
-                                    }
-                                    if (key === "sessions") {
-                                      runRowAction(
-                                        user.id,
-                                        () => revokeUserSessionsAction(user.id),
-                                        t("toasts.sessionsRevoked"),
-                                      );
-                                    }
-                                  }}
-                                >
-                                  {data.canManage ? (
-                                    <Dropdown.Item id="role" textValue={t("changeRole")}>
-                                      {t("changeRole")}
-                                    </Dropdown.Item>
-                                  ) : null}
-                                  {data.canBudget ? (
-                                    <Dropdown.Item id="budget" textValue={t("budget")}>
-                                      {t("budget")}
-                                    </Dropdown.Item>
-                                  ) : null}
-                                  {data.canManage ? (
-                                    <Dropdown.Item id="password" textValue={t("setPassword")}>
-                                      {t("setPassword")}
-                                    </Dropdown.Item>
-                                  ) : null}
-                                  {data.canManage ? (
-                                    <Dropdown.Item
-                                      id="content"
-                                      textValue={t("contentAction", { enabled: user.logContent ? "true" : "false" })}
-                                    >
-                                      {t("contentAction", { enabled: user.logContent ? "true" : "false" })}
-                                    </Dropdown.Item>
-                                  ) : null}
-                                  {data.canSecure ? (
-                                    <Dropdown.Item id="sessions" textValue={t("revokeSessions")}>
-                                      {t("revokeSessions")}
-                                    </Dropdown.Item>
-                                  ) : null}
-                                  {data.canSecure ? (
-                                    <Dropdown.Item id="reset" textValue={t("resetTwoFactor")}>
-                                      {t("resetTwoFactor")}
-                                    </Dropdown.Item>
-                                  ) : null}
-                                  {data.canManage ? (
-                                    <Dropdown.Item
-                                      id="block"
-                                      textValue={t("blockAction", { blocked: user.blocked ? "true" : "false" })}
-                                    >
-                                      {t("blockAction", { blocked: user.blocked ? "true" : "false" })}
-                                    </Dropdown.Item>
-                                  ) : null}
-                                  {data.canManage ? (
-                                    <Dropdown.Item id="delete" textValue={tCommon("delete")}>
-                                      {tCommon("delete")}
-                                    </Dropdown.Item>
-                                  ) : null}
-                                </Dropdown.Menu>
-                              </Dropdown.Popover>
-                            </Dropdown>
-                          ) : null}
-                        </Table.Cell>
-                      </Table.Row>
-                    ))}
-                  </Table.Body>
-                </Table.Content>
-              </Table.ScrollContainer>
-            </Table>
+            <>
+              <RowCards label={t("title")}>
+                {filtered.map((user) => (
+                  <RowCard
+                    key={user.id}
+                    title={user.username}
+                    description={user.email}
+                    aside={userMenu(user)}
+                    chips={
+                      <>
+                        {statusChips(user)}
+                        {securityChips(user)}
+                      </>
+                    }
+                    details={[
+                      { label: t("columns.role"), value: roleLabel(user) },
+                      { label: t("columns.lastActive"), value: lastActiveLabel(user) },
+                      {
+                        label: t("columns.access"),
+                        value: (
+                          <>
+                            {accessLabel(user)}
+                            <span className="block text-xs text-muted">{spendLabel(user)}</span>
+                          </>
+                        ),
+                        wide: true,
+                      },
+                    ]}
+                  />
+                ))}
+              </RowCards>
+              <Table aria-label={t("title")} className={TABLE_FROM_LG}>
+                <Table.ScrollContainer>
+                  <Table.Content>
+                    <Table.Header>
+                      <Table.Column isRowHeader>{t("columns.user")}</Table.Column>
+                      <Table.Column>{t("columns.role")}</Table.Column>
+                      <Table.Column>{t("columns.access")}</Table.Column>
+                      <Table.Column>{t("columns.security")}</Table.Column>
+                      <Table.Column>{tCommon("status")}</Table.Column>
+                      <Table.Column>{t("columns.lastActive")}</Table.Column>
+                      <Table.Column>{tCommon("actions")}</Table.Column>
+                    </Table.Header>
+                    <Table.Body>
+                      {filtered.map((user) => (
+                        <Table.Row key={user.id} id={user.id}>
+                          <Table.Cell>
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium">{user.username}</p>
+                              <p className="text-xs text-muted">{user.email}</p>
+                            </div>
+                          </Table.Cell>
+                          <Table.Cell>{roleLabel(user)}</Table.Cell>
+                          <Table.Cell>
+                            <p className="text-sm">{accessLabel(user)}</p>
+                            <p className="text-xs text-muted">{spendLabel(user)}</p>
+                          </Table.Cell>
+                          <Table.Cell>
+                            <div className="flex flex-wrap gap-1">{securityChips(user)}</div>
+                          </Table.Cell>
+                          <Table.Cell>
+                            <div className="flex flex-wrap gap-1">{statusChips(user)}</div>
+                          </Table.Cell>
+                          <Table.Cell>{lastActiveLabel(user)}</Table.Cell>
+                          <Table.Cell>{userMenu(user)}</Table.Cell>
+                        </Table.Row>
+                      ))}
+                    </Table.Body>
+                  </Table.Content>
+                </Table.ScrollContainer>
+              </Table>
+            </>
           )}
         </>
       )}

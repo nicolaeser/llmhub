@@ -17,6 +17,8 @@ test("model names map to the endpoint they can actually serve", () => {
   assert.equal(modelRole(["dall-e-3"]), "media");
   assert.equal(modelRole(["gpt-image-1"]), "media");
   assert.equal(modelRole(["FLUX.1-dev"]), "media");
+  assert.equal(modelRole(["grok-imagine-image"]), "media");
+  assert.equal(modelRole(["grok-imagine-video-1.5"]), "media");
   assert.equal(modelRole(["omni-moderation-latest"]), "moderation");
   assert.equal(modelRole(["gpt-4o"]), "chat");
   assert.equal(modelRole(["claude-3-5-sonnet"]), "chat");

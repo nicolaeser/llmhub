@@ -196,6 +196,8 @@ export type DiscoveredModel = {
   costInputPer1k: number;
   costOutputPer1k: number;
   priceSource: string;
+  serviceTiers?: string[];
+  accessPrograms?: string[];
 };
 
 export type ModelPrice = { in: number; out: number };

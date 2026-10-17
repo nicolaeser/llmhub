@@ -32,12 +32,17 @@ export type PriceWindow = {
 
 export type PriceWindowDraft = PriceWindow & { key: number };
 
+export type ModelVariant = "fast" | "ultrafast" | "daybreak";
+
+export type ModelVariantRoute = { variant: ModelVariant; pools: RoutePool[] };
+
 export type ModelGroupView = {
   alias: string;
   enabled: boolean;
   vendor: string;
   displayName: string;
   autoRoutes: boolean | null;
+  variants: ModelVariant[];
   strategy: string;
   billingMode: string;
   priceInput: number;
@@ -92,4 +97,15 @@ export type PublicModel = {
   pricing: ModelPricing | null;
   subscriptionPricing?: ModelPricing | null;
   pools: RoutePool[];
+  variants: ModelVariantRoute[];
 };
+
+export type ContextRoute = { kind: string; model: string; provider: { kind: string; discovered: unknown } | null };
+
+export type ContextGroup = { alias: string; deployments: ContextRoute[] };
+
+export type ContextWindows = Record<RoutePool, ReadonlyMap<string, number>>;
+
+export type SpeedVariants = Record<RoutePool, ReadonlyMap<string, readonly ModelVariant[]>>;
+
+export type CatalogFacts = { windows: ContextWindows; speeds: SpeedVariants };

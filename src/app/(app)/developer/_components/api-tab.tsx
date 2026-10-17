@@ -17,6 +17,7 @@ import { useTranslations } from "next-intl";
 import CopyButton from "@/components/console/copy-button";
 import EmptyState from "@/components/console/empty-state";
 import PageStatus from "@/components/console/page-status";
+import RowCard, { RowCards, TABLE_FROM_LG } from "@/components/console/row-cards";
 import { loadApiRefAction } from "../_action";
 import { Link } from "@/i18n/routing";
 import { useActionData } from "@/lib/hooks/use-action-data";
@@ -33,6 +34,7 @@ const CHAT_CURL_BODY =
 const MESSAGES_CURL_BODY =
   '\'{"model":"my-alias","max_tokens":256,"messages":[{"role":"user","content":"Hello"}]}\'';
 const EXAMPLE_STYLES = ["openai", "anthropic", "management"] as const;
+const CLI_CLIENTS = ["claude", "codex"] as const;
 
 const ERROR_EXAMPLES = {
   openai: {
@@ -66,6 +68,7 @@ export default function ApiTab() {
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<OpenApiPath | null>(null);
   const [example, setExample] = useState<string>("openai");
+  const [cli, setCli] = useState<string>("claude");
   const [errorShape, setErrorShape] = useState<string>("openai");
   const tryState = useOverlayState();
   const page = useActionData(loadApiRefAction);
@@ -95,16 +98,59 @@ export default function ApiTab() {
       : example === "management"
         ? t("curlManagement", { origin })
         : t("curl", { origin, body: CHAT_CURL_BODY });
+  const cliSetup =
+    cli === "codex"
+      ? t("cliCodex", { openai: `${origin}${SUBSCRIPTION_PREFIX}/v1` })
+      : t("cliClaude", { anthropic: `${origin}${SUBSCRIPTION_PREFIX}` });
   const bases = [
-    { id: "openai", value: `${origin}${API_PREFIX}/v1`, hint: t("auth") },
-    { id: "anthropic", value: `${origin}${API_PREFIX}`, hint: t("anthropicAuth", { version: ANTHROPIC_VERSION }) },
+    {
+      id: "openai",
+      urls: [{ label: t("baseUrl"), value: `${origin}${API_PREFIX}/v1` }],
+      hint: t("auth"),
+    },
+    {
+      id: "anthropic",
+      urls: [{ label: t("baseUrl"), value: `${origin}${API_PREFIX}` }],
+      hint: t("anthropicAuth", { version: ANTHROPIC_VERSION }),
+    },
     {
       id: "subscription",
-      value: `${origin}${SUBSCRIPTION_PREFIX}/v1`,
-      hint: t("subscriptionAuth", { anthropic: `${origin}${SUBSCRIPTION_PREFIX}` }),
+      urls: [
+        { label: t("baseUrlFor", { client: "openai" }), value: `${origin}${SUBSCRIPTION_PREFIX}/v1` },
+        { label: t("baseUrlFor", { client: "anthropic" }), value: `${origin}${SUBSCRIPTION_PREFIX}` },
+      ],
+      hint: t("subscriptionAuth"),
     },
-    { id: "management", value: `${origin}${MANAGEMENT_PREFIX}`, hint: null },
+    {
+      id: "management",
+      urls: [{ label: t("baseUrl"), value: `${origin}${MANAGEMENT_PREFIX}` }],
+      hint: null,
+    },
   ];
+
+  function styleChip(row: OpenApiPath) {
+    return (
+      <Chip size="sm" variant="soft" color={row.style === "management" ? "accent" : "default"}>
+        {t("style", { style: row.style })}
+      </Chip>
+    );
+  }
+
+  function tryButton(row: OpenApiPath) {
+    return (
+      <Button
+        size="sm"
+        variant="secondary"
+        aria-label={t("tryAria", { method: row.method, path: row.path })}
+        onPress={() => {
+          setSelected(row);
+          tryState.open();
+        }}
+      >
+        {tCommon("test")}
+      </Button>
+    );
+  }
 
   return (
     <div className="space-y-5">
@@ -117,13 +163,15 @@ export default function ApiTab() {
               <Card.Title>{t("sdkTitle", { style: base.id })}</Card.Title>
               <Card.Description>{t("sdkDescription", { style: base.id })}</Card.Description>
             </Card.Header>
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="min-w-0">
-                <p className="text-sm font-medium">{t("baseUrl")}</p>
-                <code className="mt-1 block break-all font-mono text-sm">{base.value}</code>
+            {base.urls.map((url) => (
+              <div key={url.value} className="flex flex-wrap items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium">{url.label}</p>
+                  <code className="mt-1 block break-all font-mono text-sm">{url.value}</code>
+                </div>
+                <CopyButton text={url.value} label={tCommon("copy")} showLabel />
               </div>
-              <CopyButton text={base.value} label={tCommon("copy")} showLabel />
-            </div>
+            ))}
             <Alert>
               <Alert.Content>
                 <Alert.Description>
@@ -141,6 +189,29 @@ export default function ApiTab() {
           </Card>
         ))}
       </div>
+
+      <Card className="gap-3">
+        <Card.Header>
+          <Card.Title>{t("cliTitle")}</Card.Title>
+          <Card.Description>{t("cliDescription")}</Card.Description>
+        </Card.Header>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <Tabs selectedKey={cli} onSelectionChange={(key) => setCli(String(key))} aria-label={t("cliLabel")} className="w-fit">
+            <Tabs.List className="w-fit min-w-0" aria-label={t("cliLabel")}>
+              {CLI_CLIENTS.map((client) => (
+                <Tabs.Tab key={client} id={client} className="w-auto">
+                  {t("cliName", { client })}
+                </Tabs.Tab>
+              ))}
+            </Tabs.List>
+          </Tabs>
+          <CopyButton text={cliSetup} label={tCommon("copy")} showLabel />
+        </div>
+        <Surface variant="secondary" className="overflow-x-auto rounded-xl p-4">
+          <pre className="font-mono text-xs whitespace-pre-wrap">{cliSetup}</pre>
+        </Surface>
+        <p className="text-sm text-muted">{t("cliHint", { client: cli })}</p>
+      </Card>
 
       <Card>
         <Card.Header className="flex-row flex-wrap items-center justify-between gap-2">
@@ -171,7 +242,7 @@ export default function ApiTab() {
           value={query}
           onChange={setQuery}
           aria-label={t("searchPlaceholder")}
-          className="max-w-sm"
+          className="w-full max-w-sm"
         >
           <SearchField.Group>
             <SearchField.SearchIcon />
@@ -182,62 +253,61 @@ export default function ApiTab() {
         {filtered.length === 0 ? (
           <EmptyState icon={Code2} title={t("empty")} />
         ) : (
-          <Table aria-label={t("endpoints")}>
-            <Table.ScrollContainer>
-              <Table.Content>
-                <Table.Header>
-                  <Table.Column isRowHeader>{t("columns.method")}</Table.Column>
-                  <Table.Column>{t("columns.path")}</Table.Column>
-                  <Table.Column>{t("columns.style")}</Table.Column>
-                  <Table.Column>{t("columns.summary")}</Table.Column>
-                  {canTry ? (
-                    <Table.Column>{tCommon("actions")}</Table.Column>
-                  ) : null}
-                </Table.Header>
-                <Table.Body>
-                  {filtered.map((row) => (
-                    <Table.Row
-                      key={`${row.method}:${row.path}`}
-                      id={`${row.method}:${row.path}`}
-                    >
-                      <Table.Cell>
-                        <Chip size="sm" variant="soft">
-                          {row.method}
-                        </Chip>
-                      </Table.Cell>
-                      <Table.Cell>
-                        <code className="font-mono text-xs">{row.path}</code>
-                      </Table.Cell>
-                      <Table.Cell>
-                        <Chip size="sm" variant="soft" color={row.style === "management" ? "accent" : "default"}>
-                          {t("style", { style: row.style })}
-                        </Chip>
-                      </Table.Cell>
-                      <Table.Cell>{row.summary}</Table.Cell>
-                      {canTry ? (
+          <>
+            <RowCards label={t("endpoints")}>
+              {filtered.map((row) => (
+                <RowCard
+                  key={`${row.method}:${row.path}`}
+                  title={<code className="font-mono text-xs break-words">{row.path}</code>}
+                  description={row.summary}
+                  chips={
+                    <>
+                      <Chip size="sm" variant="soft">
+                        {row.method}
+                      </Chip>
+                      {styleChip(row)}
+                    </>
+                  }
+                  actions={canTry ? tryButton(row) : undefined}
+                />
+              ))}
+            </RowCards>
+            <Table aria-label={t("endpoints")} className={TABLE_FROM_LG}>
+              <Table.ScrollContainer>
+                <Table.Content>
+                  <Table.Header>
+                    <Table.Column isRowHeader>{t("columns.method")}</Table.Column>
+                    <Table.Column>{t("columns.path")}</Table.Column>
+                    <Table.Column>{t("columns.style")}</Table.Column>
+                    <Table.Column>{t("columns.summary")}</Table.Column>
+                    {canTry ? (
+                      <Table.Column>{tCommon("actions")}</Table.Column>
+                    ) : null}
+                  </Table.Header>
+                  <Table.Body>
+                    {filtered.map((row) => (
+                      <Table.Row
+                        key={`${row.method}:${row.path}`}
+                        id={`${row.method}:${row.path}`}
+                      >
                         <Table.Cell>
-                          <Button
-                            size="sm"
-                            variant="secondary"
-                            aria-label={t("tryAria", {
-                              method: row.method,
-                              path: row.path,
-                            })}
-                            onPress={() => {
-                              setSelected(row);
-                              tryState.open();
-                            }}
-                          >
-                            {tCommon("test")}
-                          </Button>
+                          <Chip size="sm" variant="soft">
+                            {row.method}
+                          </Chip>
                         </Table.Cell>
-                      ) : null}
-                    </Table.Row>
-                  ))}
-                </Table.Body>
-              </Table.Content>
-            </Table.ScrollContainer>
-          </Table>
+                        <Table.Cell>
+                          <code className="font-mono text-xs">{row.path}</code>
+                        </Table.Cell>
+                        <Table.Cell>{styleChip(row)}</Table.Cell>
+                        <Table.Cell>{row.summary}</Table.Cell>
+                        {canTry ? <Table.Cell>{tryButton(row)}</Table.Cell> : null}
+                      </Table.Row>
+                    ))}
+                  </Table.Body>
+                </Table.Content>
+              </Table.ScrollContainer>
+            </Table>
+          </>
         )}
       </section>
 
@@ -279,7 +349,21 @@ export default function ApiTab() {
           </Surface>
         </Card>
         <div className="grid items-start gap-5 xl:grid-cols-2">
-          <Table aria-label={t("problemCodes")}>
+          <RowCards label={t("problemCodes")}>
+            {Object.entries(PROBLEMS).map(([code, spec]) => (
+              <RowCard
+                key={code}
+                title={<code className="font-mono text-xs break-words">{code}</code>}
+                description={spec.title}
+                aside={
+                  <Chip size="sm" variant="soft">
+                    {t("statusCode", { status: spec.status })}
+                  </Chip>
+                }
+              />
+            ))}
+          </RowCards>
+          <Table aria-label={t("problemCodes")} className={TABLE_FROM_LG}>
             <Table.ScrollContainer>
               <Table.Content>
                 <Table.Header>
