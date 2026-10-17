@@ -21,7 +21,13 @@ export const NAV: NavSection[] = [
     id: "organization",
     labelKey: "sections.organization",
     items: [
-      { href: "/companies", labelKey: "items.companies", icon: Building2, permission: PERMISSIONS.TENANCY_READ },
+      {
+        href: "/companies",
+        labelKey: "items.companies",
+        companyLabelKey: "items.company",
+        icon: Building2,
+        permission: PERMISSIONS.TENANCY_READ,
+      },
       {
         href: "/keys",
         labelKey: "items.keys",
@@ -31,6 +37,7 @@ export const NAV: NavSection[] = [
       {
         href: "/users",
         labelKey: "items.users",
+        adminOnly: true,
         icon: User,
         permission: [PERMISSIONS.USERS_READ, PERMISSIONS.ROLES_MANAGE],
       },
@@ -40,8 +47,8 @@ export const NAV: NavSection[] = [
     id: "models",
     labelKey: "sections.models",
     items: [
-      { href: "/providers", labelKey: "items.providers", icon: Plug, permission: PERMISSIONS.PROVIDERS_READ },
-      { href: "/models", labelKey: "items.models", icon: Network, permission: PERMISSIONS.MODELS_READ },
+      { href: "/providers", labelKey: "items.providers", adminOnly: true, icon: Plug, permission: PERMISSIONS.PROVIDERS_READ },
+      { href: "/models", labelKey: "items.models", adminOnly: true, icon: Network, permission: PERMISSIONS.MODELS_READ },
     ],
   },
   {
@@ -70,7 +77,13 @@ export const NAV: NavSection[] = [
     id: "system",
     labelKey: "sections.system",
     items: [
-      { href: "/settings", labelKey: "items.settings", icon: Settings, permission: PERMISSIONS.SETTINGS_READ },
+      {
+        href: "/settings",
+        labelKey: "items.settings",
+        companyLabelKey: "items.companySettings",
+        icon: Settings,
+        permission: PERMISSIONS.SETTINGS_READ,
+      },
       {
         href: "/developer",
         labelKey: "items.developer",
@@ -83,12 +96,23 @@ export const NAV: NavSection[] = [
 
 const NO_NAV_HOME = "/account";
 
-export function canSee(permissions: readonly Permission[], item: { permission: Permission | readonly Permission[] }) {
+export function canSee(
+  permissions: readonly Permission[],
+  item: { permission: Permission | readonly Permission[]; adminOnly?: boolean },
+  companyView = false,
+) {
+  if (companyView && item.adminOnly) return false;
   const needed: readonly Permission[] = Array.isArray(item.permission) ? item.permission : [item.permission];
   return needed.some((permission) => hasPerm(permissions, permission));
 }
 
-export function homePath(permissions: readonly Permission[]): string {
-  const first = NAV.flatMap((section) => section.items).find((item) => canSee(permissions, item));
+export function homePath(permissions: readonly Permission[], companyView = false): string {
+  const first = NAV.flatMap((section) => section.items).find((item) => canSee(permissions, item, companyView));
   return first?.href ?? NO_NAV_HOME;
+}
+
+export function adminOnlyPath(pathname: string): boolean {
+  return NAV.flatMap((section) => section.items).some(
+    (item) => item.adminOnly && (pathname === item.href || pathname.startsWith(`${item.href}/`)),
+  );
 }

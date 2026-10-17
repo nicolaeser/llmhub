@@ -57,6 +57,7 @@ export type HostedTool = {
   action: McpToolAction;
   method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
   path: string;
+  query: string[];
   inputSchema: JsonMap;
 };
 
@@ -64,7 +65,9 @@ export type HostedSpec = {
   tools: HostedTool[];
 };
 
-export type McpDraft = {
+export type McpBuilderTemplate = "readonly" | "writes" | "full" | "custom";
+
+export type McpDraftServer = {
   name: string;
   description: string;
   baseUrl: string;
@@ -72,7 +75,25 @@ export type McpDraft = {
   authType: "none" | "bearer" | "header";
   authHeader: string;
   notes: string;
+};
+
+export type McpDraftReading = {
+  server: McpDraftServer | null;
   tools: HostedTool[];
+  cut: boolean;
+};
+
+export type McpOpenApiImport = {
+  server: McpDraftServer;
+  tools: HostedTool[];
+  operations: number;
+};
+
+export type McpDraft = McpDraftServer & {
+  tools: HostedTool[];
+  included: string[];
+  source: "openapi" | "model";
+  operations: number;
 };
 
 export type McpBuilderModel = {
@@ -466,4 +487,45 @@ export type McpOAuthLoginState = {
   scope: string;
   expiresAt: number | null;
   version: number;
+};
+
+export type McpKeyAccessMode = "inherit" | "allow" | "block";
+
+export type McpKeyServerAccess = {
+  serverId: string;
+  name: string;
+  description: string;
+  kind: McpServerKind;
+  enabled: boolean;
+  template: boolean;
+  connected: boolean;
+  global: boolean;
+  toolsRestricted: boolean;
+  allowedTools: string[];
+  tools: McpToolSpec[];
+  roles: McpRoleView[];
+  inherited: McpAssignmentView[];
+  rule: McpAssignmentView | null;
+};
+
+export type McpKeyAccess = {
+  keyId: string;
+  label: string;
+  company: string;
+  chain: McpChain;
+  servers: McpKeyServerAccess[];
+};
+
+export type McpKeyAccessChoice = {
+  serverId: string;
+  mode: McpKeyAccessMode;
+  roleId: string;
+  blockedTools: string[];
+  blockedActions: McpToolAction[];
+};
+
+export type McpCompanyServers = {
+  company: { id: string; alias: string };
+  servers: McpServerView[];
+  canInstall: boolean;
 };

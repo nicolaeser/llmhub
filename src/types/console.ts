@@ -5,6 +5,8 @@ import type { Permission } from "@/types/auth";
 type NavItem = {
   href: string;
   labelKey: string;
+  companyLabelKey?: string;
+  adminOnly?: boolean;
   icon: LucideIcon;
   permission: Permission | readonly Permission[];
 };

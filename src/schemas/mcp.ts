@@ -8,7 +8,10 @@ export const MCP_AUTH_TYPES = ["none", "bearer", "header", "oauth"] as const;
 export const MCP_OAUTH_GRANTS = ["authorization_code", "client_credentials"] as const;
 export const MCP_MODES = ["allow", "block"] as const;
 export const MCP_ROLE_KEYS = ["reader", "operator", "admin"] as const;
+export const MCP_BUILDER_TEMPLATES = ["readonly", "writes", "full", "custom"] as const;
 export const MAX_MCP_ASSIGNMENTS = 500;
+export const MAX_HOSTED_TOOLS = 200;
+export const MAX_BUILDER_DOCS = 600_000;
 
 const RESERVED_HEADERS = new Set([
   "accept",
@@ -41,6 +44,7 @@ export const hostedToolSchema = z
       .min(1)
       .max(512)
       .regex(/^\/(?!\/)(?!.*\.\.)[A-Za-z0-9._~{}:/-]*$/),
+    query: z.array(z.string().trim().regex(/^[A-Za-z0-9_.-]{1,64}$/)).max(50).default([]),
     inputSchema: z.record(z.string(), z.unknown()).default({}),
   })
   .superRefine((tool, ctx) => {
@@ -69,8 +73,9 @@ export const mcpDraftBaseSchema = z.object({
 export const builderModelSchema = z.string().trim().max(200);
 
 export const builderDraftSchema = z.object({
+  template: z.enum(MCP_BUILDER_TEMPLATES).default("custom"),
   instruction: z.string().trim().min(1).max(2_000),
-  docs: z.string().trim().min(1).max(60_000),
+  docs: z.string().trim().min(1).max(MAX_BUILDER_DOCS),
 });
 
 export const hostedServerSchema = z
@@ -88,7 +93,7 @@ export const hostedServerSchema = z
       .refine((value) => ![...value].some((char) => char.charCodeAt(0) < 32 || char.charCodeAt(0) === 127), {
         message: "invalid characters",
       }),
-    tools: z.array(hostedToolSchema).min(1).max(30),
+    tools: z.array(hostedToolSchema).min(1).max(MAX_HOSTED_TOOLS),
     template: z.boolean().default(false),
     global: z.boolean().default(false),
     assignments: z
@@ -109,7 +114,7 @@ export const hostedServerSchema = z
     if (value.authType === "header" && !/^[A-Za-z0-9-]{1,64}$/.test(value.authHeader)) {
       ctx.addIssue({ code: "custom", path: ["authHeader"], message: "invalid header name" });
     }
-    if (value.authType !== "none" && !value.secret.trim()) {
+    if (value.authType !== "none" && !value.template && !value.secret.trim()) {
       ctx.addIssue({ code: "custom", path: ["secret"], message: "secret required" });
     }
   });
@@ -251,4 +256,21 @@ export const mcpOAuthCallbackSchema = z.object({
   state: z.string().max(512).default(""),
   iss: z.string().max(2048).nullable().default(null),
   error: z.string().max(256).default(""),
+});
+
+export const MCP_KEY_ACCESS_MODES = ["inherit", "allow", "block"] as const;
+
+export const keyMcpAccessSchema = z.object({
+  keyId: z.string().min(1).max(64),
+  servers: z
+    .array(
+      z.object({
+        serverId: z.string().min(1).max(64),
+        mode: z.enum(MCP_KEY_ACCESS_MODES),
+        roleId: z.string().max(64).default(""),
+        blockedTools: toolNames.default([]),
+        blockedActions: actions.default([]),
+      }),
+    )
+    .max(500),
 });

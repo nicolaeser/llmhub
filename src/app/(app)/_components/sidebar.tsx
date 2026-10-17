@@ -13,6 +13,7 @@ import { PanelLeftClose, PanelLeftOpen, UserRound } from "lucide-react";
 import { useTranslations } from "next-intl";
 import type { Key } from "react-aria-components";
 import { Link, usePathname } from "@/i18n/routing";
+import { WORKSPACE_EVENT } from "@/lib/auth/workspace-event";
 import BrandMark from "@/components/brand/brand-mark";
 import { BuildNotice, BuildVersion } from "./build-status";
 import LanguageSwitcher from "./language-switcher";
@@ -30,10 +31,12 @@ export function useConsoleNav() {
 function NavItems({
   items,
   collapsed,
+  companyView,
   onNavigate,
 }: {
   items: NavSection["items"];
   collapsed: boolean;
+  companyView: boolean;
   onNavigate?: () => void;
 }) {
   const t = useTranslations("Sidebar");
@@ -42,18 +45,19 @@ function NavItems({
   return items.map((item) => {
     const Icon = item.icon;
     const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
+    const label = t(companyView && item.companyLabelKey ? item.companyLabelKey : item.labelKey);
     return (
       <Link
         key={item.href}
         href={item.href}
         aria-current={active ? "page" : undefined}
-        aria-label={t(item.labelKey)}
-        title={t(item.labelKey)}
+        aria-label={label}
+        title={label}
         onClick={onNavigate}
         className={`mb-0.5 flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-left text-sm transition ${active ? "bg-accent/10 font-medium text-foreground ring-1 ring-accent/20" : "text-muted hover:bg-default hover:text-foreground"}`}
       >
         <Icon size={16} aria-hidden className={active ? "text-accent" : ""} />
-        {!collapsed ? <span className="truncate">{t(item.labelKey)}</span> : null}
+        {!collapsed ? <span className="truncate">{label}</span> : null}
       </Link>
     );
   });
@@ -62,12 +66,14 @@ function NavItems({
 function NavList({
   collapsed,
   permissions,
+  companyView,
   expandedSections,
   onExpandedSectionsChange,
   onNavigate,
 }: {
   collapsed: boolean;
   permissions: readonly Permission[];
+  companyView: boolean;
   expandedSections: Set<Key>;
   onExpandedSectionsChange: (keys: Set<Key>) => void;
   onNavigate?: () => void;
@@ -75,7 +81,7 @@ function NavList({
   const t = useTranslations("Sidebar");
   const sections = NAV.map((section) => ({
     ...section,
-    items: section.items.filter((item) => canSee(permissions, item)),
+    items: section.items.filter((item) => canSee(permissions, item, companyView)),
   })).filter((section) => section.items.length > 0);
 
   return (
@@ -83,7 +89,7 @@ function NavList({
       {collapsed ? (
         sections.map((section) => (
           <div key={section.id} className="mb-4">
-            <NavItems items={section.items} collapsed />
+            <NavItems items={section.items} collapsed companyView={companyView} />
           </div>
         ))
       ) : (
@@ -103,6 +109,7 @@ function NavList({
                   <NavItems
                     items={section.items}
                     collapsed={false}
+                    companyView={companyView}
                     onNavigate={onNavigate}
                   />
                 </div>
@@ -171,10 +178,14 @@ function RailFooter({
 export default function Sidebar({
   user,
   permissions,
+  isOwner,
+  companyView: initialCompanyView,
   children,
 }: {
   user: { email: string; username: string };
   permissions: readonly Permission[];
+  isOwner: boolean;
+  companyView: boolean;
   children: React.ReactNode;
 }) {
   const t = useTranslations("Sidebar");
@@ -185,7 +196,15 @@ export default function Sidebar({
   const [expandedSections, setExpandedSections] = useState<Set<Key>>(
     () => new Set(NAV.map((section) => section.id)),
   );
+  const [companyView, setCompanyView] = useState(initialCompanyView);
   const setDrawerOpen = drawer.setOpen;
+
+  useEffect(() => {
+    if (!isOwner) return;
+    const onWorkspace = (event: Event) => setCompanyView(Boolean((event as CustomEvent<string | null>).detail));
+    window.addEventListener(WORKSPACE_EVENT, onWorkspace);
+    return () => window.removeEventListener(WORKSPACE_EVENT, onWorkspace);
+  }, [isOwner]);
 
   useEffect(() => {
     setDrawerOpen(false);
@@ -199,7 +218,7 @@ export default function Sidebar({
           className={`hidden shrink-0 flex-col bg-surface md:flex ${collapsed ? "w-16" : "w-64"}`}
         >
           <Link
-            href={homePath(permissions)}
+            href={homePath(permissions, companyView)}
             aria-label={t("goHome")}
             className="flex h-14 items-center gap-2.5 px-3"
           >
@@ -213,6 +232,7 @@ export default function Sidebar({
           <NavList
             collapsed={collapsed}
             permissions={permissions}
+            companyView={companyView}
             expandedSections={expandedSections}
             onExpandedSectionsChange={setExpandedSections}
           />
@@ -242,6 +262,7 @@ export default function Sidebar({
                 <NavList
                   collapsed={false}
                   permissions={permissions}
+                  companyView={companyView}
                   expandedSections={expandedSections}
                   onExpandedSectionsChange={setExpandedSections}
                   onNavigate={drawer.close}

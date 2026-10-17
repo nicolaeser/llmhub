@@ -4,5 +4,5 @@ import { homePath } from "./_components/nav-data";
 
 export default async function ConsoleHome() {
   const session = await requireAuth();
-  redirect(homePath(session.permissions));
+  redirect(homePath(session.permissions, Boolean(session.isOwner && session.workspaceOrgId)));
 }

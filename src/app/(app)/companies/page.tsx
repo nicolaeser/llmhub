@@ -10,6 +10,7 @@ import EmptyState from "@/components/console/empty-state";
 import IconTile from "@/components/console/icon-tile";
 import PageHeader from "@/components/console/page-header";
 import PageStatus from "@/components/console/page-status";
+import McpConnectionsCard from "@/components/mcp/connections-card";
 import { useErrorToast } from "@/components/console/use-error-toast";
 import { useActionData } from "@/lib/hooks/use-action-data";
 import { useSearchParam } from "@/lib/hooks/use-search-param";
@@ -22,7 +23,13 @@ import type {
   SetupStep,
   StructurePayload,
 } from "@/types/structure";
-import { deleteNodeAction, loadStructureAction, setBudgetAction } from "./_action";
+import {
+  deleteNodeAction,
+  loadCompanyMcpAction,
+  loadStructureAction,
+  saveCompanyMcpInstallationAction,
+  setBudgetAction,
+} from "./_action";
 import AlertsCard from "./_components/alerts-card";
 import BoostDialog from "./_components/boost-dialog";
 import BudgetCard from "./_components/budget-card";
@@ -400,6 +407,15 @@ export default function CompaniesPage() {
               }
               onBudget={(target) => openBudget(target, budgetState)}
             />
+
+            {org ? (
+              <McpConnectionsCard
+                key={`mcp-${org.id}`}
+                orgId={org.id}
+                load={loadCompanyMcpAction}
+                onInstall={saveCompanyMcpInstallationAction}
+              />
+            ) : null}
 
             {(org || team) && data.canSeeReports ? (
               <ReportsCard

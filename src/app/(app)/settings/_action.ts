@@ -1,6 +1,8 @@
 "use server";
 
 import { runAction } from "@/lib/http/action-result";
+import { loadCompanyMcpServers, saveCompanyMcpInstallation } from "@/lib/mcp/servers";
+import { loadSettingsScope } from "@/lib/settings/scope";
 import { loadCache, loadCacheStats, saveCache } from "@/lib/settings/caching";
 import { loadCatalogSettings, saveCatalogSettings } from "@/lib/settings/catalog";
 import { loadGeneralSettings, saveGeneralSettings } from "@/lib/settings/general";
@@ -80,4 +82,16 @@ export async function loadCatalogSettingsAction() {
 
 export async function saveCatalogSettingsAction(...args: Parameters<typeof saveCatalogSettings>) {
   return runAction(() => saveCatalogSettings(...args));
+}
+
+export async function loadSettingsScopeAction() {
+  return runAction(() => loadSettingsScope());
+}
+
+export async function loadCompanyMcpSettingsAction(...args: Parameters<typeof loadCompanyMcpServers>) {
+  return runAction(() => loadCompanyMcpServers(...args));
+}
+
+export async function saveCompanyMcpSettingsAction(...args: Parameters<typeof saveCompanyMcpInstallation>) {
+  return runAction(() => saveCompanyMcpInstallation(...args));
 }

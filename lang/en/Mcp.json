@@ -1,12 +1,12 @@
 {
   "title": "MCP servers",
-  "subtitle": "Connect a public MCP server, or let an assistant build one from API docs. Assigned callers use the tools on every model call and through POST /api/v1/mcp.",
+  "subtitle": "Connect a public MCP server, or turn any HTTP API into one with MCP Anything. Assigned callers use the tools on every model call and through POST /api/v1/mcp.",
   "add": "Add server",
   "readOnly": "You can view MCP servers. Changing them needs the permission to manage settings.",
   "installOnly": "You can connect a company API key and set access inside your company. Changing the server itself needs permission to manage MCP.",
   "empty": {
     "title": "No MCP servers yet",
-    "description": "Connect a public MCP server, or build one from API docs. The gateway calls its tools for every model and provider, and credentials never leave the gateway."
+    "description": "Connect a public MCP server, or turn any HTTP API into one with MCP Anything. The gateway calls its tools for every model and provider, and credentials never leave the gateway."
   },
   "stats": {
     "servers": "Servers",
@@ -24,26 +24,26 @@
   "hosted": "Built from API docs",
   "action": "{action, select, read {Read} write {Write} delete {Delete} other {Action}}",
   "builder": {
-    "open": "Build an MCP server",
-    "title": "Build an MCP server",
-    "description": "A short brief, a reviewed draft, then who may call it.",
+    "open": "MCP Anything",
+    "title": "MCP Anything",
+    "description": "Turn any HTTP API into an MCP server: import its OpenAPI document or let the assistant read the docs, pick the tools, then decide who may call them.",
     "stepsLabel": "Build steps",
     "step": "{step, select, brief {Brief} review {Draft} access {Access} other {Step}}",
-    "stepHint": "{step, select, brief {Choose a template, say what to build, and paste the API docs.} review {Check the server and decide which tools exist. The action is what a key permission can block.} access {Allow API keys, or another level, and take tools or actions away from each one.} other {}}",
+    "stepHint": "{step, select, brief {Choose a template, say what to build, and add the API docs: an OpenAPI document, a link to it, or a reference.} review {Check the server and decide which tools exist. The action is what a key permission can block.} access {Allow API keys, people, or other levels, and take tools or actions away from each one.} other {}}",
     "create": "Create server",
     "back": "Back",
-    "model": "Model",
-    "modelEmpty": "Add an enabled chat model under Models first.",
+    "model": "Assistant model",
+    "modelEmpty": "No chat model with an API provider route is enabled. OpenAPI documents still import; other documentation needs such a model under Models.",
     "template": "Instruction template",
     "templateHint": "A template fills the instruction. Edit it before drafting.",
     "share": "Offer to companies",
-    "shareHint": "Each company connects its own API key. Calls then use that key instead of the server secret.",
+    "shareHint": "Each company connects its own API key, and calls use that key. The server then needs no key of its own.",
     "templateName": "{template, select, readonly {Read only} writes {Reads and changes} full {Everything, including deletes} custom {Your own instruction} other {Template}}",
     "templateText": "{template, select, readonly {Build only safe read operations from this documentation. Do not create tools that change or delete data. Set every tool action to read.} writes {Build the read and write operations this documentation describes. Do not build deletes or other irreversible calls. Set reads to action read, and creates and updates to action write.} full {Build every operation this documentation describes. Set safe reads to action read, creates and updates to action write, and deletes or irreversible calls to action delete.} other {}}",
     "instruction": "Instruction",
     "instructionHint": "The assistant keeps the operations you ask for and skips the ones you rule out.",
     "docs": "API documentation",
-    "docsHint": "Paste an OpenAPI document, a markdown reference, or the endpoints that matter.",
+    "docsHint": "Paste an OpenAPI or Swagger document (JSON or YAML), a link to it, or a markdown reference. OpenAPI imports every operation; the assistant reads everything else.",
     "draft": "Draft server",
     "drafting": "Reading the documentation…",
     "redraft": "Draft again",
@@ -66,7 +66,17 @@
     "noCaller": "No API key can call this server yet.",
     "readsOnly": "Reads only",
     "fullAccess": "All included tools",
-    "previewEmpty": "Add a key, or pick one below, to see the tools it would get."
+    "previewEmpty": "Add a key, or pick one below, to see the tools it would get.",
+    "docsLong": "The documentation is longer than {max, number} characters. Paste only the part you need.",
+    "companyKey": "Each company enters its own key when it connects the server.",
+    "imported": "Imported from the OpenAPI document",
+    "importedCount": "{count, plural, one {# of {total, number} operations became a tool.} other {# of {total, number} operations became tools.}}",
+    "importedLeft": "Operations past {max, number} tools, or with paths the gateway cannot call, were left out.",
+    "baseInvalid": "Enter the full address, for example https://api.example.com/v1.",
+    "tooMany": "A server holds at most {max, number} tools. Turn some off to continue.",
+    "searchTools": "Search tools",
+    "noMatch": "No tool matches this search.",
+    "modelHint": "Only models with API provider routes are offered. Subscription accounts are never used here, because their terms do not cover this use."
   },
   "access": {
     "summary": "{global, select, true {All callers} other {{count, plural, =0 {Not assigned} one {# rule} other {# rules}}}}",
@@ -241,5 +251,15 @@
     "role": "Role",
     "roleNone": "Every tool",
     "rolePreset": "{role, select, reader {Reader} operator {Operator} admin {Admin} other {Role}}"
+  },
+  "connections": {
+    "title": "MCP connections",
+    "description": "Servers offered to every company. Enter this company's own API key so its people and keys can use them. Keys are sealed and never shown again.",
+    "summary": "{count, number} of {total, number} connected",
+    "empty": "No MCP server is offered to companies yet. An admin can offer one under MCP servers.",
+    "state": "{state, select, connected {Connected} paused {Paused} other {Not connected}}",
+    "auth": "{type, select, none {No key needed} header {Header {header}} other {Bearer token}}",
+    "tools": "{count, plural, =0 {No tools} one {# tool} other {# tools}}",
+    "action": "{state, select, connected {Edit connection} paused {Edit connection} other {Connect}}"
   }
 }
