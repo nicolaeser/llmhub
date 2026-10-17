@@ -151,6 +151,7 @@ export function responsesToChat(
   if (typeof request.max_output_tokens === "number") body.max_tokens = request.max_output_tokens;
   if (request.user) body.user = request.user;
   if (request.service_tier) body.service_tier = request.service_tier;
+  if (request.access_programs?.cyber) body.access_programs = { cyber: request.access_programs.cyber };
   if (request.reasoning?.effort) body.reasoning_effort = request.reasoning.effort;
   if (request.text?.verbosity) body.verbosity = request.text.verbosity;
   if (request.prompt_cache_key) body.prompt_cache_key = request.prompt_cache_key;

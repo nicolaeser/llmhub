@@ -1,6 +1,8 @@
 import "server-only";
 import { allowModel, applyGuardrails, gateRequest, gateResponse, modelOf, readBody } from "@/lib/gateway/access/gate";
 import { GateError } from "@/lib/gateway/errors";
+import { variantBody } from "@/lib/gateway/catalog/model-variants";
+import { variantRoute } from "@/lib/gateway/routing/variant-route";
 import { parseRequest } from "@/lib/gateway/protocols/parse-request";
 import type { ZodType } from "zod";
 import type { ScreenedRequest, ScreenOptions } from "@/types/gateway";
@@ -17,7 +19,9 @@ export function gatewayRoute(handle: (req: Request) => Promise<Response>): (req:
 
 export async function screenModelRequest(req: Request, options: ScreenOptions = {}): Promise<ScreenedRequest> {
   const principal = await gateRequest(options.auth ?? req, options.pool);
-  const body = await readBody(req);
+  const raw = await readBody(req);
+  const variant = await variantRoute(modelOf(raw), principal.pool ?? "api");
+  const body = variant ? variantBody(raw, variant.model, variant.variant) : raw;
   const model = modelOf(body);
   allowModel(principal, model);
   const { body: clean, output } = await applyGuardrails(body, principal);

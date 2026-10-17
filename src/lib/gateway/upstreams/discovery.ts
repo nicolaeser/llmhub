@@ -7,7 +7,7 @@ import { antigravityModels } from "@/lib/gateway/upstreams/antigravity";
 import { fetchAvailableModels } from "@/lib/gateway/upstreams/antigravity-api";
 import { PROVIDER_CATALOG } from "@/lib/gateway/upstreams/provider-kinds";
 import { CLAUDE_OAUTH_BETAS } from "@/lib/gateway/upstreams/claude";
-import { CODEX_CLIENT_VERSION } from "@/lib/gateway/upstreams/codex";
+import { CODEX_CLIENT_VERSION, codexModelFacts } from "@/lib/gateway/upstreams/codex";
 import { asNumber, asRecord, asString } from "@/lib/gateway/core";
 import { providerAuth } from "@/lib/gateway/upstreams/credentials";
 import { GateError } from "@/lib/gateway/errors";
@@ -98,6 +98,7 @@ export async function fetchProviderModels(
       costInputPer1k: pricing?.in ?? 0,
       costOutputPer1k: pricing?.out ?? 0,
       priceSource: pricing ? "provider" : "none",
+      ...(kind === "codex" ? codexModelFacts(m) : {}),
     });
   }
   return out;

@@ -30,6 +30,7 @@ import { routePermitted } from "@/lib/gateway/access/model-policy";
 import { priceWindowQuery, priceWindowRates } from "@/lib/gateway/billing/price-schedule";
 import { costRejection } from "@/lib/gateway/billing/cost-cap";
 import { coolingDown, recordFailure, recordSuccess } from "@/lib/gateway/routing/provider-health";
+import { attachModelFacts } from "@/lib/gateway/routing/model-facts";
 import type { CostFilter } from "@/types/billing";
 import type { DeploymentRow, ResolvedModelGroup, ResolvedDeployment, Deployment, QuotaScores } from "@/types/routing";
 import type { AccountAccess } from "@/types/providers";
@@ -97,6 +98,7 @@ export async function loadGroup(requested: string): Promise<ResolvedModelGroup> 
       include: { provider: providerSelect },
     });
     const mapped = rows.map(mapDeployment);
+    await attachModelFacts(mapped);
     return {
       alias: "auto",
       strategy: "cost_lowest",
@@ -122,6 +124,7 @@ export async function loadGroup(requested: string): Promise<ResolvedModelGroup> 
   });
   if (!group?.enabled) throw ERR_UNKNOWN_GROUP;
   const mapped = group.deployments.map(mapDeployment);
+  await attachModelFacts(mapped);
   return {
     alias: group.alias,
     strategy: group.strategy,

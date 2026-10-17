@@ -155,6 +155,7 @@ export const responsesRequestSchema = z
       .nullish(),
     background: z.boolean().nullish(),
     service_tier: z.string().nullish(),
+    access_programs: z.looseObject({ cyber: z.string().nullish() }).nullish(),
     include: z.array(z.string()).nullish(),
     prompt_cache_key: z.string().nullish(),
     safety_identifier: z.string().nullish(),

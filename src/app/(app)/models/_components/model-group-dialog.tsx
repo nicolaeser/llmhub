@@ -3,6 +3,8 @@
 import { useState, useTransition } from "react";
 import {
   Button,
+  Checkbox,
+  CheckboxGroup,
   Description,
   Disclosure,
   Input,
@@ -23,7 +25,8 @@ import { useErrorToast } from "@/components/console/use-error-toast";
 import { createModelGroupAction, updateModelGroupAction } from "../_action";
 import { isActionFail } from "@/lib/http/action-result";
 import { scheduleOverlaps, validPrice, windowValid } from "@/lib/gateway/billing/price-schedule";
-import type { DeploymentDraft, ModelGroupView, PriceWindowDraft, ProviderOpt } from "@/types/models";
+import { MODEL_VARIANTS, variantAlias } from "@/lib/gateway/catalog/model-variants";
+import type { DeploymentDraft, ModelGroupView, ModelVariant, PriceWindowDraft, ProviderOpt } from "@/types/models";
 import CustomPriceFields from "./custom-price-fields";
 import DeploymentCard from "./deployment-card";
 import {
@@ -76,6 +79,7 @@ export default function ModelGroupDialog({
   const [vendor, setVendor] = useState(editing?.vendor ?? "");
   const [displayName, setDisplayName] = useState(editing?.displayName ?? "");
   const [autoRoutes, setAutoRoutes] = useState<boolean | null>(editing ? editing.autoRoutes : null);
+  const [variants, setVariants] = useState<ModelVariant[]>(editing?.variants ?? []);
   const [billingMode, setBillingMode] = useState<BillingMode>(billingModeOf(editing?.billingMode));
   const [price, setPrice] = useState({ input: editing?.priceInput ?? 0, output: editing?.priceOutput ?? 0 });
   const [priceTimeZone, setPriceTimeZone] = useState(editing?.priceTimeZone || "UTC");
@@ -123,6 +127,7 @@ export default function ModelGroupDialog({
         vendor,
         displayName,
         autoRoutes,
+        variants,
         strategy,
         billingMode,
         priceInput: validPrice(price.input) ? price.input : undefined,
@@ -258,6 +263,25 @@ export default function ModelGroupDialog({
         </Switch.Content>
         <Description>{t("fields.enabledHint")}</Description>
       </Switch>
+      <CheckboxGroup
+        value={variants}
+        onChange={(next) => setVariants(MODEL_VARIANTS.filter((variant) => next.includes(variant)))}
+        isDisabled={pending}
+      >
+        <Label>{t("fields.variants")}</Label>
+        <Description>{t("fields.variantsHint")}</Description>
+        {MODEL_VARIANTS.map((variant) => (
+          <Checkbox key={variant} value={variant}>
+            <Checkbox.Content>
+              <Checkbox.Control>
+                <Checkbox.Indicator />
+              </Checkbox.Control>
+              <Label>{t("fields.variantLabel", { variant, alias: variantAlias(alias.trim() || "alias", variant) })}</Label>
+            </Checkbox.Content>
+            <Description>{t("fields.variantHint", { variant })}</Description>
+          </Checkbox>
+        ))}
+      </CheckboxGroup>
       <Disclosure>
         <Disclosure.Heading>
           <Disclosure.Trigger className="flex w-full items-center justify-between text-sm text-muted">

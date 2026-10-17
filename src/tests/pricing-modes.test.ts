@@ -31,6 +31,7 @@ test("OpenAI, xAI, and OpenRouter bill the tier that served the request", () => 
   close(costOf(openai, base), 3);
   close(costOf(openai, { ...base, service_tier: "priority" }), 6);
   close(costOf(openai, { ...base, service_tier: "fast" }), 6);
+  close(costOf(openai, { ...base, service_tier: "ultrafast" }), 18);
   close(costOf(openai, { ...base, service_tier: "flex" }), 1.5);
   close(costOf(openai, { ...base, service_tier: "default" }), 3);
   close(costOf(dep("xai", "grok-4.7"), { ...base, service_tier: "priority" }), 6);

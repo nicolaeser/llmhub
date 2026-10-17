@@ -17,7 +17,7 @@ import { chatToCodex, codexCompletion } from "@/lib/gateway/upstreams/codex";
 import { deploymentAuth } from "@/lib/gateway/upstreams/credentials";
 import { acquireGroup, defaultBase, loadGroup, markFailure, markSuccess, openaiRoot } from "@/lib/gateway/routing/runtime";
 import { applyProviderServiceMode, requestRoutingOverride, serviceModeHeaders } from "@/lib/gateway/dispatch/service-mode";
-import { asRecord } from "@/lib/gateway/core";
+import { asRecord, asString } from "@/lib/gateway/core";
 import { costFilter, costRejected } from "@/lib/gateway/billing/cost-cap";
 import type { JsonMap, Principal, ProxyFirstResult } from "@/types/gateway";
 import type { ResolvedDeployment } from "@/types/routing";
@@ -139,7 +139,7 @@ export function prepareBody(
 ): JsonMap {
   let payload: JsonMap = { ...body, model: dep.model || (typeof body.model === "string" ? plainModel(body.model) : body.model) };
   for (const key of GATEWAY_ONLY_KEYS) delete payload[key];
-  payload = applyProviderServiceMode(dep.kind, payload, groupStrategy).body;
+  payload = applyProviderServiceMode(dep.kind, payload, groupStrategy, asString(payload.model), dep.facts).body;
   if ((dep.kind === "xai" || dep.kind === "grok_build") && payload.reasoning_effort !== undefined) {
     payload.reasoning_effort = xaiReasoningEffort(String(payload.model ?? ""), payload.reasoning_effort);
   }
@@ -196,7 +196,7 @@ export async function proxyJson(input: {
   const url = joinPath(input.dep, input.path);
   const headers = mergeUpstreamHeaders(
     upstreamHeaders(input.dep, input.auth, input.headers),
-    serviceModeHeaders(input.dep.kind, input.body ?? {}, input.groupStrategy, input.dep.model),
+    serviceModeHeaders(input.dep.kind, input.body ?? {}, input.groupStrategy, input.dep.model, input.dep.facts),
   );
   if (input.rawBody instanceof FormData) {
     delete headers["Content-Type"];
@@ -246,7 +246,7 @@ async function proxyRaw(input: {
   const url = joinPath(input.dep, input.path);
   const headers = mergeUpstreamHeaders(
     upstreamHeaders(input.dep, input.auth, input.headers),
-    serviceModeHeaders(input.dep.kind, input.body ?? {}, input.groupStrategy, input.dep.model),
+    serviceModeHeaders(input.dep.kind, input.body ?? {}, input.groupStrategy, input.dep.model, input.dep.facts),
   );
   if (input.rawBody instanceof FormData) {
     delete headers["Content-Type"];

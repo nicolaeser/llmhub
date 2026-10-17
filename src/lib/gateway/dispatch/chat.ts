@@ -5,7 +5,7 @@ import { alertUpstreamFailure } from "@/lib/alerts/notify";
 import { spendTag } from "@/lib/gateway/access/gate";
 import { GateError } from "@/lib/gateway/errors";
 import { outputScreen, type OutputScreen } from "@/lib/gateway/safety/guardrails";
-import { requestRoutingOverride, serviceModeHeaders } from "@/lib/gateway/dispatch/service-mode";
+import { requestRoutingOverride, serviceModeHeaders, variantRoutes } from "@/lib/gateway/dispatch/service-mode";
 import { accessOf } from "@/lib/gateway/routing/account-access";
 import { acquireGroup, loadGroup, markFailure, markSuccess } from "@/lib/gateway/routing/runtime";
 import { speaksAnthropic } from "@/lib/gateway/upstreams/provider-kinds";
@@ -75,6 +75,7 @@ export async function routeMetered<T>(
     strategy: requestRoutingOverride(input.body),
     principal: input.principal,
     cost: costFilter(input.principal, input.body),
+    request: input.body,
   };
   try {
     return await withDeployment(input.aliases, input.principal.routeLimits, fn, routing);
@@ -129,7 +130,14 @@ export async function withDeployment<T>(
   aliases: string[],
   limits: RouteLimits,
   fn: (dep: ResolvedDeployment, group: ResolvedModelGroup) => Promise<T>,
-  opts?: { deferRelease?: boolean; strategy?: string; pool?: RoutePool; cost?: CostFilter; principal?: Principal },
+  opts?: {
+    deferRelease?: boolean;
+    strategy?: string;
+    pool?: RoutePool;
+    cost?: CostFilter;
+    principal?: Principal;
+    request?: JsonMap;
+  },
 ): Promise<{
   result: T;
   dep: ResolvedDeployment;
@@ -146,7 +154,6 @@ export async function withDeployment<T>(
   });
   for (let qi = 0; qi < queue.length; qi++) {
     const { alias, root, pool } = queue[qi]!;
-    const routable = inPool(pool);
     let group: ResolvedModelGroup;
     try {
       group = await loadGroup(alias);
@@ -154,8 +161,11 @@ export async function withDeployment<T>(
       last = err;
       continue;
     }
+    const pooled = group.mapped.filter(inPool(pool));
+    const variants = variantRoutes(pooled, opts?.request);
+    const routable = (dep: ResolvedDeployment) => inPool(pool)(dep) && variants.serves(dep);
     const reachable = !group.mapped.length || group.mapped.some(routable) || Boolean(group.overflow_group);
-    if (!reachable) last = outsidePool(pool, surface);
+    if (!reachable) last = pooled.length && variants.error ? variants.error : outsidePool(pool, surface);
     const attempts = reachable ? Math.max(0, group.num_retries) + 1 : 0;
     let stopAlias = false;
     for (let i = 0; i < attempts; i++) {
@@ -295,7 +305,7 @@ export async function openUpstreamStream(input: {
   const headers: Record<string, string> = {
     ...mergeUpstreamHeaders(
       upstreamHeaders(input.dep, auth, input.headers),
-      serviceModeHeaders(input.dep.kind, input.payload, input.group.strategy, input.dep.model),
+      serviceModeHeaders(input.dep.kind, input.payload, input.group.strategy, input.dep.model, input.dep.facts),
     ),
     Accept: "text/event-stream",
   };
