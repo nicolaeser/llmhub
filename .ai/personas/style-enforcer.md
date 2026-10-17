@@ -22,6 +22,7 @@ Compare the changed UI to [../STYLE.md](../STYLE.md) and report every deviation 
 - No `dark:`, raw palette colors, `text-white`, gradients, `default-N` utilities, `text-[Npx]`, `overflow-hidden`, or React `style={}`.
 - `src/styles/globals.css` is the only stylesheet and only overrides HeroUI tokens.
 - `Chip` only for real state.
+- Every list `Table` hides below its breakpoint (`TABLE_FROM_LG` / `TABLE_FROM_XL`) and has a `RowCards` twin that shares the row's chip and action helpers. No horizontal page scroll at 390 px.
 
 ## Required context
 

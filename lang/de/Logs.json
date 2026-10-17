@@ -2,9 +2,9 @@
   "title": "Protokolle",
   "subtitle": "Anfragen, Ausgabenereignisse und Admin-Audit",
   "tabs": {
-    "requests": "anfragen",
-    "spend": "ausgaben",
-    "audit": "audit"
+    "requests": "Anfragen",
+    "spend": "Ausgaben",
+    "audit": "Audit"
   },
   "columns": {
     "time": "Zeit",
@@ -43,7 +43,8 @@
     "user": "Benutzer",
     "anyUser": "Alle",
     "pii": "Nur Anfragen mit PII",
-    "reset": "Zurücksetzen"
+    "reset": "Zurücksetzen",
+    "title": "{count, plural, =0 {Filter} other {Filter · # aktiv}}"
   },
   "prev": "Zurück",
   "next": "Weiter",

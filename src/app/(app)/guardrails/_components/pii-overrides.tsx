@@ -5,6 +5,7 @@ import { Button, Card, Chip, Table, toast, useOverlayState } from "@heroui/react
 import { Plus, Trash2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import ConfirmDialog from "@/components/console/confirm-dialog";
+import RowCard, { RowCards, TABLE_FROM_LG } from "@/components/console/row-cards";
 import { isActionFail } from "@/lib/http/action-result";
 import type { PiiOverrideView, PiiPolicy, PolicyScope, PolicyTarget } from "@/types/guardrails";
 import { savePiiOverrideAction } from "../_action";
@@ -60,6 +61,40 @@ export default function PiiOverrides({
     });
   }
 
+  function modeChip(row: PiiOverrideView) {
+    return (
+      <Chip size="sm" variant="soft" color={row.policy.enabled ? "success" : "warning"}>
+        {t("modeState", { state: row.policy.enabled ? row.policy.mode : "off" })}
+      </Chip>
+    );
+  }
+
+  function outputLabel(row: PiiOverrideView) {
+    return t("outputState", { output: row.policy.enabled && row.policy.output ? "true" : "false" });
+  }
+
+  function overrideActions(row: PiiOverrideView) {
+    return (
+      <>
+        <Button size="sm" variant="secondary" aria-label={tCommon("edit")} onPress={() => openDialog(row)}>
+          {tCommon("edit")}
+        </Button>
+        <ConfirmDialog
+          title={t("removeConfirm", { alias: row.alias })}
+          description={t("removeConfirmHint")}
+          confirmLabel={t("removeOverride")}
+          cancelLabel={tCommon("cancel")}
+          pending={pending}
+          onConfirm={() => remove(row)}
+        >
+          <Button isIconOnly size="sm" variant="danger-soft" aria-label={t("removeOverride")} isPending={pending}>
+            <Trash2 size={14} aria-hidden />
+          </Button>
+        </ConfirmDialog>
+      </>
+    );
+  }
+
   return (
     <Card className="mb-6 gap-4">
       <Card.Header className="flex-row flex-wrap items-start justify-between gap-2">
@@ -78,69 +113,54 @@ export default function PiiOverrides({
       {overrides.length === 0 ? (
         <p className="text-sm text-muted">{t("overridesEmpty")}</p>
       ) : (
-        <Table aria-label={t("overrides")}>
-          <Table.ScrollContainer>
-            <Table.Content>
-              <Table.Header>
-                <Table.Column isRowHeader>{t("columns.name")}</Table.Column>
-                <Table.Column>{t("scope")}</Table.Column>
-                <Table.Column>{t("mode")}</Table.Column>
-                <Table.Column>{t("entities")}</Table.Column>
-                <Table.Column>{t("columns.output")}</Table.Column>
-                {canManage ? <Table.Column>{tCommon("actions")}</Table.Column> : null}
-              </Table.Header>
-              <Table.Body>
-                {overrides.map((row) => (
-                  <Table.Row key={`${row.scope}:${row.id}`} id={`${row.scope}:${row.id}`}>
-                    <Table.Cell>{row.alias}</Table.Cell>
-                    <Table.Cell>{t("scopeLabel", { scope: row.scope })}</Table.Cell>
-                    <Table.Cell>
-                      <Chip size="sm" variant="soft" color={row.policy.enabled ? "success" : "warning"}>
-                        {t("modeState", { state: row.policy.enabled ? row.policy.mode : "off" })}
-                      </Chip>
-                    </Table.Cell>
-                    <Table.Cell>{t("entityCount", { count: row.policy.entities.length })}</Table.Cell>
-                    <Table.Cell>
-                      {t("outputState", { output: row.policy.enabled && row.policy.output ? "true" : "false" })}
-                    </Table.Cell>
-                    {canManage ? (
-                      <Table.Cell>
-                        <div className="flex flex-wrap gap-1">
-                          <Button
-                            size="sm"
-                            variant="secondary"
-                            aria-label={tCommon("edit")}
-                            onPress={() => openDialog(row)}
-                          >
-                            {tCommon("edit")}
-                          </Button>
-                          <ConfirmDialog
-                            title={t("removeConfirm", { alias: row.alias })}
-                            description={t("removeConfirmHint")}
-                            confirmLabel={t("removeOverride")}
-                            cancelLabel={tCommon("cancel")}
-                            pending={pending}
-                            onConfirm={() => remove(row)}
-                          >
-                            <Button
-                              isIconOnly
-                              size="sm"
-                              variant="danger-soft"
-                              aria-label={t("removeOverride")}
-                              isPending={pending}
-                            >
-                              <Trash2 size={14} aria-hidden />
-                            </Button>
-                          </ConfirmDialog>
-                        </div>
-                      </Table.Cell>
-                    ) : null}
-                  </Table.Row>
-                ))}
-              </Table.Body>
-            </Table.Content>
-          </Table.ScrollContainer>
-        </Table>
+        <>
+          <RowCards label={t("overrides")}>
+            {overrides.map((row) => (
+              <RowCard
+                key={`${row.scope}:${row.id}`}
+                variant="secondary"
+                title={row.alias}
+                description={t("scopeLabel", { scope: row.scope })}
+                aside={modeChip(row)}
+                details={[
+                  { label: t("entities"), value: t("entityCount", { count: row.policy.entities.length }) },
+                  { label: t("columns.output"), value: outputLabel(row) },
+                ]}
+                actions={canManage ? overrideActions(row) : undefined}
+              />
+            ))}
+          </RowCards>
+          <Table aria-label={t("overrides")} className={TABLE_FROM_LG}>
+            <Table.ScrollContainer>
+              <Table.Content>
+                <Table.Header>
+                  <Table.Column isRowHeader>{t("columns.name")}</Table.Column>
+                  <Table.Column>{t("scope")}</Table.Column>
+                  <Table.Column>{t("mode")}</Table.Column>
+                  <Table.Column>{t("entities")}</Table.Column>
+                  <Table.Column>{t("columns.output")}</Table.Column>
+                  {canManage ? <Table.Column>{tCommon("actions")}</Table.Column> : null}
+                </Table.Header>
+                <Table.Body>
+                  {overrides.map((row) => (
+                    <Table.Row key={`${row.scope}:${row.id}`} id={`${row.scope}:${row.id}`}>
+                      <Table.Cell>{row.alias}</Table.Cell>
+                      <Table.Cell>{t("scopeLabel", { scope: row.scope })}</Table.Cell>
+                      <Table.Cell>{modeChip(row)}</Table.Cell>
+                      <Table.Cell>{t("entityCount", { count: row.policy.entities.length })}</Table.Cell>
+                      <Table.Cell>{outputLabel(row)}</Table.Cell>
+                      {canManage ? (
+                        <Table.Cell>
+                          <div className="flex flex-wrap gap-1">{overrideActions(row)}</div>
+                        </Table.Cell>
+                      ) : null}
+                    </Table.Row>
+                  ))}
+                </Table.Body>
+              </Table.Content>
+            </Table.ScrollContainer>
+          </Table>
+        </>
       )}
       <PiiOverrideDialog
         key={`override-${dialogKey}`}

@@ -1,9 +1,23 @@
 "use client";
 
 import { useState } from "react";
-import { Button, ComboBox, Form, Input, Label, ListBox, Spinner, Switch, TextField } from "@heroui/react";
+import {
+  Button,
+  Card,
+  ComboBox,
+  Disclosure,
+  Form,
+  Input,
+  Label,
+  ListBox,
+  Spinner,
+  Switch,
+  TextField,
+} from "@heroui/react";
+import { SlidersHorizontal } from "lucide-react";
 import { useTranslations } from "next-intl";
 import SearchSelect from "@/components/console/search-select";
+import { BELOW_MD, useMediaQuery } from "@/lib/hooks/use-media-query";
 import type { LogFilterValues, LogOptions } from "@/types/logs";
 
 export const NO_FILTERS: LogFilterValues = {
@@ -17,6 +31,10 @@ export const NO_FILTERS: LogFilterValues = {
   to: "",
 };
 
+function activeCount(filters: LogFilterValues): number {
+  return Object.values(filters).filter((value) => value === true || (typeof value === "string" && value !== "")).length;
+}
+
 export default function LogFilters({
   pending,
   options,
@@ -28,15 +46,25 @@ export default function LogFilters({
 }) {
   const t = useTranslations("Logs");
   const [values, setValues] = useState<LogFilterValues>(NO_FILTERS);
+  const [applied, setApplied] = useState(0);
+  const [expanded, setExpanded] = useState(false);
+  const compact = useMediaQuery(BELOW_MD);
   const set = <K extends keyof LogFilterValues>(key: K) => (value: LogFilterValues[K]) =>
     setValues((current) => ({ ...current, [key]: value }));
 
-  return (
+  const form = (
     <Form
-      className="mb-4 space-y-4"
+      className={compact ? "space-y-4" : "mb-4 space-y-4"}
       onSubmit={(event) => {
         event.preventDefault();
-        onApply({ ...values, model: values.model.trim(), status: values.status.trim(), endpoint: values.endpoint.trim() });
+        const next = {
+          ...values,
+          model: values.model.trim(),
+          status: values.status.trim(),
+          endpoint: values.endpoint.trim(),
+        };
+        setApplied(activeCount(next));
+        onApply(next);
       }}
     >
       <div className="grid gap-3 md:grid-cols-4">
@@ -110,6 +138,7 @@ export default function LogFilters({
           isDisabled={pending}
           onPress={() => {
             setValues(NO_FILTERS);
+            setApplied(0);
             onApply(NO_FILTERS);
           }}
         >
@@ -117,5 +146,25 @@ export default function LogFilters({
         </Button>
       </div>
     </Form>
+  );
+
+  if (!compact) return form;
+  return (
+    <Card className="mb-4">
+      <Disclosure isExpanded={expanded} onExpandedChange={setExpanded}>
+        <Disclosure.Heading>
+          <Disclosure.Trigger className="flex w-full items-center justify-between gap-2 text-sm font-medium">
+            <span className="flex items-center gap-2">
+              <SlidersHorizontal size={14} aria-hidden />
+              {t("filters.title", { count: applied })}
+            </span>
+            <Disclosure.Indicator />
+          </Disclosure.Trigger>
+        </Disclosure.Heading>
+        <Disclosure.Content>
+          <Disclosure.Body className="pt-4">{form}</Disclosure.Body>
+        </Disclosure.Content>
+      </Disclosure>
+    </Card>
   );
 }

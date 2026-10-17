@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Card, Table, ToggleButton, ToggleButtonGroup } from "@heroui/react";
 import { useFormatter, useTranslations } from "next-intl";
+import RowCard, { RowCards, TABLE_FROM_LG } from "@/components/console/row-cards";
 import { marginShare } from "@/lib/gateway/billing/markup-policy";
 import { chargebackParts } from "@/lib/usage/usage-stats";
 import type { SliceRow } from "@/types/usage";
@@ -56,24 +57,26 @@ export default function MarginCard({
           <Card.Title>{t("margin.title")}</Card.Title>
           <Card.Description>{t("margin.description")}</Card.Description>
         </div>
-        <ToggleButtonGroup
-          size="sm"
-          selectionMode="single"
-          disallowEmptySelection
-          aria-label={t("margin.groupBy")}
-          selectedKeys={[group]}
-          onSelectionChange={(keys) => {
-            const next = GROUPS.find((item) => keys.has(item));
-            if (next) setGroup(next);
-          }}
-        >
-          {GROUPS.map((item, index) => (
-            <ToggleButton key={item} id={item}>
-              {index > 0 ? <ToggleButtonGroup.Separator /> : null}
-              {t(`group.${GROUP_LABEL[item]}`)}
-            </ToggleButton>
-          ))}
-        </ToggleButtonGroup>
+        <div className="max-w-full overflow-x-auto">
+          <ToggleButtonGroup
+            size="sm"
+            selectionMode="single"
+            disallowEmptySelection
+            aria-label={t("margin.groupBy")}
+            selectedKeys={[group]}
+            onSelectionChange={(keys) => {
+              const next = GROUPS.find((item) => keys.has(item));
+              if (next) setGroup(next);
+            }}
+          >
+            {GROUPS.map((item, index) => (
+              <ToggleButton key={item} id={item}>
+                {index > 0 ? <ToggleButtonGroup.Separator /> : null}
+                {t(`group.${GROUP_LABEL[item]}`)}
+              </ToggleButton>
+            ))}
+          </ToggleButtonGroup>
+        </div>
       </Card.Header>
       <Card.Content className="space-y-4">
         <dl className="grid gap-3 sm:grid-cols-3">
@@ -99,34 +102,58 @@ export default function MarginCard({
           ))}
         </dl>
         {rows.length ? (
-          <Table aria-label={t("margin.title")}>
-            <Table.ScrollContainer>
-              <Table.Content aria-label={t("margin.title")} className="min-w-[40rem]">
-                <Table.Header>
-                  <Table.Column isRowHeader>{t(`group.${GROUP_LABEL[group]}`)}</Table.Column>
-                  <Table.Column>{t("margin.metrics.purchase")}</Table.Column>
-                  <Table.Column>{t("margin.metrics.sale")}</Table.Column>
-                  <Table.Column>{t("margin.metrics.margin")}</Table.Column>
-                  <Table.Column>{t("margin.share")}</Table.Column>
-                </Table.Header>
-                <Table.Body>
-                  {rows.map((row) => (
-                    <Table.Row key={row.id || "none"} id={row.id || "none"}>
-                      <Table.Cell>{label(row.id)}</Table.Cell>
-                      <Table.Cell className="tabular-nums">{format.number(row.purchase, "money")}</Table.Cell>
-                      <Table.Cell className="tabular-nums">{format.number(row.sale, "money")}</Table.Cell>
-                      <Table.Cell>
+          <>
+            <RowCards label={t("margin.title")}>
+              {rows.map((row) => (
+                <RowCard
+                  key={row.id || "none"}
+                  variant="secondary"
+                  title={label(row.id)}
+                  details={[
+                    { label: t("margin.metrics.purchase"), value: format.number(row.purchase, "money") },
+                    { label: t("margin.metrics.sale"), value: format.number(row.sale, "money") },
+                    {
+                      label: t("margin.metrics.margin"),
+                      value: (
                         <span className={marginClass(row.sale - row.purchase)}>
                           {format.number(row.sale - row.purchase, "money")}
                         </span>
-                      </Table.Cell>
-                      <Table.Cell className="tabular-nums">{percent(marginShare(row.purchase, row.sale))}</Table.Cell>
-                    </Table.Row>
-                  ))}
-                </Table.Body>
-              </Table.Content>
-            </Table.ScrollContainer>
-          </Table>
+                      ),
+                    },
+                    { label: t("margin.share"), value: percent(marginShare(row.purchase, row.sale)) },
+                  ]}
+                />
+              ))}
+            </RowCards>
+            <Table aria-label={t("margin.title")} className={TABLE_FROM_LG}>
+              <Table.ScrollContainer>
+                <Table.Content aria-label={t("margin.title")} className="min-w-[40rem]">
+                  <Table.Header>
+                    <Table.Column isRowHeader>{t(`group.${GROUP_LABEL[group]}`)}</Table.Column>
+                    <Table.Column>{t("margin.metrics.purchase")}</Table.Column>
+                    <Table.Column>{t("margin.metrics.sale")}</Table.Column>
+                    <Table.Column>{t("margin.metrics.margin")}</Table.Column>
+                    <Table.Column>{t("margin.share")}</Table.Column>
+                  </Table.Header>
+                  <Table.Body>
+                    {rows.map((row) => (
+                      <Table.Row key={row.id || "none"} id={row.id || "none"}>
+                        <Table.Cell>{label(row.id)}</Table.Cell>
+                        <Table.Cell className="tabular-nums">{format.number(row.purchase, "money")}</Table.Cell>
+                        <Table.Cell className="tabular-nums">{format.number(row.sale, "money")}</Table.Cell>
+                        <Table.Cell>
+                          <span className={marginClass(row.sale - row.purchase)}>
+                            {format.number(row.sale - row.purchase, "money")}
+                          </span>
+                        </Table.Cell>
+                        <Table.Cell className="tabular-nums">{percent(marginShare(row.purchase, row.sale))}</Table.Cell>
+                      </Table.Row>
+                    ))}
+                  </Table.Body>
+                </Table.Content>
+              </Table.ScrollContainer>
+            </Table>
+          </>
         ) : (
           <p className="text-sm text-muted">{t("margin.empty")}</p>
         )}

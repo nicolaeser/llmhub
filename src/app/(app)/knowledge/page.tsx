@@ -8,6 +8,7 @@ import ConfirmDialog from "@/components/console/confirm-dialog";
 import EmptyState from "@/components/console/empty-state";
 import PageHeader from "@/components/console/page-header";
 import PageStatus from "@/components/console/page-status";
+import RowCard, { RowCards, TABLE_FROM_LG } from "@/components/console/row-cards";
 import SearchSelect from "@/components/console/search-select";
 import { useErrorToast } from "@/components/console/use-error-toast";
 import { deleteKnowledgeAction, loadKnowledgeAction } from "./_action";
@@ -118,6 +119,107 @@ export default function KnowledgePage() {
       </Button>
     ) : undefined;
 
+  function ownerCell(store: VectorStoreView) {
+    return (
+      <>
+        <div className="text-sm">{t("owner.name", { scope: store.scope, name: ownerName(store) })}</div>
+        <div className="text-xs text-muted">{t("owner.kind", { scope: store.scope })}</div>
+      </>
+    );
+  }
+
+  function statusChip(store: VectorStoreView) {
+    return (
+      <Chip size="sm" variant="soft" color={STATUS_COLOR[store.status]}>
+        {t("status", { status: store.status })}
+      </Chip>
+    );
+  }
+
+  function filesCell(store: VectorStoreView) {
+    return (
+      <>
+        <div className="text-sm">
+          {t("fileCounts", { completed: store.fileCounts.completed, total: store.fileCounts.total })}
+        </div>
+        {store.fileCounts.failed > 0 ? (
+          <div className="text-xs text-danger">{t("failedCount", { count: store.fileCounts.failed })}</div>
+        ) : null}
+      </>
+    );
+  }
+
+  function embeddingCell(store: VectorStoreView) {
+    return (
+      <>
+        <div className="font-mono text-xs break-words">{store.embeddingModel}</div>
+        {store.embeddingDimensions > 0 ? (
+          <div className="text-xs text-muted">{t("dimensions", { count: store.embeddingDimensions })}</div>
+        ) : null}
+      </>
+    );
+  }
+
+  function activityCell(store: VectorStoreView) {
+    return (
+      <>
+        <div className="text-sm">{format.relativeTime(new Date(store.lastActiveAt), now)}</div>
+        {store.expiresAt && store.status !== "expired" ? (
+          <div className="text-xs text-muted">
+            {t("expires", { when: format.relativeTime(new Date(store.expiresAt), now) })}
+          </div>
+        ) : null}
+      </>
+    );
+  }
+
+  function storeActions(store: VectorStoreView) {
+    return (
+      <>
+        <Button
+          isIconOnly
+          size="sm"
+          variant="ghost"
+          aria-label={t("manageFiles")}
+          onPress={() => openFiles(store)}
+        >
+          <FolderOpen size={14} aria-hidden />
+        </Button>
+        {canManage ? (
+          <>
+            <Button
+              isIconOnly
+              size="sm"
+              variant="ghost"
+              aria-label={tCommon("edit")}
+              onPress={() => openDialog(store)}
+            >
+              <Pencil size={14} aria-hidden />
+            </Button>
+            <ConfirmDialog
+              title={t("deleteConfirm", { name: store.name })}
+              description={t("deleteHint", { count: store.fileCounts.total })}
+              confirmLabel={tCommon("delete")}
+              cancelLabel={tCommon("cancel")}
+              pending={deleting === store.id}
+              onConfirm={() => remove(store.id)}
+            >
+              <Button
+                isIconOnly
+                size="sm"
+                variant="danger-soft"
+                aria-label={tCommon("delete")}
+                isPending={deleting === store.id}
+              >
+                <Trash2 size={14} aria-hidden />
+              </Button>
+            </ConfirmDialog>
+          </>
+        ) : null}
+      </>
+    );
+  }
+
   return (
     <div className="space-y-5">
       <PageHeader
@@ -162,7 +264,7 @@ export default function KnowledgePage() {
                 ]}
                 value={company}
                 onChange={setCompany}
-                className="w-full max-w-xs"
+                className="w-full sm:max-w-xs"
               />
             ) : null}
           </div>
@@ -170,121 +272,66 @@ export default function KnowledgePage() {
           {filtered.length === 0 ? (
             <EmptyState icon={Library} title={t("noMatches")} />
           ) : (
-            <Table aria-label={t("title")}>
-              <Table.ScrollContainer>
-                <Table.Content aria-label={t("title")} className="min-w-[64rem]">
-                  <Table.Header>
-                    <Table.Column isRowHeader>{t("columns.name")}</Table.Column>
-                    <Table.Column>{t("columns.company")}</Table.Column>
-                    <Table.Column>{t("columns.owner")}</Table.Column>
-                    <Table.Column>{t("columns.status")}</Table.Column>
-                    <Table.Column>{t("columns.files")}</Table.Column>
-                    <Table.Column>{t("columns.size")}</Table.Column>
-                    <Table.Column>{t("columns.embedding")}</Table.Column>
-                    <Table.Column>{t("columns.lastActive")}</Table.Column>
-                    <Table.Column>{tCommon("actions")}</Table.Column>
-                  </Table.Header>
-                  <Table.Body>
-                    {filtered.map((store) => (
-                      <Table.Row key={store.id} id={store.id}>
-                        <Table.Cell>
-                          <div className="font-medium">{store.name}</div>
-                          {store.description ? (
-                            <div className="text-xs text-muted">{store.description}</div>
-                          ) : null}
-                        </Table.Cell>
-                        <Table.Cell>{store.orgName || tCommon("none")}</Table.Cell>
-                        <Table.Cell>
-                          <div className="text-sm">
-                            {t("owner.name", { scope: store.scope, name: ownerName(store) })}
-                          </div>
-                          <div className="text-xs text-muted">{t("owner.kind", { scope: store.scope })}</div>
-                        </Table.Cell>
-                        <Table.Cell>
-                          <Chip size="sm" variant="soft" color={STATUS_COLOR[store.status]}>
-                            {t("status", { status: store.status })}
-                          </Chip>
-                        </Table.Cell>
-                        <Table.Cell>
-                          <div className="text-sm">
-                            {t("fileCounts", {
-                              completed: store.fileCounts.completed,
-                              total: store.fileCounts.total,
-                            })}
-                          </div>
-                          {store.fileCounts.failed > 0 ? (
-                            <div className="text-xs text-danger">
-                              {t("failedCount", { count: store.fileCounts.failed })}
-                            </div>
-                          ) : null}
-                        </Table.Cell>
-                        <Table.Cell>{formatBytes(format, store.usageBytes)}</Table.Cell>
-                        <Table.Cell>
-                          <div className="font-mono text-xs">{store.embeddingModel}</div>
-                          {store.embeddingDimensions > 0 ? (
-                            <div className="text-xs text-muted">
-                              {t("dimensions", { count: store.embeddingDimensions })}
-                            </div>
-                          ) : null}
-                        </Table.Cell>
-                        <Table.Cell>
-                          <div className="text-sm">{format.relativeTime(new Date(store.lastActiveAt), now)}</div>
-                          {store.expiresAt && store.status !== "expired" ? (
-                            <div className="text-xs text-muted">
-                              {t("expires", { when: format.relativeTime(new Date(store.expiresAt), now) })}
-                            </div>
-                          ) : null}
-                        </Table.Cell>
-                        <Table.Cell>
-                          <div className="flex gap-1">
-                            <Button
-                              isIconOnly
-                              size="sm"
-                              variant="ghost"
-                              aria-label={t("manageFiles")}
-                              onPress={() => openFiles(store)}
-                            >
-                              <FolderOpen size={14} aria-hidden />
-                            </Button>
-                            {canManage ? (
-                              <>
-                                <Button
-                                  isIconOnly
-                                  size="sm"
-                                  variant="ghost"
-                                  aria-label={tCommon("edit")}
-                                  onPress={() => openDialog(store)}
-                                >
-                                  <Pencil size={14} aria-hidden />
-                                </Button>
-                                <ConfirmDialog
-                                  title={t("deleteConfirm", { name: store.name })}
-                                  description={t("deleteHint", { count: store.fileCounts.total })}
-                                  confirmLabel={tCommon("delete")}
-                                  cancelLabel={tCommon("cancel")}
-                                  pending={deleting === store.id}
-                                  onConfirm={() => remove(store.id)}
-                                >
-                                  <Button
-                                    isIconOnly
-                                    size="sm"
-                                    variant="danger-soft"
-                                    aria-label={tCommon("delete")}
-                                    isPending={deleting === store.id}
-                                  >
-                                    <Trash2 size={14} aria-hidden />
-                                  </Button>
-                                </ConfirmDialog>
-                              </>
+            <>
+              <RowCards label={t("title")}>
+                {filtered.map((store) => (
+                  <RowCard
+                    key={store.id}
+                    title={store.name}
+                    description={store.description || undefined}
+                    aside={statusChip(store)}
+                    details={[
+                      { label: t("columns.company"), value: store.orgName || tCommon("none") },
+                      { label: t("columns.owner"), value: ownerCell(store) },
+                      { label: t("columns.files"), value: filesCell(store) },
+                      { label: t("columns.size"), value: formatBytes(format, store.usageBytes) },
+                      { label: t("columns.embedding"), value: embeddingCell(store) },
+                      { label: t("columns.lastActive"), value: activityCell(store) },
+                    ]}
+                    actions={storeActions(store)}
+                  />
+                ))}
+              </RowCards>
+              <Table aria-label={t("title")} className={TABLE_FROM_LG}>
+                <Table.ScrollContainer>
+                  <Table.Content aria-label={t("title")} className="min-w-[64rem]">
+                    <Table.Header>
+                      <Table.Column isRowHeader>{t("columns.name")}</Table.Column>
+                      <Table.Column>{t("columns.company")}</Table.Column>
+                      <Table.Column>{t("columns.owner")}</Table.Column>
+                      <Table.Column>{t("columns.status")}</Table.Column>
+                      <Table.Column>{t("columns.files")}</Table.Column>
+                      <Table.Column>{t("columns.size")}</Table.Column>
+                      <Table.Column>{t("columns.embedding")}</Table.Column>
+                      <Table.Column>{t("columns.lastActive")}</Table.Column>
+                      <Table.Column>{tCommon("actions")}</Table.Column>
+                    </Table.Header>
+                    <Table.Body>
+                      {filtered.map((store) => (
+                        <Table.Row key={store.id} id={store.id}>
+                          <Table.Cell>
+                            <div className="font-medium">{store.name}</div>
+                            {store.description ? (
+                              <div className="text-xs text-muted">{store.description}</div>
                             ) : null}
-                          </div>
-                        </Table.Cell>
-                      </Table.Row>
-                    ))}
-                  </Table.Body>
-                </Table.Content>
-              </Table.ScrollContainer>
-            </Table>
+                          </Table.Cell>
+                          <Table.Cell>{store.orgName || tCommon("none")}</Table.Cell>
+                          <Table.Cell>{ownerCell(store)}</Table.Cell>
+                          <Table.Cell>{statusChip(store)}</Table.Cell>
+                          <Table.Cell>{filesCell(store)}</Table.Cell>
+                          <Table.Cell>{formatBytes(format, store.usageBytes)}</Table.Cell>
+                          <Table.Cell>{embeddingCell(store)}</Table.Cell>
+                          <Table.Cell>{activityCell(store)}</Table.Cell>
+                          <Table.Cell>
+                            <div className="flex gap-1">{storeActions(store)}</div>
+                          </Table.Cell>
+                        </Table.Row>
+                      ))}
+                    </Table.Body>
+                  </Table.Content>
+                </Table.ScrollContainer>
+              </Table>
+            </>
           )}
         </>
       )}

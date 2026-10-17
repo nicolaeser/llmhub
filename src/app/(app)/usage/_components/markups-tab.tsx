@@ -22,6 +22,7 @@ import ConfirmDialog from "@/components/console/confirm-dialog";
 import EmptyState from "@/components/console/empty-state";
 import IconTile from "@/components/console/icon-tile";
 import PageStatus from "@/components/console/page-status";
+import RowCard, { RowCards, TABLE_FROM_LG } from "@/components/console/row-cards";
 import StatCard from "@/components/console/stat-card";
 import { useErrorToast } from "@/components/console/use-error-toast";
 import { deleteMarkupAction, loadMarkupsAction } from "../_action";
@@ -133,6 +134,73 @@ export default function MarkupsTab() {
     </Button>
   ) : undefined;
 
+  function modelCell(markup: MarkupView) {
+    if (!markup.model) return <span className="text-sm text-muted">{t("allModels")}</span>;
+    return (
+      <div>
+        <div className="font-mono text-sm break-words">{markup.model}</div>
+        <div className="text-xs text-muted">
+          {t("modelKind", { kind: isModelPattern(markup.model) ? "pattern" : "one" })}
+        </div>
+      </div>
+    );
+  }
+
+  function percentCell(markup: MarkupView) {
+    return (
+      <>
+        <span
+          className={
+            markup.percent > 0
+              ? "font-semibold text-success tabular-nums"
+              : markup.percent < 0
+                ? "font-semibold text-warning tabular-nums"
+                : "font-semibold text-muted tabular-nums"
+          }
+        >
+          {format.number(markup.percent / 100, "markup")}
+        </span>
+        <div className="text-xs text-muted">
+          {t("kind", { kind: markup.percent > 0 ? "markup" : markup.percent < 0 ? "discount" : "none" })}
+        </div>
+      </>
+    );
+  }
+
+  function markupActions(markup: MarkupView) {
+    return (
+      <>
+        <Button
+          isIconOnly
+          size="sm"
+          variant="ghost"
+          aria-label={tCommon("edit")}
+          onPress={() => openDialog(markup)}
+        >
+          <Pencil size={14} aria-hidden />
+        </Button>
+        <ConfirmDialog
+          title={t("deleteConfirm", { rule: describe(markup) })}
+          description={t("deleteHint")}
+          confirmLabel={tCommon("delete")}
+          cancelLabel={tCommon("cancel")}
+          pending={deleting === markup.id}
+          onConfirm={() => remove(markup.id)}
+        >
+          <Button
+            isIconOnly
+            size="sm"
+            variant="danger-soft"
+            aria-label={tCommon("delete")}
+            isPending={deleting === markup.id}
+          >
+            <Trash2 size={14} aria-hidden />
+          </Button>
+        </ConfirmDialog>
+      </>
+    );
+  }
+
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -175,102 +243,71 @@ export default function MarkupsTab() {
       {markups.length === 0 ? (
         <EmptyState icon={BadgePercent} title={t("emptyTitle")} description={t("empty")} action={createButton} />
       ) : (
-        <Table aria-label={t("title")}>
-          <Table.ScrollContainer>
-            <Table.Content aria-label={t("title")} className="min-w-[48rem]">
-              <Table.Header>
-                <Table.Column isRowHeader>{t("columns.scope")}</Table.Column>
-                <Table.Column>{t("columns.model")}</Table.Column>
-                <Table.Column>{t("columns.percent")}</Table.Column>
-                <Table.Column>{t("columns.note")}</Table.Column>
-                <Table.Column>{tCommon("actions")}</Table.Column>
-              </Table.Header>
-              <Table.Body>
-                {markups.map((markup) => {
-                  const Icon = SCOPE_ICONS[markup.scope];
-                  const where = target(markup);
-                  return (
-                    <Table.Row key={markup.id} id={markup.id}>
-                      <Table.Cell>
-                        <div className="flex items-center gap-3">
-                          <IconTile icon={Icon} size="sm" />
-                          <div className="min-w-0">
-                            <div className="truncate font-medium">{where.label}</div>
-                            {where.detail ? <div className="truncate text-xs text-muted">{where.detail}</div> : null}
-                          </div>
-                        </div>
-                      </Table.Cell>
-                      <Table.Cell>
-                        {markup.model ? (
-                          <div>
-                            <div className="font-mono text-sm">{markup.model}</div>
-                            <div className="text-xs text-muted">
-                              {t("modelKind", { kind: isModelPattern(markup.model) ? "pattern" : "one" })}
+        <>
+          <RowCards label={t("title")}>
+            {markups.map((markup) => {
+              const where = target(markup);
+              return (
+                <RowCard
+                  key={markup.id}
+                  title={
+                    <span className="flex items-center gap-2">
+                      <IconTile icon={SCOPE_ICONS[markup.scope]} size="sm" />
+                      {where.label}
+                    </span>
+                  }
+                  description={where.detail || undefined}
+                  aside={data.canManage ? markupActions(markup) : undefined}
+                  details={[
+                    { label: t("columns.model"), value: modelCell(markup) },
+                    { label: t("columns.percent"), value: percentCell(markup) },
+                    { label: t("columns.note"), value: markup.note || tCommon("none"), wide: true },
+                  ]}
+                />
+              );
+            })}
+          </RowCards>
+          <Table aria-label={t("title")} className={TABLE_FROM_LG}>
+            <Table.ScrollContainer>
+              <Table.Content aria-label={t("title")} className="min-w-[48rem]">
+                <Table.Header>
+                  <Table.Column isRowHeader>{t("columns.scope")}</Table.Column>
+                  <Table.Column>{t("columns.model")}</Table.Column>
+                  <Table.Column>{t("columns.percent")}</Table.Column>
+                  <Table.Column>{t("columns.note")}</Table.Column>
+                  <Table.Column>{tCommon("actions")}</Table.Column>
+                </Table.Header>
+                <Table.Body>
+                  {markups.map((markup) => {
+                    const Icon = SCOPE_ICONS[markup.scope];
+                    const where = target(markup);
+                    return (
+                      <Table.Row key={markup.id} id={markup.id}>
+                        <Table.Cell>
+                          <div className="flex items-center gap-3">
+                            <IconTile icon={Icon} size="sm" />
+                            <div className="min-w-0">
+                              <div className="truncate font-medium">{where.label}</div>
+                              {where.detail ? <div className="truncate text-xs text-muted">{where.detail}</div> : null}
                             </div>
                           </div>
-                        ) : (
-                          <span className="text-sm text-muted">{t("allModels")}</span>
-                        )}
-                      </Table.Cell>
-                      <Table.Cell>
-                        <span
-                          className={
-                            markup.percent > 0
-                              ? "font-semibold text-success tabular-nums"
-                              : markup.percent < 0
-                                ? "font-semibold text-warning tabular-nums"
-                                : "font-semibold text-muted tabular-nums"
-                          }
-                        >
-                          {format.number(markup.percent / 100, "markup")}
-                        </span>
-                        <div className="text-xs text-muted">
-                          {t("kind", { kind: markup.percent > 0 ? "markup" : markup.percent < 0 ? "discount" : "none" })}
-                        </div>
-                      </Table.Cell>
-                      <Table.Cell>
-                        <span className="text-sm text-muted">{markup.note || tCommon("none")}</span>
-                      </Table.Cell>
-                      <Table.Cell>
-                        {data.canManage ? (
-                          <div className="flex gap-1">
-                            <Button
-                              isIconOnly
-                              size="sm"
-                              variant="ghost"
-                              aria-label={tCommon("edit")}
-                              onPress={() => openDialog(markup)}
-                            >
-                              <Pencil size={14} aria-hidden />
-                            </Button>
-                            <ConfirmDialog
-                              title={t("deleteConfirm", { rule: describe(markup) })}
-                              description={t("deleteHint")}
-                              confirmLabel={tCommon("delete")}
-                              cancelLabel={tCommon("cancel")}
-                              pending={deleting === markup.id}
-                              onConfirm={() => remove(markup.id)}
-                            >
-                              <Button
-                                isIconOnly
-                                size="sm"
-                                variant="danger-soft"
-                                aria-label={tCommon("delete")}
-                                isPending={deleting === markup.id}
-                              >
-                                <Trash2 size={14} aria-hidden />
-                              </Button>
-                            </ConfirmDialog>
-                          </div>
-                        ) : null}
-                      </Table.Cell>
-                    </Table.Row>
-                  );
-                })}
-              </Table.Body>
-            </Table.Content>
-          </Table.ScrollContainer>
-        </Table>
+                        </Table.Cell>
+                        <Table.Cell>{modelCell(markup)}</Table.Cell>
+                        <Table.Cell>{percentCell(markup)}</Table.Cell>
+                        <Table.Cell>
+                          <span className="text-sm text-muted">{markup.note || tCommon("none")}</span>
+                        </Table.Cell>
+                        <Table.Cell>
+                          {data.canManage ? <div className="flex gap-1">{markupActions(markup)}</div> : null}
+                        </Table.Cell>
+                      </Table.Row>
+                    );
+                  })}
+                </Table.Body>
+              </Table.Content>
+            </Table.ScrollContainer>
+          </Table>
+        </>
       )}
 
       <div className="grid gap-5 lg:grid-cols-2">

@@ -9,6 +9,7 @@ import SubscriptionBadge from "@/components/console/subscription-badge";
 import { isSignInKind } from "@/lib/gateway/upstreams/provider-kinds";
 import { LoadError, PageLoading } from "@/components/console/page-status";
 import StatCard from "@/components/console/stat-card";
+import RowCard, { RowCards, TABLE_FROM_LG } from "@/components/console/row-cards";
 import { Link } from "@/i18n/routing";
 import { useActionData } from "@/lib/hooks/use-action-data";
 import { isActionFail } from "@/lib/http/action-result";
@@ -73,6 +74,34 @@ export default function ProviderHealth() {
   const attempts = report.deployments.reduce((sum, row) => sum + row.attempts, 0);
   const failures = report.deployments.reduce((sum, row) => sum + row.failures, 0);
   const latency = (ms: number | null) => (ms === null ? "—" : t("latencyValue", { ms: Math.round(ms) }));
+  const readyNote = (row: DeploymentHealthView) =>
+    row.cooldownUntil
+      ? t("ready", { when: format.relativeTime(new Date(row.cooldownUntil), new Date(report.generatedAt)) })
+      : null;
+
+  function stateChip(row: DeploymentHealthView) {
+    const state = routeState(row);
+    return (
+      <Chip size="sm" variant="soft" color={STATE_COLOR[state]} className="whitespace-nowrap">
+        {t("state", { state })}
+      </Chip>
+    );
+  }
+
+  function providerCell(row: DeploymentHealthView) {
+    return (
+      <span className="inline-flex flex-wrap items-center gap-1.5">
+        <span>
+          {row.provider || tProviders(isSignInKind(row.kind) ? "kindShort" : "kindName", { kind: row.kind })}
+        </span>
+        {isSignInKind(row.kind) ? <SubscriptionBadge /> : null}
+      </span>
+    );
+  }
+
+  function errorRate(row: DeploymentHealthView) {
+    return row.attempts ? format.number(row.errorRate, "percent") : "—";
+  }
 
   if (report.deployments.length === 0) {
     return (
@@ -183,7 +212,41 @@ export default function ProviderHealth() {
             </Switch.Content>
           </Switch>
         </Card.Header>
-        <Table>
+        {visible.length ? (
+          <RowCards label={t("endpoints")}>
+            {visible.map((row) => (
+              <RowCard
+                key={row.id}
+                variant="secondary"
+                title={row.alias}
+                description={row.model}
+                aside={stateChip(row)}
+                details={[
+                  { label: t("columns.provider"), value: providerCell(row), wide: true },
+                  ...(row.cooldownUntil ? [{ label: tCommon("status"), value: readyNote(row), wide: true }] : []),
+                  { label: t("columns.attempts"), value: format.number(row.attempts, "integer") },
+                  {
+                    label: t("columns.errorRate"),
+                    value: <span className={row.failures ? "text-danger" : undefined}>{errorRate(row)}</span>,
+                  },
+                  { label: t("columns.p50"), value: latency(row.p50) },
+                  { label: t("columns.p95"), value: latency(row.p95) },
+                  {
+                    label: t("columns.trips"),
+                    value: (
+                      <span className={row.trips ? "text-warning" : undefined}>
+                        {format.number(row.trips, "integer")}
+                      </span>
+                    ),
+                  },
+                ]}
+              />
+            ))}
+          </RowCards>
+        ) : (
+          <p className="py-6 text-center text-sm text-muted lg:hidden">{t("quiet", { n: report.minutes })}</p>
+        )}
+        <Table className={TABLE_FROM_LG}>
           <Table.ScrollContainer>
             <Table.Content aria-label={t("endpoints")} className="min-w-4xl">
               <Table.Header>
@@ -201,47 +264,26 @@ export default function ProviderHealth() {
                   <p className="py-6 text-center text-sm text-muted">{t("quiet", { n: report.minutes })}</p>
                 )}
               >
-                {visible.map((row) => {
-                  const state = routeState(row);
-                  return (
-                    <Table.Row key={row.id} id={row.id}>
-                      <Table.Cell>
-                        <div className="font-medium">{row.alias}</div>
-                        <div className="text-xs text-muted">{row.model}</div>
-                      </Table.Cell>
-                      <Table.Cell>
-                        <span className="inline-flex items-center gap-1.5">
-                          <span>
-                            {row.provider ||
-                              tProviders(isSignInKind(row.kind) ? "kindShort" : "kindName", { kind: row.kind })}
-                          </span>
-                          {isSignInKind(row.kind) ? <SubscriptionBadge /> : null}
-                        </span>
-                      </Table.Cell>
-                      <Table.Cell>
-                        <Chip size="sm" variant="soft" color={STATE_COLOR[state]} className="whitespace-nowrap">
-                          {t("state", { state })}
-                        </Chip>
-                        {row.cooldownUntil ? (
-                          <div className="mt-1 text-xs text-muted">
-                            {t("ready", {
-                              when: format.relativeTime(new Date(row.cooldownUntil), new Date(report.generatedAt)),
-                            })}
-                          </div>
-                        ) : null}
-                      </Table.Cell>
-                      <Table.Cell>{format.number(row.attempts, "integer")}</Table.Cell>
-                      <Table.Cell className={row.failures ? "text-danger" : undefined}>
-                        {row.attempts ? format.number(row.errorRate, "percent") : "—"}
-                      </Table.Cell>
-                      <Table.Cell>{latency(row.p50)}</Table.Cell>
-                      <Table.Cell>{latency(row.p95)}</Table.Cell>
-                      <Table.Cell className={row.trips ? "text-warning" : undefined}>
-                        {format.number(row.trips, "integer")}
-                      </Table.Cell>
-                    </Table.Row>
-                  );
-                })}
+                {visible.map((row) => (
+                  <Table.Row key={row.id} id={row.id}>
+                    <Table.Cell>
+                      <div className="font-medium">{row.alias}</div>
+                      <div className="text-xs text-muted">{row.model}</div>
+                    </Table.Cell>
+                    <Table.Cell>{providerCell(row)}</Table.Cell>
+                    <Table.Cell>
+                      {stateChip(row)}
+                      {row.cooldownUntil ? <div className="mt-1 text-xs text-muted">{readyNote(row)}</div> : null}
+                    </Table.Cell>
+                    <Table.Cell>{format.number(row.attempts, "integer")}</Table.Cell>
+                    <Table.Cell className={row.failures ? "text-danger" : undefined}>{errorRate(row)}</Table.Cell>
+                    <Table.Cell>{latency(row.p50)}</Table.Cell>
+                    <Table.Cell>{latency(row.p95)}</Table.Cell>
+                    <Table.Cell className={row.trips ? "text-warning" : undefined}>
+                      {format.number(row.trips, "integer")}
+                    </Table.Cell>
+                  </Table.Row>
+                ))}
               </Table.Body>
             </Table.Content>
           </Table.ScrollContainer>

@@ -24,6 +24,7 @@ import {
 import { Ban, Check, ChevronDown, CircleCheck, Minus, Plus, RotateCcw, Sparkles, Trash2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import FormDialog from "@/components/console/form-dialog";
+import RowCard, { RowCards, TABLE_FROM_LG } from "@/components/console/row-cards";
 import { useErrorToast } from "@/components/console/use-error-toast";
 import { isActionFail } from "@/lib/http/action-result";
 import { classifyTools, isToolAction, roleAllowsTool, toolGrant } from "@/lib/mcp/resolve";
@@ -189,6 +190,72 @@ export default function PermissionsDialog({
       toast(t("permissions.saved"), { variant: "success" });
       close();
     });
+  }
+
+  function actionMenu(tool: McpToolSpec) {
+    const base = baseTools.find((item) => item.name === tool.name) ?? tool;
+    const options = base.action ? [...MCP_ACTIONS] : [UNCLASSIFIED, ...MCP_ACTIONS];
+    const value = tool.action ?? UNCLASSIFIED;
+    return (
+      <div className="space-y-1">
+        <Dropdown>
+          <Button size="sm" variant="tertiary" aria-label={t("permissions.classify", { tool: tool.name })}>
+            {tool.action ? t("action", { action: tool.action }) : t("permissions.unclassified")}
+            <ChevronDown size={14} aria-hidden />
+          </Button>
+          <Dropdown.Popover>
+            <Dropdown.Menu
+              aria-label={t("permissions.classify", { tool: tool.name })}
+              selectionMode="single"
+              selectedKeys={[value]}
+              onAction={(key) => classify(base, String(key))}
+            >
+              {options.map((option) => {
+                const label = isToolAction(option) ? t("action", { action: option }) : t("permissions.unclassified");
+                return (
+                  <Dropdown.Item key={option} id={option} textValue={label}>
+                    {label}
+                    <Dropdown.ItemIndicator />
+                  </Dropdown.Item>
+                );
+              })}
+            </Dropdown.Menu>
+          </Dropdown.Popover>
+        </Dropdown>
+        {base.hint && base.hint !== tool.action ? (
+          <p className="text-xs text-muted">{t("permissions.serverHint", { action: base.hint })}</p>
+        ) : null}
+      </div>
+    );
+  }
+
+  function grantButton(role: McpRoleView, tool: McpToolSpec, labeled: boolean) {
+    const grant = toolGrant(role, tool.name);
+    const granted = roleAllowsTool(role, tool);
+    const icon =
+      grant === "deny" ? (
+        <Ban size={16} className="text-danger" aria-hidden />
+      ) : grant === "allow" ? (
+        <CircleCheck size={16} className="text-success" aria-hidden />
+      ) : granted ? (
+        <Check size={16} className="text-foreground" aria-hidden />
+      ) : (
+        <Minus size={16} className="text-muted" aria-hidden />
+      );
+    return (
+      <Button
+        key={role.id}
+        isIconOnly={!labeled}
+        size="sm"
+        variant={labeled ? "secondary" : "ghost"}
+        isDisabled={pending}
+        aria-label={t("permissions.cell", { role: roleLabel(role), tool: tool.name, grant, granted: String(granted) })}
+        onPress={() => setGrant(role, tool.name, NEXT_GRANT[grant])}
+      >
+        {icon}
+        {labeled ? roleLabel(role) : null}
+      </Button>
+    );
   }
 
   const search =
@@ -436,24 +503,35 @@ export default function PermissionsDialog({
           {search}
           {empty}
           {visible.length ? (
-            <Table aria-label={t("permissions.matrixLabel")}>
-              <Table.ScrollContainer>
-                <Table.Content className="min-w-xl">
-                  <Table.Header>
-                    <Table.Column isRowHeader>{t("permissions.columnTool")}</Table.Column>
-                    <Table.Column>{t("permissions.columnAction")}</Table.Column>
-                    {roles.map((role) => (
-                      <Table.Column key={role.id} id={role.id}>
-                        {roleLabel(role)}
-                      </Table.Column>
-                    ))}
-                  </Table.Header>
-                  <Table.Body>
-                    {visible.map((tool) => {
-                      const base = baseTools.find((item) => item.name === tool.name) ?? tool;
-                      const options = base.action ? [...MCP_ACTIONS] : [UNCLASSIFIED, ...MCP_ACTIONS];
-                      const value = tool.action ?? UNCLASSIFIED;
-                      return (
+            <>
+              <RowCards label={t("permissions.matrixLabel")}>
+                {visible.map((tool) => (
+                  <RowCard
+                    key={tool.name}
+                    variant="secondary"
+                    title={<span className="break-all">{tool.title || tool.name}</span>}
+                    description={
+                      tool.title ? <span className="font-mono text-xs break-all">{tool.name}</span> : undefined
+                    }
+                    details={[{ label: t("permissions.columnAction"), value: actionMenu(tool), wide: true }]}
+                    actions={roles.map((role) => grantButton(role, tool, true))}
+                  />
+                ))}
+              </RowCards>
+              <Table aria-label={t("permissions.matrixLabel")} className={TABLE_FROM_LG}>
+                <Table.ScrollContainer>
+                  <Table.Content className="min-w-xl">
+                    <Table.Header>
+                      <Table.Column isRowHeader>{t("permissions.columnTool")}</Table.Column>
+                      <Table.Column>{t("permissions.columnAction")}</Table.Column>
+                      {roles.map((role) => (
+                        <Table.Column key={role.id} id={role.id}>
+                          {roleLabel(role)}
+                        </Table.Column>
+                      ))}
+                    </Table.Header>
+                    <Table.Body>
+                      {visible.map((tool) => (
                         <Table.Row key={tool.name} id={tool.name}>
                           <Table.Cell>
                             <div className="min-w-0">
@@ -461,75 +539,17 @@ export default function PermissionsDialog({
                               {tool.title ? <p className="font-mono text-xs break-all text-muted">{tool.name}</p> : null}
                             </div>
                           </Table.Cell>
-                          <Table.Cell>
-                            <div className="space-y-1">
-                              <Dropdown>
-                                <Button size="sm" variant="tertiary" aria-label={t("permissions.classify", { tool: tool.name })}>
-                                  {tool.action ? t("action", { action: tool.action }) : t("permissions.unclassified")}
-                                  <ChevronDown size={14} aria-hidden />
-                                </Button>
-                                <Dropdown.Popover>
-                                  <Dropdown.Menu
-                                    aria-label={t("permissions.classify", { tool: tool.name })}
-                                    selectionMode="single"
-                                    selectedKeys={[value]}
-                                    onAction={(key) => classify(base, String(key))}
-                                  >
-                                    {options.map((option) => {
-                                      const label = isToolAction(option) ? t("action", { action: option }) : t("permissions.unclassified");
-                                      return (
-                                        <Dropdown.Item key={option} id={option} textValue={label}>
-                                          {label}
-                                          <Dropdown.ItemIndicator />
-                                        </Dropdown.Item>
-                                      );
-                                    })}
-                                  </Dropdown.Menu>
-                                </Dropdown.Popover>
-                              </Dropdown>
-                              {base.hint && base.hint !== tool.action ? (
-                                <p className="text-xs text-muted">{t("permissions.serverHint", { action: base.hint })}</p>
-                              ) : null}
-                            </div>
-                          </Table.Cell>
-                          {roles.map((role) => {
-                            const grant = toolGrant(role, tool.name);
-                            const granted = roleAllowsTool(role, tool);
-                            return (
-                              <Table.Cell key={role.id}>
-                                <Button
-                                  isIconOnly
-                                  size="sm"
-                                  variant="ghost"
-                                  isDisabled={pending}
-                                  aria-label={t("permissions.cell", {
-                                    role: roleLabel(role),
-                                    tool: tool.name,
-                                    grant,
-                                    granted: String(granted),
-                                  })}
-                                  onPress={() => setGrant(role, tool.name, NEXT_GRANT[grant])}
-                                >
-                                  {grant === "deny" ? (
-                                    <Ban size={16} className="text-danger" aria-hidden />
-                                  ) : grant === "allow" ? (
-                                    <CircleCheck size={16} className="text-success" aria-hidden />
-                                  ) : granted ? (
-                                    <Check size={16} className="text-foreground" aria-hidden />
-                                  ) : (
-                                    <Minus size={16} className="text-muted" aria-hidden />
-                                  )}
-                                </Button>
-                              </Table.Cell>
-                            );
-                          })}
+                          <Table.Cell>{actionMenu(tool)}</Table.Cell>
+                          {roles.map((role) => (
+                            <Table.Cell key={role.id}>{grantButton(role, tool, false)}</Table.Cell>
+                          ))}
                         </Table.Row>
-                      );
-                    })}
-                  </Table.Body>
-                </Table.Content>
-              </Table.ScrollContainer>
-            </Table>
+                      ))}
+                    </Table.Body>
+                  </Table.Content>
+                </Table.ScrollContainer>
+              </Table>
+            </>
           ) : null}
           {visible.length ? (
             <div className="flex flex-wrap gap-x-4 gap-y-2 text-xs text-muted">

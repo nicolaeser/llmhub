@@ -9,6 +9,7 @@ import ConfirmDialog from "@/components/console/confirm-dialog";
 import SubscriptionBadge from "@/components/console/subscription-badge";
 import EmptyState from "@/components/console/empty-state";
 import PageStatus from "@/components/console/page-status";
+import RowCard, { RowCards, TABLE_FROM_LG } from "@/components/console/row-cards";
 import { useErrorToast } from "@/components/console/use-error-toast";
 import {
   deleteModelGroupAction,
@@ -123,6 +124,88 @@ export default function GroupsTab() {
     });
   }
 
+  function groupDetail(group: ModelGroupView) {
+    return format.list([group.vendor, group.displayName].filter(Boolean), { type: "unit" });
+  }
+
+  function tagChip(group: ModelGroupView) {
+    const { tag } = splitTag(group.alias);
+    if (!tag) return null;
+    return (
+      <Chip size="sm" variant="soft" color="warning" className="whitespace-nowrap">
+        {tCatalog("tag", { tag })}
+      </Chip>
+    );
+  }
+
+  function billingLabel(group: ModelGroupView) {
+    return t("billingSummary", {
+      mode: group.billingMode,
+      input: group.priceInput,
+      output: group.priceOutput,
+      windows: group.priceWindows.length,
+    });
+  }
+
+  function endpointList(group: ModelGroupView) {
+    return (
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+        {routes(group).map((route) => (
+          <span key={route.key} className="inline-flex items-center gap-1.5 text-sm">
+            <span>{route.name}</span>
+            {route.subscription ? <SubscriptionBadge /> : null}
+          </span>
+        ))}
+      </div>
+    );
+  }
+
+  function enabledSwitch(group: ModelGroupView) {
+    return (
+      <Switch
+        size="sm"
+        isSelected={group.enabled}
+        onChange={(next) => toggle(group.alias, next)}
+        isDisabled={toggling === group.alias}
+        aria-label={t("enabledToggle", { alias: group.alias })}
+      >
+        <Switch.Content>
+          <Switch.Control>
+            <Switch.Thumb />
+          </Switch.Control>
+          <Label>{t("enabledState", { enabled: String(group.enabled) })}</Label>
+        </Switch.Content>
+      </Switch>
+    );
+  }
+
+  function groupActions(group: ModelGroupView) {
+    return (
+      <>
+        <Button size="sm" variant="secondary" aria-label={tCommon("edit")} onPress={() => openDialog(group)}>
+          {tCommon("edit")}
+        </Button>
+        <ConfirmDialog
+          title={t("removeConfirm", { alias: group.alias })}
+          confirmLabel={tCommon("delete")}
+          cancelLabel={tCommon("cancel")}
+          pending={deleting === group.alias}
+          onConfirm={() => remove(group.alias)}
+        >
+          <Button
+            isIconOnly
+            size="sm"
+            variant="danger-soft"
+            aria-label={tCommon("delete")}
+            isPending={deleting === group.alias}
+          >
+            <Trash2 size={14} aria-hidden />
+          </Button>
+        </ConfirmDialog>
+      </>
+    );
+  }
+
   const createButton = (
     <Button
       aria-label={t("add")}
@@ -181,112 +264,69 @@ export default function GroupsTab() {
           {shown.length === 0 ? (
             <EmptyState icon={Network} title={t("noMatches")} />
           ) : (
-            <Table aria-label={t("title")}>
-              <Table.ScrollContainer>
-                <Table.Content className="min-w-4xl">
-                  <Table.Header>
-                    <Table.Column isRowHeader>{t("columns.alias")}</Table.Column>
-                    <Table.Column>{t("columns.enabled")}</Table.Column>
-                    <Table.Column>{t("columns.strategy")}</Table.Column>
-                    <Table.Column>{t("columns.billing")}</Table.Column>
-                    <Table.Column>{t("columns.endpoints")}</Table.Column>
-                    <Table.Column>{t("columns.overflow")}</Table.Column>
-                    <Table.Column>{tCommon("actions")}</Table.Column>
-                  </Table.Header>
-                  <Table.Body>
-                    {shown.map((g) => (
-                      <Table.Row key={g.alias} id={g.alias}>
-                        <Table.Cell>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="font-medium"
-                            onPress={() => openDialog(g)}
-                          >
-                            {g.alias}
-                          </Button>
-                          {splitTag(g.alias).tag ? (
-                            <Chip size="sm" variant="soft" color="warning" className="whitespace-nowrap">
-                              {tCatalog("tag", { tag: splitTag(g.alias).tag })}
-                            </Chip>
-                          ) : null}
-                          {g.vendor || g.displayName ? (
-                            <div className="px-3 text-xs text-muted">
-                              {format.list([g.vendor, g.displayName].filter(Boolean), { type: "unit" })}
-                            </div>
-                          ) : null}
-                        </Table.Cell>
-                        <Table.Cell>
-                          <Switch
-                            size="sm"
-                            isSelected={g.enabled}
-                            onChange={(next) => toggle(g.alias, next)}
-                            isDisabled={toggling === g.alias}
-                            aria-label={t("enabledToggle", { alias: g.alias })}
-                          >
-                            <Switch.Content>
-                              <Switch.Control>
-                                <Switch.Thumb />
-                              </Switch.Control>
-                              <Label>{t("enabledState", { enabled: String(g.enabled) })}</Label>
-                            </Switch.Content>
-                          </Switch>
-                        </Table.Cell>
-                        <Table.Cell>{t("strategyLabel", { strategy: g.strategy })}</Table.Cell>
-                        <Table.Cell>
-                          {t("billingSummary", {
-                            mode: g.billingMode,
-                            input: g.priceInput,
-                            output: g.priceOutput,
-                            windows: g.priceWindows.length,
-                          })}
-                        </Table.Cell>
-                        <Table.Cell>
-                          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                            {routes(g).map((route) => (
-                              <span key={route.key} className="inline-flex items-center gap-1.5 text-sm">
-                                <span>{route.name}</span>
-                                {route.subscription ? <SubscriptionBadge /> : null}
-                              </span>
-                            ))}
-                          </div>
-                        </Table.Cell>
-                        <Table.Cell>{g.overflowGroup || tCommon("none")}</Table.Cell>
-                        <Table.Cell>
-                          <div className="flex gap-1">
+            <>
+              <RowCards label={t("title")}>
+                {shown.map((g) => (
+                  <RowCard
+                    key={g.alias}
+                    title={g.alias}
+                    description={g.vendor || g.displayName ? groupDetail(g) : undefined}
+                    aside={enabledSwitch(g)}
+                    chips={tagChip(g)}
+                    details={[
+                      { label: t("columns.strategy"), value: t("strategyLabel", { strategy: g.strategy }) },
+                      { label: t("columns.overflow"), value: g.overflowGroup || tCommon("none") },
+                      { label: t("columns.billing"), value: billingLabel(g), wide: true },
+                      { label: t("columns.endpoints"), value: endpointList(g), wide: true },
+                    ]}
+                    actions={groupActions(g)}
+                  />
+                ))}
+              </RowCards>
+              <Table aria-label={t("title")} className={TABLE_FROM_LG}>
+                <Table.ScrollContainer>
+                  <Table.Content className="min-w-4xl">
+                    <Table.Header>
+                      <Table.Column isRowHeader>{t("columns.alias")}</Table.Column>
+                      <Table.Column>{t("columns.enabled")}</Table.Column>
+                      <Table.Column>{t("columns.strategy")}</Table.Column>
+                      <Table.Column>{t("columns.billing")}</Table.Column>
+                      <Table.Column>{t("columns.endpoints")}</Table.Column>
+                      <Table.Column>{t("columns.overflow")}</Table.Column>
+                      <Table.Column>{tCommon("actions")}</Table.Column>
+                    </Table.Header>
+                    <Table.Body>
+                      {shown.map((g) => (
+                        <Table.Row key={g.alias} id={g.alias}>
+                          <Table.Cell>
                             <Button
                               size="sm"
-                              variant="secondary"
-                              aria-label={tCommon("edit")}
+                              variant="ghost"
+                              className="font-medium"
                               onPress={() => openDialog(g)}
                             >
-                              {tCommon("edit")}
+                              {g.alias}
                             </Button>
-                            <ConfirmDialog
-                              title={t("removeConfirm", { alias: g.alias })}
-                              confirmLabel={tCommon("delete")}
-                              cancelLabel={tCommon("cancel")}
-                              pending={deleting === g.alias}
-                              onConfirm={() => remove(g.alias)}
-                            >
-                              <Button
-                                isIconOnly
-                                size="sm"
-                                variant="danger-soft"
-                                aria-label={tCommon("delete")}
-                                isPending={deleting === g.alias}
-                              >
-                                <Trash2 size={14} aria-hidden />
-                              </Button>
-                            </ConfirmDialog>
-                          </div>
-                        </Table.Cell>
-                      </Table.Row>
-                    ))}
-                  </Table.Body>
-                </Table.Content>
-              </Table.ScrollContainer>
-            </Table>
+                            {tagChip(g)}
+                            {g.vendor || g.displayName ? (
+                              <div className="px-3 text-xs text-muted">{groupDetail(g)}</div>
+                            ) : null}
+                          </Table.Cell>
+                          <Table.Cell>{enabledSwitch(g)}</Table.Cell>
+                          <Table.Cell>{t("strategyLabel", { strategy: g.strategy })}</Table.Cell>
+                          <Table.Cell>{billingLabel(g)}</Table.Cell>
+                          <Table.Cell>{endpointList(g)}</Table.Cell>
+                          <Table.Cell>{g.overflowGroup || tCommon("none")}</Table.Cell>
+                          <Table.Cell>
+                            <div className="flex gap-1">{groupActions(g)}</div>
+                          </Table.Cell>
+                        </Table.Row>
+                      ))}
+                    </Table.Body>
+                  </Table.Content>
+                </Table.ScrollContainer>
+              </Table>
+            </>
           )}
         </div>
       )}

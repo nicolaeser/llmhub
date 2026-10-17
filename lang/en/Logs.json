@@ -2,9 +2,9 @@
   "title": "Logs",
   "subtitle": "Requests, spend events, and admin audit trail",
   "tabs": {
-    "requests": "requests",
-    "spend": "spend",
-    "audit": "audit"
+    "requests": "Requests",
+    "spend": "Spend",
+    "audit": "Audit"
   },
   "columns": {
     "time": "Time",
@@ -43,7 +43,8 @@
     "user": "User",
     "anyUser": "Anyone",
     "pii": "Only requests with PII",
-    "reset": "Reset"
+    "reset": "Reset",
+    "title": "{count, plural, =0 {Filters} other {Filters · # active}}"
   },
   "prev": "Previous",
   "next": "Next",

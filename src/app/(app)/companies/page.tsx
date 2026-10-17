@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { Breadcrumbs, Button, Card, toast, useOverlayState } from "@heroui/react";
 import { Building2, Folder, Pencil, Plus, Trash2, User, Users, type LucideIcon } from "lucide-react";
 import { useFormatter, useTranslations } from "next-intl";
@@ -13,6 +13,7 @@ import PageStatus from "@/components/console/page-status";
 import McpConnectionsCard from "@/components/mcp/connections-card";
 import { useErrorToast } from "@/components/console/use-error-toast";
 import { useActionData } from "@/lib/hooks/use-action-data";
+import { BELOW_LG, REDUCED_MOTION } from "@/lib/hooks/use-media-query";
 import { useSearchParam } from "@/lib/hooks/use-search-param";
 import { isActionFail } from "@/lib/http/action-result";
 import type {
@@ -64,6 +65,7 @@ export default function CompaniesPage() {
   const [budgetTarget, setBudgetTarget] = useState<BudgetTarget | null>(null);
   const [dialogKey, setDialogKey] = useState(0);
   const [deleting, startDelete] = useTransition();
+  const detailRef = useRef<HTMLDivElement>(null);
   const nodeState = useOverlayState();
   const budgetState = useOverlayState();
   const boostState = useOverlayState();
@@ -77,6 +79,15 @@ export default function CompaniesPage() {
       "",
       ref ? `?node=${ref.kind}:${ref.id}` : window.location.pathname,
     );
+  }
+
+  function selectFromTree(ref: NodeRef) {
+    select(ref);
+    if (!window.matchMedia(BELOW_LG).matches) return;
+    detailRef.current?.scrollIntoView({
+      behavior: window.matchMedia(REDUCED_MOTION).matches ? "auto" : "smooth",
+      block: "start",
+    });
   }
 
   function openNode(kind: NodeKind, editingId: string | null, orgId: string, teamId = "") {
@@ -240,10 +251,10 @@ export default function CompaniesPage() {
       ) : (
         <div className="grid gap-5 lg:grid-cols-[18rem_minmax(0,1fr)] xl:grid-cols-[20rem_minmax(0,1fr)]">
           <div className="min-w-0 lg:sticky lg:top-4 lg:self-start">
-            <CompanyTree data={data} selected={selected} onSelect={select} onCreateOrg={createOrg} />
+            <CompanyTree data={data} selected={selected} onSelect={selectFromTree} onCreateOrg={createOrg} />
           </div>
 
-          <div className="min-w-0 space-y-5">
+          <div ref={detailRef} className="min-w-0 space-y-5">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="flex min-w-0 items-start gap-3">
                 <IconTile icon={NODE_ICONS[selected.kind]} />

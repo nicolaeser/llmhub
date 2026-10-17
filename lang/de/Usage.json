@@ -46,6 +46,7 @@
     "byProject": "Prompt-Caching nach Projekt"
   },
   "range": "Zeitraum",
+  "filters": "{count, plural, =0 {Filter} other {Filter · # aktiv}}",
   "empty": "Noch keine Ausgaben. Sende eine Spielwiesen-Anfrage.",
   "ok": "OK",
   "successRate": "Erfolgsquote",

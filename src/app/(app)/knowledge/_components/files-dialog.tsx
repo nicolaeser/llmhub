@@ -16,6 +16,7 @@ import {
 import { RefreshCw, Trash2, Upload } from "lucide-react";
 import { useFormatter, useNow, useTranslations } from "next-intl";
 import ConfirmDialog from "@/components/console/confirm-dialog";
+import RowCard, { RowCards, TABLE_FROM_LG } from "@/components/console/row-cards";
 import { listKnowledgeFilesAction, removeKnowledgeFileAction } from "../_action";
 import { isActionFail } from "@/lib/http/action-result";
 import { formatBytes } from "@/lib/utils/bytes";
@@ -188,6 +189,47 @@ export default function FilesDialog({
     });
   }
 
+  function fileStatus(file: VectorFileView) {
+    return (
+      <Chip size="sm" variant="soft" color={FILE_COLOR[file.status]}>
+        {t("files.status", { status: file.status })}
+      </Chip>
+    );
+  }
+
+  function fileError(file: VectorFileView) {
+    if (!file.error) return null;
+    return (
+      <div className="space-y-0.5">
+        <p className="text-xs text-danger">{t("files.error", { code: file.error.code })}</p>
+        <p className="break-words text-xs text-muted">{file.error.message}</p>
+      </div>
+    );
+  }
+
+  function removeButton(file: VectorFileView) {
+    return (
+      <ConfirmDialog
+        title={t("files.removeConfirm", { name: file.filename })}
+        description={t("files.removeHint")}
+        confirmLabel={t("files.remove")}
+        cancelLabel={tCommon("cancel")}
+        pending={removing === file.fileId}
+        onConfirm={() => remove(file)}
+      >
+        <Button
+          isIconOnly
+          size="sm"
+          variant="danger-soft"
+          aria-label={t("files.remove")}
+          isPending={removing === file.fileId}
+        >
+          <Trash2 size={14} aria-hidden />
+        </Button>
+      </ConfirmDialog>
+    );
+  }
+
   return (
     <Modal state={state}>
       <Modal.Backdrop>
@@ -298,65 +340,59 @@ export default function FilesDialog({
                   ) : files.length === 0 ? (
                     <p className="py-6 text-center text-sm text-muted">{t("files.empty")}</p>
                   ) : (
-                    <Table aria-label={t("files.title", { name: store.name })}>
-                      <Table.ScrollContainer>
-                        <Table.Content aria-label={t("files.title", { name: store.name })} className="min-w-[40rem]">
-                          <Table.Header>
-                            <Table.Column isRowHeader>{t("files.columns.name")}</Table.Column>
-                            <Table.Column>{t("files.columns.status")}</Table.Column>
-                            <Table.Column>{t("files.columns.chunks")}</Table.Column>
-                            <Table.Column>{t("files.columns.size")}</Table.Column>
-                            <Table.Column>{t("files.columns.created")}</Table.Column>
-                            <Table.Column>{tCommon("actions")}</Table.Column>
-                          </Table.Header>
-                          <Table.Body>
-                            {files.map((file) => (
-                              <Table.Row key={file.fileId} id={file.fileId}>
-                                <Table.Cell>
-                                  <div className="break-all font-medium">{file.filename}</div>
-                                  {file.error ? (
-                                    <div className="space-y-0.5">
-                                      <p className="text-xs text-danger">{t("files.error", { code: file.error.code })}</p>
-                                      <p className="break-words text-xs text-muted">{file.error.message}</p>
-                                    </div>
-                                  ) : null}
-                                </Table.Cell>
-                                <Table.Cell>
-                                  <Chip size="sm" variant="soft" color={FILE_COLOR[file.status]}>
-                                    {t("files.status", { status: file.status })}
-                                  </Chip>
-                                </Table.Cell>
-                                <Table.Cell>{format.number(file.chunkCount, "integer")}</Table.Cell>
-                                <Table.Cell>{formatBytes(format, file.usageBytes)}</Table.Cell>
-                                <Table.Cell>{format.relativeTime(new Date(file.createdAt), now)}</Table.Cell>
-                                <Table.Cell>
-                                  {canManage ? (
-                                    <ConfirmDialog
-                                      title={t("files.removeConfirm", { name: file.filename })}
-                                      description={t("files.removeHint")}
-                                      confirmLabel={t("files.remove")}
-                                      cancelLabel={tCommon("cancel")}
-                                      pending={removing === file.fileId}
-                                      onConfirm={() => remove(file)}
-                                    >
-                                      <Button
-                                        isIconOnly
-                                        size="sm"
-                                        variant="danger-soft"
-                                        aria-label={t("files.remove")}
-                                        isPending={removing === file.fileId}
-                                      >
-                                        <Trash2 size={14} aria-hidden />
-                                      </Button>
-                                    </ConfirmDialog>
-                                  ) : null}
-                                </Table.Cell>
-                              </Table.Row>
-                            ))}
-                          </Table.Body>
-                        </Table.Content>
-                      </Table.ScrollContainer>
-                    </Table>
+                    <>
+                      <RowCards label={t("files.title", { name: store.name })}>
+                        {files.map((file) => (
+                          <RowCard
+                            key={file.fileId}
+                            variant="secondary"
+                            title={<span className="break-all">{file.filename}</span>}
+                            aside={canManage ? removeButton(file) : undefined}
+                            chips={fileStatus(file)}
+                            details={[
+                              ...(file.error
+                                ? [{ label: t("files.columns.status"), value: fileError(file), wide: true }]
+                                : []),
+                              { label: t("files.columns.chunks"), value: format.number(file.chunkCount, "integer") },
+                              { label: t("files.columns.size"), value: formatBytes(format, file.usageBytes) },
+                              {
+                                label: t("files.columns.created"),
+                                value: format.relativeTime(new Date(file.createdAt), now),
+                              },
+                            ]}
+                          />
+                        ))}
+                      </RowCards>
+                      <Table aria-label={t("files.title", { name: store.name })} className={TABLE_FROM_LG}>
+                        <Table.ScrollContainer>
+                          <Table.Content aria-label={t("files.title", { name: store.name })} className="min-w-[40rem]">
+                            <Table.Header>
+                              <Table.Column isRowHeader>{t("files.columns.name")}</Table.Column>
+                              <Table.Column>{t("files.columns.status")}</Table.Column>
+                              <Table.Column>{t("files.columns.chunks")}</Table.Column>
+                              <Table.Column>{t("files.columns.size")}</Table.Column>
+                              <Table.Column>{t("files.columns.created")}</Table.Column>
+                              <Table.Column>{tCommon("actions")}</Table.Column>
+                            </Table.Header>
+                            <Table.Body>
+                              {files.map((file) => (
+                                <Table.Row key={file.fileId} id={file.fileId}>
+                                  <Table.Cell>
+                                    <div className="break-all font-medium">{file.filename}</div>
+                                    {fileError(file)}
+                                  </Table.Cell>
+                                  <Table.Cell>{fileStatus(file)}</Table.Cell>
+                                  <Table.Cell>{format.number(file.chunkCount, "integer")}</Table.Cell>
+                                  <Table.Cell>{formatBytes(format, file.usageBytes)}</Table.Cell>
+                                  <Table.Cell>{format.relativeTime(new Date(file.createdAt), now)}</Table.Cell>
+                                  <Table.Cell>{canManage ? removeButton(file) : null}</Table.Cell>
+                                </Table.Row>
+                              ))}
+                            </Table.Body>
+                          </Table.Content>
+                        </Table.ScrollContainer>
+                      </Table>
+                    </>
                   )}
                 </Modal.Body>
                 <Modal.Footer>
