@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Badge, Button, Card, Disclosure } from "@heroui/react";
+import { Button, Card, Chip, Disclosure } from "@heroui/react";
 import { Plug, Plus } from "lucide-react";
 import { useTranslations } from "next-intl";
 import EmptyState from "@/components/console/empty-state";
@@ -73,9 +73,9 @@ export default function ApiProviders({ rows, actions }: { rows: ProviderView[]; 
             <h2 id="providers-connected" className="text-base font-semibold tracking-tight">
               {t("connectedTitle")}
             </h2>
-            <Badge size="sm" variant="secondary" className="px-1.5">
+            <Chip size="sm" variant="soft">
               {rows.length}
-            </Badge>
+            </Chip>
           </div>
           <div className="grid gap-3 lg:grid-cols-2 2xl:grid-cols-3">
             {rows.map((row) => (

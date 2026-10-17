@@ -15,6 +15,7 @@ import { MoreHorizontal, Plus, RotateCcw } from "lucide-react";
 import { useTranslations } from "next-intl";
 import ConfirmDialog from "@/components/console/confirm-dialog";
 import PageStatus from "@/components/console/page-status";
+import RowCard, { RowCards, TABLE_FROM_LG } from "@/components/console/row-cards";
 import { useActionData } from "@/lib/hooks/use-action-data";
 import { isActionFail } from "@/lib/http/action-result";
 import { permissionCatalog, roleTemplateKeys } from "@/lib/auth/permissions";
@@ -114,6 +115,77 @@ export default function RolesTab() {
     });
   }
 
+  function roleDescription(role: RoleSummary) {
+    return role.description ?? (role.templateKey ? t("templateDescription", { key: role.templateKey }) : "");
+  }
+
+  function permissionChips(role: RoleSummary) {
+    return (
+      <>
+        <Chip size="sm" variant="soft">
+          {t("permissionCount", { count: role.permissions.length })}
+        </Chip>
+        {role.permissions.some((permission) => permissionCatalog[permission].level === "sensitive") ? (
+          <Chip size="sm" variant="soft" color="warning">
+            {t("level", { level: "sensitive" })}
+          </Chip>
+        ) : null}
+      </>
+    );
+  }
+
+  function roleMenu(role: RoleSummary) {
+    if (!role.editable) {
+      return (
+        <Chip size="sm" variant="soft">
+          {t("protected")}
+        </Chip>
+      );
+    }
+    return (
+      <Dropdown>
+        <Button
+          isIconOnly
+          size="sm"
+          variant="ghost"
+          isPending={deletingId === role.id}
+          aria-label={t("actionsMenu", { role: roleName(role) })}
+        >
+          {({ isPending }) =>
+            isPending ? <Spinner color="current" size="sm" /> : <MoreHorizontal size={14} aria-hidden />
+          }
+        </Button>
+        <Dropdown.Popover>
+          <Dropdown.Menu
+            aria-label={t("actionsMenu", { role: roleName(role) })}
+            onAction={(key) => {
+              if (key === "edit") openEditor(role);
+              if (key === "delete") {
+                setTarget(role);
+                deleteState.open();
+              }
+              if (key === "reset") reset(role);
+            }}
+          >
+            <Dropdown.Item id="edit" textValue={t("edit")}>
+              {t("edit")}
+            </Dropdown.Item>
+            {role.templateKey ? (
+              <Dropdown.Item id="reset" textValue={t("reset")}>
+                {t("reset")}
+              </Dropdown.Item>
+            ) : null}
+            {role.memberCount === 0 ? (
+              <Dropdown.Item id="delete" textValue={tCommon("delete")}>
+                {tCommon("delete")}
+              </Dropdown.Item>
+            ) : null}
+          </Dropdown.Menu>
+        </Dropdown.Popover>
+      </Dropdown>
+    );
+  }
+
   if (!data) {
     return <PageStatus state={page} />;
   }
@@ -127,7 +199,28 @@ export default function RolesTab() {
           {t("create")}
         </Button>
       </div>
-      <Table aria-label={t("title")}>
+      <RowCards label={t("title")}>
+        {data.roles.map((role) => (
+          <RowCard
+            key={role.id}
+            title={roleName(role)}
+            description={roleDescription(role) || undefined}
+            aside={roleMenu(role)}
+            chips={
+              <>
+                {role.templateKey ? (
+                  <Chip size="sm" variant="soft">
+                    {t("builtIn")}
+                  </Chip>
+                ) : null}
+                {permissionChips(role)}
+              </>
+            }
+            details={[{ label: t("columns.members"), value: t("members", { count: role.memberCount }) }]}
+          />
+        ))}
+      </RowCards>
+      <Table aria-label={t("title")} className={TABLE_FROM_LG}>
         <Table.ScrollContainer>
           <Table.Content>
             <Table.Header>
@@ -149,72 +242,15 @@ export default function RolesTab() {
                           </Chip>
                         ) : null}
                       </p>
-                      <p className="text-xs text-muted">
-                        {role.description ??
-                          (role.templateKey ? t("templateDescription", { key: role.templateKey }) : "")}
-                      </p>
+                      <p className="text-xs text-muted">{roleDescription(role)}</p>
                     </div>
                   </Table.Cell>
                   <Table.Cell>{t("members", { count: role.memberCount })}</Table.Cell>
                   <Table.Cell>
-                    <div className="flex flex-wrap gap-1">
-                      <Chip size="sm" variant="soft">
-                        {t("permissionCount", { count: role.permissions.length })}
-                      </Chip>
-                      {role.permissions.some((permission) => permissionCatalog[permission].level === "sensitive") ? (
-                        <Chip size="sm" variant="soft" color="warning">
-                          {t("level", { level: "sensitive" })}
-                        </Chip>
-                      ) : null}
-                    </div>
+                    <div className="flex flex-wrap gap-1">{permissionChips(role)}</div>
                   </Table.Cell>
                   <Table.Cell>
-                    {role.editable ? (
-                      <Dropdown>
-                        <Button
-                          isIconOnly
-                          size="sm"
-                          variant="ghost"
-                          isPending={deletingId === role.id}
-                          aria-label={t("actionsMenu", { role: roleName(role) })}
-                        >
-                          {({ isPending }) =>
-                            isPending ? <Spinner color="current" size="sm" /> : <MoreHorizontal size={14} aria-hidden />
-                          }
-                        </Button>
-                        <Dropdown.Popover>
-                          <Dropdown.Menu
-                            aria-label={t("actionsMenu", { role: roleName(role) })}
-                            onAction={(key) => {
-                              if (key === "edit") openEditor(role);
-                              if (key === "delete") {
-                                setTarget(role);
-                                deleteState.open();
-                              }
-                              if (key === "reset") reset(role);
-                            }}
-                          >
-                            <Dropdown.Item id="edit" textValue={t("edit")}>
-                              {t("edit")}
-                            </Dropdown.Item>
-                            {role.templateKey ? (
-                              <Dropdown.Item id="reset" textValue={t("reset")}>
-                                {t("reset")}
-                              </Dropdown.Item>
-                            ) : null}
-                            {role.memberCount === 0 ? (
-                              <Dropdown.Item id="delete" textValue={tCommon("delete")}>
-                                {tCommon("delete")}
-                              </Dropdown.Item>
-                            ) : null}
-                          </Dropdown.Menu>
-                        </Dropdown.Popover>
-                      </Dropdown>
-                    ) : (
-                      <Chip size="sm" variant="soft">
-                        {t("protected")}
-                      </Chip>
-                    )}
+                    {roleMenu(role)}
                   </Table.Cell>
                 </Table.Row>
               ))}

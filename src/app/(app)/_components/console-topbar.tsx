@@ -52,7 +52,7 @@ export default function ConsoleTopbar({
 
   return (
     <>
-      <header className="flex h-14 items-center gap-3 bg-surface px-4 md:px-6">
+      <header className="flex h-14 items-center gap-2 bg-surface px-3 sm:gap-3 sm:px-4 md:px-6">
         {nav ? (
           <Button
             isIconOnly
@@ -66,15 +66,16 @@ export default function ConsoleTopbar({
           </Button>
         ) : null}
         <div
-          className="flex items-center gap-2 text-sm text-muted"
+          className="flex min-w-0 items-center gap-2 text-sm text-muted"
           role="status"
           aria-label={healthLabel}
+          title={healthLabel}
         >
           <span
-            className={`h-2 w-2 rounded-full ${health === "ok" ? "bg-success" : health === "down" ? "bg-danger" : "bg-accent"}`}
+            className={`h-2 w-2 shrink-0 rounded-full ${health === "ok" ? "bg-success" : health === "down" ? "bg-danger" : "bg-accent"}`}
             aria-hidden
           />
-          <span className={health === "down" ? "text-danger" : undefined}>
+          <span className={health === "down" ? "truncate text-danger" : "hidden sm:inline"}>
             {healthLabel}
           </span>
         </div>
@@ -82,7 +83,7 @@ export default function ConsoleTopbar({
         {companies.length ? (
           <Select
             aria-label={tNav("workspaceLabel")}
-            className="w-44 sm:w-60"
+            className="w-36 sm:w-60"
             selectedKey={selectedKey}
             onSelectionChange={(key) => {
               if (key == null) return;
@@ -141,9 +142,20 @@ export default function ConsoleTopbar({
         <form action="/internal-api/account/logout" method="POST">
           <Button
             type="submit"
+            isIconOnly
             size="sm"
             variant="ghost"
             aria-label={t("signOut")}
+            className="sm:hidden"
+          >
+            <LogOut size={14} aria-hidden />
+          </Button>
+          <Button
+            type="submit"
+            size="sm"
+            variant="ghost"
+            aria-label={t("signOut")}
+            className="max-sm:hidden"
           >
             <LogOut size={14} aria-hidden />
             {t("signOut")}

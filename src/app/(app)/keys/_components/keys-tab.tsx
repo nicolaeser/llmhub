@@ -16,6 +16,7 @@ import BudgetDialog from "@/components/budget/budget-dialog";
 import ConfirmDialog from "@/components/console/confirm-dialog";
 import EmptyState from "@/components/console/empty-state";
 import PageStatus from "@/components/console/page-status";
+import RowCard, { RowCards, TABLE_FROM_LG } from "@/components/console/row-cards";
 import StatCard from "@/components/console/stat-card";
 import { useErrorToast } from "@/components/console/use-error-toast";
 import GettingStarted from "./getting-started";
@@ -202,6 +203,115 @@ export default function KeysTab() {
     };
   }
 
+  function spendLabel(row: VirtualKeyView) {
+    return tCommon("spendBudget", {
+      hasCap: row.max_budget > 0 ? "yes" : "no",
+      spend: row.spend,
+      budget: row.max_budget,
+    });
+  }
+
+  function keyChips(row: VirtualKeyView) {
+    return (
+      <>
+        <Chip size="sm" variant="soft" color={row.blocked ? "danger" : "success"}>
+          {tCommon("blockedState", {
+            blocked: row.blocked ? "true" : "false",
+          })}
+        </Chip>
+        {row.log_content ? null : (
+          <Chip size="sm" variant="soft" color="warning">
+            {t("contentOff")}
+          </Chip>
+        )}
+        {row.allowed_endpoints.length ? (
+          <Chip size="sm" variant="soft">
+            {t("endpointChip", {
+              endpoints: format.list(
+                row.allowed_endpoints.map((endpoint) => t("endpoints.name", { endpoint })),
+                { type: "conjunction" },
+              ),
+            })}
+          </Chip>
+        ) : null}
+        {row.access_windows.length ? (
+          <Chip size="sm" variant="soft">
+            {t("windowChip")}
+          </Chip>
+        ) : null}
+      </>
+    );
+  }
+
+  function keyActions(row: VirtualKeyView) {
+    const name = row.key_alias || row.key_name;
+    return (
+      <>
+        {canManage ? (
+          <Button isIconOnly size="sm" variant="ghost" aria-label={t("edit")} onPress={() => openDialog(row)}>
+            <Pencil size={14} aria-hidden />
+          </Button>
+        ) : null}
+        {canMcp ? (
+          <Button
+            isIconOnly
+            size="sm"
+            variant="ghost"
+            aria-label={t("mcp.open", { name })}
+            onPress={() => openMcp(row)}
+          >
+            <Blocks size={14} aria-hidden />
+          </Button>
+        ) : null}
+        {canBudget ? (
+          <Button isIconOnly size="sm" variant="ghost" aria-label={t("budget")} onPress={() => openBudget(row)}>
+            <Wallet size={14} aria-hidden />
+          </Button>
+        ) : null}
+        {canManage ? (
+          <>
+            <ConfirmDialog
+              title={t("rotateConfirm.title", { name })}
+              description={t("rotateConfirm.description")}
+              confirmLabel={t("rotate")}
+              cancelLabel={tCommon("cancel")}
+              onConfirm={() => rotate(row.token_id)}
+            >
+              <Button
+                isIconOnly
+                size="sm"
+                variant="ghost"
+                aria-label={t("rotate")}
+                isPending={busy?.id === row.token_id && busy.action === "rotate"}
+                isDisabled={busy !== null && busy.id !== row.token_id}
+              >
+                <RefreshCw size={14} aria-hidden />
+              </Button>
+            </ConfirmDialog>
+            <ConfirmDialog
+              title={t("revokeConfirm.title", { name })}
+              description={t("revokeConfirm.description")}
+              confirmLabel={t("revoke")}
+              cancelLabel={tCommon("cancel")}
+              onConfirm={() => revoke(row.token_id)}
+            >
+              <Button
+                isIconOnly
+                size="sm"
+                variant="danger-soft"
+                aria-label={t("revoke")}
+                isPending={busy?.id === row.token_id && busy.action === "revoke"}
+                isDisabled={busy !== null && busy.id !== row.token_id}
+              >
+                <Trash2 size={14} aria-hidden />
+              </Button>
+            </ConfirmDialog>
+          </>
+        ) : null}
+      </>
+    );
+  }
+
   const createButton = canManage ? (
     <Button onPress={() => openDialog(null)}>
       <Plus size={16} aria-hidden />
@@ -243,7 +353,7 @@ export default function KeysTab() {
         />
       ) : (
         <>
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
             <StatCard
               icon={KeyRound}
               label={t("overview.keys")}
@@ -285,155 +395,79 @@ export default function KeysTab() {
           {filtered.length === 0 ? (
             <EmptyState icon={KeyRound} title={t("noMatches")} />
           ) : (
-            <Table aria-label={t("title")}>
-              <Table.ScrollContainer>
-                <Table.Content>
-                  <Table.Header>
-                    <Table.Column isRowHeader>{t("columns.name")}</Table.Column>
-                    <Table.Column>{t("columns.binding")}</Table.Column>
-                    <Table.Column>{t("columns.access")}</Table.Column>
-                    <Table.Column>{t("columns.spend")}</Table.Column>
-                    <Table.Column>{t("columns.status")}</Table.Column>
-                    <Table.Column>{tCommon("actions")}</Table.Column>
-                  </Table.Header>
-                  <Table.Body>
-                    {filtered.map((row) => {
-                      const bound = binding(row);
-                      return (
-                        <Table.Row key={row.token_id} id={row.token_id}>
-                          <Table.Cell>
-                            <div className="font-medium">{row.key_alias || tCommon("none")}</div>
-                            <div className="font-mono text-xs text-muted">{row.key_name}…</div>
-                          </Table.Cell>
-                          <Table.Cell>
-                            <div className="min-w-0">
-                              <p className="text-sm">{bound.name}</p>
-                              <p className="text-xs text-muted">{bound.path}</p>
-                            </div>
-                          </Table.Cell>
-                          <Table.Cell>
-                            <span className="text-sm">{accessLabel(row)}</span>
-                          </Table.Cell>
-                          <Table.Cell>
-                            {tCommon("spendBudget", {
-                              hasCap: row.max_budget > 0 ? "yes" : "no",
-                              spend: row.spend,
-                              budget: row.max_budget,
-                            })}
-                          </Table.Cell>
-                          <Table.Cell>
-                            <div className="flex flex-wrap gap-1">
-                              <Chip size="sm" variant="soft" color={row.blocked ? "danger" : "success"}>
-                                {tCommon("blockedState", {
-                                  blocked: row.blocked ? "true" : "false",
-                                })}
-                              </Chip>
-                              {row.log_content ? null : (
-                                <Chip size="sm" variant="soft" color="warning">
-                                  {t("contentOff")}
-                                </Chip>
-                              )}
-                              {row.allowed_endpoints.length ? (
-                                <Chip size="sm" variant="soft">
-                                  {t("endpointChip", {
-                                    endpoints: format.list(
-                                      row.allowed_endpoints.map((endpoint) => t("endpoints.name", { endpoint })),
-                                      { type: "conjunction" },
-                                    ),
-                                  })}
-                                </Chip>
-                              ) : null}
-                              {row.access_windows.length ? (
-                                <Chip size="sm" variant="soft">
-                                  {t("windowChip")}
-                                </Chip>
-                              ) : null}
-                            </div>
-                          </Table.Cell>
-                          <Table.Cell>
-                            <div className="flex gap-1">
-                              {canManage ? (
-                                <Button
-                                  isIconOnly
-                                  size="sm"
-                                  variant="ghost"
-                                  aria-label={t("edit")}
-                                  onPress={() => openDialog(row)}
-                                >
-                                  <Pencil size={14} aria-hidden />
-                                </Button>
-                              ) : null}
-                              {canMcp ? (
-                                <Button
-                                  isIconOnly
-                                  size="sm"
-                                  variant="ghost"
-                                  aria-label={t("mcp.open", { name: row.key_alias || row.key_name })}
-                                  onPress={() => openMcp(row)}
-                                >
-                                  <Blocks size={14} aria-hidden />
-                                </Button>
-                              ) : null}
-                              {canBudget ? (
-                                <Button
-                                  isIconOnly
-                                  size="sm"
-                                  variant="ghost"
-                                  aria-label={t("budget")}
-                                  onPress={() => openBudget(row)}
-                                >
-                                  <Wallet size={14} aria-hidden />
-                                </Button>
-                              ) : null}
-                              {canManage ? (
-                                <>
-                                  <ConfirmDialog
-                                    title={t("rotateConfirm.title", { name: row.key_alias || row.key_name })}
-                                    description={t("rotateConfirm.description")}
-                                    confirmLabel={t("rotate")}
-                                    cancelLabel={tCommon("cancel")}
-                                    onConfirm={() => rotate(row.token_id)}
-                                  >
-                                    <Button
-                                      isIconOnly
-                                      size="sm"
-                                      variant="ghost"
-                                      aria-label={t("rotate")}
-                                      isPending={busy?.id === row.token_id && busy.action === "rotate"}
-                                      isDisabled={busy !== null && busy.id !== row.token_id}
-                                    >
-                                      <RefreshCw size={14} aria-hidden />
-                                    </Button>
-                                  </ConfirmDialog>
-                                  <ConfirmDialog
-                                    title={t("revokeConfirm.title", { name: row.key_alias || row.key_name })}
-                                    description={t("revokeConfirm.description")}
-                                    confirmLabel={t("revoke")}
-                                    cancelLabel={tCommon("cancel")}
-                                    onConfirm={() => revoke(row.token_id)}
-                                  >
-                                    <Button
-                                      isIconOnly
-                                      size="sm"
-                                      variant="danger-soft"
-                                      aria-label={t("revoke")}
-                                      isPending={busy?.id === row.token_id && busy.action === "revoke"}
-                                      isDisabled={busy !== null && busy.id !== row.token_id}
-                                    >
-                                      <Trash2 size={14} aria-hidden />
-                                    </Button>
-                                  </ConfirmDialog>
-                                </>
-                              ) : null}
-                            </div>
-                          </Table.Cell>
-                        </Table.Row>
-                      );
-                    })}
-                  </Table.Body>
-                </Table.Content>
-              </Table.ScrollContainer>
-            </Table>
+            <>
+              <RowCards label={t("title")}>
+                {filtered.map((row) => {
+                  const bound = binding(row);
+                  return (
+                    <RowCard
+                      key={row.token_id}
+                      title={row.key_alias || tCommon("none")}
+                      description={<span className="font-mono text-xs">{row.key_name}…</span>}
+                      chips={keyChips(row)}
+                      details={[
+                        {
+                          label: t("columns.binding"),
+                          value: (
+                            <>
+                              {bound.name}
+                              <span className="block text-xs text-muted">{bound.path}</span>
+                            </>
+                          ),
+                          wide: true,
+                        },
+                        { label: t("columns.access"), value: accessLabel(row) },
+                        { label: t("columns.spend"), value: spendLabel(row) },
+                      ]}
+                      actions={keyActions(row)}
+                    />
+                  );
+                })}
+              </RowCards>
+              <Table aria-label={t("title")} className={TABLE_FROM_LG}>
+                <Table.ScrollContainer>
+                  <Table.Content>
+                    <Table.Header>
+                      <Table.Column isRowHeader>{t("columns.name")}</Table.Column>
+                      <Table.Column>{t("columns.binding")}</Table.Column>
+                      <Table.Column>{t("columns.access")}</Table.Column>
+                      <Table.Column>{t("columns.spend")}</Table.Column>
+                      <Table.Column>{t("columns.status")}</Table.Column>
+                      <Table.Column>{tCommon("actions")}</Table.Column>
+                    </Table.Header>
+                    <Table.Body>
+                      {filtered.map((row) => {
+                        const bound = binding(row);
+                        return (
+                          <Table.Row key={row.token_id} id={row.token_id}>
+                            <Table.Cell>
+                              <div className="font-medium">{row.key_alias || tCommon("none")}</div>
+                              <div className="font-mono text-xs text-muted">{row.key_name}…</div>
+                            </Table.Cell>
+                            <Table.Cell>
+                              <div className="min-w-0">
+                                <p className="text-sm">{bound.name}</p>
+                                <p className="text-xs text-muted">{bound.path}</p>
+                              </div>
+                            </Table.Cell>
+                            <Table.Cell>
+                              <span className="text-sm">{accessLabel(row)}</span>
+                            </Table.Cell>
+                            <Table.Cell>{spendLabel(row)}</Table.Cell>
+                            <Table.Cell>
+                              <div className="flex flex-wrap gap-1">{keyChips(row)}</div>
+                            </Table.Cell>
+                            <Table.Cell>
+                              <div className="flex gap-1">{keyActions(row)}</div>
+                            </Table.Cell>
+                          </Table.Row>
+                        );
+                      })}
+                    </Table.Body>
+                  </Table.Content>
+                </Table.ScrollContainer>
+              </Table>
+            </>
           )}
         </>
       )}

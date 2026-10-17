@@ -5,6 +5,7 @@ import {
   Button,
   buttonVariants,
   Card,
+  Disclosure,
   Label,
   ListBox,
   Select,
@@ -18,12 +19,15 @@ import {
   Coins,
   Download,
   Gauge,
+  SlidersHorizontal,
   Timer,
 } from "lucide-react";
 import { useFormatter, useTranslations } from "next-intl";
 import { loadUsageAction } from "../_action";
 import { useActionData } from "@/lib/hooks/use-action-data";
+import { BELOW_MD, useMediaQuery } from "@/lib/hooks/use-media-query";
 import PageStatus, { LoadError } from "@/components/console/page-status";
+import RowCard, { RowCards, TABLE_FROM_LG } from "@/components/console/row-cards";
 import SearchSelect from "@/components/console/search-select";
 import StatCard from "@/components/console/stat-card";
 import MarginCard from "./margin-card";
@@ -66,6 +70,8 @@ export default function OverviewTab() {
   const format = useFormatter();
   const [query, setQuery] = useState<UsageQuery>(INITIAL_QUERY);
   const [picked, setPicked] = useState<Partial<Record<FilterKey, PickerItem>>>({});
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const compact = useMediaQuery(BELOW_MD);
   const usage = useActionData(() => loadUsageAction(INITIAL_QUERY));
   const { data: stats, pending } = usage;
 
@@ -100,6 +106,28 @@ export default function OverviewTab() {
     { key: "keyId" as const, label: t("group.key"), options: options("key", stats.keys) },
     { key: "userId" as const, label: t("group.user"), options: options("user", stats.users) },
   ];
+
+  const tenantFields = tenantFilters.map((filter) => {
+    const kept = picked[filter.key];
+    const missing =
+      kept && kept.id === query[filter.key] && !filter.options.some((option) => option.id === kept.id);
+    return (
+      <SearchSelect
+        key={filter.key}
+        label={filter.label}
+        items={[{ id: "all", label: tCommon("all") }, ...filter.options, ...(missing ? [kept] : [])]}
+        value={query[filter.key] || "all"}
+        onChange={(next) => {
+          setPicked((current) => ({
+            ...current,
+            [filter.key]: filter.options.find((option) => option.id === next),
+          }));
+          apply({ [filter.key]: next === "all" ? "" : next });
+        }}
+      />
+    );
+  });
+  const activeFilters = tenantFilters.filter((filter) => query[filter.key]).length;
 
   return (
     <div>
@@ -149,27 +177,26 @@ export default function OverviewTab() {
             </ListBox>
           </Select.Popover>
         </Select>
-        {tenantFilters.map((filter) => {
-          const kept = picked[filter.key];
-          const missing =
-            kept && kept.id === query[filter.key] && !filter.options.some((option) => option.id === kept.id);
-          return (
-            <SearchSelect
-              key={filter.key}
-              label={filter.label}
-              items={[{ id: "all", label: tCommon("all") }, ...filter.options, ...(missing ? [kept] : [])]}
-              value={query[filter.key] || "all"}
-              onChange={(next) => {
-                setPicked((current) => ({
-                  ...current,
-                  [filter.key]: filter.options.find((option) => option.id === next),
-                }));
-                apply({ [filter.key]: next === "all" ? "" : next });
-              }}
-            />
-          );
-        })}
+        {compact ? null : tenantFields}
       </div>
+      {compact && tenantFields.length ? (
+        <Card className="mb-5">
+          <Disclosure isExpanded={filtersOpen} onExpandedChange={setFiltersOpen}>
+            <Disclosure.Heading>
+              <Disclosure.Trigger className="flex w-full items-center justify-between gap-2 text-sm font-medium">
+                <span className="flex items-center gap-2">
+                  <SlidersHorizontal size={14} aria-hidden />
+                  {t("filters", { count: activeFilters })}
+                </span>
+                <Disclosure.Indicator />
+              </Disclosure.Trigger>
+            </Disclosure.Heading>
+            <Disclosure.Content>
+              <Disclosure.Body className="grid gap-3 pt-4">{tenantFields}</Disclosure.Body>
+            </Disclosure.Content>
+          </Disclosure>
+        </Card>
+      ) : null}
       <LoadError state={usage} className="mb-5" />
       <p className="sr-only">
         {t("summary", {
@@ -238,7 +265,21 @@ export default function OverviewTab() {
           <Card.Header>
             <Card.Title>{t("pdf.byModel")}</Card.Title>
           </Card.Header>
-          <Table aria-label={t("pdf.byModel")}>
+          <RowCards label={t("pdf.byModel")}>
+            {stats.byModel.map((row) => (
+              <RowCard
+                key={row.name || "none"}
+                variant="secondary"
+                title={row.name || tCommon("none")}
+                details={[
+                  { label: t("columns.spend"), value: format.number(row.spend, "money"), wide: true },
+                  { label: t("columns.prompt"), value: format.number(row.prompt, "integer") },
+                  { label: t("columns.completion"), value: format.number(row.completion, "integer") },
+                ]}
+              />
+            ))}
+          </RowCards>
+          <Table aria-label={t("pdf.byModel")} className={TABLE_FROM_LG}>
             <Table.ScrollContainer>
               <Table.Content>
                 <Table.Header>
@@ -296,7 +337,26 @@ export default function OverviewTab() {
           <Card.Header>
             <Card.Title>{t("cache.byProject")}</Card.Title>
           </Card.Header>
-          <Table aria-label={t("cache.byProject")}>
+          <RowCards label={t("cache.byProject")}>
+            {stats.cacheByProject.map((row) => (
+              <RowCard
+                key={row.name}
+                variant="secondary"
+                title={label("project", row.name) || tCommon("none")}
+                details={[
+                  { label: t("columns.prompt"), value: format.number(row.prompt, "integer") },
+                  {
+                    label: t("columns.hitRate"),
+                    value: format.number(row.prompt ? (row.cacheRead ?? 0) / row.prompt : 0, "percent"),
+                  },
+                  { label: t("columns.cacheRead"), value: format.number(row.cacheRead ?? 0, "integer") },
+                  { label: t("columns.cacheWrite"), value: format.number(row.cacheWrite ?? 0, "integer") },
+                  { label: t("columns.savings"), value: format.number(row.cacheSavings ?? 0, "money") },
+                ]}
+              />
+            ))}
+          </RowCards>
+          <Table aria-label={t("cache.byProject")} className={TABLE_FROM_LG}>
             <Table.ScrollContainer>
               <Table.Content>
                 <Table.Header>

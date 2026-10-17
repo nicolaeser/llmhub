@@ -6,7 +6,7 @@ Load `BASE.md` first. Then open only the documents below that match the task.
 
 - [BASE.md](BASE.md) — Always-loaded conduct, safety, and compact routing; load before any other project work.
 - [AI.md](AI.md) — Governance for this directory; load when creating or revising `.ai/` documents.
-- [STYLE.md](STYLE.md) — Sole visual, layout, HeroUI, sizing, overflow, and accessibility contract; load for any UI, theme, motion, or a11y work.
+- [STYLE.md](STYLE.md) — Sole visual, layout, responsive, HeroUI, sizing, overflow, and accessibility contract; load for any UI, theme, mobile, motion, or a11y work.
 
 ## Knowledge
 

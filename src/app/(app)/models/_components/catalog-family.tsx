@@ -3,6 +3,7 @@
 import { Button, Card, Chip, Disclosure, Label, Switch, Table } from "@heroui/react";
 import { ArrowRight, ArrowRightLeft } from "lucide-react";
 import { useFormatter, useTranslations } from "next-intl";
+import RowCard, { RowCards, TABLE_FROM_LG } from "@/components/console/row-cards";
 import SearchSelect from "@/components/console/search-select";
 import SubscriptionBadge from "@/components/console/subscription-badge";
 import { isSignInKind } from "@/lib/gateway/upstreams/provider-kinds";
@@ -47,11 +48,66 @@ function GroupSwitch({ group, handlers }: { group: CatalogGroupView; handlers: H
   );
 }
 
-function VariantBody({ group, handlers }: { group: CatalogGroupView; handlers: Handlers }) {
+function VariantBody({
+  group,
+  handlers,
+  inset = false,
+}: {
+  group: CatalogGroupView;
+  handlers: Handlers;
+  inset?: boolean;
+}) {
   const t = useTranslations("ModelCatalog");
   const tProviders = useTranslations("Providers");
   const format = useFormatter();
   const { canManage, busy } = handlers;
+
+  function kindLabel(entry: CatalogEntryView) {
+    return isSignInKind(entry.kind)
+      ? tProviders("channel", { kind: entry.kind })
+      : tProviders("kindName", { kind: entry.kind });
+  }
+
+  function modelCell(entry: CatalogEntryView) {
+    return (
+      <>
+        <div className="break-all font-mono text-xs">{entry.upstreamId}</div>
+        {entry.name ? <div className="text-xs text-muted">{entry.name}</div> : null}
+      </>
+    );
+  }
+
+  function matchCell(entry: CatalogEntryView) {
+    return (
+      <>
+        <div className="text-sm">
+          {entry.source === "jev"
+            ? t("jevConfidence", { confidence: format.number(entry.confidence, "percent") })
+            : t("source", { source: entry.source || "own" })}
+        </div>
+        {!entry.trusted && entry.status === "new" ? <div className="text-xs text-warning">{t("untrusted")}</div> : null}
+      </>
+    );
+  }
+
+  function entrySwitch(entry: CatalogEntryView) {
+    return (
+      <Switch
+        size="sm"
+        isSelected={entry.status === "active"}
+        isDisabled={!canManage || busy === `entry:${catalogEntryKey(entry)}`}
+        onChange={(next) => handlers.onEntryActive(entry, next)}
+        aria-label={t("entryToggle", { model: entry.upstreamId, provider: entry.providerName })}
+      >
+        <Switch.Content>
+          <Switch.Control>
+            <Switch.Thumb />
+          </Switch.Control>
+          <Label>{t("entryState", { status: entry.status })}</Label>
+        </Switch.Content>
+      </Switch>
+    );
+  }
 
   return (
     <div className="space-y-4">
@@ -80,83 +136,86 @@ function VariantBody({ group, handlers }: { group: CatalogGroupView; handlers: H
         </div>
       )}
       {group.entries.length ? (
-        <Table aria-label={group.alias}>
-          <Table.ScrollContainer>
-            <Table.Content aria-label={group.alias} className="min-w-[44rem]">
-              <Table.Header>
-                <Table.Column isRowHeader>{t("columns.provider")}</Table.Column>
-                <Table.Column>{t("columns.model")}</Table.Column>
-                <Table.Column>{t("columns.match")}</Table.Column>
-                <Table.Column>{t("columns.active")}</Table.Column>
-                <Table.Column>{t("columns.actions")}</Table.Column>
-              </Table.Header>
-              <Table.Body>
-                {group.entries.map((entry) => {
-                  const key = catalogEntryKey(entry);
-                  return (
-                    <Table.Row key={key} id={key}>
-                      <Table.Cell>
-                        <div className="flex flex-wrap items-center gap-1.5">
-                          <span className="font-medium">{entry.providerName}</span>
-                          {isSignInKind(entry.kind) ? <SubscriptionBadge /> : null}
-                        </div>
-                        <div className="text-xs text-muted">
-                          {isSignInKind(entry.kind)
-                            ? tProviders("channel", { kind: entry.kind })
-                            : tProviders("kindName", { kind: entry.kind })}
-                        </div>
-                      </Table.Cell>
-                      <Table.Cell>
-                        <div className="break-all font-mono text-xs">{entry.upstreamId}</div>
-                        {entry.name ? <div className="text-xs text-muted">{entry.name}</div> : null}
-                      </Table.Cell>
-                      <Table.Cell>
-                        <div className="text-sm">
-                          {entry.source === "jev"
-                            ? t("jevConfidence", { confidence: format.number(entry.confidence, "percent") })
-                            : t("source", { source: entry.source || "own" })}
-                        </div>
-                        {!entry.trusted && entry.status === "new" ? (
-                          <div className="text-xs text-warning">{t("untrusted")}</div>
-                        ) : null}
-                      </Table.Cell>
-                      <Table.Cell>
-                        <Switch
-                          size="sm"
-                          isSelected={entry.status === "active"}
-                          isDisabled={!canManage || busy === `entry:${key}`}
-                          onChange={(next) => handlers.onEntryActive(entry, next)}
-                          aria-label={t("entryToggle", { model: entry.upstreamId, provider: entry.providerName })}
-                        >
-                          <Switch.Content>
-                            <Switch.Control>
-                              <Switch.Thumb />
-                            </Switch.Control>
-                            <Label>{t("entryState", { status: entry.status })}</Label>
-                          </Switch.Content>
-                        </Switch>
-                      </Table.Cell>
-                      <Table.Cell>
-                        {canManage ? (
-                          <Button
-                            isIconOnly
-                            size="sm"
-                            variant="ghost"
-                            aria-label={t("assign")}
-                            isDisabled={busy === `entry:${key}`}
-                            onPress={() => handlers.onAssign(entry, group.alias)}
-                          >
-                            <ArrowRightLeft size={14} aria-hidden />
-                          </Button>
-                        ) : null}
-                      </Table.Cell>
-                    </Table.Row>
-                  );
-                })}
-              </Table.Body>
-            </Table.Content>
-          </Table.ScrollContainer>
-        </Table>
+        <>
+          <RowCards label={group.alias}>
+            {group.entries.map((entry) => {
+              const key = catalogEntryKey(entry);
+              return (
+                <RowCard
+                  key={key}
+                  variant={inset ? "tertiary" : "secondary"}
+                  title={entry.providerName}
+                  description={kindLabel(entry)}
+                  aside={entrySwitch(entry)}
+                  chips={isSignInKind(entry.kind) ? <SubscriptionBadge /> : null}
+                  details={[
+                    { label: t("columns.model"), value: modelCell(entry), wide: true },
+                    { label: t("columns.match"), value: matchCell(entry), wide: true },
+                  ]}
+                  actions={
+                    canManage ? (
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        isDisabled={busy === `entry:${key}`}
+                        onPress={() => handlers.onAssign(entry, group.alias)}
+                      >
+                        <ArrowRightLeft size={14} aria-hidden />
+                        {t("assign")}
+                      </Button>
+                    ) : undefined
+                  }
+                />
+              );
+            })}
+          </RowCards>
+          <Table aria-label={group.alias} className={TABLE_FROM_LG}>
+            <Table.ScrollContainer>
+              <Table.Content aria-label={group.alias} className="min-w-[44rem]">
+                <Table.Header>
+                  <Table.Column isRowHeader>{t("columns.provider")}</Table.Column>
+                  <Table.Column>{t("columns.model")}</Table.Column>
+                  <Table.Column>{t("columns.match")}</Table.Column>
+                  <Table.Column>{t("columns.active")}</Table.Column>
+                  <Table.Column>{t("columns.actions")}</Table.Column>
+                </Table.Header>
+                <Table.Body>
+                  {group.entries.map((entry) => {
+                    const key = catalogEntryKey(entry);
+                    return (
+                      <Table.Row key={key} id={key}>
+                        <Table.Cell>
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <span className="font-medium">{entry.providerName}</span>
+                            {isSignInKind(entry.kind) ? <SubscriptionBadge /> : null}
+                          </div>
+                          <div className="text-xs text-muted">{kindLabel(entry)}</div>
+                        </Table.Cell>
+                        <Table.Cell>{modelCell(entry)}</Table.Cell>
+                        <Table.Cell>{matchCell(entry)}</Table.Cell>
+                        <Table.Cell>{entrySwitch(entry)}</Table.Cell>
+                        <Table.Cell>
+                          {canManage ? (
+                            <Button
+                              isIconOnly
+                              size="sm"
+                              variant="ghost"
+                              aria-label={t("assign")}
+                              isDisabled={busy === `entry:${key}`}
+                              onPress={() => handlers.onAssign(entry, group.alias)}
+                            >
+                              <ArrowRightLeft size={14} aria-hidden />
+                            </Button>
+                          ) : null}
+                        </Table.Cell>
+                      </Table.Row>
+                    );
+                  })}
+                </Table.Body>
+              </Table.Content>
+            </Table.ScrollContainer>
+          </Table>
+        </>
       ) : null}
     </div>
   );
@@ -221,7 +280,7 @@ export default function CatalogFamily({ family, handlers }: { family: CatalogFam
                   </div>
                   <GroupSwitch group={variant} handlers={handlers} />
                 </div>
-                <VariantBody group={variant} handlers={handlers} />
+                <VariantBody group={variant} handlers={handlers} inset />
               </Card.Content>
             </Card>
           ))}

@@ -17,6 +17,7 @@ import { useTranslations } from "next-intl";
 import CopyButton from "@/components/console/copy-button";
 import EmptyState from "@/components/console/empty-state";
 import PageStatus from "@/components/console/page-status";
+import RowCard, { RowCards, TABLE_FROM_LG } from "@/components/console/row-cards";
 import { loadApiRefAction } from "../_action";
 import { Link } from "@/i18n/routing";
 import { useActionData } from "@/lib/hooks/use-action-data";
@@ -127,6 +128,30 @@ export default function ApiTab() {
     },
   ];
 
+  function styleChip(row: OpenApiPath) {
+    return (
+      <Chip size="sm" variant="soft" color={row.style === "management" ? "accent" : "default"}>
+        {t("style", { style: row.style })}
+      </Chip>
+    );
+  }
+
+  function tryButton(row: OpenApiPath) {
+    return (
+      <Button
+        size="sm"
+        variant="secondary"
+        aria-label={t("tryAria", { method: row.method, path: row.path })}
+        onPress={() => {
+          setSelected(row);
+          tryState.open();
+        }}
+      >
+        {tCommon("test")}
+      </Button>
+    );
+  }
+
   return (
     <div className="space-y-5">
       <p className="max-w-3xl text-sm text-muted">{t("subtitle")}</p>
@@ -217,7 +242,7 @@ export default function ApiTab() {
           value={query}
           onChange={setQuery}
           aria-label={t("searchPlaceholder")}
-          className="max-w-sm"
+          className="w-full max-w-sm"
         >
           <SearchField.Group>
             <SearchField.SearchIcon />
@@ -228,62 +253,61 @@ export default function ApiTab() {
         {filtered.length === 0 ? (
           <EmptyState icon={Code2} title={t("empty")} />
         ) : (
-          <Table aria-label={t("endpoints")}>
-            <Table.ScrollContainer>
-              <Table.Content>
-                <Table.Header>
-                  <Table.Column isRowHeader>{t("columns.method")}</Table.Column>
-                  <Table.Column>{t("columns.path")}</Table.Column>
-                  <Table.Column>{t("columns.style")}</Table.Column>
-                  <Table.Column>{t("columns.summary")}</Table.Column>
-                  {canTry ? (
-                    <Table.Column>{tCommon("actions")}</Table.Column>
-                  ) : null}
-                </Table.Header>
-                <Table.Body>
-                  {filtered.map((row) => (
-                    <Table.Row
-                      key={`${row.method}:${row.path}`}
-                      id={`${row.method}:${row.path}`}
-                    >
-                      <Table.Cell>
-                        <Chip size="sm" variant="soft">
-                          {row.method}
-                        </Chip>
-                      </Table.Cell>
-                      <Table.Cell>
-                        <code className="font-mono text-xs">{row.path}</code>
-                      </Table.Cell>
-                      <Table.Cell>
-                        <Chip size="sm" variant="soft" color={row.style === "management" ? "accent" : "default"}>
-                          {t("style", { style: row.style })}
-                        </Chip>
-                      </Table.Cell>
-                      <Table.Cell>{row.summary}</Table.Cell>
-                      {canTry ? (
+          <>
+            <RowCards label={t("endpoints")}>
+              {filtered.map((row) => (
+                <RowCard
+                  key={`${row.method}:${row.path}`}
+                  title={<code className="font-mono text-xs break-words">{row.path}</code>}
+                  description={row.summary}
+                  chips={
+                    <>
+                      <Chip size="sm" variant="soft">
+                        {row.method}
+                      </Chip>
+                      {styleChip(row)}
+                    </>
+                  }
+                  actions={canTry ? tryButton(row) : undefined}
+                />
+              ))}
+            </RowCards>
+            <Table aria-label={t("endpoints")} className={TABLE_FROM_LG}>
+              <Table.ScrollContainer>
+                <Table.Content>
+                  <Table.Header>
+                    <Table.Column isRowHeader>{t("columns.method")}</Table.Column>
+                    <Table.Column>{t("columns.path")}</Table.Column>
+                    <Table.Column>{t("columns.style")}</Table.Column>
+                    <Table.Column>{t("columns.summary")}</Table.Column>
+                    {canTry ? (
+                      <Table.Column>{tCommon("actions")}</Table.Column>
+                    ) : null}
+                  </Table.Header>
+                  <Table.Body>
+                    {filtered.map((row) => (
+                      <Table.Row
+                        key={`${row.method}:${row.path}`}
+                        id={`${row.method}:${row.path}`}
+                      >
                         <Table.Cell>
-                          <Button
-                            size="sm"
-                            variant="secondary"
-                            aria-label={t("tryAria", {
-                              method: row.method,
-                              path: row.path,
-                            })}
-                            onPress={() => {
-                              setSelected(row);
-                              tryState.open();
-                            }}
-                          >
-                            {tCommon("test")}
-                          </Button>
+                          <Chip size="sm" variant="soft">
+                            {row.method}
+                          </Chip>
                         </Table.Cell>
-                      ) : null}
-                    </Table.Row>
-                  ))}
-                </Table.Body>
-              </Table.Content>
-            </Table.ScrollContainer>
-          </Table>
+                        <Table.Cell>
+                          <code className="font-mono text-xs">{row.path}</code>
+                        </Table.Cell>
+                        <Table.Cell>{styleChip(row)}</Table.Cell>
+                        <Table.Cell>{row.summary}</Table.Cell>
+                        {canTry ? <Table.Cell>{tryButton(row)}</Table.Cell> : null}
+                      </Table.Row>
+                    ))}
+                  </Table.Body>
+                </Table.Content>
+              </Table.ScrollContainer>
+            </Table>
+          </>
         )}
       </section>
 
@@ -325,7 +349,21 @@ export default function ApiTab() {
           </Surface>
         </Card>
         <div className="grid items-start gap-5 xl:grid-cols-2">
-          <Table aria-label={t("problemCodes")}>
+          <RowCards label={t("problemCodes")}>
+            {Object.entries(PROBLEMS).map(([code, spec]) => (
+              <RowCard
+                key={code}
+                title={<code className="font-mono text-xs break-words">{code}</code>}
+                description={spec.title}
+                aside={
+                  <Chip size="sm" variant="soft">
+                    {t("statusCode", { status: spec.status })}
+                  </Chip>
+                }
+              />
+            ))}
+          </RowCards>
+          <Table aria-label={t("problemCodes")} className={TABLE_FROM_LG}>
             <Table.ScrollContainer>
               <Table.Content>
                 <Table.Header>

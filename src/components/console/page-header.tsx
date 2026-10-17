@@ -15,10 +15,10 @@ export default function PageHeader({
 }) {
   return (
     <header className="mb-6 flex flex-wrap items-start justify-between gap-4">
-      <div className="flex min-w-0 flex-1 items-start gap-3">
+      <div className="flex min-w-0 grow basis-80 items-start gap-3">
         {icon ? <IconTile icon={icon} size="lg" /> : null}
         <div className="min-w-0">
-          <h1 className="text-xl font-semibold tracking-tight">{title}</h1>
+          <h1 className="text-xl font-semibold tracking-tight break-words">{title}</h1>
           {subtitle ? <p className="mt-1 text-sm text-muted">{subtitle}</p> : null}
         </div>
       </div>

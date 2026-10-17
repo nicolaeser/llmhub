@@ -5,6 +5,7 @@ import { Alert, Button, Card, Chip, Spinner, Table, toast, useOverlayState } fro
 import { Pencil, Plus, Send, Trash2 } from "lucide-react";
 import { useFormatter, useTranslations } from "next-intl";
 import ConfirmDialog from "@/components/console/confirm-dialog";
+import RowCard, { RowCards, TABLE_FROM_XL } from "@/components/console/row-cards";
 import { isActionFail } from "@/lib/http/action-result";
 import type { MemberNode } from "@/types/structure";
 import type { UsageReportView } from "@/types/reports";
@@ -76,6 +77,98 @@ export default function ReportsCard({
     });
   }
 
+  function reportLabel(report: UsageReportView) {
+    return t("row", {
+      cadence: report.cadence,
+      first: report.recipients[0] ?? "",
+      more: Math.max(0, report.recipients.length - 1),
+    });
+  }
+
+  function pausedChip(report: UsageReportView) {
+    if (report.enabled) return null;
+    return (
+      <Chip size="sm" variant="soft" color="warning">
+        {t("paused")}
+      </Chip>
+    );
+  }
+
+  function languageLabel(report: UsageReportView) {
+    return t("language", {
+      language: format.displayName(report.locale, { type: "language" }) ?? report.locale,
+    });
+  }
+
+  function deliveryStatus(report: UsageReportView) {
+    return (
+      <div className="space-y-0.5 text-xs">
+        {report.enabled ? <p>{t("next", { date: new Date(report.nextRunAt) })}</p> : null}
+        {report.lastError ? <p className="text-danger">{t("failed", { code: report.lastError })}</p> : null}
+        <p className="text-muted">
+          {report.lastSentAt ? t("lastSent", { date: new Date(report.lastSentAt) }) : t("never")}
+        </p>
+      </div>
+    );
+  }
+
+  function recipientList(report: UsageReportView) {
+    return (
+      <ul className="text-sm wrap-break-word">
+        {report.recipients.map((email) => (
+          <li key={email}>{email}</li>
+        ))}
+      </ul>
+    );
+  }
+
+  function reportActions(report: UsageReportView) {
+    const label = reportLabel(report);
+    return (
+      <>
+        <Button
+          isIconOnly
+          size="sm"
+          variant="ghost"
+          aria-label={t("sendNow", { report: label })}
+          isPending={pending && busy === `send:${report.id}`}
+          isDisabled={!mailEnabled || pending}
+          onPress={() => sendNow(report)}
+        >
+          {({ isPending }) => (isPending ? <Spinner color="current" size="sm" /> : <Send size={14} aria-hidden />)}
+        </Button>
+        <Button
+          isIconOnly
+          size="sm"
+          variant="ghost"
+          aria-label={t("edit", { report: label })}
+          isDisabled={pending}
+          onPress={() => openDialog(report)}
+        >
+          <Pencil size={14} aria-hidden />
+        </Button>
+        <ConfirmDialog
+          title={t("deleteTitle")}
+          description={t("deleteHint")}
+          confirmLabel={tCommon("delete")}
+          cancelLabel={tCommon("cancel")}
+          pending={pending && busy === `delete:${report.id}`}
+          onConfirm={() => remove(report)}
+        >
+          <Button
+            isIconOnly
+            size="sm"
+            variant="danger-soft"
+            aria-label={t("delete", { report: label })}
+            isDisabled={pending}
+          >
+            <Trash2 size={14} aria-hidden />
+          </Button>
+        </ConfirmDialog>
+      </>
+    );
+  }
+
   return (
     <Card>
       <Card.Header className="flex-row flex-wrap items-start justify-between gap-3">
@@ -102,114 +195,57 @@ export default function ReportsCard({
         {reports.length === 0 ? (
           <p className="text-sm text-muted">{t("empty")}</p>
         ) : (
-          <Table>
-            <Table.ScrollContainer>
-              <Table.Content aria-label={t("title", { count: reports.length })} className="min-w-xl">
-                <Table.Header>
-                  <Table.Column isRowHeader>{t("columns.schedule")}</Table.Column>
-                  <Table.Column>{t("columns.recipients")}</Table.Column>
-                  {canReport ? <Table.Column>{tCommon("actions")}</Table.Column> : null}
-                </Table.Header>
-                <Table.Body>
-                  {reports.map((report) => {
-                    const label = t("row", {
-                      cadence: report.cadence,
-                      first: report.recipients[0] ?? "",
-                      more: Math.max(0, report.recipients.length - 1),
-                    });
-                    return (
+          <>
+            <RowCards label={t("title", { count: reports.length })} until="xl">
+              {reports.map((report) => (
+                <RowCard
+                  key={report.id}
+                  variant="secondary"
+                  title={t("schedule", { cadence: report.cadence, format: report.format })}
+                  description={languageLabel(report)}
+                  chips={pausedChip(report)}
+                  details={[
+                    { label: tCommon("status"), value: deliveryStatus(report), wide: true },
+                    { label: t("columns.recipients"), value: recipientList(report), wide: true },
+                  ]}
+                  actions={canReport ? reportActions(report) : undefined}
+                />
+              ))}
+            </RowCards>
+            <Table className={TABLE_FROM_XL}>
+              <Table.ScrollContainer>
+                <Table.Content aria-label={t("title", { count: reports.length })} className="min-w-xl">
+                  <Table.Header>
+                    <Table.Column isRowHeader>{t("columns.schedule")}</Table.Column>
+                    <Table.Column>{t("columns.recipients")}</Table.Column>
+                    {canReport ? <Table.Column>{tCommon("actions")}</Table.Column> : null}
+                  </Table.Header>
+                  <Table.Body>
+                    {reports.map((report) => (
                       <Table.Row key={report.id} id={report.id}>
                         <Table.Cell>
                           <div className="min-w-0">
                             <p className="flex flex-wrap items-center gap-2 text-sm font-medium">
                               {t("schedule", { cadence: report.cadence, format: report.format })}
-                              {report.enabled ? null : (
-                                <Chip size="sm" variant="soft" color="warning">
-                                  {t("paused")}
-                                </Chip>
-                              )}
+                              {pausedChip(report)}
                             </p>
-                            <p className="text-xs text-muted">
-                              {t("language", {
-                                language: format.displayName(report.locale, { type: "language" }) ?? report.locale,
-                              })}
-                            </p>
-                            <div className="mt-2 space-y-0.5 text-xs">
-                              {report.enabled ? (
-                                <p>{t("next", { date: new Date(report.nextRunAt) })}</p>
-                              ) : null}
-                              {report.lastError ? (
-                                <p className="text-danger">{t("failed", { code: report.lastError })}</p>
-                              ) : null}
-                              <p className="text-muted">
-                                {report.lastSentAt
-                                  ? t("lastSent", { date: new Date(report.lastSentAt) })
-                                  : t("never")}
-                              </p>
-                            </div>
+                            <p className="text-xs text-muted">{languageLabel(report)}</p>
+                            <div className="mt-2">{deliveryStatus(report)}</div>
                           </div>
                         </Table.Cell>
-                        <Table.Cell>
-                          <ul className="text-sm wrap-break-word">
-                            {report.recipients.map((email) => (
-                              <li key={email}>{email}</li>
-                            ))}
-                          </ul>
-                        </Table.Cell>
+                        <Table.Cell>{recipientList(report)}</Table.Cell>
                         {canReport ? (
                           <Table.Cell>
-                            <div className="flex gap-1">
-                              <Button
-                                isIconOnly
-                                size="sm"
-                                variant="ghost"
-                                aria-label={t("sendNow", { report: label })}
-                                isPending={pending && busy === `send:${report.id}`}
-                                isDisabled={!mailEnabled || pending}
-                                onPress={() => sendNow(report)}
-                              >
-                                {({ isPending }) =>
-                                  isPending ? <Spinner color="current" size="sm" /> : <Send size={14} aria-hidden />
-                                }
-                              </Button>
-                              <Button
-                                isIconOnly
-                                size="sm"
-                                variant="ghost"
-                                aria-label={t("edit", { report: label })}
-                                isDisabled={pending}
-                                onPress={() => openDialog(report)}
-                              >
-                                <Pencil size={14} aria-hidden />
-                              </Button>
-                              <ConfirmDialog
-                                title={t("deleteTitle")}
-                                description={t("deleteHint")}
-                                confirmLabel={tCommon("delete")}
-                                cancelLabel={tCommon("cancel")}
-                                pending={pending && busy === `delete:${report.id}`}
-                                onConfirm={() => remove(report)}
-                              >
-                                <Button
-                                  isIconOnly
-                                  size="sm"
-                                  variant="danger-soft"
-                                  aria-label={t("delete", { report: label })}
-                                  isDisabled={pending}
-                                >
-                                  <Trash2 size={14} aria-hidden />
-                                </Button>
-                              </ConfirmDialog>
-                            </div>
+                            <div className="flex gap-1">{reportActions(report)}</div>
                           </Table.Cell>
                         ) : null}
                       </Table.Row>
-                    );
-                  })}
-                </Table.Body>
-              </Table.Content>
-            </Table.ScrollContainer>
-          </Table>
+                    ))}
+                  </Table.Body>
+                </Table.Content>
+              </Table.ScrollContainer>
+            </Table>
+          </>
         )}
       </Card.Content>
       {canReport ? (
