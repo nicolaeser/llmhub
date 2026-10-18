@@ -1,3 +1,5 @@
+import { cancelQuietly } from "@/lib/utils/streams";
+
 const CREDENTIALS = new Set(["SECRET", "JWT", "PRIVATE_KEY", "CONNECTION_STRING", "ENV_SECRET"]);
 
 export class PiiVault {
@@ -84,7 +86,7 @@ export function restoreSseResponse(response: Response, vault: PiiVault | null): 
       if (emit) controller.enqueue(encoder.encode(emit));
     },
     cancel() {
-      void reader.cancel();
+      void cancelQuietly(reader);
     },
   });
   return new Response(stream, { status: response.status, statusText: response.statusText, headers: response.headers });
