@@ -25,11 +25,13 @@ export function routeOf(model: string, surface: RoutePool): { alias: string; poo
   if (requested.toLowerCase().startsWith(ANTHROPIC_ROUTE_PREFIX)) {
     requested = requested.slice(ANTHROPIC_ROUTE_PREFIX.length).trim();
   }
-  const alias = plainModel(requested);
-  const usesApiPool = requested.toLowerCase().startsWith(API_ROUTE_PREFIX);
-  return surface === "subscription" && usesApiPool
-    ? { alias, pool: "api" }
-    : { alias: usesApiPool ? alias : requested, pool: surface };
+  const lower = requested.toLowerCase();
+  const usesApiPool =
+    surface === "subscription" &&
+    lower.startsWith(API_ROUTE_PREFIX) &&
+    lower.length > API_ROUTE_PREFIX.length;
+  if (!usesApiPool) return { alias: requested, pool: surface };
+  return { alias: plainModel(requested.slice(API_ROUTE_PREFIX.length).trim()), pool: "api" };
 }
 
 export function outsidePool(pool: RoutePool, surface: RoutePool = pool): GateError {

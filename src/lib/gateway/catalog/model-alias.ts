@@ -14,7 +14,10 @@ export function isReservedAlias(alias: string): boolean {
 export function plainModel(model: string): string {
   let plain = model.trim();
   let lower = plain.toLowerCase();
-  while (lower.startsWith(ANTHROPIC_ROUTE_PREFIX) || lower.startsWith(API_ROUTE_PREFIX)) {
+  while (
+    (lower.startsWith(ANTHROPIC_ROUTE_PREFIX) && lower.length > ANTHROPIC_ROUTE_PREFIX.length) ||
+    (lower.startsWith(API_ROUTE_PREFIX) && lower.length > API_ROUTE_PREFIX.length)
+  ) {
     const prefix = lower.startsWith(ANTHROPIC_ROUTE_PREFIX) ? ANTHROPIC_ROUTE_PREFIX : API_ROUTE_PREFIX;
     plain = plain.slice(prefix.length).trim();
     lower = plain.toLowerCase();
