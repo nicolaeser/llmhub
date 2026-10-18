@@ -39,16 +39,20 @@ export function upstreamHeaders(
     headers["HTTP-Referer"] = env.NEXT_PUBLIC_APP_URL;
     headers["X-Title"] = "LLM Hub";
   }
+  const forwardAll = speaksAnthropic(dep.kind);
   if (extra) {
     const src = extra instanceof Headers ? extra : new Headers(extra);
     src.forEach((value, key) => {
-      if (!["host", "content-length", "connection", "authorization"].includes(key.toLowerCase())) {
-        headers[key] = value;
-      }
+      const name = key.toLowerCase();
+      if (["host", "content-length", "connection", "authorization"].includes(name)) return;
+      if (!forwardAll && name !== "anthropic-version" && name !== "anthropic-beta") return;
+      headers[key] = value;
     });
   }
   const merged = dep.kind === "claude" ? withClaudeBetas(headers) : headers;
+  const clientHeaderNames = new Set(Object.keys(merged).map((name) => name.toLowerCase()));
   for (const [key, value] of Object.entries(auth.headers)) {
+    if (dep.kind === "claude" && clientHeaderNames.has(key.toLowerCase())) continue;
     for (const name of Object.keys(merged)) {
       if (name.toLowerCase() === key.toLowerCase()) delete merged[name];
     }

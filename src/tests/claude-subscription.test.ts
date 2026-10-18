@@ -45,6 +45,33 @@ test("Claude requests send the OAuth bearer token and merge client betas", () =>
   assert.equal(headers["x-api-key"], "spoofed");
 });
 
+test("Claude requests keep the client's own identity headers and fall back to defaults", () => {
+  const auth = { key: "sk-ant-oat01-a", headers: signInHeaders("claude", { access: "a", refresh: "r", accountId: "", residency: "" }) };
+  const forwarded = upstreamHeaders(claudeDep, auth, {
+    "user-agent": "claude-cli/2.1.300 (external, cli)",
+    "x-app": "cli",
+    "anthropic-version": "2023-06-01",
+    "x-stainless-lang": "js",
+  });
+  assert.equal(forwarded["user-agent"], "claude-cli/2.1.300 (external, cli)");
+  assert.equal(forwarded["User-Agent"], undefined);
+  assert.equal(forwarded["x-stainless-lang"], "js");
+  assert.equal(forwarded.Authorization, "Bearer sk-ant-oat01-a");
+  const fallback = upstreamHeaders(claudeDep, auth);
+  assert.match(fallback["User-Agent"] ?? "", /^claude-cli\//);
+});
+
+test("Non-Anthropic upstreams only receive the Anthropic version and beta headers", () => {
+  const headers = upstreamHeaders({ ...claudeDep, kind: "openai" }, { key: "sk-x", headers: {} }, {
+    "anthropic-version": "2023-06-01",
+    "user-agent": "claude-cli/2.1.300 (external, cli)",
+    "x-stainless-lang": "js",
+  });
+  assert.equal(headers["anthropic-version"], "2023-06-01");
+  assert.equal(headers["user-agent"], undefined);
+  assert.equal(headers["x-stainless-lang"], undefined);
+});
+
 test("API key Anthropic deployments keep x-api-key and no OAuth betas", () => {
   const headers = upstreamHeaders({ ...claudeDep, kind: "anthropic" }, { key: "sk-ant-api", headers: {} });
   assert.equal(headers["x-api-key"], "sk-ant-api");

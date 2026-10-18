@@ -29,6 +29,7 @@ import { costFilter, costRejected } from "@/lib/gateway/billing/cost-cap";
 import { ChatStreamTranscript } from "@/lib/gateway/request-logs/log-content";
 import { estimateTokens, requestText } from "@/lib/gateway/billing/tokens";
 import { parseJsonOrNull, readTextOr } from "@/lib/utils/json";
+import { cancelQuietly } from "@/lib/utils/streams";
 import type { ChatSseTranslator, JsonMap, Principal, RequestTrace } from "@/types/gateway";
 import type { CostFilter, TokenUsage } from "@/types/billing";
 import type { ResolvedModelGroup, ResolvedDeployment, RoutePool } from "@/types/routing";
@@ -465,6 +466,29 @@ export function relayChatStream(input: {
     });
   };
 
+  const fail = async (controller: ReadableStreamDefaultController<Uint8Array>, err: unknown) => {
+    const message = err instanceof Error && err.message ? err.message : "upstream stream error";
+    const gate = err instanceof GateError ? err : new GateError(502, "upstream_error", message);
+    release();
+    if (billed) return;
+    billed = true;
+    const errorChunk = encoder.encode(
+      sseData({ error: { message: gate.message, type: gate.type, param: gate.param, code: gate.code } }),
+    );
+    try {
+      controller.enqueue(errorChunk);
+      end(controller);
+      controller.close();
+    } catch {
+      controller.error(err);
+    }
+    await recordFailure(
+      { principal: input.principal, model: input.model, body: input.body },
+      gate,
+      started,
+    );
+  };
+
   const forward = (json: JsonMap, controller: ReadableStreamDefaultController<Uint8Array>) => {
     screenChatJson(json, screen, true);
     json.model = input.model;
@@ -552,12 +576,11 @@ export function relayChatStream(input: {
       try {
         await step(controller);
       } catch (err) {
-        await finish();
-        controller.error(err);
+        await fail(controller, err);
       }
     },
     cancel() {
-      void reader.cancel();
+      void cancelQuietly(reader);
       void finish();
     },
   });

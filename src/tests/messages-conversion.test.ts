@@ -298,15 +298,30 @@ test("chat reasoning becomes Anthropic thinking blocks and stream events", async
   assert.deepEqual((events[1]!.data.content_block as JsonMap).type, "thinking");
 });
 
-test("Anthropic passthrough headers keep version and beta flags only", () => {
+test("Anthropic passthrough headers forward client headers and drop credentials and proxy metadata", () => {
   const headers = new Headers({
     "anthropic-version": "2023-06-01",
     "anthropic-beta": "context-1m-2025-08-07",
+    "user-agent": "claude-cli/2.1.300 (external, cli)",
+    "x-app": "cli",
+    "x-stainless-lang": "js",
+    "x-claude-code-session-id": "session-1",
     "x-api-key": "secret",
+    authorization: "Bearer hub-key",
+    cookie: "a=b",
+    host: "hub.example",
+    "content-length": "12",
+    "x-forwarded-for": "10.0.0.1",
+    "x-hub-max-cost": "1",
+    "x-llmhub-mcp": "off",
   });
   assert.deepEqual(anthropicPassthroughHeaders(headers), {
     "anthropic-version": "2023-06-01",
     "anthropic-beta": "context-1m-2025-08-07",
+    "user-agent": "claude-cli/2.1.300 (external, cli)",
+    "x-app": "cli",
+    "x-stainless-lang": "js",
+    "x-claude-code-session-id": "session-1",
   });
   assert.deepEqual(anthropicPassthroughHeaders(new Headers()), {});
 });
