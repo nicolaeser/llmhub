@@ -16,7 +16,7 @@
   "cliName": "{client, select, claude {Claude Code} other {Codex}}",
   "cliClaude": "export ANTHROPIC_BASE_URL=\"{anthropic}\"\nexport ANTHROPIC_AUTH_TOKEN=\"sk-hub-…\"\nexport CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY=1\nclaude",
   "cliCodex": "model_provider = \"llmhub\"\n\n[model_providers.llmhub]\nname = \"LLM Hub\"\nbase_url = \"{openai}\"\nmodel_catalog_url = \"{openai}/models\"\nenv_key = \"LLMHUB_API_KEY\"\nwire_api = \"responses\"",
-  "cliHint": "{client, select, claude {Führe das mit einem API-Key in deiner Shell aus oder trage die Variablen unter env in ~/.claude/settings.json ein. Claude Code listet nur Claude-Modelle; andere Modelle wählst du mit /model und dem Namen.} other {Füge das in ~/.codex/config.toml ein und exportiere LLMHUB_API_KEY mit einem API-Key. Codex lädt seine Modellliste über model_catalog_url.}}",
+  "cliHint": "{client, select, claude {Führe das mit einem API-Key in deiner Shell aus oder trage die Variablen unter env in ~/.claude/settings.json ein. Die Gateway-Discovery listet alle für diesen Key verfügbaren Modelle. Die eingebauten Modelle von Claude Code bleiben im Picker; mit einer eigenen modelPicker-Konfiguration in ~/.claude/settings.json kannst du diese Optionen ersetzen.} other {Füge das in ~/.codex/config.toml ein und exportiere LLMHUB_API_KEY mit einem API-Key. Codex lädt seine Modellliste über model_catalog_url.}}",
   "examplesLabel": "Anfragebeispiele",
   "curlTitle": "{style, select, anthropic {Anthropic Messages} management {Management-API} other {Chat-Completions}}",
   "curl": "curl {origin}/api/v1/chat/completions \\\n  -H \"Authorization: Bearer sk-hub-…\" \\\n  -H \"Content-Type: application/json\" \\\n  -d {body}",

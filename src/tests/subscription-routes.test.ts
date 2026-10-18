@@ -198,18 +198,31 @@ test("subscription model listings come from the subscription pool", async () => 
   };
   const plan = await list(subscriptionApp, "/api/subscription/v1/models");
   assert.ok(plan.includes("grok-build") && plan.includes("api/gpt-api") && !plan.includes("gpt-api"), plan.join());
+  const discovered = await list(subscriptionApp, "/api/subscription/v1/models?limit=1000");
+  assert.ok(discovered.includes("anthropic/grok-build") && discovered.includes("anthropic/api/gpt-api"), discovered.join());
+  assert.ok(discovered.every((id) => id.startsWith("anthropic/")), discovered.join());
   const api = await list(gatewayApp, "/api/v1/models");
   assert.ok(api.includes("gpt-api") && !api.includes("grok-build"), api.join());
   const retrieve = async (surface: string, url: string) =>
     (await (await surfaceRoute(surface, "v1/models/[id]")).GET!(getRequest(url), { params: Promise.resolve({ id: "grok-build" }) })).status;
   assert.equal(await retrieve(subscriptionApp, "/api/subscription/v1/models/grok-build"), 200);
   assert.equal(await retrieve(gatewayApp, "/api/v1/models/grok-build"), 404);
+  const retrieved = await (await surfaceRoute(subscriptionApp, "v1/models/[id]")).GET!(
+    getRequest("/api/subscription/v1/models/anthropic%2Fapi%2Fgpt-api"),
+    { params: Promise.resolve({ id: "anthropic/api/gpt-api" }) },
+  );
+  assert.equal((await retrieved.json() as { id: string }).id, "anthropic/api/gpt-api");
 });
 
 test("the api/ prefix selects the API pool on the subscription surface only", async () => {
   const { routeOf } = await import("@/lib/gateway/routing/route-pool");
   const { isReservedAlias, plainModel } = await import("@/lib/gateway/catalog/model-alias");
   assert.deepEqual(routeOf("api/gpt-5.5", "subscription"), { alias: "gpt-5.5", pool: "api" });
+  assert.deepEqual(routeOf("anthropic/claude-opus-5-5", "subscription"), {
+    alias: "claude-opus-5-5",
+    pool: "subscription",
+  });
+  assert.deepEqual(routeOf("anthropic/api/gpt-5.5", "subscription"), { alias: "gpt-5.5", pool: "api" });
   assert.deepEqual(routeOf("gpt-5.5", "subscription"), { alias: "gpt-5.5", pool: "subscription" });
   assert.deepEqual(routeOf(" API/GPT-5.5 ", "subscription"), { alias: "GPT-5.5", pool: "api" });
   assert.deepEqual(routeOf("api/gpt-5.5", "api"), { alias: "api/gpt-5.5", pool: "api" });
@@ -217,10 +230,12 @@ test("the api/ prefix selects the API pool on the subscription surface only", as
   assert.deepEqual(routeOf("apiary", "subscription"), { alias: "apiary", pool: "subscription" });
   assert.equal(plainModel("api/claude-x"), "claude-x");
   assert.equal(plainModel("API/claude-x"), "claude-x");
+  assert.equal(plainModel("anthropic/api/claude-x"), "claude-x");
   assert.equal(plainModel("claude-x"), "claude-x");
   assert.equal(plainModel("api/"), "api/");
   assert.equal(isReservedAlias("auto"), true);
   assert.equal(isReservedAlias("api/claude-x"), true);
+  assert.equal(isReservedAlias("anthropic/claude-x"), true);
   assert.equal(isReservedAlias("apiary"), false);
   assert.equal(isReservedAlias("gpt-5.5"), false);
 });
@@ -269,6 +284,7 @@ test("model access follows the plain alias for prefixed models", async () => {
   };
   assert.equal(modelPermitted(caller, "gpt-5.5"), true);
   assert.equal(modelPermitted(caller, "api/gpt-5.5"), true);
+  assert.equal(modelPermitted(caller, "anthropic/api/gpt-5.5"), true);
   assert.equal(modelPermitted(caller, "api/gpt-api"), false);
   assert.equal(modelPermitted({ ...caller, pool: "api" }, "api/gpt-5.5"), false);
   assert.equal(modelPermitted({ ...caller, models: ["*"] }, "api/anything"), true);
