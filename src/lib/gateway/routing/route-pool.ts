@@ -1,7 +1,7 @@
 import { SUBSCRIPTION_PREFIX } from "@/lib/gateway/api-paths";
 import { isSignInKind } from "@/lib/gateway/upstreams/provider-kinds";
 import { GateError } from "@/lib/gateway/errors";
-import { plainModel } from "@/lib/gateway/catalog/model-alias";
+import { ANTHROPIC_ROUTE_PREFIX, API_ROUTE_PREFIX, plainModel } from "@/lib/gateway/catalog/model-alias";
 import type { PublicModel } from "@/types/models";
 import type { RoutePool } from "@/types/routing";
 
@@ -21,9 +21,15 @@ export function listedIn(model: Pick<PublicModel, "pools">, pool: RoutePool): bo
 }
 
 export function routeOf(model: string, surface: RoutePool): { alias: string; pool: RoutePool } {
-  const alias = plainModel(model);
-  const prefixed = alias !== model.trim();
-  return surface === "subscription" && prefixed ? { alias, pool: "api" } : { alias: model.trim(), pool: surface };
+  let requested = model.trim();
+  if (requested.toLowerCase().startsWith(ANTHROPIC_ROUTE_PREFIX)) {
+    requested = requested.slice(ANTHROPIC_ROUTE_PREFIX.length).trim();
+  }
+  const alias = plainModel(requested);
+  const usesApiPool = requested.toLowerCase().startsWith(API_ROUTE_PREFIX);
+  return surface === "subscription" && usesApiPool
+    ? { alias, pool: "api" }
+    : { alias: usesApiPool ? alias : requested, pool: surface };
 }
 
 export function outsidePool(pool: RoutePool, surface: RoutePool = pool): GateError {

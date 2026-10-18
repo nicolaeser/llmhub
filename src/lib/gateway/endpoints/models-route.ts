@@ -4,7 +4,7 @@ import { gateRequest, gateResponse, modelPermitted } from "@/lib/gateway/access/
 import { GateError } from "@/lib/gateway/errors";
 import { apiKeyRequest } from "@/lib/gateway/protocols/messages";
 import { AUTO_MODEL, modelEntry } from "@/lib/gateway/core";
-import { API_ROUTE_PREFIX, modelAlias } from "@/lib/gateway/catalog/model-alias";
+import { ANTHROPIC_ROUTE_PREFIX, API_ROUTE_PREFIX, modelAlias } from "@/lib/gateway/catalog/model-alias";
 import { splitVariant, VARIANT_LABELS, variantAlias } from "@/lib/gateway/catalog/model-variants";
 import { CODEX_VERSION_PARAM, codexCatalog } from "@/lib/gateway/catalog/codex-catalog";
 import { catalogFacts } from "@/lib/gateway/catalog/model-context";
@@ -63,12 +63,16 @@ export function listModelsRoute(pool: RoutePool) {
       if (new URL(req.url).searchParams.has(CODEX_VERSION_PARAM)) {
         return NextResponse.json(codexCatalog(data, pool, await catalogFacts()));
       }
+      const gatewayDiscovery = pool === "subscription" && new URL(req.url).searchParams.get("limit") === "1000";
+      const listed = gatewayDiscovery
+        ? data.map((entry) => ({ ...entry, id: `${ANTHROPIC_ROUTE_PREFIX}${String(entry.id)}` }))
+        : data;
       return NextResponse.json({
         object: "list",
-        data,
+        data: listed,
         has_more: false,
-        first_id: data[0]?.id ?? null,
-        last_id: data.at(-1)?.id ?? null,
+        first_id: listed[0]?.id ?? null,
+        last_id: listed.at(-1)?.id ?? null,
       });
     } catch (err) {
       return gateResponse(err, req);
@@ -82,14 +86,17 @@ export function retrieveModelRoute(pool: RoutePool) {
       const principal = await gateRequest(apiKeyRequest(req), pool);
       const requested = modelAlias((await ctx.params).id);
       const { alias } = routeOf(requested, pool);
+      const listId = requested.toLowerCase().startsWith(ANTHROPIC_ROUTE_PREFIX)
+        ? requested.slice(ANTHROPIC_ROUTE_PREFIX.length)
+        : requested;
       const created = new Date();
       const base = splitVariant(alias)?.alias;
       const models = alias === AUTO_MODEL.alias ? [AUTO_MODEL] : await pricedModels(created, base ? [alias, base] : [alias]);
       const entry = modelEntries(models, pool, (model) => modelPermitted(principal, model), created).find(
-        (candidate) => candidate.id === requested,
+        (candidate) => candidate.id === listId,
       );
       if (!entry) throw new GateError(404, "model_not_found", "model not found", { param: "id" });
-      return NextResponse.json(entry);
+      return NextResponse.json({ ...entry, id: requested });
     } catch (err) {
       return gateResponse(err, req);
     }
