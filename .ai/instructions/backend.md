@@ -54,6 +54,7 @@ Load before changing `src/lib/`, colocated `_action.ts`, or gateway helpers that
 - `src/lib/keys/` key views and key management. `src/lib/tenancy/` companies, departments, projects, people, and budgets. `src/lib/reports/` usage report schedules and delivery. `src/lib/models/` model groups, templates, and enabled aliases. `src/lib/providers/` provider connections and subscription account routing. `src/lib/pricing/` markups.
 - `src/lib/management/` management-key auth, scope, `/api/mgmt` route wrapper, serializers, Structure helpers.
 - `src/lib/mcp/` MCP server client, SSRF guard, assignment resolution, gateway tool loop, and the console service.
+- `src/lib/updates/` build version, release update check, the updater bridge (`updater.ts`, signed by `updater-signature.ts`, state in `updater-store.ts`), and the console live stream (`live.ts`, `live-stream.ts`).
 - `src/lib/bootstrap/` catalog and boot.
 - `src/lib/` must not import route modules; the ESLint layering rule enforces it.
 
@@ -66,4 +67,4 @@ Load before changing `src/lib/`, colocated `_action.ts`, or gateway helpers that
 
 ## Validation
 
-`npm test` for the touched module (`log-content`, `request-log-query`, and `request-log-record` cover request logging; `budget-rules`, `budget-tenancy`, and `billing` cover budgets; `model-templates`, `model-sync`, `alert-webhooks`, `pii-policy`, `pricing-modes`, `mcp-client`, `mcp-resolve`, and `mcp-gateway` cover their modules). Gateway changes must keep `/api/v1` auth fail-closed.
+`npm test` for the touched module (`log-content`, `request-log-query`, and `request-log-record` cover request logging; `budget-rules`, `budget-tenancy`, and `billing` cover budgets; `model-templates`, `model-sync`, `alert-webhooks`, `pii-policy`, `pricing-modes`, `mcp-client`, `mcp-resolve`, `mcp-gateway`, and `updater` cover their modules). Gateway changes must keep `/api/v1` auth fail-closed.

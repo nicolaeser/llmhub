@@ -44,7 +44,8 @@ COPY --from=builder --chown=node:node /app/.next/static ./.next/static
 COPY --from=builder --chown=node:node /app/public ./public
 COPY --chown=node:node prisma/schema ./prisma/schema
 COPY --chown=node:node prisma/migrations ./prisma/migrations
-COPY --chown=node:node prisma.config.ts scripts/migrate-deploy.mjs ./
+COPY --chown=node:node prisma.config.ts scripts/migrate-deploy.mjs scripts/updater.mjs ./
+COPY --chown=node:node scripts/updater ./updater
 ARG BUILD_ID=development
 ENV BUILD_ID=${BUILD_ID}
 USER node

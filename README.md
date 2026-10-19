@@ -116,6 +116,47 @@ Restore with the same or a newer image than the one that wrote the backup. A new
 
 Each container start applies pending migrations under a database lock before the server starts, so several replicas can start at the same time. Migrations are forward-only. To roll back, restore the backup taken before the upgrade and start the previous tag.
 
+## Automatic updates
+
+`docker-compose.au.yml` is `docker-compose.yml` plus an updater container. The app, Postgres, and Redis services are identical; the app only gains the label `llmhub.updater.target=true` and a second, internal network that it shares with the updater. The updater runs from the same image (`node updater.mjs`) and keeps the app on the newest image of its tag:
+
+1. Every five minutes it asks the registry for the digest behind the tag the app runs and compares it with the running image.
+2. When automatic updates are on, or when someone presses Update now in the console, it pulls the image, stops the app, starts a new container with the same settings, environment overrides, labels, networks, and aliases, and waits until the image's health check reports healthy (up to ten minutes, because migrations run on start).
+3. If the new container stops or turns unhealthy, it removes it and starts the previous container again. A digest that failed is not installed automatically again until a newer image is published; Update now retries it.
+4. After a successful update it removes the old container and the old image if nothing else uses it, and then replaces its own container with the new image.
+
+Use it instead of `docker-compose.yml`, in the same directory and with the same `.env`:
+
+```bash
+curl -fsSLO https://raw.githubusercontent.com/nicolaeser/llmhub/main/docker-compose.au.yml
+docker compose -f docker-compose.au.yml up -d
+```
+
+Use `-f docker-compose.au.yml` for later compose commands, or add `COMPOSE_FILE=docker-compose.au.yml` to `.env` so a plain `docker compose` uses it. Switching an existing stack keeps its data: Postgres and Redis are unchanged, and only the app container is recreated.
+
+The badge in the console's top bar shows the live connection to the server (Live, Updating, Reconnecting, Offline). Its menu and Settings → General → Automatic updates show the updater, the running and newest image digest, the last check and its result, and offer Check now, Update now, and the Install updates automatically switch (`settings:manage`). Automatic updates start switched off; while an updater is connected and they are off, the console offers to turn them on.
+
+The updater gets only what it needs:
+
+- The Docker socket. Pulls and registry lookups run through the Docker daemon, so the updater itself has no internet access.
+- `APP_SECRET`, from which it derives the key that signs its messages to the app. It does not receive the rest of `.env`.
+- The internal `updater` network, on which it reaches only the app at `http://app:3000/internal-api/updater`. It publishes no ports and accepts no connections.
+- User `0:0`, because the socket belongs to root on the host, with every Linux capability dropped and `no-new-privileges` set.
+
+Every ten seconds it posts its status to the app and reads back the switch and any requested check or update; both directions are signed. These variables configure the updater only; the app does not read them:
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `APP_SECRET` | from `.env` | Must match the app. The updater derives its signing key from it. |
+| `LLMHUB_UPDATER_APP_URL` | `http://app:3000` | Address of the app inside the compose network. |
+| `LLMHUB_UPDATER_PROJECT` | detected | Compose project whose containers the updater manages, when it cannot inspect its own container. |
+
+Security: access to the Docker socket is equivalent to root access on the host, so anyone who controls the updater container or the image it pulls controls the server. That is why the socket lives in a separate container without ports or internet access instead of in the app, which handles outside traffic. Only use this file on hosts where that is acceptable. The updater only recreates running containers of its own compose project that carry the label `llmhub.updater.target=true`, and it only pulls public images; registries that need a login are not supported.
+
+Pinned tags: when `LLMHUB_TAG` is a release tag (`vYYYY.MM.DD.<sha>` or `dev-YYYY.MM.DD.<sha>`), a commit tag (`sha-<sha>`, `dev-<sha>`), or a digest, the updater reports the tag as pinned and never replaces the image. Set `LLMHUB_TAG` to `latest` or `dev` to receive updates. Back up the database regularly when automatic updates are on, because a new image applies its migrations on start and migrations are forward-only.
+
+To stop automatic installs, turn off the switch; the updater keeps checking and offers Update now. To remove the updater, drop `COMPOSE_FILE` from `.env` if you set it and run `docker compose -f docker-compose.yml up -d --remove-orphans`; this removes the updater and recreates the app without the label and the extra network. An older updater refreshes itself after the next app update; `docker compose -f docker-compose.au.yml pull updater && docker compose -f docker-compose.au.yml up -d updater` refreshes it by hand.
+
 ## Development
 
 Requirements: Node.js 24 or newer and Docker.

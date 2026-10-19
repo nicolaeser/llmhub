@@ -266,3 +266,42 @@ test("generate-env.sh --yes builds the production .env from the environment", { 
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+test("the runner carries the updater next to the migration script", async () => {
+  const dockerfile = await file("Dockerfile");
+  const runner = dockerfile.slice(dockerfile.indexOf("AS runner"));
+  assert.match(runner, /COPY --chown=node:node prisma\.config\.ts scripts\/migrate-deploy\.mjs scripts\/updater\.mjs \.\//);
+  assert.match(runner, /COPY --chown=node:node scripts\/updater \.\/updater\n/);
+  const entry = await file("scripts/updater.mjs");
+  assert.match(entry, /from "\.\/updater\/agent\.mjs"/);
+  assert.match(entry, /--healthcheck/);
+});
+
+test("the auto-update stack is the production stack plus a locked-down updater", async () => {
+  const [deploy, dev, au, dockerignore] = await Promise.all([
+    file("docker-compose.yml"),
+    file("docker-compose.dev.yml"),
+    file("docker-compose.au.yml"),
+    file(".dockerignore"),
+  ]);
+  assert.doesNotMatch(deploy + dev, /docker\.sock|updater/);
+  const appTarget = '    labels:\n      llmhub.updater.target: "true"\n    networks:\n      - default\n      - updater\n';
+  const updaterStart = au.indexOf("\n  updater:\n");
+  assert.ok(au.includes(appTarget));
+  assert.equal(au.slice(0, updaterStart + 1).replace(appTarget, "").trimEnd(), deploy.trimEnd());
+  const updater = au.slice(updaterStart, au.indexOf("\nnetworks:\n"));
+  assert.match(updater, /image: ghcr\.io\/nicolaeser\/llmhub:\$\{LLMHUB_TAG:-latest\}/);
+  assert.match(updater, /restart: unless-stopped/);
+  assert.match(updater, /user: "0:0"/);
+  assert.match(updater, /cap_drop:\n {6}- ALL\n/);
+  assert.match(updater, /security_opt:\n {6}- no-new-privileges:true\n/);
+  assert.match(updater, /command: \["node", "updater\.mjs"\]/);
+  assert.match(updater, /environment:\n {6}APP_SECRET: \$\{APP_SECRET\}\n {4}volumes:/);
+  assert.match(updater, /networks:\n {6}- updater\n/);
+  assert.match(updater, /^ {6}- \/var\/run\/docker\.sock:\/var\/run\/docker\.sock$/m);
+  assert.match(updater, /test: \["CMD", "node", "updater\.mjs", "--healthcheck"\]/);
+  assert.doesNotMatch(updater, /env_file|ports:|privileged|cap_add|build:/);
+  assert.ok(au.endsWith("\nnetworks:\n  updater:\n    internal: true\n"));
+  assert.equal(au.split("\n").filter((line) => line.includes("docker.sock")).length, 1);
+  assert.ok(dockerignore.split("\n").includes("docker-compose.au.yml"));
+});

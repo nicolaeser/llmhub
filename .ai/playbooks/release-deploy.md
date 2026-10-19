@@ -24,6 +24,7 @@ A `.env` file exists (`generate-env.sh` for self-hosting). Postgres is reachable
 3. `npm run build` (runs `prebuild` gates) or `docker build .`. CI publishes the image on pushes to `main` and `development`.
 4. Check `/internal-api/health` and `/internal-api/ready` on the published origin. Health may report `worker.mode` `local` when Redis is unset; that is valid. `/internal-api/version` must show the release version, not `development`.
 5. First operator is created at `/internal-api/setup` when the user table is empty.
+6. With `docker-compose.au.yml`, the `updater` container is healthy and the console's status badge shows the updater connected; an update recreates the app and leaves `docker compose up -d --dry-run` with nothing to recreate.
 
 ## Validation
 
