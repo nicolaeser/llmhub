@@ -722,5 +722,5 @@ test("refreshing keeps the project, account, and plan and replaces the access to
   assert.equal(form.get("refresh_token"), "refresh-1");
   assert.equal(form.get("client_secret"), "client-secret");
   respondWith(() => Response.json({ error: "invalid_grant" }, { status: 400 }));
-  assert.deepEqual(await refreshSession("antigravity", current), { ok: false, fatal: true });
+  assert.deepEqual(await refreshSession("antigravity", current), { ok: false, fatal: true, retryAfterMs: null });
 });

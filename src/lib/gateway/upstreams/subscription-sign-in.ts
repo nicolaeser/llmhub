@@ -16,6 +16,7 @@ import {
 } from "@/lib/gateway/upstreams/antigravity";
 import { antigravityClientSecret } from "@/lib/gateway/upstreams/antigravity-config";
 import { CLAUDE_OAUTH_BETAS, claudeIdentityHeaders } from "@/lib/gateway/upstreams/claude";
+import { retryAfterMs } from "@/lib/gateway/upstreams/reset-credits";
 import { asNumber, asRecord, asString } from "@/lib/gateway/core";
 import { readJsonOr } from "@/lib/utils/json";
 import { signInCredentialSchema, signInTicketSchema } from "@/schemas/providers";
@@ -206,7 +207,7 @@ async function postAuth(
   url: string,
   body: URLSearchParams | JsonMap,
   extraHeaders: Record<string, string> = {},
-): Promise<{ status: number; json: JsonMap }> {
+): Promise<{ status: number; json: JsonMap; retryAfterMs: number | null }> {
   const form = body instanceof URLSearchParams;
   const res = await fetch(url, {
     method: "POST",
@@ -222,7 +223,7 @@ async function postAuth(
     throw new Error("SIGN_IN_FAILED");
   });
   const json = asRecord(await readJsonOr(res, null)) ?? {};
-  return { status: res.status, json };
+  return { status: res.status, json, retryAfterMs: retryAfterMs(res.headers.get("retry-after"), Date.now()) };
 }
 
 function errorCode(json: JsonMap): string {
@@ -514,7 +515,10 @@ export function pollDeviceCode(grant: DeviceGrant): Promise<DevicePoll> {
   }
 }
 
-async function refreshRequest(kind: SignInKind, current: SignInSession): Promise<{ status: number; json: JsonMap }> {
+async function refreshRequest(
+  kind: SignInKind,
+  current: SignInSession,
+): Promise<{ status: number; json: JsonMap; retryAfterMs: number | null }> {
   switch (kind) {
     case "antigravity":
       return postAuth(
@@ -569,21 +573,21 @@ function refreshedSession(kind: SignInKind, json: JsonMap, current: SignInSessio
 }
 
 export async function refreshSession(kind: SignInKind, current: SignInSession): Promise<TokenRefresh> {
-  if (!current.tokens.refresh) return { ok: false, fatal: true };
-  let result: { status: number; json: JsonMap };
+  if (!current.tokens.refresh) return { ok: false, fatal: true, retryAfterMs: null };
+  let result: { status: number; json: JsonMap; retryAfterMs: number | null };
   try {
     result = await refreshRequest(kind, current);
   } catch {
-    return { ok: false, fatal: false };
+    return { ok: false, fatal: false, retryAfterMs: null };
   }
   if (result.status >= 400) {
     const fatal = result.status === 401 || FATAL_REFRESH_CODES.has(errorCode(result.json));
-    return { ok: false, fatal };
+    return { ok: false, fatal, retryAfterMs: result.status === 429 ? result.retryAfterMs : null };
   }
   try {
     return { ok: true, session: refreshedSession(kind, result.json, current) };
   } catch {
-    return { ok: false, fatal: false };
+    return { ok: false, fatal: false, retryAfterMs: null };
   }
 }
 
