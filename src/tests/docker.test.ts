@@ -291,6 +291,7 @@ test("the auto-update stack is the production stack plus the updater", async () 
   assert.equal(au.slice(0, updaterStart + 1).replace(appTarget, "").trimEnd(), deploy.trimEnd());
   const updater = au.slice(updaterStart);
   assert.match(updater, /image: ghcr\.io\/nicolaeser\/llmhub:\$\{LLMHUB_TAG:-latest\}/);
+  assert.match(updater, /pull_policy: always/);
   assert.match(updater, /restart: unless-stopped/);
   assert.match(updater, /user: "0:0"/);
   assert.match(updater, /command: \["node", "updater\.mjs"\]/);
