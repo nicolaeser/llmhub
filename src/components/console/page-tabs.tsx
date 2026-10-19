@@ -9,16 +9,14 @@ export default function PageTabs({ label, tabs }: { label: string; tabs: readonl
   if (tabs.length < 2) return tabs[0]?.panel ?? null;
   return (
     <Tabs selectedKey={selected} onSelectionChange={(key) => select(String(key))}>
-      <Tabs.ListContainer className="max-w-full overflow-x-auto">
-        <Tabs.List aria-label={label}>
-          {tabs.map((tab) => (
-            <Tabs.Tab key={tab.id} id={tab.id} className="w-auto shrink-0 whitespace-nowrap">
-              {tab.label}
-              <Tabs.Indicator />
-            </Tabs.Tab>
-          ))}
-        </Tabs.List>
-      </Tabs.ListContainer>
+      <Tabs.List className="w-full flex-wrap" aria-label={label}>
+        {tabs.map((tab) => (
+          <Tabs.Tab key={tab.id} id={tab.id} className="w-auto whitespace-nowrap">
+            {tab.label}
+            <Tabs.Indicator />
+          </Tabs.Tab>
+        ))}
+      </Tabs.List>
       {tabs.map((tab) => (
         <Tabs.Panel key={tab.id} id={tab.id} className="pt-4">
           {tab.panel}

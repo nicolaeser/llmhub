@@ -51,16 +51,14 @@ export default function SettingsPage() {
       />
       <Tabs selectedKey={tab} onSelectionChange={select} aria-label={t("title")}>
         {tabs.length > 1 ? (
-          <Tabs.ListContainer className="max-w-full overflow-x-auto">
-            <Tabs.List aria-label={t("title")}>
-              {tabs.map((id) => (
-                <Tabs.Tab key={id} id={id} className="w-auto shrink-0 whitespace-nowrap">
-                  {t("tabs", { tab: id.replace("-", "_") })}
-                  <Tabs.Indicator />
-                </Tabs.Tab>
-              ))}
-            </Tabs.List>
-          </Tabs.ListContainer>
+          <Tabs.List className="w-full flex-wrap" aria-label={t("title")}>
+            {tabs.map((id) => (
+              <Tabs.Tab key={id} id={id} className="w-auto whitespace-nowrap">
+                {t("tabs", { tab: id.replace("-", "_") })}
+                <Tabs.Indicator />
+              </Tabs.Tab>
+            ))}
+          </Tabs.List>
         ) : null}
         {company ? (
           <Tabs.Panel id="company" className="pt-4">
