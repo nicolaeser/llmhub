@@ -50,10 +50,17 @@ function groupRow(alias: string, numRetries = 0) {
 }
 
 const groups = new Map<string, ReturnType<typeof groupRow>>();
+const resetChecks: string[] = [];
 
 (globalThis as { prisma?: unknown }).prisma = {
   modelGroup: { findUnique: async ({ where }: { where: { alias: string } }) => groups.get(where.alias) ?? null },
-  providerConnection: { findMany: async () => [] },
+  providerConnection: {
+    findMany: async () => [],
+    findUnique: async ({ where }: { where: { id: string } }) => {
+      resetChecks.push(where.id);
+      return null;
+    },
+  },
   providerLogin: { findUnique: async () => null },
   accountRouting: { findMany: async () => [] },
   setting: { findUnique: async () => null },
@@ -93,6 +100,16 @@ beforeEach(async () => {
   const { forgetPins } = await import("@/lib/gateway/routing/account-affinity");
   forgetPins();
   freshGroup();
+});
+
+test("a usage limit asks the banked reset policy of the exhausted account", async () => {
+  resetChecks.length = 0;
+  await route(async (dep) => {
+    if (dep.provider_id === "acct-a") throw await limitError();
+    return "answer";
+  });
+  for (let wait = 0; wait < 50 && !resetChecks.length; wait++) await new Promise((resolve) => setTimeout(resolve, 20));
+  assert.deepEqual(resetChecks, ["acct-a"]);
 });
 
 test("a usage limit on one account moves the same request to the next account even without retries", async () => {

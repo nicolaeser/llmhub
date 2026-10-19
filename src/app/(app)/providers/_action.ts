@@ -9,6 +9,7 @@ import {
   saveAccountRouting,
   saveAntigravityConfig,
   saveAssignments,
+  saveAutoReset,
 } from "@/lib/providers/account-routing";
 import { importAuthFiles, importSignInFile } from "@/lib/providers/auth-import";
 import { importCliProxyAuthFiles, listCliProxyAuthFiles } from "@/lib/providers/cliproxy-import";
@@ -25,6 +26,7 @@ import {
   startSignIn,
   updateProvider,
 } from "@/lib/providers/connections";
+import { redeemProviderReset } from "@/lib/providers/resets";
 
 export async function loadProvidersAction(...args: Parameters<typeof loadProviders>) {
   return runAction(() => loadProviders(...args));
@@ -92,6 +94,14 @@ export async function loadAccountRoutingAction(...args: Parameters<typeof loadAc
 
 export async function saveAccountRoutingAction(...args: Parameters<typeof saveAccountRouting>) {
   return runAction(() => saveAccountRouting(...args));
+}
+
+export async function saveAutoResetAction(...args: Parameters<typeof saveAutoReset>) {
+  return runAction(() => saveAutoReset(...args));
+}
+
+export async function redeemProviderResetAction(...args: Parameters<typeof redeemProviderReset>) {
+  return runAction(() => redeemProviderReset(...args));
 }
 
 export async function loadAssignmentOptionsAction(...args: Parameters<typeof loadAssignmentOptions>) {

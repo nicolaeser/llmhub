@@ -240,6 +240,11 @@ export function limitsSnapshot(providerId: string): SubscriptionLimits | null {
   return cache.get(providerId)?.limits ?? null;
 }
 
+export function forgetLimits(providerId: string): void {
+  cache.delete(providerId);
+  failedAt.delete(providerId);
+}
+
 export async function warmLimits(providers: LimitProvider[]): Promise<void> {
   const now = Date.now();
   const pending: Promise<unknown>[] = [];

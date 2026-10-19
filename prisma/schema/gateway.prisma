@@ -257,9 +257,12 @@ model ProviderAssignment {
 }
 
 model AccountRouting {
-  kind      String   @id
-  strategy  String
-  updatedAt DateTime @updatedAt
+  kind             String   @id
+  strategy         String
+  autoReset        Boolean  @default(false)
+  autoResetPercent Int      @default(99)
+  autoResetScope   String   @default("pool")
+  updatedAt        DateTime @updatedAt
 }
 
 model ProviderLogin {

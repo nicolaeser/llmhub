@@ -19,6 +19,7 @@ import { isSignInKind, speaksAnthropic } from "@/lib/gateway/upstreams/provider-
 import { AntigravitySseTranslator, withProject } from "@/lib/gateway/upstreams/antigravity";
 import { CodexSseTranslator } from "@/lib/gateway/upstreams/codex";
 import { deploymentAuth, renewRejectedLogin } from "@/lib/gateway/upstreams/credentials";
+import { autoRedeemIfDue } from "@/lib/gateway/upstreams/reset-redeem";
 import { plainModel } from "@/lib/gateway/catalog/model-alias";
 import { inPool, outsidePool, routeOf } from "@/lib/gateway/routing/route-pool";
 import { KEEPALIVE_MS, SSE_HEADERS, SSE_KEEPALIVE, sseData } from "@/lib/gateway/protocols/sse";
@@ -262,6 +263,7 @@ export async function withDeployment<T>(
           if (retryable(err)) markFailure(acquired.dep, err instanceof GateError ? err.retryAt : null);
           last = err;
           if (!isRouterError(err)) upstreamFailure = err;
+          if (account && failureCode(err).status === 429) void autoRedeemIfDue(account);
           if (account && accountUnusable(err)) {
             run.tried.add(acquired.dep.id);
             failedAccount = account;

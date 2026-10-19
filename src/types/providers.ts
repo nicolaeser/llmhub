@@ -1,5 +1,6 @@
 import type { z } from "zod";
 import type { signInCredentialSchema, signInTicketSchema } from "@/schemas/providers";
+import type { AutoResetPolicies, ResetCredits } from "@/types/resets";
 
 export type ProviderRecord = {
   id: string;
@@ -93,6 +94,12 @@ export type AccountStrategy =
 
 export type AccountRouting = Partial<Record<SignInKind, AccountStrategy>>;
 
+export type AccountRoutingView = {
+  routing: AccountRouting;
+  autoReset: AutoResetPolicies;
+  canManage: boolean;
+};
+
 export type ProviderView = {
   id: string;
   name: string;
@@ -156,7 +163,7 @@ export type SubscriptionLimits = {
   plan: string;
   windows: LimitWindow[];
   credits: { unlimited: boolean; balance: string } | null;
-  resetCredits: { available: number; applicable: number } | null;
+  resetCredits: ResetCredits | null;
   extraUsage: { usedCents: number; limitCents: number; percent: number | null } | null;
   fetchedAt: string;
 };
