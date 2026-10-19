@@ -49,6 +49,7 @@ services:
 
   updater:
     image: ghcr.io/nicolaeser/llmhub:${LLMHUB_TAG:-latest}
+    pull_policy: always
     restart: unless-stopped
     depends_on:
       - app

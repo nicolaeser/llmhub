@@ -134,6 +134,8 @@ docker compose -f docker-compose.au.yml up -d
 
 Use `-f docker-compose.au.yml` for later compose commands, or add `COMPOSE_FILE=docker-compose.au.yml` to `.env` so a plain `docker compose` uses it. Switching an existing stack keeps its data: Postgres and Redis are unchanged, and only the app container is recreated.
 
+The updater service sets `pull_policy: always`, so every `docker compose -f docker-compose.au.yml up` pulls the newest image of `LLMHUB_TAG` first and recreates the app and the updater if it changed. A host that still has an older image of the tag, for example one pulled before the updater existed, would otherwise start the updater from an image without `updater.mjs` (`Cannot find module '/app/updater.mjs'`). The command therefore needs the registry to be reachable.
+
 The badge in the console's top bar shows the live connection to the server (Live, Updating, Reconnecting, Offline). Its menu and Settings → General → Automatic updates show the updater, the running and newest image digest, the last check and its result, and offer Check now, Update now, and the Install updates automatically switch (`settings:manage`). Automatic updates start switched off; while an updater is connected and they are off, the console offers to turn them on.
 
 The updater gets only what it needs:
@@ -155,7 +157,7 @@ Security: access to the Docker socket is equivalent to root access on the host, 
 
 Pinned tags: when `LLMHUB_TAG` is a release tag (`vYYYY.MM.DD.<sha>` or `dev-YYYY.MM.DD.<sha>`), a commit tag (`sha-<sha>`, `dev-<sha>`), or a digest, the updater reports the tag as pinned and never replaces the image. Set `LLMHUB_TAG` to `latest` or `dev` to receive updates. Back up the database regularly when automatic updates are on, because a new image applies its migrations on start and migrations are forward-only.
 
-To stop automatic installs, turn off the switch; the updater keeps checking and offers Update now. To remove the updater, drop `COMPOSE_FILE` from `.env` if you set it and run `docker compose -f docker-compose.yml up -d --remove-orphans`; this removes the updater and recreates the app without the label. An older updater refreshes itself after the next app update; `docker compose -f docker-compose.au.yml pull updater && docker compose -f docker-compose.au.yml up -d updater` refreshes it by hand.
+To stop automatic installs, turn off the switch; the updater keeps checking and offers Update now. To remove the updater, drop `COMPOSE_FILE` from `.env` if you set it and run `docker compose -f docker-compose.yml up -d --remove-orphans`; this removes the updater and recreates the app without the label. An older updater refreshes itself after the next app update; `docker compose -f docker-compose.au.yml up -d` refreshes it by hand, together with the app.
 
 ## Development
 
