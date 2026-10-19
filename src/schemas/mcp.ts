@@ -72,10 +72,84 @@ export const mcpDraftBaseSchema = z.object({
 
 export const builderModelSchema = z.string().trim().max(200);
 
+export const MCP_DOCS_AUTH_TYPES = ["none", "bearer", "basic", "header", "query"] as const;
+export const MAX_BUILDER_LINKS = 10;
+export const MAX_BUILDER_FILES = 10;
+export const MAX_BUILDER_FILE_BYTES = 10 * 1024 * 1024;
+export const MAX_BUILDER_UPLOAD_BYTES = 20 * 1024 * 1024;
+export const MAX_BUILDER_REQUEST_BYTES = MAX_BUILDER_UPLOAD_BYTES + 4 * 1024 * 1024;
+export const MCP_BUILDER_FILE_EXTENSIONS = [
+  "pdf", "docx", "pptx", "xlsx", "png", "jpg", "jpeg", "webp", "gif",
+  "txt", "md", "markdown", "mdx", "rst", "adoc", "json", "jsonl", "yaml", "yml", "toml", "xml", "csv", "tsv",
+  "html", "htm", "xhtml", "graphql", "proto", "raml", "wsdl", "har", "http",
+] as const;
+
+const DOCS_HEADER_NAME = /^[!#$%&'*+.^_`|~0-9A-Za-z-]{1,64}$/;
+const DOCS_QUERY_NAME = /^[A-Za-z0-9_.~[\]-]{1,64}$/;
+const DOCS_HEADER_VALUE = /^[\x20-\x7e]*$/;
+const RESERVED_DOCS_HEADERS = new Set([
+  "accept-encoding",
+  "connection",
+  "content-length",
+  "expect",
+  "host",
+  "http2-settings",
+  "keep-alive",
+  "proxy-authorization",
+  "proxy-connection",
+  "te",
+  "trailer",
+  "transfer-encoding",
+  "upgrade",
+]);
+
+function hasControl(value: string): boolean {
+  return [...value].some((char) => char.charCodeAt(0) < 32 || char.charCodeAt(0) === 127);
+}
+
+function hasUserInfo(value: string): boolean {
+  const url = new URL(value);
+  return Boolean(url.username || url.password);
+}
+
+export const builderLinkSchema = z
+  .object({
+    url: z.string().trim().max(2048),
+    internal: z.boolean().default(false),
+    auth: z.enum(MCP_DOCS_AUTH_TYPES).default("none"),
+    name: z.string().trim().max(256).default(""),
+    secret: z.string().max(4096).default(""),
+  })
+  .superRefine((link, ctx) => {
+    const flag = (path: "url" | "name" | "secret", message: "required" | "invalid" | "insecure") =>
+      ctx.addIssue({ code: "custom", path: [path], message });
+    if (!link.url) flag("url", "required");
+    else if (!/^https?:\/\/\S+$/i.test(link.url) || !URL.canParse(link.url) || hasUserInfo(link.url)) flag("url", "invalid");
+    else if (/^http:/i.test(link.url) && !link.internal) flag("url", "insecure");
+    if (link.auth === "none") return;
+    if (link.auth === "basic") {
+      if (!link.name) flag("name", "required");
+      else if (link.name.includes(":") || hasControl(link.name)) flag("name", "invalid");
+      if (hasControl(link.secret)) flag("secret", "invalid");
+      return;
+    }
+    if (link.auth === "header") {
+      if (!link.name) flag("name", "required");
+      else if (!DOCS_HEADER_NAME.test(link.name) || RESERVED_DOCS_HEADERS.has(link.name.toLowerCase())) flag("name", "invalid");
+    }
+    if (link.auth === "query") {
+      if (!link.name) flag("name", "required");
+      else if (!DOCS_QUERY_NAME.test(link.name)) flag("name", "invalid");
+    }
+    if (!link.secret) flag("secret", "required");
+    else if (link.auth === "query" ? hasControl(link.secret) : !DOCS_HEADER_VALUE.test(link.secret)) flag("secret", "invalid");
+  });
+
 export const builderDraftSchema = z.object({
   template: z.enum(MCP_BUILDER_TEMPLATES).default("custom"),
   instruction: z.string().trim().min(1).max(2_000),
-  docs: z.string().trim().min(1).max(MAX_BUILDER_DOCS),
+  docs: z.string().trim().max(MAX_BUILDER_DOCS).default(""),
+  links: z.array(builderLinkSchema).max(MAX_BUILDER_LINKS).default([]),
 });
 
 export const hostedServerSchema = z
