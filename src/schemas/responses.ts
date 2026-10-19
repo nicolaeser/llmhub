@@ -71,6 +71,10 @@ const reasoningItemSchema = z.looseObject({
   encrypted_content: z.string().nullish(),
 });
 
+const webSearchCallItemSchema = z.looseObject({
+  type: z.literal("web_search_call"),
+});
+
 export const responsesInputItemSchema = z.preprocess(
   (value) =>
     value &&
@@ -82,7 +86,7 @@ export const responsesInputItemSchema = z.preprocess(
       : value,
   z.discriminatedUnion(
     "type",
-    [messageItemSchema, functionCallItemSchema, functionCallOutputItemSchema, reasoningItemSchema],
+    [messageItemSchema, functionCallItemSchema, functionCallOutputItemSchema, reasoningItemSchema, webSearchCallItemSchema],
     {
       error: (issue) =>
         issue.code === "invalid_union"

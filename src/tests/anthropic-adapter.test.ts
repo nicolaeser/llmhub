@@ -333,7 +333,7 @@ test("reasoning_effort maps to adaptive thinking and effort on current Claude mo
   assert.deepEqual(out.output_config, { effort: "high" });
   assert.equal(out.temperature, undefined);
   assert.equal(out.top_p, undefined);
-  assert.equal(out.max_tokens, 4096);
+  assert.equal(out.max_tokens, 32_000);
   const minimal = chatToAnthropic({ model: "claude-sonnet-4-6", messages: [], reasoning_effort: "minimal" });
   assert.deepEqual(minimal.output_config, { effort: "low" });
   const none = chatToAnthropic({ model: "claude-sonnet-4-6", messages: [], reasoning_effort: "none", temperature: 0.3 });
@@ -352,7 +352,7 @@ test("reasoning_effort maps to budget thinking on Claude 4.5 and earlier", () =>
     top_k: 5,
   });
   assert.deepEqual(open.thinking, { type: "enabled", budget_tokens: 4096 });
-  assert.equal(open.max_tokens, 8192);
+  assert.equal(open.max_tokens, 32_000);
   assert.equal(open.output_config, undefined);
   assert.equal(open.temperature, undefined);
   assert.equal(open.top_k, undefined);

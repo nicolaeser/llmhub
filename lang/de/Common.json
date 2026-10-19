@@ -17,6 +17,7 @@
   "copied": "Kopiert",
   "copyFailed": "Kopieren fehlgeschlagen",
   "done": "Fertig",
+  "unsaved": "Ungespeichert",
   "close": "Schließen",
   "test": "Testen",
   "import": "Importieren",
@@ -39,6 +40,7 @@
     "step": "{n, number, integer}"
   },
   "continue": "Weiter",
+  "back": "Zurück",
   "version": {
     "updateAvailable": "Update verfügbar",
     "updateLabel": "Update auf {version} verfügbar, Release öffnen",

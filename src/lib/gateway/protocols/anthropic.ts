@@ -1,9 +1,12 @@
 import { asRecord, newId } from "@/lib/gateway/core";
 import { tokenCount } from "@/lib/gateway/billing/tokens";
+import { isCodexSignature } from "@/lib/gateway/protocols/reasoning-signature";
 import type { DataUrl } from "@/types/anthropic";
 import type { JsonMap } from "@/types/gateway";
 
 const DEFAULT_MAX_TOKENS = 4096;
+const MODERN_MAX_TOKENS = 32_000;
+const MODERN_MIN_VERSION = 4;
 const COUNT_TOKENS_KEYS = [
   "model",
   "messages",
@@ -95,10 +98,21 @@ export function claudeVersion(model: unknown): number | null {
   return Number(match[1]) + Number(match[2] ?? 0) / 10;
 }
 
+function defaultMaxTokens(model: unknown): number {
+  const version = claudeVersion(model);
+  return (version !== null && version >= MODERN_MIN_VERSION) || fixedSampling(model)
+    ? MODERN_MAX_TOKENS
+    : DEFAULT_MAX_TOKENS;
+}
+
 function fixedSampling(model: unknown): boolean {
   const version = claudeVersion(model);
   if (version !== null) return version >= 4.7;
   return typeof model === "string" && /claude-(mythos|fable)/i.test(model);
+}
+
+export function claudeSignedThinking(block: JsonMap): boolean {
+  return typeof block.signature === "string" && block.signature !== "" && !isCodexSignature(block.signature);
 }
 
 function thinkingBlocks(value: unknown): JsonMap[] {
@@ -106,7 +120,7 @@ function thinkingBlocks(value: unknown): JsonMap[] {
   const out: JsonMap[] = [];
   for (const raw of value) {
     const block = asRecord(raw);
-    if (block?.type === "thinking" && typeof block.thinking === "string" && typeof block.signature === "string") {
+    if (block?.type === "thinking" && typeof block.thinking === "string" && claudeSignedThinking(block)) {
       out.push({ type: "thinking", thinking: block.thinking, signature: block.signature });
     } else if (block?.type === "redacted_thinking" && typeof block.data === "string") {
       out.push({ type: "redacted_thinking", data: block.data });
@@ -126,7 +140,10 @@ function reasoningConfig(
     const budget = THINKING_BUDGETS[effort];
     if (!budget) return null;
     if (maxTokens === null) {
-      return { thinking: { type: "enabled", budget_tokens: budget }, maxTokens: DEFAULT_MAX_TOKENS + budget };
+      return {
+        thinking: { type: "enabled", budget_tokens: budget },
+        maxTokens: Math.max(defaultMaxTokens(model), DEFAULT_MAX_TOKENS + budget),
+      };
     }
     const capped = Math.min(budget, maxTokens - 1);
     if (capped < MIN_THINKING_BUDGET) return null;
@@ -332,7 +349,7 @@ export function chatToAnthropic(body: JsonMap): JsonMap {
             ]
           : turn.content,
     })),
-    max_tokens: reasoning?.maxTokens ?? requestedMax ?? DEFAULT_MAX_TOKENS,
+    max_tokens: reasoning?.maxTokens ?? requestedMax ?? defaultMaxTokens(body.model),
   };
   if (system.length) {
     out.system = system.some((block) => block.cache_control)
@@ -589,6 +606,39 @@ export class AnthropicSseTranslator {
   }
 }
 
+const EPHEMERAL = { type: "ephemeral" };
+
+function hasCacheControl(value: unknown): boolean {
+  if (Array.isArray(value)) return value.some(hasCacheControl);
+  const rec = asRecord(value);
+  if (!rec) return false;
+  return "cache_control" in rec || Object.values(rec).some((item) => typeof item === "object" && hasCacheControl(item));
+}
+
+function markLast(blocks: unknown): unknown {
+  if (!Array.isArray(blocks) || !blocks.length) return blocks;
+  const last = asRecord(blocks.at(-1));
+  if (!last) return blocks;
+  return [...blocks.slice(0, -1), { ...last, cache_control: EPHEMERAL }];
+}
+
+export function withCacheBreakpoints(body: JsonMap): JsonMap {
+  if (hasCacheControl(body.system) || hasCacheControl(body.messages) || hasCacheControl(body.tools)) return body;
+  const out: JsonMap = { ...body };
+  if (Array.isArray(out.tools) && out.tools.length) out.tools = markLast(out.tools);
+  if (typeof out.system === "string" && out.system) out.system = [{ type: "text", text: out.system, cache_control: EPHEMERAL }];
+  else if (Array.isArray(out.system)) out.system = markLast(out.system);
+  const messages = Array.isArray(out.messages) ? [...out.messages] : [];
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = asRecord(messages[index]);
+    if (message?.role !== "user" || !Array.isArray(message.content) || !message.content.length) continue;
+    messages[index] = { ...message, content: markLast(message.content) };
+    out.messages = messages;
+    break;
+  }
+  return out;
+}
+
 export function anthropicCountBody(body: JsonMap): JsonMap {
   const out: JsonMap = {};
   for (const key of COUNT_TOKENS_KEYS) {
@@ -597,9 +647,41 @@ export function anthropicCountBody(body: JsonMap): JsonMap {
   return out;
 }
 
+function synthesizedSearch(block: JsonMap): boolean {
+  if (block.type !== "web_search_tool_result" || !Array.isArray(block.content)) return false;
+  return block.content.every((item) => !asRecord(item)?.encrypted_content);
+}
+
+function withoutForeignThinking(messages: unknown): unknown {
+  if (!Array.isArray(messages)) return messages;
+  let changed = false;
+  const out = messages.map((raw) => {
+    const message = asRecord(raw);
+    if (message?.role !== "assistant" || !Array.isArray(message.content)) return raw;
+    const synthesized = new Set(
+      message.content
+        .map(asRecord)
+        .filter((block): block is JsonMap => block !== null && synthesizedSearch(block))
+        .map((block) => block.tool_use_id),
+    );
+    const kept = message.content.filter((part) => {
+      const block = asRecord(part);
+      if (!block) return true;
+      if (synthesizedSearch(block)) return false;
+      if (block.type === "server_tool_use" && synthesized.has(block.id)) return false;
+      return block.type !== "thinking" || claudeSignedThinking(block);
+    });
+    if (kept.length === message.content.length) return raw;
+    changed = true;
+    return { ...message, content: kept.length ? kept : [{ type: "text", text: "" }] };
+  });
+  return changed ? out : messages;
+}
+
 export function nativeMessagesBody(body: JsonMap): JsonMap {
   const out: JsonMap = { ...body };
   for (const key of GATEWAY_ONLY_KEYS) delete out[key];
+  if (Array.isArray(out.messages)) out.messages = withoutForeignThinking(out.messages);
   const meta = asRecord(out.metadata);
   if (meta) {
     if (typeof meta.user_id === "string" && meta.user_id) out.metadata = { user_id: meta.user_id };

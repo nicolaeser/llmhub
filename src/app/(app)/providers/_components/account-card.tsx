@@ -19,6 +19,7 @@ export default function AccountCard({
   row,
   reports,
   entry,
+  timeZone,
   refreshing,
   onRefresh,
   onEdit,
@@ -30,6 +31,7 @@ export default function AccountCard({
   row: ProviderView;
   reports: boolean;
   entry: AccountLimits | undefined;
+  timeZone: string;
   refreshing: boolean;
   onRefresh: (id: string) => void;
   onEdit: (row: ProviderView) => void;
@@ -78,7 +80,18 @@ export default function AccountCard({
         {state === "limited" ? (
           <p className="text-sm text-warning">
             {recovery
-              ? t("backIn", { when: format.relativeTime(new Date(recovery), now) })
+              ? t("backIn", {
+                  when: format.relativeTime(new Date(recovery), now),
+                  date: format.dateTime(new Date(recovery), {
+                    weekday: "short",
+                    day: "numeric",
+                    month: "short",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                    timeZone,
+                    timeZoneName: "short",
+                  }),
+                })
               : t("backInUnknown")}
           </p>
         ) : null}
@@ -99,7 +112,7 @@ export default function AccountCard({
         {planWindows.length > 0 ? (
           <div className="grid gap-4 sm:grid-cols-2">
             {planWindows.map((window, index) => (
-              <LimitMeter key={`plan-${window.windowSeconds}-${index}`} window={window} />
+              <LimitMeter key={`plan-${window.windowSeconds}-${index}`} window={window} timeZone={timeZone} />
             ))}
           </div>
         ) : null}
@@ -114,7 +127,7 @@ export default function AccountCard({
             <Disclosure.Content>
               <Disclosure.Body className="grid gap-4 pt-3 sm:grid-cols-2">
                 {scopedWindows.map((window, index) => (
-                  <LimitMeter key={`${window.scope}-${index}`} window={window} scoped />
+                  <LimitMeter key={`${window.scope}-${index}`} window={window} scoped timeZone={timeZone} />
                 ))}
               </Disclosure.Body>
             </Disclosure.Content>

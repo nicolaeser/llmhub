@@ -99,6 +99,13 @@ export default function ProvidersPage() {
       });
     },
     replace,
+    upsert(providers) {
+      const byId = new Map(providers.map((provider) => [provider.id, provider]));
+      setConnected((cur) => [
+        ...providers.filter((provider) => !cur.some((row) => row.id === provider.id)),
+        ...cur.map((row) => byId.get(row.id) ?? row),
+      ]);
+    },
     remove(id) {
       setConnected((cur) => cur.filter((row) => row.id !== id));
     },
@@ -114,10 +121,10 @@ export default function ProvidersPage() {
         <PageLoading />
       ) : (
         <Tabs selectedKey={tab} onSelectionChange={(key) => selectTab(tabOf(key))} aria-label={t("tabsLabel")}>
-          <Tabs.ListContainer className="w-fit max-w-full">
+          <Tabs.ListContainer className="max-w-full overflow-x-auto">
             <Tabs.List aria-label={t("tabsLabel")}>
               {TABS.map(({ id, icon: Icon }) => (
-                <Tabs.Tab key={id} id={id} className="gap-2 whitespace-nowrap">
+                <Tabs.Tab key={id} id={id} className="shrink-0 gap-2 whitespace-nowrap">
                   <Icon size={14} aria-hidden />
                   {t("tabs", { tab: id })}
                   <Tabs.Indicator />
@@ -125,24 +132,24 @@ export default function ProvidersPage() {
               ))}
             </Tabs.List>
           </Tabs.ListContainer>
-  
-          <Tabs.Panel id="api">
+
+          <Tabs.Panel id="api" className="pt-4">
             {connected ? (
               <ApiProviders rows={connected.filter((row) => !isSignInKind(row.kind))} actions={actions} />
             ) : (
               status
             )}
           </Tabs.Panel>
-  
-          <Tabs.Panel id="subscriptions">
+
+          <Tabs.Panel id="subscriptions" className="pt-4">
             {connected ? (
               <SubscriptionAccounts rows={connected.filter((row) => isSignInKind(row.kind))} actions={actions} />
             ) : (
               status
             )}
           </Tabs.Panel>
-  
-          <Tabs.Panel id="health">
+
+          <Tabs.Panel id="health" className="pt-4">
             <ProviderHealth />
           </Tabs.Panel>
         </Tabs>

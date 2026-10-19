@@ -51,6 +51,16 @@ function qualified(value: unknown, type: string): unknown {
   return next;
 }
 
+function hostedSearch(tools: unknown[]): JsonMap | null {
+  const tool = tools.map(asRecord).find((item) => item !== null && HOSTED_SEARCH_TOOLS.has(String(item.type)));
+  if (!tool || tool.external_web_access === false) return null;
+  const options: JsonMap = {};
+  const domains = asRecord(tool.filters)?.allowed_domains;
+  if (Array.isArray(domains) && domains.length) options.allowed_domains = domains;
+  if (asRecord(tool.user_location)) options.user_location = tool.user_location;
+  return options;
+}
+
 export function clientTools(body: JsonMap): ClientTools {
   const namespaces = new Map<string, ToolNamespace>();
   const input = Array.isArray(body.input) ? body.input : null;
@@ -68,7 +78,7 @@ export function clientTools(body: JsonMap): ClientTools {
   }
   if (tools.length || Array.isArray(body.tools)) next.tools = tools;
   if (body.tool_choice !== undefined) next.tool_choice = qualified(body.tool_choice, "function");
-  return { body: next, namespaces };
+  return { body: next, namespaces, webSearch: hostedSearch(offered) };
 }
 
 function localCall(item: unknown, namespaces: ToolNamespaces): unknown {

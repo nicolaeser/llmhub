@@ -71,19 +71,23 @@ export function restoreSseResponse(response: Response, vault: PiiVault | null): 
   let pending = "";
   const stream = new ReadableStream<Uint8Array>({
     async pull(controller) {
-      const { done, value } = await reader.read();
-      if (done) {
-        const text = vault.restore(pending + decoder.decode());
-        pending = "";
-        if (text) controller.enqueue(encoder.encode(text));
-        controller.close();
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) {
+          const text = vault.restore(pending + decoder.decode());
+          pending = "";
+          if (text) controller.enqueue(encoder.encode(text));
+          controller.close();
+          return;
+        }
+        const combined = pending + decoder.decode(value, { stream: true });
+        const hold = combined.match(/\[[A-Z0-9_]{0,80}$/);
+        pending = hold?.[0] ?? "";
+        const emit = vault.restore(hold ? combined.slice(0, -pending.length) : combined);
+        if (!emit) continue;
+        controller.enqueue(encoder.encode(emit));
         return;
       }
-      const combined = pending + decoder.decode(value, { stream: true });
-      const hold = combined.match(/\[[A-Z0-9_]{0,80}$/);
-      pending = hold?.[0] ?? "";
-      const emit = vault.restore(hold ? combined.slice(0, -pending.length) : combined);
-      if (emit) controller.enqueue(encoder.encode(emit));
     },
     cancel() {
       void cancelQuietly(reader);

@@ -166,7 +166,7 @@ export function claudePlan(profile: JsonMap): string {
   return "";
 }
 
-async function claudeProfilePlan(access: string): Promise<string> {
+export async function claudeProfilePlan(access: string): Promise<string> {
   try {
     const res = await fetch(CLAUDE_PROFILE_URL, {
       headers: {
@@ -311,7 +311,7 @@ export function antigravitySession(
   };
 }
 
-async function googleEmail(access: string): Promise<string> {
+export async function googleEmail(access: string): Promise<string> {
   try {
     const res = await fetch(ANTIGRAVITY_USERINFO_URL, {
       headers: { Authorization: `Bearer ${access}`, Accept: "application/json" },

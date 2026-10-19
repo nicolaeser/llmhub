@@ -62,13 +62,24 @@ function sourceIssue(block: JsonMap, where: string): string | null {
   return null;
 }
 
-export function chatIncompatibility(request: MessagesRequest): string | null {
+const WEB_SEARCH_TOOL = /^web_search_\d{8}$/;
+const WEB_SEARCH_BLOCKS = ["server_tool_use", "web_search_tool_result"];
+
+export type ChatFallbackOptions = { webSearch?: boolean };
+
+function isWebSearchTool(tool: MessagesTool): boolean {
+  return typeof tool.type === "string" && WEB_SEARCH_TOOL.test(tool.type);
+}
+
+export function chatIncompatibility(request: MessagesRequest, options: ChatFallbackOptions = {}): string | null {
   for (const [index, tool] of (request.tools ?? []).entries()) {
+    if (options.webSearch && isWebSearchTool(tool)) continue;
     if (tool.type && tool.type !== "custom") {
       return `tools.${index}.type: tool type "${tool.type}" requires an Anthropic deployment`;
     }
   }
   const supported = new Set(["text", "image", "document", "tool_use", "tool_result", "thinking", "redacted_thinking"]);
+  if (options.webSearch) for (const type of WEB_SEARCH_BLOCKS) supported.add(type);
   for (const [m, message] of request.messages.entries()) {
     if (typeof message.content === "string") continue;
     for (const [b, raw] of message.content.entries()) {
@@ -142,8 +153,15 @@ function userMessages(blocks: MessagesContentBlock[]): JsonMap[] {
 function assistantMessage(blocks: MessagesContentBlock[]): JsonMap | null {
   let text = "";
   const toolCalls: JsonMap[] = [];
+  const thinking: JsonMap[] = [];
   for (const block of blocks) {
     if (block.type === "text") text += block.text;
+    if (block.type === "thinking" && typeof block.signature === "string" && block.signature) {
+      thinking.push({ type: "thinking", thinking: block.thinking, signature: block.signature });
+    }
+    if (block.type === "redacted_thinking" && typeof block.data === "string") {
+      thinking.push({ type: "redacted_thinking", data: block.data });
+    }
     if (block.type === "tool_use") {
       toolCalls.push({
         id: block.id,
@@ -155,6 +173,7 @@ function assistantMessage(blocks: MessagesContentBlock[]): JsonMap | null {
   if (!text && !toolCalls.length) return null;
   const message: JsonMap = { role: "assistant", content: text || null };
   if (toolCalls.length) message.tool_calls = toolCalls;
+  if (thinking.length) message.thinking_blocks = thinking;
   return message;
 }
 
@@ -166,6 +185,32 @@ function chatTool(tool: MessagesTool): JsonMap {
   if (tool.description) fn.description = tool.description;
   if (tool.strict === true) fn.strict = true;
   return { type: "function", function: fn };
+}
+
+const SESSION_SUFFIX = /_session_([0-9a-f-]{8,})$/i;
+
+export function claudeCodeSession(userId: unknown): string {
+  if (typeof userId !== "string" || !userId) return "";
+  const suffix = SESSION_SUFFIX.exec(userId)?.[1];
+  if (suffix) return suffix;
+  if (userId.startsWith("{")) {
+    try {
+      const parsed = asRecord(JSON.parse(userId));
+      if (typeof parsed?.session_id === "string" && parsed.session_id) return parsed.session_id;
+    } catch {
+      return "";
+    }
+  }
+  return "";
+}
+
+function webSearchOptions(tool: MessagesTool, choice: MessagesRequest["tool_choice"]): JsonMap {
+  const rec = asRecord(tool) ?? {};
+  const options: JsonMap = {};
+  if (Array.isArray(rec.allowed_domains) && rec.allowed_domains.length) options.allowed_domains = rec.allowed_domains;
+  if (asRecord(rec.user_location)) options.user_location = rec.user_location;
+  if (choice?.type === "tool" && choice.name === tool.name) options.forced = true;
+  return options;
 }
 
 function chatToolChoice(choice: MessagesRequest["tool_choice"]): unknown {
@@ -218,11 +263,17 @@ export function messagesToChat(request: MessagesRequest): JsonMap {
   if (typeof request.top_p === "number") body.top_p = request.top_p;
   if (request.stop_sequences?.length) body.stop = request.stop_sequences;
   if (request.metadata?.user_id) body.user = request.metadata.user_id;
+  const session = claudeCodeSession(request.metadata?.user_id);
+  if (session) body.prompt_cache_key = `claude-code-${session}`;
   if (request.service_tier) body.service_tier = request.service_tier;
   if (request.speed) body.speed = request.speed;
-  if (request.tools?.length) {
-    body.tools = request.tools.map(chatTool);
-    const choice = chatToolChoice(request.tool_choice);
+  const webTool = (request.tools ?? []).find(isWebSearchTool);
+  const clientTools = (request.tools ?? []).filter((tool) => !isWebSearchTool(tool));
+  if (webTool) body.web_search = webSearchOptions(webTool, request.tool_choice);
+  if (clientTools.length) {
+    body.tools = clientTools.map(chatTool);
+    const forcedSearch = asRecord(body.web_search)?.forced === true;
+    const choice = forcedSearch ? undefined : chatToolChoice(request.tool_choice);
     if (choice !== undefined) body.tool_choice = choice;
     if (request.tool_choice?.type !== "none" && asRecord(request.tool_choice)?.disable_parallel_tool_use === true) {
       body.parallel_tool_calls = false;
@@ -261,12 +312,52 @@ function stopReasonFromFinish(finish: unknown, hasTools: boolean, stopSequence: 
   return "end_turn";
 }
 
+function webSearchBlocks(call: JsonMap): JsonMap[] {
+  const id = `srvtoolu_${typeof call.id === "string" && call.id ? call.id : newId()}`;
+  const sources = Array.isArray(call.sources) ? call.sources : [];
+  const results = sources
+    .map(asRecord)
+    .filter((source): source is JsonMap => typeof source?.url === "string" && source.url !== "")
+    .map((source) => ({
+      type: "web_search_result",
+      url: source.url,
+      title: typeof source.title === "string" && source.title ? source.title : source.url,
+      encrypted_content: "",
+      page_age: null,
+    }));
+  return [
+    { type: "server_tool_use", id, name: "web_search", input: { query: typeof call.query === "string" ? call.query : "" } },
+    { type: "web_search_tool_result", tool_use_id: id, content: results },
+  ];
+}
+
+function webSearchCalls(value: unknown): JsonMap[] {
+  return (Array.isArray(value) ? value : []).map(asRecord).filter((call): call is JsonMap => call !== null);
+}
+
+function signedThinking(value: unknown): JsonMap[] {
+  const out: JsonMap[] = [];
+  for (const raw of Array.isArray(value) ? value : []) {
+    const block = asRecord(raw);
+    if (block?.type === "thinking" && typeof block.signature === "string" && block.signature) {
+      out.push({ type: "thinking", thinking: typeof block.thinking === "string" ? block.thinking : "", signature: block.signature });
+    } else if (block?.type === "redacted_thinking" && typeof block.data === "string") {
+      out.push({ type: "redacted_thinking", data: block.data });
+    }
+  }
+  return out;
+}
+
 export function chatToMessage(chat: JsonMap, model: string): JsonMap {
   const choice = asRecord(Array.isArray(chat.choices) ? chat.choices[0] : null);
   const message = asRecord(choice?.message);
   const content: JsonMap[] = [];
   const reasoning = typeof message?.reasoning_content === "string" ? message.reasoning_content : "";
-  if (reasoning) content.push({ type: "thinking", thinking: reasoning, signature: "" });
+  const signed = signedThinking(message?.thinking_blocks);
+  if (signed.length) content.push(...signed);
+  else if (reasoning) content.push({ type: "thinking", thinking: reasoning, signature: "" });
+  const searches = webSearchCalls(message?.web_search_calls);
+  for (const call of searches) content.push(...webSearchBlocks(call));
   const text = stringifyContent(message?.content);
   if (text) content.push({ type: "text", text });
   const calls = Array.isArray(message?.tool_calls) ? message.tool_calls : [];
@@ -293,7 +384,9 @@ export function chatToMessage(chat: JsonMap, model: string): JsonMap {
     content,
     stop_reason: stopReason,
     stop_sequence: stopReason === "stop_sequence" ? matched : null,
-    usage: anthropicUsageFromChat(chat.usage),
+    usage: searches.length
+      ? { ...anthropicUsageFromChat(chat.usage), server_tool_use: { web_search_requests: searches.length } }
+      : anthropicUsageFromChat(chat.usage),
   };
 }
 
@@ -354,11 +447,17 @@ export class MessagesStreamEncoder implements ChatStreamEncoder {
   private matched: string | null = null;
   private usage: unknown = null;
   private done = false;
+  private signature = "";
+  private searches = 0;
 
   constructor(
     private model: string,
     private options: MessagesStreamOptions = {},
   ) {}
+
+  keepAlive(): string {
+    return sseEvent("ping", { type: "ping" });
+  }
 
   start(): string[] {
     return [
@@ -391,9 +490,10 @@ export class MessagesStreamEncoder implements ChatStreamEncoder {
         sseEvent("content_block_delta", {
           type: "content_block_delta",
           index: this.index,
-          delta: { type: "signature_delta", signature: "" },
+          delta: { type: "signature_delta", signature: this.signature },
         }),
       );
+      this.signature = "";
     }
     this.open = null;
     out.push(sseEvent("content_block_stop", { type: "content_block_stop", index: this.index }));
@@ -414,13 +514,63 @@ export class MessagesStreamEncoder implements ChatStreamEncoder {
         }),
       );
     }
-    out.push(
-      sseEvent("content_block_delta", {
-        type: "content_block_delta",
-        index: this.index,
-        delta: { type: "thinking_delta", thinking: delta },
-      }),
-    );
+    if (delta) {
+      out.push(
+        sseEvent("content_block_delta", {
+          type: "content_block_delta",
+          index: this.index,
+          delta: { type: "thinking_delta", thinking: delta },
+        }),
+      );
+    }
+    return out;
+  }
+
+  private signed(blocks: unknown): string[] {
+    const out: string[] = [];
+    for (const block of signedThinking(blocks)) {
+      if (block.type === "redacted_thinking") {
+        out.push(...this.close());
+        this.index += 1;
+        out.push(
+          sseEvent("content_block_start", { type: "content_block_start", index: this.index, content_block: block }),
+          sseEvent("content_block_stop", { type: "content_block_stop", index: this.index }),
+        );
+        continue;
+      }
+      if (this.open !== "thinking") out.push(...this.thinking(""));
+      this.signature = String(block.signature);
+      out.push(...this.close());
+    }
+    return out;
+  }
+
+  private webSearch(calls: unknown): string[] {
+    const out: string[] = [];
+    for (const call of webSearchCalls(calls)) {
+      const [use, result] = webSearchBlocks(call);
+      out.push(...this.close());
+      this.index += 1;
+      out.push(
+        sseEvent("content_block_start", {
+          type: "content_block_start",
+          index: this.index,
+          content_block: { ...use, input: {} },
+        }),
+        sseEvent("content_block_delta", {
+          type: "content_block_delta",
+          index: this.index,
+          delta: { type: "input_json_delta", partial_json: JSON.stringify(use!.input) },
+        }),
+        sseEvent("content_block_stop", { type: "content_block_stop", index: this.index }),
+      );
+      this.index += 1;
+      out.push(
+        sseEvent("content_block_start", { type: "content_block_start", index: this.index, content_block: result }),
+        sseEvent("content_block_stop", { type: "content_block_stop", index: this.index }),
+      );
+      this.searches += 1;
+    }
     return out;
   }
 
@@ -485,6 +635,8 @@ export class MessagesStreamEncoder implements ChatStreamEncoder {
     const delta = asRecord(choice.delta);
     const reasoning = typeof delta?.reasoning_content === "string" ? delta.reasoning_content : "";
     if (reasoning) out.push(...this.thinking(reasoning));
+    out.push(...this.signed(delta?.thinking_blocks));
+    out.push(...this.webSearch(delta?.web_search_calls));
     const text = typeof delta?.content === "string" ? delta.content : "";
     if (text) out.push(...this.text(text));
     for (const event of this.deltas.push(delta?.tool_calls)) out.push(...this.tool(event));
@@ -514,6 +666,7 @@ export class MessagesStreamEncoder implements ChatStreamEncoder {
           output_tokens: usage.output_tokens,
           cache_creation_input_tokens: usage.cache_creation_input_tokens,
           cache_read_input_tokens: usage.cache_read_input_tokens,
+          ...(this.searches ? { server_tool_use: { web_search_requests: this.searches } } : {}),
         },
       }),
       sseEvent("message_stop", { type: "message_stop" }),

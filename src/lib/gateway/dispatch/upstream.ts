@@ -1,7 +1,7 @@
 import "server-only";
 import { env } from "@/lib/env";
 import { GateError } from "@/lib/gateway/errors";
-import { anthropicToChat, chatToAnthropic } from "@/lib/gateway/protocols/anthropic";
+import { anthropicToChat, chatToAnthropic, withCacheBreakpoints } from "@/lib/gateway/protocols/anthropic";
 import { plainModel } from "@/lib/gateway/catalog/model-alias";
 import { inPool, outsidePool } from "@/lib/gateway/routing/route-pool";
 import { speaksAnthropic } from "@/lib/gateway/upstreams/provider-kinds";
@@ -143,11 +143,12 @@ export function prepareBody(
 ): JsonMap {
   let payload: JsonMap = { ...body, model: dep.model || (typeof body.model === "string" ? plainModel(body.model) : body.model) };
   for (const key of GATEWAY_ONLY_KEYS) delete payload[key];
+  if (dep.kind !== "codex") delete payload.web_search;
   payload = applyProviderServiceMode(dep.kind, payload, groupStrategy, asString(payload.model), dep.facts).body;
   if ((dep.kind === "xai" || dep.kind === "grok_build") && payload.reasoning_effort !== undefined) {
     payload.reasoning_effort = xaiReasoningEffort(String(payload.model ?? ""), payload.reasoning_effort);
   }
-  if (!speaksAnthropic(dep.kind) && Array.isArray(payload.messages)) {
+  if (!speaksAnthropic(dep.kind) && dep.kind !== "codex" && Array.isArray(payload.messages)) {
     payload.messages = withoutThinkingBlocks(payload.messages);
   }
   if (speaksAnthropic(dep.kind)) {
@@ -156,6 +157,7 @@ export function prepareBody(
       native = chatToAnthropic(payload);
       if (typeof payload.speed === "string") native.speed = payload.speed;
       if (typeof payload.service_tier === "string") native.service_tier = payload.service_tier;
+      if (dep.kind === "claude") native = withCacheBreakpoints(native);
     }
     return dep.kind === "claude" ? withClaudeIdentity(native) : native;
   }

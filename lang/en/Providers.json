@@ -38,7 +38,9 @@
     "pasteTitle": "Paste the authorization result",
     "pasteHint": "{kind, select, antigravity {After you approve access, the browser tries to open a page on localhost that does not load. Copy the full address from the address bar and paste it below.} claude {After you approve access, the browser tries to open a page on localhost that does not load. Copy the full address from the address bar, or the authorization code, and paste it below.} other {Paste the authorization result below.}}",
     "pasteLabel": "Callback address or authorization code",
-    "finish": "Finish sign-in"
+    "finish": "Finish sign-in",
+    "importFile": "Import JSON file",
+    "importHint": "Or upload an auth file from CLIProxyAPI or EasyCLIProxyAPI, usually in ~/.cli-proxy-api. LLM Hub renews the sign-in from then on, so stop using that file in CLIProxyAPI."
   },
   "toasts": {
     "saved": "{mode, select, created {Provider connected} updated {Provider updated} deleted {Disconnected} other {Provider connected}}"

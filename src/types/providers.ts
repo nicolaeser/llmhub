@@ -173,6 +173,36 @@ export type SignInPollResult =
   | { state: "pending"; interval: number }
   | { state: "done"; credential: string; account: string; plan: string };
 
+export type AuthFileAccount = {
+  kind: SignInKind;
+  session: SignInSession;
+  needsProject: boolean;
+};
+
+export type AuthFileUpload = { name: string; content: string };
+
+export type AuthFileStatus = "created" | "updated" | "failed";
+
+export type AuthFileResult = {
+  file: string;
+  kind?: SignInKind;
+  account?: string;
+  plan?: string;
+  status: AuthFileStatus;
+  error?: string;
+};
+
+export type AuthFileImport = {
+  results: AuthFileResult[];
+  providers: ProviderView[];
+};
+
+export type SignInFileResult = {
+  credential: string;
+  account: string;
+  plan: string;
+};
+
 export type ProviderAuthMode = "api_key" | "sign_in";
 
 export type ProviderKindSpec = {
@@ -226,6 +256,7 @@ export type ProviderListActions = {
   openForm: (spec: ProviderKindSpec | null, row: ProviderView | null, onSaved?: (provider: ProviderView) => void) => void;
   openImport: (row: ProviderView) => void;
   replace: (provider: ProviderView) => void;
+  upsert: (providers: ProviderView[]) => void;
   remove: (id: string) => void;
 };
 

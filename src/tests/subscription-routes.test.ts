@@ -167,7 +167,7 @@ test("/api/v1 never routes to subscriptions and /api/subscription/v1 reaches API
 
 test("subscription paths expose only text endpoints that /api/v1 serves with the same limits", async () => {
   const dirs = routeDirs(subscriptionApp);
-  assert.deepEqual(dirs, ["v1/chat/completions", "v1/messages", "v1/models", "v1/models/[id]", "v1/responses"]);
+  assert.deepEqual(dirs, ["v1/chat/completions", "v1/messages", "v1/messages/count_tokens", "v1/models", "v1/models/[id]", "v1/responses"]);
   const methods = (mod: RouteModule) => ["GET", "POST", "PUT", "PATCH", "DELETE"].filter((method) => typeof mod[method] === "function");
   for (const dir of dirs) {
     const subscription = await surfaceRoute(subscriptionApp, dir);

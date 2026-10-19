@@ -38,7 +38,7 @@ export function sealTokens(tokens: SignInTokens): string {
   return seal(JSON.stringify(tokens));
 }
 
-function openTokens(sealed: string, providerId: string): SignInTokens {
+export function openTokens(sealed: string, providerId: string): SignInTokens {
   const rec = asRecord(parseJsonOrNull(open(sealed)));
   if (!rec) logger.warn("provider_login.tokens_unreadable", { providerId });
   return {

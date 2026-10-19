@@ -236,6 +236,7 @@ export const OPENAPI_PATHS: OpenApiPath[] = [
   { method: "POST", path: "/api/subscription/v1/chat/completions", summary: "Create a chat completion on a subscription", style: "openai" },
   { method: "POST", path: "/api/subscription/v1/responses", summary: "Create a response on a subscription", style: "openai" },
   { method: "POST", path: "/api/subscription/v1/messages", summary: "Create an Anthropic Messages response on a subscription", style: "anthropic" },
+  { method: "POST", path: "/api/subscription/v1/messages/count_tokens", summary: "Count Anthropic Messages input tokens on a subscription", style: "anthropic" },
   { method: "GET", path: "/api/subscription/v1/models", summary: "List models served by subscriptions", style: "dual" },
   { method: "GET", path: "/api/subscription/v1/models/{id}", summary: "Retrieve a model served by subscriptions", style: "dual" },
   { method: "GET", path: "/api/mgmt/me", summary: "Show the key's user and effective permissions", style: "management" },

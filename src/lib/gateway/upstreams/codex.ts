@@ -1,6 +1,7 @@
 import { asNumber, asRecord, asString, asStringArray, newId, stringifyContent } from "@/lib/gateway/core";
 import { GateError } from "@/lib/gateway/errors";
 import { chatMessagesToItems } from "@/lib/gateway/protocols/responses";
+import { isCodexSignature } from "@/lib/gateway/protocols/reasoning-signature";
 import { completionFromSse } from "@/lib/gateway/protocols/sse-completion";
 import type { ChatSseTranslator, JsonMap } from "@/types/gateway";
 import type { ModelFacts } from "@/types/routing";
@@ -14,6 +15,28 @@ const CODEX_LEGACY_FAST_TIER = "fast";
 const INSTRUCTION_ROLES = new Set(["system", "developer"]);
 const REASONING_DELTAS = new Set(["response.reasoning_summary_text.delta", "response.reasoning_text.delta"]);
 const FINAL_EVENTS = new Set(["response.completed", "response.incomplete"]);
+function reasoningItems(message: JsonMap): JsonMap[] {
+  if (asString(message.role) !== "assistant" || !Array.isArray(message.thinking_blocks)) return [];
+  const items: JsonMap[] = [];
+  for (const raw of message.thinking_blocks) {
+    const block = asRecord(raw);
+    if (block?.type !== "thinking" || !isCodexSignature(block.signature)) continue;
+    items.push({ type: "reasoning", summary: [], encrypted_content: block.signature });
+  }
+  return items;
+}
+
+function codexInput(messages: JsonMap[]): JsonMap[] {
+  return messages.flatMap((message) => [...reasoningItems(message), ...chatMessagesToItems([message])]);
+}
+
+function summaryText(item: JsonMap): string {
+  const parts = Array.isArray(item.summary) ? item.summary : [];
+  return parts
+    .map((part) => asString(asRecord(part)?.text))
+    .filter(Boolean)
+    .join("\n\n");
+}
 
 function codexTools(tools: unknown): JsonMap[] {
   const out: JsonMap[] = [];
@@ -67,9 +90,10 @@ export function chatToCodex(body: JsonMap): JsonMap {
   const payload: JsonMap = {
     model: body.model,
     instructions: instructions || CODEX_DEFAULT_INSTRUCTIONS,
-    input: chatMessagesToItems(messages.filter((message) => !INSTRUCTION_ROLES.has(asString(message.role)))),
+    input: codexInput(messages.filter((message) => !INSTRUCTION_ROLES.has(asString(message.role)))),
     store: false,
     stream: true,
+    include: ["reasoning.encrypted_content"],
   };
   const tools = codexTools(body.tools);
   if (tools.length) {
@@ -77,6 +101,17 @@ export function chatToCodex(body: JsonMap): JsonMap {
     const choice = codexToolChoice(body.tool_choice);
     if (choice !== undefined) payload.tool_choice = choice;
     if (typeof body.parallel_tool_calls === "boolean") payload.parallel_tool_calls = body.parallel_tool_calls;
+  }
+  const search = asRecord(body.web_search);
+  if (search) {
+    const tool: JsonMap = { type: "web_search" };
+    const domains = asStringArray(search.allowed_domains);
+    if (domains.length) tool.filters = { allowed_domains: domains };
+    const location = asRecord(search.user_location);
+    if (location) tool.user_location = { ...location, type: "approximate" };
+    payload.tools = [...(Array.isArray(payload.tools) ? payload.tools : []), tool];
+    payload.include = ["reasoning.encrypted_content", "web_search_call.action.sources"];
+    if (search.forced === true) payload.tool_choice = { type: "web_search" };
   }
   const effort = codexEffort(body.reasoning_effort) || codexEffort(asRecord(body.reasoning)?.effort);
   payload.reasoning = effort ? { effort, summary: "auto" } : { summary: "auto" };
@@ -226,6 +261,23 @@ export class CodexSseTranslator implements ChatSseTranslator {
     }
     if (type === "response.output_item.added" || type === "response.output_item.done") {
       const item = asRecord(data.item);
+      if (item?.type === "web_search_call") {
+        if (type !== "response.output_item.done") return null;
+        const action = asRecord(item.action);
+        const sources = (Array.isArray(action?.sources) ? action.sources : [])
+          .map(asRecord)
+          .filter((source): source is JsonMap => source !== null && asString(source.url) !== "")
+          .map((source) => ({ url: asString(source.url), title: asString(source.title) }));
+        return this.chunk({
+          web_search_calls: [{ id: asString(item.id) || `ws_${newId()}`, query: asString(action?.query), sources }],
+        });
+      }
+      if (item?.type === "reasoning") {
+        if (type !== "response.output_item.done" || !isCodexSignature(item.encrypted_content)) return null;
+        return this.chunk({
+          thinking_blocks: [{ type: "thinking", thinking: summaryText(item), signature: item.encrypted_content }],
+        });
+      }
       if (item?.type !== "function_call") return null;
       const outputIndex = asNumber(data.output_index, this.tools.size);
       const tool = this.toolSlot(outputIndex);

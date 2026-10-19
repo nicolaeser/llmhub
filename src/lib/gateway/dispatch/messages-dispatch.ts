@@ -41,13 +41,12 @@ type MessagesInput = {
   headers: Record<string, string>;
 };
 
-function chatFallback(request: MessagesRequest): () => JsonMap {
+function chatFallback(request: MessagesRequest): (kind: string) => JsonMap {
   let converted: JsonMap | null = null;
-  return () => {
-    if (converted) return converted;
-    const issue = chatIncompatibility(request);
+  return (kind) => {
+    const issue = chatIncompatibility(request, { webSearch: kind === "codex" });
     if (issue) throw new GateError(400, "unsupported_parameter", issue);
-    converted = messagesToChat(request);
+    converted ??= messagesToChat(request);
     return converted;
   };
 }
@@ -89,7 +88,7 @@ export async function dispatchMessages(input: MessagesInput): Promise<JsonMap> {
   const fallback = chatFallback(input.request);
   const routed = await routeMetered(input, started, async (dep, group) => {
     if (!speaksAnthropic(dep.kind)) {
-      return { native: false, json: asRecord(await chatOnce(dep, group, fallback(), input.model)) ?? {} };
+      return { native: false, json: asRecord(await chatOnce(dep, group, fallback(dep.kind), input.model)) ?? {} };
     }
     const proxied = await proxyJson({
       dep,
@@ -132,7 +131,7 @@ export async function streamMessages(input: MessagesInput & { req: Request }): P
       if (!speaksAnthropic(dep.kind)) {
         return {
           native: false,
-          res: await openChatStream(dep, group, { req: input.req, model: input.model, body: fallback() }),
+          res: await openChatStream(dep, group, { req: input.req, model: input.model, body: fallback(dep.kind) }),
         };
       }
       const payload = prepareBody(
@@ -151,7 +150,7 @@ export async function streamMessages(input: MessagesInput & { req: Request }): P
   const { result, dep, group, release } = routed;
 
   if (!result.native) {
-    const chatBody = fallback();
+    const chatBody = fallback(dep.kind);
     return pipeChatStream(
       relayChatStream({
         res: result.res,

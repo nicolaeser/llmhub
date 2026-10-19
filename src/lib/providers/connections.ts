@@ -58,7 +58,7 @@ function signInOf(row: ProviderRecord): ProviderSignIn | null {
   };
 }
 
-function publicProvider(row: ProviderRecord) {
+export function publicProvider(row: ProviderRecord) {
   return {
     id: row.id,
     name: row.name,
@@ -75,7 +75,7 @@ function publicProvider(row: ProviderRecord) {
 }
 
 const loginSelect = { select: { account: true, plan: true, status: true } } as const;
-const providerInclude = { login: loginSelect, assignments: assignmentSelect } as const;
+export const providerInclude = { login: loginSelect, assignments: assignmentSelect } as const;
 
 function signInCredential(raw: string | undefined, uid: string, kind: string): SignInCredential | null {
   if (!raw) return null;
@@ -100,7 +100,7 @@ function parsePolicy(raw: unknown): ProviderPolicyInput {
   return policy.zdr ? { ...policy, retentionDays: 0, noTraining: true } : policy;
 }
 
-function providerAuditAfter(row: ProviderRecord, extra?: Record<string, unknown>) {
+export function providerAuditAfter(row: ProviderRecord, extra?: Record<string, unknown>) {
   return { name: row.name, kind: row.kind, baseUrl: row.baseUrl, policy: policyOf(row), ...extra };
 }
 

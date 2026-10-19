@@ -14,6 +14,8 @@
     "tools": "Tools offered",
     "errors": "With errors"
   },
+  "tabs": "{tab, select, all {All} connected {Connected} attention {Needs attention} disabled {Disabled} other {{tab}}}",
+  "emptyFilter": "No server in this view.",
   "status": "{status, select, connected {Connected} error {Error} disabled {Disabled} signin {Sign-in needed} other {Not checked}}",
   "protocol": "{era, select, modern {Stateless MCP, version {version}} legacy {MCP with sessions, version {version}} sse {Legacy HTTP+SSE, version {version}} other {Protocol not detected}}",
   "toolCount": "{count, plural, =0 {No tools} one {# tool} other {# tools}}",

@@ -1,8 +1,8 @@
 import { asRecord, newId } from "@/lib/gateway/core";
-import { SSE_HEADERS } from "@/lib/gateway/protocols/sse";
+import { KEEPALIVE_MS, SSE_HEADERS, SSE_KEEPALIVE } from "@/lib/gateway/protocols/sse";
 import { errorFields } from "@/lib/logging/format";
 import { logger } from "@/lib/logging/logger";
-import { cancelQuietly } from "@/lib/utils/streams";
+import { cancelQuietly, DeadlineReader } from "@/lib/utils/streams";
 import type { JsonMap } from "@/types/gateway";
 import type { ChatStreamEncoder, ToolCallEntry, ToolCallEvent } from "@/types/responses";
 
@@ -14,13 +14,17 @@ export function pipeChatStream(
   res: Response,
   encoder: ChatStreamEncoder,
   onDone?: () => Promise<void> | void,
+  options: { keepAliveMs?: number } = {},
 ): Response {
   const bytes = new TextEncoder();
   const decoder = new TextDecoder();
   const reader = res.body?.getReader() ?? null;
+  const reads = reader ? new DeadlineReader(reader) : null;
+  const keepAliveMs = options.keepAliveMs ?? KEEPALIVE_MS;
   let started = false;
   let failed = false;
   let leftover = "";
+  let lastSent = Date.now();
 
   const lineEvents = (raw: string): string[] => {
     const line = raw.trim();
@@ -58,13 +62,18 @@ export function pipeChatStream(
         started = true;
         out.push(...encoder.start());
       }
-      if (!reader) {
+      if (!reads) {
         await complete(controller, [...out, ...encoder.finish()]);
         return;
       }
       try {
         while (!out.length) {
-          const { done, value } = await reader.read();
+          const read = await reads.read(lastSent + keepAliveMs - Date.now());
+          if (!read) {
+            out.push(encoder.keepAlive?.() ?? SSE_KEEPALIVE);
+            break;
+          }
+          const { done, value } = read;
           if (done) {
             leftover += decoder.decode();
             for (const line of leftover.split("\n")) out.push(...lineEvents(line));
@@ -85,6 +94,7 @@ export function pipeChatStream(
         return;
       }
       for (const event of out) controller.enqueue(bytes.encode(event));
+      lastSent = Date.now();
     },
     cancel() {
       void cancelQuietly(reader);

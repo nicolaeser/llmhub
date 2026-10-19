@@ -1,4 +1,5 @@
 import { asRecord, newId, stringifyContent } from "@/lib/gateway/core";
+import { isCodexSignature } from "@/lib/gateway/protocols/reasoning-signature";
 import type { JsonMap } from "@/types/gateway";
 import type { ResponsesInputItem, ResponsesRequest, StoredResponse } from "@/types/responses";
 
@@ -65,6 +66,16 @@ export function decodeThinking(value: unknown): JsonMap[] {
   }
 }
 
+function reasoningThinking(item: JsonMap): JsonMap[] {
+  const decoded = decodeThinking(item.encrypted_content);
+  if (decoded.length || !isCodexSignature(item.encrypted_content)) return decoded;
+  const summary = (Array.isArray(item.summary) ? item.summary : [])
+    .map((part) => asRecord(part)?.text)
+    .filter((text): text is string => typeof text === "string" && text !== "")
+    .join("\n\n");
+  return [{ type: "thinking", thinking: summary, signature: item.encrypted_content }];
+}
+
 function attachThinking(message: JsonMap, pending: JsonMap[]): void {
   if (!pending.length) return;
   const existing = Array.isArray(message.thinking_blocks) ? (message.thinking_blocks as JsonMap[]) : [];
@@ -77,7 +88,7 @@ function responsesInputToMessages(input: string | ResponsesInputItem[] | null | 
   const pending: JsonMap[] = [];
   for (const item of input ?? []) {
     if (item.type === "reasoning") {
-      pending.push(...decodeThinking(item.encrypted_content));
+      pending.push(...reasoningThinking(item));
       continue;
     }
     if (item.type === "message") {
