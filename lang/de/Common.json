@@ -29,7 +29,7 @@
   "goHome": "Zur Startseite",
   "signOut": "Abmelden",
   "health": {
-    "status": "{status, select, ok {Gesund} down {Offline} other {Verbinden}}"
+    "status": "{status, select, live {Live} updating {Wird aktualisiert…} reconnecting {Verbinde neu…} down {Offline} other {Verbinden…}}"
   },
   "theme": {
     "toggle": "{isDark, select, true {Zum hellen Modus wechseln} other {Zum dunklen Modus wechseln}}"
@@ -50,5 +50,51 @@
     "ready": "Neue Version bereit",
     "reload": "Neu laden",
     "reloadLabel": "Neue Version installiert, Seite neu laden"
+  },
+  "live": {
+    "title": "Serverstatus",
+    "open": "Serverstatus: {status}. Details anzeigen",
+    "connection": "Verbindung",
+    "version": "Version",
+    "started": "Gestartet"
+  },
+  "updater": {
+    "title": "Automatische Updates",
+    "missing": "Bei diesem Server hat sich noch kein Updater gemeldet. Starte den Updater-Container aus docker-compose.au.yml, um neue Images aus der Konsole zu installieren.",
+    "command": "docker compose -f docker-compose.yml -f docker-compose.au.yml up -d",
+    "connection": "Updater",
+    "connected": "{connected, select, true {Verbunden} other {Nicht verbunden}}",
+    "lastSeen": "Zuletzt gesehen",
+    "stateLabel": "Zustand",
+    "state": "{state, select, idle {Bereit} checking {Prüft} pulling {Lädt herunter} recreating {Startet neu} verifying {Überprüft} rolling_back {Setzt zurück} failed {Fehlgeschlagen} other {Unbekannt}}",
+    "image": "Image",
+    "running": "Laufender Digest",
+    "latest": "Neuester Digest",
+    "unknown": "Unbekannt",
+    "checked": "Letzte Prüfung",
+    "never": "Noch nicht geprüft",
+    "availability": "Update",
+    "available": "{available, select, true {Verfügbar} other {Keines}}",
+    "result": "Letztes Ergebnis",
+    "outcome": "{outcome, select, up_to_date {Aktuell} available {Update gefunden} updated {Aktualisiert} rolled_back {Zurückgesetzt} failed {Fehlgeschlagen} pinned {Fester Tag} other {Unbekannt}}, {when}",
+    "pinned": "Der Image-Tag {tag} ist auf ein Release festgelegt, deshalb ersetzt der Updater ihn nie. Setze LLMHUB_TAG auf latest oder dev, um Updates zu erhalten.",
+    "issue": "{issue, select, docker_unavailable {Der Updater erreicht den Docker-Socket nicht.} no_project {Der Updater läuft nicht in einem Docker-Compose-Projekt.} no_targets {Kein laufender Container trägt das Label llmhub.updater.target=true.} mixed_images {Die markierten Container verwenden unterschiedliche Image-Referenzen.} unsupported_image {Der App-Container verweist nicht über Repository und Tag auf sein Image.} registry_unreachable {Die Image-Registry war nicht erreichbar.} other {Der Updater hat ein Problem gemeldet.}}",
+    "auto": "Updates automatisch installieren",
+    "autoHint": "Der Updater sucht alle fünf Minuten nach einem neuen Image und startet LLM Hub damit neu. Änderungen gelten sofort.",
+    "autoPinned": "Wirkt nicht, solange der Image-Tag festgelegt ist.",
+    "autoChanged": "{enabled, select, true {Automatische Updates eingeschaltet} other {Automatische Updates ausgeschaltet}}",
+    "check": "Jetzt prüfen",
+    "update": "Jetzt aktualisieren",
+    "updateTitle": "Update jetzt installieren?",
+    "updateDescription": "Der Updater lädt das neueste Image und startet LLM Hub neu. Laufende Anfragen werden abgebrochen und die Konsole verbindet sich neu, sobald die neue Version bereit ist. Startet sie nicht, wird die aktuelle Version wiederhergestellt.",
+    "updateConfirm": "Update installieren",
+    "requested": "{action, select, check {Der Updater sucht nach einem neuen Image.} update {Der Updater installiert das Update.} other {Anfrage gesendet.}}",
+    "install": "Installieren",
+    "installLabel": "Update verfügbar, jetzt installieren",
+    "installing": "Update wird installiert",
+    "noticeTitle": "Automatische Updates sind verfügbar",
+    "noticeBody": "Mit diesem Server ist ein Updater verbunden. Schalte automatische Updates ein, damit neue LLM-Hub-Images innerhalb von fünf Minuten nach ihrer Veröffentlichung installiert werden. LLM Hub startet dafür jeweils kurz neu.",
+    "noticeEnable": "Automatische Updates einschalten",
+    "noticeLater": "Nicht jetzt"
   }
 }

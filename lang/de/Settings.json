@@ -21,6 +21,10 @@
       "state": "{state, select, available {Installiert ist {current}. Verfügbar ist {latest}.} current {Installiert ist {current}, das neueste Release.} other {Installiert ist {current}.}}",
       "open": "Release auf GitHub öffnen"
     },
+    "automatic": {
+      "title": "Automatische Updates",
+      "subtitle": "Ein Updater-Container neben der App prüft die Image-Registry und startet LLM Hub mit neuen Images neu."
+    },
     "env": {
       "title": "Umgebung",
       "subtitle": "Diese Werte kommen aus der Prozessumgebung. Sie werden nicht in der Konsole bearbeitet.",

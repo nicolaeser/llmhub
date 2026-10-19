@@ -29,7 +29,7 @@
   "goHome": "Go to the start page",
   "signOut": "Sign out",
   "health": {
-    "status": "{status, select, ok {Healthy} down {Down} other {Connecting}}"
+    "status": "{status, select, live {Live} updating {Updating…} reconnecting {Reconnecting…} down {Offline} other {Connecting…}}"
   },
   "theme": {
     "toggle": "{isDark, select, true {Switch to light mode} other {Switch to dark mode}}"
@@ -50,5 +50,51 @@
     "ready": "New version ready",
     "reload": "Reload",
     "reloadLabel": "New version installed, reload the page"
+  },
+  "live": {
+    "title": "Server status",
+    "open": "Server status: {status}. Show details",
+    "connection": "Connection",
+    "version": "Version",
+    "started": "Started"
+  },
+  "updater": {
+    "title": "Automatic updates",
+    "missing": "No updater has reported to this server. Start the updater container from docker-compose.au.yml to install new images from the console.",
+    "command": "docker compose -f docker-compose.yml -f docker-compose.au.yml up -d",
+    "connection": "Updater",
+    "connected": "{connected, select, true {Connected} other {Not connected}}",
+    "lastSeen": "Last seen",
+    "stateLabel": "State",
+    "state": "{state, select, idle {Idle} checking {Checking} pulling {Downloading} recreating {Restarting} verifying {Verifying} rolling_back {Rolling back} failed {Failed} other {Unknown}}",
+    "image": "Image",
+    "running": "Running digest",
+    "latest": "Newest digest",
+    "unknown": "Unknown",
+    "checked": "Last check",
+    "never": "Not checked yet",
+    "availability": "Update",
+    "available": "{available, select, true {Available} other {None}}",
+    "result": "Last result",
+    "outcome": "{outcome, select, up_to_date {Up to date} available {Update found} updated {Updated} rolled_back {Rolled back} failed {Failed} pinned {Pinned tag} other {Unknown}}, {when}",
+    "pinned": "The image tag {tag} is pinned to one release, so the updater never replaces it. Set LLMHUB_TAG to latest or dev to receive updates.",
+    "issue": "{issue, select, docker_unavailable {The updater cannot reach the Docker socket.} no_project {The updater does not run inside a Docker Compose project.} no_targets {No running container carries the label llmhub.updater.target=true.} mixed_images {The labeled containers run different image references.} unsupported_image {The app container does not reference its image by repository and tag.} registry_unreachable {The image registry could not be reached.} other {The updater reported a problem.}}",
+    "auto": "Install updates automatically",
+    "autoHint": "The updater checks for a new image every five minutes and restarts LLM Hub with it. Changes apply immediately.",
+    "autoPinned": "Has no effect while the image tag is pinned.",
+    "autoChanged": "{enabled, select, true {Automatic updates turned on} other {Automatic updates turned off}}",
+    "check": "Check now",
+    "update": "Update now",
+    "updateTitle": "Install the update now?",
+    "updateDescription": "The updater downloads the newest image and restarts LLM Hub. Running requests are cut off and the console reconnects once the new version is healthy. If it does not start, the current version is restored.",
+    "updateConfirm": "Install update",
+    "requested": "{action, select, check {The updater checks for a new image.} update {The updater installs the update.} other {Request sent.}}",
+    "install": "Install",
+    "installLabel": "Update available, install it now",
+    "installing": "Installing the update",
+    "noticeTitle": "Automatic updates are available",
+    "noticeBody": "An updater is connected to this server. Turn on automatic updates to install new LLM Hub images within five minutes of their release. LLM Hub restarts briefly for each update.",
+    "noticeEnable": "Enable automatic updates",
+    "noticeLater": "Not now"
   }
 }
