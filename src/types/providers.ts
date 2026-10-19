@@ -134,9 +134,14 @@ export type DevicePoll =
   | { state: "expired" }
   | { state: "done"; session: SignInSession };
 
+export type LoginRefreshMode =
+  | { reason: "expiring" }
+  | { reason: "scheduled" }
+  | { reason: "rejected"; version: number };
+
 export type TokenRefresh =
   | { ok: true; session: SignInSession }
-  | { ok: false; fatal: boolean };
+  | { ok: false; fatal: boolean; retryAfterMs: number | null };
 
 export type SignInTicket = z.infer<typeof signInTicketSchema>;
 

@@ -12,9 +12,13 @@ type FakeLogin = {
   status: string;
   version: number;
   leaseUntil: Date | null;
+  refreshedAt?: Date | null;
+  retryAt?: Date | null;
+  failures?: number;
 };
 
 const logins = new Map<string, FakeLogin>();
+const loginKinds = new Map<string, string>();
 const policyRows: { kind: string; strategy: string }[] = [];
 
 const fakePrisma = {
@@ -26,18 +30,25 @@ const fakePrisma = {
       const row = logins.get(where.providerId);
       return row ? { ...row } : null;
     },
+    findMany: async ({ where }: { where: { status: string; expiresAt: { lte: Date } } }) =>
+      [...logins.values()]
+        .filter((row) => row.status === where.status && row.expiresAt <= where.expiresAt.lte)
+        .sort((a, b) => a.expiresAt.getTime() - b.expiresAt.getTime())
+        .map((row) => ({ ...row, provider: { kind: loginKinds.get(row.providerId) ?? "codex" } })),
     updateMany: async ({
       where,
       data,
     }: {
-      where: { providerId: string; version: number; status: string };
-      data: { leaseUntil: Date };
+      where: { providerId: string; version: number; status?: string; OR?: unknown[] };
+      data: Partial<FakeLogin> & { version?: { increment: number } };
     }) => {
       const row = logins.get(where.providerId);
-      const now = Date.now();
-      if (!row || row.version !== where.version || row.status !== where.status) return { count: 0 };
-      if (row.leaseUntil && row.leaseUntil.getTime() >= now) return { count: 0 };
-      row.leaseUntil = data.leaseUntil;
+      if (!row || row.version !== where.version) return { count: 0 };
+      if (where.status && row.status !== where.status) return { count: 0 };
+      if (where.OR && row.leaseUntil && row.leaseUntil.getTime() >= Date.now()) return { count: 0 };
+      const { version, ...rest } = data;
+      Object.assign(row, rest);
+      if (version) row.version += version.increment;
       return { count: 1 };
     },
     update: async ({
@@ -89,6 +100,7 @@ const openaiIdToken = jwt({
 beforeEach(() => {
   calls = [];
   logins.clear();
+  loginKinds.clear();
   policyRows.length = 0;
 });
 
@@ -237,8 +249,9 @@ test("Codex requests identify LLM Hub and carry the ChatGPT workspace headers", 
   assert.deepEqual(signInHeaders("grok_build", { access: "a", refresh: "r", accountId: "", residency: "" }), {});
 });
 
-async function seedLogin(providerId: string, expiresAt: number, refresh = "r1") {
+async function seedLogin(providerId: string, expiresAt: number, refresh = "r1", kind = "codex") {
   const { sealTokens } = await import("@/lib/gateway/upstreams/credentials");
+  loginKinds.set(providerId, kind);
   logins.set(providerId, {
     providerId,
     account: "dev@example.com",
@@ -248,6 +261,9 @@ async function seedLogin(providerId: string, expiresAt: number, refresh = "r1") 
     status: "active",
     version: 0,
     leaseUntil: null,
+    refreshedAt: null,
+    retryAt: null,
+    failures: 0,
   });
 }
 
@@ -312,6 +328,148 @@ test("a transient refresh failure keeps using a still valid access token", async
   assert.equal(auth.key, "old-access");
   assert.equal(logins.get("p4")!.status, "active");
   assert.equal(logins.get("p4")!.leaseUntil, null);
+});
+
+test("a failed refresh inside the skew window is not retried by every request", async () => {
+  const { providerAuth } = await import("@/lib/gateway/upstreams/credentials");
+  await seedLogin("p6", Date.now() + 60_000);
+  respondWith(() => new Response("bad gateway", { status: 502 }));
+  await providerAuth({ id: "p6", kind: "grok_build", apiKey: "" });
+  const auth = await providerAuth({ id: "p6", kind: "grok_build", apiKey: "" });
+  assert.equal(auth.key, "old-access");
+  assert.equal(calls.length, 1);
+  const row = logins.get("p6")!;
+  assert.equal(row.failures, 1);
+  assert.ok(row.retryAt!.getTime() > Date.now());
+});
+
+test("an expired token is refreshed on demand even while a retry is pending", async () => {
+  const { providerAuth } = await import("@/lib/gateway/upstreams/credentials");
+  await seedLogin("p7", Date.now() - 1_000);
+  logins.get("p7")!.retryAt = new Date(Date.now() + 600_000);
+  logins.get("p7")!.failures = 3;
+  const exp = inOneHour();
+  respondWith(() => Response.json({ access_token: jwt({ exp }), refresh_token: "r2" }));
+  const auth = await providerAuth({ id: "p7", kind: "codex", apiKey: "" });
+  assert.equal(auth.key, jwt({ exp }));
+  const row = logins.get("p7")!;
+  assert.equal(row.failures, 0);
+  assert.equal(row.retryAt, null);
+  assert.ok(row.refreshedAt instanceof Date);
+});
+
+test("the refresh lead follows the kind and never exceeds half the token lifetime", async () => {
+  const { refreshDueAt } = await import("@/lib/gateway/upstreams/credentials");
+  const expiresAt = new Date("2026-10-20T12:00:00Z");
+  const hours = (n: number) => n * 3_600_000;
+  assert.equal(refreshDueAt("claude", { expiresAt, refreshedAt: null, retryAt: null }), expiresAt.getTime() - hours(4));
+  assert.equal(refreshDueAt("codex", { expiresAt, refreshedAt: null, retryAt: null }), expiresAt.getTime() - hours(96));
+  assert.equal(
+    refreshDueAt("claude", { expiresAt, refreshedAt: new Date(expiresAt.getTime() - hours(1)), retryAt: null }),
+    expiresAt.getTime() - hours(0.5),
+  );
+  assert.equal(
+    refreshDueAt("antigravity", { expiresAt, refreshedAt: new Date(expiresAt.getTime() - hours(1)), retryAt: null }),
+    expiresAt.getTime() - hours(0.5),
+  );
+  const retryAt = new Date(expiresAt.getTime() - hours(1));
+  assert.equal(refreshDueAt("claude", { expiresAt, refreshedAt: null, retryAt }), retryAt.getTime());
+});
+
+test("the sweep refreshes every login inside its lead and leaves the others alone", async () => {
+  const { openTokens, refreshDueLogins } = await import("@/lib/gateway/upstreams/credentials");
+  const hour = 3_600_000;
+  await seedLogin("claude-due", Date.now() + 3 * hour, "rc1", "claude");
+  await seedLogin("claude-fresh", Date.now() + 7 * hour, "rc2", "claude");
+  await seedLogin("codex-due", Date.now() + 72 * hour, "rx1", "codex");
+  await seedLogin("codex-fresh", Date.now() + 120 * hour, "rx2", "codex");
+  await seedLogin("grok-expired", Date.now() - hour, "rg1", "grok_build");
+  logins.get("claude-fresh")!.refreshedAt = new Date(Date.now() - hour);
+  const exp = Math.floor(Date.now() / 1000) + 8 * 3600;
+  respondWith((url, body) => {
+    const sent = new URL(url).hostname === "platform.claude.com" ? JSON.parse(body).refresh_token : body;
+    return Response.json({ access_token: jwt({ exp, sent }), refresh_token: `next-${String(sent).slice(-3)}` });
+  });
+  assert.equal(await refreshDueLogins(), 3);
+  const refreshed = calls.map((call) => new URL(call.url).hostname).sort();
+  assert.deepEqual(refreshed, ["auth.openai.com", "auth.x.ai", "platform.claude.com"]);
+  for (const id of ["claude-due", "codex-due", "grok-expired"]) {
+    const row = logins.get(id)!;
+    assert.equal(row.version, 1, id);
+    assert.equal(row.status, "active", id);
+    assert.equal(row.expiresAt.getTime(), exp * 1000, id);
+    assert.notEqual(openTokens(row.tokens, id).refresh, "", id);
+  }
+  assert.equal(logins.get("claude-fresh")!.version, 0);
+  assert.equal(logins.get("codex-fresh")!.version, 0);
+  assert.equal(await refreshDueLogins(), 0);
+  assert.equal(calls.length, 3);
+});
+
+test("a failing scheduled refresh backs off exponentially and keeps the valid token", async () => {
+  const { providerAuth, refreshDueLogins } = await import("@/lib/gateway/upstreams/credentials");
+  await seedLogin("c1", Date.now() + 3 * 3_600_000, "rc1", "claude");
+  respondWith(() => new Response("unavailable", { status: 503 }));
+  assert.equal(await refreshDueLogins(), 0);
+  const row = logins.get("c1")!;
+  assert.equal(row.failures, 1);
+  assert.equal(row.status, "active");
+  assert.equal(row.leaseUntil, null);
+  const firstDelay = row.retryAt!.getTime() - Date.now();
+  assert.ok(firstDelay > 50_000 && firstDelay <= 60_000, String(firstDelay));
+  assert.equal(await refreshDueLogins(), 0);
+  assert.equal(calls.length, 1);
+  row.retryAt = new Date(Date.now() - 1);
+  await refreshDueLogins();
+  assert.equal(calls.length, 2);
+  const secondDelay = row.retryAt!.getTime() - Date.now();
+  assert.ok(secondDelay > 110_000 && secondDelay <= 120_000, String(secondDelay));
+  const auth = await providerAuth({ id: "c1", kind: "claude", apiKey: "" });
+  assert.equal(auth.key, "old-access");
+  assert.equal(calls.length, 2);
+});
+
+test("a revoked refresh token keeps serving the valid access token until it expires", async () => {
+  const { providerAuth, refreshDueLogins } = await import("@/lib/gateway/upstreams/credentials");
+  await seedLogin("c2", Date.now() + 3 * 3_600_000, "rc1", "claude");
+  respondWith(() => Response.json({ error: "invalid_grant" }, { status: 400 }));
+  await refreshDueLogins();
+  assert.equal(logins.get("c2")!.status, "active");
+  const auth = await providerAuth({ id: "c2", kind: "claude", apiKey: "" });
+  assert.equal(auth.key, "old-access");
+});
+
+test("a rate-limited refresh waits for the token endpoint's Retry-After", async () => {
+  const { refreshDueLogins } = await import("@/lib/gateway/upstreams/credentials");
+  await seedLogin("c3", Date.now() + 3 * 3_600_000, "rc1", "claude");
+  respondWith(() => Response.json({ error: "rate_limited" }, { status: 429, headers: { "retry-after": "600" } }));
+  await refreshDueLogins();
+  const delay = logins.get("c3")!.retryAt!.getTime() - Date.now();
+  assert.ok(delay > 590_000 && delay <= 600_000, String(delay));
+  assert.equal(logins.get("c3")!.status, "active");
+});
+
+test("a rejected access token whose refresh is revoked expires the sign-in", async () => {
+  const { renewRejectedLogin } = await import("@/lib/gateway/upstreams/credentials");
+  await seedLogin("c4", Date.now() + 3 * 3_600_000, "rc1", "claude");
+  respondWith(() => Response.json({ error: "invalid_grant" }, { status: 400 }));
+  assert.equal(await renewRejectedLogin("c4", "claude"), false);
+  assert.equal(logins.get("c4")!.status, "expired");
+});
+
+test("a refresh that loses the row to a new sign-in keeps the newer tokens", async () => {
+  const { providerAuth, sealTokens } = await import("@/lib/gateway/upstreams/credentials");
+  await seedLogin("p8", Date.now() + 60_000);
+  const exp = inOneHour();
+  respondWith(() => {
+    const row = logins.get("p8")!;
+    row.tokens = sealTokens({ access: "signed-in-again", refresh: "r9", accountId: "acct_1", residency: "" });
+    row.expiresAt = new Date(Date.now() + 3_600_000);
+    row.version += 1;
+    return Response.json({ access_token: jwt({ exp }), refresh_token: "r2" });
+  });
+  const auth = await providerAuth({ id: "p8", kind: "codex", apiKey: "" });
+  assert.equal(auth.key, "signed-in-again");
 });
 
 test("API key providers keep their sealed key and need no sign-in row", async () => {
