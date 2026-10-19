@@ -47,11 +47,13 @@ export function quotaBottleneckReset(limits: SubscriptionLimits | null, model: s
   return resets.length ? Math.min(...resets) : Infinity;
 }
 
-export function earliestRecovery(limits: SubscriptionLimits | null, now = Date.now()): number | null {
+export function latestRecovery(limits: SubscriptionLimits | null, now = Date.now()): number | null {
   if (!limits) return null;
-  const resets = limits.windows
-    .filter((window) => !window.scope && (window.limitReached || window.usedPercent >= FULL_PERCENT))
-    .map((window) => (window.resetsAt ? Date.parse(window.resetsAt) : NaN))
-    .filter((time) => Number.isFinite(time) && time > now);
-  return resets.length ? Math.min(...resets) : null;
+  const exhausted = liveWindows(limits, "", now).filter(
+    (window) => !window.scope && (window.limitReached || window.usedPercent >= FULL_PERCENT),
+  );
+  if (!exhausted.length) return null;
+  const resets = exhausted.map((window) => (window.resetsAt ? Date.parse(window.resetsAt) : NaN));
+  if (resets.some((time) => !Number.isFinite(time))) return null;
+  return Math.max(...resets);
 }

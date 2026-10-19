@@ -23,9 +23,11 @@ function windowSpan(seconds: number): { unit: string; count: number } {
 export default function LimitMeter({
   window,
   scoped,
+  timeZone,
 }: {
   window: LimitWindow;
   scoped?: boolean;
+  timeZone: string;
 }) {
   const t = useTranslations("Subscriptions.limits");
   const format = useFormatter();
@@ -56,6 +58,8 @@ export default function LimitMeter({
                 month: "short",
                 hour: "2-digit",
                 minute: "2-digit",
+                timeZone,
+                timeZoneName: "short",
               }),
             })}
           </span>

@@ -46,12 +46,17 @@ export function createResponseRoute(pool: RoutePool) {
   return gatewayRoute(async (req) => {
     const screened = await screenModelRequest(req, { pool });
     const files = await resolveResponsesFiles(screened.clean, screened.principal);
-    const { body: clean, namespaces } = clientTools(files);
-    return withToolNamespaces(await respond(req, screened, clean), namespaces);
+    const { body: clean, namespaces, webSearch } = clientTools(files);
+    return withToolNamespaces(await respond(req, screened, clean, webSearch), namespaces);
   });
 }
 
-async function respond(req: Request, { principal, model, output }: ScreenedRequest, clean: JsonMap): Promise<Response> {
+async function respond(
+  req: Request,
+  { principal, model, output }: ScreenedRequest,
+  clean: JsonMap,
+  webSearch: JsonMap | null,
+): Promise<Response> {
   const { body: requestBody, tool: searchTool } = takeFileSearchTool(clean);
   const request = validRequest(responsesRequestSchema, requestBody);
   const owner = ownerId(principal);
@@ -61,10 +66,11 @@ async function respond(req: Request, { principal, model, output }: ScreenedReque
   const callerTools = (request.tools ?? []).map((tool) => tool.name);
   const toolset = searchTool ? null : await mcpToolsetFor(req, principal, callerTools);
   const kept = new Set([...callerTools, ...(toolset?.tools.map((tool) => tool.name) ?? [])]);
-  const { body: baseChat, conversation } = responsesToChat(
+  const { body: convertedChat, conversation } = responsesToChat(
     request,
     withoutMcpHistory(searchTool ? history : withoutFileSearchHistory(history), kept),
   );
+  const baseChat = webSearch ? { ...convertedChat, web_search: webSearch } : convertedChat;
   const aliases = modelChain(principal, model, clean);
   const store = request.store !== false;
   const createdAt = Math.floor(Date.now() / 1000);

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  earliestRecovery,
+  latestRecovery,
   quotaBottleneckReset,
   quotaExhausted,
   quotaPressure,
@@ -84,14 +84,24 @@ test("the bottleneck reset follows the tightest window", () => {
   assert.equal(quotaBottleneckReset(null, "m", NOW), Infinity);
 });
 
-test("recovery is the earliest reset among full plan wide windows", () => {
+test("recovery waits for every full plan wide window to reset", () => {
   const full = limits([
     window({ usedPercent: 100, limitReached: true, resetsAt: iso(3) }),
     window({ usedPercent: 100, limitReached: true, windowSeconds: 604_800, resetsAt: iso(40) }),
     window({ scope: "Opus", usedPercent: 100, limitReached: true, resetsAt: iso(1) }),
   ]);
-  assert.equal(earliestRecovery(full, NOW), NOW + 3 * 3_600_000);
-  assert.equal(earliestRecovery(limits([window({ usedPercent: 10 })]), NOW), null);
+  assert.equal(latestRecovery(full, NOW), NOW + 40 * 3_600_000);
+  assert.equal(
+    latestRecovery(
+      limits([
+        window({ usedPercent: 100, limitReached: true, resetsAt: iso(3) }),
+        window({ usedPercent: 100, limitReached: true, windowSeconds: 604_800 }),
+      ]),
+      NOW,
+    ),
+    null,
+  );
+  assert.equal(latestRecovery(limits([window({ usedPercent: 10 })]), NOW), null);
 });
 
 test("round robin rotates through the same accounts in a stable order", () => {

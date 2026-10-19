@@ -25,6 +25,7 @@ export type ChatStreamEncoder = {
   push(chunk: JsonMap): string[];
   finish(): string[];
   fail(message: string): string[];
+  keepAlive?(): string;
 };
 
 export type ToolCallEvent =
@@ -61,7 +62,7 @@ export type ToolNamespace = { namespace: string; name: string };
 
 export type ToolNamespaces = ReadonlyMap<string, ToolNamespace>;
 
-export type ClientTools = { body: JsonMap; namespaces: ToolNamespaces };
+export type ClientTools = { body: JsonMap; namespaces: ToolNamespaces; webSearch: JsonMap | null };
 
 export type SseRelayOptions = {
   map?: (json: JsonMap, event: string) => JsonMap | null;

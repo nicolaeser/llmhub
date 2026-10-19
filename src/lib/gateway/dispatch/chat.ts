@@ -14,7 +14,7 @@ import { CodexSseTranslator } from "@/lib/gateway/upstreams/codex";
 import { deploymentAuth } from "@/lib/gateway/upstreams/credentials";
 import { plainModel } from "@/lib/gateway/catalog/model-alias";
 import { inPool, outsidePool, routeOf } from "@/lib/gateway/routing/route-pool";
-import { SSE_HEADERS, sseData } from "@/lib/gateway/protocols/sse";
+import { KEEPALIVE_MS, SSE_HEADERS, SSE_KEEPALIVE, sseData } from "@/lib/gateway/protocols/sse";
 import {
   joinPath,
   mergeUpstreamHeaders,
@@ -29,7 +29,7 @@ import { costFilter, costRejected } from "@/lib/gateway/billing/cost-cap";
 import { ChatStreamTranscript } from "@/lib/gateway/request-logs/log-content";
 import { estimateTokens, requestText } from "@/lib/gateway/billing/tokens";
 import { parseJsonOrNull, readTextOr } from "@/lib/utils/json";
-import { cancelQuietly } from "@/lib/utils/streams";
+import { cancelQuietly, DeadlineReader } from "@/lib/utils/streams";
 import type { ChatSseTranslator, JsonMap, Principal, RequestTrace } from "@/types/gateway";
 import type { CostFilter, TokenUsage } from "@/types/billing";
 import type { ResolvedModelGroup, ResolvedDeployment, RoutePool } from "@/types/routing";
@@ -423,6 +423,7 @@ export function relayChatStream(input: {
   const encoder = new TextEncoder();
   const decoder = new TextDecoder();
   const reader = input.res.body!.getReader();
+  const reads = new DeadlineReader(reader);
   const translator = streamTranslator(dep, input.model);
   let leftover = "";
   let billed = false;
@@ -430,6 +431,20 @@ export function relayChatStream(input: {
   let reported: Partial<TokenUsage> | null = null;
   let streamedText = "";
   let filtered = false;
+  let emitted = 0;
+  let closed = false;
+  let lastSent = Date.now();
+
+  const send = (controller: ReadableStreamDefaultController<Uint8Array>, chunk: Uint8Array) => {
+    emitted += 1;
+    lastSent = Date.now();
+    controller.enqueue(chunk);
+  };
+
+  const close = (controller: ReadableStreamDefaultController<Uint8Array>) => {
+    closed = true;
+    controller.close();
+  };
 
   const observe = (json: JsonMap): boolean => {
     transcript.push(json);
@@ -476,10 +491,11 @@ export function relayChatStream(input: {
       sseData({ error: { message: gate.message, type: gate.type, param: gate.param, code: gate.code } }),
     );
     try {
-      controller.enqueue(errorChunk);
+      send(controller, errorChunk);
       end(controller);
-      controller.close();
+      close(controller);
     } catch {
+      closed = true;
       controller.error(err);
     }
     await recordFailure(
@@ -497,18 +513,18 @@ export function relayChatStream(input: {
         filtered = true;
         const stop = contentFilterChunk(json, input.model);
         transcript.push(stop);
-        controller.enqueue(encoder.encode(sseData(stop)));
+        send(controller, encoder.encode(sseData(stop)));
       }
       json.choices = [];
       if (!asRecord(json.usage)) return;
     }
-    if (observe(json)) controller.enqueue(encoder.encode(sseData(json)));
+    if (observe(json)) send(controller, encoder.encode(sseData(json)));
   };
 
   const end = (controller: ReadableStreamDefaultController<Uint8Array>) => {
     if (ended) return;
     ended = true;
-    controller.enqueue(encoder.encode(sseData("[DONE]")));
+    send(controller, encoder.encode(sseData("[DONE]")));
   };
 
   const emitLine = (line: string, controller: ReadableStreamDefaultController<Uint8Array>) => {
@@ -522,7 +538,7 @@ export function relayChatStream(input: {
         try {
           json = JSON.parse(payload) as JsonMap;
         } catch {
-          controller.enqueue(encoder.encode(sseData(payload)));
+          send(controller, encoder.encode(sseData(payload)));
           continue;
         }
         forward(json, controller);
@@ -540,14 +556,19 @@ export function relayChatStream(input: {
     try {
       json = JSON.parse(data) as JsonMap;
     } catch {
-      controller.enqueue(encoder.encode(sseData(data)));
+      send(controller, encoder.encode(sseData(data)));
       return;
     }
     forward(json, controller);
   };
 
   const step = async (controller: ReadableStreamDefaultController<Uint8Array>) => {
-    const { done, value } = await reader.read();
+    const read = await reads.read(lastSent + KEEPALIVE_MS - Date.now());
+    if (!read) {
+      send(controller, encoder.encode(SSE_KEEPALIVE));
+      return;
+    }
+    const { done, value } = read;
     if (done) {
       leftover += decoder.decode();
       if (leftover) {
@@ -561,7 +582,7 @@ export function relayChatStream(input: {
         }
       }
       end(controller);
-      controller.close();
+      close(controller);
       await finish();
       return;
     }
@@ -573,8 +594,9 @@ export function relayChatStream(input: {
 
   const stream = new ReadableStream<Uint8Array>({
     async pull(controller) {
+      const before = emitted;
       try {
-        await step(controller);
+        while (emitted === before && !closed) await step(controller);
       } catch (err) {
         await fail(controller, err);
       }

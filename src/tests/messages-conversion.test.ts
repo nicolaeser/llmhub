@@ -119,6 +119,7 @@ test("messages request converts to an OpenAI chat body", () => {
       role: "assistant",
       content: "checking",
       tool_calls: [{ id: "toolu_1", type: "function", function: { name: "lookup", arguments: '{"q":"a"}' } }],
+      thinking_blocks: [{ type: "thinking", thinking: "hmm", signature: "sig" }],
     },
     { role: "tool", tool_call_id: "toolu_1", content: "found it" },
     {
@@ -220,7 +221,7 @@ test("native-only Messages features pass the schema but block the chat fallback"
   assert.equal(chatIncompatibility(plain), null);
   assert.deepEqual(messagesToChat(plain).messages, [
     { role: "user", content: "notes" },
-    { role: "assistant", content: "ok" },
+    { role: "assistant", content: "ok", thinking_blocks: [{ type: "thinking", thinking: "hmm", signature: "sig" }] },
     { role: "system", content: "be brief" },
     { role: "user", content: "next" },
   ]);

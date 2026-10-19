@@ -51,10 +51,10 @@ export default function SettingsPage() {
       />
       <Tabs selectedKey={tab} onSelectionChange={select} aria-label={t("title")}>
         {tabs.length > 1 ? (
-          <Tabs.ListContainer className="w-full min-w-0 md:w-fit">
+          <Tabs.ListContainer className="max-w-full overflow-x-auto">
             <Tabs.List aria-label={t("title")}>
               {tabs.map((id) => (
-                <Tabs.Tab key={id} id={id} className="w-auto whitespace-nowrap">
+                <Tabs.Tab key={id} id={id} className="w-auto shrink-0 whitespace-nowrap">
                   {t("tabs", { tab: id.replace("-", "_") })}
                   <Tabs.Indicator />
                 </Tabs.Tab>

@@ -7,6 +7,7 @@ import { useFormatter, useTranslations } from "next-intl";
 import EmptyState from "@/components/console/empty-state";
 import PageHeader from "@/components/console/page-header";
 import PageStatus, { LoadError } from "@/components/console/page-status";
+import PageTabs from "@/components/console/page-tabs";
 import StatCard from "@/components/console/stat-card";
 import InstallDialog from "@/components/mcp/install-dialog";
 import { useActionData } from "@/lib/hooks/use-action-data";
@@ -18,6 +19,57 @@ import BuilderDialog from "./_components/builder-dialog";
 import PermissionsDialog from "./_components/permissions-dialog";
 import ServerCard from "./_components/server-card";
 import ServerDialog from "./_components/server-dialog";
+
+function McpServerGrid({
+  rows,
+  emptyTitle,
+  empty,
+  canManage,
+  canInstall,
+  companyId,
+  onEdit,
+  onAccess,
+  onPermissions,
+  onInstall,
+  onChanged,
+  onDeleted,
+}: {
+  rows: McpServerView[];
+  emptyTitle: string;
+  empty: string;
+  canManage: boolean;
+  canInstall: boolean;
+  companyId: string | null;
+  onEdit: (server: McpServerView | null) => void;
+  onAccess: (server: McpServerView) => void;
+  onPermissions: (server: McpServerView) => void;
+  onInstall: (server: McpServerView) => void;
+  onChanged: (server: McpServerView) => void;
+  onDeleted: (id: string) => void;
+}) {
+  if (rows.length === 0) {
+    return <EmptyState icon={Blocks} title={emptyTitle} description={empty} />;
+  }
+  return (
+    <div className="grid gap-4 lg:grid-cols-2 2xl:grid-cols-3">
+      {rows.map((server) => (
+        <ServerCard
+          key={server.id}
+          server={server}
+          canManage={canManage}
+          canInstall={canInstall}
+          companyId={companyId}
+          onEdit={onEdit}
+          onAccess={onAccess}
+          onPermissions={onPermissions}
+          onInstall={onInstall}
+          onChanged={onChanged}
+          onDeleted={onDeleted}
+        />
+      ))}
+    </div>
+  );
+}
 
 export default function McpPage() {
   const t = useTranslations("Mcp");
@@ -83,8 +135,23 @@ export default function McpPage() {
     installState.open();
   }
 
-  const connected = servers.filter((row) => row.status === "connected").length;
+  const connectedRows = servers.filter((row) => row.status === "connected");
+  const connected = connectedRows.length;
   const failing = servers.filter((row) => row.status === "error").length;
+  const attentionRows = servers.filter((row) => row.status === "error" || row.status === "signin");
+  const disabledRows = servers.filter((row) => !row.enabled);
+  const gridProps = {
+    emptyTitle: t("emptyFilter"),
+    canManage,
+    canInstall,
+    companyId,
+    onEdit: openForm,
+    onAccess: openAccess,
+    onPermissions: openPermissions,
+    onInstall: openInstall,
+    onChanged: replace,
+    onDeleted: (id: string) => setData((current) => ({ ...current, servers: current.servers.filter((row) => row.id !== id) })),
+  };
   const tools = servers
     .filter((row) => row.enabled)
     .reduce(
@@ -137,7 +204,7 @@ export default function McpPage() {
         <EmptyState icon={Blocks} title={t("empty.title")} description={t("empty.description")} action={actions ?? undefined} />
       ) : (
         <>
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="grid grid-cols-1 gap-3 min-[420px]:grid-cols-2 xl:grid-cols-4">
             <StatCard label={t("stats.servers")} value={format.number(servers.length)} icon={Blocks} tone="accent" />
             <StatCard label={t("stats.connected")} value={format.number(connected)} icon={CheckCircle2} tone="success" />
             <StatCard label={t("stats.tools")} value={format.number(tools)} icon={Wrench} tone="accent" />
@@ -148,23 +215,31 @@ export default function McpPage() {
               tone={failing ? "danger" : "neutral"}
             />
           </div>
-          <div className="grid gap-4 lg:grid-cols-2 2xl:grid-cols-3">
-            {servers.map((server) => (
-              <ServerCard
-                key={server.id}
-                server={server}
-                canManage={canManage}
-                canInstall={canInstall}
-                companyId={companyId}
-                onEdit={openForm}
-                onAccess={openAccess}
-                onPermissions={openPermissions}
-                onInstall={openInstall}
-                onChanged={replace}
-                onDeleted={(id) => setData((current) => ({ ...current, servers: current.servers.filter((row) => row.id !== id) }))}
-              />
-            ))}
-          </div>
+          <PageTabs
+            label={t("title")}
+            tabs={[
+              {
+                id: "all",
+                label: `${t("tabs", { tab: "all" })} (${format.number(servers.length)})`,
+                panel: <McpServerGrid rows={servers} empty={t("empty.description")} {...gridProps} />,
+              },
+              {
+                id: "connected",
+                label: `${t("tabs", { tab: "connected" })} (${format.number(connectedRows.length)})`,
+                panel: <McpServerGrid rows={connectedRows} empty={t("emptyFilter")} {...gridProps} />,
+              },
+              {
+                id: "attention",
+                label: `${t("tabs", { tab: "attention" })} (${format.number(attentionRows.length)})`,
+                panel: <McpServerGrid rows={attentionRows} empty={t("emptyFilter")} {...gridProps} />,
+              },
+              {
+                id: "disabled",
+                label: `${t("tabs", { tab: "disabled" })} (${format.number(disabledRows.length)})`,
+                panel: <McpServerGrid rows={disabledRows} empty={t("emptyFilter")} {...gridProps} />,
+              },
+            ]}
+          />
         </>
       )}
       <ServerDialog

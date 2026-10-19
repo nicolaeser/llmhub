@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useTransition } from "react";
 import { Button, Card, Chip, Spinner, useOverlayState } from "@heroui/react";
-import { CircleCheck, CirclePause, Gauge, Plus, RefreshCw, TimerReset } from "lucide-react";
+import { CircleCheck, CirclePause, Gauge, Plus, RefreshCw, TimerReset, Upload } from "lucide-react";
 import { useFormatter, useNow, useTranslations } from "next-intl";
 import IconTile from "@/components/console/icon-tile";
 import SubscriptionBadge from "@/components/console/subscription-badge";
@@ -10,6 +10,8 @@ import StatCard from "@/components/console/stat-card";
 import { useErrorToast } from "@/components/console/use-error-toast";
 import { DEFAULT_ACCOUNT_STRATEGY } from "@/lib/gateway/routing/account-access";
 import { isSignInKind, PROVIDER_CATALOG, reportsLimits } from "@/lib/gateway/upstreams/provider-kinds";
+import TimeZonePicker from "@/components/console/time-zone-picker";
+import { setDashboardTimeZone, useDashboardTimeZone } from "@/lib/hooks/use-dashboard-time-zone";
 import { isActionFail } from "@/lib/http/action-result";
 import type {
   AccountLimits,
@@ -31,6 +33,8 @@ import AccountCard from "./account-card";
 import AccountRoutingPicker from "./account-routing-picker";
 import { ACCOUNT_STATE_COLOR, accountState, recoveryAt } from "./account-status";
 import AntigravitySetup from "./antigravity-setup";
+import AuthFilesDialog from "./auth-files-dialog";
+import SubscriptionAddWizard from "./subscription-add-wizard";
 import { kindIcon } from "./kind-icons";
 
 const SUBSCRIPTION_CATALOG = PROVIDER_CATALOG.filter((spec): spec is ProviderKindSpec & { kind: SignInKind } =>
@@ -56,6 +60,7 @@ export default function SubscriptionAccounts({
   const showError = useErrorToast();
   const format = useFormatter();
   const now = useNow({ updateInterval: 60_000 });
+  const timeZone = useDashboardTimeZone();
   const [limits, setLimits] = useState<Record<string, AccountLimits>>({});
   const [routing, setRouting] = useState<AccountRouting>({});
   const [antigravityReady, setAntigravityReady] = useState<boolean | null>(null);
@@ -65,6 +70,9 @@ export default function SubscriptionAccounts({
   const [refreshingAll, startRefreshAll] = useTransition();
   const [, startRefreshOne] = useTransition();
   const accessState = useOverlayState();
+  const [importKey, setImportKey] = useState(0);
+  const importState = useOverlayState();
+  const wizardState = useOverlayState();
 
   function storeLimits(items: AccountLimits[]) {
     setLimits((cur) => ({ ...cur, ...Object.fromEntries(items.map((item) => [item.id, item])) }));
@@ -114,6 +122,19 @@ export default function SubscriptionAccounts({
     });
   }
 
+  function openImportFiles() {
+    setImportKey((n) => n + 1);
+    importState.open();
+  }
+
+  function imported(providers: ProviderView[]) {
+    actions.upsert(providers);
+    startRefreshAll(async () => {
+      const result = await loadSubscriptionLimitsAction();
+      if (!isActionFail(result)) storeLimits(result.items);
+    });
+  }
+
   function openAccess(row: ProviderView) {
     setAccess(row);
     setAccessKey((n) => n + 1);
@@ -149,23 +170,42 @@ export default function SubscriptionAccounts({
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
+    <div className="space-y-4 sm:space-y-6">
+      <div className="flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-end lg:justify-between">
         <p className="min-w-0 flex-1 basis-72 text-sm text-muted">{t("intro")}</p>
-        {rows.length > 0 ? (
-          <Button variant="secondary" aria-label={t("refreshAll")} isPending={refreshingAll} onPress={refreshAll}>
-            {({ isPending }) => (
-              <>
-                {isPending ? <Spinner color="current" size="sm" /> : <RefreshCw size={14} aria-hidden />}
-                {t("refreshAll")}
-              </>
-            )}
+        <div className="w-full sm:max-w-72 lg:w-72">
+          <TimeZonePicker
+            label={t("timeZone")}
+            description={t("timeZoneHint")}
+            value={timeZone}
+            isDisabled={false}
+            onChange={setDashboardTimeZone}
+          />
+        </div>
+        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+          <Button aria-label={t("addSubscription")} onPress={wizardState.open}>
+            <Plus size={14} aria-hidden />
+            {t("addSubscription")}
           </Button>
-        ) : null}
+          <Button variant="secondary" aria-label={t("importFiles.open")} onPress={openImportFiles}>
+            <Upload size={14} aria-hidden />
+            {t("importFiles.open")}
+          </Button>
+          {rows.length > 0 ? (
+            <Button variant="secondary" aria-label={t("refreshAll")} isPending={refreshingAll} onPress={refreshAll}>
+              {({ isPending }) => (
+                <>
+                  {isPending ? <Spinner color="current" size="sm" /> : <RefreshCw size={14} aria-hidden />}
+                  {t("refreshAll")}
+                </>
+              )}
+            </Button>
+          ) : null}
+        </div>
       </div>
 
       {rows.length > 0 ? (
-        <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+        <div className="grid grid-cols-1 gap-3 min-[420px]:grid-cols-2 xl:grid-cols-4">
           <StatCard
             icon={CircleCheck}
             tone="success"
@@ -246,6 +286,7 @@ export default function SubscriptionAccounts({
                     row={row}
                     reports={reportsLimits(row.kind)}
                     entry={limits[row.id]}
+                    timeZone={timeZone}
                     refreshing={refreshingId === row.id}
                     onRefresh={refreshOne}
                     onEdit={(provider) => openForm(spec, provider)}
@@ -262,36 +303,51 @@ export default function SubscriptionAccounts({
       })}
 
       {idleKinds.length > 0 ? (
-        <section className="space-y-3" aria-labelledby="subscriptions-connect">
-          <h2 id="subscriptions-connect" className="text-base font-semibold tracking-tight">
-            {t("connectTitle", { first: String(rows.length === 0) })}
-          </h2>
-          <div className="grid gap-3 md:grid-cols-2">
-            {idleKinds.map((spec) => (
-              <Card key={spec.kind}>
-                <Card.Header className="flex-row items-start gap-3">
-                  <IconTile icon={kindIcon(spec.kind)} tone="neutral" />
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Card.Title>{tProviders("kindShort", { kind: spec.kind })}</Card.Title>
-                      <SubscriptionBadge />
-                    </div>
-                    <Card.Description>{tProviders("kindDescription", { kind: spec.kind })}</Card.Description>
-                  </div>
-                </Card.Header>
-                {spec.kind === "antigravity" ? (
-                  <Card.Content>
-                    <AntigravitySetup configured={antigravityReady} onChanged={setAntigravityReady} />
-                  </Card.Content>
-                ) : null}
-                <Card.Footer className="mt-auto justify-end">{addButton(spec)}</Card.Footer>
-              </Card>
-            ))}
-          </div>
-        </section>
+        <Card variant="secondary" aria-labelledby="subscriptions-connect">
+          <Card.Header className="flex-row flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0 flex-1 basis-64">
+              <Card.Title id="subscriptions-connect">
+                {t("connectTitle", { first: String(rows.length === 0) })}
+              </Card.Title>
+              <Card.Description>{t("remainingHint")}</Card.Description>
+            </div>
+            <Button size="sm" onPress={wizardState.open}>
+              <Plus size={14} aria-hidden />
+              {t("openWizard")}
+            </Button>
+          </Card.Header>
+          <Card.Content className="gap-3">
+            <div className="flex flex-wrap gap-1.5">
+              {idleKinds.map((spec) => (
+                <button
+                  key={spec.kind}
+                  type="button"
+                  onClick={() => openForm(spec, null)}
+                  className="inline-flex min-w-0 items-center gap-2 rounded-full border border-border py-1 pr-3 pl-1 text-xs font-medium transition hover:border-accent/60 hover:bg-accent/5"
+                >
+                  <IconTile icon={kindIcon(spec.kind)} tone="neutral" size="sm" />
+                  <span className="truncate">{tProviders("kindShort", { kind: spec.kind })}</span>
+                </button>
+              ))}
+            </div>
+            {SUBSCRIPTION_CATALOG.some((spec) => spec.kind === "antigravity") &&
+            idleKinds.some((spec) => spec.kind === "antigravity") ? (
+              <AntigravitySetup configured={antigravityReady} onChanged={setAntigravityReady} />
+            ) : null}
+          </Card.Content>
+        </Card>
       ) : null}
 
+      <SubscriptionAddWizard
+        state={wizardState}
+        catalog={SUBSCRIPTION_CATALOG}
+        antigravityReady={antigravityReady}
+        onConnect={(spec) => openForm(spec, null)}
+      />
+
       <AccessDialog key={`access-${accessKey}`} state={accessState} provider={access} onSaved={actions.replace} />
+
+      <AuthFilesDialog key={`import-files-${importKey}`} state={importState} onImported={imported} />
     </div>
   );
 }

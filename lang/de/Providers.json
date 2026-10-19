@@ -38,7 +38,9 @@
     "pasteTitle": "Autorisierungsergebnis einfügen",
     "pasteHint": "{kind, select, antigravity {Nach der Bestätigung versucht der Browser, eine Seite auf localhost zu öffnen, die nicht lädt. Kopiere die vollständige Adresse aus der Adressleiste und füge sie unten ein.} claude {Nach der Freigabe versucht der Browser, eine Seite auf localhost zu öffnen, die nicht lädt. Kopiere die vollständige Adresse aus der Adressleiste oder den Autorisierungscode und füge sie unten ein.} other {Füge das Autorisierungsergebnis unten ein.}}",
     "pasteLabel": "Callback-Adresse oder Autorisierungscode",
-    "finish": "Anmeldung abschließen"
+    "finish": "Anmeldung abschließen",
+    "importFile": "JSON-Datei importieren",
+    "importHint": "Oder lade eine Auth-Datei aus CLIProxyAPI oder EasyCLIProxyAPI hoch, meist unter ~/.cli-proxy-api. LLM Hub erneuert die Anmeldung danach selbst, nutze die Datei deshalb nicht weiter in CLIProxyAPI."
   },
   "toasts": {
     "saved": "{mode, select, created {Anbieter verbunden} updated {Anbieter aktualisiert} deleted {Getrennt} other {Anbieter verbunden}}"

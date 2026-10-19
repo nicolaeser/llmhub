@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
-import { Alert, Button, Chip, Input, Label, Spinner, Surface, TextField } from "@heroui/react";
-import { ExternalLink } from "lucide-react";
+import { useEffect, useRef, useState, useTransition } from "react";
+import { Alert, Button, Chip, Description, Input, Label, Spinner, Surface, TextField } from "@heroui/react";
+import { ExternalLink, FileJson } from "lucide-react";
 import { useTranslations } from "next-intl";
 import CopyButton from "@/components/console/copy-button";
-import { completeSignInAction, pollSignInAction, startSignInAction } from "../_action";
+import { completeSignInAction, importSignInFileAction, pollSignInAction, startSignInAction } from "../_action";
 import { isActionFail } from "@/lib/http/action-result";
+import { MAX_AUTH_FILE_BYTES } from "@/schemas/providers";
 import type { ProviderSignIn, SignInKind, SignInStart } from "@/types/providers";
 import { PlanBadge } from "@/components/console/subscription-badge";
 import { useErrorToast } from "@/components/console/use-error-toast";
@@ -31,6 +32,8 @@ export default function SignInPanel({
   const [pasted, setPasted] = useState("");
   const [pending, start] = useTransition();
   const [finishing, finish] = useTransition();
+  const [importing, startImport] = useTransition();
+  const picker = useRef<HTMLInputElement>(null);
   const shown = fresh ?? current;
 
   useEffect(() => {
@@ -67,6 +70,22 @@ export default function SignInPanel({
       }
       setPasted("");
       setWaiting({ ...result, delay: result.interval });
+    });
+  }
+
+  function importFile(file: File) {
+    if (file.size > MAX_AUTH_FILE_BYTES) {
+      showError("AUTH_FILE_TOO_LARGE");
+      return;
+    }
+    startImport(async () => {
+      const result = await importSignInFileAction(kind, await file.text().catch(() => ""));
+      if (isActionFail(result)) {
+        showError(result.error);
+        return;
+      }
+      setFresh({ account: result.account, plan: result.plan, status: "active" });
+      onSignedIn(result.credential);
     });
   }
 
@@ -188,20 +207,52 @@ export default function SignInPanel({
           </Alert.Content>
         </Alert>
       ) : (
-        <Button
-          variant={shown?.status === "active" ? "secondary" : undefined}
-          aria-label={t("signIn.start", { kind, again: shown ? "true" : "false" })}
-          isPending={pending}
-          isDisabled={isDisabled}
-          onPress={begin}
-        >
-          {({ isPending }) => (
-            <>
-              {isPending ? <Spinner color="current" size="sm" /> : null}
-              {t("signIn.start", { kind, again: shown ? "true" : "false" })}
-            </>
-          )}
-        </Button>
+        <div className="space-y-2">
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant={shown?.status === "active" ? "secondary" : undefined}
+              aria-label={t("signIn.start", { kind, again: shown ? "true" : "false" })}
+              isPending={pending}
+              isDisabled={isDisabled || importing}
+              onPress={begin}
+            >
+              {({ isPending }) => (
+                <>
+                  {isPending ? <Spinner color="current" size="sm" /> : null}
+                  {t("signIn.start", { kind, again: shown ? "true" : "false" })}
+                </>
+              )}
+            </Button>
+            <input
+              ref={picker}
+              type="file"
+              accept=".json,application/json"
+              tabIndex={-1}
+              aria-hidden
+              className="sr-only"
+              onChange={(event) => {
+                const file = event.currentTarget.files?.[0];
+                event.currentTarget.value = "";
+                if (file) importFile(file);
+              }}
+            />
+            <Button
+              variant="secondary"
+              aria-label={t("signIn.importFile")}
+              isPending={importing}
+              isDisabled={isDisabled || pending}
+              onPress={() => picker.current?.click()}
+            >
+              {({ isPending }) => (
+                <>
+                  {isPending ? <Spinner color="current" size="sm" /> : <FileJson size={16} aria-hidden />}
+                  {t("signIn.importFile")}
+                </>
+              )}
+            </Button>
+          </div>
+          <Description className="block">{t("signIn.importHint")}</Description>
+        </div>
       )}
     </div>
   );

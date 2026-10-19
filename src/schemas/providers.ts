@@ -8,7 +8,22 @@ export const providerPolicySchema = z.object({
   noTraining: z.boolean().default(false),
 });
 
+export const MAX_AUTH_FILES = 50;
+export const MAX_AUTH_FILE_BYTES = 256 * 1024;
+
 const signInKindSchema = z.enum(["codex", "grok_build", "claude", "antigravity"]);
+
+const authFileUploadSchema = z.object({
+  name: z.string().trim().min(1).max(255),
+  content: z.string().max(MAX_AUTH_FILE_BYTES),
+});
+
+export const authFileImportSchema = z.array(authFileUploadSchema).min(1).max(MAX_AUTH_FILES);
+
+export const signInFileSchema = z.object({
+  kind: signInKindSchema,
+  content: z.string().min(1).max(MAX_AUTH_FILE_BYTES),
+});
 
 const signInSessionSchema = z.object({
   tokens: z.object({

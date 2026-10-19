@@ -1,4 +1,4 @@
-import { earliestRecovery, quotaExhausted } from "@/lib/gateway/routing/quota";
+import { latestRecovery, quotaExhausted } from "@/lib/gateway/routing/quota";
 import type { AccountLimits, AccountState, ProviderView } from "@/types/providers";
 
 export const ACCOUNT_STATE_COLOR = {
@@ -22,5 +22,5 @@ export function accountState(row: ProviderView, entry: AccountLimits | undefined
 }
 
 export function recoveryAt(entry: AccountLimits | undefined, now = Date.now()): number | null {
-  return entry?.limits ? earliestRecovery(entry.limits, now) : null;
+  return entry?.limits ? latestRecovery(entry.limits, now) : null;
 }

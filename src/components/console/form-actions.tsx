@@ -17,9 +17,9 @@ export default function FormActions({
   extra?: ReactNode;
 }) {
   return (
-    <div className="sticky bottom-0 z-10 flex flex-wrap items-center justify-end gap-2 border-t border-border bg-background/95 py-3 backdrop-blur-sm">
+    <div className="flex flex-col-reverse gap-2 border-t border-border pt-4 sm:flex-row sm:items-center sm:justify-end">
       {extra}
-      <Button isPending={pending} isDisabled={isDisabled} onPress={onSave}>
+      <Button isPending={pending} isDisabled={isDisabled} onPress={onSave} className="w-full sm:w-auto">
         {({ isPending }) => (
           <>
             {isPending ? <Spinner color="current" size="sm" /> : null}

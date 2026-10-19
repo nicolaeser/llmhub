@@ -12,6 +12,10 @@ export const SSE_HEADERS = {
   "X-Accel-Buffering": "no",
 } as const;
 
+export const KEEPALIVE_MS = 15_000;
+
+export const SSE_KEEPALIVE = ": keep-alive\n\n";
+
 function serialize(event: string, data: string): string {
   return `${event ? `event: ${event}\n` : ""}data: ${data}\n\n`;
 }

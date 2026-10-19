@@ -10,6 +10,7 @@ import {
   saveAntigravityConfig,
   saveAssignments,
 } from "@/lib/providers/account-routing";
+import { importAuthFiles, importSignInFile } from "@/lib/providers/auth-import";
 import {
   completeSignIn,
   createProvider,
@@ -58,6 +59,14 @@ export async function pollSignInAction(...args: Parameters<typeof pollSignIn>) {
 
 export async function completeSignInAction(...args: Parameters<typeof completeSignIn>) {
   return runAction(() => completeSignIn(...args));
+}
+
+export async function importSignInFileAction(...args: Parameters<typeof importSignInFile>) {
+  return runAction(() => importSignInFile(...args));
+}
+
+export async function importAuthFilesAction(...args: Parameters<typeof importAuthFiles>) {
+  return runAction(() => importAuthFiles(...args));
 }
 
 export async function loadProviderLimitsAction(...args: Parameters<typeof loadProviderLimits>) {

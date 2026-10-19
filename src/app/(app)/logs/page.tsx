@@ -133,21 +133,23 @@ export default function LogsPage() {
         selectedKey={kind}
         onSelectionChange={(key) => setKind(String(key) as LogKind)}
         aria-label={t("title")}
-        className="mb-4 w-fit"
+        className="mb-4 max-w-full"
       >
-        <Tabs.List className="w-fit min-w-0" aria-label={t("title")}>
-          <Tabs.Tab id="requests" className="w-auto">
-            {t("tabs.requests")}
-          </Tabs.Tab>
-          <Tabs.Tab id="spend" className="w-auto">
-            {t("tabs.spend")}
-          </Tabs.Tab>
-          {logs.canAudit ? (
-            <Tabs.Tab id="audit" className="w-auto">
-              {t("tabs.audit")}
+        <Tabs.ListContainer className="max-w-full overflow-x-auto">
+          <Tabs.List className="min-w-0" aria-label={t("title")}>
+            <Tabs.Tab id="requests" className="w-auto shrink-0 whitespace-nowrap">
+              {t("tabs.requests")}
             </Tabs.Tab>
-          ) : null}
-        </Tabs.List>
+            <Tabs.Tab id="spend" className="w-auto shrink-0 whitespace-nowrap">
+              {t("tabs.spend")}
+            </Tabs.Tab>
+            {logs.canAudit ? (
+              <Tabs.Tab id="audit" className="w-auto shrink-0 whitespace-nowrap">
+                {t("tabs.audit")}
+              </Tabs.Tab>
+            ) : null}
+          </Tabs.List>
+        </Tabs.ListContainer>
       </Tabs>
 
       <LoadError state={logsState} className="mb-4" />
