@@ -387,7 +387,7 @@ test("the sweep refreshes every login inside its lead and leaves the others alon
   logins.get("claude-fresh")!.refreshedAt = new Date(Date.now() - hour);
   const exp = Math.floor(Date.now() / 1000) + 8 * 3600;
   respondWith((url, body) => {
-    const sent = url.includes("platform.claude.com") ? JSON.parse(body).refresh_token : body;
+    const sent = new URL(url).hostname === "platform.claude.com" ? JSON.parse(body).refresh_token : body;
     return Response.json({ access_token: jwt({ exp, sent }), refresh_token: `next-${String(sent).slice(-3)}` });
   });
   assert.equal(await refreshDueLogins(), 3);
