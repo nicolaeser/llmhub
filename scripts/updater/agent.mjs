@@ -1,5 +1,5 @@
 import { Buffer } from "node:buffer";
-import { readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { setInterval } from "node:timers";
@@ -17,10 +17,11 @@ export const SYNC_INTERVAL_MS = 10_000;
 export const CHECK_INTERVAL_MS = 5 * 60_000;
 export const AUTO_TRUST_MS = 5 * 60_000;
 export const HANDOVER_TIMEOUT_MS = 2 * 60_000;
-export const HEARTBEAT_FILE = path.join(os.tmpdir(), "llmhub-updater.heartbeat");
+export const STATE_DIR = path.join(os.homedir(), ".llmhub-updater");
+export const HEARTBEAT_FILE = path.join(STATE_DIR, "heartbeat");
 export const HEARTBEAT_MAX_AGE_MS = 90_000;
 
-const STATE_FILE = path.join(os.tmpdir(), "llmhub-updater.state.json");
+const STATE_FILE = path.join(STATE_DIR, "state.json");
 const SYNC_TIMEOUT_MS = 8_000;
 const RESPONSE_LIMIT = 64 * 1024;
 const COMMAND_ID = /^[A-Za-z0-9-]{8,64}$/;
@@ -465,6 +466,9 @@ export function createAgent({ docker, key, appUrl, projectOverride = null, prede
   }
 
   async function start() {
+    await mkdir(STATE_DIR, { recursive: true, mode: 0o700 }).catch((err) =>
+      log("warn", "updater.state_dir_failed", { err: errorMessage(err) }),
+    );
     await heartbeat();
     await restore();
     try {
