@@ -4,6 +4,7 @@ import { antigravityLimits } from "@/lib/gateway/upstreams/antigravity";
 import { fetchAvailableModels } from "@/lib/gateway/upstreams/antigravity-api";
 import { reportsLimits } from "@/lib/gateway/upstreams/provider-kinds";
 import { CLAUDE_OAUTH_BETAS } from "@/lib/gateway/upstreams/claude";
+import { CODEX_USAGE_URL } from "@/lib/gateway/upstreams/codex";
 import { asNumber, asRecord, asString } from "@/lib/gateway/core";
 import { providerAuth } from "@/lib/gateway/upstreams/credentials";
 import { GateError } from "@/lib/gateway/errors";
@@ -21,7 +22,6 @@ import {
 import type { JsonMap } from "@/types/gateway";
 import type { LimitWindow, SubscriptionLimits } from "@/types/providers";
 
-const CODEX_USAGE_URL = "https://chatgpt.com/backend-api/wham/usage";
 const CLAUDE_USAGE_URL = "https://api.anthropic.com/api/oauth/usage";
 const CLAUDE_FIVE_HOUR_SECONDS = 5 * 3_600;
 const CLAUDE_WEEK_SECONDS = 7 * 86_400;
@@ -238,6 +238,11 @@ export async function subscriptionLimits(
 
 export function limitsSnapshot(providerId: string): SubscriptionLimits | null {
   return cache.get(providerId)?.limits ?? null;
+}
+
+export function forgetLimits(providerId: string): void {
+  cache.delete(providerId);
+  failedAt.delete(providerId);
 }
 
 export async function warmLimits(providers: LimitProvider[]): Promise<void> {

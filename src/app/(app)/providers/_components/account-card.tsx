@@ -7,8 +7,9 @@ import SubscriptionBadge, { PlanBadge } from "@/components/console/subscription-
 import PolicyChips from "./policy-chips";
 import ProviderActions from "./provider-actions";
 import ProviderToggle from "./provider-toggle";
-import type { AccountLimits, LimitWindow, ProviderView } from "@/types/providers";
+import type { AccountLimits, LimitWindow, ProviderView, SubscriptionLimits } from "@/types/providers";
 import { ACCOUNT_STATE_COLOR, accountState, recoveryAt } from "./account-status";
+import BankedResets from "./banked-resets";
 import LimitMeter from "./limit-meter";
 
 function byLength(a: LimitWindow, b: LimitWindow): number {
@@ -21,7 +22,9 @@ export default function AccountCard({
   entry,
   timeZone,
   refreshing,
+  canManage,
   onRefresh,
+  onLimits,
   onEdit,
   onImport,
   onAccess,
@@ -33,7 +36,9 @@ export default function AccountCard({
   entry: AccountLimits | undefined;
   timeZone: string;
   refreshing: boolean;
+  canManage: boolean;
   onRefresh: (id: string) => void;
+  onLimits: (id: string, limits: SubscriptionLimits | null) => void;
   onEdit: (row: ProviderView) => void;
   onImport: (row: ProviderView) => void;
   onAccess: (row: ProviderView) => void;
@@ -133,9 +138,17 @@ export default function AccountCard({
             </Disclosure.Content>
           </Disclosure>
         ) : null}
-        {limits?.resetCredits || limits?.extraUsage || limits?.credits ? (
+        {limits?.resetCredits ? (
+          <BankedResets
+            row={row}
+            credits={limits.resetCredits}
+            timeZone={timeZone}
+            canManage={canManage}
+            onLimits={onLimits}
+          />
+        ) : null}
+        {limits?.extraUsage || limits?.credits ? (
           <ul className="space-y-1 text-sm text-muted">
-            {limits.resetCredits ? <li>{t("limits.resetCredits", limits.resetCredits)}</li> : null}
             {limits.extraUsage ? (
               <li>
                 {t("limits.extraUsage", {

@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import type { AddressInfo } from "node:net";
 import test, { afterEach, beforeEach } from "node:test";
 import type { AuthenticatedSession, Permission } from "@/types/auth";
 import type { GlobalWithWorkerBoot } from "@/types/jobs";
@@ -328,6 +330,25 @@ test("files may hold one account, an array of accounts, or a wrapper around them
   assert.throws(() => parseAuthFileEntry(42), { message: "AUTH_FILE_INVALID" });
 });
 
+test("pasted text may hold several accounts, even one copied without its opening brace", async () => {
+  const { authFileEntries, parseAuthFileEntry } = await import("@/lib/gateway/upstreams/auth-file-import");
+  const claude = JSON.stringify({ type: "claude", access_token: "sk-ant-oat01-a", refresh_token: "sk-ant-ort01-r", email: "c@example.com" });
+  const xai = JSON.stringify({ type: "xai", access_token: "a", refresh_token: "r", note: "braces { inside } strings" });
+  const pasted = `\uFEFF${JSON.stringify(codexFile())}\n\n${claude.slice(1)}\n,\n${xai}`;
+  assert.deepEqual(
+    authFileEntries(pasted).map((entry) => parseAuthFileEntry(entry).kind),
+    ["codex", "claude", "grok_build"],
+  );
+  const unclosed = authFileEntries(`${JSON.stringify(codexFile())}\n${claude.slice(0, -1)}`);
+  assert.deepEqual(unclosed.map((entry) => parseAuthFileEntry(entry).kind), ["codex", "claude"]);
+  const mixed = authFileEntries(`${JSON.stringify(codexFile())}\n{"type": "claude", oops}`);
+  assert.equal(mixed.length, 2);
+  assert.equal(parseAuthFileEntry(mixed[0]).kind, "codex");
+  assert.throws(() => parseAuthFileEntry(mixed[1]), { message: "AUTH_FILE_INVALID" });
+  assert.throws(() => authFileEntries(`Here are my files: ${JSON.stringify(codexFile())}`), { message: "AUTH_FILE_INVALID" });
+  assert.throws(() => authFileEntries("   "), { message: "AUTH_FILE_INVALID" });
+});
+
 test("unsupported providers and SIWC Codex clients are rejected", async () => {
   const { parseAuthFileEntry } = await import("@/lib/gateway/upstreams/auth-file-import");
   for (const type of ["kimi", "gemini", "gemini-cli", "vertex", "qwen", "iflow", "constructor", ""]) {
@@ -358,12 +379,70 @@ test("the sign-in dialog picks the account of its own kind", async () => {
   assert.equal(authFileEntryFor([kimi], "claude"), kimi);
 });
 
-test("fresh tokens are imported without refreshing", async () => {
+test("fresh tokens are imported without refreshing once the provider accepts them", async () => {
+  const { freshAuthFileSession, parseAuthFileEntry } = await import("@/lib/gateway/upstreams/auth-file-import");
+  respondWith(() => Response.json({ plan_type: "plus" }));
+  const parsed = parseAuthFileEntry(codexFile());
+  assert.deepEqual(await freshAuthFileSession(parsed), parsed.session);
+  assert.deepEqual(calls.map((call) => call.url), ["https://chatgpt.com/backend-api/wham/usage"]);
+});
+
+test("an unreachable provider does not block the import of fresh tokens", async () => {
   const { freshAuthFileSession, parseAuthFileEntry } = await import("@/lib/gateway/upstreams/auth-file-import");
   refuseNetwork();
   const parsed = parseAuthFileEntry(codexFile());
   assert.deepEqual(await freshAuthFileSession(parsed), parsed.session);
-  assert.equal(calls.length, 0);
+});
+
+test("a rejected access token is renewed once and the rotated session is imported", async () => {
+  const { freshAuthFileSession, parseAuthFileEntry } = await import("@/lib/gateway/upstreams/auth-file-import");
+  let profiles = 0;
+  respondWith((url) => {
+    if (url === "https://platform.claude.com/v1/oauth/token") {
+      return Response.json({ access_token: "sk-ant-oat01-renewed", refresh_token: "sk-ant-ort01-rotated", expires_in: 28_800 });
+    }
+    profiles += 1;
+    if (profiles === 1) return Response.json({ type: "error", error: { type: "authentication_error" } }, { status: 401 });
+    return Response.json({ account: { has_claude_max: true }, organization: {} });
+  });
+  const parsed = parseAuthFileEntry({
+    type: "claude",
+    access_token: "sk-ant-oat01-revoked",
+    refresh_token: "sk-ant-ort01-current",
+    email: "claude@example.com",
+    account_uuid: "uuid-1",
+    expired: new Date(Date.now() + 3_600_000).toISOString(),
+  });
+  const session = await freshAuthFileSession(parsed);
+  assert.deepEqual(
+    calls.map((call) => call.url),
+    [
+      "https://api.anthropic.com/api/oauth/profile",
+      "https://platform.claude.com/v1/oauth/token",
+      "https://api.anthropic.com/api/oauth/profile",
+    ],
+  );
+  assert.equal(session.tokens.access, "sk-ant-oat01-renewed");
+  assert.equal(session.tokens.refresh, "sk-ant-ort01-rotated");
+  assert.equal(session.plan, "max");
+  assert.equal(session.account, "claude@example.com");
+});
+
+test("credentials the source already rotated fail as revoked instead of being stored", async () => {
+  const { freshAuthFileSession, parseAuthFileEntry } = await import("@/lib/gateway/upstreams/auth-file-import");
+  respondWith((url) =>
+    url === "https://platform.claude.com/v1/oauth/token"
+      ? Response.json({ error: "invalid_grant", error_description: "Refresh token not found or invalid" }, { status: 400 })
+      : Response.json({ type: "error", error: { type: "authentication_error" } }, { status: 401 }),
+  );
+  const parsed = parseAuthFileEntry({
+    type: "claude",
+    access_token: "sk-ant-oat01-revoked",
+    refresh_token: "sk-ant-ort01-rotated-elsewhere",
+    email: "claude@example.com",
+    expired: new Date(Date.now() + 3_600_000).toISOString(),
+  });
+  await assert.rejects(freshAuthFileSession(parsed), { message: "AUTH_FILE_REVOKED" });
 });
 
 test("expiring tokens refresh with the hub client and keep the file's account", async () => {
@@ -372,8 +451,10 @@ test("expiring tokens refresh with the hub client and keep the file's account", 
   respondWith(() => Response.json({ access_token: jwt({ exp }), refresh_token: "rt_rotated" }));
   const parsed = parseAuthFileEntry(codexFile({ access_token: jwt({ exp: nowSeconds() + 60 }) }));
   const session = await freshAuthFileSession(parsed);
-  assert.equal(calls.length, 1);
-  assert.equal(calls[0]!.url, "https://auth.openai.com/oauth/token");
+  assert.deepEqual(
+    calls.map((call) => call.url),
+    ["https://auth.openai.com/oauth/token", "https://chatgpt.com/backend-api/wham/usage"],
+  );
   assert.deepEqual(JSON.parse(calls[0]!.body), {
     client_id: "app_EMoamEEZ73f0CkXaXp7hrann",
     grant_type: "refresh_token",
@@ -424,7 +505,8 @@ test("antigravity imports need the client secret and fill the project and plan",
   settings.set("enterprise", JSON.stringify({ antigravity: { client_secret: "secret" } }));
   respondWith(() => Response.json({ cloudaicompanionProject: "proj-9", paidTier: { id: "g1-pro-tier" } }));
   const session = await freshAuthFileSession(parsed);
-  assert.ok(calls[0]!.url.endsWith(":loadCodeAssist"));
+  assert.equal(calls[0]!.url, "https://www.googleapis.com/oauth2/v2/userinfo?alt=json");
+  assert.ok(calls[1]!.url.endsWith(":loadCodeAssist"));
   assert.equal(session.tokens.accountId, "proj-9");
   assert.equal(session.plan, "pro");
   assert.equal(session.account, "g@example.com");
@@ -503,4 +585,158 @@ test("single file import returns a sealed credential for the dialog", async () =
     message: "AUTH_FILE_KIND_MISMATCH",
   });
   assert.equal(connections.length, 0);
+});
+
+type ManagementCall = { method: string; path: string; auth: string };
+
+async function fakeCliProxy(
+  handle: (req: IncomingMessage, res: ServerResponse, url: URL) => void,
+): Promise<{ url: string; requests: ManagementCall[]; close: () => Promise<void> }> {
+  const requests: ManagementCall[] = [];
+  const server = createServer((req, res) => {
+    const url = new URL(req.url ?? "/", "http://cliproxy.test");
+    requests.push({ method: req.method ?? "", path: `${url.pathname}${url.search}`, auth: req.headers.authorization ?? "" });
+    res.setHeader("X-CPA-VERSION", "v6.9.1");
+    if (req.headers.authorization !== "Bearer mgmt-key") {
+      res.writeHead(401, { "Content-Type": "application/json" }).end(JSON.stringify({ error: "invalid management key" }));
+      return;
+    }
+    handle(req, res, url);
+  });
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const { port } = server.address() as AddressInfo;
+  return {
+    url: `127.0.0.1:${port}/management.html`,
+    requests,
+    close: () => new Promise((resolve) => server.close(() => resolve())),
+  };
+}
+
+function json(res: ServerResponse, status: number, body: unknown) {
+  res.writeHead(status, { "Content-Type": "application/json" }).end(JSON.stringify(body));
+}
+
+const LISTED_FILES = [
+  { name: "codex-dev@example.com-plus.json", type: "codex", email: "dev@example.com", status: "active", disabled: false, source: "file" },
+  { name: "claude-old.json", type: "claude", email: "c@example.com", status: "disabled", disabled: true, source: "file" },
+  { name: "gemini-g@example.com.json", type: "gemini-cli", email: "g@example.com", status: "active", source: "file" },
+  { name: "runtime-claude", type: "claude", runtime_only: true, source: "memory" },
+];
+
+test("a CLIProxyAPI server lists its auth files and marks which ones LLM Hub can import", async () => {
+  const { listCliProxyAuthFiles } = await import("@/lib/providers/cliproxy-import");
+  const cliproxy = await fakeCliProxy((_req, res, url) => {
+    if (url.pathname === "/v0/management/auth-files") json(res, 200, { files: LISTED_FILES });
+    else json(res, 404, {});
+  });
+  try {
+    const listing = await asCaller(() => listCliProxyAuthFiles({ url: cliproxy.url, key: "mgmt-key" }));
+    assert.equal(listing.version, "v6.9.1");
+    assert.deepEqual(
+      listing.files.map((file) => [file.name, file.kind, file.importable, file.disabled, file.account]),
+      [
+        ["codex-dev@example.com-plus.json", "codex", true, false, "dev@example.com"],
+        ["claude-old.json", "claude", true, true, "c@example.com"],
+        ["gemini-g@example.com.json", null, false, false, "g@example.com"],
+        ["runtime-claude", "claude", false, false, ""],
+      ],
+    );
+    assert.deepEqual(cliproxy.requests.map((call) => `${call.method} ${call.path}`), ["GET /v0/management/auth-files"]);
+    await assert.rejects(
+      asCaller(() => listCliProxyAuthFiles({ url: cliproxy.url, key: "wrong" })),
+      { message: "CLIPROXY_KEY_REJECTED" },
+    );
+    await assert.rejects(
+      asCaller(() => listCliProxyAuthFiles({ url: cliproxy.url, key: "mgmt-key" }), ["providers:read"]),
+      { message: "FORBIDDEN" },
+    );
+  } finally {
+    await cliproxy.close();
+  }
+});
+
+test("CLIProxyAPI refusals become clear error codes", async () => {
+  const { listCliProxyAuthFiles } = await import("@/lib/providers/cliproxy-import");
+  const answers: [number, unknown, string][] = [
+    [403, { error: "remote management disabled" }, "CLIPROXY_REMOTE_DISABLED"],
+    [403, { error: "remote management key not set" }, "CLIPROXY_MANAGEMENT_OFF"],
+    [403, { error: "IP banned due to too many failed attempts. Try again in 29m" }, "CLIPROXY_LOCKED"],
+    [500, { error: "boom" }, "CLIPROXY_FAILED"],
+  ];
+  let answer = 0;
+  const cliproxy = await fakeCliProxy((_req, res) => {
+    const [status, body] = answers[answer]!;
+    json(res, status, body);
+  });
+  try {
+    for (const [, , code] of answers) {
+      await assert.rejects(asCaller(() => listCliProxyAuthFiles({ url: cliproxy.url, key: "mgmt-key" })), { message: code });
+      answer += 1;
+    }
+  } finally {
+    await cliproxy.close();
+  }
+  await assert.rejects(asCaller(() => listCliProxyAuthFiles({ url: cliproxy.url, key: "mgmt-key" })), {
+    message: "CLIPROXY_UNREACHABLE",
+  });
+  await assert.rejects(asCaller(() => listCliProxyAuthFiles({ url: "ftp://cliproxy.test", key: "k" })), {
+    message: "CLIPROXY_URL_INVALID",
+  });
+  await assert.rejects(asCaller(() => listCliProxyAuthFiles({ url: "http://169.254.169.254", key: "k" })), {
+    message: "DESTINATION_BLOCKED",
+  });
+});
+
+test("importing from CLIProxyAPI moves the accounts and removes only fully imported files at the source", async () => {
+  const { importCliProxyAuthFiles } = await import("@/lib/providers/cliproxy-import");
+  respondWith(() => Response.json({ plan_type: "plus" }));
+  const downloads: Record<string, unknown> = {
+    "codex-dev@example.com-plus.json": codexFile(),
+    "claude-old.json": { type: "claude", access_token: "sk-ant-oat01-a", email: "c@example.com" },
+  };
+  const cliproxy = await fakeCliProxy((req, res, url) => {
+    if (url.pathname === "/v0/management/auth-files" && req.method === "GET") json(res, 200, { files: LISTED_FILES });
+    else if (url.pathname === "/v0/management/auth-files/download") json(res, 200, downloads[url.searchParams.get("name") ?? ""]);
+    else if (url.pathname === "/v0/management/auth-files" && req.method === "DELETE") json(res, 200, { status: "ok" });
+    else json(res, 404, {});
+  });
+  try {
+    const result = await asCaller(() =>
+      importCliProxyAuthFiles({
+        url: cliproxy.url,
+        key: "mgmt-key",
+        names: ["codex-dev@example.com-plus.json", "claude-old.json", "gemini-g@example.com.json"],
+        removeFromSource: true,
+      }),
+    );
+    assert.deepEqual(
+      result.results.map((item) => [item.file, item.status, item.error ?? ""]),
+      [
+        ["gemini-g@example.com.json", "failed", "AUTH_FILE_UNSUPPORTED"],
+        ["codex-dev@example.com-plus.json", "created", ""],
+        ["claude-old.json", "failed", "AUTH_FILE_INCOMPLETE"],
+      ],
+    );
+    assert.deepEqual(result.removed, ["codex-dev@example.com-plus.json"]);
+    assert.deepEqual(result.keptAtSource, []);
+    assert.equal(connections.length, 1);
+    assert.ok(
+      cliproxy.requests.some(
+        (call) => call.method === "DELETE" && call.path === "/v0/management/auth-files?name=codex-dev%40example.com-plus.json",
+      ),
+    );
+    assert.equal(cliproxy.requests.filter((call) => call.method === "DELETE").length, 1);
+    const audit = audits.find((row) => row.action === "provider.import_cliproxy");
+    assert.ok(audit);
+    assert.equal(audit.afterJson.includes("mgmt-key"), false);
+
+    const kept = await asCaller(() =>
+      importCliProxyAuthFiles({ url: cliproxy.url, key: "mgmt-key", names: ["codex-dev@example.com-plus.json"], removeFromSource: false }),
+    );
+    assert.deepEqual(kept.results.map((item) => item.status), ["updated"]);
+    assert.deepEqual(kept.removed, []);
+    assert.equal(cliproxy.requests.filter((call) => call.method === "DELETE").length, 1);
+  } finally {
+    await cliproxy.close();
+  }
 });
