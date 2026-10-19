@@ -2,17 +2,20 @@ import "server-only";
 
 import prisma from "@/lib/db/prisma";
 import { requirePermission } from "@/lib/auth/guards";
-import { PERMISSIONS } from "@/lib/auth/permissions";
+import { hasPerm, PERMISSIONS } from "@/lib/auth/permissions";
 import { writeAudit } from "@/lib/audit";
-import { isAccountStrategy, isAssignmentScope } from "@/lib/gateway/routing/account-access";
+import { DEFAULT_ACCOUNT_STRATEGY, isAccountStrategy, isAssignmentScope } from "@/lib/gateway/routing/account-access";
 import { assignmentOptions, replaceAssignments } from "@/lib/gateway/routing/account-assignments";
 import { forgetAccountPolicies } from "@/lib/gateway/routing/account-routing";
+import { autoResetPoliciesOf } from "@/lib/gateway/routing/auto-reset-policy";
 import {
   antigravityClientSecret,
   saveAntigravityClientSecret,
 } from "@/lib/gateway/upstreams/antigravity-config";
 import { isSignInKind } from "@/lib/gateway/upstreams/provider-kinds";
-import type { AccountRouting, AssignmentInput, SignInKind } from "@/types/providers";
+import { autoResetInputSchema } from "@/schemas/resets";
+import type { AccountRouting, AccountRoutingView, AssignmentInput, SignInKind } from "@/types/providers";
+import type { AutoResetInput, AutoResetPolicies } from "@/types/resets";
 
 const MAX_TARGETS = 500;
 const MAX_SECRET_LENGTH = 200;
@@ -26,9 +29,14 @@ async function currentRouting(): Promise<AccountRouting> {
   return routing;
 }
 
-export async function loadAccountRouting() {
-  await requirePermission(PERMISSIONS.PROVIDERS_READ);
-  return { routing: await currentRouting() };
+async function currentAutoReset(): Promise<AutoResetPolicies> {
+  return autoResetPoliciesOf(await prisma.accountRouting.findMany());
+}
+
+export async function loadAccountRouting(): Promise<AccountRoutingView> {
+  const session = await requirePermission(PERMISSIONS.PROVIDERS_READ);
+  const [routing, autoReset] = await Promise.all([currentRouting(), currentAutoReset()]);
+  return { routing, autoReset, canManage: hasPerm(session.permissions, PERMISSIONS.PROVIDERS_MANAGE) };
 }
 
 export async function saveAccountRouting(input: { kind: string; strategy: string }) {
@@ -51,6 +59,30 @@ export async function saveAccountRouting(input: { kind: string; strategy: string
     after: { strategy: input.strategy },
   });
   return { routing: await currentRouting() };
+}
+
+export async function saveAutoReset(input: AutoResetInput) {
+  const session = await requirePermission(PERMISSIONS.PROVIDERS_MANAGE);
+  const parsed = autoResetInputSchema.safeParse(input);
+  if (!parsed.success) throw new Error("VALIDATION");
+  const { kind, enabled, percent, scope } = parsed.data;
+  const before = (await currentAutoReset())[kind] ?? null;
+  const data = { autoReset: enabled, autoResetPercent: percent, autoResetScope: scope };
+  await prisma.accountRouting.upsert({
+    where: { kind },
+    create: { kind, strategy: DEFAULT_ACCOUNT_STRATEGY, ...data },
+    update: data,
+  });
+  forgetAccountPolicies();
+  await writeAudit({
+    actor: session.user.id,
+    action: "account_routing.auto_reset",
+    objectType: "account_routing",
+    objectId: kind,
+    before,
+    after: { enabled, percent, scope },
+  });
+  return { autoReset: await currentAutoReset() };
 }
 
 export async function loadAssignmentOptions() {

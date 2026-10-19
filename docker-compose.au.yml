@@ -17,9 +17,6 @@ services:
       - "127.0.0.1:${LLMHUB_PORT:-3000}:3000"
     labels:
       llmhub.updater.target: "true"
-    networks:
-      - default
-      - updater
 
   postgres:
     image: postgres:18-alpine
@@ -57,23 +54,13 @@ services:
       - app
     command: ["node", "updater.mjs"]
     user: "0:0"
-    cap_drop:
-      - ALL
-    security_opt:
-      - no-new-privileges:true
     environment:
       APP_SECRET: ${APP_SECRET}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-    networks:
-      - updater
     healthcheck:
       test: ["CMD", "node", "updater.mjs", "--healthcheck"]
       interval: 30s
       timeout: 5s
       start_period: 30s
       retries: 3
-
-networks:
-  updater:
-    internal: true

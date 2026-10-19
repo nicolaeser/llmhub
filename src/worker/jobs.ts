@@ -5,6 +5,7 @@ import { ATTEMPT_RETENTION_MS } from "@/lib/auth/throttle";
 import prisma from "@/lib/db/prisma";
 import { fireAlert } from "@/lib/alerts/notify";
 import { runPendingBatches } from "@/lib/gateway/endpoints/batches";
+import { runAutoResets } from "@/lib/gateway/upstreams/reset-redeem";
 import { crossedThresholds, forecastBudget } from "@/lib/usage/forecast";
 import { purgeStoredObjects } from "@/lib/gateway/storage/objects";
 import { runPendingIngests } from "@/lib/rag/ingest";
@@ -74,6 +75,7 @@ export async function runMaintenanceSweep(
     vectorFiles: 0,
     vectorStores: 0,
     reports: 0,
+    resets: 0,
   };
 
   const enterprise = await sweepSettings();
@@ -122,6 +124,7 @@ export async function runMaintenanceSweep(
   await runSweepJob("spend_anomaly_alerts", () => runSpendAnomalyAlerts(now));
   await runSweepJob("key_expiry_alerts", () => runKeyExpiryAlerts(now));
   result.reports = await runSweepJob("usage_reports", () => runUsageReports(now));
+  result.resets = await runSweepJob("auto_resets", () => runAutoResets(now.getTime()));
   return result;
 }
 

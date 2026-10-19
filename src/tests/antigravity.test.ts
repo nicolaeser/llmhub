@@ -499,7 +499,7 @@ test("the models call posts the project and reports the status", async () => {
   respondWith(() => Response.json({ models: { a: {} } }));
   const ok = await fetchAvailableModels({ key: "tok", headers: {}, project: "proj-1" });
   assert.equal(ok.status, 200);
-  assert.equal(calls[0]!.url, "https://cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels");
+  assert.equal(calls[0]!.url, "https://daily-cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels");
   assert.deepEqual(JSON.parse(calls[0]!.body), { project: "proj-1" });
   assert.equal(calls[0]!.headers.Authorization, "Bearer tok");
   assert.match(calls[0]!.headers["User-Agent"] ?? "", /^antigravity\//);
@@ -517,7 +517,7 @@ test("antigravity deployments belong to the subscription pool and use the stream
   const { signInHeaders } = await import("@/lib/gateway/upstreams/credentials");
   assert.equal(routePool({ kind: "antigravity" }), "subscription");
   assert.equal(routePool({ kind: "openai", provider: { kind: "antigravity" } }), "subscription");
-  assert.equal(joinPath(dep, "/chat/completions"), "https://cloudcode-pa.googleapis.com/v1internal:streamGenerateContent?alt=sse");
+  assert.equal(joinPath(dep, "/chat/completions"), "https://daily-cloudcode-pa.googleapis.com/v1internal:streamGenerateContent?alt=sse");
   assert.throws(() => joinPath(dep, "/embeddings"), (err: unknown) => err instanceof GateError && err.status === 400);
   const headers = upstreamHeaders(dep, {
     key: "tok",
@@ -547,7 +547,7 @@ test("a chat request goes out as a Cloud Code envelope and the SSE reply returns
     body: { model: "alias", messages: [{ role: "user", content: "Ping" }], stream: false },
   });
   assert.equal(result.status, 200);
-  assert.equal(calls[0]!.url, "https://cloudcode-pa.googleapis.com/v1internal:streamGenerateContent?alt=sse");
+  assert.equal(calls[0]!.url, "https://daily-cloudcode-pa.googleapis.com/v1internal:streamGenerateContent?alt=sse");
   const sent = JSON.parse(calls[0]!.body) as JsonMap;
   assert.equal(sent.project, "proj-1");
   assert.equal(sent.model, "claude-sonnet-4-6");
@@ -656,6 +656,7 @@ test("signing in exchanges the code, reads the email, and stores the Cloud Code 
   assert.equal(form.get("redirect_uri"), ANTIGRAVITY_REDIRECT_URI);
   assert.equal(form.get("code_verifier"), device.grant.verifier);
   const load = calls.find((call) => call.url.endsWith(":loadCodeAssist"))!;
+  assert.equal(load.url, "https://cloudcode-pa.googleapis.com/v1internal:loadCodeAssist");
   assert.deepEqual(JSON.parse(load.body), { metadata: { ideType: "ANTIGRAVITY" } });
   assert.equal(load.headers.Authorization, "Bearer access-1");
 });

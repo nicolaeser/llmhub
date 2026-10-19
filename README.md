@@ -8,7 +8,7 @@ It ships as one container image backed by PostgreSQL, with optional Redis and S3
 
 - **Compatible API.** `/api/v1` serves chat completions, completions, Responses, Anthropic Messages (including token counting), embeddings, moderations, rerank, OCR, images, audio, files, batches, videos, and vector stores with search, so existing OpenAI and Anthropic SDKs work by changing the base URL and key.
 - **Providers and routing.** OpenAI, Anthropic, OpenRouter (global and EU), xAI, and any OpenAI-compatible endpoint. Model groups map one alias to several deployments with strategies such as least in-flight, weighted random, lowest cost, priority, round robin, and quota-aware routing, plus fallbacks, cooldowns on upstream failures, and a provider health view. A model catalog discovers provider models every two hours and keeps aliases up to date.
-- **Subscription accounts.** Optionally connect ChatGPT, Claude, SuperGrok, and Google Antigravity plans through a device or callback sign-in. They are served from a separate endpoint (`/api/subscription/v1`) and never mix with API-key traffic.
+- **Subscription accounts.** Optionally connect ChatGPT, Claude, SuperGrok, and Google Antigravity plans through a device or callback sign-in, or move them over once from CLIProxyAPI or EasyCLIProxyAPI (auth files, pasted JSON, or straight from a running CLIProxyAPI through its management API; every account is checked with its provider first and can be removed at the source so the two never invalidate each other's rotating tokens). A session stays on one account and moves to the next account with its full conversation when that account hits its limit or loses its sign-in. They are served from a separate endpoint (`/api/subscription/v1`) and never mix with API-key traffic.
 - **Companies and budgets.** Companies, departments, projects, and people form the tenancy model. API keys belong to a project, a person, or a console user. Every level can carry a spend cap with a reset period and temporary boosts; a child cap can never exceed a capped parent. Keys also support RPM and TPM limits, a per-request cost limit, model allowlists, reusable model templates (providers, regions, zero data retention, no training, maximum retention), client IP allowlists, endpoint restrictions, access time windows, expiry, and rotation.
 - **Safety and privacy.** PII detection with masking or blocking, configurable guardrail rules on input and output, and policy overrides per company, project, or key. Request and response bodies are stored separately from log metadata, can be switched off per key, user, or person, and follow their own retention period.
 - **Usage and cost.** Daily usage rollups, dashboards, chargeback by company, department, and project, price markups, CSV, JSONL, PDF, and Markdown exports, and scheduled usage report emails. Prompt cache tokens are billed at provider rates, and an optional response cache with semantic matching answers repeated requests.
@@ -118,7 +118,7 @@ Each container start applies pending migrations under a database lock before the
 
 ## Automatic updates
 
-`docker-compose.au.yml` is `docker-compose.yml` plus an updater container. The app, Postgres, and Redis services are identical; the app only gains the label `llmhub.updater.target=true` and a second, internal network that it shares with the updater. The updater runs from the same image (`node updater.mjs`) and keeps the app on the newest image of its tag:
+`docker-compose.au.yml` is `docker-compose.yml` plus an updater container. The app, Postgres, and Redis services are identical; the app only gains the label `llmhub.updater.target=true`. The updater runs from the same image (`node updater.mjs`) and keeps the app on the newest image of its tag:
 
 1. Every five minutes it asks the registry for the digest behind the tag the app runs and compares it with the running image.
 2. When automatic updates are on, or when someone presses Update now in the console, it pulls the image, stops the app, starts a new container with the same settings, environment overrides, labels, networks, and aliases, and waits until the image's health check reports healthy (up to ten minutes, because migrations run on start).
@@ -138,10 +138,10 @@ The badge in the console's top bar shows the live connection to the server (Live
 
 The updater gets only what it needs:
 
-- The Docker socket. Pulls and registry lookups run through the Docker daemon, so the updater itself has no internet access.
+- The Docker socket. Pulls and registry lookups run through the Docker daemon.
 - `APP_SECRET`, from which it derives the key that signs its messages to the app. It does not receive the rest of `.env`.
-- The internal `updater` network, on which it reaches only the app at `http://app:3000/internal-api/updater`. It publishes no ports and accepts no connections.
-- User `0:0`, because the socket belongs to root on the host, with every Linux capability dropped and `no-new-privileges` set.
+- The default compose network, on which it reaches the app at `http://app:3000/internal-api/updater`. It publishes no ports and accepts no connections.
+- User `0:0`, because the socket belongs to root on the host and the image's `node` user cannot open it.
 
 Every ten seconds it posts its status to the app and reads back the switch and any requested check or update; both directions are signed. These variables configure the updater only; the app does not read them:
 
@@ -151,11 +151,11 @@ Every ten seconds it posts its status to the app and reads back the switch and a
 | `LLMHUB_UPDATER_APP_URL` | `http://app:3000` | Address of the app inside the compose network. |
 | `LLMHUB_UPDATER_PROJECT` | detected | Compose project whose containers the updater manages, when it cannot inspect its own container. |
 
-Security: access to the Docker socket is equivalent to root access on the host, so anyone who controls the updater container or the image it pulls controls the server. That is why the socket lives in a separate container without ports or internet access instead of in the app, which handles outside traffic. Only use this file on hosts where that is acceptable. The updater only recreates running containers of its own compose project that carry the label `llmhub.updater.target=true`, and it only pulls public images; registries that need a login are not supported.
+Security: access to the Docker socket is equivalent to root access on the host, so anyone who controls the updater container or the image it pulls controls the server. That is why the socket lives in a separate container without ports instead of in the app, which handles outside traffic. Only use this file on hosts where that is acceptable. The updater only recreates running containers of its own compose project that carry the label `llmhub.updater.target=true`, and it only pulls public images; registries that need a login are not supported.
 
 Pinned tags: when `LLMHUB_TAG` is a release tag (`vYYYY.MM.DD.<sha>` or `dev-YYYY.MM.DD.<sha>`), a commit tag (`sha-<sha>`, `dev-<sha>`), or a digest, the updater reports the tag as pinned and never replaces the image. Set `LLMHUB_TAG` to `latest` or `dev` to receive updates. Back up the database regularly when automatic updates are on, because a new image applies its migrations on start and migrations are forward-only.
 
-To stop automatic installs, turn off the switch; the updater keeps checking and offers Update now. To remove the updater, drop `COMPOSE_FILE` from `.env` if you set it and run `docker compose -f docker-compose.yml up -d --remove-orphans`; this removes the updater and recreates the app without the label and the extra network. An older updater refreshes itself after the next app update; `docker compose -f docker-compose.au.yml pull updater && docker compose -f docker-compose.au.yml up -d updater` refreshes it by hand.
+To stop automatic installs, turn off the switch; the updater keeps checking and offers Update now. To remove the updater, drop `COMPOSE_FILE` from `.env` if you set it and run `docker compose -f docker-compose.yml up -d --remove-orphans`; this removes the updater and recreates the app without the label. An older updater refreshes itself after the next app update; `docker compose -f docker-compose.au.yml pull updater && docker compose -f docker-compose.au.yml up -d updater` refreshes it by hand.
 
 ## Development
 

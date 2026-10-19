@@ -3,8 +3,8 @@ import { randomBytes } from "node:crypto";
 import { open, pkceChallenge, seal } from "@/lib/crypto";
 import {
   ANTIGRAVITY_AUTHORIZE_URL,
-  ANTIGRAVITY_BASE_URL,
   ANTIGRAVITY_CLIENT_ID,
+  ANTIGRAVITY_CONTROL_URL,
   ANTIGRAVITY_REDIRECT_URI,
   ANTIGRAVITY_SCOPE,
   ANTIGRAVITY_TOKEN_URL,
@@ -166,7 +166,7 @@ export function claudePlan(profile: JsonMap): string {
   return "";
 }
 
-export async function claudeProfilePlan(access: string): Promise<string> {
+export async function claudeProfile(access: string): Promise<{ status: number; plan: string }> {
   try {
     const res = await fetch(CLAUDE_PROFILE_URL, {
       headers: {
@@ -178,10 +178,27 @@ export async function claudeProfilePlan(access: string): Promise<string> {
       signal: AbortSignal.timeout(AUTH_TIMEOUT_MS),
       redirect: "error",
     });
-    if (!res.ok) return "";
-    return claudePlan(asRecord(await readJsonOr(res, null)) ?? {});
+    if (!res.ok) return { status: res.status, plan: "" };
+    return { status: res.status, plan: claudePlan(asRecord(await readJsonOr(res, null)) ?? {}) };
   } catch {
-    return "";
+    return { status: 0, plan: "" };
+  }
+}
+
+export async function claudeProfilePlan(access: string): Promise<string> {
+  return (await claudeProfile(access)).plan;
+}
+
+export async function googleAccess(access: string): Promise<number> {
+  try {
+    const res = await fetch(ANTIGRAVITY_USERINFO_URL, {
+      headers: { Authorization: `Bearer ${access}`, Accept: "application/json" },
+      signal: AbortSignal.timeout(AUTH_TIMEOUT_MS),
+      redirect: "error",
+    });
+    return res.status;
+  } catch {
+    return 0;
   }
 }
 
@@ -326,7 +343,7 @@ export async function googleEmail(access: string): Promise<string> {
 }
 
 async function codeAssist(access: string, method: string, body: JsonMap): Promise<{ status: number; json: JsonMap }> {
-  return postAuth(`${ANTIGRAVITY_BASE_URL}/v1internal:${method}`, body, {
+  return postAuth(`${ANTIGRAVITY_CONTROL_URL}/v1internal:${method}`, body, {
     ...antigravityHeaders(),
     Authorization: `Bearer ${access}`,
   });

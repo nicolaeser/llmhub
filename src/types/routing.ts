@@ -71,3 +71,7 @@ export type ServiceTarget = { kind: string; model: string; facts?: ModelFacts };
 export type WeightedChoice = { id: string; weight: number };
 
 export type QuotaScores = Map<string, { pressure: number; reset: number }>;
+
+export type AccountPin = { providerId: string; handoffAt: number };
+
+export type RunRouting = { session: string; tried: Set<string> };

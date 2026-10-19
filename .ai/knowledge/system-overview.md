@@ -16,7 +16,7 @@ LLM Hub is a Next.js 16 App Router app: OpenAI- and Anthropic-compatible `/api/v
 
 - `src/app/(app)/` — authenticated console. Layout requires a session.
 - `src/app/account/` — login, register, password reset. Public except when a session already exists.
-- `src/app/internal-api/` — health, ready, version, the console live stream (`live`), the signed updater bridge (`updater`), account HTTP, playground chat, API reference try-out, log/usage export, first-admin setup.
+- `src/app/internal-api/` — health, ready, version, the console live stream (`live`), the signed updater bridge (`updater`), account HTTP, playground chat, API reference try-out, log/usage export, the MCP Anything draft upload, first-admin setup.
 - `src/app/api/v1/` — OpenAI-compatible gateway. Virtual keys only (plus console try-tokens). `src/app/api/subscription/v1/` serves the same API from signed-in subscription accounts.
 - `src/app/api/mgmt/` — management API over the console actions. Management keys only.
 - `src/app/sso/` and `src/app/scim/` — enterprise login and provisioning.

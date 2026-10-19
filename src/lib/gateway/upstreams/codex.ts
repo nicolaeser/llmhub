@@ -8,6 +8,7 @@ import type { ModelFacts } from "@/types/routing";
 
 export const CODEX_DEFAULT_INSTRUCTIONS = "You are a helpful assistant.";
 export const CODEX_CLIENT_VERSION = "0.161.0";
+export const CODEX_USAGE_URL = "https://chatgpt.com/backend-api/wham/usage";
 export const CODEX_FAST_TIER = "priority";
 export const CODEX_ULTRAFAST_TIER = "ultrafast";
 

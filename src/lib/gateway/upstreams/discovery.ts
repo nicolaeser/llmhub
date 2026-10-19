@@ -42,8 +42,8 @@ function modelsUrl(kind: string, base: string): string {
   return `${b}/v1/models`;
 }
 
-async function fetchAntigravityModels(baseUrl: string, auth: UpstreamAuth): Promise<DiscoveredModel[]> {
-  const { status, json } = await fetchAvailableModels(auth, baseUrl);
+async function fetchAntigravityModels(auth: UpstreamAuth): Promise<DiscoveredModel[]> {
+  const { status, json } = await fetchAvailableModels(auth);
   if (status === 401 || status === 403) throw new Error("UPSTREAM_AUTH");
   if (status < 200 || status >= 300) throw new Error("UPSTREAM_FAILED");
   return antigravityModels(json);
@@ -180,7 +180,7 @@ export async function refreshProviderModels(
   });
   const models =
     row.kind === "antigravity"
-      ? await fetchAntigravityModels(row.baseUrl, auth)
+      ? await fetchAntigravityModels(auth)
       : await fetchProviderModels(row.kind, row.baseUrl, auth.key, auth.headers);
   const before = discoveredOf(row.discovered);
   if (models.length === 0 && before.length > 0) throw new Error("UPSTREAM_EMPTY");
