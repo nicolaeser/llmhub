@@ -218,6 +218,7 @@ export const MODEL_ROUTES: ModelRoute[] = [
     body: chat,
   },
   { path: "/api/subscription/v1/messages", load: () => import("@/app/api/subscription/v1/messages/route"), body: anthropic },
+  { path: "/api/subscription/v1/messages/count_tokens", load: () => import("@/app/api/subscription/v1/messages/count_tokens/route"), body: anthropic },
   { path: "/api/subscription/v1/responses", load: () => import("@/app/api/subscription/v1/responses/route"), body: input },
 ];
 
