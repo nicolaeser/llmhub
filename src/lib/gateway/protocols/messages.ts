@@ -4,10 +4,12 @@ import { tokenCount } from "@/lib/gateway/billing/tokens";
 import { anthropicErrorBody } from "@/lib/gateway/errors";
 import { sseEvent } from "@/lib/gateway/protocols/sse";
 import { ToolCallDeltas } from "@/lib/gateway/protocols/chat-stream";
+import { VALIDATED_BLOCK_TYPES } from "@/schemas/anthropic";
 import type {
   AnthropicUsage,
   MessagesContentBlock,
   MessagesRequest,
+  MessagesRequestBlock,
   MessagesStreamOptions,
   MessagesTool,
 } from "@/types/anthropic";
@@ -78,7 +80,7 @@ export function chatIncompatibility(request: MessagesRequest, options: ChatFallb
       return `tools.${index}.type: tool type "${tool.type}" requires an Anthropic deployment`;
     }
   }
-  const supported = new Set(["text", "image", "document", "tool_use", "tool_result", "thinking", "redacted_thinking"]);
+  const supported = new Set(VALIDATED_BLOCK_TYPES);
   if (options.webSearch) for (const type of WEB_SEARCH_BLOCKS) supported.add(type);
   for (const [m, message] of request.messages.entries()) {
     if (typeof message.content === "string") continue;
@@ -117,6 +119,10 @@ function reasoningEffort(request: MessagesRequest): string | null {
     return "high";
   }
   return null;
+}
+
+function validatedBlocks(blocks: MessagesRequestBlock[]): MessagesContentBlock[] {
+  return blocks.filter((block): block is MessagesContentBlock => VALIDATED_BLOCK_TYPES.has(block.type));
 }
 
 function simplify(parts: JsonMap[]): string | JsonMap[] {
@@ -204,6 +210,11 @@ export function claudeCodeSession(userId: unknown): string {
   return "";
 }
 
+export function claudeCodeCacheKey(metadata: unknown): string {
+  const session = claudeCodeSession(asRecord(metadata)?.user_id);
+  return session ? `claude-code-${session}` : "";
+}
+
 function webSearchOptions(tool: MessagesTool, choice: MessagesRequest["tool_choice"]): JsonMap {
   const rec = asRecord(tool) ?? {};
   const options: JsonMap = {};
@@ -233,7 +244,9 @@ export function messagesToChat(request: MessagesRequest): JsonMap {
       const text =
         typeof message.content === "string"
           ? message.content
-          : message.content.map((block) => (block.type === "text" ? block.text : "")).join("");
+          : validatedBlocks(message.content)
+              .map((block) => (block.type === "text" ? block.text : ""))
+              .join("");
       if (text) messages.push({ role: "system", content: text });
       continue;
     }
@@ -242,11 +255,11 @@ export function messagesToChat(request: MessagesRequest): JsonMap {
       continue;
     }
     if (message.role === "assistant") {
-      const converted = assistantMessage(message.content);
+      const converted = assistantMessage(validatedBlocks(message.content));
       if (converted) messages.push(converted);
       continue;
     }
-    messages.push(...userMessages(message.content));
+    messages.push(...userMessages(validatedBlocks(message.content)));
   }
   const body: JsonMap = { model: request.model, messages };
   if (typeof request.max_tokens === "number" && request.max_tokens > 0) body.max_tokens = request.max_tokens;
@@ -263,8 +276,8 @@ export function messagesToChat(request: MessagesRequest): JsonMap {
   if (typeof request.top_p === "number") body.top_p = request.top_p;
   if (request.stop_sequences?.length) body.stop = request.stop_sequences;
   if (request.metadata?.user_id) body.user = request.metadata.user_id;
-  const session = claudeCodeSession(request.metadata?.user_id);
-  if (session) body.prompt_cache_key = `claude-code-${session}`;
+  const cacheKey = claudeCodeCacheKey(request.metadata);
+  if (cacheKey) body.prompt_cache_key = cacheKey;
   if (request.service_tier) body.service_tier = request.service_tier;
   if (request.speed) body.speed = request.speed;
   const webTool = (request.tools ?? []).find(isWebSearchTool);

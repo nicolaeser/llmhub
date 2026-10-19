@@ -67,7 +67,7 @@ export function countTokensRoute(pool: RoutePool) {
         if (proxied.status >= 400) throw upstreamError(proxied.status, proxied.json, proxied.headers);
         return asNumber(asRecord(proxied.json)?.input_tokens, 0);
       },
-      { strategy: requestRoutingOverride(clean), pool, principal },
+      { strategy: requestRoutingOverride(clean), pool, principal, request: clean },
     );
     return NextResponse.json({ input_tokens: routed.result });
   });

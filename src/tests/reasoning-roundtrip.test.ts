@@ -5,6 +5,7 @@ import { pipeChatStream } from "@/lib/gateway/protocols/chat-stream";
 import {
   chatIncompatibility,
   chatToMessage,
+  claudeCodeCacheKey,
   claudeCodeSession,
   messagesToChat,
   MessagesStreamEncoder,
@@ -292,4 +293,6 @@ test("Claude Code sessions become a stable prompt cache key for Codex", () => {
   assert.ok(parsed.ok);
   const codex = chatToCodex(messagesToChat(parsed.data));
   assert.equal(codex.prompt_cache_key, "claude-code-s-1");
+  assert.equal(claudeCodeCacheKey(parsed.data.metadata), "claude-code-s-1");
+  assert.equal(claudeCodeCacheKey({ user_id: "plain-user" }), "");
 });
