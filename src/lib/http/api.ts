@@ -49,8 +49,12 @@ async function readCapped(req: Request, limit: number): Promise<Buffer> {
   return Buffer.concat(chunks);
 }
 
+export async function readText(req: Request, limit: number): Promise<string> {
+  return (await readCapped(req, limit)).toString("utf8");
+}
+
 export async function readJSON<T = unknown>(req: Request, limit = MAX_JSON_BYTES): Promise<T> {
-  const text = (await readCapped(req, limit)).toString("utf8");
+  const text = await readText(req, limit);
   return (text ? JSON.parse(text) : {}) as T;
 }
 

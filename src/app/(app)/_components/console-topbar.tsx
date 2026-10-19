@@ -10,6 +10,7 @@ import { useErrorToast } from "@/components/console/use-error-toast";
 import { isActionFail } from "@/lib/http/action-result";
 import { setWorkspaceAction } from "../_action";
 import { useBuildStatus } from "./build-status";
+import LiveBadge from "./live-badge";
 import { adminOnlyPath } from "./nav-data";
 import { useConsoleNav } from "./sidebar";
 
@@ -31,8 +32,6 @@ export default function ConsoleTopbar({
   const [override, setOverride] = useState<string | null>(null);
   const chosen = override !== null && override !== (workspaceOrgId ?? "") ? override : (workspaceOrgId ?? "");
   const selectedKey = chosen && companies.some((company) => company.id === chosen) ? chosen : "all";
-  const health = build?.health ?? "connecting";
-  const healthLabel = t("health.status", { status: health });
 
   function choose(key: string) {
     const next = key === "all" ? "" : key;
@@ -65,20 +64,7 @@ export default function ConsoleTopbar({
             <Menu size={16} aria-hidden />
           </Button>
         ) : null}
-        <div
-          className="flex min-w-0 items-center gap-2 text-sm text-muted"
-          role="status"
-          aria-label={healthLabel}
-          title={healthLabel}
-        >
-          <span
-            className={`h-2 w-2 shrink-0 rounded-full ${health === "ok" ? "bg-success" : health === "down" ? "bg-danger" : "bg-accent"}`}
-            aria-hidden
-          />
-          <span className={health === "down" ? "truncate text-danger" : "hidden sm:inline"}>
-            {healthLabel}
-          </span>
-        </div>
+        <LiveBadge />
         <div className="flex-1" />
         {companies.length ? (
           <Select

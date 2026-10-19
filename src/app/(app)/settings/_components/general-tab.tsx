@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { Chip, toast } from "@heroui/react";
-import { RefreshCw, Server, UserPlus } from "lucide-react";
+import { CloudDownload, RefreshCw, Server, UserPlus } from "lucide-react";
 import { useTranslations } from "next-intl";
 import IconTile from "@/components/console/icon-tile";
 import { SettingSection, SettingSwitch } from "./setting-fields";
@@ -10,6 +10,9 @@ import { useErrorToast } from "@/components/console/use-error-toast";
 import { useActionData } from "@/lib/hooks/use-action-data";
 import { isActionFail } from "@/lib/http/action-result";
 import type { GeneralSettings } from "@/types/settings";
+import type { UpdaterView } from "@/types/updates";
+import { useBuildStatus } from "../../_components/build-status";
+import UpdaterPanel from "../../_components/updater-panel";
 import { loadGeneralSettingsAction, saveGeneralSettingsAction } from "../_action";
 import SaveBar, { SettingsLead } from "./save-bar";
 import TabState from "./tab-state";
@@ -19,11 +22,19 @@ export default function GeneralTab() {
   const tSettings = useTranslations("Settings");
   const showError = useErrorToast();
   const [draft, setDraft] = useState<GeneralSettings | null>(null);
+  const [updaterOverride, setUpdaterOverride] = useState<{ view: UpdaterView | null } | null>(null);
   const [pending, start] = useTransition();
   const page = useActionData(loadGeneralSettingsAction);
   const { data: view, setData } = page;
+  const live = useBuildStatus();
 
   if (!view) return <TabState state={page} />;
+
+  const updater = live?.live ? live.live.updater : updaterOverride ? updaterOverride.view : view.updater;
+  const showUpdater = (next: UpdaterView | null) => {
+    setUpdaterOverride({ view: next });
+    live?.setUpdater(next);
+  };
 
   const settings = draft ?? view.settings;
   const disabled = !view.canManage || pending;
@@ -93,6 +104,18 @@ export default function GeneralTab() {
                 {t("updates.open")}
               </a>
             ) : null}
+          </div>
+        </div>
+      </SettingSection>
+
+      <SettingSection title={t("automatic.title")} subtitle={t("automatic.subtitle")}>
+        <div className="flex items-start gap-3">
+          <IconTile
+            icon={CloudDownload}
+            tone={updater?.connected ? (updater.available ? "warning" : "success") : "neutral"}
+          />
+          <div className="min-w-0 flex-1">
+            <UpdaterPanel updater={updater} canManage={view.canManage} detailed onView={showUpdater} />
           </div>
         </div>
       </SettingSection>
