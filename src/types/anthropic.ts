@@ -1,6 +1,7 @@
 import type { z } from "zod";
 import type {
   messagesContentBlockSchema,
+  messagesRequestBlockSchema,
   messagesRequestSchema,
   messagesToolSchema,
 } from "@/schemas/anthropic";
@@ -8,6 +9,8 @@ import type {
 export type MessagesRequest = z.infer<typeof messagesRequestSchema>;
 
 export type MessagesContentBlock = z.infer<typeof messagesContentBlockSchema>;
+
+export type MessagesRequestBlock = z.infer<typeof messagesRequestBlockSchema>;
 
 export type MessagesTool = z.infer<typeof messagesToolSchema>;
 

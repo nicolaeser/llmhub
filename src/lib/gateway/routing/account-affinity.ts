@@ -1,6 +1,7 @@
 import "server-only";
 import { createHash } from "node:crypto";
 import { asRecord, asString } from "@/lib/gateway/core";
+import { claudeCodeCacheKey } from "@/lib/gateway/protocols/messages";
 import { redisUrl } from "@/lib/jobs/connection";
 import { logger } from "@/lib/logging/logger";
 import { sharedRedis, withRedisTimeout } from "@/lib/redis/client";
@@ -30,7 +31,8 @@ function errText(err: unknown): string {
 }
 
 export function runSession(body: JsonMap | null | undefined): string {
-  const key = asString(asRecord(body)?.prompt_cache_key).trim();
+  const rec = asRecord(body);
+  const key = asString(rec?.prompt_cache_key).trim() || claudeCodeCacheKey(rec?.metadata);
   if (!key || key.length > MAX_SESSION_LENGTH) return "";
   return createHash("sha256").update(key).digest("hex").slice(0, 32);
 }

@@ -54,22 +54,22 @@ const documentBlockSchema = z.looseObject({
   cache_control: cacheControlSchema.nullish(),
 });
 
-export const NATIVE_BLOCK_TYPES = [
-  "search_result",
-  "compaction",
-  "container_upload",
-  "server_tool_use",
-  "web_search_tool_result",
-  "web_fetch_tool_result",
-  "code_execution_tool_result",
-  "bash_code_execution_tool_result",
-  "text_editor_code_execution_tool_result",
-  "tool_search_tool_result",
-  "mcp_tool_use",
-  "mcp_tool_result",
-] as const;
+export const VALIDATED_BLOCK_TYPES: ReadonlySet<string> = new Set([
+  "text",
+  "image",
+  "document",
+  "tool_use",
+  "tool_result",
+  "thinking",
+  "redacted_thinking",
+]);
 
-const nativeBlockSchemas = NATIVE_BLOCK_TYPES.map((type) => z.looseObject({ type: z.literal(type) }));
+const passthroughBlockSchema = z.looseObject({
+  type: z
+    .string()
+    .min(1)
+    .refine((type) => !VALIDATED_BLOCK_TYPES.has(type), { abort: true }),
+});
 
 const toolUseBlockSchema = z.looseObject({
   type: z.literal("tool_use"),
@@ -85,12 +85,9 @@ const toolResultBlockSchema = z.looseObject({
     .union([
       z.string(),
       z.array(
-        z.discriminatedUnion("type", [
-          textBlockSchema,
-          imageBlockSchema,
-          documentBlockSchema,
-          z.looseObject({ type: z.literal("search_result") }),
-          z.looseObject({ type: z.literal("tool_reference") }),
+        z.union([
+          z.discriminatedUnion("type", [textBlockSchema, imageBlockSchema, documentBlockSchema]),
+          passthroughBlockSchema,
         ]),
       ),
     ])
@@ -117,12 +114,13 @@ export const messagesContentBlockSchema = z.discriminatedUnion("type", [
   toolResultBlockSchema,
   thinkingBlockSchema,
   redactedThinkingBlockSchema,
-  ...nativeBlockSchemas,
 ]);
+
+export const messagesRequestBlockSchema = z.union([messagesContentBlockSchema, passthroughBlockSchema]);
 
 const messageSchema = z.looseObject({
   role: z.enum(["user", "assistant", "system"]),
-  content: z.union([z.string(), z.array(messagesContentBlockSchema)]),
+  content: z.union([z.string(), z.array(messagesRequestBlockSchema)]),
 });
 
 export const messagesToolSchema = z

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { anthropicErrorBody } from "@/lib/gateway/errors";
+import { nativeMessagesBody } from "@/lib/gateway/protocols/anthropic";
 import {
   anthropicPassthroughHeaders,
   apiKeyRequest,
@@ -171,7 +172,8 @@ test("messages schema rejects malformed requests", () => {
   const bad = [
     { model: "m", messages: [] },
     { model: "m", messages: [{ role: "user", content: [{ type: "image", source: { type: "base64" } }] }] },
-    { model: "m", messages: [{ role: "user", content: [{ type: "mystery" }] }] },
+    { model: "m", messages: [{ role: "user", content: [{ type: "text" }] }] },
+    { model: "m", messages: [{ role: "user", content: [{ text: "no type" }] }] },
     { model: "m", messages: [{ role: "user", content: "x" }], temperature: 3 },
     { model: "m", messages: [{ role: "user", content: "x" }], tools: [{ input_schema: { type: "object" } }] },
   ];
@@ -181,6 +183,8 @@ test("messages schema rejects malformed requests", () => {
   }
   const image = parseRequest(messagesRequestSchema, bad[1]);
   if (!image.ok) assert.match(image.message, /^messages\.0\.content\.0\.source\.media_type/);
+  const text = parseRequest(messagesRequestSchema, bad[2]);
+  if (!text.ok) assert.match(text.message, /^messages\.0\.content\.0\.text:/);
 });
 
 test("native-only Messages features pass the schema but block the chat fallback", () => {
@@ -564,4 +568,37 @@ test("compaction history blocks pass the schema but block the chat fallback", ()
     ],
   });
   assert.match(chatIncompatibility(request) ?? "", /^messages\.1\.content\.0\.type: content block "compaction"/);
+});
+
+test("block types the hub does not read pass the schema unchanged and block only the chat fallback", () => {
+  const body: JsonMap = {
+    model: "m",
+    max_tokens: 10,
+    messages: [
+      { role: "user", content: "start" },
+      {
+        role: "system",
+        content: [
+          { type: "text", text: "tools changed" },
+          { type: "tool_removal", tool: { type: "tool_reference", name: "old_tool" } },
+          { type: "tool_addition", tool: { type: "tool_definition", definition: { name: "new_tool", input_schema: {} } } },
+        ],
+      },
+      {
+        role: "assistant",
+        content: [
+          { type: "connector_text", text: "checking" },
+          { type: "tool_use", id: "toolu_1", name: "new_tool", input: {} },
+        ],
+      },
+      {
+        role: "user",
+        content: [{ type: "tool_result", tool_use_id: "toolu_1", content: [{ type: "tool_reference", tool_name: "new_tool" }] }],
+      },
+    ],
+  };
+  const request = parse(structuredClone(body));
+  assert.deepEqual(request.messages, body.messages);
+  assert.deepEqual(nativeMessagesBody(structuredClone(body)).messages, body.messages);
+  assert.match(chatIncompatibility(request) ?? "", /^messages\.1\.content\.1\.type: content block "tool_removal" requires an Anthropic deployment/);
 });

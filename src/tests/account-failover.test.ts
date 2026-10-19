@@ -146,6 +146,24 @@ test("a run stays on its account until that account fails", async () => {
   assert.equal(fresh.dep.provider_id, "acct-a");
 });
 
+test("a Claude Code session stays on its account through metadata.user_id", async () => {
+  const { runSession, writePin } = await import("@/lib/gateway/routing/account-affinity");
+  const request: JsonMap = {
+    model: "m",
+    metadata: { user_id: JSON.stringify({ device_id: "d", session_id: "claude-run" }) },
+    messages: [{ role: "user", content: "hi" }],
+  };
+  assert.equal(runSession(request), runSession({ prompt_cache_key: "claude-code-claude-run" }));
+  assert.equal(runSession({ metadata: { user_id: "plain-user" } }), "");
+  await writePin("codex", runSession(request), { providerId: "acct-b", handoffAt: 0 });
+  for (let i = 0; i < 3; i++) {
+    const routed = await route(async () => "ok", request);
+    assert.equal(routed.dep.provider_id, "acct-b");
+  }
+  const other = await route(async () => "ok", { ...request, metadata: { user_id: JSON.stringify({ session_id: "other-run" }) } });
+  assert.equal(other.dep.provider_id, "acct-a");
+});
+
 test("switching accounts mid-run hands the history over without the old account's encrypted reasoning", async () => {
   const { readPin, runSession, writePin } = await import("@/lib/gateway/routing/account-affinity");
   const request: JsonMap = {
