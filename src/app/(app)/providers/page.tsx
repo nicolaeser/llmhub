@@ -121,17 +121,15 @@ export default function ProvidersPage() {
         <PageLoading />
       ) : (
         <Tabs selectedKey={tab} onSelectionChange={(key) => selectTab(tabOf(key))} aria-label={t("tabsLabel")}>
-          <Tabs.ListContainer className="max-w-full overflow-x-auto">
-            <Tabs.List aria-label={t("tabsLabel")}>
-              {TABS.map(({ id, icon: Icon }) => (
-                <Tabs.Tab key={id} id={id} className="shrink-0 gap-2 whitespace-nowrap">
-                  <Icon size={14} aria-hidden />
-                  {t("tabs", { tab: id })}
-                  <Tabs.Indicator />
-                </Tabs.Tab>
-              ))}
-            </Tabs.List>
-          </Tabs.ListContainer>
+          <Tabs.List className="w-full flex-wrap" aria-label={t("tabsLabel")}>
+            {TABS.map(({ id, icon: Icon }) => (
+              <Tabs.Tab key={id} id={id} className="w-auto shrink-0 gap-2 whitespace-nowrap">
+                <Icon size={14} aria-hidden />
+                {t("tabs", { tab: id })}
+                <Tabs.Indicator />
+              </Tabs.Tab>
+            ))}
+          </Tabs.List>
 
           <Tabs.Panel id="api" className="pt-4">
             {connected ? (
