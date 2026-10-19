@@ -16,9 +16,11 @@ const REFRESH_SKEW_MS = 5 * 60_000;
 const LEASE_MS = 30_000;
 const LEASE_WAIT_MS = 10_000;
 const LEASE_POLL_MS = 250;
+const RENEW_GAP_MS = 60_000;
 const CODEX_ORIGINATOR = "llmhub";
 
 const refreshing = new Map<string, Promise<SignInSession>>();
+const renewedAt = new Map<string, number>();
 
 type LoginRow = {
   providerId: string;
@@ -105,12 +107,12 @@ async function renew(row: LoginRow, current: SignInSession, kind: SignInKind): P
   throw signInRequired();
 }
 
-async function refreshLogin(providerId: string, kind: SignInKind): Promise<SignInSession> {
+async function refreshLogin(providerId: string, kind: SignInKind, rejectedVersion: number | null = null): Promise<SignInSession> {
   const deadline = Date.now() + LEASE_WAIT_MS;
   for (;;) {
     const row = await loadLogin(providerId);
     const session = sessionOf(row);
-    if (fresh(session)) return session;
+    if (rejectedVersion === null ? fresh(session) : row.version !== rejectedVersion) return session;
     const now = new Date();
     const claimed = await prisma.providerLogin.updateMany({
       where: {
@@ -128,6 +130,21 @@ async function refreshLogin(providerId: string, kind: SignInKind): Promise<SignI
     }
     await new Promise((resolve) => setTimeout(resolve, LEASE_POLL_MS));
   }
+}
+
+export async function renewRejectedLogin(providerId: string, kind: SignInKind, now = Date.now()): Promise<boolean> {
+  const pending = refreshing.get(providerId);
+  if (pending) return pending.then(() => true, () => false);
+  if (now - (renewedAt.get(providerId) ?? 0) < RENEW_GAP_MS) return true;
+  renewedAt.set(providerId, now);
+  const started = loadLogin(providerId)
+    .then((row) => refreshLogin(providerId, kind, row.version))
+    .finally(() => refreshing.delete(providerId));
+  refreshing.set(providerId, started);
+  return started.then(
+    () => true,
+    () => false,
+  );
 }
 
 async function activeSession(providerId: string, kind: SignInKind): Promise<SignInSession> {

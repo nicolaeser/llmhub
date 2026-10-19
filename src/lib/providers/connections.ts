@@ -19,6 +19,7 @@ import { loginData } from "@/lib/gateway/upstreams/credentials";
 import { baseName, vendorOf } from "@/lib/gateway/catalog/model-catalog";
 import { refreshProviderModels } from "@/lib/gateway/upstreams/discovery";
 import { discoveredOf } from "@/lib/gateway/upstreams/provider-prices";
+import { withResetDetails } from "@/lib/gateway/upstreams/reset-redeem";
 import { subscriptionLimits } from "@/lib/gateway/upstreams/subscription-limits";
 import {
   completeAuthorization,
@@ -216,7 +217,8 @@ export async function loadProviderLimits(input: { id: string; refresh?: boolean 
     select: { id: true, kind: true, apiKey: true },
   });
   if (!row) throw new Error("NOT_FOUND");
-  return { limits: await subscriptionLimits(row, { force: input.refresh === true }) };
+  const refresh = input.refresh === true;
+  return { limits: await withResetDetails(row, await subscriptionLimits(row, { force: refresh }), { refresh }) };
 }
 
 const LIMIT_ERRORS = new Set(["SIGN_IN_EXPIRED", "UPSTREAM_AUTH", "UPSTREAM_FAILED"]);
@@ -233,7 +235,9 @@ export async function loadSubscriptionLimits(input: { refresh?: boolean } = {}):
   const items = await Promise.all(
     rows.map(async (row): Promise<AccountLimits> => {
       try {
-        return { id: row.id, limits: await subscriptionLimits(row, { force: input.refresh === true }), error: "" };
+        const refresh = input.refresh === true;
+        const limits = await subscriptionLimits(row, { force: refresh });
+        return { id: row.id, limits: await withResetDetails(row, limits, { refresh }), error: "" };
       } catch (error) {
         const code = error instanceof Error ? error.message : "";
         return { id: row.id, limits: null, error: LIMIT_ERRORS.has(code) ? code : "UPSTREAM_FAILED" };

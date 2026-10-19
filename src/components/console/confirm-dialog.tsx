@@ -11,6 +11,8 @@ export default function ConfirmDialog({
   pending,
   onConfirm,
   state,
+  status = "danger",
+  focusCancel = false,
   children,
 }: {
   title: string;
@@ -20,6 +22,8 @@ export default function ConfirmDialog({
   pending?: boolean;
   onConfirm: () => void;
   state?: ReturnType<typeof useOverlayState>;
+  status?: "danger" | "warning";
+  focusCancel?: boolean;
   children?: ReactNode;
 }) {
   return (
@@ -29,7 +33,7 @@ export default function ConfirmDialog({
         <AlertDialog.Container>
           <AlertDialog.Dialog className="max-w-md">
             <AlertDialog.Header>
-              <AlertDialog.Icon status="danger" />
+              <AlertDialog.Icon status={status} />
               <AlertDialog.Heading>{title}</AlertDialog.Heading>
             </AlertDialog.Header>
             {description ? (
@@ -38,10 +42,15 @@ export default function ConfirmDialog({
               </AlertDialog.Body>
             ) : null}
             <AlertDialog.Footer>
-              <Button slot="close" variant="tertiary">
+              <Button slot="close" variant="tertiary" autoFocus={focusCancel}>
                 {cancelLabel}
               </Button>
-              <Button slot="close" variant="danger" isPending={pending} onPress={onConfirm}>
+              <Button
+                slot="close"
+                variant={status === "danger" ? "danger" : "primary"}
+                isPending={pending}
+                onPress={onConfirm}
+              >
                 {confirmLabel}
               </Button>
             </AlertDialog.Footer>

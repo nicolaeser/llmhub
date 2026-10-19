@@ -269,9 +269,16 @@ function isInternal(baseUrl: string): boolean {
   return match[1]!.toLowerCase() === "http" || PRIVATE_HOST.test(match[2]!);
 }
 
-export function importOpenApi(root: JsonMap): McpOpenApiImport {
+function resolvedBase(baseUrl: string, documentUrl: string): string {
+  const relative = !baseUrl || baseUrl.startsWith("/") || baseUrl.startsWith(".");
+  if (!documentUrl || !relative || !URL.canParse(baseUrl || "/", documentUrl)) return baseUrl;
+  const url = new URL(baseUrl || "/", documentUrl);
+  return `${url.origin}${url.pathname}`.replace(/\/+$/, "");
+}
+
+export function importOpenApi(root: JsonMap, documentUrl = ""): McpOpenApiImport {
   const info = asMap(root.info) ?? {};
-  const baseUrl = baseUrlOf(root);
+  const baseUrl = resolvedBase(baseUrlOf(root), documentUrl);
   const server: McpDraftServer = {
     name: clip(text(info.title) || "API", 48),
     description: clip(text(info.description).split(/\n\s*\n/)[0] ?? "", 500),

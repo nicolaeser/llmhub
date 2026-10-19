@@ -13,6 +13,7 @@ import { isSignInKind, PROVIDER_CATALOG, reportsLimits } from "@/lib/gateway/ups
 import TimeZonePicker from "@/components/console/time-zone-picker";
 import { setDashboardTimeZone, useDashboardTimeZone } from "@/lib/hooks/use-dashboard-time-zone";
 import { isActionFail } from "@/lib/http/action-result";
+import { autoResetPolicy, isResetKind } from "@/lib/gateway/routing/auto-reset-policy";
 import type {
   AccountLimits,
   AccountRouting,
@@ -21,7 +22,9 @@ import type {
   ProviderListActions,
   ProviderView,
   SignInKind,
+  SubscriptionLimits,
 } from "@/types/providers";
+import type { AutoResetPolicies } from "@/types/resets";
 import {
   loadAccountRoutingAction,
   loadAntigravityConfigAction,
@@ -33,6 +36,7 @@ import AccountCard from "./account-card";
 import AccountRoutingPicker from "./account-routing-picker";
 import { ACCOUNT_STATE_COLOR, accountState, recoveryAt } from "./account-status";
 import AntigravitySetup from "./antigravity-setup";
+import AutoResetSettings from "./auto-reset-settings";
 import AuthFilesDialog from "./auth-files-dialog";
 import SubscriptionAddWizard from "./subscription-add-wizard";
 import { kindIcon } from "./kind-icons";
@@ -63,6 +67,8 @@ export default function SubscriptionAccounts({
   const timeZone = useDashboardTimeZone();
   const [limits, setLimits] = useState<Record<string, AccountLimits>>({});
   const [routing, setRouting] = useState<AccountRouting>({});
+  const [autoReset, setAutoReset] = useState<AutoResetPolicies>({});
+  const [canManage, setCanManage] = useState(false);
   const [antigravityReady, setAntigravityReady] = useState<boolean | null>(null);
   const [access, setAccess] = useState<ProviderView | null>(null);
   const [accessKey, setAccessKey] = useState(0);
@@ -84,7 +90,10 @@ export default function SubscriptionAccounts({
       if (active && !isActionFail(res)) storeLimits(res.items);
     });
     loadAccountRoutingAction().then((res) => {
-      if (active && !isActionFail(res)) setRouting(res.routing);
+      if (!active || isActionFail(res)) return;
+      setRouting(res.routing);
+      setAutoReset(res.autoReset);
+      setCanManage(res.canManage);
     });
     loadAntigravityConfigAction().then((res) => {
       if (active && !isActionFail(res)) setAntigravityReady(res.configured);
@@ -93,6 +102,10 @@ export default function SubscriptionAccounts({
       active = false;
     };
   }, []);
+
+  function storeAccountLimits(id: string, next: SubscriptionLimits | null) {
+    if (next) storeLimits([{ id, limits: next, error: "" }]);
+  }
 
   function refreshAll() {
     startRefreshAll(async () => {
@@ -279,6 +292,14 @@ export default function SubscriptionAccounts({
                 accounts={items.length}
                 onSaved={setRouting}
               />
+              {isResetKind(spec.kind) ? (
+                <AutoResetSettings
+                  kind={spec.kind}
+                  policy={autoReset[spec.kind] ?? autoResetPolicy({})}
+                  canManage={canManage}
+                  onSaved={setAutoReset}
+                />
+              ) : null}
               <div className="grid gap-3 lg:grid-cols-2 2xl:grid-cols-3">
                 {items.map((row) => (
                   <AccountCard
@@ -288,7 +309,9 @@ export default function SubscriptionAccounts({
                     entry={limits[row.id]}
                     timeZone={timeZone}
                     refreshing={refreshingId === row.id}
+                    canManage={canManage}
                     onRefresh={refreshOne}
+                    onLimits={storeAccountLimits}
                     onEdit={(provider) => openForm(spec, provider)}
                     onImport={actions.openImport}
                     onAccess={openAccess}

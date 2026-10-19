@@ -7,11 +7,19 @@ import { GateError } from "@/lib/gateway/errors";
 import { outputScreen, type OutputScreen } from "@/lib/gateway/safety/guardrails";
 import { requestRoutingOverride, serviceModeHeaders, variantRoutes } from "@/lib/gateway/dispatch/service-mode";
 import { accessOf } from "@/lib/gateway/routing/account-access";
+import { runSession, writePin } from "@/lib/gateway/routing/account-affinity";
+import {
+  dropAccountReasoning,
+  historyLength,
+  nextPin,
+  rejectsForeignReasoning,
+} from "@/lib/gateway/routing/account-handoff";
 import { acquireGroup, loadGroup, markFailure, markSuccess } from "@/lib/gateway/routing/runtime";
-import { speaksAnthropic } from "@/lib/gateway/upstreams/provider-kinds";
+import { isSignInKind, speaksAnthropic } from "@/lib/gateway/upstreams/provider-kinds";
 import { AntigravitySseTranslator, withProject } from "@/lib/gateway/upstreams/antigravity";
 import { CodexSseTranslator } from "@/lib/gateway/upstreams/codex";
-import { deploymentAuth } from "@/lib/gateway/upstreams/credentials";
+import { deploymentAuth, renewRejectedLogin } from "@/lib/gateway/upstreams/credentials";
+import { autoRedeemIfDue } from "@/lib/gateway/upstreams/reset-redeem";
 import { plainModel } from "@/lib/gateway/catalog/model-alias";
 import { inPool, outsidePool, routeOf } from "@/lib/gateway/routing/route-pool";
 import { KEEPALIVE_MS, SSE_HEADERS, SSE_KEEPALIVE, sseData } from "@/lib/gateway/protocols/sse";
@@ -24,7 +32,7 @@ import {
   upstreamError,
   upstreamHeaders,
 } from "@/lib/gateway/dispatch/upstream";
-import { asRecord, isRouterError, newId, routerGateError, stringifyContent } from "@/lib/gateway/core";
+import { asRecord, isRouterError, isUnavailableError, newId, routerGateError, stringifyContent } from "@/lib/gateway/core";
 import { costFilter, costRejected } from "@/lib/gateway/billing/cost-cap";
 import { ChatStreamTranscript } from "@/lib/gateway/request-logs/log-content";
 import { estimateTokens, requestText } from "@/lib/gateway/billing/tokens";
@@ -32,7 +40,8 @@ import { parseJsonOrNull, readTextOr } from "@/lib/utils/json";
 import { cancelQuietly, DeadlineReader } from "@/lib/utils/streams";
 import type { ChatSseTranslator, JsonMap, Principal, RequestTrace } from "@/types/gateway";
 import type { CostFilter, TokenUsage } from "@/types/billing";
-import type { ResolvedModelGroup, ResolvedDeployment, RoutePool } from "@/types/routing";
+import type { AccountPin, ResolvedModelGroup, ResolvedDeployment, RoutePool, RunRouting } from "@/types/routing";
+import type { SignInKind } from "@/types/providers";
 import type { OutputGuard } from "@/types/guardrails";
 import type { RouteLimits } from "@/types/model-templates";
 import type { ResponseCacheUsage } from "@/types/cache";
@@ -127,6 +136,38 @@ function fallbackable(err: unknown): boolean {
   return true;
 }
 
+function signInAccount(dep: ResolvedDeployment): string | null {
+  return dep.provider && isSignInKind(dep.provider.kind) ? dep.provider.id : null;
+}
+
+function failureCode(err: unknown): { status: number; code: string } {
+  const rec = err instanceof Error ? (err as Error & { status?: unknown; code?: unknown }) : null;
+  return {
+    status: typeof rec?.status === "number" ? rec.status : 0,
+    code: typeof rec?.code === "string" ? rec.code : "",
+  };
+}
+
+function unauthorized(err: unknown): boolean {
+  return failureCode(err).status === 401;
+}
+
+function accountUnusable(err: unknown): boolean {
+  const { status, code } = failureCode(err);
+  return status === 429 || status === 401 || code === "no_provider_key";
+}
+
+function accountBudget(deployments: ResolvedDeployment[]): number {
+  return new Set(deployments.flatMap((dep) => signInAccount(dep) ?? [])).size;
+}
+
+function prepareHandoff(dep: ResolvedDeployment, pinned: AccountPin | null, switched: boolean, request: JsonMap | null): void {
+  if (!request || dep.kind !== "codex") return;
+  const account = signInAccount(dep);
+  if (switched || (pinned && pinned.providerId !== account)) dropAccountReasoning(request);
+  else if (pinned && pinned.handoffAt > 0) dropAccountReasoning(request, pinned.handoffAt);
+}
+
 export async function withDeployment<T>(
   aliases: string[],
   limits: RouteLimits,
@@ -147,8 +188,14 @@ export async function withDeployment<T>(
   release: () => void;
 }> {
   let last: unknown = new GateError(404, "model_not_found", "no deployment for model", { param: "model" });
+  let upstreamFailure: unknown = null;
   const surface = opts?.pool ?? opts?.principal?.pool ?? "api";
   const access = accessOf(opts?.principal);
+  const request = opts?.request ?? null;
+  const run: RunRouting = { session: runSession(request), tried: new Set() };
+  const renewed = new Set<string>();
+  let reasoningDropped = false;
+  let failedAccount: string | null = null;
   const queue = aliases.map((entry) => {
     const route = routeOf(entry, surface);
     return { alias: route.alias, root: route.alias, pool: route.pool };
@@ -168,14 +215,26 @@ export async function withDeployment<T>(
     const reachable = !group.mapped.length || group.mapped.some(routable) || Boolean(group.overflow_group);
     if (!reachable) last = pooled.length && variants.error ? variants.error : outsidePool(pool, surface);
     const attempts = reachable ? Math.max(0, group.num_retries) + 1 : 0;
+    const switchBudget = accountBudget(pooled.filter(routable));
+    let switches = 0;
     let stopAlias = false;
     for (let i = 0; i < attempts; i++) {
       try {
-        const acquired = await acquireGroup(group, limits[root], routable, opts?.strategy, opts?.cost, access);
+        const acquired = await acquireGroup(group, limits[root], routable, opts?.strategy, opts?.cost, access, run);
+        const account = signInAccount(acquired.dep);
+        const switched = account !== null && failedAccount !== null && failedAccount !== account;
+        prepareHandoff(acquired.dep, acquired.pinned, switched, request);
         try {
           const started = Date.now();
           const result = await fn(acquired.dep, group);
           markSuccess(acquired.dep, Date.now() - started);
+          if (account && run.session) {
+            void writePin(
+              acquired.dep.provider!.kind,
+              run.session,
+              nextPin(account, acquired.pinned, switched, historyLength(request)),
+            );
+          }
           if (!opts?.deferRelease) {
             acquired.release();
             return { result, dep: acquired.dep, alias, group, release: () => {} };
@@ -189,8 +248,31 @@ export async function withDeployment<T>(
           };
         } catch (err) {
           acquired.release();
+          if (account && unauthorized(err) && !renewed.has(account)) {
+            renewed.add(account);
+            if (await renewRejectedLogin(account, acquired.dep.provider!.kind as SignInKind)) {
+              i--;
+              continue;
+            }
+          }
+          if (!reasoningDropped && acquired.dep.kind === "codex" && rejectsForeignReasoning(err) && dropAccountReasoning(request)) {
+            reasoningDropped = true;
+            i--;
+            continue;
+          }
           if (retryable(err)) markFailure(acquired.dep, err instanceof GateError ? err.retryAt : null);
           last = err;
+          if (!isRouterError(err)) upstreamFailure = err;
+          if (account && failureCode(err).status === 429) void autoRedeemIfDue(account);
+          if (account && accountUnusable(err)) {
+            run.tried.add(acquired.dep.id);
+            failedAccount = account;
+            if (switches < switchBudget) {
+              switches++;
+              i--;
+            }
+            continue;
+          }
           if (!retryable(err)) {
             stopAlias = true;
             if (!fallbackable(err)) throw err;
@@ -214,8 +296,9 @@ export async function withDeployment<T>(
       queue.push({ alias: group.overflow_group, root, pool });
     }
   }
-  await alertUpstreamFailure(last);
-  throw last;
+  const failure = upstreamFailure && isUnavailableError(last) ? upstreamFailure : last;
+  await alertUpstreamFailure(failure);
+  throw failure;
 }
 
 function screenMessage(message: JsonMap | null, apply: (text: string) => string): void {

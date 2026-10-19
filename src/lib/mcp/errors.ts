@@ -46,6 +46,16 @@ export class McpError extends Error {
   }
 }
 
+export class McpSourceError extends Error {
+  constructor(
+    code: string,
+    readonly pointer: string,
+  ) {
+    super(code);
+    this.name = "McpSourceError";
+  }
+}
+
 export function mcpErrorCode(err: unknown): McpErrorCode {
   if (err instanceof McpError) return err.code;
   if (err instanceof Error && (err.name === "TimeoutError" || err.name === "AbortError")) return "MCP_TIMEOUT";

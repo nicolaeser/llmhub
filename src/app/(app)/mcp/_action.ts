@@ -2,7 +2,7 @@
 
 import { runAction } from "@/lib/http/action-result";
 import { ensureMcpRoles, saveMcpInstallation, saveMcpPermissions, setMcpTemplate } from "@/lib/mcp/catalog";
-import { draftMcpServer, setBuilderModel } from "@/lib/mcp/builder";
+import { setBuilderModel } from "@/lib/mcp/builder";
 import {
   createHostedMcpServer,
   createMcpServer,
@@ -65,10 +65,6 @@ export async function saveMcpAssignmentsAction(...args: Parameters<typeof saveMc
 
 export async function setBuilderModelAction(model: string) {
   return runAction(() => setBuilderModel(model));
-}
-
-export async function draftMcpServerAction(input: unknown) {
-  return runAction(() => draftMcpServer(input));
 }
 
 export async function createHostedMcpServerAction(input: unknown) {

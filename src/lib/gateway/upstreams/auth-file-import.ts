@@ -1,11 +1,14 @@
 import "server-only";
 import { asNumber, asRecord, asString } from "@/lib/gateway/core";
 import { antigravityClientSecret } from "@/lib/gateway/upstreams/antigravity-config";
+import { CODEX_USAGE_URL } from "@/lib/gateway/upstreams/codex";
+import { signInHeaders } from "@/lib/gateway/upstreams/credentials";
 import {
   antigravityAccount,
   antigravitySession,
-  claudeProfilePlan,
+  claudeProfile,
   claudeSession,
+  googleAccess,
   googleEmail,
   jwtClaims,
   openaiSession,
@@ -17,6 +20,8 @@ import type { JsonMap } from "@/types/gateway";
 import type { AuthFileAccount, SignInKind, SignInSession } from "@/types/providers";
 
 const REFRESH_SKEW_MS = 5 * 60_000;
+const PROBE_TIMEOUT_MS = 15_000;
+const REJECTED_STATUS = 401;
 const MAX_NESTING = 3;
 const MILLISECOND_EPOCH = 1e12;
 
@@ -69,10 +74,63 @@ function collectEntries(value: unknown, depth: number): unknown[] {
   return nested.length ? nested : [value];
 }
 
+function pieceEnd(text: string, start: number, implicit: boolean): { end: number; closers: string } {
+  const open: string[] = implicit ? ["}"] : [];
+  let inString = false;
+  let escaped = false;
+  for (let index = start; index < text.length; index++) {
+    const char = text[index]!;
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (char === "\\") escaped = true;
+      else if (char === '"') inString = false;
+      continue;
+    }
+    if (char === '"') inString = true;
+    else if (char === "{") open.push("}");
+    else if (char === "[") open.push("]");
+    else if (char === "}" || char === "]") {
+      if (open.pop() !== char || !open.length) return { end: index + 1, closers: "" };
+    }
+  }
+  return { end: text.length, closers: open.reverse().join("") };
+}
+
+type JsonPiece = { text: string; repaired: boolean };
+
+function jsonPieces(text: string): JsonPiece[] | null {
+  const pieces: JsonPiece[] = [];
+  let index = 0;
+  while (index < text.length) {
+    const char = text[index]!;
+    if (char === "," || /\s/.test(char)) {
+      index += 1;
+      continue;
+    }
+    const implicit = char === '"';
+    if (!implicit && char !== "{" && char !== "[") return null;
+    const { end, closers } = pieceEnd(text, index, implicit);
+    pieces.push({ text: `${implicit ? "{" : ""}${text.slice(index, end)}${closers}`, repaired: implicit || closers !== "" });
+    index = end;
+  }
+  return pieces;
+}
+
+function authFileValues(content: string): unknown[] {
+  const text = content.replace(/^\uFEFF/, "").trim();
+  if (!text) return [];
+  const whole = parseJsonOrNull(text);
+  if (whole !== null) return [whole];
+  return (jsonPieces(text) ?? []).map((piece) => {
+    const value = parseJsonOrNull(piece.text);
+    return piece.repaired && !(value && typeof value === "object" && Object.keys(value).length) ? null : value;
+  });
+}
+
 export function authFileEntries(content: string): unknown[] {
-  const parsed = parseJsonOrNull(content);
-  if (parsed === null || typeof parsed !== "object") throw new Error("AUTH_FILE_INVALID");
-  const entries = collectEntries(parsed, 0);
+  const values = authFileValues(content);
+  if (!values.some((value) => value !== null && typeof value === "object")) throw new Error("AUTH_FILE_INVALID");
+  const entries = values.flatMap((value) => (value !== null && typeof value === "object" ? collectEntries(value, 0) : [null]));
   if (!entries.length) throw new Error("AUTH_FILE_INVALID");
   return entries;
 }
@@ -178,6 +236,41 @@ async function renewed(kind: SignInKind, session: SignInSession, now: number): P
   throw new Error("UPSTREAM_FAILED");
 }
 
+async function codexUsageStatus(session: SignInSession): Promise<number> {
+  try {
+    const res = await fetch(CODEX_USAGE_URL, {
+      headers: {
+        ...signInHeaders("codex", session.tokens),
+        Authorization: `Bearer ${session.tokens.access}`,
+        Accept: "application/json",
+      },
+      signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
+      redirect: "error",
+    });
+    return res.status;
+  } catch {
+    return 0;
+  }
+}
+
+async function accessCheck(kind: SignInKind, session: SignInSession): Promise<{ status: number; plan: string }> {
+  if (kind === "codex") return { status: await codexUsageStatus(session), plan: "" };
+  if (kind === "claude") return claudeProfile(session.tokens.access);
+  if (kind === "antigravity") return { status: await googleAccess(session.tokens.access), plan: "" };
+  return { status: 0, plan: "" };
+}
+
+async function acceptedSession(kind: SignInKind, session: SignInSession, renewedNow: boolean): Promise<SignInSession> {
+  const first = await accessCheck(kind, session);
+  if (first.status !== REJECTED_STATUS) return first.plan && !session.plan ? { ...session, plan: first.plan } : session;
+  if (renewedNow) throw new Error("AUTH_FILE_REVOKED");
+  const outcome = await refreshSession(kind, session);
+  if (!outcome.ok) throw new Error(outcome.fatal ? "AUTH_FILE_REVOKED" : "UPSTREAM_FAILED");
+  const second = await accessCheck(kind, outcome.session);
+  if (second.status === REJECTED_STATUS) throw new Error("AUTH_FILE_REVOKED");
+  return second.plan && !outcome.session.plan ? { ...outcome.session, plan: second.plan } : outcome.session;
+}
+
 async function antigravityDetails(session: SignInSession): Promise<{ project: string; plan: string }> {
   const project = session.tokens.accountId;
   if (!project) return antigravityAccount(session.tokens.access);
@@ -200,9 +293,9 @@ async function withAntigravityDetails(session: SignInSession): Promise<SignInSes
 export async function freshAuthFileSession(account: AuthFileAccount, now = Date.now()): Promise<SignInSession> {
   const { kind } = account;
   if (kind === "antigravity" && !(await antigravityClientSecret())) throw new Error("ANTIGRAVITY_NOT_CONFIGURED");
-  let session = account.session;
-  if (session.expiresAt - now <= REFRESH_SKEW_MS) session = await renewed(kind, session, now);
-  if (kind === "claude" && !session.plan) session = { ...session, plan: await claudeProfilePlan(session.tokens.access) };
+  const stored = account.session;
+  const current = stored.expiresAt - now <= REFRESH_SKEW_MS ? await renewed(kind, stored, now) : stored;
+  let session = await acceptedSession(kind, current, current !== stored);
   if (kind === "antigravity") session = await withAntigravityDetails(session);
   return session;
 }

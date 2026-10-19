@@ -29,7 +29,7 @@ export const PROVIDER_CATALOG: ProviderKindSpec[] = [
   {
     kind: "antigravity",
     name: "Google subscription (Antigravity)",
-    default_base_url: "https://cloudcode-pa.googleapis.com",
+    default_base_url: "https://daily-cloudcode-pa.googleapis.com",
     auth: "sign_in",
   },
 ];

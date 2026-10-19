@@ -1,6 +1,7 @@
 import "server-only";
 import prisma from "@/lib/db/prisma";
 import { accountAllowed } from "@/lib/gateway/routing/account-access";
+import { readPin } from "@/lib/gateway/routing/account-affinity";
 import { accountPolicies } from "@/lib/gateway/routing/account-routing";
 import { isSignInKind, PROVIDER_CATALOG, reportsLimits } from "@/lib/gateway/upstreams/provider-kinds";
 import {
@@ -32,7 +33,15 @@ import { costRejection } from "@/lib/gateway/billing/cost-cap";
 import { coolingDown, recordFailure, recordSuccess } from "@/lib/gateway/routing/provider-health";
 import { attachModelFacts } from "@/lib/gateway/routing/model-facts";
 import type { CostFilter } from "@/types/billing";
-import type { DeploymentRow, ResolvedModelGroup, ResolvedDeployment, Deployment, QuotaScores } from "@/types/routing";
+import type {
+  AccountPin,
+  DeploymentRow,
+  ResolvedModelGroup,
+  ResolvedDeployment,
+  Deployment,
+  QuotaScores,
+  RunRouting,
+} from "@/types/routing";
 import type { AccountAccess } from "@/types/providers";
 import type { DeploymentRule, RoutePolicy } from "@/types/model-templates";
 import { money } from "@/lib/utils/money";
@@ -224,6 +233,30 @@ function affordable(
   return fitting;
 }
 
+function untried(items: ResolvedDeployment[], run: RunRouting | null): ResolvedDeployment[] {
+  if (!run?.tried.size) return items;
+  return items.filter((dep) => !run.tried.has(dep.id));
+}
+
+async function runPins(items: ResolvedDeployment[], session: string): Promise<Map<string, AccountPin>> {
+  const kinds = [...new Set(items.flatMap((dep) => (signInProvider(dep) ? [dep.provider!.kind] : [])))];
+  const found = new Map<string, AccountPin>();
+  if (!session) return found;
+  for (const kind of kinds) {
+    const pin = await readPin(kind, session);
+    if (pin) found.set(kind, pin);
+  }
+  return found;
+}
+
+function signInProvider(dep: ResolvedDeployment): boolean {
+  return Boolean(dep.provider && isSignInKind(dep.provider.kind));
+}
+
+function pinnedChoice(items: ResolvedDeployment[], pins: Map<string, AccountPin>): ResolvedDeployment[] {
+  return items.filter((dep) => signInProvider(dep) && pins.get(dep.provider!.kind)?.providerId === dep.provider!.id);
+}
+
 export async function acquireGroup(
   group: ResolvedModelGroup,
   rules: DeploymentRule[] | undefined,
@@ -231,27 +264,31 @@ export async function acquireGroup(
   strategy = "",
   cost?: CostFilter,
   access: AccountAccess | null = null,
-): Promise<{ dep: ResolvedDeployment; release: () => void; overflow: boolean }> {
+  run: RunRouting | null = null,
+): Promise<{ dep: ResolvedDeployment; release: () => void; overflow: boolean; pinned: AccountPin | null }> {
   const permitted = permittedDeployments(group.mapped, rules).filter(serves);
   const active = permitted.filter((dep) => dep.provider?.enabled !== false);
   const assigned = active.filter((dep) => accountAllowed(dep.provider, access));
-  const ready = await healthy(assigned);
+  const ready = untried(await healthy(assigned), run);
   if (!ready.length) {
     if (group.overflow_group && group.overflow_group !== group.alias) {
       const overflow = await loadGroup(group.overflow_group);
-      const acquired = await acquireGroup(overflow, rules, serves, strategy, cost, access);
+      const acquired = await acquireGroup(overflow, rules, serves, strategy, cost, access, run);
       return { ...acquired, overflow: true };
     }
     if (permitted.length && !active.length) throw ERR_ALL_PAUSED;
     throw active.length && !assigned.length ? ERR_NOT_ASSIGNED : ERR_NO_HEALTHY;
   }
   const quota = await withinQuota(affordable(group, ready, cost));
-  const candidates = await byAccountPolicy(quota.items, quota.scores);
+  const pins = await runPins(quota.items, run?.session ?? "");
+  const sticky = pinnedChoice(quota.items, pins);
+  const candidates = sticky.length ? sticky : await byAccountPolicy(quota.items, quota.scores);
   const dep = pick(candidates, strategy || group.strategy, quota.scores);
   inflight.set(dep.id, (inflight.get(dep.id) ?? 0) + 1);
   return {
     dep,
     overflow: false,
+    pinned: signInProvider(dep) ? (pins.get(dep.provider!.kind) ?? null) : null,
     release: () => {
       inflight.set(dep.id, Math.max(0, (inflight.get(dep.id) ?? 1) - 1));
     },
