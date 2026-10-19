@@ -135,21 +135,19 @@ export default function LogsPage() {
         aria-label={t("title")}
         className="mb-4 max-w-full"
       >
-        <Tabs.ListContainer className="max-w-full overflow-x-auto">
-          <Tabs.List className="min-w-0" aria-label={t("title")}>
-            <Tabs.Tab id="requests" className="w-auto shrink-0 whitespace-nowrap">
-              {t("tabs.requests")}
+        <Tabs.List className="w-full flex-wrap" aria-label={t("title")}>
+          <Tabs.Tab id="requests" className="w-auto whitespace-nowrap">
+            {t("tabs.requests")}
+          </Tabs.Tab>
+          <Tabs.Tab id="spend" className="w-auto whitespace-nowrap">
+            {t("tabs.spend")}
+          </Tabs.Tab>
+          {logs.canAudit ? (
+            <Tabs.Tab id="audit" className="w-auto whitespace-nowrap">
+              {t("tabs.audit")}
             </Tabs.Tab>
-            <Tabs.Tab id="spend" className="w-auto shrink-0 whitespace-nowrap">
-              {t("tabs.spend")}
-            </Tabs.Tab>
-            {logs.canAudit ? (
-              <Tabs.Tab id="audit" className="w-auto shrink-0 whitespace-nowrap">
-                {t("tabs.audit")}
-              </Tabs.Tab>
-            ) : null}
-          </Tabs.List>
-        </Tabs.ListContainer>
+          ) : null}
+        </Tabs.List>
       </Tabs>
 
       <LoadError state={logsState} className="mb-4" />

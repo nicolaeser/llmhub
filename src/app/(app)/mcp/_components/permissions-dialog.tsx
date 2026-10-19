@@ -299,16 +299,14 @@ export default function PermissionsDialog({
         }}
         aria-label={t("permissions.tabsLabel")}
       >
-        <Tabs.ListContainer className="w-full min-w-0 sm:w-fit">
-          <Tabs.List aria-label={t("permissions.tabsLabel")}>
-            {TABS.map((id) => (
-              <Tabs.Tab key={id} id={id} className="w-auto whitespace-nowrap">
-                {t("permissions.tabs", { tab: id })}
-                <Tabs.Indicator />
-              </Tabs.Tab>
-            ))}
-          </Tabs.List>
-        </Tabs.ListContainer>
+        <Tabs.List className="w-full flex-wrap" aria-label={t("permissions.tabsLabel")}>
+          {TABS.map((id) => (
+            <Tabs.Tab key={id} id={id} className="w-auto whitespace-nowrap">
+              {t("permissions.tabs", { tab: id })}
+              <Tabs.Indicator />
+            </Tabs.Tab>
+          ))}
+        </Tabs.List>
 
         <Tabs.Panel id="roles" className="space-y-5 pt-4">
           <div className="flex flex-wrap gap-2" role="group" aria-label={t("permissions.rolesLabel")}>
