@@ -89,11 +89,56 @@ export type McpOpenApiImport = {
   operations: number;
 };
 
+export type McpDocsAuthType = "none" | "bearer" | "basic" | "header" | "query";
+
+export type McpDocsAuth = {
+  type: McpDocsAuthType;
+  name: string;
+  secret: string;
+};
+
+export type McpDocsLink = {
+  url: string;
+  internal: boolean;
+  auth: McpDocsAuthType;
+  name: string;
+  secret: string;
+};
+
+export type McpDocsLinkRow = McpDocsLink & { key: string };
+
+export type McpDocsFileRow = { key: string; file: File };
+
+export type McpLinkedDocument = {
+  url: string;
+  contentType: string;
+  bytes: Uint8Array;
+};
+
+export type McpBuilderUpload = {
+  name: string;
+  type: string;
+  bytes: Uint8Array;
+};
+
+export type McpDocsSourceKind = "link" | "text" | "file";
+
+export type McpDocsSourceRef = {
+  kind: McpDocsSourceKind;
+  name: string;
+};
+
+export type McpDocsSource =
+  | { ref: McpDocsSourceRef; text: string; link: string }
+  | { ref: McpDocsSourceRef; part: JsonMap };
+
 export type McpDraft = McpDraftServer & {
   tools: HostedTool[];
   included: string[];
   source: "openapi" | "model";
   operations: number;
+  importedFrom: McpDocsSourceRef | null;
+  unused: McpDocsSourceRef[];
 };
 
 export type McpBuilderModel = {

@@ -24,26 +24,40 @@ import {
   type useOverlayState,
 } from "@heroui/react";
 import { SearchX, Sparkles } from "lucide-react";
-import { useTranslations } from "next-intl";
+import { useFormatter, useTranslations } from "next-intl";
 import EmptyState from "@/components/console/empty-state";
 import { useErrorToast } from "@/components/console/use-error-toast";
 import { isActionFail } from "@/lib/http/action-result";
-import { MAX_BUILDER_DOCS, MAX_HOSTED_TOOLS, MCP_ACTIONS, MCP_BUILDER_TEMPLATES, MCP_ROLE_KEYS } from "@/schemas/mcp";
+import { MAX_HOSTED_TOOLS, MCP_ACTIONS, MCP_BUILDER_TEMPLATES, MCP_ROLE_KEYS } from "@/schemas/mcp";
 import type {
   HostedTool,
   McpAssignmentView,
   McpBuilderModel,
   McpBuilderTemplate,
+  McpDocsFileRow,
+  McpDocsLinkRow,
+  McpDocsSourceRef,
   McpDraft,
   McpServerView,
   McpToolAction,
 } from "@/types/mcp";
-import { createHostedMcpServerAction, draftMcpServerAction, setBuilderModelAction } from "../_action";
+import { createHostedMcpServerAction, setBuilderModelAction } from "../_action";
 import BuilderAccess from "./builder-access";
+import BuilderSources, { sourcesReady } from "./builder-sources";
 
 const STEPS = ["brief", "review", "access"] as const;
 const SEARCH_FROM = 8;
 type StepId = (typeof STEPS)[number];
+
+function problemOf(body: unknown): { code: string; pointer: string } {
+  const record = body && typeof body === "object" ? (body as { code?: unknown; errors?: unknown }) : {};
+  const code = typeof record.code === "string" && record.code ? record.code : "REQUEST_FAILED";
+  const first = Array.isArray(record.errors) ? (record.errors[0] as { pointer?: unknown } | undefined) : undefined;
+  return {
+    code: code === "PAYLOAD_TOO_LARGE" ? "MCP_BUILDER_FILES_SIZE" : code,
+    pointer: typeof first?.pointer === "string" ? first.pointer : "",
+  };
+}
 
 function methodColor(method: HostedTool["method"]): "success" | "warning" | "danger" {
   if (method === "GET") return "success";
@@ -66,12 +80,16 @@ export default function BuilderDialog({
 }) {
   const t = useTranslations("Mcp");
   const tCommon = useTranslations("Common");
+  const format = useFormatter();
   const showError = useErrorToast();
   const initial = t("builder.templateText", { template: "readonly" });
   const [step, setStep] = useState<StepId>("brief");
   const [template, setTemplate] = useState<McpBuilderTemplate>("readonly");
   const [instruction, setInstruction] = useState(initial);
   const [docs, setDocs] = useState("");
+  const [links, setLinks] = useState<McpDocsLinkRow[]>([]);
+  const [files, setFiles] = useState<McpDocsFileRow[]>([]);
+  const [sourceErrors, setSourceErrors] = useState<Record<string, string>>({});
   const [draft, setDraft] = useState<McpDraft | null>(null);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -96,13 +114,13 @@ export default function BuilderDialog({
   const shown = needle
     ? tools.filter((tool) => [tool.name, tool.title, tool.path].some((value) => value.toLowerCase().includes(needle)))
     : tools;
-  const docsTooLong = docs.length > MAX_BUILDER_DOCS;
   const baseValid = /^https?:\/\/[^\s/]+/i.test(baseUrl.trim());
   const tooMany = chosen.length > MAX_HOSTED_TOOLS;
   const headerValid = authType !== "header" || /^[A-Za-z0-9-]{1,64}$/.test(authHeader.trim());
   const needsSecret = authType !== "none" && !shared && !secret.trim();
   const reviewReady = Boolean(name.trim() && baseValid && chosen.length && !tooMany && headerValid && !needsSecret);
-  const canDraft = Boolean(instruction.trim() && docs.trim() && !docsTooLong);
+  const canDraft = Boolean(instruction.trim()) && sourcesReady(links, docs, files);
+  const sourceName = (ref: McpDocsSourceRef) => t("builder.sourceName", { kind: ref.kind, name: ref.name });
 
   function chooseTemplate(next: McpBuilderTemplate) {
     setTemplate(next);
@@ -142,14 +160,36 @@ export default function BuilderDialog({
     setStep("review");
   }
 
+  function markSource(pointer: string, code: string) {
+    const match = /^#\/(links|files)\/(\d+)$/.exec(pointer);
+    const rows = match?.[1] === "links" ? links : match?.[1] === "files" ? files : [];
+    const key = pointer === "#/docs" ? "docs" : rows[Number(match?.[2])]?.key;
+    if (key) setSourceErrors({ [key]: code });
+  }
+
   function runDraft() {
+    setSourceErrors({});
     startDraft(async () => {
-      const result = await draftMcpServerAction({ template, instruction, docs });
-      if (isActionFail(result)) {
-        showError(result.error);
+      const body = new FormData();
+      const sent = links.map((row) => ({ url: row.url, internal: row.internal, auth: row.auth, name: row.name, secret: row.secret }));
+      body.append("request", JSON.stringify({ template, instruction, docs, links: sent }));
+      for (const row of files) body.append("file", row.file, row.file.name);
+      let res: Response;
+      try {
+        res = await fetch("/internal-api/mcp/draft", { method: "POST", body });
+      } catch {
+        showError("REQUEST_FAILED");
         return;
       }
-      applyDraft(result);
+      const json: unknown = await res.json().catch(() => null);
+      if (!res.ok) {
+        const problem = problemOf(json);
+        markSource(problem.pointer, problem.code);
+        if (problem.pointer) setStep("brief");
+        showError(problem.code);
+        return;
+      }
+      applyDraft(json as McpDraft);
     });
   }
 
@@ -287,15 +327,17 @@ export default function BuilderDialog({
                           <TextArea className="min-h-24" />
                           <Description>{t("builder.instructionHint")}</Description>
                         </TextField>
-                        <TextField fullWidth isRequired value={docs} onChange={setDocs} isDisabled={pending} isInvalid={docsTooLong}>
-                          <Label>{t("builder.docs")}</Label>
-                          <TextArea className="min-h-40 font-mono text-xs" />
-                          {docsTooLong ? (
-                            <FieldError>{t("builder.docsLong", { max: MAX_BUILDER_DOCS })}</FieldError>
-                          ) : (
-                            <Description>{t("builder.docsHint")}</Description>
-                          )}
-                        </TextField>
+                        <BuilderSources
+                          links={links}
+                          docs={docs}
+                          files={files}
+                          errors={sourceErrors}
+                          pending={pending}
+                          onLinks={setLinks}
+                          onDocs={setDocs}
+                          onFiles={setFiles}
+                          onErrors={setSourceErrors}
+                        />
                         {drafting ? (
                           <output aria-live="polite" className="text-sm text-muted">
                             {t("builder.drafting")}
@@ -313,8 +355,21 @@ export default function BuilderDialog({
                             <Alert.Content>
                               <Alert.Title>{t("builder.imported")}</Alert.Title>
                               <Alert.Description>
+                                {draft.importedFrom ? `${t("builder.importedSource", { source: sourceName(draft.importedFrom) })} ` : ""}
                                 {t("builder.importedCount", { count: draft.tools.length, total: draft.operations })}
                                 {draft.tools.length < draft.operations ? ` ${t("builder.importedLeft", { max: MAX_HOSTED_TOOLS })}` : ""}
+                              </Alert.Description>
+                            </Alert.Content>
+                          </Alert>
+                        ) : null}
+                        {draft.unused.length ? (
+                          <Alert status="warning">
+                            <Alert.Indicator />
+                            <Alert.Content>
+                              <Alert.Description>
+                                {t("builder.unusedSources", {
+                                  names: format.list(draft.unused.map(sourceName), { type: "conjunction" }),
+                                })}
                               </Alert.Description>
                             </Alert.Content>
                           </Alert>

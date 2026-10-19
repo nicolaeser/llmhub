@@ -21,6 +21,7 @@ Shape, with the server fields before tools:
 Rules:
 - Build one tool for every operation the documentation describes that the request allows. Do not merge, sample, or shorten the list.
 - Include only operations the documentation describes.
+- The documentation can come as several labeled sources and attached files. Combine them into one server.
 - action is read for safe reads, write for creates and updates, delete for deletes and irreversible changes.
 - path is relative to baseUrl, starts with /, and has no query string. Path parameters use {name}; that name is a string property in inputSchema.
 - Query and body fields are properties of inputSchema. For POST, PUT, and PATCH, list the query string fields in query.
