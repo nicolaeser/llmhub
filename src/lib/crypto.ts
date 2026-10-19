@@ -5,12 +5,14 @@ import type { DigestPurpose } from "@/types/auth";
 
 const SEALED_PREFIX = "enc1:";
 
-const subkey = (purpose: "data" | "signing") =>
+const subkey = (purpose: "data" | "signing" | "updater") =>
   Buffer.from(hkdfSync("sha256", env.APP_SECRET, "llmhub", purpose, 32));
 
 const dataKey = () => subkey("data");
 
 export const signingSecret = () => subkey("signing").toString("hex");
+
+export const updaterKey = () => subkey("updater");
 
 export const digest = (value: string) => createHash("sha256").update(value).digest("hex");
 

@@ -29,9 +29,9 @@ export function assertContentLength(req: Request, limit: number): void {
   if (Number(req.headers.get("content-length") ?? 0) > limit) throw tooLarge();
 }
 
-export async function readJSON<T = unknown>(req: Request, limit = MAX_JSON_BYTES): Promise<T> {
+export async function readText(req: Request, limit: number): Promise<string> {
   assertContentLength(req, limit);
-  if (!req.body) return {} as T;
+  if (!req.body) return "";
   const reader = req.body.getReader();
   const chunks: Uint8Array[] = [];
   let size = 0;
@@ -45,7 +45,11 @@ export async function readJSON<T = unknown>(req: Request, limit = MAX_JSON_BYTES
     }
     chunks.push(value);
   }
-  const text = Buffer.concat(chunks).toString("utf8");
+  return Buffer.concat(chunks).toString("utf8");
+}
+
+export async function readJSON<T = unknown>(req: Request, limit = MAX_JSON_BYTES): Promise<T> {
+  const text = await readText(req, limit);
   return (text ? JSON.parse(text) : {}) as T;
 }
 

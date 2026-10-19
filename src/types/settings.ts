@@ -9,7 +9,7 @@ import type { AntigravitySettings } from "@/types/providers";
 import type { VectorStoreDefaults } from "@/types/rag";
 import type { ModelChoice } from "@/lib/models/model-role";
 import type { S3Settings } from "@/types/s3";
-import type { UpdateStatus } from "@/types/updates";
+import type { UpdaterView, UpdateStatus } from "@/types/updates";
 
 export type SettingsTab = "company" | "general" | "sign-in" | "storage" | "logging" | "cache" | "catalog";
 
@@ -23,6 +23,7 @@ export type GeneralSettings = z.infer<typeof generalSettingsSchema>;
 export type GeneralSettingsView = {
   settings: GeneralSettings;
   updates: UpdateStatus;
+  updater: UpdaterView | null;
   env: { appUrl: string; s3Keys: boolean; oidcSecret: boolean; smtp: boolean; redis: boolean };
   canManage: boolean;
 };
@@ -122,5 +123,6 @@ export type Enterprise = {
   catalog_auto_routes?: boolean;
   catalog_min_confidence?: number;
   update_check?: boolean;
+  auto_update?: boolean;
   vector_stores?: VectorStoreDefaults;
 };

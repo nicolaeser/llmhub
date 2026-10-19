@@ -21,6 +21,10 @@
       "state": "{state, select, available {Running {current}. {latest} is available.} current {Running {current}, the newest release.} other {Running {current}.}}",
       "open": "Open the release on GitHub"
     },
+    "automatic": {
+      "title": "Automatic updates",
+      "subtitle": "An updater container next to the app checks the image registry and restarts LLM Hub with new images."
+    },
     "env": {
       "title": "Environment",
       "subtitle": "These values come from process env. They are not edited in the console.",
