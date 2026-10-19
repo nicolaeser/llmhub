@@ -1,8 +1,7 @@
 import "server-only";
 
 import { headers } from "next/headers";
-import type { Prisma } from "@/generated/prisma/client";
-import prisma from "@/lib/db/prisma";
+import { withSerializableRetry } from "@/lib/db/serializable";
 import { hashPassword } from "@/lib/auth/password";
 import { templateRoleId } from "@/lib/auth/roles";
 import { issueEnrollmentChallenge } from "@/lib/auth/sign-in";
@@ -19,30 +18,6 @@ import { clientIp } from "@/lib/http/api";
 import { logger } from "@/lib/logging/logger";
 import { setupSchema } from "@/schemas/auth";
 import type { CreateFirstAdminResult } from "@/types/setup";
-
-function isSerializableConflict(error: unknown): boolean {
-  if (!error || typeof error !== "object") return false;
-  if ("code" in error && error.code === "P2034") return true;
-  const cause = "cause" in error ? error.cause : null;
-  return Boolean(
-    cause && typeof cause === "object" && "kind" in cause && cause.kind === "TransactionWriteConflict",
-  );
-}
-
-async function withSerializableRetry<T>(
-  operation: (tx: Prisma.TransactionClient) => Promise<T>,
-): Promise<T> {
-  for (let attempt = 1; attempt <= 3; attempt += 1) {
-    try {
-      return await prisma.$transaction(operation, {
-        isolationLevel: "Serializable",
-      });
-    } catch (error) {
-      if (attempt === 3 || !isSerializableConflict(error)) throw error;
-    }
-  }
-  throw new Error("SETUP_TRANSACTION_FAILED");
-}
 
 export async function createFirstAdmin(
   input: unknown,

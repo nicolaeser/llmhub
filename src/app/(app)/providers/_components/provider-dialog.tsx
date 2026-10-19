@@ -18,11 +18,25 @@ import { useTranslations } from "next-intl";
 import { isSignInKind, PROVIDER_CATALOG } from "@/lib/gateway/upstreams/provider-kinds";
 import { DATA_REGIONS } from "@/lib/gateway/access/model-policy";
 import { isActionFail } from "@/lib/http/action-result";
-import { createProviderAction, updateProviderAction } from "../_action";
-import type { ProviderView } from "@/types/providers";
-import SignInPanel from "./sign-in-panel";
+import {
+  completeSignInAction,
+  createProviderAction,
+  importSignInFileAction,
+  pollSignInAction,
+  startSignInAction,
+  updateProviderAction,
+} from "../_action";
+import type { ProviderView, SignInFileResult, SignInFlowActions } from "@/types/providers";
+import SignInPanel from "@/components/providers/sign-in-panel";
 import { useErrorToast } from "@/components/console/use-error-toast";
 import FormDialog from "@/components/console/form-dialog";
+
+const SIGN_IN_ACTIONS: SignInFlowActions<SignInFileResult> = {
+  start: startSignInAction,
+  poll: pollSignInAction,
+  complete: completeSignInAction,
+  importFile: importSignInFileAction,
+};
 
 export default function ProviderDialog({
   state,
@@ -99,7 +113,8 @@ export default function ProviderDialog({
           kind={signInKind}
           current={editing?.signIn ?? null}
           isDisabled={pending}
-          onSignedIn={setSignIn}
+          actions={SIGN_IN_ACTIONS}
+          onSignedIn={(result) => setSignIn(result.credential)}
         />
       ) : (
         <TextField fullWidth value={apiKey} onChange={setApiKey} isDisabled={pending} aria-label={t("apiKey")}>

@@ -326,7 +326,24 @@ export async function deleteProvider(id: string) {
   if (!(await prisma.providerConnection.findUnique({ where: { id }, select: { id: true } }))) {
     throw new Error("NOT_FOUND");
   }
-  const result = await prisma.$transaction(async (tx) => {
+  const result = await removeProviderConnection(id);
+  await writeAudit({
+    actor: session.user.id,
+    action: "provider.delete",
+    objectType: "provider",
+    objectId: result.row.id,
+    after: providerAuditAfter(result.row, {
+      removedRoutes: result.routes,
+      removedGroups: result.removedGroups,
+      emptyGroups: result.emptyGroups,
+    }),
+  });
+  await scheduleCatalogTask({ task: "rebuild" });
+  return { id: result.row.id, removedRoutes: result.routes, removedGroups: result.removedGroups, emptyGroups: result.emptyGroups };
+}
+
+export async function removeProviderConnection(id: string) {
+  return prisma.$transaction(async (tx) => {
     const routes = await tx.deployment.findMany({ where: { providerId: id }, select: { groupAlias: true } });
     await tx.deployment.deleteMany({ where: { providerId: id } });
     const row = await tx.providerConnection.delete({ where: { id } });
@@ -356,19 +373,6 @@ export async function deleteProvider(id: string) {
     const emptyGroups = emptied.map((group) => group.alias).filter((alias) => !removedGroups.includes(alias));
     return { row, routes: routes.length, removedGroups, emptyGroups };
   });
-  await writeAudit({
-    actor: session.user.id,
-    action: "provider.delete",
-    objectType: "provider",
-    objectId: result.row.id,
-    after: providerAuditAfter(result.row, {
-      removedRoutes: result.routes,
-      removedGroups: result.removedGroups,
-      emptyGroups: result.emptyGroups,
-    }),
-  });
-  await scheduleCatalogTask({ task: "rebuild" });
-  return { id: result.row.id, removedRoutes: result.routes, removedGroups: result.removedGroups, emptyGroups: result.emptyGroups };
 }
 
 export async function discoverProvider(id: string) {

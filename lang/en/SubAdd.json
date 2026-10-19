@@ -1,0 +1,49 @@
+{
+  "metaTitle": "Connect a subscription account",
+  "unavailableTitle": "Link not available",
+  "unavailable": "This link is not valid. Ask the person who shared it for a new one.",
+  "title": "Share your subscription account",
+  "intro": "{named, select, true {Connect your own subscription account to the LLM Hub at {instance}. You need no account on this hub.} other {Connect your own subscription account to this LLM Hub. You need no account on this hub.}}",
+  "label": "Link: {label}",
+  "limits": "{limited, select, true {{remaining, plural, one {This link can add # more account until {date}.} other {This link can add # more accounts until {date}.}}} other {This link works until {date}.}}",
+  "pickTitle": "Choose your provider",
+  "pickHint": "Pick the subscription you want to share, then sign in with that provider.",
+  "pickLabel": "Provider",
+  "kindPlan": "{kind, select, codex {ChatGPT Plus, Pro, or Business} grok_build {SuperGrok or X Premium+} claude {Claude Pro or Max} antigravity {Google account with Antigravity access} other {Subscription account}}",
+  "signInHint": "{kind, select, codex {Sign in with the ChatGPT account whose plan you want to share.} grok_build {Sign in with the xAI account that has SuperGrok or X Premium+.} claude {Sign in with the Claude account whose Pro or Max plan you want to share.} antigravity {Sign in with the Google account whose Antigravity plan you want to share.} other {Sign in with the account you want to share.}}",
+  "notice": {
+    "title": "What you share",
+    "usage": "{named, select, true {Requests that {instance} sends run on your account and count against the limits of your plan.} other {Requests that this hub sends run on your account and count against the limits of your plan.}}",
+    "tokens": "The hub stores the sign-in for your account encrypted and renews it itself. It never sees your password.",
+    "terms": "Using a subscription through a third-party hub may break the terms of the provider. The provider can limit or ban the account.",
+    "withdraw": "After connecting you get a private link to check the account and disconnect it at any time.",
+    "accept": "I understand and want to share my account"
+  },
+  "done": {
+    "title": "{count, plural, one {Account connected} other {# accounts connected}}",
+    "description": "Thank you. The hub can now use these accounts.",
+    "outcome": "{outcome, select, created {Added} updated {Sign-in renewed} other {Connected}}",
+    "manageTitle": "Your private manage link",
+    "manageHint": "Save this link. It shows the status of your accounts and lets you disconnect them at any time. Anyone with this link can disconnect them, so keep it to yourself.",
+    "copy": "Copy manage link",
+    "openManage": "Open manage page",
+    "addAnother": "Add another account",
+    "full": "This link cannot add more accounts."
+  },
+  "manage": {
+    "title": "Your shared accounts",
+    "unavailable": "This link is not valid.",
+    "intro": "{named, select, true {Accounts you connected to the LLM Hub at {instance}.} other {Accounts you connected to this LLM Hub.}}",
+    "listTitle": "{count, plural, =0 {No connected accounts} one {# connected account} other {# connected accounts}}",
+    "listHint": "Disconnecting removes the account and its stored sign-in from the hub right away.",
+    "addedAt": "Connected on {date}",
+    "state": "{state, select, active {Active} expired {Sign-in expired} paused {Paused by the hub} other {{state}}}",
+    "removeTitle": "Disconnect this {name} account?",
+    "removeDescription": "The hub deletes this account and its stored sign-in. To connect it again you need a new add-account link.",
+    "remove": "Disconnect",
+    "removeLabel": "Disconnect {name} account {account}",
+    "removed": "{name} account disconnected",
+    "empty": "No account is connected with this link.",
+    "vendorHint": "You can also end access for the hub at the provider by signing out other sessions or removing connected apps in your account settings."
+  }
+}

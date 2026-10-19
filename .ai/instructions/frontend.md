@@ -34,6 +34,7 @@ Load before changing `src/app/`, `src/proxy.ts`, `src/i18n/` navigation, or Next
 
 - `src/app/(app)/` authenticated console.
 - `src/app/account/` public account screens.
+- `src/app/providers/sub-add/` public add-account link pages (`[token]` and `manage/[token]`, own layout outside the console). `src/proxy.ts` lets only `isSubAddPage` paths (`src/lib/http/public-path.ts`, a full 43-character token) through without a session; every other `/providers` path stays behind the console session.
 - `src/app/internal-api/` private HTTP plus the first-operator page `setup/`.
 - `src/app/api/v1/` and `src/app/api/subscription/` gateway; `src/app/api/mgmt/` management-key API; see [api.md](api.md).
 - Colocated walk policy: `src/tests/route-view-policy.ts`.

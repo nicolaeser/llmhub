@@ -1,5 +1,6 @@
 import "server-only";
 
+import type { Prisma } from "@/generated/prisma/client";
 import prisma from "@/lib/db/prisma";
 import { requirePermission } from "@/lib/auth/guards";
 import { PERMISSIONS } from "@/lib/auth/permissions";
@@ -93,10 +94,14 @@ async function freshEntries(entries: ParsedEntry[]): Promise<FreshEntry[]> {
   return out;
 }
 
-async function matchingConnection(kind: SignInKind, session: SignInSession): Promise<string | null> {
+export async function matchingConnection(
+  kind: SignInKind,
+  session: SignInSession,
+  db: Prisma.TransactionClient = prisma,
+): Promise<string | null> {
   const account = session.account.trim();
   if (!account) return null;
-  const rows = await prisma.providerConnection.findMany({
+  const rows = await db.providerConnection.findMany({
     where: { kind, login: { is: { account: { equals: account, mode: "insensitive" } } } },
     select: { id: true, login: { select: { tokens: true } } },
     orderBy: { createdAt: "asc" },
