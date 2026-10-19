@@ -11,6 +11,7 @@ import {
   saveAssignments,
 } from "@/lib/providers/account-routing";
 import { importAuthFiles, importSignInFile } from "@/lib/providers/auth-import";
+import { importCliProxyAuthFiles, listCliProxyAuthFiles } from "@/lib/providers/cliproxy-import";
 import {
   completeSignIn,
   createProvider,
@@ -67,6 +68,14 @@ export async function importSignInFileAction(...args: Parameters<typeof importSi
 
 export async function importAuthFilesAction(...args: Parameters<typeof importAuthFiles>) {
   return runAction(() => importAuthFiles(...args));
+}
+
+export async function listCliProxyAuthFilesAction(...args: Parameters<typeof listCliProxyAuthFiles>) {
+  return runAction(() => listCliProxyAuthFiles(...args));
+}
+
+export async function importCliProxyAuthFilesAction(...args: Parameters<typeof importCliProxyAuthFiles>) {
+  return runAction(() => importCliProxyAuthFiles(...args));
 }
 
 export async function loadProviderLimitsAction(...args: Parameters<typeof loadProviderLimits>) {

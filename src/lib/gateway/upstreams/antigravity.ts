@@ -10,8 +10,9 @@ export const ANTIGRAVITY_AUTHORIZE_URL = "https://accounts.google.com/o/oauth2/v
 export const ANTIGRAVITY_TOKEN_URL = "https://oauth2.googleapis.com/token";
 export const ANTIGRAVITY_USERINFO_URL = "https://www.googleapis.com/oauth2/v2/userinfo?alt=json";
 export const ANTIGRAVITY_REDIRECT_URI = "http://localhost:51121/oauth-callback";
-export const ANTIGRAVITY_BASE_URL = "https://cloudcode-pa.googleapis.com";
-export const ANTIGRAVITY_CLIENT_VERSION = "2.17.0";
+export const ANTIGRAVITY_BASE_URL = "https://daily-cloudcode-pa.googleapis.com";
+export const ANTIGRAVITY_CONTROL_URL = "https://cloudcode-pa.googleapis.com";
+export const ANTIGRAVITY_CLIENT_VERSION = "2.23.0";
 export const ANTIGRAVITY_STREAM_PATH = "/v1internal:streamGenerateContent?alt=sse";
 export const ANTIGRAVITY_SCOPE = [
   "cloud-platform",

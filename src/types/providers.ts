@@ -197,6 +197,20 @@ export type AuthFileImport = {
   providers: ProviderView[];
 };
 
+export type CliProxyAuthFile = {
+  name: string;
+  type: string;
+  kind: SignInKind | null;
+  account: string;
+  status: string;
+  disabled: boolean;
+  importable: boolean;
+};
+
+export type CliProxyListing = { version: string; files: CliProxyAuthFile[] };
+
+export type CliProxyImport = AuthFileImport & { removed: string[]; keptAtSource: string[] };
+
 export type SignInFileResult = {
   credential: string;
   account: string;

@@ -148,7 +148,11 @@ export async function importAuthFiles(files: AuthFileUpload[]): Promise<AuthFile
   const session = await requirePermission(PERMISSIONS.PROVIDERS_MANAGE);
   const parsed = authFileImportSchema.safeParse(files);
   if (!parsed.success) throw new Error("VALIDATION");
-  const fresh = await freshEntries(parsedEntries(parsed.data));
+  return importUploads(session.user.id, parsed.data);
+}
+
+export async function importUploads(actor: string, files: AuthFileUpload[]): Promise<AuthFileImport> {
+  const fresh = await freshEntries(parsedEntries(files));
   const results: AuthFileResult[] = [];
   const providers = new Map<string, ProviderView>();
   for (const entry of fresh) {
@@ -158,7 +162,7 @@ export async function importAuthFiles(files: AuthFileUpload[]): Promise<AuthFile
     }
     const detail = { file: entry.file, kind: entry.kind, account: entry.session.account, plan: entry.session.plan };
     try {
-      const stored = await storeAccount(session.user.id, entry.kind, entry.session);
+      const stored = await storeAccount(actor, entry.kind, entry.session);
       providers.set(stored.provider.id, stored.provider);
       results.push({ ...detail, status: stored.status });
     } catch (error) {

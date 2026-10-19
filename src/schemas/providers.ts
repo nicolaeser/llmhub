@@ -20,6 +20,16 @@ const authFileUploadSchema = z.object({
 
 export const authFileImportSchema = z.array(authFileUploadSchema).min(1).max(MAX_AUTH_FILES);
 
+export const cliProxyConnectionSchema = z.object({
+  url: z.string().trim().min(1).max(2048),
+  key: z.string().trim().min(1).max(512),
+});
+
+export const cliProxyImportSchema = cliProxyConnectionSchema.extend({
+  names: z.array(z.string().trim().min(1).max(255)).min(1).max(MAX_AUTH_FILES),
+  removeFromSource: z.boolean(),
+});
+
 export const signInFileSchema = z.object({
   kind: signInKindSchema,
   content: z.string().min(1).max(MAX_AUTH_FILE_BYTES),
