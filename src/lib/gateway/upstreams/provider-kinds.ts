@@ -40,6 +40,10 @@ export function isSignInKind(kind: string): kind is SignInKind {
   return PROVIDER_CATALOG.some((spec) => spec.kind === kind && spec.auth === "sign_in");
 }
 
+export function signInKinds(): SignInKind[] {
+  return PROVIDER_CATALOG.flatMap((spec) => (isSignInKind(spec.kind) ? [spec.kind] : []));
+}
+
 export function reportsLimits(kind: string): boolean {
   return LIMIT_KINDS.has(kind);
 }

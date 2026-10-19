@@ -1,5 +1,6 @@
 import type { z } from "zod";
 import type { signInCredentialSchema, signInTicketSchema } from "@/schemas/providers";
+import type { ActionFail } from "@/types/actions";
 import type { AutoResetPolicies, ResetCredits } from "@/types/resets";
 
 export type ProviderRecord = {
@@ -80,6 +81,8 @@ export type AssignmentTarget = {
 };
 
 export type AssignmentInput = { scope: AssignmentScope; id: string };
+
+export type AccessMode = "open" | "limited";
 
 export type AssignmentOptions = Record<AssignmentScope, { id: string; label: string; detail?: string }[]>;
 
@@ -185,6 +188,17 @@ export type SignInPollResult =
   | { state: "pending"; interval: number }
   | { state: "done"; credential: string; account: string; plan: string };
 
+export type SignInFinish = { account: string; plan: string };
+
+export type SignInFlowStep<T extends SignInFinish> = { state: "pending"; interval: number } | ({ state: "done" } & T);
+
+export type SignInFlowActions<T extends SignInFinish> = {
+  start: (kind: SignInKind) => Promise<SignInStart | ActionFail>;
+  poll: (input: { ticket: string; interval: number }) => Promise<SignInFlowStep<T> | ActionFail>;
+  complete: (input: { ticket: string; code: string }) => Promise<SignInFlowStep<T> | ActionFail>;
+  importFile?: (kind: SignInKind, content: string) => Promise<T | ActionFail>;
+};
+
 export type AuthFileAccount = {
   kind: SignInKind;
   session: SignInSession;
@@ -207,6 +221,7 @@ export type AuthFileResult = {
 export type AuthFileImport = {
   results: AuthFileResult[];
   providers: ProviderView[];
+  superseded: string[];
 };
 
 export type CliProxyAuthFile = {

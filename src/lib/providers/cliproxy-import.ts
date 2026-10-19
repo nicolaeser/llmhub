@@ -154,7 +154,7 @@ export async function importCliProxyAuthFiles(raw: unknown): Promise<CliProxyImp
   const fetched = await downloads(connection, wanted);
   const uploads = fetched.filter((item): item is AuthFileUpload => "content" in item);
   const failed = fetched.filter((item): item is AuthFileResult => !("content" in item));
-  const imported = uploads.length ? await importUploads(session.user.id, uploads) : { results: [], providers: [] };
+  const imported = uploads.length ? await importUploads(session.user.id, uploads) : { results: [], providers: [], superseded: [] };
   const removed: string[] = [];
   const keptAtSource: string[] = [];
   if (parsed.data.removeFromSource) {
@@ -178,5 +178,11 @@ export async function importCliProxyAuthFiles(raw: unknown): Promise<CliProxyImp
       keptAtSource,
     },
   });
-  return { results: [...refused, ...failed, ...imported.results], providers: imported.providers, removed, keptAtSource };
+  return {
+    results: [...refused, ...failed, ...imported.results],
+    providers: imported.providers,
+    superseded: imported.superseded,
+    removed,
+    keptAtSource,
+  };
 }

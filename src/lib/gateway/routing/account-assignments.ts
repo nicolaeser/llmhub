@@ -74,6 +74,22 @@ function idsOf(targets: AssignmentInput[], scope: AssignmentScope): string[] {
   return [...new Set(targets.filter((target) => target.scope === scope).map((target) => target.id))];
 }
 
+function targetIds(targets: AssignmentInput[]): Record<AssignmentScope, string[]> {
+  return Object.fromEntries(ASSIGNMENT_SCOPES.map((scope) => [scope, idsOf(targets, scope)])) as Record<
+    AssignmentScope,
+    string[]
+  >;
+}
+
+export function assignmentColumns(targets: AssignmentInput[]): Partial<Record<(typeof COLUMN)[AssignmentScope], string>>[] {
+  const ids = targetIds(targets);
+  return ASSIGNMENT_SCOPES.flatMap((scope) => ids[scope].map((id) => ({ [COLUMN[scope]]: id })));
+}
+
+export async function targetsMissing(targets: AssignmentInput[]): Promise<boolean> {
+  return missingTargets(targetIds(targets));
+}
+
 async function missingTargets(ids: Record<AssignmentScope, string[]>): Promise<boolean> {
   const counts = await Promise.all([
     prisma.organization.count({ where: { id: { in: ids.org } } }),
@@ -90,14 +106,11 @@ export async function replaceAssignments(
   restricted: boolean,
   targets: AssignmentInput[],
 ): Promise<{ restricted: boolean; assignments: AssignmentTarget[] } | null> {
-  const ids = Object.fromEntries(ASSIGNMENT_SCOPES.map((scope) => [scope, idsOf(targets, scope)])) as Record<
-    AssignmentScope,
-    string[]
-  >;
-  if (await missingTargets(ids)) return null;
-  const data: Prisma.ProviderAssignmentCreateManyInput[] = ASSIGNMENT_SCOPES.flatMap((scope) =>
-    ids[scope].map((id) => ({ providerId, [COLUMN[scope]]: id })),
-  );
+  if (await targetsMissing(targets)) return null;
+  const data: Prisma.ProviderAssignmentCreateManyInput[] = assignmentColumns(targets).map((columns) => ({
+    providerId,
+    ...columns,
+  }));
   const row = await prisma.$transaction(async (tx) => {
     const exists = await tx.providerConnection.findUnique({ where: { id: providerId }, select: { id: true } });
     if (!exists) return null;

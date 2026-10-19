@@ -27,6 +27,7 @@ import {
   updateProvider,
 } from "@/lib/providers/connections";
 import { redeemProviderReset } from "@/lib/providers/resets";
+import { createSubAddLink, loadSubAddLinks, revokeSubAddLink } from "@/lib/providers/sub-add-links";
 
 export async function loadProvidersAction(...args: Parameters<typeof loadProviders>) {
   return runAction(() => loadProviders(...args));
@@ -122,4 +123,16 @@ export async function saveAntigravityConfigAction(...args: Parameters<typeof sav
 
 export async function loadProviderHealthAction(...args: Parameters<typeof loadProviderHealth>) {
   return runAction(() => loadProviderHealth(...args));
+}
+
+export async function loadSubAddLinksAction(...args: Parameters<typeof loadSubAddLinks>) {
+  return runAction(() => loadSubAddLinks(...args));
+}
+
+export async function createSubAddLinkAction(...args: Parameters<typeof createSubAddLink>) {
+  return runAction(() => createSubAddLink(...args));
+}
+
+export async function revokeSubAddLinkAction(...args: Parameters<typeof revokeSubAddLink>) {
+  return runAction(() => revokeSubAddLink(...args));
 }

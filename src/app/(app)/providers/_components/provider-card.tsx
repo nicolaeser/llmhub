@@ -7,7 +7,7 @@ import PolicyChips from "./policy-chips";
 import ProviderActions from "./provider-actions";
 import ProviderToggle from "./provider-toggle";
 import type { ProviderView } from "@/types/providers";
-import { kindIcon } from "./kind-icons";
+import { kindIcon } from "@/components/providers/kind-icons";
 
 export default function ProviderCard({
   row,

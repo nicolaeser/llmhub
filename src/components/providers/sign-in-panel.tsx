@@ -5,25 +5,28 @@ import { Alert, Button, Chip, Description, Input, Label, Spinner, Surface, TextF
 import { ExternalLink, FileJson } from "lucide-react";
 import { useTranslations } from "next-intl";
 import CopyButton from "@/components/console/copy-button";
-import { completeSignInAction, importSignInFileAction, pollSignInAction, startSignInAction } from "../_action";
 import { isActionFail } from "@/lib/http/action-result";
 import { MAX_AUTH_FILE_BYTES } from "@/schemas/providers";
-import type { ProviderSignIn, SignInKind, SignInStart } from "@/types/providers";
+import type { ProviderSignIn, SignInFinish, SignInFlowActions, SignInKind, SignInStart } from "@/types/providers";
 import { PlanBadge } from "@/components/console/subscription-badge";
 import { useErrorToast } from "@/components/console/use-error-toast";
 
 type Waiting = SignInStart & { delay: number };
 
-export default function SignInPanel({
+export default function SignInPanel<T extends SignInFinish>({
   kind,
   current,
   isDisabled,
+  actions,
+  hint,
   onSignedIn,
 }: {
   kind: SignInKind;
   current: ProviderSignIn | null;
   isDisabled: boolean;
-  onSignedIn: (credential: string) => void;
+  actions: SignInFlowActions<T>;
+  hint?: string;
+  onSignedIn: (result: T) => void;
 }) {
   const t = useTranslations("Providers");
   const showError = useErrorToast();
@@ -34,13 +37,21 @@ export default function SignInPanel({
   const [finishing, finish] = useTransition();
   const [importing, startImport] = useTransition();
   const picker = useRef<HTMLInputElement>(null);
+  const flow = useRef(actions);
+  const done = useRef(onSignedIn);
   const shown = fresh ?? current;
+  const importFileAction = actions.importFile;
+
+  useEffect(() => {
+    flow.current = actions;
+    done.current = onSignedIn;
+  });
 
   useEffect(() => {
     if (!waiting || waiting.method === "code") return;
     let active = true;
     const timer = setTimeout(async () => {
-      const result = await pollSignInAction({ ticket: waiting.ticket, interval: waiting.delay });
+      const result = await flow.current.poll({ ticket: waiting.ticket, interval: waiting.delay });
       if (!active) return;
       if (isActionFail(result)) {
         setWaiting(null);
@@ -53,17 +64,17 @@ export default function SignInPanel({
       }
       setWaiting(null);
       setFresh({ account: result.account, plan: result.plan, status: "active" });
-      onSignedIn(result.credential);
+      done.current(result);
     }, waiting.delay * 1000);
     return () => {
       active = false;
       clearTimeout(timer);
     };
-  }, [waiting, onSignedIn, showError]);
+  }, [waiting, showError]);
 
   function begin() {
     start(async () => {
-      const result = await startSignInAction(kind);
+      const result = await actions.start(kind);
       if (isActionFail(result)) {
         showError(result.error);
         return;
@@ -74,24 +85,25 @@ export default function SignInPanel({
   }
 
   function importFile(file: File) {
+    if (!importFileAction) return;
     if (file.size > MAX_AUTH_FILE_BYTES) {
       showError("AUTH_FILE_TOO_LARGE");
       return;
     }
     startImport(async () => {
-      const result = await importSignInFileAction(kind, await file.text().catch(() => ""));
+      const result = await importFileAction(kind, await file.text().catch(() => ""));
       if (isActionFail(result)) {
         showError(result.error);
         return;
       }
       setFresh({ account: result.account, plan: result.plan, status: "active" });
-      onSignedIn(result.credential);
+      onSignedIn(result);
     });
   }
 
   function complete(ticket: string) {
     finish(async () => {
-      const result = await completeSignInAction({ ticket, code: pasted });
+      const result = await actions.complete({ ticket, code: pasted });
       if (isActionFail(result)) {
         showError(result.error);
         return;
@@ -99,7 +111,7 @@ export default function SignInPanel({
       if (result.state !== "done") return;
       setWaiting(null);
       setFresh({ account: result.account, plan: result.plan, status: "active" });
-      onSignedIn(result.credential);
+      onSignedIn(result);
     });
   }
 
@@ -107,7 +119,7 @@ export default function SignInPanel({
     <div className="space-y-3">
       <div className="space-y-1">
         <p className="text-sm font-medium text-foreground">{t("signIn.title", { kind })}</p>
-        <p className="text-sm text-muted">{t("signIn.hint", { kind })}</p>
+        <p className="text-sm text-muted">{hint ?? t("signIn.hint", { kind })}</p>
       </div>
       {shown ? (
         <div className="flex flex-wrap items-center gap-2 text-sm">
@@ -223,35 +235,39 @@ export default function SignInPanel({
                 </>
               )}
             </Button>
-            <input
-              ref={picker}
-              type="file"
-              accept=".json,application/json"
-              tabIndex={-1}
-              aria-hidden
-              className="sr-only"
-              onChange={(event) => {
-                const file = event.currentTarget.files?.[0];
-                event.currentTarget.value = "";
-                if (file) importFile(file);
-              }}
-            />
-            <Button
-              variant="secondary"
-              aria-label={t("signIn.importFile")}
-              isPending={importing}
-              isDisabled={isDisabled || pending}
-              onPress={() => picker.current?.click()}
-            >
-              {({ isPending }) => (
-                <>
-                  {isPending ? <Spinner color="current" size="sm" /> : <FileJson size={16} aria-hidden />}
-                  {t("signIn.importFile")}
-                </>
-              )}
-            </Button>
+            {importFileAction ? (
+              <>
+                <input
+                  ref={picker}
+                  type="file"
+                  accept=".json,application/json"
+                  tabIndex={-1}
+                  aria-hidden
+                  className="sr-only"
+                  onChange={(event) => {
+                    const file = event.currentTarget.files?.[0];
+                    event.currentTarget.value = "";
+                    if (file) importFile(file);
+                  }}
+                />
+                <Button
+                  variant="secondary"
+                  aria-label={t("signIn.importFile")}
+                  isPending={importing}
+                  isDisabled={isDisabled || pending}
+                  onPress={() => picker.current?.click()}
+                >
+                  {({ isPending }) => (
+                    <>
+                      {isPending ? <Spinner color="current" size="sm" /> : <FileJson size={16} aria-hidden />}
+                      {t("signIn.importFile")}
+                    </>
+                  )}
+                </Button>
+              </>
+            ) : null}
           </div>
-          <Description className="block">{t("signIn.importHint")}</Description>
+          {importFileAction ? <Description className="block">{t("signIn.importHint")}</Description> : null}
         </div>
       )}
     </div>

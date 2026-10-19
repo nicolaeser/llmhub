@@ -39,7 +39,8 @@ import AntigravitySetup from "./antigravity-setup";
 import AutoResetSettings from "./auto-reset-settings";
 import AuthFilesDialog from "./auth-files-dialog";
 import SubscriptionAddWizard from "./subscription-add-wizard";
-import { kindIcon } from "./kind-icons";
+import SubAddLinks from "./sub-add-links";
+import { kindIcon } from "@/components/providers/kind-icons";
 
 const SUBSCRIPTION_CATALOG = PROVIDER_CATALOG.filter((spec): spec is ProviderKindSpec & { kind: SignInKind } =>
   isSignInKind(spec.kind),
@@ -140,8 +141,9 @@ export default function SubscriptionAccounts({
     importState.open();
   }
 
-  function imported(providers: ProviderView[]) {
+  function imported(providers: ProviderView[], superseded: string[]) {
     actions.upsert(providers);
+    for (const id of superseded) actions.remove(id);
     startRefreshAll(async () => {
       const result = await loadSubscriptionLimitsAction();
       if (!isActionFail(result)) storeLimits(result.items);
@@ -361,6 +363,8 @@ export default function SubscriptionAccounts({
           </Card.Content>
         </Card>
       ) : null}
+
+      <SubAddLinks antigravityReady={antigravityReady} />
 
       <SubscriptionAddWizard
         state={wizardState}

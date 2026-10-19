@@ -881,7 +881,7 @@ test("Jev works through long lists in steps and stops on a rejected key", async 
 });
 
 test("only plain catalog groups disappear with their last provider", async () => {
-  const { catalogOwnedGroups } = await import("@/lib/providers/connections");
+  const { catalogOwnedGroups } = await import("@/lib/providers/provider-removal");
   const plain = {
     enabled: true,
     billingMode: "routed",

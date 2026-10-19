@@ -6,6 +6,7 @@ import prisma from "@/lib/db/prisma";
 import { fireAlert } from "@/lib/alerts/notify";
 import { runPendingBatches } from "@/lib/gateway/endpoints/batches";
 import { refreshDueLogins } from "@/lib/gateway/upstreams/credentials";
+import { pruneSupersededLogins } from "@/lib/providers/account-match";
 import { runAutoResets } from "@/lib/gateway/upstreams/reset-redeem";
 import { crossedThresholds, forecastBudget } from "@/lib/usage/forecast";
 import { purgeStoredObjects } from "@/lib/gateway/storage/objects";
@@ -77,6 +78,7 @@ export async function runMaintenanceSweep(
     vectorStores: 0,
     reports: 0,
     signIns: 0,
+    supersededLogins: 0,
     resets: 0,
   };
 
@@ -127,6 +129,7 @@ export async function runMaintenanceSweep(
   await runSweepJob("key_expiry_alerts", () => runKeyExpiryAlerts(now));
   result.reports = await runSweepJob("usage_reports", () => runUsageReports(now));
   result.signIns = await runSweepJob("sign_in_refresh", () => refreshDueLogins(now.getTime()));
+  result.supersededLogins = await runSweepJob("superseded_logins", async () => (await pruneSupersededLogins("worker")).length);
   result.resets = await runSweepJob("auto_resets", () => runAutoResets(now.getTime()));
   return result;
 }
