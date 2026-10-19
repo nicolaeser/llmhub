@@ -297,12 +297,40 @@ export function chatToMessage(chat: JsonMap, model: string): JsonMap {
   };
 }
 
+const UNFORWARDED_HEADERS = new Set([
+  "authorization",
+  "proxy-authorization",
+  "x-api-key",
+  "cookie",
+  "host",
+  "content-length",
+  "content-type",
+  "connection",
+  "keep-alive",
+  "transfer-encoding",
+  "upgrade",
+  "te",
+  "trailer",
+  "expect",
+  "accept-encoding",
+  "origin",
+  "referer",
+  "forwarded",
+  "via",
+  "x-real-ip",
+  "true-client-ip",
+]);
+const UNFORWARDED_HEADER_PREFIXES = ["x-forwarded-", "x-hub-", "x-llmhub-", "cf-", "sec-"];
+
 export function anthropicPassthroughHeaders(headers: Headers): Record<string, string> {
   const out: Record<string, string> = {};
-  const version = headers.get("anthropic-version")?.trim();
-  if (version) out["anthropic-version"] = version;
-  const beta = headers.get("anthropic-beta")?.trim();
-  if (beta) out["anthropic-beta"] = beta;
+  headers.forEach((value, key) => {
+    const name = key.toLowerCase();
+    if (UNFORWARDED_HEADERS.has(name)) return;
+    if (UNFORWARDED_HEADER_PREFIXES.some((prefix) => name.startsWith(prefix))) return;
+    const trimmed = value.trim();
+    if (trimmed) out[name] = trimmed;
+  });
   return out;
 }
 
