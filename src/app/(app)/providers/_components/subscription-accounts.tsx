@@ -319,15 +319,16 @@ export default function SubscriptionAccounts({
           <Card.Content className="gap-3">
             <div className="flex flex-wrap gap-1.5">
               {idleKinds.map((spec) => (
-                <button
+                <Button
                   key={spec.kind}
-                  type="button"
-                  onClick={() => openForm(spec, null)}
-                  className="inline-flex min-w-0 items-center gap-2 rounded-full border border-border py-1 pr-3 pl-1 text-xs font-medium transition hover:border-accent/60 hover:bg-accent/5"
+                  size="sm"
+                  variant="secondary"
+                  onPress={() => openForm(spec, null)}
+                  className="min-w-0"
                 >
                   <IconTile icon={kindIcon(spec.kind)} tone="neutral" size="sm" />
                   <span className="truncate">{tProviders("kindShort", { kind: spec.kind })}</span>
-                </button>
+                </Button>
               ))}
             </div>
             {SUBSCRIPTION_CATALOG.some((spec) => spec.kind === "antigravity") &&

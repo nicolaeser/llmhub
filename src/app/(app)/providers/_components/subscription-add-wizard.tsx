@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Button, Card, Modal, type useOverlayState } from "@heroui/react";
+import { Button, Card, Modal, Radio, RadioGroup, type useOverlayState } from "@heroui/react";
 import { ArrowLeft, ArrowRight, Check, FileJson, KeyRound, Plug } from "lucide-react";
 import { useTranslations } from "next-intl";
 import IconTile from "@/components/console/icon-tile";
@@ -99,41 +99,50 @@ export default function SubscriptionAddWizard({
                 </Modal.Header>
                 <Modal.Body>
                   {step === 0 ? (
-                    <div className="grid gap-2 sm:grid-cols-2" role="radiogroup" aria-label={t("wizard.providerLabel")}>
+                    <RadioGroup
+                      value={picked?.kind ?? ""}
+                      onChange={(value) => {
+                        const spec = catalog.find((item) => item.kind === value);
+                        if (spec) choose(spec);
+                      }}
+                      aria-label={t("wizard.providerLabel")}
+                      className="grid gap-2 sm:grid-cols-2"
+                    >
                       {catalog.map((spec) => {
                         const selected = picked?.kind === spec.kind;
                         const locked = spec.kind === "antigravity" && antigravityReady === false;
                         return (
-                          <button
+                          <Card
                             key={spec.kind}
-                            type="button"
-                            role="radio"
-                            aria-checked={selected}
-                            disabled={locked}
-                            onClick={() => choose(spec)}
-                            className={`flex min-w-0 items-start gap-3 rounded-xl border p-3 text-left transition disabled:cursor-not-allowed disabled:opacity-50 ${
-                              selected ? "border-accent bg-accent/5" : "border-border hover:border-accent/50"
-                            }`}
+                            variant="secondary"
+                            className={selected ? "border border-accent bg-accent/8 p-0" : "border border-transparent p-0"}
                           >
-                            <IconTile icon={kindIcon(spec.kind)} tone={selected ? "accent" : "neutral"} />
-                            <span className="min-w-0 flex-1">
-                              <span className="flex flex-wrap items-center gap-1.5">
-                                <span className="truncate text-sm font-medium">
-                                  {tProviders("kindShort", { kind: spec.kind })}
+                            <Radio value={spec.kind} isDisabled={locked} className="mt-0 h-full w-full">
+                              <Radio.Content className="h-full w-full items-start gap-3 p-3">
+                                <IconTile icon={kindIcon(spec.kind)} tone={selected ? "accent" : "neutral"} />
+                                <span className="min-w-0 flex-1">
+                                  <span className="flex flex-wrap items-center gap-1.5">
+                                    <span className="truncate text-sm font-medium">
+                                      {tProviders("kindShort", { kind: spec.kind })}
+                                    </span>
+                                    <SubscriptionBadge />
+                                  </span>
+                                  <span className="mt-0.5 line-clamp-2 block text-xs text-muted">
+                                    {tProviders("kindDescription", { kind: spec.kind })}
+                                  </span>
+                                  {locked ? (
+                                    <span className="mt-1 block text-xs text-warning">{t("wizard.antigravityLocked")}</span>
+                                  ) : null}
                                 </span>
-                                <SubscriptionBadge />
-                              </span>
-                              <span className="mt-0.5 line-clamp-2 block text-xs text-muted">
-                                {tProviders("kindDescription", { kind: spec.kind })}
-                              </span>
-                              {locked ? (
-                                <span className="mt-1 block text-xs text-warning">{t("wizard.antigravityLocked")}</span>
-                              ) : null}
-                            </span>
-                          </button>
+                                <Radio.Control>
+                                  <Radio.Indicator />
+                                </Radio.Control>
+                              </Radio.Content>
+                            </Radio>
+                          </Card>
                         );
                       })}
-                    </div>
+                    </RadioGroup>
                   ) : null}
 
                   {step === 1 && picked ? (
@@ -145,53 +154,55 @@ export default function SubscriptionAddWizard({
                           <p className="truncate text-xs text-muted">{tProviders("channel", { kind: picked.kind })}</p>
                         </div>
                       </div>
-                      <div className="grid gap-2 sm:grid-cols-2" role="radiogroup" aria-label={t("wizard.methodLabel")}>
+                      <RadioGroup
+                        value={method}
+                        onChange={(value) => setMethod(value as Method)}
+                        aria-label={t("wizard.methodLabel")}
+                        className="grid gap-2 sm:grid-cols-2"
+                      >
                         {methods.includes("signin") ? (
-                          <button
-                            type="button"
-                            role="radio"
-                            aria-checked={method === "signin"}
-                            onClick={() => setMethod("signin")}
-                            className={`flex items-start gap-3 rounded-xl border p-3 text-left transition ${method === "signin" ? "border-accent bg-accent/5" : "border-border hover:border-accent/50"}`}
-                          >
-                            <IconTile icon={Plug} tone={method === "signin" ? "accent" : "neutral"} />
-                            <span>
-                              <span className="block text-sm font-medium">{t("wizard.methodSignin")}</span>
-                              <span className="mt-0.5 block text-xs text-muted">{t("wizard.methodSigninHint")}</span>
-                            </span>
-                          </button>
+                          <Card variant="secondary" className={method === "signin" ? "border border-accent bg-accent/8 p-0" : "border border-transparent p-0"}>
+                            <Radio value="signin" className="mt-0 h-full w-full">
+                              <Radio.Content className="h-full w-full items-start gap-3 p-3">
+                                <IconTile icon={Plug} tone={method === "signin" ? "accent" : "neutral"} />
+                                <span>
+                                  <span className="block text-sm font-medium">{t("wizard.methodSignin")}</span>
+                                  <span className="mt-0.5 block text-xs text-muted">{t("wizard.methodSigninHint")}</span>
+                                </span>
+                                <Radio.Control><Radio.Indicator /></Radio.Control>
+                              </Radio.Content>
+                            </Radio>
+                          </Card>
                         ) : null}
                         {methods.includes("file") ? (
-                          <button
-                            type="button"
-                            role="radio"
-                            aria-checked={method === "file"}
-                            onClick={() => setMethod("file")}
-                            className={`flex items-start gap-3 rounded-xl border p-3 text-left transition ${method === "file" ? "border-accent bg-accent/5" : "border-border hover:border-accent/50"}`}
-                          >
-                            <IconTile icon={FileJson} tone={method === "file" ? "accent" : "neutral"} />
-                            <span>
-                              <span className="block text-sm font-medium">{t("wizard.methodFile")}</span>
-                              <span className="mt-0.5 block text-xs text-muted">{t("wizard.methodFileHint")}</span>
-                            </span>
-                          </button>
+                          <Card variant="secondary" className={method === "file" ? "border border-accent bg-accent/8 p-0" : "border border-transparent p-0"}>
+                            <Radio value="file" className="mt-0 h-full w-full">
+                              <Radio.Content className="h-full w-full items-start gap-3 p-3">
+                                <IconTile icon={FileJson} tone={method === "file" ? "accent" : "neutral"} />
+                                <span>
+                                  <span className="block text-sm font-medium">{t("wizard.methodFile")}</span>
+                                  <span className="mt-0.5 block text-xs text-muted">{t("wizard.methodFileHint")}</span>
+                                </span>
+                                <Radio.Control><Radio.Indicator /></Radio.Control>
+                              </Radio.Content>
+                            </Radio>
+                          </Card>
                         ) : null}
                         {methods.includes("key") ? (
-                          <button
-                            type="button"
-                            role="radio"
-                            aria-checked={method === "key"}
-                            onClick={() => setMethod("key")}
-                            className={`flex items-start gap-3 rounded-xl border p-3 text-left transition ${method === "key" ? "border-accent bg-accent/5" : "border-border hover:border-accent/50"}`}
-                          >
-                            <IconTile icon={KeyRound} tone={method === "key" ? "accent" : "neutral"} />
-                            <span>
-                              <span className="block text-sm font-medium">{t("wizard.methodKey")}</span>
-                              <span className="mt-0.5 block text-xs text-muted">{t("wizard.methodKeyHint")}</span>
-                            </span>
-                          </button>
+                          <Card variant="secondary" className={method === "key" ? "border border-accent bg-accent/8 p-0" : "border border-transparent p-0"}>
+                            <Radio value="key" className="mt-0 h-full w-full">
+                              <Radio.Content className="h-full w-full items-start gap-3 p-3">
+                                <IconTile icon={KeyRound} tone={method === "key" ? "accent" : "neutral"} />
+                                <span>
+                                  <span className="block text-sm font-medium">{t("wizard.methodKey")}</span>
+                                  <span className="mt-0.5 block text-xs text-muted">{t("wizard.methodKeyHint")}</span>
+                                </span>
+                                <Radio.Control><Radio.Indicator /></Radio.Control>
+                              </Radio.Content>
+                            </Radio>
+                          </Card>
                         ) : null}
-                      </div>
+                      </RadioGroup>
                     </div>
                   ) : null}
 
