@@ -11,13 +11,15 @@ import {
   signInMethod,
 } from "@/lib/gateway/upstreams/provider-kinds";
 import { seal } from "@/lib/crypto";
-import { asStringArray, KNOWN_KINDS } from "@/lib/gateway/core";
+import { KNOWN_KINDS } from "@/lib/gateway/core";
 import { addRoute, catalogTargets, markRouted } from "@/lib/gateway/catalog/catalog-sync";
 import { scheduleCatalogTask } from "@/lib/gateway/catalog/catalog-tasks";
 import { assignmentSelect, assignmentTargets } from "@/lib/gateway/routing/account-assignments";
 import { loginData } from "@/lib/gateway/upstreams/credentials";
 import { baseName, vendorOf } from "@/lib/gateway/catalog/model-catalog";
 import { refreshProviderModels } from "@/lib/gateway/upstreams/discovery";
+import { matchingConnection, pruneSupersededLogins } from "@/lib/providers/account-match";
+import { removeProviderConnection } from "@/lib/providers/provider-removal";
 import { discoveredOf } from "@/lib/gateway/upstreams/provider-prices";
 import { withResetDetails } from "@/lib/gateway/upstreams/reset-redeem";
 import { subscriptionLimits } from "@/lib/gateway/upstreams/subscription-limits";
@@ -142,26 +144,39 @@ export async function createProvider(input: {
   if (signedIn && !credential) throw new Error("SIGN_IN_REQUIRED");
   const apiKey = signedIn ? "" : input.apiKey.trim();
   const baseUrl = signedIn ? "" : input.baseUrl.trim();
-  const row = await prisma.providerConnection.create({
-    data: {
-      name: input.name.trim() || spec?.name || kind,
-      kind,
-      baseUrl: validBaseUrl(baseUrl || spec?.default_base_url || ""),
-      apiKey: apiKey ? seal(apiKey) : "",
-      ...parsePolicy(input.policy),
-      ...(credential ? { login: { create: loginData(credential.session) } } : {}),
-    },
-    include: providerInclude,
-  });
+  const login = credential ? loginData(credential.session) : null;
+  const existing = credential && isSignInKind(kind) ? await matchingConnection(kind, credential.session) : null;
+  const row = existing && login
+    ? await prisma.providerConnection.update({
+        where: { id: existing },
+        data: {
+          ...(spec?.default_base_url ? { baseUrl: spec.default_base_url } : {}),
+          login: { upsert: { create: login, update: { ...login, version: { increment: 1 } } } },
+        },
+        include: providerInclude,
+      })
+    : await prisma.providerConnection.create({
+        data: {
+          name: input.name.trim() || spec?.name || kind,
+          kind,
+          baseUrl: validBaseUrl(baseUrl || spec?.default_base_url || ""),
+          apiKey: apiKey ? seal(apiKey) : "",
+          ...parsePolicy(input.policy),
+          ...(login ? { login: { create: login } } : {}),
+        },
+        include: providerInclude,
+      });
+  const outcome = existing ? "updated" : "created";
   await writeAudit({
     actor: session.user.id,
     action: "provider.connect",
     objectType: "provider",
     objectId: row.id,
-    after: providerAuditAfter(row, credential ? { signInAccount: credential.session.account } : undefined),
+    after: providerAuditAfter(row, credential ? { outcome, signInAccount: credential.session.account } : undefined),
   });
   await scheduleCatalogTask({ task: "provider", providerId: row.id });
-  return { provider: publicProvider(row) };
+  const superseded = credential ? await pruneSupersededLogins(session.user.id) : [];
+  return { provider: publicProvider(row), outcome, superseded };
 }
 
 export async function updateProvider(input: {
@@ -207,7 +222,8 @@ export async function updateProvider(input: {
   if (apiKey || credential || row.baseUrl !== existing.baseUrl) {
     await scheduleCatalogTask({ task: "provider", providerId: row.id });
   }
-  return { provider: publicProvider(row) };
+  const superseded = credential ? await pruneSupersededLogins(session.user.id) : [];
+  return { provider: publicProvider(row), outcome: "updated" as const, superseded };
 }
 
 export async function loadProviderLimits(input: { id: string; refresh?: boolean }): Promise<{ limits: SubscriptionLimits | null }> {
@@ -295,31 +311,6 @@ export async function completeSignIn(input: { ticket: string; code: string }): P
   };
 }
 
-type EmptiedGroup = {
-  alias: string;
-  enabled: boolean;
-  billingMode: string;
-  overflowGroup: string;
-  fallbackGroups: unknown;
-  autoRoutes: boolean | null;
-  _count: { priceWindows: number };
-};
-
-export function catalogOwnedGroups(emptied: EmptiedGroup[], referenced: Set<string>): string[] {
-  return emptied
-    .filter(
-      (group) =>
-        group.enabled &&
-        group.billingMode === "routed" &&
-        group.autoRoutes === null &&
-        !group.overflowGroup &&
-        asStringArray(group.fallbackGroups).length === 0 &&
-        group._count.priceWindows === 0 &&
-        !referenced.has(group.alias),
-    )
-    .map((group) => group.alias);
-}
-
 export async function deleteProvider(id: string) {
   const session = await requirePermission(PERMISSIONS.PROVIDERS_MANAGE);
   if (!id) throw new Error("MISSING_ID");
@@ -340,39 +331,6 @@ export async function deleteProvider(id: string) {
   });
   await scheduleCatalogTask({ task: "rebuild" });
   return { id: result.row.id, removedRoutes: result.routes, removedGroups: result.removedGroups, emptyGroups: result.emptyGroups };
-}
-
-export async function removeProviderConnection(id: string) {
-  return prisma.$transaction(async (tx) => {
-    const routes = await tx.deployment.findMany({ where: { providerId: id }, select: { groupAlias: true } });
-    await tx.deployment.deleteMany({ where: { providerId: id } });
-    const row = await tx.providerConnection.delete({ where: { id } });
-    const touched = [...new Set(routes.map((route) => route.groupAlias))];
-    if (!touched.length) return { row, routes: 0, removedGroups: [], emptyGroups: [] };
-    const [emptied, others] = await Promise.all([
-      tx.modelGroup.findMany({
-        where: { alias: { in: touched }, deployments: { none: {} } },
-        select: {
-          alias: true,
-          enabled: true,
-          billingMode: true,
-          overflowGroup: true,
-          fallbackGroups: true,
-          autoRoutes: true,
-          _count: { select: { priceWindows: true } },
-        },
-      }),
-      tx.modelGroup.findMany({
-        where: { alias: { notIn: touched } },
-        select: { overflowGroup: true, fallbackGroups: true },
-      }),
-    ]);
-    const referenced = new Set(others.flatMap((group) => [group.overflowGroup, ...asStringArray(group.fallbackGroups)]));
-    const removedGroups = catalogOwnedGroups(emptied, referenced);
-    if (removedGroups.length) await tx.modelGroup.deleteMany({ where: { alias: { in: removedGroups } } });
-    const emptyGroups = emptied.map((group) => group.alias).filter((alias) => !removedGroups.includes(alias));
-    return { row, routes: routes.length, removedGroups, emptyGroups };
-  });
 }
 
 export async function discoverProvider(id: string) {

@@ -141,8 +141,9 @@ export default function SubscriptionAccounts({
     importState.open();
   }
 
-  function imported(providers: ProviderView[]) {
+  function imported(providers: ProviderView[], superseded: string[]) {
     actions.upsert(providers);
+    for (const id of superseded) actions.remove(id);
     startRefreshAll(async () => {
       const result = await loadSubscriptionLimitsAction();
       if (!isActionFail(result)) storeLimits(result.items);

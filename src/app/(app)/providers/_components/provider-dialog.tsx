@@ -47,7 +47,7 @@ export default function ProviderDialog({
   state: ReturnType<typeof useOverlayState>;
   spec: (typeof PROVIDER_CATALOG)[number] | null;
   editing: ProviderView | null;
-  onSaved: (provider: ProviderView) => void;
+  onSaved: (provider: ProviderView, superseded: string[]) => void;
 }) {
   const t = useTranslations("Providers");
   const tCommon = useTranslations("Common");
@@ -89,8 +89,8 @@ export default function ProviderDialog({
         showError(result.error);
         return;
       }
-      onSaved(result.provider);
-      toast(t("toasts.saved", { mode: editing ? "updated" : "created" }), { variant: "success" });
+      onSaved(result.provider, result.superseded);
+      toast(t("toasts.saved", { mode: result.outcome }), { variant: "success" });
       close();
     });
   }

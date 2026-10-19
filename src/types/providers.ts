@@ -221,6 +221,7 @@ export type AuthFileResult = {
 export type AuthFileImport = {
   results: AuthFileResult[];
   providers: ProviderView[];
+  superseded: string[];
 };
 
 export type CliProxyAuthFile = {

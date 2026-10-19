@@ -1,6 +1,5 @@
 import "server-only";
 
-import type { Prisma } from "@/generated/prisma/client";
 import prisma from "@/lib/db/prisma";
 import { requirePermission } from "@/lib/auth/guards";
 import { PERMISSIONS } from "@/lib/auth/permissions";
@@ -13,12 +12,13 @@ import {
   freshAuthFileSession,
   parseAuthFileEntry,
 } from "@/lib/gateway/upstreams/auth-file-import";
-import { loginData, openTokens } from "@/lib/gateway/upstreams/credentials";
+import { loginData } from "@/lib/gateway/upstreams/credentials";
 import { PROVIDER_CATALOG } from "@/lib/gateway/upstreams/provider-kinds";
 import { sealCredential } from "@/lib/gateway/upstreams/subscription-sign-in";
 import { isActionCode } from "@/lib/http/action-result";
 import { errorFields } from "@/lib/logging/format";
 import { logger } from "@/lib/logging/logger";
+import { matchingConnection, pruneSupersededLogins } from "@/lib/providers/account-match";
 import { providerAuditAfter, providerInclude, publicProvider } from "@/lib/providers/connections";
 import { authFileImportSchema, signInFileSchema } from "@/schemas/providers";
 import type {
@@ -94,27 +94,6 @@ async function freshEntries(entries: ParsedEntry[]): Promise<FreshEntry[]> {
   return out;
 }
 
-export async function matchingConnection(
-  kind: SignInKind,
-  session: SignInSession,
-  db: Prisma.TransactionClient = prisma,
-): Promise<string | null> {
-  const account = session.account.trim();
-  if (!account) return null;
-  const rows = await db.providerConnection.findMany({
-    where: { kind, login: { is: { account: { equals: account, mode: "insensitive" } } } },
-    select: { id: true, login: { select: { tokens: true } } },
-    orderBy: { createdAt: "asc" },
-  });
-  const accountId = session.tokens.accountId;
-  const stored = rows.map((row) => ({
-    id: row.id,
-    accountId: row.login ? openTokens(row.login.tokens, row.id).accountId : "",
-  }));
-  const exact = accountId ? stored.find((row) => row.accountId === accountId) : undefined;
-  return (exact ?? stored.find((row) => !accountId || !row.accountId))?.id ?? null;
-}
-
 async function storeAccount(
   actor: string,
   kind: SignInKind,
@@ -174,7 +153,12 @@ export async function importUploads(actor: string, files: AuthFileUpload[]): Pro
       results.push({ ...detail, status: "failed", error: failureCode(error, entry.kind) });
     }
   }
-  return { results, providers: [...providers.values()] };
+  const superseded = await pruneSupersededLogins(actor);
+  return {
+    results,
+    providers: [...providers.values()].filter((provider) => !superseded.includes(provider.id)),
+    superseded,
+  };
 }
 
 export async function importSignInFile(kind: string, content: string): Promise<SignInFileResult> {

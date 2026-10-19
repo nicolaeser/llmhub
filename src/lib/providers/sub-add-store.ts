@@ -7,8 +7,9 @@ import { withSerializableRetry } from "@/lib/db/serializable";
 import { scheduleCatalogTask } from "@/lib/gateway/catalog/catalog-tasks";
 import { loginData } from "@/lib/gateway/upstreams/credentials";
 import { isSignInKind, PROVIDER_CATALOG } from "@/lib/gateway/upstreams/provider-kinds";
-import { matchingConnection } from "@/lib/providers/auth-import";
-import { providerAuditAfter, providerInclude, removeProviderConnection } from "@/lib/providers/connections";
+import { matchingConnection, pruneSupersededLogins } from "@/lib/providers/account-match";
+import { providerAuditAfter, providerInclude } from "@/lib/providers/connections";
+import { removeProviderConnection } from "@/lib/providers/provider-removal";
 import { subAddStatus } from "@/lib/providers/sub-add-status";
 import type { SignInKind, SignInSession } from "@/types/providers";
 import type { SubAddAccountRecord, SubAddAccountView, SubAddOutcome } from "@/types/sub-add";
@@ -133,6 +134,7 @@ export async function storeSubAddAccount(input: {
     }),
   });
   await scheduleCatalogTask({ task: "provider", providerId: stored.row.id });
+  await pruneSupersededLogins(subAddUid(stored.linkId));
   return { providerId: stored.row.id, outcome: stored.outcome };
 }
 

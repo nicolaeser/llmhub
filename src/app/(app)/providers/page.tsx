@@ -65,12 +65,13 @@ export default function ProvidersPage() {
     setConnected((cur) => cur.map((row) => (row.id === provider.id ? provider : row)));
   }
 
-  function saved(provider: ProviderView) {
-    setConnected((cur) =>
-      cur.some((row) => row.id === provider.id)
-        ? cur.map((row) => (row.id === provider.id ? provider : row))
-        : [provider, ...cur],
-    );
+  function saved(provider: ProviderView, superseded: string[]) {
+    setConnected((cur) => {
+      const kept = cur.filter((row) => !superseded.includes(row.id));
+      return kept.some((row) => row.id === provider.id)
+        ? kept.map((row) => (row.id === provider.id ? provider : row))
+        : [provider, ...kept];
+    });
     afterSave.current?.(provider);
   }
 
