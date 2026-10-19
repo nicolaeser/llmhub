@@ -32,6 +32,7 @@ export type MaintenanceSweepResult = {
   vectorFiles: number;
   vectorStores: number;
   reports: number;
+  signIns: number;
   resets: number;
 };
 
