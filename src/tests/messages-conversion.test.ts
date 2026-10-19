@@ -511,3 +511,57 @@ test("Anthropic error envelope and x-api-key auth", () => {
   });
   assert.equal(apiKeyRequest(bearer), bearer);
 });
+
+test("web search calls convert to spec-shaped tool result blocks", () => {
+  const message = chatToMessage(
+    {
+      id: "chatcmpl-1",
+      object: "chat.completion",
+      model: "alias",
+      choices: [
+        {
+          index: 0,
+          message: {
+            role: "assistant",
+            content: "done",
+            web_search_calls: [{ id: "ws_1", query: "hub", sources: [{ url: "https://example.com", title: "Example" }] }],
+          },
+          finish_reason: "stop",
+        },
+      ],
+      usage: { prompt_tokens: 1, completion_tokens: 1 },
+    },
+    "alias",
+  );
+  const content = message.content as JsonMap[];
+  const types = content.map((block) => block.type);
+  assert.ok(!types.includes("web_search_result"));
+  const use = content.find((block) => block.type === "server_tool_use");
+  const result = content.find((block) => block.type === "web_search_tool_result");
+  assert.ok(use && result);
+  assert.equal(result.tool_use_id, use.id);
+  assert.deepEqual(
+    (result.content as JsonMap[]).map((block) => block.type),
+    ["web_search_result"],
+  );
+  parse({
+    model: "alias",
+    max_tokens: 10,
+    messages: [
+      { role: "user", content: "search" },
+      { role: "assistant", content },
+    ],
+  });
+});
+
+test("compaction history blocks pass the schema but block the chat fallback", () => {
+  const request = parse({
+    model: "m",
+    messages: [
+      { role: "user", content: "search" },
+      { role: "assistant", content: [{ type: "compaction", content: "earlier turns summarized" }] },
+      { role: "user", content: "next" },
+    ],
+  });
+  assert.match(chatIncompatibility(request) ?? "", /^messages\.1\.content\.0\.type: content block "compaction"/);
+});

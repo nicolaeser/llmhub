@@ -56,6 +56,7 @@ const documentBlockSchema = z.looseObject({
 
 export const NATIVE_BLOCK_TYPES = [
   "search_result",
+  "compaction",
   "container_upload",
   "server_tool_use",
   "web_search_tool_result",
