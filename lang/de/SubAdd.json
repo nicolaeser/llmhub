@@ -1,0 +1,49 @@
+{
+  "metaTitle": "Abo-Konto verbinden",
+  "unavailableTitle": "Link nicht verfügbar",
+  "unavailable": "Dieser Link ist nicht gültig. Bitte die Person, die ihn geteilt hat, um einen neuen.",
+  "title": "Teile dein Abo-Konto",
+  "intro": "{named, select, true {Verbinde dein eigenes Abo-Konto mit dem LLM Hub unter {instance}. Du brauchst dafür kein Konto auf diesem Hub.} other {Verbinde dein eigenes Abo-Konto mit diesem LLM Hub. Du brauchst dafür kein Konto auf diesem Hub.}}",
+  "label": "Link: {label}",
+  "limits": "{limited, select, true {{remaining, plural, one {Über diesen Link kann bis {date} noch # Konto hinzugefügt werden.} other {Über diesen Link können bis {date} noch # Konten hinzugefügt werden.}}} other {Dieser Link ist bis {date} gültig.}}",
+  "pickTitle": "Anbieter wählen",
+  "pickHint": "Wähle das Abo, das du teilen möchtest, und melde dich dann beim Anbieter an.",
+  "pickLabel": "Anbieter",
+  "kindPlan": "{kind, select, codex {ChatGPT Plus, Pro oder Business} grok_build {SuperGrok oder X Premium+} claude {Claude Pro oder Max} antigravity {Google-Konto mit Antigravity-Zugang} other {Abo-Konto}}",
+  "signInHint": "{kind, select, codex {Melde dich mit dem ChatGPT-Konto an, dessen Abo du teilen möchtest.} grok_build {Melde dich mit dem xAI-Konto an, das SuperGrok oder X Premium+ hat.} claude {Melde dich mit dem Claude-Konto an, dessen Pro- oder Max-Abo du teilen möchtest.} antigravity {Melde dich mit dem Google-Konto an, dessen Antigravity-Plan du teilen möchtest.} other {Melde dich mit dem Konto an, das du teilen möchtest.}}",
+  "notice": {
+    "title": "Was du teilst",
+    "usage": "{named, select, true {Anfragen, die {instance} sendet, laufen über dein Konto und zählen auf die Limits deines Abos.} other {Anfragen, die dieser Hub sendet, laufen über dein Konto und zählen auf die Limits deines Abos.}}",
+    "tokens": "Der Hub speichert die Anmeldung für dein Konto verschlüsselt und erneuert sie selbst. Dein Passwort sieht er nie.",
+    "terms": "Ein Abo über einen fremden Hub zu nutzen, kann gegen die Bedingungen des Anbieters verstoßen. Der Anbieter kann das Konto einschränken oder sperren.",
+    "withdraw": "Nach dem Verbinden erhältst du einen privaten Link, mit dem du das Konto prüfen und jederzeit trennen kannst.",
+    "accept": "Ich habe das verstanden und möchte mein Konto teilen"
+  },
+  "done": {
+    "title": "{count, plural, one {Konto verbunden} other {# Konten verbunden}}",
+    "description": "Danke. Der Hub kann diese Konten jetzt nutzen.",
+    "outcome": "{outcome, select, created {Hinzugefügt} updated {Anmeldung erneuert} other {Verbunden}}",
+    "manageTitle": "Dein privater Verwaltungslink",
+    "manageHint": "Speichere diesen Link. Er zeigt den Status deiner Konten, und du kannst sie damit jederzeit trennen. Wer den Link hat, kann sie trennen, behalte ihn also für dich.",
+    "copy": "Verwaltungslink kopieren",
+    "openManage": "Verwaltungsseite öffnen",
+    "addAnother": "Weiteres Konto hinzufügen",
+    "full": "Über diesen Link können keine weiteren Konten hinzugefügt werden."
+  },
+  "manage": {
+    "title": "Deine geteilten Konten",
+    "unavailable": "Dieser Link ist nicht gültig.",
+    "intro": "{named, select, true {Konten, die du mit dem LLM Hub unter {instance} verbunden hast.} other {Konten, die du mit diesem LLM Hub verbunden hast.}}",
+    "listTitle": "{count, plural, =0 {Keine verbundenen Konten} one {# verbundenes Konto} other {# verbundene Konten}}",
+    "listHint": "Beim Trennen entfernt der Hub das Konto und seine gespeicherte Anmeldung sofort.",
+    "addedAt": "Verbunden am {date}",
+    "state": "{state, select, active {Aktiv} expired {Anmeldung abgelaufen} paused {Vom Hub pausiert} other {{state}}}",
+    "removeTitle": "Dieses {name}-Konto trennen?",
+    "removeDescription": "Der Hub löscht dieses Konto und seine gespeicherte Anmeldung. Um es wieder zu verbinden, brauchst du einen neuen Konto-Link.",
+    "remove": "Trennen",
+    "removeLabel": "{name}-Konto {account} trennen",
+    "removed": "{name}-Konto getrennt",
+    "empty": "Mit diesem Link ist kein Konto verbunden.",
+    "vendorHint": "Du kannst den Zugriff des Hubs auch beim Anbieter beenden, indem du andere Sitzungen abmeldest oder verbundene Apps in deinen Kontoeinstellungen entfernst."
+  }
+}

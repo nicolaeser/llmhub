@@ -93,3 +93,48 @@ test("signed-in users are sent from sign-in pages back to a safe return path", a
   assert.equal(redirectTarget(await proxy(request("/account/login?return=%2Fusage", cookie))), "/usage");
   assert.equal(redirectTarget(await proxy(request("/account/login?return=https%3A%2F%2Fevil.example", cookie))), "/");
 });
+
+const SUB_ADD_TOKEN = `${"A".repeat(20)}${"b-_9".repeat(5)}zzz`;
+
+test("add-account link pages are public only at their exact token paths", async () => {
+  const { unstable_doesMiddlewareMatch } = await import("next/experimental/testing/server");
+  assert.equal(SUB_ADD_TOKEN.length, 43);
+  for (const path of [`/providers/sub-add/${SUB_ADD_TOKEN}`, `/providers/sub-add/manage/${SUB_ADD_TOKEN}`]) {
+    assert.equal(unstable_doesMiddlewareMatch({ config, url: path }), true, path);
+    const res = await proxy(request(path));
+    assert.equal(passedThrough(res), true, path);
+    assert.equal(res.headers.get("location"), null, path);
+    assert.equal(res.headers.get("x-frame-options"), "DENY", path);
+    assert.match(res.headers.get("content-security-policy") ?? "", /frame-ancestors 'none'/, path);
+  }
+  const signedIn = await signSessionToken(randomToken());
+  assert.equal(passedThrough(await proxy(request(`/providers/sub-add/${SUB_ADD_TOKEN}`, signedIn))), true);
+});
+
+test("every other providers path stays behind the console session", async () => {
+  for (const path of [
+    "/providers",
+    "/providers?tab=subscriptions",
+    "/providers/sub-add",
+    "/providers/sub-add/",
+    "/providers/sub-add/manage",
+    "/providers/sub-add/manage/",
+    "/providers/sub-add/short-token",
+    `/providers/sub-add/${SUB_ADD_TOKEN}x`,
+    `/providers/sub-add/${SUB_ADD_TOKEN}/extra`,
+    `/providers/sub-add/manage/${SUB_ADD_TOKEN}/extra`,
+    `/providers/sub-add/other/${SUB_ADD_TOKEN}`,
+    `/providers/${SUB_ADD_TOKEN}`,
+    `/providers/subscriptions/${SUB_ADD_TOKEN}`,
+    `/keys/sub-add/${SUB_ADD_TOKEN}`,
+  ]) {
+    const res = await proxy(request(path));
+    assert.equal(res.status, 307, path);
+    assert.equal(redirectTarget(res)?.startsWith("/account/login?return="), true, path);
+  }
+});
+
+test("a locale prefix in front of an add-account link keeps it public", async () => {
+  const res = await proxy(request(`/de/providers/sub-add/${SUB_ADD_TOKEN}`));
+  assert.equal(redirectTarget(res)?.startsWith("/account/login") ?? false, false);
+});

@@ -1,25 +1,14 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
-import { Spinner, ToggleButton, ToggleButtonGroup, toast, type useOverlayState } from "@heroui/react";
+import { useState, useTransition } from "react";
+import { toast, type useOverlayState } from "@heroui/react";
 import { useTranslations } from "next-intl";
-import { loadAssignmentOptionsAction, saveAssignmentsAction } from "../_action";
+import { saveAssignmentsAction } from "../_action";
 import FormDialog from "@/components/console/form-dialog";
-import MultiPicker from "@/components/console/multi-picker";
-import { ASSIGNMENT_SCOPES } from "@/lib/gateway/routing/account-access";
 import { isActionFail } from "@/lib/http/action-result";
-import type { AssignmentOptions, AssignmentScope, ProviderView } from "@/types/providers";
+import type { AccessMode, ProviderView } from "@/types/providers";
 import { useErrorToast } from "@/components/console/use-error-toast";
-
-type Mode = "open" | "limited";
-
-const MODES: Mode[] = ["open", "limited"];
-
-function pickedFrom(provider: ProviderView | null): Record<AssignmentScope, string[]> {
-  const picked: Record<AssignmentScope, string[]> = { org: [], team: [], project: [], member: [], key: [] };
-  for (const target of provider?.assignments ?? []) picked[target.scope].push(target.id);
-  return picked;
-}
+import AccessFields, { pickedFrom, pickedTargets, useAssignmentOptions } from "./access-fields";
 
 export default function AccessDialog({
   state,
@@ -31,41 +20,11 @@ export default function AccessDialog({
   onSaved: (provider: ProviderView) => void;
 }) {
   const t = useTranslations("Subscriptions.access");
-  const tCommon = useTranslations("Common");
   const showError = useErrorToast();
-  const [mode, setMode] = useState<Mode>(provider?.restricted ? "limited" : "open");
-  const [picked, setPicked] = useState(() => pickedFrom(provider));
-  const [options, setOptions] = useState<AssignmentOptions | null>(null);
+  const [mode, setMode] = useState<AccessMode>(provider?.restricted ? "limited" : "open");
+  const [picked, setPicked] = useState(() => pickedFrom(provider?.assignments ?? []));
   const [pending, start] = useTransition();
-  const modeLabel = t("mode");
-  const isOpen = state.isOpen;
-
-  useEffect(() => {
-    if (!isOpen) return;
-    let active = true;
-    loadAssignmentOptionsAction().then((result) => {
-      if (!active) return;
-      if (isActionFail(result)) {
-        showError(result.error);
-        setOptions({ org: [], team: [], project: [], member: [], key: [] });
-        return;
-      }
-      setOptions(result.options);
-    });
-    return () => {
-      active = false;
-    };
-  }, [isOpen, showError]);
-
-  const total = ASSIGNMENT_SCOPES.reduce((sum, scope) => sum + picked[scope].length, 0);
-
-  function itemsFor(scope: AssignmentScope) {
-    const known = options?.[scope] ?? [];
-    const labels = (provider?.assignments ?? [])
-      .filter((target) => target.scope === scope && !known.some((item) => item.id === target.id))
-      .map((target) => ({ id: target.id, label: target.label }));
-    return [...known, ...labels];
-  }
+  const options = useAssignmentOptions(state.isOpen);
 
   function save(close: () => void) {
     if (!provider) return;
@@ -73,7 +32,7 @@ export default function AccessDialog({
       const result = await saveAssignmentsAction({
         providerId: provider.id,
         restricted: mode === "limited",
-        targets: ASSIGNMENT_SCOPES.flatMap((scope) => picked[scope].map((id) => ({ scope, id }))),
+        targets: pickedTargets(picked),
       });
       if (isActionFail(result)) {
         showError(result.error);
@@ -95,53 +54,15 @@ export default function AccessDialog({
       isSubmitDisabled={!provider || (mode === "limited" && options === null)}
       onSubmit={save}
     >
-      <ToggleButtonGroup
-        fullWidth
-        selectionMode="single"
-        disallowEmptySelection
-        aria-label={modeLabel}
-        selectedKeys={[mode]}
-        onSelectionChange={(keys) => {
-          const next = MODES.find((item) => item === [...keys][0]);
-          if (next) setMode(next);
-        }}
+      <AccessFields
+        mode={mode}
+        onModeChange={setMode}
+        picked={picked}
+        onPickedChange={setPicked}
+        options={options}
+        known={provider?.assignments ?? []}
         isDisabled={pending}
-      >
-        {MODES.map((item, index) => (
-          <ToggleButton key={item} id={item}>
-            {index > 0 ? <ToggleButtonGroup.Separator /> : null}
-            {t("modes", { mode: item })}
-          </ToggleButton>
-        ))}
-      </ToggleButtonGroup>
-      {mode === "limited" ? (
-        options === null ? (
-          <output
-            aria-live="polite"
-            aria-label={tCommon("loading")}
-            className="flex justify-center py-6 text-accent"
-          >
-            <Spinner color="current" />
-          </output>
-        ) : (
-          <div className="space-y-4">
-            {ASSIGNMENT_SCOPES.map((scope) => (
-              <MultiPicker
-                key={scope}
-                label={t("scope", { scope })}
-                placeholder={t("scope", { scope })}
-                searchLabel={t("search")}
-                emptyLabel={t("empty")}
-                items={itemsFor(scope)}
-                selected={picked[scope]}
-                onChange={(ids) => setPicked((cur) => ({ ...cur, [scope]: ids }))}
-                isDisabled={pending}
-              />
-            ))}
-            {total === 0 ? <p className="text-sm text-warning">{t("nothing")}</p> : null}
-          </div>
-        )
-      ) : null}
+      />
     </FormDialog>
   );
 }

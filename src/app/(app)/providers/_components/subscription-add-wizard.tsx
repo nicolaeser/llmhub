@@ -8,7 +8,7 @@ import IconTile from "@/components/console/icon-tile";
 import SubscriptionBadge from "@/components/console/subscription-badge";
 import type { ProviderKindSpec } from "@/types/providers";
 import { isSignInKind } from "@/lib/gateway/upstreams/provider-kinds";
-import { kindIcon } from "./kind-icons";
+import { kindIcon } from "@/components/providers/kind-icons";
 
 const STEPS = ["provider", "method", "review"] as const;
 

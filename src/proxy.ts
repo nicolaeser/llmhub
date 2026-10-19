@@ -3,6 +3,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import { SESSION_COOKIE, verifySessionCookie } from "@/lib/auth/cookie";
 import {
   APP_LOCALES,
+  isSubAddPage,
   routePathname,
   shouldHardenTransport,
 } from "@/lib/http/public-path";
@@ -54,7 +55,12 @@ export async function proxy(req: NextRequest) {
     const url = req.nextUrl.clone();
     url.pathname = routePath;
     response = NextResponse.redirect(url);
-  } else if (!signedIn && !AUTH_PATTERN.test(routePath) && !SETUP_PATTERN.test(routePath)) {
+  } else if (
+    !signedIn &&
+    !AUTH_PATTERN.test(routePath) &&
+    !SETUP_PATTERN.test(routePath) &&
+    !isSubAddPage(routePath)
+  ) {
     const loginUrl = new URL("/account/login", req.url);
     loginUrl.searchParams.set("return", routePath);
     response = NextResponse.redirect(loginUrl);

@@ -64,7 +64,7 @@ function view(row: FakeConnection) {
             row.kind === where.kind &&
             row.login?.account.toLowerCase() === where.login.is.account.equals.toLowerCase(),
         )
-        .map((row) => ({ id: row.id, login: row.login ? { tokens: row.login.tokens } : null })),
+        .map((row) => ({ id: row.id, login: row.login ? { tokens: row.login.tokens, status: row.login.status } : null })),
     create: async ({
       data,
     }: {
@@ -103,6 +103,12 @@ function view(row: FakeConnection) {
         : { ...data.login.upsert.create, version: 0 };
       return view(row);
     },
+  },
+  providerLogin: {
+    findMany: async ({ where }: { where: { status: string } }) =>
+      connections
+        .filter((row) => row.login?.status === where.status)
+        .map((row) => ({ providerId: row.id, account: row.login!.account, tokens: row.login!.tokens, provider: { kind: row.kind } })),
   },
   gatewayAuditLog: {
     create: async ({ data }: { data: { action: string; objectId: string; afterJson: string } }) => {

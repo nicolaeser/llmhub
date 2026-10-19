@@ -33,6 +33,7 @@ export type MaintenanceSweepResult = {
   vectorStores: number;
   reports: number;
   signIns: number;
+  supersededLogins: number;
   resets: number;
 };
 

@@ -8,7 +8,7 @@ import EmptyState from "@/components/console/empty-state";
 import IconTile from "@/components/console/icon-tile";
 import { isSignInKind, PROVIDER_CATALOG } from "@/lib/gateway/upstreams/provider-kinds";
 import type { ProviderKindSpec, ProviderListActions, ProviderView } from "@/types/providers";
-import { kindIcon } from "./kind-icons";
+import { kindIcon } from "@/components/providers/kind-icons";
 import ProviderCard from "./provider-card";
 
 const STARTER_KINDS = new Set(["openai", "anthropic", "openrouter", "openai_compat"]);

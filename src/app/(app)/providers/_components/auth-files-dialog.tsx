@@ -92,7 +92,7 @@ export default function AuthFilesDialog({
   onImported,
 }: {
   state: ReturnType<typeof useOverlayState>;
-  onImported: (providers: ProviderView[]) => void;
+  onImported: (providers: ProviderView[], superseded: string[]) => void;
 }) {
   const t = useTranslations("Subscriptions.importFiles");
   const tCommon = useTranslations("Common");
@@ -123,15 +123,16 @@ export default function AuthFilesDialog({
     });
   }
 
-  function finish(collected: AuthFileResult[], providers: ProviderView[]) {
+  function finish(collected: AuthFileResult[], providers: ProviderView[], superseded: string[]) {
     setResults(collected);
-    if (providers.length) onImported(providers);
+    if (providers.length || superseded.length) onImported(providers, superseded);
   }
 
   function importFiles() {
     start(async () => {
       const collected: AuthFileResult[] = [];
       const providers = new Map<string, ProviderView>();
+      const superseded = new Set<string>();
       for (const step of importSteps(files)) {
         if ("failed" in step) {
           collected.push(step.failed);
@@ -144,8 +145,12 @@ export default function AuthFilesDialog({
         }
         collected.push(...result.results);
         for (const provider of result.providers) providers.set(provider.id, provider);
+        for (const id of result.superseded) {
+          superseded.add(id);
+          providers.delete(id);
+        }
       }
-      finish(collected, [...providers.values()]);
+      finish(collected, [...providers.values()], [...superseded]);
     });
   }
 
@@ -154,10 +159,10 @@ export default function AuthFilesDialog({
     start(async () => {
       const result = await importAuthFilesAction([{ name, content: pasted }]);
       if (isActionFail(result)) {
-        finish([{ file: name, status: "failed", error: result.error }], []);
+        finish([{ file: name, status: "failed", error: result.error }], [], []);
         return;
       }
-      finish(result.results, result.providers);
+      finish(result.results, result.providers, result.superseded);
     });
   }
 
@@ -182,7 +187,7 @@ export default function AuthFilesDialog({
         return;
       }
       setCleanup({ requested: removeAtSource, removed: result.removed.length, kept: result.keptAtSource.length });
-      finish(result.results, result.providers);
+      finish(result.results, result.providers, result.superseded);
     });
   }
 
