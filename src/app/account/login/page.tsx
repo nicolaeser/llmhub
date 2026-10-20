@@ -73,7 +73,7 @@ export default function LoginPage() {
       title={t.rich("stepHeading", {
         step: current,
         lead: (chunks) => chunks,
-        accent: (chunks) => <span className="text-muted">{chunks}</span>,
+        accent: (chunks) => <span className="text-accent">{chunks}</span>,
       })}
       subtitle={t("stepSubtitle", { step: current })}
       footer={

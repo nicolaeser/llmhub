@@ -1,6 +1,7 @@
 const SIZES = {
-  sm: { box: "size-8", glyph: "size-5" },
-  md: { box: "size-9", glyph: "size-6" },
+  sm: { box: "size-8 rounded-lg", glyph: "size-5" },
+  md: { box: "size-9 rounded-lg", glyph: "size-6" },
+  lg: { box: "size-12 rounded-2xl shadow-overlay", glyph: "size-8" },
 } as const;
 
 export default function BrandMark({
@@ -11,7 +12,7 @@ export default function BrandMark({
   const s = SIZES[size];
   return (
     <span
-      className={`inline-flex shrink-0 items-center justify-center rounded-lg bg-accent text-accent-foreground ${s.box}`}
+      className={`inline-flex shrink-0 items-center justify-center bg-accent text-accent-foreground ${s.box}`}
       aria-hidden
     >
       <svg viewBox="0 0 24 24" className={s.glyph} fill="currentColor" aria-hidden>
