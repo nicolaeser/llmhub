@@ -72,13 +72,18 @@ export function publicProvider(row: ProviderRecord) {
     restricted: row.restricted,
     assignments: assignmentTargets(row.assignments ?? []),
     signIn: signInOf(row),
+    sharedVia: row.subAdd ? row.subAdd.label : null,
     discovered: discoveredOf(row.discovered),
     policy: policyOf(row),
   };
 }
 
 const loginSelect = { select: { account: true, plan: true, status: true } } as const;
-export const providerInclude = { login: loginSelect, assignments: assignmentSelect } as const;
+export const providerInclude = {
+  login: loginSelect,
+  assignments: assignmentSelect,
+  subAdd: { select: { label: true } },
+} as const;
 
 function signInCredential(raw: string | undefined, uid: string, kind: string): SignInCredential | null {
   if (!raw) return null;
@@ -339,7 +344,7 @@ export async function discoverProvider(id: string) {
   if (!row) throw new Error("NOT_FOUND");
   const refreshed = await refreshProviderModels(row, session.user.id);
   if (refreshed.diff.changed) await scheduleCatalogTask({ task: "rebuild" });
-  const provider = publicProvider({ ...refreshed.provider, login: row.login, assignments: row.assignments });
+  const provider = publicProvider({ ...refreshed.provider, login: row.login, assignments: row.assignments, subAdd: row.subAdd });
   const [targets, groups] = await Promise.all([
     catalogTargets(row.id),
     prisma.modelGroup.findMany({ select: { alias: true } }),
@@ -414,5 +419,5 @@ export async function importProviderModels(input: {
     objectId: row.id,
     after: providerAuditAfter(row, { added, updated, strategy }),
   });
-  return { provider: publicProvider({ ...current, login: row.login, assignments: row.assignments }), added, updated, strategy };
+  return { provider: publicProvider({ ...current, login: row.login, assignments: row.assignments, subAdd: row.subAdd }), added, updated, strategy };
 }

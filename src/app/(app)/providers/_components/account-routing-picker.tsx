@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Button, Card, Chip, Description, Label, Radio, RadioGroup, Separator, Spinner, toast } from "@heroui/react";
+import { Card, Chip, Description, Label, Radio, RadioGroup, Separator, Spinner, toast } from "@heroui/react";
 import {
   Activity,
   BatteryMedium,
@@ -28,7 +28,7 @@ const GROUPS = [
 
 const RECOMMENDED: AccountStrategy = "smart";
 
-const ICONS: Record<AccountStrategy, LucideIcon> = {
+export const STRATEGY_ICONS: Record<AccountStrategy, LucideIcon> = {
   inherit: Network,
   smart: Sparkles,
   quota_balanced: BatteryMedium,
@@ -54,7 +54,6 @@ export default function AccountRoutingPicker({
   const tCommon = useTranslations("Common");
   const showError = useErrorToast();
   const [choice, setChoice] = useState<AccountStrategy | null>(null);
-  const [expanded, setExpanded] = useState(false);
   const [saving, start] = useTransition();
   const shown = choice ?? strategy;
   const provider = tProviders("kindName", { kind });
@@ -75,28 +74,15 @@ export default function AccountRoutingPicker({
     });
   }
 
-  if (accounts < 2 && !expanded) {
-    return (
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex min-w-0 flex-1 basis-72 items-center gap-3">
-          <IconTile icon={ICONS[shown]} tone="neutral" size="sm" />
-          <p className="min-w-0 text-sm text-muted">
-            {t("single", { method: t("method", { strategy: shown }) })}
-          </p>
-        </div>
-        <Button size="sm" variant="tertiary" aria-label={t("label", { provider })} onPress={() => setExpanded(true)}>
-          {t("choose")}
-        </Button>
-      </div>
-    );
-  }
-
   return (
     <RadioGroup value={shown} onChange={change} isDisabled={saving} aria-label={t("label", { provider })} className="gap-4">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="flex min-w-0 flex-1 flex-col gap-1">
           <Label>{t("title")}</Label>
           <Description>{t("description")}</Description>
+          {accounts < 2 ? (
+            <p className="text-xs text-muted">{t("single", { method: t("method", { strategy: shown }) })}</p>
+          ) : null}
         </div>
         {saving ? (
           <output aria-live="polite" aria-label={tCommon("loading")} className="text-accent">
@@ -119,7 +105,7 @@ export default function AccountRoutingPicker({
                 >
                   <Radio value={item} className="mt-0 h-full w-full">
                     <Radio.Content className="h-full w-full items-start gap-3 p-4">
-                      <IconTile icon={ICONS[item]} tone={selected ? "accent" : "neutral"} size="sm" />
+                      <IconTile icon={STRATEGY_ICONS[item]} tone={selected ? "accent" : "neutral"} size="sm" />
                       <span className="min-w-0 flex-1 space-y-1">
                         <span className="flex flex-wrap items-center gap-2">
                           <Label>{t("method", { strategy: item })}</Label>

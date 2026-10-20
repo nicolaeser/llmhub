@@ -2,11 +2,10 @@ import type { z } from "zod";
 import type { subAddLinkInputSchema } from "@/schemas/sub-add";
 import type { AssignmentTarget, SignInKind, SignInStatus } from "@/types/providers";
 
-export type SubAddStatus = "active" | "expired" | "revoked" | "used_up";
+export type SubAddStatus = "active" | "expired" | "used_up";
 
 export type SubAddLinkState = {
   expiresAt: Date | string;
-  revokedAt: Date | string | null;
   maxAccounts: number | null;
   added: number;
 };
@@ -16,7 +15,6 @@ export type SubAddLinkRecord = SubAddLinkState & {
   label: string;
   kinds: string[];
   expiresAt: Date;
-  revokedAt: Date | null;
 };
 
 export type SubAddAccountRecord = {
@@ -46,7 +44,6 @@ export type SubAddLinkView = {
   restricted: boolean;
   targets: AssignmentTarget[];
   expiresAt: string;
-  revokedAt: string | null;
   createdAt: string;
   createdBy: string;
   accounts: SubAddAccountView[];
@@ -72,6 +69,8 @@ export type SubAddOffer = {
 };
 
 export type SubAddOutcome = "created" | "updated";
+
+export type SubAddDeleteReason = "revoked" | "expired" | "used_up";
 
 export type SubAddDone = {
   kind: SignInKind;
