@@ -8,7 +8,7 @@ import type { RoutePool, RouterWait } from "@/types/routing";
 export class RouterError extends Error {
   constructor(
     message: string,
-    readonly code: "unknown_group" | "no_healthy" | "all_paused" | "not_assigned" | "unknown_strategy",
+    readonly code: "unknown_group" | "no_healthy" | "all_paused" | "signed_out" | "not_assigned" | "unknown_strategy",
     readonly wait: RouterWait | null = null,
   ) {
     super(message);
@@ -28,6 +28,10 @@ export const ERR_ALL_PAUSED = new RouterError(
   "router: every deployment is paused",
   "all_paused",
 );
+export const ERR_SIGNED_OUT = new RouterError(
+  "router: every subscription account needs a new sign-in",
+  "signed_out",
+);
 export const ERR_NOT_ASSIGNED = new RouterError(
   "router: no subscription account is assigned to this caller",
   "not_assigned",
@@ -46,7 +50,7 @@ export function isRouterError(err: unknown, code?: RouterError["code"]): err is 
 }
 
 export function isUnavailableError(err: unknown): err is RouterError {
-  return isRouterError(err, "no_healthy") || isRouterError(err, "all_paused");
+  return isRouterError(err, "no_healthy") || isRouterError(err, "all_paused") || isRouterError(err, "signed_out");
 }
 
 export function routerGateError(err: unknown): GateError | null {
@@ -55,6 +59,9 @@ export function routerGateError(err: unknown): GateError | null {
   }
   if (isRouterError(err, "not_assigned")) {
     return new GateError(403, "account_not_assigned", "no subscription account is assigned to this key");
+  }
+  if (isRouterError(err, "signed_out")) {
+    return new GateError(503, "no_provider_key", "provider sign-in expired; sign in again on the Providers page");
   }
   if (isUnavailableError(err)) {
     const wait = err.wait;
