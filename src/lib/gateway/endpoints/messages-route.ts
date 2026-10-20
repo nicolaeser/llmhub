@@ -4,6 +4,7 @@ import { modelChain } from "@/lib/gateway/access/gate";
 import { gatewayRoute, screenModelRequest, validRequest } from "@/lib/gateway/endpoints/pipeline";
 import { anthropicPassthroughHeaders, apiKeyRequest } from "@/lib/gateway/protocols/messages";
 import { dispatchMessages, streamMessages } from "@/lib/gateway/dispatch/messages-dispatch";
+import { restoreClientJson, restoreClientMessagesStream } from "@/lib/gateway/safety/restore-client";
 import { messagesRequestSchema } from "@/schemas/anthropic";
 import { maxCostHeader } from "@/lib/gateway/billing/cost-cap";
 import { messagesToolNames, runMcpMessages, streamMcpMessages, withMcpMessagesTools } from "@/lib/mcp/messages-loop";
@@ -35,10 +36,12 @@ export function messagesRoute(pool: RoutePool) {
         signal: req.signal,
       };
       const body = withMcpMessagesTools(clean, toolset);
-      if (request.stream === true) return streamMcpMessages({ req, ctx, body, headers: input.headers });
-      return NextResponse.json(await runMcpMessages(ctx, body, input.headers));
+      if (request.stream === true) {
+        return restoreClientMessagesStream(principal.trace, await streamMcpMessages({ req, ctx, body, headers: input.headers }));
+      }
+      return NextResponse.json(restoreClientJson(principal.trace, await runMcpMessages(ctx, body, input.headers)));
     }
-    if (request.stream === true) return streamMessages({ ...input, req });
-    return NextResponse.json(await dispatchMessages(input));
+    if (request.stream === true) return restoreClientMessagesStream(principal.trace, await streamMessages({ ...input, req }));
+    return NextResponse.json(restoreClientJson(principal.trace, await dispatchMessages(input)));
   });
 }
