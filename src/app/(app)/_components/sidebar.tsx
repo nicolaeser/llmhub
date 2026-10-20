@@ -23,8 +23,8 @@ export function useConsoleNav() {
 }
 
 const ITEM_TONE = {
-  active: "bg-accent/10 font-medium text-foreground ring-1 ring-accent/20",
-  idle: "text-muted hover:bg-default hover:text-foreground",
+  active: "bg-accent/12 font-medium text-foreground ring-1 ring-inset ring-accent/25",
+  idle: "text-muted hover:bg-foreground/5 hover:text-foreground",
 } as const;
 
 function NavLink({ item, collapsed, onNavigate }: { item: NavItem; collapsed: boolean; onNavigate?: () => void }) {
@@ -40,7 +40,7 @@ function NavLink({ item, collapsed, onNavigate }: { item: NavItem; collapsed: bo
     return (
       <Tooltip delay={0} closeDelay={0}>
         <Tooltip.Trigger<"a">
-          className={`flex size-10 items-center justify-center rounded-lg transition ${tone}`}
+          className={`flex size-10 items-center justify-center rounded-xl motion-safe:transition-colors ${tone}`}
           render={(props) => (
             <Link {...props} role={undefined} href={item.href} aria-current={active ? "page" : undefined} aria-label={label}>
               {icon}
@@ -57,7 +57,7 @@ function NavLink({ item, collapsed, onNavigate }: { item: NavItem; collapsed: bo
       href={item.href}
       aria-current={active ? "page" : undefined}
       onClick={onNavigate}
-      className={`flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm transition ${tone}`}
+      className={`flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-sm motion-safe:transition-colors ${tone}`}
     >
       {icon}
       <span className="truncate">{label}</span>
