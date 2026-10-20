@@ -5,6 +5,9 @@ import createNextIntlPlugin from "next-intl/plugin";
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  outputFileTracingIncludes: {
+    "/internal-api/usage/export": ["./src/lib/export/fonts/*"],
+  },
   poweredByHeader: false,
   turbopack: {
     root: path.dirname(fileURLToPath(import.meta.url)),

@@ -29,12 +29,19 @@ export function keyScope(session: AuthenticatedSession): { orgId?: string; userI
   };
 }
 
-export function spendScope(session: AuthenticatedSession): SpendScope {
-  const company = companyOf(session);
+export function spendScopeFor(input: { company: string | null; seesAll: boolean; userId: string }): SpendScope {
   return {
-    ...(company ? { orgId: company } : {}),
-    ...(seesAllSpend(session) ? {} : { userId: session.user.id }),
+    ...(input.company ? { orgId: input.company } : {}),
+    ...(input.seesAll ? {} : { userId: input.userId }),
   };
+}
+
+export function spendScope(session: AuthenticatedSession): SpendScope {
+  return spendScopeFor({ company: companyOf(session), seesAll: seesAllSpend(session), userId: session.user.id });
+}
+
+export function spendScopeKey(scope: SpendScope): string {
+  return `${scope.orgId ?? ""}|${scope.userId ?? ""}`;
 }
 
 export function keyVisibleTo(

@@ -95,6 +95,7 @@
   "limits": {
     "refresh": "Refresh usage limits",
     "updated": "Updated {when}",
+    "nextCheck": "Next check {when}.",
     "window": "{unit, select, hour {{count, plural, one {Hourly limit} other {#-hour limit}}} day {{count, plural, one {Daily limit} =7 {Weekly limit} other {#-day limit}}} month {Monthly limit} other {Usage limit}}",
     "scoped": "{scope}: {window}",
     "resets": "Resets {when} ({date})",
