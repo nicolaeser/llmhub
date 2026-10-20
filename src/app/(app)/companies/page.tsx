@@ -107,7 +107,7 @@ export default function CompaniesPage() {
   }
 
   if (!data) {
-    return <PageStatus icon={Building2} title={t("title")} state={page} />;
+    return <PageStatus icon={Building2} title={t("title")} state={page} layout="split" />;
   }
 
   const platform = !data.companyId;

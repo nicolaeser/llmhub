@@ -32,6 +32,12 @@
   --muted: oklch(0.74 0.02 277);
 }
 
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --skeleton-animation: none;
+  }
+}
+
 @layer base {
   .dark {
     color: var(--foreground);

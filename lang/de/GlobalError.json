@@ -1,0 +1,8 @@
+{
+  "documentTitle": "Fehler | LLM Hub",
+  "title": "LLM Hub konnte diese Seite nicht öffnen",
+  "description": "Die App hatte einen unerwarteten Fehler, bevor die Seite geladen werden konnte. Bitte erneut versuchen oder die Startseite öffnen.",
+  "tryAgain": "Erneut versuchen",
+  "goHome": "Startseite öffnen",
+  "errorId": "Fehler-ID: {id}"
+}

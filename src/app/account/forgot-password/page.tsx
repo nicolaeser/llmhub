@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
-import { Alert, Button, Form, Input, Label, Skeleton, Spinner, TextField } from "@heroui/react";
+import { Alert, Button, Form, Input, Label, Spinner, TextField } from "@heroui/react";
 import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/routing";
 import AccountShell from "@/app/account/_components/account-shell";
+import FormSkeleton from "@/app/account/_components/form-skeleton";
 import { isActionFail } from "@/lib/http/action-result";
 import { passwordResetContextAction } from "./_action";
 
@@ -36,10 +37,7 @@ export default function ForgotPasswordPage() {
       }
     >
       {enabled === null ? (
-        <div aria-busy className="space-y-5">
-          <Skeleton className="h-16 w-full rounded-xl" />
-          <Skeleton className="h-10 w-full rounded-xl" />
-        </div>
+        <FormSkeleton fields={1} />
       ) : !enabled ? (
         <Alert status="default">
           <Alert.Indicator />

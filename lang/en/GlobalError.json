@@ -1,0 +1,8 @@
+{
+  "documentTitle": "Error | LLM Hub",
+  "title": "LLM Hub could not open this page",
+  "description": "The app hit an unexpected error before the page could load. Try again, or open the start page.",
+  "tryAgain": "Try again",
+  "goHome": "Open the start page",
+  "errorId": "Error id: {id}"
+}

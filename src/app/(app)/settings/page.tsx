@@ -28,7 +28,7 @@ export default function SettingsPage() {
   const scope = page.data;
 
   if (!scope) {
-    return <PageStatus icon={Settings} title={t("title")} state={page} />;
+    return <PageStatus icon={Settings} title={t("title")} state={page} tabs layout="form" />;
   }
 
   const company = scope.company;

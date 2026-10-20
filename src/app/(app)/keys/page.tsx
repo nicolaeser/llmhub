@@ -17,7 +17,7 @@ export default function KeysPage() {
   const granted = page.data;
 
   if (!granted) {
-    return <PageStatus icon={KeyRound} title={t("title")} subtitle={t("subtitle")} state={page} />;
+    return <PageStatus icon={KeyRound} title={t("title")} subtitle={t("subtitle")} state={page} tabs stats={4} />;
   }
 
   const tabs = [
