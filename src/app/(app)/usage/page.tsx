@@ -19,7 +19,16 @@ export default function UsagePage() {
   const subtitle = t("subtitle", { scope: kind });
 
   if (!granted) {
-    return <PageStatus icon={BarChart3} title={t("title")} subtitle={subtitle} state={page} />;
+    return (
+      <PageStatus
+        icon={BarChart3}
+        title={t("title")}
+        subtitle={subtitle}
+        state={page}
+        tabs={kind === "platform"}
+        layout="charts"
+      />
+    );
   }
 
   const tabs = [

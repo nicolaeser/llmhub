@@ -47,7 +47,14 @@ export function useActionData<T>(load: ActionLoader<T>, onLoad?: (data: T) => vo
     void run();
   }, [run]);
 
-  useEffect(() => onWorkspaceChange(reload), [reload]);
+  useEffect(
+    () =>
+      onWorkspaceChange(() => {
+        setSnapshot({ data: null, error: null, pending: true });
+        void run();
+      }),
+    [run],
+  );
 
   const reloadWith = useCallback(
     (next: ActionLoader<T>) => {

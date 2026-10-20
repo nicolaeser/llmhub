@@ -14,7 +14,6 @@ import {
   ListBox,
   SearchField,
   Select,
-  Spinner,
   Switch,
   ToggleButton,
   ToggleButtonGroup,
@@ -25,6 +24,7 @@ import { Blocks, SearchX } from "lucide-react";
 import { useFormatter, useTranslations } from "next-intl";
 import EmptyState from "@/components/console/empty-state";
 import FormDialog from "@/components/console/form-dialog";
+import { SectionLoading } from "@/components/console/page-status";
 import { useErrorToast } from "@/components/console/use-error-toast";
 import { isActionFail } from "@/lib/http/action-result";
 import { explainAccess } from "@/lib/mcp/resolve";
@@ -271,9 +271,7 @@ export default function KeyMcpDialog({
             </Alert.Content>
           </Alert>
         ) : (
-          <output aria-live="polite" aria-label={tCommon("loading")} className="flex justify-center py-10 text-accent">
-            <Spinner color="current" />
-          </output>
+          <SectionLoading rows={4} />
         )
       ) : servers.length === 0 ? (
         <EmptyState icon={Blocks} title={t("emptyTitle")} description={t("emptyDescription")} />
