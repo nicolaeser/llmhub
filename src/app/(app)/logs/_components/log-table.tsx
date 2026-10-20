@@ -1,7 +1,7 @@
 "use client";
 
 import { Button, Chip, Table } from "@heroui/react";
-import { Activity, FileText } from "lucide-react";
+import { Activity, Coins, FileText, ScrollText } from "lucide-react";
 import { useFormatter, useTranslations } from "next-intl";
 import EmptyState from "@/components/console/empty-state";
 import RowCard, { RowCards, TABLE_FROM_LG } from "@/components/console/row-cards";
@@ -100,7 +100,7 @@ export default function LogTable({
   }
 
   if (kind === "requests") {
-    if (!logs.requests.length) return <EmptyState icon={Activity} title={t("emptyRequests")} />;
+    if (!logs.requests.length) return <EmptyState icon={Activity} title={t("emptyRequests")} description={t("emptyRequestsHint")} />;
     return (
       <>
         <RowCards label={t("tabs.requests")}>
@@ -188,7 +188,7 @@ export default function LogTable({
   }
 
   if (kind === "spend") {
-    if (!logs.spend.length) return <EmptyState icon={Activity} title={t("emptySpend")} />;
+    if (!logs.spend.length) return <EmptyState icon={Coins} title={t("emptySpend")} description={t("emptySpendHint")} />;
     return (
       <>
         <RowCards label={t("tabs.spend")}>
@@ -235,7 +235,7 @@ export default function LogTable({
     );
   }
 
-  if (!logs.audit.length) return <EmptyState icon={Activity} title={t("emptyAudit")} />;
+  if (!logs.audit.length) return <EmptyState icon={ScrollText} title={t("emptyAudit")} description={t("emptyAuditHint")} />;
   return (
     <>
       <RowCards label={t("tabs.audit")}>
