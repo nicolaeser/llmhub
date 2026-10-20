@@ -16,14 +16,15 @@ import { catalogTargets } from "@/lib/gateway/catalog/catalog-entries";
 import { addRoute, markRouted } from "@/lib/gateway/catalog/catalog-routes";
 import { scheduleCatalogTask } from "@/lib/gateway/catalog/catalog-tasks";
 import { assignmentSelect, assignmentTargets } from "@/lib/gateway/routing/account-assignments";
+import { reactivateAccount } from "@/lib/gateway/routing/account-reactivation";
 import { loginData } from "@/lib/gateway/upstreams/credentials";
 import { baseName, vendorOf } from "@/lib/gateway/catalog/model-catalog";
 import { refreshProviderModels } from "@/lib/gateway/upstreams/discovery";
 import { matchingConnection, pruneSupersededLogins } from "@/lib/providers/account-match";
 import { removeProviderConnection } from "@/lib/providers/provider-removal";
 import { discoveredOf } from "@/lib/gateway/upstreams/provider-prices";
-import { withResetDetails } from "@/lib/gateway/upstreams/reset-redeem";
-import { subscriptionLimits } from "@/lib/gateway/upstreams/subscription-limits";
+import { pollAccounts, readLimitSnapshot, readLimitSnapshots } from "@/lib/gateway/upstreams/limit-store";
+import { refreshAccountLimits, refreshAccountsLimits } from "@/lib/providers/limit-refresh";
 import {
   completeAuthorization,
   openCredential,
@@ -35,8 +36,9 @@ import {
 } from "@/lib/gateway/upstreams/subscription-sign-in";
 import { providerPolicySchema } from "@/schemas/providers";
 import type {
-  AccountLimits,
   ImportCandidate,
+  LimitSnapshot,
+  LimitSnapshotList,
   ProviderPolicyInput,
   ProviderRecord,
   ProviderSignIn,
@@ -173,6 +175,7 @@ export async function createProvider(input: {
         include: providerInclude,
       });
   const outcome = existing ? "updated" : "created";
+  if (existing) await reactivateAccount(row.id);
   await writeAudit({
     actor: session.user.id,
     action: "provider.connect",
@@ -183,6 +186,11 @@ export async function createProvider(input: {
   await scheduleCatalogTask({ task: "provider", providerId: row.id });
   const superseded = credential ? await pruneSupersededLogins(session.user.id) : [];
   return { provider: publicProvider(row), outcome, superseded };
+}
+
+function updateAction(wasEnabled: boolean, enabled: boolean): string {
+  if (wasEnabled === enabled) return "provider.update";
+  return enabled ? "provider.resume" : "provider.pause";
 }
 
 export async function updateProvider(input: {
@@ -214,11 +222,14 @@ export async function updateProvider(input: {
     },
     include: providerInclude,
   });
+  const resumed = !existing.enabled && row.enabled;
+  if (resumed || apiKey || credential) await reactivateAccount(row.id);
   await writeAudit({
     actor: session.user.id,
-    action: "provider.update",
+    action: updateAction(existing.enabled, row.enabled),
     objectType: "provider",
     objectId: row.id,
+    before: { enabled: existing.enabled },
     after: providerAuditAfter(row, {
       enabled: row.enabled,
       keyReplaced: Boolean(apiKey),
@@ -232,41 +243,37 @@ export async function updateProvider(input: {
   return { provider: publicProvider(row), outcome: "updated" as const, superseded };
 }
 
-export async function loadProviderLimits(input: { id: string; refresh?: boolean }): Promise<{ limits: SubscriptionLimits | null }> {
+export async function loadProviderLimits(input: {
+  id: string;
+  refresh?: boolean;
+}): Promise<{ limits: SubscriptionLimits | null; item: LimitSnapshot | null }> {
   await requirePermission(PERMISSIONS.PROVIDERS_READ);
   const row = await prisma.providerConnection.findUnique({
     where: { id: input.id },
-    select: { id: true, kind: true, apiKey: true },
+    select: { id: true, kind: true, apiKey: true, enabled: true, login: { select: { status: true, version: true } } },
   });
   if (!row) throw new Error("NOT_FOUND");
-  const refresh = input.refresh === true;
-  return { limits: await withResetDetails(row, await subscriptionLimits(row, { force: refresh }), { refresh }) };
+  if (!reportsLimits(row.kind)) return { limits: null, item: null };
+  if (row.login?.status !== "active") throw new Error("SIGN_IN_EXPIRED");
+  if (input.refresh === true) {
+    await refreshAccountLimits({
+      id: row.id,
+      kind: row.kind,
+      apiKey: row.apiKey,
+      enabled: row.enabled,
+      loginVersion: row.login.version,
+    });
+  }
+  const item = await readLimitSnapshot(row.id);
+  if (item?.error && !item.limits) throw new Error(item.error);
+  return { limits: item?.limits ?? null, item };
 }
 
-const LIMIT_ERRORS = new Set(["SIGN_IN_EXPIRED", "UPSTREAM_AUTH", "UPSTREAM_FAILED"]);
-
-export async function loadSubscriptionLimits(input: { refresh?: boolean } = {}): Promise<{ items: AccountLimits[] }> {
+export async function loadSubscriptionLimits(input: { refresh?: boolean } = {}): Promise<LimitSnapshotList> {
   await requirePermission(PERMISSIONS.PROVIDERS_READ);
-  const rows = await prisma.providerConnection.findMany({
-    where: {
-      kind: { in: PROVIDER_CATALOG.filter((spec) => reportsLimits(spec.kind)).map((spec) => spec.kind) },
-      login: { is: { status: "active" } },
-    },
-    select: { id: true, kind: true, apiKey: true },
-  });
-  const items = await Promise.all(
-    rows.map(async (row): Promise<AccountLimits> => {
-      try {
-        const refresh = input.refresh === true;
-        const limits = await subscriptionLimits(row, { force: refresh });
-        return { id: row.id, limits: await withResetDetails(row, limits, { refresh }), error: "" };
-      } catch (error) {
-        const code = error instanceof Error ? error.message : "";
-        return { id: row.id, limits: null, error: LIMIT_ERRORS.has(code) ? code : "UPSTREAM_FAILED" };
-      }
-    }),
-  );
-  return { items };
+  if (input.refresh === true) await refreshAccountsLimits(await pollAccounts());
+  const at = Date.now();
+  return { at, items: await readLimitSnapshots(undefined, at) };
 }
 
 export async function startSignIn(kind: string): Promise<SignInStart> {

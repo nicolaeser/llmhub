@@ -42,6 +42,7 @@ function groupRow(alias: string, routes: FakeRoute[]) {
         retentionDays: null,
         region: "",
         noTraining: false,
+        login: { status: "active" },
       },
     })),
   };

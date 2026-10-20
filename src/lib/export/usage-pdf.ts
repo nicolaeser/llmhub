@@ -11,6 +11,7 @@ import {
   PAGE_W,
   pdfDocument,
 } from "./pdf";
+import { unicodeTypeface } from "./pdf-unicode";
 import type { PdfCanvas, PdfTextStyle, UsagePdfInput, UsagePdfStats } from "@/types/export";
 import type { Formatter, Translate } from "@/types/i18n";
 
@@ -158,7 +159,7 @@ function drawModelTable(page: PdfCanvas, table: UsagePdfInput["byModel"], top: n
 }
 
 export function usagePdf(input: UsagePdfInput): Uint8Array {
-  const page = canvas();
+  const page = canvas(unicodeTypeface);
   const headerBottom = drawHeader(page, {
     brand: input.brand,
     title: input.title,

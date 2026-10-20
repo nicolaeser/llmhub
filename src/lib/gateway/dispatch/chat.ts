@@ -19,6 +19,7 @@ import { isSignInKind, speaksAnthropic } from "@/lib/gateway/upstreams/provider-
 import { AntigravitySseTranslator, withProject } from "@/lib/gateway/upstreams/antigravity";
 import { CodexSseTranslator } from "@/lib/gateway/upstreams/codex";
 import { deploymentAuth, renewRejectedLogin } from "@/lib/gateway/upstreams/credentials";
+import { nudgeLimits } from "@/lib/gateway/upstreams/limit-store";
 import { autoRedeemIfDue } from "@/lib/gateway/upstreams/reset-redeem";
 import { plainModel } from "@/lib/gateway/catalog/model-alias";
 import { inPool, outsidePool, routeOf } from "@/lib/gateway/routing/route-pool";
@@ -36,6 +37,7 @@ import { asRecord, isRouterError, isUnavailableError, newId, routerGateError, st
 import { costFilter, costRejected } from "@/lib/gateway/billing/cost-cap";
 import { ChatStreamTranscript } from "@/lib/gateway/request-logs/log-content";
 import { estimateTokens, requestText } from "@/lib/gateway/billing/tokens";
+import { logger } from "@/lib/logging/logger";
 import { parseJsonOrNull, readTextOr } from "@/lib/utils/json";
 import { cancelQuietly, DeadlineReader } from "@/lib/utils/streams";
 import type { ChatSseTranslator, JsonMap, Principal, RequestTrace } from "@/types/gateway";
@@ -161,6 +163,19 @@ function accountBudget(deployments: ResolvedDeployment[]): number {
   return new Set(deployments.flatMap((dep) => signInAccount(dep) ?? [])).size;
 }
 
+async function settleRunPin(
+  kind: string,
+  session: string,
+  account: string,
+  pinned: AccountPin | null,
+  switched: boolean,
+  request: JsonMap | null,
+): Promise<void> {
+  const held = await writePin(kind, session, nextPin(account, pinned, switched, historyLength(request)), pinned);
+  if (!pinned || pinned.providerId === account || held?.providerId !== account) return;
+  logger.info("gateway.account_handover", { kind, from: pinned.providerId, to: account, failover: switched });
+}
+
 function prepareHandoff(dep: ResolvedDeployment, pinned: AccountPin | null, switched: boolean, request: JsonMap | null): void {
   if (!request || dep.kind !== "codex") return;
   const account = signInAccount(dep);
@@ -229,11 +244,7 @@ export async function withDeployment<T>(
           const result = await fn(acquired.dep, group);
           markSuccess(acquired.dep, Date.now() - started);
           if (account && run.session) {
-            void writePin(
-              acquired.dep.provider!.kind,
-              run.session,
-              nextPin(account, acquired.pinned, switched, historyLength(request)),
-            );
+            void settleRunPin(acquired.dep.provider!.kind, run.session, account, acquired.pinned, switched, request);
           }
           if (!opts?.deferRelease) {
             acquired.release();
@@ -263,7 +274,10 @@ export async function withDeployment<T>(
           if (retryable(err)) markFailure(acquired.dep, err instanceof GateError ? err.retryAt : null);
           last = err;
           if (!isRouterError(err)) upstreamFailure = err;
-          if (account && failureCode(err).status === 429) void autoRedeemIfDue(account);
+          if (account && failureCode(err).status === 429) {
+            nudgeLimits(account);
+            void autoRedeemIfDue(account);
+          }
           if (account && accountUnusable(err)) {
             run.tried.add(acquired.dep.id);
             failedAccount = account;

@@ -7,7 +7,7 @@ import { useFormatter, useNow, useTranslations } from "next-intl";
 import ConfirmDialog from "@/components/console/confirm-dialog";
 import { useErrorToast } from "@/components/console/use-error-toast";
 import { isActionFail } from "@/lib/http/action-result";
-import type { ProviderView, SubscriptionLimits } from "@/types/providers";
+import type { LimitSnapshot, ProviderView } from "@/types/providers";
 import type { ResetCredits, ResetResult } from "@/types/resets";
 import { redeemProviderResetAction } from "../_action";
 
@@ -31,13 +31,13 @@ export default function BankedResets({
   credits,
   timeZone,
   canManage,
-  onLimits,
+  onItem,
 }: {
   row: ProviderView;
   credits: ResetCredits;
   timeZone: string;
   canManage: boolean;
-  onLimits: (id: string, limits: SubscriptionLimits | null) => void;
+  onItem: (item: LimitSnapshot | null) => void;
 }) {
   const t = useTranslations("Subscriptions.resets");
   const tLimits = useTranslations("Subscriptions.limits");
@@ -77,7 +77,7 @@ export default function BankedResets({
         showError(result.error);
         return;
       }
-      onLimits(row.id, result.limits);
+      onItem(result.item);
       toast(t("result", { result: result.result, windows: result.windowsReset }), {
         variant: RESULT_TOAST[result.result],
       });
