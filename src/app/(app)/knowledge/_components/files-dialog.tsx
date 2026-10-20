@@ -21,6 +21,7 @@ import { listKnowledgeFilesAction, removeKnowledgeFileAction } from "../_action"
 import { isActionFail } from "@/lib/http/action-result";
 import { formatBytes } from "@/lib/utils/bytes";
 import type { UploadItem, UploadStatus, VectorFileStatus, VectorFileView, VectorStoreView } from "@/types/rag";
+import { SectionLoading } from "@/components/console/page-status";
 import { useErrorToast } from "@/components/console/use-error-toast";
 
 const POLL_MS = 3000;
@@ -324,13 +325,7 @@ export default function FilesDialog({
                   ) : null}
 
                   {loading ? (
-                    <output
-                      aria-live="polite"
-                      aria-label={tCommon("loading")}
-                      className="flex min-h-32 items-center justify-center text-accent"
-                    >
-                      <Spinner color="current" />
-                    </output>
+                    <SectionLoading rows={4} />
                   ) : loadFailed ? (
                     <Alert status="danger">
                       <Alert.Content>

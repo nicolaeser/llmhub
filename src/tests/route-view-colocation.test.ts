@@ -406,3 +406,16 @@ test("moved shared UI lives in src/components domain folders", () => {
     assert.equal(existsSync(path.join(appRoot, "_components", name)), false, name);
   }
 });
+
+test("every console page has a loading view and every route group has an error boundary", () => {
+  const consoleRoot = path.join(appRoot, "(app)");
+  const withoutLoading = walkFiles(consoleRoot)
+    .filter((file) => path.basename(file) === "page.tsx")
+    .map((file) => path.dirname(file))
+    .filter((dir) => dir !== consoleRoot && !existsSync(path.join(dir, "loading.tsx")))
+    .map((dir) => path.relative(root, dir));
+  assert.deepEqual(withoutLoading, []);
+  for (const rel of ["(app)/error.tsx", "account/error.tsx", "providers/sub-add/error.tsx", "global-error.tsx"]) {
+    assert.equal(existsSync(path.join(appRoot, rel)), true, rel);
+  }
+});

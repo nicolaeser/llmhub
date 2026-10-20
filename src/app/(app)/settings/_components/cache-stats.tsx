@@ -16,6 +16,7 @@ export default function CacheStats({ initial, semanticOn }: { initial: ResponseC
   const showError = useErrorToast();
   const format = useFormatter();
   const [stats, setStats] = useState(initial);
+  const [days, setDays] = useState(initial.days);
   const [pending, start] = useTransition();
   const headingId = useId();
   const showSemantic = semanticOn || stats.semanticHits > 0 || stats.lookupCost > 0;
@@ -74,12 +75,14 @@ export default function CacheStats({ initial, semanticOn }: { initial: ResponseC
         {t("stats.title")}
       </h2>
       <Select
-        selectedKey={String(stats.days)}
+        selectedKey={String(days)}
         onSelectionChange={(key) => {
-          const days = Number(key);
+          const next = Number(key);
+          setDays(next);
           start(async () => {
-            const result = await loadCacheStatsAction({ days });
+            const result = await loadCacheStatsAction({ days: next });
             if (isActionFail(result)) {
+              setDays(stats.days);
               showError(result.error);
               return;
             }
@@ -108,7 +111,13 @@ export default function CacheStats({ initial, semanticOn }: { initial: ResponseC
       </Select>
       <div aria-busy={pending} className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {tiles.map((tile) => (
-          <StatCard key={tile.key} label={tile.label} value={tile.value} icon={tile.icon} tone={tile.tone} />
+          <StatCard
+            key={tile.key}
+            label={tile.label}
+            value={pending ? null : tile.value}
+            icon={tile.icon}
+            tone={tile.tone}
+          />
         ))}
       </div>
       <p className="text-xs text-muted">{t("stats.hint")}</p>
