@@ -504,7 +504,7 @@ test("the models call posts the project and reports the status", async () => {
   assert.equal(calls[0]!.headers.Authorization, "Bearer tok");
   assert.match(calls[0]!.headers["User-Agent"] ?? "", /^antigravity\//);
   respondWith(() => new Response("no", { status: 403 }));
-  assert.deepEqual(await fetchAvailableModels({ key: "tok", headers: {}, project: "p" }, "https://example.test/"), { status: 403, json: null });
+  assert.deepEqual(await fetchAvailableModels({ key: "tok", headers: {}, project: "p" }, "https://example.test/"), { status: 403, json: null, retryAfter: null });
   assert.equal(calls[1]!.url, "https://example.test/v1internal:fetchAvailableModels");
   globalThis.fetch = (async () => {
     throw new Error("down");

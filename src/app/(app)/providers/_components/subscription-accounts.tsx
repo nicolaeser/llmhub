@@ -1,25 +1,29 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { Button, Spinner, useOverlayState } from "@heroui/react";
 import { CircleCheck, CirclePause, Gauge, KeyRound, Link2, Plus, RefreshCw, Upload } from "lucide-react";
 import { useFormatter, useNow, useTranslations } from "next-intl";
+import { LoadError } from "@/components/console/page-status";
 import StatCard from "@/components/console/stat-card";
 import TimeZonePicker from "@/components/console/time-zone-picker";
 import { useErrorToast } from "@/components/console/use-error-toast";
 import { DEFAULT_ACCOUNT_STRATEGY } from "@/lib/gateway/routing/account-access";
 import { autoResetPolicy, isResetKind } from "@/lib/gateway/routing/auto-reset-policy";
 import { isSignInKind, PROVIDER_CATALOG, reportsLimits } from "@/lib/gateway/upstreams/provider-kinds";
+import { useActionData } from "@/lib/hooks/use-action-data";
 import { setDashboardTimeZone, useDashboardTimeZone } from "@/lib/hooks/use-dashboard-time-zone";
+import { useLiveConnected, useLiveLimits } from "@/lib/hooks/use-live";
 import { isActionFail } from "@/lib/http/action-result";
+import { withLimitItems } from "@/lib/updates/live-events";
 import type {
-  AccountLimits,
   AccountRouting,
+  LimitSnapshot,
+  LimitSnapshotList,
   ProviderKindSpec,
   ProviderListActions,
   ProviderView,
   SignInKind,
-  SubscriptionLimits,
 } from "@/types/providers";
 import type { AutoResetPolicies } from "@/types/resets";
 import {
@@ -44,6 +48,9 @@ function kindRank(kind: string): number {
   return index === -1 ? KIND_ORDER.length : index;
 }
 
+const FALLBACK_POLL_MS = 60_000;
+const RECONCILE_DELAY_MS = 6_000;
+
 const SUBSCRIPTION_CATALOG = PROVIDER_CATALOG.filter((spec): spec is ProviderKindSpec & { kind: SignInKind } =>
   isSignInKind(spec.kind),
 ).sort((a, b) => kindRank(a.kind) - kindRank(b.kind));
@@ -61,7 +68,12 @@ export default function SubscriptionAccounts({
   const timeZone = useDashboardTimeZone();
   const showError = useErrorToast();
   const links = useSubAddLinks();
-  const [limits, setLimits] = useState<Record<string, AccountLimits>>({});
+  const seed = useActionData<LimitSnapshotList>(() => loadSubscriptionLimitsAction());
+  const { data: seedList, setData: setSeed, reload: reloadSeed } = seed;
+  const { items: limits, removed } = useLiveLimits(seedList);
+  const live = useLiveConnected();
+  const { reload: reloadRows } = actions;
+  const reconciled = useRef("");
   const [routing, setRouting] = useState<AccountRouting | null>(null);
   const [autoReset, setAutoReset] = useState<AutoResetPolicies>({});
   const [canManage, setCanManage] = useState(false);
@@ -69,7 +81,7 @@ export default function SubscriptionAccounts({
   const [access, setAccess] = useState<ProviderView | null>(null);
   const [accessKey, setAccessKey] = useState(0);
   const [settingsKind, setSettingsKind] = useState<SignInKind | null>(null);
-  const [refreshingId, setRefreshingId] = useState("");
+  const [refreshing, setRefreshing] = useState<string[]>([]);
   const [refreshingAll, startRefreshAll] = useTransition();
   const [, startRefreshOne] = useTransition();
   const accessState = useOverlayState();
@@ -78,15 +90,18 @@ export default function SubscriptionAccounts({
   const importState = useOverlayState();
   const wizardState = useOverlayState();
 
-  function storeLimits(items: AccountLimits[]) {
-    setLimits((cur) => ({ ...cur, ...Object.fromEntries(items.map((item) => [item.id, item])) }));
+  function storeItems(items: LimitSnapshot[]) {
+    if (seedList) setSeed((list) => withLimitItems(list, items));
+    else reloadSeed();
+  }
+
+  function storeList(list: LimitSnapshotList) {
+    if (seedList) setSeed(list);
+    else reloadSeed();
   }
 
   useEffect(() => {
     let active = true;
-    loadSubscriptionLimitsAction().then((res) => {
-      if (active && !isActionFail(res)) storeLimits(res.items);
-    });
     loadAccountRoutingAction().then((res) => {
       if (!active || isActionFail(res)) return;
       setRouting(res.routing);
@@ -101,8 +116,40 @@ export default function SubscriptionAccounts({
     };
   }, []);
 
-  function storeAccountLimits(id: string, next: SubscriptionLimits | null) {
-    if (next) storeLimits([{ id, limits: next, error: "" }]);
+  useEffect(() => {
+    if (live) return;
+    let active = true;
+    const timer = setInterval(() => {
+      if (document.visibilityState !== "visible") return;
+      loadSubscriptionLimitsAction().then((res) => {
+        if (active && !isActionFail(res)) setSeed(res);
+      });
+    }, FALLBACK_POLL_MS);
+    return () => {
+      active = false;
+      clearInterval(timer);
+    };
+  }, [live, setSeed]);
+
+  const listed = new Set(rows.map((row) => row.id));
+  const staleKey = [
+    ...Object.keys(limits).filter((id) => !listed.has(id)),
+    ...removed.filter((id) => listed.has(id)),
+  ]
+    .sort()
+    .join(",");
+
+  useEffect(() => {
+    if (!staleKey || reconciled.current === staleKey) return;
+    const timer = setTimeout(() => {
+      reconciled.current = staleKey;
+      reloadRows();
+    }, RECONCILE_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [staleKey, reloadRows]);
+
+  function storeItem(item: LimitSnapshot | null) {
+    if (item) storeItems([item]);
   }
 
   function refreshAll() {
@@ -112,18 +159,20 @@ export default function SubscriptionAccounts({
         showError(result.error);
         return;
       }
-      storeLimits(result.items);
+      storeList(result);
     });
   }
 
   function refreshOne(id: string) {
-    setRefreshingId(id);
+    setRefreshing((cur) => [...cur, id]);
     startRefreshOne(async () => {
       const result = await loadProviderLimitsAction({ id, refresh: true });
-      setRefreshingId("");
-      storeLimits([
-        isActionFail(result) ? { id, limits: null, error: result.error } : { id, limits: result.limits, error: "" },
-      ]);
+      setRefreshing((cur) => cur.filter((item) => item !== id));
+      if (isActionFail(result)) {
+        showError(result.error);
+        return;
+      }
+      storeItem(result.item);
     });
   }
 
@@ -141,9 +190,13 @@ export default function SubscriptionAccounts({
   function imported(providers: ProviderView[], superseded: string[]) {
     actions.upsert(providers);
     for (const id of superseded) actions.remove(id);
+    const fresh = providers.filter((provider) => reportsLimits(provider.kind) && provider.enabled);
+    if (!fresh.length) return;
     startRefreshAll(async () => {
-      const result = await loadSubscriptionLimitsAction();
-      if (!isActionFail(result)) storeLimits(result.items);
+      const results = await Promise.all(
+        fresh.map((provider) => loadProviderLimitsAction({ id: provider.id, refresh: true })),
+      );
+      storeItems(results.flatMap((result) => (isActionFail(result) || !result.item ? [] : [result.item])));
     });
   }
 
@@ -163,7 +216,7 @@ export default function SubscriptionAccounts({
   );
   const tally = (state: CountedState, subset: ProviderView[] = rows) =>
     subset.filter((row) => states.get(row.id) === state).length;
-  const checking = rows.some((row) => reportsLimits(row.kind) && row.enabled && row.signIn?.status === "active" && !limits[row.id]);
+  const checking = seedList === null;
   const recoveries = rows
     .filter((row) => states.get(row.id) === "limited")
     .map((row) => recoveryAt(limits[row.id], now.getTime()))
@@ -213,6 +266,8 @@ export default function SubscriptionAccounts({
         </div>
       </div>
 
+      {rows.length > 0 ? <LoadError state={seed} /> : null}
+
       {rows.length > 0 ? (
         <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
           <StatCard
@@ -258,11 +313,11 @@ export default function SubscriptionAccounts({
             canManage={canManage}
             canAdd={!(spec.kind === "antigravity" && antigravityReady === false)}
             timeZone={timeZone}
-            refreshingId={refreshingId}
+            refreshing={refreshing}
             onAdd={() => openForm(spec, null)}
             onSettings={() => openSettings(spec.kind)}
             onRefresh={refreshOne}
-            onLimits={storeAccountLimits}
+            onItem={storeItem}
             onEdit={(provider) => openForm(spec, provider)}
             onImport={actions.openImport}
             onAccess={openAccess}

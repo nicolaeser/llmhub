@@ -111,6 +111,7 @@ function view(row: FakeConnection) {
       return [];
     },
   },
+  providerLimitSnapshot: { updateMany: async () => ({ count: 0 }) },
   providerLogin: {
     updateMany: async () => ({ count: 0 }),
     findMany: async ({ where }: { where: { status: string } }) =>

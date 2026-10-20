@@ -48,6 +48,7 @@
   },
   "prev": "Zurück",
   "next": "Weiter",
+  "newRequests": "{capped, select, true {Mehr als {count, number, integer} neue Anfragen · Neueste anzeigen} other {{count, plural, one {# neue Anfrage · Neueste anzeigen} other {# neue Anfragen · Neueste anzeigen}}}}",
   "pageStatus": "Seite {page, number, integer} · {total, number, integer} Zeilen · {pageSize, number, integer} pro Seite",
   "caller": {
     "noKey": "Console-Sitzung"

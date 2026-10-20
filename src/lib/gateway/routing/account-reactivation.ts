@@ -7,6 +7,6 @@ import { forgetLimits } from "@/lib/gateway/upstreams/subscription-limits";
 export async function reactivateAccount(providerId: string): Promise<void> {
   const routes = await prisma.deployment.findMany({ where: { providerId }, select: { id: true } });
   await clearCooldowns(routes.map((route) => route.id));
-  forgetLimits(providerId);
+  await forgetLimits(providerId);
   await clearRefreshBackoff(providerId);
 }

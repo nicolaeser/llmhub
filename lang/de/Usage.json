@@ -45,6 +45,11 @@
     "empty": "Keine Cache-Lese- oder Schreibvorgänge in diesem Zeitraum.",
     "byProject": "Prompt-Caching nach Projekt"
   },
+  "today": {
+    "title": "Heute",
+    "description": "Summen für {day} (UTC) über den gesamten für dich sichtbaren Verkehr. Sie aktualisieren sich, sobald Anfragen eintreffen.",
+    "live": "Live"
+  },
   "range": "Zeitraum",
   "filters": "{count, plural, =0 {Filter} other {Filter · # aktiv}}",
   "empty": "Noch keine Ausgaben. Sende eine Spielwiesen-Anfrage.",
