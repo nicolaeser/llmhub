@@ -18,7 +18,7 @@ export default function ChartTooltip({
   );
   if (rows.length === 0) return null;
   return (
-    <Card className="gap-1 px-3 py-2 text-sm">
+    <Card className="gap-1 px-3 py-2 text-sm shadow-overlay">
       {labelText ? <div className="text-muted">{labelText}</div> : null}
       <ul className="space-y-1">
         {rows.map((item) => {

@@ -44,7 +44,7 @@ export default function FormDialog({
 
   return (
     <Modal state={state}>
-      <Modal.Backdrop>
+      <Modal.Backdrop variant="blur">
         <Modal.Container>
           <Modal.Dialog className={WIDTHS[size]}>
             {({ close }) => (

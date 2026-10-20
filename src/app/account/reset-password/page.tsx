@@ -32,7 +32,7 @@ export default function ResetPasswordPage() {
     <AccountShell
       title={t.rich("heading", {
         lead: (chunks) => chunks,
-        accent: (chunks) => <span className="text-muted">{chunks}</span>,
+        accent: (chunks) => <span className="text-accent">{chunks}</span>,
       })}
       footer={
         <Link href="/account/login" className="text-accent">
