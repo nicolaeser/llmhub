@@ -28,7 +28,7 @@ export async function incrementRateWindow(
   requests: number,
   tokens: number,
   now = Date.now(),
-): Promise<{ rpm: number; tpm: number; backend: "redis" | "memory" }> {
+): Promise<{ rpm: number; tpm: number; resetAt: number; backend: "redis" | "memory" }> {
   const redis = await sharedRedis();
   if (redis) {
     const minute = Math.floor(now / WINDOW_MS);
@@ -39,13 +39,13 @@ export async function incrementRateWindow(
       if (rpm === requests) await redis.expire(rpmKey, 120);
       const tpm = await withRedisTimeout(redis.incrby(tpmKey, tokens));
       if (tpm === tokens) await redis.expire(tpmKey, 120);
-      return { rpm, tpm, backend: "redis" };
+      return { rpm, tpm, resetAt: (minute + 1) * WINDOW_MS, backend: "redis" };
     } catch (err) {
       logger.warn("rate_limit.redis_fallback", errorFields(err));
     }
   }
   const bucket = memoryIncrement(id, requests, tokens, now);
-  return { rpm: bucket.rpm, tpm: bucket.tpm, backend: "memory" };
+  return { rpm: bucket.rpm, tpm: bucket.tpm, resetAt: bucket.start + WINDOW_MS, backend: "memory" };
 }
 
 export async function redisCounter(key: string, ttlSeconds: number): Promise<number | null> {

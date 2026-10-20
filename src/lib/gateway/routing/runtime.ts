@@ -25,12 +25,14 @@ import {
   ERR_NO_HEALTHY,
   ERR_NOT_ASSIGNED,
   ERR_UNKNOWN_GROUP,
+  isUnavailableError,
+  waitingError,
 } from "@/lib/gateway/core";
 import { modelAlias } from "@/lib/gateway/catalog/model-alias";
 import { routePermitted } from "@/lib/gateway/access/model-policy";
 import { priceWindowQuery, priceWindowRates } from "@/lib/gateway/billing/price-schedule";
 import { costRejection } from "@/lib/gateway/billing/cost-cap";
-import { coolingDown, recordFailure, recordSuccess } from "@/lib/gateway/routing/provider-health";
+import { COOLDOWN_MS, cooldownEnds, recordFailure, recordSuccess } from "@/lib/gateway/routing/provider-health";
 import { attachModelFacts } from "@/lib/gateway/routing/model-facts";
 import type { CostFilter } from "@/types/billing";
 import type {
@@ -40,6 +42,7 @@ import type {
   ResolvedDeployment,
   Deployment,
   QuotaScores,
+  RouterWait,
   RunRouting,
 } from "@/types/routing";
 import type { AccountAccess } from "@/types/providers";
@@ -150,9 +153,35 @@ export async function loadGroup(requested: string): Promise<ResolvedModelGroup> 
   };
 }
 
-async function healthy(items: ResolvedDeployment[]): Promise<ResolvedDeployment[]> {
-  const cooling = await coolingDown(items.map((d) => d.id));
-  return items.filter((d) => !cooling.has(d.id));
+async function healthy(
+  items: ResolvedDeployment[],
+): Promise<{ ready: ResolvedDeployment[]; cooling: Map<string, number> }> {
+  const cooling = await cooldownEnds(items.map((d) => d.id));
+  return { ready: items.filter((d) => !cooling.has(d.id)), cooling };
+}
+
+export function cooldownWait(
+  items: ResolvedDeployment[],
+  cooling: Map<string, number>,
+  now = Date.now(),
+): RouterWait | null {
+  const held = items.filter((dep) => cooling.has(dep.id));
+  if (!held.length) return null;
+  const ends = held.map((dep) => cooling.get(dep.id)!);
+  return {
+    retryAt: Math.min(...ends),
+    limited: held.length === items.length && ends.every((until) => until - now > COOLDOWN_MS),
+    kinds: held.every(signInProvider) ? [...new Set(held.map((dep) => dep.provider!.kind))] : [],
+  };
+}
+
+export function mergeWait(a: RouterWait | null, b: RouterWait | null): RouterWait | null {
+  if (!a || !b) return a ?? b;
+  return {
+    retryAt: Math.min(a.retryAt, b.retryAt),
+    limited: a.limited && b.limited,
+    kinds: a.kinds.length && b.kinds.length ? [...new Set([...a.kinds, ...b.kinds])] : [],
+  };
 }
 
 function pick(items: ResolvedDeployment[], strategy: string, scores: QuotaScores): ResolvedDeployment {
@@ -269,15 +298,23 @@ export async function acquireGroup(
   const permitted = permittedDeployments(group.mapped, rules).filter(serves);
   const active = permitted.filter((dep) => dep.provider?.enabled !== false);
   const assigned = active.filter((dep) => accountAllowed(dep.provider, access));
-  const ready = untried(await healthy(assigned), run);
+  const health = await healthy(assigned);
+  const ready = untried(health.ready, run);
   if (!ready.length) {
+    const wait = cooldownWait(assigned, health.cooling);
     if (group.overflow_group && group.overflow_group !== group.alias) {
       const overflow = await loadGroup(group.overflow_group);
-      const acquired = await acquireGroup(overflow, rules, serves, strategy, cost, access, run);
-      return { ...acquired, overflow: true };
+      try {
+        const acquired = await acquireGroup(overflow, rules, serves, strategy, cost, access, run);
+        return { ...acquired, overflow: true };
+      } catch (err) {
+        const merged = isUnavailableError(err) ? mergeWait(wait, err.wait) : null;
+        throw merged ? waitingError(merged) : err;
+      }
     }
     if (permitted.length && !active.length) throw ERR_ALL_PAUSED;
-    throw active.length && !assigned.length ? ERR_NOT_ASSIGNED : ERR_NO_HEALTHY;
+    if (active.length && !assigned.length) throw ERR_NOT_ASSIGNED;
+    throw wait ? waitingError(wait) : ERR_NO_HEALTHY;
   }
   const quota = await withinQuota(affordable(group, ready, cost));
   const pins = await runPins(quota.items, run?.session ?? "");
