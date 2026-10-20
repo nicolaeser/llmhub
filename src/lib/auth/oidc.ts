@@ -3,12 +3,21 @@ import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { pkceChallenge, signingSecret } from "@/lib/crypto";
 import { env } from "@/lib/env";
 import { asRecord, asString, asStringArray } from "@/lib/gateway/core";
-import { DEFAULT_OIDC_SCOPES, oidcScopes } from "@/lib/auth/oidc-presets";
+import {
+  DEFAULT_OIDC_SCOPES,
+  ENTRA_TENANT_ID,
+  issuerHasPlaceholder,
+  oidcScopes,
+  trimIssuer,
+} from "@/lib/auth/oidc-presets";
 import { verifyJwt } from "@/lib/auth/jwks";
-import { readJsonOr } from "@/lib/utils/json";
+import { parseJsonOrNull, readJsonOr } from "@/lib/utils/json";
+import type { LogMeta } from "@/types/logging";
 import type {
   OidcDiscoveryCache,
   OidcDiscovery,
+  OidcDiscoveryFailure,
+  OidcDiscoveryFailureDetail,
   OidcEnv,
   OidcState,
   ResolvedOidc,
@@ -24,10 +33,71 @@ export const OIDC_STATE_COOKIE =
   process.env.NODE_ENV === "production" ? "__Host-llmhub-oidc" : "llmhub_oidc";
 const OIDC_STATE_TTL_SECONDS = 600;
 const STATE_PART = /^[A-Za-z0-9_-]{16,128}$/;
+const ENTRA_V2_ISSUER = /^https:\/\/login\.microsoftonline\.com\/([^/?#]+)\/v2\.0$/i;
+const ENTRA_SHARED_TENANTS = new Set(["common", "organizations", "consumers"]);
 let discCache: OidcDiscoveryCache | null = null;
 
-export function trimIssuer(issuer: string): string {
-  return issuer.trim().replace(/\/+$/, "");
+export class OidcDiscoveryError extends Error {
+  readonly status?: number;
+  readonly issuer?: string;
+
+  constructor(
+    readonly reason: OidcDiscoveryFailure,
+    detail: OidcDiscoveryFailureDetail = {},
+  ) {
+    super(`oidc discovery ${reason}`);
+    this.name = "OidcDiscoveryError";
+    this.status = detail.status;
+    this.issuer = detail.issuer;
+  }
+}
+
+function issuerHost(issuer: string): string {
+  try {
+    return new URL(issuer).host;
+  } catch {
+    return "";
+  }
+}
+
+export function oidcFailureFields(err: unknown): LogMeta {
+  if (!(err instanceof OidcDiscoveryError)) return {};
+  return {
+    reason: err.reason,
+    ...(err.status ? { status: err.status } : {}),
+    ...(err.issuer ? { issuerHost: issuerHost(err.issuer) } : {}),
+  };
+}
+
+export function entraTenantIdIssuer(configured: string, discovered: string): boolean {
+  const tenant = ENTRA_V2_ISSUER.exec(configured)?.[1] ?? "";
+  const tenantId = ENTRA_V2_ISSUER.exec(discovered)?.[1] ?? "";
+  return (
+    Boolean(tenant) &&
+    !ENTRA_TENANT_ID.test(tenant) &&
+    !ENTRA_SHARED_TENANTS.has(tenant.toLowerCase()) &&
+    ENTRA_TENANT_ID.test(tenantId)
+  );
+}
+
+function assertDiscoveredIssuer(configured: string, discovered: string): void {
+  if (issuerHasPlaceholder(discovered)) {
+    throw new OidcDiscoveryError("multi_tenant", { issuer: discovered });
+  }
+  const trimmed = trimIssuer(discovered);
+  if (trimmed === configured || entraTenantIdIssuer(configured, trimmed)) return;
+  throw new OidcDiscoveryError("issuer_mismatch", { issuer: discovered });
+}
+
+async function discoveryDocument(url: string, fetchFn: typeof fetch): Promise<Record<string, unknown>> {
+  const unreachable = () => {
+    throw new OidcDiscoveryError("unreachable");
+  };
+  const res = await fetchFn(url, { signal: AbortSignal.timeout(8_000) }).catch(unreachable);
+  if (!res.ok) throw new OidcDiscoveryError("http", { status: res.status });
+  const rec = asRecord(parseJsonOrNull(await res.text().catch(unreachable)));
+  if (!rec) throw new OidcDiscoveryError("not_json");
+  return rec;
 }
 
 export function oidcCallbackUrl(appUrl: string = env.NEXT_PUBLIC_APP_URL): string {
@@ -87,10 +157,7 @@ export async function fetchOidcDiscovery(
   ) {
     return discCache.disc;
   }
-  const url = `${trimmed}/.well-known/openid-configuration`;
-  const res = await fetchFn(url, { signal: AbortSignal.timeout(8_000) });
-  if (!res.ok) throw new Error(`oidc discovery ${res.status}`);
-  const rec = asRecord(await res.json()) ?? {};
+  const rec = await discoveryDocument(`${trimmed}/.well-known/openid-configuration`, fetchFn);
   const disc: OidcDiscovery = {
     issuer: asString(rec.issuer, trimmed),
     authorization_endpoint: asString(rec.authorization_endpoint),
@@ -100,17 +167,9 @@ export async function fetchOidcDiscovery(
     token_endpoint_auth_methods_supported: asStringArray(rec.token_endpoint_auth_methods_supported),
     id_token_signing_alg_values_supported: asStringArray(rec.id_token_signing_alg_values_supported),
   };
-  if (trimIssuer(disc.issuer) !== trimmed) {
-    throw new Error("oidc discovery issuer mismatch");
-  }
-  if (!disc.authorization_endpoint) {
-    throw new Error("oidc discovery missing authorization_endpoint");
-  }
-  if (!disc.token_endpoint) {
-    throw new Error("oidc discovery missing token_endpoint");
-  }
-  if (!disc.jwks_uri) {
-    throw new Error("oidc discovery missing jwks_uri");
+  assertDiscoveredIssuer(trimmed, disc.issuer);
+  if (!disc.authorization_endpoint || !disc.token_endpoint || !disc.jwks_uri) {
+    throw new OidcDiscoveryError("incomplete");
   }
   discCache = { issuer: trimmed, disc, fetched: Date.now() };
   return disc;

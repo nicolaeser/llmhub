@@ -3,8 +3,11 @@ import test from "node:test";
 import {
   buildAuthorizationUrl,
   emailFromOidcClaims,
+  exchangeOidcCode,
   fetchOidcDiscovery,
   jwtConfigForOidc,
+  OidcDiscoveryError,
+  oidcFailureFields,
   oidcIsReady,
   resetOidcCache,
   resolveOidc,
@@ -13,18 +16,27 @@ import {
   identityFromClaims,
   tokenAuthMethod,
   tokenRequest,
-  trimIssuer,
   verifyOidcState,
 } from "@/lib/auth/oidc";
 import { verifyJwt } from "@/lib/auth/jwks";
-import { emailDomainAllowed, mappedRoleId, oidcScopes } from "@/lib/auth/oidc-presets";
+import {
+  emailDomainAllowed,
+  entraV2Issuer,
+  mappedRoleId,
+  oidcScopes,
+  suggestedIssuer,
+  trimIssuer,
+} from "@/lib/auth/oidc-presets";
 import { generateKeyPairSync, sign, type KeyObject } from "node:crypto";
 import { pkceChallenge } from "@/lib/crypto";
 import type { OidcDiscovery } from "@/types/auth";
 
-test("trimIssuer drops trailing slashes", () => {
+test("trimIssuer drops trailing slashes and a pasted discovery suffix", () => {
   assert.equal(trimIssuer("https://idp.example.com/"), "https://idp.example.com");
   assert.equal(trimIssuer("https://idp.example.com///"), "https://idp.example.com");
+  assert.equal(trimIssuer(" https://idp.example.com/realms/hub/.well-known/openid-configuration "), "https://idp.example.com/realms/hub");
+  assert.equal(trimIssuer("https://idp.example.com/.well-known/openid-configuration/"), "https://idp.example.com");
+  assert.equal(trimIssuer("https://idp.example.com/.well-known/other"), "https://idp.example.com/.well-known/other");
 });
 
 test("resolveOidc uses the settings client id and always the app callback", () => {
@@ -174,17 +186,145 @@ test("fetchOidcDiscovery reads well-known document", async () => {
   assert.equal(disc.authorization_endpoint, "https://idp.example.com/authorize");
 });
 
+const TENANT_ID = "9188040d-6c67-4c5b-b112-36a304b66dad";
+const ENTRA_TENANT_ISSUER = `https://login.microsoftonline.com/${TENANT_ID}/v2.0`;
+
+function discoveryFor(issuer: string, base = "https://idp.example.com") {
+  return {
+    issuer,
+    authorization_endpoint: `${base}/authorize`,
+    token_endpoint: `${base}/token`,
+    jwks_uri: `${base}/jwks`,
+  };
+}
+
+function serving(body: unknown, requested: string[] = []): typeof fetch {
+  return async (input) => {
+    requested.push(String(input));
+    return Response.json(body);
+  };
+}
+
+async function discoveryFailure(issuer: string, fetchFn: typeof fetch): Promise<OidcDiscoveryError> {
+  resetOidcCache();
+  const err = await fetchOidcDiscovery(issuer, fetchFn).then(
+    () => null,
+    (error: unknown) => error,
+  );
+  resetOidcCache();
+  assert.ok(err instanceof OidcDiscoveryError, String(err));
+  return err;
+}
+
 test("fetchOidcDiscovery refuses a document for another issuer", async () => {
+  const err = await discoveryFailure(
+    "https://idp.example.com",
+    serving(discoveryFor("https://evil.example.com", "https://evil.example.com")),
+  );
+  assert.equal(err.reason, "issuer_mismatch");
+  assert.equal(err.issuer, "https://evil.example.com");
+  assert.match(err.message, /issuer_mismatch/);
+});
+
+test("fetchOidcDiscovery names why the discovery document could not be used", async () => {
+  const unreachable = await discoveryFailure("https://idp.example.com", async () => {
+    throw new TypeError("fetch failed");
+  });
+  assert.deepEqual([unreachable.reason, unreachable.status, unreachable.issuer], ["unreachable", undefined, undefined]);
+
+  const http = await discoveryFailure("https://idp.example.com", async () => new Response("missing", { status: 404 }));
+  assert.deepEqual([http.reason, http.status], ["http", 404]);
+
+  const html = await discoveryFailure(
+    "https://idp.example.com",
+    async () => new Response("<html>sign in</html>", { status: 200, headers: { "Content-Type": "text/html" } }),
+  );
+  assert.equal(html.reason, "not_json");
+  assert.equal((await discoveryFailure("https://idp.example.com", serving(["not", "an", "object"]))).reason, "not_json");
+
+  for (const missing of ["authorization_endpoint", "token_endpoint", "jwks_uri"] as const) {
+    const doc: Record<string, string> = discoveryFor("https://idp.example.com");
+    delete doc[missing];
+    assert.equal((await discoveryFailure("https://idp.example.com", serving(doc))).reason, "incomplete", missing);
+  }
+});
+
+test("fetchOidcDiscovery strips a pasted discovery suffix before fetching", async () => {
   resetOidcCache();
-  const fetchFn: typeof fetch = async () =>
-    Response.json({
-      issuer: "https://evil.example.com",
-      authorization_endpoint: "https://evil.example.com/authorize",
-      token_endpoint: "https://evil.example.com/token",
-      jwks_uri: "https://evil.example.com/jwks",
-    });
-  await assert.rejects(fetchOidcDiscovery("https://idp.example.com", fetchFn), /issuer mismatch/);
+  const requested: string[] = [];
+  const disc = await fetchOidcDiscovery(
+    "https://idp.example.com/realms/hub/.well-known/openid-configuration",
+    serving(discoveryFor("https://idp.example.com/realms/hub"), requested),
+  );
   resetOidcCache();
+  assert.deepEqual(requested, ["https://idp.example.com/realms/hub/.well-known/openid-configuration"]);
+  assert.equal(disc.issuer, "https://idp.example.com/realms/hub");
+});
+
+test("an Entra tenant domain issuer resolves to the tenant ID issuer of the same host", async () => {
+  resetOidcCache();
+  const configured = "https://login.microsoftonline.com/contoso.com/v2.0";
+  const requested: string[] = [];
+  const fetchFn = serving(discoveryFor(ENTRA_TENANT_ISSUER, "https://login.microsoftonline.com/contoso.com"), requested);
+  const disc = await fetchOidcDiscovery(`${configured}/`, fetchFn);
+  assert.equal(disc.issuer, ENTRA_TENANT_ISSUER);
+  assert.deepEqual(requested, [`${configured}/.well-known/openid-configuration`]);
+  assert.equal((await fetchOidcDiscovery(configured, fetchFn)).issuer, ENTRA_TENANT_ISSUER);
+  assert.equal(requested.length, 1);
+  resetOidcCache();
+  const resolved = resolveOidc(
+    { enabled: true, issuer: configured, client_id: "hub" },
+    { clientSecret: "s3cret", appUrl: "https://hub.example.com" },
+  );
+  assert.equal(jwtConfigForOidc(resolved, disc).issuer, ENTRA_TENANT_ISSUER);
+});
+
+test("Entra multi-tenant, v1, foreign-host, and other-tenant answers stay rejected", async () => {
+  for (const tenant of ["common", "organizations"]) {
+    const err = await discoveryFailure(
+      `https://login.microsoftonline.com/${tenant}/v2.0`,
+      serving(discoveryFor("https://login.microsoftonline.com/{tenantid}/v2.0")),
+    );
+    assert.equal(err.reason, "multi_tenant", tenant);
+    assert.equal(err.issuer, "https://login.microsoftonline.com/{tenantid}/v2.0");
+  }
+  const v1 = await discoveryFailure(
+    `https://login.microsoftonline.com/${TENANT_ID}`,
+    serving(discoveryFor(`https://sts.windows.net/${TENANT_ID}/`)),
+  );
+  assert.deepEqual([v1.reason, v1.issuer], ["issuer_mismatch", `https://sts.windows.net/${TENANT_ID}/`]);
+  const mismatches = [
+    ["https://login.microsoftonline.com/contoso.com/v2.0", `https://evil.example.com/${TENANT_ID}/v2.0`],
+    ["https://idp.example.com/contoso.com/v2.0", `https://idp.example.com/${TENANT_ID}/v2.0`],
+    ["https://login.microsoftonline.com/contoso.com/v2.0", "https://login.microsoftonline.com/fabrikam.com/v2.0"],
+    ["https://login.microsoftonline.com/contoso.com/v2.0", `https://login.microsoftonline.com/${TENANT_ID}`],
+    [`https://login.microsoftonline.com/${TENANT_ID}/v2.0`, "https://login.microsoftonline.com/72f988bf-86f1-41af-91ab-2d7cd011db47/v2.0"],
+    ["https://login.microsoftonline.com/common/v2.0", ENTRA_TENANT_ISSUER],
+    ["https://login.microsoftonline.com/consumers/v2.0", ENTRA_TENANT_ISSUER],
+    ["http://login.microsoftonline.com/contoso.com/v2.0", ENTRA_TENANT_ISSUER],
+  ];
+  for (const [configured, discovered] of mismatches) {
+    const err = await discoveryFailure(configured, serving(discoveryFor(discovered)));
+    assert.deepEqual([err.reason, err.issuer], ["issuer_mismatch", discovered], configured);
+  }
+});
+
+test("discovery failures log the reason, status, and issuer host only", () => {
+  assert.deepEqual(oidcFailureFields(new OidcDiscoveryError("http", { status: 502 })), { reason: "http", status: 502 });
+  assert.deepEqual(
+    oidcFailureFields(new OidcDiscoveryError("issuer_mismatch", { issuer: `https://sts.windows.net/${TENANT_ID}/` })),
+    { reason: "issuer_mismatch", issuerHost: "sts.windows.net" },
+  );
+  assert.deepEqual(oidcFailureFields(new Error("other")), {});
+});
+
+test("issuer suggestions name the concrete issuer and the Entra v2.0 endpoint", () => {
+  assert.equal(entraV2Issuer(`https://sts.windows.net/${TENANT_ID.toUpperCase()}/`), ENTRA_TENANT_ISSUER);
+  assert.equal(entraV2Issuer("https://sts.windows.net/contoso.com/"), null);
+  assert.equal(suggestedIssuer(`https://sts.windows.net/${TENANT_ID}/`), ENTRA_TENANT_ISSUER);
+  assert.equal(suggestedIssuer("https://idp.example.com/realms/hub/"), "https://idp.example.com/realms/hub");
+  assert.equal(suggestedIssuer("https://login.microsoftonline.com/{tenantid}/v2.0"), null);
+  assert.equal(suggestedIssuer(""), null);
 });
 
 test("the token request uses client_secret_basic only when the provider prefers it", () => {
@@ -290,4 +430,43 @@ test("ID tokens verify with RSA, EC P-256 and P-384, and Ed25519 keys bound to t
     const otherAudience = signed("ES256", pairs[1].privateKey, "k1", { ...claims, aud: ["other", "hub"], azp: "other" });
     await assert.rejects(verifyJwt(otherAudience, cfg), /azp/);
   });
+});
+
+test("an Entra tenant domain sign-in verifies the ID token against the tenant ID issuer", async () => {
+  const { publicKey, privateKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
+  const now = Math.floor(Date.now() / 1000);
+  const base = "https://login.microsoftonline.com/contoso.com";
+  const configured = `${base}/v2.0`;
+  const jwksUrl = `https://login.microsoftonline.com/${TENANT_ID}/discovery/v2.0/keys-${now}`;
+  const claims = { iss: ENTRA_TENANT_ISSUER, aud: "hub", exp: now + 60, nonce: "nonce-1", sub: "subject-1" };
+  const tenantToken = signed("RS256", privateKey, "k1", claims);
+  const domainToken = signed("RS256", privateKey, "k1", { ...claims, iss: configured });
+  let idToken = tenantToken;
+  const fetchFn: typeof fetch = async (input) => {
+    const url = String(input);
+    if (url === `${configured}/.well-known/openid-configuration`) {
+      return Response.json({ ...discoveryFor(ENTRA_TENANT_ISSUER, base), jwks_uri: jwksUrl });
+    }
+    if (url === jwksUrl) return Response.json({ keys: [{ ...publicKey.export({ format: "jwk" }), kid: "k1", use: "sig" }] });
+    if (url === `${base}/token`) return Response.json({ id_token: idToken });
+    return new Response("unexpected", { status: 500 });
+  };
+  const resolved = resolveOidc(
+    { enabled: true, issuer: configured, client_id: "hub" },
+    { clientSecret: "s3cret", appUrl: "https://hub.example.com" },
+  );
+  const exchange = () => exchangeOidcCode({ resolved, code: "code-1", nonce: "nonce-1", verifier: "v".repeat(43), fetchFn });
+  const original = globalThis.fetch;
+  globalThis.fetch = fetchFn;
+  try {
+    resetOidcCache();
+    const identity = await exchange();
+    assert.equal(identity.issuer, ENTRA_TENANT_ISSUER);
+    assert.equal(identity.subject, "subject-1");
+    idToken = domainToken;
+    await assert.rejects(exchange(), /jwt issuer mismatch/);
+  } finally {
+    globalThis.fetch = original;
+    resetOidcCache();
+  }
 });

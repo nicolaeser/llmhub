@@ -181,6 +181,16 @@ export type OidcEnv = {
 
 export type OidcDiscoveryCache = { issuer: string; disc: OidcDiscovery; fetched: number };
 
+export type OidcDiscoveryFailure =
+  | "unreachable"
+  | "http"
+  | "not_json"
+  | "issuer_mismatch"
+  | "multi_tenant"
+  | "incomplete";
+
+export type OidcDiscoveryFailureDetail = { status?: number; issuer?: string };
+
 export type OidcState = {
   state: string;
   nonce: string;

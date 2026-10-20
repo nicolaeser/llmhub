@@ -33,7 +33,14 @@ import { WEBHOOK_EVENTS, WEBHOOK_FORMATS } from "@/lib/alerts/events";
 import type { JsonMap, Principal } from "@/types/gateway";
 import type { AlertStateKind, AlertWebhook, WebhookFormat } from "@/types/alerts";
 import type { CatalogRouting, JevSettings } from "@/types/model-catalog";
-import { DEFAULT_OIDC_SCOPES, MAX_ALLOWED_DOMAINS, MAX_ROLE_MAPPINGS, OIDC_PROVIDER_IDS, oidcScopes } from "@/lib/auth/oidc-presets";
+import {
+  DEFAULT_OIDC_SCOPES,
+  MAX_ALLOWED_DOMAINS,
+  MAX_ROLE_MAPPINGS,
+  OIDC_PROVIDER_IDS,
+  oidcScopes,
+  trimIssuer,
+} from "@/lib/auth/oidc-presets";
 import { S3_ADDRESSING, S3_PRESET_IDS } from "@/lib/s3/presets";
 import type { OidcSettings, RoleMapping } from "@/types/auth";
 import type { S3AddressingSetting, S3Settings } from "@/types/s3";
@@ -314,7 +321,7 @@ export function normalizeOidc(raw: unknown): OidcSettings {
   return {
     enabled: asBool(rec.enabled, false),
     provider: pick(rec.provider, OIDC_PROVIDER_IDS, "generic"),
-    issuer: asString(rec.issuer),
+    issuer: trimIssuer(asString(rec.issuer)),
     client_id: asString(rec.client_id),
     scopes: oidcScopes(asString(rec.scopes, DEFAULT_OIDC_SCOPES)),
     groups_claim: asString(rec.groups_claim).trim(),

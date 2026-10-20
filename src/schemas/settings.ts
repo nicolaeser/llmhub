@@ -3,7 +3,7 @@ import { CACHE_STATS_RANGES, CACHE_TTL_MAX_SECONDS, SEMANTIC_THRESHOLD_MIN } fro
 import { modelAlias } from "@/lib/gateway/catalog/model-alias";
 import { MAX_ALERT_WEBHOOKS, WEBHOOK_EVENTS, WEBHOOK_FORMATS } from "@/lib/alerts/events";
 import { vectorDefaultsSchema } from "@/schemas/rag";
-import { MAX_ALLOWED_DOMAINS, MAX_ROLE_MAPPINGS, OIDC_PROVIDER_IDS } from "@/lib/auth/oidc-presets";
+import { MAX_ALLOWED_DOMAINS, MAX_ROLE_MAPPINGS, OIDC_PROVIDER_IDS, trimIssuer } from "@/lib/auth/oidc-presets";
 import { hasPlaceholder, S3_ADDRESSING, S3_PRESET_IDS } from "@/lib/s3/presets";
 
 function isHttpUrl(value: string): boolean {
@@ -20,6 +20,8 @@ const optionalUrl = z
   .trim()
   .max(500)
   .refine((value) => !value || isHttpUrl(value), "must be an http(s) URL");
+
+const issuerUrl = optionalUrl.transform(trimIssuer);
 
 const text = z.string().trim().max(200);
 
@@ -39,7 +41,7 @@ export const generalSettingsSchema = z.object({
 export const oidcSettingsSchema = z.object({
   enabled: z.boolean(),
   provider: z.enum(OIDC_PROVIDER_IDS),
-  issuer: optionalUrl,
+  issuer: issuerUrl,
   client_id: text,
   scopes: z
     .string()
@@ -86,7 +88,7 @@ export const catalogSettingsSchema = z.object({
   vector_stores: vectorDefaultsSchema,
 });
 
-export const issuerCheckSchema = z.object({ issuer: optionalUrl.refine(Boolean) });
+export const issuerCheckSchema = z.object({ issuer: issuerUrl.refine(Boolean) });
 
 export const alertWebhooksSchema = z
   .array(

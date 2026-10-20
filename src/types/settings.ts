@@ -1,7 +1,13 @@
 import type { z } from "zod";
 import type { alertWebhooksSchema, catalogSettingsSchema, generalSettingsSchema } from "@/schemas/settings";
 import type { AlertWebhook, WebhookEvent, WebhookFormat } from "@/types/alerts";
-import type { OidcSettings, OidcTokenAuth, RoleOption } from "@/types/auth";
+import type {
+  OidcDiscoveryFailure,
+  OidcDiscoveryFailureDetail,
+  OidcSettings,
+  OidcTokenAuth,
+  RoleOption,
+} from "@/types/auth";
 import type { SemanticCacheSettings } from "@/types/cache";
 import type { GuardrailPolicy, PiiPolicy } from "@/types/guardrails";
 import type { JevSettings } from "@/types/model-catalog";
@@ -37,8 +43,15 @@ export type SignInSettingsView = {
 };
 
 export type IssuerCheck =
-  | { ok: true; issuer: string; tokenAuth: OidcTokenAuth; algorithms: string[]; supported: boolean }
-  | { ok: false };
+  | {
+      ok: true;
+      issuer: string;
+      usesTenantId: boolean;
+      tokenAuth: OidcTokenAuth;
+      algorithms: string[];
+      supported: boolean;
+    }
+  | ({ ok: false; reason: OidcDiscoveryFailure } & OidcDiscoveryFailureDetail);
 
 export type StorageSettingsView = {
   settings: S3Settings;
