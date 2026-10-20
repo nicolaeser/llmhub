@@ -932,3 +932,34 @@ test("subscription limits for SuperGrok call the billing endpoints with the Grok
   respondWith(() => new Response("", { status: 401 }));
   await assert.rejects(fetchSubscriptionLimits({ id: "p11", kind: "grok_build", apiKey: "" }), { message: "UPSTREAM_AUTH" });
 });
+
+test("a fresh sign-in is checked with its own tokens against the account usage endpoint", async () => {
+  const { checkSignInSession } = await import("@/lib/gateway/upstreams/subscription-limits");
+  const session: SignInSession = {
+    tokens: { access: "fresh-access", refresh: "fresh-refresh", accountId: "acct_9", residency: "" },
+    expiresAt: Date.now() + 3_600_000,
+    account: "dev@example.com",
+    plan: "pro",
+  };
+  const answers = new Map([
+    [200, "valid"],
+    [429, "valid"],
+    [401, "rejected"],
+    [403, "rejected"],
+    [500, "unreachable"],
+  ]);
+  for (const [status, expected] of answers) {
+    calls = [];
+    respondWith(() => Response.json({}, { status }));
+    assert.equal(await checkSignInSession("codex", session), expected);
+    assert.equal(calls.length, 1);
+    assert.equal(new URL(calls[0].url).pathname, "/backend-api/wham/usage");
+    assert.equal(calls[0].headers.Authorization, "Bearer fresh-access");
+    assert.equal(calls[0].headers["ChatGPT-Account-ID"], "acct_9");
+  }
+  respondWith(() => {
+    throw new TypeError("fetch failed");
+  });
+  assert.equal(await checkSignInSession("claude", session), "unreachable");
+  assert.equal(new URL(calls.at(-1)!.url).pathname, "/api/oauth/usage");
+});

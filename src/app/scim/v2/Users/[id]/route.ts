@@ -9,7 +9,7 @@ import {
   toScimUser,
   updateScimUser,
 } from "@/lib/auth/scim";
-import { clientIp } from "@/lib/http/api";
+import { clientIp } from "@/lib/http/client-ip";
 import { readJsonOr } from "@/lib/utils/json";
 
 export const dynamic = "force-dynamic";
@@ -24,13 +24,13 @@ export const GET = scimHandler("get", async (_req, ctx: Context) => {
 
 export const PUT = scimHandler("replace", async (req, ctx: Context) => {
   const operations = parseScimPut(await readJsonOr(req, null));
-  const user = await updateScimUser((await ctx.params).id, operations, clientIp(req.headers) || null);
+  const user = await updateScimUser((await ctx.params).id, operations, clientIp(req.headers));
   return scimJson(toScimUser(user));
 });
 
 export const PATCH = scimHandler("patch", async (req, ctx: Context) => {
   const operations = parseScimPatch(await readJsonOr(req, null));
-  const user = await updateScimUser((await ctx.params).id, operations, clientIp(req.headers) || null);
+  const user = await updateScimUser((await ctx.params).id, operations, clientIp(req.headers));
   return scimJson(toScimUser(user));
 });
 

@@ -8,7 +8,7 @@ import { templateRoleId } from "@/lib/auth/roles";
 import { issueEnrollmentChallenge } from "@/lib/auth/sign-in";
 import { releaseAttempts, reserveAttempts } from "@/lib/auth/throttle";
 import { env } from "@/lib/env";
-import { clientIp } from "@/lib/http/api";
+import { clientBucket, clientIp } from "@/lib/http/client-ip";
 import { fieldErrors, problemResponse } from "@/lib/http/problem";
 import { readJsonOr } from "@/lib/utils/json";
 import { registerSchema } from "@/schemas/auth";
@@ -19,11 +19,11 @@ const REGISTRATIONS_PER_CLIENT = 20;
 export async function POST(req: NextRequest) {
   if (!isSameOriginRequest(req.headers, env.NEXT_PUBLIC_APP_URL)) return problemResponse(req, "FORBIDDEN");
   if (!(await registrationEnabled())) return problemResponse(req, "REGISTRATION_DISABLED");
-  const ip = clientIp(req.headers) || "unknown";
+  const client = clientBucket(clientIp(req.headers));
   let reservation: string[];
   try {
     reservation = await reserveAttempts([
-      { key: `register:${ip}`, limit: REGISTRATIONS_PER_CLIENT, windowMs: HOUR_MS },
+      { key: `register:${client}`, limit: REGISTRATIONS_PER_CLIENT, windowMs: HOUR_MS },
     ]);
   } catch (error) {
     if (error instanceof AuthError) return problemResponse(req, "RATE_LIMITED");

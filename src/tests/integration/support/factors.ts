@@ -44,8 +44,12 @@ export async function givePassword(userId: string): Promise<string> {
   return password;
 }
 
+function addressGroup(): string {
+  return (randomBytes(2).readUInt16BE() | 0x1000).toString(16);
+}
+
 export function documentationAddress(): string {
-  return `2001:db8::${randomBytes(2).toString("hex")}:${randomBytes(2).toString("hex")}`;
+  return `2001:db8:${addressGroup()}:${addressGroup()}::${addressGroup()}`;
 }
 
 export function secondFactorFailures(userId: string): Promise<number> {

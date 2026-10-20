@@ -206,13 +206,17 @@ function forgetLocalCooldown(id: string): void {
   cooldownSince().delete(id);
 }
 
-export async function coolingDown(ids: string[], now = Date.now()): Promise<Set<string>> {
+export async function cooldownEnds(ids: string[], now = Date.now()): Promise<Map<string, number>> {
   const local = memory().cooldownUntil;
-  const cooling = new Set(ids.filter((id) => (local.get(id) ?? 0) > now));
-  if (!redisUrl()) return cooling;
+  const ends = new Map<string, number>();
+  for (const id of ids) {
+    const until = local.get(id) ?? 0;
+    if (until > now) ends.set(id, until);
+  }
+  if (!redisUrl()) return ends;
   const redis = await sharedRedis();
-  if (!redis) return cooling;
-  const held = [...cooling];
+  if (!redis) return ends;
+  const held = [...ends.keys()];
   try {
     const [cleared, shared] = await withRedisTimeout(
       Promise.all([
@@ -224,16 +228,22 @@ export async function coolingDown(ids: string[], now = Date.now()): Promise<Set<
       const id = held[index]!;
       if (value !== null && Number(value) >= (cooldownSince().get(id) ?? 0)) {
         forgetLocalCooldown(id);
-        cooling.delete(id);
+        ends.delete(id);
       }
     });
     shared.forEach((value, index) => {
-      if (Number(value) > now) cooling.add(ids[index]!);
+      const until = Number(value);
+      const id = ids[index]!;
+      if (until > now) ends.set(id, Math.max(ends.get(id) ?? 0, until));
     });
   } catch (err) {
     logger.warn("provider_health.redis_fallback", { err: errText(err) });
   }
-  return cooling;
+  return ends;
+}
+
+export async function coolingDown(ids: string[], now = Date.now()): Promise<Set<string>> {
+  return new Set((await cooldownEnds(ids, now)).keys());
 }
 
 export async function clearCooldowns(ids: string[], now = Date.now()): Promise<void> {

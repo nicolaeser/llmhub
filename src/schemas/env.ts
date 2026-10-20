@@ -14,6 +14,8 @@ const optionalTrimmedString = z
   .optional()
   .transform((v) => v?.trim() || undefined);
 
+const IP_MODES = ["proxy", "cloudflare", "direct"] as const;
+
 export const envSchema = z.object({
   NODE_ENV: z.enum(["development", "production"]),
   DATABASE_URL: z.string().min(1),
@@ -28,5 +30,9 @@ export const envSchema = z.object({
   SMTP_FROM: optionalString,
   OIDC_CLIENT_SECRET: optionalString,
   REDIS_URL: optionalTrimmedString,
+  IP_MODE: z.preprocess(
+    (v) => (typeof v === "string" ? v.trim() || undefined : v),
+    z.enum(IP_MODES).default("proxy"),
+  ),
   BUILD_ID: optionalString,
 });

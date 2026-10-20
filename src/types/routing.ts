@@ -75,3 +75,5 @@ export type QuotaScores = Map<string, { pressure: number; reset: number }>;
 export type AccountPin = { providerId: string; handoffAt: number };
 
 export type RunRouting = { session: string; tried: Set<string> };
+
+export type RouterWait = { retryAt: number; limited: boolean; kinds: string[] };

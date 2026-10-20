@@ -300,7 +300,7 @@ export async function withDeployment<T>(
       queue.push({ alias: group.overflow_group, root, pool });
     }
   }
-  const failure = upstreamFailure && isUnavailableError(last) ? upstreamFailure : last;
+  const failure = upstreamFailure && isUnavailableError(last) && !last.wait?.limited ? upstreamFailure : last;
   await alertUpstreamFailure(failure);
   throw failure;
 }

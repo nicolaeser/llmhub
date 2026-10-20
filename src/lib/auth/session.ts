@@ -3,7 +3,7 @@ import { cookies, headers } from "next/headers";
 import prisma from "@/lib/db/prisma";
 import { effectivePermissions } from "@/lib/auth/permissions";
 import { digest, randomToken } from "@/lib/crypto";
-import { clientIp } from "@/lib/http/api";
+import { clientIp } from "@/lib/http/client-ip";
 import {
   SESSION_ABSOLUTE_TTL_MS,
   SESSION_COOKIE,
@@ -30,7 +30,7 @@ export function newSessionToken(now = new Date()) {
 
 export async function requestMeta(): Promise<RequestMeta> {
   const h = await headers();
-  return { ipAddress: clientIp(h) || null, userAgent: h.get("user-agent")?.slice(0, 512) ?? null };
+  return { ipAddress: clientIp(h), userAgent: h.get("user-agent")?.slice(0, 512) ?? null };
 }
 
 export async function pruneSessions(userId: string): Promise<void> {

@@ -93,7 +93,7 @@ export default function AccountCard({
   const failure = entry?.error && entry.error !== "SIGN_IN_EXPIRED" ? entry.error : "";
 
   return (
-    <Card variant="secondary" className="gap-4">
+    <Card variant="secondary" className="min-w-0 gap-4">
       <Card.Header className="flex-row flex-wrap items-start gap-3">
         <IconTile icon={STATE_ICON[state]} tone={STATE_TONE[state]} />
         <div className="min-w-0 flex-1 basis-40">
@@ -158,7 +158,7 @@ export default function AccountCard({
         {!reports && state !== "expired" ? <p className="text-sm text-muted">{t("noLimits")}</p> : null}
 
         {reports && state === "checking" ? (
-          <div className="grid gap-4 sm:grid-cols-2" aria-hidden>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2" aria-hidden>
             {[0, 1].map((item) => (
               <div key={item} className="space-y-2">
                 <Skeleton className="h-3 w-1/2 rounded-lg" />
@@ -170,7 +170,7 @@ export default function AccountCard({
         ) : null}
         {limits && limits.windows.length === 0 ? <p className="text-sm text-muted">{t("limits.none")}</p> : null}
         {planWindows.length > 0 ? (
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             {planWindows.map((window, index) => (
               <LimitMeter key={`plan-${window.windowSeconds}-${index}`} window={window} timeZone={timeZone} />
             ))}
@@ -185,7 +185,7 @@ export default function AccountCard({
               </Disclosure.Trigger>
             </Disclosure.Heading>
             <Disclosure.Content>
-              <Disclosure.Body className="grid gap-4 pt-3 sm:grid-cols-2">
+              <Disclosure.Body className="grid grid-cols-1 gap-4 pt-3 sm:grid-cols-2">
                 {scopedWindows.map((window, index) => (
                   <LimitMeter key={`${window.scope}-${index}`} window={window} scoped timeZone={timeZone} />
                 ))}

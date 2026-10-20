@@ -130,7 +130,7 @@ export default function ProviderSection({
         ) : (
           <Skeleton className="h-4 w-72 max-w-full rounded-lg" />
         )}
-        <div className="grid gap-3 lg:grid-cols-2 2xl:grid-cols-3">
+        <div className="grid grid-cols-1 gap-3 lg:grid-cols-2 2xl:grid-cols-3">
           {rows.map((row) => (
             <AccountCard
               key={row.id}

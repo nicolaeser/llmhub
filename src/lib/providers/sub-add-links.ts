@@ -1,6 +1,7 @@
 import "server-only";
 import prisma from "@/lib/db/prisma";
 import { requirePermission } from "@/lib/auth/guards";
+import { requireStepUp } from "@/lib/auth/second-factor";
 import { hasPerm, PERMISSIONS } from "@/lib/auth/permissions";
 import { writeAudit } from "@/lib/audit";
 import { env } from "@/lib/env";
@@ -14,7 +15,7 @@ import { isSignInKind, signInKinds } from "@/lib/gateway/upstreams/provider-kind
 import { subAddPath } from "@/lib/http/public-path";
 import { auditSubAddDelete, finishedSubAddLinks, subAddLinkAudit } from "@/lib/providers/sub-add-prune";
 import { newSubAddToken, subAddAccountSelect, subAddAccountViews } from "@/lib/providers/sub-add-store";
-import { subAddLinkInputSchema } from "@/schemas/sub-add";
+import { subAddLinkCreateSchema } from "@/schemas/sub-add";
 import type { SignInKind } from "@/types/providers";
 import type { SubAddCreated, SubAddLinksPayload, SubAddLinkView } from "@/types/sub-add";
 
@@ -86,13 +87,14 @@ export async function loadSubAddLinks(): Promise<SubAddLinksPayload> {
 
 export async function createSubAddLink(raw: unknown): Promise<SubAddCreated> {
   const session = await requirePermission(PERMISSIONS.PROVIDERS_MANAGE);
-  const parsed = subAddLinkInputSchema.safeParse(raw);
+  const parsed = subAddLinkCreateSchema.safeParse(raw);
   if (!parsed.success) throw new Error("VALIDATION");
   const input = parsed.data;
   const kinds = [...new Set(input.kinds)];
   if (!kinds.every(isSignInKind)) throw new Error("UNKNOWN_PROVIDER_KIND");
   const targets = input.restricted ? input.targets : [];
   if (await targetsMissing(targets)) throw new Error("NOT_FOUND");
+  await requireStepUp(session.user.id, input.code);
   const { token, hash } = newSubAddToken();
   const row = await prisma.subAddLink.create({
     data: {

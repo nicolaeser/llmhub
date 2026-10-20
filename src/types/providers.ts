@@ -43,6 +43,8 @@ export type SignInMethod = "device" | "code";
 
 export type SignInStatus = "active" | "expired";
 
+export type SignInCheck = "valid" | "rejected" | "unreachable";
+
 export type ProviderSignIn = {
   account: string;
   plan: string;

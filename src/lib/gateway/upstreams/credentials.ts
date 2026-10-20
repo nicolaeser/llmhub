@@ -267,14 +267,17 @@ export async function refreshDueLogins(now = Date.now()): Promise<number> {
   return refreshed;
 }
 
-export async function providerAuth(provider: { id: string; kind: string; apiKey: string }): Promise<UpstreamAuth> {
-  if (!isSignInKind(provider.kind)) return { key: open(provider.apiKey), headers: {} };
-  const session = await activeSession(provider.id, provider.kind);
+export function sessionAuth(kind: SignInKind, session: SignInSession): UpstreamAuth {
   return {
     key: session.tokens.access,
-    headers: signInHeaders(provider.kind, session.tokens),
-    ...(provider.kind === "antigravity" ? { project: session.tokens.accountId } : {}),
+    headers: signInHeaders(kind, session.tokens),
+    ...(kind === "antigravity" ? { project: session.tokens.accountId } : {}),
   };
+}
+
+export async function providerAuth(provider: { id: string; kind: string; apiKey: string }): Promise<UpstreamAuth> {
+  if (!isSignInKind(provider.kind)) return { key: open(provider.apiKey), headers: {} };
+  return sessionAuth(provider.kind, await activeSession(provider.id, provider.kind));
 }
 
 export async function deploymentAuth(dep: ResolvedDeployment): Promise<UpstreamAuth> {

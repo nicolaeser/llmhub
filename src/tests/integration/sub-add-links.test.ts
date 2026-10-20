@@ -4,7 +4,7 @@ import prisma from "@/lib/db/prisma";
 import { runAsPrincipal } from "@/lib/auth/delegation";
 import { stopLocalCatalogTasks } from "@/lib/gateway/catalog/catalog-tasks";
 import { loginData } from "@/lib/gateway/upstreams/credentials";
-import { loadProviders } from "@/lib/providers/connections";
+import { deleteProvider, loadProviders } from "@/lib/providers/connections";
 import { deleteSubAddLink, loadSubAddLinks } from "@/lib/providers/sub-add-links";
 import { pruneSubAddLinks } from "@/lib/providers/sub-add-prune";
 import { newSubAddToken, removeSubAddAccount, storeSubAddAccount } from "@/lib/providers/sub-add-store";
@@ -76,6 +76,7 @@ test("concurrent contributors cannot add more accounts than the link allows, and
           kind: "claude",
           session: session(`${uniqueName(`race-${index}`)}@example.test`),
           manageHash: newSubAddToken().hash,
+          loginVerified: false,
         }),
       ),
     );
@@ -113,6 +114,7 @@ test("accounts added through a restricted link get its assignments, and re-addin
       kind: "claude",
       session: session(account),
       manageHash: owner.hash,
+      loginVerified: false,
     });
     providerIds.push(first.providerId);
     assert.equal(first.outcome, "created");
@@ -127,24 +129,36 @@ test("accounts added through a restricted link get its assignments, and re-addin
     assert.doesNotMatch(provider.login?.tokens ?? "", /access-|refresh-/);
 
     const renewed = newSubAddToken();
+    await assert.rejects(
+      storeSubAddAccount({
+        linkId: link.id,
+        kind: "claude",
+        session: session(account.toUpperCase(), account),
+        manageHash: renewed.hash,
+        loginVerified: false,
+      }),
+      { message: "SUB_ADD_LOGIN_UNVERIFIED" },
+    );
+    assert.equal((await prisma.providerLogin.findUniqueOrThrow({ where: { providerId: first.providerId } })).version, 0);
     const second = await storeSubAddAccount({
       linkId: link.id,
       kind: "claude",
       session: session(account.toUpperCase(), account),
       manageHash: renewed.hash,
+      loginVerified: true,
     });
     assert.deepEqual(second, { providerId: first.providerId, outcome: "updated" });
     assert.equal((await prisma.subAddLink.findUniqueOrThrow({ where: { id: link.id } })).added, 1);
-    assert.equal(
-      (await prisma.subAddAccount.findUniqueOrThrow({ where: { providerId: first.providerId } })).manageHash,
-      owner.hash,
-    );
+    const moved = await prisma.subAddAccount.findUniqueOrThrow({ where: { providerId: first.providerId } });
+    assert.equal(moved.manageHash, renewed.hash);
+    assert.equal(moved.linkId, link.id);
 
     const last = await storeSubAddAccount({
       linkId: link.id,
       kind: "claude",
       session: session(`${uniqueName("last")}@example.test`),
       manageHash: renewed.hash,
+      loginVerified: false,
     });
     providerIds.push(last.providerId);
     assert.equal(await prisma.subAddLink.count({ where: { id: link.id } }), 0);
@@ -157,6 +171,7 @@ test("accounts added through a restricted link get its assignments, and re-addin
         kind: "claude",
         session: session(`${uniqueName("other")}@example.test`),
         manageHash: renewed.hash,
+        loginVerified: false,
       }),
       { message: "SUB_ADD_UNAVAILABLE" },
     );
@@ -176,6 +191,7 @@ test("a contributor disconnects an account and the hub deletes it with an audit 
       kind: "claude",
       session: session(`${uniqueName("leaver")}@example.test`),
       manageHash: manage.hash,
+      loginVerified: false,
     });
     await assert.rejects(removeSubAddAccount(stored.providerId, newSubAddToken().hash), { message: "NOT_FOUND" });
     assert.equal(await prisma.providerConnection.count({ where: { id: stored.providerId } }), 1);
@@ -189,9 +205,41 @@ test("a contributor disconnects an account and the hub deletes it with an audit 
       where: { objectId: stored.providerId, action: "provider.sub_add_removed" },
     });
     assert.equal(audit?.actor, `sub-add:${link.id}`);
-    assert.equal((await prisma.subAddLink.findUniqueOrThrow({ where: { id: link.id } })).added, 1);
+    assert.equal((await prisma.subAddLink.findUniqueOrThrow({ where: { id: link.id } })).added, 0);
   } finally {
     await cleanup([link.id]);
+  }
+});
+
+test("disconnecting an account from the console frees its place so the link can add another one", async () => {
+  const owner = await ownerSession();
+  const link = await createLink({ maxAccounts: 2 });
+  const providerIds: string[] = [];
+  const add = async (name: string) => {
+    const stored = await storeSubAddAccount({
+      linkId: link.id,
+      kind: "claude",
+      session: session(`${uniqueName(name)}@example.test`),
+      manageHash: newSubAddToken().hash,
+      loginVerified: false,
+    });
+    providerIds.push(stored.providerId);
+    return stored.providerId;
+  };
+  try {
+    const removed = await add("leaves");
+    assert.equal((await prisma.subAddLink.findUniqueOrThrow({ where: { id: link.id } })).added, 1);
+    await runAsPrincipal(owner, () => deleteProvider(removed));
+    stopLocalCatalogTasks();
+    assert.equal((await prisma.subAddLink.findUniqueOrThrow({ where: { id: link.id } })).added, 0);
+    await add("again");
+    assert.equal(await prisma.subAddLink.count({ where: { id: link.id } }), 1);
+    await add("full");
+    stopLocalCatalogTasks();
+    assert.equal(await prisma.subAddLink.count({ where: { id: link.id } }), 0);
+  } finally {
+    await cleanup([link.id], providerIds);
+    await prisma.user.deleteMany({ where: { id: owner.user.id } });
   }
 });
 
@@ -207,6 +255,7 @@ test("revoking a link deletes it and its targets while its accounts stay connect
       kind: "claude",
       session: session(`${uniqueName("stays")}@example.test`),
       manageHash: manage.hash,
+      loginVerified: false,
     });
     providerIds.push(stored.providerId);
     stopLocalCatalogTasks();
@@ -277,19 +326,24 @@ test("the sweep deletes expired and used-up links with an audit row and the cons
   }
 });
 
-test("a link sign-in renews a console-added connection without letting the contributor own or remove it", async () => {
+test("an unverified link sign-in leaves a console-added connection and its management untouched", async () => {
   const account = `${uniqueName("console")}@example.test`;
   const existing = await consoleConnection(account);
   const link = await createLink({ maxAccounts: 1 });
   const manage = newSubAddToken();
   try {
-    const stored = await storeSubAddAccount({ linkId: link.id, kind: "claude", session: session(account), manageHash: manage.hash });
-    stopLocalCatalogTasks();
-    assert.deepEqual(stored, { providerId: existing.id, outcome: "updated" });
-    assert.equal((await prisma.providerLogin.findUniqueOrThrow({ where: { providerId: existing.id } })).version, 1);
+    await assert.rejects(
+      storeSubAddAccount({
+        linkId: link.id,
+        kind: "claude",
+        session: session(account),
+        manageHash: manage.hash,
+        loginVerified: false,
+      }),
+      { message: "SUB_ADD_LOGIN_UNVERIFIED" },
+    );
+    assert.equal((await prisma.providerLogin.findUniqueOrThrow({ where: { providerId: existing.id } })).version, 0);
     assert.equal(await prisma.subAddAccount.count({ where: { providerId: existing.id } }), 0);
-    assert.equal(await prisma.subAddAccount.count({ where: { manageHash: manage.hash } }), 0);
-    assert.equal((await prisma.subAddLink.findUniqueOrThrow({ where: { id: link.id } })).added, 0);
     await assert.rejects(removeSubAddAccount(existing.id, manage.hash), { message: "NOT_FOUND" });
     assert.equal(await prisma.providerConnection.count({ where: { id: existing.id } }), 1);
   } finally {
@@ -297,23 +351,64 @@ test("a link sign-in renews a console-added connection without letting the contr
   }
 });
 
-test("a second contributor signing in to the same account leaves the first contributor's ownership alone", async () => {
+test("a verified link sign-in renews a console-added connection and lets the contributor manage it without using a place", async () => {
+  const account = `${uniqueName("console")}@example.test`;
+  const existing = await consoleConnection(account);
+  const link = await createLink({ maxAccounts: 1 });
+  const manage = newSubAddToken();
+  try {
+    const stored = await storeSubAddAccount({
+      linkId: link.id,
+      kind: "claude",
+      session: session(account),
+      manageHash: manage.hash,
+      loginVerified: true,
+    });
+    stopLocalCatalogTasks();
+    assert.deepEqual(stored, { providerId: existing.id, outcome: "updated" });
+    assert.equal((await prisma.providerLogin.findUniqueOrThrow({ where: { providerId: existing.id } })).version, 1);
+    const managed = await prisma.subAddAccount.findUniqueOrThrow({ where: { providerId: existing.id } });
+    assert.equal(managed.manageHash, manage.hash);
+    assert.equal(managed.linkId, null);
+    assert.equal(managed.label, link.label);
+    assert.equal((await prisma.subAddLink.findUniqueOrThrow({ where: { id: link.id } })).added, 0);
+    await removeSubAddAccount(existing.id, manage.hash);
+    stopLocalCatalogTasks();
+    assert.equal(await prisma.providerConnection.count({ where: { id: existing.id } }), 0);
+    assert.equal((await prisma.subAddLink.findUniqueOrThrow({ where: { id: link.id } })).added, 0);
+  } finally {
+    await cleanup([link.id], [existing.id]);
+  }
+});
+
+test("a second contributor takes over management only with a verified sign-in to the same account", async () => {
   const account = `${uniqueName("shared")}@example.test`;
   const link = await createLink({ maxAccounts: null });
   const first = newSubAddToken();
   const second = newSubAddToken();
   const providerIds: string[] = [];
+  const signIn = (manageHash: string, loginVerified: boolean) =>
+    storeSubAddAccount({ linkId: link.id, kind: "claude", session: session(account), manageHash, loginVerified });
   try {
-    const added = await storeSubAddAccount({ linkId: link.id, kind: "claude", session: session(account), manageHash: first.hash });
+    const added = await signIn(first.hash, false);
     providerIds.push(added.providerId);
-    const renewed = await storeSubAddAccount({ linkId: link.id, kind: "claude", session: session(account), manageHash: second.hash });
+    await assert.rejects(signIn(second.hash, false), { message: "SUB_ADD_LOGIN_UNVERIFIED" });
+    const kept = await prisma.subAddAccount.findUniqueOrThrow({ where: { providerId: added.providerId } });
+    assert.equal(kept.manageHash, first.hash);
+    await assert.rejects(removeSubAddAccount(added.providerId, second.hash), { message: "NOT_FOUND" });
+
+    const renewed = await signIn(second.hash, true);
     stopLocalCatalogTasks();
     assert.deepEqual(renewed, { providerId: added.providerId, outcome: "updated" });
-    const owned = await prisma.subAddAccount.findUniqueOrThrow({ where: { providerId: added.providerId } });
-    assert.equal(owned.manageHash, first.hash);
-    assert.equal(owned.linkId, link.id);
-    await assert.rejects(removeSubAddAccount(added.providerId, second.hash), { message: "NOT_FOUND" });
-    assert.equal(await prisma.providerConnection.count({ where: { id: added.providerId } }), 1);
+    const moved = await prisma.subAddAccount.findUniqueOrThrow({ where: { providerId: added.providerId } });
+    assert.equal(moved.manageHash, second.hash);
+    assert.equal(moved.linkId, link.id);
+    assert.equal((await prisma.subAddLink.findUniqueOrThrow({ where: { id: link.id } })).added, 1);
+    await assert.rejects(removeSubAddAccount(added.providerId, first.hash), { message: "NOT_FOUND" });
+    await removeSubAddAccount(added.providerId, second.hash);
+    stopLocalCatalogTasks();
+    assert.equal(await prisma.providerConnection.count({ where: { id: added.providerId } }), 0);
+    assert.equal((await prisma.subAddLink.findUniqueOrThrow({ where: { id: link.id } })).added, 0);
   } finally {
     await cleanup([link.id], providerIds);
   }
@@ -325,7 +420,13 @@ test("a used-up link renews no connection", async () => {
   const link = await createLink({ maxAccounts: 1, added: 1 });
   try {
     await assert.rejects(
-      storeSubAddAccount({ linkId: link.id, kind: "claude", session: session(account), manageHash: newSubAddToken().hash }),
+      storeSubAddAccount({
+        linkId: link.id,
+        kind: "claude",
+        session: session(account),
+        manageHash: newSubAddToken().hash,
+        loginVerified: true,
+      }),
       { message: "SUB_ADD_UNAVAILABLE" },
     );
     assert.equal((await prisma.providerLogin.findUniqueOrThrow({ where: { providerId: existing.id } })).version, 0);
