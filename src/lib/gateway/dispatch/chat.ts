@@ -5,6 +5,7 @@ import { alertUpstreamFailure } from "@/lib/alerts/notify";
 import { spendTag } from "@/lib/gateway/access/gate";
 import { GateError } from "@/lib/gateway/errors";
 import { outputScreen, type OutputScreen } from "@/lib/gateway/safety/guardrails";
+import { instructChat } from "@/lib/gateway/safety/pii-instruction";
 import { requestRoutingOverride, serviceModeHeaders, variantRoutes } from "@/lib/gateway/dispatch/service-mode";
 import { accessOf } from "@/lib/gateway/routing/account-access";
 import { runSession, writePin } from "@/lib/gateway/routing/account-affinity";
@@ -444,7 +445,8 @@ export async function dispatchChat(input: {
   responseCache?: ResponseCacheUsage;
 }): Promise<{ json: JsonMap; dep: ResolvedDeployment; alias: string; usage: Partial<TokenUsage>; cost: number }> {
   const started = Date.now();
-  const routed = await routeMetered(input, started, (dep, group) => chatOnce(dep, group, input.body, input.model));
+  const call = { ...input, body: instructChat(input.principal.trace, input.body) };
+  const routed = await routeMetered(call, started, (dep, group) => chatOnce(dep, group, call.body, call.model));
   const { result, dep, alias } = routed;
 
   const json: JsonMap = { ...(asRecord(result) ?? {}), model: input.model };
@@ -453,7 +455,7 @@ export async function dispatchChat(input: {
   if (!json.object) json.object = "chat.completion";
   if (!json.id) json.id = `chatcmpl_${newId()}`;
   const usage = usageFromUnknown(json.usage, json);
-  const cost = await recordSuccess(input, routed, {
+  const cost = await recordSuccess(call, routed, {
     usage,
     blocked,
     started,
@@ -472,7 +474,8 @@ export async function streamChat(input: {
   outputGuard: OutputGuard | null;
 }): Promise<Response> {
   const started = Date.now();
-  const routed = await routeMetered(input, started, (dep, group) => openChatStream(dep, group, input), {
+  const call = { ...input, body: instructChat(input.principal.trace, input.body) };
+  const routed = await routeMetered(call, started, (dep, group) => openChatStream(dep, group, call), {
     deferRelease: true,
   });
   return relayChatStream({
@@ -480,10 +483,10 @@ export async function streamChat(input: {
     dep: routed.dep,
     group: routed.group,
     release: routed.release,
-    principal: input.principal,
-    model: input.model,
-    body: input.body,
-    outputGuard: input.outputGuard,
+    principal: call.principal,
+    model: call.model,
+    body: call.body,
+    outputGuard: call.outputGuard,
     started,
   });
 }

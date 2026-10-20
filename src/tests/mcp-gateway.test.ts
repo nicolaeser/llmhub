@@ -5,6 +5,7 @@ import { createServer, type IncomingMessage } from "node:http";
 import type { AddressInfo } from "node:net";
 import { after, before, test } from "node:test";
 import { seal } from "@/lib/crypto";
+import { PII_RESTORE_INSTRUCTION } from "@/lib/gateway/safety/pii-instruction";
 import type { JsonMap } from "@/types/gateway";
 
 const TOOL = "mcp__weather__forecast";
@@ -368,6 +369,47 @@ test("tool results pass the PII policy before reaching the model", async () => {
   assert.equal(res.status, 400);
   assert.equal(((await res.json()) as { error: JsonMap }).error.code, "pii_blocked");
   assert.equal(blocked.length, 1);
+});
+
+test("restore mode instructs every MCP step once and keeps the instruction out of the step logs", async () => {
+  const bodies = reset();
+  gateway.enterprise = { pii: { enabled: true, mode: "restore", output: false, entities: ["EMAIL_ADDRESS"] } };
+  gateway.key = { ...gateway.key, logContent: true };
+  recordedPrisma.handlers = {
+    ...recordedPrisma.handlers,
+    user: {
+      findUnique: () => ({
+        id: "user-1",
+        blocked: false,
+        orgId: null,
+        spend: 0,
+        maxBudget: 0,
+        budgetDuration: "",
+        spendResetAt: null,
+        createdAt: new Date(0),
+        logContent: true,
+      }),
+    },
+  };
+  scripted(bodies, [() => toolCallReply([forecast]), () => chatReply("Sent to [EMAIL_ADDRESS_1].")]);
+  const res = await post("/api/v1/chat/completions", {
+    model: MODEL,
+    messages: [{ role: "user", content: "Weather in Bern for ada@acme.com?" }],
+  });
+  assert.equal(res.status, 200);
+  const choice = (((await res.json()) as JsonMap).choices as JsonMap[])[0]!;
+  assert.equal((choice.message as JsonMap).content, "Sent to ada@acme.com.");
+  assert.equal(bodies.length, 2);
+  for (const body of bodies) {
+    const messages = body.messages as JsonMap[];
+    assert.deepEqual(messages[0], { role: "system", content: PII_RESTORE_INSTRUCTION });
+    assert.equal(messages.filter((message) => message.role === "system").length, 1);
+  }
+  const logged = recordedPrisma
+    .called("requestLog", "create")
+    .map((call) => (call.args as { data: { content?: { create: { request?: unknown } } } }).data.content?.create.request);
+  assert.equal(logged.length, 2);
+  for (const request of logged) assert.equal(JSON.stringify(request).includes(PII_RESTORE_INSTRUCTION), false);
 });
 
 test("the loop stops offering MCP tools at the step limit", async () => {

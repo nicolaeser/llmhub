@@ -20,6 +20,7 @@ import { GateError } from "@/lib/gateway/errors";
 import { chatIncompatibility, chatToMessage, messagesToChat, MessagesStreamEncoder } from "@/lib/gateway/protocols/messages";
 import { MessagesStreamTranscript } from "@/lib/gateway/request-logs/log-content";
 import { outputScreen, type OutputScreen } from "@/lib/gateway/safety/guardrails";
+import { instructChat, instructMessages } from "@/lib/gateway/safety/pii-instruction";
 import { pipeChatStream } from "@/lib/gateway/protocols/chat-stream";
 import { relaySse } from "@/lib/gateway/protocols/sse";
 import { estimateTokens, requestText } from "@/lib/gateway/billing/tokens";
@@ -41,12 +42,12 @@ type MessagesInput = {
   headers: Record<string, string>;
 };
 
-function chatFallback(request: MessagesRequest): (kind: string) => JsonMap {
+function chatFallback(input: MessagesInput): (kind: string) => JsonMap {
   let converted: JsonMap | null = null;
   return (kind) => {
-    const issue = chatIncompatibility(request, { webSearch: kind === "codex" });
+    const issue = chatIncompatibility(input.request, { webSearch: kind === "codex" });
     if (issue) throw new GateError(400, "unsupported_parameter", issue);
-    converted ??= messagesToChat(request);
+    converted ??= instructChat(input.principal.trace, messagesToChat(input.request));
     return converted;
   };
 }
@@ -85,7 +86,7 @@ export function mergeStreamUsage(target: JsonMap, usage: unknown): JsonMap {
 
 export async function dispatchMessages(input: MessagesInput): Promise<JsonMap> {
   const started = Date.now();
-  const fallback = chatFallback(input.request);
+  const fallback = chatFallback(input);
   const routed = await routeMetered(input, started, async (dep, group) => {
     if (!speaksAnthropic(dep.kind)) {
       return { native: false, json: asRecord(await chatOnce(dep, group, fallback(dep.kind), input.model)) ?? {} };
@@ -94,7 +95,11 @@ export async function dispatchMessages(input: MessagesInput): Promise<JsonMap> {
       dep,
       auth: await deploymentAuth(dep),
       path: NATIVE_PATH,
-      body: { ...nativeMessagesBody(input.body), model: dep.model || plainModel(input.model), stream: false },
+      body: {
+        ...nativeMessagesBody(instructMessages(input.principal.trace, input.body)),
+        model: dep.model || plainModel(input.model),
+        stream: false,
+      },
       timeoutMs: UPSTREAM_TIMEOUT_MS,
       groupStrategy: group.strategy,
       headers: input.headers,
@@ -123,7 +128,7 @@ export async function dispatchMessages(input: MessagesInput): Promise<JsonMap> {
 
 export async function streamMessages(input: MessagesInput & { req: Request }): Promise<Response> {
   const started = Date.now();
-  const fallback = chatFallback(input.request);
+  const fallback = chatFallback(input);
   const routed = await routeMetered(
     input,
     started,
@@ -137,7 +142,11 @@ export async function streamMessages(input: MessagesInput & { req: Request }): P
       const payload = prepareBody(
         dep,
         NATIVE_PATH,
-        { ...nativeMessagesBody(input.body), model: dep.model || plainModel(input.model), stream: true },
+        {
+          ...nativeMessagesBody(instructMessages(input.principal.trace, input.body)),
+          model: dep.model || plainModel(input.model),
+          stream: true,
+        },
         group.strategy,
       );
       return {
