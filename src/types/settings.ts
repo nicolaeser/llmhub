@@ -11,12 +11,7 @@ import type { ModelChoice } from "@/lib/models/model-role";
 import type { S3Settings } from "@/types/s3";
 import type { UpdaterView, UpdateStatus } from "@/types/updates";
 
-export type SettingsTab = "company" | "general" | "sign-in" | "storage" | "logging" | "cache" | "catalog";
-
-export type SettingsScope = {
-  company: { id: string; alias: string } | null;
-  platform: boolean;
-};
+export type SettingsTab = "general" | "sign-in" | "storage" | "logging" | "cache" | "catalog";
 
 export type GeneralSettings = z.infer<typeof generalSettingsSchema>;
 
@@ -66,7 +61,9 @@ export type LoggingSettingsView = {
   alertRules: AlertRules;
   logRetentionDays: number;
   spendRetentionDays: number;
+  usageRetentionDays: number;
   auditRetentionDays: number;
+  securityRetentionDays: number;
   objectRetentionDays: number;
   fileRetentionDays: number;
   contentRetentionDays: number;
@@ -74,6 +71,7 @@ export type LoggingSettingsView = {
   logContent: boolean;
   s3Ready: boolean;
   canManage: boolean;
+  budgetAlerts: { thresholds: number[]; canManage: boolean };
 };
 
 export type AlertWebhookInput = z.infer<typeof alertWebhooksSchema>[number];
@@ -102,7 +100,9 @@ export type Enterprise = {
   alert_webhooks?: AlertWebhook[];
   log_retention_days?: number;
   spend_retention_days?: number;
+  usage_retention_days?: number;
   audit_retention_days?: number;
+  security_retention_days?: number;
   object_retention_days?: number;
   file_retention_days?: number;
   cache_ttl_seconds?: number;

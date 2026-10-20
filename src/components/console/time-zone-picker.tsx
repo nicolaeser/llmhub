@@ -15,7 +15,7 @@ export default function TimeZonePicker({
   onChange,
 }: {
   label: string;
-  description: string;
+  description?: string;
   value: string;
   isDisabled: boolean;
   onChange: (timeZone: string) => void;
@@ -34,7 +34,7 @@ export default function TimeZonePicker({
         <Input />
         <ComboBox.Trigger />
       </ComboBox.InputGroup>
-      <Description>{description}</Description>
+      {description ? <Description>{description}</Description> : null}
       <ComboBox.Popover>
         <ListBox aria-label={label}>
           {timeZones(value).map((zone) => (

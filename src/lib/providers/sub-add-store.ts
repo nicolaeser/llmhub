@@ -5,11 +5,13 @@ import { writeAudit } from "@/lib/audit";
 import { digest } from "@/lib/crypto";
 import { withSerializableRetry } from "@/lib/db/serializable";
 import { scheduleCatalogTask } from "@/lib/gateway/catalog/catalog-tasks";
+import { reactivateAccount } from "@/lib/gateway/routing/account-reactivation";
 import { loginData } from "@/lib/gateway/upstreams/credentials";
 import { isSignInKind, PROVIDER_CATALOG } from "@/lib/gateway/upstreams/provider-kinds";
 import { matchingConnection, pruneSupersededLogins } from "@/lib/providers/account-match";
 import { providerAuditAfter, providerInclude } from "@/lib/providers/connections";
 import { removeProviderConnection } from "@/lib/providers/provider-removal";
+import { auditSubAddDelete, subAddAuditSelect } from "@/lib/providers/sub-add-prune";
 import { subAddStatus } from "@/lib/providers/sub-add-status";
 import type { SignInKind, SignInSession } from "@/types/providers";
 import type { SubAddAccountRecord, SubAddAccountView, SubAddOutcome } from "@/types/sub-add";
@@ -18,6 +20,8 @@ const SUB_ADD_TOKEN_BYTES = 32;
 const STORE_ATTEMPTS = 6;
 
 export const SUB_ADD_UNAVAILABLE = "SUB_ADD_UNAVAILABLE";
+export const SUB_ADD_LOGIN_INVALID = "SUB_ADD_LOGIN_INVALID";
+export const SUB_ADD_LOGIN_UNVERIFIED = "SUB_ADD_LOGIN_UNVERIFIED";
 
 export function subAddTokenHash(token: string): string {
   return digest(token);
@@ -63,30 +67,19 @@ export async function storeSubAddAccount(input: {
   kind: SignInKind;
   session: SignInSession;
   manageHash: string;
+  loginVerified: boolean;
   now?: number;
 }): Promise<{ providerId: string; outcome: SubAddOutcome }> {
   const spec = PROVIDER_CATALOG.find((item) => item.kind === input.kind);
   const baseUrl = spec?.default_base_url ?? "";
   const login = loginData(input.session);
   const stored = await withSerializableRetry(async (tx) => {
-    const link = await tx.subAddLink.findUnique({
-      where: { id: input.linkId },
-      select: {
-        id: true,
-        kinds: true,
-        maxAccounts: true,
-        added: true,
-        restricted: true,
-        expiresAt: true,
-        revokedAt: true,
-        targets: { select: { orgId: true, teamId: true, projectId: true, memberId: true, keyId: true } },
-      },
-    });
+    const link = await tx.subAddLink.findUnique({ where: { id: input.linkId }, select: subAddAuditSelect });
     if (!link || !link.kinds.includes(input.kind)) throw new Error(SUB_ADD_UNAVAILABLE);
-    const status = subAddStatus(link, input.now ?? Date.now());
-    if (status === "revoked" || status === "expired") throw new Error(SUB_ADD_UNAVAILABLE);
+    if (subAddStatus(link, input.now ?? Date.now()) !== "active") throw new Error(SUB_ADD_UNAVAILABLE);
     const existing = await matchingConnection(input.kind, input.session, tx);
     if (existing) {
+      if (!input.loginVerified) throw new Error(SUB_ADD_LOGIN_UNVERIFIED);
       const row = await tx.providerConnection.update({
         where: { id: existing },
         data: {
@@ -94,16 +87,18 @@ export async function storeSubAddAccount(input: {
           login: { upsert: { create: login, update: { ...login, version: { increment: 1 } } } },
           subAdd: {
             upsert: {
-              create: { linkId: link.id, manageHash: input.manageHash },
+              create: { linkId: null, label: link.label, manageHash: input.manageHash },
               update: { manageHash: input.manageHash },
             },
           },
         },
         include: providerInclude,
       });
-      return { row, linkId: link.id, outcome: "updated" as const };
+      return { row, link, outcome: "updated" as const, usedUp: false };
     }
-    if (status !== "active") throw new Error(SUB_ADD_UNAVAILABLE);
+    const added = link.added + 1;
+    const usedUp = link.maxAccounts !== null && added >= link.maxAccounts;
+    await tx.subAddLink.update({ where: { id: link.id }, data: { added: { increment: 1 } } });
     const row = await tx.providerConnection.create({
       data: {
         name: spec?.name ?? input.kind,
@@ -112,29 +107,32 @@ export async function storeSubAddAccount(input: {
         apiKey: "",
         restricted: link.restricted,
         login: { create: login },
-        subAdd: { create: { linkId: link.id, manageHash: input.manageHash } },
+        subAdd: { create: { linkId: link.id, label: link.label, manageHash: input.manageHash } },
         ...(link.restricted && link.targets.length ? { assignments: { create: link.targets } } : {}),
       },
       include: providerInclude,
     });
-    await tx.subAddLink.update({ where: { id: link.id }, data: { added: { increment: 1 } } });
-    return { row, linkId: link.id, outcome: "created" as const };
+    if (usedUp) await tx.subAddLink.delete({ where: { id: link.id } });
+    return { row, link: { ...link, added }, outcome: "created" as const, usedUp };
   }, STORE_ATTEMPTS);
+  if (stored.outcome === "updated") await reactivateAccount(stored.row.id);
+  const actor = subAddUid(stored.link.id);
   await writeAudit({
-    actor: subAddUid(stored.linkId),
+    actor,
     action: "provider.sub_add_added",
     objectType: "provider",
     objectId: stored.row.id,
     after: providerAuditAfter(stored.row, {
       outcome: stored.outcome,
-      linkId: stored.linkId,
+      linkId: stored.link.id,
       restricted: stored.row.restricted,
       signInAccount: input.session.account,
       plan: input.session.plan,
     }),
   });
+  if (stored.usedUp) await auditSubAddDelete(actor, stored.link, "used_up");
   await scheduleCatalogTask({ task: "provider", providerId: stored.row.id });
-  await pruneSupersededLogins(subAddUid(stored.linkId));
+  await pruneSupersededLogins(actor);
   return { providerId: stored.row.id, outcome: stored.outcome };
 }
 
@@ -146,7 +144,7 @@ export async function removeSubAddAccount(providerId: string, manageHash: string
   if (!owned) throw new Error("NOT_FOUND");
   const result = await removeProviderConnection(providerId);
   await writeAudit({
-    actor: subAddUid(owned.linkId),
+    actor: owned.linkId ? subAddUid(owned.linkId) : "sub-add",
     action: "provider.sub_add_removed",
     objectType: "provider",
     objectId: result.row.id,

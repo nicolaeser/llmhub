@@ -6,10 +6,12 @@ import { reportsLimits } from "@/lib/gateway/upstreams/provider-kinds";
 import { CLAUDE_OAUTH_BETAS } from "@/lib/gateway/upstreams/claude";
 import { CODEX_USAGE_URL } from "@/lib/gateway/upstreams/codex";
 import { asNumber, asRecord, asString } from "@/lib/gateway/core";
-import { providerAuth } from "@/lib/gateway/upstreams/credentials";
+import { providerAuth, sessionAuth } from "@/lib/gateway/upstreams/credentials";
 import { GateError } from "@/lib/gateway/errors";
+import { retryAfterMs } from "@/lib/gateway/upstreams/reset-credits";
 import { errorFields } from "@/lib/logging/format";
 import { logger } from "@/lib/logging/logger";
+import { notifyLive } from "@/lib/updates/live-topics";
 import { readJsonOr } from "@/lib/utils/json";
 import {
   XAI_BILLING_MONTHLY_URL,
@@ -20,7 +22,17 @@ import {
   xaiPlan,
 } from "@/lib/gateway/upstreams/xai-limits";
 import type { JsonMap } from "@/types/gateway";
-import type { LimitWindow, SubscriptionLimits } from "@/types/providers";
+import type {
+  LimitAccount,
+  LimitErrorCode,
+  LimitFetchFailure,
+  LimitWindow,
+  SignInCheck,
+  SignInKind,
+  SignInSession,
+  SubscriptionLimits,
+  UpstreamAuth,
+} from "@/types/providers";
 
 const CLAUDE_USAGE_URL = "https://api.anthropic.com/api/oauth/usage";
 const CLAUDE_FIVE_HOUR_SECONDS = 5 * 3_600;
@@ -35,15 +47,20 @@ const CLAUDE_WINDOWS = [
   { key: "iguana_necktie", scope: "Fable", windowSeconds: CLAUDE_WEEK_SECONDS },
 ] as const;
 const CLAUDE_CREDIT_POOL_SCOPE = "Cloud sessions";
-const LIMITS_TTL_MS = 60_000;
-const FORCED_REFRESH_MS = 10_000;
 const LIMITS_TIMEOUT_MS = 15_000;
+const TOO_MANY_REQUESTS = 429;
 
-const WARM_WAIT_MS = 1_500;
+const cache = new Map<string, SubscriptionLimits>();
 
-const cache = new Map<string, { at: number; limits: SubscriptionLimits }>();
-const refreshing = new Map<string, Promise<unknown>>();
-const failedAt = new Map<string, number>();
+export class LimitsFetchError extends Error {
+  readonly retryAfterMs: number | null;
+
+  constructor(code: LimitErrorCode, retryAfterMs: number | null = null, options?: ErrorOptions) {
+    super(code, options);
+    this.name = "LimitsFetchError";
+    this.retryAfterMs = retryAfterMs;
+  }
+}
 
 function limitWindows(scope: string, rateLimit: unknown, now: number): LimitWindow[] {
   const limit = asRecord(rateLimit);
@@ -149,44 +166,50 @@ export function claudeLimits(payload: JsonMap, plan: string, now = Date.now()): 
   };
 }
 
-type LimitProvider = { id: string; kind: string; apiKey: string };
-
-async function usageAuth(provider: LimitProvider) {
+async function usageAuth(provider: LimitAccount) {
   return providerAuth(provider).catch((error: unknown) => {
-    throw error instanceof GateError ? new Error("SIGN_IN_EXPIRED", { cause: error }) : error;
+    throw error instanceof GateError ? new LimitsFetchError("SIGN_IN_EXPIRED", null, { cause: error }) : error;
   });
 }
 
-async function getJson(
-  url: string,
-  key: string,
-  headers: Record<string, string>,
-): Promise<{ status: number; json: JsonMap | null }> {
+type UsageReply = { status: number; json: JsonMap | null; retryAfterMs: number | null };
+
+async function getJson(url: string, key: string, headers: Record<string, string>): Promise<UsageReply> {
   try {
     const res = await fetch(url, {
       headers: { Accept: "application/json", ...headers, Authorization: `Bearer ${key}` },
       signal: AbortSignal.timeout(LIMITS_TIMEOUT_MS),
       redirect: "error",
     });
-    return { status: res.status, json: res.ok ? asRecord(await readJsonOr(res, null)) : null };
+    return {
+      status: res.status,
+      json: res.ok ? asRecord(await readJsonOr(res, null)) : null,
+      retryAfterMs: retryAfterMs(res.headers.get("retry-after"), Date.now()),
+    };
   } catch {
-    return { status: 0, json: null };
+    return { status: 0, json: null, retryAfterMs: null };
   }
 }
 
+function failOn(replies: UsageReply[]): void {
+  const limited = replies.find((reply) => reply.status === TOO_MANY_REQUESTS);
+  if (limited) throw new LimitsFetchError("UPSTREAM_RATE_LIMITED", limited.retryAfterMs);
+  if (replies.some((reply) => reply.status === 401 || reply.status === 403)) throw new LimitsFetchError("UPSTREAM_AUTH");
+}
+
 async function fetchUsage(
-  provider: LimitProvider,
+  provider: LimitAccount,
   url: string,
   extraHeaders: Record<string, string> = {},
 ): Promise<JsonMap> {
   const auth = await usageAuth(provider);
-  const { status, json } = await getJson(url, auth.key, { ...auth.headers, ...extraHeaders });
-  if (status === 401 || status === 403) throw new Error("UPSTREAM_AUTH");
-  if (!json) throw new Error("UPSTREAM_FAILED");
-  return json;
+  const reply = await getJson(url, auth.key, { ...auth.headers, ...extraHeaders });
+  failOn([reply]);
+  if (!reply.json) throw new LimitsFetchError("UPSTREAM_FAILED");
+  return reply.json;
 }
 
-async function fetchXaiLimits(provider: LimitProvider): Promise<SubscriptionLimits> {
+async function fetchXaiLimits(provider: LimitAccount): Promise<SubscriptionLimits> {
   const auth = await usageAuth(provider);
   const headers = { ...auth.headers, ...xaiLimitHeaders() };
   const [weekly, monthly, settings] = await Promise.all([
@@ -195,8 +218,8 @@ async function fetchXaiLimits(provider: LimitProvider): Promise<SubscriptionLimi
     getJson(XAI_SETTINGS_URL, auth.key, headers),
   ]);
   const billing = [weekly, monthly];
-  if (billing.some((result) => result.status === 401 || result.status === 403)) throw new Error("UPSTREAM_AUTH");
-  if (billing.every((result) => result.status === 0 || result.status >= 500)) throw new Error("UPSTREAM_FAILED");
+  failOn(billing);
+  if (billing.every((result) => result.status === 0 || result.status >= 500)) throw new LimitsFetchError("UPSTREAM_FAILED");
   return xaiLimits(weekly.json, monthly.json, xaiPlan(settings.json) || (await storedPlan(provider.id)));
 }
 
@@ -205,15 +228,35 @@ async function storedPlan(providerId: string): Promise<string> {
   return row?.plan ?? "";
 }
 
-async function fetchAntigravityLimits(provider: LimitProvider): Promise<SubscriptionLimits> {
+async function fetchAntigravityLimits(provider: LimitAccount): Promise<SubscriptionLimits> {
   const auth = await usageAuth(provider);
-  const { status, json } = await fetchAvailableModels(auth);
-  if (status === 401 || status === 403) throw new Error("UPSTREAM_AUTH");
-  if (status < 200 || status >= 300) throw new Error("UPSTREAM_FAILED");
+  const { status, json, retryAfter } = await fetchAvailableModels(auth);
+  failOn([{ status, json: null, retryAfterMs: retryAfterMs(retryAfter, Date.now()) }]);
+  if (status < 200 || status >= 300) throw new LimitsFetchError("UPSTREAM_FAILED");
   return antigravityLimits(json, await storedPlan(provider.id));
 }
 
-async function fetchLimits(provider: LimitProvider): Promise<SubscriptionLimits> {
+async function probeStatus(kind: SignInKind, auth: UpstreamAuth): Promise<number> {
+  if (kind === "antigravity") return (await fetchAvailableModels(auth)).status;
+  if (kind === "claude") {
+    return (await getJson(CLAUDE_USAGE_URL, auth.key, { ...auth.headers, "anthropic-beta": CLAUDE_OAUTH_BETAS.join(",") }))
+      .status;
+  }
+  if (kind === "grok_build") {
+    return (await getJson(XAI_BILLING_WEEKLY_URL, auth.key, { ...auth.headers, ...xaiLimitHeaders() })).status;
+  }
+  return (await getJson(CODEX_USAGE_URL, auth.key, auth.headers)).status;
+}
+
+export async function checkSignInSession(kind: SignInKind, session: SignInSession): Promise<SignInCheck> {
+  const status = await probeStatus(kind, sessionAuth(kind, session));
+  if (status === 401 || status === 403) return "rejected";
+  if ((status >= 200 && status < 300) || status === 429) return "valid";
+  return "unreachable";
+}
+
+export async function fetchSubscriptionLimits(provider: LimitAccount): Promise<SubscriptionLimits | null> {
+  if (!reportsLimits(provider.kind)) return null;
   if (provider.kind === "antigravity") return fetchAntigravityLimits(provider);
   if (provider.kind === "claude") {
     const json = await fetchUsage(provider, CLAUDE_USAGE_URL, { "anthropic-beta": CLAUDE_OAUTH_BETAS.join(",") });
@@ -223,50 +266,36 @@ async function fetchLimits(provider: LimitProvider): Promise<SubscriptionLimits>
   return codexLimits(await fetchUsage(provider, CODEX_USAGE_URL));
 }
 
-export async function subscriptionLimits(
-  provider: LimitProvider,
-  opts: { force?: boolean } = {},
-): Promise<SubscriptionLimits | null> {
-  if (!reportsLimits(provider.kind)) return null;
-  const cached = cache.get(provider.id);
-  const age = cached ? Date.now() - cached.at : Infinity;
-  if (cached && age < (opts.force ? FORCED_REFRESH_MS : LIMITS_TTL_MS)) return cached.limits;
-  const limits = await fetchLimits(provider);
-  cache.set(provider.id, { at: Date.now(), limits });
-  return limits;
+export function limitFailure(error: unknown): LimitFetchFailure {
+  if (error instanceof LimitsFetchError) {
+    return { code: error.message as LimitErrorCode, retryAfterMs: error.retryAfterMs };
+  }
+  return { code: "UPSTREAM_FAILED", retryAfterMs: null };
 }
 
 export function limitsSnapshot(providerId: string): SubscriptionLimits | null {
-  return cache.get(providerId)?.limits ?? null;
+  return cache.get(providerId) ?? null;
 }
 
-export function forgetLimits(providerId: string): void {
+export function rememberLimits(providerId: string, limits: SubscriptionLimits): void {
+  const current = cache.get(providerId);
+  if (current && Date.parse(current.fetchedAt) > Date.parse(limits.fetchedAt)) return;
+  cache.set(providerId, limits);
+}
+
+export function dropCachedLimits(providerId: string): void {
   cache.delete(providerId);
-  failedAt.delete(providerId);
 }
 
-export async function warmLimits(providers: LimitProvider[]): Promise<void> {
-  const now = Date.now();
-  const pending: Promise<unknown>[] = [];
-  for (const provider of providers) {
-    if (!reportsLimits(provider.kind)) continue;
-    const cached = cache.get(provider.id);
-    if (cached && now - cached.at < LIMITS_TTL_MS) continue;
-    if (now - (failedAt.get(provider.id) ?? 0) < LIMITS_TTL_MS) continue;
-    const refresh =
-      refreshing.get(provider.id) ??
-      subscriptionLimits(provider).catch((err) => {
-        failedAt.set(provider.id, Date.now());
-        logger.warn("subscription.limits_failed", { providerId: provider.id, kind: provider.kind, ...errorFields(err) });
-        return null;
-      });
-    refreshing.set(provider.id, refresh);
-    void refresh.finally(() => refreshing.delete(provider.id));
-    if (!cached) pending.push(refresh);
+export async function forgetLimits(providerId: string, now = Date.now()): Promise<void> {
+  cache.delete(providerId);
+  try {
+    const written = await prisma.providerLimitSnapshot.updateMany({
+      where: { providerId },
+      data: { fetchedAt: null, error: "", failures: 0, nextAt: new Date(now), version: { increment: 1 } },
+    });
+    if (written.count) notifyLive("limits");
+  } catch (err) {
+    logger.warn("subscription.limits_forget_failed", { providerId, ...errorFields(err) });
   }
-  if (!pending.length) return;
-  await Promise.race([
-    Promise.all(pending),
-    new Promise((resolve) => setTimeout(resolve, WARM_WAIT_MS)),
-  ]);
 }

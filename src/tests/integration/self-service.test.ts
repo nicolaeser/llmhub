@@ -8,6 +8,7 @@ import { env } from "@/lib/env";
 import { verifyPassword } from "@/lib/auth/password";
 import { ensureSystemCatalog } from "@/lib/bootstrap/system-catalog";
 import { digest, randomToken } from "@/lib/crypto";
+import { clientBucket } from "@/lib/http/client-ip";
 import { patchEnterprise } from "@/lib/settings/enterprise";
 import { loginContextAction } from "@/app/account/login/_action";
 import { isActionFail } from "@/lib/http/action-result";
@@ -56,7 +57,7 @@ function account() {
 test("self-registration is off unless enabled and refuses before reading the request", async () => {
   const data = new TestData();
   const ip = documentationAddress();
-  data.ownAttempts(`register:${ip}`);
+  data.ownAttempts(`register:${clientBucket(ip)}`);
   try {
     await data.user();
     await prisma.setting.update({ where: { key: "enterprise" }, data: { value: "{}" } });
@@ -68,7 +69,7 @@ test("self-registration is off unless enabled and refuses before reading the req
     const res = await register(post("/internal-api/account/register", { nonsense: true }, ip));
     assert.equal(res.status, 403);
     assert.equal(await problem(res), "REGISTRATION_DISABLED");
-    assert.equal(await prisma.loginAttempt.count({ where: { key: `register:${ip}` } }), 0);
+    assert.equal(await prisma.loginAttempt.count({ where: { key: `register:${clientBucket(ip)}` } }), 0);
   } finally {
     await data.cleanup();
   }
@@ -77,7 +78,7 @@ test("self-registration is off unless enabled and refuses before reading the req
 test("enabled self-registration creates a viewer who must enroll a second factor", async () => {
   const data = new TestData();
   const ip = documentationAddress();
-  data.ownAttempts(`register:${ip}`);
+  data.ownAttempts(`register:${clientBucket(ip)}`);
   const input = account();
   try {
     await data.user();
@@ -110,7 +111,7 @@ test("enabled self-registration creates a viewer who must enroll a second factor
 test("a client may register twenty times per hour", async () => {
   const data = new TestData();
   const ip = documentationAddress();
-  data.ownAttempts(`register:${ip}`);
+  data.ownAttempts(`register:${clientBucket(ip)}`);
   try {
     const existing = await data.user();
     await patchEnterprise({ registration_enabled: true });
@@ -130,7 +131,7 @@ test("password reset answers the same for every address and mails from a deferre
   const data = new TestData();
   const ip = documentationAddress();
   const unknown = `${uniqueName("nobody")}@example.test`;
-  data.ownAttempts(`reset-ip:${ip}`, `reset:${digest(unknown)}`);
+  data.ownAttempts(`reset-ip:${clientBucket(ip)}`, `reset:${digest(unknown)}`);
   try {
     const user = await data.user();
     data.ownAttempts(`reset:${digest(user.email)}`);
@@ -173,7 +174,7 @@ test("password reset requests are limited per address and per client", async () 
   const data = new TestData();
   const email = `${uniqueName("nobody")}@example.test`;
   const ips = [documentationAddress(), documentationAddress()];
-  data.ownAttempts(...ips.map((ip) => `reset-ip:${ip}`), `reset:${digest(email)}`);
+  data.ownAttempts(...ips.map((ip) => `reset-ip:${clientBucket(ip)}`), `reset:${digest(email)}`);
   const request = (address: string, ip: string) =>
     withDeferredWork(() => forgotPassword(post("/internal-api/account/forgot-password", { email: address }, ip)));
   try {

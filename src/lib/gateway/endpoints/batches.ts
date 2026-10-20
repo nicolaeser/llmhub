@@ -1,5 +1,6 @@
 import "server-only";
 import prisma from "@/lib/db/prisma";
+import { errorFields } from "@/lib/logging/format";
 import { logger } from "@/lib/logging/logger";
 import {
   addBatchUsage,
@@ -48,6 +49,7 @@ import {
 import { parseRequest } from "@/lib/gateway/protocols/parse-request";
 import { previousConversation } from "@/lib/gateway/storage/responses-store";
 import { forwardToModel } from "@/lib/gateway/dispatch/upstream";
+import { restoreClientJson } from "@/lib/gateway/safety/restore-client";
 import { completionsRequestSchema } from "@/schemas/completions";
 import { responsesRequestSchema } from "@/schemas/responses";
 import type { BatchEndpoint, BatchLineResult, BatchSnapshot } from "@/types/batches";
@@ -272,7 +274,7 @@ export async function runBatchLine(owner: Principal, endpoint: BatchEndpoint, ra
     if (endpoint === "/v1/chat/completions") {
       const clean = await resolveChatFiles(body, principal);
       const dispatched = await dispatchChat({ principal, model, body: clean, aliases: modelChain(principal, model, clean), outputGuard: output });
-      return { ok: true, body: dispatched.json, usage: dispatched.json.usage };
+      return { ok: true, body: restoreClientJson(principal.trace, dispatched.json), usage: dispatched.json.usage };
     }
     const json =
       endpoint === "/v1/completions"
@@ -280,7 +282,7 @@ export async function runBatchLine(owner: Principal, endpoint: BatchEndpoint, ra
         : endpoint === "/v1/responses"
           ? await respondLine(principal, model, body, output)
           : await forwardLine(principal, model, BATCH_ENDPOINTS[endpoint], body);
-    return { ok: true, body: json, usage: json.usage };
+    return { ok: true, body: restoreClientJson(principal.trace, json), usage: json.usage };
   } catch (err) {
     const failure = errorBody(err);
     return { ok: false, status: failure.status, error: failure.error };
@@ -387,7 +389,7 @@ export async function processBatch(id: string): Promise<void> {
 
 export function startBatch(id: string): void {
   void processBatch(id).catch((err) => {
-    logger.error("batch.failed", { batchId: id, err: err instanceof Error ? err.message : String(err) });
+    logger.error("batch.failed", { batchId: id, ...errorFields(err) });
   });
 }
 

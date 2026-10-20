@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { appendFile, mkdtemp, readFile, rm, stat } from "node:fs/promises";
+import { appendFile, mkdtemp, readdir, readFile, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
+import { stopSeconds } from "../../scripts/updater/container-config.mjs";
 
 const root = fileURLToPath(new URL("../..", import.meta.url));
 
@@ -12,9 +13,46 @@ function file(relativePath: string) {
   return readFile(path.join(root, relativePath), "utf8");
 }
 
+async function routeFiles(dir: string): Promise<string[]> {
+  const entries = await readdir(path.join(root, dir), { withFileTypes: true });
+  const nested = await Promise.all(
+    entries.map((entry) => {
+      const relative = path.join(dir, entry.name);
+      if (entry.isDirectory()) return routeFiles(relative);
+      return Promise.resolve(entry.name === "route.ts" ? [relative] : []);
+    }),
+  );
+  return nested.flat();
+}
+
+function composeServices(source: string): Map<string, string> {
+  const services = source.slice(source.indexOf("\nservices:\n"));
+  return new Map([...services.matchAll(/^ {2}([a-z]+):\n((?: {4}.*\n|\n)*)/gm)].map((match) => [match[1], match[2]]));
+}
+
 test("next emits the standalone server the image runs", async () => {
   const config = await file("next.config.ts");
   assert.match(config, /output: "standalone"/);
+});
+
+test("the standalone trace carries the usage PDF fonts with their licenses", async () => {
+  const config = await file("next.config.ts");
+  assert.match(config, /"\/internal-api\/usage\/export": \["\.\/src\/lib\/export\/fonts\/\*"\]/);
+  const fonts = (await readdir(path.join(root, "src/lib/export/fonts"))).sort();
+  assert.deepEqual(fonts, [
+    "Geist-Bold.ttf.br",
+    "Geist-Regular.ttf.br",
+    "NotoSans-Bold.ttf.br",
+    "NotoSans-Regular.ttf.br",
+    "NotoSansKR-Regular.ttf.br",
+    "NotoSansSC-Regular.ttf.br",
+    "OFL-Geist.txt",
+    "OFL-NotoSans.txt",
+    "OFL-NotoSansCJK.txt",
+  ]);
+  for (const license of fonts.filter((name) => name.endsWith(".txt"))) {
+    assert.match(await file(`src/lib/export/fonts/${license}`), /SIL Open Font License, Version 1\.1/);
+  }
 });
 
 test("every stage builds on Debian trixie slim", async () => {
@@ -34,6 +72,18 @@ test("the runner only carries runtime files and runs as the node user", async ()
   assert.doesNotMatch(runner, /COPY --from=deps|npm (ci|install)|COPY \. /);
   assert.match(runner, /USER node/);
   assert.match(runner, /HEALTHCHECK[\s\S]*\/internal-api\/health/);
+  for (const tool of ["node_modules/npm", "node_modules/corepack", "/opt/yarn-v*", "bin/npx", "bin/yarn"]) {
+    assert.ok(runner.slice(0, runner.indexOf("USER node")).includes(tool), tool);
+  }
+});
+
+test("the dependency stage skips the postinstall generate that the builder runs with the schema", async () => {
+  const [dockerfile, pkg] = await Promise.all([file("Dockerfile"), file("package.json")]);
+  assert.equal(JSON.parse(pkg).scripts.postinstall, "prisma generate");
+  const deps = dockerfile.slice(dockerfile.indexOf("AS deps"), dockerfile.indexOf("AS prismacli"));
+  assert.match(deps, /npm ci --ignore-scripts/);
+  const builder = dockerfile.slice(dockerfile.indexOf("AS builder"), dockerfile.indexOf("AS runner"));
+  assert.match(builder, /npx prisma generate && npm run build/);
 });
 
 test("CI bakes the release version into the image as BUILD_ID", async () => {
@@ -111,6 +161,49 @@ test("CI migrates a real Postgres, checks schema drift, and runs integration tes
   assert.ok(steps.every((index, i) => index > 0 && (i === 0 || index > steps[i - 1])), String(steps));
 });
 
+test("CI rejects migrations that sort before the base branch's newest one", async () => {
+  const pipeline = await file(".github/workflows/pipeline.yml");
+  const quality = pipeline.slice(pipeline.indexOf("\n  quality:\n"), pipeline.indexOf("\n  image:\n"));
+  const check = quality.indexOf("npm run migrations:check -- \"${base}\"");
+  assert.ok(check > 0 && check < quality.indexOf("npx prisma migrate deploy"));
+  assert.match(quality, /BASE_REF: \$\{\{ github\.base_ref \}\}/);
+  assert.match(quality, /BEFORE: \$\{\{ github\.event\.before \}\}/);
+  const pkg = JSON.parse(await file("package.json"));
+  assert.equal(pkg.scripts["migrations:check"], "node scripts/check-migration-order.mjs");
+});
+
+test("CI blocks fixable high and critical image findings before anything is tagged", async () => {
+  const pipeline = await file(".github/workflows/pipeline.yml");
+  const image = pipeline.slice(pipeline.indexOf("\n  image:\n"));
+  const scan = image.indexOf("aquasecurity/trivy-action@");
+  assert.ok(scan > image.indexOf("scripts/smoke-image.sh"), "scan after smoke test");
+  assert.ok(scan < image.indexOf("actions/upload-artifact"), "scan before digest upload");
+  const step = image.slice(scan, image.indexOf("\n\n", scan));
+  assert.match(step, /severity: HIGH,CRITICAL/);
+  assert.match(step, /ignore-unfixed: true/);
+  assert.match(step, /exit-code: "1"/);
+});
+
+test("pull requests review new dependencies and audit production dependencies", async () => {
+  const verify = await file(".github/workflows/verify.yml");
+  const dependencies = verify.slice(verify.indexOf("\n  dependencies:\n"));
+  assert.match(dependencies, /uses: actions\/dependency-review-action@[0-9a-f]{40}\n {8}with:\n {10}fail-on-severity: high\n/);
+  assert.match(dependencies, /run: npm audit --omit=dev --audit-level=high/);
+  assert.match(dependencies, /timeout-minutes: \d+/);
+});
+
+test("workflows pin every action to a full commit SHA", async () => {
+  const workflows = (await readdir(path.join(root, ".github/workflows"))).filter((name) => name.endsWith(".yml"));
+  assert.ok(workflows.length > 0);
+  for (const name of workflows) {
+    const source = await file(`.github/workflows/${name}`);
+    for (const [, ref] of source.matchAll(/^\s*(?:- )?uses: (.+)$/gm)) {
+      if (ref.startsWith("./.github/workflows/")) continue;
+      assert.match(ref, /^[\w.-]+\/[\w./-]+@[0-9a-f]{40}$/, `${name}: ${ref}`);
+    }
+  }
+});
+
 test("the container applies migrations before the web server starts", async () => {
   const dockerfile = await file("Dockerfile");
   const cmd = /^CMD \[(.*)\]$/m.exec(dockerfile)?.[1] ?? "";
@@ -165,6 +258,31 @@ test("compose keeps postgres and redis data in bind mounts next to the compose f
   }
 });
 
+test("production compose drains requests on stop, rotates logs, and caps memory", async () => {
+  const [deploy, au] = await Promise.all([file("docker-compose.yml"), file("docker-compose.au.yml")]);
+  const durations = await Promise.all(
+    (await routeFiles("src/app")).map(async (route) => Number(/export const maxDuration = (\d+);/.exec(await file(route))?.[1] ?? 0)),
+  );
+  const longest = Math.max(...durations);
+  for (const source of [deploy, au]) {
+    assert.match(source, /^x-logging: &logging\n {2}driver: json-file\n {2}options:\n {4}max-size: "\d+m"\n {4}max-file: "\d+"\n/);
+    const services = composeServices(source);
+    assert.ok(services.size >= 3);
+    for (const [name, block] of services) {
+      assert.match(block, /^ {4}logging: \*logging$/m, name);
+      assert.match(block, /^ {4}mem_limit: \S+$/m, name);
+    }
+    const app = services.get("app") ?? "";
+    const grace = Number(/^ {4}stop_grace_period: (\d+)s$/m.exec(app)?.[1]);
+    assert.ok(grace > longest, `stop_grace_period ${grace}s must exceed the longest route maxDuration ${longest}s`);
+    assert.equal(stopSeconds({ Config: {} }), grace);
+    assert.match(app, /^ {4}mem_limit: \$\{LLMHUB_MEMORY_LIMIT:-\d+[mg]\}$/m);
+    assert.match(services.get("postgres") ?? "", /^ {4}mem_limit: \$\{POSTGRES_MEMORY_LIMIT:-\d+[mg]\}$/m);
+    assert.match(services.get("redis") ?? "", /^ {4}mem_limit: \$\{REDIS_MEMORY_LIMIT:-\d+[mg]\}$/m);
+  }
+  assert.ok(composeServices(au).has("updater"));
+});
+
 test("compose files read credentials from the generated .env", async () => {
   const [deploy, dev] = await Promise.all([
     file("docker-compose.yml"),
@@ -198,6 +316,7 @@ test("generate-env.sh writes the production .env and keeps an existing one", asy
     "LLMHUB_TAG",
     "NEXT_PUBLIC_APP_URL",
     "LLMHUB_PORT",
+    "IP_MODE",
     "POSTGRES_USER",
     "POSTGRES_DB",
     "SMTP_URL",
@@ -241,17 +360,23 @@ test("generate-env.sh --yes builds the production .env from the environment", { 
     assert.match(written, /^NODE_ENV=production$/m);
     assert.match(written, /^NEXT_PUBLIC_APP_URL=https:\/\/hub\.example\.com$/m);
     assert.match(written, /^LLMHUB_TAG=latest$/m);
+    assert.match(written, /^IP_MODE=proxy$/m);
     assert.match(written, /^POSTGRES_PASSWORD=[A-Za-z0-9_-]{32}$/m);
     assert.match(written, /^APP_SECRET=[0-9a-f]{64}$/m);
     assert.match(written, /^SMTP_FROM=mailer@example\.com$/m);
     assert.doesNotMatch(written, /^(?:DATABASE_URL|REDIS_URL|OIDC_CLIENT_SECRET|S3_ACCESS_KEY_ID)=/m);
+
+    const invalidMode = run(["--yes", "--force"], { IP_MODE: "x-forwarded-for" });
+    assert.equal(invalidMode.status, 1);
+    assert.match(invalidMode.stderr, /IP_MODE/);
+    assert.equal(await readFile(output, "utf8"), written);
 
     const refused = run(["--yes"], { NEXT_PUBLIC_APP_URL: "https://other.example.com" });
     assert.equal(refused.status, 1);
     assert.equal(await readFile(output, "utf8"), written);
 
     await appendFile(output, "EXTRA_SETTING=kept\n");
-    const updated = run(["--yes", "--force"], { OIDC_CLIENT_SECRET: "sso-secret" });
+    const updated = run(["--yes", "--force"], { OIDC_CLIENT_SECRET: "sso-secret", IP_MODE: "cloudflare" });
     assert.equal(updated.status, 0, updated.stderr);
     const next = await readFile(output, "utf8");
     for (const name of ["APP_SECRET", "POSTGRES_PASSWORD", "REDIS_PASSWORD", "SMTP_URL", "NEXT_PUBLIC_APP_URL"]) {
@@ -259,6 +384,7 @@ test("generate-env.sh --yes builds the production .env from the environment", { 
       assert.equal(line.exec(next)?.[0], line.exec(written)?.[0], name);
     }
     assert.match(next, /^OIDC_CLIENT_SECRET=sso-secret$/m);
+    assert.match(next, /^IP_MODE=cloudflare$/m);
     assert.match(next, /^EXTRA_SETTING=kept$/m);
     assert.equal(await readFile(`${output}.bak`, "utf8"), `${written}EXTRA_SETTING=kept\n`);
     assert.equal((await stat(output)).mode & 0o777, 0o600);

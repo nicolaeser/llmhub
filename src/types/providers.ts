@@ -18,6 +18,7 @@ export type ProviderRecord = {
   restricted: boolean;
   assignments?: AssignmentSource[];
   login?: { account: string; plan: string; status: string } | null;
+  subAdd?: { label: string } | null;
 };
 
 export type ProviderPolicyInput = {
@@ -41,6 +42,8 @@ export type SignInKind = SignInCredential["kind"];
 export type SignInMethod = "device" | "code";
 
 export type SignInStatus = "active" | "expired";
+
+export type SignInCheck = "valid" | "rejected" | "unreachable";
 
 export type ProviderSignIn = {
   account: string;
@@ -113,6 +116,7 @@ export type ProviderView = {
   restricted: boolean;
   assignments: AssignmentTarget[];
   signIn: ProviderSignIn | null;
+  sharedVia: string | null;
   discovered: { id: string; name: string }[];
   policy: ProviderPolicyInput;
 };
@@ -180,6 +184,48 @@ export type AccountLimits = {
   id: string;
   limits: SubscriptionLimits | null;
   error: string;
+};
+
+export type LimitErrorCode = "SIGN_IN_EXPIRED" | "UPSTREAM_AUTH" | "UPSTREAM_FAILED" | "UPSTREAM_RATE_LIMITED";
+
+export type LimitSnapshot = AccountLimits & {
+  version: number;
+  checkedAt: string | null;
+  nextAt: string | null;
+  retryAt: string | null;
+};
+
+export type LimitSnapshotList = { at: number; items: LimitSnapshot[] };
+
+export type LimitAccount = { id: string; kind: string; apiKey: string };
+
+export type LimitPollAccount = LimitAccount & { enabled: boolean; loginVersion: number };
+
+export type StoredLimitSnapshot = {
+  providerId: string;
+  limits: SubscriptionLimits | null;
+  resets: ResetCredits | null;
+  resetsAt: number | null;
+  error: string;
+  fetchedAt: number | null;
+  checkedAt: number | null;
+  nextAt: number;
+  retryAt: number | null;
+  failures: number;
+  loginVersion: number;
+  leaseUntil: number | null;
+  version: number;
+};
+
+export type LimitFetchFailure = { code: LimitErrorCode; retryAfterMs: number | null };
+
+export type LimitRefreshMode = { kind: "scheduled" } | { kind: "manual" } | { kind: "fresh"; maxAgeMs: number };
+
+export type LimitRefreshResult = {
+  status: "fetched" | "skipped" | "busy" | "gone";
+  limits: SubscriptionLimits | null;
+  failure: LimitFetchFailure | null;
+  snapshot: StoredLimitSnapshot | null;
 };
 
 export type AccountState = "paused" | "available" | "limited" | "expired" | "unavailable" | "checking" | "connected";
@@ -299,6 +345,7 @@ export type ProviderListActions = {
   replace: (provider: ProviderView) => void;
   upsert: (providers: ProviderView[]) => void;
   remove: (id: string) => void;
+  reload: () => void;
 };
 
 export type ProvidersTab = "api" | "subscriptions" | "health";

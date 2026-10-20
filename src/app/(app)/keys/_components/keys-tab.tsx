@@ -19,6 +19,7 @@ import PageStatus from "@/components/console/page-status";
 import RowCard, { RowCards, TABLE_FROM_LG } from "@/components/console/row-cards";
 import StatCard from "@/components/console/stat-card";
 import { useErrorToast } from "@/components/console/use-error-toast";
+import { useConsoleScope } from "../../_components/console-scope";
 import GettingStarted from "./getting-started";
 import { bindingKind, parsePreset, placeOf } from "./key-binding";
 import { KeyDialog } from "./key-dialog";
@@ -48,6 +49,7 @@ export default function KeysTab() {
   const showError = useErrorToast();
   const tCommon = useTranslations("Common");
   const format = useFormatter();
+  const scope = useConsoleScope();
   const [budgetKey, setBudgetKey] = useState<VirtualKeyView | null>(null);
   const [mcpKey, setMcpKey] = useState<VirtualKeyView | null>(null);
   const [query, setQuery] = useState("");
@@ -158,7 +160,7 @@ export default function KeysTab() {
   }, [keys, query]);
 
   if (!data) {
-    return <PageStatus state={page} />;
+    return <PageStatus state={page} stats={4} />;
   }
 
   const { canManage, canBind, canBudget, canMcp, overview, owners } = data;
@@ -319,7 +321,9 @@ export default function KeysTab() {
     </Button>
   ) : undefined;
   const setupIncomplete =
-    canManage && (data.providers === 0 || options.models.length === 0 || data.keys.length === 0);
+    canManage &&
+    scope.kind === "platform" &&
+    (data.providers === 0 || options.models.length === 0 || data.keys.length === 0);
 
   return (
     <div className="space-y-5">

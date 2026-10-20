@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import test, { afterEach, beforeEach } from "node:test";
+import { limitSnapshotModel, seedSnapshot } from "./support/limit-snapshot-fake";
+import type { JsonMap } from "@/types/gateway";
 import type { ResolvedModelGroup } from "@/types/routing";
 import type { SignInSession } from "@/types/providers";
 
@@ -22,6 +24,7 @@ const loginKinds = new Map<string, string>();
 const policyRows: { kind: string; strategy: string }[] = [];
 
 const fakePrisma = {
+  providerLimitSnapshot: limitSnapshotModel(),
   accountRouting: {
     findMany: async () => policyRows.map((row) => ({ ...row })),
   },
@@ -530,29 +533,30 @@ test("Codex usage maps plan windows, model specific limits, and credits", async 
   assert.equal(codexLimits({}, 0).resetCredits, null);
 });
 
-test("subscription limits come from the ChatGPT usage endpoint and are cached", async () => {
-  const { subscriptionLimits } = await import("@/lib/gateway/upstreams/subscription-limits");
+test("subscription limits come from the ChatGPT usage endpoint", async () => {
+  const { fetchSubscriptionLimits } = await import("@/lib/gateway/upstreams/subscription-limits");
   await seedLogin("p6", Date.now() + 3_600_000);
   respondWith(() => Response.json(usagePayload));
-  assert.equal(await subscriptionLimits({ id: "p7", kind: "openai", apiKey: "" }), null);
+  assert.equal(await fetchSubscriptionLimits({ id: "p7", kind: "openai", apiKey: "" }), null);
   assert.equal(calls.length, 0);
-  const first = await subscriptionLimits({ id: "p6", kind: "codex", apiKey: "" });
+  const first = await fetchSubscriptionLimits({ id: "p6", kind: "codex", apiKey: "" });
   assert.equal(first?.windows.length, 3);
   assert.equal(calls.length, 1);
   assert.equal(calls[0]!.url, "https://chatgpt.com/backend-api/wham/usage");
   assert.equal(calls[0]!.headers.Authorization, "Bearer old-access");
   assert.equal(calls[0]!.headers["ChatGPT-Account-ID"], "acct_1");
-  assert.equal(await subscriptionLimits({ id: "p6", kind: "codex", apiKey: "" }), first);
-  assert.equal(await subscriptionLimits({ id: "p6", kind: "codex", apiKey: "" }, { force: true }), first);
-  assert.equal(calls.length, 1);
 });
 
-test("subscription limits report rejected and expired sign-ins as codes", async () => {
-  const { subscriptionLimits } = await import("@/lib/gateway/upstreams/subscription-limits");
+test("subscription limits report rejected, rate-limited, and expired sign-ins as codes", async () => {
+  const { fetchSubscriptionLimits, limitFailure } = await import("@/lib/gateway/upstreams/subscription-limits");
   await seedLogin("p8", Date.now() + 3_600_000);
   respondWith(() => new Response("", { status: 401 }));
-  await assert.rejects(subscriptionLimits({ id: "p8", kind: "codex", apiKey: "" }), { message: "UPSTREAM_AUTH" });
-  await assert.rejects(subscriptionLimits({ id: "missing", kind: "codex", apiKey: "" }), { message: "SIGN_IN_EXPIRED" });
+  await assert.rejects(fetchSubscriptionLimits({ id: "p8", kind: "codex", apiKey: "" }), { message: "UPSTREAM_AUTH" });
+  respondWith(() => new Response("", { status: 429, headers: { "retry-after": "120" } }));
+  const limited = await fetchSubscriptionLimits({ id: "p8", kind: "codex", apiKey: "" }).catch((error: unknown) => error);
+  assert.deepEqual(limitFailure(limited), { code: "UPSTREAM_RATE_LIMITED", retryAfterMs: 120_000 });
+  await assert.rejects(fetchSubscriptionLimits({ id: "missing", kind: "codex", apiKey: "" }), { message: "SIGN_IN_EXPIRED" });
+  assert.deepEqual(limitFailure(new Error("boom")), { code: "UPSTREAM_FAILED", retryAfterMs: null });
 });
 
 const claudeUsagePayload = {
@@ -695,10 +699,10 @@ test("Claude usage maps the five hour, weekly, and model weekly windows", async 
 });
 
 test("Claude subscription limits call the OAuth usage endpoint with the beta header", async () => {
-  const { subscriptionLimits } = await import("@/lib/gateway/upstreams/subscription-limits");
+  const { fetchSubscriptionLimits } = await import("@/lib/gateway/upstreams/subscription-limits");
   await seedLogin("p9", Date.now() + 3_600_000);
   respondWith(() => Response.json(claudeUsagePayload));
-  const limits = await subscriptionLimits({ id: "p9", kind: "claude", apiKey: "" });
+  const limits = await fetchSubscriptionLimits({ id: "p9", kind: "claude", apiKey: "" });
   assert.equal(limits?.plan, "pro");
   assert.equal(limits?.windows.length, 3);
   assert.equal(calls[0]!.url, "https://api.anthropic.com/api/oauth/usage");
@@ -730,6 +734,7 @@ function poolDeployment(id: string, weight: number) {
       enabled: true,
       restricted: false,
       assignments: [] as { orgId: string | null; teamId: string | null; projectId: string | null; memberId: string | null; keyId: string | null }[],
+      login: { status: "active" } as { status: string } | null,
     },
   };
 }
@@ -759,9 +764,16 @@ async function claudePool(): Promise<{ group: ResolvedModelGroup; mapped: PoolDe
       leaseUntil: null,
     });
   }
-  globalThis.fetch = (async (_input: string | URL | Request, init?: RequestInit) => {
-    const auth = String((init?.headers as Record<string, string>).Authorization).replace("Bearer ", "");
-    return Response.json(usage[auth]);
+  const { claudeLimits } = await import("@/lib/gateway/upstreams/subscription-limits");
+  for (const id of ["q1", "q2", "q3"]) {
+    seedSnapshot(`prov-${id}`, {
+      limits: claudeLimits(usage[`token-${id}`] as JsonMap, "max"),
+      fetchedAt: new Date(),
+      checkedAt: new Date(),
+    });
+  }
+  globalThis.fetch = (async (input: string | URL | Request) => {
+    throw new Error(`routing must read limit snapshots, not ${String(input)}`);
   }) as typeof fetch;
   const mapped = [poolDeployment("q1", 10), poolDeployment("q2", 5), poolDeployment("q3", 1)];
   const group: ResolvedModelGroup = {
@@ -902,7 +914,7 @@ test("xAI billing maps the weekly credits, the monthly spend cap, and on-demand 
 });
 
 test("subscription limits for SuperGrok call the billing endpoints with the Grok CLI headers", async () => {
-  const { subscriptionLimits } = await import("@/lib/gateway/upstreams/subscription-limits");
+  const { fetchSubscriptionLimits } = await import("@/lib/gateway/upstreams/subscription-limits");
   await seedLogin("p10", Date.now() + 3_600_000);
   respondWith((url) =>
     url.endsWith("/v1/settings")
@@ -911,7 +923,7 @@ test("subscription limits for SuperGrok call the billing endpoints with the Grok
         ? Response.json({ config: { currentPeriod: { start: "2026-10-05T00:00:00Z", end: "2026-10-12T00:00:00Z" }, creditUsagePercent: 10 } })
         : new Response("", { status: 404 }),
   );
-  const limits = await subscriptionLimits({ id: "p10", kind: "grok_build", apiKey: "" });
+  const limits = await fetchSubscriptionLimits({ id: "p10", kind: "grok_build", apiKey: "" });
   assert.equal(limits?.plan, "SuperGrok Heavy");
   assert.equal(limits?.windows.length, 1);
   assert.equal(calls.length, 3);
@@ -919,5 +931,36 @@ test("subscription limits for SuperGrok call the billing endpoints with the Grok
   assert.equal(calls[0]!.headers.Authorization, "Bearer old-access");
   await seedLogin("p11", Date.now() + 3_600_000);
   respondWith(() => new Response("", { status: 401 }));
-  await assert.rejects(subscriptionLimits({ id: "p11", kind: "grok_build", apiKey: "" }), { message: "UPSTREAM_AUTH" });
+  await assert.rejects(fetchSubscriptionLimits({ id: "p11", kind: "grok_build", apiKey: "" }), { message: "UPSTREAM_AUTH" });
+});
+
+test("a fresh sign-in is checked with its own tokens against the account usage endpoint", async () => {
+  const { checkSignInSession } = await import("@/lib/gateway/upstreams/subscription-limits");
+  const session: SignInSession = {
+    tokens: { access: "fresh-access", refresh: "fresh-refresh", accountId: "acct_9", residency: "" },
+    expiresAt: Date.now() + 3_600_000,
+    account: "dev@example.com",
+    plan: "pro",
+  };
+  const answers = new Map([
+    [200, "valid"],
+    [429, "valid"],
+    [401, "rejected"],
+    [403, "rejected"],
+    [500, "unreachable"],
+  ]);
+  for (const [status, expected] of answers) {
+    calls = [];
+    respondWith(() => Response.json({}, { status }));
+    assert.equal(await checkSignInSession("codex", session), expected);
+    assert.equal(calls.length, 1);
+    assert.equal(new URL(calls[0].url).pathname, "/backend-api/wham/usage");
+    assert.equal(calls[0].headers.Authorization, "Bearer fresh-access");
+    assert.equal(calls[0].headers["ChatGPT-Account-ID"], "acct_9");
+  }
+  respondWith(() => {
+    throw new TypeError("fetch failed");
+  });
+  assert.equal(await checkSignInSession("claude", session), "unreachable");
+  assert.equal(new URL(calls.at(-1)!.url).pathname, "/api/oauth/usage");
 });

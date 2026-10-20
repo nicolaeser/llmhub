@@ -7,17 +7,28 @@ import PageStatus from "@/components/console/page-status";
 import PageTabs from "@/components/console/page-tabs";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { useActionData } from "@/lib/hooks/use-action-data";
+import { useConsoleScope } from "../_components/console-scope";
 import { loadKeyTabsAction } from "./_action";
 import KeysTab from "./_components/keys-tab";
 import TemplatesTab from "./_components/templates-tab";
 
 export default function KeysPage() {
   const t = useTranslations("Keys");
+  const { kind, canSwitch } = useConsoleScope();
   const page = useActionData(loadKeyTabsAction);
   const granted = page.data;
 
   if (!granted) {
-    return <PageStatus icon={KeyRound} title={t("title")} subtitle={t("subtitle")} state={page} />;
+    return (
+      <PageStatus
+        icon={KeyRound}
+        title={t("title")}
+        subtitle={t("subtitle")}
+        state={page}
+        tabs={kind === "platform" || canSwitch}
+        stats={4}
+      />
+    );
   }
 
   const tabs = [

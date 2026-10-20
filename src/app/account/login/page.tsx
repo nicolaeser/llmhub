@@ -5,6 +5,7 @@ import { Skeleton, toast } from "@heroui/react";
 import { useTranslations } from "next-intl";
 import { Link, useRouter } from "@/i18n/routing";
 import AccountShell from "@/app/account/_components/account-shell";
+import FormSkeleton from "@/app/account/_components/form-skeleton";
 import { postLoginDestination, withReturnQuery } from "@/lib/auth/return-path";
 import { isActionFail } from "@/lib/http/action-result";
 import { useSearchParam } from "@/lib/hooks/use-search-param";
@@ -72,7 +73,7 @@ export default function LoginPage() {
       title={t.rich("stepHeading", {
         step: current,
         lead: (chunks) => chunks,
-        accent: (chunks) => <span className="text-muted">{chunks}</span>,
+        accent: (chunks) => <span className="text-accent">{chunks}</span>,
       })}
       subtitle={t("stepSubtitle", { step: current })}
       footer={
@@ -91,11 +92,7 @@ export default function LoginPage() {
       }
     >
       {!context ? (
-        <div aria-busy className="space-y-5">
-          <Skeleton className="h-16 w-full rounded-xl" />
-          <Skeleton className="h-16 w-full rounded-xl" />
-          <Skeleton className="h-10 w-full rounded-xl" />
-        </div>
+        <FormSkeleton fields={2} />
       ) : step.step === null ? (
         <PasswordStep
           ssoEnabled={context.ssoEnabled}

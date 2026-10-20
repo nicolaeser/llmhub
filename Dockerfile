@@ -7,7 +7,7 @@ ENV NEXT_TELEMETRY_DISABLED=1 \
 
 FROM base AS deps
 COPY package.json package-lock.json ./
-RUN --mount=type=cache,target=/root/.npm npm ci --no-audit --no-fund
+RUN --mount=type=cache,target=/root/.npm npm ci --ignore-scripts --no-audit --no-fund
 
 FROM base AS prismacli
 WORKDIR /pc
@@ -38,6 +38,8 @@ LABEL org.opencontainers.image.title="LLM Hub" \
 ENV NODE_ENV=production \
     PORT=3000 \
     HOSTNAME=0.0.0.0
+RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack /opt/yarn-v* \
+      /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack /usr/local/bin/yarn /usr/local/bin/yarnpkg
 COPY --from=prismacli --chown=node:node /pc/node_modules ./node_modules
 COPY --from=builder --chown=node:node /app/.next/standalone ./
 COPY --from=builder --chown=node:node /app/.next/static ./.next/static

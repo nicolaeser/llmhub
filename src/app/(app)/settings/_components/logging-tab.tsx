@@ -13,6 +13,7 @@ import { useTranslations } from "next-intl";
 import { SettingSection, SettingSwitch } from "./setting-fields";
 import { formats } from "@/i18n/formats";
 import { loadLoggingAction, saveLoggingAction } from "../_action";
+import BudgetAlertsCard from "./budget-alerts-card";
 import WebhookCard from "./webhook-card";
 import SaveBar, { SettingsLead } from "./save-bar";
 import TabState from "./tab-state";
@@ -24,10 +25,15 @@ import {
   DEFAULT_SPEND_ANOMALY_MIN_COST,
 } from "@/lib/alerts/rules";
 import { MAX_ALERT_WEBHOOKS, WEBHOOK_EVENTS } from "@/lib/alerts/events";
+import {
+  DEFAULT_CONTENT_RETENTION_DAYS,
+  DEFAULT_LOG_RETENTION_DAYS,
+  DEFAULT_OBJECT_RETENTION_DAYS,
+  DEFAULT_SECURITY_RETENTION_DAYS,
+  RETENTION_MAX_DAYS,
+} from "@/lib/settings/retention-defaults";
 import type { AlertRules, AlertWebhookDraft, LoggingSettingsView } from "@/types/settings";
 import { useErrorToast } from "@/components/console/use-error-toast";
-
-const RETENTION_MAX_DAYS = 36500;
 
 export default function LoggingTab() {
   const t = useTranslations("Settings.logging");
@@ -40,12 +46,14 @@ export default function LoggingTab() {
     keyExpiryWarningDays: DEFAULT_KEY_EXPIRY_WARNING_DAYS,
   });
   const draftSeq = useRef(0);
-  const [retention, setRetention] = useState(0);
+  const [retention, setRetention] = useState(DEFAULT_LOG_RETENTION_DAYS);
   const [spendRetention, setSpendRetention] = useState(0);
+  const [usageRetention, setUsageRetention] = useState(0);
   const [auditRetention, setAuditRetention] = useState(0);
-  const [objectRetention, setObjectRetention] = useState(30);
+  const [securityRetention, setSecurityRetention] = useState(DEFAULT_SECURITY_RETENTION_DAYS);
+  const [objectRetention, setObjectRetention] = useState(DEFAULT_OBJECT_RETENTION_DAYS);
   const [fileRetention, setFileRetention] = useState(0);
-  const [contentRetention, setContentRetention] = useState(0);
+  const [contentRetention, setContentRetention] = useState(DEFAULT_CONTENT_RETENTION_DAYS);
   const [archive, setArchive] = useState(false);
   const [content, setContent] = useState(true);
   const [pending, start] = useTransition();
@@ -66,7 +74,9 @@ export default function LoggingTab() {
     setRules(next.alertRules);
     setRetention(next.logRetentionDays);
     setSpendRetention(next.spendRetentionDays);
+    setUsageRetention(next.usageRetentionDays);
     setAuditRetention(next.auditRetentionDays);
+    setSecurityRetention(next.securityRetentionDays);
     setObjectRetention(next.objectRetentionDays);
     setFileRetention(next.fileRetentionDays);
     setContentRetention(next.contentRetentionDays);
@@ -194,6 +204,13 @@ export default function LoggingTab() {
           })}
         </div>
       </SettingSection>
+      <BudgetAlertsCard
+        thresholds={view.budgetAlerts.thresholds}
+        canManage={view.budgetAlerts.canManage}
+        onSaved={(thresholds) =>
+          setView((current) => ({ ...current, budgetAlerts: { ...current.budgetAlerts, thresholds } }))
+        }
+      />
       <SettingSection title={t("contentTitle")} subtitle={t("contentSubtitle")}>
         <SettingSwitch
           label={t("content")}
@@ -203,15 +220,17 @@ export default function LoggingTab() {
           hint={t("contentHint")}
         />
         <div className="grid gap-4 md:grid-cols-3 md:items-start">
-          {numberField(contentRetention, setContentRetention, t("contentRetention"), t("contentRetentionHint"))}
+          {numberField(contentRetention, setContentRetention, t("contentRetention"), t("contentRetentionHint", { days: DEFAULT_CONTENT_RETENTION_DAYS }))}
         </div>
       </SettingSection>
       <SettingSection title={t("retentionTitle")}>
         <div className="grid gap-4 md:grid-cols-3 md:items-start">
-          {numberField(retention, setRetention, t("retention"), t("retentionHint"))}
+          {numberField(retention, setRetention, t("retention"), t("retentionHint", { days: DEFAULT_LOG_RETENTION_DAYS }))}
           {numberField(spendRetention, setSpendRetention, t("spendRetention"), t("spendRetentionHint"))}
+          {numberField(usageRetention, setUsageRetention, t("usageRetention"), t("usageRetentionHint"))}
           {numberField(auditRetention, setAuditRetention, t("auditRetention"), t("auditRetentionHint"))}
-          {numberField(objectRetention, setObjectRetention, t("objectRetention"), t("objectRetentionHint"))}
+          {numberField(securityRetention, setSecurityRetention, t("securityRetention"), t("securityRetentionHint", { days: DEFAULT_SECURITY_RETENTION_DAYS }))}
+          {numberField(objectRetention, setObjectRetention, t("objectRetention"), t("objectRetentionHint", { days: DEFAULT_OBJECT_RETENTION_DAYS }))}
           {numberField(fileRetention, setFileRetention, t("fileRetention"), t("fileRetentionHint"))}
         </div>
         <SettingSwitch
@@ -239,7 +258,9 @@ export default function LoggingTab() {
               alertRules: rules,
               logRetentionDays: retention,
               spendRetentionDays: spendRetention,
+              usageRetentionDays: usageRetention,
               auditRetentionDays: auditRetention,
+              securityRetentionDays: securityRetention,
               objectRetentionDays: objectRetention,
               fileRetentionDays: fileRetention,
               contentRetentionDays: contentRetention,

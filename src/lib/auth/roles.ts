@@ -8,7 +8,7 @@ import {
   canManage,
   grantActor,
 } from "@/lib/auth/grants";
-import { requirePermission } from "@/lib/auth/guards";
+import { requirePlatformPermission } from "@/lib/auth/guards";
 import {
   isRoleTemplateKey,
   permissionList,
@@ -235,7 +235,7 @@ export async function templateRoleId(key: RoleTemplateKey): Promise<string | nul
 }
 
 export async function loadRolesConsole(): Promise<RolesConsolePayload> {
-  const actor = grantActor(await requirePermission(PERMISSIONS.ROLES_MANAGE));
+  const actor = grantActor(await requirePlatformPermission(PERMISSIONS.ROLES_MANAGE));
   const [roles, templates] = await Promise.all([
     listRoles(actor),
     prisma.role.findMany({ where: { templateKey: { not: null } }, select: { templateKey: true } }),
@@ -251,7 +251,7 @@ export async function loadRolesConsole(): Promise<RolesConsolePayload> {
 export async function changeRole(
   mutation: (session: AuthenticatedSession) => Promise<{ id: string }>,
 ): Promise<{ role: RoleSummary }> {
-  const session = await requirePermission(PERMISSIONS.ROLES_MANAGE);
+  const session = await requirePlatformPermission(PERMISSIONS.ROLES_MANAGE);
   const { id } = await mutation(session);
   const role = (await listRoles(grantActor(session))).find((row) => row.id === id);
   if (!role) throw new AuthError("ROLE_NOT_FOUND");

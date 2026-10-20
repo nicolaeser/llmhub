@@ -5,6 +5,7 @@ import {
   Button,
   buttonVariants,
   Card,
+  Chip,
   Disclosure,
   Label,
   ListBox,
@@ -23,10 +24,11 @@ import {
   Timer,
 } from "lucide-react";
 import { useFormatter, useTranslations } from "next-intl";
-import { loadUsageAction } from "../_action";
+import { loadUsageAction, loadUsageTodayAction } from "../_action";
 import { useActionData } from "@/lib/hooks/use-action-data";
+import { useLiveConnected, useLiveUsageToday } from "@/lib/hooks/use-live";
 import { BELOW_MD, useMediaQuery } from "@/lib/hooks/use-media-query";
-import PageStatus, { LoadError } from "@/components/console/page-status";
+import PageStatus, { LoadError, SectionLoading } from "@/components/console/page-status";
 import RowCard, { RowCards, TABLE_FROM_LG } from "@/components/console/row-cards";
 import SearchSelect from "@/components/console/search-select";
 import StatCard from "@/components/console/stat-card";
@@ -74,6 +76,9 @@ export default function OverviewTab() {
   const compact = useMediaQuery(BELOW_MD);
   const usage = useActionData(() => loadUsageAction(INITIAL_QUERY));
   const { data: stats, pending } = usage;
+  const todaySeed = useActionData(loadUsageTodayAction);
+  const today = useLiveUsageToday(todaySeed.data);
+  const live = useLiveConnected();
 
   function apply(patch: Partial<UsageQuery>) {
     const next = { ...query, ...patch };
@@ -82,7 +87,7 @@ export default function OverviewTab() {
   }
 
   if (!stats) {
-    return <PageStatus state={usage} />;
+    return <PageStatus state={usage} layout="charts" />;
   }
 
   const label = (group: TenantGroup, id: string) =>
@@ -99,7 +104,7 @@ export default function OverviewTab() {
       label: t("group.model"),
       options: stats.models.map((id) => ({ id, label: id })),
     },
-    { key: "orgId" as const, label: t("group.org"), options: options("org", stats.orgs) },
+    ...(stats.companyView ? [] : [{ key: "orgId" as const, label: t("group.org"), options: options("org", stats.orgs) }]),
     { key: "teamId" as const, label: t("group.team"), options: options("team", stats.teams) },
     { key: "projectId" as const, label: t("group.project"), options: options("project", stats.projects) },
     { key: "memberId" as const, label: t("group.member"), options: options("member", stats.members) },
@@ -198,128 +203,30 @@ export default function OverviewTab() {
         </Card>
       ) : null}
       <LoadError state={usage} className="mb-5" />
-      <p className="sr-only">
-        {t("summary", {
-          spend: stats.spend,
-          count: stats.count,
-          errors: stats.errors,
-        })}
-      </p>
-      <div aria-busy={pending} className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <StatCard icon={CircleDollarSign} label={t("metrics.spend")} value={format.number(stats.spend, "money")} />
-        <StatCard icon={Coins} label={t("metrics.tokens")} value={format.number(stats.tokens, "integer")} />
-        <StatCard
-          icon={Activity}
-          tone="success"
-          label={t("metrics.requests")}
-          value={format.number(stats.count, "integer")}
-        />
-        <StatCard
-          icon={AlertTriangle}
-          tone={stats.errors > 0 ? "danger" : "neutral"}
-          label={t("metrics.errors")}
-          value={format.number(stats.errors, "integer")}
-        />
-      </div>
-      <div aria-busy={pending} className="mt-3 grid gap-3 sm:grid-cols-3">
-        <StatCard
-          icon={Timer}
-          tone="neutral"
-          label={t("metrics.latency")}
-          value={t("latencyValue", { ms: Math.round(stats.latency) })}
-        />
-        <StatCard
-          icon={Gauge}
-          tone="neutral"
-          label={t("metrics.p95")}
-          value={t("latencyValue", { ms: Math.round(stats.p95Latency) })}
-        />
-        <StatCard
-          icon={Ban}
-          tone={stats.rate429 > 0 ? "warning" : "neutral"}
-          label={t("metrics.rate429")}
-          value={format.number(stats.rate429, "integer")}
-        />
-      </div>
-      {stats.purchase === null ? null : (
-        <MarginCard
-          chargeback={stats.chargeback}
-          names={stats.names}
-          purchase={stats.purchase}
-          sale={stats.spend}
-        />
-      )}
-      <UsageCharts
-        daily={stats.daily}
-        byModel={stats.byModel}
-        byTeam={named("team", stats.byTeam)}
-        byOrg={named("org", stats.byOrg)}
-        byProject={named("project", stats.byProject)}
-        byMember={named("member", stats.byMember)}
-        healthByModel={stats.healthByModel}
-        requests={stats.count}
-        errors={stats.errors}
-      />
-      {stats.byModel.length ? (
-        <Card className="mt-5 gap-4">
-          <Card.Header>
-            <Card.Title>{t("pdf.byModel")}</Card.Title>
+      {today && activeFilters === 0 ? (
+        <Card className="mb-5 gap-4">
+          <Card.Header className="flex-row flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0 flex-1 basis-64">
+              <Card.Title>{t("today.title")}</Card.Title>
+              <Card.Description>
+                {t("today.description", {
+                  day: format.dateTime(new Date(`${today.day}T00:00:00Z`), { dateStyle: "medium", timeZone: "UTC" }),
+                })}
+              </Card.Description>
+            </div>
+            {live ? (
+              <Chip size="sm" variant="soft" color="success">
+                {t("today.live")}
+              </Chip>
+            ) : null}
           </Card.Header>
-          <RowCards label={t("pdf.byModel")}>
-            {stats.byModel.map((row) => (
-              <RowCard
-                key={row.name || "none"}
-                variant="secondary"
-                title={row.name || tCommon("none")}
-                details={[
-                  { label: t("columns.spend"), value: format.number(row.spend, "money"), wide: true },
-                  { label: t("columns.prompt"), value: format.number(row.prompt, "integer") },
-                  { label: t("columns.completion"), value: format.number(row.completion, "integer") },
-                ]}
-              />
-            ))}
-          </RowCards>
-          <Table aria-label={t("pdf.byModel")} className={TABLE_FROM_LG}>
-            <Table.ScrollContainer>
-              <Table.Content>
-                <Table.Header>
-                  <Table.Column isRowHeader>{t("columns.name")}</Table.Column>
-                  <Table.Column>{t("columns.spend")}</Table.Column>
-                  <Table.Column>{t("columns.prompt")}</Table.Column>
-                  <Table.Column>{t("columns.completion")}</Table.Column>
-                </Table.Header>
-                <Table.Body>
-                  {stats.byModel.map((row) => (
-                    <Table.Row key={row.name || "none"} id={row.name || "none"}>
-                      <Table.Cell>{row.name || tCommon("none")}</Table.Cell>
-                      <Table.Cell>{format.number(row.spend, "money")}</Table.Cell>
-                      <Table.Cell>
-                        {format.number(row.prompt, "integer")}
-                      </Table.Cell>
-                      <Table.Cell>
-                        {format.number(row.completion, "integer")}
-                      </Table.Cell>
-                    </Table.Row>
-                  ))}
-                </Table.Body>
-              </Table.Content>
-            </Table.ScrollContainer>
-          </Table>
-        </Card>
-      ) : null}
-      <Card className="mt-5 gap-4">
-        <Card.Header>
-          <Card.Title>{t("cache.title")}</Card.Title>
-          <Card.Description>{t("cache.description")}</Card.Description>
-        </Card.Header>
-        {stats.cacheRead || stats.cacheWrite ? (
-          <dl aria-busy={pending} className="grid grid-cols-2 gap-4 md:grid-cols-4">
+          <dl className="grid grid-cols-2 gap-4 md:grid-cols-4">
             {(
               [
-                ["hitRate", t("columns.hitRate"), format.number(stats.cacheHitRate, "percent")],
-                ["cacheRead", t("columns.cacheRead"), format.number(stats.cacheRead, "integer")],
-                ["cacheWrite", t("columns.cacheWrite"), format.number(stats.cacheWrite, "integer")],
-                ["savings", t("columns.savings"), format.number(stats.cacheSavings, "money")],
+                ["spend", t("metrics.spend"), format.number(today.spend, "money")],
+                ["requests", t("metrics.requests"), format.number(today.requests, "integer")],
+                ["errors", t("metrics.errors"), format.number(today.errors, "integer")],
+                ["tokens", t("metrics.tokens"), format.number(today.tokens, "integer")],
               ] as const
             ).map(([key, label, value]) => (
               <div key={key}>
@@ -328,64 +235,205 @@ export default function OverviewTab() {
               </div>
             ))}
           </dl>
-        ) : (
-          <Card.Description>{t("cache.empty")}</Card.Description>
-        )}
-      </Card>
-      {stats.cacheByProject.length ? (
-        <Card className="mt-5 gap-4">
-          <Card.Header>
-            <Card.Title>{t("cache.byProject")}</Card.Title>
-          </Card.Header>
-          <RowCards label={t("cache.byProject")}>
-            {stats.cacheByProject.map((row) => (
-              <RowCard
-                key={row.name}
-                variant="secondary"
-                title={label("project", row.name) || tCommon("none")}
-                details={[
-                  { label: t("columns.prompt"), value: format.number(row.prompt, "integer") },
-                  {
-                    label: t("columns.hitRate"),
-                    value: format.number(row.prompt ? (row.cacheRead ?? 0) / row.prompt : 0, "percent"),
-                  },
-                  { label: t("columns.cacheRead"), value: format.number(row.cacheRead ?? 0, "integer") },
-                  { label: t("columns.cacheWrite"), value: format.number(row.cacheWrite ?? 0, "integer") },
-                  { label: t("columns.savings"), value: format.number(row.cacheSavings ?? 0, "money") },
-                ]}
-              />
-            ))}
-          </RowCards>
-          <Table aria-label={t("cache.byProject")} className={TABLE_FROM_LG}>
-            <Table.ScrollContainer>
-              <Table.Content>
-                <Table.Header>
-                  <Table.Column isRowHeader>{t("group.project")}</Table.Column>
-                  <Table.Column>{t("columns.prompt")}</Table.Column>
-                  <Table.Column>{t("columns.cacheRead")}</Table.Column>
-                  <Table.Column>{t("columns.cacheWrite")}</Table.Column>
-                  <Table.Column>{t("columns.hitRate")}</Table.Column>
-                  <Table.Column>{t("columns.savings")}</Table.Column>
-                </Table.Header>
-                <Table.Body>
-                  {stats.cacheByProject.map((row) => (
-                    <Table.Row key={row.name} id={row.name}>
-                      <Table.Cell>{label("project", row.name) || tCommon("none")}</Table.Cell>
-                      <Table.Cell>{format.number(row.prompt, "integer")}</Table.Cell>
-                      <Table.Cell>{format.number(row.cacheRead ?? 0, "integer")}</Table.Cell>
-                      <Table.Cell>{format.number(row.cacheWrite ?? 0, "integer")}</Table.Cell>
-                      <Table.Cell>
-                        {format.number(row.prompt ? (row.cacheRead ?? 0) / row.prompt : 0, "percent")}
-                      </Table.Cell>
-                      <Table.Cell>{format.number(row.cacheSavings ?? 0, "money")}</Table.Cell>
-                    </Table.Row>
-                  ))}
-                </Table.Body>
-              </Table.Content>
-            </Table.ScrollContainer>
-          </Table>
         </Card>
       ) : null}
+      <p className="sr-only">
+        {t("summary", {
+          spend: stats.spend,
+          count: stats.count,
+          errors: stats.errors,
+        })}
+      </p>
+      <div aria-busy={pending} className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <StatCard icon={CircleDollarSign} label={t("metrics.spend")} value={pending ? null : format.number(stats.spend, "money")} />
+        <StatCard icon={Coins} label={t("metrics.tokens")} value={pending ? null : format.number(stats.tokens, "integer")} />
+        <StatCard
+          icon={Activity}
+          tone="success"
+          label={t("metrics.requests")}
+          value={pending ? null : format.number(stats.count, "integer")}
+        />
+        <StatCard
+          icon={AlertTriangle}
+          tone={stats.errors > 0 ? "danger" : "neutral"}
+          label={t("metrics.errors")}
+          value={pending ? null : format.number(stats.errors, "integer")}
+        />
+      </div>
+      <div aria-busy={pending} className="mt-3 grid gap-3 sm:grid-cols-3">
+        <StatCard
+          icon={Timer}
+          tone="neutral"
+          label={t("metrics.latency")}
+          value={pending ? null : t("latencyValue", { ms: Math.round(stats.latency) })}
+        />
+        <StatCard
+          icon={Gauge}
+          tone="neutral"
+          label={t("metrics.p95")}
+          value={pending ? null : t("latencyValue", { ms: Math.round(stats.p95Latency) })}
+        />
+        <StatCard
+          icon={Ban}
+          tone={stats.rate429 > 0 ? "warning" : "neutral"}
+          label={t("metrics.rate429")}
+          value={pending ? null : format.number(stats.rate429, "integer")}
+        />
+      </div>
+      {pending ? (
+        <div className="mt-5">
+          <SectionLoading shape="charts" />
+        </div>
+      ) : (
+        <>
+        {stats.purchase === null ? null : (
+          <MarginCard
+            companyView={stats.companyView}
+            chargeback={stats.chargeback}
+            names={stats.names}
+            purchase={stats.purchase}
+            sale={stats.spend}
+          />
+        )}
+        <UsageCharts
+          daily={stats.daily}
+          byModel={stats.byModel}
+          byTeam={named("team", stats.byTeam)}
+          byOrg={stats.companyView ? [] : named("org", stats.byOrg)}
+          byProject={named("project", stats.byProject)}
+          byMember={named("member", stats.byMember)}
+          healthByModel={stats.healthByModel}
+          requests={stats.count}
+          errors={stats.errors}
+        />
+        {stats.byModel.length ? (
+          <Card className="mt-5 gap-4">
+            <Card.Header>
+              <Card.Title>{t("pdf.byModel")}</Card.Title>
+            </Card.Header>
+            <RowCards label={t("pdf.byModel")}>
+              {stats.byModel.map((row) => (
+                <RowCard
+                  key={row.name || "none"}
+                  variant="secondary"
+                  title={row.name || tCommon("none")}
+                  details={[
+                    { label: t("columns.spend"), value: format.number(row.spend, "money"), wide: true },
+                    { label: t("columns.prompt"), value: format.number(row.prompt, "integer") },
+                    { label: t("columns.completion"), value: format.number(row.completion, "integer") },
+                  ]}
+                />
+              ))}
+            </RowCards>
+            <Table aria-label={t("pdf.byModel")} className={TABLE_FROM_LG}>
+              <Table.ScrollContainer>
+                <Table.Content>
+                  <Table.Header>
+                    <Table.Column isRowHeader>{t("columns.name")}</Table.Column>
+                    <Table.Column>{t("columns.spend")}</Table.Column>
+                    <Table.Column>{t("columns.prompt")}</Table.Column>
+                    <Table.Column>{t("columns.completion")}</Table.Column>
+                  </Table.Header>
+                  <Table.Body>
+                    {stats.byModel.map((row) => (
+                      <Table.Row key={row.name || "none"} id={row.name || "none"}>
+                        <Table.Cell>{row.name || tCommon("none")}</Table.Cell>
+                        <Table.Cell>{format.number(row.spend, "money")}</Table.Cell>
+                        <Table.Cell>
+                          {format.number(row.prompt, "integer")}
+                        </Table.Cell>
+                        <Table.Cell>
+                          {format.number(row.completion, "integer")}
+                        </Table.Cell>
+                      </Table.Row>
+                    ))}
+                  </Table.Body>
+                </Table.Content>
+              </Table.ScrollContainer>
+            </Table>
+          </Card>
+        ) : null}
+        <Card className="mt-5 gap-4">
+          <Card.Header>
+            <Card.Title>{t("cache.title")}</Card.Title>
+            <Card.Description>{t("cache.description")}</Card.Description>
+          </Card.Header>
+          {stats.cacheRead || stats.cacheWrite ? (
+            <dl className="grid grid-cols-2 gap-4 md:grid-cols-4">
+              {(
+                [
+                  ["hitRate", t("columns.hitRate"), format.number(stats.cacheHitRate, "percent")],
+                  ["cacheRead", t("columns.cacheRead"), format.number(stats.cacheRead, "integer")],
+                  ["cacheWrite", t("columns.cacheWrite"), format.number(stats.cacheWrite, "integer")],
+                  ["savings", t("columns.savings"), format.number(stats.cacheSavings, "money")],
+                ] as const
+              ).map(([key, label, value]) => (
+                <div key={key}>
+                  <dt className="text-xs text-muted">{label}</dt>
+                  <dd className="text-xl font-semibold tracking-tight">{value}</dd>
+                </div>
+              ))}
+            </dl>
+          ) : (
+            <Card.Description>{t("cache.empty")}</Card.Description>
+          )}
+        </Card>
+        {stats.cacheByProject.length ? (
+          <Card className="mt-5 gap-4">
+            <Card.Header>
+              <Card.Title>{t("cache.byProject")}</Card.Title>
+            </Card.Header>
+            <RowCards label={t("cache.byProject")}>
+              {stats.cacheByProject.map((row) => (
+                <RowCard
+                  key={row.name}
+                  variant="secondary"
+                  title={label("project", row.name) || tCommon("none")}
+                  details={[
+                    { label: t("columns.prompt"), value: format.number(row.prompt, "integer") },
+                    {
+                      label: t("columns.hitRate"),
+                      value: format.number(row.prompt ? (row.cacheRead ?? 0) / row.prompt : 0, "percent"),
+                    },
+                    { label: t("columns.cacheRead"), value: format.number(row.cacheRead ?? 0, "integer") },
+                    { label: t("columns.cacheWrite"), value: format.number(row.cacheWrite ?? 0, "integer") },
+                    { label: t("columns.savings"), value: format.number(row.cacheSavings ?? 0, "money") },
+                  ]}
+                />
+              ))}
+            </RowCards>
+            <Table aria-label={t("cache.byProject")} className={TABLE_FROM_LG}>
+              <Table.ScrollContainer>
+                <Table.Content>
+                  <Table.Header>
+                    <Table.Column isRowHeader>{t("group.project")}</Table.Column>
+                    <Table.Column>{t("columns.prompt")}</Table.Column>
+                    <Table.Column>{t("columns.cacheRead")}</Table.Column>
+                    <Table.Column>{t("columns.cacheWrite")}</Table.Column>
+                    <Table.Column>{t("columns.hitRate")}</Table.Column>
+                    <Table.Column>{t("columns.savings")}</Table.Column>
+                  </Table.Header>
+                  <Table.Body>
+                    {stats.cacheByProject.map((row) => (
+                      <Table.Row key={row.name} id={row.name}>
+                        <Table.Cell>{label("project", row.name) || tCommon("none")}</Table.Cell>
+                        <Table.Cell>{format.number(row.prompt, "integer")}</Table.Cell>
+                        <Table.Cell>{format.number(row.cacheRead ?? 0, "integer")}</Table.Cell>
+                        <Table.Cell>{format.number(row.cacheWrite ?? 0, "integer")}</Table.Cell>
+                        <Table.Cell>
+                          {format.number(row.prompt ? (row.cacheRead ?? 0) / row.prompt : 0, "percent")}
+                        </Table.Cell>
+                        <Table.Cell>{format.number(row.cacheSavings ?? 0, "money")}</Table.Cell>
+                      </Table.Row>
+                    ))}
+                  </Table.Body>
+                </Table.Content>
+              </Table.ScrollContainer>
+            </Table>
+          </Card>
+        ) : null}
+        </>
+      )}
     </div>
   );
 }

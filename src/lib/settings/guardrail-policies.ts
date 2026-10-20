@@ -4,7 +4,7 @@ import prisma from "@/lib/db/prisma";
 import { Prisma } from "@/generated/prisma/client";
 import { requirePermission } from "@/lib/auth/guards";
 import { hasPerm, PERMISSIONS } from "@/lib/auth/permissions";
-import { keyScope, keyVisibleTo } from "@/lib/auth/scope";
+import { assertPlatform, companyOf, inCompany, keyScope, keyVisibleTo } from "@/lib/auth/scope";
 import { writeAudit } from "@/lib/audit";
 import { testGuardrails as evaluateGuardrails } from "@/lib/gateway/safety/guardrails";
 import {
@@ -110,11 +110,20 @@ function policyFailure(error: z.ZodError): string {
 }
 
 async function payload(session: Session) {
+  const company = companyOf(session);
   const [pii, guardrails, orgs, projects, keys] = await Promise.all([
     getPii(),
     getGuardrails(),
-    prisma.organization.findMany({ select: ORG_SELECT, orderBy: { alias: "asc" } }),
-    prisma.project.findMany({ select: PROJECT_SELECT, orderBy: { alias: "asc" } }),
+    prisma.organization.findMany({
+      where: company ? { id: company } : {},
+      select: ORG_SELECT,
+      orderBy: { alias: "asc" },
+    }),
+    prisma.project.findMany({
+      where: company ? { orgId: company } : {},
+      select: PROJECT_SELECT,
+      orderBy: { alias: "asc" },
+    }),
     prisma.virtualKey.findMany({
       where: keyScope(session),
       select: KEY_SELECT,
@@ -132,17 +141,18 @@ async function payload(session: Session) {
       .sort(byAlias),
     targets: rows.map((row) => row.target),
     canManage: hasPerm(session.permissions, PERMISSIONS.SETTINGS_MANAGE),
+    platform: !company,
   };
 }
 
 async function findTarget(session: Session, scope: PolicyScope, id: string): Promise<TargetRow | null> {
   if (scope === "org") {
     const row = await prisma.organization.findUnique({ where: { id }, select: ORG_SELECT });
-    return row ? orgRow(row) : null;
+    return row && inCompany(session, row.id) ? orgRow(row) : null;
   }
   if (scope === "project") {
     const row = await prisma.project.findUnique({ where: { id }, select: PROJECT_SELECT });
-    return row ? projectRow(row) : null;
+    return row && inCompany(session, row.orgId) ? projectRow(row) : null;
   }
   const row = await prisma.virtualKey.findUnique({ where: { id }, select: KEY_SELECT });
   if (!row || !keyVisibleTo(session, row)) return null;
@@ -172,6 +182,7 @@ export async function loadGuardrails() {
 
 export async function savePii(raw: unknown) {
   const session = await requirePermission(PERMISSIONS.SETTINGS_MANAGE);
+  assertPlatform(session);
   const parsed = piiPolicySchema.safeParse(raw);
   if (!parsed.success) throw new Error("VALIDATION");
   const saved = await storePii(parsed.data);
@@ -207,6 +218,7 @@ export async function savePiiOverride(raw: unknown) {
 
 export async function saveGuardrailPolicy(raw: unknown) {
   const session = await requirePermission(PERMISSIONS.SETTINGS_MANAGE);
+  assertPlatform(session);
   const parsed = guardrailPolicySchema.safeParse(raw);
   if (!parsed.success) throw new Error(policyFailure(parsed.error));
   const before = await getGuardrails();

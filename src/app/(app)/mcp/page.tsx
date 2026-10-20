@@ -92,7 +92,7 @@ export default function McpPage() {
   const builderState = useOverlayState();
 
   if (!data) {
-    return <PageStatus title={t("title")} subtitle={t("subtitle")} state={page} />;
+    return <PageStatus icon={Blocks} title={t("title")} subtitle={t("subtitle")} state={page} stats={4} layout="cards" />;
   }
 
   const { servers, canManage, canInstall, companyId, companies, redirectUri } = data;

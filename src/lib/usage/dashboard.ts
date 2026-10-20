@@ -1,8 +1,8 @@
 import "server-only";
 
-import { requirePermission } from "@/lib/auth/guards";
+import { requireActor, requirePermission } from "@/lib/auth/guards";
 import { hasPerm, PERMISSIONS } from "@/lib/auth/permissions";
-import { spendScope } from "@/lib/auth/scope";
+import { companyOf, spendScope } from "@/lib/auth/scope";
 import {
   chargebackRows,
   groupCache,
@@ -12,7 +12,15 @@ import {
   usageDays,
 } from "@/lib/usage/usage-stats";
 import { p95Latency, usageNames, usageSlices } from "@/lib/usage/usage-totals";
-import type { UsageSlice } from "@/types/usage";
+import type { UsageSlice, UsageTab } from "@/types/usage";
+
+export async function loadUsageTabs(): Promise<UsageTab[]> {
+  const session = await requireActor();
+  const tabs: UsageTab[] = [];
+  if (hasPerm(session.permissions, PERMISSIONS.SPEND_READ)) tabs.push("overview");
+  if (hasPerm(session.permissions, PERMISSIONS.PRICING_READ) && !companyOf(session)) tabs.push("markups");
+  return tabs;
+}
 
 export async function loadUsage(
   input:
@@ -61,6 +69,7 @@ export async function loadUsage(
   const distinct = (pick: (row: UsageSlice) => string) =>
     [...new Set(rows.map(pick).filter(Boolean))].sort();
   return {
+    companyView: Boolean(companyOf(session)),
     days,
     model,
     teamId,

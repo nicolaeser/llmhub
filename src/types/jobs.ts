@@ -27,6 +27,11 @@ export type MaintenanceSweepResult = {
   requestContents: number;
   spendEvents: number;
   auditLogs: number;
+  securityEvents: number;
+  toolExecutions: number;
+  approvalRequests: number;
+  usageRows: number;
+  retentionBacklog: number;
   storedObjects: number;
   batches: number;
   vectorFiles: number;
@@ -34,7 +39,44 @@ export type MaintenanceSweepResult = {
   reports: number;
   signIns: number;
   supersededLogins: number;
+  subAddLinks: number;
+  limits: number;
   resets: number;
+};
+
+export type RetentionTable =
+  | "requestContents"
+  | "requestLogs"
+  | "toolExecutions"
+  | "securityEvents"
+  | "spendEvents"
+  | "usageRows"
+  | "auditLogs"
+  | "approvalRequests";
+
+export type RetentionStep = {
+  deleted: number;
+  more: boolean;
+};
+
+export type RetentionTask = {
+  name: RetentionTable;
+  step: (take: number) => Promise<RetentionStep>;
+};
+
+export type RetentionOptions = {
+  chunk?: number;
+  budgetMs?: number;
+  clock?: () => number;
+};
+
+export type RetentionSweepOptions = RetentionOptions & {
+  leaseKey?: string;
+};
+
+export type RetentionRun = {
+  deleted: Partial<Record<RetentionTable, number>>;
+  backlog: RetentionTable[];
 };
 
 export type QueueName = (typeof QUEUE_NAMES)[keyof typeof QUEUE_NAMES];

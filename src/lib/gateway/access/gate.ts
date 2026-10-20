@@ -1,5 +1,6 @@
 import "server-only";
-import { bearerToken, clientIp, isPayloadTooLarge, readJSON } from "@/lib/http/api";
+import { bearerToken, isPayloadTooLarge, readJSON } from "@/lib/http/api";
+import { clientIp, ipAllowed } from "@/lib/http/client-ip";
 import { authenticateBearer } from "@/lib/gateway/access/principal";
 import { defaultEntityIds, redactJSON } from "@/lib/gateway/safety/pii";
 import { bindPiiVault, PiiVault } from "@/lib/gateway/safety/pii-vault";
@@ -10,6 +11,7 @@ import { assertBudget, assertRate, recordUsageOrLog } from "@/lib/gateway/billin
 import { capRequestCost, maxCostHeader } from "@/lib/gateway/billing/cost-cap";
 import { asRecord, newRequestId, routerGateError } from "@/lib/gateway/core";
 import { anthropicErrorBody, GateError, openAIErrorBody } from "@/lib/gateway/errors";
+import { errorFields } from "@/lib/logging/format";
 import { logger } from "@/lib/logging/logger";
 import { modelAlias } from "@/lib/gateway/catalog/model-alias";
 import { aliasChain } from "@/lib/gateway/routing/runtime";
@@ -42,22 +44,34 @@ export function wantsAnthropicErrors(req: Request): boolean {
   return gatewayPath(new URL(req.url).pathname).startsWith("/v1/messages") || req.headers.has("anthropic-version");
 }
 
+export const CLIENT_RETRY_MAX_SECONDS = 60;
+
+export function retryHeaders(gate: GateError, now = Date.now()): Record<string, string> {
+  if (gate.retryAt === null || (gate.status !== 429 && gate.status < 500)) return {};
+  const seconds = Math.max(1, Math.ceil((gate.retryAt - now) / 1000));
+  return {
+    "retry-after": String(seconds),
+    "x-should-retry": seconds > CLIENT_RETRY_MAX_SECONDS ? "false" : "true",
+  };
+}
+
 export function gateResponse(err: unknown, req: Request): NextResponse {
   void alertUpstreamFailure(err);
   const gate = toGateError(err);
   const requestId = newRequestId();
   if (gate.status >= 500) {
-    logger.error("gateway.error", { requestId, code: gate.code, err: String(err) });
+    logger.error("gateway.error", { requestId, code: gate.code, ...errorFields(err) });
   }
+  const retry = retryHeaders(gate);
   if (wantsAnthropicErrors(req)) {
     return NextResponse.json(anthropicErrorBody(gate.status, gate.message, requestId), {
       status: gate.status,
-      headers: { "request-id": requestId, "x-request-id": requestId },
+      headers: { "request-id": requestId, "x-request-id": requestId, ...retry },
     });
   }
   return NextResponse.json(openAIErrorBody(gate), {
     status: gate.status,
-    headers: { "x-request-id": requestId },
+    headers: { "x-request-id": requestId, ...retry },
   });
 }
 
@@ -82,13 +96,10 @@ export function withTrace(principal: Principal, endpoint: string): Principal {
 
 export async function gateRequest(req: Request, pool: RoutePool = "api"): Promise<Principal> {
   const token = bearerToken(req);
-  const ip = clientIp(req.headers);
   const path = requestPath(req);
   const principal = { ...withTrace(await authenticateBearer(token), path), pool };
-  if (principal.key?.allowed_ips.length) {
-    if (!ip || !principal.key.allowed_ips.includes(ip)) {
-      throw new GateError(403, "ip_not_allowed", "ip not allowed for this key");
-    }
+  if (principal.key?.allowed_ips.length && !ipAllowed(principal.key.allowed_ips, clientIp(req.headers))) {
+    throw new GateError(403, "ip_not_allowed", "ip not allowed for this key");
   }
   allowEndpoint(principal, gatewayPath(path));
   allowAccessTime(principal, new Date());

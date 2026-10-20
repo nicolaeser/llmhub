@@ -9,6 +9,8 @@
   "modelCount": "{count, plural, one {# Modell} other {# Modelle}}",
   "connect": "Verbinden",
   "edit": "{name} bearbeiten",
+  "importModels": "Modelle importieren",
+  "actions": "Aktionen für {name}",
   "formTitle": "{mode, select, edit {{name} bearbeiten} connect {{name} verbinden} other {{name} verbinden}}",
   "formSubmit": "{mode, select, save {Speichern} connect {Verbinden} other {Verbinden}}",
   "kindName": "{kind, select, openai {OpenAI} anthropic {Anthropic} openrouter {OpenRouter} openrouter_eu {OpenRouter EU} xai {xAI Grok} typesafe {TypeSafe AI} openai_compat {OpenAI-kompatibel} codex {ChatGPT-Abo (Codex)} grok_build {SuperGrok-Abo (Grok Build)} claude {Claude-Abo (Claude Code)} antigravity {Google-Abo (Antigravity)} other {{kind}}}",

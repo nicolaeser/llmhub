@@ -7,17 +7,21 @@ import { fireAlert } from "@/lib/alerts/notify";
 import { runPendingBatches } from "@/lib/gateway/endpoints/batches";
 import { refreshDueLogins } from "@/lib/gateway/upstreams/credentials";
 import { pruneSupersededLogins } from "@/lib/providers/account-match";
+import { pruneSubAddLinks } from "@/lib/providers/sub-add-prune";
 import { runAutoResets } from "@/lib/gateway/upstreams/reset-redeem";
+import { refreshDueLimits } from "@/lib/providers/limit-refresh";
 import { crossedThresholds, forecastBudget } from "@/lib/usage/forecast";
 import { purgeStoredObjects } from "@/lib/gateway/storage/objects";
 import { runPendingIngests } from "@/lib/rag/ingest";
 import { expireVectorStores, purgeOrphanUploads } from "@/lib/rag/stores";
 import { getAlertState, getEnterprise, saveAlertState } from "@/lib/settings/enterprise";
+import { DEFAULT_OBJECT_RETENTION_DAYS } from "@/lib/settings/retention-defaults";
 import { errorFields } from "@/lib/logging/format";
 import { logger } from "@/lib/logging/logger";
 import { runUsageReports } from "@/lib/reports/usage-report";
 import { runKeyExpiryAlerts, runSpendAnomalyAlerts } from "./alert-checks";
 import { retentionCutoff } from "./retention";
+import { runRetentionSweep } from "./retention-sweep";
 import type { MaintenanceSweepResult, SpendResetRow } from "@/types/jobs";
 import { money } from "@/lib/utils/money";
 
@@ -72,6 +76,11 @@ export async function runMaintenanceSweep(
     requestContents: 0,
     spendEvents: 0,
     auditLogs: 0,
+    securityEvents: 0,
+    toolExecutions: 0,
+    approvalRequests: 0,
+    usageRows: 0,
+    retentionBacklog: 0,
     storedObjects: 0,
     batches: 0,
     vectorFiles: 0,
@@ -79,42 +88,22 @@ export async function runMaintenanceSweep(
     reports: 0,
     signIns: 0,
     supersededLogins: 0,
+    subAddLinks: 0,
+    limits: 0,
     resets: 0,
   };
 
   const enterprise = await sweepSettings();
-  const logCutoff = retentionCutoff(enterprise?.log_retention_days ?? 0, now);
-  if (logCutoff) {
-    const requestLogs = await prisma.requestLog.deleteMany({
-      where: { createdAt: { lt: logCutoff } },
-    });
-    result.requestLogs = requestLogs.count;
-  }
-  const contentCutoff = retentionCutoff(enterprise?.content_retention_days ?? 0, now);
-  if (contentCutoff) {
-    const requestContents = await prisma.requestLogContent.deleteMany({
-      where: { createdAt: { lt: contentCutoff } },
-    });
-    result.requestContents = requestContents.count;
-  }
-  const spendCutoff = retentionCutoff(enterprise?.spend_retention_days ?? 0, now);
-  if (spendCutoff) {
-    const spendEvents = await prisma.spendEvent.deleteMany({
-      where: { createdAt: { lt: spendCutoff } },
-    });
-    result.spendEvents = spendEvents.count;
-  }
-  const auditCutoff = retentionCutoff(enterprise?.audit_retention_days ?? 0, now);
-  if (auditCutoff) {
-    const auditLogs = await prisma.gatewayAuditLog.deleteMany({
-      where: { createdAt: { lt: auditCutoff } },
-    });
-    result.auditLogs = auditLogs.count;
-  }
   if (enterprise) {
+    await runSweepJob("retention", async () => {
+      const run = await runRetentionSweep(enterprise, now);
+      if (!run) return 0;
+      Object.assign(result, run.deleted, { retentionBacklog: run.backlog.length });
+      return Object.values(run.deleted).reduce((sum, count) => sum + count, 0);
+    });
     result.storedObjects = await runSweepJob("stored_objects", () =>
       purgeStoredObjects({
-        generatedBefore: retentionCutoff(enterprise.object_retention_days ?? 30, now),
+        generatedBefore: retentionCutoff(enterprise.object_retention_days ?? DEFAULT_OBJECT_RETENTION_DAYS, now),
         uploadsBefore: retentionCutoff(enterprise.file_retention_days ?? 0, now),
       }),
     );
@@ -130,6 +119,8 @@ export async function runMaintenanceSweep(
   result.reports = await runSweepJob("usage_reports", () => runUsageReports(now));
   result.signIns = await runSweepJob("sign_in_refresh", () => refreshDueLogins(now.getTime()));
   result.supersededLogins = await runSweepJob("superseded_logins", async () => (await pruneSupersededLogins("worker")).length);
+  result.subAddLinks = await runSweepJob("sub_add_links", async () => (await pruneSubAddLinks("worker", now.getTime())).length);
+  result.limits = await runSweepJob("subscription_limits", () => refreshDueLimits(now.getTime()));
   result.resets = await runSweepJob("auto_resets", () => runAutoResets(now.getTime()));
   return result;
 }

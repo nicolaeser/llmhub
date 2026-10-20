@@ -1,5 +1,14 @@
 import "server-only";
-import type { PdfCanvas, PdfColor, PdfFont, PdfTextStyle } from "@/types/export";
+import type {
+  PdfCanvas,
+  PdfColor,
+  PdfFace,
+  PdfFont,
+  PdfGlyph,
+  PdfObject,
+  PdfTextStyle,
+  PdfTypeface,
+} from "@/types/export";
 
 export const PAGE_W = 595.28;
 export const PAGE_H = 841.89;
@@ -9,20 +18,20 @@ export const HEADER_H = 122;
 export const FOOTER_RULE = 44;
 
 export const COLORS = {
-  accent: [99, 103, 239],
-  accentRaised: [126, 130, 242],
-  accentSoft: [236, 238, 254],
+  accent: [82, 82, 232],
+  accentRaised: [107, 118, 243],
+  accentSoft: [233, 237, 255],
   onAccent: [255, 255, 255],
-  onAccentMuted: [207, 213, 249],
-  ink: [30, 31, 37],
-  muted: [110, 113, 126],
-  border: [220, 222, 227],
-  axis: [196, 198, 206],
-  surface: [244, 245, 249],
-  track: [232, 233, 240],
-  warning: [146, 94, 0],
+  onAccentMuted: [201, 210, 252],
+  ink: [23, 25, 40],
+  muted: [99, 102, 121],
+  border: [220, 221, 230],
+  axis: [196, 199, 210],
+  surface: [244, 245, 251],
+  track: [232, 235, 245],
+  warning: [161, 85, 12],
   warningSoft: [253, 240, 214],
-  danger: [196, 32, 38],
+  danger: [199, 31, 42],
   dangerSoft: [253, 228, 226],
 } satisfies Record<string, PdfColor>;
 
@@ -85,16 +94,12 @@ const WIN_ANSI: Record<string, number> = {
   " ": 0x20,
   " ": 0xa0,
 };
-const ELLIPSIS = 0x85;
+const EMBOLDEN = 1 / 30;
 
-export function encode(value: string): number[] {
-  const bytes: number[] = [];
-  for (const char of value.normalize("NFC")) {
-    const code = char.codePointAt(0)!;
-    if ((code >= 0x20 && code <= 0x7e) || (code >= 0xa0 && code <= 0xff)) bytes.push(code);
-    else bytes.push(WIN_ANSI[char] ?? 0x3f);
-  }
-  return bytes;
+function winAnsi(char: string): number {
+  const code = char.codePointAt(0)!;
+  if ((code >= 0x20 && code <= 0x7e) || (code >= 0xa0 && code <= 0xff)) return code;
+  return WIN_ANSI[char] ?? 0x3f;
 }
 
 const isBold = (font: PdfFont) => font === "bold" || font === "boldItalic";
@@ -110,29 +115,58 @@ function advance(byte: number, font: PdfFont): number {
   return base >= 0x20 && base <= 0x7e ? widths[base - 0x20]! : 556;
 }
 
-export function measure(bytes: number[], font: PdfFont, size: number, tracking = 0): number {
-  return (bytes.reduce((sum, byte) => sum + advance(byte, font), 0) * size) / 1000 + tracking * bytes.length;
+function standardLayout(value: string, font: PdfFont): PdfGlyph[] {
+  return Array.from(value.normalize("NFC"), (char) => {
+    const code = winAnsi(char);
+    return { face: FONTS[font].resource, code, width: advance(code, font), text: char, emboldened: false };
+  });
+}
+
+const standardTypeface: PdfTypeface = {
+  faces: Object.fromEntries(
+    Object.values(FONTS).map(({ resource, baseFont }): [string, PdfFace] => [
+      resource,
+      {
+        codeBytes: 1,
+        objects: () => [`<< /Type /Font /Subtype /Type1 /BaseFont /${baseFont} /Encoding /WinAnsiEncoding >>`],
+      },
+    ]),
+  ),
+  layout: standardLayout,
+};
+
+function measure(glyphs: PdfGlyph[], size: number, tracking = 0): number {
+  return (glyphs.reduce((sum, glyph) => sum + glyph.width, 0) * size) / 1000 + tracking * glyphs.length;
 }
 
 export function textWidth(value: string, style: PdfTextStyle): number {
-  return measure(encode(value), style.font ?? "regular", style.size, style.tracking);
+  return measure(standardLayout(value, style.font ?? "regular"), style.size, style.tracking);
 }
 
-function truncate(bytes: number[], font: PdfFont, size: number, maxWidth: number): number[] {
-  if (measure(bytes, font, size) <= maxWidth) return bytes;
-  const out = bytes.slice();
-  while (out.length > 0 && measure([...out, ELLIPSIS], font, size) > maxWidth) out.pop();
-  while (out.at(-1) === 0x20) out.pop();
-  return [...out, ELLIPSIS];
+function truncate(glyphs: PdfGlyph[], ellipsis: PdfGlyph, size: number, maxWidth: number): PdfGlyph[] {
+  if (measure(glyphs, size) <= maxWidth) return glyphs;
+  const out = glyphs.slice();
+  while (out.length > 0 && measure([...out, ellipsis], size) > maxWidth) out.pop();
+  while (out.at(-1)?.text === " ") out.pop();
+  return [...out, ellipsis];
+}
+
+function runs(glyphs: PdfGlyph[]): PdfGlyph[][] {
+  const out: PdfGlyph[][] = [];
+  for (const glyph of glyphs) {
+    const last = out.at(-1);
+    if (last && last[0]!.face === glyph.face && last[0]!.emboldened === glyph.emboldened) last.push(glyph);
+    else out.push([glyph]);
+  }
+  return out;
 }
 
 const num = (value: number) => Number(value.toFixed(2)).toString();
 const rgb = (color: PdfColor) => color.map((channel) => num(channel / 255)).join(" ");
-const hex = (bytes: number[]) => bytes.map((byte) => byte.toString(16).padStart(2, "0")).join("");
 
-export function canvas() {
+export function canvas(typeface: PdfTypeface = standardTypeface) {
   const ops: string[] = [];
-  const fonts = new Set<PdfFont>();
+  const glyphs = new Map<string, Map<number, string>>();
 
   function rect(x: number, y: number, w: number, h: number, fill: PdfColor) {
     ops.push(`${rgb(fill)} rg ${num(x)} ${num(y)} ${num(w)} ${num(h)} re f`);
@@ -165,24 +199,42 @@ export function canvas() {
     ops.push(`${rgb(stroke)} RG ${num(width)} w ${num(x1)} ${num(y1)} m ${num(x2)} ${num(y2)} l S`);
   }
 
+  function show(run: PdfGlyph[], size: number, color: string): string {
+    const face = run[0]!.face;
+    const digits = typeface.faces[face]!.codeBytes * 2;
+    const codes = run.map((glyph) => glyph.code.toString(16).padStart(digits, "0")).join("");
+    const shown = `/${face} ${num(size)} Tf <${codes}> Tj`;
+    return run[0]!.emboldened ? `2 Tr ${num(size * EMBOLDEN)} w ${color} RG ${shown} 0 Tr` : shown;
+  }
+
   function text(value: string, x: number, y: number, style: PdfTextStyle) {
     const font = style.font ?? "regular";
     let size = style.size;
-    let bytes = encode(value);
+    let laid = typeface.layout(value, font);
     if (style.maxWidth !== undefined) {
-      const natural = measure(bytes, font, size);
+      const natural = measure(laid, size);
       if (style.shrink && natural > style.maxWidth) size = Math.max(7, (size * style.maxWidth) / natural);
-      bytes = truncate(bytes, font, size, style.maxWidth);
+      laid = truncate(laid, typeface.layout("…", font)[0]!, size, style.maxWidth);
     }
-    const width = measure(bytes, font, size, style.tracking);
+    if (laid.length === 0) return;
+    const width = measure(laid, size, style.tracking);
     const left = style.align === "right" ? x - width : style.align === "center" ? x - width / 2 : x;
-    fonts.add(font);
-    ops.push(
-      `BT /${FONTS[font].resource} ${num(size)} Tf ${num(style.tracking ?? 0)} Tc ${rgb(style.color ?? COLORS.ink)} rg ${num(left)} ${num(y)} Td <${hex(bytes)}> Tj ET`,
-    );
+    for (const glyph of laid) {
+      const used = glyphs.get(glyph.face) ?? new Map<number, string>();
+      if (!used.has(glyph.code)) used.set(glyph.code, glyph.text);
+      glyphs.set(glyph.face, used);
+    }
+    const color = rgb(style.color ?? COLORS.ink);
+    const shown = runs(laid).map((run) => show(run, size, color));
+    const op = `BT ${num(style.tracking ?? 0)} Tc ${color} rg ${num(left)} ${num(y)} Td ${shown.join(" ")} ET`;
+    ops.push(laid.some((glyph) => glyph.emboldened) ? `q ${op} Q` : op);
   }
 
-  return { ops, fonts, rect, roundedRect, line, text, textWidth };
+  function pageTextWidth(value: string, style: PdfTextStyle): number {
+    return measure(typeface.layout(value, style.font ?? "regular"), style.size, style.tracking);
+  }
+
+  return { typeface, ops, glyphs, rect, roundedRect, line, text, textWidth: pageTextWidth };
 }
 
 export function drawHeader(
@@ -256,24 +308,37 @@ function pdfString(value: string): string {
 }
 
 export function pdfDocument(pages: PdfCanvas[], info: { title: string; producer: string }): Uint8Array {
-  const used = (Object.keys(FONTS) as PdfFont[]).filter((font) => pages.some((page) => page.fonts.has(font)));
-  const fontRefs = new Map(used.map((font, index) => [font, index + 3]));
-  const firstPage = 3 + used.length;
-  const pageRef = (index: number) => firstPage + index * 2;
-  const resources = used.map((font) => `/${FONTS[font].resource} ${fontRefs.get(font)} 0 R`).join(" ");
+  const used = new Map<string, { face: PdfFace; glyphs: Map<number, string> }>();
+  for (const page of pages) {
+    for (const [name, face] of Object.entries(page.typeface.faces)) {
+      const glyphs = page.glyphs.get(name);
+      if (!glyphs) continue;
+      const entry = used.get(name) ?? { face, glyphs: new Map<number, string>() };
+      for (const [code, text] of glyphs) if (!entry.glyphs.has(code)) entry.glyphs.set(code, text);
+      used.set(name, entry);
+    }
+  }
 
-  const objects: string[] = [
+  const fontObjects: PdfObject[] = [];
+  const fontRefs = new Map<string, number>();
+  for (const [name, { face, glyphs }] of used) {
+    const ref = 3 + fontObjects.length;
+    fontRefs.set(name, ref);
+    fontObjects.push(...face.objects(glyphs, ref));
+  }
+  const firstPage = 3 + fontObjects.length;
+  const pageRef = (index: number) => firstPage + index * 2;
+  const resources = [...fontRefs].map(([name, ref]) => `/${name} ${ref} 0 R`).join(" ");
+
+  const objects: PdfObject[] = [
     "<< /Type /Catalog /Pages 2 0 R >>",
     `<< /Type /Pages /Kids [${pages.map((_, index) => `${pageRef(index)} 0 R`).join(" ")}] /Count ${pages.length} >>`,
-    ...used.map(
-      (font) => `<< /Type /Font /Subtype /Type1 /BaseFont /${FONTS[font].baseFont} /Encoding /WinAnsiEncoding >>`,
-    ),
+    ...fontObjects,
   ];
   pages.forEach((page, index) => {
-    const stream = page.ops.join("\n") + "\n";
     objects.push(
       `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${PAGE_W} ${PAGE_H}] /Contents ${pageRef(index) + 1} 0 R /Resources << /Font << ${resources} >> >> >>`,
-      `<< /Length ${Buffer.byteLength(stream, "latin1")} >>\nstream\n${stream}endstream`,
+      { entries: "", data: Buffer.from(page.ops.join("\n"), "latin1") },
     );
   });
   objects.push(`<< /Title ${pdfString(info.title)} /Producer ${pdfString(info.producer)} >>`);
@@ -282,7 +347,14 @@ export function pdfDocument(pages: PdfCanvas[], info: { title: string; producer:
   const xref = [0];
   let offset = chunks[0]!.length;
   objects.forEach((body, i) => {
-    const buf = Buffer.from(`${i + 1} 0 obj\n${body}\nendobj\n`, "latin1");
+    const buf =
+      typeof body === "string"
+        ? Buffer.from(`${i + 1} 0 obj\n${body}\nendobj\n`, "latin1")
+        : Buffer.concat([
+            Buffer.from(`${i + 1} 0 obj\n<< /Length ${body.data.length}${body.entries ? ` ${body.entries}` : ""} >>\nstream\n`, "latin1"),
+            body.data,
+            Buffer.from("\nendstream\nendobj\n", "latin1"),
+          ]);
     xref.push(offset);
     chunks.push(buf);
     offset += buf.length;

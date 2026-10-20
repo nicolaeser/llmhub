@@ -87,7 +87,7 @@ export default function ApiTab() {
   }, [paths, query]);
 
   if (!page.data) {
-    return <PageStatus state={page} />;
+    return <PageStatus state={page} layout="panels" />;
   }
 
   const { keys, models, canTry } = page.data;

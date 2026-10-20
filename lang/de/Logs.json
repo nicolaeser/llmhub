@@ -28,6 +28,9 @@
   "emptyRequests": "Noch keine Anfrageprotokolle.",
   "emptySpend": "Keine Ausgabenereignisse.",
   "emptyAudit": "Keine Audit-Ereignisse.",
+  "emptyRequestsHint": "Anfragen erscheinen hier, sobald ein API-Key das Gateway aufruft.",
+  "emptySpendHint": "Ausgabenereignisse erscheinen hier, sobald eine Anfrage abgerechnet wird.",
+  "emptyAuditHint": "Änderungen an Keys, Providern, Benutzern und Einstellungen werden hier protokolliert.",
   "exportCsv": "CSV exportieren",
   "exportJsonl": "JSONL exportieren",
   "latencyMs": "{value, number, integer} ms",
@@ -48,6 +51,7 @@
   },
   "prev": "Zurück",
   "next": "Weiter",
+  "newRequests": "{capped, select, true {Mehr als {count, number, integer} neue Anfragen · Neueste anzeigen} other {{count, plural, one {# neue Anfrage · Neueste anzeigen} other {# neue Anfragen · Neueste anzeigen}}}}",
   "pageStatus": "Seite {page, number, integer} · {total, number, integer} Zeilen · {pageSize, number, integer} pro Seite",
   "caller": {
     "noKey": "Console-Sitzung"

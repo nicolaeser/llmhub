@@ -44,6 +44,7 @@ function claudeGroup() {
           enabled: true,
           restricted: false,
           assignments: [],
+          login: { status: "active" },
         },
       },
     ],

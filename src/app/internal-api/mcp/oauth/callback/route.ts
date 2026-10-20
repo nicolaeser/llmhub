@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
+import { env } from "@/lib/env";
 import { isActionFail, runAction } from "@/lib/http/action-result";
-import { completeMcpOAuth } from "@/lib/mcp/servers";
+import { completeMcpOAuth } from "@/lib/mcp/server-oauth";
 
 export const dynamic = "force-dynamic";
 
@@ -14,7 +15,7 @@ export async function GET(req: NextRequest) {
       error: params.get("error") ?? "",
     }),
   );
-  const target = new URL("/mcp", req.url);
+  const target = new URL("/mcp", env.NEXT_PUBLIC_APP_URL);
   if (isActionFail(result)) {
     target.searchParams.set("oauth", "failed");
     target.searchParams.set("reason", result.error);

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { WORKSPACE_EVENT } from "@/lib/auth/workspace-event";
+import { onWorkspaceChange } from "@/lib/auth/workspace-event";
 import { actionFail, isActionFail } from "@/lib/http/action-result";
 import type { ActionData, ActionDataUpdate, ActionFail, ActionLoader, ActionSnapshot } from "@/types/actions";
 
@@ -47,11 +47,14 @@ export function useActionData<T>(load: ActionLoader<T>, onLoad?: (data: T) => vo
     void run();
   }, [run]);
 
-  useEffect(() => {
-    const onWorkspace = () => reload();
-    window.addEventListener(WORKSPACE_EVENT, onWorkspace);
-    return () => window.removeEventListener(WORKSPACE_EVENT, onWorkspace);
-  }, [reload]);
+  useEffect(
+    () =>
+      onWorkspaceChange(() => {
+        setSnapshot({ data: null, error: null, pending: true });
+        void run();
+      }),
+    [run],
+  );
 
   const reloadWith = useCallback(
     (next: ActionLoader<T>) => {

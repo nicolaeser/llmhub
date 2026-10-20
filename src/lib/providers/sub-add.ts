@@ -6,6 +6,7 @@ import { assertRequestRate } from "@/lib/auth/throttle";
 import { env } from "@/lib/env";
 import { antigravityClientSecret } from "@/lib/gateway/upstreams/antigravity-config";
 import { isSignInKind, signInKinds, signInMethod } from "@/lib/gateway/upstreams/provider-kinds";
+import { checkSignInSession } from "@/lib/gateway/upstreams/subscription-limits";
 import {
   completeAuthorization,
   openTicket,
@@ -14,11 +15,15 @@ import {
   startAuthorization,
 } from "@/lib/gateway/upstreams/subscription-sign-in";
 import { isActionCode } from "@/lib/http/action-result";
+import { clientBucket } from "@/lib/http/client-ip";
+import { matchingConnection } from "@/lib/providers/account-match";
 import { subAddRemaining, subAddStatus } from "@/lib/providers/sub-add-status";
 import {
   newSubAddToken,
   removeSubAddAccount,
   storeSubAddAccount,
+  SUB_ADD_LOGIN_INVALID,
+  SUB_ADD_LOGIN_UNVERIFIED,
   SUB_ADD_UNAVAILABLE,
   subAddAccountSelect,
   subAddAccountViews,
@@ -47,6 +52,8 @@ const SLOW_DOWN_STEP_S = 5;
 const TOKEN_FIELDS = new Set<PropertyKey>(["token", "manage"]);
 const PUBLIC_CODES = new Set([
   SUB_ADD_UNAVAILABLE,
+  SUB_ADD_LOGIN_INVALID,
+  SUB_ADD_LOGIN_UNVERIFIED,
   "SIGN_IN_EXPIRED",
   "SIGN_IN_DENIED",
   "SIGN_IN_FAILED",
@@ -75,7 +82,7 @@ async function guarded<T>(work: () => Promise<T>): Promise<T> {
 
 async function throttledClient(): Promise<string> {
   const { ipAddress } = await requestMeta();
-  const client = ipAddress ?? "unknown";
+  const client = clientBucket(ipAddress);
   await assertRequestRate(`sub-add:client:${client}`, CLIENT_REQUESTS_PER_MINUTE, MINUTE_MS);
   return client;
 }
@@ -101,7 +108,7 @@ async function offeredKinds(kinds: string[]): Promise<SignInKind[]> {
 async function usableLink(token: string, now = Date.now()): Promise<SubAddLinkRecord> {
   const link = await prisma.subAddLink.findUnique({
     where: { tokenHash: subAddTokenHash(token) },
-    select: { id: true, label: true, kinds: true, expiresAt: true, revokedAt: true, maxAccounts: true, added: true },
+    select: { id: true, label: true, kinds: true, expiresAt: true, maxAccounts: true, added: true },
   });
   if (!link || subAddStatus(link, now) !== "active") throw new Error(SUB_ADD_UNAVAILABLE);
   return link;
@@ -115,14 +122,23 @@ async function manageFor(manage: string | undefined): Promise<{ token: string; h
   return newSubAddToken();
 }
 
+async function verifiedRenewal(kind: SignInKind, session: SignInSession): Promise<boolean> {
+  if (!(await matchingConnection(kind, session))) return false;
+  const check = await checkSignInSession(kind, session);
+  if (check === "rejected") throw new Error(SUB_ADD_LOGIN_INVALID);
+  if (check === "unreachable") throw new Error(SUB_ADD_LOGIN_UNVERIFIED);
+  return true;
+}
+
 async function finish(
   link: SubAddLinkRecord,
   kind: SignInKind,
   session: SignInSession,
   manage: string | undefined,
 ): Promise<SubAddStep> {
+  const loginVerified = await verifiedRenewal(kind, session);
   const owner = await manageFor(manage);
-  const stored = await storeSubAddAccount({ linkId: link.id, kind, session, manageHash: owner.hash });
+  const stored = await storeSubAddAccount({ linkId: link.id, kind, session, manageHash: owner.hash, loginVerified });
   return {
     state: "done",
     kind,

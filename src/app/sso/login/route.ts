@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { env } from "@/lib/env";
 import { getEnterprise } from "@/lib/settings/enterprise";
 import {
   buildAuthorizationUrl,
@@ -9,13 +10,14 @@ import {
   signOidcState,
 } from "@/lib/auth/oidc";
 import { sanitizeReturnPath } from "@/lib/auth/return-path";
+import { errorFields } from "@/lib/logging/format";
 import { logger } from "@/lib/logging/logger";
 import { operatorCount } from "@/lib/bootstrap/operators";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
-  const loginError = new URL("/account/login", req.url);
+  const loginError = new URL("/account/login", env.NEXT_PUBLIC_APP_URL);
   try {
     if ((await operatorCount()) === 0) {
       loginError.searchParams.set("sso", "setup");
@@ -36,7 +38,7 @@ export async function GET(req: NextRequest) {
     res.cookies.set(opts.name, state.cookie, opts);
     return res;
   } catch (err) {
-    logger.error("sso.login.failed", { err: String(err) });
+    logger.error("sso.login.failed", errorFields(err));
     loginError.searchParams.set("sso", "error");
     return NextResponse.redirect(loginError);
   }

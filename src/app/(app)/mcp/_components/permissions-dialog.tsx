@@ -24,6 +24,7 @@ import {
 import { Ban, Check, ChevronDown, CircleCheck, Minus, Plus, RotateCcw, Sparkles, Trash2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import FormDialog from "@/components/console/form-dialog";
+import { SectionLoading } from "@/components/console/page-status";
 import RowCard, { RowCards, TABLE_FROM_LG } from "@/components/console/row-cards";
 import { useErrorToast } from "@/components/console/use-error-toast";
 import { isActionFail } from "@/lib/http/action-result";
@@ -68,7 +69,7 @@ export default function PermissionsDialog({
   const [overrides, setOverrides] = useState<McpToolActions | null>(null);
   const [query, setQuery] = useState("");
   const [pending, start] = useTransition();
-  const [, startEnsure] = useTransition();
+  const [ensuring, startEnsure] = useTransition();
   const ensured = useRef("");
   const created = useRef(0);
 
@@ -288,7 +289,7 @@ export default function PermissionsDialog({
       description={t("permissions.description")}
       submitLabel={tCommon("save")}
       pending={pending}
-      isSubmitDisabled={!server || namesMissing}
+      isSubmitDisabled={!server || namesMissing || ensuring}
       onSubmit={save}
     >
       <Tabs
@@ -309,24 +310,28 @@ export default function PermissionsDialog({
         </Tabs.List>
 
         <Tabs.Panel id="roles" className="space-y-5 pt-4">
-          <div className="flex flex-wrap gap-2" role="group" aria-label={t("permissions.rolesLabel")}>
-            {roles.map((role) => (
-              <Button
-                key={role.id}
-                size="sm"
-                variant={current?.id === role.id ? "primary" : "tertiary"}
-                onPress={() => setSelected(role.id)}
-              >
-                {roleLabel(role)}
+          {ensuring ? (
+            <SectionLoading rows={4} />
+          ) : (
+            <div className="flex flex-wrap gap-2" role="group" aria-label={t("permissions.rolesLabel")}>
+              {roles.map((role) => (
+                <Button
+                  key={role.id}
+                  size="sm"
+                  variant={current?.id === role.id ? "primary" : "tertiary"}
+                  onPress={() => setSelected(role.id)}
+                >
+                  {roleLabel(role)}
+                </Button>
+              ))}
+              <Button size="sm" variant="secondary" onPress={addRole} isDisabled={pending}>
+                <Plus size={14} aria-hidden />
+                {t("permissions.newRole")}
               </Button>
-            ))}
-            <Button size="sm" variant="secondary" onPress={addRole} isDisabled={pending}>
-              <Plus size={14} aria-hidden />
-              {t("permissions.newRole")}
-            </Button>
-          </div>
+            </div>
+          )}
 
-          {current ? (
+          {current && !ensuring ? (
             <>
               <div className="grid gap-4 sm:grid-cols-2">
                 <TextField

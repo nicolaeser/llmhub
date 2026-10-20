@@ -15,10 +15,14 @@
     "methodFileHint": "JSON-Datei aus CLIProxyAPI hochladen oder einfügen.",
     "methodKey": "API-Key eingeben",
     "methodKeyHint": "Key im nächsten Schritt sicher hinterlegen.",
-    "reviewMethod": "{method, select, signin {Anmeldung im Browser} file {Auth-Datei} other {API-Key}}",
+    "reviewMethod": "{method, select, signin {Anmeldung im Browser} file {Auth-Datei} share {Konto-Link} other {API-Key}}",
     "reviewHint": "Beim Verbinden öffnet sich das passende Formular für Anmeldung, Key und Aufbewahrung.",
     "connect": "Verbinden",
-    "antigravityLocked": "Erst Google-OAuth-Client einrichten."
+    "antigravityLocked": "Erst Google-OAuth-Client einrichten.",
+    "methodShare": "Link teilen",
+    "methodShareHint": "Jemand anderes meldet sich mit dem eigenen Konto an, ganz ohne Konsolen-Login.",
+    "reviewShareHint": "Als Nächstes legst du Bezeichnung, Gültigkeit und Zugriff für den Link fest.",
+    "share": "Link erstellen"
   },
   "remaining": "Noch nicht verbunden",
   "remainingHint": "Diese Anbieter haben noch kein Konto. Verbinde sie über den Assistenten.",
@@ -69,18 +73,21 @@
     "moved": "{removed, plural, =0 {Aus CLIProxyAPI wurde nichts entfernt.} one {# Datei wurde aus CLIProxyAPI entfernt. Ab jetzt erneuert nur noch LLM Hub dieses Konto.} other {# Dateien wurden aus CLIProxyAPI entfernt. Ab jetzt erneuert nur noch LLM Hub diese Konten.}}",
     "keptAtSource": "{count, plural, one {# importierte Datei ließ sich nicht aus CLIProxyAPI entfernen. Lösche sie dort, sonst machen sich beide Seiten gegenseitig die Tokens ungültig.} other {# importierte Dateien ließen sich nicht aus CLIProxyAPI entfernen. Lösche sie dort, sonst machen sich beide Seiten gegenseitig die Tokens ungültig.}}"
   },
-  "timeZone": "Dashboard-Zeitzone",
-  "timeZoneHint": "Reset-Zeitpunkte verwenden diese Zone. Der Countdown folgt dem Zeitstempel des Anbieters.",
+  "timeZone": "Zeitzone für Reset-Zeiten",
   "stats": {
     "available": "Jetzt verfügbar",
     "limited": "Am Limit",
-    "nextRecovery": "Nächste Erholung",
-    "none": "Keine",
     "paused": "Pausiert",
-    "total": "{count, plural, one {von # Konto} other {von # Konten}}"
+    "total": "{count, plural, one {von # Konto} other {von # Konten}}",
+    "expired": "Anmeldung nötig",
+    "expiredHint": "Neu anmelden, um sie zu nutzen",
+    "nextFree": "Nächstes frei {when}"
   },
   "stateCount": "{state, select, available {{count, plural, other {# verfügbar}}} limited {{count, plural, other {# am Limit}}} expired {{count, plural, one {# Anmeldung abgelaufen} other {# Anmeldungen abgelaufen}}} paused {{count, plural, other {# pausiert}}} other {{count, plural, other {#}}}}",
   "status": "{status, select, paused {Pausiert} available {Verfügbar} limited {Limit erreicht} expired {Anmeldung abgelaufen} unavailable {Limits nicht verfügbar} checking {Wird geprüft} other {Verbunden}}",
+  "sharedVia": "{named, select, true {Über Link: {label}} other {Über Link}}",
+  "signInAgain": "Neu anmelden",
+  "noAccount": "Ohne Kontoname",
   "backIn": "Wieder verfügbar {when} ({date}).",
   "backInUnknown": "Limit erreicht. Der Anbieter nennt keinen Zeitpunkt für die Zurücksetzung.",
   "expiredHint": "Melde dich erneut an, um dieses Konto zu nutzen.",
@@ -88,6 +95,7 @@
   "limits": {
     "refresh": "Nutzungslimits aktualisieren",
     "updated": "Aktualisiert {when}",
+    "nextCheck": "Nächste Abfrage {when}.",
     "window": "{unit, select, hour {{count, plural, one {Stundenlimit} other {#-Stunden-Limit}}} day {{count, plural, one {Tageslimit} =7 {Wochenlimit} other {#-Tage-Limit}}} month {Monatslimit} other {Nutzungslimit}}",
     "scoped": "{scope}: {window}",
     "resets": "Wird {when} zurückgesetzt ({date})",
@@ -166,7 +174,9 @@
     "search": "Suchen",
     "empty": "Nichts gefunden",
     "save": "Zugriff speichern",
-    "saved": "Zugriff für {name} gespeichert"
+    "saved": "Zugriff für {name} gespeichert",
+    "short": "{restricted, select, true {{count, plural, =0 {Kein Key} one {# Zuordnung} other {# Zuordnungen}}} other {Alle Keys}}",
+    "manageFor": "Zugriff für {name} verwalten"
   },
   "antigravity": {
     "title": "Google-OAuth-Client",
@@ -184,27 +194,21 @@
     "title": "Konto-Links",
     "description": "Teile einen Link mit Freunden oder Kollegen, damit sie ihr eigenes Abo-Konto mit diesem Hub verbinden. Sie brauchen kein Konsolen-Login und können ihr Konto jederzeit wieder trennen.",
     "create": "Link erstellen",
-    "createdTitle": "Link jetzt kopieren",
-    "createdHint": "Er wird nur dieses eine Mal angezeigt. Wer ihn hat, kann Konten hinzufügen, bis er abläuft, aufgebraucht ist oder du ihn widerrufst.",
+    "createdTitle": "Link bereit",
+    "createdHint": "LLM Hub speichert nur einen Fingerabdruck des Links und kann ihn daher nicht erneut anzeigen. Er funktioniert nicht mehr, sobald er abläuft, alle Plätze belegt sind oder du ihn löschst. Beendete Links werden automatisch gelöscht.",
     "copy": "Link kopieren",
     "empty": "Noch keine Konto-Links.",
     "createdBy": "{named, select, true {Erstellt von {name} am {date}} other {Erstellt am {date}}}",
-    "status": "{status, select, active {Aktiv} used_up {Aufgebraucht} expired {Abgelaufen} revoked {Widerrufen} other {{status}}}",
-    "uses": "{limited, select, true {{added, number} von {max, plural, one {# Konto} other {# Konten}} hinzugefügt} other {{added, plural, one {# Konto hinzugefügt} other {# Konten hinzugefügt}}}}",
-    "kinds": "Anbieter: {kinds}",
-    "expires": "{past, select, true {Abgelaufen am {date}} other {Läuft ab am {date}}}",
-    "revokedAt": "Widerrufen am {date}",
+    "status": "{status, select, active {Aktiv} used_up {Aufgebraucht} expired {Abgelaufen} other {{status}}}",
+    "expires": "{past, select, true {Abgelaufen {when}} other {Läuft ab {when}}} ({date})",
     "access": "{restricted, select, true {{count, plural, =0 {Hinzugefügte Konten: kein Key darf sie nutzen} one {Hinzugefügte Konten: auf # Zuordnung beschränkt} other {Hinzugefügte Konten: auf # Zuordnungen beschränkt}}} other {Hinzugefügte Konten: für jeden Key offen}}",
     "accountsLabel": "Über {label} hinzugefügte Konten",
     "noAccounts": "Kein über diesen Link hinzugefügtes Konto ist verbunden.",
-    "revoke": "Widerrufen",
-    "revokeLabel": "{label} widerrufen",
-    "revokeTitle": "{label} widerrufen?",
-    "revokeDescription": "Der Link funktioniert sofort nicht mehr. Bereits hinzugefügte Konten bleiben verbunden, und ihre Inhaber können sie weiterhin trennen.",
-    "revoked": "{label} widerrufen",
     "dialogTitle": "Konto-Link erstellen",
     "dialogDescription": "Wer den Link öffnet, kann sich mit dem eigenen Abo-Konto anmelden und es mit dem Abo-Pool dieses Hubs verbinden.",
     "submit": "Link erstellen",
+    "stepUpTitle": "Neuen Link bestätigen",
+    "stepUpDescription": "Mit diesem Link kann jede Person Konten mit dem Abo-Pool verbinden. Gib zum Erstellen einen Code aus deiner Authenticator-App oder einen Wiederherstellungscode ein.",
     "createdToast": "Link erstellt",
     "label": "Bezeichnung",
     "labelHint": "Erscheint auf der Link-Seite, zum Beispiel der Name der Person oder des Teams, mit dem du ihn teilst.",
@@ -215,6 +219,35 @@
     "maxAccounts": "Maximale Anzahl Konten",
     "accountOption": "{count, plural, =0 {Unbegrenzt} one {# Konto} other {# Konten}}",
     "accessTitle": "Zugriff für hinzugefügte Konten",
-    "accessHint": "Jedes über diesen Link hinzugefügte Konto erhält diesen Zugriff. Du kannst ihn später pro Konto ändern."
+    "accessHint": "Jedes über diesen Link hinzugefügte Konto erhält diesen Zugriff. Du kannst ihn später pro Konto ändern.",
+    "open": "Konto-Link teilen",
+    "createdDescription": "Schick ihn an {label}. Wer ihn öffnet, kann sein eigenes Abo-Konto verbinden.",
+    "onceTitle": "Nur dieses eine Mal sichtbar",
+    "validForHint": "Nach Ablauf wird der Link gelöscht.",
+    "maxAccountsHint": "Wird ein Konto getrennt, ist sein Platz wieder frei. Sind so viele Konten gleichzeitig verbunden, wird der Link gelöscht.",
+    "slots": "Konten",
+    "slotsValue": "{added, number} von {max, number}",
+    "unlimited": "{added, plural, one {# Konto hinzugefügt} other {# Konten hinzugefügt}}, ohne Limit",
+    "delete": "Link löschen",
+    "deleteLabel": "{label} löschen",
+    "deleteTitle": "{label} löschen?",
+    "deleteDescription": "Der Link funktioniert sofort nicht mehr und wird entfernt. Bereits hinzugefügte Konten bleiben verbunden, und ihre Besitzer können sie weiterhin trennen.",
+    "deleted": "{label} gelöscht"
+  },
+  "settings": {
+    "open": "Einstellungen",
+    "openFor": "Einstellungen für {provider}",
+    "title": "Einstellungen: {provider}",
+    "description": "Lege fest, wie Anfragen auf die Konten verteilt werden und wann gesparte Resets genutzt werden.",
+    "routingSummary": "Kontoverteilung: {method}",
+    "autoResetSummary": "{enabled, select, true {Automatische Resets ab {percent}} other {Automatische Resets aus}}",
+    "setupRequired": "Einrichtung nötig",
+    "setUp": "Einrichten"
+  },
+  "idle": {
+    "connect": "Verbinden"
+  },
+  "section": {
+    "description": "{channel} · {count, plural, one {# Konto} other {# Konten}}"
   }
 }

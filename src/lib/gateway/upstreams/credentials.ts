@@ -8,6 +8,7 @@ import { asRecord, asString, VERSION } from "@/lib/gateway/core";
 import { GateError } from "@/lib/gateway/errors";
 import { refreshSession } from "@/lib/gateway/upstreams/subscription-sign-in";
 import { logger } from "@/lib/logging/logger";
+import { notifyLive } from "@/lib/updates/live-topics";
 import { parseJsonOrNull } from "@/lib/utils/json";
 import type { ResolvedDeployment } from "@/types/routing";
 import type { LoginRefreshMode, SignInKind, SignInSession, SignInTokens, UpstreamAuth } from "@/types/providers";
@@ -127,6 +128,13 @@ export function loginData(session: SignInSession, now = Date.now()) {
   };
 }
 
+export async function clearRefreshBackoff(providerId: string): Promise<void> {
+  await prisma.providerLogin.updateMany({
+    where: { providerId, status: "active", OR: [{ retryAt: { not: null } }, { failures: { gt: 0 } }] },
+    data: { retryAt: null, failures: 0 },
+  });
+}
+
 async function loadLogin(providerId: string): Promise<LoginRow> {
   const row = await prisma.providerLogin.findUnique({ where: { providerId } });
   if (!row || row.status !== "active") throw signInRequired();
@@ -171,6 +179,7 @@ async function renew(row: LoginRow, current: SignInSession, kind: SignInKind, mo
     expired: dead,
   });
   if (saved.count !== 1) return latestUsable(row.providerId);
+  if (dead) notifyLive("limits");
   if (keep) return current;
   throw signInRequired();
 }
@@ -267,14 +276,17 @@ export async function refreshDueLogins(now = Date.now()): Promise<number> {
   return refreshed;
 }
 
-export async function providerAuth(provider: { id: string; kind: string; apiKey: string }): Promise<UpstreamAuth> {
-  if (!isSignInKind(provider.kind)) return { key: open(provider.apiKey), headers: {} };
-  const session = await activeSession(provider.id, provider.kind);
+export function sessionAuth(kind: SignInKind, session: SignInSession): UpstreamAuth {
   return {
     key: session.tokens.access,
-    headers: signInHeaders(provider.kind, session.tokens),
-    ...(provider.kind === "antigravity" ? { project: session.tokens.accountId } : {}),
+    headers: signInHeaders(kind, session.tokens),
+    ...(kind === "antigravity" ? { project: session.tokens.accountId } : {}),
   };
+}
+
+export async function providerAuth(provider: { id: string; kind: string; apiKey: string }): Promise<UpstreamAuth> {
+  if (!isSignInKind(provider.kind)) return { key: open(provider.apiKey), headers: {} };
+  return sessionAuth(provider.kind, await activeSession(provider.id, provider.kind));
 }
 
 export async function deploymentAuth(dep: ResolvedDeployment): Promise<UpstreamAuth> {

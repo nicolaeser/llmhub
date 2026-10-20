@@ -16,6 +16,8 @@ import {
   STORAGE_KEY,
   makeSession,
   parseSessions,
+  rememberedSessionId,
+  rememberSessionId,
   parseTools,
   readAssistantStream,
   replaySession,
@@ -96,9 +98,11 @@ export default function PlaygroundTab() {
     } else {
       const list = hydrated.length ? hydrated : [makeSession(fallback)];
       const newest = [...list].sort((a, b) => b.updatedAt - a.updatedAt)[0]!;
+      const remembered = rememberedSessionId();
+      const selected = list.find((s) => s.id === remembered) ?? newest;
       setSessions(list);
-      setCurrentId(newest.id);
-      if (replayed) setReplay({ kind: "failed", sessionId: newest.id, error: replayed.error });
+      setCurrentId(selected.id);
+      if (replayed) setReplay({ kind: "failed", sessionId: selected.id, error: replayed.error });
     }
     setReady(true);
   }
@@ -106,6 +110,12 @@ export default function PlaygroundTab() {
   const page = useActionData(loadAliasesAction, hydrate);
   const models = page.data?.models ?? [];
   const providerCount = page.data?.providers ?? 0;
+
+  const currentSessionId = current?.id;
+
+  useEffect(() => {
+    if (ready && currentSessionId) rememberSessionId(currentSessionId);
+  }, [ready, currentSessionId]);
 
   useEffect(() => {
     if (!ready || pending) return;
@@ -225,7 +235,7 @@ export default function PlaygroundTab() {
   }
 
   if (!page.data || !ready) {
-    return <PageStatus state={page} />;
+    return <PageStatus state={page} layout="chat" />;
   }
 
   if (!models.length) {

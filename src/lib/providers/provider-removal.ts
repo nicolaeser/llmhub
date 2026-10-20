@@ -2,6 +2,7 @@ import "server-only";
 
 import prisma from "@/lib/db/prisma";
 import { asStringArray } from "@/lib/gateway/core";
+import { notifyLive } from "@/lib/updates/live-topics";
 
 type EmptiedGroup = {
   alias: string;
@@ -29,10 +30,17 @@ export function catalogOwnedGroups(emptied: EmptiedGroup[], referenced: Set<stri
 }
 
 export async function removeProviderConnection(id: string) {
-  return prisma.$transaction(async (tx) => {
+  const removed = await prisma.$transaction(async (tx) => {
     const routes = await tx.deployment.findMany({ where: { providerId: id }, select: { groupAlias: true } });
+    const shared = await tx.subAddAccount.findUnique({ where: { providerId: id }, select: { linkId: true } });
     await tx.deployment.deleteMany({ where: { providerId: id } });
     const row = await tx.providerConnection.delete({ where: { id } });
+    if (shared?.linkId) {
+      await tx.subAddLink.updateMany({
+        where: { id: shared.linkId, added: { gt: 0 } },
+        data: { added: { decrement: 1 } },
+      });
+    }
     const touched = [...new Set(routes.map((route) => route.groupAlias))];
     if (!touched.length) return { row, routes: 0, removedGroups: [], emptyGroups: [] };
     const [emptied, others] = await Promise.all([
@@ -59,4 +67,6 @@ export async function removeProviderConnection(id: string) {
     const emptyGroups = emptied.map((group) => group.alias).filter((alias) => !removedGroups.includes(alias));
     return { row, routes: routes.length, removedGroups, emptyGroups };
   });
+  notifyLive("limits");
+  return removed;
 }

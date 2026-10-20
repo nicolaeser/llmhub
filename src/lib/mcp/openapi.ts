@@ -2,7 +2,7 @@ import { parse as parseYaml } from "yaml";
 import { classifySideEffect } from "@/lib/integrations/ingest";
 import { cleanParamName, cleanToolName, mergeTools } from "@/lib/mcp/hosted";
 import { parseJsonOrNull } from "@/lib/utils/json";
-import { hostedToolSchema } from "@/schemas/mcp";
+import { authNameValid, hostedToolSchema } from "@/schemas/mcp";
 import type { JsonMap } from "@/types/gateway";
 import type { HostedTool, McpDraftServer, McpOpenApiImport, McpToolAction } from "@/types/mcp";
 
@@ -255,10 +255,13 @@ function authOf(root: JsonMap): Pick<McpDraftServer, "authType" | "authHeader"> 
     if (type === "oauth2" || type === "openidconnect" || (type === "http" && http === "bearer")) {
       return { authType: "bearer", authHeader: "" };
     }
-    if (type === "apikey" && text(scheme.in) === "header" && /^[A-Za-z0-9-]{1,64}$/.test(header)) {
+    if (type === "apikey" && text(scheme.in) === "header" && authNameValid("header", header)) {
       return { authType: "header", authHeader: header };
     }
-    if (type === "basic" || (type === "http" && http === "basic")) return { authType: "header", authHeader: "Authorization" };
+    if (type === "apikey" && text(scheme.in) === "query" && authNameValid("query", header)) {
+      return { authType: "query", authHeader: header };
+    }
+    if (type === "basic" || (type === "http" && http === "basic")) return { authType: "basic", authHeader: "" };
   }
   return { authType: "none", authHeader: "" };
 }

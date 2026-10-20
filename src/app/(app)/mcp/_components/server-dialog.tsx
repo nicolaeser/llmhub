@@ -23,7 +23,7 @@ import CopyButton from "@/components/console/copy-button";
 import FormDialog from "@/components/console/form-dialog";
 import { useErrorToast } from "@/components/console/use-error-toast";
 import { isActionFail } from "@/lib/http/action-result";
-import { MCP_AUTH_TYPES, MCP_OAUTH_GRANTS } from "@/schemas/mcp";
+import { MCP_AUTH_TYPES, MCP_OAUTH_GRANTS, authNameValid, authUsesName } from "@/schemas/mcp";
 import type { McpAuthType, McpOAuthGrant, McpProbeResult, McpServerView, McpToolSpec } from "@/types/mcp";
 import { createMcpServerAction, probeMcpServerAction, updateMcpServerAction } from "../_action";
 
@@ -67,12 +67,12 @@ export default function ServerDialog({
   const [testing, startTest] = useTransition();
   const [saving, startSave] = useTransition();
   const hosted = editing?.kind === "hosted";
-  const authTypes = hosted ? MCP_AUTH_TYPES.filter((type) => type !== "oauth") : MCP_AUTH_TYPES;
+  const authTypes = MCP_AUTH_TYPES.filter((type) => (hosted ? type !== "oauth" : type !== "query"));
   const keepsSecret = Boolean(editing?.hasSecret && editing.authType === authType);
   const oauth = authType === "oauth";
   const secretRequired = secretNeeded(authType, oauthGrant);
   const needsSecret = secretRequired && !secret.trim() && !keepsSecret;
-  const headerValid = authType !== "header" || /^[A-Za-z0-9-]{1,64}$/.test(authHeader.trim());
+  const headerValid = authNameValid(authType, authHeader);
   const clientValid = !oauth || oauthGrant !== "client_credentials" || oauthClientId.trim() !== "";
   const ready = name.trim() !== "" && url.trim() !== "" && headerValid && clientValid && !needsSecret;
   const signInPending = probe?.error === "MCP_AUTH_REQUIRED" && oauth && oauthGrant === "authorization_code";
@@ -202,7 +202,7 @@ export default function ServerDialog({
             </ListBox>
           </Select.Popover>
         </Select>
-        {authType === "header" ? (
+        {authUsesName(authType) ? (
           <TextField
             fullWidth
             isRequired
@@ -211,8 +211,8 @@ export default function ServerDialog({
             isInvalid={authHeader.trim() !== "" && !headerValid}
             isDisabled={pending}
           >
-            <Label>{t("form.header")}</Label>
-            <Input placeholder="X-Api-Key" />
+            <Label>{t("form.authName", { type: authType })}</Label>
+            <Input autoComplete="off" spellCheck={false} placeholder={t("form.authNamePlaceholder", { type: authType })} />
           </TextField>
         ) : null}
       </div>

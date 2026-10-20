@@ -1,7 +1,7 @@
 {
   "title": "Einstellungen",
   "subtitle": "Anmeldung, Speicher, Protokollierung, Cache und Modellkatalog. Infrastruktur-Secrets bleiben in der Umgebung.",
-  "tabs": "{tab, select, company {Unternehmen} general {Allgemein} sign_in {Anmeldung} storage {Speicher} logging {Protokollierung & Alarme} cache {Antwort-Cache} catalog {Modellkatalog} other {Einstellungen}}",
+  "tabs": "{tab, select, general {Allgemein} sign_in {Anmeldung} storage {Speicher} logging {Protokollierung & Alarme} cache {Antwort-Cache} catalog {Modellkatalog} other {Einstellungen}}",
   "save": "Speichern",
   "saved": "Einstellungen gespeichert",
   "readOnly": "Du kannst diese Einstellungen ansehen. Zum Ändern brauchst du die Berechtigung Einstellungen verwalten.",
@@ -158,16 +158,29 @@
     }
   },
   "logging": {
+    "budgetAlerts": {
+      "title": "Budget-Alarme",
+      "hint": "Webhooks, die Budget-Schwellen abonniert haben, feuern einmal je Schwelle, wenn die Ausgabe sie überschreitet. Änderungen gelten sofort.",
+      "saved": "Alarm-Schwellen gespeichert",
+      "remove": "{value, number, integer} Prozent entfernen",
+      "add": "Neue Schwelle",
+      "addHint": "Zwischen 1 und 100 Prozent eines Budgets.",
+      "addButton": "Schwelle hinzufügen"
+    },
     "webhook": "Endpunkt-URL",
     "webhookSecret": "Signatur-Secret",
     "retention": "Request-Log-Aufbewahrung in Tagen",
-    "retentionHint": "0 behält Request-Logs unbegrenzt. Spend und Audit haben eigene Aufbewahrung.",
+    "retentionHint": "Standardmäßig {days, plural, one {# Tag} other {# Tage}}. 0 behält Request-Logs unbegrenzt. Spend, Nutzung, Audit und Sicherheitsaktivität haben eigene Aufbewahrung.",
     "spendRetention": "Spend-Aufbewahrung in Tagen",
     "spendRetentionHint": "0 behält Finanz-Spend-Events unbegrenzt, auch wenn Request-Logs ablaufen.",
+    "usageRetention": "Aufbewahrung der Nutzungssummen in Tagen",
+    "usageRetentionHint": "Tägliche Nutzungssummen für Nutzungsdiagramme, Chargeback und Berichte. 0 behält sie unbegrenzt, auch wenn Spend-Events ablaufen.",
     "auditRetention": "Audit-Aufbewahrung in Tagen",
-    "auditRetentionHint": "0 behält das Console-Audit unbegrenzt.",
+    "auditRetentionHint": "0 behält das Console-Audit und abgelehnte Integrationsfreigaben unbegrenzt.",
+    "securityRetention": "Aufbewahrung der Sicherheitsaktivität in Tagen",
+    "securityRetentionHint": "Sicherheitsänderungen an Console-Konten wie Anmeldemethoden, Rollen, Sperren und Management-Keys, mit IP-Adressen. Standardmäßig {days, plural, one {# Tag} other {# Tage}}, 0 behält sie unbegrenzt.",
     "objectRetention": "Aufbewahrung erzeugter Objekte in Tagen",
-    "objectRetentionHint": "Gespeicherte Responses, Batches, Batch-Ergebnisse und Videos. 0 behält sie unbegrenzt; laufende Batches werden nie gelöscht.",
+    "objectRetentionHint": "Gespeicherte Responses, Batches, Batch-Ergebnisse und Videos. Standardmäßig {days, plural, one {# Tag} other {# Tage}}, 0 behält sie unbegrenzt. Laufende Batches werden nie gelöscht.",
     "fileRetention": "Aufbewahrung hochgeladener Dateien in Tagen",
     "fileRetentionHint": "Über /api/v1/files hochgeladene Dateien. 0 behält sie unbegrenzt.",
     "alerts": "Alarm-Webhooks",
@@ -190,7 +203,7 @@
     "formatLabel": "{format, select, json {JSON} slack {Slack} teams {Microsoft Teams} other {Format}}",
     "formatHint": "{format, select, json {JSON mit id, event, message, source und ts.} slack {Nachricht für einen eingehenden Slack-Webhook.} teams {Adaptive Card für einen Teams-Workflow-Webhook.} other {}}",
     "rulesTitle": "Alarmregeln",
-    "rulesHint": "Wann Kosten-Anomalie- und Key-Ablauf-Alarme ausgelöst werden. Budget-Schwellen stehen auf der Seite Unternehmen.",
+    "rulesHint": "Wann Kosten-Anomalie- und Key-Ablauf-Alarme ausgelöst werden. Budget-Schwellen haben einen eigenen Abschnitt weiter unten.",
     "anomalyFactor": "Faktor für Kosten-Anomalien",
     "anomalyFactorHint": "Alarm, wenn ein Key oder Projekt in der letzten Stunde mindestens Faktor × den Durchschnitt derselben Stunde der letzten 7 Tage ausgibt. 0 schaltet ihn aus.",
     "anomalyMinCost": "Mindestausgaben pro Stunde",
@@ -202,7 +215,7 @@
     "content": "Prompts und Antworten speichern",
     "contentHint": "Für einzelne Personen unter Benutzer oder für einzelne Keys in deren Einstellungen ausschaltbar. Solange die PII-Schwärzung aktiv ist, werden gespeicherte Inhalte maskiert und jedes Log zeigt die gefundenen Entitäten.",
     "contentRetention": "Aufbewahrung der Inhalte in Tagen",
-    "contentRetentionHint": "0 behält Inhalte so lange wie das Request-Log. Ein kleinerer Wert entfernt Prompts und Antworten früher und behält die Metadaten.",
+    "contentRetentionHint": "Standardmäßig {days, plural, one {# Tag} other {# Tage}}. 0 behält Inhalte so lange wie das Request-Log. Ein kleinerer Wert entfernt Prompts und Antworten früher und behält die Metadaten. Werkzeug-Ausführungen von Integrationen speichern Tool-Ausgaben und folgen dem kürzeren der beiden Werte.",
     "description": "Alarm-Webhooks und -Regeln, Anfrageinhalte, Aufbewahrung und Log-Archivierung."
   },
   "cache": {
@@ -274,13 +287,5 @@
       "manageHint": "Wissensbasen legst du unter <link>Wissensbasen</link> an, dort lädst du auch Dateien hoch."
     },
     "description": "Wie der Katalog Anbietermodelle gruppiert, und die Standardmodelle für Wissensdatenbanken."
-  },
-  "companySubtitle": "Einstellungen von {name}. Plattform-Einstellungen bleiben in der Admin-Ansicht.",
-  "company": {
-    "title": "Einstellungen für {name}",
-    "description": "Alles, was dieses Unternehmen selbst einstellt. Wähle einen Bereich, um ihn in der Unternehmensansicht zu öffnen.",
-    "open": "Öffnen",
-    "area": "{area, select, structure {Unternehmen und Budgets} keys {API-Keys} guardrails {Guardrails und PII} mcp {MCP-Server} other {Bereich}}",
-    "areaHint": "{area, select, structure {Abteilungen, Projekte, Personen, Budgets, Alarme und Berichte.} keys {Die Keys dieses Unternehmens und ihr MCP-Zugriff pro Tool.} guardrails {Richtlinien für dieses Unternehmen, seine Projekte und Keys.} mcp {Server, die dieses Unternehmen nutzt, seine Zugriffsregeln und Rollen.} other {}}"
   }
 }

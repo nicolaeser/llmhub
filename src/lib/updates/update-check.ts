@@ -1,5 +1,6 @@
 import "server-only";
 import { asRecord, asString } from "@/lib/gateway/core";
+import { errorFields } from "@/lib/logging/format";
 import { logger } from "@/lib/logging/logger";
 import { currentBuild } from "@/lib/updates/build";
 import { noUpdate, releaseChannel, updateStatus } from "@/lib/updates/release-status";
@@ -48,7 +49,7 @@ async function cachedReleases(): Promise<PublishedRelease[]> {
     cacheHolder.__llmhubReleaseCache = { releases, until: Date.now() + CHECK_TTL_MS };
     return releases;
   } catch (err) {
-    logger.warn("update_check.failed", { err: err instanceof Error ? err.message : String(err) });
+    logger.warn("update_check.failed", errorFields(err));
     const releases = cached?.releases ?? [];
     cacheHolder.__llmhubReleaseCache = { releases, until: Date.now() + FAILURE_TTL_MS };
     return releases;

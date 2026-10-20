@@ -28,6 +28,9 @@
   "emptyRequests": "No request logs yet.",
   "emptySpend": "No spend events.",
   "emptyAudit": "No audit events.",
+  "emptyRequestsHint": "Requests appear here as soon as an API key calls the gateway.",
+  "emptySpendHint": "Spend events appear here once a request is billed.",
+  "emptyAuditHint": "Changes to keys, providers, users, and settings are recorded here.",
   "exportCsv": "Export CSV",
   "exportJsonl": "Export JSONL",
   "latencyMs": "{value, number, integer} ms",
@@ -48,6 +51,7 @@
   },
   "prev": "Previous",
   "next": "Next",
+  "newRequests": "{capped, select, true {More than {count, number, integer} new requests · Show newest} other {{count, plural, one {# new request · Show newest} other {# new requests · Show newest}}}}",
   "pageStatus": "Page {page, number, integer} · {total, number, integer} rows · {pageSize, number, integer} per page",
   "caller": {
     "noKey": "Console session"

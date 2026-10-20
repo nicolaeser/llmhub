@@ -9,7 +9,7 @@ const MODELS_TIMEOUT_MS = 30_000;
 export async function fetchAvailableModels(
   auth: UpstreamAuth,
   baseUrl = "",
-): Promise<{ status: number; json: unknown }> {
+): Promise<{ status: number; json: unknown; retryAfter: string | null }> {
   const root = (baseUrl.trim() || ANTIGRAVITY_BASE_URL).replace(/\/$/, "");
   try {
     const res = await fetch(`${root}/v1internal:fetchAvailableModels`, {
@@ -25,8 +25,8 @@ export async function fetchAvailableModels(
       redirect: "error",
     });
     const json: unknown = res.ok ? asRecord(await readJsonOr(res, null)) : null;
-    return { status: res.status, json };
+    return { status: res.status, json, retryAfter: res.headers.get("retry-after") };
   } catch {
-    return { status: 0, json: null };
+    return { status: 0, json: null, retryAfter: null };
   }
 }

@@ -1,6 +1,6 @@
 {
   "title": "Usage",
-  "subtitle": "Spend, tokens, errors, request volume, and resale markups.",
+  "subtitle": "{scope, select, company {Spend, tokens, errors, and request volume of this company.} other {Spend, tokens, errors, request volume, and resale markups.}}",
   "tab": "{tab, select, overview {Overview} markups {Markups} other {}}",
   "days": "{n, plural, one {# day} other {# days}}",
   "metrics": {
@@ -44,6 +44,11 @@
     "description": "Hit rate is the share of prompt tokens read from the provider cache. Savings compare billed cost with the same prompt tokens at the full input price, net of cache writes. Gateway response cache hits are not included; they are reported on the Response cache page.",
     "empty": "No prompt cache reads or writes in this period.",
     "byProject": "Prompt caching by project"
+  },
+  "today": {
+    "title": "Today",
+    "description": "Totals for {day} (UTC) across all traffic you can see. They update as requests arrive.",
+    "live": "Live"
   },
   "range": "Range",
   "filters": "{count, plural, =0 {Filters} other {Filters · # active}}",

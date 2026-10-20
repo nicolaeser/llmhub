@@ -1,6 +1,10 @@
-import { cancelQuietly } from "@/lib/utils/streams";
-
 const CREDENTIALS = new Set(["SECRET", "JWT", "PRIVATE_KEY", "CONNECTION_STRING", "ENV_SECRET"]);
+const NUMBERED_PLACEHOLDER = /\[[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)*_\d+\]/g;
+const SIGNED_KEYS = new Set(["thinking", "signature", "encrypted_content", "thinking_blocks", "reasoning_details"]);
+const JSON_TEXT_KEYS = new Set(["arguments"]);
+const asIs = (value: string): string => value;
+
+export const jsonStringBody = (value: string): string => JSON.stringify(value).slice(1, -1);
 
 export class PiiVault {
   private readonly values = new Map<string, string>();
@@ -20,8 +24,15 @@ export class PiiVault {
     return token;
   }
 
-  restore(text: string): string {
-    return text.replace(/\[[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)*_\d+\]/g, (token) => this.values.get(token) ?? token);
+  get size(): number {
+    return this.values.size;
+  }
+
+  restore(text: string, encode: (value: string) => string = asIs): string {
+    return text.replace(NUMBERED_PLACEHOLDER, (token) => {
+      const value = this.values.get(token);
+      return value === undefined ? token : encode(value);
+    });
   }
 }
 
@@ -51,47 +62,14 @@ export function vaultOf(trace: object | undefined): PiiVault | null {
   return trace ? (traces.get(trace) ?? null) : null;
 }
 
-export function restoreJson(value: unknown, vault: PiiVault | null): unknown {
-  if (!vault) return value;
-  if (typeof value === "string") return vault.restore(value);
-  if (Array.isArray(value)) return value.map((item) => restoreJson(item, vault));
+export function restoreJson(value: unknown, vault: PiiVault | null, key = ""): unknown {
+  if (!vault || SIGNED_KEYS.has(key)) return value;
+  if (typeof value === "string") return vault.restore(value, JSON_TEXT_KEYS.has(key) ? jsonStringBody : asIs);
+  if (Array.isArray(value)) return value.map((item) => restoreJson(item, vault, key));
   if (value && typeof value === "object") {
     const out: Record<string, unknown> = {};
-    for (const [key, item] of Object.entries(value)) out[key] = restoreJson(item, vault);
+    for (const [name, item] of Object.entries(value)) out[name] = restoreJson(item, vault, name);
     return out;
   }
   return value;
-}
-
-export function restoreSseResponse(response: Response, vault: PiiVault | null): Response {
-  if (!vault || !response.body) return response;
-  const decoder = new TextDecoder();
-  const encoder = new TextEncoder();
-  const reader = response.body.getReader();
-  let pending = "";
-  const stream = new ReadableStream<Uint8Array>({
-    async pull(controller) {
-      for (;;) {
-        const { done, value } = await reader.read();
-        if (done) {
-          const text = vault.restore(pending + decoder.decode());
-          pending = "";
-          if (text) controller.enqueue(encoder.encode(text));
-          controller.close();
-          return;
-        }
-        const combined = pending + decoder.decode(value, { stream: true });
-        const hold = combined.match(/\[[A-Z0-9_]{0,80}$/);
-        pending = hold?.[0] ?? "";
-        const emit = vault.restore(hold ? combined.slice(0, -pending.length) : combined);
-        if (!emit) continue;
-        controller.enqueue(encoder.encode(emit));
-        return;
-      }
-    },
-    cancel() {
-      void cancelQuietly(reader);
-    },
-  });
-  return new Response(stream, { status: response.status, statusText: response.statusText, headers: response.headers });
 }

@@ -1,6 +1,6 @@
 import "server-only";
 
-import { requirePermission } from "@/lib/auth/guards";
+import { requirePermission, requirePlatformPermission } from "@/lib/auth/guards";
 import { hasPerm, PERMISSIONS } from "@/lib/auth/permissions";
 import { writeAudit } from "@/lib/audit";
 import { env } from "@/lib/env";
@@ -37,7 +37,7 @@ export async function loadStorageSettings() {
 }
 
 export async function saveStorageSettings(raw: unknown) {
-  const session = await requirePermission(PERMISSIONS.SETTINGS_MANAGE);
+  const session = await requirePlatformPermission(PERMISSIONS.SETTINGS_MANAGE);
   const s3 = parseStorage(raw);
   const enterprise = await patchEnterprise({ s3 });
   await writeAudit({
@@ -51,7 +51,7 @@ export async function saveStorageSettings(raw: unknown) {
 }
 
 export async function testStorageSettings(raw: unknown): Promise<S3ProbeResult> {
-  const session = await requirePermission(PERMISSIONS.SETTINGS_MANAGE);
+  const session = await requirePlatformPermission(PERMISSIONS.SETTINGS_MANAGE);
   const s3 = parseStorage(raw);
   const keys = s3KeysPresent();
   if (!keys.accessKeyId || !keys.secretAccessKey) return { ok: false, code: "KEYS_MISSING", step: null, status: null };

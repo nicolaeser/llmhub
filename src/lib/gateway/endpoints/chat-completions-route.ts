@@ -4,7 +4,7 @@ import { recordUsage } from "@/lib/gateway/billing/billing";
 import { cacheBypassed } from "@/lib/gateway/cache/response-cache";
 import { cachedTokens, lookupChatCache, storeChatCache } from "@/lib/gateway/cache/chat-cache";
 import { dispatchChat, screenChatOutput, streamChat } from "@/lib/gateway/dispatch/chat";
-import { restoreClientJson, restoreClientStream } from "@/lib/gateway/safety/restore-client";
+import { restoreClientJson, restoreClientChatStream } from "@/lib/gateway/safety/restore-client";
 import { resolveChatFiles } from "@/lib/gateway/storage/file-refs";
 import { modelChain, spendTag } from "@/lib/gateway/access/gate";
 import { gatewayRoute, screenModelRequest } from "@/lib/gateway/endpoints/pipeline";
@@ -34,14 +34,14 @@ export function chatCompletionsRoute(pool: RoutePool) {
       const body = withMcpTools(clean, toolset);
       if (clean.stream === true) {
         const wantsUsage = asRecord(clean.stream_options)?.include_usage === true;
-        return restoreClientStream(principal.trace, await streamMcpChat({ req, ctx, body, sink: async () => chatStreamSink(wantsUsage) }));
+        return restoreClientChatStream(principal.trace, await streamMcpChat({ req, ctx, body, sink: async () => chatStreamSink(wantsUsage) }));
       }
       const run = await runMcpChat(ctx, body);
       return NextResponse.json(restoreClientJson(principal.trace, run.final), { headers: { "X-Hub-Cache": "BYPASS" } });
     }
     const settings = await loadSettings();
     if (clean.stream === true) {
-      return restoreClientStream(
+      return restoreClientChatStream(
         principal.trace,
         await streamChat({
           req,

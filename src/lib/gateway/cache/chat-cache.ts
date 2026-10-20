@@ -6,6 +6,7 @@ import { GateError } from "@/lib/gateway/errors";
 import { modelChain, modelPermitted, spendTag, withTrace } from "@/lib/gateway/access/gate";
 import { endpointAllowed } from "@/lib/gateway/access/key-restrictions";
 import { forwardToModel } from "@/lib/gateway/dispatch/upstream";
+import { errorFields } from "@/lib/logging/format";
 import { logger } from "@/lib/logging/logger";
 import type { CachedResponse, ChatCacheLookup, ChatCacheSlot, SemanticCacheSettings } from "@/types/cache";
 import type { JsonMap, Principal } from "@/types/gateway";
@@ -50,7 +51,7 @@ async function embedPrompt(principal: Principal, model: string, text: string, ta
       request: body,
       error: err,
     });
-    logger.warn("cache.semantic_embedding_failed", { model, err: err instanceof Error ? err.message : String(err) });
+    logger.warn("cache.semantic_embedding_failed", { model, ...errorFields(err) });
     return null;
   });
   if (!hit) return null;
