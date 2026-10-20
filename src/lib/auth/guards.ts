@@ -6,6 +6,7 @@ import { delegatedPrincipal } from "@/lib/auth/delegation";
 import { AuthError } from "@/lib/auth/errors";
 import { getSession } from "@/lib/auth/session";
 import { hasPerm } from "@/lib/auth/permissions";
+import { assertPlatform, companyOf } from "@/lib/auth/scope";
 import type { AuthenticatedSession, Permission } from "@/types/auth";
 
 export async function requireAuth(): Promise<AuthenticatedSession> {
@@ -35,6 +36,18 @@ export async function requirePermission(
   if (!hasPerm(session.permissions, permission)) {
     throw new AuthError("FORBIDDEN");
   }
+  return session;
+}
+
+export async function requirePlatformPermission(permission: Permission): Promise<AuthenticatedSession> {
+  const session = await requirePermission(permission);
+  assertPlatform(session);
+  return session;
+}
+
+export async function requirePlatformScope(): Promise<AuthenticatedSession> {
+  const session = await requireAuth();
+  if (companyOf(session)) redirect("/");
   return session;
 }
 

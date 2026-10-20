@@ -1,6 +1,6 @@
 {
   "title": "Nutzung",
-  "subtitle": "Ausgaben, Token, Fehler, Anfragevolumen und Aufschläge für den Weiterverkauf.",
+  "subtitle": "{scope, select, company {Ausgaben, Token, Fehler und Anfragevolumen dieses Unternehmens.} other {Ausgaben, Token, Fehler, Anfragevolumen und Aufschläge für den Weiterverkauf.}}",
   "tab": "{tab, select, overview {Übersicht} markups {Aufschläge} other {}}",
   "days": "{n, plural, one {# Tag} other {# Tage}}",
   "metrics": {

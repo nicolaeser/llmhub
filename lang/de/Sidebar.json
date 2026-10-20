@@ -1,21 +1,24 @@
 {
   "appName": "LLM Hub",
+  "sidebar": "Seitenleiste",
   "primaryNav": "Hauptnavigation",
+  "location": "Aktuelle Position",
   "toggleCollapsed": "{collapsed, select, true {Seitenleiste ausklappen} other {Seitenleiste einklappen}}",
   "openMenu": "Navigationsmenü öffnen",
-  "workspaceLabel": "Arbeitsbereich",
   "goHome": "Zur Startseite",
   "sections": {
+    "tenants": "Mandanten",
     "organization": "Organisation",
-    "models": "Modelle & Anbieter",
+    "gateway": "Gateway",
     "policies": "Richtlinien",
     "insights": "Auswertungen",
-    "system": "Plattform"
+    "system": "System"
   },
   "items": {
     "companies": "Unternehmen",
+    "company": "Unternehmen",
     "keys": "API-Keys",
-    "users": "Benutzer",
+    "users": "Konsolen-Benutzer",
     "providers": "Anbieter",
     "models": "Modelle",
     "guardrails": "Leitplanken",
@@ -24,13 +27,22 @@
     "usage": "Nutzung",
     "logs": "Protokolle",
     "settings": "Einstellungen",
-    "developer": "Entwickler",
-    "company": "Unternehmen",
-    "companySettings": "Unternehmenseinstellungen"
+    "developer": "Entwickler"
   },
   "account": "Konto und Sicherheit",
-  "workspaceAdmin": "Admin",
-  "workspaceAdminHint": "Alle Unternehmen und die Plattform",
-  "workspaceCompanies": "Unternehmen",
-  "workspaceCompanyHint": "Unternehmensansicht"
+  "scope": {
+    "switch": "Zwischen Plattform und einem Unternehmen wechseln",
+    "trigger": "Bereich wechseln, aktuell: {current}",
+    "openDrawer": "Navigation öffnen, aktueller Bereich: {current}",
+    "label": "{kind, select, company {Unternehmen · {alias}} other {Plattform}}",
+    "platform": "Plattform",
+    "platformHint": "Alle Unternehmen und Einstellungen",
+    "companyHint": "Unternehmen",
+    "companies": "Unternehmen"
+  },
+  "userMenu": {
+    "open": "Kontomenü für {name}",
+    "language": "Sprache",
+    "checkStatus": "Verbindung prüfen"
+  }
 }

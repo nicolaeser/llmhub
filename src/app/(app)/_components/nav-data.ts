@@ -14,50 +14,65 @@ import {
 } from "lucide-react";
 import { hasPerm, PERMISSIONS } from "@/lib/auth/permissions";
 import type { Permission } from "@/types/auth";
-import type { NavSection } from "@/types/console";
+import type { NavItem, NavSection, ScopeKind } from "@/types/console";
 
 export const NAV: NavSection[] = [
   {
-    id: "organization",
-    labelKey: "sections.organization",
+    id: "tenants",
+    labelKey: "sections.tenants",
     items: [
-      {
-        href: "/companies",
-        labelKey: "items.companies",
-        companyLabelKey: "items.company",
-        icon: Building2,
-        permission: PERMISSIONS.TENANCY_READ,
-      },
-      {
-        href: "/keys",
-        labelKey: "items.keys",
-        icon: KeyRound,
-        permission: [PERMISSIONS.KEYS_READ, PERMISSIONS.MODELS_READ],
-      },
+      { href: "/companies", labelKey: "items.companies", scope: "platform", icon: Building2, permission: PERMISSIONS.TENANCY_READ },
       {
         href: "/users",
         labelKey: "items.users",
-        adminOnly: true,
+        scope: "platform",
         icon: User,
         permission: [PERMISSIONS.USERS_READ, PERMISSIONS.ROLES_MANAGE],
       },
     ],
   },
   {
-    id: "models",
-    labelKey: "sections.models",
+    id: "organization",
+    labelKey: "sections.organization",
     items: [
-      { href: "/providers", labelKey: "items.providers", adminOnly: true, icon: Plug, permission: PERMISSIONS.PROVIDERS_READ },
-      { href: "/models", labelKey: "items.models", adminOnly: true, icon: Network, permission: PERMISSIONS.MODELS_READ },
+      { href: "/companies", labelKey: "items.company", scope: "company", icon: Building2, permission: PERMISSIONS.TENANCY_READ },
+      {
+        href: "/keys",
+        labelKey: "items.keys",
+        scope: "company",
+        icon: KeyRound,
+        permission: [PERMISSIONS.KEYS_READ, PERMISSIONS.MODELS_READ],
+      },
+    ],
+  },
+  {
+    id: "gateway",
+    labelKey: "sections.gateway",
+    items: [
+      { href: "/providers", labelKey: "items.providers", scope: "platform", icon: Plug, permission: PERMISSIONS.PROVIDERS_READ },
+      { href: "/models", labelKey: "items.models", scope: "platform", icon: Network, permission: PERMISSIONS.MODELS_READ },
+      {
+        href: "/keys",
+        labelKey: "items.keys",
+        scope: "platform",
+        icon: KeyRound,
+        permission: [PERMISSIONS.KEYS_READ, PERMISSIONS.MODELS_READ],
+      },
     ],
   },
   {
     id: "policies",
     labelKey: "sections.policies",
     items: [
-      { href: "/guardrails", labelKey: "items.guardrails", icon: Shield, permission: PERMISSIONS.SETTINGS_READ },
-      { href: "/knowledge", labelKey: "items.knowledge", icon: Library, permission: PERMISSIONS.TENANCY_READ },
-      { href: "/mcp", labelKey: "items.mcp", icon: Blocks, permission: [PERMISSIONS.SETTINGS_READ, PERMISSIONS.MCP_READ] },
+      { href: "/guardrails", labelKey: "items.guardrails", scope: "both", icon: Shield, permission: PERMISSIONS.SETTINGS_READ },
+      { href: "/knowledge", labelKey: "items.knowledge", scope: "both", icon: Library, permission: PERMISSIONS.TENANCY_READ },
+      {
+        href: "/mcp",
+        labelKey: "items.mcp",
+        scope: "both",
+        icon: Blocks,
+        permission: [PERMISSIONS.SETTINGS_READ, PERMISSIONS.MCP_READ],
+      },
     ],
   },
   {
@@ -67,26 +82,23 @@ export const NAV: NavSection[] = [
       {
         href: "/usage",
         labelKey: "items.usage",
+        scope: "both",
         icon: BarChart3,
         permission: [PERMISSIONS.SPEND_READ, PERMISSIONS.PRICING_READ],
       },
-      { href: "/logs", labelKey: "items.logs", icon: Activity, permission: PERMISSIONS.SPEND_READ },
+      { href: "/logs", labelKey: "items.logs", scope: "both", icon: Activity, permission: PERMISSIONS.SPEND_READ },
     ],
   },
   {
     id: "system",
     labelKey: "sections.system",
+    pinned: true,
     items: [
-      {
-        href: "/settings",
-        labelKey: "items.settings",
-        companyLabelKey: "items.companySettings",
-        icon: Settings,
-        permission: PERMISSIONS.SETTINGS_READ,
-      },
+      { href: "/settings", labelKey: "items.settings", scope: "platform", icon: Settings, permission: PERMISSIONS.SETTINGS_READ },
       {
         href: "/developer",
         labelKey: "items.developer",
+        scope: "both",
         icon: Code2,
         permission: [PERMISSIONS.PLAYGROUND_USE, PERMISSIONS.KEYS_READ],
       },
@@ -96,23 +108,41 @@ export const NAV: NavSection[] = [
 
 const NO_NAV_HOME = "/account";
 
+function inScope(item: Pick<NavItem, "scope">, scope: ScopeKind): boolean {
+  return item.scope === "both" || item.scope === scope;
+}
+
+function matchesPath(item: Pick<NavItem, "href">, pathname: string): boolean {
+  return pathname === item.href || pathname.startsWith(`${item.href}/`);
+}
+
 export function canSee(
   permissions: readonly Permission[],
-  item: { permission: Permission | readonly Permission[]; adminOnly?: boolean },
-  companyView = false,
+  item: Pick<NavItem, "permission" | "scope">,
+  scope: ScopeKind = "platform",
 ) {
-  if (companyView && item.adminOnly) return false;
+  if (!inScope(item, scope)) return false;
   const needed: readonly Permission[] = Array.isArray(item.permission) ? item.permission : [item.permission];
   return needed.some((permission) => hasPerm(permissions, permission));
 }
 
-export function homePath(permissions: readonly Permission[], companyView = false): string {
-  const first = NAV.flatMap((section) => section.items).find((item) => canSee(permissions, item, companyView));
+export function visibleNav(permissions: readonly Permission[], scope: ScopeKind): NavSection[] {
+  return NAV.map((section) => ({
+    ...section,
+    items: section.items.filter((item) => canSee(permissions, item, scope)),
+  })).filter((section) => section.items.length > 0);
+}
+
+export function homePath(permissions: readonly Permission[], scope: ScopeKind = "platform"): string {
+  const first = visibleNav(permissions, scope).flatMap((section) => section.items)[0];
   return first?.href ?? NO_NAV_HOME;
 }
 
-export function adminOnlyPath(pathname: string): boolean {
-  return NAV.flatMap((section) => section.items).some(
-    (item) => item.adminOnly && (pathname === item.href || pathname.startsWith(`${item.href}/`)),
-  );
+export function navItemFor(pathname: string, scope: ScopeKind): NavItem | undefined {
+  return NAV.flatMap((section) => section.items).find((item) => inScope(item, scope) && matchesPath(item, pathname));
+}
+
+export function platformOnlyPath(pathname: string): boolean {
+  const matching = NAV.flatMap((section) => section.items).filter((item) => matchesPath(item, pathname));
+  return matching.length > 0 && matching.every((item) => item.scope === "platform");
 }

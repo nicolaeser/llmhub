@@ -1,7 +1,7 @@
 import "server-only";
 
 import prisma from "@/lib/db/prisma";
-import { companyOf, inCompany } from "@/lib/auth/scope";
+import { inCompany } from "@/lib/auth/scope";
 import type { AuthenticatedSession } from "@/types/auth";
 
 export function cleanAlias(value: unknown): string {
@@ -27,10 +27,6 @@ export function cleanLimit(value: unknown, max: number): number {
   const n = Number(value ?? 0);
   if (!Number.isInteger(n) || n < 0 || n > max) throw new Error("VALIDATION");
   return n;
-}
-
-export function assertPlatform(session: AuthenticatedSession) {
-  if (companyOf(session)) throw new Error("PLATFORM_ONLY");
 }
 
 export function assertInCompany(session: AuthenticatedSession, orgId: string | null | undefined) {

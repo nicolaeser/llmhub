@@ -3,7 +3,7 @@ import "server-only";
 import prisma from "@/lib/db/prisma";
 import { requirePermission } from "@/lib/auth/guards";
 import { hasPerm, PERMISSIONS } from "@/lib/auth/permissions";
-import { companyOf, inCompany, keyScope } from "@/lib/auth/scope";
+import { assertPlatform, companyOf, inCompany, keyScope } from "@/lib/auth/scope";
 import { writeAudit } from "@/lib/audit";
 import { getEnterprise } from "@/lib/settings/enterprise";
 import { mailEnabled } from "@/lib/mail/send";
@@ -18,7 +18,6 @@ import type {
 } from "@/types/structure";
 import {
   assertInCompany,
-  assertPlatform,
   cleanAlias,
   cleanEmail,
   cleanLimit,

@@ -22,24 +22,28 @@ export function setupDone(data: StructurePayload): Record<SetupStep, boolean> {
 
 export default function SetupSteps({
   data,
+  company,
   onStep,
 }: {
   data: StructurePayload;
+  company: string | null;
   onStep: (step: SetupStep) => void;
 }) {
   const t = useTranslations("Companies.steps");
   const done = setupDone(data);
-  const current = STEPS.find((step) => !done[step]);
+  const steps = company ? STEPS.filter((step) => step !== "org") : STEPS;
+  const current = steps.find((step) => !done[step]);
+  const title = t("title", { scope: company ? "company" : "platform", alias: company ?? "" });
 
   return (
-    <Card render={(props) => <section {...props} />} aria-label={t("title")}>
+    <Card render={(props) => <section {...props} />} aria-label={title}>
       <Card.Header>
-        <Card.Title>{t("title")}</Card.Title>
+        <Card.Title>{title}</Card.Title>
         <Card.Description>{t("subtitle")}</Card.Description>
       </Card.Header>
       <Card.Content>
-        <ol className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-          {STEPS.map((step, index) => {
+        <ol className={`grid gap-3 sm:grid-cols-2 ${company ? "xl:grid-cols-4" : "xl:grid-cols-5"}`}>
+          {steps.map((step, index) => {
             const isDone = done[step];
             const isCurrent = step === current;
             return (

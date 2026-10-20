@@ -1,6 +1,8 @@
 {
   "title": "Guardrails",
   "subtitle": "Check prompts and responses for personal data, banned content, prompt injection, and leaked secrets.",
+  "companySubtitle": "Overrides for this company, its projects, and its keys. Everything else follows the platform policy.",
+  "companyNotice": "The platform policy summarized above applies to this company unless an override below replaces it. Switch to the platform scope to change it.",
   "tabs": "{tab, select, pii {PII} content {Rules and checks} other {{tab}}}",
   "save": "Save policy",
   "enabledState": "{enabled, select, true {Active} other {Paused}}",

@@ -92,13 +92,13 @@ HeroUI `size` maps control height. Must not mix `size` with a competing height c
 | Icon | Lucide `size={14}` or `size={16}` |
 | Full-width field | `fullWidth` on `TextField` / `Select` / `Button` |
 
-The collapsed rail widths (`w-16` / `w-64`), meter fills, and table `min-w-*` locks are allowed. Below `md`, the rail is hidden and navigation opens in a HeroUI `Drawer` (`placement="left"`, `Backdrop variant="blur"`). Expanded navigation groups sections in a `DisclosureGroup`; the collapsed rail shows icons only.
+The rail widths (`w-16` / `w-64`), meter fills, and table `min-w-*` locks are allowed. Below `md`, the rail is hidden and navigation opens in a HeroUI `Drawer` (`placement="left"`, `Backdrop variant="blur"`) with the scope switcher on top, the navigation, and the user menu row; it repeats no footer controls. Expanded navigation groups sections in a `DisclosureGroup`. The collapsed rail keeps one centre line: centred brand, `size-10` square links with `justify-center` and a `Tooltip` (`placement="right"`) on every item, a `Separator` between sections and above the pinned items, and a one-column footer (a fixed status slot, the user menu, then the collapse toggle). A rail link is the `Tooltip.Trigger` itself (`render` returns the `Link`), and a rail menu is an icon-only `Button` inside the `Tooltip`; must not nest a link or button inside a trigger. Must not centre rail items with padding alone or spread footer controls with `justify-between`.
 
 ## Responsive layout
 
 Every console screen must work at 390 px wide without horizontal page scroll.
 
-- Below `sm` the `(app)` layout pads `main` with `p-4`, the top bar shows only the health dot (its label stays visible when the status is down), and sign-out is icon-only.
+- Below `sm` the `(app)` layout pads `main` with `p-4`. Below `md` the top bar shows the menu button, brand and page title (truncated), a scope button that opens the drawer, the health dot (its label stays visible when the status is down), and the Avatar user menu that holds the connection check and sign-out.
 - `PageHeader` actions wrap under the title when they do not fit beside it. Must not force them onto the title row.
 - `StatCard` keeps label and tile on one row and sizes the value with a container query, so it never needs to stack. Four-up stat grids must not start before `lg`, because the rail narrows the pane at `md`.
 - A list `Table` must have a card twin: `RowCards` with one `RowCard` per row (`src/components/console/row-cards.tsx`) below `lg`, and `className={TABLE_FROM_LG}` on the `Table`. Tables in a narrow column (the company detail pane) use `until="xl"` with `TABLE_FROM_XL`. Inside a `Card` the twin uses `variant="secondary"`, inside a secondary card `variant="tertiary"`. Row chips and actions live in one helper that the table cell and the card both call, so the two never drift. Markdown tables inside transcripts may scroll instead.

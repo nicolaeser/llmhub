@@ -1,7 +1,7 @@
 {
   "title": "Settings",
   "subtitle": "Sign-in, storage, logging, caching, and the model catalog. Infrastructure secrets stay in the environment.",
-  "tabs": "{tab, select, company {Company} general {General} sign_in {Sign-in} storage {Storage} logging {Logging & alerts} cache {Response cache} catalog {Model catalog} other {Settings}}",
+  "tabs": "{tab, select, general {General} sign_in {Sign-in} storage {Storage} logging {Logging & alerts} cache {Response cache} catalog {Model catalog} other {Settings}}",
   "save": "Save",
   "saved": "Settings saved",
   "readOnly": "You can view these settings. Changing them needs the Manage settings permission.",
@@ -158,6 +158,15 @@
     }
   },
   "logging": {
+    "budgetAlerts": {
+      "title": "Budget alerts",
+      "hint": "Webhooks that subscribe to budget thresholds fire once per threshold when spend crosses it. Changes apply right away.",
+      "saved": "Alert thresholds saved",
+      "remove": "Remove {value, number, integer} percent",
+      "add": "New threshold",
+      "addHint": "Between 1 and 100 percent of a budget.",
+      "addButton": "Add threshold"
+    },
     "webhook": "Endpoint URL",
     "webhookSecret": "Signing secret",
     "retention": "Request log retention days",
@@ -194,7 +203,7 @@
     "formatLabel": "{format, select, json {JSON} slack {Slack} teams {Microsoft Teams} other {Format}}",
     "formatHint": "{format, select, json {JSON with id, event, message, source, and ts.} slack {Message for a Slack incoming webhook.} teams {Adaptive Card for a Teams workflow webhook.} other {}}",
     "rulesTitle": "Alert rules",
-    "rulesHint": "When spend anomaly and key expiry alerts fire. Budget thresholds are set on the Companies page.",
+    "rulesHint": "When spend anomaly and key expiry alerts fire. Budget thresholds have their own section below.",
     "anomalyFactor": "Spend anomaly factor",
     "anomalyFactorHint": "Alert when a key or project spends at least this many times its average for the same hour over the previous 7 days. 0 turns it off.",
     "anomalyMinCost": "Minimum spend per hour",
@@ -278,13 +287,5 @@
       "manageHint": "Create knowledge bases and upload files under <link>Knowledge bases</link>."
     },
     "description": "How the catalog groups provider models, and the default models for knowledge bases."
-  },
-  "companySubtitle": "Settings of {name}. Platform settings stay in the Admin view.",
-  "company": {
-    "title": "Settings for {name}",
-    "description": "Everything this company configures for itself. Pick an area to open it in the company view.",
-    "open": "Open",
-    "area": "{area, select, structure {Company and budgets} keys {API keys} guardrails {Guardrails and PII} mcp {MCP servers} other {Area}}",
-    "areaHint": "{area, select, structure {Departments, projects, people, budgets, alerts, and reports.} keys {This company's keys, and MCP access for each tool.} guardrails {Policy overrides for this company, its projects, and keys.} mcp {Servers this company uses, its access rules, and roles.} other {}}"
   }
 }
