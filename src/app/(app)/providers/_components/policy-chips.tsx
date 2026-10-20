@@ -1,12 +1,13 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { Chip } from "@heroui/react";
 import { useTranslations } from "next-intl";
 import type { ProviderPolicyInput } from "@/types/providers";
 
 const CHIP = "whitespace-nowrap";
 
-export default function PolicyChips({ policy }: { policy: ProviderPolicyInput }) {
+export default function PolicyChips({ policy, lead }: { policy: ProviderPolicyInput; lead?: ReactNode }) {
   const t = useTranslations("Providers");
   const items = [
     policy.zdr ? { key: "zdr", color: "success" as const, label: t("policy.zdrChip") } : null,
@@ -25,10 +26,11 @@ export default function PolicyChips({ policy }: { policy: ProviderPolicyInput })
       : null,
   ].filter((item) => item !== null);
 
-  if (!items.length) return null;
+  if (!items.length && !lead) return null;
 
   return (
-    <div className="flex flex-wrap gap-1">
+    <div className="flex flex-wrap items-center gap-1">
+      {lead}
       {items.map((item) => (
         <Chip key={item.key} size="sm" variant="soft" color={item.color} className={CHIP}>
           {item.label}

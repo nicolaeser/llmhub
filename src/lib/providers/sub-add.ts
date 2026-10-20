@@ -102,7 +102,7 @@ async function offeredKinds(kinds: string[]): Promise<SignInKind[]> {
 async function usableLink(token: string, now = Date.now()): Promise<SubAddLinkRecord> {
   const link = await prisma.subAddLink.findUnique({
     where: { tokenHash: subAddTokenHash(token) },
-    select: { id: true, label: true, kinds: true, expiresAt: true, revokedAt: true, maxAccounts: true, added: true },
+    select: { id: true, label: true, kinds: true, expiresAt: true, maxAccounts: true, added: true },
   });
   if (!link || subAddStatus(link, now) !== "active") throw new Error(SUB_ADD_UNAVAILABLE);
   return link;

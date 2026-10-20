@@ -27,7 +27,7 @@ import {
   updateProvider,
 } from "@/lib/providers/connections";
 import { redeemProviderReset } from "@/lib/providers/resets";
-import { createSubAddLink, loadSubAddLinks, revokeSubAddLink } from "@/lib/providers/sub-add-links";
+import { createSubAddLink, deleteSubAddLink, loadSubAddLinks } from "@/lib/providers/sub-add-links";
 
 export async function loadProvidersAction(...args: Parameters<typeof loadProviders>) {
   return runAction(() => loadProviders(...args));
@@ -133,6 +133,6 @@ export async function createSubAddLinkAction(...args: Parameters<typeof createSu
   return runAction(() => createSubAddLink(...args));
 }
 
-export async function revokeSubAddLinkAction(...args: Parameters<typeof revokeSubAddLink>) {
-  return runAction(() => revokeSubAddLink(...args));
+export async function deleteSubAddLinkAction(...args: Parameters<typeof deleteSubAddLink>) {
+  return runAction(() => deleteSubAddLink(...args));
 }

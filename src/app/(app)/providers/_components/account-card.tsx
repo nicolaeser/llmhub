@@ -1,16 +1,50 @@
 "use client";
 
-import { Button, Card, Chip, Disclosure, Skeleton, Spinner } from "@heroui/react";
-import { RefreshCw, Users } from "lucide-react";
+import { Button, Card, Chip, Disclosure, Separator, Skeleton, Spinner } from "@heroui/react";
+import {
+  CircleAlert,
+  CircleCheck,
+  CirclePause,
+  CloudOff,
+  Gauge,
+  KeyRound,
+  Link2,
+  LoaderCircle,
+  RefreshCw,
+  Users,
+  type LucideIcon,
+} from "lucide-react";
 import { useFormatter, useNow, useTranslations } from "next-intl";
-import SubscriptionBadge, { PlanBadge } from "@/components/console/subscription-badge";
+import IconTile from "@/components/console/icon-tile";
+import { PlanBadge } from "@/components/console/subscription-badge";
 import PolicyChips from "./policy-chips";
 import ProviderActions from "./provider-actions";
 import ProviderToggle from "./provider-toggle";
-import type { AccountLimits, LimitWindow, ProviderView, SubscriptionLimits } from "@/types/providers";
+import type { AccountLimits, AccountState, LimitWindow, ProviderView, SubscriptionLimits } from "@/types/providers";
+import type { Tone } from "@/types/console";
 import { ACCOUNT_STATE_COLOR, accountState, recoveryAt } from "./account-status";
 import BankedResets from "./banked-resets";
 import LimitMeter from "./limit-meter";
+
+const STATE_ICON: Record<AccountState, LucideIcon> = {
+  available: CircleCheck,
+  connected: CircleCheck,
+  limited: Gauge,
+  expired: KeyRound,
+  unavailable: CloudOff,
+  checking: LoaderCircle,
+  paused: CirclePause,
+};
+
+const STATE_TONE: Record<AccountState, Tone> = {
+  available: "success",
+  connected: "success",
+  limited: "warning",
+  expired: "danger",
+  unavailable: "warning",
+  checking: "neutral",
+  paused: "neutral",
+};
 
 function byLength(a: LimitWindow, b: LimitWindow): number {
   return a.windowSeconds - b.windowSeconds;
@@ -46,7 +80,6 @@ export default function AccountCard({
   onToggled: (provider: ProviderView) => void;
 }) {
   const t = useTranslations("Subscriptions");
-  const tProviders = useTranslations("Providers");
   const tError = useTranslations("Error");
   const format = useFormatter();
   const now = useNow({ updateInterval: 60_000 });
@@ -56,32 +89,38 @@ export default function AccountCard({
   const scopedWindows = limits ? limits.windows.filter((window) => window.scope).sort(byLength) : [];
   const recovery = state === "limited" ? recoveryAt(entry) : null;
   const plan = limits?.plan || row.signIn?.plan || "";
+  const account = row.signIn?.account ?? "";
+  const failure = entry?.error && entry.error !== "SIGN_IN_EXPIRED" ? entry.error : "";
 
   return (
-    <Card variant="secondary">
-      <Card.Header>
-        <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
-          <div className="min-w-0 flex-1 basis-40">
-            <Card.Title className="truncate">{row.name}</Card.Title>
-            <Card.Description className="truncate">
-              {tProviders("signIn.account", {
-                named: row.signIn?.account ? "true" : "false",
-                account: row.signIn?.account ?? "",
-              })}
-            </Card.Description>
-          </div>
-          <div className="flex min-w-0 max-w-full flex-wrap justify-end gap-1">
-            <SubscriptionBadge />
-            <PlanBadge plan={plan} />
-            <Chip size="sm" variant="soft" color={ACCOUNT_STATE_COLOR[state]} className="whitespace-nowrap">
-              {t("status", { status: state })}
-            </Chip>
-          </div>
+    <Card variant="secondary" className="gap-4">
+      <Card.Header className="flex-row flex-wrap items-start gap-3">
+        <IconTile icon={STATE_ICON[state]} tone={STATE_TONE[state]} />
+        <div className="min-w-0 flex-1 basis-40">
+          <Card.Title className="truncate">{account || row.name}</Card.Title>
+          <Card.Description className="truncate">{account ? row.name : t("noAccount")}</Card.Description>
+        </div>
+        <div className="flex max-w-full flex-wrap justify-end gap-1">
+          <PlanBadge plan={plan} />
+          <Chip size="sm" variant="soft" color={ACCOUNT_STATE_COLOR[state]} className="whitespace-nowrap">
+            {t("status", { status: state })}
+          </Chip>
         </div>
       </Card.Header>
-      <Card.Content className="space-y-4">
-        <PolicyChips policy={row.policy} />
-        {state === "paused" ? <p className="text-sm text-muted">{t("pausedHint")}</p> : null}
+
+      <Card.Content className="gap-4">
+        <PolicyChips
+          policy={row.policy}
+          lead={
+            row.sharedVia !== null ? (
+              <Chip size="sm" variant="soft" color="accent" className="whitespace-nowrap">
+                <Link2 size={12} aria-hidden />
+                {t("sharedVia", { named: String(row.sharedVia !== ""), label: row.sharedVia })}
+              </Chip>
+            ) : null
+          }
+        />
+
         {state === "limited" ? (
           <p className="text-sm text-warning">
             {recovery
@@ -100,18 +139,34 @@ export default function AccountCard({
               : t("backInUnknown")}
           </p>
         ) : null}
-        {state === "expired" ? <p className="text-sm text-danger">{t("expiredHint")}</p> : null}
-        {!reports && state !== "expired" ? <p className="text-sm text-muted">{t("noLimits")}</p> : null}
-        {reports && state === "checking" ? (
-          <div className="space-y-3" aria-hidden>
-            <Skeleton className="h-3 w-1/3 rounded-lg" />
-            <Skeleton className="h-2 w-full rounded-lg" />
-            <Skeleton className="h-3 w-1/3 rounded-lg" />
-            <Skeleton className="h-2 w-full rounded-lg" />
+        {state === "expired" ? (
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="flex min-w-0 items-center gap-2 text-sm text-danger">
+              <CircleAlert size={14} aria-hidden className="shrink-0" />
+              {t("expiredHint")}
+            </p>
+            {canManage ? (
+              <Button size="sm" variant="danger-soft" onPress={() => onEdit(row)}>
+                <KeyRound size={14} aria-hidden />
+                {t("signInAgain")}
+              </Button>
+            ) : null}
           </div>
         ) : null}
-        {entry?.error && entry.error !== "SIGN_IN_EXPIRED" ? (
-          <p className="text-sm text-warning">{tError("code", { code: entry.error })}</p>
+        {state === "paused" ? <p className="text-sm text-muted">{t("pausedHint")}</p> : null}
+        {failure ? <p className="text-sm text-warning">{tError("code", { code: failure })}</p> : null}
+        {!reports && state !== "expired" ? <p className="text-sm text-muted">{t("noLimits")}</p> : null}
+
+        {reports && state === "checking" ? (
+          <div className="grid gap-4 sm:grid-cols-2" aria-hidden>
+            {[0, 1].map((item) => (
+              <div key={item} className="space-y-2">
+                <Skeleton className="h-3 w-1/2 rounded-lg" />
+                <Skeleton className="h-2 w-full rounded-lg" />
+                <Skeleton className="h-3 w-2/3 rounded-lg" />
+              </div>
+            ))}
+          </div>
         ) : null}
         {limits && limits.windows.length === 0 ? <p className="text-sm text-muted">{t("limits.none")}</p> : null}
         {planWindows.length > 0 ? (
@@ -124,7 +179,7 @@ export default function AccountCard({
         {scopedWindows.length > 0 ? (
           <Disclosure>
             <Disclosure.Heading>
-              <Disclosure.Trigger className="flex w-full items-center justify-between text-sm text-muted">
+              <Disclosure.Trigger className="flex w-full items-center justify-between gap-2 text-sm text-muted">
                 {t("limits.modelLimits", { count: scopedWindows.length })}
                 <Disclosure.Indicator />
               </Disclosure.Trigger>
@@ -139,13 +194,7 @@ export default function AccountCard({
           </Disclosure>
         ) : null}
         {limits?.resetCredits ? (
-          <BankedResets
-            row={row}
-            credits={limits.resetCredits}
-            timeZone={timeZone}
-            canManage={canManage}
-            onLimits={onLimits}
-          />
+          <BankedResets row={row} credits={limits.resetCredits} timeZone={timeZone} canManage={canManage} onLimits={onLimits} />
         ) : null}
         {limits?.extraUsage || limits?.credits ? (
           <ul className="space-y-1 text-sm text-muted">
@@ -159,44 +208,48 @@ export default function AccountCard({
             ) : null}
             {limits.credits ? (
               <li>
-                {t("limits.credits", {
-                  unlimited: limits.credits.unlimited ? "true" : "false",
-                  balance: limits.credits.balance,
-                })}
+                {t("limits.credits", { unlimited: limits.credits.unlimited ? "true" : "false", balance: limits.credits.balance })}
               </li>
             ) : null}
           </ul>
         ) : null}
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <p className={row.restricted ? "text-sm text-warning" : "text-sm text-muted"}>
-            {t("access.summary", { restricted: String(row.restricted), count: row.assignments.length })}
-          </p>
-          <Button size="sm" variant="tertiary" aria-label={t("access.manage")} onPress={() => onAccess(row)}>
-            <Users size={14} aria-hidden />
-            {t("access.manage")}
+      </Card.Content>
+
+      <Separator />
+
+      <Card.Footer className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2">
+          <ProviderToggle row={row} onChanged={onToggled} />
+          <Button
+            size="sm"
+            variant="tertiary"
+            aria-label={t("access.manageFor", { name: account || row.name })}
+            onPress={() => onAccess(row)}
+          >
+            <Users size={14} aria-hidden className={row.restricted ? "text-warning" : undefined} />
+            {t("access.short", { restricted: String(row.restricted), count: row.assignments.length })}
           </Button>
         </div>
-      </Card.Content>
-      <Card.Footer className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
-          <ProviderToggle row={row} onChanged={onToggled} />
-          {reports && state !== "expired" ? (
-            <div className="flex min-w-0 items-center gap-1">
-              <Button
-                isIconOnly
-                size="sm"
-                variant="tertiary"
-                aria-label={t("limits.refresh")}
-                isPending={refreshing}
-                onPress={() => onRefresh(row.id)}
-              >
-                {({ isPending }) => (isPending ? <Spinner color="current" size="sm" /> : <RefreshCw size={14} aria-hidden />)}
-              </Button>
-              {limits ? <span className="truncate">{t("limits.updated", { when: format.relativeTime(new Date(limits.fetchedAt), now) })}</span> : null}
-            </div>
+        <div className="flex min-w-0 items-center gap-1">
+          {reports && state !== "expired" && limits ? (
+            <span className="truncate text-xs text-muted">
+              {t("limits.updated", { when: format.relativeTime(new Date(limits.fetchedAt), now) })}
+            </span>
           ) : null}
+          {reports && state !== "expired" ? (
+            <Button
+              isIconOnly
+              size="sm"
+              variant="tertiary"
+              aria-label={t("limits.refresh")}
+              isPending={refreshing}
+              onPress={() => onRefresh(row.id)}
+            >
+              {({ isPending }) => (isPending ? <Spinner color="current" size="sm" /> : <RefreshCw size={14} aria-hidden />)}
+            </Button>
+          ) : null}
+          <ProviderActions row={row} variant="menu" onEdit={onEdit} onImport={onImport} onDeleted={onDeleted} />
         </div>
-        <ProviderActions row={row} onEdit={onEdit} onImport={onImport} onDeleted={onDeleted} />
       </Card.Footer>
     </Card>
   );
