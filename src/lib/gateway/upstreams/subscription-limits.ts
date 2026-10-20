@@ -6,7 +6,7 @@ import { reportsLimits } from "@/lib/gateway/upstreams/provider-kinds";
 import { CLAUDE_OAUTH_BETAS } from "@/lib/gateway/upstreams/claude";
 import { CODEX_USAGE_URL } from "@/lib/gateway/upstreams/codex";
 import { asNumber, asRecord, asString } from "@/lib/gateway/core";
-import { providerAuth } from "@/lib/gateway/upstreams/credentials";
+import { providerAuth, sessionAuth } from "@/lib/gateway/upstreams/credentials";
 import { GateError } from "@/lib/gateway/errors";
 import { errorFields } from "@/lib/logging/format";
 import { logger } from "@/lib/logging/logger";
@@ -20,7 +20,14 @@ import {
   xaiPlan,
 } from "@/lib/gateway/upstreams/xai-limits";
 import type { JsonMap } from "@/types/gateway";
-import type { LimitWindow, SubscriptionLimits } from "@/types/providers";
+import type {
+  LimitWindow,
+  SignInCheck,
+  SignInKind,
+  SignInSession,
+  SubscriptionLimits,
+  UpstreamAuth,
+} from "@/types/providers";
 
 const CLAUDE_USAGE_URL = "https://api.anthropic.com/api/oauth/usage";
 const CLAUDE_FIVE_HOUR_SECONDS = 5 * 3_600;
@@ -211,6 +218,25 @@ async function fetchAntigravityLimits(provider: LimitProvider): Promise<Subscrip
   if (status === 401 || status === 403) throw new Error("UPSTREAM_AUTH");
   if (status < 200 || status >= 300) throw new Error("UPSTREAM_FAILED");
   return antigravityLimits(json, await storedPlan(provider.id));
+}
+
+async function probeStatus(kind: SignInKind, auth: UpstreamAuth): Promise<number> {
+  if (kind === "antigravity") return (await fetchAvailableModels(auth)).status;
+  if (kind === "claude") {
+    return (await getJson(CLAUDE_USAGE_URL, auth.key, { ...auth.headers, "anthropic-beta": CLAUDE_OAUTH_BETAS.join(",") }))
+      .status;
+  }
+  if (kind === "grok_build") {
+    return (await getJson(XAI_BILLING_WEEKLY_URL, auth.key, { ...auth.headers, ...xaiLimitHeaders() })).status;
+  }
+  return (await getJson(CODEX_USAGE_URL, auth.key, auth.headers)).status;
+}
+
+export async function checkSignInSession(kind: SignInKind, session: SignInSession): Promise<SignInCheck> {
+  const status = await probeStatus(kind, sessionAuth(kind, session));
+  if (status === 401 || status === 403) return "rejected";
+  if ((status >= 200 && status < 300) || status === 429) return "valid";
+  return "unreachable";
 }
 
 async function fetchLimits(provider: LimitProvider): Promise<SubscriptionLimits> {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useState, useTransition } from "react";
+import { useId, useState } from "react";
 import {
   Alert,
   Button,
@@ -18,14 +18,14 @@ import {
   Surface,
   TextField,
   toast,
-  type useOverlayState,
+  useOverlayState,
 } from "@heroui/react";
 import { Check, Link2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import CopyButton from "@/components/console/copy-button";
 import IconTile from "@/components/console/icon-tile";
-import { useErrorToast } from "@/components/console/use-error-toast";
 import { kindIcon } from "@/components/providers/kind-icons";
+import { StepUpDialog } from "@/components/security/step-up-dialog";
 import { isActionFail } from "@/lib/http/action-result";
 import { SUB_ADD_DEFAULT_DAYS, SUB_ADD_LABEL_MAX } from "@/schemas/sub-add";
 import type { AccessMode, SignInKind } from "@/types/providers";
@@ -52,7 +52,6 @@ export default function SubAddDialog({
   const t = useTranslations("Subscriptions.subAdd");
   const tProviders = useTranslations("Providers");
   const tCommon = useTranslations("Common");
-  const showError = useErrorToast();
   const formId = useId();
   const [label, setLabel] = useState("");
   const [selected, setSelected] = useState<SignInKind[]>(() =>
@@ -63,200 +62,211 @@ export default function SubAddDialog({
   const [mode, setMode] = useState<AccessMode>("open");
   const [picked, setPicked] = useState(() => pickedFrom([]));
   const [url, setUrl] = useState<string | null>(null);
-  const [pending, start] = useTransition();
+  const stepUp = useOverlayState();
+  const pending = stepUp.isOpen;
   const options = useAssignmentOptions(state.isOpen && mode === "limited" && url === null);
   const invalid = !label.trim() || selected.length === 0 || (mode === "limited" && options === null);
 
   function create() {
     if (pending || invalid) return;
-    start(async () => {
-      const result = await createSubAddLinkAction({
-        label,
-        kinds: selected,
-        days,
-        maxAccounts: accounts === 0 ? null : accounts,
-        restricted: mode === "limited",
-        targets: mode === "limited" ? pickedTargets(picked) : [],
-      });
-      if (isActionFail(result)) {
-        showError(result.error);
-        return;
-      }
-      onCreated(result);
-      setUrl(result.url);
-      toast(t("createdToast"), { variant: "success" });
+    stepUp.open();
+  }
+
+  async function createWithCode(code: string): Promise<string | null> {
+    const result = await createSubAddLinkAction({
+      label,
+      kinds: selected,
+      days,
+      maxAccounts: accounts === 0 ? null : accounts,
+      restricted: mode === "limited",
+      targets: mode === "limited" ? pickedTargets(picked) : [],
+      code,
     });
+    if (isActionFail(result)) return result.error;
+    onCreated(result);
+    setUrl(result.url);
+    toast(t("createdToast"), { variant: "success" });
+    return null;
   }
 
   return (
-    <Modal state={state}>
-      <Modal.Backdrop>
-        <Modal.Container>
-          <Modal.Dialog className="max-w-2xl">
-            {({ close }) => (
-              <>
-                <Modal.Header className="flex-row items-start gap-3">
-                  <IconTile icon={url ? Check : Link2} tone={url ? "success" : "accent"} />
-                  <div className="min-w-0 flex-1">
-                    <Modal.Heading>{url ? t("createdTitle") : t("dialogTitle")}</Modal.Heading>
-                    <p className="text-sm text-muted">{url ? t("createdDescription", { label }) : t("dialogDescription")}</p>
-                  </div>
-                </Modal.Header>
-                <Modal.Body>
-                  {url ? (
-                    <div className="space-y-4">
-                      <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-start">
-                        <Surface variant="secondary" className="min-w-0 flex-1 rounded-lg px-3 py-2">
-                          <code className="font-mono text-sm break-all">{url}</code>
-                        </Surface>
-                        <CopyButton text={url} label={t("copy")} />
-                      </div>
-                      <Alert status="warning">
-                        <Alert.Indicator />
-                        <Alert.Content className="min-w-0">
-                          <Alert.Title>{t("onceTitle")}</Alert.Title>
-                          <Alert.Description>{t("createdHint")}</Alert.Description>
-                        </Alert.Content>
-                      </Alert>
+    <>
+      <Modal state={state}>
+        <Modal.Backdrop>
+          <Modal.Container>
+            <Modal.Dialog className="max-w-2xl">
+              {({ close }) => (
+                <>
+                  <Modal.Header className="flex-row items-start gap-3">
+                    <IconTile icon={url ? Check : Link2} tone={url ? "success" : "accent"} />
+                    <div className="min-w-0 flex-1">
+                      <Modal.Heading>{url ? t("createdTitle") : t("dialogTitle")}</Modal.Heading>
+                      <p className="text-sm text-muted">{url ? t("createdDescription", { label }) : t("dialogDescription")}</p>
                     </div>
-                  ) : (
-                    <Form
-                      id={formId}
-                      className="flex flex-col gap-5"
-                      onSubmit={(event) => {
-                        event.preventDefault();
-                        create();
-                      }}
-                    >
-                      <TextField
-                        fullWidth
-                        value={label}
-                        onChange={setLabel}
-                        isDisabled={pending}
-                        maxLength={SUB_ADD_LABEL_MAX}
-                        isRequired
-                      >
-                        <Label>{t("label")}</Label>
-                        <Input autoComplete="off" />
-                        <Description>{t("labelHint")}</Description>
-                      </TextField>
-                      <Fieldset className="gap-2">
-                        <Fieldset.Legend>{t("providers")}</Fieldset.Legend>
-                        <div className="grid gap-2 sm:grid-cols-2">
-                          {kinds.map((kind) => (
-                            <Checkbox
-                              key={kind}
-                              isSelected={selected.includes(kind)}
-                              isDisabled={pending}
-                              onChange={(checked) =>
-                                setSelected((current) =>
-                                  checked ? [...current, kind] : current.filter((item) => item !== kind),
-                                )
-                              }
-                            >
-                              <Checkbox.Content className="items-center gap-2">
-                                <Checkbox.Control>
-                                  <Checkbox.Indicator />
-                                </Checkbox.Control>
-                                <IconTile icon={kindIcon(kind)} tone={selected.includes(kind) ? "accent" : "neutral"} size="sm" />
-                                <span className="text-sm">{tProviders("kindShort", { kind })}</span>
-                              </Checkbox.Content>
-                            </Checkbox>
-                          ))}
+                  </Modal.Header>
+                  <Modal.Body>
+                    {url ? (
+                      <div className="space-y-4">
+                        <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-start">
+                          <Surface variant="secondary" className="min-w-0 flex-1 rounded-lg px-3 py-2">
+                            <code className="font-mono text-sm break-all">{url}</code>
+                          </Surface>
+                          <CopyButton text={url} label={t("copy")} />
                         </div>
-                        {antigravityReady === false && selected.includes("antigravity") ? (
-                          <p className="text-xs text-warning">{t("antigravityHidden")}</p>
-                        ) : null}
-                      </Fieldset>
-                      <div className="grid gap-4 sm:grid-cols-2">
-                        <Select
-                          selectedKey={String(days)}
-                          onSelectionChange={(key) => setDays(Number(key))}
-                          isDisabled={pending}
-                          fullWidth
-                        >
-                          <Label>{t("validFor")}</Label>
-                          <Select.Trigger>
-                            <Select.Value />
-                            <Select.Indicator />
-                          </Select.Trigger>
-                          <Description>{t("validForHint")}</Description>
-                          <Select.Popover>
-                            <ListBox aria-label={t("validFor")}>
-                              {DAY_OPTIONS.map((option) => (
-                                <ListBox.Item key={option} id={String(option)} textValue={t("days", { days: option })}>
-                                  {t("days", { days: option })}
-                                  <ListBox.ItemIndicator />
-                                </ListBox.Item>
-                              ))}
-                            </ListBox>
-                          </Select.Popover>
-                        </Select>
-                        <Select
-                          selectedKey={String(accounts)}
-                          onSelectionChange={(key) => setAccounts(Number(key))}
-                          isDisabled={pending}
-                          fullWidth
-                        >
-                          <Label>{t("maxAccounts")}</Label>
-                          <Select.Trigger>
-                            <Select.Value />
-                            <Select.Indicator />
-                          </Select.Trigger>
-                          <Description>{t("maxAccountsHint")}</Description>
-                          <Select.Popover>
-                            <ListBox aria-label={t("maxAccounts")}>
-                              {ACCOUNT_OPTIONS.map((option) => (
-                                <ListBox.Item key={option} id={String(option)} textValue={t("accountOption", { count: option })}>
-                                  {t("accountOption", { count: option })}
-                                  <ListBox.ItemIndicator />
-                                </ListBox.Item>
-                              ))}
-                            </ListBox>
-                          </Select.Popover>
-                        </Select>
+                        <Alert status="warning">
+                          <Alert.Indicator />
+                          <Alert.Content className="min-w-0">
+                            <Alert.Title>{t("onceTitle")}</Alert.Title>
+                            <Alert.Description>{t("createdHint")}</Alert.Description>
+                          </Alert.Content>
+                        </Alert>
                       </div>
-                      <Separator />
-                      <div className="space-y-1">
-                        <p className="text-sm font-medium text-foreground">{t("accessTitle")}</p>
-                        <p className="text-sm text-muted">{t("accessHint")}</p>
-                      </div>
-                      <AccessFields
-                        mode={mode}
-                        onModeChange={setMode}
-                        picked={picked}
-                        onPickedChange={setPicked}
-                        options={options}
-                        known={[]}
-                        isDisabled={pending}
-                      />
-                    </Form>
-                  )}
-                </Modal.Body>
-                <Modal.Footer>
-                  {url ? (
-                    <Button onPress={close}>{tCommon("done")}</Button>
-                  ) : (
-                    <>
-                      <Button variant="tertiary" onPress={close} isDisabled={pending}>
-                        {tCommon("cancel")}
-                      </Button>
-                      <Button type="submit" form={formId} isPending={pending} isDisabled={invalid}>
-                        {({ isPending }) => (
-                          <>
-                            {isPending ? <Spinner color="current" size="sm" /> : <Link2 size={16} aria-hidden />}
-                            {t("submit")}
-                          </>
-                        )}
-                      </Button>
-                    </>
-                  )}
-                </Modal.Footer>
-              </>
-            )}
-          </Modal.Dialog>
-        </Modal.Container>
-      </Modal.Backdrop>
-    </Modal>
+                    ) : (
+                      <Form
+                        id={formId}
+                        className="flex flex-col gap-5"
+                        onSubmit={(event) => {
+                          event.preventDefault();
+                          create();
+                        }}
+                      >
+                        <TextField
+                          fullWidth
+                          value={label}
+                          onChange={setLabel}
+                          isDisabled={pending}
+                          maxLength={SUB_ADD_LABEL_MAX}
+                          isRequired
+                        >
+                          <Label>{t("label")}</Label>
+                          <Input autoComplete="off" />
+                          <Description>{t("labelHint")}</Description>
+                        </TextField>
+                        <Fieldset className="gap-2">
+                          <Fieldset.Legend>{t("providers")}</Fieldset.Legend>
+                          <div className="grid gap-2 sm:grid-cols-2">
+                            {kinds.map((kind) => (
+                              <Checkbox
+                                key={kind}
+                                isSelected={selected.includes(kind)}
+                                isDisabled={pending}
+                                onChange={(checked) =>
+                                  setSelected((current) =>
+                                    checked ? [...current, kind] : current.filter((item) => item !== kind),
+                                  )
+                                }
+                              >
+                                <Checkbox.Content className="items-center gap-2">
+                                  <Checkbox.Control>
+                                    <Checkbox.Indicator />
+                                  </Checkbox.Control>
+                                  <IconTile icon={kindIcon(kind)} tone={selected.includes(kind) ? "accent" : "neutral"} size="sm" />
+                                  <span className="text-sm">{tProviders("kindShort", { kind })}</span>
+                                </Checkbox.Content>
+                              </Checkbox>
+                            ))}
+                          </div>
+                          {antigravityReady === false && selected.includes("antigravity") ? (
+                            <p className="text-xs text-warning">{t("antigravityHidden")}</p>
+                          ) : null}
+                        </Fieldset>
+                        <div className="grid gap-4 sm:grid-cols-2">
+                          <Select
+                            selectedKey={String(days)}
+                            onSelectionChange={(key) => setDays(Number(key))}
+                            isDisabled={pending}
+                            fullWidth
+                          >
+                            <Label>{t("validFor")}</Label>
+                            <Select.Trigger>
+                              <Select.Value />
+                              <Select.Indicator />
+                            </Select.Trigger>
+                            <Description>{t("validForHint")}</Description>
+                            <Select.Popover>
+                              <ListBox aria-label={t("validFor")}>
+                                {DAY_OPTIONS.map((option) => (
+                                  <ListBox.Item key={option} id={String(option)} textValue={t("days", { days: option })}>
+                                    {t("days", { days: option })}
+                                    <ListBox.ItemIndicator />
+                                  </ListBox.Item>
+                                ))}
+                              </ListBox>
+                            </Select.Popover>
+                          </Select>
+                          <Select
+                            selectedKey={String(accounts)}
+                            onSelectionChange={(key) => setAccounts(Number(key))}
+                            isDisabled={pending}
+                            fullWidth
+                          >
+                            <Label>{t("maxAccounts")}</Label>
+                            <Select.Trigger>
+                              <Select.Value />
+                              <Select.Indicator />
+                            </Select.Trigger>
+                            <Description>{t("maxAccountsHint")}</Description>
+                            <Select.Popover>
+                              <ListBox aria-label={t("maxAccounts")}>
+                                {ACCOUNT_OPTIONS.map((option) => (
+                                  <ListBox.Item key={option} id={String(option)} textValue={t("accountOption", { count: option })}>
+                                    {t("accountOption", { count: option })}
+                                    <ListBox.ItemIndicator />
+                                  </ListBox.Item>
+                                ))}
+                              </ListBox>
+                            </Select.Popover>
+                          </Select>
+                        </div>
+                        <Separator />
+                        <div className="space-y-1">
+                          <p className="text-sm font-medium text-foreground">{t("accessTitle")}</p>
+                          <p className="text-sm text-muted">{t("accessHint")}</p>
+                        </div>
+                        <AccessFields
+                          mode={mode}
+                          onModeChange={setMode}
+                          picked={picked}
+                          onPickedChange={setPicked}
+                          options={options}
+                          known={[]}
+                          isDisabled={pending}
+                        />
+                      </Form>
+                    )}
+                  </Modal.Body>
+                  <Modal.Footer>
+                    {url ? (
+                      <Button onPress={close}>{tCommon("done")}</Button>
+                    ) : (
+                      <>
+                        <Button variant="tertiary" onPress={close} isDisabled={pending}>
+                          {tCommon("cancel")}
+                        </Button>
+                        <Button type="submit" form={formId} isPending={pending} isDisabled={invalid}>
+                          {({ isPending }) => (
+                            <>
+                              {isPending ? <Spinner color="current" size="sm" /> : <Link2 size={16} aria-hidden />}
+                              {t("submit")}
+                            </>
+                          )}
+                        </Button>
+                      </>
+                    )}
+                  </Modal.Footer>
+                </>
+              )}
+            </Modal.Dialog>
+          </Modal.Container>
+        </Modal.Backdrop>
+      </Modal>
+      <StepUpDialog
+        state={stepUp}
+        title={t("stepUpTitle")}
+        description={t("stepUpDescription")}
+        confirmLabel={t("submit")}
+        onConfirm={createWithCode}
+      />
+    </>
   );
 }
