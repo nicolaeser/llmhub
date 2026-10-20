@@ -14,6 +14,7 @@ import {
   startAuthorization,
 } from "@/lib/gateway/upstreams/subscription-sign-in";
 import { isActionCode } from "@/lib/http/action-result";
+import { clientBucket } from "@/lib/http/client-ip";
 import { subAddRemaining, subAddStatus } from "@/lib/providers/sub-add-status";
 import {
   newSubAddToken,
@@ -75,7 +76,7 @@ async function guarded<T>(work: () => Promise<T>): Promise<T> {
 
 async function throttledClient(): Promise<string> {
   const { ipAddress } = await requestMeta();
-  const client = ipAddress ?? "unknown";
+  const client = clientBucket(ipAddress);
   await assertRequestRate(`sub-add:client:${client}`, CLIENT_REQUESTS_PER_MINUTE, MINUTE_MS);
   return client;
 }

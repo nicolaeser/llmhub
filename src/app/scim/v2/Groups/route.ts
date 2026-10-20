@@ -1,6 +1,6 @@
 import { parseScimPage, scimHandler, scimJson, scimList } from "@/lib/auth/scim";
 import { createScimGroup, listScimGroups, parseScimGroupBody, toScimGroup } from "@/lib/auth/scim-groups";
-import { clientIp } from "@/lib/http/api";
+import { clientIp } from "@/lib/http/client-ip";
 import { readJsonOr } from "@/lib/utils/json";
 
 export const dynamic = "force-dynamic";
@@ -19,6 +19,6 @@ export const GET = scimHandler("groups.list", async (req) => {
 });
 
 export const POST = scimHandler("groups.create", async (req) => {
-  const group = await createScimGroup(parseScimGroupBody(await readJsonOr(req, null)), clientIp(req.headers) || null);
+  const group = await createScimGroup(parseScimGroupBody(await readJsonOr(req, null)), clientIp(req.headers));
   return scimJson(toScimGroup(group), 201);
 });
