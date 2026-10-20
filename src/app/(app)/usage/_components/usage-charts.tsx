@@ -21,12 +21,14 @@ import ChartTooltip from "./chart-tooltip";
 import type { HealthPoint, ModelPoint, SpendPoint, UsageDay } from "@/types/usage";
 
 const TICK = { fill: "var(--muted)", fontSize: 12 } as const;
-const GRID = { stroke: "var(--border)", vertical: false as const };
+const GRID = { stroke: "var(--separator)", strokeDasharray: "3 4", vertical: false as const };
+const HOVER = { fill: "var(--accent)", fillOpacity: 0.06 } as const;
+const GAP = { stroke: "var(--surface)", strokeWidth: 2 } as const;
 
 function SeriesKey({ colorClass, label }: { colorClass: string; label: string }) {
   return (
     <span className="inline-flex items-center gap-1.5 text-xs text-muted">
-      <span aria-hidden className={`h-2 w-2 rounded-full ${colorClass}`} />
+      <span aria-hidden className={`size-2.5 rounded-full ${colorClass}`} />
       {label}
     </span>
   );
@@ -108,7 +110,7 @@ function GroupSpendChart({
             tickFormatter={shortName}
           />
           <Tooltip
-            cursor={{ fill: "var(--foreground)", fillOpacity: 0.04 }}
+            cursor={HOVER}
             content={(props) => (
               <ChartTooltip
                 active={props.active}
@@ -124,8 +126,8 @@ function GroupSpendChart({
             dataKey="spend"
             name={spendLabel}
             fill="var(--accent)"
-            maxBarSize={22}
-            radius={[0, 4, 4, 0]}
+            maxBarSize={20}
+            radius={[0, 6, 6, 0]}
           />
         </BarChart>
       </ResponsiveContainer>
@@ -217,8 +219,8 @@ export default function UsageCharts({
           <AreaChart data={daily} margin={{ top: 8, right: 8, left: 4, bottom: 0 }}>
             <defs>
               <linearGradient id="usageSpendFill" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="var(--accent)" stopOpacity={0.28} />
-                <stop offset="100%" stopColor="var(--accent)" stopOpacity={0} />
+                <stop offset="0%" stopColor="var(--accent)" stopOpacity={0.34} />
+                <stop offset="100%" stopColor="var(--accent)" stopOpacity={0.02} />
               </linearGradient>
             </defs>
             <CartesianGrid {...GRID} />
@@ -239,7 +241,7 @@ export default function UsageCharts({
               tickFormatter={(value) => formatSpendTick(Number(value))}
             />
             <Tooltip
-              cursor={{ stroke: "var(--accent)", strokeOpacity: 0.35 }}
+              cursor={{ stroke: "var(--accent)", strokeOpacity: 0.4, strokeDasharray: "4 4" }}
               content={(props) => (
                 <ChartTooltip
                   active={props.active}
@@ -256,10 +258,10 @@ export default function UsageCharts({
               dataKey="spend"
               name={t("metrics.spend")}
               stroke="var(--accent)"
-              strokeWidth={2}
+              strokeWidth={2.5}
               fill="url(#usageSpendFill)"
               dot={false}
-              activeDot={{ r: 4, fill: "var(--accent)", stroke: "var(--surface)" }}
+              activeDot={{ r: 5, fill: "var(--accent)", stroke: "var(--surface)", strokeWidth: 2 }}
             />
           </AreaChart>
         </ResponsiveContainer>
@@ -303,7 +305,7 @@ export default function UsageCharts({
                   tickFormatter={(value) => format.number(Number(value), "integer")}
                 />
                 <Tooltip
-                  cursor={{ fill: "var(--foreground)", fillOpacity: 0.04 }}
+                  cursor={HOVER}
                   content={(props) => (
                     <ChartTooltip
                       active={props.active}
@@ -321,7 +323,8 @@ export default function UsageCharts({
                   stackId="req"
                   fill="var(--accent)"
                   maxBarSize={36}
-                  radius={[0, 0, 0, 0]}
+                  radius={[4, 4, 0, 0]}
+                  {...GAP}
                 />
                 <Bar
                   dataKey="errors"
@@ -330,6 +333,7 @@ export default function UsageCharts({
                   fill="var(--danger)"
                   maxBarSize={36}
                   radius={[4, 4, 0, 0]}
+                  {...GAP}
                 />
               </BarChart>
             </ResponsiveContainer>
@@ -357,8 +361,10 @@ export default function UsageCharts({
                     nameKey="name"
                     innerRadius="62%"
                     outerRadius="88%"
-                    paddingAngle={requests > 0 && errors > 0 ? 2 : 0}
+                    paddingAngle={requests > 0 && errors > 0 ? 3 : 0}
+                    cornerRadius={4}
                     stroke="var(--surface)"
+                    strokeWidth={2}
                   >
                     {outcomes.map((row) => (
                       <Cell key={row.key} fill={row.fill} />
@@ -475,7 +481,7 @@ export default function UsageCharts({
                 tickFormatter={shortName}
               />
               <Tooltip
-                cursor={{ fill: "var(--foreground)", fillOpacity: 0.04 }}
+                cursor={HOVER}
                 content={(props) => (
                   <ChartTooltip
                     active={props.active}
@@ -492,14 +498,14 @@ export default function UsageCharts({
                 name={t("metrics.errors")}
                 fill="var(--danger)"
                 maxBarSize={16}
-                radius={[0, 4, 4, 0]}
+                radius={[0, 6, 6, 0]}
               />
               <Bar
                 dataKey="rate429"
                 name={t("metrics.rate429")}
                 fill="var(--warning)"
                 maxBarSize={16}
-                radius={[0, 4, 4, 0]}
+                radius={[0, 6, 6, 0]}
               />
             </BarChart>
           </ResponsiveContainer>

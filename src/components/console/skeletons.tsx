@@ -28,10 +28,10 @@ function TextSkeleton({ lines = 2 }: { lines?: number }) {
 
 export function HeaderSkeleton() {
   return (
-    <div className="mb-6 flex items-start gap-3">
-      <Skeleton className="size-12 shrink-0 rounded-xl" />
-      <div className="min-w-0 flex-1 space-y-2.5 pt-1">
-        <Skeleton className="h-5 w-48 max-w-full rounded-lg" />
+    <div className="mb-7 flex items-center gap-4">
+      <Skeleton className="size-12 shrink-0 rounded-2xl" />
+      <div className="min-w-0 flex-1 space-y-2.5">
+        <Skeleton className="h-6 w-48 max-w-full rounded-lg" />
         <Skeleton className="h-3.5 w-80 max-w-full rounded-lg" />
       </div>
     </div>
@@ -52,14 +52,12 @@ export function TabsSkeleton() {
 
 function StatCardSkeleton() {
   return (
-    <Card className="@container">
-      <div className="flex flex-col items-start gap-3 @min-[11rem]:flex-row @min-[11rem]:items-center">
-        <Skeleton className="size-9 shrink-0 rounded-lg" />
-        <div className="w-full min-w-0 space-y-2">
-          <Skeleton className="h-3.5 w-24 max-w-full rounded-lg" />
-          <Skeleton className="h-6 w-16 rounded-lg" />
-        </div>
+    <Card className="gap-2">
+      <div className="flex items-start justify-between gap-3">
+        <Skeleton className="mt-1.5 h-3.5 w-24 max-w-full rounded-lg" />
+        <Skeleton className="size-9 shrink-0 rounded-xl" />
       </div>
+      <Skeleton className="my-1 h-7 w-20 rounded-lg" />
     </Card>
   );
 }
@@ -149,7 +147,7 @@ export function CardSkeleton({ variant = "default", lines = 2 }: { variant?: "de
   return (
     <Card variant={variant}>
       <Card.Header className="flex-row items-start gap-3">
-        <Skeleton className="size-9 shrink-0 rounded-lg" />
+        <Skeleton className="size-9 shrink-0 rounded-xl" />
         <div className="w-full min-w-0 space-y-2">
           <Skeleton className="h-4 w-2/5 rounded-lg" />
           <Skeleton className="h-3 w-3/5 rounded-lg" />
@@ -183,7 +181,7 @@ function PanelsSkeleton({ count = 2 }: { count?: number }) {
         <Card key={panel} className="gap-5">
           <Card.Header className="flex-row items-start justify-between gap-3">
             <div className="flex w-full min-w-0 items-start gap-3">
-              <Skeleton className="size-9 shrink-0 rounded-lg" />
+              <Skeleton className="size-9 shrink-0 rounded-xl" />
               <div className="w-full min-w-0 space-y-2">
                 <Skeleton className="h-4 w-40 max-w-full rounded-lg" />
                 <Skeleton className="h-3 w-64 max-w-full rounded-lg" />
@@ -290,14 +288,14 @@ function SplitSkeleton() {
         <Skeleton className="h-10 w-full rounded-xl" />
         {times(6).map((item) => (
           <div key={item} className={`flex items-center gap-2 ${item % 3 ? "pl-5" : ""}`}>
-            <Skeleton className="size-7 shrink-0 rounded-md" />
+            <Skeleton className="size-7 shrink-0 rounded-lg" />
             <Skeleton className="h-3.5 w-full rounded-lg" />
           </div>
         ))}
       </Card>
       <div className="min-w-0 space-y-5">
         <div className="flex items-start gap-3">
-          <Skeleton className="size-9 shrink-0 rounded-lg" />
+          <Skeleton className="size-9 shrink-0 rounded-xl" />
           <div className="w-full min-w-0 space-y-2">
             <Skeleton className="h-5 w-48 max-w-full rounded-lg" />
             <Skeleton className="h-3.5 w-72 max-w-full rounded-lg" />
