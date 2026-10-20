@@ -29,9 +29,9 @@ export const COLORS = {
   axis: [196, 199, 210],
   surface: [244, 245, 251],
   track: [232, 235, 245],
-  warning: [169, 90, 13],
+  warning: [161, 85, 12],
   warningSoft: [253, 240, 214],
-  danger: [208, 36, 45],
+  danger: [199, 31, 42],
   dangerSoft: [253, 228, 226],
 } satisfies Record<string, PdfColor>;
 

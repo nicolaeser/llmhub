@@ -19,11 +19,11 @@
   --segment: var(--white);
   --segment-foreground: var(--foreground);
   --muted: oklch(0.515 0.03 277);
-  --success: oklch(0.525 0.13 155);
+  --success: oklch(0.505 0.125 155);
   --success-foreground: var(--snow);
-  --warning: oklch(0.55 0.13 56);
+  --warning: oklch(0.53 0.125 56);
   --warning-foreground: var(--snow);
-  --danger: oklch(0.555 0.205 25);
+  --danger: oklch(0.535 0.2 25);
   --danger-foreground: var(--snow);
   --border: oklch(0.32 0.06 277 / 0.13);
   --separator: oklch(0.32 0.06 277 / 0.09);
