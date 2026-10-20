@@ -44,6 +44,7 @@ function codexGroup() {
           enabled: true,
           restricted: false,
           assignments: [],
+          login: { status: "active" },
         },
       },
     ],

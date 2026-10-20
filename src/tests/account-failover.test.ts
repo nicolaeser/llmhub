@@ -44,6 +44,7 @@ function groupRow(alias: string, numRetries = 0, overflowGroup = "") {
         enabled: true,
         restricted: false,
         assignments: [],
+        login: { status: "active" },
       },
     })),
   };
@@ -229,7 +230,7 @@ test("a run stays on its account until that account fails", async () => {
   const { writePin } = await import("@/lib/gateway/routing/account-affinity");
   const { runSession } = await import("@/lib/gateway/routing/account-affinity");
   const request: JsonMap = { prompt_cache_key: "run-sticky", messages: [{ role: "user", content: "hi" }] };
-  await writePin("codex", runSession(request), { providerId: "acct-b", handoffAt: 0 });
+  await writePin("codex", runSession(request), { providerId: "acct-b", handoffAt: 0 }, null);
   for (let i = 0; i < 3; i++) {
     const routed = await route(async () => "ok", request);
     assert.equal(routed.dep.provider_id, "acct-b");
@@ -247,7 +248,7 @@ test("a Claude Code session stays on its account through metadata.user_id", asyn
   };
   assert.equal(runSession(request), runSession({ prompt_cache_key: "claude-code-claude-run" }));
   assert.equal(runSession({ metadata: { user_id: "plain-user" } }), "");
-  await writePin("codex", runSession(request), { providerId: "acct-b", handoffAt: 0 });
+  await writePin("codex", runSession(request), { providerId: "acct-b", handoffAt: 0 }, null);
   for (let i = 0; i < 3; i++) {
     const routed = await route(async () => "ok", request);
     assert.equal(routed.dep.provider_id, "acct-b");
@@ -267,7 +268,7 @@ test("switching accounts mid-run hands the history over without the old account'
     ],
   };
   const session = runSession(request);
-  await writePin("codex", session, { providerId: "acct-a", handoffAt: 0 });
+  await writePin("codex", session, { providerId: "acct-a", handoffAt: 0 }, null);
   const seen: string[][] = [];
   const routed = await route(async (dep) => {
     seen.push(reasoningOf(request));
@@ -292,6 +293,30 @@ test("switching accounts mid-run hands the history over without the old account'
   const next = await route(async () => reasoningOf(later), later);
   assert.equal(next.dep.provider_id, "acct-b");
   assert.deepEqual(next.result, ["gAAAA-from-b"]);
+});
+
+test("a run whose account was paused continues on the next account without the old account's encrypted reasoning", async () => {
+  const { readPin, runSession, writePin } = await import("@/lib/gateway/routing/account-affinity");
+  const request: JsonMap = {
+    prompt_cache_key: "run-paused",
+    messages: [
+      { role: "user", content: "step 1" },
+      { role: "assistant", content: "done 1", thinking_blocks: [{ type: "thinking", thinking: "", signature: "gAAAA-from-a" }] },
+      { role: "user", content: "step 2" },
+    ],
+  };
+  const session = runSession(request);
+  await writePin("codex", session, { providerId: "acct-a", handoffAt: 0 }, null);
+  groups.get(alias)!.deployments[0]!.provider.enabled = false;
+  const served: string[] = [];
+  const routed = await route(async (dep) => {
+    served.push(`${dep.provider_id}:${reasoningOf(request).length}`);
+    return "continued";
+  }, request);
+  assert.equal(routed.dep.provider_id, "acct-b");
+  assert.deepEqual(served, ["acct-b:0"]);
+  for (let wait = 0; wait < 20; wait++) await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(await readPin("codex", session), { providerId: "acct-b", handoffAt: 3 });
 });
 
 test("an upstream that cannot verify carried reasoning gets the request again without it", async () => {

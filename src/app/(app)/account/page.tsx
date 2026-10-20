@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect } from "react";
-import { Card, Chip, Skeleton } from "@heroui/react";
+import { Card, Chip } from "@heroui/react";
 import { CircleUser } from "lucide-react";
 import { useTranslations } from "next-intl";
 import PageHeader from "@/components/console/page-header";
-import { LoadError } from "@/components/console/page-status";
+import { LoadError, PageLoading } from "@/components/console/page-status";
+import { CardSkeleton } from "@/components/console/skeletons";
 import { useActionData } from "@/lib/hooks/use-action-data";
 import { isActionFail } from "@/lib/http/action-result";
 import { useRoleName } from "@/components/security/use-role-name";
@@ -48,13 +49,7 @@ export default function AccountPage() {
       {page.error && !overview ? (
         <LoadError state={page} />
       ) : !overview ? (
-        <div aria-busy className="space-y-5">
-          <Skeleton className="h-20 w-full rounded-3xl" />
-          <div className="grid gap-5 xl:grid-cols-2">
-            <Skeleton className="h-64 w-full rounded-3xl" />
-            <Skeleton className="h-64 w-full rounded-3xl" />
-          </div>
-        </div>
+        <PageLoading layout="columns" />
       ) : (
         <div className="space-y-5">
           <Card className="flex-row flex-wrap items-center justify-between gap-4">
@@ -96,7 +91,9 @@ export default function AccountPage() {
               ) : keys.error ? (
                 <LoadError state={keys} />
               ) : (
-                <Skeleton className="h-40 w-full rounded-3xl" />
+                <div aria-busy="true">
+                  <CardSkeleton lines={3} />
+                </div>
               )}
               <ActivityCard events={overview.events} />
             </div>

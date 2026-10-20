@@ -5,6 +5,7 @@ import { writeAudit } from "@/lib/audit";
 import { digest } from "@/lib/crypto";
 import { withSerializableRetry } from "@/lib/db/serializable";
 import { scheduleCatalogTask } from "@/lib/gateway/catalog/catalog-tasks";
+import { reactivateAccount } from "@/lib/gateway/routing/account-reactivation";
 import { loginData } from "@/lib/gateway/upstreams/credentials";
 import { isSignInKind, PROVIDER_CATALOG } from "@/lib/gateway/upstreams/provider-kinds";
 import { matchingConnection, pruneSupersededLogins } from "@/lib/providers/account-match";
@@ -114,6 +115,7 @@ export async function storeSubAddAccount(input: {
     if (usedUp) await tx.subAddLink.delete({ where: { id: link.id } });
     return { row, link: { ...link, added }, outcome: "created" as const, usedUp };
   }, STORE_ATTEMPTS);
+  if (stored.outcome === "updated") await reactivateAccount(stored.row.id);
   const actor = subAddUid(stored.link.id);
   await writeAudit({
     actor,

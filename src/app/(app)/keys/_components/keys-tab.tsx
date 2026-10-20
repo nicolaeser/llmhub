@@ -158,7 +158,7 @@ export default function KeysTab() {
   }, [keys, query]);
 
   if (!data) {
-    return <PageStatus state={page} />;
+    return <PageStatus state={page} stats={4} />;
   }
 
   const { canManage, canBind, canBudget, canMcp, overview, owners } = data;

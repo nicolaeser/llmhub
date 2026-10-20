@@ -25,6 +25,7 @@ import {
   ERR_ALL_PAUSED,
   ERR_NO_HEALTHY,
   ERR_NOT_ASSIGNED,
+  ERR_SIGNED_OUT,
   ERR_UNKNOWN_GROUP,
   isUnavailableError,
   waitingError,
@@ -81,6 +82,7 @@ const providerSelect = {
     enabled: true,
     restricted: true,
     assignments: { select: { orgId: true, teamId: true, projectId: true, memberId: true, keyId: true } },
+    login: { select: { status: true } },
   },
 } as const;
 
@@ -283,8 +285,17 @@ function signInProvider(dep: ResolvedDeployment): boolean {
   return Boolean(dep.provider && isSignInKind(dep.provider.kind));
 }
 
+function signedIn(dep: ResolvedDeployment): boolean {
+  return !signInProvider(dep) || dep.provider!.login?.status === "active";
+}
+
 function pinnedChoice(items: ResolvedDeployment[], pins: Map<string, AccountPin>): ResolvedDeployment[] {
   return items.filter((dep) => signInProvider(dep) && pins.get(dep.provider!.kind)?.providerId === dep.provider!.id);
+}
+
+function pinnedKinds(items: ResolvedDeployment[], pins: Map<string, AccountPin>): ResolvedDeployment[] {
+  const kept = items.filter((dep) => signInProvider(dep) && pins.has(dep.provider!.kind));
+  return kept.length ? kept : items;
 }
 
 export async function acquireGroup(
@@ -298,11 +309,12 @@ export async function acquireGroup(
 ): Promise<{ dep: ResolvedDeployment; release: () => void; overflow: boolean; pinned: AccountPin | null }> {
   const permitted = permittedDeployments(group.mapped, rules).filter(serves);
   const active = permitted.filter((dep) => dep.provider?.enabled !== false);
-  const assigned = active.filter((dep) => accountAllowed(dep.provider, access));
-  const health = await healthy(assigned);
+  const allowed = active.filter((dep) => accountAllowed(dep.provider, access));
+  const usable = allowed.filter(signedIn);
+  const health = await healthy(usable);
   const ready = untried(health.ready, run);
   if (!ready.length) {
-    const wait = cooldownWait(assigned, health.cooling);
+    const wait = cooldownWait(usable, health.cooling);
     if (group.overflow_group && group.overflow_group !== group.alias) {
       const overflow = await loadGroup(group.overflow_group);
       try {
@@ -314,21 +326,27 @@ export async function acquireGroup(
       }
     }
     if (permitted.length && !active.length) throw ERR_ALL_PAUSED;
-    if (active.length && !assigned.length) throw ERR_NOT_ASSIGNED;
+    if (active.length && !allowed.length) throw ERR_NOT_ASSIGNED;
+    if (allowed.length && !usable.length) throw ERR_SIGNED_OUT;
     throw wait ? waitingError(wait) : ERR_NO_HEALTHY;
   }
   const quota = await withinQuota(affordable(group, ready, cost));
   const pins = await runPins(quota.items, run?.session ?? "");
   const sticky = pinnedChoice(quota.items, pins);
-  const candidates = sticky.length ? sticky : await byAccountPolicy(quota.items, quota.scores);
+  const candidates = sticky.length ? sticky : await byAccountPolicy(pinnedKinds(quota.items, pins), quota.scores);
   const dep = pick(candidates, strategy || group.strategy, quota.scores);
   inflight.set(dep.id, (inflight.get(dep.id) ?? 0) + 1);
+  let released = false;
   return {
     dep,
     overflow: false,
     pinned: signInProvider(dep) ? (pins.get(dep.provider!.kind) ?? null) : null,
     release: () => {
-      inflight.set(dep.id, Math.max(0, (inflight.get(dep.id) ?? 1) - 1));
+      if (released) return;
+      released = true;
+      const left = (inflight.get(dep.id) ?? 1) - 1;
+      if (left > 0) inflight.set(dep.id, left);
+      else inflight.delete(dep.id);
     },
   };
 }
