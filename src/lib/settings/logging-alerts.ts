@@ -13,6 +13,13 @@ import {
 import { getEnterprise, patchEnterprise } from "@/lib/settings/enterprise";
 import { WEBHOOK_EVENTS } from "@/lib/alerts/events";
 import { resolveS3Config } from "@/lib/s3/config";
+import {
+  DEFAULT_CONTENT_RETENTION_DAYS,
+  DEFAULT_LOG_RETENTION_DAYS,
+  DEFAULT_OBJECT_RETENTION_DAYS,
+  DEFAULT_SECURITY_RETENTION_DAYS,
+  clampRetentionDays,
+} from "@/lib/settings/retention-defaults";
 import { alertWebhooksSchema } from "@/schemas/settings";
 import type { AlertWebhook } from "@/types/alerts";
 import type { AlertRules, AlertWebhookInput, AlertWebhookView, LoggingSettingsView } from "@/types/settings";
@@ -34,12 +41,14 @@ async function view(canManage: boolean): Promise<LoggingSettingsView> {
       spendAnomalyMinCost: enterprise.spend_anomaly_min_cost ?? DEFAULT_SPEND_ANOMALY_MIN_COST,
       keyExpiryWarningDays: enterprise.key_expiry_warning_days ?? DEFAULT_KEY_EXPIRY_WARNING_DAYS,
     },
-    logRetentionDays: enterprise.log_retention_days ?? 0,
+    logRetentionDays: enterprise.log_retention_days ?? DEFAULT_LOG_RETENTION_DAYS,
     spendRetentionDays: enterprise.spend_retention_days ?? 0,
+    usageRetentionDays: enterprise.usage_retention_days ?? 0,
     auditRetentionDays: enterprise.audit_retention_days ?? 0,
-    objectRetentionDays: enterprise.object_retention_days ?? 30,
+    securityRetentionDays: enterprise.security_retention_days ?? DEFAULT_SECURITY_RETENTION_DAYS,
+    objectRetentionDays: enterprise.object_retention_days ?? DEFAULT_OBJECT_RETENTION_DAYS,
     fileRetentionDays: enterprise.file_retention_days ?? 0,
-    contentRetentionDays: enterprise.content_retention_days ?? 0,
+    contentRetentionDays: enterprise.content_retention_days ?? DEFAULT_CONTENT_RETENTION_DAYS,
     logArchive: enterprise.log_archive === true,
     logContent: enterprise.log_content !== false,
     s3Ready: Boolean(await resolveS3Config()),
@@ -57,7 +66,9 @@ export async function saveLogging(input: {
   alertRules: AlertRules;
   logRetentionDays: number;
   spendRetentionDays: number;
+  usageRetentionDays: number;
   auditRetentionDays: number;
+  securityRetentionDays: number;
   objectRetentionDays: number;
   fileRetentionDays: number;
   contentRetentionDays: number;
@@ -83,12 +94,14 @@ export async function saveLogging(input: {
     };
   });
   const after = {
-    log_retention_days: Math.max(0, Math.trunc(input.logRetentionDays) || 0),
-    spend_retention_days: Math.max(0, Math.trunc(input.spendRetentionDays) || 0),
-    audit_retention_days: Math.max(0, Math.trunc(input.auditRetentionDays) || 0),
-    object_retention_days: Math.max(0, Math.trunc(input.objectRetentionDays) || 0),
-    file_retention_days: Math.max(0, Math.trunc(input.fileRetentionDays) || 0),
-    content_retention_days: Math.max(0, Math.trunc(input.contentRetentionDays) || 0),
+    log_retention_days: clampRetentionDays(input.logRetentionDays),
+    spend_retention_days: clampRetentionDays(input.spendRetentionDays),
+    usage_retention_days: clampRetentionDays(input.usageRetentionDays),
+    audit_retention_days: clampRetentionDays(input.auditRetentionDays),
+    security_retention_days: clampRetentionDays(input.securityRetentionDays),
+    object_retention_days: clampRetentionDays(input.objectRetentionDays),
+    file_retention_days: clampRetentionDays(input.fileRetentionDays),
+    content_retention_days: clampRetentionDays(input.contentRetentionDays),
     log_archive: input.logArchive,
     log_content: input.logContent,
     spend_anomaly_factor: anomalyFactor(Number(input.alertRules.spendAnomalyFactor) || 0),
