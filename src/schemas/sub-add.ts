@@ -25,6 +25,8 @@ export const subAddLinkInputSchema = z.object({
     .max(SUB_ADD_MAX_TARGETS),
 });
 
+export const subAddLinkCreateSchema = subAddLinkInputSchema.extend({ code: z.string().trim().min(1).max(64) });
+
 export const subAddOpenSchema = z.object({ token: subAddTokenSchema });
 
 export const subAddStartSchema = z.object({ token: subAddTokenSchema, kind: kindSchema });

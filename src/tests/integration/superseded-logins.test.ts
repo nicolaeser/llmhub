@@ -75,6 +75,7 @@ test("a new sign-in renews the active connection of the account and removes its 
       kind: "claude",
       session: session(account, "id-renew"),
       manageHash: newSubAddToken().hash,
+      loginVerified: true,
     });
     stopLocalCatalogTasks();
     assert.deepEqual(stored, { providerId: fresh.id, outcome: "updated" });

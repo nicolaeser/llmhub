@@ -19,6 +19,8 @@ const SUB_ADD_TOKEN_BYTES = 32;
 const STORE_ATTEMPTS = 6;
 
 export const SUB_ADD_UNAVAILABLE = "SUB_ADD_UNAVAILABLE";
+export const SUB_ADD_LOGIN_INVALID = "SUB_ADD_LOGIN_INVALID";
+export const SUB_ADD_LOGIN_UNVERIFIED = "SUB_ADD_LOGIN_UNVERIFIED";
 
 export function subAddTokenHash(token: string): string {
   return digest(token);
@@ -64,6 +66,7 @@ export async function storeSubAddAccount(input: {
   kind: SignInKind;
   session: SignInSession;
   manageHash: string;
+  loginVerified: boolean;
   now?: number;
 }): Promise<{ providerId: string; outcome: SubAddOutcome }> {
   const spec = PROVIDER_CATALOG.find((item) => item.kind === input.kind);
@@ -75,11 +78,18 @@ export async function storeSubAddAccount(input: {
     if (subAddStatus(link, input.now ?? Date.now()) !== "active") throw new Error(SUB_ADD_UNAVAILABLE);
     const existing = await matchingConnection(input.kind, input.session, tx);
     if (existing) {
+      if (!input.loginVerified) throw new Error(SUB_ADD_LOGIN_UNVERIFIED);
       const row = await tx.providerConnection.update({
         where: { id: existing },
         data: {
           ...(baseUrl ? { baseUrl } : {}),
           login: { upsert: { create: login, update: { ...login, version: { increment: 1 } } } },
+          subAdd: {
+            upsert: {
+              create: { linkId: null, label: link.label, manageHash: input.manageHash },
+              update: { manageHash: input.manageHash },
+            },
+          },
         },
         include: providerInclude,
       });
