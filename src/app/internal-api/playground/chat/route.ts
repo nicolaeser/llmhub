@@ -5,7 +5,7 @@ import { env } from "@/lib/env";
 import { readJSON } from "@/lib/http/api";
 import { problemFromError, problemResponse } from "@/lib/http/problem";
 import { streamChat } from "@/lib/gateway/dispatch/chat";
-import { restoreClientStream } from "@/lib/gateway/safety/restore-client";
+import { restoreClientChatStream } from "@/lib/gateway/safety/restore-client";
 import {
   admit,
   allowModel,
@@ -36,7 +36,7 @@ export async function POST(req: Request) {
     allowModel(principal, model);
     await admit(principal);
     const { body: clean, output } = await applyGuardrails(body, principal);
-    return restoreClientStream(
+    return restoreClientChatStream(
       principal.trace,
       await streamChat({
         req,

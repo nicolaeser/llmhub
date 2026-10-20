@@ -1,8 +1,108 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { redactJSON, redactPii } from "@/lib/gateway/safety/pii";
-import { PiiVault, bindPiiVault, restoreJson, restoreSseResponse, vaultOf } from "@/lib/gateway/safety/pii-vault";
+import { PiiVault, bindPiiVault, restoreJson, vaultOf } from "@/lib/gateway/safety/pii-vault";
+import { restoreChatSse } from "@/lib/gateway/safety/restore-chat";
 import { restoreClientJson } from "@/lib/gateway/safety/restore-client";
+import { restoreResponsesSse } from "@/lib/gateway/safety/restore-responses";
+import type { JsonMap } from "@/types/gateway";
+
+const EMAIL = "ada@acme.com";
+const TOKEN = "[EMAIL_ADDRESS_1]";
+const TRICKY = 'Zoë "Q" \\ ☃';
+
+function emailVault(): PiiVault {
+  const vault = new PiiVault();
+  assert.equal(vault.placeholder("EMAIL_ADDRESS", EMAIL), TOKEN);
+  return vault;
+}
+
+function sseFrames(frames: string[]): Response {
+  const encoder = new TextEncoder();
+  return new Response(
+    new ReadableStream<Uint8Array>({
+      start(controller) {
+        for (const frame of frames) controller.enqueue(encoder.encode(frame));
+        controller.close();
+      },
+    }),
+    { headers: { "content-type": "text/event-stream" } },
+  );
+}
+
+function chatChunk(choices: JsonMap[], extra: JsonMap = {}): string {
+  return `data: ${JSON.stringify({ id: "c1", object: "chat.completion.chunk", created: 1, model: "m", ...extra, choices })}\n\n`;
+}
+
+function contentChunk(content: string, index = 0): string {
+  return chatChunk([{ index, delta: { content }, finish_reason: null }]);
+}
+
+function finishChunk(index = 0, reason = "stop"): string {
+  return chatChunk([{ index, delta: {}, finish_reason: reason }]);
+}
+
+function argumentsChunk(piece: string): string {
+  return chatChunk([{ index: 0, delta: { tool_calls: [{ index: 0, function: { arguments: piece } }] }, finish_reason: null }]);
+}
+
+function responsesFrames(events: JsonMap[], first = 0): string[] {
+  return events.map(
+    (event, offset) => `event: ${String(event.type)}\ndata: ${JSON.stringify({ ...event, sequence_number: first + offset })}\n\n`,
+  );
+}
+
+function textDelta(delta: string): JsonMap {
+  return { type: "response.output_text.delta", item_id: "msg_1", output_index: 0, content_index: 0, delta, logprobs: [] };
+}
+
+function argumentsDelta(delta: string): JsonMap {
+  return { type: "response.function_call_arguments.delta", item_id: "fc_1", output_index: 1, delta };
+}
+
+function summaryDelta(delta: string): JsonMap {
+  return { type: "response.reasoning_summary_text.delta", item_id: "rs_2", output_index: 1, summary_index: 0, delta };
+}
+
+function blocks(text: string): string[] {
+  return text.split("\n\n").filter((block) => block.trim());
+}
+
+function parsedEvents(text: string): JsonMap[] {
+  return blocks(text)
+    .map((block) =>
+      block
+        .split("\n")
+        .filter((line) => line.startsWith("data:"))
+        .map((line) => line.slice(5).replace(/^ /, ""))
+        .join("\n"),
+    )
+    .filter((data) => data && data !== "[DONE]")
+    .map((data) => JSON.parse(data) as JsonMap);
+}
+
+function chatChoices(events: JsonMap[], index: number): JsonMap[] {
+  return events
+    .flatMap((event) => (Array.isArray(event.choices) ? (event.choices as JsonMap[]) : []))
+    .filter((choice) => choice.index === index);
+}
+
+function joined(values: unknown[]): string {
+  return values.filter((value): value is string => typeof value === "string").join("");
+}
+
+const deltaOf = (choice: JsonMap): JsonMap => (choice.delta as JsonMap | undefined) ?? {};
+const contentOf = (choice: JsonMap): unknown => deltaOf(choice).content;
+const argumentsOf = (choice: JsonMap): unknown =>
+  ((((deltaOf(choice).tool_calls as JsonMap[] | undefined) ?? [])[0]?.function as JsonMap | undefined) ?? {}).arguments;
+
+function chatText(events: JsonMap[], index: number, read: (choice: JsonMap) => unknown): string {
+  return joined(chatChoices(events, index).map(read));
+}
+
+function responsesText(events: JsonMap[], type: string): string {
+  return joined(events.filter((event) => event.type === type).map((event) => event.delta));
+}
 
 test("restore numbers personal data and leaves secrets masked", () => {
   const vault = new PiiVault();
@@ -47,19 +147,319 @@ test("client restore uses the request vault and leaves the stored object masked"
   assert.equal(vaultOf(trace), vault);
 });
 
-test("streaming restore holds a placeholder split across chunks", async () => {
+test("non-stream restore escapes tool arguments and leaves signed reasoning untouched", () => {
   const vault = new PiiVault();
-  assert.equal(vault.placeholder("EMAIL_ADDRESS", "ada@acme.com"), "[EMAIL_ADDRESS_1]");
-  const token = "[EMAIL_ADDRESS_1]";
-  const split = token.indexOf("DRESS");
-  const encoder = new TextEncoder();
-  const source = new ReadableStream<Uint8Array>({
-    start(controller) {
-      controller.enqueue(encoder.encode(`hello ${token.slice(0, split)}`));
-      controller.enqueue(encoder.encode(`${token.slice(split)} end`));
-      controller.close();
-    },
-  });
-  const text = await restoreSseResponse(new Response(source), vault).text();
-  assert.equal(text, "hello ada@acme.com end");
+  vault.placeholder("PERSON", TRICKY);
+  const message = {
+    content: "Hi [PERSON_1]",
+    reasoning_content: "About [PERSON_1]",
+    tool_calls: [{ id: "t1", type: "function", function: { name: "send", arguments: '{"to":"[PERSON_1]"}' } }],
+    thinking_blocks: [
+      { type: "thinking", thinking: "About [PERSON_1]", signature: "sig-[PERSON_1]" },
+      { type: "redacted_thinking", data: "opaque-[PERSON_1]" },
+    ],
+    reasoning_details: [{ type: "reasoning.text", text: "About [PERSON_1]", signature: "sig" }],
+  };
+  const restored = restoreJson(structuredClone(message), vault) as typeof message;
+  assert.equal(restored.content, `Hi ${TRICKY}`);
+  assert.equal(restored.reasoning_content, `About ${TRICKY}`);
+  assert.deepEqual(JSON.parse(restored.tool_calls[0]!.function.arguments), { to: TRICKY });
+  assert.deepEqual(restored.thinking_blocks, message.thinking_blocks);
+  assert.deepEqual(restored.reasoning_details, message.reasoning_details);
+  const item = {
+    type: "reasoning",
+    summary: [{ type: "summary_text", text: "About [PERSON_1]" }],
+    encrypted_content: "enc-[PERSON_1]",
+  };
+  assert.deepEqual(restoreJson(item, vault), { ...item, summary: [{ type: "summary_text", text: `About ${TRICKY}` }] });
 });
+
+test("chat streams restore placeholders split across two and three events in content and tool arguments", async () => {
+  const text = await restoreChatSse(
+    sseFrames([
+      chatChunk([{ index: 0, delta: { role: "assistant", content: "" }, finish_reason: null }]),
+      contentChunk("Mail [EMAIL_"),
+      contentChunk("ADDRESS_1] or [EM"),
+      contentChunk("AIL_ADD"),
+      contentChunk("RESS_1]."),
+      chatChunk([
+        {
+          index: 0,
+          delta: { tool_calls: [{ index: 0, id: "t1", type: "function", function: { name: "send", arguments: "" } }] },
+          finish_reason: null,
+        },
+      ]),
+      argumentsChunk('{"to": "[EM'),
+      argumentsChunk("AIL_ADD"),
+      argumentsChunk('RESS_1]"}'),
+      finishChunk(0, "tool_calls"),
+      "data: [DONE]\n\n",
+    ]),
+    emailVault(),
+  ).text();
+  const events = parsedEvents(text);
+  const pieces = chatChoices(events, 0)
+    .map(contentOf)
+    .filter((piece) => typeof piece === "string" && piece);
+  assert.deepEqual(pieces, ["Mail ", `${EMAIL} or `, `${EMAIL}.`]);
+  assert.deepEqual(JSON.parse(chatText(events, 0, argumentsOf)), { to: EMAIL });
+  assert.equal(text.includes("EMAIL_ADDRESS"), false);
+  assert.equal(blocks(text).at(-1), "data: [DONE]");
+  assert.equal(deltaOf(chatChoices(events, 0)[0]!).role, "assistant");
+
+  const legacyChunk = (piece: string, finish: string | null) =>
+    `data: ${JSON.stringify({ id: "cmpl-1", object: "text_completion", choices: [{ text: piece, index: 0, logprobs: null, finish_reason: finish }] })}\n\n`;
+  const legacy = await restoreChatSse(
+    sseFrames([legacyChunk("to [EMAIL_ADD", null), legacyChunk("RESS_1]", "stop"), "data: [DONE]\n\n"]),
+    emailVault(),
+  ).text();
+  assert.equal(chatText(parsedEvents(legacy), 0, (choice) => choice.text), `to ${EMAIL}`);
+});
+
+test("Responses streams restore placeholders split across two and three events in text and function arguments", async () => {
+  const text = await restoreResponsesSse(
+    sseFrames(
+      responsesFrames([
+        { type: "response.created", response: { id: "resp_1", output: [] } },
+        textDelta("Mail [EMAIL_"),
+        textDelta("ADDRESS_1] or [EM"),
+        textDelta("AIL_ADD"),
+        textDelta("RESS_1]."),
+        { type: "response.output_text.done", item_id: "msg_1", output_index: 0, content_index: 0, text: `Mail ${TOKEN} or ${TOKEN}.` },
+        {
+          type: "response.output_item.done",
+          output_index: 0,
+          item: { id: "msg_1", type: "message", content: [{ type: "output_text", text: `Mail ${TOKEN} or ${TOKEN}.` }] },
+        },
+        argumentsDelta('{"to": "[EM'),
+        argumentsDelta("AIL_ADD"),
+        argumentsDelta('RESS_1]"}'),
+        { type: "response.function_call_arguments.done", item_id: "fc_1", output_index: 1, arguments: `{"to": "${TOKEN}"}` },
+        { type: "response.completed", response: { id: "resp_1", output_text: `Mail ${TOKEN} or ${TOKEN}.` } },
+      ]),
+    ),
+    emailVault(),
+  ).text();
+  const events = parsedEvents(text);
+  const deltas = events.filter((event) => event.type === "response.output_text.delta").map((event) => event.delta);
+  assert.deepEqual(deltas, ["Mail ", `${EMAIL} or `, `${EMAIL}.`]);
+  assert.equal(events.find((event) => event.type === "response.output_text.done")?.text, `Mail ${EMAIL} or ${EMAIL}.`);
+  assert.deepEqual(JSON.parse(responsesText(events, "response.function_call_arguments.delta")), { to: EMAIL });
+  assert.equal(text.includes("EMAIL_ADDRESS"), false);
+  assert.deepEqual(
+    events.map((event) => event.sequence_number),
+    events.map((_, index) => index),
+  );
+  assert.ok(blocks(text).every((block) => block.startsWith(`event: ${String(parsedEvents(block)[0]?.type)}\n`)));
+});
+
+test("restored values with quotes, backslashes, and unicode keep every event valid JSON", async () => {
+  const vault = new PiiVault();
+  vault.placeholder("PERSON", TRICKY);
+  const chat = await restoreChatSse(
+    sseFrames([
+      contentChunk("Hi [PER"),
+      contentChunk("SON_1]"),
+      argumentsChunk('{"to":"[PERSON'),
+      argumentsChunk('_1]"}'),
+      finishChunk(),
+      "data: [DONE]\n\n",
+    ]),
+    vault,
+  ).text();
+  const chatEvents = parsedEvents(chat);
+  assert.equal(chatText(chatEvents, 0, contentOf), `Hi ${TRICKY}`);
+  assert.deepEqual(JSON.parse(chatText(chatEvents, 0, argumentsOf)), { to: TRICKY });
+
+  const responses = await restoreResponsesSse(
+    sseFrames(
+      responsesFrames([
+        textDelta("Hi [PER"),
+        textDelta("SON_1]"),
+        argumentsDelta('{"to":"[PERSON'),
+        argumentsDelta('_1]"}'),
+        { type: "response.function_call_arguments.done", item_id: "fc_1", output_index: 1, arguments: '{"to":"[PERSON_1]"}' },
+      ]),
+    ),
+    vault,
+  ).text();
+  const responsesEvents = parsedEvents(responses);
+  assert.equal(responsesText(responsesEvents, "response.output_text.delta"), `Hi ${TRICKY}`);
+  assert.deepEqual(JSON.parse(responsesText(responsesEvents, "response.function_call_arguments.delta")), { to: TRICKY });
+  const done = responsesEvents.find((event) => event.type === "response.function_call_arguments.done");
+  assert.deepEqual(JSON.parse(String(done?.arguments)), { to: TRICKY });
+});
+
+test("signed reasoning and encrypted content pass through byte-identical", async () => {
+  const signedChat = `data: {"id":"c1","choices":[{"index":0,"delta":{"thinking_blocks":[{"type":"thinking","thinking":"Write to ${TOKEN}","signature":"s\\/ig\\u00e9"}]},"finish_reason":null}]}`;
+  const chat = await restoreChatSse(
+    sseFrames([
+      chatChunk([{ index: 0, delta: { reasoning_content: `Write to ${TOKEN}` }, finish_reason: null }]),
+      `${signedChat}\n\n`,
+      contentChunk(`Sent to ${TOKEN}`),
+      finishChunk(),
+      "data: [DONE]\n\n",
+    ]),
+    emailVault(),
+  ).text();
+  assert.ok(blocks(chat).includes(signedChat));
+  assert.equal(chatText(parsedEvents(chat), 0, (choice) => deltaOf(choice).reasoning_content), `Write to ${EMAIL}`);
+  assert.equal(chatText(parsedEvents(chat), 0, contentOf), `Sent to ${EMAIL}`);
+
+  const reasoningDone = `event: response.output_item.done\ndata: {"type":"response.output_item.done","sequence_number":0,"output_index":0,"item":{"id":"rs_1","type":"reasoning","summary":[],"encrypted_content":"enc-${TOKEN}-\\u00e9"}}`;
+  const responses = await restoreResponsesSse(
+    sseFrames([
+      `${reasoningDone}\n\n`,
+      ...responsesFrames(
+        [
+          summaryDelta("About [EMAIL_"),
+          summaryDelta("ADDRESS_1]"),
+          { type: "response.reasoning_summary_text.done", item_id: "rs_2", output_index: 1, summary_index: 0, text: `About ${TOKEN}` },
+          {
+            type: "response.completed",
+            response: {
+              output: [
+                {
+                  id: "rs_2",
+                  type: "reasoning",
+                  summary: [{ type: "summary_text", text: `About ${TOKEN}` }],
+                  encrypted_content: `enc-${TOKEN}`,
+                },
+              ],
+            },
+          },
+        ],
+        1,
+      ),
+    ]),
+    emailVault(),
+  ).text();
+  assert.equal(blocks(responses)[0], reasoningDone);
+  const events = parsedEvents(responses);
+  assert.equal(responsesText(events, "response.reasoning_summary_text.delta"), `About ${EMAIL}`);
+  assert.equal(events.find((event) => event.type === "response.reasoning_summary_text.done")?.text, `About ${EMAIL}`);
+  const completed = events.find((event) => event.type === "response.completed")?.response as { output: JsonMap[] };
+  assert.equal(completed.output[0]?.encrypted_content, `enc-${TOKEN}`);
+  assert.deepEqual(completed.output[0]?.summary, [{ type: "summary_text", text: `About ${EMAIL}` }]);
+});
+
+test("DONE markers, comments, and other non-data blocks pass through unchanged", async () => {
+  const text = await restoreChatSse(
+    sseFrames([
+      ": keep-alive\n\n",
+      contentChunk("Hi [EMAIL_"),
+      "retry: 100\n\n",
+      contentChunk("ADDRESS_1]"),
+      "data: [DONE]\n\n",
+    ]),
+    emailVault(),
+  ).text();
+  const out = blocks(text);
+  assert.equal(out[0], ": keep-alive");
+  assert.ok(out.includes("retry: 100"));
+  assert.equal(out.at(-1), "data: [DONE]");
+  assert.equal(chatText(parsedEvents(text), 0, contentOf), `Hi ${EMAIL}`);
+
+  const responses = await restoreResponsesSse(sseFrames([": keep-alive\n\n", "data: [DONE]\n\n"]), emailVault()).text();
+  assert.equal(responses, ": keep-alive\n\ndata: [DONE]\n\n");
+});
+
+test("a held suffix that never becomes a known placeholder is emitted unchanged", async () => {
+  const chat = await restoreChatSse(
+    sseFrames([
+      contentChunk("See [1"),
+      contentChunk("] and [Bad"),
+      contentChunk(" idea] or [EMAIL_ADDRESS_"),
+      contentChunk("9]"),
+      finishChunk(),
+      "data: [DONE]\n\n",
+    ]),
+    emailVault(),
+  ).text();
+  assert.equal(chatText(parsedEvents(chat), 0, contentOf), "See [1] and [Bad idea] or [EMAIL_ADDRESS_9]");
+
+  const responses = await restoreResponsesSse(
+    sseFrames(responsesFrames([textDelta("See [1"), textDelta("] and [EMAIL_ADDRESS_"), textDelta("9]")])),
+    emailVault(),
+  ).text();
+  assert.equal(responsesText(parsedEvents(responses), "response.output_text.delta"), "See [1] and [EMAIL_ADDRESS_9]");
+});
+
+test("held text is flushed at the end of the stream and before the finishing chunk", async () => {
+  const ended = parsedEvents(await restoreChatSse(sseFrames([contentChunk("Hi [EMAIL_"), argumentsChunk('{"to":"[EM')]), emailVault()).text());
+  assert.equal(chatText(ended, 0, contentOf), "Hi [EMAIL_");
+  assert.equal(chatText(ended, 0, argumentsOf), '{"to":"[EM');
+  assert.equal(ended.at(-1)?.id, "c1");
+
+  const finished = parsedEvents(await restoreChatSse(sseFrames([contentChunk("Hi [EMAIL_"), finishChunk()]), emailVault()).text());
+  assert.deepEqual(
+    finished.map((event) => (event.choices as JsonMap[])[0]),
+    [
+      { index: 0, delta: { content: "Hi " }, finish_reason: null },
+      { index: 0, delta: { content: "[EMAIL_" }, finish_reason: null },
+      { index: 0, delta: {}, finish_reason: "stop" },
+    ],
+  );
+
+  const closing = parsedEvents(
+    await restoreChatSse(
+      sseFrames([contentChunk("Hi [EMAIL_"), chatChunk([{ index: 0, delta: { content: "ADDRESS_1]" }, finish_reason: "stop" }])]),
+      emailVault(),
+    ).text(),
+  );
+  assert.equal(chatText(closing, 0, contentOf), `Hi ${EMAIL}`);
+  assert.equal(closing.length, 2);
+
+  const responses = parsedEvents(await restoreResponsesSse(sseFrames(responsesFrames([textDelta("Hi [EMAIL_")])), emailVault()).text());
+  assert.deepEqual(
+    responses.map((event) => event.delta),
+    ["Hi ", "[EMAIL_"],
+  );
+  assert.deepEqual(
+    responses.map((event) => event.sequence_number),
+    [0, 1],
+  );
+});
+
+test("each chat choice holds and flushes its own pending text", async () => {
+  const text = await restoreChatSse(
+    sseFrames([
+      contentChunk("A [EMAIL_", 0),
+      contentChunk("B [EMAIL_ADD", 1),
+      contentChunk("ADDRESS_1]", 0),
+      contentChunk("[EM", 0),
+      finishChunk(0),
+      contentChunk("RESS_1]", 1),
+      finishChunk(1, "length"),
+      "data: [DONE]\n\n",
+    ]),
+    emailVault(),
+  ).text();
+  const events = parsedEvents(text);
+  assert.equal(chatText(events, 0, contentOf), `A ${EMAIL}[EM`);
+  assert.equal(chatText(events, 1, contentOf), `B ${EMAIL}`);
+  const order = events.map((event) => {
+    const choice = (event.choices as JsonMap[])[0]!;
+    return `${String(choice.index)}:${String(choice.finish_reason ?? contentOf(choice))}`;
+  });
+  assert.ok(order.indexOf("0:[EM") < order.indexOf("0:stop"));
+  assert.ok(order.indexOf("0:stop") < order.indexOf(`1:${EMAIL}`));
+  assert.ok(order.indexOf(`1:${EMAIL}`) < order.indexOf("1:length"));
+});
+
+test("network chunks that split an event mid-JSON still restore", async () => {
+  const frame = contentChunk(`Mail ${TOKEN}`);
+  const cut = frame.indexOf("ADDRESS");
+  const text = await restoreChatSse(sseFrames([frame.slice(0, cut), frame.slice(cut), "data: [DONE]\n\n"]), emailVault()).text();
+  assert.equal(chatText(parsedEvents(text), 0, contentOf), `Mail ${EMAIL}`);
+});
+
+test("streams pass through untouched without a vault value", () => {
+  const chat = sseFrames([contentChunk(TOKEN)]);
+  assert.equal(restoreChatSse(chat, null), chat);
+  assert.equal(restoreChatSse(chat, new PiiVault()), chat);
+  const responses = sseFrames(responsesFrames([textDelta(TOKEN)]));
+  assert.equal(restoreResponsesSse(responses, null), responses);
+  assert.equal(restoreResponsesSse(responses, new PiiVault()), responses);
+});
+

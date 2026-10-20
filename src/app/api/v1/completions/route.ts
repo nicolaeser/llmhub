@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { dispatchChat, streamChat } from "@/lib/gateway/dispatch/chat";
-import { restoreClientJson, restoreClientStream } from "@/lib/gateway/safety/restore-client";
+import { restoreClientJson, restoreClientChatStream } from "@/lib/gateway/safety/restore-client";
 import { modelChain } from "@/lib/gateway/access/gate";
 import { gatewayRoute, screenModelRequest, validRequest } from "@/lib/gateway/endpoints/pipeline";
 import { GateError } from "@/lib/gateway/errors";
@@ -38,7 +38,7 @@ export const POST = gatewayRoute(async (req) => {
       aliases,
       outputGuard: output,
     });
-    return restoreClientStream(
+    return restoreClientChatStream(
       principal.trace,
       pipeChatStream(streamed, new CompletionStreamEncoder({ id, created, model, echo: request.echo ? prompt : "" })),
     );
