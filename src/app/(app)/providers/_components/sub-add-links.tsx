@@ -223,7 +223,7 @@ export default function SubAddLinks({
       <Card.Content>
         {data ? (
           data.links.length ? (
-            <ul className="grid gap-3 lg:grid-cols-2 2xl:grid-cols-3">
+            <ul className="grid grid-cols-1 gap-3 lg:grid-cols-2 2xl:grid-cols-3">
               {data.links.map((link) => (
                 <LinkCard key={link.id} link={link} now={now} canManage={data.canManage} onDeleted={onDeleted} />
               ))}

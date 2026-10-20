@@ -42,7 +42,7 @@ export default function IdleProviders({
         </Button>
       </Card.Header>
       <Card.Content>
-        <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
           {specs.map((spec) => {
             const locked = spec.kind === "antigravity" && antigravityReady === false;
             return (
