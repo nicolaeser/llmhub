@@ -111,8 +111,9 @@ test("the crawl follows sub pages of the start folder breadth first and stops at
   assert.equal(result.site.pages[1]!.title, "Tickets");
   assert.match(result.site.pages[1]!.text, /GET \/api\/v1\/tickets lists tickets/);
   const requested = site.paths();
-  for (const blocked of ["blog", "other.example.com", "mailto", "javascript", "style.css", "logo.png", "manual.pdf", "tel:", "deep/9"]) {
-    assert.equal(requested.some((url) => url.includes(blocked)), false, blocked);
+  assert.equal(requested.every((url) => new URL(url).origin === ROOT), true);
+  for (const blocked of ["/blog/", "style.css", "logo.png", "manual.pdf", "deep/9"]) {
+    assert.equal(requested.some((url) => new URL(url).pathname.includes(blocked)), false, blocked);
   }
   assert.equal(requested.filter((url) => url.endsWith("/tickets.html")).length, 1);
   assert.deepEqual(result.site.stats, { pages: urls.length, skipped: 0, failed: 0, truncated: "depth" });
@@ -180,7 +181,7 @@ test("credentials go to every page of the docs site and never to another site", 
   });
   const result = await crawlDocs(link(`${ROOT}/docs/index.html`, { auth: "basic", name: "agent", secret: "pw-SECRET" }), 0, site.fetchImpl, budget());
   for (const call of site.seen) {
-    const trusted = call.url.startsWith(ROOT);
+    const trusted = new URL(call.url).origin === ROOT;
     assert.equal(header(call, "authorization") === basic, trusted, call.url);
   }
   const urls = result.site!.pages.map((entry) => entry.url);
@@ -201,7 +202,7 @@ test("a query key is re-added on the docs site but stripped from discovered addr
   );
   assert.equal(JSON.stringify(result.site!.pages).includes("q-SECRET"), false);
   assert.match(result.site!.pages[0]!.text, /tickets\.html\?key=\[credential\]&lang=en/);
-  assert.equal(site.seen.every((call) => call.url.startsWith(ROOT)), true);
+  assert.equal(site.seen.every((call) => new URL(call.url).origin === ROOT), true);
   assert.equal(site.seen.every((call) => new URL(call.url).searchParams.get("key") === "q-SECRET"), true);
 });
 
@@ -243,7 +244,7 @@ test("session cookies from the docs site are replayed on later requests of that 
   });
   const viaCookie = await crawlDocs(link(`${ROOT}/kb/index.html`, { auth: "cookie", secret: "portal=xyz; lang=de" }), 0, portal.fetchImpl, budget());
   assert.equal(viaCookie.site!.pages[0]!.title, "Portal");
-  const foreign = portal.seen.find((call) => call.url.startsWith("https://cdn.example.net"));
+  const foreign = portal.seen.find((call) => new URL(call.url).origin === "https://cdn.example.net");
   assert.ok(foreign);
   assert.equal(cookie(foreign), "");
   assert.equal(header(foreign, "authorization"), undefined);
@@ -391,7 +392,7 @@ test("fetchSitePage loads more pages of the docs site with its login and the sam
   }
   assert.ok("error" in (await fetchSitePage(docs, `${ROOT}/reference/login.html`)));
   assert.match(String(Object.values(await fetchSitePage(docs, `${ROOT}/reference/more.html`))[0]), /limit/);
-  assert.equal(site.seen.filter((call) => call.url.includes("other.example.com") || call.url.includes("logout")).length, 0);
+  assert.equal(site.seen.every((call) => new URL(call.url).origin === ROOT && !new URL(call.url).pathname.includes("logout")), true);
 });
 
 test("builder links default to following sub pages and accept a copied browser cookie", () => {

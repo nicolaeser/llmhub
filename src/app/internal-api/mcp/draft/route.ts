@@ -11,7 +11,7 @@ import { parseJsonOrNull } from "@/lib/utils/json";
 import { MAX_BUILDER_REQUEST_BYTES } from "@/schemas/mcp";
 import type { McpBuilderUpload } from "@/types/mcp";
 
-export const maxDuration = 600;
+export const maxDuration = 300;
 
 async function uploadsOf(form: FormData): Promise<McpBuilderUpload[]> {
   const files = form.getAll("file").filter((entry): entry is File => entry instanceof File);

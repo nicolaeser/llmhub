@@ -26,7 +26,7 @@ export const MAX_AGENT_STEPS = 6;
 export const MAX_AGENT_CHARS = 300_000;
 export const MAX_TOOL_CALLS_PER_STEP = 8;
 export const READ_PAGE_CHARS = 30_000;
-export const DRAFT_MODEL_TIME_MS = 420_000;
+export const DRAFT_TIME_MS = 270_000;
 
 const LIST_PAGES: JsonMap = {
   type: "function",

@@ -8,7 +8,7 @@ import { GateError } from "@/lib/gateway/errors";
 import { inPool } from "@/lib/gateway/routing/route-pool";
 import { errorFields } from "@/lib/logging/format";
 import { logger } from "@/lib/logging/logger";
-import { DRAFT_MODEL_TIME_MS, draftWithAgent, turnOf } from "@/lib/mcp/builder-agent";
+import { DRAFT_TIME_MS, draftWithAgent, turnOf } from "@/lib/mcp/builder-agent";
 import { crawlBudget, crawlDocs, fetchSitePage, withoutSecrets } from "@/lib/mcp/docs-crawl";
 import { sameSite } from "@/lib/mcp/docs-login";
 import { docsLink, linkedText } from "@/lib/mcp/docs-source";
@@ -294,7 +294,12 @@ function sitePageFetcher(sites: McpDocsSite[]): McpBuilderLibrary["fetchPage"] {
   };
 }
 
-async function draftFromModel(instruction: string, sources: McpDocsSource[], sites: McpDocsSite[]): Promise<DraftBody> {
+async function draftFromModel(
+  instruction: string,
+  sources: McpDocsSource[],
+  sites: McpDocsSite[],
+  deadline: number,
+): Promise<DraftBody> {
   const alias = await builderAlias();
   if (!alias) throw new Error("MCP_BUILDER_MODEL");
   const library = libraryOf(sources, sitePageFetcher(sites));
@@ -304,7 +309,7 @@ async function draftFromModel(instruction: string, sources: McpDocsSource[], sit
       instruction,
       library,
       complete: (messages, tools) => complete(alias, messages, tools),
-      deadline: Date.now() + DRAFT_MODEL_TIME_MS,
+      deadline,
     });
   } catch (err) {
     throw draftFailure(err, library.attachments.length > 0);
@@ -337,7 +342,8 @@ export async function draftMcpServer(raw: unknown, uploads: McpBuilderUpload[] =
   if (!input.links.length && !input.docs && !uploads.length) throw new Error("VALIDATION");
   const files = readUploads(uploads);
   const pasted = docsLink(input.docs);
-  const budget = crawlBudget();
+  const started = Date.now();
+  const budget = crawlBudget(started);
   const reads = await Promise.all(input.links.map((link, index) => readLink(link, index, `#/links/${index}`, budget)));
   if (pasted) {
     reads.push(
@@ -372,6 +378,6 @@ export async function draftMcpServer(raw: unknown, uploads: McpBuilderUpload[] =
     }
   }
   const sites = reads.flatMap((read) => (read.site && read.crawl ? [read.site] : []));
-  const draft = await draftFromModel(input.instruction, sources, sites);
+  const draft = await draftFromModel(input.instruction, sources, sites, started + DRAFT_TIME_MS);
   return { ...draft, crawls: crawlSummaries(reads) };
 }
