@@ -91,7 +91,7 @@ export default function AccountCard({
   const plan = limits?.plan || row.signIn?.plan || "";
   const account = row.signIn?.account ?? "";
   const failure = entry?.error && entry.error !== "SIGN_IN_EXPIRED" ? entry.error : "";
-  const nextCheck = failure && entry?.nextAt ? new Date(entry.nextAt) : null;
+  const nextCheck = failure && entry?.nextAt ? new Date(Math.max(Date.parse(entry.nextAt), now.getTime())) : null;
   const held = entry?.retryAt ? Date.parse(entry.retryAt) > now.getTime() : false;
 
   return (
@@ -244,7 +244,9 @@ export default function AccountCard({
         <div className="flex min-w-0 items-center gap-1">
           {reports && state !== "expired" && limits ? (
             <span className="truncate text-xs text-muted">
-              {t("limits.updated", { when: format.relativeTime(new Date(limits.fetchedAt), now) })}
+              {t("limits.updated", {
+                when: format.relativeTime(new Date(Math.min(Date.parse(limits.fetchedAt), now.getTime())), now),
+              })}
             </span>
           ) : null}
           {reports && state !== "expired" ? (
