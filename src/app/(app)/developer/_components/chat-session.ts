@@ -2,6 +2,25 @@ import type { PlaygroundMessage, PlaygroundReplay, PlaygroundSession } from "@/t
 
 export const STORAGE_KEY = "llmhub.playground.sessions";
 
+const CURRENT_KEY = "llmhub.playground.current";
+
+export function rememberedSessionId(): string | null {
+  try {
+    return window.sessionStorage.getItem(CURRENT_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function rememberSessionId(id: string): boolean {
+  try {
+    window.sessionStorage.setItem(CURRENT_KEY, id);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function makeSession(model: string): PlaygroundSession {
   return {
     id: crypto.randomUUID(),

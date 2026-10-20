@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { createContext, Fragment, useCallback, useContext, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { usePathname, useRouter } from "@/i18n/routing";
 import { useErrorToast } from "@/components/console/use-error-toast";
 import { notifyWorkspace, onWorkspaceChange, relayOtherTabs } from "@/lib/auth/workspace-event";
@@ -37,6 +37,11 @@ export function useConsoleScope(): ConsoleScopeValue {
 
 function scopeKey(scope: ConsoleScope): string | null {
   return scope.kind === "company" ? scope.id : null;
+}
+
+export function ScopedPage({ children }: { children: React.ReactNode }) {
+  const { scope } = useConsoleScope();
+  return <Fragment key={scopeKey(scope) ?? "platform"}>{children}</Fragment>;
 }
 
 function byAlias(a: ScopeCompany, b: ScopeCompany) {

@@ -108,7 +108,8 @@ export default function CompaniesPage() {
   }
 
   if (!data) {
-    return <PageStatus icon={Building2} title={t("title")} state={page} layout="split" />;
+    const loadingTitle = consoleScope.scope.kind === "company" ? consoleScope.scope.alias : t("title");
+    return <PageStatus icon={Building2} title={loadingTitle} state={page} layout="split" />;
   }
 
   const platform = !data.companyId;

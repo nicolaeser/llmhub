@@ -105,3 +105,20 @@ test("before the first check the sidebar shows the loaded version and no notice"
   );
   assert.equal(html, '<p class="truncate px-2 text-xs text-muted" title="v2026.10.07.38e8b1b">Version v2026.10.07.38e8b1b</p>');
 });
+
+test("without a notice the footer status slot keeps the version in place", async () => {
+  const { default: BuildStatusProvider, BuildNotice, BuildVersion } = await import("@/app/(app)/_components/build-status");
+  const messages = JSON.parse(readFileSync(path.join(root, "lang/en/Common.json"), "utf8"));
+  const html = renderToStaticMarkup(
+    createElement(NextIntlClientProvider, {
+      locale: "en",
+      timeZone: "UTC",
+      messages: { Common: messages },
+      children: createElement(BuildStatusProvider, {
+        version: "v2026.10.07.38e8b1b",
+        children: createElement(BuildNotice, { collapsed: false, fallback: createElement(BuildVersion) }),
+      }),
+    }),
+  );
+  assert.equal(html, '<p class="truncate px-2 text-xs text-muted" title="v2026.10.07.38e8b1b">Version v2026.10.07.38e8b1b</p>');
+});

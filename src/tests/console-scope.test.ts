@@ -1,10 +1,15 @@
 import { recordedPrisma } from "./support/recorded-prisma";
 import assert from "node:assert/strict";
+import path from "node:path";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 import { runAsPrincipal } from "@/lib/auth/delegation";
 import { permissions } from "@/lib/auth/permissions";
 import type { AuthenticatedSession } from "@/types/auth";
 import type { WorkspaceChange } from "@/types/console";
+import { importedAs, readJsx, type JsxNode } from "./support/jsx-source";
+
+const root = fileURLToPath(new URL("../..", import.meta.url));
 
 const COMPANY_ID = "orgacme0001";
 
@@ -172,4 +177,46 @@ test("a scope change reaches this tab once and every other tab through the broad
     otherTab.close();
     delete target.window;
   }
+});
+
+test("the playground remembers the open session per tab and falls back when storage is blocked", async () => {
+  const { rememberedSessionId, rememberSessionId } = await import("@/app/(app)/developer/_components/chat-session");
+  const target = globalThis as { window?: unknown };
+  const values = new Map<string, string>();
+  target.window = {
+    sessionStorage: {
+      getItem: (key: string) => values.get(key) ?? null,
+      setItem: (key: string, value: string) => void values.set(key, value),
+    },
+  };
+  try {
+    assert.equal(rememberedSessionId(), null);
+    assert.equal(rememberSessionId("session-2"), true);
+    assert.equal(rememberedSessionId(), "session-2");
+    target.window = {
+      sessionStorage: {
+        getItem: () => {
+          throw new Error("blocked");
+        },
+        setItem: () => {
+          throw new Error("blocked");
+        },
+      },
+    };
+    assert.equal(rememberedSessionId(), null);
+    assert.equal(rememberSessionId("session-3"), false);
+  } finally {
+    delete target.window;
+  }
+});
+
+test("the console layout keys only the page by scope so page state starts fresh after a switch", () => {
+  const layout = readJsx(path.join(root, "src/app/(app)/layout.tsx"));
+  const scoped = importedAs(layout, "./_components/console-scope", "ScopedPage");
+  const within = (element: JsxNode): JsxNode[] => [element, ...element.children.flatMap(within)];
+  const main = layout.elements.find((element) => element.tag === "main");
+  assert.ok(main);
+  assert.equal(layout.elements.filter((element) => element.tag === scoped).length, 1);
+  assert.ok(within(main).some((element) => element.tag === scoped));
+  assert.equal(within(main).some((element) => element.tag === "Sidebar" || element.tag === "ConsoleTopbar"), false);
 });

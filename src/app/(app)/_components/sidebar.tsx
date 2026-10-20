@@ -175,6 +175,14 @@ function ConsoleNavigation({
   );
 }
 
+function BuildStatusSlot() {
+  return (
+    <div className="flex h-12 flex-col justify-center">
+      <BuildNotice collapsed={false} fallback={<BuildVersion />} />
+    </div>
+  );
+}
+
 function BrandLink({ permissions, collapsed }: { permissions: readonly Permission[]; collapsed: boolean }) {
   const t = useTranslations("Sidebar");
   const { kind } = useConsoleScope();
@@ -235,9 +243,11 @@ export default function Sidebar({
           />
           <Separator />
           <div className={collapsed ? "flex flex-col items-center gap-2 p-2" : "flex flex-col gap-2 p-2"}>
-            <BuildNotice collapsed={collapsed} />
             {collapsed ? (
               <>
+                <div className="flex h-10 items-center justify-center">
+                  <BuildNotice collapsed />
+                </div>
                 <UserMenu user={user} variant="rail" />
                 <Tooltip delay={0} closeDelay={0}>
                   <Button
@@ -254,21 +264,23 @@ export default function Sidebar({
                 </Tooltip>
               </>
             ) : (
-              <div className="flex items-center gap-1">
-                <UserMenu user={user} variant="expanded" />
-                <Button
-                  isIconOnly
-                  variant="ghost"
-                  size="sm"
-                  aria-label={t("toggleCollapsed", { collapsed: "false" })}
-                  aria-expanded
-                  onPress={toggleCollapsed}
-                >
-                  <PanelLeftClose size={16} aria-hidden />
-                </Button>
-              </div>
+              <>
+                <div className="flex items-center gap-1">
+                  <UserMenu user={user} variant="expanded" />
+                  <Button
+                    isIconOnly
+                    variant="ghost"
+                    size="sm"
+                    aria-label={t("toggleCollapsed", { collapsed: "false" })}
+                    aria-expanded
+                    onPress={toggleCollapsed}
+                  >
+                    <PanelLeftClose size={16} aria-hidden />
+                  </Button>
+                </div>
+                <BuildStatusSlot />
+              </>
             )}
-            {collapsed ? null : <BuildVersion />}
           </div>
         </aside>
         <Separator orientation="vertical" className="hidden md:block" />
@@ -298,8 +310,8 @@ export default function Sidebar({
                 />
                 <Separator />
                 <div className="flex flex-col gap-2 p-2">
-                  <BuildNotice collapsed={false} />
                   <UserMenu user={user} variant="drawer" />
+                  <BuildStatusSlot />
                 </div>
               </Drawer.Body>
             </Drawer.Dialog>

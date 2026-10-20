@@ -1,7 +1,7 @@
 "use client";
 
-import { useSyncExternalStore } from "react";
-import { Alert, Button, Spinner } from "@heroui/react";
+import { useEffect, useRef, useSyncExternalStore } from "react";
+import { toast } from "@heroui/react";
 import { useTranslations } from "next-intl";
 import { useBuildStatus } from "./build-status";
 import { useAutoUpdate } from "./updater-controls";
@@ -41,31 +41,38 @@ export default function AutoUpdateNotice() {
   const t = useTranslations("Common");
   const status = useBuildStatus();
   const dismissed = useSyncExternalStore(subscribe, readDismissed, () => true);
-  const { setAuto, pending } = useAutoUpdate((view) => status?.setUpdater(view));
+  const { setAuto } = useAutoUpdate((view) => status?.setUpdater(view));
+  const enable = useRef(setAuto);
+  const shown = useRef<string | null>(null);
   const live = status?.live;
   const updater = live?.updater;
-  if (!live?.canManage || !updater?.connected || updater.auto || updater.pinned || dismissed) return null;
+  const offered = Boolean(live?.canManage && updater?.connected && !updater.auto && !updater.pinned && !dismissed);
 
-  return (
-    <Alert status="accent" role="status" className="mb-5">
-      <Alert.Indicator />
-      <Alert.Content>
-        <Alert.Title>{t("updater.noticeTitle")}</Alert.Title>
-        <Alert.Description>{t("updater.noticeBody")}</Alert.Description>
-        <div className="mt-3 flex flex-wrap gap-2">
-          <Button size="sm" isPending={pending} onPress={() => setAuto(true)}>
-            {({ isPending }) => (
-              <>
-                {isPending ? <Spinner size="sm" color="current" /> : null}
-                {t("updater.noticeEnable")}
-              </>
-            )}
-          </Button>
-          <Button size="sm" variant="tertiary" isDisabled={pending} onPress={writeDismissed}>
-            {t("updater.noticeLater")}
-          </Button>
-        </div>
-      </Alert.Content>
-    </Alert>
-  );
+  useEffect(() => {
+    enable.current = setAuto;
+  });
+
+  useEffect(() => {
+    if (!offered) {
+      const open = shown.current;
+      shown.current = null;
+      if (open) toast.close(open);
+      return;
+    }
+    if (shown.current) return;
+    const key = toast(t("updater.noticeTitle"), {
+      description: t("updater.noticeBody"),
+      variant: "accent",
+      timeout: 0,
+      actionProps: { children: t("updater.noticeEnable"), onPress: () => enable.current(true) },
+      onClose: () => {
+        if (shown.current !== key) return;
+        shown.current = null;
+        writeDismissed();
+      },
+    });
+    shown.current = key;
+  }, [offered, t]);
+
+  return null;
 }

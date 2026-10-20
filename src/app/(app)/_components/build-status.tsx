@@ -8,6 +8,7 @@ import {
   useRef,
   useState,
   useTransition,
+  type ReactNode,
 } from "react";
 import { Button, toast } from "@heroui/react";
 import { ArrowUpCircle, ExternalLink, RotateCw } from "lucide-react";
@@ -324,10 +325,10 @@ export default function BuildStatusProvider({
   );
 }
 
-export function BuildNotice({ collapsed }: { collapsed: boolean }) {
+export function BuildNotice({ collapsed, fallback = null }: { collapsed: boolean; fallback?: ReactNode }) {
   const t = useTranslations("Common");
   const status = useBuildStatus();
-  if (!status) return null;
+  if (!status) return fallback;
 
   if (reloadRequired(status.loaded, status.served?.version ?? null)) {
     return collapsed ? (
@@ -375,7 +376,7 @@ export function BuildNotice({ collapsed }: { collapsed: boolean }) {
   }
 
   const update = status.update;
-  if (!update?.available || !update.url) return null;
+  if (!update?.available || !update.url) return fallback;
   const label = t("version.updateLabel", { version: update.latest ?? "" });
   return (
     <a

@@ -13,6 +13,7 @@ import { useErrorToast } from "@/components/console/use-error-toast";
 import { guardrailsValid } from "@/lib/gateway/safety/guardrails";
 import { defaultEntityIds } from "@/lib/gateway/safety/pii";
 import { useActionData } from "@/lib/hooks/use-action-data";
+import { useConsoleScope } from "../_components/console-scope";
 import { loadGuardrailsAction, saveGuardrailPolicyAction, savePiiAction } from "./_action";
 import GuardrailOverrides from "./_components/guardrail-overrides";
 import GuardrailPolicyFields from "./_components/guardrail-policy-fields";
@@ -52,9 +53,11 @@ export default function GuardrailsPage() {
   const [pending, start] = useTransition();
   const page = useActionData(loadGuardrailsAction);
   const { data, setData } = page;
+  const { kind } = useConsoleScope();
 
   if (!data) {
-    return <PageStatus icon={Shield} title={t("title")} subtitle={t("subtitle")} state={page} tabs stats={3} layout="form" />;
+    const loadingSubtitle = kind === "company" ? t("companySubtitle") : t("subtitle");
+    return <PageStatus icon={Shield} title={t("title")} subtitle={loadingSubtitle} state={page} tabs stats={3} layout="form" />;
   }
 
   const { canManage, targets, piiOverrides, guardrailOverrides, platform } = data;
