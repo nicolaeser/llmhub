@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { env } from "@/lib/env";
 import { getEnterprise } from "@/lib/settings/enterprise";
 import {
   buildAuthorizationUrl,
@@ -16,7 +17,7 @@ import { operatorCount } from "@/lib/bootstrap/operators";
 export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
-  const loginError = new URL("/account/login", req.url);
+  const loginError = new URL("/account/login", env.NEXT_PUBLIC_APP_URL);
   try {
     if ((await operatorCount()) === 0) {
       loginError.searchParams.set("sso", "setup");
