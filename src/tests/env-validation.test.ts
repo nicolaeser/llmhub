@@ -59,6 +59,17 @@ test("REDIS_URL is optional", () => {
   assert.equal(parseEnvironment({ ...valid, REDIS_URL: "" }).REDIS_URL, undefined);
 });
 
+test("IP_MODE defaults to proxy and accepts only proxy, cloudflare, or direct", () => {
+  assert.equal(parseEnvironment(valid).IP_MODE, "proxy");
+  assert.equal(parseEnvironment({ ...valid, IP_MODE: "" }).IP_MODE, "proxy");
+  for (const mode of ["proxy", "cloudflare", "direct"]) {
+    assert.equal(parseEnvironment({ ...valid, IP_MODE: ` ${mode} ` }).IP_MODE, mode);
+  }
+  for (const value of ["auto", "Proxy", "x-forwarded-for", "true"]) {
+    assert.throws(() => parseEnvironment({ ...valid, IP_MODE: value }), /IP_MODE/, value);
+  }
+});
+
 test("BUILD_ID is optional", () => {
   assert.equal(parseEnvironment(valid).BUILD_ID, undefined);
   assert.equal(parseEnvironment({ ...valid, BUILD_ID: "" }).BUILD_ID, undefined);

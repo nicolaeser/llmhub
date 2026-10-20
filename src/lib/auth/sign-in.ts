@@ -51,6 +51,7 @@ import {
 } from "@/lib/auth/totp";
 import { securityEvent, userActor } from "@/lib/auth/security-events";
 import { ssoOnlyActive } from "@/lib/auth/oidc";
+import { clientBucket } from "@/lib/http/client-ip";
 import { getEnterprise } from "@/lib/settings/enterprise";
 import {
   passkeyAssertionSchema,
@@ -82,7 +83,7 @@ async function verifyMethods(userId: string): Promise<LoginMethod[]> {
 async function assertPasswordlessRate() {
   const { ipAddress } = await requestMeta();
   await assertRequestRate(
-    `passkey-login:${ipAddress ?? "unknown"}`,
+    `passkey-login:${clientBucket(ipAddress)}`,
     CLIENT_PASSKEY_LOGINS_PER_MINUTE,
     MINUTE_MS,
   );
@@ -109,7 +110,7 @@ export async function issueEnrollmentChallenge(userId: string): Promise<LoginSte
 export async function passwordSignIn(raw: unknown): Promise<LoginResult> {
   const input = parseAuthInput(passwordSignInSchema, raw);
   const meta = await requestMeta();
-  const client = meta.ipAddress ?? "unknown";
+  const client = clientBucket(meta.ipAddress);
   await assertRequestRate(`login:${client}`, CLIENT_SIGN_INS_PER_MINUTE, MINUTE_MS);
   const account = `login:${digest(input.email)}`;
   const throttleKey = `${account}:${client}`;

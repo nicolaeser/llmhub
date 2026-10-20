@@ -7,14 +7,6 @@ export function bearerToken(req: Request): string {
     .trim();
 }
 
-export function clientIp(headers: Headers): string {
-  const hops = (headers.get("x-forwarded-for") ?? "")
-    .split(",")
-    .map((hop) => hop.trim())
-    .filter(Boolean);
-  return hops.at(-1) ?? "";
-}
-
 const MAX_JSON_BYTES = 32 * 1024 * 1024;
 export const MAX_UPLOAD_BYTES = 100 * 1024 * 1024;
 

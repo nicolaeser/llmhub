@@ -3,6 +3,7 @@ import { randomBytes } from "node:crypto";
 import { after, test } from "node:test";
 import prisma from "@/lib/db/prisma";
 import { createFirstAdmin } from "@/lib/bootstrap/first-admin";
+import { clientBucket } from "@/lib/http/client-ip";
 import { closeDatabase, createUser, uniqueName } from "./support/database";
 import { documentationAddress } from "./support/factors";
 import { setRequestHeaders } from "./support/next-request.mjs";
@@ -34,7 +35,7 @@ test("setup refuses to create a second owner once any user exists", async () => 
       0,
     );
   } finally {
-    await prisma.loginAttempt.deleteMany({ where: { key: `setup:${ip}` } });
+    await prisma.loginAttempt.deleteMany({ where: { key: `setup:${clientBucket(ip)}` } });
     await prisma.user.deleteMany({ where: { OR: [{ id: existing.id }, { email: input.email }] } });
   }
 });
@@ -55,7 +56,7 @@ test("setup reports input problems with their policy codes and allows ten attemp
     assert.deepEqual(await createFirstAdmin(input), { ok: false, error: "RATE_LIMITED" });
     assert.equal(await prisma.user.count({ where: { email: input.email } }), 0);
   } finally {
-    await prisma.loginAttempt.deleteMany({ where: { key: `setup:${ip}` } });
+    await prisma.loginAttempt.deleteMany({ where: { key: `setup:${clientBucket(ip)}` } });
   }
 });
 
@@ -96,6 +97,6 @@ test("racing setup requests on an empty user table create exactly one owner and 
     });
     await prisma.gatewayAuditLog.deleteMany({ where: { objectId: { in: created.map((user) => user.id) } } });
     await prisma.user.deleteMany({ where: { id: { in: created.map((user) => user.id) } } });
-    await prisma.loginAttempt.deleteMany({ where: { key: { in: clients.map((ip) => `setup:${ip}`) } } });
+    await prisma.loginAttempt.deleteMany({ where: { key: { in: clients.map((ip) => `setup:${clientBucket(ip)}`) } } });
   }
 });

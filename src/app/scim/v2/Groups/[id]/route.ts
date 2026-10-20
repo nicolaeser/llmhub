@@ -8,7 +8,7 @@ import {
   replaceScimGroup,
   toScimGroup,
 } from "@/lib/auth/scim-groups";
-import { clientIp } from "@/lib/http/api";
+import { clientIp } from "@/lib/http/client-ip";
 import { readJsonOr } from "@/lib/utils/json";
 
 export const dynamic = "force-dynamic";
@@ -25,17 +25,17 @@ export const GET = scimHandler("groups.get", async (req, ctx: Context) => {
 
 export const PUT = scimHandler("groups.replace", async (req, ctx: Context) => {
   const input = parseScimGroupBody(await readJsonOr(req, null));
-  const group = await replaceScimGroup((await ctx.params).id, input, clientIp(req.headers) || null);
+  const group = await replaceScimGroup((await ctx.params).id, input, clientIp(req.headers));
   return scimJson(toScimGroup(group));
 });
 
 export const PATCH = scimHandler("groups.patch", async (req, ctx: Context) => {
   const operations = parseScimGroupPatch(await readJsonOr(req, null));
-  const group = await patchScimGroup((await ctx.params).id, operations, clientIp(req.headers) || null);
+  const group = await patchScimGroup((await ctx.params).id, operations, clientIp(req.headers));
   return scimJson(toScimGroup(group));
 });
 
 export const DELETE = scimHandler("groups.delete", async (req, ctx: Context) => {
-  await deleteScimGroup((await ctx.params).id, clientIp(req.headers) || null);
+  await deleteScimGroup((await ctx.params).id, clientIp(req.headers));
   return new Response(null, { status: 204 });
 });

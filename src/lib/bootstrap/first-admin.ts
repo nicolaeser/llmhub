@@ -14,7 +14,7 @@ import {
 import { ensureSystemCatalog } from "@/lib/bootstrap/system-catalog";
 import { writeAudit } from "@/lib/audit";
 import { SetupAlreadyCompleteError } from "@/lib/bootstrap/operators";
-import { clientIp } from "@/lib/http/api";
+import { clientBucket, clientIp } from "@/lib/http/client-ip";
 import { logger } from "@/lib/logging/logger";
 import { setupSchema } from "@/schemas/auth";
 import type { CreateFirstAdminResult } from "@/types/setup";
@@ -23,11 +23,11 @@ export async function createFirstAdmin(
   input: unknown,
 ): Promise<CreateFirstAdminResult> {
   const headerList = await headers();
-  const ip = clientIp(headerList) || "unknown";
+  const client = clientBucket(clientIp(headerList));
   let reservation: string[];
   try {
     reservation = await reserveAttempts([
-      { key: `setup:${ip}`, limit: 10, windowMs: LOGIN_ATTEMPT_WINDOW_MS },
+      { key: `setup:${client}`, limit: 10, windowMs: LOGIN_ATTEMPT_WINDOW_MS },
     ]);
   } catch (error) {
     if (error instanceof AuthError) return { ok: false, error: "RATE_LIMITED" };

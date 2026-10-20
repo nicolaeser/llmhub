@@ -198,6 +198,7 @@ test("generate-env.sh writes the production .env and keeps an existing one", asy
     "LLMHUB_TAG",
     "NEXT_PUBLIC_APP_URL",
     "LLMHUB_PORT",
+    "IP_MODE",
     "POSTGRES_USER",
     "POSTGRES_DB",
     "SMTP_URL",
@@ -241,17 +242,23 @@ test("generate-env.sh --yes builds the production .env from the environment", { 
     assert.match(written, /^NODE_ENV=production$/m);
     assert.match(written, /^NEXT_PUBLIC_APP_URL=https:\/\/hub\.example\.com$/m);
     assert.match(written, /^LLMHUB_TAG=latest$/m);
+    assert.match(written, /^IP_MODE=proxy$/m);
     assert.match(written, /^POSTGRES_PASSWORD=[A-Za-z0-9_-]{32}$/m);
     assert.match(written, /^APP_SECRET=[0-9a-f]{64}$/m);
     assert.match(written, /^SMTP_FROM=mailer@example\.com$/m);
     assert.doesNotMatch(written, /^(?:DATABASE_URL|REDIS_URL|OIDC_CLIENT_SECRET|S3_ACCESS_KEY_ID)=/m);
+
+    const invalidMode = run(["--yes", "--force"], { IP_MODE: "x-forwarded-for" });
+    assert.equal(invalidMode.status, 1);
+    assert.match(invalidMode.stderr, /IP_MODE/);
+    assert.equal(await readFile(output, "utf8"), written);
 
     const refused = run(["--yes"], { NEXT_PUBLIC_APP_URL: "https://other.example.com" });
     assert.equal(refused.status, 1);
     assert.equal(await readFile(output, "utf8"), written);
 
     await appendFile(output, "EXTRA_SETTING=kept\n");
-    const updated = run(["--yes", "--force"], { OIDC_CLIENT_SECRET: "sso-secret" });
+    const updated = run(["--yes", "--force"], { OIDC_CLIENT_SECRET: "sso-secret", IP_MODE: "cloudflare" });
     assert.equal(updated.status, 0, updated.stderr);
     const next = await readFile(output, "utf8");
     for (const name of ["APP_SECRET", "POSTGRES_PASSWORD", "REDIS_PASSWORD", "SMTP_URL", "NEXT_PUBLIC_APP_URL"]) {
@@ -259,6 +266,7 @@ test("generate-env.sh --yes builds the production .env from the environment", { 
       assert.equal(line.exec(next)?.[0], line.exec(written)?.[0], name);
     }
     assert.match(next, /^OIDC_CLIENT_SECRET=sso-secret$/m);
+    assert.match(next, /^IP_MODE=cloudflare$/m);
     assert.match(next, /^EXTRA_SETTING=kept$/m);
     assert.equal(await readFile(`${output}.bak`, "utf8"), `${written}EXTRA_SETTING=kept\n`);
     assert.equal((await stat(output)).mode & 0o777, 0o600);

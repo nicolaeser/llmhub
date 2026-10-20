@@ -5,7 +5,7 @@ import { passwordResetEnabled } from "@/lib/auth/self-service";
 import { consumeQuota } from "@/lib/auth/throttle";
 import { digest, randomToken } from "@/lib/crypto";
 import { env } from "@/lib/env";
-import { clientIp } from "@/lib/http/api";
+import { clientBucket, clientIp } from "@/lib/http/client-ip";
 import { fieldErrors, problemResponse } from "@/lib/http/problem";
 import { logger } from "@/lib/logging/logger";
 import { sendMail } from "@/lib/mail/send";
@@ -63,9 +63,9 @@ export async function POST(req: NextRequest) {
     return problemResponse(req, "VALIDATION", { errors: fieldErrors(body.error) });
   }
   const email = body.data.email.toLowerCase();
-  const ip = clientIp(req.headers) || "unknown";
+  const client = clientBucket(clientIp(req.headers));
   const allowed =
-    (await consumeQuota(`reset-ip:${ip}`, 10, HOUR_MS)) &&
+    (await consumeQuota(`reset-ip:${client}`, 10, HOUR_MS)) &&
     (await consumeQuota(`reset:${digest(email)}`, 3, HOUR_MS));
   if (!allowed) {
     return problemResponse(req, "RATE_LIMITED");
