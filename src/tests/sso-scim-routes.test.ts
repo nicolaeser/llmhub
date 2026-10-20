@@ -505,11 +505,12 @@ test("there is no master key", async () => {
   }
 });
 
-test("the login password step links to SSO when it is enabled", async () => {
+test("the login password step opens SSO with a full-page navigation when it is enabled", async () => {
   const form = await readFile(
     new URL("../../src/app/account/login/_components/password-step.tsx", import.meta.url),
     "utf8",
   );
   assert.match(form, /ssoEnabled/);
-  assert.match(form, /\/sso\/login/);
+  assert.match(form, /window\.location\.assign\(withReturnQuery\("\/sso\/login", returnParam\)\)/);
+  assert.doesNotMatch(form, /router\.(replace|push)\([^)]*\/sso\/login/);
 });
