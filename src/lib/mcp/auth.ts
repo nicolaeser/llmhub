@@ -16,7 +16,15 @@ import { errorFields } from "@/lib/logging/format";
 import { logger } from "@/lib/logging/logger";
 import { parseJsonOrNull } from "@/lib/utils/json";
 import type { JsonMap } from "@/types/gateway";
-import type { McpAuth, McpFetch, McpOAuthClient, McpOAuthLoginState, McpServerRecord, McpTokenGrant } from "@/types/mcp";
+import type {
+  McpAuth,
+  McpFetch,
+  McpHostedAuth,
+  McpOAuthClient,
+  McpOAuthLoginState,
+  McpServerRecord,
+  McpTokenGrant,
+} from "@/types/mcp";
 
 const REFRESH_SKEW_MS = 60_000;
 const LEASE_MS = 30_000;
@@ -48,8 +56,17 @@ export function authHeaders(server: Pick<McpServerRecord, "authType" | "authHead
   const secret = server.authSecret ? open(server.authSecret) : "";
   if (!secret) return {};
   if (server.authType === "bearer") return { Authorization: `Bearer ${secret}` };
+  if (server.authType === "basic" && server.authHeader) {
+    return { Authorization: `Basic ${Buffer.from(`${server.authHeader}:${secret}`, "utf8").toString("base64")}` };
+  }
   if (server.authType === "header" && server.authHeader) return { [server.authHeader]: secret };
   return {};
+}
+
+export function hostedAuth(server: Pick<McpServerRecord, "authType" | "authHeader" | "authSecret">): McpHostedAuth {
+  if (server.authType !== "query") return { headers: authHeaders(server), query: {} };
+  const secret = server.authSecret ? open(server.authSecret) : "";
+  return { headers: {}, query: secret && server.authHeader ? { [server.authHeader]: secret } : {} };
 }
 
 export function sealTokens(grant: Pick<McpTokenGrant, "access" | "refresh">): string {

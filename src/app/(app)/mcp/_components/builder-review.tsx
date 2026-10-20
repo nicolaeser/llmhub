@@ -22,7 +22,7 @@ import {
 import { SearchX, Sparkles } from "lucide-react";
 import { useFormatter, useTranslations } from "next-intl";
 import EmptyState from "@/components/console/empty-state";
-import { MAX_HOSTED_TOOLS, MCP_ACTIONS } from "@/schemas/mcp";
+import { MAX_HOSTED_TOOLS, MCP_ACTIONS, MCP_STATIC_AUTH_TYPES, authNameValid, authUsesName } from "@/schemas/mcp";
 import type { HostedTool, McpDocsSourceRef, McpDraft, McpDraftServer, McpToolAction } from "@/types/mcp";
 
 const SEARCH_FROM = 8;
@@ -36,6 +36,7 @@ export type BuilderServer = {
   authHeader: string;
   secret: string;
   shared: boolean;
+  loginFrom: number | null;
 };
 
 function methodColor(method: HostedTool["method"]): "success" | "warning" | "danger" {
@@ -118,6 +119,25 @@ export default function BuilderReview({
           </Alert.Content>
         </Alert>
       ) : null}
+      {draft.crawls.length || draft.parts > 1 ? (
+        <Alert status="default">
+          <Alert.Indicator />
+          <Alert.Content>
+            <Alert.Title>{t("builder.crawlTitle")}</Alert.Title>
+            {draft.crawls.map((crawl) => (
+              <Alert.Description key={`${crawl.link}-${crawl.url}`} className="block break-words">
+                {t("builder.crawlLine", { url: crawl.url, pages: crawl.pages, skipped: crawl.skipped, failed: crawl.failed })}
+                {crawl.truncated ? ` ${t("builder.crawlLimit", { limit: crawl.truncated })}` : ""}
+              </Alert.Description>
+            ))}
+            {draft.parts > 1 ? (
+              <Alert.Description className="block">
+                {t("builder.passes", { read: draft.passes >= draft.parts ? "all" : "some", passes: draft.passes, parts: draft.parts })}
+              </Alert.Description>
+            ) : null}
+          </Alert.Content>
+        </Alert>
+      ) : null}
       {draft.notes ? (
         <Alert status="accent">
           <Alert.Indicator />
@@ -175,8 +195,8 @@ export default function BuilderReview({
           fullWidth
           selectedKey={server.authType}
           onSelectionChange={(key) => {
-            const next = ["none", "bearer", "header"].find((item) => item === String(key));
-            if (next === "none" || next === "bearer" || next === "header") onServer({ authType: next });
+            const next = MCP_STATIC_AUTH_TYPES.find((item) => item === String(key));
+            if (next) onServer({ authType: next, loginFrom: null });
           }}
           isDisabled={pending}
         >
@@ -187,7 +207,7 @@ export default function BuilderReview({
           </Select.Trigger>
           <Select.Popover>
             <ListBox>
-              {(["none", "bearer", "header"] as const).map((type) => (
+              {MCP_STATIC_AUTH_TYPES.map((type) => (
                 <ListBox.Item key={type} id={type} textValue={t("form.authOption", { type })}>
                   {t("form.authOption", { type })}
                   <ListBox.ItemIndicator />
@@ -195,11 +215,21 @@ export default function BuilderReview({
               ))}
             </ListBox>
           </Select.Popover>
+          {server.loginFrom !== null ? (
+            <Description>{t("builder.loginFromDocs", { index: server.loginFrom + 1 })}</Description>
+          ) : null}
         </Select>
-        {server.authType === "header" ? (
-          <TextField fullWidth isRequired value={server.authHeader} onChange={(authHeader) => onServer({ authHeader })} isDisabled={pending}>
-            <Label>{t("form.header")}</Label>
-            <Input placeholder="X-Api-Key" />
+        {authUsesName(server.authType) ? (
+          <TextField
+            fullWidth
+            isRequired
+            value={server.authHeader}
+            onChange={(authHeader) => onServer({ authHeader })}
+            isDisabled={pending}
+            isInvalid={server.authHeader.trim() !== "" && !authNameValid(server.authType, server.authHeader)}
+          >
+            <Label>{t("form.authName", { type: server.authType })}</Label>
+            <Input autoComplete="off" spellCheck={false} placeholder={t("form.authNamePlaceholder", { type: server.authType })} />
           </TextField>
         ) : null}
       </div>

@@ -8,8 +8,9 @@ import { companyOf } from "@/lib/auth/scope";
 import { seal } from "@/lib/crypto";
 import { toolSpecs } from "@/lib/mcp/client";
 import { toolActionsOf } from "@/lib/mcp/resolve";
+import { installedAuthType } from "@/lib/mcp/toolset";
 import { checkServerUrl } from "@/lib/mcp/url-guard";
-import { MCP_ROLE_KEYS, mcpInstallationSchema, mcpPermissionsSchema, mcpTemplateSchema } from "@/schemas/mcp";
+import { MCP_ROLE_KEYS, authUsesName, mcpInstallationSchema, mcpPermissionsSchema, mcpTemplateSchema } from "@/schemas/mcp";
 import type { McpInstallationView, McpRoleView } from "@/types/mcp";
 
 const BUILTIN_ROLES = [
@@ -77,7 +78,7 @@ export function installationViews(
       orgLabel: row.org?.alias || row.orgId,
       enabled: row.enabled,
       baseUrl: row.baseUrl,
-      authType: row.authType === "none" || row.authType === "header" ? row.authType : "bearer",
+      authType: installedAuthType(row.authType),
       authHeader: row.authHeader,
       hasSecret: Boolean(row.authSecret),
     }));
@@ -247,6 +248,7 @@ export async function saveMcpInstallation(raw: unknown) {
   });
   if (!server) throw new Error("NOT_FOUND");
   if (!server.template) throw new Error("VALIDATION");
+  if (input.authType === "query" && server.kind !== "hosted") throw new Error("VALIDATION");
   if (input.baseUrl) {
     const verdict = checkServerUrl(input.baseUrl, server.internal);
     if (!verdict.ok) throw new Error(verdict.code);
@@ -267,14 +269,14 @@ export async function saveMcpInstallation(raw: unknown) {
       enabled: input.enabled,
       baseUrl: input.baseUrl,
       authType: input.authType,
-      authHeader: input.authType === "header" ? input.authHeader : "",
+      authHeader: authUsesName(input.authType) ? input.authHeader : "",
       authSecret,
     },
     update: {
       enabled: input.enabled,
       baseUrl: input.baseUrl,
       authType: input.authType,
-      authHeader: input.authType === "header" ? input.authHeader : "",
+      authHeader: authUsesName(input.authType) ? input.authHeader : "",
       authSecret,
     },
   });

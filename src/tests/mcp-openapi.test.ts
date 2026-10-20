@@ -64,8 +64,8 @@ paths:
   const imported = importOpenApi(yaml!);
   assert.equal(imported.server.baseUrl, "http://legacy.example.com/api");
   assert.equal(imported.server.internal, true);
-  assert.equal(imported.server.authType, "header");
-  assert.equal(imported.server.authHeader, "Authorization");
+  assert.equal(imported.server.authType, "basic");
+  assert.equal(imported.server.authHeader, "");
   assert.deepEqual(imported.tools[0]!.inputSchema, {
     type: "object",
     properties: { id: { type: "string" }, label: { type: "string" } },

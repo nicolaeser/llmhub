@@ -10,7 +10,7 @@ const PLATFORM_KEY = "platform";
 
 type Variant = "expanded" | "rail" | "drawer";
 
-const ROW = "flex w-full min-w-0 items-center gap-2.5 rounded-lg px-2 py-1.5 text-left";
+const ROW = "flex w-full min-w-0 items-center gap-2.5 rounded-xl px-2 py-1.5 text-left";
 
 export default function ScopeSwitcher({ variant }: { variant: Variant }) {
   const t = useTranslations("Sidebar.scope");
@@ -116,7 +116,7 @@ export default function ScopeSwitcher({ variant }: { variant: Variant }) {
         <Dropdown.Trigger
           aria-label={t("trigger", { current: label })}
           isPending={pending}
-          className={`${ROW} hover:bg-default`}
+          className={`${ROW} hover:bg-foreground/5 motion-safe:transition-colors`}
         >
           {summary}
           {pending ? (

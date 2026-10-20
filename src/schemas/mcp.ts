@@ -4,7 +4,8 @@ export const BUILDER_MODEL_KEY = "mcp_builder_model";
 export const MCP_SCOPES = ["org", "team", "project", "member", "key"] as const;
 export const MCP_ACTIONS = ["read", "write", "delete"] as const;
 export const MCP_HTTP_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"] as const;
-export const MCP_AUTH_TYPES = ["none", "bearer", "header", "oauth"] as const;
+export const MCP_STATIC_AUTH_TYPES = ["none", "bearer", "basic", "header", "query"] as const;
+export const MCP_AUTH_TYPES = [...MCP_STATIC_AUTH_TYPES, "oauth"] as const;
 export const MCP_OAUTH_GRANTS = ["authorization_code", "client_credentials"] as const;
 export const MCP_MODES = ["allow", "block"] as const;
 export const MCP_ROLE_KEYS = ["reader", "operator", "admin"] as const;
@@ -30,6 +31,24 @@ const toolNames = z.array(z.string().trim().min(1).max(128)).max(200);
 const actions = z.array(z.enum(MCP_ACTIONS)).max(MCP_ACTIONS.length);
 
 const PATH_PARAM = /\{([A-Za-z][A-Za-z0-9_]*)\}/g;
+const AUTH_HEADER_NAME = /^[A-Za-z0-9-]{1,64}$/;
+const AUTH_QUERY_NAME = /^[A-Za-z0-9_.~[\]-]{1,64}$/;
+
+function hasControl(value: string): boolean {
+  return [...value].some((char) => char.charCodeAt(0) < 32 || char.charCodeAt(0) === 127);
+}
+
+export function authUsesName(authType: string): boolean {
+  return authType === "header" || authType === "basic" || authType === "query";
+}
+
+export function authNameValid(authType: string, value: string): boolean {
+  const name = value.trim();
+  if (authType === "header") return AUTH_HEADER_NAME.test(name);
+  if (authType === "basic") return name.length > 0 && name.length <= 64 && !name.includes(":") && !hasControl(name);
+  if (authType === "query") return AUTH_QUERY_NAME.test(name);
+  return true;
+}
 
 export const hostedToolSchema = z
   .object({
@@ -65,15 +84,16 @@ export const mcpDraftBaseSchema = z.object({
   description: z.string().trim().max(500).default(""),
   baseUrl: z.string().trim().min(1).max(2048),
   internal: z.boolean().default(false),
-  authType: z.enum(["none", "bearer", "header"]).default("none"),
+  authType: z.enum(MCP_STATIC_AUTH_TYPES).default("none"),
   authHeader: z.string().trim().max(64).default(""),
   notes: z.string().trim().max(2000).default(""),
 });
 
 export const builderModelSchema = z.string().trim().max(200);
 
-export const MCP_DOCS_AUTH_TYPES = ["none", "bearer", "basic", "header", "query"] as const;
+export const MCP_DOCS_AUTH_TYPES = ["none", "bearer", "basic", "header", "query", "cookie"] as const;
 export const MAX_BUILDER_LINKS = 10;
+export const MAX_CRAWL_DEPTH = 8;
 export const MAX_BUILDER_FILES = 10;
 export const MAX_BUILDER_FILE_BYTES = 10 * 1024 * 1024;
 export const MAX_BUILDER_UPLOAD_BYTES = 20 * 1024 * 1024;
@@ -103,10 +123,6 @@ const RESERVED_DOCS_HEADERS = new Set([
   "upgrade",
 ]);
 
-function hasControl(value: string): boolean {
-  return [...value].some((char) => char.charCodeAt(0) < 32 || char.charCodeAt(0) === 127);
-}
-
 function hasUserInfo(value: string): boolean {
   const url = new URL(value);
   return Boolean(url.username || url.password);
@@ -116,6 +132,7 @@ export const builderLinkSchema = z
   .object({
     url: z.string().trim().max(2048),
     internal: z.boolean().default(false),
+    crawl: z.boolean().default(true),
     auth: z.enum(MCP_DOCS_AUTH_TYPES).default("none"),
     name: z.string().trim().max(256).default(""),
     secret: z.string().max(4096).default(""),
@@ -158,7 +175,7 @@ export const hostedServerSchema = z
     description: z.string().trim().max(500),
     baseUrl: z.string().trim().min(1).max(2048),
     internal: z.boolean(),
-    authType: z.enum(["none", "bearer", "header"]),
+    authType: z.enum(MCP_STATIC_AUTH_TYPES),
     authHeader: z.string().trim().max(64).default(""),
     secret: z
       .string()
@@ -185,8 +202,8 @@ export const hostedServerSchema = z
       .default([]),
   })
   .superRefine((value, ctx) => {
-    if (value.authType === "header" && !/^[A-Za-z0-9-]{1,64}$/.test(value.authHeader)) {
-      ctx.addIssue({ code: "custom", path: ["authHeader"], message: "invalid header name" });
+    if (!authNameValid(value.authType, value.authHeader)) {
+      ctx.addIssue({ code: "custom", path: ["authHeader"], message: "invalid name" });
     }
     if (value.authType !== "none" && !value.template && !value.secret.trim()) {
       ctx.addIssue({ code: "custom", path: ["secret"], message: "secret required" });
@@ -224,9 +241,11 @@ function checkConnection(
   ctx: z.RefinementCtx,
 ) {
   if (value.authType === "header") {
-    if (!/^[A-Za-z0-9-]{1,64}$/.test(value.authHeader) || RESERVED_HEADERS.has(value.authHeader.toLowerCase())) {
+    if (!AUTH_HEADER_NAME.test(value.authHeader) || RESERVED_HEADERS.has(value.authHeader.toLowerCase())) {
       ctx.addIssue({ code: "custom", path: ["authHeader"], message: "invalid header name" });
     }
+  } else if (!authNameValid(value.authType, value.authHeader)) {
+    ctx.addIssue({ code: "custom", path: ["authHeader"], message: "invalid name" });
   }
   if (value.authType === "oauth" && value.oauthGrant === "client_credentials" && !value.oauthClientId) {
     ctx.addIssue({ code: "custom", path: ["oauthClientId"], message: "client id required" });
@@ -299,7 +318,7 @@ export const mcpInstallationSchema = z
     orgId: z.string().min(1).max(64),
     enabled: z.boolean(),
     baseUrl: z.string().trim().max(2048).default(""),
-    authType: z.enum(["none", "bearer", "header"]),
+    authType: z.enum(MCP_STATIC_AUTH_TYPES),
     authHeader: z.string().trim().max(64).default(""),
     secret: z
       .string()
@@ -313,8 +332,8 @@ export const mcpInstallationSchema = z
     if (value.baseUrl && !/^https?:\/\//.test(value.baseUrl)) {
       ctx.addIssue({ code: "custom", path: ["baseUrl"], message: "invalid url" });
     }
-    if (value.authType === "header" && !/^[A-Za-z0-9-]{1,64}$/.test(value.authHeader)) {
-      ctx.addIssue({ code: "custom", path: ["authHeader"], message: "invalid header name" });
+    if (!authNameValid(value.authType, value.authHeader)) {
+      ctx.addIssue({ code: "custom", path: ["authHeader"], message: "invalid name" });
     }
   });
 

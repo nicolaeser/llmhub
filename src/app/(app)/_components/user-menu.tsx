@@ -73,7 +73,7 @@ export default function UserMenu({ user, variant }: { user: ConsoleUser; variant
   const trigger = wide ? (
     <Dropdown.Trigger
       aria-label={label}
-      className="flex min-w-0 flex-1 items-center gap-2.5 rounded-lg px-2 py-1.5 text-left hover:bg-default"
+      className="flex min-w-0 flex-1 items-center gap-2.5 rounded-xl px-2 py-1.5 text-left hover:bg-foreground/5 motion-safe:transition-colors"
     >
       {avatar}
       <span className="min-w-0 flex-1">

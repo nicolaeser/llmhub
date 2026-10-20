@@ -18,20 +18,20 @@ export const HEADER_H = 122;
 export const FOOTER_RULE = 44;
 
 export const COLORS = {
-  accent: [99, 103, 239],
-  accentRaised: [126, 130, 242],
-  accentSoft: [236, 238, 254],
+  accent: [82, 82, 232],
+  accentRaised: [107, 118, 243],
+  accentSoft: [233, 237, 255],
   onAccent: [255, 255, 255],
-  onAccentMuted: [207, 213, 249],
-  ink: [30, 31, 37],
-  muted: [110, 113, 126],
-  border: [220, 222, 227],
-  axis: [196, 198, 206],
-  surface: [244, 245, 249],
-  track: [232, 233, 240],
-  warning: [146, 94, 0],
+  onAccentMuted: [201, 210, 252],
+  ink: [23, 25, 40],
+  muted: [99, 102, 121],
+  border: [220, 221, 230],
+  axis: [196, 199, 210],
+  surface: [244, 245, 251],
+  track: [232, 235, 245],
+  warning: [161, 85, 12],
   warningSoft: [253, 240, 214],
-  danger: [196, 32, 38],
+  danger: [199, 31, 42],
   dangerSoft: [253, 228, 226],
 } satisfies Record<string, PdfColor>;
 

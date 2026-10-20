@@ -22,12 +22,12 @@ export default function AccountShell({
     <main className="flex flex-1 flex-col items-center justify-center bg-background px-4 py-16 text-foreground">
       <div className="w-full max-w-md">
         <div className="mb-8 flex flex-col items-center text-center">
-          <Link href="/" aria-label={t("goHome")} className="mb-8 inline-flex items-center gap-2.5">
-            <BrandMark size="md" />
-            <span className="text-lg font-semibold tracking-tight">{t("appName")}</span>
+          <Link href="/" aria-label={t("goHome")} className="mb-10 inline-flex flex-col items-center gap-3">
+            <BrandMark size="lg" />
+            <span className="text-sm font-semibold tracking-tight text-muted">{t("appName")}</span>
           </Link>
           {title ? (
-            <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">{title}</h1>
+            <h1 className="text-3xl font-semibold tracking-tight text-balance sm:text-4xl">{title}</h1>
           ) : (
             <Skeleton className="h-9 w-56 max-w-full rounded-xl sm:h-10" />
           )}
@@ -37,7 +37,7 @@ export default function AccountShell({
             <Skeleton className="mt-4 h-3.5 w-64 max-w-full rounded-lg" />
           )}
         </div>
-        <Card className="p-5 sm:p-7">{children}</Card>
+        <Card className="p-5 shadow-overlay sm:p-8">{children}</Card>
         {footer ? <div className="mt-6 text-center text-sm text-muted">{footer}</div> : null}
       </div>
     </main>
