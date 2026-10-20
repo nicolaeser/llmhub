@@ -13,6 +13,7 @@ import { useErrorToast } from "@/components/console/use-error-toast";
 import { guardrailsValid } from "@/lib/gateway/safety/guardrails";
 import { defaultEntityIds } from "@/lib/gateway/safety/pii";
 import { useActionData } from "@/lib/hooks/use-action-data";
+import { useConsoleScope } from "../_components/console-scope";
 import { loadGuardrailsAction, saveGuardrailPolicyAction, savePiiAction } from "./_action";
 import GuardrailOverrides from "./_components/guardrail-overrides";
 import GuardrailPolicyFields from "./_components/guardrail-policy-fields";
@@ -52,12 +53,15 @@ export default function GuardrailsPage() {
   const [pending, start] = useTransition();
   const page = useActionData(loadGuardrailsAction);
   const { data, setData } = page;
+  const { kind } = useConsoleScope();
 
   if (!data) {
-    return <PageStatus icon={Shield} title={t("title")} subtitle={t("subtitle")} state={page} tabs stats={3} layout="form" />;
+    const loadingSubtitle = kind === "company" ? t("companySubtitle") : t("subtitle");
+    return <PageStatus icon={Shield} title={t("title")} subtitle={loadingSubtitle} state={page} tabs stats={3} layout="form" />;
   }
 
-  const { canManage, targets, piiOverrides, guardrailOverrides } = data;
+  const { canManage, targets, piiOverrides, guardrailOverrides, platform } = data;
+  const canEditGlobal = canManage && platform;
   const saved = withDefaults(data.pii);
   const savedGuardrails = data.guardrails;
   const policy = policyDraft ?? saved;
@@ -97,7 +101,7 @@ export default function GuardrailsPage() {
 
   return (
     <div className="space-y-5">
-      <PageHeader icon={Shield} title={t("title")} subtitle={t("subtitle")} />
+      <PageHeader icon={Shield} title={t("title")} subtitle={platform ? t("subtitle") : t("companySubtitle")} />
 
       <PageTabs
         label={t("title")}
@@ -122,24 +126,27 @@ export default function GuardrailsPage() {
                   />
                 </div>
 
-                <Card className="gap-4">
-                  <Card.Header className="flex-row flex-wrap items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <Card.Title>{t("policy")}</Card.Title>
-                      <Card.Description>{t("policyHint")}</Card.Description>
-                    </div>
-                    <Chip size="sm" variant="soft" color={policy.enabled ? "success" : "warning"}>
-                      {t("enabledState", { enabled: policy.enabled ? "true" : "false" })}
-                    </Chip>
-                  </Card.Header>
-                  <Card.Content>
-                    <PiiPolicyFields value={policy} onChange={setPolicy} isDisabled={!canManage} />
-                  </Card.Content>
-                </Card>
+                {platform ? (
+                  <Card className="gap-4">
+                    <Card.Header className="flex-row flex-wrap items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <Card.Title>{t("policy")}</Card.Title>
+                        <Card.Description>{t("policyHint")}</Card.Description>
+                      </div>
+                      <Chip size="sm" variant="soft" color={policy.enabled ? "success" : "warning"}>
+                        {t("enabledState", { enabled: policy.enabled ? "true" : "false" })}
+                      </Chip>
+                    </Card.Header>
+                    <Card.Content>
+                      <PiiPolicyFields value={policy} onChange={setPolicy} isDisabled={!canManage} />
+                    </Card.Content>
+                  </Card>
+                ) : null}
 
                 <Alert status="accent">
                   <Alert.Indicator />
                   <Alert.Content>
+                    {platform ? null : <Alert.Description>{t("companyNotice")}</Alert.Description>}
                     <Alert.Description>{t("logsHint")}</Alert.Description>
                   </Alert.Content>
                 </Alert>
@@ -154,28 +161,30 @@ export default function GuardrailsPage() {
                   }
                 />
 
-                <Card>
-                  <Disclosure>
-                    <Disclosure.Heading>
-                      <Disclosure.Trigger className="flex w-full items-center justify-between gap-2 text-sm font-medium">
-                        {tCommon("advanced")}
-                        <Disclosure.Indicator />
-                      </Disclosure.Trigger>
-                    </Disclosure.Heading>
-                    <Disclosure.Content>
-                      <Disclosure.Body className="flex flex-col gap-4 pt-4">
-                        <PiiEntityPicker
-                          value={policy.entities}
-                          onChange={(entities) => setPolicy({ ...policy, entities })}
-                          isDisabled={!canManage}
-                          wide
-                        />
-                        <PiiTester />
-                      </Disclosure.Body>
-                    </Disclosure.Content>
-                  </Disclosure>
-                </Card>
-                {canManage ? <FormActions label={t("save")} pending={pending} onSave={savePii} /> : null}
+                {platform ? (
+                  <Card>
+                    <Disclosure>
+                      <Disclosure.Heading>
+                        <Disclosure.Trigger className="flex w-full items-center justify-between gap-2 text-sm font-medium">
+                          {tCommon("advanced")}
+                          <Disclosure.Indicator />
+                        </Disclosure.Trigger>
+                      </Disclosure.Heading>
+                      <Disclosure.Content>
+                        <Disclosure.Body className="flex flex-col gap-4 pt-4">
+                          <PiiEntityPicker
+                            value={policy.entities}
+                            onChange={(entities) => setPolicy({ ...policy, entities })}
+                            isDisabled={!canManage}
+                            wide
+                          />
+                          <PiiTester />
+                        </Disclosure.Body>
+                      </Disclosure.Content>
+                    </Disclosure>
+                  </Card>
+                ) : null}
+                {canEditGlobal ? <FormActions label={t("save")} pending={pending} onSave={savePii} /> : null}
               </div>
             ),
           },
@@ -203,19 +212,22 @@ export default function GuardrailsPage() {
                   />
                 </div>
 
-                <Card className="gap-4">
-                  <Card.Header>
-                    <Card.Title>{t("content.policy")}</Card.Title>
-                    <Card.Description>{t("content.policyHint")}</Card.Description>
-                  </Card.Header>
-                  <Card.Content>
-                    <GuardrailPolicyFields value={guardrails} onChange={setGuardrails} isDisabled={!canManage} />
-                  </Card.Content>
-                </Card>
+                {platform ? (
+                  <Card className="gap-4">
+                    <Card.Header>
+                      <Card.Title>{t("content.policy")}</Card.Title>
+                      <Card.Description>{t("content.policyHint")}</Card.Description>
+                    </Card.Header>
+                    <Card.Content>
+                      <GuardrailPolicyFields value={guardrails} onChange={setGuardrails} isDisabled={!canManage} />
+                    </Card.Content>
+                  </Card>
+                ) : null}
 
                 <Alert status="accent">
                   <Alert.Indicator />
                   <Alert.Content>
+                    {platform ? null : <Alert.Description>{t("companyNotice")}</Alert.Description>}
                     <Alert.Description>{t("content.logsHint")}</Alert.Description>
                     <Alert.Description>{t("content.streamHint")}</Alert.Description>
                   </Alert.Content>
@@ -234,8 +246,8 @@ export default function GuardrailsPage() {
                   }
                 />
 
-                <GuardrailTester policy={guardrails} />
-                {canManage ? (
+                {platform ? <GuardrailTester policy={guardrails} /> : null}
+                {canEditGlobal ? (
                   <FormActions
                     label={t("save")}
                     pending={pending}

@@ -1,21 +1,24 @@
 {
   "appName": "LLM Hub",
+  "sidebar": "Sidebar",
   "primaryNav": "Primary navigation",
+  "location": "Current location",
   "toggleCollapsed": "{collapsed, select, true {Expand sidebar} other {Collapse sidebar}}",
   "openMenu": "Open navigation menu",
-  "workspaceLabel": "Workspace",
   "goHome": "Go to the start page",
   "sections": {
+    "tenants": "Tenants",
     "organization": "Organization",
-    "models": "Models & providers",
+    "gateway": "Gateway",
     "policies": "Policies",
     "insights": "Insights",
-    "system": "Platform"
+    "system": "System"
   },
   "items": {
     "companies": "Companies",
+    "company": "Company",
     "keys": "API keys",
-    "users": "Users",
+    "users": "Console users",
     "providers": "Providers",
     "models": "Models",
     "guardrails": "Guardrails",
@@ -24,13 +27,22 @@
     "usage": "Usage",
     "logs": "Logs",
     "settings": "Settings",
-    "developer": "Developer",
-    "company": "Company",
-    "companySettings": "Company settings"
+    "developer": "Developer"
   },
   "account": "Account and security",
-  "workspaceAdmin": "Admin",
-  "workspaceAdminHint": "Every company and the platform",
-  "workspaceCompanies": "Companies",
-  "workspaceCompanyHint": "Company view"
+  "scope": {
+    "switch": "Switch between the platform and a company",
+    "trigger": "Switch scope, current: {current}",
+    "openDrawer": "Open navigation, current scope: {current}",
+    "label": "{kind, select, company {Company · {alias}} other {Platform}}",
+    "platform": "Platform",
+    "platformHint": "All companies and settings",
+    "companyHint": "Company",
+    "companies": "Companies"
+  },
+  "userMenu": {
+    "open": "Account menu for {name}",
+    "language": "Language",
+    "checkStatus": "Check connection"
+  }
 }

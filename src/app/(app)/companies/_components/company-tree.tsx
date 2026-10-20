@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Button, Card, ListBox, SearchField } from "@heroui/react";
-import { Building2, Folder, Plus, Users } from "lucide-react";
+import { Card, ListBox, SearchField } from "@heroui/react";
+import { Building2, Folder, Users } from "lucide-react";
 import { useFormatter, useTranslations } from "next-intl";
 import type { BudgetView, NodeRef, StructurePayload } from "@/types/structure";
 import { parseNodeRef, usedRatio } from "./tree-model";
@@ -20,12 +20,10 @@ export default function CompanyTree({
   data,
   selected,
   onSelect,
-  onCreateOrg,
 }: {
   data: StructurePayload;
   selected: NodeRef | null;
   onSelect: (ref: NodeRef) => void;
-  onCreateOrg: (() => void) | null;
 }) {
   const t = useTranslations("Companies");
   const format = useFormatter();
@@ -91,14 +89,8 @@ export default function CompanyTree({
 
   return (
     <Card className="gap-3">
-      <Card.Header className="flex-row items-center justify-between gap-2">
-        <Card.Title>{t("tree.title")}</Card.Title>
-        {onCreateOrg ? (
-          <Button size="sm" variant="tertiary" onPress={onCreateOrg}>
-            <Plus size={14} aria-hidden />
-            {t("tree.addOrg")}
-          </Button>
-        ) : null}
+      <Card.Header>
+        <Card.Title>{t("tree.title", { scope: data.companyId ? "company" : "platform" })}</Card.Title>
       </Card.Header>
       <SearchField value={query} onChange={setQuery} aria-label={t("tree.search")}>
         <SearchField.Group>
@@ -112,7 +104,7 @@ export default function CompanyTree({
       ) : (
         <div className="max-h-[45vh] overflow-y-auto lg:max-h-[60vh]">
           <ListBox
-            aria-label={t("tree.title")}
+            aria-label={t("tree.title", { scope: data.companyId ? "company" : "platform" })}
             selectionMode="single"
             disallowEmptySelection
             selectedKeys={selectedKey ? [selectedKey] : []}

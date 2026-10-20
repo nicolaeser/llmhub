@@ -1,6 +1,6 @@
 "use server";
 
-import { grantedPermissions, requirePermission } from "@/lib/auth/guards";
+import { grantedPermissions, requirePlatformPermission } from "@/lib/auth/guards";
 import { grantActor } from "@/lib/auth/grants";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import {
@@ -57,7 +57,7 @@ export async function setUserContentLoggingAction(id: string, enabled: boolean) 
 
 export async function deleteUserAction(id: string) {
   return runAction(async () => {
-    await deleteUser(await requirePermission(PERMISSIONS.USERS_MANAGE), id);
+    await deleteUser(await requirePlatformPermission(PERMISSIONS.USERS_MANAGE), id);
     return { id };
   });
 }
@@ -106,7 +106,7 @@ export async function updateRoleAction(roleId: string, input: unknown) {
 
 export async function deleteRoleAction(roleId: string) {
   return runAction(async () => {
-    const session = await requirePermission(PERMISSIONS.ROLES_MANAGE);
+    const session = await requirePlatformPermission(PERMISSIONS.ROLES_MANAGE);
     await deleteRole(grantActor(session), session.user.id, roleId);
     return { id: roleId };
   });

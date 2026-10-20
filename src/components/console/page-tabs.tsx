@@ -7,6 +7,7 @@ import type { PageTab } from "@/types/console";
 export default function PageTabs({ label, tabs }: { label: string; tabs: readonly PageTab[] }) {
   const [selected, select] = useTabParam(tabs.map((tab) => tab.id));
   if (tabs.length < 2) return tabs[0]?.panel ?? null;
+  if (!selected) return null;
   return (
     <Tabs selectedKey={selected} onSelectionChange={(key) => select(String(key))}>
       <Tabs.List className="w-full flex-wrap" aria-label={label}>
