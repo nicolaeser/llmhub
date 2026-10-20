@@ -5,7 +5,15 @@ import { parseAuthInput } from "@/lib/auth/errors";
 import { assertCanGrant, canGrant, grantActor } from "@/lib/auth/grants";
 import { requirePermission, requirePlatformPermission } from "@/lib/auth/guards";
 import { JWT_ALGORITHMS } from "@/lib/auth/jwks";
-import { fetchOidcDiscovery, oidcCallbackUrl, resetOidcCache, tokenAuthMethod } from "@/lib/auth/oidc";
+import {
+  fetchOidcDiscovery,
+  oidcCallbackUrl,
+  OidcDiscoveryError,
+  oidcFailureFields,
+  resetOidcCache,
+  tokenAuthMethod,
+} from "@/lib/auth/oidc";
+import { trimIssuer } from "@/lib/auth/oidc-presets";
 import { hasPerm, permissionList, permissions, PERMISSIONS } from "@/lib/auth/permissions";
 import { roleOptions } from "@/lib/auth/roles";
 import {
@@ -98,14 +106,25 @@ export async function checkOidcIssuer(raw: unknown): Promise<IssuerCheck> {
     return {
       ok: true,
       issuer: disc.issuer,
+      usesTenantId: trimIssuer(disc.issuer) !== parsed.data.issuer,
       tokenAuth: tokenAuthMethod(disc.token_endpoint_auth_methods_supported),
       algorithms,
       supported: !algorithms.length || algorithms.some((alg) => JWT_ALGORITHMS.includes(alg)),
     };
   } catch (err) {
-    logger.warn("settings.oidc_check_failed", errorFields(err));
-    return { ok: false };
+    logger.warn("settings.oidc_check_failed", { ...errorFields(err), ...oidcFailureFields(err) });
+    return issuerFailure(err);
   }
+}
+
+function issuerFailure(err: unknown): IssuerCheck {
+  if (!(err instanceof OidcDiscoveryError)) return { ok: false, reason: "unreachable" };
+  return {
+    ok: false,
+    reason: err.reason,
+    ...(err.status ? { status: err.status } : {}),
+    ...(err.issuer ? { issuer: err.issuer } : {}),
+  };
 }
 
 async function requireScimManager(input: unknown) {

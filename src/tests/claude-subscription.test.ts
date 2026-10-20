@@ -4,6 +4,16 @@ import { CLAUDE_CODE_IDENTITY, withClaudeBetas, withClaudeIdentity } from "@/lib
 import { signInHeaders } from "@/lib/gateway/upstreams/credentials";
 import { joinPath, prepareBody, upstreamError, upstreamHeaders, upstreamRetryAt } from "@/lib/gateway/dispatch/upstream";
 import { routePool } from "@/lib/gateway/routing/route-pool";
+import {
+  claudeHeaderWindows,
+  limitsUpdatedAt,
+  newestLimits,
+  observedChanged,
+  observedFlipped,
+  updatedFromTraffic,
+  withObservedWindows,
+} from "@/lib/gateway/upstreams/observed-limits";
+import type { LimitWindow, SubscriptionLimits } from "@/types/providers";
 import type { ResolvedDeployment } from "@/types/routing";
 
 const claudeDep: ResolvedDeployment = {
@@ -122,4 +132,144 @@ test("Anthropic rate limit headers park the route until the unified reset", () =
   assert.equal(upstreamRetryAt(500, {}, 0, headers), null);
   assert.equal(upstreamError(429, { error: { message: "limit" } }, headers).retryAt, 1_900_000_000_000);
   assert.equal(upstreamError(429, { error: { message: "limit" } }).retryAt, null);
+});
+
+const FIVE_HOURS = 18_000;
+const WEEK = 604_800;
+const RESET_5H = 1_900_000_000;
+const RESET_7D = 1_900_400_000;
+
+function unified(values: Record<string, string>): Headers {
+  return new Headers(
+    Object.fromEntries(Object.entries(values).map(([name, value]) => [`anthropic-ratelimit-unified-${name}`, value])),
+  );
+}
+
+function planWindow(windowSeconds: number, usedPercent: number, resetsAt: string | null, limitReached = false): LimitWindow {
+  return { scope: "", usedPercent, windowSeconds, resetsAt, limitReached };
+}
+
+function fullLimits(fetchedAt: number): SubscriptionLimits {
+  return {
+    plan: "max",
+    windows: [
+      planWindow(FIVE_HOURS, 10, new Date(RESET_5H * 1000).toISOString()),
+      planWindow(WEEK, 20, new Date(RESET_7D * 1000).toISOString()),
+      { scope: "Opus", usedPercent: 70, windowSeconds: WEEK, resetsAt: null, limitReached: false },
+    ],
+    credits: null,
+    resetCredits: null,
+    extraUsage: { usedCents: 120, limitCents: 5_000, percent: 2.4 },
+    fetchedAt: new Date(fetchedAt).toISOString(),
+  };
+}
+
+test("unified rate limit headers become the five-hour and weekly plan windows", () => {
+  const windows = claudeHeaderWindows(
+    unified({
+      status: "allowed_warning",
+      reset: String(RESET_5H),
+      "representative-claim": "five_hour",
+      "5h-utilization": "0.42",
+      "5h-reset": String(RESET_5H),
+      "5h-status": "allowed",
+      "7d-utilization": "0.875",
+      "7d-reset": String(RESET_7D * 1000),
+      "7d-status": "allowed_warning",
+      "7d_oi-utilization": "0.99",
+      "overage-status": "rejected",
+    }),
+  );
+  assert.deepEqual(windows, [
+    planWindow(FIVE_HOURS, 42, new Date(RESET_5H * 1000).toISOString()),
+    planWindow(WEEK, 87.5, new Date(RESET_7D * 1000).toISOString()),
+  ]);
+});
+
+test("rejected headers mark the claimed window reached and odd or missing values are ignored", () => {
+  const rejected = claudeHeaderWindows(
+    unified({ status: "rejected", reset: String(RESET_5H), "representative-claim": "five_hour", "7d-utilization": "0.3" }),
+  );
+  assert.deepEqual(rejected, [
+    planWindow(FIVE_HOURS, 100, new Date(RESET_5H * 1000).toISOString(), true),
+    planWindow(WEEK, 30, null),
+  ]);
+  const weekly = claudeHeaderWindows(
+    unified({ "5h-utilization": "0.2", "7d-utilization": "1", "7d-status": "rejected", "7d-reset": "2031-03-17T12:00:00Z" }),
+  );
+  assert.equal(weekly[1]?.limitReached, true);
+  assert.equal(weekly[1]?.usedPercent, 100);
+  assert.equal(weekly[1]?.resetsAt, "2031-03-17T12:00:00.000Z");
+  assert.equal(weekly[0]?.limitReached, false);
+  assert.deepEqual(claudeHeaderWindows(new Headers()), []);
+  assert.deepEqual(claudeHeaderWindows(unified({ status: "allowed", reset: String(RESET_5H) })), []);
+  assert.deepEqual(
+    claudeHeaderWindows(unified({ "5h-utilization": "42", "7d-utilization": "-0.1", "5h-reset": "soon" })),
+    [],
+  );
+  assert.equal(claudeHeaderWindows(unified({ "5h-utilization": "0.5", "5h-reset": "later" }))[0]?.resetsAt, null);
+});
+
+test("observed windows replace only the plan windows and keep model limits, extra usage, and plan", () => {
+  const now = RESET_5H * 1000 - 3_600_000;
+  const base = fullLimits(now - 600_000);
+  const merged = withObservedWindows(base, [planWindow(FIVE_HOURS, 55, null), planWindow(WEEK, 21, null)], now);
+  assert.equal(merged.plan, "max");
+  assert.deepEqual(merged.extraUsage, base.extraUsage);
+  assert.equal(merged.fetchedAt, base.fetchedAt);
+  assert.equal(merged.observedAt, new Date(now).toISOString());
+  assert.deepEqual(
+    merged.windows.map((window) => [window.scope, window.windowSeconds, window.usedPercent, window.resetsAt]),
+    [
+      ["", FIVE_HOURS, 55, base.windows[0]!.resetsAt],
+      ["", WEEK, 21, base.windows[1]!.resetsAt],
+      ["Opus", WEEK, 70, null],
+    ],
+  );
+  assert.equal(limitsUpdatedAt(merged), now);
+  assert.equal(updatedFromTraffic(merged), true);
+  assert.equal(updatedFromTraffic(base), false);
+  const empty = withObservedWindows({ ...base, windows: [] }, [planWindow(WEEK, 5, null)], now);
+  assert.deepEqual(empty.windows, [planWindow(WEEK, 5, null)]);
+});
+
+test("only real movement in the observed windows counts as a change", () => {
+  const reset = new Date(RESET_5H * 1000).toISOString();
+  const before = [planWindow(FIVE_HOURS, 40, reset), planWindow(WEEK, 20, null)];
+  assert.equal(observedChanged(before, [planWindow(FIVE_HOURS, 40.6, reset)]), false);
+  assert.equal(observedChanged(before, [planWindow(FIVE_HOURS, 41, reset)]), true);
+  assert.equal(observedChanged(before, [planWindow(FIVE_HOURS, 40, new Date(RESET_5H * 1000 + 30_000).toISOString())]), false);
+  assert.equal(observedChanged(before, [planWindow(FIVE_HOURS, 40, new Date(RESET_5H * 1000 + 3_600_000).toISOString())]), true);
+  assert.equal(observedChanged(before, [planWindow(WEEK, 20, reset)]), true);
+  assert.equal(observedFlipped(before, [planWindow(FIVE_HOURS, 40, reset, true)]), true);
+  assert.equal(observedFlipped(before, [planWindow(FIVE_HOURS, 90, reset)]), false);
+  assert.equal(observedFlipped([], [planWindow(FIVE_HOURS, 1, null)]), true);
+});
+
+test("a newer full read wins but keeps plan windows observed after it", () => {
+  const t0 = 1_800_000_000_000;
+  const older = withObservedWindows(
+    fullLimits(t0),
+    [planWindow(FIVE_HOURS, 80, null), planWindow(WEEK, 26, null)],
+    t0 + 120_000,
+  );
+  const polled = {
+    ...fullLimits(t0 + 60_000),
+    windows: [
+      planWindow(FIVE_HOURS, 60, null),
+      planWindow(WEEK, 25, null),
+      { scope: "Opus", usedPercent: 90, windowSeconds: WEEK, resetsAt: null, limitReached: false },
+    ],
+  };
+  const combined = newestLimits(older, polled);
+  assert.equal(combined.fetchedAt, polled.fetchedAt);
+  assert.equal(combined.observedAt, older.observedAt);
+  assert.deepEqual(
+    combined.windows.map((window) => window.usedPercent),
+    [80, 26, 90],
+  );
+  const later = fullLimits(t0 + 180_000);
+  assert.equal(newestLimits(older, later), later);
+  assert.equal(newestLimits(later, older), later);
+  assert.equal(newestLimits(fullLimits(t0), fullLimits(t0 - 1)).fetchedAt, new Date(t0).toISOString());
 });

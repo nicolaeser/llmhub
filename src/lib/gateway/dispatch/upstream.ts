@@ -15,6 +15,7 @@ import {
 } from "@/lib/gateway/upstreams/antigravity";
 import { chatToCodex, codexCompletion } from "@/lib/gateway/upstreams/codex";
 import { deploymentAuth } from "@/lib/gateway/upstreams/credentials";
+import { observeClaudeLimits } from "@/lib/gateway/upstreams/limit-store";
 import { acquireGroup, defaultBase, loadGroup, markFailure, markSuccess, openaiRoot } from "@/lib/gateway/routing/runtime";
 import { applyProviderServiceMode, requestRoutingOverride, serviceModeHeaders } from "@/lib/gateway/dispatch/service-mode";
 import { asRecord, asString } from "@/lib/gateway/core";
@@ -82,6 +83,11 @@ export function mergeUpstreamHeaders(
     }
   }
   return out;
+}
+
+export function observeUpstreamLimits(dep: ResolvedDeployment, headers: Headers): void {
+  if (dep.provider?.kind !== "claude") return;
+  void observeClaudeLimits(dep.provider.id, headers);
 }
 
 function nativeChatPath(path: string): boolean {
@@ -222,6 +228,7 @@ export async function proxyJson(input: {
     );
   }
   const res = await fetch(url, init);
+  observeUpstreamLimits(input.dep, res.headers);
   const raw = new Uint8Array(await res.arrayBuffer());
   let json: unknown = {};
   const ct = res.headers.get("content-type") ?? "";
@@ -271,6 +278,7 @@ async function proxyRaw(input: {
         : undefined),
     signal: AbortSignal.timeout(input.timeoutMs && input.timeoutMs > 0 ? input.timeoutMs : 120_000),
   });
+  observeUpstreamLimits(input.dep, res.headers);
   const raw = new Uint8Array(await res.arrayBuffer());
   return {
     status: res.status,

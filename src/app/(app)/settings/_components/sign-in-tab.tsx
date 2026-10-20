@@ -21,7 +21,13 @@ import CopyButton from "@/components/console/copy-button";
 import IconTile from "@/components/console/icon-tile";
 import { SettingSection, SettingSwitch, SettingText } from "./setting-fields";
 import { useErrorToast } from "@/components/console/use-error-toast";
-import { OIDC_PRESETS, OIDC_PROVIDER_IDS } from "@/lib/auth/oidc-presets";
+import {
+  entraV2Issuer,
+  issuerHasPlaceholder,
+  OIDC_PRESETS,
+  OIDC_PROVIDER_IDS,
+  suggestedIssuer,
+} from "@/lib/auth/oidc-presets";
 import { useActionData } from "@/lib/hooks/use-action-data";
 import { isActionFail } from "@/lib/http/action-result";
 import type { OidcProviderId, OidcSettings } from "@/types/auth";
@@ -45,8 +51,15 @@ function draftOf(view: SignInSettingsView): Draft {
   };
 }
 
-function hasPlaceholder(value: string) {
-  return /[{}]/.test(value);
+function checkState(check: IssuerCheck) {
+  if (check.ok) return check.supported ? "ok" : "unsupported";
+  if (check.reason === "issuer_mismatch" && check.issuer && entraV2Issuer(check.issuer)) return "entra_v1";
+  return check.reason;
+}
+
+function checkSuggestion(check: IssuerCheck) {
+  if (check.ok) return check.usesTenantId ? check.issuer : null;
+  return check.reason === "issuer_mismatch" && check.issuer ? suggestedIssuer(check.issuer) : null;
 }
 
 export default function SignInTab() {
@@ -79,7 +92,7 @@ export default function SignInTab() {
 
   function pickProvider(provider: OidcProviderId) {
     const next = OIDC_PRESETS[provider];
-    const fixedIssuer = next.issuer && !hasPlaceholder(next.issuer) ? next.issuer : "";
+    const fixedIssuer = next.issuer && !issuerHasPlaceholder(next.issuer) ? next.issuer : "";
     const keptIssuer = oidc.issuer === preset.issuer ? "" : oidc.issuer;
     setOidc({
       provider,
@@ -90,9 +103,9 @@ export default function SignInTab() {
     setCheck(null);
   }
 
-  function runCheck() {
+  function runCheck(issuer = oidc.issuer) {
     startCheck(async () => {
-      const result = await checkOidcIssuerAction({ issuer: oidc.issuer });
+      const result = await checkOidcIssuerAction({ issuer });
       if (isActionFail(result)) {
         showError(result.error);
         return;
@@ -118,6 +131,13 @@ export default function SignInTab() {
     });
   }
 
+  function applyIssuer(issuer: string) {
+    setOidc({ issuer });
+    setCheck(null);
+    runCheck(issuer);
+  }
+
+  const suggestion = check ? checkSuggestion(check) : null;
   const checklist = [
     { key: "callback", ok: null },
     { key: "secret", ok: view.secretSet },
@@ -171,8 +191,8 @@ export default function SignInTab() {
                 size="sm"
                 variant="secondary"
                 isPending={checking}
-                isDisabled={!oidc.issuer || hasPlaceholder(oidc.issuer)}
-                onPress={runCheck}
+                isDisabled={!oidc.issuer || issuerHasPlaceholder(oidc.issuer)}
+                onPress={() => runCheck()}
               >
                 {({ isPending }) => (
                   <>
@@ -201,7 +221,7 @@ export default function SignInTab() {
           <Alert status={check.ok ? (check.supported ? "success" : "warning") : "danger"}>
             <Alert.Indicator />
             <Alert.Content className="min-w-0">
-              <Alert.Title>{t("check.title", { state: check.ok ? (check.supported ? "ok" : "unsupported") : "failed" })}</Alert.Title>
+              <Alert.Title>{t("check.title", { state: checkState(check) })}</Alert.Title>
               <Alert.Description className="break-words">
                 {check.ok
                   ? t("check.found", {
@@ -209,9 +229,20 @@ export default function SignInTab() {
                       method: check.tokenAuth,
                       algorithms: check.algorithms.join(", ") || "RS256",
                     })
-                  : t("check.failed")}
+                  : t("check.failed", {
+                      reason: checkState(check),
+                      status: check.status ?? 0,
+                      issuer: check.issuer ?? "",
+                      suggestion: suggestion ?? "",
+                    })}
+                {check.ok && check.usesTenantId ? ` ${t("check.tenantId", { issuer: check.issuer })}` : null}
               </Alert.Description>
             </Alert.Content>
+            {suggestion && view.canManage ? (
+              <Button size="sm" variant="secondary" isDisabled={disabled || checking} onPress={() => applyIssuer(suggestion)}>
+                {t("check.useIssuer")}
+              </Button>
+            ) : null}
           </Alert>
         ) : null}
         {preset.docs ? (
