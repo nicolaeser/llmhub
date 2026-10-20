@@ -2,11 +2,14 @@ import type { ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
 import type { Permission } from "@/types/auth";
 
-type NavItem = {
+export type ScopeKind = "platform" | "company";
+
+export type NavScope = ScopeKind | "both";
+
+export type NavItem = {
   href: string;
   labelKey: string;
-  companyLabelKey?: string;
-  adminOnly?: boolean;
+  scope: NavScope;
   icon: LucideIcon;
   permission: Permission | readonly Permission[];
 };
@@ -14,8 +17,21 @@ type NavItem = {
 export type NavSection = {
   id: string;
   labelKey: string;
+  pinned?: boolean;
   items: NavItem[];
 };
+
+export type ScopeCompany = { id: string; alias: string };
+
+export type ConsoleScope = { kind: "platform" } | ({ kind: "company" } & ScopeCompany);
+
+export type ConsoleScopeState = {
+  scope: ConsoleScope;
+  companies: ScopeCompany[];
+  canSwitch: boolean;
+};
+
+export type WorkspaceChange = { orgId: string | null; alias: string };
 
 export type PickerItem = { id: string; label: string; detail?: string };
 

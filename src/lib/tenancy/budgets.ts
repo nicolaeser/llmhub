@@ -3,7 +3,7 @@ import "server-only";
 import prisma from "@/lib/db/prisma";
 import { requirePermission } from "@/lib/auth/guards";
 import { PERMISSIONS } from "@/lib/auth/permissions";
-import { inCompany, keyVisibleTo } from "@/lib/auth/scope";
+import { assertPlatform, inCompany, keyVisibleTo } from "@/lib/auth/scope";
 import { writeAudit } from "@/lib/audit";
 import { forecastBudget, spendWindow } from "@/lib/usage/forecast";
 import { resolveKeyTenancy } from "@/lib/gateway/access/key-tenancy";
@@ -22,7 +22,6 @@ import type {
   CapLink,
   HolderRecord,
 } from "@/types/structure";
-import { assertPlatform } from "@/lib/tenancy/guards";
 
 const BUDGET_KINDS: readonly string[] = ["org", "team", "project", "member", "user", "key"];
 const PLATFORM_BUDGETS: readonly BudgetKind[] = ["org", "user"];

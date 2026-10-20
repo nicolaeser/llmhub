@@ -1,6 +1,6 @@
 import "server-only";
 
-import { requirePermission } from "@/lib/auth/guards";
+import { requirePermission, requirePlatformPermission } from "@/lib/auth/guards";
 import { hasPerm, PERMISSIONS } from "@/lib/auth/permissions";
 import { writeAudit } from "@/lib/audit";
 import { assertModelRoles, enabledModelChoices } from "@/lib/models/aliases";
@@ -50,7 +50,7 @@ export async function loadCatalogSettings() {
 }
 
 export async function saveCatalogSettings(raw: unknown) {
-  const session = await requirePermission(PERMISSIONS.SETTINGS_MANAGE);
+  const session = await requirePlatformPermission(PERMISSIONS.SETTINGS_MANAGE);
   const parsed = catalogSettingsSchema.safeParse(raw);
   if (!parsed.success) throw new Error("VALIDATION");
   const { catalog_jev: jevInput, ...rest } = parsed.data;

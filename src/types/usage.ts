@@ -102,3 +102,5 @@ export type UsageSummary = {
   cacheSavings: number;
   cacheHitRate: number;
 };
+
+export type UsageTab = "overview" | "markups";

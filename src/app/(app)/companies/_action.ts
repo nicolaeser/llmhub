@@ -2,7 +2,7 @@
 
 import { runAction } from "@/lib/http/action-result";
 import { loadCompanyMcpServers, saveCompanyMcpInstallation } from "@/lib/mcp/servers";
-import { addBoost, removeBoost, saveBudgetAlerts, setBudget } from "@/lib/tenancy/budgets";
+import { addBoost, removeBoost, setBudget } from "@/lib/tenancy/budgets";
 import {
   deleteNode,
   loadStructure,
@@ -47,10 +47,6 @@ export async function addBoostAction(...args: Parameters<typeof addBoost>) {
 
 export async function removeBoostAction(...args: Parameters<typeof removeBoost>) {
   return runAction(() => removeBoost(...args));
-}
-
-export async function saveBudgetAlertsAction(...args: Parameters<typeof saveBudgetAlerts>) {
-  return runAction(() => saveBudgetAlerts(...args));
 }
 
 export async function saveReportAction(...args: Parameters<typeof saveReport>) {

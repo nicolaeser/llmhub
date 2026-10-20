@@ -1,19 +1,18 @@
 {
   "title": "Unternehmen",
-  "subtitle": "{scope, select, company {Dein Unternehmen mit Abteilungen, Projekten, Personen und Budgets.} other {Kunden mit Abteilungen, Projekten, Personen und Budgets.}}",
+  "subtitle": "{scope, select, company {Abteilungen, Projekte, Personen und Budgets dieses Unternehmens.} other {Kunden mit Abteilungen, Projekten, Personen und Budgets.}}",
   "createOrg": "Unternehmen hinzufügen",
   "emptyTitle": "Noch keine Unternehmen",
   "empty": "{scope, select, company {Dein Unternehmen ist noch nicht eingerichtet. Wende dich an einen Plattform-Admin.} other {Lege das erste Kundenunternehmen an. Abteilungen, Projekte, Personen und ihre API-Keys liegen darin.}}",
   "tree": {
-    "title": "Unternehmen",
-    "addOrg": "Unternehmen",
+    "title": "{scope, select, company {Struktur} other {Unternehmen}}",
     "search": "Nach Namen filtern…",
     "clear": "Filter löschen",
     "noMatches": "Nichts passt zu diesem Filter.",
     "unlimited": "Ohne Limit"
   },
   "steps": {
-    "title": "Kunden einrichten",
+    "title": "{scope, select, company {{alias} einrichten} other {Kunden einrichten}}",
     "subtitle": "Abteilungen sind optional, damit lassen sich aber ganze Gruppen wie die IT begrenzen. Erledigte Schritte bleiben abgehakt.",
     "number": "Schritt {n, number, integer}",
     "status": "{status, select, done {Erledigt} other {Offen}}",
@@ -53,7 +52,8 @@
     "delete": "{kind, select, org {Unternehmen löschen} team {Abteilung löschen} project {Projekt löschen} member {Person löschen} other {Löschen}}",
     "deleteTitle": "{kind, select, org {Unternehmen {alias} löschen?} team {Abteilung {alias} löschen?} project {Projekt {alias} löschen?} member {{alias} löschen?} other {{alias} löschen?}}",
     "deleteHint": "{kind, select, org {Lösche zuerst Abteilungen, Projekte und Personen und entziehe Konsolen-Benutzern den Zugriff auf dieses Unternehmen.} team {Projekte und Personen bleiben im Unternehmen, nur ohne Abteilung.} project {Alle API-Keys dieses Projekts werden widerrufen.} member {Alle persönlichen API-Keys dieser Person werden widerrufen.} other {Das lässt sich nicht rückgängig machen.}}",
-    "deleted": "{kind, select, org {Unternehmen gelöscht} team {Abteilung gelöscht} project {Projekt gelöscht} member {Person gelöscht} other {Gelöscht}}"
+    "deleted": "{kind, select, org {Unternehmen gelöscht} team {Abteilung gelöscht} project {Projekt gelöscht} member {Person gelöscht} other {Gelöscht}}",
+    "openCompanyView": "Unternehmensansicht öffnen"
   },
   "budget": {
     "title": "Budget",
@@ -162,15 +162,6 @@
     },
     "ownerKind": "{kind, select, project {Projekt} member {Person} other {Intern}}",
     "budget": "Budget für {alias}"
-  },
-  "alerts": {
-    "title": "Budget-Alarme",
-    "hint": "Webhooks unter Logging & Alarme, die Budget-Schwellen abonniert haben, feuern einmal je Schwelle, wenn die Ausgabe sie überschreitet.",
-    "saved": "Alarm-Schwellen gespeichert",
-    "remove": "{value, number, integer} Prozent entfernen",
-    "add": "Neue Schwelle",
-    "addHint": "Zwischen 1 und 100 Prozent eines Budgets.",
-    "addButton": "Schwelle hinzufügen"
   },
   "reports": {
     "title": "Geplante Berichte ({count, number, integer})",

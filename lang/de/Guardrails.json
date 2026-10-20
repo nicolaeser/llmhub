@@ -1,6 +1,8 @@
 {
   "title": "Guardrails",
   "subtitle": "Prompts und Antworten auf personenbezogene Daten, verbotene Inhalte, Prompt-Injection und geleakte Secrets prüfen.",
+  "companySubtitle": "Überschreibungen für dieses Unternehmen, seine Projekte und Keys. Alles andere folgt der Plattform-Richtlinie.",
+  "companyNotice": "Die oben zusammengefasste Plattform-Richtlinie gilt für dieses Unternehmen, solange keine Überschreibung unten sie ersetzt. Ändern kannst du sie im Plattform-Bereich.",
   "tabs": "{tab, select, pii {PII} content {Regeln und Prüfungen} other {{tab}}}",
   "save": "Richtlinie speichern",
   "enabledState": "{enabled, select, true {Aktiv} other {Pausiert}}",
@@ -11,7 +13,7 @@
   "mask": "Mit Platzhaltern maskieren",
   "block": "Anfrage blockieren (400)",
   "restore": "In der Antwort wiederherstellen",
-  "modeHint": "Blockieren lehnt die Anfrage mit 400 pii_blocked ab, bevor sie das Modell erreicht. Maskieren lässt die Platzhalter in Antwort und Logs stehen. Wiederherstellen sendet nummerierte Platzhalter an das Modell und setzt die ursprünglichen personenbezogenen Werte danach in der Client-Antwort zurück. Logs bleiben maskiert. Geheimnisse, Schlüssel und Tokens werden nie wiederhergestellt.",
+  "modeHint": "Blockieren lehnt die Anfrage mit 400 pii_blocked ab, bevor sie das Modell erreicht. Maskieren lässt die Platzhalter in Antwort und Logs stehen. Wiederherstellen sendet nummerierte Platzhalter an das Modell und setzt die ursprünglichen personenbezogenen Werte danach in der Client-Antwort zurück. Außerdem fügt es eine kurze Systemanweisung hinzu, damit das Modell die Platzhalter unverändert lässt. Logs bleiben maskiert. Geheimnisse, Schlüssel und Tokens werden nie wiederhergestellt.",
   "output": "Auch Modellausgabe schwärzen",
   "outputHint": "Neue personenbezogene Daten in der Modellausgabe werden maskiert, bevor der Client sie sieht. Im Modus Wiederherstellen werden Werte aus dem Prompt danach zurückgesetzt.",
   "entities": "Entitäten",

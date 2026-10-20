@@ -10,7 +10,7 @@ import {
   permissionList,
   PERMISSIONS,
 } from "@/lib/auth/permissions";
-import { requirePermission } from "@/lib/auth/guards";
+import { requirePlatformPermission } from "@/lib/auth/guards";
 import { assertPasswordPolicy, hashPassword } from "@/lib/auth/password";
 import { roleOptions } from "@/lib/auth/roles";
 import { requestMeta } from "@/lib/auth/session";
@@ -364,14 +364,14 @@ export async function revokeUserSessions(session: AuthenticatedSession, userId: 
 }
 
 export async function loadUsersConsole(): Promise<UsersConsolePayload> {
-  return usersConsole(await requirePermission(PERMISSIONS.USERS_READ));
+  return usersConsole(await requirePlatformPermission(PERMISSIONS.USERS_READ));
 }
 
 export async function changeUsers(
   permission: Permission,
   mutation: (session: AuthenticatedSession) => Promise<unknown>,
 ): Promise<UsersConsolePayload> {
-  const session = await requirePermission(permission);
+  const session = await requirePlatformPermission(permission);
   await mutation(session);
   return usersConsole(session);
 }

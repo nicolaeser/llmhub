@@ -1,7 +1,7 @@
 import "server-only";
 
 import prisma from "@/lib/db/prisma";
-import { requirePermission } from "@/lib/auth/guards";
+import { requirePlatformPermission } from "@/lib/auth/guards";
 import { hasPerm, PERMISSIONS } from "@/lib/auth/permissions";
 import { writeAudit } from "@/lib/audit";
 import { markupColumns, markupRuleOf } from "@/lib/gateway/billing/markup-policy";
@@ -49,7 +49,7 @@ async function targetExists(scope: MarkupScope, id: string): Promise<boolean> {
 }
 
 export async function loadMarkups() {
-  const session = await requirePermission(PERMISSIONS.PRICING_READ);
+  const session = await requirePlatformPermission(PERMISSIONS.PRICING_READ);
   const [markups, orgs, teams, projects, groups, totals] = await Promise.all([
     prisma.priceMarkup.findMany({ orderBy: { createdAt: "asc" }, select: markupSelect }),
     prisma.organization.findMany({ orderBy: { alias: "asc" }, select: { id: true, alias: true } }),
@@ -79,7 +79,7 @@ export async function loadMarkups() {
 }
 
 export async function saveMarkup(raw: unknown) {
-  const session = await requirePermission(PERMISSIONS.PRICING_MANAGE);
+  const session = await requirePlatformPermission(PERMISSIONS.PRICING_MANAGE);
   const parsed = markupSchema.safeParse(raw);
   if (!parsed.success) throw new Error("VALIDATION");
   const input = parsed.data;
@@ -115,7 +115,7 @@ export async function saveMarkup(raw: unknown) {
 }
 
 export async function deleteMarkup(id: string) {
-  const session = await requirePermission(PERMISSIONS.PRICING_MANAGE);
+  const session = await requirePlatformPermission(PERMISSIONS.PRICING_MANAGE);
   if (!id) throw new Error("MISSING_ID");
   const existing = await prisma.priceMarkup.findUnique({ where: { id }, select: markupSelect });
   if (!existing) throw new Error("NOT_FOUND");

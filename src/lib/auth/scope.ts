@@ -16,6 +16,10 @@ export function companyOf(session: AuthenticatedSession): string | null {
   return session.user.orgId ?? null;
 }
 
+export function assertPlatform(session: AuthenticatedSession): void {
+  if (companyOf(session)) throw new Error("PLATFORM_ONLY");
+}
+
 export function inCompany(session: AuthenticatedSession, orgId: string | null | undefined): boolean {
   const company = companyOf(session);
   return !company || orgId === company;

@@ -1,31 +1,25 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import {
-  Button,
-  Card,
-  Label,
-  NumberField,
-  Spinner,
-  Tag,
-  TagGroup,
-  toast,
-} from "@heroui/react";
+import { Button, Label, NumberField, Spinner, Tag, TagGroup, toast } from "@heroui/react";
 import { Plus } from "lucide-react";
 import { useFormatter, useTranslations } from "next-intl";
 import { formats } from "@/i18n/formats";
 import { isActionFail } from "@/lib/http/action-result";
-import { saveBudgetAlertsAction } from "../_action";
 import { useErrorToast } from "@/components/console/use-error-toast";
+import { saveBudgetAlertsAction } from "../_action";
+import { SettingSection } from "./setting-fields";
 
-export default function AlertsCard({
+export default function BudgetAlertsCard({
   thresholds,
+  canManage,
   onSaved,
 }: {
   thresholds: number[];
+  canManage: boolean;
   onSaved: (thresholds: number[]) => void;
 }) {
-  const t = useTranslations("Companies.alerts");
+  const t = useTranslations("Settings.logging.budgetAlerts");
   const showError = useErrorToast();
   const format = useFormatter();
   const [draft, setDraft] = useState(90);
@@ -46,29 +40,21 @@ export default function AlertsCard({
   }
 
   return (
-    <Card>
-      <Card.Header>
-        <Card.Title>{t("title")}</Card.Title>
-        <Card.Description>{t("hint")}</Card.Description>
-      </Card.Header>
-      <Card.Content className="space-y-4">
-        <TagGroup
-          aria-label={t("title")}
-          onRemove={(keys) =>
-            save(thresholds.filter((value) => !keys.has(String(value))))
-          }
-        >
-          <TagGroup.List>
-            {thresholds.map((value) => (
-              <Tag key={value} id={String(value)} textValue={String(value)}>
-                {format.number(value / 100, "percent")}
-                {thresholds.length > 1 ? (
-                  <Tag.RemoveButton aria-label={t("remove", { value })} />
-                ) : null}
-              </Tag>
-            ))}
-          </TagGroup.List>
-        </TagGroup>
+    <SettingSection title={t("title")} subtitle={t("hint")}>
+      <TagGroup
+        aria-label={t("title")}
+        onRemove={canManage ? (keys) => save(thresholds.filter((value) => !keys.has(String(value)))) : undefined}
+      >
+        <TagGroup.List>
+          {thresholds.map((value) => (
+            <Tag key={value} id={String(value)} textValue={String(value)}>
+              {format.number(value / 100, "percent")}
+              {canManage && thresholds.length > 1 ? <Tag.RemoveButton aria-label={t("remove", { value })} /> : null}
+            </Tag>
+          ))}
+        </TagGroup.List>
+      </TagGroup>
+      {canManage ? (
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
           <NumberField
             value={draft}
@@ -86,12 +72,7 @@ export default function AlertsCard({
               <NumberField.IncrementButton />
             </NumberField.Group>
           </NumberField>
-          <Button
-            variant="secondary"
-            isPending={pending}
-            isDisabled={!canAdd}
-            onPress={() => save([...thresholds, next])}
-          >
+          <Button variant="secondary" isPending={pending} isDisabled={!canAdd} onPress={() => save([...thresholds, next])}>
             {({ isPending }) => (
               <>
                 {isPending ? <Spinner color="current" size="sm" /> : <Plus size={14} aria-hidden />}
@@ -100,8 +81,8 @@ export default function AlertsCard({
             )}
           </Button>
         </div>
-        <p className="text-xs text-muted">{t("addHint")}</p>
-      </Card.Content>
-    </Card>
+      ) : null}
+      <p className="text-xs text-muted">{t("addHint")}</p>
+    </SettingSection>
   );
 }

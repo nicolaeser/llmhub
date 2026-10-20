@@ -1,8 +1,8 @@
 "use client";
 
 import { useRef, useState, useTransition } from "react";
-import { Breadcrumbs, Button, Card, toast, useOverlayState } from "@heroui/react";
-import { Building2, Folder, Pencil, Plus, Trash2, User, Users, type LucideIcon } from "lucide-react";
+import { Breadcrumbs, Button, Card, Spinner, toast, useOverlayState } from "@heroui/react";
+import { ArrowRightLeft, Building2, Folder, Pencil, Plus, Trash2, User, Users, type LucideIcon } from "lucide-react";
 import { useFormatter, useTranslations } from "next-intl";
 import BudgetDialog from "@/components/budget/budget-dialog";
 import ConfirmDialog from "@/components/console/confirm-dialog";
@@ -10,7 +10,6 @@ import EmptyState from "@/components/console/empty-state";
 import IconTile from "@/components/console/icon-tile";
 import PageHeader from "@/components/console/page-header";
 import PageStatus from "@/components/console/page-status";
-import McpConnectionsCard from "@/components/mcp/connections-card";
 import { useErrorToast } from "@/components/console/use-error-toast";
 import { useActionData } from "@/lib/hooks/use-action-data";
 import { BELOW_LG, REDUCED_MOTION } from "@/lib/hooks/use-media-query";
@@ -31,17 +30,18 @@ import {
   saveCompanyMcpInstallationAction,
   setBudgetAction,
 } from "./_action";
-import AlertsCard from "./_components/alerts-card";
 import BoostDialog from "./_components/boost-dialog";
 import BudgetCard from "./_components/budget-card";
 import ChildrenCard from "./_components/children-card";
 import CompanyTree from "./_components/company-tree";
 import KeysCard from "./_components/keys-card";
+import McpConnectionsCard from "./_components/mcp-connections-card";
 import MembersCard from "./_components/members-card";
 import NodeDialog from "./_components/node-dialog";
 import ReportsCard from "./_components/reports-card";
 import SetupSteps, { setupDone } from "./_components/setup-steps";
 import { budgetOf, chainOf, nodeExists, parseNodeRef, withBudget } from "./_components/tree-model";
+import { useConsoleScope } from "../_components/console-scope";
 
 const NODE_ICONS: Record<NodeKind, LucideIcon> = { org: Building2, team: Users, project: Folder, member: User };
 
@@ -71,6 +71,7 @@ export default function CompaniesPage() {
   const boostState = useOverlayState();
   const page = useActionData(loadStructureAction);
   const { data, setData } = page;
+  const consoleScope = useConsoleScope();
 
   function select(ref: NodeRef | null) {
     setPicked(ref);
@@ -107,10 +108,13 @@ export default function CompaniesPage() {
   }
 
   if (!data) {
-    return <PageStatus icon={Building2} title={t("title")} state={page} layout="split" />;
+    const loadingTitle = consoleScope.scope.kind === "company" ? consoleScope.scope.alias : t("title");
+    return <PageStatus icon={Building2} title={loadingTitle} state={page} layout="split" />;
   }
 
   const platform = !data.companyId;
+  const scope = platform ? "platform" : "company";
+  const home = platform ? undefined : data.orgs.find((row) => row.id === data.companyId);
   const selected =
     [picked, parseNodeRef(nodeParam)].find((ref) => nodeExists(data, ref)) ?? firstNode(data);
   const org = selected?.kind === "org" ? data.orgs.find((row) => row.id === selected.id) : undefined;
@@ -176,6 +180,7 @@ export default function CompaniesPage() {
         return;
       }
       setData(result);
+      if (ref.kind === "org") consoleScope.refresh();
       const parent: NodeRef | null =
         ref.kind === "org"
           ? null
@@ -190,6 +195,7 @@ export default function CompaniesPage() {
   }
 
   const createOrg = data.canManage && platform ? () => openNode("org", null, "") : null;
+  const openCompanyView = platform && org && consoleScope.canSwitch ? () => consoleScope.switchTo(org.id) : null;
   const summary = org
     ? t("detail.orgSummary", {
         teams: data.teams.filter((row) => row.orgId === org.id).length,
@@ -220,8 +226,8 @@ export default function CompaniesPage() {
     <div className="space-y-5">
       <PageHeader
         icon={Building2}
-        title={t("title")}
-        subtitle={t("subtitle", { scope: platform ? "platform" : "company" })}
+        title={home?.alias ?? t("title")}
+        subtitle={t("subtitle", { scope })}
         actions={
           createOrg && node ? (
             <Button onPress={createOrg}>
@@ -232,13 +238,13 @@ export default function CompaniesPage() {
         }
       />
 
-      {showSteps ? <SetupSteps data={data} onStep={onStep} /> : null}
+      {showSteps ? <SetupSteps data={data} company={home?.alias ?? null} onStep={onStep} /> : null}
 
       {!node || !selected ? (
         <EmptyState
           icon={Building2}
           title={t("emptyTitle")}
-          description={t("empty", { scope: platform ? "platform" : "company" })}
+          description={t("empty", { scope })}
           action={
             createOrg ? (
               <Button onPress={createOrg}>
@@ -251,7 +257,7 @@ export default function CompaniesPage() {
       ) : (
         <div className="grid gap-5 lg:grid-cols-[18rem_minmax(0,1fr)] xl:grid-cols-[20rem_minmax(0,1fr)]">
           <div className="min-w-0 lg:sticky lg:top-4 lg:self-start">
-            <CompanyTree data={data} selected={selected} onSelect={selectFromTree} onCreateOrg={createOrg} />
+            <CompanyTree data={data} selected={selected} onSelect={selectFromTree} />
           </div>
 
           <div ref={detailRef} className="min-w-0 space-y-5">
@@ -281,34 +287,57 @@ export default function CompaniesPage() {
                   </p>
                 </div>
               </div>
-              {canEditNode ? (
+              {canEditNode || openCompanyView ? (
                 <div className="flex flex-wrap gap-2">
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    onPress={() => openNode(selected.kind, node.id, orgId, teamId)}
-                  >
-                    <Pencil size={14} aria-hidden />
-                    {t("detail.edit", { kind: selected.kind })}
-                  </Button>
-                  <ConfirmDialog
-                    title={t("detail.deleteTitle", { kind: selected.kind, alias: node.alias })}
-                    description={t("detail.deleteHint", { kind: selected.kind })}
-                    confirmLabel={tCommon("delete")}
-                    cancelLabel={tCommon("cancel")}
-                    pending={deleting}
-                    onConfirm={() => remove(selected)}
-                  >
+                  {openCompanyView ? (
                     <Button
-                      isIconOnly
                       size="sm"
-                      variant="danger-soft"
-                      aria-label={t("detail.delete", { kind: selected.kind })}
-                      isPending={deleting}
+                      variant="secondary"
+                      isPending={consoleScope.pending}
+                      onPress={openCompanyView}
                     >
-                      <Trash2 size={14} aria-hidden />
+                      {({ isPending }) => (
+                        <>
+                          {isPending ? (
+                            <Spinner color="current" size="sm" />
+                          ) : (
+                            <ArrowRightLeft size={14} aria-hidden />
+                          )}
+                          {t("detail.openCompanyView")}
+                        </>
+                      )}
                     </Button>
-                  </ConfirmDialog>
+                  ) : null}
+                  {canEditNode ? (
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onPress={() => openNode(selected.kind, node.id, orgId, teamId)}
+                    >
+                      <Pencil size={14} aria-hidden />
+                      {t("detail.edit", { kind: selected.kind })}
+                    </Button>
+                  ) : null}
+                  {canEditNode ? (
+                    <ConfirmDialog
+                      title={t("detail.deleteTitle", { kind: selected.kind, alias: node.alias })}
+                      description={t("detail.deleteHint", { kind: selected.kind })}
+                      confirmLabel={tCommon("delete")}
+                      cancelLabel={tCommon("cancel")}
+                      pending={deleting}
+                      onConfirm={() => remove(selected)}
+                    >
+                      <Button
+                        isIconOnly
+                        size="sm"
+                        variant="danger-soft"
+                        aria-label={t("detail.delete", { kind: selected.kind })}
+                        isPending={deleting}
+                      >
+                        <Trash2 size={14} aria-hidden />
+                      </Button>
+                    </ConfirmDialog>
+                  ) : null}
                 </div>
               ) : null}
             </div>
@@ -450,15 +479,6 @@ export default function CompaniesPage() {
         </div>
       )}
 
-      {data.canBudget && platform ? (
-        <AlertsCard
-          thresholds={data.thresholds}
-          onSaved={(thresholds) =>
-            setData((current) => ({ ...current, thresholds }))
-          }
-        />
-      ) : null}
-
       <NodeDialog
         key={`node-${dialogKey}`}
         state={nodeState}
@@ -469,6 +489,7 @@ export default function CompaniesPage() {
         data={data}
         onSaved={(payload, ref) => {
           setData(payload);
+          if (nodeForm.kind === "org") consoleScope.refresh();
           if (ref) select(ref);
         }}
       />

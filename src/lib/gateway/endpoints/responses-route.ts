@@ -100,7 +100,7 @@ async function respond(
     : null;
 
   if (mcp && request.stream === true) {
-    return streamMcpChat({
+    const streamed = await streamMcpChat({
       req,
       ctx: mcp,
       body: chatBody,
@@ -129,6 +129,7 @@ async function respond(
         });
       },
     });
+    return restoreClientStream(principal.trace, streamed);
   }
 
   if (mcp) {
@@ -147,7 +148,7 @@ async function respond(
   }
 
   if (request.stream === true && search) {
-    return streamFileSearch({
+    const streamed = await streamFileSearch({
       req,
       ctx: search,
       body: chatBody,
@@ -179,6 +180,7 @@ async function respond(
         };
       },
     });
+    return restoreClientStream(principal.trace, streamed);
   }
 
   if (search) {

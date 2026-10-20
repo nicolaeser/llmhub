@@ -104,7 +104,7 @@ export default function OverviewTab() {
       label: t("group.model"),
       options: stats.models.map((id) => ({ id, label: id })),
     },
-    { key: "orgId" as const, label: t("group.org"), options: options("org", stats.orgs) },
+    ...(stats.companyView ? [] : [{ key: "orgId" as const, label: t("group.org"), options: options("org", stats.orgs) }]),
     { key: "teamId" as const, label: t("group.team"), options: options("team", stats.teams) },
     { key: "projectId" as const, label: t("group.project"), options: options("project", stats.projects) },
     { key: "memberId" as const, label: t("group.member"), options: options("member", stats.members) },
@@ -288,6 +288,7 @@ export default function OverviewTab() {
         <>
         {stats.purchase === null ? null : (
           <MarginCard
+            companyView={stats.companyView}
             chargeback={stats.chargeback}
             names={stats.names}
             purchase={stats.purchase}
@@ -298,7 +299,7 @@ export default function OverviewTab() {
           daily={stats.daily}
           byModel={stats.byModel}
           byTeam={named("team", stats.byTeam)}
-          byOrg={named("org", stats.byOrg)}
+          byOrg={stats.companyView ? [] : named("org", stats.byOrg)}
           byProject={named("project", stats.byProject)}
           byMember={named("member", stats.byMember)}
           healthByModel={stats.healthByModel}

@@ -95,7 +95,6 @@
     "installing": "Installing the update",
     "noticeTitle": "Automatic updates are available",
     "noticeBody": "An updater is connected to this server. Turn on automatic updates to install new LLM Hub images within five minutes of their release. LLM Hub restarts briefly for each update.",
-    "noticeEnable": "Enable automatic updates",
-    "noticeLater": "Not now"
+    "noticeEnable": "Enable automatic updates"
   }
 }

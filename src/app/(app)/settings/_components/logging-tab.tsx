@@ -13,6 +13,7 @@ import { useTranslations } from "next-intl";
 import { SettingSection, SettingSwitch } from "./setting-fields";
 import { formats } from "@/i18n/formats";
 import { loadLoggingAction, saveLoggingAction } from "../_action";
+import BudgetAlertsCard from "./budget-alerts-card";
 import WebhookCard from "./webhook-card";
 import SaveBar, { SettingsLead } from "./save-bar";
 import TabState from "./tab-state";
@@ -203,6 +204,13 @@ export default function LoggingTab() {
           })}
         </div>
       </SettingSection>
+      <BudgetAlertsCard
+        thresholds={view.budgetAlerts.thresholds}
+        canManage={view.budgetAlerts.canManage}
+        onSaved={(thresholds) =>
+          setView((current) => ({ ...current, budgetAlerts: { ...current.budgetAlerts, thresholds } }))
+        }
+      />
       <SettingSection title={t("contentTitle")} subtitle={t("contentSubtitle")}>
         <SettingSwitch
           label={t("content")}

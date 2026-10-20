@@ -1,6 +1,9 @@
 import { cancelQuietly } from "@/lib/utils/streams";
 
 const CREDENTIALS = new Set(["SECRET", "JWT", "PRIVATE_KEY", "CONNECTION_STRING", "ENV_SECRET"]);
+const NUMBERED_PLACEHOLDER = /\[[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)*_\d+\]/g;
+const SIGNED_KEYS = new Set(["thinking", "signature", "encrypted_content"]);
+const asIs = (value: string): string => value;
 
 export class PiiVault {
   private readonly values = new Map<string, string>();
@@ -20,8 +23,15 @@ export class PiiVault {
     return token;
   }
 
-  restore(text: string): string {
-    return text.replace(/\[[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)*_\d+\]/g, (token) => this.values.get(token) ?? token);
+  get size(): number {
+    return this.values.size;
+  }
+
+  restore(text: string, encode: (value: string) => string = asIs): string {
+    return text.replace(NUMBERED_PLACEHOLDER, (token) => {
+      const value = this.values.get(token);
+      return value === undefined ? token : encode(value);
+    });
   }
 }
 
@@ -51,20 +61,20 @@ export function vaultOf(trace: object | undefined): PiiVault | null {
   return trace ? (traces.get(trace) ?? null) : null;
 }
 
-export function restoreJson(value: unknown, vault: PiiVault | null): unknown {
-  if (!vault) return value;
+export function restoreJson(value: unknown, vault: PiiVault | null, key = ""): unknown {
+  if (!vault || SIGNED_KEYS.has(key)) return value;
   if (typeof value === "string") return vault.restore(value);
-  if (Array.isArray(value)) return value.map((item) => restoreJson(item, vault));
+  if (Array.isArray(value)) return value.map((item) => restoreJson(item, vault, key));
   if (value && typeof value === "object") {
     const out: Record<string, unknown> = {};
-    for (const [key, item] of Object.entries(value)) out[key] = restoreJson(item, vault);
+    for (const [name, item] of Object.entries(value)) out[name] = restoreJson(item, vault, name);
     return out;
   }
   return value;
 }
 
 export function restoreSseResponse(response: Response, vault: PiiVault | null): Response {
-  if (!vault || !response.body) return response;
+  if (!vault?.size || !response.body) return response;
   const decoder = new TextDecoder();
   const encoder = new TextEncoder();
   const reader = response.body.getReader();

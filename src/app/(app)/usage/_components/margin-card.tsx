@@ -30,11 +30,13 @@ function marginClass(margin: number): string {
 }
 
 export default function MarginCard({
+  companyView,
   chargeback,
   names,
   purchase,
   sale,
 }: {
+  companyView: boolean;
   chargeback: SliceRow[];
   names: Record<string, string>;
   purchase: number;
@@ -43,7 +45,9 @@ export default function MarginCard({
   const t = useTranslations("Usage");
   const tCommon = useTranslations("Common");
   const format = useFormatter();
-  const [group, setGroup] = useState<MarginGroup>("orgId");
+  const groups: readonly MarginGroup[] = companyView ? GROUPS.filter((item) => item !== "orgId") : GROUPS;
+  const [picked, setGroup] = useState<MarginGroup>(groups[0]);
+  const group = groups.includes(picked) ? picked : groups[0];
   const rows = marginRows(chargeback, group);
   const share = marginShare(purchase, sale);
   const label = (id: string) =>
@@ -65,11 +69,11 @@ export default function MarginCard({
             aria-label={t("margin.groupBy")}
             selectedKeys={[group]}
             onSelectionChange={(keys) => {
-              const next = GROUPS.find((item) => keys.has(item));
+              const next = groups.find((item) => keys.has(item));
               if (next) setGroup(next);
             }}
           >
-            {GROUPS.map((item, index) => (
+            {groups.map((item, index) => (
               <ToggleButton key={item} id={item}>
                 {index > 0 ? <ToggleButtonGroup.Separator /> : null}
                 {t(`group.${GROUP_LABEL[item]}`)}

@@ -3,7 +3,7 @@ import "server-only";
 import prisma from "@/lib/db/prisma";
 import { parseAuthInput } from "@/lib/auth/errors";
 import { assertCanGrant, canGrant, grantActor } from "@/lib/auth/grants";
-import { requirePermission } from "@/lib/auth/guards";
+import { requirePermission, requirePlatformPermission } from "@/lib/auth/guards";
 import { JWT_ALGORITHMS } from "@/lib/auth/jwks";
 import { fetchOidcDiscovery, oidcCallbackUrl, resetOidcCache, tokenAuthMethod } from "@/lib/auth/oidc";
 import { hasPerm, permissionList, permissions, PERMISSIONS } from "@/lib/auth/permissions";
@@ -67,7 +67,7 @@ export async function loadSignInSettings() {
 }
 
 export async function saveSignInSettings(raw: unknown) {
-  const session = await requirePermission(PERMISSIONS.SETTINGS_MANAGE);
+  const session = await requirePlatformPermission(PERMISSIONS.SETTINGS_MANAGE);
   const parsed = oidcSettingsSchema.safeParse(raw);
   if (!parsed.success) {
     const badUrl = parsed.error.issues.some((issue) => issue.path[0] === "issuer");
@@ -88,7 +88,7 @@ export async function saveSignInSettings(raw: unknown) {
 }
 
 export async function checkOidcIssuer(raw: unknown): Promise<IssuerCheck> {
-  await requirePermission(PERMISSIONS.SETTINGS_MANAGE);
+  await requirePlatformPermission(PERMISSIONS.SETTINGS_MANAGE);
   const parsed = issuerCheckSchema.safeParse(raw);
   if (!parsed.success) throw new Error("INVALID_URL");
   resetOidcCache();
@@ -109,7 +109,7 @@ export async function checkOidcIssuer(raw: unknown): Promise<IssuerCheck> {
 }
 
 async function requireScimManager(input: unknown) {
-  const session = await requirePermission(PERMISSIONS.SETTINGS_MANAGE);
+  const session = await requirePlatformPermission(PERMISSIONS.SETTINGS_MANAGE);
   assertCanGrant(grantActor(session), permissions);
   await requireStepUp(session.user.id, parseAuthInput(stepUpSchema, input).code);
   return session;

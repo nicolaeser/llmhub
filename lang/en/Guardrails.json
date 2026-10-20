@@ -1,6 +1,8 @@
 {
   "title": "Guardrails",
   "subtitle": "Check prompts and responses for personal data, banned content, prompt injection, and leaked secrets.",
+  "companySubtitle": "Overrides for this company, its projects, and its keys. Everything else follows the platform policy.",
+  "companyNotice": "The platform policy summarized above applies to this company unless an override below replaces it. Switch to the platform scope to change it.",
   "tabs": "{tab, select, pii {PII} content {Rules and checks} other {{tab}}}",
   "save": "Save policy",
   "enabledState": "{enabled, select, true {Active} other {Paused}}",
@@ -11,7 +13,7 @@
   "mask": "Mask with placeholders",
   "block": "Block the request (400)",
   "restore": "Restore in the response",
-  "modeHint": "Block rejects the request with 400 pii_blocked before it reaches the model. Mask keeps placeholders in the response and in logs. Restore sends numbered placeholders to the model, then puts the original personal values back in the client response. Logs stay masked. Secrets, keys, and tokens are never restored.",
+  "modeHint": "Block rejects the request with 400 pii_blocked before it reaches the model. Mask keeps placeholders in the response and in logs. Restore sends numbered placeholders to the model, then puts the original personal values back in the client response. It also adds a short system instruction so the model keeps the placeholders unchanged. Logs stay masked. Secrets, keys, and tokens are never restored.",
   "output": "Also redact model output",
   "outputHint": "New personal data in the model output is masked before the client sees it. In restore mode, values from the prompt are put back after that check.",
   "entities": "Entities",

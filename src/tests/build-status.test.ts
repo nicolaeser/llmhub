@@ -15,7 +15,7 @@ import {
   UPDATE_RECHECK_MS,
   VERSION_POLL_MS,
 } from "@/lib/updates/build-change";
-import { importedAs, readJsx, rendersComponent } from "./support/jsx-source";
+import { importedAs, readJsx, rendersComponent, type JsxNode } from "./support/jsx-source";
 
 const root = fileURLToPath(new URL("../..", import.meta.url));
 const components = path.join(root, "src/app/(app)/_components");
@@ -64,9 +64,13 @@ test("the console polls only the version endpoint and the sidebar carries the up
   assert.match(status, /rel="noreferrer noopener"/);
   assert.match(status, /target="_blank"/);
 
-  const topbar = source("console-topbar.tsx");
-  assert.doesNotMatch(topbar, /fetch\(|loadUpdateStatusAction|setInterval/);
-  assert.equal(importedAs(readJsx(path.join(components, "console-topbar.tsx")), "./build-status", "useBuildStatus"), "useBuildStatus");
+  for (const file of ["console-topbar.tsx", "user-menu.tsx"]) {
+    assert.doesNotMatch(source(file), /fetch\(|loadUpdateStatusAction|setInterval/, file);
+  }
+  assert.equal(importedAs(readJsx(path.join(components, "user-menu.tsx")), "./build-status", "useBuildStatus"), "useBuildStatus");
+  const topbar = readJsx(path.join(components, "console-topbar.tsx"));
+  assert.ok(rendersComponent(topbar, importedAs(topbar, "./live-badge")));
+  assert.ok(rendersComponent(topbar, importedAs(topbar, "./user-menu")));
 
   const sidebar = readJsx(path.join(components, "sidebar.tsx"));
   assert.ok(rendersComponent(sidebar, importedAs(sidebar, "./build-status", "BuildNotice")));
@@ -78,7 +82,8 @@ test("the console polls only the version endpoint and the sidebar carries the up
   );
   assert.equal(provider.length, 1);
   assert.equal(provider[0]!.attributes.get("version"), "currentBuild()");
-  assert.ok(provider[0]!.children.some((element) => element.tag === "Sidebar"));
+  const within = (element: JsxNode): JsxNode[] => [element, ...element.children.flatMap(within)];
+  assert.ok(within(provider[0]!).some((element) => element.tag === "Sidebar"));
 });
 
 test("before the first check the sidebar shows the loaded version and no notice", async () => {
@@ -95,6 +100,23 @@ test("before the first check the sidebar shows the loaded version and no notice"
           createElement(BuildNotice, { key: "notice", collapsed: false }),
           createElement(BuildVersion, { key: "version" }),
         ],
+      }),
+    }),
+  );
+  assert.equal(html, '<p class="truncate px-2 text-xs text-muted" title="v2026.10.07.38e8b1b">Version v2026.10.07.38e8b1b</p>');
+});
+
+test("without a notice the footer status slot keeps the version in place", async () => {
+  const { default: BuildStatusProvider, BuildNotice, BuildVersion } = await import("@/app/(app)/_components/build-status");
+  const messages = JSON.parse(readFileSync(path.join(root, "lang/en/Common.json"), "utf8"));
+  const html = renderToStaticMarkup(
+    createElement(NextIntlClientProvider, {
+      locale: "en",
+      timeZone: "UTC",
+      messages: { Common: messages },
+      children: createElement(BuildStatusProvider, {
+        version: "v2026.10.07.38e8b1b",
+        children: createElement(BuildNotice, { collapsed: false, fallback: createElement(BuildVersion) }),
       }),
     }),
   );
