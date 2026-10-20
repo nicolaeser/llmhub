@@ -13,7 +13,7 @@ import { importUploads } from "@/lib/providers/auth-import";
 import { createProvider, updateProvider } from "@/lib/providers/connections";
 import { newSubAddToken, storeSubAddAccount } from "@/lib/providers/sub-add-store";
 import type { ResolvedDeployment } from "@/types/routing";
-import type { SignInSession } from "@/types/providers";
+import type { AccountAccess, SignInSession } from "@/types/providers";
 import { closeDatabase, ownerSession, uniqueName } from "./support/database";
 
 after(closeDatabase);
@@ -82,7 +82,7 @@ test("signing in to the same Claude account again keeps its connection, routes, 
     login: { failures: 3, retryAt: new Date(Date.now() + 10 * 60_000) },
     connection: { restricted: true, assignments: { create: [{ orgId: org.id }] } },
   });
-  const access = { orgId: org.id, teamId: null, projectId: null, memberId: null, keyId: null };
+  const access: AccountAccess = { orgId: org.id, teamId: "", projectId: "", memberId: "", keyId: "" };
   try {
     markFailure({ id: route } as ResolvedDeployment, Date.now() + 3 * HOUR_MS);
     assert.ok((await coolingDown([route])).has(route));
