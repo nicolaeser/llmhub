@@ -94,7 +94,7 @@ export async function fireAlert(event: WebhookEvent, message: string): Promise<v
 }
 
 export function shouldAlert(err: unknown): boolean {
-  if (isRouterError(err, "no_healthy")) return true;
+  if (isRouterError(err, "no_healthy") || isRouterError(err, "signed_out")) return true;
   const status = (err as { status?: number }).status ?? 0;
   const code = (err as { code?: string }).code;
   return status >= 500 || status === 429 || code === "no_capacity";

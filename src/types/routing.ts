@@ -52,6 +52,7 @@ export type DeploymentRow = {
     enabled: boolean;
     restricted: boolean;
     assignments: AssignmentRow[];
+    login: { status: string } | null;
   } | null;
 };
 
