@@ -1,11 +1,12 @@
 import "server-only";
 import prisma from "@/lib/db/prisma";
-import { authHeaders, mcpAuthFor, mcpCapabilities } from "@/lib/mcp/auth";
+import { hostedAuth, mcpAuthFor, mcpCapabilities } from "@/lib/mcp/auth";
 import { McpClient, toolSpecs } from "@/lib/mcp/client";
 import { callHosted, hostedSpec } from "@/lib/mcp/hosted";
 import { chainOf, classifyTools, effectiveServers, toolActionsOf } from "@/lib/mcp/resolve";
 import { bindTools } from "@/lib/mcp/tool-names";
 import { guardedFetch } from "@/lib/mcp/transport";
+import { MCP_STATIC_AUTH_TYPES, authUsesName } from "@/schemas/mcp";
 import { errorFields } from "@/lib/logging/format";
 import { logger } from "@/lib/logging/logger";
 import type { Principal } from "@/types/gateway";
@@ -19,6 +20,7 @@ import type {
   McpFetch,
   McpOAuthGrant,
   McpServerRecord,
+  McpStaticAuthType,
   McpToolset,
   McpTransport,
 } from "@/types/mcp";
@@ -31,8 +33,16 @@ export function mcpOptedOut(headers: Headers): boolean {
   return OPT_OUT_VALUES.has(headers.get(MCP_OPT_OUT_HEADER)?.trim().toLowerCase() ?? "");
 }
 
+export function isStaticAuthType(value: string): value is McpStaticAuthType {
+  return MCP_STATIC_AUTH_TYPES.some((type) => type === value);
+}
+
+export function installedAuthType(value: string): McpStaticAuthType {
+  return isStaticAuthType(value) ? value : "bearer";
+}
+
 export function isAuthType(value: string): value is McpAuthType {
-  return value === "none" || value === "bearer" || value === "header" || value === "oauth";
+  return isStaticAuthType(value) || value === "oauth";
 }
 
 export function isOAuthGrant(value: string): value is McpOAuthGrant {
@@ -208,13 +218,13 @@ export async function loadMcpServers(chain: McpChain) {
     const installation = row.installations[0];
     if (!installation) return false;
     if (record.kind !== "hosted") return true;
-    const authType = installation.authType === "none" || installation.authType === "header" ? installation.authType : "bearer";
+    const authType = installedAuthType(installation.authType);
     if (authType !== "none" && !installation.authSecret) return false;
     records.set(server.serverId, {
       ...record,
       url: installation.baseUrl || record.url,
       authType,
-      authHeader: authType === "header" ? installation.authHeader : "",
+      authHeader: authUsesName(authType) ? installation.authHeader : "",
       authSecret: installation.authSecret,
     });
     return true;
@@ -246,7 +256,7 @@ export function createExecutor(
       const record = records.get(bound.serverId);
       if (!record) return { text: "This tool is no longer available.", isError: true };
       if (record.kind === "hosted") {
-        return callHosted(record.url, record.internal, record.spec, bound.tool.name, args, signal, fetchFor(record.internal), authHeaders(record));
+        return callHosted(record.url, record.internal, record.spec, bound.tool.name, args, signal, fetchFor(record.internal), hostedAuth(record));
       }
       return session(record).callTool(bound.tool.name, args, signal, bound.tool.inputSchema);
     },

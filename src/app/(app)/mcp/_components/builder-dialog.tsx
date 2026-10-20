@@ -6,7 +6,8 @@ import { Sparkles } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useErrorToast } from "@/components/console/use-error-toast";
 import { isActionFail } from "@/lib/http/action-result";
-import { MAX_HOSTED_TOOLS, MCP_ROLE_KEYS } from "@/schemas/mcp";
+import { docsLoginFor } from "@/lib/mcp/docs-login";
+import { MAX_HOSTED_TOOLS, MCP_ROLE_KEYS, authNameValid } from "@/schemas/mcp";
 import type {
   HostedTool,
   McpAssignmentView,
@@ -35,6 +36,7 @@ const EMPTY_SERVER: BuilderServer = {
   authHeader: "",
   secret: "",
   shared: false,
+  loginFrom: null,
 };
 
 function problemOf(body: unknown): { code: string; pointer: string } {
@@ -85,9 +87,9 @@ export default function BuilderDialog({
   const chosen = tools.filter((tool) => enabled.includes(tool.name));
   const baseValid = /^https?:\/\/[^\s/]+/i.test(server.baseUrl.trim());
   const tooMany = chosen.length > MAX_HOSTED_TOOLS;
-  const headerValid = server.authType !== "header" || /^[A-Za-z0-9-]{1,64}$/.test(server.authHeader.trim());
+  const nameValid = authNameValid(server.authType, server.authHeader);
   const needsSecret = server.authType !== "none" && !server.shared && !server.secret.trim();
-  const reviewReady = Boolean(server.name.trim() && baseValid && chosen.length && !tooMany && headerValid && !needsSecret);
+  const reviewReady = Boolean(server.name.trim() && baseValid && chosen.length && !tooMany && nameValid && !needsSecret);
   const canDraft = Boolean(instruction.trim()) && sourcesReady(links, docs, files);
 
   function patchServer(patch: Partial<BuilderServer>) {
@@ -107,13 +109,16 @@ export default function BuilderDialog({
 
   function applyDraft(result: McpDraft) {
     setDraft(result);
+    const login = docsLoginFor(result.baseUrl, links);
     patchServer({
       name: result.name,
       description: result.description,
       baseUrl: result.baseUrl,
       internal: result.internal,
-      authType: result.authType,
-      authHeader: result.authHeader,
+      authType: login?.authType ?? result.authType,
+      authHeader: login ? login.authHeader : result.authHeader,
+      ...(login ? { secret: login.secret } : {}),
+      loginFrom: login?.link ?? null,
     });
     setTools(result.tools);
     setEnabled(result.included);
@@ -132,7 +137,14 @@ export default function BuilderDialog({
     setSourceErrors({});
     startDraft(async () => {
       const body = new FormData();
-      const sent = links.map((row) => ({ url: row.url, internal: row.internal, auth: row.auth, name: row.name, secret: row.secret }));
+      const sent = links.map((row) => ({
+        url: row.url,
+        internal: row.internal,
+        crawl: row.crawl,
+        auth: row.auth,
+        name: row.name,
+        secret: row.secret,
+      }));
       body.append("request", JSON.stringify({ template, instruction, docs, links: sent }));
       for (const row of files) body.append("file", row.file, row.file.name);
       let res: Response;

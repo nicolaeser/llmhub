@@ -2,6 +2,7 @@ import "server-only";
 import { seal } from "@/lib/crypto";
 import { isOAuthGrant } from "@/lib/mcp/toolset";
 import { checkServerUrl } from "@/lib/mcp/url-guard";
+import { authUsesName } from "@/schemas/mcp";
 
 export function parse<T>(schema: { safeParse(value: unknown): { success: true; data: T } | { success: false } }, value: unknown): T {
   const parsed = schema.safeParse(value);
@@ -12,6 +13,10 @@ export function parse<T>(schema: { safeParse(value: unknown): { success: true; d
 export function assertUrl(url: string, internal: boolean): void {
   const verdict = checkServerUrl(url, internal);
   if (!verdict.ok) throw new Error(verdict.code);
+}
+
+export function assertRemoteAuth(authType: string): void {
+  if (authType === "query") throw new Error("VALIDATION");
 }
 
 export function secretRequired(input: { authType: string; oauthGrant: string }): boolean {
@@ -35,7 +40,7 @@ export function connectionFields(input: {
 }) {
   const oauth = input.authType === "oauth";
   return {
-    authHeader: input.authType === "header" ? input.authHeader : "",
+    authHeader: authUsesName(input.authType) ? input.authHeader : "",
     oauthGrant: oauth && isOAuthGrant(input.oauthGrant) ? input.oauthGrant : "authorization_code",
     oauthClientId: oauth ? input.oauthClientId : "",
     oauthScopes: oauth ? input.oauthScopes : "",

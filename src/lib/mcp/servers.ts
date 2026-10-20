@@ -12,11 +12,11 @@ import { managesMcp, managesMcpRules, visibleToCompany } from "@/lib/mcp/scope";
 import { ensureBuiltinRoles, saveMcpInstallation } from "@/lib/mcp/catalog";
 import { toolSpecOf } from "@/lib/mcp/hosted";
 import { mcpOAuthRedirectUri } from "@/lib/mcp/oauth";
-import { assertUrl, connectionFields, parse, secretFor, secretRequired } from "@/lib/mcp/server-input";
+import { assertRemoteAuth, assertUrl, connectionFields, parse, secretFor, secretRequired } from "@/lib/mcp/server-input";
 import { probe, storeProbe } from "@/lib/mcp/server-probe";
 import { auditShape, loadRow, scopedView, seesMcp, serverSelect, viewOf, type ServerRow } from "@/lib/mcp/server-view";
 import { serverRecord } from "@/lib/mcp/toolset";
-import { BUILDER_MODEL_KEY, hostedServerSchema, mcpAssignmentsSchema, mcpServerInputSchema } from "@/schemas/mcp";
+import { BUILDER_MODEL_KEY, authUsesName, hostedServerSchema, mcpAssignmentsSchema, mcpServerInputSchema } from "@/schemas/mcp";
 import type { Prisma } from "@/generated/prisma/client";
 
 export async function loadMcpServerList() {
@@ -85,6 +85,7 @@ export async function createMcpServer(raw: unknown) {
   const session = await requirePermission(PERMISSIONS.SETTINGS_MANAGE);
   const input = parse(mcpServerInputSchema, raw);
   assertUrl(input.url, input.internal);
+  assertRemoteAuth(input.authType);
   const authSecret = secretFor(input.authType, input, "");
   if (secretRequired(input) && !authSecret) throw new Error("MCP_SECRET_REQUIRED");
   let created: ServerRow;
@@ -135,7 +136,7 @@ export async function createHostedMcpServer(raw: unknown) {
         kind: "hosted",
         spec: { tools: input.tools } as Prisma.InputJsonValue,
         authType: input.authType,
-        authHeader: input.authType === "header" ? input.authHeader : "",
+        authHeader: authUsesName(input.authType) ? input.authHeader : "",
         authSecret: input.secret.trim() ? seal(input.secret.trim()) : "",
         internal: input.internal,
         enabled: true,
@@ -230,6 +231,7 @@ export async function updateMcpServer(raw: { id: string } & Record<string, unkno
     });
     return { server: scopedView(updated, session) };
   }
+  assertRemoteAuth(input.authType);
   const authSecret = secretFor(input.authType, input, before.authSecret);
   if (secretRequired(input) && !authSecret) throw new Error("MCP_SECRET_REQUIRED");
   const fields = connectionFields(input);

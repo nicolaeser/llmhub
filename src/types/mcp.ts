@@ -2,7 +2,9 @@ import type { AssignmentScope, AssignmentSource } from "@/types/providers";
 import type { JsonMap, Principal } from "@/types/gateway";
 import type { OutputGuard } from "@/types/guardrails";
 
-export type McpAuthType = "none" | "bearer" | "header" | "oauth";
+export type McpStaticAuthType = "none" | "bearer" | "basic" | "header" | "query";
+
+export type McpAuthType = McpStaticAuthType | "oauth";
 
 export type McpOAuthGrant = "authorization_code" | "client_credentials";
 
@@ -72,7 +74,7 @@ export type McpDraftServer = {
   description: string;
   baseUrl: string;
   internal: boolean;
-  authType: "none" | "bearer" | "header";
+  authType: McpStaticAuthType;
   authHeader: string;
   notes: string;
 };
@@ -89,7 +91,7 @@ export type McpOpenApiImport = {
   operations: number;
 };
 
-export type McpDocsAuthType = "none" | "bearer" | "basic" | "header" | "query";
+export type McpDocsAuthType = "none" | "bearer" | "basic" | "header" | "query" | "cookie";
 
 export type McpDocsAuth = {
   type: McpDocsAuthType;
@@ -100,10 +102,87 @@ export type McpDocsAuth = {
 export type McpDocsLink = {
   url: string;
   internal: boolean;
+  crawl: boolean;
   auth: McpDocsAuthType;
   name: string;
   secret: string;
 };
+
+export type McpDocsCookie = {
+  name: string;
+  value: string;
+  path: string;
+  secure: boolean;
+};
+
+export type McpDocsJar = Map<string, McpDocsCookie>;
+
+export type McpDocsSession = {
+  start: URL;
+  fetchImpl: McpFetch;
+  auth: McpDocsAuth;
+  jar: McpDocsJar;
+  signal?: AbortSignal;
+};
+
+export type McpDocsResponse = {
+  url: URL;
+  requested: URL;
+  redirected: boolean;
+  contentType: string;
+  bytes: Uint8Array;
+};
+
+export type McpDocsPage = {
+  url: string;
+  title: string;
+  text: string;
+};
+
+export type McpCrawlLimit = "depth" | "pages" | "bytes" | "time";
+
+export type McpCrawlStats = {
+  pages: number;
+  skipped: number;
+  failed: number;
+  truncated: McpCrawlLimit | null;
+};
+
+export type McpCrawlBudget = {
+  pages: number;
+  bytes: number;
+  fetches: number;
+  deadline: number;
+};
+
+export type McpCrawlSummary = McpCrawlStats & {
+  link: number;
+  url: string;
+};
+
+export type McpDocsSpec = {
+  url: string;
+  text: string;
+};
+
+export type McpDocsSite = {
+  link: number;
+  session: McpDocsSession;
+  scopes: string[];
+  pages: McpDocsPage[];
+  specs: McpDocsSpec[];
+  stats: McpCrawlStats;
+  budget: McpCrawlBudget;
+  seen: Set<string>;
+  texts: Set<string>;
+};
+
+export type McpDocsCrawl = {
+  first: McpDocsResponse;
+  site: McpDocsSite | null;
+};
+
+export type McpDocsFetched = { page: McpDocsPage } | { error: string };
 
 export type McpDocsLinkRow = McpDocsLink & { key: string };
 
@@ -129,8 +208,43 @@ export type McpDocsSourceRef = {
 };
 
 export type McpDocsSource =
-  | { ref: McpDocsSourceRef; text: string; link: string }
+  | { ref: McpDocsSourceRef; text: string; link: string; pages: McpDocsPage[] }
   | { ref: McpDocsSourceRef; part: JsonMap };
+
+export type McpBuilderSection = {
+  label: string;
+  pages: McpDocsPage[];
+};
+
+export type McpBuilderLibrary = {
+  sections: McpBuilderSection[];
+  attachments: JsonMap[];
+  fetchPage: ((url: string) => Promise<McpDocsFetched>) | null;
+};
+
+export type McpBuilderTurn = {
+  message: JsonMap;
+  text: string;
+  cut: boolean;
+  calls: McpToolCall[];
+  toolsAccepted: boolean;
+};
+
+export type McpBuilderComplete = (messages: JsonMap[], tools: JsonMap[] | null) => Promise<McpBuilderTurn>;
+
+export type McpBuilderResult = {
+  server: McpDraftServer;
+  tools: HostedTool[];
+  passes: number;
+  parts: number;
+};
+
+export type McpDocsLogin = {
+  link: number;
+  authType: Exclude<McpStaticAuthType, "none">;
+  authHeader: string;
+  secret: string;
+};
 
 export type McpDraft = McpDraftServer & {
   tools: HostedTool[];
@@ -139,6 +253,9 @@ export type McpDraft = McpDraftServer & {
   operations: number;
   importedFrom: McpDocsSourceRef | null;
   unused: McpDocsSourceRef[];
+  crawls: McpCrawlSummary[];
+  passes: number;
+  parts: number;
 };
 
 export type McpBuilderModel = {
@@ -187,7 +304,7 @@ export type McpInstallationView = {
   orgLabel: string;
   enabled: boolean;
   baseUrl: string;
-  authType: "none" | "bearer" | "header";
+  authType: McpStaticAuthType;
   authHeader: string;
   hasSecret: boolean;
 };
@@ -234,6 +351,11 @@ export type McpBoundTool = {
   serverId: string;
   serverName: string;
   tool: McpToolSpec;
+};
+
+export type McpHostedAuth = {
+  headers: Record<string, string>;
+  query: Record<string, string>;
 };
 
 export type McpToolOutcome = {

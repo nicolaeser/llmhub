@@ -7,7 +7,7 @@ import { trialClientCredentials } from "@/lib/mcp/auth";
 import { eraOf } from "@/lib/mcp/client";
 import { McpError, mcpErrorCode, type McpErrorCode } from "@/lib/mcp/errors";
 import { discoverOAuth } from "@/lib/mcp/oauth";
-import { connectionFields, parse, secretFor } from "@/lib/mcp/server-input";
+import { assertRemoteAuth, connectionFields, parse, secretFor } from "@/lib/mcp/server-input";
 import { loadRow, scopedView, serverSelect, type ServerRow } from "@/lib/mcp/server-view";
 import { mcpClientFor, serverRecord } from "@/lib/mcp/toolset";
 import { guardedFetch } from "@/lib/mcp/transport";
@@ -75,6 +75,7 @@ export async function storeProbe(id: string, result: McpProbeResult): Promise<Se
 export async function probeMcpServer(raw: unknown): Promise<McpProbeResult> {
   await requirePermission(PERMISSIONS.SETTINGS_MANAGE);
   const input = parse(mcpProbeSchema, raw);
+  assertRemoteAuth(input.authType);
   const verdict = checkServerUrl(input.url, input.internal);
   if (!verdict.ok) return failedProbe(verdict.code);
   const stored = input.id ? await prisma.mcpServer.findUnique({ where: { id: input.id }, select: serverSelect }) : null;
