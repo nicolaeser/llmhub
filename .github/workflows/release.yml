@@ -26,6 +26,8 @@ jobs:
     with:
       channel: ${{ github.ref_name }}
       publish: true
+    secrets:
+      antigravity_client_secret: ${{ secrets.ANTIGRAVITY_CLIENT_SECRET }}
 
   publish:
     needs: [build]
