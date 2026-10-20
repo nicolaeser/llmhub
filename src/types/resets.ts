@@ -1,6 +1,6 @@
 import type { z } from "zod";
 import type { autoResetInputSchema, resetStateSchema } from "@/schemas/resets";
-import type { SubscriptionLimits } from "@/types/providers";
+import type { LimitSnapshot, SubscriptionLimits } from "@/types/providers";
 
 export type ResetKind = "codex" | "claude";
 
@@ -163,6 +163,7 @@ export type RedeemResponse = {
   result: ResetResult;
   windowsReset: number;
   limits: SubscriptionLimits | null;
+  item: LimitSnapshot | null;
 };
 
 export type ResetProvider = {

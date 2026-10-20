@@ -6,6 +6,7 @@ import { defaultEntityIds, redactJSON, redactPii } from "@/lib/gateway/safety/pi
 import { getEnterprise, resolvePii } from "@/lib/settings/enterprise";
 import { errorFields } from "@/lib/logging/format";
 import { logger } from "@/lib/logging/logger";
+import { notifyLive } from "@/lib/updates/live-topics";
 import type { Prisma } from "@/generated/prisma/client";
 import type { Principal } from "@/types/gateway";
 import type { Enterprise } from "@/types/settings";
@@ -102,6 +103,7 @@ export async function writeRequestLog(entry: RequestLogEntry): Promise<void> {
   const log = await prisma.requestLog.create({
     data: { ...dims, ...meta, cost: entry.cost, ...(content ? { content } : {}) },
   });
+  notifyLive("requests");
 
   try {
     if (!enterprise.log_archive) return;
