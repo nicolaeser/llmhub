@@ -12,6 +12,7 @@ import {
   freshAuthFileSession,
   parseAuthFileEntry,
 } from "@/lib/gateway/upstreams/auth-file-import";
+import { reactivateAccount } from "@/lib/gateway/routing/account-reactivation";
 import { loginData } from "@/lib/gateway/upstreams/credentials";
 import { PROVIDER_CATALOG } from "@/lib/gateway/upstreams/provider-kinds";
 import { sealCredential } from "@/lib/gateway/upstreams/subscription-sign-in";
@@ -117,6 +118,7 @@ async function storeAccount(
         include: providerInclude,
       });
   const status = existing ? "updated" : "created";
+  if (existing) await reactivateAccount(row.id);
   await writeAudit({
     actor,
     action: "provider.import_auth_file",

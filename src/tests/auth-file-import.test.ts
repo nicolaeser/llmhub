@@ -35,6 +35,7 @@ type LoginWrite = Omit<FakeLogin, "version">;
 
 const connections: FakeConnection[] = [];
 const audits: { action: string; objectId: string; afterJson: string }[] = [];
+const reactivated: string[] = [];
 const settings = new Map<string, string>();
 
 function view(row: FakeConnection) {
@@ -104,7 +105,15 @@ function view(row: FakeConnection) {
       return view(row);
     },
   },
+  deployment: {
+    findMany: async ({ where }: { where: { providerId: string } }) => {
+      reactivated.push(where.providerId);
+      return [];
+    },
+  },
+  providerLimitSnapshot: { updateMany: async () => ({ count: 0 }) },
   providerLogin: {
+    updateMany: async () => ({ count: 0 }),
     findMany: async ({ where }: { where: { status: string } }) =>
       connections
         .filter((row) => row.login?.status === where.status)
@@ -193,6 +202,7 @@ beforeEach(() => {
   calls = [];
   connections.length = 0;
   audits.length = 0;
+  reactivated.length = 0;
   settings.clear();
 });
 
@@ -558,6 +568,7 @@ test("bulk import creates accounts, updates known ones, and isolates bad files",
   assert.equal(login.status, "active");
   assert.equal(login.leaseUntil, null);
   assert.equal(login.account, "DEV@example.com");
+  assert.deepEqual(reactivated, [connections[0]!.id]);
   assert.equal(audits.length, 3);
   assert.ok(audits.every((row) => row.action === "provider.import_auth_file"));
   assert.ok(audits.every((row) => !/rt_codex|rt_new|eyJ/.test(row.afterJson)));
