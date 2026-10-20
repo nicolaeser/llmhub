@@ -640,7 +640,8 @@ test("a rejected Jev key stops the run and is reported", async () => {
 });
 
 test("turning a provider off removes its route and keeps it off across refreshes", async () => {
-  const { refreshCatalog, setEntryActive, setGroupActive } = await import("@/lib/gateway/catalog/catalog-sync");
+  const { refreshCatalog } = await import("@/lib/gateway/catalog/catalog-sync");
+  const { setEntryActive, setGroupActive } = await import("@/lib/gateway/catalog/catalog-routes");
   const router = seedProvider([], { name: "OpenRouter" });
   respondWith(() => modelsResponse(["openai/gpt-4o", "openai/gpt-4o:free"]));
   await refreshCatalog({ actor: "worker", force: true });
@@ -666,7 +667,8 @@ test("turning a provider off removes its route and keeps it off across refreshes
 });
 
 test("moving a provider model to another alias carries its active route along", async () => {
-  const { assignEntry, refreshCatalog, setEntryActive } = await import("@/lib/gateway/catalog/catalog-sync");
+  const { refreshCatalog } = await import("@/lib/gateway/catalog/catalog-sync");
+  const { assignEntry, setEntryActive } = await import("@/lib/gateway/catalog/catalog-routes");
   const router = seedProvider([], { name: "OpenRouter" });
   respondWith(() => modelsResponse(["openai/gpt-4o"]));
   await refreshCatalog({ actor: "worker", force: true });
@@ -908,7 +910,8 @@ test("only plain catalog groups disappear with their last provider", async () =>
 });
 
 test("a rejected Jev key stays visible until the key changes, then Jev runs again", async () => {
-  const { refreshCatalog, loadCatalogView } = await import("@/lib/gateway/catalog/catalog-sync");
+  const { refreshCatalog } = await import("@/lib/gateway/catalog/catalog-sync");
+  const { loadCatalogView } = await import("@/lib/gateway/catalog/catalog-view");
   const { stopLocalCatalogTasks } = await import("@/lib/gateway/catalog/catalog-tasks");
   db.enterprise = { catalog_jev: { enabled: true, model: "jev-latest", api_key: "sk-or-bad" } };
   db.groups.push({ alias: "llama-3.3-70b-instruct", vendor: "", displayName: "", autoRoutes: false, enabled: true });

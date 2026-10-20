@@ -8,15 +8,9 @@ import prisma from "@/lib/db/prisma";
 import { runAsPrincipal } from "@/lib/auth/delegation";
 import { McpError } from "@/lib/mcp/errors";
 import { MCP_OAUTH_PENDING_COOKIE } from "@/lib/mcp/oauth";
-import {
-  completeMcpOAuth,
-  createMcpServer,
-  disconnectMcpOAuth,
-  loadMcpServerList,
-  probeMcpServer,
-  startMcpOAuth,
-  updateMcpServer,
-} from "@/lib/mcp/servers";
+import { completeMcpOAuth, disconnectMcpOAuth, startMcpOAuth } from "@/lib/mcp/server-oauth";
+import { probeMcpServer } from "@/lib/mcp/server-probe";
+import { createMcpServer, loadMcpServerList, updateMcpServer } from "@/lib/mcp/servers";
 import { createExecutor, loadMcpServers, serverRecord } from "@/lib/mcp/toolset";
 import type { JsonMap } from "@/types/gateway";
 import type { McpBoundTool } from "@/types/mcp";

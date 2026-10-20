@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isActionFail, runAction } from "@/lib/http/action-result";
-import { completeMcpOAuth } from "@/lib/mcp/servers";
+import { completeMcpOAuth } from "@/lib/mcp/server-oauth";
 
 export const dynamic = "force-dynamic";
 
