@@ -346,6 +346,39 @@ test("the token request uses client_secret_basic only when the provider prefers 
   );
 });
 
+test("a refused code exchange names the provider error and its Entra error codes", async () => {
+  const base = "https://login.microsoftonline.com/contoso.com";
+  const configured = `${base}/v2.0`;
+  let tokenAnswer: Response = new Response("", { status: 500 });
+  const fetchFn: typeof fetch = async (input) => {
+    const url = String(input);
+    if (url === `${configured}/.well-known/openid-configuration`) {
+      return Response.json(discoveryFor(ENTRA_TENANT_ISSUER, base));
+    }
+    if (url === `${base}/token`) return tokenAnswer;
+    return new Response("unexpected", { status: 500 });
+  };
+  const resolved = resolveOidc(
+    { enabled: true, issuer: configured, client_id: "hub" },
+    { clientSecret: "s3cret", appUrl: "https://hub.example.com" },
+  );
+  const exchange = () => exchangeOidcCode({ resolved, code: "code-1", nonce: "nonce-1", verifier: "v".repeat(43), fetchFn });
+  try {
+    resetOidcCache();
+    tokenAnswer = Response.json(
+      { error: "invalid_client", error_description: "AADSTS7000215: Invalid client secret provided.", error_codes: [7000215] },
+      { status: 401 },
+    );
+    await assert.rejects(exchange(), { message: "oidc token 401 invalid_client AADSTS7000215" });
+    tokenAnswer = Response.json({ error: "invalid_grant", error_codes: ["x", 1.5] }, { status: 400 });
+    await assert.rejects(exchange(), { message: "oidc token 400 invalid_grant" });
+    tokenAnswer = new Response("down", { status: 502 });
+    await assert.rejects(exchange(), { message: "oidc token 502" });
+  } finally {
+    resetOidcCache();
+  }
+});
+
 test("claims map to a stable identity with groups and external ids", () => {
   const identity = identityFromClaims(
     {
