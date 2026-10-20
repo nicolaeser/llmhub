@@ -352,7 +352,8 @@ test("streamed chat keeps restoring placeholders with the instruction present", 
   withPolicy(policy("restore"));
   gateway.reply = () =>
     sseResponse([
-      `data: ${JSON.stringify({ id: "c1", object: "chat.completion.chunk", choices: [{ index: 0, delta: { content: `Sent to ${TOKEN}` } }] })}\n\n`,
+      `data: ${JSON.stringify({ id: "c1", object: "chat.completion.chunk", choices: [{ index: 0, delta: { content: "Sent to [EMAIL_" } }] })}\n\n`,
+      `data: ${JSON.stringify({ id: "c1", object: "chat.completion.chunk", choices: [{ index: 0, delta: { content: "ADDRESS_1]" } }] })}\n\n`,
       `data: ${JSON.stringify({ id: "c1", object: "chat.completion.chunk", choices: [{ index: 0, delta: {}, finish_reason: "stop" }] })}\n\n`,
       "data: [DONE]\n\n",
     ]);
@@ -362,8 +363,12 @@ test("streamed chat keeps restoring placeholders with the instruction present", 
     messages: [{ role: "user", content: `Mail ${EMAIL}` }],
   });
   const text = await api.text();
-  assert.match(text, new RegExp(`Sent to ${EMAIL}`));
-  assert.equal(text.includes(TOKEN), false);
+  const content = sseEvents(text)
+    .map((event) => ((event.choices as JsonMap[] | undefined)?.[0]?.delta as JsonMap | undefined)?.content)
+    .filter((piece): piece is string => typeof piece === "string")
+    .join("");
+  assert.equal(content, `Sent to ${EMAIL}`);
+  assert.equal(text.includes("EMAIL_ADDRESS"), false);
   assert.deepEqual((upstreamBody().messages as JsonMap[])[0], { role: "system", content: INSTRUCTION });
   await new Promise((resolve) => setImmediate(resolve));
   const logged = loggedRequests();
@@ -390,6 +395,44 @@ test("Responses add the instruction after the caller's instructions without echo
   gateway.reply = () => chatReply("ok");
   await post("/api/v1/responses", { model: MODEL, input: `Mail ${EMAIL}`, store: false });
   assert.deepEqual((upstreamBody().messages as JsonMap[])[0], { role: "system", content: INSTRUCTION });
+});
+
+test("streamed Responses restore placeholders split across chat chunks in text and function arguments", async () => {
+  withPolicy(policy("restore"));
+  const chunk = (delta: JsonMap, finish: string | null = null) =>
+    `data: ${JSON.stringify({ id: "c1", object: "chat.completion.chunk", choices: [{ index: 0, delta, finish_reason: finish }] })}\n\n`;
+  const call = (args: string, start = false) => ({
+    tool_calls: [{ index: 0, ...(start ? { id: "call_1", type: "function" } : {}), function: { ...(start ? { name: "send" } : {}), arguments: args } }],
+  });
+  gateway.reply = () =>
+    sseResponse([
+      chunk({ content: "Sent to [EMA" }),
+      chunk({ content: "IL_ADDRESS" }),
+      chunk({ content: "_1]." }),
+      chunk(call('{"to":"[EMAIL_', true)),
+      chunk(call('ADDRESS_1]"}')),
+      chunk({}, "tool_calls"),
+      "data: [DONE]\n\n",
+    ]);
+  const res = await post("/api/v1/responses", { model: MODEL, stream: true, input: `Mail ${EMAIL}`, store: false });
+  assert.equal(res.status, 200);
+  const text = await res.text();
+  const events = sseEvents(text);
+  const deltas = (type: string) =>
+    events
+      .filter((event) => event.type === type)
+      .map((event) => String(event.delta))
+      .join("");
+  assert.equal(deltas("response.output_text.delta"), `Sent to ${EMAIL}.`);
+  assert.deepEqual(JSON.parse(deltas("response.function_call_arguments.delta")), { to: EMAIL });
+  assert.equal(events.find((event) => event.type === "response.output_text.done")?.text, `Sent to ${EMAIL}.`);
+  assert.equal(text.includes("EMAIL_ADDRESS"), false);
+  assert.deepEqual(
+    events.map((event) => event.sequence_number),
+    events.map((_, index) => index),
+  );
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(loggedRequests().length, 1);
 });
 
 test("native Messages keep client cache breakpoints, restore text and tool input, and leave signed thinking alone", async () => {

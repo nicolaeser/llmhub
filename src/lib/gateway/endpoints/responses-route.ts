@@ -16,7 +16,7 @@ import {
   visibleResponse,
 } from "@/lib/gateway/protocols/responses";
 import { pipeChatStream } from "@/lib/gateway/protocols/chat-stream";
-import { restoreClientJson, restoreClientStream } from "@/lib/gateway/safety/restore-client";
+import { restoreClientJson, restoreClientResponsesStream } from "@/lib/gateway/safety/restore-client";
 import { ResponsesStreamEncoder } from "@/lib/gateway/protocols/responses-stream";
 import { clientTools, withToolNamespaces } from "@/lib/gateway/protocols/responses-tools";
 import { newId, ownerId } from "@/lib/gateway/core";
@@ -129,7 +129,7 @@ async function respond(
         });
       },
     });
-    return restoreClientStream(principal.trace, streamed);
+    return restoreClientResponsesStream(principal.trace, streamed);
   }
 
   if (mcp) {
@@ -180,7 +180,7 @@ async function respond(
         };
       },
     });
-    return restoreClientStream(principal.trace, streamed);
+    return restoreClientResponsesStream(principal.trace, streamed);
   }
 
   if (search) {
@@ -227,7 +227,7 @@ async function respond(
       }
     }
     const encoder = new ResponsesStreamEncoder(responseSkeleton(request, id, createdAt), request.include ?? null);
-    return restoreClientStream(principal.trace, pipeChatStream(streamed, encoder, async () => {
+    return restoreClientResponsesStream(principal.trace, pipeChatStream(streamed, encoder, async () => {
       if (!storedId) return;
       const response = encoder.result();
       await updateObjectPayload(
