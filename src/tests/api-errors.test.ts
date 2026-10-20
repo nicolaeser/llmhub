@@ -5,9 +5,17 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
 import { AuthError } from "@/lib/auth/errors";
-import { ERR_ALL_PAUSED, ERR_NO_HEALTHY, ERR_NOT_ASSIGNED, ERR_UNKNOWN_GROUP } from "@/lib/gateway/core";
+import {
+  ERR_ALL_PAUSED,
+  ERR_NO_HEALTHY,
+  ERR_NOT_ASSIGNED,
+  ERR_UNKNOWN_GROUP,
+  limitMessage,
+  waitingError,
+  waitText,
+} from "@/lib/gateway/core";
 import { anthropicErrorBody, GateError, gatewayErrorType, openAIErrorBody } from "@/lib/gateway/errors";
-import { gateResponse, toGateError } from "@/lib/gateway/access/gate";
+import { gateResponse, retryHeaders, toGateError } from "@/lib/gateway/access/gate";
 import { upstreamError } from "@/lib/gateway/dispatch/upstream";
 import { ApiProblem, PROBLEM_CONTENT_TYPE, problemFromError, problemResponse } from "@/lib/http/problem";
 import { isProblemCode, problemSpec } from "@/lib/http/problem-codes";
@@ -178,4 +186,59 @@ test("every error code the HTTP surfaces can emit is in the problem catalog", ()
   const missing = [...codes].filter((code) => !isProblemCode(code) && code !== "REQUEST_FAILED");
   assert.deepEqual(missing, []);
   assert.equal(problemSpec("NOT_IN_CATALOG", 503).status, 503);
+});
+
+test("limit waits read as short relative durations", () => {
+  assert.equal(waitText(0), "1m");
+  assert.equal(waitText(59_000), "1m");
+  assert.equal(waitText(45 * 60_000), "45m");
+  assert.equal(waitText(90 * 60_000), "1h 30m");
+  assert.equal(waitText(5 * 3_600_000), "5h");
+  assert.equal(waitText(26 * 3_600_000), "1d 2h");
+  assert.equal(waitText(7 * 24 * 3_600_000), "7d");
+});
+
+test("exhausted subscription accounts become a rate limit error naming the provider and the next reset", () => {
+  const now = Date.UTC(2026, 0, 1, 12, 0, 0);
+  const retryAt = now + 2 * 3_600_000 + 15 * 60_000;
+  assert.equal(
+    limitMessage({ retryAt, limited: true, kinds: ["claude"] }, now),
+    "all Claude subscription (Claude Code) accounts have reached their usage limit; the next one is available again at 2026-01-01T14:15:00.000Z (in 2h 15m)",
+  );
+  assert.match(limitMessage({ retryAt, limited: true, kinds: [] }, now), /^all deployments for this model are rate limited; /);
+  const limited = toGateError(waitingError({ retryAt, limited: true, kinds: ["codex", "claude"] }));
+  assert.equal(limited.status, 429);
+  assert.equal(limited.code, "rate_limit_exceeded");
+  assert.equal(limited.type, "rate_limit_error");
+  assert.equal(limited.retryAt, retryAt);
+  assert.match(limited.message, /ChatGPT subscription \(Codex\) and Claude subscription \(Claude Code\)/);
+  const cooling = toGateError(waitingError({ retryAt: now + 10_000, limited: false, kinds: [] }));
+  assert.equal(cooling.status, 503);
+  assert.equal(cooling.code, "no_healthy_deployment");
+  assert.equal(cooling.retryAt, now + 10_000);
+  assert.equal(toGateError(ERR_NO_HEALTHY).retryAt, null);
+});
+
+test("retry headers tell clients how long to wait and stop blind retries on long limits", () => {
+  const now = 1_700_000_000_000;
+  const soon = new GateError(429, "rate_limit_exceeded", "rpm exceeded", { retryAt: now + 12_400 });
+  assert.deepEqual(retryHeaders(soon, now), { "retry-after": "13", "x-should-retry": "true" });
+  const later = new GateError(429, "rate_limit_exceeded", "limit", { retryAt: now + 3_600_000 });
+  assert.deepEqual(retryHeaders(later, now), { "retry-after": "3600", "x-should-retry": "false" });
+  const past = new GateError(503, "no_healthy_deployment", "cooling", { retryAt: now - 5_000 });
+  assert.deepEqual(retryHeaders(past, now), { "retry-after": "1", "x-should-retry": "true" });
+  assert.deepEqual(retryHeaders(new GateError(429, "rate_limit_exceeded", "rpm exceeded"), now), {});
+  assert.deepEqual(retryHeaders(new GateError(400, "invalid_request", "bad", { retryAt: now + 1_000 }), now), {});
+});
+
+test("gateResponse sends retry headers in both error shapes", async () => {
+  const err = new GateError(429, "rate_limit_exceeded", "all accounts limited", { retryAt: Date.now() + 7_200_000 });
+  const anthropic = gateResponse(err, new Request("http://hub.local/v1/messages", { method: "POST" }));
+  assert.equal(anthropic.status, 429);
+  assert.equal((await anthropic.json()).error.type, "rate_limit_error");
+  assert.ok(Number(anthropic.headers.get("retry-after")) > 7_000);
+  assert.equal(anthropic.headers.get("x-should-retry"), "false");
+  const openai = gateResponse(err, new Request("http://hub.local/v1/responses", { method: "POST" }));
+  assert.equal(openai.headers.get("x-should-retry"), "false");
+  assert.equal((await openai.json()).error.code, "rate_limit_exceeded");
 });

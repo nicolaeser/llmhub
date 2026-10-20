@@ -18,3 +18,15 @@ test("memory rate window counts requests up front and tokens afterwards", async 
   assert.equal(next.rpm, 2);
   assert.equal(next.tpm, 120);
 });
+
+test("memory rate window reports when the current minute resets", async () => {
+  resetRateLimitMemory();
+  const start = 1_700_000_000_000;
+  const first = await incrementRateWindow("mem-reset", 1, 0, start);
+  assert.equal(first.resetAt, start + 60_000);
+  const later = await incrementRateWindow("mem-reset", 1, 0, start + 30_000);
+  assert.equal(later.resetAt, start + 60_000);
+  const rolled = await incrementRateWindow("mem-reset", 1, 0, start + 61_000);
+  assert.equal(rolled.rpm, 1);
+  assert.equal(rolled.resetAt, start + 121_000);
+});

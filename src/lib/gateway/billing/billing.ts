@@ -121,12 +121,12 @@ export async function assertRate(principal: Principal): Promise<void> {
   const key = principal.key;
   const id = ownerId(principal);
   if (!id) return;
-  const { rpm, tpm } = await incrementRateWindow(id, 1, 0);
+  const { rpm, tpm, resetAt } = await incrementRateWindow(id, 1, 0);
   if (key?.rpm_limit && rpm > key.rpm_limit) {
-    throw new GateError(429, "rate_limit_exceeded", "rpm exceeded");
+    throw new GateError(429, "rate_limit_exceeded", "rpm exceeded", { retryAt: resetAt });
   }
   if (key?.tpm_limit && tpm >= key.tpm_limit) {
-    throw new GateError(429, "rate_limit_exceeded", "tpm exceeded");
+    throw new GateError(429, "rate_limit_exceeded", "tpm exceeded", { retryAt: resetAt });
   }
   if (principal.teamId) {
     const team = await prisma.team.findUnique({
@@ -136,10 +136,10 @@ export async function assertRate(principal: Principal): Promise<void> {
     if (team) {
       const teamWindow = await incrementRateWindow(`team:${principal.teamId}`, 1, 0);
       if (team.rpmLimit > 0 && teamWindow.rpm > team.rpmLimit) {
-        throw new GateError(429, "rate_limit_exceeded", "team rpm exceeded");
+        throw new GateError(429, "rate_limit_exceeded", "team rpm exceeded", { retryAt: teamWindow.resetAt });
       }
       if (team.tpmLimit > 0 && teamWindow.tpm >= team.tpmLimit) {
-        throw new GateError(429, "rate_limit_exceeded", "team tpm exceeded");
+        throw new GateError(429, "rate_limit_exceeded", "team tpm exceeded", { retryAt: teamWindow.resetAt });
       }
     }
   }
