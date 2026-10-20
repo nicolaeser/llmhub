@@ -1,5 +1,6 @@
 import "server-only";
 import prisma from "@/lib/db/prisma";
+import { errorFields } from "@/lib/logging/format";
 import { logger } from "@/lib/logging/logger";
 import {
   addBatchUsage,
@@ -387,7 +388,7 @@ export async function processBatch(id: string): Promise<void> {
 
 export function startBatch(id: string): void {
   void processBatch(id).catch((err) => {
-    logger.error("batch.failed", { batchId: id, err: err instanceof Error ? err.message : String(err) });
+    logger.error("batch.failed", { batchId: id, ...errorFields(err) });
   });
 }
 

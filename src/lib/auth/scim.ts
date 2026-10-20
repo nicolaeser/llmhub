@@ -11,6 +11,7 @@ import { removeUserWithInternalKeys } from "@/lib/auth/user-removal";
 import { writeAudit } from "@/lib/audit";
 import { digest, randomToken } from "@/lib/crypto";
 import { bearerToken } from "@/lib/http/api";
+import { errorFields } from "@/lib/logging/format";
 import { logger } from "@/lib/logging/logger";
 import { isRoleTemplateKey } from "@/lib/auth/permissions";
 import type { RoleTemplateKey } from "@/types/auth";
@@ -109,7 +110,7 @@ export function scimHandler<A extends unknown[]>(
       return await handler(req, ...args);
     } catch (err) {
       if (((err as { status?: number }).status ?? 500) >= 500) {
-        logger.error(`scim.${name}.failed`, { err: String(err) });
+        logger.error(`scim.${name}.failed`, errorFields(err));
       }
       return scimCaught(err);
     }

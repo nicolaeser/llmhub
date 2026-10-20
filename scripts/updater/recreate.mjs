@@ -61,17 +61,19 @@ export async function recreateContainer(docker, container, { imageRef, image, on
   const backup = `${name}${BACKUP_SUFFIX}`;
   const oldImage = await docker.inspectImage(container.Image);
   if (!oldImage) throw new Error(`the image of ${name} cannot be inspected`);
+  const graceSeconds = stopSeconds(container);
   const body = createConfigFor(container, oldImage, {
     imageRef,
     imageId: image.Id,
     composeImage: composeImageLabel(container, image),
+    stopTimeout: graceSeconds,
   });
   const wasRunning = container.State?.Running === true;
   const progress = { stopped: false, renamed: false, created: null };
   try {
     await onPhase("recreating");
     await removeContainerNamed(docker, backup, container.Id);
-    await docker.stop(container.Id, stopSeconds(container));
+    await docker.stop(container.Id, graceSeconds);
     progress.stopped = true;
     await docker.rename(container.Id, backup);
     progress.renamed = true;

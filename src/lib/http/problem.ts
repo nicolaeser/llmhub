@@ -9,6 +9,7 @@ import { GateError } from "@/lib/gateway/errors";
 import { isActionCode } from "@/lib/http/action-result";
 import { isPayloadTooLarge } from "@/lib/http/api";
 import { normalizeProblemCode, problemSpec } from "@/lib/http/problem-codes";
+import { errorFields } from "@/lib/logging/format";
 import { logger } from "@/lib/logging/logger";
 import type { ActionFail } from "@/types/actions";
 import type {
@@ -75,7 +76,7 @@ export function problemResponse(
       requestId,
       path: body.instance,
       code: normalized,
-      ...(input.cause === undefined ? {} : { err: String(input.cause) }),
+      ...(input.cause === undefined ? {} : errorFields(input.cause)),
     });
   }
   return NextResponse.json(body, {
