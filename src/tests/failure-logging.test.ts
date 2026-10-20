@@ -113,3 +113,22 @@ test("fireAlert logs when alert settings cannot be read", async () => {
   assert.equal(lines[0]!.alertEvent, "budget_threshold");
   assert.doesNotMatch(JSON.stringify(lines), /team crossed/);
 });
+
+test("gateway and problem responses log only the first line of a failure", async () => {
+  const { gateResponse } = await import("@/lib/gateway/access/gate");
+  const { problemResponse } = await import("@/lib/http/problem");
+  const failure = () => new Error("query failed\n  where email = 'person@example.com'");
+  const { lines } = await capture(async () => {
+    gateResponse(failure(), new Request("http://hub.test/api/v1/chat/completions"));
+    problemResponse(new Request("http://hub.test/api/mgmt/keys"), "INTERNAL_ERROR", { cause: failure() });
+  });
+  const logged = lines.filter((line) => line.event === "gateway.error" || line.event === "api.problem");
+  assert.deepEqual(
+    logged.map(({ event, errName, err }) => ({ event, errName, err })),
+    [
+      { event: "gateway.error", errName: "Error", err: "query failed" },
+      { event: "api.problem", errName: "Error", err: "query failed" },
+    ],
+  );
+  assert.doesNotMatch(JSON.stringify(lines), /person@example\.com/);
+});

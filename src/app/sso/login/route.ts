@@ -9,6 +9,7 @@ import {
   signOidcState,
 } from "@/lib/auth/oidc";
 import { sanitizeReturnPath } from "@/lib/auth/return-path";
+import { errorFields } from "@/lib/logging/format";
 import { logger } from "@/lib/logging/logger";
 import { operatorCount } from "@/lib/bootstrap/operators";
 
@@ -36,7 +37,7 @@ export async function GET(req: NextRequest) {
     res.cookies.set(opts.name, state.cookie, opts);
     return res;
   } catch (err) {
-    logger.error("sso.login.failed", { err: String(err) });
+    logger.error("sso.login.failed", errorFields(err));
     loginError.searchParams.set("sso", "error");
     return NextResponse.redirect(loginError);
   }

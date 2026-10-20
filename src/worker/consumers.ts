@@ -1,6 +1,7 @@
 import "server-only";
 
 import { Worker, type WorkerOptions } from "bullmq";
+import { errorFields } from "@/lib/logging/format";
 import { logger } from "@/lib/logging/logger";
 import { getQueueConnectionOptions } from "@/lib/jobs/connection";
 import { QUEUE_NAMES } from "@/lib/jobs/queues";
@@ -31,7 +32,7 @@ function attachListeners(worker: Worker): void {
       queue: worker.name,
       jobId: job?.id,
       attemptsMade: job?.attemptsMade,
-      err: err instanceof Error ? err.message : String(err),
+      ...errorFields(err),
     });
   });
   worker.on("stalled", (jobId) => {
@@ -40,7 +41,7 @@ function attachListeners(worker: Worker): void {
   worker.on("error", (err) => {
     logger.error("worker.error", {
       queue: worker.name,
-      err: err instanceof Error ? err.message : String(err),
+      ...errorFields(err),
     });
   });
 }

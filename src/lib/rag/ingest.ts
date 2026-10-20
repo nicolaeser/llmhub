@@ -4,6 +4,7 @@ import { Prisma } from "@/generated/prisma/client";
 import { assertBudget } from "@/lib/gateway/billing/billing";
 import { GateError } from "@/lib/gateway/errors";
 import { getObject } from "@/lib/gateway/storage/objects";
+import { errorFields } from "@/lib/logging/format";
 import { logger } from "@/lib/logging/logger";
 import { chunkText } from "@/lib/rag/chunking";
 import { extractDocument } from "@/lib/rag/extract";
@@ -240,7 +241,7 @@ async function drain(): Promise<void> {
       const key = await claimNext();
       if (!key) return;
       await ingest(key).catch((err) => {
-        logger.error("vector_store.ingest_failed", { ...key, err: err instanceof Error ? err.message : String(err) });
+        logger.error("vector_store.ingest_failed", { ...key, ...errorFields(err) });
       });
     }
   } finally {
@@ -251,7 +252,7 @@ async function drain(): Promise<void> {
 export function kickIngest(): void {
   for (let slot = ingestState().running; slot < CONCURRENCY; slot++) {
     void drain().catch((err) => {
-      logger.error("vector_store.drain_failed", { err: err instanceof Error ? err.message : String(err) });
+      logger.error("vector_store.drain_failed", errorFields(err));
     });
   }
 }
