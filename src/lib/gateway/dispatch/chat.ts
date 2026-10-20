@@ -28,6 +28,7 @@ import { KEEPALIVE_MS, SSE_HEADERS, SSE_KEEPALIVE, sseData } from "@/lib/gateway
 import {
   joinPath,
   mergeUpstreamHeaders,
+  observeUpstreamLimits,
   prepareBody,
   proxyJson,
   retryableStatus,
@@ -276,7 +277,7 @@ export async function withDeployment<T>(
           last = err;
           if (!isRouterError(err)) upstreamFailure = err;
           if (account && failureCode(err).status === 429) {
-            nudgeLimits(account);
+            nudgeLimits(account, acquired.dep.provider!.kind);
             void autoRedeemIfDue(account);
           }
           if (account && accountUnusable(err)) {
@@ -415,6 +416,7 @@ export async function openUpstreamStream(input: {
     body: input.form ?? JSON.stringify(withProject(input.dep, auth, input.payload)),
     signal: AbortSignal.any(signals),
   });
+  observeUpstreamLimits(input.dep, res.headers);
   if (!res.ok || !res.body) {
     const text = await readTextOr(res);
     const json = parseJsonOrNull(text);

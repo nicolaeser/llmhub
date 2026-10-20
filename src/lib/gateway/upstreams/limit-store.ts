@@ -8,12 +8,22 @@ import { asRecord } from "@/lib/gateway/core";
 import { isResetKind } from "@/lib/gateway/routing/auto-reset-policy";
 import { latestRecovery, quotaExhausted } from "@/lib/gateway/routing/quota";
 import { PROVIDER_CATALOG, reportsLimits } from "@/lib/gateway/upstreams/provider-kinds";
+import {
+  claudeHeaderWindows,
+  isObservedWindow,
+  limitsUpdatedAt,
+  observedChanged,
+  observedFlipped,
+  observedTime,
+  withObservedWindows,
+} from "@/lib/gateway/upstreams/observed-limits";
 import { parseResetState, resetCreditsView, resetStateKey } from "@/lib/gateway/upstreams/reset-state";
 import {
   dropCachedLimits,
   fetchSubscriptionLimits,
   LimitsFetchError,
   limitFailure,
+  limitsSnapshot,
   rememberLimits,
 } from "@/lib/gateway/upstreams/subscription-limits";
 import { errorFields } from "@/lib/logging/format";
@@ -26,26 +36,36 @@ import type {
   LimitRefreshMode,
   LimitRefreshResult,
   LimitSnapshot,
+  LimitWindow,
   StoredLimitSnapshot,
   SubscriptionLimits,
 } from "@/types/providers";
 import type { ResetCredits, ResetState } from "@/types/resets";
 
 export const LIMITS_POLL_MS = 5 * 60_000;
+export const CLAUDE_POLL_MS = 30 * 60_000;
+export const CLAUDE_TRAFFIC_POLL_MS = 2 * 3_600_000;
 export const POLL_JITTER = 0.15;
 export const MIN_POLL_GAP_MS = 60_000;
 export const RESET_GRACE_MS = 30_000;
 export const RESET_GRACE_JITTER_MS = 15_000;
 export const MANUAL_REFRESH_GAP_MS = 60_000;
+export const CLAUDE_MANUAL_REFRESH_GAP_MS = 5 * 60_000;
 export const ERROR_BACKOFF_MS = 60_000;
 export const AUTH_BACKOFF_MS = 5 * 60_000;
 export const MAX_BACKOFF_MS = 30 * 60_000;
 export const RATE_LIMIT_WAIT_MS = 15 * 60_000;
+export const MAX_RATE_LIMIT_WAIT_MS = 2 * 3_600_000;
+export const RATE_LIMIT_JITTER = 0.1;
+export const OBSERVED_WRITE_GAP_MS = 30_000;
+export const OBSERVED_REFRESH_MS = 5 * 60_000;
 const LIMIT_LEASE_MS = 60_000;
 const HYDRATE_MS = 15_000;
 const LEASE_WAIT_MS = 5_000;
 const LEASE_POLL_MS = 250;
 const NUDGE_GAP_MS = 60_000;
+const OBSERVED_WRITE_ATTEMPTS = 3;
+const RATE_LIMITED = "UPSTREAM_RATE_LIMITED";
 
 const LIMIT_ACCOUNT_KINDS = PROVIDER_CATALOG.filter((spec) => reportsLimits(spec.kind)).map((spec) => spec.kind);
 
@@ -54,6 +74,9 @@ const ACTIVE_ACCOUNT = { kind: { in: LIMIT_ACCOUNT_KINDS }, login: { is: { statu
 const hydratedAt = new Map<string, number>();
 const hydrating = new Map<string, Promise<void>>();
 const nudgedAt = new Map<string, number>();
+const observedAt = new Map<string, number>();
+const observedWrites = new Map<string, { at: number; windows: LimitWindow[] }>();
+const observedChains = new Map<string, Promise<boolean>>();
 
 type SnapshotRow = {
   providerId: string;
@@ -117,18 +140,38 @@ export function jittered(ms: number, random: () => number, spread = POLL_JITTER)
   return Math.round(ms * (1 + (random() * 2 - 1) * spread));
 }
 
-export function nextPollAt(limits: SubscriptionLimits | null, now: number, random: () => number = Math.random): number {
-  const regular = now + jittered(LIMITS_POLL_MS, random);
-  if (!limits || !quotaExhausted(limits, "", now)) return regular;
+export function pollInterval(kind: string): number {
+  return kind === "claude" ? CLAUDE_POLL_MS : LIMITS_POLL_MS;
+}
+
+export function manualRefreshGap(kind: string): number {
+  return kind === "claude" ? CLAUDE_MANUAL_REFRESH_GAP_MS : MANUAL_REFRESH_GAP_MS;
+}
+
+export function nextPollAt(
+  kind: string,
+  limits: SubscriptionLimits | null,
+  now: number,
+  random: () => number = Math.random,
+): number {
+  const interval = pollInterval(kind);
+  const regular = now + jittered(interval, random);
+  if (!limits || !quotaExhausted(limits, "", now) || now - observedTime(limits) < interval) return regular;
   const recovery = latestRecovery(limits, now);
   if (recovery === null) return regular;
   const afterReset = recovery + RESET_GRACE_MS + Math.round(random() * RESET_GRACE_JITTER_MS);
   return Math.max(now + MIN_POLL_GAP_MS, Math.min(regular, afterReset));
 }
 
+export function rateLimitWait(failures: number, retryAfterMs: number | null): number {
+  const escalated = Math.min(MAX_RATE_LIMIT_WAIT_MS, RATE_LIMIT_WAIT_MS * 2 ** Math.max(0, failures - 1));
+  return Math.max(retryAfterMs ?? 0, escalated);
+}
+
 export function failureDelay(failure: LimitFetchFailure, failures: number, random: () => number = Math.random): number {
-  if (failure.code === "UPSTREAM_RATE_LIMITED") {
-    return Math.max(failure.retryAfterMs ?? RATE_LIMIT_WAIT_MS, LIMITS_POLL_MS) + Math.round(random() * RESET_GRACE_JITTER_MS);
+  if (failure.code === RATE_LIMITED) {
+    const wait = rateLimitWait(failures, failure.retryAfterMs);
+    return wait + Math.round(random() * wait * RATE_LIMIT_JITTER);
   }
   const base = failure.code === "UPSTREAM_FAILED" ? ERROR_BACKOFF_MS : AUTH_BACKOFF_MS;
   return jittered(Math.min(MAX_BACKOFF_MS, base * 2 ** Math.max(0, failures - 1)), random);
@@ -148,8 +191,14 @@ export function pollDue(snapshot: StoredLimitSnapshot | null, loginVersion: numb
   return snapshot.nextAt <= now || renewedLogin(snapshot, loginVersion);
 }
 
+export function failureCount(failure: LimitFetchFailure, previous: StoredLimitSnapshot | null): number {
+  if (failure.code === RATE_LIMITED && previous?.error !== RATE_LIMITED) return 1;
+  return (previous?.failures ?? 0) + 1;
+}
+
 function claimConditions(
   mode: LimitRefreshMode,
+  kind: string,
   loginVersion: number,
   now: number,
 ): Prisma.ProviderLimitSnapshotWhereInput[] {
@@ -162,7 +211,7 @@ function claimConditions(
     return [
       free,
       open,
-      { OR: [{ checkedAt: null }, { checkedAt: { lte: new Date(now - MANUAL_REFRESH_GAP_MS) } }, renewed] },
+      { OR: [{ checkedAt: null }, { checkedAt: { lte: new Date(now - manualRefreshGap(kind)) } }, renewed] },
     ];
   }
   const stale = mode.maxAgeMs > 0 ? [{ OR: [{ fetchedAt: null }, { fetchedAt: { lt: new Date(now - mode.maxAgeMs) } }] }] : [];
@@ -191,7 +240,7 @@ async function claim(account: LimitPollAccount, mode: LimitRefreshMode, now: num
   }
   const leaseToken = randomUUID();
   const claimed = await prisma.providerLimitSnapshot.updateMany({
-    where: { providerId: account.id, AND: claimConditions(mode, account.loginVersion, now) },
+    where: { providerId: account.id, AND: claimConditions(mode, account.kind, account.loginVersion, now) },
     data: { leaseUntil: new Date(now + LIMIT_LEASE_MS), leaseToken },
   });
   return claimed.count ? leaseToken : null;
@@ -205,6 +254,11 @@ async function settledSnapshot(providerId: string, version: number, deadline: nu
   }
 }
 
+function withPreviousObservation(limits: SubscriptionLimits, previous: StoredLimitSnapshot | null): SubscriptionLimits {
+  const observed = previous?.limits?.observedAt;
+  return observed ? { ...limits, observedAt: observed } : limits;
+}
+
 function successData(account: LimitPollAccount, limits: SubscriptionLimits, now: number, random: () => number) {
   return {
     limits: json(limits),
@@ -213,7 +267,7 @@ function successData(account: LimitPollAccount, limits: SubscriptionLimits, now:
     checkedAt: new Date(now),
     failures: 0,
     retryAt: null,
-    nextAt: new Date(nextPollAt(limits, now, random)),
+    nextAt: new Date(nextPollAt(account.kind, limits, now, random)),
     loginVersion: account.loginVersion,
   };
 }
@@ -225,13 +279,13 @@ function failureData(
   now: number,
   random: () => number,
 ) {
-  const failures = (previous?.failures ?? 0) + 1;
-  const limited = failure.code === "UPSTREAM_RATE_LIMITED";
+  const failures = failureCount(failure, previous);
+  const limited = failure.code === RATE_LIMITED;
   return {
     error: failure.code,
     checkedAt: new Date(now),
     failures,
-    retryAt: limited ? new Date(now + (failure.retryAfterMs ?? RATE_LIMIT_WAIT_MS)) : null,
+    retryAt: limited ? new Date(now + rateLimitWait(failures, failure.retryAfterMs)) : null,
     nextAt: new Date(now + failureDelay(failure, failures, random)),
     loginVersion: account.loginVersion,
   };
@@ -247,7 +301,8 @@ async function fetchHeld(
   let limits: SubscriptionLimits | null = null;
   let failure: LimitFetchFailure | null = null;
   try {
-    limits = await fetchSubscriptionLimits(account);
+    const fetched = await fetchSubscriptionLimits(account);
+    limits = fetched ? withPreviousObservation(fetched, previous) : null;
     if (!limits) failure = { code: "UPSTREAM_FAILED", retryAfterMs: null };
   } catch (error) {
     failure = limitFailure(error);
@@ -287,13 +342,16 @@ export async function refreshLimits(
   return { status: "busy", limits: settled?.limits ?? null, failure: null, snapshot: settled };
 }
 
+function recentLimits(providerId: string, stored: StoredLimitSnapshot | null): SubscriptionLimits | null {
+  if (!stored?.limits || stored.fetchedAt === null) return null;
+  rememberLimits(providerId, stored.limits);
+  return limitsSnapshot(providerId);
+}
+
 export async function freshLimits(provider: LimitAccount, maxAgeMs: number): Promise<SubscriptionLimits | null> {
   const now = Date.now();
-  const stored = await readStoredSnapshot(provider.id);
-  if (stored?.limits && stored.fetchedAt !== null && now - stored.fetchedAt < maxAgeMs) {
-    rememberLimits(provider.id, stored.limits);
-    return stored.limits;
-  }
+  const recent = recentLimits(provider.id, await readStoredSnapshot(provider.id));
+  if (recent && now - limitsUpdatedAt(recent) < maxAgeMs) return recent;
   const account = { ...provider, enabled: true, loginVersion: await loginVersionOf(provider.id) };
   const result = await refreshLimits(account, { kind: "fresh", maxAgeMs }, { now });
   if (result.failure) throw new LimitsFetchError(result.failure.code, result.failure.retryAfterMs);
@@ -447,7 +505,8 @@ export async function hydrateLimits(providerIds: string[], now = Date.now()): Pr
   await Promise.all(waits);
 }
 
-export function nudgeLimits(providerId: string, now = Date.now()): void {
+export function nudgeLimits(providerId: string, kind: string, now = Date.now()): void {
+  if (now - (observedAt.get(providerId) ?? -Infinity) < NUDGE_GAP_MS) return;
   if (now - (nudgedAt.get(providerId) ?? -Infinity) < NUDGE_GAP_MS) return;
   nudgedAt.set(providerId, now);
   void Promise.resolve()
@@ -456,7 +515,7 @@ export function nudgeLimits(providerId: string, now = Date.now()): void {
         where: {
           providerId,
           nextAt: { gt: new Date(now) },
-          checkedAt: { lte: new Date(now - MIN_POLL_GAP_MS) },
+          checkedAt: { lte: new Date(now - manualRefreshGap(kind)) },
           OR: [{ retryAt: null }, { retryAt: { lte: new Date(now) } }],
         },
         data: { nextAt: new Date(now) },
@@ -465,4 +524,107 @@ export function nudgeLimits(providerId: string, now = Date.now()): void {
     .catch((err: unknown) => {
       logger.warn("subscription.limits_nudge_failed", { providerId, ...errorFields(err) });
     });
+}
+
+export async function usageBlockedUntil(providerId: string, now: number): Promise<number | null> {
+  const stored = await readStoredSnapshot(providerId);
+  return stored?.retryAt != null && stored.retryAt > now ? stored.retryAt : null;
+}
+
+export async function blockUsageReads(
+  providerId: string,
+  retryAfterMs: number | null,
+  now: number,
+  random: () => number = Math.random,
+): Promise<number | null> {
+  const stored = await readStoredSnapshot(providerId);
+  if (!stored) return null;
+  const failure: LimitFetchFailure = { code: RATE_LIMITED, retryAfterMs };
+  const failures = failureCount(failure, stored);
+  const retryAt = Math.max(now + rateLimitWait(failures, retryAfterMs), stored.retryAt ?? 0);
+  const nextAt = Math.max(stored.nextAt, retryAt, now + failureDelay(failure, failures, random));
+  const written = await prisma.providerLimitSnapshot.updateMany({
+    where: { providerId },
+    data: {
+      error: RATE_LIMITED,
+      failures,
+      retryAt: new Date(retryAt),
+      nextAt: new Date(nextAt),
+      version: { increment: 1 },
+    },
+  });
+  if (written.count) notifyLive("limits");
+  return retryAt;
+}
+
+function observedBase(now: number): SubscriptionLimits {
+  return { plan: "", windows: [], credits: null, resetCredits: null, extraUsage: null, fetchedAt: new Date(now).toISOString() };
+}
+
+function trafficPollAt(stored: StoredLimitSnapshot, now: number): number | null {
+  if (stored.fetchedAt === null || stored.failures > 0) return null;
+  const at = Math.min(stored.fetchedAt + CLAUDE_TRAFFIC_POLL_MS, now + CLAUDE_POLL_MS);
+  return at > stored.nextAt ? at : null;
+}
+
+export async function storeObservedLimits(providerId: string, windows: LimitWindow[], now: number): Promise<boolean> {
+  for (let attempt = 0; attempt < OBSERVED_WRITE_ATTEMPTS; attempt++) {
+    const stored = await readStoredSnapshot(providerId);
+    if (!stored) return false;
+    const base = stored.limits ?? observedBase(now);
+    const merged = withObservedWindows(base, windows, now);
+    const changed = !stored.limits || observedChanged(base.windows, merged.windows.filter(isObservedWindow));
+    if (!changed && now - observedTime(base) < OBSERVED_WRITE_GAP_MS) return false;
+    const pushTo = trafficPollAt(stored, now);
+    const written = await prisma.providerLimitSnapshot.updateMany({
+      where: { providerId, version: stored.version },
+      data: {
+        limits: json(merged),
+        ...(pushTo !== null ? { nextAt: new Date(pushTo) } : {}),
+        version: { increment: 1 },
+      },
+    });
+    if (!written.count) continue;
+    if (stored.fetchedAt !== null) rememberLimits(providerId, merged);
+    notifyLive("limits");
+    return true;
+  }
+  return false;
+}
+
+function observedWriteDue(last: { at: number; windows: LimitWindow[] } | undefined, windows: LimitWindow[], now: number) {
+  if (!last || observedFlipped(last.windows, windows)) return true;
+  if (now - last.at < OBSERVED_WRITE_GAP_MS) return false;
+  return observedChanged(last.windows, windows) || now - last.at >= OBSERVED_REFRESH_MS;
+}
+
+function observeFailed(providerId: string, err: unknown): false {
+  logger.warn("subscription.limits_observe_failed", { providerId, ...errorFields(err) });
+  return false;
+}
+
+function queueObservedWrite(providerId: string, windows: LimitWindow[], now: number): Promise<boolean> {
+  const chain: Promise<boolean> = (observedChains.get(providerId) ?? Promise.resolve(false))
+    .then(() => storeObservedLimits(providerId, windows, now))
+    .catch((err: unknown) => observeFailed(providerId, err))
+    .finally(() => {
+      if (observedChains.get(providerId) === chain) observedChains.delete(providerId);
+    });
+  observedChains.set(providerId, chain);
+  return chain;
+}
+
+export function observeClaudeLimits(providerId: string, headers: Headers, now = Date.now()): Promise<boolean> {
+  try {
+    const windows = claudeHeaderWindows(headers);
+    if (!windows.length) return Promise.resolve(false);
+    observedAt.set(providerId, now);
+    const cached = limitsSnapshot(providerId);
+    if (cached) rememberLimits(providerId, withObservedWindows(cached, windows, now));
+    if (!observedWriteDue(observedWrites.get(providerId), windows, now)) return Promise.resolve(false);
+    observedWrites.set(providerId, { at: now, windows });
+    return queueObservedWrite(providerId, windows, now);
+  } catch (err) {
+    return Promise.resolve(observeFailed(providerId, err));
+  }
 }

@@ -94,7 +94,7 @@
   "noLimits": "Dieser Anbieter meldet keine Nutzungslimits.",
   "limits": {
     "refresh": "Nutzungslimits aktualisieren",
-    "updated": "Aktualisiert {when}",
+    "updated": "{source, select, traffic {Aus laufenden Anfragen aktualisiert {when}} other {Aktualisiert {when}}}",
     "nextCheck": "Nächste Abfrage {when}.",
     "window": "{unit, select, hour {{count, plural, one {Stundenlimit} other {#-Stunden-Limit}}} day {{count, plural, one {Tageslimit} =7 {Wochenlimit} other {#-Tage-Limit}}} month {Monatslimit} other {Nutzungslimit}}",
     "scoped": "{scope}: {window}",
