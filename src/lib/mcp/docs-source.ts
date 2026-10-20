@@ -131,8 +131,8 @@ export function docsJar(auth: McpDocsAuth): McpDocsJar {
   return jar;
 }
 
-export function docsSession(link: string, fetchImpl: McpFetch, auth: McpDocsAuth = NO_AUTH, signal?: AbortSignal): McpDocsSession {
-  return { start: new URL(link), fetchImpl, auth, jar: docsJar(auth), signal };
+export function docsSession(link: string, fetchImpl: McpFetch, auth: McpDocsAuth = NO_AUTH): McpDocsSession {
+  return { start: new URL(link), fetchImpl, auth, jar: docsJar(auth) };
 }
 
 function defaultCookiePath(url: URL): string {
