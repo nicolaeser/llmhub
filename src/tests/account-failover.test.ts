@@ -10,7 +10,7 @@ const ACCOUNTS: FakeAccount[] = [
   { id: "acct-b", deployment: "dep-b", weight: 5 },
 ];
 
-function groupRow(alias: string, numRetries = 0) {
+function groupRow(alias: string, numRetries = 0, overflowGroup = "") {
   return {
     alias,
     enabled: true,
@@ -20,7 +20,7 @@ function groupRow(alias: string, numRetries = 0) {
     priceOutput: 0,
     priceTimeZone: "UTC",
     priceWindows: [],
-    overflowGroup: "",
+    overflowGroup,
     numRetries,
     fallbackGroups: [],
     deployments: ACCOUNTS.map((account) => ({
@@ -84,9 +84,9 @@ async function route<T>(fn: (dep: ResolvedDeployment) => Promise<T>, request?: J
   return withDeployment([alias], {}, (dep) => fn(dep), { pool: "subscription", request });
 }
 
-async function limitError(message = "You've hit your usage limit.") {
+async function limitError(message = "You've hit your usage limit.", retryAt = Date.now() + 3_600_000) {
   const { GateError } = await import("@/lib/gateway/errors");
-  return new GateError(429, "upstream_error", message, { upstreamCode: "usage_limit_reached", retryAt: Date.now() + 3_600_000 });
+  return new GateError(429, "upstream_error", message, { upstreamCode: "usage_limit_reached", retryAt });
 }
 
 function reasoningOf(request: JsonMap): string[] {
@@ -124,13 +124,105 @@ test("a usage limit on one account moves the same request to the next account ev
   assert.equal(routed.dep.provider_id, "acct-b");
 });
 
-test("when every account is exhausted the caller gets the upstream limit error, not a routing error", async () => {
-  await assert.rejects(
-    route(async () => {
-      throw await limitError("Usage limit reached until 18:00.");
-    }),
-    (err: unknown) => err instanceof Error && err.message === "Usage limit reached until 18:00." && (err as { status?: number }).status === 429,
-  );
+test("when every account is exhausted the caller gets a usage limit error with the earliest reset", async () => {
+  const { toGateError } = await import("@/lib/gateway/access/gate");
+  const resets = new Map([
+    ["acct-a", Date.now() + 3 * 3_600_000],
+    ["acct-b", Date.now() + 2 * 3_600_000],
+  ]);
+  const served: string[] = [];
+  const failure = await route(async (dep) => {
+    served.push(dep.provider_id);
+    throw await limitError("Usage limit reached until 18:00.", resets.get(dep.provider_id));
+  }).catch((err: unknown) => err);
+  assert.deepEqual(served, ["acct-a", "acct-b"]);
+  const gate = toGateError(failure);
+  assert.equal(gate.status, 429);
+  assert.equal(gate.code, "rate_limit_exceeded");
+  assert.equal(gate.retryAt, resets.get("acct-b"));
+  assert.match(gate.message, /^all ChatGPT subscription \(Codex\) accounts have reached their usage limit; /);
+  assert.match(gate.message, /\(in 2h\)$/);
+});
+
+test("accounts already cooling down after a limit answer with a rate limit error instead of overloaded", async () => {
+  const { markFailure } = await import("@/lib/gateway/routing/runtime");
+  const { gateResponse } = await import("@/lib/gateway/access/gate");
+  const resetAt = Date.now() + 90 * 60_000;
+  markFailure({ id: `${alias}-dep-a` } as ResolvedDeployment, resetAt + 60_000);
+  markFailure({ id: `${alias}-dep-b` } as ResolvedDeployment, resetAt);
+  const served: string[] = [];
+  const failure = await route(async (dep) => {
+    served.push(dep.provider_id);
+    return "unreachable";
+  }).catch((err: unknown) => err);
+  assert.deepEqual(served, []);
+  const response = gateResponse(failure, new Request("http://hub.local/v1/messages", { method: "POST" }));
+  assert.equal(response.status, 429);
+  const body = await response.json();
+  assert.equal(body.error.type, "rate_limit_error");
+  assert.match(body.error.message, /available again at /);
+  assert.ok(Number(response.headers.get("retry-after")) > 60 * 60);
+  assert.equal(response.headers.get("x-should-retry"), "false");
+});
+
+test("a short transient cooldown stays retryable and tells the client when to come back", async () => {
+  const { markFailure } = await import("@/lib/gateway/routing/runtime");
+  const { gateResponse, toGateError } = await import("@/lib/gateway/access/gate");
+  for (const dep of ["dep-a", "dep-b"]) {
+    markFailure({ id: `${alias}-${dep}` } as ResolvedDeployment);
+    markFailure({ id: `${alias}-${dep}` } as ResolvedDeployment);
+  }
+  const failure = await route(async () => "unreachable").catch((err: unknown) => err);
+  const gate = toGateError(failure);
+  assert.equal(gate.status, 503);
+  assert.equal(gate.code, "no_healthy_deployment");
+  assert.ok(gate.retryAt && gate.retryAt > Date.now());
+  const response = gateResponse(failure, new Request("http://hub.local/v1/chat/completions", { method: "POST" }));
+  assert.ok(Number(response.headers.get("retry-after")) <= 15);
+  assert.equal(response.headers.get("x-should-retry"), "true");
+});
+
+test("one limited account and one rejected login report the real upstream failure", async () => {
+  const { GateError } = await import("@/lib/gateway/errors");
+  const served: string[] = [];
+  const failure = await route(async (dep) => {
+    served.push(dep.provider_id);
+    if (dep.provider_id === "acct-a") throw await limitError();
+    throw new GateError(401, "upstream_error", "OAuth access token has been revoked.");
+  }).catch((err: unknown) => err);
+  assert.deepEqual(served, ["acct-a", "acct-b"]);
+  assert.ok(failure instanceof GateError);
+  assert.equal(failure.status, 401);
+  assert.equal(failure.message, "OAuth access token has been revoked.");
+});
+
+test("an overflow group with free accounts takes over when the primary accounts are limited", async () => {
+  const { markFailure } = await import("@/lib/gateway/routing/runtime");
+  const primary = alias;
+  const spare = `${primary}-spare`;
+  groups.set(spare, groupRow(spare));
+  groups.set(primary, groupRow(primary, 0, spare));
+  markFailure({ id: `${primary}-dep-a` } as ResolvedDeployment, Date.now() + 3_600_000);
+  markFailure({ id: `${primary}-dep-b` } as ResolvedDeployment, Date.now() + 3_600_000);
+  const routed = await route(async (dep) => dep.id);
+  assert.equal(routed.result, `${spare}-dep-a`);
+});
+
+test("limits across a group and its overflow report the earliest reset of either", async () => {
+  const { markFailure } = await import("@/lib/gateway/routing/runtime");
+  const { toGateError } = await import("@/lib/gateway/access/gate");
+  const primary = alias;
+  const spare = `${primary}-spare`;
+  groups.set(spare, groupRow(spare));
+  groups.set(primary, groupRow(primary, 0, spare));
+  const earliest = Date.now() + 40 * 60_000;
+  markFailure({ id: `${primary}-dep-a` } as ResolvedDeployment, Date.now() + 3_600_000);
+  markFailure({ id: `${primary}-dep-b` } as ResolvedDeployment, Date.now() + 3_600_000);
+  markFailure({ id: `${spare}-dep-a` } as ResolvedDeployment, earliest);
+  markFailure({ id: `${spare}-dep-b` } as ResolvedDeployment, Date.now() + 2 * 3_600_000);
+  const gate = toGateError(await route(async () => "unreachable").catch((err: unknown) => err));
+  assert.equal(gate.status, 429);
+  assert.equal(gate.retryAt, earliest);
 });
 
 test("a run stays on its account until that account fails", async () => {

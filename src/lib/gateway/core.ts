@@ -3,12 +3,13 @@ import { GateError } from "@/lib/gateway/errors";
 import { PROVIDER_CATALOG } from "@/lib/gateway/upstreams/provider-kinds";
 import type { JsonMap, Principal } from "@/types/gateway";
 import type { ModelPricing, PublicModel } from "@/types/models";
-import type { RoutePool } from "@/types/routing";
+import type { RoutePool, RouterWait } from "@/types/routing";
 
 export class RouterError extends Error {
   constructor(
     message: string,
     readonly code: "unknown_group" | "no_healthy" | "all_paused" | "not_assigned" | "unknown_strategy",
+    readonly wait: RouterWait | null = null,
   ) {
     super(message);
     this.name = "RouterError";
@@ -32,6 +33,14 @@ export const ERR_NOT_ASSIGNED = new RouterError(
   "not_assigned",
 );
 
+export function waitingError(wait: RouterWait): RouterError {
+  return new RouterError(
+    wait.limited ? "router: every deployment is rate limited" : "router: every deployment is cooling down",
+    "no_healthy",
+    wait,
+  );
+}
+
 export function isRouterError(err: unknown, code?: RouterError["code"]): err is RouterError {
   return err instanceof RouterError && (code ? err.code === code : true);
 }
@@ -48,9 +57,37 @@ export function routerGateError(err: unknown): GateError | null {
     return new GateError(403, "account_not_assigned", "no subscription account is assigned to this key");
   }
   if (isUnavailableError(err)) {
-    return new GateError(503, "no_healthy_deployment", "no healthy deployment for model");
+    const wait = err.wait;
+    if (wait?.limited) {
+      return new GateError(429, "rate_limit_exceeded", limitMessage(wait), { retryAt: wait.retryAt });
+    }
+    return new GateError(503, "no_healthy_deployment", "no healthy deployment for model", {
+      retryAt: wait?.retryAt ?? null,
+    });
   }
   return null;
+}
+
+function kindName(kind: string): string {
+  return PROVIDER_CATALOG.find((spec) => spec.kind === kind)?.name ?? kind;
+}
+
+export function waitText(ms: number): string {
+  const minutes = Math.max(1, Math.ceil(ms / 60_000));
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  if (hours < 24) return rest ? `${hours}h ${rest}m` : `${hours}h`;
+  const days = Math.floor(hours / 24);
+  return hours % 24 ? `${days}d ${hours % 24}h` : `${days}d`;
+}
+
+export function limitMessage(wait: RouterWait, now = Date.now()): string {
+  const subject = wait.kinds.length
+    ? `all ${wait.kinds.map(kindName).join(" and ")} accounts have reached their usage limit`
+    : "all deployments for this model are rate limited";
+  const when = new Date(wait.retryAt).toISOString();
+  return `${subject}; the next one is available again at ${when} (in ${waitText(wait.retryAt - now)})`;
 }
 
 export function ownerId(pr: Principal | null | undefined): string {
