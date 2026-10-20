@@ -2,7 +2,9 @@
 
 import type { RefObject } from "react";
 import { Spinner } from "@heroui/react";
+import { MessagesSquare } from "lucide-react";
 import { useTranslations } from "next-intl";
+import IconTile from "@/components/console/icon-tile";
 import type { PlaygroundMessage } from "@/types/playground";
 
 function visibleText(content: PlaygroundMessage["content"], imageMarker: string): string {
@@ -30,9 +32,12 @@ export default function ChatTranscript({
   return (
     <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-5" aria-live="polite">
       {messages.length === 0 ? (
-        <div className="flex h-full flex-col items-center justify-center text-center">
-          <p className="text-sm font-medium">{t("emptyTitle")}</p>
-          <p className="mt-1 text-sm text-muted">{t("emptyHint")}</p>
+        <div className="flex h-full flex-col items-center justify-center gap-4 text-center">
+          <IconTile icon={MessagesSquare} size="xl" />
+          <div>
+            <p className="text-base font-semibold tracking-tight text-foreground">{t("emptyTitle")}</p>
+            <p className="mt-1 max-w-sm text-sm text-balance text-muted">{t("emptyHint")}</p>
+          </div>
         </div>
       ) : (
         messages.map((m, i) => {
