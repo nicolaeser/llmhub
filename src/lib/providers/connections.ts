@@ -15,6 +15,7 @@ import { KNOWN_KINDS } from "@/lib/gateway/core";
 import { addRoute, catalogTargets, markRouted } from "@/lib/gateway/catalog/catalog-sync";
 import { scheduleCatalogTask } from "@/lib/gateway/catalog/catalog-tasks";
 import { assignmentSelect, assignmentTargets } from "@/lib/gateway/routing/account-assignments";
+import { reactivateAccount } from "@/lib/gateway/routing/account-reactivation";
 import { loginData } from "@/lib/gateway/upstreams/credentials";
 import { baseName, vendorOf } from "@/lib/gateway/catalog/model-catalog";
 import { refreshProviderModels } from "@/lib/gateway/upstreams/discovery";
@@ -172,6 +173,7 @@ export async function createProvider(input: {
         include: providerInclude,
       });
   const outcome = existing ? "updated" : "created";
+  if (existing) await reactivateAccount(row.id);
   await writeAudit({
     actor: session.user.id,
     action: "provider.connect",
@@ -182,6 +184,11 @@ export async function createProvider(input: {
   await scheduleCatalogTask({ task: "provider", providerId: row.id });
   const superseded = credential ? await pruneSupersededLogins(session.user.id) : [];
   return { provider: publicProvider(row), outcome, superseded };
+}
+
+function updateAction(wasEnabled: boolean, enabled: boolean): string {
+  if (wasEnabled === enabled) return "provider.update";
+  return enabled ? "provider.resume" : "provider.pause";
 }
 
 export async function updateProvider(input: {
@@ -213,11 +220,14 @@ export async function updateProvider(input: {
     },
     include: providerInclude,
   });
+  const resumed = !existing.enabled && row.enabled;
+  if (resumed || apiKey || credential) await reactivateAccount(row.id);
   await writeAudit({
     actor: session.user.id,
-    action: "provider.update",
+    action: updateAction(existing.enabled, row.enabled),
     objectType: "provider",
     objectId: row.id,
+    before: { enabled: existing.enabled },
     after: providerAuditAfter(row, {
       enabled: row.enabled,
       keyReplaced: Boolean(apiKey),

@@ -127,6 +127,13 @@ export function loginData(session: SignInSession, now = Date.now()) {
   };
 }
 
+export async function clearRefreshBackoff(providerId: string): Promise<void> {
+  await prisma.providerLogin.updateMany({
+    where: { providerId, status: "active", OR: [{ retryAt: { not: null } }, { failures: { gt: 0 } }] },
+    data: { retryAt: null, failures: 0 },
+  });
+}
+
 async function loadLogin(providerId: string): Promise<LoginRow> {
   const row = await prisma.providerLogin.findUnique({ where: { providerId } });
   if (!row || row.status !== "active") throw signInRequired();
