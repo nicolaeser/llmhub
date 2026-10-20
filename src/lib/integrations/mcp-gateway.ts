@@ -1,7 +1,7 @@
 import "server-only";
 import prisma from "@/lib/db/prisma";
 import { GateError } from "@/lib/gateway/errors";
-import { executeBoundTool } from "@/lib/integrations/service";
+import { executeBoundTool } from "@/lib/integrations/execution";
 import { parseRpc, rpcFail, rpcOk, toolCard, visibleTools, type CallableTool } from "@/lib/integrations/mcp-protocol";
 import { DEFAULT_EXECUTION_POLICY } from "@/lib/integrations/workflow";
 import { executionPolicySchema, policyRuleSchema } from "@/schemas/integrations";
