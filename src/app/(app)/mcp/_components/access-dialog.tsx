@@ -10,7 +10,6 @@ import {
   ListBox,
   Select,
   Separator,
-  Spinner,
   Switch,
   ToggleButton,
   ToggleButtonGroup,
@@ -22,6 +21,7 @@ import { useFormatter, useTranslations } from "next-intl";
 import FormDialog from "@/components/console/form-dialog";
 import MultiPicker from "@/components/console/multi-picker";
 import SearchSelect from "@/components/console/search-select";
+import { SectionLoading } from "@/components/console/page-status";
 import { useErrorToast } from "@/components/console/use-error-toast";
 import { isActionFail } from "@/lib/http/action-result";
 import { explainAccess } from "@/lib/mcp/resolve";
@@ -227,9 +227,7 @@ export default function AccessDialog({
       </Switch>
       <Separator />
       {options === null ? (
-        <output aria-live="polite" aria-label={tCommon("loading")} className="flex justify-center py-6 text-accent">
-          <Spinner color="current" />
-        </output>
+        <SectionLoading />
       ) : (
         <>
           <div className="grid items-end gap-3 sm:grid-cols-[10rem_1fr_auto_auto]">

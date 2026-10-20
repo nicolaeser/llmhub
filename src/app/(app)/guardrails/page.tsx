@@ -54,7 +54,7 @@ export default function GuardrailsPage() {
   const { data, setData } = page;
 
   if (!data) {
-    return <PageStatus icon={Shield} title={t("title")} subtitle={t("subtitle")} state={page} />;
+    return <PageStatus icon={Shield} title={t("title")} subtitle={t("subtitle")} state={page} tabs stats={3} layout="form" />;
   }
 
   const { canManage, targets, piiOverrides, guardrailOverrides } = data;

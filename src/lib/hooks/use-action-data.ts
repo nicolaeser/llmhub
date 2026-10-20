@@ -48,10 +48,13 @@ export function useActionData<T>(load: ActionLoader<T>, onLoad?: (data: T) => vo
   }, [run]);
 
   useEffect(() => {
-    const onWorkspace = () => reload();
+    const onWorkspace = () => {
+      setSnapshot({ data: null, error: null, pending: true });
+      void run();
+    };
     window.addEventListener(WORKSPACE_EVENT, onWorkspace);
     return () => window.removeEventListener(WORKSPACE_EVENT, onWorkspace);
-  }, [reload]);
+  }, [run]);
 
   const reloadWith = useCallback(
     (next: ActionLoader<T>) => {

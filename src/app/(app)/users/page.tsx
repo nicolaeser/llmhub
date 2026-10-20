@@ -17,7 +17,7 @@ export default function UsersPage() {
   const granted = page.data;
 
   if (!granted) {
-    return <PageStatus icon={User} title={t("title")} subtitle={t("subtitle")} state={page} />;
+    return <PageStatus icon={User} title={t("title")} subtitle={t("subtitle")} state={page} tabs />;
   }
 
   const tabs = [

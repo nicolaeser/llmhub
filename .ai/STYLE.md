@@ -2,7 +2,7 @@
 
 Load this file for any UI, theme, layout, motion, or accessibility work. It is the sole active design contract.
 
-The UI is HeroUI v3 (`@heroui/react` / `@heroui/styles`) plus Tailwind CSS 4 layout utilities. There is one stylesheet, `src/styles/globals.css`: it imports `tailwindcss` and `@heroui/styles`, declares the `dark` custom variant, and overrides official HeroUI tokens (`--accent`, `--background`, `--surface`, `--border`, `--muted`, `--default`, `--field-*`, …) for `.light` and `.dark`. Nothing else. Must not add another stylesheet, custom classes, `@keyframes`, `@theme`, comments, or non-HeroUI custom properties to it. The root layout is the only module that imports it. Theme class on `<html>` (`.dark` / `.light`, next-themes). This is an authenticated LLM gateway console, not a marketing site.
+The UI is HeroUI v3 (`@heroui/react` / `@heroui/styles`) plus Tailwind CSS 4 layout utilities. There is one stylesheet, `src/styles/globals.css`: it imports `tailwindcss` and `@heroui/styles`, declares the `dark` custom variant, and overrides official HeroUI tokens (`--accent`, `--background`, `--surface`, `--border`, `--muted`, `--default`, `--field-*`, …) for `.light` and `.dark`, plus `--skeleton-animation: none` under `prefers-reduced-motion: reduce`. Nothing else. Must not add another stylesheet, custom classes, `@keyframes`, `@theme`, comments, or non-HeroUI custom properties to it. The root layout is the only module that imports it. Theme class on `<html>` (`.dark` / `.light`, next-themes). This is an authenticated LLM gateway console, not a marketing site.
 
 Load HeroUI docs in this order:
 
@@ -108,7 +108,7 @@ Every console screen must work at 390 px wide without horizontal page scroll.
 
 Must not clip with `overflow-hidden`. Chat transcripts and nav lists scroll with `overflow-y-auto` on the pane.
 
-Motion comes from HeroUI components (overlays, skeleton shimmer, spinners) and respects `prefers-reduced-motion`. Must not add page-level animations, custom keyframes, or an animation library.
+Motion comes from HeroUI components (overlays, skeleton shimmer, spinners) and respects `prefers-reduced-motion`; `Skeleton` reads the `--skeleton-animation` token, so the shimmer stops for reduced motion without per-call props. Must not add page-level animations, custom keyframes, or an animation library.
 
 ## Verification
 

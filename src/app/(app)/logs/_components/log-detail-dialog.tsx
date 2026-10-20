@@ -10,7 +10,6 @@ import {
   Label,
   Modal,
   Separator,
-  Spinner,
   Switch,
   Tabs,
   type useOverlayState,
@@ -20,6 +19,7 @@ import { useFormatter, useTranslations } from "next-intl";
 import { loadAliasesAction } from "../_action";
 import Markdown from "./markdown";
 import SearchSelect from "@/components/console/search-select";
+import { SectionLoading } from "@/components/console/page-status";
 import { useGuardrailHitLabel } from "@/components/guardrails/guardrail-hit";
 import { useRouter } from "@/i18n/routing";
 import { splitPiiPlaceholders } from "@/lib/gateway/safety/pii";
@@ -186,6 +186,7 @@ function Content({ detail }: { detail: RequestLogDetail }) {
 
 function Replay({ detail }: { detail: RequestLogDetail }) {
   const t = useTranslations("Logs.detail");
+  const tCommon = useTranslations("Common");
   const router = useRouter();
   const [models, setModels] = useState<string[] | null>(null);
   const [model, setModel] = useState("");
@@ -204,7 +205,9 @@ function Replay({ detail }: { detail: RequestLogDetail }) {
       <div className="flex flex-wrap items-end gap-3">
         <SearchSelect
           label={t("replayModel")}
-          placeholder={models?.length === 0 ? t("replayNoModels") : t("replayPick")}
+          placeholder={
+            models === null ? tCommon("loading") : models.length === 0 ? t("replayNoModels") : t("replayPick")
+          }
           items={(models ?? []).map((alias) => ({ id: alias, label: alias }))}
           value={model}
           onChange={setModel}
@@ -291,13 +294,7 @@ export default function LogDetailDialog({
             </Modal.Header>
             <Modal.Body className="space-y-5">
               {!detail ? (
-                <output
-                  aria-live="polite"
-                  aria-label={tCommon("loading")}
-                  className="flex min-h-40 items-center justify-center text-accent"
-                >
-                  <Spinner color="current" />
-                </output>
+                <SectionLoading shape="details" />
               ) : (
                 <>
                   {detail.error ? (

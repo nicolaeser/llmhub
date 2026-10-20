@@ -11,6 +11,7 @@
   "search": "Suchen",
   "noResults": "Keine Treffer",
   "loading": "Laden",
+  "notLoaded": "Noch nicht geladen",
   "loadFailed": "Diese Seite konnte nicht geladen werden",
   "advanced": "Erweitert",
   "copy": "Kopieren",

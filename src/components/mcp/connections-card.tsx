@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Button, Card, Chip, Skeleton, useOverlayState } from "@heroui/react";
+import { Button, Card, Chip, useOverlayState } from "@heroui/react";
 import { Blocks, Link2, Pencil } from "lucide-react";
 import { useTranslations } from "next-intl";
 import IconTile from "@/components/console/icon-tile";
+import { SectionLoading } from "@/components/console/page-status";
 import InstallDialog from "@/components/mcp/install-dialog";
 import { useErrorToast } from "@/components/console/use-error-toast";
 import { isActionFail } from "@/lib/http/action-result";
@@ -94,10 +95,7 @@ export default function McpConnectionsCard({
       </Card.Header>
       <Card.Content>
         {!data ? (
-          <div className="space-y-2">
-            <Skeleton className="h-12 w-full rounded-xl" />
-            <Skeleton className="h-12 w-full rounded-xl" />
-          </div>
+          <SectionLoading rows={2} />
         ) : data.servers.length === 0 ? (
           <p className="text-sm text-muted">{t("empty")}</p>
         ) : (

@@ -56,7 +56,7 @@ export default function MarkupsTab() {
   const { data, setData } = page;
 
   if (!data) {
-    return <PageStatus state={page} />;
+    return <PageStatus state={page} stats={3} />;
   }
 
   const orgAlias = (id: string) => data.orgs.find((org) => org.id === id)?.alias ?? "";
