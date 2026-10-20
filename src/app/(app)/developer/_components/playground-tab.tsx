@@ -225,7 +225,7 @@ export default function PlaygroundTab() {
   }
 
   if (!page.data || !ready) {
-    return <PageStatus state={page} />;
+    return <PageStatus state={page} layout="chat" />;
   }
 
   if (!models.length) {

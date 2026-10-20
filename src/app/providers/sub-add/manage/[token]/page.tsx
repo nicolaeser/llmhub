@@ -6,7 +6,8 @@ import { Unlink } from "lucide-react";
 import { useFormatter, useTranslations } from "next-intl";
 import ConfirmDialog from "@/components/console/confirm-dialog";
 import IconTile from "@/components/console/icon-tile";
-import { LoadError, PageLoading } from "@/components/console/page-status";
+import { LoadError } from "@/components/console/page-status";
+import { ContributionsSkeleton } from "@/app/providers/sub-add/_components/link-skeletons";
 import { PlanBadge } from "@/components/console/subscription-badge";
 import { useErrorToast } from "@/components/console/use-error-toast";
 import { kindIcon } from "@/components/providers/kind-icons";
@@ -49,7 +50,7 @@ export default function SubAddManagePage({ params }: { params: Promise<{ token: 
   }
 
   if (!data) {
-    if (page.error === null) return <PageLoading />;
+    if (page.error === null) return <ContributionsSkeleton />;
     return (
       <div className="space-y-4">
         <h1 className="text-3xl font-semibold tracking-tight">{t("title")}</h1>
