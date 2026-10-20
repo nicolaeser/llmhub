@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test, { afterEach, beforeEach } from "node:test";
+import { limitSnapshotModel, snapshotRows } from "./support/limit-snapshot-fake";
 import type { AuthenticatedSession, Permission } from "@/types/auth";
 import type { JsonMap } from "@/types/gateway";
 import type { AutoResetPolicy, AutoUsage } from "@/types/resets";
@@ -115,6 +116,10 @@ const fakePrisma = {
       return data;
     },
   },
+  providerLimitSnapshot: limitSnapshotModel((id) => {
+    const row = providers.find((item) => item.id === id);
+    return row ? { kind: row.kind, enabled: row.enabled } : null;
+  }),
 };
 
 (globalThis as { prisma?: unknown }).prisma = fakePrisma;
@@ -274,6 +279,7 @@ beforeEach(async () => {
   routing.length = 0;
   deployments.length = 0;
   audits.length = 0;
+  snapshotRows.clear();
   const { forgetAccountPolicies } = await import("@/lib/gateway/routing/account-routing");
   forgetAccountPolicies();
 });
@@ -394,7 +400,8 @@ test("an unknown Codex outcome stays pending and the retry reuses the same redee
 });
 
 test("an unknown Claude claim blocks new claims until fresh limits settle it after ten minutes", async () => {
-  const { redeemReset, loadResetState, RETRY_WINDOW_MS } = await import("@/lib/gateway/upstreams/reset-redeem");
+  const { redeemReset, loadResetState } = await import("@/lib/gateway/upstreams/reset-redeem");
+  const { RETRY_WINDOW_MS } = await import("@/lib/gateway/upstreams/reset-state");
   const account = await addAccount("claude");
   const answers: (() => Response)[] = [
     () => {
@@ -486,12 +493,14 @@ test("auto resets skip accounts below the threshold, without an applicable reset
   );
   const { forgetLimits } = await import("@/lib/gateway/upstreams/subscription-limits");
   forgetLimits(account.id);
+  snapshotRows.delete(account.id);
   await runAutoResets(Date.now());
   setPolicy("codex", { enabled: false });
   const { forgetAccountPolicies } = await import("@/lib/gateway/routing/account-routing");
   forgetAccountPolicies();
   respond(routeCodex(() => Response.json({ code: "reset" }), () => codexUsage(100)));
   forgetLimits(account.id);
+  snapshotRows.delete(account.id);
   await runAutoResets(Date.now());
   assert.equal(consumes().length, 0);
 });
@@ -507,6 +516,7 @@ test("pool scope waits for every account and spends one reset on the account tha
   assert.equal(consumes().length, 0);
   forgetLimits(soon.id);
   forgetLimits(late.id);
+  snapshotRows.clear();
   respond(routeCodex(() => Response.json({ code: "reset" }), (id) => codexUsage(100, undefined, id === late.id ? 9_000 : 600)));
   const now = Date.now();
   assert.equal(await runAutoResets(now), 1);
@@ -514,6 +524,7 @@ test("pool scope waits for every account and spends one reset on the account tha
   assert.equal(owner(consumes()[0]!), late.id);
   forgetLimits(soon.id);
   forgetLimits(late.id);
+  snapshotRows.clear();
   await runAutoResets(now + 60_000);
   assert.equal(consumes().length, 1);
 });
@@ -546,10 +557,10 @@ test("the gateway hook reports why it did nothing", async () => {
 
 test("reset details on the console show Claude grants, pending claims, and whether a reset can be used", async () => {
   const { withResetDetails, redeemReset } = await import("@/lib/gateway/upstreams/reset-redeem");
-  const { subscriptionLimits } = await import("@/lib/gateway/upstreams/subscription-limits");
+  const { fetchSubscriptionLimits } = await import("@/lib/gateway/upstreams/subscription-limits");
   const account = await addAccount("claude");
   respond(routeClaude(() => new Response("", { status: 504 })));
-  const limits = await subscriptionLimits(account);
+  const limits = await fetchSubscriptionLimits(account);
   assert.equal(limits?.resetCredits, null);
   const detailed = await withResetDetails(account, limits);
   assert.equal(detailed?.resetCredits?.available, 2);
@@ -568,7 +579,7 @@ test("reset details on the console show Claude grants, pending claims, and wheth
   assert.equal(sent.filter((call) => call.url.includes("cedar_ember=1")).length, statusReads);
   const codex = await addAccount("codex");
   respond(routeCodex(() => Response.json({ code: "reset" }), () => codexUsage(100)));
-  const codexLimits = await subscriptionLimits(codex);
+  const codexLimits = await fetchSubscriptionLimits(codex);
   const codexDetails = await withResetDetails(codex, codexLimits);
   assert.equal(codexDetails?.resetCredits?.expiresAt, "2098-01-01T00:00:00.000Z");
   assert.equal(codexDetails?.resetCredits?.canRedeem, true);

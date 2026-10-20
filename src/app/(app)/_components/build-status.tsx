@@ -13,7 +13,10 @@ import { Button, toast } from "@heroui/react";
 import { ArrowUpCircle, ExternalLink, RotateCw } from "lucide-react";
 import { useTranslations } from "next-intl";
 import IconTile from "@/components/console/icon-tile";
+import { WORKSPACE_EVENT } from "@/lib/auth/workspace-event";
 import { isActionFail } from "@/lib/http/action-result";
+import { onWantedLiveTopics, receiveLiveEvent, setLiveLink, wantedLiveTopics } from "@/lib/updates/live-client";
+import { LIVE_TOPICS, liveUrl } from "@/lib/updates/live-events";
 import { parseJsonOrNull } from "@/lib/utils/json";
 import {
   buildInfoOf,
@@ -53,6 +56,7 @@ type BuildStatus = {
 const RECONNECT_SLOW_MS = 30_000;
 const RECONNECT_FAST_FOR_MS = 2 * 60_000;
 const PROBE_GAP_MS = 10_000;
+const TOPICS_SETTLE_MS = 300;
 
 const BuildStatusContext = createContext<BuildStatus | null>(null);
 
@@ -171,6 +175,8 @@ export default function BuildStatusProvider({
     let lostSince = 0;
     let lastProbeAt = 0;
     let retryAt = 0;
+    let connectedTopics = "";
+    let topicsTimer: ReturnType<typeof setTimeout> | undefined;
 
     const probe = (now: number) => {
       lastProbeAt = now;
@@ -183,6 +189,7 @@ export default function BuildStatusProvider({
       const now = Date.now();
       lostSince = now;
       setLink("lost");
+      setLiveLink("lost");
       setLostAt(now);
       setClock(now);
       probe(now);
@@ -192,6 +199,7 @@ export default function BuildStatusProvider({
       lastEventAt = Date.now();
       lost = false;
       setLink("open");
+      setLiveLink("open");
       setReachable(true);
     };
 
@@ -200,8 +208,16 @@ export default function BuildStatusProvider({
       lastEventAt = Date.now();
       const slow = lost && lastEventAt - lostSince > RECONNECT_FAST_FOR_MS;
       retryAt = lastEventAt + (slow ? RECONNECT_SLOW_MS : LIVE_WATCHDOG_MS);
-      const next = new EventSource(LIVE_URL);
+      const topics = wantedLiveTopics();
+      connectedTopics = topics.join(",");
+      const next = new EventSource(liveUrl(LIVE_URL, topics));
       source = next;
+      for (const topic of LIVE_TOPICS) {
+        next.addEventListener(topic, (event) => {
+          markOpen();
+          receiveLiveEvent(topic, parseJsonOrNull(event.data));
+        });
+      }
       next.addEventListener("status", (event) => {
         markOpen();
         const payload = liveStatusOf(parseJsonOrNull(event.data));
@@ -251,16 +267,32 @@ export default function BuildStatusProvider({
       source = null;
     };
 
+    const reconnectVisible = () => {
+      if (document.visibilityState !== "hidden") connect();
+    };
+
+    const topicsChanged = () => {
+      clearTimeout(topicsTimer);
+      topicsTimer = setTimeout(() => {
+        if (wantedLiveTopics().join(",") !== connectedTopics) reconnectVisible();
+      }, TOPICS_SETTLE_MS);
+    };
+
     reconnect.current = ensureOpen;
     connect();
     const timer = setInterval(watchdog, LIVE_WATCHDOG_MS);
+    const stopTopics = onWantedLiveTopics(topicsChanged);
     document.addEventListener("visibilitychange", visibility);
     window.addEventListener("focus", ensureOpen);
+    window.addEventListener(WORKSPACE_EVENT, reconnectVisible);
     return () => {
       reconnect.current = null;
       clearInterval(timer);
+      clearTimeout(topicsTimer);
+      stopTopics();
       document.removeEventListener("visibilitychange", visibility);
       window.removeEventListener("focus", ensureOpen);
+      window.removeEventListener(WORKSPACE_EVENT, reconnectVisible);
       source?.close();
     };
   }, [announce]);

@@ -40,6 +40,7 @@ export type MaintenanceSweepResult = {
   signIns: number;
   supersededLogins: number;
   subAddLinks: number;
+  limits: number;
   resets: number;
 };
 
