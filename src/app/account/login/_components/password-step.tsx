@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { Button, Disclosure, Form, Input, Label, Spinner, TextField, toast } from "@heroui/react";
 import { KeyRound } from "lucide-react";
 import { useTranslations } from "next-intl";
-import { Link, useRouter } from "@/i18n/routing";
+import { Link } from "@/i18n/routing";
 import { withReturnQuery } from "@/lib/auth/return-path";
 import { isActionFail } from "@/lib/http/action-result";
 import { useSecurityError } from "@/components/security/use-security-error";
@@ -36,7 +36,6 @@ export default function PasswordStep({
   onResult: (result: LoginResult) => void;
 }) {
   const t = useTranslations("Auth.login");
-  const router = useRouter();
   const errorText = useSecurityError();
   const browserPasskeys = usePasskeySupport();
   const [email, setEmail] = useState("");
@@ -143,7 +142,7 @@ export default function PasswordStep({
       size="lg"
       isDisabled={busy}
       onPress={() => {
-        router.replace(withReturnQuery("/sso/login", returnParam));
+        window.location.assign(withReturnQuery("/sso/login", returnParam));
       }}
     >
       {t("sso")}

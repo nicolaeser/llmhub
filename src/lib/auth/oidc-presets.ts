@@ -16,6 +16,14 @@ export const MAX_ROLE_MAPPINGS = 50;
 
 export const MAX_ALLOWED_DOMAINS = 50;
 
+export const ENTRA_TENANT_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+const DISCOVERY_SUFFIX = /\/\.well-known\/openid-configuration$/i;
+
+const ISSUER_PLACEHOLDER = /[{}]/;
+
+const ENTRA_V1_ISSUER = /^https:\/\/sts\.windows\.net\/([^/]+)\/?$/i;
+
 export const OIDC_PRESETS: Record<OidcProviderId, OidcPreset> = {
   entra: {
     issuer: "https://login.microsoftonline.com/{tenant-id}/v2.0",
@@ -75,4 +83,22 @@ export function emailDomainAllowed(email: string, domains: readonly string[]): b
   if (!domains.length) return true;
   const domain = email.trim().toLowerCase().split("@").at(-1) ?? "";
   return domains.some((allowed) => allowed.trim().toLowerCase() === domain);
+}
+
+export function trimIssuer(issuer: string): string {
+  return issuer.trim().replace(/\/+$/, "").replace(DISCOVERY_SUFFIX, "").replace(/\/+$/, "");
+}
+
+export function issuerHasPlaceholder(issuer: string): boolean {
+  return ISSUER_PLACEHOLDER.test(issuer);
+}
+
+export function entraV2Issuer(issuer: string): string | null {
+  const tenant = ENTRA_V1_ISSUER.exec(issuer.trim())?.[1] ?? "";
+  return ENTRA_TENANT_ID.test(tenant) ? `https://login.microsoftonline.com/${tenant.toLowerCase()}/v2.0` : null;
+}
+
+export function suggestedIssuer(discovered: string): string | null {
+  if (!discovered.trim() || issuerHasPlaceholder(discovered)) return null;
+  return entraV2Issuer(discovered) ?? trimIssuer(discovered);
 }

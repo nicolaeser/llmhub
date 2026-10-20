@@ -4,6 +4,7 @@ import { getEnterprise } from "@/lib/settings/enterprise";
 import {
   buildAuthorizationUrl,
   fetchOidcDiscovery,
+  oidcFailureFields,
   oidcIsReady,
   oidcStateCookieOptions,
   resolveOidc,
@@ -38,7 +39,7 @@ export async function GET(req: NextRequest) {
     res.cookies.set(opts.name, state.cookie, opts);
     return res;
   } catch (err) {
-    logger.error("sso.login.failed", errorFields(err));
+    logger.error("sso.login.failed", { ...errorFields(err), ...oidcFailureFields(err) });
     loginError.searchParams.set("sso", "error");
     return NextResponse.redirect(loginError);
   }

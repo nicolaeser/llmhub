@@ -1,3 +1,4 @@
+import "./integration/support/oidc-env";
 import { recordedPrisma } from "./support/recorded-prisma";
 import assert from "node:assert/strict";
 import { readdir, readFile } from "node:fs/promises";
@@ -5,7 +6,8 @@ import test from "node:test";
 import { NextRequest } from "next/server";
 import { SESSION_COOKIE } from "@/lib/auth/cookie";
 import { digest } from "@/lib/crypto";
-import { oidcSettingsSchema } from "@/schemas/settings";
+import { issuerCheckSchema, oidcSettingsSchema } from "@/schemas/settings";
+import type { AuthenticatedSession } from "@/types/auth";
 
 const SCIM_TOKEN = "scim_integration-token";
 const OWNER = { id: "owner-1", email: "owner@example.test", username: "owner", blocked: false, isOwner: true, orgId: null, role: null };
@@ -232,6 +234,189 @@ test("SSO sign-in waits for setup and for an enabled OIDC configuration", async 
   assert.equal(disabled.cookies.getAll().length, 0);
 });
 
+const TENANT_ID = "9188040d-6c67-4c5b-b112-36a304b66dad";
+const ENTRA_TENANT_ISSUER = `https://login.microsoftonline.com/${TENANT_ID}/v2.0`;
+
+function enterpriseWithOidc(issuer: string) {
+  const value = JSON.stringify({ oidc: { enabled: true, provider: "entra", issuer, client_id: "hub-client" } });
+  return {
+    user: { count: () => 1 },
+    setting: { findUnique: ({ where }: { where: { key: string } }) => (where.key === "enterprise" ? { key: "enterprise", value } : null) },
+  };
+}
+
+function discoveryAnswer(issuer: string, base = "https://login.microsoftonline.com/contoso.com"): typeof fetch {
+  return async () =>
+    Response.json({
+      issuer,
+      authorization_endpoint: `${base}/oauth2/v2.0/authorize`,
+      token_endpoint: `${base}/oauth2/v2.0/token`,
+      jwks_uri: `${base}/discovery/v2.0/keys`,
+    });
+}
+
+async function withFetch<T>(fetchFn: typeof fetch, run: () => Promise<T>): Promise<T> {
+  const { resetOidcCache } = await import("@/lib/auth/oidc");
+  const original = globalThis.fetch;
+  globalThis.fetch = fetchFn;
+  resetOidcCache();
+  try {
+    return await run();
+  } finally {
+    globalThis.fetch = original;
+    resetOidcCache();
+  }
+}
+
+async function capturedLogs<T>(run: () => Promise<T>): Promise<{ result: T; lines: Record<string, unknown>[] }> {
+  const lines: Record<string, unknown>[] = [];
+  const original = { error: console.error, log: console.log };
+  const keep = (line: unknown) => {
+    lines.push(JSON.parse(String(line)) as Record<string, unknown>);
+  };
+  console.error = keep;
+  console.log = keep;
+  try {
+    return { result: await run(), lines };
+  } finally {
+    console.error = original.error;
+    console.log = original.log;
+  }
+}
+
+test("SSO sign-in failures log the discovery reason and send users to the public login page", async () => {
+  const { env } = await import("@/lib/env");
+  const { GET } = await import("@/app/sso/login/route");
+  const loginError = new URL("/account/login?sso=error", env.NEXT_PUBLIC_APP_URL).href;
+  const attempts = [
+    {
+      fetchFn: discoveryAnswer(`https://sts.windows.net/${TENANT_ID}/`),
+      fields: { reason: "issuer_mismatch", issuerHost: "sts.windows.net" },
+    },
+    {
+      fetchFn: discoveryAnswer("https://login.microsoftonline.com/{tenantid}/v2.0"),
+      fields: { reason: "multi_tenant", issuerHost: "login.microsoftonline.com" },
+    },
+    { fetchFn: (async () => new Response("bad gateway", { status: 502 })) as typeof fetch, fields: { reason: "http", status: 502 } },
+    {
+      fetchFn: (async () => {
+        throw new TypeError("fetch failed");
+      }) as typeof fetch,
+      fields: { reason: "unreachable" },
+    },
+  ];
+  for (const attempt of attempts) {
+    recordedPrisma.reset(enterpriseWithOidc("https://login.microsoftonline.com/organizations/v2.0"));
+    const { result: res, lines } = await capturedLogs(() =>
+      withFetch(attempt.fetchFn, () => GET(new NextRequest("http://0.0.0.0:3000/sso/login?return=/keys"))),
+    );
+    assert.equal(res.headers.get("location"), loginError);
+    assert.equal(res.cookies.getAll().length, 0);
+    const failed = lines.filter((line) => line.event === "sso.login.failed");
+    assert.equal(failed.length, 1);
+    const { ts, level, event, errName, err, ...fields } = failed[0];
+    assert.ok(ts);
+    assert.deepEqual([level, event, errName], ["error", "sso.login.failed", "OidcDiscoveryError"]);
+    assert.match(String(err), /^oidc discovery /);
+    assert.deepEqual(fields, attempt.fields);
+    assert.doesNotMatch(JSON.stringify(lines), /integration-oidc-client-secret|hub-client/);
+  }
+});
+
+test("SSO sign-in with an Entra tenant domain redirects to Microsoft", async () => {
+  const { GET } = await import("@/app/sso/login/route");
+  recordedPrisma.reset(enterpriseWithOidc("https://login.microsoftonline.com/contoso.com/v2.0/.well-known/openid-configuration"));
+  const res = await withFetch(discoveryAnswer(ENTRA_TENANT_ISSUER), () =>
+    GET(new NextRequest("http://0.0.0.0:3000/sso/login?return=/keys")),
+  );
+  const location = new URL(res.headers.get("location") ?? "");
+  assert.equal(`${location.origin}${location.pathname}`, "https://login.microsoftonline.com/contoso.com/oauth2/v2.0/authorize");
+  assert.equal(location.searchParams.get("client_id"), "hub-client");
+  assert.ok(res.cookies.getAll().length > 0);
+});
+
+function settingsManager(): AuthenticatedSession {
+  return {
+    error: false,
+    sessionId: "",
+    user: { id: "u1", username: "admin", orgId: null } as AuthenticatedSession["user"],
+    isOwner: false,
+    role: null,
+    permissions: ["settings:read", "settings:manage"],
+    secondFactor: "TOTP",
+    ipAddress: null,
+    userAgent: null,
+  };
+}
+
+test("the issuer check explains why discovery failed and resolves Entra tenant domains", async () => {
+  const { runAsPrincipal } = await import("@/lib/auth/delegation");
+  const { checkOidcIssuer } = await import("@/lib/settings/sign-in");
+  const check = (issuer: string, fetchFn: typeof fetch) =>
+    capturedLogs(() => withFetch(fetchFn, () => runAsPrincipal(settingsManager(), () => checkOidcIssuer({ issuer })))).then(
+      ({ result }) => result,
+    );
+  const domain = "https://login.microsoftonline.com/contoso.com/v2.0";
+  assert.deepEqual(await check(domain, discoveryAnswer(ENTRA_TENANT_ISSUER)), {
+    ok: true,
+    issuer: ENTRA_TENANT_ISSUER,
+    usesTenantId: true,
+    tokenAuth: "client_secret_post",
+    algorithms: [],
+    supported: true,
+  });
+  const tenant = await check(`${ENTRA_TENANT_ISSUER}/.well-known/openid-configuration`, discoveryAnswer(ENTRA_TENANT_ISSUER));
+  assert.deepEqual([tenant.ok, tenant.ok && tenant.usesTenantId], [true, false]);
+  assert.deepEqual(await check(`https://login.microsoftonline.com/${TENANT_ID}`, discoveryAnswer(`https://sts.windows.net/${TENANT_ID}/`)), {
+    ok: false,
+    reason: "issuer_mismatch",
+    issuer: `https://sts.windows.net/${TENANT_ID}/`,
+  });
+  assert.deepEqual(
+    await check("https://login.microsoftonline.com/common/v2.0", discoveryAnswer("https://login.microsoftonline.com/{tenantid}/v2.0")),
+    { ok: false, reason: "multi_tenant", issuer: "https://login.microsoftonline.com/{tenantid}/v2.0" },
+  );
+  assert.deepEqual(await check(domain, async () => new Response("missing", { status: 404 })), {
+    ok: false,
+    reason: "http",
+    status: 404,
+  });
+  assert.deepEqual(await check(domain, async () => new Response("<html></html>", { status: 200 })), {
+    ok: false,
+    reason: "not_json",
+  });
+  assert.deepEqual(
+    await check(domain, async () => {
+      throw new TypeError("fetch failed");
+    }),
+    { ok: false, reason: "unreachable" },
+  );
+  assert.deepEqual(await check(domain, async () => Response.json({ issuer: ENTRA_TENANT_ISSUER })), {
+    ok: false,
+    reason: "incomplete",
+  });
+});
+
+test("issuer settings store the issuer without a pasted discovery suffix", () => {
+  const pasted = "https://id.example.test/realms/hub/.well-known/openid-configuration";
+  assert.equal(issuerCheckSchema.parse({ issuer: pasted }).issuer, "https://id.example.test/realms/hub");
+  assert.equal(issuerCheckSchema.safeParse({ issuer: "   " }).success, false);
+  const parsed = oidcSettingsSchema.parse({
+    enabled: true,
+    provider: "keycloak",
+    issuer: `${pasted}/`,
+    client_id: "hub",
+    scopes: "openid",
+    groups_claim: "",
+    role_mappings: [],
+    default_role_id: "",
+    default_org_id: "",
+    allowed_domains: [],
+    sso_only: false,
+  });
+  assert.equal(parsed.issuer, "https://id.example.test/realms/hub");
+});
+
 test("the SSO callback refuses requests without a matching signed state before any lookup", async () => {
   const { GET } = await import("@/app/sso/callback/route");
   const { signOidcState, OIDC_STATE_COOKIE } = await import("@/lib/auth/oidc");
@@ -320,11 +505,12 @@ test("there is no master key", async () => {
   }
 });
 
-test("the login password step links to SSO when it is enabled", async () => {
+test("the login password step opens SSO with a full-page navigation when it is enabled", async () => {
   const form = await readFile(
     new URL("../../src/app/account/login/_components/password-step.tsx", import.meta.url),
     "utf8",
   );
   assert.match(form, /ssoEnabled/);
-  assert.match(form, /\/sso\/login/);
+  assert.match(form, /window\.location\.assign\(withReturnQuery\("\/sso\/login", returnParam\)\)/);
+  assert.doesNotMatch(form, /router\.(replace|push)\([^)]*\/sso\/login/);
 });
