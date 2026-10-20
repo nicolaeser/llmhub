@@ -1,4 +1,5 @@
 import "server-only";
+import { errorFields } from "@/lib/logging/format";
 import { logger } from "@/lib/logging/logger";
 import { sharedRedis, withRedisTimeout } from "@/lib/redis/client";
 import type { RateWindow } from "@/types/rate-limit";
@@ -40,9 +41,7 @@ export async function incrementRateWindow(
       if (tpm === tokens) await redis.expire(tpmKey, 120);
       return { rpm, tpm, backend: "redis" };
     } catch (err) {
-      logger.warn("rate_limit.redis_fallback", {
-        err: err instanceof Error ? err.message : String(err),
-      });
+      logger.warn("rate_limit.redis_fallback", errorFields(err));
     }
   }
   const bucket = memoryIncrement(id, requests, tokens, now);
@@ -57,9 +56,7 @@ export async function redisCounter(key: string, ttlSeconds: number): Promise<num
     if (count === 1) await withRedisTimeout(redis.expire(key, ttlSeconds));
     return count;
   } catch (err) {
-    logger.warn("rate_limit.redis_fallback", {
-      err: err instanceof Error ? err.message : String(err),
-    });
+    logger.warn("rate_limit.redis_fallback", errorFields(err));
     return null;
   }
 }

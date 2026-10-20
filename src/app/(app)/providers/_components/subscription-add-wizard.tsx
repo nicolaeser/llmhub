@@ -2,21 +2,36 @@
 
 import { useState } from "react";
 import { Button, Card, Modal, Radio, RadioGroup, type useOverlayState } from "@heroui/react";
-import { ArrowLeft, ArrowRight, Check, FileJson, KeyRound, Plug } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, FileJson, KeyRound, Link2, Plug, type LucideIcon } from "lucide-react";
 import { useTranslations } from "next-intl";
 import IconTile from "@/components/console/icon-tile";
 import SubscriptionBadge from "@/components/console/subscription-badge";
-import type { ProviderKindSpec } from "@/types/providers";
+import type { ProviderKindSpec, SignInKind } from "@/types/providers";
 import { isSignInKind } from "@/lib/gateway/upstreams/provider-kinds";
 import { kindIcon } from "@/components/providers/kind-icons";
 
 const STEPS = ["provider", "method", "review"] as const;
 
-type Method = "signin" | "file" | "key";
+type Method = "signin" | "file" | "share" | "key";
 
-function methodsFor(spec: ProviderKindSpec | null): Method[] {
+const METHOD_ICONS: Record<Method, LucideIcon> = {
+  signin: Plug,
+  file: FileJson,
+  share: Link2,
+  key: KeyRound,
+};
+
+const METHOD_LABELS = {
+  signin: { label: "wizard.methodSignin", hint: "wizard.methodSigninHint" },
+  file: { label: "wizard.methodFile", hint: "wizard.methodFileHint" },
+  share: { label: "wizard.methodShare", hint: "wizard.methodShareHint" },
+  key: { label: "wizard.methodKey", hint: "wizard.methodKeyHint" },
+} as const satisfies Record<Method, { label: string; hint: string }>;
+
+function methodsFor(spec: ProviderKindSpec | null, canShare: boolean): Method[] {
   if (!spec) return [];
-  return isSignInKind(spec.kind) ? ["signin", "file"] : ["key"];
+  if (!isSignInKind(spec.kind)) return ["key"];
+  return canShare ? ["signin", "file", "share"] : ["signin", "file"];
 }
 
 export default function SubscriptionAddWizard({
@@ -24,11 +39,13 @@ export default function SubscriptionAddWizard({
   catalog,
   antigravityReady,
   onConnect,
+  onShare,
 }: {
   state: ReturnType<typeof useOverlayState>;
   catalog: ProviderKindSpec[];
   antigravityReady: boolean | null;
   onConnect: (spec: ProviderKindSpec) => void;
+  onShare: ((kind: SignInKind) => void) | null;
 }) {
   const t = useTranslations("Subscriptions");
   const tProviders = useTranslations("Providers");
@@ -45,7 +62,7 @@ export default function SubscriptionAddWizard({
 
   function choose(spec: ProviderKindSpec) {
     setPicked(spec);
-    setMethod(methodsFor(spec)[0] ?? "key");
+    setMethod(methodsFor(spec, onShare !== null)[0] ?? "key");
     setStep(1);
   }
 
@@ -53,10 +70,11 @@ export default function SubscriptionAddWizard({
     if (!picked) return;
     const spec = picked;
     close();
-    onConnect(spec);
+    if (method === "share" && onShare && isSignInKind(spec.kind)) onShare(spec.kind);
+    else onConnect(spec);
   }
 
-  const methods = methodsFor(picked);
+  const methods = methodsFor(picked, onShare !== null);
   const canNext = step === 0 ? picked !== null : true;
   const last = step === STEPS.length - 1;
 
@@ -160,48 +178,30 @@ export default function SubscriptionAddWizard({
                         aria-label={t("wizard.methodLabel")}
                         className="grid gap-2 sm:grid-cols-2"
                       >
-                        {methods.includes("signin") ? (
-                          <Card variant="secondary" className={method === "signin" ? "border border-accent bg-accent/8 p-0" : "border border-transparent p-0"}>
-                            <Radio value="signin" className="mt-0 h-full w-full">
-                              <Radio.Content className="h-full w-full items-start gap-3 p-3">
-                                <IconTile icon={Plug} tone={method === "signin" ? "accent" : "neutral"} />
-                                <span>
-                                  <span className="block text-sm font-medium">{t("wizard.methodSignin")}</span>
-                                  <span className="mt-0.5 block text-xs text-muted">{t("wizard.methodSigninHint")}</span>
-                                </span>
-                                <Radio.Control><Radio.Indicator /></Radio.Control>
-                              </Radio.Content>
-                            </Radio>
-                          </Card>
-                        ) : null}
-                        {methods.includes("file") ? (
-                          <Card variant="secondary" className={method === "file" ? "border border-accent bg-accent/8 p-0" : "border border-transparent p-0"}>
-                            <Radio value="file" className="mt-0 h-full w-full">
-                              <Radio.Content className="h-full w-full items-start gap-3 p-3">
-                                <IconTile icon={FileJson} tone={method === "file" ? "accent" : "neutral"} />
-                                <span>
-                                  <span className="block text-sm font-medium">{t("wizard.methodFile")}</span>
-                                  <span className="mt-0.5 block text-xs text-muted">{t("wizard.methodFileHint")}</span>
-                                </span>
-                                <Radio.Control><Radio.Indicator /></Radio.Control>
-                              </Radio.Content>
-                            </Radio>
-                          </Card>
-                        ) : null}
-                        {methods.includes("key") ? (
-                          <Card variant="secondary" className={method === "key" ? "border border-accent bg-accent/8 p-0" : "border border-transparent p-0"}>
-                            <Radio value="key" className="mt-0 h-full w-full">
-                              <Radio.Content className="h-full w-full items-start gap-3 p-3">
-                                <IconTile icon={KeyRound} tone={method === "key" ? "accent" : "neutral"} />
-                                <span>
-                                  <span className="block text-sm font-medium">{t("wizard.methodKey")}</span>
-                                  <span className="mt-0.5 block text-xs text-muted">{t("wizard.methodKeyHint")}</span>
-                                </span>
-                                <Radio.Control><Radio.Indicator /></Radio.Control>
-                              </Radio.Content>
-                            </Radio>
-                          </Card>
-                        ) : null}
+                        {methods.map((item) => {
+                          const Icon = METHOD_ICONS[item];
+                          const active = method === item;
+                          return (
+                            <Card
+                              key={item}
+                              variant="secondary"
+                              className={active ? "border border-accent bg-accent/8 p-0" : "border border-transparent p-0"}
+                            >
+                              <Radio value={item} className="mt-0 h-full w-full">
+                                <Radio.Content className="h-full w-full items-start gap-3 p-3">
+                                  <IconTile icon={Icon} tone={active ? "accent" : "neutral"} />
+                                  <span className="min-w-0 flex-1">
+                                    <span className="block text-sm font-medium">{t(METHOD_LABELS[item].label)}</span>
+                                    <span className="mt-0.5 block text-xs text-muted">{t(METHOD_LABELS[item].hint)}</span>
+                                  </span>
+                                  <Radio.Control>
+                                    <Radio.Indicator />
+                                  </Radio.Control>
+                                </Radio.Content>
+                              </Radio>
+                            </Card>
+                          );
+                        })}
                       </RadioGroup>
                     </div>
                   ) : null}
@@ -215,7 +215,9 @@ export default function SubscriptionAddWizard({
                           <p className="text-xs text-muted">{t("wizard.reviewMethod", { method })}</p>
                         </div>
                       </div>
-                      <p className="text-sm text-muted">{t("wizard.reviewHint")}</p>
+                      <p className="text-sm text-muted">
+                        {method === "share" ? t("wizard.reviewShareHint") : t("wizard.reviewHint")}
+                      </p>
                     </Card>
                   ) : null}
                 </Modal.Body>
@@ -233,8 +235,8 @@ export default function SubscriptionAddWizard({
                   </div>
                   {last ? (
                     <Button onPress={connect} isDisabled={!canNext} className="w-full sm:w-auto">
-                      <Check size={14} aria-hidden />
-                      {t("wizard.connect")}
+                      {method === "share" ? <Link2 size={14} aria-hidden /> : <Check size={14} aria-hidden />}
+                      {method === "share" ? t("wizard.share") : t("wizard.connect")}
                     </Button>
                   ) : step > 0 ? (
                     <Button onPress={() => setStep((s) => s + 1)} isDisabled={!canNext} className="w-full sm:w-auto">

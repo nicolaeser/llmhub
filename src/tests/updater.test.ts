@@ -4,6 +4,7 @@ import { recordedPrisma } from "./support/recorded-prisma";
 import { createConfigFor, hasHealthcheck, stopSeconds } from "../../scripts/updater/container-config.mjs";
 import { desiredOf } from "../../scripts/updater/agent.mjs";
 import { untarFirstFile } from "../../scripts/updater/docker.mjs";
+import { recreateContainer } from "../../scripts/updater/recreate.mjs";
 import {
   digestsFor,
   isPinned,
@@ -132,8 +133,42 @@ test("recreate config keeps container overrides and replaces marker variables", 
   assert.deepEqual(body.Env, ["APP_SECRET=kept", "LLMHUB_UPDATER_PREDECESSOR=current"]);
   assert.equal(hasHealthcheck({ Config: { Healthcheck: { Test: ["NONE"] } } }), false);
   assert.equal(hasHealthcheck(appContainer()), true);
-  assert.equal(stopSeconds(appContainer()), 10);
+  assert.equal(stopSeconds(appContainer()), 330);
   assert.equal(stopSeconds({ Config: { StopTimeout: 45 } }), 45);
+});
+
+async function recreateRecorded(container: ReturnType<typeof appContainer>) {
+  const calls: [string, ...unknown[]][] = [];
+  const docker = {
+    inspectImage: async () => oldImage(),
+    inspectContainer: async (id: string) =>
+      id === "sha256:created" ? { State: { Status: "running", Health: { Status: "healthy" } }, Config: { Healthcheck: HEALTHCHECK } } : null,
+    stop: async (id: string, seconds: number) => void calls.push(["stop", id, seconds]),
+    rename: async (id: string, name: string) => void calls.push(["rename", id, name]),
+    create: async (name: string, body: { StopTimeout?: number }) => {
+      calls.push(["create", name, body.StopTimeout]);
+      return { Id: "sha256:created" };
+    },
+    start: async (id: string) => void calls.push(["start", id]),
+    remove: async (id: string) => void calls.push(["remove", id]),
+  };
+  await recreateContainer(docker, container, {
+    imageRef: "ghcr.io/nicolaeser/llmhub:latest",
+    image: { Id: "sha256:new" },
+    onPhase: async () => {},
+    waitOptions: { pollMs: 1 },
+  });
+  return calls;
+}
+
+test("recreating a container gives open requests the grace period and keeps it on the new container", async () => {
+  const container = appContainer();
+  const calls = await recreateRecorded(container);
+  assert.deepEqual(calls.find(([name]) => name === "stop"), ["stop", container.Id, 330]);
+  assert.deepEqual(calls.find(([name]) => name === "create"), ["create", "llmhub-app-1", 330]);
+  const tuned = await recreateRecorded(appContainer({ StopTimeout: 45 }));
+  assert.deepEqual(tuned.find(([name]) => name === "stop")?.[2], 45);
+  assert.deepEqual(tuned.find(([name]) => name === "create")?.[2], 45);
 });
 
 test("image references, digests, and pinned tags are recognized", () => {

@@ -2,6 +2,7 @@ import "server-only";
 
 import { Queue, type DefaultJobOptions } from "bullmq";
 import { getQueueConnectionOptions } from "./connection";
+import { errorFields } from "@/lib/logging/format";
 import { logger } from "@/lib/logging/logger";
 import type {
   QueueName,
@@ -34,7 +35,7 @@ function getQueue<TData>(name: QueueName): Queue<TData> {
   queue.on("error", (err) => {
     logger.error("queue.error", {
       queue: name,
-      err: err instanceof Error ? err.message : String(err),
+      ...errorFields(err),
     });
   });
   queues.set(name, queue as Queue);

@@ -12,7 +12,7 @@ import {
 } from "@/lib/gateway/routing/account-assignments";
 import { isSignInKind, signInKinds } from "@/lib/gateway/upstreams/provider-kinds";
 import { subAddPath } from "@/lib/http/public-path";
-import { subAddStatus } from "@/lib/providers/sub-add-status";
+import { auditSubAddDelete, finishedSubAddLinks, subAddLinkAudit } from "@/lib/providers/sub-add-prune";
 import { newSubAddToken, subAddAccountSelect, subAddAccountViews } from "@/lib/providers/sub-add-store";
 import { subAddLinkInputSchema } from "@/schemas/sub-add";
 import type { SignInKind } from "@/types/providers";
@@ -29,7 +29,6 @@ const linkSelect = {
   added: true,
   restricted: true,
   expiresAt: true,
-  revokedAt: true,
   createdAt: true,
   createdById: true,
   targets: assignmentSelect,
@@ -59,7 +58,6 @@ function linkView(row: LinkRow, names: Map<string, string>): SubAddLinkView {
     restricted: row.restricted,
     targets: assignmentTargets(row.targets),
     expiresAt: row.expiresAt.toISOString(),
-    revokedAt: row.revokedAt?.toISOString() ?? null,
     createdAt: row.createdAt.toISOString(),
     createdBy: names.get(row.createdById) ?? "",
     accounts: subAddAccountViews(row.accounts),
@@ -70,21 +68,10 @@ async function viewOf(row: LinkRow): Promise<SubAddLinkView> {
   return linkView(row, await creatorNames([row.createdById]));
 }
 
-function linkAudit(row: LinkRow) {
-  return {
-    label: row.label,
-    kinds: row.kinds,
-    maxAccounts: row.maxAccounts,
-    restricted: row.restricted,
-    targets: assignmentTargets(row.targets).map((target) => ({ scope: target.scope, id: target.id })),
-    expiresAt: row.expiresAt.toISOString(),
-    status: subAddStatus(row),
-  };
-}
-
 export async function loadSubAddLinks(): Promise<SubAddLinksPayload> {
   const session = await requirePermission(PERMISSIONS.PROVIDERS_READ);
   const rows = await prisma.subAddLink.findMany({
+    where: { NOT: finishedSubAddLinks(new Date()) },
     select: linkSelect,
     orderBy: { createdAt: "desc" },
     take: LIST_LIMIT,
@@ -125,7 +112,7 @@ export async function createSubAddLink(raw: unknown): Promise<SubAddCreated> {
     action: "provider_sub_add.create",
     objectType: "provider_sub_add",
     objectId: row.id,
-    after: linkAudit(row),
+    after: subAddLinkAudit(row),
   });
   return {
     link: await viewOf(row),
@@ -133,25 +120,13 @@ export async function createSubAddLink(raw: unknown): Promise<SubAddCreated> {
   };
 }
 
-export async function revokeSubAddLink(id: string): Promise<{ link: SubAddLinkView }> {
+export async function deleteSubAddLink(id: string): Promise<{ id: string }> {
   const session = await requirePermission(PERMISSIONS.PROVIDERS_MANAGE);
   if (!id) throw new Error("MISSING_ID");
-  const before = await findLink(id);
-  if (!before) throw new Error("NOT_FOUND");
-  if (!before.revokedAt) {
-    await prisma.subAddLink.updateMany({ where: { id, revokedAt: null }, data: { revokedAt: new Date() } });
-  }
   const row = await findLink(id);
   if (!row) throw new Error("NOT_FOUND");
-  if (!before.revokedAt) {
-    await writeAudit({
-      actor: session.user.id,
-      action: "provider_sub_add.revoke",
-      objectType: "provider_sub_add",
-      objectId: row.id,
-      before: { status: subAddStatus(before) },
-      after: linkAudit(row),
-    });
-  }
-  return { link: await viewOf(row) };
+  const deleted = await prisma.subAddLink.deleteMany({ where: { id } });
+  if (!deleted.count) throw new Error("NOT_FOUND");
+  await auditSubAddDelete(session.user.id, row, "revoked");
+  return { id };
 }

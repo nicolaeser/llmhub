@@ -310,18 +310,17 @@ model ProviderLimitSnapshot {
 }
 
 model SubAddLink {
-  id          String    @id @default(cuid())
+  id          String   @id @default(cuid())
   label       String
-  tokenHash   String    @unique
-  kinds       String[]  @default([])
+  tokenHash   String   @unique
+  kinds       String[] @default([])
   maxAccounts Int?
-  added       Int       @default(0)
-  restricted  Boolean   @default(false)
+  added       Int      @default(0)
+  restricted  Boolean  @default(false)
   expiresAt   DateTime
-  revokedAt   DateTime?
-  createdById String    @default("")
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  createdById String   @default("")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   targets  SubAddTarget[]
   accounts SubAddAccount[]
@@ -360,8 +359,9 @@ model SubAddTarget {
 model SubAddAccount {
   providerId String             @id
   provider   ProviderConnection @relation(fields: [providerId], references: [id], onDelete: Cascade)
-  linkId     String
-  link       SubAddLink         @relation(fields: [linkId], references: [id], onDelete: Cascade)
+  linkId     String?
+  link       SubAddLink?        @relation(fields: [linkId], references: [id], onDelete: SetNull)
+  label      String             @default("")
   manageHash String
   createdAt  DateTime           @default(now())
 

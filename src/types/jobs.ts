@@ -34,6 +34,7 @@ export type MaintenanceSweepResult = {
   reports: number;
   signIns: number;
   supersededLogins: number;
+  subAddLinks: number;
   limits: number;
   resets: number;
 };

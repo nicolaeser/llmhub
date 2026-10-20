@@ -1,6 +1,6 @@
 const IMAGE_DEFAULTS = ["WorkingDir", "User", "StopSignal", "Shell", "OnBuild", "ArgsEscaped"];
 const HEALTHCHECK_FIELDS = ["Test", "Interval", "Timeout", "StartPeriod", "StartInterval", "Retries"];
-const DEFAULT_STOP_SECONDS = 10;
+const GRACEFUL_STOP_SECONDS = 330;
 
 export const COMPOSE_IMAGE_LABEL = "com.docker.compose.image";
 export const COMPOSE_PROJECT_LABEL = "com.docker.compose.project";
@@ -47,7 +47,7 @@ export function shortId(id) {
 
 export function stopSeconds(container) {
   const value = container.Config?.StopTimeout;
-  return Number.isInteger(value) && value >= 0 ? value : DEFAULT_STOP_SECONDS;
+  return Number.isInteger(value) && value >= 0 ? value : GRACEFUL_STOP_SECONDS;
 }
 
 export function hasHealthcheck(container) {
@@ -141,5 +141,6 @@ export function createConfigFor(container, oldImage, target) {
   const healthcheck = healthcheckFor(config.Healthcheck, defaults.Healthcheck);
   if (healthcheck) config.Healthcheck = healthcheck;
   else delete config.Healthcheck;
+  if (Number.isInteger(target.stopTimeout) && target.stopTimeout >= 0) config.StopTimeout = target.stopTimeout;
   return { ...config, HostConfig: hostConfigFor(container), NetworkingConfig: networkingFor(container) };
 }

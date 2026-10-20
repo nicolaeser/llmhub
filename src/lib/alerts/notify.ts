@@ -75,7 +75,7 @@ async function dispatchWebhook(job: WebhookJobData): Promise<void> {
     } catch (err) {
       logger.warn("alert.enqueue_failed", {
         webhook: job.webhookId,
-        err: err instanceof Error ? err.message : String(err),
+        ...errorFields(err),
       });
     }
   }

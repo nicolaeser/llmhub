@@ -18,6 +18,7 @@ export type ProviderRecord = {
   restricted: boolean;
   assignments?: AssignmentSource[];
   login?: { account: string; plan: string; status: string } | null;
+  subAdd?: { label: string } | null;
 };
 
 export type ProviderPolicyInput = {
@@ -113,6 +114,7 @@ export type ProviderView = {
   restricted: boolean;
   assignments: AssignmentTarget[];
   signIn: ProviderSignIn | null;
+  sharedVia: string | null;
   discovered: { id: string; name: string }[];
   policy: ProviderPolicyInput;
 };

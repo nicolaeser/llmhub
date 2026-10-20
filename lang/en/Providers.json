@@ -9,6 +9,8 @@
   "modelCount": "{count, plural, one {# model} other {# models}}",
   "connect": "Connect",
   "edit": "Edit {name}",
+  "importModels": "Import models",
+  "actions": "Actions for {name}",
   "formTitle": "{mode, select, edit {Edit {name}} connect {Connect {name}} other {Connect {name}}}",
   "formSubmit": "{mode, select, save {Save} connect {Connect} other {Connect}}",
   "kindName": "{kind, select, openai {OpenAI} anthropic {Anthropic} openrouter {OpenRouter} openrouter_eu {OpenRouter EU} xai {xAI Grok} typesafe {TypeSafe AI} openai_compat {OpenAI-compatible} codex {ChatGPT subscription (Codex)} grok_build {SuperGrok subscription (Grok Build)} claude {Claude subscription (Claude Code)} antigravity {Google subscription (Antigravity)} other {{kind}}}",
