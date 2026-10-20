@@ -8,7 +8,8 @@ import { requireStepUp } from "@/lib/auth/second-factor";
 import { recordSecurityEvent, userActor } from "@/lib/auth/security-events";
 import { requestMeta } from "@/lib/auth/session";
 import { writeAudit } from "@/lib/audit";
-import { bearerToken, clientIp } from "@/lib/http/api";
+import { bearerToken } from "@/lib/http/api";
+import { clientIp } from "@/lib/http/client-ip";
 import { ApiProblem } from "@/lib/http/problem";
 import {
   isManagementKey,
@@ -137,7 +138,7 @@ export async function authenticateManagementKey(req: Request): Promise<Authentic
     role: role ? { id: role.id, templateKey: role.templateKey, name: role.name } : null,
     permissions: keyScope(row.permissions, current),
     secondFactor: "MANAGEMENT_KEY",
-    ipAddress: clientIp(req.headers) || null,
+    ipAddress: clientIp(req.headers),
     userAgent: req.headers.get("user-agent")?.slice(0, 512) ?? null,
   };
 }

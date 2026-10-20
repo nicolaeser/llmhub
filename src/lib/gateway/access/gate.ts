@@ -1,5 +1,6 @@
 import "server-only";
-import { bearerToken, clientIp, isPayloadTooLarge, readJSON } from "@/lib/http/api";
+import { bearerToken, isPayloadTooLarge, readJSON } from "@/lib/http/api";
+import { clientIp, ipAllowed } from "@/lib/http/client-ip";
 import { authenticateBearer } from "@/lib/gateway/access/principal";
 import { defaultEntityIds, redactJSON } from "@/lib/gateway/safety/pii";
 import { bindPiiVault, PiiVault } from "@/lib/gateway/safety/pii-vault";
@@ -83,13 +84,10 @@ export function withTrace(principal: Principal, endpoint: string): Principal {
 
 export async function gateRequest(req: Request, pool: RoutePool = "api"): Promise<Principal> {
   const token = bearerToken(req);
-  const ip = clientIp(req.headers);
   const path = requestPath(req);
   const principal = { ...withTrace(await authenticateBearer(token), path), pool };
-  if (principal.key?.allowed_ips.length) {
-    if (!ip || !principal.key.allowed_ips.includes(ip)) {
-      throw new GateError(403, "ip_not_allowed", "ip not allowed for this key");
-    }
+  if (principal.key?.allowed_ips.length && !ipAllowed(principal.key.allowed_ips, clientIp(req.headers))) {
+    throw new GateError(403, "ip_not_allowed", "ip not allowed for this key");
   }
   allowEndpoint(principal, gatewayPath(path));
   allowAccessTime(principal, new Date());

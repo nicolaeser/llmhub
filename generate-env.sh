@@ -226,7 +226,7 @@ pick() {
   done
   say "${CYAN}?${RESET} ${BOLD}${label}${RESET}"
   for index in "${!options[@]}"; do
-    line=$(printf '%d) %-8s' $((index + 1)) "${names[$index]}")
+    line=$(printf '%d) %-10s' $((index + 1)) "${names[$index]}")
     if [[ ${names[$index]} == "$value" ]]; then
       say "  ${GREEN}${line}${RESET} ${DIM}${options[$index]#*|}${RESET}"
     else
@@ -376,6 +376,21 @@ release_tag() {
     prompt "Release tag" "$value" required "regex:$IMAGE_TAG"
   fi
   remember LLMHUB_TAG "$ANSWER"
+}
+
+ip_mode() {
+  local value
+  if ! $INTERACTIVE; then
+    ask IP_MODE "Client address source" proxy required "regex:^(proxy|cloudflare|direct)$"
+    return
+  fi
+  value=$(current IP_MODE)
+  [[ $value == cloudflare ]] || value=proxy
+  note "Sign-in limits, sessions, the audit log, and key IP allowlists use the client address."
+  pick "Client address source" "$value" \
+    "proxy|the X-Forwarded-For entry the reverse proxy on this server appends" \
+    "cloudflare|CF-Connecting-IP; the server accepts web traffic only from Cloudflare"
+  remember IP_MODE "$ANSWER"
 }
 
 smtp_label() {
@@ -591,6 +606,10 @@ next_steps() {
   say "         reverse_proxy 127.0.0.1:$port"
   say "       }"
   say ""
+  if [[ $(value_of IP_MODE) == cloudflare ]]; then
+    say "     Accept ports 80 and 443 only from Cloudflare's address ranges, or reach the server through a Cloudflare Tunnel."
+    say ""
+  fi
   step=$((step + 1))
   say "  $step. Start ${APP_NAME}: ${BOLD}docker compose up -d${RESET}"
   step=$((step + 1))
@@ -615,6 +634,7 @@ note "The domain people and applications use. Your reverse proxy serves it with 
 ask NEXT_PUBLIC_APP_URL "Domain or public URL" "" to:public_origin required origin https
 release_tag
 ask LLMHUB_PORT "Port on 127.0.0.1 for the reverse proxy" 3000 required port
+ip_mode
 
 section "Database and Redis"
 ask POSTGRES_USER "PostgreSQL user" llmhub required "regex:^[A-Za-z_][A-Za-z0-9_]{0,62}$"

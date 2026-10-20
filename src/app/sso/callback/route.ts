@@ -13,7 +13,7 @@ import { sanitizeReturnPath } from "@/lib/auth/return-path";
 import { signInWithSso, SsoError } from "@/lib/auth/sso-user";
 import { SetupRequiredError } from "@/lib/bootstrap/operators";
 import { getEnterprise, normalizeOidc } from "@/lib/settings/enterprise";
-import { clientIp } from "@/lib/http/api";
+import { clientIp } from "@/lib/http/client-ip";
 import { errorFields } from "@/lib/logging/format";
 import { logger } from "@/lib/logging/logger";
 
@@ -52,7 +52,7 @@ export async function GET(req: NextRequest) {
       nonce: verified.nonce,
       verifier: verified.verifier,
     });
-    const user = await signInWithSso(identity, normalizeOidc(enterprise.oidc), clientIp(req.headers) || null);
+    const user = await signInWithSso(identity, normalizeOidc(enterprise.oidc), clientIp(req.headers));
     if (user.blocked) {
       loginError.searchParams.set("sso", "blocked");
       const res = NextResponse.redirect(loginError);
@@ -62,7 +62,7 @@ export async function GET(req: NextRequest) {
 
     await revokeSessionCookie(req.cookies.get(SESSION_COOKIE)?.value);
     const session = await createSession(user.id, "SSO", {
-      ipAddress: clientIp(req.headers) || null,
+      ipAddress: clientIp(req.headers),
       userAgent: req.headers.get("user-agent")?.slice(0, 512) ?? null,
     });
     const dest = sanitizeReturnPath(verified.returnPath) ?? "/";
