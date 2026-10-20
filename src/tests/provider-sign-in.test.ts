@@ -734,6 +734,7 @@ function poolDeployment(id: string, weight: number) {
       enabled: true,
       restricted: false,
       assignments: [] as { orgId: string | null; teamId: string | null; projectId: string | null; memberId: string | null; keyId: string | null }[],
+      login: { status: "active" } as { status: string } | null,
     },
   };
 }
