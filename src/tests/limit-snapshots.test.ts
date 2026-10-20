@@ -723,9 +723,10 @@ test("a sweep reads at most four Claude accounts and spreads the rest over the n
   logins.clear();
   const claude = await Promise.all(Array.from({ length: 6 }, () => account("claude")));
   const codex = await Promise.all(Array.from({ length: 2 }, () => account("codex")));
-  respond(() => (upstreamCalls.at(-1)?.includes("anthropic") ? claudeUsage(5) : usage(5)));
+  const anthropic = (url: string) => new URL(url).hostname === "api.anthropic.com";
+  respond(() => (anthropic(upstreamCalls.at(-1) ?? "") ? claudeUsage(5) : usage(5)));
   const now = Date.now();
-  const claudeCalls = () => upstreamCalls.filter((url) => url.includes("api.anthropic.com")).length;
+  const claudeCalls = () => upstreamCalls.filter(anthropic).length;
   const polls: number[] = [];
   const reads: number[] = [];
   for (let sweep = 0; sweep < 4; sweep++) {
@@ -735,7 +736,7 @@ test("a sweep reads at most four Claude accounts and spreads the rest over the n
   }
   assert.deepEqual(polls, [6, 2, 0, 0]);
   assert.deepEqual(reads, [4, 4, 4, 0]);
-  assert.equal(upstreamCalls.filter((url) => url.includes("cedar_ember=1")).length, 6);
+  assert.equal(upstreamCalls.filter((url) => new URL(url).searchParams.get("cedar_ember") === "1").length, 6);
   assert.ok(claude.every((item) => snapshotRows.get(item.id)?.fetchedAt));
   assert.ok(codex.every((item) => snapshotRows.get(item.id)?.fetchedAt));
 });
