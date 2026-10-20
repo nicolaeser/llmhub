@@ -20,12 +20,25 @@ import {
   selectGrant,
   soonestCredit,
 } from "@/lib/gateway/upstreams/reset-credits";
-import { forgetLimits, limitsSnapshot, subscriptionLimits } from "@/lib/gateway/upstreams/subscription-limits";
+import {
+  expireResetView,
+  freshLimits,
+  readStoredSnapshot,
+  storeResetView,
+  touchLimitSnapshot,
+} from "@/lib/gateway/upstreams/limit-store";
+import {
+  parseResetState,
+  pendingView,
+  RESET_STATE_PREFIX,
+  resetStateKey,
+  RETRY_WINDOW_MS,
+} from "@/lib/gateway/upstreams/reset-state";
+import { limitsSnapshot } from "@/lib/gateway/upstreams/subscription-limits";
 import { acquireLease, releaseLease } from "@/lib/jobs/lease";
 import { errorFields } from "@/lib/logging/format";
 import { logger } from "@/lib/logging/logger";
-import { parseJsonOrNull } from "@/lib/utils/json";
-import { RESET_KINDS, resetStateSchema } from "@/schemas/resets";
+import { RESET_KINDS } from "@/schemas/resets";
 import type { LimitWindow, SubscriptionLimits, UpstreamAuth } from "@/types/providers";
 import type {
   AutoResetOutcome,
@@ -35,7 +48,6 @@ import type {
   ClaudeResetBlock,
   CodexCreditList,
   PendingClaim,
-  PendingResetView,
   RedeemOutcome,
   ResetCredits,
   ResetKind,
@@ -46,7 +58,6 @@ import type {
   StatusRead,
 } from "@/types/resets";
 
-export const RETRY_WINDOW_MS = 10 * 60_000;
 export const AUTO_GUARD_MS = 15 * 60_000;
 const LEASE_MS = 90_000;
 const CLAUDE_VIEW_AGE_MS = 60 * 60_000;
@@ -58,12 +69,13 @@ const CODEX_REFRESH_AGE_MS = 2 * 60_000;
 const ORG_TTL_MS = 60 * 60_000;
 const READ_BACKOFF_MS = 5 * 60_000;
 const RATE_LIMIT_BACKOFF_MS = 60 * 60_000;
-const USAGE_MAX_AGE_MS = 5 * 60_000;
+const USAGE_MAX_AGE_MS = 10 * 60_000;
+const FORCED_LIMITS_MS = 10_000;
+const HOOK_LIMITS_MS = 60_000;
 const SETTLE_DELAY_MS = 20_000;
 const HOOK_THROTTLE_MS = 60_000;
 const FULL_PERCENT = 100;
 const WORKER_ACTOR = "worker";
-const STATE_PREFIX = "provider_reset:";
 const LOCK_PREFIX = "provider_reset_lock:";
 const AUTO_LOCK_PREFIX = "provider_reset_auto_lock:";
 const POOL_GUARD_PREFIX = "provider_reset_pool:";
@@ -126,34 +138,36 @@ export function autoGuardOpen(state: ResetState, now: number): boolean {
   return state.pending === null && now - state.lastAutoAt >= AUTO_GUARD_MS;
 }
 
-function stateKey(providerId: string): string {
-  return `${STATE_PREFIX}${providerId}`;
-}
-
 function lockKey(providerId: string): string {
   return `${LOCK_PREFIX}${providerId}`;
 }
 
-function parseState(value: string | undefined, providerId: string): ResetState {
-  const parsed = resetStateSchema.safeParse(value ? parseJsonOrNull(value) : {});
-  if (parsed.success) return parsed.data;
-  logger.error("provider.reset_state_invalid", { providerId });
-  return { pending: null, lastAutoAt: 0 };
+export async function loadResetState(providerId: string): Promise<ResetState> {
+  const row = await prisma.setting.findUnique({ where: { key: resetStateKey(providerId) } });
+  return parseResetState(row?.value, providerId);
 }
 
-export async function loadResetState(providerId: string): Promise<ResetState> {
-  const row = await prisma.setting.findUnique({ where: { key: stateKey(providerId) } });
-  return parseState(row?.value, providerId);
+async function touchQuietly(providerId: string): Promise<void> {
+  await touchLimitSnapshot(providerId).catch((err: unknown) => {
+    logger.warn("provider.reset_touch_failed", { providerId, ...errorFields(err) });
+  });
 }
 
 async function saveResetState(providerId: string, state: ResetState): Promise<void> {
-  const key = stateKey(providerId);
+  const key = resetStateKey(providerId);
   if (!state.pending && !state.lastAutoAt) {
     await prisma.setting.deleteMany({ where: { key } });
-    return;
+  } else {
+    const value = JSON.stringify(state);
+    await prisma.setting.upsert({ where: { key }, create: { key, value }, update: { value } });
   }
-  const value = JSON.stringify(state);
-  await prisma.setting.upsert({ where: { key }, create: { key, value }, update: { value } });
+  await touchQuietly(providerId);
+}
+
+async function expireViewQuietly(providerId: string): Promise<void> {
+  await expireResetView(providerId).catch((err: unknown) => {
+    logger.warn("provider.reset_view_expire_failed", { providerId, ...errorFields(err) });
+  });
 }
 
 async function withLease<T>(key: string, work: () => Promise<T>): Promise<{ value: T } | null> {
@@ -260,7 +274,7 @@ async function auditRedeem(
 
 async function freshStatusAt(provider: ResetProvider, now: number): Promise<number> {
   if (provider.kind === "codex") {
-    const limits = await subscriptionLimits(provider, { force: true }).catch(() => null);
+    const limits = await freshLimits(provider, FORCED_LIMITS_MS).catch(() => null);
     return limits ? Date.parse(limits.fetchedAt) : 0;
   }
   return (await readClaude(provider, 0, now))?.at ?? 0;
@@ -288,7 +302,7 @@ async function newClaim(
 ): Promise<PendingClaim> {
   const base = { requestId: randomUUID(), startedAt: now, attempts: 0, trigger, actor };
   if (provider.kind === "codex") {
-    const limits = await subscriptionLimits(provider, { force: true });
+    const limits = await freshLimits(provider, FORCED_LIMITS_MS);
     if (!((limits?.resetCredits?.applicable ?? 0) > 0)) throw new Error("RESET_NOT_AVAILABLE");
     const credit = soonestCredit((await readCodex(provider, CODEX_REFRESH_AGE_MS, now))?.value ?? null, now);
     return { kind: "codex", ...base, ...(credit ? { creditId: credit.id } : {}) };
@@ -315,8 +329,7 @@ function sendClaim(auth: UpstreamAuth, claim: PendingClaim): Promise<RedeemOutco
 
 function scheduleRecheck(provider: ResetProvider, deployments: string[]): void {
   const timer = setTimeout(() => {
-    forgetLimits(provider.id);
-    void subscriptionLimits(provider)
+    void freshLimits(provider, SETTLE_DELAY_MS / 2)
       .then(() => clearCooldowns(deployments))
       .catch((err: unknown) => {
         logger.warn("provider.reset_refresh_failed", { providerId: provider.id, ...errorFields(err) });
@@ -327,12 +340,12 @@ function scheduleRecheck(provider: ResetProvider, deployments: string[]): void {
 
 async function afterReset(provider: ResetProvider): Promise<void> {
   forgetResetStatus(provider.id);
-  forgetLimits(provider.id);
+  await expireViewQuietly(provider.id);
   const deployments = (
     await prisma.deployment.findMany({ where: { providerId: provider.id }, select: { id: true } })
   ).map((row) => row.id);
   await clearCooldowns(deployments);
-  const limits = await subscriptionLimits(provider).catch((err: unknown) => {
+  const limits = await freshLimits(provider, 0).catch((err: unknown) => {
     logger.warn("provider.reset_refresh_failed", { providerId: provider.id, ...errorFields(err) });
     return null;
   });
@@ -366,6 +379,7 @@ async function redeemLocked(
     await afterReset(provider);
   } else {
     forgetResetStatus(provider.id);
+    await expireViewQuietly(provider.id);
   }
   return outcome;
 }
@@ -390,21 +404,22 @@ export async function redeemReset(
   return leased.value;
 }
 
-function pendingView(pending: PendingClaim, now: number): PendingResetView {
-  const retryUntil = pending.startedAt + RETRY_WINDOW_MS;
-  return { startedAt: iso(pending.startedAt), retryUntil: iso(retryUntil), retryable: now <= retryUntil };
+async function settleForView(provider: ResetProvider, locked: boolean, now: number): Promise<boolean> {
+  if (locked) return settleStaleLocked(provider, WORKER_ACTOR, now);
+  const settled = await withLease(lockKey(provider.id), () => settleStaleLocked(provider, WORKER_ACTOR, now));
+  return settled?.value ?? false;
 }
 
 async function resetView(
   provider: ResetProvider & { kind: ResetKind },
   limits: SubscriptionLimits,
   refresh: boolean,
+  locked: boolean,
   now: number,
 ): Promise<ResetCredits | null> {
   let state = await loadResetState(provider.id);
   if (state.pending && now > state.pending.startedAt + RETRY_WINDOW_MS) {
-    const settled = await withLease(lockKey(provider.id), () => settleStaleLocked(provider, WORKER_ACTOR, now));
-    if (settled?.value) state = await loadResetState(provider.id);
+    if (await settleForView(provider, locked, now)) state = await loadResetState(provider.id);
   }
   let credits: ResetCredits | null;
   let checkedAt: number | null;
@@ -431,12 +446,18 @@ async function resetView(
 export async function withResetDetails(
   provider: ResetProvider,
   limits: SubscriptionLimits | null,
-  options: { refresh?: boolean; now?: number } = {},
+  options: { refresh?: boolean; now?: number; locked?: boolean } = {},
 ): Promise<SubscriptionLimits | null> {
   const kind = provider.kind;
   if (!limits || !isResetKind(kind)) return limits;
   try {
-    const credits = await resetView({ ...provider, kind }, limits, options.refresh === true, options.now ?? Date.now());
+    const credits = await resetView(
+      { ...provider, kind },
+      limits,
+      options.refresh === true,
+      options.locked === true,
+      options.now ?? Date.now(),
+    );
     return credits ? { ...limits, resetCredits: credits } : limits;
   } catch (err) {
     logger.warn("provider.reset_view_failed", { providerId: provider.id, kind, ...errorFields(err) });
@@ -444,10 +465,39 @@ export async function withResetDetails(
   }
 }
 
+function viewAgeMs(kind: ResetKind, refresh: boolean): number {
+  if (kind === "codex") return refresh ? CODEX_REFRESH_AGE_MS : CODEX_VIEW_AGE_MS;
+  return refresh ? CLAUDE_REFRESH_AGE_MS : CLAUDE_VIEW_AGE_MS;
+}
+
+export function resetViewDue(kind: string, resetsAt: number | null, refresh: boolean, now: number): boolean {
+  return isResetKind(kind) && (resetsAt === null || now - resetsAt >= viewAgeMs(kind, refresh));
+}
+
+export async function refreshResetView(
+  provider: ResetProvider,
+  options: { refresh: boolean; now?: number },
+): Promise<boolean> {
+  const kind = provider.kind;
+  if (!isResetKind(kind)) return false;
+  const now = options.now ?? Date.now();
+  const leased = await withLease(lockKey(provider.id), async () => {
+    const stored = await readStoredSnapshot(provider.id);
+    if (!stored?.limits || !resetViewDue(kind, stored.resetsAt, options.refresh, now)) return false;
+    const detailed = await withResetDetails(provider, stored.limits, { refresh: options.refresh, now, locked: true });
+    const view = detailed?.resetCredits ?? null;
+    const read = kind === "codex" || Boolean(view?.checkedAt);
+    const retryIn = Math.max(READ_BACKOFF_MS, (readBackoff.get(provider.id) ?? 0) - now);
+    await storeResetView(provider.id, read ? view : stored.resets, read ? now : now - viewAgeMs(kind, false) + retryIn);
+    return true;
+  });
+  return leased?.value ?? false;
+}
+
 async function usageLimits(provider: ResetProvider, now: number): Promise<SubscriptionLimits | null> {
   const cached = limitsSnapshot(provider.id);
   if (cached && now - Date.parse(cached.fetchedAt) < USAGE_MAX_AGE_MS) return cached;
-  return subscriptionLimits(provider).catch((err: unknown) => {
+  return freshLimits(provider, USAGE_MAX_AGE_MS).catch((err: unknown) => {
     logger.warn("provider.reset_usage_failed", { providerId: provider.id, ...errorFields(err) });
     return cached;
   });
@@ -545,7 +595,7 @@ async function autoRedeemFor(providerId: string, now: number): Promise<AutoReset
   if (!provider || !isResetKind(provider.kind)) return skipped("unsupported");
   const policy = (await autoResetPolicies(now))[provider.kind];
   if (!policy?.enabled) return skipped("off");
-  await subscriptionLimits(provider, { force: true }).catch((err: unknown) => {
+  await freshLimits(provider, HOOK_LIMITS_MS).catch((err: unknown) => {
     logger.warn("provider.reset_usage_failed", { providerId, ...errorFields(err) });
   });
   const outcomes = await evaluateKind(provider.kind, policy, providerId, now);
@@ -569,9 +619,9 @@ export function autoRedeemIfDue(providerId: string): Promise<AutoResetOutcome> {
 }
 
 async function settleStalePending(now: number): Promise<void> {
-  const rows = await prisma.setting.findMany({ where: { key: { startsWith: STATE_PREFIX } } });
+  const rows = await prisma.setting.findMany({ where: { key: { startsWith: RESET_STATE_PREFIX } } });
   for (const row of rows) {
-    const providerId = row.key.slice(STATE_PREFIX.length);
+    const providerId = row.key.slice(RESET_STATE_PREFIX.length);
     const provider = await prisma.providerConnection.findUnique({
       where: { id: providerId },
       select: { id: true, kind: true, apiKey: true },
@@ -580,7 +630,7 @@ async function settleStalePending(now: number): Promise<void> {
       await prisma.setting.deleteMany({ where: { key: row.key } });
       continue;
     }
-    const state = parseState(row.value, providerId);
+    const state = parseResetState(row.value, providerId);
     if (state.pending && now > state.pending.startedAt + RETRY_WINDOW_MS) {
       await withLease(lockKey(providerId), () => settleStaleLocked(provider, WORKER_ACTOR, now));
     }

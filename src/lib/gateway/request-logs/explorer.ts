@@ -20,6 +20,7 @@ import { money } from "@/lib/utils/money";
 import type { LogOptions } from "@/types/logs";
 
 const OPTION_LIMIT = 500;
+const NEW_LOGS_CAP = 1000;
 
 export async function loadLogs(input?: { page?: number; pageSize?: number; filters?: unknown }) {
   const session = await requirePermission(PERMISSIONS.SPEND_READ);
@@ -95,6 +96,18 @@ export async function loadLogs(input?: { page?: number; pageSize?: number; filte
       after: r.afterJson,
     })),
   };
+}
+
+export async function countNewLogs(input: { since: string; filters?: unknown }) {
+  const session = await requirePermission(PERMISSIONS.SPEND_READ);
+  const since = new Date(typeof input?.since === "string" ? input.since : "");
+  if (Number.isNaN(since.getTime())) throw new Error("VALIDATION");
+  const where = requestLogWhere(parseLogFilters(input.filters), spendScope(session));
+  const count = await prisma.requestLog.count({
+    where: { AND: [where, { createdAt: { gt: since } }] },
+    take: NEW_LOGS_CAP,
+  });
+  return { count, capped: count >= NEW_LOGS_CAP };
 }
 
 export async function loadLogOptions() {

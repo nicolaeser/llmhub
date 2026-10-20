@@ -7,7 +7,7 @@ import IconTile from "@/components/console/icon-tile";
 import SubscriptionBadge from "@/components/console/subscription-badge";
 import { kindIcon } from "@/components/providers/kind-icons";
 import { reportsLimits } from "@/lib/gateway/upstreams/provider-kinds";
-import type { AccountLimits, AccountStrategy, ProviderView, SignInKind, SubscriptionLimits } from "@/types/providers";
+import type { AccountStrategy, LimitSnapshot, ProviderView, SignInKind } from "@/types/providers";
 import type { AutoResetPolicy } from "@/types/resets";
 import AccountCard from "./account-card";
 import { STRATEGY_ICONS } from "./account-routing-picker";
@@ -24,11 +24,11 @@ export default function ProviderSection({
   canManage,
   canAdd,
   timeZone,
-  refreshingId,
+  refreshing,
   onAdd,
   onSettings,
   onRefresh,
-  onLimits,
+  onItem,
   onEdit,
   onImport,
   onAccess,
@@ -38,18 +38,18 @@ export default function ProviderSection({
   kind: SignInKind;
   rows: ProviderView[];
   counts: { state: CountedState; count: number }[];
-  limits: Record<string, AccountLimits>;
+  limits: Record<string, LimitSnapshot>;
   settingsLoaded: boolean;
   strategy: AccountStrategy;
   autoReset: AutoResetPolicy | null;
   canManage: boolean;
   canAdd: boolean;
   timeZone: string;
-  refreshingId: string;
+  refreshing: string[];
   onAdd: () => void;
   onSettings: () => void;
   onRefresh: (id: string) => void;
-  onLimits: (id: string, limits: SubscriptionLimits | null) => void;
+  onItem: (item: LimitSnapshot | null) => void;
   onEdit: (row: ProviderView) => void;
   onImport: (row: ProviderView) => void;
   onAccess: (row: ProviderView) => void;
@@ -138,10 +138,10 @@ export default function ProviderSection({
               reports={reportsLimits(row.kind)}
               entry={limits[row.id]}
               timeZone={timeZone}
-              refreshing={refreshingId === row.id}
+              refreshing={refreshing.includes(row.id)}
               canManage={canManage}
               onRefresh={onRefresh}
-              onLimits={onLimits}
+              onItem={onItem}
               onEdit={onEdit}
               onImport={onImport}
               onAccess={onAccess}

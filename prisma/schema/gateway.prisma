@@ -230,6 +230,7 @@ model ProviderConnection {
   deployments    Deployment[]
   catalogEntries CatalogEntry[]
   login          ProviderLogin?
+  limitSnapshot  ProviderLimitSnapshot?
   assignments    ProviderAssignment[]
   subAdd         SubAddAccount?
 }
@@ -286,6 +287,26 @@ model ProviderLogin {
   failures    Int                @default(0)
   createdAt   DateTime           @default(now())
   updatedAt   DateTime           @updatedAt
+}
+
+model ProviderLimitSnapshot {
+  providerId   String             @id
+  provider     ProviderConnection @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  limits       Json?
+  resets       Json?
+  resetsAt     DateTime?
+  error        String             @default("")
+  fetchedAt    DateTime?
+  checkedAt    DateTime?
+  nextAt       DateTime           @default(now())
+  retryAt      DateTime?
+  failures     Int                @default(0)
+  loginVersion Int                @default(-1)
+  leaseUntil   DateTime?
+  leaseToken   String             @default("")
+  version      Int                @default(0)
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
 }
 
 model SubAddLink {
@@ -1071,4 +1092,5 @@ model ToolExecution {
   @@index([orgId, startedAt])
   @@index([toolId, startedAt])
   @@index([status, startedAt])
+  @@index([startedAt])
 }

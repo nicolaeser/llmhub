@@ -1,11 +1,15 @@
 "use server";
 
 import { runAction } from "@/lib/http/action-result";
-import { loadLogDetail, loadLogOptions, loadLogs } from "@/lib/gateway/request-logs/explorer";
+import { countNewLogs, loadLogDetail, loadLogOptions, loadLogs } from "@/lib/gateway/request-logs/explorer";
 import { loadAliases } from "@/lib/models/aliases";
 
 export async function loadLogsAction(...args: Parameters<typeof loadLogs>) {
   return runAction(() => loadLogs(...args));
+}
+
+export async function countNewLogsAction(...args: Parameters<typeof countNewLogs>) {
+  return runAction(() => countNewLogs(...args));
 }
 
 export async function loadLogOptionsAction(...args: Parameters<typeof loadLogOptions>) {

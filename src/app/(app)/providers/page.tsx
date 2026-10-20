@@ -110,6 +110,7 @@ export default function ProvidersPage() {
     remove(id) {
       setConnected((cur) => cur.filter((row) => row.id !== id));
     },
+    reload: page.reload,
   };
 
   const status = (shape: LoadingShape) =>

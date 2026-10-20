@@ -5,6 +5,7 @@ import {
   Button,
   buttonVariants,
   Card,
+  Chip,
   Disclosure,
   Label,
   ListBox,
@@ -23,8 +24,9 @@ import {
   Timer,
 } from "lucide-react";
 import { useFormatter, useTranslations } from "next-intl";
-import { loadUsageAction } from "../_action";
+import { loadUsageAction, loadUsageTodayAction } from "../_action";
 import { useActionData } from "@/lib/hooks/use-action-data";
+import { useLiveConnected, useLiveUsageToday } from "@/lib/hooks/use-live";
 import { BELOW_MD, useMediaQuery } from "@/lib/hooks/use-media-query";
 import PageStatus, { LoadError, SectionLoading } from "@/components/console/page-status";
 import RowCard, { RowCards, TABLE_FROM_LG } from "@/components/console/row-cards";
@@ -74,6 +76,9 @@ export default function OverviewTab() {
   const compact = useMediaQuery(BELOW_MD);
   const usage = useActionData(() => loadUsageAction(INITIAL_QUERY));
   const { data: stats, pending } = usage;
+  const todaySeed = useActionData(loadUsageTodayAction);
+  const today = useLiveUsageToday(todaySeed.data);
+  const live = useLiveConnected();
 
   function apply(patch: Partial<UsageQuery>) {
     const next = { ...query, ...patch };
@@ -198,6 +203,40 @@ export default function OverviewTab() {
         </Card>
       ) : null}
       <LoadError state={usage} className="mb-5" />
+      {today && activeFilters === 0 ? (
+        <Card className="mb-5 gap-4">
+          <Card.Header className="flex-row flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0 flex-1 basis-64">
+              <Card.Title>{t("today.title")}</Card.Title>
+              <Card.Description>
+                {t("today.description", {
+                  day: format.dateTime(new Date(`${today.day}T00:00:00Z`), { dateStyle: "medium", timeZone: "UTC" }),
+                })}
+              </Card.Description>
+            </div>
+            {live ? (
+              <Chip size="sm" variant="soft" color="success">
+                {t("today.live")}
+              </Chip>
+            ) : null}
+          </Card.Header>
+          <dl className="grid grid-cols-2 gap-4 md:grid-cols-4">
+            {(
+              [
+                ["spend", t("metrics.spend"), format.number(today.spend, "money")],
+                ["requests", t("metrics.requests"), format.number(today.requests, "integer")],
+                ["errors", t("metrics.errors"), format.number(today.errors, "integer")],
+                ["tokens", t("metrics.tokens"), format.number(today.tokens, "integer")],
+              ] as const
+            ).map(([key, label, value]) => (
+              <div key={key}>
+                <dt className="text-xs text-muted">{label}</dt>
+                <dd className="text-xl font-semibold tracking-tight">{value}</dd>
+              </div>
+            ))}
+          </dl>
+        </Card>
+      ) : null}
       <p className="sr-only">
         {t("summary", {
           spend: stats.spend,

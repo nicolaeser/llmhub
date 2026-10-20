@@ -1,22 +1,31 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button, Skeleton, Tabs, useOverlayState } from "@heroui/react";
-import { Activity, Download } from "lucide-react";
+import { Activity, ArrowUp, Download } from "lucide-react";
 import { useTranslations } from "next-intl";
 import PageHeader from "@/components/console/page-header";
 import PageStatus, { LoadError, SectionLoading } from "@/components/console/page-status";
 import { useErrorToast } from "@/components/console/use-error-toast";
 import { useActionData } from "@/lib/hooks/use-action-data";
+import { useLiveConnected, useLiveRequests } from "@/lib/hooks/use-live";
 import { isActionFail } from "@/lib/http/action-result";
-import type { LogKind, LogFilterValues, LogOptions, RequestLogDetail, RequestLogRow } from "@/types/logs";
-import { loadLogDetailAction, loadLogOptionsAction, loadLogsAction } from "./_action";
+import type {
+  LogKind,
+  LogFilterValues,
+  LogOptions,
+  NewLogsCount,
+  RequestLogDetail,
+  RequestLogRow,
+} from "@/types/logs";
+import { countNewLogsAction, loadLogDetailAction, loadLogOptionsAction, loadLogsAction } from "./_action";
 import LogDetailDialog from "./_components/log-detail-dialog";
 import LogFilters, { NO_FILTERS } from "./_components/log-filters";
 import LogTable from "./_components/log-table";
 
 const PAGE_SIZE = 50;
-const LIVE_INTERVAL_MS = 15_000;
+const POLL_INTERVAL_MS = 15_000;
+const LIVE_RELOAD_GAP_MS = 10_000;
 const NO_OPTIONS: LogOptions = { models: [], keys: [], users: [] };
 
 function download(href: string) {
@@ -41,10 +50,24 @@ export default function LogsPage() {
   const [filters, setFilters] = useState<LogFilterValues>(NO_FILTERS);
   const [options, setOptions] = useState<LogOptions | null>(null);
   const [detail, setDetail] = useState<RequestLogDetail | null>(null);
+  const [newestSeen, setNewestSeen] = useState<string | null>(null);
+  const [fresh, setFresh] = useState<NewLogsCount | null>(null);
   const detailState = useOverlayState();
-  const logsState = useActionData(() => loadLogsAction({ page: 1, pageSize: PAGE_SIZE }));
+  const logsState = useActionData(
+    () => loadLogsAction({ page: 1, pageSize: PAGE_SIZE }),
+    (data) => {
+      if (data.page === 1) setNewestSeen(data.requests[0]?.createdAt ?? null);
+    },
+  );
   const { data: logs, setData: setLogs, pending } = logsState;
   const page = logs?.page ?? 1;
+  const connected = useLiveConnected();
+  const live = useLiveRequests();
+  const liveKey = live ? `${live.requestId ?? ""}|${live.auditId ?? ""}` : "";
+  const liveRequestId = live?.requestId ?? null;
+  const newestId = page === 1 ? (logs?.requests[0]?.id ?? null) : null;
+  const handledKey = useRef<string | null>(null);
+  const reloadedAt = useRef(0);
 
   useEffect(() => {
     loadLogOptionsAction().then(
@@ -71,17 +94,52 @@ export default function LogsPage() {
   }
 
   useEffect(() => {
-    if (page !== 1) return;
+    if (!connected || !liveKey || handledKey.current === liveKey) return;
+    if (handledKey.current === null && liveRequestId === newestId) {
+      handledKey.current = liveKey;
+      return;
+    }
+    let active = true;
+    const since = newestSeen;
+    const timer = setTimeout(
+      () => {
+        handledKey.current = liveKey;
+        reloadedAt.current = Date.now();
+        if (page === 1) {
+          loadLogsAction({ page: 1, pageSize: PAGE_SIZE, filters }).then((res) => {
+            if (!active || isActionFail(res)) return;
+            setLogs(res);
+            setNewestSeen(res.requests[0]?.createdAt ?? null);
+          });
+          return;
+        }
+        if (!since) return;
+        countNewLogsAction({ since, filters }).then((res) => {
+          if (active && !isActionFail(res)) setFresh({ since, ...res });
+        });
+      },
+      Math.max(0, reloadedAt.current + LIVE_RELOAD_GAP_MS - Date.now()),
+    );
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
+  }, [connected, liveKey, liveRequestId, newestId, newestSeen, page, filters, setLogs]);
+
+  useEffect(() => {
+    if (page !== 1 || connected) return;
     let active = true;
     let timer: ReturnType<typeof setInterval> | undefined;
     const tick = () => {
       loadLogsAction({ page: 1, pageSize: PAGE_SIZE, filters }).then((res) => {
-        if (active && !isActionFail(res)) setLogs(res);
+        if (!active || isActionFail(res)) return;
+        setLogs(res);
+        setNewestSeen(res.requests[0]?.createdAt ?? null);
       });
     };
     const schedule = () => {
       clearInterval(timer);
-      timer = document.visibilityState === "visible" ? setInterval(tick, LIVE_INTERVAL_MS) : undefined;
+      timer = document.visibilityState === "visible" ? setInterval(tick, POLL_INTERVAL_MS) : undefined;
     };
     const onVisibility = () => {
       if (document.visibilityState === "visible") tick();
@@ -94,7 +152,7 @@ export default function LogsPage() {
       clearInterval(timer);
       document.removeEventListener("visibilitychange", onVisibility);
     };
-  }, [page, filters, setLogs]);
+  }, [page, filters, connected, setLogs]);
 
   if (!logs || !options) {
     return (
@@ -104,6 +162,7 @@ export default function LogsPage() {
 
   const total =
     kind === "requests" ? logs.requestTotal : kind === "spend" ? logs.spendTotal : logs.auditTotal;
+  const newer = page > 1 && fresh && fresh.since === newestSeen && fresh.count > 0 ? fresh : null;
 
   return (
     <div>
@@ -154,6 +213,15 @@ export default function LogsPage() {
       </Tabs>
 
       <LoadError state={logsState} className="mb-4" />
+
+      {newer ? (
+        <div className="mb-4 flex flex-wrap items-center gap-2" aria-live="polite">
+          <Button size="sm" variant="secondary" isPending={pending} onPress={() => load(1, filters)}>
+            <ArrowUp size={14} aria-hidden />
+            {t("newRequests", { count: newer.count, capped: String(newer.capped) })}
+          </Button>
+        </div>
+      ) : null}
 
       {pending ? <SectionLoading shape="table" rows={8} /> : <LogTable kind={kind} logs={logs} onOpen={openDetail} />}
 
