@@ -372,6 +372,15 @@ export type ExecutionView = {
   error: string;
 };
 
+export type ToolRun = {
+  status: string;
+  output: unknown;
+  error: string;
+  operation: string;
+  decision: string;
+  policyVersion: number;
+};
+
 export type EffectivePreview = {
   agentId: string;
   toolId: string;

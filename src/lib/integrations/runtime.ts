@@ -1,6 +1,8 @@
 import "server-only";
 import { allowRequest } from "@/lib/rate-limit/window";
 import { guardedFetch } from "@/lib/mcp/transport";
+import { checkServerUrl } from "@/lib/mcp/url-guard";
+import { fail } from "@/lib/integrations/records";
 import { executeWorkflow, type WorkflowFetch } from "@/lib/integrations/workflow";
 import type { EndpointDraft, ExecutionPolicy, PolicyRule, WorkflowGraph, WorkflowResult } from "@/types/integrations";
 
@@ -34,6 +36,16 @@ export function integrationFetch(internal: boolean, maxBytes: number): WorkflowF
     const body = await readBody(response, maxBytes);
     if (body === "response_too_large") return { status: response.status, body: "x".repeat(maxBytes + 1) };
     return { status: response.status, body };
+  };
+}
+
+export function tokenFetch(internal: boolean) {
+  const send = guardedFetch(internal);
+  return async (input: { url: string; method: string; headers: Record<string, string>; body?: string; signal: AbortSignal }) => {
+    const verdict = checkServerUrl(input.url, internal);
+    if (!verdict.ok) fail(verdict.code);
+    const response = await send(input.url, { method: input.method, headers: input.headers, body: input.body, signal: input.signal });
+    return { status: response.status, body: await response.text() };
   };
 }
 

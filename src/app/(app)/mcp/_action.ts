@@ -3,19 +3,17 @@
 import { runAction } from "@/lib/http/action-result";
 import { ensureMcpRoles, saveMcpInstallation, saveMcpPermissions, setMcpTemplate } from "@/lib/mcp/catalog";
 import { setBuilderModel } from "@/lib/mcp/builder";
+import { disconnectMcpOAuth, startMcpOAuth } from "@/lib/mcp/server-oauth";
+import { probeMcpServer, refreshMcpServer } from "@/lib/mcp/server-probe";
 import {
   createHostedMcpServer,
   createMcpServer,
   deleteMcpServer,
-  disconnectMcpOAuth,
   loadMcpServerList,
   loadMcpTargets,
   presentMcpServer,
-  probeMcpServer,
-  refreshMcpServer,
   saveMcpAssignments,
   setMcpServerEnabled,
-  startMcpOAuth,
   updateMcpServer,
 } from "@/lib/mcp/servers";
 
