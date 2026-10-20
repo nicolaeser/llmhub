@@ -3,13 +3,8 @@
 import { requirePermission } from "@/lib/auth/guards";
 import { hasPerm, PERMISSIONS } from "@/lib/auth/permissions";
 import { actionFail, runAction } from "@/lib/http/action-result";
-import {
-  assignEntry,
-  loadCatalogView,
-  setEntryActive,
-  setGroupActive,
-  setGroupAutoRoutes,
-} from "@/lib/gateway/catalog/catalog-sync";
+import { assignEntry, setEntryActive, setGroupActive, setGroupAutoRoutes } from "@/lib/gateway/catalog/catalog-routes";
+import { loadCatalogView } from "@/lib/gateway/catalog/catalog-view";
 import { refreshCatalogNow } from "@/lib/gateway/catalog/catalog-tasks";
 import {
   createModelGroup,

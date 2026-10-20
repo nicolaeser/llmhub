@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { normalizeEnterprise, normalizeOidc, normalizeS3 } from "@/lib/settings/enterprise";
+import { clampRetentionDays, RETENTION_MAX_DAYS } from "@/lib/settings/retention-defaults";
 
 test("normalizeOidc fills defaults and drops the retired redirect override", () => {
   assert.deepEqual(normalizeOidc({}), {
@@ -88,8 +89,40 @@ test("normalizeEnterprise keeps split retention and webhook secrets", () => {
 test("normalizeEnterprise logs request content by default and keeps content retention", () => {
   const defaults = normalizeEnterprise({});
   assert.equal(defaults.log_content, true);
-  assert.equal(defaults.content_retention_days, 0);
+  assert.equal(defaults.content_retention_days, 30);
   const custom = normalizeEnterprise({ log_content: false, content_retention_days: 7 });
   assert.equal(custom.log_content, false);
   assert.equal(custom.content_retention_days, 7);
+});
+
+test("request logs and content expire after 30 days and security activity after 90 unless set", () => {
+  const defaults = normalizeEnterprise({});
+  assert.deepEqual(
+    {
+      log: defaults.log_retention_days,
+      content: defaults.content_retention_days,
+      security: defaults.security_retention_days,
+      spend: defaults.spend_retention_days,
+      usage: defaults.usage_retention_days,
+      audit: defaults.audit_retention_days,
+    },
+    { log: 30, content: 30, security: 90, spend: 0, usage: 0, audit: 0 },
+  );
+  const kept = normalizeEnterprise({
+    log_retention_days: 0,
+    content_retention_days: 0,
+    security_retention_days: 0,
+    usage_retention_days: 400,
+  });
+  assert.equal(kept.log_retention_days, 0);
+  assert.equal(kept.content_retention_days, 0);
+  assert.equal(kept.security_retention_days, 0);
+  assert.equal(kept.usage_retention_days, 400);
+});
+
+test("saved retention days are whole days between 0 and the maximum", () => {
+  assert.deepEqual(
+    [-5, 0, 7.9, Number.NaN, RETENTION_MAX_DAYS + 1, 1e12].map(clampRetentionDays),
+    [0, 0, 7, 0, RETENTION_MAX_DAYS, RETENTION_MAX_DAYS],
+  );
 });

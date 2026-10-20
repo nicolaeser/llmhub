@@ -12,7 +12,8 @@ import {
 } from "@/lib/gateway/upstreams/provider-kinds";
 import { seal } from "@/lib/crypto";
 import { KNOWN_KINDS } from "@/lib/gateway/core";
-import { addRoute, catalogTargets, markRouted } from "@/lib/gateway/catalog/catalog-sync";
+import { catalogTargets } from "@/lib/gateway/catalog/catalog-entries";
+import { addRoute, markRouted } from "@/lib/gateway/catalog/catalog-routes";
 import { scheduleCatalogTask } from "@/lib/gateway/catalog/catalog-tasks";
 import { assignmentSelect, assignmentTargets } from "@/lib/gateway/routing/account-assignments";
 import { reactivateAccount } from "@/lib/gateway/routing/account-reactivation";
