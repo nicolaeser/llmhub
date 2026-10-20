@@ -1,7 +1,7 @@
 import "server-only";
 
 import { randomUUID } from "node:crypto";
-import { requirePermission } from "@/lib/auth/guards";
+import { requirePermission, requirePlatformPermission } from "@/lib/auth/guards";
 import { hasPerm, PERMISSIONS } from "@/lib/auth/permissions";
 import { writeAudit } from "@/lib/audit";
 import {
@@ -22,9 +22,10 @@ import {
 } from "@/lib/settings/retention-defaults";
 import { alertWebhooksSchema } from "@/schemas/settings";
 import type { AlertWebhook } from "@/types/alerts";
+import type { AuthenticatedSession } from "@/types/auth";
 import type { AlertRules, AlertWebhookInput, AlertWebhookView, LoggingSettingsView } from "@/types/settings";
 
-async function view(canManage: boolean): Promise<LoggingSettingsView> {
+async function view(session: AuthenticatedSession): Promise<LoggingSettingsView> {
   const enterprise = await getEnterprise();
   return {
     alertWebhooks: (enterprise.alert_webhooks ?? []).map(
@@ -52,13 +53,17 @@ async function view(canManage: boolean): Promise<LoggingSettingsView> {
     logArchive: enterprise.log_archive === true,
     logContent: enterprise.log_content !== false,
     s3Ready: Boolean(await resolveS3Config()),
-    canManage,
+    canManage: hasPerm(session.permissions, PERMISSIONS.SETTINGS_MANAGE),
+    budgetAlerts: {
+      thresholds: enterprise.budget_alert_thresholds ?? [50, 80, 100],
+      canManage: hasPerm(session.permissions, PERMISSIONS.BUDGETS_MANAGE),
+    },
   };
 }
 
 export async function loadLogging() {
   const session = await requirePermission(PERMISSIONS.SETTINGS_READ);
-  return view(hasPerm(session.permissions, PERMISSIONS.SETTINGS_MANAGE));
+  return view(session);
 }
 
 export async function saveLogging(input: {
@@ -75,7 +80,7 @@ export async function saveLogging(input: {
   logArchive: boolean;
   logContent: boolean;
 }) {
-  const session = await requirePermission(PERMISSIONS.SETTINGS_MANAGE);
+  const session = await requirePlatformPermission(PERMISSIONS.SETTINGS_MANAGE);
   const parsed = alertWebhooksSchema.safeParse(input.alertWebhooks);
   if (!parsed.success) {
     const badUrl = parsed.error.issues.some((issue) => issue.path.at(-1) === "url");
@@ -125,5 +130,5 @@ export async function saveLogging(input: {
       })),
     },
   });
-  return view(true);
+  return view(session);
 }

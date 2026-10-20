@@ -1,7 +1,7 @@
 {
   "title": "Einstellungen",
   "subtitle": "Anmeldung, Speicher, Protokollierung, Cache und Modellkatalog. Infrastruktur-Secrets bleiben in der Umgebung.",
-  "tabs": "{tab, select, company {Unternehmen} general {Allgemein} sign_in {Anmeldung} storage {Speicher} logging {Protokollierung & Alarme} cache {Antwort-Cache} catalog {Modellkatalog} other {Einstellungen}}",
+  "tabs": "{tab, select, general {Allgemein} sign_in {Anmeldung} storage {Speicher} logging {Protokollierung & Alarme} cache {Antwort-Cache} catalog {Modellkatalog} other {Einstellungen}}",
   "save": "Speichern",
   "saved": "Einstellungen gespeichert",
   "readOnly": "Du kannst diese Einstellungen ansehen. Zum Ändern brauchst du die Berechtigung Einstellungen verwalten.",
@@ -158,6 +158,15 @@
     }
   },
   "logging": {
+    "budgetAlerts": {
+      "title": "Budget-Alarme",
+      "hint": "Webhooks, die Budget-Schwellen abonniert haben, feuern einmal je Schwelle, wenn die Ausgabe sie überschreitet. Änderungen gelten sofort.",
+      "saved": "Alarm-Schwellen gespeichert",
+      "remove": "{value, number, integer} Prozent entfernen",
+      "add": "Neue Schwelle",
+      "addHint": "Zwischen 1 und 100 Prozent eines Budgets.",
+      "addButton": "Schwelle hinzufügen"
+    },
     "webhook": "Endpunkt-URL",
     "webhookSecret": "Signatur-Secret",
     "retention": "Request-Log-Aufbewahrung in Tagen",
@@ -194,7 +203,7 @@
     "formatLabel": "{format, select, json {JSON} slack {Slack} teams {Microsoft Teams} other {Format}}",
     "formatHint": "{format, select, json {JSON mit id, event, message, source und ts.} slack {Nachricht für einen eingehenden Slack-Webhook.} teams {Adaptive Card für einen Teams-Workflow-Webhook.} other {}}",
     "rulesTitle": "Alarmregeln",
-    "rulesHint": "Wann Kosten-Anomalie- und Key-Ablauf-Alarme ausgelöst werden. Budget-Schwellen stehen auf der Seite Unternehmen.",
+    "rulesHint": "Wann Kosten-Anomalie- und Key-Ablauf-Alarme ausgelöst werden. Budget-Schwellen haben einen eigenen Abschnitt weiter unten.",
     "anomalyFactor": "Faktor für Kosten-Anomalien",
     "anomalyFactorHint": "Alarm, wenn ein Key oder Projekt in der letzten Stunde mindestens Faktor × den Durchschnitt derselben Stunde der letzten 7 Tage ausgibt. 0 schaltet ihn aus.",
     "anomalyMinCost": "Mindestausgaben pro Stunde",
@@ -278,13 +287,5 @@
       "manageHint": "Wissensbasen legst du unter <link>Wissensbasen</link> an, dort lädst du auch Dateien hoch."
     },
     "description": "Wie der Katalog Anbietermodelle gruppiert, und die Standardmodelle für Wissensdatenbanken."
-  },
-  "companySubtitle": "Einstellungen von {name}. Plattform-Einstellungen bleiben in der Admin-Ansicht.",
-  "company": {
-    "title": "Einstellungen für {name}",
-    "description": "Alles, was dieses Unternehmen selbst einstellt. Wähle einen Bereich, um ihn in der Unternehmensansicht zu öffnen.",
-    "open": "Öffnen",
-    "area": "{area, select, structure {Unternehmen und Budgets} keys {API-Keys} guardrails {Guardrails und PII} mcp {MCP-Server} other {Bereich}}",
-    "areaHint": "{area, select, structure {Abteilungen, Projekte, Personen, Budgets, Alarme und Berichte.} keys {Die Keys dieses Unternehmens und ihr MCP-Zugriff pro Tool.} guardrails {Richtlinien für dieses Unternehmen, seine Projekte und Keys.} mcp {Server, die dieses Unternehmen nutzt, seine Zugriffsregeln und Rollen.} other {}}"
   }
 }

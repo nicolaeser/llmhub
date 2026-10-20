@@ -1,7 +1,7 @@
 import "server-only";
 
 import { assertModelRoles, enabledModelChoices } from "@/lib/models/aliases";
-import { requirePermission } from "@/lib/auth/guards";
+import { requirePermission, requirePlatformPermission } from "@/lib/auth/guards";
 import { hasPerm, PERMISSIONS } from "@/lib/auth/permissions";
 import { writeAudit } from "@/lib/audit";
 import { cacheBackend } from "@/lib/gateway/cache/response-cache";
@@ -42,7 +42,7 @@ export async function loadCacheStats(input: { days: number }) {
 }
 
 export async function saveCache(input: CacheSettingsInput) {
-  const session = await requirePermission(PERMISSIONS.SETTINGS_MANAGE);
+  const session = await requirePlatformPermission(PERMISSIONS.SETTINGS_MANAGE);
   const parsed = cacheSettingsSchema.safeParse(input);
   if (!parsed.success) throw new Error("VALIDATION");
   const previous = normalizeSemanticCache((await getEnterprise()).cache_semantic).model;

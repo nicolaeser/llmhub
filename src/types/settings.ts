@@ -11,12 +11,7 @@ import type { ModelChoice } from "@/lib/models/model-role";
 import type { S3Settings } from "@/types/s3";
 import type { UpdaterView, UpdateStatus } from "@/types/updates";
 
-export type SettingsTab = "company" | "general" | "sign-in" | "storage" | "logging" | "cache" | "catalog";
-
-export type SettingsScope = {
-  company: { id: string; alias: string } | null;
-  platform: boolean;
-};
+export type SettingsTab = "general" | "sign-in" | "storage" | "logging" | "cache" | "catalog";
 
 export type GeneralSettings = z.infer<typeof generalSettingsSchema>;
 
@@ -76,6 +71,7 @@ export type LoggingSettingsView = {
   logContent: boolean;
   s3Ready: boolean;
   canManage: boolean;
+  budgetAlerts: { thresholds: number[]; canManage: boolean };
 };
 
 export type AlertWebhookInput = z.infer<typeof alertWebhooksSchema>[number];

@@ -1,6 +1,8 @@
 {
   "title": "Guardrails",
   "subtitle": "Prompts und Antworten auf personenbezogene Daten, verbotene Inhalte, Prompt-Injection und geleakte Secrets prüfen.",
+  "companySubtitle": "Überschreibungen für dieses Unternehmen, seine Projekte und Keys. Alles andere folgt der Plattform-Richtlinie.",
+  "companyNotice": "Die oben zusammengefasste Plattform-Richtlinie gilt für dieses Unternehmen, solange keine Überschreibung unten sie ersetzt. Ändern kannst du sie im Plattform-Bereich.",
   "tabs": "{tab, select, pii {PII} content {Regeln und Prüfungen} other {{tab}}}",
   "save": "Richtlinie speichern",
   "enabledState": "{enabled, select, true {Aktiv} other {Pausiert}}",

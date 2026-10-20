@@ -1,19 +1,18 @@
 {
   "title": "Companies",
-  "subtitle": "{scope, select, company {Your company with its departments, projects, people, and budgets.} other {Customers with their departments, projects, people, and budgets.}}",
+  "subtitle": "{scope, select, company {Departments, projects, people, and budgets of this company.} other {Customers with their departments, projects, people, and budgets.}}",
   "createOrg": "Add company",
   "emptyTitle": "No companies yet",
   "empty": "{scope, select, company {Your company is not set up yet. Ask a platform admin.} other {Add the first customer company. Departments, projects, people, and their API keys live inside it.}}",
   "tree": {
-    "title": "Companies",
-    "addOrg": "Company",
+    "title": "{scope, select, company {Structure} other {Companies}}",
     "search": "Filter by name…",
     "clear": "Clear filter",
     "noMatches": "Nothing matches that filter.",
     "unlimited": "No cap"
   },
   "steps": {
-    "title": "Set up a customer",
+    "title": "{scope, select, company {Set up {alias}} other {Set up a customer}}",
     "subtitle": "Departments are optional, but they let you cap whole groups such as IT. Finished steps stay checked.",
     "number": "Step {n, number, integer}",
     "status": "{status, select, done {Done} other {To do}}",
@@ -53,7 +52,8 @@
     "delete": "{kind, select, org {Delete company} team {Delete department} project {Delete project} member {Delete person} other {Delete}}",
     "deleteTitle": "{kind, select, org {Delete company {alias}?} team {Delete department {alias}?} project {Delete project {alias}?} member {Delete {alias}?} other {Delete {alias}?}}",
     "deleteHint": "{kind, select, org {Delete its departments, projects, and people first, and move console users with access to this company elsewhere.} team {Its projects and people stay in the company without a department.} project {Every API key of this project is revoked.} member {Every personal API key of this person is revoked.} other {This cannot be undone.}}",
-    "deleted": "{kind, select, org {Company deleted} team {Department deleted} project {Project deleted} member {Person deleted} other {Deleted}}"
+    "deleted": "{kind, select, org {Company deleted} team {Department deleted} project {Project deleted} member {Person deleted} other {Deleted}}",
+    "openCompanyView": "Open company view"
   },
   "budget": {
     "title": "Budget",
@@ -162,15 +162,6 @@
     },
     "ownerKind": "{kind, select, project {Project} member {Person} other {Internal}}",
     "budget": "Budget for {alias}"
-  },
-  "alerts": {
-    "title": "Budget alerts",
-    "hint": "Webhooks under Logging & alerts that subscribe to budget thresholds fire once per threshold when spend crosses it.",
-    "saved": "Alert thresholds saved",
-    "remove": "Remove {value, number, integer} percent",
-    "add": "New threshold",
-    "addHint": "Between 1 and 100 percent of a budget.",
-    "addButton": "Add threshold"
   },
   "reports": {
     "title": "Scheduled reports ({count, number, integer})",
