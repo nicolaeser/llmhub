@@ -10,6 +10,7 @@ import { latestRecovery, quotaExhausted } from "@/lib/gateway/routing/quota";
 import { PROVIDER_CATALOG, reportsLimits } from "@/lib/gateway/upstreams/provider-kinds";
 import { parseResetState, resetCreditsView, resetStateKey } from "@/lib/gateway/upstreams/reset-state";
 import {
+  dropCachedLimits,
   fetchSubscriptionLimits,
   LimitsFetchError,
   limitFailure,
@@ -413,11 +414,12 @@ async function hydrate(providerIds: string[], now: number): Promise<void> {
   try {
     const rows = await prisma.providerLimitSnapshot.findMany({
       where: { providerId: { in: providerIds } },
-      select: { providerId: true, limits: true },
+      select: { providerId: true, limits: true, fetchedAt: true },
     });
     for (const row of rows) {
-      const limits = limitsOf(row.limits);
+      const limits = row.fetchedAt ? limitsOf(row.limits) : null;
       if (limits) rememberLimits(row.providerId, limits);
+      else if (!row.fetchedAt) dropCachedLimits(row.providerId);
     }
   } catch (err) {
     logger.warn("subscription.limits_hydrate_failed", errorFields(err));

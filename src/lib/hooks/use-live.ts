@@ -2,9 +2,9 @@
 
 import { useCallback, useMemo, useSyncExternalStore } from "react";
 import { liveLink, liveTopicValue, watchLiveLink, watchLiveTopic } from "@/lib/updates/live-client";
-import { mergeLimits, newestOf } from "@/lib/updates/live-events";
-import type { LiveRequests, LiveTopic, LiveTopicValues, UsageToday } from "@/types/live";
-import type { LimitSnapshot, LimitSnapshotList } from "@/types/providers";
+import { mergeLimits, newestOf, removedSince } from "@/lib/updates/live-events";
+import type { LiveLimitsView, LiveRequests, LiveTopic, LiveTopicValues, UsageToday } from "@/types/live";
+import type { LimitSnapshotList } from "@/types/providers";
 
 export function useLiveTopic<T extends LiveTopic>(topic: T): LiveTopicValues[T] | null {
   const subscribe = useCallback((onChange: () => void) => watchLiveTopic(topic, onChange), [topic]);
@@ -23,9 +23,9 @@ export function useLiveConnected(): boolean {
   );
 }
 
-export function useLiveLimits(seed: LimitSnapshotList | null): Record<string, LimitSnapshot> {
+export function useLiveLimits(seed: LimitSnapshotList | null): LiveLimitsView {
   const live = useLiveTopic("limits");
-  return useMemo(() => mergeLimits(seed, live), [seed, live]);
+  return useMemo(() => ({ items: mergeLimits(seed, live), removed: removedSince(seed, live) }), [seed, live]);
 }
 
 export function useLiveRequests(): LiveRequests | null {

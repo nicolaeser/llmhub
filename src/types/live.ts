@@ -23,6 +23,8 @@ export type LiveLimitsEvent = { at: number; full: boolean; items: LimitSnapshot[
 
 export type LiveLimits = { at: number; items: Record<string, LimitSnapshot>; removed: Record<string, number> };
 
+export type LiveLimitsView = { items: Record<string, LimitSnapshot>; removed: string[] };
+
 export type LiveRequests = {
   at: number;
   requestId: string | null;

@@ -126,6 +126,13 @@ export function mergeLimits(seed: LimitSnapshotList | null, live: LiveLimits | n
   return merged;
 }
 
+export function removedSince(seed: LimitSnapshotList | null, live: LiveLimits | null): string[] {
+  const since = seed?.at ?? 0;
+  return Object.entries(live?.removed ?? {})
+    .filter(([, at]) => at >= since)
+    .map(([id]) => id);
+}
+
 export function withLimitItems(list: LimitSnapshotList, items: LimitSnapshot[]): LimitSnapshotList {
   const byId = new Map(list.items.map((item) => [item.id, item]));
   for (const item of items) if (newer(byId.get(item.id), item)) byId.set(item.id, item);

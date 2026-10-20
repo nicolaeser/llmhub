@@ -345,6 +345,7 @@ export type ProviderListActions = {
   replace: (provider: ProviderView) => void;
   upsert: (providers: ProviderView[]) => void;
   remove: (id: string) => void;
+  reload: () => void;
 };
 
 export type ProvidersTab = "api" | "subscriptions" | "health";

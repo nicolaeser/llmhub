@@ -212,7 +212,7 @@ test("the limits feed sends changed snapshots by version and removed accounts", 
 });
 
 test("the browser keeps the newest snapshot per account, honours removals, and merges the action seed", async () => {
-  const { applyLimitsEvent, mergeLimits, withLimitItems } = await import("@/lib/updates/live-events");
+  const { applyLimitsEvent, mergeLimits, removedSince, withLimitItems } = await import("@/lib/updates/live-events");
   const full = applyLimitsEvent(null, { at: 100, full: true, items: [snapshot("a", 2), snapshot("b", 1)], removed: [] });
   assert.deepEqual(Object.keys(full?.items ?? {}).sort(), ["a", "b"]);
   const stale = applyLimitsEvent(full, { at: 110, full: false, items: [snapshot("a", 1, 99)], removed: [] });
@@ -233,6 +233,9 @@ test("the browser keeps the newest snapshot per account, honours removals, and m
   assert.equal(merged.c?.version, 4);
   assert.equal(mergeLimits({ ...seed, at: 125 }, moved).b?.version, 1);
   assert.deepEqual(Object.keys(mergeLimits(null, null)), []);
+  assert.deepEqual(removedSince(seed, moved), ["b"]);
+  assert.deepEqual(removedSince({ ...seed, at: 125 }, moved), []);
+  assert.deepEqual(removedSince(null, null), []);
   const refreshed = withLimitItems(seed, [snapshot("c", 5, 1), snapshot("a", 1)]);
   assert.deepEqual(refreshed.items.map((item) => [item.id, item.version]), [["a", 2], ["b", 1], ["c", 5]]);
 });

@@ -9,6 +9,9 @@ import { asNumber, asRecord, asString } from "@/lib/gateway/core";
 import { providerAuth, sessionAuth } from "@/lib/gateway/upstreams/credentials";
 import { GateError } from "@/lib/gateway/errors";
 import { retryAfterMs } from "@/lib/gateway/upstreams/reset-credits";
+import { errorFields } from "@/lib/logging/format";
+import { logger } from "@/lib/logging/logger";
+import { notifyLive } from "@/lib/updates/live-topics";
 import { readJsonOr } from "@/lib/utils/json";
 import {
   XAI_BILLING_MONTHLY_URL,
@@ -280,6 +283,19 @@ export function rememberLimits(providerId: string, limits: SubscriptionLimits): 
   cache.set(providerId, limits);
 }
 
-export function forgetLimits(providerId: string): void {
+export function dropCachedLimits(providerId: string): void {
   cache.delete(providerId);
+}
+
+export async function forgetLimits(providerId: string, now = Date.now()): Promise<void> {
+  cache.delete(providerId);
+  try {
+    const written = await prisma.providerLimitSnapshot.updateMany({
+      where: { providerId },
+      data: { fetchedAt: null, error: "", failures: 0, nextAt: new Date(now), version: { increment: 1 } },
+    });
+    if (written.count) notifyLive("limits");
+  } catch (err) {
+    logger.warn("subscription.limits_forget_failed", { providerId, ...errorFields(err) });
+  }
 }

@@ -363,3 +363,54 @@ test("a reset claim, a stored reset view, and a nudge bump or reschedule the sna
   assert.equal((snapshotRows.get(target.id)?.nextAt as Date).getTime(), now + 4 * MINUTE);
   assert.equal(upstreamCalls.length, 0);
 });
+
+test("forgetting an account clears its error and backoff, makes it due at once, and keeps routing off the old limits", async () => {
+  const { freshLimits, hydrateLimits, pollDue, readStoredSnapshot } = await import("@/lib/gateway/upstreams/limit-store");
+  const { forgetLimits, limitsSnapshot, rememberLimits } = await import("@/lib/gateway/upstreams/subscription-limits");
+  const target = await account();
+  const held = await account();
+  const now = Date.now();
+  const exhausted = limitsAt(100, now + HOUR, now - 10 * MINUTE);
+  seedSnapshot(target.id, {
+    limits: exhausted,
+    error: "UPSTREAM_FAILED",
+    failures: 4,
+    fetchedAt: new Date(now - 10 * MINUTE),
+    checkedAt: new Date(now - MINUTE),
+    nextAt: new Date(now + 30 * MINUTE),
+    version: 5,
+  });
+  seedSnapshot(held.id, {
+    limits: exhausted,
+    error: "UPSTREAM_RATE_LIMITED",
+    failures: 1,
+    fetchedAt: new Date(now - 10 * MINUTE),
+    checkedAt: new Date(now - MINUTE),
+    retryAt: new Date(now + 20 * MINUTE),
+    nextAt: new Date(now + 20 * MINUTE),
+  });
+  rememberLimits(target.id, exhausted);
+  forbidUpstream();
+  await forgetLimits(target.id, now);
+  await forgetLimits(held.id, now);
+  await forgetLimits("missing-account", now);
+  const forgotten = await readStoredSnapshot(target.id);
+  assert.equal(forgotten?.error, "");
+  assert.equal(forgotten?.failures, 0);
+  assert.equal(forgotten?.nextAt, now);
+  assert.equal(forgotten?.fetchedAt, null);
+  assert.equal(forgotten?.version, 6);
+  assert.equal(forgotten?.limits?.windows[0]?.usedPercent, 100);
+  assert.equal(pollDue(forgotten, target.loginVersion, now), true);
+  assert.equal(limitsSnapshot(target.id), null);
+  await hydrateLimits([target.id], now + MINUTE);
+  assert.equal(limitsSnapshot(target.id), null);
+  const waiting = await readStoredSnapshot(held.id);
+  assert.equal(waiting?.retryAt, now + 20 * MINUTE);
+  assert.equal(pollDue(waiting, held.loginVersion, now), false);
+  assert.equal(upstreamCalls.length, 0);
+  respond(() => usage(10));
+  assert.equal((await freshLimits(target, 10 * MINUTE))?.windows[0]?.usedPercent, 10);
+  assert.equal(limitsSnapshot(target.id)?.windows[0]?.usedPercent, 10);
+  assert.equal(upstreamCalls.length, 1);
+});

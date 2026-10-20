@@ -8,6 +8,7 @@ import { asRecord, asString, VERSION } from "@/lib/gateway/core";
 import { GateError } from "@/lib/gateway/errors";
 import { refreshSession } from "@/lib/gateway/upstreams/subscription-sign-in";
 import { logger } from "@/lib/logging/logger";
+import { notifyLive } from "@/lib/updates/live-topics";
 import { parseJsonOrNull } from "@/lib/utils/json";
 import type { ResolvedDeployment } from "@/types/routing";
 import type { LoginRefreshMode, SignInKind, SignInSession, SignInTokens, UpstreamAuth } from "@/types/providers";
@@ -171,6 +172,7 @@ async function renew(row: LoginRow, current: SignInSession, kind: SignInKind, mo
     expired: dead,
   });
   if (saved.count !== 1) return latestUsable(row.providerId);
+  if (dead) notifyLive("limits");
   if (keep) return current;
   throw signInRequired();
 }

@@ -20,7 +20,7 @@ import { PlanBadge } from "@/components/console/subscription-badge";
 import PolicyChips from "./policy-chips";
 import ProviderActions from "./provider-actions";
 import ProviderToggle from "./provider-toggle";
-import type { AccountLimits, AccountState, LimitWindow, ProviderView, SubscriptionLimits } from "@/types/providers";
+import type { AccountState, LimitSnapshot, LimitWindow, ProviderView } from "@/types/providers";
 import type { Tone } from "@/types/console";
 import { ACCOUNT_STATE_COLOR, accountState, recoveryAt } from "./account-status";
 import BankedResets from "./banked-resets";
@@ -58,7 +58,7 @@ export default function AccountCard({
   refreshing,
   canManage,
   onRefresh,
-  onLimits,
+  onItem,
   onEdit,
   onImport,
   onAccess,
@@ -67,12 +67,12 @@ export default function AccountCard({
 }: {
   row: ProviderView;
   reports: boolean;
-  entry: AccountLimits | undefined;
+  entry: LimitSnapshot | undefined;
   timeZone: string;
   refreshing: boolean;
   canManage: boolean;
   onRefresh: (id: string) => void;
-  onLimits: (id: string, limits: SubscriptionLimits | null) => void;
+  onItem: (item: LimitSnapshot | null) => void;
   onEdit: (row: ProviderView) => void;
   onImport: (row: ProviderView) => void;
   onAccess: (row: ProviderView) => void;
@@ -91,6 +91,8 @@ export default function AccountCard({
   const plan = limits?.plan || row.signIn?.plan || "";
   const account = row.signIn?.account ?? "";
   const failure = entry?.error && entry.error !== "SIGN_IN_EXPIRED" ? entry.error : "";
+  const nextCheck = failure && entry?.nextAt ? new Date(entry.nextAt) : null;
+  const held = entry?.retryAt ? Date.parse(entry.retryAt) > now.getTime() : false;
 
   return (
     <Card variant="secondary" className="min-w-0 gap-4">
@@ -154,7 +156,16 @@ export default function AccountCard({
           </div>
         ) : null}
         {state === "paused" ? <p className="text-sm text-muted">{t("pausedHint")}</p> : null}
-        {failure ? <p className="text-sm text-warning">{tError("code", { code: failure })}</p> : null}
+        {failure ? (
+          <div className="space-y-1">
+            <p className="text-sm text-warning">{tError("code", { code: failure })}</p>
+            {nextCheck ? (
+              <p className="text-xs text-muted">
+                {t("limits.nextCheck", { when: format.relativeTime(nextCheck, now) })}
+              </p>
+            ) : null}
+          </div>
+        ) : null}
         {!reports && state !== "expired" ? <p className="text-sm text-muted">{t("noLimits")}</p> : null}
 
         {reports && state === "checking" ? (
@@ -194,7 +205,7 @@ export default function AccountCard({
           </Disclosure>
         ) : null}
         {limits?.resetCredits ? (
-          <BankedResets row={row} credits={limits.resetCredits} timeZone={timeZone} canManage={canManage} onLimits={onLimits} />
+          <BankedResets row={row} credits={limits.resetCredits} timeZone={timeZone} canManage={canManage} onItem={onItem} />
         ) : null}
         {limits?.extraUsage || limits?.credits ? (
           <ul className="space-y-1 text-sm text-muted">
@@ -243,6 +254,7 @@ export default function AccountCard({
               variant="tertiary"
               aria-label={t("limits.refresh")}
               isPending={refreshing}
+              isDisabled={held}
               onPress={() => onRefresh(row.id)}
             >
               {({ isPending }) => (isPending ? <Spinner color="current" size="sm" /> : <RefreshCw size={14} aria-hidden />)}
