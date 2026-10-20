@@ -357,7 +357,7 @@ test("the browser derives its badge from the live link and parses only complete 
 });
 
 test("the live stream sends retry, status on change, pings, and closes on abort or lost access", async () => {
-  const { liveStream, sseEvent } = await import("@/lib/updates/live-stream");
+  const { liveAccess, liveStream, sseEvent } = await import("@/lib/updates/live-stream");
   const snapshot: UpdaterSnapshot = {
     build: { version: "v2026.10.12.abc1234", startedAt: "2026-10-19T09:00:00.000Z" },
     updater: null,
@@ -366,11 +366,11 @@ test("the live stream sends retry, status on change, pings, and closes on abort 
   const abort = new AbortController();
   const stream = liveStream({
     sessionId: "session-1",
-    access: { canRead: true, canManage: false },
+    access: liveAccess(["settings:read"]),
     signal: abort.signal,
     heartbeatMs: 20,
     loadSnapshot: async () => snapshot,
-    checkAccess: async () => ({ canRead: true, canManage: false }),
+    checkAccess: async () => liveAccess(["settings:read"]),
   });
   const reader = stream.getReader();
   const decoder = new TextDecoder();
@@ -395,7 +395,7 @@ test("the live stream sends retry, status on change, pings, and closes on abort 
 
   const revoked = liveStream({
     sessionId: "session-2",
-    access: { canRead: true, canManage: true },
+    access: liveAccess(["settings:read", "settings:manage"]),
     signal: new AbortController().signal,
     heartbeatMs: 20,
     accessCheckMs: 0,
@@ -413,7 +413,7 @@ test("the live stream sends retry, status on change, pings, and closes on abort 
 });
 
 test("open live streams end with a restart event when the server shuts down", async () => {
-  const { liveStream } = await import("@/lib/updates/live-stream");
+  const { liveAccess, liveStream } = await import("@/lib/updates/live-stream");
   const snapshot: UpdaterSnapshot = {
     build: { version: "v2026.10.12.abc1234", startedAt: "2026-10-19T09:00:00.000Z" },
     updater: null,
@@ -421,7 +421,7 @@ test("open live streams end with a restart event when the server shuts down", as
   };
   const reader = liveStream({
     sessionId: "session-3",
-    access: { canRead: false, canManage: false },
+    access: liveAccess([]),
     signal: new AbortController().signal,
     loadSnapshot: async () => snapshot,
   }).getReader();

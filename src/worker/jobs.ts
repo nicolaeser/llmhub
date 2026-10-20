@@ -8,6 +8,7 @@ import { runPendingBatches } from "@/lib/gateway/endpoints/batches";
 import { refreshDueLogins } from "@/lib/gateway/upstreams/credentials";
 import { pruneSupersededLogins } from "@/lib/providers/account-match";
 import { runAutoResets } from "@/lib/gateway/upstreams/reset-redeem";
+import { refreshDueLimits } from "@/lib/providers/limit-refresh";
 import { crossedThresholds, forecastBudget } from "@/lib/usage/forecast";
 import { purgeStoredObjects } from "@/lib/gateway/storage/objects";
 import { runPendingIngests } from "@/lib/rag/ingest";
@@ -79,6 +80,7 @@ export async function runMaintenanceSweep(
     reports: 0,
     signIns: 0,
     supersededLogins: 0,
+    limits: 0,
     resets: 0,
   };
 
@@ -130,6 +132,7 @@ export async function runMaintenanceSweep(
   result.reports = await runSweepJob("usage_reports", () => runUsageReports(now));
   result.signIns = await runSweepJob("sign_in_refresh", () => refreshDueLogins(now.getTime()));
   result.supersededLogins = await runSweepJob("superseded_logins", async () => (await pruneSupersededLogins("worker")).length);
+  result.limits = await runSweepJob("subscription_limits", () => refreshDueLimits(now.getTime()));
   result.resets = await runSweepJob("auto_resets", () => runAutoResets(now.getTime()));
   return result;
 }

@@ -14,6 +14,7 @@ import { tighterCap } from "@/lib/gateway/billing/cost-cap";
 import { tokenCount } from "@/lib/gateway/billing/tokens";
 import { errorFields } from "@/lib/logging/format";
 import { logger } from "@/lib/logging/logger";
+import { notifyLive } from "@/lib/updates/live-topics";
 import type { Prisma } from "@/generated/prisma/client";
 import type { Principal } from "@/types/gateway";
 import type { SpendHolder, BillingContext, BillingGroup, CostCap, TokenUsage } from "@/types/billing";
@@ -328,6 +329,7 @@ export async function recordUsage(input: {
     if (projectId) writes.push(prisma.project.updateMany({ where: { id: projectId }, data: increment }));
   }
   await prisma.$transaction(writes);
+  notifyLive("usage");
   const tokens = prompt + completion;
   const owner = ownerId(input.principal);
   if (tokens && owner) {

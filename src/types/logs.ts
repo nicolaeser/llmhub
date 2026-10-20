@@ -3,6 +3,8 @@ import type { Deployment } from "@/types/routing";
 
 export type LogKind = "requests" | "spend" | "audit";
 
+export type NewLogsCount = { since: string; count: number; capped: boolean };
+
 export type LogFilterValues = {
   model: string;
   status: string;

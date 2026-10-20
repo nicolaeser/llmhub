@@ -182,6 +182,48 @@ export type AccountLimits = {
   error: string;
 };
 
+export type LimitErrorCode = "SIGN_IN_EXPIRED" | "UPSTREAM_AUTH" | "UPSTREAM_FAILED" | "UPSTREAM_RATE_LIMITED";
+
+export type LimitSnapshot = AccountLimits & {
+  version: number;
+  checkedAt: string | null;
+  nextAt: string | null;
+  retryAt: string | null;
+};
+
+export type LimitSnapshotList = { at: number; items: LimitSnapshot[] };
+
+export type LimitAccount = { id: string; kind: string; apiKey: string };
+
+export type LimitPollAccount = LimitAccount & { enabled: boolean; loginVersion: number };
+
+export type StoredLimitSnapshot = {
+  providerId: string;
+  limits: SubscriptionLimits | null;
+  resets: ResetCredits | null;
+  resetsAt: number | null;
+  error: string;
+  fetchedAt: number | null;
+  checkedAt: number | null;
+  nextAt: number;
+  retryAt: number | null;
+  failures: number;
+  loginVersion: number;
+  leaseUntil: number | null;
+  version: number;
+};
+
+export type LimitFetchFailure = { code: LimitErrorCode; retryAfterMs: number | null };
+
+export type LimitRefreshMode = { kind: "scheduled" } | { kind: "manual" } | { kind: "fresh"; maxAgeMs: number };
+
+export type LimitRefreshResult = {
+  status: "fetched" | "skipped" | "busy" | "gone";
+  limits: SubscriptionLimits | null;
+  failure: LimitFetchFailure | null;
+  snapshot: StoredLimitSnapshot | null;
+};
+
 export type AccountState = "paused" | "available" | "limited" | "expired" | "unavailable" | "checking" | "connected";
 
 export type SignInPollResult =

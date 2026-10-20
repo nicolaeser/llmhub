@@ -17,7 +17,8 @@ import {
   pickWeighted,
 } from "@/lib/gateway/routing/router";
 import { quotaBottleneckReset, quotaExhausted, quotaPressure } from "@/lib/gateway/routing/quota";
-import { limitsSnapshot, warmLimits } from "@/lib/gateway/upstreams/subscription-limits";
+import { hydrateLimits } from "@/lib/gateway/upstreams/limit-store";
+import { limitsSnapshot } from "@/lib/gateway/upstreams/subscription-limits";
 import {
   asRecord,
   asStringArray,
@@ -188,7 +189,7 @@ async function withinQuota(
   const scores: QuotaScores = new Map();
   const providers = items.flatMap((dep) => limitedProvider(dep) ?? []);
   if (!providers.length) return { items, scores };
-  await warmLimits(providers);
+  await hydrateLimits(providers.map((provider) => provider.id));
   const now = Date.now();
   const open = items.filter((dep) => {
     const provider = limitedProvider(dep);
