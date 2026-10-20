@@ -347,6 +347,12 @@ export function jwtConfigForOidc(
   };
 }
 
+function tokenFailureMessage(status: number, rec: Record<string, unknown>): string {
+  const codes = Array.isArray(rec.error_codes) ? rec.error_codes.filter((code) => Number.isInteger(code)) : [];
+  const providerCodes = codes.slice(0, 3).map((code) => `AADSTS${code}`).join(",");
+  return ["oidc token", String(status), asString(rec.error).slice(0, 80), providerCodes].filter(Boolean).join(" ");
+}
+
 export async function exchangeOidcCode(input: {
   resolved: ResolvedOidc;
   code: string;
@@ -370,9 +376,7 @@ export async function exchangeOidcCode(input: {
   });
   const rec = asRecord(await readJsonOr(res, null)) ?? {};
   const idToken = asString(rec.id_token);
-  if (!idToken) {
-    throw new Error(`oidc token ${res.status} ${asString(rec.error).slice(0, 80)}`.trim());
-  }
+  if (!idToken) throw new Error(tokenFailureMessage(res.status, rec));
   const claims = await verifyJwt(idToken, jwtConfigForOidc(input.resolved, disc));
   if (claims.nonce !== input.nonce) throw new Error("oidc nonce mismatch");
   return identityFromClaims(claims, input.resolved.groupsClaim);
