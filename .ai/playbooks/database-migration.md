@@ -21,7 +21,7 @@ Postgres available for `prisma migrate dev`. There is no seed.
 
 1. Edit `prisma/schema/*.prisma` only. Keep `User` as the operator model.
 2. Run `npx prisma generate`.
-3. Run `npx prisma migrate dev` locally to create SQL under `prisma/migrations/`. The folder timestamp must sort after every existing migration. Without a database, copy `prisma/schema/` before editing and run `npx prisma migrate diff --from-schema <copy> --to-schema prisma/schema --script`; `--from-migrations` needs a `shadowDatabaseUrl`, which `prisma.config.ts` does not set. Remove `--` comment lines before committing.
+3. Run `npx prisma migrate dev` locally to create SQL under `prisma/migrations/`. The folder timestamp must sort after every existing migration. Without a database, copy `prisma/schema/` before editing and run `npx prisma migrate diff --from-schema <copy> --to-schema prisma/schema --script`; `--from-migrations` needs a `shadowDatabaseUrl`, which `prisma.config.ts` does not set. Remove `--` comment lines before committing. After `git fetch origin`, `npm run migrations:check -- origin/development` must pass; when another branch merged a newer migration first, rename the unmerged folder to a later timestamp.
 4. Update TypeScript callers and tests that depend on field names.
 5. Confirm `.gitignore` still excludes `src/generated/`.
 6. Confirm the `Dockerfile` `CMD` still runs `migrate-deploy.mjs` before `server.js`.

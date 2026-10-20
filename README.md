@@ -80,6 +80,16 @@ The compose files also read these values from `.env`. They configure the Postgre
 | `POSTGRES_PASSWORD` | random | Database password. |
 | `REDIS_PASSWORD` | random | Redis password (`--requirepass`). |
 
+`docker-compose.yml` and `docker-compose.au.yml` cap the memory of each container and rotate container logs (`json-file`, five files of 10 MB per container). `generate-env.sh` does not write the caps; add them to `.env` only to change the defaults:
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `LLMHUB_MEMORY_LIMIT` | `4g` | Memory cap of the app. Node sizes its heap at about half of it, so lower values also shrink the heap. |
+| `POSTGRES_MEMORY_LIMIT` | `2g` | Memory cap of Postgres. |
+| `REDIS_MEMORY_LIMIT` | `1g` | Memory cap of Redis. |
+
+The updater in `docker-compose.au.yml` is capped at 256 MB. On `docker compose stop`, `down`, or an update, the app gets 330 seconds to finish open requests and streams (`stop_grace_period`), because API requests may run for up to 300 seconds.
+
 The image sets `PORT=3000`, `HOSTNAME=0.0.0.0`, and `NODE_ENV=production`.
 
 ### Storage
@@ -169,12 +179,11 @@ cp .env.example .env
 openssl rand -hex 32
 docker compose -f docker-compose.dev.yml up -d postgres redis rustfs
 npm ci
-npx prisma generate
 npm run db:migrate
 npm run dev
 ```
 
-Put the generated value into `APP_SECRET` in `.env`. `.env.example` sets `NODE_ENV=development` and points `DATABASE_URL` at Postgres on `127.0.0.1:5433`, `REDIS_URL` at Redis on `127.0.0.1:6379` (BullMQ), and the S3 keys at RustFS on `127.0.0.1:9000` (console on `127.0.0.1:9001`). `docker compose -f docker-compose.dev.yml up --build` builds and runs the production image locally.
+Put the generated value into `APP_SECRET` in `.env`. `npm ci` also generates the Prisma client; run `npx prisma generate` again after changing the schema (it needs no database). `.env.example` sets `NODE_ENV=development` and points `DATABASE_URL` at Postgres on `127.0.0.1:5433`, `REDIS_URL` at Redis on `127.0.0.1:6379` (BullMQ), and the S3 keys at RustFS on `127.0.0.1:9000` (console on `127.0.0.1:9001`). `docker compose -f docker-compose.dev.yml up --build` builds and runs the production image locally.
 
 | Command | Purpose |
 | --- | --- |
@@ -191,7 +200,7 @@ To run the integration tests against the development database:
 DATABASE_URL="postgresql://llmhub:<POSTGRES_PASSWORD>@127.0.0.1:5433/llmhub" npm run test:integration
 ```
 
-CI runs the same checks and the integration tests against a fresh PostgreSQL 18 database, verifies that the migrations match the Prisma schema, builds the image natively for `linux/amd64` and `linux/arm64`, and starts each build against PostgreSQL to check health, readiness, and the reported version (`scripts/smoke-image.sh <image> <expected-version>` runs the same check locally). On pushes to `main` and `development` the image is tagged and published to GitHub Container Registry only after both architectures pass.
+CI runs the same checks and the integration tests against a fresh PostgreSQL 18 database, verifies that the migrations match the Prisma schema and that new migrations sort after the newest one on the base branch (`npm run migrations:check -- origin/development`), reviews new dependencies and audits production dependencies on pull requests, builds the image natively for `linux/amd64` and `linux/arm64`, and starts each build against PostgreSQL to check health, readiness, and the reported version (`scripts/smoke-image.sh <image> <expected-version>` runs the same check locally), then fails the build when Trivy finds a HIGH or CRITICAL vulnerability that has a fix. On pushes to `main` and `development` the image is tagged and published to GitHub Container Registry only after both architectures pass.
 
 Contributor and architecture notes live in [`.ai/`](.ai/SUMMARY.md).
 

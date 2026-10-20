@@ -11,6 +11,7 @@ import { assertBudget, assertRate, recordUsageOrLog } from "@/lib/gateway/billin
 import { capRequestCost, maxCostHeader } from "@/lib/gateway/billing/cost-cap";
 import { asRecord, newRequestId, routerGateError } from "@/lib/gateway/core";
 import { anthropicErrorBody, GateError, openAIErrorBody } from "@/lib/gateway/errors";
+import { errorFields } from "@/lib/logging/format";
 import { logger } from "@/lib/logging/logger";
 import { modelAlias } from "@/lib/gateway/catalog/model-alias";
 import { aliasChain } from "@/lib/gateway/routing/runtime";
@@ -48,7 +49,7 @@ export function gateResponse(err: unknown, req: Request): NextResponse {
   const gate = toGateError(err);
   const requestId = newRequestId();
   if (gate.status >= 500) {
-    logger.error("gateway.error", { requestId, code: gate.code, err: String(err) });
+    logger.error("gateway.error", { requestId, code: gate.code, ...errorFields(err) });
   }
   if (wantsAnthropicErrors(req)) {
     return NextResponse.json(anthropicErrorBody(gate.status, gate.message, requestId), {

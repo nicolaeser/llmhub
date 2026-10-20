@@ -14,6 +14,7 @@ import { signInWithSso, SsoError } from "@/lib/auth/sso-user";
 import { SetupRequiredError } from "@/lib/bootstrap/operators";
 import { getEnterprise, normalizeOidc } from "@/lib/settings/enterprise";
 import { clientIp } from "@/lib/http/client-ip";
+import { errorFields } from "@/lib/logging/format";
 import { logger } from "@/lib/logging/logger";
 
 export const dynamic = "force-dynamic";
@@ -83,7 +84,7 @@ export async function GET(req: NextRequest) {
       clearOidcCookie(res);
       return res;
     }
-    logger.error("sso.callback.failed", { err: String(err) });
+    logger.error("sso.callback.failed", errorFields(err));
     return fail();
   }
 }

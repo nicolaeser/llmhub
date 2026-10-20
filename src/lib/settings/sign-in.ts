@@ -16,6 +16,7 @@ import {
 import { requireStepUp } from "@/lib/auth/second-factor";
 import { writeAudit } from "@/lib/audit";
 import { env } from "@/lib/env";
+import { errorFields } from "@/lib/logging/format";
 import { logger } from "@/lib/logging/logger";
 import { getEnterprise, normalizeOidc, patchEnterprise } from "@/lib/settings/enterprise";
 import { stepUpSchema } from "@/schemas/auth";
@@ -102,7 +103,7 @@ export async function checkOidcIssuer(raw: unknown): Promise<IssuerCheck> {
       supported: !algorithms.length || algorithms.some((alg) => JWT_ALGORITHMS.includes(alg)),
     };
   } catch (err) {
-    logger.warn("settings.oidc_check_failed", { err: err instanceof Error ? err.message : "unknown" });
+    logger.warn("settings.oidc_check_failed", errorFields(err));
     return { ok: false };
   }
 }

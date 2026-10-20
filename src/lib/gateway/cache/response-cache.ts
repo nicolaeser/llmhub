@@ -4,6 +4,7 @@ import { digest } from "@/lib/crypto";
 import { asNumber, asRecord } from "@/lib/gateway/core";
 import { redisUrl } from "@/lib/jobs/connection";
 import { sharedRedis, withRedisTimeout } from "@/lib/redis/client";
+import { errorFields } from "@/lib/logging/format";
 import { logger } from "@/lib/logging/logger";
 import type { CacheBackend, CachedResponse, SemanticMatch, SemanticProbe } from "@/types/cache";
 import type { JsonMap } from "@/types/gateway";
@@ -43,7 +44,7 @@ async function viaRedis<T>(op: string, run: (redis: Redis) => Promise<T>): Promi
   try {
     return await withRedisTimeout(run(redis), REDIS_CACHE_TIMEOUT_MS);
   } catch (err) {
-    logger.warn("cache.redis_fallback", { op, err: err instanceof Error ? err.message : String(err) });
+    logger.warn("cache.redis_fallback", { op, ...errorFields(err) });
     return undefined;
   }
 }
