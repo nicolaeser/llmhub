@@ -17,6 +17,7 @@ import {
 import { useFormatter, useNow, useTranslations } from "next-intl";
 import IconTile from "@/components/console/icon-tile";
 import { PlanBadge } from "@/components/console/subscription-badge";
+import { limitsUpdatedAt, updatedFromTraffic } from "@/lib/gateway/upstreams/observed-limits";
 import PolicyChips from "./policy-chips";
 import ProviderActions from "./provider-actions";
 import ProviderToggle from "./provider-toggle";
@@ -245,7 +246,8 @@ export default function AccountCard({
           {reports && state !== "expired" && limits ? (
             <span className="truncate text-xs text-muted">
               {t("limits.updated", {
-                when: format.relativeTime(new Date(Math.min(Date.parse(limits.fetchedAt), now.getTime())), now),
+                source: updatedFromTraffic(limits) ? "traffic" : "poll",
+                when: format.relativeTime(new Date(Math.min(limitsUpdatedAt(limits), now.getTime())), now),
               })}
             </span>
           ) : null}

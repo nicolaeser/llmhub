@@ -21,12 +21,16 @@ import {
   soonestCredit,
 } from "@/lib/gateway/upstreams/reset-credits";
 import {
+  blockUsageReads,
+  CLAUDE_POLL_MS,
   expireResetView,
   freshLimits,
   readStoredSnapshot,
   storeResetView,
   touchLimitSnapshot,
+  usageBlockedUntil,
 } from "@/lib/gateway/upstreams/limit-store";
+import { limitsUpdatedAt } from "@/lib/gateway/upstreams/observed-limits";
 import {
   parseResetState,
   pendingView,
@@ -70,8 +74,10 @@ const ORG_TTL_MS = 60 * 60_000;
 const READ_BACKOFF_MS = 5 * 60_000;
 const RATE_LIMIT_BACKOFF_MS = 60 * 60_000;
 const USAGE_MAX_AGE_MS = 10 * 60_000;
+const CLAUDE_USAGE_MAX_AGE_MS = 2 * CLAUDE_POLL_MS;
 const FORCED_LIMITS_MS = 10_000;
 const HOOK_LIMITS_MS = 60_000;
+const CLAUDE_HOOK_LIMITS_MS = 5 * 60_000;
 const SETTLE_DELAY_MS = 20_000;
 const HOOK_THROTTLE_MS = 60_000;
 const FULL_PERCENT = 100;
@@ -191,6 +197,28 @@ async function authFor(provider: ResetProvider): Promise<UpstreamAuth> {
   }
 }
 
+export function sharesUsageBlock(kind: string): boolean {
+  return kind === "claude";
+}
+
+async function sharedBlockUntil(provider: ResetProvider, now: number): Promise<number | null> {
+  if (!sharesUsageBlock(provider.kind)) return null;
+  return usageBlockedUntil(provider.id, now).catch((err: unknown) => {
+    logger.warn("provider.reset_block_read_failed", { providerId: provider.id, ...errorFields(err) });
+    return null;
+  });
+}
+
+async function rateLimitedUntil(provider: ResetProvider, retryAfterMs: number | null, now: number): Promise<number> {
+  const fallback = now + (retryAfterMs ?? RATE_LIMIT_BACKOFF_MS);
+  if (!sharesUsageBlock(provider.kind)) return fallback;
+  const blocked = await blockUsageReads(provider.id, retryAfterMs, now).catch((err: unknown) => {
+    logger.warn("provider.reset_block_write_failed", { providerId: provider.id, ...errorFields(err) });
+    return null;
+  });
+  return blocked ?? fallback;
+}
+
 async function cachedRead<T>(
   cache: Map<string, Cached<T>>,
   provider: ResetProvider,
@@ -201,6 +229,11 @@ async function cachedRead<T>(
   const hit = cache.get(provider.id) ?? null;
   if (hit && now - hit.at <= maxAgeMs) return hit;
   if ((readBackoff.get(provider.id) ?? 0) > now) return hit;
+  const blocked = await sharedBlockUntil(provider, now);
+  if (blocked !== null) {
+    readBackoff.set(provider.id, blocked);
+    return hit;
+  }
   let auth: UpstreamAuth;
   try {
     auth = await providerAuth(provider);
@@ -217,8 +250,10 @@ async function cachedRead<T>(
     if (!res.value) logger.warn("provider.reset_status_invalid", { providerId: provider.id, kind: provider.kind });
     return entry;
   }
-  const wait = res.status === 429 ? (res.retryAfterMs ?? RATE_LIMIT_BACKOFF_MS) : READ_BACKOFF_MS;
-  readBackoff.set(provider.id, now + wait);
+  readBackoff.set(
+    provider.id,
+    res.status === 429 ? await rateLimitedUntil(provider, res.retryAfterMs, now) : now + READ_BACKOFF_MS,
+  );
   logger.warn("provider.reset_status_failed", { providerId: provider.id, kind: provider.kind, status: res.status });
   return hit;
 }
@@ -495,9 +530,10 @@ export async function refreshResetView(
 }
 
 async function usageLimits(provider: ResetProvider, now: number): Promise<SubscriptionLimits | null> {
+  const maxAgeMs = provider.kind === "claude" ? CLAUDE_USAGE_MAX_AGE_MS : USAGE_MAX_AGE_MS;
   const cached = limitsSnapshot(provider.id);
-  if (cached && now - Date.parse(cached.fetchedAt) < USAGE_MAX_AGE_MS) return cached;
-  return freshLimits(provider, USAGE_MAX_AGE_MS).catch((err: unknown) => {
+  if (cached && now - limitsUpdatedAt(cached) < maxAgeMs) return cached;
+  return freshLimits(provider, maxAgeMs).catch((err: unknown) => {
     logger.warn("provider.reset_usage_failed", { providerId: provider.id, ...errorFields(err) });
     return cached;
   });
@@ -595,7 +631,7 @@ async function autoRedeemFor(providerId: string, now: number): Promise<AutoReset
   if (!provider || !isResetKind(provider.kind)) return skipped("unsupported");
   const policy = (await autoResetPolicies(now))[provider.kind];
   if (!policy?.enabled) return skipped("off");
-  await freshLimits(provider, HOOK_LIMITS_MS).catch((err: unknown) => {
+  await freshLimits(provider, provider.kind === "claude" ? CLAUDE_HOOK_LIMITS_MS : HOOK_LIMITS_MS).catch((err: unknown) => {
     logger.warn("provider.reset_usage_failed", { providerId, ...errorFields(err) });
   });
   const outcomes = await evaluateKind(provider.kind, policy, providerId, now);

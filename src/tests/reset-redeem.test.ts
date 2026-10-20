@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test, { afterEach, beforeEach } from "node:test";
-import { limitSnapshotModel, snapshotRows } from "./support/limit-snapshot-fake";
+import { limitSnapshotModel, seedSnapshot, snapshotRows } from "./support/limit-snapshot-fake";
 import type { AuthenticatedSession, Permission } from "@/types/auth";
 import type { JsonMap } from "@/types/gateway";
 import type { AutoResetPolicy, AutoUsage } from "@/types/resets";
@@ -644,4 +644,85 @@ test("auto reset settings are validated, stored per kind, and audited", async ()
     ),
     { ok: false, error: "FORBIDDEN", message: "FORBIDDEN" },
   );
+});
+
+test("the Claude reset view and the limits poll share one 429 block that escalates until a read succeeds", async () => {
+  const { refreshResetView } = await import("@/lib/gateway/upstreams/reset-redeem");
+  const { readStoredSnapshot, refreshLimits } = await import("@/lib/gateway/upstreams/limit-store");
+  const { refreshAccountLimits } = await import("@/lib/providers/limit-refresh");
+  const account = await addAccount("claude");
+  const poll = { ...account, loginVersion: 0 };
+  const minute = 60_000;
+  let viewReply = () => new Response("", { status: 429, headers: { "retry-after": "0" } });
+  let usageReply = () => claudeUsage(40);
+  respond(routeClaude(() => Response.json({ result: "reset" }), () => viewReply(), () => usageReply()));
+  const views = () => sent.filter((call) => call.url.includes("cedar_ember=1")).length;
+  const now = Date.now();
+  await refreshLimits(poll, { kind: "scheduled" }, { now, random: () => 0 });
+  assert.equal(await refreshResetView(account, { refresh: false, now }), true);
+  const blocked = await readStoredSnapshot(account.id);
+  assert.equal(blocked?.error, "UPSTREAM_RATE_LIMITED");
+  assert.equal(blocked?.failures, 1);
+  assert.equal(blocked?.retryAt, now + 15 * minute);
+  assert.ok(blocked!.nextAt >= now + 15 * minute);
+  assert.equal(blocked?.limits?.windows[0]?.usedPercent, 40);
+  const reads = sent.length;
+  for (const mode of [{ kind: "scheduled" }, { kind: "manual" }, { kind: "fresh", maxAgeMs: 0 }] as const) {
+    assert.equal((await refreshLimits(poll, mode, { now: now + 10 * minute })).status, "skipped");
+  }
+  await refreshResetView(account, { refresh: true, now: now + 10 * minute });
+  assert.equal(sent.length, reads);
+
+  usageReply = () => new Response("", { status: 429 });
+  const second = await refreshLimits(poll, { kind: "scheduled" }, { now: now + 26 * minute, random: () => 0 });
+  assert.equal(second.snapshot?.failures, 2);
+  assert.equal(second.snapshot?.retryAt, now + 56 * minute);
+  viewReply = () => claudeBlock(true);
+  await refreshResetView(account, { refresh: true, now: now + 30 * minute });
+  const held = sent.length;
+  await refreshAccountLimits(poll, now + 40 * minute);
+  assert.equal(sent.length, held);
+  assert.equal(views(), 1);
+
+  usageReply = () => claudeUsage(50);
+  const recovered = await refreshLimits(poll, { kind: "scheduled" }, { now: now + 56 * minute, random: () => 0.5 });
+  assert.equal(recovered.snapshot?.failures, 0);
+  assert.equal(recovered.snapshot?.retryAt, null);
+  assert.equal(await refreshResetView(account, { refresh: true, now: now + 57 * minute }), true);
+  assert.equal(views(), 2);
+  assert.equal((await readStoredSnapshot(account.id))?.resets?.available, 2);
+});
+
+test("the gateway hook decides on recent traffic headers without reading Claude usage", async () => {
+  const { autoRedeemIfDue } = await import("@/lib/gateway/upstreams/reset-redeem");
+  const { observeClaudeLimits } = await import("@/lib/gateway/upstreams/limit-store");
+  const observed = await addAccount("claude");
+  const stale = await addAccount("claude");
+  setPolicy("claude", { scope: "account", percent: 90 });
+  const now = Date.now();
+  const older = new Date(now - 10 * 60_000);
+  const limits = {
+    plan: "max",
+    windows: [{ scope: "", usedPercent: 95, windowSeconds: 18_000, resetsAt: null, limitReached: false }],
+    credits: null,
+    resetCredits: null,
+    extraUsage: null,
+    fetchedAt: older.toISOString(),
+  };
+  for (const account of [observed, stale]) {
+    seedSnapshot(account.id, { limits, fetchedAt: older, checkedAt: older, nextAt: new Date(now + 20 * 60_000), loginVersion: 0 });
+  }
+  respond(routeClaude(() => Response.json({ result: "reset" }), () => claudeBlock(false), () => claudeUsage(30)));
+  await observeClaudeLimits(
+    observed.id,
+    new Headers({
+      "anthropic-ratelimit-unified-5h-utilization": "0.3",
+      "anthropic-ratelimit-unified-7d-utilization": "0.2",
+    }),
+    now,
+  );
+  assert.deepEqual(await autoRedeemIfDue(observed.id), { status: "skipped", reason: "below_threshold" });
+  assert.equal(sent.length, 0);
+  await autoRedeemIfDue(stale.id);
+  assert.equal(sent.filter((call) => call.url.endsWith("/api/oauth/usage")).length, 1);
 });

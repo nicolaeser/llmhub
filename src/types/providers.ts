@@ -178,6 +178,7 @@ export type SubscriptionLimits = {
   resetCredits: ResetCredits | null;
   extraUsage: { usedCents: number; limitCents: number; percent: number | null } | null;
   fetchedAt: string;
+  observedAt?: string;
 };
 
 export type AccountLimits = {

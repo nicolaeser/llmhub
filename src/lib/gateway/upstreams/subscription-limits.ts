@@ -6,6 +6,7 @@ import { reportsLimits } from "@/lib/gateway/upstreams/provider-kinds";
 import { CLAUDE_OAUTH_BETAS } from "@/lib/gateway/upstreams/claude";
 import { CODEX_USAGE_URL } from "@/lib/gateway/upstreams/codex";
 import { asNumber, asRecord, asString } from "@/lib/gateway/core";
+import { newestLimits } from "@/lib/gateway/upstreams/observed-limits";
 import { providerAuth, sessionAuth } from "@/lib/gateway/upstreams/credentials";
 import { GateError } from "@/lib/gateway/errors";
 import { retryAfterMs } from "@/lib/gateway/upstreams/reset-credits";
@@ -279,8 +280,7 @@ export function limitsSnapshot(providerId: string): SubscriptionLimits | null {
 
 export function rememberLimits(providerId: string, limits: SubscriptionLimits): void {
   const current = cache.get(providerId);
-  if (current && Date.parse(current.fetchedAt) > Date.parse(limits.fetchedAt)) return;
-  cache.set(providerId, limits);
+  cache.set(providerId, current ? newestLimits(current, limits) : limits);
 }
 
 export function dropCachedLimits(providerId: string): void {
