@@ -1,6 +1,6 @@
 import { recordedPrisma } from "./support/recorded-prisma";
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 import test from "node:test";
 import { NextRequest } from "next/server";
 import { SESSION_COOKIE } from "@/lib/auth/cookie";
@@ -256,6 +256,38 @@ test("the SSO callback refuses requests without a matching signed state before a
     assert.equal(res.cookies.get(OIDC_STATE_COOKIE)?.value, "");
     assert.equal(res.cookies.get(SESSION_COOKIE), undefined);
     assert.deepEqual(recordedPrisma.calls, []);
+  }
+});
+
+test("SSO and MCP OAuth redirects use the public app URL, not the internal bind address", async () => {
+  const { env } = await import("@/lib/env");
+  const { GET: login } = await import("@/app/sso/login/route");
+  const { GET: callback } = await import("@/app/sso/callback/route");
+  const { GET: mcpCallback } = await import("@/app/internal-api/mcp/oauth/callback/route");
+  const publicOrigin = new URL(env.NEXT_PUBLIC_APP_URL).origin;
+  recordedPrisma.reset({ user: { count: () => 1 } });
+  const responses = [
+    await login(new NextRequest("http://0.0.0.0:3000/sso/login?return=/keys")),
+    await callback(new NextRequest("http://0.0.0.0:3000/sso/callback?error=access_denied")),
+    await callback(new NextRequest("http://0.0.0.0:3000/sso/callback?code=abc&state=xyz")),
+    await mcpCallback(new NextRequest("http://0.0.0.0:3000/internal-api/mcp/oauth/callback?error=access_denied")),
+  ];
+  for (const res of responses) {
+    const location = new URL(res.headers.get("location") ?? "");
+    assert.equal(location.origin, publicOrigin);
+    assert.notEqual(location.hostname, "0.0.0.0");
+  }
+  assert.equal(new URL(responses[0].headers.get("location") ?? "").pathname, "/account/login");
+  assert.equal(new URL(responses[3].headers.get("location") ?? "").pathname, "/mcp");
+});
+
+test("route handlers never resolve URLs against the request URL", async () => {
+  const appDir = new URL("../../src/app/", import.meta.url);
+  const routes = (await readdir(appDir, { recursive: true })).filter((file) => /(^|\/)route\.ts$/.test(file));
+  assert.ok(routes.length > 0);
+  for (const file of routes) {
+    const source = await readFile(new URL(file, appDir), "utf8");
+    assert.doesNotMatch(source, /new URL\([^;]*,\s*req(?:uest)?\.(?:url|nextUrl)\s*\)/, file);
   }
 });
 
