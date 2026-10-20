@@ -66,7 +66,9 @@ export type LoggingSettingsView = {
   alertRules: AlertRules;
   logRetentionDays: number;
   spendRetentionDays: number;
+  usageRetentionDays: number;
   auditRetentionDays: number;
+  securityRetentionDays: number;
   objectRetentionDays: number;
   fileRetentionDays: number;
   contentRetentionDays: number;
@@ -102,7 +104,9 @@ export type Enterprise = {
   alert_webhooks?: AlertWebhook[];
   log_retention_days?: number;
   spend_retention_days?: number;
+  usage_retention_days?: number;
   audit_retention_days?: number;
+  security_retention_days?: number;
   object_retention_days?: number;
   file_retention_days?: number;
   cache_ttl_seconds?: number;
