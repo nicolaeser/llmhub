@@ -182,7 +182,7 @@ export default function SubscriptionAccounts({
         <p className="max-w-3xl text-sm text-muted">{t("intro")}</p>
         <div className="flex flex-col gap-3 md:flex-row md:flex-wrap md:items-end md:justify-between">
           <div className="flex flex-wrap items-center gap-2">
-            <Button onPress={wizardState.open}>
+            <Button className="w-full sm:w-auto" onPress={wizardState.open}>
               <Plus size={16} aria-hidden />
               {t("addSubscription")}
             </Button>
@@ -214,7 +214,7 @@ export default function SubscriptionAccounts({
       </div>
 
       {rows.length > 0 ? (
-        <div className="grid grid-cols-1 gap-3 min-[420px]:grid-cols-2 xl:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
           <StatCard
             icon={CircleCheck}
             tone={available > 0 ? "success" : "neutral"}
