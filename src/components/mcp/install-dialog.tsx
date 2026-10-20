@@ -16,20 +16,14 @@ import { useTranslations } from "next-intl";
 import FormDialog from "@/components/console/form-dialog";
 import { useErrorToast } from "@/components/console/use-error-toast";
 import { isActionFail } from "@/lib/http/action-result";
+import { MCP_STATIC_AUTH_TYPES, authNameValid, authUsesName } from "@/schemas/mcp";
 import type { ActionFail } from "@/types/actions";
-import type { McpInstallationView, McpServerView } from "@/types/mcp";
+import type { McpInstallationView, McpServerView, McpStaticAuthType } from "@/types/mcp";
 
 type ServerResult = Promise<{ server: McpServerView } | ActionFail>;
 
-const AUTH = ["none", "bearer", "header"] as const;
-type InstallAuth = (typeof AUTH)[number];
-
-function installAuth(value: string | undefined): InstallAuth {
-  return value === "none" || value === "header" ? value : "bearer";
-}
-
-function headerOk(authType: InstallAuth, authHeader: string): boolean {
-  return authType !== "header" || /^[A-Za-z0-9-]{1,64}$/.test(authHeader.trim());
+function installAuth(value: string | undefined): McpStaticAuthType {
+  return MCP_STATIC_AUTH_TYPES.find((type) => type === value) ?? "bearer";
 }
 
 function urlOk(baseUrl: string): boolean {
@@ -56,7 +50,7 @@ export default function InstallDialog({
     orgId: string;
     enabled: boolean;
     baseUrl: string;
-    authType: "none" | "bearer" | "header";
+    authType: McpStaticAuthType;
     authHeader: string;
     secret: string;
   }) => ServerResult;
@@ -71,7 +65,7 @@ export default function InstallDialog({
   const [orgId, setOrgId] = useState(initialOrg);
   const [enabled, setEnabled] = useState(initial?.enabled ?? true);
   const [baseUrl, setBaseUrl] = useState(initial?.baseUrl ?? "");
-  const [authType, setAuthType] = useState<InstallAuth>(installAuth(initial?.authType ?? server?.authType));
+  const [authType, setAuthType] = useState<McpStaticAuthType>(installAuth(initial?.authType ?? server?.authType));
   const [authHeader, setAuthHeader] = useState(initial?.authHeader ?? "");
   const [secret, setSecret] = useState("");
   const [shared, setShared] = useState(server?.template ?? false);
@@ -81,10 +75,11 @@ export default function InstallDialog({
   const needsSecret = enabled && authType !== "none" && !secret.trim() && !keepsSecret;
   const togglesTemplate = Boolean(canManage && onTemplate);
   const connect = (togglesTemplate ? shared : Boolean(server?.template)) && Boolean(orgId);
-  const fieldsOk = headerOk(authType, authHeader) && urlOk(baseUrl) && !needsSecret;
+  const authTypes = MCP_STATIC_AUTH_TYPES.filter((type) => server?.kind === "hosted" || type !== "query");
+  const fieldsOk = authNameValid(authType, authHeader) && urlOk(baseUrl) && !needsSecret;
   const templateChanged = Boolean(togglesTemplate && server && shared !== server.template);
 
-  function apply(row: McpInstallationView | null, fallback: InstallAuth) {
+  function apply(row: McpInstallationView | null, fallback: McpStaticAuthType) {
     setEnabled(row?.enabled ?? true);
     setBaseUrl(row?.baseUrl ?? "");
     setAuthType(installAuth(row?.authType ?? fallback));
@@ -200,7 +195,7 @@ export default function InstallDialog({
         fullWidth
         selectedKey={authType}
         onSelectionChange={(key) => {
-          const next = AUTH.find((item) => item === String(key));
+          const next = authTypes.find((item) => item === String(key));
           if (next) setAuthType(next);
         }}
         isDisabled={pending || !orgId}
@@ -212,7 +207,7 @@ export default function InstallDialog({
         </Select.Trigger>
         <Select.Popover>
           <ListBox aria-label={t("install.authType")}>
-            {AUTH.map((item) => (
+            {authTypes.map((item) => (
               <ListBox.Item key={item} id={item} textValue={t("install.authOption", { type: item })}>
                 {t("install.authOption", { type: item })}
                 <ListBox.ItemIndicator />
@@ -221,17 +216,17 @@ export default function InstallDialog({
           </ListBox>
         </Select.Popover>
       </Select>
-      {authType === "header" ? (
+      {authUsesName(authType) ? (
         <TextField
           fullWidth
           isRequired
           value={authHeader}
           onChange={setAuthHeader}
-          isInvalid={authHeader.trim() !== "" && !headerOk(authType, authHeader)}
+          isInvalid={authHeader.trim() !== "" && !authNameValid(authType, authHeader)}
           isDisabled={pending}
         >
-          <Label>{t("install.header")}</Label>
-          <Input autoComplete="off" placeholder="X-Api-Key" />
+          <Label>{t("form.authName", { type: authType })}</Label>
+          <Input autoComplete="off" spellCheck={false} placeholder={t("form.authNamePlaceholder", { type: authType })} />
         </TextField>
       ) : null}
       {authType !== "none" ? (

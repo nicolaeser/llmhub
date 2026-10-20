@@ -25,6 +25,7 @@ import {
   MAX_BUILDER_FILES,
   MAX_BUILDER_FILE_BYTES,
   MAX_BUILDER_LINKS,
+  MAX_CRAWL_DEPTH,
   MAX_BUILDER_UPLOAD_BYTES,
   MCP_BUILDER_FILE_EXTENSIONS,
   MCP_DOCS_AUTH_TYPES,
@@ -98,7 +99,10 @@ export default function BuilderSources({
   }
 
   function addLink() {
-    onLinks((current) => [...current, { key: rowKey("link"), url: "", internal: false, auth: "none", name: "", secret: "" }]);
+    onLinks((current) => [
+      ...current,
+      { key: rowKey("link"), url: "", internal: false, crawl: true, auth: "none", name: "", secret: "" },
+    ]);
   }
 
   function patchLink(key: string, change: Partial<McpDocsLink>) {
@@ -265,6 +269,15 @@ export default function BuilderSources({
                       </TextField>
                     </div>
                   ) : null}
+                  <Switch isSelected={row.crawl} onChange={(crawl) => patchLink(row.key, { crawl })} isDisabled={pending}>
+                    <Switch.Content>
+                      <Switch.Control>
+                        <Switch.Thumb />
+                      </Switch.Control>
+                      <Label>{t("builder.linkCrawl")}</Label>
+                    </Switch.Content>
+                    <Description>{t("builder.linkCrawlHint", { depth: MAX_CRAWL_DEPTH })}</Description>
+                  </Switch>
                   <Switch isSelected={row.internal} onChange={(internal) => patchLink(row.key, { internal })} isDisabled={pending}>
                     <Switch.Content>
                       <Switch.Control>

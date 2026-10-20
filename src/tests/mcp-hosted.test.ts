@@ -153,7 +153,7 @@ test("callHosted sends the sealed header and refuses private addresses", async (
     { id: "7" },
     AbortSignal.timeout(1000),
     fetchImpl,
-    { Authorization: "Bearer secret" },
+    { headers: { Authorization: "Bearer secret" }, query: {} },
   );
   assert.deepEqual(ok, { text: '{"ok":true}', isError: false });
   assert.equal(calls.length, 1);
@@ -169,8 +169,88 @@ test("callHosted sends the sealed header and refuses private addresses", async (
     { id: "1" },
     AbortSignal.timeout(1000),
     fetchImpl,
-    {},
+    { headers: {}, query: {} },
   );
   assert.deepEqual(blocked, { text: "MCP_URL_BLOCKED", isError: true });
   assert.equal(calls.length, 0);
+});
+
+test("hosted servers sign calls with basic credentials or an API key in the address", async () => {
+  const { seal } = await import("@/lib/crypto");
+  const { hostedAuth } = await import("@/lib/mcp/auth");
+  const basic = hostedAuth({ authType: "basic", authHeader: "agent", authSecret: seal("pä:ss-SECRET") });
+  assert.deepEqual(basic.query, {});
+  assert.equal(Buffer.from(basic.headers.Authorization!.replace(/^Basic /, ""), "base64").toString("utf8"), "agent:pä:ss-SECRET");
+  assert.deepEqual(hostedAuth({ authType: "query", authHeader: "api_key", authSecret: seal("k&y-SECRET") }), {
+    headers: {},
+    query: { api_key: "k&y-SECRET" },
+  });
+  assert.deepEqual(hostedAuth({ authType: "bearer", authHeader: "", authSecret: seal("tok") }), {
+    headers: { Authorization: "Bearer tok" },
+    query: {},
+  });
+  assert.deepEqual(hostedAuth({ authType: "query", authHeader: "api_key", authSecret: "" }), { headers: {}, query: {} });
+
+  const calls: { url: string; headers: Record<string, string> }[] = [];
+  const fetchImpl: McpFetch = async (url, init) => {
+    calls.push({ url, headers: init.headers });
+    return new Response("[]", { status: 200 });
+  };
+  const search: HostedTool = {
+    ...pet,
+    name: "search_pets",
+    path: "/pets",
+    inputSchema: { type: "object", properties: { q: { type: "string" }, api_key: { type: "string" } } },
+  };
+  const keyed = hostedAuth({ authType: "query", authHeader: "api_key", authSecret: seal("k&y-SECRET") });
+  const args = { q: "cat", api_key: "forged" };
+  await callHosted("https://api.example.com/v1", false, { tools: [search] }, "search_pets", args, AbortSignal.timeout(1000), fetchImpl, keyed);
+  const sent = new URL(calls[0]!.url);
+  assert.equal(sent.pathname, "/v1/pets");
+  assert.equal(sent.searchParams.get("q"), "cat");
+  assert.deepEqual(sent.searchParams.getAll("api_key"), ["k&y-SECRET"]);
+  assert.equal(calls[0]!.headers.Authorization, undefined);
+  await callHosted("https://api.example.com/v1", false, { tools: [pet] }, "get_pet", { id: "7" }, AbortSignal.timeout(1000), fetchImpl, basic);
+  assert.match(calls[1]!.headers.Authorization!, /^Basic /);
+  assert.equal(calls[1]!.url, "https://api.example.com/v1/pets/7");
+});
+
+test("drafts and hosted servers accept basic and query logins with valid names", async () => {
+  const { hostedServerSchema, mcpInstallationSchema, mcpServerInputSchema } = await import("@/schemas/mcp");
+  const draft = readDraft('{"name":"Desk","baseUrl":"https://desk.example.com/api","authType":"basic","authHeader":"admin","tools":[]}');
+  assert.equal(draft.server?.authType, "basic");
+  assert.equal(draft.server?.authHeader, "");
+  const keyed = readDraft('{"name":"Desk","baseUrl":"https://desk.example.com/api","authType":"apiKeyQuery","authHeader":"token","tools":[]}');
+  assert.equal(keyed.server?.authType, "query");
+  assert.equal(keyed.server?.authHeader, "token");
+  const base = { name: "Desk", description: "", baseUrl: "https://desk.example.com", internal: false, tools: [pet], secret: "s" };
+  const server = (change: Record<string, unknown>) => hostedServerSchema.safeParse({ ...base, ...change }).success;
+  assert.equal(server({ authType: "basic", authHeader: "agent" }), true);
+  assert.equal(server({ authType: "basic", authHeader: "" }), false);
+  assert.equal(server({ authType: "basic", authHeader: "a:b" }), false);
+  assert.equal(server({ authType: "query", authHeader: "api_key" }), true);
+  assert.equal(server({ authType: "query", authHeader: "api key" }), false);
+  assert.equal(server({ authType: "query", authHeader: "api_key", secret: "" }), false);
+  const install = (change: Record<string, unknown>) =>
+    mcpInstallationSchema.safeParse({ serverId: "s1", orgId: "o1", enabled: true, ...change }).success;
+  assert.equal(install({ authType: "basic", authHeader: "agent", secret: "pw" }), true);
+  assert.equal(install({ authType: "query", authHeader: "" }), false);
+  const remote = mcpServerInputSchema.safeParse({
+    name: "Desk",
+    description: "",
+    url: "https://mcp.example.com/mcp",
+    authType: "basic",
+    authHeader: "agent",
+    secret: "pw",
+    internal: false,
+    clearSecret: false,
+    enabled: true,
+    global: false,
+    toolsRestricted: false,
+    allowedTools: [],
+  });
+  assert.equal(remote.success, true);
+  const { assertRemoteAuth } = await import("@/lib/mcp/server-input");
+  assert.throws(() => assertRemoteAuth("query"), /^Error: VALIDATION$/);
+  assert.doesNotThrow(() => assertRemoteAuth("basic"));
 });

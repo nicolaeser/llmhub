@@ -9,6 +9,7 @@ import type {
   McpDraftReading,
   McpDraftServer,
   McpFetch,
+  McpHostedAuth,
   McpToolAction,
   McpToolOutcome,
   McpToolSpec,
@@ -22,13 +23,15 @@ Rules:
 - Build one tool for every operation the documentation describes that the request allows. Do not merge, sample, or shorten the list.
 - Include only operations the documentation describes.
 - The documentation can come as several labeled sources and attached files. Combine them into one server.
+- The documentation can be many crawled pages of one site, for example an index page and one page per resource or endpoint. Such pages often describe each endpoint in prose or tables instead of a machine-readable spec. Read the method, path, parameters, and body fields from that text.
+- When tools are offered, the site index lists every page that was crawled. Read the pages that describe operations before you answer: read_page returns the full text of a crawled page, list_pages finds pages, and fetch_page loads a linked page of the same site that was not crawled. Your final answer is the JSON object, not a tool call.
 - action is read for safe reads, write for creates and updates, delete for deletes and irreversible changes.
 - path is relative to baseUrl, starts with /, and has no query string. Path parameters use {name}; that name is a string property in inputSchema.
 - Query and body fields are properties of inputSchema. For POST, PUT, and PATCH, list the query string fields in query.
 - Keep each description to one sentence and each inputSchema to the fields the call takes.
 - Prefer the operations the operator asked for. Skip operations they told you not to build.
 - At most ${MAX_HOSTED_TOOLS} tools.
-- authType is none, bearer, or header. authHeader is only the header name when authType is header. Do not invent secrets.
+- authType is none, bearer, basic, header, or query. authHeader is the header name when authType is header, the query parameter name when authType is query, and empty otherwise. Do not invent secrets or user names.
 - internal is true only when the base URL is http or on a private network.`;
 
 export const PICK_SYSTEM = `You choose which operations of an API become MCP tools.
@@ -61,6 +64,14 @@ function names(value: unknown): string[] {
 export function continuePrompt(listed: string[]): string {
   return `Your previous answer stopped before the end. These tools already exist: ${listed.join(", ")}.
 Return the same JSON shape with only the operations that are still missing. Return "tools":[] when none are missing.`;
+}
+
+export function passPrompt(part: number, parts: number, listed: string[]): string {
+  const intro = `The documentation is long, so it is read in ${parts} parts. This is part ${part} of ${parts}. Build the tools for the operations described in this part, and use the tools to read other pages when an operation continues there.`;
+  if (!listed.length) return intro;
+  return `${intro}
+These tools already exist from earlier parts: ${listed.join(", ")}.
+Return the same JSON shape with the server fields and only the operations that are still missing. Return "tools":[] when none are missing.`;
 }
 
 export function cleanToolName(raw: string): string {
@@ -140,6 +151,8 @@ export function extractJson(answer: string): unknown {
 function authOf(value: unknown): McpDraftServer["authType"] {
   const kind = text(value).toLowerCase().replace(/[^a-z]/g, "");
   if (kind === "bearer" || kind === "oauth" || kind === "oauth2" || kind === "token") return "bearer";
+  if (kind === "basic" || kind === "httpbasic") return "basic";
+  if (kind === "query" || kind === "apikeyquery" || kind === "queryparam" || kind === "queryparameter") return "query";
   if (kind === "header" || kind === "apikey") return "header";
   return "none";
 }
@@ -153,7 +166,7 @@ function serverOf(head: JsonMap | null): McpDraftServer | null {
     baseUrl: clip(text(head.baseUrl), 2048),
     internal: head.internal === true,
     authType,
-    authHeader: authType === "header" ? clip(text(head.authHeader), 64) : "",
+    authHeader: authType === "header" || authType === "query" ? clip(text(head.authHeader), 64) : "",
     notes: clip(text(head.notes), 2000),
   });
   return parsed.success ? parsed.data : null;
@@ -386,7 +399,7 @@ export async function callHosted(
   args: JsonMap,
   caller: AbortSignal,
   fetchImpl: McpFetch,
-  headers: Record<string, string>,
+  auth: McpHostedAuth,
 ): Promise<McpToolOutcome> {
   const tool = spec.tools.find((item) => item.name === toolName);
   if (!tool) return { text: "This tool is no longer available.", isError: true };
@@ -394,12 +407,14 @@ export async function callHosted(
   if ("error" in built) return { text: built.error, isError: true };
   const verdict = checkServerUrl(built.url, internal);
   if (!verdict.ok) return { text: verdict.code, isError: true };
+  const target = new URL(built.url);
+  for (const [name, value] of Object.entries(auth.query)) target.searchParams.set(name, value);
   try {
-    const response = await fetchImpl(built.url, {
+    const response = await fetchImpl(target.toString(), {
       method: built.method,
       headers: {
         Accept: "application/json",
-        ...headers,
+        ...auth.headers,
         ...(built.body ? { "Content-Type": "application/json" } : {}),
       },
       ...(built.body ? { body: built.body } : {}),

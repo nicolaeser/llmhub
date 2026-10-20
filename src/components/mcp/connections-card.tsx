@@ -105,7 +105,7 @@ export default function McpConnectionsCard({
             {data.servers.map((server) => {
               const state = connectionOf(server, orgId);
               const row = server.installations.find((item) => item.orgId === orgId);
-              const authType = row?.authType ?? (server.authType === "header" || server.authType === "none" ? server.authType : "bearer");
+              const authType = row?.authType ?? (server.authType === "oauth" ? "bearer" : server.authType);
               return (
                 <li key={server.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
                   <div className="min-w-0 flex-1 space-y-1">
