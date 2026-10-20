@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { Skeleton } from "@heroui/react";
 import type { LucideIcon } from "lucide-react";
 import IconTile from "@/components/console/icon-tile";
 
@@ -7,11 +8,13 @@ export default function PageHeader({
   subtitle,
   actions,
   icon,
+  subtitlePending = false,
 }: {
   title: ReactNode;
   subtitle?: ReactNode;
   actions?: ReactNode;
   icon?: LucideIcon;
+  subtitlePending?: boolean;
 }) {
   return (
     <header className="mb-6 flex flex-wrap items-start justify-between gap-4">
@@ -19,7 +22,11 @@ export default function PageHeader({
         {icon ? <IconTile icon={icon} size="lg" /> : null}
         <div className="min-w-0">
           <h1 className="text-xl font-semibold tracking-tight break-words">{title}</h1>
-          {subtitle ? <p className="mt-1 text-sm text-muted">{subtitle}</p> : null}
+          {subtitle ? (
+            <p className="mt-1 text-sm text-muted">{subtitle}</p>
+          ) : subtitlePending ? (
+            <Skeleton className="mt-2 h-3.5 w-80 max-w-full rounded-lg" />
+          ) : null}
         </div>
       </div>
       {actions ? (

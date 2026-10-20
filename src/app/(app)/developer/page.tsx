@@ -17,7 +17,7 @@ export default function DeveloperPage() {
   const granted = page.data;
 
   if (!granted) {
-    return <PageStatus icon={Code2} title={t("title")} subtitle={t("subtitle")} state={page} />;
+    return <PageStatus icon={Code2} title={t("title")} subtitle={t("subtitle")} state={page} tabs layout="chat" />;
   }
 
   const tabs = [

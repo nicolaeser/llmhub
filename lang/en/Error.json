@@ -3,8 +3,8 @@
   "boundary": {
     "title": "Something broke",
     "description": "The console hit an unexpected error. Try again.",
+    "pageDescription": "This page hit an unexpected error. Try again.",
     "tryAgain": "Try again",
-    "tryAgainAria": "Reload this view",
     "errorId": "Error id: {id}"
   },
   "notFound": {

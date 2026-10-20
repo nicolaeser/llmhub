@@ -1,11 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Button, Tabs, useOverlayState } from "@heroui/react";
+import { Button, Skeleton, Tabs, useOverlayState } from "@heroui/react";
 import { Activity, Download } from "lucide-react";
 import { useTranslations } from "next-intl";
 import PageHeader from "@/components/console/page-header";
-import PageStatus, { LoadError } from "@/components/console/page-status";
+import PageStatus, { LoadError, SectionLoading } from "@/components/console/page-status";
 import { useErrorToast } from "@/components/console/use-error-toast";
 import { useActionData } from "@/lib/hooks/use-action-data";
 import { isActionFail } from "@/lib/http/action-result";
@@ -39,7 +39,7 @@ export default function LogsPage() {
   const showError = useErrorToast();
   const [kind, setKind] = useState<LogKind>("requests");
   const [filters, setFilters] = useState<LogFilterValues>(NO_FILTERS);
-  const [options, setOptions] = useState<LogOptions>(NO_OPTIONS);
+  const [options, setOptions] = useState<LogOptions | null>(null);
   const [detail, setDetail] = useState<RequestLogDetail | null>(null);
   const detailState = useOverlayState();
   const logsState = useActionData(() => loadLogsAction({ page: 1, pageSize: PAGE_SIZE }));
@@ -47,9 +47,10 @@ export default function LogsPage() {
   const page = logs?.page ?? 1;
 
   useEffect(() => {
-    loadLogOptionsAction().then((res) => {
-      if (!isActionFail(res)) setOptions(res);
-    });
+    loadLogOptionsAction().then(
+      (res) => setOptions(isActionFail(res) ? NO_OPTIONS : res),
+      () => setOptions(NO_OPTIONS),
+    );
   }, []);
 
   function load(nextPage: number, nextFilters: LogFilterValues) {
@@ -95,8 +96,10 @@ export default function LogsPage() {
     };
   }, [page, filters, setLogs]);
 
-  if (!logs) {
-    return <PageStatus icon={Activity} title={t("title")} subtitle={t("subtitle")} state={logsState} />;
+  if (!logs || !options) {
+    return (
+      <PageStatus icon={Activity} title={t("title")} subtitle={t("subtitle")} state={logsState} filters={8} tabs layout="rows" />
+    );
   }
 
   const total =
@@ -152,12 +155,14 @@ export default function LogsPage() {
 
       <LoadError state={logsState} className="mb-4" />
 
-      <LogTable kind={kind} logs={logs} onOpen={openDetail} />
+      {pending ? <SectionLoading shape="table" rows={8} /> : <LogTable kind={kind} logs={logs} onOpen={openDetail} />}
 
       <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-        <p className="text-sm text-muted">
-          {t("pageStatus", { page, total, pageSize: logs.pageSize })}
-        </p>
+        {pending ? (
+          <Skeleton className="h-3.5 w-40 rounded-lg" />
+        ) : (
+          <p className="text-sm text-muted">{t("pageStatus", { page, total, pageSize: logs.pageSize })}</p>
+        )}
         <div className="flex gap-2">
           <Button
             variant="secondary"

@@ -17,7 +17,7 @@ export default function UsagePage() {
   const granted = page.data;
 
   if (!granted) {
-    return <PageStatus icon={BarChart3} title={t("title")} subtitle={t("subtitle")} state={page} />;
+    return <PageStatus icon={BarChart3} title={t("title")} subtitle={t("subtitle")} state={page} tabs layout="charts" />;
   }
 
   const tabs = [

@@ -5,7 +5,7 @@ import { Tabs, useOverlayState } from "@heroui/react";
 import { HeartPulse, KeyRound, Plug, UserRound, type LucideIcon } from "lucide-react";
 import { useTranslations } from "next-intl";
 import PageHeader from "@/components/console/page-header";
-import { LoadError, PageLoading } from "@/components/console/page-status";
+import { LoadError, PageLoading, type LoadingShape } from "@/components/console/page-status";
 import { useErrorToast } from "@/components/console/use-error-toast";
 import ImportModelsDialog from "./_components/import-models-dialog";
 import ProviderDialog from "./_components/provider-dialog";
@@ -112,14 +112,15 @@ export default function ProvidersPage() {
     },
   };
 
-  const status = page.error === null ? <PageLoading /> : <LoadError state={page} />;
+  const status = (shape: LoadingShape) =>
+    page.error === null ? <PageLoading {...shape} /> : <LoadError state={page} />;
 
   return (
     <div>
       <PageHeader icon={Plug} title={t("title")} subtitle={t("subtitle")} />
 
       {tabParam === undefined ? (
-        <PageLoading />
+        <PageLoading tabs layout="cards" />
       ) : (
         <Tabs selectedKey={tab} onSelectionChange={(key) => selectTab(tabOf(key))} aria-label={t("tabsLabel")}>
           <Tabs.List className="w-full flex-wrap" aria-label={t("tabsLabel")}>
@@ -136,7 +137,7 @@ export default function ProvidersPage() {
             {connected ? (
               <ApiProviders rows={connected.filter((row) => !isSignInKind(row.kind))} actions={actions} />
             ) : (
-              status
+              status({ layout: "cards" })
             )}
           </Tabs.Panel>
 
@@ -144,7 +145,7 @@ export default function ProvidersPage() {
             {connected ? (
               <SubscriptionAccounts rows={connected.filter((row) => isSignInKind(row.kind))} actions={actions} />
             ) : (
-              status
+              status({ stats: 4, layout: "panels" })
             )}
           </Tabs.Panel>
 

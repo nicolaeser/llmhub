@@ -121,7 +121,7 @@ export default function CatalogTab() {
   }
 
   if (!view) {
-    return <PageStatus state={page} />;
+    return <PageStatus state={page} stats={3} layout="panels" />;
   }
 
   const state = view.state;

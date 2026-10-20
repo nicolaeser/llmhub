@@ -3,7 +3,8 @@
 import { use, useState } from "react";
 import { Alert, Card } from "@heroui/react";
 import { useFormatter, useTranslations } from "next-intl";
-import { LoadError, PageLoading } from "@/components/console/page-status";
+import { LoadError } from "@/components/console/page-status";
+import { OfferSkeleton } from "@/app/providers/sub-add/_components/link-skeletons";
 import SignInPanel from "@/components/providers/sign-in-panel";
 import { useActionData } from "@/lib/hooks/use-action-data";
 import { subAddManagePath } from "@/lib/http/public-path";
@@ -58,7 +59,7 @@ export default function SubAddPage({ params }: { params: Promise<{ token: string
   }
 
   if (!offer) {
-    if (page.error === null) return <PageLoading />;
+    if (page.error === null) return <OfferSkeleton />;
     return (
       <div className="space-y-4">
         <h1 className="text-3xl font-semibold tracking-tight">{t("unavailableTitle")}</h1>

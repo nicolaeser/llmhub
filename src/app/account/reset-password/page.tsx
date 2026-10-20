@@ -9,7 +9,6 @@ import {
   Form,
   Input,
   Label,
-  Skeleton,
   Spinner,
   TextField,
   toast,
@@ -17,6 +16,7 @@ import {
 import { useTranslations } from "next-intl";
 import { Link, useRouter } from "@/i18n/routing";
 import AccountShell from "@/app/account/_components/account-shell";
+import FormSkeleton from "@/app/account/_components/form-skeleton";
 import { useSecurityError } from "@/components/security/use-security-error";
 import { useSearchParam } from "@/lib/hooks/use-search-param";
 
@@ -41,10 +41,7 @@ export default function ResetPasswordPage() {
       }
     >
       {token === undefined ? (
-        <div aria-busy className="space-y-5">
-          <Skeleton className="h-16 w-full rounded-xl" />
-          <Skeleton className="h-10 w-full rounded-xl" />
-        </div>
+        <FormSkeleton fields={1} />
       ) : !token ? (
         <Alert status="danger">
           <Alert.Content>

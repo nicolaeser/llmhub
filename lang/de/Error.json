@@ -3,8 +3,8 @@
   "boundary": {
     "title": "Etwas ist schiefgelaufen",
     "description": "Die Konsole hat einen unerwarteten Fehler. Bitte erneut versuchen.",
+    "pageDescription": "Diese Seite hat einen unerwarteten Fehler. Bitte erneut versuchen.",
     "tryAgain": "Erneut versuchen",
-    "tryAgainAria": "Ansicht neu laden",
     "errorId": "Fehler-ID: {id}"
   },
   "notFound": {
