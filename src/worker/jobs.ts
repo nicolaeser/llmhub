@@ -14,11 +14,13 @@ import { purgeStoredObjects } from "@/lib/gateway/storage/objects";
 import { runPendingIngests } from "@/lib/rag/ingest";
 import { expireVectorStores, purgeOrphanUploads } from "@/lib/rag/stores";
 import { getAlertState, getEnterprise, saveAlertState } from "@/lib/settings/enterprise";
+import { DEFAULT_OBJECT_RETENTION_DAYS } from "@/lib/settings/retention-defaults";
 import { errorFields } from "@/lib/logging/format";
 import { logger } from "@/lib/logging/logger";
 import { runUsageReports } from "@/lib/reports/usage-report";
 import { runKeyExpiryAlerts, runSpendAnomalyAlerts } from "./alert-checks";
 import { retentionCutoff } from "./retention";
+import { runRetentionSweep } from "./retention-sweep";
 import type { MaintenanceSweepResult, SpendResetRow } from "@/types/jobs";
 import { money } from "@/lib/utils/money";
 
@@ -73,6 +75,11 @@ export async function runMaintenanceSweep(
     requestContents: 0,
     spendEvents: 0,
     auditLogs: 0,
+    securityEvents: 0,
+    toolExecutions: 0,
+    approvalRequests: 0,
+    usageRows: 0,
+    retentionBacklog: 0,
     storedObjects: 0,
     batches: 0,
     vectorFiles: 0,
@@ -85,38 +92,16 @@ export async function runMaintenanceSweep(
   };
 
   const enterprise = await sweepSettings();
-  const logCutoff = retentionCutoff(enterprise?.log_retention_days ?? 0, now);
-  if (logCutoff) {
-    const requestLogs = await prisma.requestLog.deleteMany({
-      where: { createdAt: { lt: logCutoff } },
-    });
-    result.requestLogs = requestLogs.count;
-  }
-  const contentCutoff = retentionCutoff(enterprise?.content_retention_days ?? 0, now);
-  if (contentCutoff) {
-    const requestContents = await prisma.requestLogContent.deleteMany({
-      where: { createdAt: { lt: contentCutoff } },
-    });
-    result.requestContents = requestContents.count;
-  }
-  const spendCutoff = retentionCutoff(enterprise?.spend_retention_days ?? 0, now);
-  if (spendCutoff) {
-    const spendEvents = await prisma.spendEvent.deleteMany({
-      where: { createdAt: { lt: spendCutoff } },
-    });
-    result.spendEvents = spendEvents.count;
-  }
-  const auditCutoff = retentionCutoff(enterprise?.audit_retention_days ?? 0, now);
-  if (auditCutoff) {
-    const auditLogs = await prisma.gatewayAuditLog.deleteMany({
-      where: { createdAt: { lt: auditCutoff } },
-    });
-    result.auditLogs = auditLogs.count;
-  }
   if (enterprise) {
+    await runSweepJob("retention", async () => {
+      const run = await runRetentionSweep(enterprise, now);
+      if (!run) return 0;
+      Object.assign(result, run.deleted, { retentionBacklog: run.backlog.length });
+      return Object.values(run.deleted).reduce((sum, count) => sum + count, 0);
+    });
     result.storedObjects = await runSweepJob("stored_objects", () =>
       purgeStoredObjects({
-        generatedBefore: retentionCutoff(enterprise.object_retention_days ?? 30, now),
+        generatedBefore: retentionCutoff(enterprise.object_retention_days ?? DEFAULT_OBJECT_RETENTION_DAYS, now),
         uploadsBefore: retentionCutoff(enterprise.file_retention_days ?? 0, now),
       }),
     );

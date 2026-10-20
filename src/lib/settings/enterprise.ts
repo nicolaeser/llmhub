@@ -42,6 +42,12 @@ import type { AntigravitySettings } from "@/types/providers";
 import type { GuardrailPolicy, GuardrailRule, PiiPolicy } from "@/types/guardrails";
 import type { SemanticCacheSettings } from "@/types/cache";
 import type { VectorStoreDefaults } from "@/types/rag";
+import {
+  DEFAULT_CONTENT_RETENTION_DAYS,
+  DEFAULT_LOG_RETENTION_DAYS,
+  DEFAULT_OBJECT_RETENTION_DAYS,
+  DEFAULT_SECURITY_RETENTION_DAYS,
+} from "@/lib/settings/retention-defaults";
 
 const SETTING_ENTERPRISE = "enterprise";
 const ALERT_STATE_SETTINGS: Record<AlertStateKind, string> = {
@@ -79,12 +85,14 @@ const DEFAULT_VECTOR_STORES: VectorStoreDefaults = {
 const DEFAULT_ENTERPRISE: Enterprise = {
   cache_ttl_seconds: 0,
   cache_semantic: DEFAULT_SEMANTIC_CACHE,
-  log_retention_days: 0,
+  log_retention_days: DEFAULT_LOG_RETENTION_DAYS,
   spend_retention_days: 0,
+  usage_retention_days: 0,
   audit_retention_days: 0,
-  object_retention_days: 30,
+  security_retention_days: DEFAULT_SECURITY_RETENTION_DAYS,
+  object_retention_days: DEFAULT_OBJECT_RETENTION_DAYS,
   file_retention_days: 0,
-  content_retention_days: 0,
+  content_retention_days: DEFAULT_CONTENT_RETENTION_DAYS,
   alert_webhooks: [],
   log_archive: false,
   log_content: true,
@@ -256,12 +264,14 @@ export function normalizeEnterprise(raw: unknown): Enterprise {
   return {
     cache_ttl_seconds: asNumber(rec.cache_ttl_seconds, 0),
     cache_semantic: normalizeSemanticCache(rec.cache_semantic),
-    log_retention_days: asNumber(rec.log_retention_days, 0),
+    log_retention_days: asNumber(rec.log_retention_days, DEFAULT_LOG_RETENTION_DAYS),
     spend_retention_days: asNumber(rec.spend_retention_days, 0),
+    usage_retention_days: asNumber(rec.usage_retention_days, 0),
     audit_retention_days: asNumber(rec.audit_retention_days, 0),
-    object_retention_days: asNumber(rec.object_retention_days, 30),
+    security_retention_days: asNumber(rec.security_retention_days, DEFAULT_SECURITY_RETENTION_DAYS),
+    object_retention_days: asNumber(rec.object_retention_days, DEFAULT_OBJECT_RETENTION_DAYS),
     file_retention_days: asNumber(rec.file_retention_days, 0),
-    content_retention_days: asNumber(rec.content_retention_days, 0),
+    content_retention_days: asNumber(rec.content_retention_days, DEFAULT_CONTENT_RETENTION_DAYS),
     alert_webhooks: normalizeWebhooks(rec),
     log_archive: asBool(rec.log_archive, false),
     log_content: asBool(rec.log_content, true),
