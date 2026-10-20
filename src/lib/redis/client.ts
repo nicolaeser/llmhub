@@ -1,6 +1,7 @@
 import "server-only";
 import type { Redis } from "ioredis";
 import { redisUrl } from "@/lib/jobs/connection";
+import { errorFields } from "@/lib/logging/format";
 import { logger } from "@/lib/logging/logger";
 
 const REDIS_DECISION_TIMEOUT_MS = 2_000;
@@ -36,18 +37,14 @@ async function connect(url: string): Promise<Redis | null> {
       lazyConnect: true,
     });
     client.on("error", (err) => {
-      logger.warn("redis.error", {
-        err: err instanceof Error ? err.message : String(err),
-      });
+      logger.warn("redis.error", errorFields(err));
     });
     await withRedisTimeout(client.connect());
     return client;
   } catch (err) {
     client?.disconnect();
     globalForRedis.__llmhubRedisRetryAt = Date.now() + RECONNECT_AFTER_MS;
-    logger.warn("redis.unavailable", {
-      err: err instanceof Error ? err.message : String(err),
-    });
+    logger.warn("redis.unavailable", errorFields(err));
     return null;
   }
 }

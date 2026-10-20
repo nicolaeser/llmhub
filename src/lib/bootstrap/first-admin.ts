@@ -15,6 +15,7 @@ import { ensureSystemCatalog } from "@/lib/bootstrap/system-catalog";
 import { writeAudit } from "@/lib/audit";
 import { SetupAlreadyCompleteError } from "@/lib/bootstrap/operators";
 import { clientIp } from "@/lib/http/api";
+import { errorFields } from "@/lib/logging/format";
 import { logger } from "@/lib/logging/logger";
 import { setupSchema } from "@/schemas/auth";
 import type { CreateFirstAdminResult } from "@/types/setup";
@@ -94,7 +95,7 @@ export async function createFirstAdmin(
     ) {
       return { ok: false, error: "SETUP_ALREADY_COMPLETE" };
     }
-    logger.error("auth.setup_failed", { err: String(error) });
+    logger.error("auth.setup_failed", errorFields(error));
     return { ok: false, error: "CREATE_FAILED" };
   }
 }
