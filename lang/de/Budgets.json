@@ -14,7 +14,30 @@
   "periodHint": "Zu Beginn jeder Periode fallen die Ausgaben auf null. Eine geänderte Periode beginnt sofort neu.",
   "preview": "Bereits genutzt",
   "previewText": "Bisher {spend, number, currency} ausgegeben{capped, select, yes { von {cap, number, currency}} other {}}{hasBoost, select, yes {, dazu eine temporäre Erhöhung von {boost, number, currency}} other {}}.",
+  "resets": "{when, select, now {Diese Periode ist abgelaufen. Die Ausgaben werden mit der nächsten Anfrage zurückgesetzt.} other {Die Ausgaben werden am {date, date, stamp} zurückgesetzt.}}",
   "saveBudget": "Budget speichern",
+  "boost": {
+    "title": "Temporäre Erhöhung für {alias}",
+    "hint": "Gibt bis zum Ablauf zusätzlichen Spielraum über dem Budget. Übergeordnete Limits gelten weiterhin.",
+    "amount": "Zusätzlicher Betrag",
+    "amountHint": "Wird zum aktuellen Limit addiert.",
+    "amountInvalid": "Gib einen Betrag über null ein.",
+    "presets": "Schnellauswahl",
+    "duration": "Gültig für",
+    "hours": "{hours, select, 24 {24 Stunden} 72 {3 Tage} 168 {7 Tage} 720 {30 Tage} other {{hours, number, integer} Stunden}}",
+    "until": "Läuft am {date, date, stamp} ab.",
+    "active": "Aktive Erhöhungen",
+    "expires": "Bis {date, date, stamp}",
+    "remove": "Erhöhung entfernen",
+    "submit": "Erhöhung hinzufügen",
+    "added": "Erhöhung hinzugefügt",
+    "removed": "Erhöhung entfernt",
+    "action": "Temporäre Erhöhung"
+  },
+  "alerts": {
+    "levels": "{capped, select, yes {Budget-Alarme werden bei {levels} des Limits ausgelöst.} other {Sobald ein Limit gesetzt ist, werden Budget-Alarme bei {levels} davon ausgelöst.}}",
+    "settings": "Alarm-Schwellen in den Einstellungen ändern"
+  },
   "toasts": {
     "saved": "Budget gespeichert"
   }

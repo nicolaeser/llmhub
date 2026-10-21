@@ -392,6 +392,7 @@ test("moved shared UI lives in src/components domain folders", () => {
     "console/stat-card.tsx",
     "console/confirm-dialog.tsx",
     "budget/budget-dialog.tsx",
+    "budget/boost-dialog.tsx",
   ]) {
     assert.equal(existsSync(path.join(componentsRoot, rel)), true, rel);
   }
@@ -405,6 +406,7 @@ test("moved shared UI lives in src/components domain folders", () => {
   ]) {
     assert.equal(existsSync(path.join(appRoot, "_components", name)), false, name);
   }
+  assert.equal(existsSync(path.join(appRoot, "(app)", "companies", "_components", "boost-dialog.tsx")), false);
 });
 
 test("every console page has a loading view and every route group has an error boundary", () => {

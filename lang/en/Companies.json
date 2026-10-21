@@ -72,23 +72,6 @@
     "limitedBy": "{kind, select, org {Company} team {Department} project {Project} member {Person} user {Console user} key {Key} other {Parent}} {alias} is the tighter limit: {amount, number, currency} left.",
     "inherits": "No own cap. The limits above still apply."
   },
-  "boost": {
-    "title": "Temporary boost for {alias}",
-    "hint": "Adds extra headroom on top of the budget until it expires. Parent limits still apply.",
-    "amount": "Extra amount",
-    "amountHint": "Added to the current limit.",
-    "amountInvalid": "Enter an amount above zero.",
-    "presets": "Quick amounts",
-    "duration": "Valid for",
-    "hours": "{hours, select, 24 {24 hours} 72 {3 days} 168 {7 days} 720 {30 days} other {{hours, number, integer} hours}}",
-    "until": "Expires {date, date, stamp}.",
-    "active": "Active boosts",
-    "expires": "Until {date, date, stamp}",
-    "remove": "Remove boost",
-    "submit": "Add boost",
-    "added": "Boost added",
-    "removed": "Boost removed"
-  },
   "node": {
     "title": "{mode, select, edit {{kind, select, org {Edit company} team {Edit department} project {Edit project} member {Edit person} other {Edit}}} other {{kind, select, org {New company} team {New department} project {New project} member {New person} other {New}}}}",
     "hint": "{kind, select, org {The customer. Departments, projects, and people live inside it.} team {A group of the company such as IT. Its projects and people share its budget and rate limits.} project {An application or integration. Its keys are billed to the project, its department, and the company.} member {Someone at the company who calls the API with personal keys. People never sign in to this console.} other {}}",

@@ -13,18 +13,20 @@ import {
 } from "@heroui/react";
 import { MoreHorizontal, Plus, User } from "lucide-react";
 import { useFormatter, useNow, useTranslations } from "next-intl";
+import BoostDialog from "@/components/budget/boost-dialog";
 import BudgetDialog from "@/components/budget/budget-dialog";
 import ConfirmDialog from "@/components/console/confirm-dialog";
 import EmptyState from "@/components/console/empty-state";
 import PageStatus from "@/components/console/page-status";
 import RowCard, { RowCards, TABLE_FROM_LG } from "@/components/console/row-cards";
+import { useErrorToast } from "@/components/console/use-error-toast";
 import { useActionData } from "@/lib/hooks/use-action-data";
 import { isActionFail } from "@/lib/http/action-result";
 import type { ActionFail } from "@/types/actions";
 import { StepUpDialog } from "@/components/security/step-up-dialog";
 import { useRoleName } from "@/components/security/use-role-name";
 import { useSecurityError } from "@/components/security/use-security-error";
-import type { BudgetResult, BudgetView } from "@/types/structure";
+import type { BudgetDetail, BudgetResult } from "@/types/structure";
 import type { ConsoleUser, ConsoleUserBudget, UsersConsolePayload } from "@/types/users";
 import {
   ChangeAccessDialog,
@@ -33,8 +35,11 @@ import {
 } from "./user-dialogs";
 import { hasUserActions, userActions, type UserAction } from "./user-actions";
 import {
+  addBoostAction,
   deleteUserAction,
+  loadBudgetAction,
   loadConsoleUsersAction,
+  removeBoostAction,
   resetUserTwoFactorAction,
   revokeUserSessionsAction,
   setUserBlockedAction,
@@ -42,27 +47,18 @@ import {
   setUserContentLoggingAction,
 } from "../_action";
 
-function userBudget(budget: ConsoleUserBudget): BudgetView {
-  return {
-    ...budget,
-    boost: 0,
-    boosts: [],
-    resetsAt: null,
-    projectedMonth: 0,
-    daysToExhaust: null,
-    pctUsed: null,
-  };
-}
-
 export default function UsersTab() {
   const t = useTranslations("Users");
   const tCommon = useTranslations("Common");
+  const tBudgets = useTranslations("Budgets");
   const format = useFormatter();
   const now = useNow({ updateInterval: 30_000 });
   const roleName = useRoleName();
   const errorText = useSecurityError();
+  const showError = useErrorToast();
   const [query, setQuery] = useState("");
   const [target, setTarget] = useState<ConsoleUser | null>(null);
+  const [budgetFor, setBudgetFor] = useState<(BudgetDetail & { alias: string }) | null>(null);
   const [dialogKey, setDialogKey] = useState(0);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [, start] = useTransition();
@@ -70,6 +66,7 @@ export default function UsersTab() {
   const passwordState = useOverlayState();
   const roleState = useOverlayState();
   const budgetState = useOverlayState();
+  const boostState = useOverlayState();
   const deleteState = useOverlayState();
   const resetState = useOverlayState();
   const page = useActionData(loadConsoleUsersAction);
@@ -107,6 +104,21 @@ export default function UsersTab() {
     });
   }
 
+  function openBudget(user: ConsoleUser, state: ReturnType<typeof useOverlayState>) {
+    setBusyId(user.id);
+    start(async () => {
+      const result = await loadBudgetAction({ kind: "user", id: user.id });
+      setBusyId(null);
+      if (isActionFail(result)) {
+        showError(result.error);
+        return;
+      }
+      setBudgetFor({ ...result, alias: user.username });
+      setDialogKey((n) => n + 1);
+      state.open();
+    });
+  }
+
   function remove(user: ConsoleUser) {
     setBusyId(user.id);
     start(async () => {
@@ -137,6 +149,7 @@ export default function UsersTab() {
           : user,
       ),
     }));
+    setBudgetFor((current) => (current?.id === result.id ? { ...current, budget: result.budget } : current));
   }
 
   if (!data) {
@@ -210,6 +223,7 @@ export default function UsersTab() {
   function actionLabel(action: UserAction, user: ConsoleUser) {
     if (action === "role") return t("changeRole");
     if (action === "budget") return t("budget");
+    if (action === "boost") return tBudgets("boost.action");
     if (action === "password") return t("setPassword");
     if (action === "content") return t("contentAction", { enabled: user.logContent ? "true" : "false" });
     if (action === "sessions") return t("revokeSessions");
@@ -243,7 +257,8 @@ export default function UsersTab() {
             aria-label={t("actionsMenu", { username: user.username })}
             onAction={(key) => {
               if (key === "role") openDialog(roleState, user);
-              if (key === "budget") openDialog(budgetState, user);
+              if (key === "budget") openBudget(user, budgetState);
+              if (key === "boost") openBudget(user, boostState);
               if (key === "password") openDialog(passwordState, user);
               if (key === "delete") openDialog(deleteState, user);
               if (key === "reset") openDialog(resetState, user);
@@ -429,15 +444,26 @@ export default function UsersTab() {
         </>
       ) : null}
       {canBudget ? (
-        <BudgetDialog
-          key={`budget-${dialogKey}`}
-          state={budgetState}
-          target={target ? { kind: "user", id: target.id, alias: target.username } : null}
-          budget={target?.budget ? userBudget(target.budget) : null}
-          ancestors={[]}
-          onSubmit={setBudgetAction}
-          onSaved={applyBudget}
-        />
+        <>
+          <BudgetDialog
+            key={`budget-${dialogKey}`}
+            state={budgetState}
+            target={budgetFor}
+            budget={budgetFor?.budget ?? null}
+            ancestors={budgetFor?.ancestors ?? []}
+            onSubmit={setBudgetAction}
+            onSaved={applyBudget}
+          />
+          <BoostDialog
+            key={`boost-${dialogKey}`}
+            state={boostState}
+            target={budgetFor}
+            budget={budgetFor?.budget ?? null}
+            onSubmit={addBoostAction}
+            onRemove={removeBoostAction}
+            onSaved={applyBudget}
+          />
+        </>
       ) : null}
       {canSecure ? (
         <StepUpDialog

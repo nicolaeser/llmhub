@@ -15,7 +15,6 @@ const root = fileURLToPath(new URL("../..", import.meta.url));
 const FORM_DIALOGS = [
   "src/app/(app)/account/_components/management-keys-card.tsx",
   "src/app/(app)/account/_components/passkeys-card.tsx",
-  "src/app/(app)/companies/_components/boost-dialog.tsx",
   "src/app/(app)/companies/_components/node-dialog.tsx",
   "src/app/(app)/companies/_components/report-dialog.tsx",
   "src/app/(app)/guardrails/_components/guardrail-override-dialog.tsx",
@@ -30,6 +29,7 @@ const FORM_DIALOGS = [
   "src/app/(app)/providers/_components/provider-dialog.tsx",
   "src/app/(app)/users/_components/role-editor-dialog.tsx",
   "src/app/(app)/users/_components/user-dialogs.tsx",
+  "src/components/budget/boost-dialog.tsx",
   "src/components/budget/budget-dialog.tsx",
 ];
 

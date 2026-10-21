@@ -18,8 +18,8 @@ import { Trash2 } from "lucide-react";
 import { useFormatter, useNow, useTranslations } from "next-intl";
 import { formats } from "@/i18n/formats";
 import { isActionFail } from "@/lib/http/action-result";
-import type { BudgetResult, BudgetTarget, BudgetView } from "@/types/structure";
-import { addBoostAction, removeBoostAction } from "../_action";
+import type { ActionFail } from "@/types/actions";
+import type { BoostInput, BudgetResult, BudgetTarget, BudgetView } from "@/types/structure";
 import { useErrorToast } from "@/components/console/use-error-toast";
 import FormDialog from "@/components/console/form-dialog";
 
@@ -35,14 +35,18 @@ export default function BoostDialog({
   state,
   target,
   budget,
+  onSubmit,
+  onRemove,
   onSaved,
 }: {
   state: ReturnType<typeof useOverlayState>;
   target: BudgetTarget | null;
   budget: BudgetView | null;
+  onSubmit: (input: BoostInput) => Promise<BudgetResult | ActionFail>;
+  onRemove: (boostId: string) => Promise<BudgetResult | ActionFail>;
   onSaved: (result: BudgetResult) => void;
 }) {
-  const t = useTranslations("Companies.boost");
+  const t = useTranslations("Budgets.boost");
   const showError = useErrorToast();
   const format = useFormatter();
   const now = useNow({ updateInterval: 60_000 });
@@ -58,7 +62,7 @@ export default function BoostDialog({
   function add(close: () => void) {
     if (!target) return;
     start(async () => {
-      const result = await addBoostAction({ kind: target.kind, id: target.id, amount, hours });
+      const result = await onSubmit({ kind: target.kind, id: target.id, amount, hours });
       if (isActionFail(result)) {
         showError(result.error);
         return;
@@ -72,7 +76,7 @@ export default function BoostDialog({
   function remove(id: string) {
     setRemoving(id);
     startRemove(async () => {
-      const result = await removeBoostAction(id);
+      const result = await onRemove(id);
       setRemoving(null);
       if (isActionFail(result)) {
         showError(result.error);

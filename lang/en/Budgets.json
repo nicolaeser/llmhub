@@ -14,7 +14,30 @@
   "periodHint": "Spend goes back to zero at the start of each period. Changing the period starts a new one now.",
   "preview": "Already used",
   "previewText": "{spend, number, currency} spent so far{capped, select, yes { of {cap, number, currency}} other {}}{hasBoost, select, yes {, plus a temporary boost of {boost, number, currency}} other {}}.",
+  "resets": "{when, select, now {This period has ended. Spend resets with the next request.} other {Spend resets on {date, date, stamp}.}}",
   "saveBudget": "Save budget",
+  "boost": {
+    "title": "Temporary boost for {alias}",
+    "hint": "Adds extra headroom on top of the budget until it expires. Parent limits still apply.",
+    "amount": "Extra amount",
+    "amountHint": "Added to the current limit.",
+    "amountInvalid": "Enter an amount above zero.",
+    "presets": "Quick amounts",
+    "duration": "Valid for",
+    "hours": "{hours, select, 24 {24 hours} 72 {3 days} 168 {7 days} 720 {30 days} other {{hours, number, integer} hours}}",
+    "until": "Expires {date, date, stamp}.",
+    "active": "Active boosts",
+    "expires": "Until {date, date, stamp}",
+    "remove": "Remove boost",
+    "submit": "Add boost",
+    "added": "Boost added",
+    "removed": "Boost removed",
+    "action": "Temporary boost"
+  },
+  "alerts": {
+    "levels": "{capped, select, yes {Budget alerts go out at {levels} of the limit.} other {Once a limit is set, budget alerts go out at {levels} of it.}}",
+    "settings": "Change alert thresholds in Settings"
+  },
   "toasts": {
     "saved": "Budget saved"
   }

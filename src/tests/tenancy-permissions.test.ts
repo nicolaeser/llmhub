@@ -5,6 +5,7 @@ import { setupStepsFor } from "@/app/(app)/companies/_components/tree-model";
 import { runAsPrincipal } from "@/lib/auth/delegation";
 import { effectivePermissions, permissions, roleTemplates } from "@/lib/auth/permissions";
 import type { AuthenticatedSession, Permission } from "@/types/auth";
+import type { BudgetKind } from "@/types/structure";
 
 const COMPANY_ID = "orgacme0001";
 
@@ -137,6 +138,38 @@ test("the company structure hides keys and MCP for callers who may not read them
   const shown = await runAsPrincipal(viewer, () => loadStructure());
   assert.equal(shown.canSeeKeys, true);
   assert.equal(shown.canSeeMcp, true);
+});
+
+test("the company structure links the alert settings only for platform callers who may read settings", async () => {
+  const { loadStructure } = await import("@/lib/tenancy/structure");
+  const cases: [AuthenticatedSession, boolean][] = [
+    [owner, true],
+    [viewer, true],
+    [principal({ permissions: ["tenancy:read"] }), false],
+    [ownerCompanyView, false],
+    [companyUser, false],
+  ];
+  for (const [session, linked] of cases) {
+    recordedPrisma.reset();
+    const payload = await runAsPrincipal(session, () => loadStructure());
+    assert.equal(payload.canSeeSettings, linked);
+    assert.deepEqual(payload.thresholds, [50, 80, 100]);
+  }
+});
+
+test("budget details need budgets:manage and keep console users in the platform scope before reading data", async () => {
+  const { loadBudget } = await import("@/lib/tenancy/budgets");
+  recordedPrisma.reset();
+  await assert.rejects(runAsPrincipal(viewer, () => loadBudget({ kind: "team", id: "t1" })), /FORBIDDEN/);
+  await assert.rejects(runAsPrincipal(ownerCompanyView, () => loadBudget({ kind: "user", id: "u2" })), /PLATFORM_ONLY/);
+  await assert.rejects(runAsPrincipal(companyUser, () => loadBudget({ kind: "org", id: COMPANY_ID })), /PLATFORM_ONLY/);
+  assert.deepEqual(recordedPrisma.calls, []);
+  await assert.rejects(
+    runAsPrincipal(owner, () => loadBudget({ kind: "nope" as BudgetKind, id: "x" })),
+    /UNKNOWN_ENTITY_TYPE/,
+  );
+  await assert.rejects(runAsPrincipal(owner, () => loadBudget({ kind: "team", id: " " })), /MISSING_ID/);
+  await assert.rejects(runAsPrincipal(owner, () => loadBudget({ kind: "team", id: "missing" })), /NOT_FOUND/);
 });
 
 test("read-only knowledge and guardrail views leave out what only editing needs", async () => {

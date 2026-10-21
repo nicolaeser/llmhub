@@ -6,12 +6,14 @@ import {
   Button,
   Chip,
   SearchField,
+  Spinner,
   Table,
   toast,
   useOverlayState,
 } from "@heroui/react";
-import { Activity, AlertTriangle, Blocks, CircleDollarSign, KeyRound, Pencil, Plus, RefreshCw, Trash2, Wallet } from "lucide-react";
+import { Activity, AlertTriangle, Blocks, CircleDollarSign, KeyRound, Pencil, Plus, RefreshCw, Trash2, Wallet, Zap } from "lucide-react";
 import { useFormatter, useTranslations } from "next-intl";
+import BoostDialog from "@/components/budget/boost-dialog";
 import BudgetDialog from "@/components/budget/budget-dialog";
 import ConfirmDialog from "@/components/console/confirm-dialog";
 import EmptyState from "@/components/console/empty-state";
@@ -24,33 +26,31 @@ import GettingStarted from "./getting-started";
 import { bindingKind, parsePreset, placeOf } from "./key-binding";
 import { KeyDialog } from "./key-dialog";
 import KeyMcpDialog from "./key-mcp-dialog";
-import { loadKeysPageAction, revokeKeyAction, rotateKeyAction, setBudgetAction } from "../_action";
+import {
+  addBoostAction,
+  loadBudgetAction,
+  loadKeysPageAction,
+  removeBoostAction,
+  revokeKeyAction,
+  rotateKeyAction,
+  setBudgetAction,
+} from "../_action";
 import { useActionData } from "@/lib/hooks/use-action-data";
 import { isActionFail } from "@/lib/http/action-result";
 import type { KeyOptions, KeyPreset, VirtualKeyView } from "@/types/keys";
-import type { BudgetResult, BudgetView } from "@/types/structure";
+import type { BudgetDetail, BudgetResult } from "@/types/structure";
 
-function keyBudget(row: VirtualKeyView): BudgetView {
-  return {
-    maxBudget: row.max_budget,
-    spend: row.spend,
-    budgetDuration: row.budget_duration,
-    boost: 0,
-    boosts: [],
-    resetsAt: null,
-    projectedMonth: 0,
-    daysToExhaust: null,
-    pctUsed: null,
-  };
-}
+type BudgetDialogKind = "budget" | "boost";
 
 export default function KeysTab() {
   const t = useTranslations("Keys");
+  const tBudgets = useTranslations("Budgets");
   const showError = useErrorToast();
   const tCommon = useTranslations("Common");
   const format = useFormatter();
   const scope = useConsoleScope();
-  const [budgetKey, setBudgetKey] = useState<VirtualKeyView | null>(null);
+  const [budgetFor, setBudgetFor] = useState<(BudgetDetail & { alias: string }) | null>(null);
+  const [loadingBudget, setLoadingBudget] = useState<{ id: string; dialog: BudgetDialogKind } | null>(null);
   const [mcpKey, setMcpKey] = useState<VirtualKeyView | null>(null);
   const [query, setQuery] = useState("");
   const [secret, setSecret] = useState<string | null>(null);
@@ -59,8 +59,10 @@ export default function KeysTab() {
   const [dialogKey, setDialogKey] = useState(0);
   const [busy, setBusy] = useState<{ id: string; action: "rotate" | "revoke" } | null>(null);
   const [, start] = useTransition();
+  const [, startBudget] = useTransition();
   const dialogState = useOverlayState();
   const budgetState = useOverlayState();
+  const boostState = useOverlayState();
   const mcpState = useOverlayState();
 
   function openDialog(row: VirtualKeyView | null, next: KeyPreset | null = null) {
@@ -85,10 +87,20 @@ export default function KeysTab() {
     mcpState.open();
   }
 
-  function openBudget(row: VirtualKeyView) {
-    setBudgetKey(row);
-    setDialogKey((n) => n + 1);
-    budgetState.open();
+  function openBudget(row: VirtualKeyView, dialog: BudgetDialogKind) {
+    setLoadingBudget({ id: row.token_id, dialog });
+    startBudget(async () => {
+      const result = await loadBudgetAction({ kind: "key", id: row.token_id });
+      setLoadingBudget(null);
+      if (isActionFail(result)) {
+        showError(result.error);
+        return;
+      }
+      setBudgetFor({ ...result, alias: row.key_alias || row.key_name });
+      setDialogKey((n) => n + 1);
+      if (dialog === "budget") budgetState.open();
+      else boostState.open();
+    });
   }
 
   function setKeys(update: (current: VirtualKeyView[]) => VirtualKeyView[]) {
@@ -108,6 +120,7 @@ export default function KeysTab() {
           : k,
       ),
     );
+    setBudgetFor((current) => (current?.id === result.id ? { ...current, budget: result.budget } : current));
   }
 
   function upsertKey(row: VirtualKeyView) {
@@ -246,6 +259,10 @@ export default function KeysTab() {
     );
   }
 
+  function budgetPending(row: VirtualKeyView, dialog: BudgetDialogKind) {
+    return loadingBudget?.id === row.token_id && loadingBudget.dialog === dialog;
+  }
+
   function keyActions(row: VirtualKeyView) {
     const name = row.key_alias || row.key_name;
     return (
@@ -267,8 +284,33 @@ export default function KeysTab() {
           </Button>
         ) : null}
         {canBudget ? (
-          <Button isIconOnly size="sm" variant="ghost" aria-label={t("budget")} onPress={() => openBudget(row)}>
-            <Wallet size={14} aria-hidden />
+          <Button
+            isIconOnly
+            size="sm"
+            variant="ghost"
+            aria-label={t("budget")}
+            isPending={budgetPending(row, "budget")}
+            isDisabled={loadingBudget !== null && !budgetPending(row, "budget")}
+            onPress={() => openBudget(row, "budget")}
+          >
+            {({ isPending }) =>
+              isPending ? <Spinner color="current" size="sm" /> : <Wallet size={14} aria-hidden />
+            }
+          </Button>
+        ) : null}
+        {canBudget && row.max_budget > 0 ? (
+          <Button
+            isIconOnly
+            size="sm"
+            variant="ghost"
+            aria-label={tBudgets("boost.action")}
+            isPending={budgetPending(row, "boost")}
+            isDisabled={loadingBudget !== null && !budgetPending(row, "boost")}
+            onPress={() => openBudget(row, "boost")}
+          >
+            {({ isPending }) =>
+              isPending ? <Spinner color="current" size="sm" /> : <Zap size={14} aria-hidden />
+            }
           </Button>
         ) : null}
         {canManage ? (
@@ -487,14 +529,19 @@ export default function KeysTab() {
       <BudgetDialog
         key={`budget-${dialogKey}`}
         state={budgetState}
-        target={
-          budgetKey
-            ? { kind: "key", id: budgetKey.token_id, alias: budgetKey.key_alias || budgetKey.key_name }
-            : null
-        }
-        budget={budgetKey ? keyBudget(budgetKey) : null}
-        ancestors={[]}
+        target={budgetFor}
+        budget={budgetFor?.budget ?? null}
+        ancestors={budgetFor?.ancestors ?? []}
         onSubmit={setBudgetAction}
+        onSaved={applyBudget}
+      />
+      <BoostDialog
+        key={`boost-${dialogKey}`}
+        state={boostState}
+        target={budgetFor}
+        budget={budgetFor?.budget ?? null}
+        onSubmit={addBoostAction}
+        onRemove={removeBoostAction}
         onSaved={applyBudget}
       />
       <KeyMcpDialog

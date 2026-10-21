@@ -13,7 +13,7 @@ import {
   updateRole,
 } from "@/lib/auth/roles";
 import { runAction } from "@/lib/http/action-result";
-import { setBudget } from "@/lib/tenancy/budgets";
+import { addBoost, loadBudget, removeBoost, setBudget } from "@/lib/tenancy/budgets";
 import {
   assignUserAccess,
   changeUsers,
@@ -26,7 +26,7 @@ import {
   setUserContentLogging,
   setUserPassword,
 } from "@/lib/auth/users";
-import type { BudgetInput } from "@/types/structure";
+import type { BoostInput, BudgetInput, BudgetRef } from "@/types/structure";
 
 export async function loadUserTabsAction() {
   return runAction(() => grantedPermissions([PERMISSIONS.USERS_READ, PERMISSIONS.ROLES_MANAGE]));
@@ -87,8 +87,20 @@ export async function revokeUserSessionsAction(id: string) {
   );
 }
 
+export async function loadBudgetAction(input: BudgetRef) {
+  return runAction(() => loadBudget({ ...input, kind: "user" }));
+}
+
 export async function setBudgetAction(input: BudgetInput) {
   return runAction(() => setBudget({ ...input, kind: "user" }));
+}
+
+export async function addBoostAction(input: BoostInput) {
+  return runAction(() => addBoost({ ...input, kind: "user" }));
+}
+
+export async function removeBoostAction(boostId: string) {
+  return runAction(() => removeBoost(boostId, "user"));
 }
 
 export async function loadRolesAction() {

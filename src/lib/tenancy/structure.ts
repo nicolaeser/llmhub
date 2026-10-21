@@ -124,6 +124,7 @@ async function structurePayload(session: AuthenticatedSession): Promise<Structur
     reports,
     canSeeReports: seesReports,
     canReport: canReport(session),
+    canSeeSettings: !company && hasPerm(session.permissions, PERMISSIONS.SETTINGS_READ),
     mailEnabled: mailEnabled(),
   };
 }
