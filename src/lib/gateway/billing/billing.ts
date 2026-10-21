@@ -32,12 +32,22 @@ const HOLDER_SELECT = {
   createdAt: true,
 } as const;
 
-async function extraCap(type: string, id: string, now: Date): Promise<number> {
+function boostKey(type: string, id: string): string {
+  return `${type}:${id}`;
+}
+
+async function activeBoosts(holders: { kind: BudgetKind; id: string }[], now: Date): Promise<Map<string, number>> {
+  const extras = new Map<string, number>();
+  if (!holders.length) return extras;
   const rows = await prisma.tempBudget.findMany({
-    where: { entityType: type, entityId: id, until: { gt: now } },
-    select: { amount: true },
+    where: { until: { gt: now }, OR: holders.map((holder) => ({ entityType: holder.kind, entityId: holder.id })) },
+    select: { entityType: true, entityId: true, amount: true },
   });
-  return rows.reduce((n, row) => n + money(row.amount), 0);
+  for (const row of rows) {
+    const key = boostKey(row.entityType, row.entityId);
+    extras.set(key, (extras.get(key) ?? 0) + money(row.amount));
+  }
+  return extras;
 }
 
 function loadHolder(kind: BudgetKind, id: string): Promise<SpendHolder | null> {
@@ -102,6 +112,11 @@ export async function assertBudget(principal: Principal): Promise<CostCap | null
   const now = new Date();
   const chain = budgetChain(principal);
   const rows = await Promise.all(chain.map((link) => loadHolder(link.kind, link.id)));
+  const capped = chain.flatMap((link, index) => {
+    const row = rows[index];
+    return row && money(row.maxBudget) > 0 ? [{ kind: link.kind, id: row.id }] : [];
+  });
+  const boosts = await activeBoosts(capped, now);
   let tightest: CostCap | null = null;
   for (const [index, link] of chain.entries()) {
     const row = rows[index];
@@ -109,7 +124,7 @@ export async function assertBudget(principal: Principal): Promise<CostCap | null
     const spend = await spendAfterReset(link.kind, row, now);
     const maxBudget = money(row.maxBudget);
     if (!(maxBudget > 0)) continue;
-    const extra = await extraCap(link.kind, row.id, now);
+    const extra = boosts.get(boostKey(link.kind, row.id)) ?? 0;
     if (capExceeded(spend, maxBudget, extra)) {
       throw new GateError(429, "budget_exceeded", `${link.kind} budget exceeded`);
     }
