@@ -66,7 +66,7 @@ export default function ChildrenCard({
                         <ChevronRight size={14} aria-hidden />
                       </Button>
                     </div>
-                    <p className="text-xs text-muted">{row.detail}</p>
+                    {row.detail ? <p className="text-xs text-muted">{row.detail}</p> : null}
                     {ratio != null ? (
                       <div className="space-y-1">
                         <div className="flex flex-wrap justify-between gap-2 text-xs text-muted">

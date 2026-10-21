@@ -60,10 +60,12 @@ function ancestorsOf(rule: McpAssignmentView, options: McpTargetOptions): McpAss
 export default function AccessDialog({
   state,
   server,
+  platform,
   onSaved,
 }: {
   state: ReturnType<typeof useOverlayState>;
   server: McpServerView | null;
+  platform: boolean;
   onSaved: (server: McpServerView) => void;
 }) {
   const tPage = useTranslations("Mcp");
@@ -216,16 +218,20 @@ export default function AccessDialog({
       isSubmitDisabled={!server || options === null}
       onSubmit={save}
     >
-      <Switch isSelected={global} onChange={setGlobal} isDisabled={pending}>
-        <Switch.Content>
-          <Switch.Control>
-            <Switch.Thumb />
-          </Switch.Control>
-          <Label>{t("global")}</Label>
-        </Switch.Content>
-        <Description>{t("globalHint")}</Description>
-      </Switch>
-      <Separator />
+      {platform ? (
+        <>
+          <Switch isSelected={global} onChange={setGlobal} isDisabled={pending}>
+            <Switch.Content>
+              <Switch.Control>
+                <Switch.Thumb />
+              </Switch.Control>
+              <Label>{t("global")}</Label>
+            </Switch.Content>
+            <Description>{t("globalHint")}</Description>
+          </Switch>
+          <Separator />
+        </>
+      ) : null}
       {options === null ? (
         <SectionLoading />
       ) : (

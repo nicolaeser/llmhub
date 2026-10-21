@@ -2,8 +2,6 @@ import "server-only";
 import { timingSafeEqual } from "node:crypto";
 import { cookies } from "next/headers";
 import prisma from "@/lib/db/prisma";
-import { requirePermission } from "@/lib/auth/guards";
-import { PERMISSIONS } from "@/lib/auth/permissions";
 import { writeAudit } from "@/lib/audit";
 import { loginData } from "@/lib/mcp/auth";
 import { McpError, mcpErrorCode } from "@/lib/mcp/errors";
@@ -24,6 +22,7 @@ import {
   sealPending,
   tokenRequest,
 } from "@/lib/mcp/oauth";
+import { requireMcpManager } from "@/lib/mcp/scope";
 import { assertUrl, parse } from "@/lib/mcp/server-input";
 import { probe, storeProbe } from "@/lib/mcp/server-probe";
 import { loadRow, scopedView } from "@/lib/mcp/server-view";
@@ -45,7 +44,7 @@ async function mcpStep<T>(work: () => Promise<T>): Promise<T> {
 }
 
 export async function startMcpOAuth(rawId: unknown) {
-  const session = await requirePermission(PERMISSIONS.SETTINGS_MANAGE);
+  const session = await requireMcpManager();
   const row = await loadRow(parse(mcpServerIdSchema, rawId));
   const record = serverRecord(row);
   if (record.authType !== "oauth" || record.oauthGrant !== "authorization_code") throw new Error("VALIDATION");
@@ -90,7 +89,7 @@ function sameState(expected: string, given: string): boolean {
 }
 
 export async function completeMcpOAuth(raw: unknown) {
-  const session = await requirePermission(PERMISSIONS.SETTINGS_MANAGE);
+  const session = await requireMcpManager();
   const input = parse(mcpOAuthCallbackSchema, raw);
   const store = await cookies();
   const sealed = store.get(MCP_OAUTH_PENDING_COOKIE)?.value ?? "";
@@ -135,7 +134,7 @@ export async function completeMcpOAuth(raw: unknown) {
 }
 
 export async function disconnectMcpOAuth(rawId: unknown) {
-  const session = await requirePermission(PERMISSIONS.SETTINGS_MANAGE);
+  const session = await requireMcpManager();
   const id = parse(mcpServerIdSchema, rawId);
   const before = await loadRow(id);
   await prisma.mcpOAuthLogin.deleteMany({ where: { serverId: id } });
