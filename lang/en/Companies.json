@@ -181,6 +181,34 @@
     "never": "Never",
     "created": "Created"
   },
+  "insights": {
+    "usage": "Usage",
+    "logs": "Logs"
+  },
+  "access": {
+    "title": "Access",
+    "hint": "{users, select, yes {{policies, select, yes {Console users who sign in for this company, and the PII and guardrail policies its requests follow.} other {Console users who sign in for this company.}}} other {The PII and guardrail policies this company's requests follow.}}",
+    "users": {
+      "title": "Console users ({count, number, integer})",
+      "hint": "They sign in to this console and see only this company. People of the company call the API and never sign in.",
+      "empty": "No console user signs in for this company."
+    },
+    "policies": {
+      "title": "Effective policies",
+      "hint": "Loaded when you open it. Each request uses exactly one policy: the key's, else the project's, else the company's, else the global one.",
+      "pii": "PII",
+      "guardrails": "Guardrails",
+      "level": "{level, select, org {Company override} other {Global policy}}",
+      "piiDetail": "{entities, plural, =0 {Default entities} one {# entity} other {# entities}} · {output, select, true {model output redacted} other {model output unchanged}}",
+      "guardrailDetail": "Prompt injection: {injection, select, block {block} flag {flag only} other {off}} · Secrets in responses: {secrets, select, block {block} mask {mask} flag {flag only} other {off}}",
+      "overrides": "Own policies of projects and keys in this company ({count, number, integer})",
+      "overridesEmpty": "No project or key of this company has its own policy.",
+      "overridePii": "PII: {state, select, mask {Mask} block {Block} restore {Restore} other {Off}}",
+      "overrideGuardrails": "Guardrails: {count, plural, =0 {no rules} one {# rule} other {# rules}}",
+      "openTarget": "Open {alias}",
+      "open": "Open guardrails"
+    }
+  },
   "reports": {
     "title": "Scheduled reports ({count, number, integer})",
     "hint": "{kind, select, org {A weekly or monthly usage report of this company and its departments, sent by email with a PDF or CSV attached.} other {A weekly or monthly usage report of this department, sent by email with a PDF or CSV attached.}}",

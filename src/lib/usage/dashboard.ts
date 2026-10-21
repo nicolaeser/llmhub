@@ -50,7 +50,7 @@ export async function loadUsage(
   const now = new Date();
   const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
   const since = new Date(today - (days - 1) * 86400000);
-  const filters = {
+  const requested = {
     ...(model ? { model } : {}),
     ...(teamId ? { teamId } : {}),
     ...(orgId ? { orgId } : {}),
@@ -58,8 +58,8 @@ export async function loadUsage(
     ...(memberId ? { memberId } : {}),
     ...(keyId ? { keyId } : {}),
     ...(userId ? { userId } : {}),
-    ...spendScope(session),
   };
+  const filters = { AND: [requested, spendScope(session)] };
   const priced = hasPerm(session.permissions, PERMISSIONS.PRICING_READ);
   const [rows, p95] = await Promise.all([
     usageSlices({ ...filters, day: { gte: since } }, { purchase: priced }),

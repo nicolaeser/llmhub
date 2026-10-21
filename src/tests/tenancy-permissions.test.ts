@@ -204,6 +204,96 @@ test("the company structure links the alert settings only for platform callers w
   }
 });
 
+test("the company structure lists console users, usage links, and policies only with their permissions", async () => {
+  const { loadStructure } = await import("@/lib/tenancy/structure");
+  const cases: [AuthenticatedSession, { users: boolean; usage: boolean; policies: boolean }][] = [
+    [principal({ permissions: ["tenancy:read"] }), { users: false, usage: false, policies: false }],
+    [principal({ permissions: ["tenancy:read", "users:read"] }), { users: true, usage: false, policies: false }],
+    [principal({ permissions: ["tenancy:read", "spend:read"] }), { users: false, usage: true, policies: false }],
+    [principal({ permissions: ["tenancy:read", "settings:read"] }), { users: false, usage: false, policies: true }],
+    [viewer, { users: true, usage: true, policies: true }],
+    [owner, { users: true, usage: true, policies: true }],
+    [ownerCompanyView, { users: false, usage: true, policies: true }],
+    [companyUser, { users: false, usage: true, policies: false }],
+  ];
+  for (const [session, expected] of cases) {
+    recordedPrisma.reset();
+    const payload = await runAsPrincipal(session, () => loadStructure());
+    assert.deepEqual(
+      { users: payload.canSeeUsers, usage: payload.canSeeUsage, policies: payload.canSeePolicies },
+      expected,
+      session.permissions.join(","),
+    );
+  }
+});
+
+test("company policy summaries need settings:read and stay inside the caller's company and key scope", async () => {
+  const { loadCompanyPolicies } = await import("@/lib/settings/guardrail-policies");
+  recordedPrisma.reset();
+  await assert.rejects(
+    runAsPrincipal(principal({ permissions: ["tenancy:read", "spend:read"] }), () => loadCompanyPolicies(COMPANY_ID)),
+    /FORBIDDEN/,
+  );
+  await assert.rejects(runAsPrincipal(ownerCompanyView, () => loadCompanyPolicies("orgother001")), /NOT_FOUND/);
+  await assert.rejects(runAsPrincipal(viewer, () => loadCompanyPolicies(" ")), /MISSING_ID/);
+  assert.deepEqual(recordedPrisma.calls, []);
+
+  recordedPrisma.reset();
+  await assert.rejects(runAsPrincipal(viewer, () => loadCompanyPolicies("missing")), /NOT_FOUND/);
+
+  const injectionOnly = {
+    injection: { enabled: true, action: "block", checks: [] },
+    secrets: { enabled: false, action: "mask", entities: [] },
+    rules: [],
+  };
+  recordedPrisma.reset({
+    organization: {
+      findUnique: () => ({
+        id: COMPANY_ID,
+        alias: "Acme",
+        piiPolicy: { enabled: true, mode: "block", output: false, entities: ["EMAIL_ADDRESS"] },
+        guardrailPolicy: null,
+      }),
+    },
+    project: {
+      findMany: () => [
+        { id: "p1", alias: "Bot", orgId: COMPANY_ID, piiPolicy: null, guardrailPolicy: injectionOnly },
+        { id: "p2", alias: "Plain", orgId: COMPANY_ID, piiPolicy: null, guardrailPolicy: null },
+      ],
+    },
+    virtualKey: {
+      findMany: () => [
+        {
+          id: "k1",
+          keyAlias: "",
+          prefix: "sk-hub-k1",
+          orgId: COMPANY_ID,
+          projectId: "p1",
+          userId: "u1",
+          piiPolicy: { enabled: false, mode: "mask", output: false, entities: [] },
+          guardrailPolicy: null,
+        },
+      ],
+    },
+  });
+  const summary = await runAsPrincipal(viewer, () => loadCompanyPolicies(COMPANY_ID));
+  assert.deepEqual(summary.pii, { level: "org", enabled: true, mode: "block", output: false, entities: 1 });
+  assert.equal(summary.guardrails.level, "global");
+  assert.deepEqual(
+    summary.overrides.map((row) => [row.scope, row.id, row.alias, row.pii, row.guardrails]),
+    [
+      ["project", "p1", "Bot", null, { injection: "block", secrets: null, rules: 0 }],
+      ["key", "k1", "sk-hub-k1", { enabled: false, mode: "mask", output: false, entities: 0 }, null],
+    ],
+  );
+  assert.deepEqual((recordedPrisma.called("project", "findMany")[0]?.args as { where: unknown }).where, { orgId: COMPANY_ID });
+  assert.deepEqual((recordedPrisma.called("virtualKey", "findMany")[0]?.args as { where: unknown }).where, {
+    userId: "u1",
+    orgId: COMPANY_ID,
+  });
+  assert.equal(JSON.stringify(summary).includes("EMAIL_ADDRESS"), false);
+});
+
 test("budget details need budgets:manage and keep console users in the platform scope before reading data", async () => {
   const { loadBudget } = await import("@/lib/tenancy/budgets");
   recordedPrisma.reset();

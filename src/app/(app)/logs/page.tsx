@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Button, Skeleton, Tabs, useOverlayState } from "@heroui/react";
 import { Activity, ArrowUp, Download } from "lucide-react";
 import { useTranslations } from "next-intl";
@@ -9,6 +9,8 @@ import PageStatus, { LoadError, SectionLoading } from "@/components/console/page
 import { useErrorToast } from "@/components/console/use-error-toast";
 import { useActionData } from "@/lib/hooks/use-action-data";
 import { useLiveConnected, useLiveRequests } from "@/lib/hooks/use-live";
+import { setSearchParams, useSearchString } from "@/lib/hooks/use-search-param";
+import { logFilterParams, logFiltersFromSearch } from "@/lib/gateway/request-logs/request-log-query";
 import { isActionFail } from "@/lib/http/action-result";
 import type {
   LogKind,
@@ -20,7 +22,7 @@ import type {
 } from "@/types/logs";
 import { countNewLogsAction, loadLogDetailAction, loadLogOptionsAction, loadLogsAction } from "./_action";
 import LogDetailDialog from "./_components/log-detail-dialog";
-import LogFilters, { NO_FILTERS } from "./_components/log-filters";
+import LogFilters from "./_components/log-filters";
 import LogTable from "./_components/log-table";
 
 const PAGE_SIZE = 50;
@@ -36,9 +38,8 @@ function download(href: string) {
 
 function exportHref(kind: LogKind, format: "csv" | "jsonl", filters: LogFilterValues) {
   const params = new URLSearchParams({ kind, format });
-  for (const [key, value] of Object.entries(filters)) {
-    if (value === true) params.set(key, "1");
-    else if (typeof value === "string" && value) params.set(key, value);
+  for (const [key, value] of Object.entries(logFilterParams(filters))) {
+    if (value !== null) params.set(key, value);
   }
   return `/internal-api/logs/export?${params.toString()}`;
 }
@@ -47,14 +48,15 @@ export default function LogsPage() {
   const t = useTranslations("Logs");
   const showError = useErrorToast();
   const [kind, setKind] = useState<LogKind>("requests");
-  const [filters, setFilters] = useState<LogFilterValues>(NO_FILTERS);
+  const search = useSearchString();
+  const filters = useMemo(() => logFiltersFromSearch(search ?? ""), [search]);
   const [options, setOptions] = useState<LogOptions | null>(null);
   const [detail, setDetail] = useState<RequestLogDetail | null>(null);
   const [newestSeen, setNewestSeen] = useState<string | null>(null);
   const [fresh, setFresh] = useState<NewLogsCount | null>(null);
   const detailState = useOverlayState();
   const logsState = useActionData(
-    () => loadLogsAction({ page: 1, pageSize: PAGE_SIZE }),
+    () => loadLogsAction({ page: 1, pageSize: PAGE_SIZE, filters: logFiltersFromSearch(window.location.search) }),
     (data) => {
       if (data.page === 1) setNewestSeen(data.requests[0]?.createdAt ?? null);
     },
@@ -186,8 +188,9 @@ export default function LogsPage() {
       <LogFilters
         pending={pending}
         options={options}
+        initial={filters}
         onApply={(next) => {
-          setFilters(next);
+          setSearchParams(logFilterParams(next));
           load(1, next);
         }}
       />

@@ -1,7 +1,9 @@
+import type { UsageQuery } from "@/types/usage";
 import type {
   BudgetKind,
   BudgetView,
   CapLink,
+  ConsoleUserNode,
   KeyNode,
   MemberNode,
   NodeKind,
@@ -35,6 +37,19 @@ export function parseNodeRef(value: string | null | undefined): NodeRef | null {
 
 export function nodeKey(ref: NodeRef): string {
   return `${ref.kind}:${ref.id}`;
+}
+
+export function usageFilterOf(ref: NodeRef, platform: boolean): Partial<UsageQuery> {
+  if (ref.kind === "org") return platform ? { orgId: ref.id } : {};
+  if (ref.kind === "team") return { teamId: ref.id };
+  if (ref.kind === "project") return { projectId: ref.id };
+  if (ref.kind === "member") return { memberId: ref.id };
+  return { keyId: ref.id };
+}
+
+export function accessUsersOf(data: StructurePayload, orgId: string): ConsoleUserNode[] | null {
+  if (!data.canSeeUsers || data.companyId) return null;
+  return data.users.filter((user) => user.orgId === orgId);
 }
 
 function rowsOf(data: StructurePayload, kind: BudgetKind): { id: string; alias: string; budget: BudgetView }[] {

@@ -8,6 +8,8 @@ import {
   SearchField,
   Spinner,
   Table,
+  Tag,
+  TagGroup,
   toast,
   useOverlayState,
 } from "@heroui/react";
@@ -20,8 +22,12 @@ import EmptyState from "@/components/console/empty-state";
 import PageStatus from "@/components/console/page-status";
 import RowCard, { RowCards, TABLE_FROM_LG } from "@/components/console/row-cards";
 import { useErrorToast } from "@/components/console/use-error-toast";
+import { Link, useRouter } from "@/i18n/routing";
+import { logsHref } from "@/lib/gateway/request-logs/request-log-query";
 import { useActionData } from "@/lib/hooks/use-action-data";
+import { setSearchParams, useSearchParam } from "@/lib/hooks/use-search-param";
 import { isActionFail } from "@/lib/http/action-result";
+import { usageHref } from "@/lib/usage/usage-query";
 import type { ActionFail } from "@/types/actions";
 import { StepUpDialog } from "@/components/security/step-up-dialog";
 import { useRoleName } from "@/components/security/use-role-name";
@@ -33,7 +39,7 @@ import {
   CreateUserDialog,
   SetPasswordDialog,
 } from "./user-dialogs";
-import { hasUserActions, userActions, type UserAction } from "./user-actions";
+import { hasUserActions, userActions, usersWithAccessTo, type UserAction } from "./user-actions";
 import {
   addBoostAction,
   deleteUserAction,
@@ -56,6 +62,8 @@ export default function UsersTab() {
   const roleName = useRoleName();
   const errorText = useSecurityError();
   const showError = useErrorToast();
+  const router = useRouter();
+  const company = useSearchParam("company") ?? "";
   const [query, setQuery] = useState("");
   const [target, setTarget] = useState<ConsoleUser | null>(null);
   const [budgetFor, setBudgetFor] = useState<(BudgetDetail & { alias: string }) | null>(null);
@@ -74,11 +82,11 @@ export default function UsersTab() {
 
   const filtered = useMemo(() => {
     const q = query.toLowerCase();
-    return (data?.users ?? []).filter(
+    return usersWithAccessTo(data?.users ?? [], company).filter(
       (user) =>
         !q || user.username.toLowerCase().includes(q) || user.email.toLowerCase().includes(q),
     );
-  }, [query, data]);
+  }, [query, data, company]);
 
   function openDialog(state: ReturnType<typeof useOverlayState>, user: ConsoleUser | null) {
     setTarget(user);
@@ -156,8 +164,13 @@ export default function UsersTab() {
     return <PageStatus state={page} />;
   }
 
-  const { canManage, canSecure, canBudget } = data;
+  const { canManage, canSecure, canBudget, canSeeCompanies, insights, selfId } = data;
   const showActions = hasUserActions(data);
+  const companyAlias =
+    data.users.find((user) => user.orgId === company)?.orgAlias ||
+    data.orgs.find((org) => org.id === company)?.alias ||
+    "";
+  const companyLabel = t("companyFilter.value", { named: companyAlias ? "yes" : "no", alias: companyAlias });
 
   function roleLabel(user: ConsoleUser) {
     if (user.isOwner) return t("ownerRole");
@@ -166,6 +179,15 @@ export default function UsersTab() {
 
   function accessLabel(user: ConsoleUser) {
     return t("access", { scope: user.orgId ? "company" : "platform", org: user.orgAlias });
+  }
+
+  function accessValue(user: ConsoleUser) {
+    if (!user.orgId || !canSeeCompanies) return accessLabel(user);
+    return (
+      <Link href={`/companies?node=org:${user.orgId}`} className="text-accent">
+        {accessLabel(user)}
+      </Link>
+    );
   }
 
   function spendLabel(budget: ConsoleUserBudget) {
@@ -221,6 +243,8 @@ export default function UsersTab() {
   }
 
   function actionLabel(action: UserAction, user: ConsoleUser) {
+    if (action === "usage") return t("usageAction");
+    if (action === "logs") return t("logsAction");
     if (action === "role") return t("changeRole");
     if (action === "budget") return t("budget");
     if (action === "boost") return tBudgets("boost.action");
@@ -233,7 +257,7 @@ export default function UsersTab() {
   }
 
   function userMenu(user: ConsoleUser) {
-    const actions = userActions({ canManage, canSecure, canBudget }, user);
+    const actions = userActions({ canManage, canSecure, canBudget, insights, selfId }, user);
     if (!actions.length) return null;
     return (
       <Dropdown>
@@ -256,6 +280,8 @@ export default function UsersTab() {
           <Dropdown.Menu
             aria-label={t("actionsMenu", { username: user.username })}
             onAction={(key) => {
+              if (key === "usage") router.push(usageHref({ userId: user.id }));
+              if (key === "logs") router.push(logsHref({ userId: user.id }));
               if (key === "role") openDialog(roleState, user);
               if (key === "budget") openBudget(user, budgetState);
               if (key === "boost") openBudget(user, boostState);
@@ -313,22 +339,37 @@ export default function UsersTab() {
       ) : (
         <>
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-            <SearchField
-              value={query}
-              onChange={setQuery}
-              aria-label={t("searchPlaceholder")}
-              className="w-full max-w-sm"
-            >
-              <SearchField.Group>
-                <SearchField.SearchIcon />
-                <SearchField.Input placeholder={t("searchPlaceholder")} />
-                <SearchField.ClearButton aria-label={tCommon("close")} />
-              </SearchField.Group>
-            </SearchField>
+            <div className="flex min-w-0 grow basis-80 flex-wrap items-center gap-3">
+              <SearchField
+                value={query}
+                onChange={setQuery}
+                aria-label={t("searchPlaceholder")}
+                className="w-full max-w-sm"
+              >
+                <SearchField.Group>
+                  <SearchField.SearchIcon />
+                  <SearchField.Input placeholder={t("searchPlaceholder")} />
+                  <SearchField.ClearButton aria-label={tCommon("close")} />
+                </SearchField.Group>
+              </SearchField>
+              {company ? (
+                <TagGroup aria-label={t("companyFilter.label")} onRemove={() => setSearchParams({ company: null })}>
+                  <TagGroup.List>
+                    <Tag id="company" textValue={companyLabel}>
+                      <span className="break-words">{companyLabel}</span>
+                      <Tag.RemoveButton aria-label={t("companyFilter.clear")} />
+                    </Tag>
+                  </TagGroup.List>
+                </TagGroup>
+              ) : null}
+            </div>
             {createButton}
           </div>
           {filtered.length === 0 ? (
-            <EmptyState icon={User} title={t("noMatches")} />
+            <EmptyState
+              icon={User}
+              title={company && !query ? t("companyFilter.empty") : t("noMatches")}
+            />
           ) : (
             <>
               <RowCards label={t("title")}>
@@ -351,7 +392,7 @@ export default function UsersTab() {
                         label: t("columns.access"),
                         value: (
                           <>
-                            {accessLabel(user)}
+                            {accessValue(user)}
                             {user.budget ? (
                               <span className="block text-xs text-muted">{spendLabel(user.budget)}</span>
                             ) : null}
@@ -386,7 +427,7 @@ export default function UsersTab() {
                           </Table.Cell>
                           <Table.Cell>{roleLabel(user)}</Table.Cell>
                           <Table.Cell>
-                            <p className="text-sm">{accessLabel(user)}</p>
+                            <p className="text-sm">{accessValue(user)}</p>
                             {user.budget ? <p className="text-xs text-muted">{spendLabel(user.budget)}</p> : null}
                           </Table.Cell>
                           <Table.Cell>

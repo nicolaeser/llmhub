@@ -103,9 +103,8 @@ test("the chargeback export downloads the caller's filtered usage as a CSV attac
   assert.equal(header, CHARGEBACK_COLUMNS.join(","));
   assert.equal(row, "o1,Acme,t1,IT,p1,,,,k1,u1,gpt,1.5,10,5");
   const query = calls.find((call) => call.model === "usageDaily" && call.method === "findMany");
-  const where = (query?.args as { where: { teamId?: string; userId?: string; day: { gte: Date } } }).where;
-  assert.equal(where.teamId, "t1");
-  assert.equal(where.userId, "u1");
+  const where = (query?.args as { where: { AND: Record<string, string>[]; day: { gte: Date } } }).where;
+  assert.deepEqual(where.AND, [{ teamId: "t1" }, { userId: "u1" }]);
   const windowMs = Date.now() - where.day.gte.getTime();
   assert.ok(windowMs >= 6 * DAY_MS && windowMs < 7 * DAY_MS + 60_000, `${windowMs}`);
 });

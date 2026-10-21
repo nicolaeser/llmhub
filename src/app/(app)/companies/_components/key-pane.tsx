@@ -7,11 +7,14 @@ import { useFormatter, useNow, useTranslations } from "next-intl";
 import { LoadError, SectionLoading } from "@/components/console/page-status";
 import { bindingKind } from "@/components/keys/key-binding";
 import { useKeyDialogs, type KeyServerActions } from "@/components/keys/use-key-dialogs";
+import { logsHref } from "@/lib/gateway/request-logs/request-log-query";
 import { useActionData } from "@/lib/hooks/use-action-data";
+import { usageHref } from "@/lib/usage/usage-query";
 import type { ActionFail } from "@/types/actions";
 import type { KeyChoices, KeyDetail, VirtualKeyView } from "@/types/keys";
 import type { BudgetTarget, KeyNode, NodeRef, StructurePayload } from "@/types/structure";
 import BudgetCard from "./budget-card";
+import InsightLinks from "./insight-links";
 import { keyOptionsOf } from "./key-model";
 import NodeHeader from "./node-header";
 import { chainOf, nodeAlias, nodePath } from "./tree-model";
@@ -115,8 +118,11 @@ export default function KeyPane({
   );
 
   const headerActions =
-    data.canManageKeys || data.canMcp ? (
+    data.canManageKeys || data.canMcp || data.canSeeUsage ? (
       <>
+        {data.canSeeUsage ? (
+          <InsightLinks usage={usageHref({ keyId: node.id })} logs={logsHref({ keyId: node.id })} />
+        ) : null}
         {data.canManageKeys ? (
           <Button size="sm" variant="secondary" isPending={opening} isDisabled={!key} onPress={edit}>
             {({ isPending }) => (

@@ -18,7 +18,8 @@ import { SlidersHorizontal } from "lucide-react";
 import { useTranslations } from "next-intl";
 import SearchSelect from "@/components/console/search-select";
 import { BELOW_MD, useMediaQuery } from "@/lib/hooks/use-media-query";
-import type { LogFilterValues, LogOptions } from "@/types/logs";
+import type { PickerItem } from "@/types/console";
+import type { LogFilterValues, LogOption, LogOptions } from "@/types/logs";
 
 export const NO_FILTERS: LogFilterValues = {
   model: "",
@@ -38,19 +39,25 @@ function activeCount(filters: LogFilterValues): number {
 export default function LogFilters({
   pending,
   options,
+  initial,
   onApply,
 }: {
   pending: boolean;
   options: LogOptions;
+  initial: LogFilterValues;
   onApply: (filters: LogFilterValues) => void;
 }) {
   const t = useTranslations("Logs");
-  const [values, setValues] = useState<LogFilterValues>(NO_FILTERS);
-  const [applied, setApplied] = useState(0);
+  const [values, setValues] = useState<LogFilterValues>(initial);
+  const [applied, setApplied] = useState(() => activeCount(initial));
   const [expanded, setExpanded] = useState(false);
   const compact = useMediaQuery(BELOW_MD);
   const set = <K extends keyof LogFilterValues>(key: K) => (value: LogFilterValues[K]) =>
     setValues((current) => ({ ...current, [key]: value }));
+  const withSelected = (listed: LogOption[], id: string, kind: "key" | "user"): PickerItem[] =>
+    !id || listed.some((option) => option.id === id)
+      ? listed
+      : [...listed, { id, label: t("filters.selected", { kind }), detail: id }];
 
   const form = (
     <Form
@@ -95,14 +102,14 @@ export default function LogFilters({
         </TextField>
         <SearchSelect
           label={t("filters.key")}
-          items={[{ id: "all", label: t("filters.anyKey") }, ...options.keys]}
+          items={[{ id: "all", label: t("filters.anyKey") }, ...withSelected(options.keys, values.keyId, "key")]}
           value={values.keyId || "all"}
           onChange={(next) => set("keyId")(next === "all" ? "" : next)}
         />
-        {options.users.length ? (
+        {options.users.length || values.userId ? (
           <SearchSelect
             label={t("filters.user")}
-            items={[{ id: "all", label: t("filters.anyUser") }, ...options.users]}
+            items={[{ id: "all", label: t("filters.anyUser") }, ...withSelected(options.users, values.userId, "user")]}
             value={values.userId || "all"}
             onChange={(next) => set("userId")(next === "all" ? "" : next)}
           />
