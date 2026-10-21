@@ -219,3 +219,25 @@ test("a client that cancels before the upstream answers is logged as cancelled w
   const { cooldownEnds } = await import("@/lib/gateway/routing/provider-health");
   assert.equal((await cooldownEnds([`${alias}-route`])).size, 0);
 });
+
+test("a rate limited count_tokens call falls back to the local estimate and never cools the key", async () => {
+  const alias = anthropicGroup();
+  gateway.reply = () =>
+    Response.json(
+      { type: "error", error: { type: "rate_limit_error", message: "Rate limited" } },
+      { status: 429, headers: { "retry-after": "600" } },
+    );
+  const { POST } = await import("@/app/api/v1/messages/count_tokens/route");
+  const body = { model: alias, max_tokens: 16, messages: [{ role: "user", content: "count these words please" }] };
+  for (let round = 0; round < 3; round++) {
+    const res = await POST(gatewayRequest("/api/v1/messages/count_tokens", body, { "anthropic-version": "2023-06-01" }));
+    assert.equal(res.status, 200);
+    assert.ok(((await res.json()) as { input_tokens: number }).input_tokens > 0);
+  }
+  assert.equal(gateway.upstream.filter((call) => call.url.endsWith("/v1/messages/count_tokens")).length, 3);
+  const { cooldownEnds } = await import("@/lib/gateway/routing/provider-health");
+  assert.equal((await cooldownEnds([`${alias}-route`])).size, 0);
+  gateway.reply = () => Response.json({ input_tokens: 1234 });
+  const counted = await POST(gatewayRequest("/api/v1/messages/count_tokens", body, { "anthropic-version": "2023-06-01" }));
+  assert.equal(((await counted.json()) as { input_tokens: number }).input_tokens, 1234);
+});

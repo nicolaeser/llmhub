@@ -64,3 +64,11 @@ export function withClaudeIdentity(body: JsonMap): JsonMap {
   if (isNativeClaudeCode(body)) return body;
   return { ...body, system: [{ type: "text", text: CLAUDE_CODE_IDENTITY }, ...systemBlocks(body.system)] };
 }
+
+export function fastModeRefusal(message: string): boolean {
+  const text = message.toLowerCase();
+  return (
+    text.includes("fast request rejected") ||
+    (text.includes("fast") && (text.includes("usage credits") || text.includes("credits are required")))
+  );
+}

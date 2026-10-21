@@ -43,6 +43,7 @@ export class GateError extends Error {
   readonly code: string;
   readonly param: string | null;
   readonly retryAt: number | null;
+  readonly requestScoped: boolean;
 
   constructor(
     readonly status: number,
@@ -55,6 +56,7 @@ export class GateError extends Error {
     this.code = options.upstreamCode || code;
     this.param = options.param ?? null;
     this.retryAt = options.retryAt ?? null;
+    this.requestScoped = options.requestScoped ?? false;
   }
 
   get type(): GatewayErrorType {

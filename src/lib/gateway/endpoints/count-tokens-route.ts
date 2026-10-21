@@ -1,6 +1,6 @@
 import "server-only";
 import { NextResponse } from "next/server";
-import { modelChain } from "@/lib/gateway/access/gate";
+import { modelChain, toGateError } from "@/lib/gateway/access/gate";
 import { asNumber, asRecord, stringifyContent } from "@/lib/gateway/core";
 import { estimateTokens } from "@/lib/gateway/billing/tokens";
 import { withDeployment } from "@/lib/gateway/dispatch/chat";
@@ -33,10 +33,16 @@ function estimatedInputTokens(chat: JsonMap): number {
   return estimateTokens(parts.filter(Boolean).join("\n"));
 }
 
+function rateLimited(err: unknown): boolean {
+  return toGateError(err).status === 429;
+}
+
 export function countTokensRoute(pool: RoutePool) {
   return gatewayRoute(async (req) => {
     const { principal, model, clean } = await screenModelRequest(req, { pool, auth: apiKeyRequest(req) });
     const request = validRequest(messagesRequestSchema, clean);
+    const headers = anthropicPassthroughHeaders(req.headers);
+    const estimate = () => estimatedInputTokens(messagesToChat(request));
     const routed = await withDeployment(
       modelChain(principal, model, clean),
       principal.routeLimits,
@@ -48,8 +54,9 @@ export function countTokensRoute(pool: RoutePool) {
             path: "/v1/messages/count_tokens",
             body: anthropicCountBody(nativeMessagesBody(clean)),
             groupStrategy: group.strategy,
-            headers: anthropicPassthroughHeaders(req.headers),
+            headers,
           });
+          if (proxied.status === 429) return estimate();
           if (proxied.status >= 400) throw upstreamError(proxied.status, proxied.json, proxied.headers);
           return asNumber(asRecord(proxied.json)?.input_tokens, 0);
         }
@@ -64,11 +71,15 @@ export function countTokensRoute(pool: RoutePool) {
           body: chatToResponsesCountBody(chat, dep.model || model),
           groupStrategy: group.strategy,
         });
+        if (proxied.status === 429) return estimatedInputTokens(chat);
         if (proxied.status >= 400) throw upstreamError(proxied.status, proxied.json, proxied.headers);
         return asNumber(asRecord(proxied.json)?.input_tokens, 0);
       },
-      { strategy: requestRoutingOverride(clean), pool, principal, request: clean },
-    );
+      { strategy: requestRoutingOverride(clean), pool, principal, request: clean, headers, health: false },
+    ).catch((err: unknown) => {
+      if (rateLimited(err)) return { result: estimate() };
+      throw err;
+    });
     return NextResponse.json({ input_tokens: routed.result });
   });
 }

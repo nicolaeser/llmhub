@@ -155,6 +155,84 @@ test("Anthropic rate limit headers park the route until the unified reset", () =
   assert.equal(upstreamError(429, { error: { message: "limit" } }).retryAt, null);
 });
 
+test("only a rejected five-hour or weekly window parks the account until its reset", () => {
+  const now = 1_899_990_000_000;
+  const fiveHour = String(1_900_000_000);
+  const weekly = String(1_900_400_000);
+  const none = () => 0;
+  const rejected5h = new Headers({
+    "anthropic-ratelimit-unified-status": "rejected",
+    "anthropic-ratelimit-unified-5h-status": "rejected",
+    "anthropic-ratelimit-unified-5h-reset": fiveHour,
+    "anthropic-ratelimit-unified-7d-status": "allowed",
+    "anthropic-ratelimit-unified-7d-reset": weekly,
+    "anthropic-ratelimit-unified-reset": fiveHour,
+    "retry-after": "30",
+  });
+  assert.equal(upstreamRetryAt(429, {}, now, rejected5h, none), 1_900_000_000_000);
+  const rejectedWeek = new Headers({
+    "anthropic-ratelimit-unified-status": "rejected",
+    "anthropic-ratelimit-unified-representative-claim": "seven_day",
+    "anthropic-ratelimit-unified-reset": weekly,
+  });
+  assert.equal(upstreamRetryAt(429, {}, now, rejectedWeek, none), 1_900_400_000_000);
+  const throttled = new Headers({
+    "anthropic-ratelimit-unified-status": "allowed_warning",
+    "anthropic-ratelimit-unified-5h-status": "allowed",
+    "anthropic-ratelimit-unified-reset": fiveHour,
+    "retry-after": "30",
+  });
+  assert.equal(upstreamRetryAt(429, {}, now, throttled, none), now + 30_000);
+  const overageOnly = new Headers({
+    "anthropic-ratelimit-unified-status": "rejected",
+    "anthropic-ratelimit-unified-representative-claim": "overage",
+    "anthropic-ratelimit-unified-5h-status": "allowed",
+    "anthropic-ratelimit-unified-7d-status": "allowed",
+    "anthropic-ratelimit-unified-reset": weekly,
+    "retry-after": "12",
+  });
+  assert.equal(upstreamRetryAt(429, {}, now, overageOnly, none), now + 12_000);
+  assert.equal(upstreamRetryAt(429, {}, now, new Headers({ "anthropic-ratelimit-unified-status": "allowed" }), none), null);
+});
+
+test("Retry-After drives short throttles with a little jitter on every provider", () => {
+  const now = 1_000_000;
+  const apiKey = new Headers({ "retry-after": "20", "anthropic-ratelimit-requests-reset": "2026-10-21T00:00:00Z" });
+  assert.equal(upstreamRetryAt(429, { type: "error" }, now, apiKey, () => 0), now + 20_000);
+  const jittered = upstreamRetryAt(429, { type: "error" }, now, apiKey, () => 0.999)!;
+  assert.ok(jittered > now + 20_000 && jittered <= now + 24_000);
+  assert.equal(upstreamRetryAt(429, {}, now, new Headers({ "retry-after-ms": "1500" }), () => 0), now + 1_500);
+  assert.equal(upstreamRetryAt(429, { error: { resets_in_seconds: 90 } }, now, apiKey, () => 0), now + 90_000);
+  assert.equal(upstreamRetryAt(503, {}, now, new Headers({ "retry-after": "7" }), () => 0), now + 7_000);
+  assert.equal(upstreamRetryAt(529, {}, now, new Headers({ "retry-after": "2" }), () => 0), now + 2_000);
+  assert.equal(upstreamRetryAt(500, {}, now, new Headers({ "retry-after": "2" }), () => 0), null);
+  assert.equal(upstreamRetryAt(400, {}, now, apiKey, () => 0), null);
+});
+
+test("a fast mode credits refusal belongs to the request, not the account", async () => {
+  const { gateResponse } = await import("@/lib/gateway/access/gate");
+  const refusal = upstreamError(
+    429,
+    { type: "error", error: { type: "rate_limit_error", message: "Fast mode requires usage credits. Turn on extra usage." } },
+    new Headers({ "retry-after": "60" }),
+  );
+  assert.equal(refusal.requestScoped, true);
+  assert.equal(refusal.retryAt, null);
+  const throttle = upstreamError(429, { type: "error", error: { message: "Rate limited" } }, new Headers({ "retry-after": "8" }));
+  assert.equal(throttle.requestScoped, false);
+  const response = gateResponse(throttle, new Request("http://hub.local/api/v1/messages", { method: "POST" }));
+  assert.equal(response.status, 429);
+  assert.ok(Number(response.headers.get("retry-after")) >= 8);
+  assert.equal(response.headers.get("x-should-retry"), "true");
+  const overloaded = gateResponse(
+    upstreamError(529, { type: "error", error: { type: "overloaded_error", message: "Overloaded" } }, new Headers({ "retry-after": "4" })),
+    new Request("http://hub.local/api/v1/messages", { method: "POST" }),
+  );
+  assert.equal(overloaded.status, 529);
+  assert.ok(Number(overloaded.headers.get("retry-after")) >= 4);
+  assert.equal(((await overloaded.json()) as { error: { type: string } }).error.type, "overloaded_error");
+});
+
 const FIVE_HOURS = 18_000;
 const WEEK = 604_800;
 const RESET_5H = 1_900_000_000;

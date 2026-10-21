@@ -28,6 +28,7 @@ export type GateErrorOptions = {
   param?: string | null;
   upstreamCode?: string;
   retryAt?: number | null;
+  requestScoped?: boolean;
 };
 
 export type OpenAIErrorBody = {

@@ -8,14 +8,21 @@ import { outputScreen, type OutputScreen } from "@/lib/gateway/safety/guardrails
 import { instructChat } from "@/lib/gateway/safety/pii-instruction";
 import { requestRoutingOverride, serviceModeHeaders, variantRoutes } from "@/lib/gateway/dispatch/service-mode";
 import { accessOf } from "@/lib/gateway/routing/account-access";
-import { runSession, writePin } from "@/lib/gateway/routing/account-affinity";
+import { pinsAccounts, runSession, writePin } from "@/lib/gateway/routing/account-affinity";
 import {
   dropAccountReasoning,
   historyLength,
   nextPin,
   rejectsForeignReasoning,
 } from "@/lib/gateway/routing/account-handoff";
-import { acquireGroup, loadGroup, markFailure, markSuccess } from "@/lib/gateway/routing/runtime";
+import {
+  acquireGroup,
+  loadGroup,
+  markFailure,
+  markOverloaded,
+  markRejected,
+  markSuccess,
+} from "@/lib/gateway/routing/runtime";
 import { isSignInKind, speaksAnthropic, speaksGoogle, speaksMuse } from "@/lib/gateway/upstreams/provider-kinds";
 import { AntigravitySseTranslator } from "@/lib/gateway/upstreams/antigravity";
 import { googleStreamTranslator } from "@/lib/gateway/upstreams/google";
@@ -62,6 +69,11 @@ import type { ResponseCacheUsage } from "@/types/cache";
 
 export const UPSTREAM_TIMEOUT_MS = 300_000;
 const STREAM_IDLE_TIMEOUT_MS = 300_000;
+const ACCOUNT_REJECTED_COOLDOWN_MS = 30 * 60_000;
+const MODEL_UNAVAILABLE_COOLDOWN_MS = 60 * 60_000;
+const OVERLOADED_STATUS = 529;
+const ACCOUNT_REJECTED_STATUSES = new Set([401, 402, 403]);
+const MODEL_UNAVAILABLE = /\bmodel\b/i;
 
 function failureStatus(err: unknown): number {
   if (err instanceof GateError) return err.status;
@@ -87,7 +99,13 @@ export async function recordFailure(
   });
 }
 
-type MeteredCall = { principal: Principal; model: string; body: JsonMap; aliases: string[] };
+type MeteredCall = {
+  principal: Principal;
+  model: string;
+  body: JsonMap;
+  aliases: string[];
+  headers?: Record<string, string>;
+};
 
 export async function routeMetered<T>(
   input: MeteredCall,
@@ -101,6 +119,7 @@ export async function routeMetered<T>(
     principal: input.principal,
     cost: costFilter(input.principal, input.body),
     request: input.body,
+    headers: input.headers,
   };
   try {
     return await withDeployment(input.aliases, input.principal.routeLimits, fn, routing);
@@ -139,15 +158,9 @@ export function recordSuccess(
   });
 }
 
-function retryable(err: unknown): boolean {
-  if (err instanceof GateError) return retryableStatus(err.status);
-  if (isRouterError(err)) return true;
-  return true;
-}
-
 function fallbackable(err: unknown): boolean {
   if (isRouterError(err)) return true;
-  if (err instanceof GateError) return retryableStatus(err.status);
+  if (err instanceof GateError) return retryableStatus(err.status) && !err.requestScoped;
   return true;
 }
 
@@ -155,21 +168,37 @@ function signInAccount(dep: ResolvedDeployment): string | null {
   return dep.provider && isSignInKind(dep.provider.kind) ? dep.provider.id : null;
 }
 
-function failureCode(err: unknown): { status: number; code: string } {
-  const rec = err instanceof Error ? (err as Error & { status?: unknown; code?: unknown }) : null;
-  return {
-    status: typeof rec?.status === "number" ? rec.status : 0,
-    code: typeof rec?.code === "string" ? rec.code : "",
-  };
+function pinnedAccount(dep: ResolvedDeployment): string | null {
+  return dep.provider && pinsAccounts(dep.provider.kind) ? dep.provider.id : null;
+}
+
+type FailureClass = "request" | "limit" | "rejected" | "signed_out" | "model" | "overloaded" | "transient" | "caller";
+
+function failureClass(err: unknown, account: string | null): FailureClass {
+  if (!(err instanceof GateError)) return "transient";
+  if (err.requestScoped) return "request";
+  if (err.status === 429) return "limit";
+  if (err.status === OVERLOADED_STATUS) return "overloaded";
+  if (account && ACCOUNT_REJECTED_STATUSES.has(err.status)) return "rejected";
+  if (account && err.code === "no_provider_key") return "signed_out";
+  if (account && err.status === 404 && MODEL_UNAVAILABLE.test(err.message)) return "model";
+  return retryableStatus(err.status) ? "transient" : "caller";
+}
+
+function recordAttemptFailure(dep: ResolvedDeployment, failure: FailureClass, err: unknown, now = Date.now()): void {
+  if (failure === "caller" || failure === "request") return;
+  if (failure === "overloaded") markOverloaded(dep);
+  else if (failure === "rejected") markRejected(dep, now + ACCOUNT_REJECTED_COOLDOWN_MS);
+  else if (failure === "model") markRejected(dep, now + MODEL_UNAVAILABLE_COOLDOWN_MS);
+  else markFailure(dep, err instanceof GateError ? err.retryAt : null);
+}
+
+function rotatesAccount(failure: FailureClass): boolean {
+  return failure === "limit" || failure === "rejected" || failure === "signed_out" || failure === "model";
 }
 
 function unauthorized(err: unknown): boolean {
-  return failureCode(err).status === 401;
-}
-
-function accountUnusable(err: unknown): boolean {
-  const { status, code } = failureCode(err);
-  return status === 429 || status === 401 || code === "no_provider_key";
+  return err instanceof GateError && err.status === 401;
 }
 
 function accountBudget(deployments: ResolvedDeployment[]): number {
@@ -211,7 +240,9 @@ export async function withDeployment<T>(
     cost?: CostFilter;
     principal?: Principal;
     request?: JsonMap;
+    headers?: Record<string, string>;
     signal?: AbortSignal;
+    health?: boolean;
   },
 ): Promise<{
   result: T;
@@ -225,7 +256,8 @@ export async function withDeployment<T>(
   const surface = opts?.pool ?? opts?.principal?.pool ?? "api";
   const access = accessOf(opts?.principal);
   const request = opts?.request ?? null;
-  const run: RunRouting = { session: runSession(request), tried: new Set() };
+  const tracksHealth = opts?.health !== false;
+  const run: RunRouting = { session: runSession(request, opts?.headers), tried: new Set() };
   const renewed = new Set<string>();
   let reasoningDropped = false;
   let failedAccount: string | null = null;
@@ -261,9 +293,10 @@ export async function withDeployment<T>(
         try {
           const started = Date.now();
           const result = await fn(acquired.dep, group);
-          markSuccess(acquired.dep, Date.now() - started);
-          if (account && run.session) {
-            void settleRunPin(acquired.dep.provider!.kind, run.session, account, acquired.pinned, switched, request);
+          if (tracksHealth) markSuccess(acquired.dep, Date.now() - started);
+          const pinTo = pinnedAccount(acquired.dep);
+          if (pinTo && run.session && !acquired.pinHeld) {
+            void settleRunPin(acquired.dep.provider!.kind, run.session, pinTo, acquired.pinned, switched, request);
           }
           if (!opts?.deferRelease) {
             acquired.release();
@@ -296,14 +329,16 @@ export async function withDeployment<T>(
             i--;
             continue;
           }
-          if (retryable(err)) markFailure(acquired.dep, err instanceof GateError ? err.retryAt : null);
+          const failure = failureClass(err, account);
+          if (failure === "request") throw err;
+          if (tracksHealth) recordAttemptFailure(acquired.dep, failure, err);
           last = err;
           if (!isRouterError(err)) upstreamFailure = err;
-          if (account && failureCode(err).status === 429) {
+          if (account && tracksHealth && failure === "limit") {
             nudgeLimits(account, acquired.dep.provider!.kind);
             void autoRedeemIfDue(account);
           }
-          if (account && accountUnusable(err)) {
+          if (account && rotatesAccount(failure)) {
             run.tried.add(acquired.dep.id);
             failedAccount = account;
             if (switches < switchBudget) {
@@ -312,7 +347,7 @@ export async function withDeployment<T>(
             }
             continue;
           }
-          if (!retryable(err)) {
+          if (failure === "caller") {
             stopAlias = true;
             if (!fallbackable(err)) throw err;
             break;
@@ -336,7 +371,7 @@ export async function withDeployment<T>(
     }
   }
   const failure = upstreamFailure && isUnavailableError(last) && !last.wait?.limited ? upstreamFailure : last;
-  await alertUpstreamFailure(failure);
+  if (tracksHealth) await alertUpstreamFailure(failure);
   throw failure;
 }
 
