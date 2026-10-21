@@ -131,6 +131,7 @@ async function payload(session: Session) {
     }),
   ]);
   const rows = [...orgs.map(orgRow), ...projects.map(projectRow), ...keys.map(keyRow)];
+  const canManage = hasPerm(session.permissions, PERMISSIONS.SETTINGS_MANAGE);
   return {
     pii,
     guardrails,
@@ -139,8 +140,8 @@ async function payload(session: Session) {
       .map((row) => guardrailOverrideOf(row.target, row.guardrailPolicy))
       .filter(present)
       .sort(byAlias),
-    targets: rows.map((row) => row.target),
-    canManage: hasPerm(session.permissions, PERMISSIONS.SETTINGS_MANAGE),
+    targets: canManage ? rows.map((row) => row.target) : [],
+    canManage,
     platform: !company,
   };
 }

@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth/session";
-import { hasPerm, PERMISSIONS } from "@/lib/auth/permissions";
 import { isSameOriginRequest } from "@/lib/auth/request-origin";
+import { companyOf } from "@/lib/auth/scope";
 import { env } from "@/lib/env";
 import { readForm } from "@/lib/http/api";
 import { problemFromError, problemResponse } from "@/lib/http/problem";
 import { draftMcpServer } from "@/lib/mcp/builder";
 import { McpSourceError } from "@/lib/mcp/errors";
+import { managesMcp } from "@/lib/mcp/scope";
 import { parseJsonOrNull } from "@/lib/utils/json";
 import { MAX_BUILDER_REQUEST_BYTES } from "@/schemas/mcp";
 import type { McpBuilderUpload } from "@/types/mcp";
@@ -24,7 +25,8 @@ export async function POST(req: Request) {
   }
   const session = await getSession();
   if (session.error) return problemResponse(req, "UNAUTHORIZED");
-  if (!hasPerm(session.permissions, PERMISSIONS.SETTINGS_MANAGE)) return problemResponse(req, "FORBIDDEN");
+  if (!managesMcp(session)) return problemResponse(req, "FORBIDDEN");
+  if (companyOf(session)) return problemResponse(req, "PLATFORM_ONLY");
   try {
     const form = await readForm(req, MAX_BUILDER_REQUEST_BYTES);
     const request = form.get("request");

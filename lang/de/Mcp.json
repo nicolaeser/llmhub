@@ -2,7 +2,7 @@
   "title": "MCP-Server",
   "subtitle": "Verbinde einen öffentlichen MCP-Server oder mach mit MCP Anything aus jeder HTTP-API einen. Zugewiesene Aufrufer nutzen die Tools bei jedem Modellaufruf und über POST /api/v1/mcp.",
   "add": "Server hinzufügen",
-  "readOnly": "Du kannst MCP-Server ansehen. Zum Ändern brauchst du die Berechtigung, Einstellungen zu verwalten.",
+  "readOnly": "Du kannst MCP-Server ansehen. Zum Ändern brauchst du die Berechtigung, MCP zu verwalten.",
   "installOnly": "Du kannst einen API-Key des Unternehmens hinterlegen und den Zugriff innerhalb des Unternehmens festlegen. Den Server selbst zu ändern braucht die Berechtigung, MCP zu verwalten.",
   "empty": {
     "title": "Noch keine MCP-Server",

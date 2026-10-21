@@ -9,6 +9,9 @@ on:
       publish:
         type: boolean
         default: false
+    secrets:
+      antigravity_client_secret:
+        required: false
     outputs:
       version:
         value: ${{ jobs.version.outputs.version }}
@@ -160,6 +163,8 @@ jobs:
           labels: ${{ needs.version.outputs.labels }}
           build-args: |
             BUILD_ID=${{ env.BUILD_ID }}
+          secrets: |
+            antigravity_client_secret=${{ secrets.antigravity_client_secret }}
           cache-from: type=gha,scope=image-${{ matrix.arch }}
           cache-to: type=gha,mode=max,scope=image-${{ matrix.arch }}
           provenance: ${{ inputs.publish }}

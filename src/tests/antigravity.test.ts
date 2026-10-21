@@ -600,7 +600,7 @@ test("the authorization link carries PKCE, offline access, and the loopback redi
   assert.equal(challenge, createHash("sha256").update(verifier).digest("base64url"));
 });
 
-test("signing in with Antigravity needs the client secret to be configured first", async () => {
+test("without a saved or bundled client secret, Antigravity sign-in answers not configured", async () => {
   const { startAuthorization } = await import("@/lib/gateway/upstreams/subscription-sign-in");
   await assert.rejects(startAuthorization("antigravity"), /ANTIGRAVITY_NOT_CONFIGURED/);
   configure("client-secret");
@@ -611,13 +611,18 @@ test("signing in with Antigravity needs the client secret to be configured first
 });
 
 test("the client secret is stored sealed and read back", async () => {
-  const { saveAntigravityClientSecret, antigravityClientSecret } = await import("@/lib/gateway/upstreams/antigravity-config");
+  const { saveAntigravityClientSecret, antigravityClientSecret, antigravityClientState } = await import(
+    "@/lib/gateway/upstreams/antigravity-config"
+  );
   assert.equal(await antigravityClientSecret(), "");
+  assert.deepEqual(await antigravityClientState(), { saved: false, bundled: false });
   await saveAntigravityClientSecret("test-client-secret");
   assert.doesNotMatch(settings.get(ENTERPRISE_KEY) ?? "", /test-client-secret/);
   assert.equal(await antigravityClientSecret(), "test-client-secret");
+  assert.deepEqual(await antigravityClientState(), { saved: true, bundled: false });
   await saveAntigravityClientSecret("");
   assert.equal(await antigravityClientSecret(), "");
+  assert.deepEqual(await antigravityClientState(), { saved: false, bundled: false });
 });
 
 function googleFlow(loaded: JsonMap, onboard?: JsonMap) {

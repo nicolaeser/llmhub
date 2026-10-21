@@ -27,6 +27,7 @@ import {
 } from "@/lib/tenancy/guards";
 import { HOLDER, budgetView } from "@/lib/tenancy/budgets";
 import { canReport, reportViews } from "@/lib/reports/manage";
+import { seesMcp } from "@/lib/mcp/scope";
 
 const NODE_KINDS: readonly string[] = ["org", "team", "project", "member"];
 
@@ -115,9 +116,11 @@ async function structurePayload(session: AuthenticatedSession): Promise<Structur
     companyId: company ?? "",
     canManage: hasPerm(session.permissions, PERMISSIONS.TENANCY_MANAGE),
     canBudget: hasPerm(session.permissions, PERMISSIONS.BUDGETS_MANAGE),
+    canSeeKeys: seesKeys,
     canCreateKeys:
       hasPerm(session.permissions, PERMISSIONS.KEYS_MANAGE) &&
       hasPerm(session.permissions, PERMISSIONS.TENANCY_MANAGE),
+    canSeeMcp: seesMcp(session),
     reports,
     canSeeReports: seesReports,
     canReport: canReport(session),

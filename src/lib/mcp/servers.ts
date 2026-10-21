@@ -1,20 +1,19 @@
 import "server-only";
 import prisma from "@/lib/db/prisma";
-import { requireActor, requirePermission } from "@/lib/auth/guards";
-import { hasPerm, PERMISSIONS } from "@/lib/auth/permissions";
+import { requireActor } from "@/lib/auth/guards";
 import { companyOf, inCompany } from "@/lib/auth/scope";
 import { AuthError, isPrismaCode } from "@/lib/auth/errors";
 import { writeAudit } from "@/lib/audit";
 import { seal } from "@/lib/crypto";
 import { replaceCompanyMcpAssignments, replaceMcpAssignments, targetOptions } from "@/lib/mcp/assignments";
 import { builderModels } from "@/lib/mcp/builder";
-import { managesMcp, managesMcpRules, visibleToCompany } from "@/lib/mcp/scope";
+import { managesMcpRules, mcpAccess, requireMcpManager, seesMcp, visibleToCompany } from "@/lib/mcp/scope";
 import { ensureBuiltinRoles, saveMcpInstallation } from "@/lib/mcp/catalog";
 import { toolSpecOf } from "@/lib/mcp/hosted";
 import { mcpOAuthRedirectUri } from "@/lib/mcp/oauth";
 import { assertRemoteAuth, assertUrl, connectionFields, parse, secretFor, secretRequired } from "@/lib/mcp/server-input";
 import { probe, storeProbe } from "@/lib/mcp/server-probe";
-import { auditShape, loadRow, scopedView, seesMcp, serverSelect, viewOf, type ServerRow } from "@/lib/mcp/server-view";
+import { auditShape, loadRow, scopedView, serverSelect, viewOf, type ServerRow } from "@/lib/mcp/server-view";
 import { serverRecord } from "@/lib/mcp/toolset";
 import { BUILDER_MODEL_KEY, authUsesName, hostedServerSchema, mcpAssignmentsSchema, mcpServerInputSchema } from "@/schemas/mcp";
 import type { Prisma } from "@/generated/prisma/client";
@@ -23,29 +22,29 @@ export async function loadMcpServerList() {
   const session = await requireActor();
   if (!seesMcp(session)) throw new AuthError("FORBIDDEN");
   const company = companyOf(session);
+  const access = mcpAccess(session, company);
   const [rows, setting, models, companies] = await Promise.all([
     prisma.mcpServer.findMany({
       where: company ? visibleToCompany(company) : undefined,
       select: serverSelect,
       orderBy: { name: "asc" },
     }),
-    prisma.setting.findUnique({ where: { key: BUILDER_MODEL_KEY } }),
-    builderModels(),
-    prisma.organization.findMany({
-      where: company ? { id: company } : undefined,
-      select: { id: true, alias: true },
-      orderBy: { alias: "asc" },
-    }),
+    access.canManage ? prisma.setting.findUnique({ where: { key: BUILDER_MODEL_KEY } }) : null,
+    access.canManage ? builderModels() : [],
+    access.canInstall
+      ? prisma.organization.findMany({
+          where: company ? { id: company } : undefined,
+          select: { id: true, alias: true },
+          orderBy: { alias: "asc" },
+        })
+      : [],
   ]);
-  const canManage = managesMcp(session);
-  const canInstall = canManage || hasPerm(session.permissions, PERMISSIONS.MCP_INSTALL);
   return {
-    servers: rows.map((row) => viewOf(row, canManage, company)),
-    canManage,
-    canInstall,
+    servers: rows.map((row) => viewOf(row, access.canManage, company)),
+    ...access,
     companyId: company,
     companies,
-    redirectUri: canManage ? mcpOAuthRedirectUri() : "",
+    redirectUri: access.canManage ? mcpOAuthRedirectUri() : "",
     builderModel: setting?.value ?? "",
     models,
   };
@@ -60,29 +59,28 @@ export async function loadCompanyMcpServers(rawOrgId: unknown) {
   const org = await prisma.organization.findUnique({ where: { id: orgId }, select: { id: true, alias: true } });
   if (!org) throw new Error("ORG_NOT_FOUND");
   const rows = await prisma.mcpServer.findMany({ where: { template: true }, select: serverSelect, orderBy: { name: "asc" } });
-  const canManage = managesMcp(session);
+  const access = mcpAccess(session, companyOf(session));
   return {
     company: org,
-    servers: rows.map((row) => viewOf(row, canManage, org.id)),
-    canInstall: canManage || hasPerm(session.permissions, PERMISSIONS.MCP_INSTALL),
+    servers: rows.map((row) => viewOf(row, access.canManage, org.id)),
+    canInstall: access.canInstall,
   };
 }
 
 export async function saveCompanyMcpInstallation(raw: unknown) {
   const saved = await saveMcpInstallation(raw);
   const session = await requireActor();
-  return { server: viewOf(await loadRow(saved.serverId), managesMcp(session), saved.orgId) };
+  return { server: viewOf(await loadRow(saved.serverId), mcpAccess(session, companyOf(session)).canManage, saved.orgId) };
 }
 
 export async function presentMcpServer(id: string) {
   const session = await requireActor();
   if (!seesMcp(session)) throw new AuthError("FORBIDDEN");
-  const company = companyOf(session);
-  return { server: viewOf(await loadRow(id), managesMcp(session), company) };
+  return { server: scopedView(await loadRow(id), session) };
 }
 
 export async function createMcpServer(raw: unknown) {
-  const session = await requirePermission(PERMISSIONS.SETTINGS_MANAGE);
+  const session = await requireMcpManager();
   const input = parse(mcpServerInputSchema, raw);
   assertUrl(input.url, input.internal);
   assertRemoteAuth(input.authType);
@@ -122,7 +120,7 @@ export async function createMcpServer(raw: unknown) {
 }
 
 export async function createHostedMcpServer(raw: unknown) {
-  const session = await requirePermission(PERMISSIONS.SETTINGS_MANAGE);
+  const session = await requireMcpManager();
   const input = parse(hostedServerSchema, raw);
   assertUrl(input.baseUrl, input.internal);
   const tools = input.tools.map(toolSpecOf);
@@ -187,7 +185,7 @@ export async function createHostedMcpServer(raw: unknown) {
 }
 
 export async function updateMcpServer(raw: { id: string } & Record<string, unknown>) {
-  const session = await requirePermission(PERMISSIONS.SETTINGS_MANAGE);
+  const session = await requireMcpManager();
   if (!raw?.id || typeof raw.id !== "string") throw new Error("MISSING_ID");
   const input = parse(mcpServerInputSchema, raw);
   assertUrl(input.url, input.internal);
@@ -289,7 +287,7 @@ export async function updateMcpServer(raw: { id: string } & Record<string, unkno
 }
 
 export async function setMcpServerEnabled(input: { id: string; enabled: boolean }) {
-  const session = await requirePermission(PERMISSIONS.SETTINGS_MANAGE);
+  const session = await requireMcpManager();
   if (!input?.id) throw new Error("MISSING_ID");
   const before = await loadRow(input.id);
   const updated = await prisma.mcpServer.update({
@@ -309,7 +307,7 @@ export async function setMcpServerEnabled(input: { id: string; enabled: boolean 
 }
 
 export async function deleteMcpServer(id: string) {
-  const session = await requirePermission(PERMISSIONS.SETTINGS_MANAGE);
+  const session = await requireMcpManager();
   if (!id) throw new Error("MISSING_ID");
   const before = await loadRow(id);
   await prisma.mcpServer.delete({ where: { id } });
@@ -345,6 +343,9 @@ export async function saveMcpAssignments(raw: unknown) {
   const company = companyOf(session);
   if (!managesMcpRules(session, company)) throw new AuthError("FORBIDDEN");
   const input = parse(mcpAssignmentsSchema, raw);
+  if (company && !(await prisma.mcpServer.count({ where: { AND: [{ id: input.serverId }, visibleToCompany(company)] } }))) {
+    throw new Error("NOT_FOUND");
+  }
   const before = await loadRow(input.serverId);
   const saved = company
     ? await replaceCompanyMcpAssignments(input.serverId, company, input.assignments)
