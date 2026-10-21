@@ -195,7 +195,7 @@ export default function LinksTab({
   };
 
   const access = (link: SubAddLinkView) => (
-    <span className={link.restricted ? "text-sm text-warning" : "text-sm text-foreground"}>
+    <span className={link.restricted ? "text-sm whitespace-nowrap text-warning" : "text-sm whitespace-nowrap text-foreground"}>
       {tSubscriptions("access.short", { restricted: String(link.restricted), count: link.targets.length })}
     </span>
   );
