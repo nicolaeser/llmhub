@@ -17,7 +17,7 @@ import {
 } from "@/lib/gateway/protocols/messages";
 import { chatToResponsesCountBody } from "@/lib/gateway/protocols/responses";
 import { deploymentAuth } from "@/lib/gateway/upstreams/credentials";
-import { isSignInKind, speaksAnthropic } from "@/lib/gateway/upstreams/provider-kinds";
+import { isSignInKind, speaksAnthropic, speaksMuse } from "@/lib/gateway/upstreams/provider-kinds";
 import { messagesRequestSchema } from "@/schemas/anthropic";
 import type { JsonMap } from "@/types/gateway";
 import type { RoutePool } from "@/types/routing";
@@ -53,7 +53,7 @@ export function countTokensRoute(pool: RoutePool) {
           if (proxied.status >= 400) throw upstreamError(proxied.status, proxied.json, proxied.headers);
           return asNumber(asRecord(proxied.json)?.input_tokens, 0);
         }
-        const issue = chatIncompatibility(request, { webSearch: dep.kind === "codex" });
+        const issue = chatIncompatibility(request, { webSearch: dep.kind === "codex" || speaksMuse(dep.kind) });
         if (issue) throw new GateError(400, "unsupported_parameter", issue);
         const chat = messagesToChat(request);
         if (isSignInKind(dep.kind)) return estimatedInputTokens(chat);

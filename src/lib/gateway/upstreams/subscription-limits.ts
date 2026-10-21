@@ -5,6 +5,8 @@ import { fetchAvailableModels } from "@/lib/gateway/upstreams/antigravity-api";
 import { reportsLimits } from "@/lib/gateway/upstreams/provider-kinds";
 import { CLAUDE_OAUTH_BETAS } from "@/lib/gateway/upstreams/claude";
 import { CODEX_USAGE_URL } from "@/lib/gateway/upstreams/codex";
+import { kimiLimits, kimiUsageUrl } from "@/lib/gateway/upstreams/kimi";
+import { museModelsUrl } from "@/lib/gateway/upstreams/muse";
 import { asNumber, asRecord, asString } from "@/lib/gateway/core";
 import { newestLimits } from "@/lib/gateway/upstreams/observed-limits";
 import { providerAuth, sessionAuth } from "@/lib/gateway/upstreams/credentials";
@@ -237,8 +239,22 @@ async function fetchAntigravityLimits(provider: LimitAccount): Promise<Subscript
   return antigravityLimits(json, await storedPlan(provider.id));
 }
 
+async function fetchMuseLimits(provider: LimitAccount): Promise<SubscriptionLimits> {
+  await usageAuth(provider);
+  return {
+    plan: await storedPlan(provider.id),
+    windows: [],
+    credits: null,
+    resetCredits: null,
+    extraUsage: null,
+    fetchedAt: new Date().toISOString(),
+  };
+}
+
 async function probeStatus(kind: SignInKind, auth: UpstreamAuth): Promise<number> {
   if (kind === "antigravity") return (await fetchAvailableModels(auth)).status;
+  if (kind === "kimi" || kind === "kimi_ai") return (await getJson(kimiUsageUrl(kind), auth.key, auth.headers)).status;
+  if (kind === "muse_code") return (await getJson(museModelsUrl(), auth.key, auth.headers)).status;
   if (kind === "claude") {
     return (await getJson(CLAUDE_USAGE_URL, auth.key, { ...auth.headers, "anthropic-beta": CLAUDE_OAUTH_BETAS.join(",") }))
       .status;
@@ -264,6 +280,10 @@ export async function fetchSubscriptionLimits(provider: LimitAccount): Promise<S
     return claudeLimits(json, await storedPlan(provider.id));
   }
   if (provider.kind === "grok_build") return fetchXaiLimits(provider);
+  if (provider.kind === "kimi" || provider.kind === "kimi_ai") {
+    return kimiLimits(await fetchUsage(provider, kimiUsageUrl(provider.kind)), await storedPlan(provider.id));
+  }
+  if (provider.kind === "muse_code") return fetchMuseLimits(provider);
   return codexLimits(await fetchUsage(provider, CODEX_USAGE_URL));
 }
 

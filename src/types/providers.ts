@@ -39,6 +39,8 @@ export type ImportCandidate = {
 
 export type SignInKind = SignInCredential["kind"];
 
+export type KimiCodeKind = Extract<SignInKind, "kimi" | "kimi_ai">;
+
 export type SignInMethod = "device" | "code";
 
 export type SignInStatus = "active" | "expired";
