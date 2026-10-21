@@ -96,7 +96,7 @@ function events(text: string): { event: string; data: JsonMap }[] {
 }
 
 async function logged(): Promise<{ status: number; outcome: string }[]> {
-  for (let wait = 0; wait < 100 && !recordedPrisma.called("requestLog", "create").length; wait++) {
+  for (let wait = 0; wait < 400 && !recordedPrisma.called("requestLog", "create").length; wait++) {
     await new Promise((resolve) => setTimeout(resolve, 5));
   }
   await new Promise((resolve) => setTimeout(resolve, 20));

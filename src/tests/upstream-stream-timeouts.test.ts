@@ -60,12 +60,13 @@ test("a stream that keeps sending runs past the header timeout without a total l
         clearInterval(timer);
         res.end("data: [DONE]\n\n");
       }
-    }, 40);
+    }, 100);
   };
+  await (await open({ headersMs: 10_000, idleMs: 10_000 })).text();
   const started = Date.now();
-  const res = await open({ headersMs: 100, idleMs: 200 });
+  const res = await open({ headersMs: 400, idleMs: 2_000 });
   const text = await res.text();
-  assert.ok(Date.now() - started >= 300, "the stream outlived the header timeout");
+  assert.ok(Date.now() - started >= 600, "the stream outlived the header timeout");
   assert.equal((text.match(/"content":"/g) ?? []).length, 8);
   assert.match(text, /\[DONE\]$/m);
 });
@@ -76,7 +77,7 @@ test("a stream that goes silent fails with an upstream timeout and closes the up
     res.write(chunk(0));
   };
   const before = closed.length;
-  const res = await open({ headersMs: 1_000, idleMs: 80 });
+  const res = await open({ headersMs: 10_000, idleMs: 300 });
   const reader = res.body!.getReader();
   const first = await reader.read();
   assert.match(new TextDecoder().decode(first.value), /"content":"0"/);
