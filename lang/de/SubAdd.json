@@ -16,7 +16,7 @@
     "usage": "{named, select, true {Anfragen, die {instance} sendet, laufen über dein Konto und zählen auf die Limits deines Abos.} other {Anfragen, die dieser Hub sendet, laufen über dein Konto und zählen auf die Limits deines Abos.}}",
     "tokens": "Der Hub speichert die Anmeldung für dein Konto verschlüsselt und erneuert sie selbst. Dein Passwort sieht er nie.",
     "terms": "Ein Abo über einen fremden Hub zu nutzen, kann gegen die Bedingungen des Anbieters verstoßen. Der Anbieter kann das Konto einschränken oder sperren.",
-    "withdraw": "Nach dem Verbinden erhältst du einen privaten Link, mit dem du das Konto prüfen und jederzeit trennen kannst.",
+    "withdraw": "Nach dem Verbinden erhältst du einen privaten Link, mit dem du das Konto prüfen und trennen kannst. Du kannst diesen Link jederzeit ersetzen oder deaktivieren. Auch ohne ihn kannst du den Zugriff des Hubs beim Anbieter beenden.",
     "accept": "Ich habe das verstanden und möchte mein Konto teilen"
   },
   "done": {
@@ -28,11 +28,14 @@
     "copy": "Verwaltungslink kopieren",
     "openManage": "Verwaltungsseite öffnen",
     "addAnother": "Weiteres Konto hinzufügen",
-    "full": "Über diesen Link können keine weiteren Konten hinzugefügt werden."
+    "full": "Über diesen Link können keine weiteren Konten hinzugefügt werden.",
+    "skipManage": "Ich brauche keinen Verwaltungslink",
+    "manageOffHint": "Diese Konten bleiben verbunden, und der Hub nutzt sie weiter. Über den Verwaltungslink kann sie niemand mehr sehen oder trennen.",
+    "noManage": "Kein Verwaltungslink"
   },
   "manage": {
     "title": "Deine geteilten Konten",
-    "unavailable": "Dieser Link ist nicht gültig.",
+    "unavailable": "Dieser Link ist nicht gültig. Vielleicht wurde er ersetzt oder deaktiviert, oder alle seine Konten wurden getrennt.",
     "intro": "{named, select, true {Konten, die du mit dem LLM Hub unter {instance} verbunden hast.} other {Konten, die du mit diesem LLM Hub verbunden hast.}}",
     "listTitle": "{count, plural, =0 {Keine verbundenen Konten} one {# verbundenes Konto} other {# verbundene Konten}}",
     "listHint": "Beim Trennen entfernt der Hub das Konto und seine gespeicherte Anmeldung sofort.",
@@ -44,6 +47,23 @@
     "removeLabel": "{name}-Konto {account} trennen",
     "removed": "{name}-Konto getrennt",
     "empty": "Mit diesem Link ist kein Konto verbunden.",
-    "vendorHint": "Du kannst den Zugriff des Hubs auch beim Anbieter beenden, indem du andere Sitzungen abmeldest oder verbundene Apps in deinen Kontoeinstellungen entfernst."
+    "vendorHint": "Du kannst den Zugriff des Hubs auch beim Anbieter beenden, indem du andere Sitzungen abmeldest oder verbundene Apps in deinen Kontoeinstellungen entfernst.",
+    "securityTitle": "Link-Sicherheit",
+    "securityHint": "Wer diesen Link hat, kann diese Konten sehen und trennen. Erstelle einen neuen Link, falls andere ihn gesehen haben könnten, oder deaktiviere ihn, wenn du ihn nicht mehr brauchst.",
+    "renew": "Neuen Link erstellen",
+    "renewTitle": "Neuen Verwaltungslink erstellen?",
+    "renewDescription": "Dieser Link funktioniert sofort nicht mehr. Der neue Link wird nur einmal angezeigt, speichere ihn also, bevor du diese Seite verlässt.",
+    "renewConfirm": "Link erstellen",
+    "renewedTitle": "Dein neuer Verwaltungslink",
+    "renewedHint": "Der alte Link funktioniert nicht mehr. Speichere diesen jetzt, er wird nur einmal angezeigt.",
+    "renewed": "Neuer Verwaltungslink erstellt",
+    "copy": "Verwaltungslink kopieren",
+    "revoke": "Diesen Link deaktivieren",
+    "revokeTitle": "Verwaltungslink deaktivieren?",
+    "revokeDescription": "Deine Konten bleiben verbunden, und der Hub nutzt sie weiter. Über diesen Link kann sie niemand mehr sehen oder trennen, auch du nicht. Um das Teilen später zu beenden, entferne den Zugriff des Hubs in deinen Kontoeinstellungen beim Anbieter oder bitte einen Administrator dieses Hubs darum.",
+    "revokeConfirm": "Link deaktivieren",
+    "revokedTitle": "Verwaltungslink deaktiviert",
+    "revokedDescription": "{count, plural, one {Dein Konto bleibt verbunden, und der Hub nutzt es weiter. Dieser Link funktioniert nicht mehr, deshalb kann es hier niemand mehr sehen oder trennen.} other {Deine # Konten bleiben verbunden, und der Hub nutzt sie weiter. Dieser Link funktioniert nicht mehr, deshalb kann sie hier niemand mehr sehen oder trennen.}}",
+    "revokedNext": "Um das Teilen später zu beenden, entferne den Zugriff des Hubs in deinen Kontoeinstellungen beim Anbieter oder bitte einen Administrator dieses Hubs darum."
   }
 }

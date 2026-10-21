@@ -136,6 +136,44 @@ export async function storeSubAddAccount(input: {
   return { providerId: stored.row.id, outcome: stored.outcome };
 }
 
+type ManagedAccount = { providerId: string; linkId: string | null };
+
+const managedAccountSelect = { providerId: true, linkId: true } as const;
+
+async function auditManageChange(action: string, accounts: ManagedAccount[]): Promise<void> {
+  for (const account of accounts) {
+    await writeAudit({
+      actor: account.linkId ? subAddUid(account.linkId) : "sub-add",
+      action,
+      objectType: "provider",
+      objectId: account.providerId,
+      after: { linkId: account.linkId, accounts: accounts.length },
+    });
+  }
+}
+
+export async function revokeSubAddManageHash(manageHash: string): Promise<number> {
+  const revoked = await prisma.subAddAccount.updateManyAndReturn({
+    where: { manageHash },
+    data: { manageHash: null },
+    select: managedAccountSelect,
+  });
+  if (!revoked.length) throw new Error(SUB_ADD_UNAVAILABLE);
+  await auditManageChange("provider_sub_add.manage_revoke", revoked);
+  return revoked.length;
+}
+
+export async function renewSubAddManageHash(manageHash: string, nextHash: string): Promise<number> {
+  const moved = await prisma.subAddAccount.updateManyAndReturn({
+    where: { manageHash },
+    data: { manageHash: nextHash },
+    select: managedAccountSelect,
+  });
+  if (!moved.length) throw new Error(SUB_ADD_UNAVAILABLE);
+  await auditManageChange("provider_sub_add.manage_renew", moved);
+  return moved.length;
+}
+
 export async function removeSubAddAccount(providerId: string, manageHash: string): Promise<void> {
   const owned = await prisma.subAddAccount.findFirst({
     where: { providerId, manageHash },
