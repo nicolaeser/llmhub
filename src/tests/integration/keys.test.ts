@@ -127,6 +127,7 @@ test("binding or rebinding a key needs tenancy:manage, keeping a binding does no
       runAsPrincipal(keyOnly, () => updateKey(updateInput(key.token_id, { memberId: world.homeMember.id }))),
       failsWith("FORBIDDEN"),
     );
+    await assert.rejects(runAsPrincipal(keyOnly, () => updateKey(updateInput(key.token_id))), failsWith("FORBIDDEN"));
     assert.equal((await prisma.virtualKey.findUniqueOrThrow({ where: { id: key.token_id } })).projectId, world.homeProject.id);
   } finally {
     await data.cleanup();

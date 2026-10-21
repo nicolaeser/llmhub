@@ -1,6 +1,7 @@
 import "server-only";
 import { hasPerm, PERMISSIONS } from "@/lib/auth/permissions";
 import type { AuthenticatedSession } from "@/types/auth";
+import type { SetupLinks } from "@/types/console";
 import type { SpendScope } from "@/types/structure";
 
 export function seesAllResources(session: AuthenticatedSession): boolean {
@@ -46,6 +47,14 @@ export function spendScope(session: AuthenticatedSession): SpendScope {
 
 export function spendScopeKey(scope: SpendScope): string {
   return `${scope.orgId ?? ""}|${scope.userId ?? ""}`;
+}
+
+export function setupLinks(session: AuthenticatedSession): SetupLinks {
+  const platform = !companyOf(session);
+  return {
+    provider: platform && hasPerm(session.permissions, PERMISSIONS.PROVIDERS_READ),
+    model: platform && hasPerm(session.permissions, PERMISSIONS.MODELS_READ),
+  };
 }
 
 export function keyVisibleTo(

@@ -12,7 +12,7 @@ import {
   withholdChatJson,
   UPSTREAM_TIMEOUT_MS,
 } from "@/lib/gateway/dispatch/chat";
-import { speaksAnthropic } from "@/lib/gateway/upstreams/provider-kinds";
+import { servesMessages, speaksMuse } from "@/lib/gateway/upstreams/provider-kinds";
 import { asRecord } from "@/lib/gateway/core";
 import { plainModel } from "@/lib/gateway/catalog/model-alias";
 import { deploymentAuth } from "@/lib/gateway/upstreams/credentials";
@@ -45,7 +45,7 @@ type MessagesInput = {
 function chatFallback(input: MessagesInput): (kind: string) => JsonMap {
   let converted: JsonMap | null = null;
   return (kind) => {
-    const issue = chatIncompatibility(input.request, { webSearch: kind === "codex" });
+    const issue = chatIncompatibility(input.request, { webSearch: kind === "codex" || speaksMuse(kind) });
     if (issue) throw new GateError(400, "unsupported_parameter", issue);
     converted ??= instructChat(input.principal.trace, messagesToChat(input.request));
     return converted;
@@ -88,7 +88,7 @@ export async function dispatchMessages(input: MessagesInput): Promise<JsonMap> {
   const started = Date.now();
   const fallback = chatFallback(input);
   const routed = await routeMetered(input, started, async (dep, group) => {
-    if (!speaksAnthropic(dep.kind)) {
+    if (!servesMessages(dep.kind)) {
       return { native: false, json: asRecord(await chatOnce(dep, group, fallback(dep.kind), input.model)) ?? {} };
     }
     const proxied = await proxyJson({
@@ -133,7 +133,7 @@ export async function streamMessages(input: MessagesInput & { req: Request }): P
     input,
     started,
     async (dep, group) => {
-      if (!speaksAnthropic(dep.kind)) {
+      if (!servesMessages(dep.kind)) {
         return {
           native: false,
           res: await openChatStream(dep, group, { req: input.req, model: input.model, body: fallback(dep.kind) }),

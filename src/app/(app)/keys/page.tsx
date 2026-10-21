@@ -5,7 +5,6 @@ import { useTranslations } from "next-intl";
 import PageHeader from "@/components/console/page-header";
 import PageStatus from "@/components/console/page-status";
 import PageTabs from "@/components/console/page-tabs";
-import { PERMISSIONS } from "@/lib/auth/permissions";
 import { useActionData } from "@/lib/hooks/use-action-data";
 import { useConsoleScope } from "../_components/console-scope";
 import { loadKeyTabsAction } from "./_action";
@@ -14,7 +13,7 @@ import TemplatesTab from "./_components/templates-tab";
 
 export default function KeysPage() {
   const t = useTranslations("Keys");
-  const { kind, canSwitch } = useConsoleScope();
+  const { kind } = useConsoleScope();
   const page = useActionData(loadKeyTabsAction);
   const granted = page.data;
 
@@ -25,15 +24,15 @@ export default function KeysPage() {
         title={t("title")}
         subtitle={t("subtitle")}
         state={page}
-        tabs={kind === "platform" || canSwitch}
+        tabs={kind === "platform"}
         stats={4}
       />
     );
   }
 
   const tabs = [
-    ...(granted.includes(PERMISSIONS.KEYS_READ) ? [{ id: "keys", label: t("tab", { tab: "keys" }), panel: <KeysTab /> }] : []),
-    ...(granted.includes(PERMISSIONS.MODELS_READ)
+    ...(granted.includes("keys") ? [{ id: "keys", label: t("tab", { tab: "keys" }), panel: <KeysTab /> }] : []),
+    ...(granted.includes("templates")
       ? [{ id: "templates", label: t("tab", { tab: "templates" }), panel: <TemplatesTab /> }]
       : []),
   ];

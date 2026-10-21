@@ -1,6 +1,6 @@
 import { asRecord, asString } from "@/lib/gateway/core";
 import { GateError } from "@/lib/gateway/errors";
-import { isCodexSignature } from "@/lib/gateway/protocols/reasoning-signature";
+import { isResponsesSignature } from "@/lib/gateway/protocols/reasoning-signature";
 import type { JsonMap } from "@/types/gateway";
 import type { AccountPin } from "@/types/routing";
 
@@ -11,10 +11,10 @@ export function historyLength(body: JsonMap | null | undefined): number {
   return Array.isArray(messages) ? messages.length : 0;
 }
 
-function withoutCodexReasoning(message: unknown): unknown {
+function withoutAccountReasoning(message: unknown): unknown {
   const rec = asRecord(message);
   if (!rec || asString(rec.role) !== "assistant" || !Array.isArray(rec.thinking_blocks)) return message;
-  const kept = rec.thinking_blocks.filter((block) => !isCodexSignature(asRecord(block)?.signature));
+  const kept = rec.thinking_blocks.filter((block) => !isResponsesSignature(asRecord(block)?.signature));
   if (kept.length === rec.thinking_blocks.length) return message;
   const copy: JsonMap = { ...rec };
   if (kept.length) copy.thinking_blocks = kept;
@@ -28,7 +28,7 @@ export function dropAccountReasoning(body: JsonMap | null | undefined, before = 
   let changed = false;
   const next = messages.map((message, index) => {
     if (index >= before) return message;
-    const stripped = withoutCodexReasoning(message);
+    const stripped = withoutAccountReasoning(message);
     if (stripped !== message) changed = true;
     return stripped;
   });

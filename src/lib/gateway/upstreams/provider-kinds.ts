@@ -32,9 +32,34 @@ export const PROVIDER_CATALOG: ProviderKindSpec[] = [
     default_base_url: "https://daily-cloudcode-pa.googleapis.com",
     auth: "sign_in",
   },
+  { kind: "moonshot", name: "Kimi API Platform", default_base_url: "https://api.moonshot.ai/v1" },
+  { kind: "moonshot_cn", name: "Kimi API Platform China", default_base_url: "https://api.moonshot.cn/v1" },
+  {
+    kind: "kimi",
+    name: "Kimi subscription (Kimi Code)",
+    default_base_url: "https://api.kimi.com/coding/v1",
+    auth: "sign_in",
+  },
+  {
+    kind: "kimi_ai",
+    name: "Kimi.ai subscription (Kimi Code)",
+    default_base_url: "https://api.kimi.ai/coding/v1",
+    auth: "sign_in",
+  },
+  { kind: "meta", name: "Meta Model API", default_base_url: "https://api.meta.ai/v1" },
+  {
+    kind: "muse_code",
+    name: "Meta subscription (Muse Code)",
+    default_base_url: "https://api.meta.ai/v1",
+    auth: "sign_in",
+  },
 ];
 
-const LIMIT_KINDS = new Set(["codex", "claude", "grok_build", "antigravity"]);
+const LIMIT_KINDS = new Set(["codex", "claude", "grok_build", "antigravity", "kimi", "kimi_ai", "muse_code"]);
+const TRAFFIC_LIMIT_KINDS = new Set(["muse_code"]);
+const KIMI_CODE_KINDS = new Set(["kimi", "kimi_ai"]);
+const KIMI_KINDS = new Set(["kimi", "kimi_ai", "moonshot", "moonshot_cn"]);
+const MUSE_KINDS = new Set(["meta", "muse_code"]);
 
 export function isSignInKind(kind: string): kind is SignInKind {
   return PROVIDER_CATALOG.some((spec) => spec.kind === kind && spec.auth === "sign_in");
@@ -48,10 +73,30 @@ export function reportsLimits(kind: string): boolean {
   return LIMIT_KINDS.has(kind);
 }
 
+export function limitsFromTraffic(kind: string): boolean {
+  return TRAFFIC_LIMIT_KINDS.has(kind);
+}
+
 export function signInMethod(kind: SignInKind): SignInMethod {
   return kind === "claude" || kind === "antigravity" ? "code" : "device";
 }
 
 export function speaksAnthropic(kind: string): boolean {
   return kind === "anthropic" || kind === "claude";
+}
+
+export function isKimiCodeKind(kind: string): boolean {
+  return KIMI_CODE_KINDS.has(kind);
+}
+
+export function speaksKimi(kind: string): boolean {
+  return KIMI_KINDS.has(kind);
+}
+
+export function speaksMuse(kind: string): boolean {
+  return MUSE_KINDS.has(kind);
+}
+
+export function servesMessages(kind: string): boolean {
+  return speaksAnthropic(kind) || isKimiCodeKind(kind);
 }

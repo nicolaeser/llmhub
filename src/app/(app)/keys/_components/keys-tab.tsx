@@ -163,7 +163,8 @@ export default function KeysTab() {
     return <PageStatus state={page} stats={4} />;
   }
 
-  const { canManage, canBind, canBudget, canMcp, overview, owners } = data;
+  const { canManage, canBind, canBudget, canMcp, canTemplates, overview, owners } = data;
+  const hasActions = canManage || canMcp || canBudget;
   const options: KeyOptions = {
     companyId: data.companyId,
     orgs: data.orgs,
@@ -332,6 +333,7 @@ export default function KeysTab() {
           providers={data.providers}
           models={options.models.length}
           keys={data.keys.length}
+          links={data.setupLinks}
           onCreateKey={() => openDialog(null)}
         />
       ) : null}
@@ -363,23 +365,27 @@ export default function KeysTab() {
               label={t("overview.keys")}
               value={format.number(data.keys.length, "integer")}
             />
-            <StatCard
-              icon={CircleDollarSign}
-              label={t("overview.spend")}
-              value={format.number(overview.spend7d, "money")}
-            />
-            <StatCard
-              icon={Activity}
-              tone="success"
-              label={t("overview.requests")}
-              value={format.number(overview.requests7d, "integer")}
-            />
-            <StatCard
-              icon={AlertTriangle}
-              tone={overview.errors7d > 0 ? "danger" : "neutral"}
-              label={t("overview.errors")}
-              value={format.number(overview.errors7d, "integer")}
-            />
+            {overview ? (
+              <>
+                <StatCard
+                  icon={CircleDollarSign}
+                  label={t("overview.spend")}
+                  value={format.number(overview.spend7d, "money")}
+                />
+                <StatCard
+                  icon={Activity}
+                  tone="success"
+                  label={t("overview.requests")}
+                  value={format.number(overview.requests7d, "integer")}
+                />
+                <StatCard
+                  icon={AlertTriangle}
+                  tone={overview.errors7d > 0 ? "danger" : "neutral"}
+                  label={t("overview.errors")}
+                  value={format.number(overview.errors7d, "integer")}
+                />
+              </>
+            ) : null}
           </div>
           <div className="flex flex-wrap items-center justify-between gap-3">
             <SearchField
@@ -423,7 +429,7 @@ export default function KeysTab() {
                         { label: t("columns.access"), value: accessLabel(row) },
                         { label: t("columns.spend"), value: spendLabel(row) },
                       ]}
-                      actions={keyActions(row)}
+                      actions={hasActions ? keyActions(row) : undefined}
                     />
                   );
                 })}
@@ -437,7 +443,7 @@ export default function KeysTab() {
                       <Table.Column>{t("columns.access")}</Table.Column>
                       <Table.Column>{t("columns.spend")}</Table.Column>
                       <Table.Column>{t("columns.status")}</Table.Column>
-                      <Table.Column>{tCommon("actions")}</Table.Column>
+                      {hasActions ? <Table.Column>{tCommon("actions")}</Table.Column> : null}
                     </Table.Header>
                     <Table.Body>
                       {filtered.map((row) => {
@@ -461,9 +467,11 @@ export default function KeysTab() {
                             <Table.Cell>
                               <div className="flex flex-wrap gap-1">{keyChips(row)}</div>
                             </Table.Cell>
-                            <Table.Cell>
-                              <div className="flex gap-1">{keyActions(row)}</div>
-                            </Table.Cell>
+                            {hasActions ? (
+                              <Table.Cell>
+                                <div className="flex gap-1">{keyActions(row)}</div>
+                              </Table.Cell>
+                            ) : null}
                           </Table.Row>
                         );
                       })}
@@ -502,6 +510,7 @@ export default function KeysTab() {
         preset={preset}
         options={options}
         canBind={canBind}
+        canTemplates={canTemplates}
         onSaved={(row, created) => {
           upsertKey(row);
           if (created) setSecret(created);
