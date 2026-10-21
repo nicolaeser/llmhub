@@ -71,6 +71,17 @@ export function toKeyView(row: {
   };
 }
 
+export function keyReferences(keys: readonly VirtualKeyView[], selfId: string) {
+  const ids = (pick: (key: VirtualKeyView) => string) => [...new Set(keys.map(pick).filter(Boolean))];
+  return {
+    orgs: ids((key) => key.org_id),
+    teams: ids((key) => key.team_id),
+    projects: ids((key) => key.project_id),
+    members: ids((key) => key.member_id),
+    users: [...new Set([selfId, ...ids((key) => key.user_id)])],
+  };
+}
+
 export async function listKeys(session: AuthenticatedSession) {
   const rows = await prisma.virtualKey.findMany({
     where: keyScope(session),

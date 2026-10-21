@@ -65,6 +65,14 @@ export type ChatSseTranslator = {
   flush(): string | null;
 };
 
+export type ReasoningSignatureCheck = (value: unknown) => value is string;
+
+export type ResponsesStreamOptions = {
+  isSignature?: ReasoningSignatureCheck;
+  onEvent?: (type: string, data: JsonMap) => void;
+  failure?: (data: JsonMap) => Error;
+};
+
 export type StoredObjectRecord = {
   id: string;
   kind: string;

@@ -41,7 +41,15 @@ import ProviderSettingsDialog from "./provider-settings-dialog";
 import SubAddLinks, { useSubAddLinks } from "./sub-add-links";
 import SubscriptionAddWizard from "./subscription-add-wizard";
 
-const KIND_ORDER = ["claude", "codex", "antigravity", "grok_build"] as const satisfies readonly SignInKind[];
+const KIND_ORDER = [
+  "claude",
+  "codex",
+  "antigravity",
+  "grok_build",
+  "kimi",
+  "kimi_ai",
+  "muse_code",
+] as const satisfies readonly SignInKind[];
 
 function kindRank(kind: string): number {
   const index = KIND_ORDER.findIndex((item) => item === kind);

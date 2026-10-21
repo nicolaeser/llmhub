@@ -64,6 +64,7 @@ export function KeyDialog({
   preset,
   options,
   canBind,
+  canTemplates,
   onSaved,
 }: {
   state: ReturnType<typeof useOverlayState>;
@@ -71,6 +72,7 @@ export function KeyDialog({
   preset: KeyPreset | null;
   options: KeyOptions;
   canBind: boolean;
+  canTemplates: boolean;
   onSaved: (key: VirtualKeyView, secret: string | null) => void;
 }) {
   const t = useTranslations("Keys");
@@ -233,13 +235,17 @@ export function KeyDialog({
       <p className="text-sm font-medium text-foreground">{t("fields.access")}</p>
       <MultiPicker
         label={t("fields.templates")}
-        description={t.rich("fields.templatesHint", {
-          link: (chunks) => (
-            <Link href="/keys?tab=templates" className="text-accent">
-              {chunks}
-            </Link>
-          ),
-        })}
+        description={
+          canTemplates
+            ? t.rich("fields.templatesHint", {
+                link: (chunks) => (
+                  <Link href="/keys?tab=templates" className="text-accent">
+                    {chunks}
+                  </Link>
+                ),
+              })
+            : t("fields.templatesNote")
+        }
         placeholder={t("fields.templatesPlaceholder")}
         searchLabel={t("fields.search")}
         emptyLabel={t("fields.noResults")}
