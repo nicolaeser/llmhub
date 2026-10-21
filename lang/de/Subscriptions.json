@@ -88,6 +88,7 @@
   "sharedVia": "{named, select, true {Über Link: {label}} other {Über Link}}",
   "signInAgain": "Neu anmelden",
   "noAccount": "Ohne Kontoname",
+  "noneTitle": "Noch keine Abo-Konten",
   "backIn": "Wieder verfügbar {when} ({date}).",
   "backInUnknown": "Limit erreicht. Der Anbieter nennt keinen Zeitpunkt für die Zurücksetzung.",
   "expiredHint": "Melde dich erneut an, um dieses Konto zu nutzen.",

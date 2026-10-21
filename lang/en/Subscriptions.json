@@ -88,6 +88,7 @@
   "sharedVia": "{named, select, true {Via link: {label}} other {Via link}}",
   "signInAgain": "Sign in again",
   "noAccount": "No account name",
+  "noneTitle": "No subscription accounts yet",
   "backIn": "Available again {when} ({date}).",
   "backInUnknown": "Limit reached. The provider did not say when it resets.",
   "expiredHint": "Sign in again to use this account.",

@@ -340,6 +340,7 @@ export default function SignInTab() {
           <RoleMappings
             rows={current.rows}
             roles={roles}
+            canEdit={view.canManage}
             isDisabled={disabled}
             onChange={(rows) => update({ rows })}
           />

@@ -1,6 +1,6 @@
 import "server-only";
 
-import { requirePermission } from "@/lib/auth/guards";
+import { requirePlatformPermission } from "@/lib/auth/guards";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { writeAudit } from "@/lib/audit";
 import { asRecord, asString } from "@/lib/gateway/core";
@@ -94,7 +94,7 @@ async function listFiles(connection: Connection): Promise<CliProxyListing> {
 }
 
 export async function listCliProxyAuthFiles(raw: unknown): Promise<CliProxyListing> {
-  await requirePermission(PERMISSIONS.PROVIDERS_MANAGE);
+  await requirePlatformPermission(PERMISSIONS.PROVIDERS_MANAGE);
   const parsed = cliProxyConnectionSchema.safeParse(raw);
   if (!parsed.success) throw new Error("VALIDATION");
   return listFiles(connectionOf(parsed.data.url, parsed.data.key));
@@ -137,7 +137,7 @@ async function removeAtSource(connection: Connection, name: string): Promise<boo
 }
 
 export async function importCliProxyAuthFiles(raw: unknown): Promise<CliProxyImport> {
-  const session = await requirePermission(PERMISSIONS.PROVIDERS_MANAGE);
+  const session = await requirePlatformPermission(PERMISSIONS.PROVIDERS_MANAGE);
   const parsed = cliProxyImportSchema.safeParse(raw);
   if (!parsed.success) throw new Error("VALIDATION");
   const connection = connectionOf(parsed.data.url, parsed.data.key);

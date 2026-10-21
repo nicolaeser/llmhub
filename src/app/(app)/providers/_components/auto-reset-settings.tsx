@@ -31,12 +31,10 @@ function validPercent(value: number | null): value is number {
 export default function AutoResetSettings({
   kind,
   policy,
-  canManage,
   onSaved,
 }: {
   kind: ResetKind;
   policy: AutoResetPolicy;
-  canManage: boolean;
   onSaved: (policies: AutoResetPolicies) => void;
 }) {
   const t = useTranslations("Subscriptions.resets.auto");
@@ -49,7 +47,7 @@ export default function AutoResetSettings({
   const changed =
     draft !== null && (draft.enabled !== policy.enabled || draft.percent !== policy.percent || draft.scope !== policy.scope);
   const valid = validPercent(percent);
-  const locked = !canManage || saving;
+  const locked = saving;
 
   function update(patch: Partial<Draft>) {
     setDraft({ enabled, percent, scope, ...patch });
@@ -134,25 +132,23 @@ export default function AutoResetSettings({
         </Select>
       </div>
       {kind === "claude" ? <p className="text-xs text-muted">{t("claudeNote")}</p> : null}
-      {canManage ? (
-        <div className="flex flex-wrap items-center justify-end gap-2">
-          <Button
-            size="sm"
-            variant="secondary"
-            isDisabled={!changed || !valid}
-            isPending={saving}
-            aria-label={t("save", { provider })}
-            onPress={save}
-          >
-            {({ isPending }) => (
-              <>
-                {isPending ? <Spinner color="current" size="sm" /> : <Save size={14} aria-hidden />}
-                {t("saveShort")}
-              </>
-            )}
-          </Button>
-        </div>
-      ) : null}
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        <Button
+          size="sm"
+          variant="secondary"
+          isDisabled={!changed || !valid}
+          isPending={saving}
+          aria-label={t("save", { provider })}
+          onPress={save}
+        >
+          {({ isPending }) => (
+            <>
+              {isPending ? <Spinner color="current" size="sm" /> : <Save size={14} aria-hidden />}
+              {t("saveShort")}
+            </>
+          )}
+        </Button>
+      </div>
     </div>
   );
 }

@@ -1,6 +1,6 @@
 import "server-only";
 
-import { requirePermission, requirePlatformPermission } from "@/lib/auth/guards";
+import { requirePlatformPermission } from "@/lib/auth/guards";
 import { hasPerm, PERMISSIONS } from "@/lib/auth/permissions";
 import { writeAudit } from "@/lib/audit";
 import { assertModelRoles, enabledModelChoices } from "@/lib/models/aliases";
@@ -45,7 +45,7 @@ async function assertNewAliases(next: VectorStoreDefaults, previous: VectorStore
 }
 
 export async function loadCatalogSettings() {
-  const session = await requirePermission(PERMISSIONS.SETTINGS_READ);
+  const session = await requirePlatformPermission(PERMISSIONS.SETTINGS_READ);
   return view(await getEnterprise(), session.permissions);
 }
 

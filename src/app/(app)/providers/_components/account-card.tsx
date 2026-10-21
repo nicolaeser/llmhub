@@ -231,16 +231,25 @@ export default function AccountCard({
 
       <Card.Footer className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2">
-          <ProviderToggle row={row} onChanged={onToggled} />
-          <Button
-            size="sm"
-            variant="tertiary"
-            aria-label={t("access.manageFor", { name: account || row.name })}
-            onPress={() => onAccess(row)}
-          >
-            <Users size={14} aria-hidden className={row.restricted ? "text-warning" : undefined} />
-            {t("access.short", { restricted: String(row.restricted), count: row.assignments.length })}
-          </Button>
+          {canManage ? (
+            <>
+              <ProviderToggle row={row} onChanged={onToggled} />
+              <Button
+                size="sm"
+                variant="tertiary"
+                aria-label={t("access.manageFor", { name: account || row.name })}
+                onPress={() => onAccess(row)}
+              >
+                <Users size={14} aria-hidden className={row.restricted ? "text-warning" : undefined} />
+                {t("access.short", { restricted: String(row.restricted), count: row.assignments.length })}
+              </Button>
+            </>
+          ) : (
+            <span className="flex min-w-0 items-center gap-1.5 text-sm text-muted">
+              <Users size={14} aria-hidden className={row.restricted ? "shrink-0 text-warning" : "shrink-0"} />
+              {t("access.summary", { restricted: String(row.restricted), count: row.assignments.length })}
+            </span>
+          )}
         </div>
         <div className="flex min-w-0 items-center gap-1">
           {reports && state !== "expired" && limits ? (
@@ -264,7 +273,9 @@ export default function AccountCard({
               {({ isPending }) => (isPending ? <Spinner color="current" size="sm" /> : <RefreshCw size={14} aria-hidden />)}
             </Button>
           ) : null}
-          <ProviderActions row={row} variant="menu" onEdit={onEdit} onImport={onImport} onDeleted={onDeleted} />
+          {canManage ? (
+            <ProviderActions row={row} variant="menu" onEdit={onEdit} onImport={onImport} onDeleted={onDeleted} />
+          ) : null}
         </div>
       </Card.Footer>
     </Card>

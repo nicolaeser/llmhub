@@ -50,6 +50,7 @@
   "deleteConfirm": "{name} trennen? Seine Routen und Katalogeinträge werden entfernt, und Modellgruppen ohne verbleibende Routen werden gelöscht, sofern sie keine eigenen Einstellungen haben.",
   "empty": "Noch keine Anbieter verbunden.",
   "emptyTitle": "Einen Anbieter verbinden",
+  "noneTitle": "Noch keine API-Anbieter",
   "moreProviders": "Weitere Anbieter",
   "keyState": "{state, select, stored {API-Key hinterlegt} signed_in {Angemeldet als {account}} expired {Anmeldung abgelaufen} other {Kein API-Key}}",
   "connectedCount": "{count, plural, =0 {Nicht verbunden} one {# Verbindung} other {# Verbindungen}}",

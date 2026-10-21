@@ -1,6 +1,6 @@
 import "server-only";
 import prisma from "@/lib/db/prisma";
-import { requirePermission } from "@/lib/auth/guards";
+import { requirePlatformPermission } from "@/lib/auth/guards";
 import { requireStepUp } from "@/lib/auth/second-factor";
 import { hasPerm, PERMISSIONS } from "@/lib/auth/permissions";
 import { writeAudit } from "@/lib/audit";
@@ -70,7 +70,7 @@ async function viewOf(row: LinkRow): Promise<SubAddLinkView> {
 }
 
 export async function loadSubAddLinks(): Promise<SubAddLinksPayload> {
-  const session = await requirePermission(PERMISSIONS.PROVIDERS_READ);
+  const session = await requirePlatformPermission(PERMISSIONS.PROVIDERS_READ);
   const rows = await prisma.subAddLink.findMany({
     where: { NOT: finishedSubAddLinks(new Date()) },
     select: linkSelect,
@@ -86,7 +86,7 @@ export async function loadSubAddLinks(): Promise<SubAddLinksPayload> {
 }
 
 export async function createSubAddLink(raw: unknown): Promise<SubAddCreated> {
-  const session = await requirePermission(PERMISSIONS.PROVIDERS_MANAGE);
+  const session = await requirePlatformPermission(PERMISSIONS.PROVIDERS_MANAGE);
   const parsed = subAddLinkCreateSchema.safeParse(raw);
   if (!parsed.success) throw new Error("VALIDATION");
   const input = parsed.data;
@@ -123,7 +123,7 @@ export async function createSubAddLink(raw: unknown): Promise<SubAddCreated> {
 }
 
 export async function deleteSubAddLink(id: string): Promise<{ id: string }> {
-  const session = await requirePermission(PERMISSIONS.PROVIDERS_MANAGE);
+  const session = await requirePlatformPermission(PERMISSIONS.PROVIDERS_MANAGE);
   if (!id) throw new Error("MISSING_ID");
   const row = await findLink(id);
   if (!row) throw new Error("NOT_FOUND");

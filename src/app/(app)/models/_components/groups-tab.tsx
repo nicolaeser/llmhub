@@ -47,7 +47,7 @@ export default function GroupsTab() {
   const [typed, setTyped] = useState<string | null>(null);
   const query = typed ?? groupParam ?? "";
   const formState = useOverlayState();
-  const page = useActionData<{ groups: ModelGroupView[]; providers: ProviderOpt[] }>(loadModelsAction);
+  const page = useActionData<{ groups: ModelGroupView[]; providers: ProviderOpt[]; canManage: boolean }>(loadModelsAction);
   const { data, setData } = page;
 
   function setGroups(update: (current: ModelGroupView[]) => ModelGroupView[]) {
@@ -58,7 +58,7 @@ export default function GroupsTab() {
     return <PageStatus state={page} />;
   }
 
-  const { groups, providers } = data;
+  const { groups, providers, canManage } = data;
   const needle = query.trim().toLowerCase();
   const shown = groups.filter((group) => matchesGroup(group, needle));
 
@@ -161,6 +161,13 @@ export default function GroupsTab() {
   }
 
   function enabledSwitch(group: ModelGroupView) {
+    if (!canManage) {
+      return (
+        <Chip size="sm" variant="soft" color={group.enabled ? "success" : "default"} className="whitespace-nowrap">
+          {t("enabledState", { enabled: String(group.enabled) })}
+        </Chip>
+      );
+    }
     return (
       <Switch
         size="sm"
@@ -180,6 +187,7 @@ export default function GroupsTab() {
   }
 
   function groupActions(group: ModelGroupView) {
+    if (!canManage) return undefined;
     return (
       <>
         <Button size="sm" variant="secondary" aria-label={tCommon("edit")} onPress={() => openDialog(group)}>
@@ -206,7 +214,7 @@ export default function GroupsTab() {
     );
   }
 
-  const createButton = (
+  const createButton = canManage ? (
     <Button
       aria-label={t("add")}
       onPress={() => openDialog(null)}
@@ -214,7 +222,18 @@ export default function GroupsTab() {
       <Plus size={16} aria-hidden />
       {t("add")}
     </Button>
-  );
+  ) : null;
+
+  function emptyHint() {
+    if (providers.length > 0) return t("empty");
+    return t.rich("needProvider", {
+      providers: (chunks) => (
+        <Link href="/providers" className="text-accent">
+          {chunks}
+        </Link>
+      ),
+    });
+  }
 
   return (
     <div>
@@ -222,19 +241,9 @@ export default function GroupsTab() {
         <EmptyState
           icon={Network}
           title={t("emptyTitle")}
-          description={
-            providers.length === 0
-              ? t.rich("needProvider", {
-                  providers: (chunks) => (
-                    <Link href="/providers" className="text-accent">
-                      {chunks}
-                    </Link>
-                  ),
-                })
-              : t("empty")
-          }
+          description={canManage ? emptyHint() : undefined}
           action={
-            providers.length === 0 ? (
+            canManage && providers.length === 0 ? (
               <Link href="/providers" className="text-sm font-medium text-accent">
                 {t("connectProvider")}
               </Link>
@@ -293,20 +302,24 @@ export default function GroupsTab() {
                       <Table.Column>{t("columns.billing")}</Table.Column>
                       <Table.Column>{t("columns.endpoints")}</Table.Column>
                       <Table.Column>{t("columns.overflow")}</Table.Column>
-                      <Table.Column>{tCommon("actions")}</Table.Column>
+                      {canManage ? <Table.Column>{tCommon("actions")}</Table.Column> : null}
                     </Table.Header>
                     <Table.Body>
                       {shown.map((g) => (
                         <Table.Row key={g.alias} id={g.alias}>
                           <Table.Cell>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="font-medium"
-                              onPress={() => openDialog(g)}
-                            >
-                              {g.alias}
-                            </Button>
+                            {canManage ? (
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="font-medium"
+                                onPress={() => openDialog(g)}
+                              >
+                                {g.alias}
+                              </Button>
+                            ) : (
+                              <span className="px-3 font-medium">{g.alias}</span>
+                            )}
                             {tagChip(g)}
                             {g.vendor || g.displayName ? (
                               <div className="px-3 text-xs text-muted">{groupDetail(g)}</div>
@@ -317,9 +330,11 @@ export default function GroupsTab() {
                           <Table.Cell>{billingLabel(g)}</Table.Cell>
                           <Table.Cell>{endpointList(g)}</Table.Cell>
                           <Table.Cell>{g.overflowGroup || tCommon("none")}</Table.Cell>
-                          <Table.Cell>
-                            <div className="flex gap-1">{groupActions(g)}</div>
-                          </Table.Cell>
+                          {canManage ? (
+                            <Table.Cell>
+                              <div className="flex gap-1">{groupActions(g)}</div>
+                            </Table.Cell>
+                          ) : null}
                         </Table.Row>
                       ))}
                     </Table.Body>
@@ -331,18 +346,20 @@ export default function GroupsTab() {
         </div>
       )}
 
-      <ModelGroupDialog
-        key={dialogKey}
-        state={formState}
-        editing={editing}
-        providers={providers}
-        models={groups.map((group) => ({
-          alias: group.alias,
-          label: group.displayName || group.alias,
-          role: modelRole([...group.deployments.map((deployment) => deployment.model), group.alias, group.displayName]),
-        }))}
-        onSaved={saved}
-      />
+      {canManage ? (
+        <ModelGroupDialog
+          key={dialogKey}
+          state={formState}
+          editing={editing}
+          providers={providers}
+          models={groups.map((group) => ({
+            alias: group.alias,
+            label: group.displayName || group.alias,
+            role: modelRole([...group.deployments.map((deployment) => deployment.model), group.alias, group.displayName]),
+          }))}
+          onSaved={saved}
+        />
+      ) : null}
     </div>
   );
 }

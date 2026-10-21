@@ -100,35 +100,39 @@ export default function CatalogTab() {
           isDisabled={disabled || (!settings.catalog_jev.enabled && !jevKeyReady)}
           hint={t("jev.enabledHint", { ready: jevKeyReady ? "true" : "false" })}
         />
-        <TextField
-          fullWidth
-          type="password"
-          value={settings.catalog_jev.api_key}
-          onChange={(api_key) => jev({ api_key, clear_api_key: false })}
-          isDisabled={disabled}
-          className="max-w-xl"
-        >
-          <Label>{t("jev.apiKey")}</Label>
-          <Input autoComplete="off" placeholder={t("jev.apiKeyState", { set: view.jevKeySet ? "true" : "false" })} />
-          <Description>{t("jev.apiKeyHint")}</Description>
-        </TextField>
-        {view.jevKeySet ? (
-          <div className="flex flex-wrap items-center gap-3">
-            <Button
-              size="sm"
-              variant={settings.catalog_jev.clear_api_key ? "secondary" : "danger-soft"}
+        {view.canManage ? (
+          <>
+            <TextField
+              fullWidth
+              type="password"
+              value={settings.catalog_jev.api_key}
+              onChange={(api_key) => jev({ api_key, clear_api_key: false })}
               isDisabled={disabled}
-              onPress={() =>
-                jev({
-                  clear_api_key: !settings.catalog_jev.clear_api_key,
-                  api_key: "",
-                  enabled: settings.catalog_jev.clear_api_key ? settings.catalog_jev.enabled : false,
-                })
-              }
+              className="max-w-xl"
             >
-              {settings.catalog_jev.clear_api_key ? t("jev.keepKey") : t("jev.clearKey")}
-            </Button>
-          </div>
+              <Label>{t("jev.apiKey")}</Label>
+              <Input autoComplete="off" placeholder={t("jev.apiKeyState", { set: view.jevKeySet ? "true" : "false" })} />
+              <Description>{t("jev.apiKeyHint")}</Description>
+            </TextField>
+            {view.jevKeySet ? (
+              <div className="flex flex-wrap items-center gap-3">
+                <Button
+                  size="sm"
+                  variant={settings.catalog_jev.clear_api_key ? "secondary" : "danger-soft"}
+                  isDisabled={disabled}
+                  onPress={() =>
+                    jev({
+                      clear_api_key: !settings.catalog_jev.clear_api_key,
+                      api_key: "",
+                      enabled: settings.catalog_jev.clear_api_key ? settings.catalog_jev.enabled : false,
+                    })
+                  }
+                >
+                  {settings.catalog_jev.clear_api_key ? t("jev.keepKey") : t("jev.clearKey")}
+                </Button>
+              </div>
+            ) : null}
+          </>
         ) : null}
         <Disclosure>
           <Disclosure.Heading>

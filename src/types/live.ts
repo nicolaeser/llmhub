@@ -9,6 +9,7 @@ export type LiveViewer = { permissions: Permission[]; scope: SpendScope };
 export type LiveFeed<State> = {
   topic: LiveTopic;
   permission: Permission;
+  platformOnly?: boolean;
   pollMs: number;
   minGapMs: number;
   scopeKey(scope: SpendScope): string;

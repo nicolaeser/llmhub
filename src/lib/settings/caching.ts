@@ -1,7 +1,7 @@
 import "server-only";
 
 import { assertModelRoles, enabledModelChoices } from "@/lib/models/aliases";
-import { requirePermission, requirePlatformPermission } from "@/lib/auth/guards";
+import { requirePlatformPermission } from "@/lib/auth/guards";
 import { hasPerm, PERMISSIONS } from "@/lib/auth/permissions";
 import { writeAudit } from "@/lib/audit";
 import { cacheBackend } from "@/lib/gateway/cache/response-cache";
@@ -29,12 +29,12 @@ async function view(permissions: readonly Permission[]): Promise<CacheView> {
 }
 
 export async function loadCache() {
-  const session = await requirePermission(PERMISSIONS.SETTINGS_READ);
+  const session = await requirePlatformPermission(PERMISSIONS.SETTINGS_READ);
   return view(session.permissions);
 }
 
 export async function loadCacheStats(input: { days: number }) {
-  const session = await requirePermission(PERMISSIONS.SETTINGS_READ);
+  const session = await requirePlatformPermission(PERMISSIONS.SETTINGS_READ);
   if (!hasPerm(session.permissions, PERMISSIONS.SPEND_READ_ALL)) throw new Error("FORBIDDEN");
   const parsed = cacheStatsSchema.safeParse(input);
   if (!parsed.success) throw new Error("VALIDATION");

@@ -49,12 +49,15 @@ export default function ProvidersPage() {
   const afterSave = useRef<((provider: ProviderView) => void) | undefined>(undefined);
   const formState = useOverlayState();
   const discoverState = useOverlayState();
-  const page = useActionData<ProviderView[]>(async () => {
-    const res = await loadProvidersAction();
-    return isActionFail(res) ? res : res.connected;
-  });
-  const { data: connected, setData: setConnected } = page;
+  const page = useActionData<{ connected: ProviderView[]; canManage: boolean }>(loadProvidersAction);
+  const { data, setData } = page;
+  const connected = data?.connected ?? null;
+  const canManage = data?.canManage ?? false;
   const tab = picked ?? tabOf(tabParam);
+
+  function setConnected(update: (cur: ProviderView[]) => ProviderView[]) {
+    setData((cur) => ({ ...cur, connected: update(cur.connected) }));
+  }
 
   function selectTab(next: ProvidersTab) {
     setPicked(next);
@@ -136,7 +139,11 @@ export default function ProvidersPage() {
 
           <Tabs.Panel id="api" className="pt-4">
             {connected ? (
-              <ApiProviders rows={connected.filter((row) => !isSignInKind(row.kind))} actions={actions} />
+              <ApiProviders
+                rows={connected.filter((row) => !isSignInKind(row.kind))}
+                actions={actions}
+                canManage={canManage}
+              />
             ) : (
               status({ layout: "cards" })
             )}
@@ -144,7 +151,11 @@ export default function ProvidersPage() {
 
           <Tabs.Panel id="subscriptions" className="pt-4">
             {connected ? (
-              <SubscriptionAccounts rows={connected.filter((row) => isSignInKind(row.kind))} actions={actions} />
+              <SubscriptionAccounts
+                rows={connected.filter((row) => isSignInKind(row.kind))}
+                actions={actions}
+                canManage={canManage}
+              />
             ) : (
               status({ stats: 4, layout: "panels" })
             )}
@@ -156,15 +167,18 @@ export default function ProvidersPage() {
         </Tabs>
       )}
 
-      <ProviderDialog key={`form-${dialogKey}`} state={formState} spec={spec} editing={edit} onSaved={saved} />
-
-      <ImportModelsDialog
-        key={`import-${dialogKey}`}
-        state={discoverState}
-        provider={discover}
-        models={models}
-        onImported={replace}
-      />
+      {canManage ? (
+        <>
+          <ProviderDialog key={`form-${dialogKey}`} state={formState} spec={spec} editing={edit} onSaved={saved} />
+          <ImportModelsDialog
+            key={`import-${dialogKey}`}
+            state={discoverState}
+            provider={discover}
+            models={models}
+            onImported={replace}
+          />
+        </>
+      ) : null}
     </div>
   );
 }
