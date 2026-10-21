@@ -59,3 +59,24 @@ test("relayEvent names data-only events by their type field", () => {
   assert.equal(out, 'data: {"type":"image_generation.completed","usage":{"input_tokens":3}}\n\n');
   assert.equal(relayEvent("data: one\ndata: two", {}), "data: one\ntwo\n\n");
 });
+
+test("relaySse ends the client stream before slow end bookkeeping settles", async () => {
+  let release = () => {};
+  const steps: string[] = [];
+  const res = relaySse(chunked('event: message_stop\ndata: {"type":"message_stop"}\n\n'), {
+    onEnd: async () => {
+      steps.push("end started");
+      await new Promise<void>((resolve) => (release = resolve));
+      steps.push("end finished");
+    },
+  });
+  const body = res.text();
+  const text = await Promise.race([body, new Promise<null>((resolve) => setTimeout(resolve, 1000, null))]);
+  steps.push("client done");
+  release();
+  await body;
+  assert.equal(text, 'event: message_stop\ndata: {"type":"message_stop"}\n\n');
+  assert.deepEqual(steps.slice(0, 2), ["end started", "client done"]);
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(steps, ["end started", "client done", "end finished"]);
+});
