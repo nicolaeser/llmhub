@@ -6,7 +6,8 @@ import { fireAlert } from "@/lib/alerts/notify";
 import { antigravityModels } from "@/lib/gateway/upstreams/antigravity";
 import { fetchAvailableModels } from "@/lib/gateway/upstreams/antigravity-api";
 import { fetchGeminiModels, fetchVertexModels } from "@/lib/gateway/upstreams/google-models";
-import { isSignInKind, PROVIDER_CATALOG } from "@/lib/gateway/upstreams/provider-kinds";
+import { museModels } from "@/lib/gateway/upstreams/muse";
+import { isSignInKind, PROVIDER_CATALOG, speaksMuse } from "@/lib/gateway/upstreams/provider-kinds";
 import { CLAUDE_OAUTH_BETAS } from "@/lib/gateway/upstreams/claude";
 import { CODEX_CLIENT_VERSION, codexModelFacts } from "@/lib/gateway/upstreams/codex";
 import { asNumber, asRecord, asString } from "@/lib/gateway/core";
@@ -50,6 +51,16 @@ async function fetchAntigravityModels(auth: UpstreamAuth): Promise<DiscoveredMod
   return antigravityModels(json);
 }
 
+async function fetchMuseModels(kind: string, baseUrl: string, auth: UpstreamAuth): Promise<DiscoveredModel[]> {
+  try {
+    const listed = await fetchProviderModels(kind, baseUrl, auth.key, auth.headers);
+    return listed.length ? listed : museModels();
+  } catch (error) {
+    if (error instanceof Error && error.message === "UPSTREAM_AUTH") throw error;
+    return museModels();
+  }
+}
+
 function providerBase(row: ProviderSyncRecord): string {
   return row.baseUrl.trim() || PROVIDER_CATALOG.find((spec) => spec.kind === row.kind)?.default_base_url || "";
 }
@@ -58,6 +69,7 @@ async function fetchConnectionModels(row: ProviderSyncRecord, auth: UpstreamAuth
   if (row.kind === "antigravity") return fetchAntigravityModels(auth);
   if (row.kind === "gemini") return fetchGeminiModels(providerBase(row), auth);
   if (row.kind === "vertex") return fetchVertexModels(providerBase(row), auth);
+  if (speaksMuse(row.kind)) return fetchMuseModels(row.kind, row.baseUrl, auth);
   return fetchProviderModels(row.kind, row.baseUrl, auth.key, auth.headers);
 }
 

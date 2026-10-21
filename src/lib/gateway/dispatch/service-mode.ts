@@ -210,6 +210,12 @@ export function applyProviderServiceMode(
     }
     case "typesafe":
     case "grok_build":
+    case "moonshot":
+    case "moonshot_cn":
+    case "kimi":
+    case "kimi_ai":
+    case "meta":
+    case "muse_code":
     case "gemini":
     case "vertex": {
       delete payload.service_tier;

@@ -169,7 +169,7 @@ export default function TemplatesTab() {
                   <Table.Column>{t("columns.rules")}</Table.Column>
                   <Table.Column>{t("columns.models")}</Table.Column>
                   <Table.Column>{t("columns.keys")}</Table.Column>
-                  <Table.Column>{tCommon("actions")}</Table.Column>
+                  {canManage ? <Table.Column>{tCommon("actions")}</Table.Column> : null}
                 </Table.Header>
                 <Table.Body>
                   {templates.map((template) => (
@@ -185,9 +185,11 @@ export default function TemplatesTab() {
                       </Table.Cell>
                       <Table.Cell>{t("matchCount", { count: templateModels(template, policies).length })}</Table.Cell>
                       <Table.Cell>{t("keyCount", { count: template.keyCount })}</Table.Cell>
-                      <Table.Cell>
-                        {canManage ? <div className="flex gap-1">{templateActions(template)}</div> : null}
-                      </Table.Cell>
+                      {canManage ? (
+                        <Table.Cell>
+                          <div className="flex gap-1">{templateActions(template)}</div>
+                        </Table.Cell>
+                      ) : null}
                     </Table.Row>
                   ))}
                 </Table.Body>
