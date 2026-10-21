@@ -455,7 +455,7 @@ async function sampleConnections(samples) {
 
 async function statementStats() {
   const out = await psql(
-    `select calls, round(total_exec_time::numeric, 1), rows, regexp_replace(left(query, 160), '\\s+', ' ', 'g') from pg_stat_statements where dbid = (select oid from pg_database where datname = '${args["pg-database"]}') and query not ilike '%pg_stat%' order by calls desc`,
+    `select calls, round(total_exec_time::numeric, 1), rows, regexp_replace(left(query, 160), '\\s+', ' ', 'g') from pg_stat_statements where dbid = (select oid from pg_database where datname = '${args["pg-database"]}') and query not ilike '%pg_stat%' order by calls desc limit 60`,
   );
   return out
     .trim()
@@ -467,7 +467,7 @@ async function statementStats() {
     });
 }
 
-function serverMetrics(from, to) {
+function serverMetrics(from, to, requests) {
   if (!args.metrics) return null;
   let lines;
   try {
@@ -489,6 +489,12 @@ function serverMetrics(from, to) {
     loopDelayP99Ms: percentile(lines.map((line) => line.loopDelayP99), 50),
     loopDelayMaxMs: Math.round(Math.max(...lines.map((line) => line.loopDelayMax))),
     loopUtilization: Math.round((lines.reduce((sum, line) => sum + line.loopUtilization, 0) / lines.length) * 100) / 100,
+    cpuMsPerRequest: requests ? Math.round((lines.reduce((sum, line) => sum + (line.cpuMs ?? 0), 0) / requests) * 10) / 10 : null,
+    poolWaitMsPerRequest: requests ? Math.round((lines.reduce((sum, line) => sum + (line.pool?.waitMs ?? 0), 0) / requests) * 10) / 10 : null,
+    poolAcquisitionsPerRequest: requests ? Math.round((lines.reduce((sum, line) => sum + (line.pool?.acquisitions ?? 0), 0) / requests) * 10) / 10 : null,
+    poolWaitMaxMs: Math.round(Math.max(0, ...lines.map((line) => line.pool?.waitMaxMs ?? 0))),
+    poolWaitingMax: Math.max(0, ...lines.map((line) => line.pool?.waitingMax ?? 0)),
+    poolTotalMax: Math.max(0, ...lines.map((line) => line.pool?.totalMax ?? 0)),
   };
 }
 
@@ -611,7 +617,7 @@ async function main() {
     const writes = statements.filter((item) => /^\s*(insert|update|delete)/i.test(item.query)).reduce((sum, item) => sum + item.calls, 0);
     const summary = summarize(stage, stageRecords, timings, {
       stickiness: accountSwitches(timings, sessionIds),
-      server: serverMetrics(stageStart, Date.now()),
+      server: serverMetrics(stageStart, Date.now(), stageRecords.length),
       postgres: args["pg-container"]
         ? {
             connectionsMax: Math.max(0, ...samples.map((row) => row.total)),

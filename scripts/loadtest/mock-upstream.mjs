@@ -38,6 +38,7 @@ const config = {
   accounts: {},
 };
 
+const initialConfig = JSON.stringify(config);
 const CHUNK_TOKENS = 4;
 const WORDS = "the gateway relays every event of this streamed answer while the session keeps its account".split(" ");
 const MODELS = ["claude-opus-5-5", "claude-sonnet-5", "claude-haiku-4-5"];
@@ -449,6 +450,8 @@ async function control(req, res) {
 }
 
 function reset(res) {
+  for (const key of Object.keys(config)) delete config[key];
+  Object.assign(config, JSON.parse(initialConfig));
   timings = [];
   sessions.clear();
   promptCache.clear();

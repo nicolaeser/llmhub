@@ -1,4 +1,6 @@
 import { appendFileSync } from "node:fs";
+import { createRequire } from "node:module";
+import { join } from "node:path";
 import { monitorEventLoopDelay, performance } from "node:perf_hooks";
 import { setInterval } from "node:timers";
 
@@ -35,12 +37,53 @@ globalThis.fetch = async function loadtestFetch(input, init) {
   return originalFetch(next, init);
 };
 
+const poolStats = { acquisitions: 0, waitMs: 0, waitMaxMs: 0, waitingMax: 0, totalMax: 0 };
+
+function poolClass() {
+  try {
+    return createRequire(join(process.cwd(), "server.js"))("pg-pool");
+  } catch {
+    return null;
+  }
+}
+
+function watchPools() {
+  const Pool = poolClass();
+  if (!Pool?.prototype?.connect) return;
+  const connect = Pool.prototype.connect;
+  Pool.prototype.connect = function watchedConnect(callback) {
+    const started = performance.now();
+    poolStats.waitingMax = Math.max(poolStats.waitingMax, this.waitingCount ?? 0);
+    poolStats.totalMax = Math.max(poolStats.totalMax, this.totalCount ?? 0);
+    const settle = () => {
+      const waited = performance.now() - started;
+      poolStats.acquisitions += 1;
+      poolStats.waitMs += waited;
+      poolStats.waitMaxMs = Math.max(poolStats.waitMaxMs, waited);
+    };
+    if (typeof callback === "function") {
+      return connect.call(this, (err, client, release) => {
+        settle();
+        callback(err, client, release);
+      });
+    }
+    return connect.call(this).then((client) => {
+      settle();
+      return client;
+    });
+  };
+}
+
 if (metricsFile) {
+  watchPools();
   const delay = monitorEventLoopDelay({ resolution: 10 });
   delay.enable();
   let utilization = performance.eventLoopUtilization();
+  let cpu = process.cpuUsage();
   setInterval(() => {
     const memory = process.memoryUsage();
+    const spent = process.cpuUsage(cpu);
+    cpu = process.cpuUsage();
     const current = performance.eventLoopUtilization(utilization);
     utilization = performance.eventLoopUtilization();
     const line = {
@@ -54,8 +97,11 @@ if (metricsFile) {
       loopDelayP99: delay.percentile(99) / 1e6,
       loopDelayMax: delay.max / 1e6,
       loopUtilization: current.utilization,
+      cpuMs: (spent.user + spent.system) / 1000,
+      pool: { ...poolStats },
     };
     delay.reset();
+    Object.assign(poolStats, { acquisitions: 0, waitMs: 0, waitMaxMs: 0, waitingMax: 0, totalMax: 0 });
     appendFileSync(metricsFile, `${JSON.stringify(line)}\n`);
   }, 1000).unref();
 }
