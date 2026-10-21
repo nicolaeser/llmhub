@@ -4,23 +4,30 @@ import prisma from "@/lib/db/prisma";
 import { requirePermission } from "@/lib/auth/guards";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { setupLinks } from "@/lib/auth/scope";
-import { chatChoices, modelRole, type ModelChoice, type ModelRole } from "@/lib/models/model-role";
+import { listedIn, routePool } from "@/lib/gateway/routing/route-pool";
+import { chatChoices, modelRole, type ModelRole } from "@/lib/models/model-role";
+import type { PooledModelChoice } from "@/types/models";
 
-export async function enabledModelChoices(): Promise<ModelChoice[]> {
+export async function enabledModelChoices(): Promise<PooledModelChoice[]> {
   const groups = await prisma.modelGroup.findMany({
     where: { enabled: true },
-    select: { alias: true, displayName: true, deployments: { select: { model: true } } },
+    select: {
+      alias: true,
+      displayName: true,
+      deployments: { select: { kind: true, model: true, provider: { select: { kind: true, internal: true } } } },
+    },
     orderBy: { alias: "asc" },
   });
   return groups.map((group) => ({
     alias: group.alias,
     label: group.displayName || group.alias,
     role: modelRole([...group.deployments.map((deployment) => deployment.model), group.alias, group.displayName]),
+    pools: [...new Set(group.deployments.map(routePool))],
   }));
 }
 
-export async function enabledAliases(): Promise<string[]> {
-  return (await enabledModelChoices()).map((choice) => choice.alias);
+export async function apiModelChoices(): Promise<PooledModelChoice[]> {
+  return (await enabledModelChoices()).filter((choice) => listedIn(choice, "api"));
 }
 
 export async function assertModelRoles(checks: { alias: string; role: ModelRole }[]): Promise<void> {
@@ -46,7 +53,7 @@ export async function assertModelRoles(checks: { alias: string; role: ModelRole 
 export async function loadAliases() {
   const session = await requirePermission(PERMISSIONS.PLAYGROUND_USE);
   const [choices, providers] = await Promise.all([
-    enabledModelChoices(),
+    apiModelChoices(),
     prisma.providerConnection.count(),
   ]);
   return { models: chatChoices(choices).map((choice) => choice.alias), providers, setupLinks: setupLinks(session) };

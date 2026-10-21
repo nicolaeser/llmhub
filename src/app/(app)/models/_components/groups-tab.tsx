@@ -6,7 +6,7 @@ import { BookOpen, Network, Plus, Trash2 } from "lucide-react";
 import { useFormatter, useTranslations } from "next-intl";
 import { Link } from "@/i18n/routing";
 import ConfirmDialog from "@/components/console/confirm-dialog";
-import SubscriptionBadge from "@/components/console/subscription-badge";
+import SubscriptionBadge, { InternalBadge } from "@/components/console/subscription-badge";
 import EmptyState from "@/components/console/empty-state";
 import PageStatus from "@/components/console/page-status";
 import RowCard, { RowCards, TABLE_FROM_LG } from "@/components/console/row-cards";
@@ -21,7 +21,8 @@ import { setSearchParams, useSearchParam } from "@/lib/hooks/use-search-param";
 import { isActionFail } from "@/lib/http/action-result";
 import { splitTag } from "@/lib/gateway/catalog/model-catalog";
 import type { ModelGroupView, ProviderOpt } from "@/types/models";
-import { isSignInKind } from "@/lib/gateway/upstreams/provider-kinds";
+import type { RoutePool } from "@/types/routing";
+import { hiddenFrom, routePool } from "@/lib/gateway/routing/route-pool";
 import { modelRole } from "@/lib/models/model-role";
 import ModelGroupDialog from "./model-group-dialog";
 
@@ -67,17 +68,39 @@ export default function GroupsTab() {
     if (groupParam) setSearchParams({ group: null });
   }
 
+  function pooledRoutes(group: ModelGroupView) {
+    return group.deployments.map((dep) => ({
+      kind: dep.kind,
+      provider: providers.find((item) => item.id === dep.providerId) ?? null,
+    }));
+  }
+
   function routes(group: ModelGroupView) {
-    const seen = new Map<string, { name: string; subscription: boolean }>();
-    for (const dep of group.deployments) {
-      const provider = providers.find((item) => item.id === dep.providerId);
-      const subscription = isSignInKind(dep.kind) || isSignInKind(provider?.kind ?? "");
+    const seen = new Map<string, { name: string; pool: RoutePool }>();
+    for (const route of pooledRoutes(group)) {
+      const pool = routePool(route);
       const name =
-        provider?.name ?? tProviders(subscription ? "kindShort" : "kindName", { kind: dep.kind });
-      const key = `${name}:${subscription ? "subscription" : "api"}`;
-      if (!seen.has(key)) seen.set(key, { name, subscription });
+        route.provider?.name ?? tProviders(pool === "subscription" ? "kindShort" : "kindName", { kind: route.kind });
+      const key = `${name}:${pool}`;
+      if (!seen.has(key)) seen.set(key, { name, pool });
     }
     return [...seen.entries()].map(([key, route]) => ({ key, ...route }));
+  }
+
+  function groupChips(group: ModelGroupView) {
+    const { tag } = splitTag(group.alias);
+    const internal = hiddenFrom("api", pooledRoutes(group));
+    if (!tag && !internal) return null;
+    return (
+      <span className="inline-flex flex-wrap items-center gap-1">
+        {internal ? <InternalBadge /> : null}
+        {tag ? (
+          <Chip size="sm" variant="soft" color="warning" className="whitespace-nowrap">
+            {tCatalog("tag", { tag })}
+          </Chip>
+        ) : null}
+      </span>
+    );
   }
 
   function openDialog(group: ModelGroupView | null) {
@@ -128,16 +151,6 @@ export default function GroupsTab() {
     return format.list([group.vendor, group.displayName].filter(Boolean), { type: "unit" });
   }
 
-  function tagChip(group: ModelGroupView) {
-    const { tag } = splitTag(group.alias);
-    if (!tag) return null;
-    return (
-      <Chip size="sm" variant="soft" color="warning" className="whitespace-nowrap">
-        {tCatalog("tag", { tag })}
-      </Chip>
-    );
-  }
-
   function billingLabel(group: ModelGroupView) {
     return t("billingSummary", {
       mode: group.billingMode,
@@ -153,7 +166,8 @@ export default function GroupsTab() {
         {routes(group).map((route) => (
           <span key={route.key} className="inline-flex items-center gap-1.5 text-sm">
             <span>{route.name}</span>
-            {route.subscription ? <SubscriptionBadge /> : null}
+            {route.pool === "subscription" ? <SubscriptionBadge /> : null}
+            {route.pool === "internal" ? <InternalBadge /> : null}
           </span>
         ))}
       </div>
@@ -281,7 +295,7 @@ export default function GroupsTab() {
                     title={g.alias}
                     description={g.vendor || g.displayName ? groupDetail(g) : undefined}
                     aside={enabledSwitch(g)}
-                    chips={tagChip(g)}
+                    chips={groupChips(g)}
                     details={[
                       { label: t("columns.strategy"), value: t("strategyLabel", { strategy: g.strategy }) },
                       { label: t("columns.overflow"), value: g.overflowGroup || tCommon("none") },
@@ -320,7 +334,7 @@ export default function GroupsTab() {
                             ) : (
                               <span className="px-3 font-medium">{g.alias}</span>
                             )}
-                            {tagChip(g)}
+                            {groupChips(g)}
                             {g.vendor || g.displayName ? (
                               <div className="px-3 text-xs text-muted">{groupDetail(g)}</div>
                             ) : null}

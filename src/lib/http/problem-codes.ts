@@ -58,6 +58,7 @@ export const PROBLEMS = {
   VERTEX_PROJECT_INVALID: { status: 422, title: "Invalid or missing Google Cloud project for Vertex AI" },
   VERTEX_LOCATION_INVALID: { status: 422, title: "Invalid Vertex AI location" },
   SIGN_IN_REQUIRED: { status: 422, title: "This provider connects by signing in from the console" },
+  INTERNAL_SIGN_IN: { status: 422, title: "Subscription providers cannot be internal only" },
   WEAK_PASSWORD: { status: 422, title: "Password is too weak" },
   PASSWORD_GUESSABLE: { status: 422, title: "Password is too easy to guess" },
   PASSWORD_REUSED: { status: 422, title: "Password was used before" },

@@ -20,7 +20,7 @@ import { gatewayPath } from "@/lib/gateway/api-paths";
 import { routeOf } from "@/lib/gateway/routing/route-pool";
 import { NextResponse } from "next/server";
 import type { JsonMap, Principal } from "@/types/gateway";
-import type { RoutePool } from "@/types/routing";
+import type { PublicPool } from "@/types/routing";
 import type { OutputGuard } from "@/types/guardrails";
 
 export function toGateError(err: unknown): GateError {
@@ -94,7 +94,7 @@ export function withTrace(principal: Principal, endpoint: string): Principal {
   };
 }
 
-export async function gateRequest(req: Request, pool: RoutePool = "api"): Promise<Principal> {
+export async function gateRequest(req: Request, pool: PublicPool = "api"): Promise<Principal> {
   const token = bearerToken(req);
   const path = requestPath(req);
   const principal = { ...withTrace(await authenticateBearer(token), path), pool };

@@ -33,7 +33,7 @@ import { deploymentAuth, renewRejectedLogin } from "@/lib/gateway/upstreams/cred
 import { nudgeLimits } from "@/lib/gateway/upstreams/limit-store";
 import { autoRedeemIfDue } from "@/lib/gateway/upstreams/reset-redeem";
 import { plainModel } from "@/lib/gateway/catalog/model-alias";
-import { inPool, outsidePool, routeOf } from "@/lib/gateway/routing/route-pool";
+import { hiddenFrom, outsidePool, routable, routeOf } from "@/lib/gateway/routing/route-pool";
 import { KEEPALIVE_MS, SSE_HEADERS, SSE_KEEPALIVE, sseData } from "@/lib/gateway/protocols/sse";
 import {
   devinResetLookup,
@@ -52,7 +52,7 @@ import {
   upstreamModel,
   upstreamRetryAt,
 } from "@/lib/gateway/dispatch/upstream";
-import { asRecord, isRouterError, isUnavailableError, newId, routerGateError, stringifyContent } from "@/lib/gateway/core";
+import { asRecord, ERR_UNKNOWN_GROUP, isRouterError, isUnavailableError, newId, routerGateError, stringifyContent } from "@/lib/gateway/core";
 import { costFilter, costRejected } from "@/lib/gateway/billing/cost-cap";
 import { ChatStreamTranscript } from "@/lib/gateway/request-logs/log-content";
 import { estimateTokens, requestText } from "@/lib/gateway/billing/tokens";
@@ -274,19 +274,24 @@ export async function withDeployment<T>(
       last = err;
       continue;
     }
-    const pooled = group.mapped.filter(inPool(pool));
+    if (hiddenFrom(pool, group.mapped)) {
+      last = ERR_UNKNOWN_GROUP;
+      continue;
+    }
+    const inPool = routable(pool);
+    const pooled = group.mapped.filter(inPool);
     const variants = variantRoutes(pooled, opts?.request);
-    const routable = (dep: ResolvedDeployment) => inPool(pool)(dep) && variants.serves(dep);
-    const reachable = !group.mapped.length || group.mapped.some(routable) || Boolean(group.overflow_group);
+    const servable = (dep: ResolvedDeployment) => inPool(dep) && variants.serves(dep);
+    const reachable = !group.mapped.length || group.mapped.some(servable) || Boolean(group.overflow_group);
     if (!reachable) last = pooled.length && variants.error ? variants.error : outsidePool(pool, surface);
     const attempts = reachable ? Math.max(0, group.num_retries) + 1 : 0;
-    const switchBudget = accountBudget(pooled.filter(routable));
+    const switchBudget = accountBudget(pooled.filter(servable));
     let switches = 0;
     let stopAlias = false;
     for (let i = 0; i < attempts; i++) {
       if (opts?.signal?.aborted) throw clientClosedError();
       try {
-        const acquired = await acquireGroup(group, limits[root], routable, opts?.strategy, opts?.cost, access, run);
+        const acquired = await acquireGroup(group, limits[root], servable, opts?.strategy, opts?.cost, access, run);
         const account = signInAccount(acquired.dep);
         const switched = account !== null && failedAccount !== null && failedAccount !== account;
         prepareHandoff(acquired.dep, acquired.pinned, switched, request);

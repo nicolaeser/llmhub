@@ -3,7 +3,7 @@ import prisma from "@/lib/db/prisma";
 import { modelAlias } from "@/lib/gateway/catalog/model-alias";
 import { chatOnce, withDeployment } from "@/lib/gateway/dispatch/chat";
 import { GateError } from "@/lib/gateway/errors";
-import { inPool } from "@/lib/gateway/routing/route-pool";
+import { routable } from "@/lib/gateway/routing/route-pool";
 import { errorFields } from "@/lib/logging/format";
 import { logger } from "@/lib/logging/logger";
 import { DRAFT_TIME_MS, draftWithAgent, turnOf } from "@/lib/mcp/builder-agent";
@@ -73,14 +73,14 @@ export async function builderModels(): Promise<McpBuilderModel[]> {
     select: {
       alias: true,
       displayName: true,
-      deployments: { select: { kind: true, model: true, provider: { select: { kind: true } } } },
+      deployments: { select: { kind: true, model: true, provider: { select: { kind: true, internal: true } } } },
     },
     orderBy: { alias: "asc" },
   });
   return groups
     .filter(
       (group) =>
-        group.deployments.some(inPool("api")) &&
+        group.deployments.some(routable("api")) &&
         modelRole([...group.deployments.map((deployment) => deployment.model), group.alias, group.displayName]) === "chat",
     )
     .map((group) => ({ alias: group.alias, label: group.displayName || group.alias }));
