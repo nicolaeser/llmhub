@@ -131,11 +131,14 @@ function signedIn(row: { authType: string; oauthGrant: string; oauthLogin?: { st
 
 export async function loadMcpServers(chain: McpChain) {
   const conditions = chainConditions(chain);
+  const where = {
+    enabled: true,
+    OR: [{ global: true }, ...(conditions.length ? [{ assignments: { some: { mode: "allow", OR: conditions } } }] : [])],
+  };
+  const anyOffered = await prisma.mcpServer.findMany({ where, select: { id: true }, take: 1 });
+  if (!anyOffered.length) return { servers: [], records: new Map<string, McpServerRecord>() };
   const rows = await prisma.mcpServer.findMany({
-    where: {
-      enabled: true,
-      OR: [{ global: true }, ...(conditions.length ? [{ assignments: { some: { mode: "allow", OR: conditions } } }] : [])],
-    },
+    where,
     select: {
       id: true,
       name: true,
