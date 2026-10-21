@@ -631,7 +631,7 @@ test("auto reset settings are validated, stored per kind, and audited", async ()
     saveAutoReset({ kind: "claude", enabled: true, percent: 100, scope: "account" }),
   );
   assert.deepEqual(saved.autoReset, { claude: { enabled: true, percent: 100, scope: "account" } });
-  assert.equal(routing.find((row) => row.kind === "claude")?.strategy, "inherit");
+  assert.equal(routing.find((row) => row.kind === "claude")?.strategy, "smart");
   const audit = audits.find((row) => row.action === "account_routing.auto_reset");
   assert.equal(audit?.objectId, "claude");
   const viewer = principal(["providers:read"]);
