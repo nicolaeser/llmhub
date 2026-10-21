@@ -8,6 +8,7 @@ rustfs-data
 postgres-data
 redis-data
 src/tests
+scripts/loadtest
 .env*
 *.tsbuildinfo
 next-env.d.ts
