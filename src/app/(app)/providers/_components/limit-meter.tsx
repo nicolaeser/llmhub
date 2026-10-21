@@ -3,7 +3,7 @@
 import { Chip, Label, Meter } from "@heroui/react";
 import { useFormatter, useNow, useTranslations } from "next-intl";
 import { meterColor } from "@/lib/utils/budget";
-import type { LimitWindow } from "@/types/providers";
+import type { LimitGroup } from "@/types/providers";
 
 const DAY_SECONDS = 86_400;
 const HOUR_SECONDS = 3_600;
@@ -21,26 +21,34 @@ function windowSpan(seconds: number): { unit: string; count: number } {
 }
 
 export default function LimitMeter({
-  window,
-  scoped,
+  group,
+  withMembers,
   timeZone,
 }: {
-  window: LimitWindow;
-  scoped?: boolean;
+  group: LimitGroup;
+  withMembers?: boolean;
   timeZone: string;
 }) {
   const t = useTranslations("Subscriptions.limits");
   const format = useFormatter();
   const now = useNow({ updateInterval: 60_000 });
-  const resetsAt = window.resetsAt ? new Date(window.resetsAt) : null;
-  const renewed = resetsAt !== null && resetsAt.getTime() <= now.getTime();
-  const used = renewed ? 0 : window.usedPercent;
-  const span = t("window", windowSpan(window.windowSeconds));
-  const label = scoped && window.scope ? t("scoped", { scope: window.scope, window: span }) : span;
+  const resetsAt = group.resetsAt ? new Date(group.resetsAt) : null;
+  const pending = resetsAt !== null && resetsAt.getTime() > now.getTime();
+  const used = group.usedPercent;
+  const span = t("window", windowSpan(group.windowSeconds));
+  const name = group.family ? t("group", { family: group.family }) : group.label;
+  const scopedLabel = group.windowSeconds > 0 ? t("scoped", { scope: name, window: span }) : name;
+  const label = group.scoped ? scopedLabel : span;
+  const listed = withMembers && group.members.length > 1;
 
   return (
     <div className="min-w-0 space-y-1">
-      <Meter value={used} color={meterColor(used / 100)} aria-label={label}>
+      <Meter
+        value={used}
+        color={meterColor(used / 100)}
+        aria-label={label}
+        valueLabel={group.uniform ? format.number(used / 100, { style: "percent" }) : t("upTo", { used: used / 100 })}
+      >
         <Label>{label}</Label>
         <Meter.Output />
         <Meter.Track>
@@ -48,7 +56,7 @@ export default function LimitMeter({
         </Meter.Track>
       </Meter>
       <div className="flex flex-wrap items-center gap-2 text-xs text-muted">
-        {resetsAt && !renewed ? (
+        {resetsAt && pending ? (
           <span>
             {t("resets", {
               when: format.relativeTime(resetsAt, now),
@@ -65,12 +73,26 @@ export default function LimitMeter({
           </span>
         ) : null}
         {!resetsAt && used === 0 ? <span>{t("notStarted")}</span> : null}
-        {!renewed && window.limitReached ? (
+        {group.limitReached ? (
           <Chip size="sm" variant="soft" color="danger" className="whitespace-nowrap">
             {t("reached")}
           </Chip>
         ) : null}
       </div>
+      {listed && group.uniform ? (
+        <p className="break-words text-xs text-muted">
+          {t("sharedBy", { models: format.list(group.members.map((member) => member.label), { type: "conjunction" }) })}
+        </p>
+      ) : null}
+      {listed && !group.uniform ? (
+        <ul className="space-y-0.5 text-xs text-muted">
+          {group.members.map((member) => (
+            <li key={member.scope} className="break-words">
+              {t("member", { model: member.label, used: member.usedPercent / 100, reached: String(member.limitReached) })}
+            </li>
+          ))}
+        </ul>
+      ) : null}
     </div>
   );
 }

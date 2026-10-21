@@ -63,6 +63,16 @@ test("model scoped windows only count for the model they name", () => {
   assert.equal(quotaPressure(opusFull, "claude-opus-4", NOW), 100);
 });
 
+test("a window label never changes which models a scoped window covers", () => {
+  const labelled = limits([
+    window({ scope: "gemini-3-flash", label: "Claude Opus 4.6", usedPercent: 100, limitReached: true, resetsAt: iso(2) }),
+  ]);
+  assert.equal(quotaExhausted(labelled, "gemini-3-flash", NOW), true);
+  assert.equal(quotaExhausted(labelled, "claude-opus-4-6", NOW), false);
+  assert.equal(quotaExhausted(labelled, "", NOW), false);
+  assert.equal(quotaPressure(labelled, "claude-opus-4-6", NOW), 50);
+});
+
 test("pressure is the tightest live window and a renewed window counts as empty", () => {
   const mixed = limits([
     window({ usedPercent: 30, resetsAt: iso(1) }),
