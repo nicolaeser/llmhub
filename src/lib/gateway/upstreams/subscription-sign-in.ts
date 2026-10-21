@@ -16,6 +16,8 @@ import {
 } from "@/lib/gateway/upstreams/antigravity";
 import { antigravityClientSecret } from "@/lib/gateway/upstreams/antigravity-config";
 import { CLAUDE_OAUTH_BETAS, claudeIdentityHeaders } from "@/lib/gateway/upstreams/claude";
+import { devinAuthorizationUrl, devinSession, pastedSessionToken } from "@/lib/gateway/upstreams/devin-account";
+import { devinProfile, devinStatusReply, exchangeDevinCode, readDevinStatus } from "@/lib/gateway/upstreams/devin-api";
 import { KIMI_CLIENT_ID, kimiAuthHost, kimiHeaders } from "@/lib/gateway/upstreams/kimi";
 import {
   MUSE_AUTH_USER_AGENT,
@@ -31,10 +33,12 @@ import { readJsonOr } from "@/lib/utils/json";
 import { signInCredentialSchema, signInTicketSchema } from "@/schemas/providers";
 import type { JsonMap } from "@/types/gateway";
 import type {
+  CodeGrant,
   DeviceAuthorization,
   DeviceGrant,
   DevicePoll,
   KimiCodeKind,
+  RotatingSignInKind,
   SignInCredential,
   SignInKind,
   SignInSession,
@@ -59,6 +63,8 @@ const CLAUDE_SCOPE = "user:profile user:inference user:sessions:claude_code user
 const CLAUDE_AUTHORIZATION_TTL_S = 10 * 60;
 const CLAUDE_OAUTH_USER_AGENT = "axios/1.15.2";
 const ANTIGRAVITY_AUTHORIZATION_TTL_S = 10 * 60;
+const DEVIN_AUTHORIZATION_TTL_S = 10 * 60;
+const DEVIN_VERIFIER_BYTES = 64;
 const ONBOARD_ATTEMPTS = 5;
 const ONBOARD_POLL_MS = 2_000;
 const DEVICE_GRANT_TYPE = "urn:ietf:params:oauth:grant-type:device_code";
@@ -294,7 +300,14 @@ const AUTHORIZATION_STARTS: Record<SignInKind, () => Promise<DeviceAuthorization
   kimi: () => requestKimiDeviceCode("kimi"),
   kimi_ai: () => requestKimiDeviceCode("kimi_ai"),
   muse_code: () => requestMuseDeviceCode(),
+  devin: async () => requestDevinAuthorization(),
 };
+
+const CODE_GRANT_KINDS = new Set<string>(["claude", "antigravity", "devin"]);
+
+export function isCodeGrant(grant: DeviceGrant): grant is CodeGrant {
+  return CODE_GRANT_KINDS.has(grant.kind);
+}
 
 export function startAuthorization(kind: SignInKind): Promise<DeviceAuthorization> {
   if (!Object.hasOwn(AUTHORIZATION_STARTS, kind)) throw new Error("UNKNOWN_PROVIDER_KIND");
@@ -344,6 +357,43 @@ export function requestAuthorizationCode(): DeviceAuthorization {
     interval: DEFAULT_INTERVAL_S,
     expiresIn: CLAUDE_AUTHORIZATION_TTL_S,
   };
+}
+
+export function requestDevinAuthorization(): DeviceAuthorization {
+  const verifier = randomBytes(DEVIN_VERIFIER_BYTES).toString("base64url");
+  const state = randomBytes(32).toString("base64url");
+  return {
+    grant: { kind: "devin", verifier, state },
+    verificationUrl: devinAuthorizationUrl(pkceChallenge(verifier), state),
+    userCode: "",
+    interval: DEFAULT_INTERVAL_S,
+    expiresIn: DEVIN_AUTHORIZATION_TTL_S,
+  };
+}
+
+async function devinAccountSession(token: string): Promise<SignInSession> {
+  const [reply, profile] = await Promise.all([devinStatusReply(token), devinProfile(token)]);
+  if (reply.status === 401 || reply.status === 403) throw new Error("SIGN_IN_FAILED");
+  const session = devinSession(token, { status: readDevinStatus(reply), profile });
+  if (!session.account) throw new Error("SIGN_IN_FAILED");
+  return session;
+}
+
+async function completeDevin(grant: Extract<DeviceGrant, { kind: "devin" }>, input: string): Promise<SignInSession> {
+  const pasted = pastedSessionToken(input);
+  if (pasted) return devinAccountSession(pasted);
+  const { code, state } = parseAuthorizationInput(input);
+  if (!code || (state && state !== grant.state)) throw new Error("SIGN_IN_FAILED");
+  return devinAccountSession(await exchangeDevinCode(code, grant.verifier));
+}
+
+async function renewDevin(current: SignInSession): Promise<TokenRefresh> {
+  const reply = await devinStatusReply(current.tokens.access);
+  if (reply.status === 401 || reply.status === 403) return { ok: false, fatal: true, retryAfterMs: null };
+  if (reply.status === 429) return { ok: false, fatal: false, retryAfterMs: retryAfterMs(reply.retryAfter, Date.now()) };
+  const status = readDevinStatus(reply);
+  if (!status) return { ok: false, fatal: false, retryAfterMs: null };
+  return { ok: true, session: devinSession(current.tokens.access, { status }, current) };
 }
 
 export function parseAuthorizationInput(input: string): { code: string; state: string } {
@@ -445,10 +495,8 @@ async function completeAntigravity(
   return antigravitySession(exchanged.json, Date.now(), undefined, { account, plan: details.plan, project: details.project });
 }
 
-export async function completeAuthorization(
-  grant: Extract<DeviceGrant, { kind: "claude" | "antigravity" }>,
-  input: string,
-): Promise<SignInSession> {
+export async function completeAuthorization(grant: CodeGrant, input: string): Promise<SignInSession> {
+  if (grant.kind === "devin") return completeDevin(grant, input);
   const { code, state } = parseAuthorizationInput(input);
   if (!code || (state && state !== grant.state)) throw new Error("SIGN_IN_FAILED");
   if (grant.kind === "antigravity") return completeAntigravity(grant, code);
@@ -664,7 +712,7 @@ export function pollDeviceCode(grant: DeviceGrant): Promise<DevicePoll> {
 }
 
 async function refreshRequest(
-  kind: SignInKind,
+  kind: RotatingSignInKind,
   current: SignInSession,
 ): Promise<{ status: number; json: JsonMap; retryAfterMs: number | null }> {
   switch (kind) {
@@ -720,7 +768,7 @@ async function refreshRequest(
   }
 }
 
-function refreshedSession(kind: SignInKind, json: JsonMap, current: SignInSession): SignInSession {
+function refreshedSession(kind: RotatingSignInKind, json: JsonMap, current: SignInSession): SignInSession {
   switch (kind) {
     case "codex":
       return openaiSession(json, Date.now(), current);
@@ -740,6 +788,7 @@ function refreshedSession(kind: SignInKind, json: JsonMap, current: SignInSessio
 
 export async function refreshSession(kind: SignInKind, current: SignInSession): Promise<TokenRefresh> {
   if (!current.tokens.refresh) return { ok: false, fatal: true, retryAfterMs: null };
+  if (kind === "devin") return renewDevin(current);
   let result: { status: number; json: JsonMap; retryAfterMs: number | null };
   try {
     result = await refreshRequest(kind, current);

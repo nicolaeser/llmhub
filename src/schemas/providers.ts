@@ -18,7 +18,7 @@ export const vertexTargetSchema = z
 export const MAX_AUTH_FILES = 50;
 export const MAX_AUTH_FILE_BYTES = 256 * 1024;
 
-const signInKindSchema = z.enum(["codex", "grok_build", "claude", "antigravity", "kimi", "kimi_ai", "muse_code"]);
+const signInKindSchema = z.enum(["codex", "grok_build", "claude", "antigravity", "kimi", "kimi_ai", "muse_code", "devin"]);
 
 const authFileUploadSchema = z.object({
   name: z.string().trim().min(1).max(255),
@@ -68,6 +68,7 @@ export const signInTicketSchema = z.object({
     z.object({ kind: z.literal("kimi"), deviceCode: z.string().min(1), device: z.string().min(1) }),
     z.object({ kind: z.literal("kimi_ai"), deviceCode: z.string().min(1), device: z.string().min(1) }),
     z.object({ kind: z.literal("muse_code"), deviceCode: z.string().min(1) }),
+    z.object({ kind: z.literal("devin"), verifier: z.string().min(1), state: z.string().min(1) }),
   ]),
 });
 

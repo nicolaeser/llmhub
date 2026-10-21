@@ -5,6 +5,8 @@ import { fetchAvailableModels } from "@/lib/gateway/upstreams/antigravity-api";
 import { reportsLimits } from "@/lib/gateway/upstreams/provider-kinds";
 import { CLAUDE_OAUTH_BETAS } from "@/lib/gateway/upstreams/claude";
 import { CODEX_USAGE_URL } from "@/lib/gateway/upstreams/codex";
+import { devinLimits } from "@/lib/gateway/upstreams/devin-account";
+import { devinStatusReply, readDevinStatus } from "@/lib/gateway/upstreams/devin-api";
 import { kimiLimits, kimiUsageUrl } from "@/lib/gateway/upstreams/kimi";
 import { museModelsUrl } from "@/lib/gateway/upstreams/muse";
 import { asNumber, asRecord, asString } from "@/lib/gateway/core";
@@ -251,10 +253,20 @@ async function fetchMuseLimits(provider: LimitAccount): Promise<SubscriptionLimi
   };
 }
 
+async function fetchDevinLimits(provider: LimitAccount): Promise<SubscriptionLimits> {
+  const auth = await usageAuth(provider);
+  const reply = await devinStatusReply(auth.key);
+  failOn([{ status: reply.status, json: null, retryAfterMs: retryAfterMs(reply.retryAfter, Date.now()) }]);
+  const status = readDevinStatus(reply);
+  if (!status) throw new LimitsFetchError("UPSTREAM_FAILED");
+  return devinLimits(status);
+}
+
 async function probeStatus(kind: SignInKind, auth: UpstreamAuth): Promise<number> {
   if (kind === "antigravity") return (await fetchAvailableModels(auth)).status;
   if (kind === "kimi" || kind === "kimi_ai") return (await getJson(kimiUsageUrl(kind), auth.key, auth.headers)).status;
   if (kind === "muse_code") return (await getJson(museModelsUrl(), auth.key, auth.headers)).status;
+  if (kind === "devin") return (await devinStatusReply(auth.key)).status;
   if (kind === "claude") {
     return (await getJson(CLAUDE_USAGE_URL, auth.key, { ...auth.headers, "anthropic-beta": CLAUDE_OAUTH_BETAS.join(",") }))
       .status;
@@ -284,6 +296,7 @@ export async function fetchSubscriptionLimits(provider: LimitAccount): Promise<S
     return kimiLimits(await fetchUsage(provider, kimiUsageUrl(provider.kind)), await storedPlan(provider.id));
   }
   if (provider.kind === "muse_code") return fetchMuseLimits(provider);
+  if (provider.kind === "devin") return fetchDevinLimits(provider);
   return codexLimits(await fetchUsage(provider, CODEX_USAGE_URL));
 }
 

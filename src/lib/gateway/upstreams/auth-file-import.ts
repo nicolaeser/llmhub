@@ -4,6 +4,8 @@ import { asNumber, asRecord, asString } from "@/lib/gateway/core";
 import { antigravityClientSecret } from "@/lib/gateway/upstreams/antigravity-config";
 import { CODEX_USAGE_URL } from "@/lib/gateway/upstreams/codex";
 import { signInHeaders } from "@/lib/gateway/upstreams/credentials";
+import { devinSession, formatSessionToken } from "@/lib/gateway/upstreams/devin-account";
+import { devinProfile, devinStatusReply, readDevinStatus } from "@/lib/gateway/upstreams/devin-api";
 import { kimiUsageUrl } from "@/lib/gateway/upstreams/kimi";
 import { MUSE_KEY_EXPIRES_AT, museModelsUrl } from "@/lib/gateway/upstreams/muse";
 import {
@@ -41,10 +43,13 @@ const AUTH_FILE_KINDS: Record<string, SignInKind> = {
   "kimi.ai": "kimi_ai",
   "kimi.com": "kimi",
   meta: "muse_code",
+  devin: "devin",
 };
 
 const KIMI_AI_HOST = /(?:^|\.)kimi\.ai$/i;
 const MUSE_DCA_PREFIX = "dca:";
+const DEVIN_TOKEN_KEYS = ["session_token", "api_key", "token"];
+const DEVIN_REJECTED = new Set([401, 403]);
 
 const EXPIRY_KEYS = ["expired", "expire", "expires_at", "expiresAt", "expiry", "expires"];
 const LIFETIME_KEYS = ["expires_in", "expiresIn"];
@@ -209,7 +214,7 @@ export function authFileExpiry(record: JsonMap, access: string): number | null {
   return recordExpiry(record) ?? recordExpiry(asRecord(record.token) ?? {});
 }
 
-const SESSION_BUILDERS: Record<SignInKind, (entry: EntryTokens) => SignInSession> = {
+const SESSION_BUILDERS: Record<Exclude<SignInKind, "devin">, (entry: EntryTokens) => SignInSession> = {
   codex: ({ record, access, refresh, expiresAt }) => {
     const claims = openaiSession({ access_token: access, refresh_token: refresh, id_token: text(record, "id_token") });
     return {
@@ -261,6 +266,19 @@ function museTokens(record: JsonMap): { access: string; refresh: string; expires
   return { access: key || dca, refresh: dca, expiresAt: key ? MUSE_KEY_EXPIRES_AT : 0 };
 }
 
+function devinFileAccount(record: JsonMap): AuthFileAccount {
+  const metadata = asRecord(record.metadata) ?? {};
+  const raw = firstText([record, metadata], DEVIN_TOKEN_KEYS);
+  if (!raw) throw new Error("AUTH_FILE_INCOMPLETE");
+  const records = [record, metadata];
+  const session = devinSession(formatSessionToken(raw), {
+    account: firstText(records, ["email"]) || firstText(records, ["user_name"]),
+    accountId: firstText(records, ["user_id"]),
+    plan: firstText(records, ["plan"]),
+  });
+  return { kind: "devin", session, needsProject: false };
+}
+
 export function parseAuthFileEntry(entry: unknown): AuthFileAccount {
   const record = asRecord(entry);
   if (!record) throw new Error("AUTH_FILE_INVALID");
@@ -269,6 +287,7 @@ export function parseAuthFileEntry(entry: unknown): AuthFileAccount {
   if (kind === "muse_code") {
     return { kind, session: SESSION_BUILDERS.muse_code({ record, ...museTokens(record) }), needsProject: false };
   }
+  if (kind === "devin") return devinFileAccount(record);
   const token = asRecord(record.token) ?? {};
   const access = firstText([record, token], ["access_token", "accessToken"]);
   const refresh = firstText([record, token], ["refresh_token", "refreshToken"]);
@@ -342,8 +361,18 @@ async function withAntigravityDetails(session: SignInSession): Promise<SignInSes
   return { ...session, tokens: { ...session.tokens, accountId: details.project }, account, plan: details.plan };
 }
 
+async function freshDevinSession(stored: SignInSession): Promise<SignInSession> {
+  const token = stored.tokens.access;
+  const [reply, profile] = await Promise.all([devinStatusReply(token), devinProfile(token)]);
+  if (DEVIN_REJECTED.has(reply.status)) throw new Error("AUTH_FILE_REVOKED");
+  const session = devinSession(token, { status: readDevinStatus(reply), profile }, stored);
+  if (!session.account) throw new Error("AUTH_FILE_INCOMPLETE");
+  return session;
+}
+
 export async function freshAuthFileSession(account: AuthFileAccount, now = Date.now()): Promise<SignInSession> {
   const { kind } = account;
+  if (kind === "devin") return freshDevinSession(account.session);
   if (kind === "antigravity" && !(await antigravityClientSecret())) throw new Error("ANTIGRAVITY_NOT_CONFIGURED");
   const stored = account.session;
   const current = stored.expiresAt - now <= REFRESH_SKEW_MS ? await renewed(kind, stored, now) : stored;

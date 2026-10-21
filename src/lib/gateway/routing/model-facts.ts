@@ -4,16 +4,17 @@ import { discoveredOf } from "@/lib/gateway/upstreams/provider-prices";
 import type { FactTarget, ModelFacts } from "@/types/routing";
 
 const FACTS_TTL_MS = 60_000;
-const FACT_KINDS = new Set(["codex"]);
+const FACT_KINDS = new Set(["codex", "devin"]);
 const factCache = new Map<string, { at: number; models: ReadonlyMap<string, ModelFacts> }>();
 
 export function factsByModel(discovered: unknown): ReadonlyMap<string, ModelFacts> {
   const models = new Map<string, ModelFacts>();
   for (const model of discoveredOf(discovered)) {
-    if (!model.serviceTiers && !model.accessPrograms) continue;
+    if (!model.serviceTiers && !model.accessPrograms && !model.variants) continue;
     const facts: ModelFacts = {};
     if (model.serviceTiers) facts.serviceTiers = model.serviceTiers;
     if (model.accessPrograms) facts.accessPrograms = model.accessPrograms;
+    if (model.variants) facts.variants = model.variants;
     models.set(model.id, facts);
   }
   return models;

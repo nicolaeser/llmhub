@@ -55,13 +55,20 @@ export const PROVIDER_CATALOG: ProviderKindSpec[] = [
     default_base_url: "https://api.meta.ai/v1",
     auth: "sign_in",
   },
+  {
+    kind: "devin",
+    name: "Devin subscription",
+    default_base_url: "https://server.codeium.com",
+    auth: "sign_in",
+  },
 ];
 
-const LIMIT_KINDS = new Set(["codex", "claude", "grok_build", "antigravity", "kimi", "kimi_ai", "muse_code"]);
+const LIMIT_KINDS = new Set(["codex", "claude", "grok_build", "antigravity", "kimi", "kimi_ai", "muse_code", "devin"]);
 const TRAFFIC_LIMIT_KINDS = new Set(["muse_code"]);
 const KIMI_CODE_KINDS = new Set(["kimi", "kimi_ai"]);
 const KIMI_KINDS = new Set(["kimi", "kimi_ai", "moonshot", "moonshot_cn"]);
 const MUSE_KINDS = new Set(["meta", "muse_code"]);
+const CODE_SIGN_IN_KINDS = new Set<SignInKind>(["claude", "antigravity", "devin"]);
 
 export function isSignInKind(kind: string): kind is SignInKind {
   return PROVIDER_CATALOG.some((spec) => spec.kind === kind && spec.auth === "sign_in");
@@ -80,7 +87,7 @@ export function limitsFromTraffic(kind: string): boolean {
 }
 
 export function signInMethod(kind: SignInKind): SignInMethod {
-  return kind === "claude" || kind === "antigravity" ? "code" : "device";
+  return CODE_SIGN_IN_KINDS.has(kind) ? "code" : "device";
 }
 
 export function speaksAnthropic(kind: string): boolean {

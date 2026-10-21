@@ -9,6 +9,7 @@ import { isSignInKind, signInKinds, signInMethod } from "@/lib/gateway/upstreams
 import { checkSignInSession } from "@/lib/gateway/upstreams/subscription-limits";
 import {
   completeAuthorization,
+  isCodeGrant,
   openTicket,
   pollDeviceCode,
   sealTicket,
@@ -220,7 +221,7 @@ export async function completeSubAddSignIn(raw: unknown): Promise<SubAddStep> {
     const input = parseInput(subAddCompleteSchema, raw);
     const link = await usableLink(input.token);
     const ticket = ticketFor(link, input.ticket);
-    if (ticket.grant.kind !== "claude" && ticket.grant.kind !== "antigravity") throw new Error("SIGN_IN_FAILED");
+    if (!isCodeGrant(ticket.grant)) throw new Error("SIGN_IN_FAILED");
     const session = await completeAuthorization(ticket.grant, input.code);
     return finish(link, ticket.grant.kind, session, input.manage);
   });

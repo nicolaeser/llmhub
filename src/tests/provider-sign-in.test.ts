@@ -3,7 +3,7 @@ import test, { afterEach, beforeEach } from "node:test";
 import { limitSnapshotModel, seedSnapshot } from "./support/limit-snapshot-fake";
 import type { JsonMap } from "@/types/gateway";
 import type { ResolvedModelGroup } from "@/types/routing";
-import type { SignInSession } from "@/types/providers";
+import type { DeviceGrant, SignInSession } from "@/types/providers";
 
 type FakeLogin = {
   providerId: string;
@@ -963,4 +963,159 @@ test("a fresh sign-in is checked with its own tokens against the account usage e
   });
   assert.equal(await checkSignInSession("claude", session), "unreachable");
   assert.equal(new URL(calls.at(-1)!.url).pathname, "/api/oauth/usage");
+});
+
+const DEVIN_STATUS_PATH = "/exa.seat_management_pb.SeatManagementService/GetUserStatus";
+
+async function devinStatusBytes(): Promise<Uint8Array> {
+  const { ProtoWriter } = await import("@/lib/gateway/upstreams/devin-wire");
+  const plan = new ProtoWriter()
+    .message(1, new ProtoWriter().string(2, "Pro"))
+    .varint(14, 40)
+    .varint(15, 80)
+    .varint(17, Math.floor(Date.now() / 1000) + 3_600)
+    .varint(18, Math.floor(Date.now() / 1000) + 86_400);
+  const user = new ProtoWriter().string(3, "devin-user").string(7, "devin@example.com").message(13, plan).string(36, "user-42");
+  return new ProtoWriter().message(1, user).finish();
+}
+
+function devinReplies(status: Uint8Array, token = "eyJ.session") {
+  respondWith((url) => {
+    if (url === "https://api.devin.ai/auth/cli/token") return Response.json({ token });
+    if (url === `https://server.codeium.com${DEVIN_STATUS_PATH}`) return new Response(new Uint8Array(status), { status: 200 });
+    if (url === "https://api.devin.ai/v3/self") return Response.json({ user_name: "devin-user", user_id: "user-42", org_id: "org-1" });
+    return new Response("", { status: 404 });
+  });
+}
+
+test("Devin sign-in opens the manual PKCE code page and pastes back the code", async () => {
+  const { requestDevinAuthorization, startAuthorization } = await import("@/lib/gateway/upstreams/subscription-sign-in");
+  const { isSignInKind, signInMethod } = await import("@/lib/gateway/upstreams/provider-kinds");
+  assert.equal(isSignInKind("devin"), true);
+  assert.equal(signInMethod("devin"), "code");
+  const device = requestDevinAuthorization();
+  const url = new URL(device.verificationUrl);
+  assert.equal(`${url.origin}${url.pathname}`, "https://app.devin.ai/auth/cli/continue");
+  assert.equal(url.searchParams.get("prompt"), "select_account");
+  assert.equal(url.searchParams.get("code_challenge_method"), "S256");
+  assert.equal(url.searchParams.get("cli_pkce_marker"), "1");
+  assert.equal(url.searchParams.get("redirect_uri"), null);
+  assert.equal(device.grant.kind, "devin");
+  const grant = device.grant as Extract<DeviceGrant, { kind: "devin" }>;
+  assert.equal(url.searchParams.get("state"), grant.state);
+  const { createHash } = await import("node:crypto");
+  assert.equal(url.searchParams.get("code_challenge"), createHash("sha256").update(grant.verifier).digest("base64url"));
+  assert.equal((await startAuthorization("devin")).grant.kind, "devin");
+  assert.equal(calls.length, 0);
+});
+
+test("Devin authorization exchanges the code, then reads the profile and the plan from the user status", async () => {
+  const { completeAuthorization, requestDevinAuthorization } = await import("@/lib/gateway/upstreams/subscription-sign-in");
+  const { DEVIN_SESSION_EXPIRES_AT } = await import("@/lib/gateway/upstreams/devin-account");
+  const grant = requestDevinAuthorization().grant as Extract<DeviceGrant, { kind: "devin" }>;
+  devinReplies(await devinStatusBytes());
+  const session = await completeAuthorization(grant, " auth-code-1 ");
+  assert.deepEqual(JSON.parse(calls[0]!.body), { code: "auth-code-1", code_verifier: grant.verifier });
+  const token = "devin-session-token$eyJ.session";
+  assert.deepEqual(session, {
+    tokens: { access: token, refresh: token, accountId: "user-42", residency: "" },
+    expiresAt: DEVIN_SESSION_EXPIRES_AT,
+    account: "devin@example.com",
+    plan: "Pro",
+  });
+  const status = calls.find((call) => call.url.endsWith(DEVIN_STATUS_PATH))!;
+  assert.equal(status.headers.Authorization, `Basic ${token}-${token}`);
+  assert.equal(status.headers["Content-Type"], "application/proto");
+  assert.equal(status.headers["Connect-Protocol-Version"], "1");
+  const profile = calls.find((call) => call.url === "https://api.devin.ai/v3/self")!;
+  assert.equal(profile.headers.Authorization, `Bearer ${token}`);
+
+  calls = [];
+  devinReplies(await devinStatusBytes());
+  const pasted = await completeAuthorization(grant, "devin-session-token$eyJ.pasted");
+  assert.equal(pasted.tokens.access, "devin-session-token$eyJ.pasted");
+  assert.ok(calls.every((call) => call.url !== "https://api.devin.ai/auth/cli/token"));
+  const fromUrl = await completeAuthorization(grant, `https://app.devin.ai/auth/cli/done?code=c2&state=${grant.state}`);
+  assert.equal(fromUrl.account, "devin@example.com");
+});
+
+test("Devin authorization rejects a foreign state, a refused exchange, and a rejected session", async () => {
+  const { completeAuthorization, requestDevinAuthorization } = await import("@/lib/gateway/upstreams/subscription-sign-in");
+  const grant = requestDevinAuthorization().grant as Extract<DeviceGrant, { kind: "devin" }>;
+  devinReplies(await devinStatusBytes());
+  await assert.rejects(completeAuthorization(grant, "https://app.devin.ai/cb?code=c&state=other"), { message: "SIGN_IN_FAILED" });
+  await assert.rejects(completeAuthorization(grant, ""), { message: "SIGN_IN_FAILED" });
+  respondWith(() => Response.json({ error: "invalid_code" }, { status: 400 }));
+  await assert.rejects(completeAuthorization(grant, "code"), { message: "SIGN_IN_FAILED" });
+  respondWith((url) => (url.endsWith("/auth/cli/token") ? Response.json({ token: "eyJ.x" }) : new Response("", { status: 401 })));
+  await assert.rejects(completeAuthorization(grant, "code"), { message: "SIGN_IN_FAILED" });
+});
+
+test("Devin sessions never need a scheduled refresh and a renewal is a user status check", async () => {
+  const { refreshSession } = await import("@/lib/gateway/upstreams/subscription-sign-in");
+  const { providerAuth, refreshDueLogins, renewRejectedLogin } = await import("@/lib/gateway/upstreams/credentials");
+  const { DEVIN_SESSION_EXPIRES_AT } = await import("@/lib/gateway/upstreams/devin-account");
+  await seedLogin("dv1", DEVIN_SESSION_EXPIRES_AT, "old-access", "devin");
+  respondWith(() => {
+    throw new Error("no request expected");
+  });
+  assert.equal(await refreshDueLogins(), 0);
+  const auth = await providerAuth({ id: "dv1", kind: "devin", apiKey: "" });
+  assert.equal(auth.key, "old-access");
+  assert.equal(auth.headers.Authorization, "Basic old-access-old-access");
+  assert.equal(auth.headers["Content-Type"], "application/connect+proto");
+  assert.equal(calls.length, 0);
+
+  const current = {
+    tokens: { access: "tok", refresh: "tok", accountId: "user-42", residency: "" },
+    expiresAt: DEVIN_SESSION_EXPIRES_AT,
+    account: "devin@example.com",
+    plan: "",
+  };
+  devinReplies(await devinStatusBytes());
+  const renewed = await refreshSession("devin", current);
+  assert.equal(renewed.ok, true);
+  assert.equal(renewed.ok && renewed.session.tokens.access, "tok");
+  assert.equal(renewed.ok && renewed.session.plan, "Pro");
+  respondWith(() => new Response("", { status: 429, headers: { "retry-after": "90" } }));
+  assert.deepEqual(await refreshSession("devin", current), { ok: false, fatal: false, retryAfterMs: 90_000 });
+  respondWith(() => new Response("", { status: 401 }));
+  assert.deepEqual(await refreshSession("devin", current), { ok: false, fatal: true, retryAfterMs: null });
+
+  await seedLogin("dv2", DEVIN_SESSION_EXPIRES_AT, "old-access", "devin");
+  assert.equal(await renewRejectedLogin("dv2", "devin"), false);
+  assert.equal(logins.get("dv2")!.status, "expired");
+});
+
+test("Devin limits come from the user status as daily and weekly windows", async () => {
+  const { checkSignInSession, fetchSubscriptionLimits } = await import("@/lib/gateway/upstreams/subscription-limits");
+  const { DEVIN_SESSION_EXPIRES_AT } = await import("@/lib/gateway/upstreams/devin-account");
+  await seedLogin("dv3", DEVIN_SESSION_EXPIRES_AT, "old-access", "devin");
+  devinReplies(await devinStatusBytes());
+  const limits = await fetchSubscriptionLimits({ id: "dv3", kind: "devin", apiKey: "" });
+  assert.equal(limits?.plan, "Pro");
+  assert.deepEqual(
+    limits?.windows.map((window) => [window.windowSeconds, window.usedPercent, window.limitReached]),
+    [
+      [86_400, 60, false],
+      [604_800, 20, false],
+    ],
+  );
+  assert.equal(calls[0]!.url, `https://server.codeium.com${DEVIN_STATUS_PATH}`);
+  respondWith(() => new Response("", { status: 403 }));
+  await assert.rejects(fetchSubscriptionLimits({ id: "dv3", kind: "devin", apiKey: "" }), { message: "UPSTREAM_AUTH" });
+  respondWith(() => new Response("", { status: 429, headers: { "retry-after": "30" } }));
+  await assert.rejects(fetchSubscriptionLimits({ id: "dv3", kind: "devin", apiKey: "" }), { message: "UPSTREAM_RATE_LIMITED" });
+  respondWith(() => new Response("not proto", { status: 200 }));
+  await assert.rejects(fetchSubscriptionLimits({ id: "dv3", kind: "devin", apiKey: "" }), { message: "UPSTREAM_FAILED" });
+  const session = {
+    tokens: { access: "fresh", refresh: "fresh", accountId: "", residency: "" },
+    expiresAt: DEVIN_SESSION_EXPIRES_AT,
+    account: "devin@example.com",
+    plan: "",
+  };
+  respondWith(() => new Response("", { status: 401 }));
+  assert.equal(await checkSignInSession("devin", session), "rejected");
+  respondWith(() => new Response(new Uint8Array(), { status: 200 }));
+  assert.equal(await checkSignInSession("devin", session), "valid");
 });

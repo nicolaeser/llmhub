@@ -17,13 +17,17 @@ import { chatToCodex, codexCompletion } from "@/lib/gateway/upstreams/codex";
 import { googlePath, googlePayload, googleResponse, googleWire, keepsThinkingBlocks } from "@/lib/gateway/upstreams/google";
 import { forgetVertexToken } from "@/lib/gateway/upstreams/vertex-credentials";
 import { deploymentAuth } from "@/lib/gateway/upstreams/credentials";
+import { DEVIN_CHAT_PATH, windowReset } from "@/lib/gateway/upstreams/devin-account";
+import { chatToDevin, devinCompletion, encodeDevinRequest } from "@/lib/gateway/upstreams/devin";
 import { kimiChatBody } from "@/lib/gateway/upstreams/kimi";
 import { observeClaudeLimits, observeLimitWindows } from "@/lib/gateway/upstreams/limit-store";
 import { chatToMuse, museCompletion } from "@/lib/gateway/upstreams/muse";
+import { limitsSnapshot } from "@/lib/gateway/upstreams/subscription-limits";
 import { acquireGroup, defaultBase, loadGroup, markFailure, markSuccess, openaiRoot } from "@/lib/gateway/routing/runtime";
 import { applyProviderServiceMode, requestRoutingOverride, serviceModeHeaders } from "@/lib/gateway/dispatch/service-mode";
 import { asRecord, asString } from "@/lib/gateway/core";
 import { costFilter, costRejected } from "@/lib/gateway/billing/cost-cap";
+import type { DevinResetLookup } from "@/types/devin";
 import type { JsonMap, Principal, ProxyFirstResult } from "@/types/gateway";
 import type { ResolvedDeployment } from "@/types/routing";
 import type { LimitWindow, UpstreamAuth } from "@/types/providers";
@@ -119,6 +123,20 @@ function nativeChatPath(path: string): boolean {
   return path.includes("chat/completions");
 }
 
+export function devinResetLookup(dep: ResolvedDeployment): DevinResetLookup {
+  const providerId = dep.provider?.id ?? "";
+  return (windowSeconds) => (providerId ? windowReset(limitsSnapshot(providerId), windowSeconds) : null);
+}
+
+export function upstreamBody(dep: ResolvedDeployment, auth: UpstreamAuth, path: string, payload: JsonMap): BodyInit {
+  if (dep.kind === "devin") return encodeDevinRequest(payload, auth.key);
+  return JSON.stringify(wireBody(dep, auth, path, payload));
+}
+
+export function streamAccept(kind: string): string {
+  return kind === "devin" ? "*/*" : "text/event-stream";
+}
+
 const XAI_EFFORT_MIN_VERSION = 4.5;
 const XAI_XHIGH_MIN_VERSION = 4.6;
 const GATEWAY_ONLY_KEYS = ["fallbacks", "fallback", "tags", "tag"] as const;
@@ -143,6 +161,10 @@ export function joinPath(dep: ResolvedDeployment, rel: string, model = dep.model
     return `${defaultBase(dep)}${ANTIGRAVITY_STREAM_PATH}`;
   }
   if (speaksGoogle(dep.kind)) return googlePath(dep.kind, defaultBase(dep), model, path);
+  if (dep.kind === "devin") {
+    if (!nativeChatPath(path)) throw new GateError(400, "unsupported_endpoint", "this endpoint is not available on devin accounts");
+    return `${defaultBase(dep)}${DEVIN_CHAT_PATH}`;
+  }
   const root = openaiRoot(defaultBase(dep));
   if (speaksAnthropic(dep.kind)) {
     if (path === "/chat/completions" || path === "/v1/chat/completions") {
@@ -184,6 +206,7 @@ export function prepareBody(
   if (
     !speaksAnthropic(dep.kind) &&
     dep.kind !== "codex" &&
+    dep.kind !== "devin" &&
     !speaksMuse(dep.kind) &&
     !keepsThinkingBlocks(dep.kind, asString(payload.model)) &&
     Array.isArray(payload.messages)
@@ -205,6 +228,7 @@ export function prepareBody(
   if (speaksMuse(dep.kind) && nativeChatPath(path)) return chatToMuse(payload);
   if (speaksKimi(dep.kind) && nativeChatPath(path)) return kimiChatBody(payload, dep.kind);
   if (speaksGoogle(dep.kind)) return googlePayload(dep.kind, path, payload);
+  if (dep.kind === "devin" && nativeChatPath(path)) return chatToDevin(payload, dep.facts);
   return payload;
 }
 
@@ -229,6 +253,7 @@ function decodeBody(
     return museCompletion(new TextDecoder().decode(raw), model, museUsageObserver(dep));
   }
   if (speaksGoogle(dep.kind)) return googleResponse(dep.kind, path, model, new TextDecoder().decode(raw), json);
+  if (dep.kind === "devin" && nativeChatPath(path)) return devinCompletion(raw, model, devinResetLookup(dep));
   return json;
 }
 
@@ -264,9 +289,7 @@ export async function proxyJson(input: {
   if (input.rawBody != null) {
     init.body = input.rawBody;
   } else if (input.body && method !== "GET" && method !== "HEAD") {
-    init.body = JSON.stringify(
-      wireBody(input.dep, input.auth, input.path, prepareBody(input.dep, input.path, input.body, input.groupStrategy)),
-    );
+    init.body = upstreamBody(input.dep, input.auth, input.path, prepareBody(input.dep, input.path, input.body, input.groupStrategy));
   }
   const res = await fetch(url, init);
   observeUpstreamLimits(input.dep, res.headers);
@@ -315,9 +338,7 @@ async function proxyRaw(input: {
     body:
       input.rawBody ??
       (input.body && method !== "GET"
-        ? JSON.stringify(
-            wireBody(input.dep, input.auth, input.path, prepareBody(input.dep, input.path, input.body, input.groupStrategy)),
-          )
+        ? upstreamBody(input.dep, input.auth, input.path, prepareBody(input.dep, input.path, input.body, input.groupStrategy))
         : undefined),
     signal: AbortSignal.timeout(input.timeoutMs && input.timeoutMs > 0 ? input.timeoutMs : 120_000),
   });
