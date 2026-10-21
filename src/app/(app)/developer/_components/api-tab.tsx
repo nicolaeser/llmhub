@@ -34,7 +34,7 @@ const CHAT_CURL_BODY =
 const MESSAGES_CURL_BODY =
   '\'{"model":"my-alias","max_tokens":256,"messages":[{"role":"user","content":"Hello"}]}\'';
 const EXAMPLE_STYLES = ["openai", "anthropic", "management"] as const;
-const CLI_CLIENTS = ["claude", "codex"] as const;
+const CLI_CLIENTS = ["claude", "codex", "cursor"] as const;
 
 const ERROR_EXAMPLES = {
   openai: {
@@ -101,7 +101,9 @@ export default function ApiTab() {
   const cliSetup =
     cli === "codex"
       ? t("cliCodex", { openai: `${origin}${SUBSCRIPTION_PREFIX}/v1` })
-      : t("cliClaude", { anthropic: `${origin}${SUBSCRIPTION_PREFIX}` });
+      : cli === "cursor"
+        ? t("cliCursor", { openai: `${origin}${API_PREFIX}/v1` })
+        : t("cliClaude", { anthropic: `${origin}${SUBSCRIPTION_PREFIX}` });
   const bases = [
     {
       id: "openai",
