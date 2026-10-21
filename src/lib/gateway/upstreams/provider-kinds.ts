@@ -8,6 +8,8 @@ export const PROVIDER_CATALOG: ProviderKindSpec[] = [
   { kind: "xai", name: "xAI Grok", default_base_url: "https://api.x.ai/v1" },
   { kind: "typesafe", name: "TypeSafe AI", default_base_url: "https://api.typesafe.ai" },
   { kind: "openai_compat", name: "OpenAI-compatible" },
+  { kind: "gemini", name: "Google Gemini API", default_base_url: "https://generativelanguage.googleapis.com/v1beta" },
+  { kind: "vertex", name: "Google Vertex AI", default_base_url: "https://aiplatform.googleapis.com/v1" },
   {
     kind: "codex",
     name: "ChatGPT subscription (Codex)",
@@ -54,4 +56,8 @@ export function signInMethod(kind: SignInKind): SignInMethod {
 
 export function speaksAnthropic(kind: string): boolean {
   return kind === "anthropic" || kind === "claude";
+}
+
+export function speaksGoogle(kind: string): boolean {
+  return kind === "gemini" || kind === "vertex";
 }

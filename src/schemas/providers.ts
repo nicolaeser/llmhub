@@ -8,6 +8,13 @@ export const providerPolicySchema = z.object({
   noTraining: z.boolean().default(false),
 });
 
+export const vertexTargetSchema = z
+  .object({
+    project: z.string().trim().max(100).optional(),
+    location: z.string().trim().max(64).optional(),
+  })
+  .strict();
+
 export const MAX_AUTH_FILES = 50;
 export const MAX_AUTH_FILE_BYTES = 256 * 1024;
 

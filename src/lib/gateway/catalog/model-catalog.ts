@@ -1,4 +1,5 @@
 import { RESERVED_ALIASES } from "@/lib/gateway/catalog/model-alias";
+import { vertexVendor } from "@/lib/gateway/upstreams/vertex-target";
 import type {
   CatalogEntryPlan,
   CatalogGroupInput,
@@ -19,11 +20,12 @@ export const NATIVE_VENDORS: Readonly<Record<string, string>> = {
   typesafe: "typesafe",
   codex: "openai",
   grok_build: "xai",
+  gemini: "google",
 };
 
-const AGGREGATOR_KINDS = new Set(["openrouter", "openrouter_eu"]);
+const AGGREGATOR_KINDS = new Set(["openrouter", "openrouter_eu", "vertex"]);
 const VENDOR_SYNONYMS: Readonly<Record<string, string>> = { "x-ai": "xai" };
-const SNAPSHOT = /^(.+?)-(\d{4}-\d{2}-\d{2}|\d{8})$/;
+const SNAPSHOT = /^(.+?)[-@](\d{4}-\d{2}-\d{2}|\d{8})$/;
 const COLON_TAG = /^([^:]+):([a-z][a-z0-9-]{0,23})$/;
 const DASH_TAGS = ["batch", "free"] as const;
 const DISPLAY_VENDOR_PREFIX = /^[^:]{1,40}:\s+/;
@@ -103,6 +105,7 @@ function kindRank(kind: string): number {
 export function vendorOf(kind: string, upstreamId: string): string {
   const native = NATIVE_VENDORS[kind];
   if (native) return native;
+  if (kind === "vertex") return normalizeVendor(vertexVendor(upstreamId));
   const slash = upstreamId.indexOf("/");
   return slash > 0 ? normalizeVendor(upstreamId.slice(0, slash)) : "";
 }

@@ -209,7 +209,9 @@ export function applyProviderServiceMode(
       break;
     }
     case "typesafe":
-    case "grok_build": {
+    case "grok_build":
+    case "gemini":
+    case "vertex": {
       delete payload.service_tier;
       delete payload.speed;
       break;

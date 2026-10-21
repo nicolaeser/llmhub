@@ -16,8 +16,9 @@ import {
   rejectsForeignReasoning,
 } from "@/lib/gateway/routing/account-handoff";
 import { acquireGroup, loadGroup, markFailure, markSuccess } from "@/lib/gateway/routing/runtime";
-import { isSignInKind, speaksAnthropic } from "@/lib/gateway/upstreams/provider-kinds";
-import { AntigravitySseTranslator, withProject } from "@/lib/gateway/upstreams/antigravity";
+import { isSignInKind, speaksAnthropic, speaksGoogle } from "@/lib/gateway/upstreams/provider-kinds";
+import { AntigravitySseTranslator } from "@/lib/gateway/upstreams/antigravity";
+import { googleStreamTranslator } from "@/lib/gateway/upstreams/google";
 import { CodexSseTranslator } from "@/lib/gateway/upstreams/codex";
 import { deploymentAuth, renewRejectedLogin } from "@/lib/gateway/upstreams/credentials";
 import { nudgeLimits } from "@/lib/gateway/upstreams/limit-store";
@@ -29,11 +30,14 @@ import {
   joinPath,
   mergeUpstreamHeaders,
   observeUpstreamLimits,
+  observeUpstreamStatus,
   prepareBody,
   proxyJson,
   retryableStatus,
   upstreamError,
   upstreamHeaders,
+  upstreamModel,
+  wireBody,
 } from "@/lib/gateway/dispatch/upstream";
 import { asRecord, isRouterError, isUnavailableError, newId, routerGateError, stringifyContent } from "@/lib/gateway/core";
 import { costFilter, costRejected } from "@/lib/gateway/billing/cost-cap";
@@ -410,13 +414,14 @@ export async function openUpstreamStream(input: {
     Accept: "text/event-stream",
   };
   if (input.form) delete headers["Content-Type"];
-  const res = await fetch(joinPath(input.dep, input.path), {
+  const res = await fetch(joinPath(input.dep, input.path, upstreamModel(input.dep, input.payload)), {
     method: "POST",
     headers,
-    body: input.form ?? JSON.stringify(withProject(input.dep, auth, input.payload)),
+    body: input.form ?? JSON.stringify(wireBody(input.dep, auth, input.path, input.payload)),
     signal: AbortSignal.any(signals),
   });
   observeUpstreamLimits(input.dep, res.headers);
+  observeUpstreamStatus(input.dep, res.status);
   if (!res.ok || !res.body) {
     const text = await readTextOr(res);
     const json = parseJsonOrNull(text);
@@ -449,6 +454,7 @@ function streamTranslator(dep: ResolvedDeployment, model: string): ChatSseTransl
   if (speaksAnthropic(dep.kind)) return new AnthropicSseTranslator(model);
   if (dep.kind === "codex") return new CodexSseTranslator(model);
   if (dep.kind === "antigravity") return new AntigravitySseTranslator(model);
+  if (speaksGoogle(dep.kind)) return googleStreamTranslator(dep.kind, dep.model || plainModel(model), model);
   return null;
 }
 

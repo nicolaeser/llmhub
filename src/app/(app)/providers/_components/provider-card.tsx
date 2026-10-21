@@ -9,6 +9,11 @@ import ProviderToggle from "./provider-toggle";
 import type { ProviderView } from "@/types/providers";
 import { kindIcon } from "@/components/providers/kind-icons";
 
+function keyState(row: ProviderView): string {
+  if (!row.hasApiKey) return "missing";
+  return row.vertex?.credential === "service_account" ? "service_account" : "stored";
+}
+
 export default function ProviderCard({
   row,
   onEdit,
@@ -44,7 +49,7 @@ export default function ProviderCard({
               className={`size-1.5 rounded-full ${row.hasApiKey ? "bg-success" : "bg-warning"}`}
               aria-hidden
             />
-            {t("keyState", { state: row.hasApiKey ? "stored" : "missing", account: "" })}
+            {t("keyState", { state: keyState(row), account: "" })}
           </span>
           {row.discovered.length > 0 ? <span>{t("modelCount", { count: row.discovered.length })}</span> : null}
         </p>

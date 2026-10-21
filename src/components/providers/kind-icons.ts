@@ -1,5 +1,7 @@
 import {
   Asterisk,
+  Cloud,
+  Gem,
   MessageCircle,
   Orbit,
   Plug,
@@ -23,6 +25,8 @@ const KIND_ICONS: Record<string, LucideIcon> = {
   grok_build: Zap,
   claude: Asterisk,
   antigravity: Orbit,
+  gemini: Gem,
+  vertex: Cloud,
 };
 
 export function kindIcon(kind: string): LucideIcon {

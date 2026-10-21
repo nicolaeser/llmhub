@@ -17,7 +17,7 @@ import {
 } from "@/lib/gateway/protocols/messages";
 import { chatToResponsesCountBody } from "@/lib/gateway/protocols/responses";
 import { deploymentAuth } from "@/lib/gateway/upstreams/credentials";
-import { isSignInKind, speaksAnthropic } from "@/lib/gateway/upstreams/provider-kinds";
+import { isSignInKind, speaksAnthropic, speaksGoogle } from "@/lib/gateway/upstreams/provider-kinds";
 import { messagesRequestSchema } from "@/schemas/anthropic";
 import type { JsonMap } from "@/types/gateway";
 import type { RoutePool } from "@/types/routing";
@@ -56,7 +56,7 @@ export function countTokensRoute(pool: RoutePool) {
         const issue = chatIncompatibility(request, { webSearch: dep.kind === "codex" });
         if (issue) throw new GateError(400, "unsupported_parameter", issue);
         const chat = messagesToChat(request);
-        if (isSignInKind(dep.kind)) return estimatedInputTokens(chat);
+        if (isSignInKind(dep.kind) || speaksGoogle(dep.kind)) return estimatedInputTokens(chat);
         const proxied = await proxyJson({
           dep,
           auth: await deploymentAuth(dep),
