@@ -43,6 +43,7 @@ import {
   upstreamError,
   upstreamHeaders,
   upstreamModel,
+  upstreamRetryAt,
 } from "@/lib/gateway/dispatch/upstream";
 import { asRecord, isRouterError, isUnavailableError, newId, routerGateError, stringifyContent } from "@/lib/gateway/core";
 import { costFilter, costRejected } from "@/lib/gateway/billing/cost-cap";
@@ -50,7 +51,7 @@ import { ChatStreamTranscript } from "@/lib/gateway/request-logs/log-content";
 import { estimateTokens, requestText } from "@/lib/gateway/billing/tokens";
 import { logger } from "@/lib/logging/logger";
 import { parseJsonOrNull, readTextOr } from "@/lib/utils/json";
-import { cancelQuietly, DeadlineReader } from "@/lib/utils/streams";
+import { cancelQuietly, DeadlineReader, withIdleTimeout } from "@/lib/utils/streams";
 import type { ChatSseTranslator, JsonMap, Principal, RequestTrace } from "@/types/gateway";
 import type { CostFilter, TokenUsage } from "@/types/billing";
 import type { AccountPin, ResolvedModelGroup, ResolvedDeployment, RoutePool, RunRouting } from "@/types/routing";
@@ -60,6 +61,7 @@ import type { RouteLimits } from "@/types/model-templates";
 import type { ResponseCacheUsage } from "@/types/cache";
 
 export const UPSTREAM_TIMEOUT_MS = 300_000;
+const STREAM_IDLE_TIMEOUT_MS = 300_000;
 
 function failureStatus(err: unknown): number {
   if (err instanceof GateError) return err.status;
@@ -419,9 +421,15 @@ export async function openUpstreamStream(input: {
   payload: JsonMap;
   form?: FormData;
   headers?: Record<string, string>;
+  timeouts?: { headersMs?: number; idleMs?: number };
 }): Promise<Response> {
   const auth = await deploymentAuth(input.dep);
-  const signals: AbortSignal[] = [AbortSignal.timeout(UPSTREAM_TIMEOUT_MS)];
+  const headersDue = new AbortController();
+  const headersTimer = setTimeout(
+    () => headersDue.abort(new DOMException("upstream response headers timed out", "TimeoutError")),
+    input.timeouts?.headersMs ?? UPSTREAM_TIMEOUT_MS,
+  );
+  const signals: AbortSignal[] = [headersDue.signal];
   if (input.req.signal) signals.push(input.req.signal);
   const headers: Record<string, string> = {
     ...mergeUpstreamHeaders(
@@ -431,23 +439,35 @@ export async function openUpstreamStream(input: {
     Accept: streamAccept(input.dep.kind),
   };
   if (input.form) delete headers["Content-Type"];
-  const res = await fetch(joinPath(input.dep, input.path, upstreamModel(input.dep, input.payload)), {
-    method: "POST",
-    headers,
-    body: input.form ?? upstreamBody(input.dep, auth, input.path, input.payload),
-    signal: AbortSignal.any(signals),
-  });
-  observeUpstreamLimits(input.dep, res.headers);
-  observeUpstreamStatus(input.dep, res.status);
-  if (!res.ok || !res.body) {
-    const text = await readTextOr(res);
-    if (input.dep.kind === "devin") throw devinHttpError(res.status, text, devinResetLookup(input.dep));
-    const json = parseJsonOrNull(text);
-    if (json) throw upstreamError(res.status, json, res.headers);
-    throw new GateError(res.status || 502, "upstream_error", text.slice(0, 512) || "upstream error");
+  try {
+    const res = await fetch(joinPath(input.dep, input.path, upstreamModel(input.dep, input.payload)), {
+      method: "POST",
+      headers,
+      body: input.form ?? upstreamBody(input.dep, auth, input.path, input.payload),
+      signal: AbortSignal.any(signals),
+    });
+    observeUpstreamLimits(input.dep, res.headers);
+    observeUpstreamStatus(input.dep, res.status);
+    if (!res.ok || !res.body) {
+      const text = await readTextOr(res);
+      if (input.dep.kind === "devin") throw devinHttpError(res.status, text, devinResetLookup(input.dep));
+      const json = parseJsonOrNull(text);
+      if (json) throw upstreamError(res.status, json, res.headers);
+      throw new GateError(res.status || 502, "upstream_error", text.slice(0, 512) || "upstream error", {
+        retryAt: upstreamRetryAt(res.status, null, Date.now(), res.headers),
+      });
+    }
+    const body = withIdleTimeout(
+      res.body,
+      input.timeouts?.idleMs ?? STREAM_IDLE_TIMEOUT_MS,
+      () => new GateError(504, "upstream_timeout", "upstream stream stalled"),
+    );
+    const live = new Response(body, { status: res.status, statusText: res.statusText, headers: res.headers });
+    if (input.dep.kind === "devin") return devinEventStream(live, input.dep.model, devinResetLookup(input.dep));
+    return live;
+  } finally {
+    clearTimeout(headersTimer);
   }
-  if (input.dep.kind === "devin") return devinEventStream(res, input.dep.model, devinResetLookup(input.dep));
-  return res;
 }
 
 export function openChatStream(
