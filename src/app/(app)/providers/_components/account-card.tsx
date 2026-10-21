@@ -17,13 +17,14 @@ import {
 import { useFormatter, useNow, useTranslations } from "next-intl";
 import IconTile from "@/components/console/icon-tile";
 import { PlanBadge } from "@/components/console/subscription-badge";
+import { limitGroups, summaryGroups } from "@/lib/gateway/upstreams/limit-groups";
 import { limitsUpdatedAt, updatedFromTraffic } from "@/lib/gateway/upstreams/observed-limits";
 import PolicyChips from "./policy-chips";
 import ProviderActions from "./provider-actions";
 import ProviderToggle from "./provider-toggle";
-import type { AccountState, LimitSnapshot, LimitWindow, ProviderView } from "@/types/providers";
+import type { AccountState, LimitSnapshot, ProviderView } from "@/types/providers";
 import type { Tone } from "@/types/console";
-import { ACCOUNT_STATE_COLOR, accountState, recoveryAt } from "./account-status";
+import { ACCOUNT_STATE_COLOR, accountState, partialLimits, recoveryAt } from "./account-status";
 import BankedResets from "./banked-resets";
 import LimitMeter from "./limit-meter";
 
@@ -46,10 +47,6 @@ const STATE_TONE: Record<AccountState, Tone> = {
   checking: "neutral",
   paused: "neutral",
 };
-
-function byLength(a: LimitWindow, b: LimitWindow): number {
-  return a.windowSeconds - b.windowSeconds;
-}
 
 export default function AccountCard({
   row,
@@ -84,11 +81,13 @@ export default function AccountCard({
   const tError = useTranslations("Error");
   const format = useFormatter();
   const now = useNow({ updateInterval: 60_000 });
-  const state = accountState(row, entry, reports);
+  const state = accountState(row, entry, reports, now.getTime());
   const limits = entry?.limits ?? null;
-  const planWindows = limits ? limits.windows.filter((window) => !window.scope).sort(byLength) : [];
-  const scopedWindows = limits ? limits.windows.filter((window) => window.scope).sort(byLength) : [];
-  const recovery = state === "limited" ? recoveryAt(entry) : null;
+  const groups = limitGroups(row.kind, limits, now.getTime());
+  const summary = summaryGroups(groups);
+  const detailed = summary.more > 0 || groups.some((group) => group.members.length > 1);
+  const partial = state === "available" ? partialLimits(row, entry, now.getTime()) : null;
+  const recovery = state === "limited" ? recoveryAt(row, entry, now.getTime()) : null;
   const plan = limits?.plan || row.signIn?.plan || "";
   const account = row.signIn?.account ?? "";
   const failure = entry?.error && entry.error !== "SIGN_IN_EXPIRED" ? entry.error : "";
@@ -108,6 +107,11 @@ export default function AccountCard({
           <Chip size="sm" variant="soft" color={ACCOUNT_STATE_COLOR[state]} className="whitespace-nowrap">
             {t("status", { status: state })}
           </Chip>
+          {partial ? (
+            <Chip size="sm" variant="soft" color="warning" className="whitespace-nowrap">
+              {t("limits.partial", { reached: partial.reached, total: partial.total })}
+            </Chip>
+          ) : null}
         </div>
       </Card.Header>
 
@@ -180,26 +184,26 @@ export default function AccountCard({
             ))}
           </div>
         ) : null}
-        {limits && limits.windows.length === 0 ? <p className="text-sm text-muted">{t("limits.none")}</p> : null}
-        {planWindows.length > 0 ? (
+        {limits && groups.length === 0 ? <p className="text-sm text-muted">{t("limits.none")}</p> : null}
+        {summary.groups.length > 0 ? (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            {planWindows.map((window, index) => (
-              <LimitMeter key={`plan-${window.windowSeconds}-${index}`} window={window} timeZone={timeZone} />
+            {summary.groups.map((group) => (
+              <LimitMeter key={group.id} group={group} timeZone={timeZone} />
             ))}
           </div>
         ) : null}
-        {scopedWindows.length > 0 ? (
+        {detailed ? (
           <Disclosure>
             <Disclosure.Heading>
               <Disclosure.Trigger className="flex w-full items-center justify-between gap-2 text-sm text-muted">
-                {t("limits.modelLimits", { count: scopedWindows.length })}
+                {t("limits.allLimits", { count: groups.length })}
                 <Disclosure.Indicator />
               </Disclosure.Trigger>
             </Disclosure.Heading>
             <Disclosure.Content>
               <Disclosure.Body className="grid grid-cols-1 gap-4 pt-3 sm:grid-cols-2">
-                {scopedWindows.map((window, index) => (
-                  <LimitMeter key={`${window.scope}-${index}`} window={window} scoped timeZone={timeZone} />
+                {groups.map((group) => (
+                  <LimitMeter key={group.id} group={group} withMembers timeZone={timeZone} />
                 ))}
               </Disclosure.Body>
             </Disclosure.Content>

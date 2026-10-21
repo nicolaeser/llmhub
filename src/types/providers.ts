@@ -171,10 +171,45 @@ export type SignInStart = {
 
 export type LimitWindow = {
   scope: string;
+  label?: string;
   usedPercent: number;
   windowSeconds: number;
   resetsAt: string | null;
   limitReached: boolean;
+};
+
+export type AntigravityFamily = "gemini_pro" | "gemini_flash" | "gemini_image" | "claude" | "gpt_oss" | "other";
+
+export type LimitGroupMember = {
+  scope: string;
+  label: string;
+  usedPercent: number;
+  resetsAt: string | null;
+  limitReached: boolean;
+};
+
+export type LimitGroup = {
+  id: string;
+  scoped: boolean;
+  family: AntigravityFamily | null;
+  label: string;
+  windowSeconds: number;
+  members: LimitGroupMember[];
+  usedPercent: number;
+  resetsAt: string | null;
+  limitReached: boolean;
+  exhausted: boolean;
+  uniform: boolean;
+};
+
+export type LimitSummary = {
+  groups: LimitGroup[];
+  more: number;
+};
+
+export type PartialLimits = {
+  reached: number;
+  total: number;
 };
 
 export type SubscriptionLimits = {
