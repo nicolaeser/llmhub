@@ -102,6 +102,7 @@ export type StructurePayload = {
   reports: UsageReportView[];
   canSeeReports: boolean;
   canReport: boolean;
+  canSeeSettings: boolean;
   mailEnabled: boolean;
 };
 
@@ -123,7 +124,9 @@ export type ProjectInput = {
   owner: string;
 };
 
-export type BudgetTarget = { kind: BudgetKind; id: string; alias: string };
+export type BudgetRef = { kind: BudgetKind; id: string };
+
+export type BudgetTarget = BudgetRef & { alias: string };
 
 export type BudgetInput = {
   kind: BudgetKind;
@@ -140,6 +143,8 @@ export type BoostInput = {
 };
 
 export type BudgetResult = { kind: BudgetKind; id: string; budget: BudgetView };
+
+export type BudgetDetail = BudgetResult & { ancestors: CapLink[] };
 
 export type HolderRecord = {
   alias: string;

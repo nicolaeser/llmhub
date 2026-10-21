@@ -222,7 +222,7 @@ test("partial user rights show only their own row actions and never on the owner
   const { usersConsole } = await import("@/lib/auth/users");
   const cases: [Permission[], string[], boolean][] = [
     [["users:read", "users:security"], ["sessions", "reset"], false],
-    [["users:read", "budgets:manage"], ["budget"], true],
+    [["users:read", "budgets:manage"], ["budget", "boost"], true],
     [["users:read", "spend:read", "spend:read-all"], [], true],
     [
       ["users:read", "users:manage", "keys:read"],
@@ -240,6 +240,16 @@ test("partial user rights show only their own row actions and never on the owner
     assert.equal(byId.get("weak")!.budget !== null, seesSpend, granted.join(","));
     assert.equal(recordedPrisma.called("organization").length > 0, granted.includes("users:manage"), granted.join(","));
   }
+});
+
+test("a temporary boost is offered only for console users with a capped budget", () => {
+  const flags = { canManage: false, canSecure: false, canBudget: true };
+  const budget = (maxBudget: number) => ({ maxBudget, spend: 1, budgetDuration: "" });
+  assert.deepEqual(userActions(flags, { manageable: true, budget: budget(10) }), ["budget", "boost"]);
+  assert.deepEqual(userActions(flags, { manageable: true, budget: budget(0) }), ["budget"]);
+  assert.deepEqual(userActions(flags, { manageable: true, budget: null }), ["budget"]);
+  assert.deepEqual(userActions({ ...flags, canBudget: false }, { manageable: true, budget: budget(10) }), []);
+  assert.deepEqual(userActions(flags, { manageable: false, budget: budget(10) }), []);
 });
 
 test("user managers only get roles they may grant, and role managers only grantable templates and resets", async () => {
@@ -291,6 +301,37 @@ test("the users page budget action only ever sets console user budgets and needs
   );
   assert.equal(recordedPrisma.called("user", "findUnique").length, 1);
   assert.deepEqual(recordedPrisma.called("organization"), []);
+});
+
+test("the users and keys pages read and boost only their own budget kind", async () => {
+  const users = await import("@/app/(app)/users/_action");
+  const keys = await import("@/app/(app)/keys/_action");
+  const manager = principal(["users:read", "keys:read", "budgets:manage"]);
+  const company = { kind: "org" as const, id: "orgacme0001" };
+  const pages: [string, typeof users | typeof keys, string][] = [
+    ["users", users, "user"],
+    ["keys", keys, "virtualKey"],
+  ];
+  for (const [name, page, holder] of pages) {
+    const calls: (() => Promise<unknown>)[] = [
+      () => page.loadBudgetAction(company),
+      () => page.setBudgetAction({ ...company, maxBudget: 10, budgetDuration: "" }),
+      () => page.addBoostAction({ ...company, amount: 5, hours: 1 }),
+    ];
+    for (const call of calls) {
+      recordedPrisma.reset();
+      assert.deepEqual(await runAsPrincipal(manager, call), actionFail("NOT_FOUND"), name);
+      assert.equal(recordedPrisma.called(holder, "findUnique").length, 1, name);
+      assert.deepEqual(recordedPrisma.called("organization"), [], name);
+    }
+
+    recordedPrisma.reset({
+      tempBudget: { findUnique: () => ({ id: "boost1", entityType: "org", entityId: company.id, amount: 5, until: new Date() }) },
+    });
+    assert.deepEqual(await runAsPrincipal(manager, () => page.removeBoostAction("boost1")), actionFail("NOT_FOUND"), name);
+    assert.deepEqual(recordedPrisma.called("organization"), [], name);
+    assert.deepEqual(recordedPrisma.called("tempBudget", "delete"), [], name);
+  }
 });
 
 test("only settings readers are told about new releases", async () => {

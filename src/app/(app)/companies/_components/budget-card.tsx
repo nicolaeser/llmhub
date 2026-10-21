@@ -3,6 +3,7 @@
 import { Alert, Button, Card, Label, Meter } from "@heroui/react";
 import { Wallet, Zap } from "lucide-react";
 import { useFormatter, useNow, useTranslations } from "next-intl";
+import { Link } from "@/i18n/routing";
 import { headroom, meterColor } from "@/lib/utils/budget";
 import type { BudgetView, CapLink } from "@/types/structure";
 import { usedRatio } from "./tree-model";
@@ -10,17 +11,22 @@ import { usedRatio } from "./tree-model";
 export default function BudgetCard({
   chain,
   budget,
+  thresholds,
   canBudget,
+  canSeeSettings,
   onEdit,
   onBoost,
 }: {
   chain: CapLink[];
   budget: BudgetView;
+  thresholds: number[];
   canBudget: boolean;
+  canSeeSettings: boolean;
   onEdit: () => void;
   onBoost: () => void;
 }) {
   const t = useTranslations("Companies.budget");
+  const tAlerts = useTranslations("Budgets.alerts");
   const format = useFormatter();
   const now = useNow({ updateInterval: 60_000 });
   const ratio = usedRatio(budget);
@@ -120,6 +126,23 @@ export default function BudgetCard({
         ) : !capped ? (
           <p className="text-sm text-muted">{t("inherits")}</p>
         ) : null}
+        <p className="text-sm text-muted">
+          {tAlerts("levels", {
+            capped: capped ? "yes" : "no",
+            levels: format.list(
+              thresholds.map((value) => format.number(value / 100, "percent")),
+              { type: "conjunction" },
+            ),
+          })}
+          {canSeeSettings ? (
+            <>
+              {" "}
+              <Link href="/settings?tab=logging" className="text-accent">
+                {tAlerts("settings")}
+              </Link>
+            </>
+          ) : null}
+        </p>
       </Card.Content>
     </Card>
   );

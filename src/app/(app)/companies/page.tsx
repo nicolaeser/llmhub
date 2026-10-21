@@ -4,6 +4,7 @@ import { useRef, useState, useTransition } from "react";
 import { Breadcrumbs, Button, Card, Spinner, toast, useOverlayState } from "@heroui/react";
 import { ArrowRightLeft, Building2, Folder, Pencil, Plus, Trash2, User, Users, type LucideIcon } from "lucide-react";
 import { useFormatter, useTranslations } from "next-intl";
+import BoostDialog from "@/components/budget/boost-dialog";
 import BudgetDialog from "@/components/budget/budget-dialog";
 import ConfirmDialog from "@/components/console/confirm-dialog";
 import EmptyState from "@/components/console/empty-state";
@@ -24,13 +25,14 @@ import type {
   StructurePayload,
 } from "@/types/structure";
 import {
+  addBoostAction,
   deleteNodeAction,
   loadCompanyMcpAction,
   loadStructureAction,
+  removeBoostAction,
   saveCompanyMcpInstallationAction,
   setBudgetAction,
 } from "./_action";
-import BoostDialog from "./_components/boost-dialog";
 import BudgetCard from "./_components/budget-card";
 import ChildrenCard from "./_components/children-card";
 import CompanyTree from "./_components/company-tree";
@@ -348,7 +350,9 @@ export default function CompaniesPage() {
               key={`${selected.kind}:${node.id}`}
               chain={chainOf(data, selected.kind, node.id)}
               budget={node.budget}
+              thresholds={data.thresholds}
               canBudget={canBudgetNode}
+              canSeeSettings={data.canSeeSettings}
               onEdit={() =>
                 openBudget({ kind: selected.kind, id: node.id, alias: node.alias }, budgetState)
               }
@@ -515,6 +519,8 @@ export default function CompaniesPage() {
         state={boostState}
         target={budgetTarget}
         budget={budgetFor}
+        onSubmit={addBoostAction}
+        onRemove={removeBoostAction}
         onSaved={applyBudget}
       />
     </div>

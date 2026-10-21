@@ -72,23 +72,6 @@
     "limitedBy": "{kind, select, org {Unternehmen} team {Abteilung} project {Projekt} member {Person} user {Konsolen-Benutzer} key {Key} other {Übergeordnet}} {alias} ist das engere Limit: noch {amount, number, currency} übrig.",
     "inherits": "Kein eigenes Limit. Die Limits darüber gelten weiterhin."
   },
-  "boost": {
-    "title": "Temporäre Erhöhung für {alias}",
-    "hint": "Gibt bis zum Ablauf zusätzlichen Spielraum über dem Budget. Übergeordnete Limits gelten weiterhin.",
-    "amount": "Zusätzlicher Betrag",
-    "amountHint": "Wird zum aktuellen Limit addiert.",
-    "amountInvalid": "Gib einen Betrag über null ein.",
-    "presets": "Schnellauswahl",
-    "duration": "Gültig für",
-    "hours": "{hours, select, 24 {24 Stunden} 72 {3 Tage} 168 {7 Tage} 720 {30 Tage} other {{hours, number, integer} Stunden}}",
-    "until": "Läuft am {date, date, stamp} ab.",
-    "active": "Aktive Erhöhungen",
-    "expires": "Bis {date, date, stamp}",
-    "remove": "Erhöhung entfernen",
-    "submit": "Erhöhung hinzufügen",
-    "added": "Erhöhung hinzugefügt",
-    "removed": "Erhöhung entfernt"
-  },
   "node": {
     "title": "{mode, select, edit {{kind, select, org {Unternehmen bearbeiten} team {Abteilung bearbeiten} project {Projekt bearbeiten} member {Person bearbeiten} other {Bearbeiten}}} other {{kind, select, org {Neues Unternehmen} team {Neue Abteilung} project {Neues Projekt} member {Neue Person} other {Neu}}}}",
     "hint": "{kind, select, org {Der Kunde. Abteilungen, Projekte und Personen liegen darin.} team {Eine Gruppe im Unternehmen, etwa die IT. Ihre Projekte und Personen teilen Budget und Rate-Limits.} project {Eine Anwendung oder Integration. Ihre Keys werden dem Projekt, der Abteilung und dem Unternehmen berechnet.} member {Ein Benutzer des Unternehmens mit persönlichen API-Keys. Personen melden sich nicht an dieser Konsole an.} other {}}",

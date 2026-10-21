@@ -9,7 +9,8 @@ import {
   loadTemplates,
   updateTemplate,
 } from "@/lib/models/templates";
-import { setBudget } from "@/lib/tenancy/budgets";
+import { addBoost, loadBudget, removeBoost, setBudget } from "@/lib/tenancy/budgets";
+import type { BoostInput, BudgetInput, BudgetRef } from "@/types/structure";
 
 export async function loadKeyTabsAction() {
   return runAction(() => loadKeyTabs());
@@ -35,8 +36,20 @@ export async function revokeKeyAction(...args: Parameters<typeof revokeKey>) {
   return runAction(() => revokeKey(...args));
 }
 
-export async function setBudgetAction(...args: Parameters<typeof setBudget>) {
-  return runAction(() => setBudget(...args));
+export async function loadBudgetAction(input: BudgetRef) {
+  return runAction(() => loadBudget({ ...input, kind: "key" }));
+}
+
+export async function setBudgetAction(input: BudgetInput) {
+  return runAction(() => setBudget({ ...input, kind: "key" }));
+}
+
+export async function addBoostAction(input: BoostInput) {
+  return runAction(() => addBoost({ ...input, kind: "key" }));
+}
+
+export async function removeBoostAction(boostId: string) {
+  return runAction(() => removeBoost(boostId, "key"));
 }
 
 export async function loadTemplatesAction(...args: Parameters<typeof loadTemplates>) {
