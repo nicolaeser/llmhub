@@ -20,6 +20,7 @@ export const PATCH = managementRoute<{ id: string }>(PERMISSIONS.PROVIDERS_MANAG
       baseUrl: body.base_url ?? "",
       apiKey: body.api_key ?? "",
       enabled: body.enabled,
+      vertex: body.vertex,
     });
   return respond(serializeProvider(provider));
 });

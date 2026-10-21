@@ -5,7 +5,7 @@ import ConsoleScopeProvider, { ScopedPage } from "./_components/console-scope";
 import BuildStatusProvider from "./_components/build-status";
 import AutoUpdateNotice from "./_components/auto-update-notice";
 import IgnoreAutofill from "./_components/ignore-autofill";
-import { consoleScopeOf } from "@/lib/auth/console-scope";
+import { consoleScopeOf, sessionAccessKey } from "@/lib/auth/console-scope";
 import { requireAuth } from "@/lib/auth/guards";
 import { currentBuild } from "@/lib/updates/build";
 import { SIDEBAR_COOKIE, sidebarCollapsed } from "@/lib/utils/sidebar-cookie";
@@ -21,7 +21,7 @@ export default async function AppLayout({
   const user = { email: session.user.email, username: session.user.username };
 
   return (
-    <BuildStatusProvider version={currentBuild()}>
+    <BuildStatusProvider version={currentBuild()} access={sessionAccessKey(session)}>
       <ConsoleScopeProvider initial={scope} permissions={session.permissions}>
         <IgnoreAutofill />
         <Sidebar user={user} permissions={session.permissions} initialCollapsed={collapsed}>

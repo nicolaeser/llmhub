@@ -7,6 +7,8 @@ import { claudeIdentityHeaders } from "@/lib/gateway/upstreams/claude";
 import { devinHeaders } from "@/lib/gateway/upstreams/devin-account";
 import { kimiHeaders } from "@/lib/gateway/upstreams/kimi";
 import { museHeaders } from "@/lib/gateway/upstreams/muse";
+import { GOOGLE_KEY_HEADER } from "@/lib/gateway/upstreams/google";
+import { vertexAuth } from "@/lib/gateway/upstreams/vertex-credentials";
 import { asRecord, asString, VERSION } from "@/lib/gateway/core";
 import { GateError } from "@/lib/gateway/errors";
 import { refreshSession } from "@/lib/gateway/upstreams/subscription-sign-in";
@@ -297,6 +299,8 @@ export function sessionAuth(kind: SignInKind, session: SignInSession): UpstreamA
 }
 
 export async function providerAuth(provider: { id: string; kind: string; apiKey: string }): Promise<UpstreamAuth> {
+  if (provider.kind === "vertex") return vertexAuth(provider);
+  if (provider.kind === "gemini") return { key: open(provider.apiKey), headers: {}, keyHeader: GOOGLE_KEY_HEADER };
   if (!isSignInKind(provider.kind)) return { key: open(provider.apiKey), headers: {} };
   return sessionAuth(provider.kind, await activeSession(provider.id, provider.kind));
 }

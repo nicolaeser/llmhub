@@ -16,8 +16,9 @@ import {
   rejectsForeignReasoning,
 } from "@/lib/gateway/routing/account-handoff";
 import { acquireGroup, loadGroup, markFailure, markSuccess } from "@/lib/gateway/routing/runtime";
-import { isSignInKind, speaksAnthropic, speaksMuse } from "@/lib/gateway/upstreams/provider-kinds";
+import { isSignInKind, speaksAnthropic, speaksGoogle, speaksMuse } from "@/lib/gateway/upstreams/provider-kinds";
 import { AntigravitySseTranslator } from "@/lib/gateway/upstreams/antigravity";
+import { googleStreamTranslator } from "@/lib/gateway/upstreams/google";
 import { CodexSseTranslator } from "@/lib/gateway/upstreams/codex";
 import { devinEventStream, devinHttpError } from "@/lib/gateway/upstreams/devin";
 import { museTranslator } from "@/lib/gateway/upstreams/muse";
@@ -33,6 +34,7 @@ import {
   mergeUpstreamHeaders,
   museUsageObserver,
   observeUpstreamLimits,
+  observeUpstreamStatus,
   prepareBody,
   proxyJson,
   retryableStatus,
@@ -40,6 +42,7 @@ import {
   upstreamBody,
   upstreamError,
   upstreamHeaders,
+  upstreamModel,
 } from "@/lib/gateway/dispatch/upstream";
 import { asRecord, isRouterError, isUnavailableError, newId, routerGateError, stringifyContent } from "@/lib/gateway/core";
 import { costFilter, costRejected } from "@/lib/gateway/billing/cost-cap";
@@ -428,13 +431,14 @@ export async function openUpstreamStream(input: {
     Accept: streamAccept(input.dep.kind),
   };
   if (input.form) delete headers["Content-Type"];
-  const res = await fetch(joinPath(input.dep, input.path), {
+  const res = await fetch(joinPath(input.dep, input.path, upstreamModel(input.dep, input.payload)), {
     method: "POST",
     headers,
-    body: input.form ?? upstreamBody(input.dep, auth, input.payload),
+    body: input.form ?? upstreamBody(input.dep, auth, input.path, input.payload),
     signal: AbortSignal.any(signals),
   });
   observeUpstreamLimits(input.dep, res.headers);
+  observeUpstreamStatus(input.dep, res.status);
   if (!res.ok || !res.body) {
     const text = await readTextOr(res);
     if (input.dep.kind === "devin") throw devinHttpError(res.status, text, devinResetLookup(input.dep));
@@ -470,6 +474,7 @@ function streamTranslator(dep: ResolvedDeployment, model: string): ChatSseTransl
   if (dep.kind === "codex") return new CodexSseTranslator(model);
   if (speaksMuse(dep.kind)) return museTranslator(model, museUsageObserver(dep));
   if (dep.kind === "antigravity") return new AntigravitySseTranslator(model);
+  if (speaksGoogle(dep.kind)) return googleStreamTranslator(dep.kind, dep.model || plainModel(model), model);
   return null;
 }
 

@@ -118,6 +118,14 @@ export function serializeProvider(provider: ProviderSource) {
       cost_output_per_1k: model.costOutputPer1k,
       price_source: model.priceSource,
     })),
+    vertex: provider.vertex
+      ? {
+          credential: provider.vertex.credential,
+          account: orNull(provider.vertex.account),
+          project: orNull(provider.vertex.project),
+          location: orNull(provider.vertex.location),
+        }
+      : null,
   };
 }
 

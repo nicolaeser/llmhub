@@ -224,7 +224,9 @@ export function applyProviderServiceMode(
     case "kimi":
     case "kimi_ai":
     case "meta":
-    case "muse_code": {
+    case "muse_code":
+    case "gemini":
+    case "vertex": {
       delete payload.service_tier;
       delete payload.speed;
       break;

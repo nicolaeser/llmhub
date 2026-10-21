@@ -18,6 +18,7 @@ import { scheduleCatalogTask } from "@/lib/gateway/catalog/catalog-tasks";
 import { assignmentSelect, assignmentTargets } from "@/lib/gateway/routing/account-assignments";
 import { reactivateAccount } from "@/lib/gateway/routing/account-reactivation";
 import { loginData } from "@/lib/gateway/upstreams/credentials";
+import { forgetVertexToken, vertexConnection, vertexView } from "@/lib/gateway/upstreams/vertex-credentials";
 import { baseName, vendorOf } from "@/lib/gateway/catalog/model-catalog";
 import { refreshProviderModels } from "@/lib/gateway/upstreams/discovery";
 import { matchingConnection, pruneSupersededLogins } from "@/lib/providers/account-match";
@@ -35,7 +36,7 @@ import {
   sealTicket,
   startAuthorization,
 } from "@/lib/gateway/upstreams/subscription-sign-in";
-import { providerPolicySchema } from "@/schemas/providers";
+import { providerPolicySchema, vertexTargetSchema } from "@/schemas/providers";
 import type {
   ImportCandidate,
   LimitSnapshot,
@@ -48,6 +49,7 @@ import type {
   SignInPollResult,
   SignInStart,
   SubscriptionLimits,
+  VertexTarget,
 } from "@/types/providers";
 
 const SLOW_DOWN_STEP_S = 5;
@@ -79,6 +81,7 @@ export function publicProvider(row: ProviderRecord) {
     sharedVia: row.subAdd ? row.subAdd.label : null,
     discovered: discoveredOf(row.discovered),
     policy: policyOf(row),
+    vertex: row.kind === "vertex" ? vertexView(row) : null,
   };
 }
 
@@ -116,6 +119,13 @@ export function providerAuditAfter(row: ProviderRecord, extra?: Record<string, u
   return { name: row.name, kind: row.kind, baseUrl: row.baseUrl, policy: policyOf(row), ...extra };
 }
 
+function parseVertexTarget(raw: unknown): Partial<VertexTarget> | undefined {
+  if (raw === undefined) return undefined;
+  const parsed = vertexTargetSchema.safeParse(raw);
+  if (!parsed.success) throw new Error("VALIDATION");
+  return parsed.data;
+}
+
 function validBaseUrl(value: string): string {
   if (!value) return "";
   const url = URL.canParse(value) ? new URL(value) : null;
@@ -143,6 +153,7 @@ export async function createProvider(input: {
   apiKey: string;
   signIn?: string;
   policy?: ProviderPolicyInput;
+  vertex?: Partial<VertexTarget>;
 }) {
   const session = await requirePermission(PERMISSIONS.PROVIDERS_MANAGE);
   const kind = input.kind.trim();
@@ -151,8 +162,12 @@ export async function createProvider(input: {
   const signedIn = isSignInKind(kind);
   const credential = signedIn ? signInCredential(input.signIn, session.user.id, kind) : null;
   if (signedIn && !credential) throw new Error("SIGN_IN_REQUIRED");
+  const vertex =
+    kind === "vertex"
+      ? vertexConnection({ credential: input.apiKey, target: parseVertexTarget(input.vertex), baseUrl: input.baseUrl })
+      : null;
   const apiKey = signedIn ? "" : input.apiKey.trim();
-  const baseUrl = signedIn ? "" : input.baseUrl.trim();
+  const baseUrl = signedIn ? "" : (vertex?.baseUrl ?? input.baseUrl.trim());
   const login = credential ? loginData(credential.session) : null;
   const existing = credential && isSignInKind(kind) ? await matchingConnection(kind, credential.session) : null;
   const row = existing && login
@@ -169,7 +184,7 @@ export async function createProvider(input: {
           name: input.name.trim() || spec?.name || kind,
           kind,
           baseUrl: validBaseUrl(baseUrl || spec?.default_base_url || ""),
-          apiKey: apiKey ? seal(apiKey) : "",
+          apiKey: vertex ? vertex.apiKey : apiKey ? seal(apiKey) : "",
           ...parsePolicy(input.policy),
           ...(login ? { login: { create: login } } : {}),
         },
@@ -202,21 +217,33 @@ export async function updateProvider(input: {
   enabled?: boolean;
   signIn?: string;
   policy?: ProviderPolicyInput;
+  vertex?: Partial<VertexTarget>;
 }) {
   const session = await requirePermission(PERMISSIONS.PROVIDERS_MANAGE);
   const existing = await prisma.providerConnection.findUnique({ where: { id: input.id } });
   if (!existing) throw new Error("NOT_FOUND");
   const signedIn = isSignInKind(existing.kind);
   const credential = signedIn ? signInCredential(input.signIn, session.user.id, existing.kind) : null;
-  const apiKey = signedIn ? "" : input.apiKey.trim();
-  const baseUrl = signedIn ? specFor(existing.kind)?.default_base_url ?? existing.baseUrl : input.baseUrl.trim();
+  const vertex =
+    existing.kind === "vertex"
+      ? vertexConnection({
+          credential: input.apiKey,
+          target: parseVertexTarget(input.vertex),
+          baseUrl: input.baseUrl,
+          currentBaseUrl: existing.baseUrl,
+        })
+      : null;
+  const apiKey = signedIn ? "" : vertex ? vertex.apiKey : input.apiKey.trim();
+  const baseUrl = signedIn
+    ? specFor(existing.kind)?.default_base_url ?? existing.baseUrl
+    : (vertex?.baseUrl ?? input.baseUrl.trim());
   const login = credential ? loginData(credential.session) : null;
   const row = await prisma.providerConnection.update({
     where: { id: input.id },
     data: {
       name: input.name.trim() || existing.name,
       baseUrl: validBaseUrl(baseUrl || existing.baseUrl),
-      ...(apiKey ? { apiKey: seal(apiKey) } : {}),
+      ...(apiKey ? { apiKey: vertex ? apiKey : seal(apiKey) } : {}),
       ...(input.enabled === undefined ? {} : { enabled: input.enabled }),
       ...(input.policy ? parsePolicy(input.policy) : {}),
       ...(login ? { login: { upsert: { create: login, update: { ...login, version: { increment: 1 } } } } } : {}),
@@ -224,6 +251,7 @@ export async function updateProvider(input: {
     include: providerInclude,
   });
   const resumed = !existing.enabled && row.enabled;
+  if (vertex) forgetVertexToken(row.id);
   if (resumed || apiKey || credential) await reactivateAccount(row.id);
   await writeAudit({
     actor: session.user.id,

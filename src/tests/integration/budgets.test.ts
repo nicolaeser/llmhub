@@ -5,7 +5,7 @@ import { runAsPrincipal } from "@/lib/auth/delegation";
 import { AuthError } from "@/lib/auth/errors";
 import { addBoost, removeBoost, saveBudgetAlerts, setBudget } from "@/lib/tenancy/budgets";
 import type { Permission } from "@/types/auth";
-import { closeDatabase } from "./support/database";
+import { closeDatabase, uniqueName } from "./support/database";
 import { sessionOf, TestData } from "./support/fixtures";
 
 after(closeDatabase);
@@ -68,6 +68,40 @@ test("company users set budgets only inside their company and never on companies
     assert.equal(set.budget.maxBudget, 10);
   } finally {
     await data.cleanup();
+  }
+});
+
+test("console-user budgets change only for people the caller may manage", async () => {
+  const data = new TestData();
+  const role = await prisma.role.create({
+    data: { name: uniqueName("role"), permissions: ["budgets:manage", "users:manage"] },
+  });
+  try {
+    const owner = await data.user({ isOwner: true });
+    const self = await data.user();
+    const stronger = await data.user();
+    const weaker = await data.user();
+    await prisma.user.update({ where: { id: stronger.id }, data: { roleId: role.id } });
+    const manager = sessionOf(self, { permissions: BUDGET_ADMIN });
+    const as = <T>(fn: () => Promise<T>) => runAsPrincipal(manager, fn);
+
+    for (const target of [owner, self, stronger]) {
+      await assert.rejects(as(() => setBudget({ kind: "user", id: target.id, maxBudget: 10, budgetDuration: "" })), failsWith("FORBIDDEN"));
+      await assert.rejects(as(() => addBoost({ kind: "user", id: target.id, amount: 5, hours: 1 })), failsWith("FORBIDDEN"));
+    }
+    assert.equal(Number((await prisma.user.findUniqueOrThrow({ where: { id: owner.id } })).maxBudget), 0);
+
+    const set = await as(() => setBudget({ kind: "user", id: weaker.id, maxBudget: 10, budgetDuration: "" }));
+    assert.equal(set.budget.maxBudget, 10);
+
+    const asOwner = <T>(fn: () => Promise<T>) => runAsPrincipal(sessionOf(owner), fn);
+    const capped = await asOwner(() => setBudget({ kind: "user", id: stronger.id, maxBudget: 20, budgetDuration: "" }));
+    assert.equal(capped.budget.maxBudget, 20);
+    const boosted = await asOwner(() => addBoost({ kind: "user", id: stronger.id, amount: 5, hours: 1 }));
+    await assert.rejects(as(() => removeBoost(boosted.budget.boosts[0].id)), failsWith("FORBIDDEN"));
+  } finally {
+    await data.cleanup();
+    await prisma.role.delete({ where: { id: role.id } });
   }
 });
 

@@ -56,15 +56,18 @@ export async function listRoles(actor: GrantActor): Promise<RoleSummary[]> {
     .sort((a, b) => templateOrder(a.templateKey) - templateOrder(b.templateKey))
     .map((role) => {
       const granted = permissionList(role.permissions);
+      const templateKey = isRoleTemplateKey(role.templateKey) ? role.templateKey : null;
+      const editable = canManage(actor, granted);
       return {
         id: role.id,
-        templateKey: isRoleTemplateKey(role.templateKey) ? role.templateKey : null,
+        templateKey,
         name: role.name,
         description: role.description,
         permissions: granted,
         memberCount: role._count.users,
         revision: role.revision,
-        editable: canManage(actor, granted),
+        editable,
+        resettable: editable && templateKey !== null && canGrant(actor, roleTemplates[templateKey]),
       };
     });
 }
@@ -244,7 +247,7 @@ export async function loadRolesConsole(): Promise<RolesConsolePayload> {
   return {
     roles,
     grantable: actor.isOwner ? [...permissions] : [...actor.permissions],
-    missingTemplates: roleTemplateKeys.filter((key) => !present.has(key)),
+    missingTemplates: roleTemplateKeys.filter((key) => !present.has(key) && canGrant(actor, roleTemplates[key])),
   };
 }
 

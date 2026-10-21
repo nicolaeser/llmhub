@@ -4,7 +4,7 @@ import { GateError } from "@/lib/gateway/errors";
 import { anthropicToChat, chatToAnthropic, withCacheBreakpoints } from "@/lib/gateway/protocols/anthropic";
 import { plainModel } from "@/lib/gateway/catalog/model-alias";
 import { inPool, outsidePool } from "@/lib/gateway/routing/route-pool";
-import { speaksAnthropic, speaksKimi, speaksMuse } from "@/lib/gateway/upstreams/provider-kinds";
+import { speaksAnthropic, speaksGoogle, speaksKimi, speaksMuse } from "@/lib/gateway/upstreams/provider-kinds";
 import { withClaudeBetas, withClaudeIdentity } from "@/lib/gateway/upstreams/claude";
 import {
   ANTIGRAVITY_STREAM_PATH,
@@ -14,6 +14,8 @@ import {
   withProject,
 } from "@/lib/gateway/upstreams/antigravity";
 import { chatToCodex, codexCompletion } from "@/lib/gateway/upstreams/codex";
+import { googlePath, googlePayload, googleResponse, googleWire, keepsThinkingBlocks } from "@/lib/gateway/upstreams/google";
+import { forgetVertexToken } from "@/lib/gateway/upstreams/vertex-credentials";
 import { deploymentAuth } from "@/lib/gateway/upstreams/credentials";
 import { DEVIN_CHAT_PATH, windowReset } from "@/lib/gateway/upstreams/devin-account";
 import { chatToDevin, devinCompletion, encodeDevinRequest } from "@/lib/gateway/upstreams/devin";
@@ -39,6 +41,8 @@ export function upstreamHeaders(
   if (dep.kind === "anthropic") {
     headers["x-api-key"] = auth.key;
     headers["anthropic-version"] = "2023-06-01";
+  } else if (auth.keyHeader) {
+    if (auth.key) headers[auth.keyHeader] = auth.key;
   } else if (auth.key) {
     headers.Authorization = `Bearer ${auth.key}`;
   }
@@ -96,6 +100,19 @@ export function observeUpstreamLimits(dep: ResolvedDeployment, headers: Headers)
   void observeClaudeLimits(dep.provider.id, headers);
 }
 
+export function observeUpstreamStatus(dep: ResolvedDeployment, status: number): void {
+  if (status === 401 && dep.provider?.kind === "vertex") forgetVertexToken(dep.provider.id);
+}
+
+export function upstreamModel(dep: ResolvedDeployment, body: JsonMap | null | undefined): string {
+  return dep.model || plainModel(asString(body?.model));
+}
+
+export function wireBody(dep: ResolvedDeployment, auth: UpstreamAuth, path: string, payload: JsonMap): JsonMap {
+  if (speaksGoogle(dep.kind)) return googleWire(dep.kind, path, payload);
+  return withProject(dep, auth, payload);
+}
+
 export function museUsageObserver(dep: ResolvedDeployment): ((windows: LimitWindow[]) => void) | undefined {
   const provider = dep.provider;
   if (provider?.kind !== "muse_code") return undefined;
@@ -111,9 +128,9 @@ export function devinResetLookup(dep: ResolvedDeployment): DevinResetLookup {
   return (windowSeconds) => (providerId ? windowReset(limitsSnapshot(providerId), windowSeconds) : null);
 }
 
-export function upstreamBody(dep: ResolvedDeployment, auth: UpstreamAuth, payload: JsonMap): BodyInit {
+export function upstreamBody(dep: ResolvedDeployment, auth: UpstreamAuth, path: string, payload: JsonMap): BodyInit {
   if (dep.kind === "devin") return encodeDevinRequest(payload, auth.key);
-  return JSON.stringify(withProject(dep, auth, payload));
+  return JSON.stringify(wireBody(dep, auth, path, payload));
 }
 
 export function streamAccept(kind: string): string {
@@ -135,7 +152,7 @@ function withoutThinkingBlocks(messages: unknown): unknown {
   });
 }
 
-export function joinPath(dep: ResolvedDeployment, rel: string): string {
+export function joinPath(dep: ResolvedDeployment, rel: string, model = dep.model): string {
   const path = rel.startsWith("/") ? rel : `/${rel}`;
   if (dep.kind === "codex") return `${defaultBase(dep)}${nativeChatPath(path) ? "/responses" : path}`;
   if (speaksMuse(dep.kind) && nativeChatPath(path)) return `${openaiRoot(defaultBase(dep))}/responses`;
@@ -143,6 +160,7 @@ export function joinPath(dep: ResolvedDeployment, rel: string): string {
     if (!nativeChatPath(path)) throw new GateError(400, "unsupported_endpoint", "this endpoint is not available on antigravity accounts");
     return `${defaultBase(dep)}${ANTIGRAVITY_STREAM_PATH}`;
   }
+  if (speaksGoogle(dep.kind)) return googlePath(dep.kind, defaultBase(dep), model, path);
   if (dep.kind === "devin") {
     if (!nativeChatPath(path)) throw new GateError(400, "unsupported_endpoint", "this endpoint is not available on devin accounts");
     return `${defaultBase(dep)}${DEVIN_CHAT_PATH}`;
@@ -190,6 +208,7 @@ export function prepareBody(
     dep.kind !== "codex" &&
     dep.kind !== "devin" &&
     !speaksMuse(dep.kind) &&
+    !keepsThinkingBlocks(dep.kind, asString(payload.model)) &&
     Array.isArray(payload.messages)
   ) {
     payload.messages = withoutThinkingBlocks(payload.messages);
@@ -208,6 +227,7 @@ export function prepareBody(
   if (dep.kind === "antigravity" && nativeChatPath(path)) return chatToAntigravity(payload);
   if (speaksMuse(dep.kind) && nativeChatPath(path)) return chatToMuse(payload);
   if (speaksKimi(dep.kind) && nativeChatPath(path)) return kimiChatBody(payload, dep.kind);
+  if (speaksGoogle(dep.kind)) return googlePayload(dep.kind, path, payload);
   if (dep.kind === "devin" && nativeChatPath(path)) return chatToDevin(payload, dep.facts);
   return payload;
 }
@@ -232,6 +252,7 @@ function decodeBody(
   if (speaksMuse(dep.kind) && nativeChatPath(path)) {
     return museCompletion(new TextDecoder().decode(raw), model, museUsageObserver(dep));
   }
+  if (speaksGoogle(dep.kind)) return googleResponse(dep.kind, path, model, new TextDecoder().decode(raw), json);
   if (dep.kind === "devin" && nativeChatPath(path)) return devinCompletion(raw, model, devinResetLookup(dep));
   return json;
 }
@@ -249,7 +270,8 @@ export async function proxyJson(input: {
   headers?: Record<string, string>;
 }): Promise<{ status: number; json: unknown; headers: Headers; raw: Uint8Array }> {
   const method = input.method ?? "POST";
-  const url = joinPath(input.dep, input.path);
+  const model = upstreamModel(input.dep, input.body);
+  const url = joinPath(input.dep, input.path, model);
   const headers = mergeUpstreamHeaders(
     upstreamHeaders(input.dep, input.auth, input.headers),
     serviceModeHeaders(input.dep.kind, input.body ?? {}, input.groupStrategy, input.dep.model, input.dep.facts),
@@ -267,10 +289,11 @@ export async function proxyJson(input: {
   if (input.rawBody != null) {
     init.body = input.rawBody;
   } else if (input.body && method !== "GET" && method !== "HEAD") {
-    init.body = upstreamBody(input.dep, input.auth, prepareBody(input.dep, input.path, input.body, input.groupStrategy));
+    init.body = upstreamBody(input.dep, input.auth, input.path, prepareBody(input.dep, input.path, input.body, input.groupStrategy));
   }
   const res = await fetch(url, init);
   observeUpstreamLimits(input.dep, res.headers);
+  observeUpstreamStatus(input.dep, res.status);
   const raw = new Uint8Array(await res.arrayBuffer());
   let json: unknown = {};
   const ct = res.headers.get("content-type") ?? "";
@@ -281,7 +304,7 @@ export async function proxyJson(input: {
       json = {};
     }
   }
-  if (res.ok) json = decodeBody(input.dep, input.path, json, raw, input.dep.model);
+  if (res.ok) json = decodeBody(input.dep, input.path, json, raw, model);
   return { status: res.status, json, headers: res.headers, raw };
 }
 
@@ -298,7 +321,8 @@ async function proxyRaw(input: {
   headers?: Record<string, string>;
 }): Promise<{ status: number; raw: Uint8Array; contentType: string; headers: Headers }> {
   const method = input.method ?? "POST";
-  const url = joinPath(input.dep, input.path);
+  const model = upstreamModel(input.dep, input.body);
+  const url = joinPath(input.dep, input.path, model);
   const headers = mergeUpstreamHeaders(
     upstreamHeaders(input.dep, input.auth, input.headers),
     serviceModeHeaders(input.dep.kind, input.body ?? {}, input.groupStrategy, input.dep.model, input.dep.facts),
@@ -314,11 +338,12 @@ async function proxyRaw(input: {
     body:
       input.rawBody ??
       (input.body && method !== "GET"
-        ? upstreamBody(input.dep, input.auth, prepareBody(input.dep, input.path, input.body, input.groupStrategy))
+        ? upstreamBody(input.dep, input.auth, input.path, prepareBody(input.dep, input.path, input.body, input.groupStrategy))
         : undefined),
     signal: AbortSignal.timeout(input.timeoutMs && input.timeoutMs > 0 ? input.timeoutMs : 120_000),
   });
   observeUpstreamLimits(input.dep, res.headers);
+  observeUpstreamStatus(input.dep, res.status);
   const raw = new Uint8Array(await res.arrayBuffer());
   return {
     status: res.status,

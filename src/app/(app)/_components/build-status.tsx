@@ -14,6 +14,7 @@ import { Button, toast } from "@heroui/react";
 import { ArrowUpCircle, ExternalLink, RotateCw } from "lucide-react";
 import { useTranslations } from "next-intl";
 import IconTile from "@/components/console/icon-tile";
+import { receiveAccess, recheckAccess, watchAccess } from "@/lib/auth/access-watch";
 import { WORKSPACE_EVENT } from "@/lib/auth/workspace-event";
 import { isActionFail } from "@/lib/http/action-result";
 import { onWantedLiveTopics, receiveLiveEvent, setLiveLink, wantedLiveTopics } from "@/lib/updates/live-client";
@@ -24,6 +25,7 @@ import {
   checkDue,
   FOCUS_CHECK_GAP_MS,
   healthOf,
+  liveAccessKeyOf,
   LIVE_STALE_MS,
   LIVE_URL,
   LIVE_WATCHDOG_MS,
@@ -40,7 +42,7 @@ import type {
   UpdaterView,
   UpdateStatus,
 } from "@/types/updates";
-import { loadUpdateStatusAction } from "../_action";
+import { loadConsoleAccessAction, loadUpdateStatusAction } from "../_action";
 import InstallUpdate from "./install-update";
 
 type BuildStatus = {
@@ -80,9 +82,11 @@ async function fetchServedBuild(): Promise<BuildInfo | null> {
 
 export default function BuildStatusProvider({
   version,
+  access,
   children,
 }: {
   version: string;
+  access: string;
   children: React.ReactNode;
 }) {
   const t = useTranslations("Common");
@@ -137,6 +141,8 @@ export default function BuildStatusProvider({
   const setUpdater = useCallback((view: UpdaterView | null) => {
     setLive((current) => (current ? { ...current, updater: view } : current));
   }, []);
+
+  useEffect(() => watchAccess({ key: access, check: loadConsoleAccessAction, reload: reloadPage }), [access]);
 
   useEffect(() => {
     if (typeof EventSource === "undefined") {
@@ -226,11 +232,16 @@ export default function BuildStatusProvider({
         setLive(payload);
         announce(payload.build);
       });
+      next.addEventListener("access", (event) => {
+        markOpen();
+        receiveAccess(liveAccessKeyOf(parseJsonOrNull(event.data)));
+      });
       next.addEventListener("ping", markOpen);
       next.addEventListener("restart", markLost);
       next.addEventListener("expired", () => {
         next.close();
         markLost();
+        recheckAccess();
       });
       next.addEventListener("error", () => {
         if (source === next) markLost();

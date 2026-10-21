@@ -35,6 +35,12 @@ export function liveStatusOf(json: unknown): LiveStatus | null {
   return { build, updater, updating: record.updating, canRead: record.canRead, canManage: record.canManage };
 }
 
+export function liveAccessKeyOf(json: unknown): string | null {
+  if (!json || typeof json !== "object") return null;
+  const { key } = json as Record<string, unknown>;
+  return typeof key === "string" && key ? key : null;
+}
+
 export function healthOf(input: {
   link: LiveLink;
   updating: boolean;

@@ -1,6 +1,8 @@
 import {
   Asterisk,
   Bot,
+  Cloud,
+  Gem,
   Infinity as InfinityIcon,
   MessageCircle,
   Moon,
@@ -32,6 +34,8 @@ const KIND_ICONS: Record<string, LucideIcon> = {
   kimi_ai: Moon,
   meta: InfinityIcon,
   muse_code: InfinityIcon,
+  gemini: Gem,
+  vertex: Cloud,
   devin: Bot,
 };
 
