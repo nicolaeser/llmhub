@@ -19,10 +19,16 @@ export const NATIVE_VENDORS: Readonly<Record<string, string>> = {
   typesafe: "typesafe",
   codex: "openai",
   grok_build: "xai",
+  moonshot: "moonshotai",
+  moonshot_cn: "moonshotai",
+  kimi: "moonshotai",
+  kimi_ai: "moonshotai",
+  meta: "meta",
+  muse_code: "meta",
 };
 
 const AGGREGATOR_KINDS = new Set(["openrouter", "openrouter_eu"]);
-const VENDOR_SYNONYMS: Readonly<Record<string, string>> = { "x-ai": "xai" };
+const VENDOR_SYNONYMS: Readonly<Record<string, string>> = { "x-ai": "xai", moonshot: "moonshotai" };
 const SNAPSHOT = /^(.+?)-(\d{4}-\d{2}-\d{2}|\d{8})$/;
 const COLON_TAG = /^([^:]+):([a-z][a-z0-9-]{0,23})$/;
 const DASH_TAGS = ["batch", "free"] as const;

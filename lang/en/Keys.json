@@ -36,6 +36,7 @@
     "access": "Model access",
     "templates": "Model templates",
     "templatesHint": "Template rules stay current as models change. <link>Manage templates</link>",
+    "templatesNote": "Template rules stay current as models change.",
     "templatesPlaceholder": "No template",
     "models": "Individual models",
     "modelsHint": "Allowed in addition to the selected templates.",

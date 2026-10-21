@@ -7,11 +7,12 @@ import { isPrismaCode } from "@/lib/auth/errors";
 import { asRecord } from "@/lib/gateway/core";
 import { isResetKind } from "@/lib/gateway/routing/auto-reset-policy";
 import { latestRecovery, quotaExhausted } from "@/lib/gateway/routing/quota";
-import { PROVIDER_CATALOG, reportsLimits } from "@/lib/gateway/upstreams/provider-kinds";
+import { limitsFromTraffic, PROVIDER_CATALOG, reportsLimits } from "@/lib/gateway/upstreams/provider-kinds";
 import {
   claudeHeaderWindows,
   isObservedWindow,
   limitsUpdatedAt,
+  observedWindowsBefore,
   observedChanged,
   observedFlipped,
   observedTime,
@@ -254,9 +255,17 @@ async function settledSnapshot(providerId: string, version: number, deadline: nu
   }
 }
 
-function withPreviousObservation(limits: SubscriptionLimits, previous: StoredLimitSnapshot | null): SubscriptionLimits {
+function withPreviousObservation(
+  kind: string,
+  limits: SubscriptionLimits,
+  previous: StoredLimitSnapshot | null,
+  now: number,
+): SubscriptionLimits {
   const observed = previous?.limits?.observedAt;
-  return observed ? { ...limits, observedAt: observed } : limits;
+  if (!observed) return limits;
+  if (!limitsFromTraffic(kind)) return { ...limits, observedAt: observed };
+  const carried = observedWindowsBefore(previous.limits?.windows ?? [], limits.windows, now);
+  return { ...limits, windows: [...carried, ...limits.windows], observedAt: observed };
 }
 
 function successData(account: LimitPollAccount, limits: SubscriptionLimits, now: number, random: () => number) {
@@ -302,7 +311,7 @@ async function fetchHeld(
   let failure: LimitFetchFailure | null = null;
   try {
     const fetched = await fetchSubscriptionLimits(account);
-    limits = fetched ? withPreviousObservation(fetched, previous) : null;
+    limits = fetched ? withPreviousObservation(account.kind, fetched, previous, now) : null;
     if (!limits) failure = { code: "UPSTREAM_FAILED", retryAfterMs: null };
   } catch (error) {
     failure = limitFailure(error);
@@ -616,7 +625,14 @@ function queueObservedWrite(providerId: string, windows: LimitWindow[], now: num
 
 export function observeClaudeLimits(providerId: string, headers: Headers, now = Date.now()): Promise<boolean> {
   try {
-    const windows = claudeHeaderWindows(headers);
+    return observeLimitWindows(providerId, claudeHeaderWindows(headers), now);
+  } catch (err) {
+    return Promise.resolve(observeFailed(providerId, err));
+  }
+}
+
+export function observeLimitWindows(providerId: string, windows: LimitWindow[], now = Date.now()): Promise<boolean> {
+  try {
     if (!windows.length) return Promise.resolve(false);
     observedAt.set(providerId, now);
     const cached = limitsSnapshot(providerId);

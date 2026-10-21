@@ -240,6 +240,9 @@ export default function PlaygroundTab() {
 
   if (!models.length) {
     const gap = providerCount === 0 ? "provider" : "model";
+    if (!page.data.setupLinks[gap]) {
+      return <EmptyState icon={PlayCircle} title={t("emptySetupTitle")} description={t("emptySetupAsk", { gap })} />;
+    }
     return (
       <EmptyState
         icon={PlayCircle}

@@ -15,6 +15,8 @@ export type KeyOptions = {
   templates: TemplateOption[];
 };
 
+export type KeyTab = "keys" | "templates";
+
 export type KeyBindingKind = "project" | "member" | "internal";
 
 export type KeyPreset = { kind: KeyBindingKind; id: string };
