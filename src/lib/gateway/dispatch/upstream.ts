@@ -15,11 +15,15 @@ import {
 } from "@/lib/gateway/upstreams/antigravity";
 import { chatToCodex, codexCompletion } from "@/lib/gateway/upstreams/codex";
 import { deploymentAuth } from "@/lib/gateway/upstreams/credentials";
+import { DEVIN_CHAT_PATH, windowReset } from "@/lib/gateway/upstreams/devin-account";
+import { chatToDevin, devinCompletion, encodeDevinRequest } from "@/lib/gateway/upstreams/devin";
 import { observeClaudeLimits } from "@/lib/gateway/upstreams/limit-store";
+import { limitsSnapshot } from "@/lib/gateway/upstreams/subscription-limits";
 import { acquireGroup, defaultBase, loadGroup, markFailure, markSuccess, openaiRoot } from "@/lib/gateway/routing/runtime";
 import { applyProviderServiceMode, requestRoutingOverride, serviceModeHeaders } from "@/lib/gateway/dispatch/service-mode";
 import { asRecord, asString } from "@/lib/gateway/core";
 import { costFilter, costRejected } from "@/lib/gateway/billing/cost-cap";
+import type { DevinResetLookup } from "@/types/devin";
 import type { JsonMap, Principal, ProxyFirstResult } from "@/types/gateway";
 import type { ResolvedDeployment } from "@/types/routing";
 import type { UpstreamAuth } from "@/types/providers";
@@ -94,6 +98,20 @@ function nativeChatPath(path: string): boolean {
   return path.includes("chat/completions");
 }
 
+export function devinResetLookup(dep: ResolvedDeployment): DevinResetLookup {
+  const providerId = dep.provider?.id ?? "";
+  return (windowSeconds) => (providerId ? windowReset(limitsSnapshot(providerId), windowSeconds) : null);
+}
+
+export function upstreamBody(dep: ResolvedDeployment, auth: UpstreamAuth, payload: JsonMap): BodyInit {
+  if (dep.kind === "devin") return encodeDevinRequest(payload, auth.key);
+  return JSON.stringify(withProject(dep, auth, payload));
+}
+
+export function streamAccept(kind: string): string {
+  return kind === "devin" ? "*/*" : "text/event-stream";
+}
+
 const XAI_EFFORT_MIN_VERSION = 4.5;
 const XAI_XHIGH_MIN_VERSION = 4.6;
 const GATEWAY_ONLY_KEYS = ["fallbacks", "fallback", "tags", "tag"] as const;
@@ -115,6 +133,10 @@ export function joinPath(dep: ResolvedDeployment, rel: string): string {
   if (dep.kind === "antigravity") {
     if (!nativeChatPath(path)) throw new GateError(400, "unsupported_endpoint", "this endpoint is not available on antigravity accounts");
     return `${defaultBase(dep)}${ANTIGRAVITY_STREAM_PATH}`;
+  }
+  if (dep.kind === "devin") {
+    if (!nativeChatPath(path)) throw new GateError(400, "unsupported_endpoint", "this endpoint is not available on devin accounts");
+    return `${defaultBase(dep)}${DEVIN_CHAT_PATH}`;
   }
   const root = openaiRoot(defaultBase(dep));
   if (speaksAnthropic(dep.kind)) {
@@ -154,7 +176,7 @@ export function prepareBody(
   if ((dep.kind === "xai" || dep.kind === "grok_build") && payload.reasoning_effort !== undefined) {
     payload.reasoning_effort = xaiReasoningEffort(String(payload.model ?? ""), payload.reasoning_effort);
   }
-  if (!speaksAnthropic(dep.kind) && dep.kind !== "codex" && Array.isArray(payload.messages)) {
+  if (!speaksAnthropic(dep.kind) && dep.kind !== "codex" && dep.kind !== "devin" && Array.isArray(payload.messages)) {
     payload.messages = withoutThinkingBlocks(payload.messages);
   }
   if (speaksAnthropic(dep.kind)) {
@@ -169,6 +191,7 @@ export function prepareBody(
   }
   if (dep.kind === "codex" && nativeChatPath(path)) return chatToCodex(payload);
   if (dep.kind === "antigravity" && nativeChatPath(path)) return chatToAntigravity(payload);
+  if (dep.kind === "devin" && nativeChatPath(path)) return chatToDevin(payload, dep.facts);
   return payload;
 }
 
@@ -189,6 +212,7 @@ function decodeBody(
   if (dep.kind === "antigravity" && nativeChatPath(path)) {
     return antigravityCompletion(new TextDecoder().decode(raw), model);
   }
+  if (dep.kind === "devin" && nativeChatPath(path)) return devinCompletion(raw, model, devinResetLookup(dep));
   return json;
 }
 
@@ -223,9 +247,7 @@ export async function proxyJson(input: {
   if (input.rawBody != null) {
     init.body = input.rawBody;
   } else if (input.body && method !== "GET" && method !== "HEAD") {
-    init.body = JSON.stringify(
-      withProject(input.dep, input.auth, prepareBody(input.dep, input.path, input.body, input.groupStrategy)),
-    );
+    init.body = upstreamBody(input.dep, input.auth, prepareBody(input.dep, input.path, input.body, input.groupStrategy));
   }
   const res = await fetch(url, init);
   observeUpstreamLimits(input.dep, res.headers);
@@ -272,9 +294,7 @@ async function proxyRaw(input: {
     body:
       input.rawBody ??
       (input.body && method !== "GET"
-        ? JSON.stringify(
-            withProject(input.dep, input.auth, prepareBody(input.dep, input.path, input.body, input.groupStrategy)),
-          )
+        ? upstreamBody(input.dep, input.auth, prepareBody(input.dep, input.path, input.body, input.groupStrategy))
         : undefined),
     signal: AbortSignal.timeout(input.timeoutMs && input.timeoutMs > 0 ? input.timeoutMs : 120_000),
   });

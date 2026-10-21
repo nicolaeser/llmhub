@@ -9,8 +9,8 @@
   "pickTitle": "Choose your provider",
   "pickHint": "Pick the subscription you want to share, then sign in with that provider.",
   "pickLabel": "Provider",
-  "kindPlan": "{kind, select, codex {ChatGPT Plus, Pro, or Business} grok_build {SuperGrok or X Premium+} claude {Claude Pro or Max} antigravity {Google account with Antigravity access} other {Subscription account}}",
-  "signInHint": "{kind, select, codex {Sign in with the ChatGPT account whose plan you want to share.} grok_build {Sign in with the xAI account that has SuperGrok or X Premium+.} claude {Sign in with the Claude account whose Pro or Max plan you want to share.} antigravity {Sign in with the Google account whose Antigravity plan you want to share.} other {Sign in with the account you want to share.}}",
+  "kindPlan": "{kind, select, codex {ChatGPT Plus, Pro, or Business} grok_build {SuperGrok or X Premium+} claude {Claude Pro or Max} antigravity {Google account with Antigravity access} devin {Devin account} other {Subscription account}}",
+  "signInHint": "{kind, select, codex {Sign in with the ChatGPT account whose plan you want to share.} grok_build {Sign in with the xAI account that has SuperGrok or X Premium+.} claude {Sign in with the Claude account whose Pro or Max plan you want to share.} antigravity {Sign in with the Google account whose Antigravity plan you want to share.} devin {Sign in with the Devin account whose plan you want to share.} other {Sign in with the account you want to share.}}",
   "notice": {
     "title": "What you share",
     "usage": "{named, select, true {Requests that {instance} sends run on your account and count against the limits of your plan.} other {Requests that this hub sends run on your account and count against the limits of your plan.}}",

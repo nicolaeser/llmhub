@@ -27,6 +27,7 @@ import { pollAccounts, readLimitSnapshot, readLimitSnapshots } from "@/lib/gatew
 import { refreshAccountLimits, refreshAccountsLimits } from "@/lib/providers/limit-refresh";
 import {
   completeAuthorization,
+  isCodeGrant,
   openCredential,
   openTicket,
   pollDeviceCode,
@@ -314,7 +315,7 @@ export async function completeSignIn(input: { ticket: string; code: string }): P
   const session = await requirePermission(PERMISSIONS.PROVIDERS_MANAGE);
   const ticket = openTicket(input.ticket, session.user.id);
   if (!ticket) throw new Error("SIGN_IN_EXPIRED");
-  if (ticket.grant.kind !== "claude" && ticket.grant.kind !== "antigravity") throw new Error("SIGN_IN_FAILED");
+  if (!isCodeGrant(ticket.grant)) throw new Error("SIGN_IN_FAILED");
   const completed = await completeAuthorization(ticket.grant, input.code);
   return {
     state: "done",

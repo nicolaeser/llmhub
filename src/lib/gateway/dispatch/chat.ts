@@ -17,8 +17,9 @@ import {
 } from "@/lib/gateway/routing/account-handoff";
 import { acquireGroup, loadGroup, markFailure, markSuccess } from "@/lib/gateway/routing/runtime";
 import { isSignInKind, speaksAnthropic } from "@/lib/gateway/upstreams/provider-kinds";
-import { AntigravitySseTranslator, withProject } from "@/lib/gateway/upstreams/antigravity";
+import { AntigravitySseTranslator } from "@/lib/gateway/upstreams/antigravity";
 import { CodexSseTranslator } from "@/lib/gateway/upstreams/codex";
+import { devinEventStream, devinHttpError } from "@/lib/gateway/upstreams/devin";
 import { deploymentAuth, renewRejectedLogin } from "@/lib/gateway/upstreams/credentials";
 import { nudgeLimits } from "@/lib/gateway/upstreams/limit-store";
 import { autoRedeemIfDue } from "@/lib/gateway/upstreams/reset-redeem";
@@ -26,12 +27,15 @@ import { plainModel } from "@/lib/gateway/catalog/model-alias";
 import { inPool, outsidePool, routeOf } from "@/lib/gateway/routing/route-pool";
 import { KEEPALIVE_MS, SSE_HEADERS, SSE_KEEPALIVE, sseData } from "@/lib/gateway/protocols/sse";
 import {
+  devinResetLookup,
   joinPath,
   mergeUpstreamHeaders,
   observeUpstreamLimits,
   prepareBody,
   proxyJson,
   retryableStatus,
+  streamAccept,
+  upstreamBody,
   upstreamError,
   upstreamHeaders,
 } from "@/lib/gateway/dispatch/upstream";
@@ -386,7 +390,10 @@ export async function chatOnce(
     timeoutMs: UPSTREAM_TIMEOUT_MS,
     groupStrategy: group.strategy,
   });
-  if (!proxied.status || proxied.status >= 400) throw upstreamError(proxied.status, proxied.json, proxied.headers);
+  if (!proxied.status || proxied.status >= 400) {
+    if (dep.kind === "devin") throw devinHttpError(proxied.status, new TextDecoder().decode(proxied.raw), devinResetLookup(dep));
+    throw upstreamError(proxied.status, proxied.json, proxied.headers);
+  }
   return proxied.json;
 }
 
@@ -407,22 +414,24 @@ export async function openUpstreamStream(input: {
       upstreamHeaders(input.dep, auth, input.headers),
       serviceModeHeaders(input.dep.kind, input.payload, input.group.strategy, input.dep.model, input.dep.facts),
     ),
-    Accept: "text/event-stream",
+    Accept: streamAccept(input.dep.kind),
   };
   if (input.form) delete headers["Content-Type"];
   const res = await fetch(joinPath(input.dep, input.path), {
     method: "POST",
     headers,
-    body: input.form ?? JSON.stringify(withProject(input.dep, auth, input.payload)),
+    body: input.form ?? upstreamBody(input.dep, auth, input.payload),
     signal: AbortSignal.any(signals),
   });
   observeUpstreamLimits(input.dep, res.headers);
   if (!res.ok || !res.body) {
     const text = await readTextOr(res);
+    if (input.dep.kind === "devin") throw devinHttpError(res.status, text, devinResetLookup(input.dep));
     const json = parseJsonOrNull(text);
     if (json) throw upstreamError(res.status, json, res.headers);
     throw new GateError(res.status || 502, "upstream_error", text.slice(0, 512) || "upstream error");
   }
+  if (input.dep.kind === "devin") return devinEventStream(res, input.dep.model, devinResetLookup(input.dep));
   return res;
 }
 

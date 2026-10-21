@@ -32,9 +32,16 @@ export const PROVIDER_CATALOG: ProviderKindSpec[] = [
     default_base_url: "https://daily-cloudcode-pa.googleapis.com",
     auth: "sign_in",
   },
+  {
+    kind: "devin",
+    name: "Devin subscription",
+    default_base_url: "https://server.codeium.com",
+    auth: "sign_in",
+  },
 ];
 
-const LIMIT_KINDS = new Set(["codex", "claude", "grok_build", "antigravity"]);
+const LIMIT_KINDS = new Set(["codex", "claude", "grok_build", "antigravity", "devin"]);
+const CODE_SIGN_IN_KINDS = new Set<SignInKind>(["claude", "antigravity", "devin"]);
 
 export function isSignInKind(kind: string): kind is SignInKind {
   return PROVIDER_CATALOG.some((spec) => spec.kind === kind && spec.auth === "sign_in");
@@ -49,7 +56,7 @@ export function reportsLimits(kind: string): boolean {
 }
 
 export function signInMethod(kind: SignInKind): SignInMethod {
-  return kind === "claude" || kind === "antigravity" ? "code" : "device";
+  return CODE_SIGN_IN_KINDS.has(kind) ? "code" : "device";
 }
 
 export function speaksAnthropic(kind: string): boolean {

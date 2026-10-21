@@ -4,6 +4,7 @@ import { open, seal } from "@/lib/crypto";
 import { antigravityHeaders } from "@/lib/gateway/upstreams/antigravity";
 import { isSignInKind } from "@/lib/gateway/upstreams/provider-kinds";
 import { claudeIdentityHeaders } from "@/lib/gateway/upstreams/claude";
+import { devinHeaders } from "@/lib/gateway/upstreams/devin-account";
 import { asRecord, asString, VERSION } from "@/lib/gateway/core";
 import { GateError } from "@/lib/gateway/errors";
 import { refreshSession } from "@/lib/gateway/upstreams/subscription-sign-in";
@@ -19,6 +20,7 @@ const REFRESH_LEAD_MS: Record<SignInKind, number> = {
   codex: 96 * 3_600_000,
   antigravity: 30 * 60_000,
   grok_build: 30 * 60_000,
+  devin: 0,
 };
 const MAX_REFRESH_LEAD_MS = Math.max(...Object.values(REFRESH_LEAD_MS));
 const RETRY_BASE_MS = 60_000;
@@ -104,6 +106,7 @@ function retryDelay(failures: number, retryAfterMs: number | null): number {
 export function signInHeaders(kind: SignInKind, tokens: SignInTokens): Record<string, string> {
   if (kind === "claude") return claudeIdentityHeaders();
   if (kind === "antigravity") return antigravityHeaders();
+  if (kind === "devin") return devinHeaders(tokens.access);
   if (kind !== "codex") return {};
   const headers: Record<string, string> = {
     "ChatGPT-Account-ID": tokens.accountId,

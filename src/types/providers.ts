@@ -39,6 +39,8 @@ export type ImportCandidate = {
 
 export type SignInKind = SignInCredential["kind"];
 
+export type RotatingSignInKind = Exclude<SignInKind, "devin">;
+
 export type SignInMethod = "device" | "code";
 
 export type SignInStatus = "active" | "expired";
@@ -126,6 +128,8 @@ export type SignInSession = SignInCredential["session"];
 export type SignInTokens = SignInSession["tokens"];
 
 export type DeviceGrant = SignInTicket["grant"];
+
+export type CodeGrant = Extract<DeviceGrant, { kind: "claude" | "antigravity" | "devin" }>;
 
 export type DeviceAuthorization = {
   grant: DeviceGrant;
@@ -316,6 +320,7 @@ export type DiscoveredModel = {
   priceSource: string;
   serviceTiers?: string[];
   accessPrograms?: string[];
+  variants?: string[];
 };
 
 export type ModelPrice = { in: number; out: number };

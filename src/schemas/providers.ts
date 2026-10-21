@@ -11,7 +11,7 @@ export const providerPolicySchema = z.object({
 export const MAX_AUTH_FILES = 50;
 export const MAX_AUTH_FILE_BYTES = 256 * 1024;
 
-const signInKindSchema = z.enum(["codex", "grok_build", "claude", "antigravity"]);
+const signInKindSchema = z.enum(["codex", "grok_build", "claude", "antigravity", "devin"]);
 
 const authFileUploadSchema = z.object({
   name: z.string().trim().min(1).max(255),
@@ -57,6 +57,7 @@ export const signInTicketSchema = z.object({
     z.object({ kind: z.literal("grok_build"), deviceCode: z.string().min(1) }),
     z.object({ kind: z.literal("claude"), verifier: z.string().min(1), state: z.string().min(1) }),
     z.object({ kind: z.literal("antigravity"), verifier: z.string().min(1), state: z.string().min(1) }),
+    z.object({ kind: z.literal("devin"), verifier: z.string().min(1), state: z.string().min(1) }),
   ]),
 });
 
