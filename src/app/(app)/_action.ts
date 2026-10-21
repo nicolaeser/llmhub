@@ -1,7 +1,8 @@
 "use server";
 
-import { requireAuth } from "@/lib/auth/guards";
-import { loadConsoleScope } from "@/lib/auth/console-scope";
+import { requireSession } from "@/lib/auth/guards";
+import { loadConsoleAccess, loadConsoleScope } from "@/lib/auth/console-scope";
+import { hasPerm, PERMISSIONS } from "@/lib/auth/permissions";
 import { setWorkspace } from "@/lib/auth/workspace";
 import { runAction } from "@/lib/http/action-result";
 import { getEnterprise } from "@/lib/settings/enterprise";
@@ -16,10 +17,15 @@ export async function loadConsoleScopeAction() {
   return runAction(() => loadConsoleScope());
 }
 
+export async function loadConsoleAccessAction() {
+  return runAction(() => loadConsoleAccess());
+}
+
 export async function loadUpdateStatusAction() {
   return runAction(async () => {
-    await requireAuth();
-    return checkForUpdate((await getEnterprise()).update_check !== false);
+    const session = await requireSession();
+    const shown = hasPerm(session.permissions, PERMISSIONS.SETTINGS_READ);
+    return checkForUpdate(shown && (await getEnterprise()).update_check !== false);
   });
 }
 

@@ -18,7 +18,7 @@ import PageStatus from "@/components/console/page-status";
 import RowCard, { RowCards, TABLE_FROM_LG } from "@/components/console/row-cards";
 import { useActionData } from "@/lib/hooks/use-action-data";
 import { isActionFail } from "@/lib/http/action-result";
-import { permissionCatalog, roleTemplateKeys } from "@/lib/auth/permissions";
+import { isSubset, permissionCatalog, roleTemplateKeys, roleTemplates } from "@/lib/auth/permissions";
 import { useRoleName } from "@/components/security/use-role-name";
 import { useSecurityError } from "@/components/security/use-security-error";
 import type { RoleSummary, RoleTemplateKey } from "@/types/auth";
@@ -68,7 +68,9 @@ export default function RolesTab() {
       ...current,
       roles: current.roles.filter((row) => row.id !== role.id),
       missingTemplates: roleTemplateKeys.filter(
-        (key) => key === role.templateKey || current.missingTemplates.includes(key),
+        (key) =>
+          current.missingTemplates.includes(key) ||
+          (key === role.templateKey && isSubset(roleTemplates[key], current.grantable)),
       ),
     }));
   }
@@ -170,7 +172,7 @@ export default function RolesTab() {
             <Dropdown.Item id="edit" textValue={t("edit")}>
               {t("edit")}
             </Dropdown.Item>
-            {role.templateKey ? (
+            {role.resettable ? (
               <Dropdown.Item id="reset" textValue={t("reset")}>
                 {t("reset")}
               </Dropdown.Item>

@@ -26,6 +26,7 @@ import {
   setUserContentLogging,
   setUserPassword,
 } from "@/lib/auth/users";
+import type { BudgetInput } from "@/types/structure";
 
 export async function loadUserTabsAction() {
   return runAction(() => grantedPermissions([PERMISSIONS.USERS_READ, PERMISSIONS.ROLES_MANAGE]));
@@ -86,8 +87,8 @@ export async function revokeUserSessionsAction(id: string) {
   );
 }
 
-export async function setBudgetAction(...args: Parameters<typeof setBudget>) {
-  return runAction(() => setBudget(...args));
+export async function setBudgetAction(input: BudgetInput) {
+  return runAction(() => setBudget({ ...input, kind: "user" }));
 }
 
 export async function loadRolesAction() {

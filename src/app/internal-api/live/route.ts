@@ -1,3 +1,4 @@
+import { sessionAccessKey } from "@/lib/auth/console-scope";
 import { spendScope } from "@/lib/auth/scope";
 import { getSession } from "@/lib/auth/session";
 import { problemResponse } from "@/lib/http/problem";
@@ -18,7 +19,7 @@ export async function GET(req: Request) {
   if (session.error) return problemResponse(req, "UNAUTHORIZED");
   const stream = liveStream({
     sessionId: session.sessionId,
-    access: liveAccess(session.permissions, spendScope(session)),
+    access: liveAccess(session.permissions, spendScope(session), sessionAccessKey(session)),
     topics: parseLiveTopics(new URL(req.url).searchParams.get("topics")),
     workspaceOrgId: session.workspaceOrgId ?? null,
     signal: req.signal,

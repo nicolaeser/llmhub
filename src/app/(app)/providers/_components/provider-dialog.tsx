@@ -26,10 +26,12 @@ import {
   startSignInAction,
   updateProviderAction,
 } from "../_action";
-import type { ProviderView, SignInFileResult, SignInFlowActions } from "@/types/providers";
+import { VERTEX_DEFAULT_LOCATION } from "@/lib/gateway/upstreams/vertex-target";
+import type { ProviderView, SignInFileResult, SignInFlowActions, VertexDraft } from "@/types/providers";
 import SignInPanel from "@/components/providers/sign-in-panel";
 import { useErrorToast } from "@/components/console/use-error-toast";
 import FormDialog from "@/components/console/form-dialog";
+import VertexFields, { vertexDraftReady } from "./vertex-fields";
 
 const SIGN_IN_ACTIONS: SignInFlowActions<SignInFileResult> = {
   start: startSignInAction,
@@ -59,6 +61,14 @@ export default function ProviderDialog({
   const [apiKey, setApiKey] = useState("");
   const [signIn, setSignIn] = useState("");
   const signInKind = spec && isSignInKind(spec.kind) ? spec.kind : null;
+  const vertexKind = spec?.kind === "vertex";
+  const currentVertex = editing?.vertex ?? null;
+  const [vertex, setVertex] = useState<VertexDraft>({
+    credential: currentVertex?.credential ?? "service_account",
+    serviceAccount: "",
+    project: currentVertex?.project ?? "",
+    location: currentVertex?.location || VERTEX_DEFAULT_LOCATION,
+  });
   const [zdr, setZdr] = useState(editing?.policy.zdr ?? false);
   const [retention, setRetention] = useState(
     !editing || editing.policy.zdr || editing.policy.retentionDays === null
@@ -81,7 +91,17 @@ export default function ProviderDialog({
         region,
         noTraining: zdr || noTraining,
       };
-      const body = { name, kind: spec.kind, baseUrl, apiKey, signIn: signIn || undefined, policy };
+      const credential = vertexKind && vertex.credential === "service_account" ? vertex.serviceAccount : apiKey;
+      const target = vertexKind && vertex.credential === "service_account" ? { project: vertex.project, location: vertex.location } : undefined;
+      const body = {
+        name,
+        kind: spec.kind,
+        baseUrl: vertexKind ? "" : baseUrl,
+        apiKey: credential,
+        signIn: signIn || undefined,
+        policy,
+        vertex: target,
+      };
       const result = editing
         ? await updateProviderAction({ id: editing.id, ...body })
         : await createProviderAction(body);
@@ -105,7 +125,12 @@ export default function ProviderDialog({
       })}
       submitLabel={t("formSubmit", { mode: editing ? "save" : "connect" })}
       pending={pending}
-      isSubmitDisabled={!spec || !retentionValid || Boolean(signInKind && !editing && !signIn)}
+      isSubmitDisabled={
+        !spec ||
+        !retentionValid ||
+        Boolean(signInKind && !editing && !signIn) ||
+        (vertexKind && !vertexDraftReady(vertex, apiKey, currentVertex))
+      }
       onSubmit={save}
     >
       {signInKind ? (
@@ -116,13 +141,22 @@ export default function ProviderDialog({
           actions={SIGN_IN_ACTIONS}
           onSignedIn={(result) => setSignIn(result.credential)}
         />
+      ) : vertexKind ? (
+        <VertexFields
+          draft={vertex}
+          current={currentVertex}
+          apiKey={apiKey}
+          isDisabled={pending}
+          onApiKey={setApiKey}
+          onChange={setVertex}
+        />
       ) : (
         <TextField fullWidth value={apiKey} onChange={setApiKey} isDisabled={pending} aria-label={t("apiKey")}>
           <Label>{t("apiKey")}</Label>
           <Input
             type="password"
             aria-label={t("apiKey")}
-            placeholder={editing?.hasApiKey ? t("apiKeyKeep") : "sk-…"}
+            placeholder={editing?.hasApiKey ? t("apiKeyKeep") : spec?.kind === "gemini" ? "AIza…" : "sk-…"}
           />
         </TextField>
       )}
@@ -203,7 +237,7 @@ export default function ProviderDialog({
               <Label>{t("displayName")}</Label>
               <Input aria-label={t("displayName")} />
             </TextField>
-            {signInKind ? null : (
+            {signInKind || vertexKind ? null : (
               <TextField fullWidth value={baseUrl} onChange={setBaseUrl} isDisabled={pending} aria-label={t("baseUrl")}>
                 <Label>{t("baseUrl")}</Label>
                 <Input aria-label={t("baseUrl")} />

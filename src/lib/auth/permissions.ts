@@ -177,6 +177,17 @@ export function effectivePermissions(input: {
   return granted.filter((permission) => allowed.has(permission));
 }
 
+export const OWNER_ACCESS_KEY = "owner";
+
+export function accessKey(input: {
+  isOwner: boolean;
+  orgId: string | null;
+  permissions: readonly Permission[];
+}): string {
+  if (input.isOwner) return OWNER_ACCESS_KEY;
+  return `${input.orgId ?? ""}|${sortPermissions(input.permissions).join(",")}`;
+}
+
 export function isSubset(
   subset: readonly Permission[],
   superset: readonly Permission[],

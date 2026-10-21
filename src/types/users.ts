@@ -2,6 +2,8 @@ import type { RoleOption, RoleTemplateKey } from "@/types/auth";
 
 type TenancyOption = { id: string; alias: string };
 
+export type ConsoleUserBudget = { maxBudget: number; spend: number; budgetDuration: string };
+
 export type ConsoleUser = {
   id: string;
   username: string;
@@ -13,9 +15,7 @@ export type ConsoleUser = {
   blocked: boolean;
   orgId: string | null;
   orgAlias: string;
-  maxBudget: number;
-  spend: number;
-  budgetDuration: string;
+  budget: ConsoleUserBudget | null;
   twoFactorEnabled: boolean;
   passkeys: number;
   activeSessions: number;
