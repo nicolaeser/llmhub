@@ -5,8 +5,6 @@ import { Check } from "lucide-react";
 import { useTranslations } from "next-intl";
 import type { SetupStep, StructurePayload } from "@/types/structure";
 
-const STEPS: SetupStep[] = ["org", "team", "project", "member", "budget"];
-
 export function setupDone(data: StructurePayload): Record<SetupStep, boolean> {
   const capped = [...data.orgs, ...data.teams, ...data.projects, ...data.members].some(
     (row) => row.budget.maxBudget > 0,
@@ -23,15 +21,16 @@ export function setupDone(data: StructurePayload): Record<SetupStep, boolean> {
 export default function SetupSteps({
   data,
   company,
+  steps,
   onStep,
 }: {
   data: StructurePayload;
   company: string | null;
+  steps: SetupStep[];
   onStep: (step: SetupStep) => void;
 }) {
   const t = useTranslations("Companies.steps");
   const done = setupDone(data);
-  const steps = company ? STEPS.filter((step) => step !== "org") : STEPS;
   const current = steps.find((step) => !done[step]);
   const title = t("title", { scope: company ? "company" : "platform", alias: company ?? "" });
 
@@ -42,7 +41,7 @@ export default function SetupSteps({
         <Card.Description>{t("subtitle")}</Card.Description>
       </Card.Header>
       <Card.Content>
-        <ol className={`grid gap-3 sm:grid-cols-2 ${company ? "xl:grid-cols-4" : "xl:grid-cols-5"}`}>
+        <ol className={`grid gap-3 sm:grid-cols-2 ${steps.length > 4 ? "xl:grid-cols-5" : steps.length > 3 ? "xl:grid-cols-4" : "xl:grid-cols-3"}`}>
           {steps.map((step, index) => {
             const isDone = done[step];
             const isCurrent = step === current;

@@ -4,10 +4,19 @@ import type {
   CapLink,
   NodeKind,
   NodeRef,
+  SetupStep,
   StructurePayload,
 } from "@/types/structure";
 
 const NODE_KINDS: readonly NodeKind[] = ["org", "team", "project", "member"];
+
+const SETUP_STEPS: readonly SetupStep[] = ["org", "team", "project", "member", "budget"];
+
+export function setupStepsFor(input: { company: boolean; canBudget: boolean }): SetupStep[] {
+  return SETUP_STEPS.filter(
+    (step) => !(step === "org" && input.company) && !(step === "budget" && !input.canBudget),
+  );
+}
 
 export function isNodeKind(value: string): value is NodeKind {
   return NODE_KINDS.some((kind) => kind === value);

@@ -1,9 +1,8 @@
 import "server-only";
 import prisma from "@/lib/db/prisma";
-import { hasPerm, PERMISSIONS } from "@/lib/auth/permissions";
 import { companyOf } from "@/lib/auth/scope";
 import { assignmentViews, mcpAssignmentSelect } from "@/lib/mcp/assignments";
-import { managesMcp } from "@/lib/mcp/scope";
+import { mcpAccess } from "@/lib/mcp/scope";
 import { installationViews, roleViews } from "@/lib/mcp/catalog";
 import { eraOf, toolSpecs } from "@/lib/mcp/client";
 import { toolActionsOf } from "@/lib/mcp/resolve";
@@ -132,12 +131,9 @@ export function viewOf(row: ServerRow, canManage = true, companyId: string | nul
   };
 }
 
-export function seesMcp(session: Pick<AuthenticatedSession, "permissions">): boolean {
-  return hasPerm(session.permissions, PERMISSIONS.SETTINGS_READ) || hasPerm(session.permissions, PERMISSIONS.MCP_READ);
-}
-
 export function scopedView(row: ServerRow, session: AuthenticatedSession): McpServerView {
-  return viewOf(row, managesMcp(session), companyOf(session));
+  const company = companyOf(session);
+  return viewOf(row, mcpAccess(session, company).canManage, company);
 }
 
 export async function loadRow(id: string): Promise<ServerRow> {
