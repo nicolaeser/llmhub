@@ -4,8 +4,8 @@ import type { AccountAccess, AccountStrategy, AssignmentRow, AssignmentScope } f
 export const ASSIGNMENT_SCOPES = ["org", "team", "project", "member", "key"] as const satisfies readonly AssignmentScope[];
 
 export const ACCOUNT_STRATEGIES = [
-  "inherit",
   "smart",
+  "inherit",
   "quota_balanced",
   "quota_expiring",
   "round_robin",
@@ -13,7 +13,7 @@ export const ACCOUNT_STRATEGIES = [
   "least_inflight",
 ] as const satisfies readonly AccountStrategy[];
 
-export const DEFAULT_ACCOUNT_STRATEGY: AccountStrategy = "inherit";
+export const DEFAULT_ACCOUNT_STRATEGY: AccountStrategy = "smart";
 
 export function isAccountStrategy(value: string): value is AccountStrategy {
   return (ACCOUNT_STRATEGIES as readonly string[]).includes(value);

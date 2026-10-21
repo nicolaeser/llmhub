@@ -793,9 +793,13 @@ async function claudePool(): Promise<{ group: ResolvedModelGroup; mapped: PoolDe
   return { group, mapped };
 }
 
-test("routing skips subscription accounts at a limit and follows the quota strategies", async () => {
+test("routing skips subscription accounts at a limit and follows the quota strategies", async (t) => {
   const { acquireGroup } = await import("@/lib/gateway/routing/runtime");
+  const { forgetAccountPolicies } = await import("@/lib/gateway/routing/account-routing");
   const { group, mapped } = await claudePool();
+  policyRows.push({ kind: "claude", strategy: "inherit" });
+  forgetAccountPolicies();
+  t.after(forgetAccountPolicies);
   const pickFor = async (strategy: string) => {
     const acquired = await acquireGroup({ ...group, strategy }, undefined, undefined, "");
     acquired.release();
@@ -827,7 +831,7 @@ test("a per provider account policy decides between accounts of that provider be
     return acquired.dep.id;
   };
   forgetAccountPolicies();
-  assert.equal(await pickFor(), "dep-q2");
+  assert.equal(await pickFor(), "dep-q3");
   policyRows.push({ kind: "claude", strategy: "inherit" });
   forgetAccountPolicies();
   assert.equal(await pickFor(), "dep-q2");
@@ -844,14 +848,18 @@ test("a per provider account policy decides between accounts of that provider be
   assert.equal(rotation.includes("dep-q1"), false);
   policyRows[0] = { kind: "codex", strategy: "round_robin" };
   forgetAccountPolicies();
-  assert.equal(await pickFor(), "dep-q2");
+  assert.equal(await pickFor(), "dep-q3");
   forgetAccountPolicies();
 });
 
-test("restricted accounts only serve the keys, people, projects, departments, and companies assigned to them", async () => {
+test("restricted accounts only serve the keys, people, projects, departments, and companies assigned to them", async (t) => {
   const { acquireGroup } = await import("@/lib/gateway/routing/runtime");
   const { ERR_NOT_ASSIGNED } = await import("@/lib/gateway/core");
+  const { forgetAccountPolicies } = await import("@/lib/gateway/routing/account-routing");
   const { group, mapped } = await claudePool();
+  policyRows.push({ kind: "claude", strategy: "inherit" });
+  forgetAccountPolicies();
+  t.after(forgetAccountPolicies);
   const none = { orgId: null, teamId: null, projectId: null, memberId: null, keyId: null };
   const caller = { orgId: "org-1", teamId: "team-1", projectId: "proj-1", memberId: "mem-1", keyId: "key-1" };
   const pickFor = async (access: typeof caller | null) => {

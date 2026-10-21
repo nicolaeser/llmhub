@@ -1,6 +1,6 @@
 import "server-only";
 import prisma from "@/lib/db/prisma";
-import { accountAllowed } from "@/lib/gateway/routing/account-access";
+import { accountAllowed, DEFAULT_ACCOUNT_STRATEGY } from "@/lib/gateway/routing/account-access";
 import { readPin } from "@/lib/gateway/routing/account-affinity";
 import { accountPolicies } from "@/lib/gateway/routing/account-routing";
 import { isSignInKind, PROVIDER_CATALOG, reportsLimits } from "@/lib/gateway/upstreams/provider-kinds";
@@ -240,16 +240,16 @@ async function byAccountPolicy(items: ResolvedDeployment[], scores: QuotaScores)
   const policies = await accountPolicies();
   const kept: ResolvedDeployment[] = [];
   const accounts = new Map<string, ResolvedDeployment[]>();
+  const policyOf = (kind: string) => policies.get(kind) ?? DEFAULT_ACCOUNT_STRATEGY;
   for (const dep of items) {
     const kind = dep.provider?.kind ?? "";
-    const policy = policies.get(kind);
-    if (!policy || policy === "inherit") {
+    if (!isSignInKind(kind) || policyOf(kind) === "inherit") {
       kept.push(dep);
       continue;
     }
     accounts.set(kind, [...(accounts.get(kind) ?? []), dep]);
   }
-  for (const [kind, deps] of accounts) kept.push(pick(deps, policies.get(kind)!, scores));
+  for (const [kind, deps] of accounts) kept.push(pick(deps, policyOf(kind), scores));
   return kept;
 }
 
