@@ -112,6 +112,27 @@ test("Claude bodies start with the Claude Code identity and keep the caller syst
   assert.equal("system" in prepareBody({ ...claudeDep, kind: "anthropic" }, "/v1/messages", { messages: [] }), false);
 });
 
+test("native Claude Code requests reach the subscription untouched", () => {
+  const system = [
+    { type: "text", text: "x-anthropic-billing-header: cc_version=2.1.303.e6f; cc_entrypoint=cli;" },
+    { type: "text", text: CLAUDE_CODE_IDENTITY, cache_control: { type: "ephemeral" } },
+    { type: "text", text: "Project instructions", cache_control: { type: "ephemeral" } },
+  ];
+  const body = { model: "alias", max_tokens: 5, system, messages: [{ role: "user", content: "hi" }] };
+  const native = prepareBody(claudeDep, "/v1/messages", body);
+  assert.equal(native.system, system);
+  assert.deepEqual(native.system, structuredClone(system));
+  const sdk = [{ type: "text", text: "You are a Claude agent, built on Anthropic's Claude Agent SDK." }];
+  assert.equal(withClaudeIdentity({ system: sdk }).system, sdk);
+  const sdkCli = "You are Claude Code, Anthropic's official CLI for Claude, running within the Claude Agent SDK.";
+  assert.equal(withClaudeIdentity({ system: sdkCli }).system, sdkCli);
+  const other = withClaudeIdentity({ system: [{ type: "text", text: "Be brief." }] }).system as { text: string }[];
+  assert.deepEqual(
+    other.map((block) => block.text),
+    [CLAUDE_CODE_IDENTITY, "Be brief."],
+  );
+});
+
 test("the Claude Code identity is not duplicated", () => {
   const once = withClaudeIdentity({ system: [{ type: "text", text: CLAUDE_CODE_IDENTITY }, { type: "text", text: "x" }] });
   assert.equal((once.system as unknown[]).length, 2);
