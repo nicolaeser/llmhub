@@ -1,29 +1,83 @@
 "use client";
 
-import { Button, Card, Chip, Table } from "@heroui/react";
-import { Plus, Wallet } from "lucide-react";
+import { useState, useTransition } from "react";
+import { Button, Card, Chip, Spinner, Table } from "@heroui/react";
+import { ChevronRight, Plus } from "lucide-react";
 import { useTranslations } from "next-intl";
-import { Link, useRouter } from "@/i18n/routing";
 import RowCard, { RowCards, TABLE_FROM_XL } from "@/components/console/row-cards";
-import type { BudgetTarget, KeyNode, NodeKind, StructurePayload } from "@/types/structure";
+import { useErrorToast } from "@/components/console/use-error-toast";
+import KeyMenu, { keyMenuActions, type KeyMenuAction } from "@/components/keys/key-menu";
+import { useKeyDialogs, type KeyServerActions } from "@/components/keys/use-key-dialogs";
+import { isActionFail } from "@/lib/http/action-result";
+import type { ActionFail } from "@/types/actions";
+import type { KeyChoices, KeyDetail, KeyPreset, VirtualKeyView } from "@/types/keys";
+import type { BudgetTarget, KeyNode, NodeRef, StructurePayload, TenancyKind } from "@/types/structure";
+import { keyOptionsOf } from "./key-model";
 import { nodeAlias } from "./tree-model";
 
 export default function KeysCard({
   data,
   keys,
   kind,
-  createFor,
+  preset,
+  actions,
+  loadKey,
+  loadChoices,
+  onOpen,
   onBudget,
+  onChanged,
+  onRevoked,
 }: {
   data: StructurePayload;
   keys: KeyNode[];
-  kind: NodeKind;
-  createFor: { kind: "project" | "member"; id: string } | null;
-  onBudget: (target: BudgetTarget) => void;
+  kind: TenancyKind;
+  preset: KeyPreset | null;
+  actions: KeyServerActions;
+  loadKey: (id: string) => Promise<KeyDetail | ActionFail>;
+  loadChoices: () => Promise<KeyChoices | null>;
+  onOpen: (ref: NodeRef) => void;
+  onBudget: (target: BudgetTarget, dialog: "budget" | "boost") => void;
+  onChanged: (key: VirtualKeyView) => void;
+  onRevoked: (id: string) => void;
 }) {
   const t = useTranslations("Companies.keys");
   const tCommon = useTranslations("Common");
-  const router = useRouter();
+  const showError = useErrorToast();
+  const [opening, setOpening] = useState<string | null>(null);
+  const [, start] = useTransition();
+  const keyDialogs = useKeyDialogs({ actions, canBind: data.canManage, onSaved: onChanged, onRevoked });
+  const flags = { canManage: data.canManageKeys, canMcp: data.canMcp, canBudget: data.canBudget };
+
+  function create(next: KeyPreset) {
+    setOpening("create");
+    start(async () => {
+      const choices = await loadChoices();
+      setOpening(null);
+      if (choices) keyDialogs.openCreate(keyOptionsOf(data, choices), next);
+    });
+  }
+
+  function edit(key: KeyNode) {
+    setOpening(key.id);
+    start(async () => {
+      const [choices, detail] = await Promise.all([loadChoices(), loadKey(key.id)]);
+      setOpening(null);
+      if (isActionFail(detail)) {
+        showError(detail.error);
+        return;
+      }
+      if (choices) keyDialogs.openEdit(keyOptionsOf(data, choices), detail.key);
+    });
+  }
+
+  function run(key: KeyNode, action: KeyMenuAction) {
+    const target = { id: key.id, name: key.alias };
+    if (action === "edit") edit(key);
+    if (action === "mcp") keyDialogs.openMcp(target);
+    if (action === "budget" || action === "boost") onBudget({ kind: "key", id: key.id, alias: key.alias }, action);
+    if (action === "rotate") keyDialogs.askRotate(target);
+    if (action === "revoke") keyDialogs.askRevoke(target);
+  }
 
   function owner(key: KeyNode) {
     if (key.memberId) return { kind: "member", name: nodeAlias(data, "member", key.memberId) };
@@ -48,88 +102,91 @@ export default function KeysCard({
     });
   }
 
-  function budgetButton(key: KeyNode) {
+  function rowActions(key: KeyNode) {
     return (
-      <Button
-        isIconOnly
-        size="sm"
-        variant="ghost"
-        aria-label={t("budget", { alias: key.alias })}
-        onPress={() => onBudget({ kind: "key", id: key.id, alias: key.alias })}
-      >
-        <Wallet size={14} aria-hidden />
-      </Button>
+      <>
+        <KeyMenu
+          name={key.alias}
+          actions={keyMenuActions(flags, { capped: key.budget.maxBudget > 0 })}
+          pending={opening === key.id || keyDialogs.busy?.id === key.id}
+          isDisabled={opening !== null && opening !== key.id}
+          onAction={(action) => run(key, action)}
+        />
+        <Button
+          isIconOnly
+          size="sm"
+          variant="ghost"
+          aria-label={t("open", { alias: key.alias })}
+          onPress={() => onOpen({ kind: "key", id: key.id })}
+        >
+          <ChevronRight size={14} aria-hidden />
+        </Button>
+      </>
+    );
+  }
+
+  function ownerValue(key: KeyNode) {
+    const bound = owner(key);
+    return (
+      <>
+        {bound.name || tCommon("none")}
+        <span className="block text-xs text-muted">{t("ownerKind", { kind: bound.kind })}</span>
+      </>
     );
   }
 
   return (
-    <Card>
-      <Card.Header className="flex-row flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <Card.Title>{t("title", { count: keys.length })}</Card.Title>
-          <Card.Description>{t("hint", { kind })}</Card.Description>
-        </div>
-        {createFor && data.canCreateKeys ? (
-          <Button size="sm" onPress={() => router.push(`/keys?new=${createFor.kind}:${createFor.id}`)}>
-            <Plus size={14} aria-hidden />
-            {t("create")}
-          </Button>
-        ) : null}
-      </Card.Header>
-      <Card.Content>
-        {keys.length === 0 ? (
-          <p className="text-sm text-muted">
-            {t.rich("empty", {
-              kind,
-              link: (chunks) => (
-                <Link href="/keys" className="text-accent">
-                  {chunks}
-                </Link>
-              ),
-            })}
-          </p>
-        ) : (
-          <>
-            <RowCards label={t("title", { count: keys.length })} until="xl">
-              {keys.map((key) => {
-                const bound = owner(key);
-                return (
+    <>
+      <Card>
+        <Card.Header className="flex-row flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0">
+            <Card.Title>{t("title", { count: keys.length })}</Card.Title>
+            <Card.Description>{t("hint", { kind })}</Card.Description>
+          </div>
+          {preset && data.canCreateKeys ? (
+            <Button size="sm" isPending={opening === "create"} onPress={() => create(preset)}>
+              {({ isPending }) => (
+                <>
+                  {isPending ? <Spinner color="current" size="sm" /> : <Plus size={14} aria-hidden />}
+                  {t("create")}
+                </>
+              )}
+            </Button>
+          ) : null}
+        </Card.Header>
+        <Card.Content className="space-y-4">
+          {keyDialogs.notice}
+          {keys.length === 0 ? (
+            <p className="text-sm text-muted">{t("empty", { kind })}</p>
+          ) : (
+            <>
+              <RowCards label={t("title", { count: keys.length })} until="xl">
+                {keys.map((key) => (
                   <RowCard
                     key={key.id}
                     variant="secondary"
                     title={key.alias}
                     description={<span className="font-mono text-xs">{key.prefix}…</span>}
-                    aside={data.canBudget ? budgetButton(key) : undefined}
+                    aside={rowActions(key)}
                     chips={blockedChip(key)}
                     details={[
-                      {
-                        label: t("columns.owner"),
-                        value: (
-                          <>
-                            {bound.name || tCommon("none")}
-                            <span className="block text-xs text-muted">{t("ownerKind", { kind: bound.kind })}</span>
-                          </>
-                        ),
-                      },
+                      { label: t("columns.owner"), value: ownerValue(key) },
                       { label: t("columns.budget"), value: spendLabel(key) },
                     ]}
                   />
-                );
-              })}
-            </RowCards>
-            <Table aria-label={t("title", { count: keys.length })} className={TABLE_FROM_XL}>
-              <Table.ScrollContainer>
-                <Table.Content className="min-w-xl">
-                  <Table.Header>
-                    <Table.Column isRowHeader>{t("columns.key")}</Table.Column>
-                    <Table.Column>{t("columns.owner")}</Table.Column>
-                    <Table.Column>{t("columns.budget")}</Table.Column>
-                    {data.canBudget ? <Table.Column>{tCommon("actions")}</Table.Column> : null}
-                  </Table.Header>
-                  <Table.Body>
-                    {keys.map((key) => {
-                      const bound = owner(key);
-                      return (
+                ))}
+              </RowCards>
+              <Table aria-label={t("title", { count: keys.length })} className={TABLE_FROM_XL}>
+                <Table.ScrollContainer>
+                  <Table.Content className="min-w-xl">
+                    <Table.Header>
+                      <Table.Column isRowHeader>{t("columns.key")}</Table.Column>
+                      <Table.Column>{t("columns.owner")}</Table.Column>
+                      <Table.Column>{t("columns.budget")}</Table.Column>
+                      <Table.Column>{tCommon("actions")}</Table.Column>
+                    </Table.Header>
+                    <Table.Body>
+                      {keys.map((key) => (
                         <Table.Row key={key.id} id={key.id}>
                           <Table.Cell>
                             <div className="min-w-0">
@@ -141,23 +198,23 @@ export default function KeysCard({
                             </div>
                           </Table.Cell>
                           <Table.Cell>
-                            <div className="min-w-0">
-                              <p className="text-sm">{bound.name || tCommon("none")}</p>
-                              <p className="text-xs text-muted">{t("ownerKind", { kind: bound.kind })}</p>
-                            </div>
+                            <div className="min-w-0 text-sm">{ownerValue(key)}</div>
                           </Table.Cell>
                           <Table.Cell>{spendLabel(key)}</Table.Cell>
-                          {data.canBudget ? <Table.Cell>{budgetButton(key)}</Table.Cell> : null}
+                          <Table.Cell>
+                            <div className="flex gap-1">{rowActions(key)}</div>
+                          </Table.Cell>
                         </Table.Row>
-                      );
-                    })}
-                  </Table.Body>
-                </Table.Content>
-              </Table.ScrollContainer>
-            </Table>
-          </>
-        )}
-      </Card.Content>
-    </Card>
+                      ))}
+                    </Table.Body>
+                  </Table.Content>
+                </Table.ScrollContainer>
+              </Table>
+            </>
+          )}
+        </Card.Content>
+      </Card>
+      {keyDialogs.dialogs}
+    </>
   );
 }

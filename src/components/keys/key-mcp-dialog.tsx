@@ -29,6 +29,7 @@ import { useErrorToast } from "@/components/console/use-error-toast";
 import { isActionFail } from "@/lib/http/action-result";
 import { explainAccess } from "@/lib/mcp/resolve";
 import { MCP_ACTIONS, MCP_KEY_ACCESS_MODES, MCP_ROLE_KEYS } from "@/schemas/mcp";
+import type { ActionFail } from "@/types/actions";
 import type {
   McpAssignmentView,
   McpExplanation,
@@ -39,7 +40,6 @@ import type {
   McpToolAction,
   McpToolSpec,
 } from "@/types/mcp";
-import { loadKeyMcpAccessAction, saveKeyMcpAccessAction } from "../_action";
 
 const SEARCH_FROM = 6;
 
@@ -144,10 +144,14 @@ export default function KeyMcpDialog({
   state,
   keyId,
   keyName,
+  onLoad,
+  onSave,
 }: {
   state: ReturnType<typeof useOverlayState>;
   keyId: string | null;
   keyName: string;
+  onLoad: (keyId: string) => Promise<McpKeyAccess | ActionFail>;
+  onSave: (input: { keyId: string; servers: McpKeyAccessChoice[] }) => Promise<McpKeyAccess | ActionFail>;
 }) {
   const t = useTranslations("Keys.mcp");
   const tMcp = useTranslations("Mcp");
@@ -164,7 +168,7 @@ export default function KeyMcpDialog({
   useEffect(() => {
     if (!keyId) return;
     let active = true;
-    loadKeyMcpAccessAction(keyId).then((result) => {
+    onLoad(keyId).then((result) => {
       if (!active) return;
       if (isActionFail(result)) {
         showError(result.error);
@@ -177,7 +181,7 @@ export default function KeyMcpDialog({
     return () => {
       active = false;
     };
-  }, [keyId, showError]);
+  }, [keyId, onLoad, showError]);
 
   const servers = access?.servers ?? [];
   const needle = search.trim().toLowerCase();
@@ -236,7 +240,7 @@ export default function KeyMcpDialog({
   function save(close: () => void) {
     if (!access || !changed.length) return;
     startSave(async () => {
-      const result = await saveKeyMcpAccessAction({
+      const result = await onSave({
         keyId: access.keyId,
         servers: changed.map((server) => choices[server.serverId]!),
       });

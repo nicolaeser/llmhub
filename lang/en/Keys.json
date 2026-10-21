@@ -21,8 +21,10 @@
     "requests": "Requests (7 days)",
     "errors": "Errors (7 days)"
   },
-  "secretTitle": "Save this secret",
+  "secretTitle": "Save the secret of {name}",
   "secretHint": "This is the only time the full key is shown.",
+  "copySecret": "Copy secret",
+  "secretDismiss": "Hide secret",
   "columns": {
     "name": "Key name",
     "binding": "Belongs to",
@@ -92,6 +94,7 @@
     "rotated": "Key rotated. Copy the new secret."
   },
   "edit": "Edit key",
+  "actionsMenu": "Actions for {name}",
   "dialogTitle": "{mode, select, edit {Edit key} other {Create a key}}",
   "dialogSubmit": "{mode, select, edit {Save} other {Create key}}",
   "access": "{state, select, all {Without templates or models, this key can use every model.} none {This key cannot use any model yet. Pick a template that matches models or add individual models.} other {{count, plural, one {This key can use # model.} other {This key can use # models.}}}}",
@@ -108,11 +111,11 @@
     "place": "{hasTeam, select, yes {{org} › {team}} other {{org}}}",
     "path": "{kind, select, project {Project} member {Person} other {Internal}}{hasPlace, select, yes { · {place}} other {}}",
     "targetHint": "{kind, select, project {Budgets and limits of the project, department, and company apply.} other {Budgets and limits of the person, department, and company apply.}}",
-    "empty": "{kind, select, project {No projects yet. Add one under <link>Companies</link>.} other {No people yet. Add one under <link>Companies</link>.}}",
+    "empty": "{kind, select, project {No projects yet. Projects are added to a company under Companies.} other {No people yet. People are added to a company under Companies.}}",
     "locked": "Project and person keys need the Manage companies permission. You can create internal keys for yourself."
   },
   "mcp": {
-    "open": "MCP access for {name}",
+    "action": "MCP access",
     "title": "MCP access for {name}",
     "description": "Choose which MCP servers this key can use and what each tool may do. A rule on the key is the most specific one: its role wins, and blocks set for the company, department, project, or person still apply.",
     "loadFailed": "The MCP access of this key could not be loaded.",

@@ -5,21 +5,25 @@ import type { TemplateOption } from "@/types/model-templates";
 
 export type KeyBindingOption = { id: string; alias: string; orgId: string; teamId: string };
 
-export type KeyOptions = {
+export type KeyChoices = {
+  models: string[];
+  templates: TemplateOption[];
+  canTemplates: boolean;
+};
+
+export type KeyOptions = KeyChoices & {
   companyId: string;
   orgs: { id: string; alias: string }[];
   teams: { id: string; alias: string; orgId: string }[];
   projects: KeyBindingOption[];
   members: KeyBindingOption[];
-  models: string[];
-  templates: TemplateOption[];
 };
 
 export type KeyTab = "keys" | "templates";
 
 export type KeyBindingKind = "project" | "member" | "internal";
 
-export type KeyPreset = { kind: KeyBindingKind; id: string };
+export type KeyPreset = { kind: Exclude<KeyBindingKind, "internal">; id: string };
 
 export type KeyPlace = { org: string; team: string };
 
@@ -73,6 +77,30 @@ export type VirtualKeyView = {
   log_content: boolean;
   created_at: string;
 };
+
+export type IssuedKey = VirtualKeyView & { key: string };
+
+export type KeyDetail = { key: VirtualKeyView; templates: { id: string; name: string }[] };
+
+export type KeyFieldsInput = {
+  alias: string;
+  projectId: string;
+  memberId: string;
+  models: string[];
+  templateIds: string[];
+  rpm: number;
+  tpm: number;
+  maxRequestCost: number;
+  allowedIps: string[];
+  allowedEndpoints: KeyEndpoint[];
+  accessWindows: AccessWindow[];
+  accessTimeZone: string;
+  logContent: boolean;
+};
+
+export type KeyCreateInput = KeyFieldsInput & { days: number };
+
+export type KeyUpdateInput = KeyFieldsInput & { id: string; blocked: boolean };
 
 export type KeyTenancy = {
   userId: string;

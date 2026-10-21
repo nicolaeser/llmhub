@@ -12,9 +12,9 @@ import type { AuthenticatedSession, Permission } from "@/types/auth";
 import type {
   BudgetKind,
   MemberInput,
-  NodeKind,
   ProjectInput,
   StructurePayload,
+  TenancyKind,
 } from "@/types/structure";
 import {
   assertInCompany,
@@ -27,11 +27,11 @@ import {
 } from "@/lib/tenancy/guards";
 import { HOLDER, budgetView } from "@/lib/tenancy/budgets";
 import { canReport, reportViews } from "@/lib/reports/manage";
-import { seesMcp } from "@/lib/mcp/scope";
+import { managesMcpRules, seesMcp } from "@/lib/mcp/scope";
 
 const NODE_KINDS: readonly string[] = ["org", "team", "project", "member"];
 
-function isNodeKind(value: unknown): value is NodeKind {
+function isNodeKind(value: unknown): value is TenancyKind {
   return typeof value === "string" && NODE_KINDS.includes(value);
 }
 
@@ -40,6 +40,7 @@ async function structurePayload(session: AuthenticatedSession): Promise<Structur
   const company = companyOf(session);
   const inScope = company ? { orgId: company } : {};
   const seesKeys = hasPerm(session.permissions, PERMISSIONS.KEYS_READ);
+  const managesKeys = hasPerm(session.permissions, PERMISSIONS.KEYS_MANAGE);
   const seesReports = hasPerm(session.permissions, PERMISSIONS.SPEND_READ_ALL);
   const [orgs, teams, projects, members, users, keys, temps, enterprise, reports] = await Promise.all([
     prisma.organization.findMany({ where: company ? { id: company } : {}, orderBy: { alias: "asc" } }),
@@ -117,9 +118,9 @@ async function structurePayload(session: AuthenticatedSession): Promise<Structur
     canManage: hasPerm(session.permissions, PERMISSIONS.TENANCY_MANAGE),
     canBudget: hasPerm(session.permissions, PERMISSIONS.BUDGETS_MANAGE),
     canSeeKeys: seesKeys,
-    canCreateKeys:
-      hasPerm(session.permissions, PERMISSIONS.KEYS_MANAGE) &&
-      hasPerm(session.permissions, PERMISSIONS.TENANCY_MANAGE),
+    canManageKeys: seesKeys && managesKeys,
+    canCreateKeys: seesKeys && managesKeys && hasPerm(session.permissions, PERMISSIONS.TENANCY_MANAGE),
+    canMcp: seesKeys && managesMcpRules(session, company),
     canSeeMcp: seesMcp(session),
     reports,
     canSeeReports: seesReports,
@@ -138,7 +139,7 @@ async function mutate(
   return structurePayload(await requirePermission(PERMISSIONS.TENANCY_READ));
 }
 
-async function assertUniqueAlias(kind: NodeKind, alias: string, id: string | null, orgId: string | null) {
+async function assertUniqueAlias(kind: TenancyKind, alias: string, id: string | null, orgId: string | null) {
   const where = {
     ...(id ? { id: { not: id } } : {}),
   };
@@ -319,7 +320,7 @@ async function revokeKeys(where: { projectId: string } | { memberId: string }) {
   };
 }
 
-export async function deleteNode(input: { kind: NodeKind; id: string }) {
+export async function deleteNode(input: { kind: TenancyKind; id: string }) {
   return mutate(PERMISSIONS.TENANCY_MANAGE, async (session) => {
       if (!isNodeKind(input.kind)) throw new Error("UNKNOWN_ENTITY_TYPE");
       const id = input.id?.trim();

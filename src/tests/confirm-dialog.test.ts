@@ -5,7 +5,7 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { AlertDialog, type useOverlayState } from "@heroui/react";
 import ConfirmDialog from "@/components/console/confirm-dialog";
-import { importedAs, readJsx } from "./support/jsx-source";
+import { importedAs, readJsx, type JsxNode } from "./support/jsx-source";
 
 const root = fileURLToPath(new URL("../..", import.meta.url));
 const CONFIRM_DIALOG = "@/components/console/confirm-dialog";
@@ -42,23 +42,31 @@ test("no console component falls back to the browser confirm prompt", () => {
 });
 
 test("key rotation and revocation only run once their ConfirmDialog is confirmed", () => {
-  const page = readJsx(path.join(root, "src/app/(app)/keys/_components/keys-tab.tsx"));
-  const dialog = importedAs(page, CONFIRM_DIALOG);
+  const dialogs = readJsx(path.join(root, "src/components/keys/use-key-dialogs.tsx"));
+  const dialog = importedAs(dialogs, CONFIRM_DIALOG);
   assert.ok(dialog);
   for (const action of ["rotate", "revoke"]) {
     const call = new RegExp(`\\b${action}\\(`);
-    const confirm = page.elements.find(
+    const confirm: JsxNode | undefined = dialogs.elements.find(
       (element) => element.tag === dialog && call.test(element.attributes.get("onConfirm") ?? ""),
     );
     assert.ok(confirm, action);
+    assert.equal(confirm.attributes.get("state"), `${action}State`);
     assert.match(confirm.attributes.get("title") ?? "", new RegExp(`"${action}Confirm\\.title"`));
-    assert.ok(
-      confirm.children.some((child) => child.tag === "Button" && child.attributes.get("aria-label") === `t("${action}")`),
-      `${action} trigger`,
-    );
   }
-  const direct = page.elements.filter((element) => /\b(?:rotate|revoke)\(/.test(element.attributes.get("onPress") ?? ""));
-  assert.deepEqual(direct, []);
+  const callers = [
+    "src/components/keys/use-key-dialogs.tsx",
+    "src/app/(app)/keys/_components/keys-tab.tsx",
+    "src/app/(app)/companies/_components/keys-card.tsx",
+    "src/app/(app)/companies/_components/key-pane.tsx",
+  ];
+  for (const rel of callers) {
+    const source = readJsx(path.join(root, rel));
+    const direct = source.elements.filter((element) =>
+      ["onPress", "onAction"].some((name) => /\b(?:rotate|revoke)\(/.test(element.attributes.get(name) ?? "")),
+    );
+    assert.deepEqual(direct, [], rel);
+  }
 });
 
 test("user and role deletion use the shared ConfirmDialog", () => {
