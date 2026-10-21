@@ -1,5 +1,6 @@
 import type { PiiEntity, PiiRule } from "@/types/guardrails";
 import { activeVault, type PiiVault, withActiveVault } from "@/lib/gateway/safety/pii-vault";
+import { SizedLru } from "@/lib/utils/sized-lru";
 
 function mark(id: string, value: string): string {
   return activeVault()?.placeholder(id, value) ?? `[${id}]`;
@@ -519,17 +520,41 @@ export function defaultEntityIds(): string[] {
   return PII_CATALOG.filter((e) => e.default).map((e) => e.id);
 }
 
+const REMEMBERED_MIN_CHARS = 64;
+const REMEMBERED_MAX_CHARS = 32_000_000;
+
+type TextScan = { text: string; rules: string[] };
+
+const rememberedScans = new SizedLru<TextScan & { entities: string }>(REMEMBERED_MAX_CHARS);
+
+function scanText(text: string, entities: string[] | undefined): TextScan {
+  const enabled = new Set(entities?.length ? entities : defaultEntityIds());
+  const rules: string[] = [];
+  let out = text;
+  for (const rule of RULES) {
+    if (!enabled.has(rule.id)) continue;
+    const next = rule.apply(out);
+    if (next !== out) rules.push(rule.id);
+    out = next;
+  }
+  return { text: out, rules };
+}
+
+function rememberedScan(text: string, entities: string[] | undefined): TextScan {
+  if (text.length < REMEMBERED_MIN_CHARS || activeVault()) return scanText(text, entities);
+  const key = entities?.length ? entities.join(",") : "";
+  const known = rememberedScans.get(text);
+  if (known?.entities === key) return known;
+  const scanned = scanText(text, entities);
+  rememberedScans.set(text, { ...scanned, entities: key }, text.length + (scanned.text === text ? 0 : scanned.text.length));
+  return scanned;
+}
+
 export function redactPii(text: string, entities?: string[], found?: Set<string>, vault?: PiiVault | null): string {
   const run = () => {
-    const enabled = new Set(entities?.length ? entities : defaultEntityIds());
-    let out = text;
-    for (const rule of RULES) {
-      if (!enabled.has(rule.id)) continue;
-      const next = rule.apply(out);
-      if (found && next !== out) found.add(rule.id);
-      out = next;
-    }
-    return out;
+    const scanned = rememberedScan(text, entities);
+    if (found) for (const id of scanned.rules) found.add(id);
+    return scanned.text;
   };
   return vault === undefined ? run() : withActiveVault(vault, run);
 }
