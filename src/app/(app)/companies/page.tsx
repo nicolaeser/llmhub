@@ -27,6 +27,7 @@ import { useActionData } from "@/lib/hooks/use-action-data";
 import { BELOW_LG, REDUCED_MOTION } from "@/lib/hooks/use-media-query";
 import { setSearchParams, useSearchParam } from "@/lib/hooks/use-search-param";
 import { isActionFail } from "@/lib/http/action-result";
+import { usageHref } from "@/lib/usage/usage-query";
 import type { KeyChoices, VirtualKeyView } from "@/types/keys";
 import type {
   BudgetResult,
@@ -43,6 +44,7 @@ import {
   createKeyAction,
   deleteNodeAction,
   loadCompanyMcpAction,
+  loadCompanyPoliciesAction,
   loadKeyDetailAction,
   loadKeyMcpAccessAction,
   loadKeyOptionsAction,
@@ -55,9 +57,11 @@ import {
   setBudgetAction,
   updateKeyAction,
 } from "./_action";
+import AccessCard from "./_components/access-card";
 import BudgetCard from "./_components/budget-card";
 import ChildrenCard from "./_components/children-card";
 import CompanyTree from "./_components/company-tree";
+import InsightLinks from "./_components/insight-links";
 import KeyPane from "./_components/key-pane";
 import KeysCard from "./_components/keys-card";
 import { keyPresetOf, withKey, withoutKey } from "./_components/key-model";
@@ -68,6 +72,7 @@ import NodeHeader from "./_components/node-header";
 import ReportsCard from "./_components/reports-card";
 import SetupSteps, { setupDone } from "./_components/setup-steps";
 import {
+  accessUsersOf,
   budgetOf,
   chainOf,
   nodeExists,
@@ -76,6 +81,7 @@ import {
   parentOf,
   parseNodeRef,
   setupStepsFor,
+  usageFilterOf,
   withBudget,
 } from "./_components/tree-model";
 import { useConsoleScope } from "../_components/console-scope";
@@ -234,6 +240,7 @@ export default function CompaniesPage() {
   const budgetFor = budgetTarget ? budgetOf(data, budgetTarget.kind, budgetTarget.id) : null;
   const canEditNode = data.canManage && (tenancy?.kind !== "org" || platform);
   const canBudgetNode = data.canBudget && (tenancy?.kind !== "org" || platform);
+  const accessUsers = org ? accessUsersOf(data, org.id) : null;
 
   function onStep(step: SetupStep) {
     const target = orgId || data?.orgs[0]?.id || "";
@@ -361,7 +368,7 @@ export default function CompaniesPage() {
                   subtitle={`${t("detail.kind", { kind: tenancy.kind })} · ${summary}`}
                   onOpen={selectInPane}
                   actions={
-                    canEditNode || openCompanyView ? (
+                    canEditNode || openCompanyView || data.canSeeUsage ? (
                       <>
                         {openCompanyView ? (
                           <Button
@@ -382,6 +389,7 @@ export default function CompaniesPage() {
                             )}
                           </Button>
                         ) : null}
+                        {data.canSeeUsage ? <InsightLinks usage={usageHref(usageFilterOf(tenancy, platform))} /> : null}
                         {canEditNode ? (
                           <Button
                             size="sm"
@@ -529,6 +537,17 @@ export default function CompaniesPage() {
                     onBudget={openKeyBudget}
                     onChanged={applyKey}
                     onRevoked={dropKey}
+                  />
+                ) : null}
+
+                {org && (accessUsers || data.canSeePolicies) ? (
+                  <AccessCard
+                    key={`access-${org.id}`}
+                    orgId={org.id}
+                    users={accessUsers}
+                    loadPolicies={data.canSeePolicies ? loadCompanyPoliciesAction : null}
+                    canOpen={(ref) => nodeExists(data, ref)}
+                    onOpen={selectInPane}
                   />
                 ) : null}
 

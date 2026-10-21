@@ -2,7 +2,7 @@ import { recordedPrisma } from "./support/recorded-prisma";
 import { setRequest } from "./support/next-headers-stub";
 import assert from "node:assert/strict";
 import test from "node:test";
-import { hasUserActions, userActions } from "@/app/(app)/users/_components/user-actions";
+import { hasUserActions, userActions, usersWithAccessTo } from "@/app/(app)/users/_components/user-actions";
 import {
   ACCESS_CHECK_GAP_MS,
   accessStale,
@@ -223,7 +223,6 @@ test("partial user rights show only their own row actions and never on the owner
   const cases: [Permission[], string[], boolean][] = [
     [["users:read", "users:security"], ["sessions", "reset"], false],
     [["users:read", "budgets:manage"], ["budget", "boost"], true],
-    [["users:read", "spend:read", "spend:read-all"], [], true],
     [
       ["users:read", "users:manage", "keys:read"],
       ["role", "password", "content", "block", "delete"],
@@ -242,14 +241,56 @@ test("partial user rights show only their own row actions and never on the owner
   }
 });
 
+test("usage and log links on console users follow spend:read and spend:read-all", async () => {
+  const { usersConsole } = await import("@/lib/auth/users");
+  const all = ["usage", "logs"];
+  const cases: [Permission[], "all" | "own" | "none", Record<string, string[]>][] = [
+    [["users:read"], "none", { actor: [], owner: [], weak: [], strong: [] }],
+    [["users:read", "spend:read-all"], "none", { actor: [], owner: [], weak: [], strong: [] }],
+    [["users:read", "spend:read"], "own", { actor: all, owner: [], weak: [], strong: [] }],
+    [["users:read", "spend:read", "spend:read-all"], "all", { actor: all, owner: all, weak: all, strong: all }],
+    [
+      ["users:read", "spend:read", "spend:read-all", "budgets:manage"],
+      "all",
+      { actor: all, owner: all, weak: [...all, "budget", "boost"], strong: all },
+    ],
+  ];
+  for (const [granted, insights, expected] of cases) {
+    recordedPrisma.reset({ user: { findMany: () => USERS } });
+    const payload = await usersConsole(principal(granted));
+    assert.equal(payload.insights, insights, granted.join(","));
+    for (const user of payload.users) assert.deepEqual(userActions(payload, user), expected[user.id], `${granted} ${user.id}`);
+    assert.equal(hasUserActions(payload), insights !== "none", granted.join(","));
+  }
+});
+
+test("the console users list links companies only for tenancy readers and filters by company access", async () => {
+  const { usersConsole } = await import("@/lib/auth/users");
+  recordedPrisma.reset({ user: { findMany: () => USERS } });
+  assert.equal((await usersConsole(principal(["users:read"]))).canSeeCompanies, false);
+  recordedPrisma.reset({ user: { findMany: () => USERS } });
+  assert.equal((await usersConsole(principal(["users:read", "tenancy:read"]))).canSeeCompanies, true);
+
+  const rows = [
+    { id: "a", orgId: "o1" },
+    { id: "b", orgId: null },
+    { id: "c", orgId: "o2" },
+    { id: "d", orgId: "o1" },
+  ];
+  assert.deepEqual(usersWithAccessTo(rows, "o1").map((row) => row.id), ["a", "d"]);
+  assert.deepEqual(usersWithAccessTo(rows, "").map((row) => row.id), ["a", "b", "c", "d"]);
+  assert.deepEqual(usersWithAccessTo(rows, "missing"), []);
+});
+
 test("a temporary boost is offered only for console users with a capped budget", () => {
-  const flags = { canManage: false, canSecure: false, canBudget: true };
+  const flags = { canManage: false, canSecure: false, canBudget: true, insights: "none" as const, selfId: "actor" };
   const budget = (maxBudget: number) => ({ maxBudget, spend: 1, budgetDuration: "" });
-  assert.deepEqual(userActions(flags, { manageable: true, budget: budget(10) }), ["budget", "boost"]);
-  assert.deepEqual(userActions(flags, { manageable: true, budget: budget(0) }), ["budget"]);
-  assert.deepEqual(userActions(flags, { manageable: true, budget: null }), ["budget"]);
-  assert.deepEqual(userActions({ ...flags, canBudget: false }, { manageable: true, budget: budget(10) }), []);
-  assert.deepEqual(userActions(flags, { manageable: false, budget: budget(10) }), []);
+  const user = (manageable: boolean, cap: ReturnType<typeof budget> | null) => ({ id: "weak", manageable, budget: cap });
+  assert.deepEqual(userActions(flags, user(true, budget(10))), ["budget", "boost"]);
+  assert.deepEqual(userActions(flags, user(true, budget(0))), ["budget"]);
+  assert.deepEqual(userActions(flags, user(true, null)), ["budget"]);
+  assert.deepEqual(userActions({ ...flags, canBudget: false }, user(true, budget(10))), []);
+  assert.deepEqual(userActions(flags, user(false, budget(10))), []);
 });
 
 test("user managers only get roles they may grant, and role managers only grantable templates and resets", async () => {

@@ -23,6 +23,33 @@ export function parseLogFilters(input: unknown): LogFilterValues {
   };
 }
 
+export function logFilterParams(filters: Partial<LogFilterValues>): Record<keyof LogFilterValues, string | null> {
+  const value = (name: Exclude<keyof LogFilterValues, "pii">) => filters[name] || null;
+  return {
+    model: value("model"),
+    status: value("status"),
+    endpoint: value("endpoint"),
+    keyId: value("keyId"),
+    userId: value("userId"),
+    pii: filters.pii ? "1" : null,
+    from: value("from"),
+    to: value("to"),
+  };
+}
+
+export function logFiltersFromSearch(search: string): LogFilterValues {
+  return parseLogFilters(Object.fromEntries(new URLSearchParams(search)));
+}
+
+export function logsHref(filters: Partial<LogFilterValues>): string {
+  const params = new URLSearchParams();
+  for (const [name, value] of Object.entries(logFilterParams(filters))) {
+    if (value !== null) params.set(name, value);
+  }
+  const query = params.toString();
+  return query ? `/logs?${query}` : "/logs";
+}
+
 export function createdAtRange(from: string, to: string): Prisma.DateTimeFilter | undefined {
   const range: Prisma.DateTimeFilter = {};
   const start = from ? new Date(from) : null;
@@ -36,12 +63,12 @@ export function createdAtRange(from: string, to: string): Prisma.DateTimeFilter 
 }
 
 function scoped(filters: LogFilterValues, scope: SpendScope) {
-  return {
+  const requested = {
     ...(filters.userId ? { userId: filters.userId } : {}),
     ...(filters.keyId ? { keyId: filters.keyId } : {}),
     ...(filters.model ? { model: filters.model } : {}),
-    ...scope,
   };
+  return { AND: [requested, scope] };
 }
 
 export function requestLogWhere(filters: LogFilterValues, scope: SpendScope): Prisma.RequestLogWhereInput {

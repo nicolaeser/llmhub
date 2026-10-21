@@ -36,6 +36,27 @@ export type InjectionCheck = InjectionPolicy["checks"][number];
 
 export type GuardrailOverrideView = PolicyTarget & { policy: GuardrailPolicy };
 
+export type PiiSummary = { enabled: boolean; mode: PiiMode; output: boolean; entities: number };
+
+export type GuardrailSummary = {
+  injection: InjectionAction | null;
+  secrets: GuardrailAction | null;
+  rules: number;
+};
+
+export type PolicyLevel = "global" | "org";
+
+export type PolicyOverrideSummary = PolicyTarget & {
+  pii: PiiSummary | null;
+  guardrails: GuardrailSummary | null;
+};
+
+export type CompanyPolicies = {
+  pii: PiiSummary & { level: PolicyLevel };
+  guardrails: GuardrailSummary & { level: PolicyLevel };
+  overrides: PolicyOverrideSummary[];
+};
+
 export type PatternIssue = "invalid" | "nested_quantifier" | "matches_empty";
 
 export type RuleIssue = {

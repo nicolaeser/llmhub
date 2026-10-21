@@ -29,7 +29,7 @@ import {
   userSecurityResetSchema,
 } from "@/schemas/auth";
 import type { AuthenticatedSession, GrantActor, Permission, TargetRow } from "@/types/auth";
-import type { ConsoleUser, UsersConsolePayload } from "@/types/users";
+import type { ConsoleUser, InsightReach, UsersConsolePayload } from "@/types/users";
 
 function targetPermissions(target: TargetRow) {
   return effectivePermissions({
@@ -74,6 +74,11 @@ async function assignableRole(actor: GrantActor, roleId: string) {
   return role;
 }
 
+function insightReach(session: AuthenticatedSession): InsightReach {
+  if (!hasPerm(session.permissions, PERMISSIONS.SPEND_READ)) return "none";
+  return seesAllSpend(session) ? "all" : "own";
+}
+
 export function usersConsoleAccess(session: AuthenticatedSession) {
   const manages = hasPerm(session.permissions, PERMISSIONS.USERS_MANAGE);
   const secures = hasPerm(session.permissions, PERMISSIONS.USERS_SECURITY);
@@ -84,6 +89,8 @@ export function usersConsoleAccess(session: AuthenticatedSession) {
     canBudget: budgets,
     canAct: manages || secures || budgets,
     seesSpend: budgets || seesAllSpend(session),
+    canSeeCompanies: hasPerm(session.permissions, PERMISSIONS.TENANCY_READ),
+    insights: insightReach(session),
   };
 }
 
@@ -150,6 +157,8 @@ export async function usersConsole(session: AuthenticatedSession): Promise<Users
     canManage: access.canManage,
     canBudget: access.canBudget,
     canSecure: access.canSecure,
+    canSeeCompanies: access.canSeeCompanies,
+    insights: access.insights,
   };
 }
 

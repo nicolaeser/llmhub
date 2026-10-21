@@ -125,19 +125,28 @@ test("loadUsage narrows the usage and latency queries to every tenant filter and
     userId: "u9",
   });
   const filters = { model: "model-a", teamId: "t1", orgId: "o1", projectId: "p1", memberId: "m1", keyId: "k1", userId: "u9" };
-  assert.deepEqual(usageWhere, filters);
-  assert.deepEqual(latencyWhere, filters);
+  assert.deepEqual(usageWhere, { AND: [filters, {}] });
+  assert.deepEqual(latencyWhere, { AND: [filters, {}] });
   assert.equal(usage.teamId, "t1");
 
   const blank = await loadAs(reader, { teamId: "  ", keyId: "" });
-  assert.deepEqual(blank.usageWhere, {});
+  assert.deepEqual(blank.usageWhere, { AND: [{}, {}] });
 });
 
-test("loadUsage applies the caller's spend scope over the requested filters", async () => {
+test("loadUsage intersects the requested filters with the caller's spend scope instead of replacing them", async () => {
   const scoped = principal(["spend:read"], "o-own");
-  const { usageWhere, latencyWhere } = await loadAs(scoped, { orgId: "o-other", userId: "u-other", teamId: "t1" });
-  assert.deepEqual(usageWhere, { teamId: "t1", orgId: "o-own", userId: "u-self" });
-  assert.deepEqual(latencyWhere, { teamId: "t1", orgId: "o-own", userId: "u-self" });
+  const scope = { orgId: "o-own", userId: "u-self" };
+  const outside = await loadAs(scoped, { orgId: "o-other", userId: "u-other", teamId: "t1" });
+  const requested = { teamId: "t1", orgId: "o-other", userId: "u-other" };
+  assert.deepEqual(outside.usageWhere, { AND: [requested, scope] });
+  assert.deepEqual(outside.latencyWhere, { AND: [requested, scope] });
+
+  const inside = await loadAs(scoped, { orgId: "o-own", keyId: "k1" });
+  assert.deepEqual(inside.usageWhere, { AND: [{ orgId: "o-own", keyId: "k1" }, scope] });
+
+  const platformReader = principal(["spend:read"]);
+  const own = await loadAs(platformReader, { userId: "u-other" });
+  assert.deepEqual(own.usageWhere, { AND: [{ userId: "u-other" }, { userId: "u-self" }] });
 });
 
 test("loadUsage returns tenant rollups, request health, chargeback rows, names, p95 latency, and 429s", async () => {

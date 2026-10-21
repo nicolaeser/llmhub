@@ -43,8 +43,9 @@
     "apply": "Apply filters",
     "key": "API key",
     "anyKey": "Any key",
-    "user": "User",
+    "user": "Console user",
     "anyUser": "Anyone",
+    "selected": "{kind, select, key {Selected key} other {Selected console user}}",
     "pii": "Only requests with PII",
     "reset": "Reset",
     "title": "{count, plural, =0 {Filters} other {Filters · # active}}"

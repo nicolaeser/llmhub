@@ -113,6 +113,9 @@ export type StructurePayload = {
   canSeeReports: boolean;
   canReport: boolean;
   canSeeSettings: boolean;
+  canSeeUsers: boolean;
+  canSeeUsage: boolean;
+  canSeePolicies: boolean;
   mailEnabled: boolean;
 };
 

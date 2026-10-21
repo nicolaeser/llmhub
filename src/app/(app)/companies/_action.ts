@@ -4,6 +4,7 @@ import { runAction } from "@/lib/http/action-result";
 import { createKey, loadKeyDetail, loadKeyOptions, revokeKey, rotateKey, updateKey } from "@/lib/keys/manage";
 import { loadKeyMcpAccess, saveKeyMcpAccess } from "@/lib/mcp/key-access";
 import { loadCompanyMcpServers, saveCompanyMcpInstallation } from "@/lib/mcp/servers";
+import { loadCompanyPolicies } from "@/lib/settings/guardrail-policies";
 import { addBoost, removeBoost, setBudget } from "@/lib/tenancy/budgets";
 import {
   deleteNode,
@@ -69,6 +70,10 @@ export async function loadCompanyMcpAction(...args: Parameters<typeof loadCompan
 
 export async function saveCompanyMcpInstallationAction(...args: Parameters<typeof saveCompanyMcpInstallation>) {
   return runAction(() => saveCompanyMcpInstallation(...args));
+}
+
+export async function loadCompanyPoliciesAction(...args: Parameters<typeof loadCompanyPolicies>) {
+  return runAction(() => loadCompanyPolicies(...args));
 }
 
 export async function loadKeyOptionsAction() {

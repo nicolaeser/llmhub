@@ -58,5 +58,13 @@
   "contentAction": "{enabled, select, true {Stop logging content} other {Log content again}}",
   "contentOff": "Content not logged",
   "access": "{scope, select, company {{org}} other {Whole hub}}",
-  "budget": "Set budget"
+  "budget": "Set budget",
+  "usageAction": "View usage",
+  "logsAction": "View logs",
+  "companyFilter": {
+    "label": "Company filter",
+    "value": "{named, select, yes {Access to {alias}} other {Access to the selected company}}",
+    "clear": "Show all console users",
+    "empty": "No console users can sign in for this company."
+  }
 }

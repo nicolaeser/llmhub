@@ -28,6 +28,7 @@
     "user": "Console user"
   },
   "deleted": "{group, select, org {Deleted company} team {Deleted department} project {Deleted project} member {Deleted person} key {Deleted key} user {Deleted console user} other {Deleted}}",
+  "withoutUsage": "{group, select, org {Company without usage} team {Department without usage} project {Project without usage} member {Person without usage} key {Key without usage} user {Console user without usage} other {No usage}}",
   "chargeback": "Chargeback CSV",
   "columns": {
     "name": "Name",

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  accessUsersOf,
   nodeExists,
   nodeKey,
   nodePath,
@@ -8,7 +9,10 @@ import {
   parseNodeRef,
   treeHighlight,
   treeRows,
+  usageFilterOf,
 } from "@/app/(app)/companies/_components/tree-model";
+import { logsHref } from "@/lib/gateway/request-logs/request-log-query";
+import { usageHref } from "@/lib/usage/usage-query";
 import { keyOptionsOf, keyPresetOf, withKey, withoutKey } from "@/app/(app)/companies/_components/key-model";
 import { keyMenuActions } from "@/components/keys/key-menu";
 import type { VirtualKeyView } from "@/types/keys";
@@ -82,6 +86,9 @@ const structure: StructurePayload = {
   canSeeReports: false,
   canReport: false,
   canSeeSettings: false,
+  canSeeUsers: false,
+  canSeeUsage: false,
+  canSeePolicies: false,
   mailEnabled: false,
 };
 
@@ -267,4 +274,22 @@ test("key row menus offer only what the caller may do", () => {
   ]);
   assert.deepEqual(keyMenuActions({ canManage: false, canMcp: true, canBudget: false }, { capped: true }), ["mcp"]);
   assert.deepEqual(keyMenuActions({ canManage: false, canMcp: false, canBudget: false }, { capped: true }), []);
+});
+
+test("usage drill-downs filter by the selected node and drop the company filter in the company scope", () => {
+  assert.equal(usageHref(usageFilterOf(ref("org:o1"), true)), "/usage?orgId=o1");
+  assert.equal(usageHref(usageFilterOf(ref("org:o1"), false)), "/usage");
+  assert.equal(usageHref(usageFilterOf(ref("team:t1"), true)), "/usage?teamId=t1");
+  assert.equal(usageHref(usageFilterOf(ref("project:p1"), false)), "/usage?projectId=p1");
+  assert.equal(usageHref(usageFilterOf(ref("member:m1"), true)), "/usage?memberId=m1");
+  assert.equal(usageHref(usageFilterOf(ref("key:k1"), true)), "/usage?keyId=k1");
+  assert.equal(logsHref({ keyId: "k1" }), "/logs?keyId=k1");
+});
+
+test("console users with company access are listed only for platform callers who may read users", () => {
+  assert.equal(accessUsersOf(structure, "o1"), null);
+  const reader = { ...structure, canSeeUsers: true };
+  assert.deepEqual(accessUsersOf(reader, "o1")?.map((user) => user.id), ["u1"]);
+  assert.deepEqual(accessUsersOf(reader, "o2"), []);
+  assert.equal(accessUsersOf({ ...reader, companyId: "o1" }, "o1"), null);
 });

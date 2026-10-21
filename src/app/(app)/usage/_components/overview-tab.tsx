@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   Button,
   buttonVariants,
@@ -28,6 +28,8 @@ import { loadUsageAction, loadUsageTodayAction } from "../_action";
 import { useActionData } from "@/lib/hooks/use-action-data";
 import { useLiveConnected, useLiveUsageToday } from "@/lib/hooks/use-live";
 import { BELOW_MD, useMediaQuery } from "@/lib/hooks/use-media-query";
+import { setSearchParams, useSearchString } from "@/lib/hooks/use-search-param";
+import { USAGE_RANGES, usageQueryFromSearch, usageQueryParams } from "@/lib/usage/usage-query";
 import PageStatus, { LoadError, SectionLoading } from "@/components/console/page-status";
 import RowCard, { RowCards, TABLE_FROM_LG } from "@/components/console/row-cards";
 import SearchSelect from "@/components/console/search-select";
@@ -37,22 +39,9 @@ import UsageCharts from "./usage-charts";
 import type { PickerItem } from "@/types/console";
 import type { UsageQuery, SliceRow } from "@/types/usage";
 
-const RANGES = [7, 14, 30, 90] as const;
-
 type TenantGroup = "org" | "team" | "project" | "member" | "key" | "user";
 
 type FilterKey = Exclude<keyof UsageQuery, "days">;
-
-const INITIAL_QUERY: UsageQuery = {
-  days: 14,
-  model: "",
-  teamId: "",
-  orgId: "",
-  projectId: "",
-  memberId: "",
-  keyId: "",
-  userId: "",
-};
 
 function chargebackHref(query: UsageQuery) {
   const params = new URLSearchParams({ days: String(query.days) });
@@ -70,11 +59,12 @@ export default function OverviewTab() {
   const t = useTranslations("Usage");
   const tCommon = useTranslations("Common");
   const format = useFormatter();
-  const [query, setQuery] = useState<UsageQuery>(INITIAL_QUERY);
+  const search = useSearchString();
+  const query = useMemo(() => usageQueryFromSearch(search ?? ""), [search]);
   const [picked, setPicked] = useState<Partial<Record<FilterKey, PickerItem>>>({});
   const [filtersOpen, setFiltersOpen] = useState(false);
   const compact = useMediaQuery(BELOW_MD);
-  const usage = useActionData(() => loadUsageAction(INITIAL_QUERY));
+  const usage = useActionData(() => loadUsageAction(usageQueryFromSearch(window.location.search)));
   const { data: stats, pending } = usage;
   const todaySeed = useActionData(loadUsageTodayAction);
   const today = useLiveUsageToday(todaySeed.data);
@@ -82,7 +72,7 @@ export default function OverviewTab() {
 
   function apply(patch: Partial<UsageQuery>) {
     const next = { ...query, ...patch };
-    setQuery(next);
+    setSearchParams(usageQueryParams(next));
     usage.reloadWith(() => loadUsageAction(next));
   }
 
@@ -96,6 +86,11 @@ export default function OverviewTab() {
     ids.map((id) =>
       stats.names[id] ? { id, label: stats.names[id] } : { id, label: t("deleted", { group }), detail: id },
     );
+  const selectedItem = (group: TenantGroup) => (id: string): PickerItem => ({
+    id,
+    label: t("withoutUsage", { group }),
+    detail: id,
+  });
   const named = (group: TenantGroup, rows: SliceRow[]) =>
     rows.map((row) => ({ ...row, name: label(group, row.name) }));
   const tenantFilters = [
@@ -103,24 +98,55 @@ export default function OverviewTab() {
       key: "model" as const,
       label: t("group.model"),
       options: stats.models.map((id) => ({ id, label: id })),
+      selected: (id: string): PickerItem => ({ id, label: id }),
     },
-    ...(stats.companyView ? [] : [{ key: "orgId" as const, label: t("group.org"), options: options("org", stats.orgs) }]),
-    { key: "teamId" as const, label: t("group.team"), options: options("team", stats.teams) },
-    { key: "projectId" as const, label: t("group.project"), options: options("project", stats.projects) },
-    { key: "memberId" as const, label: t("group.member"), options: options("member", stats.members) },
-    { key: "keyId" as const, label: t("group.key"), options: options("key", stats.keys) },
-    { key: "userId" as const, label: t("group.user"), options: options("user", stats.users) },
+    ...(stats.companyView && !query.orgId
+      ? []
+      : [
+          {
+            key: "orgId" as const,
+            label: t("group.org"),
+            options: options("org", stats.orgs),
+            selected: selectedItem("org"),
+          },
+        ]),
+    {
+      key: "teamId" as const,
+      label: t("group.team"),
+      options: options("team", stats.teams),
+      selected: selectedItem("team"),
+    },
+    {
+      key: "projectId" as const,
+      label: t("group.project"),
+      options: options("project", stats.projects),
+      selected: selectedItem("project"),
+    },
+    {
+      key: "memberId" as const,
+      label: t("group.member"),
+      options: options("member", stats.members),
+      selected: selectedItem("member"),
+    },
+    { key: "keyId" as const, label: t("group.key"), options: options("key", stats.keys), selected: selectedItem("key") },
+    {
+      key: "userId" as const,
+      label: t("group.user"),
+      options: options("user", stats.users),
+      selected: selectedItem("user"),
+    },
   ];
 
   const tenantFields = tenantFilters.map((filter) => {
+    const value = query[filter.key];
     const kept = picked[filter.key];
-    const missing =
-      kept && kept.id === query[filter.key] && !filter.options.some((option) => option.id === kept.id);
+    const listed = !value || filter.options.some((option) => option.id === value);
+    const extra = listed ? [] : [kept?.id === value ? kept : filter.selected(value)];
     return (
       <SearchSelect
         key={filter.key}
         label={filter.label}
-        items={[{ id: "all", label: tCommon("all") }, ...filter.options, ...(missing ? [kept] : [])]}
+        items={[{ id: "all", label: tCommon("all") }, ...filter.options, ...extra]}
         value={query[filter.key] || "all"}
         onChange={(next) => {
           setPicked((current) => ({
@@ -173,7 +199,7 @@ export default function OverviewTab() {
           </Select.Trigger>
           <Select.Popover>
             <ListBox aria-label={t("range")}>
-              {RANGES.map((n) => (
+              {USAGE_RANGES.map((n) => (
                 <ListBox.Item key={String(n)} id={String(n)} textValue={t("days", { n })}>
                   {t("days", { n })}
                   <ListBox.ItemIndicator />

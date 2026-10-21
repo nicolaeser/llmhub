@@ -58,5 +58,13 @@
   "contentAction": "{enabled, select, true {Inhalte nicht mehr protokollieren} other {Inhalte wieder protokollieren}}",
   "contentOff": "Inhalte nicht protokolliert",
   "access": "{scope, select, company {{org}} other {Gesamter Hub}}",
-  "budget": "Budget festlegen"
+  "budget": "Budget festlegen",
+  "usageAction": "Nutzung anzeigen",
+  "logsAction": "Protokolle anzeigen",
+  "companyFilter": {
+    "label": "Unternehmensfilter",
+    "value": "{named, select, yes {Zugriff auf {alias}} other {Zugriff auf das ausgewählte Unternehmen}}",
+    "clear": "Alle Konsolen-Benutzer anzeigen",
+    "empty": "Für dieses Unternehmen kann sich kein Konsolen-Benutzer anmelden."
+  }
 }

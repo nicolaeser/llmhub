@@ -26,6 +26,8 @@ export type ConsoleUser = {
   manageable: boolean;
 };
 
+export type InsightReach = "all" | "own" | "none";
+
 export type UsersConsolePayload = {
   users: ConsoleUser[];
   roles: RoleOption[];
@@ -34,4 +36,6 @@ export type UsersConsolePayload = {
   canManage: boolean;
   canSecure: boolean;
   canBudget: boolean;
+  canSeeCompanies: boolean;
+  insights: InsightReach;
 };
