@@ -1,7 +1,7 @@
 import "server-only";
 
 import prisma from "@/lib/db/prisma";
-import { requirePermission } from "@/lib/auth/guards";
+import { requirePlatformPermission } from "@/lib/auth/guards";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { writeAudit } from "@/lib/audit";
 import { scheduleCatalogTask } from "@/lib/gateway/catalog/catalog-tasks";
@@ -131,7 +131,7 @@ async function storeAccount(
 }
 
 export async function importAuthFiles(files: AuthFileUpload[]): Promise<AuthFileImport> {
-  const session = await requirePermission(PERMISSIONS.PROVIDERS_MANAGE);
+  const session = await requirePlatformPermission(PERMISSIONS.PROVIDERS_MANAGE);
   const parsed = authFileImportSchema.safeParse(files);
   if (!parsed.success) throw new Error("VALIDATION");
   return importUploads(session.user.id, parsed.data);
@@ -164,7 +164,7 @@ export async function importUploads(actor: string, files: AuthFileUpload[]): Pro
 }
 
 export async function importSignInFile(kind: string, content: string): Promise<SignInFileResult> {
-  const session = await requirePermission(PERMISSIONS.PROVIDERS_MANAGE);
+  const session = await requirePlatformPermission(PERMISSIONS.PROVIDERS_MANAGE);
   const parsed = signInFileSchema.safeParse({ kind, content });
   if (!parsed.success) throw new Error("VALIDATION");
   const account = parseAuthFileEntry(authFileEntryFor(authFileEntries(parsed.data.content), parsed.data.kind));

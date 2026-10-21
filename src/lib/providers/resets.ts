@@ -1,7 +1,7 @@
 import "server-only";
 
 import prisma from "@/lib/db/prisma";
-import { requirePermission } from "@/lib/auth/guards";
+import { requirePlatformPermission } from "@/lib/auth/guards";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { isResetKind } from "@/lib/gateway/routing/auto-reset-policy";
 import { readLimitSnapshot } from "@/lib/gateway/upstreams/limit-store";
@@ -13,7 +13,7 @@ import { refreshAccountLimits } from "@/lib/providers/limit-refresh";
 import type { RedeemResponse } from "@/types/resets";
 
 export async function redeemProviderReset(input: { id: string }): Promise<RedeemResponse> {
-  const session = await requirePermission(PERMISSIONS.PROVIDERS_MANAGE);
+  const session = await requirePlatformPermission(PERMISSIONS.PROVIDERS_MANAGE);
   if (typeof input?.id !== "string" || !input.id) throw new Error("MISSING_ID");
   const row = await prisma.providerConnection.findUnique({
     where: { id: input.id },

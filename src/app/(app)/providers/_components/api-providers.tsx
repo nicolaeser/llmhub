@@ -16,9 +16,21 @@ const API_CATALOG = PROVIDER_CATALOG.filter((spec) => !isSignInKind(spec.kind));
 const STARTER_CATALOG = API_CATALOG.filter((spec) => STARTER_KINDS.has(spec.kind));
 const MORE_CATALOG = API_CATALOG.filter((spec) => !STARTER_KINDS.has(spec.kind));
 
-export default function ApiProviders({ rows, actions }: { rows: ProviderView[]; actions: ProviderListActions }) {
+export default function ApiProviders({
+  rows,
+  actions,
+  canManage,
+}: {
+  rows: ProviderView[];
+  actions: ProviderListActions;
+  canManage: boolean;
+}) {
   const t = useTranslations("Providers");
   const [browsing, setBrowsing] = useState(false);
+
+  if (rows.length === 0 && !canManage) {
+    return <EmptyState icon={Plug} title={t("noneTitle")} />;
+  }
 
   if (rows.length === 0 && !browsing) {
     return (
@@ -82,6 +94,7 @@ export default function ApiProviders({ rows, actions }: { rows: ProviderView[]; 
               <ProviderCard
                 key={row.id}
                 row={row}
+                canManage={canManage}
                 onEdit={(provider) =>
                   actions.openForm(PROVIDER_CATALOG.find((spec) => spec.kind === provider.kind) ?? null, provider)
                 }
@@ -94,30 +107,32 @@ export default function ApiProviders({ rows, actions }: { rows: ProviderView[]; 
         </section>
       ) : null}
 
-      <section className="space-y-3" aria-labelledby="providers-catalog">
-        <div className="space-y-1">
-          <h2 id="providers-catalog" className="text-base font-semibold tracking-tight">
-            {t("catalogTitle")}
-          </h2>
-          <p className="text-sm text-muted">{t("catalogHint")}</p>
-        </div>
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{catalog.map(catalogCard)}</div>
-        {rows.length === 0 && MORE_CATALOG.length > 0 ? (
-          <Disclosure>
-            <Disclosure.Heading>
-              <Disclosure.Trigger className="flex w-full items-center justify-between text-sm text-muted">
-                {t("moreProviders")}
-                <Disclosure.Indicator />
-              </Disclosure.Trigger>
-            </Disclosure.Heading>
-            <Disclosure.Content>
-              <Disclosure.Body className="grid gap-3 pt-3 sm:grid-cols-2 xl:grid-cols-4">
-                {MORE_CATALOG.map(catalogCard)}
-              </Disclosure.Body>
-            </Disclosure.Content>
-          </Disclosure>
-        ) : null}
-      </section>
+      {canManage ? (
+        <section className="space-y-3" aria-labelledby="providers-catalog">
+          <div className="space-y-1">
+            <h2 id="providers-catalog" className="text-base font-semibold tracking-tight">
+              {t("catalogTitle")}
+            </h2>
+            <p className="text-sm text-muted">{t("catalogHint")}</p>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{catalog.map(catalogCard)}</div>
+          {rows.length === 0 && MORE_CATALOG.length > 0 ? (
+            <Disclosure>
+              <Disclosure.Heading>
+                <Disclosure.Trigger className="flex w-full items-center justify-between text-sm text-muted">
+                  {t("moreProviders")}
+                  <Disclosure.Indicator />
+                </Disclosure.Trigger>
+              </Disclosure.Heading>
+              <Disclosure.Content>
+                <Disclosure.Body className="grid gap-3 pt-3 sm:grid-cols-2 xl:grid-cols-4">
+                  {MORE_CATALOG.map(catalogCard)}
+                </Disclosure.Body>
+              </Disclosure.Content>
+            </Disclosure>
+          ) : null}
+        </section>
+      ) : null}
     </div>
   );
 }

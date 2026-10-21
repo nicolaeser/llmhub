@@ -18,7 +18,6 @@ export default function ProviderSettingsDialog({
   accounts,
   routing,
   autoReset,
-  canManage,
   antigravity,
   onRouting,
   onAutoReset,
@@ -29,7 +28,6 @@ export default function ProviderSettingsDialog({
   accounts: number;
   routing: AccountRouting;
   autoReset: AutoResetPolicies;
-  canManage: boolean;
   antigravity: AntigravityClientState | null;
   onRouting: (routing: AccountRouting) => void;
   onAutoReset: (policies: AutoResetPolicies) => void;
@@ -72,7 +70,6 @@ export default function ProviderSettingsDialog({
                         <AutoResetSettings
                           kind={kind}
                           policy={autoReset[kind] ?? autoResetPolicy({})}
-                          canManage={canManage}
                           onSaved={onAutoReset}
                         />
                       </>

@@ -1,7 +1,7 @@
 import "server-only";
 
 import prisma from "@/lib/db/prisma";
-import { requirePermission } from "@/lib/auth/guards";
+import { requirePlatformPermission } from "@/lib/auth/guards";
 import { hasPerm, PERMISSIONS } from "@/lib/auth/permissions";
 import { writeAudit } from "@/lib/audit";
 import { DEFAULT_ACCOUNT_STRATEGY, isAccountStrategy, isAssignmentScope } from "@/lib/gateway/routing/account-access";
@@ -37,13 +37,13 @@ async function currentAutoReset(): Promise<AutoResetPolicies> {
 }
 
 export async function loadAccountRouting(): Promise<AccountRoutingView> {
-  const session = await requirePermission(PERMISSIONS.PROVIDERS_READ);
+  const session = await requirePlatformPermission(PERMISSIONS.PROVIDERS_READ);
   const [routing, autoReset] = await Promise.all([currentRouting(), currentAutoReset()]);
   return { routing, autoReset, canManage: hasPerm(session.permissions, PERMISSIONS.PROVIDERS_MANAGE) };
 }
 
 export async function saveAccountRouting(input: { kind: string; strategy: string }) {
-  const session = await requirePermission(PERMISSIONS.PROVIDERS_MANAGE);
+  const session = await requirePlatformPermission(PERMISSIONS.PROVIDERS_MANAGE);
   if (!isSignInKind(input.kind)) throw new Error("UNKNOWN_PROVIDER_KIND");
   if (!isAccountStrategy(input.strategy)) throw new Error("VALIDATION");
   const before = (await currentRouting())[input.kind] ?? "inherit";
@@ -65,7 +65,7 @@ export async function saveAccountRouting(input: { kind: string; strategy: string
 }
 
 export async function saveAutoReset(input: AutoResetInput) {
-  const session = await requirePermission(PERMISSIONS.PROVIDERS_MANAGE);
+  const session = await requirePlatformPermission(PERMISSIONS.PROVIDERS_MANAGE);
   const parsed = autoResetInputSchema.safeParse(input);
   if (!parsed.success) throw new Error("VALIDATION");
   const { kind, enabled, percent, scope } = parsed.data;
@@ -89,7 +89,7 @@ export async function saveAutoReset(input: AutoResetInput) {
 }
 
 export async function loadAssignmentOptions() {
-  await requirePermission(PERMISSIONS.PROVIDERS_MANAGE);
+  await requirePlatformPermission(PERMISSIONS.PROVIDERS_MANAGE);
   return { options: await assignmentOptions() };
 }
 
@@ -98,7 +98,7 @@ export async function saveAssignments(input: {
   restricted: boolean;
   targets: AssignmentInput[];
 }) {
-  const session = await requirePermission(PERMISSIONS.PROVIDERS_MANAGE);
+  const session = await requirePlatformPermission(PERMISSIONS.PROVIDERS_MANAGE);
   if (!input.providerId) throw new Error("MISSING_ID");
   if (input.targets.length > MAX_TARGETS) throw new Error("VALIDATION");
   if (!input.targets.every((target) => isAssignmentScope(target.scope) && target.id)) throw new Error("VALIDATION");
@@ -121,12 +121,12 @@ export async function saveAssignments(input: {
 }
 
 export async function loadAntigravityConfig(): Promise<AntigravityClientState> {
-  await requirePermission(PERMISSIONS.PROVIDERS_READ);
+  await requirePlatformPermission(PERMISSIONS.PROVIDERS_READ);
   return antigravityClientState();
 }
 
 export async function saveAntigravityConfig(input: { clientSecret: string }): Promise<AntigravityClientState> {
-  const session = await requirePermission(PERMISSIONS.PROVIDERS_MANAGE);
+  const session = await requirePlatformPermission(PERMISSIONS.PROVIDERS_MANAGE);
   const secret = input.clientSecret.trim();
   if (secret.length > MAX_SECRET_LENGTH || /\s/.test(secret)) throw new Error("VALIDATION");
   await saveAntigravityClientSecret(secret);

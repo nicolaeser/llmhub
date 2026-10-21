@@ -88,22 +88,24 @@ export default function ProviderSection({
             </div>
           </div>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button size="sm" variant="tertiary" aria-label={t("settings.openFor", { provider: name })} onPress={onSettings}>
-            <SlidersHorizontal size={14} aria-hidden />
-            {t("settings.open")}
-          </Button>
-          <Button
-            size="sm"
-            variant="secondary"
-            isDisabled={!canAdd}
-            aria-label={tProviders("formTitle", { mode: "connect", name: tProviders("kindName", { kind }) })}
-            onPress={onAdd}
-          >
-            <Plus size={14} aria-hidden />
-            {t("addAccount")}
-          </Button>
-        </div>
+        {canManage ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <Button size="sm" variant="tertiary" aria-label={t("settings.openFor", { provider: name })} onPress={onSettings}>
+              <SlidersHorizontal size={14} aria-hidden />
+              {t("settings.open")}
+            </Button>
+            <Button
+              size="sm"
+              variant="secondary"
+              isDisabled={!canAdd}
+              aria-label={tProviders("formTitle", { mode: "connect", name: tProviders("kindName", { kind }) })}
+              onPress={onAdd}
+            >
+              <Plus size={14} aria-hidden />
+              {t("addAccount")}
+            </Button>
+          </div>
+        ) : null}
       </Card.Header>
 
       <Card.Content className="gap-4">

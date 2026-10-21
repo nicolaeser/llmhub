@@ -152,7 +152,8 @@ export function liveStream(input: {
     for (const topic of input.topics ?? []) {
       const feed = feeds[topic];
       if (!feed || closed) continue;
-      const allowed = hasPerm(access.viewer.permissions, feed.permission);
+      const allowed =
+        hasPerm(access.viewer.permissions, feed.permission) && !(feed.platformOnly && access.viewer.scope.orgId);
       const key = allowed ? feed.scopeKey(access.viewer.scope) : "";
       const current = topics.get(topic);
       if (current?.key === key) continue;

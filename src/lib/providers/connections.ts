@@ -1,8 +1,8 @@
 import "server-only";
 
 import prisma from "@/lib/db/prisma";
-import { requirePermission } from "@/lib/auth/guards";
-import { PERMISSIONS } from "@/lib/auth/permissions";
+import { requirePlatformPermission } from "@/lib/auth/guards";
+import { hasPerm, PERMISSIONS } from "@/lib/auth/permissions";
 import { writeAudit } from "@/lib/audit";
 import {
   isSignInKind,
@@ -141,8 +141,8 @@ async function listConnected() {
 }
 
 export async function loadProviders() {
-  await requirePermission(PERMISSIONS.PROVIDERS_READ);
-  return { connected: await listConnected() };
+  const session = await requirePlatformPermission(PERMISSIONS.PROVIDERS_READ);
+  return { connected: await listConnected(), canManage: hasPerm(session.permissions, PERMISSIONS.PROVIDERS_MANAGE) };
 }
 
 export async function createProvider(input: {
@@ -154,7 +154,7 @@ export async function createProvider(input: {
   policy?: ProviderPolicyInput;
   vertex?: Partial<VertexTarget>;
 }) {
-  const session = await requirePermission(PERMISSIONS.PROVIDERS_MANAGE);
+  const session = await requirePlatformPermission(PERMISSIONS.PROVIDERS_MANAGE);
   const kind = input.kind.trim();
   if (!KNOWN_KINDS.has(kind)) throw new Error("UNKNOWN_PROVIDER_KIND");
   const spec = specFor(kind);
@@ -218,7 +218,7 @@ export async function updateProvider(input: {
   policy?: ProviderPolicyInput;
   vertex?: Partial<VertexTarget>;
 }) {
-  const session = await requirePermission(PERMISSIONS.PROVIDERS_MANAGE);
+  const session = await requirePlatformPermission(PERMISSIONS.PROVIDERS_MANAGE);
   const existing = await prisma.providerConnection.findUnique({ where: { id: input.id } });
   if (!existing) throw new Error("NOT_FOUND");
   const signedIn = isSignInKind(existing.kind);
@@ -275,7 +275,7 @@ export async function loadProviderLimits(input: {
   id: string;
   refresh?: boolean;
 }): Promise<{ limits: SubscriptionLimits | null; item: LimitSnapshot | null }> {
-  await requirePermission(PERMISSIONS.PROVIDERS_READ);
+  await requirePlatformPermission(PERMISSIONS.PROVIDERS_READ);
   const row = await prisma.providerConnection.findUnique({
     where: { id: input.id },
     select: { id: true, kind: true, apiKey: true, enabled: true, login: { select: { status: true, version: true } } },
@@ -298,14 +298,14 @@ export async function loadProviderLimits(input: {
 }
 
 export async function loadSubscriptionLimits(input: { refresh?: boolean } = {}): Promise<LimitSnapshotList> {
-  await requirePermission(PERMISSIONS.PROVIDERS_READ);
+  await requirePlatformPermission(PERMISSIONS.PROVIDERS_READ);
   if (input.refresh === true) await refreshAccountsLimits(await pollAccounts());
   const at = Date.now();
   return { at, items: await readLimitSnapshots(undefined, at) };
 }
 
 export async function startSignIn(kind: string): Promise<SignInStart> {
-  const session = await requirePermission(PERMISSIONS.PROVIDERS_MANAGE);
+  const session = await requirePlatformPermission(PERMISSIONS.PROVIDERS_MANAGE);
   if (!isSignInKind(kind)) throw new Error("UNKNOWN_PROVIDER_KIND");
   const method = signInMethod(kind);
   const device = await startAuthorization(kind);
@@ -320,7 +320,7 @@ export async function startSignIn(kind: string): Promise<SignInStart> {
 }
 
 export async function pollSignIn(input: { ticket: string; interval: number }): Promise<SignInPollResult> {
-  const session = await requirePermission(PERMISSIONS.PROVIDERS_MANAGE);
+  const session = await requirePlatformPermission(PERMISSIONS.PROVIDERS_MANAGE);
   const ticket = openTicket(input.ticket, session.user.id);
   if (!ticket) throw new Error("SIGN_IN_EXPIRED");
   const polled = await pollDeviceCode(ticket.grant);
@@ -339,7 +339,7 @@ export async function pollSignIn(input: { ticket: string; interval: number }): P
 }
 
 export async function completeSignIn(input: { ticket: string; code: string }): Promise<SignInPollResult> {
-  const session = await requirePermission(PERMISSIONS.PROVIDERS_MANAGE);
+  const session = await requirePlatformPermission(PERMISSIONS.PROVIDERS_MANAGE);
   const ticket = openTicket(input.ticket, session.user.id);
   if (!ticket) throw new Error("SIGN_IN_EXPIRED");
   if (ticket.grant.kind !== "claude" && ticket.grant.kind !== "antigravity") throw new Error("SIGN_IN_FAILED");
@@ -353,7 +353,7 @@ export async function completeSignIn(input: { ticket: string; code: string }): P
 }
 
 export async function deleteProvider(id: string) {
-  const session = await requirePermission(PERMISSIONS.PROVIDERS_MANAGE);
+  const session = await requirePlatformPermission(PERMISSIONS.PROVIDERS_MANAGE);
   if (!id) throw new Error("MISSING_ID");
   if (!(await prisma.providerConnection.findUnique({ where: { id }, select: { id: true } }))) {
     throw new Error("NOT_FOUND");
@@ -375,7 +375,7 @@ export async function deleteProvider(id: string) {
 }
 
 export async function discoverProvider(id: string) {
-  const session = await requirePermission(PERMISSIONS.PROVIDERS_MANAGE);
+  const session = await requirePlatformPermission(PERMISSIONS.PROVIDERS_MANAGE);
   const row = await prisma.providerConnection.findUnique({ where: { id }, include: providerInclude });
   if (!row) throw new Error("NOT_FOUND");
   const refreshed = await refreshProviderModels(row, session.user.id);
@@ -398,7 +398,7 @@ export async function importProviderModels(input: {
   models: string[];
   strategy?: string;
 }) {
-  const session = await requirePermission(PERMISSIONS.PROVIDERS_MANAGE);
+  const session = await requirePlatformPermission(PERMISSIONS.PROVIDERS_MANAGE);
   const row = await prisma.providerConnection.findUnique({
     where: { id: input.id },
     include: providerInclude,

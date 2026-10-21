@@ -62,7 +62,7 @@ async function withCurrentJev(state: CatalogState | null, settings: JevSettings 
   return { ...state, jev: { ...state.jev, error: "", configured: jevReady(settings) } };
 }
 
-export async function loadCatalogView(): Promise<Omit<CatalogView, "canManage">> {
+export async function loadCatalogView(): Promise<Omit<CatalogView, "canManage" | "canConfigure">> {
   const [rows, providers, groups, state, enterprise] = await Promise.all([
     prisma.catalogEntry.findMany({ select: storedSelect }),
     prisma.providerConnection.findMany({ select: { id: true, name: true, kind: true } }),

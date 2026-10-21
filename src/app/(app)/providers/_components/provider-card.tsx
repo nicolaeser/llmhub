@@ -1,6 +1,6 @@
 "use client";
 
-import { Card } from "@heroui/react";
+import { Card, Chip } from "@heroui/react";
 import { useTranslations } from "next-intl";
 import IconTile from "@/components/console/icon-tile";
 import PolicyChips from "./policy-chips";
@@ -16,12 +16,14 @@ function keyState(row: ProviderView): string {
 
 export default function ProviderCard({
   row,
+  canManage,
   onEdit,
   onImport,
   onDeleted,
   onToggled,
 }: {
   row: ProviderView;
+  canManage: boolean;
   onEdit: (row: ProviderView) => void;
   onImport: (row: ProviderView) => void;
   onDeleted: (id: string) => void;
@@ -56,8 +58,16 @@ export default function ProviderCard({
         <PolicyChips policy={row.policy} />
       </Card.Content>
       <Card.Footer className="mt-auto flex-wrap items-center justify-between gap-2">
-        <ProviderToggle row={row} onChanged={onToggled} />
-        <ProviderActions row={row} onEdit={onEdit} onImport={onImport} onDeleted={onDeleted} />
+        {canManage ? (
+          <>
+            <ProviderToggle row={row} onChanged={onToggled} />
+            <ProviderActions row={row} onEdit={onEdit} onImport={onImport} onDeleted={onDeleted} />
+          </>
+        ) : (
+          <Chip size="sm" variant="soft" color={row.enabled ? "success" : "default"} className="whitespace-nowrap">
+            {t("enabled.state", { enabled: String(row.enabled) })}
+          </Chip>
+        )}
       </Card.Footer>
     </Card>
   );

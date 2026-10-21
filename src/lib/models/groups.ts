@@ -1,8 +1,8 @@
 import "server-only";
 
 import prisma from "@/lib/db/prisma";
-import { requirePermission } from "@/lib/auth/guards";
-import { PERMISSIONS } from "@/lib/auth/permissions";
+import { requirePlatformPermission } from "@/lib/auth/guards";
+import { hasPerm, PERMISSIONS } from "@/lib/auth/permissions";
 import { writeAudit } from "@/lib/audit";
 import { isReservedAlias, modelAlias } from "@/lib/gateway/catalog/model-alias";
 import { splitVariant, variantAlias, variantsOf } from "@/lib/gateway/catalog/model-variants";
@@ -240,7 +240,22 @@ async function listProviders() {
   }));
 }
 
-async function payload() {
+type ModelsPayload = {
+  groups: Awaited<ReturnType<typeof listGroups>>;
+  providers: Awaited<ReturnType<typeof listProviders>>;
+};
+
+function withoutPurchaseCosts(payload: ModelsPayload): ModelsPayload {
+  return {
+    groups: payload.groups.map((group) => ({
+      ...group,
+      deployments: group.deployments.map((deployment) => ({ ...deployment, costInput: 0, costOutput: 0 })),
+    })),
+    providers: payload.providers.map((provider) => ({ ...provider, discovered: [] })),
+  };
+}
+
+async function payload(): Promise<ModelsPayload> {
   return { groups: await listGroups(), providers: await listProviders() };
 }
 
@@ -281,8 +296,11 @@ function depCreateData(groupAlias: string, d: DeploymentInput) {
 }
 
 export async function loadModels() {
-  await requirePermission(PERMISSIONS.MODELS_READ);
-  return payload();
+  const session = await requirePlatformPermission(PERMISSIONS.MODELS_READ);
+  const canManage = hasPerm(session.permissions, PERMISSIONS.MODELS_MANAGE);
+  const priced = canManage || hasPerm(session.permissions, PERMISSIONS.PRICING_READ);
+  const models = await payload();
+  return { ...(priced ? models : withoutPurchaseCosts(models)), canManage };
 }
 
 async function assertNotVariant(alias: string): Promise<void> {
@@ -318,7 +336,7 @@ export async function createModelGroup(input: {
   fallbackGroups: string[] | string;
   deployments?: DeploymentInput[];
 }) {
-  const session = await requirePermission(PERMISSIONS.MODELS_MANAGE);
+  const session = await requirePlatformPermission(PERMISSIONS.MODELS_MANAGE);
   const alias = modelAlias(input.alias);
   if (!alias) throw new Error("ALIAS_REQUIRED");
   if (isReservedAlias(alias)) throw new Error("ALIAS_RESERVED");
@@ -381,7 +399,7 @@ export async function updateModelGroup(input: {
   fallbackGroups: string[] | string;
   deployments?: DeploymentInput[];
 }) {
-  const session = await requirePermission(PERMISSIONS.MODELS_MANAGE);
+  const session = await requirePlatformPermission(PERMISSIONS.MODELS_MANAGE);
   const alias = modelAlias(input.alias);
   const existing = await prisma.modelGroup.findUnique({
     where: { alias },
@@ -456,7 +474,7 @@ export async function updateModelGroup(input: {
 }
 
 export async function setModelGroupEnabled(input: { alias: string; enabled: boolean }) {
-  const session = await requirePermission(PERMISSIONS.MODELS_MANAGE);
+  const session = await requirePlatformPermission(PERMISSIONS.MODELS_MANAGE);
   const alias = modelAlias(input.alias);
   const existing = await prisma.modelGroup.findUnique({
     where: { alias },
@@ -480,7 +498,7 @@ export async function setModelGroupEnabled(input: { alias: string; enabled: bool
 }
 
 export async function deleteModelGroup(alias: string) {
-  const session = await requirePermission(PERMISSIONS.MODELS_MANAGE);
+  const session = await requirePlatformPermission(PERMISSIONS.MODELS_MANAGE);
   const id = modelAlias(alias);
   if (!id) throw new Error("MISSING_ID");
   if (!(await prisma.modelGroup.findUnique({ where: { alias: id }, select: { alias: true } }))) {

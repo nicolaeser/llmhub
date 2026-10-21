@@ -2,8 +2,9 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { Button, Spinner, useOverlayState } from "@heroui/react";
-import { CircleCheck, CirclePause, Gauge, KeyRound, Link2, Plus, RefreshCw, Upload } from "lucide-react";
+import { CircleCheck, CirclePause, Gauge, KeyRound, Link2, Plus, RefreshCw, Upload, UserRound } from "lucide-react";
 import { useFormatter, useNow, useTranslations } from "next-intl";
+import EmptyState from "@/components/console/empty-state";
 import { LoadError } from "@/components/console/page-status";
 import StatCard from "@/components/console/stat-card";
 import TimeZonePicker from "@/components/console/time-zone-picker";
@@ -67,9 +68,11 @@ const SUBSCRIPTION_CATALOG = PROVIDER_CATALOG.filter((spec): spec is ProviderKin
 export default function SubscriptionAccounts({
   rows,
   actions,
+  canManage,
 }: {
   rows: ProviderView[];
   actions: ProviderListActions;
+  canManage: boolean;
 }) {
   const t = useTranslations("Subscriptions");
   const format = useFormatter();
@@ -85,7 +88,6 @@ export default function SubscriptionAccounts({
   const reconciled = useRef("");
   const [routing, setRouting] = useState<AccountRouting | null>(null);
   const [autoReset, setAutoReset] = useState<AutoResetPolicies>({});
-  const [canManage, setCanManage] = useState(false);
   const [antigravity, setAntigravity] = useState<AntigravityClientState | null>(null);
   const [access, setAccess] = useState<ProviderView | null>(null);
   const [accessKey, setAccessKey] = useState(0);
@@ -115,7 +117,6 @@ export default function SubscriptionAccounts({
       if (!active || isActionFail(res)) return;
       setRouting(res.routing);
       setAutoReset(res.autoReset);
-      setCanManage(res.canManage);
     });
     loadAntigravityConfigAction().then((res) => {
       if (active && !isActionFail(res)) setAntigravity(res);
@@ -245,20 +246,24 @@ export default function SubscriptionAccounts({
         <p className="max-w-3xl text-sm text-muted">{t("intro")}</p>
         <div className="flex flex-col gap-3 md:flex-row md:flex-wrap md:items-end md:justify-between">
           <div className="flex flex-wrap items-center gap-2">
-            <Button className="w-full sm:w-auto" onPress={wizardState.open}>
-              <Plus size={16} aria-hidden />
-              {t("addSubscription")}
-            </Button>
-            {links.canManage ? (
-              <Button variant="secondary" onPress={() => links.openCreate(null)}>
-                <Link2 size={16} aria-hidden />
-                {t("subAdd.open")}
-              </Button>
+            {canManage ? (
+              <>
+                <Button className="w-full sm:w-auto" onPress={wizardState.open}>
+                  <Plus size={16} aria-hidden />
+                  {t("addSubscription")}
+                </Button>
+                {links.canManage ? (
+                  <Button variant="secondary" onPress={() => links.openCreate(null)}>
+                    <Link2 size={16} aria-hidden />
+                    {t("subAdd.open")}
+                  </Button>
+                ) : null}
+                <Button variant="secondary" onPress={openImportFiles}>
+                  <Upload size={16} aria-hidden />
+                  {t("importFiles.open")}
+                </Button>
+              </>
             ) : null}
-            <Button variant="secondary" onPress={openImportFiles}>
-              <Upload size={16} aria-hidden />
-              {t("importFiles.open")}
-            </Button>
             {rows.length > 0 ? (
               <Button variant="tertiary" isPending={refreshingAll} onPress={refreshAll}>
                 {({ isPending }) => (
@@ -337,7 +342,9 @@ export default function SubscriptionAccounts({
         );
       })}
 
-      {idle.length > 0 ? (
+      {!canManage && rows.length === 0 ? <EmptyState icon={UserRound} title={t("noneTitle")} /> : null}
+
+      {canManage && idle.length > 0 ? (
         <IdleProviders
           specs={idle}
           first={rows.length === 0}
@@ -348,32 +355,35 @@ export default function SubscriptionAccounts({
         />
       ) : null}
 
-      <SubAddLinks links={links} antigravityReady={antigravityReady} />
+      <SubAddLinks links={links} canManage={canManage} antigravityReady={antigravityReady} />
 
-      <SubscriptionAddWizard
-        state={wizardState}
-        catalog={SUBSCRIPTION_CATALOG}
-        antigravityReady={antigravityReady}
-        onConnect={(spec) => openForm(spec, null)}
-        onShare={links.canManage ? (kind) => links.openCreate(kind) : null}
-      />
+      {canManage ? (
+        <>
+          <SubscriptionAddWizard
+            state={wizardState}
+            catalog={SUBSCRIPTION_CATALOG}
+            antigravityReady={antigravityReady}
+            onConnect={(spec) => openForm(spec, null)}
+            onShare={links.canManage ? (kind) => links.openCreate(kind) : null}
+          />
 
-      <ProviderSettingsDialog
-        state={settingsState}
-        kind={settingsKind}
-        accounts={settingsKind ? rows.filter((row) => row.kind === settingsKind).length : 0}
-        routing={routing ?? {}}
-        autoReset={autoReset}
-        canManage={canManage}
-        antigravity={antigravity}
-        onRouting={setRouting}
-        onAutoReset={setAutoReset}
-        onAntigravity={setAntigravity}
-      />
+          <ProviderSettingsDialog
+            state={settingsState}
+            kind={settingsKind}
+            accounts={settingsKind ? rows.filter((row) => row.kind === settingsKind).length : 0}
+            routing={routing ?? {}}
+            autoReset={autoReset}
+            antigravity={antigravity}
+            onRouting={setRouting}
+            onAutoReset={setAutoReset}
+            onAntigravity={setAntigravity}
+          />
 
-      <AccessDialog key={`access-${accessKey}`} state={accessState} provider={access} onSaved={actions.replace} />
+          <AccessDialog key={`access-${accessKey}`} state={accessState} provider={access} onSaved={actions.replace} />
 
-      <AuthFilesDialog key={`import-files-${importKey}`} state={importState} onImported={imported} />
+          <AuthFilesDialog key={`import-files-${importKey}`} state={importState} onImported={imported} />
+        </>
+      ) : null}
     </div>
   );
 }

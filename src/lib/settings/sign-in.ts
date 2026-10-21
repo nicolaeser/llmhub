@@ -3,7 +3,7 @@ import "server-only";
 import prisma from "@/lib/db/prisma";
 import { parseAuthInput } from "@/lib/auth/errors";
 import { assertCanGrant, canGrant, grantActor } from "@/lib/auth/grants";
-import { requirePermission, requirePlatformPermission } from "@/lib/auth/guards";
+import { requirePlatformPermission } from "@/lib/auth/guards";
 import { JWT_ALGORITHMS } from "@/lib/auth/jwks";
 import {
   fetchOidcDiscovery,
@@ -70,7 +70,7 @@ async function assertDirectoryTargets(oidc: OidcSettings, session: Authenticated
 }
 
 export async function loadSignInSettings() {
-  const session = await requirePermission(PERMISSIONS.SETTINGS_READ);
+  const session = await requirePlatformPermission(PERMISSIONS.SETTINGS_READ);
   return view(normalizeOidc((await getEnterprise()).oidc), session);
 }
 

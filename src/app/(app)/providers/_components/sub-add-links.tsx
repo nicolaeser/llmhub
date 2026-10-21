@@ -184,9 +184,11 @@ function LinkCard({
 
 export default function SubAddLinks({
   links,
+  canManage,
   antigravityReady,
 }: {
   links: ReturnType<typeof useSubAddLinks>;
+  canManage: boolean;
   antigravityReady: boolean | null;
 }) {
   const t = useTranslations("Subscriptions.subAdd");
@@ -202,6 +204,8 @@ export default function SubAddLinks({
   function onDeleted(id: string) {
     setData((cur) => ({ ...cur, links: cur.links.filter((row) => row.id !== id) }));
   }
+
+  if (!canManage && !data?.links.length) return null;
 
   return (
     <Card aria-labelledby="sub-add-links-title" className="gap-5">
