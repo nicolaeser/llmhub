@@ -6,6 +6,7 @@ import { clockMinute, isTimeZone, MAX_PRICE_WINDOWS } from "@/lib/gateway/billin
 import { MODEL_VARIANTS } from "@/lib/gateway/catalog/model-variants";
 import { MANAGEMENT_PERMISSIONS } from "@/lib/management/scope";
 import { accessWindowsSchema, allowedEndpointsSchema } from "@/schemas/keys";
+import { vertexTargetSchema } from "@/schemas/providers";
 import { budgetPeriod, MAX_BOOST_HOURS } from "@/lib/utils/budget";
 
 const id = z.string().trim().min(1).max(64);
@@ -139,7 +140,8 @@ export const providerCreateSchema = z
     kind,
     name: z.string().trim().max(120).default(""),
     base_url: url.default(""),
-    api_key: z.string().trim().max(4000).default(""),
+    api_key: z.string().trim().max(16384).default(""),
+    vertex: vertexTargetSchema.optional(),
   })
   .strict();
 
@@ -147,8 +149,9 @@ export const providerUpdateSchema = z
   .object({
     name: z.string().trim().min(1).max(120),
     base_url: url,
-    api_key: z.string().trim().min(1).max(4000),
+    api_key: z.string().trim().min(1).max(16384),
     enabled: z.boolean(),
+    vertex: vertexTargetSchema,
   })
   .partial()
   .strict();
