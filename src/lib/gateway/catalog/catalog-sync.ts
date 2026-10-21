@@ -82,7 +82,7 @@ async function applyAutoRoutes(
   for (const entry of due) {
     const model = inputs.discovered.get(entry.providerId)?.find((item) => item.id === entry.upstreamId);
     const provider = inputs.providers.find((item) => item.id === entry.providerId);
-    if (!model || !provider) continue;
+    if (!model || !provider || provider.internal) continue;
     await addRoute({ provider, model, alias: entry.alias, vendor: entry.vendor, displayName: entry.name });
     routed.push({
       provider: entry.providerId,

@@ -114,9 +114,9 @@ test("signed-in providers form the subscription pool and every other route the A
   const { listedIn, routePool } = await import("@/lib/gateway/routing/route-pool");
   const { AUTO_MODEL } = await import("@/lib/gateway/core");
   assert.equal(routePool({ kind: "codex" }), "subscription");
-  assert.equal(routePool({ kind: "grok_build", provider: { kind: "grok_build" } }), "subscription");
-  assert.equal(routePool({ kind: "openai", provider: { kind: "codex" } }), "subscription");
-  assert.equal(routePool({ kind: "xai", provider: { kind: "xai" } }), "api");
+  assert.equal(routePool({ kind: "grok_build", provider: { kind: "grok_build", internal: false } }), "subscription");
+  assert.equal(routePool({ kind: "openai", provider: { kind: "codex", internal: false } }), "subscription");
+  assert.equal(routePool({ kind: "xai", provider: { kind: "xai", internal: false } }), "api");
   assert.equal(routePool({ kind: "openai_compat", provider: null }), "api");
   assert.equal(listedIn({ pools: [] }, "api"), true);
   assert.equal(listedIn({ pools: [] }, "subscription"), false);

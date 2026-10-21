@@ -3,7 +3,7 @@ import { GateError } from "@/lib/gateway/errors";
 import { PROVIDER_CATALOG } from "@/lib/gateway/upstreams/provider-kinds";
 import type { JsonMap, Principal } from "@/types/gateway";
 import type { ModelPricing, PublicModel } from "@/types/models";
-import type { RoutePool, RouterWait } from "@/types/routing";
+import type { PublicPool, RouterWait } from "@/types/routing";
 
 export class RouterError extends Error {
   constructor(
@@ -184,7 +184,7 @@ export function modelEntry(
   created: Date,
   pricing?: ModelPricing | null,
   origin?: Pick<PublicModel, "vendor" | "displayName" | "tags">,
-  route?: RoutePool,
+  route?: PublicPool,
 ): JsonMap {
   return {
     id,

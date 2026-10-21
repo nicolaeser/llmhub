@@ -81,6 +81,7 @@ const providerSelect = {
     noTraining: true,
     enabled: true,
     restricted: true,
+    internal: true,
     assignments: { select: { orgId: true, teamId: true, projectId: true, memberId: true, keyId: true } },
     login: { select: { status: true } },
   },

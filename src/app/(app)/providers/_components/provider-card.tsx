@@ -3,6 +3,7 @@
 import { Card, Chip } from "@heroui/react";
 import { useTranslations } from "next-intl";
 import IconTile from "@/components/console/icon-tile";
+import { InternalBadge } from "@/components/console/subscription-badge";
 import PolicyChips from "./policy-chips";
 import ProviderActions from "./provider-actions";
 import ProviderToggle from "./provider-toggle";
@@ -55,7 +56,7 @@ export default function ProviderCard({
           </span>
           {row.discovered.length > 0 ? <span>{t("modelCount", { count: row.discovered.length })}</span> : null}
         </p>
-        <PolicyChips policy={row.policy} />
+        <PolicyChips policy={row.policy} lead={row.internal ? <InternalBadge /> : null} />
       </Card.Content>
       <Card.Footer className="mt-auto flex-wrap items-center justify-between gap-2">
         {canManage ? (

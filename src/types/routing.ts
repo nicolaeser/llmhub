@@ -2,7 +2,11 @@ import type { Prisma } from "@/generated/prisma/client";
 import type { PriceWindowRates } from "@/types/billing";
 import type { AssignmentRow } from "@/types/providers";
 
-export type RoutePool = "api" | "subscription";
+export type RoutePool = "api" | "subscription" | "internal";
+
+export type PublicPool = Exclude<RoutePool, "internal">;
+
+export type PooledRoute = { kind: string; provider?: { kind: string; internal: boolean } | null };
 
 export type Deployment = {
   id: string;
@@ -51,6 +55,7 @@ export type DeploymentRow = {
     noTraining: boolean;
     enabled: boolean;
     restricted: boolean;
+    internal: boolean;
     assignments: AssignmentRow[];
     login: { status: string } | null;
   } | null;

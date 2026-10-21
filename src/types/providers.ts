@@ -16,6 +16,7 @@ export type ProviderRecord = {
   noTraining: boolean;
   enabled: boolean;
   restricted: boolean;
+  internal: boolean;
   assignments?: AssignmentSource[];
   login?: { account: string; plan: string; status: string } | null;
   subAdd?: { label: string } | null;
@@ -117,6 +118,7 @@ export type ProviderView = {
   hasApiKey: boolean;
   enabled: boolean;
   restricted: boolean;
+  internal: boolean;
   assignments: AssignmentTarget[];
   signIn: ProviderSignIn | null;
   sharedVia: string | null;

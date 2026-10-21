@@ -79,6 +79,7 @@ export default function ProviderDialog({
     editing?.policy.region ?? (spec?.kind === "openrouter_eu" ? "eu" : ""),
   );
   const [noTraining, setNoTraining] = useState(editing?.policy.noTraining ?? false);
+  const [internal, setInternal] = useState(editing?.internal ?? false);
   const [pending, start] = useTransition();
   const retentionValid = zdr || /^\d{0,4}$/.test(retention.trim());
 
@@ -101,6 +102,7 @@ export default function ProviderDialog({
         signIn: signIn || undefined,
         policy,
         vertex: target,
+        internal: signInKind ? undefined : internal,
       };
       const result = editing
         ? await updateProviderAction({ id: editing.id, ...body })
@@ -159,6 +161,17 @@ export default function ProviderDialog({
             placeholder={editing?.hasApiKey ? t("apiKeyKeep") : spec?.kind === "gemini" ? "AIza…" : "sk-…"}
           />
         </TextField>
+      )}
+      {signInKind ? null : (
+        <Switch isSelected={internal} onChange={setInternal} isDisabled={pending}>
+          <Switch.Content>
+            <Switch.Control>
+              <Switch.Thumb />
+            </Switch.Control>
+            <Label>{t("internalOnly")}</Label>
+          </Switch.Content>
+          <Description>{t("internalOnlyHint")}</Description>
+        </Switch>
       )}
       <Separator />
       <div className="space-y-1">

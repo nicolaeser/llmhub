@@ -21,6 +21,7 @@ export const PATCH = managementRoute<{ id: string }>(PERMISSIONS.PROVIDERS_MANAG
       apiKey: body.api_key ?? "",
       enabled: body.enabled,
       vertex: body.vertex,
+      internal: body.internal,
     });
   return respond(serializeProvider(provider));
 });

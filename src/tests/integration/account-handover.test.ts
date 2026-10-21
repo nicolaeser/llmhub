@@ -130,7 +130,7 @@ test("pausing and resuming an account is audited and the resume clears its marks
   try {
     assert.equal((await toggle(false)).provider.enabled, false);
     const paused = await prisma.gatewayAuditLog.findFirstOrThrow({ where: { action: "provider.pause", objectId: provider.id } });
-    assert.deepEqual(JSON.parse(paused.beforeJson), { enabled: true });
+    assert.deepEqual(JSON.parse(paused.beforeJson), { enabled: true, internal: false });
     assert.equal(JSON.parse(paused.afterJson).enabled, false);
     await assert.rejects(acquireGroup(await loadGroup(alias), undefined), (err: unknown) => isRouterError(err, "all_paused"));
 
@@ -142,7 +142,7 @@ test("pausing and resuming an account is audited and the resume clears its marks
 
     assert.equal((await toggle(true)).provider.enabled, true);
     const resumed = await prisma.gatewayAuditLog.findFirstOrThrow({ where: { action: "provider.resume", objectId: provider.id } });
-    assert.deepEqual(JSON.parse(resumed.beforeJson), { enabled: false });
+    assert.deepEqual(JSON.parse(resumed.beforeJson), { enabled: false, internal: false });
     assert.equal((await coolingDown([route])).size, 0);
     const login = await prisma.providerLogin.findUniqueOrThrow({ where: { providerId: provider.id } });
     assert.equal(login.failures, 0);

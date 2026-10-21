@@ -20,7 +20,7 @@ import { deploymentAuth } from "@/lib/gateway/upstreams/credentials";
 import { isSignInKind, speaksAnthropic, speaksGoogle, speaksMuse } from "@/lib/gateway/upstreams/provider-kinds";
 import { messagesRequestSchema } from "@/schemas/anthropic";
 import type { JsonMap } from "@/types/gateway";
-import type { RoutePool } from "@/types/routing";
+import type { PublicPool } from "@/types/routing";
 
 function estimatedInputTokens(chat: JsonMap): number {
   const messages = Array.isArray(chat.messages) ? chat.messages : [];
@@ -33,7 +33,7 @@ function estimatedInputTokens(chat: JsonMap): number {
   return estimateTokens(parts.filter(Boolean).join("\n"));
 }
 
-export function countTokensRoute(pool: RoutePool) {
+export function countTokensRoute(pool: PublicPool) {
   return gatewayRoute(async (req) => {
     const { principal, model, clean } = await screenModelRequest(req, { pool, auth: apiKeyRequest(req) });
     const request = validRequest(messagesRequestSchema, clean);
