@@ -215,19 +215,19 @@ test("CI blocks fixable high and critical image findings before anything is tagg
 test("pull requests review new dependencies and audit production dependencies", async () => {
   const verify = await file(".github/workflows/verify.yml");
   const dependencies = verify.slice(verify.indexOf("\n  dependencies:\n"));
-  assert.match(dependencies, /uses: actions\/dependency-review-action@[0-9a-f]{40}\n {8}with:\n {10}fail-on-severity: high\n/);
+  assert.match(dependencies, /uses: actions\/dependency-review-action@v\d+(?:\.\d+){0,2}\n {8}with:\n {10}fail-on-severity: high\n/);
   assert.match(dependencies, /run: npm audit --omit=dev --audit-level=high/);
   assert.match(dependencies, /timeout-minutes: \d+/);
 });
 
-test("workflows pin every action to a full commit SHA", async () => {
+test("workflows reference every action by a release version tag", async () => {
   const workflows = (await readdir(path.join(root, ".github/workflows"))).filter((name) => name.endsWith(".yml"));
   assert.ok(workflows.length > 0);
   for (const name of workflows) {
     const source = await file(`.github/workflows/${name}`);
     for (const [, ref] of source.matchAll(/^\s*(?:- )?uses: (.+)$/gm)) {
       if (ref.startsWith("./.github/workflows/")) continue;
-      assert.match(ref, /^[\w.-]+\/[\w./-]+@[0-9a-f]{40}$/, `${name}: ${ref}`);
+      assert.match(ref, /^[\w.-]+\/[\w./-]+@v\d+(?:\.\d+){0,2}$/, `${name}: ${ref}`);
     }
   }
 });
