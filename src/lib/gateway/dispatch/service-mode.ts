@@ -218,7 +218,13 @@ export function applyProviderServiceMode(
       break;
     }
     case "typesafe":
-    case "grok_build": {
+    case "grok_build":
+    case "moonshot":
+    case "moonshot_cn":
+    case "kimi":
+    case "kimi_ai":
+    case "meta":
+    case "muse_code": {
       delete payload.service_tier;
       delete payload.speed;
       break;

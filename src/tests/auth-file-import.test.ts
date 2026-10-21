@@ -367,7 +367,7 @@ test("pasted text may hold several accounts, even one copied without its opening
 
 test("unsupported providers and SIWC Codex clients are rejected", async () => {
   const { parseAuthFileEntry } = await import("@/lib/gateway/upstreams/auth-file-import");
-  for (const type of ["kimi", "gemini", "gemini-cli", "vertex", "qwen", "iflow", "constructor", ""]) {
+  for (const type of ["gemini", "gemini-cli", "vertex", "qwen", "iflow", "constructor", ""]) {
     assert.throws(() => parseAuthFileEntry({ type, access_token: "a", refresh_token: "r" }), {
       message: "AUTH_FILE_UNSUPPORTED",
     });
@@ -391,8 +391,8 @@ test("the sign-in dialog picks the account of its own kind", async () => {
   const claude = { type: "claude", access_token: "a", refresh_token: "r" };
   assert.equal(authFileEntryFor([codexFile(), claude], "claude"), claude);
   assert.throws(() => authFileEntryFor([codexFile()], "claude"), { message: "AUTH_FILE_KIND_MISMATCH" });
-  const kimi = { type: "kimi" };
-  assert.equal(authFileEntryFor([kimi], "claude"), kimi);
+  const qwen = { type: "qwen" };
+  assert.equal(authFileEntryFor([qwen], "claude"), qwen);
 });
 
 test("fresh tokens are imported without refreshing once the provider accepts them", async () => {
@@ -534,13 +534,13 @@ test("bulk import creates accounts, updates known ones, and isolates bad files",
   const first = await asCaller(() =>
     importAuthFiles([
       { name: "codex-dev.json", content: JSON.stringify(codexFile()) },
-      { name: "kimi.json", content: JSON.stringify({ type: "kimi", access_token: "a", refresh_token: "r" }) },
+      { name: "qwen.json", content: JSON.stringify({ type: "qwen", access_token: "a", refresh_token: "r" }) },
       { name: "broken.json", content: "{" },
     ]),
   );
   assert.deepEqual(first.results, [
     { file: "codex-dev.json", kind: "codex", account: "dev@example.com", plan: "plus", status: "created" },
-    { file: "kimi.json", status: "failed", error: "AUTH_FILE_UNSUPPORTED" },
+    { file: "qwen.json", status: "failed", error: "AUTH_FILE_UNSUPPORTED" },
     { file: "broken.json", status: "failed", error: "AUTH_FILE_INVALID" },
   ]);
   assert.equal(first.providers.length, 1);

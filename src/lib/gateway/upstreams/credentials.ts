@@ -5,6 +5,8 @@ import { antigravityHeaders } from "@/lib/gateway/upstreams/antigravity";
 import { isSignInKind } from "@/lib/gateway/upstreams/provider-kinds";
 import { claudeIdentityHeaders } from "@/lib/gateway/upstreams/claude";
 import { devinHeaders } from "@/lib/gateway/upstreams/devin-account";
+import { kimiHeaders } from "@/lib/gateway/upstreams/kimi";
+import { museHeaders } from "@/lib/gateway/upstreams/muse";
 import { asRecord, asString, VERSION } from "@/lib/gateway/core";
 import { GateError } from "@/lib/gateway/errors";
 import { refreshSession } from "@/lib/gateway/upstreams/subscription-sign-in";
@@ -20,6 +22,9 @@ const REFRESH_LEAD_MS: Record<SignInKind, number> = {
   codex: 96 * 3_600_000,
   antigravity: 30 * 60_000,
   grok_build: 30 * 60_000,
+  kimi: 5 * 60_000,
+  kimi_ai: 5 * 60_000,
+  muse_code: 0,
   devin: 0,
 };
 const MAX_REFRESH_LEAD_MS = Math.max(...Object.values(REFRESH_LEAD_MS));
@@ -64,11 +69,13 @@ export function sealTokens(tokens: SignInTokens): string {
 export function openTokens(sealed: string, providerId: string): SignInTokens {
   const rec = asRecord(parseJsonOrNull(open(sealed)));
   if (!rec) logger.warn("provider_login.tokens_unreadable", { providerId });
+  const device = asString(rec?.device);
   return {
     access: asString(rec?.access),
     refresh: asString(rec?.refresh),
     accountId: asString(rec?.accountId),
     residency: asString(rec?.residency),
+    ...(device ? { device } : {}),
   };
 }
 
@@ -106,6 +113,8 @@ function retryDelay(failures: number, retryAfterMs: number | null): number {
 export function signInHeaders(kind: SignInKind, tokens: SignInTokens): Record<string, string> {
   if (kind === "claude") return claudeIdentityHeaders();
   if (kind === "antigravity") return antigravityHeaders();
+  if (kind === "kimi" || kind === "kimi_ai") return kimiHeaders(tokens.device);
+  if (kind === "muse_code") return museHeaders();
   if (kind === "devin") return devinHeaders(tokens.access);
   if (kind !== "codex") return {};
   const headers: Record<string, string> = {

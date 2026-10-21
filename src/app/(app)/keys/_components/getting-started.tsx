@@ -3,6 +3,7 @@
 import { Button, Card } from "@heroui/react";
 import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/routing";
+import type { SetupLinks } from "@/types/console";
 
 const STEPS = [
   { id: "provider", href: "/providers" },
@@ -14,11 +15,13 @@ export default function GettingStarted({
   providers,
   models,
   keys,
+  links,
   onCreateKey,
 }: {
   providers: number;
   models: number;
   keys: number;
+  links: SetupLinks;
   onCreateKey: () => void;
 }) {
   const t = useTranslations("Keys.gettingStarted");
@@ -49,19 +52,13 @@ export default function GettingStarted({
           const nameClass = isCurrent
             ? "text-sm font-semibold text-accent"
             : "text-sm font-medium text-accent";
-          const name = isDone ? (
-            step.href ? (
-              <Link href={step.href} className="text-sm font-medium text-accent">
-                {label}
-              </Link>
-            ) : (
-              <span className="text-sm font-medium text-foreground">{label}</span>
-            )
-          ) : step.href ? (
-            <Link href={step.href} className={nameClass}>
+          const canOpen = step.id === "key" || links[step.id];
+          const href = canOpen ? step.href : null;
+          const name = href ? (
+            <Link href={href} className={isDone ? "text-sm font-medium text-accent" : nameClass}>
               {label}
             </Link>
-          ) : (
+          ) : step.id === "key" && !isDone ? (
             <Button
               variant="ghost"
               size="sm"
@@ -71,6 +68,10 @@ export default function GettingStarted({
             >
               {label}
             </Button>
+          ) : (
+            <span className={isCurrent ? "text-sm font-semibold text-foreground" : "text-sm font-medium text-foreground"}>
+              {label}
+            </span>
           );
           return (
             <li

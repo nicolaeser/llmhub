@@ -1,9 +1,7 @@
 "use server";
 
-import { grantedPermissions } from "@/lib/auth/guards";
-import { PERMISSIONS } from "@/lib/auth/permissions";
 import { runAction } from "@/lib/http/action-result";
-import { createKey, loadKeysPage, revokeKey, rotateKey, updateKey } from "@/lib/keys/manage";
+import { createKey, loadKeysPage, loadKeyTabs, revokeKey, rotateKey, updateKey } from "@/lib/keys/manage";
 import { loadKeyMcpAccess, saveKeyMcpAccess } from "@/lib/mcp/key-access";
 import {
   createTemplate,
@@ -14,7 +12,7 @@ import {
 import { setBudget } from "@/lib/tenancy/budgets";
 
 export async function loadKeyTabsAction() {
-  return runAction(() => grantedPermissions([PERMISSIONS.KEYS_READ, PERMISSIONS.MODELS_READ]));
+  return runAction(() => loadKeyTabs());
 }
 
 export async function loadKeysPageAction(...args: Parameters<typeof loadKeysPage>) {

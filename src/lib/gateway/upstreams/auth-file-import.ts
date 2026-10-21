@@ -1,10 +1,13 @@
 import "server-only";
+import { randomUUID } from "node:crypto";
 import { asNumber, asRecord, asString } from "@/lib/gateway/core";
 import { antigravityClientSecret } from "@/lib/gateway/upstreams/antigravity-config";
 import { CODEX_USAGE_URL } from "@/lib/gateway/upstreams/codex";
 import { signInHeaders } from "@/lib/gateway/upstreams/credentials";
 import { devinSession, formatSessionToken } from "@/lib/gateway/upstreams/devin-account";
 import { devinProfile, devinStatusReply, readDevinStatus } from "@/lib/gateway/upstreams/devin-api";
+import { kimiUsageUrl } from "@/lib/gateway/upstreams/kimi";
+import { MUSE_KEY_EXPIRES_AT, museModelsUrl } from "@/lib/gateway/upstreams/muse";
 import {
   antigravityAccount,
   antigravitySession,
@@ -13,6 +16,7 @@ import {
   googleAccess,
   googleEmail,
   jwtClaims,
+  kimiSession,
   openaiSession,
   refreshSession,
   xaiSession,
@@ -34,9 +38,16 @@ const AUTH_FILE_KINDS: Record<string, SignInKind> = {
   antigravity: "antigravity",
   "anti-gravity": "antigravity",
   xai: "grok_build",
+  kimi: "kimi",
+  "kimi-ai": "kimi_ai",
+  "kimi.ai": "kimi_ai",
+  "kimi.com": "kimi",
+  meta: "muse_code",
   devin: "devin",
 };
 
+const KIMI_AI_HOST = /(?:^|\.)kimi\.ai$/i;
+const MUSE_DCA_PREFIX = "dca:";
 const DEVIN_TOKEN_KEYS = ["session_token", "api_key", "token"];
 const DEVIN_REJECTED = new Set([401, 403]);
 
@@ -141,9 +152,23 @@ export function authFileEntries(content: string): unknown[] {
   return entries;
 }
 
+function kimiAiHost(value: string): boolean {
+  if (!URL.canParse(value)) return false;
+  return KIMI_AI_HOST.test(new URL(value).hostname);
+}
+
+function kimiFileKind(record: JsonMap): SignInKind {
+  const domain = text(record, "domain").toLowerCase();
+  if (domain) return domain === "kimi.ai" || domain === "ai" || domain.endsWith(".kimi.ai") ? "kimi_ai" : "kimi";
+  return kimiAiHost(text(record, "base_url")) ? "kimi_ai" : "kimi";
+}
+
 export function authFileKind(entry: unknown): SignInKind | null {
-  const type = asString(asRecord(entry)?.type).trim().toLowerCase();
-  return Object.hasOwn(AUTH_FILE_KINDS, type) ? AUTH_FILE_KINDS[type]! : null;
+  const record = asRecord(entry);
+  const type = asString(record?.type).trim().toLowerCase();
+  if (!Object.hasOwn(AUTH_FILE_KINDS, type)) return null;
+  const kind = AUTH_FILE_KINDS[type]!;
+  return kind === "kimi" && record ? kimiFileKind(record) : kind;
 }
 
 export function authFileEntryFor(entries: unknown[], kind: SignInKind): unknown {
@@ -218,7 +243,28 @@ const SESSION_BUILDERS: Record<Exclude<SignInKind, "devin">, (entry: EntryTokens
     }),
     expiresAt,
   }),
+  kimi: (entry) => kimiFileSession(entry),
+  kimi_ai: (entry) => kimiFileSession(entry),
+  muse_code: ({ record, access, refresh, expiresAt }) => ({
+    tokens: { access, refresh, accountId: "", residency: "" },
+    expiresAt,
+    account: text(record, "email"),
+    plan: text(record, "subs_tier_name"),
+  }),
 };
+
+function kimiFileSession({ record, access, refresh, expiresAt }: EntryTokens): SignInSession {
+  const session = kimiSession({ access_token: access, refresh_token: refresh }, text(record, "device_id") || randomUUID());
+  return { ...session, expiresAt, account: text(record, "email") || session.account };
+}
+
+function museTokens(record: JsonMap): { access: string; refresh: string; expiresAt: number } {
+  const stored = text(record, "access_token");
+  const key = text(record, "api_key") || (stored.startsWith(MUSE_DCA_PREFIX) ? "" : stored);
+  const dca = text(record, "dca_token") || (stored.startsWith(MUSE_DCA_PREFIX) ? stored : "");
+  if (!dca) throw new Error("AUTH_FILE_INCOMPLETE");
+  return { access: key || dca, refresh: dca, expiresAt: key ? MUSE_KEY_EXPIRES_AT : 0 };
+}
 
 function devinFileAccount(record: JsonMap): AuthFileAccount {
   const metadata = asRecord(record.metadata) ?? {};
@@ -238,6 +284,9 @@ export function parseAuthFileEntry(entry: unknown): AuthFileAccount {
   if (!record) throw new Error("AUTH_FILE_INVALID");
   const kind = authFileKind(record);
   if (!kind || (kind === "codex" && record.use_siwc === true)) throw new Error("AUTH_FILE_UNSUPPORTED");
+  if (kind === "muse_code") {
+    return { kind, session: SESSION_BUILDERS.muse_code({ record, ...museTokens(record) }), needsProject: false };
+  }
   if (kind === "devin") return devinFileAccount(record);
   const token = asRecord(record.token) ?? {};
   const access = firstText([record, token], ["access_token", "accessToken"]);
@@ -256,11 +305,11 @@ async function renewed(kind: SignInKind, session: SignInSession, now: number): P
   throw new Error("UPSTREAM_FAILED");
 }
 
-async function codexUsageStatus(session: SignInSession): Promise<number> {
+async function probeStatus(url: string, kind: SignInKind, session: SignInSession): Promise<number> {
   try {
-    const res = await fetch(CODEX_USAGE_URL, {
+    const res = await fetch(url, {
       headers: {
-        ...signInHeaders("codex", session.tokens),
+        ...signInHeaders(kind, session.tokens),
         Authorization: `Bearer ${session.tokens.access}`,
         Accept: "application/json",
       },
@@ -274,7 +323,9 @@ async function codexUsageStatus(session: SignInSession): Promise<number> {
 }
 
 async function accessCheck(kind: SignInKind, session: SignInSession): Promise<{ status: number; plan: string }> {
-  if (kind === "codex") return { status: await codexUsageStatus(session), plan: "" };
+  if (kind === "codex") return { status: await probeStatus(CODEX_USAGE_URL, kind, session), plan: "" };
+  if (kind === "kimi" || kind === "kimi_ai") return { status: await probeStatus(kimiUsageUrl(kind), kind, session), plan: "" };
+  if (kind === "muse_code") return { status: await probeStatus(museModelsUrl(), kind, session), plan: "" };
   if (kind === "claude") return claudeProfile(session.tokens.access);
   if (kind === "antigravity") return { status: await googleAccess(session.tokens.access), plan: "" };
   return { status: 0, plan: "" };

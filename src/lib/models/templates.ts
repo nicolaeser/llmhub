@@ -1,14 +1,16 @@
 import "server-only";
 
 import prisma from "@/lib/db/prisma";
-import { requirePermission } from "@/lib/auth/guards";
+import { requirePlatformPermission } from "@/lib/auth/guards";
 import { isPrismaCode } from "@/lib/auth/errors";
 import { hasPerm, PERMISSIONS } from "@/lib/auth/permissions";
+import { companyOf } from "@/lib/auth/scope";
 import { writeAudit } from "@/lib/audit";
 import { loadModelPolicies, templateRuleSelect } from "@/lib/gateway/access/model-access";
 import { hasRules, templateRulesOf } from "@/lib/gateway/access/model-policy";
 import { createTemplateSchema, updateTemplateSchema } from "@/schemas/model-templates";
 import type { ZodType } from "zod";
+import type { AuthenticatedSession } from "@/types/auth";
 import type { ModelTemplateView, TemplateRules } from "@/types/model-templates";
 
 const templateSelect = {
@@ -76,8 +78,12 @@ async function saveTemplate<T>(write: () => Promise<T>): Promise<T> {
   }
 }
 
+export function readsTemplates(session: AuthenticatedSession): boolean {
+  return hasPerm(session.permissions, PERMISSIONS.MODELS_READ) && !companyOf(session);
+}
+
 export async function loadTemplates() {
-  const session = await requirePermission(PERMISSIONS.MODELS_READ);
+  const session = await requirePlatformPermission(PERMISSIONS.MODELS_READ);
   const [templates, policies, providers] = await Promise.all([
     prisma.modelTemplate.findMany({ orderBy: { name: "asc" }, select: templateSelect }),
     loadModelPolicies(),
@@ -95,7 +101,7 @@ export async function loadTemplates() {
 }
 
 export async function createTemplate(raw: unknown) {
-  const session = await requirePermission(PERMISSIONS.MODELS_MANAGE);
+  const session = await requirePlatformPermission(PERMISSIONS.MODELS_MANAGE);
   const input = parseTemplate(createTemplateSchema, raw);
   await assertProviders(input.providerIds);
   const row = await saveTemplate(() =>
@@ -112,7 +118,7 @@ export async function createTemplate(raw: unknown) {
 }
 
 export async function updateTemplate(raw: unknown) {
-  const session = await requirePermission(PERMISSIONS.MODELS_MANAGE);
+  const session = await requirePlatformPermission(PERMISSIONS.MODELS_MANAGE);
   const input = parseTemplate(updateTemplateSchema, raw);
   const existing = await prisma.modelTemplate.findUnique({ where: { id: input.id }, select: templateSelect });
   if (!existing) throw new Error("NOT_FOUND");
@@ -136,7 +142,7 @@ export async function updateTemplate(raw: unknown) {
 }
 
 export async function deleteTemplate(id: string) {
-  const session = await requirePermission(PERMISSIONS.MODELS_MANAGE);
+  const session = await requirePlatformPermission(PERMISSIONS.MODELS_MANAGE);
   if (!id) throw new Error("MISSING_ID");
   const existing = await prisma.modelTemplate.findUnique({ where: { id }, select: templateSelect });
   if (!existing) throw new Error("NOT_FOUND");

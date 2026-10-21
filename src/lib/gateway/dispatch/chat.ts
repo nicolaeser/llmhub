@@ -16,10 +16,11 @@ import {
   rejectsForeignReasoning,
 } from "@/lib/gateway/routing/account-handoff";
 import { acquireGroup, loadGroup, markFailure, markSuccess } from "@/lib/gateway/routing/runtime";
-import { isSignInKind, speaksAnthropic } from "@/lib/gateway/upstreams/provider-kinds";
+import { isSignInKind, speaksAnthropic, speaksMuse } from "@/lib/gateway/upstreams/provider-kinds";
 import { AntigravitySseTranslator } from "@/lib/gateway/upstreams/antigravity";
 import { CodexSseTranslator } from "@/lib/gateway/upstreams/codex";
 import { devinEventStream, devinHttpError } from "@/lib/gateway/upstreams/devin";
+import { museTranslator } from "@/lib/gateway/upstreams/muse";
 import { deploymentAuth, renewRejectedLogin } from "@/lib/gateway/upstreams/credentials";
 import { nudgeLimits } from "@/lib/gateway/upstreams/limit-store";
 import { autoRedeemIfDue } from "@/lib/gateway/upstreams/reset-redeem";
@@ -30,6 +31,7 @@ import {
   devinResetLookup,
   joinPath,
   mergeUpstreamHeaders,
+  museUsageObserver,
   observeUpstreamLimits,
   prepareBody,
   proxyJson,
@@ -182,8 +184,12 @@ async function settleRunPin(
   logger.info("gateway.account_handover", { kind, from: pinned.providerId, to: account, failover: switched });
 }
 
+function carriesAccountReasoning(kind: string): boolean {
+  return kind === "codex" || kind === "muse_code";
+}
+
 function prepareHandoff(dep: ResolvedDeployment, pinned: AccountPin | null, switched: boolean, request: JsonMap | null): void {
-  if (!request || dep.kind !== "codex") return;
+  if (!request || !carriesAccountReasoning(dep.kind)) return;
   const account = signInAccount(dep);
   if (switched || (pinned && pinned.providerId !== account)) dropAccountReasoning(request);
   else if (pinned && pinned.handoffAt > 0) dropAccountReasoning(request, pinned.handoffAt);
@@ -272,7 +278,12 @@ export async function withDeployment<T>(
               continue;
             }
           }
-          if (!reasoningDropped && acquired.dep.kind === "codex" && rejectsForeignReasoning(err) && dropAccountReasoning(request)) {
+          if (
+            !reasoningDropped &&
+            carriesAccountReasoning(acquired.dep.kind) &&
+            rejectsForeignReasoning(err) &&
+            dropAccountReasoning(request)
+          ) {
             reasoningDropped = true;
             i--;
             continue;
@@ -457,6 +468,7 @@ export function openChatStream(
 function streamTranslator(dep: ResolvedDeployment, model: string): ChatSseTranslator | null {
   if (speaksAnthropic(dep.kind)) return new AnthropicSseTranslator(model);
   if (dep.kind === "codex") return new CodexSseTranslator(model);
+  if (speaksMuse(dep.kind)) return museTranslator(model, museUsageObserver(dep));
   if (dep.kind === "antigravity") return new AntigravitySseTranslator(model);
   return null;
 }

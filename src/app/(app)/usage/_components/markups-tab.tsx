@@ -275,7 +275,7 @@ export default function MarkupsTab() {
                   <Table.Column>{t("columns.model")}</Table.Column>
                   <Table.Column>{t("columns.percent")}</Table.Column>
                   <Table.Column>{t("columns.note")}</Table.Column>
-                  <Table.Column>{tCommon("actions")}</Table.Column>
+                  {data.canManage ? <Table.Column>{tCommon("actions")}</Table.Column> : null}
                 </Table.Header>
                 <Table.Body>
                   {markups.map((markup) => {
@@ -297,9 +297,11 @@ export default function MarkupsTab() {
                         <Table.Cell>
                           <span className="text-sm text-muted">{markup.note || tCommon("none")}</span>
                         </Table.Cell>
-                        <Table.Cell>
-                          {data.canManage ? <div className="flex gap-1">{markupActions(markup)}</div> : null}
-                        </Table.Cell>
+                        {data.canManage ? (
+                          <Table.Cell>
+                            <div className="flex gap-1">{markupActions(markup)}</div>
+                          </Table.Cell>
+                        ) : null}
                       </Table.Row>
                     );
                   })}

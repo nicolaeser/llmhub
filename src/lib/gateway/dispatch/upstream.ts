@@ -4,7 +4,7 @@ import { GateError } from "@/lib/gateway/errors";
 import { anthropicToChat, chatToAnthropic, withCacheBreakpoints } from "@/lib/gateway/protocols/anthropic";
 import { plainModel } from "@/lib/gateway/catalog/model-alias";
 import { inPool, outsidePool } from "@/lib/gateway/routing/route-pool";
-import { speaksAnthropic } from "@/lib/gateway/upstreams/provider-kinds";
+import { speaksAnthropic, speaksKimi, speaksMuse } from "@/lib/gateway/upstreams/provider-kinds";
 import { withClaudeBetas, withClaudeIdentity } from "@/lib/gateway/upstreams/claude";
 import {
   ANTIGRAVITY_STREAM_PATH,
@@ -17,7 +17,9 @@ import { chatToCodex, codexCompletion } from "@/lib/gateway/upstreams/codex";
 import { deploymentAuth } from "@/lib/gateway/upstreams/credentials";
 import { DEVIN_CHAT_PATH, windowReset } from "@/lib/gateway/upstreams/devin-account";
 import { chatToDevin, devinCompletion, encodeDevinRequest } from "@/lib/gateway/upstreams/devin";
-import { observeClaudeLimits } from "@/lib/gateway/upstreams/limit-store";
+import { kimiChatBody } from "@/lib/gateway/upstreams/kimi";
+import { observeClaudeLimits, observeLimitWindows } from "@/lib/gateway/upstreams/limit-store";
+import { chatToMuse, museCompletion } from "@/lib/gateway/upstreams/muse";
 import { limitsSnapshot } from "@/lib/gateway/upstreams/subscription-limits";
 import { acquireGroup, defaultBase, loadGroup, markFailure, markSuccess, openaiRoot } from "@/lib/gateway/routing/runtime";
 import { applyProviderServiceMode, requestRoutingOverride, serviceModeHeaders } from "@/lib/gateway/dispatch/service-mode";
@@ -26,7 +28,7 @@ import { costFilter, costRejected } from "@/lib/gateway/billing/cost-cap";
 import type { DevinResetLookup } from "@/types/devin";
 import type { JsonMap, Principal, ProxyFirstResult } from "@/types/gateway";
 import type { ResolvedDeployment } from "@/types/routing";
-import type { UpstreamAuth } from "@/types/providers";
+import type { LimitWindow, UpstreamAuth } from "@/types/providers";
 
 export function upstreamHeaders(
   dep: ResolvedDeployment,
@@ -94,6 +96,12 @@ export function observeUpstreamLimits(dep: ResolvedDeployment, headers: Headers)
   void observeClaudeLimits(dep.provider.id, headers);
 }
 
+export function museUsageObserver(dep: ResolvedDeployment): ((windows: LimitWindow[]) => void) | undefined {
+  const provider = dep.provider;
+  if (provider?.kind !== "muse_code") return undefined;
+  return (windows) => void observeLimitWindows(provider.id, windows);
+}
+
 function nativeChatPath(path: string): boolean {
   return path.includes("chat/completions");
 }
@@ -130,6 +138,7 @@ function withoutThinkingBlocks(messages: unknown): unknown {
 export function joinPath(dep: ResolvedDeployment, rel: string): string {
   const path = rel.startsWith("/") ? rel : `/${rel}`;
   if (dep.kind === "codex") return `${defaultBase(dep)}${nativeChatPath(path) ? "/responses" : path}`;
+  if (speaksMuse(dep.kind) && nativeChatPath(path)) return `${openaiRoot(defaultBase(dep))}/responses`;
   if (dep.kind === "antigravity") {
     if (!nativeChatPath(path)) throw new GateError(400, "unsupported_endpoint", "this endpoint is not available on antigravity accounts");
     return `${defaultBase(dep)}${ANTIGRAVITY_STREAM_PATH}`;
@@ -171,12 +180,18 @@ export function prepareBody(
 ): JsonMap {
   let payload: JsonMap = { ...body, model: dep.model || (typeof body.model === "string" ? plainModel(body.model) : body.model) };
   for (const key of GATEWAY_ONLY_KEYS) delete payload[key];
-  if (dep.kind !== "codex") delete payload.web_search;
+  if (dep.kind !== "codex" && !speaksMuse(dep.kind)) delete payload.web_search;
   payload = applyProviderServiceMode(dep.kind, payload, groupStrategy, asString(payload.model), dep.facts).body;
   if ((dep.kind === "xai" || dep.kind === "grok_build") && payload.reasoning_effort !== undefined) {
     payload.reasoning_effort = xaiReasoningEffort(String(payload.model ?? ""), payload.reasoning_effort);
   }
-  if (!speaksAnthropic(dep.kind) && dep.kind !== "codex" && dep.kind !== "devin" && Array.isArray(payload.messages)) {
+  if (
+    !speaksAnthropic(dep.kind) &&
+    dep.kind !== "codex" &&
+    dep.kind !== "devin" &&
+    !speaksMuse(dep.kind) &&
+    Array.isArray(payload.messages)
+  ) {
     payload.messages = withoutThinkingBlocks(payload.messages);
   }
   if (speaksAnthropic(dep.kind)) {
@@ -191,6 +206,8 @@ export function prepareBody(
   }
   if (dep.kind === "codex" && nativeChatPath(path)) return chatToCodex(payload);
   if (dep.kind === "antigravity" && nativeChatPath(path)) return chatToAntigravity(payload);
+  if (speaksMuse(dep.kind) && nativeChatPath(path)) return chatToMuse(payload);
+  if (speaksKimi(dep.kind) && nativeChatPath(path)) return kimiChatBody(payload, dep.kind);
   if (dep.kind === "devin" && nativeChatPath(path)) return chatToDevin(payload, dep.facts);
   return payload;
 }
@@ -211,6 +228,9 @@ function decodeBody(
   }
   if (dep.kind === "antigravity" && nativeChatPath(path)) {
     return antigravityCompletion(new TextDecoder().decode(raw), model);
+  }
+  if (speaksMuse(dep.kind) && nativeChatPath(path)) {
+    return museCompletion(new TextDecoder().decode(raw), model, museUsageObserver(dep));
   }
   if (dep.kind === "devin" && nativeChatPath(path)) return devinCompletion(raw, model, devinResetLookup(dep));
   return json;
