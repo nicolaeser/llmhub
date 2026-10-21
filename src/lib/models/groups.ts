@@ -222,6 +222,7 @@ async function listProviders() {
       kind: true,
       baseUrl: true,
       apiKey: true,
+      internal: true,
       discovered: true,
     },
   });
@@ -231,6 +232,7 @@ async function listProviders() {
     kind: row.kind,
     baseUrl: row.baseUrl,
     hasApiKey: Boolean(row.apiKey),
+    internal: row.internal,
     discovered: catalogPricesOf(row.discovered).map((item) => ({
       id: item.id,
       costInputPer1k: item.costInput,

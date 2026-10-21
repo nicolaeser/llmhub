@@ -35,14 +35,14 @@ import { mcpResponse, responsesSink } from "@/lib/mcp/responses";
 import { mcpToolsetFor } from "@/lib/mcp/toolset";
 import { responsesRequestSchema } from "@/schemas/responses";
 import type { JsonMap, ScreenedRequest } from "@/types/gateway";
-import type { RoutePool } from "@/types/routing";
+import type { PublicPool } from "@/types/routing";
 import type { FileSearchContext } from "@/types/rag";
 
 function storedPayload(response: JsonMap, messages: JsonMap[], input: JsonMap[]): Buffer {
   return Buffer.from(JSON.stringify({ response, messages, input }));
 }
 
-export function createResponseRoute(pool: RoutePool) {
+export function createResponseRoute(pool: PublicPool) {
   return gatewayRoute(async (req) => {
     const screened = await screenModelRequest(req, { pool });
     const files = await resolveResponsesFiles(screened.clean, screened.principal);

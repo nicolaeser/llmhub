@@ -9,9 +9,9 @@ import { messagesRequestSchema } from "@/schemas/anthropic";
 import { maxCostHeader } from "@/lib/gateway/billing/cost-cap";
 import { messagesToolNames, runMcpMessages, streamMcpMessages, withMcpMessagesTools } from "@/lib/mcp/messages-loop";
 import { mcpToolsetFor } from "@/lib/mcp/toolset";
-import type { RoutePool } from "@/types/routing";
+import type { PublicPool } from "@/types/routing";
 
-export function messagesRoute(pool: RoutePool) {
+export function messagesRoute(pool: PublicPool) {
   return gatewayRoute(async (req) => {
     const { principal, model, clean, output } = await screenModelRequest(req, { pool, auth: apiKeyRequest(req) });
     const request = validRequest(messagesRequestSchema, clean);

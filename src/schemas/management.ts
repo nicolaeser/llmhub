@@ -142,6 +142,7 @@ export const providerCreateSchema = z
     base_url: url.default(""),
     api_key: z.string().trim().max(16384).default(""),
     vertex: vertexTargetSchema.optional(),
+    internal: z.boolean().default(false),
   })
   .strict();
 
@@ -152,6 +153,7 @@ export const providerUpdateSchema = z
     api_key: z.string().trim().min(1).max(16384),
     enabled: z.boolean(),
     vertex: vertexTargetSchema,
+    internal: z.boolean(),
   })
   .partial()
   .strict();

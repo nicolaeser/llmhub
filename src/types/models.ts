@@ -1,5 +1,6 @@
+import type { ModelChoice } from "@/lib/models/model-role";
 import type { DiscoveredModel } from "@/types/providers";
-import type { RoutePool } from "@/types/routing";
+import type { PublicPool, RoutePool } from "@/types/routing";
 
 export type DeploymentInput = {
   id?: string;
@@ -34,7 +35,7 @@ export type PriceWindowDraft = PriceWindow & { key: number };
 
 export type ModelVariant = "fast" | "ultrafast" | "daybreak";
 
-export type ModelVariantRoute = { variant: ModelVariant; pools: RoutePool[] };
+export type ModelVariantRoute = { variant: ModelVariant; pools: PublicPool[] };
 
 export type ModelGroupView = {
   alias: string;
@@ -73,6 +74,7 @@ export type ProviderOpt = {
   kind: string;
   baseUrl: string;
   hasApiKey: boolean;
+  internal: boolean;
   discovered?: DiscoveredPrice[];
 };
 
@@ -100,7 +102,7 @@ export type PublicModel = {
   variants: ModelVariantRoute[];
 };
 
-export type ContextRoute = { kind: string; model: string; provider: { kind: string; discovered: unknown } | null };
+export type ContextRoute = { kind: string; model: string; provider: { kind: string; internal: boolean; discovered: unknown } | null };
 
 export type ContextGroup = { alias: string; deployments: ContextRoute[] };
 
@@ -109,3 +111,5 @@ export type ContextWindows = Record<RoutePool, ReadonlyMap<string, number>>;
 export type SpeedVariants = Record<RoutePool, ReadonlyMap<string, readonly ModelVariant[]>>;
 
 export type CatalogFacts = { windows: ContextWindows; speeds: SpeedVariants };
+
+export type PooledModelChoice = ModelChoice & { pools: RoutePool[] };

@@ -3,19 +3,25 @@ import { isSignInKind } from "@/lib/gateway/upstreams/provider-kinds";
 import { GateError } from "@/lib/gateway/errors";
 import { ANTHROPIC_ROUTE_PREFIX, API_ROUTE_PREFIX, plainModel } from "@/lib/gateway/catalog/model-alias";
 import type { PublicModel } from "@/types/models";
-import type { RoutePool } from "@/types/routing";
-
-type PooledRoute = { kind: string; provider?: { kind: string } | null };
+import type { PooledRoute, PublicPool, RoutePool } from "@/types/routing";
 
 export function routePool(route: PooledRoute): RoutePool {
-  return isSignInKind(route.kind) || isSignInKind(route.provider?.kind ?? "") ? "subscription" : "api";
+  if (isSignInKind(route.kind) || isSignInKind(route.provider?.kind ?? "")) return "subscription";
+  return route.provider?.internal ? "internal" : "api";
 }
 
-export function inPool(pool: RoutePool): (route: PooledRoute) => boolean {
-  return (route) => routePool(route) === pool;
+export function routable(surface: RoutePool): (route: PooledRoute) => boolean {
+  return (route) => {
+    const pool = routePool(route);
+    return pool === surface || (surface === "internal" && pool === "api");
+  };
 }
 
-export function listedIn(model: Pick<PublicModel, "pools">, pool: RoutePool): boolean {
+export function hiddenFrom(surface: RoutePool, routes: readonly PooledRoute[]): boolean {
+  return surface !== "internal" && routes.length > 0 && routes.every((route) => routePool(route) === "internal");
+}
+
+export function listedIn(model: Pick<PublicModel, "pools">, pool: PublicPool): boolean {
   if (pool === "subscription") return model.pools.includes("subscription");
   return !model.pools.length || model.pools.includes("api");
 }
@@ -36,6 +42,7 @@ export function routeOf(model: string, surface: RoutePool): { alias: string; poo
 
 export function outsidePool(pool: RoutePool, surface: RoutePool = pool): GateError {
   if (pool === "subscription") return new GateError(404, "model_not_found", "model has no subscription route", { param: "model" });
+  if (pool === "internal") return new GateError(404, "model_not_found", "model is only served by subscriptions", { param: "model" });
   return new GateError(
     404,
     "model_not_found",
