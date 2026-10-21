@@ -33,7 +33,7 @@
     },
     "member": {
       "title": "People",
-      "hint": "The company's own users who get personal keys. Not console users.",
+      "hint": "Individuals who call the API with personal keys and never sign in. Not console users.",
       "action": "Add person"
     },
     "budget": {
@@ -91,7 +91,7 @@
   },
   "node": {
     "title": "{mode, select, edit {{kind, select, org {Edit company} team {Edit department} project {Edit project} member {Edit person} other {Edit}}} other {{kind, select, org {New company} team {New department} project {New project} member {New person} other {New}}}}",
-    "hint": "{kind, select, org {The customer. Departments, projects, and people live inside it.} team {A group of the company such as IT. Its projects and people share its budget and rate limits.} project {An application or integration. Its keys are billed to the project, its department, and the company.} member {A user of the company who gets personal API keys. People do not sign in to this console.} other {}}",
+    "hint": "{kind, select, org {The customer. Departments, projects, and people live inside it.} team {A group of the company such as IT. Its projects and people share its budget and rate limits.} project {An application or integration. Its keys are billed to the project, its department, and the company.} member {Someone at the company who calls the API with personal keys. People never sign in to this console.} other {}}",
     "name": "{kind, select, org {Company name} team {Department name} project {Project name} member {Name} other {Name}}",
     "placeholder": "{kind, select, org {Acme Inc.} team {IT} project {Support bot} member {Alex Example} other {}}",
     "org": "Company",
@@ -137,7 +137,7 @@
   },
   "members": {
     "title": "People ({count, number, integer})",
-    "hint": "{kind, select, org {The company's own users. They get personal API keys and do not sign in to this console.} other {People in this department. The department's budget also applies to them.}}",
+    "hint": "{kind, select, org {Individuals of the company who call the API with personal keys. They never sign in to this console.} other {People in this department. The department's budget also applies to them.}}",
     "empty": "{kind, select, org {No people in this company yet.} other {No people in this department yet.}}",
     "add": "Add person",
     "columns": {

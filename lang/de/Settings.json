@@ -51,7 +51,7 @@
       "copy": "Token kopieren",
       "issued": "SCIM-Token erstellt",
       "revoked": "SCIM-Token widerrufen",
-      "manageHint": "Nur Personen mit allen Berechtigungen können den SCIM-Token erstellen oder widerrufen.",
+      "manageHint": "Nur Benutzer mit allen Berechtigungen können den SCIM-Token erstellen oder widerrufen.",
       "copyEndpoint": "SCIM-Basis-URL kopieren",
       "groups": "Provisionierte Gruppen",
       "groupCount": "{count, plural, =0 {Keine} one {# Gruppe} other {# Gruppen}}",
@@ -93,7 +93,7 @@
     },
     "accounts": {
       "title": "Konten und Rollen",
-      "subtitle": "Gilt für Personen, die sich per SSO anmelden oder per SCIM angelegt werden.",
+      "subtitle": "Gilt für Konsolen-Benutzer, die sich per SSO anmelden oder per SCIM angelegt werden.",
       "defaultRole": "Standardrolle",
       "viewerDefault": "Viewer (eingebaut)",
       "defaultRoleHint": "Neue Konten bekommen diese Rolle, wenn keine Gruppenregel passt.",

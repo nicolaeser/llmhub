@@ -7,7 +7,6 @@
   "openMenu": "Open navigation menu",
   "goHome": "Go to the start page",
   "sections": {
-    "tenants": "Tenants",
     "organization": "Organization",
     "gateway": "Gateway",
     "policies": "Policies",
