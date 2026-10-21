@@ -26,6 +26,7 @@ function McpServerGrid({
   empty,
   canManage,
   canInstall,
+  canAssign,
   companyId,
   onEdit,
   onAccess,
@@ -39,6 +40,7 @@ function McpServerGrid({
   empty: string;
   canManage: boolean;
   canInstall: boolean;
+  canAssign: boolean;
   companyId: string | null;
   onEdit: (server: McpServerView | null) => void;
   onAccess: (server: McpServerView) => void;
@@ -58,6 +60,7 @@ function McpServerGrid({
           server={server}
           canManage={canManage}
           canInstall={canInstall}
+          canAssign={canAssign}
           companyId={companyId}
           onEdit={onEdit}
           onAccess={onAccess}
@@ -95,7 +98,7 @@ export default function McpPage() {
     return <PageStatus icon={Blocks} title={t("title")} subtitle={t("subtitle")} state={page} stats={4} layout="cards" />;
   }
 
-  const { servers, canManage, canInstall, companyId, companies, redirectUri } = data;
+  const { servers, canManage, canInstall, canAssign, companyId, companies, redirectUri } = data;
   const connectedName = servers.find((row) => row.id === oauthServer)?.name ?? "";
   const dismissOAuth = () => setSearchParams({ oauth: null, reason: null, server: null });
 
@@ -144,6 +147,7 @@ export default function McpPage() {
     emptyTitle: t("emptyFilter"),
     canManage,
     canInstall,
+    canAssign,
     companyId,
     onEdit: openForm,
     onAccess: openAccess,
@@ -242,34 +246,48 @@ export default function McpPage() {
           />
         </>
       )}
-      <ServerDialog
-        key={`form-${dialogKey}`}
-        state={formState}
-        editing={editing}
-        redirectUri={redirectUri}
-        onSaved={replace}
-      />
-      <AccessDialog key={`access-${dialogKey}`} state={accessState} server={access} onSaved={replace} />
-      <PermissionsDialog key={`permissions-${dialogKey}`} state={permissionsState} server={permissions} onSaved={replace} />
-      <InstallDialog
-        key={`install-${dialogKey}`}
-        state={installState}
-        server={install}
-        companies={companies}
-        companyId={companyId}
-        canManage={canManage}
-        onInstall={saveMcpInstallationAction}
-        onTemplate={setMcpTemplateAction}
-        onSaved={replace}
-      />
-      <BuilderDialog
-        key={`builder-${dialogKey}`}
-        state={builderState}
-        model={data.builderModel}
-        models={data.models}
-        onModel={(builderModel) => setData((current) => ({ ...current, builderModel }))}
-        onCreated={replace}
-      />
+      {canManage ? (
+        <>
+          <ServerDialog
+            key={`form-${dialogKey}`}
+            state={formState}
+            editing={editing}
+            redirectUri={redirectUri}
+            onSaved={replace}
+          />
+          <PermissionsDialog key={`permissions-${dialogKey}`} state={permissionsState} server={permissions} onSaved={replace} />
+          <BuilderDialog
+            key={`builder-${dialogKey}`}
+            state={builderState}
+            model={data.builderModel}
+            models={data.models}
+            onModel={(builderModel) => setData((current) => ({ ...current, builderModel }))}
+            onCreated={replace}
+          />
+        </>
+      ) : null}
+      {canAssign ? (
+        <AccessDialog
+          key={`access-${dialogKey}`}
+          state={accessState}
+          server={access}
+          platform={!companyId}
+          onSaved={replace}
+        />
+      ) : null}
+      {canInstall ? (
+        <InstallDialog
+          key={`install-${dialogKey}`}
+          state={installState}
+          server={install}
+          companies={companies}
+          companyId={companyId}
+          canManage={canManage}
+          onInstall={saveMcpInstallationAction}
+          onTemplate={setMcpTemplateAction}
+          onSaved={replace}
+        />
+      ) : null}
     </div>
   );
 }

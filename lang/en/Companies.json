@@ -46,7 +46,7 @@
     "kind": "{kind, select, org {Company} team {Department} project {Project} member {Person} user {Console user} key {Key} other {Parent}}",
     "orgSummary": "{teams, plural, one {# department} other {# departments}} · {projects, plural, one {# project} other {# projects}} · {members, plural, one {# person} other {# people}}",
     "teamSummary": "{projects, plural, one {# project} other {# projects}} · {members, plural, one {# person} other {# people}}",
-    "projectSummary": "{hasTeam, select, yes {Department {team}} other {No department}} · {keys, plural, one {# key} other {# keys}}",
+    "projectSummary": "{hasTeam, select, yes {Department {team}} other {No department}}{showKeys, select, yes { · {keys, plural, one {# key} other {# keys}}} other {}}",
     "memberSummary": "{hasTeam, select, yes {Department {team}} other {No department}}{hasEmail, select, yes { · {email}} other {}}",
     "edit": "{kind, select, org {Edit company} team {Edit department} project {Edit project} member {Edit person} other {Edit}}",
     "delete": "{kind, select, org {Delete company} team {Delete department} project {Delete project} member {Delete person} other {Delete}}",

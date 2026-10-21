@@ -40,7 +40,7 @@ import MembersCard from "./_components/members-card";
 import NodeDialog from "./_components/node-dialog";
 import ReportsCard from "./_components/reports-card";
 import SetupSteps, { setupDone } from "./_components/setup-steps";
-import { budgetOf, chainOf, nodeExists, parseNodeRef, withBudget } from "./_components/tree-model";
+import { budgetOf, chainOf, nodeExists, parseNodeRef, setupStepsFor, withBudget } from "./_components/tree-model";
 import { useConsoleScope } from "../_components/console-scope";
 
 const NODE_ICONS: Record<NodeKind, LucideIcon> = { org: Building2, team: Users, project: Folder, member: User };
@@ -154,7 +154,8 @@ export default function CompaniesPage() {
     );
   const teamAlias = (id: string) => data.teams.find((row) => row.id === id)?.alias ?? "";
   const done = setupDone(data);
-  const showSteps = data.canManage && Object.values(done).some((value) => !value);
+  const steps = setupStepsFor({ company: !platform, canBudget: data.canBudget });
+  const showSteps = data.canManage && steps.some((step) => !done[step]);
   const budgetFor = budgetTarget ? budgetOf(data, budgetTarget.kind, budgetTarget.id) : null;
   const canEditNode = data.canManage && (selected?.kind !== "org" || platform);
   const canBudgetNode = data.canBudget && (selected?.kind !== "org" || platform);
@@ -165,7 +166,7 @@ export default function CompaniesPage() {
     if (step === "team") openNode("team", null, target);
     if (step === "project") openNode("project", null, target, team?.id ?? "");
     if (step === "member") openNode("member", null, target, team?.id ?? "");
-    if (step === "budget" && data?.orgs[0]) {
+    if (step === "budget" && data?.canBudget && data.orgs[0]) {
       const kind = platform ? "org" : data.teams[0] ? "team" : null;
       const row = kind === "org" ? data.orgs[0] : data.teams[0];
       if (kind && row) openBudget({ kind, id: row.id, alias: row.alias }, budgetState);
@@ -211,6 +212,7 @@ export default function CompaniesPage() {
         ? t("detail.projectSummary", {
             hasTeam: project.teamId ? "yes" : "no",
             team: teamAlias(project.teamId),
+            showKeys: data.canSeeKeys ? "yes" : "no",
             keys: keysOf("project", project.id).length,
           })
         : member
@@ -238,7 +240,7 @@ export default function CompaniesPage() {
         }
       />
 
-      {showSteps ? <SetupSteps data={data} company={home?.alias ?? null} onStep={onStep} /> : null}
+      {showSteps ? <SetupSteps data={data} company={home?.alias ?? null} steps={steps} onStep={onStep} /> : null}
 
       {!node || !selected ? (
         <EmptyState
@@ -411,11 +413,15 @@ export default function CompaniesPage() {
                   id: row.id,
                   alias: row.alias,
                   budget: row.budget,
-                  detail: t("children.projectDetail", {
-                    hasTeam: org && row.teamId ? "yes" : "no",
-                    team: teamAlias(row.teamId),
-                    keys: keysOf("project", row.id).length,
-                  }),
+                  detail: data.canSeeKeys
+                    ? t("children.projectDetail", {
+                        hasTeam: org && row.teamId ? "yes" : "no",
+                        team: teamAlias(row.teamId),
+                        keys: keysOf("project", row.id).length,
+                      })
+                    : org
+                      ? teamAlias(row.teamId)
+                      : "",
                 }))}
                 canManage={data.canManage}
                 onOpen={select}
@@ -434,21 +440,23 @@ export default function CompaniesPage() {
               />
             ) : null}
 
-            <KeysCard
-              data={data}
-              kind={selected.kind}
-              keys={keysOf(selected.kind, node.id)}
-              createFor={
-                project
-                  ? { kind: "project", id: project.id }
-                  : member
-                    ? { kind: "member", id: member.id }
-                    : null
-              }
-              onBudget={(target) => openBudget(target, budgetState)}
-            />
+            {data.canSeeKeys ? (
+              <KeysCard
+                data={data}
+                kind={selected.kind}
+                keys={keysOf(selected.kind, node.id)}
+                createFor={
+                  project
+                    ? { kind: "project", id: project.id }
+                    : member
+                      ? { kind: "member", id: member.id }
+                      : null
+                }
+                onBudget={(target) => openBudget(target, budgetState)}
+              />
+            ) : null}
 
-            {org ? (
+            {org && data.canSeeMcp ? (
               <McpConnectionsCard
                 key={`mcp-${org.id}`}
                 orgId={org.id}

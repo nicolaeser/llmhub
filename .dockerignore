@@ -18,3 +18,4 @@ generate-env.sh
 docker-compose.yml
 docker-compose.dev.yml
 docker-compose.au.yml
+antigravity-client-secret

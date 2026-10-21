@@ -336,17 +336,19 @@ export default function KnowledgePage() {
         </>
       )}
 
-      <StoreDialog
-        key={dialogKey}
-        state={formState}
-        editing={editing}
-        companies={view.companies}
-        projects={view.projects}
-        defaults={view.defaults}
-        models={view.models}
-        initialCompany={company === ALL_COMPANIES ? "" : company}
-        onSaved={upsert}
-      />
+      {canManage ? (
+        <StoreDialog
+          key={dialogKey}
+          state={formState}
+          editing={editing}
+          companies={view.companies}
+          projects={view.projects}
+          defaults={view.defaults}
+          models={view.models}
+          initialCompany={company === ALL_COMPANIES ? "" : company}
+          onSaved={upsert}
+        />
+      ) : null}
 
       {filesStore ? (
         <FilesDialog

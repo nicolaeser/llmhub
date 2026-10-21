@@ -50,6 +50,10 @@ COPY --chown=node:node prisma.config.ts scripts/migrate-deploy.mjs scripts/updat
 COPY --chown=node:node scripts/updater ./updater
 ARG BUILD_ID=development
 ENV BUILD_ID=${BUILD_ID}
+RUN --mount=type=secret,id=antigravity_client_secret,required=false \
+    if [ -s /run/secrets/antigravity_client_secret ]; then \
+      install -o root -g node -m 0440 /run/secrets/antigravity_client_secret antigravity-client-secret; \
+    fi
 USER node
 EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \

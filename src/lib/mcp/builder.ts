@@ -1,7 +1,5 @@
 import "server-only";
 import prisma from "@/lib/db/prisma";
-import { requirePermission } from "@/lib/auth/guards";
-import { PERMISSIONS } from "@/lib/auth/permissions";
 import { modelAlias } from "@/lib/gateway/catalog/model-alias";
 import { chatOnce, withDeployment } from "@/lib/gateway/dispatch/chat";
 import { GateError } from "@/lib/gateway/errors";
@@ -16,6 +14,7 @@ import { McpSourceError } from "@/lib/mcp/errors";
 import { PICK_SYSTEM, readPick, templateAllows } from "@/lib/mcp/hosted";
 import { importOpenApi, readApiDocument } from "@/lib/mcp/openapi";
 import { guardedFetch } from "@/lib/mcp/transport";
+import { requireMcpManager } from "@/lib/mcp/scope";
 import { modelRole } from "@/lib/models/model-role";
 import { extensionOf, extractDocument } from "@/lib/rag/extract";
 import {
@@ -207,7 +206,7 @@ async function readLink(link: McpDocsLink, index: number, pointer: string, budge
 }
 
 export async function setBuilderModel(raw: unknown): Promise<{ model: string }> {
-  await requirePermission(PERMISSIONS.SETTINGS_MANAGE);
+  await requireMcpManager();
   const alias = modelAlias(parse(builderModelSchema, raw));
   if (alias && !(await builderModels()).some((model) => model.alias === alias)) throw new Error("MCP_BUILDER_MODEL");
   await prisma.setting.upsert({
@@ -337,7 +336,7 @@ function crawlSummaries(reads: LinkRead[]): McpCrawlSummary[] {
 }
 
 export async function draftMcpServer(raw: unknown, uploads: McpBuilderUpload[] = []): Promise<McpDraft> {
-  await requirePermission(PERMISSIONS.SETTINGS_MANAGE);
+  await requireMcpManager();
   const input = parse(builderDraftSchema, raw);
   if (!input.links.length && !input.docs && !uploads.length) throw new Error("VALIDATION");
   const files = readUploads(uploads);

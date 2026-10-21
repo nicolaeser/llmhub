@@ -102,7 +102,7 @@ export default function MembersCard({
                     ...(kind === "org"
                       ? [{ label: t("columns.team"), value: teamAlias(member.teamId) || t("noTeam") }]
                       : []),
-                    { label: t("columns.keys"), value: keyCount(member.id) },
+                    ...(data.canSeeKeys ? [{ label: t("columns.keys"), value: keyCount(member.id) }] : []),
                     { label: t("columns.budget"), value: spendLabel(member), wide: kind !== "org" },
                   ]}
                 />
@@ -114,7 +114,7 @@ export default function MembersCard({
                   <Table.Header>
                     <Table.Column isRowHeader>{t("columns.person")}</Table.Column>
                     {kind === "org" ? <Table.Column>{t("columns.team")}</Table.Column> : null}
-                    <Table.Column>{t("columns.keys")}</Table.Column>
+                    {data.canSeeKeys ? <Table.Column>{t("columns.keys")}</Table.Column> : null}
                     <Table.Column>{t("columns.budget")}</Table.Column>
                     <Table.Column>{tCommon("actions")}</Table.Column>
                   </Table.Header>
@@ -135,7 +135,7 @@ export default function MembersCard({
                         {kind === "org" ? (
                           <Table.Cell>{teamAlias(member.teamId) || t("noTeam")}</Table.Cell>
                         ) : null}
-                        <Table.Cell className="tabular-nums">{keyCount(member.id)}</Table.Cell>
+                        {data.canSeeKeys ? <Table.Cell className="tabular-nums">{keyCount(member.id)}</Table.Cell> : null}
                         <Table.Cell>{spendLabel(member)}</Table.Cell>
                         <Table.Cell>
                           <div className="flex gap-1">{memberActions(member)}</div>

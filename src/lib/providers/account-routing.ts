@@ -8,13 +8,16 @@ import { DEFAULT_ACCOUNT_STRATEGY, isAccountStrategy, isAssignmentScope } from "
 import { assignmentOptions, replaceAssignments } from "@/lib/gateway/routing/account-assignments";
 import { forgetAccountPolicies } from "@/lib/gateway/routing/account-routing";
 import { autoResetPoliciesOf } from "@/lib/gateway/routing/auto-reset-policy";
-import {
-  antigravityClientSecret,
-  saveAntigravityClientSecret,
-} from "@/lib/gateway/upstreams/antigravity-config";
+import { antigravityClientState, saveAntigravityClientSecret } from "@/lib/gateway/upstreams/antigravity-config";
 import { isSignInKind } from "@/lib/gateway/upstreams/provider-kinds";
 import { autoResetInputSchema } from "@/schemas/resets";
-import type { AccountRouting, AccountRoutingView, AssignmentInput, SignInKind } from "@/types/providers";
+import type {
+  AccountRouting,
+  AccountRoutingView,
+  AntigravityClientState,
+  AssignmentInput,
+  SignInKind,
+} from "@/types/providers";
 import type { AutoResetInput, AutoResetPolicies } from "@/types/resets";
 
 const MAX_TARGETS = 500;
@@ -117,12 +120,12 @@ export async function saveAssignments(input: {
   return saved;
 }
 
-export async function loadAntigravityConfig() {
+export async function loadAntigravityConfig(): Promise<AntigravityClientState> {
   await requirePlatformPermission(PERMISSIONS.PROVIDERS_READ);
-  return { configured: Boolean(await antigravityClientSecret()) };
+  return antigravityClientState();
 }
 
-export async function saveAntigravityConfig(input: { clientSecret: string }) {
+export async function saveAntigravityConfig(input: { clientSecret: string }): Promise<AntigravityClientState> {
   const session = await requirePlatformPermission(PERMISSIONS.PROVIDERS_MANAGE);
   const secret = input.clientSecret.trim();
   if (secret.length > MAX_SECRET_LENGTH || /\s/.test(secret)) throw new Error("VALIDATION");
@@ -134,5 +137,5 @@ export async function saveAntigravityConfig(input: { clientSecret: string }) {
     objectId: "antigravity",
     after: { configured: secret !== "" },
   });
-  return { configured: secret !== "" };
+  return antigravityClientState();
 }

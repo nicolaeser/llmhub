@@ -6,7 +6,7 @@ import IconTile from "@/components/console/icon-tile";
 import { kindIcon } from "@/components/providers/kind-icons";
 import { DEFAULT_ACCOUNT_STRATEGY } from "@/lib/gateway/routing/account-access";
 import { autoResetPolicy, isResetKind } from "@/lib/gateway/routing/auto-reset-policy";
-import type { AccountRouting, SignInKind } from "@/types/providers";
+import type { AccountRouting, AntigravityClientState, SignInKind } from "@/types/providers";
 import type { AutoResetPolicies } from "@/types/resets";
 import AccountRoutingPicker from "./account-routing-picker";
 import AntigravitySetup from "./antigravity-setup";
@@ -18,7 +18,7 @@ export default function ProviderSettingsDialog({
   accounts,
   routing,
   autoReset,
-  antigravityReady,
+  antigravity,
   onRouting,
   onAutoReset,
   onAntigravity,
@@ -28,10 +28,10 @@ export default function ProviderSettingsDialog({
   accounts: number;
   routing: AccountRouting;
   autoReset: AutoResetPolicies;
-  antigravityReady: boolean | null;
+  antigravity: AntigravityClientState | null;
   onRouting: (routing: AccountRouting) => void;
   onAutoReset: (policies: AutoResetPolicies) => void;
-  onAntigravity: (configured: boolean) => void;
+  onAntigravity: (state: AntigravityClientState) => void;
 }) {
   const t = useTranslations("Subscriptions.settings");
   const tProviders = useTranslations("Providers");
@@ -54,7 +54,7 @@ export default function ProviderSettingsDialog({
                   </Modal.Header>
                   <Modal.Body className="space-y-6">
                     {kind === "antigravity" ? (
-                      <AntigravitySetup configured={antigravityReady} onChanged={onAntigravity} />
+                      <AntigravitySetup state={antigravity} onChanged={onAntigravity} />
                     ) : null}
                     {accounts > 0 ? (
                       <AccountRoutingPicker
