@@ -17,7 +17,7 @@ import { isInternalKey } from "@/lib/gateway/access/key-tenancy";
 import { loadModelPolicies, templateRuleSelect } from "@/lib/gateway/access/model-access";
 import { templateModels, templateRulesOf } from "@/lib/gateway/access/model-policy";
 import type { AuthenticatedSession } from "@/types/auth";
-import type { KeyTab } from "@/types/keys";
+import type { KeyChoices, KeyDetail, KeyTab } from "@/types/keys";
 
 async function keyBinding(
   session: AuthenticatedSession,
@@ -220,6 +220,46 @@ export async function loadKeyTabs(): Promise<KeyTab[]> {
   return tabs;
 }
 
+export async function keyOptions(session: AuthenticatedSession): Promise<KeyChoices> {
+  const [policies, templates] = await Promise.all([
+    loadModelPolicies(),
+    prisma.modelTemplate.findMany({
+      orderBy: { name: "asc" },
+      select: { ...templateRuleSelect, name: true, description: true },
+    }),
+  ]);
+  return {
+    models: policies.map((policy) => policy.alias),
+    templates: templates.map((template) => ({
+      id: template.id,
+      name: template.name,
+      description: template.description,
+      matches: templateModels(templateRulesOf(template), policies),
+    })),
+    canTemplates: readsTemplates(session),
+  };
+}
+
+export async function loadKeyOptions(): Promise<KeyChoices> {
+  return keyOptions(await requirePermission(PERMISSIONS.KEYS_MANAGE));
+}
+
+export async function loadKeyDetail(id: string): Promise<KeyDetail> {
+  const session = await requirePermission(PERMISSIONS.KEYS_READ);
+  if (typeof id !== "string" || !id.trim()) throw new Error("MISSING_ID");
+  const row = await prisma.virtualKey.findUnique({
+    where: { id: id.trim() },
+    include: { templates: { select: { templateId: true, template: { select: { name: true } } } } },
+  });
+  if (!row || !keyVisibleTo(session, row)) throw new Error("NOT_FOUND");
+  return {
+    key: toKeyView(row),
+    templates: row.templates
+      .map((entry) => ({ id: entry.templateId, name: entry.template.name }))
+      .sort((a, b) => a.name.localeCompare(b.name)),
+  };
+}
+
 export async function loadKeysPage() {
   const session = await requirePermission(PERMISSIONS.KEYS_READ);
   const company = companyOf(session);
@@ -229,37 +269,32 @@ export async function loadKeysPage() {
   const seesTenancy =
     hasPerm(session.permissions, PERMISSIONS.TENANCY_READ) || hasPerm(session.permissions, PERMISSIONS.TENANCY_MANAGE);
   const referenced = (ids: string[]) => (seesTenancy ? {} : { id: { in: ids } });
-  const [orgs, teams, projects, members, users, policies, templates, providerCount, overview] =
-    await Promise.all([
-      prisma.organization.findMany({
-        where: company ? { id: company } : referenced(refs.orgs),
-        orderBy: { alias: "asc" },
-        select: { id: true, alias: true },
-      }),
-      prisma.team.findMany({
-        where: { ...inScope, ...referenced(refs.teams) },
-        orderBy: { alias: "asc" },
-        select: { id: true, alias: true, orgId: true },
-      }),
-      prisma.project.findMany({
-        where: { ...inScope, ...referenced(refs.projects) },
-        orderBy: { alias: "asc" },
-        select: { id: true, alias: true, orgId: true, teamId: true },
-      }),
-      prisma.member.findMany({
-        where: { ...inScope, ...referenced(refs.members) },
-        orderBy: { name: "asc" },
-        select: { id: true, name: true, orgId: true, teamId: true },
-      }),
-      prisma.user.findMany({ where: { ...inScope, id: { in: refs.users } }, select: { id: true, username: true } }),
-      loadModelPolicies(),
-      prisma.modelTemplate.findMany({
-        orderBy: { name: "asc" },
-        select: { ...templateRuleSelect, name: true, description: true },
-      }),
-      prisma.providerConnection.count(),
-      hasPerm(session.permissions, PERMISSIONS.SPEND_READ) ? usageTotals(7, spendScope(session)) : null,
-    ]);
+  const [orgs, teams, projects, members, users, choices, providerCount, overview] = await Promise.all([
+    prisma.organization.findMany({
+      where: company ? { id: company } : referenced(refs.orgs),
+      orderBy: { alias: "asc" },
+      select: { id: true, alias: true },
+    }),
+    prisma.team.findMany({
+      where: { ...inScope, ...referenced(refs.teams) },
+      orderBy: { alias: "asc" },
+      select: { id: true, alias: true, orgId: true },
+    }),
+    prisma.project.findMany({
+      where: { ...inScope, ...referenced(refs.projects) },
+      orderBy: { alias: "asc" },
+      select: { id: true, alias: true, orgId: true, teamId: true },
+    }),
+    prisma.member.findMany({
+      where: { ...inScope, ...referenced(refs.members) },
+      orderBy: { name: "asc" },
+      select: { id: true, name: true, orgId: true, teamId: true },
+    }),
+    prisma.user.findMany({ where: { ...inScope, id: { in: refs.users } }, select: { id: true, username: true } }),
+    keyOptions(session),
+    prisma.providerConnection.count(),
+    hasPerm(session.permissions, PERMISSIONS.SPEND_READ) ? usageTotals(7, spendScope(session)) : null,
+  ]);
   return {
     keys,
     companyId: company ?? "",
@@ -278,13 +313,7 @@ export async function loadKeysPage() {
       teamId: row.teamId ?? "",
     })),
     owners: Object.fromEntries(users.map((user) => [user.id, user.username])),
-    models: policies.map((policy) => policy.alias),
-    templates: templates.map((template) => ({
-      id: template.id,
-      name: template.name,
-      description: template.description,
-      matches: templateModels(templateRulesOf(template), policies),
-    })),
+    ...choices,
     providers: providerCount,
     overview,
     selfId: session.user.id,
@@ -292,7 +321,7 @@ export async function loadKeysPage() {
     canBind: hasPerm(session.permissions, PERMISSIONS.TENANCY_MANAGE),
     canBudget: hasPerm(session.permissions, PERMISSIONS.BUDGETS_MANAGE),
     canMcp: managesMcpRules(session, company ?? null),
-    canTemplates: readsTemplates(session),
+    canOpenCompanies: hasPerm(session.permissions, PERMISSIONS.TENANCY_READ),
     setupLinks: setupLinks(session),
   };
 }

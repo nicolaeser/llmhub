@@ -3,9 +3,17 @@ import type { UsageReportView } from "@/types/reports";
 
 export type BudgetKind = "org" | "team" | "project" | "member" | "user" | "key";
 
-export type NodeKind = "org" | "team" | "project" | "member";
+export type TenancyKind = "org" | "team" | "project" | "member";
+
+export type NodeKind = TenancyKind | "key";
+
+export type TenancyRef = { kind: TenancyKind; id: string };
 
 export type NodeRef = { kind: NodeKind; id: string };
+
+export type NodeLink = NodeRef & { alias: string };
+
+export type TreeRow = NodeLink & { budget: BudgetView; depth: number };
 
 export type SetupStep = "org" | "team" | "project" | "member" | "budget";
 
@@ -97,7 +105,9 @@ export type StructurePayload = {
   canManage: boolean;
   canBudget: boolean;
   canSeeKeys: boolean;
+  canManageKeys: boolean;
   canCreateKeys: boolean;
+  canMcp: boolean;
   canSeeMcp: boolean;
   reports: UsageReportView[];
   canSeeReports: boolean;

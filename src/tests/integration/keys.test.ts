@@ -4,7 +4,7 @@ import prisma from "@/lib/db/prisma";
 import { runAsPrincipal } from "@/lib/auth/delegation";
 import { AuthError } from "@/lib/auth/errors";
 import { permissions } from "@/lib/auth/permissions";
-import { createKey, loadKeysPage, revokeKey, rotateKey, updateKey } from "@/lib/keys/manage";
+import { createKey, loadKeyDetail, loadKeysPage, revokeKey, rotateKey, updateKey } from "@/lib/keys/manage";
 import { digest } from "@/lib/crypto";
 import { PATCH as patchKey } from "@/app/api/mgmt/keys/[id]/route";
 import type { Permission } from "@/types/auth";
@@ -175,6 +175,60 @@ test("key services need keys:manage and only reach keys the caller may see", asy
     assert.equal(rotatedRow.hash, digest(rotated.key.key ?? ""));
   } finally {
     await data.cleanup();
+  }
+});
+
+test("key details open only keys the caller may see, with their template names", async () => {
+  const data = new TestData();
+  const templateName = uniqueName("template");
+  try {
+    const world = await twoCompanies(data);
+    const template = await prisma.modelTemplate.create({ data: { name: templateName } });
+    const colleague = await data.user({ orgId: world.home.id });
+    const outsider = await data.user({ orgId: world.away.id });
+    const homeKey = await data.key({
+      userId: colleague.id,
+      orgId: world.home.id,
+      teamId: world.homeTeam.id,
+      projectId: world.homeProject.id,
+    });
+    await prisma.virtualKeyTemplate.create({ data: { keyId: homeKey.id, templateId: template.id } });
+    const awayKey = await data.key({ userId: outsider.id, orgId: world.away.id });
+
+    const tenancyOnly = sessionOf(await data.user(), { permissions: ["tenancy:read"] });
+    await assert.rejects(runAsPrincipal(tenancyOnly, () => loadKeyDetail(homeKey.id)), forbidden);
+
+    const platformReader = sessionOf(await data.user(), { permissions: ["keys:read", "keys:read-all"] });
+    const detail = await runAsPrincipal(platformReader, () => loadKeyDetail(homeKey.id));
+    assert.equal(detail.key.token_id, homeKey.id);
+    assert.equal(detail.key.project_id, world.homeProject.id);
+    assert.equal(detail.key.org_id, world.home.id);
+    assert.deepEqual(detail.key.templates, [template.id]);
+    assert.deepEqual(detail.templates, [{ id: template.id, name: templateName }]);
+    assert.equal("hash" in detail.key, false);
+    assert.equal("key" in detail.key, false);
+    assert.equal((await runAsPrincipal(platformReader, () => loadKeyDetail(awayKey.id))).key.token_id, awayKey.id);
+
+    const companyReader = sessionOf(await data.user({ orgId: world.home.id }), {
+      permissions: ["keys:read", "keys:read-all"],
+    });
+    assert.equal((await runAsPrincipal(companyReader, () => loadKeyDetail(homeKey.id))).key.token_id, homeKey.id);
+    await assert.rejects(runAsPrincipal(companyReader, () => loadKeyDetail(awayKey.id)), failsWith("NOT_FOUND"));
+
+    const ownKeysOnly = sessionOf(colleague, { permissions: ["keys:read"] });
+    assert.equal((await runAsPrincipal(ownKeysOnly, () => loadKeyDetail(homeKey.id))).key.token_id, homeKey.id);
+    const otherColleague = sessionOf(await data.user({ orgId: world.home.id }), { permissions: ["keys:read"] });
+    await assert.rejects(runAsPrincipal(otherColleague, () => loadKeyDetail(homeKey.id)), failsWith("NOT_FOUND"));
+
+    const ownerCompanyView = { ...sessionOf(await data.user({ isOwner: true })), workspaceOrgId: world.away.id };
+    await assert.rejects(runAsPrincipal(ownerCompanyView, () => loadKeyDetail(homeKey.id)), failsWith("NOT_FOUND"));
+    assert.equal((await runAsPrincipal(ownerCompanyView, () => loadKeyDetail(awayKey.id))).key.token_id, awayKey.id);
+
+    await assert.rejects(runAsPrincipal(platformReader, () => loadKeyDetail("missing-key")), failsWith("NOT_FOUND"));
+    await assert.rejects(runAsPrincipal(platformReader, () => loadKeyDetail(" ")), failsWith("MISSING_ID"));
+  } finally {
+    await data.cleanup();
+    await prisma.modelTemplate.deleteMany({ where: { name: templateName } });
   }
 });
 

@@ -15,12 +15,12 @@ import { useTranslations } from "next-intl";
 import SearchSelect from "@/components/console/search-select";
 import { formats } from "@/i18n/formats";
 import { isActionFail } from "@/lib/http/action-result";
-import type { NodeKind, NodeRef, StructurePayload } from "@/types/structure";
+import type { NodeRef, StructurePayload, TenancyKind } from "@/types/structure";
 import { saveMemberAction, saveOrgAction, saveProjectAction, saveTeamAction } from "../_action";
 import { useErrorToast } from "@/components/console/use-error-toast";
 import FormDialog from "@/components/console/form-dialog";
 
-function idsOf(data: StructurePayload, kind: NodeKind): Set<string> {
+function idsOf(data: StructurePayload, kind: TenancyKind): Set<string> {
   const rows =
     kind === "org" ? data.orgs : kind === "team" ? data.teams : kind === "project" ? data.projects : data.members;
   return new Set(rows.map((row) => row.id));
@@ -36,7 +36,7 @@ export default function NodeDialog({
   onSaved,
 }: {
   state: ReturnType<typeof useOverlayState>;
-  kind: NodeKind;
+  kind: TenancyKind;
   editingId: string | null;
   orgId: string;
   teamId: string;

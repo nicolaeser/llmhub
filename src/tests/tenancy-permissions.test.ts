@@ -132,12 +132,59 @@ test("the company structure hides keys and MCP for callers who may not read them
   assert.equal(tenancyOnly.canSeeMcp, false);
   assert.equal(tenancyOnly.canManage, false);
   assert.equal(tenancyOnly.canBudget, false);
+  assert.equal(tenancyOnly.canManageKeys, false);
+  assert.equal(tenancyOnly.canCreateKeys, false);
+  assert.equal(tenancyOnly.canMcp, false);
   assert.equal(recordedPrisma.called("virtualKey").length, 0);
 
   recordedPrisma.reset();
   const shown = await runAsPrincipal(viewer, () => loadStructure());
   assert.equal(shown.canSeeKeys, true);
   assert.equal(shown.canSeeMcp, true);
+  assert.equal(shown.canManageKeys, false);
+  assert.equal(shown.canCreateKeys, false);
+  assert.equal(shown.canMcp, false);
+});
+
+test("key dialog options need keys:manage and key details keys:read before reading data", async () => {
+  const { loadKeyDetail, loadKeyOptions } = await import("@/lib/keys/manage");
+  recordedPrisma.reset();
+  await assert.rejects(runAsPrincipal(viewer, () => loadKeyOptions()), /FORBIDDEN/);
+  await assert.rejects(runAsPrincipal(principal({ permissions: ["tenancy:read"] }), () => loadKeyDetail("k1")), /FORBIDDEN/);
+  assert.deepEqual(recordedPrisma.calls, []);
+  await assert.rejects(runAsPrincipal(viewer, () => loadKeyDetail(" ")), /MISSING_ID/);
+  await assert.rejects(runAsPrincipal(viewer, () => loadKeyDetail("missing")), /NOT_FOUND/);
+
+  recordedPrisma.reset();
+  const platform = await runAsPrincipal(owner, () => loadKeyOptions());
+  assert.equal(platform.canTemplates, true);
+  const company = await runAsPrincipal(companyUser, () => loadKeyOptions());
+  assert.equal(company.canTemplates, false);
+});
+
+test("the company structure grants key actions with the same permissions as the API keys page", async () => {
+  const { loadStructure } = await import("@/lib/tenancy/structure");
+  const keyManager = principal({ permissions: ["tenancy:read", "keys:read", "keys:manage"] });
+  const binder = principal({ permissions: ["tenancy:read", "tenancy:manage", "keys:read", "keys:manage"] });
+  const blindManager = principal({ permissions: ["tenancy:read", "keys:manage", "tenancy:manage", "mcp:manage"] });
+  const cases: [AuthenticatedSession, { manage: boolean; create: boolean; mcp: boolean }][] = [
+    [keyManager, { manage: true, create: false, mcp: false }],
+    [binder, { manage: true, create: true, mcp: false }],
+    [blindManager, { manage: false, create: false, mcp: false }],
+    [principal({ permissions: ["tenancy:read", "keys:read", "mcp:manage"] }), { manage: false, create: false, mcp: true }],
+    [principal({ orgId: COMPANY_ID, permissions: ["tenancy:read", "keys:read", "mcp:install"] }), { manage: false, create: false, mcp: true }],
+    [principal({ permissions: ["tenancy:read", "keys:read", "mcp:install"] }), { manage: false, create: false, mcp: false }],
+    [owner, { manage: true, create: true, mcp: true }],
+  ];
+  for (const [session, expected] of cases) {
+    recordedPrisma.reset();
+    const payload = await runAsPrincipal(session, () => loadStructure());
+    assert.deepEqual(
+      { manage: payload.canManageKeys, create: payload.canCreateKeys, mcp: payload.canMcp },
+      expected,
+      session.permissions.join(","),
+    );
+  }
 });
 
 test("the company structure links the alert settings only for platform callers who may read settings", async () => {

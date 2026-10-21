@@ -1,91 +1,73 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import {
-  Alert,
-  Button,
-  Chip,
-  SearchField,
-  Spinner,
-  Table,
-  toast,
-  useOverlayState,
-} from "@heroui/react";
-import { Activity, AlertTriangle, Blocks, CircleDollarSign, KeyRound, Pencil, Plus, RefreshCw, Trash2, Wallet, Zap } from "lucide-react";
+import { Button, Chip, SearchField, Table, useOverlayState } from "@heroui/react";
+import { Activity, AlertTriangle, CircleDollarSign, KeyRound, Plus } from "lucide-react";
 import { useFormatter, useTranslations } from "next-intl";
+import { Link } from "@/i18n/routing";
 import BoostDialog from "@/components/budget/boost-dialog";
 import BudgetDialog from "@/components/budget/budget-dialog";
-import ConfirmDialog from "@/components/console/confirm-dialog";
 import EmptyState from "@/components/console/empty-state";
 import PageStatus from "@/components/console/page-status";
 import RowCard, { RowCards, TABLE_FROM_LG } from "@/components/console/row-cards";
 import StatCard from "@/components/console/stat-card";
 import { useErrorToast } from "@/components/console/use-error-toast";
+import { bindingKind, placeOf } from "@/components/keys/key-binding";
+import KeyMenu, { hasKeyMenu, keyMenuActions, type KeyMenuAction } from "@/components/keys/key-menu";
+import { useKeyDialogs, type KeyServerActions } from "@/components/keys/use-key-dialogs";
 import { useConsoleScope } from "../../_components/console-scope";
 import GettingStarted from "./getting-started";
-import { bindingKind, parsePreset, placeOf } from "./key-binding";
-import { KeyDialog } from "./key-dialog";
-import KeyMcpDialog from "./key-mcp-dialog";
 import {
   addBoostAction,
+  createKeyAction,
   loadBudgetAction,
+  loadKeyMcpAccessAction,
   loadKeysPageAction,
   removeBoostAction,
   revokeKeyAction,
   rotateKeyAction,
+  saveKeyMcpAccessAction,
   setBudgetAction,
+  updateKeyAction,
 } from "../_action";
 import { useActionData } from "@/lib/hooks/use-action-data";
 import { isActionFail } from "@/lib/http/action-result";
-import type { KeyOptions, KeyPreset, VirtualKeyView } from "@/types/keys";
+import type { KeyOptions, VirtualKeyView } from "@/types/keys";
 import type { BudgetDetail, BudgetResult } from "@/types/structure";
 
 type BudgetDialogKind = "budget" | "boost";
 
+const KEY_ACTIONS: KeyServerActions = {
+  create: createKeyAction,
+  update: updateKeyAction,
+  rotate: rotateKeyAction,
+  revoke: revokeKeyAction,
+  loadMcp: loadKeyMcpAccessAction,
+  saveMcp: saveKeyMcpAccessAction,
+};
+
 export default function KeysTab() {
   const t = useTranslations("Keys");
-  const tBudgets = useTranslations("Budgets");
   const showError = useErrorToast();
   const tCommon = useTranslations("Common");
   const format = useFormatter();
   const scope = useConsoleScope();
   const [budgetFor, setBudgetFor] = useState<(BudgetDetail & { alias: string }) | null>(null);
   const [loadingBudget, setLoadingBudget] = useState<{ id: string; dialog: BudgetDialogKind } | null>(null);
-  const [mcpKey, setMcpKey] = useState<VirtualKeyView | null>(null);
   const [query, setQuery] = useState("");
-  const [secret, setSecret] = useState<string | null>(null);
-  const [editing, setEditing] = useState<VirtualKeyView | null>(null);
-  const [preset, setPreset] = useState<KeyPreset | null>(null);
   const [dialogKey, setDialogKey] = useState(0);
-  const [busy, setBusy] = useState<{ id: string; action: "rotate" | "revoke" } | null>(null);
-  const [, start] = useTransition();
   const [, startBudget] = useTransition();
-  const dialogState = useOverlayState();
   const budgetState = useOverlayState();
   const boostState = useOverlayState();
-  const mcpState = useOverlayState();
-
-  function openDialog(row: VirtualKeyView | null, next: KeyPreset | null = null) {
-    setEditing(row);
-    setPreset(next);
-    setDialogKey((n) => n + 1);
-    dialogState.open();
-  }
-
-  const page = useActionData(loadKeysPageAction, (loaded) => {
-    const requested = parsePreset(new URLSearchParams(window.location.search).get("new"));
-    if (!requested || !loaded.canManage) return;
-    window.history.replaceState(null, "", window.location.pathname);
-    openDialog(null, requested);
-  });
+  const page = useActionData(loadKeysPageAction);
   const { data, setData } = page;
   const keys = data?.keys;
-
-  function openMcp(row: VirtualKeyView) {
-    setMcpKey(row);
-    setDialogKey((n) => n + 1);
-    mcpState.open();
-  }
+  const keyDialogs = useKeyDialogs({
+    actions: KEY_ACTIONS,
+    canBind: data?.canBind ?? false,
+    onSaved: (row) => upsertKey(row),
+    onRevoked: (id) => setKeys((current) => current.filter((k) => k.token_id !== id)),
+  });
 
   function openBudget(row: VirtualKeyView, dialog: BudgetDialogKind) {
     setLoadingBudget({ id: row.token_id, dialog });
@@ -131,36 +113,6 @@ export default function KeysTab() {
     );
   }
 
-  function rotate(id: string) {
-    setBusy({ id, action: "rotate" });
-    start(async () => {
-      const result = await rotateKeyAction(id);
-      setBusy(null);
-      if (isActionFail(result)) {
-        showError(result.error);
-        return;
-      }
-      const { key: rotated, ...row } = result.key;
-      upsertKey(row);
-      setSecret(rotated);
-      toast(t("toasts.rotated"), { variant: "success" });
-    });
-  }
-
-  function revoke(id: string) {
-    setBusy({ id, action: "revoke" });
-    start(async () => {
-      const result = await revokeKeyAction(id);
-      setBusy(null);
-      if (isActionFail(result)) {
-        showError(result.error);
-        return;
-      }
-      setKeys((current) => current.filter((k) => k.token_id !== result.id));
-      toast(t("toasts.revoked"), { variant: "success" });
-    });
-  }
-
   const filtered = useMemo(() => {
     const q = query.toLowerCase();
     return (keys ?? []).filter(
@@ -176,8 +128,9 @@ export default function KeysTab() {
     return <PageStatus state={page} stats={4} />;
   }
 
-  const { canManage, canBind, canBudget, canMcp, canTemplates, overview, owners } = data;
-  const hasActions = canManage || canMcp || canBudget;
+  const { canManage, canBudget, canMcp, canOpenCompanies, overview, owners } = data;
+  const menuFlags = { canManage, canMcp, canBudget };
+  const hasActions = hasKeyMenu(menuFlags);
   const options: KeyOptions = {
     companyId: data.companyId,
     orgs: data.orgs,
@@ -186,6 +139,7 @@ export default function KeysTab() {
     members: data.members,
     models: data.models,
     templates: data.templates,
+    canTemplates: data.canTemplates,
   };
 
   function accessLabel(row: VirtualKeyView): string {
@@ -259,106 +213,39 @@ export default function KeysTab() {
     );
   }
 
-  function budgetPending(row: VirtualKeyView, dialog: BudgetDialogKind) {
-    return loadingBudget?.id === row.token_id && loadingBudget.dialog === dialog;
+  function keyTitle(row: VirtualKeyView) {
+    const name = row.key_alias || tCommon("none");
+    if (!canOpenCompanies || !row.org_id) return name;
+    return (
+      <Link href={`/companies?node=key:${row.token_id}`} className="text-accent">
+        {name}
+      </Link>
+    );
   }
 
-  function keyActions(row: VirtualKeyView) {
-    const name = row.key_alias || row.key_name;
+  function runMenu(row: VirtualKeyView, action: KeyMenuAction) {
+    const target = { id: row.token_id, name: row.key_alias || row.key_name };
+    if (action === "edit") keyDialogs.openEdit(options, row);
+    if (action === "mcp") keyDialogs.openMcp(target);
+    if (action === "budget" || action === "boost") openBudget(row, action);
+    if (action === "rotate") keyDialogs.askRotate(target);
+    if (action === "revoke") keyDialogs.askRevoke(target);
+  }
+
+  function keyMenu(row: VirtualKeyView) {
     return (
-      <>
-        {canManage ? (
-          <Button isIconOnly size="sm" variant="ghost" aria-label={t("edit")} onPress={() => openDialog(row)}>
-            <Pencil size={14} aria-hidden />
-          </Button>
-        ) : null}
-        {canMcp ? (
-          <Button
-            isIconOnly
-            size="sm"
-            variant="ghost"
-            aria-label={t("mcp.open", { name })}
-            onPress={() => openMcp(row)}
-          >
-            <Blocks size={14} aria-hidden />
-          </Button>
-        ) : null}
-        {canBudget ? (
-          <Button
-            isIconOnly
-            size="sm"
-            variant="ghost"
-            aria-label={t("budget")}
-            isPending={budgetPending(row, "budget")}
-            isDisabled={loadingBudget !== null && !budgetPending(row, "budget")}
-            onPress={() => openBudget(row, "budget")}
-          >
-            {({ isPending }) =>
-              isPending ? <Spinner color="current" size="sm" /> : <Wallet size={14} aria-hidden />
-            }
-          </Button>
-        ) : null}
-        {canBudget && row.max_budget > 0 ? (
-          <Button
-            isIconOnly
-            size="sm"
-            variant="ghost"
-            aria-label={tBudgets("boost.action")}
-            isPending={budgetPending(row, "boost")}
-            isDisabled={loadingBudget !== null && !budgetPending(row, "boost")}
-            onPress={() => openBudget(row, "boost")}
-          >
-            {({ isPending }) =>
-              isPending ? <Spinner color="current" size="sm" /> : <Zap size={14} aria-hidden />
-            }
-          </Button>
-        ) : null}
-        {canManage ? (
-          <>
-            <ConfirmDialog
-              title={t("rotateConfirm.title", { name })}
-              description={t("rotateConfirm.description")}
-              confirmLabel={t("rotate")}
-              cancelLabel={tCommon("cancel")}
-              onConfirm={() => rotate(row.token_id)}
-            >
-              <Button
-                isIconOnly
-                size="sm"
-                variant="ghost"
-                aria-label={t("rotate")}
-                isPending={busy?.id === row.token_id && busy.action === "rotate"}
-                isDisabled={busy !== null && busy.id !== row.token_id}
-              >
-                <RefreshCw size={14} aria-hidden />
-              </Button>
-            </ConfirmDialog>
-            <ConfirmDialog
-              title={t("revokeConfirm.title", { name })}
-              description={t("revokeConfirm.description")}
-              confirmLabel={t("revoke")}
-              cancelLabel={tCommon("cancel")}
-              onConfirm={() => revoke(row.token_id)}
-            >
-              <Button
-                isIconOnly
-                size="sm"
-                variant="danger-soft"
-                aria-label={t("revoke")}
-                isPending={busy?.id === row.token_id && busy.action === "revoke"}
-                isDisabled={busy !== null && busy.id !== row.token_id}
-              >
-                <Trash2 size={14} aria-hidden />
-              </Button>
-            </ConfirmDialog>
-          </>
-        ) : null}
-      </>
+      <KeyMenu
+        name={row.key_alias || row.key_name}
+        actions={keyMenuActions(menuFlags, { capped: row.max_budget > 0 })}
+        pending={loadingBudget?.id === row.token_id || keyDialogs.busy?.id === row.token_id}
+        isDisabled={loadingBudget !== null && loadingBudget.id !== row.token_id}
+        onAction={(action) => runMenu(row, action)}
+      />
     );
   }
 
   const createButton = canManage ? (
-    <Button onPress={() => openDialog(null)}>
+    <Button onPress={() => keyDialogs.openCreate(options, null)}>
       <Plus size={16} aria-hidden />
       {t("create")}
     </Button>
@@ -376,21 +263,11 @@ export default function KeysTab() {
           models={options.models.length}
           keys={data.keys.length}
           links={data.setupLinks}
-          onCreateKey={() => openDialog(null)}
+          onCreateKey={() => keyDialogs.openCreate(options, null)}
         />
       ) : null}
 
-      {secret ? (
-        <Alert status="success">
-          <Alert.Content>
-            <Alert.Title>{t("secretTitle")}</Alert.Title>
-            <Alert.Description>
-              {t("secretHint")}
-              <code className="mt-2 block break-all font-mono text-sm">{secret}</code>
-            </Alert.Description>
-          </Alert.Content>
-        </Alert>
-      ) : null}
+      {keyDialogs.notice}
 
       {data.keys.length === 0 ? (
         <EmptyState
@@ -454,8 +331,9 @@ export default function KeysTab() {
                   return (
                     <RowCard
                       key={row.token_id}
-                      title={row.key_alias || tCommon("none")}
+                      title={keyTitle(row)}
                       description={<span className="font-mono text-xs">{row.key_name}…</span>}
+                      aside={hasActions ? keyMenu(row) : undefined}
                       chips={keyChips(row)}
                       details={[
                         {
@@ -471,7 +349,6 @@ export default function KeysTab() {
                         { label: t("columns.access"), value: accessLabel(row) },
                         { label: t("columns.spend"), value: spendLabel(row) },
                       ]}
-                      actions={hasActions ? keyActions(row) : undefined}
                     />
                   );
                 })}
@@ -493,7 +370,7 @@ export default function KeysTab() {
                         return (
                           <Table.Row key={row.token_id} id={row.token_id}>
                             <Table.Cell>
-                              <div className="font-medium">{row.key_alias || tCommon("none")}</div>
+                              <div className="font-medium">{keyTitle(row)}</div>
                               <div className="font-mono text-xs text-muted">{row.key_name}…</div>
                             </Table.Cell>
                             <Table.Cell>
@@ -509,11 +386,7 @@ export default function KeysTab() {
                             <Table.Cell>
                               <div className="flex flex-wrap gap-1">{keyChips(row)}</div>
                             </Table.Cell>
-                            {hasActions ? (
-                              <Table.Cell>
-                                <div className="flex gap-1">{keyActions(row)}</div>
-                              </Table.Cell>
-                            ) : null}
+                            {hasActions ? <Table.Cell>{keyMenu(row)}</Table.Cell> : null}
                           </Table.Row>
                         );
                       })}
@@ -544,25 +417,7 @@ export default function KeysTab() {
         onRemove={removeBoostAction}
         onSaved={applyBudget}
       />
-      <KeyMcpDialog
-        key={`mcp-${dialogKey}`}
-        state={mcpState}
-        keyId={mcpKey?.token_id ?? null}
-        keyName={mcpKey ? mcpKey.key_alias || mcpKey.key_name : ""}
-      />
-      <KeyDialog
-        key={dialogKey}
-        state={dialogState}
-        editing={editing}
-        preset={preset}
-        options={options}
-        canBind={canBind}
-        canTemplates={canTemplates}
-        onSaved={(row, created) => {
-          upsertKey(row);
-          if (created) setSecret(created);
-        }}
-      />
+      {keyDialogs.dialogs}
     </div>
   );
 }
