@@ -453,12 +453,18 @@ test("project and tier come from loadCodeAssist in either response shape", () =>
   assert.equal(antigravityPlan(""), "");
 });
 
-test("available models list ids, names, owners, and context sizes", () => {
+test("available models list ids, names, owners, and context sizes and skip hidden models", () => {
   const models = antigravityModels({
     models: {
       "gemini-3-flash": { displayName: "Gemini 3 Flash", maxTokens: 1_000_000 },
       "claude-sonnet-4-6": { displayName: "Claude Sonnet 4.6", maxTokens: 200_000 },
       "gpt-oss-120b-medium": {},
+      chat_20706: { displayName: "Chat", maxTokens: 1_000 },
+      chat_23310: {},
+      tab_flash_lite_preview: {},
+      tab_jump_flash_lite_preview: {},
+      "gemini-2.5-flash-thinking": { displayName: "Gemini 2.5 Flash Thinking" },
+      "gemini-2.5-pro": { displayName: "Gemini 2.5 Pro" },
     },
   });
   assert.deepEqual(
@@ -472,15 +478,20 @@ test("available models list ids, names, owners, and context sizes", () => {
   assert.deepEqual(antigravityModels(null), []);
 });
 
-test("per model quota becomes scoped limit windows with reset times", () => {
+test("per model quota becomes labelled scoped limit windows with reset times", () => {
   const reset = new Date(NOW + 3_600_000).toISOString();
   const limits = antigravityLimits(
     {
       models: {
-        "claude-sonnet-4-6": { quotaInfo: { remainingFraction: 0.25, resetTime: reset } },
-        "gemini-3-flash": { quotaInfo: { resetTime: reset } },
+        "claude-sonnet-4-6": { displayName: "Claude Sonnet 4.6", quotaInfo: { remainingFraction: 0.25, resetTime: reset } },
+        "gemini-3-flash": { displayName: " Gemini 3 Flash ", quotaInfo: { resetTime: reset } },
         "gemini-3-pro": { quotaInfo: { remainingFraction: 1 } },
+        "gemini-2.5-pro": { displayName: "Gemini 2.5 Pro", quotaInfo: { remainingFraction: 0.5, resetTime: reset } },
         "gpt-oss-120b-medium": {},
+        chat_20706: { quotaInfo: { remainingFraction: 1 } },
+        chat_23310: { quotaInfo: { remainingFraction: 1 } },
+        tab_flash_lite_preview: { quotaInfo: { remainingFraction: 1 } },
+        tab_jump_flash_lite_preview: { quotaInfo: { remainingFraction: 1 } },
       },
     },
     "pro",
@@ -489,9 +500,10 @@ test("per model quota becomes scoped limit windows with reset times", () => {
   assert.equal(limits.plan, "pro");
   assert.equal(limits.fetchedAt, new Date(NOW).toISOString());
   assert.deepEqual(limits.windows, [
-    { scope: "claude-sonnet-4-6", usedPercent: 75, windowSeconds: 0, resetsAt: reset, limitReached: false },
-    { scope: "gemini-3-flash", usedPercent: 100, windowSeconds: 0, resetsAt: reset, limitReached: true },
-    { scope: "gemini-3-pro", usedPercent: 0, windowSeconds: 0, resetsAt: null, limitReached: false },
+    { scope: "claude-sonnet-4-6", label: "Claude Sonnet 4.6", usedPercent: 75, windowSeconds: 0, resetsAt: reset, limitReached: false },
+    { scope: "gemini-2.5-pro", label: "Gemini 2.5 Pro", usedPercent: 50, windowSeconds: 0, resetsAt: reset, limitReached: false },
+    { scope: "gemini-3-flash", label: "Gemini 3 Flash", usedPercent: 100, windowSeconds: 0, resetsAt: reset, limitReached: true },
+    { scope: "gemini-3-pro", label: "gemini-3-pro", usedPercent: 0, windowSeconds: 0, resetsAt: null, limitReached: false },
   ]);
 });
 
