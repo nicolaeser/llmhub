@@ -1,6 +1,6 @@
 import { asRecord, newId } from "@/lib/gateway/core";
 import { tokenCount } from "@/lib/gateway/billing/tokens";
-import { isCodexSignature } from "@/lib/gateway/protocols/reasoning-signature";
+import { isResponsesSignature } from "@/lib/gateway/protocols/reasoning-signature";
 import type { DataUrl } from "@/types/anthropic";
 import type { JsonMap } from "@/types/gateway";
 
@@ -112,7 +112,7 @@ function fixedSampling(model: unknown): boolean {
 }
 
 export function claudeSignedThinking(block: JsonMap): boolean {
-  return typeof block.signature === "string" && block.signature !== "" && !isCodexSignature(block.signature);
+  return typeof block.signature === "string" && block.signature !== "" && !isResponsesSignature(block.signature);
 }
 
 function thinkingBlocks(value: unknown): JsonMap[] {

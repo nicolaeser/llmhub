@@ -36,6 +36,7 @@
     "access": "Modellzugriff",
     "templates": "Modellvorlagen",
     "templatesHint": "Regeln aus Vorlagen bleiben aktuell, wenn sich Modelle ändern. <link>Vorlagen verwalten</link>",
+    "templatesNote": "Regeln aus Vorlagen bleiben aktuell, wenn sich Modelle ändern.",
     "templatesPlaceholder": "Keine Vorlage",
     "models": "Einzelne Modelle",
     "modelsHint": "Zusätzlich zu den gewählten Vorlagen erlaubt.",

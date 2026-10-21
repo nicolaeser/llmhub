@@ -1,6 +1,8 @@
 import {
   Asterisk,
+  Infinity as InfinityIcon,
   MessageCircle,
+  Moon,
   Orbit,
   Plug,
   Route,
@@ -23,6 +25,12 @@ const KIND_ICONS: Record<string, LucideIcon> = {
   grok_build: Zap,
   claude: Asterisk,
   antigravity: Orbit,
+  moonshot: Moon,
+  moonshot_cn: Moon,
+  kimi: Moon,
+  kimi_ai: Moon,
+  meta: InfinityIcon,
+  muse_code: InfinityIcon,
 };
 
 export function kindIcon(kind: string): LucideIcon {

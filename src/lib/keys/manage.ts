@@ -4,11 +4,12 @@ import prisma from "@/lib/db/prisma";
 import { digest, randomToken } from "@/lib/crypto";
 import { createKeySchema, updateKeySchema } from "@/schemas/keys";
 import type { ZodType } from "zod";
-import { requirePermission } from "@/lib/auth/guards";
+import { requireActor, requirePermission } from "@/lib/auth/guards";
 import { hasPerm, PERMISSIONS } from "@/lib/auth/permissions";
-import { companyOf, inCompany, keyVisibleTo, spendScope } from "@/lib/auth/scope";
+import { companyOf, inCompany, keyVisibleTo, setupLinks, spendScope } from "@/lib/auth/scope";
 import { managesMcpRules } from "@/lib/mcp/scope";
-import { listKeys, toKeyView } from "@/lib/keys/view";
+import { keyReferences, listKeys, toKeyView } from "@/lib/keys/view";
+import { readsTemplates } from "@/lib/models/templates";
 import { alertKeyBlocked } from "@/lib/alerts/notify";
 import { writeAudit } from "@/lib/audit";
 import { usageTotals } from "@/lib/usage/usage-totals";
@@ -16,6 +17,7 @@ import { isInternalKey } from "@/lib/gateway/access/key-tenancy";
 import { loadModelPolicies, templateRuleSelect } from "@/lib/gateway/access/model-access";
 import { templateModels, templateRulesOf } from "@/lib/gateway/access/model-policy";
 import type { AuthenticatedSession } from "@/types/auth";
+import type { KeyTab } from "@/types/keys";
 
 async function keyBinding(
   session: AuthenticatedSession,
@@ -26,7 +28,8 @@ async function keyBinding(
   if (projectId && memberId) throw new Error("KEY_BINDING_CONFLICT");
   const unchanged =
     current !== null && (current.projectId ?? "") === projectId && (current.memberId ?? "") === memberId;
-  if ((projectId || memberId) && !unchanged && !hasPerm(session.permissions, PERMISSIONS.TENANCY_MANAGE)) {
+  const bindsTenancy = Boolean(projectId || memberId || current?.projectId || current?.memberId);
+  if (bindsTenancy && !unchanged && !hasPerm(session.permissions, PERMISSIONS.TENANCY_MANAGE)) {
     throw new Error("FORBIDDEN");
   }
   if (projectId) {
@@ -209,41 +212,53 @@ export async function revokeKey(id: string) {
   return { id: existing.id };
 }
 
+export async function loadKeyTabs(): Promise<KeyTab[]> {
+  const session = await requireActor();
+  const tabs: KeyTab[] = [];
+  if (hasPerm(session.permissions, PERMISSIONS.KEYS_READ)) tabs.push("keys");
+  if (readsTemplates(session)) tabs.push("templates");
+  return tabs;
+}
+
 export async function loadKeysPage() {
   const session = await requirePermission(PERMISSIONS.KEYS_READ);
   const company = companyOf(session);
   const inScope = company ? { orgId: company } : {};
-  const [keys, orgs, teams, projects, members, users, policies, templates, providerCount, overview] =
+  const keys = await listKeys(session);
+  const refs = keyReferences(keys, session.user.id);
+  const seesTenancy =
+    hasPerm(session.permissions, PERMISSIONS.TENANCY_READ) || hasPerm(session.permissions, PERMISSIONS.TENANCY_MANAGE);
+  const referenced = (ids: string[]) => (seesTenancy ? {} : { id: { in: ids } });
+  const [orgs, teams, projects, members, users, policies, templates, providerCount, overview] =
     await Promise.all([
-      listKeys(session),
       prisma.organization.findMany({
-        where: company ? { id: company } : {},
+        where: company ? { id: company } : referenced(refs.orgs),
         orderBy: { alias: "asc" },
         select: { id: true, alias: true },
       }),
       prisma.team.findMany({
-        where: inScope,
+        where: { ...inScope, ...referenced(refs.teams) },
         orderBy: { alias: "asc" },
         select: { id: true, alias: true, orgId: true },
       }),
       prisma.project.findMany({
-        where: inScope,
+        where: { ...inScope, ...referenced(refs.projects) },
         orderBy: { alias: "asc" },
         select: { id: true, alias: true, orgId: true, teamId: true },
       }),
       prisma.member.findMany({
-        where: inScope,
+        where: { ...inScope, ...referenced(refs.members) },
         orderBy: { name: "asc" },
         select: { id: true, name: true, orgId: true, teamId: true },
       }),
-      prisma.user.findMany({ where: inScope, select: { id: true, username: true } }),
+      prisma.user.findMany({ where: { ...inScope, id: { in: refs.users } }, select: { id: true, username: true } }),
       loadModelPolicies(),
       prisma.modelTemplate.findMany({
         orderBy: { name: "asc" },
         select: { ...templateRuleSelect, name: true, description: true },
       }),
       prisma.providerConnection.count(),
-      usageTotals(7, spendScope(session)),
+      hasPerm(session.permissions, PERMISSIONS.SPEND_READ) ? usageTotals(7, spendScope(session)) : null,
     ]);
   return {
     keys,
@@ -277,5 +292,7 @@ export async function loadKeysPage() {
     canBind: hasPerm(session.permissions, PERMISSIONS.TENANCY_MANAGE),
     canBudget: hasPerm(session.permissions, PERMISSIONS.BUDGETS_MANAGE),
     canMcp: managesMcpRules(session, company ?? null),
+    canTemplates: readsTemplates(session),
+    setupLinks: setupLinks(session),
   };
 }

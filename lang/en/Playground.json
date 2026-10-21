@@ -9,6 +9,7 @@
   "emptySetupTitle": "No models yet",
   "emptySetup": "{gap, select, provider {Connect a <providers>provider</providers> first.} other {Add one under <models>Models</models>.}}",
   "emptySetupAction": "{gap, select, provider {Connect a provider} other {Add a model}}",
+  "emptySetupAsk": "{gap, select, provider {No provider is connected yet. Ask an administrator to connect one.} other {No models are enabled yet. Ask an administrator to add one.}}",
   "emptyResponse": "(empty response)",
   "model": "Model",
   "send": "Send",

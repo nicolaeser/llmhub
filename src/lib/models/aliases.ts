@@ -3,6 +3,7 @@ import "server-only";
 import prisma from "@/lib/db/prisma";
 import { requirePermission } from "@/lib/auth/guards";
 import { PERMISSIONS } from "@/lib/auth/permissions";
+import { setupLinks } from "@/lib/auth/scope";
 import { chatChoices, modelRole, type ModelChoice, type ModelRole } from "@/lib/models/model-role";
 
 export async function enabledModelChoices(): Promise<ModelChoice[]> {
@@ -43,10 +44,10 @@ export async function assertModelRoles(checks: { alias: string; role: ModelRole 
 }
 
 export async function loadAliases() {
-  await requirePermission(PERMISSIONS.PLAYGROUND_USE);
+  const session = await requirePermission(PERMISSIONS.PLAYGROUND_USE);
   const [choices, providers] = await Promise.all([
     enabledModelChoices(),
     prisma.providerConnection.count(),
   ]);
-  return { models: chatChoices(choices).map((choice) => choice.alias), providers };
+  return { models: chatChoices(choices).map((choice) => choice.alias), providers, setupLinks: setupLinks(session) };
 }
