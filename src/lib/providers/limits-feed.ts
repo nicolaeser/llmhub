@@ -15,6 +15,7 @@ function changedIds(versions: Map<string, number>, previous: LimitsState | null)
 export const LIMITS_FEED: LiveFeed<LimitsState> = {
   topic: "limits",
   permission: PERMISSIONS.PROVIDERS_READ,
+  platformOnly: true,
   pollMs: LIMITS_POLL_LIVE_MS,
   minGapMs: 1_000,
   scopeKey: () => "all",

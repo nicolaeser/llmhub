@@ -213,7 +213,7 @@ export default function CatalogTab() {
         </Card.Content>
       </Card>
 
-      {view.jevReady ? null : (
+      {view.jevReady || !view.canConfigure ? null : (
         <Alert status="warning">
           <Alert.Indicator />
           <Alert.Content>

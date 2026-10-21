@@ -19,6 +19,14 @@ export function useSearchParam(name: string): string | null | undefined {
   );
 }
 
+export function useSearchString(): string | undefined {
+  return useSyncExternalStore(
+    subscribe,
+    () => window.location.search,
+    () => undefined,
+  );
+}
+
 function writeSearch(params: URLSearchParams) {
   const query = params.toString();
   window.history.replaceState(null, "", query ? `?${query}` : window.location.pathname);

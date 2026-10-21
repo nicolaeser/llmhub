@@ -39,6 +39,9 @@ export type ImportCandidate = {
 
 export type SignInKind = SignInCredential["kind"];
 
+export type RotatingSignInKind = Exclude<SignInKind, "devin">;
+export type KimiCodeKind = Extract<SignInKind, "kimi" | "kimi_ai">;
+
 export type SignInMethod = "device" | "code";
 
 export type SignInStatus = "active" | "expired";
@@ -119,6 +122,7 @@ export type ProviderView = {
   sharedVia: string | null;
   discovered: { id: string; name: string }[];
   policy: ProviderPolicyInput;
+  vertex: VertexView | null;
 };
 
 export type SignInSession = SignInCredential["session"];
@@ -126,6 +130,8 @@ export type SignInSession = SignInCredential["session"];
 export type SignInTokens = SignInSession["tokens"];
 
 export type DeviceGrant = SignInTicket["grant"];
+
+export type CodeGrant = Extract<DeviceGrant, { kind: "claude" | "antigravity" | "devin" }>;
 
 export type DeviceAuthorization = {
   grant: DeviceGrant;
@@ -304,7 +310,54 @@ export type UpstreamAuth = {
   key: string;
   headers: Record<string, string>;
   project?: string;
+  keyHeader?: string;
 };
+
+export type ThinkingLevel = "minimal" | "low" | "medium" | "high";
+
+export type VertexTarget = { project: string; location: string };
+
+export type VertexRoute = "google" | "anthropic" | "openapi";
+
+export type VertexModelRoute = { route: VertexRoute; model: string };
+
+export type ServiceAccount = {
+  type: "service_account";
+  project_id: string;
+  private_key_id: string;
+  private_key: string;
+  client_email: string;
+  client_id: string;
+};
+
+export type VertexCredentialKind = "service_account" | "api_key";
+
+export type VertexCredential =
+  | { type: "service_account"; account: ServiceAccount }
+  | { type: "api_key"; key: string };
+
+export type VertexView = {
+  credential: VertexCredentialKind;
+  account: string;
+  project: string;
+  location: string;
+};
+
+export type VertexDraft = {
+  credential: VertexCredentialKind;
+  serviceAccount: string;
+  project: string;
+  location: string;
+};
+
+export type VertexConnectionInput = {
+  credential: string;
+  target?: Partial<VertexTarget>;
+  baseUrl?: string;
+  currentBaseUrl?: string;
+};
+
+export type GoogleAccessToken = { token: string; expiresAt: number };
 
 export type DiscoveredModel = {
   id: string;
@@ -316,7 +369,10 @@ export type DiscoveredModel = {
   priceSource: string;
   serviceTiers?: string[];
   accessPrograms?: string[];
+  variants?: string[];
 };
+
+export type DiscoveredPage = { models: DiscoveredModel[]; next: string };
 
 export type ModelPrice = { in: number; out: number };
 
@@ -338,6 +394,11 @@ export type ProviderModelPrice = {
 
 export type AntigravitySettings = {
   client_secret: string;
+};
+
+export type AntigravityClientState = {
+  saved: boolean;
+  bundled: boolean;
 };
 
 export type ProviderListActions = {

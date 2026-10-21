@@ -5,7 +5,7 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { canSee, homePath, NAV, navItemFor, platformOnlyPath, visibleNav } from "@/app/(app)/_components/nav-data";
+import { canOpen, canSee, homePath, NAV, navItemFor, platformOnlyPath, visibleNav } from "@/app/(app)/_components/nav-data";
 import { SESSION_COOKIE, signSessionToken } from "@/lib/auth/cookie";
 import { WORKSPACE_COOKIE } from "@/lib/auth/workspace-cookie";
 import { permissions, PERMISSIONS } from "@/lib/auth/permissions";
@@ -83,10 +83,10 @@ test("the company scope lands on the first company page and never on a platform 
 test("platform and company scopes show their own navigation", () => {
   assert.deepEqual(hrefs("platform"), [
     "/companies",
+    "/keys",
     "/users",
     "/providers",
     "/models",
-    "/keys",
     "/guardrails",
     "/knowledge",
     "/mcp",
@@ -107,8 +107,15 @@ test("platform and company scopes show their own navigation", () => {
   ]);
   const platformSections = visibleNav(permissions, "platform").map((section) => section.id);
   const companySections = visibleNav(permissions, "company").map((section) => section.id);
-  assert.deepEqual(platformSections, ["tenants", "gateway", "policies", "insights", "system"]);
+  assert.deepEqual(platformSections, ["organization", "gateway", "policies", "insights", "system"]);
   assert.deepEqual(companySections, ["organization", "policies", "insights", "system"]);
+  const sectionHrefs = (scope: ScopeKind, id: string) =>
+    visibleNav(permissions, scope)
+      .find((section) => section.id === id)
+      ?.items.map((item) => item.href);
+  assert.deepEqual(sectionHrefs("platform", "organization"), ["/companies", "/keys", "/users"]);
+  assert.deepEqual(sectionHrefs("company", "organization"), ["/companies", "/keys"]);
+  assert.deepEqual(sectionHrefs("platform", "gateway"), ["/providers", "/models"]);
   const pinned = (scope: ScopeKind) =>
     visibleNav(permissions, scope)
       .filter((section) => section.pinned)
@@ -131,6 +138,39 @@ test("canSee checks the scope before the permission", () => {
   assert.equal(canSee(permissions, company, "company"), true);
   assert.equal(canSee(permissions, usage, "company"), true);
   assert.equal(canSee([], usage, "company"), false);
+});
+
+test("a page opens exactly when its navigation entry is visible", () => {
+  assert.equal(canOpen([PERMISSIONS.USERS_READ], "/users", "platform"), true);
+  assert.equal(canOpen([PERMISSIONS.ROLES_MANAGE], "/users", "platform"), true);
+  assert.equal(canOpen([PERMISSIONS.USERS_MANAGE, PERMISSIONS.USERS_SECURITY], "/users", "platform"), false);
+  assert.equal(canOpen(permissions, "/users", "company"), false);
+  assert.equal(canOpen([PERMISSIONS.TENANCY_READ], "/companies/x", "company"), true);
+  assert.equal(canOpen([PERMISSIONS.MODELS_READ], "/keys", "platform"), true);
+  assert.equal(canOpen([PERMISSIONS.MODELS_READ], "/keys", "company"), false);
+  assert.equal(canOpen([PERMISSIONS.KEYS_READ], "/keys", "company"), true);
+  assert.equal(canOpen(permissions, "/account", "platform"), false);
+  for (const scope of ["platform", "company"] as const) {
+    for (const granted of [[], [PERMISSIONS.KEYS_READ], [PERMISSIONS.SPEND_READ], [...permissions]]) {
+      for (const href of hrefs(scope, granted)) assert.equal(canOpen(granted, href, scope), true, `${scope} ${href}`);
+    }
+  }
+});
+
+test("the console users page sends callers without users:read or roles:manage back to the console home", async () => {
+  const { default: UsersLayout } = await import("@/app/(app)/users/layout");
+  for (const [granted, opens] of [
+    [[], false],
+    [[PERMISSIONS.KEYS_READ, PERMISSIONS.USERS_MANAGE], false],
+    [[PERMISSIONS.USERS_READ], true],
+    [[PERMISSIONS.ROLES_MANAGE], true],
+  ] as const) {
+    await signedIn();
+    recordedPrisma.reset({ session: { findUnique: () => sessionRow([...granted]) } });
+    const render = () => UsersLayout({ children: "page" });
+    if (opens) assert.equal(await render(), "page", granted.join(","));
+    else assert.equal(await redirectOf(render), "/", granted.join(","));
+  }
 });
 
 test("platform-only paths are exactly the pages without a company entry", () => {

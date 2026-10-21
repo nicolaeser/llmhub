@@ -8,32 +8,44 @@ import {
   SearchField,
   Spinner,
   Table,
+  Tag,
+  TagGroup,
   toast,
   useOverlayState,
 } from "@heroui/react";
 import { MoreHorizontal, Plus, User } from "lucide-react";
 import { useFormatter, useNow, useTranslations } from "next-intl";
+import BoostDialog from "@/components/budget/boost-dialog";
 import BudgetDialog from "@/components/budget/budget-dialog";
 import ConfirmDialog from "@/components/console/confirm-dialog";
 import EmptyState from "@/components/console/empty-state";
 import PageStatus from "@/components/console/page-status";
 import RowCard, { RowCards, TABLE_FROM_LG } from "@/components/console/row-cards";
+import { useErrorToast } from "@/components/console/use-error-toast";
+import { Link, useRouter } from "@/i18n/routing";
+import { logsHref } from "@/lib/gateway/request-logs/request-log-query";
 import { useActionData } from "@/lib/hooks/use-action-data";
+import { setSearchParams, useSearchParam } from "@/lib/hooks/use-search-param";
 import { isActionFail } from "@/lib/http/action-result";
+import { usageHref } from "@/lib/usage/usage-query";
 import type { ActionFail } from "@/types/actions";
 import { StepUpDialog } from "@/components/security/step-up-dialog";
 import { useRoleName } from "@/components/security/use-role-name";
 import { useSecurityError } from "@/components/security/use-security-error";
-import type { BudgetResult, BudgetView } from "@/types/structure";
-import type { ConsoleUser, UsersConsolePayload } from "@/types/users";
+import type { BudgetDetail, BudgetResult } from "@/types/structure";
+import type { ConsoleUser, ConsoleUserBudget, UsersConsolePayload } from "@/types/users";
 import {
   ChangeAccessDialog,
   CreateUserDialog,
   SetPasswordDialog,
 } from "./user-dialogs";
+import { hasUserActions, userActions, usersWithAccessTo, type UserAction } from "./user-actions";
 import {
+  addBoostAction,
   deleteUserAction,
+  loadBudgetAction,
   loadConsoleUsersAction,
+  removeBoostAction,
   resetUserTwoFactorAction,
   revokeUserSessionsAction,
   setUserBlockedAction,
@@ -41,29 +53,20 @@ import {
   setUserContentLoggingAction,
 } from "../_action";
 
-function userBudget(user: ConsoleUser): BudgetView {
-  return {
-    maxBudget: user.maxBudget,
-    spend: user.spend,
-    budgetDuration: user.budgetDuration,
-    boost: 0,
-    boosts: [],
-    resetsAt: null,
-    projectedMonth: 0,
-    daysToExhaust: null,
-    pctUsed: null,
-  };
-}
-
 export default function UsersTab() {
   const t = useTranslations("Users");
   const tCommon = useTranslations("Common");
+  const tBudgets = useTranslations("Budgets");
   const format = useFormatter();
   const now = useNow({ updateInterval: 30_000 });
   const roleName = useRoleName();
   const errorText = useSecurityError();
+  const showError = useErrorToast();
+  const router = useRouter();
+  const company = useSearchParam("company") ?? "";
   const [query, setQuery] = useState("");
   const [target, setTarget] = useState<ConsoleUser | null>(null);
+  const [budgetFor, setBudgetFor] = useState<(BudgetDetail & { alias: string }) | null>(null);
   const [dialogKey, setDialogKey] = useState(0);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [, start] = useTransition();
@@ -71,6 +74,7 @@ export default function UsersTab() {
   const passwordState = useOverlayState();
   const roleState = useOverlayState();
   const budgetState = useOverlayState();
+  const boostState = useOverlayState();
   const deleteState = useOverlayState();
   const resetState = useOverlayState();
   const page = useActionData(loadConsoleUsersAction);
@@ -78,11 +82,11 @@ export default function UsersTab() {
 
   const filtered = useMemo(() => {
     const q = query.toLowerCase();
-    return (data?.users ?? []).filter(
+    return usersWithAccessTo(data?.users ?? [], company).filter(
       (user) =>
         !q || user.username.toLowerCase().includes(q) || user.email.toLowerCase().includes(q),
     );
-  }, [query, data]);
+  }, [query, data, company]);
 
   function openDialog(state: ReturnType<typeof useOverlayState>, user: ConsoleUser | null) {
     setTarget(user);
@@ -108,6 +112,21 @@ export default function UsersTab() {
     });
   }
 
+  function openBudget(user: ConsoleUser, state: ReturnType<typeof useOverlayState>) {
+    setBusyId(user.id);
+    start(async () => {
+      const result = await loadBudgetAction({ kind: "user", id: user.id });
+      setBusyId(null);
+      if (isActionFail(result)) {
+        showError(result.error);
+        return;
+      }
+      setBudgetFor({ ...result, alias: user.username });
+      setDialogKey((n) => n + 1);
+      state.open();
+    });
+  }
+
   function remove(user: ConsoleUser) {
     setBusyId(user.id);
     start(async () => {
@@ -129,20 +148,29 @@ export default function UsersTab() {
         user.id === result.id
           ? {
               ...user,
-              maxBudget: result.budget.maxBudget,
-              spend: result.budget.spend,
-              budgetDuration: result.budget.budgetDuration,
+              budget: {
+                maxBudget: result.budget.maxBudget,
+                spend: result.budget.spend,
+                budgetDuration: result.budget.budgetDuration,
+              },
             }
           : user,
       ),
     }));
+    setBudgetFor((current) => (current?.id === result.id ? { ...current, budget: result.budget } : current));
   }
 
   if (!data) {
     return <PageStatus state={page} />;
   }
 
-  const { canManage, canSecure, canBudget } = data;
+  const { canManage, canSecure, canBudget, canSeeCompanies, insights, selfId } = data;
+  const showActions = hasUserActions(data);
+  const companyAlias =
+    data.users.find((user) => user.orgId === company)?.orgAlias ||
+    data.orgs.find((org) => org.id === company)?.alias ||
+    "";
+  const companyLabel = t("companyFilter.value", { named: companyAlias ? "yes" : "no", alias: companyAlias });
 
   function roleLabel(user: ConsoleUser) {
     if (user.isOwner) return t("ownerRole");
@@ -153,11 +181,20 @@ export default function UsersTab() {
     return t("access", { scope: user.orgId ? "company" : "platform", org: user.orgAlias });
   }
 
-  function spendLabel(user: ConsoleUser) {
+  function accessValue(user: ConsoleUser) {
+    if (!user.orgId || !canSeeCompanies) return accessLabel(user);
+    return (
+      <Link href={`/companies?node=org:${user.orgId}`} className="text-accent">
+        {accessLabel(user)}
+      </Link>
+    );
+  }
+
+  function spendLabel(budget: ConsoleUserBudget) {
     return tCommon("spendBudget", {
-      hasCap: user.maxBudget > 0 ? "yes" : "no",
-      spend: user.spend,
-      budget: user.maxBudget,
+      hasCap: budget.maxBudget > 0 ? "yes" : "no",
+      spend: budget.spend,
+      budget: budget.maxBudget,
     });
   }
 
@@ -205,8 +242,23 @@ export default function UsersTab() {
     );
   }
 
+  function actionLabel(action: UserAction, user: ConsoleUser) {
+    if (action === "usage") return t("usageAction");
+    if (action === "logs") return t("logsAction");
+    if (action === "role") return t("changeRole");
+    if (action === "budget") return t("budget");
+    if (action === "boost") return tBudgets("boost.action");
+    if (action === "password") return t("setPassword");
+    if (action === "content") return t("contentAction", { enabled: user.logContent ? "true" : "false" });
+    if (action === "sessions") return t("revokeSessions");
+    if (action === "reset") return t("resetTwoFactor");
+    if (action === "block") return t("blockAction", { blocked: user.blocked ? "true" : "false" });
+    return tCommon("delete");
+  }
+
   function userMenu(user: ConsoleUser) {
-    if (!user.manageable || !(canManage || canSecure || canBudget)) return null;
+    const actions = userActions({ canManage, canSecure, canBudget, insights, selfId }, user);
+    if (!actions.length) return null;
     return (
       <Dropdown>
         <Button
@@ -228,8 +280,11 @@ export default function UsersTab() {
           <Dropdown.Menu
             aria-label={t("actionsMenu", { username: user.username })}
             onAction={(key) => {
+              if (key === "usage") router.push(usageHref({ userId: user.id }));
+              if (key === "logs") router.push(logsHref({ userId: user.id }));
               if (key === "role") openDialog(roleState, user);
-              if (key === "budget") openDialog(budgetState, user);
+              if (key === "budget") openBudget(user, budgetState);
+              if (key === "boost") openBudget(user, boostState);
               if (key === "password") openDialog(passwordState, user);
               if (key === "delete") openDialog(deleteState, user);
               if (key === "reset") openDialog(resetState, user);
@@ -256,59 +311,21 @@ export default function UsersTab() {
               }
             }}
           >
-            {canManage ? (
-              <Dropdown.Item id="role" textValue={t("changeRole")}>
-                {t("changeRole")}
-              </Dropdown.Item>
-            ) : null}
-            {canBudget ? (
-              <Dropdown.Item id="budget" textValue={t("budget")}>
-                {t("budget")}
-              </Dropdown.Item>
-            ) : null}
-            {canManage ? (
-              <Dropdown.Item id="password" textValue={t("setPassword")}>
-                {t("setPassword")}
-              </Dropdown.Item>
-            ) : null}
-            {canManage ? (
-              <Dropdown.Item
-                id="content"
-                textValue={t("contentAction", { enabled: user.logContent ? "true" : "false" })}
-              >
-                {t("contentAction", { enabled: user.logContent ? "true" : "false" })}
-              </Dropdown.Item>
-            ) : null}
-            {canSecure ? (
-              <Dropdown.Item id="sessions" textValue={t("revokeSessions")}>
-                {t("revokeSessions")}
-              </Dropdown.Item>
-            ) : null}
-            {canSecure ? (
-              <Dropdown.Item id="reset" textValue={t("resetTwoFactor")}>
-                {t("resetTwoFactor")}
-              </Dropdown.Item>
-            ) : null}
-            {canManage ? (
-              <Dropdown.Item
-                id="block"
-                textValue={t("blockAction", { blocked: user.blocked ? "true" : "false" })}
-              >
-                {t("blockAction", { blocked: user.blocked ? "true" : "false" })}
-              </Dropdown.Item>
-            ) : null}
-            {canManage ? (
-              <Dropdown.Item id="delete" textValue={tCommon("delete")}>
-                {tCommon("delete")}
-              </Dropdown.Item>
-            ) : null}
+            {actions.map((action) => {
+              const label = actionLabel(action, user);
+              return (
+                <Dropdown.Item key={action} id={action} textValue={label}>
+                  {label}
+                </Dropdown.Item>
+              );
+            })}
           </Dropdown.Menu>
         </Dropdown.Popover>
       </Dropdown>
     );
   }
 
-  const createButton = data.canManage ? (
+  const createButton = canManage ? (
     <Button onPress={() => openDialog(createState, null)}>
       <Plus size={16} aria-hidden />
       {t("create")}
@@ -322,22 +339,37 @@ export default function UsersTab() {
       ) : (
         <>
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-            <SearchField
-              value={query}
-              onChange={setQuery}
-              aria-label={t("searchPlaceholder")}
-              className="w-full max-w-sm"
-            >
-              <SearchField.Group>
-                <SearchField.SearchIcon />
-                <SearchField.Input placeholder={t("searchPlaceholder")} />
-                <SearchField.ClearButton aria-label={tCommon("close")} />
-              </SearchField.Group>
-            </SearchField>
+            <div className="flex min-w-0 grow basis-80 flex-wrap items-center gap-3">
+              <SearchField
+                value={query}
+                onChange={setQuery}
+                aria-label={t("searchPlaceholder")}
+                className="w-full max-w-sm"
+              >
+                <SearchField.Group>
+                  <SearchField.SearchIcon />
+                  <SearchField.Input placeholder={t("searchPlaceholder")} />
+                  <SearchField.ClearButton aria-label={tCommon("close")} />
+                </SearchField.Group>
+              </SearchField>
+              {company ? (
+                <TagGroup aria-label={t("companyFilter.label")} onRemove={() => setSearchParams({ company: null })}>
+                  <TagGroup.List>
+                    <Tag id="company" textValue={companyLabel}>
+                      <span className="break-words">{companyLabel}</span>
+                      <Tag.RemoveButton aria-label={t("companyFilter.clear")} />
+                    </Tag>
+                  </TagGroup.List>
+                </TagGroup>
+              ) : null}
+            </div>
             {createButton}
           </div>
           {filtered.length === 0 ? (
-            <EmptyState icon={User} title={t("noMatches")} />
+            <EmptyState
+              icon={User}
+              title={company && !query ? t("companyFilter.empty") : t("noMatches")}
+            />
           ) : (
             <>
               <RowCards label={t("title")}>
@@ -360,8 +392,10 @@ export default function UsersTab() {
                         label: t("columns.access"),
                         value: (
                           <>
-                            {accessLabel(user)}
-                            <span className="block text-xs text-muted">{spendLabel(user)}</span>
+                            {accessValue(user)}
+                            {user.budget ? (
+                              <span className="block text-xs text-muted">{spendLabel(user.budget)}</span>
+                            ) : null}
                           </>
                         ),
                         wide: true,
@@ -380,7 +414,7 @@ export default function UsersTab() {
                       <Table.Column>{t("columns.security")}</Table.Column>
                       <Table.Column>{tCommon("status")}</Table.Column>
                       <Table.Column>{t("columns.lastActive")}</Table.Column>
-                      <Table.Column>{tCommon("actions")}</Table.Column>
+                      {showActions ? <Table.Column>{tCommon("actions")}</Table.Column> : null}
                     </Table.Header>
                     <Table.Body>
                       {filtered.map((user) => (
@@ -393,8 +427,8 @@ export default function UsersTab() {
                           </Table.Cell>
                           <Table.Cell>{roleLabel(user)}</Table.Cell>
                           <Table.Cell>
-                            <p className="text-sm">{accessLabel(user)}</p>
-                            <p className="text-xs text-muted">{spendLabel(user)}</p>
+                            <p className="text-sm">{accessValue(user)}</p>
+                            {user.budget ? <p className="text-xs text-muted">{spendLabel(user.budget)}</p> : null}
                           </Table.Cell>
                           <Table.Cell>
                             <div className="flex flex-wrap gap-1">{securityChips(user)}</div>
@@ -403,7 +437,7 @@ export default function UsersTab() {
                             <div className="flex flex-wrap gap-1">{statusChips(user)}</div>
                           </Table.Cell>
                           <Table.Cell>{lastActiveLabel(user)}</Table.Cell>
-                          <Table.Cell>{userMenu(user)}</Table.Cell>
+                          {showActions ? <Table.Cell>{userMenu(user)}</Table.Cell> : null}
                         </Table.Row>
                       ))}
                     </Table.Body>
@@ -415,61 +449,80 @@ export default function UsersTab() {
         </>
       )}
 
-      <CreateUserDialog
-        key={`create-${dialogKey}`}
-        state={createState}
-        roles={data.roles}
-        orgs={data.orgs}
-        onSaved={setData}
-      />
-      <ChangeAccessDialog
-        key={`role-${dialogKey}`}
-        state={roleState}
-        target={target}
-        roles={data.roles}
-        orgs={data.orgs}
-        onSaved={setData}
-      />
-      <BudgetDialog
-        key={`budget-${dialogKey}`}
-        state={budgetState}
-        target={target ? { kind: "user", id: target.id, alias: target.username } : null}
-        budget={target ? userBudget(target) : null}
-        ancestors={[]}
-        onSubmit={setBudgetAction}
-        onSaved={applyBudget}
-      />
-      <SetPasswordDialog
-        key={`password-${dialogKey}`}
-        state={passwordState}
-        target={target}
-        onSaved={setData}
-      />
-      <ConfirmDialog
-        state={deleteState}
-        title={t("deleteTitle")}
-        description={t("deleteConfirm", { username: target?.username ?? "" })}
-        confirmLabel={tCommon("delete")}
-        cancelLabel={tCommon("cancel")}
-        onConfirm={() => {
-          if (target) remove(target);
-        }}
-      />
-      <StepUpDialog
-        state={resetState}
-        title={t("resetTwoFactor")}
-        description={t("resetTwoFactorHint", { username: target?.username ?? "" })}
-        confirmLabel={t("resetTwoFactor")}
-        danger
-        onConfirm={async (code) => {
-          if (!target) return null;
-          const result = await resetUserTwoFactorAction({ userId: target.id, code });
-          if (isActionFail(result)) return result.error;
-          setData(result);
-          toast(t("toasts.twoFactorReset"), { variant: "success" });
-          return null;
-        }}
-      />
+      {canManage ? (
+        <>
+          <CreateUserDialog
+            key={`create-${dialogKey}`}
+            state={createState}
+            roles={data.roles}
+            orgs={data.orgs}
+            onSaved={setData}
+          />
+          <ChangeAccessDialog
+            key={`role-${dialogKey}`}
+            state={roleState}
+            target={target}
+            roles={data.roles}
+            orgs={data.orgs}
+            onSaved={setData}
+          />
+          <SetPasswordDialog
+            key={`password-${dialogKey}`}
+            state={passwordState}
+            target={target}
+            onSaved={setData}
+          />
+          <ConfirmDialog
+            state={deleteState}
+            title={t("deleteTitle")}
+            description={t("deleteConfirm", { username: target?.username ?? "" })}
+            confirmLabel={tCommon("delete")}
+            cancelLabel={tCommon("cancel")}
+            onConfirm={() => {
+              if (target) remove(target);
+            }}
+          />
+        </>
+      ) : null}
+      {canBudget ? (
+        <>
+          <BudgetDialog
+            key={`budget-${dialogKey}`}
+            state={budgetState}
+            target={budgetFor}
+            budget={budgetFor?.budget ?? null}
+            ancestors={budgetFor?.ancestors ?? []}
+            onSubmit={setBudgetAction}
+            onSaved={applyBudget}
+          />
+          <BoostDialog
+            key={`boost-${dialogKey}`}
+            state={boostState}
+            target={budgetFor}
+            budget={budgetFor?.budget ?? null}
+            onSubmit={addBoostAction}
+            onRemove={removeBoostAction}
+            onSaved={applyBudget}
+          />
+        </>
+      ) : null}
+      {canSecure ? (
+        <StepUpDialog
+          state={resetState}
+          title={t("resetTwoFactor")}
+          description={t("resetTwoFactorHint", { username: target?.username ?? "" })}
+          confirmLabel={t("resetTwoFactor")}
+          danger
+          onConfirm={async (code) => {
+            if (!target) return null;
+            const result = await resetUserTwoFactorAction({ userId: target.id, code });
+            if (isActionFail(result)) return result.error;
+            setData(result);
+            toast(t("toasts.twoFactorReset"), { variant: "success" });
+            return null;
+          }}
+        />
+      ) : null}
     </div>
   );
 }

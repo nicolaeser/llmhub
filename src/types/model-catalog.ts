@@ -138,6 +138,7 @@ export type CatalogView = {
   jevReady: boolean;
   autoRoutesDefault: boolean;
   canManage: boolean;
+  canConfigure: boolean;
 };
 
 export type CatalogRouting = {

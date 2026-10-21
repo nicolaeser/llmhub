@@ -31,7 +31,11 @@ export type ConsoleScopeState = {
   canSwitch: boolean;
 };
 
+export type ConsoleAccess = { key: string };
+
 export type WorkspaceChange = { orgId: string | null; alias: string };
+
+export type SetupLinks = Record<"provider" | "model", boolean>;
 
 export type PickerItem = { id: string; label: string; detail?: string };
 

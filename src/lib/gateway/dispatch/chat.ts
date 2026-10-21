@@ -16,9 +16,12 @@ import {
   rejectsForeignReasoning,
 } from "@/lib/gateway/routing/account-handoff";
 import { acquireGroup, loadGroup, markFailure, markSuccess } from "@/lib/gateway/routing/runtime";
-import { isSignInKind, speaksAnthropic } from "@/lib/gateway/upstreams/provider-kinds";
-import { AntigravitySseTranslator, withProject } from "@/lib/gateway/upstreams/antigravity";
+import { isSignInKind, speaksAnthropic, speaksGoogle, speaksMuse } from "@/lib/gateway/upstreams/provider-kinds";
+import { AntigravitySseTranslator } from "@/lib/gateway/upstreams/antigravity";
+import { googleStreamTranslator } from "@/lib/gateway/upstreams/google";
 import { CodexSseTranslator } from "@/lib/gateway/upstreams/codex";
+import { devinEventStream, devinHttpError } from "@/lib/gateway/upstreams/devin";
+import { museTranslator } from "@/lib/gateway/upstreams/muse";
 import { deploymentAuth, renewRejectedLogin } from "@/lib/gateway/upstreams/credentials";
 import { nudgeLimits } from "@/lib/gateway/upstreams/limit-store";
 import { autoRedeemIfDue } from "@/lib/gateway/upstreams/reset-redeem";
@@ -26,14 +29,20 @@ import { plainModel } from "@/lib/gateway/catalog/model-alias";
 import { inPool, outsidePool, routeOf } from "@/lib/gateway/routing/route-pool";
 import { KEEPALIVE_MS, SSE_HEADERS, SSE_KEEPALIVE, sseData } from "@/lib/gateway/protocols/sse";
 import {
+  devinResetLookup,
   joinPath,
   mergeUpstreamHeaders,
+  museUsageObserver,
   observeUpstreamLimits,
+  observeUpstreamStatus,
   prepareBody,
   proxyJson,
   retryableStatus,
+  streamAccept,
+  upstreamBody,
   upstreamError,
   upstreamHeaders,
+  upstreamModel,
 } from "@/lib/gateway/dispatch/upstream";
 import { asRecord, isRouterError, isUnavailableError, newId, routerGateError, stringifyContent } from "@/lib/gateway/core";
 import { costFilter, costRejected } from "@/lib/gateway/billing/cost-cap";
@@ -178,8 +187,12 @@ async function settleRunPin(
   logger.info("gateway.account_handover", { kind, from: pinned.providerId, to: account, failover: switched });
 }
 
+function carriesAccountReasoning(kind: string): boolean {
+  return kind === "codex" || kind === "muse_code";
+}
+
 function prepareHandoff(dep: ResolvedDeployment, pinned: AccountPin | null, switched: boolean, request: JsonMap | null): void {
-  if (!request || dep.kind !== "codex") return;
+  if (!request || !carriesAccountReasoning(dep.kind)) return;
   const account = signInAccount(dep);
   if (switched || (pinned && pinned.providerId !== account)) dropAccountReasoning(request);
   else if (pinned && pinned.handoffAt > 0) dropAccountReasoning(request, pinned.handoffAt);
@@ -268,7 +281,12 @@ export async function withDeployment<T>(
               continue;
             }
           }
-          if (!reasoningDropped && acquired.dep.kind === "codex" && rejectsForeignReasoning(err) && dropAccountReasoning(request)) {
+          if (
+            !reasoningDropped &&
+            carriesAccountReasoning(acquired.dep.kind) &&
+            rejectsForeignReasoning(err) &&
+            dropAccountReasoning(request)
+          ) {
             reasoningDropped = true;
             i--;
             continue;
@@ -386,7 +404,10 @@ export async function chatOnce(
     timeoutMs: UPSTREAM_TIMEOUT_MS,
     groupStrategy: group.strategy,
   });
-  if (!proxied.status || proxied.status >= 400) throw upstreamError(proxied.status, proxied.json, proxied.headers);
+  if (!proxied.status || proxied.status >= 400) {
+    if (dep.kind === "devin") throw devinHttpError(proxied.status, new TextDecoder().decode(proxied.raw), devinResetLookup(dep));
+    throw upstreamError(proxied.status, proxied.json, proxied.headers);
+  }
   return proxied.json;
 }
 
@@ -407,22 +428,25 @@ export async function openUpstreamStream(input: {
       upstreamHeaders(input.dep, auth, input.headers),
       serviceModeHeaders(input.dep.kind, input.payload, input.group.strategy, input.dep.model, input.dep.facts),
     ),
-    Accept: "text/event-stream",
+    Accept: streamAccept(input.dep.kind),
   };
   if (input.form) delete headers["Content-Type"];
-  const res = await fetch(joinPath(input.dep, input.path), {
+  const res = await fetch(joinPath(input.dep, input.path, upstreamModel(input.dep, input.payload)), {
     method: "POST",
     headers,
-    body: input.form ?? JSON.stringify(withProject(input.dep, auth, input.payload)),
+    body: input.form ?? upstreamBody(input.dep, auth, input.path, input.payload),
     signal: AbortSignal.any(signals),
   });
   observeUpstreamLimits(input.dep, res.headers);
+  observeUpstreamStatus(input.dep, res.status);
   if (!res.ok || !res.body) {
     const text = await readTextOr(res);
+    if (input.dep.kind === "devin") throw devinHttpError(res.status, text, devinResetLookup(input.dep));
     const json = parseJsonOrNull(text);
     if (json) throw upstreamError(res.status, json, res.headers);
     throw new GateError(res.status || 502, "upstream_error", text.slice(0, 512) || "upstream error");
   }
+  if (input.dep.kind === "devin") return devinEventStream(res, input.dep.model, devinResetLookup(input.dep));
   return res;
 }
 
@@ -448,7 +472,9 @@ export function openChatStream(
 function streamTranslator(dep: ResolvedDeployment, model: string): ChatSseTranslator | null {
   if (speaksAnthropic(dep.kind)) return new AnthropicSseTranslator(model);
   if (dep.kind === "codex") return new CodexSseTranslator(model);
+  if (speaksMuse(dep.kind)) return museTranslator(model, museUsageObserver(dep));
   if (dep.kind === "antigravity") return new AntigravitySseTranslator(model);
+  if (speaksGoogle(dep.kind)) return googleStreamTranslator(dep.kind, dep.model || plainModel(model), model);
   return null;
 }
 

@@ -3,6 +3,9 @@ import test from "node:test";
 import {
   auditLogWhere,
   createdAtRange,
+  logFilterParams,
+  logFiltersFromSearch,
+  logsHref,
   parseLogFilters,
   requestLogWhere,
   spendEventWhere,
@@ -35,30 +38,28 @@ test("createdAtRange includes the whole end day for date-only input", () => {
   assert.equal(createdAtRange("nope", ""), undefined);
 });
 
-test("requestLogWhere scopes to the owner and ignores another user filter", () => {
+test("requestLogWhere intersects another user filter with the owner scope instead of replacing it", () => {
   const filters = parseLogFilters({ userId: "someone", keyId: "k1", status: "429", endpoint: "/v1/chat" });
   assert.deepEqual(requestLogWhere(filters, { userId: "me" }), {
-    userId: "me",
-    keyId: "k1",
+    AND: [{ userId: "someone", keyId: "k1" }, { userId: "me" }],
     status: 429,
     endpoint: { contains: "/v1/chat" },
   });
-  assert.deepEqual(requestLogWhere(filters, {}).userId, "someone");
+  assert.deepEqual(requestLogWhere(filters, {}).AND, [{ userId: "someone", keyId: "k1" }, {}]);
 });
 
 test("requestLogWhere keeps company users inside their company", () => {
   const filters = parseLogFilters({ keyId: "k1" });
-  assert.deepEqual(requestLogWhere(filters, { orgId: "org_a" }), { keyId: "k1", orgId: "org_a" });
+  assert.deepEqual(requestLogWhere(filters, { orgId: "org_a" }), { AND: [{ keyId: "k1" }, { orgId: "org_a" }] });
   assert.deepEqual(requestLogWhere(filters, { orgId: "org_a", userId: "me" }), {
-    keyId: "k1",
-    orgId: "org_a",
-    userId: "me",
+    AND: [{ keyId: "k1" }, { orgId: "org_a", userId: "me" }],
   });
 });
 
 test("requestLogWhere filters PII rows across prompt and response markers", () => {
   const where = requestLogWhere(parseLogFilters({ pii: true, status: "abc" }), {});
   assert.deepEqual(where, {
+    AND: [{}, {}],
     OR: [{ piiInput: { isEmpty: false } }, { piiOutput: { isEmpty: false } }],
   });
 });
@@ -66,11 +67,34 @@ test("requestLogWhere filters PII rows across prompt and response markers", () =
 test("spend and audit filters reuse the scope and date range", () => {
   const filters = parseLogFilters({ model: "m", keyId: "k", from: "2026-10-01", pii: true, endpoint: "/v1" });
   assert.deepEqual(spendEventWhere(filters, { userId: "me" }), {
-    keyId: "k",
-    model: "m",
-    userId: "me",
+    AND: [{ keyId: "k", model: "m" }, { userId: "me" }],
     createdAt: { gte: new Date("2026-10-01T00:00:00.000Z") },
   });
   assert.deepEqual(auditLogWhere(filters), { createdAt: { gte: new Date("2026-10-01T00:00:00.000Z") } });
   assert.deepEqual(auditLogWhere(parseLogFilters({})), {});
+});
+
+test("log filters round-trip through URL params and drop empty values", () => {
+  const filters = parseLogFilters({ keyId: "k1", userId: "u1", pii: true, from: "2026-10-01" });
+  const params = logFilterParams(filters);
+  assert.deepEqual(params, {
+    model: null,
+    status: null,
+    endpoint: null,
+    keyId: "k1",
+    userId: "u1",
+    pii: "1",
+    from: "2026-10-01",
+    to: null,
+  });
+  const search = new URLSearchParams(Object.entries(params).flatMap(([name, value]) => (value === null ? [] : [[name, value]])));
+  assert.deepEqual(logFiltersFromSearch(`?${search}`), filters);
+  assert.deepEqual(logFiltersFromSearch("?keyId=%20k2%20&tab=x&pii=0"), parseLogFilters({ keyId: "k2" }));
+  assert.deepEqual(logFiltersFromSearch(""), parseLogFilters({}));
+});
+
+test("logsHref links to the filtered logs and to the plain page without filters", () => {
+  assert.equal(logsHref({ keyId: "k 1" }), "/logs?keyId=k+1");
+  assert.equal(logsHref({ userId: "u1", pii: false }), "/logs?userId=u1");
+  assert.equal(logsHref({}), "/logs");
 });

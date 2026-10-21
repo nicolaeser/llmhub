@@ -33,7 +33,7 @@
     },
     "member": {
       "title": "Personen",
-      "hint": "Die eigenen Benutzer des Unternehmens mit persönlichen Keys. Keine Konsolen-Benutzer.",
+      "hint": "Einzelpersonen, die die API mit persönlichen Keys nutzen und sich nie anmelden. Keine Konsolen-Benutzer.",
       "action": "Person hinzufügen"
     },
     "budget": {
@@ -46,7 +46,7 @@
     "kind": "{kind, select, org {Unternehmen} team {Abteilung} project {Projekt} member {Person} user {Konsolen-Benutzer} key {Key} other {Übergeordnet}}",
     "orgSummary": "{teams, plural, one {# Abteilung} other {# Abteilungen}} · {projects, plural, one {# Projekt} other {# Projekte}} · {members, plural, one {# Person} other {# Personen}}",
     "teamSummary": "{projects, plural, one {# Projekt} other {# Projekte}} · {members, plural, one {# Person} other {# Personen}}",
-    "projectSummary": "{hasTeam, select, yes {Abteilung {team}} other {Keine Abteilung}} · {keys, plural, one {# Key} other {# Keys}}",
+    "projectSummary": "{hasTeam, select, yes {Abteilung {team}} other {Keine Abteilung}}{showKeys, select, yes { · {keys, plural, one {# Key} other {# Keys}}} other {}}",
     "memberSummary": "{hasTeam, select, yes {Abteilung {team}} other {Keine Abteilung}}{hasEmail, select, yes { · {email}} other {}}",
     "edit": "{kind, select, org {Unternehmen bearbeiten} team {Abteilung bearbeiten} project {Projekt bearbeiten} member {Person bearbeiten} other {Bearbeiten}}",
     "delete": "{kind, select, org {Unternehmen löschen} team {Abteilung löschen} project {Projekt löschen} member {Person löschen} other {Löschen}}",
@@ -72,26 +72,9 @@
     "limitedBy": "{kind, select, org {Unternehmen} team {Abteilung} project {Projekt} member {Person} user {Konsolen-Benutzer} key {Key} other {Übergeordnet}} {alias} ist das engere Limit: noch {amount, number, currency} übrig.",
     "inherits": "Kein eigenes Limit. Die Limits darüber gelten weiterhin."
   },
-  "boost": {
-    "title": "Temporäre Erhöhung für {alias}",
-    "hint": "Gibt bis zum Ablauf zusätzlichen Spielraum über dem Budget. Übergeordnete Limits gelten weiterhin.",
-    "amount": "Zusätzlicher Betrag",
-    "amountHint": "Wird zum aktuellen Limit addiert.",
-    "amountInvalid": "Gib einen Betrag über null ein.",
-    "presets": "Schnellauswahl",
-    "duration": "Gültig für",
-    "hours": "{hours, select, 24 {24 Stunden} 72 {3 Tage} 168 {7 Tage} 720 {30 Tage} other {{hours, number, integer} Stunden}}",
-    "until": "Läuft am {date, date, stamp} ab.",
-    "active": "Aktive Erhöhungen",
-    "expires": "Bis {date, date, stamp}",
-    "remove": "Erhöhung entfernen",
-    "submit": "Erhöhung hinzufügen",
-    "added": "Erhöhung hinzugefügt",
-    "removed": "Erhöhung entfernt"
-  },
   "node": {
     "title": "{mode, select, edit {{kind, select, org {Unternehmen bearbeiten} team {Abteilung bearbeiten} project {Projekt bearbeiten} member {Person bearbeiten} other {Bearbeiten}}} other {{kind, select, org {Neues Unternehmen} team {Neue Abteilung} project {Neues Projekt} member {Neue Person} other {Neu}}}}",
-    "hint": "{kind, select, org {Der Kunde. Abteilungen, Projekte und Personen liegen darin.} team {Eine Gruppe im Unternehmen, etwa die IT. Ihre Projekte und Personen teilen Budget und Rate-Limits.} project {Eine Anwendung oder Integration. Ihre Keys werden dem Projekt, der Abteilung und dem Unternehmen berechnet.} member {Ein Benutzer des Unternehmens mit persönlichen API-Keys. Personen melden sich nicht an dieser Konsole an.} other {}}",
+    "hint": "{kind, select, org {Der Kunde. Abteilungen, Projekte und Personen liegen darin.} team {Eine Gruppe im Unternehmen, etwa die IT. Ihre Projekte und Personen teilen Budget und Rate-Limits.} project {Eine Anwendung oder Integration. Ihre Keys werden dem Projekt, der Abteilung und dem Unternehmen berechnet.} member {Jemand im Unternehmen, der die API mit persönlichen Keys nutzt. Personen melden sich nie an dieser Konsole an.} other {}}",
     "name": "{kind, select, org {Name des Unternehmens} team {Name der Abteilung} project {Name des Projekts} member {Name} other {Name}}",
     "placeholder": "{kind, select, org {Acme GmbH} team {IT} project {Support-Bot} member {Alex Beispiel} other {}}",
     "org": "Unternehmen",
@@ -137,7 +120,7 @@
   },
   "members": {
     "title": "Personen ({count, number, integer})",
-    "hint": "{kind, select, org {Die eigenen Benutzer des Unternehmens. Sie bekommen persönliche API-Keys und melden sich nicht an dieser Konsole an.} other {Personen in dieser Abteilung. Das Budget der Abteilung gilt auch für sie.}}",
+    "hint": "{kind, select, org {Einzelpersonen des Unternehmens, die die API mit persönlichen Keys nutzen. Sie melden sich nie an dieser Konsole an.} other {Personen in dieser Abteilung. Das Budget der Abteilung gilt auch für sie.}}",
     "empty": "{kind, select, org {Noch keine Personen in diesem Unternehmen.} other {Noch keine Personen in dieser Abteilung.}}",
     "add": "Person hinzufügen",
     "columns": {
@@ -154,14 +137,77 @@
     "title": "API-Keys ({count, number, integer})",
     "hint": "{kind, select, org {Alle Keys, die diesem Unternehmen berechnet werden.} team {Keys von Projekten und Personen in dieser Abteilung.} project {Projekt-Keys. Sie werden diesem Projekt berechnet.} member {Persönliche Keys dieser Person.} other {}}",
     "create": "Key erstellen",
-    "empty": "{kind, select, project {Noch keine Keys. Erstelle einen für dieses Projekt.} member {Noch keine Keys. Erstelle einen persönlichen Key für diese Person.} other {Noch keine Keys. Erstelle sie für ein Projekt oder eine Person oder auf der Seite <link>API-Keys</link>.}}",
+    "empty": "{kind, select, project {Noch keine Keys für dieses Projekt.} member {Noch keine persönlichen Keys für diese Person.} other {Noch keine Keys. Öffne ein Projekt oder eine Person, um dort einen zu erstellen.}}",
     "columns": {
       "key": "Key",
       "owner": "Gehört zu",
       "budget": "Ausgabe / Budget"
     },
     "ownerKind": "{kind, select, project {Projekt} member {Person} other {Intern}}",
-    "budget": "Budget für {alias}"
+    "open": "{alias} öffnen"
+  },
+  "key": {
+    "summary": "{binding, select, project {Projekt-Key} member {Persönlicher Key} other {Interner Key}} · {prefix}…",
+    "expiresChip": "{state, select, expired {Abgelaufen} other {Läuft ab am {date, date, short}}}",
+    "bindingTitle": "Gehört zu",
+    "bindingHint": "{binding, select, project {Wird dem Projekt, seiner Abteilung und dem Unternehmen berechnet.} member {Persönlicher Key einer Person, die die API nutzt und sich nie anmeldet. Wird der Person, ihrer Abteilung und dem Unternehmen berechnet.} other {Interner Key eines Konsolen-Benutzers. Wird diesem Benutzer und seinem Unternehmen berechnet.}}",
+    "bindingName": "{binding, select, project {Projekt} member {Person} other {Konsolen-Benutzer}}",
+    "place": "Unternehmen und Abteilung",
+    "open": "{binding, select, project {Projekt öffnen} other {Person öffnen}}",
+    "accessTitle": "Modellzugriff",
+    "accessHint": "Vorlagen bleiben aktuell, wenn sich der Katalog ändert. Einzelne Modelle sind zusätzlich erlaubt.",
+    "templates": "Modellvorlagen",
+    "models": "Einzelne Modelle",
+    "none": "Keine",
+    "limitsTitle": "Limits und Einschränkungen",
+    "limitsHint": "Sie gelten für diesen Key zusätzlich zu den Limits der Ebenen darüber.",
+    "rpm": "Anfragen pro Minute",
+    "tpm": "Tokens pro Minute",
+    "maxRequestCost": "Maximale Kosten pro Anfrage",
+    "unlimited": "Unbegrenzt",
+    "content": "Anfrageinhalte",
+    "contentState": "{logged, select, yes {Werden in den Request-Logs gespeichert} other {Nicht gespeichert, nur Metadaten}}",
+    "ips": "Erlaubte Client-IPs",
+    "anyIp": "Jede Adresse",
+    "endpoints": "Erlaubte Endpunkte",
+    "allEndpoints": "Alle Endpunkte",
+    "windows": "Erlaubte Zeiten",
+    "anyTime": "Jederzeit",
+    "window": "{days}: {allDay, select, yes {ganztägig} other {{start} bis {end}}}",
+    "timeZone": "Zeitzone {zone}",
+    "expiryTitle": "Ablauf",
+    "expiryHint": "{expires, select, yes {Nach diesem Datum werden Anfragen mit diesem Key abgelehnt.} other {Dieser Key läuft nicht ab. Rotiere oder widerrufe ihn, wenn er nicht mehr gebraucht wird.}}",
+    "expires": "Läuft ab",
+    "never": "Nie",
+    "created": "Erstellt"
+  },
+  "insights": {
+    "usage": "Nutzung",
+    "logs": "Protokolle"
+  },
+  "access": {
+    "title": "Zugriff",
+    "hint": "{users, select, yes {{policies, select, yes {Konsolen-Benutzer, die sich für dieses Unternehmen anmelden, und die PII- und Guardrail-Richtlinien für seine Anfragen.} other {Konsolen-Benutzer, die sich für dieses Unternehmen anmelden.}}} other {Die PII- und Guardrail-Richtlinien für die Anfragen dieses Unternehmens.}}",
+    "users": {
+      "title": "Konsolen-Benutzer ({count, number, integer})",
+      "hint": "Sie melden sich in dieser Konsole an und sehen nur dieses Unternehmen. Personen des Unternehmens nutzen die API und melden sich nie an.",
+      "empty": "Für dieses Unternehmen meldet sich kein Konsolen-Benutzer an."
+    },
+    "policies": {
+      "title": "Wirksame Richtlinien",
+      "hint": "Wird beim Öffnen geladen. Jede Anfrage nutzt genau eine Richtlinie: die des Keys, sonst die des Projekts, sonst die des Unternehmens, sonst die globale.",
+      "pii": "PII",
+      "guardrails": "Guardrails",
+      "level": "{level, select, org {Überschreibung des Unternehmens} other {Globale Richtlinie}}",
+      "piiDetail": "{entities, plural, =0 {Standard-Entitäten} one {# Entität} other {# Entitäten}} · {output, select, true {Modellausgabe geschwärzt} other {Modellausgabe unverändert}}",
+      "guardrailDetail": "Prompt-Injection: {injection, select, block {blockieren} flag {nur markieren} other {aus}} · Secrets in Antworten: {secrets, select, block {blockieren} mask {maskieren} flag {nur markieren} other {aus}}",
+      "overrides": "Eigene Richtlinien von Projekten und Keys dieses Unternehmens ({count, number, integer})",
+      "overridesEmpty": "Kein Projekt und kein Key dieses Unternehmens hat eine eigene Richtlinie.",
+      "overridePii": "PII: {state, select, mask {Maskieren} block {Blockieren} restore {Wiederherstellen} other {Aus}}",
+      "overrideGuardrails": "Guardrails: {count, plural, =0 {keine Regeln} one {# Regel} other {# Regeln}}",
+      "openTarget": "{alias} öffnen",
+      "open": "Guardrails öffnen"
+    }
   },
   "reports": {
     "title": "Geplante Berichte ({count, number, integer})",

@@ -43,8 +43,9 @@
     "apply": "Filter anwenden",
     "key": "API-Key",
     "anyKey": "Alle Keys",
-    "user": "Benutzer",
+    "user": "Konsolen-Benutzer",
     "anyUser": "Alle",
+    "selected": "{kind, select, key {Ausgewählter Key} other {Ausgewählter Konsolen-Benutzer}}",
     "pii": "Nur Anfragen mit PII",
     "reset": "Zurücksetzen",
     "title": "{count, plural, =0 {Filter} other {Filter · # aktiv}}"

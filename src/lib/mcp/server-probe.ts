@@ -1,7 +1,5 @@
 import "server-only";
 import prisma from "@/lib/db/prisma";
-import { requirePermission } from "@/lib/auth/guards";
-import { PERMISSIONS } from "@/lib/auth/permissions";
 import { writeAudit } from "@/lib/audit";
 import { trialClientCredentials } from "@/lib/mcp/auth";
 import { eraOf } from "@/lib/mcp/client";
@@ -12,6 +10,7 @@ import { loadRow, scopedView, serverSelect, type ServerRow } from "@/lib/mcp/ser
 import { mcpClientFor, serverRecord } from "@/lib/mcp/toolset";
 import { guardedFetch } from "@/lib/mcp/transport";
 import { checkServerUrl } from "@/lib/mcp/url-guard";
+import { requireMcpManager } from "@/lib/mcp/scope";
 import { errorFields } from "@/lib/logging/format";
 import { logger } from "@/lib/logging/logger";
 import { mcpProbeSchema } from "@/schemas/mcp";
@@ -73,7 +72,7 @@ export async function storeProbe(id: string, result: McpProbeResult): Promise<Se
 }
 
 export async function probeMcpServer(raw: unknown): Promise<McpProbeResult> {
-  await requirePermission(PERMISSIONS.SETTINGS_MANAGE);
+  await requireMcpManager();
   const input = parse(mcpProbeSchema, raw);
   assertRemoteAuth(input.authType);
   const verdict = checkServerUrl(input.url, input.internal);
@@ -107,7 +106,7 @@ export async function probeMcpServer(raw: unknown): Promise<McpProbeResult> {
 }
 
 export async function refreshMcpServer(id: string) {
-  const session = await requirePermission(PERMISSIONS.SETTINGS_MANAGE);
+  const session = await requireMcpManager();
   if (!id) throw new Error("MISSING_ID");
   const row = await loadRow(id);
   if (row.kind === "hosted") return { server: scopedView(row, session) };

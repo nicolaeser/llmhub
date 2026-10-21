@@ -177,6 +177,7 @@ export default function LoggingTab() {
               key={hook.key}
               draft={hook}
               position={index + 1}
+              canEdit={view.canManage}
               isDisabled={disabled}
               onChange={(next) =>
                 setWebhooks((current) => current.map((item) => (item.key === hook.key ? next : item)))

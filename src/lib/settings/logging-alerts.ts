@@ -1,7 +1,7 @@
 import "server-only";
 
 import { randomUUID } from "node:crypto";
-import { requirePermission, requirePlatformPermission } from "@/lib/auth/guards";
+import { requirePlatformPermission } from "@/lib/auth/guards";
 import { hasPerm, PERMISSIONS } from "@/lib/auth/permissions";
 import { writeAudit } from "@/lib/audit";
 import {
@@ -25,13 +25,19 @@ import type { AlertWebhook } from "@/types/alerts";
 import type { AuthenticatedSession } from "@/types/auth";
 import type { AlertRules, AlertWebhookInput, AlertWebhookView, LoggingSettingsView } from "@/types/settings";
 
+export function visibleWebhookUrl(url: string, canManage: boolean): string {
+  if (canManage) return url;
+  return URL.canParse(url) ? new URL(url).origin : "";
+}
+
 async function view(session: AuthenticatedSession): Promise<LoggingSettingsView> {
   const enterprise = await getEnterprise();
+  const canManage = hasPerm(session.permissions, PERMISSIONS.SETTINGS_MANAGE);
   return {
     alertWebhooks: (enterprise.alert_webhooks ?? []).map(
       (hook): AlertWebhookView => ({
         id: hook.id,
-        url: hook.url,
+        url: visibleWebhookUrl(hook.url, canManage),
         format: hook.format,
         events: hook.events,
         secretSet: Boolean(hook.secret),
@@ -53,7 +59,7 @@ async function view(session: AuthenticatedSession): Promise<LoggingSettingsView>
     logArchive: enterprise.log_archive === true,
     logContent: enterprise.log_content !== false,
     s3Ready: Boolean(await resolveS3Config()),
-    canManage: hasPerm(session.permissions, PERMISSIONS.SETTINGS_MANAGE),
+    canManage,
     budgetAlerts: {
       thresholds: enterprise.budget_alert_thresholds ?? [50, 80, 100],
       canManage: hasPerm(session.permissions, PERMISSIONS.BUDGETS_MANAGE),
@@ -62,7 +68,7 @@ async function view(session: AuthenticatedSession): Promise<LoggingSettingsView>
 }
 
 export async function loadLogging() {
-  const session = await requirePermission(PERMISSIONS.SETTINGS_READ);
+  const session = await requirePlatformPermission(PERMISSIONS.SETTINGS_READ);
   return view(session);
 }
 

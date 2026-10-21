@@ -1,8 +1,9 @@
 import "server-only";
 
 import prisma from "@/lib/db/prisma";
+import { canManage, grantActor } from "@/lib/auth/grants";
 import { requirePermission } from "@/lib/auth/guards";
-import { PERMISSIONS } from "@/lib/auth/permissions";
+import { effectivePermissions, PERMISSIONS } from "@/lib/auth/permissions";
 import { assertPlatform, inCompany, keyVisibleTo } from "@/lib/auth/scope";
 import { writeAudit } from "@/lib/audit";
 import { forecastBudget, spendWindow } from "@/lib/usage/forecast";
@@ -15,8 +16,10 @@ import type { AuthenticatedSession } from "@/types/auth";
 import type { SpendHolder } from "@/types/billing";
 import type {
   BoostInput,
+  BudgetDetail,
   BudgetInput,
   BudgetKind,
+  BudgetRef,
   BudgetResult,
   BudgetView,
   CapLink,
@@ -218,6 +221,40 @@ function assertBudgetScope(session: AuthenticatedSession, kind: BudgetKind) {
   if (PLATFORM_BUDGETS.includes(kind)) assertPlatform(session);
 }
 
+async function assertHolderManageable(session: AuthenticatedSession, kind: BudgetKind, id: string) {
+  if (kind !== "user" || session.isOwner) return;
+  const target = await prisma.user.findUnique({
+    where: { id },
+    select: { id: true, isOwner: true, orgId: true, role: { select: { permissions: true } } },
+  });
+  if (!target) throw new Error("NOT_FOUND");
+  const permissions = effectivePermissions({
+    isOwner: target.isOwner,
+    rolePermissions: target.role?.permissions ?? [],
+    orgId: target.orgId,
+  });
+  if (target.id === session.user.id || target.isOwner || !canManage(grantActor(session), permissions)) {
+    throw new Error("FORBIDDEN");
+  }
+}
+
+export async function loadBudget(input: BudgetRef): Promise<BudgetDetail> {
+  const session = await requirePermission(PERMISSIONS.BUDGETS_MANAGE);
+  if (!isBudgetKind(input.kind)) throw new Error("UNKNOWN_ENTITY_TYPE");
+  assertBudgetScope(session, input.kind);
+  const id = input.id?.trim();
+  if (!id) throw new Error("MISSING_ID");
+  const record = await holderRecord(session, input.kind, id);
+  if (!record) throw new Error("NOT_FOUND");
+  await assertHolderManageable(session, input.kind, id);
+  const now = new Date();
+  const [boosts, ancestors] = await Promise.all([
+    activeBoosts(input.kind, id, now),
+    ancestorsOf(session, record, now),
+  ]);
+  return { kind: input.kind, id, budget: budgetView(record.row, boosts, now), ancestors };
+}
+
 export async function setBudget(input: BudgetInput) {
   const session = await requirePermission(PERMISSIONS.BUDGETS_MANAGE);
   if (!isBudgetKind(input.kind)) throw new Error("UNKNOWN_ENTITY_TYPE");
@@ -230,6 +267,7 @@ export async function setBudget(input: BudgetInput) {
   const now = new Date();
   const record = await holderRecord(session, input.kind, id);
   if (!record) throw new Error("NOT_FOUND");
+  await assertHolderManageable(session, input.kind, id);
   if (capConflict(maxBudget, await ancestorsOf(session, record, now))) {
     throw new Error("BUDGET_EXCEEDS_PARENT");
   }
@@ -263,6 +301,7 @@ export async function addBoost(input: BoostInput) {
   }
   const record = await holderRecord(session, input.kind, id);
   if (!record) throw new Error("NOT_FOUND");
+  await assertHolderManageable(session, input.kind, id);
   if (!(money(record.row.maxBudget) > 0)) throw new Error("BUDGET_NOT_CAPPED");
   const until = new Date(Date.now() + hours * 3_600_000);
   await prisma.tempBudget.create({
@@ -278,15 +317,18 @@ export async function addBoost(input: BoostInput) {
   return budgetResult(session, input.kind, id);
 }
 
-export async function removeBoost(boostId: string) {
+export async function removeBoost(boostId: string, kind?: BudgetKind) {
   const session = await requirePermission(PERMISSIONS.BUDGETS_MANAGE);
   if (!boostId) throw new Error("MISSING_ID");
   const boost = await prisma.tempBudget.findUnique({ where: { id: boostId } });
-  if (!boost || !isBudgetKind(boost.entityType)) throw new Error("NOT_FOUND");
+  if (!boost || !isBudgetKind(boost.entityType) || (kind && boost.entityType !== kind)) {
+    throw new Error("NOT_FOUND");
+  }
   assertBudgetScope(session, boost.entityType);
   if (!(await holderRecord(session, boost.entityType, boost.entityId))) {
     throw new Error("NOT_FOUND");
   }
+  await assertHolderManageable(session, boost.entityType, boost.entityId);
   await prisma.tempBudget.delete({ where: { id: boost.id } });
   await writeAudit({
     actor: session.user.id,

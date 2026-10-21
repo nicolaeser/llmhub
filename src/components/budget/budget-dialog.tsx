@@ -15,7 +15,7 @@ import {
   toast,
   type useOverlayState,
 } from "@heroui/react";
-import { useFormatter, useTranslations } from "next-intl";
+import { useFormatter, useNow, useTranslations } from "next-intl";
 import { formats } from "@/i18n/formats";
 import { isActionFail } from "@/lib/http/action-result";
 import { budgetPeriod, capConflict, meterColor } from "@/lib/utils/budget";
@@ -57,10 +57,12 @@ export default function BudgetDialog({
   const t = useTranslations("Budgets");
   const showError = useErrorToast();
   const format = useFormatter();
+  const now = useNow({ updateInterval: 60_000 });
   const current = budget?.maxBudget ?? 0;
+  const savedPeriod = budgetPeriod(budget?.budgetDuration ?? "") ?? "";
   const [limited, setLimited] = useState(current > 0);
   const [amount, setAmount] = useState(current > 0 ? current : 100);
-  const [period, setPeriod] = useState(budgetPeriod(budget?.budgetDuration ?? "") ?? "");
+  const [period, setPeriod] = useState(savedPeriod);
   const [pending, start] = useTransition();
   const periodLabel = useId();
   const valid = Number.isFinite(amount) && amount > 0;
@@ -69,6 +71,7 @@ export default function BudgetDialog({
   const spend = budget?.spend ?? 0;
   const ratio = cap > 0 ? Math.min(1, spend / cap) : 0;
   const custom = PERIODS.some((item) => item.value === period) ? null : period;
+  const resetsAt = budget?.resetsAt && period === savedPeriod ? new Date(budget.resetsAt) : null;
 
   function save(close: () => void) {
     if (!target) return;
@@ -215,6 +218,11 @@ export default function BudgetDialog({
               hasBoost: (budget?.boost ?? 0) > 0 ? "yes" : "no",
             })}
           </p>
+          {resetsAt ? (
+            <p className="text-sm text-muted">
+              {t("resets", { when: resetsAt > now ? "later" : "now", date: resetsAt })}
+            </p>
+          ) : null}
         </Card.Content>
       </Card>
     </FormDialog>

@@ -21,8 +21,10 @@
     "requests": "Anfragen (7 Tage)",
     "errors": "Fehler (7 Tage)"
   },
-  "secretTitle": "Dieses Geheimnis speichern",
+  "secretTitle": "Geheimnis von {name} speichern",
   "secretHint": "Der vollständige Schlüssel wird nur dieses eine Mal angezeigt.",
+  "copySecret": "Geheimnis kopieren",
+  "secretDismiss": "Geheimnis ausblenden",
   "columns": {
     "name": "Schlüsselname",
     "binding": "Gehört zu",
@@ -36,6 +38,7 @@
     "access": "Modellzugriff",
     "templates": "Modellvorlagen",
     "templatesHint": "Regeln aus Vorlagen bleiben aktuell, wenn sich Modelle ändern. <link>Vorlagen verwalten</link>",
+    "templatesNote": "Regeln aus Vorlagen bleiben aktuell, wenn sich Modelle ändern.",
     "templatesPlaceholder": "Keine Vorlage",
     "models": "Einzelne Modelle",
     "modelsHint": "Zusätzlich zu den gewählten Vorlagen erlaubt.",
@@ -91,6 +94,7 @@
     "rotated": "Key rotiert. Kopiere das neue Secret."
   },
   "edit": "Key bearbeiten",
+  "actionsMenu": "Aktionen für {name}",
   "dialogTitle": "{mode, select, edit {Key bearbeiten} other {Key erstellen}}",
   "dialogSubmit": "{mode, select, edit {Speichern} other {Key erstellen}}",
   "access": "{state, select, all {Ohne Vorlagen oder Modelle darf dieser Key jedes Modell nutzen.} none {Dieser Key darf noch kein Modell nutzen. Wähle eine Vorlage mit passenden Modellen oder füge einzelne Modelle hinzu.} other {{count, plural, one {Dieser Key darf # Modell nutzen.} other {Dieser Key darf # Modelle nutzen.}}}}",
@@ -102,16 +106,16 @@
   "windowChip": "Zeitlich begrenzt",
   "binding": {
     "kind": "{kind, select, project {Projekt} member {Person} other {Intern}}",
-    "hint": "{kind, select, project {Für eine Anwendung. Wird dem Projekt, seiner Abteilung und dem Unternehmen berechnet.} member {Persönlicher Key für einen Benutzer des Unternehmens. Wird der Person, ihrer Abteilung und dem Unternehmen berechnet.} other {{scope, select, company {Für deine eigene Nutzung. Wird deinem Budget und deinem Unternehmen berechnet.} other {Für deine eigene Nutzung. Wird deinem persönlichen Budget berechnet, keinem Kunden.}}}}",
+    "hint": "{kind, select, project {Für eine Anwendung. Wird dem Projekt, seiner Abteilung und dem Unternehmen berechnet.} member {Persönlicher Key für eine Person des Unternehmens, nicht für einen Konsolen-Benutzer. Wird der Person, ihrer Abteilung und dem Unternehmen berechnet.} other {{scope, select, company {Für deine eigene Nutzung. Wird deinem Budget und deinem Unternehmen berechnet.} other {Für deine eigene Nutzung. Wird deinem persönlichen Budget berechnet, keinem Kunden.}}}}",
     "pick": "{kind, select, project {Projekt wählen} other {Person wählen}}",
     "place": "{hasTeam, select, yes {{org} › {team}} other {{org}}}",
     "path": "{kind, select, project {Projekt} member {Person} other {Intern}}{hasPlace, select, yes { · {place}} other {}}",
     "targetHint": "{kind, select, project {Budgets und Limits von Projekt, Abteilung und Unternehmen gelten.} other {Budgets und Limits von Person, Abteilung und Unternehmen gelten.}}",
-    "empty": "{kind, select, project {Noch keine Projekte. Lege eines unter <link>Unternehmen</link> an.} other {Noch keine Personen. Lege eine unter <link>Unternehmen</link> an.}}",
+    "empty": "{kind, select, project {Noch keine Projekte. Projekte werden unter Unternehmen einem Unternehmen hinzugefügt.} other {Noch keine Personen. Personen werden unter Unternehmen einem Unternehmen hinzugefügt.}}",
     "locked": "Projekt- und Personen-Keys erfordern die Berechtigung Unternehmen verwalten. Du kannst interne Keys für dich selbst erstellen."
   },
   "mcp": {
-    "open": "MCP-Zugriff für {name}",
+    "action": "MCP-Zugriff",
     "title": "MCP-Zugriff für {name}",
     "description": "Lege fest, welche MCP-Server dieser Key nutzen darf und was jedes Tool darf. Eine Regel am Key ist die genaueste: Ihre Rolle gilt, und Sperren für Unternehmen, Abteilung, Projekt oder Person gelten weiter.",
     "loadFailed": "Der MCP-Zugriff dieses Keys ließ sich nicht laden.",

@@ -1,6 +1,6 @@
 import "server-only";
 
-import { requirePermission, requirePlatformPermission } from "@/lib/auth/guards";
+import { requirePlatformPermission } from "@/lib/auth/guards";
 import { hasPerm, PERMISSIONS } from "@/lib/auth/permissions";
 import { writeAudit } from "@/lib/audit";
 import { env } from "@/lib/env";
@@ -35,7 +35,7 @@ async function view(enterprise: Enterprise, permissions: readonly Permission[]):
 }
 
 export async function loadGeneralSettings() {
-  const session = await requirePermission(PERMISSIONS.SETTINGS_READ);
+  const session = await requirePlatformPermission(PERMISSIONS.SETTINGS_READ);
   return view(await getEnterprise(), session.permissions);
 }
 

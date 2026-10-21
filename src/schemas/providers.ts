@@ -8,10 +8,17 @@ export const providerPolicySchema = z.object({
   noTraining: z.boolean().default(false),
 });
 
+export const vertexTargetSchema = z
+  .object({
+    project: z.string().trim().max(100).optional(),
+    location: z.string().trim().max(64).optional(),
+  })
+  .strict();
+
 export const MAX_AUTH_FILES = 50;
 export const MAX_AUTH_FILE_BYTES = 256 * 1024;
 
-const signInKindSchema = z.enum(["codex", "grok_build", "claude", "antigravity"]);
+const signInKindSchema = z.enum(["codex", "grok_build", "claude", "antigravity", "kimi", "kimi_ai", "muse_code", "devin"]);
 
 const authFileUploadSchema = z.object({
   name: z.string().trim().min(1).max(255),
@@ -41,6 +48,7 @@ const signInSessionSchema = z.object({
     refresh: z.string().min(1),
     accountId: z.string(),
     residency: z.string(),
+    device: z.string().optional(),
   }),
   expiresAt: z.number(),
   account: z.string(),
@@ -57,6 +65,10 @@ export const signInTicketSchema = z.object({
     z.object({ kind: z.literal("grok_build"), deviceCode: z.string().min(1) }),
     z.object({ kind: z.literal("claude"), verifier: z.string().min(1), state: z.string().min(1) }),
     z.object({ kind: z.literal("antigravity"), verifier: z.string().min(1), state: z.string().min(1) }),
+    z.object({ kind: z.literal("kimi"), deviceCode: z.string().min(1), device: z.string().min(1) }),
+    z.object({ kind: z.literal("kimi_ai"), deviceCode: z.string().min(1), device: z.string().min(1) }),
+    z.object({ kind: z.literal("muse_code"), deviceCode: z.string().min(1) }),
+    z.object({ kind: z.literal("devin"), verifier: z.string().min(1), state: z.string().min(1) }),
   ]),
 });
 

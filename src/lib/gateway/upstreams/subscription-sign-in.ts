@@ -1,5 +1,5 @@
 import "server-only";
-import { randomBytes } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import { open, pkceChallenge, seal } from "@/lib/crypto";
 import {
   ANTIGRAVITY_AUTHORIZE_URL,
@@ -16,15 +16,29 @@ import {
 } from "@/lib/gateway/upstreams/antigravity";
 import { antigravityClientSecret } from "@/lib/gateway/upstreams/antigravity-config";
 import { CLAUDE_OAUTH_BETAS, claudeIdentityHeaders } from "@/lib/gateway/upstreams/claude";
+import { devinAuthorizationUrl, devinSession, pastedSessionToken } from "@/lib/gateway/upstreams/devin-account";
+import { devinProfile, devinStatusReply, exchangeDevinCode, readDevinStatus } from "@/lib/gateway/upstreams/devin-api";
+import { KIMI_CLIENT_ID, kimiAuthHost, kimiHeaders } from "@/lib/gateway/upstreams/kimi";
+import {
+  MUSE_AUTH_USER_AGENT,
+  MUSE_CLIENT_ID,
+  MUSE_DEVICE_URL,
+  MUSE_KEY_EXPIRES_AT,
+  MUSE_MINT_URL,
+  MUSE_TOKEN_URL,
+} from "@/lib/gateway/upstreams/muse";
 import { retryAfterMs } from "@/lib/gateway/upstreams/reset-credits";
 import { asNumber, asRecord, asString } from "@/lib/gateway/core";
 import { readJsonOr } from "@/lib/utils/json";
 import { signInCredentialSchema, signInTicketSchema } from "@/schemas/providers";
 import type { JsonMap } from "@/types/gateway";
 import type {
+  CodeGrant,
   DeviceAuthorization,
   DeviceGrant,
   DevicePoll,
+  KimiCodeKind,
+  RotatingSignInKind,
   SignInCredential,
   SignInKind,
   SignInSession,
@@ -49,12 +63,18 @@ const CLAUDE_SCOPE = "user:profile user:inference user:sessions:claude_code user
 const CLAUDE_AUTHORIZATION_TTL_S = 10 * 60;
 const CLAUDE_OAUTH_USER_AGENT = "axios/1.15.2";
 const ANTIGRAVITY_AUTHORIZATION_TTL_S = 10 * 60;
+const DEVIN_AUTHORIZATION_TTL_S = 10 * 60;
+const DEVIN_VERIFIER_BYTES = 64;
 const ONBOARD_ATTEMPTS = 5;
 const ONBOARD_POLL_MS = 2_000;
 const DEVICE_GRANT_TYPE = "urn:ietf:params:oauth:grant-type:device_code";
 const AUTH_TIMEOUT_MS = 15_000;
 const DEFAULT_INTERVAL_S = 5;
 const DEFAULT_TOKEN_TTL_S = 3600;
+const KIMI_DEVICE_TTL_S = 15 * 60;
+const MUSE_DEVICE_TTL_S = 15 * 60;
+const MUSE_DCA_PREFIX = "dca:";
+const FORBIDDEN_IS_FATAL = new Set<SignInKind>(["kimi", "kimi_ai", "muse_code"]);
 const FATAL_REFRESH_CODES = new Set([
   "invalid_grant",
   "invalid_client",
@@ -129,6 +149,41 @@ export function xaiSession(payload: JsonMap, now = Date.now(), previous?: SignIn
       previous?.account ||
       "",
     plan: previous?.plan ?? "",
+  };
+}
+
+export function kimiSession(payload: JsonMap, device: string, now = Date.now(), previous?: SignInSession): SignInSession {
+  const access = asString(payload.access_token);
+  if (!access) throw new Error("SIGN_IN_FAILED");
+  const claims = jwtClaims(access) ?? {};
+  const accountId = asString(claims.user_id) || asString(claims.sub) || previous?.tokens.accountId || "";
+  return {
+    tokens: {
+      access,
+      refresh: asString(payload.refresh_token) || previous?.tokens.refresh || "",
+      accountId,
+      residency: "",
+      device: device || previous?.tokens.device || "",
+    },
+    expiresAt: tokenExpiry(access, payload.expires_in, now),
+    account:
+      asString(claims.email) ||
+      asString(claims.preferred_username) ||
+      asString(claims.name) ||
+      previous?.account ||
+      accountId,
+    plan: previous?.plan ?? "",
+  };
+}
+
+export function museSession(minted: JsonMap, dca: string, previous?: SignInSession): SignInSession {
+  const access = asString(minted.api_key).trim();
+  if (!access || access.startsWith(MUSE_DCA_PREFIX)) throw new Error("SIGN_IN_FAILED");
+  return {
+    tokens: { access, refresh: dca || previous?.tokens.refresh || "", accountId: "", residency: "" },
+    expiresAt: MUSE_KEY_EXPIRES_AT,
+    account: asString(minted.user_email) || previous?.account || "",
+    plan: asString(minted.subs_tier_name) || previous?.plan || "",
   };
 }
 
@@ -242,7 +297,17 @@ const AUTHORIZATION_STARTS: Record<SignInKind, () => Promise<DeviceAuthorization
   claude: async () => requestAuthorizationCode(),
   codex: () => requestOpenaiDeviceCode(),
   grok_build: () => requestXaiDeviceCode(),
+  kimi: () => requestKimiDeviceCode("kimi"),
+  kimi_ai: () => requestKimiDeviceCode("kimi_ai"),
+  muse_code: () => requestMuseDeviceCode(),
+  devin: async () => requestDevinAuthorization(),
 };
+
+const CODE_GRANT_KINDS = new Set<string>(["claude", "antigravity", "devin"]);
+
+export function isCodeGrant(grant: DeviceGrant): grant is CodeGrant {
+  return CODE_GRANT_KINDS.has(grant.kind);
+}
 
 export function startAuthorization(kind: SignInKind): Promise<DeviceAuthorization> {
   if (!Object.hasOwn(AUTHORIZATION_STARTS, kind)) throw new Error("UNKNOWN_PROVIDER_KIND");
@@ -292,6 +357,43 @@ export function requestAuthorizationCode(): DeviceAuthorization {
     interval: DEFAULT_INTERVAL_S,
     expiresIn: CLAUDE_AUTHORIZATION_TTL_S,
   };
+}
+
+export function requestDevinAuthorization(): DeviceAuthorization {
+  const verifier = randomBytes(DEVIN_VERIFIER_BYTES).toString("base64url");
+  const state = randomBytes(32).toString("base64url");
+  return {
+    grant: { kind: "devin", verifier, state },
+    verificationUrl: devinAuthorizationUrl(pkceChallenge(verifier), state),
+    userCode: "",
+    interval: DEFAULT_INTERVAL_S,
+    expiresIn: DEVIN_AUTHORIZATION_TTL_S,
+  };
+}
+
+async function devinAccountSession(token: string): Promise<SignInSession> {
+  const [reply, profile] = await Promise.all([devinStatusReply(token), devinProfile(token)]);
+  if (reply.status === 401 || reply.status === 403) throw new Error("SIGN_IN_FAILED");
+  const session = devinSession(token, { status: readDevinStatus(reply), profile });
+  if (!session.account) throw new Error("SIGN_IN_FAILED");
+  return session;
+}
+
+async function completeDevin(grant: Extract<DeviceGrant, { kind: "devin" }>, input: string): Promise<SignInSession> {
+  const pasted = pastedSessionToken(input);
+  if (pasted) return devinAccountSession(pasted);
+  const { code, state } = parseAuthorizationInput(input);
+  if (!code || (state && state !== grant.state)) throw new Error("SIGN_IN_FAILED");
+  return devinAccountSession(await exchangeDevinCode(code, grant.verifier));
+}
+
+async function renewDevin(current: SignInSession): Promise<TokenRefresh> {
+  const reply = await devinStatusReply(current.tokens.access);
+  if (reply.status === 401 || reply.status === 403) return { ok: false, fatal: true, retryAfterMs: null };
+  if (reply.status === 429) return { ok: false, fatal: false, retryAfterMs: retryAfterMs(reply.retryAfter, Date.now()) };
+  const status = readDevinStatus(reply);
+  if (!status) return { ok: false, fatal: false, retryAfterMs: null };
+  return { ok: true, session: devinSession(current.tokens.access, { status }, current) };
 }
 
 export function parseAuthorizationInput(input: string): { code: string; state: string } {
@@ -393,10 +495,8 @@ async function completeAntigravity(
   return antigravitySession(exchanged.json, Date.now(), undefined, { account, plan: details.plan, project: details.project });
 }
 
-export async function completeAuthorization(
-  grant: Extract<DeviceGrant, { kind: "claude" | "antigravity" }>,
-  input: string,
-): Promise<SignInSession> {
+export async function completeAuthorization(grant: CodeGrant, input: string): Promise<SignInSession> {
+  if (grant.kind === "devin") return completeDevin(grant, input);
   const { code, state } = parseAuthorizationInput(input);
   if (!code || (state && state !== grant.state)) throw new Error("SIGN_IN_FAILED");
   if (grant.kind === "antigravity") return completeAntigravity(grant, code);
@@ -452,6 +552,97 @@ export async function requestXaiDeviceCode(): Promise<DeviceAuthorization> {
     interval: intervalOf(json.interval),
     expiresIn: Math.max(60, Math.round(asNumber(json.expires_in, OPENAI_DEVICE_TTL_S))),
   };
+}
+
+export async function requestKimiDeviceCode(kind: KimiCodeKind): Promise<DeviceAuthorization> {
+  const device = randomUUID();
+  const { status, json } = await postAuth(
+    `${kimiAuthHost(kind)}/api/oauth/device_authorization`,
+    new URLSearchParams({ client_id: KIMI_CLIENT_ID }),
+    kimiHeaders(device),
+  );
+  const deviceCode = asString(json.device_code);
+  const userCode = asString(json.user_code);
+  const verificationUrl = asString(json.verification_uri_complete) || asString(json.verification_uri);
+  if (status >= 400 || !deviceCode || !userCode || !verificationUrl.startsWith("https://")) {
+    throw new Error("SIGN_IN_FAILED");
+  }
+  return {
+    grant: { kind, deviceCode, device },
+    verificationUrl,
+    userCode,
+    interval: intervalOf(json.interval),
+    expiresIn: Math.max(60, Math.round(asNumber(json.expires_in, KIMI_DEVICE_TTL_S))),
+  };
+}
+
+export async function requestMuseDeviceCode(): Promise<DeviceAuthorization> {
+  const { status, json } = await postAuth(MUSE_DEVICE_URL, new URLSearchParams({ client_id: MUSE_CLIENT_ID }), {
+    "User-Agent": MUSE_AUTH_USER_AGENT,
+  });
+  const deviceCode = asString(json.device_code);
+  const userCode = asString(json.user_code);
+  const verificationUrl = asString(json.verification_uri_complete) || asString(json.verification_uri);
+  if (status >= 400 || !deviceCode || !userCode || !verificationUrl.startsWith("https://")) {
+    throw new Error("SIGN_IN_FAILED");
+  }
+  return {
+    grant: { kind: "muse_code", deviceCode },
+    verificationUrl,
+    userCode,
+    interval: intervalOf(json.interval),
+    expiresIn: Math.max(60, Math.round(asNumber(json.expires_in, MUSE_DEVICE_TTL_S))),
+  };
+}
+
+export function mintMuseKey(dca: string): Promise<{ status: number; json: JsonMap; retryAfterMs: number | null }> {
+  return postAuth(MUSE_MINT_URL, { dca_token: dca }, { Authorization: `Bearer ${dca}`, "User-Agent": MUSE_AUTH_USER_AGENT });
+}
+
+function devicePending(json: JsonMap): DevicePoll | null {
+  switch (errorCode(json)) {
+    case "authorization_pending":
+      return { state: "pending", slowDown: false };
+    case "slow_down":
+      return { state: "pending", slowDown: true };
+    case "access_denied":
+      return { state: "denied" };
+    case "expired_token":
+      return { state: "expired" };
+    default:
+      return null;
+  }
+}
+
+async function pollKimi(grant: Extract<DeviceGrant, { kind: KimiCodeKind }>): Promise<DevicePoll> {
+  const polled = await postAuth(
+    `${kimiAuthHost(grant.kind)}/api/oauth/token`,
+    new URLSearchParams({ client_id: KIMI_CLIENT_ID, device_code: grant.deviceCode, grant_type: DEVICE_GRANT_TYPE }),
+    kimiHeaders(grant.device),
+  );
+  const waiting = devicePending(polled.json);
+  if (waiting) return waiting;
+  if (polled.status >= 400 || errorCode(polled.json)) throw new Error("SIGN_IN_FAILED");
+  const session = kimiSession(polled.json, grant.device);
+  if (!session.tokens.refresh) throw new Error("SIGN_IN_FAILED");
+  return { state: "done", session };
+}
+
+async function pollMuse(grant: Extract<DeviceGrant, { kind: "muse_code" }>): Promise<DevicePoll> {
+  const polled = await postAuth(
+    MUSE_TOKEN_URL,
+    new URLSearchParams({ grant_type: DEVICE_GRANT_TYPE, device_code: grant.deviceCode, client_id: MUSE_CLIENT_ID }),
+    { "User-Agent": MUSE_AUTH_USER_AGENT },
+  );
+  const dca = asString(polled.json.access_token);
+  if (polled.status >= 400 || !dca) {
+    const waiting = devicePending(polled.json);
+    if (waiting) return waiting;
+    throw new Error("SIGN_IN_FAILED");
+  }
+  const minted = await mintMuseKey(dca);
+  if (minted.status >= 400) throw new Error("SIGN_IN_FAILED");
+  return { state: "done", session: museSession(minted.json, dca) };
 }
 
 async function pollOpenai(grant: Extract<DeviceGrant, { kind: "codex" }>): Promise<DevicePoll> {
@@ -510,13 +701,18 @@ export function pollDeviceCode(grant: DeviceGrant): Promise<DevicePoll> {
       return pollOpenai(grant);
     case "grok_build":
       return pollXai(grant);
+    case "kimi":
+    case "kimi_ai":
+      return pollKimi(grant);
+    case "muse_code":
+      return pollMuse(grant);
     default:
       return Promise.reject(new Error("SIGN_IN_FAILED"));
   }
 }
 
 async function refreshRequest(
-  kind: SignInKind,
+  kind: RotatingSignInKind,
   current: SignInSession,
 ): Promise<{ status: number; json: JsonMap; retryAfterMs: number | null }> {
   switch (kind) {
@@ -556,10 +752,23 @@ async function refreshRequest(
         },
         { "User-Agent": CLAUDE_OAUTH_USER_AGENT },
       );
+    case "kimi":
+    case "kimi_ai":
+      return postAuth(
+        `${kimiAuthHost(kind)}/api/oauth/token`,
+        new URLSearchParams({
+          client_id: KIMI_CLIENT_ID,
+          grant_type: "refresh_token",
+          refresh_token: current.tokens.refresh,
+        }),
+        kimiHeaders(current.tokens.device),
+      );
+    case "muse_code":
+      return mintMuseKey(current.tokens.refresh);
   }
 }
 
-function refreshedSession(kind: SignInKind, json: JsonMap, current: SignInSession): SignInSession {
+function refreshedSession(kind: RotatingSignInKind, json: JsonMap, current: SignInSession): SignInSession {
   switch (kind) {
     case "codex":
       return openaiSession(json, Date.now(), current);
@@ -569,11 +778,17 @@ function refreshedSession(kind: SignInKind, json: JsonMap, current: SignInSessio
       return claudeSession(json, Date.now(), current);
     case "antigravity":
       return antigravitySession(json, Date.now(), current);
+    case "kimi":
+    case "kimi_ai":
+      return kimiSession(json, current.tokens.device ?? "", Date.now(), current);
+    case "muse_code":
+      return museSession(json, current.tokens.refresh, current);
   }
 }
 
 export async function refreshSession(kind: SignInKind, current: SignInSession): Promise<TokenRefresh> {
   if (!current.tokens.refresh) return { ok: false, fatal: true, retryAfterMs: null };
+  if (kind === "devin") return renewDevin(current);
   let result: { status: number; json: JsonMap; retryAfterMs: number | null };
   try {
     result = await refreshRequest(kind, current);
@@ -581,7 +796,10 @@ export async function refreshSession(kind: SignInKind, current: SignInSession): 
     return { ok: false, fatal: false, retryAfterMs: null };
   }
   if (result.status >= 400) {
-    const fatal = result.status === 401 || FATAL_REFRESH_CODES.has(errorCode(result.json));
+    const fatal =
+      result.status === 401 ||
+      (result.status === 403 && FORBIDDEN_IS_FATAL.has(kind)) ||
+      FATAL_REFRESH_CODES.has(errorCode(result.json));
     return { ok: false, fatal, retryAfterMs: result.status === 429 ? result.retryAfterMs : null };
   }
   try {

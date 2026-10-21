@@ -21,15 +21,19 @@ import { formats } from "@/i18n/formats";
 import { Link } from "@/i18n/routing";
 import MultiPicker from "@/components/console/multi-picker";
 import SearchSelect from "@/components/console/search-select";
-import { createKeyAction, updateKeyAction } from "../_action";
 import { isActionFail } from "@/lib/http/action-result";
 import { accessWindowValid, KEY_ENDPOINTS } from "@/lib/gateway/access/key-restrictions";
+import type { ActionFail } from "@/types/actions";
 import type {
   AccessWindowDraft,
+  IssuedKey,
   KeyBindingKind,
+  KeyCreateInput,
   KeyEndpoint,
+  KeyFieldsInput,
   KeyOptions,
   KeyPreset,
+  KeyUpdateInput,
   VirtualKeyView,
 } from "@/types/keys";
 import AccessWindowFields from "./access-window-fields";
@@ -58,12 +62,14 @@ function initialKind(
   return options.projects.length || options.members.length ? "project" : "internal";
 }
 
-export function KeyDialog({
+export default function KeyDialog({
   state,
   editing,
   preset,
   options,
   canBind,
+  onCreate,
+  onUpdate,
   onSaved,
 }: {
   state: ReturnType<typeof useOverlayState>;
@@ -71,6 +77,8 @@ export function KeyDialog({
   preset: KeyPreset | null;
   options: KeyOptions;
   canBind: boolean;
+  onCreate: (input: KeyCreateInput) => Promise<{ key: IssuedKey } | ActionFail>;
+  onUpdate: (input: KeyUpdateInput) => Promise<{ key: VirtualKeyView } | ActionFail>;
   onSaved: (key: VirtualKeyView, secret: string | null) => void;
 }) {
   const t = useTranslations("Keys");
@@ -114,7 +122,7 @@ export function KeyDialog({
 
   function save(close: () => void) {
     start(async () => {
-      const shared = {
+      const shared: KeyFieldsInput = {
         alias: alias.trim(),
         projectId: kind === "project" ? projectId : "",
         memberId: kind === "member" ? memberId : "",
@@ -130,14 +138,14 @@ export function KeyDialog({
         logContent,
       };
       if (editing) {
-        const result = await updateKeyAction({ ...shared, id: editing.token_id, blocked });
+        const result = await onUpdate({ ...shared, id: editing.token_id, blocked });
         if (isActionFail(result)) {
           showError(result.error);
           return;
         }
         onSaved(result.key, null);
       } else {
-        const result = await createKeyAction({ ...shared, days: Number(days) || 0 });
+        const result = await onCreate({ ...shared, days: Number(days) || 0 });
         if (isActionFail(result)) {
           showError(result.error);
           return;
@@ -215,31 +223,24 @@ export function KeyDialog({
             else setMemberId(next);
           }}
           isDisabled={pending || !canBind || targets.length === 0}
-          description={
-            targets.length
-              ? t("binding.targetHint", { kind })
-              : t.rich("binding.empty", {
-                  kind,
-                  link: (chunks) => (
-                    <Link href="/companies" className="text-accent">
-                      {chunks}
-                    </Link>
-                  ),
-                })
-          }
+          description={targets.length ? t("binding.targetHint", { kind }) : t("binding.empty", { kind })}
         />
       )}
       <Separator />
       <p className="text-sm font-medium text-foreground">{t("fields.access")}</p>
       <MultiPicker
         label={t("fields.templates")}
-        description={t.rich("fields.templatesHint", {
-          link: (chunks) => (
-            <Link href="/keys?tab=templates" className="text-accent">
-              {chunks}
-            </Link>
-          ),
-        })}
+        description={
+          options.canTemplates
+            ? t.rich("fields.templatesHint", {
+                link: (chunks) => (
+                  <Link href="/keys?tab=templates" className="text-accent">
+                    {chunks}
+                  </Link>
+                ),
+              })
+            : t("fields.templatesNote")
+        }
         placeholder={t("fields.templatesPlaceholder")}
         searchLabel={t("fields.search")}
         emptyLabel={t("fields.noResults")}

@@ -30,14 +30,15 @@ function idOf(value: unknown): string {
 
 export async function loadKnowledge(): Promise<KnowledgeView> {
   const session = await requirePermission(PERMISSIONS.TENANCY_READ);
+  const canManage = hasPerm(session.permissions, PERMISSIONS.TENANCY_MANAGE);
   const [data, models] = await Promise.all([
     listConsoleStores(session),
-    enabledModelChoices(),
+    canManage ? enabledModelChoices() : [],
   ]);
   return {
     ...data,
     models,
-    canManage: hasPerm(session.permissions, PERMISSIONS.TENANCY_MANAGE),
+    canManage,
     maxUploadBytes: MAX_UPLOAD_BYTES,
   };
 }

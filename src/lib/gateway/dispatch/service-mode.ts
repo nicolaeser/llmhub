@@ -4,6 +4,7 @@ import { DAYBREAK_AUTO, VARIANT_LABELS } from "@/lib/gateway/catalog/model-varia
 import { GateError } from "@/lib/gateway/errors";
 import { speaksAnthropic } from "@/lib/gateway/upstreams/provider-kinds";
 import { CODEX_FAST_TIER, CODEX_ULTRAFAST_TIER } from "@/lib/gateway/upstreams/codex";
+import { devinTierVariants } from "@/lib/gateway/upstreams/devin-models";
 import type { HubServiceMode, JsonMap, ModeSupport } from "@/types/gateway";
 import type { ModelVariant } from "@/types/models";
 import type { ModelFacts, ServiceTarget } from "@/types/routing";
@@ -78,6 +79,7 @@ export function modeSupport(
     return kind === "openai" ? "unverified" : "none";
   }
   if (kind === "codex") return listed(facts?.serviceTiers, [CODEX_FAST_TIER]);
+  if (kind === "devin") return devinTierVariants(facts?.variants, "fast") ? "confirmed" : "none";
   if (speaksAnthropic(kind)) return anthropicFastSupported(model) ? "confirmed" : "none";
   if (FAST_KINDS.has(kind)) return "confirmed";
   return kind === "openai_compat" ? "unverified" : "none";
@@ -208,8 +210,23 @@ export function applyProviderServiceMode(
       }
       break;
     }
+    case "devin": {
+      delete payload.speed;
+      delete payload.service_tier;
+      if (mode === "fast" || mode === "ultrafast") payload.service_tier = "fast";
+      else if (mode === "priority") payload.service_tier = "priority";
+      break;
+    }
     case "typesafe":
-    case "grok_build": {
+    case "grok_build":
+    case "moonshot":
+    case "moonshot_cn":
+    case "kimi":
+    case "kimi_ai":
+    case "meta":
+    case "muse_code":
+    case "gemini":
+    case "vertex": {
       delete payload.service_tier;
       delete payload.speed;
       break;

@@ -18,10 +18,19 @@ import type { NavItem, NavSection, ScopeKind } from "@/types/console";
 
 export const NAV: NavSection[] = [
   {
-    id: "tenants",
-    labelKey: "sections.tenants",
+    id: "organization",
+    labelKey: "sections.organization",
     items: [
       { href: "/companies", labelKey: "items.companies", scope: "platform", icon: Building2, permission: PERMISSIONS.TENANCY_READ },
+      { href: "/companies", labelKey: "items.company", scope: "company", icon: Building2, permission: PERMISSIONS.TENANCY_READ },
+      {
+        href: "/keys",
+        labelKey: "items.keys",
+        scope: "platform",
+        icon: KeyRound,
+        permission: [PERMISSIONS.KEYS_READ, PERMISSIONS.MODELS_READ],
+      },
+      { href: "/keys", labelKey: "items.keys", scope: "company", icon: KeyRound, permission: PERMISSIONS.KEYS_READ },
       {
         href: "/users",
         labelKey: "items.users",
@@ -32,32 +41,11 @@ export const NAV: NavSection[] = [
     ],
   },
   {
-    id: "organization",
-    labelKey: "sections.organization",
-    items: [
-      { href: "/companies", labelKey: "items.company", scope: "company", icon: Building2, permission: PERMISSIONS.TENANCY_READ },
-      {
-        href: "/keys",
-        labelKey: "items.keys",
-        scope: "company",
-        icon: KeyRound,
-        permission: [PERMISSIONS.KEYS_READ, PERMISSIONS.MODELS_READ],
-      },
-    ],
-  },
-  {
     id: "gateway",
     labelKey: "sections.gateway",
     items: [
       { href: "/providers", labelKey: "items.providers", scope: "platform", icon: Plug, permission: PERMISSIONS.PROVIDERS_READ },
       { href: "/models", labelKey: "items.models", scope: "platform", icon: Network, permission: PERMISSIONS.MODELS_READ },
-      {
-        href: "/keys",
-        labelKey: "items.keys",
-        scope: "platform",
-        icon: KeyRound,
-        permission: [PERMISSIONS.KEYS_READ, PERMISSIONS.MODELS_READ],
-      },
     ],
   },
   {
@@ -131,6 +119,12 @@ export function visibleNav(permissions: readonly Permission[], scope: ScopeKind)
     ...section,
     items: section.items.filter((item) => canSee(permissions, item, scope)),
   })).filter((section) => section.items.length > 0);
+}
+
+export function canOpen(permissions: readonly Permission[], pathname: string, scope: ScopeKind): boolean {
+  return NAV.some((section) =>
+    section.items.some((item) => matchesPath(item, pathname) && canSee(permissions, item, scope)),
+  );
 }
 
 export function homePath(permissions: readonly Permission[], scope: ScopeKind = "platform"): string {

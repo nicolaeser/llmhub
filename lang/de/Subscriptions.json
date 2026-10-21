@@ -88,6 +88,7 @@
   "sharedVia": "{named, select, true {Über Link: {label}} other {Über Link}}",
   "signInAgain": "Neu anmelden",
   "noAccount": "Ohne Kontoname",
+  "noneTitle": "Noch keine Abo-Konten",
   "backIn": "Wieder verfügbar {when} ({date}).",
   "backInUnknown": "Limit erreicht. Der Anbieter nennt keinen Zeitpunkt für die Zurücksetzung.",
   "expiredHint": "Melde dich erneut an, um dieses Konto zu nutzen.",
@@ -180,15 +181,15 @@
   },
   "antigravity": {
     "title": "Google-OAuth-Client",
-    "description": "Die Antigravity-Anmeldung braucht das Secret des öffentlichen Google-OAuth-Clients. Es wird versiegelt gespeichert und nie wieder angezeigt.",
+    "description": "{bundled, select, true {Dieses Image enthält das Secret des öffentlichen Google-OAuth-Clients. Das hier gespeicherte Secret ersetzt es, bis du es entfernst.} other {Die Antigravity-Anmeldung braucht das Secret des öffentlichen Google-OAuth-Clients. Veröffentlichte Images enthalten es; ein selbst gebautes Image braucht es hier. Es wird versiegelt gespeichert und nie wieder angezeigt.}}",
     "status": "{configured, select, true {Konfiguriert} other {Nicht konfiguriert}}",
     "label": "OAuth-Client-Secret",
-    "hint": "Füge das Client-Secret des Antigravity-Desktop-OAuth-Clients ein. Ohne es ist die Anmeldung gesperrt.",
+    "hint": "{bundled, select, true {Füge das Client-Secret des Antigravity-Desktop-OAuth-Clients ein. Es wird statt des Secrets aus diesem Image verwendet.} other {Füge das Client-Secret des Antigravity-Desktop-OAuth-Clients ein. Ohne es ist die Anmeldung gesperrt.}}",
     "save": "Secret speichern",
     "replace": "Secret ersetzen",
     "remove": "Secret entfernen",
     "saved": "Client-Secret gespeichert",
-    "removed": "Client-Secret entfernt"
+    "removed": "{bundled, select, true {Gespeichertes Secret entfernt. Die Anmeldung nutzt jetzt das Secret aus diesem Image.} other {Client-Secret entfernt}}"
   },
   "subAdd": {
     "title": "Konto-Links",

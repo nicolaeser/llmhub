@@ -5,7 +5,10 @@ import { env } from "@/lib/env";
 import { fireAlert } from "@/lib/alerts/notify";
 import { antigravityModels } from "@/lib/gateway/upstreams/antigravity";
 import { fetchAvailableModels } from "@/lib/gateway/upstreams/antigravity-api";
-import { PROVIDER_CATALOG } from "@/lib/gateway/upstreams/provider-kinds";
+import { devinModelsReply } from "@/lib/gateway/upstreams/devin-api";
+import { fetchGeminiModels, fetchVertexModels } from "@/lib/gateway/upstreams/google-models";
+import { museModels } from "@/lib/gateway/upstreams/muse";
+import { isSignInKind, PROVIDER_CATALOG, speaksMuse } from "@/lib/gateway/upstreams/provider-kinds";
 import { CLAUDE_OAUTH_BETAS } from "@/lib/gateway/upstreams/claude";
 import { CODEX_CLIENT_VERSION, codexModelFacts } from "@/lib/gateway/upstreams/codex";
 import { asNumber, asRecord, asString } from "@/lib/gateway/core";
@@ -47,6 +50,36 @@ async function fetchAntigravityModels(auth: UpstreamAuth): Promise<DiscoveredMod
   if (status === 401 || status === 403) throw new Error("UPSTREAM_AUTH");
   if (status < 200 || status >= 300) throw new Error("UPSTREAM_FAILED");
   return antigravityModels(json);
+}
+
+async function fetchMuseModels(kind: string, baseUrl: string, auth: UpstreamAuth): Promise<DiscoveredModel[]> {
+  try {
+    const listed = await fetchProviderModels(kind, baseUrl, auth.key, auth.headers);
+    return listed.length ? listed : museModels();
+  } catch (error) {
+    if (error instanceof Error && error.message === "UPSTREAM_AUTH") throw error;
+    return museModels();
+  }
+}
+
+async function fetchDevinModels(auth: UpstreamAuth): Promise<DiscoveredModel[]> {
+  const { status, models } = await devinModelsReply(auth.key);
+  if (status === 401 || status === 403) throw new Error("UPSTREAM_AUTH");
+  if (status < 200 || status >= 300) throw new Error("UPSTREAM_FAILED");
+  return models;
+}
+
+function providerBase(row: ProviderSyncRecord): string {
+  return row.baseUrl.trim() || PROVIDER_CATALOG.find((spec) => spec.kind === row.kind)?.default_base_url || "";
+}
+
+async function fetchConnectionModels(row: ProviderSyncRecord, auth: UpstreamAuth): Promise<DiscoveredModel[]> {
+  if (row.kind === "antigravity") return fetchAntigravityModels(auth);
+  if (row.kind === "devin") return fetchDevinModels(auth);
+  if (row.kind === "gemini") return fetchGeminiModels(providerBase(row), auth);
+  if (row.kind === "vertex") return fetchVertexModels(providerBase(row), auth);
+  if (speaksMuse(row.kind)) return fetchMuseModels(row.kind, row.baseUrl, auth);
+  return fetchProviderModels(row.kind, row.baseUrl, auth.key, auth.headers);
 }
 
 export async function fetchProviderModels(
@@ -176,12 +209,11 @@ export async function refreshProviderModels(
   actor: string,
 ): Promise<{ provider: ProviderSyncRecord; diff: DiscoveredDiff }> {
   const auth = await providerAuth(row).catch((error: unknown) => {
-    throw error instanceof GateError ? new Error("SIGN_IN_EXPIRED", { cause: error }) : error;
+    if (!(error instanceof GateError)) throw error;
+    if (isSignInKind(row.kind)) throw new Error("SIGN_IN_EXPIRED", { cause: error });
+    throw new Error(error.code === "no_provider_key" ? "UPSTREAM_AUTH" : "UPSTREAM_FAILED", { cause: error });
   });
-  const models =
-    row.kind === "antigravity"
-      ? await fetchAntigravityModels(auth)
-      : await fetchProviderModels(row.kind, row.baseUrl, auth.key, auth.headers);
+  const models = await fetchConnectionModels(row, auth);
   const before = discoveredOf(row.discovered);
   if (models.length === 0 && before.length > 0) throw new Error("UPSTREAM_EMPTY");
   const diff = diffDiscovered(before, models);

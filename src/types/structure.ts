@@ -3,9 +3,17 @@ import type { UsageReportView } from "@/types/reports";
 
 export type BudgetKind = "org" | "team" | "project" | "member" | "user" | "key";
 
-export type NodeKind = "org" | "team" | "project" | "member";
+export type TenancyKind = "org" | "team" | "project" | "member";
+
+export type NodeKind = TenancyKind | "key";
+
+export type TenancyRef = { kind: TenancyKind; id: string };
 
 export type NodeRef = { kind: NodeKind; id: string };
+
+export type NodeLink = NodeRef & { alias: string };
+
+export type TreeRow = NodeLink & { budget: BudgetView; depth: number };
 
 export type SetupStep = "org" | "team" | "project" | "member" | "budget";
 
@@ -96,10 +104,18 @@ export type StructurePayload = {
   companyId: string;
   canManage: boolean;
   canBudget: boolean;
+  canSeeKeys: boolean;
+  canManageKeys: boolean;
   canCreateKeys: boolean;
+  canMcp: boolean;
+  canSeeMcp: boolean;
   reports: UsageReportView[];
   canSeeReports: boolean;
   canReport: boolean;
+  canSeeSettings: boolean;
+  canSeeUsers: boolean;
+  canSeeUsage: boolean;
+  canSeePolicies: boolean;
   mailEnabled: boolean;
 };
 
@@ -121,7 +137,9 @@ export type ProjectInput = {
   owner: string;
 };
 
-export type BudgetTarget = { kind: BudgetKind; id: string; alias: string };
+export type BudgetRef = { kind: BudgetKind; id: string };
+
+export type BudgetTarget = BudgetRef & { alias: string };
 
 export type BudgetInput = {
   kind: BudgetKind;
@@ -138,6 +156,8 @@ export type BoostInput = {
 };
 
 export type BudgetResult = { kind: BudgetKind; id: string; budget: BudgetView };
+
+export type BudgetDetail = BudgetResult & { ancestors: CapLink[] };
 
 export type HolderRecord = {
   alias: string;

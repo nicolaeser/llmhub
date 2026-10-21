@@ -88,6 +88,7 @@
   "sharedVia": "{named, select, true {Via link: {label}} other {Via link}}",
   "signInAgain": "Sign in again",
   "noAccount": "No account name",
+  "noneTitle": "No subscription accounts yet",
   "backIn": "Available again {when} ({date}).",
   "backInUnknown": "Limit reached. The provider did not say when it resets.",
   "expiredHint": "Sign in again to use this account.",
@@ -180,15 +181,15 @@
   },
   "antigravity": {
     "title": "Google OAuth client",
-    "description": "Antigravity sign-in needs the secret of Google's public OAuth client. It is stored sealed and never shown again.",
+    "description": "{bundled, select, true {This image includes the secret of Google's public OAuth client. The secret saved here replaces it until you remove it.} other {Antigravity sign-in needs the secret of Google's public OAuth client. Published images include it; an image you build yourself needs it here. It is stored sealed and never shown again.}}",
     "status": "{configured, select, true {Configured} other {Not configured}}",
     "label": "OAuth client secret",
-    "hint": "Paste the client secret of the Antigravity desktop OAuth client. Without it, signing in is disabled.",
+    "hint": "{bundled, select, true {Paste the client secret of the Antigravity desktop OAuth client. It is used instead of the one included in this image.} other {Paste the client secret of the Antigravity desktop OAuth client. Without it, signing in is disabled.}}",
     "save": "Save secret",
     "replace": "Replace secret",
     "remove": "Remove secret",
     "saved": "Client secret saved",
-    "removed": "Client secret removed"
+    "removed": "{bundled, select, true {Saved secret removed. Sign-in now uses the secret included in this image.} other {Client secret removed}}"
   },
   "subAdd": {
     "title": "Add-account links",

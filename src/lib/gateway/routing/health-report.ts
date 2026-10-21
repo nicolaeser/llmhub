@@ -1,7 +1,7 @@
 import "server-only";
 
 import prisma from "@/lib/db/prisma";
-import { requirePermission } from "@/lib/auth/guards";
+import { requirePlatformPermission } from "@/lib/auth/guards";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import {
   COOLDOWN_MS,
@@ -29,7 +29,7 @@ function byUrgency(a: DeploymentHealthView, b: DeploymentHealthView): number {
 }
 
 export async function loadProviderHealth(minutes = 15): Promise<HealthReport> {
-  await requirePermission(PERMISSIONS.PROVIDERS_READ);
+  await requirePlatformPermission(PERMISSIONS.PROVIDERS_READ);
   const span = Math.min(HEALTH_RETENTION_MINUTES, Math.max(1, Math.trunc(Number(minutes)) || 15));
   const rows = await prisma.deployment.findMany({
     select: {

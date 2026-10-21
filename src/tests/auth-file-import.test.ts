@@ -367,7 +367,7 @@ test("pasted text may hold several accounts, even one copied without its opening
 
 test("unsupported providers and SIWC Codex clients are rejected", async () => {
   const { parseAuthFileEntry } = await import("@/lib/gateway/upstreams/auth-file-import");
-  for (const type of ["kimi", "gemini", "gemini-cli", "vertex", "qwen", "iflow", "constructor", ""]) {
+  for (const type of ["gemini", "gemini-cli", "vertex", "qwen", "iflow", "constructor", ""]) {
     assert.throws(() => parseAuthFileEntry({ type, access_token: "a", refresh_token: "r" }), {
       message: "AUTH_FILE_UNSUPPORTED",
     });
@@ -391,8 +391,8 @@ test("the sign-in dialog picks the account of its own kind", async () => {
   const claude = { type: "claude", access_token: "a", refresh_token: "r" };
   assert.equal(authFileEntryFor([codexFile(), claude], "claude"), claude);
   assert.throws(() => authFileEntryFor([codexFile()], "claude"), { message: "AUTH_FILE_KIND_MISMATCH" });
-  const kimi = { type: "kimi" };
-  assert.equal(authFileEntryFor([kimi], "claude"), kimi);
+  const qwen = { type: "qwen" };
+  assert.equal(authFileEntryFor([qwen], "claude"), qwen);
 });
 
 test("fresh tokens are imported without refreshing once the provider accepts them", async () => {
@@ -534,13 +534,13 @@ test("bulk import creates accounts, updates known ones, and isolates bad files",
   const first = await asCaller(() =>
     importAuthFiles([
       { name: "codex-dev.json", content: JSON.stringify(codexFile()) },
-      { name: "kimi.json", content: JSON.stringify({ type: "kimi", access_token: "a", refresh_token: "r" }) },
+      { name: "qwen.json", content: JSON.stringify({ type: "qwen", access_token: "a", refresh_token: "r" }) },
       { name: "broken.json", content: "{" },
     ]),
   );
   assert.deepEqual(first.results, [
     { file: "codex-dev.json", kind: "codex", account: "dev@example.com", plan: "plus", status: "created" },
-    { file: "kimi.json", status: "failed", error: "AUTH_FILE_UNSUPPORTED" },
+    { file: "qwen.json", status: "failed", error: "AUTH_FILE_UNSUPPORTED" },
     { file: "broken.json", status: "failed", error: "AUTH_FILE_INVALID" },
   ]);
   assert.equal(first.providers.length, 1);
@@ -756,4 +756,82 @@ test("importing from CLIProxyAPI moves the accounts and removes only fully impor
   } finally {
     await cliproxy.close();
   }
+});
+
+async function devinStatusResponse(email: string): Promise<Response> {
+  const { ProtoWriter } = await import("@/lib/gateway/upstreams/devin-wire");
+  const plan = new ProtoWriter().message(1, new ProtoWriter().string(2, "Pro")).varint(14, 60).varint(15, 90);
+  const user = new ProtoWriter().string(7, email).message(13, plan).string(36, "status-id");
+  return new Response(new ProtoWriter().message(1, user).finish(), { status: 200 });
+}
+
+test("CLIProxyAPI devin files become Devin accounts with their permanent session token", async () => {
+  const { parseAuthFileEntry } = await import("@/lib/gateway/upstreams/auth-file-import");
+  const parsed = parseAuthFileEntry({
+    type: "devin",
+    api_key: "devin-session-token$eyJ.file",
+    session_token: "devin-session-token$eyJ.file",
+    user_name: "devin-user",
+    user_id: "user-42",
+    org_id: "org-1",
+    email: "devin@example.com",
+    plan: "Pro",
+    auth_kind: "oauth",
+  });
+  assert.equal(parsed.kind, "devin");
+  assert.equal(parsed.needsProject, false);
+  assert.equal(parsed.session.account, "devin@example.com");
+  assert.equal(parsed.session.plan, "Pro");
+  assert.deepEqual(parsed.session.tokens, {
+    access: "devin-session-token$eyJ.file",
+    refresh: "devin-session-token$eyJ.file",
+    accountId: "user-42",
+    residency: "",
+  });
+  assert.ok(parsed.session.expiresAt > Date.now() + 365 * 86_400_000);
+  const bare = parseAuthFileEntry({ type: "devin", metadata: { api_key: "eyJ.bare", user_name: "only-name" } });
+  assert.equal(bare.session.tokens.access, "devin-session-token$eyJ.bare");
+  assert.equal(bare.session.account, "only-name");
+  assert.throws(() => parseAuthFileEntry({ type: "devin", user_name: "x" }), { message: "AUTH_FILE_INCOMPLETE" });
+});
+
+test("devin imports check the session with the user status call and fail as revoked when Devin rejects it", async () => {
+  const { freshAuthFileSession, parseAuthFileEntry } = await import("@/lib/gateway/upstreams/auth-file-import");
+  const parsed = parseAuthFileEntry({ type: "devin", api_key: "devin-session-token$eyJ.file", user_name: "devin-user" });
+  const status = await devinStatusResponse("devin@example.com");
+  respondWith((url) => {
+    if (url.endsWith("/exa.seat_management_pb.SeatManagementService/GetUserStatus")) return status.clone();
+    if (url === "https://api.devin.ai/v3/self") return Response.json({ user_name: "devin-user", user_id: "user-42" });
+    return new Response("", { status: 404 });
+  });
+  const fresh = await freshAuthFileSession(parsed);
+  assert.equal(fresh.account, "devin@example.com");
+  assert.equal(fresh.plan, "Pro");
+  assert.equal(fresh.tokens.accountId, "user-42");
+  assert.equal(fresh.tokens.access, "devin-session-token$eyJ.file");
+  for (const rejected of [401, 403]) {
+    respondWith(() => new Response("", { status: rejected }));
+    await assert.rejects(freshAuthFileSession(parsed), { message: "AUTH_FILE_REVOKED" });
+  }
+  respondWith(() => {
+    throw new TypeError("fetch failed");
+  });
+  const offline = await freshAuthFileSession(parsed);
+  assert.equal(offline.account, "devin-user");
+});
+
+test("bulk import stores a Devin account on the pinned Devin base URL", async () => {
+  const { importAuthFiles } = await import("@/lib/providers/auth-import");
+  const status = await devinStatusResponse("devin@example.com");
+  respondWith((url) => (url.endsWith("/GetUserStatus") ? status.clone() : new Response("", { status: 404 })));
+  const imported = await asCaller(() =>
+    importAuthFiles([{ name: "devin-user.json", content: JSON.stringify({ type: "devin", api_key: "eyJ.bulk", user_id: "user-42" }) }]),
+  );
+  assert.deepEqual(imported.results, [
+    { file: "devin-user.json", kind: "devin", account: "devin@example.com", plan: "Pro", status: "created" },
+  ]);
+  assert.equal(imported.providers[0]!.kind, "devin");
+  assert.equal(imported.providers[0]!.name, "Devin subscription");
+  assert.equal(imported.providers[0]!.baseUrl, "https://server.codeium.com");
+  assert.ok(connections.every((row) => !row.login!.tokens.includes("eyJ")));
 });

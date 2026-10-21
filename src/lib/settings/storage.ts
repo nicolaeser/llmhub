@@ -1,6 +1,6 @@
 import "server-only";
 
-import { requirePermission, requirePlatformPermission } from "@/lib/auth/guards";
+import { requirePlatformPermission } from "@/lib/auth/guards";
 import { hasPerm, PERMISSIONS } from "@/lib/auth/permissions";
 import { writeAudit } from "@/lib/audit";
 import { env } from "@/lib/env";
@@ -32,7 +32,7 @@ function parseStorage(raw: unknown): S3Settings {
 }
 
 export async function loadStorageSettings() {
-  const session = await requirePermission(PERMISSIONS.SETTINGS_READ);
+  const session = await requirePlatformPermission(PERMISSIONS.SETTINGS_READ);
   return view(normalizeS3((await getEnterprise()).s3), session.permissions);
 }
 

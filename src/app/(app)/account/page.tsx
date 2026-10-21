@@ -87,7 +87,9 @@ export default function AccountPage() {
             <div className="space-y-5">
               <SessionsCard sessions={overview.sessions} onChange={setOverview} />
               {managementKeys ? (
-                <ManagementKeysCard payload={managementKeys} onChange={setManagementKeys} />
+                managementKeys.grantable.length || managementKeys.keys.length ? (
+                  <ManagementKeysCard payload={managementKeys} onChange={setManagementKeys} />
+                ) : null
               ) : keys.error ? (
                 <LoadError state={keys} />
               ) : (

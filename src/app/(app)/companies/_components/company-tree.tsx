@@ -2,19 +2,19 @@
 
 import { useState } from "react";
 import { Card, ListBox, SearchField } from "@heroui/react";
-import { Building2, Folder, Users } from "lucide-react";
+import { Building2, Folder, KeyRound, User, Users, type LucideIcon } from "lucide-react";
 import { useFormatter, useTranslations } from "next-intl";
-import type { BudgetView, NodeRef, StructurePayload } from "@/types/structure";
-import { parseNodeRef, usedRatio } from "./tree-model";
+import type { NodeKind, NodeRef, StructurePayload, TreeRow } from "@/types/structure";
+import { nodeKey, parseNodeRef, treeHighlight, treeRows, usedRatio } from "./tree-model";
 
-type TreeKind = "org" | "team" | "project";
-
-const ICONS = { org: Building2, team: Users, project: Folder } as const;
-const INDENT = ["", "pl-5", "pl-10"] as const;
-
-function matches(alias: string, query: string) {
-  return !query || alias.toLowerCase().includes(query);
-}
+const ICONS: Record<NodeKind, LucideIcon> = {
+  org: Building2,
+  team: Users,
+  project: Folder,
+  member: User,
+  key: KeyRound,
+};
+const INDENT = ["", "pl-5", "pl-10", "pl-15"] as const;
 
 export default function CompanyTree({
   data,
@@ -28,41 +28,20 @@ export default function CompanyTree({
   const t = useTranslations("Companies");
   const format = useFormatter();
   const [query, setQuery] = useState("");
-  const q = query.trim().toLowerCase();
+  const rows = treeRows(data, query);
+  const highlight = treeHighlight(data, selected, rows);
+  const selectedKey = highlight?.exact ? highlight.key : null;
 
-  const teamIds = new Set(data.teams.map((row) => row.id));
-  const projectsOf = (teamId: string) =>
-    data.projects.filter((row) => row.teamId === teamId && matches(row.alias, q));
-  const directProjects = (orgId: string) =>
-    data.projects.filter(
-      (row) => row.orgId === orgId && !teamIds.has(row.teamId) && matches(row.alias, q),
-    );
-  const teamVisible = (team: StructurePayload["teams"][number]) =>
-    matches(team.alias, q) || projectsOf(team.id).length > 0;
-  const teamsOf = (orgId: string) =>
-    data.teams.filter((row) => row.orgId === orgId && teamVisible(row));
-  const orgs = data.orgs.filter(
-    (org) => matches(org.alias, q) || teamsOf(org.id).length > 0 || directProjects(org.id).length > 0,
-  );
-  const selectedKey = selected && selected.kind !== "member" ? `${selected.kind}:${selected.id}` : null;
-
-  function item(kind: TreeKind, id: string, alias: string, budget: BudgetView, depth: 0 | 1 | 2) {
-    const Icon = ICONS[kind];
-    const ratio = usedRatio(budget);
-    const active = selectedKey === `${kind}:${id}`;
+  function item(row: TreeRow) {
+    const Icon = ICONS[row.kind];
+    const ratio = usedRatio(row.budget);
+    const key = nodeKey(row);
+    const active = highlight?.key === key;
     return (
-      <ListBox.Item key={`${kind}:${id}`} id={`${kind}:${id}`} textValue={alias}>
-        <div className={`flex min-w-0 flex-1 items-center gap-2 ${INDENT[depth]}`}>
-          <Icon
-            size={14}
-            aria-hidden
-            className={`shrink-0 ${active ? "text-accent" : "text-muted"}`}
-          />
-          <span
-            className={`min-w-0 break-words text-sm ${active ? "font-medium text-accent" : ""}`}
-          >
-            {alias}
-          </span>
+      <ListBox.Item key={key} id={key} textValue={row.alias}>
+        <div className={`flex min-w-0 flex-1 items-center gap-2 ${INDENT[Math.min(row.depth, INDENT.length - 1)]}`}>
+          <Icon size={14} aria-hidden className={`shrink-0 ${active ? "text-accent" : "text-muted"}`} />
+          <span className={`min-w-0 break-words text-sm ${active ? "font-medium text-accent" : ""}`}>{row.alias}</span>
         </div>
         <span
           className={`shrink-0 text-xs tabular-nums ${ratio != null && ratio >= 1 ? "text-danger" : "text-muted"}`}
@@ -73,19 +52,6 @@ export default function CompanyTree({
       </ListBox.Item>
     );
   }
-
-  const rows = orgs.flatMap((org) => [
-    item("org", org.id, org.alias, org.budget, 0),
-    ...teamsOf(org.id).flatMap((team) => [
-      item("team", team.id, team.alias, team.budget, 1),
-      ...projectsOf(team.id).map((project) =>
-        item("project", project.id, project.alias, project.budget, 2),
-      ),
-    ]),
-    ...directProjects(org.id).map((project) =>
-      item("project", project.id, project.alias, project.budget, 1),
-    ),
-  ]);
 
   return (
     <Card className="gap-3">
@@ -114,7 +80,7 @@ export default function CompanyTree({
               if (ref) onSelect(ref);
             }}
           >
-            {rows}
+            {rows.map(item)}
           </ListBox>
         </div>
       )}

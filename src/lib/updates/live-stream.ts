@@ -1,7 +1,7 @@
 import "server-only";
 import prisma from "@/lib/db/prisma";
 import { SESSION_IDLE_TTL_MS } from "@/lib/auth/cookie";
-import { effectivePermissions, hasPerm, PERMISSIONS } from "@/lib/auth/permissions";
+import { accessKey, effectivePermissions, hasPerm, PERMISSIONS } from "@/lib/auth/permissions";
 import { spendScopeFor } from "@/lib/auth/scope";
 import { errorFields } from "@/lib/logging/format";
 import { logger } from "@/lib/logging/logger";
@@ -17,7 +17,7 @@ import type { UpdaterSnapshot } from "@/types/updates";
 
 export const LIVE_HEARTBEAT_MS = 15_000;
 export const LIVE_RETRY_MS = 3_000;
-const ACCESS_RECHECK_MS = 60_000;
+const ACCESS_RECHECK_MS = 15_000;
 
 export const LIVE_HEADERS: Record<string, string> = {
   "Content-Type": "text/event-stream; charset=utf-8",
@@ -25,13 +25,14 @@ export const LIVE_HEADERS: Record<string, string> = {
   "X-Accel-Buffering": "no",
 };
 
-export type LiveAccess = { canRead: boolean; canManage: boolean; viewer: LiveViewer };
+export type LiveAccess = { canRead: boolean; canManage: boolean; viewer: LiveViewer; key: string };
 
-export function liveAccess(permissions: readonly Permission[], scope: SpendScope = {}): LiveAccess {
+export function liveAccess(permissions: readonly Permission[], scope: SpendScope = {}, key = ""): LiveAccess {
   return {
     canRead: hasPerm(permissions, PERMISSIONS.SETTINGS_READ),
     canManage: hasPerm(permissions, PERMISSIONS.SETTINGS_MANAGE),
     viewer: { permissions: [...permissions], scope },
+    key,
   };
 }
 
@@ -63,7 +64,11 @@ function sessionAccess(workspaceOrgId: string | null) {
       seesAll: hasPerm(permissions, PERMISSIONS.SPEND_READ_ALL),
       userId: row.user.id,
     });
-    return liveAccess(permissions, scope);
+    return liveAccess(
+      permissions,
+      scope,
+      accessKey({ isOwner: row.user.isOwner, orgId: row.user.orgId, permissions }),
+    );
   };
 }
 
@@ -96,6 +101,7 @@ export function liveStream(input: {
   let access = input.access;
   let latest: UpdaterSnapshot | null = null;
   let lastSent = "";
+  let lastAccess = "";
   let accessCheckedAt = Date.now();
   let closed = false;
   let unsubscribe = () => {};
@@ -136,11 +142,18 @@ export function liveStream(input: {
     send(sseEvent("status", json));
   }
 
+  function sendAccess() {
+    if (!access.key || access.key === lastAccess) return;
+    lastAccess = access.key;
+    send(sseEvent("access", JSON.stringify({ key: access.key })));
+  }
+
   function syncTopics() {
     for (const topic of input.topics ?? []) {
       const feed = feeds[topic];
       if (!feed || closed) continue;
-      const allowed = hasPerm(access.viewer.permissions, feed.permission);
+      const allowed =
+        hasPerm(access.viewer.permissions, feed.permission) && !(feed.platformOnly && access.viewer.scope.orgId);
       const key = allowed ? feed.scopeKey(access.viewer.scope) : "";
       const current = topics.get(topic);
       if (current?.key === key) continue;
@@ -167,6 +180,7 @@ export function liveStream(input: {
         return;
       }
       access = next;
+      sendAccess();
       if (latest) deliver(latest);
       syncTopics();
     } catch (err) {
@@ -194,6 +208,7 @@ export function liveStream(input: {
         logger.warn("live.snapshot_failed", errorFields(err));
       }
       if (closed) return;
+      sendAccess();
       unsubscribe = subscribeLive(deliver);
       syncTopics();
       heartbeat = setInterval(() => {

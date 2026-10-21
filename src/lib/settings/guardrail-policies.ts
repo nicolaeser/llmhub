@@ -24,10 +24,14 @@ import {
   piiPolicySchema,
 } from "@/schemas/guardrails";
 import type {
+  CompanyPolicies,
   GuardrailOverrideView,
   GuardrailPolicy,
+  GuardrailSummary,
   PiiOverrideView,
   PiiPolicy,
+  PiiSummary,
+  PolicyOverrideSummary,
   PolicyScope,
   PolicyTarget,
 } from "@/types/guardrails";
@@ -131,6 +135,7 @@ async function payload(session: Session) {
     }),
   ]);
   const rows = [...orgs.map(orgRow), ...projects.map(projectRow), ...keys.map(keyRow)];
+  const canManage = hasPerm(session.permissions, PERMISSIONS.SETTINGS_MANAGE);
   return {
     pii,
     guardrails,
@@ -139,8 +144,8 @@ async function payload(session: Session) {
       .map((row) => guardrailOverrideOf(row.target, row.guardrailPolicy))
       .filter(present)
       .sort(byAlias),
-    targets: rows.map((row) => row.target),
-    canManage: hasPerm(session.permissions, PERMISSIONS.SETTINGS_MANAGE),
+    targets: canManage ? rows.map((row) => row.target) : [],
+    canManage,
     platform: !company,
   };
 }
@@ -178,6 +183,55 @@ async function writeOverride(
 export async function loadGuardrails() {
   const session = await requirePermission(PERMISSIONS.SETTINGS_READ);
   return payload(session);
+}
+
+function piiSummary(policy: PiiPolicy): PiiSummary {
+  return { enabled: policy.enabled, mode: policy.mode, output: policy.output, entities: policy.entities.length };
+}
+
+function guardrailSummary(policy: GuardrailPolicy): GuardrailSummary {
+  return {
+    injection: policy.injection.enabled ? policy.injection.action : null,
+    secrets: policy.secrets.enabled ? policy.secrets.action : null,
+    rules: policy.rules.length,
+  };
+}
+
+function overrideSummary(row: TargetRow): PolicyOverrideSummary | null {
+  const pii = piiOverride(row.piiPolicy);
+  const guardrails = guardrailOverride(row.guardrailPolicy);
+  if (!pii && !guardrails) return null;
+  return {
+    ...row.target,
+    pii: pii ? piiSummary(pii) : null,
+    guardrails: guardrails ? guardrailSummary(guardrails) : null,
+  };
+}
+
+export async function loadCompanyPolicies(orgId: string): Promise<CompanyPolicies> {
+  const session = await requirePermission(PERMISSIONS.SETTINGS_READ);
+  const id = typeof orgId === "string" ? orgId.trim() : "";
+  if (!id) throw new Error("MISSING_ID");
+  if (!inCompany(session, id)) throw new Error("NOT_FOUND");
+  const [pii, guardrails, org, projects, keys] = await Promise.all([
+    getPii(),
+    getGuardrails(),
+    prisma.organization.findUnique({ where: { id }, select: ORG_SELECT }),
+    prisma.project.findMany({ where: { orgId: id }, select: PROJECT_SELECT, orderBy: { alias: "asc" } }),
+    prisma.virtualKey.findMany({
+      where: { ...keyScope(session), orgId: id },
+      select: KEY_SELECT,
+      orderBy: { keyAlias: "asc" },
+    }),
+  ]);
+  if (!org) throw new Error("NOT_FOUND");
+  const orgPii = piiOverride(org.piiPolicy);
+  const orgGuardrails = guardrailOverride(org.guardrailPolicy);
+  return {
+    pii: { level: orgPii ? "org" : "global", ...piiSummary(orgPii ?? pii) },
+    guardrails: { level: orgGuardrails ? "org" : "global", ...guardrailSummary(orgGuardrails ?? guardrails) },
+    overrides: [...projects.map(projectRow), ...keys.map(keyRow)].map(overrideSummary).filter(present),
+  };
 }
 
 export async function savePii(raw: unknown) {

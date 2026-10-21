@@ -3,7 +3,7 @@ import { GateError } from "@/lib/gateway/errors";
 import { chatMessagesToItems } from "@/lib/gateway/protocols/responses";
 import { isCodexSignature } from "@/lib/gateway/protocols/reasoning-signature";
 import { completionFromSse } from "@/lib/gateway/protocols/sse-completion";
-import type { ChatSseTranslator, JsonMap } from "@/types/gateway";
+import type { ChatSseTranslator, JsonMap, ReasoningSignatureCheck, ResponsesStreamOptions } from "@/types/gateway";
 import type { ModelFacts } from "@/types/routing";
 
 export const CODEX_DEFAULT_INSTRUCTIONS = "You are a helpful assistant.";
@@ -16,19 +16,19 @@ const CODEX_LEGACY_FAST_TIER = "fast";
 const INSTRUCTION_ROLES = new Set(["system", "developer"]);
 const REASONING_DELTAS = new Set(["response.reasoning_summary_text.delta", "response.reasoning_text.delta"]);
 const FINAL_EVENTS = new Set(["response.completed", "response.incomplete"]);
-function reasoningItems(message: JsonMap): JsonMap[] {
+function reasoningItems(message: JsonMap, isSignature: ReasoningSignatureCheck): JsonMap[] {
   if (asString(message.role) !== "assistant" || !Array.isArray(message.thinking_blocks)) return [];
   const items: JsonMap[] = [];
   for (const raw of message.thinking_blocks) {
     const block = asRecord(raw);
-    if (block?.type !== "thinking" || !isCodexSignature(block.signature)) continue;
+    if (block?.type !== "thinking" || !isSignature(block.signature)) continue;
     items.push({ type: "reasoning", summary: [], encrypted_content: block.signature });
   }
   return items;
 }
 
-function codexInput(messages: JsonMap[]): JsonMap[] {
-  return messages.flatMap((message) => [...reasoningItems(message), ...chatMessagesToItems([message])]);
+function codexInput(messages: JsonMap[], isSignature: ReasoningSignatureCheck): JsonMap[] {
+  return messages.flatMap((message) => [...reasoningItems(message, isSignature), ...chatMessagesToItems([message])]);
 }
 
 function summaryText(item: JsonMap): string {
@@ -79,7 +79,7 @@ function codexText(body: JsonMap): JsonMap | null {
   return Object.keys(text).length ? text : null;
 }
 
-export function chatToCodex(body: JsonMap): JsonMap {
+export function chatToCodex(body: JsonMap, isSignature: ReasoningSignatureCheck = isCodexSignature): JsonMap {
   const messages = (Array.isArray(body.messages) ? body.messages : [])
     .map(asRecord)
     .filter((message): message is JsonMap => message !== null);
@@ -91,7 +91,10 @@ export function chatToCodex(body: JsonMap): JsonMap {
   const payload: JsonMap = {
     model: body.model,
     instructions: instructions || CODEX_DEFAULT_INSTRUCTIONS,
-    input: codexInput(messages.filter((message) => !INSTRUCTION_ROLES.has(asString(message.role)))),
+    input: codexInput(
+      messages.filter((message) => !INSTRUCTION_ROLES.has(asString(message.role))),
+      isSignature,
+    ),
     store: false,
     stream: true,
     include: ["reasoning.encrypted_content"],
@@ -170,8 +173,14 @@ export class CodexSseTranslator implements ChatSseTranslator {
   private created = Math.floor(Date.now() / 1000);
   private started = false;
   private tools = new Map<number, { slot: number; streamed: boolean }>();
+  private isSignature: ReasoningSignatureCheck;
 
-  constructor(private model: string) {}
+  constructor(
+    private model: string,
+    private options: ResponsesStreamOptions = {},
+  ) {
+    this.isSignature = options.isSignature ?? isCodexSignature;
+  }
 
   pushLine(raw: string): string[] {
     const line = raw.endsWith("\r") ? raw.slice(0, -1) : raw;
@@ -204,7 +213,9 @@ export class CodexSseTranslator implements ChatSseTranslator {
     } catch {
       return null;
     }
-    return this.translate(asString(parsed.type) || event, parsed);
+    const type = asString(parsed.type) || event;
+    this.options.onEvent?.(type, parsed);
+    return this.translate(type, parsed);
   }
 
   private chunk(delta: JsonMap): string {
@@ -249,7 +260,7 @@ export class CodexSseTranslator implements ChatSseTranslator {
 
   private translate(type: string, data: JsonMap): string | null {
     if (type === "error" || type === "response.failed") {
-      throw new GateError(502, "upstream_error", failureMessage(data));
+      throw this.options.failure?.(data) ?? new GateError(502, "upstream_error", failureMessage(data));
     }
     if (type === "response.created") return this.started ? null : this.chunk({ content: "" });
     if (type === "response.output_text.delta") {
@@ -274,7 +285,7 @@ export class CodexSseTranslator implements ChatSseTranslator {
         });
       }
       if (item?.type === "reasoning") {
-        if (type !== "response.output_item.done" || !isCodexSignature(item.encrypted_content)) return null;
+        if (type !== "response.output_item.done" || !this.isSignature(item.encrypted_content)) return null;
         return this.chunk({
           thinking_blocks: [{ type: "thinking", thinking: summaryText(item), signature: item.encrypted_content }],
         });
@@ -307,6 +318,6 @@ export class CodexSseTranslator implements ChatSseTranslator {
   }
 }
 
-export function codexCompletion(text: string, model: string): JsonMap {
-  return completionFromSse(new CodexSseTranslator(model), text, model);
+export function codexCompletion(text: string, model: string, options: ResponsesStreamOptions = {}): JsonMap {
+  return completionFromSse(new CodexSseTranslator(model, options), text, model);
 }

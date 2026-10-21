@@ -13,11 +13,13 @@ export type MappingRow = RoleMapping & { key: string };
 export default function RoleMappings({
   rows,
   roles,
+  canEdit,
   isDisabled,
   onChange,
 }: {
   rows: MappingRow[];
   roles: readonly { id: string; label: string }[];
+  canEdit: boolean;
   isDisabled: boolean;
   onChange: (rows: MappingRow[]) => void;
 }) {
@@ -49,32 +51,36 @@ export default function RoleMappings({
                 onChange={(role_id) => edit(row.key, { role_id })}
                 isDisabled={isDisabled}
               />
-              <Button
-                isIconOnly
-                variant="danger-soft"
-                aria-label={t("remove", { position: index + 1 })}
-                isDisabled={isDisabled}
-                onPress={() => onChange(rows.filter((item) => item.key !== row.key))}
-              >
-                <Trash2 size={16} aria-hidden />
-              </Button>
+              {canEdit ? (
+                <Button
+                  isIconOnly
+                  variant="danger-soft"
+                  aria-label={t("remove", { position: index + 1 })}
+                  isDisabled={isDisabled}
+                  onPress={() => onChange(rows.filter((item) => item.key !== row.key))}
+                >
+                  <Trash2 size={16} aria-hidden />
+                </Button>
+              ) : null}
             </Card.Content>
           </Card>
         ))
       ) : (
         <p className="text-sm text-muted">{t("empty")}</p>
       )}
-      <Button
-        variant="secondary"
-        isDisabled={isDisabled || rows.length >= MAX_ROLE_MAPPINGS || !roles.length}
-        onPress={() => {
-          seq.current += 1;
-          onChange([...rows, { key: `new-${seq.current}`, group: "", role_id: roles[0]?.id ?? "" }]);
-        }}
-      >
-        <Plus size={16} aria-hidden />
-        {t("add")}
-      </Button>
+      {canEdit ? (
+        <Button
+          variant="secondary"
+          isDisabled={isDisabled || rows.length >= MAX_ROLE_MAPPINGS || !roles.length}
+          onPress={() => {
+            seq.current += 1;
+            onChange([...rows, { key: `new-${seq.current}`, group: "", role_id: roles[0]?.id ?? "" }]);
+          }}
+        >
+          <Plus size={16} aria-hidden />
+          {t("add")}
+        </Button>
+      ) : null}
     </div>
   );
 }

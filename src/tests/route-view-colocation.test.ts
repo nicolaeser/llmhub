@@ -392,8 +392,16 @@ test("moved shared UI lives in src/components domain folders", () => {
     "console/stat-card.tsx",
     "console/confirm-dialog.tsx",
     "budget/budget-dialog.tsx",
+    "budget/boost-dialog.tsx",
+    "keys/key-dialog.tsx",
+    "keys/key-mcp-dialog.tsx",
+    "keys/access-window-fields.tsx",
+    "keys/key-binding.ts",
   ]) {
     assert.equal(existsSync(path.join(componentsRoot, rel)), true, rel);
+  }
+  for (const name of ["key-dialog.tsx", "key-mcp-dialog.tsx", "access-window-fields.tsx", "key-binding.ts"]) {
+    assert.equal(existsSync(path.join(appRoot, "(app)", "keys", "_components", name)), false, name);
   }
   for (const name of [
     "brand-mark.tsx",
@@ -404,6 +412,15 @@ test("moved shared UI lives in src/components domain folders", () => {
     "budget-dialog.tsx",
   ]) {
     assert.equal(existsSync(path.join(appRoot, "_components", name)), false, name);
+  }
+  assert.equal(existsSync(path.join(appRoot, "(app)", "companies", "_components", "boost-dialog.tsx")), false);
+});
+
+test("shared key UI takes its server actions as props instead of importing a route action", () => {
+  for (const file of listSourceFiles(path.join(componentsRoot, "keys"))) {
+    for (const specifier of moduleSpecifiers(read(file))) {
+      assert.doesNotMatch(specifier, /_action|^@\/app\//, `${path.relative(root, file)} imports ${specifier}`);
+    }
   }
 });
 

@@ -33,7 +33,7 @@
     },
     "member": {
       "title": "People",
-      "hint": "The company's own users who get personal keys. Not console users.",
+      "hint": "Individuals who call the API with personal keys and never sign in. Not console users.",
       "action": "Add person"
     },
     "budget": {
@@ -46,7 +46,7 @@
     "kind": "{kind, select, org {Company} team {Department} project {Project} member {Person} user {Console user} key {Key} other {Parent}}",
     "orgSummary": "{teams, plural, one {# department} other {# departments}} · {projects, plural, one {# project} other {# projects}} · {members, plural, one {# person} other {# people}}",
     "teamSummary": "{projects, plural, one {# project} other {# projects}} · {members, plural, one {# person} other {# people}}",
-    "projectSummary": "{hasTeam, select, yes {Department {team}} other {No department}} · {keys, plural, one {# key} other {# keys}}",
+    "projectSummary": "{hasTeam, select, yes {Department {team}} other {No department}}{showKeys, select, yes { · {keys, plural, one {# key} other {# keys}}} other {}}",
     "memberSummary": "{hasTeam, select, yes {Department {team}} other {No department}}{hasEmail, select, yes { · {email}} other {}}",
     "edit": "{kind, select, org {Edit company} team {Edit department} project {Edit project} member {Edit person} other {Edit}}",
     "delete": "{kind, select, org {Delete company} team {Delete department} project {Delete project} member {Delete person} other {Delete}}",
@@ -72,26 +72,9 @@
     "limitedBy": "{kind, select, org {Company} team {Department} project {Project} member {Person} user {Console user} key {Key} other {Parent}} {alias} is the tighter limit: {amount, number, currency} left.",
     "inherits": "No own cap. The limits above still apply."
   },
-  "boost": {
-    "title": "Temporary boost for {alias}",
-    "hint": "Adds extra headroom on top of the budget until it expires. Parent limits still apply.",
-    "amount": "Extra amount",
-    "amountHint": "Added to the current limit.",
-    "amountInvalid": "Enter an amount above zero.",
-    "presets": "Quick amounts",
-    "duration": "Valid for",
-    "hours": "{hours, select, 24 {24 hours} 72 {3 days} 168 {7 days} 720 {30 days} other {{hours, number, integer} hours}}",
-    "until": "Expires {date, date, stamp}.",
-    "active": "Active boosts",
-    "expires": "Until {date, date, stamp}",
-    "remove": "Remove boost",
-    "submit": "Add boost",
-    "added": "Boost added",
-    "removed": "Boost removed"
-  },
   "node": {
     "title": "{mode, select, edit {{kind, select, org {Edit company} team {Edit department} project {Edit project} member {Edit person} other {Edit}}} other {{kind, select, org {New company} team {New department} project {New project} member {New person} other {New}}}}",
-    "hint": "{kind, select, org {The customer. Departments, projects, and people live inside it.} team {A group of the company such as IT. Its projects and people share its budget and rate limits.} project {An application or integration. Its keys are billed to the project, its department, and the company.} member {A user of the company who gets personal API keys. People do not sign in to this console.} other {}}",
+    "hint": "{kind, select, org {The customer. Departments, projects, and people live inside it.} team {A group of the company such as IT. Its projects and people share its budget and rate limits.} project {An application or integration. Its keys are billed to the project, its department, and the company.} member {Someone at the company who calls the API with personal keys. People never sign in to this console.} other {}}",
     "name": "{kind, select, org {Company name} team {Department name} project {Project name} member {Name} other {Name}}",
     "placeholder": "{kind, select, org {Acme Inc.} team {IT} project {Support bot} member {Alex Example} other {}}",
     "org": "Company",
@@ -137,7 +120,7 @@
   },
   "members": {
     "title": "People ({count, number, integer})",
-    "hint": "{kind, select, org {The company's own users. They get personal API keys and do not sign in to this console.} other {People in this department. The department's budget also applies to them.}}",
+    "hint": "{kind, select, org {Individuals of the company who call the API with personal keys. They never sign in to this console.} other {People in this department. The department's budget also applies to them.}}",
     "empty": "{kind, select, org {No people in this company yet.} other {No people in this department yet.}}",
     "add": "Add person",
     "columns": {
@@ -154,14 +137,77 @@
     "title": "API keys ({count, number, integer})",
     "hint": "{kind, select, org {Every key billed to this company.} team {Keys of projects and people in this department.} project {Project keys. They are billed to this project.} member {Personal keys of this person.} other {}}",
     "create": "Create key",
-    "empty": "{kind, select, project {No keys yet. Create one for this project.} member {No keys yet. Create a personal key for this person.} other {No keys yet. Create them for a project or a person, or on the <link>API keys</link> page.}}",
+    "empty": "{kind, select, project {No keys for this project yet.} member {No personal keys for this person yet.} other {No keys yet. Open a project or a person to create one there.}}",
     "columns": {
       "key": "Key",
       "owner": "Belongs to",
       "budget": "Spend / budget"
     },
     "ownerKind": "{kind, select, project {Project} member {Person} other {Internal}}",
-    "budget": "Budget for {alias}"
+    "open": "Open {alias}"
+  },
+  "key": {
+    "summary": "{binding, select, project {Project key} member {Personal key} other {Internal key}} · {prefix}…",
+    "expiresChip": "{state, select, expired {Expired} other {Expires {date, date, short}}}",
+    "bindingTitle": "Belongs to",
+    "bindingHint": "{binding, select, project {Billed to the project, its department, and the company.} member {A personal key of a person who calls the API and never signs in. Billed to the person, their department, and the company.} other {An internal key of a console user. Billed to that user and their company.}}",
+    "bindingName": "{binding, select, project {Project} member {Person} other {Console user}}",
+    "place": "Company and department",
+    "open": "{binding, select, project {Open project} other {Open person}}",
+    "accessTitle": "Model access",
+    "accessHint": "Templates stay current as the catalog changes. Individual models are allowed in addition.",
+    "templates": "Model templates",
+    "models": "Individual models",
+    "none": "None",
+    "limitsTitle": "Limits and restrictions",
+    "limitsHint": "They apply to this key on top of the limits of the levels above it.",
+    "rpm": "Requests per minute",
+    "tpm": "Tokens per minute",
+    "maxRequestCost": "Maximum cost per request",
+    "unlimited": "Unlimited",
+    "content": "Request content",
+    "contentState": "{logged, select, yes {Stored in request logs} other {Not stored, metadata only}}",
+    "ips": "Allowed client IPs",
+    "anyIp": "Any address",
+    "endpoints": "Allowed endpoints",
+    "allEndpoints": "All endpoints",
+    "windows": "Allowed times",
+    "anyTime": "Any time",
+    "window": "{days}: {allDay, select, yes {all day} other {{start} to {end}}}",
+    "timeZone": "Time zone {zone}",
+    "expiryTitle": "Expiry",
+    "expiryHint": "{expires, select, yes {Requests with this key are rejected after this date.} other {This key does not expire. Rotate or revoke it when it is no longer needed.}}",
+    "expires": "Expires",
+    "never": "Never",
+    "created": "Created"
+  },
+  "insights": {
+    "usage": "Usage",
+    "logs": "Logs"
+  },
+  "access": {
+    "title": "Access",
+    "hint": "{users, select, yes {{policies, select, yes {Console users who sign in for this company, and the PII and guardrail policies its requests follow.} other {Console users who sign in for this company.}}} other {The PII and guardrail policies this company's requests follow.}}",
+    "users": {
+      "title": "Console users ({count, number, integer})",
+      "hint": "They sign in to this console and see only this company. People of the company call the API and never sign in.",
+      "empty": "No console user signs in for this company."
+    },
+    "policies": {
+      "title": "Effective policies",
+      "hint": "Loaded when you open it. Each request uses exactly one policy: the key's, else the project's, else the company's, else the global one.",
+      "pii": "PII",
+      "guardrails": "Guardrails",
+      "level": "{level, select, org {Company override} other {Global policy}}",
+      "piiDetail": "{entities, plural, =0 {Default entities} one {# entity} other {# entities}} · {output, select, true {model output redacted} other {model output unchanged}}",
+      "guardrailDetail": "Prompt injection: {injection, select, block {block} flag {flag only} other {off}} · Secrets in responses: {secrets, select, block {block} mask {mask} flag {flag only} other {off}}",
+      "overrides": "Own policies of projects and keys in this company ({count, number, integer})",
+      "overridesEmpty": "No project or key of this company has its own policy.",
+      "overridePii": "PII: {state, select, mask {Mask} block {Block} restore {Restore} other {Off}}",
+      "overrideGuardrails": "Guardrails: {count, plural, =0 {no rules} one {# rule} other {# rules}}",
+      "openTarget": "Open {alias}",
+      "open": "Open guardrails"
+    }
   },
   "reports": {
     "title": "Scheduled reports ({count, number, integer})",

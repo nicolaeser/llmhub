@@ -1,7 +1,10 @@
 "use server";
 
 import { runAction } from "@/lib/http/action-result";
+import { createKey, loadKeyDetail, loadKeyOptions, revokeKey, rotateKey, updateKey } from "@/lib/keys/manage";
+import { loadKeyMcpAccess, saveKeyMcpAccess } from "@/lib/mcp/key-access";
 import { loadCompanyMcpServers, saveCompanyMcpInstallation } from "@/lib/mcp/servers";
+import { loadCompanyPolicies } from "@/lib/settings/guardrail-policies";
 import { addBoost, removeBoost, setBudget } from "@/lib/tenancy/budgets";
 import {
   deleteNode,
@@ -67,4 +70,40 @@ export async function loadCompanyMcpAction(...args: Parameters<typeof loadCompan
 
 export async function saveCompanyMcpInstallationAction(...args: Parameters<typeof saveCompanyMcpInstallation>) {
   return runAction(() => saveCompanyMcpInstallation(...args));
+}
+
+export async function loadCompanyPoliciesAction(...args: Parameters<typeof loadCompanyPolicies>) {
+  return runAction(() => loadCompanyPolicies(...args));
+}
+
+export async function loadKeyOptionsAction() {
+  return runAction(() => loadKeyOptions());
+}
+
+export async function loadKeyDetailAction(...args: Parameters<typeof loadKeyDetail>) {
+  return runAction(() => loadKeyDetail(...args));
+}
+
+export async function createKeyAction(...args: Parameters<typeof createKey>) {
+  return runAction(() => createKey(...args));
+}
+
+export async function updateKeyAction(...args: Parameters<typeof updateKey>) {
+  return runAction(() => updateKey(...args));
+}
+
+export async function rotateKeyAction(...args: Parameters<typeof rotateKey>) {
+  return runAction(() => rotateKey(...args));
+}
+
+export async function revokeKeyAction(...args: Parameters<typeof revokeKey>) {
+  return runAction(() => revokeKey(...args));
+}
+
+export async function loadKeyMcpAccessAction(...args: Parameters<typeof loadKeyMcpAccess>) {
+  return runAction(() => loadKeyMcpAccess(...args));
+}
+
+export async function saveKeyMcpAccessAction(...args: Parameters<typeof saveKeyMcpAccess>) {
+  return runAction(() => saveKeyMcpAccess(...args));
 }
