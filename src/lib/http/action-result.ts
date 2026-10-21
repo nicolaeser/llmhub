@@ -26,11 +26,24 @@ export async function runAction<T>(
   }
 }
 
+type FailListener = (error: string) => void;
+
+let failListener: FailListener | null = null;
+
+export function onActionFail(listener: FailListener): () => void {
+  failListener = listener;
+  return () => {
+    if (failListener === listener) failListener = null;
+  };
+}
+
 export function isActionFail(value: unknown): value is ActionFail {
-  return Boolean(
+  const failed = Boolean(
     value &&
       typeof value === "object" &&
       "ok" in value &&
       (value as { ok: unknown }).ok === false,
   );
+  if (failed) failListener?.(String((value as ActionFail).error));
+  return failed;
 }

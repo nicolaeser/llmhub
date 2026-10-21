@@ -45,13 +45,14 @@ function RoleSelect({
 }) {
   const t = useTranslations("Users");
   const roleName = useRoleName();
+  const offered = roles.filter((role) => role.assignable || role.id === value);
   return (
     <SearchSelect
       label={t("fields.role")}
-      items={roles.map((role) => ({ id: role.id, label: roleName(role) }))}
+      items={offered.map((role) => ({ id: role.id, label: roleName(role) }))}
       value={value}
       onChange={onChange}
-      disabledKeys={roles.filter((role) => !role.assignable).map((role) => role.id)}
+      disabledKeys={offered.filter((role) => !role.assignable).map((role) => role.id)}
       isDisabled={isDisabled}
     />
   );

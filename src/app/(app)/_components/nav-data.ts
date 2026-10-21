@@ -133,6 +133,12 @@ export function visibleNav(permissions: readonly Permission[], scope: ScopeKind)
   })).filter((section) => section.items.length > 0);
 }
 
+export function canOpen(permissions: readonly Permission[], pathname: string, scope: ScopeKind): boolean {
+  return NAV.some((section) =>
+    section.items.some((item) => matchesPath(item, pathname) && canSee(permissions, item, scope)),
+  );
+}
+
 export function homePath(permissions: readonly Permission[], scope: ScopeKind = "platform"): string {
   const first = visibleNav(permissions, scope).flatMap((section) => section.items)[0];
   return first?.href ?? NO_NAV_HOME;

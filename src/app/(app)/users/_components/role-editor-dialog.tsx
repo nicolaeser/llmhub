@@ -41,7 +41,6 @@ export default function RoleEditorDialog({
   const [description, setDescription] = useState(editing?.description ?? "");
   const [selected, setSelected] = useState<Permission[]>(editing?.permissions ?? []);
   const [pending, start] = useTransition();
-  const allowed = new Set(grantable);
 
   function save(close: () => void) {
     start(async () => {
@@ -86,7 +85,7 @@ export default function RoleEditorDialog({
         </TextField>
       </div>
       <div className="space-y-5">
-        {permissionsByDomain().map((group) => (
+        {permissionsByDomain(grantable).map((group) => (
           <Fieldset key={group.domain} className="gap-2">
             <Fieldset.Legend>{t("domain", { domain: group.domain })}</Fieldset.Legend>
             <div className="grid gap-2 sm:grid-cols-2">
@@ -101,7 +100,7 @@ export default function RoleEditorDialog({
                   >
                     <Checkbox
                       isSelected={selected.includes(permission)}
-                      isDisabled={pending || !allowed.has(permission)}
+                      isDisabled={pending}
                       onChange={(checked) =>
                         setSelected((current) =>
                           checked

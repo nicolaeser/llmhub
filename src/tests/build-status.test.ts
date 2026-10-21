@@ -96,6 +96,7 @@ test("before the first check the sidebar shows the loaded version and no notice"
       messages: { Common: messages },
       children: createElement(BuildStatusProvider, {
         version: "v2026.10.07.38e8b1b",
+        access: "owner",
         children: [
           createElement(BuildNotice, { key: "notice", collapsed: false }),
           createElement(BuildVersion, { key: "version" }),
@@ -116,6 +117,7 @@ test("without a notice the footer status slot keeps the version in place", async
       messages: { Common: messages },
       children: createElement(BuildStatusProvider, {
         version: "v2026.10.07.38e8b1b",
+        access: "owner",
         children: createElement(BuildNotice, { collapsed: false, fallback: createElement(BuildVersion) }),
       }),
     }),

@@ -1,9 +1,10 @@
 import "server-only";
 import prisma from "@/lib/db/prisma";
 import { requireSession } from "@/lib/auth/guards";
+import { accessKey } from "@/lib/auth/permissions";
 import { companyOf } from "@/lib/auth/scope";
 import type { AuthenticatedSession } from "@/types/auth";
-import type { ConsoleScopeState, ScopeCompany } from "@/types/console";
+import type { ConsoleAccess, ConsoleScopeState, ScopeCompany } from "@/types/console";
 
 const COMPANY_SELECT = { id: true, alias: true } as const;
 
@@ -25,4 +26,12 @@ export async function consoleScopeOf(session: AuthenticatedSession): Promise<Con
 
 export async function loadConsoleScope(): Promise<ConsoleScopeState> {
   return consoleScopeOf(await requireSession());
+}
+
+export function sessionAccessKey(session: AuthenticatedSession): string {
+  return accessKey({ isOwner: session.isOwner, orgId: session.user.orgId, permissions: session.permissions });
+}
+
+export async function loadConsoleAccess(): Promise<ConsoleAccess> {
+  return { key: sessionAccessKey(await requireSession()) };
 }
