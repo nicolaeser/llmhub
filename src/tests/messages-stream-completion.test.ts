@@ -195,3 +195,27 @@ test("a chat completion stream that finishes without [DONE] still counts as comp
   assert.doesNotMatch(text, /"error"/);
   assert.deepEqual(await logged(), [{ status: 200, outcome: "ok" }]);
 });
+
+test("a client that cancels before the upstream answers is logged as cancelled without cooling the key", async () => {
+  const alias = anthropicGroup();
+  const client = new AbortController();
+  let calls = 0;
+  gateway.reply = () => {
+    calls += 1;
+    return new Promise<Response>((_resolve, reject) => {
+      setTimeout(() => {
+        client.abort();
+        reject(new DOMException("This operation was aborted", "AbortError"));
+      }, 5);
+    });
+  };
+  const res = await messages(alias, {}, { signal: client.signal });
+  assert.equal(res.status, 499);
+  assert.equal(calls, 1);
+  assert.deepEqual(await logged(), [{ status: 499, outcome: "cancelled" }]);
+  const usage = recordedPrisma.called("usageDaily", "upsert")[0]!.args as { create: { errors: number; requests: number } };
+  assert.equal(usage.create.requests, 1);
+  assert.equal(usage.create.errors, 0);
+  const { cooldownEnds } = await import("@/lib/gateway/routing/provider-health");
+  assert.equal((await cooldownEnds([`${alias}-route`])).size, 0);
+});

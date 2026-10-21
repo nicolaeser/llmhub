@@ -3,7 +3,7 @@ import { AnthropicSseTranslator } from "@/lib/gateway/protocols/anthropic";
 import { recordUsage, recordUsageOrLog, usageFromUnknown } from "@/lib/gateway/billing/billing";
 import { alertUpstreamFailure } from "@/lib/alerts/notify";
 import { spendTag } from "@/lib/gateway/access/gate";
-import { GateError } from "@/lib/gateway/errors";
+import { clientClosedError, GateError, isClientClosed } from "@/lib/gateway/errors";
 import { outputScreen, type OutputScreen } from "@/lib/gateway/safety/guardrails";
 import { instructChat } from "@/lib/gateway/safety/pii-instruction";
 import { requestRoutingOverride, serviceModeHeaders, variantRoutes } from "@/lib/gateway/dispatch/service-mode";
@@ -79,7 +79,7 @@ export async function recordFailure(
     principal: input.principal,
     model: input.model,
     status: failureStatus(err),
-    outcome: "error",
+    outcome: isClientClosed(err) ? "cancelled" : "error",
     latencyMs: Date.now() - started,
     tag: spendTag(input.body),
     request: input.body,
@@ -93,7 +93,7 @@ export async function routeMetered<T>(
   input: MeteredCall,
   started: number,
   fn: (dep: ResolvedDeployment, group: ResolvedModelGroup) => Promise<T>,
-  opts: { deferRelease?: boolean } = {},
+  opts: { deferRelease?: boolean; signal?: AbortSignal } = {},
 ) {
   const routing = {
     ...opts,
@@ -211,6 +211,7 @@ export async function withDeployment<T>(
     cost?: CostFilter;
     principal?: Principal;
     request?: JsonMap;
+    signal?: AbortSignal;
   },
 ): Promise<{
   result: T;
@@ -251,6 +252,7 @@ export async function withDeployment<T>(
     let switches = 0;
     let stopAlias = false;
     for (let i = 0; i < attempts; i++) {
+      if (opts?.signal?.aborted) throw clientClosedError();
       try {
         const acquired = await acquireGroup(group, limits[root], routable, opts?.strategy, opts?.cost, access, run);
         const account = signInAccount(acquired.dep);
@@ -276,6 +278,7 @@ export async function withDeployment<T>(
           };
         } catch (err) {
           acquired.release();
+          if (opts?.signal?.aborted) throw clientClosedError();
           if (account && unauthorized(err) && !renewed.has(account)) {
             renewed.add(account);
             if (await renewRejectedLogin(account, acquired.dep.provider!.kind as SignInKind)) {
@@ -317,7 +320,7 @@ export async function withDeployment<T>(
         }
       } catch (err) {
         last = err;
-        if (!fallbackable(err) || costRejected(err)) throw err;
+        if (isClientClosed(err) || !fallbackable(err) || costRejected(err)) throw err;
         break;
       }
     }
@@ -539,6 +542,7 @@ export async function streamChat(input: {
   const call = { ...input, body: instructChat(input.principal.trace, input.body) };
   const routed = await routeMetered(call, started, (dep, group) => openChatStream(dep, group, call), {
     deferRelease: true,
+    signal: input.req.signal,
   });
   return relayChatStream({
     res: routed.result,

@@ -161,7 +161,7 @@ export async function streamMessages(input: MessagesInput & { req: Request }): P
         res: await openUpstreamStream({ dep, group, req: input.req, path: NATIVE_PATH, payload, headers: input.headers }),
       };
     },
-    { deferRelease: true },
+    { deferRelease: true, signal: input.req.signal },
   );
   const { result, dep, group, release } = routed;
 
