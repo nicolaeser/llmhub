@@ -108,7 +108,7 @@ export default function SubscriptionAccounts({
     subset.filter((row) => states.get(row.id) === state).length;
   const recoveries = rows
     .filter((row) => states.get(row.id) === "limited")
-    .map((row) => recoveryAt(items[row.id], now.getTime()))
+    .map((row) => recoveryAt(row, items[row.id], now.getTime()))
     .filter((time): time is number => time !== null);
   const nextRecovery = recoveries.length ? Math.min(...recoveries) : null;
   const connected = SUBSCRIPTION_CATALOG.filter((spec) => rows.some((row) => row.kind === spec.kind));
