@@ -33,7 +33,7 @@
     },
     "member": {
       "title": "Personen",
-      "hint": "Die eigenen Benutzer des Unternehmens mit persönlichen Keys. Keine Konsolen-Benutzer.",
+      "hint": "Einzelpersonen, die die API mit persönlichen Keys nutzen und sich nie anmelden. Keine Konsolen-Benutzer.",
       "action": "Person hinzufügen"
     },
     "budget": {
@@ -74,7 +74,7 @@
   },
   "node": {
     "title": "{mode, select, edit {{kind, select, org {Unternehmen bearbeiten} team {Abteilung bearbeiten} project {Projekt bearbeiten} member {Person bearbeiten} other {Bearbeiten}}} other {{kind, select, org {Neues Unternehmen} team {Neue Abteilung} project {Neues Projekt} member {Neue Person} other {Neu}}}}",
-    "hint": "{kind, select, org {Der Kunde. Abteilungen, Projekte und Personen liegen darin.} team {Eine Gruppe im Unternehmen, etwa die IT. Ihre Projekte und Personen teilen Budget und Rate-Limits.} project {Eine Anwendung oder Integration. Ihre Keys werden dem Projekt, der Abteilung und dem Unternehmen berechnet.} member {Ein Benutzer des Unternehmens mit persönlichen API-Keys. Personen melden sich nicht an dieser Konsole an.} other {}}",
+    "hint": "{kind, select, org {Der Kunde. Abteilungen, Projekte und Personen liegen darin.} team {Eine Gruppe im Unternehmen, etwa die IT. Ihre Projekte und Personen teilen Budget und Rate-Limits.} project {Eine Anwendung oder Integration. Ihre Keys werden dem Projekt, der Abteilung und dem Unternehmen berechnet.} member {Jemand im Unternehmen, der die API mit persönlichen Keys nutzt. Personen melden sich nie an dieser Konsole an.} other {}}",
     "name": "{kind, select, org {Name des Unternehmens} team {Name der Abteilung} project {Name des Projekts} member {Name} other {Name}}",
     "placeholder": "{kind, select, org {Acme GmbH} team {IT} project {Support-Bot} member {Alex Beispiel} other {}}",
     "org": "Unternehmen",
@@ -120,7 +120,7 @@
   },
   "members": {
     "title": "Personen ({count, number, integer})",
-    "hint": "{kind, select, org {Die eigenen Benutzer des Unternehmens. Sie bekommen persönliche API-Keys und melden sich nicht an dieser Konsole an.} other {Personen in dieser Abteilung. Das Budget der Abteilung gilt auch für sie.}}",
+    "hint": "{kind, select, org {Einzelpersonen des Unternehmens, die die API mit persönlichen Keys nutzen. Sie melden sich nie an dieser Konsole an.} other {Personen in dieser Abteilung. Das Budget der Abteilung gilt auch für sie.}}",
     "empty": "{kind, select, org {Noch keine Personen in diesem Unternehmen.} other {Noch keine Personen in dieser Abteilung.}}",
     "add": "Person hinzufügen",
     "columns": {

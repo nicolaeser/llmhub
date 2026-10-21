@@ -45,6 +45,7 @@ export function discoveredOf(v: unknown): DiscoveredModel[] {
       priceSource: asString(rec.priceSource) || asString(rec.price_source) || "none",
       ...(Array.isArray(rec.serviceTiers) ? { serviceTiers: asStringArray(rec.serviceTiers) } : {}),
       ...(Array.isArray(rec.accessPrograms) ? { accessPrograms: asStringArray(rec.accessPrograms) } : {}),
+      ...(Array.isArray(rec.variants) ? { variants: asStringArray(rec.variants) } : {}),
     });
   }
   return out;

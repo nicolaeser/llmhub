@@ -7,7 +7,6 @@
   "openMenu": "Navigationsmenü öffnen",
   "goHome": "Zur Startseite",
   "sections": {
-    "tenants": "Mandanten",
     "organization": "Organisation",
     "gateway": "Gateway",
     "policies": "Richtlinien",

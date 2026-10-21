@@ -1,5 +1,6 @@
 import {
   Asterisk,
+  Bot,
   Cloud,
   Gem,
   Infinity as InfinityIcon,
@@ -35,6 +36,7 @@ const KIND_ICONS: Record<string, LucideIcon> = {
   muse_code: InfinityIcon,
   gemini: Gem,
   vertex: Cloud,
+  devin: Bot,
 };
 
 export function kindIcon(kind: string): LucideIcon {

@@ -51,6 +51,7 @@ const KIND_ORDER = [
   "kimi",
   "kimi_ai",
   "muse_code",
+  "devin",
 ] as const satisfies readonly SignInKind[];
 
 function kindRank(kind: string): number {

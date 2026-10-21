@@ -56,7 +56,7 @@ export type DeploymentRow = {
   } | null;
 };
 
-export type ModelFacts = { serviceTiers?: string[]; accessPrograms?: string[] };
+export type ModelFacts = { serviceTiers?: string[]; accessPrograms?: string[]; variants?: string[] };
 
 export type ResolvedDeployment = Deployment & {
   provider?: DeploymentRow["provider"];

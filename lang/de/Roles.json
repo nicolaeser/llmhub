@@ -98,7 +98,7 @@
     },
     "usersRead": {
       "label": "Benutzer ansehen",
-      "description": "Personen sehen, die sich anmelden können."
+      "description": "Konsolen-Benutzer sehen, die sich anmelden können."
     },
     "usersManage": {
       "label": "Benutzer verwalten",
