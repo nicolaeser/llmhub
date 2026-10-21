@@ -7,8 +7,8 @@ import { useConsoleScope } from "../_components/console-scope";
 
 export default function KeysLoading() {
   const t = useTranslations("Keys");
-  const { kind, canSwitch } = useConsoleScope();
+  const { kind } = useConsoleScope();
   return (
-    <PageLoading icon={KeyRound} title={t("title")} subtitle={t("subtitle")} tabs={kind === "platform" || canSwitch} stats={4} />
+    <PageLoading icon={KeyRound} title={t("title")} subtitle={t("subtitle")} tabs={kind === "platform"} stats={4} />
   );
 }
