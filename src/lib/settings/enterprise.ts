@@ -415,7 +415,28 @@ async function inheritedPolicies(principal: Principal) {
   return { project, org };
 }
 
-export async function resolvePolicies(principal: Principal): Promise<{ pii: PiiPolicy; guardrails: GuardrailPolicy }> {
+const tracedEnterprises = new WeakMap<object, Promise<Enterprise>>();
+const tracedPolicies = new WeakMap<object, Promise<{ pii: PiiPolicy; guardrails: GuardrailPolicy }>>();
+
+function oncePerTrace<T>(store: WeakMap<object, Promise<T>>, trace: object | undefined, load: () => Promise<T>): Promise<T> {
+  if (!trace) return load();
+  const known = store.get(trace);
+  if (known) return known;
+  const loading = load();
+  store.set(trace, loading);
+  loading.catch(() => store.delete(trace));
+  return loading;
+}
+
+export function requestEnterprise(principal: Principal): Promise<Enterprise> {
+  return oncePerTrace(tracedEnterprises, principal.trace, getEnterprise);
+}
+
+export function resolvePolicies(principal: Principal): Promise<{ pii: PiiPolicy; guardrails: GuardrailPolicy }> {
+  return oncePerTrace(tracedPolicies, principal.trace, () => loadPolicies(principal));
+}
+
+async function loadPolicies(principal: Principal): Promise<{ pii: PiiPolicy; guardrails: GuardrailPolicy }> {
   const keyPii = principal.key?.pii ?? null;
   const keyGuardrails = principal.guardrails ?? null;
   const { project, org } =
@@ -424,7 +445,7 @@ export async function resolvePolicies(principal: Principal): Promise<{ pii: PiiP
   const guardrails =
     keyGuardrails ?? guardrailOverride(project?.guardrailPolicy) ?? guardrailOverride(org?.guardrailPolicy);
   if (pii && guardrails) return { pii, guardrails };
-  const enterprise = await getEnterprise();
+  const enterprise = await requestEnterprise(principal);
   return {
     pii: pii ?? normalizePii(enterprise.pii),
     guardrails: guardrails ?? normalizeGuardrails(enterprise.guardrails),
