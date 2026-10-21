@@ -64,7 +64,7 @@ export function claudeHeaderWindows(headers: Headers): LimitWindow[] {
 }
 
 export function isObservedWindow(window: LimitWindow): boolean {
-  return !window.scope && OBSERVED_WINDOWS.some((spec) => spec.windowSeconds === window.windowSeconds);
+  return !window.scope;
 }
 
 function sameWindow(a: LimitWindow, b: LimitWindow): boolean {
@@ -74,6 +74,14 @@ function sameWindow(a: LimitWindow, b: LimitWindow): boolean {
 function resetMs(window: LimitWindow): number | null {
   const at = window.resetsAt ? Date.parse(window.resetsAt) : NaN;
   return Number.isFinite(at) ? at : null;
+}
+
+export function observedWindowsBefore(previous: LimitWindow[], fetched: LimitWindow[], now: number): LimitWindow[] {
+  return previous.filter((window) => {
+    if (!isObservedWindow(window) || fetched.some((item) => sameWindow(item, window))) return false;
+    const reset = resetMs(window);
+    return reset === null || reset > now;
+  });
 }
 
 function withKnownReset(next: LimitWindow, prior: LimitWindow, at: number): LimitWindow {
