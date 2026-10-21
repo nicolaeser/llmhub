@@ -90,6 +90,17 @@ export default function ProviderFields({
           />
         </TextField>
       )}
+      {signInKind ? null : (
+        <Switch isSelected={draft.internal} onChange={(internal) => set({ internal })} isDisabled={isDisabled}>
+          <Switch.Content>
+            <Switch.Control>
+              <Switch.Thumb />
+            </Switch.Control>
+            <Label>{t("internalOnly")}</Label>
+          </Switch.Content>
+          <Description>{t("internalOnlyHint")}</Description>
+        </Switch>
+      )}
       <Separator />
       <div className="space-y-1">
         <p className="text-sm font-medium text-foreground">{t("policy.title")}</p>

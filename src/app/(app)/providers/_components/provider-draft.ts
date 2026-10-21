@@ -45,6 +45,7 @@ export function draftFor(spec: ProviderKindSpec | null, editing: ProviderView | 
     retention: !policy || policy.zdr || policy.retentionDays === null ? "" : String(policy.retentionDays),
     region: policy?.region ?? (spec?.kind === "openrouter_eu" ? "eu" : ""),
     noTraining: policy?.noTraining ?? false,
+    internal: editing?.internal ?? false,
   };
 }
 
@@ -76,5 +77,6 @@ export function draftBody(spec: ProviderKindSpec, draft: ProviderDraft): Provide
       noTraining: draft.zdr || draft.noTraining,
     },
     vertex: serviceAccount ? { project: draft.vertex.project, location: draft.vertex.location } : undefined,
+    internal: isSignInKind(spec.kind) ? undefined : draft.internal,
   };
 }

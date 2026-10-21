@@ -16,6 +16,7 @@ function provider(kind: string): ProviderView {
     hasApiKey: false,
     enabled: true,
     restricted: false,
+    internal: false,
     assignments: [],
     signIn: { account: "user@example.test", plan: "pro", status: "active" },
     sharedVia: null,

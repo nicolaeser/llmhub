@@ -16,6 +16,7 @@ export type ProviderRecord = {
   noTraining: boolean;
   enabled: boolean;
   restricted: boolean;
+  internal: boolean;
   assignments?: AssignmentSource[];
   login?: { account: string; plan: string; status: string } | null;
   subAdd?: { label: string } | null;
@@ -117,6 +118,7 @@ export type ProviderView = {
   hasApiKey: boolean;
   enabled: boolean;
   restricted: boolean;
+  internal: boolean;
   assignments: AssignmentTarget[];
   signIn: ProviderSignIn | null;
   sharedVia: string | null;
@@ -455,6 +457,7 @@ export type ProviderDraft = {
   retention: string;
   region: string;
   noTraining: boolean;
+  internal: boolean;
 };
 
 export type ProviderBody = {
@@ -465,6 +468,7 @@ export type ProviderBody = {
   signIn?: string;
   policy: ProviderPolicyInput;
   vertex?: VertexTarget;
+  internal?: boolean;
 };
 
 export type AddProviderSection = "api" | "subscription" | "import";

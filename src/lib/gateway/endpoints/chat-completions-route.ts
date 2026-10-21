@@ -13,9 +13,9 @@ import { maxCostHeader } from "@/lib/gateway/billing/cost-cap";
 import { asRecord } from "@/lib/gateway/core";
 import { chatStreamSink, chatToolNames, runMcpChat, streamMcpChat, withMcpTools } from "@/lib/mcp/chat-loop";
 import { mcpToolsetFor } from "@/lib/mcp/toolset";
-import type { RoutePool } from "@/types/routing";
+import type { PublicPool } from "@/types/routing";
 
-export function chatCompletionsRoute(pool: RoutePool) {
+export function chatCompletionsRoute(pool: PublicPool) {
   return gatewayRoute(async (req) => {
     const { principal, model, clean: redacted, output } = await screenModelRequest(req, { pool });
     const clean = await resolveChatFiles(redacted, principal);

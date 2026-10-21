@@ -35,6 +35,7 @@ function row(overrides: Partial<ProviderView>): ProviderView {
     hasApiKey: true,
     enabled: true,
     restricted: false,
+    internal: false,
     assignments: [],
     signIn: null,
     sharedVia: null,
@@ -104,6 +105,17 @@ test("retention must be up to four digits unless ZDR is on", () => {
   assert.equal(retentionValid({ ...base, retention: "abc" }), false);
   assert.equal(retentionValid({ ...base, retention: "abc", zdr: true }), true);
   assert.equal(draftReady(spec("openai"), null, { ...base, retention: "-1" }), false);
+});
+
+test("only API key kinds carry the internal flag", () => {
+  const fresh = draftFor(spec("openai"), null, "OpenAI");
+  assert.equal(fresh.internal, false);
+  assert.equal(draftBody(spec("openai"), fresh).internal, false);
+  const stored = draftFor(spec("openai"), row({ internal: true }), "OpenAI");
+  assert.equal(stored.internal, true);
+  assert.equal(draftBody(spec("openai"), stored).internal, true);
+  assert.equal(draftBody(spec("vertex"), { ...draftFor(spec("vertex"), null, "Vertex"), internal: true }).internal, true);
+  assert.equal(draftBody(spec("codex"), { ...draftFor(spec("codex"), null, "ChatGPT"), internal: true }).internal, undefined);
 });
 
 test("base URLs are sent only for API key kinds", () => {

@@ -29,7 +29,7 @@ const claudeDep: ResolvedDeployment = {
 
 test("Claude subscription deployments belong to the subscription pool", () => {
   assert.equal(routePool({ kind: "claude" }), "subscription");
-  assert.equal(routePool({ kind: "anthropic", provider: { kind: "claude" } }), "subscription");
+  assert.equal(routePool({ kind: "anthropic", provider: { kind: "claude", internal: false } }), "subscription");
   assert.equal(routePool({ kind: "anthropic" }), "api");
 });
 
