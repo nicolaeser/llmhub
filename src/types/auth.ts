@@ -135,6 +135,7 @@ export type RoleSummary = {
   memberCount: number;
   revision: number;
   editable: boolean;
+  resettable: boolean;
 };
 
 export type RoleOption = {

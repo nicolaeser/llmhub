@@ -11,6 +11,7 @@ import {
   PERMISSIONS,
 } from "@/lib/auth/permissions";
 import { requirePlatformPermission } from "@/lib/auth/guards";
+import { seesAllSpend } from "@/lib/auth/scope";
 import { assertPasswordPolicy, hashPassword } from "@/lib/auth/password";
 import { roleOptions } from "@/lib/auth/roles";
 import { requestMeta } from "@/lib/auth/session";
@@ -73,8 +74,22 @@ async function assignableRole(actor: GrantActor, roleId: string) {
   return role;
 }
 
+export function usersConsoleAccess(session: AuthenticatedSession) {
+  const manages = hasPerm(session.permissions, PERMISSIONS.USERS_MANAGE);
+  const secures = hasPerm(session.permissions, PERMISSIONS.USERS_SECURITY);
+  const budgets = hasPerm(session.permissions, PERMISSIONS.BUDGETS_MANAGE);
+  return {
+    canManage: manages,
+    canSecure: secures,
+    canBudget: budgets,
+    canAct: manages || secures || budgets,
+    seesSpend: budgets || seesAllSpend(session),
+  };
+}
+
 export async function usersConsole(session: AuthenticatedSession): Promise<UsersConsolePayload> {
   const actor = grantActor(session);
+  const access = usersConsoleAccess(session);
   const now = new Date();
   const [users, roles, orgs] = await Promise.all([
     prisma.user.findMany({
@@ -94,8 +109,10 @@ export async function usersConsole(session: AuthenticatedSession): Promise<Users
         },
       },
     }),
-    roleOptions(actor),
-    prisma.organization.findMany({ orderBy: { alias: "asc" }, select: { id: true, alias: true } }),
+    access.canManage ? roleOptions(actor) : [],
+    access.canManage
+      ? prisma.organization.findMany({ orderBy: { alias: "asc" }, select: { id: true, alias: true } })
+      : [],
   ]);
   return {
     users: users.map(
@@ -110,9 +127,9 @@ export async function usersConsole(session: AuthenticatedSession): Promise<Users
         blocked: user.blocked,
         orgId: user.orgId,
         orgAlias: user.org?.alias ?? "",
-        maxBudget: money(user.maxBudget),
-        spend: money(user.spend),
-        budgetDuration: user.budgetDuration,
+        budget: access.seesSpend
+          ? { maxBudget: money(user.maxBudget), spend: money(user.spend), budgetDuration: user.budgetDuration }
+          : null,
         twoFactorEnabled: Boolean(user.totp?.enabledAt),
         passkeys: user._count.passkeys,
         activeSessions: user.sessions.length,
@@ -121,6 +138,7 @@ export async function usersConsole(session: AuthenticatedSession): Promise<Users
         logContent: user.logContent,
         revision: user.revision,
         manageable:
+          access.canAct &&
           user.id !== session.user.id &&
           !user.isOwner &&
           canManage(actor, targetPermissions(user)),
@@ -129,9 +147,9 @@ export async function usersConsole(session: AuthenticatedSession): Promise<Users
     roles,
     orgs,
     selfId: session.user.id,
-    canManage: hasPerm(session.permissions, PERMISSIONS.USERS_MANAGE),
-    canBudget: hasPerm(session.permissions, PERMISSIONS.BUDGETS_MANAGE),
-    canSecure: hasPerm(session.permissions, PERMISSIONS.USERS_SECURITY),
+    canManage: access.canManage,
+    canBudget: access.canBudget,
+    canSecure: access.canSecure,
   };
 }
 
