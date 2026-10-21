@@ -107,6 +107,34 @@ test("CI bakes the release version into the image as BUILD_ID", async () => {
   }
 });
 
+test("the Google OAuth client secret enters the image only as a BuildKit secret", async () => {
+  const dockerfile = await file("Dockerfile");
+  const runner = dockerfile.slice(dockerfile.indexOf("AS runner"));
+  const step = runner.indexOf("RUN --mount=type=secret,id=antigravity_client_secret,required=false");
+  assert.ok(step > runner.indexOf("ENV BUILD_ID=${BUILD_ID}"), "re-run on every build because secrets are not in the cache key");
+  assert.ok(step < runner.indexOf("USER node"), "written by root");
+  assert.match(
+    runner,
+    /if \[ -s \/run\/secrets\/antigravity_client_secret \]; then \\\n {6}install -o root -g node -m 0440 \/run\/secrets\/antigravity_client_secret antigravity-client-secret; \\\n {4}fi\n/,
+  );
+  assert.equal(dockerfile.match(/antigravity_client_secret/g)?.length, 3);
+  assert.doesNotMatch(dockerfile, /^(?:ARG|ENV)\b.*antigravity/im);
+
+  const pipeline = await file(".github/workflows/pipeline.yml");
+  assert.match(pipeline, /^ {4}secrets:\n {6}antigravity_client_secret:\n {8}required: false\n/m);
+  assert.match(pipeline, /secrets: \|\n {12}antigravity_client_secret=\$\{\{ secrets\.antigravity_client_secret \}\}\n/);
+  assert.doesNotMatch(pipeline.slice(pipeline.indexOf("build-args:"), pipeline.indexOf("secrets: |")), /antigravity/i);
+  for (const workflow of [".github/workflows/verify.yml", ".github/workflows/release.yml"]) {
+    const source = await file(workflow);
+    assert.match(source, /secrets:\n {6}antigravity_client_secret: \$\{\{ secrets\.ANTIGRAVITY_CLIENT_SECRET \}\}\n/, workflow);
+    assert.doesNotMatch(source, /secrets: inherit/, workflow);
+  }
+
+  const [gitignore, dockerignore] = await Promise.all([file(".gitignore"), file(".dockerignore")]);
+  assert.ok(gitignore.split("\n").includes("/antigravity-client-secret"));
+  assert.ok(dockerignore.split("\n").includes("antigravity-client-secret"));
+});
+
 test("only pushes get write permissions in CI", async () => {
   const pipeline = await file(".github/workflows/pipeline.yml");
   assert.doesNotMatch(pipeline, /: write/);

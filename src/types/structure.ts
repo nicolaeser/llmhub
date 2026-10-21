@@ -96,7 +96,9 @@ export type StructurePayload = {
   companyId: string;
   canManage: boolean;
   canBudget: boolean;
+  canSeeKeys: boolean;
   canCreateKeys: boolean;
+  canSeeMcp: boolean;
   reports: UsageReportView[];
   canSeeReports: boolean;
   canReport: boolean;

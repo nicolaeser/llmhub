@@ -2,7 +2,7 @@
   "title": "MCP servers",
   "subtitle": "Connect a public MCP server, or turn any HTTP API into one with MCP Anything. Assigned callers use the tools on every model call and through POST /api/v1/mcp.",
   "add": "Add server",
-  "readOnly": "You can view MCP servers. Changing them needs the permission to manage settings.",
+  "readOnly": "You can view MCP servers. Changing them needs the permission to manage MCP.",
   "installOnly": "You can connect a company API key and set access inside your company. Changing the server itself needs permission to manage MCP.",
   "empty": {
     "title": "No MCP servers yet",

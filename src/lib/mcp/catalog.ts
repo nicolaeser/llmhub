@@ -3,11 +3,11 @@ import prisma from "@/lib/db/prisma";
 import { writeAudit } from "@/lib/audit";
 import { AuthError, isPrismaCode } from "@/lib/auth/errors";
 import { requireActor } from "@/lib/auth/guards";
-import { hasPerm, PERMISSIONS } from "@/lib/auth/permissions";
 import { companyOf } from "@/lib/auth/scope";
 import { seal } from "@/lib/crypto";
 import { toolSpecs } from "@/lib/mcp/client";
 import { toolActionsOf } from "@/lib/mcp/resolve";
+import { mcpAccess, requireMcpManager } from "@/lib/mcp/scope";
 import { installedAuthType } from "@/lib/mcp/toolset";
 import { checkServerUrl } from "@/lib/mcp/url-guard";
 import { MCP_ROLE_KEYS, authUsesName, mcpInstallationSchema, mcpPermissionsSchema, mcpTemplateSchema } from "@/schemas/mcp";
@@ -85,7 +85,7 @@ export function installationViews(
 }
 
 export async function ensureMcpRoles(raw: unknown) {
-  await requireCatalogManager();
+  await requireMcpManager();
   const id = typeof raw === "string" ? raw : "";
   if (!id) throw new Error("VALIDATION");
   const server = await prisma.mcpServer.findUnique({ where: { id }, select: { id: true } });
@@ -122,20 +122,12 @@ function nextRoleKey(name: string, taken: ReadonlySet<string>): string {
   return key;
 }
 
-async function requireCatalogManager() {
-  const session = await requireActor();
-  if (!hasPerm(session.permissions, PERMISSIONS.MCP_MANAGE) && !hasPerm(session.permissions, PERMISSIONS.SETTINGS_MANAGE)) {
-    throw new AuthError("FORBIDDEN");
-  }
-  return session;
-}
-
 function knownNames(names: string[], known: ReadonlySet<string>): string[] {
   return [...new Set(names)].filter((name) => known.has(name));
 }
 
 export async function saveMcpPermissions(raw: unknown) {
-  const session = await requireCatalogManager();
+  const session = await requireMcpManager();
   const input = parse(mcpPermissionsSchema, raw);
   const server = await prisma.mcpServer.findUnique({
     where: { id: input.serverId },
@@ -217,7 +209,7 @@ export async function saveMcpPermissions(raw: unknown) {
 }
 
 export async function setMcpTemplate(raw: unknown) {
-  const session = await requireCatalogManager();
+  const session = await requireMcpManager();
   const input = parse(mcpTemplateSchema, raw);
   const server = await prisma.mcpServer.findUnique({ where: { id: input.id }, select: { id: true, template: true } });
   if (!server) throw new Error("NOT_FOUND");
@@ -236,11 +228,9 @@ export async function setMcpTemplate(raw: unknown) {
 
 export async function saveMcpInstallation(raw: unknown) {
   const session = await requireActor();
-  const canManage = hasPerm(session.permissions, PERMISSIONS.MCP_MANAGE);
-  const canInstall = hasPerm(session.permissions, PERMISSIONS.MCP_INSTALL);
-  if (!canManage && !canInstall) throw new AuthError("FORBIDDEN");
-  const input = parse(mcpInstallationSchema, raw);
   const company = companyOf(session);
+  if (!mcpAccess(session, company).canInstall) throw new AuthError("FORBIDDEN");
+  const input = parse(mcpInstallationSchema, raw);
   if (company && company !== input.orgId) throw new AuthError("FORBIDDEN");
   const server = await prisma.mcpServer.findUnique({
     where: { id: input.serverId },

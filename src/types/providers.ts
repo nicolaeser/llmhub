@@ -346,6 +346,11 @@ export type AntigravitySettings = {
   client_secret: string;
 };
 
+export type AntigravityClientState = {
+  saved: boolean;
+  bundled: boolean;
+};
+
 export type ProviderListActions = {
   openForm: (spec: ProviderKindSpec | null, row: ProviderView | null, onSaved?: (provider: ProviderView) => void) => void;
   openImport: (row: ProviderView) => void;

@@ -33,6 +33,7 @@ export default function ServerCard({
   server,
   canManage,
   canInstall,
+  canAssign,
   companyId,
   onEdit,
   onAccess,
@@ -44,6 +45,7 @@ export default function ServerCard({
   server: McpServerView;
   canManage: boolean;
   canInstall: boolean;
+  canAssign: boolean;
   companyId: string | null;
   onEdit: (server: McpServerView) => void;
   onAccess: (server: McpServerView) => void;
@@ -65,7 +67,7 @@ export default function ServerCard({
   const allowed = enabledTools(server);
   const browserSignIn = server.authType === "oauth" && server.oauthGrant === "authorization_code";
   const signedIn = server.oauth?.status === "active";
-  const canAccess = canManage || canInstall;
+  const canConnect = canInstall && (server.template || canManage);
   const installation = companyId ? server.installations.find((row) => row.orgId === companyId) : null;
   const connected = Boolean(installation?.enabled && (installation.authType === "none" || installation.hasSecret));
 
@@ -243,12 +245,14 @@ export default function ServerCard({
           <Chip size="sm" variant="soft" color={server.global || server.assignments.length ? "accent" : "default"}>
             {t("access.summary", { global: String(server.global), count: server.assignments.length })}
           </Chip>
-          {canAccess ? (
+          {canAssign || canManage || canConnect ? (
             <div className="flex flex-wrap gap-1">
-              <Button size="sm" variant="tertiary" aria-label={t("access.manage", { name: server.name })} onPress={() => onAccess(server)}>
-                <Users size={14} aria-hidden />
-                {t("access.button")}
-              </Button>
+              {canAssign ? (
+                <Button size="sm" variant="tertiary" aria-label={t("access.manage", { name: server.name })} onPress={() => onAccess(server)}>
+                  <Users size={14} aria-hidden />
+                  {t("access.button")}
+                </Button>
+              ) : null}
               {canManage ? (
                 <Button
                   size="sm"
@@ -260,7 +264,7 @@ export default function ServerCard({
                   {t("permissions.open")}
                 </Button>
               ) : null}
-              {canAccess && (server.template || canManage) ? (
+              {canConnect ? (
                 <Button size="sm" variant="tertiary" aria-label={t("install.manage", { name: server.name })} onPress={() => onInstall(server)}>
                   <KeyRound size={14} aria-hidden />
                   {t("install.open")}

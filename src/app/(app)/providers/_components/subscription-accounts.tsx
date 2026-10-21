@@ -18,6 +18,7 @@ import { isActionFail } from "@/lib/http/action-result";
 import { withLimitItems } from "@/lib/updates/live-events";
 import type {
   AccountRouting,
+  AntigravityClientState,
   LimitSnapshot,
   LimitSnapshotList,
   ProviderKindSpec,
@@ -86,7 +87,7 @@ export default function SubscriptionAccounts({
   const [routing, setRouting] = useState<AccountRouting | null>(null);
   const [autoReset, setAutoReset] = useState<AutoResetPolicies>({});
   const [canManage, setCanManage] = useState(false);
-  const [antigravityReady, setAntigravityReady] = useState<boolean | null>(null);
+  const [antigravity, setAntigravity] = useState<AntigravityClientState | null>(null);
   const [access, setAccess] = useState<ProviderView | null>(null);
   const [accessKey, setAccessKey] = useState(0);
   const [settingsKind, setSettingsKind] = useState<SignInKind | null>(null);
@@ -118,7 +119,7 @@ export default function SubscriptionAccounts({
       setCanManage(res.canManage);
     });
     loadAntigravityConfigAction().then((res) => {
-      if (active && !isActionFail(res)) setAntigravityReady(res.configured);
+      if (active && !isActionFail(res)) setAntigravity(res);
     });
     return () => {
       active = false;
@@ -140,6 +141,7 @@ export default function SubscriptionAccounts({
     };
   }, [live, setSeed]);
 
+  const antigravityReady = antigravity === null ? null : antigravity.saved || antigravity.bundled;
   const listed = new Set(rows.map((row) => row.id));
   const staleKey = [
     ...Object.keys(limits).filter((id) => !listed.has(id)),
@@ -364,10 +366,10 @@ export default function SubscriptionAccounts({
         routing={routing ?? {}}
         autoReset={autoReset}
         canManage={canManage}
-        antigravityReady={antigravityReady}
+        antigravity={antigravity}
         onRouting={setRouting}
         onAutoReset={setAutoReset}
-        onAntigravity={setAntigravityReady}
+        onAntigravity={setAntigravity}
       />
 
       <AccessDialog key={`access-${accessKey}`} state={accessState} provider={access} onSaved={actions.replace} />
