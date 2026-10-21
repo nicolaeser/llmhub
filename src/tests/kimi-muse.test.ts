@@ -112,11 +112,11 @@ test("Kimi Code and Muse Code are subscription kinds and the API kinds stay in t
     assert.equal(kinds.isSignInKind(kind), true);
     assert.equal(kinds.reportsLimits(kind), true);
     assert.equal(kinds.signInMethod(kind as "kimi"), "device");
-    assert.equal(routePool({ kind, provider: { kind } }), "subscription");
+    assert.equal(routePool({ kind, provider: { kind, internal: false } }), "subscription");
   }
   for (const kind of ["moonshot", "moonshot_cn", "meta"]) {
     assert.equal(kinds.isSignInKind(kind), false);
-    assert.equal(routePool({ kind, provider: { kind } }), "api");
+    assert.equal(routePool({ kind, provider: { kind, internal: false } }), "api");
   }
   assert.equal(kinds.servesMessages("kimi_ai"), true);
   assert.equal(kinds.servesMessages("moonshot"), false);

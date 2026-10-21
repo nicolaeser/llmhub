@@ -38,7 +38,7 @@ export async function catalogInputs() {
   const [providers, groups, deployments, stored] = await Promise.all([
     prisma.providerConnection.findMany({
       orderBy: { createdAt: "asc" },
-      select: { id: true, name: true, kind: true, discovered: true },
+      select: { id: true, name: true, kind: true, internal: true, discovered: true },
     }),
     prisma.modelGroup.findMany({
       orderBy: { alias: "asc" },
