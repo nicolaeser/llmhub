@@ -5,6 +5,7 @@ import {
   chatOnce,
   openChatStream,
   openUpstreamStream,
+  recordFailure,
   recordSuccess,
   relayChatStream,
   routeMetered,
@@ -16,13 +17,13 @@ import { servesMessages, speaksMuse } from "@/lib/gateway/upstreams/provider-kin
 import { asRecord } from "@/lib/gateway/core";
 import { plainModel } from "@/lib/gateway/catalog/model-alias";
 import { deploymentAuth } from "@/lib/gateway/upstreams/credentials";
-import { GateError } from "@/lib/gateway/errors";
+import { anthropicErrorBody, GateError } from "@/lib/gateway/errors";
 import { chatIncompatibility, chatToMessage, messagesToChat, MessagesStreamEncoder } from "@/lib/gateway/protocols/messages";
 import { MessagesStreamTranscript } from "@/lib/gateway/request-logs/log-content";
 import { outputScreen, type OutputScreen } from "@/lib/gateway/safety/guardrails";
 import { instructChat, instructMessages } from "@/lib/gateway/safety/pii-instruction";
 import { pipeChatStream } from "@/lib/gateway/protocols/chat-stream";
-import { relaySse } from "@/lib/gateway/protocols/sse";
+import { relaySse, sseEvent } from "@/lib/gateway/protocols/sse";
 import { estimateTokens, requestText } from "@/lib/gateway/billing/tokens";
 import { prepareBody, proxyJson, upstreamError } from "@/lib/gateway/dispatch/upstream";
 import type { MessagesRequest } from "@/types/anthropic";
@@ -73,6 +74,12 @@ export function screenMessageEvent(event: JsonMap, screen: OutputScreen | null):
   const block = asRecord(event.content_block);
   if (block) screenBlock(block, (text) => screen.delta(text));
   return event;
+}
+
+function streamEventError(json: JsonMap): GateError {
+  const error = asRecord(json.error);
+  const message = typeof error?.message === "string" && error.message ? error.message : "upstream stream error";
+  return new GateError(502, "upstream_error", message);
 }
 
 export function mergeStreamUsage(target: JsonMap, usage: unknown): JsonMap {
@@ -180,8 +187,18 @@ export async function streamMessages(input: MessagesInput & { req: Request }): P
   const screen = outputScreen(input.outputGuard, input.principal.trace);
   const transcript = new MessagesStreamTranscript();
   let streamed = "";
+  let stopped = false;
+  let upstreamFailure: GateError | null = null;
+  const incomplete = (failure: unknown): GateError | null => {
+    if (stopped && !upstreamFailure) return null;
+    if (upstreamFailure) return upstreamFailure;
+    if (failure instanceof GateError) return failure;
+    return new GateError(502, "upstream_error", "upstream stream ended before message_stop");
+  };
   return relaySse(result.res, {
     map: (json, event) => {
+      if (event === "message_stop") stopped = true;
+      if (event === "error") upstreamFailure = streamEventError(json);
       if (event === "message_start") {
         const message = asRecord(json.message);
         if (message) {
@@ -205,8 +222,18 @@ export async function streamMessages(input: MessagesInput & { req: Request }): P
       transcript.push(mapped, event);
       return mapped;
     },
-    onEnd: async () => {
+    tail: (failure) => {
+      const err = incomplete(failure);
+      if (!err || err === upstreamFailure) return null;
+      return sseEvent("error", anthropicErrorBody(err.status, err.message));
+    },
+    onEnd: async (failure, cancelled) => {
       release();
+      const err = cancelled || input.req.signal?.aborted ? null : incomplete(failure);
+      if (err) {
+        await recordFailure(input, err, started);
+        return;
+      }
       const reported = usageFromUnknown(chatUsageFromAnthropic(usage));
       const prompt = estimateTokens(requestText(input.body));
       const completion = estimateTokens(streamed);

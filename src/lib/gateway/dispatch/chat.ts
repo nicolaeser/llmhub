@@ -581,6 +581,7 @@ export function relayChatStream(input: {
   let filtered = false;
   let emitted = 0;
   let closed = false;
+  let completed = false;
   let lastSent = Date.now();
 
   const send = (controller: ReadableStreamDefaultController<Uint8Array>, chunk: Uint8Array) => {
@@ -602,6 +603,7 @@ export function relayChatStream(input: {
     for (const choice of choices) {
       const delta = asRecord(asRecord(choice)?.delta);
       if (delta) streamedText += stringifyContent(delta.content) + stringifyContent(delta.reasoning_content);
+      if (asRecord(choice)?.finish_reason) completed = true;
     }
     if (!wantsUsage) {
       delete json.usage;
@@ -659,6 +661,7 @@ export function relayChatStream(input: {
     if (screen?.blocked) {
       if (!filtered) {
         filtered = true;
+        completed = true;
         const stop = contentFilterChunk(json, input.model);
         transcript.push(stop);
         send(controller, encoder.encode(sseData(stop)));
@@ -679,6 +682,7 @@ export function relayChatStream(input: {
     if (translator) {
       for (const payload of translator.pushLine(line)) {
         if (payload === "[DONE]") {
+          completed = true;
           end(controller);
           continue;
         }
@@ -697,6 +701,7 @@ export function relayChatStream(input: {
     const data = line.slice(5).trim();
     if (!data) return;
     if (data === "[DONE]") {
+      completed = true;
       end(controller);
       return;
     }
@@ -729,6 +734,7 @@ export function relayChatStream(input: {
           if (json) forward(json, controller);
         }
       }
+      if (!completed) throw new GateError(502, "upstream_error", "upstream stream ended before the response was complete");
       end(controller);
       close(controller);
       await finish();
