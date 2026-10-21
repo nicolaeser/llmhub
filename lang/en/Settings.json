@@ -51,7 +51,7 @@
       "copy": "Copy token",
       "issued": "SCIM token created",
       "revoked": "SCIM token revoked",
-      "manageHint": "Only people who hold every permission can create or revoke the SCIM token.",
+      "manageHint": "Only users who hold every permission can create or revoke the SCIM token.",
       "copyEndpoint": "Copy SCIM base URL",
       "groups": "Provisioned groups",
       "groupCount": "{count, plural, =0 {None} one {# group} other {# groups}}",
@@ -93,7 +93,7 @@
     },
     "accounts": {
       "title": "Accounts and roles",
-      "subtitle": "Applies to people who sign in with SSO or are provisioned through SCIM.",
+      "subtitle": "Applies to console users who sign in with SSO or are provisioned through SCIM.",
       "defaultRole": "Default role",
       "viewerDefault": "Viewer (built-in)",
       "defaultRoleHint": "New accounts get this role when no group rule matches.",

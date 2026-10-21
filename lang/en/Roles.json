@@ -98,7 +98,7 @@
     },
     "usersRead": {
       "label": "View users",
-      "description": "See the people who can sign in."
+      "description": "See the console users who can sign in."
     },
     "usersManage": {
       "label": "Manage users",
