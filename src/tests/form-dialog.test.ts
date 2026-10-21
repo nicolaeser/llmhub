@@ -27,6 +27,7 @@ const FORM_DIALOGS = [
   "src/app/(app)/keys/_components/template-dialog.tsx",
   "src/app/(app)/models/_components/model-group-dialog.tsx",
   "src/app/(app)/providers/_components/access-dialog.tsx",
+  "src/app/(app)/providers/_components/add-provider-dialog.tsx",
   "src/app/(app)/providers/_components/provider-dialog.tsx",
   "src/app/(app)/users/_components/role-editor-dialog.tsx",
   "src/app/(app)/users/_components/user-dialogs.tsx",
