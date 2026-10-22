@@ -44,8 +44,10 @@ COPY --from=builder --chown=node:node /app/.next/static ./.next/static
 COPY --from=builder --chown=node:node /app/public ./public
 COPY --chown=node:node prisma/schema ./prisma/schema
 COPY --chown=node:node prisma/migrations ./prisma/migrations
-COPY --chown=node:node prisma.config.ts scripts/migrate-deploy.mjs scripts/updater.mjs ./
+COPY --chown=node:node prisma.config.ts scripts/migrate-deploy.mjs scripts/updater.mjs scripts/redactor.mjs ./
 COPY --chown=node:node scripts/updater ./updater
+COPY --chown=node:node scripts/redactor ./redactor
+RUN install -d -o node -g node -m 0755 /models
 ARG BUILD_ID=development
 ENV BUILD_ID=${BUILD_ID}
 RUN --mount=type=secret,id=antigravity_client_secret,required=false \

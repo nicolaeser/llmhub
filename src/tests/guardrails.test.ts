@@ -58,7 +58,7 @@ function trace(): RequestTrace {
   };
 }
 
-const PII_OFF: PiiPolicy = { enabled: false, mode: "mask", output: false, entities: [] };
+const PII_OFF: PiiPolicy = { enabled: false, mode: "mask", output: false, entities: [], detector: "patterns", failure: "patterns" };
 
 function principal(guardrails: GuardrailPolicy, pii: PiiPolicy = PII_OFF): Principal {
   return withTrace(
@@ -403,7 +403,7 @@ const SEARCH_CALL = {
   usage: { prompt_tokens: 3, completion_tokens: 2, total_tokens: 5 },
 };
 
-const EMAIL_MASK: PiiPolicy = { enabled: true, mode: "mask", output: false, entities: ["EMAIL_ADDRESS"] };
+const EMAIL_MASK: PiiPolicy = { enabled: true, mode: "mask", output: false, entities: ["EMAIL_ADDRESS"], detector: "patterns", failure: "patterns" };
 
 async function searchFiles(chunk: string, guardrails: GuardrailPolicy, pii: PiiPolicy) {
   const { runFileSearch, withFileSearch } = await import("@/lib/rag/file-search-tool");

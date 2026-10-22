@@ -73,6 +73,10 @@ export default function PiiOverrides({
     return t("outputState", { output: row.policy.enabled && row.policy.output ? "true" : "false" });
   }
 
+  function detectorLabel(row: PiiOverrideView) {
+    return t("detectorOption", { detector: row.policy.detector });
+  }
+
   function overrideActions(row: PiiOverrideView) {
     return (
       <>
@@ -125,6 +129,7 @@ export default function PiiOverrides({
                 details={[
                   { label: t("entities"), value: t("entityCount", { count: row.policy.entities.length }) },
                   { label: t("columns.output"), value: outputLabel(row) },
+                  { label: t("detector"), value: detectorLabel(row) },
                 ]}
                 actions={canManage ? overrideActions(row) : undefined}
               />
@@ -139,6 +144,7 @@ export default function PiiOverrides({
                   <Table.Column>{t("mode")}</Table.Column>
                   <Table.Column>{t("entities")}</Table.Column>
                   <Table.Column>{t("columns.output")}</Table.Column>
+                  <Table.Column>{t("detector")}</Table.Column>
                   {canManage ? <Table.Column>{tCommon("actions")}</Table.Column> : null}
                 </Table.Header>
                 <Table.Body>
@@ -149,6 +155,7 @@ export default function PiiOverrides({
                       <Table.Cell>{modeChip(row)}</Table.Cell>
                       <Table.Cell>{t("entityCount", { count: row.policy.entities.length })}</Table.Cell>
                       <Table.Cell>{outputLabel(row)}</Table.Cell>
+                      <Table.Cell>{detectorLabel(row)}</Table.Cell>
                       {canManage ? (
                         <Table.Cell>
                           <div className="flex flex-wrap gap-1">{overrideActions(row)}</div>

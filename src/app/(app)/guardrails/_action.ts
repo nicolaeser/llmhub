@@ -1,6 +1,7 @@
 "use server";
 
 import { runAction } from "@/lib/http/action-result";
+import { testPiiModel } from "@/lib/models/feature-model-test";
 import {
   loadGuardrails,
   saveGuardrailOverride,
@@ -37,4 +38,8 @@ export async function testPiiAction(...args: Parameters<typeof testPii>) {
 
 export async function testGuardrailsAction(...args: Parameters<typeof testGuardrails>) {
   return runAction(() => testGuardrails(...args));
+}
+
+export async function testPiiModelAction(...args: Parameters<typeof testPiiModel>) {
+  return runAction(() => testPiiModel(...args));
 }

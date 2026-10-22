@@ -24,7 +24,7 @@ const ENTITIES = ["EMAIL_ADDRESS", "SECRET"];
 const CACHED_RULES = { type: "text", text: "Cached rules", cache_control: { type: "ephemeral" } };
 
 function policy(mode: PiiMode, enabled = true): PiiPolicy {
-  return { enabled, mode, output: false, entities: ENTITIES };
+  return { enabled, mode, output: false, entities: ENTITIES, detector: "patterns", failure: "patterns" };
 }
 
 function withPolicy(pii: PiiPolicy): void {

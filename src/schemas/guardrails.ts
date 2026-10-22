@@ -12,6 +12,12 @@ import {
   RULE_TARGETS,
   SECRET_ENTITIES,
 } from "@/lib/gateway/safety/guardrails";
+import { PII_DETECTORS, PII_FAILURES } from "@/lib/gateway/safety/pii";
+
+export const PII_TIMEOUT_MIN_SECONDS = 1;
+export const PII_TIMEOUT_MAX_SECONDS = 120;
+export const PII_TIMEOUT_DEFAULT_SECONDS = 30;
+export const MAX_PII_TEST_TEXT = 4_000;
 
 export const policyScopeSchema = z.enum(["org", "project", "key"]);
 
@@ -22,6 +28,18 @@ export const piiPolicySchema = z.object({
   mode: z.enum(["mask", "block", "restore"]),
   output: z.boolean(),
   entities: z.array(z.string().trim().min(1).max(64)).max(100),
+  detector: z.enum(PII_DETECTORS).default("patterns"),
+  failure: z.enum(PII_FAILURES).default("patterns"),
+});
+
+export const piiDetectorSettingsSchema = z.object({
+  model: z.string().trim().max(200),
+  timeout_seconds: z.number().int().min(PII_TIMEOUT_MIN_SECONDS).max(PII_TIMEOUT_MAX_SECONDS),
+});
+
+export const piiModelTestSchema = z.object({
+  model: z.string().trim().min(1).max(200),
+  text: z.string().trim().min(1).max(MAX_PII_TEST_TEXT),
 });
 
 export const piiOverrideSchema = z.object({

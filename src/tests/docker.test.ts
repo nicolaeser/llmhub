@@ -6,6 +6,7 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { stopSeconds } from "../../scripts/updater/container-config.mjs";
+import { BACKBONE_FILE, DEFAULT_REVISION } from "../../scripts/redactor/model-files.mjs";
 
 const root = fileURLToPath(new URL("../..", import.meta.url));
 
@@ -26,8 +27,10 @@ async function routeFiles(dir: string): Promise<string[]> {
 }
 
 function composeServices(source: string): Map<string, string> {
-  const services = source.slice(source.indexOf("\nservices:\n"));
-  return new Map([...services.matchAll(/^ {2}([a-z]+):\n((?: {4}.*\n|\n)*)/gm)].map((match) => [match[1], match[2]]));
+  const section = source.slice(source.indexOf("\nservices:\n") + "\nservices:\n".length);
+  const next = section.search(/^[a-z]/m);
+  const services = `\n${next < 0 ? section : section.slice(0, next)}`;
+  return new Map([...services.matchAll(/^ {2}([a-z][a-z-]*):\n((?: {4}.*\n|\n)*)/gm)].map((match) => [match[1], match[2]]));
 }
 
 test("next emits the standalone server the image runs", async () => {
@@ -352,6 +355,7 @@ test("generate-env.sh writes the production .env and keeps an existing one", asy
     "OIDC_CLIENT_SECRET",
     "S3_ACCESS_KEY_ID",
     "S3_SECRET_ACCESS_KEY",
+    "LLMHUB_REDACTOR_URL",
   ]) {
     assert.match(script, new RegExp(`^\\s*ask(_secret)? ${name} `, "m"), name);
   }
@@ -424,8 +428,14 @@ test("generate-env.sh --yes builds the production .env from the environment", { 
 test("the runner carries the updater next to the migration script", async () => {
   const dockerfile = await file("Dockerfile");
   const runner = dockerfile.slice(dockerfile.indexOf("AS runner"));
-  assert.match(runner, /COPY --chown=node:node prisma\.config\.ts scripts\/migrate-deploy\.mjs scripts\/updater\.mjs \.\//);
+  assert.match(
+    runner,
+    /COPY --chown=node:node prisma\.config\.ts scripts\/migrate-deploy\.mjs scripts\/updater\.mjs scripts\/redactor\.mjs \.\//,
+  );
   assert.match(runner, /COPY --chown=node:node scripts\/updater \.\/updater\n/);
+  assert.match(runner, /COPY --chown=node:node scripts\/redactor \.\/redactor\n/);
+  assert.match(runner, /RUN install -d -o node -g node -m 0755 \/models\n/);
+  assert.ok(runner.indexOf("/models") < runner.indexOf("USER node"));
   const entry = await file("scripts/updater.mjs");
   assert.match(entry, /from "\.\/updater\/agent\.mjs"/);
   assert.match(entry, /--healthcheck/);
@@ -455,4 +465,68 @@ test("the auto-update stack is the production stack plus the updater", async () 
   assert.doesNotMatch(updater, /env_file|ports:|privileged|cap_add|build:/);
   assert.equal(au.split("\n").filter((line) => line.includes("docker.sock")).length, 1);
   assert.ok(dockerignore.split("\n").includes("docker-compose.au.yml"));
+});
+
+test("the redaction model overlay runs PII-Tracer on an internal network next to the app", async () => {
+  const [deploy, au, rm, dockerignore] = await Promise.all([
+    file("docker-compose.yml"),
+    file("docker-compose.au.yml"),
+    file("docker-compose.rm.yml"),
+    file(".dockerignore"),
+  ]);
+  assert.doesNotMatch(deploy + au, /redactor/);
+  assert.ok(dockerignore.split("\n").includes("docker-compose.rm.yml"));
+  assert.match(rm, /^x-logging: &logging\n {2}driver: json-file\n {2}options:\n {4}max-size: "\d+m"\n {4}max-file: "\d+"\n/);
+  assert.doesNotMatch(rm, /ports:|docker\.sock|privileged|cap_add|build:|:latest|user: "0:0"/);
+  const services = composeServices(rm);
+  assert.deepEqual([...services.keys()], ["app", "redactor-fetch", "redactor-model", "redactor"]);
+
+  const app = services.get("app") ?? "";
+  assert.equal(app, "    environment:\n      LLMHUB_REDACTOR_URL: http://redactor:8080\n    networks:\n      - default\n      - redactor\n\n");
+
+  for (const name of ["redactor-fetch", "redactor-model", "redactor"]) {
+    const block = services.get(name) ?? "";
+    assert.match(block, /^ {4}logging: \*logging$/m, name);
+    assert.match(block, /^ {4}mem_limit: \S+$/m, name);
+    assert.match(block, /^ {4}restart: \S+$/m, name);
+  }
+  for (const name of ["redactor-model", "redactor"]) {
+    const block = services.get(name) ?? "";
+    assert.match(block, /^ {4}networks:\n {6}- redactor\n {4}\w/m, name);
+    assert.match(block, /^ {4}healthcheck:\n {6}test: \[/m, name);
+    assert.match(block, /^ {4}cpus: \S+$/m, name);
+    assert.match(block, /^ {6}- redactor-models:\/models:ro$/m, name);
+  }
+
+  const fetcher = services.get("redactor-fetch") ?? "";
+  assert.match(fetcher, /image: ghcr\.io\/nicolaeser\/llmhub:\$\{LLMHUB_TAG:-latest\}/);
+  assert.match(fetcher, /command: \["node", "redactor\.mjs", "fetch"\]/);
+  assert.match(fetcher, new RegExp(`LLMHUB_REDACTOR_REVISION: \\$\\{LLMHUB_REDACTOR_REVISION:-${DEFAULT_REVISION}\\}`));
+  assert.match(DEFAULT_REVISION, /^[0-9a-f]{40}$/);
+  assert.match(fetcher, /^ {6}- redactor-models:\/models$/m);
+  assert.doesNotMatch(fetcher, /networks:/);
+
+  const model = services.get("redactor-model") ?? "";
+  assert.match(model, /image: ghcr\.io\/ggml-org\/llama\.cpp:server-b\d+\n/);
+  assert.match(model, /user: "65534:65534"/);
+  assert.match(model, /redactor-fetch:\n {8}condition: service_completed_successfully/);
+  assert.ok(model.includes(`/models/current/${BACKBONE_FILE}`));
+  for (const flag of ["--embeddings", "--pooling", "--ctx-size", "--batch-size", "--ubatch-size", "--parallel"]) {
+    assert.ok(model.includes(`"${flag}"`), flag);
+  }
+  assert.equal(model.match(/\$\{LLMHUB_REDACTOR_WINDOW:-2048\}/g)?.length, 3);
+  assert.match(model, /mem_limit: \$\{REDACTOR_MEMORY_LIMIT:-\d+[mg]\}/);
+
+  const adapter = services.get("redactor") ?? "";
+  assert.match(adapter, /image: ghcr\.io\/nicolaeser\/llmhub:\$\{LLMHUB_TAG:-latest\}/);
+  assert.match(adapter, /command: \["node", "redactor\.mjs"\]/);
+  assert.match(adapter, /redactor-model:\n {8}condition: service_healthy/);
+  assert.match(adapter, /test: \["CMD", "node", "redactor\.mjs", "--healthcheck"\]/);
+  assert.doesNotMatch(adapter, /^ {4}user:/m);
+
+  assert.match(rm, /\nnetworks:\n {2}redactor:\n {4}internal: true\n/);
+  assert.match(rm, /\nvolumes:\n {2}redactor-models:\n?$/);
+  const entry = await file("scripts/redactor.mjs");
+  assert.match(entry, /--healthcheck/);
+  assert.match(entry, /"fetch"/);
 });
