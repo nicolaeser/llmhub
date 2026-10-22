@@ -269,6 +269,42 @@ test("a client that hangs up during a chat completion stream is booked as cancel
   assert.equal(bookedUsage().errors, 0);
 });
 
+function imageEvent(type: string, data: JsonMap): string {
+  return `event: ${type}\ndata: ${JSON.stringify({ type, ...data })}\n\n`;
+}
+
+const PARTIAL_IMAGE = imageEvent("image_generation.partial_image", { partial_image_index: 0, b64_json: "AAAA" });
+const COMPLETED_IMAGE = imageEvent("image_generation.completed", { b64_json: "BBBB", usage: { input_tokens: 12, output_tokens: 30, total_tokens: 42 } });
+
+async function imageStream() {
+  const { POST } = await import("@/app/api/v1/images/generations/route");
+  return POST(gatewayRequest("/api/v1/images/generations", { model: chatGroup(), prompt: "a lighthouse", stream: true, partial_images: 1 }));
+}
+
+test("a complete image stream is booked as success with its usage", async () => {
+  gateway.reply = () => stream([PARTIAL_IMAGE, COMPLETED_IMAGE]);
+  const res = await imageStream();
+  assert.match(await res.text(), /image_generation\.completed/);
+  assert.deepEqual(await logged(), [{ status: 200, outcome: "ok" }]);
+  assert.equal(bookedUsage().promptTokens, 12);
+});
+
+test("an image stream whose upstream connection breaks is booked as an error", async () => {
+  gateway.reply = () => stream([PARTIAL_IMAGE], new TypeError("terminated"));
+  const res = await imageStream();
+  await res.text().catch(() => "");
+  assert.deepEqual(await logged(), [{ status: 502, outcome: "error" }]);
+  assert.equal(bookedUsage().errors, 1);
+});
+
+test("a client that hangs up during an image stream is booked as cancelled", async () => {
+  gateway.reply = () => openStream([PARTIAL_IMAGE]);
+  const res = await imageStream();
+  assert.match(await hangUpAfterFirstChunk(res), /partial_image/);
+  assert.deepEqual(await logged(), [{ status: 499, outcome: "cancelled" }]);
+  assert.equal(bookedUsage().errors, 0);
+});
+
 test("a rate limited count_tokens call falls back to the local estimate and never cools the key", async () => {
   const alias = anthropicGroup();
   gateway.reply = () =>
