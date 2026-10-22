@@ -2,6 +2,7 @@ import "server-only";
 import { env } from "@/lib/env";
 import { GateError } from "@/lib/gateway/errors";
 import { anthropicToChat, chatToAnthropic, withCacheBreakpoints } from "@/lib/gateway/protocols/anthropic";
+import { withAnthropicModelParams } from "@/lib/gateway/protocols/anthropic-model-params";
 import { plainModel } from "@/lib/gateway/catalog/model-alias";
 import { hiddenFrom, outsidePool, routable } from "@/lib/gateway/routing/route-pool";
 import { speaksAnthropic, speaksGoogle, speaksKimi, speaksMuse } from "@/lib/gateway/upstreams/provider-kinds";
@@ -223,6 +224,7 @@ export function prepareBody(
       if (typeof payload.service_tier === "string") native.service_tier = payload.service_tier;
       if (dep.kind === "claude") native = withCacheBreakpoints(native);
     }
+    native = withAnthropicModelParams(asString(native.model), native);
     return dep.kind === "claude" ? withClaudeIdentity(native) : native;
   }
   if (dep.kind === "codex" && nativeChatPath(path)) return chatToCodex(payload);
