@@ -223,14 +223,15 @@ test("pull requests review new dependencies and audit production dependencies", 
   assert.match(dependencies, /timeout-minutes: \d+/);
 });
 
-test("workflows reference every action by a release version tag", async () => {
+test("workflows pin third-party actions to a commit and reference GitHub actions by a release tag", async () => {
   const workflows = (await readdir(path.join(root, ".github/workflows"))).filter((name) => name.endsWith(".yml"));
   assert.ok(workflows.length > 0);
   for (const name of workflows) {
     const source = await file(`.github/workflows/${name}`);
     for (const [, ref] of source.matchAll(/^\s*(?:- )?uses: (.+)$/gm)) {
       if (ref.startsWith("./.github/workflows/")) continue;
-      assert.match(ref, /^[\w.-]+\/[\w./-]+@v\d+(?:\.\d+){0,2}$/, `${name}: ${ref}`);
+      if (/^(?:actions|github)\//.test(ref)) assert.match(ref, /^[\w.-]+\/[\w./-]+@v\d+(?:\.\d+){0,2}$/, `${name}: ${ref}`);
+      else assert.match(ref, /^[\w.-]+\/[\w./-]+@[0-9a-f]{40}$/, `${name}: ${ref}`);
     }
   }
 });
