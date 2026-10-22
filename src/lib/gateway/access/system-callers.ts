@@ -3,7 +3,7 @@ import type { RequestLogRow } from "@/types/logs";
 
 export const SYSTEM_ACTOR_PREFIX = "system:";
 export const SYSTEM_ENDPOINT_PREFIX = "internal:";
-export const SYSTEM_FEATURES = ["catalog", "mcp_builder", "model_test"] as const satisfies readonly SystemFeature[];
+export const SYSTEM_FEATURES = ["catalog", "mcp_builder", "model_test", "pii"] as const satisfies readonly SystemFeature[];
 
 export function systemEndpoint(feature: SystemFeature): string {
   return `${SYSTEM_ENDPOINT_PREFIX}${feature}`;

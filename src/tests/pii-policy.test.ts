@@ -24,14 +24,14 @@ import type { VirtualKeyView } from "@/types/keys";
 
 const UNSCREENED_ROUTES = new Set(["/api/v1/ocr"]);
 const BLOCKED = "request blocked by guardrail policy";
-const PII_OFF: PiiPolicy = { enabled: false, mode: "mask", output: false, entities: [] };
+const PII_OFF: PiiPolicy = { enabled: false, mode: "mask", output: false, entities: [], detector: "patterns", failure: "patterns" };
 
 function blockRule(name: string, pattern: string): GuardrailRule {
   return { id: name, name, kind: "denylist", target: "input", action: "block", patterns: [pattern], caseSensitive: false };
 }
 
 function piiLayer(entity: string): PiiPolicy {
-  return { enabled: true, mode: "mask", output: false, entities: [entity] };
+  return { enabled: true, mode: "mask", output: false, entities: [entity], detector: "patterns", failure: "patterns" };
 }
 
 function guardLayer(name: string, pattern = name): GuardrailPolicy {
@@ -40,7 +40,8 @@ function guardLayer(name: string, pattern = name): GuardrailPolicy {
 
 const CODENAMES = guardLayer("Codenames", "Project Falcon");
 
-function keyPrincipal(pii: PiiPolicy): Principal {
+function keyPrincipal(policy: Omit<PiiPolicy, "detector" | "failure">): Principal {
+  const pii: PiiPolicy = { detector: "patterns", failure: "patterns", ...policy };
   const key: VirtualKeyView = {
     token_id: "key_1",
     key_name: "sk-hub-abcde",
@@ -92,8 +93,14 @@ test("piiOverride treats missing values as inherit and normalizes stored policie
     mode: "block",
     output: true,
     entities: ["EMAIL_ADDRESS"],
+    detector: "patterns",
+    failure: "patterns",
   });
   assert.equal(piiOverride({ mode: "drop" })?.mode, "mask");
+  assert.deepEqual(
+    [piiOverride({ detector: "regex", failure: "ignore" })?.detector, piiOverride({ detector: "both", failure: "block" })?.failure],
+    ["patterns", "block"],
+  );
 });
 
 test("a key override masks only its own entities and returns them for output redaction", async () => {

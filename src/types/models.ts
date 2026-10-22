@@ -116,9 +116,9 @@ export type PooledModelChoice = ModelChoice & { pools: RoutePool[] };
 
 export type FeatureModelChoice = ModelChoice & { internal: boolean };
 
-export type ModelFeature = "mcp_builder" | "catalog" | "cache" | "knowledge";
+export type ModelFeature = "mcp_builder" | "catalog" | "cache" | "knowledge" | "pii";
 
-export type FeatureModelRole = "chat" | "jev" | "embedding" | "ocr" | "rerank";
+export type FeatureModelRole = "chat" | "jev" | "embedding" | "ocr" | "rerank" | "redaction";
 
 export type FeatureModelTest = {
   model: string;

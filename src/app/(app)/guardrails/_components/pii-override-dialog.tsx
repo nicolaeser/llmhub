@@ -34,7 +34,9 @@ export default function PiiOverrideDialog({
   const [policy, setPolicy] = useState<PiiPolicy>(() => {
     if (editing) return editing.policy;
     const first = targets.find((row) => row.id === targetId);
-    return first ? inherited(first) : { enabled: true, mode: "mask", output: true, entities: [] };
+    return first
+      ? inherited(first)
+      : { enabled: true, mode: "mask", output: true, entities: [], detector: "patterns", failure: "patterns" };
   });
   const [pending, start] = useTransition();
 

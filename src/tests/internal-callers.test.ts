@@ -220,7 +220,7 @@ test("the feature model registry reads every admin-chosen model from its setting
     vector_stores: { embedding_model: "text-embed-public", embedding_dimensions: 0, ocr_model: "ocr-x", rerank_model: "rerank-private" },
   };
   recordedPrisma.reset(settingsWith({ [BUILDER_MODEL_KEY]: "chat-private" }));
-  assert.deepEqual(Object.keys(FEATURE_MODELS).sort(), ["cache", "catalog", "knowledge", "mcp_builder"]);
+  assert.deepEqual(Object.keys(FEATURE_MODELS).sort(), ["cache", "catalog", "knowledge", "mcp_builder", "pii"]);
   assert.deepEqual(featureRoles("knowledge"), ["embedding", "ocr", "rerank"]);
   assert.deepEqual(featureRoles("mcp_builder"), ["chat"]);
   assert.deepEqual(featureRoles("catalog"), ["jev"]);
@@ -637,7 +637,12 @@ test("only the internal callers create the system principal", () => {
   const importers = listSourceFiles(root)
     .filter((file) => /["']@\/lib\/gateway\/access\/system-principal["']/.test(readFileSync(file, "utf8")))
     .map((file) => path.relative(root, file).split(path.sep).join("/"));
-  assert.deepEqual(importers.sort(), ["lib/gateway/catalog/jev.ts", "lib/mcp/builder.ts", "lib/models/feature-model-test.ts"]);
+  assert.deepEqual(importers.sort(), [
+    "lib/gateway/catalog/jev.ts",
+    "lib/gateway/safety/pii-detector.ts",
+    "lib/mcp/builder.ts",
+    "lib/models/feature-model-test.ts",
+  ]);
 });
 
 test("request logs name system calls by feature", async () => {

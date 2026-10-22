@@ -9,7 +9,7 @@ import type {
   RoleOption,
 } from "@/types/auth";
 import type { SemanticCacheSettings } from "@/types/cache";
-import type { GuardrailPolicy, PiiPolicy } from "@/types/guardrails";
+import type { GuardrailPolicy, PiiDetectorSettings, PiiPolicy } from "@/types/guardrails";
 import type { JevSettings } from "@/types/model-catalog";
 import type { AntigravitySettings } from "@/types/providers";
 import type { VectorStoreDefaults } from "@/types/rag";
@@ -124,6 +124,7 @@ export type Enterprise = {
   log_content?: boolean;
   content_retention_days?: number;
   pii?: PiiPolicy;
+  pii_detector?: PiiDetectorSettings;
   guardrails?: GuardrailPolicy;
   s3?: S3Settings;
   budget_alert_thresholds?: number[];

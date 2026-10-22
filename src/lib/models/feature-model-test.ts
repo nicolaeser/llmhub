@@ -7,14 +7,20 @@ import { systemPrincipal } from "@/lib/gateway/access/system-principal";
 import { usageFromUnknown } from "@/lib/gateway/billing/billing";
 import { meter } from "@/lib/gateway/billing/meter";
 import { jevRequest } from "@/lib/gateway/catalog/jev";
+import { modelAlias } from "@/lib/gateway/catalog/model-alias";
 import { asRecord } from "@/lib/gateway/core";
 import { forwardToModel } from "@/lib/gateway/dispatch/upstream";
 import { assertModelRoles } from "@/lib/models/aliases";
 import { featureModel, featureRoles, ROLE_KIND } from "@/lib/models/feature-models";
+import { detectPiiSpans } from "@/lib/gateway/safety/pii-detector";
+import { PII_DETECT_PATH } from "@/lib/gateway/safety/pii-spans";
 import { RERANK_PATH, rerankUsage } from "@/lib/rag/models";
+import { getPiiDetector } from "@/lib/settings/enterprise";
+import { piiModelTestSchema } from "@/schemas/guardrails";
 import { featureModelTestSchema } from "@/schemas/models";
 import type { TokenUsage } from "@/types/billing";
 import type { JsonMap } from "@/types/gateway";
+import type { PiiModelTest } from "@/types/guardrails";
 import type { JevTask } from "@/types/model-catalog";
 import type { FeatureModelRole, FeatureModelTest } from "@/types/models";
 
@@ -54,6 +60,7 @@ const PROBES: Record<FeatureModelRole, (model: string) => Probe> = {
     body: { model, query: PROBE_TEXT, documents: [PROBE_TEXT, "pong"], top_n: 2 },
     usage: rerankUsage,
   }),
+  redaction: (model) => ({ path: PII_DETECT_PATH, body: { model, inputs: [PROBE_TEXT] }, usage: () => ({}) }),
 };
 
 export async function testFeatureModel(raw: unknown): Promise<FeatureModelTest> {
@@ -83,4 +90,26 @@ export async function testFeatureModel(raw: unknown): Promise<FeatureModelTest> 
   const latencyMs = Date.now() - started;
   await usage.ok(hit, probe.usage(hit.json));
   return { model, ok: true, latencyMs, status: hit.status, error: "" };
+}
+
+export async function testPiiModel(raw: unknown): Promise<PiiModelTest> {
+  await requirePlatformPermission(PERMISSIONS.SETTINGS_MANAGE);
+  const parsed = piiModelTestSchema.safeParse(raw);
+  if (!parsed.success) throw new Error("VALIDATION");
+  const model = modelAlias(parsed.data.model);
+  await assertModelRoles([{ alias: model, role: "redaction" }]);
+  const { timeout_seconds } = await getPiiDetector();
+  const started = Date.now();
+  try {
+    const spans = await detectPiiSpans([parsed.data.text], {
+      model,
+      principal: systemPrincipal("model_test"),
+      timeoutMs: Math.max(timeout_seconds * 1000, MODEL_TEST_TIMEOUT_MS),
+      useCache: false,
+    });
+    return { model, ok: true, latencyMs: Date.now() - started, status: 200, error: "", spans: spans.get(parsed.data.text) ?? [] };
+  } catch (err) {
+    const gate = toGateError(err);
+    return { model, ok: false, latencyMs: Date.now() - started, status: gate.status, error: gate.message.slice(0, ERROR_LIMIT), spans: [] };
+  }
 }

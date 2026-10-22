@@ -19,11 +19,12 @@ import GuardrailOverrides from "./_components/guardrail-overrides";
 import GuardrailPolicyFields from "./_components/guardrail-policy-fields";
 import GuardrailTester from "./_components/guardrail-tester";
 import PiiEntityPicker from "./_components/pii-entity-picker";
+import PiiModelFields from "./_components/pii-model-fields";
 import PiiOverrides from "./_components/pii-overrides";
 import PiiPolicyFields from "./_components/pii-policy-fields";
 import PiiTester from "./_components/pii-tester";
 import { isActionFail } from "@/lib/http/action-result";
-import type { GuardrailPolicy, PiiPolicy, PolicyScope, PolicyTarget } from "@/types/guardrails";
+import type { GuardrailPolicy, PiiDetectorSettings, PiiPolicy, PolicyScope, PolicyTarget } from "@/types/guardrails";
 
 function withDefaults(policy: PiiPolicy): PiiPolicy {
   return policy.entities.length ? policy : { ...policy, entities: defaultEntityIds() };
@@ -49,6 +50,7 @@ export default function GuardrailsPage() {
   const showError = useErrorToast();
   const tCommon = useTranslations("Common");
   const [policyDraft, setPolicy] = useState<PiiPolicy | null>(null);
+  const [detectorDraft, setDetector] = useState<PiiDetectorSettings | null>(null);
   const [guardrailsDraft, setGuardrails] = useState<GuardrailPolicy | null>(null);
   const [pending, start] = useTransition();
   const page = useActionData(loadGuardrailsAction);
@@ -60,24 +62,26 @@ export default function GuardrailsPage() {
     return <PageStatus icon={Shield} title={t("title")} subtitle={loadingSubtitle} state={page} tabs stats={3} layout="form" />;
   }
 
-  const { canManage, targets, piiOverrides, guardrailOverrides, platform } = data;
+  const { canManage, targets, piiOverrides, guardrailOverrides, platform, models, redactorConfigured } = data;
   const canEditGlobal = canManage && platform;
   const saved = withDefaults(data.pii);
   const savedGuardrails = data.guardrails;
   const policy = policyDraft ?? saved;
   const guardrails = guardrailsDraft ?? savedGuardrails;
-  const piiDirty = policyDraft !== null;
+  const detector = detectorDraft ?? data.detector;
+  const piiDirty = policyDraft !== null || detectorDraft !== null;
   const contentDirty = guardrailsDraft !== null;
 
   function savePii() {
     start(async () => {
-      const result = await savePiiAction(policy);
+      const result = await savePiiAction(policy, detector ?? undefined);
       if (isActionFail(result)) {
         showError(result.error);
         return;
       }
-      setData((current) => ({ ...current, pii: result.pii }));
+      setData((current) => ({ ...current, pii: result.pii, detector: result.detector }));
       setPolicy(null);
+      setDetector(null);
       toast(t("saved"), { variant: "success" });
     });
   }
@@ -137,8 +141,17 @@ export default function GuardrailsPage() {
                         {t("enabledState", { enabled: policy.enabled ? "true" : "false" })}
                       </Chip>
                     </Card.Header>
-                    <Card.Content>
+                    <Card.Content className="gap-4">
                       <PiiPolicyFields value={policy} onChange={setPolicy} isDisabled={!canManage} />
+                      {detector ? (
+                        <PiiModelFields
+                          value={detector}
+                          onChange={setDetector}
+                          models={models}
+                          configured={redactorConfigured}
+                          canManage={canManage}
+                        />
+                      ) : null}
                     </Card.Content>
                   </Card>
                 ) : null}

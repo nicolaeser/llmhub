@@ -1,6 +1,6 @@
 "use client";
 
-import { Button, Card, Checkbox, Description, Label, Tag, TagGroup } from "@heroui/react";
+import { Button, Card, Checkbox, Chip, Description, Label, Tag, TagGroup } from "@heroui/react";
 import { useTranslations } from "next-intl";
 import { PII_CATALOG } from "@/lib/gateway/safety/pii";
 
@@ -118,6 +118,11 @@ export default function PiiEntityPicker({
                       <Label>
                         {label}
                         <span className="ml-2 text-xs text-muted">{e.example}</span>
+                        {e.modelOnly ? (
+                          <Chip size="sm" variant="soft" className="ml-2">
+                            {t("modelOnly")}
+                          </Chip>
+                        ) : null}
                       </Label>
                     </Checkbox.Content>
                   </Checkbox>

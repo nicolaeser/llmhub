@@ -1,4 +1,4 @@
-export const MODEL_ROLES = ["chat", "embedding", "rerank", "ocr", "media", "moderation"] as const;
+export const MODEL_ROLES = ["chat", "embedding", "rerank", "ocr", "media", "moderation", "redaction"] as const;
 
 export type ModelRole = (typeof MODEL_ROLES)[number];
 
@@ -18,6 +18,7 @@ const SPECIALTY: { role: Exclude<ModelRole, "chat">; pattern: RegExp }[] = [
       /whisper|(?:^|[^a-z])tts(?:[^a-z]|$)|dall-e|gpt-image|(?:^|[^a-z])(?:imagen|imagine)(?:[^a-z]|$)|stable-diffusion|sdxl|(?:^|[^a-z])flux(?:[^a-z]|$)|transcri/,
   },
   { role: "moderation", pattern: /moderat/ },
+  { role: "redaction", pattern: /(?:^|[^a-z])pii(?:[^a-z]|$)|redact|presidio/ },
 ];
 
 export function modelRole(names: readonly string[]): ModelRole {
