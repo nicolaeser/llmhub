@@ -138,6 +138,30 @@ test("an override without entities uses the default set", async () => {
   assert.deepEqual(output?.pii, defaultEntityIds());
 });
 
+test("saved entity lists from before the internal IP split let internal addresses through", async () => {
+  const savedBefore = defaultEntityIds().filter((id) => id !== "PRIVATE_IP_ADDRESS");
+  const prompt = { model: "m", messages: [{ role: "user", content: "ssh 192.168.10.4, then dig 8.8.8.8 and fd00::12" }] };
+  for (const entities of [[], savedBefore, ["IP_ADDRESS"]]) {
+    const { body } = await applyGuardrails(
+      structuredClone(prompt),
+      keyPrincipal({ enabled: true, mode: "mask", output: false, entities }),
+    );
+    assert.equal(
+      (body.messages as { content: string }[])[0]?.content,
+      "ssh 192.168.10.4, then dig [IP_ADDRESS] and fd00::12",
+      entities.join(","),
+    );
+  }
+  const { body } = await applyGuardrails(
+    structuredClone(prompt),
+    keyPrincipal({ enabled: true, mode: "mask", output: false, entities: ["IP_ADDRESS", "PRIVATE_IP_ADDRESS"] }),
+  );
+  assert.equal(
+    (body.messages as { content: string }[])[0]?.content,
+    "ssh [PRIVATE_IP_ADDRESS], then dig [IP_ADDRESS] and [PRIVATE_IP_ADDRESS]",
+  );
+});
+
 test("resolvePolicies prefers the key, then the project, then the organization, then the global policy", async () => {
   resetGateway();
   gateway.enterprise = { pii: piiLayer("CREDIT_CARD"), guardrails: guardLayer("global") };

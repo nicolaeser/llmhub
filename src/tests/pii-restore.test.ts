@@ -1,15 +1,17 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { redactJSON, redactPii } from "@/lib/gateway/safety/pii";
-import { PiiVault, bindPiiVault, restoreJson, vaultOf } from "@/lib/gateway/safety/pii-vault";
+import { PiiVault, bindPiiVault, piiRestoreSummary, restoreJson, vaultOf } from "@/lib/gateway/safety/pii-vault";
 import { restoreChatSse } from "@/lib/gateway/safety/restore-chat";
 import { restoreClientJson } from "@/lib/gateway/safety/restore-client";
+import { restoreMessagesSse } from "@/lib/gateway/safety/restore-messages";
 import { restoreResponsesSse } from "@/lib/gateway/safety/restore-responses";
 import type { JsonMap } from "@/types/gateway";
 
 const EMAIL = "ada@acme.com";
 const TOKEN = "[EMAIL_ADDRESS_1]";
 const TRICKY = 'Zoë "Q" \\ ☃';
+const CONTROL = 'Zoë "Q" \\ ☃\t\n\u0001';
 
 function emailVault(): PiiVault {
   const vault = new PiiVault();
@@ -461,5 +463,273 @@ test("streams pass through untouched without a vault value", () => {
   const responses = sseFrames(responsesFrames([textDelta(TOKEN)]));
   assert.equal(restoreResponsesSse(responses, null), responses);
   assert.equal(restoreResponsesSse(responses, new PiiVault()), responses);
+});
+
+function controlVault(): PiiVault {
+  const vault = new PiiVault();
+  vault.placeholder("PERSON", CONTROL);
+  vault.placeholder("EMAIL_ADDRESS", EMAIL);
+  return vault;
+}
+
+function messagesFrames(events: JsonMap[]): string[] {
+  return events.map((event) => `event: ${String(event.type)}\ndata: ${JSON.stringify(event)}\n\n`);
+}
+
+function messagesDelta(index: number, delta: JsonMap): JsonMap {
+  return { type: "content_block_delta", index, delta };
+}
+
+function messagesText(events: JsonMap[], index: number, field: string): string {
+  return joined(
+    events
+      .filter((event) => event.type === "content_block_delta" && event.index === index)
+      .map((event) => (event.delta as JsonMap)[field]),
+  );
+}
+
+test("non-stream restore keeps tool arguments and tool inputs valid JSON in every protocol", () => {
+  const vault = controlVault();
+  const chat = restoreJson(
+    {
+      choices: [
+        {
+          message: {
+            content: "Mail [EMAIL_ADDRESS_1]",
+            tool_calls: [
+              { id: "t1", type: "function", function: { name: "send", arguments: '{"to":"[PERSON_1]","cc":["[EMAIL_ADDRESS_1]"]}' } },
+              { id: "t2", type: "function", function: { name: "note", arguments: "free text for [PERSON_1]" } },
+            ],
+          },
+        },
+      ],
+    },
+    vault,
+  ) as { choices: { message: { content: string; tool_calls: { function: { arguments: string } }[] } }[] };
+  const message = chat.choices[0]!.message;
+  assert.equal(message.content, `Mail ${EMAIL}`);
+  assert.deepEqual(JSON.parse(message.tool_calls[0]!.function.arguments), { to: CONTROL, cc: [EMAIL] });
+  assert.equal(message.tool_calls[1]!.function.arguments, `free text for ${CONTROL}`);
+
+  const messages = restoreJson(
+    {
+      type: "message",
+      content: [
+        { type: "text", text: "Sent to [PERSON_1]" },
+        { type: "tool_use", id: "toolu_1", name: "send", input: { to: "[PERSON_1]", nested: { list: ["[EMAIL_ADDRESS_1]"] } } },
+      ],
+    },
+    vault,
+  ) as { content: JsonMap[] };
+  assert.equal(messages.content[0]!.text, `Sent to ${CONTROL}`);
+  assert.deepEqual(JSON.parse(JSON.stringify(messages.content[1]!.input)), { to: CONTROL, nested: { list: [EMAIL] } });
+
+  const responses = restoreJson(
+    {
+      object: "response",
+      output: [
+        { type: "function_call", call_id: "c1", name: "send", arguments: '{"to":"[PERSON_1]"}' },
+        { type: "custom_tool_call", call_id: "c2", name: "shell", input: "echo [PERSON_1]" },
+        { type: "mcp_call", id: "m1", name: "lookup", arguments: '{"email":"[EMAIL_ADDRESS_1]"}', output: "Found [EMAIL_ADDRESS_1]" },
+      ],
+    },
+    vault,
+  ) as { output: JsonMap[] };
+  assert.deepEqual(JSON.parse(String(responses.output[0]!.arguments)), { to: CONTROL });
+  assert.equal(responses.output[1]!.input, `echo ${CONTROL}`);
+  assert.deepEqual(JSON.parse(String(responses.output[2]!.arguments)), { email: EMAIL });
+  assert.equal(responses.output[2]!.output, `Found ${EMAIL}`);
+});
+
+test("chat streams restore split placeholders in parallel tool calls with escaped values", async () => {
+  const call = (index: number, piece: string, start = false) =>
+    chatChunk([
+      {
+        index: 0,
+        delta: {
+          tool_calls: [
+            {
+              index,
+              ...(start ? { id: `t${index}`, type: "function" } : {}),
+              function: { ...(start ? { name: "send" } : {}), arguments: piece },
+            },
+          ],
+        },
+        finish_reason: null,
+      },
+    ]);
+  const text = await restoreChatSse(
+    sseFrames([
+      call(0, '{"to":"[PER', true),
+      call(1, '{"cc":"[EMAIL_', true),
+      call(0, "SON"),
+      call(1, "ADDRESS"),
+      call(0, '_1]"}'),
+      call(1, '_1]"}'),
+      finishChunk(0, "tool_calls"),
+      "data: [DONE]\n\n",
+    ]),
+    controlVault(),
+  ).text();
+  const events = parsedEvents(text);
+  const argumentsFor = (index: number) =>
+    joined(
+      chatChoices(events, 0).flatMap((choice) =>
+        ((deltaOf(choice).tool_calls as JsonMap[] | undefined) ?? [])
+          .filter((entry) => entry.index === index)
+          .map((entry) => (entry.function as JsonMap).arguments),
+      ),
+    );
+  assert.deepEqual(JSON.parse(argumentsFor(0)), { to: CONTROL });
+  assert.deepEqual(JSON.parse(argumentsFor(1)), { cc: EMAIL });
+  assert.equal(text.includes("PERSON_"), false);
+  assert.equal(text.includes("EMAIL_ADDRESS"), false);
+});
+
+test("Messages streams restore split placeholders in text and tool input JSON with escaped values", async () => {
+  const text = await restoreMessagesSse(
+    sseFrames(
+      messagesFrames([
+        { type: "message_start", message: { id: "msg_1", type: "message", role: "assistant", content: [] } },
+        { type: "content_block_start", index: 0, content_block: { type: "text", text: "" } },
+        messagesDelta(0, { type: "text_delta", text: "Sent to [PER" }),
+        messagesDelta(0, { type: "text_delta", text: "SON_1] and [EMAIL_ADD" }),
+        messagesDelta(0, { type: "text_delta", text: "RESS_1]" }),
+        { type: "content_block_stop", index: 0 },
+        { type: "content_block_start", index: 1, content_block: { type: "tool_use", id: "toolu_1", name: "send", input: {} } },
+        messagesDelta(1, { type: "input_json_delta", partial_json: '{"to": "[PERSON' }),
+        messagesDelta(1, { type: "input_json_delta", partial_json: "_" }),
+        messagesDelta(1, { type: "input_json_delta", partial_json: '1]", "cc": ["[EMAIL_ADDRESS_1]"]}' }),
+        { type: "content_block_stop", index: 1 },
+        { type: "message_delta", delta: { stop_reason: "tool_use" } },
+        { type: "message_stop" },
+      ]),
+    ),
+    controlVault(),
+  ).text();
+  const events = parsedEvents(text);
+  assert.equal(messagesText(events, 0, "text"), `Sent to ${CONTROL} and ${EMAIL}`);
+  assert.deepEqual(JSON.parse(messagesText(events, 1, "partial_json")), { to: CONTROL, cc: [EMAIL] });
+  assert.equal(text.includes("PERSON_"), false);
+  const order = events.map((event) => `${String(event.type)}:${String(event.index ?? "")}`);
+  assert.ok(order.lastIndexOf("content_block_delta:1") < order.indexOf("content_block_stop:1"));
+  assert.equal(order.at(-1), "message_stop:");
+
+  const ended = parsedEvents(
+    await restoreMessagesSse(
+      sseFrames(messagesFrames([messagesDelta(0, { type: "input_json_delta", partial_json: '{"to": "[PERSON_' })])),
+      controlVault(),
+    ).text(),
+  );
+  assert.equal(messagesText(ended, 0, "partial_json"), '{"to": "[PERSON_');
+});
+
+test("Responses streams restore split placeholders in MCP arguments and custom tool input", async () => {
+  const mcpDelta = (delta: string): JsonMap => ({ type: "response.mcp_call_arguments.delta", item_id: "mcp_1", output_index: 2, delta });
+  const customDelta = (delta: string): JsonMap => ({
+    type: "response.custom_tool_call_input.delta",
+    item_id: "ctc_1",
+    output_index: 3,
+    delta,
+  });
+  const text = await restoreResponsesSse(
+    sseFrames(
+      responsesFrames([
+        mcpDelta('{"who":"[PER'),
+        mcpDelta('SON_1]"}'),
+        { type: "response.mcp_call_arguments.done", item_id: "mcp_1", output_index: 2, arguments: '{"who":"[PERSON_1]"}' },
+        customDelta("ping [EMAIL_"),
+        customDelta("ADDRESS_1] as [PERSON_1]"),
+        { type: "response.custom_tool_call_input.done", item_id: "ctc_1", output_index: 3, input: "ping [EMAIL_ADDRESS_1] as [PERSON_1]" },
+      ]),
+    ),
+    controlVault(),
+  ).text();
+  const events = parsedEvents(text);
+  const mcpDone = events.find((event) => event.type === "response.mcp_call_arguments.done");
+  const customDone = events.find((event) => event.type === "response.custom_tool_call_input.done");
+  assert.deepEqual(JSON.parse(responsesText(events, "response.mcp_call_arguments.delta")), { who: CONTROL });
+  assert.deepEqual(JSON.parse(String(mcpDone?.arguments)), { who: CONTROL });
+  assert.equal(responsesText(events, "response.custom_tool_call_input.delta"), `ping ${EMAIL} as ${CONTROL}`);
+  assert.equal(customDone?.input, `ping ${EMAIL} as ${CONTROL}`);
+  assert.deepEqual(
+    events.map((event) => event.sequence_number),
+    events.map((_, index) => index),
+  );
+});
+
+test("the restore summary lists the vault and where the reply used each placeholder", () => {
+  const vault = controlVault();
+  const placeholders = ["[PERSON_1]", "[EMAIL_ADDRESS_1]"];
+  assert.equal(piiRestoreSummary(null, {}), null);
+  assert.equal(piiRestoreSummary(new PiiVault(), {}), null);
+  assert.deepEqual(
+    piiRestoreSummary(vault, {
+      choices: [
+        {
+          message: {
+            content: "Mail [EMAIL_ADDRESS_1] about [EMAIL_ADDRESS_7]",
+            reasoning_content: "Use [PERSON_1]",
+            thinking_blocks: [{ type: "thinking", thinking: "[PERSON_1]", signature: "s" }],
+            tool_calls: [{ function: { name: "send", arguments: '{"to":"[PERSON_1]"}' } }],
+          },
+        },
+      ],
+    }),
+    { placeholders, text: ["[EMAIL_ADDRESS_1]", "[PERSON_1]"], tools: ["[PERSON_1]"] },
+  );
+  assert.deepEqual(
+    piiRestoreSummary(vault, {
+      type: "message",
+      content: [
+        { type: "thinking", thinking: "[EMAIL_ADDRESS_1]", signature: "s" },
+        { type: "tool_use", id: "toolu_1", name: "send", input: { to: "[EMAIL_ADDRESS_1]" } },
+      ],
+    }),
+    { placeholders, text: [], tools: ["[EMAIL_ADDRESS_1]"] },
+  );
+  assert.deepEqual(piiRestoreSummary(vault, undefined), { placeholders, text: [], tools: [] });
+});
+
+test("a replayed conversation maps every value to the same placeholder on each turn", () => {
+  const entities = ["EMAIL_ADDRESS", "IP_ADDRESS"];
+  const firstTurn = {
+    system: "Help with ops.",
+    messages: [{ role: "user", content: "Is 203.0.113.9 up? Mail ada@acme.com." }],
+  };
+  const first = new PiiVault();
+  const sentFirst = redactJSON(firstTurn, entities, "", undefined, first) as typeof firstTurn;
+  assert.equal(sentFirst.messages[0]!.content, "Is [IP_ADDRESS_1] up? Mail [EMAIL_ADDRESS_1].");
+  const reply = restoreJson(
+    {
+      role: "assistant",
+      content: [
+        { type: "thinking", thinking: "Check [IP_ADDRESS_1]", signature: "sig" },
+        { type: "tool_use", id: "toolu_1", name: "bash", input: { command: "ping -c1 [IP_ADDRESS_1]" } },
+      ],
+    },
+    first,
+  ) as JsonMap;
+  assert.deepEqual((reply.content as JsonMap[])[1]!.input, { command: "ping -c1 203.0.113.9" });
+  const secondTurn = {
+    system: "Help with ops.",
+    messages: [
+      ...firstTurn.messages,
+      reply,
+      {
+        role: "user",
+        content: [{ type: "tool_result", tool_use_id: "toolu_1", content: "64 bytes from 203.0.113.9; gateway 198.51.100.7" }],
+      },
+    ],
+  };
+  const second = new PiiVault();
+  const sentSecond = redactJSON(secondTurn, entities, "", undefined, second) as { system: string; messages: JsonMap[] };
+  assert.deepEqual(sentSecond.messages[0], sentFirst.messages[0]);
+  const echoed = sentSecond.messages[1]!.content as JsonMap[];
+  assert.equal(echoed[0]!.thinking, "Check [IP_ADDRESS_1]");
+  assert.deepEqual(echoed[1]!.input, { command: "ping -c1 [IP_ADDRESS_1]" });
+  const toolResult = (sentSecond.messages[2]!.content as JsonMap[])[0]!;
+  assert.equal(toolResult.content, "64 bytes from [IP_ADDRESS_1]; gateway [IP_ADDRESS_2]");
+  assert.equal(second.restore("[IP_ADDRESS_1] [IP_ADDRESS_2]"), "203.0.113.9 198.51.100.7");
 });
 

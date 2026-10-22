@@ -78,6 +78,8 @@ export type RequestLogContentView = {
   output: TranscriptEntry[];
 };
 
+export type PiiRestoreSummary = { placeholders: string[]; text: string[]; tools: string[] };
+
 export type RequestLogDetail = RequestLogRow & {
   teamLabel: string;
   orgLabel: string;
@@ -87,6 +89,7 @@ export type RequestLogDetail = RequestLogRow & {
   upstreamModel: string;
   tag: string;
   error: string;
+  piiRestore: PiiRestoreSummary | null;
   canViewContent: boolean;
   replayable: boolean;
   content: RequestLogContentView | null;

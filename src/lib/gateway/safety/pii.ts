@@ -10,7 +10,8 @@ export const PII_CATALOG: PiiEntity[] = [
   { id: "CRYPTO", label: "Crypto wallet", category: "Finance", example: "bc1q…", default: true },
   { id: "EMAIL_ADDRESS", label: "Email", category: "General", example: "ada@acme.com", default: true },
   { id: "IBAN_CODE", label: "IBAN", category: "Finance", example: "DE89 3704 0044 0532 0130 00", default: true },
-  { id: "IP_ADDRESS", label: "IP address", category: "General", example: "8.8.8.8", default: true },
+  { id: "IP_ADDRESS", label: "Public IP address", category: "General", example: "8.8.8.8", default: true },
+  { id: "PRIVATE_IP_ADDRESS", label: "Internal IP address", category: "General", example: "10.0.0.5", default: false },
   { id: "PHONE_NUMBER", label: "Phone", category: "General", example: "+1 415 555 2671", default: true },
   { id: "URL", label: "URL", category: "General", example: "https://example.com/secret", default: false },
   { id: "DATE_TIME", label: "Date / time", category: "General", example: "2026-08-21", default: false },
@@ -158,6 +159,15 @@ const IPV4 =
   /\b(?:(?:25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(?:25[0-5]|2[0-4]\d|1?\d?\d)\b/g;
 const IPV6 =
   /(?<![\w:.])(?:[A-F0-9]{0,4}:){2,7}(?:\d{1,3}(?:\.\d{1,3}){3}|[A-F0-9]{0,4})(?:%[\w.-]+)?(?![\w:])/gi;
+const INTERNAL_IPV4_RANGES = [
+  "0.0.0.0/32",
+  "10.0.0.0/8",
+  "100.64.0.0/10",
+  "127.0.0.0/8",
+  "169.254.0.0/16",
+  "172.16.0.0/12",
+  "192.168.0.0/16",
+];
 const PHONE_SEP = "[ \\t\\u00A0\\u2000-\\u200D\\u202F\\u205F\\u2060\\u3000\\uFEFF\\-\\u2010-\\u2015./]";
 const PHONE = new RegExp(
   `(?<![\\w+])(?:(?:\\+|00)${PHONE_SEP}{0,3})?(?:\\(\\+?\\d{1,5}\\)|\\d+)` +
@@ -242,10 +252,74 @@ function isIpv6(raw: string): boolean {
   return halves.length === 2 ? total >= 1 && total <= 7 : total === 8;
 }
 
-function replaceIps(text: string): string {
-  return text
-    .replace(IPV6, (match) => (isIpv6(match) ? mark("IP_ADDRESS", match) : match))
-    .replace(IPV4, (match) => mark("IP_ADDRESS", match));
+function ipv4Number(address: string): number {
+  return address.split(".").reduce((value, octet) => value * 256 + Number(octet), 0);
+}
+
+const INTERNAL_IPV4 = INTERNAL_IPV4_RANGES.map((range) => {
+  const [base = "", bits = "32"] = range.split("/");
+  const start = ipv4Number(base);
+  return { start, end: start + 2 ** (32 - Number(bits)) };
+});
+
+function isInternalIpv4Number(value: number): boolean {
+  return INTERNAL_IPV4.some((range) => value >= range.start && value < range.end);
+}
+
+function ipv6Groups(raw: string): number[] {
+  const address = (raw.split("%")[0] ?? "").toLowerCase();
+  const v4 = /(\d{1,3}(?:\.\d{1,3}){3})$/.exec(address)?.[1];
+  const head = v4 ? address.slice(0, -v4.length) : address;
+  const embedded = v4 ? [Math.floor(ipv4Number(v4) / 65_536), ipv4Number(v4) % 65_536] : [];
+  const groups = (part: string) => part.split(":").filter(Boolean).map((group) => parseInt(group, 16));
+  const halves = head.split("::");
+  const front = groups(halves[0] ?? "");
+  const back = [...(halves.length > 1 ? groups(halves[1] ?? "") : []), ...embedded];
+  const gap = halves.length > 1 ? Array<number>(Math.max(0, 8 - front.length - back.length)).fill(0) : [];
+  return [...front, ...gap, ...back];
+}
+
+function isInternalIpv6(raw: string): boolean {
+  const groups = ipv6Groups(raw);
+  if (groups.length !== 8) return false;
+  const [first = 0, , , , , sixth = 0, seventh = 0, last = 0] = groups;
+  const zeroUntil = (end: number) => groups.slice(0, end).every((group) => group === 0);
+  if (zeroUntil(7) && (last === 0 || last === 1)) return true;
+  if ((first & 0xffc0) === 0xfe80 || (first & 0xfe00) === 0xfc00) return true;
+  return zeroUntil(5) && sixth === 0xffff && isInternalIpv4Number(seventh * 65_536 + last);
+}
+
+type IpMatch = { start: number; end: number; internal: boolean };
+
+function ipMatches(text: string): IpMatch[] {
+  const v6: IpMatch[] = [];
+  for (const match of text.matchAll(IPV6)) {
+    if (!isIpv6(match[0])) continue;
+    const start = match.index ?? 0;
+    v6.push({ start, end: start + match[0].length, internal: isInternalIpv6(match[0]) });
+  }
+  const all = [...v6];
+  let cursor = 0;
+  for (const match of text.matchAll(IPV4)) {
+    const start = match.index ?? 0;
+    const end = start + match[0].length;
+    while (cursor < v6.length && v6[cursor]!.end <= start) cursor++;
+    if (cursor < v6.length && v6[cursor]!.start < end) continue;
+    all.push({ start, end, internal: isInternalIpv4Number(ipv4Number(match[0])) });
+  }
+  return all.sort((a, b) => a.start - b.start);
+}
+
+function replaceIps(text: string, id: "IP_ADDRESS" | "PRIVATE_IP_ADDRESS"): string {
+  const internal = id === "PRIVATE_IP_ADDRESS";
+  let out = "";
+  let last = 0;
+  for (const ip of ipMatches(text)) {
+    if (ip.internal !== internal) continue;
+    out += text.slice(last, ip.start) + mark(id, text.slice(ip.start, ip.end));
+    last = ip.end;
+  }
+  return last ? out + text.slice(last) : text;
 }
 
 function isPhone(raw: string): boolean {
@@ -487,7 +561,8 @@ const RULES: PiiRule[] = [
   { id: "CREDIT_CARD", apply: replaceCards },
   { id: "IBAN_CODE", apply: (t) => t.replace(IBAN, (match) => mark("IBAN_CODE", match)) },
   { id: "CRYPTO", apply: replaceCrypto },
-  { id: "IP_ADDRESS", apply: replaceIps },
+  { id: "IP_ADDRESS", apply: (t) => replaceIps(t, "IP_ADDRESS") },
+  { id: "PRIVATE_IP_ADDRESS", apply: (t) => replaceIps(t, "PRIVATE_IP_ADDRESS") },
   { id: "PHONE_NUMBER", apply: replacePhones },
   { id: "US_SSN", apply: (t) => t.replace(SSN, (match) => mark("US_SSN", match)) },
   { id: "US_ITIN", apply: (t) => t.replace(ITIN, (match) => mark("US_ITIN", match)) },
@@ -534,19 +609,31 @@ export function redactPii(text: string, entities?: string[], found?: Set<string>
   return vault === undefined ? run() : withActiveVault(vault, run);
 }
 
-const PLACEHOLDER = new RegExp(`\\[(${PII_CATALOG.map((e) => e.id).join("|")})(?:_\\d+)?\\]`, "g");
+const PLACEHOLDER = new RegExp(`\\[(${PII_CATALOG.map((e) => e.id).join("|")})(?:_(\\d+))?\\]`, "g");
 
-export function splitPiiPlaceholders(text: string): { text: string; entity: string | null }[] {
-  const parts: { text: string; entity: string | null }[] = [];
+export type PiiTextPart = { text: string; entity: string | null; number: number | null };
+
+export function splitPiiPlaceholders(text: string): PiiTextPart[] {
+  const parts: PiiTextPart[] = [];
   let last = 0;
   for (const match of text.matchAll(PLACEHOLDER)) {
     const start = match.index ?? 0;
-    if (start > last) parts.push({ text: text.slice(last, start), entity: null });
-    parts.push({ text: match[0], entity: match[1] ?? null });
+    if (start > last) parts.push({ text: text.slice(last, start), entity: null, number: null });
+    parts.push({ text: match[0], entity: match[1] ?? null, number: match[2] ? Number(match[2]) : null });
     last = start + match[0].length;
   }
-  if (last < text.length) parts.push({ text: text.slice(last), entity: null });
+  if (last < text.length) parts.push({ text: text.slice(last), entity: null, number: null });
   return parts;
+}
+
+export function piiPlaceholderGroups(tokens: string[]): { entity: string; tokens: string[] }[] {
+  const groups = new Map<string, string[]>();
+  for (const token of tokens) {
+    const entity = splitPiiPlaceholders(token).find((part) => part.entity)?.entity;
+    if (!entity) continue;
+    groups.set(entity, [...(groups.get(entity) ?? []), token]);
+  }
+  return [...groups.entries()].map(([entity, list]) => ({ entity, tokens: list }));
 }
 
 const STRUCTURAL_KEYS = new Set([
