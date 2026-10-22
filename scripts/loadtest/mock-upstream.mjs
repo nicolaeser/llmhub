@@ -1,5 +1,5 @@
 import { createServer } from "node:http";
-import { createHash, randomBytes } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import { performance } from "node:perf_hooks";
 import { setTimeout as sleep } from "node:timers/promises";
 import { URLSearchParams } from "node:url";
@@ -57,17 +57,18 @@ const MODELS = ["claude-opus-5-5", "claude-sonnet-5", "claude-haiku-4-5"];
 
 let sequence = 0;
 let timings = [];
-const counters = { requests: 0, byPath: {}, byAccount: {}, byStatus: {}, injected: {} };
+const counters = { requests: 0, byPath: new Map(), byAccount: new Map(), byStatus: new Map(), injected: new Map() };
 const sessions = new Map();
 const promptCache = new Map();
 const accountTokens = new Map();
+const accountIds = new Map();
 
 function now() {
   return performance.timeOrigin + performance.now();
 }
 
 function bump(map, key, by = 1) {
-  map[key] = (map[key] ?? 0) + by;
+  map.set(key, (map.get(key) ?? 0) + by);
 }
 
 function accountOf(req) {
@@ -186,7 +187,7 @@ function record(entry) {
 
 function remember(session, account) {
   if (!session) return;
-  const seen = sessions.get(session) ?? {};
+  const seen = sessions.get(session) ?? new Map();
   bump(seen, account);
   sessions.set(session, seen);
 }
@@ -389,8 +390,8 @@ function accountFromToken(token) {
 }
 
 function accountUuid(label) {
-  const hex = createHash("sha256").update(label).digest("hex");
-  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-4${hex.slice(13, 16)}-8${hex.slice(17, 20)}-${hex.slice(20, 32)}`;
+  if (!accountIds.has(label)) accountIds.set(label, randomUUID());
+  return accountIds.get(label);
 }
 
 async function oauthToken(req, res) {
@@ -441,14 +442,25 @@ function models(res) {
 }
 
 function sessionSpread() {
-  const spread = { sessions: sessions.size, sticky: 0, moved: 0, accountsPerSession: {} };
+  const accountsPerSession = new Map();
+  let sticky = 0;
   for (const seen of sessions.values()) {
-    const count = Object.keys(seen).length;
-    bump(spread.accountsPerSession, String(count));
-    if (count === 1) spread.sticky += 1;
-    else spread.moved += 1;
+    bump(accountsPerSession, String(seen.size));
+    if (seen.size === 1) sticky += 1;
   }
-  return spread;
+  return { sessions: sessions.size, sticky, moved: sessions.size - sticky, accountsPerSession: Object.fromEntries(accountsPerSession) };
+}
+
+function stats() {
+  return {
+    requests: counters.requests,
+    byPath: Object.fromEntries(counters.byPath),
+    byAccount: Object.fromEntries(counters.byAccount),
+    byStatus: Object.fromEntries(counters.byStatus),
+    injected: Object.fromEntries(counters.injected),
+    sessions: sessionSpread(),
+    config,
+  };
 }
 
 async function control(req, res) {
@@ -458,6 +470,7 @@ async function control(req, res) {
     Object.assign(config, rest);
     if (accounts && typeof accounts === "object") {
       for (const [label, overrides] of Object.entries(accounts)) {
+        if (!/^[a-z0-9]+$/i.test(label)) continue;
         config.accounts[label] = overrides === null ? undefined : { ...(config.accounts[label] ?? {}), ...overrides };
       }
     }
@@ -472,7 +485,7 @@ function reset(res) {
   sessions.clear();
   promptCache.clear();
   counters.requests = 0;
-  for (const key of ["byPath", "byAccount", "byStatus", "injected"]) counters[key] = {};
+  for (const tally of [counters.byPath, counters.byAccount, counters.byStatus, counters.injected]) tally.clear();
   json(res, 200, { ok: true });
 }
 
@@ -492,7 +505,7 @@ const server = createServer(async (req, res) => {
     if (req.method === "GET" && path === "/v1/models") return models(res);
     if (req.method === "POST" && path === "/__control") return await control(req, res);
     if (req.method === "POST" && path === "/__reset") return reset(res);
-    if (req.method === "GET" && path === "/__stats") return json(res, 200, { ...counters, sessions: sessionSpread(), config });
+    if (req.method === "GET" && path === "/__stats") return json(res, 200, stats());
     if (req.method === "GET" && path === "/__timings") {
       const since = Number(url.searchParams.get("since") ?? 0);
       return json(res, 200, timings.filter((item) => item.receivedAt >= since));

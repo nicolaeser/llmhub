@@ -203,7 +203,7 @@ async function load(mount, context) {
     "--state", context.state, "--base", context.base, "--mount", mount, "--stages", args.stages,
     "--mock", context.mockUrl, "--metrics", context.metrics, "--pg-container", context.pg,
     "--abort-rate", args["abort-rate"], "--count-tokens", args["count-tokens"],
-    "--label", `${args.label}-${mount}`, "--out", out, "--timings-out", join(outDir, `${args.label}-${mount}-timings.jsonl`),
+    "--label", `${args.label}-${mount}`, "--out", out,
   ], { cwd: root, stdio: ["ignore", "inherit", "inherit"] });
   children.add(child);
   const code = await finished(child);

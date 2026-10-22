@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { randomBytes, randomUUID } from "node:crypto";
-import { appendFileSync, readFileSync, writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { Agent, request as httpRequest } from "node:http";
 import { performance } from "node:perf_hooks";
 import { clearTimeout } from "node:timers";
@@ -12,6 +12,7 @@ const run = promisify(execFile);
 const { values: args } = parseArgs({
   options: {
     state: { type: "string", default: "loadtest-state.json" },
+    model: { type: "string", default: "claude-load" },
     base: { type: "string", default: "http://127.0.0.1:3000" },
     mount: { type: "string", default: "subscription" },
     stages: { type: "string", default: "10:60,50:60,150:60" },
@@ -28,7 +29,6 @@ const { values: args } = parseArgs({
     "client-timeout-ms": { type: "string", default: "330000" },
     control: { type: "string", multiple: true, default: [] },
     out: { type: "string", default: "" },
-    "timings-out": { type: "string", default: "" },
     label: { type: "string", default: "" },
   },
 });
@@ -44,6 +44,7 @@ function loopback(raw, name) {
 }
 
 const state = JSON.parse(readFileSync(args.state, "utf8"));
+if (state.model !== args.model) throw new Error(`--model ${args.model} does not match the seeded model alias in ${args.state}`);
 const base = loopback(args.base, "base");
 if (args.mock) loopback(args.mock, "mock");
 const prefix = args.mount === "api" ? "/api/v1" : "/api/subscription/v1";
@@ -148,7 +149,7 @@ function withBreakpoints(messages) {
 
 function messagesBody(session, stream) {
   return {
-    model: state.model,
+    model: args.model,
     max_tokens: 32000,
     stream,
     thinking: { type: "enabled", budget_tokens: 8000 },
@@ -163,7 +164,7 @@ function messagesBody(session, stream) {
 }
 
 function countBody(session) {
-  return { model: state.model, system: messagesBody(session, false).system, tools: TOOLS, messages: session.messages };
+  return { model: args.model, system: messagesBody(session, false).system, tools: TOOLS, messages: session.messages };
 }
 
 function parseBlock(block) {
@@ -327,7 +328,7 @@ function errorTypeOf(result) {
 }
 
 async function streamTurn(session, stageIndex, records) {
-  const check = new StreamCheck(state.model);
+  const check = new StreamCheck(args.model);
   let buffer = "";
   const aborting = Math.random() < abortRate;
   const early = aborting && Math.random() < earlyAbortShare;
@@ -740,7 +741,6 @@ async function main() {
     const runTimings = args.mock ? ((await getJson(`${new URL("/__timings", args.mock)}?since=${runTimingStart}`)) ?? []) : [];
     const timings = runTimings.filter((item) => item.receivedAt >= timingStart);
     const sessionIds = new Set(sessions.map((session) => session.id));
-    if (args["timings-out"]) appendFileSync(args["timings-out"], `${JSON.stringify({ stage: stage.index, timings })}\n`);
     const calls = statements.reduce((sum, item) => sum + item.calls, 0);
     const writes = statements.filter((item) => /^\s*(insert|update|delete)/i.test(item.query)).reduce((sum, item) => sum + item.calls, 0);
     const summary = summarize(stage, stageRecords, timings, {
