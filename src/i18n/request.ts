@@ -18,7 +18,7 @@ export default getRequestConfig(async ({ requestLocale }) => {
   } catch {
     messages = await loadLocaleMessages(routing.defaultLocale);
   }
-  const timeZone = cookieTimeZone((await cookies()).get(TIME_ZONE_COOKIE)?.value) ?? FALLBACK_TIME_ZONE;
+  const timeZone = cookieTimeZone(cookieStore.get(TIME_ZONE_COOKIE)?.value) ?? FALLBACK_TIME_ZONE;
   return {
     locale,
     messages,
