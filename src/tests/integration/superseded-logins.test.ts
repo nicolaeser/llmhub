@@ -70,15 +70,16 @@ test("a new sign-in renews the active connection of the account and removes its 
   });
   try {
     assert.equal(await matchingConnection("claude", session(account, "id-renew")), fresh.id);
+    const manage = newSubAddToken();
     const stored = await storeSubAddAccount({
       linkId: link.id,
       kind: "claude",
       session: session(account, "id-renew"),
-      manageHash: newSubAddToken().hash,
+      manageHash: manage.hash,
       loginVerified: true,
     });
     stopLocalCatalogTasks();
-    assert.deepEqual(stored, { providerId: fresh.id, outcome: "updated" });
+    assert.deepEqual(stored, { providerId: fresh.id, outcome: "updated", manageHash: manage.hash });
     assert.equal(await prisma.providerConnection.count({ where: { id: stale.id } }), 0);
     const login = await prisma.providerLogin.findUniqueOrThrow({ where: { providerId: fresh.id } });
     assert.equal(login.status, "active");

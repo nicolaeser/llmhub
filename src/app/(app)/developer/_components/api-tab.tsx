@@ -23,7 +23,7 @@ import { Link } from "@/i18n/routing";
 import { useActionData } from "@/lib/hooks/use-action-data";
 import { useOrigin } from "@/lib/hooks/use-origin";
 import { GATEWAY_ERRORS } from "@/lib/gateway/errors";
-import { ANTHROPIC_VERSION } from "@/lib/gateway/endpoints/openapi";
+import { ANTHROPIC_LEGACY_VERSION, ANTHROPIC_VERSION } from "@/lib/gateway/endpoints/openapi";
 import { API_PREFIX, MANAGEMENT_PREFIX, SUBSCRIPTION_PREFIX } from "@/lib/gateway/api-paths";
 import { PROBLEMS } from "@/lib/http/problem-codes";
 import TryEndpoint from "./try-endpoint";
@@ -113,7 +113,7 @@ export default function ApiTab() {
     {
       id: "anthropic",
       urls: [{ label: t("baseUrl"), value: `${origin}${API_PREFIX}` }],
-      hint: t("anthropicAuth", { version: ANTHROPIC_VERSION }),
+      hint: t("anthropicAuth", { version: ANTHROPIC_VERSION, legacy: ANTHROPIC_LEGACY_VERSION }),
     },
     {
       id: "subscription",

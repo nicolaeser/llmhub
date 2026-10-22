@@ -61,11 +61,8 @@ export async function POST(req: Request) {
   }
 
   const bearer = mintTryBearer(session.user.id);
-  const headers = new Headers(
-    payload.format === "anthropic"
-      ? { "x-api-key": bearer, "anthropic-version": ANTHROPIC_VERSION, Accept: "*/*" }
-      : { Authorization: `Bearer ${bearer}`, Accept: "*/*" },
-  );
+  const headers = new Headers({ Authorization: `Bearer ${bearer}`, Accept: "*/*" });
+  if (payload.format === "anthropic") headers.set("anthropic-version", ANTHROPIC_VERSION);
   const hasBody = target.method !== "GET" && target.method !== "DELETE" && body.length > 0;
   if (hasBody) headers.set("Content-Type", "application/json");
 

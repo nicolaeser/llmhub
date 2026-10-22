@@ -1,7 +1,7 @@
 import "server-only";
 import prisma from "@/lib/db/prisma";
 import { accountAllowed, DEFAULT_ACCOUNT_STRATEGY } from "@/lib/gateway/routing/account-access";
-import { readPin } from "@/lib/gateway/routing/account-affinity";
+import { PIN_HOLD_MS, pinsAccounts, readPin } from "@/lib/gateway/routing/account-affinity";
 import { accountPolicies } from "@/lib/gateway/routing/account-routing";
 import { isSignInKind, PROVIDER_CATALOG, reportsLimits } from "@/lib/gateway/upstreams/provider-kinds";
 import {
@@ -34,7 +34,15 @@ import { modelAlias } from "@/lib/gateway/catalog/model-alias";
 import { routePermitted } from "@/lib/gateway/access/model-policy";
 import { priceWindowQuery, priceWindowRates } from "@/lib/gateway/billing/price-schedule";
 import { costRejection } from "@/lib/gateway/billing/cost-cap";
-import { COOLDOWN_MS, cooldownEnds, recordFailure, recordSuccess } from "@/lib/gateway/routing/provider-health";
+import {
+  COOLDOWN_MS,
+  cooldownEnds,
+  recordFailure,
+  recordRejection,
+  recordSuccess,
+  recordUncooledFailure,
+  rejectedCooldowns,
+} from "@/lib/gateway/routing/provider-health";
 import { attachModelFacts } from "@/lib/gateway/routing/model-facts";
 import type { CostFilter } from "@/types/billing";
 import type {
@@ -168,13 +176,17 @@ export function cooldownWait(
   items: ResolvedDeployment[],
   cooling: Map<string, number>,
   now = Date.now(),
+  rejected: Set<string> = new Set(),
 ): RouterWait | null {
   const held = items.filter((dep) => cooling.has(dep.id));
   if (!held.length) return null;
   const ends = held.map((dep) => cooling.get(dep.id)!);
   return {
     retryAt: Math.min(...ends),
-    limited: held.length === items.length && ends.every((until) => until - now > COOLDOWN_MS),
+    limited:
+      held.length === items.length &&
+      ends.every((until) => until - now > COOLDOWN_MS) &&
+      !held.some((dep) => rejected.has(dep.id)),
     kinds: held.every(signInProvider) ? [...new Set(held.map((dep) => dep.provider!.kind))] : [],
   };
 }
@@ -272,7 +284,7 @@ function untried(items: ResolvedDeployment[], run: RunRouting | null): ResolvedD
 }
 
 async function runPins(items: ResolvedDeployment[], session: string): Promise<Map<string, AccountPin>> {
-  const kinds = [...new Set(items.flatMap((dep) => (signInProvider(dep) ? [dep.provider!.kind] : [])))];
+  const kinds = [...new Set(items.flatMap((dep) => (pinnedProvider(dep) ? [dep.provider!.kind] : [])))];
   const found = new Map<string, AccountPin>();
   if (!session) return found;
   for (const kind of kinds) {
@@ -286,17 +298,41 @@ function signInProvider(dep: ResolvedDeployment): boolean {
   return Boolean(dep.provider && isSignInKind(dep.provider.kind));
 }
 
+function pinnedProvider(dep: ResolvedDeployment): boolean {
+  return Boolean(dep.provider && pinsAccounts(dep.provider.kind));
+}
+
 function signedIn(dep: ResolvedDeployment): boolean {
   return !signInProvider(dep) || dep.provider!.login?.status === "active";
 }
 
 function pinnedChoice(items: ResolvedDeployment[], pins: Map<string, AccountPin>): ResolvedDeployment[] {
-  return items.filter((dep) => signInProvider(dep) && pins.get(dep.provider!.kind)?.providerId === dep.provider!.id);
+  return items.filter((dep) => pinnedProvider(dep) && pins.get(dep.provider!.kind)?.providerId === dep.provider!.id);
 }
 
 function pinnedKinds(items: ResolvedDeployment[], pins: Map<string, AccountPin>): ResolvedDeployment[] {
-  const kept = items.filter((dep) => signInProvider(dep) && pins.has(dep.provider!.kind));
+  const kept = items.filter((dep) => pinnedProvider(dep) && pins.has(dep.provider!.kind));
   return kept.length ? kept : items;
+}
+
+function pinOf(dep: ResolvedDeployment, pins: Map<string, AccountPin>): AccountPin | null {
+  return pinnedProvider(dep) ? (pins.get(dep.provider!.kind) ?? null) : null;
+}
+
+function pinStaysPut(
+  pin: AccountPin | null,
+  chosen: ResolvedDeployment,
+  usable: ResolvedDeployment[],
+  cooling: Map<string, number>,
+  run: RunRouting | null,
+  now = Date.now(),
+): boolean {
+  if (!pin || chosen.provider?.id === pin.providerId) return false;
+  return usable.some((dep) => {
+    if (dep.provider?.id !== pin.providerId) return false;
+    const left = (cooling.get(dep.id) ?? 0) - now;
+    return left > 0 ? left <= PIN_HOLD_MS : Boolean(run?.tried.has(dep.id));
+  });
 }
 
 export async function acquireGroup(
@@ -307,7 +343,13 @@ export async function acquireGroup(
   cost?: CostFilter,
   access: AccountAccess | null = null,
   run: RunRouting | null = null,
-): Promise<{ dep: ResolvedDeployment; release: () => void; overflow: boolean; pinned: AccountPin | null }> {
+): Promise<{
+  dep: ResolvedDeployment;
+  release: () => void;
+  overflow: boolean;
+  pinned: AccountPin | null;
+  pinHeld: boolean;
+}> {
   const permitted = permittedDeployments(group.mapped, rules).filter(serves);
   const active = permitted.filter((dep) => dep.provider?.enabled !== false);
   const allowed = active.filter((dep) => accountAllowed(dep.provider, access));
@@ -315,12 +357,14 @@ export async function acquireGroup(
   const health = await healthy(usable);
   const ready = untried(health.ready, run);
   if (!ready.length) {
-    const wait = cooldownWait(usable, health.cooling);
+    const rejected = await rejectedCooldowns([...health.cooling.keys()]);
+    const wait = cooldownWait(usable, health.cooling, Date.now(), rejected);
     if (group.overflow_group && group.overflow_group !== group.alias) {
       const overflow = await loadGroup(group.overflow_group);
       try {
         const acquired = await acquireGroup(overflow, rules, serves, strategy, cost, access, run);
-        return { ...acquired, overflow: true };
+        const pinHeld = acquired.pinHeld || pinStaysPut(acquired.pinned, acquired.dep, usable, health.cooling, run);
+        return { ...acquired, overflow: true, pinHeld };
       } catch (err) {
         const merged = isUnavailableError(err) ? mergeWait(wait, err.wait) : null;
         throw merged ? waitingError(merged) : err;
@@ -336,12 +380,14 @@ export async function acquireGroup(
   const sticky = pinnedChoice(quota.items, pins);
   const candidates = sticky.length ? sticky : await byAccountPolicy(pinnedKinds(quota.items, pins), quota.scores);
   const dep = pick(candidates, strategy || group.strategy, quota.scores);
+  const pinned = pinOf(dep, pins);
   inflight.set(dep.id, (inflight.get(dep.id) ?? 0) + 1);
   let released = false;
   return {
     dep,
     overflow: false,
-    pinned: signInProvider(dep) ? (pins.get(dep.provider!.kind) ?? null) : null,
+    pinned,
+    pinHeld: pinStaysPut(pinned, dep, usable, health.cooling, run),
     release: () => {
       if (released) return;
       released = true;
@@ -354,6 +400,14 @@ export async function acquireGroup(
 
 export function markFailure(dep: Deployment, retryAt: number | null = null): void {
   recordFailure(dep.id, Date.now(), retryAt);
+}
+
+export function markOverloaded(dep: Deployment): void {
+  recordUncooledFailure(dep.id);
+}
+
+export function markRejected(dep: Deployment, until: number): void {
+  recordRejection(dep.id, until);
 }
 
 export function markSuccess(dep: Deployment, latencyMs?: number): void {

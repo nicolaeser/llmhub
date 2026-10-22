@@ -9,6 +9,11 @@ test("alerts on saturation and 5xx", () => {
   assert.equal(shouldAlert(Object.assign(new Error("x"), { status: 400 })), false);
 });
 
+test("does not alert for a refusal that belongs to one request", () => {
+  assert.equal(shouldAlert(Object.assign(new Error("x"), { status: 429, requestScoped: true })), false);
+  assert.equal(shouldAlert(Object.assign(new Error("x"), { status: 429, requestScoped: false })), true);
+});
+
 test("does not alert when every deployment is paused on purpose", () => {
   assert.equal(shouldAlert(ERR_ALL_PAUSED), false);
   assert.equal(shouldAlert(ERR_NOT_ASSIGNED), false);

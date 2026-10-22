@@ -8,9 +8,10 @@ import PageHeader from "@/components/console/page-header";
 import PageStatus, { LoadError, SectionLoading } from "@/components/console/page-status";
 import { useErrorToast } from "@/components/console/use-error-toast";
 import { useActionData } from "@/lib/hooks/use-action-data";
+import { consoleTimeZone } from "@/lib/hooks/use-console-time-zone";
 import { useLiveConnected, useLiveRequests } from "@/lib/hooks/use-live";
 import { setSearchParams, useSearchString } from "@/lib/hooks/use-search-param";
-import { logFilterParams, logFiltersFromSearch } from "@/lib/gateway/request-logs/request-log-query";
+import { logFilterParams, logFiltersFromSearch, zonedLogFilters } from "@/lib/gateway/request-logs/request-log-query";
 import { isActionFail } from "@/lib/http/action-result";
 import type {
   LogKind,
@@ -36,9 +37,13 @@ function download(href: string) {
   link.click();
 }
 
+function queryFilters(filters: LogFilterValues): LogFilterValues {
+  return zonedLogFilters(filters, consoleTimeZone());
+}
+
 function exportHref(kind: LogKind, format: "csv" | "jsonl", filters: LogFilterValues) {
   const params = new URLSearchParams({ kind, format });
-  for (const [key, value] of Object.entries(logFilterParams(filters))) {
+  for (const [key, value] of Object.entries(logFilterParams(queryFilters(filters)))) {
     if (value !== null) params.set(key, value);
   }
   return `/internal-api/logs/export?${params.toString()}`;
@@ -56,7 +61,8 @@ export default function LogsPage() {
   const [fresh, setFresh] = useState<NewLogsCount | null>(null);
   const detailState = useOverlayState();
   const logsState = useActionData(
-    () => loadLogsAction({ page: 1, pageSize: PAGE_SIZE, filters: logFiltersFromSearch(window.location.search) }),
+    () =>
+      loadLogsAction({ page: 1, pageSize: PAGE_SIZE, filters: queryFilters(logFiltersFromSearch(window.location.search)) }),
     (data) => {
       if (data.page === 1) setNewestSeen(data.requests[0]?.createdAt ?? null);
     },
@@ -79,7 +85,7 @@ export default function LogsPage() {
   }, []);
 
   function load(nextPage: number, nextFilters: LogFilterValues) {
-    logsState.reloadWith(() => loadLogsAction({ page: nextPage, pageSize: PAGE_SIZE, filters: nextFilters }));
+    logsState.reloadWith(() => loadLogsAction({ page: nextPage, pageSize: PAGE_SIZE, filters: queryFilters(nextFilters) }));
   }
 
   function openDetail(row: RequestLogRow) {
@@ -108,7 +114,7 @@ export default function LogsPage() {
         handledKey.current = liveKey;
         reloadedAt.current = Date.now();
         if (page === 1) {
-          loadLogsAction({ page: 1, pageSize: PAGE_SIZE, filters }).then((res) => {
+          loadLogsAction({ page: 1, pageSize: PAGE_SIZE, filters: queryFilters(filters) }).then((res) => {
             if (!active || isActionFail(res)) return;
             setLogs(res);
             setNewestSeen(res.requests[0]?.createdAt ?? null);
@@ -116,7 +122,7 @@ export default function LogsPage() {
           return;
         }
         if (!since) return;
-        countNewLogsAction({ since, filters }).then((res) => {
+        countNewLogsAction({ since, filters: queryFilters(filters) }).then((res) => {
           if (active && !isActionFail(res)) setFresh({ since, ...res });
         });
       },
@@ -133,7 +139,7 @@ export default function LogsPage() {
     let active = true;
     let timer: ReturnType<typeof setInterval> | undefined;
     const tick = () => {
-      loadLogsAction({ page: 1, pageSize: PAGE_SIZE, filters }).then((res) => {
+      loadLogsAction({ page: 1, pageSize: PAGE_SIZE, filters: queryFilters(filters) }).then((res) => {
         if (!active || isActionFail(res)) return;
         setLogs(res);
         setNewestSeen(res.requests[0]?.createdAt ?? null);

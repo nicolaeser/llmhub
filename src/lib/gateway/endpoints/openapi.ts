@@ -1,7 +1,9 @@
 import { gatewayPath, MANAGEMENT_PREFIX } from "@/lib/gateway/api-paths";
+import { ANTHROPIC_VERSION_2023, ANTHROPIC_VERSION_2026 } from "@/lib/gateway/protocols/anthropic-version";
 import type { OpenApiMethod, OpenApiPath, TryTarget } from "@/types/api-ref";
 
-export const ANTHROPIC_VERSION = "2023-06-01";
+export const ANTHROPIC_VERSION = ANTHROPIC_VERSION_2026;
+export const ANTHROPIC_LEGACY_VERSION = ANTHROPIC_VERSION_2023;
 
 export const OPENAPI_METHODS = [
   "GET",

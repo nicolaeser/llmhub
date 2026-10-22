@@ -261,7 +261,7 @@ export default function LogDetailDialog({
                     <p className="text-sm text-muted">
                       {tDetail("subtitle", {
                         model: detail.model,
-                        time: format.dateTime(new Date(detail.createdAt), "dateTime"),
+                        time: format.dateTime(new Date(detail.createdAt), "zoned"),
                       })}
                     </p>
                   ) : null}

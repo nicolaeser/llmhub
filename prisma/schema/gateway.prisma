@@ -363,7 +363,7 @@ model SubAddAccount {
   linkId     String?
   link       SubAddLink?        @relation(fields: [linkId], references: [id], onDelete: SetNull)
   label      String             @default("")
-  manageHash String
+  manageHash String?
   createdAt  DateTime           @default(now())
 
   @@index([linkId])

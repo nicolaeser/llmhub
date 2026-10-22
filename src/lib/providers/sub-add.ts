@@ -22,6 +22,8 @@ import { subAddRemaining, subAddStatus } from "@/lib/providers/sub-add-status";
 import {
   newSubAddToken,
   removeSubAddAccount,
+  renewSubAddManageHash,
+  revokeSubAddManageHash,
   storeSubAddAccount,
   SUB_ADD_LOGIN_INVALID,
   SUB_ADD_LOGIN_UNVERIFIED,
@@ -40,7 +42,14 @@ import {
   subAddStartSchema,
 } from "@/schemas/sub-add";
 import type { SignInKind, SignInSession, SignInStart } from "@/types/providers";
-import type { SubAddContributions, SubAddLinkRecord, SubAddOffer, SubAddStep } from "@/types/sub-add";
+import type {
+  SubAddContributions,
+  SubAddLinkRecord,
+  SubAddManageRenewed,
+  SubAddManageRevoked,
+  SubAddOffer,
+  SubAddStep,
+} from "@/types/sub-add";
 
 const MINUTE_MS = 60_000;
 const CLIENT_REQUESTS_PER_MINUTE = 60;
@@ -49,6 +58,7 @@ const CLIENT_SIGN_INS = 10;
 const LINK_SIGN_INS = 30;
 const CLIENT_COMPLETIONS = 10;
 const CLIENT_REMOVALS = 20;
+const CLIENT_MANAGE_CHANGES = 10;
 const SLOW_DOWN_STEP_S = 5;
 const TOKEN_FIELDS = new Set<PropertyKey>(["token", "manage"]);
 const PUBLIC_CODES = new Set([
@@ -115,14 +125,6 @@ async function usableLink(token: string, now = Date.now()): Promise<SubAddLinkRe
   return link;
 }
 
-async function manageFor(manage: string | undefined): Promise<{ token: string; hash: string }> {
-  if (manage) {
-    const hash = subAddTokenHash(manage);
-    if (await prisma.subAddAccount.count({ where: { manageHash: hash } })) return { token: manage, hash };
-  }
-  return newSubAddToken();
-}
-
 async function verifiedRenewal(kind: SignInKind, session: SignInSession): Promise<boolean> {
   if (!(await matchingConnection(kind, session))) return false;
   const check = await checkSignInSession(kind, session);
@@ -138,15 +140,23 @@ async function finish(
   manage: string | undefined,
 ): Promise<SubAddStep> {
   const loginVerified = await verifiedRenewal(kind, session);
-  const owner = await manageFor(manage);
-  const stored = await storeSubAddAccount({ linkId: link.id, kind, session, manageHash: owner.hash, loginVerified });
+  const fresh = newSubAddToken();
+  const brought = manage ? { token: manage, hash: subAddTokenHash(manage) } : null;
+  const stored = await storeSubAddAccount({
+    linkId: link.id,
+    kind,
+    session,
+    manageHash: fresh.hash,
+    broughtManageHash: brought?.hash,
+    loginVerified,
+  });
   return {
     state: "done",
     kind,
     account: session.account,
     plan: session.plan,
     outcome: stored.outcome,
-    manageToken: owner.token,
+    manageToken: brought && stored.manageHash === brought.hash ? brought.token : fresh.token,
   };
 }
 
@@ -240,7 +250,9 @@ export async function loadSubAddContributions(raw: unknown): Promise<SubAddContr
   return guarded(async () => {
     await throttledClient();
     const { manage } = parseInput(subAddManageSchema, raw);
-    return contributions(subAddTokenHash(manage));
+    const found = await contributions(subAddTokenHash(manage));
+    if (!found.accounts.length) throw new Error(SUB_ADD_UNAVAILABLE);
+    return found;
   });
 }
 
@@ -252,5 +264,26 @@ export async function removeSubAddContribution(raw: unknown): Promise<SubAddCont
     const manageHash = subAddTokenHash(input.manage);
     await removeSubAddAccount(input.providerId, manageHash);
     return contributions(manageHash);
+  });
+}
+
+export async function revokeSubAddManage(raw: unknown): Promise<SubAddManageRevoked> {
+  return guarded(async () => {
+    const client = await throttledClient();
+    await throttle(`manage:${client}`, CLIENT_MANAGE_CHANGES);
+    const { manage } = parseInput(subAddManageSchema, raw);
+    const accounts = await revokeSubAddManageHash(subAddTokenHash(manage));
+    return { instance: instanceName(), accounts };
+  });
+}
+
+export async function renewSubAddManage(raw: unknown): Promise<SubAddManageRenewed> {
+  return guarded(async () => {
+    const client = await throttledClient();
+    await throttle(`manage:${client}`, CLIENT_MANAGE_CHANGES);
+    const { manage } = parseInput(subAddManageSchema, raw);
+    const next = newSubAddToken();
+    await renewSubAddManageHash(subAddTokenHash(manage), next.hash);
+    return { ...(await contributions(next.hash)), manageToken: next.token };
   });
 }

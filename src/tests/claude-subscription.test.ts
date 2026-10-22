@@ -71,15 +71,22 @@ test("Claude requests keep the client's own identity headers and fall back to de
   assert.match(fallback["User-Agent"] ?? "", /^claude-cli\//);
 });
 
-test("Non-Anthropic upstreams only receive the Anthropic version and beta headers", () => {
-  const headers = upstreamHeaders({ ...claudeDep, kind: "openai" }, { key: "sk-x", headers: {} }, {
-    "anthropic-version": "2023-06-01",
+test("Non-Anthropic upstreams receive only the client's Anthropic beta header and a policy version", () => {
+  const client = {
+    "anthropic-version": "2026-10-21",
+    "anthropic-beta": "context-1m-2025-08-07",
     "user-agent": "claude-cli/2.1.300 (external, cli)",
     "x-stainless-lang": "js",
-  });
-  assert.equal(headers["anthropic-version"], "2023-06-01");
+  };
+  const headers = upstreamHeaders({ ...claudeDep, kind: "openai" }, { key: "sk-x", headers: {} }, client);
+  assert.equal(headers["anthropic-version"], undefined);
+  assert.equal(headers["anthropic-beta"], "context-1m-2025-08-07");
   assert.equal(headers["user-agent"], undefined);
   assert.equal(headers["x-stainless-lang"], undefined);
+  const kimi = upstreamHeaders({ ...claudeDep, kind: "kimi" }, { key: "sk-kimi", headers: {} }, client);
+  assert.equal(kimi["anthropic-version"], "2023-06-01");
+  assert.equal(kimi["anthropic-beta"], "context-1m-2025-08-07");
+  assert.equal(kimi["user-agent"], undefined);
 });
 
 test("API key Anthropic deployments keep x-api-key and no OAuth betas", () => {
@@ -112,6 +119,27 @@ test("Claude bodies start with the Claude Code identity and keep the caller syst
   assert.equal("system" in prepareBody({ ...claudeDep, kind: "anthropic" }, "/v1/messages", { messages: [] }), false);
 });
 
+test("native Claude Code requests reach the subscription untouched", () => {
+  const system = [
+    { type: "text", text: "x-anthropic-billing-header: cc_version=2.1.303.e6f; cc_entrypoint=cli;" },
+    { type: "text", text: CLAUDE_CODE_IDENTITY, cache_control: { type: "ephemeral" } },
+    { type: "text", text: "Project instructions", cache_control: { type: "ephemeral" } },
+  ];
+  const body = { model: "alias", max_tokens: 5, system, messages: [{ role: "user", content: "hi" }] };
+  const native = prepareBody(claudeDep, "/v1/messages", body);
+  assert.equal(native.system, system);
+  assert.deepEqual(native.system, structuredClone(system));
+  const sdk = [{ type: "text", text: "You are a Claude agent, built on Anthropic's Claude Agent SDK." }];
+  assert.equal(withClaudeIdentity({ system: sdk }).system, sdk);
+  const sdkCli = "You are Claude Code, Anthropic's official CLI for Claude, running within the Claude Agent SDK.";
+  assert.equal(withClaudeIdentity({ system: sdkCli }).system, sdkCli);
+  const other = withClaudeIdentity({ system: [{ type: "text", text: "Be brief." }] }).system as { text: string }[];
+  assert.deepEqual(
+    other.map((block) => block.text),
+    [CLAUDE_CODE_IDENTITY, "Be brief."],
+  );
+});
+
 test("the Claude Code identity is not duplicated", () => {
   const once = withClaudeIdentity({ system: [{ type: "text", text: CLAUDE_CODE_IDENTITY }, { type: "text", text: "x" }] });
   assert.equal((once.system as unknown[]).length, 2);
@@ -132,6 +160,95 @@ test("Anthropic rate limit headers park the route until the unified reset", () =
   assert.equal(upstreamRetryAt(500, {}, 0, headers), null);
   assert.equal(upstreamError(429, { error: { message: "limit" } }, headers).retryAt, 1_900_000_000_000);
   assert.equal(upstreamError(429, { error: { message: "limit" } }).retryAt, null);
+});
+
+test("only a rejected five-hour or weekly window parks the account until its reset", () => {
+  const now = 1_899_990_000_000;
+  const fiveHour = String(1_900_000_000);
+  const weekly = String(1_900_400_000);
+  const none = () => 0;
+  const rejected5h = new Headers({
+    "anthropic-ratelimit-unified-status": "rejected",
+    "anthropic-ratelimit-unified-5h-status": "rejected",
+    "anthropic-ratelimit-unified-5h-reset": fiveHour,
+    "anthropic-ratelimit-unified-7d-status": "allowed",
+    "anthropic-ratelimit-unified-7d-reset": weekly,
+    "anthropic-ratelimit-unified-reset": fiveHour,
+    "retry-after": "30",
+  });
+  assert.equal(upstreamRetryAt(429, {}, now, rejected5h, none), 1_900_000_000_000);
+  const rejectedWeek = new Headers({
+    "anthropic-ratelimit-unified-status": "rejected",
+    "anthropic-ratelimit-unified-representative-claim": "seven_day",
+    "anthropic-ratelimit-unified-reset": weekly,
+  });
+  assert.equal(upstreamRetryAt(429, {}, now, rejectedWeek, none), 1_900_400_000_000);
+  const throttled = new Headers({
+    "anthropic-ratelimit-unified-status": "allowed_warning",
+    "anthropic-ratelimit-unified-5h-status": "allowed",
+    "anthropic-ratelimit-unified-reset": fiveHour,
+    "retry-after": "30",
+  });
+  assert.equal(upstreamRetryAt(429, {}, now, throttled, none), now + 30_000);
+  const overageOnly = new Headers({
+    "anthropic-ratelimit-unified-status": "rejected",
+    "anthropic-ratelimit-unified-representative-claim": "overage",
+    "anthropic-ratelimit-unified-5h-status": "allowed",
+    "anthropic-ratelimit-unified-7d-status": "allowed",
+    "anthropic-ratelimit-unified-reset": weekly,
+    "retry-after": "12",
+  });
+  assert.equal(upstreamRetryAt(429, {}, now, overageOnly, none), now + 12_000);
+  assert.equal(upstreamRetryAt(429, {}, now, new Headers({ "anthropic-ratelimit-unified-status": "allowed" }), none), null);
+});
+
+test("Retry-After drives short throttles with a little jitter on every provider", () => {
+  const now = 1_000_000;
+  const apiKey = new Headers({ "retry-after": "20", "anthropic-ratelimit-requests-reset": "2026-10-21T00:00:00Z" });
+  assert.equal(upstreamRetryAt(429, { type: "error" }, now, apiKey, () => 0), now + 20_000);
+  const jittered = upstreamRetryAt(429, { type: "error" }, now, apiKey, () => 0.999)!;
+  assert.ok(jittered > now + 20_000 && jittered <= now + 24_000);
+  assert.equal(upstreamRetryAt(429, {}, now, new Headers({ "retry-after-ms": "1500" }), () => 0), now + 1_500);
+  assert.equal(upstreamRetryAt(429, { error: { resets_in_seconds: 90 } }, now, apiKey, () => 0), now + 90_000);
+  assert.equal(upstreamRetryAt(503, {}, now, new Headers({ "retry-after": "7" }), () => 0), now + 7_000);
+  assert.equal(upstreamRetryAt(529, {}, now, new Headers({ "retry-after": "2" }), () => 0), now + 2_000);
+  assert.equal(upstreamRetryAt(500, {}, now, new Headers({ "retry-after": "2" }), () => 0), null);
+  assert.equal(upstreamRetryAt(400, {}, now, apiKey, () => 0), null);
+});
+
+test("fast mode and long context entitlement refusals belong to the request, not the account", async () => {
+  const { gateResponse } = await import("@/lib/gateway/access/gate");
+  const refusal = upstreamError(
+    429,
+    { type: "error", error: { type: "rate_limit_error", message: "Fast mode requires usage credits. Turn on extra usage." } },
+    new Headers({ "retry-after": "60" }),
+  );
+  assert.equal(refusal.requestScoped, true);
+  assert.equal(refusal.retryAt, null);
+  const longContext = upstreamError(
+    429,
+    { type: "error", error: { type: "rate_limit_error", message: "Extra usage is required for long context requests." } },
+    new Headers({ "retry-after": "60", "anthropic-ratelimit-unified-status": "allowed" }),
+  );
+  assert.equal(longContext.requestScoped, true);
+  assert.equal(longContext.retryAt, null);
+  const scoped = gateResponse(longContext, new Request("http://hub.local/api/subscription/v1/messages", { method: "POST" }));
+  assert.equal(scoped.status, 429);
+  assert.equal(scoped.headers.get("retry-after"), null);
+  assert.equal(scoped.headers.get("x-should-retry"), "false");
+  const throttle = upstreamError(429, { type: "error", error: { message: "Rate limited" } }, new Headers({ "retry-after": "8" }));
+  assert.equal(throttle.requestScoped, false);
+  const response = gateResponse(throttle, new Request("http://hub.local/api/v1/messages", { method: "POST" }));
+  assert.equal(response.status, 429);
+  assert.ok(Number(response.headers.get("retry-after")) >= 8);
+  assert.equal(response.headers.get("x-should-retry"), "true");
+  const overloaded = gateResponse(
+    upstreamError(529, { type: "error", error: { type: "overloaded_error", message: "Overloaded" } }, new Headers({ "retry-after": "4" })),
+    new Request("http://hub.local/api/v1/messages", { method: "POST" }),
+  );
+  assert.equal(overloaded.status, 529);
+  assert.ok(Number(overloaded.headers.get("retry-after")) >= 4);
+  assert.equal(((await overloaded.json()) as { error: { type: string } }).error.type, "overloaded_error");
 });
 
 const FIVE_HOURS = 18_000;

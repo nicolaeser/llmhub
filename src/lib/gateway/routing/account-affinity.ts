@@ -1,7 +1,8 @@
 import "server-only";
 import { createHash } from "node:crypto";
 import { asRecord, asString } from "@/lib/gateway/core";
-import { claudeCodeCacheKey } from "@/lib/gateway/protocols/messages";
+import { claudeCodeCacheKey, claudeCodeSessionKey } from "@/lib/gateway/protocols/messages";
+import { isSignInKind } from "@/lib/gateway/upstreams/provider-kinds";
 import { redisUrl } from "@/lib/jobs/connection";
 import { errorFields } from "@/lib/logging/format";
 import { logger } from "@/lib/logging/logger";
@@ -11,6 +12,9 @@ import type { JsonMap } from "@/types/gateway";
 import type { AccountPin } from "@/types/routing";
 
 export const PIN_TTL_MS = 6 * 3_600_000;
+export const PIN_HOLD_MS = 60_000;
+const PINNED_API_KINDS = new Set(["anthropic"]);
+const SESSION_HEADER = "x-claude-code-session-id";
 const MAX_PINS = 20_000;
 const MAX_SESSION_LENGTH = 512;
 const KEY_PREFIX = "llmhub:account-pin:v1";
@@ -47,9 +51,22 @@ function sharedKey(key: string): string {
   return `${KEY_PREFIX}:${key}`;
 }
 
-export function runSession(body: JsonMap | null | undefined): string {
+export function pinsAccounts(kind: string): boolean {
+  return isSignInKind(kind) || PINNED_API_KINDS.has(kind);
+}
+
+function headerValue(headers: Record<string, string> | undefined, name: string): string {
+  if (!headers) return "";
+  const found = Object.entries(headers).find(([key]) => key.toLowerCase() === name);
+  return found?.[1]?.trim() ?? "";
+}
+
+export function runSession(body: JsonMap | null | undefined, headers?: Record<string, string>): string {
   const rec = asRecord(body);
-  const key = asString(rec?.prompt_cache_key).trim() || claudeCodeCacheKey(rec?.metadata);
+  const key =
+    asString(rec?.prompt_cache_key).trim() ||
+    claudeCodeCacheKey(rec?.metadata) ||
+    claudeCodeSessionKey(headerValue(headers, SESSION_HEADER));
   if (!key || key.length > MAX_SESSION_LENGTH) return "";
   return createHash("sha256").update(key).digest("hex").slice(0, 32);
 }

@@ -17,7 +17,7 @@ import { auditSubAddDelete, finishedSubAddLinks, subAddLinkAudit } from "@/lib/p
 import { newSubAddToken, subAddAccountSelect, subAddAccountViews } from "@/lib/providers/sub-add-store";
 import { subAddLinkCreateSchema } from "@/schemas/sub-add";
 import type { SignInKind } from "@/types/providers";
-import type { SubAddCreated, SubAddLinksPayload, SubAddLinkView } from "@/types/sub-add";
+import type { SubAddCreated, SubAddLinkAccountView, SubAddLinksPayload, SubAddLinkView } from "@/types/sub-add";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const LIST_LIMIT = 200;
@@ -33,7 +33,7 @@ const linkSelect = {
   createdAt: true,
   createdById: true,
   targets: assignmentSelect,
-  accounts: { select: subAddAccountSelect, orderBy: { createdAt: "asc" } },
+  accounts: { select: { ...subAddAccountSelect, manageHash: true }, orderBy: { createdAt: "asc" } },
 } as const;
 
 type LinkRow = NonNullable<Awaited<ReturnType<typeof findLink>>>;
@@ -49,6 +49,11 @@ async function creatorNames(ids: string[]): Promise<Map<string, string>> {
   return new Map(users.map((user) => [user.id, user.username]));
 }
 
+function linkAccounts(rows: LinkRow["accounts"]): SubAddLinkAccountView[] {
+  const managed = new Set(rows.filter((row) => row.manageHash !== null).map((row) => row.providerId));
+  return subAddAccountViews(rows).map((account) => ({ ...account, manageActive: managed.has(account.providerId) }));
+}
+
 function linkView(row: LinkRow, names: Map<string, string>): SubAddLinkView {
   return {
     id: row.id,
@@ -61,7 +66,7 @@ function linkView(row: LinkRow, names: Map<string, string>): SubAddLinkView {
     expiresAt: row.expiresAt.toISOString(),
     createdAt: row.createdAt.toISOString(),
     createdBy: names.get(row.createdById) ?? "",
-    accounts: subAddAccountViews(row.accounts),
+    accounts: linkAccounts(row.accounts),
   };
 }
 

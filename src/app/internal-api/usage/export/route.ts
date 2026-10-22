@@ -5,7 +5,7 @@ import { isActionFail, runAction } from "@/lib/http/action-result";
 import { actionProblem } from "@/lib/http/problem";
 import { usageStatsPdf } from "@/lib/export/usage-pdf";
 
-const toDate = (day: string) => new Date(`${day}T00:00:00`);
+const toDate = (day: string) => new Date(`${day}T00:00:00Z`);
 
 export async function GET(req: NextRequest) {
   const days = Number(req.nextUrl.searchParams.get("days") ?? 14) || 14;
@@ -28,7 +28,7 @@ export async function GET(req: NextRequest) {
     brand: tCommon("appName"),
     period: t("pdf.period", {
       days: result.days,
-      range: first && last ? format.dateTimeRange(toDate(first), toDate(last), "short") : "",
+      range: first && last ? format.dateTimeRange(toDate(first), toDate(last), "short", { timeZone: "UTC" }) : "",
     }),
     filter: result.model ? t("pdf.filter", { model: result.model }) : undefined,
     generatedAt: await getNow(),

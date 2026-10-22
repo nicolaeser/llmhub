@@ -210,7 +210,7 @@ export function usageStatsPdf(input: {
     daily: {
       heading: t("charts.dailySpend"),
       days: stats.daily.map((day) => ({
-        label: format.dateTime(input.dayDate(day.day), "chart"),
+        label: format.dateTime(input.dayDate(day.day), "utcDay"),
         value: day.spend,
       })),
       formatTick: (value) => format.number(value, "axis"),

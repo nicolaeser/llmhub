@@ -9,6 +9,7 @@ import {
   parseLogFilters,
   requestLogWhere,
   spendEventWhere,
+  zonedLogFilters,
 } from "@/lib/gateway/request-logs/request-log-query";
 
 test("parseLogFilters trims strings, caps lengths, and reads the PII flag from query strings", () => {
@@ -36,6 +37,56 @@ test("createdAtRange includes the whole end day for date-only input", () => {
     lte: new Date("2026-10-06T12:00:00.000Z"),
   });
   assert.equal(createdAtRange("nope", ""), undefined);
+});
+
+test("createdAtRange reads instants with offsets and treats wall-clock input without one as UTC", () => {
+  assert.deepEqual(createdAtRange("2026-10-01T00:00:00+02:00", "2026-10-06T23:59:59.999+02:00"), {
+    gte: new Date("2026-09-30T22:00:00.000Z"),
+    lte: new Date("2026-10-06T21:59:59.999Z"),
+  });
+  assert.deepEqual(createdAtRange("2026-10-06T12:00", ""), { gte: new Date("2026-10-06T12:00:00.000Z") });
+});
+
+test("zonedLogFilters turns date filters into instants for whole days in the console time zone", () => {
+  const filters = parseLogFilters({ model: "m", from: "2026-10-01", to: "2026-10-06" });
+  assert.deepEqual(zonedLogFilters(filters, "Europe/Berlin"), {
+    ...filters,
+    from: "2026-09-30T22:00:00.000Z",
+    to: "2026-10-06T21:59:59.999Z",
+  });
+  assert.deepEqual(zonedLogFilters(filters, "UTC"), {
+    ...filters,
+    from: "2026-10-01T00:00:00.000Z",
+    to: "2026-10-06T23:59:59.999Z",
+  });
+  assert.deepEqual(zonedLogFilters(filters, "America/New_York"), {
+    ...filters,
+    from: "2026-10-01T04:00:00.000Z",
+    to: "2026-10-07T03:59:59.999Z",
+  });
+});
+
+test("zonedLogFilters follows daylight saving changes and leaves unambiguous or invalid input alone", () => {
+  const dst = zonedLogFilters(parseLogFilters({ from: "2026-10-25", to: "2026-10-25" }), "Europe/Berlin");
+  assert.equal(dst.from, "2026-10-24T22:00:00.000Z");
+  assert.equal(dst.to, "2026-10-25T22:59:59.999Z");
+  const winter = zonedLogFilters(parseLogFilters({ from: "2026-12-01" }), "Europe/Berlin");
+  assert.equal(winter.from, "2026-11-30T23:00:00.000Z");
+  assert.equal(winter.to, "");
+  const wallClock = zonedLogFilters(parseLogFilters({ from: "2026-10-06T12:00" }), "Europe/Berlin");
+  assert.equal(wallClock.from, "2026-10-06T10:00:00.000Z");
+  const instants = parseLogFilters({ from: "2026-10-06T12:00:00.000Z", to: "2026-10-07T12:00:00+05:30" });
+  assert.deepEqual(zonedLogFilters(instants, "Europe/Berlin"), instants);
+  const invalid = parseLogFilters({ from: "2026-13-45", to: "nope" });
+  assert.deepEqual(zonedLogFilters(invalid, "Europe/Berlin"), invalid);
+});
+
+test("zoned date filters select the same rows on the server as the console shows for those days", () => {
+  const zoned = zonedLogFilters(parseLogFilters({ from: "2026-10-01", to: "2026-10-06" }), "Europe/Berlin");
+  assert.deepEqual(requestLogWhere(zoned, {}).createdAt, {
+    gte: new Date("2026-09-30T22:00:00.000Z"),
+    lte: new Date("2026-10-06T21:59:59.999Z"),
+  });
 });
 
 test("requestLogWhere intersects another user filter with the owner scope instead of replacing it", () => {

@@ -119,6 +119,11 @@ export default function AccountDetailsDialog({
                             {t("sharedVia", { named: String(account.sharedVia !== ""), label: account.sharedVia })}
                           </Chip>
                         ) : null}
+                        {account.manageOff ? (
+                          <Chip size="sm" variant="soft" className="whitespace-nowrap">
+                            {t("manageOff")}
+                          </Chip>
+                        ) : null}
                       </div>
                     </div>
                   </Modal.Header>

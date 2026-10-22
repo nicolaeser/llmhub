@@ -29,6 +29,7 @@ export type AccountRow = {
   subtitle: string | null;
   plan: string;
   sharedVia: string | null;
+  manageOff: boolean;
   partial: PartialLimits | null;
   limits: SubscriptionLimits | null;
   groups: LimitGroup[];
@@ -70,6 +71,7 @@ export function accountRow(
     subtitle: account ? row.name : null,
     plan: limits?.plan || row.signIn?.plan || "",
     sharedVia: row.sharedVia,
+    manageOff: row.sharedVia !== null && !row.manageActive,
     partial: state === "available" ? partialLimits(row, entry, now) : null,
     limits,
     groups,

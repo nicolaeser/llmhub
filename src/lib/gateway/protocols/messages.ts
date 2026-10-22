@@ -210,9 +210,12 @@ export function claudeCodeSession(userId: unknown): string {
   return "";
 }
 
-export function claudeCodeCacheKey(metadata: unknown): string {
-  const session = claudeCodeSession(asRecord(metadata)?.user_id);
+export function claudeCodeSessionKey(session: string): string {
   return session ? `claude-code-${session}` : "";
+}
+
+export function claudeCodeCacheKey(metadata: unknown): string {
+  return claudeCodeSessionKey(claudeCodeSession(asRecord(metadata)?.user_id));
 }
 
 function webSearchOptions(tool: MessagesTool, choice: MessagesRequest["tool_choice"]): JsonMap {
