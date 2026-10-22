@@ -3,7 +3,7 @@ import { AnthropicSseTranslator } from "@/lib/gateway/protocols/anthropic";
 import { recordUsage, recordUsageOrLog, usageFromUnknown } from "@/lib/gateway/billing/billing";
 import { alertUpstreamFailure } from "@/lib/alerts/notify";
 import { spendTag } from "@/lib/gateway/access/gate";
-import { clientClosedError, GateError, isClientClosed } from "@/lib/gateway/errors";
+import { CLIENT_CLOSED_STATUS, clientClosedError, GateError, isClientClosed } from "@/lib/gateway/errors";
 import { outputScreen, type OutputScreen } from "@/lib/gateway/safety/guardrails";
 import { instructChat } from "@/lib/gateway/safety/pii-instruction";
 import { requestRoutingOverride, serviceModeHeaders, variantRoutes } from "@/lib/gateway/dispatch/service-mode";
@@ -138,6 +138,7 @@ export function recordSuccess(
     started: number;
     response: unknown;
     stream?: true;
+    hungUp?: boolean;
     responseCache?: ResponseCacheUsage;
   },
 ): Promise<number> {
@@ -147,8 +148,8 @@ export function recordSuccess(
     deployment: routed.dep,
     group: routed.group,
     usage: outcome.usage,
-    status: 200,
-    outcome: outcome.blocked ? "guardrail_blocked" : "ok",
+    status: outcome.hungUp ? CLIENT_CLOSED_STATUS : 200,
+    outcome: outcome.blocked ? "guardrail_blocked" : outcome.hungUp ? "cancelled" : "ok",
     latencyMs: Date.now() - outcome.started,
     tag: spendTag(input.body),
     stream: outcome.stream,
@@ -656,7 +657,7 @@ export function relayChatStream(input: {
     return true;
   };
 
-  const finish = async () => {
+  const finish = async (hungUp = false) => {
     release();
     if (billed) return;
     billed = true;
@@ -671,6 +672,7 @@ export function relayChatStream(input: {
       blocked: screen?.blocked ?? false,
       started,
       stream: true,
+      hungUp: hungUp && !completed,
       response: transcript.result(),
     });
   };
@@ -801,7 +803,7 @@ export function relayChatStream(input: {
     },
     cancel() {
       void cancelQuietly(reader);
-      void finish();
+      void finish(true);
     },
   });
 

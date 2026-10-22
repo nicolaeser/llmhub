@@ -220,6 +220,55 @@ test("a client that cancels before the upstream answers is logged as cancelled w
   assert.equal((await cooldownEnds([`${alias}-route`])).size, 0);
 });
 
+function openStream(frames: string[]): Response {
+  const encoder = new TextEncoder();
+  return new Response(
+    new ReadableStream<Uint8Array>({
+      start(controller) {
+        for (const frame of frames) controller.enqueue(encoder.encode(frame));
+      },
+    }),
+    { headers: { "content-type": "text/event-stream" } },
+  );
+}
+
+async function hangUpAfterFirstChunk(res: Response): Promise<string> {
+  const reader = res.body!.getReader();
+  const first = await reader.read();
+  await reader.cancel();
+  return new TextDecoder().decode(first.value);
+}
+
+function bookedUsage(): { requests: number; errors: number; promptTokens: number } {
+  return (recordedPrisma.called("usageDaily", "upsert")[0]!.args as { create: { requests: number; errors: number; promptTokens: number } }).create;
+}
+
+test("a client that hangs up during a Messages stream is booked as cancelled with the tokens streamed so far", async () => {
+  const alias = anthropicGroup();
+  gateway.reply = () => openStream([START, ...TEXT]);
+  const res = await messages(alias);
+  assert.equal(res.status, 200);
+  assert.match(await hangUpAfterFirstChunk(res), /message_start/);
+  assert.deepEqual(await logged(), [{ status: 499, outcome: "cancelled" }]);
+  const usage = bookedUsage();
+  assert.equal(usage.requests, 1);
+  assert.equal(usage.errors, 0);
+  assert.equal(usage.promptTokens, 40);
+});
+
+test("a client that hangs up during a chat completion stream is booked as cancelled", async () => {
+  const alias = chatGroup();
+  gateway.reply = () =>
+    openStream([
+      `data: ${JSON.stringify({ id: "c1", object: "chat.completion.chunk", choices: [{ index: 0, delta: { content: "Hel" }, finish_reason: null }] })}\n\n`,
+    ]);
+  const { POST } = await import("@/app/api/v1/chat/completions/route");
+  const res = await POST(gatewayRequest("/api/v1/chat/completions", { model: alias, stream: true, messages: [{ role: "user", content: "hi" }] }));
+  assert.match(await hangUpAfterFirstChunk(res), /Hel/);
+  assert.deepEqual(await logged(), [{ status: 499, outcome: "cancelled" }]);
+  assert.equal(bookedUsage().errors, 0);
+});
+
 test("a rate limited count_tokens call falls back to the local estimate and never cools the key", async () => {
   const alias = anthropicGroup();
   gateway.reply = () =>

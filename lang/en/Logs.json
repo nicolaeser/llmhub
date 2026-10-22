@@ -57,7 +57,7 @@
   "caller": {
     "noKey": "Console session"
   },
-  "statusOutcome": "{status} · {outcome, select, ok {OK} error {Error} cache_hit {Response cache hit} pii_blocked {Blocked by PII} guardrail_blocked {Blocked by guardrail} other {{outcome}}}",
+  "statusOutcome": "{status} · {outcome, select, ok {OK} error {Error} cache_hit {Response cache hit} pii_blocked {Blocked by PII} guardrail_blocked {Blocked by guardrail} cancelled {Cancelled by the client} other {{outcome}}}",
   "openDetails": "Show details for {model}",
   "pii": {
     "blocked": "Blocked",
