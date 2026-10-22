@@ -118,9 +118,16 @@ test("a failing subscription chat stream ends with an error chunk and [DONE]", a
   assert.equal(payload.error.code, "upstream_error");
 });
 
+async function bookedLogs() {
+  for (let wait = 0; wait < 400 && !recordedPrisma.called("requestLog", "create").length; wait++) {
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+  return recordedPrisma.called("requestLog", "create");
+}
+
 test("a failing subscription chat stream is metered as an error, not a 200 success", async () => {
   await streamBody();
-  const logs = recordedPrisma.called("requestLog", "create");
+  const logs = await bookedLogs();
   assert.equal(logs.length, 1);
   const data = (logs[0]!.args as { data: { status: number; outcome: string; model: string } }).data;
   assert.equal(data.model, ALIAS);
