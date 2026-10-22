@@ -20,6 +20,7 @@ function provider(kind: string): ProviderView {
     assignments: [],
     signIn: { account: "user@example.test", plan: "pro", status: "active" },
     sharedVia: null,
+    manageActive: false,
     discovered: [],
     policy: { zdr: false, retentionDays: null, region: "", noTraining: false },
     vertex: null,

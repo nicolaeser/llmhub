@@ -1,0 +1,1 @@
+ALTER TABLE "SubAddAccount" ALTER COLUMN "manageHash" DROP NOT NULL;

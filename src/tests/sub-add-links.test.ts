@@ -8,16 +8,18 @@ import { newTotpSecret, sealTotpSecret } from "@/lib/auth/totp";
 import { stopLocalCatalogTasks } from "@/lib/gateway/catalog/catalog-tasks";
 import { openTicket, sealTicket } from "@/lib/gateway/upstreams/subscription-sign-in";
 import { SUB_ADD_TOKEN_PATTERN } from "@/lib/http/public-path";
-import { completeSignIn, pollSignIn } from "@/lib/providers/connections";
+import { completeSignIn, pollSignIn, publicProvider } from "@/lib/providers/connections";
 import {
   completeSubAddSignIn,
   loadSubAddContributions,
   openSubAddLink,
   pollSubAddSignIn,
   removeSubAddContribution,
+  renewSubAddManage,
+  revokeSubAddManage,
   startSubAddSignIn,
 } from "@/lib/providers/sub-add";
-import { createSubAddLink, deleteSubAddLink } from "@/lib/providers/sub-add-links";
+import { createSubAddLink, deleteSubAddLink, loadSubAddLinks } from "@/lib/providers/sub-add-links";
 import { subAddRemaining, subAddStatus } from "@/lib/providers/sub-add-status";
 import { newSubAddToken, subAddTokenHash, subAddUid } from "@/lib/providers/sub-add-store";
 import { resetRequestWindows } from "@/lib/rate-limit/window";
@@ -523,7 +525,7 @@ test("a contributor removes only accounts that belong to their manage token", as
   assert.equal((orphan?.args as { data: { actor: string } }).data.actor, "sub-add");
 });
 
-test("the manage page lists only the accounts of its token", async () => {
+test("the manage page lists only the accounts of its token and refuses a token without any", async () => {
   const manage = newSubAddToken();
   recordedPrisma.reset({
     subAddAccount: {
@@ -544,8 +546,177 @@ test("the manage page lists only the accounts of its token", async () => {
     mine.accounts.map((account) => [account.providerId, account.kind, account.account, account.status]),
     [["provider-1", "codex", "a@example.com", "active"]],
   );
-  assert.deepEqual((await loadSubAddContributions({ manage: newSubAddToken().token })).accounts, []);
+  await assert.rejects(loadSubAddContributions({ manage: newSubAddToken().token }), { message: "SUB_ADD_UNAVAILABLE" });
   await assert.rejects(loadSubAddContributions({ manage: "not-a-token" }), { message: "SUB_ADD_UNAVAILABLE" });
+});
+
+type ManageUpdate = { where: { manageHash: string }; data: { manageHash: string | null } };
+
+function managedRows(manageHash: string) {
+  return {
+    updateManyAndReturn: (args: ManageUpdate) =>
+      args.where.manageHash === manageHash
+        ? [
+            { providerId: "provider-1", linkId: "link-1" },
+            { providerId: "provider-2", linkId: null },
+          ]
+        : [],
+  };
+}
+
+function manageAudits() {
+  return recordedPrisma
+    .called("gatewayAuditLog", "create")
+    .map(
+      (call) =>
+        (call.args as { data: { actor: string; action: string; objectType: string; objectId: string; afterJson: string } })
+          .data,
+    );
+}
+
+test("deactivating a manage link clears it from every account it covers and keeps the accounts", async () => {
+  const manage = newSubAddToken();
+  recordedPrisma.reset({ subAddAccount: managedRows(manage.hash) });
+  const revoked = await revokeSubAddManage({ manage: manage.token });
+  assert.equal(revoked.accounts, 2);
+  const [update] = recordedPrisma.called("subAddAccount", "updateManyAndReturn");
+  const args = update.args as ManageUpdate;
+  assert.deepEqual(args.where, { manageHash: manage.hash });
+  assert.deepEqual(args.data, { manageHash: null });
+  assert.deepEqual(recordedPrisma.called("providerConnection"), []);
+  assert.deepEqual(recordedPrisma.called("subAddLink"), []);
+  const audits = manageAudits();
+  assert.deepEqual(
+    audits.map((entry) => [entry.actor, entry.action, entry.objectType, entry.objectId]),
+    [
+      ["sub-add:link-1", "provider_sub_add.manage_revoke", "provider", "provider-1"],
+      ["sub-add", "provider_sub_add.manage_revoke", "provider", "provider-2"],
+    ],
+  );
+  for (const entry of audits) {
+    assert.doesNotMatch(entry.afterJson, new RegExp(manage.token));
+    assert.doesNotMatch(entry.afterJson, new RegExp(manage.hash));
+  }
+});
+
+test("renewing a manage link moves its accounts to a new token that is returned once", async () => {
+  const manage = newSubAddToken();
+  let moved = "";
+  recordedPrisma.reset({
+    subAddAccount: {
+      updateManyAndReturn: (args: ManageUpdate) => {
+        if (args.where.manageHash !== manage.hash) return [];
+        moved = args.data.manageHash ?? "";
+        return [{ providerId: "provider-1", linkId: "link-1" }];
+      },
+      findMany: (args: { where: { manageHash: string } }) =>
+        args.where.manageHash === moved
+          ? [
+              {
+                providerId: "provider-1",
+                createdAt: new Date("2026-10-19T10:00:00Z"),
+                provider: { kind: "claude", enabled: true, login: { account: "a@example.com", plan: "max", status: "active" } },
+              },
+            ]
+          : [],
+    },
+  });
+  const renewed = await renewSubAddManage({ manage: manage.token });
+  assert.match(renewed.manageToken, SUB_ADD_TOKEN_PATTERN);
+  assert.notEqual(renewed.manageToken, manage.token);
+  assert.equal(moved, subAddTokenHash(renewed.manageToken));
+  assert.deepEqual(
+    renewed.accounts.map((account) => [account.providerId, account.account]),
+    [["provider-1", "a@example.com"]],
+  );
+  const [update] = recordedPrisma.called("subAddAccount", "updateManyAndReturn");
+  assert.deepEqual((update.args as ManageUpdate).where, { manageHash: manage.hash });
+  const audits = manageAudits();
+  assert.deepEqual(
+    audits.map((entry) => [entry.actor, entry.action, entry.objectId]),
+    [["sub-add:link-1", "provider_sub_add.manage_renew", "provider-1"]],
+  );
+  for (const value of [manage.token, manage.hash, renewed.manageToken, moved]) {
+    assert.doesNotMatch(audits[0].afterJson, new RegExp(value));
+  }
+});
+
+test("deactivating or renewing an unknown or malformed manage token answers the neutral code", async () => {
+  const manage = newSubAddToken();
+  recordedPrisma.reset({ subAddAccount: managedRows(manage.hash) });
+  const unknown = newSubAddToken().token;
+  await assert.rejects(revokeSubAddManage({ manage: unknown }), { message: "SUB_ADD_UNAVAILABLE" });
+  await assert.rejects(renewSubAddManage({ manage: unknown }), { message: "SUB_ADD_UNAVAILABLE" });
+  assert.deepEqual(recordedPrisma.called("subAddAccount", "findMany"), []);
+  const attempts = recordedPrisma.calls.length;
+  for (const raw of [{ manage: "not-a-token" }, { manage: `${manage.token}x` }, {}]) {
+    await assert.rejects(revokeSubAddManage(raw), { message: "SUB_ADD_UNAVAILABLE" });
+    await assert.rejects(renewSubAddManage(raw), { message: "SUB_ADD_UNAVAILABLE" });
+  }
+  assert.equal(recordedPrisma.calls.length, attempts);
+  assert.deepEqual(recordedPrisma.called("gatewayAuditLog"), []);
+});
+
+test("manage link changes are rate limited per client", async () => {
+  const manage = newSubAddToken();
+  recordedPrisma.reset({ subAddAccount: managedRows(manage.hash) });
+  for (let call = 0; call < 10; call += 1) {
+    await assert.rejects(revokeSubAddManage({ manage: newSubAddToken().token }), { message: "SUB_ADD_UNAVAILABLE" });
+  }
+  await assert.rejects(renewSubAddManage({ manage: manage.token }), { message: "RATE_LIMITED" });
+  setRequest({ headers: { "x-forwarded-for": "192.0.2.201" } });
+  assert.equal((await revokeSubAddManage({ manage: manage.token })).accounts, 2);
+});
+
+test("the console reports per contributed account whether its manage link is active", async () => {
+  const account = (providerId: string, manageHash: string | null) => ({
+    providerId,
+    manageHash,
+    createdAt: new Date("2026-10-19T10:00:00Z"),
+    provider: { kind: "claude", enabled: true, login: { account: `${providerId}@example.com`, plan: "max", status: "active" } },
+  });
+  const activeHash = newSubAddToken().hash;
+  recordedPrisma.reset({
+    subAddLink: {
+      findMany: () => [
+        {
+          ...link({ maxAccounts: null }),
+          createdAt: new Date(),
+          createdById: "",
+          accounts: [account("provider-1", activeHash), account("provider-2", null)],
+        },
+      ],
+    },
+  });
+  const listed = await runAsPrincipal(caller(["providers:read"]), () => loadSubAddLinks());
+  assert.deepEqual(
+    listed.links[0].accounts.map((row) => [row.providerId, row.manageActive]),
+    [
+      ["provider-1", true],
+      ["provider-2", false],
+    ],
+  );
+  assert.doesNotMatch(JSON.stringify(listed), new RegExp(activeHash));
+  const connection = {
+    id: "provider-1",
+    name: "Claude",
+    kind: "claude",
+    baseUrl: "",
+    apiKey: "",
+    discovered: [],
+    zdr: false,
+    retentionDays: null,
+    region: "",
+    noTraining: false,
+    enabled: true,
+    restricted: false,
+    internal: false,
+  };
+  const shared = publicProvider({ ...connection, subAdd: { label: "Friends", manageHash: activeHash } });
+  assert.equal(shared.manageActive, true);
+  assert.doesNotMatch(JSON.stringify(shared), new RegExp(activeHash));
+  assert.equal(publicProvider({ ...connection, subAdd: { label: "Friends", manageHash: null } }).manageActive, false);
+  assert.equal(publicProvider({ ...connection, subAdd: null }).manageActive, false);
 });
 
 test("public link endpoints are rate limited per client", async () => {

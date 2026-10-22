@@ -80,6 +80,7 @@ export function publicProvider(row: ProviderRecord) {
     assignments: assignmentTargets(row.assignments ?? []),
     signIn: signInOf(row),
     sharedVia: row.subAdd ? row.subAdd.label : null,
+    manageActive: Boolean(row.subAdd?.manageHash),
     discovered: discoveredOf(row.discovered),
     policy: policyOf(row),
     vertex: row.kind === "vertex" ? vertexView(row) : null,
@@ -90,7 +91,7 @@ const loginSelect = { select: { account: true, plan: true, status: true } } as c
 export const providerInclude = {
   login: loginSelect,
   assignments: assignmentSelect,
-  subAdd: { select: { label: true } },
+  subAdd: { select: { label: true, manageHash: true } },
 } as const;
 
 function signInCredential(raw: string | undefined, uid: string, kind: string): SignInCredential | null {
