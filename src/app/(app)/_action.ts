@@ -1,6 +1,7 @@
 "use server";
 
 import { requireSession } from "@/lib/auth/guards";
+import { setConsoleLocale } from "@/lib/auth/console-locale";
 import { loadConsoleAccess, loadConsoleScope } from "@/lib/auth/console-scope";
 import { hasPerm, PERMISSIONS } from "@/lib/auth/permissions";
 import { setWorkspace } from "@/lib/auth/workspace";
@@ -11,6 +12,10 @@ import { requestUpdaterCommand, setAutoUpdate } from "@/lib/updates/updater";
 
 export async function setWorkspaceAction(orgId: string) {
   return runAction(() => setWorkspace(orgId));
+}
+
+export async function setLocaleAction(locale: string) {
+  return runAction(() => setConsoleLocale(locale));
 }
 
 export async function loadConsoleScopeAction() {
