@@ -3,6 +3,7 @@ import { admit } from "@/lib/gateway/access/gate";
 import { dispatchChat, streamChat } from "@/lib/gateway/dispatch/chat";
 import { asRecord, newId } from "@/lib/gateway/core";
 import { GateError } from "@/lib/gateway/errors";
+import { restoreClientJson } from "@/lib/gateway/safety/restore-client";
 import { SSE_HEADERS, sseData } from "@/lib/gateway/protocols/sse";
 import { addChatUsage, assistantMessage } from "@/lib/rag/file-search-tool";
 import { errorFields } from "@/lib/logging/format";
@@ -143,9 +144,10 @@ async function runTool(ctx: McpLoopContext, call: McpToolCall, deadline: number)
   if (remaining <= 0) return { text: "Skipped: the gateway's tool time limit was reached.", isError: true };
   const signals = [AbortSignal.timeout(Math.min(MCP_REQUEST_TIMEOUT_MS, remaining))];
   if (ctx.signal) signals.push(ctx.signal);
+  const restored = restoreClientJson(ctx.principal.trace, args);
   const started = Date.now();
   try {
-    const outcome = await ctx.toolset.executor.call(bound, args, AbortSignal.any(signals));
+    const outcome = await ctx.toolset.executor.call(bound, restored, AbortSignal.any(signals));
     logger.info("mcp.tool_call", {
       serverId: bound.serverId,
       tool: bound.tool.name,
