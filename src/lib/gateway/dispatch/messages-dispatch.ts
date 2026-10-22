@@ -155,6 +155,7 @@ export async function streamMessages(input: MessagesInput & { req: Request }): P
           stream: true,
         },
         group.strategy,
+        input.headers,
       );
       return {
         native: true,

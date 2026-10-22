@@ -8,6 +8,7 @@ import {
   shouldHardenTransport,
 } from "@/lib/http/public-path";
 import { sanitizeReturnPath } from "@/lib/auth/return-path";
+import { LOCALE_COOKIE, pickLocale } from "@/i18n/locale-cookie";
 
 const AUTH_PATTERN =
   /^\/account\/(login|register|forgot-password|reset-password)(\/|$)/;
@@ -17,6 +18,7 @@ const intlMiddleware = createMiddleware({
   locales: [...APP_LOCALES],
   localeDetection: true,
   localePrefix: "never",
+  localeCookie: LOCALE_COOKIE,
   defaultLocale: "en",
 });
 
@@ -70,10 +72,13 @@ export async function proxy(req: NextRequest) {
     response = NextResponse.redirect(new URL(dest, req.url));
   } else {
     const intlResponse = intlMiddleware(req) as NextResponse;
-    const locale =
-      intlResponse.headers.get("x-middleware-request-x-next-intl-locale") ||
-      req.cookies.get("NEXT_LOCALE")?.value ||
-      "en";
+    const locale = pickLocale(
+      [
+        intlResponse.headers.get("x-middleware-request-x-next-intl-locale"),
+        req.cookies.get(LOCALE_COOKIE.name)?.value,
+      ],
+      "en",
+    );
     forwardedHeaders.set("x-next-intl-locale", locale);
     response = NextResponse.next({
       request: { headers: forwardedHeaders },

@@ -3,6 +3,7 @@ import test from "node:test";
 import { NextRequest } from "next/server";
 import { SESSION_COOKIE, signSessionToken } from "@/lib/auth/cookie";
 import { randomToken } from "@/lib/crypto";
+import { LOCALE_COOKIE } from "@/i18n/locale-cookie";
 import { config, proxy } from "@/proxy";
 
 const APP = "http://localhost:3000";
@@ -86,6 +87,43 @@ test("a signed session cookie passes through with locale and security headers", 
   assert.match(res.headers.get("content-security-policy") ?? "", /script-src 'self' 'nonce-[A-Za-z0-9_-]+'/);
   assert.equal(res.headers.get("x-frame-options"), "DENY");
   assert.equal(res.headers.get("x-content-type-options"), "nosniff");
+});
+
+test("a chosen locale cookie outranks an English browser on console pages, server actions, and sign-in", async () => {
+  const session = await signSessionToken(randomToken());
+  const english = { "accept-language": "en-US,en;q=0.9" };
+  const signedIn = `${SESSION_COOKIE}=${session}; ${LOCALE_COOKIE.name}=de`;
+  const requests = [
+    new NextRequest(`${APP}/keys`, { headers: { ...english, cookie: signedIn, "sec-fetch-dest": "document" } }),
+    new NextRequest(`${APP}/keys?tab=templates`, {
+      method: "POST",
+      headers: { ...english, cookie: signedIn, "next-action": "a".repeat(42), "sec-fetch-dest": "empty" },
+    }),
+    new NextRequest(`${APP}/account/login`, {
+      headers: { ...english, cookie: `${LOCALE_COOKIE.name}=de`, "sec-fetch-dest": "document" },
+    }),
+  ];
+  for (const req of requests) {
+    const res = await proxy(req);
+    const label = `${req.method} ${req.nextUrl.pathname}`;
+    assert.equal(passedThrough(res), true, label);
+    assert.equal(res.headers.get("x-middleware-request-x-next-intl-locale"), "de", label);
+    assert.equal(
+      res.headers.getSetCookie().some((line) => line.startsWith(`${LOCALE_COOKIE.name}=`)),
+      false,
+      label,
+    );
+  }
+});
+
+test("an unsupported locale cookie falls back to the browser language", async () => {
+  const session = await signSessionToken(randomToken());
+  const res = await proxy(
+    new NextRequest(`${APP}/keys`, {
+      headers: { "accept-language": "de-DE,de;q=0.9", cookie: `${SESSION_COOKIE}=${session}; ${LOCALE_COOKIE.name}=fr` },
+    }),
+  );
+  assert.equal(res.headers.get("x-middleware-request-x-next-intl-locale"), "de");
 });
 
 test("signed-in users are sent from sign-in pages back to a safe return path", async () => {
