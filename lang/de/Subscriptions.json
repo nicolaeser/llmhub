@@ -1,36 +1,11 @@
 {
-  "intro": "Bediene Anfragen an /api/subscription mit ChatGPT-, Claude-, Google-Antigravity- und SuperGrok-Abos. Jedes Konto zeigt seine eigenen Limits und wann sie zurückgesetzt werden.",
+  "intro": "Bediene Anfragen an /api/subscription mit angemeldeten Abos wie ChatGPT, Claude, Google Antigravity, SuperGrok, Kimi Code, Meta Muse Code und Devin. Jedes Konto zeigt seine eigenen Limits und wann sie zurückgesetzt werden.",
+  "empty": "Melde dich bei einem Abo wie ChatGPT, Claude oder Google an, importiere vorhandene Konten oder sende jemandem einen Konto-Link.",
   "addAccount": "Konto hinzufügen",
-  "addSubscription": "Abo hinzufügen",
-  "wizard": {
-    "title": "Abo verbinden",
-    "hint": "Wähle den Anbieter, dann die Verbindungsmethode, und prüfe alles vor dem Verbinden.",
-    "stepsLabel": "Schritte",
-    "step": "{step, select, provider {Anbieter} method {Methode} review {Prüfen} other {Schritt}}",
-    "providerLabel": "Anbieter wählen",
-    "methodLabel": "Verbindungsmethode wählen",
-    "methodSignin": "Im Browser anmelden",
-    "methodSigninHint": "Code eingeben oder bestätigen, das Gateway erneuert Tokens selbst.",
-    "methodFile": "Auth-Datei importieren",
-    "methodFileHint": "JSON-Datei aus CLIProxyAPI hochladen oder einfügen.",
-    "methodKey": "API-Key eingeben",
-    "methodKeyHint": "Key im nächsten Schritt sicher hinterlegen.",
-    "reviewMethod": "{method, select, signin {Anmeldung im Browser} file {Auth-Datei} share {Konto-Link} other {API-Key}}",
-    "reviewHint": "Beim Verbinden öffnet sich das passende Formular für Anmeldung, Key und Aufbewahrung.",
-    "connect": "Verbinden",
-    "antigravityLocked": "Erst Google-OAuth-Client einrichten.",
-    "methodShare": "Link teilen",
-    "methodShareHint": "Jemand anderes meldet sich mit dem eigenen Konto an, ganz ohne Konsolen-Login.",
-    "reviewShareHint": "Als Nächstes legst du Bezeichnung, Gültigkeit und Zugriff für den Link fest.",
-    "share": "Link erstellen"
-  },
-  "remaining": "Noch nicht verbunden",
-  "remainingHint": "Diese Anbieter haben noch kein Konto. Verbinde sie über den Assistenten.",
-  "openWizard": "Assistent öffnen",
-  "connectTitle": "{first, select, true {Abo verbinden} other {Weiteres Abo verbinden}}",
   "refreshAll": "Alle Limits aktualisieren",
+  "search": "Konten durchsuchen",
+  "noMatches": "Keine Konten passen zu dieser Suche",
   "importFiles": {
-    "open": "Aus CLIProxyAPI importieren",
     "title": "Aus CLIProxyAPI importieren",
     "description": "Übernimm die Abo-Konten, die CLIProxyAPI oder EasyCLIProxyAPI verwalten, einmalig in LLM Hub: Lade ihre JSON-Auth-Dateien hoch, füge den Inhalt ein oder lade sie direkt aus einer laufenden CLIProxyAPI. Codex-, Claude-, Antigravity- und xAI-Konten werden zu Abo-Konten. LLM Hub prüft jedes Konto vorher beim Anbieter und erneuert die Anmeldung ab dann selbst. Ein bereits verbundenes Konto erhält die neue Anmeldung.",
     "pickTitle": "Auth-Dateien",
@@ -73,7 +48,7 @@
     "moved": "{removed, plural, =0 {Aus CLIProxyAPI wurde nichts entfernt.} one {# Datei wurde aus CLIProxyAPI entfernt. Ab jetzt erneuert nur noch LLM Hub dieses Konto.} other {# Dateien wurden aus CLIProxyAPI entfernt. Ab jetzt erneuert nur noch LLM Hub diese Konten.}}",
     "keptAtSource": "{count, plural, one {# importierte Datei ließ sich nicht aus CLIProxyAPI entfernen. Lösche sie dort, sonst machen sich beide Seiten gegenseitig die Tokens ungültig.} other {# importierte Dateien ließen sich nicht aus CLIProxyAPI entfernen. Lösche sie dort, sonst machen sich beide Seiten gegenseitig die Tokens ungültig.}}"
   },
-  "timeZone": "Zeitzone für Reset-Zeiten",
+  "timeZone": "Zeitzone der Konsole",
   "stats": {
     "available": "Jetzt verfügbar",
     "limited": "Am Limit",
@@ -83,14 +58,40 @@
     "expiredHint": "Neu anmelden, um sie zu nutzen",
     "nextFree": "Nächstes frei {when}"
   },
+  "columns": {
+    "account": "Konto",
+    "usage": "Nutzung",
+    "nextReset": "Nächster Reset",
+    "access": "Zugriff"
+  },
+  "menu": {
+    "label": "Aktionen für {name}",
+    "details": "Details",
+    "refresh": "Limits aktualisieren",
+    "signIn": "Neu anmelden",
+    "signInFor": "{name} neu anmelden",
+    "access": "Zugriff…"
+  },
+  "group": {
+    "title": "{provider}<muted> · {channel} · {count, plural, one {# Konto} other {# Konten}}</muted>",
+    "label": "Konten: {provider}",
+    "menu": "Weitere Aktionen für {provider}",
+    "settings": "{resets, select, true {Verteilung und automatische Resets…} other {Kontoverteilung…}}",
+    "createLink": "Link für {provider} erstellen"
+  },
+  "details": {
+    "title": "Details zu {name}",
+    "limits": "Nutzungslimits"
+  },
   "stateCount": "{state, select, available {{count, plural, other {# verfügbar}}} limited {{count, plural, other {# am Limit}}} expired {{count, plural, one {# Anmeldung abgelaufen} other {# Anmeldungen abgelaufen}}} paused {{count, plural, other {# pausiert}}} other {{count, plural, other {#}}}}",
   "status": "{status, select, paused {Pausiert} available {Verfügbar} limited {Limit erreicht} expired {Anmeldung abgelaufen} unavailable {Limits nicht verfügbar} checking {Wird geprüft} other {Verbunden}}",
   "sharedVia": "{named, select, true {Über Link: {label}} other {Über Link}}",
-  "signInAgain": "Neu anmelden",
+  "manageOff": "Kein Verwaltungslink",
   "noAccount": "Ohne Kontoname",
   "noneTitle": "Noch keine Abo-Konten",
   "backIn": "Wieder verfügbar {when} ({date}).",
   "backInUnknown": "Limit erreicht. Der Anbieter nennt keinen Zeitpunkt für die Zurücksetzung.",
+  "resetUnknown": "Nicht gemeldet",
   "expiredHint": "Melde dich erneut an, um dieses Konto zu nutzen.",
   "noLimits": "Dieser Anbieter meldet keine Nutzungslimits.",
   "limits": {
@@ -102,7 +103,14 @@
     "resets": "Wird {when} zurückgesetzt ({date})",
     "notStarted": "Startet mit der nächsten Anfrage",
     "reached": "Limit erreicht",
-    "modelLimits": "{count, plural, one {# Modelllimit} other {# Modelllimits}}",
+    "allLimits": "{count, plural, one {Limitdetails} other {Alle # Limits}}",
+    "allLimitsFor": "{count, plural, one {Limitdetails für {name}} other {Alle # Limits für {name}}}",
+    "models": "{count, plural, one {# Modell} other {# Modelle}}",
+    "group": "{family, select, gemini_pro {Gemini Pro} gemini_flash {Gemini Flash} gemini_image {Gemini Image} claude {Claude} gpt_oss {GPT-OSS} other {Weitere Modelle}}",
+    "upTo": "bis zu {used, number, percent}",
+    "sharedBy": "Gemeinsam genutzt von {models}",
+    "member": "{model}: {used, number, percent}{reached, select, true { (Limit erreicht)} other {}}",
+    "partial": "{reached, number} von {total, plural, one {# Limit} other {# Limits}} erreicht",
     "credits": "{unlimited, select, true {Unbegrenzte Credits} other {Credits: {balance}}}",
     "resetCredits": "{available, plural, =0 {Keine Limit-Resets verfügbar} one {# Limit-Reset verfügbar} other {# Limit-Resets verfügbar}}{applicable, plural, =0 {} other { ({applicable} jetzt nutzbar)}}",
     "extraUsage": "Zusatznutzung: {used} von {limit}",
@@ -165,7 +173,6 @@
   "pausedHint": "Dieses Konto ist pausiert und erhält keine Anfragen. Die Limits bleiben sichtbar.",
   "access": {
     "summary": "{restricted, select, true {{count, plural, =0 {Kein Key darf es nutzen} one {Auf # Zuordnung beschränkt} other {Auf # Zuordnungen beschränkt}}} other {Für jeden Key offen}}",
-    "manage": "Zugriff verwalten",
     "title": "Wer {name} nutzen darf",
     "description": "Anfragen über /api/subscription erreichen dieses Konto standardmäßig. Beschränke es auf Unternehmen, Abteilungen, Projekte, Personen oder einzelne API-Keys.",
     "mode": "Zugriff",
@@ -176,8 +183,7 @@
     "empty": "Nichts gefunden",
     "save": "Zugriff speichern",
     "saved": "Zugriff für {name} gespeichert",
-    "short": "{restricted, select, true {{count, plural, =0 {Kein Key} one {# Zuordnung} other {# Zuordnungen}}} other {Alle Keys}}",
-    "manageFor": "Zugriff für {name} verwalten"
+    "short": "{restricted, select, true {{count, plural, =0 {Kein Key} one {# Zuordnung} other {# Zuordnungen}}} other {Alle Keys}}"
   },
   "antigravity": {
     "title": "Google-OAuth-Client",
@@ -194,6 +200,14 @@
   "subAdd": {
     "title": "Konto-Links",
     "description": "Teile einen Link mit Freunden oder Kollegen, damit sie ihr eigenes Abo-Konto mit diesem Hub verbinden. Sie brauchen kein Konsolen-Login und können ihr Konto jederzeit wieder trennen.",
+    "columns": {
+      "link": "Link",
+      "providers": "Anbieter",
+      "accounts": "Konten",
+      "expires": "Läuft ab",
+      "access": "Zugriff"
+    },
+    "actionsFor": "Aktionen für {label}",
     "create": "Link erstellen",
     "createdTitle": "Link bereit",
     "createdHint": "LLM Hub speichert nur einen Fingerabdruck des Links und kann ihn daher nicht erneut anzeigen. Er funktioniert nicht mehr, sobald er abläuft, alle Plätze belegt sind oder du ihn löschst. Beendete Links werden automatisch gelöscht.",
@@ -201,10 +215,6 @@
     "empty": "Noch keine Konto-Links.",
     "createdBy": "{named, select, true {Erstellt von {name} am {date}} other {Erstellt am {date}}}",
     "status": "{status, select, active {Aktiv} used_up {Aufgebraucht} expired {Abgelaufen} other {{status}}}",
-    "expires": "{past, select, true {Abgelaufen {when}} other {Läuft ab {when}}} ({date})",
-    "access": "{restricted, select, true {{count, plural, =0 {Hinzugefügte Konten: kein Key darf sie nutzen} one {Hinzugefügte Konten: auf # Zuordnung beschränkt} other {Hinzugefügte Konten: auf # Zuordnungen beschränkt}}} other {Hinzugefügte Konten: für jeden Key offen}}",
-    "accountsLabel": "Über {label} hinzugefügte Konten",
-    "noAccounts": "Kein über diesen Link hinzugefügtes Konto ist verbunden.",
     "dialogTitle": "Konto-Link erstellen",
     "dialogDescription": "Wer den Link öffnet, kann sich mit dem eigenen Abo-Konto anmelden und es mit dem Abo-Pool dieses Hubs verbinden.",
     "submit": "Link erstellen",
@@ -221,7 +231,6 @@
     "accountOption": "{count, plural, =0 {Unbegrenzt} one {# Konto} other {# Konten}}",
     "accessTitle": "Zugriff für hinzugefügte Konten",
     "accessHint": "Jedes über diesen Link hinzugefügte Konto erhält diesen Zugriff. Du kannst ihn später pro Konto ändern.",
-    "open": "Konto-Link teilen",
     "createdDescription": "Schick ihn an {label}. Wer ihn öffnet, kann sein eigenes Abo-Konto verbinden.",
     "onceTitle": "Nur dieses eine Mal sichtbar",
     "validForHint": "Nach Ablauf wird der Link gelöscht.",
@@ -230,25 +239,15 @@
     "slotsValue": "{added, number} von {max, number}",
     "unlimited": "{added, plural, one {# Konto hinzugefügt} other {# Konten hinzugefügt}}, ohne Limit",
     "delete": "Link löschen",
-    "deleteLabel": "{label} löschen",
     "deleteTitle": "{label} löschen?",
     "deleteDescription": "Der Link funktioniert sofort nicht mehr und wird entfernt. Bereits hinzugefügte Konten bleiben verbunden, und ihre Besitzer können sie weiterhin trennen.",
     "deleted": "{label} gelöscht"
   },
   "settings": {
-    "open": "Einstellungen",
-    "openFor": "Einstellungen für {provider}",
     "title": "Einstellungen: {provider}",
     "description": "Lege fest, wie Anfragen auf die Konten verteilt werden und wann gesparte Resets genutzt werden.",
     "routingSummary": "Kontoverteilung: {method}",
     "autoResetSummary": "{enabled, select, true {Automatische Resets ab {percent}} other {Automatische Resets aus}}",
-    "setupRequired": "Einrichtung nötig",
-    "setUp": "Einrichten"
-  },
-  "idle": {
-    "connect": "Verbinden"
-  },
-  "section": {
-    "description": "{channel} · {count, plural, one {# Konto} other {# Konten}}"
+    "setupRequired": "Einrichtung nötig"
   }
 }

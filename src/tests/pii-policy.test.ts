@@ -14,24 +14,24 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { SESSION_COOKIE, signSessionToken } from "@/lib/auth/cookie";
 import { GateError } from "@/lib/gateway/errors";
-import { applyGuardrails } from "@/lib/gateway/access/gate";
+import { applyGuardrails, withTrace } from "@/lib/gateway/access/gate";
 import { defaultGuardrails } from "@/lib/gateway/safety/guardrails";
 import { defaultEntityIds } from "@/lib/gateway/safety/pii";
-import { piiOverride, resolvePolicies } from "@/lib/settings/enterprise";
+import { piiOverride, requestEnterprise, resolvePii, resolvePolicies } from "@/lib/settings/enterprise";
 import type { Principal } from "@/types/gateway";
 import type { GuardrailPolicy, GuardrailRule, PiiPolicy } from "@/types/guardrails";
 import type { VirtualKeyView } from "@/types/keys";
 
 const UNSCREENED_ROUTES = new Set(["/api/v1/ocr"]);
 const BLOCKED = "request blocked by guardrail policy";
-const PII_OFF: PiiPolicy = { enabled: false, mode: "mask", output: false, entities: [] };
+const PII_OFF: PiiPolicy = { enabled: false, mode: "mask", output: false, entities: [], detector: "patterns", failure: "patterns" };
 
 function blockRule(name: string, pattern: string): GuardrailRule {
   return { id: name, name, kind: "denylist", target: "input", action: "block", patterns: [pattern], caseSensitive: false };
 }
 
 function piiLayer(entity: string): PiiPolicy {
-  return { enabled: true, mode: "mask", output: false, entities: [entity] };
+  return { enabled: true, mode: "mask", output: false, entities: [entity], detector: "patterns", failure: "patterns" };
 }
 
 function guardLayer(name: string, pattern = name): GuardrailPolicy {
@@ -40,7 +40,8 @@ function guardLayer(name: string, pattern = name): GuardrailPolicy {
 
 const CODENAMES = guardLayer("Codenames", "Project Falcon");
 
-function keyPrincipal(pii: PiiPolicy): Principal {
+function keyPrincipal(policy: Omit<PiiPolicy, "detector" | "failure">): Principal {
+  const pii: PiiPolicy = { detector: "patterns", failure: "patterns", ...policy };
   const key: VirtualKeyView = {
     token_id: "key_1",
     key_name: "sk-hub-abcde",
@@ -92,8 +93,14 @@ test("piiOverride treats missing values as inherit and normalizes stored policie
     mode: "block",
     output: true,
     entities: ["EMAIL_ADDRESS"],
+    detector: "patterns",
+    failure: "patterns",
   });
   assert.equal(piiOverride({ mode: "drop" })?.mode, "mask");
+  assert.deepEqual(
+    [piiOverride({ detector: "regex", failure: "ignore" })?.detector, piiOverride({ detector: "both", failure: "block" })?.failure],
+    ["patterns", "block"],
+  );
 });
 
 test("a key override masks only its own entities and returns them for output redaction", async () => {
@@ -138,6 +145,30 @@ test("an override without entities uses the default set", async () => {
   assert.deepEqual(output?.pii, defaultEntityIds());
 });
 
+test("saved entity lists from before the internal IP split let internal addresses through", async () => {
+  const savedBefore = defaultEntityIds().filter((id) => id !== "PRIVATE_IP_ADDRESS");
+  const prompt = { model: "m", messages: [{ role: "user", content: "ssh 192.168.10.4, then dig 8.8.8.8 and fd00::12" }] };
+  for (const entities of [[], savedBefore, ["IP_ADDRESS"]]) {
+    const { body } = await applyGuardrails(
+      structuredClone(prompt),
+      keyPrincipal({ enabled: true, mode: "mask", output: false, entities }),
+    );
+    assert.equal(
+      (body.messages as { content: string }[])[0]?.content,
+      "ssh 192.168.10.4, then dig [IP_ADDRESS] and fd00::12",
+      entities.join(","),
+    );
+  }
+  const { body } = await applyGuardrails(
+    structuredClone(prompt),
+    keyPrincipal({ enabled: true, mode: "mask", output: false, entities: ["IP_ADDRESS", "PRIVATE_IP_ADDRESS"] }),
+  );
+  assert.equal(
+    (body.messages as { content: string }[])[0]?.content,
+    "ssh [PRIVATE_IP_ADDRESS], then dig [IP_ADDRESS] and [PRIVATE_IP_ADDRESS]",
+  );
+});
+
 test("resolvePolicies prefers the key, then the project, then the organization, then the global policy", async () => {
   resetGateway();
   gateway.enterprise = { pii: piiLayer("CREDIT_CARD"), guardrails: guardLayer("global") };
@@ -166,6 +197,24 @@ test("resolvePolicies prefers the key, then the project, then the organization, 
   org.piiPolicy = null;
   org.guardrailPolicy = null;
   assert.deepEqual(await resolved(null, null), ["CREDIT_CARD", "global"]);
+});
+
+test("a traced request reads its policies and settings once", async () => {
+  resetGateway();
+  gateway.enterprise = { pii: piiLayer("CREDIT_CARD"), guardrails: guardLayer("global"), log_content: false };
+  const caller = keyPrincipal(PII_OFF);
+  const traced = withTrace({ ...caller, key: { ...caller.key!, pii: null }, guardrails: undefined }, "/api/v1/messages");
+  const policies = await resolvePolicies(traced);
+  assert.equal((await resolvePii(traced)).entities[0], "CREDIT_CARD");
+  assert.equal((await requestEnterprise(traced)).log_content, false);
+  assert.equal(await resolvePolicies({ ...traced, pool: "subscription" }), policies);
+  assert.equal(recordedPrisma.called("setting").length, 1);
+  assert.equal(recordedPrisma.called("organization").length, 1);
+  gateway.enterprise = { pii: piiLayer("IP_ADDRESS") };
+  const untraced = { ...traced, trace: undefined };
+  assert.equal((await resolvePii(untraced)).entities[0], "IP_ADDRESS");
+  assert.equal((await resolvePii(withTrace(untraced, "/api/v1/messages"))).entities[0], "IP_ADDRESS");
+  assert.equal((await resolvePii(traced)).entities[0], "CREDIT_CARD");
 });
 
 test("the guardrail sweep covers every gateway POST route", async () => {

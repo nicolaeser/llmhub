@@ -1,5 +1,5 @@
 import type { z } from "zod";
-import type { ModelChoice } from "@/lib/models/model-role";
+import type { FeatureModelChoice } from "@/types/models";
 import type { cacheSettingsSchema, semanticCacheSchema } from "@/schemas/settings";
 import type { JsonMap } from "@/types/gateway";
 
@@ -53,7 +53,7 @@ export type CacheView = {
   cacheTtlSeconds: number;
   semantic: SemanticCacheSettings;
   backend: CacheBackend;
-  models: ModelChoice[];
+  models: FeatureModelChoice[];
   stats: ResponseCacheStats | null;
   canManage: boolean;
 };

@@ -3,19 +3,26 @@ import { AnthropicSseTranslator } from "@/lib/gateway/protocols/anthropic";
 import { recordUsage, recordUsageOrLog, usageFromUnknown } from "@/lib/gateway/billing/billing";
 import { alertUpstreamFailure } from "@/lib/alerts/notify";
 import { spendTag } from "@/lib/gateway/access/gate";
-import { GateError } from "@/lib/gateway/errors";
+import { CLIENT_CLOSED_STATUS, clientClosedError, GateError, isClientClosed } from "@/lib/gateway/errors";
 import { outputScreen, type OutputScreen } from "@/lib/gateway/safety/guardrails";
 import { instructChat } from "@/lib/gateway/safety/pii-instruction";
 import { requestRoutingOverride, serviceModeHeaders, variantRoutes } from "@/lib/gateway/dispatch/service-mode";
 import { accessOf } from "@/lib/gateway/routing/account-access";
-import { runSession, writePin } from "@/lib/gateway/routing/account-affinity";
+import { pinsAccounts, runSession, writePin } from "@/lib/gateway/routing/account-affinity";
 import {
   dropAccountReasoning,
   historyLength,
   nextPin,
   rejectsForeignReasoning,
 } from "@/lib/gateway/routing/account-handoff";
-import { acquireGroup, loadGroup, markFailure, markSuccess } from "@/lib/gateway/routing/runtime";
+import {
+  acquireGroup,
+  loadGroup,
+  markFailure,
+  markOverloaded,
+  markRejected,
+  markSuccess,
+} from "@/lib/gateway/routing/runtime";
 import { isSignInKind, speaksAnthropic, speaksGoogle, speaksMuse } from "@/lib/gateway/upstreams/provider-kinds";
 import { AntigravitySseTranslator } from "@/lib/gateway/upstreams/antigravity";
 import { googleStreamTranslator } from "@/lib/gateway/upstreams/google";
@@ -26,7 +33,7 @@ import { deploymentAuth, renewRejectedLogin } from "@/lib/gateway/upstreams/cred
 import { nudgeLimits } from "@/lib/gateway/upstreams/limit-store";
 import { autoRedeemIfDue } from "@/lib/gateway/upstreams/reset-redeem";
 import { plainModel } from "@/lib/gateway/catalog/model-alias";
-import { inPool, outsidePool, routeOf } from "@/lib/gateway/routing/route-pool";
+import { hiddenFrom, outsidePool, routable, routeOf } from "@/lib/gateway/routing/route-pool";
 import { KEEPALIVE_MS, SSE_HEADERS, SSE_KEEPALIVE, sseData } from "@/lib/gateway/protocols/sse";
 import {
   devinResetLookup,
@@ -43,14 +50,15 @@ import {
   upstreamError,
   upstreamHeaders,
   upstreamModel,
+  upstreamRetryAt,
 } from "@/lib/gateway/dispatch/upstream";
-import { asRecord, isRouterError, isUnavailableError, newId, routerGateError, stringifyContent } from "@/lib/gateway/core";
+import { asRecord, ERR_UNKNOWN_GROUP, isRouterError, isUnavailableError, newId, routerGateError, stringifyContent } from "@/lib/gateway/core";
 import { costFilter, costRejected } from "@/lib/gateway/billing/cost-cap";
 import { ChatStreamTranscript } from "@/lib/gateway/request-logs/log-content";
 import { estimateTokens, requestText } from "@/lib/gateway/billing/tokens";
 import { logger } from "@/lib/logging/logger";
 import { parseJsonOrNull, readTextOr } from "@/lib/utils/json";
-import { cancelQuietly, DeadlineReader } from "@/lib/utils/streams";
+import { cancelQuietly, DeadlineReader, withIdleTimeout } from "@/lib/utils/streams";
 import type { ChatSseTranslator, JsonMap, Principal, RequestTrace } from "@/types/gateway";
 import type { CostFilter, TokenUsage } from "@/types/billing";
 import type { AccountPin, ResolvedModelGroup, ResolvedDeployment, RoutePool, RunRouting } from "@/types/routing";
@@ -60,6 +68,12 @@ import type { RouteLimits } from "@/types/model-templates";
 import type { ResponseCacheUsage } from "@/types/cache";
 
 export const UPSTREAM_TIMEOUT_MS = 300_000;
+const STREAM_IDLE_TIMEOUT_MS = 300_000;
+const ACCOUNT_REJECTED_COOLDOWN_MS = 30 * 60_000;
+const MODEL_UNAVAILABLE_COOLDOWN_MS = 60 * 60_000;
+const OVERLOADED_STATUS = 529;
+const ACCOUNT_REJECTED_STATUSES = new Set([401, 402, 403]);
+const MODEL_UNAVAILABLE = /\bmodel\b/i;
 
 function failureStatus(err: unknown): number {
   if (err instanceof GateError) return err.status;
@@ -77,7 +91,7 @@ export async function recordFailure(
     principal: input.principal,
     model: input.model,
     status: failureStatus(err),
-    outcome: "error",
+    outcome: isClientClosed(err) ? "cancelled" : "error",
     latencyMs: Date.now() - started,
     tag: spendTag(input.body),
     request: input.body,
@@ -85,13 +99,19 @@ export async function recordFailure(
   });
 }
 
-type MeteredCall = { principal: Principal; model: string; body: JsonMap; aliases: string[] };
+type MeteredCall = {
+  principal: Principal;
+  model: string;
+  body: JsonMap;
+  aliases: string[];
+  headers?: Record<string, string>;
+};
 
 export async function routeMetered<T>(
   input: MeteredCall,
   started: number,
   fn: (dep: ResolvedDeployment, group: ResolvedModelGroup) => Promise<T>,
-  opts: { deferRelease?: boolean } = {},
+  opts: { deferRelease?: boolean; signal?: AbortSignal } = {},
 ) {
   const routing = {
     ...opts,
@@ -99,6 +119,7 @@ export async function routeMetered<T>(
     principal: input.principal,
     cost: costFilter(input.principal, input.body),
     request: input.body,
+    headers: input.headers,
   };
   try {
     return await withDeployment(input.aliases, input.principal.routeLimits, fn, routing);
@@ -117,6 +138,7 @@ export function recordSuccess(
     started: number;
     response: unknown;
     stream?: true;
+    hungUp?: boolean;
     responseCache?: ResponseCacheUsage;
   },
 ): Promise<number> {
@@ -126,8 +148,8 @@ export function recordSuccess(
     deployment: routed.dep,
     group: routed.group,
     usage: outcome.usage,
-    status: 200,
-    outcome: outcome.blocked ? "guardrail_blocked" : "ok",
+    status: outcome.hungUp ? CLIENT_CLOSED_STATUS : 200,
+    outcome: outcome.blocked ? "guardrail_blocked" : outcome.hungUp ? "cancelled" : "ok",
     latencyMs: Date.now() - outcome.started,
     tag: spendTag(input.body),
     stream: outcome.stream,
@@ -137,15 +159,9 @@ export function recordSuccess(
   });
 }
 
-function retryable(err: unknown): boolean {
-  if (err instanceof GateError) return retryableStatus(err.status);
-  if (isRouterError(err)) return true;
-  return true;
-}
-
 function fallbackable(err: unknown): boolean {
   if (isRouterError(err)) return true;
-  if (err instanceof GateError) return retryableStatus(err.status);
+  if (err instanceof GateError) return retryableStatus(err.status) && !err.requestScoped;
   return true;
 }
 
@@ -153,21 +169,37 @@ function signInAccount(dep: ResolvedDeployment): string | null {
   return dep.provider && isSignInKind(dep.provider.kind) ? dep.provider.id : null;
 }
 
-function failureCode(err: unknown): { status: number; code: string } {
-  const rec = err instanceof Error ? (err as Error & { status?: unknown; code?: unknown }) : null;
-  return {
-    status: typeof rec?.status === "number" ? rec.status : 0,
-    code: typeof rec?.code === "string" ? rec.code : "",
-  };
+function pinnedAccount(dep: ResolvedDeployment): string | null {
+  return dep.provider && pinsAccounts(dep.provider.kind) ? dep.provider.id : null;
+}
+
+type FailureClass = "request" | "limit" | "rejected" | "signed_out" | "model" | "overloaded" | "transient" | "caller";
+
+function failureClass(err: unknown, account: string | null): FailureClass {
+  if (!(err instanceof GateError)) return "transient";
+  if (err.requestScoped) return "request";
+  if (err.status === 429) return "limit";
+  if (err.status === OVERLOADED_STATUS) return "overloaded";
+  if (account && ACCOUNT_REJECTED_STATUSES.has(err.status)) return "rejected";
+  if (account && err.code === "no_provider_key") return "signed_out";
+  if (account && err.status === 404 && MODEL_UNAVAILABLE.test(err.message)) return "model";
+  return retryableStatus(err.status) ? "transient" : "caller";
+}
+
+function recordAttemptFailure(dep: ResolvedDeployment, failure: FailureClass, err: unknown, now = Date.now()): void {
+  if (failure === "caller" || failure === "request") return;
+  if (failure === "overloaded") markOverloaded(dep);
+  else if (failure === "rejected") markRejected(dep, now + ACCOUNT_REJECTED_COOLDOWN_MS);
+  else if (failure === "model") markRejected(dep, now + MODEL_UNAVAILABLE_COOLDOWN_MS);
+  else markFailure(dep, err instanceof GateError ? err.retryAt : null);
+}
+
+function rotatesAccount(failure: FailureClass): boolean {
+  return failure === "limit" || failure === "rejected" || failure === "signed_out" || failure === "model";
 }
 
 function unauthorized(err: unknown): boolean {
-  return failureCode(err).status === 401;
-}
-
-function accountUnusable(err: unknown): boolean {
-  const { status, code } = failureCode(err);
-  return status === 429 || status === 401 || code === "no_provider_key";
+  return err instanceof GateError && err.status === 401;
 }
 
 function accountBudget(deployments: ResolvedDeployment[]): number {
@@ -209,6 +241,9 @@ export async function withDeployment<T>(
     cost?: CostFilter;
     principal?: Principal;
     request?: JsonMap;
+    headers?: Record<string, string>;
+    signal?: AbortSignal;
+    health?: boolean;
   },
 ): Promise<{
   result: T;
@@ -222,7 +257,8 @@ export async function withDeployment<T>(
   const surface = opts?.pool ?? opts?.principal?.pool ?? "api";
   const access = accessOf(opts?.principal);
   const request = opts?.request ?? null;
-  const run: RunRouting = { session: runSession(request), tried: new Set() };
+  const tracksHealth = opts?.health !== false;
+  const run: RunRouting = { session: runSession(request, opts?.headers), tried: new Set() };
   const renewed = new Set<string>();
   let reasoningDropped = false;
   let failedAccount: string | null = null;
@@ -239,27 +275,34 @@ export async function withDeployment<T>(
       last = err;
       continue;
     }
-    const pooled = group.mapped.filter(inPool(pool));
+    if (hiddenFrom(pool, group.mapped)) {
+      last = ERR_UNKNOWN_GROUP;
+      continue;
+    }
+    const inPool = routable(pool);
+    const pooled = group.mapped.filter(inPool);
     const variants = variantRoutes(pooled, opts?.request);
-    const routable = (dep: ResolvedDeployment) => inPool(pool)(dep) && variants.serves(dep);
-    const reachable = !group.mapped.length || group.mapped.some(routable) || Boolean(group.overflow_group);
+    const servable = (dep: ResolvedDeployment) => inPool(dep) && variants.serves(dep);
+    const reachable = !group.mapped.length || group.mapped.some(servable) || Boolean(group.overflow_group);
     if (!reachable) last = pooled.length && variants.error ? variants.error : outsidePool(pool, surface);
     const attempts = reachable ? Math.max(0, group.num_retries) + 1 : 0;
-    const switchBudget = accountBudget(pooled.filter(routable));
+    const switchBudget = accountBudget(pooled.filter(servable));
     let switches = 0;
     let stopAlias = false;
     for (let i = 0; i < attempts; i++) {
+      if (opts?.signal?.aborted) throw clientClosedError();
       try {
-        const acquired = await acquireGroup(group, limits[root], routable, opts?.strategy, opts?.cost, access, run);
+        const acquired = await acquireGroup(group, limits[root], servable, opts?.strategy, opts?.cost, access, run);
         const account = signInAccount(acquired.dep);
         const switched = account !== null && failedAccount !== null && failedAccount !== account;
         prepareHandoff(acquired.dep, acquired.pinned, switched, request);
         try {
           const started = Date.now();
           const result = await fn(acquired.dep, group);
-          markSuccess(acquired.dep, Date.now() - started);
-          if (account && run.session) {
-            void settleRunPin(acquired.dep.provider!.kind, run.session, account, acquired.pinned, switched, request);
+          if (tracksHealth) markSuccess(acquired.dep, Date.now() - started);
+          const pinTo = pinnedAccount(acquired.dep);
+          if (pinTo && run.session && !acquired.pinHeld) {
+            void settleRunPin(acquired.dep.provider!.kind, run.session, pinTo, acquired.pinned, switched, request);
           }
           if (!opts?.deferRelease) {
             acquired.release();
@@ -274,6 +317,7 @@ export async function withDeployment<T>(
           };
         } catch (err) {
           acquired.release();
+          if (opts?.signal?.aborted) throw clientClosedError();
           if (account && unauthorized(err) && !renewed.has(account)) {
             renewed.add(account);
             if (await renewRejectedLogin(account, acquired.dep.provider!.kind as SignInKind)) {
@@ -291,14 +335,16 @@ export async function withDeployment<T>(
             i--;
             continue;
           }
-          if (retryable(err)) markFailure(acquired.dep, err instanceof GateError ? err.retryAt : null);
+          const failure = failureClass(err, account);
+          if (failure === "request") throw err;
+          if (tracksHealth) recordAttemptFailure(acquired.dep, failure, err);
           last = err;
           if (!isRouterError(err)) upstreamFailure = err;
-          if (account && failureCode(err).status === 429) {
+          if (account && tracksHealth && failure === "limit") {
             nudgeLimits(account, acquired.dep.provider!.kind);
             void autoRedeemIfDue(account);
           }
-          if (account && accountUnusable(err)) {
+          if (account && rotatesAccount(failure)) {
             run.tried.add(acquired.dep.id);
             failedAccount = account;
             if (switches < switchBudget) {
@@ -307,7 +353,7 @@ export async function withDeployment<T>(
             }
             continue;
           }
-          if (!retryable(err)) {
+          if (failure === "caller") {
             stopAlias = true;
             if (!fallbackable(err)) throw err;
             break;
@@ -315,7 +361,7 @@ export async function withDeployment<T>(
         }
       } catch (err) {
         last = err;
-        if (!fallbackable(err) || costRejected(err)) throw err;
+        if (isClientClosed(err) || !fallbackable(err) || costRejected(err)) throw err;
         break;
       }
     }
@@ -331,7 +377,7 @@ export async function withDeployment<T>(
     }
   }
   const failure = upstreamFailure && isUnavailableError(last) && !last.wait?.limited ? upstreamFailure : last;
-  await alertUpstreamFailure(failure);
+  if (tracksHealth) await alertUpstreamFailure(failure);
   throw failure;
 }
 
@@ -419,9 +465,15 @@ export async function openUpstreamStream(input: {
   payload: JsonMap;
   form?: FormData;
   headers?: Record<string, string>;
+  timeouts?: { headersMs?: number; idleMs?: number };
 }): Promise<Response> {
   const auth = await deploymentAuth(input.dep);
-  const signals: AbortSignal[] = [AbortSignal.timeout(UPSTREAM_TIMEOUT_MS)];
+  const headersDue = new AbortController();
+  const headersTimer = setTimeout(
+    () => headersDue.abort(new DOMException("upstream response headers timed out", "TimeoutError")),
+    input.timeouts?.headersMs ?? UPSTREAM_TIMEOUT_MS,
+  );
+  const signals: AbortSignal[] = [headersDue.signal];
   if (input.req.signal) signals.push(input.req.signal);
   const headers: Record<string, string> = {
     ...mergeUpstreamHeaders(
@@ -431,23 +483,35 @@ export async function openUpstreamStream(input: {
     Accept: streamAccept(input.dep.kind),
   };
   if (input.form) delete headers["Content-Type"];
-  const res = await fetch(joinPath(input.dep, input.path, upstreamModel(input.dep, input.payload)), {
-    method: "POST",
-    headers,
-    body: input.form ?? upstreamBody(input.dep, auth, input.path, input.payload),
-    signal: AbortSignal.any(signals),
-  });
-  observeUpstreamLimits(input.dep, res.headers);
-  observeUpstreamStatus(input.dep, res.status);
-  if (!res.ok || !res.body) {
-    const text = await readTextOr(res);
-    if (input.dep.kind === "devin") throw devinHttpError(res.status, text, devinResetLookup(input.dep));
-    const json = parseJsonOrNull(text);
-    if (json) throw upstreamError(res.status, json, res.headers);
-    throw new GateError(res.status || 502, "upstream_error", text.slice(0, 512) || "upstream error");
+  try {
+    const res = await fetch(joinPath(input.dep, input.path, upstreamModel(input.dep, input.payload)), {
+      method: "POST",
+      headers,
+      body: input.form ?? upstreamBody(input.dep, auth, input.path, input.payload),
+      signal: AbortSignal.any(signals),
+    });
+    observeUpstreamLimits(input.dep, res.headers);
+    observeUpstreamStatus(input.dep, res.status);
+    if (!res.ok || !res.body) {
+      const text = await readTextOr(res);
+      if (input.dep.kind === "devin") throw devinHttpError(res.status, text, devinResetLookup(input.dep));
+      const json = parseJsonOrNull(text);
+      if (json) throw upstreamError(res.status, json, res.headers);
+      throw new GateError(res.status || 502, "upstream_error", text.slice(0, 512) || "upstream error", {
+        retryAt: upstreamRetryAt(res.status, null, Date.now(), res.headers),
+      });
+    }
+    const body = withIdleTimeout(
+      res.body,
+      input.timeouts?.idleMs ?? STREAM_IDLE_TIMEOUT_MS,
+      () => new GateError(504, "upstream_timeout", "upstream stream stalled"),
+    );
+    const live = new Response(body, { status: res.status, statusText: res.statusText, headers: res.headers });
+    if (input.dep.kind === "devin") return devinEventStream(live, input.dep.model, devinResetLookup(input.dep));
+    return live;
+  } finally {
+    clearTimeout(headersTimer);
   }
-  if (input.dep.kind === "devin") return devinEventStream(res, input.dep.model, devinResetLookup(input.dep));
-  return res;
 }
 
 export function openChatStream(
@@ -519,6 +583,7 @@ export async function streamChat(input: {
   const call = { ...input, body: instructChat(input.principal.trace, input.body) };
   const routed = await routeMetered(call, started, (dep, group) => openChatStream(dep, group, call), {
     deferRelease: true,
+    signal: input.req.signal,
   });
   return relayChatStream({
     res: routed.result,
@@ -561,6 +626,7 @@ export function relayChatStream(input: {
   let filtered = false;
   let emitted = 0;
   let closed = false;
+  let completed = false;
   let lastSent = Date.now();
 
   const send = (controller: ReadableStreamDefaultController<Uint8Array>, chunk: Uint8Array) => {
@@ -582,6 +648,7 @@ export function relayChatStream(input: {
     for (const choice of choices) {
       const delta = asRecord(asRecord(choice)?.delta);
       if (delta) streamedText += stringifyContent(delta.content) + stringifyContent(delta.reasoning_content);
+      if (asRecord(choice)?.finish_reason) completed = true;
     }
     if (!wantsUsage) {
       delete json.usage;
@@ -590,7 +657,7 @@ export function relayChatStream(input: {
     return true;
   };
 
-  const finish = async () => {
+  const finish = async (hungUp = false) => {
     release();
     if (billed) return;
     billed = true;
@@ -605,6 +672,7 @@ export function relayChatStream(input: {
       blocked: screen?.blocked ?? false,
       started,
       stream: true,
+      hungUp: hungUp && !completed,
       response: transcript.result(),
     });
   };
@@ -639,6 +707,7 @@ export function relayChatStream(input: {
     if (screen?.blocked) {
       if (!filtered) {
         filtered = true;
+        completed = true;
         const stop = contentFilterChunk(json, input.model);
         transcript.push(stop);
         send(controller, encoder.encode(sseData(stop)));
@@ -659,6 +728,7 @@ export function relayChatStream(input: {
     if (translator) {
       for (const payload of translator.pushLine(line)) {
         if (payload === "[DONE]") {
+          completed = true;
           end(controller);
           continue;
         }
@@ -677,6 +747,7 @@ export function relayChatStream(input: {
     const data = line.slice(5).trim();
     if (!data) return;
     if (data === "[DONE]") {
+      completed = true;
       end(controller);
       return;
     }
@@ -709,6 +780,7 @@ export function relayChatStream(input: {
           if (json) forward(json, controller);
         }
       }
+      if (!completed) throw new GateError(502, "upstream_error", "upstream stream ended before the response was complete");
       end(controller);
       close(controller);
       await finish();
@@ -731,7 +803,7 @@ export function relayChatStream(input: {
     },
     cancel() {
       void cancelQuietly(reader);
-      void finish();
+      void finish(true);
     },
   });
 

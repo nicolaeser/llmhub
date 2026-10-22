@@ -96,5 +96,10 @@
     "noticeTitle": "Automatic updates are available",
     "noticeBody": "An updater is connected to this server. Turn on automatic updates to install new LLM Hub images within five minutes of their release. LLM Hub restarts briefly for each update.",
     "noticeEnable": "Enable automatic updates"
+  },
+  "modelTest": {
+    "run": "Test",
+    "state": "{ok, select, true {Works} other {Failed}}",
+    "detail": "{model} answered with HTTP {status} after {ms, number, integer} ms"
   }
 }

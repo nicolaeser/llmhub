@@ -24,7 +24,7 @@ const ENTITIES = ["EMAIL_ADDRESS", "SECRET"];
 const CACHED_RULES = { type: "text", text: "Cached rules", cache_control: { type: "ephemeral" } };
 
 function policy(mode: PiiMode, enabled = true): PiiPolicy {
-  return { enabled, mode, output: false, entities: ENTITIES };
+  return { enabled, mode, output: false, entities: ENTITIES, detector: "patterns", failure: "patterns" };
 }
 
 function withPolicy(pii: PiiPolicy): void {
@@ -275,6 +275,15 @@ test("the instruction is due only in restore mode with a restorable placeholder 
   assert.equal(needsPiiInstruction(traceFor("/api/v1/chat/completions", "restore", [["SECRET", "sk-live-1"]])), false);
   assert.equal(needsPiiInstruction(traceFor("/api/v1/chat/completions", "restore", [])), false);
   assert.equal(needsPiiInstruction(undefined), false);
+});
+
+test("the instruction stays compact and names no placeholder that a request could also contain", () => {
+  assert.ok(INSTRUCTION.length < 1_200, String(INSTRUCTION.length));
+  const vault = new PiiVault();
+  vault.placeholder("EMAIL_ADDRESS", EMAIL);
+  vault.placeholder("IP_ADDRESS", "203.0.113.9");
+  assert.equal(vault.restore(INSTRUCTION), INSTRUCTION);
+  assert.equal(/\[[A-Z_]+_\d+\]/.test(INSTRUCTION), false);
 });
 
 test("chat completions in restore mode instruct the model, restore the answer, and log the client's request", async () => {

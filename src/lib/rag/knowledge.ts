@@ -1,8 +1,9 @@
 import "server-only";
 
-import { enabledModelChoices } from "@/lib/models/aliases";
+import { featureModelChoices } from "@/lib/models/aliases";
 import { requirePermission } from "@/lib/auth/guards";
 import { hasPerm, PERMISSIONS } from "@/lib/auth/permissions";
+import { companyOf } from "@/lib/auth/scope";
 import { MAX_UPLOAD_BYTES } from "@/lib/http/api";
 import {
   consoleStoreFiles,
@@ -33,12 +34,13 @@ export async function loadKnowledge(): Promise<KnowledgeView> {
   const canManage = hasPerm(session.permissions, PERMISSIONS.TENANCY_MANAGE);
   const [data, models] = await Promise.all([
     listConsoleStores(session),
-    canManage ? enabledModelChoices() : [],
+    canManage ? featureModelChoices() : [],
   ]);
   return {
     ...data,
     models,
     canManage,
+    canTestModels: canManage && !companyOf(session) && hasPerm(session.permissions, PERMISSIONS.SETTINGS_MANAGE),
     maxUploadBytes: MAX_UPLOAD_BYTES,
   };
 }

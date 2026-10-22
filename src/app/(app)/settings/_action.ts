@@ -5,6 +5,7 @@ import { loadCache, loadCacheStats, saveCache } from "@/lib/settings/caching";
 import { loadCatalogSettings, saveCatalogSettings } from "@/lib/settings/catalog";
 import { loadGeneralSettings, saveGeneralSettings } from "@/lib/settings/general";
 import { loadLogging, saveLogging } from "@/lib/settings/logging-alerts";
+import { testFeatureModel } from "@/lib/models/feature-model-test";
 import {
   checkOidcIssuer,
   issueScimToken,
@@ -85,4 +86,8 @@ export async function saveCatalogSettingsAction(...args: Parameters<typeof saveC
 
 export async function saveBudgetAlertsAction(...args: Parameters<typeof saveBudgetAlerts>) {
   return runAction(() => saveBudgetAlerts(...args));
+}
+
+export async function testFeatureModelAction(...args: Parameters<typeof testFeatureModel>) {
+  return runAction(() => testFeatureModel(...args));
 }

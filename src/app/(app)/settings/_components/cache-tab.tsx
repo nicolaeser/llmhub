@@ -4,11 +4,12 @@ import { useState, useTransition } from "react";
 import { Chip, Description, Label, NumberField, toast } from "@heroui/react";
 import { useTranslations } from "next-intl";
 import { formats } from "@/i18n/formats";
+import ModelTestButton, { internalAliases, modelPickerItem } from "@/components/console/model-test";
 import SearchSelect from "@/components/console/search-select";
 import { choicesForRole } from "@/lib/models/model-role";
 import { SettingSection, SettingSwitch } from "./setting-fields";
 import { useErrorToast } from "@/components/console/use-error-toast";
-import { loadCacheAction, saveCacheAction } from "../_action";
+import { loadCacheAction, saveCacheAction, testFeatureModelAction } from "../_action";
 import {
   CACHE_TTL_MAX_SECONDS,
   SEMANTIC_THRESHOLD_DEFAULT,
@@ -38,6 +39,7 @@ export default function CacheTab() {
   const ttl = ttlDraft ?? view.cacheTtlSeconds;
   const semantic = semanticDraft ?? view.semantic;
   const disabled = !view.canManage;
+  const internal = internalAliases(view.models);
   const update = (patch: Partial<SemanticCacheSettings>) => setSemantic({ ...semantic, ...patch });
 
   return (
@@ -79,25 +81,29 @@ export default function CacheTab() {
           isDisabled={disabled || (!semantic.enabled && !semantic.model)}
           hint={t("semantic.enabledHint", { ready: semantic.model ? "true" : "false" })}
         />
-        <SearchSelect
-          label={t("semantic.model")}
-          description={t("semantic.modelHint")}
-          items={[
-            { id: "none", label: t("semantic.none") },
-            ...choicesForRole(view.models, "embedding", semantic.model).map((model) => ({
-              id: model.alias,
-              label: model.label,
-              detail: model.label === model.alias ? undefined : model.alias,
-            })),
-          ]}
-          value={semantic.model || "none"}
-          onChange={(key) => {
-            const model = key === "none" ? "" : key;
-            update({ model, enabled: model ? semantic.enabled : false });
-          }}
-          isDisabled={disabled}
-          className="max-w-md"
-        />
+        <div className="max-w-md space-y-2">
+          <SearchSelect
+            label={t("semantic.model")}
+            description={t("semantic.modelHint")}
+            items={[
+              { id: "none", label: t("semantic.none") },
+              ...choicesForRole(view.models, "embedding", semantic.model).map((model) => modelPickerItem(model, internal)),
+            ]}
+            value={semantic.model || "none"}
+            onChange={(key) => {
+              const model = key === "none" ? "" : key;
+              update({ model, enabled: model ? semantic.enabled : false });
+            }}
+            isDisabled={disabled}
+          />
+          {view.canManage ? (
+            <ModelTestButton
+              model={semantic.model}
+              isDisabled={!semantic.model}
+              test={(model) => testFeatureModelAction({ feature: "cache", role: "embedding", model })}
+            />
+          ) : null}
+        </div>
         <NumberField
           fullWidth
           value={semantic.threshold}

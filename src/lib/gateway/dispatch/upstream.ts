@@ -1,11 +1,13 @@
 import "server-only";
 import { env } from "@/lib/env";
 import { GateError } from "@/lib/gateway/errors";
-import { anthropicToChat, chatToAnthropic, withCacheBreakpoints } from "@/lib/gateway/protocols/anthropic";
+import { anthropicToChat, chatToAnthropic, claude47OrLater, withCacheBreakpoints } from "@/lib/gateway/protocols/anthropic";
+import { withAnthropicModelParams } from "@/lib/gateway/protocols/anthropic-model-params";
+import { ANTHROPIC_VERSION_2023, ANTHROPIC_VERSION_HEADER, anthropicVersionOf } from "@/lib/gateway/protocols/anthropic-version";
 import { plainModel } from "@/lib/gateway/catalog/model-alias";
-import { inPool, outsidePool } from "@/lib/gateway/routing/route-pool";
-import { speaksAnthropic, speaksGoogle, speaksKimi, speaksMuse } from "@/lib/gateway/upstreams/provider-kinds";
-import { withClaudeBetas, withClaudeIdentity } from "@/lib/gateway/upstreams/claude";
+import { hiddenFrom, outsidePool, routable } from "@/lib/gateway/routing/route-pool";
+import { servesMessages, speaksAnthropic, speaksGoogle, speaksKimi, speaksMuse } from "@/lib/gateway/upstreams/provider-kinds";
+import { entitlementRefusal, withClaudeBetas, withClaudeIdentity } from "@/lib/gateway/upstreams/claude";
 import {
   ANTIGRAVITY_STREAM_PATH,
   antigravityCompletion,
@@ -23,14 +25,40 @@ import { kimiChatBody } from "@/lib/gateway/upstreams/kimi";
 import { observeClaudeLimits, observeLimitWindows } from "@/lib/gateway/upstreams/limit-store";
 import { chatToMuse, museCompletion } from "@/lib/gateway/upstreams/muse";
 import { limitsSnapshot } from "@/lib/gateway/upstreams/subscription-limits";
+import { claudeRejectionReset } from "@/lib/gateway/upstreams/observed-limits";
+import { retryAfterMs } from "@/lib/gateway/upstreams/reset-credits";
 import { acquireGroup, defaultBase, loadGroup, markFailure, markSuccess, openaiRoot } from "@/lib/gateway/routing/runtime";
 import { applyProviderServiceMode, requestRoutingOverride, serviceModeHeaders } from "@/lib/gateway/dispatch/service-mode";
 import { asRecord, asString } from "@/lib/gateway/core";
 import { costFilter, costRejected } from "@/lib/gateway/billing/cost-cap";
 import type { DevinResetLookup } from "@/types/devin";
 import type { JsonMap, Principal, ProxyFirstResult } from "@/types/gateway";
-import type { ResolvedDeployment } from "@/types/routing";
+import type { ResolvedDeployment, RoutePool } from "@/types/routing";
 import type { LimitWindow, UpstreamAuth } from "@/types/providers";
+
+const BEDROCK_MODEL = /(?:^|\.)anthropic\.claude-/i;
+const BEDROCK_HOST = /(?:^|[.-])bedrock(?:[.-]|$)/i;
+const UNFORWARDED_CLIENT_HEADERS = new Set([
+  "host",
+  "content-length",
+  "connection",
+  "authorization",
+  ANTHROPIC_VERSION_HEADER,
+]);
+
+function onBedrock(dep: ResolvedDeployment): boolean {
+  if (BEDROCK_MODEL.test(dep.model)) return true;
+  return URL.canParse(dep.base_url) && BEDROCK_HOST.test(new URL(dep.base_url).hostname);
+}
+
+export function upstreamAnthropicVersion(dep: ResolvedDeployment, clientHeaders?: HeadersInit): string | null {
+  const requested = anthropicVersionOf(clientHeaders);
+  if (speaksAnthropic(dep.kind)) {
+    if (!requested || (onBedrock(dep) && !claude47OrLater(dep.model))) return ANTHROPIC_VERSION_2023;
+    return requested;
+  }
+  return servesMessages(dep.kind) && requested ? ANTHROPIC_VERSION_2023 : null;
+}
 
 export function upstreamHeaders(
   dep: ResolvedDeployment,
@@ -40,7 +68,6 @@ export function upstreamHeaders(
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (dep.kind === "anthropic") {
     headers["x-api-key"] = auth.key;
-    headers["anthropic-version"] = "2023-06-01";
   } else if (auth.keyHeader) {
     if (auth.key) headers[auth.keyHeader] = auth.key;
   } else if (auth.key) {
@@ -55,8 +82,8 @@ export function upstreamHeaders(
     const src = extra instanceof Headers ? extra : new Headers(extra);
     src.forEach((value, key) => {
       const name = key.toLowerCase();
-      if (["host", "content-length", "connection", "authorization"].includes(name)) return;
-      if (!forwardAll && name !== "anthropic-version" && name !== "anthropic-beta") return;
+      if (UNFORWARDED_CLIENT_HEADERS.has(name)) return;
+      if (!forwardAll && name !== "anthropic-beta") return;
       headers[key] = value;
     });
   }
@@ -69,6 +96,11 @@ export function upstreamHeaders(
     }
     merged[key] = value;
   }
+  for (const name of Object.keys(merged)) {
+    if (name.toLowerCase() === ANTHROPIC_VERSION_HEADER) delete merged[name];
+  }
+  const version = upstreamAnthropicVersion(dep, extra);
+  if (version) merged[ANTHROPIC_VERSION_HEADER] = version;
   return merged;
 }
 
@@ -195,6 +227,7 @@ export function prepareBody(
   path: string,
   body: JsonMap,
   groupStrategy = "",
+  clientHeaders?: HeadersInit,
 ): JsonMap {
   let payload: JsonMap = { ...body, model: dep.model || (typeof body.model === "string" ? plainModel(body.model) : body.model) };
   for (const key of GATEWAY_ONLY_KEYS) delete payload[key];
@@ -221,6 +254,7 @@ export function prepareBody(
       if (typeof payload.service_tier === "string") native.service_tier = payload.service_tier;
       if (dep.kind === "claude") native = withCacheBreakpoints(native);
     }
+    native = withAnthropicModelParams(asString(native.model), native, upstreamAnthropicVersion(dep, clientHeaders));
     return dep.kind === "claude" ? withClaudeIdentity(native) : native;
   }
   if (dep.kind === "codex" && nativeChatPath(path)) return chatToCodex(payload);
@@ -289,7 +323,12 @@ export async function proxyJson(input: {
   if (input.rawBody != null) {
     init.body = input.rawBody;
   } else if (input.body && method !== "GET" && method !== "HEAD") {
-    init.body = upstreamBody(input.dep, input.auth, input.path, prepareBody(input.dep, input.path, input.body, input.groupStrategy));
+    init.body = upstreamBody(
+      input.dep,
+      input.auth,
+      input.path,
+      prepareBody(input.dep, input.path, input.body, input.groupStrategy, input.headers),
+    );
   }
   const res = await fetch(url, init);
   observeUpstreamLimits(input.dep, res.headers);
@@ -338,7 +377,12 @@ async function proxyRaw(input: {
     body:
       input.rawBody ??
       (input.body && method !== "GET"
-        ? upstreamBody(input.dep, input.auth, input.path, prepareBody(input.dep, input.path, input.body, input.groupStrategy))
+        ? upstreamBody(
+            input.dep,
+            input.auth,
+            input.path,
+            prepareBody(input.dep, input.path, input.body, input.groupStrategy, input.headers),
+          )
         : undefined),
     signal: AbortSignal.timeout(input.timeoutMs && input.timeoutMs > 0 ? input.timeoutMs : 120_000),
   });
@@ -385,30 +429,51 @@ export function upstreamErrorMessage(status: number, json: unknown): string {
   );
 }
 
+const RETRY_JITTER_MAX_MS = 5_000;
+const MAX_RETRY_AFTER_MS = 24 * 3_600_000;
+const RETRY_AFTER_STATUSES = new Set([503, 529]);
+
+function retryAfterWait(headers: Headers, now: number): number | null {
+  const precise = Number(headers.get("retry-after-ms"));
+  if (Number.isFinite(precise) && precise > 0) return Math.min(precise, MAX_RETRY_AFTER_MS);
+  return retryAfterMs(headers.get("retry-after"), now);
+}
+
+export function retryAfterAt(headers: Headers | undefined, now = Date.now(), random = Math.random): number | null {
+  const wait = headers ? retryAfterWait(headers, now) : null;
+  if (wait === null) return null;
+  return now + wait + Math.floor(random() * Math.min(RETRY_JITTER_MAX_MS, wait / 5));
+}
+
 export function upstreamRetryAt(
   status: number,
   json: unknown,
   now = Date.now(),
   headers?: Headers,
+  random = Math.random,
 ): number | null {
+  if (RETRY_AFTER_STATUSES.has(status)) return retryAfterAt(headers, now, random);
   if (status !== 429) return null;
-  const unifiedReset = Number(headers?.get("anthropic-ratelimit-unified-reset"));
-  if (Number.isFinite(unifiedReset) && unifiedReset > 0) return unifiedReset * 1000;
+  const windowReset = headers ? claudeRejectionReset(headers, now) : null;
+  if (windowReset !== null) return windowReset;
   const error = asRecord(asRecord(json)?.error);
   const resetsAt = Number(error?.resets_at);
   if (Number.isFinite(resetsAt) && resetsAt > 0) return resetsAt * 1000;
   const resetsIn = Number(error?.resets_in_seconds);
   if (Number.isFinite(resetsIn) && resetsIn > 0) return now + resetsIn * 1000;
-  return googleRetryAt(error, now);
+  return googleRetryAt(error, now) ?? retryAfterAt(headers, now, random);
 }
 
 export function upstreamError(status: number, json: unknown, headers?: Headers): GateError {
   const error = asRecord(asRecord(json)?.error);
   const passCode = status !== 401 && status !== 403 && typeof error?.code === "string" && error.code;
-  return new GateError(status || 502, "upstream_error", upstreamErrorMessage(status, json), {
+  const message = upstreamErrorMessage(status, json);
+  const requestScoped = status === 429 && entitlementRefusal(message);
+  return new GateError(status || 502, "upstream_error", message, {
     param: typeof error?.param === "string" ? error.param : null,
     upstreamCode: passCode || undefined,
-    retryAt: upstreamRetryAt(status, json, Date.now(), headers),
+    retryAt: requestScoped ? null : upstreamRetryAt(status, json, Date.now(), headers),
+    requestScoped,
   });
 }
 
@@ -419,8 +484,6 @@ export function withDeploymentModel(raw: BodyInit | undefined, model: string): B
   form.set("model", model);
   return form;
 }
-
-const apiRoute = inPool("api");
 
 export async function forwardToModel(
   aliases: string[],
@@ -433,10 +496,14 @@ export async function forwardToModel(
     contentType?: string;
     binary?: boolean;
     headers?: Record<string, string>;
+    pool?: RoutePool;
+    timeoutMs?: number;
   },
 ): Promise<ProxyFirstResult> {
   let last: GateError = new GateError(404, "model_not_found", "no deployment for model", { param: "model" });
   const cost = costFilter(principal, body);
+  const pool = opts?.pool ?? "api";
+  const inPool = routable(pool);
   for (const alias of aliases) {
     if (!alias || alias === "auto") continue;
     let group;
@@ -445,8 +512,9 @@ export async function forwardToModel(
     } catch {
       continue;
     }
-    if (group.mapped.length && !group.mapped.some(apiRoute) && !group.overflow_group) {
-      last = outsidePool("api");
+    if (hiddenFrom(pool, group.mapped)) continue;
+    if (group.mapped.length && !group.mapped.some(inPool) && !group.overflow_group) {
+      last = outsidePool(pool);
       continue;
     }
     const attempts = Math.max(0, group.num_retries) + 1;
@@ -456,7 +524,7 @@ export async function forwardToModel(
         acquired = await acquireGroup(
           group,
           principal.routeLimits[alias],
-          apiRoute,
+          inPool,
           requestRoutingOverride(body),
           cost,
         );
@@ -485,6 +553,7 @@ export async function forwardToModel(
           method: opts?.method,
           groupStrategy: group.strategy,
           headers: opts?.headers,
+          timeoutMs: opts?.timeoutMs,
         };
         const proxied = opts?.binary
           ? { ...(await proxyRaw(request)), json: {} as unknown }

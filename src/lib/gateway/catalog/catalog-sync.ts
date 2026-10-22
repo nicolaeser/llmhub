@@ -5,7 +5,7 @@ import { refreshProviderModels } from "@/lib/gateway/upstreams/discovery";
 import { catalogInputs, entryKey, persist } from "@/lib/gateway/catalog/catalog-entries";
 import { addRoute } from "@/lib/gateway/catalog/catalog-routes";
 import { acquireLock, CATALOG_REFRESH_MS, getCatalogState, releaseLock, saveState } from "@/lib/gateway/catalog/catalog-state";
-import { askJevStaged, jevFingerprint, jevReady } from "@/lib/gateway/catalog/jev";
+import { askJevStaged, jevFingerprint, jevRoute } from "@/lib/gateway/catalog/jev";
 import { autoRouteEntries, JEV_SUGGEST_CONFIDENCE } from "@/lib/gateway/catalog/model-catalog";
 import { catalogRouting, getEnterprise } from "@/lib/settings/enterprise";
 import { logger } from "@/lib/logging/logger";
@@ -36,8 +36,9 @@ async function classify(
   tasks: JevTask[],
   settings: JevSettings | undefined,
 ): Promise<CatalogState["jev"]> {
+  const route = await jevRoute(settings);
   const result = {
-    configured: jevReady(settings),
+    configured: Boolean(route),
     asked: 0,
     matched: 0,
     pending: tasks.length,
@@ -45,13 +46,13 @@ async function classify(
     error: "",
     settings: jevFingerprint(settings),
   };
-  if (!jevReady(settings) || !tasks.length) return result;
+  if (!route || !tasks.length) return result;
   const byKey = new Map(entries.map((entry) => [entryKey(entry), entry]));
   const classifiedAt = new Date();
   await runLimited(tasks.slice(0, JEV_STEP_TASKS), JEV_CONCURRENCY, async (task) => {
     if (result.error) return;
     try {
-      const { verdict, cost } = await askJevStaged(settings, task);
+      const { verdict, cost } = await askJevStaged(route, task);
       result.asked += 1;
       result.cost += cost;
       const entry = byKey.get(entryKey(task));
@@ -82,7 +83,7 @@ async function applyAutoRoutes(
   for (const entry of due) {
     const model = inputs.discovered.get(entry.providerId)?.find((item) => item.id === entry.upstreamId);
     const provider = inputs.providers.find((item) => item.id === entry.providerId);
-    if (!model || !provider) continue;
+    if (!model || !provider || provider.internal) continue;
     await addRoute({ provider, model, alias: entry.alias, vendor: entry.vendor, displayName: entry.name });
     routed.push({
       provider: entry.providerId,

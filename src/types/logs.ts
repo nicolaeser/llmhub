@@ -1,4 +1,4 @@
-import type { Principal } from "@/types/gateway";
+import type { Principal, SystemFeature } from "@/types/gateway";
 import type { Deployment } from "@/types/routing";
 
 export type LogKind = "requests" | "spend" | "audit";
@@ -16,7 +16,7 @@ export type LogFilterValues = {
   to: string;
 };
 
-export type ContentSkip = "" | "gateway" | "user" | "member" | "key";
+export type ContentSkip = "" | "system" | "gateway" | "user" | "member" | "key";
 
 export type TranscriptKind = "text" | "reasoning" | "tool_call" | "tool_result" | "media";
 
@@ -67,6 +67,7 @@ export type RequestLogRow = {
   guardOutput: string[];
   hasContent: boolean;
   contentSkip: string;
+  system: SystemFeature | "";
 };
 
 export type RequestLogContentView = {
@@ -77,6 +78,8 @@ export type RequestLogContentView = {
   output: TranscriptEntry[];
 };
 
+export type PiiRestoreSummary = { placeholders: string[]; text: string[]; tools: string[] };
+
 export type RequestLogDetail = RequestLogRow & {
   teamLabel: string;
   orgLabel: string;
@@ -86,6 +89,7 @@ export type RequestLogDetail = RequestLogRow & {
   upstreamModel: string;
   tag: string;
   error: string;
+  piiRestore: PiiRestoreSummary | null;
   canViewContent: boolean;
   replayable: boolean;
   content: RequestLogContentView | null;

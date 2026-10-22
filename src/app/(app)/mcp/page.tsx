@@ -261,6 +261,7 @@ export default function McpPage() {
             state={builderState}
             model={data.builderModel}
             models={data.models}
+            canTestModels={data.canTestModels}
             onModel={(builderModel) => setData((current) => ({ ...current, builderModel }))}
             onCreated={replace}
           />

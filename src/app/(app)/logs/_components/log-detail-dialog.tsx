@@ -27,6 +27,8 @@ import { isActionFail } from "@/lib/http/action-result";
 import type { RequestLogDetail, RequestLogExportFormat, TranscriptEntry } from "@/types/logs";
 import GuardrailChip from "./guardrail-chip";
 import PiiChip from "./pii-chip";
+import { PiiCode, PiiPlaceholder } from "./pii-placeholder";
+import PiiRestore from "./pii-restore";
 
 const EXPORT_FORMATS: { id: RequestLogExportFormat; icon: LucideIcon }[] = [
   { id: "pdf", icon: FileText },
@@ -35,14 +37,11 @@ const EXPORT_FORMATS: { id: RequestLogExportFormat; icon: LucideIcon }[] = [
 ];
 
 function PiiText({ text }: { text: string }) {
-  const tPii = useTranslations("Guardrails");
   return (
     <p className="text-sm break-words whitespace-pre-wrap">
       {splitPiiPlaceholders(text).map((part, index) =>
         part.entity ? (
-          <Chip key={index} size="sm" variant="soft" color="warning">
-            {tPii("entityLabel", { id: part.entity })}
-          </Chip>
+          <PiiPlaceholder key={index} token={part.text} entity={part.entity} number={part.number} />
         ) : (
           <span key={index}>{part.text}</span>
         ),
@@ -72,7 +71,7 @@ function Entry({ entry, markdown }: { entry: TranscriptEntry; markdown: boolean 
       {entry.kind === "media" ? (
         <p className="text-sm text-muted">{t("media", { media: entry.text })}</p>
       ) : entry.kind === "tool_call" || entry.kind === "tool_result" ? (
-        <pre className="font-mono text-xs break-all whitespace-pre-wrap">{entry.text}</pre>
+        <PiiCode text={entry.text} />
       ) : entry.kind === "reasoning" ? (
         markdown ? (
           <Markdown text={entry.text} pii muted />
@@ -96,7 +95,7 @@ function Json({ value }: { value: unknown }) {
   return (
     <Card variant="secondary">
       <Card.Content>
-        <pre className="font-mono text-xs break-all whitespace-pre-wrap">{JSON.stringify(value, null, 2)}</pre>
+        <PiiCode text={JSON.stringify(value, null, 2)} />
       </Card.Content>
     </Card>
   );
@@ -261,7 +260,7 @@ export default function LogDetailDialog({
                     <p className="text-sm text-muted">
                       {tDetail("subtitle", {
                         model: detail.model,
-                        time: format.dateTime(new Date(detail.createdAt), "dateTime"),
+                        time: format.dateTime(new Date(detail.createdAt), "zoned"),
                       })}
                     </p>
                   ) : null}
@@ -323,6 +322,12 @@ export default function LogDetailDialog({
                     </Field>
                     <Field label={tDetail("stream")}>{tDetail("yesNo", { value: String(detail.stream) })}</Field>
                     <Field label={tDetail("tag")}>{detail.tag ? <PiiText text={detail.tag} /> : tCommon("none")}</Field>
+                    {detail.system ? (
+                      <Field label={t("columns.caller")}>
+                        {t("caller.system")}
+                        <span className="block text-xs text-muted">{t("caller.feature", { feature: detail.system })}</span>
+                      </Field>
+                    ) : null}
                     <Field label={tDetail("key")}>{label("key", detail.keyLabel, detail.keyId)}</Field>
                     <Field label={tDetail("user")}>{label("user", detail.userLabel, detail.userId)}</Field>
                     <Field label={tDetail("member")}>{label("member", detail.memberLabel, detail.memberId)}</Field>
@@ -363,8 +368,9 @@ export default function LogDetailDialog({
                       <Field label={tDetail("guardPrompt")}>{hits(detail.guardInput)}</Field>
                       <Field label={tDetail("guardResponse")}>{hits(detail.guardOutput)}</Field>
                     </dl>
+                    {detail.piiRestore ? <PiiRestore restore={detail.piiRestore} /> : null}
                     {detail.piiMode ? (
-                      <p className="text-xs text-muted">{tDetail("piiStored")}</p>
+                      <p className="text-xs text-muted">{tDetail("piiStored", { mode: detail.piiMode })}</p>
                     ) : null}
                   </section>
                   <Separator />

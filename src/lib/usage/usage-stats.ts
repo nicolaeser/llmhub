@@ -46,14 +46,25 @@ function rollUp(rows: UsageSlice[], nameOf: (row: UsageSlice) => string): SliceR
 
 const billable = (row: UsageSlice) => row.cost > 0 || row.promptTokens > 0 || row.completionTokens > 0;
 
+export const SYSTEM_SLICE = "system";
+export const UNASSIGNED_SLICE = "unassigned";
+
+export function systemSlice(row: Pick<UsageSlice, Exclude<SliceKey, "model">>): boolean {
+  return !row.keyId && !row.userId && !row.memberId && !row.projectId && !row.teamId && !row.orgId;
+}
+
+function sliceName(row: UsageSlice, key: SliceKey): string {
+  return row[key] || (systemSlice(row) ? SYSTEM_SLICE : UNASSIGNED_SLICE);
+}
+
 export function groupSpend(rows: UsageSlice[], key: SliceKey): SliceRow[] {
-  return rollUp(rows.filter(billable), (row) => row[key] || "unassigned").sort(
+  return rollUp(rows.filter(billable), (row) => sliceName(row, key)).sort(
     (a, b) => b.spend - a.spend,
   );
 }
 
 export function groupRequestHealth(rows: UsageSlice[], key: SliceKey): SliceRow[] {
-  return rollUp(rows, (row) => row[key] || "unassigned").sort(
+  return rollUp(rows, (row) => sliceName(row, key)).sort(
     (a, b) => (b.requests ?? 0) - (a.requests ?? 0),
   );
 }

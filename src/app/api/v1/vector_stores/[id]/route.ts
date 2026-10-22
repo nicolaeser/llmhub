@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import { allowModel, gateRequest, gateResponse } from "@/lib/gateway/access/gate";
+import { gateRequest, gateResponse } from "@/lib/gateway/access/gate";
 import { asStringMap } from "@/lib/gateway/core";
-import { parseBody } from "@/lib/rag/api";
+import { allowCallerModels, parseBody } from "@/lib/rag/api";
 import {
   deleteVectorStore,
   readableStore,
@@ -30,7 +30,7 @@ export async function POST(req: Request, ctx: Context) {
     const { id } = await ctx.params;
     const store = await writableStore(principal, id);
     const body = await parseBody(req, updateVectorStoreSchema);
-    for (const model of [body.rerank_model, body.ocr_model]) if (model) allowModel(principal, model);
+    await allowCallerModels(principal, { rerank_model: body.rerank_model, ocr_model: body.ocr_model });
     const updated = await updateVectorStore(store, {
       name: body.name ?? undefined,
       description: body.description ?? undefined,

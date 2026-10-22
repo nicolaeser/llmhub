@@ -1,6 +1,7 @@
 import { asNumber, asRecord, asString, newId, stringifyContent } from "@/lib/gateway/core";
 import { GateError } from "@/lib/gateway/errors";
 import { completionFromSse } from "@/lib/gateway/protocols/sse-completion";
+import { ANTIGRAVITY_HIDDEN_MODELS, ANTIGRAVITY_INTERNAL_MODELS } from "@/lib/gateway/upstreams/antigravity-models";
 import type { ChatSseTranslator, JsonMap } from "@/types/gateway";
 import type { ResolvedDeployment } from "@/types/routing";
 import type { LimitWindow, SubscriptionLimits, DiscoveredModel, UpstreamAuth } from "@/types/providers";
@@ -477,7 +478,7 @@ export function antigravityModels(json: unknown): DiscoveredModel[] {
   const out: DiscoveredModel[] = [];
   for (const [id, raw] of Object.entries(models)) {
     const model = asRecord(raw);
-    if (!model) continue;
+    if (!model || ANTIGRAVITY_HIDDEN_MODELS.has(id)) continue;
     out.push({
       id,
       name: asString(model.displayName) || id,
@@ -495,7 +496,9 @@ export function antigravityLimits(json: unknown, plan: string, now = Date.now())
   const models = asRecord(asRecord(json)?.models) ?? {};
   const windows: LimitWindow[] = [];
   for (const [id, raw] of Object.entries(models)) {
-    const quota = asRecord(asRecord(raw)?.quotaInfo);
+    if (ANTIGRAVITY_INTERNAL_MODELS.has(id)) continue;
+    const model = asRecord(raw);
+    const quota = asRecord(model?.quotaInfo);
     if (!quota) continue;
     const resetsAt = asString(quota.resetTime);
     const remaining = quota.remainingFraction;
@@ -505,6 +508,7 @@ export function antigravityLimits(json: unknown, plan: string, now = Date.now())
     const reset = Date.parse(resetsAt);
     windows.push({
       scope: id,
+      label: asString(model?.displayName).trim() || id,
       usedPercent,
       windowSeconds: QUOTA_WINDOW_SECONDS,
       resetsAt: Number.isFinite(reset) ? new Date(reset).toISOString() : null,

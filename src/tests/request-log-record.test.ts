@@ -5,12 +5,15 @@ import type { Principal, RequestTrace } from "@/types/gateway";
 import type { VirtualKeyView } from "@/types/keys";
 import type { Deployment } from "@/types/routing";
 import type { PiiPolicy } from "@/types/guardrails";
+import type * as Billing from "@/lib/gateway/billing/billing";
 
 type Row = Record<string, unknown>;
 type Call = { model: string; method: string; args: { where?: Row; data?: Row } };
 
 const calls: Call[] = [];
 const tables = new Map<string, Map<string, Row>>();
+const upsertFailures: Error[] = [];
+const transactionOptions: unknown[] = [];
 let enterprise: Row = {};
 
 function table(model: string): Map<string, Row> {
@@ -39,6 +42,8 @@ function fakeModel(model: string) {
     },
     upsert: async (args: Call["args"]) => {
       record("upsert", args);
+      const failure = upsertFailures.shift();
+      if (failure) throw failure;
       return {};
     },
     create: async (args: Call["args"]) => {
@@ -54,7 +59,12 @@ const models = new Map<string, ReturnType<typeof fakeModel>>();
   {},
   {
     get: (_target, model: string) => {
-      if (model === "$transaction") return (ops: Promise<unknown>[]) => Promise.all(ops);
+      if (model === "$transaction") {
+        return (ops: Promise<unknown>[], options?: unknown) => {
+          transactionOptions.push(options);
+          return Promise.all(ops);
+        };
+      }
       const fake = models.get(model) ?? fakeModel(model);
       models.set(model, fake);
       return fake;
@@ -66,6 +76,8 @@ delete process.env.REDIS_URL;
 beforeEach(() => {
   calls.length = 0;
   tables.clear();
+  upsertFailures.length = 0;
+  transactionOptions.length = 0;
   enterprise = {};
 });
 
@@ -142,6 +154,8 @@ const policy = (over: Partial<PiiPolicy>): PiiPolicy => ({
   mode: "mask",
   output: true,
   entities: ["EMAIL_ADDRESS"],
+  detector: "patterns",
+  failure: "patterns",
   ...over,
 });
 
@@ -217,6 +231,51 @@ test("recordUsage hands every request to the request log with tokens, cost, and 
   assert.equal(log.outcome, "upstream_error");
   assert.equal(log.error, "upstream said no");
   assert.deepEqual(log.content?.create, { request, response, truncated: false });
+});
+
+function prismaError(code: string, message: string): Error {
+  return Object.assign(new Error(message), { code });
+}
+
+function meteringCall(): Parameters<typeof Billing.recordUsage>[0] {
+  return {
+    principal: principal({ key: keyView(), teamId: "team_1", orgId: "org_1" }),
+    model: "gpt",
+    deployment,
+    usage: { prompt_tokens: 1000, completion_tokens: 500 },
+    status: 200,
+    outcome: "ok",
+    latencyMs: 40,
+  };
+}
+
+function usageUpserts(): number {
+  return calls.filter((call) => call.model === "usageDaily" && call.method === "upsert").length;
+}
+
+test("a metering transaction that expired under load is retried and books the request once", async () => {
+  const { recordUsage } = await import("@/lib/gateway/billing/billing");
+  upsertFailures.push(prismaError("P2028", "Transaction API error: Unable to start a transaction in the given time."));
+  const cost = await recordUsage(meteringCall());
+  assert.ok(cost > 0);
+  assert.equal(usageUpserts(), 2);
+  assert.equal(storedLog().status, 200);
+  const [options] = transactionOptions as { maxWait: number; timeout: number }[];
+  assert.ok(options!.maxWait > 2_000);
+  assert.ok(options!.timeout > 5_000);
+});
+
+test("metering gives up after repeated expiries and never retries other failures", async () => {
+  const { recordUsage } = await import("@/lib/gateway/billing/billing");
+  for (let i = 0; i < 5; i++) upsertFailures.push(prismaError("P2028", "Transaction already closed"));
+  await assert.rejects(recordUsage(meteringCall()), { code: "P2028" });
+  assert.equal(usageUpserts(), 3);
+  calls.length = 0;
+  upsertFailures.length = 0;
+  upsertFailures.push(prismaError("P2002", "Unique constraint failed"));
+  await assert.rejects(recordUsage(meteringCall()), { code: "P2002" });
+  assert.equal(usageUpserts(), 1);
+  assert.equal(calls.filter((call) => call.model === "requestLog").length, 0);
 });
 
 test("requestLog.create stores tenancy, routing, PII markers, and nested content", async () => {
@@ -299,6 +358,69 @@ test("stored log content is masked with the effective PII policy, including over
   enterprise = {};
   const keyOff = masked(await logFor(principal({ key: keyView({ pii: policy({ enabled: false }) }), orgId: "org_pii" })));
   assert.ok(keyOff.includes("ada@acme.com"));
+});
+
+test("restore mode records which placeholders went out and where the reply used them, never the values", async () => {
+  const { writeRequestLog } = await import("@/lib/gateway/request-logs/request-log");
+  const { PiiVault, bindPiiVault } = await import("@/lib/gateway/safety/pii-vault");
+  const write = async (who: Principal, response: unknown) => {
+    calls.length = 0;
+    await writeRequestLog({
+      principal: who,
+      model: "gpt",
+      deployment,
+      status: 200,
+      outcome: "ok",
+      latencyMs: 5,
+      tag: "",
+      promptTokens: 1,
+      completionTokens: 1,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
+      cost: 0,
+      response,
+    });
+    return storedLog();
+  };
+  const restoring = (logContent: boolean) => {
+    const traced = trace({
+      piiMode: "restore",
+      piiInput: new Set(["EMAIL_ADDRESS", "IP_ADDRESS"]),
+      request: { messages: [{ role: "user", content: "mail [EMAIL_ADDRESS_1] from [IP_ADDRESS_1]" }] },
+    });
+    const vault = new PiiVault();
+    vault.placeholder("EMAIL_ADDRESS", "ada@acme.com");
+    vault.placeholder("IP_ADDRESS", "203.0.113.9");
+    bindPiiVault(traced, vault);
+    return principal({ key: keyView({ log_content: logContent }), trace: traced });
+  };
+  const reply = {
+    choices: [
+      {
+        message: {
+          role: "assistant",
+          content: "Mailing [EMAIL_ADDRESS_1]",
+          tool_calls: [{ id: "t1", type: "function", function: { name: "ping", arguments: '{"host":"[IP_ADDRESS_1]"}' } }],
+        },
+      },
+    ],
+  };
+  const summary = { placeholders: ["[EMAIL_ADDRESS_1]", "[IP_ADDRESS_1]"], text: ["[EMAIL_ADDRESS_1]"], tools: ["[IP_ADDRESS_1]"] };
+
+  const logged = await write(restoring(true), reply);
+  assert.deepEqual(logged.piiRestore, summary);
+  assert.equal(logged.piiMode, "restore");
+  const stored = JSON.stringify(logged);
+  assert.equal(stored.includes("ada@acme.com"), false);
+  assert.equal(stored.includes("203.0.113.9"), false);
+  assert.ok(stored.includes("[IP_ADDRESS_1]"));
+
+  const withoutContent = await write(restoring(false), reply);
+  assert.equal(withoutContent.content, undefined);
+  assert.deepEqual(withoutContent.piiRestore, summary);
+
+  const masked = await write(principal({ trace: trace({ piiMode: "mask" }) }), reply);
+  assert.equal("piiRestore" in masked, false);
 });
 
 test("assertBudget is async and resolves to the remaining budget", async () => {

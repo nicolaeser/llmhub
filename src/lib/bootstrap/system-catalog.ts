@@ -1,6 +1,7 @@
 import "server-only";
 import prisma from "@/lib/db/prisma";
 import { roleTemplateKeys, roleTemplates } from "@/lib/auth/permissions";
+import { ensureRedactorProvider } from "@/lib/bootstrap/redactor-provider";
 
 const TEMPLATES_SEEDED = "role_templates_seeded";
 
@@ -37,6 +38,7 @@ async function upsertCatalog(): Promise<void> {
       }),
     },
   });
+  await ensureRedactorProvider();
 }
 
 export function ensureSystemCatalog(): Promise<void> {

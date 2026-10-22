@@ -1,6 +1,7 @@
 "use server";
 
 import { runAction } from "@/lib/http/action-result";
+import { testFeatureModel } from "@/lib/models/feature-model-test";
 import { ensureMcpRoles, saveMcpInstallation, saveMcpPermissions, setMcpTemplate } from "@/lib/mcp/catalog";
 import { setBuilderModel } from "@/lib/mcp/builder";
 import { disconnectMcpOAuth, startMcpOAuth } from "@/lib/mcp/server-oauth";
@@ -95,4 +96,8 @@ export async function saveMcpInstallationAction(input: unknown) {
     const saved = await saveMcpInstallation(input);
     return presentMcpServer(saved.serverId);
   });
+}
+
+export async function testFeatureModelAction(...args: Parameters<typeof testFeatureModel>) {
+  return runAction(() => testFeatureModel(...args));
 }

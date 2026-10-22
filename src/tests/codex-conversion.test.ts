@@ -244,7 +244,7 @@ test("SuperGrok deployments keep the xAI wire format without premium tiers", () 
 test("usage limit errors carry the reset time and park the route until then", async () => {
   const { upstreamError, upstreamRetryAt } = await import("@/lib/gateway/dispatch/upstream");
   const { acquireGroup, markFailure } = await import("@/lib/gateway/routing/runtime");
-  const { inPool } = await import("@/lib/gateway/routing/route-pool");
+  const { routable } = await import("@/lib/gateway/routing/route-pool");
   const limited = upstreamError(429, { error: { type: "usage_limit_reached", resets_at: 1_900_000_000 } });
   assert.equal(limited.status, 429);
   assert.equal(limited.retryAt, 1_900_000_000_000);
@@ -269,11 +269,11 @@ test("usage limit errors carry the reset time and park the route until then", as
     deployments: [subscription, spare, apiKey],
     mapped: [subscription, spare, apiKey],
   };
-  const subscriptions = inPool("subscription");
+  const subscriptions = routable("subscription");
   const first = await acquireGroup(group, undefined, subscriptions);
   first.release();
   assert.equal(first.dep.id, "sub");
-  const api = await acquireGroup(group, undefined, inPool("api"));
+  const api = await acquireGroup(group, undefined, routable("api"));
   api.release();
   assert.equal(api.dep.id, "api");
   markFailure(subscription, Date.now() + 3_600_000);

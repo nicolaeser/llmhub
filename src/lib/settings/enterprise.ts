@@ -21,8 +21,14 @@ import {
   SECRET_ENTITIES,
 } from "@/lib/gateway/safety/guardrails";
 import { modelAlias } from "@/lib/gateway/catalog/model-alias";
+import { PII_DETECTORS, PII_FAILURES } from "@/lib/gateway/safety/pii";
+import {
+  PII_TIMEOUT_DEFAULT_SECONDS,
+  PII_TIMEOUT_MAX_SECONDS,
+  PII_TIMEOUT_MIN_SECONDS,
+} from "@/schemas/guardrails";
 import { SEMANTIC_THRESHOLD_DEFAULT, SEMANTIC_THRESHOLD_MIN } from "@/lib/gateway/cache/cache-settings";
-import { DEFAULT_AUTO_CONFIDENCE, JEV_SUGGEST_CONFIDENCE } from "@/lib/gateway/catalog/model-catalog";
+import { DEFAULT_AUTO_CONFIDENCE, DEFAULT_JEV_MODEL, JEV_SUGGEST_CONFIDENCE } from "@/lib/gateway/catalog/model-catalog";
 import {
   anomalyFactor,
   DEFAULT_KEY_EXPIRY_WARNING_DAYS,
@@ -46,7 +52,7 @@ import type { OidcSettings, RoleMapping } from "@/types/auth";
 import type { S3AddressingSetting, S3Settings } from "@/types/s3";
 import type { Enterprise } from "@/types/settings";
 import type { AntigravitySettings } from "@/types/providers";
-import type { GuardrailPolicy, GuardrailRule, PiiPolicy } from "@/types/guardrails";
+import type { GuardrailPolicy, GuardrailRule, PiiDetectorSettings, PiiPolicy } from "@/types/guardrails";
 import type { SemanticCacheSettings } from "@/types/cache";
 import type { VectorStoreDefaults } from "@/types/rag";
 import {
@@ -69,9 +75,11 @@ const DEFAULT_PII: PiiPolicy = {
   mode: "mask",
   output: true,
   entities: [],
+  detector: "patterns",
+  failure: "patterns",
 };
 
-export const DEFAULT_JEV_MODEL = "jev-latest";
+const DEFAULT_PII_DETECTOR: PiiDetectorSettings = { model: "", timeout_seconds: PII_TIMEOUT_DEFAULT_SECONDS };
 
 const DEFAULT_JEV: JevSettings = { enabled: false, model: DEFAULT_JEV_MODEL, api_key: "" };
 const DEFAULT_ANTIGRAVITY: AntigravitySettings = { client_secret: "" };
@@ -112,6 +120,7 @@ const DEFAULT_ENTERPRISE: Enterprise = {
   auto_update: false,
   vector_stores: DEFAULT_VECTOR_STORES,
   pii: DEFAULT_PII,
+  pii_detector: DEFAULT_PII_DETECTOR,
   guardrails: defaultGuardrails(),
   budget_alert_thresholds: [50, 80, 100],
   spend_anomaly_factor: DEFAULT_SPEND_ANOMALY_FACTOR,
@@ -129,6 +138,17 @@ function normalizePii(raw: unknown): PiiPolicy {
     mode: mode === "block" ? "block" : mode === "restore" ? "restore" : "mask",
     output: rec.output == null ? true : asBool(rec.output, true),
     entities: asStringArray(rec.entities),
+    detector: pick(rec.detector, PII_DETECTORS, "patterns"),
+    failure: pick(rec.failure, PII_FAILURES, "patterns"),
+  };
+}
+
+export function normalizePiiDetector(raw: unknown): PiiDetectorSettings {
+  const rec = asRecord(raw) ?? {};
+  const timeout = Math.trunc(asNumber(rec.timeout_seconds, PII_TIMEOUT_DEFAULT_SECONDS));
+  return {
+    model: modelAlias(asString(rec.model).trim()),
+    timeout_seconds: Math.min(PII_TIMEOUT_MAX_SECONDS, Math.max(PII_TIMEOUT_MIN_SECONDS, timeout)),
   };
 }
 
@@ -292,6 +312,7 @@ export function normalizeEnterprise(raw: unknown): Enterprise {
     vector_stores: normalizeVectorDefaults(rec.vector_stores),
     oidc: normalizeOidc(rec.oidc),
     pii: normalizePii(rec.pii ?? DEFAULT_PII),
+    pii_detector: normalizePiiDetector(rec.pii_detector),
     guardrails: normalizeGuardrails(rec.guardrails),
     s3: normalizeS3(rec.s3),
     budget_alert_thresholds: (() => {
@@ -392,6 +413,10 @@ export async function getPii(): Promise<PiiPolicy> {
   return normalizePii((await getEnterprise()).pii);
 }
 
+export async function getPiiDetector(): Promise<PiiDetectorSettings> {
+  return normalizePiiDetector((await getEnterprise()).pii_detector);
+}
+
 export function piiOverride(raw: unknown): PiiPolicy | null {
   return asRecord(raw) ? normalizePii(raw) : null;
 }
@@ -415,7 +440,28 @@ async function inheritedPolicies(principal: Principal) {
   return { project, org };
 }
 
-export async function resolvePolicies(principal: Principal): Promise<{ pii: PiiPolicy; guardrails: GuardrailPolicy }> {
+const tracedEnterprises = new WeakMap<object, Promise<Enterprise>>();
+const tracedPolicies = new WeakMap<object, Promise<{ pii: PiiPolicy; guardrails: GuardrailPolicy }>>();
+
+function oncePerTrace<T>(store: WeakMap<object, Promise<T>>, trace: object | undefined, load: () => Promise<T>): Promise<T> {
+  if (!trace) return load();
+  const known = store.get(trace);
+  if (known) return known;
+  const loading = load();
+  store.set(trace, loading);
+  loading.catch(() => store.delete(trace));
+  return loading;
+}
+
+export function requestEnterprise(principal: Principal): Promise<Enterprise> {
+  return oncePerTrace(tracedEnterprises, principal.trace, getEnterprise);
+}
+
+export function resolvePolicies(principal: Principal): Promise<{ pii: PiiPolicy; guardrails: GuardrailPolicy }> {
+  return oncePerTrace(tracedPolicies, principal.trace, () => loadPolicies(principal));
+}
+
+async function loadPolicies(principal: Principal): Promise<{ pii: PiiPolicy; guardrails: GuardrailPolicy }> {
   const keyPii = principal.key?.pii ?? null;
   const keyGuardrails = principal.guardrails ?? null;
   const { project, org } =
@@ -424,7 +470,7 @@ export async function resolvePolicies(principal: Principal): Promise<{ pii: PiiP
   const guardrails =
     keyGuardrails ?? guardrailOverride(project?.guardrailPolicy) ?? guardrailOverride(org?.guardrailPolicy);
   if (pii && guardrails) return { pii, guardrails };
-  const enterprise = await getEnterprise();
+  const enterprise = await requestEnterprise(principal);
   return {
     pii: pii ?? normalizePii(enterprise.pii),
     guardrails: guardrails ?? normalizeGuardrails(enterprise.guardrails),

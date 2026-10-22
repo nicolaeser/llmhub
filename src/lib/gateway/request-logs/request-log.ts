@@ -3,7 +3,8 @@ import prisma from "@/lib/db/prisma";
 import { asRecord } from "@/lib/gateway/core";
 import { logPayload } from "@/lib/gateway/request-logs/log-content";
 import { defaultEntityIds, redactJSON, redactPii } from "@/lib/gateway/safety/pii";
-import { getEnterprise, resolvePii } from "@/lib/settings/enterprise";
+import { piiRestoreSummary, vaultOf } from "@/lib/gateway/safety/pii-vault";
+import { requestEnterprise, resolvePii } from "@/lib/settings/enterprise";
 import { errorFields } from "@/lib/logging/format";
 import { logger } from "@/lib/logging/logger";
 import { notifyLive } from "@/lib/updates/live-topics";
@@ -15,6 +16,7 @@ import type { ContentSkip, RequestLogEntry } from "@/types/logs";
 const ERROR_LIMIT = 2_000;
 
 export async function contentSkip(principal: Principal, enterprise: Enterprise): Promise<ContentSkip> {
+  if (principal.system) return "system";
   if (enterprise.log_content === false) return "gateway";
   if (principal.key && principal.key.log_content === false) return "key";
   if (principal.memberId) {
@@ -39,13 +41,14 @@ function errorText(error: unknown): string {
 }
 
 export async function writeRequestLog(entry: RequestLogEntry): Promise<void> {
-  const [enterprise, pii] = await Promise.all([getEnterprise(), resolvePii(entry.principal)]);
+  const [enterprise, pii] = await Promise.all([requestEnterprise(entry.principal), resolvePii(entry.principal)]);
   const trace = entry.principal.trace;
   const piiOn = pii.enabled;
   const entities = pii.entities.length ? pii.entities : defaultEntityIds();
   const piiInput = new Set(trace?.piiInput ?? []);
   const piiOutput = new Set(trace?.piiOutput ?? []);
   const scanned = Boolean(trace?.piiMode);
+  const piiRestore = piiRestoreSummary(vaultOf(trace), entry.response);
   let request = trace?.request ?? entry.request;
   let response = entry.response;
   let error = errorText(entry.error);
@@ -101,7 +104,7 @@ export async function writeRequestLog(entry: RequestLogEntry): Promise<void> {
     contentSkip: skip,
   };
   const log = await prisma.requestLog.create({
-    data: { ...dims, ...meta, cost: entry.cost, ...(content ? { content } : {}) },
+    data: { ...dims, ...meta, cost: entry.cost, ...(piiRestore ? { piiRestore } : {}), ...(content ? { content } : {}) },
   });
   notifyLive("requests");
 
@@ -136,6 +139,7 @@ export async function writeRequestLog(entry: RequestLogEntry): Promise<void> {
       pii_mode: meta.piiMode,
       pii_input: meta.piiInput,
       pii_output: meta.piiOutput,
+      pii_restore: piiRestore,
       guardrail_input: meta.guardInput,
       guardrail_output: meta.guardOutput,
       content_skip: skip,

@@ -1,12 +1,14 @@
 "use client";
 
-import { use, useState } from "react";
-import { Alert, Card } from "@heroui/react";
+import { use, useState, useTransition } from "react";
+import { Alert, Card, toast } from "@heroui/react";
 import { useFormatter, useTranslations } from "next-intl";
 import { LoadError } from "@/components/console/page-status";
+import { useErrorToast } from "@/components/console/use-error-toast";
 import { OfferSkeleton } from "@/app/providers/sub-add/_components/link-skeletons";
 import SignInPanel from "@/components/providers/sign-in-panel";
 import { useActionData } from "@/lib/hooks/use-action-data";
+import { isActionFail } from "@/lib/http/action-result";
 import { subAddManagePath } from "@/lib/http/public-path";
 import type { SignInFlowActions, SignInKind } from "@/types/providers";
 import type { SubAddDone, SubAddOffer } from "@/types/sub-add";
@@ -14,6 +16,7 @@ import {
   completeSubAddSignInAction,
   openSubAddLinkAction,
   pollSubAddSignInAction,
+  revokeSubAddManageAction,
   startSubAddSignInAction,
 } from "./_action";
 import AddedAccounts from "./_components/added-accounts";
@@ -24,12 +27,15 @@ export default function SubAddPage({ params }: { params: Promise<{ token: string
   const { token } = use(params);
   const t = useTranslations("SubAdd");
   const format = useFormatter();
+  const showError = useErrorToast();
   const page = useActionData<SubAddOffer>(() => openSubAddLinkAction({ token }));
   const offer = page.data;
   const [picked, setPicked] = useState<SignInKind | null>(null);
   const [accepted, setAccepted] = useState(false);
   const [added, setAdded] = useState<SubAddDone[]>([]);
   const [manage, setManage] = useState<{ token: string; url: string } | null>(null);
+  const [unmanaged, setUnmanaged] = useState<string[]>([]);
+  const [revoking, startRevoke] = useTransition();
   const [adding, setAdding] = useState(true);
   const [round, setRound] = useState(0);
   const kind = picked ?? offer?.kinds[0] ?? null;
@@ -51,6 +57,21 @@ export default function SubAddPage({ params }: { params: Promise<{ token: string
     if (result.outcome === "created") {
       page.setData((cur) => ({ ...cur, remaining: cur.remaining === null ? null : Math.max(0, cur.remaining - 1) }));
     }
+  }
+
+  function revokeManage() {
+    if (!manage) return;
+    const revoked = manage.token;
+    startRevoke(async () => {
+      const result = await revokeSubAddManageAction({ manage: revoked });
+      if (isActionFail(result)) {
+        showError(result.error);
+        return;
+      }
+      setUnmanaged((cur) => [...cur, revoked]);
+      setManage((cur) => (cur?.token === revoked ? null : cur));
+      toast(t("manage.revokedTitle"), { variant: "success" });
+    });
   }
 
   function addAnother() {
@@ -96,11 +117,13 @@ export default function SubAddPage({ params }: { params: Promise<{ token: string
         </p>
       </div>
 
-      {manage && added.length ? (
+      {added.length ? (
         <AddedAccounts
           added={added}
-          manageUrl={manage.url}
-          manageToken={manage.token}
+          manage={manage}
+          unmanaged={unmanaged}
+          revoking={revoking}
+          onRevoke={revokeManage}
           canAddMore={canAddMore && !adding}
           onAddAnother={addAnother}
         />

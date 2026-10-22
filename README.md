@@ -10,7 +10,7 @@ It ships as one container image backed by PostgreSQL, with optional Redis and S3
 - **Providers and routing.** OpenAI, Anthropic, OpenRouter (global and EU), xAI, the Kimi API Platform (global and China), the Meta Model API, Google Gemini API, Google Vertex AI (service account key with project and location, or an express mode API key; Gemini, Claude, Imagen, and partner models), and any OpenAI-compatible endpoint. Model groups map one alias to several deployments with strategies such as least in-flight, weighted random, lowest cost, priority, round robin, and quota-aware routing, plus fallbacks, cooldowns on upstream failures, and a provider health view. A model catalog discovers provider models every two hours and keeps aliases up to date.
 - **Subscription accounts.** Optionally connect ChatGPT, Claude, SuperGrok, Google Antigravity, Kimi Code (kimi.com or kimi.ai), Meta Muse Code, and Devin plans through a device or callback sign-in, or move them over once from CLIProxyAPI or EasyCLIProxyAPI (auth files, pasted JSON, or straight from a running CLIProxyAPI through its management API; every account is checked with its provider first and can be removed at the source so the two never invalidate each other's rotating tokens). A session stays on one account and moves to the next account with its full conversation when that account hits its limit or loses its sign-in. They are served from a separate endpoint (`/api/subscription/v1`) and never mix with API-key traffic. The server reads each account's plan limits about every five minutes (once across all replicas, sooner right after a limit resets, backing off when a provider rate-limits the check) and pushes changes live to open consoles, so open tabs never add provider calls and a manual refresh adds at most one per account per minute.
 - **Companies and budgets.** Companies, departments, projects, and people form the tenancy model. API keys belong to a project, a person, or a console user. Every level can carry a spend cap with a reset period and temporary boosts; a child cap can never exceed a capped parent. Keys also support RPM and TPM limits, a per-request cost limit, model allowlists, reusable model templates (providers, regions, zero data retention, no training, maximum retention), client IP allowlists, endpoint restrictions, access time windows, expiry, and rotation.
-- **Safety and privacy.** PII detection with masking or blocking, configurable guardrail rules on input and output, and policy overrides per company, project, or key. Request and response bodies are stored separately from log metadata, can be switched off per key, user, or person, and follow their own retention period (30 days by default, like request logs).
+- **Safety and privacy.** PII detection with masking, blocking, or restoring, by fixed patterns, a redaction model (PII-Tracer, self-hosted with `docker-compose.rm.yml` or any provider that speaks the same protocol), or both; configurable guardrail rules on input and output, and policy overrides per company, project, or key. Request and response bodies are stored separately from log metadata, can be switched off per key, user, or person, and follow their own retention period (30 days by default, like request logs).
 - **Usage and cost.** Daily usage rollups, dashboards, chargeback by company, department, and project, price markups, CSV, JSONL, PDF, and Markdown exports, and scheduled usage report emails. Prompt cache tokens are billed at provider rates, and an optional response cache with semantic matching answers repeated requests.
 - **Operations.** Request, spend, and audit logs with filters, retention rules for every log type, signed alert webhooks in JSON, Slack, or Teams format (upstream exhaustion, budget thresholds, spend anomalies, expiring or blocked keys, PII blocks, provider model changes).
 - **Access control.** Console accounts with mandatory two-factor authentication (TOTP, passkeys, recovery codes), editable roles and permissions, company-scoped console users, OIDC single sign-on, SCIM provisioning, and personal management keys for the `/api/mgmt` automation API.
@@ -27,7 +27,7 @@ chmod +x generate-env.sh
 docker compose up -d
 ```
 
-`generate-env.sh` writes the production `.env` next to `docker-compose.yml` and walks you through the setup. It checks for Docker Compose and the compose file, then asks for the domain (`hub.example.com` becomes `https://hub.example.com`), the release channel (`latest`, `dev`, or a pinned release tag), the host port, and whether client addresses come from the reverse proxy or from Cloudflare (`IP_MODE`). Mail, the OpenID Connect client secret, and S3 keys are optional; the SMTP URL is built from host, encryption, user, and password. It sets `NODE_ENV=production`, generates `APP_SECRET`, `POSTGRES_PASSWORD`, and `REDIS_PASSWORD`, shows a summary with masked secrets, writes the file with mode 600, and prints the reverse proxy block and the next commands. Without a terminal, or with `--yes`, it takes the defaults and reads answers from the environment (`NEXT_PUBLIC_APP_URL=https://hub.example.com ./generate-env.sh --yes`). An existing `.env` is replaced only with `--force`, which keeps its values and leaves the previous file in `.env.bak`. Keep `APP_SECRET` stable: it encrypts stored provider keys and signs sessions.
+`generate-env.sh` writes the production `.env` next to `docker-compose.yml` and walks you through the setup. It checks for Docker Compose and the compose file, then asks for the domain (`hub.example.com` becomes `https://hub.example.com`), the release channel (`latest`, `dev`, or a pinned release tag), the host port, and whether client addresses come from the reverse proxy or from Cloudflare (`IP_MODE`). Mail, the OpenID Connect client secret, S3 keys, and the URL of a redaction model that runs elsewhere are optional; the SMTP URL is built from host, encryption, user, and password. It sets `NODE_ENV=production`, generates `APP_SECRET`, `POSTGRES_PASSWORD`, and `REDIS_PASSWORD`, shows a summary with masked secrets, writes the file with mode 600, and prints the reverse proxy block and the next commands. Without a terminal, or with `--yes`, it takes the defaults and reads answers from the environment (`NEXT_PUBLIC_APP_URL=https://hub.example.com ./generate-env.sh --yes`). An existing `.env` is replaced only with `--force`, which keeps its values and leaves the previous file in `.env.bak`. Keep `APP_SECRET` stable: it encrypts stored provider keys and signs sessions.
 
 The app listens on `127.0.0.1:3000` (`LLMHUB_PORT`). Put a reverse proxy with TLS in front of it, for example Caddy:
 
@@ -68,6 +68,7 @@ The app reads the variables below; `.env.example` is the template for local deve
 | `SMTP_FROM` | no | `llmhub@localhost` | Sender address for outgoing mail. |
 | `OIDC_CLIENT_SECRET` | no | unset | Client secret for OIDC single sign-on. The issuer, client id, group to role rules, and SSO-only mode are set in Settings → Sign-in; the redirect URI is `NEXT_PUBLIC_APP_URL/sso/callback`. |
 | `BUILD_ID` | no | `development` | Release version reported by `/internal-api/version` and used by the update check. Published images set it at build time; do not set it yourself. |
+| `LLMHUB_REDACTOR_URL` | no | unset | Base URL of a PII redaction service that speaks the [redaction protocol](#redaction-protocol). While it is set, every start keeps an internal provider and the internal-only alias `pii-tracer` pointing at it; without it that provider is switched off. `docker-compose.rm.yml` sets it to `http://redactor:8080`. |
 
 The compose files also read these values from `.env`. They configure the Postgres and Redis containers and are not read by the app:
 
@@ -169,6 +170,56 @@ Security: access to the Docker socket is equivalent to root access on the host, 
 Pinned tags: when `LLMHUB_TAG` is a release tag (`vYYYY.MM.DD.<sha>` or `dev-YYYY.MM.DD.<sha>`), a commit tag (`sha-<sha>`, `dev-<sha>`), or a digest, the updater reports the tag as pinned and never replaces the image. Set `LLMHUB_TAG` to `latest` or `dev` to receive updates. Back up the database regularly when automatic updates are on, because a new image applies its migrations on start and migrations are forward-only.
 
 To stop automatic installs, turn off the switch; the updater keeps checking and offers Update now. To remove the updater, drop `COMPOSE_FILE` from `.env` if you set it and run `docker compose -f docker-compose.yml up -d --remove-orphans`; this removes the updater and recreates the app without the label. An older updater refreshes itself after the next app update; `docker compose -f docker-compose.au.yml up -d` refreshes it by hand, together with the app.
+
+## PII redaction model
+
+Fixed patterns find structured values such as email addresses, card numbers, and national IDs, but not names or postal addresses in free text. A PII policy can therefore detect with **Patterns** (the default, so nothing changes until you switch), with a **Redaction model**, or with **Model and patterns**. Set it in Guardrails → PII, for the global policy and for each override. Secrets and credentials always go through the patterns first and never reach the model. Model spans use the same placeholders and numbering as pattern matches, so mask, block, and restore mode, the request logs, and the placeholder chips work as before. When the model fails or runs out of time, the policy either falls back to patterns and logs a warning, or blocks the request with `503 pii_detector_unavailable`.
+
+`docker-compose.rm.yml` runs [PII-Tracer](https://huggingface.co/perplexity-ai/PII-Tracer) (MIT, a 0.6B bidirectional Qwen3 encoder) on CPU next to the app. It is an override file for `docker-compose.yml` or `docker-compose.au.yml`:
+
+```bash
+curl -fsSLO https://raw.githubusercontent.com/nicolaeser/llmhub/main/docker-compose.rm.yml
+docker compose -f docker-compose.yml -f docker-compose.rm.yml up -d
+```
+
+Add `COMPOSE_FILE=docker-compose.yml:docker-compose.rm.yml` (or `docker-compose.au.yml:docker-compose.rm.yml`) to `.env` so a plain `docker compose` uses both files. It adds three services on a network without internet access and publishes no ports:
+
+- `redactor-fetch` downloads the [GGUF build](https://huggingface.co/perplexity-ai/PII-Tracer-GGUF) at a pinned commit into the `redactor-models` volume on the first start (about 1.2 GB), checks every file against its pinned hash, and exits. Later starts only check the files. It is the only redactor service with internet access.
+- `redactor-model` runs the pinned `llama.cpp` server image as user `65534` with `--embeddings --pooling none`, which returns one hidden state per token.
+- `redactor` runs `node redactor.mjs` from the app image. It tokenizes through the model server, applies the classification head, decodes the BIOES tags with the constrained Viterbi decoder from the model card, maps tokens back to character offsets, and answers the protocol below.
+
+The app gets `LLMHUB_REDACTOR_URL=http://redactor:8080` and, on every start, an internal provider with the alias `pii-tracer`, which is also the default redaction model. The app does not wait for the redactor: until it is healthy, policies that use the model fall back or block as configured.
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `LLMHUB_REDACTOR_REVISION` | pinned commit | Commit of `perplexity-ai/PII-Tracer-GGUF` to download. Other commits are checked against the hashes Hugging Face lists for them. |
+| `LLMHUB_REDACTOR_WINDOW` | `2048` | Tokens per model pass (at most 4096). Longer inputs are split into overlapping windows. Memory grows with the window. |
+| `LLMHUB_REDACTOR_CPUS` | `4` | CPU cores and threads for the model server. |
+| `REDACTOR_MEMORY_LIMIT` | `4g` | Memory cap of the model server. A 2048-token window peaked at 2.8 GB; 4096 needs about 4.4 GB. |
+
+On 4 cores of a shared x86 server the f16 model took 0.2 to 0.6 seconds for a sentence or a short paragraph and about 26 seconds for a 7,300-character document (2,655 tokens), so expect seconds of extra latency per request on CPU. Text the model has already seen is cached for 10 minutes, so earlier turns of a conversation are not detected again; a request with more than 200,000 characters of new text is treated like a model failure. For heavier traffic, run the model on a GPU with [PII-Tracer-vLLM](https://huggingface.co/perplexity-ai/PII-Tracer-vLLM) behind an adapter that speaks this protocol, and point `LLMHUB_REDACTOR_URL` or an internal provider at it. The model card documents English; it does not state how well German is covered, so test your own samples with the Test button in Guardrails → PII.
+
+### Redaction protocol
+
+Any service can serve as the redaction model: add it as an OpenAI-compatible provider marked internal (with an API key if it needs one, sent as a bearer token) and pick its alias in Guardrails → PII. The hub calls it as a system request, which is metered as `internal:pii` and never stored with content. Requests follow the Hugging Face token classification shape:
+
+```http
+POST <base URL>/v1/token-classification
+Content-Type: application/json
+
+{"model": "pii-tracer", "inputs": ["Hi, I'm Daniel Whitfield, you can reach me at daniels@meridiancap.com.", "No PII here."]}
+```
+
+```json
+[[{"entity_group": "private_person", "score": 0.9999, "start": 8, "end": 24},
+  {"entity_group": "private_email", "score": 0.9999, "start": 46, "end": 69}], []]
+```
+
+- The answer holds one list of spans per input, in order; a string `inputs` gets a single list.
+- `start` and `end` count Unicode code points (Python string indexes), with `end` exclusive.
+- The label is read from `entity_group`, `entity`, or `label`, without a `B-`, `I-`, `E-`, or `S-` prefix. PII-Tracer labels map to `private_person` → `PERSON`, `private_email` → `EMAIL_ADDRESS`, `private_phone` → `PHONE_NUMBER`, `private_address` → `ADDRESS`, `private_url` → `URL`, `private_date` → `DATE_TIME`, `account_number` → `ACCOUNT_NUMBER`, `secret` → `SECRET`, and `other_pii` → `OTHER_PII`. Catalog ids such as `IBAN_CODE` and the names `person`, `per`, `email`, `phone`, `address`, `street_address`, `date`, and `password` work too; other labels are ignored.
+- `score` (0 to 1) is optional, and `word` is ignored.
+- The hub sends at most 16 inputs and 16,000 characters per request, cuts longer texts into pieces of up to 2,000 characters that overlap by 200, and runs at most two requests at a time per app process.
 
 ## Development
 

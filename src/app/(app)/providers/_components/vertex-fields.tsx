@@ -21,18 +21,6 @@ import type { VertexCredentialKind, VertexDraft, VertexView } from "@/types/prov
 
 const CREDENTIALS: readonly VertexCredentialKind[] = ["service_account", "api_key"];
 
-export function vertexDraftReady(draft: VertexDraft, apiKey: string, current: VertexView | null): boolean {
-  const switched = current !== null && current.credential !== draft.credential;
-  if (draft.credential === "api_key") return Boolean(apiKey.trim()) || (current !== null && !switched);
-  const text = draft.serviceAccount.trim();
-  if (!text) return current !== null && !switched && Boolean(draft.project.trim() && draft.location.trim());
-  return (
-    text.length <= MAX_VERTEX_CREDENTIAL_CHARS &&
-    serviceAccountSummary(text) !== null &&
-    Boolean(draft.project.trim() && draft.location.trim())
-  );
-}
-
 export default function VertexFields({
   draft,
   current,

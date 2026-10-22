@@ -12,14 +12,14 @@ import { pricedModels } from "@/lib/gateway/catalog/model-pricing";
 import { listedIn, routeOf } from "@/lib/gateway/routing/route-pool";
 import type { JsonMap } from "@/types/gateway";
 import type { PublicModel } from "@/types/models";
-import type { RoutePool } from "@/types/routing";
+import type { PublicPool } from "@/types/routing";
 
 function apiEntry(model: PublicModel, created: Date) {
   const label = `${model.displayName || model.alias} (API)`;
   return modelEntry(`${API_ROUTE_PREFIX}${model.alias}`, created, model.pricing, { ...model, displayName: label }, "api");
 }
 
-function variantEntries(model: PublicModel, pool: RoutePool, surface: RoutePool, created: Date, taken: ReadonlySet<string>) {
+function variantEntries(model: PublicModel, pool: PublicPool, surface: PublicPool, created: Date, taken: ReadonlySet<string>) {
   const viaApi = pool !== surface;
   const name = model.displayName || model.alias;
   return model.variants
@@ -34,7 +34,7 @@ function variantEntries(model: PublicModel, pool: RoutePool, surface: RoutePool,
 
 export function modelEntries(
   models: PublicModel[],
-  pool: RoutePool,
+  pool: PublicPool,
   allowed: (alias: string) => boolean,
   created: Date,
 ): JsonMap[] {
@@ -53,7 +53,7 @@ export function modelEntries(
   return [...own, ...ownVariants, ...viaApi, ...apiVariants];
 }
 
-export function listModelsRoute(pool: RoutePool) {
+export function listModelsRoute(pool: PublicPool) {
   return async (req: Request): Promise<Response> => {
     try {
       const principal = await gateRequest(apiKeyRequest(req), pool);
@@ -80,7 +80,7 @@ export function listModelsRoute(pool: RoutePool) {
   };
 }
 
-export function retrieveModelRoute(pool: RoutePool) {
+export function retrieveModelRoute(pool: PublicPool) {
   return async (req: Request, ctx: { params: Promise<{ id: string }> }): Promise<Response> => {
     try {
       const principal = await gateRequest(apiKeyRequest(req), pool);

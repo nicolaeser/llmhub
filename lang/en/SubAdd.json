@@ -9,14 +9,14 @@
   "pickTitle": "Choose your provider",
   "pickHint": "Pick the subscription you want to share, then sign in with that provider.",
   "pickLabel": "Provider",
-  "kindPlan": "{kind, select, codex {ChatGPT Plus, Pro, or Business} grok_build {SuperGrok or X Premium+} claude {Claude Pro or Max} antigravity {Google account with Antigravity access} kimi {Kimi Code plan on kimi.com} kimi_ai {Kimi Code plan on kimi.ai} muse_code {Meta account with Muse Code} devin {Devin account} other {Subscription account}}",
+  "kindPlan": "{kind, select, codex {ChatGPT Plus, Pro, or Business} grok_build {SuperGrok or X Premium+} claude {Claude Pro or Max} antigravity {Google account with Antigravity access} kimi {Kimi Code plan on kimi.com (China)} kimi_ai {Kimi Code plan on kimi.ai (Global)} muse_code {Meta account with Muse Code} devin {Devin account} other {Subscription account}}",
   "signInHint": "{kind, select, codex {Sign in with the ChatGPT account whose plan you want to share.} grok_build {Sign in with the xAI account that has SuperGrok or X Premium+.} claude {Sign in with the Claude account whose Pro or Max plan you want to share.} antigravity {Sign in with the Google account whose Antigravity plan you want to share.} kimi {Sign in with the kimi.com account whose Kimi Code plan you want to share.} kimi_ai {Sign in with the kimi.ai account whose Kimi Code plan you want to share.} muse_code {Sign in with the Meta account whose Muse Code subscription you want to share.} devin {Sign in with the Devin account whose plan you want to share.} other {Sign in with the account you want to share.}}",
   "notice": {
     "title": "What you share",
     "usage": "{named, select, true {Requests that {instance} sends run on your account and count against the limits of your plan.} other {Requests that this hub sends run on your account and count against the limits of your plan.}}",
     "tokens": "The hub stores the sign-in for your account encrypted and renews it itself. It never sees your password.",
     "terms": "Using a subscription through a third-party hub may break the terms of the provider. The provider can limit or ban the account.",
-    "withdraw": "After connecting you get a private link to check the account and disconnect it at any time.",
+    "withdraw": "After connecting you get a private link to check the account and disconnect it. You can replace or deactivate that link at any time. Without it, you can still end the hub's access at the provider.",
     "accept": "I understand and want to share my account"
   },
   "done": {
@@ -28,11 +28,14 @@
     "copy": "Copy manage link",
     "openManage": "Open manage page",
     "addAnother": "Add another account",
-    "full": "This link cannot add more accounts."
+    "full": "This link cannot add more accounts.",
+    "skipManage": "I don't need a manage link",
+    "manageOffHint": "These accounts stay connected and the hub keeps using them. Nobody can see or disconnect them through the manage link anymore.",
+    "noManage": "No manage link"
   },
   "manage": {
     "title": "Your shared accounts",
-    "unavailable": "This link is not valid.",
+    "unavailable": "This link is not valid. It may have been replaced or deactivated, or all its accounts were disconnected.",
     "intro": "{named, select, true {Accounts you connected to the LLM Hub at {instance}.} other {Accounts you connected to this LLM Hub.}}",
     "listTitle": "{count, plural, =0 {No connected accounts} one {# connected account} other {# connected accounts}}",
     "listHint": "Disconnecting removes the account and its stored sign-in from the hub right away.",
@@ -44,6 +47,23 @@
     "removeLabel": "Disconnect {name} account {account}",
     "removed": "{name} account disconnected",
     "empty": "No account is connected with this link.",
-    "vendorHint": "You can also end access for the hub at the provider by signing out other sessions or removing connected apps in your account settings."
+    "vendorHint": "You can also end access for the hub at the provider by signing out other sessions or removing connected apps in your account settings.",
+    "securityTitle": "Link security",
+    "securityHint": "Anyone with this link can see these accounts and disconnect them. Create a new link if others may have seen it, or deactivate it if you no longer need it.",
+    "renew": "Create new link",
+    "renewTitle": "Create a new manage link?",
+    "renewDescription": "This link stops working right away. The new link is shown only once, so save it before you leave this page.",
+    "renewConfirm": "Create link",
+    "renewedTitle": "Your new manage link",
+    "renewedHint": "The old link no longer works. Save this one now, it is shown only once.",
+    "renewed": "New manage link created",
+    "copy": "Copy manage link",
+    "revoke": "Deactivate this link",
+    "revokeTitle": "Deactivate the manage link?",
+    "revokeDescription": "Your accounts stay connected and the hub keeps using them. Nobody can see or disconnect them through this link anymore, including you. To stop sharing later, end the hub's access in your account settings at the provider, or ask an administrator of this hub.",
+    "revokeConfirm": "Deactivate link",
+    "revokedTitle": "Manage link deactivated",
+    "revokedDescription": "{count, plural, one {Your account stays connected and the hub keeps using it. This link no longer works, so nobody can see or disconnect it here.} other {Your # accounts stay connected and the hub keeps using them. This link no longer works, so nobody can see or disconnect them here.}}",
+    "revokedNext": "To stop sharing later, end the hub's access in your account settings at the provider, or ask an administrator of this hub."
   }
 }

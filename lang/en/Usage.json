@@ -13,10 +13,10 @@
     "rate429": "Upstream 429"
   },
   "charts": {
-    "dailySpend": "Daily spend",
+    "dailySpend": "Daily spend (UTC)",
     "outcomes": "Outcomes",
     "byGroup": "Spend breakdown",
-    "dailyRequests": "Daily requests"
+    "dailyRequests": "Daily requests (UTC)"
   },
   "group": {
     "model": "Model",
@@ -29,6 +29,7 @@
   },
   "deleted": "{group, select, org {Deleted company} team {Deleted department} project {Deleted project} member {Deleted person} key {Deleted key} user {Deleted console user} other {Deleted}}",
   "withoutUsage": "{group, select, org {Company without usage} team {Department without usage} project {Project without usage} member {Person without usage} key {Key without usage} user {Console user without usage} other {No usage}}",
+  "system": "System",
   "chargeback": "Chargeback CSV",
   "columns": {
     "name": "Name",
@@ -61,7 +62,7 @@
   "latencyValue": "{ms, number, integer} ms",
   "pdf": {
     "title": "Usage report",
-    "period": "{days, plural, one {Last # day} other {Last # days}} · {range}",
+    "period": "{days, plural, one {Last # day} other {Last # days}} · {range} (UTC)",
     "filter": "Model: {model}",
     "generated": "Generated {at, date, long}",
     "byModel": "Spend by model",

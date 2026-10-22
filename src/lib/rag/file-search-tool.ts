@@ -4,7 +4,8 @@ import { asNumber, asRecord, newId, stringifyContent } from "@/lib/gateway/core"
 import { GateError } from "@/lib/gateway/errors";
 import { allowEndpoint } from "@/lib/gateway/access/gate";
 import { screenRequest } from "@/lib/gateway/safety/guardrails";
-import { defaultEntityIds, redactJSON } from "@/lib/gateway/safety/pii";
+import { redactWithPolicy } from "@/lib/gateway/safety/pii-detector";
+import { vaultOf } from "@/lib/gateway/safety/pii-vault";
 import { parseRequest } from "@/lib/gateway/protocols/parse-request";
 import type { ResponsesStreamEncoder } from "@/lib/gateway/protocols/responses-stream";
 import { SSE_HEADERS } from "@/lib/gateway/protocols/sse";
@@ -244,7 +245,8 @@ async function screenRetrieved(principal: Principal, text: string): Promise<stri
   const content = typeof screened.body.content === "string" ? screened.body.content : text;
   if (!pii.enabled) return content;
   const found = new Set<string>();
-  const redacted = redactJSON(content, pii.entities.length ? pii.entities : defaultEntityIds(), "", found) as string;
+  const vault = pii.mode === "restore" ? vaultOf(principal.trace) : null;
+  const redacted = (await redactWithPolicy(content, pii, found, vault)) as string;
   for (const id of found) principal.trace?.piiInput.add(id);
   if (pii.mode === "block" && found.size) {
     throw new GateError(400, "pii_blocked", "file search results were blocked by the PII policy");

@@ -6,7 +6,10 @@ import { ChevronsUpDown, LogOut, Moon, RefreshCw, Sun, UserRound } from "lucide-
 import { useFormatter, useLocale, useTranslations } from "next-intl";
 import { useTheme } from "next-themes";
 import type { Key } from "react-aria-components";
-import { routing, usePathname, useRouter } from "@/i18n/routing";
+import { useErrorToast } from "@/components/console/use-error-toast";
+import { routing } from "@/i18n/routing";
+import { isActionFail } from "@/lib/http/action-result";
+import { setLocaleAction } from "../_action";
 import { useBuildStatus } from "./build-status";
 
 export type ConsoleUser = { email: string; username: string };
@@ -35,8 +38,7 @@ export default function UserMenu({ user, variant }: { user: ConsoleUser; variant
   const tCommon = useTranslations("Common");
   const format = useFormatter();
   const locale = useLocale();
-  const router = useRouter();
-  const pathname = usePathname();
+  const showError = useErrorToast();
   const build = useBuildStatus();
   const { resolvedTheme, setTheme } = useTheme();
   const mounted = useSyncExternalStore(subscribeNever, () => true, () => false);
@@ -59,8 +61,9 @@ export default function UserMenu({ user, variant }: { user: ConsoleUser; variant
   function chooseLocale(key: Key | undefined) {
     const next = routing.locales.find((code) => `${LOCALE_KEY}${code}` === key);
     if (!next || next === locale) return;
-    startLocale(() => {
-      router.replace(pathname, { locale: next satisfies Locale });
+    startLocale(async () => {
+      const result = await setLocaleAction(next satisfies Locale);
+      if (isActionFail(result)) showError(result.error);
     });
   }
 

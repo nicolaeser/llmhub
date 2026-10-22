@@ -8,6 +8,7 @@ rustfs-data
 postgres-data
 redis-data
 src/tests
+scripts/loadtest
 .env*
 *.tsbuildinfo
 next-env.d.ts
@@ -18,4 +19,5 @@ generate-env.sh
 docker-compose.yml
 docker-compose.dev.yml
 docker-compose.au.yml
+docker-compose.rm.yml
 antigravity-client-secret

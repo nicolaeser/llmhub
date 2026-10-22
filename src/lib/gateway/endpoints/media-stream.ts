@@ -37,7 +37,7 @@ export async function streamMedia(input: {
         form: form instanceof FormData ? form : undefined,
       });
     },
-    { deferRelease: true, cost: costFilter(input.principal, input.body) },
+    { deferRelease: true, cost: costFilter(input.principal, input.body), signal: input.req.signal },
   ).catch(async (err) => {
     await usage.fail(err);
     throw err;
@@ -54,8 +54,13 @@ export async function streamMedia(input: {
       last = json;
       return json;
     },
-    onEnd: async () => {
+    onEnd: async (failure, cancelled) => {
       release();
+      const hungUp = cancelled || Boolean(input.req.signal?.aborted);
+      if (failure && !hungUp) {
+        await usage.fail(failure);
+        return;
+      }
       const hit: ProxyFirstResult = {
         status: 200,
         json: null,
@@ -66,7 +71,8 @@ export async function streamMedia(input: {
         dep,
         group,
       };
-      await usage.ok(hit, reported, text ? { text } : last);
+      const response = text ? { text } : last;
+      await (hungUp ? usage.cancelled(hit, reported, response) : usage.ok(hit, reported, response));
     },
   });
 }

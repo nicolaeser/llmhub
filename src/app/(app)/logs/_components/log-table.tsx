@@ -31,14 +31,16 @@ export default function LogTable({
 
   function time(value: string) {
     const date = new Date(value);
-    return Number.isNaN(date.getTime()) ? value : format.dateTime(date, "dateTime");
+    return Number.isNaN(date.getTime()) ? value : format.dateTime(date, "zoned");
   }
 
   function keyLabel(row: RequestLogRow) {
+    if (row.system) return t("caller.system");
     return row.keyLabel || (row.keyId ? t("deleted", { kind: "key" }) : t("caller.noKey"));
   }
 
   function personLabel(row: RequestLogRow) {
+    if (row.system) return t("caller.feature", { feature: row.system });
     return (
       row.memberLabel ||
       row.userLabel ||
@@ -143,7 +145,7 @@ export default function LogTable({
         </RowCards>
         <Table aria-label={t("tabs.requests")} className={TABLE_FROM_LG}>
           <Table.ScrollContainer>
-            <Table.Content className="min-w-6xl">
+            <Table.Content aria-label={t("tabs.requests")} className="min-w-6xl">
               <Table.Header>
                 <Table.Column isRowHeader>{t("columns.time")}</Table.Column>
                 <Table.Column>{t("columns.model")}</Table.Column>
@@ -209,7 +211,7 @@ export default function LogTable({
         </RowCards>
         <Table aria-label={t("tabs.spend")} className={TABLE_FROM_LG}>
           <Table.ScrollContainer>
-            <Table.Content>
+            <Table.Content aria-label={t("tabs.spend")}>
               <Table.Header>
                 <Table.Column isRowHeader>{t("columns.time")}</Table.Column>
                 <Table.Column>{t("columns.model")}</Table.Column>
@@ -257,7 +259,7 @@ export default function LogTable({
       </RowCards>
       <Table aria-label={t("tabs.audit")} className={TABLE_FROM_LG}>
         <Table.ScrollContainer>
-          <Table.Content>
+          <Table.Content aria-label={t("tabs.audit")}>
             <Table.Header>
               <Table.Column isRowHeader>{t("columns.time")}</Table.Column>
               <Table.Column>{t("columns.actor")}</Table.Column>

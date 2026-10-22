@@ -1,3 +1,4 @@
+import { after } from "next/server";
 import { errorFields } from "@/lib/logging/format";
 import { logger } from "@/lib/logging/logger";
 import { parseJsonOrNull } from "@/lib/utils/json";
@@ -50,21 +51,41 @@ export function relayEvent(block: string, options: SseRelayOptions): string | nu
   return serialize(event, JSON.stringify(mapped));
 }
 
+function keepServerFor(task: Promise<void>): boolean {
+  try {
+    after(task);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function relaySse(source: Response, options: SseRelayOptions): Response {
   const reader = source.body?.getReader() ?? null;
   const decoder = new TextDecoder();
   const encoder = new TextEncoder();
   let buffer = "";
   let ended = false;
+  let finished = () => {};
+  keepServerFor(new Promise<void>((resolve) => (finished = resolve)));
 
-  const end = async () => {
+  const end = async (failure: unknown = null, cancelled = false) => {
     if (ended) return;
     ended = true;
     try {
-      await options.onEnd?.();
+      await options.onEnd?.(failure, cancelled);
     } catch (err) {
       logger.error("gateway.stream_finish_failed", errorFields(err));
+    } finally {
+      finished();
     }
+  };
+
+  const finalize = async (controller: ReadableStreamDefaultController<Uint8Array>, failure: unknown) => {
+    const tail = options.tail?.(failure) ?? null;
+    if (tail) controller.enqueue(encoder.encode(tail));
+    controller.close();
+    await end(failure);
   };
 
   const drain = (final: boolean): string[] => {
@@ -83,8 +104,8 @@ export function relaySse(source: Response, options: SseRelayOptions): Response {
   const stream = new ReadableStream<Uint8Array>({
     async pull(controller) {
       if (!reader) {
-        await end();
         controller.close();
+        await end();
         return;
       }
       try {
@@ -93,8 +114,7 @@ export function relaySse(source: Response, options: SseRelayOptions): Response {
           if (done) {
             buffer += decoder.decode();
             for (const event of drain(true)) controller.enqueue(encoder.encode(event));
-            await end();
-            controller.close();
+            await finalize(controller, null);
             return;
           }
           buffer += decoder.decode(value, { stream: true });
@@ -104,13 +124,17 @@ export function relaySse(source: Response, options: SseRelayOptions): Response {
           return;
         }
       } catch (err) {
-        await end();
+        if (options.tail) {
+          await finalize(controller, err);
+          return;
+        }
+        await end(err);
         controller.error(err);
       }
     },
     cancel() {
       void cancelQuietly(reader);
-      void end();
+      void end(null, true);
     },
   });
 

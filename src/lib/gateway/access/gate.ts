@@ -2,7 +2,8 @@ import "server-only";
 import { bearerToken, isPayloadTooLarge, readJSON } from "@/lib/http/api";
 import { clientIp, ipAllowed } from "@/lib/http/client-ip";
 import { authenticateBearer } from "@/lib/gateway/access/principal";
-import { defaultEntityIds, redactJSON } from "@/lib/gateway/safety/pii";
+import { defaultEntityIds } from "@/lib/gateway/safety/pii";
+import { redactWithPolicy } from "@/lib/gateway/safety/pii-detector";
 import { bindPiiVault, PiiVault } from "@/lib/gateway/safety/pii-vault";
 import { outputGuard, screenRequest } from "@/lib/gateway/safety/guardrails";
 import { alertPiiBlocked, alertUpstreamFailure } from "@/lib/alerts/notify";
@@ -14,13 +15,13 @@ import { anthropicErrorBody, GateError, openAIErrorBody } from "@/lib/gateway/er
 import { errorFields } from "@/lib/logging/format";
 import { logger } from "@/lib/logging/logger";
 import { modelAlias } from "@/lib/gateway/catalog/model-alias";
-import { aliasChain } from "@/lib/gateway/routing/runtime";
+import { aliasChain, servedOnlyInternally } from "@/lib/gateway/routing/runtime";
 import { accessOpen, endpointAllowed } from "@/lib/gateway/access/key-restrictions";
 import { gatewayPath } from "@/lib/gateway/api-paths";
 import { routeOf } from "@/lib/gateway/routing/route-pool";
 import { NextResponse } from "next/server";
 import type { JsonMap, Principal } from "@/types/gateway";
-import type { RoutePool } from "@/types/routing";
+import type { PublicPool } from "@/types/routing";
 import type { OutputGuard } from "@/types/guardrails";
 
 export function toGateError(err: unknown): GateError {
@@ -47,6 +48,7 @@ export function wantsAnthropicErrors(req: Request): boolean {
 export const CLIENT_RETRY_MAX_SECONDS = 60;
 
 export function retryHeaders(gate: GateError, now = Date.now()): Record<string, string> {
+  if (gate.requestScoped) return { "x-should-retry": "false" };
   if (gate.retryAt === null || (gate.status !== 429 && gate.status < 500)) return {};
   const seconds = Math.max(1, Math.ceil((gate.retryAt - now) / 1000));
   return {
@@ -94,7 +96,7 @@ export function withTrace(principal: Principal, endpoint: string): Principal {
   };
 }
 
-export async function gateRequest(req: Request, pool: RoutePool = "api"): Promise<Principal> {
+export async function gateRequest(req: Request, pool: PublicPool = "api"): Promise<Principal> {
   const token = bearerToken(req);
   const path = requestPath(req);
   const principal = { ...withTrace(await authenticateBearer(token), path), pool };
@@ -130,6 +132,11 @@ export function modelPermitted(principal: Principal, model: string): boolean {
   const allowed = principal.models;
   if (!allowed.length && !principal.key?.templates.length) return true;
   return allowed.includes("*") || allowed.includes(modelAlias(routeOf(model, principal.pool ?? "api").alias));
+}
+
+export async function featureModelPermitted(principal: Principal, model: string): Promise<boolean> {
+  if (modelPermitted(principal, model)) return true;
+  return !principal.dataRules && (await servedOnlyInternally(model));
 }
 
 export function allowModel(principal: Principal, model: string): void {
@@ -188,7 +195,13 @@ export async function applyGuardrails(
   const entities = pii.entities.length ? pii.entities : defaultEntityIds();
   const found = new Set<string>();
   const vault = pii.mode === "restore" ? new PiiVault() : null;
-  const redacted = redactJSON(screened.body, entities, "", found, vault) as JsonMap;
+  let redacted: JsonMap;
+  try {
+    redacted = (await redactWithPolicy(screened.body, pii, found, vault)) as JsonMap;
+  } catch (err) {
+    if (!(err instanceof GateError)) throw err;
+    return rejectRequest(principal, body, err, "pii_blocked");
+  }
   if (trace) {
     trace.request = redacted;
     trace.piiMode = pii.mode;

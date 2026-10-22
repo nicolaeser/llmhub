@@ -4,6 +4,8 @@ import { spendTag } from "@/lib/gateway/access/gate";
 import { GateError } from "@/lib/gateway/errors";
 import { screenRequest } from "@/lib/gateway/safety/guardrails";
 import { defaultEntityIds, redactJSON } from "@/lib/gateway/safety/pii";
+import { redactWithPolicy } from "@/lib/gateway/safety/pii-detector";
+import { vaultOf } from "@/lib/gateway/safety/pii-vault";
 import { resolvePolicies } from "@/lib/settings/enterprise";
 import type { JsonMap, Principal } from "@/types/gateway";
 
@@ -42,7 +44,14 @@ export async function screenToolResult(
   const content = typeof screened.body.content === "string" ? screened.body.content : text;
   if (!pii.enabled) return content;
   const found = new Set<string>();
-  const redacted = redactJSON(content, pii.entities.length ? pii.entities : defaultEntityIds(), "", found) as string;
+  const vault = pii.mode === "restore" ? vaultOf(principal.trace) : null;
+  let redacted: string;
+  try {
+    redacted = (await redactWithPolicy(content, pii, found, vault)) as string;
+  } catch (err) {
+    if (!(err instanceof GateError)) throw err;
+    return reject(principal, model, body, err, "pii_blocked");
+  }
   for (const id of found) principal.trace?.piiInput.add(id);
   if (pii.mode === "block" && found.size) {
     return reject(

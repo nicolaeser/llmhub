@@ -1,9 +1,10 @@
 "use client";
 
-import { Alert, Button, Card, Chip, Surface } from "@heroui/react";
+import { Alert, Button, Card, Chip } from "@heroui/react";
 import { Plus, Settings2 } from "lucide-react";
 import { useTranslations } from "next-intl";
-import CopyButton from "@/components/console/copy-button";
+import ManageLinkField from "@/app/providers/sub-add/_components/manage-link-field";
+import ManageLinkRevoke from "@/app/providers/sub-add/_components/manage-link-revoke";
 import { PlanBadge } from "@/components/console/subscription-badge";
 import { Link } from "@/i18n/routing";
 import { subAddManagePath } from "@/lib/http/public-path";
@@ -11,18 +12,23 @@ import type { SubAddDone } from "@/types/sub-add";
 
 export default function AddedAccounts({
   added,
-  manageUrl,
-  manageToken,
+  manage,
+  unmanaged,
+  revoking,
+  onRevoke,
   canAddMore,
   onAddAnother,
 }: {
   added: SubAddDone[];
-  manageUrl: string;
-  manageToken: string;
+  manage: { token: string; url: string } | null;
+  unmanaged: string[];
+  revoking: boolean;
+  onRevoke: () => void;
   canAddMore: boolean;
   onAddAnother: () => void;
 }) {
   const t = useTranslations("SubAdd.done");
+  const tManage = useTranslations("SubAdd.manage");
   const tProviders = useTranslations("Providers");
   return (
     <Card className="gap-4">
@@ -42,31 +48,48 @@ export default function AddedAccounts({
               <Chip size="sm" variant="soft" color="success" className="whitespace-nowrap">
                 {t("outcome", { outcome: item.outcome })}
               </Chip>
+              {unmanaged.includes(item.manageToken) ? (
+                <Chip size="sm" variant="soft" color="default" className="whitespace-nowrap">
+                  {t("noManage")}
+                </Chip>
+              ) : null}
             </li>
           ))}
         </ul>
-        <Alert status="accent">
-          <Alert.Indicator />
-          <Alert.Content className="min-w-0">
-            <Alert.Title>{t("manageTitle")}</Alert.Title>
-            <Alert.Description>{t("manageHint")}</Alert.Description>
-            <div className="mt-2 flex min-w-0 items-start gap-2">
-              <Surface variant="secondary" className="min-w-0 flex-1 rounded-lg px-3 py-2">
-                <code className="font-mono text-sm break-all">{manageUrl}</code>
-              </Surface>
-              <CopyButton text={manageUrl} label={t("copy")} variant="secondary" />
-            </div>
-          </Alert.Content>
-        </Alert>
+        {manage ? (
+          <Alert status="accent">
+            <Alert.Indicator />
+            <Alert.Content className="min-w-0">
+              <Alert.Title>{t("manageTitle")}</Alert.Title>
+              <Alert.Description>{t("manageHint")}</Alert.Description>
+              <ManageLinkField url={manage.url} copyLabel={t("copy")} />
+              <div className="mt-3">
+                <ManageLinkRevoke label={t("skipManage")} variant="ghost" pending={revoking} onConfirm={onRevoke} />
+              </div>
+            </Alert.Content>
+          </Alert>
+        ) : (
+          <Alert status="default">
+            <Alert.Indicator />
+            <Alert.Content className="min-w-0">
+              <Alert.Title>{tManage("revokedTitle")}</Alert.Title>
+              <Alert.Description>
+                {t("manageOffHint")} {tManage("revokedNext")}
+              </Alert.Description>
+            </Alert.Content>
+          </Alert>
+        )}
       </Card.Content>
       <Card.Footer className="flex flex-wrap gap-2">
-        <Link
-          href={subAddManagePath(manageToken)}
-          className="inline-flex items-center gap-1.5 text-sm font-medium text-accent"
-        >
-          <Settings2 size={14} aria-hidden />
-          {t("openManage")}
-        </Link>
+        {manage ? (
+          <Link
+            href={subAddManagePath(manage.token)}
+            className="inline-flex items-center gap-1.5 text-sm font-medium text-accent"
+          >
+            <Settings2 size={14} aria-hidden />
+            {t("openManage")}
+          </Link>
+        ) : null}
         {canAddMore ? (
           <Button size="sm" variant="secondary" onPress={onAddAnother} className="ml-auto">
             <Plus size={14} aria-hidden />

@@ -13,15 +13,18 @@ import {
   type useOverlayState,
 } from "@heroui/react";
 import { useTranslations } from "next-intl";
+import ModelTestButton, { internalAliases, modelPickerItem } from "@/components/console/model-test";
 import SearchSelect from "@/components/console/search-select";
-import { choicesForRole, type ModelChoice, type ModelRole } from "@/lib/models/model-role";
-import { createKnowledgeAction, updateKnowledgeAction } from "../_action";
+import { choicesForRole, type ModelRole } from "@/lib/models/model-role";
+import { createKnowledgeAction, testFeatureModelAction, updateKnowledgeAction } from "../_action";
 import { formats } from "@/i18n/formats";
 import { isActionFail } from "@/lib/http/action-result";
 import { MAX_CHUNK_TOKENS, MIN_CHUNK_TOKENS } from "@/schemas/rag";
+import type { FeatureModelChoice } from "@/types/models";
 import type { KnowledgeCompany, KnowledgeProject, VectorStoreDefaults, VectorStoreView } from "@/types/rag";
 import { useErrorToast } from "@/components/console/use-error-toast";
 import FormDialog from "@/components/console/form-dialog";
+import { InternalBadge } from "@/components/console/subscription-badge";
 
 const DEFAULT_KEY = ":default";
 const WHOLE_COMPANY_KEY = ":company";
@@ -41,6 +44,7 @@ export default function StoreDialog({
   projects,
   defaults,
   models,
+  canTestModels,
   initialCompany,
   onSaved,
 }: {
@@ -49,7 +53,8 @@ export default function StoreDialog({
   companies: KnowledgeCompany[];
   projects: KnowledgeProject[];
   defaults: VectorStoreDefaults;
-  models: ModelChoice[];
+  models: FeatureModelChoice[];
+  canTestModels: boolean;
   initialCompany: string;
   onSaved: (store: VectorStoreView) => void;
 }) {
@@ -79,18 +84,28 @@ export default function StoreDialog({
   const valid = nameValid && (editing !== null || (Boolean(orgId) && embeddingValid && chunkValid && overlapValid));
   const companyProjects = projects.filter((project) => project.orgId === orgId);
 
+  const internal = internalAliases(models);
+
   function modelItems(role: ModelRole, current: string, fallback: string) {
     return [
       {
         id: DEFAULT_KEY,
         label: t("dialog.modelDefault", { hasDefault: fallback ? "true" : "false", alias: fallback }),
+        badge: internal.has(fallback) ? <InternalBadge /> : undefined,
       },
-      ...choicesForRole(models, role, current).map((model) => ({
-        id: model.alias,
-        label: model.label,
-        detail: model.label === model.alias ? undefined : model.alias,
-      })),
+      ...choicesForRole(models, role, current).map((model) => modelPickerItem(model, internal)),
     ];
+  }
+
+  function testButton(role: "embedding" | "ocr" | "rerank", model: string, fallback: string) {
+    if (!canTestModels) return null;
+    return (
+      <ModelTestButton
+        model={model}
+        isDisabled={pending || !(model || fallback)}
+        test={(chosen) => testFeatureModelAction({ feature: "knowledge", role, model: chosen })}
+      />
+    );
   }
 
   const pickModel = (key: string) => (key === DEFAULT_KEY ? "" : key);
@@ -197,7 +212,7 @@ export default function StoreDialog({
         </p>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2">
-          <div className="sm:col-span-2">
+          <div className="space-y-2 sm:col-span-2">
             <SearchSelect
               isRequired={!defaults.embedding_model}
               label={t("dialog.embeddingModel")}
@@ -205,11 +220,7 @@ export default function StoreDialog({
               items={
                 defaults.embedding_model
                   ? modelItems("embedding", embeddingModel, defaults.embedding_model)
-                  : choicesForRole(models, "embedding", embeddingModel).map((model) => ({
-                      id: model.alias,
-                      label: model.label,
-                      detail: model.label === model.alias ? undefined : model.alias,
-                    }))
+                  : choicesForRole(models, "embedding", embeddingModel).map((model) => modelPickerItem(model, internal))
               }
               value={embeddingModel || (defaults.embedding_model ? DEFAULT_KEY : "")}
               onChange={(key) => setEmbeddingModel(pickModel(key))}
@@ -218,6 +229,7 @@ export default function StoreDialog({
                 hasDefault: defaults.embedding_model ? "true" : "false",
               })}
             />
+            {testButton("embedding", embeddingModel, defaults.embedding_model)}
           </div>
           <NumberField
             fullWidth
@@ -287,22 +299,28 @@ export default function StoreDialog({
           </NumberField>
         </div>
       )}
-      <SearchSelect
-        label={t("dialog.rerankModel")}
-        items={modelItems("rerank", rerankModel, defaults.rerank_model)}
-        value={rerankModel || DEFAULT_KEY}
-        onChange={(key) => setRerankModel(pickModel(key))}
-        isDisabled={pending}
-        description={t("dialog.rerankHint")}
-      />
-      <SearchSelect
-        label={t("dialog.ocrModel")}
-        items={modelItems("ocr", ocrModel, defaults.ocr_model)}
-        value={ocrModel || DEFAULT_KEY}
-        onChange={(key) => setOcrModel(pickModel(key))}
-        isDisabled={pending}
-        description={t("dialog.ocrHint")}
-      />
+      <div className="space-y-2">
+        <SearchSelect
+          label={t("dialog.rerankModel")}
+          items={modelItems("rerank", rerankModel, defaults.rerank_model)}
+          value={rerankModel || DEFAULT_KEY}
+          onChange={(key) => setRerankModel(pickModel(key))}
+          isDisabled={pending}
+          description={t("dialog.rerankHint")}
+        />
+        {testButton("rerank", rerankModel, defaults.rerank_model)}
+      </div>
+      <div className="space-y-2">
+        <SearchSelect
+          label={t("dialog.ocrModel")}
+          items={modelItems("ocr", ocrModel, defaults.ocr_model)}
+          value={ocrModel || DEFAULT_KEY}
+          onChange={(key) => setOcrModel(pickModel(key))}
+          isDisabled={pending}
+          description={t("dialog.ocrHint")}
+        />
+        {testButton("ocr", ocrModel, defaults.ocr_model)}
+      </div>
       <NumberField
         fullWidth
         value={expiry}

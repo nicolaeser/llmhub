@@ -130,7 +130,7 @@ test("pausing and resuming an account is audited and the resume clears its marks
   try {
     assert.equal((await toggle(false)).provider.enabled, false);
     const paused = await prisma.gatewayAuditLog.findFirstOrThrow({ where: { action: "provider.pause", objectId: provider.id } });
-    assert.deepEqual(JSON.parse(paused.beforeJson), { enabled: true });
+    assert.deepEqual(JSON.parse(paused.beforeJson), { enabled: true, internal: false });
     assert.equal(JSON.parse(paused.afterJson).enabled, false);
     await assert.rejects(acquireGroup(await loadGroup(alias), undefined), (err: unknown) => isRouterError(err, "all_paused"));
 
@@ -142,7 +142,7 @@ test("pausing and resuming an account is audited and the resume clears its marks
 
     assert.equal((await toggle(true)).provider.enabled, true);
     const resumed = await prisma.gatewayAuditLog.findFirstOrThrow({ where: { action: "provider.resume", objectId: provider.id } });
-    assert.deepEqual(JSON.parse(resumed.beforeJson), { enabled: false });
+    assert.deepEqual(JSON.parse(resumed.beforeJson), { enabled: false, internal: false });
     assert.equal((await coolingDown([route])).size, 0);
     const login = await prisma.providerLogin.findUniqueOrThrow({ where: { providerId: provider.id } });
     assert.equal(login.failures, 0);
@@ -249,14 +249,15 @@ test("renewing an account through an add-account link or an auth-file import cle
   try {
     for (const route of [linked.route, imported.route]) markFailure({ id: route } as ResolvedDeployment, Date.now() + 2 * HOUR_MS);
     const linkedAccount = (await prisma.providerLogin.findUniqueOrThrow({ where: { providerId: linked.provider.id } })).account;
+    const manage = newSubAddToken();
     const stored = await storeSubAddAccount({
       linkId: link.id,
       kind: "claude",
       session: session(linkedAccount, "id-1", "linked-new"),
-      manageHash: newSubAddToken().hash,
+      manageHash: manage.hash,
       loginVerified: true,
     });
-    assert.deepEqual(stored, { providerId: linked.provider.id, outcome: "updated" });
+    assert.deepEqual(stored, { providerId: linked.provider.id, outcome: "updated", manageHash: manage.hash });
     assert.equal((await coolingDown([linked.route])).size, 0);
     assert.ok((await coolingDown([imported.route])).has(imported.route));
 

@@ -3,12 +3,29 @@ import "server-only";
 import prisma from "@/lib/db/prisma";
 import { hasPerm, PERMISSIONS } from "@/lib/auth/permissions";
 import { spendScope } from "@/lib/auth/scope";
+import { systemFeatureOf } from "@/lib/gateway/access/system-callers";
+import { asRecord } from "@/lib/gateway/core";
 import { requestTranscript, responseTranscript } from "@/lib/gateway/request-logs/log-content";
 import { replayDraft } from "@/lib/gateway/request-logs/log-replay";
 import { money } from "@/lib/utils/money";
 import type { RequestLog } from "@/generated/prisma/client";
 import type { AuthenticatedSession } from "@/types/auth";
-import type { RequestLogDetail, RequestLogRow } from "@/types/logs";
+import type { PiiRestoreSummary, RequestLogDetail, RequestLogRow } from "@/types/logs";
+
+const PLACEHOLDER_TOKEN = /^\[[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)*_\d+\]$/;
+
+function placeholderList(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((item): item is string => typeof item === "string" && PLACEHOLDER_TOKEN.test(item));
+}
+
+export function piiRestoreOf(raw: unknown): PiiRestoreSummary | null {
+  const record = asRecord(raw);
+  if (!record) return null;
+  const placeholders = placeholderList(record.placeholders);
+  if (!placeholders.length) return null;
+  return { placeholders, text: placeholderList(record.text), tools: placeholderList(record.tools) };
+}
 
 export async function requestLogLabels(rows: { keyId: string; userId: string; memberId: string }[]) {
   const keyIds = [...new Set(rows.map((row) => row.keyId).filter(Boolean))];
@@ -69,6 +86,7 @@ export function requestLogRow(
     guardOutput: row.guardOutput,
     hasContent: Boolean(row.content),
     contentSkip: row.contentSkip,
+    system: systemFeatureOf(row),
   };
 }
 
@@ -99,6 +117,7 @@ export async function findRequestLogDetail(
     upstreamModel: row.upstreamModel,
     tag: row.tag,
     error: row.error,
+    piiRestore: piiRestoreOf(row.piiRestore),
     canViewContent,
     replayable: Boolean(
       content &&

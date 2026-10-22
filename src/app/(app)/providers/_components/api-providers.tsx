@@ -1,138 +1,197 @@
 "use client";
 
-import { useState } from "react";
-import { Button, Card, Chip, Disclosure } from "@heroui/react";
-import { Plug, Plus } from "lucide-react";
-import { useTranslations } from "next-intl";
+import { Button, Chip, Table } from "@heroui/react";
+import { Download, Pause, Pencil, Play, Plug, Plus, Unplug } from "lucide-react";
+import { useFormatter, useTranslations } from "next-intl";
 import EmptyState from "@/components/console/empty-state";
 import IconTile from "@/components/console/icon-tile";
-import { isSignInKind, PROVIDER_CATALOG } from "@/lib/gateway/upstreams/provider-kinds";
-import type { ProviderKindSpec, ProviderListActions, ProviderView } from "@/types/providers";
+import RowCard, { RowCards, TABLE_FROM_LG } from "@/components/console/row-cards";
+import { InternalBadge } from "@/components/console/subscription-badge";
 import { kindIcon } from "@/components/providers/kind-icons";
-import ProviderCard from "./provider-card";
+import { PROVIDER_CATALOG } from "@/lib/gateway/upstreams/provider-kinds";
+import type { ProviderListActions, ProviderView } from "@/types/providers";
+import PolicyChips from "./policy-chips";
+import RowMenu, { type RowMenuItem } from "./row-menu";
+import { byProviderOrder, providerMenuActions, providerRow, type ProviderMenuAction } from "./provider-rows";
+import { useProviderRowActions } from "./use-provider-row-actions";
 
-const STARTER_KINDS = new Set(["openai", "anthropic", "openrouter", "openai_compat"]);
-const API_CATALOG = PROVIDER_CATALOG.filter((spec) => !isSignInKind(spec.kind));
-const STARTER_CATALOG = API_CATALOG.filter((spec) => STARTER_KINDS.has(spec.kind));
-const MORE_CATALOG = API_CATALOG.filter((spec) => !STARTER_KINDS.has(spec.kind));
+const MENU_ICONS = {
+  edit: Pencil,
+  import: Download,
+  pause: Pause,
+  resume: Play,
+  disconnect: Unplug,
+} as const;
 
 export default function ApiProviders({
   rows,
   actions,
   canManage,
+  onAdd,
 }: {
   rows: ProviderView[];
   actions: ProviderListActions;
   canManage: boolean;
+  onAdd: () => void;
 }) {
   const t = useTranslations("Providers");
-  const [browsing, setBrowsing] = useState(false);
+  const tCommon = useTranslations("Common");
+  const format = useFormatter();
+  const rowActions = useProviderRowActions({ onReplace: actions.replace, onRemove: actions.remove });
 
-  if (rows.length === 0 && !canManage) {
-    return <EmptyState icon={Plug} title={t("noneTitle")} />;
-  }
-
-  if (rows.length === 0 && !browsing) {
-    return (
+  if (rows.length === 0) {
+    return canManage ? (
       <EmptyState
         icon={Plug}
         title={t("emptyTitle")}
         description={t("empty")}
         action={
-          <Button aria-label={t("connect")} onPress={() => setBrowsing(true)}>
-            {t("connect")}
+          <Button onPress={onAdd}>
+            <Plus size={16} aria-hidden />
+            {t("toolbar.add")}
           </Button>
         }
+      />
+    ) : (
+      <EmptyState icon={Plug} title={t("noneTitle")} />
+    );
+  }
+
+  function menuLabel(action: ProviderMenuAction) {
+    if (action === "edit") return tCommon("edit");
+    if (action === "import") return t("importModels");
+    if (action === "pause") return t("menu.pause");
+    if (action === "resume") return t("menu.resume");
+    return t("menu.disconnect");
+  }
+
+  function runMenu(row: ProviderView, action: ProviderMenuAction) {
+    if (action === "edit") actions.openForm(PROVIDER_CATALOG.find((spec) => spec.kind === row.kind) ?? null, row);
+    if (action === "import") actions.openImport(row);
+    if (action === "pause") rowActions.setEnabled(row, false);
+    if (action === "resume") rowActions.setEnabled(row, true);
+    if (action === "disconnect") rowActions.askDisconnect(row);
+  }
+
+  function menu(row: ProviderView) {
+    const items: RowMenuItem<ProviderMenuAction>[] = providerMenuActions(canManage, row).map((action) => ({
+      id: action,
+      label: menuLabel(action),
+      icon: MENU_ICONS[action],
+      danger: action === "disconnect",
+    }));
+    return (
+      <RowMenu
+        label={t("actions", { name: row.name })}
+        items={items}
+        pending={rowActions.busy === row.id}
+        onAction={(action) => runMenu(row, action)}
       />
     );
   }
 
-  const catalog = rows.length > 0 ? API_CATALOG : STARTER_CATALOG;
-
-  function catalogCard(spec: ProviderKindSpec) {
-    const count = rows.filter((row) => row.kind === spec.kind).length;
-    const name = t("kindName", { kind: spec.kind });
+  function credentialChip(row: ProviderView) {
+    const { credential } = providerRow(row);
     return (
-      <Card key={spec.kind}>
-        <Card.Header className="flex-row items-start gap-3">
-          <IconTile icon={kindIcon(spec.kind)} tone={count ? "accent" : "neutral"} />
-          <div className="min-w-0 flex-1">
-            <Card.Title>{name}</Card.Title>
-            <Card.Description>{t("kindDescription", { kind: spec.kind })}</Card.Description>
-          </div>
-        </Card.Header>
-        <Card.Footer className="mt-auto flex-wrap items-center justify-between gap-2">
-          <span className="text-sm text-muted">{count ? t("connectedCount", { count }) : null}</span>
-          <Button
-            size="sm"
-            variant="secondary"
-            aria-label={t("formTitle", { mode: "connect", name })}
-            onPress={() => actions.openForm(spec, null)}
-          >
-            <Plus size={14} aria-hidden />
-            {t("connect")}
-          </Button>
-        </Card.Footer>
-      </Card>
+      <Chip
+        size="sm"
+        variant="soft"
+        color={credential === "missing" ? "warning" : "default"}
+        className="whitespace-nowrap"
+      >
+        {t("keyState", { state: credential })}
+      </Chip>
     );
   }
 
-  return (
-    <div className="space-y-8">
-      {rows.length > 0 ? (
-        <section className="space-y-3" aria-labelledby="providers-connected">
-          <div className="flex flex-wrap items-center gap-2">
-            <h2 id="providers-connected" className="text-base font-semibold tracking-tight">
-              {t("connectedTitle")}
-            </h2>
-            <Chip size="sm" variant="soft">
-              {rows.length}
-            </Chip>
-          </div>
-          <div className="grid gap-3 lg:grid-cols-2 2xl:grid-cols-3">
-            {rows.map((row) => (
-              <ProviderCard
-                key={row.id}
-                row={row}
-                canManage={canManage}
-                onEdit={(provider) =>
-                  actions.openForm(PROVIDER_CATALOG.find((spec) => spec.kind === provider.kind) ?? null, provider)
-                }
-                onImport={actions.openImport}
-                onToggled={actions.replace}
-                onDeleted={actions.remove}
-              />
-            ))}
-          </div>
-        </section>
-      ) : null}
+  function statusChip(row: ProviderView) {
+    const { active } = providerRow(row);
+    return (
+      <Chip size="sm" variant="soft" color={active ? "success" : "default"} className="whitespace-nowrap">
+        {t("enabled.state", { enabled: String(active) })}
+      </Chip>
+    );
+  }
 
-      {canManage ? (
-        <section className="space-y-3" aria-labelledby="providers-catalog">
-          <div className="space-y-1">
-            <h2 id="providers-catalog" className="text-base font-semibold tracking-tight">
-              {t("catalogTitle")}
-            </h2>
-            <p className="text-sm text-muted">{t("catalogHint")}</p>
-          </div>
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{catalog.map(catalogCard)}</div>
-          {rows.length === 0 && MORE_CATALOG.length > 0 ? (
-            <Disclosure>
-              <Disclosure.Heading>
-                <Disclosure.Trigger className="flex w-full items-center justify-between text-sm text-muted">
-                  {t("moreProviders")}
-                  <Disclosure.Indicator />
-                </Disclosure.Trigger>
-              </Disclosure.Heading>
-              <Disclosure.Content>
-                <Disclosure.Body className="grid gap-3 pt-3 sm:grid-cols-2 xl:grid-cols-4">
-                  {MORE_CATALOG.map(catalogCard)}
-                </Disclosure.Body>
-              </Disclosure.Content>
-            </Disclosure>
-          ) : null}
-        </section>
-      ) : null}
-    </div>
+  function modelCount(row: ProviderView) {
+    return <span className="text-sm tabular-nums text-foreground">{format.number(providerRow(row).models)}</span>;
+  }
+
+  function policy(row: ProviderView) {
+    return <PolicyChips policy={row.policy} fallback={<span className="text-sm text-muted">{tCommon("none")}</span>} />;
+  }
+
+  function badges(row: ProviderView) {
+    return providerRow(row).internal ? <InternalBadge /> : null;
+  }
+
+  const sorted = [...rows].sort(byProviderOrder);
+
+  return (
+    <>
+      <RowCards label={t("tabs", { tab: "api" })}>
+        {sorted.map((row) => (
+          <RowCard
+            key={row.id}
+            title={row.name}
+            description={t("kindName", { kind: row.kind })}
+            aside={
+              <>
+                {statusChip(row)}
+                {menu(row)}
+              </>
+            }
+            chips={
+              <>
+                {credentialChip(row)}
+                {badges(row)}
+              </>
+            }
+            details={[
+              { label: t("columns.models"), value: modelCount(row) },
+              { label: t("columns.policy"), value: policy(row), wide: true },
+            ]}
+          />
+        ))}
+      </RowCards>
+      <Table aria-label={t("tabs", { tab: "api" })} className={TABLE_FROM_LG}>
+        <Table.ScrollContainer>
+          <Table.Content aria-label={t("tabs", { tab: "api" })} className="min-w-[48rem]">
+            <Table.Header>
+              <Table.Column isRowHeader>{t("columns.provider")}</Table.Column>
+              <Table.Column>{t("columns.credential")}</Table.Column>
+              <Table.Column>{t("columns.models")}</Table.Column>
+              <Table.Column>{t("columns.policy")}</Table.Column>
+              <Table.Column>{tCommon("status")}</Table.Column>
+              {canManage ? <Table.Column>{tCommon("actions")}</Table.Column> : null}
+            </Table.Header>
+            <Table.Body>
+              {sorted.map((row) => (
+                <Table.Row key={row.id} id={row.id}>
+                  <Table.Cell>
+                    <div className="flex min-w-0 items-center gap-3">
+                      <IconTile icon={kindIcon(row.kind)} tone={row.enabled ? "accent" : "neutral"} size="sm" />
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-sm font-medium break-words">{row.name}</span>
+                          {badges(row)}
+                        </div>
+                        <div className="text-xs text-muted">{t("kindName", { kind: row.kind })}</div>
+                      </div>
+                    </div>
+                  </Table.Cell>
+                  <Table.Cell>{credentialChip(row)}</Table.Cell>
+                  <Table.Cell>{modelCount(row)}</Table.Cell>
+                  <Table.Cell>{policy(row)}</Table.Cell>
+                  <Table.Cell>{statusChip(row)}</Table.Cell>
+                  {canManage ? <Table.Cell>{menu(row)}</Table.Cell> : null}
+                </Table.Row>
+              ))}
+            </Table.Body>
+          </Table.Content>
+        </Table.ScrollContainer>
+      </Table>
+      {canManage ? rowActions.dialogs : null}
+    </>
   );
 }

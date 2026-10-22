@@ -76,9 +76,11 @@ export function publicProvider(row: ProviderRecord) {
     hasApiKey: Boolean(row.apiKey),
     enabled: row.enabled,
     restricted: row.restricted,
+    internal: row.internal,
     assignments: assignmentTargets(row.assignments ?? []),
     signIn: signInOf(row),
     sharedVia: row.subAdd ? row.subAdd.label : null,
+    manageActive: Boolean(row.subAdd?.manageHash),
     discovered: discoveredOf(row.discovered),
     policy: policyOf(row),
     vertex: row.kind === "vertex" ? vertexView(row) : null,
@@ -89,7 +91,7 @@ const loginSelect = { select: { account: true, plan: true, status: true } } as c
 export const providerInclude = {
   login: loginSelect,
   assignments: assignmentSelect,
-  subAdd: { select: { label: true } },
+  subAdd: { select: { label: true, manageHash: true } },
 } as const;
 
 function signInCredential(raw: string | undefined, uid: string, kind: string): SignInCredential | null {
@@ -116,7 +118,7 @@ function parsePolicy(raw: unknown): ProviderPolicyInput {
 }
 
 export function providerAuditAfter(row: ProviderRecord, extra?: Record<string, unknown>) {
-  return { name: row.name, kind: row.kind, baseUrl: row.baseUrl, policy: policyOf(row), ...extra };
+  return { name: row.name, kind: row.kind, baseUrl: row.baseUrl, policy: policyOf(row), internal: row.internal, ...extra };
 }
 
 function parseVertexTarget(raw: unknown): Partial<VertexTarget> | undefined {
@@ -154,12 +156,14 @@ export async function createProvider(input: {
   signIn?: string;
   policy?: ProviderPolicyInput;
   vertex?: Partial<VertexTarget>;
+  internal?: boolean;
 }) {
   const session = await requirePlatformPermission(PERMISSIONS.PROVIDERS_MANAGE);
   const kind = input.kind.trim();
   if (!KNOWN_KINDS.has(kind)) throw new Error("UNKNOWN_PROVIDER_KIND");
   const spec = specFor(kind);
   const signedIn = isSignInKind(kind);
+  if (signedIn && input.internal === true) throw new Error("INTERNAL_SIGN_IN");
   const credential = signedIn ? signInCredential(input.signIn, session.user.id, kind) : null;
   if (signedIn && !credential) throw new Error("SIGN_IN_REQUIRED");
   const vertex =
@@ -185,6 +189,7 @@ export async function createProvider(input: {
           kind,
           baseUrl: validBaseUrl(baseUrl || spec?.default_base_url || ""),
           apiKey: vertex ? vertex.apiKey : apiKey ? seal(apiKey) : "",
+          internal: input.internal === true,
           ...parsePolicy(input.policy),
           ...(login ? { login: { create: login } } : {}),
         },
@@ -218,11 +223,13 @@ export async function updateProvider(input: {
   signIn?: string;
   policy?: ProviderPolicyInput;
   vertex?: Partial<VertexTarget>;
+  internal?: boolean;
 }) {
   const session = await requirePlatformPermission(PERMISSIONS.PROVIDERS_MANAGE);
   const existing = await prisma.providerConnection.findUnique({ where: { id: input.id } });
   if (!existing) throw new Error("NOT_FOUND");
   const signedIn = isSignInKind(existing.kind);
+  if (signedIn && input.internal === true) throw new Error("INTERNAL_SIGN_IN");
   const credential = signedIn ? signInCredential(input.signIn, session.user.id, existing.kind) : null;
   const vertex =
     existing.kind === "vertex"
@@ -245,6 +252,7 @@ export async function updateProvider(input: {
       baseUrl: validBaseUrl(baseUrl || existing.baseUrl),
       ...(apiKey ? { apiKey: vertex ? apiKey : seal(apiKey) } : {}),
       ...(input.enabled === undefined ? {} : { enabled: input.enabled }),
+      ...(input.internal === undefined ? {} : { internal: input.internal }),
       ...(input.policy ? parsePolicy(input.policy) : {}),
       ...(login ? { login: { upsert: { create: login, update: { ...login, version: { increment: 1 } } } } } : {}),
     },
@@ -258,7 +266,7 @@ export async function updateProvider(input: {
     action: updateAction(existing.enabled, row.enabled),
     objectType: "provider",
     objectId: row.id,
-    before: { enabled: existing.enabled },
+    before: { enabled: existing.enabled, internal: existing.internal },
     after: providerAuditAfter(row, {
       enabled: row.enabled,
       keyReplaced: Boolean(apiKey),
