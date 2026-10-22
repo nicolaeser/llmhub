@@ -113,3 +113,17 @@ export type SpeedVariants = Record<RoutePool, ReadonlyMap<string, readonly Model
 export type CatalogFacts = { windows: ContextWindows; speeds: SpeedVariants };
 
 export type PooledModelChoice = ModelChoice & { pools: RoutePool[] };
+
+export type FeatureModelChoice = ModelChoice & { internal: boolean };
+
+export type ModelFeature = "mcp_builder" | "catalog" | "cache" | "knowledge";
+
+export type FeatureModelRole = "chat" | "jev" | "embedding" | "ocr" | "rerank";
+
+export type FeatureModelTest = {
+  model: string;
+  ok: boolean;
+  latencyMs: number;
+  status: number;
+  error: string;
+};

@@ -151,3 +151,5 @@ export type JevSettings = {
   model: string;
   api_key: string;
 };
+
+export type JevRoute = { kind: "key"; settings: JevSettings } | { kind: "alias"; alias: string };

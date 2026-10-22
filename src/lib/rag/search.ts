@@ -1,7 +1,7 @@
 import "server-only";
 import prisma from "@/lib/db/prisma";
 import { GateError } from "@/lib/gateway/errors";
-import { modelPermitted } from "@/lib/gateway/access/gate";
+import { adminModelPermitted } from "@/lib/gateway/access/gate";
 import { attributesOf, matchesFilter } from "@/lib/rag/filters";
 import { fileIndexes } from "@/lib/rag/index-cache";
 import { queryTerms } from "@/lib/rag/lexical";
@@ -11,7 +11,7 @@ import { touchStores, vectorDefaults } from "@/lib/rag/stores";
 import { errorFields } from "@/lib/logging/format";
 import { logger } from "@/lib/logging/logger";
 import type { Principal } from "@/types/gateway";
-import type { IndexedFile, ScoredChunk, SearchableStore, SearchHit, SearchRequest } from "@/types/rag";
+import type { IndexedFile, ModelChooser, ScoredChunk, SearchableStore, SearchHit, SearchRequest } from "@/types/rag";
 
 const RERANK_POOL = 50;
 const MIN_RERANK_POOL = 20;
@@ -77,11 +77,15 @@ async function queryVectors(
   return out;
 }
 
-async function rerankModel(principal: Principal, stores: SearchableStore[], request: SearchRequest): Promise<string> {
-  if (request.ranking.ranker === "none") return "";
-  if (request.rerankModel !== null) return request.rerankModel;
+async function rerankModel(
+  principal: Principal,
+  stores: SearchableStore[],
+  request: SearchRequest,
+): Promise<{ model: string; chosenBy: ModelChooser }> {
+  if (request.ranking.ranker === "none") return { model: "", chosenBy: "admin" };
+  if (request.rerankModel !== null) return { model: request.rerankModel, chosenBy: "caller" };
   const configured = stores.find((store) => store.rerankModel)?.rerankModel || (await vectorDefaults()).rerank_model;
-  return configured && modelPermitted(principal, configured) ? configured : "";
+  return { model: configured && adminModelPermitted(principal, configured) ? configured : "", chosenBy: "admin" };
 }
 
 async function chunkTexts(ids: string[]): Promise<Map<string, string>> {
@@ -129,14 +133,15 @@ export async function searchStores(input: {
   let ranked = [...best.values()].sort((a, b) => b.score - a.score);
   const reranker = await rerankModel(principal, searchable, request);
   const texts = new Map<string, string>();
-  if (reranker && ranked.length) {
+  if (reranker.model && ranked.length) {
     const pool = ranked.slice(0, Math.min(RERANK_POOL, Math.max(MIN_RERANK_POOL, request.maxResults * 3)));
     const loaded = await chunkTexts(pool.map(candidateKey));
     for (const [id, text] of loaded) texts.set(id, text);
     const results = await rerankTexts({
       principal,
       endpoint: input.endpoint,
-      model: reranker,
+      model: reranker.model,
+      chosenBy: reranker.chosenBy,
       query: request.queries.join("\n"),
       documents: pool.map((candidate) => texts.get(candidateKey(candidate)) ?? ""),
     });

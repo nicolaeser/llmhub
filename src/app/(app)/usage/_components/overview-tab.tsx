@@ -30,6 +30,7 @@ import { useLiveConnected, useLiveUsageToday } from "@/lib/hooks/use-live";
 import { BELOW_MD, useMediaQuery } from "@/lib/hooks/use-media-query";
 import { setSearchParams, useSearchString } from "@/lib/hooks/use-search-param";
 import { USAGE_RANGES, usageQueryFromSearch, usageQueryParams } from "@/lib/usage/usage-query";
+import { SYSTEM_SLICE, UNASSIGNED_SLICE } from "@/lib/usage/usage-stats";
 import PageStatus, { LoadError, SectionLoading } from "@/components/console/page-status";
 import RowCard, { RowCards, TABLE_FROM_LG } from "@/components/console/row-cards";
 import SearchSelect from "@/components/console/search-select";
@@ -80,8 +81,11 @@ export default function OverviewTab() {
     return <PageStatus state={usage} layout="charts" />;
   }
 
-  const label = (group: TenantGroup, id: string) =>
-    id === "unassigned" ? "" : (stats.names[id] ?? t("deleted", { group }));
+  const label = (group: TenantGroup, id: string) => {
+    if (id === UNASSIGNED_SLICE) return "";
+    if (id === SYSTEM_SLICE) return t("system");
+    return stats.names[id] ?? t("deleted", { group });
+  };
   const options = (group: TenantGroup, ids: string[]): PickerItem[] =>
     ids.map((id) =>
       stats.names[id] ? { id, label: stats.names[id] } : { id, label: t("deleted", { group }), detail: id },

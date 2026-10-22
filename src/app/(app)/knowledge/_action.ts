@@ -1,6 +1,7 @@
 "use server";
 
 import { runAction } from "@/lib/http/action-result";
+import { testFeatureModel } from "@/lib/models/feature-model-test";
 import {
   createKnowledge,
   deleteKnowledge,
@@ -32,4 +33,8 @@ export async function listKnowledgeFilesAction(...args: Parameters<typeof listKn
 
 export async function removeKnowledgeFileAction(...args: Parameters<typeof removeKnowledgeFile>) {
   return runAction(() => removeKnowledgeFile(...args));
+}
+
+export async function testFeatureModelAction(...args: Parameters<typeof testFeatureModel>) {
+  return runAction(() => testFeatureModel(...args));
 }

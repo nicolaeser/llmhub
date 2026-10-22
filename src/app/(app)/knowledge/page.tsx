@@ -345,6 +345,7 @@ export default function KnowledgePage() {
           projects={view.projects}
           defaults={view.defaults}
           models={view.models}
+          canTestModels={view.canTestModels}
           initialCompany={company === ALL_COMPANIES ? "" : company}
           onSaved={upsert}
         />

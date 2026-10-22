@@ -53,12 +53,14 @@ export default function BuilderDialog({
   state,
   model,
   models,
+  canTestModels,
   onModel,
   onCreated,
 }: {
   state: ReturnType<typeof useOverlayState>;
   model: string;
   models: McpBuilderModel[];
+  canTestModels: boolean;
   onModel: (model: string) => void;
   onCreated: (server: McpServerView) => void;
 }) {
@@ -235,6 +237,7 @@ export default function BuilderDialog({
                       <BuilderBrief
                         model={model}
                         models={models}
+                        canTestModels={canTestModels}
                         template={template}
                         instruction={instruction}
                         links={links}

@@ -98,7 +98,7 @@
     "requestJson": "Anfrage-JSON",
     "responseJson": "Antwort-JSON",
     "noPermission": "Zum Lesen von Prompts und Antworten brauchst du die Berechtigung Anfrageinhalte ansehen.",
-    "contentMissing": "{reason, select, gateway {Die Inhaltsprotokollierung war für das Gateway ausgeschaltet.} user {Die Inhaltsprotokollierung ist für diesen Konsolen-Benutzer ausgeschaltet.} member {Die Inhaltsprotokollierung ist für diese Person ausgeschaltet.} key {Die Inhaltsprotokollierung ist für diesen API-Key ausgeschaltet.} other {Für diese Anfrage sind keine Inhalte gespeichert.}}",
+    "contentMissing": "{reason, select, gateway {Die Inhaltsprotokollierung war für das Gateway ausgeschaltet.} user {Die Inhaltsprotokollierung ist für diesen Konsolen-Benutzer ausgeschaltet.} member {Die Inhaltsprotokollierung ist für diese Person ausgeschaltet.} key {Die Inhaltsprotokollierung ist für diesen API-Key ausgeschaltet.} system {System-Aufrufe speichern nie Inhalte.} other {Für diese Anfrage sind keine Inhalte gespeichert.}}",
     "truncated": "Lange Werte wurden vor dem Speichern gekürzt.",
     "noText": "Kein lesbarer Text. Sieh dir die JSON-Tabs an.",
     "noJson": "Nichts gespeichert.",

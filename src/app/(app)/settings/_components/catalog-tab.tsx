@@ -15,18 +15,23 @@ import {
 import { BookOpen, Library } from "lucide-react";
 import { useTranslations } from "next-intl";
 import IconTile from "@/components/console/icon-tile";
+import ModelTestButton, { internalAliases, modelPickerItem } from "@/components/console/model-test";
 import SearchSelect from "@/components/console/search-select";
 import { SettingSection, SettingSwitch, SettingText } from "./setting-fields";
 import { useErrorToast } from "@/components/console/use-error-toast";
 import { formats } from "@/i18n/formats";
+import { modelAlias } from "@/lib/gateway/catalog/model-alias";
 import { choicesForRole, type ModelRole } from "@/lib/models/model-role";
 import { Link } from "@/i18n/routing";
 import { useActionData } from "@/lib/hooks/use-action-data";
 import { isActionFail } from "@/lib/http/action-result";
+import type { FeatureModelRole } from "@/types/models";
 import type { CatalogSettings } from "@/types/settings";
-import { loadCatalogSettingsAction, saveCatalogSettingsAction } from "../_action";
+import { loadCatalogSettingsAction, saveCatalogSettingsAction, testFeatureModelAction } from "../_action";
 import SaveBar, { SettingsLead } from "./save-bar";
 import TabState from "./tab-state";
+
+const JEV_DEFAULT_MODEL = "jev-latest";
 
 export default function CatalogTab() {
   const t = useTranslations("Settings.catalog");
@@ -46,18 +51,23 @@ export default function CatalogTab() {
     update({ catalog_jev: { ...settings.catalog_jev, ...patch } });
   const vectors = (patch: Partial<CatalogSettings["vector_stores"]>) =>
     update({ vector_stores: { ...settings.vector_stores, ...patch } });
+  const internal = internalAliases(view.models);
   const modelItems = (role: ModelRole, current: string) => [
     { id: "none", label: t("knowledge.none") },
-    ...choicesForRole(view.models, role, current).map((model) => ({
-      id: model.alias,
-      label: model.label,
-      detail: model.label === model.alias ? undefined : model.alias,
-    })),
+    ...choicesForRole(view.models, role, current).map((model) => modelPickerItem(model, internal)),
   ];
   const pickModel = (key: string) => (key === "none" ? "" : key);
   const jevKeyReady = settings.catalog_jev.clear_api_key
     ? Boolean(settings.catalog_jev.api_key)
     : view.jevKeySet || Boolean(settings.catalog_jev.api_key);
+  const jevModel = modelAlias(settings.catalog_jev.model || JEV_DEFAULT_MODEL);
+  const jevAlias = view.models.some((model) => model.alias === jevModel);
+  const jevReady = jevKeyReady || jevAlias;
+  const jevRoute = jevKeyReady ? "key" : jevAlias ? "alias" : "none";
+  const testModel = (feature: "catalog" | "knowledge", role: FeatureModelRole) => (model: string) =>
+    testFeatureModelAction({ feature, role, model });
+  const testButton = (role: FeatureModelRole, model: string) =>
+    view.canManage ? <ModelTestButton model={model} isDisabled={!model} test={testModel("knowledge", role)} /> : null;
   const link = (href: string) => (chunks: ReactNode) => (
     <Link href={href} className="text-accent">
       {chunks}
@@ -97,8 +107,8 @@ export default function CatalogTab() {
           label={t("jev.enabled")}
           isSelected={settings.catalog_jev.enabled}
           onChange={(enabled) => jev({ enabled })}
-          isDisabled={disabled || (!settings.catalog_jev.enabled && !jevKeyReady)}
-          hint={t("jev.enabledHint", { ready: jevKeyReady ? "true" : "false" })}
+          isDisabled={disabled || (!settings.catalog_jev.enabled && !jevReady)}
+          hint={t("jev.enabledHint", { ready: jevReady ? "true" : "false" })}
         />
         {view.canManage ? (
           <>
@@ -161,14 +171,19 @@ export default function CatalogTab() {
                 </NumberField.Group>
                 <Description>{t("jev.minConfidenceHint")}</Description>
               </NumberField>
-              <SettingText
-                label={t("jev.model")}
-                value={settings.catalog_jev.model}
-                onChange={(model) => jev({ model })}
-                isDisabled={disabled}
-                placeholder="jev-latest"
-                hint={t("jev.modelHint")}
-              />
+              <div className="space-y-2">
+                <SettingText
+                  label={t("jev.model")}
+                  value={settings.catalog_jev.model}
+                  onChange={(model) => jev({ model })}
+                  isDisabled={disabled}
+                  placeholder={JEV_DEFAULT_MODEL}
+                  hint={t("jev.modelHint", { route: jevRoute, model: jevModel })}
+                />
+                {view.canManage && jevRoute === "alias" ? (
+                  <ModelTestButton model={jevModel} test={testModel("catalog", "jev")} />
+                ) : null}
+              </div>
             </Disclosure.Body>
           </Disclosure.Content>
         </Disclosure>
@@ -179,30 +194,39 @@ export default function CatalogTab() {
         <div className="flex items-start gap-3">
           <IconTile icon={Library} />
           <div className="grid min-w-0 flex-1 gap-4 md:grid-cols-2 md:items-start">
-            <SearchSelect
-              label={t("knowledge.embeddingModel")}
-              description={t("knowledge.embeddingHint")}
-              items={modelItems("embedding", settings.vector_stores.embedding_model)}
-              value={settings.vector_stores.embedding_model || "none"}
-              onChange={(key) => vectors({ embedding_model: pickModel(key) })}
-              isDisabled={disabled}
-            />
-            <SearchSelect
-              label={t("knowledge.ocrModel")}
-              description={t("knowledge.ocrHint")}
-              items={modelItems("ocr", settings.vector_stores.ocr_model)}
-              value={settings.vector_stores.ocr_model || "none"}
-              onChange={(key) => vectors({ ocr_model: pickModel(key) })}
-              isDisabled={disabled}
-            />
-            <SearchSelect
-              label={t("knowledge.rerankModel")}
-              description={t("knowledge.rerankHint")}
-              items={modelItems("rerank", settings.vector_stores.rerank_model)}
-              value={settings.vector_stores.rerank_model || "none"}
-              onChange={(key) => vectors({ rerank_model: pickModel(key) })}
-              isDisabled={disabled}
-            />
+            <div className="space-y-2">
+              <SearchSelect
+                label={t("knowledge.embeddingModel")}
+                description={t("knowledge.embeddingHint")}
+                items={modelItems("embedding", settings.vector_stores.embedding_model)}
+                value={settings.vector_stores.embedding_model || "none"}
+                onChange={(key) => vectors({ embedding_model: pickModel(key) })}
+                isDisabled={disabled}
+              />
+              {testButton("embedding", settings.vector_stores.embedding_model)}
+            </div>
+            <div className="space-y-2">
+              <SearchSelect
+                label={t("knowledge.ocrModel")}
+                description={t("knowledge.ocrHint")}
+                items={modelItems("ocr", settings.vector_stores.ocr_model)}
+                value={settings.vector_stores.ocr_model || "none"}
+                onChange={(key) => vectors({ ocr_model: pickModel(key) })}
+                isDisabled={disabled}
+              />
+              {testButton("ocr", settings.vector_stores.ocr_model)}
+            </div>
+            <div className="space-y-2">
+              <SearchSelect
+                label={t("knowledge.rerankModel")}
+                description={t("knowledge.rerankHint")}
+                items={modelItems("rerank", settings.vector_stores.rerank_model)}
+                value={settings.vector_stores.rerank_model || "none"}
+                onChange={(key) => vectors({ rerank_model: pickModel(key) })}
+                isDisabled={disabled}
+              />
+              {testButton("rerank", settings.vector_stores.rerank_model)}
+            </div>
           </div>
         </div>
         <Disclosure>

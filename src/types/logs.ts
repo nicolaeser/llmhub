@@ -16,7 +16,7 @@ export type LogFilterValues = {
   to: string;
 };
 
-export type ContentSkip = "" | "gateway" | "user" | "member" | "key";
+export type ContentSkip = "" | "system" | "gateway" | "user" | "member" | "key";
 
 export type TranscriptKind = "text" | "reasoning" | "tool_call" | "tool_result" | "media";
 

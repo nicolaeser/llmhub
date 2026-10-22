@@ -2,7 +2,7 @@ import type { CostCap } from "@/types/billing";
 import type { GuardrailPolicy, OutputGuard, PiiMode } from "@/types/guardrails";
 import type { VirtualKeyView } from "@/types/keys";
 import type { RouteLimits } from "@/types/model-templates";
-import type { PublicPool, ResolvedDeployment, ResolvedModelGroup } from "@/types/routing";
+import type { PublicPool, ResolvedDeployment, ResolvedModelGroup, RoutePool } from "@/types/routing";
 
 export type JsonMap = Record<string, unknown>;
 
@@ -15,8 +15,10 @@ export type Principal = {
   memberId: string;
   models: string[];
   routeLimits: RouteLimits;
+  dataRules?: boolean;
   guardrails?: GuardrailPolicy | null;
-  pool?: PublicPool;
+  pool?: RoutePool;
+  system?: boolean;
   trace?: RequestTrace;
 };
 

@@ -2,13 +2,14 @@ import "server-only";
 import { usageFromUnknown } from "@/lib/gateway/billing/billing";
 import { asNumber, asRecord } from "@/lib/gateway/core";
 import { GateError } from "@/lib/gateway/errors";
-import { allowModel, applyGuardrails, modelChain, withTrace } from "@/lib/gateway/access/gate";
+import { adminModelPermitted, allowModel, applyGuardrails, modelChain, withTrace } from "@/lib/gateway/access/gate";
 import { meter } from "@/lib/gateway/billing/meter";
 import { forwardToModel } from "@/lib/gateway/dispatch/upstream";
 import { ocrText } from "@/lib/rag/extract";
 import { parseEmbedding } from "@/lib/rag/vectors";
 import type { JsonMap, Principal, ProxyFirstResult } from "@/types/gateway";
 import type { TokenUsage } from "@/types/billing";
+import type { ModelChooser } from "@/types/rag";
 
 export const RERANK_PATH = "/rerank";
 
@@ -41,20 +42,31 @@ export function rerankResults(json: unknown): { index: number; score: number }[]
   });
 }
 
+function allowChosenModel(principal: Principal, model: string, chosenBy: ModelChooser): void {
+  if (chosenBy === "caller") return allowModel(principal, model);
+  if (!model) throw new GateError(400, "missing_required_parameter", "model is required", { param: "model" });
+  if (!adminModelPermitted(principal, model)) {
+    throw new GateError(403, "model_access_denied", "model not allowed for this key", { param: "model" });
+  }
+}
+
 export async function forwardModelCall(input: {
   principal: Principal;
   model: string;
+  chosenBy: ModelChooser;
   path: string;
   body: JsonMap;
   usage: (json: unknown) => Partial<TokenUsage>;
 }): Promise<ProxyFirstResult> {
-  const { principal, model } = input;
-  allowModel(principal, model);
+  const { principal, model, chosenBy } = input;
+  allowChosenModel(principal, model, chosenBy);
   const { body: clean } = await applyGuardrails(input.body, principal);
-  const aliases = modelChain(principal, model, clean);
+  const aliases = chosenBy === "caller" ? modelChain(principal, model, clean) : [model];
   const usage = meter(principal, model, input.body);
   try {
-    const hit = await forwardToModel(aliases, principal, input.path, clean);
+    const hit = await forwardToModel(aliases, principal, input.path, clean, {
+      pool: chosenBy === "caller" ? "api" : "internal",
+    });
     await usage.ok(hit, input.usage(hit.json));
     return hit;
   } catch (err) {
@@ -79,6 +91,7 @@ export async function embedTexts(input: {
   const hit = await forwardModelCall({
     principal: withTrace(input.principal, input.endpoint),
     model: input.model,
+    chosenBy: "admin",
     path: "/embeddings",
     body,
     usage: embeddingUsage,
@@ -105,6 +118,7 @@ export async function ocrDocument(input: {
   const hit = await forwardModelCall({
     principal: withTrace(input.principal, input.endpoint),
     model: input.model,
+    chosenBy: "admin",
     path: "/ocr",
     body: { model: input.model, document: input.document },
     usage: embeddingUsage,
@@ -116,12 +130,14 @@ export async function rerankTexts(input: {
   principal: Principal;
   endpoint: string;
   model: string;
+  chosenBy: ModelChooser;
   query: string;
   documents: string[];
 }): Promise<{ index: number; score: number }[]> {
   const hit = await forwardModelCall({
     principal: withTrace(input.principal, input.endpoint),
     model: input.model,
+    chosenBy: input.chosenBy,
     path: RERANK_PATH,
     body: { model: input.model, query: input.query, documents: input.documents, top_n: input.documents.length },
     usage: rerankUsage,

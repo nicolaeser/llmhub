@@ -29,6 +29,7 @@
   },
   "deleted": "{group, select, org {Gelöschtes Unternehmen} team {Gelöschte Abteilung} project {Gelöschtes Projekt} member {Gelöschte Person} key {Gelöschter Key} user {Gelöschter Konsolen-Benutzer} other {Gelöscht}}",
   "withoutUsage": "{group, select, org {Unternehmen ohne Nutzung} team {Abteilung ohne Nutzung} project {Projekt ohne Nutzung} member {Person ohne Nutzung} key {Key ohne Nutzung} user {Konsolen-Benutzer ohne Nutzung} other {Keine Nutzung}}",
+  "system": "System",
   "chargeback": "Chargeback-CSV",
   "columns": {
     "name": "Name",

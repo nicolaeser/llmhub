@@ -3,7 +3,7 @@ import { recordUsage, recordUsageOrLog, usageFromUnknown } from "@/lib/gateway/b
 import { cacheGet, cacheKey, cachePut, semanticAdd, semanticFind, semanticProbe, unitVector } from "@/lib/gateway/cache/response-cache";
 import { asRecord, ownerId } from "@/lib/gateway/core";
 import { GateError } from "@/lib/gateway/errors";
-import { modelChain, modelPermitted, spendTag, withTrace } from "@/lib/gateway/access/gate";
+import { adminModelPermitted, spendTag, withTrace } from "@/lib/gateway/access/gate";
 import { endpointAllowed } from "@/lib/gateway/access/key-restrictions";
 import { forwardToModel } from "@/lib/gateway/dispatch/upstream";
 import { errorFields } from "@/lib/logging/format";
@@ -25,22 +25,16 @@ export function semanticAllowed(pool: RoutePool, principal: Principal, semantic:
     pool === "api" &&
     semantic.enabled &&
     Boolean(semantic.model) &&
-    modelPermitted(principal, semantic.model) &&
+    adminModelPermitted(principal, semantic.model) &&
     endpointAllowed(principal.key?.allowed_endpoints ?? [], EMBEDDINGS_ENDPOINT)
   );
 }
 
 async function embedPrompt(principal: Principal, model: string, text: string, tag: string): Promise<Float32Array | null> {
   const body: JsonMap = { model, input: text };
-  let aliases: string[];
-  try {
-    aliases = modelChain(principal, model, body);
-  } catch {
-    return null;
-  }
   const traced = withTrace(principal, EMBEDDINGS_ENDPOINT);
   const started = Date.now();
-  const hit = await forwardToModel(aliases, principal, "/embeddings", body).catch(async (err) => {
+  const hit = await forwardToModel([model], principal, "/embeddings", body, { pool: "internal" }).catch(async (err) => {
     await recordUsageOrLog({
       principal: traced,
       model,

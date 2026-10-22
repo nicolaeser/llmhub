@@ -1,7 +1,9 @@
 import "server-only";
-import { asStringMap, ownerId } from "@/lib/gateway/core";
+import { asStringMap, ERR_UNKNOWN_GROUP, ownerId } from "@/lib/gateway/core";
 import { GateError } from "@/lib/gateway/errors";
 import { allowModel, readBody } from "@/lib/gateway/access/gate";
+import { hiddenFrom, outsidePool, routable } from "@/lib/gateway/routing/route-pool";
+import { loadGroup } from "@/lib/gateway/routing/runtime";
 import { parseRequest } from "@/lib/gateway/protocols/parse-request";
 import { chunkSettings } from "@/lib/rag/chunking";
 import { kickIngest } from "@/lib/rag/ingest";
@@ -55,6 +57,29 @@ export function searchRequest(body: z.infer<typeof searchVectorStoreSchema>): Se
   };
 }
 
+async function assertApiRoutable(model: string, param: string): Promise<void> {
+  const unknown = new GateError(404, "model_not_found", "no deployment for model", { param });
+  const group = await loadGroup(model).catch((err: unknown) => {
+    if (err === ERR_UNKNOWN_GROUP) throw unknown;
+    throw err;
+  });
+  if (hiddenFrom("api", group.mapped)) throw unknown;
+  if (group.mapped.length && !group.mapped.some(routable("api")) && !group.overflow_group) {
+    throw new GateError(404, "model_not_found", outsidePool("api").message, { param });
+  }
+}
+
+export async function allowCallerModels(
+  principal: Principal,
+  models: Partial<Record<"embedding_model" | "rerank_model" | "ocr_model", string | null>>,
+): Promise<void> {
+  for (const [param, model] of Object.entries(models)) {
+    if (!model) continue;
+    allowModel(principal, model);
+    await assertApiRoutable(model, param);
+  }
+}
+
 export async function createStoreFor(
   principal: Principal,
   body: z.infer<typeof createVectorStoreSchema>,
@@ -69,7 +94,11 @@ export async function createStoreFor(
       { param: "embedding_model" },
     );
   }
-  for (const model of [embeddingModel, body.rerank_model, body.ocr_model]) if (model) allowModel(principal, model);
+  await allowCallerModels(principal, {
+    embedding_model: body.embedding_model,
+    rerank_model: body.rerank_model,
+    ocr_model: body.ocr_model,
+  });
   const chunk = chunkSettings(body.chunking_strategy);
   const store = await createVectorStore({
     owner: storeOwner(principal),

@@ -132,6 +132,10 @@ export function modelPermitted(principal: Principal, model: string): boolean {
   return allowed.includes("*") || allowed.includes(modelAlias(routeOf(model, principal.pool ?? "api").alias));
 }
 
+export function adminModelPermitted(principal: Principal, model: string): boolean {
+  return !principal.dataRules || modelPermitted(principal, model);
+}
+
 export function allowModel(principal: Principal, model: string): void {
   if (!model) {
     throw new GateError(400, "missing_required_parameter", "model is required", { param: "model" });

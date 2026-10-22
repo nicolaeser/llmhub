@@ -2,7 +2,7 @@ import "server-only";
 import prisma from "@/lib/db/prisma";
 import { storedSelect, type StoredRow } from "@/lib/gateway/catalog/catalog-entries";
 import { CATALOG_REFRESH_MS, getCatalogState, jevErrorOutdated } from "@/lib/gateway/catalog/catalog-state";
-import { jevReady } from "@/lib/gateway/catalog/jev";
+import { jevRoute } from "@/lib/gateway/catalog/jev";
 import { catalogStatus, splitTag, trustedKind } from "@/lib/gateway/catalog/model-catalog";
 import { catalogRouting, getEnterprise } from "@/lib/settings/enterprise";
 import type {
@@ -59,7 +59,7 @@ async function withCurrentJev(state: CatalogState | null, settings: JevSettings 
   if (!state || !jevErrorOutdated(state, settings)) return state;
   const { scheduleCatalogTask } = await import("@/lib/gateway/catalog/catalog-tasks");
   await scheduleCatalogTask({ task: "rebuild" });
-  return { ...state, jev: { ...state.jev, error: "", configured: jevReady(settings) } };
+  return { ...state, jev: { ...state.jev, error: "", configured: Boolean(await jevRoute(settings)) } };
 }
 
 export async function loadCatalogView(): Promise<Omit<CatalogView, "canManage" | "canConfigure">> {
@@ -119,7 +119,7 @@ export async function loadCatalogView(): Promise<Omit<CatalogView, "canManage" |
     tags: [...new Set(list.map((view) => view.tag).filter(Boolean))].sort(),
     state: await withCurrentJev(state, enterprise.catalog_jev),
     refreshMs: CATALOG_REFRESH_MS,
-    jevReady: jevReady(enterprise.catalog_jev),
+    jevReady: Boolean(await jevRoute(enterprise.catalog_jev)),
     autoRoutesDefault: catalogRouting(enterprise).autoRoutes,
   };
 }

@@ -13,13 +13,17 @@ import {
   ToggleButtonGroup,
 } from "@heroui/react";
 import { useTranslations } from "next-intl";
+import ModelTestButton from "@/components/console/model-test";
+import { InternalBadge } from "@/components/console/subscription-badge";
 import { MCP_BUILDER_TEMPLATES } from "@/schemas/mcp";
 import type { McpBuilderModel, McpBuilderTemplate, McpDocsFileRow, McpDocsLinkRow } from "@/types/mcp";
+import { testFeatureModelAction } from "../_action";
 import BuilderSources from "./builder-sources";
 
 export default function BuilderBrief({
   model,
   models,
+  canTestModels,
   template,
   instruction,
   links,
@@ -38,6 +42,7 @@ export default function BuilderBrief({
 }: {
   model: string;
   models: McpBuilderModel[];
+  canTestModels: boolean;
   template: McpBuilderTemplate;
   instruction: string;
   links: McpDocsLinkRow[];
@@ -55,7 +60,8 @@ export default function BuilderBrief({
   onSourceErrors: Dispatch<SetStateAction<Record<string, string>>>;
 }) {
   const t = useTranslations("Mcp");
-  const selected = models.some((item) => item.alias === model) ? model : null;
+  const current = models.find((item) => item.alias === model) ?? null;
+  const selected = current?.alias ?? null;
 
   function chooseTemplate(next: McpBuilderTemplate) {
     onTemplate(next);
@@ -91,14 +97,28 @@ export default function BuilderBrief({
         >
           <Label>{t("builder.model")}</Label>
           <Select.Trigger>
-            <Select.Value />
+            <Select.Value>
+              {({ defaultChildren, isPlaceholder }) =>
+                isPlaceholder || !current ? (
+                  defaultChildren
+                ) : (
+                  <span className="flex min-w-0 items-center gap-2">
+                    <span className="truncate">{current.label}</span>
+                    {current.internal ? <InternalBadge /> : null}
+                  </span>
+                )
+              }
+            </Select.Value>
             <Select.Indicator />
           </Select.Trigger>
           <Select.Popover>
             <ListBox>
               {models.map((item) => (
                 <ListBox.Item key={item.alias} id={item.alias} textValue={item.label}>
-                  {item.label}
+                  <span className="flex min-w-0 items-center gap-2">
+                    <span className="truncate">{item.label}</span>
+                    {item.internal ? <InternalBadge /> : null}
+                  </span>
                   <ListBox.ItemIndicator />
                 </ListBox.Item>
               ))}
@@ -107,6 +127,13 @@ export default function BuilderBrief({
           <Description>{t("builder.modelHint")}</Description>
         </Select>
       )}
+      {canTestModels && models.length ? (
+        <ModelTestButton
+          model={selected ?? ""}
+          isDisabled={pending || !selected}
+          test={(chosen) => testFeatureModelAction({ feature: "mcp_builder", role: "chat", model: chosen })}
+        />
+      ) : null}
       <div className="space-y-2">
         <Label>{t("builder.template")}</Label>
         <ToggleButtonGroup

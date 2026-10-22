@@ -98,7 +98,7 @@
     "requestJson": "Request JSON",
     "responseJson": "Response JSON",
     "noPermission": "You need the View request content permission to read prompts and responses.",
-    "contentMissing": "{reason, select, gateway {Content logging was turned off for the gateway.} user {Content logging is turned off for this console user.} member {Content logging is turned off for this person.} key {Content logging is turned off for this API key.} other {No content is stored for this request.}}",
+    "contentMissing": "{reason, select, gateway {Content logging was turned off for the gateway.} user {Content logging is turned off for this console user.} member {Content logging is turned off for this person.} key {Content logging is turned off for this API key.} system {System calls never store content.} other {No content is stored for this request.}}",
     "truncated": "Long values were shortened before they were stored.",
     "noText": "No readable text. Check the JSON tabs.",
     "noJson": "Nothing stored.",
