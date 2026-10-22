@@ -5,7 +5,7 @@ import { anthropicToChat, chatToAnthropic, withCacheBreakpoints } from "@/lib/ga
 import { plainModel } from "@/lib/gateway/catalog/model-alias";
 import { hiddenFrom, outsidePool, routable } from "@/lib/gateway/routing/route-pool";
 import { speaksAnthropic, speaksGoogle, speaksKimi, speaksMuse } from "@/lib/gateway/upstreams/provider-kinds";
-import { fastModeRefusal, withClaudeBetas, withClaudeIdentity } from "@/lib/gateway/upstreams/claude";
+import { entitlementRefusal, withClaudeBetas, withClaudeIdentity } from "@/lib/gateway/upstreams/claude";
 import {
   ANTIGRAVITY_STREAM_PATH,
   antigravityCompletion,
@@ -426,7 +426,7 @@ export function upstreamError(status: number, json: unknown, headers?: Headers):
   const error = asRecord(asRecord(json)?.error);
   const passCode = status !== 401 && status !== 403 && typeof error?.code === "string" && error.code;
   const message = upstreamErrorMessage(status, json);
-  const requestScoped = status === 429 && fastModeRefusal(message);
+  const requestScoped = status === 429 && entitlementRefusal(message);
   return new GateError(status || 502, "upstream_error", message, {
     param: typeof error?.param === "string" ? error.param : null,
     upstreamCode: passCode || undefined,

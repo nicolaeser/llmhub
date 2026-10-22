@@ -347,6 +347,7 @@ test("a fast mode refusal is answered without cooling or rotating accounts", asy
   const response = gateResponse(failure, new Request("http://hub.local/api/subscription/v1/messages", { method: "POST" }));
   assert.equal(response.status, 429);
   assert.equal(response.headers.get("retry-after"), null);
+  assert.equal(response.headers.get("x-should-retry"), "false");
 });
 
 test("Anthropic API keys keep a session on one key while other traffic still spreads", async () => {

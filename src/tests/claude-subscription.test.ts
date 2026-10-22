@@ -209,7 +209,7 @@ test("Retry-After drives short throttles with a little jitter on every provider"
   assert.equal(upstreamRetryAt(400, {}, now, apiKey, () => 0), null);
 });
 
-test("a fast mode credits refusal belongs to the request, not the account", async () => {
+test("fast mode and long context entitlement refusals belong to the request, not the account", async () => {
   const { gateResponse } = await import("@/lib/gateway/access/gate");
   const refusal = upstreamError(
     429,
@@ -218,6 +218,17 @@ test("a fast mode credits refusal belongs to the request, not the account", asyn
   );
   assert.equal(refusal.requestScoped, true);
   assert.equal(refusal.retryAt, null);
+  const longContext = upstreamError(
+    429,
+    { type: "error", error: { type: "rate_limit_error", message: "Extra usage is required for long context requests." } },
+    new Headers({ "retry-after": "60", "anthropic-ratelimit-unified-status": "allowed" }),
+  );
+  assert.equal(longContext.requestScoped, true);
+  assert.equal(longContext.retryAt, null);
+  const scoped = gateResponse(longContext, new Request("http://hub.local/api/subscription/v1/messages", { method: "POST" }));
+  assert.equal(scoped.status, 429);
+  assert.equal(scoped.headers.get("retry-after"), null);
+  assert.equal(scoped.headers.get("x-should-retry"), "false");
   const throttle = upstreamError(429, { type: "error", error: { message: "Rate limited" } }, new Headers({ "retry-after": "8" }));
   assert.equal(throttle.requestScoped, false);
   const response = gateResponse(throttle, new Request("http://hub.local/api/v1/messages", { method: "POST" }));

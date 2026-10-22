@@ -65,10 +65,18 @@ export function withClaudeIdentity(body: JsonMap): JsonMap {
   return { ...body, system: [{ type: "text", text: CLAUDE_CODE_IDENTITY }, ...systemBlocks(body.system)] };
 }
 
-export function fastModeRefusal(message: string): boolean {
-  const text = message.toLowerCase();
+function fastModeRefusal(text: string): boolean {
   return (
     text.includes("fast request rejected") ||
     (text.includes("fast") && (text.includes("usage credits") || text.includes("credits are required")))
   );
+}
+
+function longContextRefusal(text: string): boolean {
+  return text.includes("long context") && text.includes("extra usage");
+}
+
+export function entitlementRefusal(message: string): boolean {
+  const text = message.toLowerCase();
+  return fastModeRefusal(text) || longContextRefusal(text);
 }

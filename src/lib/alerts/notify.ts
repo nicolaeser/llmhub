@@ -94,6 +94,7 @@ export async function fireAlert(event: WebhookEvent, message: string): Promise<v
 }
 
 export function shouldAlert(err: unknown): boolean {
+  if ((err as { requestScoped?: unknown }).requestScoped === true) return false;
   if (isRouterError(err, "no_healthy") || isRouterError(err, "signed_out")) return true;
   const status = (err as { status?: number }).status ?? 0;
   const code = (err as { code?: string }).code;
