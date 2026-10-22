@@ -8,7 +8,7 @@ import { parseArgs } from "node:util";
 const { values: args } = parseArgs({
   options: {
     host: { type: "string", default: "127.0.0.1" },
-    port: { type: "string", default: "55438" },
+    port: { type: "string", default: "0" },
     "ttfb-ms": { type: "string", default: "400" },
     "tokens-per-sec": { type: "string", default: "120" },
     "output-tokens": { type: "string", default: "160" },
@@ -19,8 +19,17 @@ const { values: args } = parseArgs({
     "error-529": { type: "string", default: "0" },
     "stream-error": { type: "string", default: "0" },
     disconnect: { type: "string", default: "0" },
+    "retry-after": { type: "string", default: "5" },
+    "unified-429": { type: "string", default: "allowed" },
+    "long-rate": { type: "string", default: "0" },
+    "long-output-tokens": { type: "string", default: "2400" },
   },
 });
+
+const UNIFIED_429_MODES = new Set(["rejected", "allowed", "none"]);
+const LOOPBACK_HOSTS = new Set(["127.0.0.1", "::1", "localhost"]);
+if (!LOOPBACK_HOSTS.has(args.host)) throw new Error("the mock upstream only listens on a loopback address");
+if (!UNIFIED_429_MODES.has(args["unified-429"])) throw new Error(`--unified-429 must be one of ${[...UNIFIED_429_MODES].join(", ")}`);
 
 const config = {
   ttfbMs: Number(args["ttfb-ms"]),
@@ -33,8 +42,11 @@ const config = {
   error529: Number(args["error-529"]),
   streamError: Number(args["stream-error"]),
   disconnect: Number(args.disconnect),
+  retryAfter: Number(args["retry-after"]),
+  longRate: Number(args["long-rate"]),
+  longOutputTokens: Number(args["long-output-tokens"]),
   resetSeconds: 0,
-  unified429: true,
+  unified429: args["unified-429"],
   accounts: {},
 };
 
@@ -157,9 +169,10 @@ function toolName(body) {
 
 function plan(body, settings) {
   const thinking = body?.thinking && body.thinking.type !== "disabled" ? varied(settings.thinkingTokens, settings.jitter) : 0;
-  const text = Math.max(CHUNK_TOKENS, varied(settings.outputTokens, settings.jitter));
+  const long = body?.stream === true && Math.random() < settings.longRate;
+  const text = Math.max(CHUNK_TOKENS, varied(long ? settings.longOutputTokens : settings.outputTokens, settings.jitter));
   const tool = Array.isArray(body?.tools) && body.tools.length > 0 && Math.random() < settings.toolUse;
-  return { thinking, text, tool, name: toolName(body) };
+  return { thinking, text, tool, long, name: toolName(body) };
 }
 
 function errorPayload(type, message) {
@@ -194,11 +207,11 @@ function sendInjected(res, status, account, oauth, settings, entry) {
   if (status === 429) {
     const mode = settings.unified429 === true ? "rejected" : settings.unified429 || "none";
     const unified = oauth && mode !== "none" ? unifiedHeaders(account, mode === "rejected", settings.resetSeconds) : {};
-    const headers = { "retry-after": String(settings.resetSeconds || 30), ...unified };
+    const headers = { "retry-after": String(settings.retryAfter || settings.resetSeconds || 30), ...unified };
     json(res, 429, errorPayload("rate_limit_error", "This request would exceed your account's rate limit."), headers);
     return;
   }
-  json(res, 529, errorPayload("overloaded_error", "Overloaded"));
+  json(res, 529, errorPayload("overloaded_error", "Overloaded"), { "retry-after": String(settings.retryAfter || 30) });
 }
 
 function messageShell(id, model, usage) {
@@ -245,11 +258,13 @@ async function streamMessage(res, ctx) {
     sent += 1;
     if (sent === disconnectAt) {
       bump(counters.injected, "disconnect");
+      entry.injected = "disconnect";
       res.socket?.destroy();
       return false;
     }
     if (sent === errorAt) {
       bump(counters.injected, "stream_error");
+      entry.injected = "stream_error";
       sse(res, "error", errorPayload("overloaded_error", "Overloaded"));
       res.end();
       return false;
@@ -350,6 +365,7 @@ async function messages(req, res, entry) {
   entry.cacheWrite = usage.cache_creation_input_tokens;
   const ctx = { id, model: body.model, usage, shape: plan(body, settings), settings, oauth, account, entry };
   entry.stream = body.stream === true;
+  entry.long = ctx.shape.long;
   entry.outcome = body.stream === true ? await streamMessage(res, ctx) : await plainMessage(res, ctx);
   entry.status = 200;
   entry.endAt = now();
@@ -492,7 +508,8 @@ server.keepAliveTimeout = 65_000;
 server.headersTimeout = 70_000;
 server.requestTimeout = 0;
 server.listen(Number(args.port), args.host, () => {
-  console.log(JSON.stringify({ mock: `http://${args.host}:${args.port}`, config }));
+  const { port } = server.address();
+  console.log(JSON.stringify({ mock: `http://${args.host}:${port}`, config }));
 });
 
 for (const signal of ["SIGINT", "SIGTERM"]) {

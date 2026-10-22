@@ -18,6 +18,7 @@ const { values: args } = parseArgs({
   options: {
     mock: { type: "string", default: "http://127.0.0.1:55438" },
     accounts: { type: "string", default: "4" },
+    "api-keys": { type: "string", default: "2" },
     members: { type: "string", default: "20" },
     model: { type: "string", default: "claude-load" },
     upstream: { type: "string", default: "claude-opus-5-5" },
@@ -105,20 +106,24 @@ async function seedStructure(memberCount: number) {
   return { orgId: org.id, teamIds, memberIds };
 }
 
-async function seedProviders(accountCount: number) {
-  const api = await createProvider({ name: "Mock Anthropic API", kind: "anthropic", baseUrl: args.mock, apiKey: "loadtest-api-key" });
+async function seedProviders(accountCount: number, apiKeyCount: number) {
+  const apiIds: string[] = [];
+  for (let i = 0; i < apiKeyCount; i++) {
+    const api = await createProvider({ name: `Mock Anthropic API ${i + 1}`, kind: "anthropic", baseUrl: args.mock, apiKey: `loadtest-api${i + 1}-key` });
+    apiIds.push(api.provider.id);
+  }
   const files = Array.from({ length: accountCount }, (_, i) => claudeAuthFile(`acct${i + 1}`));
   const imported = await importUploads("loadtest", files);
   const failed = imported.results.filter((result) => result.status === "failed");
   if (failed.length) throw new Error(`claude import failed: ${JSON.stringify(failed)}`);
-  return { apiId: api.provider.id, accounts: imported.providers.map((provider) => ({ id: provider.id, account: provider.signIn?.account ?? "" })) };
+  return { apiIds, accounts: imported.providers.map((provider) => ({ id: provider.id, account: provider.signIn?.account ?? "" })) };
 }
 
 async function main() {
   const user = await seedAdmin();
   const seeded = await runAsPrincipal(ownerSession(user), async () => {
     const structure = await seedStructure(Number(args.members));
-    const providers = await seedProviders(Number(args.accounts));
+    const providers = await seedProviders(Number(args.accounts), Number(args["api-keys"]));
     await createModelGroup({
       alias: args.model,
       strategy: "least_inflight",
@@ -127,7 +132,7 @@ async function main() {
       overflowGroup: "",
       fallbackGroups: [],
       deployments: [
-        deployment("anthropic", providers.apiId),
+        ...providers.apiIds.map((id) => deployment("anthropic", id)),
         ...providers.accounts.map((account) => deployment("claude", account.id)),
       ],
     });

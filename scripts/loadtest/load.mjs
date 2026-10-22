@@ -1,8 +1,9 @@
 import { execFile } from "node:child_process";
 import { randomBytes, randomUUID } from "node:crypto";
-import { readFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, readFileSync, writeFileSync } from "node:fs";
 import { Agent, request as httpRequest } from "node:http";
 import { performance } from "node:perf_hooks";
+import { clearTimeout } from "node:timers";
 import { setTimeout as sleep } from "node:timers/promises";
 import { parseArgs, promisify } from "node:util";
 
@@ -23,25 +24,42 @@ const { values: args } = parseArgs({
     "warm-turns": { type: "string", default: "6" },
     "max-history-kb": { type: "string", default: "600" },
     "abort-rate": { type: "string", default: "0" },
+    "early-abort-share": { type: "string", default: "0.3" },
     "client-timeout-ms": { type: "string", default: "330000" },
     control: { type: "string", multiple: true, default: [] },
     out: { type: "string", default: "" },
+    "timings-out": { type: "string", default: "" },
     label: { type: "string", default: "" },
   },
 });
 
+const MAX_SESSIONS = 300;
+const MAX_SECONDS = 1200;
+const LOOPBACK_HOSTS = new Set(["127.0.0.1", "localhost", "[::1]"]);
+
+function loopback(raw, name) {
+  const url = new URL(raw);
+  if (!LOOPBACK_HOSTS.has(url.hostname)) throw new Error(`--${name} must point at a loopback address, got ${url.hostname}`);
+  return url;
+}
+
 const state = JSON.parse(readFileSync(args.state, "utf8"));
-const base = new URL(args.base);
+const base = loopback(args.base, "base");
+if (args.mock) loopback(args.mock, "mock");
 const prefix = args.mount === "api" ? "/api/v1" : "/api/subscription/v1";
 const agent = new Agent({ keepAlive: true, maxSockets: Infinity });
 const [thinkMin, thinkMax] = args["think-ms"].split(":").map(Number);
 const countRate = Number(args["count-tokens"]);
 const abortRate = Number(args["abort-rate"]);
+const earlyAbortShare = Number(args["early-abort-share"]);
 const maxHistory = Number(args["max-history-kb"]) * 1024;
 const stages = args.stages.split(",").map((item, index) => {
   const [sessions, seconds] = item.split(":").map(Number);
+  if (!(Number.isInteger(sessions) && sessions > 0 && sessions <= MAX_SESSIONS)) throw new Error(`stage ${index}: sessions must be 1 to ${MAX_SESSIONS}`);
+  if (!(seconds > 0)) throw new Error(`stage ${index}: seconds must be positive`);
   return { index, sessions, seconds };
 });
+if (stages.reduce((sum, stage) => sum + stage.seconds, 0) > MAX_SECONDS) throw new Error(`the stages may run at most ${MAX_SECONDS} s in total`);
 
 const TOOL_NAMES = ["Bash", "Read", "Edit", "Write", "Glob", "Grep", "TodoWrite", "WebFetch", "Task", "NotebookEdit", "MultiEdit", "LS", "ExitPlanMode", "WebSearch", "BashOutput", "KillShell"];
 const FILLER = "Follow the repository conventions, keep changes small, verify with the real checks, and report what changed. ";
@@ -251,7 +269,7 @@ class StreamCheck {
   }
 }
 
-function send(path, body, session, onData) {
+function send(path, body, session, onData, abortMs = 0) {
   return new Promise((resolve) => {
     const payload = JSON.stringify(body);
     const sentAt = now();
@@ -283,6 +301,12 @@ function send(path, body, session, onData) {
       },
     );
     req.setTimeout(Number(args["client-timeout-ms"]), () => req.destroy(new Error("client_timeout")));
+    if (abortMs > 0) {
+      const timer = setTimeout(() => {
+        if (!result.headersAt) req.destroy(new Error("client_abort"));
+      }, abortMs);
+      req.on("close", () => clearTimeout(timer));
+    }
     req.on("error", (err) => {
       result.endAt = now();
       result.error ||= err.code ?? err.message;
@@ -305,7 +329,10 @@ function errorTypeOf(result) {
 async function streamTurn(session, stageIndex, records) {
   const check = new StreamCheck(state.model);
   let buffer = "";
-  const abortAfter = Math.random() < abortRate ? 2 + Math.floor(Math.random() * 20) : -1;
+  const aborting = Math.random() < abortRate;
+  const early = aborting && Math.random() < earlyAbortShare;
+  const abortAfter = aborting && !early ? 2 + Math.floor(Math.random() * 20) : -1;
+  const abortMs = early ? between(60, 240) : 0;
   let events = 0;
   const result = await send("/messages", messagesBody(session, true), session, (chunk) => {
     buffer += chunk.replace(/\r\n/g, "\n");
@@ -320,16 +347,22 @@ async function streamTurn(session, stageIndex, records) {
       if (events === abortAfter) return false;
     }
     return true;
-  });
-  const aborted = abortAfter > 0 && events >= abortAfter;
-  const record = { kind: "messages", stage: stageIndex, session: session.id, status: result.status, sentAt: result.sentAt, headersAt: result.headersAt, firstEventAt: check.firstEventAt, endAt: result.endAt, reqBytes: result.reqBytes, bytes: result.bytes, id: check.id, aborted };
+  }, abortMs);
+  const abortedEarly = early && result.error === "client_abort";
+  const aborted = abortedEarly || (abortAfter > 0 && events >= abortAfter);
+  const record = { kind: "messages", stage: stageIndex, session: session.id, status: result.status, sentAt: result.sentAt, headersAt: result.headersAt, firstEventAt: check.firstEventAt, endAt: result.endAt, reqBytes: result.reqBytes, bytes: result.bytes, id: check.id, aborted, abortPhase: aborted ? (abortedEarly ? "before_headers" : "mid_stream") : "" };
+  if (abortedEarly) {
+    record.problem = "client_abort_before_headers";
+    records.push(record);
+    return null;
+  }
   if (result.status !== 200) {
     record.error = errorTypeOf(result);
     records.push(record);
     return null;
   }
   if (aborted) {
-    record.problem = "client_abort";
+    record.problem = "client_abort_mid_stream";
     records.push(record);
     return null;
   }
@@ -498,25 +531,113 @@ function serverMetrics(from, to, requests) {
   };
 }
 
-function accountSwitches(timings, sessionIds) {
-  const bySession = new Map();
-  for (const item of timings.filter((entry) => entry.path === "/v1/messages" && entry.session && sessionIds.has(entry.session)).sort((a, b) => a.receivedAt - b.receivedAt)) {
-    const list = bySession.get(item.session) ?? [];
-    list.push(item.account);
-    bySession.set(item.session, list);
-  }
-  let switches = 0;
-  let moved = 0;
-  for (const list of bySession.values()) {
-    let changed = 0;
-    for (let i = 1; i < list.length; i++) if (list[i] !== list[i - 1]) changed += 1;
-    switches += changed;
-    if (changed) moved += 1;
-  }
-  return { sessions: bySession.size, movedSessions: moved, switches };
+function failedUpstream(item) {
+  return item.status !== 200 || Boolean(item.injected);
 }
 
-function summarize(stage, records, timings, extra) {
+const PIN_HOLD_WINDOW_MS = 65_000;
+const PIN_MOVE_STREAK = 3;
+
+function accountSwitches(timings, sessionIds, from) {
+  const messages = timings.filter((entry) => entry.path === "/v1/messages").sort((a, b) => a.receivedAt - b.receivedAt);
+  const failures = new Map();
+  for (const item of messages) {
+    if (!failedUpstream(item)) continue;
+    const list = failures.get(item.account) ?? [];
+    list.push(item.receivedAt);
+    failures.set(item.account, list);
+  }
+  const failedWithin = (account, at) => (failures.get(account) ?? []).some((time) => time <= at && time >= at - PIN_HOLD_WINDOW_MS);
+  const bySession = new Map();
+  for (const item of messages) {
+    if (!item.session || !sessionIds.has(item.session)) continue;
+    const list = bySession.get(item.session) ?? [];
+    list.push(item);
+    bySession.set(item.session, list);
+  }
+  const totals = { sessions: 0, sessionsOffHome: 0, offHomeTurns: 0, offHomeAfterFailure: 0, offHomeUnexplained: 0, pinMoves: 0, unexplainedPinMoves: 0 };
+  const examples = [];
+  for (const list of bySession.values()) {
+    if (list.some((item) => item.receivedAt >= from)) totals.sessions += 1;
+    let home = "";
+    let streak = { account: "", count: 0, explained: true };
+    let off = 0;
+    let unexplained = 0;
+    let sessionFailedAt = -Infinity;
+    for (const item of list) {
+      const counted = item.receivedAt >= from;
+      if (failedUpstream(item)) {
+        sessionFailedAt = item.receivedAt;
+        continue;
+      }
+      if (!home) home = item.account;
+      if (item.account === home) {
+        streak = { account: "", count: 0, explained: true };
+        continue;
+      }
+      const explained = failedWithin(home, item.receivedAt) || item.receivedAt - sessionFailedAt <= PIN_HOLD_WINDOW_MS;
+      if (counted) {
+        off += 1;
+        if (explained) totals.offHomeAfterFailure += 1;
+        else unexplained += 1;
+      }
+      streak = streak.account === item.account ? { ...streak, count: streak.count + 1 } : { account: item.account, count: 1, explained };
+      if (streak.count >= PIN_MOVE_STREAK) {
+        if (counted) {
+          totals.pinMoves += 1;
+          if (!streak.explained) totals.unexplainedPinMoves += 1;
+        }
+        home = item.account;
+        streak = { account: "", count: 0, explained: true };
+      }
+    }
+    totals.offHomeTurns += off;
+    totals.offHomeUnexplained += unexplained;
+    if (off) totals.sessionsOffHome += 1;
+    if (unexplained && examples.length < 5) {
+      examples.push(list.filter((item) => item.receivedAt >= from - PIN_HOLD_WINDOW_MS).map((item) => [Math.round(item.receivedAt), item.account, item.status, item.injected ?? item.outcome ?? ""].join(":")));
+    }
+  }
+  return { ...totals, unexplainedExamples: examples };
+}
+
+const TIMELINE_LIMIT = 300;
+
+function failureTimeline(records, timings, from) {
+  const upstream = timings
+    .filter((item) => item.path === "/v1/messages" && failedUpstream(item))
+    .map((item) => ({ at: Math.round(item.receivedAt - from), source: "upstream", account: item.account, what: item.injected ?? String(item.status) }));
+  const client = records
+    .filter((record) => record.error)
+    .map((record) => ({ at: Math.round(record.sentAt - from), source: "client", what: record.error }));
+  return [...upstream, ...client].sort((a, b) => a.at - b.at).slice(0, TIMELINE_LIMIT);
+}
+
+function upstreamOutcomes(timings) {
+  const messages = timings.filter((item) => item.path === "/v1/messages");
+  return {
+    byStatus: tally(messages, "status"),
+    injected: tally(messages.filter((item) => item.injected), "injected"),
+    outcomes: tally(messages.filter((item) => item.outcome), "outcome"),
+    long: messages.filter((item) => item.long).length,
+  };
+}
+
+async function bookings(since) {
+  const out = await psql(
+    `select status, outcome, stream, count(*) from "RequestLog" where "createdAt" >= '${new Date(since).toISOString()}' group by 1, 2, 3 order by 4 desc`,
+  );
+  return out
+    .trim()
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => {
+      const [status, outcome, stream, count] = line.split("\t");
+      return { status: Number(status), outcome, stream: stream === "t", count: Number(count) };
+    });
+}
+
+function summarize(stage, records, timings, extra, from) {
   const messages = records.filter((record) => record.kind === "messages");
   const ok = messages.filter((record) => record.status === 200 && !record.problem);
   const counts = records.filter((record) => record.kind === "count");
@@ -551,7 +672,9 @@ function summarize(stage, records, timings, extra) {
     headersMs: spread(ok.map((record) => record.headersAt - record.sentAt)),
     totalMs: spread(ok.map((record) => record.endAt - record.sentAt)),
     overheadMs: { beforeUpstream: spread(pre), firstByte: spread(firstByte), afterUpstreamEnd: spread(tail) },
-    upstream: { messages: upstream.length, byAccount: tally(upstream, "account"), cacheReadShare: cacheRead + cacheWrite ? Math.round((cacheRead / (cacheRead + cacheWrite)) * 1000) / 1000 : null },
+    aborts: tally(messages.filter((record) => record.aborted), "abortPhase"),
+    failures: failureTimeline(records, timings, from),
+    upstream: { messages: upstream.length, byAccount: tally(upstream, "account"), ...upstreamOutcomes(timings), cacheReadShare: cacheRead + cacheWrite ? Math.round((cacheRead / (cacheRead + cacheWrite)) * 1000) / 1000 : null },
     ...extra,
   };
 }
@@ -568,7 +691,9 @@ function printStage(summary) {
     `tail p50/p99=${summary.overheadMs.afterUpstreamEnd.p50}/${summary.overheadMs.afterUpstreamEnd.p99}`,
     `errors=${JSON.stringify(summary.errors)}`,
     `problems=${JSON.stringify(summary.problems)}`,
-  ];
+    `offhome=${summary.stickiness.offHomeTurns} (after failure ${summary.stickiness.offHomeAfterFailure}, unexplained ${summary.stickiness.offHomeUnexplained}) pinmoves=${summary.stickiness.pinMoves}`,
+    summary.server ? `cpu/req=${summary.server.cpuMsPerRequest}ms poolwait/req=${summary.server.poolWaitMsPerRequest}ms elu=${summary.server.loopUtilization}` : "",
+  ].filter(Boolean);
   console.log(row.join(" "));
 }
 
@@ -591,6 +716,7 @@ async function main() {
   const loops = [];
   const summaries = [];
   const started = Date.now();
+  const runTimingStart = now();
   scheduleControls(started);
   for (const stage of stages) {
     clock.stage = stage.index;
@@ -611,12 +737,14 @@ async function main() {
     }
     const stageRecords = records.filter((record) => record.stage === stage.index);
     const statements = await statementStats();
-    const timings = args.mock ? ((await getJson(`${new URL("/__timings", args.mock)}?since=${timingStart}`)) ?? []) : [];
+    const runTimings = args.mock ? ((await getJson(`${new URL("/__timings", args.mock)}?since=${runTimingStart}`)) ?? []) : [];
+    const timings = runTimings.filter((item) => item.receivedAt >= timingStart);
     const sessionIds = new Set(sessions.map((session) => session.id));
+    if (args["timings-out"]) appendFileSync(args["timings-out"], `${JSON.stringify({ stage: stage.index, timings })}\n`);
     const calls = statements.reduce((sum, item) => sum + item.calls, 0);
     const writes = statements.filter((item) => /^\s*(insert|update|delete)/i.test(item.query)).reduce((sum, item) => sum + item.calls, 0);
     const summary = summarize(stage, stageRecords, timings, {
-      stickiness: accountSwitches(timings, sessionIds),
+      stickiness: accountSwitches(runTimings, sessionIds, timingStart),
       server: serverMetrics(stageStart, Date.now(), stageRecords.length),
       postgres: args["pg-container"]
         ? {
@@ -629,14 +757,25 @@ async function main() {
             topByTime: [...statements].sort((a, b) => b.totalMs - a.totalMs).slice(0, 8),
           }
         : null,
-    });
+    }, timingStart);
     summaries.push(summary);
     printStage(summary);
   }
   for (const session of sessions) session.stopped = true;
   await Promise.race([Promise.all(loops), sleep(60_000)]);
   agent.destroy();
-  const report = { label: args.label, mount: args.mount, base: args.base, stages: summaries, startedAt: new Date(started).toISOString() };
+  await sleep(2000);
+  const aborted = records.filter((record) => record.kind === "messages" && record.aborted);
+  const booked = await bookings(started);
+  const cancelled = booked.filter((row) => row.outcome === "cancelled").reduce((sum, row) => sum + row.count, 0);
+  const totals = {
+    requests: records.length,
+    clientAborts: tally(aborted, "abortPhase"),
+    bookedCancelled: cancelled,
+    bookings: booked,
+  };
+  if (args["pg-container"]) console.log(`aborts=${JSON.stringify(totals.clientAborts)} booked cancelled=${cancelled} bookings=${JSON.stringify(booked)}`);
+  const report = { label: args.label, mount: args.mount, base: args.base, stages: summaries, totals, startedAt: new Date(started).toISOString() };
   if (args.out) writeFileSync(args.out, `${JSON.stringify(report, null, 2)}\n`);
   process.exit(0);
 }
