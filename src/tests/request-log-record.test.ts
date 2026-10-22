@@ -301,6 +301,69 @@ test("stored log content is masked with the effective PII policy, including over
   assert.ok(keyOff.includes("ada@acme.com"));
 });
 
+test("restore mode records which placeholders went out and where the reply used them, never the values", async () => {
+  const { writeRequestLog } = await import("@/lib/gateway/request-logs/request-log");
+  const { PiiVault, bindPiiVault } = await import("@/lib/gateway/safety/pii-vault");
+  const write = async (who: Principal, response: unknown) => {
+    calls.length = 0;
+    await writeRequestLog({
+      principal: who,
+      model: "gpt",
+      deployment,
+      status: 200,
+      outcome: "ok",
+      latencyMs: 5,
+      tag: "",
+      promptTokens: 1,
+      completionTokens: 1,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
+      cost: 0,
+      response,
+    });
+    return storedLog();
+  };
+  const restoring = (logContent: boolean) => {
+    const traced = trace({
+      piiMode: "restore",
+      piiInput: new Set(["EMAIL_ADDRESS", "IP_ADDRESS"]),
+      request: { messages: [{ role: "user", content: "mail [EMAIL_ADDRESS_1] from [IP_ADDRESS_1]" }] },
+    });
+    const vault = new PiiVault();
+    vault.placeholder("EMAIL_ADDRESS", "ada@acme.com");
+    vault.placeholder("IP_ADDRESS", "203.0.113.9");
+    bindPiiVault(traced, vault);
+    return principal({ key: keyView({ log_content: logContent }), trace: traced });
+  };
+  const reply = {
+    choices: [
+      {
+        message: {
+          role: "assistant",
+          content: "Mailing [EMAIL_ADDRESS_1]",
+          tool_calls: [{ id: "t1", type: "function", function: { name: "ping", arguments: '{"host":"[IP_ADDRESS_1]"}' } }],
+        },
+      },
+    ],
+  };
+  const summary = { placeholders: ["[EMAIL_ADDRESS_1]", "[IP_ADDRESS_1]"], text: ["[EMAIL_ADDRESS_1]"], tools: ["[IP_ADDRESS_1]"] };
+
+  const logged = await write(restoring(true), reply);
+  assert.deepEqual(logged.piiRestore, summary);
+  assert.equal(logged.piiMode, "restore");
+  const stored = JSON.stringify(logged);
+  assert.equal(stored.includes("ada@acme.com"), false);
+  assert.equal(stored.includes("203.0.113.9"), false);
+  assert.ok(stored.includes("[IP_ADDRESS_1]"));
+
+  const withoutContent = await write(restoring(false), reply);
+  assert.equal(withoutContent.content, undefined);
+  assert.deepEqual(withoutContent.piiRestore, summary);
+
+  const masked = await write(principal({ trace: trace({ piiMode: "mask" }) }), reply);
+  assert.equal("piiRestore" in masked, false);
+});
+
 test("assertBudget is async and resolves to the remaining budget", async () => {
   const { assertBudget } = await import("@/lib/gateway/billing/billing");
   table("virtualKey").set("key_1", { id: "key_1", spend: 4, maxBudget: 10, budgetDuration: "", spendResetAt: null, createdAt: new Date() });

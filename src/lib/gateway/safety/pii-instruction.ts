@@ -4,12 +4,13 @@ import { vaultOf } from "@/lib/gateway/safety/pii-vault";
 import type { JsonMap, RequestTrace } from "@/types/gateway";
 
 export const PII_RESTORE_INSTRUCTION = [
-  "Privacy note from the gateway: before this conversation reached you, personal data in it was replaced with numbered placeholders such as [EMAIL_ADDRESS_1] or [PHONE_NUMBER_2].",
-  "Every numbered placeholder in your reply is replaced with the original value before the user sees it, so the user sees the real data.",
-  "Treat each placeholder as the actual value it stands for and write it exactly as given, with brackets, capital letters, and number, wherever that value belongs, including code, tables, links, and tool call arguments.",
-  "The same placeholder always means the same value.",
-  "Never say that data is missing, masked, redacted, or a placeholder, never ask for the real value, and never invent placeholders or change their numbers.",
-  "Placeholders without a number, such as [SECRET], are removed credentials that are not restored.",
+  "Privacy note from the gateway: this gateway is a privacy proxy between you and the user.",
+  "Before the conversation reached you, it replaced personal data with numbered placeholders of the form [TYPE_N].",
+  "It puts the real values back into everything you write before the user or any tool sees it: text, code, commands, file contents, and tool call arguments.",
+  "So treat each placeholder exactly as the real value and work normally: run the commands, write the code, and pass the placeholder to tools where the value belongs.",
+  "Never say that you cannot see a value, never ask the user for it, and never tell the user to run something themselves because of a placeholder.",
+  "The same placeholder always means the same value. Write placeholders exactly as given, and never invent new ones or change their numbers.",
+  "Placeholders without a number, such as [SECRET], are removed credentials that are not put back; for those you may say that a credential was removed.",
 ].join(" ");
 
 const PLAYGROUND_CHAT_PATH = "/internal-api/playground/chat";

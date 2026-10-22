@@ -78,19 +78,94 @@ if (!existsSync(piiPath)) {
 
   test("masks full, compressed, zoned, and IPv4-mapped IPv6 addresses", async () => {
     const { redactPii } = await import("@/lib/gateway/safety/pii");
-    const samples = [
-      "2001:0db8:85a3:0000:0000:8a2e:0370:7334",
-      "2001:db8:85a3::8a2e:370:7334",
-      "2001:db8::1",
-      "fe80::1ff:fe23:4567:890a",
-      "fe80::1%eth0",
-      "::ffff:192.0.2.128",
-      "::1",
+    const both = ["IP_ADDRESS", "PRIVATE_IP_ADDRESS"];
+    const samples: [string, string][] = [
+      ["2001:0db8:85a3:0000:0000:8a2e:0370:7334", "IP_ADDRESS"],
+      ["2001:db8:85a3::8a2e:370:7334", "IP_ADDRESS"],
+      ["2001:db8::1", "IP_ADDRESS"],
+      ["::ffff:192.0.2.128", "IP_ADDRESS"],
+      ["fe80::1ff:fe23:4567:890a", "PRIVATE_IP_ADDRESS"],
+      ["fe80::1%eth0", "PRIVATE_IP_ADDRESS"],
+      ["::1", "PRIVATE_IP_ADDRESS"],
     ];
-    for (const sample of samples) {
-      assert.equal(redactPii(`Host ${sample} antwortet.`, ["IP_ADDRESS"]), "Host [IP_ADDRESS] antwortet.", sample);
+    for (const [sample, id] of samples) {
+      assert.equal(redactPii(`Host ${sample} antwortet.`, both), `Host [${id}] antwortet.`, sample);
     }
     assert.equal(redactPii("[2001:db8::1]:8080", ["IP_ADDRESS"]), "[[IP_ADDRESS]]:8080");
+  });
+
+  test("internal and public IPv4 and IPv6 addresses are separate entities", async () => {
+    const { redactPii } = await import("@/lib/gateway/safety/pii");
+    const internal = [
+      "10.20.30.40",
+      "172.16.0.1",
+      "172.31.255.254",
+      "192.168.10.4",
+      "127.0.0.1",
+      "169.254.10.20",
+      "100.64.0.1",
+      "100.127.255.254",
+      "0.0.0.0",
+      "::1",
+      "fe80::1%eth0",
+      "febf::1",
+      "fc00::1",
+      "fd12:3456:789a::1",
+      "::ffff:192.168.10.4",
+      "::ffff:10.0.0.1",
+      "::ffff:c0a8:a04",
+    ];
+    const external = [
+      "8.8.8.8",
+      "11.0.0.1",
+      "172.15.255.254",
+      "172.32.0.1",
+      "100.63.255.254",
+      "100.128.0.1",
+      "169.255.0.1",
+      "192.0.2.10",
+      "198.51.100.7",
+      "203.0.113.9",
+      "2001:db8::1",
+      "2001:db8:85a3::8a2e:370:7334",
+      "::ffff:203.0.113.9",
+      "fec0::1",
+    ];
+    for (const sample of internal) {
+      const text = `Ping ${sample} now.`;
+      assert.equal(redactPii(text), text, sample);
+      assert.equal(redactPii(text, ["IP_ADDRESS"]), text, sample);
+      assert.equal(redactPii(text, ["PRIVATE_IP_ADDRESS"]), "Ping [PRIVATE_IP_ADDRESS] now.", sample);
+    }
+    for (const sample of external) {
+      const text = `Ping ${sample} now.`;
+      assert.equal(redactPii(text), "Ping [IP_ADDRESS] now.", sample);
+      assert.equal(redactPii(text, ["PRIVATE_IP_ADDRESS"]), text, sample);
+    }
+    assert.equal(redactPii("ssh 192.168.10.4 then dig 8.8.8.8"), "ssh 192.168.10.4 then dig [IP_ADDRESS]");
+    assert.equal(redactPii("route 2001:db8::192.168.10.4", ["PRIVATE_IP_ADDRESS"]), "route 2001:db8::192.168.10.4");
+    assert.equal(
+      redactPii("fe80::1 and 10.0.0.1 via 203.0.113.9", ["IP_ADDRESS", "PRIVATE_IP_ADDRESS"]),
+      "[PRIVATE_IP_ADDRESS] and [PRIVATE_IP_ADDRESS] via [IP_ADDRESS]",
+    );
+  });
+
+  test("internal addresses are off by default and number separately from public ones", async () => {
+    const { defaultEntityIds, redactPii } = await import("@/lib/gateway/safety/pii");
+    const { PiiVault } = await import("@/lib/gateway/safety/pii-vault");
+    assert.equal(defaultEntityIds().includes("IP_ADDRESS"), true);
+    assert.equal(defaultEntityIds().includes("PRIVATE_IP_ADDRESS"), false);
+    const found = new Set<string>();
+    const vault = new PiiVault();
+    const out = redactPii(
+      "203.0.113.9 and 10.0.0.1, again 10.0.0.1 and 198.51.100.7",
+      ["IP_ADDRESS", "PRIVATE_IP_ADDRESS"],
+      found,
+      vault,
+    );
+    assert.equal(out, "[IP_ADDRESS_1] and [PRIVATE_IP_ADDRESS_1], again [PRIVATE_IP_ADDRESS_1] and [IP_ADDRESS_2]");
+    assert.deepEqual([...found].sort(), ["IP_ADDRESS", "PRIVATE_IP_ADDRESS"]);
+    assert.equal(vault.restore(out), "203.0.113.9 and 10.0.0.1, again 10.0.0.1 and 198.51.100.7");
   });
 
   test("leaves code scopes, times, and MAC addresses alone", async () => {
@@ -134,12 +209,31 @@ test("redactJSON collects entities but skips structural keys", async () => {
 test("splitPiiPlaceholders marks catalog placeholders only", async () => {
   const { splitPiiPlaceholders } = await import("@/lib/gateway/safety/pii");
   assert.deepEqual(splitPiiPlaceholders("Hi [EMAIL_ADDRESS], see [NOTE] and [IBAN_CODE]"), [
-    { text: "Hi ", entity: null },
-    { text: "[EMAIL_ADDRESS]", entity: "EMAIL_ADDRESS" },
-    { text: ", see [NOTE] and ", entity: null },
-    { text: "[IBAN_CODE]", entity: "IBAN_CODE" },
+    { text: "Hi ", entity: null, number: null },
+    { text: "[EMAIL_ADDRESS]", entity: "EMAIL_ADDRESS", number: null },
+    { text: ", see [NOTE] and ", entity: null, number: null },
+    { text: "[IBAN_CODE]", entity: "IBAN_CODE", number: null },
+  ]);
+  assert.deepEqual(splitPiiPlaceholders("ssh [PRIVATE_IP_ADDRESS_2] or [IP_ADDRESS_12] [NOTE_1]"), [
+    { text: "ssh ", entity: null, number: null },
+    { text: "[PRIVATE_IP_ADDRESS_2]", entity: "PRIVATE_IP_ADDRESS", number: 2 },
+    { text: " or ", entity: null, number: null },
+    { text: "[IP_ADDRESS_12]", entity: "IP_ADDRESS", number: 12 },
+    { text: " [NOTE_1]", entity: null, number: null },
   ]);
   assert.deepEqual(splitPiiPlaceholders(""), []);
+});
+
+test("piiPlaceholderGroups groups numbered placeholders by entity in first-seen order", async () => {
+  const { piiPlaceholderGroups } = await import("@/lib/gateway/safety/pii");
+  assert.deepEqual(
+    piiPlaceholderGroups(["[IP_ADDRESS_1]", "[EMAIL_ADDRESS_1]", "[IP_ADDRESS_2]", "[NOTE_1]", "[PRIVATE_IP_ADDRESS_1]"]),
+    [
+      { entity: "IP_ADDRESS", tokens: ["[IP_ADDRESS_1]", "[IP_ADDRESS_2]"] },
+      { entity: "EMAIL_ADDRESS", tokens: ["[EMAIL_ADDRESS_1]"] },
+      { entity: "PRIVATE_IP_ADDRESS", tokens: ["[PRIVATE_IP_ADDRESS_1]"] },
+    ],
+  );
 });
 
 test("long prose without punctuation is still scanned while base64 blobs are skipped", async () => {
