@@ -10,6 +10,7 @@ import { fetchGeminiModels, fetchVertexModels } from "@/lib/gateway/upstreams/go
 import { museModels } from "@/lib/gateway/upstreams/muse";
 import { isSignInKind, PROVIDER_CATALOG, speaksMuse } from "@/lib/gateway/upstreams/provider-kinds";
 import { CLAUDE_OAUTH_BETAS } from "@/lib/gateway/upstreams/claude";
+import { ANTHROPIC_VERSION_2023, ANTHROPIC_VERSION_HEADER } from "@/lib/gateway/protocols/anthropic-version";
 import { CODEX_CLIENT_VERSION, codexModelFacts } from "@/lib/gateway/upstreams/codex";
 import { asNumber, asRecord, asString } from "@/lib/gateway/core";
 import { providerAuth } from "@/lib/gateway/upstreams/credentials";
@@ -93,7 +94,7 @@ export async function fetchProviderModels(
   if (apiKey) {
     if (kind === "anthropic") {
       headers["x-api-key"] = apiKey;
-      headers["anthropic-version"] = "2023-06-01";
+      headers[ANTHROPIC_VERSION_HEADER] = ANTHROPIC_VERSION_2023;
     } else {
       headers.Authorization = `Bearer ${apiKey}`;
     }
