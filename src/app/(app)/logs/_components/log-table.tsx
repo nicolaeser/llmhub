@@ -31,7 +31,7 @@ export default function LogTable({
 
   function time(value: string) {
     const date = new Date(value);
-    return Number.isNaN(date.getTime()) ? value : format.dateTime(date, "dateTime");
+    return Number.isNaN(date.getTime()) ? value : format.dateTime(date, "zoned");
   }
 
   function keyLabel(row: RequestLogRow) {

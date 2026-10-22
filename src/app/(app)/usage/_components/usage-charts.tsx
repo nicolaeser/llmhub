@@ -196,7 +196,7 @@ export default function UsageCharts({
   ];
 
   function formatDay(day: string) {
-    return format.dateTime(new Date(`${day}T00:00:00`), "chart");
+    return format.dateTime(new Date(`${day}T00:00:00Z`), "utcDay");
   }
 
   function formatValue(dataKey: string, value: number) {

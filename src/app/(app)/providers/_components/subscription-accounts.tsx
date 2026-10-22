@@ -13,7 +13,7 @@ import { DEFAULT_ACCOUNT_STRATEGY } from "@/lib/gateway/routing/account-access";
 import { autoResetPolicy, isResetKind } from "@/lib/gateway/routing/auto-reset-policy";
 import { isSignInKind, PROVIDER_CATALOG, reportsLimits } from "@/lib/gateway/upstreams/provider-kinds";
 import { useActionData } from "@/lib/hooks/use-action-data";
-import { setDashboardTimeZone, useDashboardTimeZone } from "@/lib/hooks/use-dashboard-time-zone";
+import { setConsoleTimeZone, useConsoleTimeZone } from "@/lib/hooks/use-console-time-zone";
 import { useLiveConnected, useLiveLimits } from "@/lib/hooks/use-live";
 import { isActionFail } from "@/lib/http/action-result";
 import { withLimitItems } from "@/lib/updates/live-events";
@@ -78,7 +78,7 @@ export default function SubscriptionAccounts({
   const t = useTranslations("Subscriptions");
   const format = useFormatter();
   const now = useNow({ updateInterval: 60_000 });
-  const timeZone = useDashboardTimeZone();
+  const timeZone = useConsoleTimeZone();
   const showError = useErrorToast();
   const links = useSubAddLinks();
   const seed = useActionData<LimitSnapshotList>(() => loadSubscriptionLimitsAction());
@@ -277,7 +277,7 @@ export default function SubscriptionAccounts({
             ) : null}
           </div>
           <div className="w-full md:w-72">
-            <TimeZonePicker label={t("timeZone")} value={timeZone} isDisabled={false} onChange={setDashboardTimeZone} />
+            <TimeZonePicker label={t("timeZone")} value={timeZone} isDisabled={false} onChange={setConsoleTimeZone} />
           </div>
         </div>
       </div>

@@ -5,6 +5,7 @@ import { RouterProvider, Toast } from "@heroui/react";
 import { useRouter } from "@/i18n/routing";
 import { ThemeProvider } from "next-themes";
 import { navigateAppHref } from "@/lib/http/app-navigation";
+import TimeZoneProvider from "./time-zone-provider";
 
 export default function AppProviders({
   children,
@@ -30,8 +31,10 @@ export default function AppProviders({
           })
         }
       >
-        <Toast.Provider />
-        {children}
+        <TimeZoneProvider>
+          <Toast.Provider />
+          {children}
+        </TimeZoneProvider>
       </RouterProvider>
     </ThemeProvider>
   );
