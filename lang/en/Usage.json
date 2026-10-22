@@ -13,10 +13,10 @@
     "rate429": "Upstream 429"
   },
   "charts": {
-    "dailySpend": "Daily spend",
+    "dailySpend": "Daily spend (UTC)",
     "outcomes": "Outcomes",
     "byGroup": "Spend breakdown",
-    "dailyRequests": "Daily requests"
+    "dailyRequests": "Daily requests (UTC)"
   },
   "group": {
     "model": "Model",
@@ -61,7 +61,7 @@
   "latencyValue": "{ms, number, integer} ms",
   "pdf": {
     "title": "Usage report",
-    "period": "{days, plural, one {Last # day} other {Last # days}} · {range}",
+    "period": "{days, plural, one {Last # day} other {Last # days}} · {range} (UTC)",
     "filter": "Model: {model}",
     "generated": "Generated {at, date, long}",
     "byModel": "Spend by model",

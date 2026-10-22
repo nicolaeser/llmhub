@@ -3,7 +3,7 @@ import type { Formats } from "next-intl";
 export const formats = {
   dateTime: {
     short: { day: "numeric", month: "short", year: "numeric" },
-    chart: { day: "numeric", month: "short" },
+    utcDay: { day: "numeric", month: "short", timeZone: "UTC" },
     long: { day: "numeric", month: "long", year: "numeric" },
     month: { month: "long", year: "numeric" },
     full: { dateStyle: "full", timeStyle: "short" },

@@ -1,9 +1,12 @@
+import { parseDate, parseDateTime } from "@internationalized/date";
 import type { Prisma } from "@/generated/prisma/client";
 import type { LogFilterValues } from "@/types/logs";
 import type { SpendScope } from "@/types/structure";
 
 const DAY_MS = 86_400_000;
 const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
+const WALL_CLOCK = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,3})?)?$/;
+const UTC_OFFSET = /(?:Z|[+-]\d{2}:?\d{2})$/i;
 
 function text(value: unknown, max: number): string {
   return typeof value === "string" ? value.trim().slice(0, max) : "";
@@ -50,12 +53,44 @@ export function logsHref(filters: Partial<LogFilterValues>): string {
   return query ? `/logs?${query}` : "/logs";
 }
 
+function wallClockInstant(value: string, timeZone: string, bound: "start" | "end"): string {
+  if (DATE_ONLY.test(value)) {
+    const day = parseDate(value);
+    if (bound === "start") return day.toDate(timeZone).toISOString();
+    return new Date(day.add({ days: 1 }).toDate(timeZone).getTime() - 1).toISOString();
+  }
+  if (WALL_CLOCK.test(value)) return parseDateTime(value).toDate(timeZone).toISOString();
+  return value;
+}
+
+function zonedBound(value: string, timeZone: string, bound: "start" | "end"): string {
+  try {
+    return wallClockInstant(value, timeZone, bound);
+  } catch {
+    return value;
+  }
+}
+
+export function zonedLogFilters(filters: LogFilterValues, timeZone: string): LogFilterValues {
+  return {
+    ...filters,
+    from: zonedBound(filters.from, timeZone, "start"),
+    to: zonedBound(filters.to, timeZone, "end"),
+  };
+}
+
+function rangeInstant(value: string): Date | null {
+  if (!value) return null;
+  const date = new Date(DATE_ONLY.test(value) || UTC_OFFSET.test(value) ? value : `${value}Z`);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
 export function createdAtRange(from: string, to: string): Prisma.DateTimeFilter | undefined {
   const range: Prisma.DateTimeFilter = {};
-  const start = from ? new Date(from) : null;
-  if (start && !Number.isNaN(start.getTime())) range.gte = start;
-  const end = to ? new Date(to) : null;
-  if (end && !Number.isNaN(end.getTime())) {
+  const start = rangeInstant(from);
+  if (start) range.gte = start;
+  const end = rangeInstant(to);
+  if (end) {
     if (DATE_ONLY.test(to)) range.lt = new Date(end.getTime() + DAY_MS);
     else range.lte = end;
   }
