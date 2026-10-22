@@ -246,6 +246,7 @@ export default function SubscriptionAccounts({
         refreshing={details ? limits.refreshing.includes(details.id) : false}
         onRefresh={limits.refreshOne}
         onItem={limits.storeItem}
+        onSignIn={(row) => runMenu(row, "signIn")}
       />
 
       {canManage ? (

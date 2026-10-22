@@ -69,10 +69,12 @@
     "details": "Details",
     "refresh": "Limits aktualisieren",
     "signIn": "Neu anmelden",
+    "signInFor": "{name} neu anmelden",
     "access": "Zugriff…"
   },
   "group": {
     "title": "{provider}<muted> · {channel} · {count, plural, one {# Konto} other {# Konten}}</muted>",
+    "label": "Konten: {provider}",
     "menu": "Weitere Aktionen für {provider}",
     "settings": "{resets, select, true {Verteilung und automatische Resets…} other {Kontoverteilung…}}",
     "createLink": "Link für {provider} erstellen"
@@ -102,6 +104,7 @@
     "notStarted": "Startet mit der nächsten Anfrage",
     "reached": "Limit erreicht",
     "allLimits": "{count, plural, one {Limitdetails} other {Alle # Limits}}",
+    "allLimitsFor": "{count, plural, one {Limitdetails für {name}} other {Alle # Limits für {name}}}",
     "models": "{count, plural, one {# Modell} other {# Modelle}}",
     "group": "{family, select, gemini_pro {Gemini Pro} gemini_flash {Gemini Flash} gemini_image {Gemini Image} claude {Claude} gpt_oss {GPT-OSS} other {Weitere Modelle}}",
     "upTo": "bis zu {used, number, percent}",

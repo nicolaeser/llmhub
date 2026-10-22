@@ -171,7 +171,27 @@ export default function SubscriptionGroup({
     );
   }
 
+  function signIn(row: ProviderView, account: AccountRow) {
+    return (
+      <div className="flex flex-col items-start gap-2">
+        <p className="text-xs text-danger">{t("expiredHint")}</p>
+        {canManage ? (
+          <Button
+            size="sm"
+            variant="danger-soft"
+            aria-label={t("menu.signInFor", { name: account.title })}
+            onPress={() => onMenu(row, "signIn")}
+          >
+            <LogIn size={14} aria-hidden />
+            {t("menu.signIn")}
+          </Button>
+        ) : null}
+      </div>
+    );
+  }
+
   function usage(row: ProviderView, account: AccountRow) {
+    if (account.needsSignIn && account.summary.groups.length === 0) return signIn(row, account);
     if (!reports) return <p className="text-xs text-muted">{t("noLimits")}</p>;
     if (account.state === "checking") {
       return (
@@ -186,18 +206,23 @@ export default function SubscriptionGroup({
       );
     }
     if (account.summary.groups.length === 0) {
-      if (account.needsSignIn) return <p className="text-xs text-danger">{t("expiredHint")}</p>;
       if (account.failure) return <p className="text-xs text-warning">{tError("code", { code: account.failure })}</p>;
       if (account.limits) return <p className="text-xs text-muted">{t("limits.none")}</p>;
       return <p className="text-xs text-muted">{tCommon("none")}</p>;
     }
     return (
       <div className="space-y-3">
+        {account.needsSignIn ? signIn(row, account) : null}
         {account.summary.groups.map((group) => (
           <LimitMeter key={group.id} group={group} timeZone={timeZone} compact />
         ))}
         {account.detailed ? (
-          <Button size="sm" variant="ghost" onPress={() => onMenu(row, "details")}>
+          <Button
+            size="sm"
+            variant="ghost"
+            aria-label={t("limits.allLimitsFor", { count: account.groups.length, name: account.title })}
+            onPress={() => onMenu(row, "details")}
+          >
             {t("limits.allLimits", { count: account.groups.length })}
           </Button>
         ) : null}
@@ -256,14 +281,9 @@ export default function SubscriptionGroup({
               ))}
               {settingsLoaded ? (
                 <>
-                  <Chip
-                    size="sm"
-                    variant="soft"
-                    className="whitespace-nowrap"
-                    title={t("settings.routingSummary", { method: tRouting("method", { strategy }) })}
-                  >
+                  <Chip size="sm" variant="soft" className="whitespace-nowrap">
                     <StrategyIcon size={12} aria-hidden />
-                    {tRouting("method", { strategy })}
+                    {t("settings.routingSummary", { method: tRouting("method", { strategy }) })}
                   </Chip>
                   {autoReset ? (
                     <Chip
@@ -309,7 +329,7 @@ export default function SubscriptionGroup({
         ) : null}
       </div>
 
-      <RowCards label={name}>
+      <RowCards label={t("group.label", { provider: name })}>
         {accounts.map(({ row, account }) => (
           <RowCard
             key={row.id}
@@ -330,9 +350,9 @@ export default function SubscriptionGroup({
           />
         ))}
       </RowCards>
-      <Table aria-label={name} className={TABLE_FROM_LG}>
+      <Table aria-label={t("group.label", { provider: name })} className={TABLE_FROM_LG}>
         <Table.ScrollContainer>
-          <Table.Content aria-label={name} className="min-w-[56rem]">
+          <Table.Content aria-label={t("group.label", { provider: name })} className="min-w-[56rem]">
             <Table.Header>
               <Table.Column isRowHeader>{t("columns.account")}</Table.Column>
               <Table.Column>{tCommon("status")}</Table.Column>

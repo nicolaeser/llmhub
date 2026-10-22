@@ -9,6 +9,7 @@ import {
   KeyRound,
   Link2,
   LoaderCircle,
+  LogIn,
   RefreshCw,
   Users,
   type LucideIcon,
@@ -55,6 +56,7 @@ export default function AccountDetailsDialog({
   refreshing,
   onRefresh,
   onItem,
+  onSignIn,
 }: {
   state: ReturnType<typeof useOverlayState>;
   row: ProviderView | null;
@@ -65,6 +67,7 @@ export default function AccountDetailsDialog({
   refreshing: boolean;
   onRefresh: (id: string) => void;
   onItem: (item: LimitSnapshot | null) => void;
+  onSignIn: (row: ProviderView) => void;
 }) {
   const t = useTranslations("Subscriptions");
   const tProviders = useTranslations("Providers");
@@ -274,6 +277,17 @@ export default function AccountDetailsDialog({
                     <Button variant="secondary" onPress={close}>
                       {tCommon("done")}
                     </Button>
+                    {canManage && account.needsSignIn ? (
+                      <Button
+                        onPress={() => {
+                          close();
+                          onSignIn(row);
+                        }}
+                      >
+                        <LogIn size={16} aria-hidden />
+                        {t("menu.signIn")}
+                      </Button>
+                    ) : null}
                   </Modal.Footer>
                 </>
               );

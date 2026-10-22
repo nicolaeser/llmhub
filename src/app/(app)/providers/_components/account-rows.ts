@@ -93,10 +93,10 @@ export function accountMenuActions(
   row: Pick<ProviderView, "enabled">,
   account: Pick<AccountRow, "needsSignIn" | "refreshable">,
 ): AccountMenuAction[] {
-  if (!canManage) return ["details"];
+  const readable: AccountMenuAction[] = account.refreshable ? ["details", "refresh"] : ["details"];
+  if (!canManage) return readable;
   return [
-    "details",
-    ...(account.refreshable ? (["refresh"] as const) : []),
+    ...readable,
     account.needsSignIn ? "signIn" : "edit",
     "access",
     row.enabled ? "pause" : "resume",

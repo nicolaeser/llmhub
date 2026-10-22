@@ -29,3 +29,18 @@ export function providerMenuActions(canManage: boolean, row: Pick<ProviderView, 
   if (!canManage) return [];
   return ["edit", "import", row.enabled ? "pause" : "resume", "disconnect"];
 }
+
+function providerLabel(row: Pick<ProviderView, "name">): string {
+  return row.name.toLocaleLowerCase();
+}
+
+export function byProviderOrder(
+  a: Pick<ProviderView, "id" | "name" | "enabled">,
+  b: Pick<ProviderView, "id" | "name" | "enabled">,
+): number {
+  return (
+    Number(!a.enabled) - Number(!b.enabled) ||
+    providerLabel(a).localeCompare(providerLabel(b)) ||
+    a.id.localeCompare(b.id)
+  );
+}

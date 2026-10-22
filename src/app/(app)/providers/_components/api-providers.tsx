@@ -12,7 +12,7 @@ import { PROVIDER_CATALOG } from "@/lib/gateway/upstreams/provider-kinds";
 import type { ProviderListActions, ProviderView } from "@/types/providers";
 import PolicyChips from "./policy-chips";
 import RowMenu, { type RowMenuItem } from "./row-menu";
-import { providerMenuActions, providerRow, type ProviderMenuAction } from "./provider-rows";
+import { byProviderOrder, providerMenuActions, providerRow, type ProviderMenuAction } from "./provider-rows";
 import { useProviderRowActions } from "./use-provider-row-actions";
 
 const MENU_ICONS = {
@@ -125,10 +125,12 @@ export default function ApiProviders({
     return providerRow(row).internal ? <InternalBadge /> : null;
   }
 
+  const sorted = [...rows].sort(byProviderOrder);
+
   return (
     <>
       <RowCards label={t("tabs", { tab: "api" })}>
-        {rows.map((row) => (
+        {sorted.map((row) => (
           <RowCard
             key={row.id}
             title={row.name}
@@ -164,7 +166,7 @@ export default function ApiProviders({
               {canManage ? <Table.Column>{tCommon("actions")}</Table.Column> : null}
             </Table.Header>
             <Table.Body>
-              {rows.map((row) => (
+              {sorted.map((row) => (
                 <Table.Row key={row.id} id={row.id}>
                   <Table.Cell>
                     <div className="flex min-w-0 items-center gap-3">
