@@ -5,7 +5,7 @@ import { recordedPrisma } from "./recorded-prisma";
 import { parseJsonOrNull } from "@/lib/utils/json";
 import type { JsonMap } from "@/types/gateway";
 
-export type UpstreamCall = { url: string; body: JsonMap | null };
+export type UpstreamCall = { url: string; body: JsonMap | null; headers: Record<string, string> };
 type RouteModule = { POST(req: Request, ctx: { params: Promise<Record<string, string>> }): Promise<Response> };
 
 export const API_KEY = "sk-hub-test";
@@ -152,7 +152,8 @@ recordedPrisma.base = {
 delete process.env.REDIS_URL;
 globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
   const body = typeof init?.body === "string" ? (parseJsonOrNull(init.body) as JsonMap | null) : null;
-  const call = { url: input instanceof Request ? input.url : String(input), body };
+  const headers = Object.fromEntries(new Headers(init?.headers).entries());
+  const call = { url: input instanceof Request ? input.url : String(input), body, headers };
   gateway.upstream.push(call);
   return gateway.reply(call);
 }) as typeof fetch;

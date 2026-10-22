@@ -46,7 +46,7 @@
     "moved": "{removed, plural, =0 {Aus CLIProxyAPI wurde nichts entfernt.} one {# Datei wurde aus CLIProxyAPI entfernt. Ab jetzt erneuert nur noch LLM Hub dieses Konto.} other {# Dateien wurden aus CLIProxyAPI entfernt. Ab jetzt erneuert nur noch LLM Hub diese Konten.}}",
     "keptAtSource": "{count, plural, one {# importierte Datei ließ sich nicht aus CLIProxyAPI entfernen. Lösche sie dort, sonst machen sich beide Seiten gegenseitig die Tokens ungültig.} other {# importierte Dateien ließen sich nicht aus CLIProxyAPI entfernen. Lösche sie dort, sonst machen sich beide Seiten gegenseitig die Tokens ungültig.}}"
   },
-  "timeZone": "Zeitzone für Reset-Zeiten",
+  "timeZone": "Zeitzone der Konsole",
   "stats": {
     "available": "Jetzt verfügbar",
     "limited": "Am Limit",
