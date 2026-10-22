@@ -21,6 +21,7 @@ const GATEWAY_ONLY_KEYS = ["tags", "tag", "user", "fallbacks", "fallback"];
 const MIN_THINKING_BUDGET = 1024;
 const ANTHROPIC_EFFORTS = new Set(["low", "medium", "high", "xhigh", "max"]);
 const XHIGH_MIN_VERSION = 4.7;
+const CLAUDE_47_VERSION = 4.7;
 const THINKING_BUDGETS: Record<string, number> = {
   minimal: 1024,
   low: 1024,
@@ -100,14 +101,14 @@ export function claudeVersion(model: unknown): number | null {
 
 function defaultMaxTokens(model: unknown): number {
   const version = claudeVersion(model);
-  return (version !== null && version >= MODERN_MIN_VERSION) || fixedSampling(model)
+  return (version !== null && version >= MODERN_MIN_VERSION) || claude47OrLater(model)
     ? MODERN_MAX_TOKENS
     : DEFAULT_MAX_TOKENS;
 }
 
-function fixedSampling(model: unknown): boolean {
+export function claude47OrLater(model: unknown): boolean {
   const version = claudeVersion(model);
-  if (version !== null) return version >= 4.7;
+  if (version !== null) return version >= CLAUDE_47_VERSION;
   return typeof model === "string" && /claude-(mythos|fable)/i.test(model);
 }
 
@@ -363,7 +364,7 @@ export function chatToAnthropic(body: JsonMap): JsonMap {
   }
   const thinking = native ?? reasoning?.thinking ?? null;
   const thinkingOn = thinking !== null && thinking.type !== "disabled";
-  if (!fixedSampling(body.model)) {
+  if (!claude47OrLater(body.model)) {
     if (thinkingOn) {
       if (typeof body.top_p === "number" && body.top_p >= 0.95) out.top_p = body.top_p;
     } else {

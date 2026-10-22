@@ -1,4 +1,5 @@
 import { asRecord } from "@/lib/gateway/core";
+import { ANTHROPIC_VERSION_2023, ANTHROPIC_VERSION_HEADER } from "@/lib/gateway/protocols/anthropic-version";
 import type { JsonMap } from "@/types/gateway";
 
 export const CLAUDE_CODE_VERSION = "2.1.280";
@@ -12,7 +13,7 @@ const CLAUDE_CODE_SYSTEM_PREFIXES = [
 
 export function claudeIdentityHeaders(): Record<string, string> {
   return {
-    "anthropic-version": "2023-06-01",
+    [ANTHROPIC_VERSION_HEADER]: ANTHROPIC_VERSION_2023,
     "x-app": "cli",
     "User-Agent": `claude-cli/${CLAUDE_CODE_VERSION} (external, cli)`,
   };

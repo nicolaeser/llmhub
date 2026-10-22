@@ -1,11 +1,12 @@
 import "server-only";
 import { env } from "@/lib/env";
 import { GateError } from "@/lib/gateway/errors";
-import { anthropicToChat, chatToAnthropic, withCacheBreakpoints } from "@/lib/gateway/protocols/anthropic";
+import { anthropicToChat, chatToAnthropic, claude47OrLater, withCacheBreakpoints } from "@/lib/gateway/protocols/anthropic";
 import { withAnthropicModelParams } from "@/lib/gateway/protocols/anthropic-model-params";
+import { ANTHROPIC_VERSION_2023, ANTHROPIC_VERSION_HEADER, anthropicVersionOf } from "@/lib/gateway/protocols/anthropic-version";
 import { plainModel } from "@/lib/gateway/catalog/model-alias";
 import { hiddenFrom, outsidePool, routable } from "@/lib/gateway/routing/route-pool";
-import { speaksAnthropic, speaksGoogle, speaksKimi, speaksMuse } from "@/lib/gateway/upstreams/provider-kinds";
+import { servesMessages, speaksAnthropic, speaksGoogle, speaksKimi, speaksMuse } from "@/lib/gateway/upstreams/provider-kinds";
 import { entitlementRefusal, withClaudeBetas, withClaudeIdentity } from "@/lib/gateway/upstreams/claude";
 import {
   ANTIGRAVITY_STREAM_PATH,
@@ -35,6 +36,30 @@ import type { JsonMap, Principal, ProxyFirstResult } from "@/types/gateway";
 import type { ResolvedDeployment, RoutePool } from "@/types/routing";
 import type { LimitWindow, UpstreamAuth } from "@/types/providers";
 
+const BEDROCK_MODEL = /(?:^|\.)anthropic\.claude-/i;
+const BEDROCK_HOST = /(?:^|[.-])bedrock(?:[.-]|$)/i;
+const UNFORWARDED_CLIENT_HEADERS = new Set([
+  "host",
+  "content-length",
+  "connection",
+  "authorization",
+  ANTHROPIC_VERSION_HEADER,
+]);
+
+function onBedrock(dep: ResolvedDeployment): boolean {
+  if (BEDROCK_MODEL.test(dep.model)) return true;
+  return URL.canParse(dep.base_url) && BEDROCK_HOST.test(new URL(dep.base_url).hostname);
+}
+
+export function upstreamAnthropicVersion(dep: ResolvedDeployment, clientHeaders?: HeadersInit): string | null {
+  const requested = anthropicVersionOf(clientHeaders);
+  if (speaksAnthropic(dep.kind)) {
+    if (!requested || (onBedrock(dep) && !claude47OrLater(dep.model))) return ANTHROPIC_VERSION_2023;
+    return requested;
+  }
+  return servesMessages(dep.kind) && requested ? ANTHROPIC_VERSION_2023 : null;
+}
+
 export function upstreamHeaders(
   dep: ResolvedDeployment,
   auth: UpstreamAuth,
@@ -43,7 +68,6 @@ export function upstreamHeaders(
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (dep.kind === "anthropic") {
     headers["x-api-key"] = auth.key;
-    headers["anthropic-version"] = "2023-06-01";
   } else if (auth.keyHeader) {
     if (auth.key) headers[auth.keyHeader] = auth.key;
   } else if (auth.key) {
@@ -54,12 +78,13 @@ export function upstreamHeaders(
     headers["X-Title"] = "LLM Hub";
   }
   const forwardAll = speaksAnthropic(dep.kind);
+  const forwardBetas = servesMessages(dep.kind);
   if (extra) {
     const src = extra instanceof Headers ? extra : new Headers(extra);
     src.forEach((value, key) => {
       const name = key.toLowerCase();
-      if (["host", "content-length", "connection", "authorization"].includes(name)) return;
-      if (!forwardAll && name !== "anthropic-version" && name !== "anthropic-beta") return;
+      if (UNFORWARDED_CLIENT_HEADERS.has(name)) return;
+      if (!forwardAll && !(forwardBetas && name === "anthropic-beta")) return;
       headers[key] = value;
     });
   }
@@ -72,6 +97,11 @@ export function upstreamHeaders(
     }
     merged[key] = value;
   }
+  for (const name of Object.keys(merged)) {
+    if (name.toLowerCase() === ANTHROPIC_VERSION_HEADER) delete merged[name];
+  }
+  const version = upstreamAnthropicVersion(dep, extra);
+  if (version) merged[ANTHROPIC_VERSION_HEADER] = version;
   return merged;
 }
 
@@ -198,6 +228,7 @@ export function prepareBody(
   path: string,
   body: JsonMap,
   groupStrategy = "",
+  clientHeaders?: HeadersInit,
 ): JsonMap {
   let payload: JsonMap = { ...body, model: dep.model || (typeof body.model === "string" ? plainModel(body.model) : body.model) };
   for (const key of GATEWAY_ONLY_KEYS) delete payload[key];
@@ -224,7 +255,7 @@ export function prepareBody(
       if (typeof payload.service_tier === "string") native.service_tier = payload.service_tier;
       if (dep.kind === "claude") native = withCacheBreakpoints(native);
     }
-    native = withAnthropicModelParams(asString(native.model), native);
+    native = withAnthropicModelParams(asString(native.model), native, upstreamAnthropicVersion(dep, clientHeaders));
     return dep.kind === "claude" ? withClaudeIdentity(native) : native;
   }
   if (dep.kind === "codex" && nativeChatPath(path)) return chatToCodex(payload);
@@ -293,7 +324,12 @@ export async function proxyJson(input: {
   if (input.rawBody != null) {
     init.body = input.rawBody;
   } else if (input.body && method !== "GET" && method !== "HEAD") {
-    init.body = upstreamBody(input.dep, input.auth, input.path, prepareBody(input.dep, input.path, input.body, input.groupStrategy));
+    init.body = upstreamBody(
+      input.dep,
+      input.auth,
+      input.path,
+      prepareBody(input.dep, input.path, input.body, input.groupStrategy, input.headers),
+    );
   }
   const res = await fetch(url, init);
   observeUpstreamLimits(input.dep, res.headers);
@@ -342,7 +378,12 @@ async function proxyRaw(input: {
     body:
       input.rawBody ??
       (input.body && method !== "GET"
-        ? upstreamBody(input.dep, input.auth, input.path, prepareBody(input.dep, input.path, input.body, input.groupStrategy))
+        ? upstreamBody(
+            input.dep,
+            input.auth,
+            input.path,
+            prepareBody(input.dep, input.path, input.body, input.groupStrategy, input.headers),
+          )
         : undefined),
     signal: AbortSignal.timeout(input.timeoutMs && input.timeoutMs > 0 ? input.timeoutMs : 120_000),
   });
