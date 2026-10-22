@@ -4,12 +4,13 @@ import { createContext, useContext, type ComponentProps, type JSX } from "react"
 import type { Root, RootContent, Text } from "mdast";
 import ReactMarkdown, { type Components, type ExtraProps } from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { Card, Chip, Separator, Table } from "@heroui/react";
+import { Card, Separator, Table } from "@heroui/react";
 import { Image as ImageGlyph, Square, SquareCheck } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/routing";
 import { splitPiiPlaceholders } from "@/lib/gateway/safety/pii";
 import CopyButton from "@/components/console/copy-button";
+import { PiiPlaceholder } from "./pii-placeholder";
 
 type MdNode = NonNullable<ExtraProps["node"]>;
 type MdChild = MdNode["children"][number];
@@ -23,7 +24,11 @@ const LINK_CLASS = "text-accent underline underline-offset-2";
 function piiTexts(node: Text): Text[] {
   return splitPiiPlaceholders(node.value).map((part) =>
     part.entity
-      ? { type: "text", value: part.text, data: { hName: "span", hProperties: { dataPii: part.entity } } }
+      ? {
+          type: "text",
+          value: part.text,
+          data: { hName: "span", hProperties: { dataPii: part.entity, dataPiiNumber: part.number ?? 0 } },
+        }
       : { type: "text", value: part.text },
   );
 }
@@ -211,14 +216,10 @@ function MdListItem({ className, children }: Md<"li">) {
 }
 
 function MdSpan({ node, children }: Md<"span">) {
-  const t = useTranslations("Guardrails");
   const entity = node?.properties.dataPii;
   if (typeof entity !== "string") return <span>{children}</span>;
-  return (
-    <Chip size="sm" variant="soft" color="warning">
-      {t("entityLabel", { id: entity })}
-    </Chip>
-  );
+  const number = Number(node?.properties.dataPiiNumber) || null;
+  return <PiiPlaceholder token={String(children ?? "")} entity={entity} number={number} />;
 }
 
 function MdInput({ type, checked }: Md<"input">) {
