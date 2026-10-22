@@ -1,5 +1,6 @@
 import "server-only";
 import { randomBytes } from "node:crypto";
+import type { Prisma } from "@/generated/prisma/client";
 import prisma from "@/lib/db/prisma";
 import { writeAudit } from "@/lib/audit";
 import { digest } from "@/lib/crypto";
@@ -62,14 +63,24 @@ export function subAddAccountViews(rows: SubAddAccountRecord[]): SubAddAccountVi
   });
 }
 
+async function liveManageHash(
+  tx: Prisma.TransactionClient,
+  brought: string | undefined,
+  fresh: string,
+): Promise<string> {
+  if (brought && (await tx.subAddAccount.count({ where: { manageHash: brought } }))) return brought;
+  return fresh;
+}
+
 export async function storeSubAddAccount(input: {
   linkId: string;
   kind: SignInKind;
   session: SignInSession;
   manageHash: string;
+  broughtManageHash?: string;
   loginVerified: boolean;
   now?: number;
-}): Promise<{ providerId: string; outcome: SubAddOutcome }> {
+}): Promise<{ providerId: string; outcome: SubAddOutcome; manageHash: string }> {
   const spec = PROVIDER_CATALOG.find((item) => item.kind === input.kind);
   const baseUrl = spec?.default_base_url ?? "";
   const login = loginData(input.session);
@@ -77,6 +88,7 @@ export async function storeSubAddAccount(input: {
     const link = await tx.subAddLink.findUnique({ where: { id: input.linkId }, select: subAddAuditSelect });
     if (!link || !link.kinds.includes(input.kind)) throw new Error(SUB_ADD_UNAVAILABLE);
     if (subAddStatus(link, input.now ?? Date.now()) !== "active") throw new Error(SUB_ADD_UNAVAILABLE);
+    const manageHash = await liveManageHash(tx, input.broughtManageHash, input.manageHash);
     const existing = await matchingConnection(input.kind, input.session, tx);
     if (existing) {
       if (!input.loginVerified) throw new Error(SUB_ADD_LOGIN_UNVERIFIED);
@@ -87,14 +99,14 @@ export async function storeSubAddAccount(input: {
           login: { upsert: { create: login, update: { ...login, version: { increment: 1 } } } },
           subAdd: {
             upsert: {
-              create: { linkId: null, label: link.label, manageHash: input.manageHash },
-              update: { manageHash: input.manageHash },
+              create: { linkId: null, label: link.label, manageHash },
+              update: { manageHash },
             },
           },
         },
         include: providerInclude,
       });
-      return { row, link, outcome: "updated" as const, usedUp: false };
+      return { row, link, manageHash, outcome: "updated" as const, usedUp: false };
     }
     const added = link.added + 1;
     const usedUp = link.maxAccounts !== null && added >= link.maxAccounts;
@@ -107,13 +119,13 @@ export async function storeSubAddAccount(input: {
         apiKey: "",
         restricted: link.restricted,
         login: { create: login },
-        subAdd: { create: { linkId: link.id, label: link.label, manageHash: input.manageHash } },
+        subAdd: { create: { linkId: link.id, label: link.label, manageHash } },
         ...(link.restricted && link.targets.length ? { assignments: { create: link.targets } } : {}),
       },
       include: providerInclude,
     });
     if (usedUp) await tx.subAddLink.delete({ where: { id: link.id } });
-    return { row, link: { ...link, added }, outcome: "created" as const, usedUp };
+    return { row, link: { ...link, added }, manageHash, outcome: "created" as const, usedUp };
   }, STORE_ATTEMPTS);
   if (stored.outcome === "updated") await reactivateAccount(stored.row.id);
   const actor = subAddUid(stored.link.id);
@@ -133,7 +145,7 @@ export async function storeSubAddAccount(input: {
   if (stored.usedUp) await auditSubAddDelete(actor, stored.link, "used_up");
   await scheduleCatalogTask({ task: "provider", providerId: stored.row.id });
   await pruneSupersededLogins(actor);
-  return { providerId: stored.row.id, outcome: stored.outcome };
+  return { providerId: stored.row.id, outcome: stored.outcome, manageHash: stored.manageHash };
 }
 
 type ManagedAccount = { providerId: string; linkId: string | null };
@@ -153,22 +165,26 @@ async function auditManageChange(action: string, accounts: ManagedAccount[]): Pr
 }
 
 export async function revokeSubAddManageHash(manageHash: string): Promise<number> {
-  const revoked = await prisma.subAddAccount.updateManyAndReturn({
-    where: { manageHash },
-    data: { manageHash: null },
-    select: managedAccountSelect,
-  });
+  const revoked = await withSerializableRetry((tx) =>
+    tx.subAddAccount.updateManyAndReturn({
+      where: { manageHash },
+      data: { manageHash: null },
+      select: managedAccountSelect,
+    }),
+  );
   if (!revoked.length) throw new Error(SUB_ADD_UNAVAILABLE);
   await auditManageChange("provider_sub_add.manage_revoke", revoked);
   return revoked.length;
 }
 
 export async function renewSubAddManageHash(manageHash: string, nextHash: string): Promise<number> {
-  const moved = await prisma.subAddAccount.updateManyAndReturn({
-    where: { manageHash },
-    data: { manageHash: nextHash },
-    select: managedAccountSelect,
-  });
+  const moved = await withSerializableRetry((tx) =>
+    tx.subAddAccount.updateManyAndReturn({
+      where: { manageHash },
+      data: { manageHash: nextHash },
+      select: managedAccountSelect,
+    }),
+  );
   if (!moved.length) throw new Error(SUB_ADD_UNAVAILABLE);
   await auditManageChange("provider_sub_add.manage_renew", moved);
   return moved.length;

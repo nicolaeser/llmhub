@@ -171,7 +171,7 @@ test("accounts added through a restricted link get its assignments, and re-addin
       manageHash: renewed.hash,
       loginVerified: true,
     });
-    assert.deepEqual(second, { providerId: first.providerId, outcome: "updated" });
+    assert.deepEqual(second, { providerId: first.providerId, outcome: "updated", manageHash: renewed.hash });
     assert.equal((await prisma.subAddLink.findUniqueOrThrow({ where: { id: link.id } })).added, 1);
     const moved = await prisma.subAddAccount.findUniqueOrThrow({ where: { providerId: first.providerId } });
     assert.equal(moved.manageHash, renewed.hash);
@@ -389,7 +389,7 @@ test("a verified link sign-in renews a console-added connection and lets the con
       loginVerified: true,
     });
     stopLocalCatalogTasks();
-    assert.deepEqual(stored, { providerId: existing.id, outcome: "updated" });
+    assert.deepEqual(stored, { providerId: existing.id, outcome: "updated", manageHash: manage.hash });
     assert.equal((await prisma.providerLogin.findUniqueOrThrow({ where: { providerId: existing.id } })).version, 1);
     const managed = await prisma.subAddAccount.findUniqueOrThrow({ where: { providerId: existing.id } });
     assert.equal(managed.manageHash, manage.hash);
@@ -423,7 +423,7 @@ test("a second contributor takes over management only with a verified sign-in to
 
     const renewed = await signIn(second.hash, true);
     stopLocalCatalogTasks();
-    assert.deepEqual(renewed, { providerId: added.providerId, outcome: "updated" });
+    assert.deepEqual(renewed, { providerId: added.providerId, outcome: "updated", manageHash: second.hash });
     const moved = await prisma.subAddAccount.findUniqueOrThrow({ where: { providerId: added.providerId } });
     assert.equal(moved.manageHash, second.hash);
     assert.equal(moved.linkId, link.id);
@@ -665,6 +665,52 @@ test("a sign-in that brings a deactivated manage link gets a fresh one instead",
     await assert.rejects(loadSubAddContributions({ manage: manage.token }), { message: "SUB_ADD_UNAVAILABLE" });
   } finally {
     globalThis.fetch = realFetch;
+    await cleanup([link.id], providerIds);
+  }
+});
+
+test("a sign-in racing a deactivation or renewal never brings the old manage link back", async () => {
+  freshClient();
+  const link = await createLink({ maxAccounts: null });
+  const providerIds: string[] = [];
+  const signIn = (name: string, manageHash: string, broughtManageHash: string) =>
+    storeSubAddAccount({
+      linkId: link.id,
+      kind: "claude",
+      session: session(`${uniqueName(name)}@example.test`),
+      manageHash,
+      broughtManageHash,
+      loginVerified: false,
+    });
+  try {
+    const kept = newSubAddToken();
+    providerIds.push(await contribute(link.id, kept.hash, "kept"));
+    const joined = await signIn("joined", newSubAddToken().hash, kept.hash);
+    providerIds.push(joined.providerId);
+    assert.equal(joined.manageHash, kept.hash);
+
+    for (const change of ["revoke", "renew"] as const) {
+      for (let round = 0; round < 3; round += 1) {
+        const manage = newSubAddToken();
+        const fresh = newSubAddToken();
+        providerIds.push(await contribute(link.id, manage.hash, `${change}-earlier`));
+        const [stored, changed] = await Promise.all([
+          signIn(`${change}-racing`, fresh.hash, manage.hash),
+          change === "revoke" ? revokeSubAddManage({ manage: manage.token }) : renewSubAddManage({ manage: manage.token }),
+        ]);
+        providerIds.push(stored.providerId);
+        assert.equal(await prisma.subAddAccount.count({ where: { manageHash: manage.hash } }), 0);
+        const hash = (await managedHashes([stored.providerId])).get(stored.providerId);
+        if (stored.manageHash === fresh.hash) {
+          assert.equal(hash, fresh.hash);
+        } else {
+          assert.equal(stored.manageHash, manage.hash);
+          assert.equal(hash, "manageToken" in changed ? subAddTokenHash(changed.manageToken) : null);
+        }
+      }
+    }
+    stopLocalCatalogTasks();
+  } finally {
     await cleanup([link.id], providerIds);
   }
 });

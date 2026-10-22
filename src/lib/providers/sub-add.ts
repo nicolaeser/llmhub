@@ -125,14 +125,6 @@ async function usableLink(token: string, now = Date.now()): Promise<SubAddLinkRe
   return link;
 }
 
-async function manageFor(manage: string | undefined): Promise<{ token: string; hash: string }> {
-  if (manage) {
-    const hash = subAddTokenHash(manage);
-    if (await prisma.subAddAccount.count({ where: { manageHash: hash } })) return { token: manage, hash };
-  }
-  return newSubAddToken();
-}
-
 async function verifiedRenewal(kind: SignInKind, session: SignInSession): Promise<boolean> {
   if (!(await matchingConnection(kind, session))) return false;
   const check = await checkSignInSession(kind, session);
@@ -148,15 +140,23 @@ async function finish(
   manage: string | undefined,
 ): Promise<SubAddStep> {
   const loginVerified = await verifiedRenewal(kind, session);
-  const owner = await manageFor(manage);
-  const stored = await storeSubAddAccount({ linkId: link.id, kind, session, manageHash: owner.hash, loginVerified });
+  const fresh = newSubAddToken();
+  const brought = manage ? { token: manage, hash: subAddTokenHash(manage) } : null;
+  const stored = await storeSubAddAccount({
+    linkId: link.id,
+    kind,
+    session,
+    manageHash: fresh.hash,
+    broughtManageHash: brought?.hash,
+    loginVerified,
+  });
   return {
     state: "done",
     kind,
     account: session.account,
     plan: session.plan,
     outcome: stored.outcome,
-    manageToken: owner.token,
+    manageToken: brought && stored.manageHash === brought.hash ? brought.token : fresh.token,
   };
 }
 
