@@ -3,6 +3,12 @@
   "subtitle": "Connect model providers by API key or subscription sign-in and keep an eye on their health.",
   "tabsLabel": "Provider views",
   "tabs": "{tab, select, api {API keys} subscriptions {Subscriptions} links {Account links} health {Health} other {{tab}}}",
+  "columns": {
+    "provider": "Provider",
+    "credential": "Credential",
+    "models": "Models",
+    "policy": "Data policy"
+  },
   "toolbar": {
     "import": "Import",
     "createLink": "Create link",
@@ -26,9 +32,14 @@
     "linkInstead": "Send a link instead"
   },
   "modelCount": "{count, plural, one {# model} other {# models}}",
-  "edit": "Edit {name}",
   "importModels": "Import models",
   "actions": "Actions for {name}",
+  "menu": {
+    "pause": "Pause",
+    "resume": "Resume",
+    "disconnect": "Disconnect",
+    "disconnectTitle": "Disconnect {name}?"
+  },
   "formTitle": "{mode, select, edit {Edit {name}} connect {Connect {name}} other {Connect {name}}}",
   "formSubmit": "{mode, select, save {Save} connect {Connect} other {Connect}}",
   "kindName": "{kind, select, openai {OpenAI} anthropic {Anthropic} openrouter {OpenRouter} openrouter_eu {OpenRouter EU} xai {xAI Grok} typesafe {TypeSafe AI} openai_compat {OpenAI-compatible} codex {ChatGPT subscription (Codex)} grok_build {SuperGrok subscription (Grok Build)} claude {Claude subscription (Claude Code)} antigravity {Google subscription (Antigravity)} moonshot {Kimi API Platform Global} moonshot_cn {Kimi API Platform China} kimi {Kimi subscription China (kimi.com)} kimi_ai {Kimi subscription Global (kimi.ai)} meta {Meta Model API} muse_code {Meta subscription (Muse Code)} gemini {Google Gemini API} vertex {Google Vertex AI} devin {Devin subscription} other {{kind}}}",
@@ -65,13 +76,14 @@
     "importHint": "Or upload an auth file from CLIProxyAPI or EasyCLIProxyAPI, usually in ~/.cli-proxy-api. LLM Hub renews the sign-in from then on, so stop using that file in CLIProxyAPI."
   },
   "toasts": {
-    "saved": "{mode, select, created {Provider connected} updated {Provider updated} deleted {Disconnected} other {Provider connected}}"
+    "saved": "{mode, select, created {Provider connected} updated {Provider updated} deleted {Disconnected} other {Provider connected}}",
+    "enabled": "{enabled, select, true {{name} resumed} other {{name} paused}}"
   },
-  "deleteConfirm": "Disconnect {name}? Its routes and catalog entries are removed, and model groups left without routes are deleted unless they have their own settings.",
+  "deleteConfirm": "Its routes and catalog entries are removed, and model groups left without routes are deleted unless they have their own settings.",
   "empty": "No providers connected yet.",
   "emptyTitle": "Connect a provider",
   "noneTitle": "No API providers yet",
-  "keyState": "{state, select, stored {API key stored} signed_in {Signed in as {account}} expired {Sign-in expired} service_account {Service account stored} other {No API key}}",
+  "keyState": "{state, select, stored {API key stored} service_account {Service account stored} other {No API key}}",
   "policy": {
     "title": "Data policy",
     "hint": "Model templates use these facts to select models. Enter what your agreement with this provider covers.",
@@ -90,8 +102,7 @@
   "importTarget": "→ {alias}",
   "importTargetState": "{exists, select, true {Joins alias} other {New alias}}",
   "enabled": {
-    "state": "{enabled, select, true {Active} other {Paused}}",
-    "toggle": "Route requests through {name}"
+    "state": "{enabled, select, true {Active} other {Paused}}"
   },
   "vertex": {
     "credentialLabel": "Credential",

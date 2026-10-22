@@ -1,6 +1,6 @@
 "use client";
 
-import { Chip, Label, Meter } from "@heroui/react";
+import { Chip, Disclosure, Label, Meter } from "@heroui/react";
 import { useFormatter, useNow, useTranslations } from "next-intl";
 import { meterColor } from "@/lib/utils/budget";
 import type { LimitGroup } from "@/types/providers";
@@ -22,12 +22,12 @@ function windowSpan(seconds: number): { unit: string; count: number } {
 
 export default function LimitMeter({
   group,
-  withMembers,
   timeZone,
+  compact = false,
 }: {
   group: LimitGroup;
-  withMembers?: boolean;
   timeZone: string;
+  compact?: boolean;
 }) {
   const t = useTranslations("Subscriptions.limits");
   const format = useFormatter();
@@ -39,22 +39,28 @@ export default function LimitMeter({
   const name = group.family ? t("group", { family: group.family }) : group.label;
   const scopedLabel = group.windowSeconds > 0 ? t("scoped", { scope: name, window: span }) : name;
   const label = group.scoped ? scopedLabel : span;
-  const listed = withMembers && group.members.length > 1;
+  const listed = group.members.length > 1;
+
+  const meter = (
+    <Meter
+      value={used}
+      color={meterColor(used / 100)}
+      aria-label={label}
+      valueLabel={group.uniform ? format.number(used / 100, { style: "percent" }) : t("upTo", { used: used / 100 })}
+    >
+      <Label>{label}</Label>
+      <Meter.Output />
+      <Meter.Track>
+        <Meter.Fill />
+      </Meter.Track>
+    </Meter>
+  );
+
+  if (compact) return <div className="min-w-0">{meter}</div>;
 
   return (
     <div className="min-w-0 space-y-1">
-      <Meter
-        value={used}
-        color={meterColor(used / 100)}
-        aria-label={label}
-        valueLabel={group.uniform ? format.number(used / 100, { style: "percent" }) : t("upTo", { used: used / 100 })}
-      >
-        <Label>{label}</Label>
-        <Meter.Output />
-        <Meter.Track>
-          <Meter.Fill />
-        </Meter.Track>
-      </Meter>
+      {meter}
       <div className="flex flex-wrap items-center gap-2 text-xs text-muted">
         {resetsAt && pending ? (
           <span>
@@ -79,19 +85,41 @@ export default function LimitMeter({
           </Chip>
         ) : null}
       </div>
-      {listed && group.uniform ? (
-        <p className="break-words text-xs text-muted">
-          {t("sharedBy", { models: format.list(group.members.map((member) => member.label), { type: "conjunction" }) })}
-        </p>
-      ) : null}
-      {listed && !group.uniform ? (
-        <ul className="space-y-0.5 text-xs text-muted">
-          {group.members.map((member) => (
-            <li key={member.scope} className="break-words">
-              {t("member", { model: member.label, used: member.usedPercent / 100, reached: String(member.limitReached) })}
-            </li>
-          ))}
-        </ul>
+      {listed ? (
+        <Disclosure>
+          <Disclosure.Heading>
+            <Disclosure.Trigger className="flex w-full items-center justify-between gap-2 text-sm text-muted">
+              {t("models", { count: group.members.length })}
+              <Disclosure.Indicator />
+            </Disclosure.Trigger>
+          </Disclosure.Heading>
+          <Disclosure.Content>
+            <Disclosure.Body className="pt-1">
+              {group.uniform ? (
+                <p className="break-words text-xs text-muted">
+                  {t("sharedBy", {
+                    models: format.list(
+                      group.members.map((member) => member.label),
+                      { type: "conjunction" },
+                    ),
+                  })}
+                </p>
+              ) : (
+                <ul className="space-y-0.5 text-xs text-muted">
+                  {group.members.map((member) => (
+                    <li key={member.scope} className="break-words">
+                      {t("member", {
+                        model: member.label,
+                        used: member.usedPercent / 100,
+                        reached: String(member.limitReached),
+                      })}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Disclosure.Body>
+          </Disclosure.Content>
+        </Disclosure>
       ) : null}
     </div>
   );

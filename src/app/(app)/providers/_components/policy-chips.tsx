@@ -7,7 +7,15 @@ import type { ProviderPolicyInput } from "@/types/providers";
 
 const CHIP = "whitespace-nowrap";
 
-export default function PolicyChips({ policy, lead }: { policy: ProviderPolicyInput; lead?: ReactNode }) {
+export default function PolicyChips({
+  policy,
+  lead,
+  fallback = null,
+}: {
+  policy: ProviderPolicyInput;
+  lead?: ReactNode;
+  fallback?: ReactNode;
+}) {
   const t = useTranslations("Providers");
   const items = [
     policy.zdr ? { key: "zdr", color: "success" as const, label: t("policy.zdrChip") } : null,
@@ -26,7 +34,7 @@ export default function PolicyChips({ policy, lead }: { policy: ProviderPolicyIn
       : null,
   ].filter((item) => item !== null);
 
-  if (!items.length && !lead) return null;
+  if (!items.length && !lead) return fallback;
 
   return (
     <div className="flex flex-wrap items-center gap-1">

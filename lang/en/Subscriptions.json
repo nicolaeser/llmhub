@@ -3,6 +3,8 @@
   "empty": "Sign in to a subscription such as ChatGPT, Claude, or Google, import existing accounts, or send someone an add-account link.",
   "addAccount": "Add account",
   "refreshAll": "Refresh all limits",
+  "search": "Search accounts",
+  "noMatches": "No accounts match this search",
   "importFiles": {
     "title": "Import from CLIProxyAPI",
     "description": "Move the subscription accounts that CLIProxyAPI or EasyCLIProxyAPI hold into LLM Hub once: upload their JSON auth files, paste their content, or load them straight from a running CLIProxyAPI. Codex, Claude, Antigravity, and xAI accounts become subscription accounts. LLM Hub checks every account with its provider first and renews its sign-in from then on. An account that is already connected gets the new sign-in.",
@@ -56,14 +58,37 @@
     "expiredHint": "Sign in again to use them",
     "nextFree": "Next one free {when}"
   },
+  "columns": {
+    "account": "Account",
+    "usage": "Usage",
+    "nextReset": "Next reset",
+    "access": "Access"
+  },
+  "menu": {
+    "label": "Actions for {name}",
+    "details": "Details",
+    "refresh": "Refresh limits",
+    "signIn": "Sign in again",
+    "access": "Access…"
+  },
+  "group": {
+    "title": "{provider}<muted> · {channel} · {count, plural, one {# account} other {# accounts}}</muted>",
+    "menu": "More actions for {provider}",
+    "settings": "{resets, select, true {Distribution and automatic resets…} other {Account distribution…}}",
+    "createLink": "Create link for {provider}"
+  },
+  "details": {
+    "title": "Details for {name}",
+    "limits": "Usage limits"
+  },
   "stateCount": "{state, select, available {{count, plural, other {# available}}} limited {{count, plural, other {# at a limit}}} expired {{count, plural, one {# sign-in expired} other {# sign-ins expired}}} paused {{count, plural, other {# paused}}} other {{count, plural, other {#}}}}",
   "status": "{status, select, paused {Paused} available {Available} limited {Limit reached} expired {Sign-in expired} unavailable {Limits unavailable} checking {Checking} other {Connected}}",
   "sharedVia": "{named, select, true {Via link: {label}} other {Via link}}",
-  "signInAgain": "Sign in again",
   "noAccount": "No account name",
   "noneTitle": "No subscription accounts yet",
   "backIn": "Available again {when} ({date}).",
   "backInUnknown": "Limit reached. The provider did not say when it resets.",
+  "resetUnknown": "Not reported",
   "expiredHint": "Sign in again to use this account.",
   "noLimits": "This provider does not report usage limits.",
   "limits": {
@@ -76,6 +101,7 @@
     "notStarted": "Starts with the next request",
     "reached": "Limit reached",
     "allLimits": "{count, plural, one {Limit details} other {All # limits}}",
+    "models": "{count, plural, one {# model} other {# models}}",
     "group": "{family, select, gemini_pro {Gemini Pro} gemini_flash {Gemini Flash} gemini_image {Gemini Image} claude {Claude} gpt_oss {GPT-OSS} other {Other models}}",
     "upTo": "up to {used, number, percent}",
     "sharedBy": "Shared by {models}",
@@ -143,7 +169,6 @@
   "pausedHint": "This account is paused and receives no requests. Its limits stay visible.",
   "access": {
     "summary": "{restricted, select, true {{count, plural, =0 {No key can use it} one {Limited to # assignment} other {Limited to # assignments}}} other {Open to every key}}",
-    "manage": "Manage access",
     "title": "Who can use {name}",
     "description": "Requests through /api/subscription can reach this account by default. Limit it to companies, departments, projects, people, or single API keys.",
     "mode": "Access",
@@ -154,8 +179,7 @@
     "empty": "Nothing found",
     "save": "Save access",
     "saved": "Access for {name} saved",
-    "short": "{restricted, select, true {{count, plural, =0 {No key} one {# assignment} other {# assignments}}} other {Every key}}",
-    "manageFor": "Manage access for {name}"
+    "short": "{restricted, select, true {{count, plural, =0 {No key} one {# assignment} other {# assignments}}} other {Every key}}"
   },
   "antigravity": {
     "title": "Google OAuth client",
@@ -216,15 +240,10 @@
     "deleted": "{label} deleted"
   },
   "settings": {
-    "open": "Settings",
-    "openFor": "Settings for {provider}",
     "title": "{provider} settings",
     "description": "Choose how requests spread across the accounts and when banked resets are used.",
     "routingSummary": "Account distribution: {method}",
     "autoResetSummary": "{enabled, select, true {Automatic resets from {percent}} other {Automatic resets off}}",
     "setupRequired": "Setup needed"
-  },
-  "section": {
-    "description": "{channel} · {count, plural, one {# account} other {# accounts}}"
   }
 }

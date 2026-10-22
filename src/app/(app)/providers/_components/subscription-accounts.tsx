@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Button, Spinner, useOverlayState } from "@heroui/react";
+import { Button, SearchField, Spinner, useOverlayState } from "@heroui/react";
 import { CircleCheck, CirclePause, Gauge, KeyRound, Plus, RefreshCw, UserRound } from "lucide-react";
 import { useFormatter, useNow, useTranslations } from "next-intl";
 import EmptyState from "@/components/console/empty-state";
@@ -23,11 +23,14 @@ import type {
 import type { AutoResetPolicies } from "@/types/resets";
 import { loadAccountRoutingAction } from "../_action";
 import AccessDialog from "./access-dialog";
+import AccountDetailsDialog from "./account-details-dialog";
+import { accountMatches, type AccountMenuAction } from "./account-rows";
 import { accountState, byAccountOrder, COUNTED_STATES, countedState, recoveryAt, type CountedState } from "./account-status";
-import ProviderSection from "./provider-section";
 import ProviderSettingsDialog from "./provider-settings-dialog";
 import { SUBSCRIPTION_CATALOG } from "./provider-options";
+import SubscriptionGroup from "./subscription-group";
 import type { AccountLimitsState } from "./use-account-limits";
+import { useProviderRowActions } from "./use-provider-row-actions";
 
 export default function SubscriptionAccounts({
   rows,
@@ -37,6 +40,7 @@ export default function SubscriptionAccounts({
   antigravity,
   onAntigravity,
   onAdd,
+  onCreateLink,
 }: {
   rows: ProviderView[];
   actions: ProviderListActions;
@@ -45,9 +49,11 @@ export default function SubscriptionAccounts({
   antigravity: AntigravityClientState | null;
   onAntigravity: (state: AntigravityClientState) => void;
   onAdd: (kind: SignInKind | null) => void;
+  onCreateLink: (kind: SignInKind) => void;
 }) {
   const t = useTranslations("Subscriptions");
   const tProviders = useTranslations("Providers");
+  const tCommon = useTranslations("Common");
   const format = useFormatter();
   const now = useNow({ updateInterval: 60_000 });
   const timeZone = useDashboardTimeZone();
@@ -56,8 +62,12 @@ export default function SubscriptionAccounts({
   const [access, setAccess] = useState<ProviderView | null>(null);
   const [accessKey, setAccessKey] = useState(0);
   const [settingsKind, setSettingsKind] = useState<SignInKind | null>(null);
+  const [detailsId, setDetailsId] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
   const accessState = useOverlayState();
   const settingsState = useOverlayState();
+  const detailsState = useOverlayState();
+  const rowActions = useProviderRowActions({ onReplace: actions.replace, onRemove: actions.remove });
   const { items } = limits;
 
   useEffect(() => {
@@ -81,6 +91,24 @@ export default function SubscriptionAccounts({
   function openSettings(kind: SignInKind) {
     setSettingsKind(kind);
     settingsState.open();
+  }
+
+  function openDetails(row: ProviderView) {
+    setDetailsId(row.id);
+    detailsState.open();
+  }
+
+  function runMenu(row: ProviderView, action: AccountMenuAction) {
+    if (action === "details") openDetails(row);
+    if (action === "refresh") limits.refreshOne(row.id);
+    if (action === "signIn" || action === "edit") {
+      actions.openForm(SUBSCRIPTION_CATALOG.find((spec) => spec.kind === row.kind) ?? null, row);
+    }
+    if (action === "access") openAccess(row);
+    if (action === "pause") rowActions.setEnabled(row, false);
+    if (action === "resume") rowActions.setEnabled(row, true);
+    if (action === "import") actions.openImport(row);
+    if (action === "disconnect") rowActions.askDisconnect(row);
   }
 
   if (rows.length === 0) {
@@ -111,18 +139,35 @@ export default function SubscriptionAccounts({
     .map((row) => recoveryAt(row, items[row.id], now.getTime()))
     .filter((time): time is number => time !== null);
   const nextRecovery = recoveries.length ? Math.min(...recoveries) : null;
-  const connected = SUBSCRIPTION_CATALOG.filter((spec) => rows.some((row) => row.kind === spec.kind));
   const available = tally("available");
   const limited = tally("limited");
   const expired = tally("expired");
   const paused = tally("paused");
+  const matches = (row: ProviderView) =>
+    accountMatches(row, query, [
+      tProviders("kindShort", { kind: row.kind }),
+      tProviders("kindName", { kind: row.kind }),
+      row.signIn?.plan ? tProviders("signIn.plan", { plan: row.signIn.plan }) : "",
+    ]);
+  const groups = SUBSCRIPTION_CATALOG.map((spec) => {
+    const all = rows.filter((row) => row.kind === spec.kind);
+    return { kind: spec.kind, all, shown: all.filter(matches).sort(byAccountOrder) };
+  }).filter((group) => group.shown.length > 0);
+  const details = detailsId ? (rows.find((row) => row.id === detailsId) ?? null) : null;
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4">
         <p className="max-w-3xl text-sm text-muted">{t("intro")}</p>
         <div className="flex flex-col gap-3 md:flex-row md:flex-wrap md:items-end md:justify-between">
-          <div>
+          <div className="flex min-w-0 flex-wrap items-center gap-3 md:grow md:basis-96">
+            <SearchField value={query} onChange={setQuery} aria-label={t("search")} className="w-full max-w-sm">
+              <SearchField.Group>
+                <SearchField.SearchIcon />
+                <SearchField.Input placeholder={t("search")} />
+                <SearchField.ClearButton aria-label={tCommon("close")} />
+              </SearchField.Group>
+            </SearchField>
             <Button variant="tertiary" isPending={limits.refreshingAll} onPress={limits.refreshAll}>
               {({ isPending }) => (
                 <>
@@ -168,33 +213,40 @@ export default function SubscriptionAccounts({
         <StatCard icon={CirclePause} tone="neutral" label={t("stats.paused")} value={format.number(paused)} />
       </div>
 
-      {connected.map((spec) => {
-        const accounts = rows.filter((row) => row.kind === spec.kind).sort(byAccountOrder);
-        return (
-          <ProviderSection
-            key={spec.kind}
-            kind={spec.kind}
-            rows={accounts}
-            counts={COUNTED_STATES.map((state) => ({ state, count: tally(state, accounts) })).filter((item) => item.count > 0)}
-            limits={items}
-            settingsLoaded={routing !== null}
-            strategy={routing?.[spec.kind] ?? DEFAULT_ACCOUNT_STRATEGY}
-            autoReset={isResetKind(spec.kind) ? (autoReset[spec.kind] ?? autoResetPolicy({})) : null}
-            canManage={canManage}
-            timeZone={timeZone}
-            refreshing={limits.refreshing}
-            onAdd={() => onAdd(spec.kind)}
-            onSettings={() => openSettings(spec.kind)}
-            onRefresh={limits.refreshOne}
-            onItem={limits.storeItem}
-            onEdit={(provider) => actions.openForm(spec, provider)}
-            onImport={actions.openImport}
-            onAccess={openAccess}
-            onToggled={actions.replace}
-            onDeleted={actions.remove}
-          />
-        );
-      })}
+      {groups.length === 0 ? <EmptyState icon={UserRound} title={t("noMatches")} /> : null}
+
+      {groups.map((group) => (
+        <SubscriptionGroup
+          key={group.kind}
+          kind={group.kind}
+          rows={group.shown}
+          total={group.all.length}
+          counts={COUNTED_STATES.map((state) => ({ state, count: tally(state, group.all) })).filter((item) => item.count > 0)}
+          limits={items}
+          settingsLoaded={routing !== null}
+          strategy={routing?.[group.kind] ?? DEFAULT_ACCOUNT_STRATEGY}
+          autoReset={isResetKind(group.kind) ? (autoReset[group.kind] ?? autoResetPolicy({})) : null}
+          canManage={canManage}
+          timeZone={timeZone}
+          isBusy={(id) => rowActions.busy === id || limits.refreshing.includes(id)}
+          onAdd={() => onAdd(group.kind)}
+          onSettings={() => openSettings(group.kind)}
+          onCreateLink={() => onCreateLink(group.kind)}
+          onMenu={runMenu}
+        />
+      ))}
+
+      <AccountDetailsDialog
+        state={detailsState}
+        row={details}
+        entry={details ? items[details.id] : undefined}
+        reports={details ? reportsLimits(details.kind) : false}
+        timeZone={timeZone}
+        canManage={canManage}
+        refreshing={details ? limits.refreshing.includes(details.id) : false}
+        onRefresh={limits.refreshOne}
+        onItem={limits.storeItem}
+      />
 
       {canManage ? (
         <>
@@ -211,6 +263,7 @@ export default function SubscriptionAccounts({
           />
 
           <AccessDialog key={`access-${accessKey}`} state={accessState} provider={access} onSaved={actions.replace} />
+          {rowActions.dialogs}
         </>
       ) : null}
     </div>
