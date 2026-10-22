@@ -78,13 +78,12 @@ export function upstreamHeaders(
     headers["X-Title"] = "LLM Hub";
   }
   const forwardAll = speaksAnthropic(dep.kind);
-  const forwardBetas = servesMessages(dep.kind);
   if (extra) {
     const src = extra instanceof Headers ? extra : new Headers(extra);
     src.forEach((value, key) => {
       const name = key.toLowerCase();
       if (UNFORWARDED_CLIENT_HEADERS.has(name)) return;
-      if (!forwardAll && !(forwardBetas && name === "anthropic-beta")) return;
+      if (!forwardAll && name !== "anthropic-beta") return;
       headers[key] = value;
     });
   }

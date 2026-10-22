@@ -232,7 +232,8 @@ test("upstream headers carry exactly one policy version and never the hub key", 
   for (const kind of ["openai", "vertex", "openrouter"]) {
     const other = upstreamHeaders(deployment(kind), { key: "sk-other", headers: {} }, clientHeaders(V2026));
     assert.deepEqual(versionHeaders(other), [], kind);
-    assert.equal(other["anthropic-beta"], undefined, kind);
+    assert.equal(other["anthropic-beta"], "context-1m-2025-08-07", kind);
+    assert.equal(other["x-stainless-lang"], undefined, kind);
     assert.equal(other.Authorization, "Bearer sk-other", kind);
   }
 });
@@ -351,7 +352,7 @@ test("prepareBody fits native and count_tokens bodies to the outbound version", 
   assert.deepEqual(kimi.messages, legacyConversation());
 });
 
-test("Vertex Claude keeps its body version and sampling regardless of the client header", () => {
+test("Vertex Claude keeps its body version and sampling and still gets the client's anthropic-beta", () => {
   const vertex = deployment("vertex", SONNET_46, "https://aiplatform.googleapis.com/v1/projects/p-123456/locations/global");
   const chat = { model: "alias", temperature: 0.2, messages: [{ role: "user", content: "Hi" }] };
   const payload = prepareBody(vertex, "/chat/completions", chat, "", clientHeaders(V2026));
@@ -359,7 +360,10 @@ test("Vertex Claude keeps its body version and sampling regardless of the client
   const wire = googleWire("vertex", "/chat/completions", payload);
   assert.equal(wire.anthropic_version, "vertex-2023-10-16");
   assert.equal("model" in wire, false);
-  assert.deepEqual(versionHeaders(upstreamHeaders(vertex, { key: "ya29.token", headers: {} }, clientHeaders(V2026))), []);
+  const headers = upstreamHeaders(vertex, { key: "ya29.token", headers: {} }, clientHeaders(V2026));
+  assert.deepEqual(versionHeaders(headers), []);
+  assert.equal(headers["anthropic-beta"], "context-1m-2025-08-07");
+  assert.equal(headers.Authorization, "Bearer ya29.token");
 });
 
 function anthropicRoute(model: string): JsonMap {

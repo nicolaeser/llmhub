@@ -71,7 +71,7 @@ test("Claude requests keep the client's own identity headers and fall back to de
   assert.match(fallback["User-Agent"] ?? "", /^claude-cli\//);
 });
 
-test("Non-Anthropic upstreams receive no client headers and only Messages upstreams get betas", () => {
+test("Non-Anthropic upstreams receive only the client's Anthropic beta header and a policy version", () => {
   const client = {
     "anthropic-version": "2026-10-21",
     "anthropic-beta": "context-1m-2025-08-07",
@@ -80,7 +80,7 @@ test("Non-Anthropic upstreams receive no client headers and only Messages upstre
   };
   const headers = upstreamHeaders({ ...claudeDep, kind: "openai" }, { key: "sk-x", headers: {} }, client);
   assert.equal(headers["anthropic-version"], undefined);
-  assert.equal(headers["anthropic-beta"], undefined);
+  assert.equal(headers["anthropic-beta"], "context-1m-2025-08-07");
   assert.equal(headers["user-agent"], undefined);
   assert.equal(headers["x-stainless-lang"], undefined);
   const kimi = upstreamHeaders({ ...claudeDep, kind: "kimi" }, { key: "sk-kimi", headers: {} }, client);
