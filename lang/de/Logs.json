@@ -55,7 +55,9 @@
   "newRequests": "{capped, select, true {Mehr als {count, number, integer} neue Anfragen · Neueste anzeigen} other {{count, plural, one {# neue Anfrage · Neueste anzeigen} other {# neue Anfragen · Neueste anzeigen}}}}",
   "pageStatus": "Seite {page, number, integer} · {total, number, integer} Zeilen · {pageSize, number, integer} pro Seite",
   "caller": {
-    "noKey": "Console-Sitzung"
+    "noKey": "Console-Sitzung",
+    "system": "System",
+    "feature": "{feature, select, catalog {Modellkatalog (Jev)} mcp_builder {MCP Anything} model_test {Modelltest} other {Konsolenfunktion}}"
   },
   "statusOutcome": "{status} · {outcome, select, ok {OK} error {Fehler} cache_hit {Treffer im Antwort-Cache} pii_blocked {Wegen PII blockiert} guardrail_blocked {Durch Guardrail blockiert} other {{outcome}}}",
   "openDetails": "Details zu {model} anzeigen",

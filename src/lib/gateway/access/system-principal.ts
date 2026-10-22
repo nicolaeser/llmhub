@@ -1,11 +1,9 @@
 import "server-only";
 import { withTrace } from "@/lib/gateway/access/gate";
-import type { Principal } from "@/types/gateway";
+import { SYSTEM_ACTOR_PREFIX, systemEndpoint } from "@/lib/gateway/access/system-callers";
+import type { Principal, SystemFeature } from "@/types/gateway";
 
-export const SYSTEM_ACTOR_PREFIX = "system:";
-export const SYSTEM_ENDPOINT_PREFIX = "internal:";
-
-export function systemPrincipal(feature: string): Principal {
+export function systemPrincipal(feature: SystemFeature): Principal {
   const traced = withTrace(
     {
       actor: `${SYSTEM_ACTOR_PREFIX}${feature}`,
@@ -16,7 +14,7 @@ export function systemPrincipal(feature: string): Principal {
       models: [],
       routeLimits: {},
     },
-    `${SYSTEM_ENDPOINT_PREFIX}${feature}`,
+    systemEndpoint(feature),
   );
-  return { ...traced, pool: "internal", system: true };
+  return { ...traced, pool: "internal", system: feature };
 }

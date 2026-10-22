@@ -1,7 +1,7 @@
 import "server-only";
 import prisma from "@/lib/db/prisma";
 import { GateError } from "@/lib/gateway/errors";
-import { adminModelPermitted } from "@/lib/gateway/access/gate";
+import { featureModelPermitted } from "@/lib/gateway/access/gate";
 import { attributesOf, matchesFilter } from "@/lib/rag/filters";
 import { fileIndexes } from "@/lib/rag/index-cache";
 import { queryTerms } from "@/lib/rag/lexical";
@@ -85,7 +85,8 @@ async function rerankModel(
   if (request.ranking.ranker === "none") return { model: "", chosenBy: "admin" };
   if (request.rerankModel !== null) return { model: request.rerankModel, chosenBy: "caller" };
   const configured = stores.find((store) => store.rerankModel)?.rerankModel || (await vectorDefaults()).rerank_model;
-  return { model: configured && adminModelPermitted(principal, configured) ? configured : "", chosenBy: "admin" };
+  const permitted = Boolean(configured) && (await featureModelPermitted(principal, configured));
+  return { model: permitted ? configured : "", chosenBy: "admin" };
 }
 
 async function chunkTexts(ids: string[]): Promise<Map<string, string>> {

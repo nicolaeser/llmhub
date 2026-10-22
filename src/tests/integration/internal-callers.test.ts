@@ -61,7 +61,7 @@ test("system calls are metered with empty tenancy, store no content, and stay ou
     assert.equal(logs.length, 1);
     assert.deepEqual(
       [logs[0]!.endpoint, logs[0]!.contentSkip, logs[0]!.content, logs[0]!.keyId, logs[0]!.userId, logs[0]!.orgId],
-      ["internal:test:knowledge", "system", null, "", "", ""],
+      ["internal:model_test", "system", null, "", "", ""],
     );
 
     const home = await data.org();

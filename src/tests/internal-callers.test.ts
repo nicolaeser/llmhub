@@ -1,7 +1,16 @@
-import { chatReply, gateway, resetGateway } from "./support/gateway-harness";
+import { API_KEY, chatReply, errorOf, gateway, gatewayRequest, resetGateway } from "./support/gateway-harness";
 import { recordedPrisma } from "./support/recorded-prisma";
+import { listSourceFiles } from "./route-view-policy";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { NextIntlClientProvider } from "next-intl";
+import LogTable, { type LogsPayload } from "@/app/(app)/logs/_components/log-table";
+import { formats } from "@/i18n/formats";
 import { runAsPrincipal } from "@/lib/auth/delegation";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { GateError } from "@/lib/gateway/errors";
@@ -9,6 +18,7 @@ import { BUILDER_MODEL_KEY } from "@/schemas/mcp";
 import type { AuthenticatedSession, Permission } from "@/types/auth";
 import type { JsonMap, Principal } from "@/types/gateway";
 import type { VirtualKeyView } from "@/types/keys";
+import type { RequestLogRow } from "@/types/logs";
 import type { JevTask } from "@/types/model-catalog";
 import type { UsageSlice } from "@/types/usage";
 
@@ -192,7 +202,7 @@ test("a system principal has no caller, no budget holder, and routes on the inte
   assert.deepEqual(principal.models, []);
   assert.deepEqual(principal.routeLimits, {});
   assert.equal(principal.pool, "internal");
-  assert.equal(principal.system, true);
+  assert.equal(principal.system, "mcp_builder");
   assert.equal(principal.trace?.endpoint, "internal:mcp_builder");
   assert.deepEqual(budgetChain(principal), []);
   assert.notEqual(systemPrincipal("catalog").trace, systemPrincipal("catalog").trace);
@@ -402,6 +412,14 @@ test("the semantic cache embeds with the admin-chosen model on internal routes f
   assert.deepEqual(gateway.upstream, []);
 
   resetGateway();
+  const unlisted = await lookup(caller(), "text-embed-public");
+  assert.equal(unlisted.slot.semantic, null);
+  assert.deepEqual(gateway.upstream, []);
+  const listed = await lookup(caller({ models: ["chat-public", "text-embed-public"] }), "text-embed-public");
+  assert.ok(listed.slot.semantic);
+  assert.deepEqual(upstreamHosts(), ["public-embed.test"]);
+
+  resetGateway();
   const subscription = await lookupChatCache({
     pool: "subscription",
     principal: caller({ pool: "subscription" }),
@@ -432,12 +450,20 @@ test("store models run on internal routes while caller-chosen RAG models stay on
     (err: unknown) => err instanceof GateError && err.status === 403 && err.code === "model_access_denied",
   );
   await assert.rejects(
+    embedTexts({ principal: restricted, endpoint: "/v1/x", model: "text-embed-public", dimensions: 0, texts: ["hi"] }),
+    (err: unknown) => err instanceof GateError && err.status === 403 && err.code === "model_access_denied",
+  );
+  await assert.rejects(
     embedTexts({ principal: restricted, endpoint: "/v1/x", model: "chat-plan", dimensions: 0, texts: ["hi"] }),
+    (err: unknown) => err instanceof GateError && err.status === 403,
+  );
+  const open = caller({ models: [], key: keyView({ models: [] }) });
+  await assert.rejects(
+    embedTexts({ principal: open, endpoint: "/v1/x", model: "chat-plan", dimensions: 0, texts: ["hi"] }),
     (err: unknown) => err instanceof GateError && err.status === 404,
   );
   assert.deepEqual(gateway.upstream, []);
 
-  const open = caller({ models: [], key: keyView({ models: [] }) });
   const rerank = (principal: Principal, model: string, chosenBy: "caller" | "admin") =>
     forwardModelCall({
       principal,
@@ -487,7 +513,7 @@ test("model tests run as a system call for platform settings managers only", asy
   assert.equal(ok.model, "text-embed-private");
   assert.equal(ok.status, 200);
   assert.deepEqual(upstreamHosts(), ["private-embed.test"]);
-  assertSystemMetered("internal:test:knowledge", "text-embed-private");
+  assertSystemMetered("internal:model_test", "text-embed-private");
 
   resetGateway();
   gateway.enterprise = { cache_semantic: { enabled: true, model: "text-embed-private", threshold: 0.9 } };
@@ -500,7 +526,7 @@ test("model tests run as a system call for platform settings managers only", asy
     testFeatureModel({ feature: "mcp_builder", role: "chat", model: "chat-public" }),
   );
   assert.deepEqual([failed.ok, failed.status, failed.error], [false, 401, "bad key"]);
-  assertSystemMetered("internal:test:mcp_builder", "chat-public");
+  assertSystemMetered("internal:model_test", "chat-public");
 
   resetGateway();
   await assert.rejects(
@@ -562,4 +588,130 @@ test("usage groups system rows as system and company scopes never include them",
   assert.equal(visible(company).some(systemSlice), false);
   assert.equal(visible(own).some(systemSlice), false);
   assert.equal(visible(spendScopeFor({ company: null, seesAll: true, userId: "u1" })).some(systemSlice), true);
+});
+
+test("request headers never turn an /api/v1 call into a system call that reaches an internal-only alias", async () => {
+  const { gateRequest } = await import("@/lib/gateway/access/gate");
+  const { POST } = await import("@/app/api/v1/embeddings/route");
+  const { forwardToModel } = await import("@/lib/gateway/dispatch/upstream");
+  const { systemPrincipal } = await import("@/lib/gateway/access/system-principal");
+  const spoofed = {
+    "x-llmhub-system": "catalog",
+    "x-llmhub-pool": "internal",
+    "x-hub-pool": "internal",
+    "x-llmhub-feature": "model_test",
+    "x-llmhub-actor": "system:catalog",
+  };
+  const body = { model: "text-embed-private", input: "hi" };
+
+  resetGateway();
+  const principal = await gateRequest(gatewayRequest("/api/v1/embeddings", body, spoofed));
+  assert.deepEqual([principal.system, principal.pool, principal.actor], [undefined, "api", API_KEY]);
+  assert.equal(principal.trace?.endpoint, "/api/v1/embeddings");
+
+  resetGateway();
+  recordedPrisma.reset({ virtualKey: { findFirst: () => null } });
+  for (const token of ["system:catalog", "system:mcp_builder", "internal:model_test"]) {
+    const req = new Request("http://hub.local/api/v1/embeddings", {
+      method: "POST",
+      headers: { authorization: `Bearer ${token}`, "content-type": "application/json", ...spoofed },
+      body: JSON.stringify(body),
+    });
+    await assert.rejects(gateRequest(req), (err: unknown) => err instanceof GateError && err.status === 401, token);
+  }
+
+  resetGateway();
+  const unknown = await errorOf(await POST(gatewayRequest("/api/v1/embeddings", { ...body, model: "no-such-model" })));
+  const hidden = await errorOf(await POST(gatewayRequest("/api/v1/embeddings", body, spoofed)));
+  assert.equal(unknown.status, 404);
+  assert.deepEqual(hidden, unknown);
+  assert.deepEqual(gateway.upstream, []);
+
+  const hit = await forwardToModel(["text-embed-private"], systemPrincipal("model_test"), "/embeddings", body, { pool: "internal" });
+  assert.equal(hit.depId, "private-embed");
+  assert.deepEqual(upstreamHosts(), ["private-embed.test"]);
+});
+
+test("only the internal callers create the system principal", () => {
+  const root = fileURLToPath(new URL("..", import.meta.url));
+  const importers = listSourceFiles(root)
+    .filter((file) => /["']@\/lib\/gateway\/access\/system-principal["']/.test(readFileSync(file, "utf8")))
+    .map((file) => path.relative(root, file).split(path.sep).join("/"));
+  assert.deepEqual(importers.sort(), ["lib/gateway/catalog/jev.ts", "lib/mcp/builder.ts", "lib/models/feature-model-test.ts"]);
+});
+
+test("request logs name system calls by feature", async () => {
+  const { systemFeatureOf } = await import("@/lib/gateway/access/system-callers");
+  const blank = { keyId: "", userId: "", memberId: "", projectId: "", teamId: "", orgId: "" };
+  assert.equal(systemFeatureOf({ ...blank, endpoint: "internal:catalog" }), "catalog");
+  assert.equal(systemFeatureOf({ ...blank, endpoint: "internal:model_test" }), "model_test");
+  assert.equal(systemFeatureOf({ ...blank, endpoint: "internal:other" }), "");
+  assert.equal(systemFeatureOf({ ...blank, endpoint: "/v1/embeddings" }), "");
+  assert.equal(systemFeatureOf({ ...blank, userId: "user-1", endpoint: "internal:catalog" }), "");
+  assert.equal(systemFeatureOf({ ...blank, keyId: "key-1", endpoint: "internal:mcp_builder" }), "");
+
+  const root = fileURLToPath(new URL("../..", import.meta.url));
+  const messages = (locale: string) =>
+    Object.fromEntries(
+      ["Common", "Logs", "Guardrails"].map((name) => [
+        name,
+        JSON.parse(readFileSync(path.join(root, "lang", locale, `${name}.json`), "utf8")),
+      ]),
+    );
+  const row: RequestLogRow = {
+    id: "req_1",
+    createdAt: "2026-10-21T12:00:00.000Z",
+    model: "chat-private",
+    endpoint: "internal:mcp_builder",
+    stream: false,
+    status: 200,
+    outcome: "ok",
+    latencyMs: 120,
+    ...blank,
+    keyLabel: "",
+    userLabel: "",
+    memberLabel: "",
+    promptTokens: 10,
+    completionTokens: 5,
+    cacheReadTokens: 0,
+    cacheWriteTokens: 0,
+    cost: 0.001,
+    piiMode: "",
+    piiInput: [],
+    piiOutput: [],
+    guardInput: [],
+    guardOutput: [],
+    hasContent: false,
+    contentSkip: "system",
+    system: "mcp_builder",
+  };
+  const logs: LogsPayload = {
+    canAudit: false,
+    page: 1,
+    pageSize: 50,
+    requestTotal: 1,
+    spendTotal: 0,
+    auditTotal: 0,
+    requests: [row],
+    spend: [],
+    audit: [],
+  };
+  const render = (locale: string) =>
+    renderToStaticMarkup(
+      createElement(NextIntlClientProvider, {
+        locale,
+        timeZone: "UTC",
+        formats,
+        now: new Date("2026-10-21T12:30:00.000Z"),
+        messages: messages(locale),
+        children: createElement(LogTable, { kind: "requests", logs, onOpen: () => {} }),
+      }),
+    );
+  const english = render("en");
+  assert.match(english, />System</);
+  assert.match(english, /MCP Anything/);
+  assert.doesNotMatch(english, /Console session/);
+  const german = render("de");
+  assert.match(german, />System</);
+  assert.doesNotMatch(german, /Console-Sitzung/);
 });

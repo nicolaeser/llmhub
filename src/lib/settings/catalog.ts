@@ -5,13 +5,8 @@ import { hasPerm, PERMISSIONS } from "@/lib/auth/permissions";
 import { writeAudit } from "@/lib/audit";
 import { jevAliasRoutable } from "@/lib/gateway/catalog/jev";
 import { assertModelRoles, featureModelChoices } from "@/lib/models/aliases";
-import {
-  catalogRouting,
-  DEFAULT_JEV_MODEL,
-  getEnterprise,
-  normalizeVectorDefaults,
-  patchEnterprise,
-} from "@/lib/settings/enterprise";
+import { DEFAULT_JEV_MODEL } from "@/lib/gateway/catalog/model-catalog";
+import { catalogRouting, getEnterprise, normalizeVectorDefaults, patchEnterprise } from "@/lib/settings/enterprise";
 import { catalogSettingsSchema } from "@/schemas/settings";
 import type { Permission } from "@/types/auth";
 import type { CatalogSettingsView, Enterprise } from "@/types/settings";

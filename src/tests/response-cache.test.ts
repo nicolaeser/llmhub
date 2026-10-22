@@ -1,3 +1,4 @@
+import { recordedPrisma } from "./support/recorded-prisma";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { responseCacheColumns } from "@/lib/gateway/billing/billing";
@@ -158,17 +159,36 @@ test("embedding responses become unit vectors", () => {
   assert.equal(embeddingVector({ error: "nope" }), null);
 });
 
-test("semantic matching needs a model and endpoint the key may use on the api pool", () => {
+test("semantic matching needs the embeddings endpoint on the api pool and a model the key may use or one served only internally", async () => {
+  const route = (internal: boolean) => ({ kind: "openai_compat", provider: { kind: "openai_compat", internal } });
+  const groups: Record<string, { enabled: boolean; deployments: ReturnType<typeof route>[] }> = {
+    embed: { enabled: true, deployments: [route(false)] },
+    "embed-private": { enabled: true, deployments: [route(true)] },
+    "embed-mixed": { enabled: true, deployments: [route(true), route(false)] },
+    "embed-off": { enabled: false, deployments: [route(true)] },
+  };
+  recordedPrisma.reset({
+    modelGroup: { findUnique: ({ where }: { where: { alias: string } }) => groups[where.alias] ?? null },
+  });
   const on = { enabled: true, model: "embed", threshold: 0.95 };
-  assert.equal(semanticAllowed("api", principal([]), on), true);
-  assert.equal(semanticAllowed("api", principal(["gpt-x", "embed"]), on), true);
-  assert.equal(semanticAllowed("api", principal(["gpt-x"]), on), false);
-  assert.equal(semanticAllowed("api", principal([]), { ...on, enabled: false }), false);
-  assert.equal(semanticAllowed("api", principal([]), { ...on, model: "" }), false);
-  assert.equal(semanticAllowed("subscription", principal([]), on), false);
-  assert.equal(semanticAllowed("api", principal([], ["chat"]), on), false);
-  assert.equal(semanticAllowed("api", principal([], ["chat", "embeddings"]), on), true);
-  assert.equal(semanticAllowed("api", principal([], []), on), true);
+  assert.equal(await semanticAllowed("api", principal([]), on), true);
+  assert.equal(await semanticAllowed("api", principal(["gpt-x", "embed"]), on), true);
+  assert.equal(await semanticAllowed("api", principal(["gpt-x"]), on), false);
+  assert.equal(await semanticAllowed("api", principal([]), { ...on, enabled: false }), false);
+  assert.equal(await semanticAllowed("api", principal([]), { ...on, model: "" }), false);
+  assert.equal(await semanticAllowed("subscription", principal([]), on), false);
+  assert.equal(await semanticAllowed("api", principal([], ["chat"]), on), false);
+  assert.equal(await semanticAllowed("api", principal([], ["chat", "embeddings"]), on), true);
+  assert.equal(await semanticAllowed("api", principal([], []), on), true);
+
+  const restricted = principal(["gpt-x"]);
+  assert.equal(await semanticAllowed("api", restricted, { ...on, model: "embed-private" }), true);
+  assert.equal(await semanticAllowed("api", { ...restricted, dataRules: true }, { ...on, model: "embed-private" }), false);
+  assert.equal(await semanticAllowed("api", restricted, { ...on, model: "embed-mixed" }), false);
+  assert.equal(await semanticAllowed("api", restricted, { ...on, model: "embed-off" }), false);
+  assert.equal(await semanticAllowed("api", restricted, { ...on, model: "embed-missing" }), false);
+  assert.equal(await semanticAllowed("api", principal([], ["chat"]), { ...on, model: "embed-private" }), false);
+  recordedPrisma.reset();
 });
 
 test("response cache keys and semantic scopes are separate per route pool", () => {

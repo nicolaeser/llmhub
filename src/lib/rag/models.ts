@@ -2,7 +2,8 @@ import "server-only";
 import { usageFromUnknown } from "@/lib/gateway/billing/billing";
 import { asNumber, asRecord } from "@/lib/gateway/core";
 import { GateError } from "@/lib/gateway/errors";
-import { adminModelPermitted, allowModel, applyGuardrails, modelChain, withTrace } from "@/lib/gateway/access/gate";
+import { allowModel, applyGuardrails, featureModelPermitted, modelChain, withTrace } from "@/lib/gateway/access/gate";
+import { modelAlias } from "@/lib/gateway/catalog/model-alias";
 import { meter } from "@/lib/gateway/billing/meter";
 import { forwardToModel } from "@/lib/gateway/dispatch/upstream";
 import { ocrText } from "@/lib/rag/extract";
@@ -42,10 +43,10 @@ export function rerankResults(json: unknown): { index: number; score: number }[]
   });
 }
 
-function allowChosenModel(principal: Principal, model: string, chosenBy: ModelChooser): void {
+async function allowChosenModel(principal: Principal, model: string, chosenBy: ModelChooser): Promise<void> {
   if (chosenBy === "caller") return allowModel(principal, model);
   if (!model) throw new GateError(400, "missing_required_parameter", "model is required", { param: "model" });
-  if (!adminModelPermitted(principal, model)) {
+  if (!(await featureModelPermitted(principal, model))) {
     throw new GateError(403, "model_access_denied", "model not allowed for this key", { param: "model" });
   }
 }
@@ -59,9 +60,9 @@ export async function forwardModelCall(input: {
   usage: (json: unknown) => Partial<TokenUsage>;
 }): Promise<ProxyFirstResult> {
   const { principal, model, chosenBy } = input;
-  allowChosenModel(principal, model, chosenBy);
+  await allowChosenModel(principal, model, chosenBy);
   const { body: clean } = await applyGuardrails(input.body, principal);
-  const aliases = chosenBy === "caller" ? modelChain(principal, model, clean) : [model];
+  const aliases = chosenBy === "caller" ? modelChain(principal, model, clean) : [modelAlias(model)];
   const usage = meter(principal, model, input.body);
   try {
     const hit = await forwardToModel(aliases, principal, input.path, clean, {

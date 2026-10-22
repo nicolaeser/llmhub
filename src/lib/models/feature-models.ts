@@ -2,7 +2,8 @@ import "server-only";
 
 import prisma from "@/lib/db/prisma";
 import { modelAlias } from "@/lib/gateway/catalog/model-alias";
-import { DEFAULT_JEV_MODEL, getEnterprise, normalizeSemanticCache, normalizeVectorDefaults } from "@/lib/settings/enterprise";
+import { DEFAULT_JEV_MODEL } from "@/lib/gateway/catalog/model-catalog";
+import { getEnterprise, normalizeSemanticCache, normalizeVectorDefaults } from "@/lib/settings/enterprise";
 import { BUILDER_MODEL_KEY } from "@/schemas/mcp";
 import type { ModelRole } from "@/lib/models/model-role";
 import type { FeatureModelRole, ModelFeature } from "@/types/models";

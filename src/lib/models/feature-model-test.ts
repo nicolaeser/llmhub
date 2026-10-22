@@ -18,7 +18,7 @@ import type { JsonMap } from "@/types/gateway";
 import type { JevTask } from "@/types/model-catalog";
 import type { FeatureModelRole, FeatureModelTest } from "@/types/models";
 
-export const MODEL_TEST_TIMEOUT_MS = 30_000;
+const MODEL_TEST_TIMEOUT_MS = 30_000;
 const ERROR_LIMIT = 300;
 const PROBE_TEXT = "Reply with OK.";
 const PROBE_IMAGE =
@@ -65,7 +65,7 @@ export async function testFeatureModel(raw: unknown): Promise<FeatureModelTest> 
   if (!model) throw new Error("MODEL_REQUIRED");
   await assertModelRoles([{ alias: model, role: ROLE_KIND[role] }]);
   const probe = PROBES[role](model);
-  const principal = systemPrincipal(`test:${feature}`);
+  const principal = systemPrincipal("model_test");
   const usage = meter(principal, model, probe.body);
   const started = Date.now();
   let hit;

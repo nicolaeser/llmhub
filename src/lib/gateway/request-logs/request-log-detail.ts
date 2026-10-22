@@ -3,6 +3,7 @@ import "server-only";
 import prisma from "@/lib/db/prisma";
 import { hasPerm, PERMISSIONS } from "@/lib/auth/permissions";
 import { spendScope } from "@/lib/auth/scope";
+import { systemFeatureOf } from "@/lib/gateway/access/system-callers";
 import { requestTranscript, responseTranscript } from "@/lib/gateway/request-logs/log-content";
 import { replayDraft } from "@/lib/gateway/request-logs/log-replay";
 import { money } from "@/lib/utils/money";
@@ -69,6 +70,7 @@ export function requestLogRow(
     guardOutput: row.guardOutput,
     hasContent: Boolean(row.content),
     contentSkip: row.contentSkip,
+    system: systemFeatureOf(row),
   };
 }
 

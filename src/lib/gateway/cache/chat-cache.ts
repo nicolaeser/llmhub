@@ -3,7 +3,7 @@ import { recordUsage, recordUsageOrLog, usageFromUnknown } from "@/lib/gateway/b
 import { cacheGet, cacheKey, cachePut, semanticAdd, semanticFind, semanticProbe, unitVector } from "@/lib/gateway/cache/response-cache";
 import { asRecord, ownerId } from "@/lib/gateway/core";
 import { GateError } from "@/lib/gateway/errors";
-import { adminModelPermitted, spendTag, withTrace } from "@/lib/gateway/access/gate";
+import { featureModelPermitted, spendTag, withTrace } from "@/lib/gateway/access/gate";
 import { endpointAllowed } from "@/lib/gateway/access/key-restrictions";
 import { forwardToModel } from "@/lib/gateway/dispatch/upstream";
 import { errorFields } from "@/lib/logging/format";
@@ -20,13 +20,17 @@ export function embeddingVector(json: unknown): Float32Array | null {
   return Array.isArray(data) ? unitVector(asRecord(data[0])?.embedding) : null;
 }
 
-export function semanticAllowed(pool: RoutePool, principal: Principal, semantic: SemanticCacheSettings): boolean {
+export async function semanticAllowed(
+  pool: RoutePool,
+  principal: Principal,
+  semantic: SemanticCacheSettings,
+): Promise<boolean> {
   return (
     pool === "api" &&
     semantic.enabled &&
     Boolean(semantic.model) &&
-    adminModelPermitted(principal, semantic.model) &&
-    endpointAllowed(principal.key?.allowed_endpoints ?? [], EMBEDDINGS_ENDPOINT)
+    endpointAllowed(principal.key?.allowed_endpoints ?? [], EMBEDDINGS_ENDPOINT) &&
+    (await featureModelPermitted(principal, semantic.model))
   );
 }
 
@@ -82,7 +86,7 @@ export async function lookupChatCache(input: {
   };
   const exact = await cacheGet(slot.key);
   if (exact) return { slot, hit: { entry: exact, similarity: null } };
-  if (!semanticAllowed(input.pool, input.principal, input.semantic)) return { slot, hit: null };
+  if (!(await semanticAllowed(input.pool, input.principal, input.semantic))) return { slot, hit: null };
   const probe = semanticProbe(input.pool, owner, input.model, input.semantic.model, input.body);
   if (!probe) return { slot, hit: null };
   const vector = await embedPrompt(input.principal, input.semantic.model, probe.text, spendTag(input.body));

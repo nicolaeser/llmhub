@@ -21,6 +21,7 @@ import { SettingSection, SettingSwitch, SettingText } from "./setting-fields";
 import { useErrorToast } from "@/components/console/use-error-toast";
 import { formats } from "@/i18n/formats";
 import { modelAlias } from "@/lib/gateway/catalog/model-alias";
+import { DEFAULT_JEV_MODEL } from "@/lib/gateway/catalog/model-catalog";
 import { choicesForRole, type ModelRole } from "@/lib/models/model-role";
 import { Link } from "@/i18n/routing";
 import { useActionData } from "@/lib/hooks/use-action-data";
@@ -30,8 +31,6 @@ import type { CatalogSettings } from "@/types/settings";
 import { loadCatalogSettingsAction, saveCatalogSettingsAction, testFeatureModelAction } from "../_action";
 import SaveBar, { SettingsLead } from "./save-bar";
 import TabState from "./tab-state";
-
-const JEV_DEFAULT_MODEL = "jev-latest";
 
 export default function CatalogTab() {
   const t = useTranslations("Settings.catalog");
@@ -60,7 +59,7 @@ export default function CatalogTab() {
   const jevKeyReady = settings.catalog_jev.clear_api_key
     ? Boolean(settings.catalog_jev.api_key)
     : view.jevKeySet || Boolean(settings.catalog_jev.api_key);
-  const jevModel = modelAlias(settings.catalog_jev.model || JEV_DEFAULT_MODEL);
+  const jevModel = modelAlias(settings.catalog_jev.model || DEFAULT_JEV_MODEL);
   const jevAlias = view.models.some((model) => model.alias === jevModel);
   const jevReady = jevKeyReady || jevAlias;
   const jevRoute = jevKeyReady ? "key" : jevAlias ? "alias" : "none";
@@ -177,7 +176,7 @@ export default function CatalogTab() {
                   value={settings.catalog_jev.model}
                   onChange={(model) => jev({ model })}
                   isDisabled={disabled}
-                  placeholder={JEV_DEFAULT_MODEL}
+                  placeholder={DEFAULT_JEV_MODEL}
                   hint={t("jev.modelHint", { route: jevRoute, model: jevModel })}
                 />
                 {view.canManage && jevRoute === "alias" ? (

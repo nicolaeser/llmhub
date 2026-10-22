@@ -1,7 +1,7 @@
 import "server-only";
 import { asStringMap, ERR_UNKNOWN_GROUP, ownerId } from "@/lib/gateway/core";
 import { GateError } from "@/lib/gateway/errors";
-import { allowModel, readBody } from "@/lib/gateway/access/gate";
+import { allowModel, featureModelPermitted, readBody } from "@/lib/gateway/access/gate";
 import { hiddenFrom, outsidePool, routable } from "@/lib/gateway/routing/route-pool";
 import { loadGroup } from "@/lib/gateway/routing/runtime";
 import { parseRequest } from "@/lib/gateway/protocols/parse-request";
@@ -99,6 +99,9 @@ export async function createStoreFor(
     rerank_model: body.rerank_model,
     ocr_model: body.ocr_model,
   });
+  if (!body.embedding_model && !(await featureModelPermitted(principal, embeddingModel))) {
+    throw new GateError(403, "model_access_denied", "model not allowed for this key", { param: "embedding_model" });
+  }
   const chunk = chunkSettings(body.chunking_strategy);
   const store = await createVectorStore({
     owner: storeOwner(principal),

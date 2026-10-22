@@ -22,7 +22,7 @@ import {
 } from "@/lib/gateway/safety/guardrails";
 import { modelAlias } from "@/lib/gateway/catalog/model-alias";
 import { SEMANTIC_THRESHOLD_DEFAULT, SEMANTIC_THRESHOLD_MIN } from "@/lib/gateway/cache/cache-settings";
-import { DEFAULT_AUTO_CONFIDENCE, JEV_SUGGEST_CONFIDENCE } from "@/lib/gateway/catalog/model-catalog";
+import { DEFAULT_AUTO_CONFIDENCE, DEFAULT_JEV_MODEL, JEV_SUGGEST_CONFIDENCE } from "@/lib/gateway/catalog/model-catalog";
 import {
   anomalyFactor,
   DEFAULT_KEY_EXPIRY_WARNING_DAYS,
@@ -70,8 +70,6 @@ const DEFAULT_PII: PiiPolicy = {
   output: true,
   entities: [],
 };
-
-export const DEFAULT_JEV_MODEL = "jev-latest";
 
 const DEFAULT_JEV: JevSettings = { enabled: false, model: DEFAULT_JEV_MODEL, api_key: "" };
 const DEFAULT_ANTIGRAVITY: AntigravitySettings = { client_secret: "" };

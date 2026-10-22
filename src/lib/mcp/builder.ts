@@ -58,7 +58,7 @@ const LINKED_FILE_EXTENSIONS = new Set(["pdf", "docx", "pptx", "xlsx", "png", "j
 const CONTEXT_LIMIT = /context[ _-]?(?:length|window)|too many tokens|prompt is too long|maximum.{0,40}tokens/i;
 const MODEL_INPUT_STATUSES = new Set([400, 413, 415, 422]);
 const DRAFT_CODES = new Set(["MCP_BUILDER_MODEL", "MCP_BUILDER_DRAFT", "MCP_BUILDER_EMPTY"]);
-export const BUILDER_FEATURE = "mcp_builder";
+const BUILDER_FEATURE = "mcp_builder";
 
 type LinkRead = { sources: McpDocsSource[]; site: McpDocsSite | null; crawl: boolean };
 

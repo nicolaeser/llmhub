@@ -55,7 +55,9 @@
   "newRequests": "{capped, select, true {More than {count, number, integer} new requests · Show newest} other {{count, plural, one {# new request · Show newest} other {# new requests · Show newest}}}}",
   "pageStatus": "Page {page, number, integer} · {total, number, integer} rows · {pageSize, number, integer} per page",
   "caller": {
-    "noKey": "Console session"
+    "noKey": "Console session",
+    "system": "System",
+    "feature": "{feature, select, catalog {Model catalog (Jev)} mcp_builder {MCP Anything} model_test {Model test} other {Console feature}}"
   },
   "statusOutcome": "{status} · {outcome, select, ok {OK} error {Error} cache_hit {Response cache hit} pii_blocked {Blocked by PII} guardrail_blocked {Blocked by guardrail} other {{outcome}}}",
   "openDetails": "Show details for {model}",

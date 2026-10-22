@@ -1,4 +1,4 @@
-import type { Principal } from "@/types/gateway";
+import type { Principal, SystemFeature } from "@/types/gateway";
 import type { Deployment } from "@/types/routing";
 
 export type LogKind = "requests" | "spend" | "audit";
@@ -67,6 +67,7 @@ export type RequestLogRow = {
   guardOutput: string[];
   hasContent: boolean;
   contentSkip: string;
+  system: SystemFeature | "";
 };
 
 export type RequestLogContentView = {

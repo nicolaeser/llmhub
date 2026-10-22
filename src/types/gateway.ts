@@ -18,9 +18,11 @@ export type Principal = {
   dataRules?: boolean;
   guardrails?: GuardrailPolicy | null;
   pool?: RoutePool;
-  system?: boolean;
+  system?: SystemFeature;
   trace?: RequestTrace;
 };
+
+export type SystemFeature = "catalog" | "mcp_builder" | "model_test";
 
 export type RequestTrace = {
   endpoint: string;

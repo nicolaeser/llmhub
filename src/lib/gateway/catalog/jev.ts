@@ -10,13 +10,12 @@ import { meter } from "@/lib/gateway/billing/meter";
 import { forwardToModel } from "@/lib/gateway/dispatch/upstream";
 import { modelAlias } from "@/lib/gateway/catalog/model-alias";
 import { routableAliases } from "@/lib/models/aliases";
-import { DEFAULT_JEV_MODEL } from "@/lib/settings/enterprise";
 import { readJsonOr } from "@/lib/utils/json";
-import { JEV_NONE, JEV_ROUND_SIZE, JEV_SUGGEST_CONFIDENCE } from "@/lib/gateway/catalog/model-catalog";
+import { DEFAULT_JEV_MODEL, JEV_NONE, JEV_ROUND_SIZE, JEV_SUGGEST_CONFIDENCE } from "@/lib/gateway/catalog/model-catalog";
 import type { JevCandidate, JevRoute, JevTask, JevVerdict, JevSettings } from "@/types/model-catalog";
 
-export const JEV_TIMEOUT_MS = 30_000;
-export const JEV_FEATURE = "catalog";
+const JEV_TIMEOUT_MS = 30_000;
+const JEV_FEATURE = "catalog";
 const JEV_QUESTION = "same_model";
 
 const OPENROUTER_BASE_URL =
