@@ -16,6 +16,7 @@ import PasskeysCard from "./_components/passkeys-card";
 import SessionsCard from "./_components/sessions-card";
 import ActivityCard from "./_components/activity-card";
 import ManagementKeysCard from "./_components/management-keys-card";
+import PreferencesCard from "./_components/preferences-card";
 import { loadManagementKeysAction, loadSecurityOverviewAction } from "./_action";
 
 export default function AccountPage() {
@@ -83,6 +84,7 @@ export default function AccountPage() {
                 onChange={setOverview}
               />
               <PasswordCard changedAt={overview.password.changedAt} onChange={setOverview} />
+              <PreferencesCard />
             </div>
             <div className="space-y-5">
               <SessionsCard sessions={overview.sessions} onChange={setOverview} />

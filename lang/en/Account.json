@@ -2,6 +2,12 @@
   "title": "Account and security",
   "subtitle": "Your sign-in methods, active sessions, and security activity.",
   "owner": "Owner",
+  "preferences": {
+    "title": "Display",
+    "description": "These settings apply to this browser only.",
+    "timeZone": "Time zone",
+    "timeZoneHint": "Dates and times across the console use this zone. It starts as your browser's time zone."
+  },
   "password": {
     "title": "Password",
     "changedAt": "Last changed on {date}.",

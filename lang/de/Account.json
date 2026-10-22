@@ -2,6 +2,12 @@
   "title": "Konto und Sicherheit",
   "subtitle": "Deine Anmeldemethoden, aktiven Sitzungen und Sicherheitsaktivitäten.",
   "owner": "Owner",
+  "preferences": {
+    "title": "Anzeige",
+    "description": "Diese Einstellungen gelten nur für diesen Browser.",
+    "timeZone": "Zeitzone",
+    "timeZoneHint": "Datums- und Zeitangaben in der Konsole verwenden diese Zone. Zu Beginn ist es die Zeitzone deines Browsers."
+  },
   "password": {
     "title": "Passwort",
     "changedAt": "Zuletzt geändert am {date}.",
