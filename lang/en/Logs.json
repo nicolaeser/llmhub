@@ -59,7 +59,7 @@
     "system": "System",
     "feature": "{feature, select, catalog {Model catalog (Jev)} mcp_builder {MCP Anything} model_test {Model test} pii {PII detection} other {Console feature}}"
   },
-  "statusOutcome": "{status} · {outcome, select, ok {OK} error {Error} cache_hit {Response cache hit} pii_blocked {Blocked by PII} guardrail_blocked {Blocked by guardrail} other {{outcome}}}",
+  "statusOutcome": "{status} · {outcome, select, ok {OK} error {Error} cache_hit {Response cache hit} pii_blocked {Blocked by PII} guardrail_blocked {Blocked by guardrail} cancelled {Cancelled by the client} other {{outcome}}}",
   "openDetails": "Show details for {model}",
   "pii": {
     "blocked": "Blocked",

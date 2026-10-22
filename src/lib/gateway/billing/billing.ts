@@ -23,6 +23,25 @@ import type { BudgetKind } from "@/types/structure";
 import type { MarkupTarget } from "@/types/pricing";
 import type { ResponseCacheColumns, ResponseCacheUsage } from "@/types/cache";
 
+const METERING_TRANSACTION = { maxWait: 10_000, timeout: 20_000 } as const;
+const METERING_ATTEMPTS = 3;
+
+function transactionExpired(err: unknown): boolean {
+  return Boolean(err && typeof err === "object" && "code" in err && err.code === "P2028");
+}
+
+async function commitMetering(writes: () => Prisma.PrismaPromise<unknown>[]): Promise<void> {
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      await prisma.$transaction(writes(), METERING_TRANSACTION);
+      return;
+    } catch (err) {
+      if (attempt >= METERING_ATTEMPTS || !transactionExpired(err)) throw err;
+      logger.warn("billing.metering_retry", { attempt, ...errorFields(err) });
+    }
+  }
+}
+
 const HOLDER_SELECT = {
   id: true,
   spend: true,
@@ -32,12 +51,22 @@ const HOLDER_SELECT = {
   createdAt: true,
 } as const;
 
-async function extraCap(type: string, id: string, now: Date): Promise<number> {
+function boostKey(type: string, id: string): string {
+  return `${type}:${id}`;
+}
+
+async function activeBoosts(holders: { kind: BudgetKind; id: string }[], now: Date): Promise<Map<string, number>> {
+  const extras = new Map<string, number>();
+  if (!holders.length) return extras;
   const rows = await prisma.tempBudget.findMany({
-    where: { entityType: type, entityId: id, until: { gt: now } },
-    select: { amount: true },
+    where: { until: { gt: now }, OR: holders.map((holder) => ({ entityType: holder.kind, entityId: holder.id })) },
+    select: { entityType: true, entityId: true, amount: true },
   });
-  return rows.reduce((n, row) => n + money(row.amount), 0);
+  for (const row of rows) {
+    const key = boostKey(row.entityType, row.entityId);
+    extras.set(key, (extras.get(key) ?? 0) + money(row.amount));
+  }
+  return extras;
 }
 
 function loadHolder(kind: BudgetKind, id: string): Promise<SpendHolder | null> {
@@ -102,6 +131,11 @@ export async function assertBudget(principal: Principal): Promise<CostCap | null
   const now = new Date();
   const chain = budgetChain(principal);
   const rows = await Promise.all(chain.map((link) => loadHolder(link.kind, link.id)));
+  const capped = chain.flatMap((link, index) => {
+    const row = rows[index];
+    return row && money(row.maxBudget) > 0 ? [{ kind: link.kind, id: row.id }] : [];
+  });
+  const boosts = await activeBoosts(capped, now);
   let tightest: CostCap | null = null;
   for (const [index, link] of chain.entries()) {
     const row = rows[index];
@@ -109,7 +143,7 @@ export async function assertBudget(principal: Principal): Promise<CostCap | null
     const spend = await spendAfterReset(link.kind, row, now);
     const maxBudget = money(row.maxBudget);
     if (!(maxBudget > 0)) continue;
-    const extra = await extraCap(link.kind, row.id, now);
+    const extra = boosts.get(boostKey(link.kind, row.id)) ?? 0;
     if (capExceeded(spend, maxBudget, extra)) {
       throw new GateError(429, "budget_exceeded", `${link.kind} budget exceeded`);
     }
@@ -260,75 +294,78 @@ export async function recordUsage(input: {
   const failed = input.status >= 400 && input.status !== CLIENT_CLOSED_STATUS ? 1 : 0;
   const limited = input.status === 429 ? 1 : 0;
   const responseCache = responseCacheColumns(input.responseCache, cost);
-  const writes: Prisma.PrismaPromise<unknown>[] = [
-    prisma.usageDaily.upsert({
-      where: { slice },
-      create: {
-        ...slice,
-        requests: 1,
-        errors: failed,
-        rateLimited: limited,
-        latencyMs: input.latencyMs,
-        promptTokens: prompt,
-        completionTokens: completion,
-        cacheReadTokens: cache.read,
-        cacheWriteTokens: cache.written,
-        cost,
-        purchaseCost,
-        cacheSavings,
-        ...responseCache,
-      },
-      update: {
-        requests: { increment: 1 },
-        errors: { increment: failed },
-        rateLimited: { increment: limited },
-        latencyMs: { increment: input.latencyMs },
-        promptTokens: { increment: prompt },
-        completionTokens: { increment: completion },
-        cacheReadTokens: { increment: cache.read },
-        cacheWriteTokens: { increment: cache.written },
-        cost: { increment: cost },
-        purchaseCost: { increment: purchaseCost },
-        cacheSavings: { increment: cacheSavings },
-        responseCacheHits: { increment: responseCache.responseCacheHits },
-        responseCacheSemanticHits: { increment: responseCache.responseCacheSemanticHits },
-        responseCacheMisses: { increment: responseCache.responseCacheMisses },
-        responseCacheSavedTokens: { increment: responseCache.responseCacheSavedTokens },
-        responseCacheSavedCost: { increment: responseCache.responseCacheSavedCost },
-        responseCacheLookupCost: { increment: responseCache.responseCacheLookupCost },
-      },
-    }),
-  ];
-  if (prompt || completion || cost) {
-    writes.push(
-      prisma.spendEvent.create({
-        data: {
-          keyId,
-          teamId,
-          orgId,
-          projectId,
-          memberId,
-          userId,
-          model,
-          deployment: input.deployment?.id ?? "",
-          tag: input.tag ?? "",
+  const meteringWrites = (): Prisma.PrismaPromise<unknown>[] => {
+    const writes: Prisma.PrismaPromise<unknown>[] = [
+      prisma.usageDaily.upsert({
+        where: { slice },
+        create: {
+          ...slice,
+          requests: 1,
+          errors: failed,
+          rateLimited: limited,
+          latencyMs: input.latencyMs,
           promptTokens: prompt,
           completionTokens: completion,
+          cacheReadTokens: cache.read,
+          cacheWriteTokens: cache.written,
           cost,
+          purchaseCost,
+          cacheSavings,
+          ...responseCache,
+        },
+        update: {
+          requests: { increment: 1 },
+          errors: { increment: failed },
+          rateLimited: { increment: limited },
+          latencyMs: { increment: input.latencyMs },
+          promptTokens: { increment: prompt },
+          completionTokens: { increment: completion },
+          cacheReadTokens: { increment: cache.read },
+          cacheWriteTokens: { increment: cache.written },
+          cost: { increment: cost },
+          purchaseCost: { increment: purchaseCost },
+          cacheSavings: { increment: cacheSavings },
+          responseCacheHits: { increment: responseCache.responseCacheHits },
+          responseCacheSemanticHits: { increment: responseCache.responseCacheSemanticHits },
+          responseCacheMisses: { increment: responseCache.responseCacheMisses },
+          responseCacheSavedTokens: { increment: responseCache.responseCacheSavedTokens },
+          responseCacheSavedCost: { increment: responseCache.responseCacheSavedCost },
+          responseCacheLookupCost: { increment: responseCache.responseCacheLookupCost },
         },
       }),
-    );
-  }
-  if (cost) {
-    const increment = { spend: { increment: cost } };
-    if (keyId) writes.push(prisma.virtualKey.updateMany({ where: { id: keyId }, data: increment }));
-    if (userId) writes.push(prisma.user.updateMany({ where: { id: userId }, data: increment }));
-    if (memberId) writes.push(prisma.member.updateMany({ where: { id: memberId }, data: increment }));
-    if (teamId) writes.push(prisma.team.updateMany({ where: { id: teamId }, data: increment }));
-    if (orgId) writes.push(prisma.organization.updateMany({ where: { id: orgId }, data: increment }));
-    if (projectId) writes.push(prisma.project.updateMany({ where: { id: projectId }, data: increment }));
-  }
-  await prisma.$transaction(writes);
+    ];
+    if (prompt || completion || cost) {
+      writes.push(
+        prisma.spendEvent.create({
+          data: {
+            keyId,
+            teamId,
+            orgId,
+            projectId,
+            memberId,
+            userId,
+            model,
+            deployment: input.deployment?.id ?? "",
+            tag: input.tag ?? "",
+            promptTokens: prompt,
+            completionTokens: completion,
+            cost,
+          },
+        }),
+      );
+    }
+    if (cost) {
+      const increment = { spend: { increment: cost } };
+      if (keyId) writes.push(prisma.virtualKey.updateMany({ where: { id: keyId }, data: increment }));
+      if (userId) writes.push(prisma.user.updateMany({ where: { id: userId }, data: increment }));
+      if (memberId) writes.push(prisma.member.updateMany({ where: { id: memberId }, data: increment }));
+      if (teamId) writes.push(prisma.team.updateMany({ where: { id: teamId }, data: increment }));
+      if (orgId) writes.push(prisma.organization.updateMany({ where: { id: orgId }, data: increment }));
+      if (projectId) writes.push(prisma.project.updateMany({ where: { id: projectId }, data: increment }));
+    }
+    return writes;
+  };
+  await commitMetering(meteringWrites);
   notifyLive("usage");
   const tokens = prompt + completion;
   const owner = ownerId(input.principal);

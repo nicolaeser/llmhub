@@ -203,6 +203,13 @@ test("the opt-out header and keys without assignments leave the request untouche
   await post("/api/v1/chat/completions", question);
   assert.equal(others[0]!.tools, undefined);
   assert.equal(mcpCalls.length, 0);
+
+  const none = reset();
+  recordedPrisma.handlers = {};
+  scripted(none, [() => chatReply("plain")]);
+  await post("/api/v1/chat/completions", question);
+  assert.equal(none[0]!.tools, undefined);
+  assert.equal(recordedPrisma.called("mcpServer", "findMany").length, 1);
 });
 
 test("mixed tool calls go back to the caller without running MCP tools", async () => {

@@ -20,6 +20,7 @@
     "styles:check": "node scripts/check-styles.mjs",
     "heroui:check": "node scripts/check-heroui.mjs",
     "migrations:check": "node scripts/check-migration-order.mjs",
+    "loadtest": "node scripts/loadtest/run.mjs",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate deploy"
   },

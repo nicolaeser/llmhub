@@ -59,8 +59,9 @@ function fakeModel(model: string) {
     findMany: async (args: Args) => {
       record("findMany", args);
       if (model !== "tempBudget") return [];
-      return tempBudgets.filter(
-        (boost) => boost.entityType === args.where?.entityType && boost.entityId === args.where?.entityId,
+      const holders = (args.where?.OR as Row[] | undefined) ?? [args.where ?? {}];
+      return tempBudgets.filter((boost) =>
+        holders.some((holder) => boost.entityType === holder.entityType && boost.entityId === holder.entityId),
       );
     },
     updateMany: async (args: Args) => {

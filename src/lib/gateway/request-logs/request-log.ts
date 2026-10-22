@@ -4,7 +4,7 @@ import { asRecord } from "@/lib/gateway/core";
 import { logPayload } from "@/lib/gateway/request-logs/log-content";
 import { defaultEntityIds, redactJSON, redactPii } from "@/lib/gateway/safety/pii";
 import { piiRestoreSummary, vaultOf } from "@/lib/gateway/safety/pii-vault";
-import { getEnterprise, resolvePii } from "@/lib/settings/enterprise";
+import { requestEnterprise, resolvePii } from "@/lib/settings/enterprise";
 import { errorFields } from "@/lib/logging/format";
 import { logger } from "@/lib/logging/logger";
 import { notifyLive } from "@/lib/updates/live-topics";
@@ -41,7 +41,7 @@ function errorText(error: unknown): string {
 }
 
 export async function writeRequestLog(entry: RequestLogEntry): Promise<void> {
-  const [enterprise, pii] = await Promise.all([getEnterprise(), resolvePii(entry.principal)]);
+  const [enterprise, pii] = await Promise.all([requestEnterprise(entry.principal), resolvePii(entry.principal)]);
   const trace = entry.principal.trace;
   const piiOn = pii.enabled;
   const entities = pii.entities.length ? pii.entities : defaultEntityIds();

@@ -1,5 +1,6 @@
 import type { PiiEntity, PiiRule, PiiSpan } from "@/types/guardrails";
 import { activeVault, PiiVault, withActiveVault } from "@/lib/gateway/safety/pii-vault";
+import { SizedLru } from "@/lib/utils/sized-lru";
 
 export const PII_DETECTORS = ["patterns", "model", "both"] as const;
 export const PII_FAILURES = ["patterns", "block"] as const;
@@ -617,8 +618,34 @@ function runRules(text: string, entities: string[] | undefined, keep: (id: strin
   return out;
 }
 
+const REMEMBERED_MIN_CHARS = 64;
+const REMEMBERED_MAX_CHARS = 32_000_000;
+
+type TextScan = { text: string; rules: string[] };
+
+const rememberedScans = new SizedLru<TextScan & { entities: string }>(REMEMBERED_MAX_CHARS);
+
+function scanText(text: string, entities: string[] | undefined): TextScan {
+  const rules = new Set<string>();
+  return { text: runRules(text, entities, () => true, rules), rules: [...rules] };
+}
+
+function rememberedScan(text: string, entities: string[] | undefined): TextScan {
+  if (text.length < REMEMBERED_MIN_CHARS || activeVault()) return scanText(text, entities);
+  const key = entities?.length ? entities.join(",") : "";
+  const known = rememberedScans.get(text);
+  if (known?.entities === key) return known;
+  const scanned = scanText(text, entities);
+  rememberedScans.set(text, { ...scanned, entities: key }, text.length + (scanned.text === text ? 0 : scanned.text.length));
+  return scanned;
+}
+
 export function redactPii(text: string, entities?: string[], found?: Set<string>, vault?: PiiVault | null): string {
-  const run = () => runRules(text, entities, () => true, found);
+  const run = () => {
+    const scanned = rememberedScan(text, entities);
+    if (found) for (const id of scanned.rules) found.add(id);
+    return scanned.text;
+  };
   return vault === undefined ? run() : withActiveVault(vault, run);
 }
 

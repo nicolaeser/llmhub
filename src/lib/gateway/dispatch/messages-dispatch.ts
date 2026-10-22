@@ -230,9 +230,10 @@ export async function streamMessages(input: MessagesInput & { req: Request }): P
     },
     onEnd: async (failure, cancelled) => {
       release();
-      const err = cancelled || input.req.signal?.aborted ? null : incomplete(failure);
-      if (err) {
-        await recordFailure(input, err, started);
+      const unfinished = incomplete(failure);
+      const hungUp = Boolean(unfinished) && (cancelled || Boolean(input.req.signal?.aborted));
+      if (unfinished && !hungUp) {
+        await recordFailure(input, unfinished, started);
         return;
       }
       const reported = usageFromUnknown(chatUsageFromAnthropic(usage));
@@ -246,6 +247,7 @@ export async function streamMessages(input: MessagesInput & { req: Request }): P
         blocked: screen?.blocked ?? false,
         started,
         stream: true,
+        hungUp,
         response: transcript.result(),
       });
     },

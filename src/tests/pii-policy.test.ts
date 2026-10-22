@@ -14,10 +14,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { SESSION_COOKIE, signSessionToken } from "@/lib/auth/cookie";
 import { GateError } from "@/lib/gateway/errors";
-import { applyGuardrails } from "@/lib/gateway/access/gate";
+import { applyGuardrails, withTrace } from "@/lib/gateway/access/gate";
 import { defaultGuardrails } from "@/lib/gateway/safety/guardrails";
 import { defaultEntityIds } from "@/lib/gateway/safety/pii";
-import { piiOverride, resolvePolicies } from "@/lib/settings/enterprise";
+import { piiOverride, requestEnterprise, resolvePii, resolvePolicies } from "@/lib/settings/enterprise";
 import type { Principal } from "@/types/gateway";
 import type { GuardrailPolicy, GuardrailRule, PiiPolicy } from "@/types/guardrails";
 import type { VirtualKeyView } from "@/types/keys";
@@ -197,6 +197,24 @@ test("resolvePolicies prefers the key, then the project, then the organization, 
   org.piiPolicy = null;
   org.guardrailPolicy = null;
   assert.deepEqual(await resolved(null, null), ["CREDIT_CARD", "global"]);
+});
+
+test("a traced request reads its policies and settings once", async () => {
+  resetGateway();
+  gateway.enterprise = { pii: piiLayer("CREDIT_CARD"), guardrails: guardLayer("global"), log_content: false };
+  const caller = keyPrincipal(PII_OFF);
+  const traced = withTrace({ ...caller, key: { ...caller.key!, pii: null }, guardrails: undefined }, "/api/v1/messages");
+  const policies = await resolvePolicies(traced);
+  assert.equal((await resolvePii(traced)).entities[0], "CREDIT_CARD");
+  assert.equal((await requestEnterprise(traced)).log_content, false);
+  assert.equal(await resolvePolicies({ ...traced, pool: "subscription" }), policies);
+  assert.equal(recordedPrisma.called("setting").length, 1);
+  assert.equal(recordedPrisma.called("organization").length, 1);
+  gateway.enterprise = { pii: piiLayer("IP_ADDRESS") };
+  const untraced = { ...traced, trace: undefined };
+  assert.equal((await resolvePii(untraced)).entities[0], "IP_ADDRESS");
+  assert.equal((await resolvePii(withTrace(untraced, "/api/v1/messages"))).entities[0], "IP_ADDRESS");
+  assert.equal((await resolvePii(traced)).entities[0], "CREDIT_CARD");
 });
 
 test("the guardrail sweep covers every gateway POST route", async () => {
