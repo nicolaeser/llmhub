@@ -1,6 +1,9 @@
-import type { PiiEntity, PiiRule } from "@/types/guardrails";
-import { activeVault, type PiiVault, withActiveVault } from "@/lib/gateway/safety/pii-vault";
+import type { PiiEntity, PiiRule, PiiSpan } from "@/types/guardrails";
+import { activeVault, PiiVault, withActiveVault } from "@/lib/gateway/safety/pii-vault";
 import { SizedLru } from "@/lib/utils/sized-lru";
+
+export const PII_DETECTORS = ["patterns", "model", "both"] as const;
+export const PII_FAILURES = ["patterns", "block"] as const;
 
 function mark(id: string, value: string): string {
   return activeVault()?.placeholder(id, value) ?? `[${id}]`;
@@ -10,12 +13,16 @@ export const PII_CATALOG: PiiEntity[] = [
   { id: "CREDIT_CARD", label: "Credit card", category: "Finance", example: "4111 1111 1111 1111", default: true },
   { id: "CRYPTO", label: "Crypto wallet", category: "Finance", example: "bc1q…", default: true },
   { id: "EMAIL_ADDRESS", label: "Email", category: "General", example: "ada@acme.com", default: true },
+  { id: "PERSON", label: "Person name", category: "General", example: "Ada Lovelace", default: true, modelOnly: true },
+  { id: "ADDRESS", label: "Postal address", category: "General", example: "12 Main St, Springfield", default: true, modelOnly: true },
   { id: "IBAN_CODE", label: "IBAN", category: "Finance", example: "DE89 3704 0044 0532 0130 00", default: true },
+  { id: "ACCOUNT_NUMBER", label: "Account or customer number", category: "Finance", example: "Account 0012345678", default: true, modelOnly: true },
   { id: "IP_ADDRESS", label: "Public IP address", category: "General", example: "8.8.8.8", default: true },
   { id: "PRIVATE_IP_ADDRESS", label: "Internal IP address", category: "General", example: "10.0.0.5", default: false },
   { id: "PHONE_NUMBER", label: "Phone", category: "General", example: "+1 415 555 2671", default: true },
   { id: "URL", label: "URL", category: "General", example: "https://example.com/secret", default: false },
   { id: "DATE_TIME", label: "Date / time", category: "General", example: "2026-08-21", default: false },
+  { id: "OTHER_PII", label: "Other personal data", category: "General", example: "Diagnosed with asthma", default: false, modelOnly: true },
   { id: "MEDICAL_LICENSE", label: "Medical license", category: "Health", example: "AB1234567", default: false },
   { id: "US_SSN", label: "US SSN", category: "USA", example: "123-45-6789", default: true },
   { id: "US_ITIN", label: "US ITIN", category: "USA", example: "912-70-1234", default: true },
@@ -591,8 +598,24 @@ const RULES: PiiRule[] = [
   { id: "DATE_TIME", apply: (t) => t.replace(ISO_DATE, (match) => mark("DATE_TIME", match)) },
 ];
 
+export const CREDENTIAL_ENTITIES: ReadonlySet<string> = new Set(
+  PII_CATALOG.filter((e) => e.category === "Credentials").map((e) => e.id),
+);
+
 export function defaultEntityIds(): string[] {
   return PII_CATALOG.filter((e) => e.default).map((e) => e.id);
+}
+
+function runRules(text: string, entities: string[] | undefined, keep: (id: string) => boolean, found?: Set<string>): string {
+  const enabled = new Set(entities?.length ? entities : defaultEntityIds());
+  let out = text;
+  for (const rule of RULES) {
+    if (!enabled.has(rule.id) || !keep(rule.id)) continue;
+    const next = rule.apply(out);
+    if (found && next !== out) found.add(rule.id);
+    out = next;
+  }
+  return out;
 }
 
 const REMEMBERED_MIN_CHARS = 64;
@@ -603,16 +626,8 @@ type TextScan = { text: string; rules: string[] };
 const rememberedScans = new SizedLru<TextScan & { entities: string }>(REMEMBERED_MAX_CHARS);
 
 function scanText(text: string, entities: string[] | undefined): TextScan {
-  const enabled = new Set(entities?.length ? entities : defaultEntityIds());
-  const rules: string[] = [];
-  let out = text;
-  for (const rule of RULES) {
-    if (!enabled.has(rule.id)) continue;
-    const next = rule.apply(out);
-    if (next !== out) rules.push(rule.id);
-    out = next;
-  }
-  return { text: out, rules };
+  const rules = new Set<string>();
+  return { text: runRules(text, entities, () => true, rules), rules: [...rules] };
 }
 
 function rememberedScan(text: string, entities: string[] | undefined): TextScan {
@@ -632,6 +647,65 @@ export function redactPii(text: string, entities?: string[], found?: Set<string>
     return scanned.text;
   };
   return vault === undefined ? run() : withActiveVault(vault, run);
+}
+
+export function redactCredentials(text: string, entities?: string[], found?: Set<string>): string {
+  return runRules(text, entities, (id) => CREDENTIAL_ENTITIES.has(id), found);
+}
+
+const SPAN_OPEN = "\uFDD0";
+const SPAN_CLOSE = "\uFDD1";
+const SPAN_DIGIT = 0xfde0;
+const SPAN_MARK = /\uFDD0([\uFDE0-\uFDEF]+)\uFDD1/g;
+const SPAN_RESERVED = /[\uFDD0-\uFDEF]/;
+
+class SpanRecorder extends PiiVault {
+  readonly matches: { id: string; value: string }[] = [];
+
+  placeholder(id: string, value: string): string {
+    const index = this.matches.push({ id, value }) - 1;
+    const digits = [...index.toString(16)].map((digit) => String.fromCharCode(SPAN_DIGIT + parseInt(digit, 16))).join("");
+    return `${SPAN_OPEN}${digits}${SPAN_CLOSE}`;
+  }
+
+  match(code: string): { id: string; value: string } | undefined {
+    const index = parseInt([...code].map((char) => (char.charCodeAt(0) - SPAN_DIGIT).toString(16)).join(""), 16);
+    return this.matches[index];
+  }
+}
+
+export function piiPatternSpans(text: string, entities?: string[]): PiiSpan[] | null {
+  if (SPAN_RESERVED.test(text)) return null;
+  const recorder = new SpanRecorder();
+  const marked = withActiveVault(recorder, () => runRules(text, entities, (id) => !CREDENTIAL_ENTITIES.has(id)));
+  const expand = (value: string): string =>
+    value.replace(SPAN_MARK, (_token, code: string) => expand(recorder.match(code)?.value ?? ""));
+  if (expand(marked) !== text) return null;
+  const spans: PiiSpan[] = [];
+  let cursor = 0;
+  let last = 0;
+  for (const token of marked.matchAll(SPAN_MARK)) {
+    const at = token.index ?? 0;
+    cursor += at - last;
+    const match = recorder.match(token[1] ?? "");
+    const length = expand(match?.value ?? "").length;
+    if (match && length) spans.push({ entity: match.id, start: cursor, end: cursor + length, score: 1, source: "pattern" });
+    cursor += length;
+    last = at + token[0].length;
+  }
+  return spans;
+}
+
+export function applyPiiSpans(text: string, spans: readonly PiiSpan[], found?: Set<string>): string {
+  let out = "";
+  let last = 0;
+  for (const span of [...spans].sort((a, b) => a.start - b.start)) {
+    if (span.start < last || span.end <= span.start || span.end > text.length) continue;
+    out += text.slice(last, span.start) + mark(span.entity, text.slice(span.start, span.end));
+    found?.add(span.entity);
+    last = span.end;
+  }
+  return last ? out + text.slice(last) : text;
 }
 
 const PLACEHOLDER = new RegExp(`\\[(${PII_CATALOG.map((e) => e.id).join("|")})(?:_(\\d+))?\\]`, "g");
@@ -691,16 +765,18 @@ export function skipsScan(key: string, value: string): boolean {
   return STRUCTURAL_KEYS.has(key) || isOpaqueText(value);
 }
 
-export function redactJSON(value: unknown, entities?: string[], key = "", found?: Set<string>, vault?: PiiVault | null): unknown {
-  if (vault !== undefined) return withActiveVault(vault, () => redactJSON(value, entities, key, found));
-  if (typeof value === "string") {
-    return skipsScan(key, value) ? value : redactPii(value, entities, found);
-  }
-  if (Array.isArray(value)) return value.map((item) => redactJSON(item, entities, key, found));
+export function mapScannedStrings(value: unknown, map: (text: string) => string, key = ""): unknown {
+  if (typeof value === "string") return skipsScan(key, value) ? value : map(value);
+  if (Array.isArray(value)) return value.map((item) => mapScannedStrings(item, map, key));
   if (value && typeof value === "object") {
     const out: Record<string, unknown> = {};
-    for (const [k, v] of Object.entries(value)) out[k] = redactJSON(v, entities, k, found);
+    for (const [k, v] of Object.entries(value)) out[k] = mapScannedStrings(v, map, k);
     return out;
   }
   return value;
+}
+
+export function redactJSON(value: unknown, entities?: string[], key = "", found?: Set<string>, vault?: PiiVault | null): unknown {
+  if (vault !== undefined) return withActiveVault(vault, () => redactJSON(value, entities, key, found));
+  return mapScannedStrings(value, (text) => redactPii(text, entities, found), key);
 }

@@ -154,6 +154,8 @@ const policy = (over: Partial<PiiPolicy>): PiiPolicy => ({
   mode: "mask",
   output: true,
   entities: ["EMAIL_ADDRESS"],
+  detector: "patterns",
+  failure: "patterns",
   ...over,
 });
 

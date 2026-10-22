@@ -16,6 +16,11 @@ const optionalTrimmedString = z
 
 const IP_MODES = ["proxy", "cloudflare", "direct"] as const;
 
+const optionalHttpUrl = optionalTrimmedString.refine(
+  (v) => v === undefined || (URL.canParse(v) && /^https?:$/.test(new URL(v).protocol)),
+  "must be an http or https URL",
+);
+
 export const envSchema = z.object({
   NODE_ENV: z.enum(["development", "production"]),
   DATABASE_URL: z.string().min(1),
@@ -35,4 +40,5 @@ export const envSchema = z.object({
     z.enum(IP_MODES).default("proxy"),
   ),
   BUILD_ID: optionalString,
+  LLMHUB_REDACTOR_URL: optionalHttpUrl,
 });

@@ -1,0 +1,93 @@
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
+services:
+  app:
+    environment:
+      LLMHUB_REDACTOR_URL: http://redactor:8080
+    networks:
+      - default
+      - redactor
+
+  redactor-fetch:
+    image: ghcr.io/nicolaeser/llmhub:${LLMHUB_TAG:-latest}
+    restart: on-failure:5
+    command: ["node", "redactor.mjs", "fetch"]
+    environment:
+      LLMHUB_REDACTOR_REVISION: ${LLMHUB_REDACTOR_REVISION:-79277a185c6d0a93ab29448e6981ebc722839c2c}
+    volumes:
+      - redactor-models:/models
+    healthcheck:
+      disable: true
+    mem_limit: 256m
+    logging: *logging
+
+  redactor-model:
+    image: ghcr.io/ggml-org/llama.cpp:server-b11804
+    restart: unless-stopped
+    depends_on:
+      redactor-fetch:
+        condition: service_completed_successfully
+    user: "65534:65534"
+    command:
+      - "--model"
+      - "/models/current/pplx-pii-masking-backbone-f16.gguf"
+      - "--embeddings"
+      - "--pooling"
+      - "none"
+      - "--ctx-size"
+      - "${LLMHUB_REDACTOR_WINDOW:-2048}"
+      - "--batch-size"
+      - "${LLMHUB_REDACTOR_WINDOW:-2048}"
+      - "--ubatch-size"
+      - "${LLMHUB_REDACTOR_WINDOW:-2048}"
+      - "--parallel"
+      - "1"
+      - "--threads"
+      - "${LLMHUB_REDACTOR_CPUS:-4}"
+    volumes:
+      - redactor-models:/models:ro
+    networks:
+      - redactor
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/health"]
+      interval: 10s
+      timeout: 5s
+      start_period: 60s
+      retries: 6
+    mem_limit: ${REDACTOR_MEMORY_LIMIT:-4g}
+    cpus: ${LLMHUB_REDACTOR_CPUS:-4}
+    logging: *logging
+
+  redactor:
+    image: ghcr.io/nicolaeser/llmhub:${LLMHUB_TAG:-latest}
+    restart: unless-stopped
+    depends_on:
+      redactor-model:
+        condition: service_healthy
+    command: ["node", "redactor.mjs"]
+    environment:
+      LLMHUB_REDACTOR_MODEL_URL: http://redactor-model:8080
+    volumes:
+      - redactor-models:/models:ro
+    networks:
+      - redactor
+    healthcheck:
+      test: ["CMD", "node", "redactor.mjs", "--healthcheck"]
+      interval: 15s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+    mem_limit: 512m
+    cpus: 1
+    logging: *logging
+
+networks:
+  redactor:
+    internal: true
+
+volumes:
+  redactor-models:

@@ -22,7 +22,7 @@ export type Principal = {
   trace?: RequestTrace;
 };
 
-export type SystemFeature = "catalog" | "mcp_builder" | "model_test";
+export type SystemFeature = "catalog" | "mcp_builder" | "model_test" | "pii";
 
 export type RequestTrace = {
   endpoint: string;

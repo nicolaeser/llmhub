@@ -277,13 +277,20 @@ test("company policy summaries need settings:read and stay inside the caller's c
     },
   });
   const summary = await runAsPrincipal(viewer, () => loadCompanyPolicies(COMPANY_ID));
-  assert.deepEqual(summary.pii, { level: "org", enabled: true, mode: "block", output: false, entities: 1 });
+  assert.deepEqual(summary.pii, {
+    level: "org",
+    enabled: true,
+    mode: "block",
+    output: false,
+    entities: 1,
+    detector: "patterns",
+  });
   assert.equal(summary.guardrails.level, "global");
   assert.deepEqual(
     summary.overrides.map((row) => [row.scope, row.id, row.alias, row.pii, row.guardrails]),
     [
       ["project", "p1", "Bot", null, { injection: "block", secrets: null, rules: 0 }],
-      ["key", "k1", "sk-hub-k1", { enabled: false, mode: "mask", output: false, entities: 0 }, null],
+      ["key", "k1", "sk-hub-k1", { enabled: false, mode: "mask", output: false, entities: 0, detector: "patterns" }, null],
     ],
   );
   assert.deepEqual((recordedPrisma.called("project", "findMany")[0]?.args as { where: unknown }).where, { orgId: COMPANY_ID });

@@ -3,7 +3,9 @@ import "server-only";
 import prisma from "@/lib/db/prisma";
 import { modelAlias } from "@/lib/gateway/catalog/model-alias";
 import { DEFAULT_JEV_MODEL } from "@/lib/gateway/catalog/model-catalog";
-import { getEnterprise, normalizeSemanticCache, normalizeVectorDefaults } from "@/lib/settings/enterprise";
+import { env } from "@/lib/env";
+import { REDACTOR_ALIAS } from "@/lib/bootstrap/redactor-provider";
+import { getEnterprise, getPiiDetector, normalizeSemanticCache, normalizeVectorDefaults } from "@/lib/settings/enterprise";
 import { BUILDER_MODEL_KEY } from "@/schemas/mcp";
 import type { ModelRole } from "@/lib/models/model-role";
 import type { FeatureModelRole, ModelFeature } from "@/types/models";
@@ -29,6 +31,9 @@ export const FEATURE_MODELS: Record<ModelFeature, Partial<Record<FeatureModelRol
     ocr: () => vectorDefault("ocr_model"),
     rerank: () => vectorDefault("rerank_model"),
   },
+  pii: {
+    redaction: async () => (await getPiiDetector()).model || (env.LLMHUB_REDACTOR_URL ? REDACTOR_ALIAS : ""),
+  },
 };
 
 export const ROLE_KIND: Record<FeatureModelRole, ModelRole> = {
@@ -37,6 +42,7 @@ export const ROLE_KIND: Record<FeatureModelRole, ModelRole> = {
   embedding: "embedding",
   ocr: "ocr",
   rerank: "rerank",
+  redaction: "redaction",
 };
 
 export function featureRoles(feature: ModelFeature): FeatureModelRole[] {

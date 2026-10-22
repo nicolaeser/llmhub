@@ -36,6 +36,7 @@ export const GATEWAY_ERRORS = {
   upstream_error: 502,
   no_healthy_deployment: 503,
   no_provider_key: 503,
+  pii_detector_unavailable: 503,
   upstream_timeout: 504,
 } as const satisfies Record<string, number>;
 

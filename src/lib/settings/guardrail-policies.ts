@@ -10,16 +10,21 @@ import { testGuardrails as evaluateGuardrails } from "@/lib/gateway/safety/guard
 import {
   getGuardrails,
   getPii,
+  getPiiDetector,
   guardrailOverride,
+  normalizePiiDetector,
+  patchEnterprise,
   piiOverride,
   saveGuardrails,
   savePii as storePii,
 } from "@/lib/settings/enterprise";
 import { redactPii } from "@/lib/gateway/safety/pii";
+import { assertModelRoles, featureModelChoices } from "@/lib/models/aliases";
 import {
   guardrailOverrideSchema,
   guardrailPolicySchema,
   guardrailTestSchema,
+  piiDetectorSettingsSchema,
   piiOverrideSchema,
   piiPolicySchema,
 } from "@/schemas/guardrails";
@@ -35,6 +40,7 @@ import type {
   PolicyScope,
   PolicyTarget,
 } from "@/types/guardrails";
+import { env } from "@/lib/env";
 import type { z } from "zod";
 
 type Session = Awaited<ReturnType<typeof requirePermission>>;
@@ -115,8 +121,10 @@ function policyFailure(error: z.ZodError): string {
 
 async function payload(session: Session) {
   const company = companyOf(session);
-  const [pii, guardrails, orgs, projects, keys] = await Promise.all([
+  const [pii, detector, models, guardrails, orgs, projects, keys] = await Promise.all([
     getPii(),
+    getPiiDetector(),
+    company ? [] : featureModelChoices(),
     getGuardrails(),
     prisma.organization.findMany({
       where: company ? { id: company } : {},
@@ -138,6 +146,9 @@ async function payload(session: Session) {
   const canManage = hasPerm(session.permissions, PERMISSIONS.SETTINGS_MANAGE);
   return {
     pii,
+    detector: company ? null : detector,
+    models,
+    redactorConfigured: !company && Boolean(env.LLMHUB_REDACTOR_URL),
     guardrails,
     piiOverrides: rows.map((row) => piiOverrideOf(row.target, row.piiPolicy)).filter(present).sort(byAlias),
     guardrailOverrides: rows
@@ -186,7 +197,13 @@ export async function loadGuardrails() {
 }
 
 function piiSummary(policy: PiiPolicy): PiiSummary {
-  return { enabled: policy.enabled, mode: policy.mode, output: policy.output, entities: policy.entities.length };
+  return {
+    enabled: policy.enabled,
+    mode: policy.mode,
+    output: policy.output,
+    entities: policy.entities.length,
+    detector: policy.detector,
+  };
 }
 
 function guardrailSummary(policy: GuardrailPolicy): GuardrailSummary {
@@ -234,20 +251,26 @@ export async function loadCompanyPolicies(orgId: string): Promise<CompanyPolicie
   };
 }
 
-export async function savePii(raw: unknown) {
+export async function savePii(raw: unknown, rawDetector?: unknown) {
   const session = await requirePermission(PERMISSIONS.SETTINGS_MANAGE);
   assertPlatform(session);
   const parsed = piiPolicySchema.safeParse(raw);
   if (!parsed.success) throw new Error("VALIDATION");
+  const detectorInput = rawDetector === undefined ? null : piiDetectorSettingsSchema.safeParse(rawDetector);
+  if (detectorInput && !detectorInput.success) throw new Error("VALIDATION");
+  const previous = await getPiiDetector();
+  const detector = detectorInput ? normalizePiiDetector(detectorInput.data) : previous;
+  if (detector.model && detector.model !== previous.model) await assertModelRoles([{ alias: detector.model, role: "redaction" }]);
   const saved = await storePii(parsed.data);
+  if (detectorInput) await patchEnterprise({ pii_detector: detector });
   await writeAudit({
     actor: session.user.id,
     action: "settings.pii",
     objectType: "pii",
     objectId: "pii",
-    after: saved,
+    after: { ...saved, detector },
   });
-  return { pii: saved };
+  return { pii: saved, detector };
 }
 
 export async function savePiiOverride(raw: unknown) {

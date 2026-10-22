@@ -52,7 +52,14 @@ test("the global PII policy is validated before it is stored", async () => {
   const saved = await runAsPrincipal(manager, () =>
     savePii({ enabled: true, mode: "block", output: false, entities: ["EMAIL_ADDRESS"] }),
   );
-  assert.deepEqual(saved.pii, { enabled: true, mode: "block", output: false, entities: ["EMAIL_ADDRESS"] });
+  assert.deepEqual(saved.pii, {
+    enabled: true,
+    mode: "block",
+    output: false,
+    entities: ["EMAIL_ADDRESS"],
+    detector: "patterns",
+    failure: "patterns",
+  });
   assert.equal(audits.length, 1);
 });
 

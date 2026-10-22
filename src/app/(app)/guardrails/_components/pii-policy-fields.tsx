@@ -2,6 +2,8 @@
 
 import { Description, Label, ListBox, Select, Switch } from "@heroui/react";
 import { useTranslations } from "next-intl";
+import { PII_DETECTORS, PII_FAILURES } from "@/lib/gateway/safety/pii";
+import ChoiceSelect from "./choice-select";
 import type { PiiPolicy } from "@/types/guardrails";
 
 export default function PiiPolicyFields({
@@ -80,6 +82,24 @@ export default function PiiPolicyFields({
           </Switch.Content>
           <Description>{t("outputHint")}</Description>
         </Switch>
+        <ChoiceSelect
+          label={t("detector")}
+          value={value.detector}
+          options={PII_DETECTORS.map((id) => ({ id, label: t("detectorOption", { detector: id }) }))}
+          onChange={(detector) => onChange({ ...value, detector })}
+          description={t("detectorHint", { detector: value.detector })}
+          isDisabled={isDisabled}
+        />
+        {value.detector === "patterns" ? null : (
+          <ChoiceSelect
+            label={t("failure")}
+            value={value.failure}
+            options={PII_FAILURES.map((id) => ({ id, label: t("failureOption", { failure: id }) }))}
+            onChange={(failure) => onChange({ ...value, failure })}
+            description={t("failureHint")}
+            isDisabled={isDisabled}
+          />
+        )}
       </div>
     </div>
   );

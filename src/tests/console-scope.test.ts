@@ -81,7 +81,7 @@ test("the platform scope still saves the global PII policy", async () => {
   const { savePii } = await import("@/lib/settings/guardrail-policies");
   recordedPrisma.reset();
   const saved = await runAsPrincipal(platform, () => savePii(PII));
-  assert.deepEqual(saved.pii, PII);
+  assert.deepEqual(saved.pii, { ...PII, detector: "patterns", failure: "patterns" });
   assert.equal(recordedPrisma.called("setting", "upsert").length, 1);
 });
 

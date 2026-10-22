@@ -79,6 +79,18 @@ test("BUILD_ID is optional", () => {
   );
 });
 
+test("LLMHUB_REDACTOR_URL is an optional http or https URL", () => {
+  assert.equal(parseEnvironment(valid).LLMHUB_REDACTOR_URL, undefined);
+  assert.equal(parseEnvironment({ ...valid, LLMHUB_REDACTOR_URL: " " }).LLMHUB_REDACTOR_URL, undefined);
+  assert.equal(
+    parseEnvironment({ ...valid, LLMHUB_REDACTOR_URL: " http://redactor:8080 " }).LLMHUB_REDACTOR_URL,
+    "http://redactor:8080",
+  );
+  for (const value of ["redactor:8080", "ftp://redactor", "not a url"]) {
+    assert.throws(() => parseEnvironment({ ...valid, LLMHUB_REDACTOR_URL: value }), /LLMHUB_REDACTOR_URL/, value);
+  }
+});
+
 test("removed settings are not part of the environment", () => {
   const parsed = parseEnvironment({
     ...valid,
