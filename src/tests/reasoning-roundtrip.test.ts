@@ -122,6 +122,28 @@ test("Claude Code history keeps signed thinking for codex and drops foreign thin
   assert.deepEqual(blocks, ["text"]);
 });
 
+test("an assistant turn left with only foreign thinking is dropped instead of becoming an empty text block", () => {
+  const native = nativeMessagesBody({
+    model: "m",
+    max_tokens: 100,
+    messages: [
+      { role: "user", content: "hi" },
+      { role: "assistant", content: [{ type: "thinking", thinking: "elsewhere", signature: CODEX_SIG }] },
+      { role: "user", content: "next" },
+      { role: "assistant", content: [{ type: "thinking", thinking: "unsigned", signature: "" }, { type: "text", text: "ok" }] },
+      { role: "user", content: "last" },
+    ],
+  });
+  const messages = native.messages as JsonMap[];
+  assert.deepEqual(
+    messages.map((message) => message.role),
+    ["user", "user", "assistant", "user"],
+  );
+  assert.deepEqual(messages[2]!.content, [{ type: "text", text: "ok" }]);
+  const texts = messages.flatMap((message) => (Array.isArray(message.content) ? (message.content as JsonMap[]) : []));
+  assert.equal(texts.some((block) => block.type === "text" && block.text === ""), false);
+});
+
 test("Codex CLI reasoning items with raw encrypted content reach the codex upstream again", () => {
   const parsed = parseRequest(responsesRequestSchema, {
     model: "gpt-5.6-terra",

@@ -3,6 +3,7 @@ import prisma from "@/lib/db/prisma";
 import { asRecord } from "@/lib/gateway/core";
 import { logPayload } from "@/lib/gateway/request-logs/log-content";
 import { defaultEntityIds, redactJSON, redactPii } from "@/lib/gateway/safety/pii";
+import { piiRestoreSummary, vaultOf } from "@/lib/gateway/safety/pii-vault";
 import { requestEnterprise, resolvePii } from "@/lib/settings/enterprise";
 import { errorFields } from "@/lib/logging/format";
 import { logger } from "@/lib/logging/logger";
@@ -46,6 +47,7 @@ export async function writeRequestLog(entry: RequestLogEntry): Promise<void> {
   const piiInput = new Set(trace?.piiInput ?? []);
   const piiOutput = new Set(trace?.piiOutput ?? []);
   const scanned = Boolean(trace?.piiMode);
+  const piiRestore = piiRestoreSummary(vaultOf(trace), entry.response);
   let request = trace?.request ?? entry.request;
   let response = entry.response;
   let error = errorText(entry.error);
@@ -101,7 +103,7 @@ export async function writeRequestLog(entry: RequestLogEntry): Promise<void> {
     contentSkip: skip,
   };
   const log = await prisma.requestLog.create({
-    data: { ...dims, ...meta, cost: entry.cost, ...(content ? { content } : {}) },
+    data: { ...dims, ...meta, cost: entry.cost, ...(piiRestore ? { piiRestore } : {}), ...(content ? { content } : {}) },
   });
   notifyLive("requests");
 
@@ -136,6 +138,7 @@ export async function writeRequestLog(entry: RequestLogEntry): Promise<void> {
       pii_mode: meta.piiMode,
       pii_input: meta.piiInput,
       pii_output: meta.piiOutput,
+      pii_restore: piiRestore,
       guardrail_input: meta.guardInput,
       guardrail_output: meta.guardOutput,
       content_skip: skip,

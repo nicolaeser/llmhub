@@ -46,7 +46,7 @@
     "moved": "{removed, plural, =0 {Aus CLIProxyAPI wurde nichts entfernt.} one {# Datei wurde aus CLIProxyAPI entfernt. Ab jetzt erneuert nur noch LLM Hub dieses Konto.} other {# Dateien wurden aus CLIProxyAPI entfernt. Ab jetzt erneuert nur noch LLM Hub diese Konten.}}",
     "keptAtSource": "{count, plural, one {# importierte Datei ließ sich nicht aus CLIProxyAPI entfernen. Lösche sie dort, sonst machen sich beide Seiten gegenseitig die Tokens ungültig.} other {# importierte Dateien ließen sich nicht aus CLIProxyAPI entfernen. Lösche sie dort, sonst machen sich beide Seiten gegenseitig die Tokens ungültig.}}"
   },
-  "timeZone": "Zeitzone für Reset-Zeiten",
+  "timeZone": "Zeitzone der Konsole",
   "stats": {
     "available": "Jetzt verfügbar",
     "limited": "Am Limit",
@@ -59,6 +59,7 @@
   "stateCount": "{state, select, available {{count, plural, other {# verfügbar}}} limited {{count, plural, other {# am Limit}}} expired {{count, plural, one {# Anmeldung abgelaufen} other {# Anmeldungen abgelaufen}}} paused {{count, plural, other {# pausiert}}} other {{count, plural, other {#}}}}",
   "status": "{status, select, paused {Pausiert} available {Verfügbar} limited {Limit erreicht} expired {Anmeldung abgelaufen} unavailable {Limits nicht verfügbar} checking {Wird geprüft} other {Verbunden}}",
   "sharedVia": "{named, select, true {Über Link: {label}} other {Über Link}}",
+  "manageOff": "Kein Verwaltungslink",
   "signInAgain": "Neu anmelden",
   "noAccount": "Ohne Kontoname",
   "noneTitle": "Noch keine Abo-Konten",

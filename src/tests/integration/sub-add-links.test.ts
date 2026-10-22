@@ -3,13 +3,30 @@ import { after, test } from "node:test";
 import prisma from "@/lib/db/prisma";
 import { runAsPrincipal } from "@/lib/auth/delegation";
 import { stopLocalCatalogTasks } from "@/lib/gateway/catalog/catalog-tasks";
+import { acquireGroup, loadGroup } from "@/lib/gateway/routing/runtime";
 import { loginData } from "@/lib/gateway/upstreams/credentials";
+import { sealTicket } from "@/lib/gateway/upstreams/subscription-sign-in";
+import { SUB_ADD_TOKEN_PATTERN } from "@/lib/http/public-path";
 import { deleteProvider, loadProviders } from "@/lib/providers/connections";
+import {
+  completeSubAddSignIn,
+  loadSubAddContributions,
+  removeSubAddContribution,
+  renewSubAddManage,
+  revokeSubAddManage,
+} from "@/lib/providers/sub-add";
 import { deleteSubAddLink, loadSubAddLinks } from "@/lib/providers/sub-add-links";
 import { pruneSubAddLinks } from "@/lib/providers/sub-add-prune";
-import { newSubAddToken, removeSubAddAccount, storeSubAddAccount } from "@/lib/providers/sub-add-store";
+import {
+  newSubAddToken,
+  removeSubAddAccount,
+  storeSubAddAccount,
+  subAddTokenHash,
+  subAddUid,
+} from "@/lib/providers/sub-add-store";
 import type { SignInSession } from "@/types/providers";
 import { closeDatabase, ownerSession, uniqueName } from "./support/database";
+import { setRequestHeaders } from "./support/next-request.mjs";
 
 after(closeDatabase);
 
@@ -25,12 +42,19 @@ function session(account: string, accountId = account): SignInSession {
 }
 
 async function createLink(
-  data: { maxAccounts: number | null; added?: number; restricted?: boolean; orgId?: string; expiresAt?: Date },
+  data: {
+    maxAccounts: number | null;
+    added?: number;
+    restricted?: boolean;
+    orgId?: string;
+    expiresAt?: Date;
+    tokenHash?: string;
+  },
 ) {
   return prisma.subAddLink.create({
     data: {
       label: uniqueName("link"),
-      tokenHash: newSubAddToken().hash,
+      tokenHash: data.tokenHash ?? newSubAddToken().hash,
       kinds: ["claude"],
       maxAccounts: data.maxAccounts,
       added: data.added ?? 0,
@@ -147,7 +171,7 @@ test("accounts added through a restricted link get its assignments, and re-addin
       manageHash: renewed.hash,
       loginVerified: true,
     });
-    assert.deepEqual(second, { providerId: first.providerId, outcome: "updated" });
+    assert.deepEqual(second, { providerId: first.providerId, outcome: "updated", manageHash: renewed.hash });
     assert.equal((await prisma.subAddLink.findUniqueOrThrow({ where: { id: link.id } })).added, 1);
     const moved = await prisma.subAddAccount.findUniqueOrThrow({ where: { providerId: first.providerId } });
     assert.equal(moved.manageHash, renewed.hash);
@@ -365,7 +389,7 @@ test("a verified link sign-in renews a console-added connection and lets the con
       loginVerified: true,
     });
     stopLocalCatalogTasks();
-    assert.deepEqual(stored, { providerId: existing.id, outcome: "updated" });
+    assert.deepEqual(stored, { providerId: existing.id, outcome: "updated", manageHash: manage.hash });
     assert.equal((await prisma.providerLogin.findUniqueOrThrow({ where: { providerId: existing.id } })).version, 1);
     const managed = await prisma.subAddAccount.findUniqueOrThrow({ where: { providerId: existing.id } });
     assert.equal(managed.manageHash, manage.hash);
@@ -399,7 +423,7 @@ test("a second contributor takes over management only with a verified sign-in to
 
     const renewed = await signIn(second.hash, true);
     stopLocalCatalogTasks();
-    assert.deepEqual(renewed, { providerId: added.providerId, outcome: "updated" });
+    assert.deepEqual(renewed, { providerId: added.providerId, outcome: "updated", manageHash: second.hash });
     const moved = await prisma.subAddAccount.findUniqueOrThrow({ where: { providerId: added.providerId } });
     assert.equal(moved.manageHash, second.hash);
     assert.equal(moved.linkId, link.id);
@@ -432,5 +456,261 @@ test("a used-up link renews no connection", async () => {
     assert.equal((await prisma.providerLogin.findUniqueOrThrow({ where: { providerId: existing.id } })).version, 0);
   } finally {
     await cleanup([link.id], [existing.id]);
+  }
+});
+
+let client = 0;
+
+function freshClient() {
+  client += 1;
+  setRequestHeaders({ "x-forwarded-for": `203.0.113.${client}` });
+}
+
+async function contribute(linkId: string, manageHash: string, name: string) {
+  const stored = await storeSubAddAccount({
+    linkId,
+    kind: "claude",
+    session: session(`${uniqueName(name)}@example.test`),
+    manageHash,
+    loginVerified: false,
+  });
+  stopLocalCatalogTasks();
+  return stored.providerId;
+}
+
+async function managedHashes(providerIds: string[]) {
+  const rows = await prisma.subAddAccount.findMany({
+    where: { providerId: { in: providerIds } },
+    select: { providerId: true, manageHash: true },
+  });
+  return new Map(rows.map((row) => [row.providerId, row.manageHash]));
+}
+
+async function manageAudits(action: string, providerIds: string[]) {
+  return prisma.gatewayAuditLog.findMany({ where: { action, objectId: { in: providerIds } }, orderBy: { objectId: "asc" } });
+}
+
+test("deactivating a manage link keeps its accounts connected and routed while the link stops working", async () => {
+  freshClient();
+  const owner = await ownerSession();
+  const link = await createLink({ maxAccounts: null });
+  const manage = newSubAddToken();
+  const other = newSubAddToken();
+  const alias = uniqueName("claude-route");
+  const providerIds: string[] = [];
+  try {
+    providerIds.push(await contribute(link.id, manage.hash, "first"));
+    providerIds.push(await contribute(link.id, manage.hash, "second"));
+    const otherId = await contribute(link.id, other.hash, "other");
+    providerIds.push(otherId);
+    const [first, second] = providerIds;
+    await prisma.modelGroup.create({
+      data: { alias, deployments: { create: [{ kind: "claude", providerId: first, model: "claude-test" }] } },
+    });
+
+    assert.deepEqual(
+      (await loadSubAddContributions({ manage: manage.token })).accounts.map((row) => row.providerId).sort(),
+      [first, second].sort(),
+    );
+    const revoked = await revokeSubAddManage({ manage: manage.token });
+    assert.equal(revoked.accounts, 2);
+
+    const hashes = await managedHashes(providerIds);
+    assert.equal(hashes.get(first), null);
+    assert.equal(hashes.get(second), null);
+    assert.equal(hashes.get(otherId), other.hash);
+    assert.equal(await prisma.providerConnection.count({ where: { id: { in: providerIds } } }), 3);
+    assert.equal(await prisma.providerLogin.count({ where: { providerId: { in: providerIds }, status: "active" } }), 3);
+    const acquired = await acquireGroup(await loadGroup(alias), undefined);
+    acquired.release();
+    assert.equal(acquired.dep.provider_id, first);
+
+    await assert.rejects(loadSubAddContributions({ manage: manage.token }), { message: "SUB_ADD_UNAVAILABLE" });
+    await assert.rejects(revokeSubAddManage({ manage: manage.token }), { message: "SUB_ADD_UNAVAILABLE" });
+    await assert.rejects(renewSubAddManage({ manage: manage.token }), { message: "SUB_ADD_UNAVAILABLE" });
+    await assert.rejects(removeSubAddContribution({ manage: manage.token, providerId: first }), { message: "NOT_FOUND" });
+    await assert.rejects(loadSubAddContributions({ manage: newSubAddToken().token }), { message: "SUB_ADD_UNAVAILABLE" });
+    assert.deepEqual(
+      (await loadSubAddContributions({ manage: other.token })).accounts.map((row) => row.providerId),
+      [otherId],
+    );
+    await removeSubAddAccount(otherId, other.hash);
+    stopLocalCatalogTasks();
+    assert.equal(await prisma.providerConnection.count({ where: { id: { in: [first, second] } } }), 2);
+
+    const { connected } = await runAsPrincipal(owner, () => loadProviders());
+    for (const id of [first, second]) {
+      const row = connected.find((provider) => provider.id === id);
+      assert.equal(row?.sharedVia, link.label);
+      assert.equal(row?.manageActive, false);
+    }
+    const listed = (await runAsPrincipal(owner, () => loadSubAddLinks())).links.find((row) => row.id === link.id);
+    assert.deepEqual(
+      listed?.accounts.map((account) => account.manageActive),
+      [false, false],
+    );
+
+    const audits = await manageAudits("provider_sub_add.manage_revoke", providerIds);
+    assert.deepEqual(
+      audits.map((row) => [row.objectId, row.actor, row.objectType]),
+      [first, second].sort().map((id) => [id, subAddUid(link.id), "provider"]),
+    );
+    for (const row of audits) {
+      for (const value of [manage.token, manage.hash]) {
+        assert.doesNotMatch(row.afterJson + row.beforeJson, new RegExp(value));
+      }
+    }
+  } finally {
+    await prisma.modelGroup.deleteMany({ where: { alias } });
+    await cleanup([link.id], providerIds);
+    await prisma.user.deleteMany({ where: { id: owner.user.id } });
+  }
+});
+
+test("renewing a manage link moves its accounts to the new link and the old one stops working at once", async () => {
+  freshClient();
+  const link = await createLink({ maxAccounts: null });
+  const manage = newSubAddToken();
+  const providerIds: string[] = [];
+  try {
+    providerIds.push(await contribute(link.id, manage.hash, "first"));
+    providerIds.push(await contribute(link.id, manage.hash, "second"));
+    const [first, second] = providerIds;
+
+    const renewed = await renewSubAddManage({ manage: manage.token });
+    assert.match(renewed.manageToken, SUB_ADD_TOKEN_PATTERN);
+    assert.notEqual(renewed.manageToken, manage.token);
+    assert.deepEqual(renewed.accounts.map((row) => row.providerId).sort(), [first, second].sort());
+    const nextHash = subAddTokenHash(renewed.manageToken);
+    const hashes = await managedHashes(providerIds);
+    assert.deepEqual([hashes.get(first), hashes.get(second)], [nextHash, nextHash]);
+
+    await assert.rejects(loadSubAddContributions({ manage: manage.token }), { message: "SUB_ADD_UNAVAILABLE" });
+    await assert.rejects(renewSubAddManage({ manage: manage.token }), { message: "SUB_ADD_UNAVAILABLE" });
+    await assert.rejects(revokeSubAddManage({ manage: manage.token }), { message: "SUB_ADD_UNAVAILABLE" });
+    await assert.rejects(removeSubAddContribution({ manage: manage.token, providerId: first }), { message: "NOT_FOUND" });
+    assert.equal(await prisma.providerConnection.count({ where: { id: { in: providerIds } } }), 2);
+
+    const listed = await loadSubAddContributions({ manage: renewed.manageToken });
+    assert.deepEqual(listed.accounts.map((row) => row.providerId).sort(), [first, second].sort());
+    const audits = await manageAudits("provider_sub_add.manage_renew", providerIds);
+    assert.equal(audits.length, 2);
+    for (const row of audits) {
+      for (const value of [manage.token, manage.hash, renewed.manageToken, nextHash]) {
+        assert.doesNotMatch(row.afterJson + row.beforeJson, new RegExp(value));
+      }
+    }
+
+    const left = await removeSubAddContribution({ manage: renewed.manageToken, providerId: first });
+    stopLocalCatalogTasks();
+    assert.deepEqual(left.accounts.map((row) => row.providerId), [second]);
+    assert.equal(await prisma.providerConnection.count({ where: { id: first } }), 0);
+  } finally {
+    await cleanup([link.id], providerIds);
+  }
+});
+
+test("a sign-in that brings a deactivated manage link gets a fresh one instead", async () => {
+  freshClient();
+  const linkToken = newSubAddToken();
+  const link = await createLink({ maxAccounts: null, tokenHash: linkToken.hash });
+  const manage = newSubAddToken();
+  const providerIds: string[] = [];
+  const realFetch = globalThis.fetch;
+  const email = `${uniqueName("again")}@example.test`;
+  globalThis.fetch = (async (input: string | URL | Request) => {
+    const url = new URL(input instanceof Request ? input.url : String(input));
+    if (url.hostname === "platform.claude.com" && url.pathname === "/v1/oauth/token") {
+      return Response.json({
+        access_token: "sk-ant-oat-access-secret",
+        refresh_token: "sk-ant-ort-refresh-secret",
+        expires_in: 3600,
+        account: { uuid: uniqueName("uuid"), email_address: email },
+      });
+    }
+    return Response.json({});
+  }) as typeof fetch;
+  try {
+    const earlier = await contribute(link.id, manage.hash, "earlier");
+    providerIds.push(earlier);
+    await revokeSubAddManage({ manage: manage.token });
+
+    const done = await completeSubAddSignIn({
+      token: linkToken.token,
+      ticket: sealTicket(subAddUid(link.id), {
+        grant: { kind: "claude", verifier: "verifier-1", state: "state-1" },
+        verificationUrl: "https://claude.ai/oauth/authorize",
+        userCode: "",
+        interval: 5,
+        expiresIn: 600,
+      }),
+      code: "code-1#state-1",
+      manage: manage.token,
+    });
+    stopLocalCatalogTasks();
+    assert.equal(done.state, "done");
+    if (done.state !== "done") return;
+    assert.equal(done.outcome, "created");
+    assert.match(done.manageToken, SUB_ADD_TOKEN_PATTERN);
+    assert.notEqual(done.manageToken, manage.token);
+    const added = await prisma.providerLogin.findFirstOrThrow({ where: { account: email }, select: { providerId: true } });
+    providerIds.push(added.providerId);
+    const hashes = await managedHashes(providerIds);
+    assert.equal(hashes.get(earlier), null);
+    assert.equal(hashes.get(added.providerId), subAddTokenHash(done.manageToken));
+    assert.deepEqual(
+      (await loadSubAddContributions({ manage: done.manageToken })).accounts.map((row) => row.providerId),
+      [added.providerId],
+    );
+    await assert.rejects(loadSubAddContributions({ manage: manage.token }), { message: "SUB_ADD_UNAVAILABLE" });
+  } finally {
+    globalThis.fetch = realFetch;
+    await cleanup([link.id], providerIds);
+  }
+});
+
+test("a sign-in racing a deactivation or renewal never brings the old manage link back", async () => {
+  freshClient();
+  const link = await createLink({ maxAccounts: null });
+  const providerIds: string[] = [];
+  const signIn = (name: string, manageHash: string, broughtManageHash: string) =>
+    storeSubAddAccount({
+      linkId: link.id,
+      kind: "claude",
+      session: session(`${uniqueName(name)}@example.test`),
+      manageHash,
+      broughtManageHash,
+      loginVerified: false,
+    });
+  try {
+    const kept = newSubAddToken();
+    providerIds.push(await contribute(link.id, kept.hash, "kept"));
+    const joined = await signIn("joined", newSubAddToken().hash, kept.hash);
+    providerIds.push(joined.providerId);
+    assert.equal(joined.manageHash, kept.hash);
+
+    for (const change of ["revoke", "renew"] as const) {
+      for (let round = 0; round < 3; round += 1) {
+        const manage = newSubAddToken();
+        const fresh = newSubAddToken();
+        providerIds.push(await contribute(link.id, manage.hash, `${change}-earlier`));
+        const [stored, changed] = await Promise.all([
+          signIn(`${change}-racing`, fresh.hash, manage.hash),
+          change === "revoke" ? revokeSubAddManage({ manage: manage.token }) : renewSubAddManage({ manage: manage.token }),
+        ]);
+        providerIds.push(stored.providerId);
+        assert.equal(await prisma.subAddAccount.count({ where: { manageHash: manage.hash } }), 0);
+        const hash = (await managedHashes([stored.providerId])).get(stored.providerId);
+        if (stored.manageHash === fresh.hash) {
+          assert.equal(hash, fresh.hash);
+        } else {
+          assert.equal(stored.manageHash, manage.hash);
+          assert.equal(hash, "manageToken" in changed ? subAddTokenHash(changed.manageToken) : null);
+        }
+      }
+    }
+    stopLocalCatalogTasks();
+  } finally {
+    await cleanup([link.id], providerIds);
   }
 });

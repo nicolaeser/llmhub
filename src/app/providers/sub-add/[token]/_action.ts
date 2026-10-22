@@ -5,6 +5,7 @@ import {
   completeSubAddSignIn,
   openSubAddLink,
   pollSubAddSignIn,
+  revokeSubAddManage,
   startSubAddSignIn,
 } from "@/lib/providers/sub-add";
 
@@ -22,4 +23,8 @@ export async function pollSubAddSignInAction(...args: Parameters<typeof pollSubA
 
 export async function completeSubAddSignInAction(...args: Parameters<typeof completeSubAddSignIn>) {
   return runAction(() => completeSubAddSignIn(...args));
+}
+
+export async function revokeSubAddManageAction(...args: Parameters<typeof revokeSubAddManage>) {
+  return runAction(() => revokeSubAddManage(...args));
 }

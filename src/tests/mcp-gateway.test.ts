@@ -419,6 +419,36 @@ test("restore mode instructs every MCP step once and keeps the instruction out o
   for (const request of logged) assert.equal(JSON.stringify(request).includes(PII_RESTORE_INSTRUCTION), false);
 });
 
+test("restore mode hands MCP tools the real values and numbers their results like the prompt", async () => {
+  const bodies = reset();
+  gateway.enterprise = { pii: { enabled: true, mode: "restore", output: false, entities: ["EMAIL_ADDRESS", "IP_ADDRESS"] } };
+  toolText = (city) => `Forecast for ${city} sent to ada@acme.com from 203.0.113.9`;
+  scripted(bodies, [
+    () => toolCallReply([{ id: "call_1", name: TOOL, arguments: '{"city":"[EMAIL_ADDRESS_1]"}' }]),
+    () => chatReply("Mailed [EMAIL_ADDRESS_1] from [IP_ADDRESS_1]."),
+  ]);
+  const res = await post("/api/v1/chat/completions", {
+    model: MODEL,
+    messages: [{ role: "user", content: "Weather for the office of ada@acme.com?" }],
+  });
+  assert.equal(res.status, 200);
+  const choice = (((await res.json()) as JsonMap).choices as JsonMap[])[0]!;
+  assert.equal((choice.message as JsonMap).content, "Mailed ada@acme.com from 203.0.113.9.");
+  const toolCall = mcpCalls.find((call) => call.method === "tools/call");
+  assert.deepEqual(toolCall?.params.arguments, { city: "ada@acme.com" });
+  assert.deepEqual((bodies[1]!.messages as JsonMap[]).at(-1), {
+    role: "tool",
+    tool_call_id: "call_1",
+    content: "Forecast for [EMAIL_ADDRESS_1] sent to [EMAIL_ADDRESS_1] from [IP_ADDRESS_1]",
+  });
+  assert.equal(JSON.stringify(bodies).includes("ada@acme.com"), false);
+  const restored = recordedPrisma
+    .called("requestLog", "create")
+    .map((call) => (call.args as { data: { piiRestore?: { tools: string[]; text: string[] } } }).data.piiRestore);
+  assert.deepEqual(restored[0]?.tools, ["[EMAIL_ADDRESS_1]"]);
+  assert.deepEqual(restored[1]?.text, ["[EMAIL_ADDRESS_1]", "[IP_ADDRESS_1]"]);
+});
+
 test("the loop stops offering MCP tools at the step limit", async () => {
   const bodies = reset();
   scripted(bodies, Array.from({ length: 10 }, () => () => toolCallReply([forecast])));

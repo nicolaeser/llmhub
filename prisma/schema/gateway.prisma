@@ -363,7 +363,7 @@ model SubAddAccount {
   linkId     String?
   link       SubAddLink?        @relation(fields: [linkId], references: [id], onDelete: SetNull)
   label      String             @default("")
-  manageHash String
+  manageHash String?
   createdAt  DateTime           @default(now())
 
   @@index([linkId])
@@ -539,6 +539,7 @@ model RequestLog {
   piiMode          String             @default("")
   piiInput         String[]           @default([])
   piiOutput        String[]           @default([])
+  piiRestore       Json?
   guardInput       String[]           @default([])
   guardOutput      String[]           @default([])
   contentSkip      String             @default("")

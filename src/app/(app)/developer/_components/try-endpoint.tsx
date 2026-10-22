@@ -19,6 +19,7 @@ import {
 import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/routing";
 import {
+  ANTHROPIC_LEGACY_VERSION,
   ANTHROPIC_VERSION,
   exampleRequestBody,
   openApiPathParams,
@@ -176,9 +177,8 @@ export default function TryEndpoint({
           const res = await fetch(filled, {
             method: endpoint.method,
             headers: {
-              ...(anthropic
-                ? { "x-api-key": key, "anthropic-version": ANTHROPIC_VERSION }
-                : { Authorization: `Bearer ${key}` }),
+              Authorization: `Bearer ${key}`,
+              ...(anthropic ? { "anthropic-version": ANTHROPIC_VERSION } : {}),
               ...(needsBody ? { "Content-Type": "application/json" } : {}),
             },
             body: needsBody ? payload : undefined,
@@ -260,7 +260,9 @@ export default function TryEndpoint({
                     </Tabs>
                   ) : null}
                   {anthropic ? (
-                    <p className="text-xs text-muted">{t("anthropicHeaders", { version: ANTHROPIC_VERSION })}</p>
+                    <p className="text-xs text-muted">
+                      {t("anthropicHeaders", { version: ANTHROPIC_VERSION, legacy: ANTHROPIC_LEGACY_VERSION })}
+                    </p>
                   ) : null}
                   <TextField fullWidth
                     value={apiKey}
