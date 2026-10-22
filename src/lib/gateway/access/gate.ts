@@ -14,7 +14,7 @@ import { anthropicErrorBody, GateError, openAIErrorBody } from "@/lib/gateway/er
 import { errorFields } from "@/lib/logging/format";
 import { logger } from "@/lib/logging/logger";
 import { modelAlias } from "@/lib/gateway/catalog/model-alias";
-import { aliasChain } from "@/lib/gateway/routing/runtime";
+import { aliasChain, servedOnlyInternally } from "@/lib/gateway/routing/runtime";
 import { accessOpen, endpointAllowed } from "@/lib/gateway/access/key-restrictions";
 import { gatewayPath } from "@/lib/gateway/api-paths";
 import { routeOf } from "@/lib/gateway/routing/route-pool";
@@ -131,6 +131,11 @@ export function modelPermitted(principal: Principal, model: string): boolean {
   const allowed = principal.models;
   if (!allowed.length && !principal.key?.templates.length) return true;
   return allowed.includes("*") || allowed.includes(modelAlias(routeOf(model, principal.pool ?? "api").alias));
+}
+
+export async function featureModelPermitted(principal: Principal, model: string): Promise<boolean> {
+  if (modelPermitted(principal, model)) return true;
+  return !principal.dataRules && (await servedOnlyInternally(model));
 }
 
 export function allowModel(principal: Principal, model: string): void {

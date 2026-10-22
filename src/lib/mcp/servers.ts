@@ -2,6 +2,7 @@ import "server-only";
 import prisma from "@/lib/db/prisma";
 import { requireActor } from "@/lib/auth/guards";
 import { companyOf, inCompany } from "@/lib/auth/scope";
+import { hasPerm, PERMISSIONS } from "@/lib/auth/permissions";
 import { AuthError, isPrismaCode } from "@/lib/auth/errors";
 import { writeAudit } from "@/lib/audit";
 import { seal } from "@/lib/crypto";
@@ -47,6 +48,7 @@ export async function loadMcpServerList() {
     redirectUri: access.canManage ? mcpOAuthRedirectUri() : "",
     builderModel: setting?.value ?? "",
     models,
+    canTestModels: access.canManage && hasPerm(session.permissions, PERMISSIONS.SETTINGS_MANAGE),
   };
 }
 

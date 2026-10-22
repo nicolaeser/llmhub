@@ -5,7 +5,7 @@ import { Card, Table, ToggleButton, ToggleButtonGroup } from "@heroui/react";
 import { useFormatter, useTranslations } from "next-intl";
 import RowCard, { RowCards, TABLE_FROM_LG } from "@/components/console/row-cards";
 import { marginShare } from "@/lib/gateway/billing/markup-policy";
-import { chargebackParts } from "@/lib/usage/usage-stats";
+import { chargebackParts, SYSTEM_SLICE, systemSlice } from "@/lib/usage/usage-stats";
 import type { SliceRow } from "@/types/usage";
 import type { MarginGroup, MarginRow } from "@/types/pricing";
 
@@ -16,7 +16,8 @@ const GROUP_LABEL = { orgId: "org", teamId: "team", projectId: "project", model:
 function marginRows(rows: SliceRow[], group: MarginGroup): MarginRow[] {
   const totals = new Map<string, MarginRow>();
   for (const row of rows) {
-    const id = chargebackParts(row.name)[group];
+    const parts = chargebackParts(row.name);
+    const id = parts[group] || (group !== "model" && systemSlice(parts) ? SYSTEM_SLICE : "");
     const current = totals.get(id) ?? { id, purchase: 0, sale: 0 };
     current.purchase += row.purchase ?? 0;
     current.sale += row.spend;
@@ -50,8 +51,12 @@ export default function MarginCard({
   const group = groups.includes(picked) ? picked : groups[0];
   const rows = marginRows(chargeback, group);
   const share = marginShare(purchase, sale);
-  const label = (id: string) =>
-    !id ? tCommon("none") : group === "model" ? id : (names[id] ?? t("deleted", { group: GROUP_LABEL[group] }));
+  const label = (id: string) => {
+    if (!id) return tCommon("none");
+    if (group === "model") return id;
+    if (id === SYSTEM_SLICE) return t("system");
+    return names[id] ?? t("deleted", { group: GROUP_LABEL[group] });
+  };
   const percent = (value: number | null) => (value === null ? tCommon("none") : format.number(value, "percent"));
 
   return (

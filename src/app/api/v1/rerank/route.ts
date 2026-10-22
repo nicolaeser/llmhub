@@ -14,6 +14,7 @@ export async function POST(req: Request) {
     const hit = await forwardModelCall({
       principal,
       model: modelOf(body),
+      chosenBy: "caller",
       path: RERANK_PATH,
       body,
       usage: rerankUsage,

@@ -15,9 +15,9 @@
     "summary": "Jev checked {asked, plural, =0 {no models} one {# model} other {# models}} in the last refresh and grouped {matched, plural, =0 {none} one {# of them} other {# of them}} ({cost}).",
     "pending": "{count, plural, one {# model waits} other {# models wait}} for Jev in the next refresh.",
     "missingTitle": "Jev is not set up",
-    "missing": "Models are grouped by naming rules only. Add a separate OpenRouter key for Jev under <link>Settings</link> to also group models that providers name differently.",
+    "missing": "Models are grouped by naming rules only. Add a separate OpenRouter key for Jev, or name a model alias that serves Jev, under <link>Settings</link> to also group models that providers name differently.",
     "errorTitle": "Jev stopped",
-    "error": "{code, select, JEV_AUTH {OpenRouter rejected the Jev API key.} JEV_CREDITS {The OpenRouter account for Jev has no credits left.} JEV_RATE_LIMITED {OpenRouter rate-limited the Jev requests.} other {The Jev request failed.}} {code, select, JEV_AUTH {Check the Jev key under Settings. This notice goes away as soon as the key is changed.} JEV_CREDITS {Top up the OpenRouter credits, then press Refresh now.} other {Jev tries again automatically in a few minutes.}}"
+    "error": "{code, select, JEV_AUTH {The provider rejected the Jev credentials.} JEV_CREDITS {The account behind Jev has no credits left.} JEV_RATE_LIMITED {The provider rate-limited the Jev requests.} other {The Jev request failed.}} {code, select, JEV_AUTH {Check the Jev key under Settings, or the provider behind the Jev model alias. This notice goes away as soon as the Jev settings change.} JEV_CREDITS {Top up the credits, then press Refresh now.} other {Jev tries again automatically in a few minutes.}}"
   },
   "failedTitle": "Some providers could not be refreshed",
   "failed": "{name}: {code, select, UPSTREAM_AUTH {the provider rejected the API key} UPSTREAM_EMPTY {the provider returned no models, the previous list is kept} BASE_URL_REQUIRED {the base URL is missing} other {the request failed}}",

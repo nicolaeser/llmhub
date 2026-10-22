@@ -3,14 +3,10 @@ import "server-only";
 import { requirePlatformPermission } from "@/lib/auth/guards";
 import { hasPerm, PERMISSIONS } from "@/lib/auth/permissions";
 import { writeAudit } from "@/lib/audit";
-import { assertModelRoles, enabledModelChoices } from "@/lib/models/aliases";
-import {
-  catalogRouting,
-  DEFAULT_JEV_MODEL,
-  getEnterprise,
-  normalizeVectorDefaults,
-  patchEnterprise,
-} from "@/lib/settings/enterprise";
+import { jevAliasRoutable } from "@/lib/gateway/catalog/jev";
+import { assertModelRoles, featureModelChoices } from "@/lib/models/aliases";
+import { DEFAULT_JEV_MODEL } from "@/lib/gateway/catalog/model-catalog";
+import { catalogRouting, getEnterprise, normalizeVectorDefaults, patchEnterprise } from "@/lib/settings/enterprise";
 import { catalogSettingsSchema } from "@/schemas/settings";
 import type { Permission } from "@/types/auth";
 import type { CatalogSettingsView, Enterprise } from "@/types/settings";
@@ -31,7 +27,7 @@ async function view(enterprise: Enterprise, permissions: readonly Permission[]):
       vector_stores: normalizeVectorDefaults(enterprise.vector_stores),
     },
     jevKeySet: Boolean(enterprise.catalog_jev?.api_key),
-    models: await enabledModelChoices(),
+    models: await featureModelChoices(),
     canManage: hasPerm(permissions, PERMISSIONS.SETTINGS_MANAGE),
   };
 }
@@ -56,9 +52,9 @@ export async function saveCatalogSettings(raw: unknown) {
   const { catalog_jev: jevInput, ...rest } = parsed.data;
   const current = await getEnterprise();
   const apiKey = jevInput.clear_api_key ? "" : jevInput.api_key || current.catalog_jev?.api_key || "";
-  if (jevInput.enabled && !apiKey) throw new Error("JEV_KEY_REQUIRED");
-  await assertNewAliases(rest.vector_stores, normalizeVectorDefaults(current.vector_stores));
   const jev = { enabled: jevInput.enabled, model: jevInput.model || DEFAULT_JEV_MODEL };
+  if (jev.enabled && !apiKey && !(await jevAliasRoutable(jev.model))) throw new Error("JEV_KEY_REQUIRED");
+  await assertNewAliases(rest.vector_stores, normalizeVectorDefaults(current.vector_stores));
   const enterprise = await patchEnterprise({ ...rest, catalog_jev: { ...jev, api_key: apiKey } });
   await writeAudit({
     actor: session.user.id,

@@ -1,9 +1,12 @@
 import "server-only";
 import prisma from "@/lib/db/prisma";
+import { systemPrincipal } from "@/lib/gateway/access/system-principal";
+import { usageFromUnknown } from "@/lib/gateway/billing/billing";
+import { meter } from "@/lib/gateway/billing/meter";
 import { modelAlias } from "@/lib/gateway/catalog/model-alias";
+import { asRecord } from "@/lib/gateway/core";
 import { chatOnce, withDeployment } from "@/lib/gateway/dispatch/chat";
 import { GateError } from "@/lib/gateway/errors";
-import { routable } from "@/lib/gateway/routing/route-pool";
 import { errorFields } from "@/lib/logging/format";
 import { logger } from "@/lib/logging/logger";
 import { DRAFT_TIME_MS, draftWithAgent, turnOf } from "@/lib/mcp/builder-agent";
@@ -15,7 +18,8 @@ import { PICK_SYSTEM, readPick, templateAllows } from "@/lib/mcp/hosted";
 import { importOpenApi, readApiDocument } from "@/lib/mcp/openapi";
 import { guardedFetch } from "@/lib/mcp/transport";
 import { requireMcpManager } from "@/lib/mcp/scope";
-import { modelRole } from "@/lib/models/model-role";
+import { featureModelChoices } from "@/lib/models/aliases";
+import { featureModel } from "@/lib/models/feature-models";
 import { extensionOf, extractDocument } from "@/lib/rag/extract";
 import {
   BUILDER_MODEL_KEY,
@@ -54,6 +58,7 @@ const LINKED_FILE_EXTENSIONS = new Set(["pdf", "docx", "pptx", "xlsx", "png", "j
 const CONTEXT_LIMIT = /context[ _-]?(?:length|window)|too many tokens|prompt is too long|maximum.{0,40}tokens/i;
 const MODEL_INPUT_STATUSES = new Set([400, 413, 415, 422]);
 const DRAFT_CODES = new Set(["MCP_BUILDER_MODEL", "MCP_BUILDER_DRAFT", "MCP_BUILDER_EMPTY"]);
+const BUILDER_FEATURE = "mcp_builder";
 
 type LinkRead = { sources: McpDocsSource[]; site: McpDocsSite | null; crawl: boolean };
 
@@ -68,27 +73,13 @@ function contextLimited(err: GateError): boolean {
 }
 
 export async function builderModels(): Promise<McpBuilderModel[]> {
-  const groups = await prisma.modelGroup.findMany({
-    where: { enabled: true },
-    select: {
-      alias: true,
-      displayName: true,
-      deployments: { select: { kind: true, model: true, provider: { select: { kind: true, internal: true } } } },
-    },
-    orderBy: { alias: "asc" },
-  });
-  return groups
-    .filter(
-      (group) =>
-        group.deployments.some(routable("api")) &&
-        modelRole([...group.deployments.map((deployment) => deployment.model), group.alias, group.displayName]) === "chat",
-    )
-    .map((group) => ({ alias: group.alias, label: group.displayName || group.alias }));
+  return (await featureModelChoices())
+    .filter((choice) => choice.role === "chat")
+    .map((choice) => ({ alias: choice.alias, label: choice.label, internal: choice.internal }));
 }
 
 async function builderAlias(): Promise<string> {
-  const setting = await prisma.setting.findUnique({ where: { key: BUILDER_MODEL_KEY } });
-  const alias = modelAlias(setting?.value ?? "");
+  const alias = await featureModel(BUILDER_FEATURE, "chat");
   if (!alias) return "";
   return (await builderModels()).some((model) => model.alias === alias) ? alias : "";
 }
@@ -102,27 +93,33 @@ function requestVariants(messages: JsonMap[], tools: JsonMap[] | null): JsonMap[
 
 async function complete(alias: string, messages: JsonMap[], tools: JsonMap[] | null = null): Promise<McpBuilderTurn> {
   const variants = requestVariants(messages, tools);
+  const principal = systemPrincipal(BUILDER_FEATURE);
+  const usage = meter(principal, alias);
+  let routed;
   try {
-    const routed = await withDeployment(
+    routed = await withDeployment(
       [alias],
       {},
       async (deployment, group) => {
         for (let at = 0; ; at += 1) {
           const body = variants[at]!;
           try {
-            return turnOf(await chatOnce(deployment, group, body, alias), "tools" in body);
+            return { json: await chatOnce(deployment, group, body, alias), tools: "tools" in body };
           } catch (err) {
             if (at === variants.length - 1 || !(err instanceof GateError) || err.status !== 400 || contextLimited(err)) throw err;
           }
         }
       },
-      { pool: "api" },
+      { pool: "internal", principal },
     );
-    return routed.result;
   } catch (err) {
+    await usage.fail(err);
     if (err instanceof GateError && err.code === "model_not_found") throw new Error("MCP_BUILDER_MODEL", { cause: err });
     throw err;
   }
+  const { json, tools: withTools } = routed.result;
+  await usage.ok(routed, usageFromUnknown(asRecord(json)?.usage, json));
+  return turnOf(json, withTools);
 }
 
 function fileName(raw: string, fallback: string): string {

@@ -5,7 +5,7 @@ import { toKeyView } from "@/lib/keys/view";
 import { effectivePermissions, hasPerm, PERMISSIONS } from "@/lib/auth/permissions";
 import { isTryBearer, verifyTryBearer } from "@/lib/gateway/access/try-bearer";
 import { modelAccess, templateRuleSelect } from "@/lib/gateway/access/model-access";
-import { templateRulesOf } from "@/lib/gateway/access/model-policy";
+import { dataRuleOf, templateRulesOf } from "@/lib/gateway/access/model-policy";
 import { GateError } from "@/lib/gateway/errors";
 import { guardrailOverride } from "@/lib/settings/enterprise";
 import { isManagementKey } from "@/lib/management/scope";
@@ -38,10 +38,8 @@ async function principalFromKey(
   const { tenancy, active } = await resolveKeyTenancy(row);
   if (!active) return null;
   const key: VirtualKeyView = toKeyView(row);
-  const access = await modelAccess(
-    key.models,
-    row.templates.map((link) => templateRulesOf(link.template)),
-  );
+  const templates = row.templates.map((link) => templateRulesOf(link.template));
+  const access = await modelAccess(key.models, templates);
   return {
     actor: row.prefix,
     key,
@@ -51,6 +49,7 @@ async function principalFromKey(
     memberId: tenancy.memberId,
     models: access.models,
     routeLimits: access.limits,
+    dataRules: templates.some((rules) => dataRuleOf(rules) !== null),
     guardrails: guardrailOverride(row.guardrailPolicy),
   };
 }

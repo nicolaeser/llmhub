@@ -35,10 +35,12 @@ export default function LogTable({
   }
 
   function keyLabel(row: RequestLogRow) {
+    if (row.system) return t("caller.system");
     return row.keyLabel || (row.keyId ? t("deleted", { kind: "key" }) : t("caller.noKey"));
   }
 
   function personLabel(row: RequestLogRow) {
+    if (row.system) return t("caller.feature", { feature: row.system });
     return (
       row.memberLabel ||
       row.userLabel ||

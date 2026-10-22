@@ -16,6 +16,7 @@ import type { ContentSkip, RequestLogEntry } from "@/types/logs";
 const ERROR_LIMIT = 2_000;
 
 export async function contentSkip(principal: Principal, enterprise: Enterprise): Promise<ContentSkip> {
+  if (principal.system) return "system";
   if (enterprise.log_content === false) return "gateway";
   if (principal.key && principal.key.log_content === false) return "key";
   if (principal.memberId) {

@@ -1,6 +1,6 @@
 import "server-only";
 
-import { assertModelRoles, enabledModelChoices } from "@/lib/models/aliases";
+import { assertModelRoles, featureModelChoices } from "@/lib/models/aliases";
 import { requirePlatformPermission } from "@/lib/auth/guards";
 import { hasPerm, PERMISSIONS } from "@/lib/auth/permissions";
 import { writeAudit } from "@/lib/audit";
@@ -16,7 +16,7 @@ async function view(permissions: readonly Permission[]): Promise<CacheView> {
   const [enterprise, backend, models] = await Promise.all([
     getEnterprise(),
     cacheBackend(),
-    enabledModelChoices(),
+    featureModelChoices(),
   ]);
   return {
     cacheTtlSeconds: enterprise.cache_ttl_seconds ?? 0,
