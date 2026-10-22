@@ -710,6 +710,7 @@ test("the console reports per contributed account whether its manage link is act
     noTraining: false,
     enabled: true,
     restricted: false,
+    internal: false,
   };
   const shared = publicProvider({ ...connection, subAdd: { label: "Friends", manageHash: activeHash } });
   assert.equal(shared.manageActive, true);
