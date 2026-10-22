@@ -8,7 +8,7 @@ import { money } from "@/lib/utils/money";
 import { ownerId } from "@/lib/gateway/core";
 import { plainModel } from "@/lib/gateway/catalog/model-alias";
 import { writeRequestLog } from "@/lib/gateway/request-logs/request-log";
-import { GateError } from "@/lib/gateway/errors";
+import { CLIENT_CLOSED_STATUS, GateError } from "@/lib/gateway/errors";
 import { applyMarkup, markupRuleOf, pickMarkup, scaleByMarkup } from "@/lib/gateway/billing/markup-policy";
 import { tighterCap } from "@/lib/gateway/billing/cost-cap";
 import { tokenCount } from "@/lib/gateway/billing/tokens";
@@ -257,7 +257,7 @@ export async function recordUsage(input: {
   const now = new Date();
   const day = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
   const slice = { day, keyId, teamId, orgId, projectId, memberId, userId, model };
-  const failed = input.status >= 400 ? 1 : 0;
+  const failed = input.status >= 400 && input.status !== CLIENT_CLOSED_STATUS ? 1 : 0;
   const limited = input.status === 429 ? 1 : 0;
   const responseCache = responseCacheColumns(input.responseCache, cost);
   const writes: Prisma.PrismaPromise<unknown>[] = [

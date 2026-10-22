@@ -47,6 +47,7 @@ export function wantsAnthropicErrors(req: Request): boolean {
 export const CLIENT_RETRY_MAX_SECONDS = 60;
 
 export function retryHeaders(gate: GateError, now = Date.now()): Record<string, string> {
+  if (gate.requestScoped) return { "x-should-retry": "false" };
   if (gate.retryAt === null || (gate.status !== 429 && gate.status < 500)) return {};
   const seconds = Math.max(1, Math.ceil((gate.retryAt - now) / 1000));
   return {

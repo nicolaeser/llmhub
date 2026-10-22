@@ -59,7 +59,7 @@ test("every stage builds on Debian trixie slim", async () => {
   const dockerfile = await file("Dockerfile");
   const froms = [...dockerfile.matchAll(/^FROM (\S+) AS (\S+)$/gm)];
   assert.deepEqual(froms.map((match) => match[2]), ["base", "deps", "prismacli", "builder", "runner"]);
-  assert.equal(froms[0][1], "node:${NODE_VERSION}-trixie-slim");
+  assert.match(froms[0][1], /^node:\d+\.\d+\.\d+-trixie-slim$/);
   for (const [, image] of froms.slice(1)) assert.equal(image, "base");
   assert.doesNotMatch(dockerfile, /apt-get|apk |dumb-init|useradd|groupadd/);
 });

@@ -1,7 +1,7 @@
 import "server-only";
 import { recordUsage, recordUsageOrLog } from "@/lib/gateway/billing/billing";
 import { spendTag } from "@/lib/gateway/access/gate";
-import { GateError } from "@/lib/gateway/errors";
+import { GateError, isClientClosed } from "@/lib/gateway/errors";
 import type { JsonMap, Principal, ProxyFirstResult } from "@/types/gateway";
 import type { TokenUsage } from "@/types/billing";
 
@@ -26,7 +26,7 @@ export function meter(principal: Principal, model: string, body: JsonMap = {}) {
       recordUsageOrLog({
         ...base,
         status: err instanceof GateError ? err.status : 502,
-        outcome: "error",
+        outcome: isClientClosed(err) ? "cancelled" : "error",
         latencyMs: Date.now() - started,
         error: err,
       }),

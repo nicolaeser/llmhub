@@ -63,6 +63,23 @@ export function claudeHeaderWindows(headers: Headers): LimitWindow[] {
   return windows;
 }
 
+export function claudeRejectionReset(headers: Headers, now: number): number | null {
+  const overall = unifiedStatus(unified(headers, "status"));
+  const claim = unified(headers, "representative-claim");
+  const windows = OBSERVED_WINDOWS.map((spec) => ({ spec, status: unifiedStatus(unified(headers, `${spec.key}-status`)) }));
+  const rejected = windows.filter((window) => window.status === "rejected");
+  const anyAllowed = windows.some((window) => window.status === "allowed" || window.status === "allowed_warning");
+  const unreported = !overall && windows.every((window) => window.status === null);
+  const claimRejected =
+    overall === "rejected" && (OBSERVED_WINDOWS.some((spec) => spec.claim === claim) || !anyAllowed);
+  if (!rejected.length && !claimRejected && !unreported) return null;
+  const resets = [
+    ...rejected.map((window) => resetTime(unified(headers, `${window.spec.key}-reset`))),
+    resetTime(unified(headers, "reset")),
+  ].filter((at): at is number => at !== null && at > now);
+  return resets.length ? Math.max(...resets) : null;
+}
+
 export function isObservedWindow(window: LimitWindow): boolean {
   return !window.scope;
 }

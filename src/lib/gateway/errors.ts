@@ -31,6 +31,7 @@ export const GATEWAY_ERRORS = {
   payload_too_large: 413,
   rate_limit_exceeded: 429,
   budget_exceeded: 429,
+  client_closed_request: 499,
   internal_error: 500,
   upstream_error: 502,
   no_healthy_deployment: 503,
@@ -42,6 +43,7 @@ export class GateError extends Error {
   readonly code: string;
   readonly param: string | null;
   readonly retryAt: number | null;
+  readonly requestScoped: boolean;
 
   constructor(
     readonly status: number,
@@ -54,11 +56,22 @@ export class GateError extends Error {
     this.code = options.upstreamCode || code;
     this.param = options.param ?? null;
     this.retryAt = options.retryAt ?? null;
+    this.requestScoped = options.requestScoped ?? false;
   }
 
   get type(): GatewayErrorType {
     return gatewayErrorType(this.status, this.code);
   }
+}
+
+export const CLIENT_CLOSED_STATUS = GATEWAY_ERRORS.client_closed_request;
+
+export function clientClosedError(): GateError {
+  return new GateError(CLIENT_CLOSED_STATUS, "client_closed_request", "the client closed the request before the upstream answered");
+}
+
+export function isClientClosed(err: unknown): boolean {
+  return err instanceof GateError && err.code === "client_closed_request";
 }
 
 export function gatewayErrorType(status: number, code: string): GatewayErrorType {
