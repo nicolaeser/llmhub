@@ -46,7 +46,7 @@
     "moved": "{removed, plural, =0 {Nothing was removed from CLIProxyAPI.} one {# file was removed from CLIProxyAPI. LLM Hub now renews this account alone.} other {# files were removed from CLIProxyAPI. LLM Hub now renews these accounts alone.}}",
     "keptAtSource": "{count, plural, one {# imported file could not be removed from CLIProxyAPI. Delete it there, or both sides invalidate each other's tokens.} other {# imported files could not be removed from CLIProxyAPI. Delete them there, or both sides invalidate each other's tokens.}}"
   },
-  "timeZone": "Time zone for reset times",
+  "timeZone": "Console time zone",
   "stats": {
     "available": "Available now",
     "limited": "At a limit",

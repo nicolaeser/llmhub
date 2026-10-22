@@ -4,6 +4,11 @@ import type { JsonMap } from "@/types/gateway";
 export const CLAUDE_CODE_VERSION = "2.1.280";
 export const CLAUDE_CODE_IDENTITY = "You are Claude Code, Anthropic's official CLI for Claude.";
 export const CLAUDE_OAUTH_BETAS = ["claude-code-20250219", "oauth-2025-04-20"] as const;
+const CLAUDE_CODE_BILLING_PREFIX = "x-anthropic-billing-header:";
+const CLAUDE_CODE_SYSTEM_PREFIXES = [
+  "You are Claude Code, Anthropic's official CLI for Claude",
+  "You are a Claude agent, built on Anthropic's Claude Agent SDK",
+] as const;
 
 export function claudeIdentityHeaders(): Record<string, string> {
   return {
@@ -41,8 +46,37 @@ function systemBlocks(system: unknown): JsonMap[] {
   return blocks;
 }
 
+function blockText(block: JsonMap): string {
+  return typeof block.text === "string" ? block.text.trimStart() : "";
+}
+
+export function isNativeClaudeCode(body: JsonMap): boolean {
+  return systemBlocks(body.system).some((block) => {
+    const text = blockText(block);
+    return (
+      text.startsWith(CLAUDE_CODE_BILLING_PREFIX) ||
+      CLAUDE_CODE_SYSTEM_PREFIXES.some((prefix) => text.startsWith(prefix))
+    );
+  });
+}
+
 export function withClaudeIdentity(body: JsonMap): JsonMap {
-  const blocks = systemBlocks(body.system);
-  if (blocks[0]?.text === CLAUDE_CODE_IDENTITY) return { ...body, system: blocks };
-  return { ...body, system: [{ type: "text", text: CLAUDE_CODE_IDENTITY }, ...blocks] };
+  if (isNativeClaudeCode(body)) return body;
+  return { ...body, system: [{ type: "text", text: CLAUDE_CODE_IDENTITY }, ...systemBlocks(body.system)] };
+}
+
+function fastModeRefusal(text: string): boolean {
+  return (
+    text.includes("fast request rejected") ||
+    (text.includes("fast") && (text.includes("usage credits") || text.includes("credits are required")))
+  );
+}
+
+function longContextRefusal(text: string): boolean {
+  return text.includes("long context") && text.includes("extra usage");
+}
+
+export function entitlementRefusal(message: string): boolean {
+  const text = message.toLowerCase();
+  return fastModeRefusal(text) || longContextRefusal(text);
 }

@@ -11,7 +11,7 @@ import TimeZonePicker from "@/components/console/time-zone-picker";
 import { DEFAULT_ACCOUNT_STRATEGY } from "@/lib/gateway/routing/account-access";
 import { autoResetPolicy, isResetKind } from "@/lib/gateway/routing/auto-reset-policy";
 import { reportsLimits } from "@/lib/gateway/upstreams/provider-kinds";
-import { setDashboardTimeZone, useDashboardTimeZone } from "@/lib/hooks/use-dashboard-time-zone";
+import { setConsoleTimeZone, useConsoleTimeZone } from "@/lib/hooks/use-console-time-zone";
 import { isActionFail } from "@/lib/http/action-result";
 import type {
   AccountRouting,
@@ -50,7 +50,7 @@ export default function SubscriptionAccounts({
   const tProviders = useTranslations("Providers");
   const format = useFormatter();
   const now = useNow({ updateInterval: 60_000 });
-  const timeZone = useDashboardTimeZone();
+  const timeZone = useConsoleTimeZone();
   const [routing, setRouting] = useState<AccountRouting | null>(null);
   const [autoReset, setAutoReset] = useState<AutoResetPolicies>({});
   const [access, setAccess] = useState<ProviderView | null>(null);
@@ -133,7 +133,7 @@ export default function SubscriptionAccounts({
             </Button>
           </div>
           <div className="w-full md:w-72">
-            <TimeZonePicker label={t("timeZone")} value={timeZone} isDisabled={false} onChange={setDashboardTimeZone} />
+            <TimeZonePicker label={t("timeZone")} value={timeZone} isDisabled={false} onChange={setConsoleTimeZone} />
           </div>
         </div>
       </div>
