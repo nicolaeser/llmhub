@@ -30,6 +30,7 @@ type HealthMemory = {
 const globalForHealth = globalThis as unknown as {
   __llmhubProviderHealth?: HealthMemory;
   __llmhubCooldownSince?: Map<string, number>;
+  __llmhubRejectedUntil?: Map<string, number>;
 };
 
 function memory(): HealthMemory {
@@ -46,6 +47,11 @@ function cooldownSince(): Map<string, number> {
   return globalForHealth.__llmhubCooldownSince;
 }
 
+function rejectedUntil(): Map<string, number> {
+  globalForHealth.__llmhubRejectedUntil ??= new Map();
+  return globalForHealth.__llmhubRejectedUntil;
+}
+
 function minuteKey(minute: number): string {
   return `${KEY_PREFIX}:minute:${minute}`;
 }
@@ -56,6 +62,10 @@ function cooldownKey(id: string): string {
 
 function clearedKey(id: string): string {
   return `${KEY_PREFIX}:cleared:${id}`;
+}
+
+function rejectedKey(id: string): string {
+  return `${KEY_PREFIX}:rejected:${id}`;
 }
 
 function errText(err: unknown): string {
@@ -183,6 +193,43 @@ export function recordSuccess(id: string, latencyMs?: number, now = Date.now()):
   count(fields, now);
 }
 
+export function recordUncooledFailure(id: string, now = Date.now()): void {
+  count([`${id}|fail`], now);
+}
+
+async function shareRejection(id: string, until: number, now: number): Promise<void> {
+  const redis = await sharedRedis();
+  if (!redis) return;
+  try {
+    await withRedisTimeout(redis.set(rejectedKey(id), String(until), "PX", Math.max(1, Math.ceil(until - now))));
+  } catch (err) {
+    logger.warn("provider_health.redis_fallback", { err: errText(err) });
+  }
+}
+
+export function recordRejection(id: string, until: number, now = Date.now()): void {
+  recordFailure(id, now, until);
+  const held = memory().cooldownUntil.get(id) ?? until;
+  rejectedUntil().set(id, held);
+  if (redisUrl()) void shareRejection(id, held, now);
+}
+
+export async function rejectedCooldowns(ids: string[], now = Date.now()): Promise<Set<string>> {
+  const rejected = new Set(ids.filter((id) => (rejectedUntil().get(id) ?? 0) > now));
+  if (!ids.length || !redisUrl()) return rejected;
+  const redis = await sharedRedis();
+  if (!redis) return rejected;
+  try {
+    const shared = await withRedisTimeout(redis.mget(ids.map(rejectedKey)));
+    shared.forEach((value, index) => {
+      if (Number(value) > now) rejected.add(ids[index]!);
+    });
+  } catch (err) {
+    logger.warn("provider_health.redis_fallback", { err: errText(err) });
+  }
+  return rejected;
+}
+
 export function recordFailure(id: string, now = Date.now(), retryAt: number | null = null): void {
   const state = memory();
   const fails = (state.failCount.get(id) ?? 0) + 1;
@@ -204,6 +251,7 @@ export function recordFailure(id: string, now = Date.now(), retryAt: number | nu
 function forgetLocalCooldown(id: string): void {
   memory().cooldownUntil.delete(id);
   cooldownSince().delete(id);
+  rejectedUntil().delete(id);
 }
 
 export async function cooldownEnds(ids: string[], now = Date.now()): Promise<Map<string, number>> {
@@ -257,7 +305,7 @@ export async function clearCooldowns(ids: string[], now = Date.now()): Promise<v
   try {
     await withRedisTimeout(
       Promise.all([
-        redis.del(...ids.map(cooldownKey)),
+        redis.del(...ids.map(cooldownKey), ...ids.map(rejectedKey)),
         ...ids.map((id) => redis.set(clearedKey(id), String(now), "PX", MAX_LIMIT_COOLDOWN_MS)),
       ]),
     );
@@ -310,5 +358,6 @@ export function resetProviderHealthMemory(): void {
   state.failCount.clear();
   state.cooldownUntil.clear();
   cooldownSince().clear();
+  rejectedUntil().clear();
   state.minutes.clear();
 }

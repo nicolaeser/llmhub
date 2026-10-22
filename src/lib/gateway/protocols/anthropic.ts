@@ -660,9 +660,9 @@ function synthesizedSearch(block: JsonMap): boolean {
 function withoutForeignThinking(messages: unknown): unknown {
   if (!Array.isArray(messages)) return messages;
   let changed = false;
-  const out = messages.map((raw) => {
+  const out = messages.flatMap((raw) => {
     const message = asRecord(raw);
-    if (message?.role !== "assistant" || !Array.isArray(message.content)) return raw;
+    if (message?.role !== "assistant" || !Array.isArray(message.content)) return [raw];
     const synthesized = new Set(
       message.content
         .map(asRecord)
@@ -676,9 +676,9 @@ function withoutForeignThinking(messages: unknown): unknown {
       if (block.type === "server_tool_use" && synthesized.has(block.id)) return false;
       return block.type !== "thinking" || claudeSignedThinking(block);
     });
-    if (kept.length === message.content.length) return raw;
+    if (kept.length === message.content.length) return [raw];
     changed = true;
-    return { ...message, content: kept.length ? kept : [{ type: "text", text: "" }] };
+    return kept.length ? [{ ...message, content: kept }] : [];
   });
   return changed ? out : messages;
 }
