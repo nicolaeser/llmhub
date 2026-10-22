@@ -236,7 +236,7 @@
       "enabledHint": "{ready, select, true {Every cache miss first embeds the last user message. That adds latency and embedding cost.} other {Choose an embedding model first.}}",
       "model": "Embedding model",
       "none": "None",
-      "modelHint": "Embeddings run on this alias with the calling key's routing rules and are billed to that key. Keys that may not use this model only get exact matches.",
+      "modelHint": "Embeddings run on this alias with the calling key's routing rules and are billed to that key. Keys that may not use this model only get exact matches. A model marked Internal also serves keys without model template data rules.",
       "threshold": "Similarity threshold",
       "thresholdHint": "Minimum cosine similarity. Lower values answer more requests but can return an answer to a different question."
     },

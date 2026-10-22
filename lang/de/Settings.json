@@ -236,7 +236,7 @@
       "enabledHint": "{ready, select, true {Bei jedem Cache-Fehltreffer wird zuerst die letzte Nutzernachricht eingebettet. Das kostet Latenz und Embedding-Kosten.} other {Wähle zuerst ein Embedding-Modell.}}",
       "model": "Embedding-Modell",
       "none": "Keins",
-      "modelHint": "Embeddings laufen über diesen Alias mit den Routing-Regeln des aufrufenden Keys und werden diesem Key berechnet. Keys, die dieses Modell nicht nutzen dürfen, bekommen nur exakte Treffer.",
+      "modelHint": "Embeddings laufen über diesen Alias mit den Routing-Regeln des aufrufenden Keys und werden diesem Key berechnet. Keys, die dieses Modell nicht nutzen dürfen, bekommen nur exakte Treffer. Ein als Intern markiertes Modell bedient auch Keys ohne Datenregeln aus Modellvorlagen.",
       "threshold": "Ähnlichkeitsschwelle",
       "thresholdHint": "Minimale Kosinus-Ähnlichkeit. Niedrigere Werte beantworten mehr Anfragen, können aber die Antwort auf eine andere Frage liefern."
     },
