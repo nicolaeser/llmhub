@@ -437,6 +437,7 @@ test("sign-in providers cannot become internal and the flag reaches the manageme
     assignments: [],
     signIn: null,
     sharedVia: null,
+    manageActive: false,
     discovered: [],
     policy: { zdr: false, retentionDays: null, region: "", noTraining: false },
     vertex: null,

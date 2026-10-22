@@ -35,6 +35,8 @@ export type SubAddAccountView = {
   addedAt: string;
 };
 
+export type SubAddLinkAccountView = SubAddAccountView & { manageActive: boolean };
+
 export type SubAddLinkView = {
   id: string;
   label: string;
@@ -46,7 +48,7 @@ export type SubAddLinkView = {
   expiresAt: string;
   createdAt: string;
   createdBy: string;
-  accounts: SubAddAccountView[];
+  accounts: SubAddLinkAccountView[];
 };
 
 export type SubAddLinksPayload = {
@@ -85,4 +87,11 @@ export type SubAddStep = { state: "pending"; interval: number } | ({ state: "don
 export type SubAddContributions = {
   instance: string;
   accounts: SubAddAccountView[];
+};
+
+export type SubAddManageRenewed = SubAddContributions & { manageToken: string };
+
+export type SubAddManageRevoked = {
+  instance: string;
+  accounts: number;
 };

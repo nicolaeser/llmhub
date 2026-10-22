@@ -249,14 +249,15 @@ test("renewing an account through an add-account link or an auth-file import cle
   try {
     for (const route of [linked.route, imported.route]) markFailure({ id: route } as ResolvedDeployment, Date.now() + 2 * HOUR_MS);
     const linkedAccount = (await prisma.providerLogin.findUniqueOrThrow({ where: { providerId: linked.provider.id } })).account;
+    const manage = newSubAddToken();
     const stored = await storeSubAddAccount({
       linkId: link.id,
       kind: "claude",
       session: session(linkedAccount, "id-1", "linked-new"),
-      manageHash: newSubAddToken().hash,
+      manageHash: manage.hash,
       loginVerified: true,
     });
-    assert.deepEqual(stored, { providerId: linked.provider.id, outcome: "updated" });
+    assert.deepEqual(stored, { providerId: linked.provider.id, outcome: "updated", manageHash: manage.hash });
     assert.equal((await coolingDown([linked.route])).size, 0);
     assert.ok((await coolingDown([imported.route])).has(imported.route));
 

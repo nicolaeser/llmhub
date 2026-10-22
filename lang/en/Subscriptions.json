@@ -59,6 +59,7 @@
   "stateCount": "{state, select, available {{count, plural, other {# available}}} limited {{count, plural, other {# at a limit}}} expired {{count, plural, one {# sign-in expired} other {# sign-ins expired}}} paused {{count, plural, other {# paused}}} other {{count, plural, other {#}}}}",
   "status": "{status, select, paused {Paused} available {Available} limited {Limit reached} expired {Sign-in expired} unavailable {Limits unavailable} checking {Checking} other {Connected}}",
   "sharedVia": "{named, select, true {Via link: {label}} other {Via link}}",
+  "manageOff": "No manage link",
   "signInAgain": "Sign in again",
   "noAccount": "No account name",
   "noneTitle": "No subscription accounts yet",

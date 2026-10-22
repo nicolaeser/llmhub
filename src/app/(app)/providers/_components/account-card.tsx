@@ -120,10 +120,17 @@ export default function AccountCard({
           policy={row.policy}
           lead={
             row.sharedVia !== null ? (
-              <Chip size="sm" variant="soft" color="accent" className="whitespace-nowrap">
-                <Link2 size={12} aria-hidden />
-                {t("sharedVia", { named: String(row.sharedVia !== ""), label: row.sharedVia })}
-              </Chip>
+              <>
+                <Chip size="sm" variant="soft" color="accent" className="whitespace-nowrap">
+                  <Link2 size={12} aria-hidden />
+                  {t("sharedVia", { named: String(row.sharedVia !== ""), label: row.sharedVia })}
+                </Chip>
+                {row.manageActive ? null : (
+                  <Chip size="sm" variant="soft" className="whitespace-nowrap">
+                    {t("manageOff")}
+                  </Chip>
+                )}
+              </>
             ) : null
           }
         />
