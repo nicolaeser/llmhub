@@ -3,6 +3,12 @@
   "subtitle": "Verbinde Modellanbieter per API-Key oder Abo-Anmeldung und behalte ihren Zustand im Blick.",
   "tabsLabel": "Anbieteransichten",
   "tabs": "{tab, select, api {API-Keys} subscriptions {Abos} links {Konto-Links} health {Status} other {{tab}}}",
+  "columns": {
+    "provider": "Anbieter",
+    "credential": "Zugangsdaten",
+    "models": "Modelle",
+    "policy": "Datenschutz"
+  },
   "toolbar": {
     "import": "Importieren",
     "createLink": "Link erstellen",
@@ -26,9 +32,14 @@
     "linkInstead": "Stattdessen Link senden"
   },
   "modelCount": "{count, plural, one {# Modell} other {# Modelle}}",
-  "edit": "{name} bearbeiten",
   "importModels": "Modelle importieren",
   "actions": "Aktionen für {name}",
+  "menu": {
+    "pause": "Pausieren",
+    "resume": "Fortsetzen",
+    "disconnect": "Trennen",
+    "disconnectTitle": "{name} trennen?"
+  },
   "formTitle": "{mode, select, edit {{name} bearbeiten} connect {{name} verbinden} other {{name} verbinden}}",
   "formSubmit": "{mode, select, save {Speichern} connect {Verbinden} other {Verbinden}}",
   "kindName": "{kind, select, openai {OpenAI} anthropic {Anthropic} openrouter {OpenRouter} openrouter_eu {OpenRouter EU} xai {xAI Grok} typesafe {TypeSafe AI} openai_compat {OpenAI-kompatibel} codex {ChatGPT-Abo (Codex)} grok_build {SuperGrok-Abo (Grok Build)} claude {Claude-Abo (Claude Code)} antigravity {Google-Abo (Antigravity)} moonshot {Kimi API Platform Global} moonshot_cn {Kimi API Platform China} kimi {Kimi-Abo China (kimi.com)} kimi_ai {Kimi-Abo Global (kimi.ai)} meta {Meta Model API} muse_code {Meta-Abo (Muse Code)} gemini {Google Gemini API} vertex {Google Vertex AI} devin {Devin-Abo} other {{kind}}}",
@@ -65,13 +76,14 @@
     "importHint": "Oder lade eine Auth-Datei aus CLIProxyAPI oder EasyCLIProxyAPI hoch, meist unter ~/.cli-proxy-api. LLM Hub erneuert die Anmeldung danach selbst, nutze die Datei deshalb nicht weiter in CLIProxyAPI."
   },
   "toasts": {
-    "saved": "{mode, select, created {Anbieter verbunden} updated {Anbieter aktualisiert} deleted {Getrennt} other {Anbieter verbunden}}"
+    "saved": "{mode, select, created {Anbieter verbunden} updated {Anbieter aktualisiert} deleted {Getrennt} other {Anbieter verbunden}}",
+    "enabled": "{enabled, select, true {{name} fortgesetzt} other {{name} pausiert}}"
   },
-  "deleteConfirm": "{name} trennen? Seine Routen und Katalogeinträge werden entfernt, und Modellgruppen ohne verbleibende Routen werden gelöscht, sofern sie keine eigenen Einstellungen haben.",
+  "deleteConfirm": "Seine Routen und Katalogeinträge werden entfernt, und Modellgruppen ohne verbleibende Routen werden gelöscht, sofern sie keine eigenen Einstellungen haben.",
   "empty": "Noch keine Anbieter verbunden.",
   "emptyTitle": "Einen Anbieter verbinden",
   "noneTitle": "Noch keine API-Anbieter",
-  "keyState": "{state, select, stored {API-Key hinterlegt} signed_in {Angemeldet als {account}} expired {Anmeldung abgelaufen} service_account {Service-Account hinterlegt} other {Kein API-Key}}",
+  "keyState": "{state, select, stored {API-Key hinterlegt} service_account {Service-Account hinterlegt} other {Kein API-Key}}",
   "policy": {
     "title": "Datenschutz",
     "hint": "Modellvorlagen wählen Modelle anhand dieser Angaben aus. Trage ein, was deine Vereinbarung mit diesem Anbieter abdeckt.",
@@ -90,8 +102,7 @@
   "importTarget": "→ {alias}",
   "importTargetState": "{exists, select, true {Wird ergänzt} other {Neuer Alias}}",
   "enabled": {
-    "state": "{enabled, select, true {Aktiv} other {Pausiert}}",
-    "toggle": "Anfragen über {name} routen"
+    "state": "{enabled, select, true {Aktiv} other {Pausiert}}"
   },
   "vertex": {
     "credentialLabel": "Zugang",

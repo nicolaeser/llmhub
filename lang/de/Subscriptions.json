@@ -3,6 +3,8 @@
   "empty": "Melde dich bei einem Abo wie ChatGPT, Claude oder Google an, importiere vorhandene Konten oder sende jemandem einen Konto-Link.",
   "addAccount": "Konto hinzufügen",
   "refreshAll": "Alle Limits aktualisieren",
+  "search": "Konten durchsuchen",
+  "noMatches": "Keine Konten passen zu dieser Suche",
   "importFiles": {
     "title": "Aus CLIProxyAPI importieren",
     "description": "Übernimm die Abo-Konten, die CLIProxyAPI oder EasyCLIProxyAPI verwalten, einmalig in LLM Hub: Lade ihre JSON-Auth-Dateien hoch, füge den Inhalt ein oder lade sie direkt aus einer laufenden CLIProxyAPI. Codex-, Claude-, Antigravity- und xAI-Konten werden zu Abo-Konten. LLM Hub prüft jedes Konto vorher beim Anbieter und erneuert die Anmeldung ab dann selbst. Ein bereits verbundenes Konto erhält die neue Anmeldung.",
@@ -56,15 +58,40 @@
     "expiredHint": "Neu anmelden, um sie zu nutzen",
     "nextFree": "Nächstes frei {when}"
   },
+  "columns": {
+    "account": "Konto",
+    "usage": "Nutzung",
+    "nextReset": "Nächster Reset",
+    "access": "Zugriff"
+  },
+  "menu": {
+    "label": "Aktionen für {name}",
+    "details": "Details",
+    "refresh": "Limits aktualisieren",
+    "signIn": "Neu anmelden",
+    "signInFor": "{name} neu anmelden",
+    "access": "Zugriff…"
+  },
+  "group": {
+    "title": "{provider}<muted> · {channel} · {count, plural, one {# Konto} other {# Konten}}</muted>",
+    "label": "Konten: {provider}",
+    "menu": "Weitere Aktionen für {provider}",
+    "settings": "{resets, select, true {Verteilung und automatische Resets…} other {Kontoverteilung…}}",
+    "createLink": "Link für {provider} erstellen"
+  },
+  "details": {
+    "title": "Details zu {name}",
+    "limits": "Nutzungslimits"
+  },
   "stateCount": "{state, select, available {{count, plural, other {# verfügbar}}} limited {{count, plural, other {# am Limit}}} expired {{count, plural, one {# Anmeldung abgelaufen} other {# Anmeldungen abgelaufen}}} paused {{count, plural, other {# pausiert}}} other {{count, plural, other {#}}}}",
   "status": "{status, select, paused {Pausiert} available {Verfügbar} limited {Limit erreicht} expired {Anmeldung abgelaufen} unavailable {Limits nicht verfügbar} checking {Wird geprüft} other {Verbunden}}",
   "sharedVia": "{named, select, true {Über Link: {label}} other {Über Link}}",
   "manageOff": "Kein Verwaltungslink",
-  "signInAgain": "Neu anmelden",
   "noAccount": "Ohne Kontoname",
   "noneTitle": "Noch keine Abo-Konten",
   "backIn": "Wieder verfügbar {when} ({date}).",
   "backInUnknown": "Limit erreicht. Der Anbieter nennt keinen Zeitpunkt für die Zurücksetzung.",
+  "resetUnknown": "Nicht gemeldet",
   "expiredHint": "Melde dich erneut an, um dieses Konto zu nutzen.",
   "noLimits": "Dieser Anbieter meldet keine Nutzungslimits.",
   "limits": {
@@ -77,6 +104,8 @@
     "notStarted": "Startet mit der nächsten Anfrage",
     "reached": "Limit erreicht",
     "allLimits": "{count, plural, one {Limitdetails} other {Alle # Limits}}",
+    "allLimitsFor": "{count, plural, one {Limitdetails für {name}} other {Alle # Limits für {name}}}",
+    "models": "{count, plural, one {# Modell} other {# Modelle}}",
     "group": "{family, select, gemini_pro {Gemini Pro} gemini_flash {Gemini Flash} gemini_image {Gemini Image} claude {Claude} gpt_oss {GPT-OSS} other {Weitere Modelle}}",
     "upTo": "bis zu {used, number, percent}",
     "sharedBy": "Gemeinsam genutzt von {models}",
@@ -144,7 +173,6 @@
   "pausedHint": "Dieses Konto ist pausiert und erhält keine Anfragen. Die Limits bleiben sichtbar.",
   "access": {
     "summary": "{restricted, select, true {{count, plural, =0 {Kein Key darf es nutzen} one {Auf # Zuordnung beschränkt} other {Auf # Zuordnungen beschränkt}}} other {Für jeden Key offen}}",
-    "manage": "Zugriff verwalten",
     "title": "Wer {name} nutzen darf",
     "description": "Anfragen über /api/subscription erreichen dieses Konto standardmäßig. Beschränke es auf Unternehmen, Abteilungen, Projekte, Personen oder einzelne API-Keys.",
     "mode": "Zugriff",
@@ -155,8 +183,7 @@
     "empty": "Nichts gefunden",
     "save": "Zugriff speichern",
     "saved": "Zugriff für {name} gespeichert",
-    "short": "{restricted, select, true {{count, plural, =0 {Kein Key} one {# Zuordnung} other {# Zuordnungen}}} other {Alle Keys}}",
-    "manageFor": "Zugriff für {name} verwalten"
+    "short": "{restricted, select, true {{count, plural, =0 {Kein Key} one {# Zuordnung} other {# Zuordnungen}}} other {Alle Keys}}"
   },
   "antigravity": {
     "title": "Google-OAuth-Client",
@@ -217,15 +244,10 @@
     "deleted": "{label} gelöscht"
   },
   "settings": {
-    "open": "Einstellungen",
-    "openFor": "Einstellungen für {provider}",
     "title": "Einstellungen: {provider}",
     "description": "Lege fest, wie Anfragen auf die Konten verteilt werden und wann gesparte Resets genutzt werden.",
     "routingSummary": "Kontoverteilung: {method}",
     "autoResetSummary": "{enabled, select, true {Automatische Resets ab {percent}} other {Automatische Resets aus}}",
     "setupRequired": "Einrichtung nötig"
-  },
-  "section": {
-    "description": "{channel} · {count, plural, one {# Konto} other {# Konten}}"
   }
 }

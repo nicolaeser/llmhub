@@ -148,7 +148,7 @@ export default function ProvidersPage() {
   };
 
   if (!data) {
-    return <PageStatus icon={Plug} title={t("title")} subtitle={t("subtitle")} state={page} tabs layout="cards" />;
+    return <PageStatus icon={Plug} title={t("title")} subtitle={t("subtitle")} state={page} tabs layout="table" />;
   }
 
   const { canManage } = data;
@@ -180,6 +180,7 @@ export default function ProvidersPage() {
           antigravity={antigravityState}
           onAntigravity={antigravity.setData}
           onAdd={(kind) => openAdd(kind, "subscription")}
+          onCreateLink={links.openCreate}
         />
       ),
     },
