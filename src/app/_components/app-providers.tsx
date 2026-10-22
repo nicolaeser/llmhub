@@ -2,10 +2,11 @@
 
 import type { ReactNode } from "react";
 import { RouterProvider, Toast } from "@heroui/react";
+import { NextIntlClientProvider, useLocale } from "next-intl";
 import { useRouter } from "@/i18n/routing";
 import { ThemeProvider } from "next-themes";
+import { useSelectedConsoleTimeZone } from "@/lib/hooks/use-console-time-zone";
 import { navigateAppHref } from "@/lib/http/app-navigation";
-import TimeZoneProvider from "./time-zone-provider";
 
 export default function AppProviders({
   children,
@@ -15,6 +16,8 @@ export default function AppProviders({
   nonce?: string;
 }) {
   const router = useRouter();
+  const locale = useLocale();
+  const timeZone = useSelectedConsoleTimeZone();
 
   return (
     <ThemeProvider
@@ -31,10 +34,10 @@ export default function AppProviders({
           })
         }
       >
-        <TimeZoneProvider>
+        <NextIntlClientProvider locale={locale} timeZone={timeZone}>
           <Toast.Provider />
           {children}
-        </TimeZoneProvider>
+        </NextIntlClientProvider>
       </RouterProvider>
     </ThemeProvider>
   );

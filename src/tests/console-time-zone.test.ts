@@ -6,7 +6,6 @@ import { fileURLToPath } from "node:url";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { createFormatter, NextIntlClientProvider } from "next-intl";
-import TimeZoneProvider from "@/app/_components/time-zone-provider";
 import LogTable, { type LogsPayload } from "@/app/(app)/logs/_components/log-table";
 import { formats } from "@/i18n/formats";
 import {
@@ -120,9 +119,7 @@ function renderLogs(locale: string, timeZone: string, kind: "requests" | "spend"
       formats,
       now: new Date("2026-07-01T12:30:00.000Z"),
       messages: namespaces(locale, ["Common", "Logs", "Guardrails"]),
-      children: createElement(TimeZoneProvider, {
-        children: createElement(LogTable, { kind, logs: LOGS, onOpen: () => {} }),
-      }),
+      children: createElement(LogTable, { kind, logs: LOGS, onOpen: () => {} }),
     }),
   );
 }

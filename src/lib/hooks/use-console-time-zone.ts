@@ -76,12 +76,13 @@ export function setConsoleTimeZone(value: string) {
   notify();
 }
 
-export function useConsoleTimeZoneState(serverTimeZone: string): string {
-  const timeZone = useSyncExternalStore(subscribe, consoleTimeZone, () => serverTimeZone);
-  useEffect(persistConsoleTimeZone, []);
-  return timeZone;
-}
-
 export function useConsoleTimeZone(): string {
   return useTimeZone() ?? FALLBACK_TIME_ZONE;
+}
+
+export function useSelectedConsoleTimeZone(): string {
+  const requestTimeZone = useConsoleTimeZone();
+  const timeZone = useSyncExternalStore(subscribe, consoleTimeZone, () => requestTimeZone);
+  useEffect(persistConsoleTimeZone, []);
+  return timeZone;
 }
