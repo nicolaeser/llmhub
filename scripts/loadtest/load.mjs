@@ -536,11 +536,15 @@ function failedUpstream(item) {
   return item.status !== 200 || Boolean(item.injected);
 }
 
+function answered(item) {
+  return Boolean(item.firstByteAt);
+}
+
 const PIN_HOLD_WINDOW_MS = 65_000;
 const PIN_MOVE_STREAK = 3;
 
 function accountSwitches(timings, sessionIds, from) {
-  const messages = timings.filter((entry) => entry.path === "/v1/messages").sort((a, b) => a.receivedAt - b.receivedAt);
+  const messages = timings.filter((entry) => entry.path === "/v1/messages" && answered(entry)).sort((a, b) => a.receivedAt - b.receivedAt);
   const failures = new Map();
   for (const item of messages) {
     if (!failedUpstream(item)) continue;
