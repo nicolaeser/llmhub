@@ -57,14 +57,21 @@ export function relaySse(source: Response, options: SseRelayOptions): Response {
   let buffer = "";
   let ended = false;
 
-  const end = async () => {
+  const end = async (failure: unknown = null, cancelled = false) => {
     if (ended) return;
     ended = true;
     try {
-      await options.onEnd?.();
+      await options.onEnd?.(failure, cancelled);
     } catch (err) {
       logger.error("gateway.stream_finish_failed", errorFields(err));
     }
+  };
+
+  const finalize = async (controller: ReadableStreamDefaultController<Uint8Array>, failure: unknown) => {
+    const tail = options.tail?.(failure) ?? null;
+    if (tail) controller.enqueue(encoder.encode(tail));
+    await end(failure);
+    controller.close();
   };
 
   const drain = (final: boolean): string[] => {
@@ -93,8 +100,7 @@ export function relaySse(source: Response, options: SseRelayOptions): Response {
           if (done) {
             buffer += decoder.decode();
             for (const event of drain(true)) controller.enqueue(encoder.encode(event));
-            await end();
-            controller.close();
+            await finalize(controller, null);
             return;
           }
           buffer += decoder.decode(value, { stream: true });
@@ -104,13 +110,17 @@ export function relaySse(source: Response, options: SseRelayOptions): Response {
           return;
         }
       } catch (err) {
-        await end();
+        if (options.tail) {
+          await finalize(controller, err);
+          return;
+        }
+        await end(err);
         controller.error(err);
       }
     },
     cancel() {
       void cancelQuietly(reader);
-      void end();
+      void end(null, true);
     },
   });
 

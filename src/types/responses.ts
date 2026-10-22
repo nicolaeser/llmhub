@@ -66,5 +66,6 @@ export type ClientTools = { body: JsonMap; namespaces: ToolNamespaces; webSearch
 
 export type SseRelayOptions = {
   map?: (json: JsonMap, event: string) => JsonMap | null;
-  onEnd?: () => Promise<void> | void;
+  onEnd?: (failure: unknown, cancelled: boolean) => Promise<void> | void;
+  tail?: (failure: unknown) => string | null;
 };
