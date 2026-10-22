@@ -59,6 +59,7 @@
   "stateCount": "{state, select, available {{count, plural, other {# verfügbar}}} limited {{count, plural, other {# am Limit}}} expired {{count, plural, one {# Anmeldung abgelaufen} other {# Anmeldungen abgelaufen}}} paused {{count, plural, other {# pausiert}}} other {{count, plural, other {#}}}}",
   "status": "{status, select, paused {Pausiert} available {Verfügbar} limited {Limit erreicht} expired {Anmeldung abgelaufen} unavailable {Limits nicht verfügbar} checking {Wird geprüft} other {Verbunden}}",
   "sharedVia": "{named, select, true {Über Link: {label}} other {Über Link}}",
+  "manageOff": "Kein Verwaltungslink",
   "signInAgain": "Neu anmelden",
   "noAccount": "Ohne Kontoname",
   "noneTitle": "Noch keine Abo-Konten",
