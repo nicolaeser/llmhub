@@ -27,6 +27,7 @@ import { formatBytes } from "@/lib/utils/bytes";
 import { MAX_AUTH_FILE_BYTES, MAX_AUTH_FILES } from "@/schemas/providers";
 import type {
   AuthFileResult,
+  AuthFileSource,
   AuthFileStatus,
   AuthFileUpload,
   CliProxyAuthFile,
@@ -36,11 +37,9 @@ import type {
 import { importAuthFilesAction, importCliProxyAuthFilesAction, listCliProxyAuthFilesAction } from "../_action";
 
 const BATCH_BYTES = 400 * 1024;
-const SOURCES = ["files", "paste", "server"] as const;
+const SOURCES = ["files", "paste", "server"] as const satisfies readonly AuthFileSource[];
 
-type Source = (typeof SOURCES)[number];
-
-const SOURCE_ICONS = { files: FileJson, paste: ClipboardPaste, server: Server } as const satisfies Record<Source, unknown>;
+const SOURCE_ICONS = { files: FileJson, paste: ClipboardPaste, server: Server } as const satisfies Record<AuthFileSource, unknown>;
 
 const STATUS_COLOR = {
   created: "success",
@@ -89,9 +88,11 @@ function textBytes(text: string): number {
 
 export default function AuthFilesDialog({
   state,
+  initialSource = "files",
   onImported,
 }: {
   state: ReturnType<typeof useOverlayState>;
+  initialSource?: AuthFileSource;
   onImported: (providers: ProviderView[], superseded: string[]) => void;
 }) {
   const t = useTranslations("Subscriptions.importFiles");
@@ -99,7 +100,7 @@ export default function AuthFilesDialog({
   const tProviders = useTranslations("Providers");
   const tError = useTranslations("Error");
   const format = useFormatter();
-  const [source, setSource] = useState<Source>("files");
+  const [source, setSource] = useState<AuthFileSource>(initialSource);
   const [files, setFiles] = useState<File[]>([]);
   const [pasted, setPasted] = useState("");
   const [server, setServer] = useState({ url: "", key: "" });

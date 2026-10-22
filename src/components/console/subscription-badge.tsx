@@ -14,6 +14,15 @@ export default function SubscriptionBadge() {
   );
 }
 
+export function InternalBadge() {
+  const t = useTranslations("Providers");
+  return (
+    <Chip size="sm" variant="soft" className={CHIP} title={t("poolHint", { pool: "internal" })}>
+      {t("pool", { pool: "internal" })}
+    </Chip>
+  );
+}
+
 export function PlanBadge({ plan }: { plan: string }) {
   const t = useTranslations("Providers");
   if (!plan) return null;

@@ -16,6 +16,7 @@ export type ProviderRecord = {
   noTraining: boolean;
   enabled: boolean;
   restricted: boolean;
+  internal: boolean;
   assignments?: AssignmentSource[];
   login?: { account: string; plan: string; status: string } | null;
   subAdd?: { label: string; manageHash: string | null } | null;
@@ -117,6 +118,7 @@ export type ProviderView = {
   hasApiKey: boolean;
   enabled: boolean;
   restricted: boolean;
+  internal: boolean;
   assignments: AssignmentTarget[];
   signIn: ProviderSignIn | null;
   sharedVia: string | null;
@@ -438,12 +440,48 @@ export type AntigravityClientState = {
 };
 
 export type ProviderListActions = {
-  openForm: (spec: ProviderKindSpec | null, row: ProviderView | null, onSaved?: (provider: ProviderView) => void) => void;
+  openForm: (spec: ProviderKindSpec | null, row: ProviderView | null) => void;
   openImport: (row: ProviderView) => void;
   replace: (provider: ProviderView) => void;
-  upsert: (providers: ProviderView[]) => void;
   remove: (id: string) => void;
-  reload: () => void;
 };
 
-export type ProvidersTab = "api" | "subscriptions" | "health";
+export type ProvidersTab = "api" | "subscriptions" | "links" | "health";
+
+export type ProviderDraft = {
+  name: string;
+  baseUrl: string;
+  apiKey: string;
+  signIn: string;
+  vertex: VertexDraft;
+  zdr: boolean;
+  retention: string;
+  region: string;
+  noTraining: boolean;
+  internal: boolean;
+};
+
+export type ProviderBody = {
+  name: string;
+  kind: string;
+  baseUrl: string;
+  apiKey: string;
+  signIn?: string;
+  policy: ProviderPolicyInput;
+  vertex?: VertexTarget;
+  internal?: boolean;
+};
+
+export type AddProviderSection = "api" | "subscription" | "import";
+
+export type AddProviderFilter = "all" | AddProviderSection;
+
+export type ImportOption = "files" | "server" | "link";
+
+export type AuthFileSource = "files" | "paste" | "server";
+
+export type AddProviderOption =
+  | { id: string; section: "api" | "subscription"; spec: ProviderKindSpec }
+  | { id: string; section: "import"; option: ImportOption };
+
+export type AddProviderPreset = { kind: string | null; filter: AddProviderFilter };

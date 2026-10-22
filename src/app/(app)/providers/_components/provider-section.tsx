@@ -22,7 +22,6 @@ export default function ProviderSection({
   strategy,
   autoReset,
   canManage,
-  canAdd,
   timeZone,
   refreshing,
   onAdd,
@@ -43,7 +42,6 @@ export default function ProviderSection({
   strategy: AccountStrategy;
   autoReset: AutoResetPolicy | null;
   canManage: boolean;
-  canAdd: boolean;
   timeZone: string;
   refreshing: string[];
   onAdd: () => void;
@@ -97,7 +95,6 @@ export default function ProviderSection({
             <Button
               size="sm"
               variant="secondary"
-              isDisabled={!canAdd}
               aria-label={tProviders("formTitle", { mode: "connect", name: tProviders("kindName", { kind }) })}
               onPress={onAdd}
             >

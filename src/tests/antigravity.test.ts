@@ -528,7 +528,7 @@ test("antigravity deployments belong to the subscription pool and use the stream
   const { joinPath, prepareBody, upstreamHeaders } = await import("@/lib/gateway/dispatch/upstream");
   const { signInHeaders } = await import("@/lib/gateway/upstreams/credentials");
   assert.equal(routePool({ kind: "antigravity" }), "subscription");
-  assert.equal(routePool({ kind: "openai", provider: { kind: "antigravity" } }), "subscription");
+  assert.equal(routePool({ kind: "openai", provider: { kind: "antigravity", internal: false } }), "subscription");
   assert.equal(joinPath(dep, "/chat/completions"), "https://daily-cloudcode-pa.googleapis.com/v1internal:streamGenerateContent?alt=sse");
   assert.throws(() => joinPath(dep, "/embeddings"), (err: unknown) => err instanceof GateError && err.status === 400);
   const headers = upstreamHeaders(dep, {

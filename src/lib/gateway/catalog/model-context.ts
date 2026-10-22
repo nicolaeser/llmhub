@@ -9,8 +9,16 @@ import type { RoutePool } from "@/types/routing";
 const SPEED_VARIANTS: readonly ModelVariant[] = ["fast", "ultrafast"];
 
 export function routeCatalogFacts(groups: ContextGroup[]): CatalogFacts {
-  const windows: Record<RoutePool, Map<string, number>> = { api: new Map(), subscription: new Map() };
-  const speeds: Record<RoutePool, Map<string, ModelVariant[]>> = { api: new Map(), subscription: new Map() };
+  const windows: Record<RoutePool, Map<string, number>> = {
+    api: new Map(),
+    subscription: new Map(),
+    internal: new Map(),
+  };
+  const speeds: Record<RoutePool, Map<string, ModelVariant[]>> = {
+    api: new Map(),
+    subscription: new Map(),
+    internal: new Map(),
+  };
   for (const group of groups) {
     for (const route of group.deployments) {
       const pool = routePool(route);
@@ -35,7 +43,9 @@ export async function catalogFacts(): Promise<CatalogFacts> {
     where: { enabled: true },
     select: {
       alias: true,
-      deployments: { select: { kind: true, model: true, provider: { select: { kind: true, discovered: true } } } },
+      deployments: {
+        select: { kind: true, model: true, provider: { select: { kind: true, internal: true, discovered: true } } },
+      },
     },
   });
   return routeCatalogFacts(groups);

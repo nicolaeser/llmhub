@@ -10,7 +10,7 @@ import { variantsOf } from "@/lib/gateway/catalog/model-variants";
 import { money } from "@/lib/utils/money";
 import type { CostRates, PriceSchedule } from "@/types/billing";
 import type { ModelPricing, ModelVariantRoute, PublicModel, TokenPricing } from "@/types/models";
-import type { PooledFactTarget, RoutePool } from "@/types/routing";
+import type { PooledFactTarget, PublicPool } from "@/types/routing";
 
 const pricedGroupSelect = {
   alias: true,
@@ -29,12 +29,12 @@ const pricedGroupSelect = {
       providerId: true,
       costInput: true,
       costOutput: true,
-      provider: { select: { kind: true } },
+      provider: { select: { kind: true, internal: true } },
     },
   },
 } as const;
 
-const POOLS: readonly RoutePool[] = ["api", "subscription"];
+const POOLS: readonly PublicPool[] = ["api", "subscription"];
 
 function variantPools(variants: unknown, routes: PooledFactTarget[]): ModelVariantRoute[] {
   return variantsOf(variants)
@@ -102,7 +102,7 @@ export async function pricedModels(at: Date, aliases?: string[]): Promise<Public
   );
   await attachModelFacts(targets.flat());
   return groups.map((group, index) => {
-    const priced = (pool: RoutePool) =>
+    const priced = (pool: PublicPool) =>
       modelPricing(
         {
           billing_mode: group.billingMode,

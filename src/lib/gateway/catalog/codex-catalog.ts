@@ -5,7 +5,7 @@ import { CODEX_FAST_TIER, CODEX_ULTRAFAST_TIER } from "@/lib/gateway/upstreams/c
 import { modelRole } from "@/lib/models/model-role";
 import type { JsonMap } from "@/types/gateway";
 import type { CatalogFacts, ModelVariant } from "@/types/models";
-import type { RoutePool } from "@/types/routing";
+import type { PublicPool } from "@/types/routing";
 
 export const CODEX_VERSION_PARAM = "client_version";
 export const CODEX_CATALOG_LIMIT = 1_000_000;
@@ -21,7 +21,7 @@ const SPEED_TIERS: Partial<Record<ModelVariant, JsonMap>> = {
   ultrafast: { id: CODEX_ULTRAFAST_TIER, name: "Ultra Fast", description: "Fastest responses at the highest usage rate" },
 };
 
-const ROUTE_DESCRIPTION: Record<RoutePool, string> = {
+const ROUTE_DESCRIPTION: Record<PublicPool, string> = {
   subscription: "Runs on a signed-in subscription",
   api: "Runs on the API and bills at API prices",
 };
@@ -30,9 +30,9 @@ function reasons(id: string): boolean {
   return !/non[-_]?reasoning/i.test(id);
 }
 
-function codexModel(entry: JsonMap, surface: RoutePool, facts: CatalogFacts, priority: number, instructions: string): JsonMap {
+function codexModel(entry: JsonMap, surface: PublicPool, facts: CatalogFacts, priority: number, instructions: string): JsonMap {
   const id = String(entry.id);
-  const route: RoutePool = entry.route === "api" || entry.route === "subscription" ? entry.route : surface;
+  const route: PublicPool = entry.route === "api" || entry.route === "subscription" ? entry.route : surface;
   const variant = isModelVariant(entry.variant) ? entry.variant : null;
   const plain = plainModel(id);
   const alias = variant ? (splitVariant(plain)?.alias ?? plain) : plain;
@@ -69,7 +69,7 @@ function codexModel(entry: JsonMap, surface: RoutePool, facts: CatalogFacts, pri
   return model;
 }
 
-export function codexCatalog(entries: JsonMap[], surface: RoutePool, facts: CatalogFacts): JsonMap {
+export function codexCatalog(entries: JsonMap[], surface: PublicPool, facts: CatalogFacts): JsonMap {
   const chat = entries.filter((entry) => modelRole([String(entry.id), String(entry.display_name ?? "")]) === "chat");
   const build = (instructions: string) => ({
     models: chat.map((entry, index) => codexModel(entry, surface, facts, index, instructions)),
