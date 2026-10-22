@@ -44,6 +44,8 @@ export const JEV_SUGGEST_CONFIDENCE = 0.5;
 export const DEFAULT_AUTO_CONFIDENCE = 0.9;
 export const JEV_NONE = "none";
 
+export const DEFAULT_JEV_MODEL = "jev-latest";
+
 type Item = {
   providerId: string;
   kind: string;

@@ -31,6 +31,7 @@ import {
   waitingError,
 } from "@/lib/gateway/core";
 import { modelAlias } from "@/lib/gateway/catalog/model-alias";
+import { hiddenFrom } from "@/lib/gateway/routing/route-pool";
 import { routePermitted } from "@/lib/gateway/access/model-policy";
 import { priceWindowQuery, priceWindowRates } from "@/lib/gateway/billing/price-schedule";
 import { costRejection } from "@/lib/gateway/billing/cost-cap";
@@ -163,6 +164,14 @@ export async function loadGroup(requested: string): Promise<ResolvedModelGroup> 
     deployments: mapped,
     mapped,
   };
+}
+
+export async function servedOnlyInternally(model: string): Promise<boolean> {
+  const group = await prisma.modelGroup.findUnique({
+    where: { alias: modelAlias(model) },
+    select: { enabled: true, deployments: { select: { kind: true, provider: { select: { kind: true, internal: true } } } } },
+  });
+  return Boolean(group?.enabled) && hiddenFrom("api", group?.deployments ?? []);
 }
 
 async function healthy(

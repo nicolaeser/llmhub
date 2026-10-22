@@ -3,11 +3,19 @@ import { env } from "@/lib/env";
 import { digest } from "@/lib/crypto";
 import { PROVIDER_CATALOG } from "@/lib/gateway/upstreams/provider-kinds";
 import { asNumber, asRecord } from "@/lib/gateway/core";
+import { GateError } from "@/lib/gateway/errors";
+import { systemPrincipal } from "@/lib/gateway/access/system-principal";
+import { usageFromUnknown } from "@/lib/gateway/billing/billing";
+import { meter } from "@/lib/gateway/billing/meter";
+import { forwardToModel } from "@/lib/gateway/dispatch/upstream";
+import { modelAlias } from "@/lib/gateway/catalog/model-alias";
+import { routableAliases } from "@/lib/models/aliases";
 import { readJsonOr } from "@/lib/utils/json";
-import { JEV_NONE, JEV_ROUND_SIZE, JEV_SUGGEST_CONFIDENCE } from "@/lib/gateway/catalog/model-catalog";
-import type { JevCandidate, JevTask, JevVerdict, JevSettings } from "@/types/model-catalog";
+import { DEFAULT_JEV_MODEL, JEV_NONE, JEV_ROUND_SIZE, JEV_SUGGEST_CONFIDENCE } from "@/lib/gateway/catalog/model-catalog";
+import type { JevCandidate, JevRoute, JevTask, JevVerdict, JevSettings } from "@/types/model-catalog";
 
 const JEV_TIMEOUT_MS = 30_000;
+const JEV_FEATURE = "catalog";
 const JEV_QUESTION = "same_model";
 
 const OPENROUTER_BASE_URL =
@@ -53,8 +61,19 @@ export function jevFingerprint(settings: JevSettings | undefined): string {
   return digest(`${settings.enabled}|${settings.model}|${settings.api_key}`).slice(0, 16);
 }
 
-export function jevReady(settings: JevSettings | undefined): settings is JevSettings {
-  return Boolean(settings?.enabled && settings.api_key);
+export function jevAlias(settings: Pick<JevSettings, "model"> | undefined): string {
+  return modelAlias(settings?.model || DEFAULT_JEV_MODEL);
+}
+
+export async function jevAliasRoutable(model: string): Promise<boolean> {
+  const alias = jevAlias({ model });
+  return (await routableAliases("internal", [alias])).has(alias);
+}
+
+export async function jevRoute(settings: JevSettings | undefined): Promise<JevRoute | null> {
+  if (!settings?.enabled) return null;
+  if (settings.api_key) return { kind: "key", settings };
+  return (await jevAliasRoutable(settings.model)) ? { kind: "alias", alias: jevAlias(settings) } : null;
 }
 
 function failureCode(status: number): string {
@@ -64,10 +83,25 @@ function failureCode(status: number): string {
   return "JEV_FAILED";
 }
 
-export async function askJev(
-  settings: JevSettings,
-  task: JevTask,
-): Promise<{ verdict: JevVerdict | null; cost: number }> {
+async function askJevAlias(alias: string, task: JevTask): Promise<{ verdict: JevVerdict | null; cost: number }> {
+  const principal = systemPrincipal(JEV_FEATURE);
+  const body = jevRequest(task, alias);
+  const usage = meter(principal, alias, body);
+  let hit;
+  try {
+    hit = await forwardToModel([alias], principal, "/systemone", body, { pool: "internal", timeoutMs: JEV_TIMEOUT_MS });
+  } catch (err) {
+    await usage.fail(err);
+    throw new Error(err instanceof GateError ? failureCode(err.status) : "JEV_FAILED", { cause: err });
+  }
+  const metered = await usage.ok(hit, usageFromUnknown(asRecord(hit.json)?.usage, hit.json));
+  return {
+    verdict: jevVerdict(task, hit.json),
+    cost: asNumber(asRecord(asRecord(hit.json)?.usage)?.cost, metered),
+  };
+}
+
+async function askJevKey(settings: JevSettings, task: JevTask): Promise<{ verdict: JevVerdict | null; cost: number }> {
   const res = await fetch(`${OPENROUTER_BASE_URL}/systemone`, {
     method: "POST",
     headers: {
@@ -90,6 +124,10 @@ export async function askJev(
   };
 }
 
+export function askJev(route: JevRoute, task: JevTask): Promise<{ verdict: JevVerdict | null; cost: number }> {
+  return route.kind === "key" ? askJevKey(route.settings, task) : askJevAlias(route.alias, task);
+}
+
 export function jevRounds(candidates: JevCandidate[]): JevCandidate[][] {
   const rounds: JevCandidate[][] = [];
   for (let start = 0; start < candidates.length; start += JEV_ROUND_SIZE) {
@@ -99,15 +137,15 @@ export function jevRounds(candidates: JevCandidate[]): JevCandidate[][] {
 }
 
 export async function askJevStaged(
-  settings: JevSettings,
+  route: JevRoute,
   task: JevTask,
 ): Promise<{ verdict: JevVerdict | null; cost: number; calls: number }> {
-  if (task.candidates.length <= JEV_ROUND_SIZE) return { ...(await askJev(settings, task)), calls: 1 };
+  if (task.candidates.length <= JEV_ROUND_SIZE) return { ...(await askJev(route, task)), calls: 1 };
   let cost = 0;
   let calls = 0;
   const finalists: { candidate: JevCandidate; verdict: JevVerdict }[] = [];
   for (const round of jevRounds(task.candidates)) {
-    const answer = await askJev(settings, { ...task, candidates: round });
+    const answer = await askJev(route, { ...task, candidates: round });
     cost += answer.cost;
     calls += 1;
     const verdict = answer.verdict;
@@ -115,6 +153,6 @@ export async function askJevStaged(
     if (verdict && candidate && verdict.confidence >= JEV_SUGGEST_CONFIDENCE) finalists.push({ candidate, verdict });
   }
   if (finalists.length <= 1) return { verdict: finalists[0]?.verdict ?? null, cost, calls };
-  const final = await askJev(settings, { ...task, candidates: finalists.map((row) => row.candidate) });
+  const final = await askJev(route, { ...task, candidates: finalists.map((row) => row.candidate) });
   return { verdict: final.verdict, cost: cost + final.cost, calls: calls + 1 };
 }

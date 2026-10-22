@@ -322,6 +322,12 @@ export default function LogDetailDialog({
                     </Field>
                     <Field label={tDetail("stream")}>{tDetail("yesNo", { value: String(detail.stream) })}</Field>
                     <Field label={tDetail("tag")}>{detail.tag ? <PiiText text={detail.tag} /> : tCommon("none")}</Field>
+                    {detail.system ? (
+                      <Field label={t("columns.caller")}>
+                        {t("caller.system")}
+                        <span className="block text-xs text-muted">{t("caller.feature", { feature: detail.system })}</span>
+                      </Field>
+                    ) : null}
                     <Field label={tDetail("key")}>{label("key", detail.keyLabel, detail.keyId)}</Field>
                     <Field label={tDetail("user")}>{label("user", detail.userLabel, detail.userId)}</Field>
                     <Field label={tDetail("member")}>{label("member", detail.memberLabel, detail.memberId)}</Field>

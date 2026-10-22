@@ -15,9 +15,9 @@
     "summary": "Jev hat bei der letzten Aktualisierung {asked, plural, =0 {keine Modelle} one {# Modell} other {# Modelle}} geprüft und {matched, plural, =0 {keines} one {# davon} other {# davon}} zugeordnet ({cost}).",
     "pending": "{count, plural, one {# Modell wartet} other {# Modelle warten}} bei der nächsten Aktualisierung auf Jev.",
     "missingTitle": "Jev ist nicht eingerichtet",
-    "missing": "Modelle werden nur nach Namensregeln gruppiert. Hinterlege unter <link>Einstellungen</link> einen eigenen OpenRouter-Key für Jev, damit auch unterschiedlich benannte Modelle zusammengefasst werden.",
+    "missing": "Modelle werden nur nach Namensregeln gruppiert. Hinterlege unter <link>Einstellungen</link> einen eigenen OpenRouter-Key für Jev oder nenne einen Modell-Alias, der Jev bedient, damit auch unterschiedlich benannte Modelle zusammengefasst werden.",
     "errorTitle": "Jev wurde abgebrochen",
-    "error": "{code, select, JEV_AUTH {OpenRouter hat den Jev-API-Key abgelehnt.} JEV_CREDITS {Das OpenRouter-Konto für Jev hat kein Guthaben mehr.} JEV_RATE_LIMITED {OpenRouter hat die Jev-Anfragen gedrosselt.} other {Die Jev-Anfrage ist fehlgeschlagen.}} {code, select, JEV_AUTH {Prüfe den Jev-Key unter Einstellungen. Der Hinweis verschwindet, sobald der Key geändert wurde.} JEV_CREDITS {Lade das OpenRouter-Guthaben auf und klicke dann auf „Jetzt aktualisieren“.} other {Jev versucht es in wenigen Minuten automatisch erneut.}}"
+    "error": "{code, select, JEV_AUTH {Der Anbieter hat die Jev-Zugangsdaten abgelehnt.} JEV_CREDITS {Das Konto hinter Jev hat kein Guthaben mehr.} JEV_RATE_LIMITED {Der Anbieter hat die Jev-Anfragen gedrosselt.} other {Die Jev-Anfrage ist fehlgeschlagen.}} {code, select, JEV_AUTH {Prüfe den Jev-Key unter Einstellungen oder den Anbieter hinter dem Jev-Modell-Alias. Der Hinweis verschwindet, sobald sich die Jev-Einstellungen ändern.} JEV_CREDITS {Lade das Guthaben auf und klicke dann auf „Jetzt aktualisieren“.} other {Jev versucht es in wenigen Minuten automatisch erneut.}}"
   },
   "failedTitle": "Einige Anbieter konnten nicht aktualisiert werden",
   "failed": "{name}: {code, select, UPSTREAM_AUTH {der Anbieter hat den API-Key abgelehnt} UPSTREAM_EMPTY {der Anbieter hat keine Modelle geliefert, die bisherige Liste bleibt} BASE_URL_REQUIRED {die Basis-URL fehlt} other {die Anfrage ist fehlgeschlagen}}",

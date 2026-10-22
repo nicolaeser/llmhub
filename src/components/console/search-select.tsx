@@ -59,7 +59,14 @@ export default function SearchSelect({
       <Autocomplete.Trigger>
         <Autocomplete.Value>
           {({ defaultChildren, isPlaceholder }) =>
-            isPlaceholder || !selected ? defaultChildren : <span className="truncate">{selected.label}</span>
+            isPlaceholder || !selected ? (
+              defaultChildren
+            ) : (
+              <span className="flex min-w-0 items-center gap-2">
+                <span className="truncate">{selected.label}</span>
+                {selected.badge}
+              </span>
+            )
           }
         </Autocomplete.Value>
         <Autocomplete.Indicator />
@@ -81,7 +88,10 @@ export default function SearchSelect({
                 textValue={item.detail ? `${item.label} ${item.detail}` : item.label}
               >
                 <div className="flex min-w-0 flex-col">
-                  <span className="truncate">{item.label}</span>
+                  <span className="flex min-w-0 items-center gap-2">
+                    <span className="truncate">{item.label}</span>
+                    {item.badge}
+                  </span>
                   {item.detail ? <span className="truncate text-xs text-muted">{item.detail}</span> : null}
                 </div>
                 <ListBox.ItemIndicator />

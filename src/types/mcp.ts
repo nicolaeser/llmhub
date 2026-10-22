@@ -261,6 +261,7 @@ export type McpDraft = McpDraftServer & {
 export type McpBuilderModel = {
   alias: string;
   label: string;
+  internal: boolean;
 };
 
 export type McpServerRecord = {

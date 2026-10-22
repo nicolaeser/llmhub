@@ -97,6 +97,7 @@ const ROW: RequestLogRow = {
   guardOutput: [],
   hasContent: false,
   contentSkip: "",
+  system: "",
 };
 
 const LOGS: LogsPayload = {

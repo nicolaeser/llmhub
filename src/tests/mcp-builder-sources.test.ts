@@ -147,9 +147,24 @@ function link(path: string, auth: JsonMap): JsonMap {
   return { url: `http://127.0.0.1:${port}${path}`, internal: true, ...auth };
 }
 
+const METERING_WRITES = new Set(["usageDaily.upsert", "spendEvent.create", "requestLog.create"]);
+const SOURCE_TEXT = ["Pets guide", "# Reference", "Pasted note", "DELETE /pets", "%PDF-1.4"];
+
 function assertNothingStored() {
   const writes = recordedPrisma.calls.filter((call) => !/^(find|count|aggregate|groupBy)/.test(call.method));
-  assert.deepEqual(writes, []);
+  assert.deepEqual(
+    writes.map((call) => `${call.model}.${call.method}`).filter((write) => !METERING_WRITES.has(write)),
+    [],
+  );
+  for (const call of writes) {
+    const data = (call.args as { data?: JsonMap }).data;
+    if (call.model === "requestLog") {
+      assert.deepEqual([data?.endpoint, data?.contentSkip, data?.content], ["internal:mcp_builder", "system", undefined]);
+    }
+    const text = JSON.stringify(call.args);
+    for (const source of SOURCE_TEXT) assert.equal(text.includes(source), false, `${call.model} stores source text`);
+    assertNoSecret(`${call.model}.${call.method}`, call.args);
+  }
 }
 
 function assertNoSecret(label: string, value: unknown) {

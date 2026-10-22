@@ -356,7 +356,7 @@ test("internal callers can bound an upstream call with their own timeout", async
   }
 });
 
-test("template matching, console model lists, and the MCP builder ignore internal routes", async () => {
+test("template matching and API model lists ignore internal routes while the MCP builder may use them", async () => {
   const { loadModelPolicies } = await import("@/lib/gateway/access/model-access");
   const { templateModels } = await import("@/lib/gateway/access/model-policy");
   const { apiModelChoices, enabledModelChoices } = await import("@/lib/models/aliases");
@@ -387,8 +387,9 @@ test("template matching, console model lists, and the MCP builder ignore interna
   const choices = await enabledModelChoices();
   assert.deepEqual(choices.find((choice) => choice.alias === "chat-private")?.pools, ["internal"]);
   assert.deepEqual((await apiModelChoices()).map((choice) => choice.alias).sort(), ["chat-mixed", "chat-public", "overflows-to-private"]);
-  const builder = (await builderModels()).map((model) => model.alias);
-  assert.deepEqual(builder.sort(), ["chat-mixed", "chat-public"]);
+  const builder = await builderModels();
+  assert.deepEqual(builder.map((model) => model.alias).sort(), ["chat-mixed", "chat-private", "chat-public", "plan-private"]);
+  assert.deepEqual(builder.filter((model) => model.internal).map((model) => model.alias).sort(), ["chat-private", "plan-private"]);
 });
 
 test("sign-in providers cannot become internal and the flag reaches the management API", async () => {
