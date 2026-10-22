@@ -1,36 +1,9 @@
 {
-  "intro": "Bediene Anfragen an /api/subscription mit ChatGPT-, Claude-, Google-Antigravity- und SuperGrok-Abos. Jedes Konto zeigt seine eigenen Limits und wann sie zurückgesetzt werden.",
+  "intro": "Bediene Anfragen an /api/subscription mit angemeldeten Abos wie ChatGPT, Claude, Google Antigravity, SuperGrok, Kimi Code, Meta Muse Code und Devin. Jedes Konto zeigt seine eigenen Limits und wann sie zurückgesetzt werden.",
+  "empty": "Melde dich bei einem Abo wie ChatGPT, Claude oder Google an, importiere vorhandene Konten oder sende jemandem einen Konto-Link.",
   "addAccount": "Konto hinzufügen",
-  "addSubscription": "Abo hinzufügen",
-  "wizard": {
-    "title": "Abo verbinden",
-    "hint": "Wähle den Anbieter, dann die Verbindungsmethode, und prüfe alles vor dem Verbinden.",
-    "stepsLabel": "Schritte",
-    "step": "{step, select, provider {Anbieter} method {Methode} review {Prüfen} other {Schritt}}",
-    "providerLabel": "Anbieter wählen",
-    "methodLabel": "Verbindungsmethode wählen",
-    "methodSignin": "Im Browser anmelden",
-    "methodSigninHint": "Code eingeben oder bestätigen, das Gateway erneuert Tokens selbst.",
-    "methodFile": "Auth-Datei importieren",
-    "methodFileHint": "JSON-Datei aus CLIProxyAPI hochladen oder einfügen.",
-    "methodKey": "API-Key eingeben",
-    "methodKeyHint": "Key im nächsten Schritt sicher hinterlegen.",
-    "reviewMethod": "{method, select, signin {Anmeldung im Browser} file {Auth-Datei} share {Konto-Link} other {API-Key}}",
-    "reviewHint": "Beim Verbinden öffnet sich das passende Formular für Anmeldung, Key und Aufbewahrung.",
-    "connect": "Verbinden",
-    "antigravityLocked": "Erst Google-OAuth-Client einrichten.",
-    "methodShare": "Link teilen",
-    "methodShareHint": "Jemand anderes meldet sich mit dem eigenen Konto an, ganz ohne Konsolen-Login.",
-    "reviewShareHint": "Als Nächstes legst du Bezeichnung, Gültigkeit und Zugriff für den Link fest.",
-    "share": "Link erstellen"
-  },
-  "remaining": "Noch nicht verbunden",
-  "remainingHint": "Diese Anbieter haben noch kein Konto. Verbinde sie über den Assistenten.",
-  "openWizard": "Assistent öffnen",
-  "connectTitle": "{first, select, true {Abo verbinden} other {Weiteres Abo verbinden}}",
   "refreshAll": "Alle Limits aktualisieren",
   "importFiles": {
-    "open": "Aus CLIProxyAPI importieren",
     "title": "Aus CLIProxyAPI importieren",
     "description": "Übernimm die Abo-Konten, die CLIProxyAPI oder EasyCLIProxyAPI verwalten, einmalig in LLM Hub: Lade ihre JSON-Auth-Dateien hoch, füge den Inhalt ein oder lade sie direkt aus einer laufenden CLIProxyAPI. Codex-, Claude-, Antigravity- und xAI-Konten werden zu Abo-Konten. LLM Hub prüft jedes Konto vorher beim Anbieter und erneuert die Anmeldung ab dann selbst. Ein bereits verbundenes Konto erhält die neue Anmeldung.",
     "pickTitle": "Auth-Dateien",
@@ -199,6 +172,14 @@
   "subAdd": {
     "title": "Konto-Links",
     "description": "Teile einen Link mit Freunden oder Kollegen, damit sie ihr eigenes Abo-Konto mit diesem Hub verbinden. Sie brauchen kein Konsolen-Login und können ihr Konto jederzeit wieder trennen.",
+    "columns": {
+      "link": "Link",
+      "providers": "Anbieter",
+      "accounts": "Konten",
+      "expires": "Läuft ab",
+      "access": "Zugriff"
+    },
+    "actionsFor": "Aktionen für {label}",
     "create": "Link erstellen",
     "createdTitle": "Link bereit",
     "createdHint": "LLM Hub speichert nur einen Fingerabdruck des Links und kann ihn daher nicht erneut anzeigen. Er funktioniert nicht mehr, sobald er abläuft, alle Plätze belegt sind oder du ihn löschst. Beendete Links werden automatisch gelöscht.",
@@ -206,10 +187,6 @@
     "empty": "Noch keine Konto-Links.",
     "createdBy": "{named, select, true {Erstellt von {name} am {date}} other {Erstellt am {date}}}",
     "status": "{status, select, active {Aktiv} used_up {Aufgebraucht} expired {Abgelaufen} other {{status}}}",
-    "expires": "{past, select, true {Abgelaufen {when}} other {Läuft ab {when}}} ({date})",
-    "access": "{restricted, select, true {{count, plural, =0 {Hinzugefügte Konten: kein Key darf sie nutzen} one {Hinzugefügte Konten: auf # Zuordnung beschränkt} other {Hinzugefügte Konten: auf # Zuordnungen beschränkt}}} other {Hinzugefügte Konten: für jeden Key offen}}",
-    "accountsLabel": "Über {label} hinzugefügte Konten",
-    "noAccounts": "Kein über diesen Link hinzugefügtes Konto ist verbunden.",
     "dialogTitle": "Konto-Link erstellen",
     "dialogDescription": "Wer den Link öffnet, kann sich mit dem eigenen Abo-Konto anmelden und es mit dem Abo-Pool dieses Hubs verbinden.",
     "submit": "Link erstellen",
@@ -226,7 +203,6 @@
     "accountOption": "{count, plural, =0 {Unbegrenzt} one {# Konto} other {# Konten}}",
     "accessTitle": "Zugriff für hinzugefügte Konten",
     "accessHint": "Jedes über diesen Link hinzugefügte Konto erhält diesen Zugriff. Du kannst ihn später pro Konto ändern.",
-    "open": "Konto-Link teilen",
     "createdDescription": "Schick ihn an {label}. Wer ihn öffnet, kann sein eigenes Abo-Konto verbinden.",
     "onceTitle": "Nur dieses eine Mal sichtbar",
     "validForHint": "Nach Ablauf wird der Link gelöscht.",
@@ -235,7 +211,6 @@
     "slotsValue": "{added, number} von {max, number}",
     "unlimited": "{added, plural, one {# Konto hinzugefügt} other {# Konten hinzugefügt}}, ohne Limit",
     "delete": "Link löschen",
-    "deleteLabel": "{label} löschen",
     "deleteTitle": "{label} löschen?",
     "deleteDescription": "Der Link funktioniert sofort nicht mehr und wird entfernt. Bereits hinzugefügte Konten bleiben verbunden, und ihre Besitzer können sie weiterhin trennen.",
     "deleted": "{label} gelöscht"
@@ -247,11 +222,7 @@
     "description": "Lege fest, wie Anfragen auf die Konten verteilt werden und wann gesparte Resets genutzt werden.",
     "routingSummary": "Kontoverteilung: {method}",
     "autoResetSummary": "{enabled, select, true {Automatische Resets ab {percent}} other {Automatische Resets aus}}",
-    "setupRequired": "Einrichtung nötig",
-    "setUp": "Einrichten"
-  },
-  "idle": {
-    "connect": "Verbinden"
+    "setupRequired": "Einrichtung nötig"
   },
   "section": {
     "description": "{channel} · {count, plural, one {# Konto} other {# Konten}}"

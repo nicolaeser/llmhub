@@ -2,8 +2,9 @@ import "server-only";
 import { env } from "@/lib/env";
 import { GateError } from "@/lib/gateway/errors";
 import { anthropicToChat, chatToAnthropic, withCacheBreakpoints } from "@/lib/gateway/protocols/anthropic";
+import { withAnthropicModelParams } from "@/lib/gateway/protocols/anthropic-model-params";
 import { plainModel } from "@/lib/gateway/catalog/model-alias";
-import { inPool, outsidePool } from "@/lib/gateway/routing/route-pool";
+import { hiddenFrom, outsidePool, routable } from "@/lib/gateway/routing/route-pool";
 import { speaksAnthropic, speaksGoogle, speaksKimi, speaksMuse } from "@/lib/gateway/upstreams/provider-kinds";
 import { withClaudeBetas, withClaudeIdentity } from "@/lib/gateway/upstreams/claude";
 import {
@@ -29,7 +30,7 @@ import { asRecord, asString } from "@/lib/gateway/core";
 import { costFilter, costRejected } from "@/lib/gateway/billing/cost-cap";
 import type { DevinResetLookup } from "@/types/devin";
 import type { JsonMap, Principal, ProxyFirstResult } from "@/types/gateway";
-import type { ResolvedDeployment } from "@/types/routing";
+import type { ResolvedDeployment, RoutePool } from "@/types/routing";
 import type { LimitWindow, UpstreamAuth } from "@/types/providers";
 
 export function upstreamHeaders(
@@ -221,6 +222,7 @@ export function prepareBody(
       if (typeof payload.service_tier === "string") native.service_tier = payload.service_tier;
       if (dep.kind === "claude") native = withCacheBreakpoints(native);
     }
+    native = withAnthropicModelParams(asString(native.model), native);
     return dep.kind === "claude" ? withClaudeIdentity(native) : native;
   }
   if (dep.kind === "codex" && nativeChatPath(path)) return chatToCodex(payload);
@@ -420,8 +422,6 @@ export function withDeploymentModel(raw: BodyInit | undefined, model: string): B
   return form;
 }
 
-const apiRoute = inPool("api");
-
 export async function forwardToModel(
   aliases: string[],
   principal: Principal,
@@ -433,10 +433,14 @@ export async function forwardToModel(
     contentType?: string;
     binary?: boolean;
     headers?: Record<string, string>;
+    pool?: RoutePool;
+    timeoutMs?: number;
   },
 ): Promise<ProxyFirstResult> {
   let last: GateError = new GateError(404, "model_not_found", "no deployment for model", { param: "model" });
   const cost = costFilter(principal, body);
+  const pool = opts?.pool ?? "api";
+  const inPool = routable(pool);
   for (const alias of aliases) {
     if (!alias || alias === "auto") continue;
     let group;
@@ -445,8 +449,9 @@ export async function forwardToModel(
     } catch {
       continue;
     }
-    if (group.mapped.length && !group.mapped.some(apiRoute) && !group.overflow_group) {
-      last = outsidePool("api");
+    if (hiddenFrom(pool, group.mapped)) continue;
+    if (group.mapped.length && !group.mapped.some(inPool) && !group.overflow_group) {
+      last = outsidePool(pool);
       continue;
     }
     const attempts = Math.max(0, group.num_retries) + 1;
@@ -456,7 +461,7 @@ export async function forwardToModel(
         acquired = await acquireGroup(
           group,
           principal.routeLimits[alias],
-          apiRoute,
+          inPool,
           requestRoutingOverride(body),
           cost,
         );
@@ -485,6 +490,7 @@ export async function forwardToModel(
           method: opts?.method,
           groupStrategy: group.strategy,
           headers: opts?.headers,
+          timeoutMs: opts?.timeoutMs,
         };
         const proxied = opts?.binary
           ? { ...(await proxyRaw(request)), json: {} as unknown }

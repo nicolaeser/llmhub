@@ -24,9 +24,12 @@ export default function ProviderSelect({
   const kinds = PROVIDER_CATALOG.filter(
     (k) => `kind:${k.kind}` === value || (withCatalog && !providers.some((p) => p.kind === k.kind)),
   );
-  function detail(kind: string) {
-    return isSignInKind(kind)
-      ? tProviders("poolDetail", { pool: "subscription", channel: tProviders("channel", { kind }) })
+  function detail(kind: string, internal = false) {
+    if (isSignInKind(kind)) {
+      return tProviders("poolDetail", { pool: "subscription", channel: tProviders("channel", { kind }) });
+    }
+    return internal
+      ? tProviders("poolDetail", { pool: "internal", channel: tProviders("kindName", { kind }) })
       : tProviders("kindName", { kind });
   }
   return (
@@ -34,7 +37,7 @@ export default function ProviderSelect({
       label={t("fields.provider")}
       items={[
         { id: "none", label: t("fields.noProvider") },
-        ...providers.map((p) => ({ id: p.id, label: p.name, detail: detail(p.kind) })),
+        ...providers.map((p) => ({ id: p.id, label: p.name, detail: detail(p.kind, p.internal) })),
         ...kinds.map((k) => ({
           id: `kind:${k.kind}`,
           label: isSignInKind(k.kind) ? tProviders("kindShort", { kind: k.kind }) : tProviders("kindName", { kind: k.kind }),

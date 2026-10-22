@@ -181,9 +181,10 @@ test("catalog facts take the smallest known window and the confirmed speed tiers
     {
       alias: "claude-sonnet",
       deployments: [
-        { kind: "claude", model: "claude-sonnet-4-6", provider: { kind: "claude", discovered: discovered("claude-sonnet-4-6", 200_000) } },
-        { kind: "anthropic", model: "claude-sonnet-4-6", provider: { kind: "anthropic", discovered: discovered("claude-sonnet-4-6", 1_000_000) } },
-        { kind: "anthropic", model: "claude-sonnet-4-6", provider: { kind: "anthropic", discovered: discovered("claude-sonnet-4-6", 400_000) } },
+        { kind: "claude", model: "claude-sonnet-4-6", provider: { kind: "claude", internal: false, discovered: discovered("claude-sonnet-4-6", 200_000) } },
+        { kind: "anthropic", model: "claude-sonnet-4-6", provider: { kind: "anthropic", internal: false, discovered: discovered("claude-sonnet-4-6", 1_000_000) } },
+        { kind: "anthropic", model: "claude-sonnet-4-6", provider: { kind: "anthropic", internal: false, discovered: discovered("claude-sonnet-4-6", 400_000) } },
+        { kind: "anthropic", model: "claude-sonnet-4-6", provider: { kind: "anthropic", internal: true, discovered: discovered("claude-sonnet-4-6", 100_000) } },
       ],
     },
     {
@@ -192,22 +193,23 @@ test("catalog facts take the smallest known window and the confirmed speed tiers
         {
           kind: "codex",
           model: "gpt-6-astra",
-          provider: { kind: "codex", discovered: discovered("gpt-6-astra", 272_000, { serviceTiers: ["priority", "ultrafast"] }) },
+          provider: { kind: "codex", internal: false, discovered: discovered("gpt-6-astra", 272_000, { serviceTiers: ["priority", "ultrafast"] }) },
         },
-        { kind: "openai", model: "gpt-6-astra", provider: { kind: "openai", discovered: [] } },
+        { kind: "openai", model: "gpt-6-astra", provider: { kind: "openai", internal: false, discovered: [] } },
       ],
     },
     {
       alias: "gpt-plus",
       deployments: [
-        { kind: "codex", model: "gpt-plus", provider: { kind: "codex", discovered: discovered("gpt-plus", 0, { serviceTiers: [] }) } },
-        { kind: "codex", model: "gpt-unknown", provider: { kind: "codex", discovered: [] } },
+        { kind: "codex", model: "gpt-plus", provider: { kind: "codex", internal: false, discovered: discovered("gpt-plus", 0, { serviceTiers: [] }) } },
+        { kind: "codex", model: "gpt-unknown", provider: { kind: "codex", internal: false, discovered: [] } },
       ],
     },
     { alias: "unknown", deployments: [{ kind: "openai_compat", model: "m", provider: null }] },
   ]);
   assert.equal(facts.windows.subscription.get("claude-sonnet"), 200_000);
   assert.equal(facts.windows.api.get("claude-sonnet"), 400_000);
+  assert.equal(facts.windows.internal.get("claude-sonnet"), 100_000);
   assert.equal(facts.windows.api.has("unknown"), false);
   assert.deepEqual(facts.speeds.subscription.get("claude-sonnet"), []);
   assert.deepEqual(facts.speeds.subscription.get("gpt-6-astra"), ["fast", "ultrafast"]);
@@ -224,8 +226,12 @@ test("the Codex catalog lists chat models with Codex metadata and the full Codex
     { id: "api/claude-sonnet", display_name: "Claude Sonnet (API)", route: "api" },
   ];
   const facts = {
-    windows: { api: new Map([["claude-sonnet", 1_000_000]]), subscription: new Map([["claude-sonnet", 200_000]]) },
-    speeds: { api: new Map(), subscription: new Map() },
+    windows: {
+      api: new Map([["claude-sonnet", 1_000_000]]),
+      subscription: new Map([["claude-sonnet", 200_000]]),
+      internal: new Map(),
+    },
+    speeds: { api: new Map(), subscription: new Map(), internal: new Map() },
   };
   const catalog = codexCatalog(entries, "subscription", facts);
   const models = catalog.models as JsonMap[];
@@ -258,10 +264,11 @@ test("the Codex catalog offers Fast and Ultra Fast where a route confirms them a
     { id: "api/gpt-6-astra", display_name: "GPT-6 Astra (API)", route: "api" },
   ];
   const facts = {
-    windows: { api: new Map(), subscription: new Map([["gpt-6-astra", 272_000]]) },
+    windows: { api: new Map(), subscription: new Map([["gpt-6-astra", 272_000]]), internal: new Map() },
     speeds: {
       api: new Map<string, ("fast" | "ultrafast")[]>([["gpt-6-astra", ["fast"]]]),
       subscription: new Map<string, ("fast" | "ultrafast")[]>([["gpt-6-astra", ["fast", "ultrafast"]]]),
+      internal: new Map(),
     },
   };
   const [base, variant, api] = codexCatalog(entries, "subscription", facts).models as [JsonMap, JsonMap, JsonMap];
@@ -279,8 +286,8 @@ test("the Codex catalog falls back to the compact prompt when the full one would
     display_name: "",
   }));
   const catalog = codexCatalog(many, "api", {
-    windows: { api: new Map(), subscription: new Map() },
-    speeds: { api: new Map(), subscription: new Map() },
+    windows: { api: new Map(), subscription: new Map(), internal: new Map() },
+    speeds: { api: new Map(), subscription: new Map(), internal: new Map() },
   });
   const models = catalog.models as JsonMap[];
   assert.equal(models.length, many.length);
