@@ -61,7 +61,6 @@
   "columns": {
     "account": "Konto",
     "usage": "Nutzung",
-    "nextReset": "Nächster Reset",
     "access": "Zugriff"
   },
   "menu": {
@@ -91,7 +90,6 @@
   "noneTitle": "Noch keine Abo-Konten",
   "backIn": "Wieder verfügbar {when} ({date}).",
   "backInUnknown": "Limit erreicht. Der Anbieter nennt keinen Zeitpunkt für die Zurücksetzung.",
-  "resetUnknown": "Nicht gemeldet",
   "expiredHint": "Melde dich erneut an, um dieses Konto zu nutzen.",
   "noLimits": "Dieser Anbieter meldet keine Nutzungslimits.",
   "limits": {
@@ -100,14 +98,16 @@
     "nextCheck": "Nächste Abfrage {when}.",
     "window": "{unit, select, hour {{count, plural, one {Stundenlimit} other {#-Stunden-Limit}}} day {{count, plural, one {Tageslimit} =7 {Wochenlimit} other {#-Tage-Limit}}} month {Monatslimit} other {Nutzungslimit}}",
     "scoped": "{scope}: {window}",
-    "resets": "Wird {when} zurückgesetzt ({date})",
+    "used": "{uniform, select, true {{used, number, percent} genutzt} other {bis zu {used, number, percent} genutzt}}",
+    "reset": "{reached, select, true {Wieder frei {countdown}} other {Reset {countdown}}}<separator> ·</separator> <time>{date}</time>",
+    "resetUnknown": "{reached, select, true {Limit erreicht, Reset-Zeit nicht gemeldet} other {Reset-Zeit nicht gemeldet}}",
+    "countdown": "{unit, select, days {in {days, plural, one {# Tag} other {# Tagen}}{hours, plural, =0 {} other { # Std.}}} hours {in {hours, number} Std.{minutes, plural, =0 {} other { # Min.}}} other {in {minutes, number} Min.}}",
+    "pace": "Bei diesem Tempo {when} aufgebraucht, noch vor dem Reset",
     "notStarted": "Startet mit der nächsten Anfrage",
-    "reached": "Limit erreicht",
     "allLimits": "{count, plural, one {Limitdetails} other {Alle # Limits}}",
     "allLimitsFor": "{count, plural, one {Limitdetails für {name}} other {Alle # Limits für {name}}}",
     "models": "{count, plural, one {# Modell} other {# Modelle}}",
     "group": "{family, select, gemini_pro {Gemini Pro} gemini_flash {Gemini Flash} gemini_image {Gemini Image} claude {Claude} gpt_oss {GPT-OSS} other {Weitere Modelle}}",
-    "upTo": "bis zu {used, number, percent}",
     "sharedBy": "Gemeinsam genutzt von {models}",
     "member": "{model}: {used, number, percent}{reached, select, true { (Limit erreicht)} other {}}",
     "partial": "{reached, number} von {total, plural, one {# Limit} other {# Limits}} erreicht",

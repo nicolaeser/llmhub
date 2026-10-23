@@ -61,7 +61,6 @@
   "columns": {
     "account": "Account",
     "usage": "Usage",
-    "nextReset": "Next reset",
     "access": "Access"
   },
   "menu": {
@@ -91,7 +90,6 @@
   "noneTitle": "No subscription accounts yet",
   "backIn": "Available again {when} ({date}).",
   "backInUnknown": "Limit reached. The provider did not say when it resets.",
-  "resetUnknown": "Not reported",
   "expiredHint": "Sign in again to use this account.",
   "noLimits": "This provider does not report usage limits.",
   "limits": {
@@ -100,14 +98,16 @@
     "nextCheck": "Next check {when}.",
     "window": "{unit, select, hour {{count, plural, one {Hourly limit} other {#-hour limit}}} day {{count, plural, one {Daily limit} =7 {Weekly limit} other {#-day limit}}} month {Monthly limit} other {Usage limit}}",
     "scoped": "{scope}: {window}",
-    "resets": "Resets {when} ({date})",
+    "used": "{uniform, select, true {{used, number, percent} used} other {up to {used, number, percent} used}}",
+    "reset": "{reached, select, true {Free again {countdown}} other {Resets {countdown}}}<separator> ·</separator> <time>{date}</time>",
+    "resetUnknown": "{reached, select, true {Limit reached, reset time not reported} other {Reset time not reported}}",
+    "countdown": "{unit, select, days {in {days, plural, one {# day} other {# days}}{hours, plural, =0 {} other { # h}}} hours {in {hours, number} h{minutes, plural, =0 {} other { # min}}} other {in {minutes, number} min}}",
+    "pace": "At this pace, used up {when}, before the reset",
     "notStarted": "Starts with the next request",
-    "reached": "Limit reached",
     "allLimits": "{count, plural, one {Limit details} other {All # limits}}",
     "allLimitsFor": "{count, plural, one {Limit details for {name}} other {All # limits for {name}}}",
     "models": "{count, plural, one {# model} other {# models}}",
     "group": "{family, select, gemini_pro {Gemini Pro} gemini_flash {Gemini Flash} gemini_image {Gemini Image} claude {Claude} gpt_oss {GPT-OSS} other {Other models}}",
-    "upTo": "up to {used, number, percent}",
     "sharedBy": "Shared by {models}",
     "member": "{model}: {used, number, percent}{reached, select, true { (limit reached)} other {}}",
     "partial": "{reached, number} of {total, plural, one {# limit} other {# limits}} reached",

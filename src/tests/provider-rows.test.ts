@@ -111,13 +111,16 @@ test("an expired sign-in offers sign-in instead of edit and no refresh", () => {
   assert.ok(!actions.includes("refresh"));
 });
 
-test("account rows pick the soonest reset and the recovery time when limited", () => {
+test("account rows carry a recovery time only while the account is at a limit", () => {
   const open = accountRow(provider(), entry([plan(40, 18_000, 2), plan(10, 604_800, 30)]), true, NOW);
   assert.equal(open.state, "available");
-  assert.equal(open.nextReset, NOW + 2 * HOUR);
+  assert.equal(open.recovery, null);
   const limited = accountRow(provider(), entry([plan(100, 18_000, 4), plan(10, 604_800, 30)]), true, NOW);
   assert.equal(limited.state, "limited");
-  assert.equal(limited.nextReset, NOW + 4 * HOUR);
+  assert.equal(limited.recovery, NOW + 4 * HOUR);
+  const weekly = accountRow(provider(), entry([plan(20, 18_000, 3), plan(100, 604_800, 100)]), true, NOW);
+  assert.equal(weekly.state, "limited");
+  assert.equal(weekly.recovery, NOW + 100 * HOUR);
 });
 
 test("account rows flag held refreshes and providers without limit reports", () => {

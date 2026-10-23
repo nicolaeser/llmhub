@@ -35,7 +35,7 @@ export type AccountRow = {
   groups: LimitGroup[];
   summary: LimitSummary;
   detailed: boolean;
-  nextReset: number | null;
+  recovery: number | null;
   needsSignIn: boolean;
   refreshable: boolean;
   held: boolean;
@@ -44,13 +44,6 @@ export type AccountRow = {
   restricted: boolean;
   assignments: number;
 };
-
-function soonestReset(groups: LimitGroup[], now: number): number | null {
-  const times = groups
-    .flatMap((group) => group.members.map((member) => (member.resetsAt ? Date.parse(member.resetsAt) : NaN)))
-    .filter((time) => Number.isFinite(time) && time > now);
-  return times.length ? Math.min(...times) : null;
-}
 
 export function accountRow(
   row: ProviderView,
@@ -77,7 +70,7 @@ export function accountRow(
     groups,
     summary,
     detailed: summary.more > 0 || groups.some((group) => group.members.length > 1),
-    nextReset: state === "limited" ? recoveryAt(row, entry, now) : soonestReset(groups, now),
+    recovery: state === "limited" ? recoveryAt(row, entry, now) : null,
     needsSignIn,
     refreshable: reports && !needsSignIn,
     held: entry?.retryAt ? Date.parse(entry.retryAt) > now : false,

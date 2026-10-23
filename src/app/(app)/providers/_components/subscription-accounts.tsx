@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { Button, SearchField, Spinner, useOverlayState } from "@heroui/react";
 import { CircleCheck, CirclePause, Gauge, KeyRound, Plus, RefreshCw, UserRound } from "lucide-react";
-import { useFormatter, useNow, useTranslations } from "next-intl";
+import { useFormatter, useTranslations } from "next-intl";
 import EmptyState from "@/components/console/empty-state";
 import { LoadError } from "@/components/console/page-status";
 import StatCard from "@/components/console/stat-card";
@@ -31,6 +31,7 @@ import { SUBSCRIPTION_CATALOG } from "./provider-options";
 import SubscriptionGroup from "./subscription-group";
 import type { AccountLimitsState } from "./use-account-limits";
 import { useProviderRowActions } from "./use-provider-row-actions";
+import { useResetTime } from "./use-reset-time";
 
 export default function SubscriptionAccounts({
   rows,
@@ -55,8 +56,9 @@ export default function SubscriptionAccounts({
   const tProviders = useTranslations("Providers");
   const tCommon = useTranslations("Common");
   const format = useFormatter();
-  const now = useNow({ updateInterval: 60_000 });
   const timeZone = useConsoleTimeZone();
+  const reset = useResetTime(timeZone);
+  const { now } = reset;
   const [routing, setRouting] = useState<AccountRouting | null>(null);
   const [autoReset, setAutoReset] = useState<AutoResetPolicies>({});
   const [access, setAccess] = useState<ProviderView | null>(null);
@@ -200,7 +202,7 @@ export default function SubscriptionAccounts({
           label={t("stats.limited")}
           value={format.number(limited)}
           pending={limits.checking}
-          hint={nextRecovery ? t("stats.nextFree", { when: format.relativeTime(new Date(nextRecovery), now) }) : undefined}
+          hint={nextRecovery ? t("stats.nextFree", { when: reset.countdown(nextRecovery) }) : undefined}
         />
         <StatCard
           icon={KeyRound}
