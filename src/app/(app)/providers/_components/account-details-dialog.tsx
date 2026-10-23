@@ -14,7 +14,7 @@ import {
   Users,
   type LucideIcon,
 } from "lucide-react";
-import { useFormatter, useNow, useTranslations } from "next-intl";
+import { useFormatter, useTranslations } from "next-intl";
 import IconTile from "@/components/console/icon-tile";
 import { PlanBadge } from "@/components/console/subscription-badge";
 import { limitsUpdatedAt, updatedFromTraffic } from "@/lib/gateway/upstreams/observed-limits";
@@ -25,6 +25,7 @@ import { ACCOUNT_STATE_COLOR } from "./account-status";
 import BankedResets from "./banked-resets";
 import LimitMeter from "./limit-meter";
 import PolicyChips from "./policy-chips";
+import { useResetTime } from "./use-reset-time";
 
 const STATE_ICON: Record<AccountState, LucideIcon> = {
   available: CircleCheck,
@@ -74,19 +75,8 @@ export default function AccountDetailsDialog({
   const tError = useTranslations("Error");
   const tCommon = useTranslations("Common");
   const format = useFormatter();
-  const now = useNow({ updateInterval: 60_000 });
-
-  function stamp(time: number) {
-    return format.dateTime(new Date(time), {
-      weekday: "short",
-      day: "numeric",
-      month: "short",
-      hour: "2-digit",
-      minute: "2-digit",
-      timeZone,
-      timeZoneName: "short",
-    });
-  }
+  const reset = useResetTime(timeZone);
+  const { now } = reset;
 
   return (
     <Modal state={state}>
@@ -133,10 +123,10 @@ export default function AccountDetailsDialog({
                   <Modal.Body className="space-y-5">
                     {account.state === "limited" ? (
                       <p className="text-sm text-warning">
-                        {account.nextReset
+                        {account.recovery
                           ? t("backIn", {
-                              when: format.relativeTime(new Date(account.nextReset), now),
-                              date: stamp(account.nextReset),
+                              when: reset.countdown(account.recovery),
+                              date: reset.date(account.recovery, true),
                             })
                           : t("backInUnknown")}
                       </p>

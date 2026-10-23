@@ -1,9 +1,11 @@
 "use client";
 
-import { Chip, Disclosure, Label, Meter } from "@heroui/react";
-import { useFormatter, useNow, useTranslations } from "next-intl";
+import { Disclosure, Label, Meter } from "@heroui/react";
+import { useFormatter, useTranslations } from "next-intl";
 import { meterColor } from "@/lib/utils/budget";
 import type { LimitGroup } from "@/types/providers";
+import { exhaustionAt } from "./limit-timing";
+import { useResetTime } from "./use-reset-time";
 
 const DAY_SECONDS = 86_400;
 const HOUR_SECONDS = 3_600;
@@ -20,6 +22,38 @@ function windowSpan(seconds: number): { unit: string; count: number } {
   return { unit: "other", count: 0 };
 }
 
+export function ResetLine({
+  at,
+  reached,
+  timeZone,
+  full = false,
+  stacked = false,
+}: {
+  at: number;
+  reached: boolean;
+  timeZone: string;
+  full?: boolean;
+  stacked?: boolean;
+}) {
+  const t = useTranslations("Subscriptions.limits");
+  const reset = useResetTime(timeZone);
+  return (
+    <p className={reached ? "text-xs text-warning" : "text-xs text-muted"}>
+      {t.rich("reset", {
+        reached: String(reached),
+        countdown: reset.countdown(at),
+        date: reset.date(at, full),
+        separator: (chunks) => (stacked ? null : chunks),
+        time: (chunks) => (
+          <time dateTime={new Date(at).toISOString()} className={stacked ? "block text-muted" : "whitespace-nowrap"}>
+            {chunks}
+          </time>
+        ),
+      })}
+    </p>
+  );
+}
+
 export default function LimitMeter({
   group,
   timeZone,
@@ -31,60 +65,41 @@ export default function LimitMeter({
 }) {
   const t = useTranslations("Subscriptions.limits");
   const format = useFormatter();
-  const now = useNow({ updateInterval: 60_000 });
-  const resetsAt = group.resetsAt ? new Date(group.resetsAt) : null;
-  const pending = resetsAt !== null && resetsAt.getTime() > now.getTime();
+  const { now } = useResetTime(timeZone);
+  const reset = group.resetsAt ? Date.parse(group.resetsAt) : NaN;
+  const pending = Number.isFinite(reset) && reset > now.getTime();
+  const runsOut = exhaustionAt(group, now.getTime());
   const used = group.usedPercent;
   const span = t("window", windowSpan(group.windowSeconds));
   const name = group.family ? t("group", { family: group.family }) : group.label;
   const scopedLabel = group.windowSeconds > 0 ? t("scoped", { scope: name, window: span }) : name;
   const label = group.scoped ? scopedLabel : span;
-  const listed = group.members.length > 1;
-
-  const meter = (
-    <Meter
-      value={used}
-      color={meterColor(used / 100)}
-      aria-label={label}
-      valueLabel={group.uniform ? format.number(used / 100, { style: "percent" }) : t("upTo", { used: used / 100 })}
-    >
-      <Label>{label}</Label>
-      <Meter.Output />
-      <Meter.Track>
-        <Meter.Fill />
-      </Meter.Track>
-    </Meter>
-  );
-
-  if (compact) return <div className="min-w-0">{meter}</div>;
+  const listed = !compact && group.members.length > 1;
 
   return (
     <div className="min-w-0 space-y-1">
-      {meter}
-      <div className="flex flex-wrap items-center gap-2 text-xs text-muted">
-        {resetsAt && pending ? (
-          <span>
-            {t("resets", {
-              when: format.relativeTime(resetsAt, now),
-              date: format.dateTime(resetsAt, {
-                weekday: "short",
-                day: "numeric",
-                month: "short",
-                hour: "2-digit",
-                minute: "2-digit",
-                timeZone,
-                timeZoneName: "short",
-              }),
-            })}
-          </span>
-        ) : null}
-        {!resetsAt && used === 0 ? <span>{t("notStarted")}</span> : null}
-        {group.limitReached ? (
-          <Chip size="sm" variant="soft" color="danger" className="whitespace-nowrap">
-            {t("reached")}
-          </Chip>
-        ) : null}
-      </div>
+      <Meter
+        value={used}
+        color={meterColor(used / 100)}
+        aria-label={label}
+        valueLabel={t("used", { used: used / 100, uniform: String(group.uniform) })}
+      >
+        <Label>{label}</Label>
+        <Meter.Output />
+        <Meter.Track>
+          <Meter.Fill />
+        </Meter.Track>
+      </Meter>
+      {pending ? <ResetLine at={reset} reached={group.limitReached} timeZone={timeZone} full={!compact} /> : null}
+      {!pending && used === 0 ? <p className="text-xs text-muted">{t("notStarted")}</p> : null}
+      {!pending && used > 0 ? (
+        <p className={group.limitReached ? "text-xs text-warning" : "text-xs text-muted"}>
+          {t("resetUnknown", { reached: String(group.limitReached) })}
+        </p>
+      ) : null}
+      {runsOut !== null ? (
+        <p className="text-xs text-warning">{t("pace", { when: format.relativeTime(new Date(runsOut), now) })}</p>
+      ) : null}
       {listed ? (
         <Disclosure>
           <Disclosure.Heading>
