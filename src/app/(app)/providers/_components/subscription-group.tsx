@@ -27,7 +27,7 @@ import type { AutoResetPolicy } from "@/types/resets";
 import { STRATEGY_ICONS } from "./account-routing-picker";
 import { accountMenuActions, accountRow, type AccountMenuAction, type AccountRow } from "./account-rows";
 import { ACCOUNT_STATE_COLOR, type CountedState } from "./account-status";
-import LimitMeter from "./limit-meter";
+import LimitMeter, { ResetLine } from "./limit-meter";
 import RowMenu, { type RowMenuItem } from "./row-menu";
 
 const MENU_ICONS = {
@@ -79,6 +79,7 @@ export default function SubscriptionGroup({
 }) {
   const t = useTranslations("Subscriptions");
   const tRouting = useTranslations("Subscriptions.routing");
+  const tLimits = useTranslations("Subscriptions.limits");
   const tProviders = useTranslations("Providers");
   const tError = useTranslations("Error");
   const tCommon = useTranslations("Common");
@@ -125,18 +126,6 @@ export default function SubscriptionGroup({
     );
   }
 
-  function stamp(time: number) {
-    return format.dateTime(new Date(time), {
-      weekday: "short",
-      day: "numeric",
-      month: "short",
-      hour: "2-digit",
-      minute: "2-digit",
-      timeZone,
-      timeZoneName: "short",
-    });
-  }
-
   function accountChips(account: AccountRow) {
     return (
       <>
@@ -169,6 +158,14 @@ export default function SubscriptionGroup({
         ) : null}
       </>
     );
+  }
+
+  function recovery(account: AccountRow) {
+    if (account.state !== "limited") return null;
+    if (account.recovery === null) {
+      return <p className="text-xs text-muted">{tLimits("resetUnknown", { reached: "false" })}</p>;
+    }
+    return <ResetLine at={account.recovery} reached timeZone={timeZone} stacked />;
   }
 
   function signIn(row: ProviderView, account: AccountRow) {
@@ -227,26 +224,6 @@ export default function SubscriptionGroup({
           </Button>
         ) : null}
       </div>
-    );
-  }
-
-  function nextReset(account: AccountRow) {
-    if (reports && account.state === "checking") return <Skeleton className="h-3.5 w-24 rounded-lg" />;
-    if (account.nextReset === null) {
-      return (
-        <span className="text-sm text-muted">
-          {account.state === "limited" ? t("resetUnknown") : tCommon("none")}
-        </span>
-      );
-    }
-    const at = new Date(account.nextReset);
-    return (
-      <span className="flex flex-col">
-        <span className={account.state === "limited" ? "text-sm text-warning" : "text-sm text-foreground"}>
-          {format.relativeTime(at, now)}
-        </span>
-        <span className="text-xs text-muted">{stamp(account.nextReset)}</span>
-      </span>
     );
   }
 
@@ -344,7 +321,7 @@ export default function SubscriptionGroup({
             }
             details={[
               { label: t("columns.usage"), value: usage(row, account), wide: true },
-              { label: t("columns.nextReset"), value: nextReset(account) },
+              ...(account.state === "limited" ? [{ label: tCommon("status"), value: recovery(account), wide: true }] : []),
               { label: t("columns.access"), value: access(account) },
             ]}
           />
@@ -357,7 +334,6 @@ export default function SubscriptionGroup({
               <Table.Column isRowHeader>{t("columns.account")}</Table.Column>
               <Table.Column>{tCommon("status")}</Table.Column>
               <Table.Column>{t("columns.usage")}</Table.Column>
-              <Table.Column>{t("columns.nextReset")}</Table.Column>
               <Table.Column>{t("columns.access")}</Table.Column>
               <Table.Column>{tCommon("actions")}</Table.Column>
             </Table.Header>
@@ -374,12 +350,14 @@ export default function SubscriptionGroup({
                     </div>
                   </Table.Cell>
                   <Table.Cell>
-                    <div className="flex flex-wrap gap-1">{statusChips(account)}</div>
+                    <div className="min-w-36 space-y-1">
+                      <div className="flex flex-wrap gap-1">{statusChips(account)}</div>
+                      {recovery(account)}
+                    </div>
                   </Table.Cell>
                   <Table.Cell>
-                    <div className="min-w-56">{usage(row, account)}</div>
+                    <div className="min-w-72">{usage(row, account)}</div>
                   </Table.Cell>
-                  <Table.Cell>{nextReset(account)}</Table.Cell>
                   <Table.Cell>{access(account)}</Table.Cell>
                   <Table.Cell>{menu(row, account)}</Table.Cell>
                 </Table.Row>
