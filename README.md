@@ -135,7 +135,7 @@ Each container start applies pending migrations under a database lock before the
 1. Every five minutes it asks the registry for the digest behind the tag the app runs and compares it with the running image.
 2. When automatic updates are on, or when someone presses Update now in the console, it pulls the image, stops the app, starts a new container with the same settings, environment overrides, labels, networks, and aliases, and waits until the image's health check reports healthy (up to ten minutes, because migrations run on start).
 3. If the new container stops or turns unhealthy, it removes it and starts the previous container again. A digest that failed is not installed automatically again until a newer image is published; Update now retries it.
-4. After a successful update it removes the old container and the old image if nothing else uses it, and then replaces its own container with the new image.
+4. After a successful update it removes the old container, recreates stopped containers that carry the label on the new image without starting them, removes the old image if nothing else uses it, and then replaces its own container with the new image. No labelled container is left on the old image.
 
 Use it instead of `docker-compose.yml`, in the same directory and with the same `.env`:
 
@@ -165,7 +165,7 @@ Every ten seconds it posts its status to the app and reads back the switch and a
 | `LLMHUB_UPDATER_APP_URL` | `http://app:3000` | Address of the app inside the compose network. |
 | `LLMHUB_UPDATER_PROJECT` | detected | Compose project whose containers the updater manages, when it cannot inspect its own container. |
 
-Security: access to the Docker socket is equivalent to root access on the host, so anyone who controls the updater container or the image it pulls controls the server. That is why the socket lives in a separate container without ports instead of in the app, which handles outside traffic. Only use this file on hosts where that is acceptable. The updater only recreates running containers of its own compose project that carry the label `llmhub.updater.target=true`, and it only pulls public images; registries that need a login are not supported.
+Security: access to the Docker socket is equivalent to root access on the host, so anyone who controls the updater container or the image it pulls controls the server. That is why the socket lives in a separate container without ports instead of in the app, which handles outside traffic. Only use this file on hosts where that is acceptable. The updater only touches containers of its own compose project that carry the label `llmhub.updater.target=true` (running ones are recreated and checked, stopped ones are recreated without being started), and it only pulls public images; registries that need a login are not supported.
 
 Pinned tags: when `LLMHUB_TAG` is a release tag (`vYYYY.MM.DD.<sha>` or `dev-YYYY.MM.DD.<sha>`), a commit tag (`sha-<sha>`, `dev-<sha>`), or a digest, the updater reports the tag as pinned and never replaces the image. Set `LLMHUB_TAG` to `latest` or `dev` to receive updates. Back up the database regularly when automatic updates are on, because a new image applies its migrations on start and migrations are forward-only.
 
@@ -189,6 +189,8 @@ Add `COMPOSE_FILE=docker-compose.yml:docker-compose.rm.yml` (or `docker-compose.
 - `redactor` runs `node redactor.mjs` from the app image. It tokenizes through the model server, applies the classification head, decodes the BIOES tags with the constrained Viterbi decoder from the model card, maps tokens back to character offsets, and answers the protocol below.
 
 The app gets `LLMHUB_REDACTOR_URL=http://redactor:8080` and, on every start, an internal provider with the alias `pii-tracer`, which is also the default redaction model. The app does not wait for the redactor: until it is healthy, policies that use the model fall back or block as configured.
+
+`redactor-fetch` and `redactor` run the app image and carry the label `llmhub.updater.target=true`, so with `docker-compose.au.yml` the updater moves them to the new image together with the app: it recreates `redactor` and waits until it is healthy, and recreates the finished `redactor-fetch` without starting it; the next `docker compose up` runs it again as before. Download the file again if it is older and run `docker compose up -d` once, otherwise both keep running the old image after an update.
 
 | Variable | Default | Purpose |
 | --- | --- | --- |

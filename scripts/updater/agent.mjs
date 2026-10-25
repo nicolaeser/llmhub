@@ -8,7 +8,7 @@ import { DockerError } from "./docker.mjs";
 import { parseJson, readText, send } from "./http.mjs";
 import { digestsFor, imageRefOf, isPinned, normalizeRepository, parseImageRef, updateAvailable } from "./image-ref.mjs";
 import { errorMessage, log } from "./log.mjs";
-import { recoverLeftovers, recreateContainer, removeContainerNamed } from "./recreate.mjs";
+import { isBackup, recoverLeftovers, recreateContainer, removeContainerNamed, replaceStoppedContainers } from "./recreate.mjs";
 import { signBody, UPDATER_HEADER, verifySignature } from "./signature.mjs";
 
 export const TARGET_LABEL = "llmhub.updater.target";
@@ -209,8 +209,11 @@ export function createAgent({ docker, key, appUrl, projectOverride = null, prede
       status.issue = "no_project";
       return null;
     }
-    const summaries = await docker.listContainers([`${COMPOSE_PROJECT_LABEL}=${project}`, `${TARGET_LABEL}=true`]);
-    const containers = (await Promise.all(summaries.map((summary) => docker.inspectContainer(summary.Id)))).filter(Boolean);
+    const summaries = await docker.listContainers([`${COMPOSE_PROJECT_LABEL}=${project}`, `${TARGET_LABEL}=true`], true);
+    const labeled = (await Promise.all(summaries.map((summary) => docker.inspectContainer(summary.Id)))).filter(
+      (container) => container && !isBackup(container),
+    );
+    const containers = labeled.filter((container) => container.State?.Running === true);
     status.targets = containers.length;
     if (!containers.length) {
       status.issue = "no_targets";
@@ -221,7 +224,8 @@ export function createAgent({ docker, key, appUrl, projectOverride = null, prede
       status.issue = "mixed_images";
       return null;
     }
-    const ref = parseImageRef([...refs][0]);
+    const [imageRef] = refs;
+    const ref = parseImageRef(imageRef);
     if (!ref) {
       status.issue = "unsupported_image";
       return null;
@@ -229,7 +233,8 @@ export function createAgent({ docker, key, appUrl, projectOverride = null, prede
     status.image = ref.name;
     status.tag = ref.tag;
     status.pinned = isPinned(ref);
-    return { ref, containers };
+    const stopped = labeled.filter((container) => container.State?.Running !== true && container.Config?.Image === imageRef);
+    return { ref, containers, stopped };
   }
 
   async function runningDigests(target) {
@@ -339,12 +344,11 @@ export function createAgent({ docker, key, appUrl, projectOverride = null, prede
       if (!image) throw new Error("the pulled image cannot be inspected");
       const stale = target.containers.filter((container) => container.Image !== image.Id);
       const freshDigests = digestsFor(image.RepoDigests, target.ref.name);
-      if (stale.length) {
-        for (const container of stale) {
-          await recreateContainer(docker, container, { imageRef, image, onPhase: setPhase });
-        }
-        await removeImages(stale.map((container) => container.Image), image.Id);
+      for (const container of stale) {
+        await recreateContainer(docker, container, { imageRef, image, onPhase: setPhase });
       }
+      const replaced = await replaceStoppedContainers(docker, target.stopped, { imageRef, image });
+      await removeImages([...stale, ...replaced].map((container) => container.Image), image.Id);
       status.currentDigest = freshDigests[0] ?? status.currentDigest;
       status.available = updateAvailable(status.latestDigest, freshDigests);
       status.failedDigest = null;

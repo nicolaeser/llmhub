@@ -34,9 +34,11 @@ export type GateErrorOptions = {
 export type OpenAIErrorBody = {
   error: {
     message: string;
-    type: GatewayErrorType;
+    type: GatewayErrorType | "usage_limit_reached";
     param: string | null;
     code: string;
+    resets_at?: number;
+    resets_in_seconds?: number;
   };
 };
 

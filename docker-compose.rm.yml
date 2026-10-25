@@ -24,6 +24,8 @@ services:
       disable: true
     mem_limit: 256m
     logging: *logging
+    labels:
+      llmhub.updater.target: "true"
 
   redactor-model:
     image: ghcr.io/ggml-org/llama.cpp:server-b11804
@@ -84,6 +86,8 @@ services:
     mem_limit: 512m
     cpus: 1
     logging: *logging
+    labels:
+      llmhub.updater.target: "true"
 
 networks:
   redactor:
