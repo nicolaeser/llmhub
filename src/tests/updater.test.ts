@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
+import { hostname } from "node:os";
 import test from "node:test";
 import { recordedPrisma } from "./support/recorded-prisma";
 import { createConfigFor, hasHealthcheck, stopSeconds } from "../../scripts/updater/container-config.mjs";
-import { desiredOf } from "../../scripts/updater/agent.mjs";
+import { createAgent, desiredOf } from "../../scripts/updater/agent.mjs";
 import { untarFirstFile } from "../../scripts/updater/docker.mjs";
-import { recreateContainer } from "../../scripts/updater/recreate.mjs";
+import { recreateContainer, replaceStoppedContainers, waitHealthy } from "../../scripts/updater/recreate.mjs";
 import {
   digestsFor,
   isPinned,
@@ -169,6 +170,89 @@ test("recreating a container gives open requests the grace period and keeps it o
   const tuned = await recreateRecorded(appContainer({ StopTimeout: 45 }));
   assert.deepEqual(tuned.find(([name]) => name === "stop")?.[2], 45);
   assert.deepEqual(tuned.find(([name]) => name === "create")?.[2], 45);
+});
+
+test("a recreated job that exits cleanly counts as started, a service that exits does not", async () => {
+  const exited = (policy: string, exitCode = 0) => ({
+    inspectContainer: async () => ({
+      State: { Status: "exited", ExitCode: exitCode },
+      RestartCount: 0,
+      HostConfig: { RestartPolicy: { Name: policy, MaximumRetryCount: 5 } },
+      Config: { Healthcheck: { Test: ["NONE"] } },
+    }),
+  });
+  await waitHealthy(exited("on-failure"), "job", { pollMs: 1 });
+  await waitHealthy(exited("no"), "job", { pollMs: 1 });
+  await assert.rejects(waitHealthy(exited("on-failure", 1), "job", { pollMs: 1 }), /exit code 1/);
+  await assert.rejects(waitHealthy(exited("unless-stopped"), "service", { pollMs: 1 }), /exit code 0/);
+});
+
+function labeledContainer(id: string, name: string, running: boolean, image = "sha256:old", ref = "ghcr.io/nicolaeser/llmhub:latest") {
+  const container = appContainer({ Image: ref });
+  return { ...container, Id: id, Name: `/${name}`, Image: image, State: { Running: running } };
+}
+
+test("the updater lists stopped labeled containers of its image next to the running targets and skips backups", async () => {
+  const containers = [
+    labeledContainer("app", "llmhub-app-1", true),
+    labeledContainer("redactor", "llmhub-redactor-1", true),
+    labeledContainer("fetch", "llmhub-redactor-fetch-1", false),
+    labeledContainer("backup", "llmhub-app-1-llmhub-old", false),
+    labeledContainer("other", "llmhub-tool-1", false, "sha256:other", "ghcr.io/nicolaeser/other:latest"),
+  ];
+  const self = { Id: hostname(), Name: "/llmhub-updater-1", Config: { Labels: { "com.docker.compose.project": "llmhub" } } };
+  const listed: [string[], boolean][] = [];
+  const docker = {
+    listContainers: async (labels: string[], all: boolean) => {
+      listed.push([labels, all]);
+      return containers.map(({ Id }) => ({ Id }));
+    },
+    inspectContainer: async (id: string) => (id === self.Id ? self : containers.find((container) => container.Id === id) ?? null),
+    inspectImage: async () => ({ RepoDigests: [`ghcr.io/nicolaeser/llmhub@${DIGEST_A}`] }),
+    distribution: async () => ({ Descriptor: { digest: DIGEST_B } }),
+  };
+  const agent = createAgent({
+    docker,
+    key: scriptKey("x".repeat(32)),
+    appUrl: new URL("http://127.0.0.1:9"),
+    version: "test",
+  });
+  const target = await agent.check();
+  assert.deepEqual(listed, [[["com.docker.compose.project=llmhub", "llmhub.updater.target=true"], true]]);
+  assert.deepEqual(target?.containers.map((container) => container.Id), ["app", "redactor"]);
+  assert.deepEqual(target?.stopped.map((container) => container.Id), ["fetch"]);
+  assert.equal(agent.status.targets, 2);
+  assert.equal(agent.status.available, true);
+});
+
+test("stopped labeled containers move to the new image without being started", async () => {
+  const calls: [string, ...unknown[]][] = [];
+  const docker = {
+    inspectImage: async (id: string) => (id === "sha256:gone" ? null : oldImage()),
+    remove: async (id: string) => void calls.push(["remove", id]),
+    create: async (name: string, body: { Image: string; Labels: Record<string, string> }) => {
+      calls.push(["create", name, body.Image, body.Labels["com.docker.compose.image"]]);
+      return { Id: `sha256:${name}` };
+    },
+    start: async (id: string) => void calls.push(["start", id]),
+  };
+  const replaced = await replaceStoppedContainers(
+    docker,
+    [
+      labeledContainer("fetch", "llmhub-redactor-fetch-1", false),
+      labeledContainer("current", "llmhub-current-1", false, "sha256:new"),
+      labeledContainer("orphan", "llmhub-orphan-1", false, "sha256:gone"),
+    ],
+    { imageRef: "ghcr.io/nicolaeser/llmhub:latest", image: { Id: "sha256:new" } },
+  );
+  assert.deepEqual(
+    replaced.map((container) => container.Id),
+    ["fetch"],
+  );
+  assert.deepEqual(calls, [
+    ["remove", "fetch"],
+    ["create", "llmhub-redactor-fetch-1", "ghcr.io/nicolaeser/llmhub:latest", "sha256:new"],
+  ]);
 });
 
 test("image references, digests, and pinned tags are recognized", () => {

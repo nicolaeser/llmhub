@@ -98,9 +98,24 @@ export function anthropicErrorType(status: number): AnthropicErrorType {
   return "invalid_request_error";
 }
 
-export function openAIErrorBody(err: GateError): OpenAIErrorBody {
+export const CLIENT_RETRY_MAX_SECONDS = 60;
+
+export function usageLimitReset(err: GateError, now = Date.now()): number | null {
+  if (err.status !== 429 || err.requestScoped || err.retryAt === null) return null;
+  return err.retryAt - now > CLIENT_RETRY_MAX_SECONDS * 1000 ? Math.ceil(err.retryAt / 1000) : null;
+}
+
+export function openAIErrorBody(err: GateError, now = Date.now()): OpenAIErrorBody {
+  const error = { message: err.message, type: err.type, param: err.param, code: err.code };
+  const resetsAt = usageLimitReset(err, now);
+  if (resetsAt === null) return { error };
   return {
-    error: { message: err.message, type: err.type, param: err.param, code: err.code },
+    error: {
+      ...error,
+      type: "usage_limit_reached",
+      resets_at: resetsAt,
+      resets_in_seconds: Math.max(1, resetsAt - Math.floor(now / 1000)),
+    },
   };
 }
 
