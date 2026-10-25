@@ -14,8 +14,8 @@ import {
   waitingError,
   waitText,
 } from "@/lib/gateway/core";
-import { anthropicErrorBody, GateError, gatewayErrorType, openAIErrorBody } from "@/lib/gateway/errors";
-import { gateResponse, retryHeaders, toGateError } from "@/lib/gateway/access/gate";
+import { anthropicErrorBody, GateError, gatewayErrorType, openAIErrorBody, usageLimitReset } from "@/lib/gateway/errors";
+import { gateResponse, retryHeaders, toGateError, usageLimitHeaders } from "@/lib/gateway/access/gate";
 import { upstreamError } from "@/lib/gateway/dispatch/upstream";
 import { ApiProblem, PROBLEM_CONTENT_TYPE, problemFromError, problemResponse } from "@/lib/http/problem";
 import { isProblemCode, problemSpec } from "@/lib/http/problem-codes";
@@ -231,14 +231,62 @@ test("retry headers tell clients how long to wait and stop blind retries on long
   assert.deepEqual(retryHeaders(new GateError(400, "invalid_request", "bad", { retryAt: now + 1_000 }), now), {});
 });
 
+test("long limits carry their reset in the Claude Code and Codex formats", () => {
+  const now = 1_700_000_000_000;
+  const resetsAt = (now + 3_600_000) / 1000;
+  const later = new GateError(429, "rate_limit_exceeded", "limit", { retryAt: now + 3_600_000 });
+  assert.equal(usageLimitReset(later, now), resetsAt);
+  assert.deepEqual(openAIErrorBody(later, now), {
+    error: {
+      message: "limit",
+      type: "usage_limit_reached",
+      param: null,
+      code: "rate_limit_exceeded",
+      resets_at: resetsAt,
+      resets_in_seconds: 3600,
+    },
+  });
+  assert.deepEqual(usageLimitHeaders(later, true, now), {
+    "anthropic-ratelimit-unified-status": "rejected",
+    "anthropic-ratelimit-unified-reset": String(resetsAt),
+    "anthropic-ratelimit-unified-overage-disabled-reason": "unknown",
+  });
+  assert.deepEqual(usageLimitHeaders(later, false, now), {
+    "x-codex-primary-used-percent": "100",
+    "x-codex-primary-reset-at": String(resetsAt),
+  });
+  const soon = new GateError(429, "rate_limit_exceeded", "rpm exceeded", { retryAt: now + 60_000 });
+  const refused = new GateError(429, "upstream_error", "not entitled", { retryAt: now + 3_600_000, requestScoped: true });
+  const cooling = new GateError(503, "no_healthy_deployment", "cooling", { retryAt: now + 3_600_000 });
+  for (const err of [soon, refused, cooling, new GateError(429, "rate_limit_exceeded", "rpm exceeded")]) {
+    assert.equal(usageLimitReset(err, now), null);
+    assert.deepEqual(usageLimitHeaders(err, true, now), {});
+    assert.deepEqual(usageLimitHeaders(err, false, now), {});
+    assert.equal("resets_at" in openAIErrorBody(err, now).error, false);
+  }
+  assert.equal(openAIErrorBody(soon, now).error.type, "rate_limit_error");
+});
+
 test("gateResponse sends retry headers in both error shapes", async () => {
   const err = new GateError(429, "rate_limit_exceeded", "all accounts limited", { retryAt: Date.now() + 7_200_000 });
+  const reset = String(Math.ceil(err.retryAt! / 1000));
   const anthropic = gateResponse(err, new Request("http://hub.local/v1/messages", { method: "POST" }));
   assert.equal(anthropic.status, 429);
   assert.equal((await anthropic.json()).error.type, "rate_limit_error");
   assert.ok(Number(anthropic.headers.get("retry-after")) > 7_000);
   assert.equal(anthropic.headers.get("x-should-retry"), "false");
+  assert.equal(anthropic.headers.get("anthropic-ratelimit-unified-status"), "rejected");
+  assert.equal(anthropic.headers.get("anthropic-ratelimit-unified-reset"), reset);
+  assert.equal(anthropic.headers.get("anthropic-ratelimit-unified-overage-disabled-reason"), "unknown");
+  assert.equal(anthropic.headers.get("anthropic-ratelimit-unified-representative-claim"), null);
+  assert.equal(anthropic.headers.get("x-codex-primary-reset-at"), null);
   const openai = gateResponse(err, new Request("http://hub.local/v1/responses", { method: "POST" }));
   assert.equal(openai.headers.get("x-should-retry"), "false");
-  assert.equal((await openai.json()).error.code, "rate_limit_exceeded");
+  assert.equal(openai.headers.get("x-codex-primary-used-percent"), "100");
+  assert.equal(openai.headers.get("x-codex-primary-reset-at"), reset);
+  assert.equal(openai.headers.get("anthropic-ratelimit-unified-status"), null);
+  const body = (await openai.json()).error;
+  assert.equal(body.code, "rate_limit_exceeded");
+  assert.equal(body.type, "usage_limit_reached");
+  assert.equal(String(body.resets_at), reset);
 });

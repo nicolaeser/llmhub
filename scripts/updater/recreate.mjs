@@ -7,6 +7,17 @@ export const HEALTHY_TIMEOUT_MS = 10 * 60_000;
 export const SETTLE_MS = 20_000;
 const POLL_MS = 2_000;
 const FAILED_LOG_LINES = 40;
+const RESTARTING_POLICIES = new Set(["always", "unless-stopped"]);
+
+function completedJob(info) {
+  const policy = info.HostConfig?.RestartPolicy?.Name ?? "";
+  return (
+    info.State?.Status === "exited" &&
+    info.State.ExitCode === 0 &&
+    (info.RestartCount ?? 0) === 0 &&
+    !RESTARTING_POLICIES.has(policy)
+  );
+}
 
 export async function waitHealthy(docker, id, { healthyTimeoutMs = HEALTHY_TIMEOUT_MS, settleMs = SETTLE_MS, pollMs = POLL_MS } = {}) {
   const startedAt = Date.now();
@@ -14,6 +25,7 @@ export async function waitHealthy(docker, id, { healthyTimeoutMs = HEALTHY_TIMEO
     const info = await docker.inspectContainer(id);
     if (!info) throw new Error("the new container disappeared");
     const state = info.State ?? {};
+    if (completedJob(info)) return;
     if (state.Status === "exited" || state.Status === "dead" || state.Restarting || (info.RestartCount ?? 0) > 0) {
       throw new Error(`the new container stopped with exit code ${state.ExitCode ?? "unknown"}`);
     }
@@ -99,6 +111,34 @@ export async function recreateContainer(docker, container, { imageRef, image, on
   }
   await attempt("remove_old", () => docker.remove(container.Id));
   return { id: progress.created, name, oldImageId: container.Image };
+}
+
+export function isBackup(container) {
+  return containerName(container).endsWith(BACKUP_SUFFIX);
+}
+
+export async function replaceStoppedContainers(docker, containers, { imageRef, image }) {
+  const replaced = [];
+  for (const container of containers) {
+    if (container.Image === image.Id) continue;
+    const name = containerName(container);
+    try {
+      const oldImage = await docker.inspectImage(container.Image);
+      if (!oldImage) throw new Error(`the image of ${name} cannot be inspected`);
+      const body = createConfigFor(container, oldImage, {
+        imageRef,
+        imageId: image.Id,
+        composeImage: composeImageLabel(container, image),
+      });
+      await docker.remove(container.Id);
+      await docker.create(name, body);
+      replaced.push(container);
+      log("info", "updater.stopped_container_replaced", { container: name, image: imageRef });
+    } catch (err) {
+      log("warn", "updater.stopped_container_not_replaced", { container: name, err: errorMessage(err) });
+    }
+  }
+  return replaced;
 }
 
 export async function recoverLeftovers(docker, projectLabel) {

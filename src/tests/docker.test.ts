@@ -499,6 +499,11 @@ test("the redaction model overlay runs PII-Tracer on an internal network next to
     assert.match(block, /^ {6}- redactor-models:\/models:ro$/m, name);
   }
 
+  for (const name of ["redactor-fetch", "redactor"]) {
+    assert.match(services.get(name) ?? "", /^ {4}labels:\n {6}llmhub\.updater\.target: "true"\n/m, name);
+  }
+  assert.doesNotMatch(services.get("redactor-model") ?? "", /llmhub\.updater\.target/);
+
   const fetcher = services.get("redactor-fetch") ?? "";
   assert.match(fetcher, /image: ghcr\.io\/nicolaeser\/llmhub:\$\{LLMHUB_TAG:-latest\}/);
   assert.match(fetcher, /command: \["node", "redactor\.mjs", "fetch"\]/);

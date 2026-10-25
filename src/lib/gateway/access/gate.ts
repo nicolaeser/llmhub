@@ -11,7 +11,13 @@ import { resolvePolicies } from "@/lib/settings/enterprise";
 import { assertBudget, assertRate, recordUsageOrLog } from "@/lib/gateway/billing/billing";
 import { capRequestCost, maxCostHeader } from "@/lib/gateway/billing/cost-cap";
 import { asRecord, newRequestId, routerGateError } from "@/lib/gateway/core";
-import { anthropicErrorBody, GateError, openAIErrorBody } from "@/lib/gateway/errors";
+import {
+  anthropicErrorBody,
+  CLIENT_RETRY_MAX_SECONDS,
+  GateError,
+  openAIErrorBody,
+  usageLimitReset,
+} from "@/lib/gateway/errors";
 import { errorFields } from "@/lib/logging/format";
 import { logger } from "@/lib/logging/logger";
 import { modelAlias } from "@/lib/gateway/catalog/model-alias";
@@ -45,8 +51,6 @@ export function wantsAnthropicErrors(req: Request): boolean {
   return gatewayPath(new URL(req.url).pathname).startsWith("/v1/messages") || req.headers.has("anthropic-version");
 }
 
-export const CLIENT_RETRY_MAX_SECONDS = 60;
-
 export function retryHeaders(gate: GateError, now = Date.now()): Record<string, string> {
   if (gate.requestScoped) return { "x-should-retry": "false" };
   if (gate.retryAt === null || (gate.status !== 429 && gate.status < 500)) return {};
@@ -57,6 +61,19 @@ export function retryHeaders(gate: GateError, now = Date.now()): Record<string, 
   };
 }
 
+export function usageLimitHeaders(gate: GateError, anthropic: boolean, now = Date.now()): Record<string, string> {
+  const resetsAt = usageLimitReset(gate, now);
+  if (resetsAt === null) return {};
+  if (anthropic) {
+    return {
+      "anthropic-ratelimit-unified-status": "rejected",
+      "anthropic-ratelimit-unified-reset": String(resetsAt),
+      "anthropic-ratelimit-unified-overage-disabled-reason": "unknown",
+    };
+  }
+  return { "x-codex-primary-used-percent": "100", "x-codex-primary-reset-at": String(resetsAt) };
+}
+
 export function gateResponse(err: unknown, req: Request): NextResponse {
   void alertUpstreamFailure(err);
   const gate = toGateError(err);
@@ -64,16 +81,17 @@ export function gateResponse(err: unknown, req: Request): NextResponse {
   if (gate.status >= 500) {
     logger.error("gateway.error", { requestId, code: gate.code, ...errorFields(err) });
   }
-  const retry = retryHeaders(gate);
+  const now = Date.now();
+  const retry = retryHeaders(gate, now);
   if (wantsAnthropicErrors(req)) {
     return NextResponse.json(anthropicErrorBody(gate.status, gate.message, requestId), {
       status: gate.status,
-      headers: { "request-id": requestId, "x-request-id": requestId, ...retry },
+      headers: { "request-id": requestId, "x-request-id": requestId, ...retry, ...usageLimitHeaders(gate, true, now) },
     });
   }
-  return NextResponse.json(openAIErrorBody(gate), {
+  return NextResponse.json(openAIErrorBody(gate, now), {
     status: gate.status,
-    headers: { "x-request-id": requestId, ...retry },
+    headers: { "x-request-id": requestId, ...retry, ...usageLimitHeaders(gate, false, now) },
   });
 }
 
