@@ -20,6 +20,7 @@ Load when changing `lang/`, `src/i18n/`, or user-visible strings. Load [next-int
 - Must keep ICU argument names, plural/select branches, and rich tags identical across locales.
 - Must keep `if` only for control flow (empty vs populated UI, auth, business rules), not for choosing a label.
 - Named formats live in `src/i18n/formats.ts` and must be returned from `getRequestConfig`.
+- German copy must reuse the console's established terms, anchored in `lang/de/Sidebar.json`: Unternehmen (not Firma), Abteilung, Konsolen-Benutzer, API-Keys, Anbieter, Leitplanken, Wissensbasen, Nutzung, Protokolle, Anfragen, Ausgaben. Search `lang/de/` for an existing term before coining a new one.
 
 ## Validation
 

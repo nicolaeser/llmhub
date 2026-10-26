@@ -70,7 +70,7 @@ Treat `<!-- BEGIN:… -->` … `<!-- END:… -->` as potentially owned by an ext
 5. If the owner requires the root path, keep the block byte-for-byte after the adapter line.
 6. If ownership or location cannot be verified, do not move or rewrite the block.
 
-The Next.js block in root `AGENTS.md` (`BEGIN:nextjs-agent-rules`) is owned by Next.js: `next dev` writes and re-adds it (`node_modules/next/dist/server/lib/generate-agent-files.js`), and it points at `node_modules/next/dist/docs/`. It must stay at `AGENTS.md`. Intentional overlap with [instructions/frontend.md](instructions/frontend.md) is a documented compatibility exception.
+The Next.js block in root `AGENTS.md` (`BEGIN:nextjs-agent-rules`) is owned by Next.js: `next dev` writes and re-adds it (`node_modules/next/dist/server/lib/generate-agent-files.js`), and it points at `node_modules/next/dist/docs/`. It must stay at `AGENTS.md`, byte-identical to what `buildAgentRulesBlock` in that file returns for the pinned `next` version (16.4.2 writes the heading as `##`); otherwise every `next dev` run rewrites the tracked file and the change leaks into commits. After a `next` upgrade, compare the block again and commit the generator's wording. Intentional overlap with [instructions/frontend.md](instructions/frontend.md) is a documented compatibility exception.
 
 ## Drift
 
