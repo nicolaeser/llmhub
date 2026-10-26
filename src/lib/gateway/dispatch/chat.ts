@@ -30,7 +30,7 @@ import { CodexSseTranslator } from "@/lib/gateway/upstreams/codex";
 import { devinEventStream, devinHttpError } from "@/lib/gateway/upstreams/devin";
 import { museTranslator } from "@/lib/gateway/upstreams/muse";
 import { deploymentAuth, renewRejectedLogin } from "@/lib/gateway/upstreams/credentials";
-import { nudgeLimits } from "@/lib/gateway/upstreams/limit-store";
+import { nudgeLimits, recordStreamTraffic } from "@/lib/gateway/upstreams/limit-store";
 import { autoRedeemIfDue } from "@/lib/gateway/upstreams/reset-redeem";
 import { plainModel } from "@/lib/gateway/catalog/model-alias";
 import { hiddenFrom, outsidePool, routable, routeOf } from "@/lib/gateway/routing/route-pool";
@@ -142,6 +142,7 @@ export function recordSuccess(
     responseCache?: ResponseCacheUsage;
   },
 ): Promise<number> {
+  if (routed.dep.provider) recordStreamTraffic(routed.dep.provider.id);
   return recordUsage({
     principal: input.principal,
     model: input.model,
@@ -632,6 +633,7 @@ export function relayChatStream(input: {
   const send = (controller: ReadableStreamDefaultController<Uint8Array>, chunk: Uint8Array) => {
     emitted += 1;
     lastSent = Date.now();
+    if (dep.provider) recordStreamTraffic(dep.provider.id, lastSent);
     controller.enqueue(chunk);
   };
 

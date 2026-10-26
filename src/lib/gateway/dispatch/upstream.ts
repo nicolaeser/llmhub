@@ -22,7 +22,7 @@ import { deploymentAuth } from "@/lib/gateway/upstreams/credentials";
 import { DEVIN_CHAT_PATH, windowReset } from "@/lib/gateway/upstreams/devin-account";
 import { chatToDevin, devinCompletion, encodeDevinRequest } from "@/lib/gateway/upstreams/devin";
 import { kimiChatBody } from "@/lib/gateway/upstreams/kimi";
-import { observeClaudeLimits, observeLimitWindows } from "@/lib/gateway/upstreams/limit-store";
+import { observeClaudeLimits, observeLimitWindows, recordStreamTraffic } from "@/lib/gateway/upstreams/limit-store";
 import { chatToMuse, museCompletion } from "@/lib/gateway/upstreams/muse";
 import { limitsSnapshot } from "@/lib/gateway/upstreams/subscription-limits";
 import { claudeRejectionReset } from "@/lib/gateway/upstreams/observed-limits";
@@ -128,6 +128,7 @@ export function mergeUpstreamHeaders(
 }
 
 export function observeUpstreamLimits(dep: ResolvedDeployment, headers: Headers): void {
+  if (dep.provider) recordStreamTraffic(dep.provider.id);
   if (dep.provider?.kind !== "claude") return;
   void observeClaudeLimits(dep.provider.id, headers);
 }
@@ -148,7 +149,10 @@ export function wireBody(dep: ResolvedDeployment, auth: UpstreamAuth, path: stri
 export function museUsageObserver(dep: ResolvedDeployment): ((windows: LimitWindow[]) => void) | undefined {
   const provider = dep.provider;
   if (provider?.kind !== "muse_code") return undefined;
-  return (windows) => void observeLimitWindows(provider.id, windows);
+  return (windows) => {
+    recordStreamTraffic(provider.id);
+    void observeLimitWindows(provider.id, windows);
+  };
 }
 
 function nativeChatPath(path: string): boolean {

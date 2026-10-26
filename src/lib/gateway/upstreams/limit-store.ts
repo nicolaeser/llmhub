@@ -6,7 +6,7 @@ import prisma from "@/lib/db/prisma";
 import { isPrismaCode } from "@/lib/auth/errors";
 import { asRecord } from "@/lib/gateway/core";
 import { isResetKind } from "@/lib/gateway/routing/auto-reset-policy";
-import { latestRecovery, quotaExhausted } from "@/lib/gateway/routing/quota";
+import { accountRecoveryAt, hasExhaustedQuota } from "@/lib/gateway/routing/quota";
 import { limitsFromTraffic, PROVIDER_CATALOG, reportsLimits } from "@/lib/gateway/upstreams/provider-kinds";
 import {
   claudeHeaderWindows,
@@ -43,7 +43,7 @@ import type {
 } from "@/types/providers";
 import type { ResetCredits, ResetState } from "@/types/resets";
 
-export const LIMITS_POLL_MS = 5 * 60_000;
+export const LIMITS_POLL_MS = 3 * 60_000;
 export const CLAUDE_POLL_MS = 30 * 60_000;
 export const CLAUDE_TRAFFIC_POLL_MS = 2 * 3_600_000;
 export const POLL_JITTER = 0.15;
@@ -76,8 +76,19 @@ const hydratedAt = new Map<string, number>();
 const hydrating = new Map<string, Promise<void>>();
 const nudgedAt = new Map<string, number>();
 const observedAt = new Map<string, number>();
+const streamedAt = new Map<string, number>();
 const observedWrites = new Map<string, { at: number; windows: LimitWindow[] }>();
 const observedChains = new Map<string, Promise<boolean>>();
+
+export function recordStreamTraffic(providerId: string, now = Date.now()): void {
+  streamedAt.set(providerId, now);
+}
+
+export function isStreamingActive(providerId: string, now = Date.now(), windowMs = LIMITS_POLL_MS): boolean {
+  const stream = streamedAt.get(providerId) ?? -Infinity;
+  const observed = observedAt.get(providerId) ?? -Infinity;
+  return Math.max(stream, observed) > now - windowMs;
+}
 
 type SnapshotRow = {
   providerId: string;
@@ -141,8 +152,8 @@ export function jittered(ms: number, random: () => number, spread = POLL_JITTER)
   return Math.round(ms * (1 + (random() * 2 - 1) * spread));
 }
 
-export function pollInterval(kind: string): number {
-  return kind === "claude" ? CLAUDE_POLL_MS : LIMITS_POLL_MS;
+export function pollInterval(kind: string, streaming = false): number {
+  return streaming && kind === "claude" ? CLAUDE_POLL_MS : LIMITS_POLL_MS;
 }
 
 export function manualRefreshGap(kind: string): number {
@@ -154,11 +165,17 @@ export function nextPollAt(
   limits: SubscriptionLimits | null,
   now: number,
   random: () => number = Math.random,
+  streaming = false,
 ): number {
-  const interval = pollInterval(kind);
+  const isStreaming =
+    streaming ||
+    (kind === "claude" &&
+      limits !== null &&
+      now - observedTime(limits) < LIMITS_POLL_MS &&
+      !hasExhaustedQuota(limits, now));
+  const interval = pollInterval(kind, isStreaming);
   const regular = now + jittered(interval, random);
-  if (!limits || !quotaExhausted(limits, "", now) || now - observedTime(limits) < interval) return regular;
-  const recovery = latestRecovery(limits, now);
+  const recovery = accountRecoveryAt(limits, now);
   if (recovery === null) return regular;
   const afterReset = recovery + RESET_GRACE_MS + Math.round(random() * RESET_GRACE_JITTER_MS);
   return Math.max(now + MIN_POLL_GAP_MS, Math.min(regular, afterReset));
@@ -269,6 +286,7 @@ function withPreviousObservation(
 }
 
 function successData(account: LimitPollAccount, limits: SubscriptionLimits, now: number, random: () => number) {
+  const streaming = isStreamingActive(account.id, now);
   return {
     limits: json(limits),
     error: "",
@@ -276,7 +294,7 @@ function successData(account: LimitPollAccount, limits: SubscriptionLimits, now:
     checkedAt: new Date(now),
     failures: 0,
     retryAt: null,
-    nextAt: new Date(nextPollAt(account.kind, limits, now, random)),
+    nextAt: new Date(nextPollAt(account.kind, limits, now, random, streaming)),
     loginVersion: account.loginVersion,
   };
 }
@@ -298,6 +316,18 @@ function failureData(
     nextAt: new Date(now + failureDelay(failure, failures, random)),
     loginVersion: account.loginVersion,
   };
+}
+
+async function clearAccountDeploymentsCooldown(providerId: string): Promise<void> {
+  try {
+    const routes = await prisma.deployment.findMany({ where: { providerId }, select: { id: true } });
+    if (routes.length) {
+      const { clearCooldowns } = await import("@/lib/gateway/routing/provider-health");
+      await clearCooldowns(routes.map((r) => r.id));
+    }
+  } catch (err) {
+    logger.warn("subscription.clear_cooldown_failed", { providerId, ...errorFields(err) });
+  }
 }
 
 async function fetchHeld(
@@ -329,7 +359,10 @@ async function fetchHeld(
     where: { providerId: account.id, leaseToken: token },
     data: { ...data, leaseUntil: null, leaseToken: "", version: { increment: 1 } },
   });
-  if (limits) rememberLimits(account.id, limits);
+  if (limits) {
+    rememberLimits(account.id, limits);
+    if (!hasExhaustedQuota(limits, now)) void clearAccountDeploymentsCooldown(account.id);
+  }
   if (written.count) notifyLive("limits");
   return { status: "fetched", limits, failure, snapshot: await readStoredSnapshot(account.id) };
 }
@@ -570,8 +603,14 @@ function observedBase(now: number): SubscriptionLimits {
   return { plan: "", windows: [], credits: null, resetCredits: null, extraUsage: null, fetchedAt: new Date(now).toISOString() };
 }
 
-function trafficPollAt(stored: StoredLimitSnapshot, now: number): number | null {
+function trafficPollAt(stored: StoredLimitSnapshot, limits: SubscriptionLimits, now: number): number | null {
   if (stored.fetchedAt === null || stored.failures > 0) return null;
+  const recovery = accountRecoveryAt(limits, now);
+  if (recovery !== null && recovery + RESET_GRACE_MS < now + CLAUDE_POLL_MS) {
+    const afterReset = recovery + RESET_GRACE_MS;
+    const target = Math.max(now + MIN_POLL_GAP_MS, afterReset);
+    return target !== stored.nextAt ? target : null;
+  }
   const at = Math.min(stored.fetchedAt + CLAUDE_TRAFFIC_POLL_MS, now + CLAUDE_POLL_MS);
   return at > stored.nextAt ? at : null;
 }
@@ -584,7 +623,7 @@ export async function storeObservedLimits(providerId: string, windows: LimitWind
     const merged = withObservedWindows(base, windows, now);
     const changed = !stored.limits || observedChanged(base.windows, merged.windows.filter(isObservedWindow));
     if (!changed && now - observedTime(base) < OBSERVED_WRITE_GAP_MS) return false;
-    const pushTo = trafficPollAt(stored, now);
+    const pushTo = trafficPollAt(stored, merged, now);
     const written = await prisma.providerLimitSnapshot.updateMany({
       where: { providerId, version: stored.version },
       data: {
