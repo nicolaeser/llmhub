@@ -22,6 +22,7 @@ import { forgetVertexToken, vertexConnection, vertexView } from "@/lib/gateway/u
 import { baseName, newModelMode, vendorOf } from "@/lib/gateway/catalog/model-catalog";
 import { refreshProviderModels } from "@/lib/gateway/upstreams/discovery";
 import { matchingConnection, pruneSupersededLogins } from "@/lib/providers/account-match";
+import { providerPresetUsage } from "@/lib/providers/preset-usage";
 import { removeProviderConnection } from "@/lib/providers/provider-removal";
 import { discoveredOf } from "@/lib/gateway/upstreams/provider-prices";
 import { pollAccounts, readLimitSnapshot, readLimitSnapshots } from "@/lib/gateway/upstreams/limit-store";
@@ -43,6 +44,7 @@ import type {
   LimitSnapshotList,
   ProviderPolicyInput,
   ProviderRecord,
+  ProvidersPage,
   ProviderSignIn,
   ProviderSyncRecord,
   SignInCredential,
@@ -163,6 +165,15 @@ async function listConnected() {
 export async function loadProviders() {
   const session = await requirePlatformPermission(PERMISSIONS.PROVIDERS_READ);
   return { connected: await listConnected(), canManage: hasPerm(session.permissions, PERMISSIONS.PROVIDERS_MANAGE) };
+}
+
+export async function loadProviderConsole(): Promise<ProvidersPage> {
+  const session = await requirePlatformPermission(PERMISSIONS.PROVIDERS_READ);
+  const [connected, presets] = await Promise.all([
+    listConnected(),
+    hasPerm(session.permissions, PERMISSIONS.MODELS_READ) ? providerPresetUsage() : null,
+  ]);
+  return { connected, canManage: hasPerm(session.permissions, PERMISSIONS.PROVIDERS_MANAGE), presets };
 }
 
 export async function createProvider(input: {

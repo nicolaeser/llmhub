@@ -1,5 +1,13 @@
 import "./support/redactor-env";
-import { chatReply, gateway, gatewayRequest, groupRow, resetGateway, type UpstreamCall } from "./support/gateway-harness";
+import {
+  chatReply,
+  gateway,
+  gatewayRequest,
+  groupRow,
+  resetGateway,
+  setKeyOverride,
+  type UpstreamCall,
+} from "./support/gateway-harness";
 import { recordedPrisma } from "./support/recorded-prisma";
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -340,11 +348,8 @@ test("the concurrency cap queues callers, refuses a full queue, and times out wa
 
 test("a gateway request detects with the model, logs the detector call without content, and stores only placeholders", async () => {
   const alias = setup();
-  gateway.key = {
-    ...gateway.key,
-    logContent: true,
-    piiPolicy: policy({ mode: "restore" }),
-  };
+  gateway.key = { ...gateway.key, logContent: true };
+  setKeyOverride({ pii: policy({ mode: "restore" }) });
   recordedPrisma.handlers = {
     user: {
       findUnique: ({ where }: { where: { id: string } }) =>

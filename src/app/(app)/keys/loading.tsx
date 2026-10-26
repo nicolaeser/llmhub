@@ -3,12 +3,8 @@
 import { KeyRound } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { PageLoading } from "@/components/console/page-status";
-import { useConsoleScope } from "../_components/console-scope";
 
 export default function KeysLoading() {
   const t = useTranslations("Keys");
-  const { kind } = useConsoleScope();
-  return (
-    <PageLoading icon={KeyRound} title={t("title")} subtitle={t("subtitle")} tabs={kind === "platform"} stats={4} />
-  );
+  return <PageLoading icon={KeyRound} title={t("title")} subtitle={t("subtitle")} stats={4} />;
 }

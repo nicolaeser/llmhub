@@ -19,8 +19,8 @@ import {
   deleteProvider,
   discoverProvider,
   importProviderModels,
+  loadProviderConsole,
   loadProviderLimits,
-  loadProviders,
   loadSubscriptionLimits,
   pollSignIn,
   startSignIn,
@@ -29,8 +29,8 @@ import {
 import { redeemProviderReset } from "@/lib/providers/resets";
 import { createSubAddLink, deleteSubAddLink, loadSubAddLinks } from "@/lib/providers/sub-add-links";
 
-export async function loadProvidersAction(...args: Parameters<typeof loadProviders>) {
-  return runAction(() => loadProviders(...args));
+export async function loadProvidersAction(...args: Parameters<typeof loadProviderConsole>) {
+  return runAction(() => loadProviderConsole(...args));
 }
 
 export async function createProviderAction(...args: Parameters<typeof createProvider>) {

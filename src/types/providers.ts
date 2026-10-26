@@ -131,6 +131,14 @@ export type ProviderView = {
   vertex: VertexView | null;
 };
 
+export type ProviderPresetUsage = Record<string, string[]>;
+
+export type ProvidersPage = {
+  connected: ProviderView[];
+  canManage: boolean;
+  presets: ProviderPresetUsage | null;
+};
+
 export type SignInSession = SignInCredential["session"];
 
 export type SignInTokens = SignInSession["tokens"];

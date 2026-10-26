@@ -1,4 +1,14 @@
-import { chatReply, gateway, gatewayRequest, groupRow, MODEL, resetGateway, UPSTREAM } from "./support/gateway-harness";
+import {
+  chatReply,
+  gateway,
+  gatewayRequest,
+  groupRow,
+  MODEL,
+  resetGateway,
+  setKeyOverride,
+  setOverride,
+  UPSTREAM,
+} from "./support/gateway-harness";
 import { recordedPrisma } from "./support/recorded-prisma";
 import { setRequest } from "./support/next-headers-stub";
 import assert from "node:assert/strict";
@@ -29,7 +39,8 @@ function policy(mode: PiiMode, enabled = true): PiiPolicy {
 
 function withPolicy(pii: PiiPolicy): void {
   resetGateway();
-  gateway.key = { ...gateway.key, piiPolicy: pii, logContent: true };
+  gateway.key = { ...gateway.key, logContent: true };
+  setKeyOverride({ pii });
   recordedPrisma.handlers = {
     user: {
       findUnique: ({ where }: { where: { id: string } }) =>
@@ -166,6 +177,7 @@ function traceFor(endpoint: string, mode: PiiMode | "", values: [string, string]
 }
 
 function ownerPrincipal(pii: PiiPolicy): Principal {
+  setOverride({ keyId: "key_batch" }, { pii, guardrails: defaultGuardrails() });
   const key: VirtualKeyView = {
     token_id: "key_batch",
     key_name: "sk-hub-batch",
@@ -189,7 +201,6 @@ function ownerPrincipal(pii: PiiPolicy): Principal {
     access_windows: [],
     access_time_zone: "UTC",
     blocked: false,
-    pii,
     log_content: false,
     created_at: "",
   };
@@ -202,7 +213,6 @@ function ownerPrincipal(pii: PiiPolicy): Principal {
     memberId: "",
     models: [],
     routeLimits: {},
-    guardrails: defaultGuardrails(),
   };
 }
 
@@ -610,11 +620,10 @@ test("the playground instructs the model in restore mode", async () => {
         budgetDuration: "",
         spendResetAt: null,
         createdAt: new Date(0),
-        piiPolicy: policy("restore"),
-        guardrailPolicy: null,
       }),
     },
   };
+  setOverride({ orgId: "o1" }, { pii: policy("restore") });
   gateway.reply = () =>
     sseResponse([
       `data: ${JSON.stringify({ id: "c1", object: "chat.completion.chunk", choices: [{ index: 0, delta: { content: `Hi ${TOKEN}` } }] })}\n\n`,

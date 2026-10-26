@@ -1,5 +1,5 @@
 import type { CostCap } from "@/types/billing";
-import type { GuardrailPolicy, OutputGuard, PiiMode } from "@/types/guardrails";
+import type { OutputGuard, PiiMode } from "@/types/guardrails";
 import type { VirtualKeyView } from "@/types/keys";
 import type { RouteLimits } from "@/types/model-templates";
 import type { PublicPool, ResolvedDeployment, ResolvedModelGroup, RoutePool } from "@/types/routing";
@@ -16,7 +16,6 @@ export type Principal = {
   models: string[];
   routeLimits: RouteLimits;
   dataRules?: boolean;
-  guardrails?: GuardrailPolicy | null;
   pool?: RoutePool;
   system?: SystemFeature;
   client?: RequestClient;

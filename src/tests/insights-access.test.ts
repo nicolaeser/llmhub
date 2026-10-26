@@ -52,7 +52,6 @@ function keyRow(overrides: Record<string, unknown> = {}) {
     accessWindows: [],
     accessTimeZone: "UTC",
     blocked: false,
-    piiPolicy: null,
     logContent: true,
     createdAt: new Date("2026-10-01T00:00:00.000Z"),
     templates: [],
@@ -65,18 +64,6 @@ function whereOf(model: string, method = "findMany"): unknown {
   assert.ok(call, `${model}.${method}`);
   return (call.args as { where?: unknown }).where;
 }
-
-test("the keys page shows model templates only in the platform scope", async () => {
-  const { loadKeyTabs } = await import("@/lib/keys/manage");
-  assert.deepEqual(await runAsPrincipal(owner, () => loadKeyTabs()), ["keys", "templates"]);
-  assert.deepEqual(await runAsPrincipal(ownerCompanyView, () => loadKeyTabs()), ["keys"]);
-  assert.deepEqual(
-    await runAsPrincipal(principal(["keys:read", "models:read"], { orgId: COMPANY_ID }), () => loadKeyTabs()),
-    ["keys"],
-  );
-  assert.deepEqual(await runAsPrincipal(principal(["models:read"]), () => loadKeyTabs()), ["templates"]);
-  assert.deepEqual(await runAsPrincipal(principal(["spend:read"]), () => loadKeyTabs()), []);
-});
 
 test("model templates are global and refuse the company scope before reading data", async () => {
   const { createTemplate, deleteTemplate, loadTemplates, updateTemplate } = await import("@/lib/models/templates");

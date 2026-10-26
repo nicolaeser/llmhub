@@ -5,11 +5,17 @@ import { toast, type useOverlayState } from "@heroui/react";
 import { useTranslations } from "next-intl";
 import FormDialog from "@/components/console/form-dialog";
 import { useErrorToast } from "@/components/console/use-error-toast";
+import { isSignInKind } from "@/lib/gateway/upstreams/provider-kinds";
 import { isActionFail } from "@/lib/http/action-result";
 import type { ProviderKindSpec, ProviderView } from "@/types/providers";
 import { createProviderAction, updateProviderAction } from "../_action";
 import { draftBody, draftFor, draftReady } from "./provider-draft";
 import ProviderFields from "./provider-fields";
+
+function poolOf(spec: ProviderKindSpec, internal: boolean) {
+  if (isSignInKind(spec.kind)) return "subscription";
+  return internal ? "internal" : "api";
+}
 
 export default function ProviderDialog({
   state,
@@ -45,11 +51,11 @@ export default function ProviderDialog({
   return (
     <FormDialog
       state={state}
-      size="sm"
       title={t("formTitle", {
         mode: editing ? "edit" : "connect",
         name: spec ? t("kindName", { kind: spec.kind }) : (editing?.name ?? ""),
       })}
+      description={spec ? t("poolHint", { pool: poolOf(spec, draft.internal) }) : undefined}
       submitLabel={t("formSubmit", { mode: editing ? "save" : "connect" })}
       pending={pending}
       isSubmitDisabled={!draftReady(spec, editing, draft)}

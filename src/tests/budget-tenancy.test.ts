@@ -154,8 +154,6 @@ function keyRow(id: string, over: Row = {}): Row {
     accessWindows: [],
     accessTimeZone: "UTC",
     blocked: false,
-    piiPolicy: null,
-    guardrailPolicy: null,
     logContent: true,
     createdAt: new Date("2026-01-01T00:00:00Z"),
     templates: [],

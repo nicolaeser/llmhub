@@ -4,10 +4,16 @@ import type {
   guardrailRuleSchema,
   piiDetectorSettingsSchema,
   piiPolicySchema,
+  POLICY_SECTIONS,
+  policyRefSchema,
   policyScopeSchema,
 } from "@/schemas/guardrails";
 
 export type PolicyScope = z.infer<typeof policyScopeSchema>;
+
+export type PolicySection = (typeof POLICY_SECTIONS)[number];
+
+export type PolicyRef = z.infer<typeof policyRefSchema>;
 
 export type PiiPolicy = z.infer<typeof piiPolicySchema>;
 
@@ -15,15 +21,13 @@ export type PiiMode = PiiPolicy["mode"];
 
 export type PiiDetectorSettings = z.infer<typeof piiDetectorSettingsSchema>;
 
-export type PolicyTarget = {
-  scope: PolicyScope;
-  id: string;
+export type PolicyTarget = PolicyRef & {
   alias: string;
   orgId: string;
+  teamId: string;
   projectId: string;
+  path: string[];
 };
-
-export type PiiOverrideView = PolicyTarget & { policy: PiiPolicy };
 
 export type GuardrailRule = z.infer<typeof guardrailRuleSchema>;
 
@@ -37,26 +41,31 @@ export type InjectionAction = InjectionPolicy["action"];
 
 export type InjectionCheck = InjectionPolicy["checks"][number];
 
-export type GuardrailOverrideView = PolicyTarget & { policy: GuardrailPolicy };
+export type SecretsPolicy = GuardrailPolicy["secrets"];
 
-export type PiiSummary = { enabled: boolean; mode: PiiMode; output: boolean; entities: number; detector: PiiDetector };
-
-export type GuardrailSummary = {
-  injection: InjectionAction | null;
-  secrets: GuardrailAction | null;
-  rules: number;
+export type PolicyLayer = {
+  pii: PiiPolicy | null;
+  injection: InjectionPolicy | null;
+  secrets: SecretsPolicy | null;
+  rules: GuardrailRule[] | null;
 };
+
+export type PolicyOverrideView = PolicyLayer & { target: PolicyTarget; updatedAt: string };
+
+export type PlatformPolicies = { pii: PiiPolicy; guardrails: GuardrailPolicy };
+
+export type EffectivePolicies = PlatformPolicies & { sources: Record<PolicySection, PolicyRef | null> };
+
+export type SectionState = "off" | "on" | PiiMode | GuardrailAction;
+
+export type SectionSummary = { section: PolicySection; state: SectionState; count: number };
 
 export type PolicyLevel = "global" | "org";
 
-export type PolicyOverrideSummary = PolicyTarget & {
-  pii: PiiSummary | null;
-  guardrails: GuardrailSummary | null;
-};
+export type PolicyOverrideSummary = PolicyTarget & { sections: SectionSummary[] };
 
 export type CompanyPolicies = {
-  pii: PiiSummary & { level: PolicyLevel };
-  guardrails: GuardrailSummary & { level: PolicyLevel };
+  sections: (SectionSummary & { level: PolicyLevel })[];
   overrides: PolicyOverrideSummary[];
 };
 
@@ -91,6 +100,11 @@ export type GuardrailTestResult = {
   text: string;
   hits: string[];
   blocked: boolean;
+};
+
+export type PolicyTestResult = GuardrailTestResult & {
+  blockedBy: "guardrail" | "pii" | null;
+  pii: string[];
 };
 
 export type PiiEntity = {

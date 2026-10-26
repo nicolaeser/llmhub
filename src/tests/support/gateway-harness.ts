@@ -4,8 +4,30 @@ import { fileURLToPath } from "node:url";
 import { recordedPrisma } from "./recorded-prisma";
 import { parseJsonOrNull } from "@/lib/utils/json";
 import type { JsonMap } from "@/types/gateway";
+import type { GuardrailPolicy, PiiPolicy } from "@/types/guardrails";
 
 export type UpstreamCall = { url: string; body: JsonMap | null; headers: Record<string, string> };
+
+export type OverrideTarget = { orgId?: string; teamId?: string; projectId?: string; keyId?: string };
+
+export type OverrideRow = {
+  orgId: string | null;
+  teamId: string | null;
+  projectId: string | null;
+  keyId: string | null;
+  pii: unknown;
+  injection: unknown;
+  secrets: unknown;
+  rules: unknown;
+};
+
+export type OverridePolicies = {
+  pii?: PiiPolicy | null;
+  guardrails?: GuardrailPolicy | null;
+  injection?: GuardrailPolicy["injection"] | null;
+  secrets?: GuardrailPolicy["secrets"] | null;
+  rules?: GuardrailPolicy["rules"] | null;
+};
 type RouteModule = { POST(req: Request, ctx: { params: Promise<Record<string, string>> }): Promise<Response> };
 
 export const API_KEY = "sk-hub-test";
@@ -36,8 +58,6 @@ export function virtualKeyRow(change: Record<string, unknown> = {}) {
     accessWindows: [],
     accessTimeZone: "UTC",
     blocked: false,
-    piiPolicy: null as unknown,
-    guardrailPolicy: null as unknown,
     logContent: false,
     createdAt: new Date("2026-10-01T00:00:00Z"),
     templates: [],
@@ -101,6 +121,7 @@ export const gateway = {
   upstream: [] as UpstreamCall[],
   enterprise: {} as JsonMap,
   key: virtualKeyRow(),
+  overrides: [] as OverrideRow[],
   groups: new Map<string, unknown>([[MODEL, groupRow(MODEL)]]),
   reply: defaultReply as (call: UpstreamCall) => Response | Promise<Response>,
 };
@@ -110,11 +131,51 @@ export function resetGateway(): void {
   gateway.upstream.length = 0;
   gateway.enterprise = {};
   gateway.key = virtualKeyRow();
+  gateway.overrides = [];
   gateway.reply = defaultReply;
+}
+
+export function overrideRow(target: OverrideTarget, policies: OverridePolicies): OverrideRow {
+  return {
+    orgId: target.orgId ?? null,
+    teamId: target.teamId ?? null,
+    projectId: target.projectId ?? null,
+    keyId: target.keyId ?? null,
+    pii: policies.pii ?? null,
+    injection: policies.injection ?? policies.guardrails?.injection ?? null,
+    secrets: policies.secrets ?? policies.guardrails?.secrets ?? null,
+    rules: policies.rules ?? policies.guardrails?.rules ?? null,
+  };
+}
+
+function sameOverrideTarget(a: OverrideRow, b: OverrideRow): boolean {
+  return a.orgId === b.orgId && a.teamId === b.teamId && a.projectId === b.projectId && a.keyId === b.keyId;
+}
+
+export function setOverride(target: OverrideTarget, policies: OverridePolicies): void {
+  const row = overrideRow(target, policies);
+  gateway.overrides = [...gateway.overrides.filter((other) => !sameOverrideTarget(other, row)), row];
+}
+
+export function setKeyOverride(policies: OverridePolicies): void {
+  setOverride({ keyId: gateway.key.id }, policies);
+}
+
+export function clearOverride(target: OverrideTarget): void {
+  const row = overrideRow(target, {});
+  gateway.overrides = gateway.overrides.filter((other) => !sameOverrideTarget(other, row));
+}
+
+function matchesWhere(row: OverrideRow, where: Record<string, unknown>): boolean {
+  return Object.entries(where).every(([field, value]) => row[field as keyof OverrideRow] === value);
 }
 
 recordedPrisma.base = {
   virtualKey: { findFirst: () => gateway.key },
+  policyOverride: {
+    findMany: ({ where }: { where?: { OR?: Record<string, unknown>[] } } = {}) =>
+      gateway.overrides.filter((row) => !where?.OR || where.OR.some((condition) => matchesWhere(row, condition))),
+  },
   user: {
     findUnique: ({ where }: { where: { id: string } }) =>
       where.id === gateway.key.userId

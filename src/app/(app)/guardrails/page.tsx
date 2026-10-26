@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Alert, Card, Chip, Disclosure, toast } from "@heroui/react";
+import { Alert, Card, Chip, toast, useOverlayState } from "@heroui/react";
 import { Shield } from "lucide-react";
 import { useTranslations } from "next-intl";
 import FormActions from "@/components/console/form-actions";
@@ -12,75 +12,136 @@ import StatCard from "@/components/console/stat-card";
 import { useErrorToast } from "@/components/console/use-error-toast";
 import { guardrailsValid } from "@/lib/gateway/safety/guardrails";
 import { defaultEntityIds } from "@/lib/gateway/safety/pii";
+import { fullLayer, refKey, sectionSummaries } from "@/lib/gateway/safety/policy-layers";
 import { useActionData } from "@/lib/hooks/use-action-data";
+import { isActionFail } from "@/lib/http/action-result";
+import { POLICY_SCOPES } from "@/schemas/guardrails";
+import type { Tone } from "@/types/console";
+import type {
+  GuardrailPolicy,
+  PiiDetectorSettings,
+  PiiPolicy,
+  PolicyOverrideView,
+  PolicyRef,
+  PolicyScope,
+  PolicyTarget,
+  SectionSummary,
+} from "@/types/guardrails";
 import { useConsoleScope } from "../_components/console-scope";
-import { loadGuardrailsAction, saveGuardrailPolicyAction, savePiiAction } from "./_action";
-import GuardrailOverrides from "./_components/guardrail-overrides";
-import GuardrailPolicyFields from "./_components/guardrail-policy-fields";
-import GuardrailTester from "./_components/guardrail-tester";
+import {
+  loadGuardrailsAction,
+  removePolicyOverrideAction,
+  saveGuardrailPolicyAction,
+  savePiiAction,
+} from "./_action";
+import GuardrailRules from "./_components/guardrail-rules";
+import InjectionFields from "./_components/injection-fields";
+import OverrideDialog from "./_components/override-dialog";
 import PiiEntityPicker from "./_components/pii-entity-picker";
 import PiiModelFields from "./_components/pii-model-fields";
-import PiiOverrides from "./_components/pii-overrides";
 import PiiPolicyFields from "./_components/pii-policy-fields";
-import PiiTester from "./_components/pii-tester";
-import { isActionFail } from "@/lib/http/action-result";
-import type { GuardrailPolicy, PiiDetectorSettings, PiiPolicy, PolicyScope, PolicyTarget } from "@/types/guardrails";
+import PolicyChain from "./_components/policy-chain";
+import PolicyInspector from "./_components/policy-inspector";
+import { SECTION_ICONS } from "@/components/guardrails/policy-labels";
+import PolicyOverrides from "./_components/policy-overrides";
+import { firstRef } from "./_components/policy-target-picker";
+import PolicyTester from "./_components/policy-tester";
+import { replaceOverride, sortOverrides, type PolicyBook } from "./_components/policy-view";
+import SecretsFields from "./_components/secrets-fields";
+
+const INSPECTOR_ID = "guardrails-inspector";
 
 function withDefaults(policy: PiiPolicy): PiiPolicy {
   return policy.entities.length ? policy : { ...policy, entities: defaultEntityIds() };
 }
 
-function byAlias(a: PolicyTarget, b: PolicyTarget) {
-  return a.alias.localeCompare(b.alias);
+function summaryTone(summary: SectionSummary): Tone {
+  if (summary.state === "off") return "neutral";
+  if (summary.state === "flag") return "warning";
+  if (summary.state === "on") return "accent";
+  return "success";
 }
 
-function replaceOverride<V extends PolicyTarget>(
-  current: V[],
-  result: { scope: PolicyScope; id: string; override: V | null },
-): V[] {
-  const next = result.override;
-  return [
-    ...current.filter((row) => row.scope !== result.scope || row.id !== result.id),
-    ...(next ? [next] : []),
-  ].sort(byAlias);
-}
+type DialogTarget = { editing: PolicyOverrideView | null; initialRef: PolicyRef | null; key: number };
 
 export default function GuardrailsPage() {
   const t = useTranslations("Guardrails");
-  const showError = useErrorToast();
   const tCommon = useTranslations("Common");
-  const [policyDraft, setPolicy] = useState<PiiPolicy | null>(null);
+  const showError = useErrorToast();
+  const [piiDraft, setPii] = useState<PiiPolicy | null>(null);
   const [detectorDraft, setDetector] = useState<PiiDetectorSettings | null>(null);
   const [guardrailsDraft, setGuardrails] = useState<GuardrailPolicy | null>(null);
+  const [inspected, setInspected] = useState<PolicyRef | null>(null);
+  const [dialog, setDialog] = useState<DialogTarget>({ editing: null, initialRef: null, key: 0 });
   const [pending, start] = useTransition();
+  const dialogState = useOverlayState();
   const page = useActionData(loadGuardrailsAction);
   const { data, setData } = page;
   const { kind } = useConsoleScope();
 
   if (!data) {
     const loadingSubtitle = kind === "company" ? t("companySubtitle") : t("subtitle");
-    return <PageStatus icon={Shield} title={t("title")} subtitle={loadingSubtitle} state={page} tabs stats={3} layout="form" />;
+    return <PageStatus icon={Shield} title={t("title")} subtitle={loadingSubtitle} state={page} tabs stats={4} layout="form" />;
   }
 
-  const { canManage, targets, piiOverrides, guardrailOverrides, platform, models, redactorConfigured } = data;
-  const canEditGlobal = canManage && platform;
-  const saved = withDefaults(data.pii);
-  const savedGuardrails = data.guardrails;
-  const policy = policyDraft ?? saved;
-  const guardrails = guardrailsDraft ?? savedGuardrails;
+  const { canManage, platform, models, redactorConfigured } = data;
+  const canEditPlatform = canManage && platform;
+  const overrides = sortOverrides(data.overrides);
+  const book: PolicyBook = {
+    platform: { pii: data.pii, guardrails: data.guardrails },
+    overrides,
+    targets: data.targets,
+  };
+  const pii = piiDraft ?? withDefaults(data.pii);
+  const guardrails = guardrailsDraft ?? data.guardrails;
   const detector = detectorDraft ?? data.detector;
-  const piiDirty = policyDraft !== null || detectorDraft !== null;
+  const piiDirty = piiDraft !== null || detectorDraft !== null;
   const contentDirty = guardrailsDraft !== null;
+  const taken = new Set(overrides.map((row) => refKey(row.target)));
+  const available = data.targets.filter((target) => !taken.has(refKey(target)));
+  const counts = Object.fromEntries(
+    POLICY_SCOPES.map((scope) => [scope, overrides.filter((row) => row.target.scope === scope).length]),
+  ) as Record<PolicyScope, number>;
+
+  function openDialog(editing: PolicyOverrideView | null, initialRef: PolicyRef | null = null) {
+    setDialog((current) => ({ editing, initialRef, key: current.key + 1 }));
+    dialogState.open();
+  }
+
+  function editTarget(target: PolicyTarget) {
+    openDialog(overrides.find((row) => refKey(row.target) === refKey(target)) ?? null, target);
+  }
+
+  function inspect(target: PolicyTarget) {
+    setInspected({ scope: target.scope, id: target.id });
+    document.getElementById(INSPECTOR_ID)?.scrollIntoView({ block: "start" });
+  }
+
+  function applyOverride(ref: PolicyRef, override: PolicyOverrideView | null) {
+    setData((current) => ({ ...current, overrides: replaceOverride(current.overrides, ref, override) }));
+  }
+
+  function remove(row: PolicyOverrideView) {
+    start(async () => {
+      const result = await removePolicyOverrideAction({ scope: row.target.scope, id: row.target.id });
+      if (isActionFail(result)) {
+        showError(result.error);
+        return;
+      }
+      applyOverride(result.ref, result.override);
+      toast(t("overrides.saved", { mode: "removed" }), { variant: "success" });
+    });
+  }
 
   function savePii() {
     start(async () => {
-      const result = await savePiiAction(policy, detector ?? undefined);
+      const result = await savePiiAction(pii, detector ?? undefined);
       if (isActionFail(result)) {
         showError(result.error);
         return;
       }
       setData((current) => ({ ...current, pii: result.pii, detector: result.detector }));
-      setPolicy(null);
+      setPii(null);
       setDetector(null);
       toast(t("saved"), { variant: "success" });
     });
@@ -99,179 +160,200 @@ export default function GuardrailsPage() {
     });
   }
 
-  const injectionOn = guardrails.injection.enabled;
-  const secretsOn = guardrails.secrets.enabled;
-  const rulesCount = guardrails.rules.length;
+  const overview = (
+    <div className="space-y-4 sm:space-y-5">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {sectionSummaries(fullLayer(book.platform)).map((summary) => (
+          <StatCard
+            key={summary.section}
+            label={t("section", { section: summary.section })}
+            icon={SECTION_ICONS[summary.section]}
+            value={
+              summary.section === "rules"
+                ? t("rules.count", { count: summary.count })
+                : t("sectionState", { state: summary.state })
+            }
+            hint={t("overview.platformValue")}
+            tone={summaryTone(summary)}
+          />
+        ))}
+      </div>
+      {platform ? null : (
+        <Alert status="accent">
+          <Alert.Indicator />
+          <Alert.Content>
+            <Alert.Description>{t("companyNotice")}</Alert.Description>
+          </Alert.Content>
+        </Alert>
+      )}
+      <PolicyChain counts={counts} />
+      <PolicyOverrides
+        overrides={overrides}
+        canManage={canManage}
+        canAdd={available.length > 0}
+        pending={pending}
+        onAdd={() => openDialog(null)}
+        onEdit={(row) => openDialog(row)}
+        onInspect={inspect}
+        onRemove={remove}
+      />
+      {book.targets.length ? (
+        <div id={INSPECTOR_ID} className="scroll-mt-4">
+          <PolicyInspector
+            book={book}
+            value={inspected ?? firstRef(overrides.map((row) => row.target)) ?? firstRef(book.targets)}
+            onChange={setInspected}
+            canManage={canManage}
+            onEdit={editTarget}
+          />
+        </div>
+      ) : null}
+    </div>
+  );
+
+  const piiPanel = (
+    <div className="space-y-4 sm:space-y-5">
+      <Card className="gap-4">
+        <Card.Header className="flex-row flex-wrap items-start justify-between gap-2">
+          <div className="min-w-0 space-y-1">
+            <Card.Title>{t("pii.title")}</Card.Title>
+            <Card.Description>{t("pii.hint")}</Card.Description>
+          </div>
+          <Chip size="sm" variant="soft" color={pii.enabled ? "success" : "warning"}>
+            {t("sectionState", { state: pii.enabled ? pii.mode : "off" })}
+          </Chip>
+        </Card.Header>
+        <Card.Content className="gap-4">
+          <PiiPolicyFields value={pii} onChange={setPii} isDisabled={!canManage} />
+          <PiiEntityPicker
+            value={pii.entities}
+            onChange={(entities) => setPii({ ...pii, entities })}
+            isDisabled={!canManage}
+            wide
+          />
+          {detector ? (
+            <PiiModelFields
+              value={detector}
+              onChange={setDetector}
+              models={models}
+              configured={redactorConfigured}
+              canManage={canManage}
+            />
+          ) : null}
+        </Card.Content>
+      </Card>
+      <Alert status="accent">
+        <Alert.Indicator />
+        <Alert.Content>
+          <Alert.Description>{t("logsHint")}</Alert.Description>
+        </Alert.Content>
+      </Alert>
+      {canEditPlatform ? (
+        <FormActions
+          label={t("save")}
+          pending={pending}
+          isDisabled={!piiDirty}
+          onSave={savePii}
+          extra={piiDirty ? <span className="text-sm text-warning">{tCommon("unsaved")}</span> : null}
+        />
+      ) : null}
+    </div>
+  );
+
+  const contentPanel = (
+    <div className="space-y-4 sm:space-y-5">
+      <Card className="gap-4">
+        <Card.Header>
+          <Card.Title>{t("injection.title")}</Card.Title>
+          <Card.Description>{t("injection.hint")}</Card.Description>
+        </Card.Header>
+        <Card.Content>
+          <InjectionFields
+            value={guardrails.injection}
+            onChange={(injection) => setGuardrails({ ...guardrails, injection })}
+            isDisabled={!canManage}
+          />
+        </Card.Content>
+      </Card>
+      <Card className="gap-4">
+        <Card.Header>
+          <Card.Title>{t("secrets.title")}</Card.Title>
+          <Card.Description>{t("secrets.hint")}</Card.Description>
+        </Card.Header>
+        <Card.Content>
+          <SecretsFields
+            value={guardrails.secrets}
+            onChange={(secrets) => setGuardrails({ ...guardrails, secrets })}
+            isDisabled={!canManage}
+          />
+        </Card.Content>
+      </Card>
+      <Card className="gap-4">
+        <Card.Header>
+          <Card.Title>{t("rules.title")}</Card.Title>
+          <Card.Description>{t("rules.hint")}</Card.Description>
+        </Card.Header>
+        <Card.Content>
+          <GuardrailRules
+            rules={guardrails.rules}
+            onChange={(rules) => setGuardrails({ ...guardrails, rules })}
+            isDisabled={!canManage}
+          />
+        </Card.Content>
+      </Card>
+      <Alert status="accent">
+        <Alert.Indicator />
+        <Alert.Content>
+          <Alert.Description>{t("content.logsHint")}</Alert.Description>
+          <Alert.Description>{t("content.streamHint")}</Alert.Description>
+        </Alert.Content>
+      </Alert>
+      {canEditPlatform ? (
+        <FormActions
+          label={t("content.save")}
+          pending={pending}
+          isDisabled={!contentDirty || !guardrailsValid(guardrails)}
+          onSave={saveContent}
+          extra={contentDirty ? <span className="text-sm text-warning">{tCommon("unsaved")}</span> : null}
+        />
+      ) : null}
+    </div>
+  );
 
   return (
     <div className="space-y-5">
       <PageHeader icon={Shield} title={t("title")} subtitle={platform ? t("subtitle") : t("companySubtitle")} />
-
       <PageTabs
         label={t("title")}
         tabs={[
+          { id: "overview", label: t("tabs", { tab: "overview" }), panel: overview },
+          ...(platform
+            ? [
+                { id: "pii", label: t("tabs", { tab: "pii" }), panel: piiPanel },
+                { id: "content", label: t("tabs", { tab: "content" }), panel: contentPanel },
+              ]
+            : []),
           {
-            id: "pii",
-            label: t("tabs", { tab: "pii" }),
+            id: "test",
+            label: t("tabs", { tab: "test" }),
             panel: (
-              <div className="space-y-4 sm:space-y-5">
-                <div className="grid gap-3 sm:grid-cols-3">
-                  <StatCard
-                    label={t("policy")}
-                    value={t("enabledState", { enabled: policy.enabled ? "true" : "false" })}
-                    tone={policy.enabled ? "success" : "neutral"}
-                  />
-                  <StatCard label={t("mode")} value={t("modeState", { state: policy.enabled ? policy.mode : "off" })} tone="accent" />
-                  <StatCard
-                    label={t("entities")}
-                    value={t("entityCount", { count: policy.entities.length })}
-                    hint={piiDirty ? tCommon("unsaved") : undefined}
-                    tone={piiDirty ? "warning" : "neutral"}
-                  />
-                </div>
-
-                {platform ? (
-                  <Card className="gap-4">
-                    <Card.Header className="flex-row flex-wrap items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <Card.Title>{t("policy")}</Card.Title>
-                        <Card.Description>{t("policyHint")}</Card.Description>
-                      </div>
-                      <Chip size="sm" variant="soft" color={policy.enabled ? "success" : "warning"}>
-                        {t("enabledState", { enabled: policy.enabled ? "true" : "false" })}
-                      </Chip>
-                    </Card.Header>
-                    <Card.Content className="gap-4">
-                      <PiiPolicyFields value={policy} onChange={setPolicy} isDisabled={!canManage} />
-                      {detector ? (
-                        <PiiModelFields
-                          value={detector}
-                          onChange={setDetector}
-                          models={models}
-                          configured={redactorConfigured}
-                          canManage={canManage}
-                        />
-                      ) : null}
-                    </Card.Content>
-                  </Card>
-                ) : null}
-
-                <Alert status="accent">
-                  <Alert.Indicator />
-                  <Alert.Content>
-                    {platform ? null : <Alert.Description>{t("companyNotice")}</Alert.Description>}
-                    <Alert.Description>{t("logsHint")}</Alert.Description>
-                  </Alert.Content>
-                </Alert>
-
-                <PiiOverrides
-                  overrides={piiOverrides}
-                  targets={targets}
-                  global={saved}
-                  canManage={canManage}
-                  onChanged={(result) =>
-                    setData((current) => ({ ...current, piiOverrides: replaceOverride(current.piiOverrides, result) }))
-                  }
-                />
-
-                {platform ? (
-                  <Card>
-                    <Disclosure>
-                      <Disclosure.Heading>
-                        <Disclosure.Trigger className="flex w-full items-center justify-between gap-2 text-sm font-medium">
-                          {tCommon("advanced")}
-                          <Disclosure.Indicator />
-                        </Disclosure.Trigger>
-                      </Disclosure.Heading>
-                      <Disclosure.Content>
-                        <Disclosure.Body className="flex flex-col gap-4 pt-4">
-                          <PiiEntityPicker
-                            value={policy.entities}
-                            onChange={(entities) => setPolicy({ ...policy, entities })}
-                            isDisabled={!canManage}
-                            wide
-                          />
-                          <PiiTester />
-                        </Disclosure.Body>
-                      </Disclosure.Content>
-                    </Disclosure>
-                  </Card>
-                ) : null}
-                {canEditGlobal ? <FormActions label={t("save")} pending={pending} onSave={savePii} /> : null}
-              </div>
-            ),
-          },
-          {
-            id: "content",
-            label: t("tabs", { tab: "content" }),
-            panel: (
-              <div className="space-y-4 sm:space-y-5">
-                <div className="grid gap-3 sm:grid-cols-3">
-                  <StatCard
-                    label={t("injection.title")}
-                    value={t("content.state", { enabled: String(injectionOn), action: guardrails.injection.action })}
-                    tone={injectionOn ? "success" : "neutral"}
-                  />
-                  <StatCard
-                    label={t("secrets.title")}
-                    value={t("content.state", { enabled: String(secretsOn), action: guardrails.secrets.action })}
-                    tone={secretsOn ? "success" : "neutral"}
-                  />
-                  <StatCard
-                    label={t("rules.title")}
-                    value={t("rules.count", { count: rulesCount })}
-                    hint={contentDirty ? tCommon("unsaved") : undefined}
-                    tone={contentDirty ? "warning" : "neutral"}
-                  />
-                </div>
-
-                {platform ? (
-                  <Card className="gap-4">
-                    <Card.Header>
-                      <Card.Title>{t("content.policy")}</Card.Title>
-                      <Card.Description>{t("content.policyHint")}</Card.Description>
-                    </Card.Header>
-                    <Card.Content>
-                      <GuardrailPolicyFields value={guardrails} onChange={setGuardrails} isDisabled={!canManage} />
-                    </Card.Content>
-                  </Card>
-                ) : null}
-
-                <Alert status="accent">
-                  <Alert.Indicator />
-                  <Alert.Content>
-                    {platform ? null : <Alert.Description>{t("companyNotice")}</Alert.Description>}
-                    <Alert.Description>{t("content.logsHint")}</Alert.Description>
-                    <Alert.Description>{t("content.streamHint")}</Alert.Description>
-                  </Alert.Content>
-                </Alert>
-
-                <GuardrailOverrides
-                  overrides={guardrailOverrides}
-                  targets={targets}
-                  global={savedGuardrails}
-                  canManage={canManage}
-                  onChanged={(result) =>
-                    setData((current) => ({
-                      ...current,
-                      guardrailOverrides: replaceOverride(current.guardrailOverrides, result),
-                    }))
-                  }
-                />
-
-                {platform ? <GuardrailTester policy={guardrails} /> : null}
-                {canEditGlobal ? (
-                  <FormActions
-                    label={t("save")}
-                    pending={pending}
-                    isDisabled={!guardrailsValid(guardrails)}
-                    onSave={saveContent}
-                  />
-                ) : null}
-              </div>
+              <PolicyTester
+                book={book}
+                draft={{ pii: piiDraft ?? data.pii, guardrails }}
+                isDraft={piiDirty || contentDirty}
+              />
             ),
           },
         ]}
+      />
+      <OverrideDialog
+        key={`override-${dialog.key}`}
+        state={dialogState}
+        book={book}
+        editing={dialog.editing}
+        initialRef={dialog.initialRef}
+        available={available}
+        onSaved={(result) => applyOverride(result.ref, result.override)}
       />
     </div>
   );

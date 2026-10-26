@@ -6,6 +6,7 @@ import PageHeader from "@/components/console/page-header";
 import PageTabs from "@/components/console/page-tabs";
 import CatalogTab from "./_components/catalog-tab";
 import GroupsTab from "./_components/groups-tab";
+import PresetsTab from "./_components/presets-tab";
 
 export default function ModelsPage() {
   const t = useTranslations("Models");
@@ -18,6 +19,7 @@ export default function ModelsPage() {
         tabs={[
           { id: "catalog", label: t("tab", { tab: "catalog" }), panel: <CatalogTab /> },
           { id: "groups", label: t("tab", { tab: "groups" }), panel: <GroupsTab /> },
+          { id: "presets", label: t("tab", { tab: "presets" }), panel: <PresetsTab /> },
         ]}
       />
     </div>

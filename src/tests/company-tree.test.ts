@@ -221,7 +221,6 @@ function view(overrides: Partial<VirtualKeyView>): VirtualKeyView {
     access_windows: [],
     access_time_zone: "UTC",
     blocked: false,
-    pii: null,
     log_content: true,
     created_at: "2026-10-01T00:00:00.000Z",
     ...overrides,

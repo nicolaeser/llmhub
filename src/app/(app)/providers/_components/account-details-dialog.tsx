@@ -242,7 +242,7 @@ export default function AccountDetailsDialog({
                     <Separator />
                     <dl className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2">
                       <div className="min-w-0 space-y-1">
-                        <dt className="text-xs text-muted">{tProviders("policy.title")}</dt>
+                        <dt className="text-xs text-muted">{tProviders("dataHandling.title")}</dt>
                         <dd>
                           <PolicyChips
                             policy={row.policy}

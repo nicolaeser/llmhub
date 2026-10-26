@@ -1,7 +1,7 @@
 {
   "title": "Models",
-  "subtitle": "Every model your providers offer, grouped under public names. Turn models on in the catalog, then tune routing and prices per group.",
-  "tab": "{tab, select, catalog {Catalog} groups {Groups and routing} other {}}",
+  "subtitle": "Every model your providers offer, grouped under public names. Turn models on in the catalog, tune routing and prices per group, and bundle access for API keys in presets.",
+  "tab": "{tab, select, catalog {Catalog} groups {Groups and routing} presets {Presets} other {}}",
   "add": "Add model",
   "formTitle": "{mode, select, edit {Edit model} add {Add model} other {Add model}}",
   "formSubmit": "{mode, select, save {Save} create {Add model} other {Add model}}",

@@ -21,6 +21,7 @@ import {
   SECRET_ENTITIES,
 } from "@/lib/gateway/safety/guardrails";
 import { modelAlias } from "@/lib/gateway/catalog/model-alias";
+import { chainLayers, effectivePolicies, policyChain, sameRef } from "@/lib/gateway/safety/policy-layers";
 import { labelKeyList, MAX_LABEL_KEYS } from "@/lib/usage/labels";
 import { PII_DETECTORS, PII_FAILURES } from "@/lib/gateway/safety/pii";
 import {
@@ -53,7 +54,18 @@ import type { OidcSettings, RoleMapping } from "@/types/auth";
 import type { S3AddressingSetting, S3Settings } from "@/types/s3";
 import type { Enterprise } from "@/types/settings";
 import type { AntigravitySettings } from "@/types/providers";
-import type { GuardrailPolicy, GuardrailRule, PiiDetectorSettings, PiiPolicy } from "@/types/guardrails";
+import type {
+  GuardrailPolicy,
+  GuardrailRule,
+  InjectionPolicy,
+  PiiDetectorSettings,
+  PiiPolicy,
+  PlatformPolicies,
+  PolicyLayer,
+  PolicyRef,
+  PolicySection,
+  SecretsPolicy,
+} from "@/types/guardrails";
 import type { SemanticCacheSettings } from "@/types/cache";
 import type { VectorStoreDefaults } from "@/types/rag";
 import {
@@ -180,29 +192,38 @@ function normalizeRule(raw: unknown, index: number): GuardrailRule[] {
   ];
 }
 
+function normalizeInjection(raw: unknown): InjectionPolicy {
+  const rec = asRecord(raw) ?? {};
+  const fallback = defaultGuardrails().injection;
+  const checks = asStringArray(rec.checks);
+  return {
+    enabled: asBool(rec.enabled, fallback.enabled),
+    action: pick(rec.action, ["block", "flag"] as const, fallback.action),
+    checks: Array.isArray(rec.checks) ? INJECTION_CHECKS.filter((check) => checks.includes(check)) : fallback.checks,
+  };
+}
+
+function normalizeSecrets(raw: unknown): SecretsPolicy {
+  const rec = asRecord(raw) ?? {};
+  const fallback = defaultGuardrails().secrets;
+  const entities = asStringArray(rec.entities);
+  return {
+    enabled: asBool(rec.enabled, fallback.enabled),
+    action: pick(rec.action, GUARDRAIL_ACTIONS, fallback.action),
+    entities: Array.isArray(rec.entities) ? SECRET_ENTITIES.filter((id) => entities.includes(id)) : fallback.entities,
+  };
+}
+
+function normalizeRules(raw: unknown): GuardrailRule[] {
+  return (Array.isArray(raw) ? raw : []).slice(0, MAX_RULES).flatMap(normalizeRule);
+}
+
 export function normalizeGuardrails(raw: unknown): GuardrailPolicy {
   const rec = asRecord(raw) ?? {};
-  const fallback = defaultGuardrails();
-  const injection = asRecord(rec.injection) ?? {};
-  const secrets = asRecord(rec.secrets) ?? {};
-  const checks = asStringArray(injection.checks);
-  const entities = asStringArray(secrets.entities);
   return {
-    injection: {
-      enabled: asBool(injection.enabled, fallback.injection.enabled),
-      action: pick(injection.action, ["block", "flag"] as const, fallback.injection.action),
-      checks: Array.isArray(injection.checks)
-        ? INJECTION_CHECKS.filter((check) => checks.includes(check))
-        : fallback.injection.checks,
-    },
-    secrets: {
-      enabled: asBool(secrets.enabled, fallback.secrets.enabled),
-      action: pick(secrets.action, GUARDRAIL_ACTIONS, fallback.secrets.action),
-      entities: Array.isArray(secrets.entities)
-        ? SECRET_ENTITIES.filter((id) => entities.includes(id))
-        : fallback.secrets.entities,
-    },
-    rules: (Array.isArray(rec.rules) ? rec.rules : []).slice(0, MAX_RULES).flatMap(normalizeRule),
+    injection: normalizeInjection(rec.injection),
+    secrets: normalizeSecrets(rec.secrets),
+    rules: normalizeRules(rec.rules),
   };
 }
 
@@ -420,31 +441,96 @@ export async function getPiiDetector(): Promise<PiiDetectorSettings> {
   return normalizePiiDetector((await getEnterprise()).pii_detector);
 }
 
-export function piiOverride(raw: unknown): PiiPolicy | null {
-  return asRecord(raw) ? normalizePii(raw) : null;
-}
-
 export async function getGuardrails(): Promise<GuardrailPolicy> {
   return normalizeGuardrails((await getEnterprise()).guardrails);
 }
 
-export function guardrailOverride(raw: unknown): GuardrailPolicy | null {
-  return asRecord(raw) ? normalizeGuardrails(raw) : null;
+function platformPoliciesOf(enterprise: Enterprise): PlatformPolicies {
+  return { pii: normalizePii(enterprise.pii), guardrails: normalizeGuardrails(enterprise.guardrails) };
 }
 
-const POLICY_SELECT = { piiPolicy: true, guardrailPolicy: true } as const;
+export async function getPlatformPolicies(): Promise<PlatformPolicies> {
+  return platformPoliciesOf(await getEnterprise());
+}
 
-async function inheritedPolicies(principal: Principal) {
-  const projectId = principal.key?.project_id;
-  const [project, org] = await Promise.all([
-    projectId ? prisma.project.findUnique({ where: { id: projectId }, select: POLICY_SELECT }) : null,
-    principal.orgId ? prisma.organization.findUnique({ where: { id: principal.orgId }, select: POLICY_SELECT }) : null,
-  ]);
-  return { project, org };
+export const POLICY_OVERRIDE_SELECT = {
+  orgId: true,
+  teamId: true,
+  projectId: true,
+  keyId: true,
+  pii: true,
+  injection: true,
+  secrets: true,
+  rules: true,
+} as const;
+
+export type PolicyOverrideRow = {
+  orgId: string | null;
+  teamId: string | null;
+  projectId: string | null;
+  keyId: string | null;
+  pii: unknown;
+  injection: unknown;
+  secrets: unknown;
+  rules: unknown;
+};
+
+export function policyLayer(row: Pick<PolicyOverrideRow, PolicySection>): PolicyLayer {
+  return {
+    pii: row.pii == null ? null : normalizePii(row.pii),
+    injection: row.injection == null ? null : normalizeInjection(row.injection),
+    secrets: row.secrets == null ? null : normalizeSecrets(row.secrets),
+    rules: row.rules == null ? null : normalizeRules(row.rules),
+  };
+}
+
+export function policyRefOf(row: PolicyOverrideRow): PolicyRef | null {
+  if (row.keyId) return { scope: "key", id: row.keyId };
+  if (row.projectId) return { scope: "project", id: row.projectId };
+  if (row.teamId) return { scope: "team", id: row.teamId };
+  if (row.orgId) return { scope: "org", id: row.orgId };
+  return null;
+}
+
+export function policyWhere(
+  ref: PolicyRef,
+): { orgId: string } | { teamId: string } | { projectId: string } | { keyId: string } {
+  if (ref.scope === "org") return { orgId: ref.id };
+  if (ref.scope === "team") return { teamId: ref.id };
+  if (ref.scope === "project") return { projectId: ref.id };
+  return { keyId: ref.id };
+}
+
+function principalChain(principal: Principal): PolicyRef[] {
+  if (principal.key) {
+    return policyChain({
+      scope: "key",
+      id: principal.key.token_id,
+      projectId: principal.key.project_id,
+      teamId: principal.teamId,
+      orgId: principal.orgId,
+    });
+  }
+  return principal.orgId ? [{ scope: "org", id: principal.orgId }] : [];
+}
+
+export async function chainOverrides(chain: readonly PolicyRef[]) {
+  if (!chain.length) return [];
+  const rows = await prisma.policyOverride.findMany({
+    where: { OR: chain.map(policyWhere) },
+    select: POLICY_OVERRIDE_SELECT,
+  });
+  return chainLayers(chain, (ref) => {
+    const row = rows.find((candidate) => {
+      const owner = policyRefOf(candidate);
+      return owner !== null && sameRef(owner, ref);
+    });
+    return row ? policyLayer(row) : undefined;
+  });
 }
 
 const tracedEnterprises = new WeakMap<object, Promise<Enterprise>>();
-const tracedPolicies = new WeakMap<object, Promise<{ pii: PiiPolicy; guardrails: GuardrailPolicy }>>();
+const tracedPolicies = new WeakMap<object, Promise<PlatformPolicies>>();
 
 function oncePerTrace<T>(store: WeakMap<object, Promise<T>>, trace: object | undefined, load: () => Promise<T>): Promise<T> {
   if (!trace) return load();
@@ -460,24 +546,17 @@ export function requestEnterprise(principal: Principal): Promise<Enterprise> {
   return oncePerTrace(tracedEnterprises, principal.trace, getEnterprise);
 }
 
-export function resolvePolicies(principal: Principal): Promise<{ pii: PiiPolicy; guardrails: GuardrailPolicy }> {
+export function resolvePolicies(principal: Principal): Promise<PlatformPolicies> {
   return oncePerTrace(tracedPolicies, principal.trace, () => loadPolicies(principal));
 }
 
-async function loadPolicies(principal: Principal): Promise<{ pii: PiiPolicy; guardrails: GuardrailPolicy }> {
-  const keyPii = principal.key?.pii ?? null;
-  const keyGuardrails = principal.guardrails ?? null;
-  const { project, org } =
-    keyPii && keyGuardrails ? { project: null, org: null } : await inheritedPolicies(principal);
-  const pii = keyPii ?? piiOverride(project?.piiPolicy) ?? piiOverride(org?.piiPolicy);
-  const guardrails =
-    keyGuardrails ?? guardrailOverride(project?.guardrailPolicy) ?? guardrailOverride(org?.guardrailPolicy);
-  if (pii && guardrails) return { pii, guardrails };
-  const enterprise = await requestEnterprise(principal);
-  return {
-    pii: pii ?? normalizePii(enterprise.pii),
-    guardrails: guardrails ?? normalizeGuardrails(enterprise.guardrails),
-  };
+async function loadPolicies(principal: Principal): Promise<PlatformPolicies> {
+  const [layers, enterprise] = await Promise.all([
+    chainOverrides(principalChain(principal)),
+    requestEnterprise(principal),
+  ]);
+  const { pii, guardrails } = effectivePolicies(platformPoliciesOf(enterprise), layers);
+  return { pii, guardrails };
 }
 
 export async function resolvePii(principal: Principal): Promise<PiiPolicy> {

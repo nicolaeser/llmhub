@@ -14,7 +14,7 @@ export default function GuardrailsLoading() {
       title={t("title")}
       subtitle={kind === "company" ? t("companySubtitle") : t("subtitle")}
       tabs
-      stats={3}
+      stats={4}
       layout="form"
     />
   );
