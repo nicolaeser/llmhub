@@ -97,6 +97,16 @@ const steps: Record<RetentionTable, (cutoff: Date, take: number) => Promise<Rete
     const { count } = await prisma.usageDaily.deleteMany({ where: { day: oldest.day } });
     return { deleted: count, more: true };
   },
+  usageLabelRows: async (cutoff) => {
+    const oldest = await prisma.usageLabelDaily.findFirst({
+      where: { day: { lt: utcDay(cutoff) } },
+      orderBy: { day: "asc" },
+      select: { day: true },
+    });
+    if (!oldest) return { deleted: 0, more: false };
+    const { count } = await prisma.usageLabelDaily.deleteMany({ where: { day: oldest.day } });
+    return { deleted: count, more: true };
+  },
   auditLogs: async (cutoff, take) => {
     const rows = await prisma.gatewayAuditLog.findMany({
       where: { createdAt: { lt: cutoff } },
@@ -132,6 +142,7 @@ function retentionDaysOf(enterprise: Enterprise): Record<RetentionTable, number>
     securityEvents: enterprise.security_retention_days ?? DEFAULT_SECURITY_RETENTION_DAYS,
     spendEvents: enterprise.spend_retention_days ?? 0,
     usageRows: enterprise.usage_retention_days ?? 0,
+    usageLabelRows: enterprise.usage_retention_days ?? 0,
     auditLogs: audit,
     approvalRequests: audit,
   };

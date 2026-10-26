@@ -9,11 +9,15 @@ import {
   CHARGEBACK_COLUMNS,
   chargebackRows,
   chargebackTable,
+  groupByLabel,
   groupSpend,
+  LABEL_SUMMARY_COLUMNS,
+  labelBreakdown,
+  labelSummaryTable,
   summarizeUsage,
   usageDays,
 } from "@/lib/usage/usage-stats";
-import { p95Latency, usageNames, usageSlices } from "@/lib/usage/usage-totals";
+import { p95Latency, usageLabelGroups, usageNames, usageSlices } from "@/lib/usage/usage-totals";
 import { toCsv } from "@/lib/export/csv";
 import { usageStatsPdf } from "@/lib/export/usage-pdf";
 import { errorFields } from "@/lib/logging/format";
@@ -26,6 +30,7 @@ import type { ReportPeriod, UsageReportRow, UsageReportTarget, UsageReportView }
 const CLAIM_MS = 10 * 60_000;
 const RETRY_MS = 60 * 60_000;
 const DAY_MS = 86_400_000;
+const REPORT_LABEL_KEYS = 8;
 
 const targetSelect = {
   id: true,
@@ -83,12 +88,17 @@ export async function buildReportMail(
   const tCommon = createTranslator({ ...intl, namespace: "Common" });
   const format = createFormatter({ locale, formats, timeZone: "UTC", now });
   const scope = { orgId: report.orgId, ...(report.teamId ? { teamId: report.teamId } : {}) };
-  const [rows, p95] = await Promise.all([
-    usageSlices({ ...scope, day: { gte: period.start, lt: period.end } }),
-    p95Latency({ ...scope, createdAt: { gte: period.start, lt: period.end } }),
+  const day = { gte: period.start, lt: period.end };
+  const [rows, p95, labelGroups] = await Promise.all([
+    usageSlices({ ...scope, day }),
+    p95Latency({ ...scope, createdAt: day }),
+    usageLabelGroups({ ...scope, day }),
   ]);
   const summary = summarizeUsage(rows, usageDays(period.start, period.days));
   const chargeback = chargebackRows(rows);
+  const byLabel = [...labelGroups.entries()]
+    .slice(0, REPORT_LABEL_KEYS)
+    .map(([key, labeled]) => ({ key, rows: groupByLabel(labelBreakdown(rows, labeled)) }));
   const brand = tCommon("appName");
   const scopeName = t("report.scope", {
     hasTeam: report.team ? "yes" : "no",
@@ -107,7 +117,7 @@ export async function buildReportMail(
       filename: `${stem}.pdf`,
       contentType: "application/pdf",
       content: usageStatsPdf({
-        stats: { ...summary, p95Latency: p95, byModel: groupSpend(rows, "model").slice(0, 12), chargeback },
+        stats: { ...summary, p95Latency: p95, byModel: groupSpend(rows, "model").slice(0, 12), chargeback, byLabel },
         t,
         format,
         brand,
@@ -124,6 +134,13 @@ export async function buildReportMail(
       contentType: "text/csv; charset=utf-8",
       content: toCsv(chargebackTable(chargeback, await usageNames(rows)), CHARGEBACK_COLUMNS),
     });
+    if (byLabel.length) {
+      attachments.push({
+        filename: `${stem}-labels.csv`,
+        contentType: "text/csv; charset=utf-8",
+        content: toCsv(labelSummaryTable(byLabel), LABEL_SUMMARY_COLUMNS),
+      });
+    }
   }
   return {
     to: report.recipients,

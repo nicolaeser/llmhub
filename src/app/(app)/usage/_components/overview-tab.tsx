@@ -42,7 +42,9 @@ import type { UsageQuery, SliceRow } from "@/types/usage";
 
 type TenantGroup = "org" | "team" | "project" | "member" | "key" | "user";
 
-type FilterKey = Exclude<keyof UsageQuery, "days">;
+type FilterKey = Exclude<keyof UsageQuery, "days" | "labelKey" | "labelValue">;
+
+const ANY_LABEL = "__any__";
 
 function chargebackHref(query: UsageQuery) {
   const params = new URLSearchParams({ days: String(query.days) });
@@ -53,7 +55,22 @@ function chargebackHref(query: UsageQuery) {
   if (query.memberId) params.set("memberId", query.memberId);
   if (query.keyId) params.set("keyId", query.keyId);
   if (query.userId) params.set("userId", query.userId);
+  if (query.labelKey) params.set("labelKey", query.labelKey);
+  if (query.labelValue) params.set("labelValue", query.labelValue);
   return `/internal-api/usage/chargeback?${params}`;
+}
+
+function pdfHref(query: UsageQuery) {
+  const params = new URLSearchParams({ days: String(query.days) });
+  if (query.model) params.set("model", query.model);
+  if (query.labelKey) params.set("labelKey", query.labelKey);
+  if (query.labelValue) params.set("labelValue", query.labelValue);
+  return `/internal-api/usage/export?${params}`;
+}
+
+function listedWith(options: string[], value: string): PickerItem[] {
+  const listed = !value || options.includes(value) ? options : [...options, value];
+  return listed.map((id) => ({ id, label: id }));
 }
 
 export default function OverviewTab() {
@@ -162,7 +179,35 @@ export default function OverviewTab() {
       />
     );
   });
-  const activeFilters = tenantFilters.filter((filter) => query[filter.key]).length;
+  const labelFields = [
+    ...(stats.labelKeys.length || query.labelKey
+      ? [
+          <SearchSelect
+            key="labelKey"
+            label={t("labels.key")}
+            description={t("labels.keyHint")}
+            items={[{ id: ANY_LABEL, label: t("labels.anyKey") }, ...listedWith(stats.labelKeys, query.labelKey)]}
+            value={query.labelKey || ANY_LABEL}
+            onChange={(next) => apply({ labelKey: next === ANY_LABEL ? "" : next, labelValue: "" })}
+          />,
+        ]
+      : []),
+    ...(query.labelKey
+      ? [
+          <SearchSelect
+            key="labelValue"
+            label={t("labels.value")}
+            items={[{ id: ANY_LABEL, label: t("labels.anyValue") }, ...listedWith(stats.labelValues, query.labelValue)]}
+            value={query.labelValue || ANY_LABEL}
+            onChange={(next) => apply({ labelValue: next === ANY_LABEL ? "" : next })}
+          />,
+        ]
+      : []),
+  ];
+  const filterFields = [...tenantFields, ...labelFields];
+  const narrowing = tenantFilters.filter((filter) => query[filter.key]).length + (query.labelValue ? 1 : 0);
+  const activeFilters = narrowing + (query.labelKey && !query.labelValue ? 1 : 0);
+  const labelName = (row: SliceRow) => row.name || t("labels.none");
 
   return (
     <div>
@@ -173,9 +218,7 @@ export default function OverviewTab() {
           isPending={pending}
           onPress={() => {
             const link = document.createElement("a");
-            const params = new URLSearchParams({ days: String(query.days) });
-            if (query.model) params.set("model", query.model);
-            link.href = `/internal-api/usage/export?${params}`;
+            link.href = pdfHref(query);
             link.click();
           }}
         >
@@ -212,9 +255,9 @@ export default function OverviewTab() {
             </ListBox>
           </Select.Popover>
         </Select>
-        {compact ? null : tenantFields}
+        {compact ? null : filterFields}
       </div>
-      {compact && tenantFields.length ? (
+      {compact && filterFields.length ? (
         <Card className="mb-5">
           <Disclosure isExpanded={filtersOpen} onExpandedChange={setFiltersOpen}>
             <Disclosure.Heading>
@@ -227,13 +270,13 @@ export default function OverviewTab() {
               </Disclosure.Trigger>
             </Disclosure.Heading>
             <Disclosure.Content>
-              <Disclosure.Body className="grid gap-3 pt-4">{tenantFields}</Disclosure.Body>
+              <Disclosure.Body className="grid gap-3 pt-4">{filterFields}</Disclosure.Body>
             </Disclosure.Content>
           </Disclosure>
         </Card>
       ) : null}
       <LoadError state={usage} className="mb-5" />
-      {today && activeFilters === 0 ? (
+      {today && narrowing === 0 ? (
         <Card className="mb-5 gap-4">
           <Card.Header className="flex-row flex-wrap items-start justify-between gap-3">
             <div className="min-w-0 flex-1 basis-64">
@@ -316,6 +359,69 @@ export default function OverviewTab() {
         </div>
       ) : (
         <>
+        {stats.labelKey ? (
+          <Card className="mt-5 gap-4">
+            <Card.Header>
+              <Card.Title>{t("labels.byLabel", { key: stats.labelKey })}</Card.Title>
+              <Card.Description>{t("labels.byLabelHint")}</Card.Description>
+            </Card.Header>
+            {stats.byLabel.length ? (
+              <>
+                <RowCards label={t("labels.byLabel", { key: stats.labelKey })}>
+                  {stats.byLabel.map((row) => (
+                    <RowCard
+                      key={row.name || ANY_LABEL}
+                      variant="secondary"
+                      title={labelName(row)}
+                      details={[
+                        { label: t("columns.spend"), value: format.number(row.spend, "money"), wide: true },
+                        {
+                          label: t("columns.share"),
+                          value: format.number(stats.spend > 0 ? row.spend / stats.spend : 0, "percent"),
+                        },
+                        { label: t("metrics.requests"), value: format.number(row.requests ?? 0, "integer") },
+                        { label: t("columns.prompt"), value: format.number(row.prompt, "integer") },
+                        { label: t("columns.completion"), value: format.number(row.completion, "integer") },
+                      ]}
+                    />
+                  ))}
+                </RowCards>
+                <Table aria-label={t("labels.byLabel", { key: stats.labelKey })} className={TABLE_FROM_LG}>
+                  <Table.ScrollContainer>
+                    <Table.Content>
+                      <Table.Header>
+                        <Table.Column isRowHeader>{t("labels.value")}</Table.Column>
+                        <Table.Column>{t("columns.spend")}</Table.Column>
+                        <Table.Column>{t("columns.share")}</Table.Column>
+                        <Table.Column>{t("metrics.requests")}</Table.Column>
+                        <Table.Column>{t("columns.prompt")}</Table.Column>
+                        <Table.Column>{t("columns.completion")}</Table.Column>
+                      </Table.Header>
+                      <Table.Body>
+                        {stats.byLabel.map((row) => (
+                          <Table.Row key={row.name || ANY_LABEL} id={row.name || ANY_LABEL}>
+                            <Table.Cell>
+                              <span className={row.name ? "break-words" : "text-muted"}>{labelName(row)}</span>
+                            </Table.Cell>
+                            <Table.Cell>{format.number(row.spend, "money")}</Table.Cell>
+                            <Table.Cell>
+                              {format.number(stats.spend > 0 ? row.spend / stats.spend : 0, "percent")}
+                            </Table.Cell>
+                            <Table.Cell>{format.number(row.requests ?? 0, "integer")}</Table.Cell>
+                            <Table.Cell>{format.number(row.prompt, "integer")}</Table.Cell>
+                            <Table.Cell>{format.number(row.completion, "integer")}</Table.Cell>
+                          </Table.Row>
+                        ))}
+                      </Table.Body>
+                    </Table.Content>
+                  </Table.ScrollContainer>
+                </Table>
+              </>
+            ) : (
+              <Card.Description>{t("labels.noData")}</Card.Description>
+            )}
+          </Card>
+        ) : null}
         {stats.purchase === null ? null : (
           <MarginCard
             companyView={stats.companyView}

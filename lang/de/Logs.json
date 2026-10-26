@@ -48,7 +48,10 @@
     "selected": "{kind, select, key {Ausgewählter Key} other {Ausgewählter Konsolen-Benutzer}}",
     "pii": "Nur Anfragen mit PII",
     "reset": "Zurücksetzen",
-    "title": "{count, plural, =0 {Filter} other {Filter · # aktiv}}"
+    "title": "{count, plural, =0 {Filter} other {Filter · # aktiv}}",
+    "label": "Label",
+    "labelHint": "key:value, zum Beispiel cost_center:4711",
+    "labelInvalid": "Gib das Label als key:value ein."
   },
   "prev": "Zurück",
   "next": "Weiter",
@@ -127,5 +130,9 @@
     "replayHint": "Lädt diese Anfrage in die Spielwiese, damit du sie erneut senden kannst. Behalte das ursprüngliche Modell oder wähle ein anderes zum Vergleich.",
     "replayPick": "Modell wählen",
     "replayNoModels": "Keine Modelle verfügbar"
+  },
+  "labels": {
+    "title": "Labels",
+    "chip": "{key}: {value}"
   }
 }

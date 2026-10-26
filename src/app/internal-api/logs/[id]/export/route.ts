@@ -10,6 +10,7 @@ import { fileResponse } from "@/lib/export/csv";
 import { problemResponse } from "@/lib/http/problem";
 import { requestLogMarkdown } from "@/lib/export/request-log-markdown";
 import { requestLogPdf } from "@/lib/export/request-log-pdf";
+import { labelText } from "@/lib/usage/labels";
 import type {
   RequestLogDetail,
   RequestLogDocument,
@@ -113,6 +114,7 @@ async function requestLogDocument(detail: RequestLogDetail): Promise<RequestLogD
       },
       { label: tDetail("stream"), value: tDetail("yesNo", { value: String(detail.stream) }) },
       { label: tDetail("tag"), value: detail.tag || none },
+      { label: t("labels.title"), value: detail.labels.length ? labelText(detail.labels) : none },
       { label: tDetail("key"), value: label(detail.keyLabel, detail.keyId) },
       { label: tDetail("user"), value: label(detail.userLabel, detail.userId) },
       { label: tDetail("member"), value: label(detail.memberLabel, detail.memberId) },

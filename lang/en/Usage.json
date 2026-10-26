@@ -39,7 +39,8 @@
     "cacheRead": "Cache read tokens",
     "cacheWrite": "Cache write tokens",
     "hitRate": "Hit rate",
-    "savings": "Savings"
+    "savings": "Savings",
+    "share": "Share"
   },
   "cache": {
     "title": "Prompt caching",
@@ -72,7 +73,10 @@
     "colPrompt": "Prompt",
     "colCompletion": "Completion",
     "total": "Total",
-    "noSpend": "No spend in this period."
+    "noSpend": "No spend in this period.",
+    "byLabel": "Spend by label {key}",
+    "colLabelValue": "Value",
+    "labelFilter": "{key}: {value}"
   },
   "report": {
     "scope": "{hasTeam, select, yes {{org} / {team}} other {{org}}}",
@@ -92,5 +96,27 @@
     "value": "{amount, number, money} · {share, number, percent}",
     "share": "Margin %",
     "empty": "No billable usage in this period."
+  },
+  "labels": {
+    "key": "Label",
+    "keyHint": "Groups spend by the values of this request label.",
+    "anyKey": "No label grouping",
+    "value": "Label value",
+    "anyValue": "All values",
+    "none": "No label",
+    "byLabel": "Spend by label {key}",
+    "byLabelHint": "Requests without this label count as No label, so the rows add up to the totals above.",
+    "noData": "No requests in this period.",
+    "listed": "Allowed label keys",
+    "remove": "Remove {key}",
+    "empty": "No label keys yet. Requests keep labels only for keys listed here.",
+    "inherited": "Also allowed for every company",
+    "add": "Label key",
+    "full": "This list holds at most {max, number, integer} keys. Remove one to add another.",
+    "problem": "{problem, select, listed {This key is already allowed.} other {Use lowercase letters, digits, and underscores, and start with a letter.}}",
+    "addButton": "Add key",
+    "howTo": "Clients send labels as one header per label (<code>X-LLMHub-Label-Cost-Center: 4711</code>), as one header for several (<code>X-LLMHub-Labels: cost_center=4711,env=prod</code>), in <code>metadata</code> on Chat Completions and Responses, or as <code>tags</code> entries such as <code>cost_center:4711</code>. Dashes in keys count as underscores.",
+    "limits": "Only listed keys are stored. A request keeps at most {labels, number, integer} labels, keys have up to {keyLength, number, integer} characters, and values are cut at {valueLength, number, integer} characters. Values are masked like the request content when a PII policy applies.",
+    "keyRule": "Lowercase letters, digits, and underscores, starting with a letter, up to {max, number, integer} characters. Dashes become underscores."
   }
 }

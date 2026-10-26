@@ -256,5 +256,10 @@
       "saved": "{mode, select, edit {Report saved} other {Report added}}"
     },
     "row": "{cadence, select, weekly {Weekly report} other {Monthly report}} to {first}{more, plural, =0 {} other { and # more}}"
+  },
+  "labels": {
+    "title": "Request labels",
+    "hint": "Label keys this company may use in addition to the platform keys. Usage, chargeback, and logs can be grouped and filtered by them.",
+    "saved": "Label keys saved."
   }
 }

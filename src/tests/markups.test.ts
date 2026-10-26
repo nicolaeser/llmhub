@@ -55,6 +55,7 @@ const db = {
               return [];
             }
             if (method === "count") return 0;
+            if (method === "groupBy") return [];
             if (method === "create" || method === "upsert") return { id: "row-1" };
             return null;
           },

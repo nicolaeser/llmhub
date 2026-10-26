@@ -8,12 +8,18 @@ import {
   drawHeader,
   FOOTER_RULE,
   MARGIN,
+  PAGE_H,
   PAGE_W,
   pdfDocument,
 } from "./pdf";
 import { unicodeTypeface } from "./pdf-unicode";
-import type { PdfCanvas, PdfTextStyle, UsagePdfInput, UsagePdfStats } from "@/types/export";
+import type { PdfCanvas, PdfTextStyle, UsagePdfInput, UsagePdfStats, UsagePdfTable } from "@/types/export";
 import type { Formatter, Translate } from "@/types/i18n";
+import type { SliceRow } from "@/types/usage";
+
+const ROW_HEIGHT = 19;
+const LABEL_TABLE_ROWS = 12;
+const TABLE_GAP = 28;
 
 function niceStep(max: number, count: number): number {
   const raw = max / count;
@@ -104,9 +110,13 @@ function drawDailyChart(page: PdfCanvas, daily: UsagePdfInput["daily"], top: num
   return baseline - 12;
 }
 
-function drawModelTable(page: PdfCanvas, table: UsagePdfInput["byModel"], top: number) {
-  page.text(table.heading, MARGIN, top - 12, { size: 11, font: "bold" });
-  const rowHeight = 19;
+function tableHeight(table: UsagePdfTable): number {
+  return 24 + ROW_HEIGHT * (Math.max(1, table.rows.length) + 2);
+}
+
+function drawSpendTable(page: PdfCanvas, table: UsagePdfTable, top: number): number {
+  page.text(table.heading, MARGIN, top - 12, { size: 11, font: "bold", maxWidth: CONTENT_W });
+  const rowHeight = ROW_HEIGHT;
   const right = PAGE_W - MARGIN;
   const col = {
     model: MARGIN + 10,
@@ -131,7 +141,7 @@ function drawModelTable(page: PdfCanvas, table: UsagePdfInput["byModel"], top: n
 
   if (table.rows.length === 0) {
     page.text(table.empty, MARGIN + CONTENT_W / 2, y - 24, { ...cell, color: COLORS.muted, align: "center" });
-    return;
+    return y - 36;
   }
 
   const fits = Math.max(0, Math.floor((y - FOOTER_RULE - 12) / rowHeight) - 1);
@@ -156,6 +166,7 @@ function drawModelTable(page: PdfCanvas, table: UsagePdfInput["byModel"], top: n
   page.text(table.total.spend, col.spend, baseline, { ...total, align: "right" });
   page.text(table.total.prompt, col.prompt, baseline, { ...total, align: "right" });
   page.text(table.total.completion, col.completion, baseline, { ...total, align: "right" });
+  return y - rowHeight;
 }
 
 export function usagePdf(input: UsagePdfInput): Uint8Array {
@@ -168,9 +179,62 @@ export function usagePdf(input: UsagePdfInput): Uint8Array {
   });
   const kpiBottom = drawKpis(page, input.kpis, headerBottom - 24);
   const chartBottom = drawDailyChart(page, input.daily, kpiBottom - 28);
-  drawModelTable(page, input.byModel, chartBottom - 26);
-  drawFooter(page, { left: input.generated, right: input.brand });
-  return pdfDocument([page], { title: input.title, producer: input.brand });
+  drawSpendTable(page, input.byModel, chartBottom - 26);
+  const pages = [page];
+  let top = 0;
+  for (const table of input.byLabel ?? []) {
+    if (pages.length === 1 || top - tableHeight(table) < FOOTER_RULE + 12) {
+      pages.push(canvas(unicodeTypeface));
+      top = PAGE_H - MARGIN;
+    }
+    top = drawSpendTable(pages.at(-1)!, table, top) - TABLE_GAP;
+  }
+  for (const each of pages) drawFooter(each, { left: input.generated, right: input.brand });
+  return pdfDocument(pages, { title: input.title, producer: input.brand });
+}
+
+function spendTable(
+  input: { heading: string; first: string; rows: SliceRow[]; shown: number; name: (row: SliceRow) => string },
+  stats: UsagePdfStats,
+  t: Translate,
+  format: Formatter,
+): UsagePdfTable {
+  const totals = input.rows.reduce(
+    (sum, row) => ({
+      spend: sum.spend + row.spend,
+      prompt: sum.prompt + row.prompt,
+      completion: sum.completion + row.completion,
+    }),
+    { spend: 0, prompt: 0, completion: 0 },
+  );
+  return {
+    heading: input.heading,
+    columns: {
+      model: input.first,
+      share: t("pdf.colShare"),
+      spend: t("pdf.colSpend"),
+      prompt: t("pdf.colPrompt"),
+      completion: t("pdf.colCompletion"),
+    },
+    rows: input.rows.slice(0, input.shown).map((row) => {
+      const share = stats.spend > 0 ? row.spend / stats.spend : 0;
+      return {
+        name: input.name(row),
+        share,
+        shareLabel: format.number(share, "percent"),
+        spend: format.number(row.spend, "money"),
+        prompt: format.number(row.prompt, "integer"),
+        completion: format.number(row.completion, "integer"),
+      };
+    }),
+    total: {
+      name: t("pdf.total"),
+      spend: format.number(totals.spend, "money"),
+      prompt: format.number(totals.prompt, "integer"),
+      completion: format.number(totals.completion, "integer"),
+    },
+    empty: t("pdf.noSpend"),
+  };
 }
 
 export function usageStatsPdf(input: {
@@ -217,32 +281,38 @@ export function usageStatsPdf(input: {
       empty: t("pdf.noSpend"),
     },
     byModel: {
-      heading: t("pdf.byModel"),
-      columns: {
-        model: t("pdf.colModel"),
-        share: t("pdf.colShare"),
-        spend: t("pdf.colSpend"),
-        prompt: t("pdf.colPrompt"),
-        completion: t("pdf.colCompletion"),
-      },
-      rows: stats.byModel.map((row) => {
-        const share = stats.spend > 0 ? row.spend / stats.spend : 0;
-        return {
-          name: row.name,
-          share,
-          shareLabel: format.number(share, "percent"),
-          spend: format.number(row.spend, "money"),
-          prompt: format.number(row.prompt, "integer"),
-          completion: format.number(row.completion, "integer"),
-        };
-      }),
+      ...spendTable(
+        {
+          heading: t("pdf.byModel"),
+          first: t("pdf.colModel"),
+          rows: stats.byModel,
+          shown: stats.byModel.length,
+          name: (row) => row.name,
+        },
+        stats,
+        t,
+        format,
+      ),
       total: {
         name: t("pdf.total"),
         spend: format.number(stats.spend, "money"),
         prompt: format.number(totals.prompt, "integer"),
         completion: format.number(totals.completion, "integer"),
       },
-      empty: t("pdf.noSpend"),
     },
+    byLabel: (stats.byLabel ?? []).map((group) =>
+      spendTable(
+        {
+          heading: t("pdf.byLabel", { key: group.key }),
+          first: t("pdf.colLabelValue"),
+          rows: group.rows,
+          shown: LABEL_TABLE_ROWS,
+          name: (row) => row.name || t("labels.none"),
+        },
+        stats,
+        t,
+        format,
+      ),
+    ),
   });
 }

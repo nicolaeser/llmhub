@@ -14,6 +14,7 @@ import { SettingSection, SettingSwitch } from "./setting-fields";
 import { formats } from "@/i18n/formats";
 import { loadLoggingAction, saveLoggingAction } from "../_action";
 import BudgetAlertsCard from "./budget-alerts-card";
+import LabelKeysCard from "./label-keys-card";
 import WebhookCard from "./webhook-card";
 import SaveBar, { SettingsLead } from "./save-bar";
 import TabState from "./tab-state";
@@ -211,6 +212,11 @@ export default function LoggingTab() {
         onSaved={(thresholds) =>
           setView((current) => ({ ...current, budgetAlerts: { ...current.budgetAlerts, thresholds } }))
         }
+      />
+      <LabelKeysCard
+        keys={view.labelKeys}
+        canManage={view.canManage}
+        onSaved={(labelKeys) => setView((current) => ({ ...current, labelKeys }))}
       />
       <SettingSection title={t("contentTitle")} subtitle={t("contentSubtitle")}>
         <SettingSwitch

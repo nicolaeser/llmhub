@@ -8,6 +8,7 @@ import RowCard, { RowCards, TABLE_FROM_LG } from "@/components/console/row-cards
 import type { loadLogsAction } from "../_action";
 import type { LogKind, RequestLogRow } from "@/types/logs";
 import GuardrailChip from "./guardrail-chip";
+import LabelChips from "./label-chips";
 import PiiChip from "./pii-chip";
 
 function guarded(row: RequestLogRow): boolean {
@@ -139,6 +140,9 @@ export default function LogTable({
                     </>
                   ),
                 },
+                ...(row.labels.length
+                  ? [{ label: t("labels.title"), value: <LabelChips labels={row.labels} />, wide: true }]
+                  : []),
               ]}
             />
           ))}
@@ -164,6 +168,11 @@ export default function LogTable({
                     <Table.Cell>
                       <p className="text-sm">{row.model}</p>
                       <p className="font-mono text-xs text-muted">{row.endpoint || tCommon("none")}</p>
+                      {row.labels.length ? (
+                        <div className="mt-1 max-w-xs">
+                          <LabelChips labels={row.labels} />
+                        </div>
+                      ) : null}
                     </Table.Cell>
                     <Table.Cell>
                       <p className="text-sm">{keyLabel(row)}</p>

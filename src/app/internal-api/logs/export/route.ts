@@ -12,6 +12,7 @@ import {
 } from "@/lib/gateway/request-logs/request-log-query";
 import { fileResponse, toCsv, toJsonl } from "@/lib/export/csv";
 import { problemResponse } from "@/lib/http/problem";
+import { labelRecord, labelsOf, labelText } from "@/lib/usage/labels";
 
 const KINDS = new Set(["requests", "spend", "audit"]);
 const FORMATS = new Set(["csv", "jsonl"]);
@@ -66,6 +67,7 @@ export async function GET(req: NextRequest) {
       provider: r.provider,
       upstream_model: r.upstreamModel,
       tag: r.tag,
+      labels: format === "csv" ? labelText(labelsOf(r.labels)) : labelRecord(labelsOf(r.labels)),
       prompt_tokens: r.promptTokens,
       completion_tokens: r.completionTokens,
       cache_read_tokens: r.cacheReadTokens,

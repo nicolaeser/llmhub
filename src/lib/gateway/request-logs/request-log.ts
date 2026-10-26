@@ -8,6 +8,7 @@ import { requestEnterprise, resolvePii } from "@/lib/settings/enterprise";
 import { errorFields } from "@/lib/logging/format";
 import { logger } from "@/lib/logging/logger";
 import { notifyLive } from "@/lib/updates/live-topics";
+import { labelRecord, storedLabel } from "@/lib/usage/labels";
 import type { Prisma } from "@/generated/prisma/client";
 import type { Principal } from "@/types/gateway";
 import type { Enterprise } from "@/types/settings";
@@ -88,6 +89,7 @@ export async function writeRequestLog(entry: RequestLogEntry): Promise<void> {
     upstreamModel: entry.deployment?.model ?? "",
     stream: entry.stream ?? (streamFlag === true || streamFlag === "true"),
     tag,
+    labels: (entry.labels ?? []).map(storedLabel),
     status: entry.status,
     outcome: entry.outcome,
     error,
@@ -136,6 +138,7 @@ export async function writeRequestLog(entry: RequestLogEntry): Promise<void> {
       cache_write_tokens: meta.cacheWriteTokens,
       cost: entry.cost,
       tag: meta.tag,
+      labels: labelRecord(entry.labels ?? []),
       pii_mode: meta.piiMode,
       pii_input: meta.piiInput,
       pii_output: meta.piiOutput,

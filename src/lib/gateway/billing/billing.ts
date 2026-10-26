@@ -8,6 +8,7 @@ import { money } from "@/lib/utils/money";
 import { ownerId } from "@/lib/gateway/core";
 import { plainModel } from "@/lib/gateway/catalog/model-alias";
 import { writeRequestLog } from "@/lib/gateway/request-logs/request-log";
+import { requestLabels } from "@/lib/gateway/billing/label-keys";
 import { CLIENT_CLOSED_STATUS, GateError } from "@/lib/gateway/errors";
 import { applyMarkup, markupRuleOf, pickMarkup, scaleByMarkup } from "@/lib/gateway/billing/markup-policy";
 import { tighterCap } from "@/lib/gateway/billing/cost-cap";
@@ -22,6 +23,7 @@ import type { Deployment } from "@/types/routing";
 import type { BudgetKind } from "@/types/structure";
 import type { MarkupTarget } from "@/types/pricing";
 import type { ResponseCacheColumns, ResponseCacheUsage } from "@/types/cache";
+import type { RequestLabel } from "@/types/usage";
 
 const METERING_TRANSACTION = { maxWait: 10_000, timeout: 20_000 } as const;
 const METERING_ATTEMPTS = 3;
@@ -250,6 +252,15 @@ export function responseCacheColumns(
   };
 }
 
+async function labelsOrNone(principal: Principal, request: unknown): Promise<RequestLabel[]> {
+  try {
+    return await requestLabels(principal, request);
+  } catch (err) {
+    logger.warn("billing.labels_failed", { keyId: principal.key?.token_id ?? "", ...errorFields(err) });
+    return [];
+  }
+}
+
 export async function recordUsage(input: {
   principal: Principal;
   model: string;
@@ -294,6 +305,7 @@ export async function recordUsage(input: {
   const failed = input.status >= 400 && input.status !== CLIENT_CLOSED_STATUS ? 1 : 0;
   const limited = input.status === 429 ? 1 : 0;
   const responseCache = responseCacheColumns(input.responseCache, cost);
+  const labels = await labelsOrNone(input.principal, input.request ?? input.principal.trace?.request);
   const meteringWrites = (): Prisma.PrismaPromise<unknown>[] => {
     const writes: Prisma.PrismaPromise<unknown>[] = [
       prisma.usageDaily.upsert({
@@ -332,6 +344,39 @@ export async function recordUsage(input: {
           responseCacheSavedCost: { increment: responseCache.responseCacheSavedCost },
           responseCacheLookupCost: { increment: responseCache.responseCacheLookupCost },
         },
+      }),
+      ...labels.map((label) => {
+        const labelSlice = { ...slice, label: label.key, value: label.value };
+        return prisma.usageLabelDaily.upsert({
+          where: { slice: labelSlice },
+          create: {
+            ...labelSlice,
+            requests: 1,
+            errors: failed,
+            rateLimited: limited,
+            latencyMs: input.latencyMs,
+            promptTokens: prompt,
+            completionTokens: completion,
+            cacheReadTokens: cache.read,
+            cacheWriteTokens: cache.written,
+            cost,
+            purchaseCost,
+            cacheSavings,
+          },
+          update: {
+            requests: { increment: 1 },
+            errors: { increment: failed },
+            rateLimited: { increment: limited },
+            latencyMs: { increment: input.latencyMs },
+            promptTokens: { increment: prompt },
+            completionTokens: { increment: completion },
+            cacheReadTokens: { increment: cache.read },
+            cacheWriteTokens: { increment: cache.written },
+            cost: { increment: cost },
+            purchaseCost: { increment: purchaseCost },
+            cacheSavings: { increment: cacheSavings },
+          },
+        });
       }),
     ];
     if (prompt || completion || cost) {
@@ -382,6 +427,7 @@ export async function recordUsage(input: {
     outcome: input.outcome,
     latencyMs: input.latencyMs,
     tag: input.tag ?? "",
+    labels,
     promptTokens: prompt,
     completionTokens: completion,
     cacheReadTokens: cache.read,

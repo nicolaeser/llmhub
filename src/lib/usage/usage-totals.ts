@@ -13,12 +13,82 @@ export function usageWindowStart(days: number, now = new Date()): Date {
   return new Date(today - (days - 1) * 86400000);
 }
 
+const LABEL_OPTION_LIMIT = 500;
+
+type SliceColumns = Prisma.UsageDailyGetPayload<{
+  select: {
+    day: true;
+    keyId: true;
+    teamId: true;
+    orgId: true;
+    projectId: true;
+    memberId: true;
+    userId: true;
+    model: true;
+    requests: true;
+    errors: true;
+    rateLimited: true;
+    latencyMs: true;
+    promptTokens: true;
+    completionTokens: true;
+    cacheReadTokens: true;
+    cacheWriteTokens: true;
+    cost: true;
+    cacheSavings: true;
+    purchaseCost: true;
+  };
+}>;
+
 export async function usageSlices(
   where: Prisma.UsageDailyWhereInput,
   options: { purchase?: boolean } = {},
 ): Promise<UsageSlice[]> {
   const rows = await prisma.usageDaily.findMany({ where });
-  return rows.map((row) => ({
+  return rows.map((row) => sliceOf(row, options));
+}
+
+export async function usageLabelSlices(
+  where: Prisma.UsageLabelDailyWhereInput,
+  options: { purchase?: boolean } = {},
+): Promise<UsageSlice[]> {
+  const rows = await prisma.usageLabelDaily.findMany({ where });
+  return rows.map((row) => ({ ...sliceOf(row, options), label: row.value }));
+}
+
+export async function usageLabelGroups(
+  where: Prisma.UsageLabelDailyWhereInput,
+  options: { purchase?: boolean } = {},
+): Promise<Map<string, UsageSlice[]>> {
+  const rows = await prisma.usageLabelDaily.findMany({ where, orderBy: { label: "asc" } });
+  const groups = new Map<string, UsageSlice[]>();
+  for (const row of rows) {
+    groups.set(row.label, [...(groups.get(row.label) ?? []), { ...sliceOf(row, options), label: row.value }]);
+  }
+  return groups;
+}
+
+export async function usageLabelKeys(where: Prisma.UsageLabelDailyWhereInput): Promise<string[]> {
+  const rows = await prisma.usageLabelDaily.groupBy({
+    by: ["label"],
+    where,
+    orderBy: { label: "asc" },
+    take: LABEL_OPTION_LIMIT,
+  });
+  return rows.map((row) => row.label);
+}
+
+export async function usageLabelValues(where: Prisma.UsageLabelDailyWhereInput): Promise<string[]> {
+  const rows = await prisma.usageLabelDaily.groupBy({
+    by: ["value"],
+    where,
+    orderBy: { value: "asc" },
+    take: LABEL_OPTION_LIMIT,
+  });
+  return rows.map((row) => row.value);
+}
+
+function sliceOf(row: SliceColumns, options: { purchase?: boolean }): UsageSlice {
+  return {
     day: row.day.toISOString().slice(0, 10),
     keyId: row.keyId,
     teamId: row.teamId,
@@ -38,7 +108,7 @@ export async function usageSlices(
     cost: money(row.cost),
     cacheSavings: money(row.cacheSavings),
     ...(options.purchase ? { purchaseCost: money(row.purchaseCost) } : {}),
-  }));
+  };
 }
 
 export async function marginTotals(days: number): Promise<MarginTotals> {

@@ -8,6 +8,7 @@ import { asRecord } from "@/lib/gateway/core";
 import { requestTranscript, responseTranscript } from "@/lib/gateway/request-logs/log-content";
 import { replayDraft } from "@/lib/gateway/request-logs/log-replay";
 import { money } from "@/lib/utils/money";
+import { labelsOf } from "@/lib/usage/labels";
 import type { RequestLog } from "@/generated/prisma/client";
 import type { AuthenticatedSession } from "@/types/auth";
 import type { PiiRestoreSummary, RequestLogDetail, RequestLogRow } from "@/types/logs";
@@ -84,6 +85,7 @@ export function requestLogRow(
     piiOutput: row.piiOutput,
     guardInput: row.guardInput,
     guardOutput: row.guardOutput,
+    labels: labelsOf(row.labels),
     hasContent: Boolean(row.content),
     contentSkip: row.contentSkip,
     system: systemFeatureOf(row),

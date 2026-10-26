@@ -1,5 +1,6 @@
 import type { Principal, SystemFeature } from "@/types/gateway";
 import type { Deployment } from "@/types/routing";
+import type { RequestLabel } from "@/types/usage";
 
 export type LogKind = "requests" | "spend" | "audit";
 
@@ -11,6 +12,7 @@ export type LogFilterValues = {
   endpoint: string;
   keyId: string;
   userId: string;
+  label: string;
   pii: boolean;
   from: string;
   to: string;
@@ -65,6 +67,7 @@ export type RequestLogRow = {
   piiOutput: string[];
   guardInput: string[];
   guardOutput: string[];
+  labels: RequestLabel[];
   hasContent: boolean;
   contentSkip: string;
   system: SystemFeature | "";
@@ -139,6 +142,7 @@ export type RequestLogEntry = {
   outcome: string;
   latencyMs: number;
   tag: string;
+  labels?: RequestLabel[];
   promptTokens: number;
   completionTokens: number;
   cacheReadTokens: number;
