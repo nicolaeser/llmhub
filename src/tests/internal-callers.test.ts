@@ -690,6 +690,8 @@ test("request logs name system calls by feature", async () => {
     hasContent: false,
     contentSkip: "system",
     system: "mcp_builder",
+    sessionId: "",
+    agent: "",
   };
   const logs: LogsPayload = {
     canAudit: false,

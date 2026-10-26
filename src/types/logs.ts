@@ -2,7 +2,7 @@ import type { Principal, SystemFeature } from "@/types/gateway";
 import type { Deployment } from "@/types/routing";
 import type { RequestLabel } from "@/types/usage";
 
-export type LogKind = "requests" | "spend" | "audit";
+export type LogKind = "requests" | "sessions" | "spend" | "audit";
 
 export type NewLogsCount = { since: string; count: number; capped: boolean };
 
@@ -13,6 +13,7 @@ export type LogFilterValues = {
   keyId: string;
   userId: string;
   label: string;
+  session: string;
   pii: boolean;
   from: string;
   to: string;
@@ -71,7 +72,79 @@ export type RequestLogRow = {
   hasContent: boolean;
   contentSkip: string;
   system: SystemFeature | "";
+  sessionId: string;
+  agent: string;
 };
+
+export type LogSessionRef = { sessionId: string; keyId: string; userId: string };
+
+export type LogSessionModel = { model: string; requests: number };
+
+export type LogSessionRow = LogSessionRef & {
+  keyLabel: string;
+  userLabel: string;
+  memberId: string;
+  memberLabel: string;
+  agent: string;
+  active: boolean;
+  startedAt: string;
+  lastAt: string;
+  durationMs: number;
+  requests: number;
+  errors: number;
+  promptTokens: number;
+  completionTokens: number;
+  cacheReadTokens: number;
+  cacheWriteTokens: number;
+  cost: number;
+  models: LogSessionModel[];
+  accounts: number;
+  accountSwitches: number;
+};
+
+export type LogSessionSortKey = "recent" | "cost" | "requests";
+
+export type LogSessionSort = { by: LogSessionSortKey; direction: "asc" | "desc" };
+
+export type LogSessionTotals = {
+  active: number;
+  requests: number;
+  errors: number;
+  cost: number;
+  promptTokens: number;
+  completionTokens: number;
+  cacheReadTokens: number;
+};
+
+export type LogSessionList = {
+  page: number;
+  pageSize: number;
+  total: number;
+  capped: boolean;
+  sort: LogSessionSort;
+  totals: LogSessionTotals;
+  sessions: LogSessionRow[];
+};
+
+export type LogSessionAccount = { index: number; label: string; provider: string; requests: number };
+
+export type LogSessionRequest = RequestLogRow & {
+  provider: string;
+  account: number;
+  accountSwitch: boolean;
+  offsetMs: number;
+};
+
+export type LogSessionDetail = {
+  session: LogSessionRow;
+  accounts: LogSessionAccount[];
+  page: number;
+  pageSize: number;
+  total: number;
+  requests: LogSessionRequest[];
+};
+
+export type AccountStep = { provider: string; providerId: string };
 
 export type RequestLogContentView = {
   request: unknown;

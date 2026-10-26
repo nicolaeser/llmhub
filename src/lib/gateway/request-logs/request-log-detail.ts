@@ -89,6 +89,8 @@ export function requestLogRow(
     hasContent: Boolean(row.content),
     contentSkip: row.contentSkip,
     system: systemFeatureOf(row),
+    sessionId: row.sessionId,
+    agent: row.agent,
   };
 }
 

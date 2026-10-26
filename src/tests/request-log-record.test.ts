@@ -311,6 +311,36 @@ test("requestLog.create stores tenancy, routing, PII markers, and nested content
   });
 });
 
+test("requestLog.create stores the session, agent, and account of the request", async () => {
+  const { writeRequestLog } = await import("@/lib/gateway/request-logs/request-log");
+  calls.length = 0;
+  await writeRequestLog({
+    principal: principal({ client: { session: "claude-code-run-1", agent: "claude_code" } }),
+    model: "gpt",
+    deployment: { ...deployment, kind: "claude", provider_id: "acct_a" },
+    status: 200,
+    outcome: "ok",
+    latencyMs: 5,
+    tag: "",
+    labels: [{ key: "cost_center", value: "4711" }],
+    promptTokens: 1,
+    completionTokens: 1,
+    cacheReadTokens: 0,
+    cacheWriteTokens: 0,
+    cost: 0,
+  });
+  const log = storedLog();
+  assert.equal(log.sessionId, "claude-code-run-1");
+  assert.equal(log.agent, "claude_code");
+  assert.equal(log.providerId, "acct_a");
+  assert.deepEqual(log.labels, ["cost_center:4711"]);
+
+  const plain = await logFor(principal());
+  assert.equal(plain.sessionId, "");
+  assert.equal(plain.agent, "");
+  assert.equal(plain.providerId, "");
+});
+
 test("content logging honours the gateway, key, member, and user switches", async () => {
   table("member").set("mem_off", { id: "mem_off", logContent: false });
   table("user").set("user_off", { id: "user_off", logContent: false });

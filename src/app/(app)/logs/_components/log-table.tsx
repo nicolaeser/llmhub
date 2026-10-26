@@ -1,6 +1,6 @@
 "use client";
 
-import { Button, Chip, Table } from "@heroui/react";
+import { Button, Table } from "@heroui/react";
 import { Activity, Coins, FileText, ScrollText } from "lucide-react";
 import { useFormatter, useTranslations } from "next-intl";
 import EmptyState from "@/components/console/empty-state";
@@ -10,6 +10,7 @@ import type { LogKind, RequestLogRow } from "@/types/logs";
 import GuardrailChip from "./guardrail-chip";
 import LabelChips from "./label-chips";
 import PiiChip from "./pii-chip";
+import StatusChip from "./status-chip";
 
 function guarded(row: RequestLogRow): boolean {
   return row.outcome === "guardrail_blocked" || row.guardInput.length > 0 || row.guardOutput.length > 0;
@@ -22,7 +23,7 @@ export default function LogTable({
   logs,
   onOpen,
 }: {
-  kind: LogKind;
+  kind: Exclude<LogKind, "sessions">;
   logs: LogsPayload;
   onOpen: (row: RequestLogRow) => void;
 }) {
@@ -54,16 +55,7 @@ export default function LogTable({
   }
 
   function statusChip(row: RequestLogRow) {
-    return (
-      <Chip
-        size="sm"
-        variant="soft"
-        color={row.status >= 500 ? "danger" : row.status >= 400 ? "warning" : "success"}
-        className="whitespace-nowrap"
-      >
-        {t("statusOutcome", { status: row.status, outcome: row.outcome })}
-      </Chip>
-    );
+    return <StatusChip status={row.status} outcome={row.outcome} />;
   }
 
   function policyChips(row: RequestLogRow) {

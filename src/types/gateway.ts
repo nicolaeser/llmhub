@@ -19,8 +19,11 @@ export type Principal = {
   guardrails?: GuardrailPolicy | null;
   pool?: RoutePool;
   system?: SystemFeature;
+  client?: RequestClient;
   trace?: RequestTrace;
 };
+
+export type RequestClient = { session: string; agent: string };
 
 export type SystemFeature = "catalog" | "mcp_builder" | "model_test" | "pii";
 

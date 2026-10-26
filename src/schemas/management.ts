@@ -320,7 +320,13 @@ export const logsQuerySchema = z.object({
   key_id: queryText,
   user_id: queryText,
   label: labelFilter,
+  session: z.string().trim().max(512).default(""),
   status: z.coerce.number().int().min(100).max(599).optional(),
   from: z.iso.datetime({ offset: true }).optional(),
   to: z.iso.datetime({ offset: true }).optional(),
+});
+
+export const sessionsQuerySchema = logsQuerySchema.extend({
+  sort: z.enum(["recent", "cost", "requests"]).default("recent"),
+  order: z.enum(["asc", "desc"]).default("desc"),
 });

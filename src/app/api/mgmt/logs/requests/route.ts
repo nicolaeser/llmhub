@@ -18,6 +18,7 @@ export const GET = managementRoute(PERMISSIONS.SPEND_READ, async ({ req }) => {
         keyId: query.key_id,
         userId: query.user_id,
         label: query.label ? storedLabel(query.label) : "",
+        session: query.session,
         status: query.status === undefined ? "" : String(query.status),
         from: query.from,
         to: query.to,
