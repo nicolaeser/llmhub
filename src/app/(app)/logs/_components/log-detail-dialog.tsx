@@ -26,6 +26,7 @@ import { splitPiiPlaceholders } from "@/lib/gateway/safety/pii";
 import { isActionFail } from "@/lib/http/action-result";
 import type { RequestLogDetail, RequestLogExportFormat, TranscriptEntry } from "@/types/logs";
 import GuardrailChip from "./guardrail-chip";
+import LabelChips from "./label-chips";
 import PiiChip from "./pii-chip";
 import { PiiCode, PiiPlaceholder } from "./pii-placeholder";
 import PiiRestore from "./pii-restore";
@@ -322,6 +323,9 @@ export default function LogDetailDialog({
                     </Field>
                     <Field label={tDetail("stream")}>{tDetail("yesNo", { value: String(detail.stream) })}</Field>
                     <Field label={tDetail("tag")}>{detail.tag ? <PiiText text={detail.tag} /> : tCommon("none")}</Field>
+                    <Field label={t("labels.title")}>
+                      {detail.labels.length ? <LabelChips labels={detail.labels} /> : tCommon("none")}
+                    </Field>
                     {detail.system ? (
                       <Field label={t("columns.caller")}>
                         {t("caller.system")}

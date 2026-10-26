@@ -8,6 +8,7 @@ import { MANAGEMENT_PERMISSIONS } from "@/lib/management/scope";
 import { accessWindowsSchema, allowedEndpointsSchema } from "@/schemas/keys";
 import { vertexTargetSchema } from "@/schemas/providers";
 import { budgetPeriod, MAX_BOOST_HOURS } from "@/lib/utils/budget";
+import { labelKey, parseLabelFilter } from "@/lib/usage/labels";
 
 const id = z.string().trim().min(1).max(64);
 const alias = z.string().trim().min(1).max(200);
@@ -264,17 +265,50 @@ export const budgetAlertsSchema = z
   .strict();
 
 const queryText = z.string().trim().max(200).default("");
+const GROUP_BY_LABEL = "label:";
 
-export const usageQuerySchema = z.object({
-  days: z.coerce.number().int().min(1).max(366).default(14),
-  model: queryText,
-  team_id: queryText,
-  org_id: queryText,
-  project_id: queryText,
-  member_id: queryText,
-  key_id: queryText,
-  user_id: queryText,
-});
+const labelFilter = z
+  .string()
+  .trim()
+  .max(200)
+  .optional()
+  .transform((value, ctx) => {
+    if (!value) return null;
+    const label = parseLabelFilter(value);
+    if (!label) ctx.addIssue({ code: "custom", message: "expected <key>:<value>" });
+    return label;
+  });
+
+const labelGroup = z
+  .string()
+  .trim()
+  .max(60)
+  .optional()
+  .transform((value, ctx) => {
+    if (!value) return null;
+    const key = value.startsWith(GROUP_BY_LABEL) ? labelKey(value.slice(GROUP_BY_LABEL.length)) : null;
+    if (!key) ctx.addIssue({ code: "custom", message: "expected label:<key>" });
+    return key;
+  });
+
+export const usageQuerySchema = z
+  .object({
+    days: z.coerce.number().int().min(1).max(366).default(14),
+    model: queryText,
+    team_id: queryText,
+    org_id: queryText,
+    project_id: queryText,
+    member_id: queryText,
+    key_id: queryText,
+    user_id: queryText,
+    group_by: labelGroup,
+    label: labelFilter,
+  })
+  .superRefine((query, ctx) => {
+    if (query.group_by && query.label && query.label.key !== query.group_by) {
+      ctx.addIssue({ code: "custom", path: ["group_by"], message: "group_by must name the key of the label filter" });
+    }
+  });
 
 export const logsQuerySchema = z.object({
   page: z.coerce.number().int().min(1).max(100_000).default(1),
@@ -283,6 +317,7 @@ export const logsQuerySchema = z.object({
   endpoint: queryText,
   key_id: queryText,
   user_id: queryText,
+  label: labelFilter,
   status: z.coerce.number().int().min(100).max(599).optional(),
   from: z.iso.datetime({ offset: true }).optional(),
   to: z.iso.datetime({ offset: true }).optional(),

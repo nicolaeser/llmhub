@@ -7,7 +7,11 @@ export type UsageQuery = {
   memberId: string;
   keyId: string;
   userId: string;
+  labelKey: string;
+  labelValue: string;
 };
+
+export type RequestLabel = { key: string; value: string };
 
 export type TipItem = {
   name?: unknown;
@@ -60,6 +64,7 @@ export type UsageSlice = {
   cost: number;
   cacheSavings: number;
   purchaseCost?: number;
+  label?: string;
 };
 
 export type ChargebackParts = {
@@ -70,6 +75,7 @@ export type ChargebackParts = {
   keyId: string;
   userId: string;
   model: string;
+  label?: string;
 };
 
 export type SliceRow = {

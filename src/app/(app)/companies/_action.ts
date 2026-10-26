@@ -9,6 +9,7 @@ import { addBoost, removeBoost, setBudget } from "@/lib/tenancy/budgets";
 import {
   deleteNode,
   loadStructure,
+  saveCompanyLabelKeys,
   saveMember,
   saveOrg,
   saveProject,
@@ -22,6 +23,10 @@ export async function loadStructureAction(...args: Parameters<typeof loadStructu
 
 export async function saveOrgAction(...args: Parameters<typeof saveOrg>) {
   return runAction(() => saveOrg(...args));
+}
+
+export async function saveCompanyLabelKeysAction(...args: Parameters<typeof saveCompanyLabelKeys>) {
+  return runAction(() => saveCompanyLabelKeys(...args));
 }
 
 export async function saveTeamAction(...args: Parameters<typeof saveTeam>) {

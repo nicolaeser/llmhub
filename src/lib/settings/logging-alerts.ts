@@ -64,6 +64,7 @@ async function view(session: AuthenticatedSession): Promise<LoggingSettingsView>
       thresholds: enterprise.budget_alert_thresholds ?? [50, 80, 100],
       canManage: hasPerm(session.permissions, PERMISSIONS.BUDGETS_MANAGE),
     },
+    labelKeys: enterprise.label_keys ?? [],
   };
 }
 

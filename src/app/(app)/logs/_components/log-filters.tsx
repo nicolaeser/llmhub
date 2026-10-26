@@ -5,7 +5,9 @@ import {
   Button,
   Card,
   ComboBox,
+  Description,
   Disclosure,
+  FieldError,
   Form,
   Input,
   Label,
@@ -18,6 +20,7 @@ import { SlidersHorizontal } from "lucide-react";
 import { useTranslations } from "next-intl";
 import SearchSelect from "@/components/console/search-select";
 import { BELOW_MD, useMediaQuery } from "@/lib/hooks/use-media-query";
+import { parseLabelFilter, storedLabel } from "@/lib/usage/labels";
 import type { PickerItem } from "@/types/console";
 import type { LogFilterValues, LogOption, LogOptions } from "@/types/logs";
 
@@ -27,6 +30,7 @@ export const NO_FILTERS: LogFilterValues = {
   endpoint: "",
   keyId: "",
   userId: "",
+  label: "",
   pii: false,
   from: "",
   to: "",
@@ -52,6 +56,8 @@ export default function LogFilters({
   const [applied, setApplied] = useState(() => activeCount(initial));
   const [expanded, setExpanded] = useState(false);
   const compact = useMediaQuery(BELOW_MD);
+  const label = values.label.trim() ? parseLabelFilter(values.label) : null;
+  const labelInvalid = values.label.trim() !== "" && !label;
   const set = <K extends keyof LogFilterValues>(key: K) => (value: LogFilterValues[K]) =>
     setValues((current) => ({ ...current, [key]: value }));
   const withSelected = (listed: LogOption[], id: string, kind: "key" | "user"): PickerItem[] =>
@@ -64,11 +70,13 @@ export default function LogFilters({
       className={compact ? "space-y-4" : "mb-4 space-y-4"}
       onSubmit={(event) => {
         event.preventDefault();
+        if (labelInvalid) return;
         const next = {
           ...values,
           model: values.model.trim(),
           status: values.status.trim(),
           endpoint: values.endpoint.trim(),
+          label: label ? storedLabel(label) : "",
         };
         setApplied(activeCount(next));
         onApply(next);
@@ -114,6 +122,12 @@ export default function LogFilters({
             onChange={(next) => set("userId")(next === "all" ? "" : next)}
           />
         ) : null}
+        <TextField fullWidth value={values.label} onChange={set("label")} isInvalid={labelInvalid} maxLength={200}>
+          <Label>{t("filters.label")}</Label>
+          <Input placeholder="cost_center:4711" />
+          {labelInvalid ? null : <Description>{t("filters.labelHint")}</Description>}
+          <FieldError>{t("filters.labelInvalid")}</FieldError>
+        </TextField>
         <TextField fullWidth value={values.from} onChange={set("from")}>
           <Label>{t("filters.from")}</Label>
           <Input type="date" />

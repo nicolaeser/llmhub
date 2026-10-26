@@ -48,7 +48,10 @@
     "selected": "{kind, select, key {Selected key} other {Selected console user}}",
     "pii": "Only requests with PII",
     "reset": "Reset",
-    "title": "{count, plural, =0 {Filters} other {Filters · # active}}"
+    "title": "{count, plural, =0 {Filters} other {Filters · # active}}",
+    "label": "Label",
+    "labelHint": "key:value, for example cost_center:4711",
+    "labelInvalid": "Enter the label as key:value."
   },
   "prev": "Previous",
   "next": "Next",
@@ -127,5 +130,9 @@
     "replayHint": "Load this request into the Playground to send it again. Keep the original model or pick another to compare.",
     "replayPick": "Choose a model",
     "replayNoModels": "No models available"
+  },
+  "labels": {
+    "title": "Labels",
+    "chip": "{key}: {value}"
   }
 }

@@ -256,5 +256,10 @@
       "saved": "{mode, select, edit {Bericht gespeichert} other {Bericht hinzugefügt}}"
     },
     "row": "{cadence, select, weekly {Wöchentlicher Bericht} other {Monatlicher Bericht}} an {first}{more, plural, =0 {} other { und # weitere}}"
+  },
+  "labels": {
+    "title": "Anfrage-Labels",
+    "hint": "Label-Schlüssel, die dieses Unternehmen zusätzlich zu den Plattform-Schlüsseln verwenden darf. Nutzung, Chargeback und Protokolle lassen sich danach gruppieren und filtern.",
+    "saved": "Label-Schlüssel gespeichert."
   }
 }

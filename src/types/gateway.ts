@@ -34,7 +34,10 @@ export type RequestTrace = {
   guardOutput: Set<string>;
   guardBlocked: boolean;
   costCap?: CostCap | null;
+  labels?: LabelCandidates;
 };
+
+export type LabelCandidates = Record<string, string>;
 
 export type ScreenedRequest = {
   principal: Principal;

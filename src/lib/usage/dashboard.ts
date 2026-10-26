@@ -3,15 +3,25 @@ import "server-only";
 import { requireActor, requirePermission } from "@/lib/auth/guards";
 import { hasPerm, PERMISSIONS } from "@/lib/auth/permissions";
 import { companyOf, spendScope } from "@/lib/auth/scope";
+import { labelKey, labelValue, storedLabel } from "@/lib/usage/labels";
 import {
   chargebackRows,
+  groupByLabel,
   groupCache,
   groupRequestHealth,
   groupSpend,
+  labelBreakdown,
   summarizeUsage,
   usageDays,
 } from "@/lib/usage/usage-stats";
-import { p95Latency, usageNames, usageSlices } from "@/lib/usage/usage-totals";
+import {
+  p95Latency,
+  usageLabelKeys,
+  usageLabelSlices,
+  usageLabelValues,
+  usageNames,
+  usageSlices,
+} from "@/lib/usage/usage-totals";
 import type { UsageSlice, UsageTab } from "@/types/usage";
 
 export async function loadUsageTabs(): Promise<UsageTab[]> {
@@ -34,6 +44,8 @@ export async function loadUsage(
         memberId?: string;
         keyId?: string;
         userId?: string;
+        labelKey?: string;
+        labelValue?: string;
       } = 14,
 ) {
   const session = await requirePermission(PERMISSIONS.SPEND_READ);
@@ -47,6 +59,8 @@ export async function loadUsage(
   const memberId = text(query.memberId);
   const keyId = text(query.keyId);
   const userId = text(query.userId);
+  const groupLabel = labelKey(query.labelKey) ?? "";
+  const filterLabel = groupLabel ? (labelValue(query.labelValue) ?? "") : "";
   const now = new Date();
   const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
   const since = new Date(today - (days - 1) * 86400000);
@@ -61,10 +75,25 @@ export async function loadUsage(
   };
   const filters = { AND: [requested, spendScope(session)] };
   const priced = hasPerm(session.permissions, PERMISSIONS.PRICING_READ);
-  const [rows, p95] = await Promise.all([
-    usageSlices({ ...filters, day: { gte: since } }, { purchase: priced }),
-    p95Latency({ ...filters, createdAt: { gte: since } }),
+  const day = { gte: since };
+  const [daily, labeled, p95, labelKeys, labelValues] = await Promise.all([
+    filterLabel ? [] : usageSlices({ ...filters, day }, { purchase: priced }),
+    groupLabel
+      ? usageLabelSlices(
+          { ...filters, day, label: groupLabel, ...(filterLabel ? { value: filterLabel } : {}) },
+          { purchase: priced },
+        )
+      : [],
+    p95Latency({
+      ...filters,
+      createdAt: { gte: since },
+      ...(filterLabel ? { labels: { has: storedLabel({ key: groupLabel, value: filterLabel }) } } : {}),
+    }),
+    usageLabelKeys({ ...filters, day }),
+    groupLabel ? usageLabelValues({ ...filters, day, label: groupLabel }) : [],
   ]);
+  const rows = filterLabel ? labeled : daily;
+  const labelRows = filterLabel ? labeled : groupLabel ? labelBreakdown(daily, labeled) : [];
   const summary = summarizeUsage(rows, usageDays(since, days));
   const distinct = (pick: (row: UsageSlice) => string) =>
     [...new Set(rows.map(pick).filter(Boolean))].sort();
@@ -78,6 +107,10 @@ export async function loadUsage(
     memberId,
     keyId,
     userId,
+    labelKey: groupLabel,
+    labelValue: filterLabel,
+    labelKeys,
+    labelValues,
     names: await usageNames(rows),
     models: distinct((row) => row.model),
     teams: distinct((row) => row.teamId),
@@ -109,6 +142,7 @@ export async function loadUsage(
     healthByModel: groupRequestHealth(rows, "model").slice(0, 12),
     healthByTeam: groupRequestHealth(rows, "teamId").slice(0, 12),
     cacheByProject: groupCache(rows, "projectId").slice(0, 12),
-    chargeback: chargebackRows(rows),
+    byLabel: groupByLabel(labelRows),
+    chargeback: chargebackRows(groupLabel ? labelRows : rows),
   };
 }

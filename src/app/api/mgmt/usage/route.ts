@@ -17,6 +17,8 @@ export const GET = managementRoute(PERMISSIONS.SPEND_READ, async ({ req }) => {
       memberId: query.member_id,
       keyId: query.key_id,
       userId: query.user_id,
+      labelKey: query.group_by ?? query.label?.key ?? "",
+      labelValue: query.label?.value ?? "",
     });
   return respond(serializeUsage(usage));
 });

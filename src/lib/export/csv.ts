@@ -2,8 +2,11 @@ import "server-only";
 
 import { NextResponse } from "next/server";
 
+const FORMULA_START = /^[=+\-@\t\r]/;
+
 function csvEscape(value: unknown): string {
-  const s = value == null ? "" : String(value);
+  const text = value == null ? "" : String(value);
+  const s = typeof value === "string" && FORMULA_START.test(text) ? `'${text}` : text;
   if (/[",\n\r]/.test(s)) return `"${s.replaceAll('"', '""')}"`;
   return s;
 }
