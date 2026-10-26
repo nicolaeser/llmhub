@@ -2,7 +2,8 @@
 
 import type { ReactNode } from "react";
 import { Alert, Chip } from "@heroui/react";
-import { useFormatter, useNow, useTranslations } from "next-intl";
+import { useFormatter, useTranslations } from "next-intl";
+import { useClock } from "@/lib/hooks/use-clock";
 import { shortDigest } from "@/lib/updates/updater-view";
 import type { UpdaterState, UpdaterView } from "@/types/updates";
 import { AutoUpdateSwitch, UpdaterButtons } from "./updater-controls";
@@ -39,7 +40,7 @@ export default function UpdaterPanel({
 }) {
   const t = useTranslations("Common");
   const format = useFormatter();
-  const now = useNow({ updateInterval: 10_000 });
+  const now = useClock(10_000);
 
   if (!updater) {
     return (

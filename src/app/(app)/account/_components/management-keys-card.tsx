@@ -18,7 +18,8 @@ import {
   useOverlayState,
 } from "@heroui/react";
 import { KeyRound, Plus, Trash2 } from "lucide-react";
-import { useFormatter, useNow, useTranslations } from "next-intl";
+import { useFormatter, useTranslations } from "next-intl";
+import { useClock } from "@/lib/hooks/use-clock";
 import ConfirmDialog from "@/components/console/confirm-dialog";
 import CopyButton from "@/components/console/copy-button";
 import FormDialog from "@/components/console/form-dialog";
@@ -49,7 +50,7 @@ export default function ManagementKeysCard({
   const tRoles = useTranslations("Roles");
   const tCommon = useTranslations("Common");
   const format = useFormatter();
-  const now = useNow({ updateInterval: 30_000 });
+  const now = useClock(30_000);
   const errorText = useSecurityError();
   const createModal = useOverlayState();
   const [name, setName] = useState("");

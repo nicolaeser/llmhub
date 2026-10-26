@@ -16,7 +16,8 @@ import {
   Unplug,
   Users,
 } from "lucide-react";
-import { useFormatter, useNow, useTranslations } from "next-intl";
+import { useFormatter, useTranslations } from "next-intl";
+import { useClock } from "@/lib/hooks/use-clock";
 import IconTile from "@/components/console/icon-tile";
 import RowCard, { RowCards, TABLE_FROM_LG } from "@/components/console/row-cards";
 import { PlanBadge } from "@/components/console/subscription-badge";
@@ -84,7 +85,7 @@ export default function SubscriptionGroup({
   const tError = useTranslations("Error");
   const tCommon = useTranslations("Common");
   const format = useFormatter();
-  const now = useNow({ updateInterval: 60_000 });
+  const now = useClock(60_000);
   const name = tProviders("kindShort", { kind });
   const StrategyIcon = STRATEGY_ICONS[strategy];
   const titleId = `subscriptions-${kind}`;

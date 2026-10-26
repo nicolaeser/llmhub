@@ -3,7 +3,8 @@
 import { useTransition } from "react";
 import { Button, Card, Chip, Label, Spinner, Switch, toast } from "@heroui/react";
 import { KeyRound, LogIn, LogOut, Pencil, RefreshCw, Shield, Trash2, Users } from "lucide-react";
-import { useFormatter, useNow, useTranslations } from "next-intl";
+import { useFormatter, useTranslations } from "next-intl";
+import { useClock } from "@/lib/hooks/use-clock";
 import ConfirmDialog from "@/components/console/confirm-dialog";
 import { useErrorToast } from "@/components/console/use-error-toast";
 import { isActionFail } from "@/lib/http/action-result";
@@ -57,7 +58,7 @@ export default function ServerCard({
   const t = useTranslations("Mcp");
   const tCommon = useTranslations("Common");
   const format = useFormatter();
-  const now = useNow({ updateInterval: 60_000 });
+  const now = useClock(60_000);
   const showError = useErrorToast();
   const [toggling, startToggle] = useTransition();
   const [refreshing, startRefresh] = useTransition();

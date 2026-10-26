@@ -1,7 +1,8 @@
 "use client";
 
 import { Card } from "@heroui/react";
-import { useFormatter, useNow, useTranslations } from "next-intl";
+import { useFormatter, useTranslations } from "next-intl";
+import { useClock } from "@/lib/hooks/use-clock";
 import type { SecurityEventAction, SecurityEventView } from "@/types/security";
 
 const EVENT_KEYS = {
@@ -27,7 +28,7 @@ const EVENT_KEYS = {
 export default function ActivityCard({ events }: { events: SecurityEventView[] }) {
   const t = useTranslations("Account.activity");
   const format = useFormatter();
-  const now = useNow({ updateInterval: 30_000 });
+  const now = useClock(30_000);
 
   return (
     <Card className="gap-4">

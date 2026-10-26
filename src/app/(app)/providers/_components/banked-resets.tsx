@@ -3,7 +3,8 @@
 import { useTransition } from "react";
 import { Alert, Button, Chip, Spinner, toast } from "@heroui/react";
 import { TimerReset } from "lucide-react";
-import { useFormatter, useNow, useTranslations } from "next-intl";
+import { useFormatter, useTranslations } from "next-intl";
+import { useClock } from "@/lib/hooks/use-clock";
 import ConfirmDialog from "@/components/console/confirm-dialog";
 import { useErrorToast } from "@/components/console/use-error-toast";
 import { isActionFail } from "@/lib/http/action-result";
@@ -43,7 +44,7 @@ export default function BankedResets({
   const tLimits = useTranslations("Subscriptions.limits");
   const tCommon = useTranslations("Common");
   const format = useFormatter();
-  const now = useNow({ updateInterval: 60_000 });
+  const now = useClock(60_000);
   const showError = useErrorToast();
   const [pending, start] = useTransition();
   const retry = credits.pending?.retryable === true;

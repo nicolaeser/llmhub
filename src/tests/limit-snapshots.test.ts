@@ -717,6 +717,39 @@ test("header data serves fresh reads, and a 429 that carried the headers does no
   assert.equal(upstreamCalls.length, 0);
 });
 
+test("a header observation that lands while a poll is in flight survives the poll's write", async () => {
+  const { refreshLimits, readStoredSnapshot, storeObservedLimits, CLAUDE_MANUAL_REFRESH_GAP_MS } = await import(
+    "@/lib/gateway/upstreams/limit-store"
+  );
+  const { claudeHeaderWindows } = await import("@/lib/gateway/upstreams/observed-limits");
+  const { limitsSnapshot } = await import("@/lib/gateway/upstreams/subscription-limits");
+  const now = Date.now();
+  const target = await seededClaude(now);
+  respond(async () => {
+    await storeObservedLimits(target.id, claudeHeaderWindows(unifiedHeaders(1, 0.3, now, "rejected")), now + 5_000);
+    return claudeUsage(80);
+  });
+  assert.equal((await refreshLimits(target, { kind: "manual" }, { now })).status, "fetched");
+  const raced = await readStoredSnapshot(target.id);
+  assert.equal(raced?.version, 3);
+  assert.equal(raced?.fetchedAt, now);
+  assert.equal(raced?.limits?.observedAt, new Date(now + 5_000).toISOString());
+  assert.deepEqual(
+    raced?.limits?.windows.map((window) => [window.scope, window.usedPercent, window.limitReached]),
+    [["", 100, true], ["", 30, false], ["Opus", 70, false]],
+  );
+  assert.equal(limitsSnapshot(target.id)?.windows[0]?.limitReached, true);
+  respond(() => claudeUsage(80));
+  const later = now + CLAUDE_MANUAL_REFRESH_GAP_MS;
+  assert.equal((await refreshLimits(target, { kind: "manual" }, { now: later })).status, "fetched");
+  const polled = await readStoredSnapshot(target.id);
+  assert.equal(polled?.limits?.observedAt, new Date(now + 5_000).toISOString());
+  assert.deepEqual(
+    polled?.limits?.windows.map((window) => [window.scope, window.usedPercent, window.limitReached]),
+    [["", 80, false], ["", 20, false], ["Opus", 70, false]],
+  );
+});
+
 test("gateway responses from a Claude account feed its limits on success and on 429", async () => {
   const { proxyJson } = await import("@/lib/gateway/dispatch/upstream");
   const { readStoredSnapshot } = await import("@/lib/gateway/upstreams/limit-store");

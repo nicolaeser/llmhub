@@ -3,13 +3,14 @@
 import { useCallback, useState } from "react";
 import { Button, Skeleton, Table, type SortDescriptor } from "@heroui/react";
 import { Activity, Bot, ChevronRight, Coins, Layers } from "lucide-react";
-import { useFormatter, useNow, useTranslations } from "next-intl";
+import { useFormatter, useTranslations } from "next-intl";
 import CopyButton from "@/components/console/copy-button";
 import EmptyState from "@/components/console/empty-state";
 import { LoadError, SectionLoading } from "@/components/console/page-status";
 import RowCard, { RowCards, TABLE_FROM_LG } from "@/components/console/row-cards";
 import StatCard from "@/components/console/stat-card";
 import { useActionData } from "@/lib/hooks/use-action-data";
+import { useClock } from "@/lib/hooks/use-clock";
 import { consoleTimeZone } from "@/lib/hooks/use-console-time-zone";
 import { isActionFail } from "@/lib/http/action-result";
 import { zonedLogFilters } from "@/lib/gateway/request-logs/request-log-query";
@@ -66,7 +67,7 @@ export default function SessionList({
   const t = useTranslations("Logs");
   const tSessions = useTranslations("Logs.sessions");
   const format = useFormatter();
-  const now = useNow({ updateInterval: NOW_INTERVAL_MS });
+  const now = useClock(NOW_INTERVAL_MS);
   const tokens = useCompactTokens();
   const caller = useCallerLabels();
   const session = useSessionFormat();

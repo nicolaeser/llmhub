@@ -132,7 +132,7 @@ export default function SubscriptionAccounts({
   }
 
   const states = new Map(
-    rows.map((row) => [row.id, countedState(accountState(row, items[row.id], reportsLimits(row.kind)))]),
+    rows.map((row) => [row.id, countedState(accountState(row, items[row.id], reportsLimits(row.kind), now.getTime()))]),
   );
   const tally = (state: CountedState, subset: ProviderView[] = rows) =>
     subset.filter((row) => states.get(row.id) === state).length;
