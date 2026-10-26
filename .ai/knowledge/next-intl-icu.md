@@ -140,7 +140,7 @@ format.relativeTime(date, {now, unit: 'day'});
 format.dateTimeRange(start, end, 'short');
 ```
 
-Prefer `useNow` / `getNow` over `new Date()` in render. Use `updateInterval` only when a relative string must tick.
+Prefer `useNow` / `getNow` over `new Date()` in render. When a relative string or countdown must tick, use `useClock(intervalMs)` (`src/lib/hooks/use-clock.ts`), never `useNow({ updateInterval })`: the ticking `useNow` starts from the `now` of the last full page load (`src/i18n/request.ts`) and keeps it for the first interval, so anything mounted later in a long-open tab is off by the tab's age. `useClock` renders the request time on the server and during hydration, then the browser clock.
 
 In messages: `{orderDate, date, medium}` or `{orderDate, date, ::yyyyMMMd}`. Built-in date styles: `full`, `long`, `medium`, `short`.
 

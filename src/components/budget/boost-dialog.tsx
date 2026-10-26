@@ -15,7 +15,8 @@ import {
   type useOverlayState,
 } from "@heroui/react";
 import { Trash2 } from "lucide-react";
-import { useFormatter, useNow, useTranslations } from "next-intl";
+import { useFormatter, useTranslations } from "next-intl";
+import { useClock } from "@/lib/hooks/use-clock";
 import { formats } from "@/i18n/formats";
 import { isActionFail } from "@/lib/http/action-result";
 import type { ActionFail } from "@/types/actions";
@@ -49,7 +50,7 @@ export default function BoostDialog({
   const t = useTranslations("Budgets.boost");
   const showError = useErrorToast();
   const format = useFormatter();
-  const now = useNow({ updateInterval: 60_000 });
+  const now = useClock(60_000);
   const durationLabel = useId();
   const [amount, setAmount] = useState(25);
   const [hours, setHours] = useState(24);

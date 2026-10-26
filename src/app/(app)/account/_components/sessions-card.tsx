@@ -3,7 +3,8 @@
 import { useState, useTransition } from "react";
 import { Button, Card, Chip, Spinner, toast } from "@heroui/react";
 import { LogOut, Monitor } from "lucide-react";
-import { useFormatter, useNow, useTranslations } from "next-intl";
+import { useFormatter, useTranslations } from "next-intl";
+import { useClock } from "@/lib/hooks/use-clock";
 import { isActionFail } from "@/lib/http/action-result";
 import { describeUserAgent } from "@/lib/utils/user-agent";
 import { useSecurityError } from "@/components/security/use-security-error";
@@ -19,7 +20,7 @@ export default function SessionsCard({
 }) {
   const t = useTranslations("Account.sessions");
   const format = useFormatter();
-  const now = useNow({ updateInterval: 30_000 });
+  const now = useClock(30_000);
   const errorText = useSecurityError();
   const [revokingId, setRevokingId] = useState<string | null>(null);
   const [revokingOthers, startOthers] = useTransition();

@@ -14,7 +14,8 @@ import {
   type useOverlayState,
 } from "@heroui/react";
 import { RefreshCw, Trash2, Upload } from "lucide-react";
-import { useFormatter, useNow, useTranslations } from "next-intl";
+import { useFormatter, useTranslations } from "next-intl";
+import { useClock } from "@/lib/hooks/use-clock";
 import ConfirmDialog from "@/components/console/confirm-dialog";
 import RowCard, { RowCards, TABLE_FROM_LG } from "@/components/console/row-cards";
 import { listKnowledgeFilesAction, removeKnowledgeFileAction } from "../_action";
@@ -71,7 +72,7 @@ export default function FilesDialog({
   const tCommon = useTranslations("Common");
   const showError = useErrorToast();
   const format = useFormatter();
-  const now = useNow({ updateInterval: 30_000 });
+  const now = useClock(30_000);
   const [files, setFiles] = useState<VectorFileView[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadFailed, setLoadFailed] = useState(false);

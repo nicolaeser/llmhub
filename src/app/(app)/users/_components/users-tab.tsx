@@ -14,7 +14,7 @@ import {
   useOverlayState,
 } from "@heroui/react";
 import { MoreHorizontal, Plus, User } from "lucide-react";
-import { useFormatter, useNow, useTranslations } from "next-intl";
+import { useFormatter, useTranslations } from "next-intl";
 import BoostDialog from "@/components/budget/boost-dialog";
 import BudgetDialog from "@/components/budget/budget-dialog";
 import ConfirmDialog from "@/components/console/confirm-dialog";
@@ -25,6 +25,7 @@ import { useErrorToast } from "@/components/console/use-error-toast";
 import { Link, useRouter } from "@/i18n/routing";
 import { logsHref } from "@/lib/gateway/request-logs/request-log-query";
 import { useActionData } from "@/lib/hooks/use-action-data";
+import { useClock } from "@/lib/hooks/use-clock";
 import { setSearchParams, useSearchParam } from "@/lib/hooks/use-search-param";
 import { isActionFail } from "@/lib/http/action-result";
 import { usageHref } from "@/lib/usage/usage-query";
@@ -58,7 +59,7 @@ export default function UsersTab() {
   const tCommon = useTranslations("Common");
   const tBudgets = useTranslations("Budgets");
   const format = useFormatter();
-  const now = useNow({ updateInterval: 30_000 });
+  const now = useClock(30_000);
   const roleName = useRoleName();
   const errorText = useSecurityError();
   const showError = useErrorToast();
