@@ -23,6 +23,7 @@ function provider(overrides: Partial<ProviderView> = {}): ProviderView {
     enabled: true,
     restricted: false,
     internal: false,
+    newModels: "auto",
     assignments: [],
     signIn: { account: "user@example.test", plan: "max", status: "active" },
     sharedVia: null,

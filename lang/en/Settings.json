@@ -270,7 +270,7 @@
       "keepKey": "Keep the stored key",
       "catalogHint": "Results and refresh status are on the <link>Model catalog</link> page.",
       "autoRoutes": "Add new providers automatically",
-      "autoRoutesHint": "Default for every alias that does not set its own value. Only trusted providers that start offering a model are routed; own OpenAI-compatible servers are always turned on by hand.",
+      "autoRoutesHint": "Default for every alias that does not set its own value. Only trusted providers that start offering a model are routed; own OpenAI-compatible servers are turned on by hand unless their provider turns new models on.",
       "minConfidence": "Minimum Jev confidence",
       "minConfidenceHint": "Jev matches below this value are shown in the catalog but never routed on their own. Matches by name always count as certain."
     },

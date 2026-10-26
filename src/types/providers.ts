@@ -1,6 +1,7 @@
 import type { z } from "zod";
 import type { signInCredentialSchema, signInTicketSchema } from "@/schemas/providers";
 import type { ActionFail } from "@/types/actions";
+import type { NewModelMode } from "@/types/model-catalog";
 import type { AutoResetPolicies, ResetCredits } from "@/types/resets";
 
 export type ProviderRecord = {
@@ -17,6 +18,7 @@ export type ProviderRecord = {
   enabled: boolean;
   restricted: boolean;
   internal: boolean;
+  newModels: string;
   assignments?: AssignmentSource[];
   login?: { account: string; plan: string; status: string } | null;
   subAdd?: { label: string; manageHash: string | null } | null;
@@ -119,6 +121,7 @@ export type ProviderView = {
   enabled: boolean;
   restricted: boolean;
   internal: boolean;
+  newModels: NewModelMode;
   assignments: AssignmentTarget[];
   signIn: ProviderSignIn | null;
   sharedVia: string | null;
@@ -459,6 +462,7 @@ export type ProviderDraft = {
   region: string;
   noTraining: boolean;
   internal: boolean;
+  newModels: NewModelMode;
 };
 
 export type ProviderBody = {
@@ -470,6 +474,7 @@ export type ProviderBody = {
   policy: ProviderPolicyInput;
   vertex?: VertexTarget;
   internal?: boolean;
+  newModels: NewModelMode;
 };
 
 export type AddProviderSection = "api" | "subscription" | "import";

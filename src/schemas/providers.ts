@@ -8,6 +8,10 @@ export const providerPolicySchema = z.object({
   noTraining: z.boolean().default(false),
 });
 
+export const NEW_MODEL_MODES = ["auto", "active", "disabled"] as const;
+
+export const DEFAULT_NEW_MODEL_MODE = "auto";
+
 export const vertexTargetSchema = z
   .object({
     project: z.string().trim().max(100).optional(),

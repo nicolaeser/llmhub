@@ -22,6 +22,7 @@ export const PATCH = managementRoute<{ id: string }>(PERMISSIONS.PROVIDERS_MANAG
       enabled: body.enabled,
       vertex: body.vertex,
       internal: body.internal,
+      newModels: body.new_models,
     });
   return respond(serializeProvider(provider));
 });

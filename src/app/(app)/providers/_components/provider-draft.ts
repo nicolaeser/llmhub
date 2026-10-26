@@ -4,6 +4,7 @@ import {
   serviceAccountSummary,
   VERTEX_DEFAULT_LOCATION,
 } from "@/lib/gateway/upstreams/vertex-target";
+import { DEFAULT_NEW_MODEL_MODE } from "@/schemas/providers";
 import type {
   ProviderBody,
   ProviderDraft,
@@ -46,6 +47,7 @@ export function draftFor(spec: ProviderKindSpec | null, editing: ProviderView | 
     region: policy?.region ?? (spec?.kind === "openrouter_eu" ? "eu" : ""),
     noTraining: policy?.noTraining ?? false,
     internal: editing?.internal ?? false,
+    newModels: editing?.newModels ?? DEFAULT_NEW_MODEL_MODE,
   };
 }
 
@@ -78,5 +80,6 @@ export function draftBody(spec: ProviderKindSpec, draft: ProviderDraft): Provide
     },
     vertex: serviceAccount ? { project: draft.vertex.project, location: draft.vertex.location } : undefined,
     internal: isSignInKind(spec.kind) ? undefined : draft.internal,
+    newModels: draft.newModels,
   };
 }

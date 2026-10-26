@@ -31,7 +31,7 @@
   "providers": "{active} of {total, plural, one {# provider} other {# providers}} active",
   "newProviders": "{count, plural, one {# new provider} other {# new providers}}",
   "autoRoutes": "Add new providers automatically",
-  "autoRoutesHint": "Routes trusted providers that start offering this model after the next refresh. The default comes from Settings. Own OpenAI-compatible servers are always turned on by hand.",
+  "autoRoutesHint": "Routes trusted providers that start offering this model after the next refresh. The default comes from Settings. Own OpenAI-compatible servers are turned on by hand unless their provider turns new models on.",
   "openModels": "Open group",
   "columns": {
     "provider": "Provider",

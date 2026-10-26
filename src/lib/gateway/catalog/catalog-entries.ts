@@ -1,6 +1,6 @@
 import "server-only";
 import prisma from "@/lib/db/prisma";
-import { planCatalog } from "@/lib/gateway/catalog/model-catalog";
+import { newModelMode, planCatalog } from "@/lib/gateway/catalog/model-catalog";
 import { discoveredOf } from "@/lib/gateway/upstreams/provider-prices";
 import type { CatalogEntryPlan } from "@/types/model-catalog";
 
@@ -38,7 +38,7 @@ export async function catalogInputs() {
   const [providers, groups, deployments, stored] = await Promise.all([
     prisma.providerConnection.findMany({
       orderBy: { createdAt: "asc" },
-      select: { id: true, name: true, kind: true, internal: true, discovered: true },
+      select: { id: true, name: true, kind: true, internal: true, newModels: true, discovered: true },
     }),
     prisma.modelGroup.findMany({
       orderBy: { alias: "asc" },
@@ -52,6 +52,7 @@ export async function catalogInputs() {
     providers: providers.map((provider) => ({
       id: provider.id,
       kind: provider.kind,
+      newModels: newModelMode(provider.newModels),
       models: (discovered.get(provider.id) ?? []).map((model) => ({ id: model.id, name: model.name })),
     })),
     groups,

@@ -20,6 +20,7 @@ export const POST = managementRoute(PERMISSIONS.PROVIDERS_MANAGE, async ({ req }
       apiKey: body.api_key,
       vertex: body.vertex,
       internal: body.internal,
+      newModels: body.new_models,
     });
   return respond(serializeProvider(provider), 201);
 });
