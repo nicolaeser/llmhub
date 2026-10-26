@@ -23,6 +23,7 @@ type FakeProvider = {
   enabled: boolean;
   restricted: boolean;
   internal: boolean;
+  newModels: string;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -299,6 +300,7 @@ function seedProvider(discovered: DiscoveredModel[], extra: Partial<FakeProvider
     enabled: true,
     restricted: false,
     internal: false,
+    newModels: "auto",
     createdAt: new Date("2026-10-01T00:00:00.000Z"),
     updatedAt: new Date("2026-10-01T00:00:00.000Z"),
     ...extra,
@@ -932,4 +934,92 @@ test("a rejected Jev key stays visible until the key changes, then Jev runs agai
   } finally {
     stopLocalCatalogTasks();
   }
+});
+
+test("a provider that turns new models on routes them on every refresh, own servers included", async () => {
+  const { refreshCatalog } = await import("@/lib/gateway/catalog/catalog-sync");
+  const { setEntryActive } = await import("@/lib/gateway/catalog/catalog-routes");
+  db.enterprise = { catalog_auto_routes: false };
+  db.groups.push(
+    { alias: "gpt-4o", vendor: "", displayName: "", autoRoutes: null, enabled: true },
+    { alias: "grok-4", vendor: "", displayName: "", autoRoutes: false, enabled: true },
+  );
+  const local = seedProvider([], {
+    name: "Local",
+    kind: "openai_compat",
+    baseUrl: "https://local.example.test/v1",
+    newModels: "active",
+  });
+  respondWith(() => modelsResponse(["gpt-4o", "grok-4", "qwen3-coder"]));
+  await refreshCatalog({ actor: "worker", force: true });
+  assert.deepEqual(
+    db.deployments.map((d) => [d.groupAlias, d.providerId, d.model]),
+    [
+      ["gpt-4o", local.id, "gpt-4o"],
+      ["qwen3-coder", local.id, "qwen3-coder"],
+    ],
+  );
+  assert.equal(db.groups.find((g) => g.alias === "qwen3-coder")?.enabled, true);
+  assert.equal(db.entries.get(`${local.id}|grok-4`)?.source, "rule");
+  assert.ok(db.audit.some((a) => a.action === "catalog.auto_route"));
+
+  await setEntryActive("user-1", { providerId: local.id, upstreamId: "qwen3-coder" }, false);
+  respondWith(() => modelsResponse(["gpt-4o", "grok-4", "qwen3-coder", "qwen3-max"]));
+  await refreshCatalog({ actor: "worker", force: true });
+  assert.deepEqual(
+    db.deployments.map((d) => d.model),
+    ["gpt-4o", "qwen3-max"],
+  );
+  assert.equal(db.entries.get(`${local.id}|qwen3-coder`)?.disabled, true);
+});
+
+test("a provider that adds new models turned off keeps them out of aliases that take in new providers", async () => {
+  const { refreshCatalog } = await import("@/lib/gateway/catalog/catalog-sync");
+  const { setEntryActive } = await import("@/lib/gateway/catalog/catalog-routes");
+  db.groups.push({ alias: "gpt-4o", vendor: "openai", displayName: "", autoRoutes: true, enabled: true });
+  const router = seedProvider([], { name: "OpenRouter", newModels: "disabled" });
+  respondWith(() => modelsResponse(["openai/gpt-4o", "openai/gpt-5"]));
+  await refreshCatalog({ actor: "worker", force: true });
+  assert.equal(db.deployments.length, 0);
+  assert.equal(db.entries.get(`${router.id}|openai/gpt-4o`)?.disabled, true);
+  assert.equal(db.entries.get(`${router.id}|openai/gpt-5`)?.disabled, true);
+
+  await setEntryActive("user-1", { providerId: router.id, upstreamId: "openai/gpt-4o" }, true);
+  await refreshCatalog({ actor: "worker", force: true });
+  assert.deepEqual(db.deployments.map((d) => d.model), ["openai/gpt-4o"]);
+  assert.equal(db.entries.get(`${router.id}|openai/gpt-4o`)?.disabled, false);
+  assert.equal(db.entries.get(`${router.id}|openai/gpt-5`)?.disabled, true);
+});
+
+test("a provider that turns new models on waits for Jev before routing a model Jev still has to place", async () => {
+  const { refreshCatalog } = await import("@/lib/gateway/catalog/catalog-sync");
+  db.enterprise = { catalog_jev: { enabled: true, model: "jev-latest", api_key: "sk-or-bad" } };
+  db.groups.push({ alias: "llama-3.3-70b-instruct", vendor: "", displayName: "", autoRoutes: null, enabled: true });
+  const groq = seedProvider([], {
+    name: "Groq",
+    kind: "openai_compat",
+    baseUrl: "https://groq.example.test/v1",
+    newModels: "active",
+  });
+  let jevAnswers = false;
+  respondWith((url) => {
+    if (!url.endsWith("/systemone")) return modelsResponse(["llama-3.3-70b-versatile", "whisper-large-v3"]);
+    return jevAnswers ? jevAnswer("llama-3.3-70b-instruct", 0.96) : new Response("{}", { status: 401 });
+  });
+  const { state } = await refreshCatalog({ actor: "worker", force: true });
+  assert.equal(state?.jev.error, "JEV_AUTH");
+  assert.deepEqual(db.deployments.map((d) => [d.groupAlias, d.model]), [["whisper-large-v3", "whisper-large-v3"]]);
+  assert.equal(db.entries.get(`${groq.id}|llama-3.3-70b-versatile`)?.source, "");
+
+  db.enterprise = { catalog_jev: { enabled: true, model: "jev-latest", api_key: "sk-or-jev" } };
+  jevAnswers = true;
+  await refreshCatalog({ actor: "worker", force: true });
+  assert.deepEqual(
+    db.deployments.map((d) => [d.groupAlias, d.model]),
+    [
+      ["whisper-large-v3", "whisper-large-v3"],
+      ["llama-3.3-70b-instruct", "llama-3.3-70b-versatile"],
+    ],
+  );
+  assert.equal(db.entries.get(`${groq.id}|llama-3.3-70b-versatile`)?.source, "route");
 });

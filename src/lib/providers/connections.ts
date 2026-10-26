@@ -19,7 +19,7 @@ import { assignmentSelect, assignmentTargets } from "@/lib/gateway/routing/accou
 import { reactivateAccount } from "@/lib/gateway/routing/account-reactivation";
 import { loginData } from "@/lib/gateway/upstreams/credentials";
 import { forgetVertexToken, vertexConnection, vertexView } from "@/lib/gateway/upstreams/vertex-credentials";
-import { baseName, vendorOf } from "@/lib/gateway/catalog/model-catalog";
+import { baseName, newModelMode, vendorOf } from "@/lib/gateway/catalog/model-catalog";
 import { refreshProviderModels } from "@/lib/gateway/upstreams/discovery";
 import { matchingConnection, pruneSupersededLogins } from "@/lib/providers/account-match";
 import { removeProviderConnection } from "@/lib/providers/provider-removal";
@@ -36,7 +36,7 @@ import {
   sealTicket,
   startAuthorization,
 } from "@/lib/gateway/upstreams/subscription-sign-in";
-import { providerPolicySchema, vertexTargetSchema } from "@/schemas/providers";
+import { DEFAULT_NEW_MODEL_MODE, NEW_MODEL_MODES, providerPolicySchema, vertexTargetSchema } from "@/schemas/providers";
 import type {
   ImportCandidate,
   LimitSnapshot,
@@ -51,6 +51,7 @@ import type {
   SubscriptionLimits,
   VertexTarget,
 } from "@/types/providers";
+import type { NewModelMode } from "@/types/model-catalog";
 
 const SLOW_DOWN_STEP_S = 5;
 
@@ -77,6 +78,7 @@ export function publicProvider(row: ProviderRecord) {
     enabled: row.enabled,
     restricted: row.restricted,
     internal: row.internal,
+    newModels: newModelMode(row.newModels),
     assignments: assignmentTargets(row.assignments ?? []),
     signIn: signInOf(row),
     sharedVia: row.subAdd ? row.subAdd.label : null,
@@ -110,6 +112,13 @@ function policyOf(row: ProviderRecord): ProviderPolicyInput {
   };
 }
 
+function parseNewModels(raw: unknown): NewModelMode | undefined {
+  if (raw === undefined) return undefined;
+  const mode = NEW_MODEL_MODES.find((item) => item === raw);
+  if (!mode) throw new Error("VALIDATION");
+  return mode;
+}
+
 function parsePolicy(raw: unknown): ProviderPolicyInput {
   const parsed = providerPolicySchema.safeParse(raw ?? {});
   if (!parsed.success) throw new Error("VALIDATION");
@@ -118,7 +127,15 @@ function parsePolicy(raw: unknown): ProviderPolicyInput {
 }
 
 export function providerAuditAfter(row: ProviderRecord, extra?: Record<string, unknown>) {
-  return { name: row.name, kind: row.kind, baseUrl: row.baseUrl, policy: policyOf(row), internal: row.internal, ...extra };
+  return {
+    name: row.name,
+    kind: row.kind,
+    baseUrl: row.baseUrl,
+    policy: policyOf(row),
+    internal: row.internal,
+    newModels: newModelMode(row.newModels),
+    ...extra,
+  };
 }
 
 function parseVertexTarget(raw: unknown): Partial<VertexTarget> | undefined {
@@ -157,10 +174,12 @@ export async function createProvider(input: {
   policy?: ProviderPolicyInput;
   vertex?: Partial<VertexTarget>;
   internal?: boolean;
+  newModels?: NewModelMode;
 }) {
   const session = await requirePlatformPermission(PERMISSIONS.PROVIDERS_MANAGE);
   const kind = input.kind.trim();
   if (!KNOWN_KINDS.has(kind)) throw new Error("UNKNOWN_PROVIDER_KIND");
+  const newModels = parseNewModels(input.newModels) ?? DEFAULT_NEW_MODEL_MODE;
   const spec = specFor(kind);
   const signedIn = isSignInKind(kind);
   if (signedIn && input.internal === true) throw new Error("INTERNAL_SIGN_IN");
@@ -190,6 +209,7 @@ export async function createProvider(input: {
           baseUrl: validBaseUrl(baseUrl || spec?.default_base_url || ""),
           apiKey: vertex ? vertex.apiKey : apiKey ? seal(apiKey) : "",
           internal: input.internal === true,
+          newModels,
           ...parsePolicy(input.policy),
           ...(login ? { login: { create: login } } : {}),
         },
@@ -224,8 +244,10 @@ export async function updateProvider(input: {
   policy?: ProviderPolicyInput;
   vertex?: Partial<VertexTarget>;
   internal?: boolean;
+  newModels?: NewModelMode;
 }) {
   const session = await requirePlatformPermission(PERMISSIONS.PROVIDERS_MANAGE);
+  const newModels = parseNewModels(input.newModels);
   const existing = await prisma.providerConnection.findUnique({ where: { id: input.id } });
   if (!existing) throw new Error("NOT_FOUND");
   const signedIn = isSignInKind(existing.kind);
@@ -253,6 +275,7 @@ export async function updateProvider(input: {
       ...(apiKey ? { apiKey: vertex ? apiKey : seal(apiKey) } : {}),
       ...(input.enabled === undefined ? {} : { enabled: input.enabled }),
       ...(input.internal === undefined ? {} : { internal: input.internal }),
+      ...(newModels === undefined ? {} : { newModels }),
       ...(input.policy ? parsePolicy(input.policy) : {}),
       ...(login ? { login: { upsert: { create: login, update: { ...login, version: { increment: 1 } } } } } : {}),
     },
@@ -266,7 +289,7 @@ export async function updateProvider(input: {
     action: updateAction(existing.enabled, row.enabled),
     objectType: "provider",
     objectId: row.id,
-    before: { enabled: existing.enabled, internal: existing.internal },
+    before: { enabled: existing.enabled, internal: existing.internal, newModels: newModelMode(existing.newModels) },
     after: providerAuditAfter(row, {
       enabled: row.enabled,
       keyReplaced: Boolean(apiKey),
@@ -275,6 +298,8 @@ export async function updateProvider(input: {
   });
   if (apiKey || credential || row.baseUrl !== existing.baseUrl) {
     await scheduleCatalogTask({ task: "provider", providerId: row.id });
+  } else if (row.newModels !== existing.newModels) {
+    await scheduleCatalogTask({ task: "rebuild" });
   }
   const superseded = credential ? await pruneSupersededLogins(session.user.id) : [];
   return { provider: publicProvider(row), outcome: "updated" as const, superseded };

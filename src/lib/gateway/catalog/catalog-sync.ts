@@ -6,7 +6,12 @@ import { catalogInputs, entryKey, persist } from "@/lib/gateway/catalog/catalog-
 import { addRoute } from "@/lib/gateway/catalog/catalog-routes";
 import { acquireLock, CATALOG_REFRESH_MS, getCatalogState, releaseLock, saveState } from "@/lib/gateway/catalog/catalog-state";
 import { askJevStaged, jevFingerprint, jevRoute } from "@/lib/gateway/catalog/jev";
-import { autoRouteEntries, JEV_SUGGEST_CONFIDENCE } from "@/lib/gateway/catalog/model-catalog";
+import {
+  activeProviderEntries,
+  autoRouteEntries,
+  JEV_SUGGEST_CONFIDENCE,
+  newModelMode,
+} from "@/lib/gateway/catalog/model-catalog";
 import { catalogRouting, getEnterprise } from "@/lib/settings/enterprise";
 import { logger } from "@/lib/logging/logger";
 import type {
@@ -72,18 +77,32 @@ async function classify(
   return result;
 }
 
+function jevWaiting(entries: CatalogEntryPlan[], tasks: JevTask[], configured: boolean): Set<string> {
+  if (!configured) return new Set();
+  const queued = new Set(tasks.map(entryKey));
+  return new Set(entries.filter((entry) => !entry.classifiedAt && queued.has(entryKey(entry))).map(entryKey));
+}
+
 async function applyAutoRoutes(
   actor: string,
   entries: CatalogEntryPlan[],
   inputs: Awaited<ReturnType<typeof catalogInputs>>,
   routing: CatalogRouting,
+  waiting: Set<string>,
 ): Promise<number> {
-  const due = autoRouteEntries(entries, inputs.groups, routing);
+  const internal = new Set(inputs.providers.filter((provider) => provider.internal).map((provider) => provider.id));
+  const active = new Set(
+    inputs.providers.filter((provider) => newModelMode(provider.newModels) === "active").map((provider) => provider.id),
+  );
+  const due = new Set([
+    ...autoRouteEntries(entries, inputs.groups, routing).filter((entry) => !internal.has(entry.providerId)),
+    ...activeProviderEntries(entries, inputs.groups, { active, waiting, minConfidence: routing.minConfidence }),
+  ]);
   const routed: { provider: string; model: string; alias: string; source: CatalogSource; confidence: number }[] = [];
   for (const entry of due) {
     const model = inputs.discovered.get(entry.providerId)?.find((item) => item.id === entry.upstreamId);
     const provider = inputs.providers.find((item) => item.id === entry.providerId);
-    if (!model || !provider || provider.internal) continue;
+    if (!model || !provider) continue;
     await addRoute({ provider, model, alias: entry.alias, vendor: entry.vendor, displayName: entry.name });
     routed.push({
       provider: entry.providerId,
@@ -105,7 +124,8 @@ async function rebuildCatalog(actor: string) {
   const [inputs, enterprise] = await Promise.all([catalogInputs(), getEnterprise()]);
   const { entries, jev } = inputs.plan;
   const classified = await classify(entries, jev, enterprise.catalog_jev);
-  const autoRouted = await applyAutoRoutes(actor, entries, inputs, catalogRouting(enterprise));
+  const waiting = jevWaiting(entries, jev, classified.configured);
+  const autoRouted = await applyAutoRoutes(actor, entries, inputs, catalogRouting(enterprise), waiting);
   await persist(entries, inputs.stored);
   return { entries: entries.length, autoRouted, jev: classified };
 }

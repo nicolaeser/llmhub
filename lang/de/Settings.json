@@ -270,7 +270,7 @@
       "keepKey": "Gespeicherten Key behalten",
       "catalogHint": "Ergebnisse und Status der Aktualisierung findest du im <link>Modellkatalog</link>.",
       "autoRoutes": "Neue Anbieter automatisch aufnehmen",
-      "autoRoutesHint": "Standard für jeden Alias ohne eigene Einstellung. Geroutet werden nur vertrauenswürdige Anbieter, die ein Modell neu anbieten; eigene OpenAI-kompatible Server schaltest du immer von Hand ein.",
+      "autoRoutesHint": "Standard für jeden Alias ohne eigene Einstellung. Geroutet werden nur vertrauenswürdige Anbieter, die ein Modell neu anbieten; eigene OpenAI-kompatible Server schaltest du von Hand ein, außer ihr Anbieter schaltet neue Modelle selbst ein.",
       "minConfidence": "Mindestsicherheit für Jev",
       "minConfidenceHint": "Jev-Zuordnungen unter diesem Wert erscheinen im Katalog, werden aber nie selbst geroutet. Zuordnungen über den Namen gelten immer als sicher."
     },

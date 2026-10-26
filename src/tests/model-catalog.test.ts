@@ -2,12 +2,15 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   activationEntries,
+  activeProviderEntries,
   splitTag,
   autoRouteEntries,
+  catalogEntryKey,
   catalogStatus,
   displayNameOf,
   matchKey,
   nameSimilarity,
+  newModelMode,
   planCatalog,
   snapshotNames,
   vendorOf,
@@ -19,11 +22,12 @@ import type {
   CatalogProviderInput,
   CatalogRouteInput,
   JevTask,
+  NewModelMode,
   StoredCatalogEntry,
 } from "@/types/model-catalog";
 
-function provider(id: string, kind: string, ids: string[]): CatalogProviderInput {
-  return { id, kind, models: ids.map((model) => ({ id: model, name: model })) };
+function provider(id: string, kind: string, ids: string[], newModels: NewModelMode = "auto"): CatalogProviderInput {
+  return { id, kind, newModels, models: ids.map((model) => ({ id: model, name: model })) };
 }
 
 function group(alias: string, extra: Partial<CatalogGroupInput> = {}): CatalogGroupInput {
@@ -209,6 +213,62 @@ test("disabled providers stay out of activation and automatic routing", () => {
   assert.equal(catalogStatus({ source: "rule", disabled: true }), "disabled");
   assert.equal(catalogStatus({ source: "route", disabled: true }), "active");
   assert.equal(catalogStatus({ source: "", disabled: false }), "new");
+});
+
+test("providers that add new models turned off store them disabled the first time only", () => {
+  const groups = [group("gpt-4o", { vendor: "openai", autoRoutes: true })];
+  const providers = (newModels: NewModelMode) => [
+    provider("router", "openrouter", ["openai/gpt-4o", "openai/gpt-4o-mini"], newModels),
+  ];
+  const routes = [{ providerId: "router", model: "openai/gpt-4o-mini", groupAlias: "gpt-4o-mini" }];
+  const automatic = plan({ providers: providers("auto"), groups, routes });
+  assert.deepEqual(autoRouteEntries(automatic.entries, groups, routing).map((entry) => entry.upstreamId), ["openai/gpt-4o"]);
+
+  const first = plan({ providers: providers("disabled"), groups, routes });
+  const entry = first.get("router", "openai/gpt-4o")!;
+  assert.equal(entry.disabled, true);
+  assert.equal(first.get("router", "openai/gpt-4o-mini")?.disabled, false);
+  assert.deepEqual(autoRouteEntries(first.entries, groups, routing), []);
+
+  const turnedOn = plan({ providers: providers("disabled"), groups, stored: [stored(entry, { disabled: false })] });
+  assert.equal(turnedOn.get("router", "openai/gpt-4o")?.disabled, false);
+  assert.equal(newModelMode("disabled"), "disabled");
+  assert.equal(newModelMode("everything"), "auto");
+  assert.equal(newModelMode(undefined), "auto");
+});
+
+test("providers that turn new models on route what the catalog placed and leave the rest to the operator", () => {
+  const groups = [group("gpt-4o"), group("grok-4", { autoRoutes: false })];
+  const result = plan({
+    providers: [
+      provider("local", "openai_compat", ["gpt-4o", "grok-4", "qwen3-coder"], "active"),
+      provider("router", "openrouter", ["openai/gpt-4o"]),
+    ],
+    groups,
+  });
+  const own = result.get("local", "qwen3-coder")!;
+  assert.equal(result.get("local", "gpt-4o")?.source, "rule");
+  assert.equal(own.source, "");
+  const entries = [
+    result.get("local", "gpt-4o")!,
+    result.get("local", "grok-4")!,
+    own,
+    { ...own, upstreamId: "turned-off", disabled: true },
+    { ...own, upstreamId: "asking-jev" },
+    { ...own, upstreamId: "weak-jev", alias: "gpt-4o", source: "jev" as const, confidence: 0.85 },
+    { ...own, upstreamId: "strong-jev", alias: "gpt-4o", source: "jev" as const, confidence: 0.95 },
+    { ...own, upstreamId: "moved", alias: "my-model", source: "manual" as const, confidence: 1 },
+    result.get("router", "openai/gpt-4o")!,
+  ];
+  const routed = activeProviderEntries(entries, groups, {
+    active: new Set(["local"]),
+    waiting: new Set([catalogEntryKey({ providerId: "local", upstreamId: "asking-jev" })]),
+    minConfidence: 0.9,
+  });
+  assert.deepEqual(
+    routed.map((entry) => entry.upstreamId),
+    ["gpt-4o", "qwen3-coder", "strong-jev"],
+  );
 });
 
 test("Jev only asks about unmatched models and only offers stronger targets", () => {

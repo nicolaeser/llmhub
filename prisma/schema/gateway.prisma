@@ -225,6 +225,7 @@ model ProviderConnection {
   enabled       Boolean  @default(true)
   restricted    Boolean  @default(false)
   internal      Boolean  @default(false)
+  newModels     String   @default("auto")
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 

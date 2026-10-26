@@ -4,6 +4,8 @@ export type CatalogStatus = "active" | "new" | "disabled";
 
 export type CatalogGroupState = "active" | "disabled" | "missing";
 
+export type NewModelMode = "auto" | "active" | "disabled";
+
 export type CatalogModelInput = {
   id: string;
   name: string;
@@ -12,6 +14,7 @@ export type CatalogModelInput = {
 export type CatalogProviderInput = {
   id: string;
   kind: string;
+  newModels: NewModelMode;
   models: CatalogModelInput[];
 };
 

@@ -17,6 +17,7 @@ function provider(kind: string): ProviderView {
     enabled: true,
     restricted: false,
     internal: false,
+    newModels: "auto",
     assignments: [],
     signIn: { account: "user@example.test", plan: "pro", status: "active" },
     sharedVia: null,
