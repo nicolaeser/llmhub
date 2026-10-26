@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import {
   Alert,
   Button,
@@ -12,7 +12,7 @@ import {
   Tabs,
   useOverlayState,
 } from "@heroui/react";
-import { Code2, KeyRound } from "lucide-react";
+import { Code2, Download, KeyRound } from "lucide-react";
 import { useTranslations } from "next-intl";
 import CopyButton from "@/components/console/copy-button";
 import EmptyState from "@/components/console/empty-state";
@@ -34,7 +34,31 @@ const CHAT_CURL_BODY =
 const MESSAGES_CURL_BODY =
   '\'{"model":"my-alias","max_tokens":256,"messages":[{"role":"user","content":"Hello"}]}\'';
 const EXAMPLE_STYLES = ["openai", "anthropic", "management"] as const;
-const CLI_CLIENTS = ["claude", "codex", "cursor"] as const;
+const CLI_CLIENTS = ["claude", "desktop", "codex", "cursor"] as const;
+const API_KEY_PLACEHOLDER = "sk-hub-…";
+const DESKTOP_CONFIG_FILE = "llmhub-claude-desktop.json";
+
+function claudeDesktopConfig(gatewayBaseUrl: string) {
+  return JSON.stringify(
+    {
+      inferenceProvider: "gateway",
+      inferenceGatewayBaseUrl: gatewayBaseUrl,
+      inferenceGatewayApiKey: API_KEY_PLACEHOLDER,
+      inferenceGatewayAuthScheme: "bearer",
+    },
+    null,
+    2,
+  );
+}
+
+function downloadJson(fileName: string, json: string) {
+  const url = URL.createObjectURL(new Blob([`${json}\n`], { type: "application/json" }));
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = fileName;
+  link.click();
+  URL.revokeObjectURL(url);
+}
 
 const ERROR_EXAMPLES = {
   openai: {
@@ -103,7 +127,17 @@ export default function ApiTab() {
       ? t("cliCodex", { openai: `${origin}${SUBSCRIPTION_PREFIX}/v1` })
       : cli === "cursor"
         ? t("cliCursor", { openai: `${origin}${API_PREFIX}/v1` })
-        : t("cliClaude", { anthropic: `${origin}${SUBSCRIPTION_PREFIX}` });
+        : cli === "desktop"
+          ? claudeDesktopConfig(`${origin}${SUBSCRIPTION_PREFIX}`)
+          : t("cliClaude", { anthropic: `${origin}${SUBSCRIPTION_PREFIX}` });
+  const desktopMenu = (chunks: ReactNode) => (
+    <span className="font-medium text-foreground">{chunks}</span>
+  );
+  const desktopSteps = {
+    developer: t.rich("desktopSteps.developer", { menu: desktopMenu }),
+    import: t.rich("desktopSteps.import", { menu: desktopMenu, file: DESKTOP_CONFIG_FILE }),
+    apply: t.rich("desktopSteps.apply", { menu: desktopMenu, key: API_KEY_PLACEHOLDER }),
+  };
   const bases = [
     {
       id: "openai",
@@ -207,11 +241,26 @@ export default function ApiTab() {
               ))}
             </Tabs.List>
           </Tabs>
-          <CopyButton text={cliSetup} label={tCommon("copy")} showLabel />
+          <div className="flex flex-wrap gap-2">
+            {cli === "desktop" ? (
+              <Button size="sm" variant="secondary" onPress={() => downloadJson(DESKTOP_CONFIG_FILE, cliSetup)}>
+                <Download size={14} aria-hidden />
+                {t("desktopDownload")}
+              </Button>
+            ) : null}
+            <CopyButton text={cliSetup} label={tCommon("copy")} showLabel />
+          </div>
         </div>
         <Surface variant="secondary" className="overflow-x-auto rounded-xl p-4">
           <pre className="font-mono text-xs whitespace-pre-wrap">{cliSetup}</pre>
         </Surface>
+        {cli === "desktop" ? (
+          <ol className="list-decimal space-y-1 pl-5 text-sm text-muted" aria-label={t("desktopStepsLabel")}>
+            {Object.entries(desktopSteps).map(([id, step]) => (
+              <li key={id}>{step}</li>
+            ))}
+          </ol>
+        ) : null}
         <p className="text-sm text-muted">{t("cliHint", { client: cli })}</p>
       </Card>
 
