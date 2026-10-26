@@ -99,6 +99,8 @@ const ROW: RequestLogRow = {
   hasContent: false,
   contentSkip: "",
   system: "",
+  sessionId: "",
+  agent: "",
 };
 
 const LOGS: LogsPayload = {

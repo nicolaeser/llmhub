@@ -291,6 +291,7 @@ export const OPENAPI_PATHS: OpenApiPath[] = [
   { method: "DELETE", path: "/api/mgmt/markups/{id}", summary: "Delete a markup", style: "management" },
   { method: "GET", path: "/api/mgmt/usage", summary: "Summarize usage and spend", style: "management" },
   { method: "GET", path: "/api/mgmt/logs/requests", summary: "List request logs", style: "management" },
+  { method: "GET", path: "/api/mgmt/logs/sessions", summary: "List agent sessions with totals", style: "management" },
   { method: "GET", path: "/api/mgmt/logs/spend", summary: "List spend events", style: "management" },
   { method: "GET", path: "/api/mgmt/logs/audit", summary: "List audit events", style: "management" },
 ];

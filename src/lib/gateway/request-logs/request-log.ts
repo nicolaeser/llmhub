@@ -54,11 +54,13 @@ export async function writeRequestLog(entry: RequestLogEntry): Promise<void> {
   let response = entry.response;
   let error = errorText(entry.error);
   let tag = entry.tag;
+  let sessionId = entry.principal.client?.session ?? "";
   if (piiOn) {
     if (request !== undefined && !scanned) request = redactJSON(request, entities, "", piiInput);
     if (response !== undefined) response = redactJSON(response, entities, "", piiOutput);
     if (error) error = redactPii(error, entities);
     if (tag) tag = redactPii(tag, entities);
+    if (sessionId) sessionId = redactPii(sessionId, entities);
   }
   const skip = await contentSkip(entry.principal, enterprise);
   const stored = skip ? null : { request: logPayload(request), response: logPayload(response) };
@@ -87,9 +89,12 @@ export async function writeRequestLog(entry: RequestLogEntry): Promise<void> {
     deploymentId: entry.deployment?.id ?? "",
     provider: entry.deployment?.kind ?? "",
     upstreamModel: entry.deployment?.model ?? "",
+    providerId: entry.deployment?.provider_id ?? "",
     stream: entry.stream ?? (streamFlag === true || streamFlag === "true"),
     tag,
     labels: (entry.labels ?? []).map(storedLabel),
+    sessionId,
+    agent: entry.principal.client?.agent ?? "",
     status: entry.status,
     outcome: entry.outcome,
     error,
@@ -127,6 +132,7 @@ export async function writeRequestLog(entry: RequestLogEntry): Promise<void> {
       deployment_id: meta.deploymentId,
       provider: meta.provider,
       upstream_model: meta.upstreamModel,
+      provider_id: meta.providerId,
       stream: meta.stream,
       status: meta.status,
       outcome: meta.outcome,
@@ -139,6 +145,8 @@ export async function writeRequestLog(entry: RequestLogEntry): Promise<void> {
       cost: entry.cost,
       tag: meta.tag,
       labels: labelRecord(entry.labels ?? []),
+      session_id: meta.sessionId,
+      agent: meta.agent,
       pii_mode: meta.piiMode,
       pii_input: meta.piiInput,
       pii_output: meta.piiOutput,

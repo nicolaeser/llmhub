@@ -21,6 +21,7 @@ test("parseLogFilters trims strings, caps lengths, and reads the PII flag from q
     keyId: "",
     userId: "",
     label: "",
+    session: "",
     pii: true,
     from: "",
     to: "",
@@ -127,7 +128,7 @@ test("spend and audit filters reuse the scope and date range", () => {
 });
 
 test("log filters round-trip through URL params and drop empty values", () => {
-  const filters = parseLogFilters({ keyId: "k1", userId: "u1", pii: true, from: "2026-10-01" });
+  const filters = parseLogFilters({ keyId: "k1", userId: "u1", session: "run-1", pii: true, from: "2026-10-01" });
   const params = logFilterParams(filters);
   assert.deepEqual(params, {
     model: null,
@@ -136,6 +137,7 @@ test("log filters round-trip through URL params and drop empty values", () => {
     keyId: "k1",
     userId: "u1",
     label: null,
+    session: "run-1",
     pii: "1",
     from: "2026-10-01",
     to: null,

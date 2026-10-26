@@ -2,7 +2,7 @@ import { chargebackParts } from "@/lib/usage/usage-stats";
 import { labelRecord } from "@/lib/usage/labels";
 import type { SliceRow } from "@/types/usage";
 import type { VirtualKeyView } from "@/types/keys";
-import type { RequestLogRow } from "@/types/logs";
+import type { LogSessionRow, RequestLogRow } from "@/types/logs";
 import type { AuditLogSource, ProviderSource, SpendLogSource, UsageSource } from "@/types/management";
 import type { ModelGroupView } from "@/types/models";
 import type { MarkupView } from "@/types/pricing";
@@ -343,6 +343,33 @@ export function serializeRequestLog(row: RequestLogRow) {
     guardrail_output: row.guardOutput,
     labels: labelRecord(row.labels),
     has_content: row.hasContent,
+    session_id: orNull(row.sessionId),
+    agent: orNull(row.agent),
+  };
+}
+
+export function serializeRequestSession(row: LogSessionRow) {
+  return {
+    object: "request_session",
+    session_id: row.sessionId,
+    key_id: orNull(row.keyId),
+    user_id: orNull(row.userId),
+    member_id: orNull(row.memberId),
+    agent: orNull(row.agent),
+    active: row.active,
+    started_at: row.startedAt,
+    last_at: row.lastAt,
+    duration_ms: row.durationMs,
+    requests: row.requests,
+    errors: row.errors,
+    prompt_tokens: row.promptTokens,
+    completion_tokens: row.completionTokens,
+    cache_read_tokens: row.cacheReadTokens,
+    cache_write_tokens: row.cacheWriteTokens,
+    cost: row.cost,
+    models: row.models,
+    accounts: row.accounts,
+    account_switches: row.accountSwitches,
   };
 }
 

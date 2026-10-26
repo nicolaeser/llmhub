@@ -557,6 +557,9 @@ model RequestLog {
   stream           Boolean            @default(false)
   tag              String             @default("")
   labels           String[]           @default([])
+  sessionId        String             @default("")
+  agent            String             @default("")
+  providerId       String             @default("")
   status           Int                @default(0)
   latencyMs        Int                @default(0)
   outcome          String             @default("")
@@ -583,6 +586,7 @@ model RequestLog {
   @@index([orgId, createdAt])
   @@index([projectId, createdAt])
   @@index([memberId, createdAt])
+  @@index([sessionId, createdAt])
   @@index([status])
   @@index([labels], type: Gin)
 }

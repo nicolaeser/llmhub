@@ -17,19 +17,39 @@ import type {
   LogKind,
   LogFilterValues,
   LogOptions,
+  LogSessionRef,
   NewLogsCount,
   RequestLogDetail,
   RequestLogRow,
 } from "@/types/logs";
 import { countNewLogsAction, loadLogDetailAction, loadLogOptionsAction, loadLogsAction } from "./_action";
 import LogDetailDialog from "./_components/log-detail-dialog";
-import LogFilters from "./_components/log-filters";
+import LogFilters, { NO_FILTERS } from "./_components/log-filters";
 import LogTable from "./_components/log-table";
+import SessionList from "./_components/session-list";
+import SessionTrace from "./_components/session-trace";
 
 const PAGE_SIZE = 50;
 const POLL_INTERVAL_MS = 15_000;
 const LIVE_RELOAD_GAP_MS = 10_000;
 const NO_OPTIONS: LogOptions = { models: [], keys: [], users: [] };
+const LOG_KINDS: readonly LogKind[] = ["requests", "sessions", "spend", "audit"];
+
+function kindOf(search: string): LogKind {
+  const requested = new URLSearchParams(search).get("tab");
+  return LOG_KINDS.find((kind) => kind === requested) ?? "requests";
+}
+
+function traceOf(search: string): LogSessionRef | null {
+  const params = new URLSearchParams(search);
+  const sessionId = params.get("trace");
+  if (!sessionId) return null;
+  return { sessionId, keyId: params.get("traceKey") ?? "", userId: params.get("traceUser") ?? "" };
+}
+
+function traceParams(ref: LogSessionRef | null) {
+  return { trace: ref?.sessionId ?? null, traceKey: ref?.keyId || null, traceUser: ref?.userId || null };
+}
 
 function download(href: string) {
   const link = document.createElement("a");
@@ -52,9 +72,11 @@ function exportHref(kind: LogKind, format: "csv" | "jsonl", filters: LogFilterVa
 export default function LogsPage() {
   const t = useTranslations("Logs");
   const showError = useErrorToast();
-  const [kind, setKind] = useState<LogKind>("requests");
   const search = useSearchString();
   const filters = useMemo(() => logFiltersFromSearch(search ?? ""), [search]);
+  const filterKey = JSON.stringify(logFilterParams(filters));
+  const requestedKind = kindOf(search ?? "");
+  const trace = useMemo(() => traceOf(search ?? ""), [search]);
   const [options, setOptions] = useState<LogOptions | null>(null);
   const [detail, setDetail] = useState<RequestLogDetail | null>(null);
   const [newestSeen, setNewestSeen] = useState<string | null>(null);
@@ -86,6 +108,20 @@ export default function LogsPage() {
 
   function load(nextPage: number, nextFilters: LogFilterValues) {
     logsState.reloadWith(() => loadLogsAction({ page: nextPage, pageSize: PAGE_SIZE, filters: queryFilters(nextFilters) }));
+  }
+
+  function openSession(ref: LogSessionRef) {
+    setSearchParams({ tab: "sessions", ...traceParams(ref) });
+  }
+
+  function showSessionRequests(ref: LogSessionRef) {
+    const next = { ...filters, session: ref.sessionId, keyId: ref.keyId, userId: ref.userId };
+    setSearchParams({ ...logFilterParams(next), tab: null, ...traceParams(null) });
+    load(1, next);
+  }
+
+  function exportSession(ref: LogSessionRef) {
+    download(exportHref("requests", "csv", { ...NO_FILTERS, session: ref.sessionId, keyId: ref.keyId, userId: ref.userId }));
   }
 
   function openDetail(row: RequestLogRow) {
@@ -164,10 +200,11 @@ export default function LogsPage() {
 
   if (!logs || !options) {
     return (
-      <PageStatus icon={Activity} title={t("title")} subtitle={t("subtitle")} state={logsState} filters={8} tabs layout="rows" />
+      <PageStatus icon={Activity} title={t("title")} subtitle={t("subtitle")} state={logsState} filters={10} tabs layout="rows" />
     );
   }
 
+  const kind: LogKind = requestedKind === "audit" && !logs.canAudit ? "requests" : requestedKind;
   const total =
     kind === "requests" ? logs.requestTotal : kind === "spend" ? logs.spendTotal : logs.auditTotal;
   const newer = page > 1 && fresh && fresh.since === newestSeen && fresh.count > 0 ? fresh : null;
@@ -192,6 +229,7 @@ export default function LogsPage() {
         }
       />
       <LogFilters
+        key={`filters:${filterKey}`}
         pending={pending}
         options={options}
         initial={filters}
@@ -202,13 +240,19 @@ export default function LogsPage() {
       />
       <Tabs
         selectedKey={kind}
-        onSelectionChange={(key) => setKind(String(key) as LogKind)}
+        onSelectionChange={(key) => {
+          const next = String(key);
+          setSearchParams({ tab: next === "requests" ? null : next, ...traceParams(null) });
+        }}
         aria-label={t("title")}
         className="mb-4 max-w-full"
       >
         <Tabs.List className="w-full flex-wrap" aria-label={t("title")}>
           <Tabs.Tab id="requests" className="w-auto whitespace-nowrap">
             {t("tabs.requests")}
+          </Tabs.Tab>
+          <Tabs.Tab id="sessions" className="w-auto whitespace-nowrap">
+            {t("tabs.sessions")}
           </Tabs.Tab>
           <Tabs.Tab id="spend" className="w-auto whitespace-nowrap">
             {t("tabs.spend")}
@@ -223,50 +267,71 @@ export default function LogsPage() {
 
       <LoadError state={logsState} className="mb-4" />
 
-      {newer ? (
-        <div className="mb-4 flex flex-wrap items-center gap-2" aria-live="polite">
-          <Button size="sm" variant="secondary" isPending={pending} onPress={() => load(1, filters)}>
-            <ArrowUp size={14} aria-hidden />
-            {t("newRequests", { count: newer.count, capped: String(newer.capped) })}
-          </Button>
-        </div>
-      ) : null}
-
-      {pending ? <SectionLoading shape="table" rows={8} /> : <LogTable kind={kind} logs={logs} onOpen={openDetail} />}
-
-      <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-        {pending ? (
-          <Skeleton className="h-3.5 w-40 rounded-lg" />
+      {kind === "sessions" ? (
+        trace ? (
+          <SessionTrace
+            key={`trace:${JSON.stringify(trace)}`}
+            sessionRef={trace}
+            onBack={() => setSearchParams(traceParams(null))}
+            onOpenRequest={openDetail}
+            onShowRequests={showSessionRequests}
+            onExport={exportSession}
+          />
         ) : (
-          <p className="text-sm text-muted">{t("pageStatus", { page, total, pageSize: logs.pageSize })}</p>
-        )}
-        <div className="flex gap-2">
-          <Button
-            variant="secondary"
-            size="sm"
-            isDisabled={page <= 1}
-            isPending={pending}
-            onPress={() => load(page - 1, filters)}
-          >
-            {t("prev")}
-          </Button>
-          <Button
-            variant="secondary"
-            size="sm"
-            isDisabled={page * logs.pageSize >= total}
-            isPending={pending}
-            onPress={() => load(page + 1, filters)}
-          >
-            {t("next")}
-          </Button>
+          <SessionList key={`sessions:${filterKey}`} filters={filters} onOpen={openSession} />
+        )
+      ) : (
+        <>
+        {newer ? (
+          <div className="mb-4 flex flex-wrap items-center gap-2" aria-live="polite">
+            <Button size="sm" variant="secondary" isPending={pending} onPress={() => load(1, filters)}>
+              <ArrowUp size={14} aria-hidden />
+              {t("newRequests", { count: newer.count, capped: String(newer.capped) })}
+            </Button>
+          </div>
+        ) : null}
+
+        {pending ? <SectionLoading shape="table" rows={8} /> : <LogTable kind={kind} logs={logs} onOpen={openDetail} />}
+
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+          {pending ? (
+            <Skeleton className="h-3.5 w-40 rounded-lg" />
+          ) : (
+            <p className="text-sm text-muted">{t("pageStatus", { page, total, pageSize: logs.pageSize })}</p>
+          )}
+          <div className="flex gap-2">
+            <Button
+              variant="secondary"
+              size="sm"
+              isDisabled={page <= 1}
+              isPending={pending}
+              onPress={() => load(page - 1, filters)}
+            >
+              {t("prev")}
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              isDisabled={page * logs.pageSize >= total}
+              isPending={pending}
+              onPress={() => load(page + 1, filters)}
+            >
+              {t("next")}
+            </Button>
+          </div>
         </div>
-      </div>
+        </>
+      )}
 
       <LogDetailDialog
         state={detailState}
         detail={detail}
         onExport={(format) => {
           if (detail) download(`/internal-api/logs/${encodeURIComponent(detail.id)}/export?format=${format}`);
+        }}
+        onOpenSession={(opened) => {
+          detailState.close();
+          openSession({ sessionId: opened.sessionId, keyId: opened.keyId, userId: opened.userId });
         }}
       />
     </div>

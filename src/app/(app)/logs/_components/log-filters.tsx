@@ -31,6 +31,7 @@ export const NO_FILTERS: LogFilterValues = {
   keyId: "",
   userId: "",
   label: "",
+  session: "",
   pii: false,
   from: "",
   to: "",
@@ -77,6 +78,7 @@ export default function LogFilters({
           status: values.status.trim(),
           endpoint: values.endpoint.trim(),
           label: label ? storedLabel(label) : "",
+          session: values.session.trim(),
         };
         setApplied(activeCount(next));
         onApply(next);
@@ -127,6 +129,10 @@ export default function LogFilters({
           <Input placeholder="cost_center:4711" />
           {labelInvalid ? null : <Description>{t("filters.labelHint")}</Description>}
           <FieldError>{t("filters.labelInvalid")}</FieldError>
+        </TextField>
+        <TextField fullWidth value={values.session} onChange={set("session")}>
+          <Label>{t("filters.session")}</Label>
+          <Input placeholder={t("filters.sessionPlaceholder")} />
         </TextField>
         <TextField fullWidth value={values.from} onChange={set("from")}>
           <Label>{t("filters.from")}</Label>

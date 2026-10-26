@@ -14,9 +14,9 @@ import type { AccountPin } from "@/types/routing";
 export const PIN_TTL_MS = 6 * 3_600_000;
 export const PIN_HOLD_MS = 60_000;
 const PINNED_API_KINDS = new Set(["anthropic"]);
-const SESSION_HEADER = "x-claude-code-session-id";
+export const CLAUDE_CODE_SESSION_HEADER = "x-claude-code-session-id";
+export const MAX_SESSION_LENGTH = 512;
 const MAX_PINS = 20_000;
-const MAX_SESSION_LENGTH = 512;
 const KEY_PREFIX = "llmhub:account-pin:v1";
 const SETTLE_PIN_SCRIPT = `
 local current = redis.call('GET', KEYS[1])
@@ -61,13 +61,18 @@ function headerValue(headers: Record<string, string> | undefined, name: string):
   return found?.[1]?.trim() ?? "";
 }
 
-export function runSession(body: JsonMap | null | undefined, headers?: Record<string, string>): string {
+export function clientSessionKey(body: unknown, headers?: Record<string, string>): string {
   const rec = asRecord(body);
   const key =
     asString(rec?.prompt_cache_key).trim() ||
     claudeCodeCacheKey(rec?.metadata) ||
-    claudeCodeSessionKey(headerValue(headers, SESSION_HEADER));
-  if (!key || key.length > MAX_SESSION_LENGTH) return "";
+    claudeCodeSessionKey(headerValue(headers, CLAUDE_CODE_SESSION_HEADER));
+  return key.length > MAX_SESSION_LENGTH ? "" : key;
+}
+
+export function runSession(body: JsonMap | null | undefined, headers?: Record<string, string>): string {
+  const key = clientSessionKey(body, headers);
+  if (!key) return "";
   return createHash("sha256").update(key).digest("hex").slice(0, 32);
 }
 
