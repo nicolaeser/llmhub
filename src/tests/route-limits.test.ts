@@ -81,6 +81,7 @@ const groups = new Map([
     findUnique: async ({ where }: { where: { alias: string } }) => groups.get(where.alias) ?? null,
   },
   providerConnection: { findMany: async () => [] },
+  deployment: { findMany: async () => [] },
 };
 
 const zdrOnly: DeploymentRule = { providerIds: [], regions: [], zdrOnly: true, noTrainingOnly: false, maxRetentionDays: null };

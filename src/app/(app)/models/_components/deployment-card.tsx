@@ -1,21 +1,28 @@
 "use client";
 
 import { Button, Card, Input, Label, TextField } from "@heroui/react";
+import { Trash2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import type { DeploymentDraft, ProviderOpt } from "@/types/models";
 import { catalogHit, contextWindowOf } from "./deployment-draft";
 import ProviderSelect from "./provider-select";
 
 export default function DeploymentCard({
+  index,
   dep,
-  primary,
+  withCatalog,
+  showWeight,
+  removable,
   providers,
   isDisabled,
   onChange,
   onRemove,
 }: {
+  index: number;
   dep: DeploymentDraft;
-  primary: boolean;
+  withCatalog: boolean;
+  showWeight: boolean;
+  removable: boolean;
   providers: ProviderOpt[];
   isDisabled: boolean;
   onChange: (patch: Partial<DeploymentDraft>) => void;
@@ -23,84 +30,85 @@ export default function DeploymentCard({
 }) {
   const t = useTranslations("Models");
   const contextWindow = contextWindowOf(providers, dep.providerId, dep.model);
+  const priced = catalogHit(providers, dep.providerId, dep.model);
+  const providerName = providers.find((p) => p.id === dep.providerId)?.name ?? "";
   return (
-    <Card variant="secondary">
-      {primary ? null : (
-        <>
-          <ProviderSelect
-            dep={dep}
-            providers={providers}
-            withCatalog={false}
-            isDisabled={isDisabled}
-            onChange={onChange}
-          />
-          <TextField
-            fullWidth
-            value={dep.model}
-            onChange={(model) => onChange({ model })}
-            isDisabled={isDisabled}
-            aria-label={t("fields.upstream")}
-          >
-            <Label>{t("fields.upstream")}</Label>
-            <Input aria-label={t("fields.upstream")} />
-          </TextField>
-        </>
+    <Card variant="secondary" className="gap-3">
+      <div className="grid gap-3 sm:grid-cols-2 sm:items-start">
+        <ProviderSelect
+          dep={dep}
+          providers={providers}
+          withCatalog={withCatalog}
+          isDisabled={isDisabled}
+          onChange={onChange}
+        />
+        <TextField fullWidth value={dep.model} onChange={(model) => onChange({ model })} isDisabled={isDisabled}>
+          <Label>{t("fields.upstream")}</Label>
+          <Input />
+        </TextField>
+      </div>
+      {dep.providerId ? null : (
+        <TextField fullWidth value={dep.baseUrl} onChange={(baseUrl) => onChange({ baseUrl })} isDisabled={isDisabled}>
+          <Label>{t("fields.baseUrl")}</Label>
+          <Input placeholder="https://" />
+        </TextField>
       )}
-      <TextField
-        fullWidth
-        value={dep.weight}
-        onChange={(weight) => onChange({ weight })}
-        isDisabled={isDisabled}
-        aria-label={t("fields.weight")}
-      >
-        <Label>{t("fields.weight")}</Label>
-        <Input aria-label={t("fields.weight")} />
-      </TextField>
-      <div className="grid grid-cols-2 gap-3">
+      <div className={showWeight ? "grid gap-3 sm:grid-cols-3" : "grid gap-3 sm:grid-cols-2"}>
+        {showWeight ? (
+          <TextField fullWidth value={dep.weight} onChange={(weight) => onChange({ weight })} isDisabled={isDisabled}>
+            <Label>{t("fields.weight")}</Label>
+            <Input inputMode="numeric" />
+          </TextField>
+        ) : null}
         <TextField
           fullWidth
           value={dep.costInput}
           onChange={(costInput) => onChange({ costInput })}
           isDisabled={isDisabled}
-          aria-label={t("fields.costIn")}
         >
           <Label>{t("fields.costIn")}</Label>
-          <Input aria-label={t("fields.costIn")} />
+          <Input inputMode="decimal" />
         </TextField>
         <TextField
           fullWidth
           value={dep.costOutput}
           onChange={(costOutput) => onChange({ costOutput })}
           isDisabled={isDisabled}
-          aria-label={t("fields.costOut")}
         >
           <Label>{t("fields.costOut")}</Label>
-          <Input aria-label={t("fields.costOut")} />
+          <Input inputMode="decimal" />
         </TextField>
       </div>
-      {catalogHit(providers, dep.providerId, dep.model) ? (
-        <p className="text-sm text-muted">
-          {t("priceFromProvider", {
-            source: providers.find((p) => p.id === dep.providerId)?.name ?? "",
-          })}
-        </p>
+      {dep.model.trim() || removable ? (
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="min-w-0 text-xs text-muted">
+            {dep.model.trim()
+              ? [
+                  priced ? t("priceFromProvider", { source: providerName }) : null,
+                  t("contextHint", {
+                    state: contextWindow ? (contextWindow.from === undefined ? "reported" : "borrowed") : "unknown",
+                    tokens: contextWindow?.tokens ?? 0,
+                    from: contextWindow?.from ?? "",
+                  }),
+                ]
+                  .filter(Boolean)
+                  .join(" · ")
+              : null}
+          </p>
+          {removable ? (
+            <Button
+              size="sm"
+              variant="danger-soft"
+              isDisabled={isDisabled}
+              aria-label={t("deleteEndpointAt", { index: index + 1 })}
+              onPress={onRemove}
+            >
+              <Trash2 size={14} aria-hidden />
+              {t("deleteEndpoint")}
+            </Button>
+          ) : null}
+        </div>
       ) : null}
-      {dep.model.trim() ? (
-        <p className="text-sm text-muted">
-          {t("contextHint", { known: contextWindow > 0 ? "yes" : "no", tokens: contextWindow })}
-        </p>
-      ) : null}
-      {primary ? null : (
-        <Button
-          size="sm"
-          variant="danger-soft"
-          aria-label={t("deleteEndpoint")}
-          isDisabled={isDisabled}
-          onPress={onRemove}
-        >
-          {t("deleteEndpoint")}
-        </Button>
-      )}
     </Card>
   );
 }

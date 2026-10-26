@@ -53,6 +53,7 @@ const groups = new Map<string, ReturnType<typeof groupRow>>();
 (globalThis as { prisma?: unknown }).prisma = {
   modelGroup: { findUnique: async ({ where }: { where: { alias: string } }) => groups.get(where.alias) ?? null },
   providerConnection: { findMany: async () => [], findUnique: async () => null },
+  deployment: { findMany: async () => [] },
   providerLogin: { findUnique: async () => null },
   accountRouting: { findMany: async () => [{ kind: "claude", strategy: "inherit" }] },
   setting: { findUnique: async () => null },

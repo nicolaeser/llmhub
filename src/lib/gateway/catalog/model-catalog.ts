@@ -152,6 +152,10 @@ export function taggedAlias(family: string, tag: string): string {
   return tag ? `${family}:${tag}` : family;
 }
 
+export function snapshotBase(name: string): string {
+  return SNAPSHOT.exec(name)?.[1] ?? name;
+}
+
 function collapseSnapshots(names: string[]): Map<string, string> {
   const present = new Set(names);
   const dated = new Map<string, Set<string>>();
@@ -185,7 +189,7 @@ export function matchKey(name: string): string {
   return name.replace(/(\d)\.(?=\d)/g, "$1-");
 }
 
-function vendorsCompatible(a: string, b: string): boolean {
+export function vendorsCompatible(a: string, b: string): boolean {
   return !a || !b || a === b;
 }
 

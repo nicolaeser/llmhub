@@ -1,32 +1,20 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Alert, Card, Chip, toast, useOverlayState } from "@heroui/react";
+import { Alert, Card, Chip, Disclosure, toast, useOverlayState } from "@heroui/react";
 import { Shield } from "lucide-react";
 import { useTranslations } from "next-intl";
 import FormActions from "@/components/console/form-actions";
 import PageHeader from "@/components/console/page-header";
 import PageStatus from "@/components/console/page-status";
 import PageTabs from "@/components/console/page-tabs";
-import StatCard from "@/components/console/stat-card";
 import { useErrorToast } from "@/components/console/use-error-toast";
 import { guardrailsValid } from "@/lib/gateway/safety/guardrails";
 import { defaultEntityIds } from "@/lib/gateway/safety/pii";
-import { fullLayer, refKey, sectionSummaries } from "@/lib/gateway/safety/policy-layers";
+import { refKey } from "@/lib/gateway/safety/policy-layers";
 import { useActionData } from "@/lib/hooks/use-action-data";
 import { isActionFail } from "@/lib/http/action-result";
-import { POLICY_SCOPES } from "@/schemas/guardrails";
-import type { Tone } from "@/types/console";
-import type {
-  GuardrailPolicy,
-  PiiDetectorSettings,
-  PiiPolicy,
-  PolicyOverrideView,
-  PolicyRef,
-  PolicyScope,
-  PolicyTarget,
-  SectionSummary,
-} from "@/types/guardrails";
+import type { GuardrailPolicy, PiiDetectorSettings, PiiPolicy, PolicyOverrideView, PolicyRef } from "@/types/guardrails";
 import { useConsoleScope } from "../_components/console-scope";
 import {
   loadGuardrailsAction,
@@ -40,29 +28,16 @@ import OverrideDialog from "./_components/override-dialog";
 import PiiEntityPicker from "./_components/pii-entity-picker";
 import PiiModelFields from "./_components/pii-model-fields";
 import PiiPolicyFields from "./_components/pii-policy-fields";
-import PolicyChain from "./_components/policy-chain";
-import PolicyInspector from "./_components/policy-inspector";
-import { SECTION_ICONS } from "@/components/guardrails/policy-labels";
 import PolicyOverrides from "./_components/policy-overrides";
-import { firstRef } from "./_components/policy-target-picker";
 import PolicyTester from "./_components/policy-tester";
 import { replaceOverride, sortOverrides, type PolicyBook } from "./_components/policy-view";
 import SecretsFields from "./_components/secrets-fields";
-
-const INSPECTOR_ID = "guardrails-inspector";
 
 function withDefaults(policy: PiiPolicy): PiiPolicy {
   return policy.entities.length ? policy : { ...policy, entities: defaultEntityIds() };
 }
 
-function summaryTone(summary: SectionSummary): Tone {
-  if (summary.state === "off") return "neutral";
-  if (summary.state === "flag") return "warning";
-  if (summary.state === "on") return "accent";
-  return "success";
-}
-
-type DialogTarget = { editing: PolicyOverrideView | null; initialRef: PolicyRef | null; key: number };
+type DialogTarget = { editing: PolicyOverrideView | null; key: number };
 
 export default function GuardrailsPage() {
   const t = useTranslations("Guardrails");
@@ -71,8 +46,7 @@ export default function GuardrailsPage() {
   const [piiDraft, setPii] = useState<PiiPolicy | null>(null);
   const [detectorDraft, setDetector] = useState<PiiDetectorSettings | null>(null);
   const [guardrailsDraft, setGuardrails] = useState<GuardrailPolicy | null>(null);
-  const [inspected, setInspected] = useState<PolicyRef | null>(null);
-  const [dialog, setDialog] = useState<DialogTarget>({ editing: null, initialRef: null, key: 0 });
+  const [dialog, setDialog] = useState<DialogTarget>({ editing: null, key: 0 });
   const [pending, start] = useTransition();
   const dialogState = useOverlayState();
   const page = useActionData(loadGuardrailsAction);
@@ -81,7 +55,16 @@ export default function GuardrailsPage() {
 
   if (!data) {
     const loadingSubtitle = kind === "company" ? t("companySubtitle") : t("subtitle");
-    return <PageStatus icon={Shield} title={t("title")} subtitle={loadingSubtitle} state={page} tabs stats={4} layout="form" />;
+    return (
+      <PageStatus
+        icon={Shield}
+        title={t("title")}
+        subtitle={loadingSubtitle}
+        state={page}
+        tabs
+        layout={kind === "company" ? "table" : "form"}
+      />
+    );
   }
 
   const { canManage, platform, models, redactorConfigured } = data;
@@ -99,22 +82,10 @@ export default function GuardrailsPage() {
   const contentDirty = guardrailsDraft !== null;
   const taken = new Set(overrides.map((row) => refKey(row.target)));
   const available = data.targets.filter((target) => !taken.has(refKey(target)));
-  const counts = Object.fromEntries(
-    POLICY_SCOPES.map((scope) => [scope, overrides.filter((row) => row.target.scope === scope).length]),
-  ) as Record<PolicyScope, number>;
 
-  function openDialog(editing: PolicyOverrideView | null, initialRef: PolicyRef | null = null) {
-    setDialog((current) => ({ editing, initialRef, key: current.key + 1 }));
+  function openDialog(editing: PolicyOverrideView | null) {
+    setDialog((current) => ({ editing, key: current.key + 1 }));
     dialogState.open();
-  }
-
-  function editTarget(target: PolicyTarget) {
-    openDialog(overrides.find((row) => refKey(row.target) === refKey(target)) ?? null, target);
-  }
-
-  function inspect(target: PolicyTarget) {
-    setInspected({ scope: target.scope, id: target.id });
-    document.getElementById(INSPECTOR_ID)?.scrollIntoView({ block: "start" });
   }
 
   function applyOverride(ref: PolicyRef, override: PolicyOverrideView | null) {
@@ -160,62 +131,23 @@ export default function GuardrailsPage() {
     });
   }
 
-  const overview = (
-    <div className="space-y-4 sm:space-y-5">
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        {sectionSummaries(fullLayer(book.platform)).map((summary) => (
-          <StatCard
-            key={summary.section}
-            label={t("section", { section: summary.section })}
-            icon={SECTION_ICONS[summary.section]}
-            value={
-              summary.section === "rules"
-                ? t("rules.count", { count: summary.count })
-                : t("sectionState", { state: summary.state })
-            }
-            hint={t("overview.platformValue")}
-            tone={summaryTone(summary)}
-          />
-        ))}
-      </div>
-      {platform ? null : (
-        <Alert status="accent">
-          <Alert.Indicator />
-          <Alert.Content>
-            <Alert.Description>{t("companyNotice")}</Alert.Description>
-          </Alert.Content>
-        </Alert>
-      )}
-      <PolicyChain counts={counts} />
-      <PolicyOverrides
-        overrides={overrides}
-        canManage={canManage}
-        canAdd={available.length > 0}
-        pending={pending}
-        onAdd={() => openDialog(null)}
-        onEdit={(row) => openDialog(row)}
-        onInspect={inspect}
-        onRemove={remove}
-      />
-      {book.targets.length ? (
-        <div id={INSPECTOR_ID} className="scroll-mt-4">
-          <PolicyInspector
-            book={book}
-            value={inspected ?? firstRef(overrides.map((row) => row.target)) ?? firstRef(book.targets)}
-            onChange={setInspected}
-            canManage={canManage}
-            onEdit={editTarget}
-          />
-        </div>
-      ) : null}
-    </div>
+  const overridesPanel = (
+    <PolicyOverrides
+      overrides={overrides}
+      canManage={canManage}
+      canAdd={available.length > 0}
+      pending={pending}
+      onAdd={() => openDialog(null)}
+      onEdit={(row) => openDialog(row)}
+      onRemove={remove}
+    />
   );
 
   const piiPanel = (
     <div className="space-y-4 sm:space-y-5">
       <Card className="gap-4">
         <Card.Header className="flex-row flex-wrap items-start justify-between gap-2">
-          <div className="min-w-0 space-y-1">
+          <div className="min-w-0 flex-1 space-y-1">
             <Card.Title>{t("pii.title")}</Card.Title>
             <Card.Description>{t("pii.hint")}</Card.Description>
           </div>
@@ -225,12 +157,24 @@ export default function GuardrailsPage() {
         </Card.Header>
         <Card.Content className="gap-4">
           <PiiPolicyFields value={pii} onChange={setPii} isDisabled={!canManage} />
-          <PiiEntityPicker
-            value={pii.entities}
-            onChange={(entities) => setPii({ ...pii, entities })}
-            isDisabled={!canManage}
-            wide
-          />
+          <Disclosure>
+            <Disclosure.Heading>
+              <Disclosure.Trigger className="flex w-full items-center justify-between gap-2 text-sm font-medium">
+                {t("entitiesSummary", { count: pii.entities.length })}
+                <Disclosure.Indicator />
+              </Disclosure.Trigger>
+            </Disclosure.Heading>
+            <Disclosure.Content>
+              <Disclosure.Body className="pt-3">
+                <PiiEntityPicker
+                  value={pii.entities}
+                  onChange={(entities) => setPii({ ...pii, entities })}
+                  isDisabled={!canManage}
+                  wide
+                />
+              </Disclosure.Body>
+            </Disclosure.Content>
+          </Disclosure>
           {detector ? (
             <PiiModelFields
               value={detector}
@@ -242,12 +186,6 @@ export default function GuardrailsPage() {
           ) : null}
         </Card.Content>
       </Card>
-      <Alert status="accent">
-        <Alert.Indicator />
-        <Alert.Content>
-          <Alert.Description>{t("logsHint")}</Alert.Description>
-        </Alert.Content>
-      </Alert>
       {canEditPlatform ? (
         <FormActions
           label={t("save")}
@@ -304,7 +242,6 @@ export default function GuardrailsPage() {
       <Alert status="accent">
         <Alert.Indicator />
         <Alert.Content>
-          <Alert.Description>{t("content.logsHint")}</Alert.Description>
           <Alert.Description>{t("content.streamHint")}</Alert.Description>
         </Alert.Content>
       </Alert>
@@ -326,13 +263,13 @@ export default function GuardrailsPage() {
       <PageTabs
         label={t("title")}
         tabs={[
-          { id: "overview", label: t("tabs", { tab: "overview" }), panel: overview },
           ...(platform
             ? [
                 { id: "pii", label: t("tabs", { tab: "pii" }), panel: piiPanel },
                 { id: "content", label: t("tabs", { tab: "content" }), panel: contentPanel },
               ]
             : []),
+          { id: "overrides", label: t("tabs", { tab: "overrides" }), panel: overridesPanel },
           {
             id: "test",
             label: t("tabs", { tab: "test" }),
@@ -351,7 +288,6 @@ export default function GuardrailsPage() {
         state={dialogState}
         book={book}
         editing={dialog.editing}
-        initialRef={dialog.initialRef}
         available={available}
         onSaved={(result) => applyOverride(result.ref, result.override)}
       />

@@ -1,6 +1,6 @@
 {
   "title": "Model presets",
-  "subtitle": "Reusable model access for API keys. A preset selects models by name and by how their providers handle data, and stays current as models and providers change.",
+  "subtitle": "Reusable model access for API keys that stays current as models and providers change.",
   "add": "New preset",
   "emptyTitle": "No model presets yet",
   "empty": "Create a preset to give keys a curated set of models in one step, for example only zero data retention models or only EU-hosted models.",
@@ -27,28 +27,18 @@
   "editLabel": "Edit {name}",
   "deleteLabel": "Delete {name}",
   "dialogTitle": "{mode, select, edit {Edit preset} other {New preset}}",
-  "dialogDescription": "Keys with this preset may use every model it matches. Matches update automatically when models or providers change.",
   "dialogSubmit": "{mode, select, edit {Save changes} other {Create preset}}",
   "preset": {
     "label": "Start from",
-    "option": "{preset, select, zdr {Zero data retention} eu {EU data residency} noTraining {No training} shortRetention {Short retention} other {Blank}}",
-    "hint": "{preset, select, zdr {Only providers with a zero data retention agreement.} eu {Only endpoints that process data in the EU.} noTraining {Only providers that do not train on prompts.} shortRetention {Providers keep data for 30 days at most.} other {Start without rules.}}",
+    "option": "{preset, select, zdr {Zero data retention} eu {EU data residency} noTraining {No training on prompts} shortRetention {Retention up to 30 days} other {Blank}}",
     "name": "{preset, select, zdr {Zero data retention} eu {EU only} noTraining {No training} shortRetention {Retention up to 30 days} other {}}"
-  },
-  "sections": {
-    "models": {
-      "title": "Which models",
-      "hint": "Narrow models by name or add them directly. Without a name pattern, every model that meets the provider rules below qualifies."
-    },
-    "providers": {
-      "title": "Which providers may serve them",
-      "hint": "A model qualifies when at least one endpoint behind it, also through fallback and overflow aliases, meets every rule. Requests from keys with this preset only use those endpoints."
-    }
   },
   "fields": {
     "name": "Name",
     "description": "Description",
     "descriptionPlaceholder": "Optional, shown to key managers",
+    "rulesTitle": "Rules",
+    "rulesHint": "A model qualifies when at least one endpoint behind it, also through fallback and overflow aliases, meets every rule. Requests from keys with this preset only use those endpoints.",
     "providers": "Providers",
     "providersHint": "Only endpoints on these connections.",
     "providersPlaceholder": "Any provider",
@@ -66,7 +56,7 @@
     "noTrainingOnly": "No training on prompts",
     "noTrainingOnlyHint": "Only providers that do not use prompts or outputs for training.",
     "models": "Always include",
-    "modelsHint": "Added regardless of the rules on this preset.",
+    "modelsHint": "Added regardless of the rules above.",
     "modelsPlaceholder": "No extra models",
     "search": "Search",
     "noResults": "No matches"

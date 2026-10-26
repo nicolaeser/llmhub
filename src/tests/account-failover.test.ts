@@ -62,6 +62,7 @@ const resetChecks: string[] = [];
       return null;
     },
   },
+  deployment: { findMany: async () => [] },
   providerLogin: { findUnique: async () => null },
   accountRouting: { findMany: async () => [] },
   setting: { findUnique: async () => null },

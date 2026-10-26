@@ -2,8 +2,7 @@
   "title": "Guardrails",
   "subtitle": "Screen prompts and responses for personal data, prompt injection, leaked secrets, and your own rules. Companies, departments, projects, and API keys can set each part themselves.",
   "companySubtitle": "Settings for this company, its departments, projects, and API keys. Everything they leave open follows the platform policy.",
-  "companyNotice": "The values above are the platform policy. They apply to this company wherever no override below sets a part itself. Switch to the platform scope to change them.",
-  "tabs": "{tab, select, overview {Overview} pii {Personal data} content {Content checks} test {Test} other {{tab}}}",
+  "tabs": "{tab, select, pii {Personal data} content {Content checks} overrides {Overrides} test {Test} other {{tab}}}",
   "save": "Save personal data policy",
   "section": "{section, select, pii {Personal data} injection {Prompt injection} secrets {Secrets in responses} rules {Custom rules} other {{section}}}",
   "sectionState": "{state, select, off {Off} on {On} mask {Mask} block {Block} restore {Restore} flag {Flag only} other {{state}}}",
@@ -15,39 +14,18 @@
   "target": {
     "scope": "Level"
   },
-  "overview": {
-    "platformValue": "Platform policy"
-  },
-  "chain": {
-    "title": "How settings are inherited",
-    "hint": "Every part is inherited on its own. A request takes each part from the most specific level that sets it: its API key, then its project, department, and company. Parts that no level sets come from the platform policy.",
-    "step": "{n, number}",
-    "levelHint": "{level, select, platform {The baseline for every request.} org {Applies to every request of a company.} team {Applies to the projects and people of a department.} project {Applies to the API keys of a project.} key {Applies to a single API key.} other {}}",
-    "always": "Always applies",
-    "count": "{count, plural, =0 {No overrides} one {# override} other {# overrides}}"
-  },
   "overrides": {
     "title": "Overrides",
-    "hint": "Companies, departments, projects, and API keys that set parts themselves. Inherited parts follow the level above.",
+    "hint": "Each of the four parts is inherited separately, from the most specific level that sets it: API key › project › department › company › platform.",
     "add": "Add override",
     "emptyTitle": "No overrides yet",
     "emptyHint": "Every request follows the platform policy. Add an override to give a company, department, project, or API key its own settings for any part.",
     "target": "Applies to",
-    "updated": "Updated",
-    "inspect": "Show what applies to {alias}",
     "remove": "Remove override",
     "removeFor": "Remove the override for {alias}",
     "removeConfirm": "Remove the override for {alias}?",
     "removeConfirmHint": "Every part then follows the level above again.",
     "saved": "{mode, select, removed {Override removed} other {Override saved}}"
-  },
-  "inspector": {
-    "title": "Effective policy",
-    "hint": "Pick a company, department, project, or API key to see what its requests get and where each part comes from.",
-    "empty": "Pick a target to see its effective policy.",
-    "own": "Set here",
-    "from": "From {source}",
-    "edit": "{mode, select, edit {Edit override} other {Add override}}"
   },
   "dialog": {
     "title": "{mode, select, edit {Edit override} other {Add override}}",
@@ -55,14 +33,13 @@
     "setHere": "Set here",
     "setHereFor": "Set {section, select, pii {personal data} injection {prompt injection} secrets {secrets in responses} rules {custom rules} other {{section}}} here",
     "custom": "{section, select, rules {These rules replace the inherited ones. Starts from a copy of them.} other {Starts from a copy of the inherited setting.}}",
-    "inherited": "Inherited from {source}",
-    "entities": "Entities: {count, plural, =0 {default set} other {# selected}}",
+    "inherited": "Inherited from {source}: {summary}",
     "clearing": "No part is set here anymore, so saving removes the override.",
     "save": "Save override"
   },
   "pii": {
     "title": "Platform policy for personal data",
-    "hint": "Applies to every request unless its API key, project, department, or company sets personal data itself."
+    "hint": "Applies to every request unless its API key, project, department, or company sets personal data itself. Request logs mark every entity found, and stored log content stays masked."
   },
   "enable": "Redact PII in prompts",
   "enableHint": "Applies to text in chat, completions, messages, responses, batches, embeddings, moderations, image prompts, speech input, and the playground. Uploaded files and audio are not scanned.",
@@ -96,6 +73,7 @@
     "result": "{count, plural, =0 {No spans} one {# span} other {# spans}} after {ms, number, integer} ms (HTTP {status})"
   },
   "entities": "Entities",
+  "entitiesSummary": "Entities: {count, plural, =0 {default set} other {# selected}}",
   "entityLabel": "{id, select, CREDIT_CARD {Credit card} CRYPTO {Crypto wallet} EMAIL_ADDRESS {Email} IBAN_CODE {IBAN} IP_ADDRESS {Public IP address} PRIVATE_IP_ADDRESS {Internal IP address} PHONE_NUMBER {Phone} URL {URL} DATE_TIME {Date / time} MEDICAL_LICENSE {Medical license} US_SSN {US SSN} US_ITIN {US ITIN} US_PASSPORT {US passport} US_BANK_NUMBER {US bank account} US_DRIVER_LICENSE {US driver license} UK_NHS {UK NHS number} UK_NINO {UK National Insurance} ES_NIF {Spanish NIF} ES_NIE {Spanish NIE} IT_FISCAL_CODE {Italian fiscal code} IT_VAT_CODE {Italian VAT} PL_PESEL {Polish PESEL} SG_NRIC_FIN {Singapore NRIC/FIN} AU_ABN {Australian ABN} AU_ACN {Australian ACN} AU_TFN {Australian TFN} AU_MEDICARE {Australian Medicare} IN_PAN {Indian PAN} IN_AADHAAR {Indian Aadhaar} IN_PASSPORT {Indian passport} FI_PERSONAL_IDENTITY_CODE {Finnish personal ID} DE_TAX_ID {German tax ID} DE_TAX_NUMBER {German tax number} DE_VAT_ID {German VAT ID} DE_SOCIAL_SECURITY {German pension insurance number} DE_HEALTH_INSURANCE {German health insurance number} DE_ID_CARD {German ID card} DE_PASSPORT {German passport} AT_SOCIAL_SECURITY {Austrian social insurance number} AT_VAT_ID {Austrian VAT ID} CH_AHV {Swiss AHV number} CH_UID {Swiss business ID (UID)} PERSON {Person name} ADDRESS {Postal address} ACCOUNT_NUMBER {Account or customer number} OTHER_PII {Other personal data} JWT {JWT} SECRET {API keys / secrets} PRIVATE_KEY {Private key} CONNECTION_STRING {Connection string / DB URL} ENV_SECRET {Env / config secret} other {{id}}}",
   "categoryLabel": "{category, select, Finance {Finance} General {General} Health {Health} USA {USA} UK {UK} Spain {Spain} Italy {Italy} Poland {Poland} Singapore {Singapore} Australia {Australia} India {India} Finland {Finland} Germany {Germany} Austria {Austria} Switzerland {Switzerland} Credentials {Credentials} other {{category}}}",
   "groups": "Data groups",
@@ -105,9 +83,8 @@
   "selectNone": "Select none",
   "saved": "Personal data policy saved",
   "entitiesHint": "Without a selection, the default set applies.",
-  "logsHint": "Request logs mark every entity found in prompts and responses, and stored log content stays masked.",
   "actionLabel": "{action, select, block {Block} mask {Mask} flag {Flag only} other {{action}}}",
-  "actionHint": "Block rejects prompts with 400 guardrail_blocked and withholds responses. Mask replaces the match. Flag only lets it through and marks the request log.",
+  "actionHint": "Block rejects prompts with 400 guardrail_blocked and cuts responses off with finish reason content_filter (stop reason refusal on Messages). Mask replaces the match. Flag only lets it through and marks the request log.",
   "hitLabel": "{kind, select, rule {Rule} injection {Injection} secret {Secret} other {Match}}: {label}",
   "injection": {
     "title": "Prompt injection",
@@ -150,7 +127,6 @@
   "content": {
     "save": "Save content checks",
     "saved": "Content checks saved",
-    "logsHint": "Request logs list every match in prompts and responses. A blocked response ends with finish reason content_filter (stop reason refusal on Messages), and stored log content keeps masked text masked.",
     "streamHint": "Streams are checked chunk by chunk with a short look-back. A blocked stream stops at the match, so text sent before it has already reached the client. Masking only covers matches within one chunk."
   },
   "test": {
@@ -158,6 +134,7 @@
     "hint": "Runs sample text through the same checks the gateway applies, in the same order. Nothing is sent to a model or stored.",
     "source": "Policy",
     "sourceOption": "{source, select, platform {Platform policy} other {Effective policy of a company, department, project, or key}}",
+    "origin": "{own, select, true {Set here} other {Inherited from {source}}}",
     "draftHint": "Includes your unsaved changes from the other tabs.",
     "sample": "Sample text",
     "direction": "Check as",

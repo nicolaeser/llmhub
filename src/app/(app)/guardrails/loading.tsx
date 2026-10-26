@@ -14,8 +14,7 @@ export default function GuardrailsLoading() {
       title={t("title")}
       subtitle={kind === "company" ? t("companySubtitle") : t("subtitle")}
       tabs
-      stats={4}
-      layout="form"
+      layout={kind === "company" ? "table" : "form"}
     />
   );
 }

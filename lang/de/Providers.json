@@ -7,8 +7,7 @@
     "provider": "Anbieter",
     "credential": "Zugangsdaten",
     "models": "Modelle",
-    "dataHandling": "Datenverarbeitung",
-    "presets": "Modellvorlagen"
+    "dataHandling": "Datenverarbeitung"
   },
   "toolbar": {
     "import": "Importieren",
@@ -120,7 +119,7 @@
     "noTrainingChip": "Kein Training"
   },
   "presets": {
-    "usage": "{count, plural, =0 {Nicht verwendet} one {# Vorlage} other {# Vorlagen}}",
+    "usedBy": "{count, plural, one {Genutzt von Vorlage {names}} other {Genutzt von # Vorlagen: {names}}}",
     "disconnect": "{count, plural, one {Die Modellvorlage {names} erlaubt diesen Anbieter.} other {# Modellvorlagen erlauben diesen Anbieter: {names}.}} Sie behalten den entfernten Anbieter in ihrer Liste, statt sich für alle Anbieter zu öffnen. Eine Vorlage, die nur diesen Anbieter erlaubt, passt daher auf keine Route mehr, bis du sie bearbeitest."
   },
   "importTarget": "→ {alias}",

@@ -165,10 +165,12 @@ export default function PresetsTab() {
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <p className="max-w-2xl text-sm text-muted">{t("subtitle")}</p>
-        {templates.length ? createButton : null}
-      </div>
+      {templates.length ? (
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p className="max-w-2xl text-sm text-muted">{t("subtitle")}</p>
+          {createButton}
+        </div>
+      ) : null}
 
       {canManage ? null : (
         <Alert status="accent">

@@ -7,18 +7,19 @@ import { useTranslations } from "next-intl";
 import GuardrailHit from "@/components/guardrails/guardrail-hit";
 import { useErrorToast } from "@/components/console/use-error-toast";
 import { guardrailsValid, MAX_TEST_TEXT } from "@/lib/gateway/safety/guardrails";
-import { effectivePolicies, fullLayer, sectionSummaries } from "@/lib/gateway/safety/policy-layers";
+import { effectivePolicies, fullLayer, sameRef, sectionSummaries } from "@/lib/gateway/safety/policy-layers";
 import { isActionFail } from "@/lib/http/action-result";
 import type {
   EffectivePolicies,
   GuardrailDirection,
   PlatformPolicies,
   PolicyRef,
+  PolicySection,
   PolicyTestResult,
 } from "@/types/guardrails";
 import { testPoliciesAction } from "../_action";
 import ChoiceSelect from "./choice-select";
-import { SectionChip, useSourceLabel } from "@/components/guardrails/policy-labels";
+import { SectionChip, SectionDetail, useSourceLabel } from "@/components/guardrails/policy-labels";
 import PolicyTargetPicker, { firstRef } from "./policy-target-picker";
 import { effectiveFor, findTarget, type PolicyBook } from "./policy-view";
 
@@ -60,6 +61,12 @@ export default function PolicyTester({
     ...(book.targets.length ? [{ id: "target" as const, label: t("test.sourceOption", { source: "target" }) }] : []),
   ];
   const outcome = result ? outcomeOf(result) : null;
+
+  function origin(section: PolicySection) {
+    const owner = policies?.sources[section] ?? null;
+    const own = Boolean(target && owner && sameRef(owner, target));
+    return t("test.origin", { own: own ? "true" : "false", source: sourceLabel(owner) });
+  }
 
   function run() {
     if (!policies) return;
@@ -113,12 +120,11 @@ export default function PolicyTester({
                   <dt className="text-xs text-muted">{t("section", { section: summary.section })}</dt>
                   <dd className="flex flex-wrap items-center gap-2">
                     <SectionChip summary={summary} />
-                    {source === "target" ? (
-                      <span className="text-xs break-words text-muted">
-                        {sourceLabel(policies.sources[summary.section])}
-                      </span>
-                    ) : null}
+                    <SectionDetail summary={summary} />
                   </dd>
+                  {source === "target" ? (
+                    <dd className="text-xs break-words text-muted">{origin(summary.section)}</dd>
+                  ) : null}
                 </div>
               ))}
             </dl>

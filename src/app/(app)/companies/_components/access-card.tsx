@@ -98,7 +98,7 @@ function PolicySummary({
           </ul>
         )}
       </div>
-      <Link href="/guardrails" className="text-sm text-accent">
+      <Link href="/guardrails?tab=overrides" className="text-sm text-accent">
         {t("open")}
       </Link>
     </div>

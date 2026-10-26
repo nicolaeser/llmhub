@@ -1,37 +1,8 @@
 "use client";
 
 import { Chip } from "@heroui/react";
-import {
-  Building2,
-  Fingerprint,
-  Folder,
-  Globe,
-  KeyRound,
-  ListFilter,
-  LockKeyhole,
-  ShieldAlert,
-  Users,
-  type LucideIcon,
-} from "lucide-react";
-import { useTranslations } from "next-intl";
-import type { PolicyRef, PolicyScope, PolicySection, SectionState, SectionSummary } from "@/types/guardrails";
-
-export type PolicyLevel = PolicyScope | "platform";
-
-export const LEVEL_ICONS: Record<PolicyLevel, LucideIcon> = {
-  platform: Globe,
-  org: Building2,
-  team: Users,
-  project: Folder,
-  key: KeyRound,
-};
-
-export const SECTION_ICONS: Record<PolicySection, LucideIcon> = {
-  pii: Fingerprint,
-  injection: ShieldAlert,
-  secrets: LockKeyhole,
-  rules: ListFilter,
-};
+import { useFormatter, useTranslations } from "next-intl";
+import type { PolicyRef, SectionState, SectionSummary } from "@/types/guardrails";
 
 const STATE_COLORS: Partial<Record<SectionState, "success" | "warning" | "accent">> = {
   mask: "success",
@@ -41,23 +12,46 @@ const STATE_COLORS: Partial<Record<SectionState, "success" | "warning" | "accent
   on: "accent",
 };
 
-export function SectionChip({ summary }: { summary: SectionSummary }) {
+function useStateLabel() {
   const t = useTranslations("Guardrails");
-  const label =
+  return (summary: SectionSummary) =>
     summary.section === "rules"
       ? t("rules.count", { count: summary.count })
       : t("sectionState", { state: summary.state });
+}
+
+function useDetailLabel() {
+  const t = useTranslations("Guardrails");
+  return (summary: SectionSummary) =>
+    summary.section === "rules" || summary.state === "off"
+      ? null
+      : t("sectionDetail", { section: summary.section, count: summary.count });
+}
+
+export function SectionChip({ summary }: { summary: SectionSummary }) {
+  const stateLabel = useStateLabel();
   return (
     <Chip size="sm" variant="soft" color={STATE_COLORS[summary.state]}>
-      {label}
+      {stateLabel(summary)}
     </Chip>
   );
 }
 
 export function SectionDetail({ summary }: { summary: SectionSummary }) {
-  const t = useTranslations("Guardrails");
-  if (summary.section === "rules" || summary.state === "off") return null;
-  return <span className="text-xs text-muted">{t("sectionDetail", { section: summary.section, count: summary.count })}</span>;
+  const detailLabel = useDetailLabel();
+  const detail = detailLabel(summary);
+  if (!detail) return null;
+  return <span className="text-xs text-muted">{detail}</span>;
+}
+
+export function useSectionText() {
+  const format = useFormatter();
+  const stateLabel = useStateLabel();
+  const detailLabel = useDetailLabel();
+  return (summary: SectionSummary) => {
+    const detail = detailLabel(summary);
+    return detail ? format.list([stateLabel(summary), detail], { type: "unit" }) : stateLabel(summary);
+  };
 }
 
 export function useSourceLabel(aliasOf: (ref: PolicyRef) => string | undefined) {

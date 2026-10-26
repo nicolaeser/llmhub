@@ -121,16 +121,15 @@ export default function ApiProviders({
   }
 
   function dataHandling(row: ProviderView) {
-    return <PolicyChips policy={row.policy} fallback={<span className="text-sm text-muted">{tCommon("none")}</span>} />;
-  }
-
-  function presetUsage(row: ProviderView) {
     const names = presets?.[row.id] ?? [];
-    if (!names.length) return <span className="text-sm text-muted">{t("presets.usage", { count: 0 })}</span>;
     return (
       <div className="min-w-0 space-y-1">
-        <p className="text-sm tabular-nums text-foreground">{t("presets.usage", { count: names.length })}</p>
-        <p className="line-clamp-2 text-xs break-words text-muted">{format.list(names)}</p>
+        <PolicyChips policy={row.policy} fallback={<span className="text-sm text-muted">{tCommon("none")}</span>} />
+        {names.length ? (
+          <p className="text-xs break-words text-muted">
+            {t("presets.usedBy", { count: names.length, names: format.list(names) })}
+          </p>
+        ) : null}
       </div>
     );
   }
@@ -144,7 +143,6 @@ export default function ApiProviders({
   const active = summaries.filter((row) => row.active).length;
   const missing = summaries.filter((row) => row.credential === "missing").length;
   const models = summaries.reduce((total, row) => total + row.models, 0);
-  const showPresets = presets !== null;
 
   return (
     <div className="space-y-6">
@@ -192,7 +190,6 @@ export default function ApiProviders({
             }
             details={[
               { label: t("columns.models"), value: modelCount(row) },
-              ...(showPresets ? [{ label: t("columns.presets"), value: presetUsage(row) }] : []),
               { label: t("columns.dataHandling"), value: dataHandling(row), wide: true },
             ]}
           />
@@ -206,7 +203,6 @@ export default function ApiProviders({
               <Table.Column>{t("columns.credential")}</Table.Column>
               <Table.Column>{t("columns.models")}</Table.Column>
               <Table.Column>{t("columns.dataHandling")}</Table.Column>
-              {showPresets ? <Table.Column>{t("columns.presets")}</Table.Column> : null}
               <Table.Column>{tCommon("status")}</Table.Column>
               {canManage ? <Table.Column>{tCommon("actions")}</Table.Column> : null}
             </Table.Header>
@@ -228,11 +224,6 @@ export default function ApiProviders({
                   <Table.Cell>{credentialChip(row)}</Table.Cell>
                   <Table.Cell>{modelCount(row)}</Table.Cell>
                   <Table.Cell>{dataHandling(row)}</Table.Cell>
-                  {showPresets ? (
-                    <Table.Cell>
-                      <div className="max-w-56">{presetUsage(row)}</div>
-                    </Table.Cell>
-                  ) : null}
                   <Table.Cell>{statusChip(row)}</Table.Cell>
                   {canManage ? <Table.Cell>{menu(row)}</Table.Cell> : null}
                 </Table.Row>

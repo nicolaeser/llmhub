@@ -7,8 +7,7 @@
     "provider": "Provider",
     "credential": "Credential",
     "models": "Models",
-    "dataHandling": "Data handling",
-    "presets": "Model presets"
+    "dataHandling": "Data handling"
   },
   "toolbar": {
     "import": "Import",
@@ -120,7 +119,7 @@
     "noTrainingChip": "No training"
   },
   "presets": {
-    "usage": "{count, plural, =0 {Not used} one {# preset} other {# presets}}",
+    "usedBy": "{count, plural, one {Used by preset {names}} other {Used by # presets: {names}}}",
     "disconnect": "{count, plural, one {The model preset {names} allows this provider.} other {# model presets allow this provider: {names}.}} They keep the removed provider in their list instead of opening up to every provider, so a preset that allows only this provider matches no route until you edit it."
   },
   "importTarget": "→ {alias}",
