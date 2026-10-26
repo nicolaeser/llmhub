@@ -1,4 +1,4 @@
-import { gateway, gatewayRequest, MODEL, resetGateway } from "./support/gateway-harness";
+import { gatewayRequest, MODEL, resetGateway, setKeyOverride } from "./support/gateway-harness";
 import { recordedPrisma } from "./support/recorded-prisma";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
@@ -267,10 +267,9 @@ test("gateway routes log the session and agent of each request", async () => {
 });
 
 test("logged session ids are masked with the effective PII policy like tags", async () => {
-  gateway.key = {
-    ...gateway.key,
-    piiPolicy: { enabled: true, mode: "mask", output: false, entities: ["EMAIL_ADDRESS"], detector: "patterns", failure: "patterns" },
-  };
+  setKeyOverride({
+    pii: { enabled: true, mode: "mask", output: false, entities: ["EMAIL_ADDRESS"], detector: "patterns", failure: "patterns" },
+  });
   const chat = await import("@/app/api/v1/chat/completions/route");
   const send = (session: string) =>
     chat.POST(

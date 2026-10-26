@@ -1,4 +1,4 @@
-import { chatReply, gateway, gatewayRequest, MODEL, resetGateway } from "./support/gateway-harness";
+import { chatReply, gateway, gatewayRequest, MODEL, resetGateway, setKeyOverride, setOverride } from "./support/gateway-harness";
 import { recordedPrisma } from "./support/recorded-prisma";
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -60,12 +60,16 @@ function trace(): RequestTrace {
 
 const PII_OFF: PiiPolicy = { enabled: false, mode: "mask", output: false, entities: [], detector: "patterns", failure: "patterns" };
 
+let principals = 0;
+
 function principal(guardrails: GuardrailPolicy, pii: PiiPolicy = PII_OFF): Principal {
+  const keyId = `key_${(principals += 1)}`;
+  setOverride({ keyId }, { pii, guardrails });
   return withTrace(
     {
       actor: "sk-hub-abcde",
       key: {
-        token_id: "key_1",
+        token_id: keyId,
         key_name: "sk-hub-abcde",
         key_alias: "test",
         user_id: "",
@@ -87,7 +91,6 @@ function principal(guardrails: GuardrailPolicy, pii: PiiPolicy = PII_OFF): Princ
         access_windows: [],
         access_time_zone: "UTC",
         blocked: false,
-        pii,
         log_content: true,
         created_at: "",
       },
@@ -97,7 +100,6 @@ function principal(guardrails: GuardrailPolicy, pii: PiiPolicy = PII_OFF): Princ
       memberId: "",
       models: [],
       routeLimits: {},
-      guardrails,
     },
     "/v1/chat/completions",
   );
@@ -349,7 +351,7 @@ test("the chat completions route screens prompts before serving a cached respons
   gateway.enterprise = { cache_ttl_seconds: 300 };
   const first = await chatRoute("Cached status of Project Falcon?");
   assert.deepEqual([first.status, first.cache], [200, "MISS"]);
-  gateway.key = { ...gateway.key, guardrailPolicy: policy({ rules: [rule({ target: "input" })] }) };
+  setKeyOverride({ guardrails: policy({ rules: [rule({ target: "input" })] }) });
   const again = await chatRoute("Cached status of Project Falcon?");
   assert.equal(again.status, 400);
   assert.equal((again.json.error as JsonMap).code, "guardrail_blocked");
@@ -362,7 +364,7 @@ test("the chat completions route screens cache hits under the current output pol
   gateway.reply = () => chatReply("Key sk-proj-abcdefghijklmnop1234");
   const first = await chatRoute("Which key did we rotate?");
   assert.deepEqual([first.status, first.cache], [200, "MISS"]);
-  gateway.key = { ...gateway.key, guardrailPolicy: policy({ secrets: { enabled: true, action: "mask", entities: [] } }) };
+  setKeyOverride({ guardrails: policy({ secrets: { enabled: true, action: "mask", entities: [] } }) });
   const hit = await chatRoute("Which key did we rotate?");
   assert.deepEqual([hit.status, hit.cache], [200, "HIT"]);
   assert.equal((firstChoice(hit.json).message as JsonMap).content, "Key [SECRET]");
@@ -372,7 +374,7 @@ test("the chat completions route screens cache hits under the current output pol
 test("the chat completions route never caches blocked output", async () => {
   resetGateway();
   gateway.enterprise = { cache_ttl_seconds: 300 };
-  gateway.key = { ...gateway.key, guardrailPolicy: policy({ secrets: { enabled: true, action: "block", entities: [] } }) };
+  setKeyOverride({ guardrails: policy({ secrets: { enabled: true, action: "block", entities: [] } }) });
   gateway.reply = () => chatReply("Key sk-proj-abcdefghijklmnop1234");
   for (const attempt of [1, 2]) {
     const res = await chatRoute("Print the deploy key");

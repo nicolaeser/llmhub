@@ -9,6 +9,7 @@ import { LoadError, SectionLoading } from "@/components/console/page-status";
 import { Link } from "@/i18n/routing";
 import { useActionData } from "@/lib/hooks/use-action-data";
 import type { ActionFail } from "@/types/actions";
+import { SectionChip, SectionDetail } from "@/components/guardrails/policy-labels";
 import type { CompanyPolicies, PolicyOverrideSummary } from "@/types/guardrails";
 import type { ConsoleUserNode, NodeRef } from "@/types/structure";
 
@@ -33,55 +34,35 @@ function PolicySummary({
     return state.error === null ? <SectionLoading shape="details" rows={2} /> : <LoadError state={state} />;
   }
 
-  const { pii, guardrails, overrides } = state.data;
+  const { sections, overrides } = state.data;
 
   function overrideChips(row: PolicyOverrideSummary) {
-    return (
-      <>
-        {row.pii ? (
-          <Chip size="sm" variant="soft" color={row.pii.enabled ? "success" : "warning"}>
-            {t("overridePii", { state: row.pii.enabled ? row.pii.mode : "off" })}
-          </Chip>
-        ) : null}
-        {row.guardrails ? (
-          <Chip size="sm" variant="soft">
-            {t("overrideGuardrails", { count: row.guardrails.rules })}
-          </Chip>
-        ) : null}
-      </>
-    );
+    return row.sections.map((summary) => (
+      <Chip key={summary.section} size="sm" variant="soft">
+        {t("overrideSection", {
+          section: tGuardrails("section", { section: summary.section }),
+          value:
+            summary.section === "rules"
+              ? tGuardrails("rules.count", { count: summary.count })
+              : tGuardrails("sectionState", { state: summary.state }),
+        })}
+      </Chip>
+    ));
   }
 
   return (
     <div className="space-y-4">
       <dl className="grid gap-4 sm:grid-cols-2">
-        <div className="min-w-0 space-y-1">
-          <dt className="text-xs text-muted">{t("pii")}</dt>
-          <dd className="flex flex-wrap items-center gap-2 text-sm">
-            <Chip size="sm" variant="soft" color={pii.enabled ? "success" : "warning"}>
-              {tGuardrails("modeState", { state: pii.enabled ? pii.mode : "off" })}
-            </Chip>
-            {t("level", { level: pii.level })}
-          </dd>
-          <dd className="text-xs text-muted">
-            {t("piiDetail", { entities: pii.entities, output: pii.enabled && pii.output ? "true" : "false" })}
-          </dd>
-        </div>
-        <div className="min-w-0 space-y-1">
-          <dt className="text-xs text-muted">{t("guardrails")}</dt>
-          <dd className="flex flex-wrap items-center gap-2 text-sm">
-            <Chip size="sm" variant="soft">
-              {tGuardrails("rules.count", { count: guardrails.rules })}
-            </Chip>
-            {t("level", { level: guardrails.level })}
-          </dd>
-          <dd className="text-xs text-muted">
-            {t("guardrailDetail", {
-              injection: guardrails.injection ?? "off",
-              secrets: guardrails.secrets ?? "off",
-            })}
-          </dd>
-        </div>
+        {sections.map((summary) => (
+          <div key={summary.section} className="min-w-0 space-y-1">
+            <dt className="text-xs text-muted">{tGuardrails("section", { section: summary.section })}</dt>
+            <dd className="flex flex-wrap items-center gap-2 text-sm">
+              <SectionChip summary={summary} />
+              <SectionDetail summary={summary} />
+            </dd>
+            <dd className="text-xs text-muted">{t("level", { level: summary.level })}</dd>
+          </div>
+        ))}
       </dl>
       <div className="space-y-2">
         <p className="text-xs text-muted">{t("overrides", { count: overrides.length })}</p>
@@ -117,7 +98,7 @@ function PolicySummary({
           </ul>
         )}
       </div>
-      <Link href="/guardrails" className="text-sm text-accent">
+      <Link href="/guardrails?tab=overrides" className="text-sm text-accent">
         {t("open")}
       </Link>
     </div>

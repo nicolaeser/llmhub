@@ -20,6 +20,7 @@ import type {
   ImportCandidate,
   ProviderKindSpec,
   ProviderListActions,
+  ProvidersPage,
   ProvidersTab,
   ProviderView,
 } from "@/types/providers";
@@ -47,7 +48,7 @@ export default function ProvidersPage() {
   const t = useTranslations("Providers");
   const showError = useErrorToast();
   const [, selectTab] = useTabParam(TABS);
-  const page = useActionData<{ connected: ProviderView[]; canManage: boolean }>(loadProvidersAction);
+  const page = useActionData<ProvidersPage>(loadProvidersAction);
   const { data, setData } = page;
   const signInRows = data ? data.connected.filter((row) => isSignInKind(row.kind)) : null;
   const limits = useAccountLimits(signInRows, page.reload);
@@ -162,6 +163,7 @@ export default function ProvidersPage() {
       panel: (
         <ApiProviders
           rows={data.connected.filter((row) => !isSignInKind(row.kind))}
+          presets={data.presets}
           actions={actions}
           canManage={canManage}
           onAdd={() => openAdd(null, "api")}
@@ -174,6 +176,7 @@ export default function ProvidersPage() {
       panel: (
         <SubscriptionAccounts
           rows={signInRows ?? []}
+          presets={data.presets}
           actions={actions}
           canManage={canManage}
           limits={limits}

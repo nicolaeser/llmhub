@@ -241,58 +241,81 @@ test("company policy summaries need settings:read and stay inside the caller's c
   recordedPrisma.reset();
   await assert.rejects(runAsPrincipal(viewer, () => loadCompanyPolicies("missing")), /NOT_FOUND/);
 
-  const injectionOnly = {
-    injection: { enabled: true, action: "block", checks: [] },
-    secrets: { enabled: false, action: "mask", entities: [] },
-    rules: [],
-  };
   recordedPrisma.reset({
-    organization: {
-      findUnique: () => ({
-        id: COMPANY_ID,
-        alias: "Acme",
-        piiPolicy: { enabled: true, mode: "block", output: false, entities: ["EMAIL_ADDRESS"] },
-        guardrailPolicy: null,
-      }),
-    },
-    project: {
-      findMany: () => [
-        { id: "p1", alias: "Bot", orgId: COMPANY_ID, piiPolicy: null, guardrailPolicy: injectionOnly },
-        { id: "p2", alias: "Plain", orgId: COMPANY_ID, piiPolicy: null, guardrailPolicy: null },
-      ],
-    },
-    virtualKey: {
+    organization: { findUnique: () => ({ id: COMPANY_ID }) },
+    policyOverride: {
       findMany: () => [
         {
-          id: "k1",
-          keyAlias: "",
-          prefix: "sk-hub-k1",
           orgId: COMPANY_ID,
+          teamId: null,
+          projectId: null,
+          keyId: null,
+          pii: { enabled: true, mode: "block", output: false, entities: ["EMAIL_ADDRESS"] },
+          injection: null,
+          secrets: null,
+          rules: null,
+        },
+        {
+          orgId: null,
+          teamId: null,
           projectId: "p1",
-          userId: "u1",
-          piiPolicy: { enabled: false, mode: "mask", output: false, entities: [] },
-          guardrailPolicy: null,
+          keyId: null,
+          pii: null,
+          injection: { enabled: true, action: "block", checks: [] },
+          secrets: null,
+          rules: null,
+        },
+        {
+          orgId: null,
+          teamId: null,
+          projectId: null,
+          keyId: "k1",
+          pii: { enabled: false, mode: "mask", output: false, entities: [] },
+          injection: null,
+          secrets: null,
+          rules: [],
         },
       ],
     },
+    team: { findMany: () => [{ id: "t1", alias: "Ops" }] },
+    project: {
+      findMany: () => [
+        { id: "p1", alias: "Bot" },
+        { id: "p2", alias: "Plain" },
+      ],
+    },
+    virtualKey: { findMany: () => [{ id: "k1", keyAlias: "", prefix: "sk-hub-k1" }] },
   });
   const summary = await runAsPrincipal(viewer, () => loadCompanyPolicies(COMPANY_ID));
-  assert.deepEqual(summary.pii, {
-    level: "org",
-    enabled: true,
-    mode: "block",
-    output: false,
-    entities: 1,
-    detector: "patterns",
-  });
-  assert.equal(summary.guardrails.level, "global");
   assert.deepEqual(
-    summary.overrides.map((row) => [row.scope, row.id, row.alias, row.pii, row.guardrails]),
+    summary.sections.map((row) => [row.section, row.state, row.level]),
     [
-      ["project", "p1", "Bot", null, { injection: "block", secrets: null, rules: 0 }],
-      ["key", "k1", "sk-hub-k1", { enabled: false, mode: "mask", output: false, entities: 0, detector: "patterns" }, null],
+      ["pii", "block", "org"],
+      ["injection", "off", "global"],
+      ["secrets", "off", "global"],
+      ["rules", "off", "global"],
     ],
   );
+  assert.equal(summary.sections[0]?.count, 1);
+  assert.deepEqual(
+    summary.overrides.map((row) => [row.scope, row.id, row.alias, row.sections]),
+    [
+      ["project", "p1", "Bot", [{ section: "injection", state: "block", count: 0 }]],
+      [
+        "key",
+        "k1",
+        "sk-hub-k1",
+        [
+          { section: "pii", state: "off", count: 0 },
+          { section: "rules", state: "off", count: 0 },
+        ],
+      ],
+    ],
+  );
+  assert.deepEqual((recordedPrisma.called("policyOverride", "findMany")[0]?.args as { where: unknown }).where, {
+    OR: [{ orgId: COMPANY_ID }, { team: { orgId: COMPANY_ID } }, { project: { orgId: COMPANY_ID } }, { key: { orgId: COMPANY_ID } }],
+  });
+  assert.deepEqual((recordedPrisma.called("team", "findMany")[0]?.args as { where: unknown }).where, { orgId: COMPANY_ID });
   assert.deepEqual((recordedPrisma.called("project", "findMany")[0]?.args as { where: unknown }).where, { orgId: COMPANY_ID });
   assert.deepEqual((recordedPrisma.called("virtualKey", "findMany")[0]?.args as { where: unknown }).where, {
     userId: "u1",
@@ -325,12 +348,12 @@ test("read-only knowledge and guardrail views leave out what only editing needs"
   assert.deepEqual(knowledge.models, []);
   assert.equal(recordedPrisma.called("modelGroup").length, 0);
 
-  recordedPrisma.reset({ organization: { findMany: () => [{ id: COMPANY_ID, alias: "Acme", piiPolicy: null, guardrailPolicy: null }] } });
+  recordedPrisma.reset({ organization: { findMany: () => [{ id: COMPANY_ID, alias: "Acme" }] } });
   const guardrails = await runAsPrincipal(viewer, () => loadGuardrails());
   assert.equal(guardrails.canManage, false);
   assert.deepEqual(guardrails.targets, []);
 
-  recordedPrisma.reset({ organization: { findMany: () => [{ id: COMPANY_ID, alias: "Acme", piiPolicy: null, guardrailPolicy: null }] } });
+  recordedPrisma.reset({ organization: { findMany: () => [{ id: COMPANY_ID, alias: "Acme" }] } });
   const managed = await runAsPrincipal(owner, () => loadGuardrails());
   assert.equal(managed.targets.length, 1);
 });

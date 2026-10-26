@@ -17,6 +17,7 @@ import type {
   AccountRouting,
   AntigravityClientState,
   ProviderListActions,
+  ProviderPresetUsage,
   ProviderView,
   SignInKind,
 } from "@/types/providers";
@@ -35,6 +36,7 @@ import { useResetTime } from "./use-reset-time";
 
 export default function SubscriptionAccounts({
   rows,
+  presets,
   actions,
   canManage,
   limits,
@@ -44,6 +46,7 @@ export default function SubscriptionAccounts({
   onCreateLink,
 }: {
   rows: ProviderView[];
+  presets: ProviderPresetUsage | null;
   actions: ProviderListActions;
   canManage: boolean;
   limits: AccountLimitsState;
@@ -69,7 +72,7 @@ export default function SubscriptionAccounts({
   const accessState = useOverlayState();
   const settingsState = useOverlayState();
   const detailsState = useOverlayState();
-  const rowActions = useProviderRowActions({ onReplace: actions.replace, onRemove: actions.remove });
+  const rowActions = useProviderRowActions({ presets, onReplace: actions.replace, onRemove: actions.remove });
   const { items } = limits;
 
   useEffect(() => {

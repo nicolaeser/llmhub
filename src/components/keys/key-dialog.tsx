@@ -234,7 +234,7 @@ export default function KeyDialog({
           options.canTemplates
             ? t.rich("fields.templatesHint", {
                 link: (chunks) => (
-                  <Link href="/keys?tab=templates" className="text-accent">
+                  <Link href="/models?tab=presets" className="text-accent">
                     {chunks}
                   </Link>
                 ),

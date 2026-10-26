@@ -49,10 +49,11 @@ function parseTemplate<T extends TemplateRules>(schema: ZodType<T>, raw: unknown
   };
 }
 
-async function assertProviders(ids: string[]) {
-  if (!ids.length) return;
-  const found = await prisma.providerConnection.count({ where: { id: { in: ids } } });
-  if (found !== ids.length) throw new Error("NOT_FOUND");
+async function assertProviders(ids: string[], stored: readonly string[] = []) {
+  const added = ids.filter((id) => !stored.includes(id));
+  if (!added.length) return;
+  const found = await prisma.providerConnection.count({ where: { id: { in: added } } });
+  if (found !== added.length) throw new Error("NOT_FOUND");
 }
 
 function templateData(input: TemplateRules & { name: string; description: string }) {
@@ -122,7 +123,7 @@ export async function updateTemplate(raw: unknown) {
   const input = parseTemplate(updateTemplateSchema, raw);
   const existing = await prisma.modelTemplate.findUnique({ where: { id: input.id }, select: templateSelect });
   if (!existing) throw new Error("NOT_FOUND");
-  await assertProviders(input.providerIds);
+  await assertProviders(input.providerIds, templateRulesOf(existing).providerIds);
   const row = await saveTemplate(() =>
     prisma.modelTemplate.update({
       where: { id: input.id },

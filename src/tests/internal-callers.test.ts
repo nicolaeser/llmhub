@@ -110,7 +110,6 @@ function keyView(change: Partial<VirtualKeyView> = {}): VirtualKeyView {
     access_windows: [],
     access_time_zone: "UTC",
     blocked: false,
-    pii: null,
     log_content: true,
     created_at: "",
     ...change,

@@ -14,6 +14,18 @@ export function contextWindow(dep: Sized): number {
   return dep.facts?.contextLength ?? 0;
 }
 
+function borrowed(dep: Sized): boolean {
+  return dep.facts?.contextSource === "borrowed";
+}
+
+function reportedWindow(dep: Sized): number {
+  return borrowed(dep) ? 0 : contextWindow(dep);
+}
+
+function borrowedWindow(dep: Sized): number {
+  return borrowed(dep) ? contextWindow(dep) : 0;
+}
+
 export function largestWindow(deps: Sized[]): number {
   return deps.reduce((largest, dep) => Math.max(largest, contextWindow(dep)), 0);
 }
@@ -38,15 +50,35 @@ export class ContextFit {
     return { input: Math.max(this.demand.input, this.floor), output: this.demand.output };
   }
 
-  fits(dep: Sized, relaxed: boolean): boolean {
-    const window = contextWindow(dep);
+  private holds(window: number, relaxed: boolean): boolean {
     if (window <= 0) return true;
     const { input, output } = this.need();
     return window >= (relaxed ? input : input + output);
   }
 
+  fits(dep: Sized, relaxed: boolean): boolean {
+    return this.holds(reportedWindow(dep), relaxed);
+  }
+
+  doubts(dep: Sized, relaxed: boolean): boolean {
+    return !this.holds(borrowedWindow(dep), relaxed);
+  }
+
+  serves(dep: Sized, relaxed: boolean, estimated: boolean): boolean {
+    return this.fits(dep, relaxed) && this.doubts(dep, relaxed) === estimated;
+  }
+
+  estimates(candidates: Sized[]): boolean {
+    return candidates.some((dep) => borrowedWindow(dep) > 0);
+  }
+
+  doubted<T extends Sized>(candidates: T[], relaxed: boolean): T[] {
+    if (!this.estimates(candidates)) return [];
+    return candidates.filter((dep) => this.fits(dep, relaxed) && this.doubts(dep, relaxed));
+  }
+
   plan(candidates: Sized[], relaxed: boolean): ContextPlan {
-    if (!candidates.some((dep) => contextWindow(dep) > 0)) return "open";
+    if (!candidates.some((dep) => reportedWindow(dep) > 0)) return "open";
     const fitting = candidates.filter((dep) => this.fits(dep, relaxed)).length;
     if (fitting === candidates.length) return "open";
     if (fitting > 0) return "narrowed";
@@ -56,7 +88,7 @@ export class ContextFit {
   }
 
   overflowed(dep: Sized): void {
-    const window = contextWindow(dep);
+    const window = reportedWindow(dep);
     if (window > 0) this.floor = Math.max(this.floor, window + 1);
   }
 

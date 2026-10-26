@@ -241,9 +241,13 @@ test("routing reads model facts once per provider for every route", async () => 
     { kind: "openai_compat", model: "local", provider_id: "" },
   ];
   await attachModelFacts(targets);
-  assert.deepEqual(targets[0]!.facts, { serviceTiers: ["priority", "ultrafast"] });
+  assert.deepEqual(targets[0]!.facts, {
+    serviceTiers: ["priority", "ultrafast"],
+    contextLength: 400_000,
+    contextSource: "borrowed",
+  });
   assert.equal(targets[1]!.facts, undefined);
-  assert.deepEqual(targets[2]!.facts, { contextLength: 400_000 });
+  assert.deepEqual(targets[2]!.facts, { contextLength: 400_000, contextSource: "reported" });
   assert.equal(targets[3]!.facts, undefined);
   await attachModelFacts([
     { kind: "codex", model: "gpt-6-astra", provider_id: "facts-provider" },

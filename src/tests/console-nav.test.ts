@@ -146,7 +146,8 @@ test("a page opens exactly when its navigation entry is visible", () => {
   assert.equal(canOpen([PERMISSIONS.USERS_MANAGE, PERMISSIONS.USERS_SECURITY], "/users", "platform"), false);
   assert.equal(canOpen(permissions, "/users", "company"), false);
   assert.equal(canOpen([PERMISSIONS.TENANCY_READ], "/companies/x", "company"), true);
-  assert.equal(canOpen([PERMISSIONS.MODELS_READ], "/keys", "platform"), true);
+  assert.equal(canOpen([PERMISSIONS.MODELS_READ], "/keys", "platform"), false);
+  assert.equal(canOpen([PERMISSIONS.MODELS_READ], "/models", "platform"), true);
   assert.equal(canOpen([PERMISSIONS.MODELS_READ], "/keys", "company"), false);
   assert.equal(canOpen([PERMISSIONS.KEYS_READ], "/keys", "company"), true);
   assert.equal(canOpen(permissions, "/account", "platform"), false);
@@ -254,7 +255,10 @@ test("retired console paths redirect to the tab that replaced them", async () =>
   assert.equal(target.get("/subscriptions"), "/providers?tab=subscriptions");
   assert.equal(target.get("/provider-health"), "/providers?tab=health");
   assert.equal(target.get("/model-catalog"), "/models");
-  assert.equal(target.get("/model-templates"), "/keys?tab=templates");
+  assert.equal(target.get("/model-templates"), "/models?tab=presets");
+  const movedTab = redirects.find((rule) => rule.source === "/keys");
+  assert.equal(movedTab?.destination, "/models?tab=presets");
+  assert.deepEqual(movedTab?.has, [{ type: "query", key: "tab", value: "templates" }]);
   assert.equal(target.get("/roles"), "/users?tab=roles");
   assert.equal(target.get("/markups"), "/usage?tab=markups");
   assert.equal(target.get("/logging"), "/settings?tab=logging");
@@ -263,6 +267,7 @@ test("retired console paths redirect to the tab that replaced them", async () =>
   assert.equal(target.get("/integrations"), "/mcp");
   for (const rule of redirects) {
     assert.equal(rule.permanent, false, rule.source);
+    if (rule.has) continue;
     assert.equal(existsSync(path.join(root, "src/app/(app)", rule.source, "page.tsx")), false, rule.source);
   }
   assert.equal(redirects.some((rule) => rule.source === "/"), false);

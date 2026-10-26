@@ -152,32 +152,51 @@ export default function GroupsTab() {
     return format.list([group.vendor, group.displayName].filter(Boolean), { type: "unit" });
   }
 
-  function billingLabel(group: ModelGroupView) {
-    return t("billingSummary", {
-      mode: group.billingMode,
-      input: group.priceInput,
-      output: group.priceOutput,
-      windows: group.priceWindows.length,
-    });
+  function routingNotes(group: ModelGroupView) {
+    const notes = [
+      group.deployments.length > 1 ? t("strategyLabel", { strategy: group.strategy }) : null,
+      group.fallbackGroups.length ? t("fallbackNote", { models: format.list(group.fallbackGroups, { type: "unit" }) }) : null,
+      group.overflowGroup ? t("overflowNote", { model: group.overflowGroup }) : null,
+      group.billingMode === "routed"
+        ? null
+        : t("billingSummary", {
+            mode: group.billingMode,
+            input: group.priceInput,
+            output: group.priceOutput,
+            windows: group.priceWindows.length,
+          }),
+    ].filter(Boolean);
+    return notes.length ? notes.join(" · ") : null;
   }
 
   function contextLabel(group: ModelGroupView) {
-    return t(
-      "contextSummary",
-      contextRange(group.deployments.map((dep) => contextWindowOf(providers, dep.providerId, dep.model))),
+    const range = contextRange(group.deployments.map((dep) => contextWindowOf(providers, dep.providerId, dep.model)));
+    return (
+      <div className="min-w-0">
+        <span className={range.range === "none" ? "text-sm text-muted" : "text-sm whitespace-nowrap"}>
+          {t("contextSummary", range)}
+        </span>
+        {range.borrowed === "none" ? null : (
+          <p className="text-xs text-muted">{t("contextEstimated", { borrowed: range.borrowed })}</p>
+        )}
+      </div>
     );
   }
 
   function endpointList(group: ModelGroupView) {
+    const notes = routingNotes(group);
     return (
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-        {routes(group).map((route) => (
-          <span key={route.key} className="inline-flex items-center gap-1.5 text-sm">
-            <span>{route.name}</span>
-            {route.pool === "subscription" ? <SubscriptionBadge /> : null}
-            {route.pool === "internal" ? <InternalBadge /> : null}
-          </span>
-        ))}
+      <div className="min-w-0 space-y-1">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          {routes(group).map((route) => (
+            <span key={route.key} className="inline-flex items-center gap-1.5 text-sm">
+              <span>{route.name}</span>
+              {route.pool === "subscription" ? <SubscriptionBadge /> : null}
+              {route.pool === "internal" ? <InternalBadge /> : null}
+            </span>
+          ))}
+        </div>
+        {notes ? <p className="text-xs break-words text-muted">{notes}</p> : null}
       </div>
     );
   }
@@ -305,11 +324,8 @@ export default function GroupsTab() {
                     aside={enabledSwitch(g)}
                     chips={groupChips(g)}
                     details={[
-                      { label: t("columns.strategy"), value: t("strategyLabel", { strategy: g.strategy }) },
-                      { label: t("columns.overflow"), value: g.overflowGroup || tCommon("none") },
-                      { label: t("columns.context"), value: contextLabel(g) },
-                      { label: t("columns.billing"), value: billingLabel(g), wide: true },
                       { label: t("columns.endpoints"), value: endpointList(g), wide: true },
+                      { label: t("columns.context"), value: contextLabel(g), wide: true },
                     ]}
                     actions={groupActions(g)}
                   />
@@ -317,15 +333,12 @@ export default function GroupsTab() {
               </RowCards>
               <Table aria-label={t("title")} className={TABLE_FROM_LG}>
                 <Table.ScrollContainer>
-                  <Table.Content className="min-w-4xl">
+                  <Table.Content className="min-w-3xl">
                     <Table.Header>
                       <Table.Column isRowHeader>{t("columns.alias")}</Table.Column>
-                      <Table.Column>{t("columns.enabled")}</Table.Column>
-                      <Table.Column>{t("columns.strategy")}</Table.Column>
-                      <Table.Column>{t("columns.context")}</Table.Column>
-                      <Table.Column>{t("columns.billing")}</Table.Column>
                       <Table.Column>{t("columns.endpoints")}</Table.Column>
-                      <Table.Column>{t("columns.overflow")}</Table.Column>
+                      <Table.Column>{t("columns.context")}</Table.Column>
+                      <Table.Column>{t("columns.enabled")}</Table.Column>
                       {canManage ? <Table.Column>{tCommon("actions")}</Table.Column> : null}
                     </Table.Header>
                     <Table.Body>
@@ -349,12 +362,9 @@ export default function GroupsTab() {
                               <div className="px-3 text-xs text-muted">{groupDetail(g)}</div>
                             ) : null}
                           </Table.Cell>
-                          <Table.Cell>{enabledSwitch(g)}</Table.Cell>
-                          <Table.Cell>{t("strategyLabel", { strategy: g.strategy })}</Table.Cell>
-                          <Table.Cell>{contextLabel(g)}</Table.Cell>
-                          <Table.Cell>{billingLabel(g)}</Table.Cell>
                           <Table.Cell>{endpointList(g)}</Table.Cell>
-                          <Table.Cell>{g.overflowGroup || tCommon("none")}</Table.Cell>
+                          <Table.Cell>{contextLabel(g)}</Table.Cell>
+                          <Table.Cell>{enabledSwitch(g)}</Table.Cell>
                           {canManage ? (
                             <Table.Cell>
                               <div className="flex gap-1">{groupActions(g)}</div>

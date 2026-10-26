@@ -68,6 +68,15 @@ export type ModelGroupView = {
 
 export type DiscoveredPrice = Pick<DiscoveredModel, "id" | "costInputPer1k" | "costOutputPer1k" | "priceSource">;
 
+export type ContextWindowView = { tokens: number; from?: string };
+
+export type ContextRange = {
+  range: "none" | "single" | "span";
+  min: number;
+  max: number;
+  borrowed: "none" | "some" | "all";
+};
+
 export type ProviderOpt = {
   id: string;
   name: string;
@@ -76,7 +85,7 @@ export type ProviderOpt = {
   hasApiKey: boolean;
   internal: boolean;
   discovered?: DiscoveredPrice[];
-  contextWindows?: Record<string, number>;
+  contextWindows?: Record<string, ContextWindowView>;
 };
 
 export type TokenPricing = {

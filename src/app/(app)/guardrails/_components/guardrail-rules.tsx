@@ -15,10 +15,12 @@ export default function GuardrailRules({
   rules,
   onChange,
   isDisabled,
+  nested,
 }: {
   rules: GuardrailRule[];
   onChange: (rules: GuardrailRule[]) => void;
   isDisabled?: boolean;
+  nested?: boolean;
 }) {
   const t = useTranslations("Guardrails");
   const kinds = RULE_KINDS.map((id) => ({ id, label: t("rules.kindLabel", { kind: id }) }));
@@ -45,17 +47,13 @@ export default function GuardrailRules({
   }
 
   return (
-    <section className="space-y-3" aria-label={t("rules.title")}>
-      <div className="space-y-1">
-        <h3 className="text-sm font-semibold">{t("rules.title")}</h3>
-        <p className="text-sm text-muted">{t("rules.hint")}</p>
-      </div>
+    <div className="space-y-3">
       {rules.length === 0 ? <p className="text-sm text-muted">{t("rules.empty")}</p> : null}
       {rules.map((rule) => {
         const issue = ruleIssue(rule, rules);
         const message = issue ? t("rules.issue", { issue: issue.issue, line: issue.line }) : "";
         return (
-          <Card key={rule.id} variant="secondary" className="gap-4">
+          <Card key={rule.id} variant={nested ? "tertiary" : "secondary"} className="gap-4">
             <div className="grid gap-4 sm:grid-cols-2">
               <TextField
                 fullWidth
@@ -132,6 +130,6 @@ export default function GuardrailRules({
         <Plus size={14} aria-hidden />
         {t("rules.add")}
       </Button>
-    </section>
+    </div>
   );
 }

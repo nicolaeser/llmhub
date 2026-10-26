@@ -12,11 +12,11 @@ import { isSignInKind, PROVIDER_CATALOG, speaksMuse } from "@/lib/gateway/upstre
 import { CLAUDE_OAUTH_BETAS } from "@/lib/gateway/upstreams/claude";
 import { ANTHROPIC_VERSION_2023, ANTHROPIC_VERSION_HEADER } from "@/lib/gateway/protocols/anthropic-version";
 import { CODEX_CLIENT_VERSION, codexModelFacts } from "@/lib/gateway/upstreams/codex";
-import { asNumber, asRecord, asString } from "@/lib/gateway/core";
+import { asRecord, asString } from "@/lib/gateway/core";
 import { providerAuth } from "@/lib/gateway/upstreams/credentials";
 import { GateError } from "@/lib/gateway/errors";
 import { readJsonOr } from "@/lib/utils/json";
-import { discoveredOf, parsePricing } from "@/lib/gateway/upstreams/provider-prices";
+import { discoveredOf, parsePricing, reportedContext } from "@/lib/gateway/upstreams/provider-prices";
 import { logger } from "@/lib/logging/logger";
 import { money } from "@/lib/utils/money";
 import type { Prisma } from "@/generated/prisma/client";
@@ -53,10 +53,15 @@ async function fetchAntigravityModels(auth: UpstreamAuth): Promise<DiscoveredMod
   return antigravityModels(json);
 }
 
+export function withMuseWindows(listed: DiscoveredModel[]): DiscoveredModel[] {
+  const known = new Map(museModels().map((model) => [model.id, model.contextLength]));
+  return listed.map((model) => (model.contextLength > 0 ? model : { ...model, contextLength: known.get(model.id) ?? 0 }));
+}
+
 async function fetchMuseModels(kind: string, baseUrl: string, auth: UpstreamAuth): Promise<DiscoveredModel[]> {
   try {
     const listed = await fetchProviderModels(kind, baseUrl, auth.key, auth.headers);
-    return listed.length ? listed : museModels();
+    return listed.length ? withMuseWindows(listed) : museModels();
   } catch (error) {
     if (error instanceof Error && error.message === "UPSTREAM_AUTH") throw error;
     return museModels();
@@ -128,7 +133,7 @@ export async function fetchProviderModels(
       id,
       name: asString(m.display_name) || asString(m.name) || id,
       ownedBy: asString(m.owned_by) || kind,
-      contextLength: asNumber(m.context_length, asNumber(m.context_window, 0)),
+      contextLength: reportedContext(m),
       costInputPer1k: pricing?.in ?? 0,
       costOutputPer1k: pricing?.out ?? 0,
       priceSource: pricing ? "provider" : "none",

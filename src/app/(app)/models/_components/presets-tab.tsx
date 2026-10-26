@@ -1,25 +1,27 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Alert, Button, Table, toast, useOverlayState } from "@heroui/react";
+import { Alert, Button, Chip, Table, toast, useOverlayState } from "@heroui/react";
 import { ListChecks, Pencil, Plus, Trash2 } from "lucide-react";
 import { useFormatter, useTranslations } from "next-intl";
 import ConfirmDialog from "@/components/console/confirm-dialog";
 import EmptyState from "@/components/console/empty-state";
-import RowCard, { RowCards, TABLE_FROM_LG } from "@/components/console/row-cards";
 import PageStatus from "@/components/console/page-status";
+import RowCard, { RowCards, TABLE_FROM_LG } from "@/components/console/row-cards";
 import { useErrorToast } from "@/components/console/use-error-toast";
-import { deleteTemplateAction, loadTemplatesAction } from "../_action";
+import { templateModels } from "@/lib/gateway/access/model-policy";
 import { useActionData } from "@/lib/hooks/use-action-data";
 import { isActionFail } from "@/lib/http/action-result";
-import { templateModels } from "@/lib/gateway/access/model-policy";
 import type { ModelTemplateView } from "@/types/model-templates";
-import TemplateDialog from "./template-dialog";
+import { deleteTemplateAction, loadTemplatesAction } from "../_action";
+import PresetDialog from "./preset-dialog";
 
-export default function TemplatesTab() {
+type RuleChip = { id: string; label: string; warning?: boolean };
+
+export default function PresetsTab() {
   const t = useTranslations("ModelTemplates");
-  const showError = useErrorToast();
   const tCommon = useTranslations("Common");
+  const showError = useErrorToast();
   const format = useFormatter();
   const [editing, setEditing] = useState<ModelTemplateView | null>(null);
   const [dialogKey, setDialogKey] = useState(0);
@@ -28,6 +30,13 @@ export default function TemplatesTab() {
   const formState = useOverlayState();
   const page = useActionData(loadTemplatesAction);
   const { data, setData } = page;
+
+  if (!data) {
+    return <PageStatus state={page} />;
+  }
+
+  const { templates, policies, providers, canManage } = data;
+  const known = new Set(providers.map((provider) => provider.id));
 
   function setTemplates(update: (current: ModelTemplateView[]) => ModelTemplateView[]) {
     setData((current) => ({ ...current, templates: update(current.templates) }));
@@ -61,38 +70,73 @@ export default function TemplatesTab() {
     });
   }
 
-  function ruleSummary(template: ModelTemplateView): string {
-    const parts = [
-      template.zdrOnly ? t("rule.zdr") : null,
-      template.noTrainingOnly ? t("rule.noTraining") : null,
-      template.maxRetentionDays !== null ? t("rule.retention", { days: template.maxRetentionDays }) : null,
-      template.regions.length
-        ? t("rule.regions", {
-            regions: format.list(template.regions.map((region) => t("region", { region }))),
-          })
+  function ruleChips(template: ModelTemplateView): RuleChip[] {
+    const removed = template.providerIds.filter((id) => !known.has(id)).length;
+    const chips: (RuleChip | null)[] = [
+      template.zdrOnly ? { id: "zdr", label: t("rule.zdr") } : null,
+      template.noTrainingOnly ? { id: "noTraining", label: t("rule.noTraining") } : null,
+      template.maxRetentionDays !== null
+        ? { id: "retention", label: t("rule.retention", { days: template.maxRetentionDays }) }
         : null,
-      template.providerIds.length ? t("rule.providers", { count: template.providerIds.length }) : null,
-      template.patterns.length ? t("rule.patterns", { patterns: format.list(template.patterns) }) : null,
-      template.models.length ? t("rule.models", { count: template.models.length }) : null,
-    ].filter((part): part is string => part !== null);
-    return format.list(parts, { type: "unit" });
+      template.regions.length
+        ? {
+            id: "regions",
+            label: t("rule.regions", {
+              regions: format.list(template.regions.map((region) => t("region", { region }))),
+            }),
+          }
+        : null,
+      template.providerIds.length > removed
+        ? { id: "providers", label: t("rule.providers", { count: template.providerIds.length - removed }) }
+        : null,
+      removed ? { id: "removed", label: t("rule.removed", { count: removed }), warning: true } : null,
+      template.patterns.length
+        ? { id: "patterns", label: t("rule.patterns", { patterns: format.list(template.patterns) }) }
+        : null,
+      template.models.length ? { id: "models", label: t("rule.models", { count: template.models.length }) } : null,
+    ];
+    return chips.filter((chip): chip is RuleChip => chip !== null);
   }
 
-  function templateActions(template: ModelTemplateView) {
+  function rules(template: ModelTemplateView) {
+    const chips = ruleChips(template);
+    if (!chips.length) return <span className="text-sm text-muted">{tCommon("none")}</span>;
+    return (
+      <span className="flex flex-wrap gap-1">
+        {chips.map((chip) => (
+          <Chip
+            key={chip.id}
+            size="sm"
+            variant="soft"
+            color={chip.warning ? "warning" : undefined}
+            className="max-w-full break-words"
+          >
+            {chip.label}
+          </Chip>
+        ))}
+      </span>
+    );
+  }
+
+  function matchLabel(template: ModelTemplateView) {
+    return t("matchCount", { count: templateModels(template, policies).length });
+  }
+
+  function presetActions(template: ModelTemplateView) {
     return (
       <>
         <Button
           isIconOnly
           size="sm"
           variant="ghost"
-          aria-label={tCommon("edit")}
+          aria-label={t("editLabel", { name: template.name })}
           onPress={() => openDialog(template)}
         >
           <Pencil size={14} aria-hidden />
         </Button>
         <ConfirmDialog
           title={t("deleteConfirm", { name: template.name })}
-          description={template.keyCount > 0 ? t("deleteInUse", { count: template.keyCount }) : undefined}
+          description={template.keyCount > 0 ? t("deleteInUse", { count: template.keyCount }) : t("deleteHint")}
           confirmLabel={tCommon("delete")}
           cancelLabel={tCommon("cancel")}
           pending={deleting === template.id}
@@ -102,7 +146,7 @@ export default function TemplatesTab() {
             isIconOnly
             size="sm"
             variant="danger-soft"
-            aria-label={tCommon("delete")}
+            aria-label={t("deleteLabel", { name: template.name })}
             isPending={deleting === template.id}
           >
             <Trash2 size={14} aria-hidden />
@@ -112,11 +156,6 @@ export default function TemplatesTab() {
     );
   }
 
-  if (!data) {
-    return <PageStatus state={page} />;
-  }
-
-  const { templates, policies, providers, canManage } = data;
   const createButton = canManage ? (
     <Button onPress={() => openDialog(null)}>
       <Plus size={16} aria-hidden />
@@ -126,13 +165,16 @@ export default function TemplatesTab() {
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="max-w-2xl text-sm text-muted">{t("subtitle")}</p>
-        {templates.length ? createButton : null}
-      </div>
+      {templates.length ? (
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p className="max-w-2xl text-sm text-muted">{t("subtitle")}</p>
+          {createButton}
+        </div>
+      ) : null}
 
       {canManage ? null : (
         <Alert status="accent">
+          <Alert.Indicator />
           <Alert.Content>
             <Alert.Description>{t("readOnly")}</Alert.Description>
           </Alert.Content>
@@ -149,13 +191,10 @@ export default function TemplatesTab() {
                 key={template.id}
                 title={template.name}
                 description={template.description || undefined}
-                aside={canManage ? templateActions(template) : undefined}
+                aside={canManage ? presetActions(template) : undefined}
+                chips={rules(template)}
                 details={[
-                  { label: t("columns.rules"), value: ruleSummary(template) || tCommon("none"), wide: true },
-                  {
-                    label: t("columns.models"),
-                    value: t("matchCount", { count: templateModels(template, policies).length }),
-                  },
+                  { label: t("columns.models"), value: matchLabel(template) },
                   { label: t("columns.keys"), value: t("keyCount", { count: template.keyCount }) },
                 ]}
               />
@@ -163,7 +202,7 @@ export default function TemplatesTab() {
           </RowCards>
           <Table aria-label={t("title")} className={TABLE_FROM_LG}>
             <Table.ScrollContainer>
-              <Table.Content aria-label={t("title")} className="min-w-[48rem]">
+              <Table.Content aria-label={t("title")} className="min-w-3xl">
                 <Table.Header>
                   <Table.Column isRowHeader>{t("columns.name")}</Table.Column>
                   <Table.Column>{t("columns.rules")}</Table.Column>
@@ -175,19 +214,19 @@ export default function TemplatesTab() {
                   {templates.map((template) => (
                     <Table.Row key={template.id} id={template.id}>
                       <Table.Cell>
-                        <div className="font-medium">{template.name}</div>
+                        <div className="font-medium break-words">{template.name}</div>
                         {template.description ? (
-                          <div className="text-xs text-muted">{template.description}</div>
+                          <div className="text-xs break-words text-muted">{template.description}</div>
                         ) : null}
                       </Table.Cell>
-                      <Table.Cell>
-                        <span className="text-sm">{ruleSummary(template)}</span>
+                      <Table.Cell>{rules(template)}</Table.Cell>
+                      <Table.Cell className="whitespace-nowrap tabular-nums">{matchLabel(template)}</Table.Cell>
+                      <Table.Cell className="whitespace-nowrap tabular-nums">
+                        {t("keyCount", { count: template.keyCount })}
                       </Table.Cell>
-                      <Table.Cell>{t("matchCount", { count: templateModels(template, policies).length })}</Table.Cell>
-                      <Table.Cell>{t("keyCount", { count: template.keyCount })}</Table.Cell>
                       {canManage ? (
                         <Table.Cell>
-                          <div className="flex gap-1">{templateActions(template)}</div>
+                          <div className="flex gap-1">{presetActions(template)}</div>
                         </Table.Cell>
                       ) : null}
                     </Table.Row>
@@ -199,7 +238,7 @@ export default function TemplatesTab() {
         </>
       )}
 
-      <TemplateDialog
+      <PresetDialog
         key={dialogKey}
         state={formState}
         editing={editing}

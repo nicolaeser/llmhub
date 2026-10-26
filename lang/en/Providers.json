@@ -7,7 +7,7 @@
     "provider": "Provider",
     "credential": "Credential",
     "models": "Models",
-    "policy": "Data policy"
+    "dataHandling": "Data handling"
   },
   "toolbar": {
     "import": "Import",
@@ -53,6 +53,13 @@
   "baseUrl": "API base URL",
   "apiKey": "API key",
   "apiKeyKeep": "Leave blank to keep the stored key.",
+  "form": {
+    "connection": "Connection",
+    "connectionHint": "{method, select, vertex {The credential and Google Cloud project the gateway calls.} other {The key the gateway sends with every request to this provider.}}",
+    "models": "Models and visibility",
+    "modelsHint": "{method, select, signIn {How new models from this account reach the model catalog.} other {How new models reach the model catalog, and whether the API serves this provider.}}",
+    "advancedHint": "{method, select, apiKey {Display name and API base URL.} other {The name shown across the console.}}"
+  },
   "internalOnly": "Internal only",
   "internalOnlyHint": "Not served on the API; usable by console features.",
   "newModels": "New models in the model catalog",
@@ -83,13 +90,22 @@
     "enabled": "{enabled, select, true {{name} resumed} other {{name} paused}}"
   },
   "deleteConfirm": "Its routes and catalog entries are removed, and model groups left without routes are deleted unless they have their own settings.",
+  "overview": {
+    "intro": "Providers the gateway calls with an API key or a service account. Their data handling facts decide which model presets may route through them.",
+    "active": "Active",
+    "total": "{count, plural, one {of # provider} other {of # providers}}",
+    "paused": "Paused",
+    "missing": "Without credentials",
+    "missingHint": "Add a key so requests can reach them",
+    "models": "Models"
+  },
   "empty": "No providers connected yet.",
   "emptyTitle": "Connect a provider",
   "noneTitle": "No API providers yet",
   "keyState": "{state, select, stored {API key stored} service_account {Service account stored} other {No API key}}",
-  "policy": {
-    "title": "Data policy",
-    "hint": "Model templates use these facts to select models. Enter what your agreement with this provider covers.",
+  "dataHandling": {
+    "title": "Data handling",
+    "hint": "Model presets use these facts to decide which providers may serve a request. Enter what your agreement with this provider covers.",
     "zdr": "Zero data retention (ZDR)",
     "zdrHint": "The provider stores no prompts or outputs under your agreement.",
     "retention": "Data retention (days)",
@@ -101,6 +117,10 @@
     "zdrChip": "ZDR",
     "retentionChip": "{days, plural, one {# day retention} other {# days retention}}",
     "noTrainingChip": "No training"
+  },
+  "presets": {
+    "usedBy": "{count, plural, one {Used by preset {names}} other {Used by # presets: {names}}}",
+    "disconnect": "{count, plural, one {The model preset {names} allows this provider.} other {# model presets allow this provider: {names}.}} They keep the removed provider in their list instead of opening up to every provider, so a preset that allows only this provider matches no route until you edit it."
   },
   "importTarget": "→ {alias}",
   "importTargetState": "{exists, select, true {Joins alias} other {New alias}}",

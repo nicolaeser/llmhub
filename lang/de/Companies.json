@@ -187,26 +187,21 @@
   },
   "access": {
     "title": "Zugriff",
-    "hint": "{users, select, yes {{policies, select, yes {Konsolen-Benutzer, die sich für dieses Unternehmen anmelden, und die PII- und Guardrail-Richtlinien für seine Anfragen.} other {Konsolen-Benutzer, die sich für dieses Unternehmen anmelden.}}} other {Die PII- und Guardrail-Richtlinien für die Anfragen dieses Unternehmens.}}",
+    "hint": "{users, select, yes {{policies, select, yes {Konsolen-Benutzer, die sich für dieses Unternehmen anmelden, und die Leitplanken für seine Anfragen.} other {Konsolen-Benutzer, die sich für dieses Unternehmen anmelden.}}} other {Die Leitplanken für die Anfragen dieses Unternehmens.}}",
     "users": {
       "title": "Konsolen-Benutzer ({count, number, integer})",
       "hint": "Sie melden sich in dieser Konsole an und sehen nur dieses Unternehmen. Personen des Unternehmens nutzen die API und melden sich nie an.",
       "empty": "Für dieses Unternehmen meldet sich kein Konsolen-Benutzer an."
     },
     "policies": {
-      "title": "Wirksame Richtlinien",
-      "hint": "Wird beim Öffnen geladen. Jede Anfrage nutzt genau eine Richtlinie: die des Keys, sonst die des Projekts, sonst die des Unternehmens, sonst die globale.",
-      "pii": "PII",
-      "guardrails": "Guardrails",
-      "level": "{level, select, org {Überschreibung des Unternehmens} other {Globale Richtlinie}}",
-      "piiDetail": "{entities, plural, =0 {Standard-Entitäten} one {# Entität} other {# Entitäten}} · {output, select, true {Modellausgabe geschwärzt} other {Modellausgabe unverändert}}",
-      "guardrailDetail": "Prompt-Injection: {injection, select, block {blockieren} flag {nur markieren} other {aus}} · Secrets in Antworten: {secrets, select, block {blockieren} mask {maskieren} flag {nur markieren} other {aus}}",
-      "overrides": "Eigene Richtlinien von Projekten und Keys dieses Unternehmens ({count, number, integer})",
-      "overridesEmpty": "Kein Projekt und kein Key dieses Unternehmens hat eine eigene Richtlinie.",
-      "overridePii": "PII: {state, select, mask {Maskieren} block {Blockieren} restore {Wiederherstellen} other {Aus}}",
-      "overrideGuardrails": "Guardrails: {count, plural, =0 {keine Regeln} one {# Regel} other {# Regeln}}",
+      "title": "Wirksame Leitplanken",
+      "hint": "Wird beim Öffnen geladen. Jeder Bereich kommt von der spezifischsten Ebene, die ihn festlegt: dem Key, dann seinem Projekt, seiner Abteilung und seinem Unternehmen, sonst aus der Plattform-Richtlinie.",
+      "level": "{level, select, org {Von diesem Unternehmen festgelegt} other {Aus der Plattform-Richtlinie}}",
+      "overrides": "Abteilungen, Projekte und Keys dieses Unternehmens mit eigenen Einstellungen ({count, number, integer})",
+      "overridesEmpty": "Keine Abteilung, kein Projekt und kein Key dieses Unternehmens legt einen Bereich selbst fest.",
+      "overrideSection": "{section}: {value}",
       "openTarget": "{alias} öffnen",
-      "open": "Guardrails öffnen"
+      "open": "Leitplanken öffnen"
     }
   },
   "reports": {

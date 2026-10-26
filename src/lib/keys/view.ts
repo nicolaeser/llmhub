@@ -5,7 +5,6 @@ import type { AuthenticatedSession } from "@/types/auth";
 import { keyScope } from "@/lib/auth/scope";
 import type { VirtualKeyView } from "@/types/keys";
 import { money } from "@/lib/utils/money";
-import { piiOverride } from "@/lib/settings/enterprise";
 import { accessTimeZoneOf, accessWindowsOf, allowedEndpointsOf } from "@/lib/gateway/access/key-restrictions";
 import type { Prisma } from "@/generated/prisma/client";
 
@@ -37,7 +36,6 @@ export function toKeyView(row: {
   accessWindows: unknown;
   accessTimeZone: string;
   blocked: boolean;
-  piiPolicy: unknown;
   logContent: boolean;
   createdAt: Date;
   templates: { templateId: string }[];
@@ -65,7 +63,6 @@ export function toKeyView(row: {
     access_windows: accessWindowsOf(row.accessWindows),
     access_time_zone: accessTimeZoneOf(row.accessTimeZone),
     blocked: row.blocked,
-    pii: piiOverride(row.piiPolicy),
     log_content: row.logContent,
     created_at: row.createdAt.toISOString(),
   };

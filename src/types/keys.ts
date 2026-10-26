@@ -1,6 +1,5 @@
 import type { z } from "zod";
 import type { accessWindowSchema } from "@/schemas/keys";
-import type { PiiPolicy } from "@/types/guardrails";
 import type { TemplateOption } from "@/types/model-templates";
 
 export type KeyBindingOption = { id: string; alias: string; orgId: string; teamId: string };
@@ -18,8 +17,6 @@ export type KeyOptions = KeyChoices & {
   projects: KeyBindingOption[];
   members: KeyBindingOption[];
 };
-
-export type KeyTab = "keys" | "templates";
 
 export type KeyBindingKind = "project" | "member" | "internal";
 
@@ -73,7 +70,6 @@ export type VirtualKeyView = {
   access_windows: AccessWindow[];
   access_time_zone: string;
   blocked: boolean;
-  pii: PiiPolicy | null;
   log_content: boolean;
   created_at: string;
 };

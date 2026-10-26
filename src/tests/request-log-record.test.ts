@@ -34,7 +34,11 @@ function fakeModel(model: string) {
     },
     findMany: async (args: Call["args"]) => {
       record("findMany", args);
-      return [];
+      if (model !== "policyOverride") return [];
+      const conditions = (args.where?.OR ?? []) as Row[];
+      return [...table(model).values()].filter((row) =>
+        conditions.some((condition) => Object.entries(condition).every(([field, value]) => row[field] === value)),
+      );
     },
     updateMany: async (args: Call["args"]) => {
       record("updateMany", args);
@@ -105,7 +109,6 @@ function keyView(over: Partial<VirtualKeyView> = {}): VirtualKeyView {
     access_windows: [],
     access_time_zone: "UTC",
     blocked: false,
-    pii: null,
     log_content: true,
     created_at: "",
     ...over,
@@ -368,9 +371,10 @@ test("content logging honours the gateway, key, member, and user switches", asyn
 test("stored log content is masked with the effective PII policy, including overrides", async () => {
   const masked = (log: StoredLog) => JSON.stringify(log.content?.create);
   enterprise = { pii: { enabled: false } };
-  table("project").set("proj_pii", { id: "proj_pii", piiPolicy: policy({}), guardrailPolicy: null });
-  table("organization").set("org_pii", { id: "org_pii", piiPolicy: policy({}), guardrailPolicy: null });
-  table("organization").set("org_plain", { id: "org_plain", piiPolicy: null, guardrailPolicy: null });
+  table("policyOverride").set("proj_pii", { projectId: "proj_pii", pii: policy({}) });
+  table("policyOverride").set("org_pii", { orgId: "org_pii", pii: policy({}) });
+  table("policyOverride").set("key_pii", { keyId: "key_pii", pii: policy({}) });
+  table("policyOverride").set("key_off", { keyId: "key_off", pii: policy({ enabled: false }) });
 
   const plain = masked(await logFor(principal({ orgId: "org_plain" })));
   assert.ok(plain.includes("ada@acme.com"));
@@ -378,7 +382,7 @@ test("stored log content is masked with the effective PII policy, including over
   for (const who of [
     principal({ key: keyView({ project_id: "proj_pii" }), orgId: "org_plain" }),
     principal({ orgId: "org_pii" }),
-    principal({ key: keyView({ pii: policy({}) }) }),
+    principal({ key: keyView({ token_id: "key_pii" }) }),
   ]) {
     const content = masked(await logFor(who));
     assert.equal(content.includes("ada@acme.com"), false, content);
@@ -386,7 +390,7 @@ test("stored log content is masked with the effective PII policy, including over
   }
 
   enterprise = {};
-  const keyOff = masked(await logFor(principal({ key: keyView({ pii: policy({ enabled: false }) }), orgId: "org_pii" })));
+  const keyOff = masked(await logFor(principal({ key: keyView({ token_id: "key_off" }), orgId: "org_pii" })));
   assert.ok(keyOff.includes("ada@acme.com"));
 });
 

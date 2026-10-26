@@ -12,9 +12,10 @@ import {
   KNOWN_KINDS,
   KNOWN_STRATEGIES,
 } from "@/lib/gateway/core";
+import { contextIndex, resolveContextWindow } from "@/lib/gateway/routing/context-sources";
 import {
   catalogPricesOf,
-  contextWindowsOf,
+  discoveredOf,
   priceForUpstream,
 } from "@/lib/gateway/upstreams/provider-prices";
 import {
@@ -27,7 +28,8 @@ import {
   validPrice,
   windowValid,
 } from "@/lib/gateway/billing/price-schedule";
-import type { DeploymentInput, ModelVariant, PriceWindow } from "@/types/models";
+import type { ContextWindowView, DeploymentInput, ModelVariant, PriceWindow } from "@/types/models";
+import type { ContextIndex, WindowRoute } from "@/types/routing";
 import { money } from "@/lib/utils/money";
 import type { Prisma } from "@/generated/prisma/client";
 
@@ -214,7 +216,17 @@ async function listGroups() {
   return groups.map(mapGroup);
 }
 
-async function listProviders() {
+function contextWindowsOf(sources: ContextIndex, providerId: string, models: string[]): Record<string, ContextWindowView> {
+  const windows: Record<string, ContextWindowView> = {};
+  for (const model of new Set(models)) {
+    const found = resolveContextWindow(sources, providerId, model);
+    if (!found) continue;
+    windows[model] = found.source === "borrowed" ? { tokens: found.tokens, from: found.from ?? "" } : { tokens: found.tokens };
+  }
+  return windows;
+}
+
+async function listProviders(routes: WindowRoute[]) {
   const rows = await prisma.providerConnection.findMany({
     orderBy: { name: "asc" },
     select: {
@@ -227,6 +239,7 @@ async function listProviders() {
       discovered: true,
     },
   });
+  const sources = contextIndex(rows, routes);
   return rows.map((row) => ({
     id: row.id,
     name: row.name,
@@ -240,7 +253,10 @@ async function listProviders() {
       costOutputPer1k: item.costOutput,
       priceSource: item.priceSource,
     })),
-    contextWindows: contextWindowsOf(row.discovered),
+    contextWindows: contextWindowsOf(sources, row.id, [
+      ...discoveredOf(row.discovered).map((model) => model.id),
+      ...routes.flatMap((route) => (route.providerId === row.id ? [route.model] : [])),
+    ]),
   }));
 }
 
@@ -260,7 +276,8 @@ function withoutPurchaseCosts(payload: ModelsPayload): ModelsPayload {
 }
 
 async function payload(): Promise<ModelsPayload> {
-  return { groups: await listGroups(), providers: await listProviders() };
+  const groups = await listGroups();
+  return { groups, providers: await listProviders(groups.flatMap((group) => group.deployments)) };
 }
 
 async function withCatalogPrices(deps: DeploymentInput[]): Promise<DeploymentInput[]> {

@@ -11,9 +11,10 @@ import { coolingDown } from "@/lib/gateway/routing/provider-health";
 import type { JsonMap } from "@/types/gateway";
 import type { ContextDemand } from "@/types/routing";
 
-type Route = { model: string; window: number };
+type Route = { model: string; window: number; borrowed?: boolean };
 
 const catalog = new Map<string, { id: string; contextLength: number }[]>();
+const memberships: { groupAlias: string; providerId: string; model: string }[] = [];
 const aliases: string[] = [];
 let serial = 0;
 
@@ -21,9 +22,9 @@ beforeEach(() => {
   resetGateway();
   recordedPrisma.reset({
     providerConnection: {
-      findMany: ({ where }: { where: { id: { in: string[] } } }) =>
-        where.id.in.map((id) => ({ id, discovered: catalog.get(id) ?? [] })),
+      findMany: () => [...catalog].map(([id, discovered]) => ({ id, name: id, kind: "openai_compat", discovered })),
     },
+    deployment: { findMany: () => memberships },
   });
 });
 
@@ -36,7 +37,10 @@ function sizedGroup(routes: Route[], change: Record<string, unknown> = {}): stri
   serial += 1;
   const alias = `ctx-${serial}`;
   const provider = `ctx-provider-${serial}`;
-  catalog.set(provider, routes.map((route) => ({ id: route.model, contextLength: route.window })));
+  catalog.set(provider, routes.filter((route) => !route.borrowed).map((route) => ({ id: route.model, contextLength: route.window })));
+  const lent = routes.filter((route) => route.borrowed);
+  if (lent.length) catalog.set(`${provider}-donor`, lent.map((route) => ({ id: route.model, contextLength: route.window })));
+  memberships.push(...routes.map((route) => ({ groupAlias: alias, providerId: provider, model: route.model })));
   gateway.groups.set(
     alias,
     groupRow(alias, {
@@ -157,6 +161,31 @@ test("a context plan never filters unknown windows and separates tight from shor
   assert.equal(overflowed.fits(unknown, false), true);
 });
 
+test("borrowed windows only defer: they never filter, shape the plan, raise the overflow floor, or measure early", () => {
+  const borrowed = { id: "borrowed", facts: { contextLength: 1_000, contextSource: "borrowed" as const } };
+  const roomy = { id: "roomy", facts: { contextLength: 100_000, contextSource: "borrowed" as const } };
+  const reported = { id: "reported", facts: { contextLength: 100_000, contextSource: "reported" as const } };
+  const measured: string[] = [];
+  const lazy = new ContextFit(() => {
+    measured.push("measured");
+    return { input: 50_000, output: 0 };
+  });
+  assert.deepEqual(lazy.doubted([{ id: "unknown" }, reported], false), []);
+  assert.deepEqual(measured, []);
+  const fit = new ContextFit(demand(5_000));
+  assert.equal(fit.plan([borrowed], false), "open");
+  assert.equal(fit.plan([borrowed, reported], false), "open");
+  assert.deepEqual(fit.doubted([borrowed, roomy, reported], false), [borrowed]);
+  assert.equal(fit.serves(borrowed, false, false), false);
+  assert.equal(fit.serves(borrowed, false, true), true);
+  assert.equal(fit.serves(roomy, false, false), true);
+  assert.equal(fit.serves(reported, false, true), false);
+  assert.equal(new ContextFit(demand(800, 400)).doubts(borrowed, true), false);
+  fit.overflowed(roomy);
+  assert.equal(fit.fits(reported, false), true);
+  assert.equal(fit.short, false);
+});
+
 test("upstream context overflows are recognized across providers and nothing else is", () => {
   const overflows = [
     upstreamError(400, { error: { message: "This model's maximum context length is 8192 tokens.", code: "context_length_exceeded" } }),
@@ -183,8 +212,8 @@ test("catalog facts keep the context length of every discovered model", () => {
   assert.deepEqual(
     factsByModel([{ id: "a", contextLength: 200_000 }, { id: "b", context_length: 8_192 }, { id: "c" }]),
     new Map([
-      ["a", { contextLength: 200_000 }],
-      ["b", { contextLength: 8_192 }],
+      ["a", { contextLength: 200_000, contextSource: "reported" }],
+      ["b", { contextLength: 8_192, contextSource: "reported" }],
     ]),
   );
 });
@@ -314,4 +343,107 @@ test("an upstream context overflow with no larger fallback passes the provider e
   assert.equal(body.error.type, "invalid_request_error");
   assert.equal(body.error.message, "prompt is too long: 210000 tokens > 200000 maximum");
   assert.deepEqual([...(await coolingDown([`${alias}-unlisted`]))], []);
+});
+
+test("a borrowed window that looks too small is tried after fitting routes, never dropped", async () => {
+  const roomy = sizedGroup([{ model: "lent-roomy", window: 100_000 }]);
+  const alias = sizedGroup([{ model: "lent-small", window: 1_000, borrowed: true }], { fallbackGroups: [roomy] });
+  const preferred = await post("/api/v1/chat/completions", chat(alias, 5_000));
+  assert.equal(preferred.status, 200);
+  assert.deepEqual(upstreamModels(), ["lent-roomy"]);
+  gateway.upstream.length = 0;
+  gateway.reply = (call) =>
+    call.body?.model === "lent-roomy" ? Response.json({ error: { message: "upstream down" } }, { status: 500 }) : chatReply("ok");
+  const deferred = await post("/api/v1/chat/completions", chat(alias, 5_000));
+  assert.equal(deferred.status, 200);
+  assert.deepEqual(upstreamModels(), ["lent-roomy", "lent-small"]);
+});
+
+test("routes without a doubtful estimate go before a borrowed one in the same group", async () => {
+  const alias = sizedGroup([
+    { model: "lent-guess", window: 1_000, borrowed: true },
+    { model: "lent-unlisted", window: 0 },
+  ]);
+  gateway.reply = (call) =>
+    call.body?.model === "lent-unlisted" ? Response.json({ error: { message: "upstream down" } }, { status: 500 }) : chatReply("ok");
+  const res = await post("/api/v1/chat/completions", chat(alias, 5_000));
+  assert.equal(res.status, 200);
+  assert.deepEqual(upstreamModels(), ["lent-unlisted", "lent-guess"]);
+  gateway.upstream.length = 0;
+  gateway.reply = () => chatReply("ok");
+  const small = await post("/api/v1/chat/completions", chat(alias, 100));
+  assert.equal(small.status, 200);
+  assert.deepEqual(upstreamModels(), ["lent-guess"]);
+});
+
+test("a borrowed window is never the reason for an up-front refusal", async () => {
+  const reported = sizedGroup([{ model: "lent-tiny", window: 1_000 }]);
+  const alias = sizedGroup([{ model: "lent-only", window: 2_000, borrowed: true }], { fallbackGroups: [reported] });
+  const res = await post("/api/v1/chat/completions", chat(alias, 5_000, { max_tokens: 300 }));
+  assert.equal(res.status, 200);
+  assert.deepEqual(upstreamModels(), ["lent-only"]);
+  gateway.upstream.length = 0;
+  gateway.reply = () => overflowReply("prompt is too long: 6000 tokens > 2000 maximum");
+  const overflowed = await post("/api/v1/chat/completions", chat(alias, 5_000));
+  assert.equal(overflowed.status, 400);
+  const body = (await overflowed.json()) as { error: { message: string } };
+  assert.equal(body.error.message, "prompt is too long: 6000 tokens > 2000 maximum");
+  assert.deepEqual(upstreamModels(), ["lent-only"]);
+});
+
+test("a borrowed route stays in play after a reported sibling overflows and raises the size floor", async () => {
+  const alias = sizedGroup(
+    [
+      { model: "floor-reported", window: 10_000 },
+      { model: "floor-lent", window: 8_000, borrowed: true },
+    ],
+    { numRetries: 2 },
+  );
+  gateway.reply = (call) =>
+    call.body?.model === "floor-reported"
+      ? overflowReply("This model's maximum context length is 10000 tokens.", "context_length_exceeded")
+      : chatReply("ok");
+  const res = await post("/api/v1/chat/completions", chat(alias, 5_000));
+  assert.equal(res.status, 200);
+  assert.deepEqual(upstreamModels(), ["floor-reported", "floor-lent"]);
+});
+
+test("a group whose routes all look too small calls its overflow group once, then tries them", async () => {
+  const wide = sizedGroup([{ model: "spill-wide", window: 100_000 }]);
+  const alias = sizedGroup([{ model: "spill-lent", window: 1_000, borrowed: true }], { overflowGroup: wide });
+  gateway.reply = (call) =>
+    call.body?.model === "spill-wide" ? Response.json({ error: { message: "upstream down" } }, { status: 500 }) : chatReply("ok");
+  const res = await post("/api/v1/chat/completions", chat(alias, 5_000));
+  assert.equal(res.status, 200);
+  assert.deepEqual(upstreamModels(), ["spill-wide", "spill-lent"]);
+});
+
+test("a borrowed window that fits routes like a reported one", async () => {
+  const alias = sizedGroup([
+    { model: "lent-wide", window: 100_000, borrowed: true },
+    { model: "lent-narrow", window: 1_000 },
+  ]);
+  const res = await post("/api/v1/chat/completions", chat(alias, 5_000));
+  assert.equal(res.status, 200);
+  assert.deepEqual(upstreamModels(), ["lent-wide"]);
+});
+
+test("a route without a window borrows its group's reported window and is deferred when that looks too small", async () => {
+  const fallback = sizedGroup([{ model: "peer-fallback", window: 100_000 }]);
+  const alias = sizedGroup(
+    [
+      { model: "peer-guess", window: 0 },
+      { model: "peer-known", window: 1_000 },
+    ],
+    { fallbackGroups: [fallback] },
+  );
+  const preferred = await post("/api/v1/chat/completions", chat(alias, 5_000));
+  assert.equal(preferred.status, 200);
+  assert.deepEqual(upstreamModels(), ["peer-fallback"]);
+  gateway.upstream.length = 0;
+  gateway.reply = (call) =>
+    call.body?.model === "peer-fallback" ? Response.json({ error: { message: "upstream down" } }, { status: 500 }) : chatReply("ok");
+  const deferred = await post("/api/v1/chat/completions", chat(alias, 5_000));
+  assert.equal(deferred.status, 200);
+  assert.deepEqual(upstreamModels(), ["peer-fallback", "peer-guess"]);
 });

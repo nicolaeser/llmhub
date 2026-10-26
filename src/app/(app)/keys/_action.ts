@@ -1,20 +1,10 @@
 "use server";
 
 import { runAction } from "@/lib/http/action-result";
-import { createKey, loadKeysPage, loadKeyTabs, revokeKey, rotateKey, updateKey } from "@/lib/keys/manage";
+import { createKey, loadKeysPage, revokeKey, rotateKey, updateKey } from "@/lib/keys/manage";
 import { loadKeyMcpAccess, saveKeyMcpAccess } from "@/lib/mcp/key-access";
-import {
-  createTemplate,
-  deleteTemplate,
-  loadTemplates,
-  updateTemplate,
-} from "@/lib/models/templates";
 import { addBoost, loadBudget, removeBoost, setBudget } from "@/lib/tenancy/budgets";
 import type { BoostInput, BudgetInput, BudgetRef } from "@/types/structure";
-
-export async function loadKeyTabsAction() {
-  return runAction(() => loadKeyTabs());
-}
 
 export async function loadKeysPageAction(...args: Parameters<typeof loadKeysPage>) {
   return runAction(() => loadKeysPage(...args));
@@ -50,22 +40,6 @@ export async function addBoostAction(input: BoostInput) {
 
 export async function removeBoostAction(boostId: string) {
   return runAction(() => removeBoost(boostId, "key"));
-}
-
-export async function loadTemplatesAction(...args: Parameters<typeof loadTemplates>) {
-  return runAction(() => loadTemplates(...args));
-}
-
-export async function createTemplateAction(...args: Parameters<typeof createTemplate>) {
-  return runAction(() => createTemplate(...args));
-}
-
-export async function updateTemplateAction(...args: Parameters<typeof updateTemplate>) {
-  return runAction(() => updateTemplate(...args));
-}
-
-export async function deleteTemplateAction(...args: Parameters<typeof deleteTemplate>) {
-  return runAction(() => deleteTemplate(...args));
 }
 
 export async function loadKeyMcpAccessAction(...args: Parameters<typeof loadKeyMcpAccess>) {

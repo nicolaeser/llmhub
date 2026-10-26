@@ -2,65 +2,47 @@
 
 import { useTranslations } from "next-intl";
 import SearchSelect from "@/components/console/search-select";
-import type { PolicyScope, PolicyTarget } from "@/types/guardrails";
+import { POLICY_SCOPES } from "@/schemas/guardrails";
+import type { PolicyRef, PolicyScope, PolicyTarget } from "@/types/guardrails";
 import ChoiceSelect from "./choice-select";
 
-const POLICY_SCOPES: readonly PolicyScope[] = ["org", "project", "key"];
-
-export function inheritedPolicy<P>(
-  target: PolicyTarget,
-  overrides: (PolicyTarget & { policy: P })[],
-  global: P,
-): P {
-  const find = (scope: PolicyScope, id: string) =>
-    id ? overrides.find((row) => row.scope === scope && row.id === id)?.policy : undefined;
-  const project = target.scope === "key" ? find("project", target.projectId) : undefined;
-  const org = target.scope === "org" ? undefined : find("org", target.orgId);
-  return project ?? org ?? global;
+export function firstRef(targets: readonly PolicyTarget[], scope?: PolicyScope): PolicyRef | null {
+  const target = targets.find((row) => !scope || row.scope === scope);
+  return target ? { scope: target.scope, id: target.id } : null;
 }
 
 export default function PolicyTargetPicker({
   targets,
-  scope,
-  targetId,
-  onScopeChange,
-  onTargetChange,
+  value,
+  onChange,
   isDisabled,
 }: {
-  targets: PolicyTarget[];
-  scope: PolicyScope;
-  targetId: string;
-  onScopeChange: (scope: PolicyScope) => void;
-  onTargetChange: (id: string) => void;
+  targets: readonly PolicyTarget[];
+  value: PolicyRef | null;
+  onChange: (ref: PolicyRef | null) => void;
   isDisabled?: boolean;
 }) {
   const t = useTranslations("Guardrails");
   const tCommon = useTranslations("Common");
+  const scopes = POLICY_SCOPES.filter((scope) => targets.some((row) => row.scope === scope));
+  const scope = value?.scope ?? scopes[0] ?? "org";
   const options = targets.filter((row) => row.scope === scope);
-  const names = new Map(targets.filter((row) => row.scope !== "key").map((row) => [`${row.scope}:${row.id}`, row.alias]));
-
-  function detail(row: PolicyTarget): string | undefined {
-    if (row.scope === "org") return undefined;
-    const company = names.get(`org:${row.orgId}`);
-    const project = row.scope === "key" ? names.get(`project:${row.projectId}`) : undefined;
-    return [project, company].filter(Boolean).join(" · ") || undefined;
-  }
 
   return (
-    <div className="grid gap-4 sm:grid-cols-2">
+    <div className="grid gap-4 sm:grid-cols-[minmax(0,12rem)_minmax(0,1fr)]">
       <ChoiceSelect
-        label={t("scope")}
+        label={t("target.scope")}
         value={scope}
-        options={POLICY_SCOPES.map((id) => ({ id, label: t("scopeLabel", { scope: id }) }))}
-        onChange={onScopeChange}
-        isDisabled={isDisabled}
+        options={scopes.map((id) => ({ id, label: t("scopeLabel", { scope: id }) }))}
+        onChange={(next) => onChange(firstRef(targets, next))}
+        isDisabled={isDisabled || scopes.length < 2}
       />
       <SearchSelect
         label={t("scopeLabel", { scope })}
         placeholder={tCommon("none")}
-        items={options.map((row) => ({ id: row.id, label: row.alias, detail: detail(row) }))}
-        value={targetId}
-        onChange={onTargetChange}
+        items={options.map((row) => ({ id: row.id, label: row.alias, detail: row.path.join(" › ") || undefined }))}
+        value={value?.scope === scope ? value.id : ""}
+        onChange={(id) => onChange(id ? { scope, id } : null)}
         isDisabled={isDisabled || options.length === 0}
       />
     </div>
