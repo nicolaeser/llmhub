@@ -184,7 +184,7 @@ export default function AddProviderDialog({
               <div className="min-w-0 flex-1">
                 <Card.Title className="break-words">{t("kindName", { kind: spec.kind })}</Card.Title>
                 <Card.Description>
-                  {t("poolHint", { pool: signInKind ? "subscription" : "api" })}
+                  {t("poolHint", { pool: signInKind ? "subscription" : draft.internal ? "internal" : "api" })}
                 </Card.Description>
               </div>
               <Button size="sm" variant="secondary" isDisabled={pending} onPress={() => setSpec(null)}>

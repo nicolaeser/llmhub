@@ -71,6 +71,7 @@ async function providerReads(): Promise<Call[]> {
   const { loadProviderHealth } = await import("@/lib/gateway/routing/health-report");
   return [
     ["loadProviders", () => connections.loadProviders()],
+    ["loadProviderConsole", () => connections.loadProviderConsole()],
     ["loadProviderLimits", () => connections.loadProviderLimits({ id: "p1", refresh: true })],
     ["loadSubscriptionLimits", () => connections.loadSubscriptionLimits({ refresh: true })],
     ["loadAccountRouting", () => routing.loadAccountRouting()],
@@ -217,6 +218,30 @@ test("provider lists never carry API keys or sign-in tokens", async () => {
   assert.equal(text.includes("sealed-api-key"), false);
   assert.equal(text.includes("sealed-tokens"), false);
   assert.deepEqual(connected[0].signIn, { account: "ops@example.com", plan: "pro", status: "active" });
+});
+
+test("the provider console lists the model presets behind each provider only for model readers", async () => {
+  const { loadProviderConsole } = await import("@/lib/providers/connections");
+  recordedPrisma.reset({
+    modelTemplate: {
+      findMany: () => [
+        { name: "EU only", providerIds: ["p1", "p2", "p1"] },
+        { name: "Zero retention", providerIds: ["p2", "gone"] },
+        { name: "Any provider", providerIds: [] },
+      ],
+    },
+  });
+  const reader = await runAsPrincipal(caller([PERMISSIONS.PROVIDERS_READ]), () => loadProviderConsole());
+  assert.equal(reader.presets, null);
+  assert.equal(recordedPrisma.called("modelTemplate").length, 0);
+  const modeler = await runAsPrincipal(caller([PERMISSIONS.PROVIDERS_READ, PERMISSIONS.MODELS_READ]), () =>
+    loadProviderConsole(),
+  );
+  assert.deepEqual(modeler.presets, { p1: ["EU only"], p2: ["EU only", "Zero retention"], gone: ["Zero retention"] });
+  assert.deepEqual(recordedPrisma.called("modelTemplate", "findMany")[0]?.args, {
+    select: { name: true, providerIds: true },
+    orderBy: { name: "asc" },
+  });
 });
 
 test("model readers without pricing access get no purchase costs", async () => {

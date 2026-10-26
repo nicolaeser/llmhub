@@ -1,7 +1,7 @@
 {
   "title": "Modelle",
-  "subtitle": "Alle Modelle deiner Anbieter, gruppiert unter öffentlichen Namen. Schalte Modelle im Katalog ein und passe dann Routing und Preise pro Gruppe an.",
-  "tab": "{tab, select, catalog {Katalog} groups {Gruppen und Routing} other {}}",
+  "subtitle": "Alle Modelle deiner Anbieter, gruppiert unter öffentlichen Namen. Schalte Modelle im Katalog ein, passe Routing und Preise pro Gruppe an und bündle Modellfreigaben für API-Keys in Vorlagen.",
+  "tab": "{tab, select, catalog {Katalog} groups {Gruppen und Routing} presets {Vorlagen} other {}}",
   "add": "Modell hinzufügen",
   "formTitle": "{mode, select, edit {Modell bearbeiten} add {Modell hinzufügen} other {Modell hinzufügen}}",
   "formSubmit": "{mode, select, save {Speichern} create {Modell hinzufügen} other {Modell hinzufügen}}",

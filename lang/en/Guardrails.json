@@ -1,12 +1,69 @@
 {
   "title": "Guardrails",
-  "subtitle": "Check prompts and responses for personal data, banned content, prompt injection, and leaked secrets.",
-  "companySubtitle": "Overrides for this company, its projects, and its keys. Everything else follows the platform policy.",
-  "companyNotice": "The platform policy summarized above applies to this company unless an override below replaces it. Switch to the platform scope to change it.",
-  "tabs": "{tab, select, pii {PII} content {Rules and checks} other {{tab}}}",
-  "save": "Save policy",
-  "enabledState": "{enabled, select, true {Active} other {Paused}}",
-  "policy": "PII policy",
+  "subtitle": "Screen prompts and responses for personal data, prompt injection, leaked secrets, and your own rules. Companies, departments, projects, and API keys can set each part themselves.",
+  "companySubtitle": "Settings for this company, its departments, projects, and API keys. Everything they leave open follows the platform policy.",
+  "companyNotice": "The values above are the platform policy. They apply to this company wherever no override below sets a part itself. Switch to the platform scope to change them.",
+  "tabs": "{tab, select, overview {Overview} pii {Personal data} content {Content checks} test {Test} other {{tab}}}",
+  "save": "Save personal data policy",
+  "section": "{section, select, pii {Personal data} injection {Prompt injection} secrets {Secrets in responses} rules {Custom rules} other {{section}}}",
+  "sectionState": "{state, select, off {Off} on {On} mask {Mask} block {Block} restore {Restore} flag {Flag only} other {{state}}}",
+  "sectionDetail": "{section, select, pii {{count, plural, =0 {Default entities} one {# entity} other {# entities}}} injection {{count, plural, =0 {All checks} one {# check} other {# checks}}} secrets {{count, plural, =0 {All detectors} one {# detector} other {# detectors}}} other {}}",
+  "scopeLabel": "{scope, select, platform {Platform} org {Company} team {Department} project {Project} key {API key} other {{scope}}}",
+  "source": "{scope, select, platform {Platform policy} org {Company {alias}} team {Department {alias}} project {Project {alias}} key {API key {alias}} other {{alias}}}",
+  "unknownTarget": "not visible to you",
+  "inherited": "Inherited",
+  "target": {
+    "scope": "Level"
+  },
+  "overview": {
+    "platformValue": "Platform policy"
+  },
+  "chain": {
+    "title": "How settings are inherited",
+    "hint": "Every part is inherited on its own. A request takes each part from the most specific level that sets it: its API key, then its project, department, and company. Parts that no level sets come from the platform policy.",
+    "step": "{n, number}",
+    "levelHint": "{level, select, platform {The baseline for every request.} org {Applies to every request of a company.} team {Applies to the projects and people of a department.} project {Applies to the API keys of a project.} key {Applies to a single API key.} other {}}",
+    "always": "Always applies",
+    "count": "{count, plural, =0 {No overrides} one {# override} other {# overrides}}"
+  },
+  "overrides": {
+    "title": "Overrides",
+    "hint": "Companies, departments, projects, and API keys that set parts themselves. Inherited parts follow the level above.",
+    "add": "Add override",
+    "emptyTitle": "No overrides yet",
+    "emptyHint": "Every request follows the platform policy. Add an override to give a company, department, project, or API key its own settings for any part.",
+    "target": "Applies to",
+    "updated": "Updated",
+    "inspect": "Show what applies to {alias}",
+    "remove": "Remove override",
+    "removeFor": "Remove the override for {alias}",
+    "removeConfirm": "Remove the override for {alias}?",
+    "removeConfirmHint": "Every part then follows the level above again.",
+    "saved": "{mode, select, removed {Override removed} other {Override saved}}"
+  },
+  "inspector": {
+    "title": "Effective policy",
+    "hint": "Pick a company, department, project, or API key to see what its requests get and where each part comes from.",
+    "empty": "Pick a target to see its effective policy.",
+    "own": "Set here",
+    "from": "From {source}",
+    "edit": "{mode, select, edit {Edit override} other {Add override}}"
+  },
+  "dialog": {
+    "title": "{mode, select, edit {Edit override} other {Add override}}",
+    "hint": "Turn on the parts this target sets itself. Every other part keeps following the level above, so later platform changes still reach it.",
+    "setHere": "Set here",
+    "setHereFor": "Set {section, select, pii {personal data} injection {prompt injection} secrets {secrets in responses} rules {custom rules} other {{section}}} here",
+    "custom": "{section, select, rules {These rules replace the inherited ones. Starts from a copy of them.} other {Starts from a copy of the inherited setting.}}",
+    "inherited": "Inherited from {source}",
+    "entities": "Entities: {count, plural, =0 {default set} other {# selected}}",
+    "clearing": "No part is set here anymore, so saving removes the override.",
+    "save": "Save override"
+  },
+  "pii": {
+    "title": "Platform policy for personal data",
+    "hint": "Applies to every request unless its API key, project, department, or company sets personal data itself."
+  },
   "enable": "Redact PII in prompts",
   "enableHint": "Applies to text in chat, completions, messages, responses, batches, embeddings, moderations, image prompts, speech input, and the playground. Uploaded files and audio are not scanned.",
   "mode": "When PII is found",
@@ -25,7 +82,7 @@
   "modelOnly": "Model",
   "model": {
     "title": "Redaction model",
-    "description": "Used by every policy, including overrides, whose detection includes the model. Secrets never reach it.",
+    "description": "Used by every policy whose detection includes the model, overrides included. Secrets never reach it.",
     "label": "Model",
     "hint": "{configured, select, true {LLMHUB_REDACTOR_URL provides the pii-tracer alias.} other {Pick an internal alias that speaks the token classification protocol, or set LLMHUB_REDACTOR_URL.}}",
     "none": "None",
@@ -46,55 +103,9 @@
   "groupTag": "{label} ({selected, number}/{total, number})",
   "selectAll": "Select all",
   "selectNone": "Select none",
-  "tester": "Live tester",
-  "testerHint": "Uses the saved global policy.",
-  "redact": "Redact sample",
-  "saved": "PII policy saved",
-  "policyHint": "Applies to every request unless its API key, project, or company has an override.",
+  "saved": "Personal data policy saved",
   "entitiesHint": "Without a selection, the default set applies.",
-  "overrides": "Overrides",
-  "overridesHint": "Give a company, a project, or a single API key its own policy. Each request uses exactly one policy, chosen in this order:",
-  "overridesEmpty": "No overrides yet. Every request uses the global policy.",
-  "addOverride": "Add override",
-  "scope": "Applies to",
-  "scopeLabel": "{scope, select, org {Company} project {Project} key {API key} other {{scope}}}",
-  "overrideTarget": "{scope, select, org {Company} project {Project} key {API key} other {{scope}}}: {alias}",
-  "overrideTitle": "{mode, select, edit {Edit override} other {Add override}}",
-  "overrideHint": "This policy fully replaces the inherited one for the selected company, project, or API key: mode, output redaction, detection, and entities.",
-  "saveOverride": "Save override",
-  "overrideSaved": "{mode, select, removed {Override removed} other {Override saved}}",
-  "removeOverride": "Remove override",
-  "removeConfirm": "Remove the override for {alias}?",
-  "removeConfirmHint": "Requests then use the inherited policy again.",
-  "modeState": "{state, select, mask {Mask} block {Block} restore {Restore} other {Off}}",
-  "entityCount": "{count, plural, =0 {Default set} one {# entity} other {# entities}}",
-  "outputState": "{output, select, true {Redacted} other {Unchanged}}",
-  "columns": {
-    "name": "Name",
-    "output": "Model output"
-  },
-  "logsHint": "Request logs mark every entity this policy finds in prompts and responses, and stored log content is masked as well.",
-  "precedence": {
-    "title": "Policy order",
-    "number": "{n, number}",
-    "key": {
-      "title": "API key override",
-      "hint": "If the request's API key has an override, only that applies. Project and company overrides are ignored."
-    },
-    "project": {
-      "title": "Project override",
-      "hint": "Otherwise the override of the project the key belongs to applies."
-    },
-    "org": {
-      "title": "Company override",
-      "hint": "Otherwise the override of the company the key belongs to applies."
-    },
-    "global": {
-      "title": "Global policy",
-      "hint": "Otherwise the global policy at the top of this tab applies."
-    },
-    "replace": "An override fully replaces the inherited policy, including mode, output redaction, detection, and entities. An override without selected entities uses the default set."
-  },
+  "logsHint": "Request logs mark every entity found in prompts and responses, and stored log content stays masked.",
   "actionLabel": "{action, select, block {Block} mask {Mask} flag {Flag only} other {{action}}}",
   "actionHint": "Block rejects prompts with 400 guardrail_blocked and withholds responses. Mask replaces the match. Flag only lets it through and marks the request log.",
   "hitLabel": "{kind, select, rule {Rule} injection {Injection} secret {Secret} other {Match}}: {label}",
@@ -118,8 +129,8 @@
     "entitiesHint": "Without a selection, every detector runs."
   },
   "rules": {
-    "title": "Denylists and regex rules",
-    "hint": "Match your own terms or patterns in prompts, responses, or both.",
+    "title": "Custom rules",
+    "hint": "Denylists and regular expressions that match your own terms or patterns in prompts, responses, or both.",
     "add": "Add rule",
     "empty": "No rules yet.",
     "name": "Name",
@@ -137,24 +148,26 @@
     "count": "{count, plural, =0 {No rules} one {# rule} other {# rules}}"
   },
   "content": {
-    "policy": "Global guardrails",
-    "policyHint": "Applies to every request unless its API key, project, or company has an override.",
-    "saved": "Guardrails saved",
+    "save": "Save content checks",
+    "saved": "Content checks saved",
     "logsHint": "Request logs list every match in prompts and responses. A blocked response ends with finish reason content_filter (stop reason refusal on Messages), and stored log content keeps masked text masked.",
-    "streamHint": "Streams are checked chunk by chunk with a short look-back. A blocked stream stops at the match, so text sent before it has already reached the client. Masking only covers matches within one chunk.",
-    "overridesHint": "Give a company, a project, or a single API key its own guardrails. Each request uses exactly one set, chosen in this order:",
-    "overridesEmpty": "No overrides yet. Every request uses the global guardrails.",
-    "overrideHint": "These guardrails fully replace the inherited ones for the selected company, project, or API key: prompt injection, secret checks, and every rule.",
-    "replace": "An override fully replaces the inherited guardrails. Rules are not merged, so copy the rules you want to keep.",
-    "state": "{enabled, select, true {{action, select, block {Block} mask {Mask} flag {Flag only} other {On}}} other {Off}}"
+    "streamHint": "Streams are checked chunk by chunk with a short look-back. A blocked stream stops at the match, so text sent before it has already reached the client. Masking only covers matches within one chunk."
   },
-  "guardTester": {
-    "title": "Live tester",
-    "hint": "Uses the global guardrails as edited above, before saving.",
+  "test": {
+    "title": "Test a policy",
+    "hint": "Runs sample text through the same checks the gateway applies, in the same order. Nothing is sent to a model or stored.",
+    "source": "Policy",
+    "sourceOption": "{source, select, platform {Platform policy} other {Effective policy of a company, department, project, or key}}",
+    "draftHint": "Includes your unsaved changes from the other tabs.",
     "sample": "Sample text",
     "direction": "Check as",
     "directionLabel": "{direction, select, input {Prompt} output {Response} other {{direction}}}",
-    "run": "Run check",
-    "result": "{blocked, select, true {Blocked} other {{hits, plural, =0 {No matches} one {# match} other {# matches}}}}"
+    "patternsOnly": "This test detects personal data with patterns only. The redaction model runs on live requests; test it on the Personal data tab.",
+    "run": "Run test",
+    "resultTitle": "Result",
+    "outcome": "{outcome, select, guardrail {Blocked by a guardrail} pii {Blocked by the personal data policy} other {{hits, plural, =0 {Passes} one {Passes with # match} other {Passes with # matches}}}}",
+    "piiHit": "Personal data: {label}",
+    "output": "{direction, select, input {What the model receives} other {What the client receives}}",
+    "blockedText": "{direction, select, input {Checked prompt. The request is rejected and never reaches the model.} other {Checked response. The client does not receive it.}}"
   }
 }

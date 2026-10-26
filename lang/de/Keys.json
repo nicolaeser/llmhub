@@ -1,7 +1,6 @@
 {
   "title": "API-Keys",
   "subtitle": "Keys authentifizieren Anwendungen an der /api/v1-API. Jeder Key gehört zu einem Projekt oder einer Person eines Unternehmens, oder intern zu dir.",
-  "tab": "{tab, select, keys {API-Keys} templates {Modellvorlagen} other {}}",
   "create": "Schlüssel erstellen",
   "gettingStarted": {
     "title": "Erste Schritte",

@@ -1,5 +1,6 @@
 import {
   callRoute,
+  clearOverride,
   errorOf,
   gateway,
   gatewayPostRoutes,
@@ -7,6 +8,8 @@ import {
   MODEL_ROUTES,
   OTHER_POST_ROUTES,
   resetGateway,
+  setKeyOverride,
+  setOverride,
 } from "./support/gateway-harness";
 import { recordedPrisma } from "./support/recorded-prisma";
 import { setRequest } from "./support/next-headers-stub";
@@ -17,7 +20,7 @@ import { GateError } from "@/lib/gateway/errors";
 import { applyGuardrails, withTrace } from "@/lib/gateway/access/gate";
 import { defaultGuardrails } from "@/lib/gateway/safety/guardrails";
 import { defaultEntityIds } from "@/lib/gateway/safety/pii";
-import { piiOverride, requestEnterprise, resolvePii, resolvePolicies } from "@/lib/settings/enterprise";
+import { policyLayer, requestEnterprise, resolvePii, resolvePolicies } from "@/lib/settings/enterprise";
 import type { Principal } from "@/types/gateway";
 import type { GuardrailPolicy, GuardrailRule, PiiPolicy } from "@/types/guardrails";
 import type { VirtualKeyView } from "@/types/keys";
@@ -40,10 +43,17 @@ function guardLayer(name: string, pattern = name): GuardrailPolicy {
 
 const CODENAMES = guardLayer("Codenames", "Project Falcon");
 
-function keyPrincipal(policy: Omit<PiiPolicy, "detector" | "failure">): Principal {
-  const pii: PiiPolicy = { detector: "patterns", failure: "patterns", ...policy };
+let keyCount = 0;
+
+function keyPrincipal(
+  policy: Omit<PiiPolicy, "detector" | "failure"> | null,
+  guardrails: GuardrailPolicy | null = defaultGuardrails(),
+): Principal {
+  const pii: PiiPolicy | null = policy ? { detector: "patterns", failure: "patterns", ...policy } : null;
+  const keyId = `key_${(keyCount += 1)}`;
+  if (pii || guardrails) setOverride({ keyId }, { pii, guardrails });
   const key: VirtualKeyView = {
-    token_id: "key_1",
+    token_id: keyId,
     key_name: "sk-hub-abcde",
     key_alias: "test",
     user_id: "",
@@ -65,7 +75,6 @@ function keyPrincipal(policy: Omit<PiiPolicy, "detector" | "failure">): Principa
     access_windows: [],
     access_time_zone: "UTC",
     blocked: false,
-    pii,
     log_content: true,
     created_at: "",
   };
@@ -78,17 +87,25 @@ function keyPrincipal(policy: Omit<PiiPolicy, "detector" | "failure">): Principa
     memberId: "",
     models: [],
     routeLimits: {},
-    guardrails: defaultGuardrails(),
   };
 }
 
 const sample = { model: "m", messages: [{ role: "user", content: "mail ada@acme.com from 8.8.8.8" }] };
 
-test("piiOverride treats missing values as inherit and normalizes stored policies", () => {
-  assert.equal(piiOverride(null), null);
-  assert.equal(piiOverride(undefined), null);
-  assert.equal(piiOverride([]), null);
-  assert.deepEqual(piiOverride({ mode: "block", entities: ["EMAIL_ADDRESS"] }), {
+test("policyLayer treats missing parts as inherited and normalizes stored ones", () => {
+  assert.deepEqual(policyLayer({ pii: null, injection: null, secrets: null, rules: null }), {
+    pii: null,
+    injection: null,
+    secrets: null,
+    rules: null,
+  });
+  const layer = policyLayer({
+    pii: { mode: "block", entities: ["EMAIL_ADDRESS"] },
+    injection: {},
+    secrets: null,
+    rules: [],
+  });
+  assert.deepEqual(layer.pii, {
     enabled: true,
     mode: "block",
     output: true,
@@ -96,9 +113,15 @@ test("piiOverride treats missing values as inherit and normalizes stored policie
     detector: "patterns",
     failure: "patterns",
   });
-  assert.equal(piiOverride({ mode: "drop" })?.mode, "mask");
+  assert.deepEqual(layer.injection, defaultGuardrails().injection);
+  assert.equal(layer.secrets, null);
+  assert.deepEqual(layer.rules, []);
+  assert.equal(policyLayer({ pii: { mode: "drop" }, injection: null, secrets: null, rules: null }).pii?.mode, "mask");
   assert.deepEqual(
-    [piiOverride({ detector: "regex", failure: "ignore" })?.detector, piiOverride({ detector: "both", failure: "block" })?.failure],
+    [
+      policyLayer({ pii: { detector: "regex", failure: "ignore" }, injection: null, secrets: null, rules: null }).pii?.detector,
+      policyLayer({ pii: { detector: "both", failure: "block" }, injection: null, secrets: null, rules: null }).pii?.failure,
+    ],
     ["patterns", "block"],
   );
 });
@@ -169,47 +192,66 @@ test("saved entity lists from before the internal IP split let internal addresse
   );
 });
 
-test("resolvePolicies prefers the key, then the project, then the organization, then the global policy", async () => {
+test("resolvePolicies takes each part from the most specific level that sets it", async () => {
   resetGateway();
   gateway.enterprise = { pii: piiLayer("CREDIT_CARD"), guardrails: guardLayer("global") };
-  const project = { piiPolicy: piiLayer("IP_ADDRESS") as unknown, guardrailPolicy: guardLayer("project") as unknown };
-  const org = { piiPolicy: piiLayer("PHONE_NUMBER") as unknown, guardrailPolicy: guardLayer("org") as unknown };
-  recordedPrisma.handlers = {
-    project: { findUnique: () => project },
-    organization: { findUnique: () => org },
+  const caller = keyPrincipal(null, null);
+  const principal: Principal = { ...caller, teamId: "t1", key: { ...caller.key!, project_id: "p1" } };
+  const keyId = principal.key!.token_id;
+  const resolved = async () => {
+    const { pii, guardrails } = await resolvePolicies(principal);
+    return [pii.entities[0], guardrails.rules[0]?.name, guardrails.injection.enabled];
   };
-  const resolved = async (pii: PiiPolicy | null, guardrails: GuardrailPolicy | null) => {
-    const caller = keyPrincipal(PII_OFF);
-    const { pii: chosenPii, guardrails: chosenGuardrails } = await resolvePolicies({
-      ...caller,
-      key: { ...caller.key!, pii, project_id: "p1" },
-      guardrails,
-    });
-    return [chosenPii.entities[0], chosenGuardrails.rules[0]?.name];
-  };
-  assert.deepEqual(await resolved(piiLayer("EMAIL_ADDRESS"), guardLayer("key")), ["EMAIL_ADDRESS", "key"]);
-  assert.deepEqual(await resolved(piiLayer("EMAIL_ADDRESS"), null), ["EMAIL_ADDRESS", "project"]);
-  assert.deepEqual(await resolved(null, null), ["IP_ADDRESS", "project"]);
-  project.piiPolicy = null;
-  project.guardrailPolicy = null;
-  assert.deepEqual(await resolved(null, guardLayer("key")), ["PHONE_NUMBER", "key"]);
-  assert.deepEqual(await resolved(null, null), ["PHONE_NUMBER", "org"]);
-  org.piiPolicy = null;
-  org.guardrailPolicy = null;
-  assert.deepEqual(await resolved(null, null), ["CREDIT_CARD", "global"]);
+  setOverride({ orgId: "org_1" }, { pii: piiLayer("PHONE_NUMBER"), rules: guardLayer("org").rules });
+  setOverride({ teamId: "t1" }, { rules: guardLayer("team").rules });
+  setOverride({ projectId: "p1" }, { pii: piiLayer("IP_ADDRESS") });
+  setOverride({ keyId }, { injection: { enabled: true, action: "block", checks: [] } });
+  assert.deepEqual(await resolved(), ["IP_ADDRESS", "team", true]);
+  assert.deepEqual((recordedPrisma.called("policyOverride", "findMany").at(-1)?.args as { where: unknown }).where, {
+    OR: [{ keyId }, { projectId: "p1" }, { teamId: "t1" }, { orgId: "org_1" }],
+  });
+  clearOverride({ projectId: "p1" });
+  assert.deepEqual(await resolved(), ["PHONE_NUMBER", "team", true]);
+  clearOverride({ teamId: "t1" });
+  assert.deepEqual(await resolved(), ["PHONE_NUMBER", "org", true]);
+  clearOverride({ keyId });
+  assert.deepEqual(await resolved(), ["PHONE_NUMBER", "org", false]);
+  clearOverride({ orgId: "org_1" });
+  assert.deepEqual(await resolved(), ["CREDIT_CARD", "global", false]);
+  setOverride({ keyId }, { rules: [] });
+  assert.deepEqual(await resolved(), ["CREDIT_CARD", undefined, false]);
+});
+
+test("resolvePolicies for a session reads only the organization override", async () => {
+  resetGateway();
+  gateway.enterprise = { pii: piiLayer("CREDIT_CARD"), guardrails: guardLayer("global") };
+  setOverride({ orgId: "o1" }, { rules: guardLayer("org").rules });
+  const { guardrails } = await resolvePolicies({
+    actor: "u1",
+    teamId: "",
+    orgId: "o1",
+    userId: "u1",
+    memberId: "",
+    models: [],
+    routeLimits: {},
+  });
+  assert.equal(guardrails.rules[0]?.name, "org");
+  assert.deepEqual((recordedPrisma.called("policyOverride", "findMany").at(-1)?.args as { where: unknown }).where, {
+    OR: [{ orgId: "o1" }],
+  });
 });
 
 test("a traced request reads its policies and settings once", async () => {
   resetGateway();
   gateway.enterprise = { pii: piiLayer("CREDIT_CARD"), guardrails: guardLayer("global"), log_content: false };
-  const caller = keyPrincipal(PII_OFF);
-  const traced = withTrace({ ...caller, key: { ...caller.key!, pii: null }, guardrails: undefined }, "/api/v1/messages");
+  const caller = keyPrincipal(null, null);
+  const traced = withTrace(caller, "/api/v1/messages");
   const policies = await resolvePolicies(traced);
   assert.equal((await resolvePii(traced)).entities[0], "CREDIT_CARD");
   assert.equal((await requestEnterprise(traced)).log_content, false);
   assert.equal(await resolvePolicies({ ...traced, pool: "subscription" }), policies);
   assert.equal(recordedPrisma.called("setting").length, 1);
-  assert.equal(recordedPrisma.called("organization").length, 1);
+  assert.equal(recordedPrisma.called("policyOverride").length, 1);
   gateway.enterprise = { pii: piiLayer("IP_ADDRESS") };
   const untraced = { ...traced, trace: undefined };
   assert.equal((await resolvePii(untraced)).entities[0], "IP_ADDRESS");
@@ -227,7 +269,7 @@ test("the guardrail sweep covers every gateway POST route", async () => {
 test("every gateway model route applies the caller's guardrails before contacting a provider", async () => {
   for (const route of MODEL_ROUTES.filter((candidate) => !UNSCREENED_ROUTES.has(candidate.path))) {
     resetGateway();
-    gateway.key = { ...gateway.key, guardrailPolicy: CODENAMES };
+    setKeyOverride({ guardrails: CODENAMES });
     const blocked = await errorOf(await callRoute(route, route.body("status of Project Falcon")));
     assert.equal(blocked.status, 400, route.path);
     assert.equal(blocked.message, BLOCKED, route.path);
@@ -241,7 +283,7 @@ test("every gateway model route applies the caller's guardrails before contactin
 test("batch lines apply the batch owner's guardrails", async () => {
   const { runBatchLine } = await import("@/lib/gateway/endpoints/batches");
   resetGateway();
-  const owner = { ...keyPrincipal(PII_OFF), guardrails: CODENAMES };
+  const owner = keyPrincipal(PII_OFF, CODENAMES);
   const line = await runBatchLine(owner, "/v1/chat/completions", {
     model: MODEL,
     messages: [{ role: "user", content: "status of Project Falcon" }],
@@ -282,11 +324,10 @@ test("the playground applies the signed-in user's organization guardrails", asyn
         budgetDuration: "",
         spendResetAt: null,
         createdAt: new Date(0),
-        piiPolicy: null,
-        guardrailPolicy: CODENAMES,
       }),
     },
   };
+  setOverride({ orgId: "o1" }, { guardrails: CODENAMES });
   const res = await POST(
     new Request("http://hub.local/internal-api/playground/chat", {
       method: "POST",

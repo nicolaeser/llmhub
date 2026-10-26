@@ -86,34 +86,49 @@ test("the platform scope still saves the global PII policy", async () => {
 });
 
 test("guardrail overrides in the company scope only list and edit that company", async () => {
-  const { loadGuardrails, savePiiOverride } = await import("@/lib/settings/guardrail-policies");
+  const { loadGuardrails, savePolicyOverride } = await import("@/lib/settings/guardrail-policies");
   recordedPrisma.reset();
   const view = await runAsPrincipal(companyView, () => loadGuardrails());
   assert.equal(view.platform, false);
   assert.deepEqual(recordedPrisma.called("organization", "findMany")[0]?.args, {
     where: { id: COMPANY_ID },
-    select: { id: true, alias: true, piiPolicy: true, guardrailPolicy: true },
+    select: { id: true, alias: true },
     orderBy: { alias: "asc" },
   });
+  assert.deepEqual((recordedPrisma.called("team", "findMany")[0]?.args as { where: unknown }).where, { orgId: COMPANY_ID });
   assert.deepEqual((recordedPrisma.called("project", "findMany")[0]?.args as { where: unknown }).where, { orgId: COMPANY_ID });
   assert.deepEqual((recordedPrisma.called("virtualKey", "findMany")[0]?.args as { where: unknown }).where, { orgId: COMPANY_ID });
+  assert.deepEqual((recordedPrisma.called("policyOverride", "findMany")[0]?.args as { where: unknown }).where, {
+    OR: [
+      { orgId: COMPANY_ID },
+      { team: { orgId: COMPANY_ID } },
+      { project: { orgId: COMPANY_ID } },
+      { key: { orgId: COMPANY_ID } },
+    ],
+  });
 
   recordedPrisma.reset({
-    organization: { findUnique: () => ({ id: "orgother001", alias: "Other", piiPolicy: null, guardrailPolicy: null }) },
-    project: { findUnique: () => ({ id: "p1", alias: "Bot", orgId: "orgother001", piiPolicy: null, guardrailPolicy: null }) },
+    organization: { findUnique: () => ({ id: "orgother001", alias: "Other" }) },
+    team: { findUnique: () => ({ id: "t1", alias: "Ops", orgId: "orgother001", org: { alias: "Other" } }) },
+    project: {
+      findUnique: () => ({ id: "p1", alias: "Bot", orgId: "orgother001", teamId: null, org: { alias: "Other" }, team: null }),
+    },
   });
-  for (const scope of ["org", "project"] as const) {
+  for (const [scope, id] of [["org", "orgother001"], ["team", "t1"], ["project", "p1"]] as const) {
     await assert.rejects(
-      runAsPrincipal(companyView, () => savePiiOverride({ scope, id: scope === "org" ? "orgother001" : "p1", policy: PII })),
+      runAsPrincipal(companyView, () =>
+        savePolicyOverride({ scope, id, pii: PII, injection: null, secrets: null, rules: null }),
+      ),
       /NOT_FOUND/,
       scope,
     );
   }
-  assert.equal(recordedPrisma.called("organization", "update").length + recordedPrisma.called("project", "update").length, 0);
+  assert.equal(recordedPrisma.called("policyOverride", "upsert").length, 0);
 
   recordedPrisma.reset();
   assert.equal((await runAsPrincipal(platform, () => loadGuardrails())).platform, true);
   assert.deepEqual((recordedPrisma.called("organization", "findMany")[0]?.args as { where: unknown }).where, {});
+  assert.deepEqual((recordedPrisma.called("policyOverride", "findMany")[0]?.args as { where: unknown }).where, {});
 });
 
 test("the usage page hides markups in the company scope and tells the overview which scope it shows", async () => {

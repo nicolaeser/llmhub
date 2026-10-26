@@ -18,19 +18,19 @@ export default function PolicyChips({
 }) {
   const t = useTranslations("Providers");
   const items = [
-    policy.zdr ? { key: "zdr", color: "success" as const, label: t("policy.zdrChip") } : null,
+    policy.zdr ? { key: "zdr", color: "success" as const, label: t("dataHandling.zdrChip") } : null,
     policy.region
-      ? { key: "region", color: "default" as const, label: t("policy.regionOption", { region: policy.region }) }
+      ? { key: "region", color: "default" as const, label: t("dataHandling.regionOption", { region: policy.region }) }
       : null,
     !policy.zdr && policy.retentionDays !== null
       ? {
           key: "retention",
           color: "default" as const,
-          label: t("policy.retentionChip", { days: policy.retentionDays }),
+          label: t("dataHandling.retentionChip", { days: policy.retentionDays }),
         }
       : null,
     !policy.zdr && policy.noTraining
-      ? { key: "training", color: "default" as const, label: t("policy.noTrainingChip") }
+      ? { key: "training", color: "default" as const, label: t("dataHandling.noTrainingChip") }
       : null,
   ].filter((item) => item !== null);
 

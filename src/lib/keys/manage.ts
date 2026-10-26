@@ -4,7 +4,7 @@ import prisma from "@/lib/db/prisma";
 import { digest, randomToken } from "@/lib/crypto";
 import { createKeySchema, updateKeySchema } from "@/schemas/keys";
 import type { ZodType } from "zod";
-import { requireActor, requirePermission } from "@/lib/auth/guards";
+import { requirePermission } from "@/lib/auth/guards";
 import { hasPerm, PERMISSIONS } from "@/lib/auth/permissions";
 import { companyOf, inCompany, keyVisibleTo, setupLinks, spendScope } from "@/lib/auth/scope";
 import { managesMcpRules } from "@/lib/mcp/scope";
@@ -17,7 +17,7 @@ import { isInternalKey } from "@/lib/gateway/access/key-tenancy";
 import { loadModelPolicies, templateRuleSelect } from "@/lib/gateway/access/model-access";
 import { templateModels, templateRulesOf } from "@/lib/gateway/access/model-policy";
 import type { AuthenticatedSession } from "@/types/auth";
-import type { KeyChoices, KeyDetail, KeyTab } from "@/types/keys";
+import type { KeyChoices, KeyDetail } from "@/types/keys";
 
 async function keyBinding(
   session: AuthenticatedSession,
@@ -210,14 +210,6 @@ export async function revokeKey(id: string) {
     after: { alias: existing.keyAlias, prefix: existing.prefix },
   });
   return { id: existing.id };
-}
-
-export async function loadKeyTabs(): Promise<KeyTab[]> {
-  const session = await requireActor();
-  const tabs: KeyTab[] = [];
-  if (hasPerm(session.permissions, PERMISSIONS.KEYS_READ)) tabs.push("keys");
-  if (readsTemplates(session)) tabs.push("templates");
-  return tabs;
 }
 
 export async function keyOptions(session: AuthenticatedSession): Promise<KeyChoices> {

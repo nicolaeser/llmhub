@@ -13,6 +13,7 @@ import {
   setModelGroupEnabled,
   updateModelGroup,
 } from "@/lib/models/groups";
+import { createTemplate, deleteTemplate, loadTemplates, updateTemplate } from "@/lib/models/templates";
 import {
   catalogEntryActiveSchema,
   catalogEntryAssignSchema,
@@ -106,4 +107,20 @@ export async function assignCatalogEntryAction(raw: unknown) {
     await assignEntry(session.user.id, ref, alias);
     return view(session);
   });
+}
+
+export async function loadTemplatesAction(...args: Parameters<typeof loadTemplates>) {
+  return runAction(() => loadTemplates(...args));
+}
+
+export async function createTemplateAction(...args: Parameters<typeof createTemplate>) {
+  return runAction(() => createTemplate(...args));
+}
+
+export async function updateTemplateAction(...args: Parameters<typeof updateTemplate>) {
+  return runAction(() => updateTemplate(...args));
+}
+
+export async function deleteTemplateAction(...args: Parameters<typeof deleteTemplate>) {
+  return runAction(() => deleteTemplate(...args));
 }

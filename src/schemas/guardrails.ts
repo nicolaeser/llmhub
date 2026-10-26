@@ -19,9 +19,18 @@ export const PII_TIMEOUT_MAX_SECONDS = 120;
 export const PII_TIMEOUT_DEFAULT_SECONDS = 30;
 export const MAX_PII_TEST_TEXT = 4_000;
 
-export const policyScopeSchema = z.enum(["org", "project", "key"]);
+export const POLICY_SCOPES = ["org", "team", "project", "key"] as const;
+
+export const POLICY_SECTIONS = ["pii", "injection", "secrets", "rules"] as const;
+
+export const policyScopeSchema = z.enum(POLICY_SCOPES);
 
 const targetId = z.string().trim().min(1).max(64);
+
+export const policyRefSchema = z.object({
+  scope: policyScopeSchema,
+  id: targetId,
+});
 
 export const piiPolicySchema = z.object({
   enabled: z.boolean(),
@@ -40,12 +49,6 @@ export const piiDetectorSettingsSchema = z.object({
 export const piiModelTestSchema = z.object({
   model: z.string().trim().min(1).max(200),
   text: z.string().trim().min(1).max(MAX_PII_TEST_TEXT),
-});
-
-export const piiOverrideSchema = z.object({
-  scope: policyScopeSchema,
-  id: targetId,
-  policy: piiPolicySchema.nullable(),
 });
 
 export const guardrailRuleSchema = z
@@ -68,39 +71,48 @@ export const guardrailRuleSchema = z
     });
   });
 
-export const guardrailPolicySchema = z
-  .object({
-    injection: z.object({
-      enabled: z.boolean(),
-      action: z.enum(["block", "flag"]),
-      checks: z.array(z.enum(INJECTION_CHECKS)).max(INJECTION_CHECKS.length),
-    }),
-    secrets: z.object({
-      enabled: z.boolean(),
-      action: z.enum(GUARDRAIL_ACTIONS),
-      entities: z
-        .array(z.string().refine((id) => SECRET_ENTITIES.includes(id)))
-        .max(SECRET_ENTITIES.length),
-    }),
-    rules: z.array(guardrailRuleSchema).max(MAX_RULES),
-  })
-  .superRefine((policy, ctx) => {
+export const injectionPolicySchema = z.object({
+  enabled: z.boolean(),
+  action: z.enum(["block", "flag"]),
+  checks: z.array(z.enum(INJECTION_CHECKS)).max(INJECTION_CHECKS.length),
+});
+
+export const secretsPolicySchema = z.object({
+  enabled: z.boolean(),
+  action: z.enum(GUARDRAIL_ACTIONS),
+  entities: z
+    .array(z.string().refine((id) => SECRET_ENTITIES.includes(id)))
+    .max(SECRET_ENTITIES.length),
+});
+
+export const guardrailRulesSchema = z
+  .array(guardrailRuleSchema)
+  .max(MAX_RULES)
+  .superRefine((rules, ctx) => {
     const seen = new Set<string>();
-    policy.rules.forEach((rule, index) => {
+    rules.forEach((rule, index) => {
       const name = rule.name.trim().toLowerCase();
-      if (seen.has(name)) ctx.addIssue({ code: "custom", path: ["rules", index, "name"], message: "duplicate" });
+      if (seen.has(name)) ctx.addIssue({ code: "custom", path: [index, "name"], message: "duplicate" });
       seen.add(name);
     });
   });
 
-export const guardrailOverrideSchema = z.object({
-  scope: policyScopeSchema,
-  id: targetId,
-  policy: guardrailPolicySchema.nullable(),
+export const guardrailPolicySchema = z.object({
+  injection: injectionPolicySchema,
+  secrets: secretsPolicySchema,
+  rules: guardrailRulesSchema,
 });
 
-export const guardrailTestSchema = z.object({
+export const policyOverrideSchema = policyRefSchema.extend({
+  pii: piiPolicySchema.nullable(),
+  injection: injectionPolicySchema.nullable(),
+  secrets: secretsPolicySchema.nullable(),
+  rules: guardrailRulesSchema.nullable(),
+});
+
+export const policyTestSchema = z.object({
   text: z.string().max(MAX_TEST_TEXT),
   direction: z.enum(["input", "output"]),
-  policy: guardrailPolicySchema,
+  pii: piiPolicySchema,
+  guardrails: guardrailPolicySchema,
 });

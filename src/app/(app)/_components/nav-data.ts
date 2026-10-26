@@ -23,14 +23,7 @@ export const NAV: NavSection[] = [
     items: [
       { href: "/companies", labelKey: "items.companies", scope: "platform", icon: Building2, permission: PERMISSIONS.TENANCY_READ },
       { href: "/companies", labelKey: "items.company", scope: "company", icon: Building2, permission: PERMISSIONS.TENANCY_READ },
-      {
-        href: "/keys",
-        labelKey: "items.keys",
-        scope: "platform",
-        icon: KeyRound,
-        permission: [PERMISSIONS.KEYS_READ, PERMISSIONS.MODELS_READ],
-      },
-      { href: "/keys", labelKey: "items.keys", scope: "company", icon: KeyRound, permission: PERMISSIONS.KEYS_READ },
+      { href: "/keys", labelKey: "items.keys", scope: "both", icon: KeyRound, permission: PERMISSIONS.KEYS_READ },
       {
         href: "/users",
         labelKey: "items.users",

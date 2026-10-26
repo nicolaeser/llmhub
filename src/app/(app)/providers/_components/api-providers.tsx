@@ -1,15 +1,16 @@
 "use client";
 
 import { Button, Chip, Table } from "@heroui/react";
-import { Download, Pause, Pencil, Play, Plug, Plus, Unplug } from "lucide-react";
+import { Boxes, CircleCheck, CirclePause, Download, KeyRound, Pause, Pencil, Play, Plug, Plus, Unplug } from "lucide-react";
 import { useFormatter, useTranslations } from "next-intl";
 import EmptyState from "@/components/console/empty-state";
 import IconTile from "@/components/console/icon-tile";
 import RowCard, { RowCards, TABLE_FROM_LG } from "@/components/console/row-cards";
+import StatCard from "@/components/console/stat-card";
 import { InternalBadge } from "@/components/console/subscription-badge";
 import { kindIcon } from "@/components/providers/kind-icons";
 import { PROVIDER_CATALOG } from "@/lib/gateway/upstreams/provider-kinds";
-import type { ProviderListActions, ProviderView } from "@/types/providers";
+import type { ProviderListActions, ProviderPresetUsage, ProviderView } from "@/types/providers";
 import PolicyChips from "./policy-chips";
 import RowMenu, { type RowMenuItem } from "./row-menu";
 import { byProviderOrder, providerMenuActions, providerRow, type ProviderMenuAction } from "./provider-rows";
@@ -25,11 +26,13 @@ const MENU_ICONS = {
 
 export default function ApiProviders({
   rows,
+  presets,
   actions,
   canManage,
   onAdd,
 }: {
   rows: ProviderView[];
+  presets: ProviderPresetUsage | null;
   actions: ProviderListActions;
   canManage: boolean;
   onAdd: () => void;
@@ -37,7 +40,7 @@ export default function ApiProviders({
   const t = useTranslations("Providers");
   const tCommon = useTranslations("Common");
   const format = useFormatter();
-  const rowActions = useProviderRowActions({ onReplace: actions.replace, onRemove: actions.remove });
+  const rowActions = useProviderRowActions({ presets, onReplace: actions.replace, onRemove: actions.remove });
 
   if (rows.length === 0) {
     return canManage ? (
@@ -117,8 +120,19 @@ export default function ApiProviders({
     return <span className="text-sm tabular-nums text-foreground">{format.number(providerRow(row).models)}</span>;
   }
 
-  function policy(row: ProviderView) {
+  function dataHandling(row: ProviderView) {
     return <PolicyChips policy={row.policy} fallback={<span className="text-sm text-muted">{tCommon("none")}</span>} />;
+  }
+
+  function presetUsage(row: ProviderView) {
+    const names = presets?.[row.id] ?? [];
+    if (!names.length) return <span className="text-sm text-muted">{t("presets.usage", { count: 0 })}</span>;
+    return (
+      <div className="min-w-0 space-y-1">
+        <p className="text-sm tabular-nums text-foreground">{t("presets.usage", { count: names.length })}</p>
+        <p className="line-clamp-2 text-xs break-words text-muted">{format.list(names)}</p>
+      </div>
+    );
   }
 
   function badges(row: ProviderView) {
@@ -126,9 +140,38 @@ export default function ApiProviders({
   }
 
   const sorted = [...rows].sort(byProviderOrder);
+  const summaries = rows.map(providerRow);
+  const active = summaries.filter((row) => row.active).length;
+  const missing = summaries.filter((row) => row.credential === "missing").length;
+  const models = summaries.reduce((total, row) => total + row.models, 0);
+  const showPresets = presets !== null;
 
   return (
-    <>
+    <div className="space-y-6">
+      <p className="max-w-3xl text-sm text-muted">{t("overview.intro")}</p>
+      <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+        <StatCard
+          icon={CircleCheck}
+          tone={active > 0 ? "success" : "neutral"}
+          label={t("overview.active")}
+          value={format.number(active)}
+          hint={t("overview.total", { count: rows.length })}
+        />
+        <StatCard
+          icon={CirclePause}
+          tone="neutral"
+          label={t("overview.paused")}
+          value={format.number(rows.length - active)}
+        />
+        <StatCard
+          icon={KeyRound}
+          tone={missing > 0 ? "warning" : "neutral"}
+          label={t("overview.missing")}
+          value={format.number(missing)}
+          hint={missing > 0 ? t("overview.missingHint") : undefined}
+        />
+        <StatCard icon={Boxes} tone="accent" label={t("overview.models")} value={format.number(models)} />
+      </div>
       <RowCards label={t("tabs", { tab: "api" })}>
         {sorted.map((row) => (
           <RowCard
@@ -149,19 +192,21 @@ export default function ApiProviders({
             }
             details={[
               { label: t("columns.models"), value: modelCount(row) },
-              { label: t("columns.policy"), value: policy(row), wide: true },
+              ...(showPresets ? [{ label: t("columns.presets"), value: presetUsage(row) }] : []),
+              { label: t("columns.dataHandling"), value: dataHandling(row), wide: true },
             ]}
           />
         ))}
       </RowCards>
       <Table aria-label={t("tabs", { tab: "api" })} className={TABLE_FROM_LG}>
         <Table.ScrollContainer>
-          <Table.Content aria-label={t("tabs", { tab: "api" })} className="min-w-[48rem]">
+          <Table.Content aria-label={t("tabs", { tab: "api" })} className="min-w-[56rem]">
             <Table.Header>
               <Table.Column isRowHeader>{t("columns.provider")}</Table.Column>
               <Table.Column>{t("columns.credential")}</Table.Column>
               <Table.Column>{t("columns.models")}</Table.Column>
-              <Table.Column>{t("columns.policy")}</Table.Column>
+              <Table.Column>{t("columns.dataHandling")}</Table.Column>
+              {showPresets ? <Table.Column>{t("columns.presets")}</Table.Column> : null}
               <Table.Column>{tCommon("status")}</Table.Column>
               {canManage ? <Table.Column>{tCommon("actions")}</Table.Column> : null}
             </Table.Header>
@@ -182,7 +227,12 @@ export default function ApiProviders({
                   </Table.Cell>
                   <Table.Cell>{credentialChip(row)}</Table.Cell>
                   <Table.Cell>{modelCount(row)}</Table.Cell>
-                  <Table.Cell>{policy(row)}</Table.Cell>
+                  <Table.Cell>{dataHandling(row)}</Table.Cell>
+                  {showPresets ? (
+                    <Table.Cell>
+                      <div className="max-w-56">{presetUsage(row)}</div>
+                    </Table.Cell>
+                  ) : null}
                   <Table.Cell>{statusChip(row)}</Table.Cell>
                   {canManage ? <Table.Cell>{menu(row)}</Table.Cell> : null}
                 </Table.Row>
@@ -192,6 +242,6 @@ export default function ApiProviders({
         </Table.ScrollContainer>
       </Table>
       {canManage ? rowActions.dialogs : null}
-    </>
+    </div>
   );
 }

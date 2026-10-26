@@ -66,7 +66,7 @@ let orgSeq = 0;
 function freshOrg(labelKeys: string[]): string {
   orgSeq += 1;
   const id = `org_labels_${orgSeq}`;
-  orgs.set(id, { id, labelKeys, piiPolicy: null, guardrailPolicy: null });
+  orgs.set(id, { id, labelKeys });
   return id;
 }
 
@@ -94,7 +94,6 @@ function keyView(): VirtualKeyView {
     access_windows: [],
     access_time_zone: "UTC",
     blocked: false,
-    pii: null,
     log_content: true,
     created_at: "",
   };

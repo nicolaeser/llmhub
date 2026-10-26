@@ -1,12 +1,69 @@
 {
-  "title": "Guardrails",
-  "subtitle": "Prompts und Antworten auf personenbezogene Daten, verbotene Inhalte, Prompt-Injection und geleakte Secrets prüfen.",
-  "companySubtitle": "Überschreibungen für dieses Unternehmen, seine Projekte und Keys. Alles andere folgt der Plattform-Richtlinie.",
-  "companyNotice": "Die oben zusammengefasste Plattform-Richtlinie gilt für dieses Unternehmen, solange keine Überschreibung unten sie ersetzt. Ändern kannst du sie im Plattform-Bereich.",
-  "tabs": "{tab, select, pii {PII} content {Regeln und Prüfungen} other {{tab}}}",
-  "save": "Richtlinie speichern",
-  "enabledState": "{enabled, select, true {Aktiv} other {Pausiert}}",
-  "policy": "PII-Richtlinie",
+  "title": "Leitplanken",
+  "subtitle": "Prompts und Antworten auf personenbezogene Daten, Prompt-Injection, geleakte Secrets und eigene Regeln prüfen. Unternehmen, Abteilungen, Projekte und API-Keys können jeden Bereich selbst festlegen.",
+  "companySubtitle": "Einstellungen für dieses Unternehmen, seine Abteilungen, Projekte und API-Keys. Was sie offen lassen, folgt der Plattform-Richtlinie.",
+  "companyNotice": "Die Werte oben sind die Plattform-Richtlinie. Sie gelten für dieses Unternehmen überall dort, wo keine Überschreibung unten einen Bereich selbst festlegt. Ändern kannst du sie im Plattform-Bereich.",
+  "tabs": "{tab, select, overview {Übersicht} pii {Personenbezogene Daten} content {Inhaltsprüfungen} test {Testen} other {{tab}}}",
+  "save": "Richtlinie für personenbezogene Daten speichern",
+  "section": "{section, select, pii {Personenbezogene Daten} injection {Prompt-Injection} secrets {Secrets in Antworten} rules {Eigene Regeln} other {{section}}}",
+  "sectionState": "{state, select, off {Aus} on {An} mask {Maskieren} block {Blockieren} restore {Wiederherstellen} flag {Nur markieren} other {{state}}}",
+  "sectionDetail": "{section, select, pii {{count, plural, =0 {Standard-Entitäten} one {# Entität} other {# Entitäten}}} injection {{count, plural, =0 {Alle Prüfungen} one {# Prüfung} other {# Prüfungen}}} secrets {{count, plural, =0 {Alle Erkennungen} one {# Erkennung} other {# Erkennungen}}} other {}}",
+  "scopeLabel": "{scope, select, platform {Plattform} org {Unternehmen} team {Abteilung} project {Projekt} key {API-Key} other {{scope}}}",
+  "source": "{scope, select, platform {Plattform-Richtlinie} org {Unternehmen {alias}} team {Abteilung {alias}} project {Projekt {alias}} key {API-Key {alias}} other {{alias}}}",
+  "unknownTarget": "für dich nicht sichtbar",
+  "inherited": "Geerbt",
+  "target": {
+    "scope": "Ebene"
+  },
+  "overview": {
+    "platformValue": "Plattform-Richtlinie"
+  },
+  "chain": {
+    "title": "So werden Einstellungen vererbt",
+    "hint": "Jeder Bereich wird einzeln vererbt. Eine Anfrage übernimmt jeden Bereich von der spezifischsten Ebene, die ihn festlegt: zuerst ihr API-Key, dann ihr Projekt, ihre Abteilung und ihr Unternehmen. Bereiche, die keine Ebene festlegt, kommen aus der Plattform-Richtlinie.",
+    "step": "{n, number}",
+    "levelHint": "{level, select, platform {Die Grundlage für jede Anfrage.} org {Gilt für jede Anfrage eines Unternehmens.} team {Gilt für die Projekte und Personen einer Abteilung.} project {Gilt für die API-Keys eines Projekts.} key {Gilt für einen einzelnen API-Key.} other {}}",
+    "always": "Gilt immer",
+    "count": "{count, plural, =0 {Keine Überschreibungen} one {# Überschreibung} other {# Überschreibungen}}"
+  },
+  "overrides": {
+    "title": "Überschreibungen",
+    "hint": "Unternehmen, Abteilungen, Projekte und API-Keys, die Bereiche selbst festlegen. Geerbte Bereiche folgen der Ebene darüber.",
+    "add": "Überschreibung hinzufügen",
+    "emptyTitle": "Noch keine Überschreibungen",
+    "emptyHint": "Jede Anfrage folgt der Plattform-Richtlinie. Mit einer Überschreibung gibst du einem Unternehmen, einer Abteilung, einem Projekt oder einem API-Key eigene Einstellungen für einzelne Bereiche.",
+    "target": "Gilt für",
+    "updated": "Geändert",
+    "inspect": "Anzeigen, was für {alias} gilt",
+    "remove": "Überschreibung entfernen",
+    "removeFor": "Überschreibung für {alias} entfernen",
+    "removeConfirm": "Überschreibung für {alias} entfernen?",
+    "removeConfirmHint": "Alle Bereiche folgen danach wieder der Ebene darüber.",
+    "saved": "{mode, select, removed {Überschreibung entfernt} other {Überschreibung gespeichert}}"
+  },
+  "inspector": {
+    "title": "Wirksame Richtlinie",
+    "hint": "Wähle ein Unternehmen, eine Abteilung, ein Projekt oder einen API-Key, um zu sehen, was für seine Anfragen gilt und woher jeder Bereich kommt.",
+    "empty": "Wähle ein Ziel, um seine wirksame Richtlinie zu sehen.",
+    "own": "Hier festgelegt",
+    "from": "Aus {source}",
+    "edit": "{mode, select, edit {Überschreibung bearbeiten} other {Überschreibung hinzufügen}}"
+  },
+  "dialog": {
+    "title": "{mode, select, edit {Überschreibung bearbeiten} other {Überschreibung hinzufügen}}",
+    "hint": "Schalte die Bereiche ein, die dieses Ziel selbst festlegt. Alle anderen folgen weiter der Ebene darüber, spätere Änderungen an der Plattform erreichen sie also weiterhin.",
+    "setHere": "Hier festlegen",
+    "setHereFor": "{section, select, pii {Personenbezogene Daten} injection {Prompt-Injection} secrets {Secrets in Antworten} rules {Eigene Regeln} other {{section}}} hier festlegen",
+    "custom": "{section, select, rules {Diese Regeln ersetzen die geerbten. Startet mit einer Kopie davon.} other {Startet mit einer Kopie der geerbten Einstellung.}}",
+    "inherited": "Geerbt von {source}",
+    "entities": "Entitäten: {count, plural, =0 {Standardauswahl} other {# ausgewählt}}",
+    "clearing": "Hier ist kein Bereich mehr festgelegt, deshalb entfernt Speichern die Überschreibung.",
+    "save": "Überschreibung speichern"
+  },
+  "pii": {
+    "title": "Plattform-Richtlinie für personenbezogene Daten",
+    "hint": "Gilt für jede Anfrage, sofern ihr API-Key, ihr Projekt, ihre Abteilung oder ihr Unternehmen personenbezogene Daten nicht selbst festlegt."
+  },
   "enable": "PII in Prompts schwärzen",
   "enableHint": "Gilt für Text in Chat, Completions, Messages, Responses, Batches, Embeddings, Moderation, Bild-Prompts, Sprachausgabe-Eingaben und Playground. Hochgeladene Dateien und Audio werden nicht geprüft.",
   "mode": "Wenn PII gefunden wird",
@@ -25,7 +82,7 @@
   "modelOnly": "Modell",
   "model": {
     "title": "Schwärzungsmodell",
-    "description": "Gilt für jede Richtlinie, auch für Überschreibungen, deren Erkennung das Modell nutzt. Secrets erreichen es nie.",
+    "description": "Gilt für jede Richtlinie, deren Erkennung das Modell nutzt, auch für Überschreibungen. Secrets erreichen es nie.",
     "label": "Modell",
     "hint": "{configured, select, true {LLMHUB_REDACTOR_URL stellt den Alias pii-tracer bereit.} other {Wähle einen internen Alias, der das Token-Classification-Protokoll spricht, oder setze LLMHUB_REDACTOR_URL.}}",
     "none": "Keines",
@@ -46,55 +103,9 @@
   "groupTag": "{label} ({selected, number}/{total, number})",
   "selectAll": "Alle auswählen",
   "selectNone": "Keine auswählen",
-  "tester": "Live-Tester",
-  "testerHint": "Verwendet die gespeicherte globale Richtlinie.",
-  "redact": "Beispiel schwärzen",
-  "saved": "PII-Richtlinie gespeichert",
-  "policyHint": "Gilt für jede Anfrage, sofern ihr API-Key, ihr Projekt oder ihr Unternehmen keine Überschreibung hat.",
+  "saved": "Richtlinie für personenbezogene Daten gespeichert",
   "entitiesHint": "Ohne Auswahl gilt die Standardauswahl.",
-  "overrides": "Überschreibungen",
-  "overridesHint": "Gib einem Unternehmen, einem Projekt oder einem einzelnen API-Key eine eigene Richtlinie. Für jede Anfrage gilt genau eine Richtlinie, gewählt in dieser Reihenfolge:",
-  "overridesEmpty": "Noch keine Überschreibungen. Jede Anfrage nutzt die globale Richtlinie.",
-  "addOverride": "Überschreibung hinzufügen",
-  "scope": "Gilt für",
-  "scopeLabel": "{scope, select, org {Unternehmen} project {Projekt} key {API-Key} other {{scope}}}",
-  "overrideTarget": "{scope, select, org {Unternehmen} project {Projekt} key {API-Key} other {{scope}}}: {alias}",
-  "overrideTitle": "{mode, select, edit {Überschreibung bearbeiten} other {Überschreibung hinzufügen}}",
-  "overrideHint": "Diese Richtlinie ersetzt die geerbte für das gewählte Unternehmen, Projekt oder den API-Key vollständig: Modus, Schwärzung der Ausgabe, Erkennung und Entitäten.",
-  "saveOverride": "Überschreibung speichern",
-  "overrideSaved": "{mode, select, removed {Überschreibung entfernt} other {Überschreibung gespeichert}}",
-  "removeOverride": "Überschreibung entfernen",
-  "removeConfirm": "Überschreibung für {alias} entfernen?",
-  "removeConfirmHint": "Anfragen nutzen danach wieder die geerbte Richtlinie.",
-  "modeState": "{state, select, mask {Maskieren} block {Blockieren} restore {Wiederherstellen} other {Aus}}",
-  "entityCount": "{count, plural, =0 {Standardauswahl} one {# Entität} other {# Entitäten}}",
-  "outputState": "{output, select, true {Geschwärzt} other {Unverändert}}",
-  "columns": {
-    "name": "Name",
-    "output": "Modellausgabe"
-  },
-  "logsHint": "Request-Logs markieren jede Entität, die diese Richtlinie in Prompts und Antworten findet, und auch die gespeicherten Log-Inhalte sind maskiert.",
-  "precedence": {
-    "title": "Reihenfolge der Richtlinien",
-    "number": "{n, number}",
-    "key": {
-      "title": "Überschreibung des API-Keys",
-      "hint": "Hat der API-Key der Anfrage eine Überschreibung, gilt nur diese. Überschreibungen von Projekt und Unternehmen werden dann nicht beachtet."
-    },
-    "project": {
-      "title": "Überschreibung des Projekts",
-      "hint": "Sonst gilt die Überschreibung des Projekts, zu dem der Key gehört."
-    },
-    "org": {
-      "title": "Überschreibung des Unternehmens",
-      "hint": "Sonst gilt die Überschreibung des Unternehmens, zu dem der Key gehört."
-    },
-    "global": {
-      "title": "Globale Richtlinie",
-      "hint": "Sonst gilt die globale Richtlinie oben in diesem Tab."
-    },
-    "replace": "Eine Überschreibung ersetzt die geerbte Richtlinie vollständig, also Modus, Schwärzung der Ausgabe, Erkennung und Entitäten. Ohne ausgewählte Entitäten gilt die Standardauswahl."
-  },
+  "logsHint": "Request-Logs markieren jede gefundene Entität in Prompts und Antworten, und gespeicherte Log-Inhalte bleiben maskiert.",
   "actionLabel": "{action, select, block {Blockieren} mask {Maskieren} flag {Nur markieren} other {{action}}}",
   "actionHint": "Blockieren lehnt Prompts mit 400 guardrail_blocked ab und hält Antworten zurück. Maskieren ersetzt den Treffer. Nur markieren lässt ihn durch und vermerkt ihn im Request-Log.",
   "hitLabel": "{kind, select, rule {Regel} injection {Injection} secret {Secret} other {Treffer}}: {label}",
@@ -118,8 +129,8 @@
     "entitiesHint": "Ohne Auswahl laufen alle Erkennungen."
   },
   "rules": {
-    "title": "Denylists und Regex-Regeln",
-    "hint": "Eigene Begriffe oder Muster in Prompts, Antworten oder beidem finden.",
+    "title": "Eigene Regeln",
+    "hint": "Denylists und reguläre Ausdrücke, die eigene Begriffe oder Muster in Prompts, Antworten oder beidem finden.",
     "add": "Regel hinzufügen",
     "empty": "Noch keine Regeln.",
     "name": "Name",
@@ -137,24 +148,26 @@
     "count": "{count, plural, =0 {Keine Regeln} one {# Regel} other {# Regeln}}"
   },
   "content": {
-    "policy": "Globale Guardrails",
-    "policyHint": "Gelten für jede Anfrage, sofern ihr API-Key, ihr Projekt oder ihr Unternehmen keine Überschreibung hat.",
-    "saved": "Guardrails gespeichert",
+    "save": "Inhaltsprüfungen speichern",
+    "saved": "Inhaltsprüfungen gespeichert",
     "logsHint": "Request-Logs listen jeden Treffer in Prompts und Antworten. Eine blockierte Antwort endet mit dem Finish-Reason content_filter (Stop-Reason refusal bei Messages), und maskierter Text bleibt auch in gespeicherten Log-Inhalten maskiert.",
-    "streamHint": "Streams werden Chunk für Chunk mit kurzem Rückblick geprüft. Ein blockierter Stream endet beim Treffer, Text davor hat den Client also schon erreicht. Maskiert werden nur Treffer innerhalb eines Chunks.",
-    "overridesHint": "Gib einem Unternehmen, einem Projekt oder einem einzelnen API-Key eigene Guardrails. Für jede Anfrage gilt genau ein Satz, gewählt in dieser Reihenfolge:",
-    "overridesEmpty": "Noch keine Überschreibungen. Jede Anfrage nutzt die globalen Guardrails.",
-    "overrideHint": "Diese Guardrails ersetzen die geerbten für das gewählte Unternehmen, Projekt oder den API-Key vollständig: Prompt-Injection, Secret-Prüfung und alle Regeln.",
-    "replace": "Eine Überschreibung ersetzt die geerbten Guardrails vollständig. Regeln werden nicht zusammengeführt, übernimm also die Regeln, die weiter gelten sollen.",
-    "state": "{enabled, select, true {{action, select, block {Blockieren} mask {Maskieren} flag {Nur markieren} other {An}}} other {Aus}}"
+    "streamHint": "Streams werden Chunk für Chunk mit kurzem Rückblick geprüft. Ein blockierter Stream endet beim Treffer, Text davor hat den Client also schon erreicht. Maskiert werden nur Treffer innerhalb eines Chunks."
   },
-  "guardTester": {
-    "title": "Live-Tester",
-    "hint": "Verwendet die globalen Guardrails wie oben bearbeitet, auch vor dem Speichern.",
+  "test": {
+    "title": "Richtlinie testen",
+    "hint": "Schickt Beispieltext durch dieselben Prüfungen wie das Gateway, in derselben Reihenfolge. Es wird nichts an ein Modell gesendet oder gespeichert.",
+    "source": "Richtlinie",
+    "sourceOption": "{source, select, platform {Plattform-Richtlinie} other {Wirksame Richtlinie eines Unternehmens, einer Abteilung, eines Projekts oder Keys}}",
+    "draftHint": "Enthält deine ungespeicherten Änderungen aus den anderen Tabs.",
     "sample": "Beispieltext",
     "direction": "Prüfen als",
     "directionLabel": "{direction, select, input {Prompt} output {Antwort} other {{direction}}}",
-    "run": "Prüfung starten",
-    "result": "{blocked, select, true {Blockiert} other {{hits, plural, =0 {Keine Treffer} one {# Treffer} other {# Treffer}}}}"
+    "patternsOnly": "Dieser Test erkennt personenbezogene Daten nur mit Mustern. Das Schwärzungsmodell läuft bei echten Anfragen; teste es im Tab Personenbezogene Daten.",
+    "run": "Test starten",
+    "resultTitle": "Ergebnis",
+    "outcome": "{outcome, select, guardrail {Durch eine Leitplanke blockiert} pii {Durch die Richtlinie für personenbezogene Daten blockiert} other {{hits, plural, =0 {Bestanden} one {Bestanden mit # Treffer} other {Bestanden mit # Treffern}}}}",
+    "piiHit": "Personenbezogen: {label}",
+    "output": "{direction, select, input {Was das Modell erhält} other {Was der Client erhält}}",
+    "blockedText": "{direction, select, input {Geprüfter Prompt. Die Anfrage wird abgelehnt und erreicht das Modell nie.} other {Geprüfte Antwort. Der Client erhält sie nicht.}}"
   }
 }
