@@ -1,4 +1,5 @@
 import { parseDate, parseDateTime } from "@internationalized/date";
+import { parseLabelFilter, storedLabel } from "@/lib/usage/labels";
 import type { Prisma } from "@/generated/prisma/client";
 import type { LogFilterValues } from "@/types/logs";
 import type { SpendScope } from "@/types/structure";
@@ -20,6 +21,8 @@ export function parseLogFilters(input: unknown): LogFilterValues {
     endpoint: text(rec.endpoint, 200),
     keyId: text(rec.keyId, 64),
     userId: text(rec.userId, 64),
+    label: text(rec.label, 200),
+    session: text(rec.session, 512),
     pii: rec.pii === true || rec.pii === "true" || rec.pii === "1",
     from: text(rec.from, 32),
     to: text(rec.to, 32),
@@ -34,6 +37,8 @@ export function logFilterParams(filters: Partial<LogFilterValues>): Record<keyof
     endpoint: value("endpoint"),
     keyId: value("keyId"),
     userId: value("userId"),
+    label: value("label"),
+    session: value("session"),
     pii: filters.pii ? "1" : null,
     from: value("from"),
     to: value("to"),
@@ -109,9 +114,12 @@ function scoped(filters: LogFilterValues, scope: SpendScope) {
 export function requestLogWhere(filters: LogFilterValues, scope: SpendScope): Prisma.RequestLogWhereInput {
   const status = filters.status ? Number(filters.status) : Number.NaN;
   const createdAt = createdAtRange(filters.from, filters.to);
+  const label = parseLabelFilter(filters.label);
   return {
     ...scoped(filters, scope),
     ...(Number.isInteger(status) ? { status } : {}),
+    ...(label ? { labels: { has: storedLabel(label) } } : {}),
+    ...(filters.session ? { sessionId: filters.session } : {}),
     ...(filters.endpoint ? { endpoint: { contains: filters.endpoint } } : {}),
     ...(filters.pii ? { OR: [{ piiInput: { isEmpty: false } }, { piiOutput: { isEmpty: false } }] } : {}),
     ...(createdAt ? { createdAt } : {}),

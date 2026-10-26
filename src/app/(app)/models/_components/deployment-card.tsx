@@ -3,7 +3,7 @@
 import { Button, Card, Input, Label, TextField } from "@heroui/react";
 import { useTranslations } from "next-intl";
 import type { DeploymentDraft, ProviderOpt } from "@/types/models";
-import { catalogHit } from "./deployment-draft";
+import { catalogHit, contextWindowOf } from "./deployment-draft";
 import ProviderSelect from "./provider-select";
 
 export default function DeploymentCard({
@@ -22,6 +22,7 @@ export default function DeploymentCard({
   onRemove: () => void;
 }) {
   const t = useTranslations("Models");
+  const contextWindow = contextWindowOf(providers, dep.providerId, dep.model);
   return (
     <Card variant="secondary">
       {primary ? null : (
@@ -82,6 +83,11 @@ export default function DeploymentCard({
           {t("priceFromProvider", {
             source: providers.find((p) => p.id === dep.providerId)?.name ?? "",
           })}
+        </p>
+      ) : null}
+      {dep.model.trim() ? (
+        <p className="text-sm text-muted">
+          {t("contextHint", { known: contextWindow > 0 ? "yes" : "no", tokens: contextWindow })}
         </p>
       ) : null}
       {primary ? null : (

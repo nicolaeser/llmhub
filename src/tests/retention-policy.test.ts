@@ -40,6 +40,7 @@ const RETENTION_QUERIES: Record<string, { method: string; field: string }> = {
   toolExecution: { method: "findMany", field: "startedAt" },
   approvalRequest: { method: "findMany", field: "decidedAt" },
   usageDaily: { method: "findFirst", field: "day" },
+  usageLabelDaily: { method: "findFirst", field: "day" },
 };
 
 async function sweepCutoffs(settings: Record<string, number>) {
@@ -83,6 +84,7 @@ test("unset retention removes request logs and content after 30 days and securit
     toolExecution: daysBefore(30),
     approvalRequest: null,
     usageDaily: null,
+    usageLabelDaily: null,
   });
 });
 
@@ -95,7 +97,7 @@ test("an explicit 0 keeps every table and explicit days are used as set", async 
     audit_retention_days: 0,
     security_retention_days: 0,
   };
-  assert.deepEqual(Object.values(await sweepCutoffs(forever)), Array(8).fill(null));
+  assert.deepEqual(Object.values(await sweepCutoffs(forever)), Array(9).fill(null));
   const cutoffs = await sweepCutoffs({
     log_retention_days: 365,
     content_retention_days: 14,
@@ -113,6 +115,7 @@ test("an explicit 0 keeps every table and explicit days are used as set", async 
     toolExecution: daysBefore(14),
     approvalRequest: daysBefore(180),
     usageDaily: "2024-09-09T00:00:00.000Z",
+    usageLabelDaily: "2024-09-09T00:00:00.000Z",
   });
   const [rejected] = recordedPrisma.called("approvalRequest", "findMany");
   assert.equal((rejected?.args as { where: { status: string } }).where.status, "rejected");
@@ -121,7 +124,7 @@ test("an explicit 0 keeps every table and explicit days are used as set", async 
 test("a sweep that finds the retention lease taken deletes nothing", async () => {
   leaseHeld = true;
   try {
-    assert.deepEqual(Object.values(await sweepCutoffs({})), Array(8).fill(null));
+    assert.deepEqual(Object.values(await sweepCutoffs({})), Array(9).fill(null));
   } finally {
     leaseHeld = false;
   }

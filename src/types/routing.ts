@@ -61,7 +61,7 @@ export type DeploymentRow = {
   } | null;
 };
 
-export type ModelFacts = { serviceTiers?: string[]; accessPrograms?: string[]; variants?: string[] };
+export type ModelFacts = { serviceTiers?: string[]; accessPrograms?: string[]; variants?: string[]; contextLength?: number };
 
 export type ResolvedDeployment = Deployment & {
   provider?: DeploymentRow["provider"];
@@ -81,5 +81,13 @@ export type QuotaScores = Map<string, { pressure: number; reset: number }>;
 export type AccountPin = { providerId: string; handoffAt: number };
 
 export type RunRouting = { session: string; tried: Set<string> };
+
+export type RouteEntry = { alias: string; root: string; pool: RoutePool; relaxed: boolean };
+
+export type ContextDemand = { input: number; output: number };
+
+export type ContextPlan = "open" | "narrowed" | "tight" | "short";
+
+export type ContextDecision = Exclude<ContextPlan, "open"> | "overflow" | "rejected";
 
 export type RouterWait = { retryAt: number; limited: boolean; kinds: string[] };

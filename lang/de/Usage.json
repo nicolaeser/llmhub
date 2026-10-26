@@ -39,7 +39,8 @@
     "cacheRead": "Gelesene Cache-Token",
     "cacheWrite": "Geschriebene Cache-Token",
     "hitRate": "Trefferquote",
-    "savings": "Ersparnis"
+    "savings": "Ersparnis",
+    "share": "Anteil"
   },
   "cache": {
     "title": "Prompt-Caching",
@@ -72,7 +73,10 @@
     "colPrompt": "Prompt",
     "colCompletion": "Completion",
     "total": "Gesamt",
-    "noSpend": "Keine Ausgaben in diesem Zeitraum."
+    "noSpend": "Keine Ausgaben in diesem Zeitraum.",
+    "byLabel": "Ausgaben nach Label {key}",
+    "colLabelValue": "Wert",
+    "labelFilter": "{key}: {value}"
   },
   "report": {
     "scope": "{hasTeam, select, yes {{org} / {team}} other {{org}}}",
@@ -92,5 +96,27 @@
     "value": "{amount, number, money} · {share, number, percent}",
     "share": "Marge %",
     "empty": "Keine abrechenbare Nutzung in diesem Zeitraum."
+  },
+  "labels": {
+    "key": "Label",
+    "keyHint": "Gruppiert die Ausgaben nach den Werten dieses Anfrage-Labels.",
+    "anyKey": "Nicht nach Label gruppieren",
+    "value": "Label-Wert",
+    "anyValue": "Alle Werte",
+    "none": "Ohne Label",
+    "byLabel": "Ausgaben nach Label {key}",
+    "byLabelHint": "Anfragen ohne dieses Label zählen als „Ohne Label“, daher ergeben die Zeilen zusammen die Summen oben.",
+    "noData": "Keine Anfragen in diesem Zeitraum.",
+    "listed": "Erlaubte Label-Schlüssel",
+    "remove": "{key} entfernen",
+    "empty": "Noch keine Label-Schlüssel. Anfragen behalten Labels nur für die hier aufgeführten Schlüssel.",
+    "inherited": "Zusätzlich für alle Unternehmen erlaubt",
+    "add": "Label-Schlüssel",
+    "full": "Diese Liste enthält höchstens {max, number, integer} Schlüssel. Entferne einen, um einen weiteren hinzuzufügen.",
+    "problem": "{problem, select, listed {Dieser Schlüssel ist bereits erlaubt.} other {Verwende Kleinbuchstaben, Ziffern und Unterstriche und beginne mit einem Buchstaben.}}",
+    "addButton": "Schlüssel hinzufügen",
+    "howTo": "Clients senden Labels als eigenen Header pro Label (<code>X-LLMHub-Label-Cost-Center: 4711</code>), als einen Header für mehrere (<code>X-LLMHub-Labels: cost_center=4711,env=prod</code>), in <code>metadata</code> bei Chat Completions und Responses oder als <code>tags</code>-Einträge wie <code>cost_center:4711</code>. Bindestriche in Schlüsseln gelten als Unterstriche.",
+    "limits": "Nur aufgeführte Schlüssel werden gespeichert. Eine Anfrage behält höchstens {labels, number, integer} Labels, Schlüssel haben bis zu {keyLength, number, integer} Zeichen und Werte werden nach {valueLength, number, integer} Zeichen gekürzt. Werte werden wie die Anfrageinhalte maskiert, wenn eine PII-Richtlinie greift.",
+    "keyRule": "Kleinbuchstaben, Ziffern und Unterstriche, beginnend mit einem Buchstaben, bis zu {max, number, integer} Zeichen. Bindestriche werden zu Unterstrichen."
   }
 }

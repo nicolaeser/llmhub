@@ -686,9 +686,12 @@ test("request logs name system calls by feature", async () => {
     piiOutput: [],
     guardInput: [],
     guardOutput: [],
+    labels: [],
     hasContent: false,
     contentSkip: "system",
     system: "mcp_builder",
+    sessionId: "",
+    agent: "",
   };
   const logs: LogsPayload = {
     canAudit: false,

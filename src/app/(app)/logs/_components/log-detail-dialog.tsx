@@ -14,7 +14,7 @@ import {
   Tabs,
   type useOverlayState,
 } from "@heroui/react";
-import { Braces, ChevronDown, Download, FileCode, FileText, Play, type LucideIcon } from "lucide-react";
+import { Braces, ChevronDown, Download, FileCode, FileText, Play, Route, type LucideIcon } from "lucide-react";
 import { useFormatter, useTranslations } from "next-intl";
 import { loadAliasesAction } from "../_action";
 import Markdown from "./markdown";
@@ -26,6 +26,7 @@ import { splitPiiPlaceholders } from "@/lib/gateway/safety/pii";
 import { isActionFail } from "@/lib/http/action-result";
 import type { RequestLogDetail, RequestLogExportFormat, TranscriptEntry } from "@/types/logs";
 import GuardrailChip from "./guardrail-chip";
+import LabelChips from "./label-chips";
 import PiiChip from "./pii-chip";
 import { PiiCode, PiiPlaceholder } from "./pii-placeholder";
 import PiiRestore from "./pii-restore";
@@ -229,10 +230,12 @@ export default function LogDetailDialog({
   state,
   detail,
   onExport,
+  onOpenSession,
 }: {
   state: ReturnType<typeof useOverlayState>;
   detail: RequestLogDetail | null;
   onExport: (format: RequestLogExportFormat) => void;
+  onOpenSession?: (detail: RequestLogDetail) => void;
 }) {
   const t = useTranslations("Logs");
   const tDetail = useTranslations("Logs.detail");
@@ -322,6 +325,29 @@ export default function LogDetailDialog({
                     </Field>
                     <Field label={tDetail("stream")}>{tDetail("yesNo", { value: String(detail.stream) })}</Field>
                     <Field label={tDetail("tag")}>{detail.tag ? <PiiText text={detail.tag} /> : tCommon("none")}</Field>
+                    <Field label={t("labels.title")}>
+                      {detail.labels.length ? <LabelChips labels={detail.labels} /> : tCommon("none")}
+                    </Field>
+                    <Field label={tDetail("session")}>
+                      {detail.sessionId ? (
+                        <div className="flex flex-wrap items-center gap-2">
+                          <div className="min-w-0 font-mono break-all">
+                            <PiiText text={detail.sessionId} />
+                          </div>
+                          {onOpenSession ? (
+                            <Button size="sm" variant="secondary" onPress={() => onOpenSession(detail)}>
+                              <Route size={14} aria-hidden />
+                              {tDetail("openSession")}
+                            </Button>
+                          ) : null}
+                        </div>
+                      ) : (
+                        tCommon("none")
+                      )}
+                    </Field>
+                    <Field label={tDetail("agent")}>
+                      {detail.agent ? t("agent", { agent: detail.agent }) : tCommon("none")}
+                    </Field>
                     {detail.system ? (
                       <Field label={t("columns.caller")}>
                         {t("caller.system")}

@@ -31,6 +31,7 @@ export type MaintenanceSweepResult = {
   toolExecutions: number;
   approvalRequests: number;
   usageRows: number;
+  usageLabelRows: number;
   retentionBacklog: number;
   storedObjects: number;
   batches: number;
@@ -51,6 +52,7 @@ export type RetentionTable =
   | "securityEvents"
   | "spendEvents"
   | "usageRows"
+  | "usageLabelRows"
   | "auditLogs"
   | "approvalRequests";
 

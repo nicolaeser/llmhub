@@ -218,7 +218,12 @@
     "contentHint": "Für einzelne Personen unter Benutzer oder für einzelne Keys in deren Einstellungen ausschaltbar. Solange die PII-Schwärzung aktiv ist, werden gespeicherte Inhalte maskiert und jedes Log zeigt die gefundenen Entitäten.",
     "contentRetention": "Aufbewahrung der Inhalte in Tagen",
     "contentRetentionHint": "Standardmäßig {days, plural, one {# Tag} other {# Tage}}. 0 behält Inhalte so lange wie das Request-Log. Ein kleinerer Wert entfernt Prompts und Antworten früher und behält die Metadaten. Werkzeug-Ausführungen von Integrationen speichern Tool-Ausgaben und folgen dem kürzeren der beiden Werte.",
-    "description": "Alarm-Webhooks und -Regeln, Anfrageinhalte, Aufbewahrung und Log-Archivierung."
+    "description": "Alarm-Webhooks und -Regeln, Anfrageinhalte, Aufbewahrung und Log-Archivierung.",
+    "labels": {
+      "title": "Anfrage-Labels",
+      "hint": "Label-Schlüssel, die jedes Unternehmen verwenden darf. Nutzung, Chargeback und Protokolle lassen sich danach gruppieren und filtern.",
+      "saved": "Label-Schlüssel gespeichert."
+    }
   },
   "cache": {
     "ttl": "TTL in Sekunden",
@@ -270,7 +275,7 @@
       "keepKey": "Gespeicherten Key behalten",
       "catalogHint": "Ergebnisse und Status der Aktualisierung findest du im <link>Modellkatalog</link>.",
       "autoRoutes": "Neue Anbieter automatisch aufnehmen",
-      "autoRoutesHint": "Standard für jeden Alias ohne eigene Einstellung. Geroutet werden nur vertrauenswürdige Anbieter, die ein Modell neu anbieten; eigene OpenAI-kompatible Server schaltest du immer von Hand ein.",
+      "autoRoutesHint": "Standard für jeden Alias ohne eigene Einstellung. Geroutet werden nur vertrauenswürdige Anbieter, die ein Modell neu anbieten; eigene OpenAI-kompatible Server schaltest du von Hand ein, außer ihr Anbieter schaltet neue Modelle selbst ein.",
       "minConfidence": "Mindestsicherheit für Jev",
       "minConfidenceHint": "Jev-Zuordnungen unter diesem Wert erscheinen im Katalog, werden aber nie selbst geroutet. Zuordnungen über den Namen gelten immer als sicher."
     },

@@ -95,9 +95,12 @@ const ROW: RequestLogRow = {
   piiOutput: [],
   guardInput: [],
   guardOutput: [],
+  labels: [],
   hasContent: false,
   contentSkip: "",
   system: "",
+  sessionId: "",
+  agent: "",
 };
 
 const LOGS: LogsPayload = {

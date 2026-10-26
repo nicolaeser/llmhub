@@ -62,6 +62,7 @@ import BudgetCard from "./_components/budget-card";
 import ChildrenCard from "./_components/children-card";
 import CompanyTree from "./_components/company-tree";
 import InsightLinks from "./_components/insight-links";
+import LabelKeysCard from "./_components/label-keys-card";
 import KeyPane from "./_components/key-pane";
 import KeysCard from "./_components/keys-card";
 import { keyPresetOf, withKey, withoutKey } from "./_components/key-model";
@@ -548,6 +549,17 @@ export default function CompaniesPage() {
                     loadPolicies={data.canSeePolicies ? loadCompanyPoliciesAction : null}
                     canOpen={(ref) => nodeExists(data, ref)}
                     onOpen={selectInPane}
+                  />
+                ) : null}
+
+                {org ? (
+                  <LabelKeysCard
+                    key={`labels-${org.id}`}
+                    orgId={org.id}
+                    keys={org.labelKeys}
+                    inherited={data.platformLabelKeys}
+                    canManage={data.canManage}
+                    onSaved={setData}
                   />
                 ) : null}
 

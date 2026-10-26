@@ -33,6 +33,8 @@ test("usage filters write every key so cleared filters leave the URL and other p
     memberId: null,
     keyId: null,
     userId: null,
+    labelKey: null,
+    labelValue: null,
   });
   assert.equal(usageQueryParams({ ...DEFAULT_USAGE_QUERY, days: 90 }).days, "90");
   const query = { ...DEFAULT_USAGE_QUERY, days: 7, orgId: "o1", userId: "u1" };

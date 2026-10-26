@@ -10,6 +10,7 @@ import { alertPiiBlocked, alertUpstreamFailure } from "@/lib/alerts/notify";
 import { resolvePolicies } from "@/lib/settings/enterprise";
 import { assertBudget, assertRate, recordUsageOrLog } from "@/lib/gateway/billing/billing";
 import { capRequestCost, maxCostHeader } from "@/lib/gateway/billing/cost-cap";
+import { bodyLabels, headerLabels, mergeLabels } from "@/lib/gateway/billing/request-labels";
 import { asRecord, newRequestId, routerGateError } from "@/lib/gateway/core";
 import {
   anthropicErrorBody,
@@ -25,6 +26,7 @@ import { aliasChain, servedOnlyInternally } from "@/lib/gateway/routing/runtime"
 import { accessOpen, endpointAllowed } from "@/lib/gateway/access/key-restrictions";
 import { gatewayPath } from "@/lib/gateway/api-paths";
 import { routeOf } from "@/lib/gateway/routing/route-pool";
+import { requestClient } from "@/lib/gateway/request-logs/request-session";
 import { NextResponse } from "next/server";
 import type { JsonMap, Principal } from "@/types/gateway";
 import type { PublicPool } from "@/types/routing";
@@ -110,6 +112,7 @@ export function withTrace(principal: Principal, endpoint: string): Principal {
       guardInput: new Set(),
       guardOutput: new Set(),
       guardBlocked: false,
+      ...(principal.trace?.labels ? { labels: principal.trace.labels } : {}),
     },
   };
 }
@@ -117,7 +120,8 @@ export function withTrace(principal: Principal, endpoint: string): Principal {
 export async function gateRequest(req: Request, pool: PublicPool = "api"): Promise<Principal> {
   const token = bearerToken(req);
   const path = requestPath(req);
-  const principal = { ...withTrace(await authenticateBearer(token), path), pool };
+  const principal = { ...withTrace(await authenticateBearer(token), path), pool, client: requestClient(req.headers) };
+  if (principal.trace) principal.trace.labels = headerLabels(req.headers);
   if (principal.key?.allowed_ips.length && !ipAllowed(principal.key.allowed_ips, clientIp(req.headers))) {
     throw new GateError(403, "ip_not_allowed", "ip not allowed for this key");
   }
@@ -196,7 +200,10 @@ export async function applyGuardrails(
   principal: Principal,
 ): Promise<{ body: JsonMap; output: OutputGuard | null }> {
   const trace = principal.trace;
-  if (trace) trace.request = body;
+  if (trace) {
+    trace.request = body;
+    trace.labels = mergeLabels(trace.labels, bodyLabels(body));
+  }
   const { pii, guardrails } = await resolvePolicies(principal);
   const screened = screenRequest(body, guardrails, trace?.guardInput ?? new Set());
   if (trace) trace.request = screened.body;

@@ -27,6 +27,8 @@ import {
 } from "@/lib/tenancy/guards";
 import { HOLDER, budgetView } from "@/lib/tenancy/budgets";
 import { canReport, reportViews } from "@/lib/reports/manage";
+import { forgetCompanyLabelKeys } from "@/lib/gateway/billing/label-keys";
+import { cleanLabelKeys } from "@/lib/usage/labels";
 import { managesMcpRules, seesMcp } from "@/lib/mcp/scope";
 
 const NODE_KINDS: readonly string[] = ["org", "team", "project", "member"];
@@ -64,10 +66,12 @@ async function structurePayload(session: AuthenticatedSession): Promise<Structur
       .filter((row) => row.entityType === kind && row.entityId === id)
       .map((row) => ({ id: row.id, amount: money(row.amount), until: row.until }));
   return {
+    platformLabelKeys: enterprise.label_keys ?? [],
     orgs: orgs.map((row) => ({
       id: row.id,
       alias: row.alias,
       budget: budgetView(row, boosts("org", row.id), now),
+      labelKeys: row.labelKeys,
     })),
     teams: teams.map((row) => ({
       id: row.id,
@@ -182,6 +186,24 @@ export async function saveOrg(input: { id?: string; alias: string }) {
         after: { alias: row.alias },
       });
     });
+}
+
+export async function saveCompanyLabelKeys(input: { orgId: string; keys: string[] }) {
+  return mutate(PERMISSIONS.TENANCY_MANAGE, async (session) => {
+    const orgId = await companyFor(session, input.orgId);
+    const labelKeys = cleanLabelKeys(input.keys);
+    const before = await prisma.organization.findUnique({ where: { id: orgId }, select: { labelKeys: true } });
+    await prisma.organization.update({ where: { id: orgId }, data: { labelKeys } });
+    forgetCompanyLabelKeys(orgId);
+    await writeAudit({
+      actor: session.user.id,
+      action: "org.label_keys",
+      objectType: "org",
+      objectId: orgId,
+      before: { label_keys: before?.labelKeys ?? [] },
+      after: { label_keys: labelKeys },
+    });
+  });
 }
 
 export async function saveTeam(input: {

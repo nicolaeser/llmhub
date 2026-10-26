@@ -36,6 +36,13 @@ export class SizedLru<V> {
     }
   }
 
+  delete(key: string): void {
+    const entry = this.entries.get(key);
+    if (!entry) return;
+    this.entries.delete(key);
+    this.used -= entry.size;
+  }
+
   clear(): void {
     this.entries.clear();
     this.used = 0;

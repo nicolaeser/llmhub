@@ -10,10 +10,12 @@ import {
   requestLogWhere,
   spendEventWhere,
 } from "@/lib/gateway/request-logs/request-log-query";
+import { listSessions, SESSION_EXPORT_LIMIT } from "@/lib/gateway/request-logs/sessions";
 import { fileResponse, toCsv, toJsonl } from "@/lib/export/csv";
 import { problemResponse } from "@/lib/http/problem";
+import { labelRecord, labelsOf, labelText } from "@/lib/usage/labels";
 
-const KINDS = new Set(["requests", "spend", "audit"]);
+const KINDS = new Set(["requests", "sessions", "spend", "audit"]);
 const FORMATS = new Set(["csv", "jsonl"]);
 const ROW_LIMIT = 5000;
 const CONTENT_ROW_LIMIT = 1000;
@@ -29,7 +31,7 @@ export async function GET(req: NextRequest) {
   const format = url.searchParams.get("format") ?? "jsonl";
   if (!KINDS.has(kind) || !FORMATS.has(format)) {
     return problemResponse(req, "INVALID_PARAMETER", {
-      detail: "kind must be requests, spend, or audit and format must be csv or jsonl",
+      detail: "kind must be requests, sessions, spend, or audit and format must be csv or jsonl",
     });
   }
 
@@ -64,8 +66,12 @@ export async function GET(req: NextRequest) {
       project_id: r.projectId,
       deployment_id: r.deploymentId,
       provider: r.provider,
+      provider_id: r.providerId,
       upstream_model: r.upstreamModel,
       tag: r.tag,
+      labels: format === "csv" ? labelText(labelsOf(r.labels)) : labelRecord(labelsOf(r.labels)),
+      session_id: r.sessionId,
+      agent: r.agent,
       prompt_tokens: r.promptTokens,
       completion_tokens: r.completionTokens,
       cache_read_tokens: r.cacheReadTokens,
@@ -90,6 +96,28 @@ export async function GET(req: NextRequest) {
         after: { filters, rows: rows.length },
       });
     }
+  } else if (kind === "sessions") {
+    const data = await listSessions(scope, filters, 0, SESSION_EXPORT_LIMIT);
+    rows = data.map((r) => ({
+      session_id: r.sessionId,
+      key_id: r.keyId,
+      user_id: r.userId,
+      member_id: r.memberId,
+      agent: r.agent,
+      started_at: r.startedAt,
+      last_at: r.lastAt,
+      duration_ms: r.durationMs,
+      requests: r.requests,
+      errors: r.errors,
+      prompt_tokens: r.promptTokens,
+      completion_tokens: r.completionTokens,
+      cache_read_tokens: r.cacheReadTokens,
+      cache_write_tokens: r.cacheWriteTokens,
+      cost: r.cost,
+      models: format === "csv" ? r.models.map((model) => model.model).join(" ") : r.models,
+      accounts: r.accounts,
+      account_switches: r.accountSwitches,
+    }));
   } else if (kind === "spend") {
     const data = await prisma.spendEvent.findMany({
       where: spendEventWhere(filters, scope),

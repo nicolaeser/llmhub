@@ -3,6 +3,7 @@ import { loadLogs } from "@/lib/gateway/request-logs/explorer";
 import { managementRoute, readQuery, respondList } from "@/lib/management/http";
 import { serializeRequestLog } from "@/lib/management/serialize";
 import { logsQuerySchema } from "@/schemas/management";
+import { storedLabel } from "@/lib/usage/labels";
 
 export const dynamic = "force-dynamic";
 
@@ -16,6 +17,8 @@ export const GET = managementRoute(PERMISSIONS.SPEND_READ, async ({ req }) => {
         endpoint: query.endpoint,
         keyId: query.key_id,
         userId: query.user_id,
+        label: query.label ? storedLabel(query.label) : "",
+        session: query.session,
         status: query.status === undefined ? "" : String(query.status),
         from: query.from,
         to: query.to,

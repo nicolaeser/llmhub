@@ -48,6 +48,8 @@ export type UsageSource = {
   memberId: string;
   keyId: string;
   userId: string;
+  labelKey?: string;
+  labelValue?: string;
   spend: number;
   purchase?: number | null;
   tokens: number;
@@ -68,6 +70,7 @@ export type UsageSource = {
   byMember: SliceRow[];
   byKey: SliceRow[];
   byUser: SliceRow[];
+  byLabel?: SliceRow[];
   chargeback: SliceRow[];
 };
 

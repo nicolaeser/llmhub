@@ -15,6 +15,7 @@ import { useTranslations } from "next-intl";
 import SignInPanel from "@/components/providers/sign-in-panel";
 import { DATA_REGIONS } from "@/lib/gateway/access/model-policy";
 import { isSignInKind } from "@/lib/gateway/upstreams/provider-kinds";
+import { NEW_MODEL_MODES } from "@/schemas/providers";
 import type {
   ProviderDraft,
   ProviderKindSpec,
@@ -101,6 +102,32 @@ export default function ProviderFields({
           <Description>{t("internalOnlyHint")}</Description>
         </Switch>
       )}
+      <Select
+        fullWidth
+        selectedKey={draft.newModels}
+        onSelectionChange={(key) => {
+          const newModels = NEW_MODEL_MODES.find((mode) => mode === key);
+          if (newModels) set({ newModels });
+        }}
+        isDisabled={isDisabled}
+      >
+        <Label>{t("newModels")}</Label>
+        <Select.Trigger>
+          <Select.Value />
+          <Select.Indicator />
+        </Select.Trigger>
+        <Select.Popover>
+          <ListBox aria-label={t("newModels")}>
+            {NEW_MODEL_MODES.map((mode) => (
+              <ListBox.Item key={mode} id={mode} textValue={t("newModelsOption", { mode })}>
+                {t("newModelsOption", { mode })}
+                <ListBox.ItemIndicator />
+              </ListBox.Item>
+            ))}
+          </ListBox>
+        </Select.Popover>
+        <Description>{t("newModelsHint", { mode: draft.newModels })}</Description>
+      </Select>
       <Separator />
       <div className="space-y-1">
         <p className="text-sm font-medium text-foreground">{t("policy.title")}</p>

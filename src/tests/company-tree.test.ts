@@ -49,9 +49,10 @@ function key(id: string, alias: string, place: Partial<KeyNode>): KeyNode {
 }
 
 const structure: StructurePayload = {
+  platformLabelKeys: [],
   orgs: [
-    { id: "o1", alias: "Acme", budget: budget(1000) },
-    { id: "o2", alias: "Beta", budget: budget() },
+    { id: "o1", alias: "Acme", budget: budget(1000), labelKeys: [] },
+    { id: "o2", alias: "Beta", budget: budget(), labelKeys: [] },
   ],
   teams: [{ id: "t1", alias: "IT", orgId: "o1", rpmLimit: 0, tpmLimit: 0, budget: budget(500) }],
   projects: [

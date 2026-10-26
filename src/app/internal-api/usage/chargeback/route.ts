@@ -17,11 +17,13 @@ export async function GET(req: NextRequest) {
       memberId: req.nextUrl.searchParams.get("memberId") ?? "",
       keyId: req.nextUrl.searchParams.get("keyId") ?? "",
       userId: req.nextUrl.searchParams.get("userId") ?? "",
+      labelKey: req.nextUrl.searchParams.get("labelKey") ?? "",
+      labelValue: req.nextUrl.searchParams.get("labelValue") ?? "",
     }),
   );
   if (isActionFail(result)) return actionProblem(req, result);
-  const columns = chargebackColumns(result.purchase !== null);
-  return new NextResponse(toCsv(chargebackTable(result.chargeback, result.names), columns), {
+  const columns = chargebackColumns(result.purchase !== null, Boolean(result.labelKey));
+  return new NextResponse(toCsv(chargebackTable(result.chargeback, result.names, result.labelKey), columns), {
     headers: {
       "Content-Type": "text/csv; charset=utf-8",
       "Content-Disposition": 'attachment; filename="llmhub-chargeback.csv"',

@@ -21,6 +21,7 @@ import {
   SECRET_ENTITIES,
 } from "@/lib/gateway/safety/guardrails";
 import { modelAlias } from "@/lib/gateway/catalog/model-alias";
+import { labelKeyList, MAX_LABEL_KEYS } from "@/lib/usage/labels";
 import { PII_DETECTORS, PII_FAILURES } from "@/lib/gateway/safety/pii";
 import {
   PII_TIMEOUT_DEFAULT_SECONDS,
@@ -123,6 +124,7 @@ const DEFAULT_ENTERPRISE: Enterprise = {
   pii_detector: DEFAULT_PII_DETECTOR,
   guardrails: defaultGuardrails(),
   budget_alert_thresholds: [50, 80, 100],
+  label_keys: [],
   spend_anomaly_factor: DEFAULT_SPEND_ANOMALY_FACTOR,
   spend_anomaly_min_cost: DEFAULT_SPEND_ANOMALY_MIN_COST,
   key_expiry_warning_days: DEFAULT_KEY_EXPIRY_WARNING_DAYS,
@@ -319,6 +321,7 @@ export function normalizeEnterprise(raw: unknown): Enterprise {
       const list = asNumberArray(rec.budget_alert_thresholds);
       return list.length ? list : [50, 80, 100];
     })(),
+    label_keys: labelKeyList(rec.label_keys).keys.slice(0, MAX_LABEL_KEYS),
     spend_anomaly_factor: anomalyFactor(asNumber(rec.spend_anomaly_factor, DEFAULT_SPEND_ANOMALY_FACTOR)),
     spend_anomaly_min_cost: Math.max(0, asNumber(rec.spend_anomaly_min_cost, DEFAULT_SPEND_ANOMALY_MIN_COST)),
     key_expiry_warning_days: Math.max(

@@ -1,5 +1,6 @@
 import { RESERVED_ALIASES } from "@/lib/gateway/catalog/model-alias";
 import { vertexVendor } from "@/lib/gateway/upstreams/vertex-target";
+import { DEFAULT_NEW_MODEL_MODE, NEW_MODEL_MODES } from "@/schemas/providers";
 import type {
   CatalogEntryPlan,
   CatalogGroupInput,
@@ -9,6 +10,7 @@ import type {
   CatalogSource,
   CatalogStatus,
   JevTask,
+  NewModelMode,
   StoredCatalogEntry,
 } from "@/types/model-catalog";
 
@@ -80,6 +82,12 @@ type AutoRouting = {
   minConfidence: number;
 };
 
+type ProviderActivation = {
+  active: Set<string>;
+  waiting: Set<string>;
+  minConfidence: number;
+};
+
 type Decidable = {
   trusted: boolean;
   source: CatalogSource;
@@ -98,6 +106,10 @@ export function catalogEntryKey(entry: { providerId: string; upstreamId: string 
 export function normalizeVendor(value: string): string {
   const vendor = value.trim().toLowerCase().replace(/^~/, "");
   return VENDOR_SYNONYMS[vendor] ?? vendor;
+}
+
+export function newModelMode(value: unknown): NewModelMode {
+  return NEW_MODEL_MODES.find((mode) => mode === value) ?? DEFAULT_NEW_MODEL_MODE;
 }
 
 export function trustedKind(kind: string): boolean {
@@ -378,6 +390,7 @@ export function planCatalog(input: {
     routed.set(key, [...(routed.get(key) ?? []), route.groupAlias].sort());
   }
   const stored = new Map(input.stored.map((row) => [entryKey(row.providerId, row.upstreamId), row]));
+  const modes = new Map(input.providers.map((provider) => [provider.id, provider.newModels]));
   const matched = new Map(items.map((item) => [item, groupMatch(item, byKey)]));
   const unmatched = items.filter((item) => !matched.get(item));
   const taken = new Set([...RESERVED_ALIASES, ...groups.map((group) => group.alias)]);
@@ -440,13 +453,14 @@ export function planCatalog(input: {
   for (const item of items) {
     const key = entryKey(item.providerId, item.upstreamId);
     const prior = stored.get(key);
+    const routes = routed.get(key);
     const base = {
       providerId: item.providerId,
       upstreamId: item.upstreamId,
       kind: item.kind,
       name: item.display,
       vendor: item.vendor,
-      disabled: prior?.disabled ?? false,
+      disabled: prior?.disabled ?? (!routes?.length && modes.get(item.providerId) === "disabled"),
       classifiedAt: prior?.classifiedAt ?? null,
       trusted: trustedKind(item.kind),
     };
@@ -458,7 +472,6 @@ export function planCatalog(input: {
         confidence,
         fresh: !prior || prior.alias !== alias || prior.source === "",
       });
-    const routes = routed.get(key);
     if (routes?.length) {
       push(prior && routes.includes(prior.alias) ? prior.alias : routes[0]!, "route", 1);
       continue;
@@ -527,5 +540,23 @@ export function autoRouteEntries(
       entry.trusted &&
       open.has(entry.alias) &&
       (entry.source === "rule" || (entry.source === "jev" && entry.confidence >= routing.minConfidence)),
+  );
+}
+
+export function activeProviderEntries(
+  entries: CatalogEntryPlan[],
+  groups: CatalogGroupInput[],
+  input: ProviderActivation,
+): CatalogEntryPlan[] {
+  const closed = new Set(groups.filter((group) => group.autoRoutes === false).map((group) => group.alias));
+  return entries.filter(
+    (entry) =>
+      input.active.has(entry.providerId) &&
+      !entry.disabled &&
+      !closed.has(entry.alias) &&
+      !input.waiting.has(catalogEntryKey(entry)) &&
+      (entry.source === "rule" ||
+        entry.source === "" ||
+        (entry.source === "jev" && entry.confidence >= input.minConfidence)),
   );
 }

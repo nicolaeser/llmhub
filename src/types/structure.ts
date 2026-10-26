@@ -42,7 +42,7 @@ export type CapLink = {
   spend: number;
 };
 
-export type OrgNode = { id: string; alias: string; budget: BudgetView };
+export type OrgNode = { id: string; alias: string; budget: BudgetView; labelKeys: string[] };
 
 export type TeamNode = {
   id: string;
@@ -94,6 +94,7 @@ export type KeyNode = {
 };
 
 export type StructurePayload = {
+  platformLabelKeys: string[];
   orgs: OrgNode[];
   teams: TeamNode[];
   projects: ProjectNode[];

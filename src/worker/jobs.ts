@@ -80,6 +80,7 @@ export async function runMaintenanceSweep(
     toolExecutions: 0,
     approvalRequests: 0,
     usageRows: 0,
+    usageLabelRows: 0,
     retentionBacklog: 0,
     storedObjects: 0,
     batches: 0,

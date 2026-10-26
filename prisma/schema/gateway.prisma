@@ -12,6 +12,7 @@ model Organization {
   spendResetAt    DateTime?
   piiPolicy       Json?
   guardrailPolicy Json?
+  labelKeys       String[]  @default([])
   createdAt       DateTime  @default(now())
 
   teams    Team[]
@@ -225,6 +226,7 @@ model ProviderConnection {
   enabled       Boolean  @default(true)
   restricted    Boolean  @default(false)
   internal      Boolean  @default(false)
+  newModels     String   @default("auto")
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
@@ -512,6 +514,33 @@ model UsageDaily {
   @@index([day])
 }
 
+model UsageLabelDaily {
+  day              DateTime @db.Date
+  label            String
+  value            String
+  keyId            String   @default("")
+  teamId           String   @default("")
+  orgId            String   @default("")
+  projectId        String   @default("")
+  memberId         String   @default("")
+  userId           String   @default("")
+  model            String   @default("")
+  requests         Int      @default(0)
+  errors           Int      @default(0)
+  rateLimited      Int      @default(0)
+  latencyMs        BigInt   @default(0)
+  promptTokens     BigInt   @default(0)
+  completionTokens BigInt   @default(0)
+  cacheReadTokens  BigInt   @default(0)
+  cacheWriteTokens BigInt   @default(0)
+  cost             Decimal  @default(0) @db.Decimal(20, 10)
+  cacheSavings     Decimal  @default(0) @db.Decimal(20, 10)
+  purchaseCost     Decimal  @default(0) @db.Decimal(20, 10)
+
+  @@id([day, label, value, keyId, teamId, orgId, projectId, memberId, userId, model], name: "slice")
+  @@index([label, value, day])
+}
+
 model RequestLog {
   id               String             @id @default(cuid())
   keyId            String             @default("")
@@ -527,6 +556,10 @@ model RequestLog {
   upstreamModel    String             @default("")
   stream           Boolean            @default(false)
   tag              String             @default("")
+  labels           String[]           @default([])
+  sessionId        String             @default("")
+  agent            String             @default("")
+  providerId       String             @default("")
   status           Int                @default(0)
   latencyMs        Int                @default(0)
   outcome          String             @default("")
@@ -553,7 +586,9 @@ model RequestLog {
   @@index([orgId, createdAt])
   @@index([projectId, createdAt])
   @@index([memberId, createdAt])
+  @@index([sessionId, createdAt])
   @@index([status])
+  @@index([labels], type: Gin)
 }
 
 model RequestLogContent {

@@ -53,6 +53,7 @@ const names: Record<string, unknown[]> = {
           get: (_delegate, method: string) => async (args: unknown) => {
             calls.push({ model, method, args });
             if (method === "count") return 0;
+            if (method === "groupBy") return [];
             if (method !== "findMany") return null;
             if (model === "usageDaily") return [usageRow];
             return names[model] ?? [];

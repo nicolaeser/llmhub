@@ -31,7 +31,7 @@
   "providers": "{active} von {total, plural, one {# Anbieter} other {# Anbietern}} aktiv",
   "newProviders": "{count, plural, one {# neuer Anbieter} other {# neue Anbieter}}",
   "autoRoutes": "Neue Anbieter automatisch aufnehmen",
-  "autoRoutesHint": "Routet vertrauenswürdige Anbieter, die dieses Modell neu anbieten, nach der nächsten Aktualisierung. Der Standard kommt aus den Einstellungen. Eigene OpenAI-kompatible Server schaltest du immer von Hand ein.",
+  "autoRoutesHint": "Routet vertrauenswürdige Anbieter, die dieses Modell neu anbieten, nach der nächsten Aktualisierung. Der Standard kommt aus den Einstellungen. Eigene OpenAI-kompatible Server schaltest du von Hand ein, außer ihr Anbieter schaltet neue Modelle selbst ein.",
   "openModels": "Gruppe öffnen",
   "columns": {
     "provider": "Anbieter",

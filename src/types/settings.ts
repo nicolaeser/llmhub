@@ -85,6 +85,7 @@ export type LoggingSettingsView = {
   s3Ready: boolean;
   canManage: boolean;
   budgetAlerts: { thresholds: number[]; canManage: boolean };
+  labelKeys: string[];
 };
 
 export type AlertWebhookInput = z.infer<typeof alertWebhooksSchema>[number];
@@ -128,6 +129,7 @@ export type Enterprise = {
   guardrails?: GuardrailPolicy;
   s3?: S3Settings;
   budget_alert_thresholds?: number[];
+  label_keys?: string[];
   spend_anomaly_factor?: number;
   spend_anomaly_min_cost?: number;
   key_expiry_warning_days?: number;

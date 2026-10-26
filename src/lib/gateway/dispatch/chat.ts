@@ -22,6 +22,7 @@ import {
   markOverloaded,
   markRejected,
   markSuccess,
+  permittedDeployments,
 } from "@/lib/gateway/routing/runtime";
 import { isSignInKind, speaksAnthropic, speaksGoogle, speaksMuse } from "@/lib/gateway/upstreams/provider-kinds";
 import { AntigravitySseTranslator } from "@/lib/gateway/upstreams/antigravity";
@@ -34,6 +35,7 @@ import { nudgeLimits, recordStreamTraffic } from "@/lib/gateway/upstreams/limit-
 import { autoRedeemIfDue } from "@/lib/gateway/upstreams/reset-redeem";
 import { plainModel } from "@/lib/gateway/catalog/model-alias";
 import { hiddenFrom, outsidePool, routable, routeOf } from "@/lib/gateway/routing/route-pool";
+import { ContextFit, contextOverflow } from "@/lib/gateway/routing/context-window";
 import { KEEPALIVE_MS, SSE_HEADERS, SSE_KEEPALIVE, sseData } from "@/lib/gateway/protocols/sse";
 import {
   devinResetLookup,
@@ -55,13 +57,20 @@ import {
 import { asRecord, ERR_UNKNOWN_GROUP, isRouterError, isUnavailableError, newId, routerGateError, stringifyContent } from "@/lib/gateway/core";
 import { costFilter, costRejected } from "@/lib/gateway/billing/cost-cap";
 import { ChatStreamTranscript } from "@/lib/gateway/request-logs/log-content";
-import { estimateTokens, requestText } from "@/lib/gateway/billing/tokens";
+import { contextDemand, estimateTokens, requestText } from "@/lib/gateway/billing/tokens";
 import { logger } from "@/lib/logging/logger";
 import { parseJsonOrNull, readTextOr } from "@/lib/utils/json";
 import { cancelQuietly, DeadlineReader, withIdleTimeout } from "@/lib/utils/streams";
 import type { ChatSseTranslator, JsonMap, Principal, RequestTrace } from "@/types/gateway";
 import type { CostFilter, TokenUsage } from "@/types/billing";
-import type { AccountPin, ResolvedModelGroup, ResolvedDeployment, RoutePool, RunRouting } from "@/types/routing";
+import type {
+  AccountPin,
+  ResolvedModelGroup,
+  ResolvedDeployment,
+  RouteEntry,
+  RoutePool,
+  RunRouting,
+} from "@/types/routing";
 import type { SignInKind } from "@/types/providers";
 import type { OutputGuard } from "@/types/guardrails";
 import type { RouteLimits } from "@/types/model-templates";
@@ -120,6 +129,7 @@ export async function routeMetered<T>(
     cost: costFilter(input.principal, input.body),
     request: input.body,
     headers: input.headers,
+    fitContext: true,
   };
   try {
     return await withDeployment(input.aliases, input.principal.routeLimits, fn, routing);
@@ -174,11 +184,21 @@ function pinnedAccount(dep: ResolvedDeployment): string | null {
   return dep.provider && pinsAccounts(dep.provider.kind) ? dep.provider.id : null;
 }
 
-type FailureClass = "request" | "limit" | "rejected" | "signed_out" | "model" | "overloaded" | "transient" | "caller";
+type FailureClass =
+  | "request"
+  | "context"
+  | "limit"
+  | "rejected"
+  | "signed_out"
+  | "model"
+  | "overloaded"
+  | "transient"
+  | "caller";
 
 function failureClass(err: unknown, account: string | null): FailureClass {
   if (!(err instanceof GateError)) return "transient";
   if (err.requestScoped) return "request";
+  if (contextOverflow(err)) return "context";
   if (err.status === 429) return "limit";
   if (err.status === OVERLOADED_STATUS) return "overloaded";
   if (account && ACCOUNT_REJECTED_STATUSES.has(err.status)) return "rejected";
@@ -188,7 +208,7 @@ function failureClass(err: unknown, account: string | null): FailureClass {
 }
 
 function recordAttemptFailure(dep: ResolvedDeployment, failure: FailureClass, err: unknown, now = Date.now()): void {
-  if (failure === "caller" || failure === "request") return;
+  if (failure === "caller" || failure === "request" || failure === "context") return;
   if (failure === "overloaded") markOverloaded(dep);
   else if (failure === "rejected") markRejected(dep, now + ACCOUNT_REJECTED_COOLDOWN_MS);
   else if (failure === "model") markRejected(dep, now + MODEL_UNAVAILABLE_COOLDOWN_MS);
@@ -245,6 +265,7 @@ export async function withDeployment<T>(
     headers?: Record<string, string>;
     signal?: AbortSignal;
     health?: boolean;
+    fitContext?: boolean;
   },
 ): Promise<{
   result: T;
@@ -261,14 +282,28 @@ export async function withDeployment<T>(
   const tracksHealth = opts?.health !== false;
   const run: RunRouting = { session: runSession(request, opts?.headers), tried: new Set() };
   const renewed = new Set<string>();
+  const context =
+    opts?.fitContext && request
+      ? new ContextFit(() => contextDemand(request), {
+          keyId: opts.principal?.key?.token_id ?? "",
+          endpoint: opts.principal?.trace?.endpoint ?? "",
+        })
+      : null;
   let reasoningDropped = false;
   let failedAccount: string | null = null;
-  const queue = aliases.map((entry) => {
+  let upstreamTried = false;
+  let overflow: unknown = null;
+  const queue: RouteEntry[] = aliases.map((entry) => {
     const route = routeOf(entry, surface);
-    return { alias: route.alias, root: route.alias, pool: route.pool };
+    return { alias: route.alias, root: route.alias, pool: route.pool, relaxed: false };
   });
-  for (let qi = 0; qi < queue.length; qi++) {
-    const { alias, root, pool } = queue[qi]!;
+  const deferred: RouteEntry[] = [];
+  const entryAt = (index: number): RouteEntry | undefined => {
+    if (index === queue.length) queue.push(...deferred.splice(0));
+    return queue[index];
+  };
+  for (let qi = 0; entryAt(qi); qi++) {
+    const { alias, root, pool, relaxed } = queue[qi]!;
     let group: ResolvedModelGroup;
     try {
       group = await loadGroup(alias);
@@ -283,9 +318,16 @@ export async function withDeployment<T>(
     const inPool = routable(pool);
     const pooled = group.mapped.filter(inPool);
     const variants = variantRoutes(pooled, opts?.request);
-    const servable = (dep: ResolvedDeployment) => inPool(dep) && variants.serves(dep);
-    const reachable = !group.mapped.length || group.mapped.some(servable) || Boolean(group.overflow_group);
-    if (!reachable) last = pooled.length && variants.error ? variants.error : outsidePool(pool, surface);
+    const candidates = context ? permittedDeployments(pooled, limits[root]).filter(variants.serves) : [];
+    const plan = context?.plan(candidates, relaxed) ?? "open";
+    if (plan !== "open") context!.record(plan, alias, candidates);
+    if (plan === "tight") deferred.push({ alias, root, pool, relaxed: true });
+    const servable = (dep: ResolvedDeployment) =>
+      inPool(dep) && variants.serves(dep) && (!context || context.fits(dep, relaxed));
+    const sized = plan === "open" || plan === "narrowed";
+    const reachable =
+      sized && (!group.mapped.length || group.mapped.some(servable) || Boolean(group.overflow_group));
+    if (sized && !reachable) last = pooled.length && variants.error ? variants.error : outsidePool(pool, surface);
     const attempts = reachable ? Math.max(0, group.num_retries) + 1 : 0;
     const switchBudget = accountBudget(pooled.filter(servable));
     let switches = 0;
@@ -299,6 +341,7 @@ export async function withDeployment<T>(
         prepareHandoff(acquired.dep, acquired.pinned, switched, request);
         try {
           const started = Date.now();
+          upstreamTried = true;
           const result = await fn(acquired.dep, group);
           if (tracksHealth) markSuccess(acquired.dep, Date.now() - started);
           const pinTo = pinnedAccount(acquired.dep);
@@ -341,6 +384,13 @@ export async function withDeployment<T>(
           if (tracksHealth) recordAttemptFailure(acquired.dep, failure, err);
           last = err;
           if (!isRouterError(err)) upstreamFailure = err;
+          if (failure === "context") {
+            overflow = err;
+            run.tried.add(acquired.dep.id);
+            context?.overflowed(acquired.dep);
+            context?.record("overflow", alias, [acquired.dep]);
+            continue;
+          }
           if (account && tracksHealth && failure === "limit") {
             nudgeLimits(account, acquired.dep.provider!.kind);
             void autoRedeemIfDue(account);
@@ -367,17 +417,24 @@ export async function withDeployment<T>(
       }
     }
     for (const fb of group.fallback_groups) {
-      if (!queue.some((entry) => entry.alias === fb && entry.pool === pool)) queue.push({ alias: fb, root, pool });
+      if (!queue.some((entry) => entry.alias === fb && entry.pool === pool)) queue.push({ alias: fb, root, pool, relaxed: false });
     }
     if (
       !stopAlias &&
       group.overflow_group &&
       !queue.some((entry) => entry.alias === group.overflow_group && entry.pool === pool)
     ) {
-      queue.push({ alias: group.overflow_group, root, pool });
+      queue.push({ alias: group.overflow_group, root, pool, relaxed: false });
     }
   }
-  const failure = upstreamFailure && isUnavailableError(last) && !last.wait?.limited ? upstreamFailure : last;
+  const waiting = isUnavailableError(last) && last.wait !== null;
+  let failure = upstreamFailure && isUnavailableError(last) && !last.wait?.limited ? upstreamFailure : last;
+  if (context?.short && !upstreamTried && !waiting) {
+    failure = context.rejection(aliases[0] ?? "");
+    context.record("rejected", aliases[0] ?? "", []);
+  } else if (overflow && isRouterError(failure)) {
+    failure = overflow;
+  }
   if (tracksHealth) await alertUpstreamFailure(failure);
   throw failure;
 }

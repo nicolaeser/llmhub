@@ -218,7 +218,12 @@
     "contentHint": "Turn it off for a single person in Users or for a single key in its key settings. While PII redaction is active, stored content is masked and every log shows the entities it found.",
     "contentRetention": "Content retention days",
     "contentRetentionHint": "{days, plural, one {# day} other {# days}} by default. 0 keeps content as long as the request log. A lower value removes prompts and responses earlier and keeps the metadata. Integration tool executions store tool output and follow the shorter of both values.",
-    "description": "Alert webhooks and rules, request content, retention, and log archiving."
+    "description": "Alert webhooks and rules, request content, retention, and log archiving.",
+    "labels": {
+      "title": "Request labels",
+      "hint": "Label keys every company may use. Usage, chargeback, and logs can be grouped and filtered by them.",
+      "saved": "Label keys saved."
+    }
   },
   "cache": {
     "ttl": "TTL seconds",
@@ -270,7 +275,7 @@
       "keepKey": "Keep the stored key",
       "catalogHint": "Results and refresh status are on the <link>Model catalog</link> page.",
       "autoRoutes": "Add new providers automatically",
-      "autoRoutesHint": "Default for every alias that does not set its own value. Only trusted providers that start offering a model are routed; own OpenAI-compatible servers are always turned on by hand.",
+      "autoRoutesHint": "Default for every alias that does not set its own value. Only trusted providers that start offering a model are routed; own OpenAI-compatible servers are turned on by hand unless their provider turns new models on.",
       "minConfidence": "Minimum Jev confidence",
       "minConfidenceHint": "Jev matches below this value are shown in the catalog but never routed on their own. Matches by name always count as certain."
     },

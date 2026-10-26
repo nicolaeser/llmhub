@@ -1,8 +1,9 @@
 {
   "title": "Logs",
-  "subtitle": "Requests, spend events, and admin audit trail",
+  "subtitle": "Requests, agent sessions, spend events, and admin audit trail",
   "tabs": {
     "requests": "Requests",
+    "sessions": "Sessions",
     "spend": "Spend",
     "audit": "Audit"
   },
@@ -46,9 +47,14 @@
     "user": "Console user",
     "anyUser": "Anyone",
     "selected": "{kind, select, key {Selected key} other {Selected console user}}",
+    "session": "Session",
+    "sessionPlaceholder": "Session ID",
     "pii": "Only requests with PII",
     "reset": "Reset",
-    "title": "{count, plural, =0 {Filters} other {Filters · # active}}"
+    "title": "{count, plural, =0 {Filters} other {Filters · # active}}",
+    "label": "Label",
+    "labelHint": "key:value, for example cost_center:4711",
+    "labelInvalid": "Enter the label as key:value."
   },
   "prev": "Previous",
   "next": "Next",
@@ -60,6 +66,7 @@
     "feature": "{feature, select, catalog {Model catalog (Jev)} mcp_builder {MCP Anything} model_test {Model test} pii {PII detection} other {Console feature}}"
   },
   "statusOutcome": "{status} · {outcome, select, ok {OK} error {Error} cache_hit {Response cache hit} pii_blocked {Blocked by PII} guardrail_blocked {Blocked by guardrail} cancelled {Cancelled by the client} other {{outcome}}}",
+  "agent": "{agent, select, claude_code {Claude Code} codex {Codex} other {{agent}}}",
   "openDetails": "Show details for {model}",
   "pii": {
     "blocked": "Blocked",
@@ -81,6 +88,9 @@
     "stream": "Streaming",
     "yesNo": "{value, select, true {Yes} other {No}}",
     "tag": "Tag",
+    "session": "Session",
+    "agent": "Agent",
+    "openSession": "Open session",
     "key": "API key",
     "user": "Console user",
     "member": "Person",
@@ -127,5 +137,67 @@
     "replayHint": "Load this request into the Playground to send it again. Keep the original model or pick another to compare.",
     "replayPick": "Choose a model",
     "replayNoModels": "No models available"
+  },
+  "sessions": {
+    "title": "{agent, select, claude_code {Claude Code session} codex {Codex session} none {Agent session} other {{agent} session}}",
+    "empty": "No agent sessions yet.",
+    "emptyHint": "Requests are grouped into a session when the client sends a session ID. Claude Code and Codex do this on their own; other clients can send the x-llmhub-session header.",
+    "columns": {
+      "session": "Session",
+      "lastActivity": "Last activity",
+      "requests": "Requests",
+      "duration": "Duration",
+      "models": "Models",
+      "switches": "Account switches",
+      "offset": "Elapsed",
+      "account": "Account"
+    },
+    "active": "Active",
+    "requestCount": "{count, plural, one {# request} other {# requests}}",
+    "errorCount": "{count, plural, =0 {No errors} one {# error} other {# errors}}",
+    "duration": "{unit, select, hours {{hours, number, integer} h {minutes, number, integer} min} minutes {{minutes, number, integer} min {seconds, number, integer} s} other {{seconds, number, integer} s}}",
+    "offset": "{unit, select, hours {+{hours, number, integer}:{mm}:{ss}} other {+{minutes, number, integer}:{ss}}}",
+    "moreModels": "+{count, number, integer}",
+    "switchCount": "{count, plural, =0 {None} one {# switch} other {# switches}}",
+    "accountCount": "{count, plural, =0 {No accounts} one {# account} other {# accounts}}",
+    "open": "Open session {session}",
+    "back": "All sessions",
+    "copy": "Copy session ID",
+    "started": "Started {at, date, zoned}",
+    "lastRequest": "Last request {at, date, zoned}",
+    "inputTokens": "Input tokens",
+    "outputTokens": "Output tokens",
+    "cacheRead": "Cache read",
+    "cacheWritten": "Cache written",
+    "modelLine": "{model} · {count, number, integer}",
+    "timeline": "Timeline",
+    "account": "Account {index, number, integer}",
+    "switched": "Account switch",
+    "showRequests": "Show in request list",
+    "exportRequests": "Export requests",
+    "pageStatus": "{capped, select, true {Page {page, number, integer} · more than {total, number, integer} sessions} other {Page {page, number, integer} · {total, plural, one {# session} other {# sessions}}}}",
+    "timelineStatus": "Requests {from, number, integer} to {to, number, integer} of {total, number, integer}",
+    "totals": {
+      "sessions": "Sessions",
+      "active": "{count, plural, =0 {None active right now} other {# active right now}}",
+      "cost": "Cost",
+      "perSession": "{value} per session on average",
+      "requests": "Requests",
+      "errorRate": "{errors, plural, =0 {No errors} other {{rate, number, percent} errors}}",
+      "tokens": "Tokens",
+      "cacheShare": "{rate, number, percent} of input from cache"
+    },
+    "span": "{start} · {duration}",
+    "successShare": "{rate, number, percent} successful",
+    "costShare": "{rate, number, percent} of the most expensive session on this page",
+    "perRequest": "{value} per request",
+    "tokenFlow": "{input} in · {output} out",
+    "latencyShare": "{rate, number, percent} of the slowest request on this page",
+    "callerLine": "{key} · {person}",
+    "tokenTotal": "{cached, select, true {{tokens} tokens · {rate, number, percent} cached} other {{tokens} tokens}}"
+  },
+  "labels": {
+    "title": "Labels",
+    "chip": "{key}: {value}"
   }
 }

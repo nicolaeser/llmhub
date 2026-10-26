@@ -6,6 +6,9 @@ type SliceKey = keyof Pick<
 >;
 
 const CHARGEBACK_PARTS = ["orgId", "teamId", "projectId", "memberId", "keyId", "userId", "model"] as const;
+const SLICE_DIMENSIONS = ["day", "keyId", "teamId", "orgId", "projectId", "memberId", "userId", "model"] as const;
+const LABEL_SEPARATOR = "\u001f";
+const MONEY_STEPS = 1e10;
 
 function rollUp(rows: UsageSlice[], nameOf: (row: UsageSlice) => string): SliceRow[] {
   const map = new Map<string, Omit<Required<SliceRow>, "purchase"> & SliceRow & { latencySum: number }>();
@@ -80,19 +83,89 @@ export function cacheHitRate(cacheRead: number, prompt: number): number {
 }
 
 export function chargebackRows(rows: UsageSlice[]): SliceRow[] {
-  return rollUp(rows.filter(billable), (row) =>
-    CHARGEBACK_PARTS.map((part) => row[part] || "-").join("/"),
-  ).sort((a, b) => b.spend - a.spend);
+  return rollUp(rows.filter(billable), (row) => {
+    const name = CHARGEBACK_PARTS.map((part) => row[part] || "-").join("/");
+    return row.label === undefined ? name : `${name}${LABEL_SEPARATOR}${row.label}`;
+  }).sort((a, b) => b.spend - a.spend);
 }
 
 export function chargebackParts(name: string): ChargebackParts {
-  const values = name.split("/");
+  const cut = name.indexOf(LABEL_SEPARATOR);
+  const values = (cut < 0 ? name : name.slice(0, cut)).split("/");
+  const tenancy = CHARGEBACK_PARTS.length - 1;
   const parts = {} as ChargebackParts;
   CHARGEBACK_PARTS.forEach((part, index) => {
-    const value = values[index];
+    const value = index < tenancy ? values[index] : values.slice(tenancy).join("/");
     parts[part] = value && value !== "-" ? value : "";
   });
+  if (cut >= 0) parts.label = name.slice(cut + 1);
   return parts;
+}
+
+function sliceIdentity(row: UsageSlice): string {
+  return SLICE_DIMENSIONS.map((dimension) => row[dimension]).join(LABEL_SEPARATOR);
+}
+
+function remaining(total: number, used: number): number {
+  return Math.max(0, Math.round((total - used) * MONEY_STEPS) / MONEY_STEPS);
+}
+
+function sliceUsage(row: UsageSlice): boolean {
+  return row.requests > 0 || row.cost > 0 || row.promptTokens > 0 || row.completionTokens > 0;
+}
+
+export function labelBreakdown(daily: UsageSlice[], labeled: UsageSlice[]): UsageSlice[] {
+  const used = new Map<string, UsageSlice>();
+  for (const row of labeled) {
+    const id = sliceIdentity(row);
+    const sum = used.get(id);
+    used.set(
+      id,
+      sum
+        ? {
+            ...sum,
+            requests: sum.requests + row.requests,
+            errors: sum.errors + row.errors,
+            rateLimited: sum.rateLimited + row.rateLimited,
+            latencyMs: sum.latencyMs + row.latencyMs,
+            promptTokens: sum.promptTokens + row.promptTokens,
+            completionTokens: sum.completionTokens + row.completionTokens,
+            cacheReadTokens: sum.cacheReadTokens + row.cacheReadTokens,
+            cacheWriteTokens: sum.cacheWriteTokens + row.cacheWriteTokens,
+            cost: sum.cost + row.cost,
+            cacheSavings: sum.cacheSavings + row.cacheSavings,
+            ...(sum.purchaseCost === undefined ? {} : { purchaseCost: sum.purchaseCost + (row.purchaseCost ?? 0) }),
+          }
+        : row,
+    );
+  }
+  const unlabeled = daily.flatMap((row) => {
+    const sum = used.get(sliceIdentity(row));
+    const rest: UsageSlice = sum
+      ? {
+          ...row,
+          requests: remaining(row.requests, sum.requests),
+          errors: remaining(row.errors, sum.errors),
+          rateLimited: remaining(row.rateLimited, sum.rateLimited),
+          latencyMs: remaining(row.latencyMs, sum.latencyMs),
+          promptTokens: remaining(row.promptTokens, sum.promptTokens),
+          completionTokens: remaining(row.completionTokens, sum.completionTokens),
+          cacheReadTokens: remaining(row.cacheReadTokens, sum.cacheReadTokens),
+          cacheWriteTokens: remaining(row.cacheWriteTokens, sum.cacheWriteTokens),
+          cost: remaining(row.cost, sum.cost),
+          cacheSavings: remaining(row.cacheSavings, sum.cacheSavings),
+          ...(row.purchaseCost === undefined ? {} : { purchaseCost: remaining(row.purchaseCost, sum.purchaseCost ?? 0) }),
+        }
+      : row;
+    return sliceUsage(rest) ? [{ ...rest, label: "" }] : [];
+  });
+  return [...labeled, ...unlabeled];
+}
+
+export function groupByLabel(rows: UsageSlice[]): SliceRow[] {
+  return rollUp(rows, (row) => row.label ?? "").sort(
+    (a, b) => b.spend - a.spend || (b.requests ?? 0) - (a.requests ?? 0),
+  );
 }
 
 export const CHARGEBACK_COLUMNS = [
@@ -131,14 +204,21 @@ export const CHARGEBACK_MARGIN_COLUMNS = [
   "completion_tokens",
 ] as const;
 
-export function chargebackColumns(priced: boolean): readonly string[] {
-  return priced ? CHARGEBACK_MARGIN_COLUMNS : CHARGEBACK_COLUMNS;
+const LABEL_COLUMNS = ["label_key", "label_value"] as const;
+
+export function chargebackColumns(priced: boolean, labelled = false): readonly string[] {
+  const columns: readonly string[] = priced ? CHARGEBACK_MARGIN_COLUMNS : CHARGEBACK_COLUMNS;
+  if (!labelled) return columns;
+  const at = columns.indexOf("model") + 1;
+  return [...columns.slice(0, at), ...LABEL_COLUMNS, ...columns.slice(at)];
 }
 
 export function chargebackTable(
   rows: SliceRow[],
   names: Record<string, string>,
-): (Record<(typeof CHARGEBACK_COLUMNS)[number], string | number> & Partial<Record<"purchase_cost" | "margin", number>>)[] {
+  labelKey = "",
+): (Record<(typeof CHARGEBACK_COLUMNS)[number], string | number> &
+  Partial<Record<"purchase_cost" | "margin", number> & Record<(typeof LABEL_COLUMNS)[number], string>>)[] {
   return rows.map((row) => {
     const parts = chargebackParts(row.name);
     return {
@@ -153,12 +233,37 @@ export function chargebackTable(
       key_id: parts.keyId,
       user_id: parts.userId,
       model: parts.model,
+      ...(labelKey ? { label_key: labelKey, label_value: parts.label ?? "" } : {}),
       spend: row.spend,
       ...(row.purchase === undefined ? {} : { purchase_cost: row.purchase, margin: row.spend - row.purchase }),
       prompt_tokens: row.prompt,
       completion_tokens: row.completion,
     };
   });
+}
+
+export const LABEL_SUMMARY_COLUMNS = [
+  "label_key",
+  "label_value",
+  "requests",
+  "spend",
+  "prompt_tokens",
+  "completion_tokens",
+] as const;
+
+export function labelSummaryTable(
+  groups: { key: string; rows: SliceRow[] }[],
+): Record<(typeof LABEL_SUMMARY_COLUMNS)[number], string | number>[] {
+  return groups.flatMap((group) =>
+    group.rows.map((row) => ({
+      label_key: group.key,
+      label_value: row.name,
+      requests: row.requests ?? 0,
+      spend: row.spend,
+      prompt_tokens: row.prompt,
+      completion_tokens: row.completion,
+    })),
+  );
 }
 
 export function usageDays(start: Date, count: number): string[] {

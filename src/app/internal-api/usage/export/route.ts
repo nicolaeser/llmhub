@@ -13,6 +13,8 @@ export async function GET(req: NextRequest) {
     loadUsage({
       days,
       model: req.nextUrl.searchParams.get("model") ?? "",
+      labelKey: req.nextUrl.searchParams.get("labelKey") ?? "",
+      labelValue: req.nextUrl.searchParams.get("labelValue") ?? "",
     }),
   );
   if (isActionFail(result)) return actionProblem(req, result);
@@ -21,8 +23,12 @@ export async function GET(req: NextRequest) {
   const format = await getFormatter();
   const first = result.daily[0]?.day;
   const last = result.daily.at(-1)?.day;
+  const filters = [
+    ...(result.model ? [t("pdf.filter", { model: result.model })] : []),
+    ...(result.labelValue ? [t("pdf.labelFilter", { key: result.labelKey, value: result.labelValue })] : []),
+  ];
   const pdf = usageStatsPdf({
-    stats: result,
+    stats: { ...result, byLabel: result.labelKey ? [{ key: result.labelKey, rows: result.byLabel }] : [] },
     t,
     format,
     brand: tCommon("appName"),
@@ -30,7 +36,7 @@ export async function GET(req: NextRequest) {
       days: result.days,
       range: first && last ? format.dateTimeRange(toDate(first), toDate(last), "short", { timeZone: "UTC" }) : "",
     }),
-    filter: result.model ? t("pdf.filter", { model: result.model }) : undefined,
+    filter: filters.length ? format.list(filters, "enumeration") : undefined,
     generatedAt: await getNow(),
     dayDate: toDate,
   });

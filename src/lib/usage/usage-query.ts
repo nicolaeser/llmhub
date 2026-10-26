@@ -11,9 +11,21 @@ export const DEFAULT_USAGE_QUERY: UsageQuery = {
   memberId: "",
   keyId: "",
   userId: "",
+  labelKey: "",
+  labelValue: "",
 };
 
-const FILTER_KEYS = ["model", "orgId", "teamId", "projectId", "memberId", "keyId", "userId"] as const;
+const FILTER_KEYS = [
+  "model",
+  "orgId",
+  "teamId",
+  "projectId",
+  "memberId",
+  "keyId",
+  "userId",
+  "labelKey",
+  "labelValue",
+] as const;
 
 type UsageFilterKey = (typeof FILTER_KEYS)[number];
 
@@ -44,6 +56,8 @@ export function usageQueryParams(query: UsageQuery): Record<"days" | UsageFilter
     memberId: null,
     keyId: null,
     userId: null,
+    labelKey: null,
+    labelValue: null,
   };
   for (const key of FILTER_KEYS) params[key] = query[key] || null;
   return params;

@@ -1,7 +1,8 @@
 import { chargebackParts } from "@/lib/usage/usage-stats";
+import { labelRecord } from "@/lib/usage/labels";
 import type { SliceRow } from "@/types/usage";
 import type { VirtualKeyView } from "@/types/keys";
-import type { RequestLogRow } from "@/types/logs";
+import type { LogSessionRow, RequestLogRow } from "@/types/logs";
 import type { AuditLogSource, ProviderSource, SpendLogSource, UsageSource } from "@/types/management";
 import type { ModelGroupView } from "@/types/models";
 import type { MarkupView } from "@/types/pricing";
@@ -106,6 +107,7 @@ export function serializeProvider(provider: ProviderSource) {
     enabled: provider.enabled,
     restricted: provider.restricted,
     internal: provider.internal,
+    new_models: provider.newModels,
     assigned_to: provider.assignments.map((target) => ({ scope: target.scope, id: target.id })),
     sign_in: provider.signIn
       ? { account: orNull(provider.signIn.account), plan: orNull(provider.signIn.plan), status: provider.signIn.status }
@@ -155,6 +157,7 @@ export function serializeOrg(org: OrgNode, structure: StructurePayload) {
     team_count: structure.teams.filter((row) => row.orgId === org.id).length,
     project_count: structure.projects.filter((row) => row.orgId === org.id).length,
     member_count: structure.members.filter((row) => row.orgId === org.id).length,
+    label_keys: org.labelKeys,
   };
 }
 
@@ -233,10 +236,17 @@ function slice(row: SliceRow) {
   };
 }
 
+function labelSlice(row: SliceRow) {
+  const { name, ...rest } = slice(row);
+  return { value: orNull(name), ...rest };
+}
+
 export function serializeUsage(usage: UsageSource) {
+  const labelKey = usage.labelKey ?? "";
   return {
     object: "usage",
     days: usage.days,
+    group_by: labelKey ? `label:${labelKey}` : null,
     filters: {
       model: orNull(usage.model),
       team_id: orNull(usage.teamId),
@@ -245,6 +255,7 @@ export function serializeUsage(usage: UsageSource) {
       member_id: orNull(usage.memberId),
       key_id: orNull(usage.keyId),
       user_id: orNull(usage.userId),
+      label: labelKey && usage.labelValue ? { key: labelKey, value: usage.labelValue } : null,
     },
     totals: {
       spend: usage.spend,
@@ -268,6 +279,9 @@ export function serializeUsage(usage: UsageSource) {
     by_member: usage.byMember.map(slice),
     by_key: usage.byKey.map(slice),
     by_user: usage.byUser.map(slice),
+    ...(labelKey
+      ? { by_label: (usage.byLabel ?? []).map(labelSlice) }
+      : {}),
     chargeback: usage.chargeback.map((row) => {
       const parts = chargebackParts(row.name);
       return {
@@ -278,6 +292,7 @@ export function serializeUsage(usage: UsageSource) {
         key_id: orNull(parts.keyId),
         user_id: orNull(parts.userId),
         model: orNull(parts.model),
+        ...(labelKey ? { label_key: labelKey, label_value: orNull(parts.label) } : {}),
         spend: row.spend,
         ...margin(row.spend, row.purchase),
         prompt_tokens: row.prompt,
@@ -326,7 +341,35 @@ export function serializeRequestLog(row: RequestLogRow) {
     pii_output: row.piiOutput,
     guardrail_input: row.guardInput,
     guardrail_output: row.guardOutput,
+    labels: labelRecord(row.labels),
     has_content: row.hasContent,
+    session_id: orNull(row.sessionId),
+    agent: orNull(row.agent),
+  };
+}
+
+export function serializeRequestSession(row: LogSessionRow) {
+  return {
+    object: "request_session",
+    session_id: row.sessionId,
+    key_id: orNull(row.keyId),
+    user_id: orNull(row.userId),
+    member_id: orNull(row.memberId),
+    agent: orNull(row.agent),
+    active: row.active,
+    started_at: row.startedAt,
+    last_at: row.lastAt,
+    duration_ms: row.durationMs,
+    requests: row.requests,
+    errors: row.errors,
+    prompt_tokens: row.promptTokens,
+    completion_tokens: row.completionTokens,
+    cache_read_tokens: row.cacheReadTokens,
+    cache_write_tokens: row.cacheWriteTokens,
+    cost: row.cost,
+    models: row.models,
+    accounts: row.accounts,
+    account_switches: row.accountSwitches,
   };
 }
 

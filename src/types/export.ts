@@ -57,10 +57,28 @@ export type TrueTypeFont = {
   weight: number;
 };
 
+export type UsagePdfLabelGroup = { key: string; rows: SliceRow[] };
+
 export type UsagePdfStats = UsageSummary & {
   p95Latency: number;
   byModel: SliceRow[];
   chargeback: SliceRow[];
+  byLabel?: UsagePdfLabelGroup[];
+};
+
+export type UsagePdfTable = {
+  heading: string;
+  columns: { model: string; share: string; spend: string; prompt: string; completion: string };
+  rows: {
+    name: string;
+    share: number;
+    shareLabel: string;
+    spend: string;
+    prompt: string;
+    completion: string;
+  }[];
+  total: { name: string; spend: string; prompt: string; completion: string };
+  empty: string;
 };
 
 export type UsagePdfInput = {
@@ -76,18 +94,6 @@ export type UsagePdfInput = {
     formatTick: (value: number) => string;
     empty: string;
   };
-  byModel: {
-    heading: string;
-    columns: { model: string; share: string; spend: string; prompt: string; completion: string };
-    rows: {
-      name: string;
-      share: number;
-      shareLabel: string;
-      spend: string;
-      prompt: string;
-      completion: string;
-    }[];
-    total: { name: string; spend: string; prompt: string; completion: string };
-    empty: string;
-  };
+  byModel: UsagePdfTable;
+  byLabel?: UsagePdfTable[];
 };
