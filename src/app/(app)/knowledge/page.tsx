@@ -3,7 +3,7 @@
 import { useCallback, useMemo, useState, useTransition } from "react";
 import { Alert, Button, Chip, SearchField, Table, toast, useOverlayState } from "@heroui/react";
 import { FolderOpen, Library, Pencil, Plus, Trash2 } from "lucide-react";
-import { useFormatter, useNow, useTranslations } from "next-intl";
+import { useFormatter, useTranslations } from "next-intl";
 import ConfirmDialog from "@/components/console/confirm-dialog";
 import EmptyState from "@/components/console/empty-state";
 import PageHeader from "@/components/console/page-header";
@@ -13,6 +13,7 @@ import SearchSelect from "@/components/console/search-select";
 import { useErrorToast } from "@/components/console/use-error-toast";
 import { deleteKnowledgeAction, loadKnowledgeAction } from "./_action";
 import { useActionData } from "@/lib/hooks/use-action-data";
+import { useClock } from "@/lib/hooks/use-clock";
 import { isActionFail } from "@/lib/http/action-result";
 import { formatBytes } from "@/lib/utils/bytes";
 import type { VectorStoreStatus, VectorStoreView } from "@/types/rag";
@@ -39,7 +40,7 @@ export default function KnowledgePage() {
   const showError = useErrorToast();
   const tCommon = useTranslations("Common");
   const format = useFormatter();
-  const now = useNow({ updateInterval: 30_000 });
+  const now = useClock(30_000);
   const [query, setQuery] = useState("");
   const [company, setCompany] = useState(ALL_COMPANIES);
   const [editing, setEditing] = useState<VectorStoreView | null>(null);

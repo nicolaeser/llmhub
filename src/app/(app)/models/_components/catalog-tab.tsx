@@ -13,7 +13,7 @@ import {
   useOverlayState,
 } from "@heroui/react";
 import { BookOpen, CircleCheck, Network, RefreshCw, Sparkles } from "lucide-react";
-import { useFormatter, useNow, useTranslations } from "next-intl";
+import { useFormatter, useTranslations } from "next-intl";
 import { Link } from "@/i18n/routing";
 import EmptyState from "@/components/console/empty-state";
 import IconTile from "@/components/console/icon-tile";
@@ -29,6 +29,7 @@ import {
   setCatalogGroupAutoRoutesAction,
 } from "../_action";
 import { useActionData } from "@/lib/hooks/use-action-data";
+import { useClock } from "@/lib/hooks/use-clock";
 import { isActionFail } from "@/lib/http/action-result";
 import { catalogEntryKey } from "@/lib/gateway/catalog/model-catalog";
 import type { ActionFail } from "@/types/actions";
@@ -77,7 +78,7 @@ export default function CatalogTab() {
   const showError = useErrorToast();
   const tCommon = useTranslations("Common");
   const format = useFormatter();
-  const now = useNow({ updateInterval: 30_000 });
+  const now = useClock(30_000);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
   const [tag, setTag] = useState(ALL_TAGS);

@@ -2,7 +2,8 @@
 
 import { Alert, Button, Card, Label, Meter } from "@heroui/react";
 import { Wallet, Zap } from "lucide-react";
-import { useFormatter, useNow, useTranslations } from "next-intl";
+import { useFormatter, useTranslations } from "next-intl";
+import { useClock } from "@/lib/hooks/use-clock";
 import { Link } from "@/i18n/routing";
 import { headroom, meterColor } from "@/lib/utils/budget";
 import type { BudgetView, CapLink } from "@/types/structure";
@@ -28,7 +29,7 @@ export default function BudgetCard({
   const t = useTranslations("Companies.budget");
   const tAlerts = useTranslations("Budgets.alerts");
   const format = useFormatter();
-  const now = useNow({ updateInterval: 60_000 });
+  const now = useClock(60_000);
   const ratio = usedRatio(budget);
   const capped = budget.maxBudget > 0;
   const own = chain[0];

@@ -66,6 +66,7 @@ const LEASE_WAIT_MS = 5_000;
 const LEASE_POLL_MS = 250;
 const NUDGE_GAP_MS = 60_000;
 const OBSERVED_WRITE_ATTEMPTS = 3;
+const POLL_WRITE_ATTEMPTS = 3;
 const RATE_LIMITED = "UPSTREAM_RATE_LIMITED";
 
 const LIMIT_ACCOUNT_KINDS = PROVIDER_CATALOG.filter((spec) => reportsLimits(spec.kind)).map((spec) => spec.kind);
@@ -285,6 +286,28 @@ function withPreviousObservation(
   return { ...limits, windows: [...carried, ...limits.windows], observedAt: observed };
 }
 
+function observedDuringFetch(
+  previous: StoredLimitSnapshot | null,
+  latest: StoredLimitSnapshot | null,
+): SubscriptionLimits | null {
+  const observed = latest?.limits;
+  if (!observed) return null;
+  const before = previous?.limits ? observedTime(previous.limits) : -Infinity;
+  return observedTime(observed) > before ? observed : null;
+}
+
+function withLatestObservation(
+  kind: string,
+  fetched: SubscriptionLimits,
+  previous: StoredLimitSnapshot | null,
+  latest: StoredLimitSnapshot | null,
+  now: number,
+): SubscriptionLimits {
+  const limits = withPreviousObservation(kind, fetched, latest, now);
+  const observed = observedDuringFetch(previous, latest);
+  return observed ? withObservedWindows(limits, observed.windows.filter(isObservedWindow), observedTime(observed)) : limits;
+}
+
 function successData(account: LimitPollAccount, limits: SubscriptionLimits, now: number, random: () => number) {
   const streaming = isStreamingActive(account.id, now);
   return {
@@ -330,6 +353,34 @@ async function clearAccountDeploymentsCooldown(providerId: string): Promise<void
   }
 }
 
+type PollOutcome = {
+  fetched: SubscriptionLimits | null;
+  failure: LimitFetchFailure;
+  previous: StoredLimitSnapshot | null;
+};
+
+async function storeFetched(
+  account: LimitPollAccount,
+  token: string,
+  { fetched, failure, previous }: PollOutcome,
+  now: number,
+  random: () => number,
+): Promise<{ limits: SubscriptionLimits | null; written: boolean }> {
+  let latest = previous;
+  let limits = fetched && withLatestObservation(account.kind, fetched, previous, latest, now);
+  for (let attempt = 0; latest && attempt < POLL_WRITE_ATTEMPTS; attempt++) {
+    const data = limits ? successData(account, limits, now, random) : failureData(account, failure, latest, now, random);
+    const written = await prisma.providerLimitSnapshot.updateMany({
+      where: { providerId: account.id, leaseToken: token, version: latest.version },
+      data: { ...data, leaseUntil: null, leaseToken: "", version: { increment: 1 } },
+    });
+    if (written.count) return { limits, written: true };
+    latest = await readStoredSnapshot(account.id);
+    limits = fetched && withLatestObservation(account.kind, fetched, previous, latest, now);
+  }
+  return { limits, written: false };
+}
+
 async function fetchHeld(
   account: LimitPollAccount,
   token: string,
@@ -337,12 +388,11 @@ async function fetchHeld(
   random: () => number,
 ): Promise<LimitRefreshResult> {
   const previous = await readStoredSnapshot(account.id);
-  let limits: SubscriptionLimits | null = null;
+  let fetched: SubscriptionLimits | null = null;
   let failure: LimitFetchFailure | null = null;
   try {
-    const fetched = await fetchSubscriptionLimits(account);
-    limits = fetched ? withPreviousObservation(account.kind, fetched, previous, now) : null;
-    if (!limits) failure = { code: "UPSTREAM_FAILED", retryAfterMs: null };
+    fetched = await fetchSubscriptionLimits(account);
+    if (!fetched) failure = { code: "UPSTREAM_FAILED", retryAfterMs: null };
   } catch (error) {
     failure = limitFailure(error);
     logger.warn("subscription.limits_failed", {
@@ -352,18 +402,18 @@ async function fetchHeld(
       ...(error instanceof LimitsFetchError ? {} : errorFields(error)),
     });
   }
-  const data = limits
-    ? successData(account, limits, now, random)
-    : failureData(account, failure ?? { code: "UPSTREAM_FAILED", retryAfterMs: null }, previous, now, random);
-  const written = await prisma.providerLimitSnapshot.updateMany({
-    where: { providerId: account.id, leaseToken: token },
-    data: { ...data, leaseUntil: null, leaseToken: "", version: { increment: 1 } },
-  });
+  const { limits, written } = await storeFetched(
+    account,
+    token,
+    { fetched, failure: failure ?? { code: "UPSTREAM_FAILED", retryAfterMs: null }, previous },
+    now,
+    random,
+  );
   if (limits) {
     rememberLimits(account.id, limits);
     if (!hasExhaustedQuota(limits, now)) void clearAccountDeploymentsCooldown(account.id);
   }
-  if (written.count) notifyLive("limits");
+  if (written) notifyLive("limits");
   return { status: "fetched", limits, failure, snapshot: await readStoredSnapshot(account.id) };
 }
 

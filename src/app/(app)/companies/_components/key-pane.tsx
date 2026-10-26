@@ -3,12 +3,13 @@
 import { useState, useTransition } from "react";
 import { Button, Card, Chip, Skeleton, Spinner } from "@heroui/react";
 import { Blocks, ChevronRight, KeyRound, Pencil, RefreshCw, Trash2 } from "lucide-react";
-import { useFormatter, useNow, useTranslations } from "next-intl";
+import { useFormatter, useTranslations } from "next-intl";
 import { LoadError, SectionLoading } from "@/components/console/page-status";
 import { bindingKind } from "@/components/keys/key-binding";
 import { useKeyDialogs, type KeyServerActions } from "@/components/keys/use-key-dialogs";
 import { logsHref } from "@/lib/gateway/request-logs/request-log-query";
 import { useActionData } from "@/lib/hooks/use-action-data";
+import { useClock } from "@/lib/hooks/use-clock";
 import { usageHref } from "@/lib/usage/usage-query";
 import type { ActionFail } from "@/types/actions";
 import type { KeyChoices, KeyDetail, VirtualKeyView } from "@/types/keys";
@@ -53,7 +54,7 @@ export default function KeyPane({
   const tKeys = useTranslations("Keys");
   const tCommon = useTranslations("Common");
   const format = useFormatter();
-  const now = useNow({ updateInterval: 60_000 });
+  const now = useClock(60_000);
   const [choices, setChoices] = useState<KeyChoices | null>(null);
   const [opening, startOpening] = useTransition();
   const detail = useActionData(() => loadKey(node.id));

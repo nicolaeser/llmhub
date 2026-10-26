@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { Button, Chip, Dropdown, Meter, Spinner, Table, toast, useOverlayState } from "@heroui/react";
 import { Link2, MoreHorizontal, Plus, Trash2 } from "lucide-react";
-import { useFormatter, useNow, useTranslations } from "next-intl";
+import { useFormatter, useTranslations } from "next-intl";
 import ConfirmDialog from "@/components/console/confirm-dialog";
 import EmptyState from "@/components/console/empty-state";
 import PageStatus, { LoadError } from "@/components/console/page-status";
@@ -11,6 +11,7 @@ import RowCard, { RowCards, TABLE_FROM_LG } from "@/components/console/row-cards
 import { useErrorToast } from "@/components/console/use-error-toast";
 import { kindIcon } from "@/components/providers/kind-icons";
 import { useActionData } from "@/lib/hooks/use-action-data";
+import { useClock } from "@/lib/hooks/use-clock";
 import { isActionFail } from "@/lib/http/action-result";
 import { subAddRemaining, subAddStatus } from "@/lib/providers/sub-add-status";
 import type { SignInKind } from "@/types/providers";
@@ -106,7 +107,7 @@ export default function LinksTab({
   const tProviders = useTranslations("Providers");
   const tCommon = useTranslations("Common");
   const format = useFormatter();
-  const now = useNow({ updateInterval: 60_000 });
+  const now = useClock(60_000);
   const { page } = links;
   const { data, setData } = page;
 

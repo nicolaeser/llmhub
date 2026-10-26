@@ -15,7 +15,8 @@ import {
   toast,
   type useOverlayState,
 } from "@heroui/react";
-import { useFormatter, useNow, useTranslations } from "next-intl";
+import { useFormatter, useTranslations } from "next-intl";
+import { useClock } from "@/lib/hooks/use-clock";
 import { formats } from "@/i18n/formats";
 import { isActionFail } from "@/lib/http/action-result";
 import { budgetPeriod, capConflict, meterColor } from "@/lib/utils/budget";
@@ -57,7 +58,7 @@ export default function BudgetDialog({
   const t = useTranslations("Budgets");
   const showError = useErrorToast();
   const format = useFormatter();
-  const now = useNow({ updateInterval: 60_000 });
+  const now = useClock(60_000);
   const current = budget?.maxBudget ?? 0;
   const savedPeriod = budgetPeriod(budget?.budgetDuration ?? "") ?? "";
   const [limited, setLimited] = useState(current > 0);

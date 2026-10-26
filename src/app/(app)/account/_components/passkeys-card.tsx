@@ -13,7 +13,8 @@ import {
   useOverlayState,
 } from "@heroui/react";
 import { KeyRound, Pencil, Plus, Trash2 } from "lucide-react";
-import { useFormatter, useNow, useTranslations } from "next-intl";
+import { useFormatter, useTranslations } from "next-intl";
+import { useClock } from "@/lib/hooks/use-clock";
 import FormDialog from "@/components/console/form-dialog";
 import { isActionFail } from "@/lib/http/action-result";
 import {
@@ -48,7 +49,7 @@ export default function PasskeysCard({
   const t = useTranslations("Account.passkeys");
   const tCommon = useTranslations("Common");
   const format = useFormatter();
-  const now = useNow({ updateInterval: 30_000 });
+  const now = useClock(30_000);
   const errorText = useSecurityError();
   const browserSupport = usePasskeySupport();
   const addModal = useOverlayState();

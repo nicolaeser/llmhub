@@ -1,7 +1,8 @@
 "use client";
 
 import { Button, Popover, Separator } from "@heroui/react";
-import { useFormatter, useNow, useTranslations } from "next-intl";
+import { useFormatter, useTranslations } from "next-intl";
+import { useClock } from "@/lib/hooks/use-clock";
 import type { ServerHealth } from "@/types/updates";
 import { useBuildStatus } from "./build-status";
 import UpdaterPanel, { Fact } from "./updater-panel";
@@ -17,7 +18,7 @@ const DOT_COLORS: Record<ServerHealth, string> = {
 export default function LiveBadge() {
   const t = useTranslations("Common");
   const format = useFormatter();
-  const now = useNow({ updateInterval: 30_000 });
+  const now = useClock(30_000);
   const build = useBuildStatus();
   const health = build?.health ?? "connecting";
   const label = t("health.status", { status: health });
