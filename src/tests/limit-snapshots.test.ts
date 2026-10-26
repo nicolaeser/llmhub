@@ -20,9 +20,14 @@ type FakeLogin = {
 const logins = new Map<string, FakeLogin>();
 const providers = new Map<string, { kind: string; enabled: boolean }>();
 const settings = new Map<string, string>();
+const deploymentsByProvider = new Map<string, string[]>();
 
 (globalThis as { prisma?: unknown }).prisma = {
   providerLimitSnapshot: limitSnapshotModel((id) => providers.get(id) ?? null),
+  deployment: {
+    findMany: async ({ where }: { where: { providerId: string } }) =>
+      (deploymentsByProvider.get(where.providerId) ?? []).map((id) => ({ id })),
+  },
   providerLogin: {
     findUnique: async ({ where }: { where: { providerId: string } }) => {
       const row = logins.get(where.providerId);
@@ -172,7 +177,7 @@ afterEach(() => {
   globalThis.fetch = realFetch;
 });
 
-test("accounts are polled every five minutes with jitter and right after an exhausted window resets", async () => {
+test("accounts are polled every three minutes with jitter and right after an exhausted window resets", async () => {
   const { nextPollAt, LIMITS_POLL_MS, MIN_POLL_GAP_MS, RESET_GRACE_MS } = await import(
     "@/lib/gateway/upstreams/limit-store"
   );
@@ -184,21 +189,27 @@ test("accounts are polled every five minutes with jitter and right after an exha
   assert.equal(nextPollAt("codex", limitsAt(100, now + 2 * MINUTE, now), now, () => 0), now + 2 * MINUTE + RESET_GRACE_MS);
   assert.equal(nextPollAt("codex", limitsAt(100, now + 10_000, now), now, () => 0), now + MIN_POLL_GAP_MS);
   assert.equal(nextPollAt("codex", limitsAt(100, now + 2 * HOUR, now), now, () => 0.5), now + LIMITS_POLL_MS);
-  assert.equal(nextPollAt("codex", limitsAt(100, now + 2 * MINUTE, now, "Opus"), now, () => 0.5), now + LIMITS_POLL_MS);
+  assert.equal(nextPollAt("codex", limitsAt(100, now + 2 * MINUTE, now, "Opus"), now, () => 0), now + 2 * MINUTE + RESET_GRACE_MS);
   assert.equal(nextPollAt("codex", limitsAt(100, null, now), now, () => 0.5), now + LIMITS_POLL_MS);
 });
 
-test("Claude accounts are polled every thirty minutes and skip the after-reset check while traffic reports the limits", async () => {
+test("Claude accounts are polled every three minutes, every thirty while traffic reports open limits, and after an exhausted window resets", async () => {
   const { nextPollAt, CLAUDE_POLL_MS, RESET_GRACE_MS } = await import("@/lib/gateway/upstreams/limit-store");
   const now = 1_000_000_000_000;
   assert.equal(CLAUDE_POLL_MS, 30 * MINUTE);
-  assert.equal(nextPollAt("claude", null, now, () => 0.5), now + 30 * MINUTE);
-  assert.equal(nextPollAt("claude", null, now, () => 0), now + Math.round(30 * MINUTE * 0.85));
-  assert.equal(nextPollAt("claude", null, now, () => 1), now + Math.round(30 * MINUTE * 1.15));
+  assert.equal(nextPollAt("claude", null, now, () => 0.5, true), now + 30 * MINUTE);
+  assert.equal(nextPollAt("claude", null, now, () => 0, true), now + Math.round(30 * MINUTE * 0.85));
+  assert.equal(nextPollAt("claude", null, now, () => 1, true), now + Math.round(30 * MINUTE * 1.15));
+  assert.equal(nextPollAt("claude", null, now, () => 0.5, false), now + 3 * MINUTE);
   const exhausted = limitsAt(100, now + 2 * MINUTE, now);
   assert.equal(nextPollAt("claude", exhausted, now, () => 0), now + 2 * MINUTE + RESET_GRACE_MS);
-  const observed = { ...exhausted, observedAt: new Date(now - 5 * MINUTE).toISOString() };
-  assert.equal(nextPollAt("claude", observed, now, () => 0.5), now + 30 * MINUTE);
+  const observedExhausted = { ...exhausted, observedAt: new Date(now - 1 * MINUTE).toISOString() };
+  assert.equal(nextPollAt("claude", observedExhausted, now, () => 0), now + 2 * MINUTE + RESET_GRACE_MS);
+  const open = limitsAt(40, now + 2 * MINUTE, now);
+  const observedOpen = { ...open, observedAt: new Date(now - 1 * MINUTE).toISOString() };
+  assert.equal(nextPollAt("claude", observedOpen, now, () => 0.5), now + 30 * MINUTE);
+  const staleOpen = { ...open, observedAt: new Date(now - 40 * MINUTE).toISOString() };
+  assert.equal(nextPollAt("claude", staleOpen, now, () => 0.5), now + 3 * MINUTE);
   const stale = { ...exhausted, observedAt: new Date(now - 40 * MINUTE).toISOString() };
   assert.equal(nextPollAt("claude", stale, now, () => 0), now + 2 * MINUTE + RESET_GRACE_MS);
 });
@@ -268,9 +279,37 @@ test("two concurrent refreshers of one account reach the provider once and share
   const row = snapshotRows.get(target.id)!;
   assert.equal(row.leaseUntil, null);
   assert.equal(row.version, 1);
-  assert.equal((row.nextAt as Date).getTime(), now + 5 * MINUTE);
+  assert.equal((row.nextAt as Date).getTime(), now + 3 * MINUTE);
   const { limitsSnapshot } = await import("@/lib/gateway/upstreams/subscription-limits");
   assert.equal(limitsSnapshot(target.id)?.windows[0]?.usedPercent, 42);
+});
+
+test("a poll that finds the account usable again frees its cooled deployments, an exhausted one keeps them", async () => {
+  const { refreshLimits } = await import("@/lib/gateway/upstreams/limit-store");
+  const { recordFailure, coolingDown, resetProviderHealthMemory } = await import("@/lib/gateway/routing/provider-health");
+  resetProviderHealthMemory();
+  const target = await account();
+  deploymentsByProvider.set(target.id, [`${target.id}-a`, `${target.id}-b`]);
+  const ids = deploymentsByProvider.get(target.id)!;
+  const now = Date.now();
+  const cool = () => ids.forEach((id) => recordFailure(id, now, now + 60 * MINUTE));
+  cool();
+  respond(() => usage(100, 3_600));
+  await refreshLimits(target, { kind: "scheduled" }, { now, random: () => 0.5 });
+  assert.equal((await coolingDown(ids, now)).size, 2);
+  respond(() => usage(30));
+  await refreshLimits(target, { kind: "manual" }, { now: now + 2 * MINUTE, random: () => 0.5 });
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  assert.equal((await coolingDown(ids, now + 2 * MINUTE)).size, 0);
+});
+
+test("stream traffic marks an account as streaming for one poll interval", async () => {
+  const { recordStreamTraffic, isStreamingActive, LIMITS_POLL_MS } = await import("@/lib/gateway/upstreams/limit-store");
+  const now = Date.now();
+  assert.equal(isStreamingActive("silent", now), false);
+  recordStreamTraffic("busy", now);
+  assert.equal(isStreamingActive("busy", now + LIMITS_POLL_MS - 1), true);
+  assert.equal(isStreamingActive("busy", now + LIMITS_POLL_MS + 1), false);
 });
 
 test("manual refreshes reach the provider at most once a minute and return the stored snapshot otherwise", async () => {
@@ -338,7 +377,7 @@ test("the 429 backoff escalates on every rate-limited usage read and a successfu
   assert.equal(recovered.snapshot?.error, "");
   assert.equal(recovered.snapshot?.failures, 0);
   assert.equal(recovered.snapshot?.retryAt, null);
-  assert.equal(recovered.snapshot?.nextAt, at + 30 * MINUTE);
+  assert.equal(recovered.snapshot?.nextAt, at + 3 * MINUTE);
   respond(() => new Response("", { status: 503 }));
   const failed = await refreshLimits(target, { kind: "scheduled" }, { now: at + 30 * MINUTE, random: () => 0.5 });
   assert.equal(failed.snapshot?.failures, 1);
@@ -729,13 +768,13 @@ test("a sweep reads at most four Claude accounts and spreads the rest over the n
   const claudeCalls = () => upstreamCalls.filter(anthropic).length;
   const polls: number[] = [];
   const reads: number[] = [];
-  for (let sweep = 0; sweep < 4; sweep++) {
+  for (let sweep = 0; sweep < 3; sweep++) {
     const before = claudeCalls();
     polls.push(await refreshDueLimits(now + sweep * MINUTE));
     reads.push(claudeCalls() - before);
   }
-  assert.deepEqual(polls, [6, 2, 0, 0]);
-  assert.deepEqual(reads, [4, 4, 4, 0]);
+  assert.deepEqual(polls, [6, 2, 0]);
+  assert.deepEqual(reads, [4, 4, 4]);
   assert.equal(upstreamCalls.filter((url) => new URL(url).searchParams.get("cedar_ember") === "1").length, 6);
   assert.ok(claude.every((item) => snapshotRows.get(item.id)?.fetchedAt));
   assert.ok(codex.every((item) => snapshotRows.get(item.id)?.fetchedAt));

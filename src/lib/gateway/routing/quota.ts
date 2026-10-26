@@ -28,6 +28,15 @@ export function quotaExhausted(limits: SubscriptionLimits | null, model: string,
   return liveWindows(limits, model, now).some((window) => window.limitReached || window.usedPercent >= FULL_PERCENT);
 }
 
+export function hasExhaustedQuota(limits: SubscriptionLimits | null, now = Date.now()): boolean {
+  if (!limits) return false;
+  return limits.windows.some((window) => {
+    const resetsAt = window.resetsAt ? Date.parse(window.resetsAt) : NaN;
+    if (Number.isFinite(resetsAt) && resetsAt <= now) return false;
+    return window.limitReached || window.usedPercent >= FULL_PERCENT;
+  });
+}
+
 export function quotaPressure(limits: SubscriptionLimits | null, model: string, now = Date.now()): number {
   if (!limits) return UNKNOWN_PRESSURE;
   const windows = liveWindows(limits, model, now);
@@ -56,4 +65,19 @@ export function latestRecovery(limits: SubscriptionLimits | null, now = Date.now
   const resets = exhausted.map((window) => (window.resetsAt ? Date.parse(window.resetsAt) : NaN));
   if (resets.some((time) => !Number.isFinite(time))) return null;
   return Math.max(...resets);
+}
+
+export function accountRecoveryAt(limits: SubscriptionLimits | null, now = Date.now()): number | null {
+  const planWide = latestRecovery(limits, now);
+  if (planWide !== null) return planWide;
+  if (!limits) return null;
+  const scopedExhausted = limits.windows.filter((window) => {
+    if (!window.scope) return false;
+    const reset = window.resetsAt ? Date.parse(window.resetsAt) : NaN;
+    if (Number.isFinite(reset) && reset <= now) return false;
+    return (window.limitReached || window.usedPercent >= FULL_PERCENT) && Number.isFinite(reset) && reset > now;
+  });
+  if (!scopedExhausted.length) return null;
+  const resets = scopedExhausted.map((window) => Date.parse(window.resetsAt!));
+  return Math.min(...resets);
 }

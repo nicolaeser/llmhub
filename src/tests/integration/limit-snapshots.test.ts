@@ -4,7 +4,7 @@ import prisma from "@/lib/db/prisma";
 import { runAsPrincipal } from "@/lib/auth/delegation";
 import { latestRequests } from "@/lib/gateway/request-logs/requests-feed";
 import { loginData } from "@/lib/gateway/upstreams/credentials";
-import { readLimitSnapshots, refreshLimits } from "@/lib/gateway/upstreams/limit-store";
+import { LIMITS_POLL_MS, readLimitSnapshots, refreshLimits } from "@/lib/gateway/upstreams/limit-store";
 import { loadProviderLimits, loadSubscriptionLimits } from "@/lib/providers/connections";
 import { LIMITS_FEED } from "@/lib/providers/limits-feed";
 import { usageToday } from "@/lib/usage/usage-today";
@@ -86,7 +86,7 @@ test("two replicas refreshing one account at the same time reach the provider on
     assert.equal(row.leaseUntil, null);
     assert.equal(row.leaseToken, "");
     assert.equal(row.error, "");
-    assert.ok(row.nextAt.getTime() >= now + 4 * 60_000 && row.nextAt.getTime() <= now + 6 * 60_000);
+    assert.ok(Math.abs(row.nextAt.getTime() - (now + LIMITS_POLL_MS)) <= 60_000);
     for (const result of results.filter((item) => item.status === "busy" && item.snapshot?.version === 1)) {
       assert.equal(result.limits?.windows[0]?.usedPercent, 37);
     }
