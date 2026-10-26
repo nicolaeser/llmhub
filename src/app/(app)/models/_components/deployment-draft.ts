@@ -31,6 +31,19 @@ export function catalogHit(
   return null;
 }
 
+export function contextWindowOf(providers: ProviderOpt[], providerId: string | null, model: string): number {
+  if (!providerId) return 0;
+  return providers.find((p) => p.id === providerId)?.contextWindows?.[model.trim()] ?? 0;
+}
+
+export function contextRange(windows: number[]): { range: "none" | "single" | "span"; min: number; max: number } {
+  const known = windows.filter((window) => window > 0);
+  if (!known.length) return { range: "none", min: 0, max: 0 };
+  const min = Math.min(...known);
+  const max = Math.max(...known);
+  return { range: min === max ? "single" : "span", min, max };
+}
+
 export function withCatalogPrice(
   current: DeploymentDraft,
   patch: Partial<DeploymentDraft>,

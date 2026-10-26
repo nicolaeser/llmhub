@@ -27,6 +27,7 @@ export const formats = {
     percentPoints: { style: "unit", unit: "percent", maximumFractionDigits: 0 },
     markup: { style: "percent", signDisplay: "exceptZero", maximumFractionDigits: 2 },
     axis: { notation: "compact", maximumSignificantDigits: 3 },
+    compact: { notation: "compact", maximumSignificantDigits: 3 },
     currency: {
       style: "currency",
       currency: "USD",

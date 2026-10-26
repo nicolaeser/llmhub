@@ -76,6 +76,7 @@ export type ProviderOpt = {
   hasApiKey: boolean;
   internal: boolean;
   discovered?: DiscoveredPrice[];
+  contextWindows?: Record<string, number>;
 };
 
 export type TokenPricing = {

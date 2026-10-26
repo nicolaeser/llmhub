@@ -24,6 +24,7 @@ import type { ModelGroupView, ProviderOpt } from "@/types/models";
 import type { RoutePool } from "@/types/routing";
 import { hiddenFrom, routePool } from "@/lib/gateway/routing/route-pool";
 import { modelRole } from "@/lib/models/model-role";
+import { contextRange, contextWindowOf } from "./deployment-draft";
 import ModelGroupDialog from "./model-group-dialog";
 
 function matchesGroup(group: ModelGroupView, query: string): boolean {
@@ -158,6 +159,13 @@ export default function GroupsTab() {
       output: group.priceOutput,
       windows: group.priceWindows.length,
     });
+  }
+
+  function contextLabel(group: ModelGroupView) {
+    return t(
+      "contextSummary",
+      contextRange(group.deployments.map((dep) => contextWindowOf(providers, dep.providerId, dep.model))),
+    );
   }
 
   function endpointList(group: ModelGroupView) {
@@ -299,6 +307,7 @@ export default function GroupsTab() {
                     details={[
                       { label: t("columns.strategy"), value: t("strategyLabel", { strategy: g.strategy }) },
                       { label: t("columns.overflow"), value: g.overflowGroup || tCommon("none") },
+                      { label: t("columns.context"), value: contextLabel(g) },
                       { label: t("columns.billing"), value: billingLabel(g), wide: true },
                       { label: t("columns.endpoints"), value: endpointList(g), wide: true },
                     ]}
@@ -313,6 +322,7 @@ export default function GroupsTab() {
                       <Table.Column isRowHeader>{t("columns.alias")}</Table.Column>
                       <Table.Column>{t("columns.enabled")}</Table.Column>
                       <Table.Column>{t("columns.strategy")}</Table.Column>
+                      <Table.Column>{t("columns.context")}</Table.Column>
                       <Table.Column>{t("columns.billing")}</Table.Column>
                       <Table.Column>{t("columns.endpoints")}</Table.Column>
                       <Table.Column>{t("columns.overflow")}</Table.Column>
@@ -341,6 +351,7 @@ export default function GroupsTab() {
                           </Table.Cell>
                           <Table.Cell>{enabledSwitch(g)}</Table.Cell>
                           <Table.Cell>{t("strategyLabel", { strategy: g.strategy })}</Table.Cell>
+                          <Table.Cell>{contextLabel(g)}</Table.Cell>
                           <Table.Cell>{billingLabel(g)}</Table.Cell>
                           <Table.Cell>{endpointList(g)}</Table.Cell>
                           <Table.Cell>{g.overflowGroup || tCommon("none")}</Table.Cell>

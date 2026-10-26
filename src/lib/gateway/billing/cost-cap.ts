@@ -1,56 +1,21 @@
-import { asRecord } from "@/lib/gateway/core";
 import { costOf } from "@/lib/gateway/billing/cost";
 import { GateError } from "@/lib/gateway/errors";
-import { isOpaqueText } from "@/lib/gateway/safety/pii";
 import { groupBilling } from "@/lib/gateway/billing/price-schedule";
 import { routePool } from "@/lib/gateway/routing/route-pool";
 import { applyProviderServiceMode } from "@/lib/gateway/dispatch/service-mode";
-import { tokensForLength } from "@/lib/gateway/billing/tokens";
+import { outputTokenLimit, positiveInteger, promptLength, tokensForLength } from "@/lib/gateway/billing/tokens";
 import type { JsonMap, Principal } from "@/types/gateway";
 import type { CostCap, CostFilter, RequestTokens, TokenUsage } from "@/types/billing";
 import type { ResolvedModelGroup, ResolvedDeployment } from "@/types/routing";
 
 export const MAX_COST_HEADER = "x-hub-max-cost";
 
-const OUTPUT_LIMIT_KEYS = ["max_tokens", "max_completion_tokens", "max_output_tokens"] as const;
 const CHOICE_KEYS = ["n", "best_of"] as const;
-const NON_PROMPT_KEYS = new Set([
-  "model",
-  "user",
-  "metadata",
-  "tags",
-  "tag",
-  "fallbacks",
-  "fallback",
-  "signature",
-  "encrypted_content",
-]);
 const COST_REJECTIONS = new Set(["cost_limit_exceeded", "budget_exceeded"]);
-
-function promptLength(value: unknown, key = ""): number {
-  if (NON_PROMPT_KEYS.has(key)) return 0;
-  if (typeof value === "string") return isOpaqueText(value) ? 0 : value.length;
-  if (Array.isArray(value)) return value.reduce((sum: number, item) => sum + promptLength(item, key), 0);
-  const rec = asRecord(value);
-  if (!rec) return 0;
-  return Object.entries(rec).reduce((sum, [field, item]) => sum + promptLength(item, field), 0);
-}
-
-function positiveInteger(value: unknown): number {
-  return typeof value === "number" && Number.isFinite(value) && value > 0 ? Math.ceil(value) : 0;
-}
-
-function outputLimit(body: JsonMap): number {
-  for (const key of OUTPUT_LIMIT_KEYS) {
-    const limit = positiveInteger(body[key]);
-    if (limit) return limit;
-  }
-  return 0;
-}
 
 export function requestTokens(body: JsonMap): RequestTokens {
   const choices = Math.max(1, ...CHOICE_KEYS.map((key) => positiveInteger(body[key])));
-  return { prompt: tokensForLength(promptLength(body)), completion: outputLimit(body) * choices };
+  return { prompt: tokensForLength(promptLength(body)), completion: outputTokenLimit(body) * choices };
 }
 
 export function estimateCost(

@@ -51,6 +51,12 @@ export function discoveredOf(v: unknown): DiscoveredModel[] {
   return out;
 }
 
+export function contextWindowsOf(raw: unknown): Record<string, number> {
+  return Object.fromEntries(
+    discoveredOf(raw).flatMap((row) => (row.contextLength > 0 ? [[row.id, row.contextLength] as const] : [])),
+  );
+}
+
 export function catalogPricesOf(raw: unknown): ProviderModelPrice[] {
   return discoveredOf(raw)
     .filter(
