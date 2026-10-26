@@ -14,6 +14,7 @@ import {
 } from "@/lib/gateway/core";
 import {
   catalogPricesOf,
+  contextWindowsOf,
   priceForUpstream,
 } from "@/lib/gateway/upstreams/provider-prices";
 import {
@@ -239,6 +240,7 @@ async function listProviders() {
       costOutputPer1k: item.costOutput,
       priceSource: item.priceSource,
     })),
+    contextWindows: contextWindowsOf(row.discovered),
   }));
 }
 

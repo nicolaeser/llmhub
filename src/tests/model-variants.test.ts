@@ -225,22 +225,30 @@ test("tiers and programs survive the Responses and ChatGPT conversions", () => {
   assert.equal("service_tier" in chatToCodex({ model: "m", messages: [] }), false);
 });
 
-test("routing reads ChatGPT model facts once per provider and only for ChatGPT routes", async () => {
+test("routing reads model facts once per provider for every route", async () => {
   recordedPrisma.reset({
     providerConnection: {
-      findMany: () => [{ id: "facts-provider", discovered: [{ id: "gpt-6-astra", serviceTiers: ["priority", "ultrafast"] }] }],
+      findMany: () => [
+        { id: "facts-provider", discovered: [{ id: "gpt-6-astra", serviceTiers: ["priority", "ultrafast"] }] },
+        { id: "api-provider", discovered: [{ id: "gpt-6-astra", contextLength: 400_000 }] },
+      ],
     },
   });
   const targets: FactTarget[] = [
     { kind: "codex", model: "gpt-6-astra", provider_id: "facts-provider" },
     { kind: "codex", model: "gpt-unknown", provider_id: "facts-provider" },
     { kind: "openai", model: "gpt-6-astra", provider_id: "api-provider" },
+    { kind: "openai_compat", model: "local", provider_id: "" },
   ];
   await attachModelFacts(targets);
   assert.deepEqual(targets[0]!.facts, { serviceTiers: ["priority", "ultrafast"] });
   assert.equal(targets[1]!.facts, undefined);
-  assert.equal(targets[2]!.facts, undefined);
-  await attachModelFacts([{ kind: "codex", model: "gpt-6-astra", provider_id: "facts-provider" }]);
+  assert.deepEqual(targets[2]!.facts, { contextLength: 400_000 });
+  assert.equal(targets[3]!.facts, undefined);
+  await attachModelFacts([
+    { kind: "codex", model: "gpt-6-astra", provider_id: "facts-provider" },
+    { kind: "openai", model: "gpt-6-astra", provider_id: "api-provider" },
+  ]);
   assert.equal(recordedPrisma.called("providerConnection", "findMany").length, 1);
 });
 

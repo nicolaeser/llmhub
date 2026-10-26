@@ -19,6 +19,7 @@
     "alias": "Öffentlicher Name",
     "enabled": "Status",
     "strategy": "Modus",
+    "context": "Kontextfenster",
     "billing": "Abrechnung",
     "endpoints": "Anbieter",
     "overflow": "Überlauf"
@@ -68,6 +69,8 @@
   "enabledState": "{enabled, select, true {Aktiv} other {Deaktiviert}}",
   "enabledToggle": "{alias} über die API verfügbar machen",
   "priceFromProvider": "Preise von {source}",
+  "contextSummary": "{range, select, none {Unbekannt} single {{max, number, compact} Tokens} other {{min, number, compact} bis {max, number, compact} Tokens}}",
+  "contextHint": "{known, select, yes {Kontextfenster: {tokens, number, integer} Tokens. Größere Anfragen überspringen diesen Endpunkt.} other {Kontextfenster unbekannt. Anfragen werden nie wegen ihrer Größe übersprungen.}}",
   "strategies": {
     "weighted_random": "Gewichteter Zufall",
     "least_inflight": "Geringste Last",

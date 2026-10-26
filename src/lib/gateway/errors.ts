@@ -16,6 +16,7 @@ export const GATEWAY_ERRORS = {
   pii_blocked: 400,
   guardrail_blocked: 400,
   cost_limit_exceeded: 400,
+  context_length_exceeded: 400,
   file_not_found: 400,
   previous_response_not_found: 400,
   invalid_api_key: 401,

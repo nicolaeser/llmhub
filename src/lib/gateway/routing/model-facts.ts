@@ -4,26 +4,24 @@ import { discoveredOf } from "@/lib/gateway/upstreams/provider-prices";
 import type { FactTarget, ModelFacts } from "@/types/routing";
 
 const FACTS_TTL_MS = 60_000;
-const FACT_KINDS = new Set(["codex", "devin"]);
 const factCache = new Map<string, { at: number; models: ReadonlyMap<string, ModelFacts> }>();
 
 export function factsByModel(discovered: unknown): ReadonlyMap<string, ModelFacts> {
   const models = new Map<string, ModelFacts>();
   for (const model of discoveredOf(discovered)) {
-    if (!model.serviceTiers && !model.accessPrograms && !model.variants) continue;
+    if (!model.serviceTiers && !model.accessPrograms && !model.variants && model.contextLength <= 0) continue;
     const facts: ModelFacts = {};
     if (model.serviceTiers) facts.serviceTiers = model.serviceTiers;
     if (model.accessPrograms) facts.accessPrograms = model.accessPrograms;
     if (model.variants) facts.variants = model.variants;
+    if (model.contextLength > 0) facts.contextLength = model.contextLength;
     models.set(model.id, facts);
   }
   return models;
 }
 
 export async function attachModelFacts(deployments: FactTarget[]): Promise<void> {
-  const providers = [
-    ...new Set(deployments.filter((dep) => FACT_KINDS.has(dep.kind) && dep.provider_id).map((dep) => dep.provider_id)),
-  ];
+  const providers = [...new Set(deployments.flatMap((dep) => dep.provider_id || []))];
   if (!providers.length) return;
   const now = Date.now();
   const stale = providers.filter((id) => (factCache.get(id)?.at ?? -FACTS_TTL_MS) + FACTS_TTL_MS <= now);
