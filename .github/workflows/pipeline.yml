@@ -93,13 +93,14 @@ jobs:
           --health-retries 20
     env:
       DATABASE_URL: postgresql://llmhub:llmhub@localhost:5432/llmhub
+      CHECKPOINT_DISABLE: "1"
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
-      - run: npm ci
+      - run: npm ci --no-audit --no-fund
       - name: Check migration order
         env:
           BASE_REF: ${{ github.base_ref }}
@@ -107,10 +108,10 @@ jobs:
         run: |
           if [ -n "${BASE_REF}" ]; then
             base="refs/remotes/origin/${BASE_REF}"
-            git fetch --no-tags --depth=1 origin "+refs/heads/${BASE_REF}:${base}"
+            git fetch --quiet --no-tags --depth=1 origin "+refs/heads/${BASE_REF}:${base}"
           elif [ -n "${BEFORE}" ] && [ "${BEFORE}" != "0000000000000000000000000000000000000000" ]; then
             base="${BEFORE}"
-            git fetch --no-tags --depth=1 origin "${base}"
+            git fetch --quiet --no-tags --depth=1 origin "${base}"
           else
             echo "No base commit to compare migrations against"
             exit 0
@@ -121,7 +122,11 @@ jobs:
       - name: Check schema drift
         run: npx prisma migrate diff --from-config-datasource --to-schema prisma/schema --exit-code
       - run: npm test
+        env:
+          NODE_OPTIONS: --test-reporter=./src/tests/failure-reporter.mjs
       - run: npm run test:integration
+        env:
+          NODE_OPTIONS: --test-reporter=./src/tests/failure-reporter.mjs
       - run: npm run i18n:check
       - run: npm run styles:check
       - run: npm run heroui:check
@@ -177,6 +182,10 @@ jobs:
 
       - name: Scan image
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
+        env:
+          TRIVY_NO_PROGRESS: "true"
+          TRIVY_SKIP_VERSION_CHECK: "true"
+          TRIVY_TABLE_MODE: detailed
         with:
           image-ref: ${{ inputs.publish && format('{0}/{1}@{2}', env.REGISTRY, env.IMAGE_NAME, steps.build.outputs.digest) || 'llmhub:verify' }}
           scanners: vuln
