@@ -1,6 +1,6 @@
 {
   "title": "Ersten Administrator anlegen",
-  "subtitle": "Dieses Formular läuft einmal. Öffne es gezielt unter /internal-api/setup.",
+  "subtitle": "Dieses Formular läuft einmal.",
   "username": "Benutzername",
   "email": "E-Mail",
   "password": "Passwort",

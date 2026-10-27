@@ -1,6 +1,6 @@
 {
   "title": "Create the first administrator",
-  "subtitle": "This form runs once. Open it on purpose at /internal-api/setup.",
+  "subtitle": "This form runs once.",
   "username": "Username",
   "email": "Email",
   "password": "Password",

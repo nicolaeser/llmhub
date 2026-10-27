@@ -16,12 +16,6 @@ export class SetupAlreadyCompleteError extends Error {
   }
 }
 
-export async function operatorCount(
-  db: { user: { count: () => Promise<number> } } = prisma,
-): Promise<number> {
-  return db.user.count();
-}
-
 export async function refuseIfNoOperators(): Promise<void> {
-  if ((await operatorCount()) === 0) throw new SetupRequiredError();
+  if ((await prisma.user.count()) === 0) throw new SetupRequiredError();
 }
