@@ -24,7 +24,7 @@ export type Principal = {
 
 export type RequestClient = { session: string; agent: string };
 
-export type SystemFeature = "catalog" | "mcp_builder" | "model_test" | "pii";
+export type SystemFeature = "catalog" | "kickoff" | "mcp_builder" | "model_test" | "pii";
 
 export type RequestTrace = {
   endpoint: string;

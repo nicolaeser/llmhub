@@ -75,7 +75,7 @@
     "title": "{provider}<muted> · {channel} · {count, plural, one {# Konto} other {# Konten}}</muted>",
     "label": "Konten: {provider}",
     "menu": "Weitere Aktionen für {provider}",
-    "settings": "{resets, select, true {Verteilung und automatische Resets…} other {Kontoverteilung…}}",
+    "settings": "{features, select, resets {Verteilung, Resets und Fensterstart…} kickoff {Verteilung und Fensterstart…} other {Kontoverteilung…}}",
     "createLink": "Link für {provider} erstellen"
   },
   "details": {
@@ -156,6 +156,18 @@
       "saveShort": "Speichern",
       "saved": "Automatische Resets für {provider} gespeichert"
     }
+  },
+  "kickoff": {
+    "title": "Nächstes Fenster beim Reset starten",
+    "description": "Ein Nutzungsfenster beginnt mit der ersten Anfrage. Sobald ein Fenster eines Kontos zurückgesetzt ist, sendet LLM Hub „Only reply with ok.“ an das gewählte Modell dieses Kontos. So startet das nächste Fenster sofort und wird früher wieder zurückgesetzt. LLM Hub prüft jede Minute, sendet höchstens einmal pro Reset oder einmal pro Stunde, solange ein Fenster nicht gestartet ist, und überspringt pausierte, abgemeldete und noch limitierte Konten.",
+    "label": "Fensterstart für {provider}",
+    "model": "Modell",
+    "off": "Aus",
+    "modelHint": "Modelle, die über {provider}-Konten laufen. Ein kleines Modell verbraucht am wenigsten vom neuen Fenster.",
+    "noModels": "Noch kein Modell läuft über {provider}-Konten. Lege zuerst eins auf der Modellseite an.",
+    "save": "Fensterstart für {provider} speichern",
+    "saveShort": "Speichern",
+    "saved": "Fensterstart für {provider} gespeichert"
   },
   "routing": {
     "title": "Kontoverteilung",
@@ -245,9 +257,10 @@
   },
   "settings": {
     "title": "Einstellungen: {provider}",
-    "description": "Lege fest, wie Anfragen auf die Konten verteilt werden und wann gesparte Resets genutzt werden.",
+    "description": "Lege fest, wie Anfragen auf die Konten verteilt werden, wann gesparte Resets genutzt werden und ob nach einem Reset sofort ein neues Nutzungsfenster startet.",
     "routingSummary": "Kontoverteilung: {method}",
     "autoResetSummary": "{enabled, select, true {Automatische Resets ab {percent}} other {Automatische Resets aus}}",
+    "kickoffSummary": "{enabled, select, true {Fensterstart mit {model}} other {Fensterstart aus}}",
     "setupRequired": "Einrichtung nötig"
   }
 }

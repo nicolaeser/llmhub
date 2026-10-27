@@ -641,6 +641,7 @@ test("only the internal callers create the system principal", () => {
     "lib/gateway/safety/pii-detector.ts",
     "lib/mcp/builder.ts",
     "lib/models/feature-model-test.ts",
+    "lib/providers/window-kickoff.ts",
   ]);
 });
 

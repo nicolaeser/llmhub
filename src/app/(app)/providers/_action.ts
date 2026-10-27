@@ -10,6 +10,7 @@ import {
   saveAntigravityConfig,
   saveAssignments,
   saveAutoReset,
+  saveWindowKickoff,
 } from "@/lib/providers/account-routing";
 import { importAuthFiles, importSignInFile } from "@/lib/providers/auth-import";
 import { importCliProxyAuthFiles, listCliProxyAuthFiles } from "@/lib/providers/cliproxy-import";
@@ -99,6 +100,10 @@ export async function saveAccountRoutingAction(...args: Parameters<typeof saveAc
 
 export async function saveAutoResetAction(...args: Parameters<typeof saveAutoReset>) {
   return runAction(() => saveAutoReset(...args));
+}
+
+export async function saveWindowKickoffAction(...args: Parameters<typeof saveWindowKickoff>) {
+  return runAction(() => saveWindowKickoff(...args));
 }
 
 export async function redeemProviderResetAction(...args: Parameters<typeof redeemProviderReset>) {

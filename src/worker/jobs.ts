@@ -10,6 +10,7 @@ import { pruneSupersededLogins } from "@/lib/providers/account-match";
 import { pruneSubAddLinks } from "@/lib/providers/sub-add-prune";
 import { runAutoResets } from "@/lib/gateway/upstreams/reset-redeem";
 import { refreshDueLimits } from "@/lib/providers/limit-refresh";
+import { runWindowKickoffs } from "@/lib/providers/window-kickoff";
 import { crossedThresholds, forecastBudget } from "@/lib/usage/forecast";
 import { purgeStoredObjects } from "@/lib/gateway/storage/objects";
 import { runPendingIngests } from "@/lib/rag/ingest";
@@ -92,6 +93,7 @@ export async function runMaintenanceSweep(
     subAddLinks: 0,
     limits: 0,
     resets: 0,
+    kickoffs: 0,
   };
 
   const enterprise = await sweepSettings();
@@ -123,6 +125,7 @@ export async function runMaintenanceSweep(
   result.subAddLinks = await runSweepJob("sub_add_links", async () => (await pruneSubAddLinks("worker", now.getTime())).length);
   result.limits = await runSweepJob("subscription_limits", () => refreshDueLimits(now.getTime()));
   result.resets = await runSweepJob("auto_resets", () => runAutoResets(now.getTime()));
+  result.kickoffs = await runSweepJob("window_kickoffs", () => runWindowKickoffs(now.getTime()));
   return result;
 }
 

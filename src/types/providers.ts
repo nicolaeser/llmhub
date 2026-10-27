@@ -106,9 +106,15 @@ export type AccountStrategy =
 
 export type AccountRouting = Partial<Record<SignInKind, AccountStrategy>>;
 
+export type WindowKickoffs = Partial<Record<SignInKind, string>>;
+
+export type KickoffModels = Partial<Record<SignInKind, string[]>>;
+
 export type AccountRoutingView = {
   routing: AccountRouting;
   autoReset: AutoResetPolicies;
+  kickoff: WindowKickoffs;
+  kickoffModels: KickoffModels;
   canManage: boolean;
 };
 
