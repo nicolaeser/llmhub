@@ -1,16 +1,21 @@
 "use client";
 
+import { useEffect } from "react";
 import { Alert, Button } from "@heroui/react";
 import { RotateCcw } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/routing";
 import AccountShell from "@/app/account/_components/account-shell";
+import { reportClientError } from "@/lib/sentry/report-client-error";
 import { errorDigest } from "@/lib/utils/error-digest";
 
 export default function AccountError({ error, retry }: { error: unknown; retry: () => void }) {
   const t = useTranslations("Error.boundary");
   const tCommon = useTranslations("Common");
   const digest = errorDigest(error);
+  useEffect(() => {
+    reportClientError(error, { boundary: "account", digest });
+  }, [error, digest]);
   return (
     <AccountShell
       title={t("title")}

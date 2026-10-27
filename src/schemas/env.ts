@@ -21,6 +21,11 @@ const optionalHttpUrl = optionalTrimmedString.refine(
   "must be an http or https URL",
 );
 
+const optionalSampleRate = optionalTrimmedString.refine(
+  (v) => v === undefined || (Number.isFinite(Number(v)) && Number(v) >= 0 && Number(v) <= 1),
+  "must be a number from 0 to 1",
+);
+
 export const envSchema = z.object({
   NODE_ENV: z.enum(["development", "production"]),
   DATABASE_URL: z.string().min(1),
@@ -41,4 +46,12 @@ export const envSchema = z.object({
   ),
   BUILD_ID: optionalString,
   LLMHUB_REDACTOR_URL: optionalHttpUrl,
+  SENTRY_DSN: optionalHttpUrl,
+  NEXT_PUBLIC_SENTRY_DSN: optionalHttpUrl,
+  SENTRY_AUTH_TOKEN: optionalString,
+  SENTRY_ORG: optionalTrimmedString,
+  SENTRY_PROJECT: optionalTrimmedString,
+  SENTRY_ENVIRONMENT: optionalTrimmedString,
+  SENTRY_RELEASE: optionalTrimmedString,
+  SENTRY_TRACES_SAMPLE_RATE: optionalSampleRate,
 });

@@ -18,7 +18,9 @@ import { getAlertState, getEnterprise, saveAlertState } from "@/lib/settings/ent
 import { DEFAULT_OBJECT_RETENTION_DAYS } from "@/lib/settings/retention-defaults";
 import { errorFields } from "@/lib/logging/format";
 import { logger } from "@/lib/logging/logger";
+import { QUEUE_NAMES } from "@/lib/jobs/queues";
 import { runUsageReports } from "@/lib/reports/usage-report";
+import { reportWorkerJobFailure } from "@/lib/sentry/worker-jobs";
 import { runKeyExpiryAlerts, runSpendAnomalyAlerts } from "./alert-checks";
 import { retentionCutoff } from "./retention";
 import { runRetentionSweep } from "./retention-sweep";
@@ -30,6 +32,7 @@ export async function runSweepJob(name: string, job: () => Promise<number>): Pro
     return await job();
   } catch (err) {
     logger.error("worker.job_failed", { job: name, ...errorFields(err) });
+    reportWorkerJobFailure(err, { queue: QUEUE_NAMES.maintenance, step: name, finalAttempt: true });
     return 0;
   }
 }
@@ -39,6 +42,7 @@ async function sweepSettings() {
     return await getEnterprise();
   } catch (err) {
     logger.error("worker.settings_failed", errorFields(err));
+    reportWorkerJobFailure(err, { queue: QUEUE_NAMES.maintenance, step: "settings", finalAttempt: true });
     return null;
   }
 }

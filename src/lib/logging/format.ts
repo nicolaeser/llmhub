@@ -16,13 +16,17 @@ export function writeLogLine(level: LogLevel, event: string, meta?: LogMeta): vo
   }
 }
 
+export function errorSummary(text: string): string {
+  const summary = text.split("\n").map((part) => part.trim()).find(Boolean) ?? "";
+  return summary.slice(0, MAX_ERROR_TEXT);
+}
+
 export function errorFields(err: unknown): LogMeta {
   const text = err instanceof Error ? err.message : String(err);
-  const summary = text.split("\n").map((part) => part.trim()).find(Boolean) ?? "";
   const code = err !== null && typeof err === "object" ? (err as { code?: unknown }).code : undefined;
   return {
     errName: err instanceof Error ? err.name : typeof err,
-    err: summary.slice(0, MAX_ERROR_TEXT),
+    err: errorSummary(text),
     ...(typeof code === "string" ? { errCode: code } : {}),
   };
 }
