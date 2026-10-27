@@ -1,6 +1,7 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { NextConfig } from "next";
+import { withSentryConfig } from "@sentry/nextjs/config";
 import createNextIntlPlugin from "next-intl/plugin";
 
 const nextConfig: NextConfig = {
@@ -49,4 +50,18 @@ const nextConfig: NextConfig = {
 
 const withNextIntl = createNextIntlPlugin("./src/i18n/request.ts");
 
-export default withNextIntl(nextConfig);
+const sentryConfigured = Boolean(
+  process.env.SENTRY_DSN?.trim() || process.env.NEXT_PUBLIC_SENTRY_DSN?.trim(),
+);
+const sentryAuthToken = process.env.SENTRY_AUTH_TOKEN?.trim();
+
+export default sentryConfigured
+  ? withSentryConfig(withNextIntl(nextConfig), {
+      org: process.env.SENTRY_ORG?.trim(),
+      project: process.env.SENTRY_PROJECT?.trim(),
+      authToken: sentryAuthToken,
+      silent: true,
+      telemetry: false,
+      sourcemaps: { disable: !sentryAuthToken },
+    })
+  : withNextIntl(nextConfig);

@@ -69,6 +69,12 @@ The app reads the variables below; `.env.example` is the template for local deve
 | `OIDC_CLIENT_SECRET` | no | unset | Client secret for OIDC single sign-on. The issuer, client id, group to role rules, and SSO-only mode are set in Settings → Sign-in; the redirect URI is `NEXT_PUBLIC_APP_URL/sso/callback`. |
 | `BUILD_ID` | no | `development` | Release version reported by `/internal-api/version` and used by the update check. Published images set it at build time; do not set it yourself. |
 | `LLMHUB_REDACTOR_URL` | no | unset | Base URL of a PII redaction service that speaks the [redaction protocol](#redaction-protocol). While it is set, every start keeps an internal provider and the internal-only alias `pii-tracer` pointing at it; without it that provider is switched off. `docker-compose.rm.yml` sets it to `http://redactor:8080`. |
+| `SENTRY_DSN` | no | unset | Sentry DSN for server errors and failed background jobs. Without it Sentry stays off and sends nothing. See [Error reporting](#error-reporting). |
+| `SENTRY_ENVIRONMENT` | no | `production` | Environment name on Sentry events (`development` when `NODE_ENV` is `development`). |
+| `SENTRY_RELEASE` | no | `BUILD_ID` | Release name on Sentry events. |
+| `SENTRY_TRACES_SAMPLE_RATE` | no | `0` | Share of requests sent to Sentry as performance traces, from `0` to `1`. Any other value stops the start. |
+| `NEXT_PUBLIC_SENTRY_DSN` | no | unset | Sentry DSN for errors in the browser. It is compiled into the console when the image is built, so it has to be a build argument; published images are built without it. The server also uses it when `SENTRY_DSN` is unset. |
+| `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, `SENTRY_PROJECT` | no | unset | Build time only: upload source maps to Sentry during `npm run build` when a DSN is set as well. |
 
 The compose files also read these values from `.env`. They configure the Postgres and Redis containers and are not read by the app:
 
@@ -96,6 +102,12 @@ The image sets `PORT=3000`, `HOSTNAME=0.0.0.0`, and `NODE_ENV=production`.
 ### Storage
 
 S3 is optional. Without it, uploaded files, batch input and output, generated images and videos, stored responses, and vector store files are kept in PostgreSQL as `bytea` rows, which grows the database and its backups. With S3 configured (both access keys in `.env` and the bucket in Settings → Storage), new objects go to the bucket, the database keeps only their metadata, and request logs can also be archived to the bucket. Objects stored before S3 was enabled stay in PostgreSQL.
+
+### Error reporting
+
+Sentry is optional. Without a DSN the SDK is never initialized and makes no network calls. With it, the server reports unhandled request errors and failed background jobs. Events never carry request or response bodies, cookies, credential or client address headers, users, database queries, or local variables; URL parameter values and add-account link tokens are replaced with `[Filtered]`, error messages are cut to their first line, and requests the app sends to providers, webhooks, and MCP servers are neither recorded nor given trace headers.
+
+Browser errors need `NEXT_PUBLIC_SENTRY_DSN` when the image is built, for example `docker build --build-arg NEXT_PUBLIC_SENTRY_DSN=https://…`, because the console is compiled with it; the content security policy then allows that Sentry host. `NEXT_PUBLIC_SENTRY_ENVIRONMENT`, `NEXT_PUBLIC_SENTRY_RELEASE`, and `NEXT_PUBLIC_SENTRY_TRACES_SAMPLE_RATE` set the browser values the same way.
 
 ## Backup and restore
 

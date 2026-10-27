@@ -111,3 +111,35 @@ test("optional secrets stay undefined when empty", () => {
   assert.equal(parsed.SMTP_URL, undefined);
   assert.equal(parseEnvironment(valid).OIDC_CLIENT_SECRET, undefined);
 });
+
+test("Sentry variables are optional, and a configured DSN or sample rate must be valid", () => {
+  const parsed = parseEnvironment(valid);
+  for (const name of [
+    "SENTRY_DSN",
+    "NEXT_PUBLIC_SENTRY_DSN",
+    "SENTRY_AUTH_TOKEN",
+    "SENTRY_ORG",
+    "SENTRY_PROJECT",
+    "SENTRY_ENVIRONMENT",
+    "SENTRY_RELEASE",
+    "SENTRY_TRACES_SAMPLE_RATE",
+  ] as const) {
+    assert.equal(parsed[name], undefined, name);
+    assert.equal(parseEnvironment({ ...valid, [name]: " " })[name], undefined, name);
+  }
+  const configured = parseEnvironment({
+    ...valid,
+    SENTRY_DSN: " https://key@sentry.example/1 ",
+    SENTRY_TRACES_SAMPLE_RATE: "0.25",
+  });
+  assert.equal(configured.SENTRY_DSN, "https://key@sentry.example/1");
+  assert.equal(configured.SENTRY_TRACES_SAMPLE_RATE, "0.25");
+  for (const [name, value] of [
+    ["SENTRY_DSN", "key@sentry.example/1"],
+    ["NEXT_PUBLIC_SENTRY_DSN", "ftp://sentry.example/1"],
+    ["SENTRY_TRACES_SAMPLE_RATE", "1.5"],
+    ["SENTRY_TRACES_SAMPLE_RATE", "half"],
+  ]) {
+    assert.throws(() => parseEnvironment({ ...valid, [name]: value }), new RegExp(name), value);
+  }
+});

@@ -357,6 +357,7 @@ test("generate-env.sh writes the production .env and keeps an existing one", asy
     "S3_ACCESS_KEY_ID",
     "S3_SECRET_ACCESS_KEY",
     "LLMHUB_REDACTOR_URL",
+    "SENTRY_DSN",
   ]) {
     assert.match(script, new RegExp(`^\\s*ask(_secret)? ${name} `, "m"), name);
   }
@@ -397,11 +398,16 @@ test("generate-env.sh --yes builds the production .env from the environment", { 
     assert.match(written, /^POSTGRES_PASSWORD=[A-Za-z0-9_-]{32}$/m);
     assert.match(written, /^APP_SECRET=[0-9a-f]{64}$/m);
     assert.match(written, /^SMTP_FROM=mailer@example\.com$/m);
-    assert.doesNotMatch(written, /^(?:DATABASE_URL|REDIS_URL|OIDC_CLIENT_SECRET|S3_ACCESS_KEY_ID)=/m);
+    assert.doesNotMatch(written, /^(?:DATABASE_URL|REDIS_URL|OIDC_CLIENT_SECRET|S3_ACCESS_KEY_ID|SENTRY_DSN)=/m);
 
     const invalidMode = run(["--yes", "--force"], { IP_MODE: "x-forwarded-for" });
     assert.equal(invalidMode.status, 1);
     assert.match(invalidMode.stderr, /IP_MODE/);
+    assert.equal(await readFile(output, "utf8"), written);
+
+    const invalidDsn = run(["--yes", "--force"], { SENTRY_DSN: "key@sentry.example/1" });
+    assert.equal(invalidDsn.status, 1);
+    assert.match(invalidDsn.stderr, /SENTRY_DSN/);
     assert.equal(await readFile(output, "utf8"), written);
 
     const refused = run(["--yes"], { NEXT_PUBLIC_APP_URL: "https://other.example.com" });
@@ -409,7 +415,11 @@ test("generate-env.sh --yes builds the production .env from the environment", { 
     assert.equal(await readFile(output, "utf8"), written);
 
     await appendFile(output, "EXTRA_SETTING=kept\n");
-    const updated = run(["--yes", "--force"], { OIDC_CLIENT_SECRET: "sso-secret", IP_MODE: "cloudflare" });
+    const updated = run(["--yes", "--force"], {
+      OIDC_CLIENT_SECRET: "sso-secret",
+      IP_MODE: "cloudflare",
+      SENTRY_DSN: "https://key@o1.ingest.sentry.example/2",
+    });
     assert.equal(updated.status, 0, updated.stderr);
     const next = await readFile(output, "utf8");
     for (const name of ["APP_SECRET", "POSTGRES_PASSWORD", "REDIS_PASSWORD", "SMTP_URL", "NEXT_PUBLIC_APP_URL"]) {
@@ -418,6 +428,7 @@ test("generate-env.sh --yes builds the production .env from the environment", { 
     }
     assert.match(next, /^OIDC_CLIENT_SECRET=sso-secret$/m);
     assert.match(next, /^IP_MODE=cloudflare$/m);
+    assert.match(next, /^SENTRY_DSN=https:\/\/key@o1\.ingest\.sentry\.example\/2$/m);
     assert.match(next, /^EXTRA_SETTING=kept$/m);
     assert.equal(await readFile(`${output}.bak`, "utf8"), `${written}EXTRA_SETTING=kept\n`);
     assert.equal((await stat(output)).mode & 0o777, 0o600);

@@ -1,10 +1,11 @@
 "use client";
 
-import { useSyncExternalStore } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 import { Button, buttonVariants } from "@heroui/react";
 import { RotateCcw } from "lucide-react";
 import { createTranslator } from "next-intl";
 import BrandMark from "@/components/brand/brand-mark";
+import { reportClientError } from "@/lib/sentry/report-client-error";
 import { errorDigest } from "@/lib/utils/error-digest";
 import de from "../../lang/de/GlobalError.json";
 import en from "../../lang/en/GlobalError.json";
@@ -49,6 +50,9 @@ export default function GlobalError({ error, retry }: { error: unknown; retry: (
   const theme = useSyncExternalStore(subscribeNever, readTheme, () => "dark");
   const t = createTranslator({ locale, messages: MESSAGES[locale] });
   const digest = errorDigest(error);
+  useEffect(() => {
+    reportClientError(error, { boundary: "global", digest });
+  }, [error, digest]);
 
   return (
     <html lang={locale} className={`${theme} h-full antialiased`}>
