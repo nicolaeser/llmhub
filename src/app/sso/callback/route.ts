@@ -93,10 +93,7 @@ export async function GET(req: NextRequest) {
       return res;
     }
     if (err instanceof SetupRequiredError || (err instanceof Error && err.message === "SETUP_REQUIRED")) {
-      loginError.searchParams.set("sso", "setup");
-      const res = NextResponse.redirect(loginError);
-      clearOidcCookie(res);
-      return res;
+      return reject("setup_required");
     }
     logger.error("sso.callback.failed", errorFields(err));
     return fail();

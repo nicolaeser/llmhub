@@ -1,6 +1,6 @@
 import { recordedPrisma } from "./support/recorded-prisma";
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
@@ -25,6 +25,11 @@ test("the setup page redirects home once any user exists", async () => {
   });
   recordedPrisma.reset(emptyUserTable);
   assert.equal(await SetupLayout({ children: "form" }), "form");
+});
+
+test("the setup page is never indexed", async () => {
+  const { metadata } = await import("@/app/internal-api/setup/layout");
+  assert.deepEqual(metadata.robots, { index: false, follow: false });
 });
 
 test("public registration cannot create the first user", async () => {
@@ -130,5 +135,14 @@ test("the setup form is a client page built from HeroUI fields that returns home
 test("the sign-in and registration pages never send visitors to setup", async () => {
   for (const relative of ["src/app/account/login/page.tsx", "src/app/account/register/page.tsx"]) {
     assert.doesNotMatch(await file(relative), /internal-api\/setup/, relative);
+  }
+});
+
+test("no message names the setup path", async () => {
+  const langRoot = path.join(root, "lang");
+  const files = (await readdir(langRoot, { recursive: true })).filter((name) => name.endsWith(".json"));
+  assert.ok(files.length > 0);
+  for (const name of files) {
+    assert.doesNotMatch(await readFile(path.join(langRoot, name), "utf8"), /internal-api\/setup/, name);
   }
 });

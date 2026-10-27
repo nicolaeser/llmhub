@@ -1,6 +1,7 @@
 import "./integration/support/oidc-env";
 import { recordedPrisma } from "./support/recorded-prisma";
 import assert from "node:assert/strict";
+import { generateKeyPairSync, sign } from "node:crypto";
 import { readdir, readFile } from "node:fs/promises";
 import test from "node:test";
 import { NextRequest } from "next/server";
@@ -219,19 +220,19 @@ test("SCIM updates of other users are applied and audited", async () => {
   assert.equal(audit.data.actor, "scim");
 });
 
-test("SSO sign-in waits for setup and for an enabled OIDC configuration", async () => {
+test("SSO sign-in answers the same with or without users and waits for an enabled OIDC configuration", async () => {
   const { GET } = await import("@/app/sso/login/route");
-  const login = new NextRequest("http://localhost:3000/sso/login?return=/keys");
-
-  recordedPrisma.reset({ user: { count: () => 0 } });
-  const setup = await GET(login);
-  assert.equal(setup.status, 307);
-  assert.equal(new URL(setup.headers.get("location") ?? "").searchParams.get("sso"), "setup");
-
-  recordedPrisma.reset({ user: { count: () => 1 } });
-  const disabled = await GET(login);
-  assert.equal(new URL(disabled.headers.get("location") ?? "").searchParams.get("sso"), "disabled");
-  assert.equal(disabled.cookies.getAll().length, 0);
+  const answers = [];
+  for (const users of [0, 1]) {
+    recordedPrisma.reset({ user: { count: () => users } });
+    const res = await GET(new NextRequest("http://localhost:3000/sso/login?return=/keys"));
+    assert.deepEqual(recordedPrisma.called("user"), []);
+    answers.push({ status: res.status, location: res.headers.get("location"), cookies: res.cookies.getAll() });
+  }
+  assert.deepEqual(answers[0], answers[1]);
+  assert.equal(answers[0].status, 307);
+  assert.equal(new URL(answers[0].location ?? "").searchParams.get("sso"), "disabled");
+  assert.deepEqual(answers[0].cookies, []);
 });
 
 const TENANT_ID = "9188040d-6c67-4c5b-b112-36a304b66dad";
@@ -442,6 +443,67 @@ test("the SSO callback refuses requests without a matching signed state before a
     assert.equal(res.cookies.get(SESSION_COOKIE), undefined);
     assert.deepEqual(recordedPrisma.calls, []);
   }
+});
+
+test("an SSO callback that would create the first user fails like any other SSO failure", async () => {
+  const { GET } = await import("@/app/sso/callback/route");
+  const { env } = await import("@/lib/env");
+  const { signOidcState, OIDC_STATE_COOKIE } = await import("@/lib/auth/oidc");
+  const issuer = "https://first-user.idp.example.test";
+  const keys = generateKeyPairSync("rsa", { modulusLength: 2048 });
+  const state = signOidcState({ returnPath: "/keys" });
+  const now = Math.floor(Date.now() / 1000);
+  const encode = (value: object) => Buffer.from(JSON.stringify(value)).toString("base64url");
+  const body = `${encode({ alg: "RS256", kid: "first-user" })}.${encode({
+    iss: issuer,
+    aud: "hub-client",
+    exp: now + 300,
+    iat: now,
+    nonce: state.nonce,
+    sub: "first-subject",
+    email: "first@example.test",
+    email_verified: true,
+  })}`;
+  const idToken = `${body}.${sign("sha256", Buffer.from(body), keys.privateKey).toString("base64url")}`;
+  const identityProvider = (async (input: RequestInfo | URL) => {
+    const url = String(input);
+    if (url === `${issuer}/.well-known/openid-configuration`) {
+      return Response.json({
+        issuer,
+        authorization_endpoint: `${issuer}/authorize`,
+        token_endpoint: `${issuer}/token`,
+        jwks_uri: `${issuer}/jwks`,
+      });
+    }
+    if (url === `${issuer}/token`) return Response.json({ id_token: idToken });
+    if (url === `${issuer}/jwks`) {
+      return Response.json({ keys: [{ ...keys.publicKey.export({ format: "jwk" }), kid: "first-user", alg: "RS256", use: "sig" }] });
+    }
+    return new Response(null, { status: 404 });
+  }) as typeof fetch;
+  const value = JSON.stringify({ oidc: { enabled: true, issuer, client_id: "hub-client" } });
+  recordedPrisma.reset({
+    user: { count: () => 0 },
+    setting: { findUnique: ({ where }: { where: { key: string } }) => (where.key === "enterprise" ? { key: "enterprise", value } : null) },
+  });
+  const { result: res, lines } = await capturedLogs(() =>
+    withFetch(identityProvider, () =>
+      GET(
+        new NextRequest(`http://localhost:3000/sso/callback?code=abc&state=${state.state}`, {
+          headers: { cookie: `${OIDC_STATE_COOKIE}=${state.cookie}` },
+        }),
+      ),
+    ),
+  );
+  assert.equal(res.headers.get("location"), new URL("/account/login?sso=error", env.NEXT_PUBLIC_APP_URL).href);
+  assert.equal(res.cookies.get(OIDC_STATE_COOKIE)?.value, "");
+  assert.equal(res.cookies.get(SESSION_COOKIE), undefined);
+  assert.equal(recordedPrisma.called("user", "count").length, 1);
+  assert.deepEqual(recordedPrisma.called("user", "create"), []);
+  assert.deepEqual(
+    lines.filter((line) => line.event === "sso.callback.rejected").map((line) => line.reason),
+    ["setup_required"],
+  );
 });
 
 test("SSO and MCP OAuth redirects use the public app URL, not the internal bind address", async () => {

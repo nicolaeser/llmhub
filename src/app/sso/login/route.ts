@@ -13,17 +13,12 @@ import {
 import { sanitizeReturnPath } from "@/lib/auth/return-path";
 import { errorFields } from "@/lib/logging/format";
 import { logger } from "@/lib/logging/logger";
-import { operatorCount } from "@/lib/bootstrap/operators";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
   const loginError = new URL("/account/login", env.NEXT_PUBLIC_APP_URL);
   try {
-    if ((await operatorCount()) === 0) {
-      loginError.searchParams.set("sso", "setup");
-      return NextResponse.redirect(loginError);
-    }
     const enterprise = await getEnterprise();
     const resolved = resolveOidc(enterprise.oidc);
     if (!oidcIsReady(enterprise.oidc)) {
