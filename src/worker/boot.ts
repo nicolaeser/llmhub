@@ -3,8 +3,9 @@ import "server-only";
 import { logger } from "@/lib/logging/logger";
 import { jobsEnabled } from "@/lib/jobs/connection";
 import { claimLease } from "@/lib/jobs/lease";
-import { closeQueues } from "@/lib/jobs/queues";
+import { closeQueues, QUEUE_NAMES } from "@/lib/jobs/queues";
 import { sharedRedis, withRedisTimeout } from "@/lib/redis/client";
+import { reportWorkerJobFailure } from "@/lib/sentry/worker-jobs";
 import { setWorkerMode } from "./health";
 import type { GlobalWithWorkerBoot } from "@/types/jobs";
 
@@ -34,6 +35,7 @@ function startLocalModelSync(g: GlobalWithWorkerBoot): void {
       .then(({ runModelSync }) => runModelSync())
       .catch((err) => {
         logger.error("worker.model_sync_failed", { err: errorMessage(err) });
+        reportWorkerJobFailure(err, { queue: QUEUE_NAMES.models, finalAttempt: true });
       });
   void sync();
   const timer = setInterval(sync, MODEL_SYNC_TICK_MS);
@@ -59,6 +61,7 @@ function startLocalTimer(g: GlobalWithWorkerBoot): void {
       })
       .catch((err) => {
         logger.error("worker.tick_failed", { err: errorMessage(err) });
+        reportWorkerJobFailure(err, { queue: QUEUE_NAMES.maintenance, finalAttempt: true });
       });
   void tick();
   const timer = setInterval(tick, WORKER_TICK_MS);

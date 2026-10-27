@@ -25,6 +25,7 @@ RUN --mount=type=cache,target=/root/.npm \
 FROM base AS builder
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
+ARG NEXT_PUBLIC_SENTRY_DSN=
 RUN DATABASE_URL=postgresql://build:build@localhost:5432/build \
     APP_SECRET=build-only-placeholder-not-a-secret-000000 \
     sh -c "npx prisma generate && npm run build"

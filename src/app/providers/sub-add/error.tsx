@@ -1,13 +1,18 @@
 "use client";
 
+import { useEffect } from "react";
 import { Alert, Button } from "@heroui/react";
 import { RotateCcw } from "lucide-react";
 import { useTranslations } from "next-intl";
+import { reportClientError } from "@/lib/sentry/report-client-error";
 import { errorDigest } from "@/lib/utils/error-digest";
 
 export default function SubAddError({ error, retry }: { error: unknown; retry: () => void }) {
   const t = useTranslations("Error.boundary");
   const digest = errorDigest(error);
+  useEffect(() => {
+    reportClientError(error, { boundary: "sub_add", digest });
+  }, [error, digest]);
   return (
     <div className="space-y-4">
       <h1 className="text-3xl font-semibold tracking-tight break-words sm:text-4xl">{t("title")}</h1>

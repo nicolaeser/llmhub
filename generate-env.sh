@@ -16,8 +16,9 @@ SMTP_PATTERN='^(smtps?)://(([^:@/]*)(:([^@/]*))?@)?([^:@/]+)(:([0-9]+))?/?$'
 usage() {
   printf 'Usage: %s [--force] [--yes]\n\n' "$0"
   printf 'Writes the production %s for docker-compose.yml. In a terminal it asks for the\n' "$OUTPUT"
-  printf 'domain, release channel, port, mail, single sign-on, object storage, and an\n'
-  printf 'external redaction model, and it generates every password and secret.\n\n'
+  printf 'domain, release channel, port, mail, single sign-on, object storage, an\n'
+  printf 'external redaction model, and error reporting, and it generates every password\n'
+  printf 'and secret.\n\n'
   printf '  --force  update an existing %s and keep its values\n' "$OUTPUT"
   printf '  --yes    accept every default without asking\n\n'
   printf 'Variables already set in the environment are used as answers.\n'
@@ -685,6 +686,10 @@ if wanted "Use a redaction model service that runs elsewhere?" LLMHUB_REDACTOR_U
 else
   drop LLMHUB_REDACTOR_URL
 fi
+
+section "Error reporting"
+note "Sentry receives server errors without request bodies, cookies, credentials, or URL parameter values."
+ask SENTRY_DSN "Sentry DSN (empty: off)" "" "regex:^(https?://[^[:space:]/]+(/[^[:space:]]*)?)?$"
 
 summary
 if [[ ${#REQUIRED_MISSING[@]} -gt 0 ]]; then

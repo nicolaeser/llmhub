@@ -83,20 +83,27 @@ test("log retention cutoff is null when disabled", () => {
   );
 });
 
-test("instrumentation loads nothing outside the Node.js server runtime or during the production build", async () => {
+test("instrumentation loads only the Sentry edge config on Edge and nothing else outside the Node.js server runtime or during the production build", async () => {
   const { register } = await import("@/instrumentation");
   const instrumentation = require.cache[sourcePath("../../src/instrumentation.ts")];
   assert.ok(instrumentation);
   assert.deepEqual(instrumentation.children, []);
   for (const [runtime, phase] of [
     [undefined, undefined],
-    ["edge", undefined],
     ["nodejs", "phase-production-build"],
   ] as const) {
     setPhase(runtime, phase);
     await register();
   }
   assert.deepEqual(instrumentation.children, []);
+  const edgeConfig = sourcePath("../../src/sentry.edge.config.ts");
+  const serverConfig = sourcePath("../../src/sentry.server.config.ts");
+  assert.equal(require.cache[edgeConfig], undefined);
+  assert.equal(require.cache[serverConfig], undefined);
+  setPhase("edge", undefined);
+  await register();
+  assert.ok(require.cache[edgeConfig]);
+  assert.equal(require.cache[serverConfig], undefined);
   assert.deepEqual(calls, []);
   assert.equal(g.__llmhubWorkerBoot, undefined);
 });

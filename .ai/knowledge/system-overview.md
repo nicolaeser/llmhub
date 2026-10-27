@@ -42,4 +42,4 @@ LLM Hub is a Next.js 16 App Router app: OpenAI- and Anthropic-compatible `/api/v
 
 ## Boot
 
-`src/instrumentation.ts` ensures the system catalog on Node, then starts the in-process worker. Migrations run only in the image `CMD`, on every container start. There is no seed. Instrumentation skips `next build` and Edge. Health includes `worker.mode`: `bullmq`, `local`, or `unavailable`.
+`src/instrumentation.ts` initializes Sentry when a DSN is set (`src/sentry.server.config.ts`), ensures the system catalog on Node, then starts the in-process worker. Migrations run only in the image `CMD`, on every container start. There is no seed. Instrumentation skips `next build`; on Edge it only loads `src/sentry.edge.config.ts`. Health includes `worker.mode`: `bullmq`, `local`, or `unavailable`.

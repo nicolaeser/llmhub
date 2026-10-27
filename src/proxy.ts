@@ -8,6 +8,7 @@ import {
   shouldHardenTransport,
 } from "@/lib/http/public-path";
 import { sanitizeReturnPath } from "@/lib/auth/return-path";
+import { publicSentryEnv, sentryIngestOrigin } from "@/lib/sentry/options";
 import { LOCALE_COOKIE, pickLocale } from "@/i18n/locale-cookie";
 
 const AUTH_PATTERN =
@@ -35,13 +36,14 @@ export async function proxy(req: NextRequest) {
   const nonce = Buffer.from(
     crypto.getRandomValues(new Uint8Array(16)),
   ).toString("base64url");
+  const connectSources = ["'self'", sentryIngestOrigin(publicSentryEnv())].filter(Boolean).join(" ");
   const contentSecurityPolicy = [
     "default-src 'self'",
     `script-src 'self' 'nonce-${nonce}' 'strict-dynamic' 'unsafe-inline'${isProd ? "" : " 'unsafe-eval'"}`,
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob:",
     "font-src 'self' data:",
-    "connect-src 'self'",
+    `connect-src ${connectSources}`,
     "frame-ancestors 'none'",
     "base-uri 'self'",
     "form-action 'self'",
