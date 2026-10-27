@@ -68,12 +68,12 @@ expect_page() {
 }
 
 docker network create "${name}" >/dev/null
-docker run -d --name "${db}" --network "${name}" \
+docker run -d --quiet --name "${db}" --network "${name}" \
   -e POSTGRES_USER=llmhub \
   -e POSTGRES_PASSWORD=llmhub \
   -e POSTGRES_DB=llmhub \
   postgres:18-alpine >/dev/null
-docker run -d --name "${app}" --network "${name}" -p 127.0.0.1::3000 \
+docker run -d --quiet --name "${app}" --network "${name}" -p 127.0.0.1::3000 \
   -e NODE_ENV=production \
   -e DATABASE_URL="postgresql://llmhub:llmhub@${db}:5432/llmhub" \
   -e APP_SECRET="$(openssl rand -hex 32)" \

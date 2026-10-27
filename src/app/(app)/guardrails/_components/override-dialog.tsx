@@ -4,7 +4,6 @@ import { Fragment, useState, useTransition } from "react";
 import { Alert, Chip, Disclosure, Label, Separator, Switch, toast, type useOverlayState } from "@heroui/react";
 import { useTranslations } from "next-intl";
 import FormDialog from "@/components/console/form-dialog";
-import IconTile from "@/components/console/icon-tile";
 import { useErrorToast } from "@/components/console/use-error-toast";
 import { guardrailsValid } from "@/lib/gateway/safety/guardrails";
 import {
@@ -22,7 +21,7 @@ import GuardrailRules from "./guardrail-rules";
 import InjectionFields from "./injection-fields";
 import PiiEntityPicker from "./pii-entity-picker";
 import PiiPolicyFields from "./pii-policy-fields";
-import { SECTION_ICONS, SectionChip, SectionDetail, useSourceLabel } from "@/components/guardrails/policy-labels";
+import { useSectionText, useSourceLabel } from "@/components/guardrails/policy-labels";
 import PolicyTargetPicker, { firstRef } from "./policy-target-picker";
 import { findTarget, inheritedFor, type PolicyBook } from "./policy-view";
 import SecretsFields from "./secrets-fields";
@@ -31,22 +30,20 @@ export default function OverrideDialog({
   state,
   book,
   editing,
-  initialRef,
   available,
   onSaved,
 }: {
   state: ReturnType<typeof useOverlayState>;
   book: PolicyBook;
   editing: PolicyOverrideView | null;
-  initialRef: PolicyRef | null;
   available: PolicyTarget[];
   onSaved: (result: { ref: PolicyRef; override: PolicyOverrideView | null }) => void;
 }) {
   const t = useTranslations("Guardrails");
   const showError = useErrorToast();
   const [ref, setRef] = useState<PolicyRef | null>(() => {
-    const start = editing?.target ?? initialRef ?? firstRef(available);
-    return start ? { scope: start.scope, id: start.id } : null;
+    if (editing) return { scope: editing.target.scope, id: editing.target.id };
+    return firstRef(available);
   });
   const [layer, setLayer] = useState<PolicyLayer>(() =>
     editing
@@ -55,6 +52,7 @@ export default function OverrideDialog({
   );
   const [pending, start] = useTransition();
   const sourceLabel = useSourceLabel((source) => findTarget(book, source)?.alias);
+  const sectionText = useSectionText();
   const target = editing?.target ?? findTarget(book, ref);
   const inherited = target ? inheritedFor(book, target) : effectivePolicies(book.platform, []);
   const inheritedLayer = fullLayer(inherited);
@@ -97,7 +95,7 @@ export default function OverrideDialog({
           <Disclosure>
             <Disclosure.Heading>
               <Disclosure.Trigger className="flex w-full items-center justify-between gap-2 text-sm font-medium">
-                {t("dialog.entities", { count: pii.entities.length })}
+                {t("entitiesSummary", { count: pii.entities.length })}
                 <Disclosure.Indicator />
               </Disclosure.Trigger>
             </Disclosure.Heading>
@@ -143,13 +141,15 @@ export default function OverrideDialog({
         />
       );
     }
+    return null;
+  }
+
+  function inheritedLine(section: PolicySection) {
     const summary = sectionSummaries(inheritedLayer).find((row) => row.section === section);
-    return summary ? (
-      <div className="flex flex-wrap items-center gap-2">
-        <SectionChip summary={summary} />
-        <SectionDetail summary={summary} />
-      </div>
-    ) : null;
+    return t("dialog.inherited", {
+      source: sourceLabel(inherited.sources[section]),
+      summary: summary ? sectionText(summary) : "",
+    });
   }
 
   return (
@@ -185,16 +185,11 @@ export default function OverrideDialog({
             <Separator />
             <section className="space-y-4" aria-label={label}>
               <div className="flex flex-wrap items-start justify-between gap-3">
-                <div className="flex min-w-0 items-start gap-3">
-                  <IconTile icon={SECTION_ICONS[section]} size="sm" tone={custom ? "accent" : "neutral"} />
-                  <div className="min-w-0 space-y-0.5">
-                    <h3 className="text-sm font-semibold">{label}</h3>
-                    <p className="text-xs text-muted">
-                      {custom
-                        ? t("dialog.custom", { section })
-                        : t("dialog.inherited", { source: sourceLabel(inherited.sources[section]) })}
-                    </p>
-                  </div>
+                <div className="min-w-0 flex-1 space-y-0.5">
+                  <h3 className="text-sm font-semibold">{label}</h3>
+                  <p className="text-xs break-words text-muted">
+                    {custom ? t("dialog.custom", { section }) : inheritedLine(section)}
+                  </p>
                 </div>
                 <Switch
                   isSelected={custom}

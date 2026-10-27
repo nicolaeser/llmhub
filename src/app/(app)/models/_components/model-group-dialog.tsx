@@ -7,15 +7,19 @@ import {
   CheckboxGroup,
   Description,
   Disclosure,
+  DisclosureGroup,
+  Fieldset,
   Input,
   Label,
   ListBox,
   Select,
+  Separator,
   Switch,
   TextField,
   toast,
   type useOverlayState,
 } from "@heroui/react";
+import { Plus } from "lucide-react";
 import { useTranslations } from "next-intl";
 import FormDialog from "@/components/console/form-dialog";
 import MultiPicker from "@/components/console/multi-picker";
@@ -38,7 +42,6 @@ import {
   withCatalogPrice,
   type BillingMode,
 } from "./deployment-draft";
-import ProviderSelect from "./provider-select";
 
 const AUTO_ROUTE_MODES = ["inherit", "on", "off"] as const;
 
@@ -70,7 +73,7 @@ export default function ModelGroupDialog({
   const t = useTranslations("Models");
   const tCommon = useTranslations("Common");
   const showError = useErrorToast();
-  const [alias, setAlias] = useState(editing?.alias ?? "gpt-4o");
+  const [alias, setAlias] = useState(editing?.alias ?? "");
   const [strategy, setStrategy] = useState(editing?.strategy || "least_inflight");
   const [retries, setRetries] = useState(String(editing?.numRetries ?? 2));
   const [overflow, setOverflow] = useState(editing?.overflowGroup ?? "");
@@ -112,6 +115,7 @@ export default function ModelGroupDialog({
       validPrice(price.output) &&
       priceWindows.every(windowValid) &&
       !scheduleOverlaps(priceWindows));
+  const fallbackCount = fallbacks.length + (overflow ? 1 : 0);
 
   function setDep(i: number, patch: Partial<DeploymentDraft>) {
     setDeps((cur) =>
@@ -159,11 +163,10 @@ export default function ModelGroupDialog({
     });
   }
 
-  const first = deps[0];
-
   return (
     <FormDialog
       state={state}
+      size="lg"
       title={t("formTitle", { mode: editing ? "edit" : "add" })}
       description={t("addHint")}
       submitLabel={t("formSubmit", { mode })}
@@ -173,87 +176,15 @@ export default function ModelGroupDialog({
     >
       <TextField
         fullWidth
+        isRequired
         value={alias}
         onChange={(value) => setAlias(value.toLowerCase())}
         isDisabled={Boolean(editing) || pending}
-        aria-label={t("fields.alias")}
       >
         <Label>{t("fields.alias")}</Label>
-        <Input aria-label={t("fields.alias")} />
+        <Input placeholder="gpt-5.5" />
         <Description>{t("fields.aliasHint")}</Description>
       </TextField>
-      {first ? (
-        <>
-          <ProviderSelect
-            dep={first}
-            providers={providers}
-            withCatalog
-            isDisabled={pending}
-            onChange={(patch) => setDep(0, patch)}
-          />
-          <TextField
-            fullWidth
-            value={first.model}
-            onChange={(v) => setDep(0, { model: v })}
-            isDisabled={pending}
-            aria-label={t("fields.upstream")}
-          >
-            <Label>{t("fields.upstream")}</Label>
-            <Input aria-label={t("fields.upstream")} />
-          </TextField>
-          {first.providerId ? null : (
-            <TextField
-              fullWidth
-              value={first.baseUrl}
-              onChange={(v) => setDep(0, { baseUrl: v })}
-              isDisabled={pending}
-              aria-label={t("fields.baseUrl")}
-            >
-              <Label>{t("fields.baseUrl")}</Label>
-              <Input aria-label={t("fields.baseUrl")} />
-            </TextField>
-          )}
-        </>
-      ) : null}
-      <Select
-        selectedKey={billingMode}
-        onSelectionChange={(key) => setBillingMode(billingModeOf(String(key)))}
-        isDisabled={pending}
-        aria-label={t("fields.billingMode")}
-        fullWidth
-      >
-        <Label>{t("fields.billingMode")}</Label>
-        <Select.Trigger>
-          <Select.Value />
-          <Select.Indicator />
-        </Select.Trigger>
-        <Select.Popover>
-          <ListBox aria-label={t("fields.billingMode")}>
-            {BILLING_MODES.map((billing) => (
-              <ListBox.Item
-                key={billing}
-                id={billing}
-                textValue={t(`billingModes.${billing}`)}
-              >
-                {t("billingModeLabel", { mode: billing })}
-                <ListBox.ItemIndicator />
-              </ListBox.Item>
-            ))}
-          </ListBox>
-        </Select.Popover>
-        <Description>{t("billingModeHint", { mode: billingMode })}</Description>
-      </Select>
-      {customPrice ? (
-        <CustomPriceFields
-          price={price}
-          windows={priceWindows}
-          timeZone={priceTimeZone}
-          isDisabled={pending}
-          onPriceChange={setPrice}
-          onWindowsChange={setPriceWindows}
-          onTimeZoneChange={setPriceTimeZone}
-        />
-      ) : null}
       <Switch isSelected={enabled} onChange={setEnabled} isDisabled={pending}>
         <Switch.Content>
           <Switch.Control>
@@ -263,131 +194,202 @@ export default function ModelGroupDialog({
         </Switch.Content>
         <Description>{t("fields.enabledHint")}</Description>
       </Switch>
-      <CheckboxGroup
-        value={variants}
-        onChange={(next) => setVariants(MODEL_VARIANTS.filter((variant) => next.includes(variant)))}
-        isDisabled={pending}
-      >
-        <Label>{t("fields.variants")}</Label>
-        <Description>{t("fields.variantsHint")}</Description>
-        {MODEL_VARIANTS.map((variant) => (
-          <Checkbox key={variant} value={variant}>
-            <Checkbox.Content>
-              <Checkbox.Control>
-                <Checkbox.Indicator />
-              </Checkbox.Control>
-              <Label>{t("fields.variantLabel", { variant, alias: variantAlias(alias.trim() || "alias", variant) })}</Label>
-            </Checkbox.Content>
-            <Description>{t("fields.variantHint", { variant })}</Description>
-          </Checkbox>
+
+      <Separator />
+
+      <Fieldset className="gap-3">
+        <Fieldset.Legend>{t("sections.endpoints")}</Fieldset.Legend>
+        <p className="text-sm text-muted">{t("sections.endpointsHint")}</p>
+        {deps.length > 1 ? (
+          <Select
+            selectedKey={strategy}
+            onSelectionChange={(key) => setStrategy(String(key))}
+            isDisabled={pending}
+            fullWidth
+          >
+            <Label>{t("fields.strategy")}</Label>
+            <Select.Trigger>
+              <Select.Value />
+              <Select.Indicator />
+            </Select.Trigger>
+            <Select.Popover>
+              <ListBox aria-label={t("fields.strategy")}>
+                {STRATEGIES.map((s) => (
+                  <ListBox.Item key={s} id={s} textValue={t(`strategies.${s}`)}>
+                    {t(`strategies.${s}`)}
+                    <ListBox.ItemIndicator />
+                  </ListBox.Item>
+                ))}
+              </ListBox>
+            </Select.Popover>
+            <Description>{t("strategyHint", { strategy })}</Description>
+          </Select>
+        ) : null}
+        {deps.map((d, i) => (
+          <DeploymentCard
+            key={d.id ?? i}
+            index={i}
+            dep={d}
+            withCatalog={i === 0}
+            showWeight={deps.length > 1}
+            removable={deps.length > 1}
+            providers={providers}
+            isDisabled={pending}
+            onChange={(patch) => setDep(i, patch)}
+            onRemove={() => setDeps((cur) => cur.filter((_, idx) => idx !== i))}
+          />
         ))}
-      </CheckboxGroup>
-      <Disclosure>
-        <Disclosure.Heading>
-          <Disclosure.Trigger className="flex w-full items-center justify-between text-sm text-muted">
-            {tCommon("advanced")}
-            <Disclosure.Indicator />
-          </Disclosure.Trigger>
-        </Disclosure.Heading>
-        <Disclosure.Content>
-          <Disclosure.Body className="space-y-4 pt-3">
-            <div className="grid gap-3 sm:grid-cols-2 sm:items-start">
-              <TextField fullWidth value={vendor} onChange={setVendor} isDisabled={pending}>
-                <Label>{t("fields.vendor")}</Label>
-                <Input placeholder="anthropic" />
-                <Description>{t("fields.vendorHint")}</Description>
-              </TextField>
-              <TextField fullWidth value={displayName} onChange={setDisplayName} isDisabled={pending}>
-                <Label>{t("fields.displayName")}</Label>
-                <Input />
-                <Description>{t("fields.displayNameHint")}</Description>
-              </TextField>
-            </div>
-            <SearchSelect
-              label={t("fields.autoRoutes")}
-              description={t("fields.autoRoutesHint")}
-              items={AUTO_ROUTE_MODES.map((mode) => ({
-                id: mode,
-                label: t("fields.autoRoutesMode", { mode }),
-              }))}
-              value={autoRoutes === null ? "inherit" : autoRoutes ? "on" : "off"}
-              onChange={(mode) => setAutoRoutes(mode === "inherit" ? null : mode === "on")}
-              isDisabled={pending}
-            />
-            <Select
-              selectedKey={strategy}
-              onSelectionChange={(key) => setStrategy(String(key))}
-              isDisabled={pending}
-              aria-label={t("fields.strategy")}
-              fullWidth
-            >
-              <Label>{t("fields.strategy")}</Label>
-              <Select.Trigger>
-                <Select.Value />
-                <Select.Indicator />
-              </Select.Trigger>
-              <Select.Popover>
-                <ListBox aria-label={t("fields.strategy")}>
-                  {STRATEGIES.map((s) => (
-                    <ListBox.Item key={s} id={s} textValue={t(`strategies.${s}`)}>
-                      {t(`strategies.${s}`)}
-                      <ListBox.ItemIndicator />
-                    </ListBox.Item>
-                  ))}
-                </ListBox>
-              </Select.Popover>
-              <Description>{t("strategyHint", { strategy })}</Description>
-            </Select>
-            <TextField
-              fullWidth
-              value={retries}
-              onChange={setRetries}
-              isDisabled={pending}
-              aria-label={t("fields.retries")}
-            >
-              <Label>{t("fields.retries")}</Label>
-              <Input aria-label={t("fields.retries")} />
-            </TextField>
-            <SearchSelect
-              label={t("fields.overflow")}
-              items={overflowItems}
-              value={overflow || "none"}
-              onChange={(next) => setOverflow(next === "none" ? "" : next)}
-              isDisabled={pending}
-            />
-            <MultiPicker
-              label={t("fields.fallbacks")}
-              placeholder={t("fields.fallbacksPlaceholder")}
-              searchLabel={tCommon("search")}
-              emptyLabel={tCommon("noResults")}
-              items={otherModels.map(modelOption)}
-              selected={fallbacks}
-              onChange={setFallbacks}
-              isDisabled={pending}
-            />
-            {deps.map((d, i) => (
-              <DeploymentCard
-                key={d.id ?? i}
-                dep={d}
-                primary={i === 0}
-                providers={providers}
+        <div>
+          <Button
+            size="sm"
+            variant="secondary"
+            isDisabled={pending}
+            onPress={() => setDeps((cur) => [...cur, emptyDep(providers)])}
+          >
+            <Plus size={14} aria-hidden />
+            {t("addEndpoint")}
+          </Button>
+        </div>
+      </Fieldset>
+
+      <Separator />
+
+      <div className="flex flex-col gap-3">
+        <Select
+          selectedKey={billingMode}
+          onSelectionChange={(key) => setBillingMode(billingModeOf(String(key)))}
+          isDisabled={pending}
+          fullWidth
+        >
+          <Label>{t("fields.billingMode")}</Label>
+          <Select.Trigger>
+            <Select.Value />
+            <Select.Indicator />
+          </Select.Trigger>
+          <Select.Popover>
+            <ListBox aria-label={t("fields.billingMode")}>
+              {BILLING_MODES.map((billing) => (
+                <ListBox.Item key={billing} id={billing} textValue={t(`billingModes.${billing}`)}>
+                  {t("billingModeLabel", { mode: billing })}
+                  <ListBox.ItemIndicator />
+                </ListBox.Item>
+              ))}
+            </ListBox>
+          </Select.Popover>
+          <Description>{t("billingModeHint", { mode: billingMode })}</Description>
+        </Select>
+        {customPrice ? (
+          <CustomPriceFields
+            price={price}
+            windows={priceWindows}
+            timeZone={priceTimeZone}
+            isDisabled={pending}
+            onPriceChange={setPrice}
+            onWindowsChange={setPriceWindows}
+            onTimeZoneChange={setPriceTimeZone}
+          />
+        ) : null}
+      </div>
+
+      <DisclosureGroup allowsMultipleExpanded>
+        <Separator />
+        <Disclosure>
+          <Disclosure.Heading>
+            <Disclosure.Trigger className="flex w-full items-center justify-between gap-2 py-3 text-sm font-medium">
+              <span className="flex-1 text-left">{t("sections.fallbacks")}</span>
+              <span className="text-xs font-normal text-muted">
+                {t("sections.fallbacksSummary", { count: fallbackCount })}
+              </span>
+              <Disclosure.Indicator />
+            </Disclosure.Trigger>
+          </Disclosure.Heading>
+          <Disclosure.Content>
+            <Disclosure.Body className="flex flex-col gap-4 pb-3">
+              <p className="text-sm text-muted">{t("sections.fallbacksHint")}</p>
+              <MultiPicker
+                label={t("fields.fallbacks")}
+                placeholder={t("fields.fallbacksPlaceholder")}
+                searchLabel={tCommon("search")}
+                emptyLabel={tCommon("noResults")}
+                items={otherModels.map(modelOption)}
+                selected={fallbacks}
+                onChange={setFallbacks}
                 isDisabled={pending}
-                onChange={(patch) => setDep(i, patch)}
-                onRemove={() => setDeps((cur) => cur.filter((_, idx) => idx !== i))}
               />
-            ))}
-            <Button
-              size="sm"
-              variant="secondary"
-              aria-label={t("addEndpoint")}
-              isDisabled={pending}
-              onPress={() => setDeps((cur) => [...cur, emptyDep(providers)])}
-            >
-              {t("addEndpoint")}
-            </Button>
-          </Disclosure.Body>
-        </Disclosure.Content>
-      </Disclosure>
+              <SearchSelect
+                label={t("fields.overflow")}
+                description={t("fields.overflowHint")}
+                items={overflowItems}
+                value={overflow || "none"}
+                onChange={(next) => setOverflow(next === "none" ? "" : next)}
+                isDisabled={pending}
+              />
+              <TextField fullWidth value={retries} onChange={setRetries} isDisabled={pending}>
+                <Label>{t("fields.retries")}</Label>
+                <Input inputMode="numeric" />
+                <Description>{t("fields.retriesHint")}</Description>
+              </TextField>
+            </Disclosure.Body>
+          </Disclosure.Content>
+        </Disclosure>
+        <Separator />
+        <Disclosure>
+          <Disclosure.Heading>
+            <Disclosure.Trigger className="flex w-full items-center justify-between gap-2 py-3 text-sm font-medium">
+              <span>{tCommon("advanced")}</span>
+              <Disclosure.Indicator />
+            </Disclosure.Trigger>
+          </Disclosure.Heading>
+          <Disclosure.Content>
+            <Disclosure.Body className="flex flex-col gap-4 pb-3">
+              <div className="grid gap-4 sm:grid-cols-2 sm:items-start">
+                <TextField fullWidth value={displayName} onChange={setDisplayName} isDisabled={pending}>
+                  <Label>{t("fields.displayName")}</Label>
+                  <Input />
+                  <Description>{t("fields.displayNameHint")}</Description>
+                </TextField>
+                <TextField fullWidth value={vendor} onChange={setVendor} isDisabled={pending}>
+                  <Label>{t("fields.vendor")}</Label>
+                  <Input placeholder="anthropic" />
+                  <Description>{t("fields.vendorHint")}</Description>
+                </TextField>
+              </div>
+              <SearchSelect
+                label={t("fields.autoRoutes")}
+                description={t("fields.autoRoutesHint")}
+                items={AUTO_ROUTE_MODES.map((option) => ({
+                  id: option,
+                  label: t("fields.autoRoutesMode", { mode: option }),
+                }))}
+                value={autoRoutes === null ? "inherit" : autoRoutes ? "on" : "off"}
+                onChange={(option) => setAutoRoutes(option === "inherit" ? null : option === "on")}
+                isDisabled={pending}
+              />
+              <CheckboxGroup
+                value={variants}
+                onChange={(next) => setVariants(MODEL_VARIANTS.filter((variant) => next.includes(variant)))}
+                isDisabled={pending}
+              >
+                <Label>{t("fields.variants")}</Label>
+                <Description>{t("fields.variantsHint")}</Description>
+                {MODEL_VARIANTS.map((variant) => (
+                  <Checkbox key={variant} value={variant}>
+                    <Checkbox.Content>
+                      <Checkbox.Control>
+                        <Checkbox.Indicator />
+                      </Checkbox.Control>
+                      <Label>
+                        {t("fields.variantLabel", { variant, alias: variantAlias(alias.trim() || "alias", variant) })}
+                      </Label>
+                    </Checkbox.Content>
+                    <Description>{t("fields.variantHint", { variant })}</Description>
+                  </Checkbox>
+                ))}
+              </CheckboxGroup>
+            </Disclosure.Body>
+          </Disclosure.Content>
+        </Disclosure>
+      </DisclosureGroup>
     </FormDialog>
   );
 }

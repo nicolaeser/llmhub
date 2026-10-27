@@ -1,7 +1,8 @@
 FROM node:26.12.1-trixie-slim AS base
 WORKDIR /app
 ENV NEXT_TELEMETRY_DISABLED=1 \
-    CHECKPOINT_DISABLE=1
+    CHECKPOINT_DISABLE=1 \
+    NPM_CONFIG_UPDATE_NOTIFIER=false
 
 FROM base AS deps
 COPY package.json package-lock.json ./

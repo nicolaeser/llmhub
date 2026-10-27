@@ -16,7 +16,7 @@ import {
   pickRoundRobin,
   pickWeighted,
 } from "@/lib/gateway/routing/router";
-import { quotaBottleneckReset, quotaExhausted, quotaPressure } from "@/lib/gateway/routing/quota";
+import { modelRecoveryAt, quotaBottleneckReset, quotaExhausted, quotaPressure } from "@/lib/gateway/routing/quota";
 import { hydrateLimits } from "@/lib/gateway/upstreams/limit-store";
 import { limitsSnapshot } from "@/lib/gateway/upstreams/subscription-limits";
 import {
@@ -236,6 +236,24 @@ function limitedProvider(dep: ResolvedDeployment) {
   return dep.provider && reportsLimits(dep.provider.kind) ? dep.provider : null;
 }
 
+function quotaRecovery(dep: ResolvedDeployment, now: number): number | null {
+  const provider = limitedProvider(dep);
+  return provider ? modelRecoveryAt(limitsSnapshot(provider.id), dep.model, now) : null;
+}
+
+async function recoveryEnds(items: ResolvedDeployment[], cooling: Map<string, number>): Promise<Map<string, number>> {
+  const held = items.filter((dep) => cooling.has(dep.id) && limitedProvider(dep));
+  if (!held.length) return cooling;
+  await hydrateLimits(held.map((dep) => dep.provider!.id));
+  const now = Date.now();
+  const ends = new Map(cooling);
+  for (const dep of held) {
+    const recovery = quotaRecovery(dep, now);
+    if (recovery !== null && recovery > ends.get(dep.id)!) ends.set(dep.id, recovery);
+  }
+  return ends;
+}
+
 async function withinQuota(
   items: ResolvedDeployment[],
 ): Promise<{ items: ResolvedDeployment[]; scores: QuotaScores }> {
@@ -367,7 +385,7 @@ export async function acquireGroup(
   const ready = untried(health.ready, run);
   if (!ready.length) {
     const rejected = await rejectedCooldowns([...health.cooling.keys()]);
-    const wait = cooldownWait(usable, health.cooling, Date.now(), rejected);
+    const wait = cooldownWait(usable, await recoveryEnds(usable, health.cooling), Date.now(), rejected);
     if (group.overflow_group && group.overflow_group !== group.alias) {
       const overflow = await loadGroup(group.overflow_group);
       try {
@@ -409,6 +427,11 @@ export async function acquireGroup(
 
 export function markFailure(dep: Deployment, retryAt: number | null = null): void {
   recordFailure(dep.id, Date.now(), retryAt);
+}
+
+export function markLimited(dep: ResolvedDeployment, retryAt: number | null, now = Date.now()): void {
+  const recovery = quotaRecovery(dep, now);
+  recordFailure(dep.id, now, recovery === null ? retryAt : Math.max(retryAt ?? 0, recovery));
 }
 
 export function markOverloaded(dep: Deployment): void {

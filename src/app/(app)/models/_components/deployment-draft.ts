@@ -1,4 +1,11 @@
-import type { DeploymentDraft, DiscoveredPrice, ModelGroupView, ProviderOpt } from "@/types/models";
+import type {
+  ContextRange,
+  ContextWindowView,
+  DeploymentDraft,
+  DiscoveredPrice,
+  ModelGroupView,
+  ProviderOpt,
+} from "@/types/models";
 
 export const BILLING_MODES = ["routed", "average", "custom"] as const;
 
@@ -31,17 +38,24 @@ export function catalogHit(
   return null;
 }
 
-export function contextWindowOf(providers: ProviderOpt[], providerId: string | null, model: string): number {
-  if (!providerId) return 0;
-  return providers.find((p) => p.id === providerId)?.contextWindows?.[model.trim()] ?? 0;
+export function contextWindowOf(
+  providers: ProviderOpt[],
+  providerId: string | null,
+  model: string,
+): ContextWindowView | null {
+  if (!providerId) return null;
+  return providers.find((p) => p.id === providerId)?.contextWindows?.[model.trim()] ?? null;
 }
 
-export function contextRange(windows: number[]): { range: "none" | "single" | "span"; min: number; max: number } {
-  const known = windows.filter((window) => window > 0);
-  if (!known.length) return { range: "none", min: 0, max: 0 };
-  const min = Math.min(...known);
-  const max = Math.max(...known);
-  return { range: min === max ? "single" : "span", min, max };
+export function contextRange(windows: (ContextWindowView | null)[]): ContextRange {
+  const known = windows.filter((window): window is ContextWindowView => Boolean(window && window.tokens > 0));
+  if (!known.length) return { range: "none", min: 0, max: 0, borrowed: "none" };
+  const tokens = known.map((window) => window.tokens);
+  const min = Math.min(...tokens);
+  const max = Math.max(...tokens);
+  const estimates = known.filter((window) => window.from !== undefined).length;
+  const borrowed = estimates === 0 ? "none" : estimates === known.length ? "all" : "some";
+  return { range: min === max ? "single" : "span", min, max, borrowed };
 }
 
 export function withCatalogPrice(

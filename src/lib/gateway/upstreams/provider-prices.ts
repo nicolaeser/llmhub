@@ -51,9 +51,29 @@ export function discoveredOf(v: unknown): DiscoveredModel[] {
   return out;
 }
 
-export function contextWindowsOf(raw: unknown): Record<string, number> {
-  return Object.fromEntries(
-    discoveredOf(raw).flatMap((row) => (row.contextLength > 0 ? [[row.id, row.contextLength] as const] : [])),
+const CONTEXT_FIELDS = [
+  "context_length",
+  "context_window",
+  "max_context_window",
+  "max_context_length",
+  "max_model_len",
+  "max_input_tokens",
+  "input_token_limit",
+  "inputTokenLimit",
+] as const;
+
+function tokenCount(v: unknown): number {
+  const n = Math.trunc(anyFloat(v));
+  return n > 0 ? n : 0;
+}
+
+export function reportedContext(raw: unknown): number {
+  const rec = asRecord(raw);
+  if (!rec) return 0;
+  return Math.max(
+    0,
+    ...CONTEXT_FIELDS.map((field) => tokenCount(rec[field])),
+    tokenCount(asRecord(rec.top_provider)?.context_length),
   );
 }
 

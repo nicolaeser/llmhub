@@ -75,7 +75,7 @@
     "title": "{provider}<muted> · {channel} · {count, plural, one {# account} other {# accounts}}</muted>",
     "label": "{provider} accounts",
     "menu": "More actions for {provider}",
-    "settings": "{resets, select, true {Distribution and automatic resets…} other {Account distribution…}}",
+    "settings": "{features, select, resets {Distribution, resets, and window start…} kickoff {Distribution and window start…} other {Account distribution…}}",
     "createLink": "Create link for {provider}"
   },
   "details": {
@@ -156,6 +156,18 @@
       "saveShort": "Save",
       "saved": "Automatic resets for {provider} saved"
     }
+  },
+  "kickoff": {
+    "title": "Start the next window at reset",
+    "description": "A usage window begins with the first request. When a window of an account has reset, LLM Hub sends “Only reply with ok.” to the chosen model on that account, so the next window starts right away and resets sooner. LLM Hub checks every minute, sends at most once per reset or once an hour while a window has not started, and skips paused, signed-out, and still limited accounts.",
+    "label": "Window start for {provider}",
+    "model": "Model",
+    "off": "Off",
+    "modelHint": "Models that route to {provider} accounts. A small model uses the least of the new window.",
+    "noModels": "No model routes to {provider} accounts yet. Add one on the Models page first.",
+    "save": "Save window start for {provider}",
+    "saveShort": "Save",
+    "saved": "Window start for {provider} saved"
   },
   "routing": {
     "title": "Account distribution",
@@ -245,9 +257,10 @@
   },
   "settings": {
     "title": "{provider} settings",
-    "description": "Choose how requests spread across the accounts and when banked resets are used.",
+    "description": "Choose how requests spread across the accounts, when banked resets are used, and whether a new usage window starts right after a reset.",
     "routingSummary": "Account distribution: {method}",
     "autoResetSummary": "{enabled, select, true {Automatic resets from {percent}} other {Automatic resets off}}",
+    "kickoffSummary": "{enabled, select, true {Window start with {model}} other {Window start off}}",
     "setupRequired": "Setup needed"
   }
 }

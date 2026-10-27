@@ -1,26 +1,20 @@
 "use client";
 
-import { Button, Card, Chip, Table } from "@heroui/react";
-import { Eye, Layers, Pencil, Plus, Trash2 } from "lucide-react";
-import { useFormatter, useTranslations } from "next-intl";
+import { Button, Chip, Table } from "@heroui/react";
+import { Layers, Pencil, Plus, Trash2 } from "lucide-react";
+import { useTranslations } from "next-intl";
 import ConfirmDialog from "@/components/console/confirm-dialog";
 import EmptyState from "@/components/console/empty-state";
 import RowCard, { RowCards, TABLE_FROM_LG } from "@/components/console/row-cards";
 import { refKey, sectionSummaries } from "@/lib/gateway/safety/policy-layers";
 import { POLICY_SECTIONS } from "@/schemas/guardrails";
 import type { PolicyOverrideView, PolicySection, PolicyTarget } from "@/types/guardrails";
-import { SectionChip, SectionDetail } from "@/components/guardrails/policy-labels";
+import { SectionChip } from "@/components/guardrails/policy-labels";
 
 function SectionCell({ row, section }: { row: PolicyOverrideView; section: PolicySection }) {
   const t = useTranslations("Guardrails");
   const summary = sectionSummaries(row).find((entry) => entry.section === section);
-  if (!summary) return <span className="text-sm text-muted">{t("inherited")}</span>;
-  return (
-    <div className="flex flex-col items-start gap-1">
-      <SectionChip summary={summary} />
-      <SectionDetail summary={summary} />
-    </div>
-  );
+  return summary ? <SectionChip summary={summary} /> : <span className="text-sm text-muted">{t("inherited")}</span>;
 }
 
 function TargetName({ target }: { target: PolicyTarget }) {
@@ -45,7 +39,6 @@ export default function PolicyOverrides({
   pending,
   onAdd,
   onEdit,
-  onInspect,
   onRemove,
 }: {
   overrides: PolicyOverrideView[];
@@ -54,63 +47,44 @@ export default function PolicyOverrides({
   pending: boolean;
   onAdd: () => void;
   onEdit: (row: PolicyOverrideView) => void;
-  onInspect: (target: PolicyTarget) => void;
   onRemove: (row: PolicyOverrideView) => void;
 }) {
   const t = useTranslations("Guardrails");
   const tCommon = useTranslations("Common");
-  const format = useFormatter();
-
-  function updated(row: PolicyOverrideView) {
-    return format.dateTime(new Date(row.updatedAt), { dateStyle: "medium" });
-  }
 
   function actions(row: PolicyOverrideView) {
     return (
       <>
-        <Button
-          isIconOnly
-          size="sm"
-          variant="ghost"
-          aria-label={t("overrides.inspect", { alias: row.target.alias })}
-          onPress={() => onInspect(row.target)}
-        >
-          <Eye size={14} aria-hidden />
+        <Button size="sm" variant="secondary" onPress={() => onEdit(row)}>
+          <Pencil size={14} aria-hidden />
+          {tCommon("edit")}
         </Button>
-        {canManage ? (
-          <>
-            <Button size="sm" variant="secondary" onPress={() => onEdit(row)}>
-              <Pencil size={14} aria-hidden />
-              {tCommon("edit")}
-            </Button>
-            <ConfirmDialog
-              title={t("overrides.removeConfirm", { alias: row.target.alias })}
-              description={t("overrides.removeConfirmHint")}
-              confirmLabel={t("overrides.remove")}
-              cancelLabel={tCommon("cancel")}
-              pending={pending}
-              onConfirm={() => onRemove(row)}
-            >
-              <Button
-                isIconOnly
-                size="sm"
-                variant="danger-soft"
-                aria-label={t("overrides.removeFor", { alias: row.target.alias })}
-                isDisabled={pending}
-              >
-                <Trash2 size={14} aria-hidden />
-              </Button>
-            </ConfirmDialog>
-          </>
-        ) : null}
+        <ConfirmDialog
+          title={t("overrides.removeConfirm", { alias: row.target.alias })}
+          description={t("overrides.removeConfirmHint")}
+          confirmLabel={t("overrides.remove")}
+          cancelLabel={tCommon("cancel")}
+          pending={pending}
+          onConfirm={() => onRemove(row)}
+        >
+          <Button
+            isIconOnly
+            size="sm"
+            variant="danger-soft"
+            aria-label={t("overrides.removeFor", { alias: row.target.alias })}
+            isDisabled={pending}
+          >
+            <Trash2 size={14} aria-hidden />
+          </Button>
+        </ConfirmDialog>
       </>
     );
   }
 
   const addButton =
     canManage && canAdd ? (
-      <Button size="sm" onPress={onAdd}>
-        <Plus size={14} aria-hidden />
+      <Button onPress={onAdd}>
+        <Plus size={16} aria-hidden />
         {t("overrides.add")}
       </Button>
     ) : null;
@@ -127,42 +101,34 @@ export default function PolicyOverrides({
   }
 
   return (
-    <Card className="gap-4">
-      <Card.Header className="flex-row flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0 space-y-1">
-          <Card.Title>{t("overrides.title")}</Card.Title>
-          <Card.Description>{t("overrides.hint")}</Card.Description>
-        </div>
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="max-w-2xl text-sm text-muted">{t("overrides.hint")}</p>
         {addButton}
-      </Card.Header>
+      </div>
       <RowCards label={t("overrides.title")}>
         {overrides.map((row) => (
           <RowCard
             key={refKey(row.target)}
-            variant="secondary"
             title={row.target.alias}
             description={[t("scopeLabel", { scope: row.target.scope }), ...row.target.path].join(" · ")}
-            details={[
-              ...POLICY_SECTIONS.map((section) => ({
-                label: t("section", { section }),
-                value: <SectionCell row={row} section={section} />,
-              })),
-              { label: t("overrides.updated"), value: updated(row) },
-            ]}
-            actions={actions(row)}
+            details={POLICY_SECTIONS.map((section) => ({
+              label: t("section", { section }),
+              value: <SectionCell row={row} section={section} />,
+            }))}
+            actions={canManage ? actions(row) : undefined}
           />
         ))}
       </RowCards>
       <Table aria-label={t("overrides.title")} className={TABLE_FROM_LG}>
         <Table.ScrollContainer>
-          <Table.Content>
+          <Table.Content aria-label={t("overrides.title")}>
             <Table.Header>
               <Table.Column isRowHeader>{t("overrides.target")}</Table.Column>
               {POLICY_SECTIONS.map((section) => (
                 <Table.Column key={section}>{t("section", { section })}</Table.Column>
               ))}
-              <Table.Column>{t("overrides.updated")}</Table.Column>
-              <Table.Column>{tCommon("actions")}</Table.Column>
+              {canManage ? <Table.Column>{tCommon("actions")}</Table.Column> : null}
             </Table.Header>
             <Table.Body>
               {overrides.map((row) => (
@@ -175,18 +141,17 @@ export default function PolicyOverrides({
                       <SectionCell row={row} section={section} />
                     </Table.Cell>
                   ))}
-                  <Table.Cell>
-                    <span className="text-sm whitespace-nowrap text-muted">{updated(row)}</span>
-                  </Table.Cell>
-                  <Table.Cell>
-                    <div className="flex flex-wrap items-center gap-1">{actions(row)}</div>
-                  </Table.Cell>
+                  {canManage ? (
+                    <Table.Cell>
+                      <div className="flex items-center gap-1">{actions(row)}</div>
+                    </Table.Cell>
+                  ) : null}
                 </Table.Row>
               ))}
             </Table.Body>
           </Table.Content>
         </Table.ScrollContainer>
       </Table>
-    </Card>
+    </div>
   );
 }

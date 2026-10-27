@@ -19,6 +19,7 @@ import {
   acquireGroup,
   loadGroup,
   markFailure,
+  markLimited,
   markOverloaded,
   markRejected,
   markSuccess,
@@ -212,6 +213,7 @@ function recordAttemptFailure(dep: ResolvedDeployment, failure: FailureClass, er
   if (failure === "overloaded") markOverloaded(dep);
   else if (failure === "rejected") markRejected(dep, now + ACCOUNT_REJECTED_COOLDOWN_MS);
   else if (failure === "model") markRejected(dep, now + MODEL_UNAVAILABLE_COOLDOWN_MS);
+  else if (failure === "limit") markLimited(dep, err instanceof GateError ? err.retryAt : null, now);
   else markFailure(dep, err instanceof GateError ? err.retryAt : null);
 }
 
@@ -295,7 +297,7 @@ export async function withDeployment<T>(
   let overflow: unknown = null;
   const queue: RouteEntry[] = aliases.map((entry) => {
     const route = routeOf(entry, surface);
-    return { alias: route.alias, root: route.alias, pool: route.pool, relaxed: false };
+    return { alias: route.alias, root: route.alias, pool: route.pool, relaxed: false, estimated: false };
   });
   const deferred: RouteEntry[] = [];
   const entryAt = (index: number): RouteEntry | undefined => {
@@ -303,7 +305,7 @@ export async function withDeployment<T>(
     return queue[index];
   };
   for (let qi = 0; entryAt(qi); qi++) {
-    const { alias, root, pool, relaxed } = queue[qi]!;
+    const { alias, root, pool, relaxed, estimated } = queue[qi]!;
     let group: ResolvedModelGroup;
     try {
       group = await loadGroup(alias);
@@ -319,15 +321,21 @@ export async function withDeployment<T>(
     const pooled = group.mapped.filter(inPool);
     const variants = variantRoutes(pooled, opts?.request);
     const candidates = context ? permittedDeployments(pooled, limits[root]).filter(variants.serves) : [];
-    const plan = context?.plan(candidates, relaxed) ?? "open";
+    const plan = context && !estimated ? context.plan(candidates, relaxed) : "open";
     if (plan !== "open") context!.record(plan, alias, candidates);
-    if (plan === "tight") deferred.push({ alias, root, pool, relaxed: true });
-    const servable = (dep: ResolvedDeployment) =>
-      inPool(dep) && variants.serves(dep) && (!context || context.fits(dep, relaxed));
+    if (plan === "tight") deferred.push({ alias, root, pool, relaxed: true, estimated: false });
     const sized = plan === "open" || plan === "narrowed";
-    const reachable =
-      sized && (!group.mapped.length || group.mapped.some(servable) || Boolean(group.overflow_group));
-    if (sized && !reachable) last = pooled.length && variants.error ? variants.error : outsidePool(pool, surface);
+    const estimating = Boolean(context) && sized && !estimated && context!.estimates(candidates);
+    const doubted = estimating ? context!.doubted(candidates, relaxed) : [];
+    if (doubted.length) context!.record("deferred", alias, doubted);
+    if (estimating) deferred.push({ alias, root, pool, relaxed, estimated: true });
+    const servable = (dep: ResolvedDeployment) =>
+      inPool(dep) && variants.serves(dep) && (!context || context.serves(dep, relaxed, estimated));
+    const spills = Boolean(group.overflow_group) && !estimated && !doubted.length;
+    const reachable = sized && (!group.mapped.length || group.mapped.some(servable) || spills);
+    if (sized && !reachable && !estimated && !doubted.length) {
+      last = pooled.length && variants.error ? variants.error : outsidePool(pool, surface);
+    }
     const attempts = reachable ? Math.max(0, group.num_retries) + 1 : 0;
     const switchBudget = accountBudget(pooled.filter(servable));
     let switches = 0;
@@ -417,14 +425,16 @@ export async function withDeployment<T>(
       }
     }
     for (const fb of group.fallback_groups) {
-      if (!queue.some((entry) => entry.alias === fb && entry.pool === pool)) queue.push({ alias: fb, root, pool, relaxed: false });
+      if (!queue.some((entry) => entry.alias === fb && entry.pool === pool)) {
+        queue.push({ alias: fb, root, pool, relaxed: false, estimated: false });
+      }
     }
     if (
       !stopAlias &&
       group.overflow_group &&
       !queue.some((entry) => entry.alias === group.overflow_group && entry.pool === pool)
     ) {
-      queue.push({ alias: group.overflow_group, root, pool, relaxed: false });
+      queue.push({ alias: group.overflow_group, root, pool, relaxed: false, estimated: false });
     }
   }
   const waiting = isUnavailableError(last) && last.wait !== null;

@@ -1,11 +1,11 @@
 {
   "title": "Models",
-  "subtitle": "Every model your providers offer, grouped under public names. Turn models on in the catalog, tune routing and prices per group, and bundle access for API keys in presets.",
+  "subtitle": "Public model names, the providers behind them, and presets that bundle model access for API keys.",
   "tab": "{tab, select, catalog {Catalog} groups {Groups and routing} presets {Presets} other {}}",
   "add": "Add model",
   "formTitle": "{mode, select, edit {Edit model} add {Add model} other {Add model}}",
   "formSubmit": "{mode, select, save {Save} create {Add model} other {Add model}}",
-  "addHint": "Pick a provider and the upstream model id. Routing options are optional.",
+  "addHint": "Choose where requests for this public name go. Everything below the endpoints is optional.",
   "emptyTitle": "No models",
   "empty": "Add a public name clients can send as model.",
   "needProvider": "Connect a <providers>provider</providers> first, then add a public model name.",
@@ -15,14 +15,19 @@
   "noMatches": "No model groups match that search.",
   "addEndpoint": "Add endpoint",
   "deleteEndpoint": "Remove endpoint",
+  "deleteEndpointAt": "Remove endpoint {index, number}",
+  "sections": {
+    "endpoints": "Endpoints",
+    "endpointsHint": "The provider models that answer requests for this name. Add more to share load or keep serving when one is down.",
+    "fallbacks": "Fallbacks and overflow",
+    "fallbacksSummary": "{count, plural, =0 {None} one {# model} other {# models}}",
+    "fallbacksHint": "Other models to try, in order, when the endpoints here fail."
+  },
   "columns": {
     "alias": "Public name",
     "enabled": "Status",
-    "strategy": "Mode",
     "context": "Context window",
-    "billing": "Billing",
-    "endpoints": "Providers",
-    "overflow": "Overflow"
+    "endpoints": "Providers"
   },
   "fields": {
     "alias": "Public model name",
@@ -32,7 +37,9 @@
     "upstream": "Upstream model id",
     "weight": "Weight",
     "retries": "Retries",
+    "retriesHint": "Extra attempts on this model's endpoints before the fallbacks take over.",
     "overflow": "Overflow alias",
+    "overflowHint": "Takes over at once when no endpoint here is ready, for example all at their limit or cooling down, and again after the fallbacks failed.",
     "fallbacks": "Fallback aliases",
     "fallbacksPlaceholder": "No fallbacks",
     "provider": "Provider connection",
@@ -70,7 +77,10 @@
   "enabledToggle": "Make {alias} available in the API",
   "priceFromProvider": "Prices from {source}",
   "contextSummary": "{range, select, none {Unknown} single {{max, number, compact} tokens} other {{min, number, compact} to {max, number, compact} tokens}}",
-  "contextHint": "{known, select, yes {Context window: {tokens, number, integer} tokens. Larger requests skip this endpoint.} other {Context window unknown. Requests are never skipped for their size.}}",
+  "contextHint": "{state, select, reported {Context window: {tokens, number, integer} tokens. Larger requests skip this endpoint.} borrowed {Context window about {tokens, number, integer} tokens, taken from {from}. Larger requests try this endpoint last.} other {Context window unknown. Requests are never skipped for their size.}}",
+  "contextEstimated": "{borrowed, select, all {Estimated from other providers} some {Partly estimated} other {}}",
+  "fallbackNote": "Fallback: {models}",
+  "overflowNote": "Overflow: {model}",
   "strategies": {
     "weighted_random": "Weighted random",
     "least_inflight": "Least busy",

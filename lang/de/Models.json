@@ -1,11 +1,11 @@
 {
   "title": "Modelle",
-  "subtitle": "Alle Modelle deiner Anbieter, gruppiert unter öffentlichen Namen. Schalte Modelle im Katalog ein, passe Routing und Preise pro Gruppe an und bündle Modellfreigaben für API-Keys in Vorlagen.",
+  "subtitle": "Öffentliche Modellnamen, die Anbieter dahinter und Vorlagen, die Modellfreigaben für API-Keys bündeln.",
   "tab": "{tab, select, catalog {Katalog} groups {Gruppen und Routing} presets {Vorlagen} other {}}",
   "add": "Modell hinzufügen",
   "formTitle": "{mode, select, edit {Modell bearbeiten} add {Modell hinzufügen} other {Modell hinzufügen}}",
   "formSubmit": "{mode, select, save {Speichern} create {Modell hinzufügen} other {Modell hinzufügen}}",
-  "addHint": "Wähle einen Anbieter und die Upstream-Modell-ID. Routing ist optional.",
+  "addHint": "Lege fest, wohin Anfragen für diesen öffentlichen Namen gehen. Alles unterhalb der Endpunkte ist optional.",
   "emptyTitle": "Keine Modelle",
   "empty": "Lege einen öffentlichen Namen an, den Clients als model senden.",
   "needProvider": "Verbinde zuerst einen <providers>Anbieter</providers>, dann lege ein öffentliches Modell an.",
@@ -15,14 +15,19 @@
   "noMatches": "Keine Modellgruppe passt zur Suche.",
   "addEndpoint": "Endpunkt hinzufügen",
   "deleteEndpoint": "Endpunkt entfernen",
+  "deleteEndpointAt": "Endpunkt {index, number} entfernen",
+  "sections": {
+    "endpoints": "Endpunkte",
+    "endpointsHint": "Die Anbietermodelle, die Anfragen für diesen Namen beantworten. Mit weiteren verteilst du die Last oder bleibst erreichbar, wenn einer ausfällt.",
+    "fallbacks": "Fallbacks und Überlauf",
+    "fallbacksSummary": "{count, plural, =0 {Keine} one {# Modell} other {# Modelle}}",
+    "fallbacksHint": "Andere Modelle, die der Reihe nach einspringen, wenn die Endpunkte hier scheitern."
+  },
   "columns": {
     "alias": "Öffentlicher Name",
     "enabled": "Status",
-    "strategy": "Modus",
     "context": "Kontextfenster",
-    "billing": "Abrechnung",
-    "endpoints": "Anbieter",
-    "overflow": "Überlauf"
+    "endpoints": "Anbieter"
   },
   "fields": {
     "alias": "Öffentlicher Modellname",
@@ -32,7 +37,9 @@
     "upstream": "Upstream-Modell-ID",
     "weight": "Gewicht",
     "retries": "Wiederholungen",
+    "retriesHint": "Zusätzliche Versuche auf den Endpunkten dieses Modells, bevor die Fallbacks übernehmen.",
     "overflow": "Überlauf-Alias",
+    "overflowHint": "Übernimmt sofort, wenn hier kein Endpunkt bereit ist, etwa weil alle am Limit sind oder pausieren, und noch einmal, wenn die Fallbacks gescheitert sind.",
     "fallbacks": "Fallback-Aliasse",
     "fallbacksPlaceholder": "Keine Fallbacks",
     "provider": "Anbieterverbindung",
@@ -70,7 +77,10 @@
   "enabledToggle": "{alias} über die API verfügbar machen",
   "priceFromProvider": "Preise von {source}",
   "contextSummary": "{range, select, none {Unbekannt} single {{max, number, compact} Tokens} other {{min, number, compact} bis {max, number, compact} Tokens}}",
-  "contextHint": "{known, select, yes {Kontextfenster: {tokens, number, integer} Tokens. Größere Anfragen überspringen diesen Endpunkt.} other {Kontextfenster unbekannt. Anfragen werden nie wegen ihrer Größe übersprungen.}}",
+  "contextHint": "{state, select, reported {Kontextfenster: {tokens, number, integer} Tokens. Größere Anfragen überspringen diesen Endpunkt.} borrowed {Kontextfenster etwa {tokens, number, integer} Tokens, übernommen von {from}. Größere Anfragen versuchen diesen Endpunkt zuletzt.} other {Kontextfenster unbekannt. Anfragen werden nie wegen ihrer Größe übersprungen.}}",
+  "contextEstimated": "{borrowed, select, all {Von anderen Anbietern übernommen} some {Teils übernommen} other {}}",
+  "fallbackNote": "Fallback: {models}",
+  "overflowNote": "Überlauf: {model}",
   "strategies": {
     "weighted_random": "Gewichteter Zufall",
     "least_inflight": "Geringste Last",

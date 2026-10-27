@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test, { beforeEach } from "node:test";
 import type { JsonMap } from "@/types/gateway";
+import type { SubscriptionLimits } from "@/types/providers";
 import type { ResolvedDeployment } from "@/types/routing";
 
 type FakeAccount = { id: string; deployment: string; weight: number };
@@ -62,6 +63,7 @@ const resetChecks: string[] = [];
       return null;
     },
   },
+  deployment: { findMany: async () => [] },
   providerLogin: { findUnique: async () => null },
   accountRouting: { findMany: async () => [] },
   setting: { findUnique: async () => null },
@@ -143,6 +145,71 @@ test("when every account is exhausted the caller gets a usage limit error with t
   assert.equal(gate.retryAt, resets.get("acct-b"));
   assert.match(gate.message, /^all ChatGPT subscription \(Codex\) accounts have reached their usage limit; /);
   assert.match(gate.message, /\(in 2h\)$/);
+});
+
+function sessionAndWeek(sessionResetAt: number, weekResetAt: number, weekPercent: number): SubscriptionLimits {
+  const at = (time: number) => new Date(time).toISOString();
+  return {
+    plan: "pro",
+    windows: [
+      { scope: "", usedPercent: 100, windowSeconds: 18_000, resetsAt: at(sessionResetAt), limitReached: true },
+      { scope: "", usedPercent: weekPercent, windowSeconds: 604_800, resetsAt: at(weekResetAt), limitReached: weekPercent >= 100 },
+    ],
+    credits: null,
+    resetCredits: null,
+    extraUsage: null,
+    fetchedAt: at(Date.now()),
+  };
+}
+
+test("an account with a full weekly window waits for that window, so the next free account names the reset", async () => {
+  const { rememberLimits, dropCachedLimits } = await import("@/lib/gateway/upstreams/subscription-limits");
+  const { toGateError } = await import("@/lib/gateway/access/gate");
+  const sessionA = Date.now() + 3_600_000;
+  const weekA = Date.now() + 3 * 24 * 3_600_000;
+  const sessionB = Date.now() + 2 * 3_600_000;
+  rememberLimits("acct-a", sessionAndWeek(sessionA, weekA, 100));
+  rememberLimits("acct-b", sessionAndWeek(sessionB, Date.now() + 4 * 24 * 3_600_000, 40));
+  try {
+    const resets = new Map([
+      ["acct-a", sessionA],
+      ["acct-b", sessionB],
+    ]);
+    const gate = toGateError(
+      await route(async (dep) => {
+        throw await limitError("Usage limit reached.", resets.get(dep.provider_id));
+      }).catch((err: unknown) => err),
+    );
+    assert.equal(gate.status, 429);
+    assert.equal(gate.code, "rate_limit_exceeded");
+    assert.equal(gate.retryAt, sessionB);
+  } finally {
+    dropCachedLimits("acct-a");
+    dropCachedLimits("acct-b");
+  }
+});
+
+test("a limit answer without a reset waits for the window the account's limits report", async () => {
+  const { rememberLimits, dropCachedLimits } = await import("@/lib/gateway/upstreams/subscription-limits");
+  const { GateError } = await import("@/lib/gateway/errors");
+  const { gateResponse } = await import("@/lib/gateway/access/gate");
+  const sessionA = Date.now() + 90 * 60_000;
+  rememberLimits("acct-a", sessionAndWeek(sessionA, Date.now() + 5 * 24 * 3_600_000, 30));
+  rememberLimits("acct-b", sessionAndWeek(Date.now() + 4 * 3_600_000, Date.now() + 6 * 24 * 3_600_000, 30));
+  try {
+    const failure = await route(async () => {
+      throw new GateError(429, "upstream_error", "Usage limit reached.", { upstreamCode: "usage_limit_reached" });
+    }).catch((err: unknown) => err);
+    const response = gateResponse(failure, new Request("http://hub.local/v1/responses", { method: "POST" }));
+    assert.equal(response.status, 429);
+    const body = await response.json();
+    assert.equal(body.error.type, "usage_limit_reached");
+    assert.equal(body.error.resets_at, Math.ceil(sessionA / 1000));
+    assert.equal(response.headers.get("x-codex-primary-reset-at"), String(Math.ceil(sessionA / 1000)));
+  } finally {
+    dropCachedLimits("acct-a");
+    dropCachedLimits("acct-b");
+  }
 });
 
 test("accounts already cooling down after a limit answer with a rate limit error instead of overloaded", async () => {

@@ -117,6 +117,8 @@ jobs:
         env:
           TRIVY_USERNAME: ${{ github.actor }}
           TRIVY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+          TRIVY_NO_PROGRESS: "true"
+          TRIVY_SKIP_VERSION_CHECK: "true"
         with:
           image-ref: ${{ env.IMAGE }}@${{ needs.publish.outputs.digest }}
           format: sarif

@@ -65,6 +65,7 @@ export const PROVIDER_CATALOG: ProviderKindSpec[] = [
 
 const LIMIT_KINDS = new Set(["codex", "claude", "grok_build", "antigravity", "kimi", "kimi_ai", "muse_code", "devin"]);
 const TRAFFIC_LIMIT_KINDS = new Set(["muse_code"]);
+const KICKOFF_KINDS = new Set(["codex", "claude", "grok_build", "antigravity", "kimi", "kimi_ai"]);
 const KIMI_CODE_KINDS = new Set(["kimi", "kimi_ai"]);
 const KIMI_KINDS = new Set(["kimi", "kimi_ai", "moonshot", "moonshot_cn"]);
 const MUSE_KINDS = new Set(["meta", "muse_code"]);
@@ -80,6 +81,10 @@ export function signInKinds(): SignInKind[] {
 
 export function reportsLimits(kind: string): boolean {
   return LIMIT_KINDS.has(kind);
+}
+
+export function startsWindows(kind: string): kind is SignInKind {
+  return KICKOFF_KINDS.has(kind);
 }
 
 export function limitsFromTraffic(kind: string): boolean {

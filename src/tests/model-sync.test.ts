@@ -385,6 +385,55 @@ test("fetchProviderModels uses Anthropic headers and maps upstream errors to cod
   });
 });
 
+test("fetchProviderModels reads the context window of every list shape but never the output cap", async () => {
+  const { fetchProviderModels, withMuseWindows } = await load();
+  respondWith(() =>
+    Response.json({
+      data: [
+        { id: "claude-opus-5-5", display_name: "Claude Opus 5.5", max_input_tokens: 1_000_000, max_tokens: 128_000 },
+        { id: "claude-haiku-4-5", max_tokens: 64_000 },
+      ],
+    }),
+  );
+  const windows = (models: DiscoveredModel[]) => models.map((row) => [row.id, row.contextLength]);
+  const expected = [
+    ["claude-opus-5-5", 1_000_000],
+    ["claude-haiku-4-5", 0],
+  ];
+  assert.deepEqual(windows(await fetchProviderModels("anthropic", "", "sk-ant")), expected);
+  assert.deepEqual(windows(await fetchProviderModels("claude", "", "oauth-token")), expected);
+  respondWith(() =>
+    Response.json({
+      data: [
+        { id: "openai/gpt-x", context_length: 400_000, top_provider: { context_length: 272_000 } },
+        { id: "z-ai/glm", top_provider: { context_length: "131072" } },
+        { id: "mistral-large", max_context_length: 131_072 },
+        { id: "served", max_model_len: 32_768 },
+        { id: "junk", context_length: 0, context_window: -1, max_model_len: "n/a" },
+      ],
+    }),
+  );
+  assert.deepEqual(windows(await fetchProviderModels("openai_compat", "http://local.test/v1", "k")), [
+    ["openai/gpt-x", 400_000],
+    ["z-ai/glm", 131_072],
+    ["mistral-large", 131_072],
+    ["served", 32_768],
+    ["junk", 0],
+  ]);
+  respondWith(() =>
+    Response.json({ models: [{ slug: "gpt-x-codex", visibility: "list", context_window: 272_000, max_context_window: 400_000 }] }),
+  );
+  assert.deepEqual(windows(await fetchProviderModels("codex", "", "token")), [["gpt-x-codex", 400_000]]);
+  assert.deepEqual(
+    windows(withMuseWindows([model("muse-spark-1.3"), model("muse-new"), model("muse-wonder-1.0", { contextLength: 5 })])),
+    [
+      ["muse-spark-1.3", 1_048_576],
+      ["muse-new", 0],
+      ["muse-wonder-1.0", 5],
+    ],
+  );
+});
+
 test("first refresh records a baseline without listing every model", async () => {
   const { refreshProviderModels } = await load();
   const row = seedProvider([]);

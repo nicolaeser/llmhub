@@ -1,6 +1,6 @@
 {
   "title": "Modellvorlagen",
-  "subtitle": "Wiederverwendbare Modellfreigaben für API-Keys. Eine Vorlage wählt Modelle nach Name und danach aus, wie ihre Anbieter mit Daten umgehen, und bleibt aktuell, wenn sich Modelle und Anbieter ändern.",
+  "subtitle": "Wiederverwendbare Modellfreigaben für API-Keys, die aktuell bleiben, wenn sich Modelle und Anbieter ändern.",
   "add": "Neue Vorlage",
   "emptyTitle": "Noch keine Modellvorlagen",
   "empty": "Lege eine Vorlage an, um Keys mit einem Schritt eine passende Modellauswahl zu geben, zum Beispiel nur Modelle mit Zero Data Retention oder nur in der EU gehostete Modelle.",
@@ -27,28 +27,18 @@
   "editLabel": "{name} bearbeiten",
   "deleteLabel": "{name} löschen",
   "dialogTitle": "{mode, select, edit {Vorlage bearbeiten} other {Neue Vorlage}}",
-  "dialogDescription": "Keys mit dieser Vorlage dürfen jedes Modell nutzen, auf das sie passt. Die Auswahl aktualisiert sich automatisch, wenn sich Modelle oder Anbieter ändern.",
   "dialogSubmit": "{mode, select, edit {Änderungen speichern} other {Vorlage anlegen}}",
   "preset": {
     "label": "Ausgangspunkt",
-    "option": "{preset, select, zdr {Zero Data Retention} eu {Datenhaltung in der EU} noTraining {Kein Training} shortRetention {Kurze Aufbewahrung} other {Leer}}",
-    "hint": "{preset, select, zdr {Nur Anbieter mit einer Vereinbarung zu Zero Data Retention.} eu {Nur Endpunkte, die Daten in der EU verarbeiten.} noTraining {Nur Anbieter, die nicht mit Prompts trainieren.} shortRetention {Anbieter bewahren Daten höchstens 30 Tage auf.} other {Ohne Regeln beginnen.}}",
+    "option": "{preset, select, zdr {Zero Data Retention} eu {Datenhaltung in der EU} noTraining {Kein Training mit Prompts} shortRetention {Aufbewahrung bis 30 Tage} other {Leer}}",
     "name": "{preset, select, zdr {Zero Data Retention} eu {Nur EU} noTraining {Kein Training} shortRetention {Aufbewahrung bis 30 Tage} other {}}"
-  },
-  "sections": {
-    "models": {
-      "title": "Welche Modelle",
-      "hint": "Grenze Modelle über den Namen ein oder füge sie direkt hinzu. Ohne Namensmuster passt jedes Modell, das die Anbieterregeln unten erfüllt."
-    },
-    "providers": {
-      "title": "Welche Anbieter sie bedienen dürfen",
-      "hint": "Ein Modell passt, wenn mindestens ein Endpunkt dahinter, auch über Fallback- und Überlauf-Aliasse, alle Regeln erfüllt. Anfragen von Keys mit dieser Vorlage laufen nur über diese Endpunkte."
-    }
   },
   "fields": {
     "name": "Name",
     "description": "Beschreibung",
     "descriptionPlaceholder": "Optional, für alle, die Keys verwalten",
+    "rulesTitle": "Regeln",
+    "rulesHint": "Ein Modell passt, wenn mindestens ein Endpunkt dahinter, auch über Fallback- und Überlauf-Aliasse, alle Regeln erfüllt. Anfragen von Keys mit dieser Vorlage laufen nur über diese Endpunkte.",
     "providers": "Anbieter",
     "providersHint": "Nur Endpunkte über diese Verbindungen.",
     "providersPlaceholder": "Beliebiger Anbieter",
@@ -66,7 +56,7 @@
     "noTrainingOnly": "Kein Training mit Prompts",
     "noTrainingOnlyHint": "Nur Anbieter, die Prompts und Ausgaben nicht für Training verwenden.",
     "models": "Immer erlauben",
-    "modelsHint": "Werden unabhängig von den Regeln dieser Vorlage ergänzt.",
+    "modelsHint": "Werden unabhängig von den Regeln oben ergänzt.",
     "modelsPlaceholder": "Keine zusätzlichen Modelle",
     "search": "Suchen",
     "noResults": "Keine Treffer"

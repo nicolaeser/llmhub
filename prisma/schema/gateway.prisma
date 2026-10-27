@@ -288,6 +288,7 @@ model AccountRouting {
   autoReset        Boolean  @default(false)
   autoResetPercent Int      @default(99)
   autoResetScope   String   @default("pool")
+  kickoffModel     String   @default("")
   updatedAt        DateTime @updatedAt
 }
 
@@ -324,6 +325,7 @@ model ProviderLimitSnapshot {
   leaseUntil   DateTime?
   leaseToken   String             @default("")
   version      Int                @default(0)
+  kickoffAt    DateTime?
   createdAt    DateTime           @default(now())
   updatedAt    DateTime           @updatedAt
 }
