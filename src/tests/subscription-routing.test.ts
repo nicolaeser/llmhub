@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   latestRecovery,
+  modelRecoveryAt,
   quotaBottleneckReset,
   quotaExhausted,
   quotaPressure,
@@ -112,6 +113,27 @@ test("recovery waits for every full plan wide window to reset", () => {
     null,
   );
   assert.equal(latestRecovery(limits([window({ usedPercent: 10 })]), NOW), null);
+});
+
+test("a model recovers when every full window that covers it has reset, a full weekly window included", () => {
+  const sessionOnly = limits([
+    window({ usedPercent: 100, limitReached: true, resetsAt: iso(2) }),
+    window({ usedPercent: 60, windowSeconds: 604_800, resetsAt: iso(50) }),
+  ]);
+  assert.equal(modelRecoveryAt(sessionOnly, "claude-opus-4", NOW), NOW + 2 * 3_600_000);
+  const weeklyFull = limits([
+    window({ usedPercent: 100, limitReached: true, resetsAt: iso(2) }),
+    window({ usedPercent: 100, windowSeconds: 604_800, resetsAt: iso(50) }),
+  ]);
+  assert.equal(modelRecoveryAt(weeklyFull, "claude-opus-4", NOW), NOW + 50 * 3_600_000);
+  const opusFull = limits([
+    window({ usedPercent: 40, resetsAt: iso(2) }),
+    window({ scope: "Opus", usedPercent: 100, limitReached: true, windowSeconds: 604_800, resetsAt: iso(30) }),
+  ]);
+  assert.equal(modelRecoveryAt(opusFull, "claude-opus-4", NOW), NOW + 30 * 3_600_000);
+  assert.equal(modelRecoveryAt(opusFull, "claude-sonnet-4-5", NOW), null);
+  assert.equal(modelRecoveryAt(weeklyFull, "claude-opus-4", NOW + 3 * 3_600_000), NOW + 50 * 3_600_000);
+  assert.equal(modelRecoveryAt(sessionOnly, "claude-opus-4", NOW + 3 * 3_600_000), null);
 });
 
 test("round robin rotates through the same accounts in a stable order", () => {

@@ -43,6 +43,7 @@ export type MaintenanceSweepResult = {
   subAddLinks: number;
   limits: number;
   resets: number;
+  kickoffs: number;
 };
 
 export type RetentionTable =

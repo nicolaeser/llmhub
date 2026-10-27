@@ -9,14 +9,16 @@ import { assignmentOptions, replaceAssignments } from "@/lib/gateway/routing/acc
 import { forgetAccountPolicies } from "@/lib/gateway/routing/account-routing";
 import { autoResetPoliciesOf } from "@/lib/gateway/routing/auto-reset-policy";
 import { antigravityClientState, saveAntigravityClientSecret } from "@/lib/gateway/upstreams/antigravity-config";
-import { isSignInKind } from "@/lib/gateway/upstreams/provider-kinds";
+import { isSignInKind, signInKinds, startsWindows } from "@/lib/gateway/upstreams/provider-kinds";
 import { autoResetInputSchema } from "@/schemas/resets";
 import type {
   AccountRouting,
   AccountRoutingView,
   AntigravityClientState,
   AssignmentInput,
+  KickoffModels,
   SignInKind,
+  WindowKickoffs,
 } from "@/types/providers";
 import type { AutoResetInput, AutoResetPolicies } from "@/types/resets";
 
@@ -36,10 +38,44 @@ async function currentAutoReset(): Promise<AutoResetPolicies> {
   return autoResetPoliciesOf(await prisma.accountRouting.findMany());
 }
 
+async function currentKickoff(): Promise<WindowKickoffs> {
+  const rows = await prisma.accountRouting.findMany({ where: { kickoffModel: { not: "" } } });
+  const kickoff: WindowKickoffs = {};
+  for (const row of rows) {
+    if (startsWindows(row.kind)) kickoff[row.kind] = row.kickoffModel;
+  }
+  return kickoff;
+}
+
+async function kickoffModels(): Promise<KickoffModels> {
+  const rows = await prisma.deployment.findMany({
+    where: { group: { enabled: true }, provider: { kind: { in: signInKinds().filter(startsWindows) } } },
+    select: { groupAlias: true, provider: { select: { kind: true } } },
+  });
+  const models: KickoffModels = {};
+  for (const row of rows) {
+    const kind = row.provider?.kind ?? "";
+    if (!startsWindows(kind)) continue;
+    models[kind] = [...new Set([...(models[kind] ?? []), row.groupAlias])].sort();
+  }
+  return models;
+}
+
 export async function loadAccountRouting(): Promise<AccountRoutingView> {
   const session = await requirePlatformPermission(PERMISSIONS.PROVIDERS_READ);
-  const [routing, autoReset] = await Promise.all([currentRouting(), currentAutoReset()]);
-  return { routing, autoReset, canManage: hasPerm(session.permissions, PERMISSIONS.PROVIDERS_MANAGE) };
+  const [routing, autoReset, kickoff, models] = await Promise.all([
+    currentRouting(),
+    currentAutoReset(),
+    currentKickoff(),
+    kickoffModels(),
+  ]);
+  return {
+    routing,
+    autoReset,
+    kickoff,
+    kickoffModels: models,
+    canManage: hasPerm(session.permissions, PERMISSIONS.PROVIDERS_MANAGE),
+  };
 }
 
 export async function saveAccountRouting(input: { kind: string; strategy: string }) {
@@ -86,6 +122,30 @@ export async function saveAutoReset(input: AutoResetInput) {
     after: { enabled, percent, scope },
   });
   return { autoReset: await currentAutoReset() };
+}
+
+export async function saveWindowKickoff(input: { kind: string; model: string }) {
+  const session = await requirePlatformPermission(PERMISSIONS.PROVIDERS_MANAGE);
+  if (!startsWindows(input.kind)) throw new Error("UNKNOWN_PROVIDER_KIND");
+  if (typeof input.model !== "string") throw new Error("VALIDATION");
+  const kind = input.kind;
+  const model = input.model.trim();
+  if (model && !((await kickoffModels())[kind] ?? []).includes(model)) throw new Error("UNKNOWN_MODEL");
+  const before = (await currentKickoff())[kind] ?? "";
+  await prisma.accountRouting.upsert({
+    where: { kind },
+    create: { kind, strategy: DEFAULT_ACCOUNT_STRATEGY, kickoffModel: model },
+    update: { kickoffModel: model },
+  });
+  await writeAudit({
+    actor: session.user.id,
+    action: "account_routing.kickoff",
+    objectType: "account_routing",
+    objectId: kind,
+    before: { model: before },
+    after: { model },
+  });
+  return { kickoff: await currentKickoff() };
 }
 
 export async function loadAssignmentOptions() {

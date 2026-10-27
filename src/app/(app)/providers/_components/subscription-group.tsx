@@ -12,6 +12,7 @@ import {
   Plus,
   RefreshCw,
   SlidersHorizontal,
+  Sunrise,
   TimerReset,
   Unplug,
   Users,
@@ -54,6 +55,7 @@ export default function SubscriptionGroup({
   settingsLoaded,
   strategy,
   autoReset,
+  kickoff,
   canManage,
   timeZone,
   isBusy,
@@ -70,6 +72,7 @@ export default function SubscriptionGroup({
   settingsLoaded: boolean;
   strategy: AccountStrategy;
   autoReset: AutoResetPolicy | null;
+  kickoff: string | null;
   canManage: boolean;
   timeZone: string;
   isBusy: (id: string) => boolean;
@@ -93,7 +96,11 @@ export default function SubscriptionGroup({
   const accounts = rows.map((row) => ({ row, account: accountRow(row, limits[row.id], reports, now.getTime()) }));
 
   const groupItems: RowMenuItem<GroupAction>[] = [
-    { id: "settings", label: t("group.settings", { resets: String(autoReset !== null) }), icon: SlidersHorizontal },
+    {
+      id: "settings",
+      label: t("group.settings", { features: autoReset !== null ? "resets" : kickoff !== null ? "kickoff" : "routing" }),
+      icon: SlidersHorizontal,
+    },
     { id: "link", label: t("group.createLink", { provider: name }), icon: Link2 },
   ];
 
@@ -275,6 +282,12 @@ export default function SubscriptionGroup({
                         enabled: String(autoReset.enabled),
                         percent: format.number(autoReset.percent / 100, { style: "percent" }),
                       })}
+                    </Chip>
+                  ) : null}
+                  {kickoff !== null ? (
+                    <Chip size="sm" variant="soft" color={kickoff ? "success" : "default"} className="whitespace-nowrap">
+                      <Sunrise size={12} aria-hidden />
+                      {t("settings.kickoffSummary", { enabled: String(kickoff !== ""), model: kickoff })}
                     </Chip>
                   ) : null}
                 </>

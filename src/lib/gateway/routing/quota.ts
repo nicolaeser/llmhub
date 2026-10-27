@@ -2,6 +2,8 @@ import type { LimitWindow, SubscriptionLimits } from "@/types/providers";
 
 const FULL_PERCENT = 100;
 const UNKNOWN_PRESSURE = 50;
+export const KICKOFF_RESET_GRACE_MS = 30_000;
+export const KICKOFF_IDLE_RETRY_MS = 60 * 60_000;
 
 function normalized(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9]/g, "");
@@ -57,9 +59,13 @@ export function quotaBottleneckReset(limits: SubscriptionLimits | null, model: s
 }
 
 export function latestRecovery(limits: SubscriptionLimits | null, now = Date.now()): number | null {
+  return modelRecoveryAt(limits, "", now);
+}
+
+export function modelRecoveryAt(limits: SubscriptionLimits | null, model: string, now = Date.now()): number | null {
   if (!limits) return null;
-  const exhausted = liveWindows(limits, "", now).filter(
-    (window) => !window.scope && (window.limitReached || window.usedPercent >= FULL_PERCENT),
+  const exhausted = liveWindows(limits, model, now).filter(
+    (window) => window.limitReached || window.usedPercent >= FULL_PERCENT,
   );
   if (!exhausted.length) return null;
   const resets = exhausted.map((window) => (window.resetsAt ? Date.parse(window.resetsAt) : NaN));
@@ -80,4 +86,23 @@ export function accountRecoveryAt(limits: SubscriptionLimits | null, now = Date.
   if (!scopedExhausted.length) return null;
   const resets = scopedExhausted.map((window) => Date.parse(window.resetsAt!));
   return Math.min(...resets);
+}
+
+export function windowKickoffDue(
+  limits: SubscriptionLimits | null,
+  model: string,
+  lastKickoff: number | null,
+  now = Date.now(),
+): boolean {
+  if (!limits || quotaExhausted(limits, model, now)) return false;
+  return limits.windows
+    .filter((window) => applies(window, model))
+    .some((window) => {
+      const reset = window.resetsAt ? Date.parse(window.resetsAt) : NaN;
+      if (Number.isFinite(reset)) {
+        return reset + KICKOFF_RESET_GRACE_MS <= now && (lastKickoff === null || lastKickoff < reset);
+      }
+      const idle = !window.scope && window.usedPercent === 0 && !window.limitReached;
+      return idle && (lastKickoff === null || now - lastKickoff >= KICKOFF_IDLE_RETRY_MS);
+    });
 }

@@ -19,6 +19,7 @@ import {
   acquireGroup,
   loadGroup,
   markFailure,
+  markLimited,
   markOverloaded,
   markRejected,
   markSuccess,
@@ -212,6 +213,7 @@ function recordAttemptFailure(dep: ResolvedDeployment, failure: FailureClass, er
   if (failure === "overloaded") markOverloaded(dep);
   else if (failure === "rejected") markRejected(dep, now + ACCOUNT_REJECTED_COOLDOWN_MS);
   else if (failure === "model") markRejected(dep, now + MODEL_UNAVAILABLE_COOLDOWN_MS);
+  else if (failure === "limit") markLimited(dep, err instanceof GateError ? err.retryAt : null, now);
   else markFailure(dep, err instanceof GateError ? err.retryAt : null);
 }
 

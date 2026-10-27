@@ -6,11 +6,19 @@ import IconTile from "@/components/console/icon-tile";
 import { kindIcon } from "@/components/providers/kind-icons";
 import { DEFAULT_ACCOUNT_STRATEGY } from "@/lib/gateway/routing/account-access";
 import { autoResetPolicy, isResetKind } from "@/lib/gateway/routing/auto-reset-policy";
-import type { AccountRouting, AntigravityClientState, SignInKind } from "@/types/providers";
+import { startsWindows } from "@/lib/gateway/upstreams/provider-kinds";
+import type {
+  AccountRouting,
+  AntigravityClientState,
+  KickoffModels,
+  SignInKind,
+  WindowKickoffs,
+} from "@/types/providers";
 import type { AutoResetPolicies } from "@/types/resets";
 import AccountRoutingPicker from "./account-routing-picker";
 import AntigravitySetup from "./antigravity-setup";
 import AutoResetSettings from "./auto-reset-settings";
+import WindowKickoffSettings from "./window-kickoff-settings";
 
 export default function ProviderSettingsDialog({
   state,
@@ -18,9 +26,12 @@ export default function ProviderSettingsDialog({
   accounts,
   routing,
   autoReset,
+  kickoff,
+  kickoffModels,
   antigravity,
   onRouting,
   onAutoReset,
+  onKickoff,
   onAntigravity,
 }: {
   state: ReturnType<typeof useOverlayState>;
@@ -28,9 +39,12 @@ export default function ProviderSettingsDialog({
   accounts: number;
   routing: AccountRouting;
   autoReset: AutoResetPolicies;
+  kickoff: WindowKickoffs;
+  kickoffModels: KickoffModels;
   antigravity: AntigravityClientState | null;
   onRouting: (routing: AccountRouting) => void;
   onAutoReset: (policies: AutoResetPolicies) => void;
+  onKickoff: (kickoff: WindowKickoffs) => void;
   onAntigravity: (state: AntigravityClientState) => void;
 }) {
   const t = useTranslations("Subscriptions.settings");
@@ -71,6 +85,17 @@ export default function ProviderSettingsDialog({
                           kind={kind}
                           policy={autoReset[kind] ?? autoResetPolicy({})}
                           onSaved={onAutoReset}
+                        />
+                      </>
+                    ) : null}
+                    {accounts > 0 && startsWindows(kind) ? (
+                      <>
+                        <Separator />
+                        <WindowKickoffSettings
+                          kind={kind}
+                          model={kickoff[kind] ?? ""}
+                          models={kickoffModels[kind] ?? []}
+                          onSaved={onKickoff}
                         />
                       </>
                     ) : null}

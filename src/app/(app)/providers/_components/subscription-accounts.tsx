@@ -10,16 +10,18 @@ import StatCard from "@/components/console/stat-card";
 import TimeZonePicker from "@/components/console/time-zone-picker";
 import { DEFAULT_ACCOUNT_STRATEGY } from "@/lib/gateway/routing/account-access";
 import { autoResetPolicy, isResetKind } from "@/lib/gateway/routing/auto-reset-policy";
-import { reportsLimits } from "@/lib/gateway/upstreams/provider-kinds";
+import { reportsLimits, startsWindows } from "@/lib/gateway/upstreams/provider-kinds";
 import { setConsoleTimeZone, useConsoleTimeZone } from "@/lib/hooks/use-console-time-zone";
 import { isActionFail } from "@/lib/http/action-result";
 import type {
   AccountRouting,
   AntigravityClientState,
+  KickoffModels,
   ProviderListActions,
   ProviderPresetUsage,
   ProviderView,
   SignInKind,
+  WindowKickoffs,
 } from "@/types/providers";
 import type { AutoResetPolicies } from "@/types/resets";
 import { loadAccountRoutingAction } from "../_action";
@@ -64,6 +66,8 @@ export default function SubscriptionAccounts({
   const { now } = reset;
   const [routing, setRouting] = useState<AccountRouting | null>(null);
   const [autoReset, setAutoReset] = useState<AutoResetPolicies>({});
+  const [kickoff, setKickoff] = useState<WindowKickoffs>({});
+  const [kickoffModels, setKickoffModels] = useState<KickoffModels>({});
   const [access, setAccess] = useState<ProviderView | null>(null);
   const [accessKey, setAccessKey] = useState(0);
   const [settingsKind, setSettingsKind] = useState<SignInKind | null>(null);
@@ -81,6 +85,8 @@ export default function SubscriptionAccounts({
       if (!active || isActionFail(res)) return;
       setRouting(res.routing);
       setAutoReset(res.autoReset);
+      setKickoff(res.kickoff);
+      setKickoffModels(res.kickoffModels);
     });
     return () => {
       active = false;
@@ -231,6 +237,7 @@ export default function SubscriptionAccounts({
           settingsLoaded={routing !== null}
           strategy={routing?.[group.kind] ?? DEFAULT_ACCOUNT_STRATEGY}
           autoReset={isResetKind(group.kind) ? (autoReset[group.kind] ?? autoResetPolicy({})) : null}
+          kickoff={startsWindows(group.kind) ? (kickoff[group.kind] ?? "") : null}
           canManage={canManage}
           timeZone={timeZone}
           isBusy={(id) => rowActions.busy === id || limits.refreshing.includes(id)}
@@ -262,9 +269,12 @@ export default function SubscriptionAccounts({
             accounts={settingsKind ? rows.filter((row) => row.kind === settingsKind).length : 0}
             routing={routing ?? {}}
             autoReset={autoReset}
+            kickoff={kickoff}
+            kickoffModels={kickoffModels}
             antigravity={antigravity}
             onRouting={setRouting}
             onAutoReset={setAutoReset}
+            onKickoff={setKickoff}
             onAntigravity={onAntigravity}
           />
 
