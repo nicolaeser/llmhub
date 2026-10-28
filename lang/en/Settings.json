@@ -113,9 +113,11 @@
     "checklist": {
       "title": "Setup checklist",
       "subtitle": "Register LLM Hub at your provider as a confidential web application with the authorization code flow.",
-      "step": "{step, select, callback {{position}. Register this redirect URI at the provider} secret {{position}. Put the client secret into OIDC_CLIENT_SECRET} client {{position}. Enter the issuer URL and client ID} issuer {{position}. Check the issuer} enabled {{position}. Turn on sign-in with OpenID Connect} other {{position}.}}",
+      "step": "{step, select, callback {{position}. Register this redirect URI at the provider} logout {{position}. Register this back-channel logout URL at the provider} secret {{position}. Put the client secret into OIDC_CLIENT_SECRET} client {{position}. Enter the issuer URL and client ID} issuer {{position}. Check the issuer} enabled {{position}. Turn on sign-in with OpenID Connect} other {{position}.}}",
       "state": "{ok, select, true {Done} other {Open}}",
       "copyCallback": "Copy redirect URI",
+      "copyLogout": "Copy back-channel logout URL",
+      "logoutHint": "Optional but recommended. When someone signs out at the provider or loses access there, the provider calls this URL and LLM Hub ends their sessions at once. With roles from the provider, LLM Hub also checks every session with the provider every 5 minutes.",
       "secretHint": "Restart LLM Hub after changing the environment. The secret is never stored in the database or shown here."
     },
     "accounts": {

@@ -7,9 +7,11 @@ import {
   exchangeOidcCode,
   fetchOidcDiscovery,
   jwtConfigForOidc,
+  logoutTokenClaims,
   OidcDiscoveryError,
   oidcFailureFields,
   oidcIsReady,
+  refreshOidcGrant,
   resetOidcCache,
   resolveOidc,
   signOidcState,
@@ -576,6 +578,91 @@ test("an Entra tenant domain sign-in verifies the ID token against the tenant ID
     await assert.rejects(exchange(), /jwt issuer mismatch/);
   } finally {
     globalThis.fetch = original;
+    resetOidcCache();
+  }
+});
+
+test("logout tokens need the back-channel event, a jti, a fresh iat, a subject or sid, and no nonce", () => {
+  const now = 10_000;
+  const valid = {
+    iss: "https://idp.example.com",
+    aud: "hub",
+    iat: now - 5,
+    jti: "jti-1",
+    events: { "http://schemas.openid.net/event/backchannel-logout": {} },
+  };
+  assert.deepEqual(logoutTokenClaims({ ...valid, sub: "s1" }, now), { subject: "s1", sid: "" });
+  assert.deepEqual(logoutTokenClaims({ ...valid, sid: "op-session" }, now), { subject: "", sid: "op-session" });
+  const refused = [
+    { ...valid, sub: "s1", events: {} },
+    { ...valid, sub: "s1", events: { "http://schemas.openid.net/event/backchannel-logout": "yes" } },
+    { ...valid, sub: "s1", nonce: "n" },
+    { ...valid, sub: "s1", jti: "" },
+    { ...valid, sub: "s1", iat: now - 601 },
+    { ...valid, sub: "s1", iat: now + 61 },
+    { ...valid, sub: "s1", iat: "recent" },
+    { ...valid },
+  ];
+  for (const claims of refused) assert.throws(() => logoutTokenClaims(claims, now), /logout token/);
+});
+
+test("offline_access is requested only while roles come from the provider and discovery lists it", () => {
+  const disc = (scopes_supported: string[]): OidcDiscovery => ({
+    ...discoveryFor("https://idp.example.com"),
+    userinfo_endpoint: "",
+    scopes_supported,
+    token_endpoint_auth_methods_supported: [],
+    id_token_signing_alg_values_supported: [],
+  });
+  const env = { clientSecret: "s3cret", appUrl: "https://hub.example.com" };
+  const scopeFor = (offered: string[], app_roles: boolean) =>
+    new URL(
+      buildAuthorizationUrl(
+        disc(offered),
+        resolveOidc({ enabled: true, issuer: "https://idp.example.com", client_id: "hub", app_roles }, env),
+        { state: "s", nonce: "n", codeChallenge: "c" },
+      ),
+    ).searchParams.get("scope");
+  assert.equal(scopeFor(["app_roles", "offline_access"], true), "openid email profile app_roles offline_access");
+  assert.equal(scopeFor(["app_roles", "offline_access"], false), "openid email profile app_roles");
+  assert.equal(scopeFor(["app_roles"], true), "openid email profile app_roles");
+});
+
+test("a refresh is refused on a provider refusal or another subject and throws while the provider is unavailable", async () => {
+  const issuer = "https://idp.example.com";
+  const resolved = resolveOidc(
+    { enabled: true, issuer, client_id: "hub", groups_claim: "groups" },
+    { clientSecret: "s3cret", appUrl: "https://hub.example.com" },
+  );
+  let tokenAnswer: Response = new Response("", { status: 500 });
+  let userinfo: Record<string, unknown> = {};
+  const fetchFn: typeof fetch = async (input) => {
+    const url = String(input);
+    if (url.endsWith("/.well-known/openid-configuration")) {
+      return Response.json({ ...discoveryFor(issuer), userinfo_endpoint: `${issuer}/userinfo`, scopes_supported: ["app_roles"] });
+    }
+    if (url === `${issuer}/token`) return tokenAnswer;
+    if (url === `${issuer}/userinfo`) return Response.json(userinfo);
+    return new Response("unexpected", { status: 500 });
+  };
+  const refresh = () => refreshOidcGrant({ resolved, refreshToken: "rt-1", subject: "s1", fetchFn });
+  try {
+    resetOidcCache();
+    tokenAnswer = Response.json({ error: "invalid_grant" }, { status: 400 });
+    assert.deepEqual(await refresh(), { status: "refused" });
+    tokenAnswer = Response.json({ error: "slow_down" }, { status: 429 });
+    await assert.rejects(refresh(), /oidc refresh 429/);
+    tokenAnswer = new Response("down", { status: 503 });
+    await assert.rejects(refresh(), /oidc refresh 503/);
+    tokenAnswer = Response.json({ access_token: "at-1" });
+    userinfo = { sub: "someone-else", app_roles: ["admin"] };
+    assert.deepEqual(await refresh(), { status: "refused" });
+    tokenAnswer = Response.json({ access_token: "at-1", refresh_token: "rt-2" });
+    userinfo = { sub: "s1", groups: ["ops"], app_roles: ["Viewer"] };
+    assert.deepEqual(await refresh(), { status: "valid", refreshToken: "rt-2", groups: ["ops"], appRoles: ["viewer"] });
+    tokenAnswer = Response.json({});
+    assert.deepEqual(await refresh(), { status: "valid", refreshToken: "rt-1", groups: null, appRoles: null });
+  } finally {
     resetOidcCache();
   }
 });

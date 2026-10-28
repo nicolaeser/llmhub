@@ -21,6 +21,7 @@ import { errorFields } from "@/lib/logging/format";
 import { logger } from "@/lib/logging/logger";
 import { QUEUE_NAMES } from "@/lib/jobs/queues";
 import { runUsageReports } from "@/lib/reports/usage-report";
+import { revalidateSsoSessions } from "@/lib/auth/sso-sessions";
 import { reportWorkerJobFailure } from "@/lib/sentry/worker-jobs";
 import { runKeyExpiryAlerts, runSpendAnomalyAlerts } from "./alert-checks";
 import { retentionCutoff } from "./retention";
@@ -124,6 +125,7 @@ export async function runMaintenanceSweep(
   await runSweepJob("spend_anomaly_alerts", () => runSpendAnomalyAlerts(now));
   await runSweepJob("key_expiry_alerts", () => runKeyExpiryAlerts(now));
   result.reports = await runSweepJob("usage_reports", () => runUsageReports(now));
+  await runSweepJob("sso_revalidation", () => revalidateSsoSessions(now));
   result.signIns = await runSweepJob("sign_in_refresh", () => refreshDueLogins(now.getTime()));
   result.supersededLogins = await runSweepJob("superseded_logins", async () => (await pruneSupersededLogins("worker")).length);
   result.subAddLinks = await runSweepJob("sub_add_links", async () => (await pruneSubAddLinks("worker", now.getTime())).length);

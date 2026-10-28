@@ -4,13 +4,14 @@ import { createSession, revokeSessionCookie } from "@/lib/auth/session";
 import { completeAppRolesCheck } from "@/lib/auth/app-roles-check";
 import {
   OIDC_STATE_COOKIE,
-  exchangeOidcCode,
+  exchangeOidcGrant,
   oidcIsReady,
   oidcStateCookieOptions,
   resolveOidc,
   verifyOidcState,
 } from "@/lib/auth/oidc";
 import { sanitizeReturnPath } from "@/lib/auth/return-path";
+import { recordSsoSession } from "@/lib/auth/sso-sessions";
 import { signInWithSso, SsoError } from "@/lib/auth/sso-user";
 import { SetupRequiredError } from "@/lib/bootstrap/operators";
 import { env } from "@/lib/env";
@@ -74,13 +75,13 @@ export async function GET(req: NextRequest) {
     const enterprise = await getEnterprise();
     if (!oidcIsReady(enterprise.oidc)) return reject("not_configured");
     const resolved = resolveOidc(enterprise.oidc);
-    const identity = await exchangeOidcCode({
+    const grant = await exchangeOidcGrant({
       resolved,
       code,
       nonce: verified.nonce,
       verifier: verified.verifier,
     });
-    const user = await signInWithSso(identity, normalizeOidc(enterprise.oidc), clientIp(req.headers));
+    const user = await signInWithSso(grant.identity, normalizeOidc(enterprise.oidc), clientIp(req.headers));
     if (user.blocked) {
       loginError.searchParams.set("sso", "blocked");
       const res = NextResponse.redirect(loginError);
@@ -93,6 +94,7 @@ export async function GET(req: NextRequest) {
       ipAddress: clientIp(req.headers),
       userAgent: req.headers.get("user-agent")?.slice(0, 512) ?? null,
     });
+    await recordSsoSession(session.id, grant);
     const dest = sanitizeReturnPath(verified.returnPath) ?? "/";
     const res = NextResponse.redirect(new URL(dest, env.NEXT_PUBLIC_APP_URL));
     const opts = sessionCookieOptions(session.expiresAt);

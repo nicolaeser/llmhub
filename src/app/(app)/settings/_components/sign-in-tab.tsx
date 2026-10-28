@@ -66,6 +66,19 @@ function detectable(issuer: string) {
   return URL.canParse(issuer) && /^https?:/i.test(issuer) && !issuerHasPlaceholder(issuer);
 }
 
+function CopyUrl({ url, label }: { url: string; label: string }) {
+  return (
+    <div className="flex min-w-0 items-center gap-2">
+      <Card variant="secondary" className="min-w-0 flex-1">
+        <Card.Content>
+          <code className="font-mono text-xs break-all">{url}</code>
+        </Card.Content>
+      </Card>
+      <CopyButton text={url} label={label} variant="secondary" />
+    </div>
+  );
+}
+
 function checkSuggestion(check: IssuerCheck) {
   if (check.ok) return check.usesTenantId ? check.issuer : null;
   return check.reason === "issuer_mismatch" && check.issuer ? suggestedIssuer(check.issuer) : null;
@@ -173,6 +186,7 @@ export default function SignInTab() {
   const suggestion = check ? checkSuggestion(check) : null;
   const checklist = [
     { key: "callback", ok: null },
+    { key: "logout", ok: null },
     { key: "secret", ok: view.secretSet },
     { key: "client", ok: Boolean(oidc.issuer && oidc.client_id) },
     { key: "issuer", ok: check ? check.ok && check.supported : null },
@@ -317,15 +331,12 @@ export default function SignInTab() {
                     </Chip>
                   )}
                 </div>
-                {item.key === "callback" ? (
-                  <div className="flex min-w-0 items-center gap-2">
-                    <Card variant="secondary" className="min-w-0 flex-1">
-                      <Card.Content>
-                        <code className="font-mono text-xs break-all">{view.callbackUrl}</code>
-                      </Card.Content>
-                    </Card>
-                    <CopyButton text={view.callbackUrl} label={t("checklist.copyCallback")} variant="secondary" />
-                  </div>
+                {item.key === "callback" ? <CopyUrl url={view.callbackUrl} label={t("checklist.copyCallback")} /> : null}
+                {item.key === "logout" ? (
+                  <>
+                    <CopyUrl url={view.backchannelLogoutUrl} label={t("checklist.copyLogout")} />
+                    <p className="text-xs text-muted">{t("checklist.logoutHint")}</p>
+                  </>
                 ) : null}
                 {item.key === "secret" ? (
                   <p className="text-xs text-muted">{t("checklist.secretHint")}</p>

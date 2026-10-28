@@ -6,6 +6,7 @@ import { asRecord, asString, asStringArray } from "@/lib/gateway/core";
 import {
   APP_ROLES_SCOPE,
   DEFAULT_OIDC_SCOPES,
+  OFFLINE_ACCESS_SCOPE,
   ENTRA_TENANT_ID,
   issuerHasPlaceholder,
   issuerHost,
@@ -27,7 +28,9 @@ import type {
   VerifiedOidcState,
   JwtClaims,
   JwtConfig,
+  OidcGrant,
   OidcIdentity,
+  OidcRefresh,
   OidcSettings,
   OidcTokenAuth,
 } from "@/types/auth";
@@ -37,6 +40,8 @@ export const OIDC_STATE_COOKIE =
 const STATE_PURPOSES: readonly OidcStatePurpose[] = ["sign_in", "role_check"];
 const OIDC_STATE_TTL_SECONDS = 600;
 const STATE_PART = /^[A-Za-z0-9_-]{16,128}$/;
+const BACKCHANNEL_LOGOUT_EVENT = "http://schemas.openid.net/event/backchannel-logout";
+const LOGOUT_TOKEN_MAX_AGE_SECONDS = 600;
 const ENTRA_V2_ISSUER = /^https:\/\/login\.microsoftonline\.com\/([^/?#]+)\/v2\.0$/i;
 const ENTRA_SHARED_TENANTS = new Set(["common", "organizations", "consumers"]);
 let discCache: OidcDiscoveryCache | null = null;
@@ -100,6 +105,10 @@ export function oidcCallbackUrl(appUrl: string = env.NEXT_PUBLIC_APP_URL): strin
   return `${appUrl.replace(/\/+$/, "")}/sso/callback`;
 }
 
+export function oidcBackchannelLogoutUrl(appUrl: string = env.NEXT_PUBLIC_APP_URL): string {
+  return `${appUrl.replace(/\/+$/, "")}/sso/backchannel-logout`;
+}
+
 export function resolveOidc(
   cfg: Partial<OidcSettings> | undefined,
   envOverride: OidcEnv = {},
@@ -113,6 +122,7 @@ export function resolveOidc(
     redirectUrl: oidcCallbackUrl(envOverride.appUrl ?? env.NEXT_PUBLIC_APP_URL),
     scopes: oidcScopes(cfg?.scopes ?? DEFAULT_OIDC_SCOPES),
     groupsClaim: (cfg?.groups_claim ?? "").trim(),
+    rolesFromProvider: cfg?.app_roles === true,
   };
 }
 
@@ -178,7 +188,9 @@ export function appRolesOffered(disc: Pick<OidcDiscovery, "scopes_supported">): 
 
 function authorizationScopes(disc: Pick<OidcDiscovery, "scopes_supported">, resolved: ResolvedOidc): string {
   const configured = resolved.scopes.split(" ").filter((scope) => scope !== APP_ROLES_SCOPE);
-  return oidcScopes([...configured, ...(appRolesOffered(disc) ? [APP_ROLES_SCOPE] : [])].join(" "));
+  const revalidates = resolved.rolesFromProvider && disc.scopes_supported.includes(OFFLINE_ACCESS_SCOPE);
+  const extra = [...(appRolesOffered(disc) ? [APP_ROLES_SCOPE] : []), ...(revalidates ? [OFFLINE_ACCESS_SCOPE] : [])];
+  return oidcScopes([...configured, ...extra].join(" "));
 }
 
 export function buildAuthorizationUrl(
@@ -217,12 +229,19 @@ export function tokenRequest(
   verifier: string,
   method: OidcTokenAuth = "client_secret_post",
 ): { headers: Record<string, string>; body: URLSearchParams } {
-  const body = new URLSearchParams({
-    grant_type: "authorization_code",
-    code,
-    redirect_uri: resolved.redirectUrl,
-    code_verifier: verifier,
-  });
+  return clientRequest(
+    resolved,
+    { grant_type: "authorization_code", code, redirect_uri: resolved.redirectUrl, code_verifier: verifier },
+    method,
+  );
+}
+
+function clientRequest(
+  resolved: ResolvedOidc,
+  grant: Record<string, string>,
+  method: OidcTokenAuth,
+): { headers: Record<string, string>; body: URLSearchParams } {
+  const body = new URLSearchParams(grant);
   const headers: Record<string, string> = { "Content-Type": "application/x-www-form-urlencoded" };
   if (method === "client_secret_basic") {
     const credentials = `${formEncode(resolved.clientId)}:${formEncode(resolved.clientSecret)}`;
@@ -374,6 +393,16 @@ export async function exchangeOidcCode(input: {
   verifier: string;
   fetchFn?: typeof fetch;
 }): Promise<OidcIdentity> {
+  return (await exchangeOidcGrant(input)).identity;
+}
+
+export async function exchangeOidcGrant(input: {
+  resolved: ResolvedOidc;
+  code: string;
+  nonce: string;
+  verifier: string;
+  fetchFn?: typeof fetch;
+}): Promise<OidcGrant> {
   const fetchFn = input.fetchFn ?? fetch;
   const disc = await fetchOidcDiscovery(input.resolved.issuer, fetchFn);
   const request = tokenRequest(
@@ -393,7 +422,88 @@ export async function exchangeOidcCode(input: {
   if (!idToken) throw new Error(tokenFailureMessage(res.status, rec));
   const claims = await verifyJwt(idToken, jwtConfigForOidc(input.resolved, disc));
   if (claims.nonce !== input.nonce) throw new Error("oidc nonce mismatch");
-  return identityFromClaims(claims, input.resolved.groupsClaim, appRolesOffered(disc));
+  return {
+    identity: identityFromClaims(claims, input.resolved.groupsClaim, appRolesOffered(disc)),
+    sid: asString(claims.sid).trim(),
+    refreshToken: asString(rec.refresh_token),
+  };
+}
+
+async function refreshedClaims(
+  disc: OidcDiscovery,
+  resolved: ResolvedOidc,
+  rec: Record<string, unknown>,
+  fetchFn: typeof fetch,
+): Promise<JwtClaims | null> {
+  const idToken = asString(rec.id_token);
+  if (idToken) return verifyJwt(idToken, jwtConfigForOidc(resolved, disc));
+  const accessToken = asString(rec.access_token);
+  if (!accessToken || !disc.userinfo_endpoint) return null;
+  const res = await fetchFn(disc.userinfo_endpoint, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    signal: AbortSignal.timeout(8_000),
+  });
+  if (!res.ok) throw new Error(`oidc userinfo ${res.status}`);
+  return asRecord(await readJsonOr(res, null));
+}
+
+export async function refreshOidcGrant(input: {
+  resolved: ResolvedOidc;
+  refreshToken: string;
+  subject: string;
+  fetchFn?: typeof fetch;
+}): Promise<OidcRefresh> {
+  const fetchFn = input.fetchFn ?? fetch;
+  const disc = await fetchOidcDiscovery(input.resolved.issuer, fetchFn);
+  const request = clientRequest(
+    input.resolved,
+    { grant_type: "refresh_token", refresh_token: input.refreshToken },
+    tokenAuthMethod(disc.token_endpoint_auth_methods_supported),
+  );
+  const res = await fetchFn(disc.token_endpoint, {
+    method: "POST",
+    headers: request.headers,
+    body: request.body,
+    signal: AbortSignal.timeout(8_000),
+  });
+  if (res.status === 429 || res.status >= 500) throw new Error(`oidc refresh ${res.status}`);
+  const rec = asRecord(await readJsonOr(res, null)) ?? {};
+  if (!res.ok) return { status: "refused" };
+  const claims = await refreshedClaims(disc, input.resolved, rec, fetchFn);
+  if (claims && asString(claims.sub) !== input.subject) return { status: "refused" };
+  return {
+    status: "valid",
+    refreshToken: asString(rec.refresh_token) || input.refreshToken,
+    groups: claims ? claimValues(claims, input.resolved.groupsClaim) : null,
+    appRoles: claims && appRolesOffered(disc) ? appRolesFromClaims(claims) : null,
+  };
+}
+
+export function logoutTokenClaims(
+  claims: JwtClaims,
+  nowSeconds = Math.floor(Date.now() / 1000),
+): { subject: string; sid: string } {
+  if (!asRecord(asRecord(claims.events)?.[BACKCHANNEL_LOGOUT_EVENT])) throw new Error("logout token event");
+  if (Object.hasOwn(claims, "nonce")) throw new Error("logout token nonce");
+  if (!asString(claims.jti)) throw new Error("logout token jti");
+  const iat = claims.iat;
+  if (typeof iat !== "number" || iat > nowSeconds + 60 || nowSeconds - iat > LOGOUT_TOKEN_MAX_AGE_SECONDS) {
+    throw new Error("logout token iat");
+  }
+  const subject = asString(claims.sub).trim();
+  const sid = asString(claims.sid).trim();
+  if (!subject && !sid) throw new Error("logout token subject");
+  return { subject, sid };
+}
+
+export async function verifyLogoutToken(
+  resolved: ResolvedOidc,
+  token: string,
+  fetchFn: typeof fetch = fetch,
+): Promise<{ issuer: string; subject: string; sid: string }> {
+  const disc = await fetchOidcDiscovery(resolved.issuer, fetchFn);
+  const claims = await verifyJwt(token, jwtConfigForOidc(resolved, disc));
+  return { issuer: String(claims.iss), ...logoutTokenClaims(claims) };
 }
 
 export function oidcStateCookieOptions(maxAge = OIDC_STATE_TTL_SECONDS) {

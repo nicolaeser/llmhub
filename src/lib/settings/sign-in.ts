@@ -9,6 +9,7 @@ import { JWT_ALGORITHMS } from "@/lib/auth/jwks";
 import {
   appRolesOffered,
   fetchOidcDiscovery,
+  oidcBackchannelLogoutUrl,
   oidcCallbackUrl,
   OidcDiscoveryError,
   oidcFailureFields,
@@ -50,6 +51,7 @@ async function view(oidc: OidcSettings, session: AuthenticatedSession): Promise<
     firstSetup: !oidc.issuer,
     appRolesCheck,
     callbackUrl: oidcCallbackUrl(),
+    backchannelLogoutUrl: oidcBackchannelLogoutUrl(),
     scimUrl: `${env.NEXT_PUBLIC_APP_URL.replace(/\/+$/, "")}/scim/v2`,
     secretSet: Boolean(env.OIDC_CLIENT_SECRET),
     roles,
