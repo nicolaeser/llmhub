@@ -10,7 +10,11 @@ export function errorMessage(err) {
   return (err instanceof Error ? err.message : String(err)).slice(0, 500);
 }
 
-export function replayLogText(text, write = (chunk) => process.stdout.write(chunk)) {
+function writeStdout(chunk) {
+  process.stdout.write(chunk);
+}
+
+export function replayLogText(text, write = writeStdout) {
   const lines = String(text ?? "")
     .split("\n")
     .filter((line) => line.length > 0)
