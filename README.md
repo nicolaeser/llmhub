@@ -181,7 +181,7 @@ Security: access to the Docker socket is equivalent to root access on the host, 
 
 Pinned tags: when `LLMHUB_TAG` is a release tag (`vYYYY.MM.DD.<sha>` or `dev-YYYY.MM.DD.<sha>`), a commit tag (`sha-<sha>`, `dev-<sha>`), or a digest, the updater reports the tag as pinned and never replaces the image. Set `LLMHUB_TAG` to `latest` or `dev` to receive updates. Back up the database regularly when automatic updates are on, because a new image applies its migrations on start and migrations are forward-only.
 
-To stop automatic installs, turn off the switch; the updater keeps checking and offers Update now. To remove the updater, drop `COMPOSE_FILE` from `.env` if you set it and run `docker compose -f docker-compose.yml up -d --remove-orphans`; this removes the updater and recreates the app without the label. An older updater refreshes itself after the next app update; `docker compose -f docker-compose.au.yml up -d` refreshes it by hand, together with the app.
+To stop automatic installs, turn off the switch; the updater keeps checking and offers Update now. To remove the updater, drop `COMPOSE_FILE` from `.env` if you set it and run `docker compose -f docker-compose.yml up -d --remove-orphans`; this removes the updater and recreates the app without the label. An older updater refreshes itself after the next app update and reprints the previous updater's logs so `docker compose logs updater` still shows that run; `docker compose -f docker-compose.au.yml up -d` refreshes it by hand, together with the app.
 
 ## PII redaction model
 
