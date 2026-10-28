@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { SESSION_COOKIE, sessionCookieOptions } from "@/lib/auth/cookie";
 import { createSession, revokeSessionCookie } from "@/lib/auth/session";
+import { completeAppRolesCheck } from "@/lib/auth/app-roles-check";
 import {
+  OIDC_ROLE_CHECK_COOKIE,
   OIDC_STATE_COOKIE,
   exchangeOidcCode,
   oidcIsReady,
@@ -26,9 +28,17 @@ function idpErrorCode(value: string): string {
   return IDP_ERROR_CODE.test(value) ? value : "other";
 }
 
-function clearOidcCookie(res: NextResponse) {
-  const opts = oidcStateCookieOptions(0);
+function clearOidcCookie(res: NextResponse, name = OIDC_STATE_COOKIE) {
+  const opts = oidcStateCookieOptions(0, name);
   res.cookies.set(opts.name, "", opts);
+}
+
+async function finishRoleCheck(input: { code: string; nonce: string; verifier: string; idpError: string }) {
+  const result = await completeAppRolesCheck(input);
+  const target = result ? "/settings?tab=sign-in" : "/account/login";
+  const res = NextResponse.redirect(new URL(target, env.NEXT_PUBLIC_APP_URL));
+  clearOidcCookie(res, OIDC_ROLE_CHECK_COOKIE);
+  return res;
 }
 
 export async function GET(req: NextRequest) {
@@ -46,9 +56,14 @@ export async function GET(req: NextRequest) {
 
   try {
     const idpError = req.nextUrl.searchParams.get("error");
-    if (idpError) return reject("idp_error", { idpError: idpErrorCode(idpError) });
     const code = req.nextUrl.searchParams.get("code") ?? "";
     const state = req.nextUrl.searchParams.get("state") ?? "";
+    const checkCookie = req.cookies.get(OIDC_ROLE_CHECK_COOKIE)?.value ?? "";
+    const roleCheck = state && checkCookie ? verifyOidcState({ cookie: checkCookie, state, purpose: "role_check" }) : null;
+    if (roleCheck) {
+      return finishRoleCheck({ code, ...roleCheck, idpError: idpError ? idpErrorCode(idpError) : "" });
+    }
+    if (idpError) return reject("idp_error", { idpError: idpErrorCode(idpError) });
     const cookie = req.cookies.get(OIDC_STATE_COOKIE)?.value ?? "";
     if (!code) return reject("missing_code");
     if (!state) return reject("missing_state");

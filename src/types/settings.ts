@@ -2,6 +2,7 @@ import type { z } from "zod";
 import type { alertWebhooksSchema, catalogSettingsSchema, generalSettingsSchema } from "@/schemas/settings";
 import type { AlertWebhook, WebhookEvent, WebhookFormat } from "@/types/alerts";
 import type {
+  AppRolesCheck,
   OidcDiscoveryFailure,
   OidcDiscoveryFailureDetail,
   OidcSettings,
@@ -31,6 +32,8 @@ export type GeneralSettingsView = {
 
 export type SignInSettingsView = {
   oidc: OidcSettings;
+  firstSetup: boolean;
+  appRolesCheck: AppRolesCheck | null;
   callbackUrl: string;
   scimUrl: string;
   secretSet: boolean;
@@ -50,6 +53,7 @@ export type IssuerCheck =
       tokenAuth: OidcTokenAuth;
       algorithms: string[];
       supported: boolean;
+      appRoles: boolean;
     }
   | ({ ok: false; reason: OidcDiscoveryFailure } & OidcDiscoveryFailureDetail);
 

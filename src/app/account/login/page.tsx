@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Skeleton, toast } from "@heroui/react";
 import { useTranslations } from "next-intl";
 import { Link, useRouter } from "@/i18n/routing";
@@ -24,15 +24,20 @@ export default function LoginPage() {
   const returnParam = useSearchParam("return") ?? null;
   const ssoStatus = useSearchParam("sso");
 
+  const announced = useRef<string | null>(null);
+
   useEffect(() => {
-    if (ssoStatus) toast.danger(t("toasts.ssoStatus", { status: ssoStatus }));
-  }, [ssoStatus, t]);
+    if (!ssoStatus || !context || announced.current === ssoStatus) return;
+    announced.current = ssoStatus;
+    toast.danger(t("toasts.ssoStatus", { status: ssoStatus, provider: context.ssoProvider || t("toasts.yourProvider") }));
+  }, [ssoStatus, context, t]);
 
   useEffect(() => {
     loginContextAction().then((result) => {
       if (isActionFail(result)) {
         setContext({
           ssoEnabled: false,
+          ssoProvider: "",
           ssoOnly: false,
           passkeysEnabled: false,
           registrationEnabled: false,
@@ -43,6 +48,7 @@ export default function LoginPage() {
       setStep(result.step);
       setContext({
         ssoEnabled: result.ssoEnabled,
+        ssoProvider: result.ssoProvider,
         ssoOnly: result.ssoOnly,
         passkeysEnabled: result.passkeysEnabled,
         registrationEnabled: result.registrationEnabled,

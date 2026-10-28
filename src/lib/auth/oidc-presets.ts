@@ -1,4 +1,5 @@
-import type { OidcPreset, OidcProviderId } from "@/types/auth";
+import { roleTemplateKeys } from "@/lib/auth/permissions";
+import type { OidcPreset, OidcProviderId, RoleTemplateKey } from "@/types/auth";
 
 export const OIDC_PROVIDER_IDS = [
   "entra",
@@ -11,6 +12,8 @@ export const OIDC_PROVIDER_IDS = [
 ] as const satisfies readonly OidcProviderId[];
 
 export const DEFAULT_OIDC_SCOPES = "openid email profile";
+
+export const APP_ROLES_SCOPE = "app_roles";
 
 export const MAX_ROLE_MAPPINGS = 50;
 
@@ -77,6 +80,19 @@ export function oidcScopes(raw: string): string {
 export function mappedRoleId(mappings: readonly { group: string; role_id: string }[], values: readonly string[]) {
   const wanted = new Set(values.map((value) => value.trim().toLowerCase()).filter(Boolean));
   return mappings.find((mapping) => wanted.has(mapping.group.trim().toLowerCase()))?.role_id ?? null;
+}
+
+export function appRoleTemplates(appRoles: readonly string[]): RoleTemplateKey[] {
+  const held = new Set(appRoles.map((value) => value.trim().toLowerCase()));
+  return roleTemplateKeys.filter((key) => held.has(key));
+}
+
+export function issuerHost(issuer: string): string {
+  return URL.canParse(issuer) ? new URL(issuer).host : "";
+}
+
+export function providerName(oidc: { display_name: string; issuer: string }): string {
+  return oidc.display_name.trim() || issuerHost(oidc.issuer);
 }
 
 export function emailDomainAllowed(email: string, domains: readonly string[]): boolean {

@@ -10,6 +10,7 @@ import {
   Table,
   Tag,
   TagGroup,
+  Tooltip,
   toast,
   useOverlayState,
 } from "@heroui/react";
@@ -176,6 +177,23 @@ export default function UsersTab() {
   function roleLabel(user: ConsoleUser) {
     if (user.isOwner) return t("ownerRole");
     return roleName(user.roleId ? { name: user.roleName, templateKey: user.roleTemplateKey } : null);
+  }
+
+  function roleValue(user: ConsoleUser) {
+    if (!user.managedBy) return roleLabel(user);
+    return (
+      <span className="flex flex-wrap items-center gap-1.5">
+        <span>{roleLabel(user)}</span>
+        <Tooltip delay={0} closeDelay={0}>
+          <Tooltip.Trigger className="inline-flex rounded-full">
+            <Chip size="sm" variant="soft" color="accent">
+              {t("managed.label", { provider: user.managedBy })}
+            </Chip>
+          </Tooltip.Trigger>
+          <Tooltip.Content className="max-w-xs">{t("managed.hint", { provider: user.managedBy })}</Tooltip.Content>
+        </Tooltip>
+      </span>
+    );
   }
 
   function accessLabel(user: ConsoleUser) {
@@ -387,7 +405,7 @@ export default function UsersTab() {
                       </>
                     }
                     details={[
-                      { label: t("columns.role"), value: roleLabel(user) },
+                      { label: t("columns.role"), value: roleValue(user) },
                       { label: t("columns.lastActive"), value: lastActiveLabel(user) },
                       {
                         label: t("columns.access"),
@@ -426,7 +444,7 @@ export default function UsersTab() {
                               <p className="text-xs text-muted">{user.email}</p>
                             </div>
                           </Table.Cell>
-                          <Table.Cell>{roleLabel(user)}</Table.Cell>
+                          <Table.Cell>{roleValue(user)}</Table.Cell>
                           <Table.Cell>
                             <p className="text-sm">{accessValue(user)}</p>
                             {user.budget ? <p className="text-xs text-muted">{spendLabel(user.budget)}</p> : null}

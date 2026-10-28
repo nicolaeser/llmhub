@@ -11,7 +11,7 @@
   "noRole": "Keine Rolle",
   "actionsMenu": "Aktionen für {role}",
   "templateName": "{key, select, admin {Admin} operator {Operator} finance {Finance} viewer {Viewer} other {Rolle}}",
-  "templateDescription": "{key, select, admin {Voller Zugriff inklusive Rollen, Einstellungen und Benutzersicherheit.} operator {Betreibt Schlüssel, Provider, Modelle, Mandanten und Benutzer. Keine Rollen oder Einstellungen.} finance {Nutzung, Logs, Chargeback, Margen und Aufschläge aller. Sonst nur lesend.} viewer {Lesende Konsole mit eigenen Schlüsseln, eigener Nutzung und Playground.} other {}}",
+  "templateDescription": "{key, select, admin {Voller Zugriff inklusive Rollen, Einstellungen und Benutzersicherheit.} operator {Betreibt das Gateway: Schlüssel, Anbieter, Modelle, Unternehmen und Benutzer. Keine Rollen oder Einstellungen.} finance {Nutzung, Logs, Chargeback, Margen und Aufschläge aller. Sonst nur lesend.} viewer {Lesende Konsole mit eigenen Schlüsseln, eigener Nutzung und Playground.} other {}}",
   "members": "{count, plural, =0 {Keine Mitglieder} one {# Mitglied} other {# Mitglieder}}",
   "permissionCount": "{count, plural, one {# Berechtigung} other {# Berechtigungen}}",
   "level": "{level, select, view {Lesen} work {Arbeiten} sensitive {Sensibel} other {}}",

@@ -56,7 +56,13 @@ export const oidcSettingsSchema = z.object({
   default_org_id: roleId,
   allowed_domains: z.array(domain).max(MAX_ALLOWED_DOMAINS),
   sso_only: z.boolean(),
+  display_name: z.string().trim().max(60),
+  app_roles: z.boolean(),
 });
+
+export const signInSaveSchema = oidcSettingsSchema.extend({ role_fields_touched: z.boolean() });
+
+export const appRolesModeSchema = z.object({ on: z.boolean() }).strict();
 
 export const storageSettingsSchema = z.object({
   preset: z.enum(S3_PRESET_IDS),

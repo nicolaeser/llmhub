@@ -50,6 +50,10 @@
   "changeRole": "Change role and access",
   "changeRoleTitle": "Role and access for {username}",
   "changeRoleHint": "You can only assign roles whose permissions you hold yourself.",
+  "managed": {
+    "label": "Managed by {provider}",
+    "hint": "Change this role at {provider} in the app's access list. LLM Hub applies it at the next sign-in."
+  },
   "revokeSessions": "Sign out all sessions",
   "resetTwoFactor": "Reset two-factor authentication",
   "resetTwoFactorHint": "{username} must set up a new authenticator at the next sign-in. All sessions and passkeys of this user are removed. Confirm with your own code.",

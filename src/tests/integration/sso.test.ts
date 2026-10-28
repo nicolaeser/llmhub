@@ -4,28 +4,39 @@ import { createSign, generateKeyPairSync, sign } from "node:crypto";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
 import { after, before, test } from "node:test";
+import { cookies } from "next/headers";
 import { NextRequest } from "next/server";
+import type { AuthenticatedSession } from "@/types/auth";
 import prisma from "@/lib/db/prisma";
 import { env } from "@/lib/env";
 import { SESSION_COOKIE, signSessionToken } from "@/lib/auth/cookie";
-import { OIDC_STATE_COOKIE } from "@/lib/auth/oidc";
+import { startAppRolesCheck, readAppRolesCheck } from "@/lib/auth/app-roles-check";
+import { runAsPrincipal } from "@/lib/auth/delegation";
+import { OIDC_ROLE_CHECK_COOKIE, OIDC_STATE_COOKIE, resetOidcCache } from "@/lib/auth/oidc";
 import { digest, pkceChallenge, randomToken } from "@/lib/crypto";
 import { ensureSystemCatalog } from "@/lib/bootstrap/system-catalog";
 import { normalizeOidc, patchEnterprise } from "@/lib/settings/enterprise";
+import { saveSignInSettings, setAppRolesMode } from "@/lib/settings/sign-in";
 import { GET as ssoLogin } from "@/app/sso/login/route";
 import { GET as ssoCallback } from "@/app/sso/callback/route";
 import { closeDatabase, uniqueName } from "./support/database";
-import { preserveSetting, TestData } from "./support/fixtures";
+import { preserveSetting, sessionOf, TestData } from "./support/fixtures";
 
 const CLIENT_ID = "hub-integration";
 const { privateKey, publicKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
 const ecKeys = generateKeyPairSync("ec", { namedCurve: "P-256" });
-const provider = { basic: false, alg: "RS256" as "RS256" | "ES256" };
+const provider = {
+  basic: false,
+  alg: "RS256" as "RS256" | "ES256",
+  offersAppRoles: false,
+  appRoles: null as string[] | null,
+};
 const issued = new Map<string, { challenge: string; nonce: string; email: string; nonceOverride?: string }>();
 const tokenRequests: URLSearchParams[] = [];
 let issuer = "";
 let server: Server;
 let restoreEnterprise: () => Promise<void>;
+let restoreRoleCheck: () => Promise<void>;
 
 function idToken(claims: Record<string, unknown>) {
   const encode = (value: unknown) => Buffer.from(JSON.stringify(value)).toString("base64url");
@@ -62,6 +73,7 @@ function identityProvider(req: IncomingMessage, res: ServerResponse) {
       token_endpoint_auth_methods_supported: provider.basic
         ? ["client_secret_basic", "client_secret_post"]
         : ["client_secret_post"],
+      ...(provider.offersAppRoles ? { scopes_supported: ["openid", "email", "profile", "app_roles"] } : {}),
     });
   }
   if (url.pathname === "/jwks") {
@@ -100,6 +112,7 @@ function identityProvider(req: IncomingMessage, res: ServerResponse) {
           sub: `sub-${grant.email}`,
           email: grant.email,
           email_verified: true,
+          ...(provider.appRoles ? { app_roles: provider.appRoles } : {}),
         }),
       });
     });
@@ -113,12 +126,14 @@ before(async () => {
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   issuer = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
   restoreEnterprise = await preserveSetting("enterprise");
+  restoreRoleCheck = await preserveSetting("app_roles_check");
   await ensureSystemCatalog();
   await patchEnterprise({ oidc: normalizeOidc({ enabled: true, issuer, client_id: CLIENT_ID }) });
 });
 
 after(async () => {
   await restoreEnterprise();
+  await restoreRoleCheck();
   await new Promise((resolve) => server.close(resolve));
   await closeDatabase();
 });
@@ -232,7 +247,6 @@ test("SSO accepts ES256 ID tokens and client_secret_basic and stores the identit
   const data = new TestData();
   provider.basic = true;
   provider.alg = "ES256";
-  const { resetOidcCache } = await import("@/lib/auth/oidc");
   resetOidcCache();
   try {
     const user = await data.user();
@@ -246,6 +260,172 @@ test("SSO accepts ES256 ID tokens and client_secret_basic and stores the identit
   } finally {
     provider.basic = false;
     provider.alg = "RS256";
+    resetOidcCache();
+    await data.cleanup();
+  }
+});
+
+async function withProviderRoles(mode: boolean) {
+  await patchEnterprise({ oidc: normalizeOidc({ enabled: true, issuer, client_id: CLIENT_ID, app_roles: mode }) });
+}
+
+async function checkAs(session: AuthenticatedSession, email: string) {
+  return runAsPrincipal(session, async () => {
+    const { url } = await startAppRolesCheck();
+    const authorize = new URL(url);
+    const checkCookie = (await cookies()).get(OIDC_ROLE_CHECK_COOKIE)?.value ?? "";
+    const code = uniqueName("code");
+    issued.set(code, {
+      challenge: authorize.searchParams.get("code_challenge") ?? "",
+      nonce: authorize.searchParams.get("nonce") ?? "",
+      email,
+    });
+    const res = await ssoCallback(
+      new NextRequest(`http://localhost:3000/sso/callback?code=${code}&state=${authorize.searchParams.get("state")}`, {
+        headers: { cookie: `${OIDC_ROLE_CHECK_COOKIE}=${checkCookie}` },
+      }),
+    );
+    return { authorize, res, location: new URL(res.headers.get("location") ?? "") };
+  });
+}
+
+test("an upgraded installation keeps everyone signed in with their role when the provider starts offering app roles", async () => {
+  const data = new TestData();
+  const email = `${uniqueName("sso")}@example.test`;
+  const templateOf = async () =>
+    (await prisma.user.findUniqueOrThrow({ where: { email }, include: { role: true } })).role?.templateKey;
+  try {
+    await data.user();
+    provider.appRoles = ["finance"];
+    resetOidcCache();
+    const unoffered = await signInAs(email);
+    assert.equal(unoffered.authorize.searchParams.get("scope"), "openid email profile");
+    data.ownUser((await prisma.user.findUniqueOrThrow({ where: { email } })).id);
+    assert.equal(await templateOf(), "viewer");
+
+    provider.offersAppRoles = true;
+    provider.appRoles = [];
+    resetOidcCache();
+    const offered = await signInAs(email);
+    assert.equal(offered.authorize.searchParams.get("scope"), "openid email profile app_roles");
+    assert.equal(offered.location.pathname, "/keys");
+    assert.ok(offered.res.cookies.get(SESSION_COOKIE)?.value);
+    assert.equal(await templateOf(), "viewer");
+  } finally {
+    provider.offersAppRoles = false;
+    provider.appRoles = null;
+    resetOidcCache();
+    await data.cleanup();
+  }
+});
+
+test("with roles from the provider, sign-in follows the app_roles claim and refuses people without a role", async () => {
+  const data = new TestData();
+  const email = `${uniqueName("sso")}@example.test`;
+  const templateOf = async () =>
+    (await prisma.user.findUniqueOrThrow({ where: { email }, include: { role: true } })).role?.templateKey;
+  try {
+    await data.user();
+    await withProviderRoles(true);
+    provider.offersAppRoles = true;
+    provider.appRoles = ["finance"];
+    resetOidcCache();
+    const first = await signInAs(email);
+    assert.equal(first.location.pathname, "/keys");
+    const user = await prisma.user.findUniqueOrThrow({ where: { email } });
+    data.ownUser(user.id);
+    assert.equal(await templateOf(), "finance");
+
+    provider.appRoles = ["viewer", "admin"];
+    await signInAs(email);
+    assert.equal(await templateOf(), "admin");
+    assert.ok(await prisma.session.count({ where: { userId: user.id } }));
+
+    provider.appRoles = [];
+    const refused = await signInAs(email);
+    assert.equal(refused.location.searchParams.get("sso"), "no_role");
+    assert.equal(refused.res.cookies.get(SESSION_COOKIE), undefined);
+    assert.equal(await prisma.session.count({ where: { userId: user.id } }), 0);
+    assert.equal(await templateOf(), "admin");
+  } finally {
+    await withProviderRoles(false);
+    provider.offersAppRoles = false;
+    provider.appRoles = null;
+    resetOidcCache();
+    await data.cleanup();
+  }
+});
+
+test("roles from the provider turn on only after a check sign-in whose app roles contain admin", async () => {
+  const data = new TestData();
+  const checker = `${uniqueName("checker")}@example.test`;
+  try {
+    const owner = await data.user({ isOwner: true });
+    const session = sessionOf(owner, { owner: true });
+    await withProviderRoles(false);
+    provider.offersAppRoles = true;
+    resetOidcCache();
+    const turnOn = () => runAsPrincipal(session, () => setAppRolesMode({ on: true }));
+    await assert.rejects(turnOn(), { message: "APP_ROLES_CHECK_REQUIRED" });
+
+    provider.appRoles = ["viewer"];
+    const viewerCheck = await checkAs(session, checker);
+    assert.equal(viewerCheck.authorize.searchParams.get("scope"), "openid email profile app_roles");
+    assert.equal(`${viewerCheck.location.pathname}${viewerCheck.location.search}`, "/settings?tab=sign-in");
+    assert.equal(viewerCheck.res.cookies.get(SESSION_COOKIE), undefined);
+    assert.equal((await readAppRolesCheck(owner.id, issuer))?.result, "no_admin");
+    await assert.rejects(turnOn(), { message: "APP_ROLES_CHECK_REQUIRED" });
+
+    provider.appRoles = ["admin"];
+    await checkAs(session, checker);
+    assert.deepEqual(await readAppRolesCheck(owner.id, issuer).then((check) => [check?.result, check?.email]), [
+      "admin",
+      checker,
+    ]);
+    assert.equal((await turnOn()).oidc.app_roles, true);
+    assert.equal((await runAsPrincipal(session, () => setAppRolesMode({ on: false }))).oidc.app_roles, false);
+    assert.equal(await prisma.user.count({ where: { email: checker } }), 0);
+    assert.equal(await prisma.userIdentity.count({ where: { issuer } }), 0);
+    const audits = await prisma.gatewayAuditLog.findMany({
+      where: { actor: owner.id, action: "settings.app_roles_mode" },
+      orderBy: { createdAt: "asc" },
+    });
+    assert.deepEqual(
+      audits.map((row) => JSON.parse(row.afterJson)),
+      [{ app_roles: true }, { app_roles: false }],
+    );
+  } finally {
+    await withProviderRoles(false);
+    provider.offersAppRoles = false;
+    provider.appRoles = null;
+    resetOidcCache();
+    await data.cleanup();
+  }
+});
+
+test("a new sign-in configuration takes its roles from the provider when it offers app roles", async () => {
+  const data = new TestData();
+  try {
+    const owner = await data.user({ isOwner: true });
+    const session = sessionOf(owner, { owner: true });
+    provider.offersAppRoles = true;
+    resetOidcCache();
+    const form = (touched: boolean) => ({
+      ...normalizeOidc({ enabled: true, issuer, client_id: CLIENT_ID }),
+      role_fields_touched: touched,
+    });
+    const save = (touched: boolean) => runAsPrincipal(session, () => saveSignInSettings(form(touched)));
+
+    await patchEnterprise({ oidc: normalizeOidc({}) });
+    assert.equal((await save(true)).oidc.app_roles, false);
+    await patchEnterprise({ oidc: normalizeOidc({}) });
+    assert.equal((await save(false)).oidc.app_roles, true);
+
+    await withProviderRoles(false);
+    assert.equal((await save(false)).oidc.app_roles, false);
+  } finally {
+    await withProviderRoles(false);
+    provider.offersAppRoles = false;
     resetOidcCache();
     await data.cleanup();
   }

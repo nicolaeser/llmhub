@@ -48,6 +48,7 @@ export type LoginFlowStep = LoginStep | LoginResult;
 export type LoginContext = {
   step: LoginStep;
   ssoEnabled: boolean;
+  ssoProvider: string;
   ssoOnly: boolean;
   passkeysEnabled: boolean;
   registrationEnabled: boolean;

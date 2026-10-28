@@ -336,6 +336,26 @@ test("SSO sign-in with an Entra tenant domain redirects to Microsoft", async () 
   assert.ok(res.cookies.getAll().length > 0);
 });
 
+test("SSO sign-in asks for app roles only when the provider offers them", async () => {
+  const { GET } = await import("@/app/sso/login/route");
+  const issuer = "https://id.example.test";
+  const scopes = [];
+  for (const offered of [undefined, ["openid", "groups"], ["openid", "email", "profile", "app_roles"]]) {
+    recordedPrisma.reset(enterpriseWithOidc(issuer));
+    const discovery = async () =>
+      Response.json({
+        issuer,
+        authorization_endpoint: `${issuer}/authorize`,
+        token_endpoint: `${issuer}/token`,
+        jwks_uri: `${issuer}/jwks`,
+        ...(offered ? { scopes_supported: offered } : {}),
+      });
+    const res = await withFetch(discovery, () => GET(new NextRequest("http://0.0.0.0:3000/sso/login")));
+    scopes.push(new URL(res.headers.get("location") ?? "").searchParams.get("scope"));
+  }
+  assert.deepEqual(scopes, ["openid email profile", "openid email profile", "openid email profile app_roles"]);
+});
+
 function settingsManager(): AuthenticatedSession {
   return {
     error: false,
@@ -365,7 +385,18 @@ test("the issuer check explains why discovery failed and resolves Entra tenant d
     tokenAuth: "client_secret_post",
     algorithms: [],
     supported: true,
+    appRoles: false,
   });
+  const offering = async () =>
+    Response.json({
+      issuer: "https://id.example.test",
+      authorization_endpoint: "https://id.example.test/authorize",
+      token_endpoint: "https://id.example.test/token",
+      jwks_uri: "https://id.example.test/jwks",
+      scopes_supported: ["openid", "email", "profile", "app_roles"],
+    });
+  const provid = await check("https://id.example.test", offering);
+  assert.deepEqual([provid.ok, provid.ok && provid.appRoles], [true, true]);
   const tenant = await check(`${ENTRA_TENANT_ISSUER}/.well-known/openid-configuration`, discoveryAnswer(ENTRA_TENANT_ISSUER));
   assert.deepEqual([tenant.ok, tenant.ok && tenant.usesTenantId], [true, false]);
   assert.deepEqual(await check(`https://login.microsoftonline.com/${TENANT_ID}`, discoveryAnswer(`https://sts.windows.net/${TENANT_ID}/`)), {
@@ -398,6 +429,23 @@ test("the issuer check explains why discovery failed and resolves Entra tenant d
   });
 });
 
+test("only settings managers can check app roles or switch where roles come from", async () => {
+  const { runAsPrincipal } = await import("@/lib/auth/delegation");
+  const { setAppRolesMode } = await import("@/lib/settings/sign-in");
+  const { startAppRolesCheck } = await import("@/lib/auth/app-roles-check");
+  const viewer = { ...settingsManager(), permissions: ["settings:read"] } as AuthenticatedSession;
+  recordedPrisma.reset({});
+  const calls: (() => Promise<unknown>)[] = [
+    () => setAppRolesMode({ on: true }),
+    () => setAppRolesMode({ on: false }),
+    () => startAppRolesCheck(),
+  ];
+  for (const call of calls) {
+    await assert.rejects(runAsPrincipal(viewer, call), { message: "FORBIDDEN" });
+  }
+  assert.deepEqual(recordedPrisma.called("setting"), []);
+});
+
 test("issuer settings store the issuer without a pasted discovery suffix", () => {
   const pasted = "https://id.example.test/realms/hub/.well-known/openid-configuration";
   assert.equal(issuerCheckSchema.parse({ issuer: pasted }).issuer, "https://id.example.test/realms/hub");
@@ -414,6 +462,8 @@ test("issuer settings store the issuer without a pasted discovery suffix", () =>
     default_org_id: "",
     allowed_domains: [],
     sso_only: false,
+    display_name: "",
+    app_roles: false,
   });
   assert.equal(parsed.issuer, "https://id.example.test/realms/hub");
 });
@@ -551,6 +601,8 @@ test("sign-in settings carry OIDC but no JWT, custom auth, or redirect override"
     default_org_id: "",
     allowed_domains: ["Example.TEST"],
     sso_only: false,
+    display_name: "Example ID",
+    app_roles: false,
     redirect_url: "https://evil.example.test/callback",
     jwt: { issuer: "https://id.example.test", jwks_url: "https://id.example.test/jwks" },
     custom_auth_url: "https://auth.example.test",

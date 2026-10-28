@@ -7,12 +7,14 @@ import { loadGeneralSettings, saveGeneralSettings } from "@/lib/settings/general
 import { loadLogging, saveLogging } from "@/lib/settings/logging-alerts";
 import { savePlatformLabelKeys } from "@/lib/settings/request-labels";
 import { testFeatureModel } from "@/lib/models/feature-model-test";
+import { startAppRolesCheck } from "@/lib/auth/app-roles-check";
 import {
   checkOidcIssuer,
   issueScimToken,
   loadSignInSettings,
   revokeScimToken,
   saveSignInSettings,
+  setAppRolesMode,
 } from "@/lib/settings/sign-in";
 import { loadStorageSettings, saveStorageSettings, testStorageSettings } from "@/lib/settings/storage";
 import { saveBudgetAlerts } from "@/lib/tenancy/budgets";
@@ -35,6 +37,14 @@ export async function saveSignInSettingsAction(...args: Parameters<typeof saveSi
 
 export async function checkOidcIssuerAction(...args: Parameters<typeof checkOidcIssuer>) {
   return runAction(() => checkOidcIssuer(...args));
+}
+
+export async function setAppRolesModeAction(...args: Parameters<typeof setAppRolesMode>) {
+  return runAction(() => setAppRolesMode(...args));
+}
+
+export async function startAppRolesCheckAction() {
+  return runAction(() => startAppRolesCheck());
 }
 
 export async function issueScimTokenAction(...args: Parameters<typeof issueScimToken>) {

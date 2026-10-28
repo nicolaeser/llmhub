@@ -89,6 +89,7 @@ export type AuthErrorCode =
   | "NAME_REQUIRED"
   | "USER_PROTECTED"
   | "OWNER_PROTECTED"
+  | "ROLE_MANAGED"
   | "CANNOT_SELF"
   | "USER_EXISTS"
   | "USER_NOT_FOUND"
@@ -159,6 +160,7 @@ export type OidcDiscovery = {
   token_endpoint: string;
   jwks_uri: string;
   userinfo_endpoint: string;
+  scopes_supported: string[];
   token_endpoint_auth_methods_supported: string[];
   id_token_signing_alg_values_supported: string[];
 };
@@ -191,6 +193,12 @@ export type OidcDiscoveryFailure =
   | "incomplete";
 
 export type OidcDiscoveryFailureDetail = { status?: number; issuer?: string };
+
+export type OidcStatePurpose = "sign_in" | "role_check";
+
+export type AppRolesCheckResult = "admin" | "no_admin" | "other_account" | "unavailable" | "failed";
+
+export type AppRolesCheck = { result: AppRolesCheckResult; email: string; at: number };
 
 export type OidcState = {
   state: string;
@@ -232,10 +240,11 @@ export type OidcIdentity = {
   subject: string;
   email: string;
   groups: string[];
+  appRoles: string[] | null;
   externalIds: string[];
 };
 
-export type SsoFailure = "owner" | "domain" | "conflict" | "email";
+export type SsoFailure = "owner" | "domain" | "conflict" | "email" | "no_role";
 
 export type Jwk = {
   kty?: string;

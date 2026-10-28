@@ -68,8 +68,11 @@
       "issuerHint": "The provider publishes /.well-known/openid-configuration below this URL.",
       "check": "Check issuer",
       "clientId": "Client ID",
+      "displayName": "Provider name",
+      "displayNamePlaceholder": "Name people know",
+      "displayNameHint": "Shown to people, for example in Managed by and sign-in messages. Empty uses the issuer host.",
       "scopes": "Scopes",
-      "scopesHint": "openid is always requested. Add groups when your provider needs a scope for the groups claim."
+      "scopesHint": "openid is always requested. Add groups when your provider needs a scope for the groups claim. app_roles is added automatically when the provider offers it."
     },
     "check": {
       "title": "{state, select, ok {Issuer found} unsupported {Issuer found, but its signing algorithms are not supported} unreachable {Issuer not reachable} http {Discovery request failed} not_json {No discovery document} issuer_mismatch {Issuer does not match} entra_v1 {Microsoft Entra v1 endpoint} multi_tenant {Multi-tenant issuer} incomplete {Discovery document incomplete} other {Issuer check failed}}",
@@ -83,6 +86,30 @@
       "note": "{id, select, entra {Use the Directory (tenant) ID, not the domain, common, or organizations: https://login.microsoftonline.com/TENANT_ID/v2.0. The issuer ends with /v2.0. Add the optional claims email and xms_edov, and a groups claim (group object IDs) or app roles (claim roles).} google {Google sends no groups. Everyone gets the default role; limit sign-in with allowed email domains.} okta {Use your Okta domain as issuer and add a groups claim filter to the ID token of the app.} keycloak {Issuer https://HOST/realms/REALM. Add a Group Membership mapper (claim groups, full group path off) to the client.} authentik {Use the OpenID configuration issuer of the application. The profile scope carries the groups claim.} auth0 {Issuer https://TENANT.auth0.com/. Groups or roles need an Action that adds a namespaced claim such as https://llmhub/roles.} other {Any provider with discovery, the authorization code flow, and PKCE.}}",
       "docs": "Provider setup guide"
     },
+    "providerRoles": {
+      "title": "Roles from your provider",
+      "subtitle": "With app roles, your provider decides who may sign in and with which role.",
+      "state": "{state, select, on {App roles detected} lost {This provider no longer offers app roles} first {App roles available} available {App roles available} absent {This provider does not offer app roles} checking {Checking your provider} other {App roles not checked}}",
+      "stateHint": "{state, select, on {{provider} decides who may sign in and with which role. Give people the Admin or Viewer role for this app there.} lost {People without a default role cannot sign in. Turn this off, or offer app roles at {provider} again.} first {When you save, {provider} decides who may sign in and with which role, because this is the first sign-in setup. You can turn it off afterwards.} available {Turn this on to let {provider} decide who may sign in and with which role. Until then, sign-in works as configured below.} absent {Roles come from group rules or the default role below.} checking {LLM Hub reads the provider's discovery document.} other {LLM Hub checks the issuer URL on its own. If it cannot reach it, the message above says why.}}",
+      "mode": "Roles come from {provider}",
+      "consequence": "People without a role in {provider} lose access at their next sign-in. Open sessions end after 7 days without activity at the latest.",
+      "saveFirst": "Save your changes first.",
+      "toast": "{on, select, true {Roles now come from {provider}.} other {Roles no longer come from {provider}.}}",
+      "missing": "Missing. Restore it under Console users, Roles.",
+      "check": {
+        "intro": "Before you turn this on, check your access: sign in at {provider} with your account. It needs the Admin role for this app, so you cannot lock yourself out.",
+        "start": "{again, select, true {Check again} other {Check my access}}",
+        "title": "{result, select, admin {Admin role found} no_admin {No Admin role} other_account {Different account} unavailable {No app roles received} other {Check not finished}}",
+        "body": "{result, select, admin {You can now turn on “Roles come from {provider}”.} no_admin {Give your account the Admin role for this app at {provider}, then check again.} other_account {You signed in at {provider} with an account other than the one linked to you. Check again with your own account.} unavailable {{provider} sent no app roles. Check that this app has roles there.} other {The check did not finish. Try again.}}",
+        "as": "Checked account: {email}."
+      },
+      "columns": {
+        "value": "Provider role",
+        "role": "Role in LLM Hub",
+        "can": "What it can do"
+      },
+      "footer": "The highest role wins. Operator and Finance work as soon as you add them as roles of this app at your provider. Other values are ignored unless a group rule below maps them."
+    },
     "checklist": {
       "title": "Setup checklist",
       "subtitle": "Register LLM Hub at your provider as a confidential web application with the authorization code flow.",
@@ -94,9 +121,9 @@
     "accounts": {
       "title": "Accounts and roles",
       "subtitle": "Applies to console users who sign in with SSO or are provisioned through SCIM.",
-      "defaultRole": "Default role",
-      "viewerDefault": "Viewer (built-in)",
-      "defaultRoleHint": "New accounts get this role when no group rule matches.",
+      "defaultRole": "Default role for people without a role",
+      "noDefault": "{appRoles, select, true {None: refuse sign-in} other {Viewer (built-in)}}",
+      "defaultRoleHint": "{appRoles, select, true {For people whose provider sends no known app role and no matching group. With None, their sign-in is refused.} other {New accounts get this role when no group rule matches.}}",
       "defaultCompany": "Default company",
       "platform": "None (platform user)",
       "defaultCompanyHint": "New accounts are limited to this company. Existing accounts keep theirs.",
@@ -105,14 +132,14 @@
     },
     "mapping": {
       "title": "Group to role rules",
-      "subtitle": "The first rule whose group matches decides the role. While rules exist, roles follow the identity provider at every sign-in and SCIM change. The owner is never changed.",
+      "subtitle": "The first matching rule decides the role, before app roles. Rules also map other app role values, for example to custom roles. While rules exist or the provider sends app roles, roles follow the identity provider at every sign-in; rules also at every SCIM change. The owner is never changed.",
       "claim": "Groups claim",
       "claimHint": "ID token claim that lists groups or roles, for example groups, roles, or realm_access.roles. SCIM groups match by display name or external ID.",
       "group": "Group {position}",
       "groupPlaceholder": "Group name or ID",
       "role": "Role {position}",
       "remove": "Remove rule {position}",
-      "empty": "No rules yet. Everyone gets the default role.",
+      "empty": "{appRoles, select, true {No rules yet. App roles decide the role; everyone else gets the default role.} other {No rules yet. Everyone gets the default role.}}",
       "add": "Add rule"
     },
     "ssoOnly": {
