@@ -42,8 +42,8 @@
     "contentLogging": "{enabled, select, true {Inhaltsprotokollierung eingeschaltet} other {Inhaltsprotokollierung ausgeschaltet}}"
   },
   "blockAction": "{blocked, select, true {Entsperren} other {Sperren}}",
-  "ownerRole": "Owner",
-  "owner": "Owner",
+  "ownerRole": "Inhaber",
+  "owner": "Inhaber",
   "twoFactor": "{enabled, select, true {2FA aktiv} other {2FA ausstehend}}",
   "passkeys": "{count, plural, one {# Passkey} other {# Passkeys}}",
   "mustChangePassword": "Passwortwechsel",
