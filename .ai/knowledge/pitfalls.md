@@ -6,7 +6,7 @@ Load when debugging surprises, adapter errors, or conflicting docs.
 - `localePrefix: "never"` must not rewrite paths to `/en/...`. The app has no `[locale]` segment. `src/proxy.ts` copies intl cookies and continues.
 - `/internal-api/setup` is public on purpose. Must not redirect `/`, login, or register there when the user table is empty.
 - `cookies().delete()` omits `Secure`, so browsers ignore it for `__Host-` cookies. Clear them with `set` and the full cookie options.
-- A signed but revoked session cookie would loop between the console layout and the proxy. `requireAuth` sends stale cookies to `/internal-api/account/expired`, which clears the cookie.
+- A signed but revoked session cookie would loop between the console layout and the proxy. `requireAuth` sends stale cookies to `/internal-api/account/expired?return=…` with the requested path and query, which clears the cookie and continues to sign-in with that return address.
 - Passkeys need `NEXT_PUBLIC_APP_URL` with HTTPS and a domain, or `localhost`. IP-address hosts cannot be WebAuthn relying parties.
 - Login after `Set-Cookie` must navigate with the App Router (`useRouter().replace`). Do not use `window.location` for in-app HTML routes; file downloads may use `<a href>`.
 - HeroUI v3 Select items are `ListBox.Item`. Modal open state lives on the Modal root via `useOverlayState`.
