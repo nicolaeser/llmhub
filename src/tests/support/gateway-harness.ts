@@ -58,6 +58,8 @@ export function virtualKeyRow(change: Record<string, unknown> = {}) {
     accessWindows: [],
     accessTimeZone: "UTC",
     blocked: false,
+    paused: false,
+    pausedUntil: null,
     logContent: false,
     createdAt: new Date("2026-10-01T00:00:00Z"),
     templates: [],

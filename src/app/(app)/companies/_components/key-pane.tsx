@@ -2,14 +2,16 @@
 
 import { useState, useTransition } from "react";
 import { Button, Card, Chip, Skeleton, Spinner } from "@heroui/react";
-import { Blocks, ChevronRight, KeyRound, Pencil, RefreshCw, Trash2 } from "lucide-react";
+import { Blocks, ChevronRight, KeyRound, Pause, Pencil, Play, RefreshCw, Trash2 } from "lucide-react";
 import { useFormatter, useTranslations } from "next-intl";
 import { LoadError, SectionLoading } from "@/components/console/page-status";
 import { bindingKind } from "@/components/keys/key-binding";
+import KeyStateChip from "@/components/keys/key-state-chip";
 import { useKeyDialogs, type KeyServerActions } from "@/components/keys/use-key-dialogs";
 import { logsHref } from "@/lib/gateway/request-logs/request-log-query";
 import { useActionData } from "@/lib/hooks/use-action-data";
 import { useClock } from "@/lib/hooks/use-clock";
+import { isKeyPaused, keyState } from "@/lib/keys/pause";
 import { usageHref } from "@/lib/usage/usage-query";
 import type { ActionFail } from "@/types/actions";
 import type { KeyChoices, KeyDetail, VirtualKeyView } from "@/types/keys";
@@ -81,6 +83,8 @@ export default function KeyPane({
   const team = path.find((link) => link.kind === "team");
   const expires = key?.expires ? new Date(key.expires) : null;
   const expired = expires !== null && expires <= now;
+  const state = keyState(node, now);
+  const paused = isKeyPaused(node, now);
 
   function edit() {
     if (!key) return;
@@ -94,11 +98,7 @@ export default function KeyPane({
 
   const chips = (
     <>
-      {node.blocked ? (
-        <Chip size="sm" variant="soft" color="danger">
-          {tCommon("blockedState", { blocked: "true" })}
-        </Chip>
-      ) : null}
+      {state === "active" ? null : <KeyStateChip state={state} pausedUntil={node.pausedUntil} />}
       {key ? (
         <>
           {key.log_content ? null : (
@@ -130,6 +130,28 @@ export default function KeyPane({
               <>
                 {isPending ? <Spinner color="current" size="sm" /> : <Pencil size={14} aria-hidden />}
                 {tKeys("edit")}
+              </>
+            )}
+          </Button>
+        ) : null}
+        {data.canManageKeys ? (
+          <Button
+            size="sm"
+            variant="secondary"
+            isPending={keyDialogs.busy?.action === "resume"}
+            isDisabled={keyDialogs.busy !== null}
+            onPress={() => (paused ? keyDialogs.resume(target) : keyDialogs.askPause(target))}
+          >
+            {({ isPending }) => (
+              <>
+                {isPending ? (
+                  <Spinner color="current" size="sm" />
+                ) : paused ? (
+                  <Play size={14} aria-hidden />
+                ) : (
+                  <Pause size={14} aria-hidden />
+                )}
+                {paused ? tKeys("resume") : tKeys("pause.action")}
               </>
             )}
           </Button>

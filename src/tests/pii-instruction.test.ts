@@ -201,6 +201,8 @@ function ownerPrincipal(pii: PiiPolicy): Principal {
     access_windows: [],
     access_time_zone: "UTC",
     blocked: false,
+    paused: false,
+    paused_until: "",
     log_content: false,
     created_at: "",
   };

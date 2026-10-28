@@ -54,6 +54,8 @@ export function serializeApiKey(key: VirtualKeyView) {
     access_windows: key.access_windows,
     access_time_zone: key.access_time_zone,
     blocked: key.blocked,
+    paused: key.paused,
+    paused_until: orNull(key.paused_until),
     expires_at: orNull(key.expires),
     created_at: key.created_at,
     ...(key.key ? { key: key.key } : {}),

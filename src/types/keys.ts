@@ -70,6 +70,8 @@ export type VirtualKeyView = {
   access_windows: AccessWindow[];
   access_time_zone: string;
   blocked: boolean;
+  paused: boolean;
+  paused_until: string;
   log_content: boolean;
   created_at: string;
 };
@@ -97,6 +99,8 @@ export type KeyFieldsInput = {
 export type KeyCreateInput = KeyFieldsInput & { days: number };
 
 export type KeyUpdateInput = KeyFieldsInput & { id: string; blocked: boolean };
+
+export type KeyPauseInput = { id: string; hours: number };
 
 export type KeyTenancy = {
   userId: string;

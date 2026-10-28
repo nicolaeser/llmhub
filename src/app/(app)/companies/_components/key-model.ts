@@ -42,6 +42,8 @@ export function keyNodeOf(key: VirtualKeyView, budget: BudgetView): KeyNode {
     projectId: key.project_id,
     memberId: key.member_id,
     blocked: key.blocked,
+    paused: key.paused,
+    pausedUntil: key.paused_until,
     budget,
   };
 }

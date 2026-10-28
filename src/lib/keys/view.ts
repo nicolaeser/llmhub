@@ -6,6 +6,7 @@ import { keyScope } from "@/lib/auth/scope";
 import type { VirtualKeyView } from "@/types/keys";
 import { money } from "@/lib/utils/money";
 import { accessTimeZoneOf, accessWindowsOf, allowedEndpointsOf } from "@/lib/gateway/access/key-restrictions";
+import { pauseActive } from "@/lib/keys/pause";
 import type { Prisma } from "@/generated/prisma/client";
 
 function jsonArray(v: unknown): string[] {
@@ -36,10 +37,13 @@ export function toKeyView(row: {
   accessWindows: unknown;
   accessTimeZone: string;
   blocked: boolean;
+  paused: boolean;
+  pausedUntil: Date | null;
   logContent: boolean;
   createdAt: Date;
   templates: { templateId: string }[];
 }): VirtualKeyView {
+  const paused = pauseActive(row.paused, row.pausedUntil, new Date());
   return {
     token_id: row.id,
     key_name: row.prefix,
@@ -63,6 +67,8 @@ export function toKeyView(row: {
     access_windows: accessWindowsOf(row.accessWindows),
     access_time_zone: accessTimeZoneOf(row.accessTimeZone),
     blocked: row.blocked,
+    paused,
+    paused_until: paused ? (row.pausedUntil?.toISOString() ?? "") : "",
     log_content: row.logContent,
     created_at: row.createdAt.toISOString(),
   };
