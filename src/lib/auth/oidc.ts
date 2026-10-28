@@ -34,9 +34,7 @@ import type {
 
 export const OIDC_STATE_COOKIE =
   process.env.NODE_ENV === "production" ? "__Host-llmhub-oidc" : "llmhub_oidc";
-export const OIDC_ROLE_CHECK_COOKIE =
-  process.env.NODE_ENV === "production" ? "__Host-llmhub-oidc-role-check" : "llmhub_oidc_role_check";
-const STATE_DOMAIN: Record<OidcStatePurpose, string> = { sign_in: "oidc", role_check: "oidc-role-check" };
+const STATE_PURPOSES: readonly OidcStatePurpose[] = ["sign_in", "role_check"];
 const OIDC_STATE_TTL_SECONDS = 600;
 const STATE_PART = /^[A-Za-z0-9_-]{16,128}$/;
 const ENTRA_V2_ISSUER = /^https:\/\/login\.microsoftonline\.com\/([^/?#]+)\/v2\.0$/i;
@@ -273,9 +271,8 @@ export function signOidcState(input: {
   const verifier = input.verifier ?? randomPart();
   const iat = input.nowSeconds ?? Math.floor(Date.now() / 1000);
   const returnPath = input.returnPath ?? "";
-  const payload = `${state}.${nonce}.${verifier}.${iat}.${b64url(returnPath)}`;
-  const domain = STATE_DOMAIN[input.purpose ?? "sign_in"];
-  const cookie = `${payload}.${hmacHex(input.secret ?? signingSecret(), `${domain}:${payload}`)}`;
+  const payload = `${state}.${nonce}.${verifier}.${iat}.${b64url(returnPath)}.${input.purpose ?? "sign_in"}`;
+  const cookie = `${payload}.${hmacHex(input.secret ?? signingSecret(), `oidc:${payload}`)}`;
   return { state, nonce, verifier, codeChallenge: pkceChallenge(verifier), returnPath, cookie };
 }
 
@@ -284,15 +281,14 @@ export function verifyOidcState(input: {
   state: string;
   nowSeconds?: number;
   secret?: string;
-  purpose?: OidcStatePurpose;
 }): VerifiedOidcState | null {
   const parts = input.cookie.split(".");
-  if (parts.length !== 6) return null;
-  const [state, nonce, verifier, iatRaw, returnB64, sig] = parts;
+  if (parts.length !== 7) return null;
+  const [state, nonce, verifier, iatRaw, returnB64, purposeRaw, sig] = parts;
   if (![state, nonce, verifier].every((part) => STATE_PART.test(part))) return null;
   if (!iatRaw || returnB64 == null || !sig) return null;
-  const payload = `${state}.${nonce}.${verifier}.${iatRaw}.${returnB64}`;
-  const expected = hmacHex(input.secret ?? signingSecret(), `${STATE_DOMAIN[input.purpose ?? "sign_in"]}:${payload}`);
+  const payload = `${state}.${nonce}.${verifier}.${iatRaw}.${returnB64}.${purposeRaw}`;
+  const expected = hmacHex(input.secret ?? signingSecret(), `oidc:${payload}`);
   const a = Buffer.from(sig, "utf8");
   const b = Buffer.from(expected, "utf8");
   if (a.length !== b.length || !timingSafeEqual(a, b)) return null;
@@ -305,8 +301,9 @@ export function verifyOidcState(input: {
     return null;
   }
   const returnPath = b64urlDecode(returnB64);
-  if (returnPath == null) return null;
-  return { nonce, verifier, returnPath };
+  const purpose = STATE_PURPOSES.find((value) => value === purposeRaw);
+  if (returnPath == null || !purpose) return null;
+  return { nonce, verifier, returnPath, purpose };
 }
 
 const MAX_CLAIM_VALUES = 500;
@@ -399,9 +396,9 @@ export async function exchangeOidcCode(input: {
   return identityFromClaims(claims, input.resolved.groupsClaim, appRolesOffered(disc));
 }
 
-export function oidcStateCookieOptions(maxAge = OIDC_STATE_TTL_SECONDS, name = OIDC_STATE_COOKIE) {
+export function oidcStateCookieOptions(maxAge = OIDC_STATE_TTL_SECONDS) {
   return {
-    name,
+    name: OIDC_STATE_COOKIE,
     maxAge,
     path: "/",
     httpOnly: true,

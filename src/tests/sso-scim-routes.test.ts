@@ -495,6 +495,85 @@ test("the SSO callback refuses requests without a matching signed state before a
   }
 });
 
+function callbackFor(cookieName: string, state: string, cookie: string | null, query = "code=abc") {
+  return new NextRequest(`http://localhost:3000/sso/callback?${query}&state=${state}`, {
+    headers: cookie === null ? {} : { cookie: `${cookieName}=${cookie}` },
+  });
+}
+
+function countingFetch(): { fetchFn: typeof fetch; calls: string[] } {
+  const calls: string[] = [];
+  return {
+    calls,
+    fetchFn: (async (input) => {
+      calls.push(String(input));
+      return new Response("unexpected", { status: 500 });
+    }) as typeof fetch,
+  };
+}
+
+test("a forged, absent, or swapped role check cookie falls through to the normal rejection", async () => {
+  const { GET } = await import("@/app/sso/callback/route");
+  const { signOidcState, OIDC_STATE_COOKIE } = await import("@/lib/auth/oidc");
+  const at = (state: string, cookie: string | null, query?: string) => callbackFor(OIDC_STATE_COOKIE, state, cookie, query);
+  const check = signOidcState({ purpose: "role_check" });
+  const signIn = signOidcState({});
+  const forged = signOidcState({ state: check.state, purpose: "role_check", secret: "another-secret-aaaaaaaaaaaaaaaaaaaa" });
+  const swap = (cookie: string, purpose: string) =>
+    cookie
+      .split(".")
+      .map((part, index) => (index === 5 ? purpose : part))
+      .join(".");
+  const attempts = [
+    at(check.state, null),
+    at(check.state, forged.cookie),
+    at(signIn.state, swap(signIn.cookie, "role_check")),
+    at(check.state, swap(check.cookie, "sign_in")),
+    at(check.state, signIn.cookie),
+    at(check.state, null, "error=access_denied"),
+  ];
+  const { fetchFn, calls } = countingFetch();
+  for (const request of attempts) {
+    recordedPrisma.reset({ user: { count: () => 1 } });
+    const res = await withFetch(fetchFn, () => GET(request));
+    const location = new URL(res.headers.get("location") ?? "");
+    assert.equal(`${location.pathname}?${location.searchParams}`, "/account/login?sso=error");
+    assert.equal(res.cookies.get(OIDC_STATE_COOKIE)?.value, "");
+    assert.equal(res.cookies.get(SESSION_COOKIE), undefined);
+    assert.deepEqual(recordedPrisma.calls, []);
+  }
+  assert.deepEqual(calls, []);
+});
+
+test("a role check cookie without a settings manager's session never uses the code", async () => {
+  const { GET } = await import("@/app/sso/callback/route");
+  const { runAsPrincipal } = await import("@/lib/auth/delegation");
+  const { signOidcState, OIDC_STATE_COOKIE } = await import("@/lib/auth/oidc");
+  const viewer = { ...settingsManager(), permissions: ["settings:read"] } as AuthenticatedSession;
+  const { fetchFn, calls } = countingFetch();
+  for (const run of [<T>(fn: () => Promise<T>) => fn(), <T>(fn: () => Promise<T>) => runAsPrincipal(viewer, fn)]) {
+    const check = signOidcState({ purpose: "role_check" });
+    recordedPrisma.reset({ user: { count: () => 1 } });
+    const res = await withFetch(fetchFn, () => run(() => GET(callbackFor(OIDC_STATE_COOKIE, check.state, check.cookie))));
+    assert.equal(new URL(res.headers.get("location") ?? "").pathname, "/account/login");
+    assert.equal(res.cookies.get(SESSION_COOKIE), undefined);
+    assert.deepEqual(recordedPrisma.called("setting"), []);
+    assert.deepEqual(recordedPrisma.called("user"), []);
+  }
+  assert.deepEqual(calls, []);
+});
+
+test("a sign-in state never records an app roles check, even for a settings manager", async () => {
+  const { GET } = await import("@/app/sso/callback/route");
+  const { runAsPrincipal } = await import("@/lib/auth/delegation");
+  const { signOidcState, OIDC_STATE_COOKIE } = await import("@/lib/auth/oidc");
+  const signIn = signOidcState({});
+  recordedPrisma.reset({ user: { count: () => 1 }, setting: { findUnique: () => null } });
+  const res = await runAsPrincipal(settingsManager(), () => GET(callbackFor(OIDC_STATE_COOKIE, signIn.state, signIn.cookie)));
+  assert.equal(new URL(res.headers.get("location") ?? "").searchParams.get("sso"), "error");
+  assert.deepEqual(recordedPrisma.called("setting", "upsert"), []);
+});
+
 test("an SSO callback that would create the first user fails like any other SSO failure", async () => {
   const { GET } = await import("@/app/sso/callback/route");
   const { env } = await import("@/lib/env");

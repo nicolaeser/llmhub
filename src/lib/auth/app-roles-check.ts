@@ -8,7 +8,6 @@ import {
   buildAuthorizationUrl,
   exchangeOidcCode,
   fetchOidcDiscovery,
-  OIDC_ROLE_CHECK_COOKIE,
   oidcIsReady,
   oidcStateCookieOptions,
   resolveOidc,
@@ -34,7 +33,7 @@ export async function startAppRolesCheck(): Promise<{ url: string }> {
   const disc = await fetchOidcDiscovery(resolved.issuer);
   if (!appRolesOffered(disc)) throw new Error("APP_ROLES_UNAVAILABLE");
   const state = signOidcState({ purpose: "role_check" });
-  const opts = oidcStateCookieOptions(undefined, OIDC_ROLE_CHECK_COOKIE);
+  const opts = oidcStateCookieOptions();
   (await cookies()).set(opts.name, state.cookie, opts);
   return { url: buildAuthorizationUrl(disc, resolved, state) };
 }

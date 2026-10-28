@@ -91,6 +91,7 @@ test("sign and verify OIDC state, reject mismatches, tampering, and expiry", () 
     nonce: "n".repeat(43),
     verifier: "v".repeat(43),
     returnPath: "/usage",
+    purpose: "sign_in",
   });
   assert.equal(verifyOidcState({ cookie: signed.cookie, state: "x".repeat(43), nowSeconds: 1_010, secret }), null);
   assert.equal(verifyOidcState({ cookie: signed.cookie, state, nowSeconds: 1_000 + 601, secret }), null);
@@ -100,17 +101,24 @@ test("sign and verify OIDC state, reject mismatches, tampering, and expiry", () 
   assert.equal(verifyOidcState({ cookie: parts.join("."), state, nowSeconds: 1_010, secret }), null);
 });
 
-test("a role check state never verifies as a sign-in state and the other way round", () => {
+test("the signed state carries its purpose, and a swapped purpose never verifies", () => {
   const secret = "test-secret-aaaaaaaaaaaaaaaa";
   const parts = { state: "s".repeat(43), nonce: "n".repeat(43), verifier: "v".repeat(43), nowSeconds: 1_000, secret };
   const check = signOidcState({ ...parts, purpose: "role_check" });
   const signIn = signOidcState(parts);
   const at = { state: parts.state, nowSeconds: 1_010, secret };
-  assert.notEqual(check.cookie, signIn.cookie);
-  assert.equal(verifyOidcState({ cookie: check.cookie, ...at }), null);
-  assert.equal(verifyOidcState({ cookie: signIn.cookie, ...at, purpose: "role_check" }), null);
-  assert.equal(verifyOidcState({ cookie: check.cookie, ...at, purpose: "role_check" })?.nonce, parts.nonce);
-  assert.equal(verifyOidcState({ cookie: signIn.cookie, ...at, purpose: "sign_in" })?.nonce, parts.nonce);
+  assert.equal(verifyOidcState({ cookie: check.cookie, ...at })?.purpose, "role_check");
+  assert.equal(verifyOidcState({ cookie: signIn.cookie, ...at })?.purpose, "sign_in");
+  const swapped = (cookie: string, purpose: string) => {
+    const fields = cookie.split(".");
+    fields[5] = purpose;
+    return fields.join(".");
+  };
+  assert.equal(verifyOidcState({ cookie: swapped(signIn.cookie, "role_check"), ...at }), null);
+  assert.equal(verifyOidcState({ cookie: swapped(check.cookie, "sign_in"), ...at }), null);
+  assert.equal(verifyOidcState({ cookie: swapped(signIn.cookie, "admin"), ...at }), null);
+  const withoutPurpose = signIn.cookie.split(".").filter((_, index) => index !== 5).join(".");
+  assert.equal(verifyOidcState({ cookie: withoutPurpose, ...at }), null);
 });
 
 test("OIDC state values are random and distinct by default", () => {

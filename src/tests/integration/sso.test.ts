@@ -12,7 +12,7 @@ import { env } from "@/lib/env";
 import { SESSION_COOKIE, signSessionToken } from "@/lib/auth/cookie";
 import { startAppRolesCheck, readAppRolesCheck } from "@/lib/auth/app-roles-check";
 import { runAsPrincipal } from "@/lib/auth/delegation";
-import { OIDC_ROLE_CHECK_COOKIE, OIDC_STATE_COOKIE, resetOidcCache } from "@/lib/auth/oidc";
+import { OIDC_STATE_COOKIE, resetOidcCache } from "@/lib/auth/oidc";
 import { digest, pkceChallenge, randomToken } from "@/lib/crypto";
 import { ensureSystemCatalog } from "@/lib/bootstrap/system-catalog";
 import { normalizeOidc, patchEnterprise } from "@/lib/settings/enterprise";
@@ -269,11 +269,29 @@ async function withProviderRoles(mode: boolean) {
   await patchEnterprise({ oidc: normalizeOidc({ enabled: true, issuer, client_id: CLIENT_ID, app_roles: mode }) });
 }
 
+async function startCheckAs(session: AuthenticatedSession, email: string) {
+  const { authorize, checkCookie } = await runAsPrincipal(session, async () => {
+    const { url } = await startAppRolesCheck();
+    return { authorize: new URL(url), checkCookie: (await cookies()).get(OIDC_STATE_COOKIE)?.value ?? "" };
+  });
+  const code = uniqueName("code");
+  issued.set(code, {
+    challenge: authorize.searchParams.get("code_challenge") ?? "",
+    nonce: authorize.searchParams.get("nonce") ?? "",
+    email,
+  });
+  const callback = new NextRequest(
+    `http://localhost:3000/sso/callback?code=${code}&state=${authorize.searchParams.get("state")}`,
+    { headers: { cookie: `${OIDC_STATE_COOKIE}=${checkCookie}` } },
+  );
+  return { authorize, callback };
+}
+
 async function checkAs(session: AuthenticatedSession, email: string) {
   return runAsPrincipal(session, async () => {
     const { url } = await startAppRolesCheck();
     const authorize = new URL(url);
-    const checkCookie = (await cookies()).get(OIDC_ROLE_CHECK_COOKIE)?.value ?? "";
+    const checkCookie = (await cookies()).get(OIDC_STATE_COOKIE)?.value ?? "";
     const code = uniqueName("code");
     issued.set(code, {
       challenge: authorize.searchParams.get("code_challenge") ?? "",
@@ -282,7 +300,7 @@ async function checkAs(session: AuthenticatedSession, email: string) {
     });
     const res = await ssoCallback(
       new NextRequest(`http://localhost:3000/sso/callback?code=${code}&state=${authorize.searchParams.get("state")}`, {
-        headers: { cookie: `${OIDC_ROLE_CHECK_COOKIE}=${checkCookie}` },
+        headers: { cookie: `${OIDC_STATE_COOKIE}=${checkCookie}` },
       }),
     );
     return { authorize, res, location: new URL(res.headers.get("location") ?? "") };
@@ -426,6 +444,61 @@ test("a new sign-in configuration takes its roles from the provider when it offe
   } finally {
     await withProviderRoles(false);
     provider.offersAppRoles = false;
+    resetOidcCache();
+    await data.cleanup();
+  }
+});
+
+test("a role check finished without the admin's session or by a viewer never exchanges the code", async () => {
+  const data = new TestData();
+  const checker = `${uniqueName("checker")}@example.test`;
+  try {
+    const owner = await data.user({ isOwner: true });
+    const viewerUser = await data.user();
+    const owned = sessionOf(owner, { owner: true });
+    const viewer = sessionOf(viewerUser, { permissions: ["settings:read"] });
+    await withProviderRoles(false);
+    provider.offersAppRoles = true;
+    provider.appRoles = ["admin"];
+    resetOidcCache();
+    const before = tokenRequests.length;
+    const signedOut = await startCheckAs(owned, checker);
+    const asNobody = await ssoCallback(signedOut.callback);
+    assert.equal(new URL(asNobody.headers.get("location") ?? "").pathname, "/account/login");
+    const asViewer = await startCheckAs(owned, checker);
+    const viewerRes = await runAsPrincipal(viewer, () => ssoCallback(asViewer.callback));
+    assert.equal(new URL(viewerRes.headers.get("location") ?? "").pathname, "/account/login");
+    assert.equal(tokenRequests.length, before);
+    assert.equal(await readAppRolesCheck(owner.id, issuer), null);
+    assert.equal(await readAppRolesCheck(viewerUser.id, issuer), null);
+    assert.equal(await prisma.user.count({ where: { email: checker } }), 0);
+  } finally {
+    await withProviderRoles(false);
+    provider.offersAppRoles = false;
+    provider.appRoles = null;
+    resetOidcCache();
+    await data.cleanup();
+  }
+});
+
+test("a sign-in state completed by a settings manager signs in normally and records no check", async () => {
+  const data = new TestData();
+  const email = `${uniqueName("sso")}@example.test`;
+  try {
+    const owner = await data.user({ isOwner: true });
+    await withProviderRoles(false);
+    provider.offersAppRoles = true;
+    provider.appRoles = ["admin"];
+    resetOidcCache();
+    const { location, res } = await runAsPrincipal(sessionOf(owner, { owner: true }), () => signInAs(email));
+    assert.equal(location.pathname, "/keys");
+    assert.ok(res.cookies.get(SESSION_COOKIE)?.value);
+    data.ownUser((await prisma.user.findUniqueOrThrow({ where: { email } })).id);
+    assert.equal(await readAppRolesCheck(owner.id, issuer), null);
+  } finally {
+    await withProviderRoles(false);
+    provider.offersAppRoles = false;
+    provider.appRoles = null;
     resetOidcCache();
     await data.cleanup();
   }

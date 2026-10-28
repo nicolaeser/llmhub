@@ -213,6 +213,7 @@ export type VerifiedOidcState = {
   nonce: string;
   verifier: string;
   returnPath: string;
+  purpose: OidcStatePurpose;
 };
 
 export type TargetRow = {
