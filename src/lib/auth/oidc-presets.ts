@@ -15,6 +15,8 @@ export const DEFAULT_OIDC_SCOPES = "openid email profile";
 
 export const APP_ROLES_SCOPE = "app_roles";
 
+export const OFFLINE_ACCESS_SCOPE = "offline_access";
+
 export const MAX_ROLE_MAPPINGS = 50;
 
 export const MAX_ALLOWED_DOMAINS = 50;

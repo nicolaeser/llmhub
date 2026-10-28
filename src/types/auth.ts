@@ -175,6 +175,7 @@ export type ResolvedOidc = {
   redirectUrl: string;
   scopes: string;
   groupsClaim: string;
+  rolesFromProvider: boolean;
 };
 
 export type OidcEnv = {
@@ -244,6 +245,12 @@ export type OidcIdentity = {
   appRoles: string[] | null;
   externalIds: string[];
 };
+
+export type OidcGrant = { identity: OidcIdentity; sid: string; refreshToken: string };
+
+export type OidcRefresh =
+  | { status: "refused" }
+  | { status: "valid"; refreshToken: string; groups: string[] | null; appRoles: string[] | null };
 
 export type SsoFailure = "owner" | "domain" | "conflict" | "email" | "no_role";
 

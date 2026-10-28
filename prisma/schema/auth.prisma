@@ -89,19 +89,35 @@ model Role {
 }
 
 model Session {
-  id           String   @id @default(cuid())
-  tokenHash    String   @unique
+  id           String      @id @default(cuid())
+  tokenHash    String      @unique
   userId       String
   secondFactor String
   ipAddress    String?
   userAgent    String?
-  createdAt    DateTime @default(now())
-  lastActive   DateTime @default(now())
+  createdAt    DateTime    @default(now())
+  lastActive   DateTime    @default(now())
   expiresAt    DateTime
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user         User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sso          SsoSession?
 
   @@index([userId])
   @@index([expiresAt])
+}
+
+model SsoSession {
+  id           String   @id @default(cuid())
+  sessionId    String   @unique
+  issuer       String
+  subject      String
+  sid          String?
+  refreshToken String?
+  checkedAt    DateTime @default(now())
+  session      Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([issuer, subject])
+  @@index([issuer, sid])
+  @@index([checkedAt])
 }
 
 model ManagementKey {

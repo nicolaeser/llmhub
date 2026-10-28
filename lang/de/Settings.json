@@ -113,9 +113,11 @@
     "checklist": {
       "title": "Checkliste zur Einrichtung",
       "subtitle": "Registriere LLM Hub bei deinem Anbieter als vertrauliche Webanwendung mit Authorization-Code-Flow.",
-      "step": "{step, select, callback {{position}. Diese Redirect-URI beim Anbieter eintragen} secret {{position}. Client-Secret als OIDC_CLIENT_SECRET hinterlegen} client {{position}. Issuer-URL und Client-ID eintragen} issuer {{position}. Issuer prüfen} enabled {{position}. Anmeldung mit OpenID Connect einschalten} other {{position}.}}",
+      "step": "{step, select, callback {{position}. Diese Redirect-URI beim Anbieter eintragen} logout {{position}. Diese Back-Channel-Logout-URL beim Anbieter eintragen} secret {{position}. Client-Secret als OIDC_CLIENT_SECRET hinterlegen} client {{position}. Issuer-URL und Client-ID eintragen} issuer {{position}. Issuer prüfen} enabled {{position}. Anmeldung mit OpenID Connect einschalten} other {{position}.}}",
       "state": "{ok, select, true {Erledigt} other {Offen}}",
       "copyCallback": "Redirect-URI kopieren",
+      "copyLogout": "Back-Channel-Logout-URL kopieren",
+      "logoutHint": "Optional, aber empfohlen. Wenn sich jemand beim Anbieter abmeldet oder dort den Zugriff verliert, ruft der Anbieter diese URL auf und LLM Hub beendet sofort dessen Sitzungen. Kommen Rollen vom Anbieter, prüft LLM Hub zusätzlich alle 5 Minuten jede Sitzung beim Anbieter.",
       "secretHint": "Starte LLM Hub nach Änderungen an der Umgebung neu. Das Secret wird nie in der Datenbank gespeichert oder hier angezeigt."
     },
     "accounts": {

@@ -19,6 +19,9 @@ import { normalizeOidc, patchEnterprise } from "@/lib/settings/enterprise";
 import { saveSignInSettings, setAppRolesMode } from "@/lib/settings/sign-in";
 import { GET as ssoLogin } from "@/app/sso/login/route";
 import { GET as ssoCallback } from "@/app/sso/callback/route";
+import { POST as backchannelLogoutRoute } from "@/app/sso/backchannel-logout/route";
+import { getSession } from "@/lib/auth/session";
+import { revalidateSsoSessions, SSO_REVALIDATE_INTERVAL_MS } from "@/lib/auth/sso-sessions";
 import { closeDatabase, uniqueName } from "./support/database";
 import { preserveSetting, sessionOf, TestData } from "./support/fixtures";
 
@@ -30,8 +33,13 @@ const provider = {
   alg: "RS256" as "RS256" | "ES256",
   offersAppRoles: false,
   appRoles: null as string[] | null,
+  refreshAnswer: "valid" as "valid" | "unavailable",
 };
-const issued = new Map<string, { challenge: string; nonce: string; email: string; nonceOverride?: string }>();
+const issued = new Map<
+  string,
+  { challenge: string; nonce: string; email: string; nonceOverride?: string; scope?: string; sid?: string }
+>();
+const refreshGrants = new Map<string, { email: string; sid: string }>();
 const tokenRequests: URLSearchParams[] = [];
 let issuer = "";
 let server: Server;
@@ -58,6 +66,31 @@ function clientCredentials(req: IncomingMessage, form: URLSearchParams) {
   return form.get("client_secret") ? { id: "", secret: "" } : { id, secret };
 }
 
+function refreshAnswer(form: URLSearchParams) {
+  const grant = refreshGrants.get(form.get("refresh_token") ?? "");
+  if (provider.refreshAnswer === "unavailable") return { status: 503, body: { error: "temporarily_unavailable" } };
+  if (!grant) return { status: 400, body: { error: "invalid_grant" } };
+  refreshGrants.delete(form.get("refresh_token") ?? "");
+  const rotated = uniqueName("refresh");
+  refreshGrants.set(rotated, grant);
+  const now = Math.floor(Date.now() / 1000);
+  return {
+    status: 200,
+    body: {
+      id_token: idToken({
+        iss: issuer,
+        aud: CLIENT_ID,
+        exp: now + 300,
+        iat: now,
+        sub: `sub-${grant.email}`,
+        sid: grant.sid,
+        ...(provider.appRoles ? { app_roles: provider.appRoles } : {}),
+      }),
+      refresh_token: rotated,
+    },
+  };
+}
+
 function identityProvider(req: IncomingMessage, res: ServerResponse) {
   const url = new URL(req.url ?? "/", issuer);
   const json = (status: number, body: unknown) => {
@@ -73,7 +106,9 @@ function identityProvider(req: IncomingMessage, res: ServerResponse) {
       token_endpoint_auth_methods_supported: provider.basic
         ? ["client_secret_basic", "client_secret_post"]
         : ["client_secret_post"],
-      ...(provider.offersAppRoles ? { scopes_supported: ["openid", "email", "profile", "app_roles"] } : {}),
+      ...(provider.offersAppRoles
+        ? { scopes_supported: ["openid", "email", "profile", "app_roles", "offline_access"], backchannel_logout_supported: true }
+        : {}),
     });
   }
   if (url.pathname === "/jwks") {
@@ -90,6 +125,10 @@ function identityProvider(req: IncomingMessage, res: ServerResponse) {
     req.on("end", () => {
       const form = new URLSearchParams(raw);
       tokenRequests.push(form);
+      if (form.get("grant_type") === "refresh_token") {
+        const answer = refreshAnswer(form);
+        return json(answer.status, answer.body);
+      }
       const grant = issued.get(form.get("code") ?? "");
       const verifier = form.get("code_verifier") ?? "";
       const client = clientCredentials(req, form);
@@ -102,6 +141,10 @@ function identityProvider(req: IncomingMessage, res: ServerResponse) {
         return json(400, { error: "invalid_grant" });
       }
       const now = Math.floor(Date.now() / 1000);
+      const sid = grant.sid ?? uniqueName("sid");
+      const offline = (grant.scope ?? "").split(" ").includes("offline_access");
+      const refreshToken = offline ? uniqueName("refresh") : "";
+      if (refreshToken) refreshGrants.set(refreshToken, { email: grant.email, sid });
       return json(200, {
         id_token: idToken({
           iss: issuer,
@@ -110,10 +153,12 @@ function identityProvider(req: IncomingMessage, res: ServerResponse) {
           iat: now,
           nonce: grant.nonceOverride ?? grant.nonce,
           sub: `sub-${grant.email}`,
+          sid,
           email: grant.email,
           email_verified: true,
           ...(provider.appRoles ? { app_roles: provider.appRoles } : {}),
         }),
+        ...(refreshToken ? { refresh_token: refreshToken } : {}),
       });
     });
     return;
@@ -138,7 +183,7 @@ after(async () => {
   await closeDatabase();
 });
 
-async function signInAs(email: string, options: { sessionCookie?: string; nonceOverride?: string } = {}) {
+async function signInAs(email: string, options: { sessionCookie?: string; nonceOverride?: string; sid?: string } = {}) {
   const started = await ssoLogin(new NextRequest("http://localhost:3000/sso/login?return=%2Fkeys%3Ftab%3Dmine"));
   const authorize = new URL(started.headers.get("location") ?? "");
   const stateCookie = started.cookies.get(OIDC_STATE_COOKIE)?.value ?? "";
@@ -149,6 +194,8 @@ async function signInAs(email: string, options: { sessionCookie?: string; nonceO
     nonce: params.get("nonce") ?? "",
     email,
     nonceOverride: options.nonceOverride,
+    scope: params.get("scope") ?? "",
+    sid: options.sid,
   });
   const cookies = [`${OIDC_STATE_COOKIE}=${stateCookie}`, ...(options.sessionCookie ? [`${SESSION_COOKIE}=${options.sessionCookie}`] : [])];
   const res = await ssoCallback(
@@ -503,3 +550,210 @@ test("a sign-in state completed by a settings manager signs in normally and reco
     await data.cleanup();
   }
 });
+
+function logoutToken(claims: Record<string, unknown>) {
+  const now = Math.floor(Date.now() / 1000);
+  return idToken({
+    iss: issuer,
+    aud: CLIENT_ID,
+    iat: now,
+    exp: now + 120,
+    jti: uniqueName("jti"),
+    events: { "http://schemas.openid.net/event/backchannel-logout": {} },
+    ...claims,
+  });
+}
+
+function backchannel(token: string) {
+  return backchannelLogoutRoute(
+    new NextRequest("http://localhost:3000/sso/backchannel-logout", {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ logout_token: token }).toString(),
+    }),
+  );
+}
+
+const afterInterval = () => new Date(Date.now() + SSO_REVALIDATE_INTERVAL_MS + 60_000);
+
+async function withRolesFromProvider<T>(roles: string[], run: () => Promise<T>): Promise<T> {
+  await withProviderRoles(true);
+  provider.offersAppRoles = true;
+  provider.appRoles = roles;
+  resetOidcCache();
+  try {
+    return await run();
+  } finally {
+    await withProviderRoles(false);
+    provider.offersAppRoles = false;
+    provider.appRoles = null;
+    provider.refreshAnswer = "valid";
+    resetOidcCache();
+  }
+}
+
+test("back-channel logout ends the sessions of that provider session or subject only", async () => {
+  const data = new TestData();
+  const email = `${uniqueName("sso")}@example.test`;
+  const sidFirst = uniqueName("sid-first");
+  const sidSecond = uniqueName("sid-second");
+  try {
+    await data.user();
+    const first = await signInAs(email, { sid: sidFirst });
+    assert.equal(first.authorize.searchParams.get("scope"), "openid email profile");
+    const user = await prisma.user.findUniqueOrThrow({ where: { email } });
+    data.ownUser(user.id);
+    await signInAs(email, { sid: sidSecond });
+    const sessions = () => prisma.session.count({ where: { userId: user.id } });
+    assert.equal(await sessions(), 2);
+    const links = await prisma.ssoSession.findMany({ where: { session: { userId: user.id } } });
+    assert.deepEqual(links.map((link) => [link.sid, link.subject, link.refreshToken]).sort(), [
+      [sidFirst, `sub-${email}`, null],
+      [sidSecond, `sub-${email}`, null],
+    ].sort());
+
+    const forged = logoutToken({ sub: `sub-${email}` }).split(".");
+    forged[2] = forged[2].split("").reverse().join("");
+    for (const bad of [
+      logoutToken({ sub: `sub-${email}`, aud: "another-client" }),
+      logoutToken({ sub: `sub-${email}`, events: {} }),
+      logoutToken({ sub: `sub-${email}`, nonce: "nonce-1" }),
+      logoutToken({ sub: `sub-${email}`, jti: "" }),
+      logoutToken({}),
+      forged.join("."),
+      "not-a-token",
+    ]) {
+      const res = await backchannel(bad);
+      assert.equal(res.status, 400);
+      assert.equal(res.headers.get("cache-control"), "no-store");
+    }
+    assert.equal(await sessions(), 2);
+
+    const bySid = await backchannel(logoutToken({ sid: sidFirst }));
+    assert.equal(bySid.status, 200);
+    assert.equal(await sessions(), 1);
+    assert.equal((await prisma.ssoSession.findFirstOrThrow({ where: { session: { userId: user.id } } })).sid, sidSecond);
+
+    assert.equal((await backchannel(logoutToken({ sub: `sub-${email}` }))).status, 200);
+    assert.equal(await sessions(), 0);
+    assert.equal(await prisma.userSecurityEvent.count({ where: { userId: user.id, action: "sessions.revoked" } }), 2);
+    assert.equal((await prisma.user.findUniqueOrThrow({ where: { id: user.id } })).roleId, user.roleId);
+  } finally {
+    await data.cleanup();
+  }
+});
+
+test("revalidation ends access and clears the role when the provider refuses the refresh token", async () => {
+  const data = new TestData();
+  const email = `${uniqueName("sso")}@example.test`;
+  try {
+    await data.user();
+    await withRolesFromProvider(["admin"], async () => {
+      const signedIn = await signInAs(email);
+      assert.equal(signedIn.authorize.searchParams.get("scope"), "openid email profile app_roles offline_access");
+      const user = await prisma.user.findUniqueOrThrow({ where: { email }, include: { role: true } });
+      data.ownUser(user.id);
+      assert.equal(user.role?.templateKey, "admin");
+      const link = await prisma.ssoSession.findFirstOrThrow({ where: { session: { userId: user.id } } });
+      assert.ok(link.refreshToken);
+      assert.equal(await revalidateSsoSessions(new Date()), 0);
+
+      refreshGrants.clear();
+      assert.equal(await revalidateSsoSessions(afterInterval()), 1);
+      assert.equal(await prisma.session.count({ where: { userId: user.id } }), 0);
+      assert.equal((await prisma.user.findUniqueOrThrow({ where: { id: user.id } })).roleId, null);
+      const audit = await prisma.gatewayAuditLog.findFirstOrThrow({
+        where: { objectId: user.id, action: "user.role_synced", afterJson: JSON.stringify({ roleId: null }) },
+      });
+      assert.equal(audit.actor, "sso");
+    });
+  } finally {
+    await data.cleanup();
+  }
+});
+
+test("revalidation ends access when the provider sends no known app role anymore", async () => {
+  const data = new TestData();
+  const email = `${uniqueName("sso")}@example.test`;
+  try {
+    await data.user();
+    await withRolesFromProvider(["operator"], async () => {
+      await signInAs(email);
+      const user = await prisma.user.findUniqueOrThrow({ where: { email } });
+      data.ownUser(user.id);
+      provider.appRoles = [];
+      assert.equal(await revalidateSsoSessions(afterInterval()), 1);
+      assert.equal(await prisma.session.count({ where: { userId: user.id } }), 0);
+      assert.equal((await prisma.user.findUniqueOrThrow({ where: { id: user.id } })).roleId, null);
+    });
+  } finally {
+    await data.cleanup();
+  }
+});
+
+test("a demotion found at revalidation takes effect on the next request", async () => {
+  const data = new TestData();
+  const email = `${uniqueName("sso")}@example.test`;
+  const jar = await cookies();
+  try {
+    await data.user();
+    await withRolesFromProvider(["admin"], async () => {
+      const signedIn = await signInAs(email);
+      data.ownUser((await prisma.user.findUniqueOrThrow({ where: { email } })).id);
+      jar.set(SESSION_COOKIE, signedIn.res.cookies.get(SESSION_COOKIE)?.value ?? "");
+      const before = await getSession();
+      assert.ok(!before.error && before.permissions.includes("settings:manage"));
+
+      provider.appRoles = ["viewer"];
+      assert.equal(await revalidateSsoSessions(afterInterval()), 0);
+      const after = await getSession();
+      assert.ok(!after.error);
+      assert.equal(after.permissions.includes("settings:manage"), false);
+      assert.equal(after.permissions.includes("settings:read"), true);
+      assert.equal(after.role?.templateKey, "viewer");
+    });
+  } finally {
+    jar.delete(SESSION_COOKIE);
+    await data.cleanup();
+  }
+});
+
+test("an unreachable provider keeps the session and checks again later", async () => {
+  const data = new TestData();
+  const email = `${uniqueName("sso")}@example.test`;
+  try {
+    await data.user();
+    await withRolesFromProvider(["admin"], async () => {
+      await signInAs(email);
+      const user = await prisma.user.findUniqueOrThrow({ where: { email } });
+      data.ownUser(user.id);
+      provider.refreshAnswer = "unavailable";
+      const at = afterInterval();
+      const lines = await capturedWarnings(() => revalidateSsoSessions(at));
+      assert.equal(lines.result, 0);
+      assert.equal(await prisma.session.count({ where: { userId: user.id } }), 1);
+      const link = await prisma.ssoSession.findFirstOrThrow({ where: { session: { userId: user.id } } });
+      assert.equal(link.checkedAt.getTime(), at.getTime());
+      assert.ok(lines.events.includes("sso.revalidate_failed"));
+    });
+  } finally {
+    await data.cleanup();
+  }
+});
+
+async function capturedWarnings<T>(run: () => Promise<T>): Promise<{ result: T; events: string[] }> {
+  const events: string[] = [];
+  const original = { error: console.error, log: console.log, warn: console.warn };
+  const keep = (line: unknown) => {
+    const event = (JSON.parse(String(line)) as { event?: string }).event;
+    if (event) events.push(event);
+  };
+  console.error = keep;
+  console.log = keep;
+  console.warn = keep;
+  try {
+    return { result: await run(), events };
+  } finally {
+    Object.assign(console, original);
+  }
+}

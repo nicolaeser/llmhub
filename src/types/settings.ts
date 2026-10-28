@@ -35,6 +35,7 @@ export type SignInSettingsView = {
   firstSetup: boolean;
   appRolesCheck: AppRolesCheck | null;
   callbackUrl: string;
+  backchannelLogoutUrl: string;
   scimUrl: string;
   secretSet: boolean;
   roles: RoleOption[];
