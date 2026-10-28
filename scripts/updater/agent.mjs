@@ -7,7 +7,7 @@ import { COMPOSE_PROJECT_LABEL, composeImageLabel, containerName, createConfigFo
 import { DockerError } from "./docker.mjs";
 import { parseJson, readText, send } from "./http.mjs";
 import { digestsFor, imageRefOf, isPinned, normalizeRepository, parseImageRef, updateAvailable } from "./image-ref.mjs";
-import { errorMessage, log } from "./log.mjs";
+import { errorMessage, log, PREDECESSOR_LOG_LINES, replayLogText } from "./log.mjs";
 import { isBackup, recoverLeftovers, recreateContainer, removeContainerNamed, replaceStoppedContainers } from "./recreate.mjs";
 import { signBody, UPDATER_HEADER, verifySignature } from "./signature.mjs";
 
@@ -183,7 +183,7 @@ export function createAgent({ docker, key, appUrl, projectOverride = null, prede
     return sync();
   }
 
-  function result(action, outcome, detail, commandId) {
+  async function result(action, outcome, detail, commandId) {
     status.lastResult = {
       action,
       outcome,
@@ -193,7 +193,7 @@ export function createAgent({ docker, key, appUrl, projectOverride = null, prede
     };
     const level = outcome === "failed" || outcome === "rolled_back" ? "error" : "info";
     log(level, "updater.result", { action, outcome, ...(detail ? { detail } : {}) });
-    void persist();
+    await persist();
   }
 
   async function ensureProject() {
@@ -326,11 +326,11 @@ export function createAgent({ docker, key, appUrl, projectOverride = null, prede
   async function apply({ commandId, target: checked }) {
     const target = checked ?? (await check());
     if (!target) {
-      result("update", "failed", status.issue, commandId);
+      await result("update", "failed", status.issue, commandId);
       return;
     }
     if (status.pinned) {
-      result("update", "pinned", null, commandId);
+      await result("update", "pinned", null, commandId);
       return;
     }
     const imageRef = imageRefOf(target.ref);
@@ -352,7 +352,7 @@ export function createAgent({ docker, key, appUrl, projectOverride = null, prede
       status.currentDigest = freshDigests[0] ?? status.currentDigest;
       status.available = updateAvailable(status.latestDigest, freshDigests);
       status.failedDigest = null;
-      result("update", stale.length ? "updated" : "up_to_date", null, commandId);
+      await result("update", stale.length ? "updated" : "up_to_date", null, commandId);
       await setPhase("idle");
       await maybeSelfUpdate(target.ref, image).catch((err) =>
         log("error", "updater.self_update_failed", { err: errorMessage(err) }),
@@ -360,7 +360,7 @@ export function createAgent({ docker, key, appUrl, projectOverride = null, prede
     } catch (err) {
       const rolledBack = err?.rolledBack === true;
       if (pulled) status.failedDigest = status.latestDigest;
-      result("update", rolledBack ? "rolled_back" : "failed", errorMessage(err), commandId);
+      await result("update", rolledBack ? "rolled_back" : "failed", errorMessage(err), commandId);
       await setPhase("failed");
     }
   }
@@ -384,10 +384,10 @@ export function createAgent({ docker, key, appUrl, projectOverride = null, prede
   async function manualCheck(commandId) {
     const target = await check();
     if (!target) {
-      result("check", "failed", status.issue, commandId);
+      await result("check", "failed", status.issue, commandId);
       return;
     }
-    result("check", status.pinned ? "pinned" : status.available ? "available" : "up_to_date", null, commandId);
+    await result("check", status.pinned ? "pinned" : status.available ? "available" : "up_to_date", null, commandId);
   }
 
   function run(task) {
@@ -458,6 +458,11 @@ export function createAgent({ docker, key, appUrl, projectOverride = null, prede
         restoreFrom(inherited);
         await persist();
       }
+      const inheritedLogs = await docker.logs(previous.Id, PREDECESSOR_LOG_LINES).catch((err) => {
+        log("warn", "updater.predecessor_logs_unavailable", { err: errorMessage(err) });
+        return "";
+      });
+      replayLogText(inheritedLogs);
       await docker.stop(previous.Id, 10).catch((err) => log("warn", "updater.predecessor_not_stopped", { err: errorMessage(err) }));
       await docker.remove(previous.Id);
       log("info", "updater.self_updated", { replaced: shortId(previous.Id) });
