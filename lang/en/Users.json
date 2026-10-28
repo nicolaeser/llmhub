@@ -37,6 +37,7 @@
     "deleted": "User deleted",
     "blocked": "{blocked, select, true {User blocked} other {User unblocked}}",
     "sessionsRevoked": "All sessions signed out",
+    "credentialsRestored": "API keys enabled again",
     "roleChanged": "Role and access changed",
     "twoFactorReset": "Two-factor authentication reset",
     "contentLogging": "{enabled, select, true {Content logging turned on} other {Content logging turned off}}"
@@ -55,6 +56,8 @@
     "hint": "Change this role at {provider} in the app's access list. LLM Hub applies it at the next sign-in."
   },
   "revokeSessions": "Sign out all sessions",
+  "restoreCredentials": "Enable API keys again",
+  "credentialsSuspended": "API keys disabled",
   "resetTwoFactor": "Reset two-factor authentication",
   "resetTwoFactorHint": "{username} must set up a new authenticator at the next sign-in. All sessions and passkeys of this user are removed. Confirm with your own code.",
   "requireChange": "Require a new password at the next sign-in",

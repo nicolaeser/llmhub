@@ -235,6 +235,7 @@ test("the viewer template is refused every console change it does not hold a per
     ["(app)/users/_action.ts", "createUserAction"],
     ["(app)/users/_action.ts", "createRoleAction"],
     ["(app)/users/_action.ts", "deleteUserAction"],
+    ["(app)/users/_action.ts", "restoreUserCredentialsAction"],
     ["(app)/providers/_action.ts", "createProviderAction"],
     ["(app)/models/_action.ts", "createModelGroupAction"],
     ["(app)/keys/_action.ts", "createKeyAction"],

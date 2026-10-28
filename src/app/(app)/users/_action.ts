@@ -21,6 +21,7 @@ import {
   deleteUser,
   loadUsersConsole,
   resetUserTwoFactor,
+  restoreUserCredentials,
   revokeUserSessions,
   setUserBlocked,
   setUserContentLogging,
@@ -45,6 +46,12 @@ export async function createUserAction(input: unknown) {
 export async function setUserBlockedAction(id: string, blocked: boolean) {
   return runAction(() =>
     changeUsers(PERMISSIONS.USERS_MANAGE, (session) => setUserBlocked(session, id, blocked)),
+  );
+}
+
+export async function restoreUserCredentialsAction(id: string) {
+  return runAction(() =>
+    changeUsers(PERMISSIONS.USERS_MANAGE, (session) => restoreUserCredentials(session, id)),
   );
 }
 

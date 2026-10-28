@@ -2,6 +2,12 @@
   "title": "Konto und Sicherheit",
   "subtitle": "Deine Anmeldemethoden, aktiven Sitzungen und Sicherheitsaktivitäten.",
   "owner": "Inhaber",
+  "credentials": {
+    "title": "Deine API-Keys sind deaktiviert",
+    "body": "Der Zugriff wurde am {date} beim Identitätsanbieter entfernt, deshalb funktionieren deine API-Keys, Management-Keys und der Playground-Zugang nicht mehr. {canRestore, select, true {Du hast dich erneut mit einer Rolle angemeldet und kannst sie wieder aktivieren.} other {Melde dich erneut über den Identitätsanbieter an, sobald du eine Rolle hast, oder wende dich an einen Administrator.}}",
+    "restore": "API-Keys wieder aktivieren",
+    "restored": "API-Keys wieder aktiviert"
+  },
   "preferences": {
     "title": "Anzeige",
     "description": "Diese Einstellungen gelten nur für diesen Browser.",
@@ -115,11 +121,14 @@
       "passwordReset": "Passwort zurückgesetzt",
       "passwordChangeRequired": "Neues Passwort erforderlich",
       "sessionsRevoked": "Sitzungen abgemeldet",
+      "sessionsUnverified": "Abgemeldet, weil der Zugriff 24 Stunden lang nicht beim Identitätsanbieter bestätigt werden konnte",
       "passkeyAdded": "Passkey hinzugefügt",
       "passkeyRemoved": "Passkey entfernt",
       "roleChanged": "Rolle geändert",
       "accountBlocked": "Konto gesperrt",
       "accountUnblocked": "Konto entsperrt",
+      "credentialsSuspended": "API-Keys deaktiviert, weil der Zugriff beim Identitätsanbieter entfernt wurde",
+      "credentialsRestored": "API-Keys wieder aktiviert",
       "managementKeyCreated": "Management-API-Key erstellt",
       "managementKeyRevoked": "Management-API-Key widerrufen"
     }

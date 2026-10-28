@@ -34,11 +34,11 @@ export async function resolveKeyTenancy(
   const owner = row.userId
     ? await prisma.user.findUnique({
         where: { id: row.userId },
-        select: { id: true, blocked: true, orgId: true },
+        select: { id: true, blocked: true, credentialsSuspendedAt: true, orgId: true },
       })
     : null;
   return {
     tenancy: { ...EMPTY, userId: owner?.id ?? "", orgId: owner?.orgId ?? "" },
-    active: Boolean(owner && !owner.blocked),
+    active: Boolean(owner && !owner.blocked && !owner.credentialsSuspendedAt),
   };
 }
