@@ -145,7 +145,12 @@ test("an emergency-access account signs in locally with a second factor, audited
       const posted = await runDeferred(signedIn.deferred);
       assert.equal(posted.length, 1);
       assert.equal(posted[0].url, WEBHOOK_URL);
-      assert.match(posted[0].body, new RegExp(person.user.email.replace(/[.]/g, "\\.")));
+      const alert = JSON.parse(posted[0].body) as { event: string; message: string };
+      assert.equal(alert.event, "emergency_sign_in");
+      assert.equal(
+        alert.message,
+        `${person.user.username} (${person.user.email}) signed in locally with emergency access instead of the identity provider`,
+      );
       const mail = capturedMail.find((message) => message.data.includes(person.user.email));
       assert.ok(mail, "no notification mail");
       assert.ok(mail.recipients.includes(manager.user.email));
