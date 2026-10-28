@@ -58,7 +58,14 @@ test("SSO and SCIM provisioning cannot create the first user", async () => {
   recordedPrisma.reset(emptyUserTable);
   await assert.rejects(
     signInWithSso(
-      { issuer: "https://id.example.test", subject: "s1", email: "first@example.test", groups: [], externalIds: ["s1"] },
+      {
+        issuer: "https://id.example.test",
+        subject: "s1",
+        email: "first@example.test",
+        groups: [],
+        appRoles: null,
+        externalIds: ["s1"],
+      },
       normalizeOidc({}),
       null,
     ),

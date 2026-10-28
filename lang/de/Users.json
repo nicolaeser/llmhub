@@ -50,6 +50,10 @@
   "changeRole": "Rolle und Zugriff ändern",
   "changeRoleTitle": "Rolle und Zugriff für {username}",
   "changeRoleHint": "Du kannst nur Rollen zuweisen, deren Berechtigungen du selbst hast.",
+  "managed": {
+    "label": "Verwaltet von {provider}",
+    "hint": "Ändere diese Rolle bei {provider} in der Zugriffsliste der App. LLM Hub übernimmt sie bei der nächsten Anmeldung."
+  },
   "revokeSessions": "Alle Sitzungen abmelden",
   "resetTwoFactor": "Zwei-Faktor-Authentifizierung zurücksetzen",
   "resetTwoFactorHint": "{username} muss bei der nächsten Anmeldung einen neuen Authenticator einrichten. Alle Sitzungen und Passkeys dieses Benutzers werden entfernt. Bestätige mit deinem eigenen Code.",

@@ -16,7 +16,11 @@ test("normalizeOidc fills defaults and drops the retired redirect override", () 
     default_org_id: "",
     allowed_domains: [],
     sso_only: false,
+    display_name: "",
+    app_roles: false,
   });
+  assert.equal(normalizeOidc({ app_roles: true, display_name: "  Example ID  " }).display_name, "Example ID");
+  assert.equal(normalizeOidc({ app_roles: "yes" }).app_roles, false);
   const legacy = normalizeOidc({ enabled: true, issuer: "https://idp", redirect_url: "https://hub/sso/callback" });
   assert.equal(legacy.enabled, true);
   assert.equal(normalizeOidc({ issuer: " https://idp/realms/hub/.well-known/openid-configuration " }).issuer, "https://idp/realms/hub");

@@ -1,6 +1,7 @@
 import "server-only";
 import prisma from "@/lib/db/prisma";
 import { SESSION_IDLE_TTL_MS } from "@/lib/auth/cookie";
+import { appRoleManagedUserIds, roleProvider } from "@/lib/auth/directory-roles";
 import { AuthError, isPrismaCode, parseAuthInput } from "@/lib/auth/errors";
 import { assertCanGrant, assertCanManage, canManage, grantActor } from "@/lib/auth/grants";
 import {
@@ -20,6 +21,7 @@ import { securityEvent, userActor } from "@/lib/auth/security-events";
 import { clearSecondFactorFailures } from "@/lib/auth/throttle";
 import { removeUserWithInternalKeys } from "@/lib/auth/user-removal";
 import { writeAudit } from "@/lib/audit";
+import { getEnterprise, normalizeOidc } from "@/lib/settings/enterprise";
 import { money } from "@/lib/utils/money";
 import {
   idSchema,
@@ -94,11 +96,16 @@ export function usersConsoleAccess(session: AuthenticatedSession) {
   };
 }
 
+async function roleManagement(userIds?: readonly string[]) {
+  const oidc = normalizeOidc((await getEnterprise()).oidc);
+  return { provider: roleProvider(oidc), managed: await appRoleManagedUserIds(oidc, userIds) };
+}
+
 export async function usersConsole(session: AuthenticatedSession): Promise<UsersConsolePayload> {
   const actor = grantActor(session);
   const access = usersConsoleAccess(session);
   const now = new Date();
-  const [users, roles, orgs] = await Promise.all([
+  const [users, roles, orgs, management] = await Promise.all([
     prisma.user.findMany({
       orderBy: { email: "asc" },
       include: {
@@ -120,6 +127,7 @@ export async function usersConsole(session: AuthenticatedSession): Promise<Users
     access.canManage
       ? prisma.organization.findMany({ orderBy: { alias: "asc" }, select: { id: true, alias: true } })
       : [],
+    roleManagement(),
   ]);
   return {
     users: users.map(
@@ -130,6 +138,7 @@ export async function usersConsole(session: AuthenticatedSession): Promise<Users
         roleId: user.roleId,
         roleName: user.role?.name ?? null,
         roleTemplateKey: isRoleTemplateKey(user.role?.templateKey) ? user.role.templateKey : null,
+        managedBy: !user.isOwner && management.managed.has(user.id) ? management.provider : null,
         isOwner: user.isOwner,
         blocked: user.blocked,
         orgId: user.orgId,
@@ -307,6 +316,9 @@ export async function assignUserAccess(session: AuthenticatedSession, raw: unkno
   const target = await loadTarget(input.userId);
   assertManageable(session, target);
   const role = await assignableRole(grantActor(session), input.roleId);
+  if (role.id !== target.roleId && (await roleManagement([target.id])).managed.has(target.id)) {
+    throw new AuthError("ROLE_MANAGED");
+  }
   const orgId = await resolveCompany(input.orgId);
   const meta = await requestMeta();
   await prisma.$transaction(async (tx) => {

@@ -4,12 +4,15 @@ import prisma from "@/lib/db/prisma";
 import { parseAuthInput } from "@/lib/auth/errors";
 import { assertCanGrant, canGrant, grantActor } from "@/lib/auth/grants";
 import { requirePlatformPermission } from "@/lib/auth/guards";
+import { readAppRolesCheck } from "@/lib/auth/app-roles-check";
 import { JWT_ALGORITHMS } from "@/lib/auth/jwks";
 import {
+  appRolesOffered,
   fetchOidcDiscovery,
   oidcCallbackUrl,
   OidcDiscoveryError,
   oidcFailureFields,
+  oidcIsReady,
   resetOidcCache,
   tokenAuthMethod,
 } from "@/lib/auth/oidc";
@@ -28,21 +31,24 @@ import { errorFields } from "@/lib/logging/format";
 import { logger } from "@/lib/logging/logger";
 import { getEnterprise, normalizeOidc, patchEnterprise } from "@/lib/settings/enterprise";
 import { stepUpSchema } from "@/schemas/auth";
-import { issuerCheckSchema, oidcSettingsSchema } from "@/schemas/settings";
+import { appRolesModeSchema, issuerCheckSchema, signInSaveSchema } from "@/schemas/settings";
 import type { AuthenticatedSession, OidcSettings } from "@/types/auth";
 import type { IssuerCheck, SignInSettingsView } from "@/types/settings";
 
 async function view(oidc: OidcSettings, session: AuthenticatedSession): Promise<SignInSettingsView> {
   const actor = grantActor(session);
   const canManage = hasPerm(session.permissions, PERMISSIONS.SETTINGS_MANAGE);
-  const [roles, orgs, scimToken, scimGroups] = await Promise.all([
+  const [roles, orgs, scimToken, scimGroups, appRolesCheck] = await Promise.all([
     roleOptions(actor),
     prisma.organization.findMany({ orderBy: { alias: "asc" }, select: { id: true, alias: true } }),
     scimTokenSet(),
     prisma.scimGroup.count(),
+    oidc.issuer ? readAppRolesCheck(session.user.id, oidc.issuer) : null,
   ]);
   return {
     oidc,
+    firstSetup: !oidc.issuer,
+    appRolesCheck,
     callbackUrl: oidcCallbackUrl(),
     scimUrl: `${env.NEXT_PUBLIC_APP_URL.replace(/\/+$/, "")}/scim/v2`,
     secretSet: Boolean(env.OIDC_CLIENT_SECRET),
@@ -74,14 +80,34 @@ export async function loadSignInSettings() {
   return view(normalizeOidc((await getEnterprise()).oidc), session);
 }
 
+async function offersAppRoles(issuer: string): Promise<boolean> {
+  try {
+    return appRolesOffered(await fetchOidcDiscovery(issuer));
+  } catch (err) {
+    logger.warn("settings.oidc_check_failed", { ...errorFields(err), ...oidcFailureFields(err) });
+    return false;
+  }
+}
+
+async function savedAppRolesMode(
+  previous: OidcSettings,
+  input: { issuer: string; role_fields_touched: boolean },
+): Promise<boolean> {
+  if (previous.app_roles) return true;
+  if (previous.issuer || !input.issuer || input.role_fields_touched) return false;
+  if (await prisma.userIdentity.count({ where: { issuer: { in: [input.issuer, `${input.issuer}/`] } } })) return false;
+  return offersAppRoles(input.issuer);
+}
+
 export async function saveSignInSettings(raw: unknown) {
   const session = await requirePlatformPermission(PERMISSIONS.SETTINGS_MANAGE);
-  const parsed = oidcSettingsSchema.safeParse(raw);
+  const parsed = signInSaveSchema.safeParse(raw);
   if (!parsed.success) {
     const badUrl = parsed.error.issues.some((issue) => issue.path[0] === "issuer");
     throw new Error(badUrl ? "INVALID_URL" : "VALIDATION");
   }
-  const oidc = normalizeOidc(parsed.data);
+  const previous = normalizeOidc((await getEnterprise()).oidc);
+  const oidc = normalizeOidc({ ...parsed.data, app_roles: await savedAppRolesMode(previous, parsed.data) });
   await assertDirectoryTargets(oidc, session);
   const enterprise = await patchEnterprise({ oidc });
   resetOidcCache();
@@ -91,6 +117,31 @@ export async function saveSignInSettings(raw: unknown) {
     objectType: "enterprise",
     objectId: "enterprise",
     after: oidc,
+  });
+  return view(normalizeOidc(enterprise.oidc), session);
+}
+
+export async function setAppRolesMode(raw: unknown) {
+  const session = await requirePlatformPermission(PERMISSIONS.SETTINGS_MANAGE);
+  const parsed = appRolesModeSchema.safeParse(raw);
+  if (!parsed.success) throw new Error("VALIDATION");
+  const previous = normalizeOidc((await getEnterprise()).oidc);
+  const on = parsed.data.on;
+  if (on && !previous.app_roles) {
+    if (!oidcIsReady(previous)) throw new Error("SSO_NOT_READY");
+    resetOidcCache();
+    if (!(await offersAppRoles(previous.issuer))) throw new Error("APP_ROLES_UNAVAILABLE");
+    const check = await readAppRolesCheck(session.user.id, previous.issuer);
+    if (check?.result !== "admin") throw new Error("APP_ROLES_CHECK_REQUIRED");
+  }
+  const enterprise = await patchEnterprise({ oidc: { ...previous, app_roles: on } });
+  await writeAudit({
+    actor: session.user.id,
+    action: "settings.app_roles_mode",
+    objectType: "enterprise",
+    objectId: "enterprise",
+    before: { app_roles: previous.app_roles },
+    after: { app_roles: on },
   });
   return view(normalizeOidc(enterprise.oidc), session);
 }
@@ -110,6 +161,7 @@ export async function checkOidcIssuer(raw: unknown): Promise<IssuerCheck> {
       tokenAuth: tokenAuthMethod(disc.token_endpoint_auth_methods_supported),
       algorithms,
       supported: !algorithms.length || algorithms.some((alg) => JWT_ALGORITHMS.includes(alg)),
+      appRoles: appRolesOffered(disc),
     };
   } catch (err) {
     logger.warn("settings.oidc_check_failed", { ...errorFields(err), ...oidcFailureFields(err) });

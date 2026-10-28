@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  appRolesOffered,
   buildAuthorizationUrl,
   emailFromOidcClaims,
   exchangeOidcCode,
@@ -20,6 +21,7 @@ import {
 } from "@/lib/auth/oidc";
 import { verifyJwt } from "@/lib/auth/jwks";
 import {
+  appRoleTemplates,
   emailDomainAllowed,
   entraV2Issuer,
   mappedRoleId,
@@ -89,6 +91,7 @@ test("sign and verify OIDC state, reject mismatches, tampering, and expiry", () 
     nonce: "n".repeat(43),
     verifier: "v".repeat(43),
     returnPath: "/usage",
+    purpose: "sign_in",
   });
   assert.equal(verifyOidcState({ cookie: signed.cookie, state: "x".repeat(43), nowSeconds: 1_010, secret }), null);
   assert.equal(verifyOidcState({ cookie: signed.cookie, state, nowSeconds: 1_000 + 601, secret }), null);
@@ -96,6 +99,26 @@ test("sign and verify OIDC state, reject mismatches, tampering, and expiry", () 
   const parts = signed.cookie.split(".");
   parts[2] = "w".repeat(43);
   assert.equal(verifyOidcState({ cookie: parts.join("."), state, nowSeconds: 1_010, secret }), null);
+});
+
+test("the signed state carries its purpose, and a swapped purpose never verifies", () => {
+  const secret = "test-secret-aaaaaaaaaaaaaaaa";
+  const parts = { state: "s".repeat(43), nonce: "n".repeat(43), verifier: "v".repeat(43), nowSeconds: 1_000, secret };
+  const check = signOidcState({ ...parts, purpose: "role_check" });
+  const signIn = signOidcState(parts);
+  const at = { state: parts.state, nowSeconds: 1_010, secret };
+  assert.equal(verifyOidcState({ cookie: check.cookie, ...at })?.purpose, "role_check");
+  assert.equal(verifyOidcState({ cookie: signIn.cookie, ...at })?.purpose, "sign_in");
+  const swapped = (cookie: string, purpose: string) => {
+    const fields = cookie.split(".");
+    fields[5] = purpose;
+    return fields.join(".");
+  };
+  assert.equal(verifyOidcState({ cookie: swapped(signIn.cookie, "role_check"), ...at }), null);
+  assert.equal(verifyOidcState({ cookie: swapped(check.cookie, "sign_in"), ...at }), null);
+  assert.equal(verifyOidcState({ cookie: swapped(signIn.cookie, "admin"), ...at }), null);
+  const withoutPurpose = signIn.cookie.split(".").filter((_, index) => index !== 5).join(".");
+  assert.equal(verifyOidcState({ cookie: withoutPurpose, ...at }), null);
 });
 
 test("OIDC state values are random and distinct by default", () => {
@@ -122,6 +145,7 @@ test("buildAuthorizationUrl and token body match the OIDC code flow with PKCE", 
     token_endpoint: "https://idp.example.com/token",
     jwks_uri: "https://idp.example.com/jwks",
     userinfo_endpoint: "",
+    scopes_supported: [],
     token_endpoint_auth_methods_supported: [],
     id_token_signing_alg_values_supported: [],
   };
@@ -396,6 +420,7 @@ test("claims map to a stable identity with groups and external ids", () => {
     subject: "pairwise-sub",
     email: "ada@example.com",
     groups: ["g1", "g2", "3"],
+    appRoles: null,
     externalIds: ["pairwise-sub", "object-id"],
   });
   assert.throws(() => identityFromClaims({ iss: "x", email: "a@b.c", email_verified: true }, ""), /sub/);
@@ -403,6 +428,57 @@ test("claims map to a stable identity with groups and external ids", () => {
   assert.deepEqual(claimValues({ "https://llmhub/roles": "ops" }, "https://llmhub/roles"), ["ops"]);
   assert.deepEqual(claimValues({ groups: "solo" }, ""), []);
   assert.equal(emailFromOidcClaims({ email: "a@ex.com", xms_edov: "true" }), "a@ex.com");
+});
+
+test("the app_roles scope is requested only when discovery offers it", async () => {
+  const resolved = resolveOidc(
+    { enabled: true, issuer: "https://idp.example.com", client_id: "hub", scopes: "email profile" },
+    { clientSecret: "s3cret", appUrl: "https://hub.example.com" },
+  );
+  const disc = (scopes_supported: string[]): OidcDiscovery => ({
+    ...discoveryFor("https://idp.example.com"),
+    userinfo_endpoint: "",
+    scopes_supported,
+    token_endpoint_auth_methods_supported: [],
+    id_token_signing_alg_values_supported: [],
+  });
+  const scopeFor = (offered: OidcDiscovery, config = resolved) =>
+    new URL(buildAuthorizationUrl(offered, config, { state: "s", nonce: "n", codeChallenge: "c" })).searchParams.get("scope");
+  assert.equal(scopeFor(disc([])), "openid email profile");
+  assert.equal(scopeFor(disc(["openid", "email", "profile", "groups"])), "openid email profile");
+  assert.equal(scopeFor(disc(["openid", "email", "app_roles"])), "openid email profile app_roles");
+  const typed = { ...resolved, scopes: "openid app_roles email" };
+  assert.equal(scopeFor(disc([]), typed), "openid email");
+  assert.equal(scopeFor(disc(["openid", "email"]), typed), "openid email");
+  assert.equal(scopeFor(disc(["app_roles"]), typed), "openid email app_roles");
+  assert.equal(appRolesOffered(disc(["App_Roles"])), false);
+
+  resetOidcCache();
+  try {
+    const fetched = await fetchOidcDiscovery(
+      "https://idp.example.com",
+      serving({ ...discoveryFor("https://idp.example.com"), scopes_supported: ["openid", "app_roles", 7] }),
+    );
+    assert.deepEqual(fetched.scopes_supported, ["openid", "app_roles"]);
+    assert.equal(appRolesOffered(fetched), true);
+  } finally {
+    resetOidcCache();
+  }
+});
+
+test("app roles come only from an offered app_roles list and rank by role template", () => {
+  const claims = { iss: "https://id.example.com", sub: "s1", groups: ["admin"], app_roles: ["Viewer", "operator", "viewer"] };
+  const offered = identityFromClaims(claims, "groups", true);
+  assert.deepEqual(offered.appRoles, ["viewer", "operator"]);
+  assert.deepEqual(offered.groups, ["admin"]);
+  assert.deepEqual(identityFromClaims({ ...claims, app_roles: [] }, "groups", true).appRoles, []);
+  assert.equal(identityFromClaims(claims, "groups", false).appRoles, null);
+  assert.equal(identityFromClaims(claims, "groups").appRoles, null);
+  assert.equal(identityFromClaims({ ...claims, app_roles: "admin" }, "groups", true).appRoles, null);
+  assert.equal(identityFromClaims({ iss: claims.iss, sub: claims.sub }, "groups", true).appRoles, null);
+  assert.deepEqual(appRoleTemplates(["viewer", "auditor", "Finance", "admin"]), ["admin", "finance", "viewer"]);
+  assert.deepEqual(appRoleTemplates(["operator", "viewer"]), ["operator", "viewer"]);
+  assert.deepEqual(appRoleTemplates(["auditor"]), []);
 });
 
 test("group rules pick the first matching role and domains are checked exactly", () => {

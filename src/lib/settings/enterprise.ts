@@ -378,6 +378,8 @@ export function normalizeOidc(raw: unknown): OidcSettings {
       .filter(Boolean)
       .slice(0, MAX_ALLOWED_DOMAINS),
     sso_only: asBool(rec.sso_only, false),
+    display_name: asString(rec.display_name).trim().slice(0, 60),
+    app_roles: asBool(rec.app_roles, false),
   };
 }
 

@@ -47,6 +47,7 @@ model UserIdentity {
   userId      String
   issuer      String
   subject     String
+  appRoles    Boolean   @default(false)
   createdAt   DateTime  @default(now())
   lastLoginAt DateTime?
   user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)

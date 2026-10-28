@@ -37,11 +37,13 @@ function RoleSelect({
   value,
   onChange,
   isDisabled,
+  description,
 }: {
   roles: RoleOption[];
   value: string;
   onChange: (id: string) => void;
   isDisabled: boolean;
+  description?: string;
 }) {
   const t = useTranslations("Users");
   const roleName = useRoleName();
@@ -54,6 +56,7 @@ function RoleSelect({
       onChange={onChange}
       disabledKeys={offered.filter((role) => !role.assignable).map((role) => role.id)}
       isDisabled={isDisabled}
+      description={description}
     />
   );
 }
@@ -197,9 +200,15 @@ export function ChangeAccessDialog({
       isSubmitDisabled={!roleId || !changed}
       onSubmit={save}
     >
-      <RoleSelect roles={roles} value={roleId} onChange={setRoleId} isDisabled={pending} />
+      <RoleSelect
+        roles={roles}
+        value={roleId}
+        onChange={setRoleId}
+        isDisabled={pending || Boolean(target?.managedBy)}
+        description={target?.managedBy ? t("managed.hint", { provider: target.managedBy }) : undefined}
+      />
       <AccessSelect orgs={orgs} value={orgId} onChange={setOrgId} isDisabled={pending} />
-      <p className="text-xs text-muted">{t("changeRoleHint")}</p>
+      {target?.managedBy ? null : <p className="text-xs text-muted">{t("changeRoleHint")}</p>}
     </FormDialog>
   );
 }
