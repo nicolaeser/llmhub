@@ -1,6 +1,7 @@
 import "server-only";
 import prisma from "@/lib/db/prisma";
 import { SESSION_IDLE_TTL_MS } from "@/lib/auth/cookie";
+import { restoreCredentials } from "@/lib/auth/credentials";
 import { appRoleManagedUserIds, roleProvider } from "@/lib/auth/directory-roles";
 import { AuthError, isPrismaCode, parseAuthInput } from "@/lib/auth/errors";
 import { assertCanGrant, assertCanManage, canManage, grantActor } from "@/lib/auth/grants";
@@ -141,6 +142,7 @@ export async function usersConsole(session: AuthenticatedSession): Promise<Users
         managedBy: !user.isOwner && management.managed.has(user.id) ? management.provider : null,
         isOwner: user.isOwner,
         blocked: user.blocked,
+        credentialsSuspended: Boolean(user.credentialsSuspendedAt),
         orgId: user.orgId,
         orgAlias: user.org?.alias ?? "",
         budget: access.seesSpend
@@ -237,6 +239,12 @@ export async function setUserBlocked(
     objectId: target.id,
     after: { blocked },
   });
+}
+
+export async function restoreUserCredentials(session: AuthenticatedSession, userId: unknown) {
+  const target = await loadTarget(userId);
+  assertManageable(session, target);
+  await restoreCredentials(target.id, session.user.id, (await requestMeta()).ipAddress);
 }
 
 export async function setUserContentLogging(

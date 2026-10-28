@@ -50,6 +50,7 @@ import {
   removeBoostAction,
   resetUserTwoFactorAction,
   revokeUserSessionsAction,
+  restoreUserCredentialsAction,
   setUserBlockedAction,
   setBudgetAction,
   setUserContentLoggingAction,
@@ -247,6 +248,11 @@ export default function UsersTab() {
         <Chip size="sm" variant="soft" color={user.blocked ? "danger" : "success"}>
           {tCommon("blockedState", { blocked: user.blocked ? "true" : "false" })}
         </Chip>
+        {user.credentialsSuspended ? (
+          <Chip size="sm" variant="soft" color="warning">
+            {t("credentialsSuspended")}
+          </Chip>
+        ) : null}
         {user.mustChangePassword ? (
           <Chip size="sm" variant="soft" color="warning">
             {t("mustChangePassword")}
@@ -271,6 +277,7 @@ export default function UsersTab() {
     if (action === "content") return t("contentAction", { enabled: user.logContent ? "true" : "false" });
     if (action === "sessions") return t("revokeSessions");
     if (action === "reset") return t("resetTwoFactor");
+    if (action === "credentials") return t("restoreCredentials");
     if (action === "block") return t("blockAction", { blocked: user.blocked ? "true" : "false" });
     return tCommon("delete");
   }
@@ -313,6 +320,9 @@ export default function UsersTab() {
                   () => setUserBlockedAction(user.id, !user.blocked),
                   t("toasts.blocked", { blocked: !user.blocked ? "true" : "false" }),
                 );
+              }
+              if (key === "credentials") {
+                runRowAction(user.id, () => restoreUserCredentialsAction(user.id), t("toasts.credentialsRestored"));
               }
               if (key === "content") {
                 runRowAction(

@@ -37,6 +37,7 @@
     "deleted": "Benutzer gelöscht",
     "blocked": "{blocked, select, true {Benutzer gesperrt} other {Benutzer entsperrt}}",
     "sessionsRevoked": "Alle Sitzungen abgemeldet",
+    "credentialsRestored": "API-Keys wieder aktiviert",
     "roleChanged": "Rolle und Zugriff geändert",
     "twoFactorReset": "Zwei-Faktor-Authentifizierung zurückgesetzt",
     "contentLogging": "{enabled, select, true {Inhaltsprotokollierung eingeschaltet} other {Inhaltsprotokollierung ausgeschaltet}}"
@@ -55,6 +56,8 @@
     "hint": "Ändere diese Rolle bei {provider} in der Zugriffsliste der App. LLM Hub übernimmt sie bei der nächsten Anmeldung."
   },
   "revokeSessions": "Alle Sitzungen abmelden",
+  "restoreCredentials": "API-Keys wieder aktivieren",
+  "credentialsSuspended": "API-Keys deaktiviert",
   "resetTwoFactor": "Zwei-Faktor-Authentifizierung zurücksetzen",
   "resetTwoFactorHint": "{username} muss bei der nächsten Anmeldung einen neuen Authenticator einrichten. Alle Sitzungen und Passkeys dieses Benutzers werden entfernt. Bestätige mit deinem eigenen Code.",
   "requireChange": "Bei der nächsten Anmeldung ein neues Passwort verlangen",

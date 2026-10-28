@@ -1,6 +1,7 @@
 import "server-only";
 import { randomBytes } from "node:crypto";
 import prisma from "@/lib/db/prisma";
+import { suspendCredentials } from "@/lib/auth/credentials";
 import { isPrismaCode } from "@/lib/auth/errors";
 import { hashPassword } from "@/lib/auth/password";
 import { emailDomainAllowed } from "@/lib/auth/oidc-presets";
@@ -80,6 +81,7 @@ async function refuseWithoutRole(userId: string | null, ipAddress: string | null
         data: { userId, ...securityEvent("sso", "sessions.revoked", ipAddress) },
       });
     }
+    await suspendCredentials(userId, "sso", ipAddress);
   }
   throw new SsoError("no_role");
 }

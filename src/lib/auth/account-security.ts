@@ -1,5 +1,6 @@
 import "server-only";
 import prisma from "@/lib/db/prisma";
+import { canRestoreOwnCredentials } from "@/lib/auth/credentials";
 import { AuthError, isPrismaCode, parseAuthInput } from "@/lib/auth/errors";
 import { assertPasswordPolicy, hashPassword, verifyPassword } from "@/lib/auth/password";
 import { SESSION_IDLE_TTL_MS } from "@/lib/auth/cookie";
@@ -101,12 +102,13 @@ async function sessionViews(userId: string, currentId: string): Promise<SessionV
 
 export async function securityOverview(session: AuthenticatedSession): Promise<SecurityOverview> {
   const userId = session.user.id;
-  const [totp, recoveryCodesRemaining, passkeys, sessions, events] = await Promise.all([
+  const [totp, recoveryCodesRemaining, passkeys, sessions, events, canRestore] = await Promise.all([
     prisma.userTotp.findUnique({ where: { userId }, select: { enabledAt: true } }),
     remainingRecoveryCodes(userId),
     passkeyViews(userId),
     sessionViews(userId, session.sessionId),
     securityEventViews(userId, 15),
+    canRestoreOwnCredentials(session),
   ]);
   return {
     user: {
@@ -117,6 +119,7 @@ export async function securityOverview(session: AuthenticatedSession): Promise<S
       roleTemplateKey: session.role?.templateKey ?? null,
     },
     password: { changedAt: session.user.passwordChangedAt?.toISOString() ?? null },
+    credentials: { suspendedAt: session.user.credentialsSuspendedAt?.toISOString() ?? null, canRestore },
     twoFactor: {
       enabledAt: totp?.enabledAt?.toISOString() ?? null,
       recoveryCodesRemaining,

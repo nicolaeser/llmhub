@@ -285,12 +285,31 @@ test("the console users list links companies only for tenancy readers and filter
 test("a temporary boost is offered only for console users with a capped budget", () => {
   const flags = { canManage: false, canSecure: false, canBudget: true, insights: "none" as const, selfId: "actor" };
   const budget = (maxBudget: number) => ({ maxBudget, spend: 1, budgetDuration: "" });
-  const user = (manageable: boolean, cap: ReturnType<typeof budget> | null) => ({ id: "weak", manageable, budget: cap });
+  const user = (manageable: boolean, cap: ReturnType<typeof budget> | null) => ({
+    id: "weak",
+    manageable,
+    budget: cap,
+    credentialsSuspended: false,
+  });
   assert.deepEqual(userActions(flags, user(true, budget(10))), ["budget", "boost"]);
   assert.deepEqual(userActions(flags, user(true, budget(0))), ["budget"]);
   assert.deepEqual(userActions(flags, user(true, null)), ["budget"]);
   assert.deepEqual(userActions({ ...flags, canBudget: false }, user(true, budget(10))), []);
   assert.deepEqual(userActions(flags, user(false, budget(10))), []);
+});
+
+test("enabling disabled API keys again is offered only to user managers", () => {
+  const flags = { canManage: true, canSecure: false, canBudget: false, insights: "none" as const, selfId: "actor" };
+  const user = (credentialsSuspended: boolean, manageable = true) => ({
+    id: "weak",
+    manageable,
+    budget: null,
+    credentialsSuspended,
+  });
+  assert.deepEqual(userActions(flags, user(true)), ["role", "password", "content", "credentials", "block", "delete"]);
+  assert.ok(!userActions(flags, user(false)).includes("credentials"));
+  assert.ok(!userActions({ ...flags, canManage: false, canSecure: true }, user(true)).includes("credentials"));
+  assert.deepEqual(userActions(flags, user(true, false)), []);
 });
 
 test("user managers only get roles they may grant, and role managers only grantable templates and resets", async () => {

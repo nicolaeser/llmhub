@@ -15,6 +15,7 @@ import TwoFactorCard from "./_components/two-factor-card";
 import PasskeysCard from "./_components/passkeys-card";
 import SessionsCard from "./_components/sessions-card";
 import ActivityCard from "./_components/activity-card";
+import CredentialsAlert from "./_components/credentials-alert";
 import ManagementKeysCard from "./_components/management-keys-card";
 import PreferencesCard from "./_components/preferences-card";
 import { loadManagementKeysAction, loadSecurityOverviewAction } from "./_action";
@@ -75,6 +76,7 @@ export default function AccountPage() {
               </Chip>
             </div>
           </Card>
+          <CredentialsAlert credentials={overview.credentials} onChange={setOverview} />
           <div className="grid items-start gap-5 xl:grid-cols-2">
             <div className="space-y-5">
               <TwoFactorCard twoFactor={overview.twoFactor} onChange={setOverview} />

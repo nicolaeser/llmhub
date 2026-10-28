@@ -21,7 +21,12 @@ import { GET as ssoLogin } from "@/app/sso/login/route";
 import { GET as ssoCallback } from "@/app/sso/callback/route";
 import { POST as backchannelLogoutRoute } from "@/app/sso/backchannel-logout/route";
 import { getSession } from "@/lib/auth/session";
-import { revalidateSsoSessions, SSO_REVALIDATE_INTERVAL_MS } from "@/lib/auth/sso-sessions";
+import { revalidateSsoSessions, SSO_REVALIDATE_INTERVAL_MS, SSO_UNVERIFIED_LIMIT_MS } from "@/lib/auth/sso-sessions";
+import { restoreOwnCredentials } from "@/lib/auth/credentials";
+import { restoreUserCredentials, usersConsole } from "@/lib/auth/users";
+import { authenticateBearer } from "@/lib/gateway/access/principal";
+import { mintTryBearer } from "@/lib/gateway/access/try-bearer";
+import { authenticateManagementKey } from "@/lib/management/auth";
 import { closeDatabase, uniqueName } from "./support/database";
 import { preserveSetting, sessionOf, TestData } from "./support/fixtures";
 
@@ -33,7 +38,7 @@ const provider = {
   alg: "RS256" as "RS256" | "ES256",
   offersAppRoles: false,
   appRoles: null as string[] | null,
-  refreshAnswer: "valid" as "valid" | "unavailable",
+  refreshAnswer: "valid" as "valid" | "unavailable" | "rate_limited",
 };
 const issued = new Map<
   string,
@@ -69,6 +74,7 @@ function clientCredentials(req: IncomingMessage, form: URLSearchParams) {
 function refreshAnswer(form: URLSearchParams) {
   const grant = refreshGrants.get(form.get("refresh_token") ?? "");
   if (provider.refreshAnswer === "unavailable") return { status: 503, body: { error: "temporarily_unavailable" } };
+  if (provider.refreshAnswer === "rate_limited") return { status: 429, body: { error: "slow_down" } };
   if (!grant) return { status: 400, body: { error: "invalid_grant" } };
   refreshGrants.delete(form.get("refresh_token") ?? "");
   const rotated = uniqueName("refresh");
@@ -757,3 +763,212 @@ async function capturedWarnings<T>(run: () => Promise<T>): Promise<{ result: T; 
     Object.assign(console, original);
   }
 }
+
+async function personalCredentials(userId: string) {
+  const virtualKey = uniqueName("sk-hub-person");
+  const managementKey = `sk-mgmt-${uniqueName("person")}`;
+  await prisma.virtualKey.create({
+    data: { userId, hash: digest(virtualKey), prefix: virtualKey.slice(-8), keyAlias: uniqueName("key") },
+  });
+  await prisma.managementKey.create({
+    data: { userId, name: "automation", prefix: managementKey.slice(0, 12), hash: digest(managementKey), permissions: ["keys:read"] },
+  });
+  return async () => {
+    const results = await Promise.allSettled([
+      authenticateBearer(virtualKey),
+      authenticateManagementKey(
+        new Request("http://localhost:3000/api/mgmt/keys", { headers: { authorization: `Bearer ${managementKey}` } }),
+      ),
+      authenticateBearer(mintTryBearer(userId)),
+    ]);
+    return results.map((result) => result.status === "fulfilled");
+  };
+}
+
+const ALL_ACCEPTED = [true, true, true];
+const ALL_REFUSED = [false, false, false];
+
+async function suspendedAt(userId: string) {
+  return (await prisma.user.findUniqueOrThrow({ where: { id: userId } })).credentialsSuspendedAt;
+}
+
+test("access removed at the identity provider disables personal keys until the person signs in again with a role", async () => {
+  const data = new TestData();
+  const email = `${uniqueName("sso")}@example.test`;
+  const jar = await cookies();
+  try {
+    await data.user();
+    await withRolesFromProvider(["admin"], async () => {
+      await signInAs(email);
+      const user = await prisma.user.findUniqueOrThrow({ where: { email } });
+      data.ownUser(user.id);
+      const accepted = await personalCredentials(user.id);
+      assert.deepEqual(await accepted(), ALL_ACCEPTED);
+
+      refreshGrants.clear();
+      assert.equal(await revalidateSsoSessions(afterInterval()), 1);
+      assert.ok(await suspendedAt(user.id));
+      assert.deepEqual(await accepted(), ALL_REFUSED);
+      assert.equal(await prisma.virtualKey.count({ where: { userId: user.id, blocked: false } }), 1);
+      assert.equal(await prisma.managementKey.count({ where: { userId: user.id } }), 1);
+      const event = await prisma.userSecurityEvent.findFirstOrThrow({
+        where: { userId: user.id, action: "credentials.suspended" },
+      });
+      assert.equal(event.actor, "sso");
+      await prisma.gatewayAuditLog.findFirstOrThrow({ where: { objectId: user.id, action: "user.credentials_suspended", actor: "sso" } });
+      await assert.rejects(restoreOwnCredentials(sessionOf(user)), { code: "FORBIDDEN" });
+
+      provider.appRoles = [];
+      const refused = await signInAs(email);
+      assert.equal(refused.location.searchParams.get("sso"), "no_role");
+      assert.deepEqual(await accepted(), ALL_REFUSED);
+
+      provider.appRoles = ["admin"];
+      const again = await signInAs(email);
+      jar.set(SESSION_COOKIE, again.res.cookies.get(SESSION_COOKIE)?.value ?? "");
+      const session = await getSession();
+      assert.ok(!session.error && session.role?.templateKey === "admin");
+      assert.ok(await suspendedAt(user.id));
+      assert.deepEqual(await accepted(), ALL_REFUSED);
+
+      await restoreOwnCredentials(session);
+      assert.equal(await suspendedAt(user.id), null);
+      assert.deepEqual(await accepted(), ALL_ACCEPTED);
+      const restored = await prisma.userSecurityEvent.findFirstOrThrow({
+        where: { userId: user.id, action: "credentials.restored" },
+      });
+      assert.equal(restored.actor, `user:${user.id}`);
+    });
+  } finally {
+    jar.delete(SESSION_COOKIE);
+    await data.cleanup();
+  }
+});
+
+test("an administrator enables disabled keys again only through the explicit action", async () => {
+  const data = new TestData();
+  const email = `${uniqueName("sso")}@example.test`;
+  try {
+    const manager = await data.user();
+    const managing = sessionOf(manager, { permissions: ["users:read", "users:manage"] });
+    await withRolesFromProvider(["operator"], async () => {
+      await signInAs(email);
+      const user = await prisma.user.findUniqueOrThrow({ where: { email } });
+      data.ownUser(user.id);
+      const accepted = await personalCredentials(user.id);
+      provider.appRoles = [];
+      assert.equal(await revalidateSsoSessions(afterInterval()), 1);
+      assert.deepEqual(await accepted(), ALL_REFUSED);
+      const listed = (await usersConsole(managing)).users.find((row) => row.id === user.id);
+      assert.equal(listed?.credentialsSuspended, true);
+
+      await restoreUserCredentials(managing, user.id);
+      assert.equal(await suspendedAt(user.id), null);
+      assert.deepEqual(await accepted(), [true, true, false]);
+      const event = await prisma.userSecurityEvent.findFirstOrThrow({
+        where: { userId: user.id, action: "credentials.restored" },
+      });
+      assert.equal(event.actor, `user:${manager.id}`);
+      await prisma.gatewayAuditLog.findFirstOrThrow({
+        where: { objectId: user.id, action: "user.credentials_restored", actor: manager.id },
+      });
+    });
+  } finally {
+    await data.cleanup();
+  }
+});
+
+test("back-channel logout disables keys only when the identity provider no longer grants access", async () => {
+  const data = new TestData();
+  const email = `${uniqueName("sso")}@example.test`;
+  try {
+    await data.user();
+    await withRolesFromProvider(["admin"], async () => {
+      const sid = uniqueName("sid");
+      await signInAs(email, { sid });
+      const user = await prisma.user.findUniqueOrThrow({ where: { email } });
+      data.ownUser(user.id);
+      const accepted = await personalCredentials(user.id);
+      const sessions = () => prisma.session.count({ where: { userId: user.id } });
+
+      assert.equal((await backchannel(logoutToken({ sid }))).status, 200);
+      assert.equal(await sessions(), 0);
+      assert.equal(await suspendedAt(user.id), null);
+      assert.deepEqual(await accepted(), ALL_ACCEPTED);
+
+      await signInAs(email);
+      provider.refreshAnswer = "unavailable";
+      const outage = await capturedWarnings(() => backchannel(logoutToken({ sub: `sub-${email}` })));
+      assert.equal(outage.result.status, 200);
+      assert.ok(outage.events.includes("sso.logout_check_failed"));
+      assert.equal(await sessions(), 0);
+      assert.equal(await suspendedAt(user.id), null);
+
+      provider.refreshAnswer = "valid";
+      await signInAs(email);
+      provider.appRoles = [];
+      assert.equal((await backchannel(logoutToken({ sub: `sub-${email}` }))).status, 200);
+      assert.equal(await sessions(), 0);
+      assert.ok(await suspendedAt(user.id));
+      assert.equal((await prisma.user.findUniqueOrThrow({ where: { id: user.id } })).roleId, null);
+      assert.deepEqual(await accepted(), ALL_REFUSED);
+
+      await prisma.user.update({ where: { id: user.id }, data: { credentialsSuspendedAt: null } });
+      provider.appRoles = ["admin"];
+      await signInAs(email);
+      refreshGrants.clear();
+      assert.equal((await backchannel(logoutToken({ sub: `sub-${email}` }))).status, 200);
+      assert.ok(await suspendedAt(user.id));
+      assert.deepEqual(await accepted(), ALL_REFUSED);
+    });
+  } finally {
+    await data.cleanup();
+  }
+});
+
+test("24 hours without a successful check end the session while shorter outages keep it", async () => {
+  const data = new TestData();
+  const email = `${uniqueName("sso")}@example.test`;
+  try {
+    await data.user();
+    await withRolesFromProvider(["admin"], async () => {
+      await signInAs(email);
+      const user = await prisma.user.findUniqueOrThrow({ where: { email } });
+      data.ownUser(user.id);
+      const accepted = await personalCredentials(user.id);
+      const sessions = () => prisma.session.count({ where: { userId: user.id } });
+      const link = await prisma.ssoSession.findFirstOrThrow({ where: { session: { userId: user.id } } });
+      const start = link.validatedAt.getTime();
+      const at = (ms: number) => new Date(start + ms);
+
+      provider.refreshAnswer = "rate_limited";
+      assert.equal((await capturedWarnings(() => revalidateSsoSessions(at(SSO_UNVERIFIED_LIMIT_MS / 2)))).result, 0);
+      provider.refreshAnswer = "unavailable";
+      assert.equal((await capturedWarnings(() => revalidateSsoSessions(at(SSO_UNVERIFIED_LIMIT_MS - 60_000)))).result, 0);
+      assert.equal(await sessions(), 1);
+
+      provider.refreshAnswer = "valid";
+      const checked = at(SSO_UNVERIFIED_LIMIT_MS - 30_000 + SSO_REVALIDATE_INTERVAL_MS);
+      assert.equal(await revalidateSsoSessions(checked), 0);
+      const validated = await prisma.ssoSession.findFirstOrThrow({ where: { session: { userId: user.id } } });
+      assert.equal(validated.validatedAt.getTime(), checked.getTime());
+
+      provider.refreshAnswer = "unavailable";
+      const later = (ms: number) => new Date(checked.getTime() + ms);
+      assert.equal((await capturedWarnings(() => revalidateSsoSessions(later(SSO_UNVERIFIED_LIMIT_MS - 10 * 60_000)))).result, 0);
+      assert.equal(await sessions(), 1);
+      assert.equal((await capturedWarnings(() => revalidateSsoSessions(later(SSO_UNVERIFIED_LIMIT_MS)))).result, 1);
+      assert.equal(await sessions(), 0);
+
+      const event = await prisma.userSecurityEvent.findFirstOrThrow({ where: { userId: user.id, action: "sessions.unverified" } });
+      assert.equal(event.actor, "sso");
+      await prisma.gatewayAuditLog.findFirstOrThrow({ where: { objectId: user.id, action: "user.session_unverified", actor: "sso" } });
+      const after = await prisma.user.findUniqueOrThrow({ where: { id: user.id }, include: { role: true } });
+      assert.equal(after.role?.templateKey, "admin");
+      assert.equal(after.credentialsSuspendedAt, null);
+      assert.deepEqual(await accepted(), ALL_ACCEPTED);
+    });
+  } finally {
+    await data.cleanup();
+  }
+});
