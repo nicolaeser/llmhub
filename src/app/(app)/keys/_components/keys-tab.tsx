@@ -14,6 +14,7 @@ import StatCard from "@/components/console/stat-card";
 import { useErrorToast } from "@/components/console/use-error-toast";
 import { bindingKind, placeOf } from "@/components/keys/key-binding";
 import KeyMenu, { hasKeyMenu, keyMenuActions, type KeyMenuAction } from "@/components/keys/key-menu";
+import KeyStateChip from "@/components/keys/key-state-chip";
 import { useKeyDialogs, type KeyServerActions } from "@/components/keys/use-key-dialogs";
 import { useConsoleScope } from "../../_components/console-scope";
 import GettingStarted from "./getting-started";
@@ -23,7 +24,9 @@ import {
   loadBudgetAction,
   loadKeyMcpAccessAction,
   loadKeysPageAction,
+  pauseKeyAction,
   removeBoostAction,
+  resumeKeyAction,
   revokeKeyAction,
   rotateKeyAction,
   saveKeyMcpAccessAction,
@@ -31,6 +34,8 @@ import {
   updateKeyAction,
 } from "../_action";
 import { useActionData } from "@/lib/hooks/use-action-data";
+import { useClock } from "@/lib/hooks/use-clock";
+import { isKeyPaused, keyState } from "@/lib/keys/pause";
 import { isActionFail } from "@/lib/http/action-result";
 import type { KeyOptions, VirtualKeyView } from "@/types/keys";
 import type { BudgetDetail, BudgetResult } from "@/types/structure";
@@ -40,6 +45,8 @@ type BudgetDialogKind = "budget" | "boost";
 const KEY_ACTIONS: KeyServerActions = {
   create: createKeyAction,
   update: updateKeyAction,
+  pause: pauseKeyAction,
+  resume: resumeKeyAction,
   rotate: rotateKeyAction,
   revoke: revokeKeyAction,
   loadMcp: loadKeyMcpAccessAction,
@@ -51,6 +58,7 @@ export default function KeysTab() {
   const showError = useErrorToast();
   const tCommon = useTranslations("Common");
   const format = useFormatter();
+  const now = useClock(60_000);
   const scope = useConsoleScope();
   const [budgetFor, setBudgetFor] = useState<(BudgetDetail & { alias: string }) | null>(null);
   const [loadingBudget, setLoadingBudget] = useState<{ id: string; dialog: BudgetDialogKind } | null>(null);
@@ -181,14 +189,14 @@ export default function KeysTab() {
     });
   }
 
+  function pauseOf(row: VirtualKeyView) {
+    return { blocked: row.blocked, paused: row.paused, pausedUntil: row.paused_until };
+  }
+
   function keyChips(row: VirtualKeyView) {
     return (
       <>
-        <Chip size="sm" variant="soft" color={row.blocked ? "danger" : "success"}>
-          {tCommon("blockedState", {
-            blocked: row.blocked ? "true" : "false",
-          })}
-        </Chip>
+        <KeyStateChip state={keyState(pauseOf(row), now)} pausedUntil={row.paused_until} />
         {row.log_content ? null : (
           <Chip size="sm" variant="soft" color="warning">
             {t("contentOff")}
@@ -226,6 +234,8 @@ export default function KeysTab() {
   function runMenu(row: VirtualKeyView, action: KeyMenuAction) {
     const target = { id: row.token_id, name: row.key_alias || row.key_name };
     if (action === "edit") keyDialogs.openEdit(options, row);
+    if (action === "pause") keyDialogs.askPause(target);
+    if (action === "resume") keyDialogs.resume(target);
     if (action === "mcp") keyDialogs.openMcp(target);
     if (action === "budget" || action === "boost") openBudget(row, action);
     if (action === "rotate") keyDialogs.askRotate(target);
@@ -236,7 +246,7 @@ export default function KeysTab() {
     return (
       <KeyMenu
         name={row.key_alias || row.key_name}
-        actions={keyMenuActions(menuFlags, { capped: row.max_budget > 0 })}
+        actions={keyMenuActions(menuFlags, { capped: row.max_budget > 0, paused: isKeyPaused(pauseOf(row), now) })}
         pending={loadingBudget?.id === row.token_id || keyDialogs.busy?.id === row.token_id}
         isDisabled={loadingBudget !== null && loadingBudget.id !== row.token_id}
         onAction={(action) => runMenu(row, action)}

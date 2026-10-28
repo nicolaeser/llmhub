@@ -87,13 +87,26 @@
     "title": "Rotate {name}?",
     "description": "A new secret is created and shown once. The current secret keeps working for one hour and is then rejected, so update every client within that hour."
   },
+  "pause": {
+    "action": "Pause",
+    "title": "Pause {name}",
+    "description": "Requests with this key are rejected with key_paused until it is resumed. Its settings, budget, and secret stay as they are, and batches already queued still finish.",
+    "duration": "Pause for",
+    "hours": "{hours, select, 0 {Until resumed} 1 {1 hour} 24 {1 day} 168 {7 days} other {{hours, number, integer} hours}}",
+    "until": "{timed, select, yes {Resumes on its own on {until}.} other {Stays paused until someone resumes it.}}",
+    "submit": "Pause key"
+  },
+  "resume": "Resume",
   "toasts": {
     "saved": "{mode, select, updated {Key updated} other {Key created}}",
     "revoked": "Key revoked",
-    "rotated": "Key rotated. Copy the new secret."
+    "rotated": "Key rotated. Copy the new secret.",
+    "paused": "Key paused",
+    "resumed": "Key resumed"
   },
   "edit": "Edit key",
   "actionsMenu": "Actions for {name}",
+  "state": "{state, select, blocked {Blocked} paused {{timed, select, yes {Paused until {until}} other {Paused}}} other {Active}}",
   "dialogTitle": "{mode, select, edit {Edit key} other {Create a key}}",
   "dialogSubmit": "{mode, select, edit {Save} other {Create key}}",
   "access": "{state, select, all {Without presets or models, this key can use every model.} none {This key cannot use any model yet. Pick a preset that matches models or add individual models.} other {{count, plural, one {This key can use # model.} other {This key can use # models.}}}}",

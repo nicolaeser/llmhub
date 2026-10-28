@@ -2,13 +2,14 @@ import "server-only";
 
 import prisma from "@/lib/db/prisma";
 import { digest, randomToken } from "@/lib/crypto";
-import { createKeySchema, updateKeySchema } from "@/schemas/keys";
+import { createKeySchema, pauseKeySchema, updateKeySchema } from "@/schemas/keys";
 import type { ZodType } from "zod";
 import { requirePermission } from "@/lib/auth/guards";
 import { hasPerm, PERMISSIONS } from "@/lib/auth/permissions";
 import { companyOf, inCompany, keyVisibleTo, setupLinks, spendScope } from "@/lib/auth/scope";
 import { managesMcpRules } from "@/lib/mcp/scope";
 import { keyReferences, listKeys, toKeyView } from "@/lib/keys/view";
+import { pauseActive, pauseEnd } from "@/lib/keys/pause";
 import { readsTemplates } from "@/lib/models/templates";
 import { alertKeyBlocked } from "@/lib/alerts/notify";
 import { writeAudit } from "@/lib/audit";
@@ -163,6 +164,54 @@ export async function updateKey(raw: unknown) {
   if (row.blocked && !existing.blocked) {
     void alertKeyBlocked(row, session.user.username || session.user.email);
   }
+  return { key: toKeyView(row) };
+}
+
+function pauseSnapshot(row: { paused: boolean; pausedUntil: Date | null }) {
+  const paused = pauseActive(row.paused, row.pausedUntil, new Date());
+  return { paused, pausedUntil: paused ? (row.pausedUntil?.toISOString() ?? null) : null };
+}
+
+export async function pauseKey(raw: unknown) {
+  const session = await requirePermission(PERMISSIONS.KEYS_MANAGE);
+  const input = parseKeyInput(pauseKeySchema, raw);
+  const existing = await prisma.virtualKey.findUnique({ where: { id: input.id } });
+  if (!existing || !keyVisibleTo(session, existing)) throw new Error("NOT_FOUND");
+  const pausedUntil = pauseEnd(input.hours, new Date());
+  const row = await prisma.virtualKey.update({
+    where: { id: existing.id },
+    data: { paused: true, pausedUntil },
+    include: withTemplates,
+  });
+  await writeAudit({
+    actor: session.user.id,
+    action: "key.pause",
+    objectType: "key",
+    objectId: existing.id,
+    before: pauseSnapshot(existing),
+    after: pauseSnapshot(row),
+  });
+  return { key: toKeyView(row) };
+}
+
+export async function resumeKey(id: string) {
+  const session = await requirePermission(PERMISSIONS.KEYS_MANAGE);
+  if (!id) throw new Error("MISSING_ID");
+  const existing = await prisma.virtualKey.findUnique({ where: { id } });
+  if (!existing || !keyVisibleTo(session, existing)) throw new Error("NOT_FOUND");
+  const row = await prisma.virtualKey.update({
+    where: { id: existing.id },
+    data: { paused: false, pausedUntil: null },
+    include: withTemplates,
+  });
+  await writeAudit({
+    actor: session.user.id,
+    action: "key.resume",
+    objectType: "key",
+    objectId: existing.id,
+    before: pauseSnapshot(existing),
+    after: pauseSnapshot(row),
+  });
   return { key: toKeyView(row) };
 }
 

@@ -125,10 +125,18 @@ export async function gateRequest(req: Request, pool: PublicPool = "api"): Promi
   if (principal.key?.allowed_ips.length && !ipAllowed(principal.key.allowed_ips, clientIp(req.headers))) {
     throw new GateError(403, "ip_not_allowed", "ip not allowed for this key");
   }
+  allowUnpaused(principal);
   allowEndpoint(principal, gatewayPath(path));
   allowAccessTime(principal, new Date());
   await admit(principal, maxCostHeader(req.headers));
   return principal;
+}
+
+export function allowUnpaused(principal: Principal): void {
+  const key = principal.key;
+  if (!key?.paused) return;
+  const message = key.paused_until ? `this key is paused until ${key.paused_until}` : "this key is paused";
+  throw new GateError(403, "key_paused", message);
 }
 
 export function allowEndpoint(principal: Principal, path: string, param?: string): void {

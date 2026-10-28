@@ -4,13 +4,13 @@ import { Button, Dropdown, Spinner } from "@heroui/react";
 import { MoreHorizontal } from "lucide-react";
 import { useTranslations } from "next-intl";
 
-export type KeyMenuAction = "edit" | "mcp" | "budget" | "boost" | "rotate" | "revoke";
+export type KeyMenuAction = "edit" | "pause" | "resume" | "mcp" | "budget" | "boost" | "rotate" | "revoke";
 
 export type KeyMenuFlags = { canManage: boolean; canMcp: boolean; canBudget: boolean };
 
-export function keyMenuActions(flags: KeyMenuFlags, key: { capped: boolean }): KeyMenuAction[] {
+export function keyMenuActions(flags: KeyMenuFlags, key: { capped: boolean; paused: boolean }): KeyMenuAction[] {
   const actions: KeyMenuAction[] = [];
-  if (flags.canManage) actions.push("edit");
+  if (flags.canManage) actions.push("edit", key.paused ? "resume" : "pause");
   if (flags.canMcp) actions.push("mcp");
   if (flags.canBudget) actions.push("budget");
   if (flags.canBudget && key.capped) actions.push("boost");
@@ -42,6 +42,8 @@ export default function KeyMenu({
 
   function label(action: KeyMenuAction) {
     if (action === "edit") return t("edit");
+    if (action === "pause") return t("pause.action");
+    if (action === "resume") return t("resume");
     if (action === "mcp") return t("mcp.action");
     if (action === "budget") return t("budget");
     if (action === "boost") return tBudgets("boost.action");

@@ -1,14 +1,17 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Button, Card, Chip, Spinner, Table } from "@heroui/react";
+import { Button, Card, Spinner, Table } from "@heroui/react";
 import { ChevronRight, Plus } from "lucide-react";
 import { useTranslations } from "next-intl";
 import RowCard, { RowCards, TABLE_FROM_XL } from "@/components/console/row-cards";
 import { useErrorToast } from "@/components/console/use-error-toast";
 import KeyMenu, { keyMenuActions, type KeyMenuAction } from "@/components/keys/key-menu";
+import KeyStateChip from "@/components/keys/key-state-chip";
 import { useKeyDialogs, type KeyServerActions } from "@/components/keys/use-key-dialogs";
 import { isActionFail } from "@/lib/http/action-result";
+import { useClock } from "@/lib/hooks/use-clock";
+import { isKeyPaused, keyState } from "@/lib/keys/pause";
 import type { ActionFail } from "@/types/actions";
 import type { KeyChoices, KeyDetail, KeyPreset, VirtualKeyView } from "@/types/keys";
 import type { BudgetTarget, KeyNode, NodeRef, StructurePayload, TenancyKind } from "@/types/structure";
@@ -43,6 +46,7 @@ export default function KeysCard({
   const t = useTranslations("Companies.keys");
   const tCommon = useTranslations("Common");
   const showError = useErrorToast();
+  const now = useClock(60_000);
   const [opening, setOpening] = useState<string | null>(null);
   const [, start] = useTransition();
   const keyDialogs = useKeyDialogs({ actions, canBind: data.canManage, onSaved: onChanged, onRevoked });
@@ -73,6 +77,8 @@ export default function KeysCard({
   function run(key: KeyNode, action: KeyMenuAction) {
     const target = { id: key.id, name: key.alias };
     if (action === "edit") edit(key);
+    if (action === "pause") keyDialogs.askPause(target);
+    if (action === "resume") keyDialogs.resume(target);
     if (action === "mcp") keyDialogs.openMcp(target);
     if (action === "budget" || action === "boost") onBudget({ kind: "key", id: key.id, alias: key.alias }, action);
     if (action === "rotate") keyDialogs.askRotate(target);
@@ -85,13 +91,10 @@ export default function KeysCard({
     return { kind: "internal", name: nodeAlias(data, "user", key.userId) };
   }
 
-  function blockedChip(key: KeyNode) {
-    if (!key.blocked) return null;
-    return (
-      <Chip size="sm" variant="soft" color="danger">
-        {tCommon("blockedState", { blocked: "true" })}
-      </Chip>
-    );
+  function stateChip(key: KeyNode) {
+    const state = keyState(key, now);
+    if (state === "active") return null;
+    return <KeyStateChip state={state} pausedUntil={key.pausedUntil} />;
   }
 
   function spendLabel(key: KeyNode) {
@@ -107,7 +110,7 @@ export default function KeysCard({
       <>
         <KeyMenu
           name={key.alias}
-          actions={keyMenuActions(flags, { capped: key.budget.maxBudget > 0 })}
+          actions={keyMenuActions(flags, { capped: key.budget.maxBudget > 0, paused: isKeyPaused(key, now) })}
           pending={opening === key.id || keyDialogs.busy?.id === key.id}
           isDisabled={opening !== null && opening !== key.id}
           onAction={(action) => run(key, action)}
@@ -168,7 +171,7 @@ export default function KeysCard({
                     title={key.alias}
                     description={<span className="font-mono text-xs">{key.prefix}…</span>}
                     aside={rowActions(key)}
-                    chips={blockedChip(key)}
+                    chips={stateChip(key)}
                     details={[
                       { label: t("columns.owner"), value: ownerValue(key) },
                       { label: t("columns.budget"), value: spendLabel(key) },
@@ -192,7 +195,7 @@ export default function KeysCard({
                             <div className="min-w-0">
                               <p className="flex flex-wrap items-center gap-2 text-sm font-medium">
                                 {key.alias}
-                                {blockedChip(key)}
+                                {stateChip(key)}
                               </p>
                               <p className="font-mono text-xs text-muted">{key.prefix}…</p>
                             </div>

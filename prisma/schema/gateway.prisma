@@ -164,6 +164,8 @@ model VirtualKey {
   accessWindows    Json          @default("[]")
   accessTimeZone   String        @default("UTC")
   blocked          Boolean       @default(false)
+  paused           Boolean       @default(false)
+  pausedUntil      DateTime?
   logContent       Boolean       @default(true)
   prevHash         String        @default("")
   prevHashUntil    DateTime?

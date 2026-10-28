@@ -49,7 +49,9 @@ import {
   loadKeyMcpAccessAction,
   loadKeyOptionsAction,
   loadStructureAction,
+  pauseKeyAction,
   removeBoostAction,
+  resumeKeyAction,
   revokeKeyAction,
   rotateKeyAction,
   saveCompanyMcpInstallationAction,
@@ -98,6 +100,8 @@ const NODE_ICONS: Record<NodeKind, LucideIcon> = {
 const KEY_ACTIONS: KeyServerActions = {
   create: createKeyAction,
   update: updateKeyAction,
+  pause: pauseKeyAction,
+  resume: resumeKeyAction,
   rotate: rotateKeyAction,
   revoke: revokeKeyAction,
   loadMcp: loadKeyMcpAccessAction,
