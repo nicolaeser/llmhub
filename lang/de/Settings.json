@@ -47,7 +47,7 @@
       "revoke": "Token widerrufen",
       "revokeDescription": "Bestätige mit deinem Authenticator. SCIM-Anfragen schlagen fehl, bis du einen neuen Token erstellst.",
       "tokenTitle": "Token jetzt kopieren",
-      "tokenHint": "Er wird nur einmal angezeigt. Trage ihn in deinem Identity Provider als Bearer-Token ein.",
+      "tokenHint": "Er wird nur einmal angezeigt. Trage ihn bei deinem Identitätsanbieter als Bearer-Token ein.",
       "copy": "Token kopieren",
       "issued": "SCIM-Token erstellt",
       "revoked": "SCIM-Token widerrufen",
@@ -57,7 +57,7 @@
       "groupCount": "{count, plural, =0 {Keine} one {# Gruppe} other {# Gruppen}}",
       "mappingHint": "Richte deinen Anbieter auf /Users und /Groups unter dieser URL aus. Gruppen nutzen dieselben Regeln wie das Single Sign-on, und provisionierte Benutzer landen bei der Anmeldung im selben Konto."
     },
-    "description": "Single Sign-on mit OpenID Connect, Regeln von Gruppen zu Rollen und SCIM-Provisionierung. Der Owner behält immer die Anmeldung mit Passwort und Zwei-Faktor-Authentifizierung.",
+    "description": "Single Sign-on mit OpenID Connect, Regeln von Gruppen zu Rollen und SCIM-Provisionierung. Der Inhaber behält immer die Anmeldung mit Passwort und Zwei-Faktor-Authentifizierung.",
     "sso": {
       "title": "Single Sign-on",
       "subtitle": "Verbinde einen OpenID-Connect-Identitätsanbieter. Das Client-Secret bleibt als OIDC_CLIENT_SECRET in der Umgebung.",
@@ -124,15 +124,15 @@
       "defaultRole": "Standardrolle für Personen ohne Rolle",
       "noDefault": "{appRoles, select, true {Keine: Anmeldung ablehnen} other {Viewer (eingebaut)}}",
       "defaultRoleHint": "{appRoles, select, true {Für Personen, deren Anbieter keine bekannte App-Rolle und keine passende Gruppe sendet. Mit Keine wird ihre Anmeldung abgelehnt.} other {Neue Konten bekommen diese Rolle, wenn keine Gruppenregel passt.}}",
-      "defaultCompany": "Standardfirma",
+      "defaultCompany": "Standardunternehmen",
       "platform": "Keine (Plattform-Benutzer)",
-      "defaultCompanyHint": "Neue Konten sind auf diese Firma beschränkt. Bestehende Konten behalten ihre.",
+      "defaultCompanyHint": "Neue Konten sind auf dieses Unternehmen beschränkt. Bestehende Konten behalten ihre.",
       "domains": "Erlaubte E-Mail-Domains",
       "domainsHint": "Mit Kommas trennen. Leer lassen, um jedes Konto zuzulassen, das dein Anbieter anmeldet."
     },
     "mapping": {
       "title": "Regeln von Gruppen zu Rollen",
-      "subtitle": "Die erste passende Regel bestimmt die Rolle, vor den App-Rollen. Regeln ordnen auch weitere App-Rollen zu, etwa eigenen Rollen. Solange Regeln bestehen oder der Anbieter App-Rollen sendet, folgen Rollen bei jeder Anmeldung dem Identitätsanbieter; Regeln auch bei jeder SCIM-Änderung. Der Owner wird nie geändert.",
+      "subtitle": "Die erste passende Regel bestimmt die Rolle, vor den App-Rollen. Regeln ordnen auch weitere App-Rollen zu, etwa eigenen Rollen. Solange Regeln bestehen oder der Anbieter App-Rollen sendet, folgen Rollen bei jeder Anmeldung dem Identitätsanbieter; Regeln auch bei jeder SCIM-Änderung. Der Inhaber wird nie geändert.",
       "claim": "Gruppen-Claim",
       "claimHint": "Claim im ID-Token mit Gruppen oder Rollen, etwa groups, roles oder realm_access.roles. SCIM-Gruppen passen über Anzeigename oder externe ID.",
       "group": "Gruppe {position}",
@@ -144,9 +144,9 @@
     },
     "ssoOnly": {
       "title": "Nur SSO",
-      "subtitle": "Blendet die Passwort-Anmeldung für alle außer dem Owner aus.",
+      "subtitle": "Blendet die Passwort-Anmeldung für alle außer dem Inhaber aus.",
       "enabled": "Nur Single Sign-on erlauben",
-      "hint": "{ready, select, true {Anmeldung mit Passwort oder Passkey und Selbstregistrierung enden für alle außer dem Owner, der Passwort und Zwei-Faktor-Authentifizierung als Notzugang behält.} other {Schließe zuerst die SSO-Einrichtung ab, damit sich niemand aussperrt.}}"
+      "hint": "{ready, select, true {Anmeldung mit Passwort oder Passkey und Selbstregistrierung enden für alle außer dem Inhaber, der Passwort und Zwei-Faktor-Authentifizierung als Notzugang behält.} other {Schließe zuerst die SSO-Einrichtung ab, damit sich niemand aussperrt.}}"
     },
     "matching": {
       "title": "So werden Konten zugeordnet",
@@ -225,8 +225,8 @@
     "webhookTitle": "Webhook {position, number}",
     "removeWebhook": "Webhook {position, number} entfernen",
     "events": "Events",
-    "eventLabel": "{event, select, upstream_exhaustion {Upstream erschöpft} budget_threshold {Budget-Schwelle} provider_models_changed {Provider-Modelle geändert} spend_anomaly {Kosten-Anomalie} key_expiring {Key läuft ab} key_blocked {Key gesperrt} pii_blocked {PII blockiert} other {Event}}",
-    "eventHint": "{event, select, upstream_exhaustion {Kein gesundes Deployment hat geantwortet oder der Upstream lieferte 5xx oder 429.} budget_threshold {Ein Key, eine Person, ein Projekt, eine Abteilung oder ein Unternehmen hat eine Budget-Alarmschwelle überschritten.} provider_models_changed {Der stündliche Sync hat hinzugefügte oder entfernte Provider-Modelle gefunden.} spend_anomaly {Ein Key oder Projekt hat in der letzten Stunde deutlich mehr ausgegeben als sonst um diese Uhrzeit.} key_expiring {Ein Key läuft innerhalb der Vorwarnzeit aus den Alarmregeln ab.} key_blocked {Jemand hat einen Key in der Konsole, über die Management-API oder den Assistenten gesperrt.} pii_blocked {Die PII-Richtlinie hat eine Anfrage blockiert. Höchstens ein Alarm pro Key alle 15 Minuten, ohne Anfrageinhalt.} other {}}",
+    "eventLabel": "{event, select, upstream_exhaustion {Upstream erschöpft} budget_threshold {Budget-Schwelle} provider_models_changed {Anbietermodelle geändert} spend_anomaly {Kosten-Anomalie} key_expiring {Key läuft ab} key_blocked {Key gesperrt} pii_blocked {PII blockiert} other {Event}}",
+    "eventHint": "{event, select, upstream_exhaustion {Kein gesundes Deployment hat geantwortet oder der Upstream lieferte 5xx oder 429.} budget_threshold {Ein Key, eine Person, ein Projekt, eine Abteilung oder ein Unternehmen hat eine Budget-Alarmschwelle überschritten.} provider_models_changed {Der stündliche Sync hat hinzugefügte oder entfernte Anbietermodelle gefunden.} spend_anomaly {Ein Key oder Projekt hat in der letzten Stunde deutlich mehr ausgegeben als sonst um diese Uhrzeit.} key_expiring {Ein Key läuft innerhalb der Vorwarnzeit aus den Alarmregeln ab.} key_blocked {Jemand hat einen Key in der Konsole, über die Management-API oder den Assistenten gesperrt.} pii_blocked {Die PII-Richtlinie hat eine Anfrage blockiert. Höchstens ein Alarm pro Key alle 15 Minuten, ohne Anfrageinhalt.} other {}}",
     "eventsRequired": "Wähle mindestens ein Event.",
     "format": "Nachrichtenformat",
     "formatLabel": "{format, select, json {JSON} slack {Slack} teams {Microsoft Teams} other {Format}}",
