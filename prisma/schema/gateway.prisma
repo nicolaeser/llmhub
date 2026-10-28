@@ -338,6 +338,7 @@ model SubAddLink {
   maxAccounts Int?
   added       Int      @default(0)
   restricted  Boolean  @default(false)
+  manageable  Boolean  @default(true)
   expiresAt   DateTime
   createdById String   @default("")
   createdAt   DateTime @default(now())

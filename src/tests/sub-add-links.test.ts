@@ -40,6 +40,7 @@ type LinkFields = {
   maxAccounts: number | null;
   added: number;
   restricted: boolean;
+  manageable: boolean;
   targets: { orgId: string | null; teamId: string | null; projectId: string | null; memberId: string | null; keyId: string | null }[];
 };
 
@@ -52,6 +53,7 @@ function link(overrides: Partial<LinkFields> = {}): LinkFields {
     maxAccounts: 1,
     added: 0,
     restricted: false,
+    manageable: true,
     targets: [],
     ...overrides,
   };
@@ -170,6 +172,8 @@ test("the link form caps expiry at 90 days and accepts an unlimited account coun
   assert.equal(subAddLinkInputSchema.safeParse({ ...input, days: 0 }).success, false);
   assert.equal(subAddLinkInputSchema.safeParse({ ...input, maxAccounts: 0 }).success, false);
   assert.equal(subAddLinkInputSchema.safeParse({ ...input, label: " " }).success, false);
+  assert.equal(subAddLinkInputSchema.parse(input).manageable, true);
+  assert.equal(subAddLinkInputSchema.parse({ ...input, manageable: false }).manageable, false);
 });
 
 test("an open link offers only its kinds that can sign in and looks the token up by digest", async () => {
@@ -179,6 +183,7 @@ test("an open link offers only its kinds that can sign in and looks the token up
   assert.deepEqual(offer.kinds, ["codex", "claude"]);
   assert.equal(offer.label, "Friends");
   assert.equal(offer.remaining, 1);
+  assert.equal(offer.manageable, true);
   const lookups = recordedPrisma.called("subAddLink", "findUnique");
   assert.deepEqual((lookups[0].args as { where: unknown }).where, { tokenHash: subAddTokenHash(token) });
   assert.doesNotMatch(JSON.stringify(recordedPrisma.calls), new RegExp(token));
@@ -275,6 +280,7 @@ test("a finished sign-in adds a restricted account through the link without leak
   if (done.state !== "done") return;
   assert.equal(done.outcome, "created");
   assert.equal(done.account, "friend@example.com");
+  assert.ok(done.manageToken);
   assert.match(done.manageToken, SUB_ADD_TOKEN_PATTERN);
 
   const [created] = recordedPrisma.called("providerConnection", "create");
@@ -391,6 +397,7 @@ test("a verified sign-in to an already connected account renews it and hands its
   const args = update.args as { where: { id: string }; data: Record<string, unknown> };
   assert.equal(args.where.id, "provider-9");
   assert.ok(args.data.login);
+  assert.ok(done.manageToken);
   const manageHash = subAddTokenHash(done.manageToken);
   assert.deepEqual(args.data.subAdd, {
     upsert: { create: { linkId: null, label: "Friends", manageHash }, update: { manageHash } },
@@ -473,7 +480,63 @@ test("a second account joins the contributor's manage token only when that token
   assert.equal(fresh.state, "done");
   if (fresh.state !== "done") return;
   assert.notEqual(fresh.manageToken, invented);
+  assert.ok(fresh.manageToken);
   assert.match(fresh.manageToken, SUB_ADD_TOKEN_PATTERN);
+});
+
+test("an add-only link adds an account without a manage token, even when one is brought along", async () => {
+  const { token } = newSubAddToken();
+  const issued = newSubAddToken();
+  recordedPrisma.reset({
+    subAddLink: linkLookup(token, link({ manageable: false, maxAccounts: null })),
+    subAddAccount: { count: () => 1 },
+    providerConnection: { create: (args: { data: object }) => ({ id: "provider-5", ...args.data }) },
+  });
+  assert.equal((await openSubAddLink({ token })).manageable, false);
+  stubFetch((url) => (isTokenUrl(url) ? claudeTokens() : Response.json({})));
+  const done = await completeSubAddSignIn({
+    token,
+    ticket: sealTicket(subAddUid("link-1"), claudeDevice()),
+    code: "code-1#state-1",
+    manage: issued.token,
+  });
+  assert.equal(done.state, "done");
+  if (done.state !== "done") return;
+  assert.equal(done.outcome, "created");
+  assert.equal(done.manageToken, null);
+  const [created] = recordedPrisma.called("providerConnection", "create");
+  const data = (created.args as { data: { subAdd: { create: unknown } } }).data;
+  assert.deepEqual(data.subAdd.create, { linkId: "link-1", label: "Friends", manageHash: null });
+  assert.deepEqual(recordedPrisma.called("subAddAccount", "count"), []);
+});
+
+test("a verified sign-in through an add-only link renews an account and leaves its management as it was", async () => {
+  const { token } = newSubAddToken();
+  recordedPrisma.reset({
+    subAddLink: linkLookup(token, link({ manageable: false })),
+    subAddAccount: { count: () => 1 },
+    providerConnection: {
+      findMany: () => [{ id: "provider-9", login: null }],
+      update: (args: { where: { id: string }; data: object }) => ({ id: args.where.id, kind: "claude", ...args.data }),
+    },
+  });
+  stubFetch((url) => (isTokenUrl(url) ? claudeTokens() : Response.json({})));
+  const done = await completeSubAddSignIn({
+    token,
+    ticket: sealTicket(subAddUid("link-1"), claudeDevice()),
+    code: "code-1#state-1",
+    manage: newSubAddToken().token,
+  });
+  assert.equal(done.state, "done");
+  if (done.state !== "done") return;
+  assert.equal(done.outcome, "updated");
+  assert.equal(done.manageToken, null);
+  const [update] = recordedPrisma.called("providerConnection", "update");
+  const args = update.args as { where: { id: string }; data: Record<string, unknown> };
+  assert.equal(args.where.id, "provider-9");
+  assert.ok(args.data.login);
+  assert.equal(args.data.subAdd, undefined);
+  assert.deepEqual(recordedPrisma.called("subAddAccount", "count"), []);
 });
 
 test("a contributor removes only accounts that belong to their manage token", async () => {
@@ -753,6 +816,7 @@ test("creating a link stores only the token digest and returns the link once", a
         maxAccounts: args.data.maxAccounts,
         added: 0,
         restricted: args.data.restricted,
+        manageable: args.data.manageable,
         expiresAt: args.data.expiresAt,
         createdAt: new Date(),
         createdById: args.data.createdById,
@@ -768,6 +832,7 @@ test("creating a link stores only the token digest and returns the link once", a
       days: 7,
       maxAccounts: 3,
       restricted: false,
+      manageable: false,
       targets: [],
       code,
     }),
@@ -781,9 +846,13 @@ test("creating a link stores only the token digest and returns the link once", a
   assert.deepEqual(data.kinds, ["codex", "claude"]);
   assert.equal(data.createdById, "user-1");
   assert.doesNotMatch(JSON.stringify(recordedPrisma.calls), new RegExp(token));
+  assert.equal(data.manageable, false);
   assert.equal(created.link.maxAccounts, 3);
+  assert.equal(created.link.manageable, false);
   const [audit] = recordedPrisma.called("gatewayAuditLog", "create");
-  assert.equal((audit.args as { data: { action: string } }).data.action, "provider_sub_add.create");
+  const entry = (audit.args as { data: { action: string; afterJson: string } }).data;
+  assert.equal(entry.action, "provider_sub_add.create");
+  assert.equal(JSON.parse(entry.afterJson).manageable, false);
 });
 
 test("creating a link needs a fresh second factor and checks the input before spending the code", async () => {

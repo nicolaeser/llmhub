@@ -1,0 +1,1 @@
+ALTER TABLE "SubAddLink" ADD COLUMN "manageable" BOOLEAN NOT NULL DEFAULT true;

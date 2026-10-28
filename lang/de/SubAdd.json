@@ -16,7 +16,7 @@
     "usage": "{named, select, true {Anfragen, die {instance} sendet, laufen über dein Konto und zählen auf die Limits deines Abos.} other {Anfragen, die dieser Hub sendet, laufen über dein Konto und zählen auf die Limits deines Abos.}}",
     "tokens": "Der Hub speichert die Anmeldung für dein Konto verschlüsselt und erneuert sie selbst. Dein Passwort sieht er nie.",
     "terms": "Ein Abo über einen fremden Hub zu nutzen, kann gegen die Bedingungen des Anbieters verstoßen. Der Anbieter kann das Konto einschränken oder sperren.",
-    "withdraw": "Nach dem Verbinden erhältst du einen privaten Link, mit dem du das Konto prüfen und trennen kannst. Du kannst diesen Link jederzeit ersetzen oder deaktivieren. Auch ohne ihn kannst du den Zugriff des Hubs beim Anbieter beenden.",
+    "withdraw": "{manageable, select, true {Nach dem Verbinden erhältst du einen privaten Link, mit dem du das Konto prüfen und trennen kannst. Du kannst diesen Link jederzeit ersetzen oder deaktivieren. Auch ohne ihn kannst du den Zugriff des Hubs beim Anbieter beenden.} other {Über diesen Link kannst du Konten nur hinzufügen, du erhältst keinen Link zum Trennen. Um das Teilen später zu beenden, entferne den Zugriff des Hubs in deinen Kontoeinstellungen beim Anbieter oder bitte einen Administrator dieses Hubs darum.}}",
     "accept": "Ich habe das verstanden und möchte mein Konto teilen"
   },
   "done": {
@@ -30,7 +30,8 @@
     "addAnother": "Weiteres Konto hinzufügen",
     "full": "Über diesen Link können keine weiteren Konten hinzugefügt werden.",
     "skipManage": "Ich brauche keinen Verwaltungslink",
-    "manageOffHint": "Diese Konten bleiben verbunden, und der Hub nutzt sie weiter. Über den Verwaltungslink kann sie niemand mehr sehen oder trennen.",
+    "manageOffTitle": "{manageable, select, true {Verwaltungslink deaktiviert} other {Kein Verwaltungslink}}",
+    "manageOffHint": "{manageable, select, true {Diese Konten bleiben verbunden, und der Hub nutzt sie weiter. Über den Verwaltungslink kann sie niemand mehr sehen oder trennen.} other {Über diesen Link kannst du Konten nur hinzufügen. Sie bleiben verbunden, und der Hub nutzt sie weiter.}}",
     "noManage": "Kein Verwaltungslink"
   },
   "manage": {

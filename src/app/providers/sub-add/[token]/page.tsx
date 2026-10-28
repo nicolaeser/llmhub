@@ -49,10 +49,12 @@ export default function SubAddPage({ params }: { params: Promise<{ token: string
 
   function signedIn(result: SubAddDone) {
     setAdded((cur) => [...cur, result]);
-    setManage({
-      token: result.manageToken,
-      url: new URL(subAddManagePath(result.manageToken), window.location.origin).toString(),
-    });
+    if (result.manageToken) {
+      setManage({
+        token: result.manageToken,
+        url: new URL(subAddManagePath(result.manageToken), window.location.origin).toString(),
+      });
+    }
     setAdding(false);
     if (result.outcome === "created") {
       page.setData((cur) => ({ ...cur, remaining: cur.remaining === null ? null : Math.max(0, cur.remaining - 1) }));
@@ -120,6 +122,7 @@ export default function SubAddPage({ params }: { params: Promise<{ token: string
       {added.length ? (
         <AddedAccounts
           added={added}
+          manageable={offer.manageable}
           manage={manage}
           unmanaged={unmanaged}
           revoking={revoking}
@@ -131,7 +134,12 @@ export default function SubAddPage({ params }: { params: Promise<{ token: string
 
       {adding && canAddMore ? (
         <>
-          <ShareNotice instance={offer.instance} accepted={accepted} onAcceptedChange={setAccepted} />
+          <ShareNotice
+            instance={offer.instance}
+            manageable={offer.manageable}
+            accepted={accepted}
+            onAcceptedChange={setAccepted}
+          />
           <Card className="gap-5">
             <Card.Header>
               <Card.Title>{t("pickTitle")}</Card.Title>

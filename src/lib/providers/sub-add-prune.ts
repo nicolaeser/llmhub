@@ -16,6 +16,7 @@ export const subAddAuditSelect = {
   maxAccounts: true,
   added: true,
   restricted: true,
+  manageable: true,
   expiresAt: true,
   targets: { select: { orgId: true, teamId: true, projectId: true, memberId: true, keyId: true } },
 } as const;
@@ -25,6 +26,7 @@ type AuditedLink = SubAddLinkState & {
   label: string;
   kinds: string[];
   restricted: boolean;
+  manageable: boolean;
   expiresAt: Date;
   targets: AssignmentSource[];
 };
@@ -36,6 +38,7 @@ export function subAddLinkAudit(row: AuditedLink, now = Date.now()) {
     maxAccounts: row.maxAccounts,
     added: row.added,
     restricted: row.restricted,
+    manageable: row.manageable,
     targets: assignmentTargets(row.targets).map((target) => ({ scope: target.scope, id: target.id })),
     expiresAt: row.expiresAt.toISOString(),
     status: subAddStatus(row, now),
