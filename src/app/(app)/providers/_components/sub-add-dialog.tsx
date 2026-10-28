@@ -16,6 +16,7 @@ import {
   Separator,
   Spinner,
   Surface,
+  Switch,
   TextField,
   toast,
   useOverlayState,
@@ -59,6 +60,7 @@ export default function SubAddDialog({
   );
   const [days, setDays] = useState<number>(SUB_ADD_DEFAULT_DAYS);
   const [accounts, setAccounts] = useState<number>(1);
+  const [manageable, setManageable] = useState(true);
   const [mode, setMode] = useState<AccessMode>("open");
   const [picked, setPicked] = useState(() => pickedFrom([]));
   const [url, setUrl] = useState<string | null>(null);
@@ -79,6 +81,7 @@ export default function SubAddDialog({
       days,
       maxAccounts: accounts === 0 ? null : accounts,
       restricted: mode === "limited",
+      manageable,
       targets: mode === "limited" ? pickedTargets(picked) : [],
       code,
     });
@@ -218,6 +221,15 @@ export default function SubAddDialog({
                             </Select.Popover>
                           </Select>
                         </div>
+                        <Switch isSelected={manageable} onChange={setManageable} isDisabled={pending}>
+                          <Switch.Content>
+                            <Switch.Control>
+                              <Switch.Thumb />
+                            </Switch.Control>
+                            <Label>{t("manageable")}</Label>
+                          </Switch.Content>
+                          <Description>{t("manageableHint")}</Description>
+                        </Switch>
                         <Separator />
                         <div className="space-y-1">
                           <p className="text-sm font-medium text-foreground">{t("accessTitle")}</p>

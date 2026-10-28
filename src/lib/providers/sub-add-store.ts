@@ -80,7 +80,7 @@ export async function storeSubAddAccount(input: {
   broughtManageHash?: string;
   loginVerified: boolean;
   now?: number;
-}): Promise<{ providerId: string; outcome: SubAddOutcome; manageHash: string }> {
+}): Promise<{ providerId: string; outcome: SubAddOutcome; manageHash: string | null }> {
   const spec = PROVIDER_CATALOG.find((item) => item.kind === input.kind);
   const baseUrl = spec?.default_base_url ?? "";
   const login = loginData(input.session);
@@ -88,7 +88,7 @@ export async function storeSubAddAccount(input: {
     const link = await tx.subAddLink.findUnique({ where: { id: input.linkId }, select: subAddAuditSelect });
     if (!link || !link.kinds.includes(input.kind)) throw new Error(SUB_ADD_UNAVAILABLE);
     if (subAddStatus(link, input.now ?? Date.now()) !== "active") throw new Error(SUB_ADD_UNAVAILABLE);
-    const manageHash = await liveManageHash(tx, input.broughtManageHash, input.manageHash);
+    const manageHash = link.manageable ? await liveManageHash(tx, input.broughtManageHash, input.manageHash) : null;
     const existing = await matchingConnection(input.kind, input.session, tx);
     if (existing) {
       if (!input.loginVerified) throw new Error(SUB_ADD_LOGIN_UNVERIFIED);
@@ -97,12 +97,16 @@ export async function storeSubAddAccount(input: {
         data: {
           ...(baseUrl ? { baseUrl } : {}),
           login: { upsert: { create: login, update: { ...login, version: { increment: 1 } } } },
-          subAdd: {
-            upsert: {
-              create: { linkId: null, label: link.label, manageHash },
-              update: { manageHash },
-            },
-          },
+          ...(manageHash
+            ? {
+                subAdd: {
+                  upsert: {
+                    create: { linkId: null, label: link.label, manageHash },
+                    update: { manageHash },
+                  },
+                },
+              }
+            : {}),
         },
         include: providerInclude,
       });

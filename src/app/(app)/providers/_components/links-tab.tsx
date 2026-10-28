@@ -83,7 +83,7 @@ function LinkActions({ link, onDeleted }: { link: SubAddLinkView; onDeleted: (id
       <ConfirmDialog
         state={confirmState}
         title={t("deleteTitle", { label: link.label })}
-        description={t("deleteDescription")}
+        description={t("deleteDescription", { manageable: String(link.manageable) })}
         confirmLabel={t("delete")}
         cancelLabel={tCommon("cancel")}
         pending={deleting}
@@ -201,6 +201,12 @@ export default function LinksTab({
     </span>
   );
 
+  const removal = (link: SubAddLinkView) => (
+    <span className="text-sm whitespace-nowrap text-foreground">
+      {t("removal", { manageable: String(link.manageable) })}
+    </span>
+  );
+
   return (
     <div className="space-y-5">
       <p className="max-w-3xl text-sm text-muted">{t("description")}</p>
@@ -222,19 +228,21 @@ export default function LinksTab({
               { label: t("columns.accounts"), value: accounts(link), wide: true },
               { label: t("columns.expires"), value: expires(link) },
               { label: t("columns.access"), value: access(link) },
+              { label: t("columns.removal"), value: removal(link) },
             ]}
           />
         ))}
       </RowCards>
       <Table aria-label={t("title")} className={TABLE_FROM_LG}>
         <Table.ScrollContainer>
-          <Table.Content aria-label={t("title")} className="min-w-[56rem]">
+          <Table.Content aria-label={t("title")} className="min-w-[64rem]">
             <Table.Header>
               <Table.Column isRowHeader>{t("columns.link")}</Table.Column>
               <Table.Column>{t("columns.providers")}</Table.Column>
               <Table.Column>{t("columns.accounts")}</Table.Column>
               <Table.Column>{t("columns.expires")}</Table.Column>
               <Table.Column>{t("columns.access")}</Table.Column>
+              <Table.Column>{t("columns.removal")}</Table.Column>
               <Table.Column>{tCommon("status")}</Table.Column>
               {canManage ? <Table.Column>{tCommon("actions")}</Table.Column> : null}
             </Table.Header>
@@ -251,6 +259,7 @@ export default function LinksTab({
                   <Table.Cell>{accounts(link)}</Table.Cell>
                   <Table.Cell>{expires(link)}</Table.Cell>
                   <Table.Cell>{access(link)}</Table.Cell>
+                  <Table.Cell>{removal(link)}</Table.Cell>
                   <Table.Cell>{statusChip(link)}</Table.Cell>
                   {canManage ? (
                     <Table.Cell>

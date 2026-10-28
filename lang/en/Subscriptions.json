@@ -211,13 +211,14 @@
   },
   "subAdd": {
     "title": "Add-account links",
-    "description": "Share a link with friends or colleagues so they can connect their own subscription account to this hub. They need no console login and can disconnect their account at any time.",
+    "description": "Share a link with friends or colleagues so they can connect their own subscription account to this hub. They need no console login and, if the link allows it, can disconnect their account at any time.",
     "columns": {
       "link": "Link",
       "providers": "Providers",
       "accounts": "Accounts",
       "expires": "Expires",
-      "access": "Access"
+      "access": "Access",
+      "removal": "Disconnect"
     },
     "actionsFor": "Actions for {label}",
     "create": "Create link",
@@ -243,6 +244,9 @@
     "accountOption": "{count, plural, =0 {Unlimited} one {# account} other {# accounts}}",
     "accessTitle": "Access for added accounts",
     "accessHint": "Every account added through this link gets this access. You can change it per account later.",
+    "manageable": "Let people disconnect their accounts",
+    "manageableHint": "Everyone who connects an account gets a private manage link to check and disconnect it. Turn this off to only let them add accounts; they can then only be disconnected here in the console.",
+    "removal": "{manageable, select, true {Via manage link} other {Console only}}",
     "createdDescription": "Send it to {label}. Whoever opens it can connect their own subscription account.",
     "onceTitle": "Shown only this once",
     "validForHint": "The link is deleted when it expires.",
@@ -252,7 +256,7 @@
     "unlimited": "{added, plural, one {# account added} other {# accounts added}}, no limit",
     "delete": "Delete link",
     "deleteTitle": "Delete {label}?",
-    "deleteDescription": "The link stops working right away and is removed. Accounts already added stay connected, and their owners can still disconnect them.",
+    "deleteDescription": "{manageable, select, true {The link stops working right away and is removed. Accounts already added stay connected, and their owners can still disconnect them.} other {The link stops working right away and is removed. Accounts already added stay connected and can only be disconnected here in the console.}}",
     "deleted": "{label} deleted"
   },
   "settings": {

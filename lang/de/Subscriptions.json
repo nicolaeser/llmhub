@@ -211,13 +211,14 @@
   },
   "subAdd": {
     "title": "Konto-Links",
-    "description": "Teile einen Link mit Freunden oder Kollegen, damit sie ihr eigenes Abo-Konto mit diesem Hub verbinden. Sie brauchen kein Konsolen-Login und können ihr Konto jederzeit wieder trennen.",
+    "description": "Teile einen Link mit Freunden oder Kollegen, damit sie ihr eigenes Abo-Konto mit diesem Hub verbinden. Sie brauchen kein Konsolen-Login und können ihr Konto, wenn der Link es erlaubt, jederzeit wieder trennen.",
     "columns": {
       "link": "Link",
       "providers": "Anbieter",
       "accounts": "Konten",
       "expires": "Läuft ab",
-      "access": "Zugriff"
+      "access": "Zugriff",
+      "removal": "Trennen"
     },
     "actionsFor": "Aktionen für {label}",
     "create": "Link erstellen",
@@ -243,6 +244,9 @@
     "accountOption": "{count, plural, =0 {Unbegrenzt} one {# Konto} other {# Konten}}",
     "accessTitle": "Zugriff für hinzugefügte Konten",
     "accessHint": "Jedes über diesen Link hinzugefügte Konto erhält diesen Zugriff. Du kannst ihn später pro Konto ändern.",
+    "manageable": "Trennen über Verwaltungslink erlauben",
+    "manageableHint": "Wer ein Konto verbindet, erhält einen privaten Verwaltungslink zum Prüfen und Trennen. Ausgeschaltet kann der Link Konten nur hinzufügen, und trennen lassen sie sich dann nur hier in der Konsole.",
+    "removal": "{manageable, select, true {Per Verwaltungslink} other {Nur in der Konsole}}",
     "createdDescription": "Schick ihn an {label}. Wer ihn öffnet, kann sein eigenes Abo-Konto verbinden.",
     "onceTitle": "Nur dieses eine Mal sichtbar",
     "validForHint": "Nach Ablauf wird der Link gelöscht.",
@@ -252,7 +256,7 @@
     "unlimited": "{added, plural, one {# Konto hinzugefügt} other {# Konten hinzugefügt}}, ohne Limit",
     "delete": "Link löschen",
     "deleteTitle": "{label} löschen?",
-    "deleteDescription": "Der Link funktioniert sofort nicht mehr und wird entfernt. Bereits hinzugefügte Konten bleiben verbunden, und ihre Besitzer können sie weiterhin trennen.",
+    "deleteDescription": "{manageable, select, true {Der Link funktioniert sofort nicht mehr und wird entfernt. Bereits hinzugefügte Konten bleiben verbunden, und ihre Besitzer können sie weiterhin trennen.} other {Der Link funktioniert sofort nicht mehr und wird entfernt. Bereits hinzugefügte Konten bleiben verbunden und lassen sich nur hier in der Konsole trennen.}}",
     "deleted": "{label} gelöscht"
   },
   "settings": {

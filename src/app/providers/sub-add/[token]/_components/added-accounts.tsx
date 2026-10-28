@@ -12,6 +12,7 @@ import type { SubAddDone } from "@/types/sub-add";
 
 export default function AddedAccounts({
   added,
+  manageable,
   manage,
   unmanaged,
   revoking,
@@ -20,6 +21,7 @@ export default function AddedAccounts({
   onAddAnother,
 }: {
   added: SubAddDone[];
+  manageable: boolean;
   manage: { token: string; url: string } | null;
   unmanaged: string[];
   revoking: boolean;
@@ -48,7 +50,7 @@ export default function AddedAccounts({
               <Chip size="sm" variant="soft" color="success" className="whitespace-nowrap">
                 {t("outcome", { outcome: item.outcome })}
               </Chip>
-              {unmanaged.includes(item.manageToken) ? (
+              {item.manageToken !== null && unmanaged.includes(item.manageToken) ? (
                 <Chip size="sm" variant="soft" color="default" className="whitespace-nowrap">
                   {t("noManage")}
                 </Chip>
@@ -72,9 +74,9 @@ export default function AddedAccounts({
           <Alert status="default">
             <Alert.Indicator />
             <Alert.Content className="min-w-0">
-              <Alert.Title>{tManage("revokedTitle")}</Alert.Title>
+              <Alert.Title>{t("manageOffTitle", { manageable: String(manageable) })}</Alert.Title>
               <Alert.Description>
-                {t("manageOffHint")} {tManage("revokedNext")}
+                {t("manageOffHint", { manageable: String(manageable) })} {tManage("revokedNext")}
               </Alert.Description>
             </Alert.Content>
           </Alert>

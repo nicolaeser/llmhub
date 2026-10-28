@@ -14,6 +14,7 @@ export type SubAddLinkRecord = SubAddLinkState & {
   id: string;
   label: string;
   kinds: string[];
+  manageable: boolean;
   expiresAt: Date;
 };
 
@@ -44,6 +45,7 @@ export type SubAddLinkView = {
   maxAccounts: number | null;
   added: number;
   restricted: boolean;
+  manageable: boolean;
   targets: AssignmentTarget[];
   expiresAt: string;
   createdAt: string;
@@ -67,6 +69,7 @@ export type SubAddOffer = {
   instance: string;
   kinds: SignInKind[];
   remaining: number | null;
+  manageable: boolean;
   expiresAt: string;
 };
 
@@ -79,7 +82,7 @@ export type SubAddDone = {
   account: string;
   plan: string;
   outcome: SubAddOutcome;
-  manageToken: string;
+  manageToken: string | null;
 };
 
 export type SubAddStep = { state: "pending"; interval: number } | ({ state: "done" } & SubAddDone);
