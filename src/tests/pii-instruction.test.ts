@@ -606,6 +606,7 @@ test("the playground instructs the model in restore mode", async () => {
           username: "member",
           blocked: false,
           isOwner: false,
+          identities: [],
           orgId: "o1",
           roleId: "r1",
           role: { id: "r1", templateKey: null, name: "Member", permissions: ["playground:use"] },

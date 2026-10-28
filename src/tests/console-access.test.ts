@@ -221,7 +221,7 @@ test("a read-only caller gets the console users without role, company, spend, or
 test("partial user rights show only their own row actions and never on the owner, the actor, or stronger users", async () => {
   const { usersConsole } = await import("@/lib/auth/users");
   const cases: [Permission[], string[], boolean][] = [
-    [["users:read", "users:security"], ["sessions", "reset"], false],
+    [["users:read", "users:security"], ["sessions", "reset", "emergency"], false],
     [["users:read", "budgets:manage"], ["budget", "boost"], true],
     [
       ["users:read", "users:manage", "keys:read"],
@@ -406,7 +406,7 @@ test("only settings readers are told about new releases", async () => {
         secondFactor: "TOTP",
         ipAddress: null,
         userAgent: null,
-        user: { id: "u1", blocked: false, isOwner: false, orgId: null, roleId: "r1", role: { id: "r1", templateKey: "viewer", name: null, permissions: ["users:read"] } },
+        user: { id: "u1", blocked: false, isOwner: false, identities: [], orgId: null, roleId: "r1", role: { id: "r1", templateKey: "viewer", name: null, permissions: ["users:read"] } },
       }),
     },
   });

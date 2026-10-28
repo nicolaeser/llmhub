@@ -172,3 +172,7 @@ export const userPasswordSchema = z
 export const userSecurityResetSchema = z
   .object({ userId: idSchema, code: stepUpCodeSchema })
   .strict();
+
+export const emergencyAccessSchema = z
+  .object({ userId: idSchema, enabled: z.boolean(), code: stepUpCodeSchema })
+  .strict();

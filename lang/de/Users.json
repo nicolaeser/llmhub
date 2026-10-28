@@ -38,6 +38,7 @@
     "blocked": "{blocked, select, true {Benutzer gesperrt} other {Benutzer entsperrt}}",
     "sessionsRevoked": "Alle Sitzungen abgemeldet",
     "credentialsRestored": "API-Keys wieder aktiviert",
+    "emergencyChanged": "{enabled, select, true {Notfallzugang erteilt} other {Notfallzugang entfernt}}",
     "roleChanged": "Rolle und Zugriff geändert",
     "twoFactorReset": "Zwei-Faktor-Authentifizierung zurückgesetzt",
     "contentLogging": "{enabled, select, true {Inhaltsprotokollierung eingeschaltet} other {Inhaltsprotokollierung ausgeschaltet}}"
@@ -58,6 +59,9 @@
   "revokeSessions": "Alle Sitzungen abmelden",
   "restoreCredentials": "API-Keys wieder aktivieren",
   "credentialsSuspended": "API-Keys deaktiviert",
+  "emergencyAccess": "Notfallzugang",
+  "emergencyAction": "{marked, select, true {Notfallzugang entfernen} other {Notfallzugang erteilen}}",
+  "emergencyHint": "{marked, select, true {{username} meldet sich dann nur noch über den Identitätsanbieter an, solange er Anmeldung oder Rollen verwaltet.} other {{username} kann sich dann auch mit Passwort oder Passkey und zweitem Faktor anmelden, wenn die Anmeldung über den Identitätsanbieter läuft. Jede solche Anmeldung wird protokolliert und die anderen Administratoren werden benachrichtigt. Nur für sehr wenige Konten.}}",
   "resetTwoFactor": "Zwei-Faktor-Authentifizierung zurücksetzen",
   "resetTwoFactorHint": "{username} muss bei der nächsten Anmeldung einen neuen Authenticator einrichten. Alle Sitzungen und Passkeys dieses Benutzers werden entfernt. Bestätige mit deinem eigenen Code.",
   "requireChange": "Bei der nächsten Anmeldung ein neues Passwort verlangen",

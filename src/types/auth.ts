@@ -96,6 +96,7 @@ export type AuthErrorCode =
   | "USER_CHANGED"
   | "KEY_LIMIT"
   | "SSO_REQUIRED"
+  | "EMERGENCY_ACCESS_LIMIT"
   | "NOT_FOUND";
 
 type SessionRole = Pick<Role, "id" | "templateKey" | "name">;
@@ -196,7 +197,7 @@ export type OidcDiscoveryFailure =
 
 export type OidcDiscoveryFailureDetail = { status?: number; issuer?: string };
 
-export type OidcStatePurpose = "sign_in" | "role_check";
+export type OidcStatePurpose = "sign_in" | "role_check" | "silent";
 
 export type AppRolesCheckResult = "admin" | "no_admin" | "other_account" | "unavailable" | "failed";
 
@@ -246,6 +247,8 @@ export type OidcIdentity = {
   appRoles: string[] | null;
   externalIds: string[];
 };
+
+export type LocalSignInPolicy = { ssoOnly: boolean; rolesFromProvider: boolean; issuers: string[] };
 
 export type OidcGrant = { identity: OidcIdentity; sid: string; refreshToken: string };
 

@@ -6,6 +6,7 @@ export const WEBHOOK_EVENTS = [
   "key_expiring",
   "key_blocked",
   "pii_blocked",
+  "emergency_sign_in",
 ] as const;
 
 export const WEBHOOK_FORMATS = ["json", "slack", "teams"] as const;

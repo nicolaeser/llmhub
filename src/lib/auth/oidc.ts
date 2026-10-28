@@ -37,7 +37,7 @@ import type {
 
 export const OIDC_STATE_COOKIE =
   process.env.NODE_ENV === "production" ? "__Host-llmhub-oidc" : "llmhub_oidc";
-const STATE_PURPOSES: readonly OidcStatePurpose[] = ["sign_in", "role_check"];
+const STATE_PURPOSES: readonly OidcStatePurpose[] = ["sign_in", "role_check", "silent"];
 const OIDC_STATE_TTL_SECONDS = 600;
 const STATE_PART = /^[A-Za-z0-9_-]{16,128}$/;
 const BACKCHANNEL_LOGOUT_EVENT = "http://schemas.openid.net/event/backchannel-logout";
@@ -207,6 +207,7 @@ export function buildAuthorizationUrl(
   disc: OidcDiscovery,
   resolved: ResolvedOidc,
   state: Pick<OidcState, "state" | "nonce" | "codeChallenge">,
+  prompt?: "none",
 ): string {
   const q = new URLSearchParams({
     response_type: "code",
@@ -218,6 +219,7 @@ export function buildAuthorizationUrl(
     code_challenge: state.codeChallenge,
     code_challenge_method: "S256",
   });
+  if (prompt) q.set("prompt", prompt);
   return `${disc.authorization_endpoint}?${q.toString()}`;
 }
 

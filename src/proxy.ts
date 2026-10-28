@@ -7,7 +7,7 @@ import {
   routePathname,
   shouldHardenTransport,
 } from "@/lib/http/public-path";
-import { sanitizeReturnPath } from "@/lib/auth/return-path";
+import { REQUEST_PATH_HEADER, sanitizeReturnPath } from "@/lib/auth/return-path";
 import { publicSentryEnv, sentryIngestOrigin } from "@/lib/sentry/options";
 import { LOCALE_COOKIE, pickLocale } from "@/i18n/locale-cookie";
 
@@ -51,6 +51,9 @@ export async function proxy(req: NextRequest) {
 
   const forwardedHeaders = new Headers(req.headers);
   forwardedHeaders.set("x-nonce", nonce);
+  const search = new URLSearchParams(req.nextUrl.search);
+  search.delete("_rsc");
+  forwardedHeaders.set(REQUEST_PATH_HEADER, search.size ? `${routePath}?${search}` : routePath);
   forwardedHeaders.set("content-security-policy", contentSecurityPolicy);
 
   let response: NextResponse;

@@ -310,6 +310,7 @@ test("the playground applies the signed-in user's organization guardrails", asyn
           username: "member",
           blocked: false,
           isOwner: false,
+          identities: [],
           orgId: "o1",
           roleId: "r1",
           role: { id: "r1", templateKey: null, name: "Member", permissions: ["playground:use"] },

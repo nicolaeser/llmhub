@@ -9,7 +9,7 @@ import { NextRequest } from "next/server";
 import type { AuthenticatedSession } from "@/types/auth";
 import prisma from "@/lib/db/prisma";
 import { env } from "@/lib/env";
-import { SESSION_COOKIE, signSessionToken } from "@/lib/auth/cookie";
+import { SESSION_COOKIE, signSessionToken, SSO_UNVERIFIED_LIMIT_MS } from "@/lib/auth/cookie";
 import { startAppRolesCheck, readAppRolesCheck } from "@/lib/auth/app-roles-check";
 import { runAsPrincipal } from "@/lib/auth/delegation";
 import { OIDC_STATE_COOKIE, resetOidcCache } from "@/lib/auth/oidc";
@@ -20,8 +20,10 @@ import { saveSignInSettings, setAppRolesMode } from "@/lib/settings/sign-in";
 import { GET as ssoLogin } from "@/app/sso/login/route";
 import { GET as ssoCallback } from "@/app/sso/callback/route";
 import { POST as backchannelLogoutRoute } from "@/app/sso/backchannel-logout/route";
-import { getSession } from "@/lib/auth/session";
-import { revalidateSsoSessions, SSO_REVALIDATE_INTERVAL_MS, SSO_UNVERIFIED_LIMIT_MS } from "@/lib/auth/sso-sessions";
+import { requireAuth } from "@/lib/auth/guards";
+import { REQUEST_PATH_HEADER } from "@/lib/auth/return-path";
+import { getSession, SSO_RECHECK } from "@/lib/auth/session";
+import { revalidateSsoSessions, SSO_REVALIDATE_INTERVAL_MS } from "@/lib/auth/sso-sessions";
 import { restoreOwnCredentials } from "@/lib/auth/credentials";
 import { restoreUserCredentials, usersConsole } from "@/lib/auth/users";
 import { authenticateBearer } from "@/lib/gateway/access/principal";
@@ -29,6 +31,7 @@ import { mintTryBearer } from "@/lib/gateway/access/try-bearer";
 import { authenticateManagementKey } from "@/lib/management/auth";
 import { closeDatabase, uniqueName } from "./support/database";
 import { preserveSetting, sessionOf, TestData } from "./support/fixtures";
+import { setRequestHeaders } from "./support/next-request.mjs";
 
 const CLIENT_ID = "hub-integration";
 const { privateKey, publicKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
@@ -39,6 +42,7 @@ const provider = {
   offersAppRoles: false,
   appRoles: null as string[] | null,
   refreshAnswer: "valid" as "valid" | "unavailable" | "rate_limited",
+  offlineAccess: true,
 };
 const issued = new Map<
   string,
@@ -113,7 +117,10 @@ function identityProvider(req: IncomingMessage, res: ServerResponse) {
         ? ["client_secret_basic", "client_secret_post"]
         : ["client_secret_post"],
       ...(provider.offersAppRoles
-        ? { scopes_supported: ["openid", "email", "profile", "app_roles", "offline_access"], backchannel_logout_supported: true }
+        ? {
+            scopes_supported: ["openid", "email", "profile", "app_roles", ...(provider.offlineAccess ? ["offline_access"] : [])],
+            backchannel_logout_supported: true,
+          }
         : {}),
     });
   }
@@ -189,8 +196,12 @@ after(async () => {
   await closeDatabase();
 });
 
-async function signInAs(email: string, options: { sessionCookie?: string; nonceOverride?: string; sid?: string } = {}) {
-  const started = await ssoLogin(new NextRequest("http://localhost:3000/sso/login?return=%2Fkeys%3Ftab%3Dmine"));
+async function signInAs(
+  email: string,
+  options: { sessionCookie?: string; nonceOverride?: string; sid?: string; silent?: boolean } = {},
+) {
+  const silent = options.silent ? "&prompt=none" : "";
+  const started = await ssoLogin(new NextRequest(`http://localhost:3000/sso/login?return=%2Fkeys%3Ftab%3Dmine${silent}`));
   const authorize = new URL(started.headers.get("location") ?? "");
   const stateCookie = started.cookies.get(OIDC_STATE_COOKIE)?.value ?? "";
   const params = authorize.searchParams;
@@ -594,6 +605,7 @@ async function withRolesFromProvider<T>(roles: string[], run: () => Promise<T>):
     provider.offersAppRoles = false;
     provider.appRoles = null;
     provider.refreshAnswer = "valid";
+    provider.offlineAccess = true;
     resetOidcCache();
   }
 }
@@ -967,6 +979,144 @@ test("24 hours without a successful check end the session while shorter outages 
       assert.equal(after.role?.templateKey, "admin");
       assert.equal(after.credentialsSuspendedAt, null);
       assert.deepEqual(await accepted(), ALL_ACCEPTED);
+    });
+  } finally {
+    await data.cleanup();
+  }
+});
+
+async function cappedSession(email: string): Promise<{ cookie: string; userId: string }> {
+  const signedIn = await signInAs(email);
+  const cookie = signedIn.res.cookies.get(SESSION_COOKIE)?.value ?? "";
+  const link = await prisma.ssoSession.findFirstOrThrow({
+    where: { session: { user: { email } } },
+    orderBy: { validatedAt: "desc" },
+    include: { session: { select: { userId: true } } },
+  });
+  assert.equal(link.refreshToken, null);
+  await prisma.ssoSession.update({
+    where: { id: link.id },
+    data: { validatedAt: new Date(Date.now() - SSO_UNVERIFIED_LIMIT_MS - 1_000) },
+  });
+  return { cookie, userId: link.session.userId };
+}
+
+async function redirectTarget(run: () => Promise<unknown>): Promise<string> {
+  const thrown = await run().then(
+    () => null,
+    (err: unknown) => err,
+  );
+  return String((thrown as { digest?: unknown } | null)?.digest ?? "").split(";")[2] ?? "";
+}
+
+function silentCallback(query: string, stateCookie: string, sessionCookie: string) {
+  return ssoCallback(
+    new NextRequest(`http://localhost:3000/sso/callback?${query}`, {
+      headers: { cookie: `${OIDC_STATE_COOKIE}=${stateCookie}; ${SESSION_COOKIE}=${sessionCookie}` },
+    }),
+  );
+}
+
+async function silentStart() {
+  const started = await ssoLogin(new NextRequest("http://localhost:3000/sso/login?prompt=none&return=%2Fkeys%3Ftab%3Dmine"));
+  return {
+    authorize: new URL(started.headers.get("location") ?? ""),
+    stateCookie: started.cookies.get(OIDC_STATE_COOKIE)?.value ?? "",
+  };
+}
+
+test("an SSO session without a refresh token goes back through the provider after 24 hours and takes the changed role", async () => {
+  const data = new TestData();
+  const email = `${uniqueName("sso")}@example.test`;
+  const jar = await cookies();
+  try {
+    await data.user();
+    await withRolesFromProvider(["admin"], async () => {
+      provider.offlineAccess = false;
+      resetOidcCache();
+      const first = await signInAs(email);
+      assert.equal(first.authorize.searchParams.get("scope"), "openid email profile app_roles");
+      const user = await prisma.user.findUniqueOrThrow({ where: { email } });
+      data.ownUser(user.id);
+      const cookie = first.res.cookies.get(SESSION_COOKIE)?.value ?? "";
+      setRequestHeaders({ [REQUEST_PATH_HEADER]: "/usage?tab=keys" });
+      jar.set(SESSION_COOKIE, cookie);
+      const link = await prisma.ssoSession.findFirstOrThrow({ where: { session: { userId: user.id } } });
+      assert.equal(link.refreshToken, null);
+
+      await prisma.ssoSession.update({
+        where: { id: link.id },
+        data: { validatedAt: new Date(Date.now() - SSO_UNVERIFIED_LIMIT_MS + 60_000) },
+      });
+      assert.equal((await getSession()).error, false);
+      await prisma.ssoSession.update({
+        where: { id: link.id },
+        data: { validatedAt: new Date(Date.now() - SSO_UNVERIFIED_LIMIT_MS - 1_000) },
+      });
+      const capped = await getSession();
+      assert.ok(capped.error && capped.message === SSO_RECHECK);
+      assert.equal(await redirectTarget(requireAuth), "/sso/login?prompt=none&return=%2Fusage%3Ftab%3Dkeys");
+
+      provider.appRoles = ["viewer"];
+      const silent = await signInAs(email, { silent: true, sessionCookie: cookie });
+      assert.equal(silent.authorize.searchParams.get("prompt"), "none");
+      assert.equal(`${silent.location.pathname}${silent.location.search}`, "/keys?tab=mine");
+      const renewed = silent.res.cookies.get(SESSION_COOKIE)?.value ?? "";
+      assert.ok(renewed && renewed !== cookie);
+      assert.equal(await prisma.session.count({ where: { userId: user.id } }), 1);
+      jar.set(SESSION_COOKIE, renewed);
+      const after = await getSession();
+      assert.ok(!after.error);
+      assert.equal(after.role?.templateKey, "viewer");
+    });
+  } finally {
+    jar.delete(SESSION_COOKIE);
+    await data.cleanup();
+  }
+});
+
+test("a silent re-check falls back to the normal sign-in page on login_required, another account, or an error", async () => {
+  const data = new TestData();
+  const email = `${uniqueName("sso")}@example.test`;
+  const otherEmail = `${uniqueName("sso-other")}@example.test`;
+  const fallback = "/account/login?return=%2Fkeys%3Ftab%3Dmine";
+  const landing = (res: Response) => {
+    const location = new URL(res.headers.get("location") ?? "");
+    return `${location.pathname}${location.search}`;
+  };
+  try {
+    await data.user();
+    await withRolesFromProvider(["admin"], async () => {
+      provider.offlineAccess = false;
+      resetOidcCache();
+      const loginRequired = await cappedSession(email);
+      data.ownUser(loginRequired.userId);
+      const started = await silentStart();
+      assert.equal(started.authorize.searchParams.get("prompt"), "none");
+      const lines = await capturedWarnings(() =>
+        silentCallback(`error=login_required&state=${started.authorize.searchParams.get("state")}`, started.stateCookie, loginRequired.cookie),
+      );
+      assert.equal(landing(lines.result), fallback);
+      assert.equal(lines.result.cookies.get(SESSION_COOKIE)?.value, "");
+      assert.ok(lines.events.includes("sso.silent.fallback"));
+      assert.equal(await prisma.session.count({ where: { userId: loginRequired.userId } }), 0);
+
+      const otherAccount = await cappedSession(email);
+      const switched = await signInAs(otherEmail, { silent: true, sessionCookie: otherAccount.cookie });
+      assert.equal(landing(switched.res), fallback);
+      assert.equal(switched.res.cookies.get(SESSION_COOKIE)?.value, "");
+      assert.equal(await prisma.user.count({ where: { email: otherEmail } }), 0);
+      assert.equal(await prisma.session.count({ where: { userId: otherAccount.userId } }), 0);
+
+      const broken = await cappedSession(email);
+      const retry = await silentStart();
+      const failed = await silentCallback(
+        `code=${uniqueName("unknown-code")}&state=${retry.authorize.searchParams.get("state")}`,
+        retry.stateCookie,
+        broken.cookie,
+      );
+      assert.equal(landing(failed), fallback);
+      assert.equal(await prisma.session.count({ where: { userId: broken.userId } }), 0);
     });
   } finally {
     await data.cleanup();

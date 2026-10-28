@@ -1,10 +1,11 @@
 import "server-only";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { SESSION_COOKIE } from "@/lib/auth/cookie";
 import { delegatedPrincipal } from "@/lib/auth/delegation";
 import { AuthError } from "@/lib/auth/errors";
-import { getSession } from "@/lib/auth/session";
+import { REQUEST_PATH_HEADER, withReturnQuery } from "@/lib/auth/return-path";
+import { getSession, SSO_RECHECK } from "@/lib/auth/session";
 import { hasPerm } from "@/lib/auth/permissions";
 import { assertPlatform } from "@/lib/auth/scope";
 import type { AuthenticatedSession, Permission } from "@/types/auth";
@@ -12,6 +13,9 @@ import type { AuthenticatedSession, Permission } from "@/types/auth";
 export async function requireAuth(): Promise<AuthenticatedSession> {
   const session = await getSession();
   if (session.error) {
+    if (session.message === SSO_RECHECK) {
+      redirect(withReturnQuery("/sso/login?prompt=none", (await headers()).get(REQUEST_PATH_HEADER)));
+    }
     const stale = (await cookies()).has(SESSION_COOKIE);
     redirect(stale ? "/internal-api/account/expired" : "/account/login");
   }

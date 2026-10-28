@@ -8,10 +8,12 @@ import {
   SESSION_ABSOLUTE_TTL_MS,
   SESSION_COOKIE,
   SESSION_IDLE_TTL_MS,
+  SSO_UNVERIFIED_LIMIT_MS,
   sessionCookieOptions,
   signSessionToken,
   verifySessionCookie,
 } from "@/lib/auth/cookie";
+import { localSessionRefused } from "@/lib/auth/local-sign-in";
 import { readWorkspaceOrgId } from "@/lib/auth/workspace-cookie";
 import type { RequestMeta, SessionResult } from "@/types/auth";
 import type { SessionFactor } from "@/types/security";
@@ -70,6 +72,13 @@ export async function currentSessionToken(): Promise<string | null> {
   return raw ? verifySessionCookie(raw) : null;
 }
 
+export async function sessionUserId(value: string | null | undefined): Promise<string | null> {
+  const token = value ? await verifySessionCookie(value) : null;
+  if (!token) return null;
+  const row = await prisma.session.findUnique({ where: { tokenHash: digest(token) }, select: { userId: true } });
+  return row?.userId ?? null;
+}
+
 export async function revokeSessionByToken(token: string) {
   await prisma.session.deleteMany({ where: { tokenHash: digest(token) } });
 }
@@ -98,6 +107,12 @@ export async function startSession(
 }
 
 export const SESSION_FACTORS: readonly SessionFactor[] = ["TOTP", "RECOVERY", "PASSKEY", "SSO"];
+export const SSO_RECHECK = "SSO_RECHECK";
+
+function ssoRecheckDue(sso: { refreshToken: string | null; validatedAt: Date } | null, createdAt: Date, now: number) {
+  if (sso?.refreshToken) return false;
+  return now - (sso?.validatedAt ?? createdAt).getTime() >= SSO_UNVERIFIED_LIMIT_MS;
+}
 
 export async function getSession(): Promise<SessionResult> {
   const token = await currentSessionToken();
@@ -105,8 +120,12 @@ export async function getSession(): Promise<SessionResult> {
   const row = await prisma.session.findUnique({
     where: { tokenHash: digest(token) },
     include: {
+      sso: { select: { refreshToken: true, validatedAt: true } },
       user: {
-        include: { role: { select: { id: true, templateKey: true, name: true, permissions: true } } },
+        include: {
+          role: { select: { id: true, templateKey: true, name: true, permissions: true } },
+          identities: { select: { issuer: true } },
+        },
       },
     },
   });
@@ -121,6 +140,11 @@ export async function getSession(): Promise<SessionResult> {
   ) {
     return { error: true, message: "Unauthorized" };
   }
+  const { role, identities, ...user } = row.user;
+  if (factor === "SSO" && ssoRecheckDue(row.sso, row.createdAt, now)) return { error: true, message: SSO_RECHECK };
+  if (factor !== "SSO" && (await localSessionRefused({ ...user, identities }))) {
+    return { error: true, message: "Unauthorized" };
+  }
 
   if (now - row.lastActive.getTime() > ACTIVITY_WRITE_INTERVAL_MS) {
     await prisma.session.update({
@@ -129,7 +153,6 @@ export async function getSession(): Promise<SessionResult> {
     });
   }
 
-  const { role, ...user } = row.user;
   return {
     error: false,
     sessionId: row.id,

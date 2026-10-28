@@ -10,6 +10,7 @@ export type UserAction =
   | "content"
   | "sessions"
   | "reset"
+  | "emergency"
   | "credentials"
   | "block"
   | "delete";
@@ -27,7 +28,7 @@ export function userActions(
   if (flags.canBudget) actions.push("budget");
   if (flags.canBudget && (user.budget?.maxBudget ?? 0) > 0) actions.push("boost");
   if (flags.canManage) actions.push("password", "content");
-  if (flags.canSecure) actions.push("sessions", "reset");
+  if (flags.canSecure) actions.push("sessions", "reset", "emergency");
   if (flags.canManage && user.credentialsSuspended) actions.push("credentials");
   if (flags.canManage) actions.push("block", "delete");
   return actions;
