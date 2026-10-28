@@ -20,6 +20,7 @@ import { saveSignInSettings, setAppRolesMode } from "@/lib/settings/sign-in";
 import { GET as ssoLogin } from "@/app/sso/login/route";
 import { GET as ssoCallback } from "@/app/sso/callback/route";
 import { POST as backchannelLogoutRoute } from "@/app/sso/backchannel-logout/route";
+import { GET as expiredRoute } from "@/app/internal-api/account/expired/route";
 import { requireAuth } from "@/lib/auth/guards";
 import { REQUEST_PATH_HEADER } from "@/lib/auth/return-path";
 import { getSession, SSO_RECHECK } from "@/lib/auth/session";
@@ -198,10 +199,11 @@ after(async () => {
 
 async function signInAs(
   email: string,
-  options: { sessionCookie?: string; nonceOverride?: string; sid?: string; silent?: boolean } = {},
+  options: { sessionCookie?: string; nonceOverride?: string; sid?: string; silent?: boolean; returnTo?: string } = {},
 ) {
   const silent = options.silent ? "&prompt=none" : "";
-  const started = await ssoLogin(new NextRequest(`http://localhost:3000/sso/login?return=%2Fkeys%3Ftab%3Dmine${silent}`));
+  const returnTo = encodeURIComponent(options.returnTo ?? "/keys?tab=mine");
+  const started = await ssoLogin(new NextRequest(`http://localhost:3000/sso/login?return=${returnTo}${silent}`));
   const authorize = new URL(started.headers.get("location") ?? "");
   const stateCookie = started.cookies.get(OIDC_STATE_COOKIE)?.value ?? "";
   const params = authorize.searchParams;
@@ -1119,6 +1121,38 @@ test("a silent re-check falls back to the normal sign-in page on login_required,
       assert.equal(await prisma.session.count({ where: { userId: broken.userId } }), 0);
     });
   } finally {
+    await data.cleanup();
+  }
+});
+
+test("a stale session cookie returns to the requested page after signing in again through the provider", async () => {
+  const data = new TestData();
+  const email = `${uniqueName("sso")}@example.test`;
+  const jar = await cookies();
+  const deepLink = "/usage?tab=keys&range=7d";
+  try {
+    await data.user();
+    const first = await signInAs(email);
+    const user = await prisma.user.findUniqueOrThrow({ where: { email } });
+    data.ownUser(user.id);
+    const cookie = first.res.cookies.get(SESSION_COOKIE)?.value ?? "";
+    assert.equal((await backchannel(logoutToken({ sub: `sub-${email}` }))).status, 200);
+
+    setRequestHeaders({ [REQUEST_PATH_HEADER]: deepLink });
+    jar.set(SESSION_COOKIE, cookie);
+    const guard = await redirectTarget(requireAuth);
+    assert.equal(guard, `/internal-api/account/expired?return=${encodeURIComponent(deepLink)}`);
+    const cleared = await expiredRoute(new NextRequest(`http://localhost:3000${guard}`));
+    assert.equal(cleared.cookies.get(SESSION_COOKIE)?.value, "");
+    const login = new URL(cleared.headers.get("location") ?? "");
+    assert.equal(login.pathname, "/account/login");
+    assert.equal(login.searchParams.get("return"), deepLink);
+
+    const again = await signInAs(email, { returnTo: login.searchParams.get("return") ?? "" });
+    assert.equal(`${again.location.pathname}${again.location.search}`, deepLink);
+    assert.ok(again.res.cookies.get(SESSION_COOKIE)?.value);
+  } finally {
+    jar.delete(SESSION_COOKIE);
     await data.cleanup();
   }
 });

@@ -13,11 +13,10 @@ import type { AuthenticatedSession, Permission } from "@/types/auth";
 export async function requireAuth(): Promise<AuthenticatedSession> {
   const session = await getSession();
   if (session.error) {
-    if (session.message === SSO_RECHECK) {
-      redirect(withReturnQuery("/sso/login?prompt=none", (await headers()).get(REQUEST_PATH_HEADER)));
-    }
+    const requested = (await headers()).get(REQUEST_PATH_HEADER);
+    if (session.message === SSO_RECHECK) redirect(withReturnQuery("/sso/login?prompt=none", requested));
     const stale = (await cookies()).has(SESSION_COOKIE);
-    redirect(stale ? "/internal-api/account/expired" : "/account/login");
+    redirect(withReturnQuery(stale ? "/internal-api/account/expired" : "/account/login", requested));
   }
   return session;
 }

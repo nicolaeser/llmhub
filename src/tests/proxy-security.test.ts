@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { NextRequest } from "next/server";
 import { SESSION_COOKIE, signSessionToken } from "@/lib/auth/cookie";
+import { REQUEST_PATH_HEADER } from "@/lib/auth/return-path";
 import { randomToken } from "@/lib/crypto";
 import { LOCALE_COOKIE } from "@/i18n/locale-cookie";
 import { config, proxy } from "@/proxy";
@@ -48,13 +49,29 @@ test("the proxy matcher leaves API, gateway, SCIM, SSO, and internal routes to t
   }
 });
 
-test("pages without a valid signed session cookie redirect to login with a return path", async () => {
+test("pages without a valid signed session cookie redirect to login with the path and query and drop the cookie", async () => {
   const forged = `${randomToken()}.${"0".repeat(64)}`;
   for (const cookie of [undefined, "garbage", forged, randomToken()]) {
-    const res = await proxy(request("/keys?tab=mine", cookie));
+    const res = await proxy(request("/keys?tab=mine&_rsc=1a2b", cookie));
     assert.equal(res.status, 307);
-    assert.equal(redirectTarget(res), "/account/login?return=%2Fkeys");
+    assert.equal(redirectTarget(res), "/account/login?return=%2Fkeys%3Ftab%3Dmine");
+    const cleared = res.cookies.get(SESSION_COOKIE);
+    if (cookie) {
+      assert.equal(cleared?.value, "");
+      assert.equal(cleared?.maxAge, 0);
+    } else {
+      assert.equal(cleared, undefined);
+    }
   }
+});
+
+test("a signed session cookie reaches the server session check with the requested path and query", async () => {
+  const cookie = await signSessionToken(randomToken());
+  const res = await proxy(request("/usage?tab=keys&_rsc=1a2b", cookie, { [REQUEST_PATH_HEADER]: "//evil.example" }));
+  assert.equal(passedThrough(res), true);
+  assert.equal(res.headers.get("location"), null);
+  assert.equal(res.headers.get(`x-middleware-request-${REQUEST_PATH_HEADER}`), "/usage?tab=keys");
+  assert.equal(res.cookies.get(SESSION_COOKIE), undefined);
 });
 
 test("sign-in pages and setup stay reachable without a session and never redirect to setup", async () => {
