@@ -35,6 +35,7 @@ const PUBLIC_ROUTES: Record<string, string> = {
   "internal-api/updater": "accepts only requests signed with the updater key",
   "sso/login": "starts OpenID Connect sign-in",
   "sso/callback": "OpenID Connect callback bound to the signed state",
+  "sso/backchannel-logout": "accepts only a logout token verified against the identity provider's keys",
 };
 
 const PUBLIC_ACTION_FILES: Record<string, string> = {
