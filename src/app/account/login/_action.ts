@@ -5,6 +5,7 @@ import { oidcIsReady, ssoOnlyActive } from "@/lib/auth/oidc";
 import { providerName } from "@/lib/auth/oidc-presets";
 import { passkeysAvailable } from "@/lib/auth/passkeys";
 import { passwordResetEnabled } from "@/lib/auth/self-service";
+import { ssoAccessHelp } from "@/lib/auth/sso-access";
 import { getEnterprise, normalizeOidc } from "@/lib/settings/enterprise";
 import type { LoginContext } from "@/types/security";
 import {
@@ -40,6 +41,10 @@ export async function loginContextAction() {
       passwordResetEnabled: passwordResetEnabled(),
     };
   });
+}
+
+export async function ssoAccessHelpAction() {
+  return runAction(() => ssoAccessHelp());
 }
 
 export async function cancelSignInAction() {

@@ -12,6 +12,7 @@ import {
   oidcFailureFields,
   oidcIsReady,
   refreshOidcGrant,
+  requestAccessUrl,
   resetOidcCache,
   resolveOidc,
   signOidcState,
@@ -147,6 +148,7 @@ test("buildAuthorizationUrl and token body match the OIDC code flow with PKCE", 
     token_endpoint: "https://idp.example.com/token",
     jwks_uri: "https://idp.example.com/jwks",
     userinfo_endpoint: "",
+    my_apps_uri: "",
     scopes_supported: [],
     token_endpoint_auth_methods_supported: [],
     id_token_signing_alg_values_supported: [],
@@ -440,6 +442,7 @@ test("the app_roles scope is requested only when discovery offers it", async () 
   const disc = (scopes_supported: string[]): OidcDiscovery => ({
     ...discoveryFor("https://idp.example.com"),
     userinfo_endpoint: "",
+    my_apps_uri: "",
     scopes_supported,
     token_endpoint_auth_methods_supported: [],
     id_token_signing_alg_values_supported: [],
@@ -610,6 +613,7 @@ test("offline_access is requested only while roles come from the provider and di
   const disc = (scopes_supported: string[]): OidcDiscovery => ({
     ...discoveryFor("https://idp.example.com"),
     userinfo_endpoint: "",
+    my_apps_uri: "",
     scopes_supported,
     token_endpoint_auth_methods_supported: [],
     id_token_signing_alg_values_supported: [],
@@ -664,5 +668,27 @@ test("a refresh is refused on a provider refusal or another subject and throws w
     assert.deepEqual(await refresh(), { status: "valid", refreshToken: "rt-1", groups: null, appRoles: null });
   } finally {
     resetOidcCache();
+  }
+});
+
+test("the request access link uses the identity provider's My apps page only over https on the issuer's origin", () => {
+  const resolved = resolveOidc(
+    { enabled: true, issuer: "https://id.example.com/realms/hub", client_id: "llm hub" },
+    { clientSecret: "s3cret", appUrl: "https://hub.example.com" },
+  );
+  const link = (my_apps_uri: string) => requestAccessUrl({ my_apps_uri }, resolved);
+  assert.equal(link("https://id.example.com/my-apps"), "https://id.example.com/my-apps?client_id=llm+hub");
+  assert.equal(link("https://id.example.com/apps?tab=all"), "https://id.example.com/apps?tab=all&client_id=llm+hub");
+  for (const refused of [
+    "",
+    "https://other.example.com/my-apps",
+    "https://id.example.com.evil.example/my-apps",
+    "http://id.example.com/my-apps",
+    "https://id.example.com:8443/my-apps",
+    "https://user:pw@id.example.com/my-apps",
+    "javascript:alert(1)",
+    "/my-apps",
+  ]) {
+    assert.equal(link(refused), "", refused);
   }
 });

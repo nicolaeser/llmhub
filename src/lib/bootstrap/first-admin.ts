@@ -1,6 +1,7 @@
 import "server-only";
 
 import { headers } from "next/headers";
+import prisma from "@/lib/db/prisma";
 import { withSerializableRetry } from "@/lib/db/serializable";
 import { hashPassword } from "@/lib/auth/password";
 import { templateRoleId } from "@/lib/auth/roles";
@@ -40,6 +41,7 @@ export async function createFirstAdmin(
     return { ok: false, error: inputErrorCode(parsed.error) };
   }
 
+  if ((await prisma.user.count()) > 0) return { ok: false, error: "SETUP_ALREADY_COMPLETE" };
   await ensureSystemCatalog();
   const adminRoleId = await templateRoleId("admin");
   const email = parsed.data.email;

@@ -446,6 +446,34 @@ test("only settings managers can check app roles or switch where roles come from
   assert.deepEqual(recordedPrisma.called("setting"), []);
 });
 
+test("the no-access help names the provider and links its My apps page only when discovery publishes it safely", async () => {
+  const { ssoAccessHelp } = await import("@/lib/auth/sso-access");
+  const issuer = "https://id.example.test";
+  const help = async (extra: Record<string, unknown>) => {
+    recordedPrisma.reset(enterpriseWithOidc(issuer));
+    const discovery = async () =>
+      Response.json({
+        issuer,
+        authorization_endpoint: `${issuer}/authorize`,
+        token_endpoint: `${issuer}/token`,
+        jwks_uri: `${issuer}/jwks`,
+        ...extra,
+      });
+    return capturedLogs(() => withFetch(discovery, () => ssoAccessHelp())).then(({ result }) => result);
+  };
+  assert.deepEqual(await help({ my_apps_uri: `${issuer}/my-apps` }), {
+    provider: "id.example.test",
+    requestAccessUrl: `${issuer}/my-apps?client_id=hub-client`,
+  });
+  assert.deepEqual(await help({}), { provider: "id.example.test", requestAccessUrl: "" });
+  assert.deepEqual(await help({ my_apps_uri: "https://other.example.test/my-apps" }), {
+    provider: "id.example.test",
+    requestAccessUrl: "",
+  });
+  recordedPrisma.reset({ setting: { findUnique: () => null } });
+  assert.deepEqual(await ssoAccessHelp(), { provider: "", requestAccessUrl: "" });
+});
+
 test("issuer settings store the issuer without a pasted discovery suffix", () => {
   const pasted = "https://id.example.test/realms/hub/.well-known/openid-configuration";
   assert.equal(issuerCheckSchema.parse({ issuer: pasted }).issuer, "https://id.example.test/realms/hub");
