@@ -1,3 +1,5 @@
+export const REQUEST_PATH_HEADER = "x-llmhub-request-path";
+
 const AUTH_SEGMENTS = new Set([
   "login",
   "register",

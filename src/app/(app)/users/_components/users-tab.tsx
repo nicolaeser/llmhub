@@ -49,6 +49,7 @@ import {
   loadConsoleUsersAction,
   removeBoostAction,
   resetUserTwoFactorAction,
+  setEmergencyAccessAction,
   revokeUserSessionsAction,
   restoreUserCredentialsAction,
   setUserBlockedAction,
@@ -80,6 +81,7 @@ export default function UsersTab() {
   const boostState = useOverlayState();
   const deleteState = useOverlayState();
   const resetState = useOverlayState();
+  const emergencyState = useOverlayState();
   const page = useActionData(loadConsoleUsersAction);
   const { data, setData } = page;
 
@@ -248,6 +250,11 @@ export default function UsersTab() {
         <Chip size="sm" variant="soft" color={user.blocked ? "danger" : "success"}>
           {tCommon("blockedState", { blocked: user.blocked ? "true" : "false" })}
         </Chip>
+        {user.emergencyAccess ? (
+          <Chip size="sm" variant="soft" color="warning">
+            {t("emergencyAccess")}
+          </Chip>
+        ) : null}
         {user.credentialsSuspended ? (
           <Chip size="sm" variant="soft" color="warning">
             {t("credentialsSuspended")}
@@ -277,6 +284,7 @@ export default function UsersTab() {
     if (action === "content") return t("contentAction", { enabled: user.logContent ? "true" : "false" });
     if (action === "sessions") return t("revokeSessions");
     if (action === "reset") return t("resetTwoFactor");
+    if (action === "emergency") return t("emergencyAction", { marked: user.emergencyMarked ? "true" : "false" });
     if (action === "credentials") return t("restoreCredentials");
     if (action === "block") return t("blockAction", { blocked: user.blocked ? "true" : "false" });
     return tCommon("delete");
@@ -314,6 +322,7 @@ export default function UsersTab() {
               if (key === "password") openDialog(passwordState, user);
               if (key === "delete") openDialog(deleteState, user);
               if (key === "reset") openDialog(resetState, user);
+              if (key === "emergency") openDialog(emergencyState, user);
               if (key === "block") {
                 runRowAction(
                   user.id,
@@ -548,6 +557,26 @@ export default function UsersTab() {
             if (isActionFail(result)) return result.error;
             setData(result);
             toast(t("toasts.twoFactorReset"), { variant: "success" });
+            return null;
+          }}
+        />
+      ) : null}
+      {canSecure ? (
+        <StepUpDialog
+          state={emergencyState}
+          title={t("emergencyAction", { marked: target?.emergencyMarked ? "true" : "false" })}
+          description={t("emergencyHint", {
+            username: target?.username ?? "",
+            marked: target?.emergencyMarked ? "true" : "false",
+          })}
+          confirmLabel={t("emergencyAction", { marked: target?.emergencyMarked ? "true" : "false" })}
+          onConfirm={async (code) => {
+            if (!target) return null;
+            const enabled = !target.emergencyMarked;
+            const result = await setEmergencyAccessAction({ userId: target.id, enabled, code });
+            if (isActionFail(result)) return result.error;
+            setData(result);
+            toast(t("toasts.emergencyChanged", { enabled: enabled ? "true" : "false" }), { variant: "success" });
             return null;
           }}
         />

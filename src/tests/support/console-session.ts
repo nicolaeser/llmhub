@@ -16,6 +16,7 @@ export function sessionRow(granted: readonly Permission[], options: { isOwner?: 
       username: "member",
       blocked: false,
       isOwner: options.isOwner ?? false,
+      identities: [],
       orgId: options.orgId ?? null,
       roleId: "r1",
       role: { id: "r1", templateKey: null, name: "Custom", permissions: [...granted] },

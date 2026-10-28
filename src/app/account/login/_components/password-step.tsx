@@ -23,6 +23,7 @@ import {
 export default function PasswordStep({
   ssoEnabled,
   ssoOnly,
+  ssoProvider,
   passkeysEnabled,
   passwordResetEnabled,
   returnParam,
@@ -30,6 +31,7 @@ export default function PasswordStep({
 }: {
   ssoEnabled: boolean;
   ssoOnly: boolean;
+  ssoProvider: string;
   passkeysEnabled: boolean;
   passwordResetEnabled: boolean;
   returnParam: string | null;
@@ -43,13 +45,15 @@ export default function PasswordStep({
   const [pending, start] = useTransition();
   const [passkeyPending, startPasskey] = useTransition();
   const busy = pending || passkeyPending;
+  const failure = (code: string) =>
+    code === "SSO_REQUIRED" ? t("ssoRequired", { provider: ssoProvider || t("toasts.yourProvider") }) : errorText(code);
 
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     start(async () => {
       const result = await passwordSignInAction({ email, password });
       if (isActionFail(result)) {
-        toast.danger(errorText(result.error));
+        toast.danger(failure(result.error));
         return;
       }
       setPassword("");
@@ -61,14 +65,14 @@ export default function PasswordStep({
     startPasskey(async () => {
       const options = await passwordlessOptionsAction();
       if (isActionFail(options)) {
-        toast.danger(errorText(options.error));
+        toast.danger(failure(options.error));
         return;
       }
       try {
         const response = await passkeyAssertion(options);
         const result = await verifyPasswordlessAction({ response });
         if (isActionFail(result)) {
-          toast.danger(errorText(result.error));
+          toast.danger(failure(result.error));
           return;
         }
         onResult(result);
@@ -180,7 +184,7 @@ export default function PasswordStep({
         <Disclosure>
           <Disclosure.Heading>
             <Disclosure.Trigger className="flex w-full items-center justify-between gap-2 text-sm text-muted">
-              {t("ownerSignIn")}
+              {t("emergencySignIn")}
               <Disclosure.Indicator />
             </Disclosure.Trigger>
           </Disclosure.Heading>

@@ -15,6 +15,8 @@ export type ConsoleUser = {
   isOwner: boolean;
   blocked: boolean;
   credentialsSuspended: boolean;
+  emergencyAccess: boolean;
+  emergencyMarked: boolean;
   orgId: string | null;
   orgAlias: string;
   budget: ConsoleUserBudget | null;

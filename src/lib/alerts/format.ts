@@ -8,6 +8,7 @@ const EVENT_TITLES: Record<WebhookEvent, string> = {
   key_expiring: "API key expiring",
   key_blocked: "API key blocked",
   pii_blocked: "Request blocked by PII policy",
+  emergency_sign_in: "Emergency sign-in",
 };
 
 const SLACK_SECTION_LIMIT = 3000;

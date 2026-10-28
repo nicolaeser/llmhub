@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { SESSION_COOKIE, sessionCookieOptions } from "@/lib/auth/cookie";
+import { clearedSessionCookieOptions, SESSION_COOKIE, sessionCookieOptions } from "@/lib/auth/cookie";
 import { createSession, revokeSessionCookie } from "@/lib/auth/session";
 import { completeAppRolesCheck } from "@/lib/auth/app-roles-check";
 import {
@@ -10,9 +10,9 @@ import {
   resolveOidc,
   verifyOidcState,
 } from "@/lib/auth/oidc";
-import { sanitizeReturnPath } from "@/lib/auth/return-path";
+import { sanitizeReturnPath, withReturnQuery } from "@/lib/auth/return-path";
 import { recordSsoSession } from "@/lib/auth/sso-sessions";
-import { signInWithSso, SsoError } from "@/lib/auth/sso-user";
+import { sessionHeldBy, signInWithSso, SsoError } from "@/lib/auth/sso-user";
 import { SetupRequiredError } from "@/lib/bootstrap/operators";
 import { env } from "@/lib/env";
 import { getEnterprise, normalizeOidc } from "@/lib/settings/enterprise";
@@ -45,12 +45,23 @@ async function finishRoleCheck(input: { code: string; nonce: string; verifier: s
 export async function GET(req: NextRequest) {
   const loginError = new URL("/account/login", env.NEXT_PUBLIC_APP_URL);
   loginError.searchParams.set("sso", "error");
-  const fail = () => {
-    const res = NextResponse.redirect(loginError);
+  const browserSession = req.cookies.get(SESSION_COOKIE)?.value;
+  let silentReturn: string | null = null;
+  const leave = async (target: URL) => {
+    const res = NextResponse.redirect(target);
     clearOidcCookie(res);
+    if (silentReturn !== null) {
+      await revokeSessionCookie(browserSession);
+      res.cookies.set({ ...clearedSessionCookieOptions(), value: "" });
+    }
     return res;
   };
+  const fail = () => leave(loginError);
   const reject = (reason: string, meta: Record<string, string> = {}) => {
+    if (silentReturn !== null) {
+      logger.info("sso.silent.fallback", { reason, ...meta });
+      return leave(new URL(withReturnQuery("/account/login", silentReturn), env.NEXT_PUBLIC_APP_URL));
+    }
     logger.warn("sso.callback.rejected", { reason, ...meta });
     return fail();
   };
@@ -69,6 +80,7 @@ export async function GET(req: NextRequest) {
     if (verified.purpose === "role_check") {
       return finishRoleCheck({ code, nonce: verified.nonce, verifier: verified.verifier, idpError });
     }
+    if (verified.purpose === "silent") silentReturn = verified.returnPath;
     if (idpError) return reject("idp_error", { idpError });
     if (!code) return reject("missing_code");
 
@@ -81,15 +93,14 @@ export async function GET(req: NextRequest) {
       nonce: verified.nonce,
       verifier: verified.verifier,
     });
+    if (silentReturn !== null && !(await sessionHeldBy(browserSession, grant.identity))) return reject("other_account");
     const user = await signInWithSso(grant.identity, normalizeOidc(enterprise.oidc), clientIp(req.headers));
     if (user.blocked) {
       loginError.searchParams.set("sso", "blocked");
-      const res = NextResponse.redirect(loginError);
-      clearOidcCookie(res);
-      return res;
+      return leave(loginError);
     }
 
-    await revokeSessionCookie(req.cookies.get(SESSION_COOKIE)?.value);
+    await revokeSessionCookie(browserSession);
     const session = await createSession(user.id, "SSO", {
       ipAddress: clientIp(req.headers),
       userAgent: req.headers.get("user-agent")?.slice(0, 512) ?? null,
@@ -104,14 +115,12 @@ export async function GET(req: NextRequest) {
   } catch (err) {
     if (err instanceof SsoError) {
       loginError.searchParams.set("sso", err.reason);
-      const res = NextResponse.redirect(loginError);
-      clearOidcCookie(res);
-      return res;
+      return leave(loginError);
     }
     if (err instanceof SetupRequiredError || (err instanceof Error && err.message === "SETUP_REQUIRED")) {
       return reject("setup_required");
     }
     logger.error("sso.callback.failed", errorFields(err));
-    return fail();
+    return silentReturn === null ? fail() : reject("failed");
   }
 }

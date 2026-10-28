@@ -6,6 +6,12 @@ import { appRoleManagedUserIds, roleProvider } from "@/lib/auth/directory-roles"
 import { AuthError, isPrismaCode, parseAuthInput } from "@/lib/auth/errors";
 import { assertCanGrant, assertCanManage, canManage, grantActor } from "@/lib/auth/grants";
 import {
+  EMERGENCY_ACCESS_LIMIT,
+  hasEmergencyAccess,
+  localSignInPolicy,
+  providerLinkedUserIds,
+} from "@/lib/auth/local-sign-in";
+import {
   effectivePermissions,
   hasPerm,
   isRoleTemplateKey,
@@ -25,6 +31,7 @@ import { writeAudit } from "@/lib/audit";
 import { getEnterprise, normalizeOidc } from "@/lib/settings/enterprise";
 import { money } from "@/lib/utils/money";
 import {
+  emergencyAccessSchema,
   idSchema,
   userCreateSchema,
   userAccessSchema,
@@ -99,7 +106,12 @@ export function usersConsoleAccess(session: AuthenticatedSession) {
 
 async function roleManagement(userIds?: readonly string[]) {
   const oidc = normalizeOidc((await getEnterprise()).oidc);
-  return { provider: roleProvider(oidc), managed: await appRoleManagedUserIds(oidc, userIds) };
+  const policy = localSignInPolicy(oidc);
+  const [managed, linked] = await Promise.all([
+    appRoleManagedUserIds(oidc, userIds),
+    providerLinkedUserIds(policy, userIds),
+  ]);
+  return { provider: roleProvider(oidc), managed, policy, linked };
 }
 
 export async function usersConsole(session: AuthenticatedSession): Promise<UsersConsolePayload> {
@@ -143,6 +155,9 @@ export async function usersConsole(session: AuthenticatedSession): Promise<Users
         isOwner: user.isOwner,
         blocked: user.blocked,
         credentialsSuspended: Boolean(user.credentialsSuspendedAt),
+        emergencyAccess:
+          user.emergencyAccess || hasEmergencyAccess(user, management.linked.has(user.id), management.policy),
+        emergencyMarked: user.emergencyAccess,
         orgId: user.orgId,
         orgAlias: user.org?.alias ?? "",
         budget: access.seesSpend
@@ -245,6 +260,41 @@ export async function restoreUserCredentials(session: AuthenticatedSession, user
   const target = await loadTarget(userId);
   assertManageable(session, target);
   await restoreCredentials(target.id, session.user.id, (await requestMeta()).ipAddress);
+}
+
+export async function setEmergencyAccess(session: AuthenticatedSession, raw: unknown) {
+  const input = parseAuthInput(emergencyAccessSchema, raw);
+  const target = await loadTarget(input.userId);
+  assertManageable(session, target);
+  await requireStepUp(session.user.id, input.code);
+  if (target.emergencyAccess === input.enabled) return;
+  if (input.enabled && (await prisma.user.count({ where: { emergencyAccess: true } })) >= EMERGENCY_ACCESS_LIMIT) {
+    throw new AuthError("EMERGENCY_ACCESS_LIMIT");
+  }
+  const meta = await requestMeta();
+  await prisma.user.update({
+    where: { id: target.id },
+    data: {
+      emergencyAccess: input.enabled,
+      revision: { increment: 1 },
+      securityEvents: {
+        create: securityEvent(
+          userActor(session.user.id),
+          input.enabled ? "emergency_access.granted" : "emergency_access.removed",
+          meta.ipAddress,
+        ),
+      },
+    },
+    select: { id: true },
+  });
+  await writeAudit({
+    actor: session.user.id,
+    action: "user.emergency_access",
+    objectType: "user",
+    objectId: target.id,
+    before: { emergencyAccess: target.emergencyAccess },
+    after: { emergencyAccess: input.enabled },
+  });
 }
 
 export async function setUserContentLogging(

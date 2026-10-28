@@ -27,8 +27,9 @@ export async function GET(req: NextRequest) {
     }
     const disc = await fetchOidcDiscovery(resolved.issuer);
     const returnPath = sanitizeReturnPath(req.nextUrl.searchParams.get("return")) ?? "";
-    const state = signOidcState({ returnPath });
-    const location = buildAuthorizationUrl(disc, resolved, state);
+    const silent = req.nextUrl.searchParams.get("prompt") === "none";
+    const state = signOidcState({ returnPath, purpose: silent ? "silent" : "sign_in" });
+    const location = buildAuthorizationUrl(disc, resolved, state, silent ? "none" : undefined);
     const res = NextResponse.redirect(location);
     const opts = oidcStateCookieOptions();
     res.cookies.set(opts.name, state.cookie, opts);

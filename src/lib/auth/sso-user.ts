@@ -2,6 +2,7 @@ import "server-only";
 import { randomBytes } from "node:crypto";
 import prisma from "@/lib/db/prisma";
 import { suspendCredentials } from "@/lib/auth/credentials";
+import { sessionUserId } from "@/lib/auth/session";
 import { isPrismaCode } from "@/lib/auth/errors";
 import { hashPassword } from "@/lib/auth/password";
 import { emailDomainAllowed } from "@/lib/auth/oidc-presets";
@@ -113,6 +114,16 @@ async function linkSsoUser(identity: OidcIdentity, oidc: OidcSettings, ipAddress
   }
   if (oidc.role_mappings.length || managed) await applyDirectoryRole(user, roleId, "sso", ipAddress);
   return { id: user.id, blocked: user.blocked };
+}
+
+export async function sessionHeldBy(sessionCookie: string | undefined, identity: OidcIdentity): Promise<boolean> {
+  const userId = await sessionUserId(sessionCookie);
+  if (!userId) return false;
+  const link = await prisma.userIdentity.findUnique({
+    where: { issuer_subject: { issuer: identity.issuer, subject: identity.subject } },
+    select: { userId: true },
+  });
+  return link?.userId === userId;
 }
 
 export async function signInWithSso(
