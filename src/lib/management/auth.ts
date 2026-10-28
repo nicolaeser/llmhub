@@ -116,7 +116,7 @@ export async function authenticateManagementKey(req: Request): Promise<Authentic
     },
   });
   const now = Date.now();
-  if (!row || (row.expiresAt && row.expiresAt.getTime() <= now) || row.user.blocked) {
+  if (!row || (row.expiresAt && row.expiresAt.getTime() <= now) || row.user.blocked || row.user.credentialsSuspendedAt) {
     throw new ApiProblem("INVALID_API_KEY", "the management key is invalid, expired, or revoked", {
       headers: CHALLENGE,
     });

@@ -1,15 +1,17 @@
 import "server-only";
 import { randomBytes } from "node:crypto";
 import prisma from "@/lib/db/prisma";
+import { suspendCredentials } from "@/lib/auth/credentials";
 import { isPrismaCode } from "@/lib/auth/errors";
 import { hashPassword } from "@/lib/auth/password";
 import { emailDomainAllowed } from "@/lib/auth/oidc-presets";
 import {
+  applyDirectoryRole,
   directoryOrgId,
   directoryRoleId,
   scimGroupValues,
-  syncDirectoryRole,
 } from "@/lib/auth/directory-roles";
+import { securityEvent } from "@/lib/auth/security-events";
 import { refuseIfNoOperators } from "@/lib/bootstrap/operators";
 import type { OidcIdentity, OidcSettings, SsoFailure } from "@/types/auth";
 
@@ -57,18 +59,31 @@ async function matchUser(identity: OidcIdentity) {
   return { user: byEmail, identityId: null };
 }
 
-async function createSsoUser(email: string, oidc: OidcSettings, groups: readonly string[]) {
+async function createSsoUser(email: string, oidc: OidcSettings, roleId: string | null) {
   await refuseIfNoOperators();
   return prisma.user.create({
     data: {
       username: await uniqueUsername(email.split("@")[0] ?? "user"),
       email,
       password: await unusablePassword(),
-      roleId: await directoryRoleId(oidc, groups),
+      roleId,
       orgId: await directoryOrgId(oidc),
     },
     select: userSelect,
   });
+}
+
+async function refuseWithoutRole(userId: string | null, ipAddress: string | null): Promise<never> {
+  if (userId) {
+    const { count } = await prisma.session.deleteMany({ where: { userId } });
+    if (count) {
+      await prisma.userSecurityEvent.create({
+        data: { userId, ...securityEvent("sso", "sessions.revoked", ipAddress) },
+      });
+    }
+    await suspendCredentials(userId, "sso", ipAddress);
+  }
+  throw new SsoError("no_role");
 }
 
 async function linkSsoUser(identity: OidcIdentity, oidc: OidcSettings, ipAddress: string | null) {
@@ -77,10 +92,15 @@ async function linkSsoUser(identity: OidcIdentity, oidc: OidcSettings, ipAddress
   const email = match.user?.email ?? identity.email;
   if (!email) throw new SsoError("email");
   if (!emailDomainAllowed(email, oidc.allowed_domains)) throw new SsoError("domain");
-  const values = match.user ? [...identity.groups, ...(await scimGroupValues(match.user.id))] : identity.groups;
-  const user = match.user ?? (await createSsoUser(email, oidc, values));
+  const appRoles = oidc.app_roles ? (identity.appRoles ?? []) : null;
+  const claimed = [...identity.groups, ...(appRoles ?? [])];
+  const values = match.user ? [...claimed, ...(await scimGroupValues(match.user.id))] : claimed;
+  const roleId = await directoryRoleId(oidc, values, appRoles);
+  if (appRoles && !roleId) await refuseWithoutRole(match.user?.id ?? null, ipAddress);
+  const user = match.user ?? (await createSsoUser(email, oidc, roleId));
+  const managed = appRoles !== null;
   if (match.identityId) {
-    await prisma.userIdentity.update({ where: { id: match.identityId }, data: { lastLoginAt: new Date() } });
+    await prisma.userIdentity.update({ where: { id: match.identityId }, data: { appRoles: managed, lastLoginAt: new Date() } });
   } else {
     const other = await prisma.userIdentity.findUnique({
       where: { userId_issuer: { userId: user.id, issuer: identity.issuer } },
@@ -88,10 +108,10 @@ async function linkSsoUser(identity: OidcIdentity, oidc: OidcSettings, ipAddress
     });
     if (other) throw new SsoError("conflict");
     await prisma.userIdentity.create({
-      data: { userId: user.id, issuer: identity.issuer, subject: identity.subject, lastLoginAt: new Date() },
+      data: { userId: user.id, issuer: identity.issuer, subject: identity.subject, appRoles: managed, lastLoginAt: new Date() },
     });
   }
-  await syncDirectoryRole(user, values, oidc, "sso", ipAddress);
+  if (oidc.role_mappings.length || managed) await applyDirectoryRole(user, roleId, "sso", ipAddress);
   return { id: user.id, blocked: user.blocked };
 }
 

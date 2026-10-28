@@ -49,10 +49,10 @@ export async function createSession(
   userId: string,
   secondFactor: SessionFactor,
   meta: RequestMeta,
-): Promise<{ cookie: string; expiresAt: Date }> {
+): Promise<{ id: string; cookie: string; expiresAt: Date }> {
   await pruneSessions(userId);
   const session = newSessionToken();
-  await prisma.session.create({
+  const row = await prisma.session.create({
     data: {
       userId,
       tokenHash: session.tokenHash,
@@ -62,7 +62,7 @@ export async function createSession(
       userAgent: meta.userAgent,
     },
   });
-  return { cookie: await signSessionToken(session.token), expiresAt: session.expiresAt };
+  return { id: row.id, cookie: await signSessionToken(session.token), expiresAt: session.expiresAt };
 }
 
 export async function currentSessionToken(): Promise<string | null> {

@@ -10,6 +10,7 @@ export type UserAction =
   | "content"
   | "sessions"
   | "reset"
+  | "credentials"
   | "block"
   | "delete";
 
@@ -17,7 +18,7 @@ type ActionFlags = Pick<UsersConsolePayload, "canManage" | "canSecure" | "canBud
 
 export function userActions(
   flags: ActionFlags,
-  user: Pick<ConsoleUser, "id" | "manageable" | "budget">,
+  user: Pick<ConsoleUser, "id" | "manageable" | "budget" | "credentialsSuspended">,
 ): UserAction[] {
   const actions: UserAction[] = [];
   if (flags.insights === "all" || (flags.insights === "own" && user.id === flags.selfId)) actions.push("usage", "logs");
@@ -27,6 +28,7 @@ export function userActions(
   if (flags.canBudget && (user.budget?.maxBudget ?? 0) > 0) actions.push("boost");
   if (flags.canManage) actions.push("password", "content");
   if (flags.canSecure) actions.push("sessions", "reset");
+  if (flags.canManage && user.credentialsSuspended) actions.push("credentials");
   if (flags.canManage) actions.push("block", "delete");
   return actions;
 }

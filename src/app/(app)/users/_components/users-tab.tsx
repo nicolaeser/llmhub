@@ -10,6 +10,7 @@ import {
   Table,
   Tag,
   TagGroup,
+  Tooltip,
   toast,
   useOverlayState,
 } from "@heroui/react";
@@ -49,6 +50,7 @@ import {
   removeBoostAction,
   resetUserTwoFactorAction,
   revokeUserSessionsAction,
+  restoreUserCredentialsAction,
   setUserBlockedAction,
   setBudgetAction,
   setUserContentLoggingAction,
@@ -178,6 +180,23 @@ export default function UsersTab() {
     return roleName(user.roleId ? { name: user.roleName, templateKey: user.roleTemplateKey } : null);
   }
 
+  function roleValue(user: ConsoleUser) {
+    if (!user.managedBy) return roleLabel(user);
+    return (
+      <span className="flex flex-wrap items-center gap-1.5">
+        <span>{roleLabel(user)}</span>
+        <Tooltip delay={0} closeDelay={0}>
+          <Tooltip.Trigger className="inline-flex rounded-full">
+            <Chip size="sm" variant="soft" color="accent">
+              {t("managed.label", { provider: user.managedBy })}
+            </Chip>
+          </Tooltip.Trigger>
+          <Tooltip.Content className="max-w-xs">{t("managed.hint", { provider: user.managedBy })}</Tooltip.Content>
+        </Tooltip>
+      </span>
+    );
+  }
+
   function accessLabel(user: ConsoleUser) {
     return t("access", { scope: user.orgId ? "company" : "platform", org: user.orgAlias });
   }
@@ -229,6 +248,11 @@ export default function UsersTab() {
         <Chip size="sm" variant="soft" color={user.blocked ? "danger" : "success"}>
           {tCommon("blockedState", { blocked: user.blocked ? "true" : "false" })}
         </Chip>
+        {user.credentialsSuspended ? (
+          <Chip size="sm" variant="soft" color="warning">
+            {t("credentialsSuspended")}
+          </Chip>
+        ) : null}
         {user.mustChangePassword ? (
           <Chip size="sm" variant="soft" color="warning">
             {t("mustChangePassword")}
@@ -253,6 +277,7 @@ export default function UsersTab() {
     if (action === "content") return t("contentAction", { enabled: user.logContent ? "true" : "false" });
     if (action === "sessions") return t("revokeSessions");
     if (action === "reset") return t("resetTwoFactor");
+    if (action === "credentials") return t("restoreCredentials");
     if (action === "block") return t("blockAction", { blocked: user.blocked ? "true" : "false" });
     return tCommon("delete");
   }
@@ -295,6 +320,9 @@ export default function UsersTab() {
                   () => setUserBlockedAction(user.id, !user.blocked),
                   t("toasts.blocked", { blocked: !user.blocked ? "true" : "false" }),
                 );
+              }
+              if (key === "credentials") {
+                runRowAction(user.id, () => restoreUserCredentialsAction(user.id), t("toasts.credentialsRestored"));
               }
               if (key === "content") {
                 runRowAction(
@@ -387,7 +415,7 @@ export default function UsersTab() {
                       </>
                     }
                     details={[
-                      { label: t("columns.role"), value: roleLabel(user) },
+                      { label: t("columns.role"), value: roleValue(user) },
                       { label: t("columns.lastActive"), value: lastActiveLabel(user) },
                       {
                         label: t("columns.access"),
@@ -426,7 +454,7 @@ export default function UsersTab() {
                               <p className="text-xs text-muted">{user.email}</p>
                             </div>
                           </Table.Cell>
-                          <Table.Cell>{roleLabel(user)}</Table.Cell>
+                          <Table.Cell>{roleValue(user)}</Table.Cell>
                           <Table.Cell>
                             <p className="text-sm">{accessValue(user)}</p>
                             {user.budget ? <p className="text-xs text-muted">{spendLabel(user.budget)}</p> : null}

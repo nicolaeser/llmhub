@@ -1,14 +1,18 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  appRolesOffered,
   buildAuthorizationUrl,
   emailFromOidcClaims,
   exchangeOidcCode,
   fetchOidcDiscovery,
   jwtConfigForOidc,
+  logoutTokenClaims,
   OidcDiscoveryError,
   oidcFailureFields,
   oidcIsReady,
+  refreshOidcGrant,
+  requestAccessUrl,
   resetOidcCache,
   resolveOidc,
   signOidcState,
@@ -20,6 +24,7 @@ import {
 } from "@/lib/auth/oidc";
 import { verifyJwt } from "@/lib/auth/jwks";
 import {
+  appRoleTemplates,
   emailDomainAllowed,
   entraV2Issuer,
   mappedRoleId,
@@ -89,6 +94,7 @@ test("sign and verify OIDC state, reject mismatches, tampering, and expiry", () 
     nonce: "n".repeat(43),
     verifier: "v".repeat(43),
     returnPath: "/usage",
+    purpose: "sign_in",
   });
   assert.equal(verifyOidcState({ cookie: signed.cookie, state: "x".repeat(43), nowSeconds: 1_010, secret }), null);
   assert.equal(verifyOidcState({ cookie: signed.cookie, state, nowSeconds: 1_000 + 601, secret }), null);
@@ -96,6 +102,26 @@ test("sign and verify OIDC state, reject mismatches, tampering, and expiry", () 
   const parts = signed.cookie.split(".");
   parts[2] = "w".repeat(43);
   assert.equal(verifyOidcState({ cookie: parts.join("."), state, nowSeconds: 1_010, secret }), null);
+});
+
+test("the signed state carries its purpose, and a swapped purpose never verifies", () => {
+  const secret = "test-secret-aaaaaaaaaaaaaaaa";
+  const parts = { state: "s".repeat(43), nonce: "n".repeat(43), verifier: "v".repeat(43), nowSeconds: 1_000, secret };
+  const check = signOidcState({ ...parts, purpose: "role_check" });
+  const signIn = signOidcState(parts);
+  const at = { state: parts.state, nowSeconds: 1_010, secret };
+  assert.equal(verifyOidcState({ cookie: check.cookie, ...at })?.purpose, "role_check");
+  assert.equal(verifyOidcState({ cookie: signIn.cookie, ...at })?.purpose, "sign_in");
+  const swapped = (cookie: string, purpose: string) => {
+    const fields = cookie.split(".");
+    fields[5] = purpose;
+    return fields.join(".");
+  };
+  assert.equal(verifyOidcState({ cookie: swapped(signIn.cookie, "role_check"), ...at }), null);
+  assert.equal(verifyOidcState({ cookie: swapped(check.cookie, "sign_in"), ...at }), null);
+  assert.equal(verifyOidcState({ cookie: swapped(signIn.cookie, "admin"), ...at }), null);
+  const withoutPurpose = signIn.cookie.split(".").filter((_, index) => index !== 5).join(".");
+  assert.equal(verifyOidcState({ cookie: withoutPurpose, ...at }), null);
 });
 
 test("OIDC state values are random and distinct by default", () => {
@@ -122,6 +148,8 @@ test("buildAuthorizationUrl and token body match the OIDC code flow with PKCE", 
     token_endpoint: "https://idp.example.com/token",
     jwks_uri: "https://idp.example.com/jwks",
     userinfo_endpoint: "",
+    my_apps_uri: "",
+    scopes_supported: [],
     token_endpoint_auth_methods_supported: [],
     id_token_signing_alg_values_supported: [],
   };
@@ -396,6 +424,7 @@ test("claims map to a stable identity with groups and external ids", () => {
     subject: "pairwise-sub",
     email: "ada@example.com",
     groups: ["g1", "g2", "3"],
+    appRoles: null,
     externalIds: ["pairwise-sub", "object-id"],
   });
   assert.throws(() => identityFromClaims({ iss: "x", email: "a@b.c", email_verified: true }, ""), /sub/);
@@ -403,6 +432,58 @@ test("claims map to a stable identity with groups and external ids", () => {
   assert.deepEqual(claimValues({ "https://llmhub/roles": "ops" }, "https://llmhub/roles"), ["ops"]);
   assert.deepEqual(claimValues({ groups: "solo" }, ""), []);
   assert.equal(emailFromOidcClaims({ email: "a@ex.com", xms_edov: "true" }), "a@ex.com");
+});
+
+test("the app_roles scope is requested only when discovery offers it", async () => {
+  const resolved = resolveOidc(
+    { enabled: true, issuer: "https://idp.example.com", client_id: "hub", scopes: "email profile" },
+    { clientSecret: "s3cret", appUrl: "https://hub.example.com" },
+  );
+  const disc = (scopes_supported: string[]): OidcDiscovery => ({
+    ...discoveryFor("https://idp.example.com"),
+    userinfo_endpoint: "",
+    my_apps_uri: "",
+    scopes_supported,
+    token_endpoint_auth_methods_supported: [],
+    id_token_signing_alg_values_supported: [],
+  });
+  const scopeFor = (offered: OidcDiscovery, config = resolved) =>
+    new URL(buildAuthorizationUrl(offered, config, { state: "s", nonce: "n", codeChallenge: "c" })).searchParams.get("scope");
+  assert.equal(scopeFor(disc([])), "openid email profile");
+  assert.equal(scopeFor(disc(["openid", "email", "profile", "groups"])), "openid email profile");
+  assert.equal(scopeFor(disc(["openid", "email", "app_roles"])), "openid email profile app_roles");
+  const typed = { ...resolved, scopes: "openid app_roles email" };
+  assert.equal(scopeFor(disc([]), typed), "openid email");
+  assert.equal(scopeFor(disc(["openid", "email"]), typed), "openid email");
+  assert.equal(scopeFor(disc(["app_roles"]), typed), "openid email app_roles");
+  assert.equal(appRolesOffered(disc(["App_Roles"])), false);
+
+  resetOidcCache();
+  try {
+    const fetched = await fetchOidcDiscovery(
+      "https://idp.example.com",
+      serving({ ...discoveryFor("https://idp.example.com"), scopes_supported: ["openid", "app_roles", 7] }),
+    );
+    assert.deepEqual(fetched.scopes_supported, ["openid", "app_roles"]);
+    assert.equal(appRolesOffered(fetched), true);
+  } finally {
+    resetOidcCache();
+  }
+});
+
+test("app roles come only from an offered app_roles list and rank by role template", () => {
+  const claims = { iss: "https://id.example.com", sub: "s1", groups: ["admin"], app_roles: ["Viewer", "operator", "viewer"] };
+  const offered = identityFromClaims(claims, "groups", true);
+  assert.deepEqual(offered.appRoles, ["viewer", "operator"]);
+  assert.deepEqual(offered.groups, ["admin"]);
+  assert.deepEqual(identityFromClaims({ ...claims, app_roles: [] }, "groups", true).appRoles, []);
+  assert.equal(identityFromClaims(claims, "groups", false).appRoles, null);
+  assert.equal(identityFromClaims(claims, "groups").appRoles, null);
+  assert.equal(identityFromClaims({ ...claims, app_roles: "admin" }, "groups", true).appRoles, null);
+  assert.equal(identityFromClaims({ iss: claims.iss, sub: claims.sub }, "groups", true).appRoles, null);
+  assert.deepEqual(appRoleTemplates(["viewer", "auditor", "Finance", "admin"]), ["admin", "finance", "viewer"]);
+  assert.deepEqual(appRoleTemplates(["operator", "viewer"]), ["operator", "viewer"]);
+  assert.deepEqual(appRoleTemplates(["auditor"]), []);
 });
 
 test("group rules pick the first matching role and domains are checked exactly", () => {
@@ -501,5 +582,113 @@ test("an Entra tenant domain sign-in verifies the ID token against the tenant ID
   } finally {
     globalThis.fetch = original;
     resetOidcCache();
+  }
+});
+
+test("logout tokens need the back-channel event, a jti, a fresh iat, a subject or sid, and no nonce", () => {
+  const now = 10_000;
+  const valid = {
+    iss: "https://idp.example.com",
+    aud: "hub",
+    iat: now - 5,
+    jti: "jti-1",
+    events: { "http://schemas.openid.net/event/backchannel-logout": {} },
+  };
+  assert.deepEqual(logoutTokenClaims({ ...valid, sub: "s1" }, now), { subject: "s1", sid: "" });
+  assert.deepEqual(logoutTokenClaims({ ...valid, sid: "op-session" }, now), { subject: "", sid: "op-session" });
+  const refused = [
+    { ...valid, sub: "s1", events: {} },
+    { ...valid, sub: "s1", events: { "http://schemas.openid.net/event/backchannel-logout": "yes" } },
+    { ...valid, sub: "s1", nonce: "n" },
+    { ...valid, sub: "s1", jti: "" },
+    { ...valid, sub: "s1", iat: now - 601 },
+    { ...valid, sub: "s1", iat: now + 61 },
+    { ...valid, sub: "s1", iat: "recent" },
+    { ...valid },
+  ];
+  for (const claims of refused) assert.throws(() => logoutTokenClaims(claims, now), /logout token/);
+});
+
+test("offline_access is requested only while roles come from the provider and discovery lists it", () => {
+  const disc = (scopes_supported: string[]): OidcDiscovery => ({
+    ...discoveryFor("https://idp.example.com"),
+    userinfo_endpoint: "",
+    my_apps_uri: "",
+    scopes_supported,
+    token_endpoint_auth_methods_supported: [],
+    id_token_signing_alg_values_supported: [],
+  });
+  const env = { clientSecret: "s3cret", appUrl: "https://hub.example.com" };
+  const scopeFor = (offered: string[], app_roles: boolean) =>
+    new URL(
+      buildAuthorizationUrl(
+        disc(offered),
+        resolveOidc({ enabled: true, issuer: "https://idp.example.com", client_id: "hub", app_roles }, env),
+        { state: "s", nonce: "n", codeChallenge: "c" },
+      ),
+    ).searchParams.get("scope");
+  assert.equal(scopeFor(["app_roles", "offline_access"], true), "openid email profile app_roles offline_access");
+  assert.equal(scopeFor(["app_roles", "offline_access"], false), "openid email profile app_roles");
+  assert.equal(scopeFor(["app_roles"], true), "openid email profile app_roles");
+});
+
+test("a refresh is refused on a provider refusal or another subject and throws while the provider is unavailable", async () => {
+  const issuer = "https://idp.example.com";
+  const resolved = resolveOidc(
+    { enabled: true, issuer, client_id: "hub", groups_claim: "groups" },
+    { clientSecret: "s3cret", appUrl: "https://hub.example.com" },
+  );
+  let tokenAnswer: Response = new Response("", { status: 500 });
+  let userinfo: Record<string, unknown> = {};
+  const fetchFn: typeof fetch = async (input) => {
+    const url = String(input);
+    if (url.endsWith("/.well-known/openid-configuration")) {
+      return Response.json({ ...discoveryFor(issuer), userinfo_endpoint: `${issuer}/userinfo`, scopes_supported: ["app_roles"] });
+    }
+    if (url === `${issuer}/token`) return tokenAnswer;
+    if (url === `${issuer}/userinfo`) return Response.json(userinfo);
+    return new Response("unexpected", { status: 500 });
+  };
+  const refresh = () => refreshOidcGrant({ resolved, refreshToken: "rt-1", subject: "s1", fetchFn });
+  try {
+    resetOidcCache();
+    tokenAnswer = Response.json({ error: "invalid_grant" }, { status: 400 });
+    assert.deepEqual(await refresh(), { status: "refused" });
+    tokenAnswer = Response.json({ error: "slow_down" }, { status: 429 });
+    await assert.rejects(refresh(), /oidc refresh 429/);
+    tokenAnswer = new Response("down", { status: 503 });
+    await assert.rejects(refresh(), /oidc refresh 503/);
+    tokenAnswer = Response.json({ access_token: "at-1" });
+    userinfo = { sub: "someone-else", app_roles: ["admin"] };
+    assert.deepEqual(await refresh(), { status: "refused" });
+    tokenAnswer = Response.json({ access_token: "at-1", refresh_token: "rt-2" });
+    userinfo = { sub: "s1", groups: ["ops"], app_roles: ["Viewer"] };
+    assert.deepEqual(await refresh(), { status: "valid", refreshToken: "rt-2", groups: ["ops"], appRoles: ["viewer"] });
+    tokenAnswer = Response.json({});
+    assert.deepEqual(await refresh(), { status: "valid", refreshToken: "rt-1", groups: null, appRoles: null });
+  } finally {
+    resetOidcCache();
+  }
+});
+
+test("the request access link uses the identity provider's My apps page only over https on the issuer's origin", () => {
+  const resolved = resolveOidc(
+    { enabled: true, issuer: "https://id.example.com/realms/hub", client_id: "llm hub" },
+    { clientSecret: "s3cret", appUrl: "https://hub.example.com" },
+  );
+  const link = (my_apps_uri: string) => requestAccessUrl({ my_apps_uri }, resolved);
+  assert.equal(link("https://id.example.com/my-apps"), "https://id.example.com/my-apps?client_id=llm+hub");
+  assert.equal(link("https://id.example.com/apps?tab=all"), "https://id.example.com/apps?tab=all&client_id=llm+hub");
+  for (const refused of [
+    "",
+    "https://other.example.com/my-apps",
+    "https://id.example.com.evil.example/my-apps",
+    "http://id.example.com/my-apps",
+    "https://id.example.com:8443/my-apps",
+    "https://user:pw@id.example.com/my-apps",
+    "javascript:alert(1)",
+    "/my-apps",
+  ]) {
+    assert.equal(link(refused), "", refused);
   }
 });

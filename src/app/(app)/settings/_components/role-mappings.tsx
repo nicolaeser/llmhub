@@ -13,12 +13,14 @@ export type MappingRow = RoleMapping & { key: string };
 export default function RoleMappings({
   rows,
   roles,
+  appRoles,
   canEdit,
   isDisabled,
   onChange,
 }: {
   rows: MappingRow[];
   roles: readonly { id: string; label: string }[];
+  appRoles: boolean;
   canEdit: boolean;
   isDisabled: boolean;
   onChange: (rows: MappingRow[]) => void;
@@ -66,7 +68,7 @@ export default function RoleMappings({
           </Card>
         ))
       ) : (
-        <p className="text-sm text-muted">{t("empty")}</p>
+        <p className="text-sm text-muted">{t("empty", { appRoles: appRoles ? "true" : "false" })}</p>
       )}
       {canEdit ? (
         <Button

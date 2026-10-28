@@ -73,7 +73,7 @@ export async function authenticateBearer(token: string): Promise<Principal> {
       where: { id: parsed.userId },
       include: { role: { select: { permissions: true } } },
     });
-    if (!user || user.blocked) {
+    if (!user || user.blocked || user.credentialsSuspendedAt) {
       throw new GateError(401, "invalid_api_key", "invalid api key");
     }
     const permissions = effectivePermissions({

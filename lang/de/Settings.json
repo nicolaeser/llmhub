@@ -47,7 +47,7 @@
       "revoke": "Token widerrufen",
       "revokeDescription": "Bestätige mit deinem Authenticator. SCIM-Anfragen schlagen fehl, bis du einen neuen Token erstellst.",
       "tokenTitle": "Token jetzt kopieren",
-      "tokenHint": "Er wird nur einmal angezeigt. Trage ihn in deinem Identity Provider als Bearer-Token ein.",
+      "tokenHint": "Er wird nur einmal angezeigt. Trage ihn bei deinem Identitätsanbieter als Bearer-Token ein.",
       "copy": "Token kopieren",
       "issued": "SCIM-Token erstellt",
       "revoked": "SCIM-Token widerrufen",
@@ -57,7 +57,7 @@
       "groupCount": "{count, plural, =0 {Keine} one {# Gruppe} other {# Gruppen}}",
       "mappingHint": "Richte deinen Anbieter auf /Users und /Groups unter dieser URL aus. Gruppen nutzen dieselben Regeln wie das Single Sign-on, und provisionierte Benutzer landen bei der Anmeldung im selben Konto."
     },
-    "description": "Single Sign-on mit OpenID Connect, Regeln von Gruppen zu Rollen und SCIM-Provisionierung. Der Owner behält immer die Anmeldung mit Passwort und Zwei-Faktor-Authentifizierung.",
+    "description": "Single Sign-on mit OpenID Connect, Regeln von Gruppen zu Rollen und SCIM-Provisionierung. Der Inhaber behält immer die Anmeldung mit Passwort und Zwei-Faktor-Authentifizierung.",
     "sso": {
       "title": "Single Sign-on",
       "subtitle": "Verbinde einen OpenID-Connect-Identitätsanbieter. Das Client-Secret bleibt als OIDC_CLIENT_SECRET in der Umgebung.",
@@ -68,8 +68,11 @@
       "issuerHint": "Der Anbieter veröffentlicht /.well-known/openid-configuration unter dieser URL.",
       "check": "Issuer prüfen",
       "clientId": "Client-ID",
+      "displayName": "Name des Anbieters",
+      "displayNamePlaceholder": "Bekannter Name",
+      "displayNameHint": "Wird Personen angezeigt, etwa bei Verwaltet von und in Anmeldemeldungen. Leer nutzt den Host des Issuers.",
       "scopes": "Scopes",
-      "scopesHint": "openid wird immer angefragt. Ergänze groups, wenn dein Anbieter für den Gruppen-Claim einen Scope braucht."
+      "scopesHint": "openid wird immer angefragt. Ergänze groups, wenn dein Anbieter für den Gruppen-Claim einen Scope braucht. app_roles kommt automatisch dazu, wenn der Anbieter es anbietet."
     },
     "check": {
       "title": "{state, select, ok {Issuer gefunden} unsupported {Issuer gefunden, aber seine Signaturverfahren werden nicht unterstützt} unreachable {Issuer nicht erreichbar} http {Discovery-Anfrage fehlgeschlagen} not_json {Kein Discovery-Dokument} issuer_mismatch {Issuer stimmt nicht überein} entra_v1 {Microsoft-Entra-v1-Endpunkt} multi_tenant {Multi-Tenant-Issuer} incomplete {Discovery-Dokument unvollständig} other {Issuer-Prüfung fehlgeschlagen}}",
@@ -83,43 +86,69 @@
       "note": "{id, select, entra {Nutze die Verzeichnis-ID (Tenant-ID), nicht die Domain, common oder organizations: https://login.microsoftonline.com/TENANT_ID/v2.0. Der Issuer endet auf /v2.0. Ergänze die optionalen Claims email und xms_edov sowie einen Gruppen-Claim (Gruppen-Objekt-IDs) oder App-Rollen (Claim roles).} google {Google sendet keine Gruppen. Alle bekommen die Standardrolle; beschränke die Anmeldung über erlaubte E-Mail-Domains.} okta {Nutze deine Okta-Domain als Issuer und ergänze im ID-Token der App einen Gruppen-Claim-Filter.} keycloak {Issuer https://HOST/realms/REALM. Ergänze am Client einen Group-Membership-Mapper (Claim groups, vollständiger Gruppenpfad aus).} authentik {Nutze den Issuer aus der OpenID-Konfiguration der Anwendung. Der Scope profile enthält den Gruppen-Claim.} auth0 {Issuer https://TENANT.auth0.com/. Gruppen oder Rollen brauchen eine Action, die einen Claim mit Namespace ergänzt, etwa https://llmhub/roles.} other {Jeder Anbieter mit Discovery, Authorization-Code-Flow und PKCE.}}",
       "docs": "Einrichtungsanleitung des Anbieters"
     },
+    "providerRoles": {
+      "title": "Rollen von deinem Anbieter",
+      "subtitle": "Mit App-Rollen entscheidet dein Anbieter, wer sich anmelden darf und mit welcher Rolle.",
+      "state": "{state, select, on {App-Rollen erkannt} lost {Dieser Anbieter bietet keine App-Rollen mehr an} first {App-Rollen verfügbar} available {App-Rollen verfügbar} absent {Dieser Anbieter bietet keine App-Rollen an} checking {Anbieter wird geprüft} other {App-Rollen nicht geprüft}}",
+      "stateHint": "{state, select, on {{provider} entscheidet, wer sich anmelden darf und mit welcher Rolle. Gib Personen dort die Rolle Admin oder Viewer für diese App.} lost {Personen ohne Standardrolle können sich nicht anmelden. Schalte das aus oder biete die App-Rollen bei {provider} wieder an.} first {Beim Speichern entscheidet {provider}, wer sich anmelden darf und mit welcher Rolle, weil dies die erste Anmelde-Einrichtung ist. Du kannst es danach ausschalten.} available {Schalte das ein, damit {provider} entscheidet, wer sich anmelden darf und mit welcher Rolle. Bis dahin gilt die Anmeldung wie unten eingerichtet.} absent {Rollen kommen aus Gruppenregeln oder der Standardrolle unten.} checking {LLM Hub liest das Discovery-Dokument des Anbieters.} other {LLM Hub prüft die Issuer-URL selbst. Wenn sie nicht erreichbar ist, steht oben der Grund.}}",
+      "mode": "Rollen kommen von {provider}",
+      "consequence": "Wer bei {provider} keine Rolle hat, verliert bei der nächsten Anmeldung den Zugriff. Offene Sitzungen enden spätestens nach 7 Tagen ohne Aktivität.",
+      "saveFirst": "Speichere zuerst deine Änderungen.",
+      "toast": "{on, select, true {Rollen kommen jetzt von {provider}.} other {Rollen kommen nicht mehr von {provider}.}}",
+      "missing": "Fehlt. Stelle sie unter Konsolen-Benutzer, Rollen wieder her.",
+      "check": {
+        "intro": "Prüfe vor dem Einschalten deinen Zugriff: Melde dich bei {provider} mit deinem Konto an. Es braucht für diese App die Rolle Admin, damit du dich nicht aussperrst.",
+        "start": "{again, select, true {Erneut prüfen} other {Zugriff prüfen}}",
+        "title": "{result, select, admin {Rolle Admin gefunden} no_admin {Keine Rolle Admin} other_account {Anderes Konto} unavailable {Keine App-Rollen erhalten} other {Prüfung nicht abgeschlossen}}",
+        "body": "{result, select, admin {Du kannst jetzt „Rollen kommen von {provider}“ einschalten.} no_admin {Gib deinem Konto bei {provider} die Rolle Admin für diese App und prüfe erneut.} other_account {Du hast dich bei {provider} mit einem anderen Konto angemeldet als dem, das mit dir verknüpft ist. Prüfe erneut mit deinem eigenen Konto.} unavailable {{provider} hat keine App-Rollen gesendet. Prüfe, ob diese App dort Rollen hat.} other {Die Prüfung wurde nicht abgeschlossen. Versuche es erneut.}}",
+        "as": "Geprüftes Konto: {email}."
+      },
+      "columns": {
+        "value": "Rolle beim Anbieter",
+        "role": "Rolle in LLM Hub",
+        "can": "Was sie darf"
+      },
+      "footer": "Die höchste Rolle gilt. Operator und Finance wirken, sobald du sie beim Anbieter als Rollen dieser App anlegst. Andere Werte werden ignoriert, außer eine Gruppenregel unten ordnet sie zu."
+    },
     "checklist": {
       "title": "Checkliste zur Einrichtung",
       "subtitle": "Registriere LLM Hub bei deinem Anbieter als vertrauliche Webanwendung mit Authorization-Code-Flow.",
-      "step": "{step, select, callback {{position}. Diese Redirect-URI beim Anbieter eintragen} secret {{position}. Client-Secret als OIDC_CLIENT_SECRET hinterlegen} client {{position}. Issuer-URL und Client-ID eintragen} issuer {{position}. Issuer prüfen} enabled {{position}. Anmeldung mit OpenID Connect einschalten} other {{position}.}}",
+      "step": "{step, select, callback {{position}. Diese Redirect-URI beim Anbieter eintragen} logout {{position}. Diese Back-Channel-Logout-URL beim Anbieter eintragen} secret {{position}. Client-Secret als OIDC_CLIENT_SECRET hinterlegen} client {{position}. Issuer-URL und Client-ID eintragen} issuer {{position}. Issuer prüfen} enabled {{position}. Anmeldung mit OpenID Connect einschalten} other {{position}.}}",
       "state": "{ok, select, true {Erledigt} other {Offen}}",
       "copyCallback": "Redirect-URI kopieren",
+      "copyLogout": "Back-Channel-Logout-URL kopieren",
+      "logoutHint": "Optional, aber empfohlen. Wenn sich jemand beim Anbieter abmeldet oder dort den Zugriff verliert, ruft der Anbieter diese URL auf und LLM Hub beendet sofort dessen Sitzungen. Kommen Rollen vom Anbieter, prüft LLM Hub zusätzlich alle 5 Minuten jede Sitzung beim Anbieter.",
       "secretHint": "Starte LLM Hub nach Änderungen an der Umgebung neu. Das Secret wird nie in der Datenbank gespeichert oder hier angezeigt."
     },
     "accounts": {
       "title": "Konten und Rollen",
       "subtitle": "Gilt für Konsolen-Benutzer, die sich per SSO anmelden oder per SCIM angelegt werden.",
-      "defaultRole": "Standardrolle",
-      "viewerDefault": "Viewer (eingebaut)",
-      "defaultRoleHint": "Neue Konten bekommen diese Rolle, wenn keine Gruppenregel passt.",
-      "defaultCompany": "Standardfirma",
+      "defaultRole": "Standardrolle für Personen ohne Rolle",
+      "noDefault": "{appRoles, select, true {Keine: Anmeldung ablehnen} other {Viewer (eingebaut)}}",
+      "defaultRoleHint": "{appRoles, select, true {Für Personen, deren Anbieter keine bekannte App-Rolle und keine passende Gruppe sendet. Mit Keine wird ihre Anmeldung abgelehnt.} other {Neue Konten bekommen diese Rolle, wenn keine Gruppenregel passt.}}",
+      "defaultCompany": "Standardunternehmen",
       "platform": "Keine (Plattform-Benutzer)",
-      "defaultCompanyHint": "Neue Konten sind auf diese Firma beschränkt. Bestehende Konten behalten ihre.",
+      "defaultCompanyHint": "Neue Konten sind auf dieses Unternehmen beschränkt. Bestehende Konten behalten ihre.",
       "domains": "Erlaubte E-Mail-Domains",
       "domainsHint": "Mit Kommas trennen. Leer lassen, um jedes Konto zuzulassen, das dein Anbieter anmeldet."
     },
     "mapping": {
       "title": "Regeln von Gruppen zu Rollen",
-      "subtitle": "Die erste Regel mit passender Gruppe bestimmt die Rolle. Solange Regeln bestehen, folgen Rollen bei jeder Anmeldung und jeder SCIM-Änderung dem Identitätsanbieter. Der Owner wird nie geändert.",
+      "subtitle": "Die erste passende Regel bestimmt die Rolle, vor den App-Rollen. Regeln ordnen auch weitere App-Rollen zu, etwa eigenen Rollen. Solange Regeln bestehen oder der Anbieter App-Rollen sendet, folgen Rollen bei jeder Anmeldung dem Identitätsanbieter; Regeln auch bei jeder SCIM-Änderung. Der Inhaber wird nie geändert.",
       "claim": "Gruppen-Claim",
       "claimHint": "Claim im ID-Token mit Gruppen oder Rollen, etwa groups, roles oder realm_access.roles. SCIM-Gruppen passen über Anzeigename oder externe ID.",
       "group": "Gruppe {position}",
       "groupPlaceholder": "Gruppenname oder ID",
       "role": "Rolle {position}",
       "remove": "Regel {position} entfernen",
-      "empty": "Noch keine Regeln. Alle bekommen die Standardrolle.",
+      "empty": "{appRoles, select, true {Noch keine Regeln. App-Rollen bestimmen die Rolle; alle anderen bekommen die Standardrolle.} other {Noch keine Regeln. Alle bekommen die Standardrolle.}}",
       "add": "Regel hinzufügen"
     },
     "ssoOnly": {
       "title": "Nur SSO",
-      "subtitle": "Blendet die Passwort-Anmeldung für alle außer dem Owner aus.",
+      "subtitle": "Blendet die Passwort-Anmeldung für alle außer dem Inhaber aus.",
       "enabled": "Nur Single Sign-on erlauben",
-      "hint": "{ready, select, true {Anmeldung mit Passwort oder Passkey und Selbstregistrierung enden für alle außer dem Owner, der Passwort und Zwei-Faktor-Authentifizierung als Notzugang behält.} other {Schließe zuerst die SSO-Einrichtung ab, damit sich niemand aussperrt.}}"
+      "hint": "{ready, select, true {Anmeldung mit Passwort oder Passkey und Selbstregistrierung enden für alle außer dem Inhaber, der Passwort und Zwei-Faktor-Authentifizierung als Notzugang behält.} other {Schließe zuerst die SSO-Einrichtung ab, damit sich niemand aussperrt.}}"
     },
     "matching": {
       "title": "So werden Konten zugeordnet",
@@ -198,8 +227,8 @@
     "webhookTitle": "Webhook {position, number}",
     "removeWebhook": "Webhook {position, number} entfernen",
     "events": "Events",
-    "eventLabel": "{event, select, upstream_exhaustion {Upstream erschöpft} budget_threshold {Budget-Schwelle} provider_models_changed {Provider-Modelle geändert} spend_anomaly {Kosten-Anomalie} key_expiring {Key läuft ab} key_blocked {Key gesperrt} pii_blocked {PII blockiert} other {Event}}",
-    "eventHint": "{event, select, upstream_exhaustion {Kein gesundes Deployment hat geantwortet oder der Upstream lieferte 5xx oder 429.} budget_threshold {Ein Key, eine Person, ein Projekt, eine Abteilung oder ein Unternehmen hat eine Budget-Alarmschwelle überschritten.} provider_models_changed {Der stündliche Sync hat hinzugefügte oder entfernte Provider-Modelle gefunden.} spend_anomaly {Ein Key oder Projekt hat in der letzten Stunde deutlich mehr ausgegeben als sonst um diese Uhrzeit.} key_expiring {Ein Key läuft innerhalb der Vorwarnzeit aus den Alarmregeln ab.} key_blocked {Jemand hat einen Key in der Konsole, über die Management-API oder den Assistenten gesperrt.} pii_blocked {Die PII-Richtlinie hat eine Anfrage blockiert. Höchstens ein Alarm pro Key alle 15 Minuten, ohne Anfrageinhalt.} other {}}",
+    "eventLabel": "{event, select, upstream_exhaustion {Upstream erschöpft} budget_threshold {Budget-Schwelle} provider_models_changed {Anbietermodelle geändert} spend_anomaly {Kosten-Anomalie} key_expiring {Key läuft ab} key_blocked {Key gesperrt} pii_blocked {PII blockiert} other {Event}}",
+    "eventHint": "{event, select, upstream_exhaustion {Kein gesundes Deployment hat geantwortet oder der Upstream lieferte 5xx oder 429.} budget_threshold {Ein Key, eine Person, ein Projekt, eine Abteilung oder ein Unternehmen hat eine Budget-Alarmschwelle überschritten.} provider_models_changed {Der stündliche Sync hat hinzugefügte oder entfernte Anbietermodelle gefunden.} spend_anomaly {Ein Key oder Projekt hat in der letzten Stunde deutlich mehr ausgegeben als sonst um diese Uhrzeit.} key_expiring {Ein Key läuft innerhalb der Vorwarnzeit aus den Alarmregeln ab.} key_blocked {Jemand hat einen Key in der Konsole, über die Management-API oder den Assistenten gesperrt.} pii_blocked {Die PII-Richtlinie hat eine Anfrage blockiert. Höchstens ein Alarm pro Key alle 15 Minuten, ohne Anfrageinhalt.} other {}}",
     "eventsRequired": "Wähle mindestens ein Event.",
     "format": "Nachrichtenformat",
     "formatLabel": "{format, select, json {JSON} slack {Slack} teams {Microsoft Teams} other {Format}}",

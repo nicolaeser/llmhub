@@ -1,6 +1,7 @@
 import "./integration/support/oidc-env";
 import { recordedPrisma } from "./support/recorded-prisma";
 import assert from "node:assert/strict";
+import { generateKeyPairSync, sign } from "node:crypto";
 import { readdir, readFile } from "node:fs/promises";
 import test from "node:test";
 import { NextRequest } from "next/server";
@@ -219,19 +220,19 @@ test("SCIM updates of other users are applied and audited", async () => {
   assert.equal(audit.data.actor, "scim");
 });
 
-test("SSO sign-in waits for setup and for an enabled OIDC configuration", async () => {
+test("SSO sign-in answers the same with or without users and waits for an enabled OIDC configuration", async () => {
   const { GET } = await import("@/app/sso/login/route");
-  const login = new NextRequest("http://localhost:3000/sso/login?return=/keys");
-
-  recordedPrisma.reset({ user: { count: () => 0 } });
-  const setup = await GET(login);
-  assert.equal(setup.status, 307);
-  assert.equal(new URL(setup.headers.get("location") ?? "").searchParams.get("sso"), "setup");
-
-  recordedPrisma.reset({ user: { count: () => 1 } });
-  const disabled = await GET(login);
-  assert.equal(new URL(disabled.headers.get("location") ?? "").searchParams.get("sso"), "disabled");
-  assert.equal(disabled.cookies.getAll().length, 0);
+  const answers = [];
+  for (const users of [0, 1]) {
+    recordedPrisma.reset({ user: { count: () => users } });
+    const res = await GET(new NextRequest("http://localhost:3000/sso/login?return=/keys"));
+    assert.deepEqual(recordedPrisma.called("user"), []);
+    answers.push({ status: res.status, location: res.headers.get("location"), cookies: res.cookies.getAll() });
+  }
+  assert.deepEqual(answers[0], answers[1]);
+  assert.equal(answers[0].status, 307);
+  assert.equal(new URL(answers[0].location ?? "").searchParams.get("sso"), "disabled");
+  assert.deepEqual(answers[0].cookies, []);
 });
 
 const TENANT_ID = "9188040d-6c67-4c5b-b112-36a304b66dad";
@@ -335,6 +336,26 @@ test("SSO sign-in with an Entra tenant domain redirects to Microsoft", async () 
   assert.ok(res.cookies.getAll().length > 0);
 });
 
+test("SSO sign-in asks for app roles only when the provider offers them", async () => {
+  const { GET } = await import("@/app/sso/login/route");
+  const issuer = "https://id.example.test";
+  const scopes = [];
+  for (const offered of [undefined, ["openid", "groups"], ["openid", "email", "profile", "app_roles"]]) {
+    recordedPrisma.reset(enterpriseWithOidc(issuer));
+    const discovery = async () =>
+      Response.json({
+        issuer,
+        authorization_endpoint: `${issuer}/authorize`,
+        token_endpoint: `${issuer}/token`,
+        jwks_uri: `${issuer}/jwks`,
+        ...(offered ? { scopes_supported: offered } : {}),
+      });
+    const res = await withFetch(discovery, () => GET(new NextRequest("http://0.0.0.0:3000/sso/login")));
+    scopes.push(new URL(res.headers.get("location") ?? "").searchParams.get("scope"));
+  }
+  assert.deepEqual(scopes, ["openid email profile", "openid email profile", "openid email profile app_roles"]);
+});
+
 function settingsManager(): AuthenticatedSession {
   return {
     error: false,
@@ -364,7 +385,18 @@ test("the issuer check explains why discovery failed and resolves Entra tenant d
     tokenAuth: "client_secret_post",
     algorithms: [],
     supported: true,
+    appRoles: false,
   });
+  const offering = async () =>
+    Response.json({
+      issuer: "https://id.example.test",
+      authorization_endpoint: "https://id.example.test/authorize",
+      token_endpoint: "https://id.example.test/token",
+      jwks_uri: "https://id.example.test/jwks",
+      scopes_supported: ["openid", "email", "profile", "app_roles"],
+    });
+  const provid = await check("https://id.example.test", offering);
+  assert.deepEqual([provid.ok, provid.ok && provid.appRoles], [true, true]);
   const tenant = await check(`${ENTRA_TENANT_ISSUER}/.well-known/openid-configuration`, discoveryAnswer(ENTRA_TENANT_ISSUER));
   assert.deepEqual([tenant.ok, tenant.ok && tenant.usesTenantId], [true, false]);
   assert.deepEqual(await check(`https://login.microsoftonline.com/${TENANT_ID}`, discoveryAnswer(`https://sts.windows.net/${TENANT_ID}/`)), {
@@ -397,6 +429,51 @@ test("the issuer check explains why discovery failed and resolves Entra tenant d
   });
 });
 
+test("only settings managers can check app roles or switch where roles come from", async () => {
+  const { runAsPrincipal } = await import("@/lib/auth/delegation");
+  const { setAppRolesMode } = await import("@/lib/settings/sign-in");
+  const { startAppRolesCheck } = await import("@/lib/auth/app-roles-check");
+  const viewer = { ...settingsManager(), permissions: ["settings:read"] } as AuthenticatedSession;
+  recordedPrisma.reset({});
+  const calls: (() => Promise<unknown>)[] = [
+    () => setAppRolesMode({ on: true }),
+    () => setAppRolesMode({ on: false }),
+    () => startAppRolesCheck(),
+  ];
+  for (const call of calls) {
+    await assert.rejects(runAsPrincipal(viewer, call), { message: "FORBIDDEN" });
+  }
+  assert.deepEqual(recordedPrisma.called("setting"), []);
+});
+
+test("the no-access help names the provider and links its My apps page only when discovery publishes it safely", async () => {
+  const { ssoAccessHelp } = await import("@/lib/auth/sso-access");
+  const issuer = "https://id.example.test";
+  const help = async (extra: Record<string, unknown>) => {
+    recordedPrisma.reset(enterpriseWithOidc(issuer));
+    const discovery = async () =>
+      Response.json({
+        issuer,
+        authorization_endpoint: `${issuer}/authorize`,
+        token_endpoint: `${issuer}/token`,
+        jwks_uri: `${issuer}/jwks`,
+        ...extra,
+      });
+    return capturedLogs(() => withFetch(discovery, () => ssoAccessHelp())).then(({ result }) => result);
+  };
+  assert.deepEqual(await help({ my_apps_uri: `${issuer}/my-apps` }), {
+    provider: "id.example.test",
+    requestAccessUrl: `${issuer}/my-apps?client_id=hub-client`,
+  });
+  assert.deepEqual(await help({}), { provider: "id.example.test", requestAccessUrl: "" });
+  assert.deepEqual(await help({ my_apps_uri: "https://other.example.test/my-apps" }), {
+    provider: "id.example.test",
+    requestAccessUrl: "",
+  });
+  recordedPrisma.reset({ setting: { findUnique: () => null } });
+  assert.deepEqual(await ssoAccessHelp(), { provider: "", requestAccessUrl: "" });
+});
+
 test("issuer settings store the issuer without a pasted discovery suffix", () => {
   const pasted = "https://id.example.test/realms/hub/.well-known/openid-configuration";
   assert.equal(issuerCheckSchema.parse({ issuer: pasted }).issuer, "https://id.example.test/realms/hub");
@@ -413,6 +490,8 @@ test("issuer settings store the issuer without a pasted discovery suffix", () =>
     default_org_id: "",
     allowed_domains: [],
     sso_only: false,
+    display_name: "",
+    app_roles: false,
   });
   assert.equal(parsed.issuer, "https://id.example.test/realms/hub");
 });
@@ -442,6 +521,146 @@ test("the SSO callback refuses requests without a matching signed state before a
     assert.equal(res.cookies.get(SESSION_COOKIE), undefined);
     assert.deepEqual(recordedPrisma.calls, []);
   }
+});
+
+function callbackFor(cookieName: string, state: string, cookie: string | null, query = "code=abc") {
+  return new NextRequest(`http://localhost:3000/sso/callback?${query}&state=${state}`, {
+    headers: cookie === null ? {} : { cookie: `${cookieName}=${cookie}` },
+  });
+}
+
+function countingFetch(): { fetchFn: typeof fetch; calls: string[] } {
+  const calls: string[] = [];
+  return {
+    calls,
+    fetchFn: (async (input) => {
+      calls.push(String(input));
+      return new Response("unexpected", { status: 500 });
+    }) as typeof fetch,
+  };
+}
+
+test("a forged, absent, or swapped role check cookie falls through to the normal rejection", async () => {
+  const { GET } = await import("@/app/sso/callback/route");
+  const { signOidcState, OIDC_STATE_COOKIE } = await import("@/lib/auth/oidc");
+  const at = (state: string, cookie: string | null, query?: string) => callbackFor(OIDC_STATE_COOKIE, state, cookie, query);
+  const check = signOidcState({ purpose: "role_check" });
+  const signIn = signOidcState({});
+  const forged = signOidcState({ state: check.state, purpose: "role_check", secret: "another-secret-aaaaaaaaaaaaaaaaaaaa" });
+  const swap = (cookie: string, purpose: string) =>
+    cookie
+      .split(".")
+      .map((part, index) => (index === 5 ? purpose : part))
+      .join(".");
+  const attempts = [
+    at(check.state, null),
+    at(check.state, forged.cookie),
+    at(signIn.state, swap(signIn.cookie, "role_check")),
+    at(check.state, swap(check.cookie, "sign_in")),
+    at(check.state, signIn.cookie),
+    at(check.state, null, "error=access_denied"),
+  ];
+  const { fetchFn, calls } = countingFetch();
+  for (const request of attempts) {
+    recordedPrisma.reset({ user: { count: () => 1 } });
+    const res = await withFetch(fetchFn, () => GET(request));
+    const location = new URL(res.headers.get("location") ?? "");
+    assert.equal(`${location.pathname}?${location.searchParams}`, "/account/login?sso=error");
+    assert.equal(res.cookies.get(OIDC_STATE_COOKIE)?.value, "");
+    assert.equal(res.cookies.get(SESSION_COOKIE), undefined);
+    assert.deepEqual(recordedPrisma.calls, []);
+  }
+  assert.deepEqual(calls, []);
+});
+
+test("a role check cookie without a settings manager's session never uses the code", async () => {
+  const { GET } = await import("@/app/sso/callback/route");
+  const { runAsPrincipal } = await import("@/lib/auth/delegation");
+  const { signOidcState, OIDC_STATE_COOKIE } = await import("@/lib/auth/oidc");
+  const viewer = { ...settingsManager(), permissions: ["settings:read"] } as AuthenticatedSession;
+  const { fetchFn, calls } = countingFetch();
+  for (const run of [<T>(fn: () => Promise<T>) => fn(), <T>(fn: () => Promise<T>) => runAsPrincipal(viewer, fn)]) {
+    const check = signOidcState({ purpose: "role_check" });
+    recordedPrisma.reset({ user: { count: () => 1 } });
+    const res = await withFetch(fetchFn, () => run(() => GET(callbackFor(OIDC_STATE_COOKIE, check.state, check.cookie))));
+    assert.equal(new URL(res.headers.get("location") ?? "").pathname, "/account/login");
+    assert.equal(res.cookies.get(SESSION_COOKIE), undefined);
+    assert.deepEqual(recordedPrisma.called("setting"), []);
+    assert.deepEqual(recordedPrisma.called("user"), []);
+  }
+  assert.deepEqual(calls, []);
+});
+
+test("a sign-in state never records an app roles check, even for a settings manager", async () => {
+  const { GET } = await import("@/app/sso/callback/route");
+  const { runAsPrincipal } = await import("@/lib/auth/delegation");
+  const { signOidcState, OIDC_STATE_COOKIE } = await import("@/lib/auth/oidc");
+  const signIn = signOidcState({});
+  recordedPrisma.reset({ user: { count: () => 1 }, setting: { findUnique: () => null } });
+  const res = await runAsPrincipal(settingsManager(), () => GET(callbackFor(OIDC_STATE_COOKIE, signIn.state, signIn.cookie)));
+  assert.equal(new URL(res.headers.get("location") ?? "").searchParams.get("sso"), "error");
+  assert.deepEqual(recordedPrisma.called("setting", "upsert"), []);
+});
+
+test("an SSO callback that would create the first user fails like any other SSO failure", async () => {
+  const { GET } = await import("@/app/sso/callback/route");
+  const { env } = await import("@/lib/env");
+  const { signOidcState, OIDC_STATE_COOKIE } = await import("@/lib/auth/oidc");
+  const issuer = "https://first-user.idp.example.test";
+  const keys = generateKeyPairSync("rsa", { modulusLength: 2048 });
+  const state = signOidcState({ returnPath: "/keys" });
+  const now = Math.floor(Date.now() / 1000);
+  const encode = (value: object) => Buffer.from(JSON.stringify(value)).toString("base64url");
+  const body = `${encode({ alg: "RS256", kid: "first-user" })}.${encode({
+    iss: issuer,
+    aud: "hub-client",
+    exp: now + 300,
+    iat: now,
+    nonce: state.nonce,
+    sub: "first-subject",
+    email: "first@example.test",
+    email_verified: true,
+  })}`;
+  const idToken = `${body}.${sign("sha256", Buffer.from(body), keys.privateKey).toString("base64url")}`;
+  const identityProvider = (async (input: RequestInfo | URL) => {
+    const url = String(input);
+    if (url === `${issuer}/.well-known/openid-configuration`) {
+      return Response.json({
+        issuer,
+        authorization_endpoint: `${issuer}/authorize`,
+        token_endpoint: `${issuer}/token`,
+        jwks_uri: `${issuer}/jwks`,
+      });
+    }
+    if (url === `${issuer}/token`) return Response.json({ id_token: idToken });
+    if (url === `${issuer}/jwks`) {
+      return Response.json({ keys: [{ ...keys.publicKey.export({ format: "jwk" }), kid: "first-user", alg: "RS256", use: "sig" }] });
+    }
+    return new Response(null, { status: 404 });
+  }) as typeof fetch;
+  const value = JSON.stringify({ oidc: { enabled: true, issuer, client_id: "hub-client" } });
+  recordedPrisma.reset({
+    user: { count: () => 0 },
+    setting: { findUnique: ({ where }: { where: { key: string } }) => (where.key === "enterprise" ? { key: "enterprise", value } : null) },
+  });
+  const { result: res, lines } = await capturedLogs(() =>
+    withFetch(identityProvider, () =>
+      GET(
+        new NextRequest(`http://localhost:3000/sso/callback?code=abc&state=${state.state}`, {
+          headers: { cookie: `${OIDC_STATE_COOKIE}=${state.cookie}` },
+        }),
+      ),
+    ),
+  );
+  assert.equal(res.headers.get("location"), new URL("/account/login?sso=error", env.NEXT_PUBLIC_APP_URL).href);
+  assert.equal(res.cookies.get(OIDC_STATE_COOKIE)?.value, "");
+  assert.equal(res.cookies.get(SESSION_COOKIE), undefined);
+  assert.equal(recordedPrisma.called("user", "count").length, 1);
+  assert.deepEqual(recordedPrisma.called("user", "create"), []);
+  assert.deepEqual(
+    lines.filter((line) => line.event === "sso.callback.rejected").map((line) => line.reason),
+    ["setup_required"],
+  );
 });
 
 test("SSO and MCP OAuth redirects use the public app URL, not the internal bind address", async () => {
@@ -489,6 +708,8 @@ test("sign-in settings carry OIDC but no JWT, custom auth, or redirect override"
     default_org_id: "",
     allowed_domains: ["Example.TEST"],
     sso_only: false,
+    display_name: "Example ID",
+    app_roles: false,
     redirect_url: "https://evil.example.test/callback",
     jwt: { issuer: "https://id.example.test", jwks_url: "https://id.example.test/jwks" },
     custom_auth_url: "https://auth.example.test",

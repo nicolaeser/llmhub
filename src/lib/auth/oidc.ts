@@ -4,9 +4,12 @@ import { pkceChallenge, signingSecret } from "@/lib/crypto";
 import { env } from "@/lib/env";
 import { asRecord, asString, asStringArray } from "@/lib/gateway/core";
 import {
+  APP_ROLES_SCOPE,
   DEFAULT_OIDC_SCOPES,
+  OFFLINE_ACCESS_SCOPE,
   ENTRA_TENANT_ID,
   issuerHasPlaceholder,
+  issuerHost,
   oidcScopes,
   trimIssuer,
 } from "@/lib/auth/oidc-presets";
@@ -20,19 +23,25 @@ import type {
   OidcDiscoveryFailureDetail,
   OidcEnv,
   OidcState,
+  OidcStatePurpose,
   ResolvedOidc,
   VerifiedOidcState,
   JwtClaims,
   JwtConfig,
+  OidcGrant,
   OidcIdentity,
+  OidcRefresh,
   OidcSettings,
   OidcTokenAuth,
 } from "@/types/auth";
 
 export const OIDC_STATE_COOKIE =
   process.env.NODE_ENV === "production" ? "__Host-llmhub-oidc" : "llmhub_oidc";
+const STATE_PURPOSES: readonly OidcStatePurpose[] = ["sign_in", "role_check"];
 const OIDC_STATE_TTL_SECONDS = 600;
 const STATE_PART = /^[A-Za-z0-9_-]{16,128}$/;
+const BACKCHANNEL_LOGOUT_EVENT = "http://schemas.openid.net/event/backchannel-logout";
+const LOGOUT_TOKEN_MAX_AGE_SECONDS = 600;
 const ENTRA_V2_ISSUER = /^https:\/\/login\.microsoftonline\.com\/([^/?#]+)\/v2\.0$/i;
 const ENTRA_SHARED_TENANTS = new Set(["common", "organizations", "consumers"]);
 let discCache: OidcDiscoveryCache | null = null;
@@ -49,14 +58,6 @@ export class OidcDiscoveryError extends Error {
     this.name = "OidcDiscoveryError";
     this.status = detail.status;
     this.issuer = detail.issuer;
-  }
-}
-
-function issuerHost(issuer: string): string {
-  try {
-    return new URL(issuer).host;
-  } catch {
-    return "";
   }
 }
 
@@ -104,6 +105,10 @@ export function oidcCallbackUrl(appUrl: string = env.NEXT_PUBLIC_APP_URL): strin
   return `${appUrl.replace(/\/+$/, "")}/sso/callback`;
 }
 
+export function oidcBackchannelLogoutUrl(appUrl: string = env.NEXT_PUBLIC_APP_URL): string {
+  return `${appUrl.replace(/\/+$/, "")}/sso/backchannel-logout`;
+}
+
 export function resolveOidc(
   cfg: Partial<OidcSettings> | undefined,
   envOverride: OidcEnv = {},
@@ -117,6 +122,7 @@ export function resolveOidc(
     redirectUrl: oidcCallbackUrl(envOverride.appUrl ?? env.NEXT_PUBLIC_APP_URL),
     scopes: oidcScopes(cfg?.scopes ?? DEFAULT_OIDC_SCOPES),
     groupsClaim: (cfg?.groups_claim ?? "").trim(),
+    rolesFromProvider: cfg?.app_roles === true,
   };
 }
 
@@ -164,6 +170,8 @@ export async function fetchOidcDiscovery(
     token_endpoint: asString(rec.token_endpoint),
     jwks_uri: asString(rec.jwks_uri),
     userinfo_endpoint: asString(rec.userinfo_endpoint),
+    my_apps_uri: asString(rec.my_apps_uri),
+    scopes_supported: asStringArray(rec.scopes_supported),
     token_endpoint_auth_methods_supported: asStringArray(rec.token_endpoint_auth_methods_supported),
     id_token_signing_alg_values_supported: asStringArray(rec.id_token_signing_alg_values_supported),
   };
@@ -175,6 +183,26 @@ export async function fetchOidcDiscovery(
   return disc;
 }
 
+export function appRolesOffered(disc: Pick<OidcDiscovery, "scopes_supported">): boolean {
+  return disc.scopes_supported.includes(APP_ROLES_SCOPE);
+}
+
+function authorizationScopes(disc: Pick<OidcDiscovery, "scopes_supported">, resolved: ResolvedOidc): string {
+  const configured = resolved.scopes.split(" ").filter((scope) => scope !== APP_ROLES_SCOPE);
+  const revalidates = resolved.rolesFromProvider && disc.scopes_supported.includes(OFFLINE_ACCESS_SCOPE);
+  const extra = [...(appRolesOffered(disc) ? [APP_ROLES_SCOPE] : []), ...(revalidates ? [OFFLINE_ACCESS_SCOPE] : [])];
+  return oidcScopes([...configured, ...extra].join(" "));
+}
+
+export function requestAccessUrl(disc: Pick<OidcDiscovery, "my_apps_uri">, resolved: ResolvedOidc): string {
+  if (!URL.canParse(disc.my_apps_uri) || !URL.canParse(resolved.issuer)) return "";
+  const url = new URL(disc.my_apps_uri);
+  if (url.protocol !== "https:" || url.username || url.password) return "";
+  if (url.origin !== new URL(resolved.issuer).origin) return "";
+  url.searchParams.set("client_id", resolved.clientId);
+  return url.toString();
+}
+
 export function buildAuthorizationUrl(
   disc: OidcDiscovery,
   resolved: ResolvedOidc,
@@ -184,7 +212,7 @@ export function buildAuthorizationUrl(
     response_type: "code",
     client_id: resolved.clientId,
     redirect_uri: resolved.redirectUrl,
-    scope: resolved.scopes,
+    scope: authorizationScopes(disc, resolved),
     state: state.state,
     nonce: state.nonce,
     code_challenge: state.codeChallenge,
@@ -211,12 +239,19 @@ export function tokenRequest(
   verifier: string,
   method: OidcTokenAuth = "client_secret_post",
 ): { headers: Record<string, string>; body: URLSearchParams } {
-  const body = new URLSearchParams({
-    grant_type: "authorization_code",
-    code,
-    redirect_uri: resolved.redirectUrl,
-    code_verifier: verifier,
-  });
+  return clientRequest(
+    resolved,
+    { grant_type: "authorization_code", code, redirect_uri: resolved.redirectUrl, code_verifier: verifier },
+    method,
+  );
+}
+
+function clientRequest(
+  resolved: ResolvedOidc,
+  grant: Record<string, string>,
+  method: OidcTokenAuth,
+): { headers: Record<string, string>; body: URLSearchParams } {
+  const body = new URLSearchParams(grant);
   const headers: Record<string, string> = { "Content-Type": "application/x-www-form-urlencoded" };
   if (method === "client_secret_basic") {
     const credentials = `${formEncode(resolved.clientId)}:${formEncode(resolved.clientSecret)}`;
@@ -258,13 +293,14 @@ export function signOidcState(input: {
   verifier?: string;
   nowSeconds?: number;
   secret?: string;
+  purpose?: OidcStatePurpose;
 }): OidcState {
   const state = input.state ?? randomPart();
   const nonce = input.nonce ?? randomPart();
   const verifier = input.verifier ?? randomPart();
   const iat = input.nowSeconds ?? Math.floor(Date.now() / 1000);
   const returnPath = input.returnPath ?? "";
-  const payload = `${state}.${nonce}.${verifier}.${iat}.${b64url(returnPath)}`;
+  const payload = `${state}.${nonce}.${verifier}.${iat}.${b64url(returnPath)}.${input.purpose ?? "sign_in"}`;
   const cookie = `${payload}.${hmacHex(input.secret ?? signingSecret(), `oidc:${payload}`)}`;
   return { state, nonce, verifier, codeChallenge: pkceChallenge(verifier), returnPath, cookie };
 }
@@ -276,11 +312,11 @@ export function verifyOidcState(input: {
   secret?: string;
 }): VerifiedOidcState | null {
   const parts = input.cookie.split(".");
-  if (parts.length !== 6) return null;
-  const [state, nonce, verifier, iatRaw, returnB64, sig] = parts;
+  if (parts.length !== 7) return null;
+  const [state, nonce, verifier, iatRaw, returnB64, purposeRaw, sig] = parts;
   if (![state, nonce, verifier].every((part) => STATE_PART.test(part))) return null;
   if (!iatRaw || returnB64 == null || !sig) return null;
-  const payload = `${state}.${nonce}.${verifier}.${iatRaw}.${returnB64}`;
+  const payload = `${state}.${nonce}.${verifier}.${iatRaw}.${returnB64}.${purposeRaw}`;
   const expected = hmacHex(input.secret ?? signingSecret(), `oidc:${payload}`);
   const a = Buffer.from(sig, "utf8");
   const b = Buffer.from(expected, "utf8");
@@ -294,8 +330,9 @@ export function verifyOidcState(input: {
     return null;
   }
   const returnPath = b64urlDecode(returnB64);
-  if (returnPath == null) return null;
-  return { nonce, verifier, returnPath };
+  const purpose = STATE_PURPOSES.find((value) => value === purposeRaw);
+  if (returnPath == null || !purpose) return null;
+  return { nonce, verifier, returnPath, purpose };
 }
 
 const MAX_CLAIM_VALUES = 500;
@@ -323,7 +360,12 @@ export function claimValues(claims: JwtClaims, name: string): string[] {
     .slice(0, MAX_CLAIM_VALUES);
 }
 
-export function identityFromClaims(claims: JwtClaims, groupsClaim: string): OidcIdentity {
+export function appRolesFromClaims(claims: JwtClaims): string[] | null {
+  if (!Array.isArray(claims[APP_ROLES_SCOPE])) return null;
+  return [...new Set(claimValues(claims, APP_ROLES_SCOPE).map((value) => value.toLowerCase()))];
+}
+
+export function identityFromClaims(claims: JwtClaims, groupsClaim: string, appRoles = false): OidcIdentity {
   const subject = typeof claims.sub === "string" ? claims.sub.trim() : "";
   if (!subject) throw new Error("oidc token missing sub");
   const oid = typeof claims.oid === "string" ? claims.oid.trim() : "";
@@ -332,6 +374,7 @@ export function identityFromClaims(claims: JwtClaims, groupsClaim: string): Oidc
     subject,
     email: emailFromOidcClaims(claims),
     groups: claimValues(claims, groupsClaim),
+    appRoles: appRoles ? appRolesFromClaims(claims) : null,
     externalIds: [...new Set([subject, oid].filter(Boolean))],
   };
 }
@@ -360,6 +403,16 @@ export async function exchangeOidcCode(input: {
   verifier: string;
   fetchFn?: typeof fetch;
 }): Promise<OidcIdentity> {
+  return (await exchangeOidcGrant(input)).identity;
+}
+
+export async function exchangeOidcGrant(input: {
+  resolved: ResolvedOidc;
+  code: string;
+  nonce: string;
+  verifier: string;
+  fetchFn?: typeof fetch;
+}): Promise<OidcGrant> {
   const fetchFn = input.fetchFn ?? fetch;
   const disc = await fetchOidcDiscovery(input.resolved.issuer, fetchFn);
   const request = tokenRequest(
@@ -379,7 +432,88 @@ export async function exchangeOidcCode(input: {
   if (!idToken) throw new Error(tokenFailureMessage(res.status, rec));
   const claims = await verifyJwt(idToken, jwtConfigForOidc(input.resolved, disc));
   if (claims.nonce !== input.nonce) throw new Error("oidc nonce mismatch");
-  return identityFromClaims(claims, input.resolved.groupsClaim);
+  return {
+    identity: identityFromClaims(claims, input.resolved.groupsClaim, appRolesOffered(disc)),
+    sid: asString(claims.sid).trim(),
+    refreshToken: asString(rec.refresh_token),
+  };
+}
+
+async function refreshedClaims(
+  disc: OidcDiscovery,
+  resolved: ResolvedOidc,
+  rec: Record<string, unknown>,
+  fetchFn: typeof fetch,
+): Promise<JwtClaims | null> {
+  const idToken = asString(rec.id_token);
+  if (idToken) return verifyJwt(idToken, jwtConfigForOidc(resolved, disc));
+  const accessToken = asString(rec.access_token);
+  if (!accessToken || !disc.userinfo_endpoint) return null;
+  const res = await fetchFn(disc.userinfo_endpoint, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    signal: AbortSignal.timeout(8_000),
+  });
+  if (!res.ok) throw new Error(`oidc userinfo ${res.status}`);
+  return asRecord(await readJsonOr(res, null));
+}
+
+export async function refreshOidcGrant(input: {
+  resolved: ResolvedOidc;
+  refreshToken: string;
+  subject: string;
+  fetchFn?: typeof fetch;
+}): Promise<OidcRefresh> {
+  const fetchFn = input.fetchFn ?? fetch;
+  const disc = await fetchOidcDiscovery(input.resolved.issuer, fetchFn);
+  const request = clientRequest(
+    input.resolved,
+    { grant_type: "refresh_token", refresh_token: input.refreshToken },
+    tokenAuthMethod(disc.token_endpoint_auth_methods_supported),
+  );
+  const res = await fetchFn(disc.token_endpoint, {
+    method: "POST",
+    headers: request.headers,
+    body: request.body,
+    signal: AbortSignal.timeout(8_000),
+  });
+  if (res.status === 429 || res.status >= 500) throw new Error(`oidc refresh ${res.status}`);
+  const rec = asRecord(await readJsonOr(res, null)) ?? {};
+  if (!res.ok) return { status: "refused" };
+  const claims = await refreshedClaims(disc, input.resolved, rec, fetchFn);
+  if (claims && asString(claims.sub) !== input.subject) return { status: "refused" };
+  return {
+    status: "valid",
+    refreshToken: asString(rec.refresh_token) || input.refreshToken,
+    groups: claims ? claimValues(claims, input.resolved.groupsClaim) : null,
+    appRoles: claims && appRolesOffered(disc) ? appRolesFromClaims(claims) : null,
+  };
+}
+
+export function logoutTokenClaims(
+  claims: JwtClaims,
+  nowSeconds = Math.floor(Date.now() / 1000),
+): { subject: string; sid: string } {
+  if (!asRecord(asRecord(claims.events)?.[BACKCHANNEL_LOGOUT_EVENT])) throw new Error("logout token event");
+  if (Object.hasOwn(claims, "nonce")) throw new Error("logout token nonce");
+  if (!asString(claims.jti)) throw new Error("logout token jti");
+  const iat = claims.iat;
+  if (typeof iat !== "number" || iat > nowSeconds + 60 || nowSeconds - iat > LOGOUT_TOKEN_MAX_AGE_SECONDS) {
+    throw new Error("logout token iat");
+  }
+  const subject = asString(claims.sub).trim();
+  const sid = asString(claims.sid).trim();
+  if (!subject && !sid) throw new Error("logout token subject");
+  return { subject, sid };
+}
+
+export async function verifyLogoutToken(
+  resolved: ResolvedOidc,
+  token: string,
+  fetchFn: typeof fetch = fetch,
+): Promise<{ issuer: string; subject: string; sid: string }> {
+  const disc = await fetchOidcDiscovery(resolved.issuer, fetchFn);
+  const claims = await verifyJwt(token, jwtConfigForOidc(resolved, disc));
+  return { issuer: String(claims.iss), ...logoutTokenClaims(claims) };
 }
 
 export function oidcStateCookieOptions(maxAge = OIDC_STATE_TTL_SECONDS) {

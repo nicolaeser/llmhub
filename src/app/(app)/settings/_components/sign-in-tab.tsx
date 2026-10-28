@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import {
   Alert,
   Button,
@@ -24,8 +24,10 @@ import { useErrorToast } from "@/components/console/use-error-toast";
 import {
   entraV2Issuer,
   issuerHasPlaceholder,
+  issuerHost,
   OIDC_PRESETS,
   OIDC_PROVIDER_IDS,
+  providerName,
   suggestedIssuer,
 } from "@/lib/auth/oidc-presets";
 import { useActionData } from "@/lib/hooks/use-action-data";
@@ -34,6 +36,7 @@ import type { OidcProviderId, OidcSettings } from "@/types/auth";
 import type { IssuerCheck, SignInSettingsView } from "@/types/settings";
 import { checkOidcIssuerAction, loadSignInSettingsAction, saveSignInSettingsAction } from "../_action";
 import OptionSelect from "./option-select";
+import ProviderRoles, { type Detection } from "./provider-roles";
 import RoleMappings, { type MappingRow } from "./role-mappings";
 import SaveBar, { SettingsLead } from "./save-bar";
 import ScimSection from "./scim-section";
@@ -42,6 +45,8 @@ import TabState from "./tab-state";
 type Draft = { oidc: OidcSettings; rows: MappingRow[]; domains: string };
 
 const NONE = "none";
+
+const DETECT_DELAY_MS = 700;
 
 function draftOf(view: SignInSettingsView): Draft {
   return {
@@ -55,6 +60,23 @@ function checkState(check: IssuerCheck) {
   if (check.ok) return check.supported ? "ok" : "unsupported";
   if (check.reason === "issuer_mismatch" && check.issuer && entraV2Issuer(check.issuer)) return "entra_v1";
   return check.reason;
+}
+
+function detectable(issuer: string) {
+  return URL.canParse(issuer) && /^https?:/i.test(issuer) && !issuerHasPlaceholder(issuer);
+}
+
+function CopyUrl({ url, label }: { url: string; label: string }) {
+  return (
+    <div className="flex min-w-0 items-center gap-2">
+      <Card variant="secondary" className="min-w-0 flex-1">
+        <Card.Content>
+          <code className="font-mono text-xs break-all">{url}</code>
+        </Card.Content>
+      </Card>
+      <CopyButton text={url} label={label} variant="secondary" />
+    </div>
+  );
 }
 
 function checkSuggestion(check: IssuerCheck) {
@@ -71,7 +93,26 @@ export default function SignInTab() {
   const [check, setCheck] = useState<IssuerCheck | null>(null);
   const [pending, start] = useTransition();
   const [checking, startCheck] = useTransition();
-  const page = useActionData(loadSignInSettingsAction);
+  const ticket = useRef(0);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [roleFieldsTouched, setRoleFieldsTouched] = useState(false);
+
+  function detect(issuer: string, quiet: boolean) {
+    const run = ++ticket.current;
+    startCheck(async () => {
+      const result = await checkOidcIssuerAction({ issuer });
+      if (run !== ticket.current) return;
+      if (isActionFail(result)) {
+        if (!quiet) showError(result.error);
+        return;
+      }
+      setCheck(result);
+    });
+  }
+
+  const page = useActionData(loadSignInSettingsAction, (loaded) => {
+    if (detectable(loaded.oidc.issuer)) detect(loaded.oidc.issuer, true);
+  });
   const { data: view, setData } = page;
 
   if (!view) return <TabState state={page} />;
@@ -81,6 +122,7 @@ export default function SignInTab() {
   const disabled = !view.canManage || pending;
   const update = (patch: Partial<Draft>) => setDraft({ ...current, ...patch });
   const setOidc = (patch: Partial<OidcSettings>) => update({ oidc: { ...oidc, ...patch } });
+  const touchRoles = () => setRoleFieldsTouched(true);
   const preset = OIDC_PRESETS[oidc.provider];
   const ready = oidc.enabled && Boolean(oidc.issuer && oidc.client_id) && view.secretSet;
   const roleLabel = (role: SignInSettingsView["roles"][number]) =>
@@ -89,29 +131,32 @@ export default function SignInTab() {
   const roles = view.roles
     .filter((role) => role.assignable || used.has(role.id))
     .map((role) => ({ id: role.id, label: roleLabel(role) }));
+  const appRoles = view.oidc.app_roles;
+  const detection: Detection = checking ? "checking" : check?.ok ? (check.appRoles ? "offered" : "absent") : "unknown";
+
+  function scheduleDetect(issuer: string) {
+    if (timer.current) clearTimeout(timer.current);
+    ticket.current += 1;
+    if (!detectable(issuer)) return;
+    timer.current = setTimeout(() => detect(issuer, true), DETECT_DELAY_MS);
+  }
+
+  function changeIssuer(issuer: string, patch: Partial<OidcSettings> = {}) {
+    setOidc({ ...patch, issuer });
+    setCheck(null);
+    scheduleDetect(issuer);
+  }
 
   function pickProvider(provider: OidcProviderId) {
     const next = OIDC_PRESETS[provider];
     const fixedIssuer = next.issuer && !issuerHasPlaceholder(next.issuer) ? next.issuer : "";
     const keptIssuer = oidc.issuer === preset.issuer ? "" : oidc.issuer;
-    setOidc({
-      provider,
-      issuer: fixedIssuer || keptIssuer,
-      scopes: next.scopes,
-      groups_claim: next.groupsClaim,
-    });
-    setCheck(null);
+    changeIssuer(fixedIssuer || keptIssuer, { provider, scopes: next.scopes, groups_claim: next.groupsClaim });
   }
 
   function runCheck(issuer = oidc.issuer) {
-    startCheck(async () => {
-      const result = await checkOidcIssuerAction({ issuer });
-      if (isActionFail(result)) {
-        showError(result.error);
-        return;
-      }
-      setCheck(result);
-    });
+    if (timer.current) clearTimeout(timer.current);
+    detect(issuer, false);
   }
 
   function save() {
@@ -120,6 +165,7 @@ export default function SignInTab() {
         ...oidc,
         role_mappings: current.rows.map(({ group, role_id }) => ({ group, role_id })),
         allowed_domains: current.domains.split(/[\s,;]+/).filter(Boolean),
+        role_fields_touched: roleFieldsTouched,
       });
       if (isActionFail(result)) {
         showError(result.error);
@@ -140,6 +186,7 @@ export default function SignInTab() {
   const suggestion = check ? checkSuggestion(check) : null;
   const checklist = [
     { key: "callback", ok: null },
+    { key: "logout", ok: null },
     { key: "secret", ok: view.secretSet },
     { key: "client", ok: Boolean(oidc.issuer && oidc.client_id) },
     { key: "issuer", ok: check ? check.ok && check.supported : null },
@@ -178,10 +225,7 @@ export default function SignInTab() {
             <SettingText
               label={t("sso.issuer")}
               value={oidc.issuer}
-              onChange={(issuer) => {
-                setOidc({ issuer });
-                setCheck(null);
-              }}
+              onChange={(issuer) => changeIssuer(issuer)}
               isDisabled={disabled}
               placeholder={preset.issuer || "https://login.example.com/realms/acme"}
               hint={t("sso.issuerHint")}
@@ -208,6 +252,14 @@ export default function SignInTab() {
             value={oidc.client_id}
             onChange={(client_id) => setOidc({ client_id })}
             isDisabled={disabled}
+          />
+          <SettingText
+            label={t("sso.displayName")}
+            value={oidc.display_name}
+            onChange={(display_name) => setOidc({ display_name })}
+            isDisabled={disabled}
+            placeholder={issuerHost(oidc.issuer) || t("sso.displayNamePlaceholder")}
+            hint={t("sso.displayNameHint")}
           />
           <SettingText
             label={t("sso.scopes")}
@@ -252,6 +304,17 @@ export default function SignInTab() {
         ) : null}
       </SettingSection>
 
+      {oidc.issuer ? (
+        <ProviderRoles
+          view={view}
+          provider={providerName(oidc)}
+          detection={detection}
+          dirty={draft !== null}
+          turnsOnWhenSaved={view.firstSetup && !roleFieldsTouched}
+          onSaved={setData}
+        />
+      ) : null}
+
       <SettingSection title={t("checklist.title")} subtitle={t("checklist.subtitle")}>
         <div className="flex items-start gap-3">
           <IconTile icon={ListChecks} tone={ready ? "success" : "warning"} />
@@ -268,15 +331,12 @@ export default function SignInTab() {
                     </Chip>
                   )}
                 </div>
-                {item.key === "callback" ? (
-                  <div className="flex min-w-0 items-center gap-2">
-                    <Card variant="secondary" className="min-w-0 flex-1">
-                      <Card.Content>
-                        <code className="font-mono text-xs break-all">{view.callbackUrl}</code>
-                      </Card.Content>
-                    </Card>
-                    <CopyButton text={view.callbackUrl} label={t("checklist.copyCallback")} variant="secondary" />
-                  </div>
+                {item.key === "callback" ? <CopyUrl url={view.callbackUrl} label={t("checklist.copyCallback")} /> : null}
+                {item.key === "logout" ? (
+                  <>
+                    <CopyUrl url={view.backchannelLogoutUrl} label={t("checklist.copyLogout")} />
+                    <p className="text-xs text-muted">{t("checklist.logoutHint")}</p>
+                  </>
                 ) : null}
                 {item.key === "secret" ? (
                   <p className="text-xs text-muted">{t("checklist.secretHint")}</p>
@@ -294,10 +354,13 @@ export default function SignInTab() {
             <OptionSelect
               label={t("accounts.defaultRole")}
               value={oidc.default_role_id || NONE}
-              options={[{ id: NONE, label: t("accounts.viewerDefault") }, ...roles]}
-              onChange={(id) => setOidc({ default_role_id: id === NONE ? "" : id })}
+              options={[{ id: NONE, label: t("accounts.noDefault", { appRoles: appRoles ? "true" : "false" }) }, ...roles]}
+              onChange={(id) => {
+                touchRoles();
+                setOidc({ default_role_id: id === NONE ? "" : id });
+              }}
               isDisabled={disabled}
-              description={t("accounts.defaultRoleHint")}
+              description={t("accounts.defaultRoleHint", { appRoles: appRoles ? "true" : "false" })}
             />
             <OptionSelect
               label={t("accounts.defaultCompany")}
@@ -332,7 +395,10 @@ export default function SignInTab() {
           <SettingText
             label={t("mapping.claim")}
             value={oidc.groups_claim}
-            onChange={(groups_claim) => setOidc({ groups_claim })}
+            onChange={(groups_claim) => {
+              touchRoles();
+              setOidc({ groups_claim });
+            }}
             isDisabled={disabled}
             placeholder={preset.groupsClaim || "groups"}
             hint={t("mapping.claimHint")}
@@ -340,9 +406,13 @@ export default function SignInTab() {
           <RoleMappings
             rows={current.rows}
             roles={roles}
+            appRoles={appRoles}
             canEdit={view.canManage}
             isDisabled={disabled}
-            onChange={(rows) => update({ rows })}
+            onChange={(rows) => {
+              touchRoles();
+              update({ rows });
+            }}
           />
         </div>
       </SettingSection>

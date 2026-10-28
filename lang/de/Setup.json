@@ -1,6 +1,6 @@
 {
   "title": "Ersten Administrator anlegen",
-  "subtitle": "Dieses Formular läuft einmal. Öffne es gezielt unter /internal-api/setup.",
+  "subtitle": "Dieses Formular läuft einmal.",
   "username": "Benutzername",
   "email": "E-Mail",
   "password": "Passwort",
@@ -9,5 +9,5 @@
     "code": "{code, select, RATE_LIMITED {Zu viele Setup-Versuche. Später erneut versuchen.} VALIDATION {Prüfe die Felder und versuche es erneut.} WEAK_PASSWORD {Nutze mindestens 10 Zeichen mit einem Buchstaben und einer Zahl.} PASSWORD_GUESSABLE {Dieses Passwort ist zu leicht zu erraten. Vermeide gängige Wörter, Zeichenfolgen sowie Benutzername oder E-Mail.} SETUP_ALREADY_COMPLETE {Das Setup ist bereits abgeschlossen.} other {Administrator konnte nicht angelegt werden.}}"
   },
   "passwordRules": "Mindestens 10 Zeichen mit einem Buchstaben und einer Zahl. Gängige Passwörter und solche mit Benutzername oder E-Mail werden abgelehnt.",
-  "nextStep": "Danach richtest du die Zwei-Faktor-Authentifizierung ein. Dieses Konto wird Owner und behält immer vollen Zugriff."
+  "nextStep": "Danach richtest du die Zwei-Faktor-Authentifizierung ein. Dieses Konto wird zum Inhaber und behält immer vollen Zugriff."
 }

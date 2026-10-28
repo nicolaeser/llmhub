@@ -48,6 +48,7 @@ export type LoginFlowStep = LoginStep | LoginResult;
 export type LoginContext = {
   step: LoginStep;
   ssoEnabled: boolean;
+  ssoProvider: string;
   ssoOnly: boolean;
   passkeysEnabled: boolean;
   registrationEnabled: boolean;
@@ -77,11 +78,14 @@ export type SecurityEventAction =
   | "password.reset"
   | "password.change_required"
   | "sessions.revoked"
+  | "sessions.unverified"
   | "passkey.added"
   | "passkey.removed"
   | "role.changed"
   | "account.blocked"
   | "account.unblocked"
+  | "credentials.suspended"
+  | "credentials.restored"
   | "management_key.created"
   | "management_key.revoked";
 
@@ -123,6 +127,7 @@ export type SecurityOverview = {
     roleTemplateKey: string | null;
   };
   password: { changedAt: string | null };
+  credentials: { suspendedAt: string | null; canRestore: boolean };
   twoFactor: {
     enabledAt: string | null;
     recoveryCodesRemaining: number;

@@ -2,10 +2,13 @@ import "./support/oidc-env";
 import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
 import prisma from "@/lib/db/prisma";
+import { syncDirectoryRole } from "@/lib/auth/directory-roles";
+import { assignUserAccess, usersConsole } from "@/lib/auth/users";
 import { templateRoleId } from "@/lib/auth/roles";
 import { issueScimToken } from "@/lib/auth/scim";
 import { signInWithSso, SsoError } from "@/lib/auth/sso-user";
 import { ensureSystemCatalog } from "@/lib/bootstrap/system-catalog";
+import { digest, randomToken } from "@/lib/crypto";
 import { normalizeOidc, patchEnterprise } from "@/lib/settings/enterprise";
 import { POST as createGroup } from "@/app/scim/v2/Groups/route";
 import { DELETE as deleteGroup, PATCH as patchGroup } from "@/app/scim/v2/Groups/[id]/route";
@@ -13,7 +16,7 @@ import { POST as createScimUser } from "@/app/scim/v2/Users/route";
 import { GET as listScimUsers } from "@/app/scim/v2/Users/route";
 import type { OidcIdentity, OidcSettings } from "@/types/auth";
 import { closeDatabase, uniqueName } from "./support/database";
-import { preserveSetting, TestData } from "./support/fixtures";
+import { preserveSetting, sessionOf, TestData } from "./support/fixtures";
 
 const ISSUER = "https://id.integration.test";
 const PATCH_OP = "urn:ietf:params:scim:api:messages:2.0:PatchOp";
@@ -48,6 +51,7 @@ function identity(patch: Partial<OidcIdentity> = {}): OidcIdentity {
     subject,
     email: `${uniqueName("sso")}@example.test`,
     groups: [],
+    appRoles: null,
     externalIds: [subject],
     ...patch,
   };
@@ -159,6 +163,239 @@ test("group rules set the role at every sign-in and leave roles alone without ru
     await signInWithSso({ ...person, groups: ["llm-admins"] }, settings(), null);
     assert.equal((await prisma.user.findUniqueOrThrow({ where: { id: created.id } })).roleId, roles.finance);
   } finally {
+    await data.cleanup();
+  }
+});
+
+const modeOn = (patch: Partial<OidcSettings> = {}) => settings({ app_roles: true, ...patch });
+
+const refusedWithoutRole = (err: unknown) => err instanceof SsoError && err.reason === "no_role";
+
+test("with roles from the provider, app roles give the role of the same name at every sign-in", async () => {
+  const data = new TestData();
+  try {
+    await data.user();
+    const person = identity({ appRoles: ["viewer", "operator"] });
+    const created = await signInWithSso(person, modeOn(), "198.51.100.8");
+    data.ownUser(created.id);
+    const roleOf = async () => (await prisma.user.findUniqueOrThrow({ where: { id: created.id } })).roleId;
+    assert.equal(await roleOf(), roles.operator);
+
+    await signInWithSso({ ...person, appRoles: ["finance", "admin"] }, modeOn(), null);
+    assert.equal(await roleOf(), roles.admin);
+    await signInWithSso({ ...person, appRoles: ["finance"] }, modeOn(), null);
+    assert.equal(await roleOf(), roles.finance);
+    await signInWithSso({ ...person, appRoles: ["auditor", "viewer"] }, modeOn(), null);
+    assert.equal(await roleOf(), roles.viewer);
+
+    const events = await prisma.userSecurityEvent.findMany({ where: { userId: created.id, action: "role.changed" } });
+    assert.deepEqual(
+      events.map((event) => event.actor),
+      ["sso", "sso", "sso"],
+    );
+    const synced = await prisma.gatewayAuditLog.findMany({
+      where: { objectId: created.id, action: "user.role_synced" },
+      orderBy: { createdAt: "asc" },
+    });
+    assert.deepEqual(
+      synced.map((row) => [JSON.parse(row.beforeJson), JSON.parse(row.afterJson)]),
+      [
+        [{ roleId: roles.operator }, { roleId: roles.admin }],
+        [{ roleId: roles.admin }, { roleId: roles.finance }],
+        [{ roleId: roles.finance }, { roleId: roles.viewer }],
+      ],
+    );
+  } finally {
+    await data.cleanup();
+  }
+});
+
+test("with roles from the provider, a person without a known role is refused unless a default role is set", async () => {
+  const data = new TestData();
+  try {
+    await data.user();
+    const stranger = identity({ appRoles: [] });
+    await assert.rejects(signInWithSso(stranger, modeOn(), null), refusedWithoutRole);
+    assert.equal(await prisma.user.count({ where: { email: stranger.email } }), 0);
+
+    const person = identity({ appRoles: ["admin"] });
+    const created = await signInWithSso(person, modeOn(), null);
+    data.ownUser(created.id);
+    await prisma.session.create({
+      data: {
+        userId: created.id,
+        tokenHash: digest(randomToken()),
+        secondFactor: "SSO",
+        expiresAt: new Date(Date.now() + 86_400_000),
+      },
+    });
+    await assert.rejects(signInWithSso({ ...person, appRoles: ["auditor"] }, modeOn(), "198.51.100.9"), refusedWithoutRole);
+    const kept = await prisma.user.findUniqueOrThrow({ where: { id: created.id } });
+    assert.equal(kept.roleId, roles.admin);
+    assert.equal(await prisma.session.count({ where: { userId: created.id } }), 0);
+    const revoked = await prisma.userSecurityEvent.findMany({ where: { userId: created.id, action: "sessions.revoked" } });
+    assert.deepEqual(
+      revoked.map((event) => [event.actor, event.ipAddress]),
+      [["sso", "198.51.100.9"]],
+    );
+    await assert.rejects(signInWithSso({ ...person, appRoles: null }, modeOn(), null), refusedWithoutRole);
+
+    await signInWithSso({ ...person, appRoles: [] }, modeOn({ default_role_id: roles.finance }), null);
+    assert.equal((await prisma.user.findUniqueOrThrow({ where: { id: created.id } })).roleId, roles.finance);
+  } finally {
+    await data.cleanup();
+  }
+});
+
+test("an upgraded installation keeps every role as it was while roles do not come from the provider", async () => {
+  const data = new TestData();
+  try {
+    await data.user();
+    const person = identity();
+    const created = await signInWithSso(person, settings(), null);
+    data.ownUser(created.id);
+    const roleOf = async () => (await prisma.user.findUniqueOrThrow({ where: { id: created.id } })).roleId;
+    assert.equal(await roleOf(), roles.viewer);
+    await prisma.user.update({ where: { id: created.id }, data: { roleId: roles.finance } });
+
+    const again = await signInWithSso({ ...person, appRoles: [] }, settings(), null);
+    assert.equal(again.id, created.id);
+    assert.equal(await roleOf(), roles.finance);
+    await signInWithSso({ ...person, appRoles: ["admin"] }, settings(), null);
+    assert.equal(await roleOf(), roles.finance);
+    const link = await prisma.userIdentity.findUniqueOrThrow({
+      where: { issuer_subject: { issuer: ISSUER, subject: person.subject } },
+    });
+    assert.equal(link.appRoles, false);
+
+    const rules = settings({ role_mappings: [{ group: "admin", role_id: roles.operator }] });
+    await signInWithSso({ ...person, appRoles: ["admin"] }, rules, null);
+    assert.equal(await roleOf(), roles.viewer);
+  } finally {
+    await data.cleanup();
+  }
+});
+
+test("with roles from the provider, group rules decide first and map other app roles to custom roles", async () => {
+  const data = new TestData();
+  const auditor = await prisma.role.create({ data: { name: uniqueName("auditor"), permissions: ["spend:read"] } });
+  try {
+    await data.user();
+    const rules = modeOn({
+      groups_claim: "groups",
+      role_mappings: [
+        { group: "Auditor", role_id: auditor.id },
+        { group: "llm-ops", role_id: roles.operator },
+      ],
+    });
+    const person = identity({ groups: [], appRoles: ["auditor", "viewer"] });
+    const created = await signInWithSso(person, rules, null);
+    data.ownUser(created.id);
+    const roleOf = async () => (await prisma.user.findUniqueOrThrow({ where: { id: created.id } })).roleId;
+    assert.equal(await roleOf(), auditor.id);
+
+    await signInWithSso({ ...person, groups: ["llm-ops"], appRoles: ["admin"] }, rules, null);
+    assert.equal(await roleOf(), roles.operator);
+    await signInWithSso({ ...person, groups: [], appRoles: ["admin"] }, rules, null);
+    assert.equal(await roleOf(), roles.admin);
+  } finally {
+    await data.cleanup();
+    await prisma.role.delete({ where: { id: auditor.id } });
+  }
+});
+
+test("app roles never change the owner", async () => {
+  const data = new TestData();
+  try {
+    const owner = await data.user({ isOwner: true });
+    await assert.rejects(
+      signInWithSso(identity({ email: owner.email, appRoles: ["viewer"] }), modeOn(), null),
+      (err: unknown) => err instanceof SsoError && err.reason === "owner",
+    );
+    const kept = await syncDirectoryRole(
+      { id: owner.id, isOwner: true, roleId: owner.roleId },
+      ["viewer"],
+      modeOn(),
+      "sso",
+      null,
+      ["viewer"],
+    );
+    assert.equal(kept, owner.roleId);
+    assert.equal((await prisma.user.findUniqueOrThrow({ where: { id: owner.id } })).roleId, owner.roleId);
+    assert.equal(await prisma.userSecurityEvent.count({ where: { userId: owner.id, action: "role.changed" } }), 0);
+  } finally {
+    await data.cleanup();
+  }
+});
+
+test("people whose role comes from the provider are marked managed and their role cannot be changed locally", async () => {
+  const data = new TestData();
+  try {
+    const admin = await data.user();
+    const session = sessionOf(admin, { owner: true });
+    const named = modeOn({ display_name: "Example ID" });
+    await patchEnterprise({ oidc: named });
+    const created = await signInWithSso(identity({ appRoles: ["viewer"] }), named, null);
+    data.ownUser(created.id);
+    const managedBy = async () => (await usersConsole(session)).users.find((user) => user.id === created.id)?.managedBy;
+    assert.equal(await managedBy(), "Example ID");
+
+    const person = await prisma.user.findUniqueOrThrow({ where: { id: created.id } });
+    await assert.rejects(
+      assignUserAccess(session, { userId: person.id, roleId: roles.admin, orgId: "", revision: person.revision }),
+      { message: "ROLE_MANAGED" },
+    );
+    const org = await data.org();
+    await assignUserAccess(session, { userId: person.id, roleId: roles.viewer, orgId: org.id, revision: person.revision });
+    assert.equal((await prisma.user.findUniqueOrThrow({ where: { id: person.id } })).orgId, org.id);
+
+    await patchEnterprise({ oidc: settings({ display_name: "Example ID" }) });
+    assert.equal(await managedBy(), null);
+    await assignUserAccess(session, { userId: person.id, roleId: roles.finance, orgId: org.id, revision: person.revision + 1 });
+    assert.equal((await prisma.user.findUniqueOrThrow({ where: { id: person.id } })).roleId, roles.finance);
+  } finally {
+    await data.cleanup();
+  }
+});
+
+test("SCIM group changes leave roles that come from the provider alone", async () => {
+  const data = new TestData();
+  const groupIds: string[] = [];
+  try {
+    await data.user();
+    const group = uniqueName("hub-ops");
+    const rules = { role_mappings: [{ group, role_id: roles.operator }] };
+    await patchEnterprise({ oidc: modeOn(rules) });
+    const created = await signInWithSso(identity({ appRoles: ["admin"] }), modeOn(rules), null);
+    data.ownUser(created.id);
+    const roleOf = async () => (await prisma.user.findUniqueOrThrow({ where: { id: created.id } })).roleId;
+    assert.equal(await roleOf(), roles.admin);
+
+    const groupRes = await createGroup(scim("POST", "/Groups", { displayName: group }));
+    const scimGroup = await groupRes.json();
+    groupIds.push(scimGroup.id);
+    const params = { params: Promise.resolve({ id: scimGroup.id }) };
+    const members = (op: string) =>
+      patchGroup(
+        scim("PATCH", `/Groups/${scimGroup.id}`, {
+          schemas: [PATCH_OP],
+          Operations: [
+            op === "Add"
+              ? { op, path: "members", value: [{ value: created.id }] }
+              : { op, path: `members[value eq "${created.id}"]` },
+          ],
+        }),
+        params,
+      );
+    assert.equal((await members("Add")).status, 200);
+    assert.equal(await roleOf(), roles.admin);
+
+    await patchEnterprise({ oidc: settings(rules) });
+    assert.equal((await members("Remove")).status, 200);
+    assert.equal((await members("Add")).status, 200);
+    assert.equal(await roleOf(), roles.operator);
+  } finally {
+    await prisma.scimGroup.deleteMany({ where: { id: { in: groupIds } } });
     await data.cleanup();
   }
 });

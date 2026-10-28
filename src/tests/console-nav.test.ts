@@ -1,12 +1,12 @@
 import { recordedPrisma } from "./support/recorded-prisma";
 import { setRequest } from "./support/next-headers-stub";
+import { redirectOf, sessionRow, signedIn } from "./support/console-session";
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { canOpen, canSee, homePath, NAV, navItemFor, platformOnlyPath, visibleNav } from "@/app/(app)/_components/nav-data";
-import { SESSION_COOKIE, signSessionToken } from "@/lib/auth/cookie";
 import { WORKSPACE_COOKIE } from "@/lib/auth/workspace-cookie";
 import { permissions, PERMISSIONS } from "@/lib/auth/permissions";
 import type { Permission } from "@/types/auth";
@@ -14,41 +14,6 @@ import type { ScopeKind } from "@/types/console";
 
 const root = fileURLToPath(new URL("../..", import.meta.url));
 const COMPANY_ID = "orgacme0001";
-
-function sessionRow(granted: Permission[], options: { isOwner?: boolean; orgId?: string | null } = {}) {
-  return {
-    id: "s1",
-    expiresAt: new Date(Date.now() + 3_600_000),
-    lastActive: new Date(),
-    secondFactor: "TOTP",
-    ipAddress: null,
-    userAgent: null,
-    user: {
-      id: "u1",
-      username: "member",
-      blocked: false,
-      isOwner: options.isOwner ?? false,
-      orgId: options.orgId ?? null,
-      roleId: "r1",
-      role: { id: "r1", templateKey: null, name: "Custom", permissions: granted },
-    },
-  };
-}
-
-async function signedIn(cookies: Record<string, string> = {}) {
-  setRequest({ cookies: { [SESSION_COOKIE]: await signSessionToken("a".repeat(64)), ...cookies } });
-}
-
-async function redirectOf(render: () => Promise<unknown>): Promise<string | null> {
-  const thrown = await render().then(
-    () => null,
-    (err: unknown) => err,
-  );
-  if (thrown === null) return null;
-  const digest = String((thrown as { digest?: unknown } | null)?.digest ?? "");
-  assert.match(digest, /^NEXT_REDIRECT;/);
-  return digest.split(";")[2] ?? "";
-}
 
 function messages(locale: string) {
   return JSON.parse(readFileSync(path.join(root, "lang", locale, "Sidebar.json"), "utf8"));

@@ -9,7 +9,7 @@ LLM Hub is a Next.js 16 App Router app: OpenAI- and Anthropic-compatible `/api/v
 - Web (`next start` / `next dev`) serves HTML, server actions, `/api/v1`, `/api/mgmt`, `/internal-api`, `/sso`, `/scim`.
 - Postgres is the durable store (Prisma 7 + `@prisma/adapter-pg`).
 - Optional RustFS/S3 holds files, batches, videos, and log archives.
-- `src/instrumentation.ts` starts an in-process worker (`src/worker/`) after catalog boot: a maintenance sweep every minute, the cached model catalog refresh every two hours, and alert webhook delivery. Optional Redis (`REDIS_URL`) runs it on the BullMQ `maintenance`, `models`, and `webhooks` queues (`QUEUE_NAMES`, `src/lib/jobs/queues.ts`) and shares RPM/TPM; without it the same jobs use process timers and inline delivery. Redis is never awaited at bind time. No separate worker process.
+- `src/instrumentation.ts` starts an in-process worker (`src/worker/`) after catalog boot: a maintenance sweep every minute (it also revalidates SSO sessions with the identity provider, see `sso_revalidation`), the cached model catalog refresh every two hours, and alert webhook delivery. Optional Redis (`REDIS_URL`) runs it on the BullMQ `maintenance`, `models`, and `webhooks` queues (`QUEUE_NAMES`, `src/lib/jobs/queues.ts`) and shares RPM/TPM; without it the same jobs use process timers and inline delivery. Redis is never awaited at bind time. No separate worker process.
 - Optional updater container (`docker-compose.au.yml`, `scripts/updater.mjs`): same image, holds the Docker socket, and replaces the app container with newer images of its tag on request or automatically.
 
 ## Route groups

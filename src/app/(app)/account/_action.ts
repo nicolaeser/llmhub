@@ -1,6 +1,7 @@
 "use server";
 
 import { requireSession } from "@/lib/auth/guards";
+import { restoreOwnCredentials } from "@/lib/auth/credentials";
 import { runAction } from "@/lib/http/action-result";
 import {
   cancelTotpReplacement,
@@ -30,6 +31,10 @@ async function overviewAfter(mutation: (session: AuthenticatedSession) => Promis
 
 export async function loadSecurityOverviewAction() {
   return runAction(async () => securityOverview(await requireSession()));
+}
+
+export async function restoreOwnCredentialsAction() {
+  return runAction(() => overviewAfter((session) => restoreOwnCredentials(session)));
 }
 
 export async function changePasswordAction(input: unknown) {

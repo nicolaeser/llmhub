@@ -2,9 +2,11 @@
 
 import { runAction } from "@/lib/http/action-result";
 import { oidcIsReady, ssoOnlyActive } from "@/lib/auth/oidc";
+import { providerName } from "@/lib/auth/oidc-presets";
 import { passkeysAvailable } from "@/lib/auth/passkeys";
 import { passwordResetEnabled } from "@/lib/auth/self-service";
-import { getEnterprise } from "@/lib/settings/enterprise";
+import { ssoAccessHelp } from "@/lib/auth/sso-access";
+import { getEnterprise, normalizeOidc } from "@/lib/settings/enterprise";
 import type { LoginContext } from "@/types/security";
 import {
   cancelSignIn,
@@ -28,15 +30,21 @@ export async function loginContextAction() {
   return runAction(async (): Promise<LoginContext> => {
     const enterprise = await getEnterprise().catch(() => null);
     const ssoOnly = enterprise ? ssoOnlyActive(enterprise.oidc) : false;
+    const ssoEnabled = enterprise ? oidcIsReady(enterprise.oidc) : false;
     return {
       step: await loginState(),
-      ssoEnabled: enterprise ? oidcIsReady(enterprise.oidc) : false,
+      ssoEnabled,
+      ssoProvider: enterprise && ssoEnabled ? providerName(normalizeOidc(enterprise.oidc)) : "",
       ssoOnly,
       passkeysEnabled: passkeysAvailable(),
       registrationEnabled: enterprise?.registration_enabled === true && !ssoOnly,
       passwordResetEnabled: passwordResetEnabled(),
     };
   });
+}
+
+export async function ssoAccessHelpAction() {
+  return runAction(() => ssoAccessHelp());
 }
 
 export async function cancelSignInAction() {
