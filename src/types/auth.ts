@@ -160,6 +160,7 @@ export type OidcDiscovery = {
   token_endpoint: string;
   jwks_uri: string;
   userinfo_endpoint: string;
+  my_apps_uri: string;
   scopes_supported: string[];
   token_endpoint_auth_methods_supported: string[];
   id_token_signing_alg_values_supported: string[];
@@ -251,6 +252,8 @@ export type OidcGrant = { identity: OidcIdentity; sid: string; refreshToken: str
 export type OidcRefresh =
   | { status: "refused" }
   | { status: "valid"; refreshToken: string; groups: string[] | null; appRoles: string[] | null };
+
+export type SsoAccessHelp = { provider: string; requestAccessUrl: string };
 
 export type SsoFailure = "owner" | "domain" | "conflict" | "email" | "no_role";
 

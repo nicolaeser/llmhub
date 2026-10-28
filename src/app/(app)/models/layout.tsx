@@ -1,6 +1,6 @@
-import { requirePlatformScope } from "@/lib/auth/guards";
+import { requireConsolePage } from "../_components/page-access";
 
 export default async function ModelsLayout({ children }: { children: React.ReactNode }) {
-  await requirePlatformScope();
+  await requireConsolePage("/models");
   return children;
 }

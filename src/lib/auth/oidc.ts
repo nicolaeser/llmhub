@@ -170,6 +170,7 @@ export async function fetchOidcDiscovery(
     token_endpoint: asString(rec.token_endpoint),
     jwks_uri: asString(rec.jwks_uri),
     userinfo_endpoint: asString(rec.userinfo_endpoint),
+    my_apps_uri: asString(rec.my_apps_uri),
     scopes_supported: asStringArray(rec.scopes_supported),
     token_endpoint_auth_methods_supported: asStringArray(rec.token_endpoint_auth_methods_supported),
     id_token_signing_alg_values_supported: asStringArray(rec.id_token_signing_alg_values_supported),
@@ -191,6 +192,15 @@ function authorizationScopes(disc: Pick<OidcDiscovery, "scopes_supported">, reso
   const revalidates = resolved.rolesFromProvider && disc.scopes_supported.includes(OFFLINE_ACCESS_SCOPE);
   const extra = [...(appRolesOffered(disc) ? [APP_ROLES_SCOPE] : []), ...(revalidates ? [OFFLINE_ACCESS_SCOPE] : [])];
   return oidcScopes([...configured, ...extra].join(" "));
+}
+
+export function requestAccessUrl(disc: Pick<OidcDiscovery, "my_apps_uri">, resolved: ResolvedOidc): string {
+  if (!URL.canParse(disc.my_apps_uri) || !URL.canParse(resolved.issuer)) return "";
+  const url = new URL(disc.my_apps_uri);
+  if (url.protocol !== "https:" || url.username || url.password) return "";
+  if (url.origin !== new URL(resolved.issuer).origin) return "";
+  url.searchParams.set("client_id", resolved.clientId);
+  return url.toString();
 }
 
 export function buildAuthorizationUrl(

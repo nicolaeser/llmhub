@@ -425,6 +425,7 @@ export async function savePolicyOverride(raw: unknown) {
 }
 
 export async function removePolicyOverride(raw: unknown) {
+  await requirePermission(PERMISSIONS.SETTINGS_MANAGE);
   const parsed = policyRefSchema.safeParse(raw);
   if (!parsed.success) throw new Error("VALIDATION");
   return savePolicyOverride({ ...parsed.data, pii: null, injection: null, secrets: null, rules: null });

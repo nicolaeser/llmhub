@@ -59,10 +59,15 @@ function parse<T>(schema: { safeParse(value: unknown): { success: true; data: T 
   return parsed.data;
 }
 
-async function editableKey(keyId: unknown): Promise<{ session: AuthenticatedSession; key: KeyRow; company: string | null }> {
+async function mcpRulesSession(): Promise<{ session: AuthenticatedSession; company: string | null }> {
   const session = await requireActor();
   const company = companyOf(session);
   if (!managesMcpRules(session, company)) throw new AuthError("FORBIDDEN");
+  return { session, company };
+}
+
+async function editableKey(keyId: unknown): Promise<{ session: AuthenticatedSession; key: KeyRow; company: string | null }> {
+  const { session, company } = await mcpRulesSession();
   if (typeof keyId !== "string" || !keyId) throw new Error("MISSING_ID");
   const key = await prisma.virtualKey.findUnique({
     where: { id: keyId },
@@ -149,6 +154,7 @@ function ruleOf(choice: McpKeyAccessChoice): Pick<McpAssignmentView, "mode" | "b
 }
 
 export async function saveKeyMcpAccess(raw: unknown): Promise<McpKeyAccess> {
+  await mcpRulesSession();
   const input = parse(keyMcpAccessSchema, raw);
   const { session, key, company } = await editableKey(input.keyId);
   const ids = [...new Set(input.servers.map((entry) => entry.serverId))];

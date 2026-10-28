@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Skeleton, toast } from "@heroui/react";
+import { Alert, Skeleton, toast } from "@heroui/react";
 import { useTranslations } from "next-intl";
 import { Link, useRouter } from "@/i18n/routing";
 import AccountShell from "@/app/account/_components/account-shell";
@@ -9,12 +9,13 @@ import FormSkeleton from "@/app/account/_components/form-skeleton";
 import { postLoginDestination, withReturnQuery } from "@/lib/auth/return-path";
 import { isActionFail } from "@/lib/http/action-result";
 import { useSearchParam } from "@/lib/hooks/use-search-param";
+import type { SsoAccessHelp } from "@/types/auth";
 import type { LoginContext, LoginFlowStep, LoginResult } from "@/types/security";
 import PasswordStep from "./_components/password-step";
 import SecondFactorStep from "./_components/second-factor-step";
 import EnrollmentStep from "./_components/enrollment-step";
 import PasswordChangeStep from "./_components/password-change-step";
-import { loginContextAction } from "./_action";
+import { loginContextAction, ssoAccessHelpAction } from "./_action";
 
 export default function LoginPage() {
   const t = useTranslations("Auth.login");
@@ -26,11 +27,21 @@ export default function LoginPage() {
 
   const announced = useRef<string | null>(null);
 
+  const noRole = ssoStatus === "no_role";
+  const [access, setAccess] = useState<SsoAccessHelp | null>(null);
+
   useEffect(() => {
-    if (!ssoStatus || !context || announced.current === ssoStatus) return;
+    if (!noRole) return;
+    ssoAccessHelpAction().then((result) => {
+      setAccess(isActionFail(result) ? { provider: "", requestAccessUrl: "" } : result);
+    });
+  }, [noRole]);
+
+  useEffect(() => {
+    if (!ssoStatus || noRole || !context || announced.current === ssoStatus) return;
     announced.current = ssoStatus;
     toast.danger(t("toasts.ssoStatus", { status: ssoStatus, provider: context.ssoProvider || t("toasts.yourProvider") }));
-  }, [ssoStatus, context, t]);
+  }, [ssoStatus, noRole, context, t]);
 
   useEffect(() => {
     loginContextAction().then((result) => {
@@ -97,6 +108,22 @@ export default function LoginPage() {
           : undefined
       }
     >
+      {noRole && step.step === null ? (
+        <Alert status="warning" className="mb-6">
+          <Alert.Indicator />
+          <Alert.Content className="min-w-0">
+            <Alert.Title>{t("noAccess.title")}</Alert.Title>
+            <Alert.Description className="break-words">
+              {t("noAccess.body", { provider: access?.provider || t("toasts.yourProvider") })}
+            </Alert.Description>
+            {access?.requestAccessUrl ? (
+              <a href={access.requestAccessUrl} rel="noreferrer" className="mt-1 text-sm font-medium text-accent">
+                {t("noAccess.request", { provider: access.provider || t("toasts.yourProvider") })}
+              </a>
+            ) : null}
+          </Alert.Content>
+        </Alert>
+      ) : null}
       {!context ? (
         <FormSkeleton fields={2} />
       ) : step.step === null ? (
