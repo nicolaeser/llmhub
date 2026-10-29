@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
 import BrandMark from "@/components/brand/brand-mark";
+import AreaMessages from "@/components/i18n/area-messages";
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations("SubAdd");
@@ -20,7 +21,7 @@ export default async function SubAddLayout({ children }: { children: React.React
           <BrandMark />
           <span className="text-sm font-semibold tracking-tight">{t("appName")}</span>
         </div>
-        {children}
+        <AreaMessages area="providers/sub-add">{children}</AreaMessages>
       </div>
     </main>
   );

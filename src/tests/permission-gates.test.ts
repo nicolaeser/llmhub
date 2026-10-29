@@ -1,6 +1,7 @@
 import { recordedPrisma } from "./support/recorded-prisma";
 import { setRequest } from "./support/next-headers-stub";
 import { redirectOf, sessionRow, signedIn } from "./support/console-session";
+import { areaContent } from "./support/area-messages";
 import assert from "node:assert/strict";
 import { existsSync, readdirSync } from "node:fs";
 import path from "node:path";
@@ -137,7 +138,7 @@ test("every console section checks its navigation permission on the server", asy
       await signedIn();
       recordedPrisma.reset({ session: { findUnique: () => sessionRow(granted) } });
       const render = () => Layout({ children: "page" });
-      if (opens) assert.equal(await render(), "page", `${section} ${granted.join(",")}`);
+      if (opens) assert.equal(areaContent(await render(), `(app)/${section}`), "page", `${section} ${granted.join(",")}`);
       else assert.equal(await redirectOf(render), "/", `${section} without permissions`);
     }
   }

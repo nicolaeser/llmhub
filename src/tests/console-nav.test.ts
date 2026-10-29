@@ -1,6 +1,7 @@
 import { recordedPrisma } from "./support/recorded-prisma";
 import { setRequest } from "./support/next-headers-stub";
 import { redirectOf, sessionRow, signedIn } from "./support/console-session";
+import { areaContent } from "./support/area-messages";
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
@@ -134,7 +135,7 @@ test("the console users page sends callers without users:read or roles:manage ba
     await signedIn();
     recordedPrisma.reset({ session: { findUnique: () => sessionRow([...granted]) } });
     const render = () => UsersLayout({ children: "page" });
-    if (opens) assert.equal(await render(), "page", granted.join(","));
+    if (opens) assert.equal(areaContent(await render(), "(app)/users"), "page", granted.join(","));
     else assert.equal(await redirectOf(render), "/", granted.join(","));
   }
 });
@@ -206,7 +207,7 @@ test("platform-only pages send the company scope back to the console home", asyn
       session: { findUnique: () => sessionRow([], { isOwner: true }) },
       organization: { findUnique: () => null },
     });
-    assert.equal(await render({ children: "page" }), "page", route);
+    assert.equal(areaContent(await render({ children: "page" }), `(app)/${route}`), "page", route);
   }
 });
 

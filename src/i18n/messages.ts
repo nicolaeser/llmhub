@@ -3,54 +3,9 @@ import path from "node:path";
 import { cache } from "react";
 import { routing } from "./routing";
 import type { Messages } from "@/types/i18n";
+import { assignMessagePath, mergeMessages } from "./message-tree";
 
 const langRoot = path.join(process.cwd(), "lang");
-
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === "object" && !Array.isArray(value);
-}
-
-function isUnsafeKey(key: string): boolean {
-  return key === "__proto__" || key === "constructor" || key === "prototype";
-}
-
-function deepMerge(base: Messages, override: Messages): Messages {
-  const merged: Messages = { ...base };
-  for (const [key, value] of Object.entries(override)) {
-    if (isUnsafeKey(key)) continue;
-    const current = merged[key];
-    if (isPlainObject(current) && isPlainObject(value)) {
-      merged[key] = deepMerge(current, value);
-      continue;
-    }
-    merged[key] = value;
-  }
-  return merged;
-}
-
-function assignDottedNamespace(
-  target: Messages,
-  dottedPath: string,
-  payload: Messages,
-) {
-  const segments = dottedPath.split(".");
-  let cursor = target;
-  for (let index = 0; index < segments.length - 1; index += 1) {
-    const segment = segments[index];
-    if (isUnsafeKey(segment)) return;
-    const existing = cursor[segment];
-    if (!isPlainObject(existing)) {
-      cursor[segment] = {};
-    }
-    cursor = cursor[segment] as Messages;
-  }
-  const leaf = segments[segments.length - 1];
-  if (isUnsafeKey(leaf)) return;
-  const existingLeaf = cursor[leaf];
-  cursor[leaf] = isPlainObject(existingLeaf)
-    ? deepMerge(existingLeaf, payload)
-    : payload;
-}
 
 async function collectJsonFiles(
   baseDir: string,
@@ -86,7 +41,7 @@ async function readLocaleNamespaces(locale: string): Promise<Messages> {
   for (const file of files) {
     const dottedPath = relativePathToDottedNamespace(file);
     const raw = await fs.readFile(path.join(localeDir, file), "utf8");
-    assignDottedNamespace(messages, dottedPath, JSON.parse(raw) as Messages);
+    assignMessagePath(messages, dottedPath, JSON.parse(raw) as Messages);
   }
   return messages;
 }
@@ -101,7 +56,7 @@ export const loadLocaleMessages = cache(
     const enMessages = await readLocaleNamespaces(routing.defaultLocale);
     if (locale === routing.defaultLocale) return enMessages;
     try {
-      return deepMerge(enMessages, await readLocaleNamespaces(locale));
+      return mergeMessages(enMessages, await readLocaleNamespaces(locale));
     } catch {
       return enMessages;
     }

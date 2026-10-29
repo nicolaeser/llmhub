@@ -1,4 +1,5 @@
 import { recordedPrisma } from "./support/recorded-prisma";
+import { areaContent } from "./support/area-messages";
 import assert from "node:assert/strict";
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
@@ -24,7 +25,7 @@ test("the setup page redirects home once any user exists", async () => {
     return true;
   });
   recordedPrisma.reset(emptyUserTable);
-  assert.equal(await SetupLayout({ children: "form" }), "form");
+  assert.equal(areaContent(await SetupLayout({ children: "form" }), "internal-api/setup"), "form");
 });
 
 test("the setup page is never indexed", async () => {
