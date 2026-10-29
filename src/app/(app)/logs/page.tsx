@@ -8,10 +8,10 @@ import PageHeader from "@/components/console/page-header";
 import PageStatus, { LoadError, SectionLoading } from "@/components/console/page-status";
 import { useErrorToast } from "@/components/console/use-error-toast";
 import { useActionData } from "@/lib/hooks/use-action-data";
-import { consoleTimeZone } from "@/lib/hooks/use-console-time-zone";
 import { useLiveConnected, useLiveRequests } from "@/lib/hooks/use-live";
+import { useRouter } from "@/i18n/routing";
 import { setSearchParams, useSearchString } from "@/lib/hooks/use-search-param";
-import { logFilterParams, logFiltersFromSearch, zonedLogFilters } from "@/lib/gateway/request-logs/request-log-query";
+import { logFilterParams, logFiltersFromSearch } from "@/lib/gateway/request-logs/request-log-query";
 import { isActionFail } from "@/lib/http/action-result";
 import type {
   LogKind,
@@ -24,10 +24,10 @@ import type {
 } from "@/types/logs";
 import { countNewLogsAction, loadLogDetailAction, loadLogOptionsAction, loadLogsAction } from "./_action";
 import LogDetailDialog from "./_components/log-detail-dialog";
-import LogFilters, { NO_FILTERS } from "./_components/log-filters";
+import LogFilters from "./_components/log-filters";
 import LogTable from "./_components/log-table";
+import { download, exportHref, queryFilters, sessionHref } from "./_components/log-export";
 import SessionList from "./_components/session-list";
-import SessionTrace from "./_components/session-trace";
 
 const PAGE_SIZE = 50;
 const POLL_INTERVAL_MS = 15_000;
@@ -40,43 +40,14 @@ function kindOf(search: string): LogKind {
   return LOG_KINDS.find((kind) => kind === requested) ?? "requests";
 }
 
-function traceOf(search: string): LogSessionRef | null {
-  const params = new URLSearchParams(search);
-  const sessionId = params.get("trace");
-  if (!sessionId) return null;
-  return { sessionId, keyId: params.get("traceKey") ?? "", userId: params.get("traceUser") ?? "" };
-}
-
-function traceParams(ref: LogSessionRef | null) {
-  return { trace: ref?.sessionId ?? null, traceKey: ref?.keyId || null, traceUser: ref?.userId || null };
-}
-
-function download(href: string) {
-  const link = document.createElement("a");
-  link.href = href;
-  link.click();
-}
-
-function queryFilters(filters: LogFilterValues): LogFilterValues {
-  return zonedLogFilters(filters, consoleTimeZone());
-}
-
-function exportHref(kind: LogKind, format: "csv" | "jsonl", filters: LogFilterValues) {
-  const params = new URLSearchParams({ kind, format });
-  for (const [key, value] of Object.entries(logFilterParams(queryFilters(filters)))) {
-    if (value !== null) params.set(key, value);
-  }
-  return `/internal-api/logs/export?${params.toString()}`;
-}
-
 export default function LogsPage() {
   const t = useTranslations("Logs");
   const showError = useErrorToast();
+  const router = useRouter();
   const search = useSearchString();
   const filters = useMemo(() => logFiltersFromSearch(search ?? ""), [search]);
   const filterKey = JSON.stringify(logFilterParams(filters));
   const requestedKind = kindOf(search ?? "");
-  const trace = useMemo(() => traceOf(search ?? ""), [search]);
   const [options, setOptions] = useState<LogOptions | null>(null);
   const [detail, setDetail] = useState<RequestLogDetail | null>(null);
   const [newestSeen, setNewestSeen] = useState<string | null>(null);
@@ -111,17 +82,7 @@ export default function LogsPage() {
   }
 
   function openSession(ref: LogSessionRef) {
-    setSearchParams({ tab: "sessions", ...traceParams(ref) });
-  }
-
-  function showSessionRequests(ref: LogSessionRef) {
-    const next = { ...filters, session: ref.sessionId, keyId: ref.keyId, userId: ref.userId };
-    setSearchParams({ ...logFilterParams(next), tab: null, ...traceParams(null) });
-    load(1, next);
-  }
-
-  function exportSession(ref: LogSessionRef) {
-    download(exportHref("requests", "csv", { ...NO_FILTERS, session: ref.sessionId, keyId: ref.keyId, userId: ref.userId }));
+    router.push(sessionHref(ref));
   }
 
   function openDetail(row: RequestLogRow) {
@@ -242,7 +203,7 @@ export default function LogsPage() {
         selectedKey={kind}
         onSelectionChange={(key) => {
           const next = String(key);
-          setSearchParams({ tab: next === "requests" ? null : next, ...traceParams(null) });
+          setSearchParams({ tab: next === "requests" ? null : next });
         }}
         aria-label={t("title")}
         className="mb-4 max-w-full"
@@ -268,18 +229,7 @@ export default function LogsPage() {
       <LoadError state={logsState} className="mb-4" />
 
       {kind === "sessions" ? (
-        trace ? (
-          <SessionTrace
-            key={`trace:${JSON.stringify(trace)}`}
-            sessionRef={trace}
-            onBack={() => setSearchParams(traceParams(null))}
-            onOpenRequest={openDetail}
-            onShowRequests={showSessionRequests}
-            onExport={exportSession}
-          />
-        ) : (
-          <SessionList key={`sessions:${filterKey}`} filters={filters} onOpen={openSession} />
-        )
+        <SessionList key={`sessions:${filterKey}`} filters={filters} onOpen={openSession} />
       ) : (
         <>
         {newer ? (

@@ -27,6 +27,7 @@ export type TranscriptEntry = {
   role: string;
   kind: TranscriptKind;
   name?: string;
+  url?: string;
   text: string;
 };
 
@@ -142,6 +143,33 @@ export type LogSessionDetail = {
   pageSize: number;
   total: number;
   requests: LogSessionRequest[];
+};
+
+export type LogChatRequest = {
+  id: string;
+  createdAt: string;
+  model: string;
+  status: number;
+  outcome: string;
+  latencyMs: number;
+  promptTokens: number;
+  completionTokens: number;
+  cacheReadTokens: number;
+  cost: number;
+  error: string;
+  resent: number;
+  repeated: boolean;
+};
+
+export type LogChatTurn = { request: LogChatRequest; input: TranscriptEntry[]; output: TranscriptEntry[] };
+
+export type LogChatThread = { id: string; system: TranscriptEntry[]; models: string[]; turns: LogChatTurn[] };
+
+export type LogSessionChat = {
+  canViewContent: boolean;
+  threads: LogChatThread[];
+  total: number;
+  scanned: number;
 };
 
 export type AccountStep = { provider: string; providerId: string };

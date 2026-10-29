@@ -34,7 +34,7 @@ LLM Hub is a Next.js 16 App Router app: OpenAI- and Anthropic-compatible `/api/v
 - Model template (`ModelTemplate`, "model preset" in the English UI, on the Models page): reusable model-access rule set (aliases, glob patterns, providers, data regions, ZDR, no-training, maximum retention) attached to keys; matching aliases are resolved at authentication time.
 - Request log: one `RequestLog` row per metered gateway request, including cache hits, upstream failures, and PII blocks (tenancy, endpoint, routing, status, tokens, cost, PII markers). Prompt and response bodies live in `RequestLogContent`.
 - Request label: an allowlisted `key:value` pair a client attaches to a request for chargeback (`RequestLog.labels`, rolled up in `UsageLabelDaily`); the platform and each company keep their own key allowlist. The older single `tag` stays alongside.
-- Agent session: the request log rows of one Claude Code, Codex, or other agent run, grouped by the client's session id, with totals for cost, tokens, requests, account switches, and errors on the Logs page.
+- Agent session: the request log rows of one Claude Code, Codex, or other agent run, grouped by the client's session id, with totals for cost, tokens, requests, account switches, and errors, listed on the Logs page's Sessions tab and opened as a chat or request timeline on `/logs/session`.
 - New-model mode (`ProviderConnection.newModels`): per provider, whether first-seen models follow the catalog's default rules (`auto`), are routed at once (`active`), or start disabled (`disabled`).
 - Management key (`ManagementKey`): hashed personal credential for `/api/mgmt`, scoped to a subset of the owner's permissions.
 - SCIM token: hashed in `Setting` `scim_token_hash`; created in Settings → Sign-in.

@@ -194,10 +194,30 @@
     "tokenFlow": "{input} in · {output} out",
     "latencyShare": "{rate, number, percent} of the slowest request on this page",
     "callerLine": "{key} · {person}",
-    "tokenTotal": "{cached, select, true {{tokens} tokens · {rate, number, percent} cached} other {{tokens} tokens}}"
+    "tokenTotal": "{cached, select, true {{tokens} tokens · {rate, number, percent} cached} other {{tokens} tokens}}",
+    "views": {
+      "chat": "Chat"
+    },
+    "missing": "Session not found",
+    "missingHint": "Open a session from the Sessions tab to read it."
   },
   "labels": {
     "title": "Labels",
     "chip": "{key}: {value}"
+  },
+  "chat": {
+    "empty": "No conversation to show",
+    "emptyHint": "Conversations appear here when content logging stores the prompts and replies of this session's requests.",
+    "partial": "Read the latest {scanned, number, integer} of {total, number, integer} requests. Older turns only appear as far as later requests repeat them.",
+    "jump": "Jump to latest",
+    "systemPrompt": "System prompt",
+    "toolCall": "Tool call",
+    "resent": "{count, plural, one {# earlier message} other {# earlier messages}} sent again{cached, select, true { · {rate, number, percent} from cache} other {}}",
+    "cached": "{rate, number, percent} cached",
+    "cacheHit": "Reply from response cache",
+    "repeated": "Same request sent again",
+    "sideTitle": "{count, plural, one {# side conversation} other {# side conversations}}",
+    "sideItem": "Side conversation {index, number, integer}",
+    "sideMeta": "{count, plural, one {# request} other {# requests}} · {models}"
   }
 }
