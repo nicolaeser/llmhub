@@ -266,5 +266,39 @@
     "autoResetSummary": "{enabled, select, true {Automatische Resets ab {percent}} other {Automatische Resets aus}}",
     "kickoffSummary": "{enabled, select, true {Fensterstart mit {model}} other {Fensterstart aus}}",
     "setupRequired": "Einrichtung nötig"
+  },
+  "keyUsage": {
+    "intro": "Live-Ansicht, welche API-Keys die Nutzungslimits der einzelnen Abos füllen. Der Anteil eines Keys ist die gemeldete Auslastung des Limits, aufgeteilt nach seinem Anteil an den Kosten der Requests, die seit Fensterbeginn über LLM Hub liefen. Nutzung desselben Kontos außerhalb von LLM Hub lässt sich nicht unterscheiden und zählt zu den Keys, die es hier genutzt haben.",
+    "search": "Konten oder Keys suchen",
+    "freshness": "{live, select, true {Live} other {Aktualisiert {when}}}",
+    "emptyTitle": "Noch keine Abo-Limits",
+    "empty": "Konten erscheinen hier, sobald ihre Nutzungslimits gelesen wurden.",
+    "noMatches": "Kein Konto und kein Key passt zur Suche",
+    "stats": {
+      "fullest": "Vollstes Limit",
+      "where": "{window} · {account}",
+      "topKey": "Top-Key",
+      "topKeyHint": "{used} von {window} · {account}",
+      "activeKeys": "Aktive Keys",
+      "activeKeysHint": "Mit Requests in einem laufenden Fenster",
+      "inUse": "Genutzte Konten",
+      "inUseValue": "{used, number} von {total, number}",
+      "inUseHint": "Mit Requests in einem laufenden Fenster"
+    },
+    "accountKind": "{kind} · {name}",
+    "columns": {
+      "key": "API-Key"
+    },
+    "keysOn": "API-Keys auf {account}",
+    "noKey": "Kein API-Key",
+    "noKeyHint": "Konsolen- und System-Requests",
+    "deletedKey": "Gelöschter Key",
+    "otherKeys": "{count, plural, one {# weiterer Key} other {# weitere Keys}}",
+    "outside": "Außerhalb von LLM Hub oder unbekannt",
+    "free": "Frei",
+    "share": "{share, number, percent} der Nutzung · {requests, plural, one {# Request} other {# Requests}}",
+    "windowRequests": "{count, plural, =0 {Keine Requests über LLM Hub in diesem Fenster} one {# Request in diesem Fenster, aufgeteilt nach {basis, select, cost {Kosten} tokens {Tokens} other {Requests}}} other {# Requests in diesem Fenster, aufgeteilt nach {basis, select, cost {Kosten} tokens {Tokens} other {Requests}}}}",
+    "windowPending": "Requests für dieses Fenster werden geladen",
+    "noRequests": "In den laufenden Fenstern hat noch kein API-Key Requests über dieses Konto geschickt."
   }
 }

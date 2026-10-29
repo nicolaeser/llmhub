@@ -22,6 +22,16 @@ function windowSpan(seconds: number): { unit: string; count: number } {
   return { unit: "other", count: 0 };
 }
 
+export function useLimitLabel(): (group: Pick<LimitGroup, "scoped" | "family" | "label" | "windowSeconds">) => string {
+  const t = useTranslations("Subscriptions.limits");
+  return (group) => {
+    const span = t("window", windowSpan(group.windowSeconds));
+    const name = group.family ? t("group", { family: group.family }) : group.label;
+    if (!group.scoped) return span;
+    return group.windowSeconds > 0 ? t("scoped", { scope: name, window: span }) : name;
+  };
+}
+
 export function ResetLine({
   at,
   reached,
@@ -70,10 +80,7 @@ export default function LimitMeter({
   const pending = Number.isFinite(reset) && reset > now.getTime();
   const runsOut = exhaustionAt(group, now.getTime());
   const used = group.usedPercent;
-  const span = t("window", windowSpan(group.windowSeconds));
-  const name = group.family ? t("group", { family: group.family }) : group.label;
-  const scopedLabel = group.windowSeconds > 0 ? t("scoped", { scope: name, window: span }) : name;
-  const label = group.scoped ? scopedLabel : span;
+  const label = useLimitLabel()(group);
   const listed = !compact && group.members.length > 1;
 
   return (

@@ -9,10 +9,14 @@ function normalized(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
-function applies(window: LimitWindow, model: string): boolean {
-  if (!window.scope) return true;
-  const scope = normalized(window.scope);
+export function scopeApplies(windowScope: string, model: string): boolean {
+  if (!windowScope) return true;
+  const scope = normalized(windowScope);
   return scope.length > 0 && normalized(model).includes(scope);
+}
+
+function applies(window: LimitWindow, model: string): boolean {
+  return scopeApplies(window.scope, model);
 }
 
 function liveWindows(limits: SubscriptionLimits, model: string, now: number): LimitWindow[] {

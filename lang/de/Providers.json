@@ -2,7 +2,7 @@
   "title": "Anbieter",
   "subtitle": "Verbinde Modellanbieter per API-Key oder Abo-Anmeldung und behalte ihren Zustand im Blick.",
   "tabsLabel": "Anbieteransichten",
-  "tabs": "{tab, select, api {API-Keys} subscriptions {Abos} links {Konto-Links} health {Status} other {{tab}}}",
+  "tabs": "{tab, select, api {API-Keys} subscriptions {Abos} usage {Nutzung nach Key} links {Konto-Links} health {Status} other {{tab}}}",
   "columns": {
     "provider": "Anbieter",
     "credential": "Zugangsdaten",

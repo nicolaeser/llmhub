@@ -17,7 +17,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import ChartTooltip from "./chart-tooltip";
+import ChartTooltip from "@/components/usage/chart-tooltip";
 import type { HealthPoint, ModelPoint, SpendPoint, UsageDay } from "@/types/usage";
 
 const TICK = { fill: "var(--muted)", fontSize: 12 } as const;

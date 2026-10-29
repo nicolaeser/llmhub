@@ -608,6 +608,7 @@ model RequestLog {
   @@index([projectId, createdAt])
   @@index([memberId, createdAt])
   @@index([sessionId, createdAt])
+  @@index([providerId, createdAt])
   @@index([status])
   @@index([labels], type: Gin)
 }
