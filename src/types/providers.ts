@@ -142,6 +142,7 @@ export type ProviderPresetUsage = Record<string, string[]>;
 export type ProvidersPage = {
   connected: ProviderView[];
   canManage: boolean;
+  canSeeKeyUsage: boolean;
   presets: ProviderPresetUsage | null;
 };
 
@@ -258,6 +259,44 @@ export type LimitSnapshot = AccountLimits & {
 };
 
 export type LimitSnapshotList = { at: number; items: LimitSnapshot[] };
+
+export type KeyUsageBasis = "cost" | "tokens" | "requests";
+
+export type WindowKeyUsage = {
+  keyId: string;
+  share: number;
+  requests: number;
+  tokens: number;
+  cost: number;
+};
+
+export type WindowUsage = {
+  groupId: string;
+  since: string;
+  basis: KeyUsageBasis;
+  requests: number;
+  keys: WindowKeyUsage[];
+};
+
+export type AccountKeyUsage = { id: string; windows: WindowUsage[] };
+
+export type UsageKeyLabel = { label: string; company: string; owner: string };
+
+export type SubscriptionKeyUsage = {
+  at: number;
+  accounts: AccountKeyUsage[];
+  keys: Record<string, UsageKeyLabel>;
+};
+
+export type KeyUsageRow = {
+  keyId: string;
+  upstreamModel: string;
+  requests: number;
+  tokens: number;
+  cost: number;
+};
+
+export type KeyUsageWindow = { groupId: string; since: number; scopes: string[] | null };
 
 export type LimitAccount = { id: string; kind: string; apiKey: string };
 
@@ -463,7 +502,7 @@ export type ProviderListActions = {
   remove: (id: string) => void;
 };
 
-export type ProvidersTab = "api" | "subscriptions" | "links" | "health";
+export type ProvidersTab = "api" | "subscriptions" | "usage" | "links" | "health";
 
 export type ProviderDraft = {
   name: string;

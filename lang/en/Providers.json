@@ -2,7 +2,7 @@
   "title": "Providers",
   "subtitle": "Connect model providers by API key or subscription sign-in and keep an eye on their health.",
   "tabsLabel": "Provider views",
-  "tabs": "{tab, select, api {API keys} subscriptions {Subscriptions} links {Account links} health {Health} other {{tab}}}",
+  "tabs": "{tab, select, api {API keys} subscriptions {Subscriptions} usage {Usage by key} links {Account links} health {Health} other {{tab}}}",
   "columns": {
     "provider": "Provider",
     "credential": "Credential",

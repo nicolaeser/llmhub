@@ -56,7 +56,7 @@ The console is confident and calm: one indigo accent (hue 276) on neutrals that 
 
 ## Charts
 
-Charts use Recharts with token colors only (`src/app/(app)/usage/_components/usage-charts.tsx`).
+Charts use Recharts with token colors only (`src/app/(app)/usage/_components/usage-charts.tsx`; the shared tooltip is `src/components/usage/chart-tooltip.tsx`). The per-key subscription bars (`src/app/(app)/providers/_components/key-usage-bar.tsx`) stack one accent hue at falling `fillOpacity` per key rank, `var(--muted)` for grouped or unattributed usage, and `var(--default)` for the free remainder, without animation because live data redraws them.
 
 | Role | Must use |
 | --- | --- |

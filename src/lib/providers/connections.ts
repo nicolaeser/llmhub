@@ -173,7 +173,12 @@ export async function loadProviderConsole(): Promise<ProvidersPage> {
     listConnected(),
     hasPerm(session.permissions, PERMISSIONS.MODELS_READ) ? providerPresetUsage() : null,
   ]);
-  return { connected, canManage: hasPerm(session.permissions, PERMISSIONS.PROVIDERS_MANAGE), presets };
+  return {
+    connected,
+    canManage: hasPerm(session.permissions, PERMISSIONS.PROVIDERS_MANAGE),
+    canSeeKeyUsage: hasPerm(session.permissions, PERMISSIONS.SPEND_READ_ALL),
+    presets,
+  };
 }
 
 export async function createProvider(input: {
