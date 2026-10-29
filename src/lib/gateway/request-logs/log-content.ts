@@ -182,6 +182,22 @@ const MEDIA_TYPES: Record<string, string> = {
   audio: "audio",
 };
 
+const REMOTE_URL = /^https?:\/\//i;
+
+function remoteUrl(value: unknown): string {
+  const rec = asRecord(value);
+  const text = typeof value === "string" ? value : asString(rec?.url);
+  return REMOTE_URL.test(text) && text.length <= 2_048 ? text : "";
+}
+
+function mediaEntry(role: string, type: string, part: JsonMap): TranscriptEntry {
+  const source = asRecord(part.source);
+  const file = asRecord(part.file);
+  const url = remoteUrl(part.image_url) || remoteUrl(part.url) || remoteUrl(source);
+  const name = asString(part.filename) || asString(file?.filename) || asString(part.title) || asString(source?.media_type);
+  return { role, kind: "media", text: MEDIA_TYPES[type]!, ...(name ? { name } : {}), ...(url ? { url } : {}) };
+}
+
 function contentEntries(role: string, content: unknown): TranscriptEntry[] {
   if (typeof content === "string") return content ? [{ role, kind: "text", text: content }] : [];
   const out: TranscriptEntry[] = [];
@@ -203,7 +219,7 @@ function contentEntries(role: string, content: unknown): TranscriptEntry[] {
     } else if (type === "tool_result") {
       out.push({ role, kind: "tool_result", text: typeof part.content === "string" ? part.content : textOf(part.content) });
     } else if (MEDIA_TYPES[type]) {
-      out.push({ role, kind: "media", text: MEDIA_TYPES[type] });
+      out.push(mediaEntry(role, type, part));
     }
   }
   return out;

@@ -6,8 +6,10 @@ import { hasPerm, PERMISSIONS } from "@/lib/auth/permissions";
 import { companyOf, spendScope } from "@/lib/auth/scope";
 import { asRecord } from "@/lib/gateway/core";
 import { CLIENT_CLOSED_STATUS } from "@/lib/gateway/errors";
+import { requestTranscript, responseTranscript } from "@/lib/gateway/request-logs/log-content";
 import { requestLogLabels, requestLogRow } from "@/lib/gateway/request-logs/request-log-detail";
 import { parseLogFilters, requestLogWhere } from "@/lib/gateway/request-logs/request-log-query";
+import { SessionChatBuilder } from "@/lib/gateway/request-logs/session-chat";
 import {
   ACTIVE_SESSION_MS,
   accountSwitchFlags,
@@ -26,6 +28,7 @@ import type {
   AccountStep,
   LogFilterValues,
   LogSessionAccount,
+  LogSessionChat,
   LogSessionDetail,
   LogSessionList,
   LogSessionRef,
@@ -38,6 +41,8 @@ import type { SpendScope } from "@/types/structure";
 export const SESSION_EXPORT_LIMIT = 1_000;
 const SESSION_COUNT_CAP = 10_000;
 const TIMELINE_PAGE_SIZE = 100;
+const CHAT_REQUEST_LIMIT = 200;
+const CHAT_CHUNK_SIZE = 20;
 const MAX_SESSION_ID = 512;
 const MAX_REF_ID = 64;
 const FAILED: Prisma.RequestLogWhereInput = { status: { gte: 400, not: CLIENT_CLOSED_STATUS } };
@@ -328,4 +333,53 @@ export async function loadLogSession(input: { ref: unknown; page?: number }): Pr
       ];
     }),
   };
+}
+
+export async function loadLogSessionChat(input: { ref: unknown }): Promise<LogSessionChat> {
+  const session = await requirePermission(PERMISSIONS.SPEND_READ);
+  const ref = parseSessionRef(input?.ref);
+  if (!ref) throw new Error("VALIDATION");
+  const where: Prisma.RequestLogWhereInput = { AND: [spendScope(session), ref, { content: { isNot: null } }] };
+  const canViewContent = hasPerm(session.permissions, PERMISSIONS.LOGS_CONTENT);
+  const [total, newest] = await Promise.all([
+    prisma.requestLog.count({ where }),
+    canViewContent
+      ? prisma.requestLog.findMany({
+          where,
+          orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+          take: CHAT_REQUEST_LIMIT,
+          select: { id: true },
+        })
+      : [],
+  ]);
+  const ids = newest.map((row) => row.id).reverse();
+  const builder = new SessionChatBuilder();
+  for (let start = 0; start < ids.length; start += CHAT_CHUNK_SIZE) {
+    const rows = await prisma.requestLog.findMany({
+      where: { AND: [where, { id: { in: ids.slice(start, start + CHAT_CHUNK_SIZE) } }] },
+      orderBy: TIMELINE_ORDER,
+      include: { content: true },
+    });
+    for (const row of rows) {
+      if (!row.content) continue;
+      builder.add({
+        request: {
+          id: row.id,
+          createdAt: row.createdAt.toISOString(),
+          model: row.model,
+          status: row.status,
+          outcome: row.outcome,
+          latencyMs: row.latencyMs,
+          promptTokens: row.promptTokens,
+          completionTokens: row.completionTokens,
+          cacheReadTokens: row.cacheReadTokens,
+          cost: money(row.cost),
+          error: row.error,
+        },
+        input: requestTranscript(row.content.request),
+        output: responseTranscript(row.content.response),
+      });
+    }
+  }
+  return { canViewContent, threads: builder.threads(), total, scanned: ids.length };
 }
