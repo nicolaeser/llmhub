@@ -1,21 +1,16 @@
 "use client";
 
-import { useCallback, useId, type ReactNode } from "react";
+import { useId, type ReactNode } from "react";
 import { Button, Card, Chip, Meter, Skeleton, Table } from "@heroui/react";
-import { Activity, ArrowLeft, ArrowLeftRight, Coins, Download, FileText, ListFilter, Timer } from "lucide-react";
+import { Activity, ArrowLeftRight, Coins, FileText, Timer } from "lucide-react";
 import { useFormatter, useTranslations } from "next-intl";
-import CopyButton from "@/components/console/copy-button";
-import { LoadError, SectionLoading } from "@/components/console/page-status";
+import { SectionLoading } from "@/components/console/page-status";
 import RowCard, { RowCards, TABLE_FROM_LG } from "@/components/console/row-cards";
 import StatCard from "@/components/console/stat-card";
-import { useActionData } from "@/lib/hooks/use-action-data";
-import { isActionFail } from "@/lib/http/action-result";
-import type { LogSessionDetail, LogSessionRef, LogSessionRequest, RequestLogRow } from "@/types/logs";
-import { loadLogSessionAction } from "../_action";
-import { ActiveChip, AgentTile, useCallerLabels, useCompactTokens } from "./session-cells";
+import type { LogSessionDetail, LogSessionRequest } from "@/types/logs";
+import { useCallerLabels, useCompactTokens } from "./session-cells";
 import { useSessionFormat } from "./session-format";
 import StatusChip from "./status-chip";
-import { useLiveReload } from "./use-live-reload";
 
 function Field({ label, children, wide = false }: { label: string; children: ReactNode; wide?: boolean }) {
   return (
@@ -27,17 +22,15 @@ function Field({ label, children, wide = false }: { label: string; children: Rea
 }
 
 export default function SessionTrace({
-  sessionRef,
-  onBack,
+  data,
+  pending,
+  onPage,
   onOpenRequest,
-  onShowRequests,
-  onExport,
 }: {
-  sessionRef: LogSessionRef;
-  onBack: () => void;
-  onOpenRequest: (row: RequestLogRow) => void;
-  onShowRequests: (ref: LogSessionRef) => void;
-  onExport: (ref: LogSessionRef) => void;
+  data: LogSessionDetail;
+  pending: boolean;
+  onPage: (page: number) => void;
+  onOpenRequest: (id: string) => void;
 }) {
   const t = useTranslations("Logs");
   const tSessions = useTranslations("Logs.sessions");
@@ -47,20 +40,7 @@ export default function SessionTrace({
   const caller = useCallerLabels();
   const tokens = useCompactTokens();
   const timelineId = useId();
-  const state = useActionData(() => loadLogSessionAction({ ref: sessionRef, page: 1 }));
-  const { data, pending, setData } = state;
-  const page = data?.page ?? 1;
-
-  const refresh = useCallback(() => {
-    loadLogSessionAction({ ref: sessionRef, page }).then((res) => {
-      if (!isActionFail(res)) setData((current) => (current.page === res.page ? res : current));
-    });
-  }, [sessionRef, page, setData]);
-  useLiveReload(Boolean(data?.session.active) && !pending, refresh);
-
-  function load(next: number) {
-    state.reloadWith(() => loadLogSessionAction({ ref: sessionRef, page: next }));
-  }
+  const page = data.page;
 
   function latency(row: LogSessionRequest, slowest: number) {
     const share = slowest > 0 ? row.latencyMs / slowest : 0;
@@ -114,26 +94,10 @@ export default function SessionTrace({
         size="sm"
         variant="ghost"
         aria-label={t("openDetails", { model: row.model })}
-        onPress={() => onOpenRequest(row)}
+        onPress={() => onOpenRequest(row.id)}
       >
         <FileText size={14} aria-hidden />
       </Button>
-    );
-  }
-
-  const back = (
-    <Button size="sm" variant="tertiary" onPress={onBack}>
-      <ArrowLeft size={14} aria-hidden />
-      {tSessions("back")}
-    </Button>
-  );
-
-  if (!data) {
-    return (
-      <div className="space-y-4">
-        {back}
-        {state.error ? <LoadError state={state} /> : <SectionLoading shape="details" />}
-      </div>
     );
   }
 
@@ -144,38 +108,7 @@ export default function SessionTrace({
 
   return (
     <div className="space-y-5">
-      {back}
-      <LoadError state={state} />
       <Card>
-        <Card.Header className="flex-row flex-wrap items-start justify-between gap-3">
-          <div className="flex min-w-0 items-start gap-3">
-            <AgentTile agent={summary.agent} active={summary.active} size="md" />
-            <div className="min-w-0 space-y-1">
-              <div className="flex flex-wrap items-center gap-2">
-                <Card.Title>{session.title(summary.agent)}</Card.Title>
-                <ActiveChip active={summary.active} />
-              </div>
-              <div className="flex min-w-0 items-center gap-1">
-                <code className="min-w-0 font-mono text-xs break-all text-muted">{summary.sessionId}</code>
-                <CopyButton text={summary.sessionId} label={tSessions("copy")} />
-              </div>
-              <Card.Description>
-                {tSessions("started", { at: new Date(summary.startedAt) })}
-                <span className="block">{tSessions("lastRequest", { at: new Date(summary.lastAt) })}</span>
-              </Card.Description>
-            </div>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Button size="sm" variant="secondary" onPress={() => onShowRequests(sessionRef)}>
-              <ListFilter size={14} aria-hidden />
-              {tSessions("showRequests")}
-            </Button>
-            <Button size="sm" variant="secondary" onPress={() => onExport(sessionRef)}>
-              <Download size={14} aria-hidden />
-              {tSessions("exportRequests")}
-            </Button>
-          </div>
-        </Card.Header>
         <Card.Content>
           <dl className="grid gap-x-4 gap-y-3 sm:grid-cols-2 lg:grid-cols-4">
             <Field label={t("columns.caller")}>
@@ -348,7 +281,7 @@ export default function SessionTrace({
               size="sm"
               isDisabled={page <= 1}
               isPending={pending}
-              onPress={() => load(page - 1)}
+              onPress={() => onPage(page - 1)}
             >
               {t("prev")}
             </Button>
@@ -357,7 +290,7 @@ export default function SessionTrace({
               size="sm"
               isDisabled={page * data.pageSize >= data.total}
               isPending={pending}
-              onPress={() => load(page + 1)}
+              onPress={() => onPage(page + 1)}
             >
               {t("next")}
             </Button>

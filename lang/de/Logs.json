@@ -194,10 +194,30 @@
     "tokenFlow": "{input} rein · {output} raus",
     "latencyShare": "{rate, number, percent} der langsamsten Anfrage auf dieser Seite",
     "callerLine": "{key} · {person}",
-    "tokenTotal": "{cached, select, true {{tokens} Token · {rate, number, percent} aus dem Cache} other {{tokens} Token}}"
+    "tokenTotal": "{cached, select, true {{tokens} Token · {rate, number, percent} aus dem Cache} other {{tokens} Token}}",
+    "views": {
+      "chat": "Chat"
+    },
+    "missing": "Sitzung nicht gefunden",
+    "missingHint": "Öffne eine Sitzung im Tab Sitzungen, um sie zu lesen."
   },
   "labels": {
     "title": "Labels",
     "chip": "{key}: {value}"
+  },
+  "chat": {
+    "empty": "Keine Unterhaltung vorhanden",
+    "emptyHint": "Unterhaltungen erscheinen hier, sobald die Inhaltsprotokollierung Prompts und Antworten der Anfragen dieser Sitzung speichert.",
+    "partial": "Gelesen wurden die letzten {scanned, number, integer} von {total, number, integer} Anfragen. Ältere Beiträge erscheinen nur, soweit spätere Anfragen sie wiederholen.",
+    "jump": "Zum Neuesten springen",
+    "systemPrompt": "Systemprompt",
+    "toolCall": "Tool-Aufruf",
+    "resent": "{count, plural, one {# frühere Nachricht} other {# frühere Nachrichten}} erneut gesendet{cached, select, true { · {rate, number, percent} aus dem Cache} other {}}",
+    "cached": "{rate, number, percent} aus dem Cache",
+    "cacheHit": "Antwort aus dem Antwort-Cache",
+    "repeated": "Dieselbe Anfrage erneut gesendet",
+    "sideTitle": "{count, plural, one {# Nebenunterhaltung} other {# Nebenunterhaltungen}}",
+    "sideItem": "Nebenunterhaltung {index, number, integer}",
+    "sideMeta": "{count, plural, one {# Anfrage} other {# Anfragen}} · {models}"
   }
 }
