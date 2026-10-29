@@ -1,13 +1,13 @@
 import createMiddleware from "next-intl/middleware";
 import { type NextRequest, NextResponse } from "next/server";
-import { SESSION_COOKIE, verifySessionCookie } from "@/lib/auth/cookie";
+import { clearedSessionCookieOptions, SESSION_COOKIE, verifySessionCookie } from "@/lib/auth/cookie";
 import {
   APP_LOCALES,
   isSubAddPage,
   routePathname,
   shouldHardenTransport,
 } from "@/lib/http/public-path";
-import { sanitizeReturnPath } from "@/lib/auth/return-path";
+import { REQUEST_PATH_HEADER, sanitizeReturnPath } from "@/lib/auth/return-path";
 import { publicSentryEnv, sentryIngestOrigin } from "@/lib/sentry/options";
 import { LOCALE_COOKIE, pickLocale } from "@/i18n/locale-cookie";
 
@@ -26,6 +26,9 @@ const intlMiddleware = createMiddleware({
 export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
   const routePath = routePathname(pathname);
+  const search = new URLSearchParams(req.nextUrl.search);
+  search.delete("_rsc");
+  const requestPath = search.size ? `${routePath}?${search}` : routePath;
   const cookieValue = req.cookies.get(SESSION_COOKIE)?.value ?? null;
   const signedIn = cookieValue ? (await verifySessionCookie(cookieValue)) !== null : false;
   const isProd = process.env.NODE_ENV === "production";
@@ -51,6 +54,7 @@ export async function proxy(req: NextRequest) {
 
   const forwardedHeaders = new Headers(req.headers);
   forwardedHeaders.set("x-nonce", nonce);
+  forwardedHeaders.set(REQUEST_PATH_HEADER, requestPath);
   forwardedHeaders.set("content-security-policy", contentSecurityPolicy);
 
   let response: NextResponse;
@@ -66,8 +70,9 @@ export async function proxy(req: NextRequest) {
     !isSubAddPage(routePath)
   ) {
     const loginUrl = new URL("/account/login", req.url);
-    loginUrl.searchParams.set("return", routePath);
+    loginUrl.searchParams.set("return", requestPath);
     response = NextResponse.redirect(loginUrl);
+    if (cookieValue) response.cookies.set({ ...clearedSessionCookieOptions(), value: "" });
   } else if (signedIn && AUTH_PATTERN.test(routePath)) {
     const dest =
       sanitizeReturnPath(req.nextUrl.searchParams.get("return")) ?? "/";

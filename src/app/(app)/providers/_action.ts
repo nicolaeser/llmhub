@@ -14,6 +14,7 @@ import {
 } from "@/lib/providers/account-routing";
 import { importAuthFiles, importSignInFile } from "@/lib/providers/auth-import";
 import { importCliProxyAuthFiles, listCliProxyAuthFiles } from "@/lib/providers/cliproxy-import";
+import { loadSubscriptionKeyUsage } from "@/lib/providers/key-usage";
 import {
   completeSignIn,
   createProvider,
@@ -88,6 +89,10 @@ export async function loadProviderLimitsAction(...args: Parameters<typeof loadPr
 
 export async function loadSubscriptionLimitsAction(...args: Parameters<typeof loadSubscriptionLimits>) {
   return runAction(() => loadSubscriptionLimits(...args));
+}
+
+export async function loadSubscriptionKeyUsageAction(...args: Parameters<typeof loadSubscriptionKeyUsage>) {
+  return runAction(() => loadSubscriptionKeyUsage(...args));
 }
 
 export async function loadAccountRoutingAction(...args: Parameters<typeof loadAccountRouting>) {

@@ -3,6 +3,7 @@ import { z } from "zod";
 import { modelAlias } from "@/lib/gateway/catalog/model-alias";
 import { KEY_ENDPOINTS, MAX_ACCESS_WINDOWS } from "@/lib/gateway/access/key-restrictions";
 import { clockMinute, isTimeZone, WEEKDAYS } from "@/lib/gateway/billing/price-schedule";
+import { MAX_KEY_PAUSE_HOURS } from "@/lib/keys/pause";
 
 const clock = z.string().refine((value) => clockMinute(value) !== null, "expected HH:MM");
 
@@ -55,4 +56,9 @@ export const updateKeySchema = z.object({
   ...keyFields,
   id: z.string().min(1).max(64),
   blocked: z.boolean(),
+});
+
+export const pauseKeySchema = z.object({
+  id: z.string().min(1).max(64),
+  hours: z.number().int().min(0).max(MAX_KEY_PAUSE_HOURS).default(0),
 });

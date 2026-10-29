@@ -24,6 +24,9 @@ export type LoginChallengeRecord = {
     username: string;
     blocked: boolean;
     mustChangePassword: boolean;
+    isOwner: boolean;
+    emergencyAccess: boolean;
+    externalId: string | null;
   };
 };
 
@@ -86,6 +89,9 @@ export type SecurityEventAction =
   | "account.unblocked"
   | "credentials.suspended"
   | "credentials.restored"
+  | "emergency_access.granted"
+  | "emergency_access.removed"
+  | "emergency_access.sign_in"
   | "management_key.created"
   | "management_key.revoked";
 

@@ -94,6 +94,8 @@ function keyView(): VirtualKeyView {
     access_windows: [],
     access_time_zone: "UTC",
     blocked: false,
+    paused: false,
+    paused_until: "",
     log_content: true,
     created_at: "",
   };

@@ -22,6 +22,7 @@ import {
   loadUsersConsole,
   resetUserTwoFactor,
   restoreUserCredentials,
+  setEmergencyAccess,
   revokeUserSessions,
   setUserBlocked,
   setUserContentLogging,
@@ -52,6 +53,12 @@ export async function setUserBlockedAction(id: string, blocked: boolean) {
 export async function restoreUserCredentialsAction(id: string) {
   return runAction(() =>
     changeUsers(PERMISSIONS.USERS_MANAGE, (session) => restoreUserCredentials(session, id)),
+  );
+}
+
+export async function setEmergencyAccessAction(input: unknown) {
+  return runAction(() =>
+    changeUsers(PERMISSIONS.USERS_SECURITY, (session) => setEmergencyAccess(session, input)),
   );
 }
 

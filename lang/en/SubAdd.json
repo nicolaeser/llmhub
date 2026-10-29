@@ -16,7 +16,7 @@
     "usage": "{named, select, true {Requests that {instance} sends run on your account and count against the limits of your plan.} other {Requests that this hub sends run on your account and count against the limits of your plan.}}",
     "tokens": "The hub stores the sign-in for your account encrypted and renews it itself. It never sees your password.",
     "terms": "Using a subscription through a third-party hub may break the terms of the provider. The provider can limit or ban the account.",
-    "withdraw": "After connecting you get a private link to check the account and disconnect it. You can replace or deactivate that link at any time. Without it, you can still end the hub's access at the provider.",
+    "withdraw": "{manageable, select, true {After connecting you get a private link to check the account and disconnect it. You can replace or deactivate that link at any time. Without it, you can still end the hub's access at the provider.} other {This link only adds accounts and gives you no link to disconnect them. To stop sharing later, end the hub's access in your account settings at the provider, or ask an administrator of this hub.}}",
     "accept": "I understand and want to share my account"
   },
   "done": {
@@ -30,7 +30,8 @@
     "addAnother": "Add another account",
     "full": "This link cannot add more accounts.",
     "skipManage": "I don't need a manage link",
-    "manageOffHint": "These accounts stay connected and the hub keeps using them. Nobody can see or disconnect them through the manage link anymore.",
+    "manageOffTitle": "{manageable, select, true {Manage link deactivated} other {No manage link}}",
+    "manageOffHint": "{manageable, select, true {These accounts stay connected and the hub keeps using them. Nobody can see or disconnect them through the manage link anymore.} other {This link only adds accounts. They stay connected and the hub keeps using them.}}",
     "noManage": "No manage link"
   },
   "manage": {

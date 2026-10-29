@@ -4,9 +4,23 @@ import prisma from "@/lib/db/prisma";
 import { runAsPrincipal } from "@/lib/auth/delegation";
 import { AuthError } from "@/lib/auth/errors";
 import { permissions } from "@/lib/auth/permissions";
-import { createKey, loadKeyDetail, loadKeysPage, revokeKey, rotateKey, updateKey } from "@/lib/keys/manage";
+import {
+  createKey,
+  loadKeyDetail,
+  loadKeysPage,
+  pauseKey,
+  resumeKey,
+  revokeKey,
+  rotateKey,
+  updateKey,
+} from "@/lib/keys/manage";
 import { digest } from "@/lib/crypto";
+import { gateRequest } from "@/lib/gateway/access/gate";
+import { authenticateBearer, keyPrincipal } from "@/lib/gateway/access/principal";
+import { GateError } from "@/lib/gateway/errors";
 import { PATCH as patchKey } from "@/app/api/mgmt/keys/[id]/route";
+import { POST as pauseRoute } from "@/app/api/mgmt/keys/[id]/pause/route";
+import { POST as resumeRoute } from "@/app/api/mgmt/keys/[id]/resume/route";
 import type { Permission } from "@/types/auth";
 import { closeDatabase, uniqueName } from "./support/database";
 import { sessionOf, TestData } from "./support/fixtures";
@@ -150,6 +164,8 @@ test("key services need keys:manage and only reach keys the caller may see", asy
       () => updateKey(updateInput(colleagueKey.id)),
       () => rotateKey(colleagueKey.id),
       () => revokeKey(colleagueKey.id),
+      () => pauseKey({ id: colleagueKey.id }),
+      () => resumeKey(colleagueKey.id),
     ];
     for (const call of calls) {
       await assert.rejects(runAsPrincipal(reader, call), forbidden);
@@ -158,7 +174,10 @@ test("key services need keys:manage and only reach keys the caller may see", asy
       await assert.rejects(runAsPrincipal(own, () => updateKey(updateInput(id))), failsWith("NOT_FOUND"));
       await assert.rejects(runAsPrincipal(own, () => rotateKey(id)), failsWith("NOT_FOUND"));
       await assert.rejects(runAsPrincipal(own, () => revokeKey(id)), failsWith("NOT_FOUND"));
+      await assert.rejects(runAsPrincipal(own, () => pauseKey({ id })), failsWith("NOT_FOUND"));
+      await assert.rejects(runAsPrincipal(own, () => resumeKey(id)), failsWith("NOT_FOUND"));
     }
+    assert.equal(await prisma.virtualKey.count({ where: { id: { in: [colleagueKey.id, awayKey.id] }, paused: true } }), 0);
     assert.equal(await prisma.virtualKey.count({ where: { id: { in: [colleagueKey.id, awayKey.id] } } }), 2);
 
     const page = await runAsPrincipal(own, () => loadKeysPage());
@@ -278,6 +297,119 @@ test("PATCH /api/mgmt/keys replaces the whole binding when either reference is s
     assert.equal(unbound.member_id, null);
     assert.equal(unbound.project_id, null);
     assert.equal(unbound.user_id, owner.id);
+  } finally {
+    await data.cleanup();
+  }
+});
+
+async function auditOf(action: string, objectId: string) {
+  const row = await prisma.gatewayAuditLog.findFirstOrThrow({ where: { action, objectId }, orderBy: { createdAt: "desc" } });
+  return { before: JSON.parse(row.beforeJson), after: JSON.parse(row.afterJson) };
+}
+
+test("a paused key is refused at the gateway until it is resumed or its pause ends", async () => {
+  const data = new TestData();
+  try {
+    const world = await twoCompanies(data);
+    const admin = sessionOf(await data.user(), { permissions: KEY_MANAGER });
+    const created = await runAsPrincipal(admin, () => createKey(keyInput({ projectId: world.homeProject.id })));
+    const id = created.key.token_id;
+    const secret = created.key.key;
+    const gate = () =>
+      gateRequest(
+        new Request("http://hub.local/api/v1/chat/completions", {
+          method: "POST",
+          headers: { authorization: `Bearer ${secret}` },
+        }),
+      );
+    const refusedAsPaused = (message: string) => (err: unknown) =>
+      err instanceof GateError && err.status === 403 && err.code === "key_paused" && err.message === message;
+
+    assert.equal((await gate()).key?.token_id, id);
+
+    const paused = await runAsPrincipal(admin, () => pauseKey({ id }));
+    assert.equal(paused.key.paused, true);
+    assert.equal(paused.key.paused_until, "");
+    assert.deepEqual(await auditOf("key.pause", id), {
+      before: { paused: false, pausedUntil: null },
+      after: { paused: true, pausedUntil: null },
+    });
+    await assert.rejects(gate(), refusedAsPaused("this key is paused"));
+    assert.equal((await authenticateBearer(secret)).key?.paused, true);
+    assert.equal((await keyPrincipal(id))?.key?.token_id, id);
+
+    const resumed = await runAsPrincipal(admin, () => resumeKey(id));
+    assert.equal(resumed.key.paused, false);
+    assert.deepEqual(await auditOf("key.resume", id), {
+      before: { paused: true, pausedUntil: null },
+      after: { paused: false, pausedUntil: null },
+    });
+    assert.equal((await gate()).key?.token_id, id);
+
+    const before = Date.now();
+    const timed = await runAsPrincipal(admin, () => pauseKey({ id, hours: 24 }));
+    const until = Date.parse(timed.key.paused_until);
+    assert.ok(until >= before + 24 * 3_600_000 && until <= Date.now() + 24 * 3_600_000);
+    await assert.rejects(gate(), refusedAsPaused(`this key is paused until ${timed.key.paused_until}`));
+
+    await prisma.virtualKey.update({ where: { id }, data: { pausedUntil: new Date(Date.now() - 1000) } });
+    assert.equal((await gate()).key?.paused, false);
+    const listed = (await runAsPrincipal(admin, () => loadKeysPage())).keys.find((key) => key.token_id === id);
+    assert.equal(listed?.paused, false);
+    assert.equal(listed?.paused_until, "");
+
+    await assert.rejects(runAsPrincipal(admin, () => pauseKey({ id, hours: -1 })), failsWith("VALIDATION"));
+  } finally {
+    await data.cleanup();
+  }
+});
+
+test("POST /api/mgmt/keys/{id}/pause and /resume switch the pause and return the key", async () => {
+  const data = new TestData();
+  try {
+    const owner = await data.user({ isOwner: true });
+    const secret = `sk-mgmt-${uniqueName("secret")}`;
+    await prisma.managementKey.create({
+      data: {
+        userId: owner.id,
+        name: "integration",
+        prefix: secret.slice(0, 16),
+        hash: digest(secret),
+        permissions: ["keys:read", "keys:read-all", "keys:manage"],
+      },
+    });
+    const key = await data.key({ userId: owner.id });
+    const post = async (handler: typeof pauseRoute, action: string, body?: unknown) => {
+      const res = await handler(
+        new Request(`http://hub.local/api/mgmt/keys/${key.id}/${action}`, {
+          method: "POST",
+          headers: { authorization: `Bearer ${secret}`, "content-type": "application/json" },
+          body: body === undefined ? undefined : JSON.stringify(body),
+        }),
+        { params: Promise.resolve({ id: key.id }) },
+      );
+      return { status: res.status, body: await res.json() };
+    };
+
+    const open = await post(pauseRoute, "pause");
+    assert.equal(open.status, 200);
+    assert.equal(open.body.object, "api_key");
+    assert.equal(open.body.paused, true);
+    assert.equal(open.body.paused_until, null);
+
+    const timed = await post(pauseRoute, "pause", { hours: 1 });
+    assert.equal(timed.body.paused, true);
+    assert.ok(Date.parse(timed.body.paused_until) > Date.now());
+
+    assert.equal((await post(pauseRoute, "pause", { hours: 1, until: "tomorrow" })).status, 422);
+
+    const resumed = await post(resumeRoute, "resume");
+    assert.equal(resumed.status, 200);
+    assert.equal(resumed.body.paused, false);
+    assert.equal(resumed.body.paused_until, null);
+    const stored = await prisma.virtualKey.findUniqueOrThrow({ where: { id: key.id } });
+    assert.equal(stored.paused, false);
+    assert.equal(stored.pausedUntil, null);
   } finally {
     await data.cleanup();
   }

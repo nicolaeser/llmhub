@@ -119,7 +119,7 @@ async function offeredKinds(kinds: string[]): Promise<SignInKind[]> {
 async function usableLink(token: string, now = Date.now()): Promise<SubAddLinkRecord> {
   const link = await prisma.subAddLink.findUnique({
     where: { tokenHash: subAddTokenHash(token) },
-    select: { id: true, label: true, kinds: true, expiresAt: true, maxAccounts: true, added: true },
+    select: { id: true, label: true, kinds: true, manageable: true, expiresAt: true, maxAccounts: true, added: true },
   });
   if (!link || subAddStatus(link, now) !== "active") throw new Error(SUB_ADD_UNAVAILABLE);
   return link;
@@ -156,8 +156,17 @@ async function finish(
     account: session.account,
     plan: session.plan,
     outcome: stored.outcome,
-    manageToken: brought && stored.manageHash === brought.hash ? brought.token : fresh.token,
+    manageToken: manageTokenOf(stored.manageHash, fresh, brought),
   };
+}
+
+function manageTokenOf(
+  stored: string | null,
+  fresh: { token: string; hash: string },
+  brought: { token: string; hash: string } | null,
+): string | null {
+  if (stored === null) return null;
+  return brought && stored === brought.hash ? brought.token : fresh.token;
 }
 
 function ticketFor(link: SubAddLinkRecord, value: string) {
@@ -179,6 +188,7 @@ export async function openSubAddLink(raw: unknown): Promise<SubAddOffer> {
       instance: instanceName(),
       kinds,
       remaining: subAddRemaining(link),
+      manageable: link.manageable,
       expiresAt: link.expiresAt.toISOString(),
     };
   });

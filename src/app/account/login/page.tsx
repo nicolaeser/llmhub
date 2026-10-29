@@ -130,6 +130,7 @@ export default function LoginPage() {
         <PasswordStep
           ssoEnabled={context.ssoEnabled}
           ssoOnly={context.ssoOnly}
+          ssoProvider={context.ssoProvider}
           passkeysEnabled={context.passkeysEnabled}
           passwordResetEnabled={context.passwordResetEnabled}
           returnParam={returnParam}

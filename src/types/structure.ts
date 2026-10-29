@@ -90,6 +90,8 @@ export type KeyNode = {
   projectId: string;
   memberId: string;
   blocked: boolean;
+  paused: boolean;
+  pausedUntil: string;
   budget: BudgetView;
 };
 

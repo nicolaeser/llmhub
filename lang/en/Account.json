@@ -129,6 +129,9 @@
       "accountUnblocked": "Account unblocked",
       "credentialsSuspended": "API keys disabled because access was removed at the identity provider",
       "credentialsRestored": "API keys enabled again",
+      "emergencyGranted": "Emergency access granted",
+      "emergencyRemoved": "Emergency access removed",
+      "emergencySignIn": "Signed in locally with emergency access",
       "managementKeyCreated": "Management API key created",
       "managementKeyRevoked": "Management API key revoked"
     }

@@ -164,6 +164,8 @@ model VirtualKey {
   accessWindows    Json          @default("[]")
   accessTimeZone   String        @default("UTC")
   blocked          Boolean       @default(false)
+  paused           Boolean       @default(false)
+  pausedUntil      DateTime?
   logContent       Boolean       @default(true)
   prevHash         String        @default("")
   prevHashUntil    DateTime?
@@ -338,6 +340,7 @@ model SubAddLink {
   maxAccounts Int?
   added       Int      @default(0)
   restricted  Boolean  @default(false)
+  manageable  Boolean  @default(true)
   expiresAt   DateTime
   createdById String   @default("")
   createdAt   DateTime @default(now())
@@ -605,6 +608,7 @@ model RequestLog {
   @@index([projectId, createdAt])
   @@index([memberId, createdAt])
   @@index([sessionId, createdAt])
+  @@index([providerId, createdAt])
   @@index([status])
   @@index([labels], type: Gin)
 }

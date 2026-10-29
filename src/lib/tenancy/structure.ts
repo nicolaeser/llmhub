@@ -30,6 +30,7 @@ import { canReport, reportViews } from "@/lib/reports/manage";
 import { forgetCompanyLabelKeys } from "@/lib/gateway/billing/label-keys";
 import { cleanLabelKeys } from "@/lib/usage/labels";
 import { managesMcpRules, seesMcp } from "@/lib/mcp/scope";
+import { pauseActive } from "@/lib/keys/pause";
 
 const NODE_KINDS: readonly string[] = ["org", "team", "project", "member"];
 
@@ -105,18 +106,23 @@ async function structurePayload(session: AuthenticatedSession): Promise<Structur
       orgId: row.orgId ?? "",
       budget: budgetView(row, boosts("user", row.id), now),
     })),
-    keys: keys.map((row) => ({
-      id: row.id,
-      alias: row.keyAlias || row.prefix,
-      prefix: row.prefix,
-      userId: row.userId ?? "",
-      orgId: row.orgId ?? "",
-      teamId: row.teamId ?? "",
-      projectId: row.projectId ?? "",
-      memberId: row.memberId ?? "",
-      blocked: row.blocked,
-      budget: budgetView(row, boosts("key", row.id), now),
-    })),
+    keys: keys.map((row) => {
+      const paused = pauseActive(row.paused, row.pausedUntil, now);
+      return {
+        id: row.id,
+        alias: row.keyAlias || row.prefix,
+        prefix: row.prefix,
+        userId: row.userId ?? "",
+        orgId: row.orgId ?? "",
+        teamId: row.teamId ?? "",
+        projectId: row.projectId ?? "",
+        memberId: row.memberId ?? "",
+        blocked: row.blocked,
+        paused,
+        pausedUntil: paused ? (row.pausedUntil?.toISOString() ?? "") : "",
+        budget: budgetView(row, boosts("key", row.id), now),
+      };
+    }),
     thresholds: enterprise.budget_alert_thresholds ?? [50, 80, 100],
     companyId: company ?? "",
     canManage: hasPerm(session.permissions, PERMISSIONS.TENANCY_MANAGE),

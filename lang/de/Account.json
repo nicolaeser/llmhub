@@ -129,6 +129,9 @@
       "accountUnblocked": "Konto entsperrt",
       "credentialsSuspended": "API-Keys deaktiviert, weil der Zugriff beim Identitätsanbieter entfernt wurde",
       "credentialsRestored": "API-Keys wieder aktiviert",
+      "emergencyGranted": "Notfallzugang erteilt",
+      "emergencyRemoved": "Notfallzugang entfernt",
+      "emergencySignIn": "Lokal mit Notfallzugang angemeldet",
       "managementKeyCreated": "Management-API-Key erstellt",
       "managementKeyRevoked": "Management-API-Key widerrufen"
     }

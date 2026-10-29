@@ -20,6 +20,7 @@ export const subAddLinkInputSchema = z.object({
   days: z.number().int().min(1).max(SUB_ADD_MAX_DAYS),
   maxAccounts: z.number().int().min(1).max(SUB_ADD_MAX_ACCOUNTS).nullable(),
   restricted: z.boolean(),
+  manageable: z.boolean().default(true),
   targets: z
     .array(z.object({ scope: z.enum(ASSIGNMENT_SCOPES), id: z.string().trim().min(1).max(64) }))
     .max(SUB_ADD_MAX_TARGETS),

@@ -38,6 +38,7 @@
     "blocked": "{blocked, select, true {User blocked} other {User unblocked}}",
     "sessionsRevoked": "All sessions signed out",
     "credentialsRestored": "API keys enabled again",
+    "emergencyChanged": "{enabled, select, true {Emergency access granted} other {Emergency access removed}}",
     "roleChanged": "Role and access changed",
     "twoFactorReset": "Two-factor authentication reset",
     "contentLogging": "{enabled, select, true {Content logging turned on} other {Content logging turned off}}"
@@ -58,6 +59,9 @@
   "revokeSessions": "Sign out all sessions",
   "restoreCredentials": "Enable API keys again",
   "credentialsSuspended": "API keys disabled",
+  "emergencyAccess": "Emergency access",
+  "emergencyAction": "{marked, select, true {Remove emergency access} other {Grant emergency access}}",
+  "emergencyHint": "{marked, select, true {{username} then signs in only through the identity provider while it manages sign-in or roles.} other {{username} can then sign in with a password or passkey and a second factor even when sign-in goes through the identity provider. Every such sign-in is recorded and the other administrators are notified. Keep this to very few accounts.}}",
   "resetTwoFactor": "Reset two-factor authentication",
   "resetTwoFactorHint": "{username} must set up a new authenticator at the next sign-in. All sessions and passkeys of this user are removed. Confirm with your own code.",
   "requireChange": "Require a new password at the next sign-in",

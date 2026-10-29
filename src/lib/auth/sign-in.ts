@@ -49,10 +49,9 @@ import {
   sealTotpSecret,
   totpEnrollment,
 } from "@/lib/auth/totp";
+import { localSignInAccess, recordEmergencySignIn } from "@/lib/auth/local-sign-in";
 import { securityEvent, userActor } from "@/lib/auth/security-events";
-import { ssoOnlyActive } from "@/lib/auth/oidc";
 import { clientBucket } from "@/lib/http/client-ip";
-import { getEnterprise } from "@/lib/settings/enterprise";
 import {
   passkeyAssertionSchema,
   passwordSignInSchema,
@@ -97,11 +96,6 @@ async function checkCredentials(email: string, password: string) {
   return user && !user.blocked && valid ? user : null;
 }
 
-async function assertPasswordAllowed(isOwner: boolean) {
-  if (isOwner) return;
-  if (ssoOnlyActive((await getEnterprise()).oidc)) throw new AuthError("SSO_REQUIRED");
-}
-
 export async function issueEnrollmentChallenge(userId: string): Promise<LoginStep> {
   const { expiresAt } = await issueLoginChallenge(userId, "ENROLL");
   return { step: "enroll", expiresAt: expiresAt.toISOString() };
@@ -125,7 +119,7 @@ export async function passwordSignIn(raw: unknown): Promise<LoginResult> {
   if (!user) throw new AuthError("INVALID_CREDENTIALS");
   await clearFailedAttempts(throttleKey);
   await releaseAttempts(reservation);
-  await assertPasswordAllowed(user.isOwner);
+  await localSignInAccess(user);
   if ((await secondFactorThrottle(user.id)).blocked) throw new AuthError("SECOND_FACTOR_LOCKED");
   const totp = await prisma.userTotp.findUnique({
     where: { userId: user.id },
@@ -172,9 +166,11 @@ async function completeSignIn(
     );
     return { step: "password", expiresAt: expiresAt.toISOString() };
   }
+  const emergency = await localSignInAccess(challenge.user);
   await consumeLoginChallenge(challenge.id);
   await startSession(challenge.userId, method);
   await clearLoginChallenge();
+  if (emergency) await recordEmergencySignIn(challenge.user, method, (await requestMeta()).ipAddress);
   return {
     step: "done",
     method,
@@ -239,6 +235,7 @@ export async function confirmEnrollment(raw: unknown): Promise<EnrollmentConfirm
     matchTotp(openTotpSecret(userId, pendingSecret), code, null),
   );
   const mustChange = challenge.user.mustChangePassword;
+  const emergency = mustChange ? false : await localSignInAccess(challenge.user);
   const meta = await requestMeta();
   let next: LoginResult;
   const session = mustChange ? null : newSessionToken();
@@ -295,6 +292,7 @@ export async function confirmEnrollment(raw: unknown): Promise<EnrollmentConfirm
     await setSessionCookie(session.token, session.expiresAt);
     await clearLoginChallenge();
   }
+  if (emergency) await recordEmergencySignIn(challenge.user, "TOTP", meta.ipAddress);
   return { recoveryCodes: codes, next };
 }
 
@@ -353,20 +351,26 @@ export async function verifyPasswordless(raw: unknown): Promise<LoginResult> {
   const user = await prisma.user.findUnique({
     where: { id: userId },
     select: {
+      id: true,
+      username: true,
+      email: true,
       blocked: true,
       isOwner: true,
+      emergencyAccess: true,
+      externalId: true,
       mustChangePassword: true,
       totp: { select: { enabledAt: true } },
     },
   });
   if (!user || user.blocked || !user.totp?.enabledAt) throw passkeyFailed();
-  await assertPasswordAllowed(user.isOwner);
+  const emergency = await localSignInAccess(user);
   if (user.mustChangePassword) {
     const { expiresAt } = await issueLoginChallenge(userId, "PASSWORD", "PASSKEY");
     return { step: "password", expiresAt: expiresAt.toISOString() };
   }
   await startSession(userId, "PASSKEY");
   await clearLoginChallenge();
+  if (emergency) await recordEmergencySignIn(user, "PASSKEY", (await requestMeta()).ipAddress);
   return { step: "done", method: "PASSKEY", recoveryCodesRemaining: null };
 }
 
@@ -385,6 +389,7 @@ export async function completePasswordChange(raw: unknown): Promise<LoginResult>
   if (!user.totp?.enabledAt) throw new AuthError("TWO_FACTOR_ENROLLMENT_REQUIRED");
   if (await verifyPassword(user.password, password)) throw new AuthError("PASSWORD_REUSED");
   const passwordHash = await hashPassword(password);
+  const emergency = await localSignInAccess(challenge.user);
   await consumeLoginChallenge(challenge.id);
   await pruneSessions(challenge.userId);
   const session = newSessionToken();
@@ -418,5 +423,6 @@ export async function completePasswordChange(raw: unknown): Promise<LoginResult>
   }
   await setSessionCookie(session.token, session.expiresAt);
   await clearLoginChallenge();
+  if (emergency) await recordEmergencySignIn(challenge.user, factor, meta.ipAddress);
   return { step: "done", method: factor, recoveryCodesRemaining: null };
 }

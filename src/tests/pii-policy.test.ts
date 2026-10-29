@@ -75,6 +75,8 @@ function keyPrincipal(
     access_windows: [],
     access_time_zone: "UTC",
     blocked: false,
+    paused: false,
+    paused_until: "",
     log_content: true,
     created_at: "",
   };
@@ -310,6 +312,7 @@ test("the playground applies the signed-in user's organization guardrails", asyn
           username: "member",
           blocked: false,
           isOwner: false,
+          identities: [],
           orgId: "o1",
           roleId: "r1",
           role: { id: "r1", templateKey: null, name: "Member", permissions: ["playground:use"] },

@@ -151,6 +151,7 @@ export function exampleRequestBody(
       access_windows: [{ days: ["mon", "tue", "wed", "thu", "fri"], start: "07:00", end: "19:00" }],
       access_time_zone: "Europe/Berlin",
     },
+    "/api/mgmt/keys/{id}/pause": { hours: 24 },
     "/api/mgmt/models": {
       alias: "my-new-alias",
       strategy: "least_inflight",
@@ -248,6 +249,8 @@ export const OPENAPI_PATHS: OpenApiPath[] = [
   { method: "PATCH", path: "/api/mgmt/keys/{id}", summary: "Update an API key", style: "management" },
   { method: "DELETE", path: "/api/mgmt/keys/{id}", summary: "Delete an API key", style: "management" },
   { method: "POST", path: "/api/mgmt/keys/{id}/rotate", summary: "Rotate an API key secret", style: "management" },
+  { method: "POST", path: "/api/mgmt/keys/{id}/pause", summary: "Pause an API key", style: "management" },
+  { method: "POST", path: "/api/mgmt/keys/{id}/resume", summary: "Resume a paused API key", style: "management" },
   { method: "GET", path: "/api/mgmt/models", summary: "List model aliases", style: "management" },
   { method: "POST", path: "/api/mgmt/models", summary: "Create a model alias", style: "management" },
   { method: "GET", path: "/api/mgmt/models/{alias}", summary: "Retrieve a model alias", style: "management" },

@@ -21,6 +21,9 @@ const securityEventActions = [
   "account.unblocked",
   "credentials.suspended",
   "credentials.restored",
+  "emergency_access.granted",
+  "emergency_access.removed",
+  "emergency_access.sign_in",
   "management_key.created",
   "management_key.revoked",
 ] as const satisfies readonly SecurityEventAction[];

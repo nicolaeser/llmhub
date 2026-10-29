@@ -13,6 +13,7 @@ import type {
   IssuedKey,
   KeyCreateInput,
   KeyOptions,
+  KeyPauseInput,
   KeyPreset,
   KeyUpdateInput,
   VirtualKeyView,
@@ -20,10 +21,13 @@ import type {
 import type { McpKeyAccess, McpKeyAccessChoice } from "@/types/mcp";
 import KeyDialog from "./key-dialog";
 import KeyMcpDialog from "./key-mcp-dialog";
+import KeyPauseDialog from "./key-pause-dialog";
 
 export type KeyServerActions = {
   create: (input: KeyCreateInput) => Promise<{ key: IssuedKey } | ActionFail>;
   update: (input: KeyUpdateInput) => Promise<{ key: VirtualKeyView } | ActionFail>;
+  pause: (input: KeyPauseInput) => Promise<{ key: VirtualKeyView } | ActionFail>;
+  resume: (id: string) => Promise<{ key: VirtualKeyView } | ActionFail>;
   rotate: (id: string) => Promise<{ key: IssuedKey } | ActionFail>;
   revoke: (id: string) => Promise<{ id: string } | ActionFail>;
   loadMcp: (keyId: string) => Promise<McpKeyAccess | ActionFail>;
@@ -64,11 +68,12 @@ export function useKeyDialogs({
   const [form, setForm] = useState<KeyForm | null>(null);
   const [target, setTarget] = useState<KeyTarget | null>(null);
   const [secret, setSecret] = useState<{ name: string; value: string } | null>(null);
-  const [busy, setBusy] = useState<{ id: string; action: "rotate" | "revoke" } | null>(null);
+  const [busy, setBusy] = useState<{ id: string; action: "resume" | "rotate" | "revoke" } | null>(null);
   const [dialogKey, setDialogKey] = useState(0);
   const [, start] = useTransition();
   const keyState = useOverlayState();
   const mcpState = useOverlayState();
+  const pauseState = useOverlayState();
   const rotateState = useOverlayState();
   const revokeState = useOverlayState();
 
@@ -82,6 +87,20 @@ export function useKeyDialogs({
     setTarget(next);
     setDialogKey((n) => n + 1);
     state.open();
+  }
+
+  function resume(key: KeyTarget) {
+    setBusy({ id: key.id, action: "resume" });
+    start(async () => {
+      const result = await actions.resume(key.id);
+      setBusy(null);
+      if (isActionFail(result)) {
+        showError(result.error);
+        return;
+      }
+      onSaved(result.key, "updated");
+      toast(t("toasts.resumed"), { variant: "success" });
+    });
   }
 
   function rotate(key: KeyTarget) {
@@ -158,6 +177,14 @@ export function useKeyDialogs({
         onLoad={actions.loadMcp}
         onSave={actions.saveMcp}
       />
+      <KeyPauseDialog
+        key={`pause-${dialogKey}`}
+        state={pauseState}
+        keyId={target?.id ?? null}
+        keyName={target?.name ?? ""}
+        onPause={actions.pause}
+        onPaused={(row) => onSaved(row, "updated")}
+      />
       <ConfirmDialog
         state={rotateState}
         title={t("rotateConfirm.title", { name: target?.name ?? "" })}
@@ -188,6 +215,8 @@ export function useKeyDialogs({
     openCreate: (options: KeyOptions, preset: KeyPreset | null) => openForm({ editing: null, preset, options }),
     openEdit: (options: KeyOptions, key: VirtualKeyView) => openForm({ editing: key, preset: null, options }),
     openMcp: (key: KeyTarget) => openTarget(key, mcpState),
+    askPause: (key: KeyTarget) => openTarget(key, pauseState),
+    resume,
     askRotate: (key: KeyTarget) => openTarget(key, rotateState),
     askRevoke: (key: KeyTarget) => openTarget(key, revokeState),
   };

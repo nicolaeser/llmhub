@@ -6,6 +6,7 @@ import { createConfigFor, hasHealthcheck, stopSeconds } from "../../scripts/upda
 import { createAgent, desiredOf } from "../../scripts/updater/agent.mjs";
 import { untarFirstFile } from "../../scripts/updater/docker.mjs";
 import { recreateContainer, replaceStoppedContainers, waitHealthy } from "../../scripts/updater/recreate.mjs";
+import { replayLogText } from "../../scripts/updater/log.mjs";
 import {
   digestsFor,
   isPinned,
@@ -187,6 +188,87 @@ test("a recreated job that exits cleanly counts as started, a service that exits
   await assert.rejects(waitHealthy(exited("unless-stopped"), "service", { pollMs: 1 }), /exit code 0/);
 });
 
+test("a healthchecked service that restarted once still counts as healthy", async () => {
+  await waitHealthy(
+    {
+      inspectContainer: async () => ({
+        State: { Status: "running", Health: { Status: "healthy" }, ExitCode: 0 },
+        RestartCount: 1,
+        Config: { Healthcheck: HEALTHCHECK },
+      }),
+    },
+    "app",
+    { pollMs: 1 },
+  );
+});
+
+test("a healthchecked service may restart while starting", async () => {
+  let n = 0;
+  await waitHealthy(
+    {
+      inspectContainer: async () => {
+        n += 1;
+        if (n < 3) {
+          return {
+            State: { Status: "running", Restarting: n === 1, Health: { Status: "starting" } },
+            RestartCount: 1,
+            Config: { Healthcheck: HEALTHCHECK },
+          };
+        }
+        return {
+          State: { Status: "running", Health: { Status: "healthy" } },
+          RestartCount: 1,
+          Config: { Healthcheck: HEALTHCHECK },
+        };
+      },
+    },
+    "app",
+    { pollMs: 1 },
+  );
+  assert.equal(n, 3);
+});
+
+test("recreate waits until the stopped container releases published ports", async () => {
+  const calls: string[] = [];
+  let stoppedInspects = 0;
+  const container = appContainer();
+  const docker = {
+    inspectImage: async () => oldImage(),
+    inspectContainer: async (id: string) => {
+      if (id === "sha256:created") {
+        return { State: { Status: "running", Health: { Status: "healthy" } }, Config: { Healthcheck: HEALTHCHECK } };
+      }
+      if (id === container.Id) {
+        stoppedInspects += 1;
+        if (stoppedInspects < 2) {
+          return {
+            State: { Running: true },
+            NetworkSettings: { Ports: { "3000/tcp": [{ HostIp: "127.0.0.1", HostPort: "3000" }] } },
+          };
+        }
+        return { State: { Running: false }, NetworkSettings: { Ports: { "3000/tcp": null } } };
+      }
+      return null;
+    },
+    stop: async () => void calls.push("stop"),
+    rename: async () => void calls.push("rename"),
+    create: async () => {
+      calls.push("create");
+      return { Id: "sha256:created" };
+    },
+    start: async () => void calls.push("start"),
+    remove: async () => void calls.push("remove"),
+  };
+  await recreateContainer(docker, container, {
+    imageRef: "ghcr.io/nicolaeser/llmhub:latest",
+    image: { Id: "sha256:new" },
+    onPhase: async () => {},
+    waitOptions: { pollMs: 1 },
+  });
+  assert.deepEqual(calls, ["stop", "rename", "create", "start", "remove"]);
+  assert.ok(stoppedInspects >= 2);
+});
+
 function labeledContainer(id: string, name: string, running: boolean, image = "sha256:old", ref = "ghcr.io/nicolaeser/llmhub:latest") {
   const container = appContainer({ Image: ref });
   return { ...container, Id: id, Name: `/${name}`, Image: image, State: { Running: running } };
@@ -283,6 +365,17 @@ test("image references, digests, and pinned tags are recognized", () => {
   assert.equal(updateAvailable(DIGEST_B, [DIGEST_A]), true);
   assert.equal(updateAvailable(DIGEST_A, [DIGEST_A]), false);
   assert.equal(updateAvailable(null, []), false);
+});
+
+test("the successor reprints the predecessor's log lines", () => {
+  const written: string[] = [];
+  const sink = (chunk: string) => written.push(chunk);
+  assert.equal(replayLogText("", sink), 0);
+  assert.equal(replayLogText("one\n\ntwo\n", sink), 2);
+  assert.deepEqual(written, ["one\n", "two\n"]);
+  written.length = 0;
+  replayLogText('{"event":"updater.result"}\n{"event":"updater.started"}\n', sink);
+  assert.deepEqual(written, ['{"event":"updater.result"}\n', '{"event":"updater.started"}\n']);
 });
 
 test("the successor reads its predecessor's state file from a Docker archive", () => {

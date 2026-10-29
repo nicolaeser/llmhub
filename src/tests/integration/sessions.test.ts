@@ -12,10 +12,14 @@ import {
   signSessionToken,
 } from "@/lib/auth/cookie";
 import { purgeAuthRecords } from "@/lib/auth/cleanup";
+import { requireAuth } from "@/lib/auth/guards";
+import { REQUEST_PATH_HEADER } from "@/lib/auth/return-path";
 import { getSession, setSessionCookie, startSession } from "@/lib/auth/session";
 import { digest, randomToken } from "@/lib/crypto";
 import { GET as expiredRoute } from "@/app/internal-api/account/expired/route";
 import { POST as logoutRoute } from "@/app/internal-api/account/logout/route";
+import { GET as liveRoute } from "@/app/internal-api/live/route";
+import { GET as usageExportRoute } from "@/app/internal-api/usage/export/route";
 import { closeDatabase, uniqueName } from "./support/database";
 import { TestData } from "./support/fixtures";
 import { setRequestHeaders } from "./support/next-request.mjs";
@@ -143,23 +147,120 @@ test("starting a session revokes the session the browser already held", async ()
   }
 });
 
-test("the expired-session route clears the cookie only when the session is invalid", async () => {
+const DEEP_LINK = "/usage?tab=keys&range=7d";
+const RETURN = encodeURIComponent(DEEP_LINK);
+
+function expiredRequest(query = "") {
+  return new NextRequest(`http://localhost:3000/internal-api/account/expired${query}`);
+}
+
+function landing(res: Response): string {
+  const url = new URL(res.headers.get("location") ?? "");
+  return `${url.pathname}${url.search}`;
+}
+
+async function guardRedirect(requested: string | null, cookie: string | null): Promise<string> {
+  setRequestHeaders(requested === null ? {} : { [REQUEST_PATH_HEADER]: requested });
+  if (cookie) await presentCookie(cookie);
+  const thrown = await requireAuth().then(
+    () => null,
+    (err: unknown) => err,
+  );
+  return String((thrown as { digest?: unknown } | null)?.digest ?? "").split(";")[2] ?? "";
+}
+
+async function staleCookies(userId: string, data: TestData) {
+  const expired = await storedSession(userId, { expiresAt: new Date(Date.now() - 1_000) });
+  const idle = await storedSession(userId, { lastActive: new Date(Date.now() - SESSION_IDLE_TTL_MS - 1_000) });
+  const revoked = await storedSession(userId);
+  await prisma.session.delete({ where: { id: revoked.row.id } });
+  const removed = await data.user();
+  const removedSession = await storedSession(removed.id);
+  await prisma.user.delete({ where: { id: removed.id } });
+  return {
+    expired: expired.cookie,
+    idle: idle.cookie,
+    revoked: revoked.cookie,
+    removed: removedSession.cookie,
+    unknown: await signSessionToken(randomToken()),
+  };
+}
+
+test("a stale session cookie goes through sign-in back to the requested page and clears only the stale cookie", async () => {
   const data = new TestData();
   try {
     const user = await data.user();
+    for (const [kind, cookie] of Object.entries(await staleCookies(user.id, data))) {
+      const target = await guardRedirect(DEEP_LINK, cookie);
+      assert.equal(target, `/internal-api/account/expired?return=${RETURN}`, kind);
+      const res = await expiredRoute(expiredRequest(target.slice(target.indexOf("?"))));
+      assert.equal(landing(res), `/account/login?return=${RETURN}`, kind);
+      assert.equal(res.cookies.get(SESSION_COOKIE)?.value, "", kind);
+      assert.equal(res.cookies.get(SESSION_COOKIE)?.maxAge, 0, kind);
+    }
+
+    assert.equal(await guardRedirect(DEEP_LINK, null), `/account/login?return=${RETURN}`);
+
     const live = await storedSession(user.id);
-
-    await presentCookie(live.cookie);
-    const kept = await expiredRoute();
-    assert.equal(new URL(kept.headers.get("location") ?? "").pathname, "/");
-    assert.equal(kept.cookies.get(SESSION_COOKIE), undefined);
-
     setRequestHeaders({});
-    await presentCookie((await storedSession(user.id, { expiresAt: new Date(Date.now() - 1_000) })).cookie);
-    const cleared = await expiredRoute();
-    assert.equal(new URL(cleared.headers.get("location") ?? "").pathname, "/account/login");
-    assert.equal(cleared.cookies.get(SESSION_COOKIE)?.value, "");
-    assert.equal(cleared.cookies.get(SESSION_COOKIE)?.maxAge, 0);
+    await presentCookie(live.cookie);
+    const kept = await expiredRoute(expiredRequest(`?return=${RETURN}`));
+    assert.equal(landing(kept), DEEP_LINK);
+    assert.equal(kept.cookies.get(SESSION_COOKIE), undefined);
+    assert.equal(await prisma.session.count({ where: { id: live.row.id } }), 1);
+  } finally {
+    await data.cleanup();
+  }
+});
+
+test("unsafe return addresses fall back to the start page", async () => {
+  const data = new TestData();
+  try {
+    const user = await data.user();
+    const stale = (await storedSession(user.id, { expiresAt: new Date(Date.now() - 1_000) })).cookie;
+    const live = (await storedSession(user.id)).cookie;
+    for (const unsafe of [
+      "//evil.example",
+      "/\\evil.example",
+      "https://evil.example",
+      "/%2F%2Fevil.example",
+      "%2F%2Fevil.example",
+      "/%5Cevil.example",
+      "javascript:alert(1)",
+      "/account/login",
+    ]) {
+      const query = `?return=${encodeURIComponent(unsafe)}`;
+      assert.equal(await guardRedirect(unsafe, stale), "/internal-api/account/expired", unsafe);
+      assert.equal(await guardRedirect(unsafe, null), "/account/login", unsafe);
+
+      setRequestHeaders({});
+      await presentCookie(stale);
+      assert.equal(landing(await expiredRoute(expiredRequest(query))), "/account/login", unsafe);
+
+      setRequestHeaders({});
+      await presentCookie(live);
+      assert.equal(landing(await expiredRoute(expiredRequest(query))), "/", unsafe);
+    }
+  } finally {
+    await data.cleanup();
+  }
+});
+
+test("console APIs and the live stream keep answering 401 to a stale session cookie", async () => {
+  const data = new TestData();
+  try {
+    const user = await data.user();
+    for (const cookie of Object.values(await staleCookies(user.id, data))) {
+      setRequestHeaders({});
+      await presentCookie(cookie);
+      for (const res of [
+        await liveRoute(new NextRequest("http://localhost:3000/internal-api/live")),
+        await usageExportRoute(new NextRequest("http://localhost:3000/internal-api/usage/export?format=csv")),
+      ]) {
+        assert.equal(res.status, 401);
+        assert.equal(res.headers.get("location"), null);
+      }
+    }
   } finally {
     await data.cleanup();
   }

@@ -24,6 +24,9 @@ const EVENT_KEYS = {
   "account.unblocked": "accountUnblocked",
   "credentials.suspended": "credentialsSuspended",
   "credentials.restored": "credentialsRestored",
+  "emergency_access.granted": "emergencyGranted",
+  "emergency_access.removed": "emergencyRemoved",
+  "emergency_access.sign_in": "emergencySignIn",
   "management_key.created": "managementKeyCreated",
   "management_key.revoked": "managementKeyRevoked",
 } as const satisfies Record<SecurityEventAction, string>;

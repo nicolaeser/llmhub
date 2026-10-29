@@ -5,10 +5,12 @@ import { useTranslations } from "next-intl";
 
 export default function ShareNotice({
   instance,
+  manageable,
   accepted,
   onAcceptedChange,
 }: {
   instance: string;
+  manageable: boolean;
   accepted: boolean;
   onAcceptedChange: (accepted: boolean) => void;
 }) {
@@ -22,7 +24,7 @@ export default function ShareNotice({
           <li>{t("usage", { named: instance ? "true" : "false", instance })}</li>
           <li>{t("tokens")}</li>
           <li>{t("terms")}</li>
-          <li>{t("withdraw")}</li>
+          <li>{t("withdraw", { manageable: String(manageable) })}</li>
         </ul>
         <Checkbox isSelected={accepted} onChange={onAcceptedChange}>
           <Checkbox.Content>

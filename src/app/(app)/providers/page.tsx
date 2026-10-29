@@ -31,6 +31,7 @@ import AddProviderDialog from "./_components/add-provider-dialog";
 import ApiProviders from "./_components/api-providers";
 import AuthFilesDialog from "./_components/auth-files-dialog";
 import ImportModelsDialog from "./_components/import-models-dialog";
+import KeyUsageTab from "./_components/key-usage-tab";
 import LinksTab, { useSubAddLinks } from "./_components/links-tab";
 import ProviderDialog from "./_components/provider-dialog";
 import ProviderHealth from "./_components/provider-health";
@@ -40,7 +41,7 @@ import SubAddDialog from "./_components/sub-add-dialog";
 import SubscriptionAccounts from "./_components/subscription-accounts";
 import { useAccountLimits } from "./_components/use-account-limits";
 
-const TABS = ["api", "subscriptions", "links", "health"] as const satisfies readonly ProvidersTab[];
+const TABS = ["api", "subscriptions", "usage", "links", "health"] as const satisfies readonly ProvidersTab[];
 
 const SUBSCRIPTION_KINDS = SUBSCRIPTION_CATALOG.map((spec) => spec.kind);
 
@@ -187,6 +188,15 @@ export default function ProvidersPage() {
         />
       ),
     },
+    ...(data.canSeeKeyUsage
+      ? [
+          {
+            id: "usage" as const,
+            label: t("tabs", { tab: "usage" }),
+            panel: <KeyUsageTab rows={signInRows ?? []} limits={limits} />,
+          },
+        ]
+      : []),
     {
       id: "links",
       label: t("tabs", { tab: "links" }),

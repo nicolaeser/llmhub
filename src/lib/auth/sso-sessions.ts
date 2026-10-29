@@ -1,6 +1,7 @@
 import "server-only";
 import prisma from "@/lib/db/prisma";
 import { writeAudit } from "@/lib/audit";
+import { SSO_UNVERIFIED_LIMIT_MS } from "@/lib/auth/cookie";
 import { suspendCredentials } from "@/lib/auth/credentials";
 import { applyDirectoryRole, directoryRoleId, scimGroupValues } from "@/lib/auth/directory-roles";
 import { oidcIsReady, refreshOidcGrant, resolveOidc, verifyLogoutToken } from "@/lib/auth/oidc";
@@ -12,7 +13,6 @@ import { getEnterprise, normalizeOidc } from "@/lib/settings/enterprise";
 import type { OidcGrant, OidcRefresh, OidcSettings, ResolvedOidc } from "@/types/auth";
 
 export const SSO_REVALIDATE_INTERVAL_MS = 5 * 60_000;
-export const SSO_UNVERIFIED_LIMIT_MS = 24 * 60 * 60_000;
 const SSO_REVALIDATE_BATCH = 100;
 const SSO_ACTOR = "sso";
 

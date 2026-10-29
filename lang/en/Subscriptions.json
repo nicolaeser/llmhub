@@ -211,13 +211,14 @@
   },
   "subAdd": {
     "title": "Add-account links",
-    "description": "Share a link with friends or colleagues so they can connect their own subscription account to this hub. They need no console login and can disconnect their account at any time.",
+    "description": "Share a link with friends or colleagues so they can connect their own subscription account to this hub. They need no console login and, if the link allows it, can disconnect their account at any time.",
     "columns": {
       "link": "Link",
       "providers": "Providers",
       "accounts": "Accounts",
       "expires": "Expires",
-      "access": "Access"
+      "access": "Access",
+      "removal": "Disconnect"
     },
     "actionsFor": "Actions for {label}",
     "create": "Create link",
@@ -243,6 +244,9 @@
     "accountOption": "{count, plural, =0 {Unlimited} one {# account} other {# accounts}}",
     "accessTitle": "Access for added accounts",
     "accessHint": "Every account added through this link gets this access. You can change it per account later.",
+    "manageable": "Let people disconnect their accounts",
+    "manageableHint": "Everyone who connects an account gets a private manage link to check and disconnect it. Turn this off to only let them add accounts; they can then only be disconnected here in the console.",
+    "removal": "{manageable, select, true {Via manage link} other {Console only}}",
     "createdDescription": "Send it to {label}. Whoever opens it can connect their own subscription account.",
     "onceTitle": "Shown only this once",
     "validForHint": "The link is deleted when it expires.",
@@ -252,7 +256,7 @@
     "unlimited": "{added, plural, one {# account added} other {# accounts added}}, no limit",
     "delete": "Delete link",
     "deleteTitle": "Delete {label}?",
-    "deleteDescription": "The link stops working right away and is removed. Accounts already added stay connected, and their owners can still disconnect them.",
+    "deleteDescription": "{manageable, select, true {The link stops working right away and is removed. Accounts already added stay connected, and their owners can still disconnect them.} other {The link stops working right away and is removed. Accounts already added stay connected and can only be disconnected here in the console.}}",
     "deleted": "{label} deleted"
   },
   "settings": {
@@ -262,5 +266,39 @@
     "autoResetSummary": "{enabled, select, true {Automatic resets from {percent}} other {Automatic resets off}}",
     "kickoffSummary": "{enabled, select, true {Window start with {model}} other {Window start off}}",
     "setupRequired": "Setup needed"
+  },
+  "keyUsage": {
+    "intro": "Live view of which API keys fill each subscription's usage limits. A key's part is the limit's reported usage, split by its share of the cost of requests that went through LLM Hub since the window started. Use of the same account outside LLM Hub cannot be told apart and counts toward the keys that used it here.",
+    "search": "Search accounts or keys",
+    "freshness": "{live, select, true {Live} other {Updated {when}}}",
+    "emptyTitle": "No subscription limits yet",
+    "empty": "Accounts appear here once their usage limits have been read.",
+    "noMatches": "No account or key matches the search",
+    "stats": {
+      "fullest": "Fullest limit",
+      "where": "{window} · {account}",
+      "topKey": "Top key",
+      "topKeyHint": "{used} of {window} · {account}",
+      "activeKeys": "Active keys",
+      "activeKeysHint": "With requests in a current window",
+      "inUse": "Accounts in use",
+      "inUseValue": "{used, number} of {total, number}",
+      "inUseHint": "With requests in a current window"
+    },
+    "accountKind": "{kind} · {name}",
+    "columns": {
+      "key": "API key"
+    },
+    "keysOn": "API keys on {account}",
+    "noKey": "No API key",
+    "noKeyHint": "Console and system requests",
+    "deletedKey": "Deleted key",
+    "otherKeys": "{count, plural, one {# other key} other {# other keys}}",
+    "outside": "Outside LLM Hub or unknown",
+    "free": "Unused",
+    "share": "{share, number, percent} of use · {requests, plural, one {# request} other {# requests}}",
+    "windowRequests": "{count, plural, =0 {No requests through LLM Hub in this window} one {# request in this window, split by {basis, select, cost {cost} tokens {tokens} other {requests}}} other {# requests in this window, split by {basis, select, cost {cost} tokens {tokens} other {requests}}}}",
+    "windowPending": "Loading requests for this window",
+    "noRequests": "No API key has sent requests through this account in its current windows."
   }
 }

@@ -6,6 +6,7 @@ model User {
   blocked                Boolean   @default(false)
   credentialsSuspendedAt DateTime?
   isOwner                Boolean   @default(false)
+  emergencyAccess        Boolean   @default(false)
   roleId                 String?
   mustChangePassword     Boolean   @default(false)
   logContent             Boolean   @default(true)

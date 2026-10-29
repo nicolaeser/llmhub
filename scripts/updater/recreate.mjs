@@ -5,8 +5,11 @@ import { errorMessage, log } from "./log.mjs";
 export const BACKUP_SUFFIX = "-llmhub-old";
 export const HEALTHY_TIMEOUT_MS = 10 * 60_000;
 export const SETTLE_MS = 20_000;
+export const PORT_RELEASE_TIMEOUT_MS = 15_000;
 const POLL_MS = 2_000;
 const FAILED_LOG_LINES = 40;
+const START_OLD_ATTEMPTS = 3;
+const START_OLD_RETRY_MS = 1_000;
 const RESTARTING_POLICIES = new Set(["always", "unless-stopped"]);
 
 function completedJob(info) {
@@ -19,6 +22,22 @@ function completedJob(info) {
   );
 }
 
+function publishedPorts(info) {
+  const ports = info?.NetworkSettings?.Ports;
+  if (!ports) return false;
+  return Object.values(ports).some((bindings) => Array.isArray(bindings) && bindings.length > 0);
+}
+
+export async function waitStopped(docker, id, { timeoutMs = PORT_RELEASE_TIMEOUT_MS, pollMs = POLL_MS } = {}) {
+  const startedAt = Date.now();
+  for (;;) {
+    const info = await docker.inspectContainer(id);
+    if (!info || (info.State?.Running !== true && !publishedPorts(info))) return;
+    if (Date.now() - startedAt >= timeoutMs) throw new Error("the old container did not release its ports in time");
+    await sleep(pollMs);
+  }
+}
+
 export async function waitHealthy(docker, id, { healthyTimeoutMs = HEALTHY_TIMEOUT_MS, settleMs = SETTLE_MS, pollMs = POLL_MS } = {}) {
   const startedAt = Date.now();
   for (;;) {
@@ -26,17 +45,20 @@ export async function waitHealthy(docker, id, { healthyTimeoutMs = HEALTHY_TIMEO
     if (!info) throw new Error("the new container disappeared");
     const state = info.State ?? {};
     if (completedJob(info)) return;
-    if (state.Status === "exited" || state.Status === "dead" || state.Restarting || (info.RestartCount ?? 0) > 0) {
-      throw new Error(`the new container stopped with exit code ${state.ExitCode ?? "unknown"}`);
-    }
     const elapsed = Date.now() - startedAt;
     if (hasHealthcheck(info)) {
       const health = state.Health?.Status;
       if (health === "healthy") return;
       if (health === "unhealthy") throw new Error("the new container reported unhealthy");
+      if (state.Status === "exited" || state.Status === "dead") {
+        throw new Error(`the new container stopped with exit code ${state.ExitCode ?? "unknown"}`);
+      }
       if (elapsed >= healthyTimeoutMs) throw new Error("the new container did not become healthy in time");
-    } else if (elapsed >= settleMs) {
-      return;
+    } else {
+      if (state.Status === "exited" || state.Status === "dead" || state.Restarting || (info.RestartCount ?? 0) > 0) {
+        throw new Error(`the new container stopped with exit code ${state.ExitCode ?? "unknown"}`);
+      }
+      if (elapsed >= settleMs) return;
     }
     await sleep(pollMs);
   }
@@ -50,6 +72,19 @@ async function attempt(step, fn) {
     log("error", "updater.rollback_step_failed", { step, err: errorMessage(err) });
     return false;
   }
+}
+
+async function attemptTimes(step, fn, times = START_OLD_ATTEMPTS) {
+  for (let i = 1; i <= times; i += 1) {
+    try {
+      await fn();
+      return true;
+    } catch (err) {
+      log("error", "updater.rollback_step_failed", { step, attempt: i, err: errorMessage(err) });
+      if (i < times) await sleep(START_OLD_RETRY_MS);
+    }
+  }
+  return false;
 }
 
 async function recordFailedLogs(docker, id, name) {
@@ -87,6 +122,7 @@ export async function recreateContainer(docker, container, { imageRef, image, on
     await removeContainerNamed(docker, backup, container.Id);
     await docker.stop(container.Id, graceSeconds);
     progress.stopped = true;
+    await waitStopped(docker, container.Id, waitOptions);
     await docker.rename(container.Id, backup);
     progress.renamed = true;
     progress.created = (await docker.create(name, body)).Id;
@@ -103,7 +139,9 @@ export async function recreateContainer(docker, container, { imageRef, image, on
       restored = (await attempt("remove_new", () => docker.remove(progress.created))) && restored;
     }
     if (progress.renamed) restored = (await attempt("rename_old", () => docker.rename(container.Id, name))) && restored;
-    if (progress.stopped && wasRunning) restored = (await attempt("start_old", () => docker.start(container.Id))) && restored;
+    if (progress.stopped && wasRunning) {
+      restored = (await attemptTimes("start_old", () => docker.start(container.Id))) && restored;
+    }
     log(restored ? "warn" : "error", restored ? "updater.rolled_back" : "updater.rollback_incomplete", { container: name });
     throw Object.assign(new Error(restored ? errorMessage(err) : `${errorMessage(err)}; the rollback did not complete`), {
       rolledBack: restored,

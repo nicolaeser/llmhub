@@ -43,6 +43,8 @@ function key(id: string, alias: string, place: Partial<KeyNode>): KeyNode {
     projectId: "",
     memberId: "",
     blocked: false,
+    paused: false,
+    pausedUntil: "",
     budget: budget(),
     ...place,
   };
@@ -221,6 +223,8 @@ function view(overrides: Partial<VirtualKeyView>): VirtualKeyView {
     access_windows: [],
     access_time_zone: "UTC",
     blocked: false,
+    paused: false,
+    paused_until: "",
     log_content: true,
     created_at: "2026-10-01T00:00:00.000Z",
     ...overrides,
@@ -258,22 +262,27 @@ test("saved keys update the structure without reloading it", () => {
 });
 
 test("key row menus offer only what the caller may do", () => {
-  assert.deepEqual(keyMenuActions({ canManage: true, canMcp: true, canBudget: true }, { capped: true }), [
+  const running = { capped: true, paused: false };
+  assert.deepEqual(keyMenuActions({ canManage: true, canMcp: true, canBudget: true }, running), [
     "edit",
+    "pause",
     "mcp",
     "budget",
     "boost",
     "rotate",
     "revoke",
   ]);
-  assert.deepEqual(keyMenuActions({ canManage: true, canMcp: false, canBudget: true }, { capped: false }), [
+  assert.deepEqual(keyMenuActions({ canManage: true, canMcp: false, canBudget: true }, { capped: false, paused: true }), [
     "edit",
+    "resume",
     "budget",
     "rotate",
     "revoke",
   ]);
-  assert.deepEqual(keyMenuActions({ canManage: false, canMcp: true, canBudget: false }, { capped: true }), ["mcp"]);
-  assert.deepEqual(keyMenuActions({ canManage: false, canMcp: false, canBudget: false }, { capped: true }), []);
+  assert.deepEqual(keyMenuActions({ canManage: false, canMcp: true, canBudget: false }, { capped: true, paused: true }), [
+    "mcp",
+  ]);
+  assert.deepEqual(keyMenuActions({ canManage: false, canMcp: false, canBudget: false }, running), []);
 });
 
 test("usage drill-downs filter by the selected node and drop the company filter in the company scope", () => {
