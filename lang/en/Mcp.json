@@ -1,21 +1,13 @@
 {
   "title": "MCP servers",
-  "subtitle": "Connect a public MCP server, or turn any HTTP API into one with MCP Anything. Assigned callers use the tools on every model call and through POST /api/v1/mcp.",
+  "subtitle": "Give models tools from other systems, such as a ticket tracker or your own API. The gateway runs the tools and decides who may use them.",
   "add": "Add server",
   "readOnly": "You can view MCP servers. Changing them needs the permission to manage MCP.",
   "installOnly": "You can connect a company API key and set access inside your company. Changing the server itself needs permission to manage MCP.",
   "empty": {
     "title": "No MCP servers yet",
-    "description": "Connect a public MCP server, or turn any HTTP API into one with MCP Anything. The gateway calls its tools for every model and provider, and credentials never leave the gateway."
+    "description": "Connect an MCP server that already runs somewhere, or build one from the documentation of any HTTP API. Credentials never leave the gateway."
   },
-  "stats": {
-    "servers": "Servers",
-    "connected": "Connected",
-    "tools": "Tools offered",
-    "errors": "With errors"
-  },
-  "tabs": "{tab, select, all {All} connected {Connected} attention {Needs attention} disabled {Disabled} other {{tab}}}",
-  "emptyFilter": "No server in this view.",
   "status": "{status, select, connected {Connected} error {Error} disabled {Disabled} signin {Sign-in needed} other {Not checked}}",
   "protocol": "{era, select, modern {Stateless MCP, version {version}} legacy {MCP with sessions, version {version}} sse {Legacy HTTP+SSE, version {version}} other {Protocol not detected}}",
   "toolCount": "{count, plural, =0 {No tools} one {# tool} other {# tools}}",
@@ -116,18 +108,11 @@
     "crawlLimit": "{limit, select, depth {Deeper pages were left out.} pages {Stopped at the page limit.} bytes {Stopped at the size limit.} time {Stopped at the time limit.} other {Stopped early.}}",
     "passes": "{read, select, all {The documentation was long, so the assistant read it in {parts, number} parts.} other {The documentation was long. The assistant read {passes, number} of {parts, number} parts and could open the other pages one by one.}}"
   },
-  "access": {
-    "summary": "{global, select, true {All callers} other {{count, plural, =0 {Not assigned} one {# rule} other {# rules}}}}",
-    "manage": "Manage access to {name}",
-    "button": "Access"
-  },
   "permissions": {
-    "open": "Permissions",
-    "manage": "Permissions for {name}",
     "title": "Permissions for {name}",
-    "description": "Roles decide what a caller may do on this server. A role grants tools by their action, and you can allow or block single tools on top of that.",
+    "description": "A role says which tools a caller may use on this server. Access rules then give a role to a company, a department, or an API key.",
     "tabsLabel": "Permission views",
-    "tabs": "{tab, select, roles {Roles} tools {Tools and matrix} other {View}}",
+    "tabs": "{tab, select, roles {Roles} tools {Tool actions} other {View}}",
     "rolesLabel": "Roles",
     "newRole": "New role",
     "untitled": "New role",
@@ -136,7 +121,7 @@
     "assigned": "{count, plural, =0 {Not used in any access rule yet.} one {Used in # access rule.} other {Used in # access rules.}}",
     "roleDescription": "Description",
     "baseline": "Granted by action",
-    "baselineHint": "Applies to every tool left on Default. Tools are classified on the Tools and matrix tab.",
+    "baselineHint": "The role gets every tool with these actions. Tools are classified on the Tool actions tab.",
     "actions": "Actions",
     "allActions": "Every tool",
     "allActionsHint": "Also grants tools that have no action yet.",
@@ -163,13 +148,18 @@
     "classify": "Action of {tool}",
     "serverHint": "Server says: {action, select, read {Read} write {Write} delete {Delete} other {Action}}",
     "cell": "{role} on {tool}: {grant, select, allow {allowed} deny {blocked} other {{granted, select, true {granted by action} other {no access}}}}",
-    "legend": "{kind, select, inherited {Granted by action} allowed {Allowed for this tool} denied {Blocked for this tool} other {No access}}"
+    "legend": "{kind, select, inherited {Granted by action} allowed {Allowed for this tool} denied {Blocked for this tool} other {No access}}",
+    "rolesHint": "Built-in roles cover the usual cases. Add your own when a team needs a different set of tools.",
+    "roleSummary": "{all, select, true {Every tool} other {{count, plural, =0 {Only single tools} other {{actions} tools}}}} · {granted, number} of {total, number} granted",
+    "builtin": "Built-in",
+    "exceptions": "{count, plural, one {# tool exception} other {# tool exceptions}}",
+    "editRole": "Edit the role {role}",
+    "edit": "Edit",
+    "backToRoles": "Back to roles"
   },
   "install": {
     "title": "API key for {name}",
     "description": "A company uses its own key. Access rules still decide who may call the server. A global server is available to every key in a company that has connected one.",
-    "open": "API key",
-    "manage": "API key for {name}",
     "company": "Company",
     "companyEmpty": "Add a company before connecting a key.",
     "enabled": "Connected",
@@ -189,15 +179,10 @@
     "companies": "{count, plural, =0 {No company keys} one {# company} other {# companies}}"
   },
   "card": {
-    "auth": "{type, select, bearer {Bearer token} basic {User name and password} header {Custom header} query {API key in the address} oauth {OAuth} other {No authentication}}",
-    "protocol": "{era, select, modern {Stateless {version}} legacy {Sessions {version}} sse {HTTP+SSE {version}} other {{version}}}",
-    "enabled": "Enable {name}",
-    "enabledState": "{enabled, select, true {Enabled} other {Disabled}}",
-    "refresh": "Reload tools",
     "reloaded": "{count, plural, =0 {No tools found} one {# tool loaded} other {# tools loaded}}",
     "template": "Template",
-    "edit": "Edit {name}",
-    "deleteConfirm": "Delete {name}? Callers lose its tools immediately."
+    "deleteConfirm": "Callers lose its tools immediately.",
+    "deleteTitle": "Delete {name}?"
   },
   "oauth": {
     "state": "{grant, select, client_credentials {{state, select, active {Token issued {when}} expired {Token rejected} other {No token yet}}} other {{state, select, active {Signed in {when}} expired {Sign-in expired} other {Not signed in}}}}",
@@ -209,11 +194,11 @@
     "dismiss": "Dismiss"
   },
   "errors": {
-    "code": "{code, select, MCP_URL_INVALID {Enter a valid http or https URL without credentials.} MCP_URL_INSECURE {Use https, or mark the server as internal to allow http.} MCP_URL_BLOCKED {This address is not allowed. Private addresses need the internal switch, and cloud metadata addresses are always blocked.} MCP_UNREACHABLE {The server could not be reached.} MCP_TIMEOUT {The server did not answer in time.} MCP_HTTP_ERROR {The server answered with an HTTP error.} MCP_PROTOCOL_ERROR {The server did not answer like an MCP server.} MCP_RPC_ERROR {The server returned an MCP error.} MCP_RESPONSE_TOO_LARGE {The server answer was too large.} MCP_AUTH_FAILED {The server rejected the credentials.} MCP_AUTH_REQUIRED {The server needs a sign-in. Save it and use Sign in on its card.} MCP_AUTH_SCOPE {The token lacks a permission the server needs. Add the scope and sign in again.} MCP_OAUTH_SUGGESTED {The server asks for OAuth. Choose OAuth as authentication.} MCP_OAUTH_DISCOVERY {The authorization server could not be found. If it runs on a private network, mark the server as internal.} MCP_OAUTH_UNSUPPORTED {The authorization server does not support the secure sign-in this gateway needs (authorization code with PKCE).} MCP_OAUTH_CLIENT_REQUIRED {The authorization server does not register clients automatically. Enter a client ID.} MCP_OAUTH_REGISTRATION {The authorization server rejected the client registration.} MCP_OAUTH_TOKEN {The authorization server did not issue a token.} MCP_OAUTH_STATE {The sign-in expired or was started elsewhere. Start it again.} MCP_OAUTH_DENIED {The sign-in was declined.} MCP_OAUTH_APP_URL {Sign-in needs the console on https or localhost. Check NEXT_PUBLIC_APP_URL.} MCP_VERSION_UNSUPPORTED {The server speaks no MCP version this gateway supports.} MCP_INPUT_REQUIRED {The tool asked for interactive input, which the gateway cannot provide.} other {The server could not be reached.}}"
+    "code": "{code, select, MCP_URL_INVALID {Enter a valid http or https URL without credentials.} MCP_URL_INSECURE {Use https, or mark the server as internal to allow http.} MCP_URL_BLOCKED {This address is not allowed. Private addresses need the internal switch, and cloud metadata addresses are always blocked.} MCP_UNREACHABLE {The server could not be reached.} MCP_TIMEOUT {The server did not answer in time.} MCP_HTTP_ERROR {The server answered with an HTTP error.} MCP_PROTOCOL_ERROR {The server did not answer like an MCP server.} MCP_RPC_ERROR {The server returned an MCP error.} MCP_RESPONSE_TOO_LARGE {The server answer was too large.} MCP_AUTH_FAILED {The server rejected the credentials.} MCP_AUTH_REQUIRED {The server needs a sign-in. Save it and use Sign in in its row.} MCP_AUTH_SCOPE {The token lacks a permission the server needs. Add the scope and sign in again.} MCP_OAUTH_SUGGESTED {The server asks for OAuth. Choose OAuth as authentication.} MCP_OAUTH_DISCOVERY {The authorization server could not be found. If it runs on a private network, mark the server as internal.} MCP_OAUTH_UNSUPPORTED {The authorization server does not support the secure sign-in this gateway needs (authorization code with PKCE).} MCP_OAUTH_CLIENT_REQUIRED {The authorization server does not register clients automatically. Enter a client ID.} MCP_OAUTH_REGISTRATION {The authorization server rejected the client registration.} MCP_OAUTH_TOKEN {The authorization server did not issue a token.} MCP_OAUTH_STATE {The sign-in expired or was started elsewhere. Start it again.} MCP_OAUTH_DENIED {The sign-in was declined.} MCP_OAUTH_APP_URL {Sign-in needs the console on https or localhost. Check NEXT_PUBLIC_APP_URL.} MCP_VERSION_UNSUPPORTED {The server speaks no MCP version this gateway supports.} MCP_INPUT_REQUIRED {The tool asked for interactive input, which the gateway cannot provide.} other {The server could not be reached.}}"
   },
   "form": {
     "title": "{mode, select, edit {Edit {name}} other {Add MCP server}}",
-    "description": "The gateway speaks stateless MCP and falls back to sessions or HTTP+SSE for older servers. It lists the tools and runs them when a model calls them.",
+    "description": "Connect an MCP server that already runs somewhere. The gateway lists its tools and runs them when a model calls them.",
     "submit": "{mode, select, edit {Save} other {Add server}}",
     "name": "Name",
     "nameHint": "Models see it as part of each tool name.",
@@ -246,12 +231,17 @@
     "testOk": "{named, select, true {Connected to {name}.} other {Connected.}} {count, plural, =0 {No tools found.} one {# tool found.} other {# tools found.}}",
     "testFailed": "Connection failed",
     "oauthReady": "Ready to sign in",
-    "oauthReadyHint": "The authorization server was found. Save the server, then use Sign in on its card.",
+    "oauthReadyHint": "The authorization server was found. Save the server, then use Sign in in its row.",
     "noTools": "Test the connection to load the tool list.",
     "toggleTool": "Enable {name}",
     "saved": "{mode, select, edit {Server saved} other {Server added}}",
-    "signInNext": "Use Sign in on the server card to finish connecting.",
-    "deleted": "Server deleted"
+    "signInNext": "Use Sign in in the server list to finish connecting.",
+    "deleted": "Server deleted",
+    "namePlaceholder": "GitHub",
+    "descriptionHint": "Optional. Helps your team recognize the server.",
+    "step": "{step, select, server {Server} signin {Sign-in} tools {Tools} other {{step}}}",
+    "stepHint": "{step, select, server {Where the gateway reaches the server.} signin {How the gateway signs in to the server. Credentials are stored encrypted and never shown again.} tools {Test the connection to load the tools, then turn off the ones nobody may use. You can also do this later.} hostedTools {Turn off the tools nobody may use.} other {}}",
+    "authHint": "{type, select, none {The server needs no credentials.} bearer {Sent as Authorization: Bearer.} basic {Sent as HTTP Basic authentication.} header {Sent in a header you name.} query {Added to the address as a parameter.} oauth {The gateway signs in with OAuth and renews the token itself.} other {}}"
   },
   "assign": {
     "title": "Access to {name}",
@@ -288,7 +278,22 @@
     "saved": "Access saved",
     "role": "Role",
     "roleNone": "Every tool",
-    "rolePreset": "{role, select, reader {Reader} operator {Operator} admin {Admin} other {Role}}"
+    "rolePreset": "{role, select, reader {Reader} operator {Operator} admin {Admin} other {Role}}",
+    "back": "Back to rules",
+    "blockServerHint": "Blocks the whole server",
+    "done": "Done",
+    "edit": "Edit the rule for {label}",
+    "editShort": "Edit",
+    "modeHint": "{mode, select, block {Takes the server, or single tools, away from this target and everything below it.} other {Gives this target and everything below it access to the server.}}",
+    "newRule": "New rule",
+    "newRuleHint": "Pick who the rule is for. A rule for a company also covers its departments, projects, people, and keys.",
+    "noneGlobal": "No rules. Every caller can use the server.",
+    "removeRule": "Remove rule",
+    "roleHint": "A role limits which tools this target gets. Every tool means no limit.",
+    "ruleActions": "{list} tools blocked",
+    "ruleRole": "Role: {role}",
+    "ruleTools": "{count, plural, one {# tool blocked} other {# tools blocked}}",
+    "targetPlaceholder": "{scope, select, org {Choose a company} team {Choose a department} project {Choose a project} member {Choose a person} key {Choose an API key} other {Choose}}"
   },
   "connections": {
     "title": "MCP connections",
@@ -299,5 +304,24 @@
     "auth": "{type, select, none {No key needed} header {Header {header}} basic {User name and password} query {Address parameter {header}} other {Bearer token}}",
     "tools": "{count, plural, =0 {No tools} one {# tool} other {# tools}}",
     "action": "{state, select, connected {Edit connection} paused {Edit connection} other {Connect}}"
+  },
+  "addChoice": "{choice, select, build {Build from API docs} other {Connect a server}}",
+  "addChoiceHint": "{choice, select, build {MCP Anything reads the documentation of any HTTP API and turns its calls into tools.} other {Add an MCP server that already runs, by its address.}}",
+  "list": {
+    "search": "Search servers",
+    "filter": "Show",
+    "filterOption": "{filter, select, connected {Connected} attention {Needs attention} disabled {Disabled} other {All servers}} ({count, number})",
+    "noMatchesTitle": "No server matches",
+    "noMatches": "Try another search, or show all servers.",
+    "columns": "{column, select, server {Server} status {Status} tools {Tools} access {Who can use it} other {{column}}}",
+    "endpoint": "Allowed API keys get these tools on every model call and through POST /api/v1/mcp.",
+    "signInHint": "Sign in once to finish connecting.",
+    "disabledHint": "Offers no tools until you enable it.",
+    "access": "{global, select, true {Every caller} other {{allowed, plural, =0 {Nobody yet} one {{first}} other {{first} and {more, number} more}}}}",
+    "blocks": "{count, plural, one {# block rule} other {# block rules}}",
+    "connectKey": "Connect API key",
+    "menu": "Actions for {name}",
+    "menuItem": "{action, select, edit {Edit} access {Who can use it} permissions {Roles and permissions} install {{company, select, true {Company API key} other {Company API keys}}} reload {Reload tools} signin {Sign in again} signout {Sign out} enable {Enable} disable {Disable} delete {Delete} other {{action}}}",
+    "toggled": "{enabled, select, true {Server enabled} other {Server disabled}}"
   }
 }

@@ -1,15 +1,14 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { Fragment, useState, useTransition } from "react";
 import {
   Alert,
   Button,
   Card,
+  Chip,
   Description,
   Input,
   Label,
-  ListBox,
-  Select,
   Separator,
   Spinner,
   Switch,
@@ -19,13 +18,13 @@ import {
 } from "@heroui/react";
 import { PlugZap } from "lucide-react";
 import { useTranslations } from "next-intl";
-import CopyButton from "@/components/console/copy-button";
-import FormDialog from "@/components/console/form-dialog";
+import StepDialog from "@/components/console/step-dialog";
 import { useErrorToast } from "@/components/console/use-error-toast";
 import { isActionFail } from "@/lib/http/action-result";
-import { MCP_AUTH_TYPES, MCP_OAUTH_GRANTS, authNameValid, authUsesName } from "@/schemas/mcp";
+import { authNameValid } from "@/schemas/mcp";
 import type { McpAuthType, McpOAuthGrant, McpProbeResult, McpServerView, McpToolSpec } from "@/types/mcp";
 import { createMcpServerAction, probeMcpServerAction, updateMcpServerAction } from "../_action";
+import ServerAuthFields, { type ServerAuth } from "./server-auth-fields";
 
 function initiallyDisabled(server: McpServerView | null): string[] {
   if (!server?.toolsRestricted) return [];
@@ -54,12 +53,14 @@ export default function ServerDialog({
   const [description, setDescription] = useState(editing?.description ?? "");
   const [url, setUrl] = useState(editing?.url ?? "");
   const [internal, setInternal] = useState(editing?.internal ?? false);
-  const [authType, setAuthType] = useState<McpAuthType>(editing?.authType ?? "none");
-  const [authHeader, setAuthHeader] = useState(editing?.authHeader ?? "");
-  const [secret, setSecret] = useState("");
-  const [oauthGrant, setOauthGrant] = useState<McpOAuthGrant>(editing?.oauthGrant ?? "authorization_code");
-  const [oauthClientId, setOauthClientId] = useState(editing?.oauthClientId ?? "");
-  const [oauthScopes, setOauthScopes] = useState(editing?.oauthScopes ?? "");
+  const [auth, setAuth] = useState<ServerAuth>({
+    authType: editing?.authType ?? "none",
+    authHeader: editing?.authHeader ?? "",
+    secret: "",
+    oauthGrant: editing?.oauthGrant ?? "authorization_code",
+    oauthClientId: editing?.oauthClientId ?? "",
+    oauthScopes: editing?.oauthScopes ?? "",
+  });
   const [enabled, setEnabled] = useState(editing?.enabled ?? true);
   const [tools, setTools] = useState<McpToolSpec[]>(editing?.tools ?? []);
   const [disabled, setDisabled] = useState<string[]>(() => initiallyDisabled(editing));
@@ -67,15 +68,18 @@ export default function ServerDialog({
   const [testing, startTest] = useTransition();
   const [saving, startSave] = useTransition();
   const hosted = editing?.kind === "hosted";
-  const authTypes = MCP_AUTH_TYPES.filter((type) => (hosted ? type !== "oauth" : type !== "query"));
+  const { authType, authHeader, secret, oauthGrant, oauthClientId, oauthScopes } = auth;
   const keepsSecret = Boolean(editing?.hasSecret && editing.authType === authType);
   const oauth = authType === "oauth";
   const secretRequired = secretNeeded(authType, oauthGrant);
   const needsSecret = secretRequired && !secret.trim() && !keepsSecret;
   const headerValid = authNameValid(authType, authHeader);
   const clientValid = !oauth || oauthGrant !== "client_credentials" || oauthClientId.trim() !== "";
-  const ready = name.trim() !== "" && url.trim() !== "" && headerValid && clientValid && !needsSecret;
+  const serverReady = name.trim() !== "" && url.trim() !== "";
+  const authReady = headerValid && clientValid && !needsSecret;
   const signInPending = probe?.error === "MCP_AUTH_REQUIRED" && oauth && oauthGrant === "authorization_code";
+  const pending = saving || testing;
+  const enabledCount = tools.filter((tool) => !disabled.includes(tool.name)).length;
 
   function test() {
     startTest(async () => {
@@ -100,7 +104,7 @@ export default function ServerDialog({
   }
 
   function toggleTool(tool: string, on: boolean) {
-    setDisabled((current) => (on ? current.filter((name) => name !== tool) : [...new Set([...current, tool])]));
+    setDisabled((current) => (on ? current.filter((item) => item !== tool) : [...new Set([...current, tool])]));
   }
 
   function save(close: () => void) {
@@ -137,34 +141,22 @@ export default function ServerDialog({
     });
   }
 
-  const pending = saving || testing;
-
-  return (
-    <FormDialog
-      state={state}
-      size="lg"
-      title={t("form.title", { mode: editing ? "edit" : "create", name: editing?.name ?? "" })}
-      description={t("form.description")}
-      submitLabel={t("form.submit", { mode: editing ? "edit" : "create" })}
-      pending={saving}
-      isSubmitDisabled={!ready || testing}
-      onSubmit={save}
-    >
-      <div className="grid gap-4 sm:grid-cols-2">
-        <TextField fullWidth isRequired value={name} onChange={setName} isDisabled={pending}>
-          <Label>{t("form.name")}</Label>
-          <Input />
-          <Description>{t("form.nameHint")}</Description>
-        </TextField>
-        <TextField fullWidth value={description} onChange={setDescription} isDisabled={pending}>
-          <Label>{t("form.descriptionField")}</Label>
-          <Input />
-        </TextField>
-      </div>
+  const serverStep = (
+    <>
+      <TextField fullWidth isRequired value={name} onChange={setName} isDisabled={pending}>
+        <Label>{t("form.name")}</Label>
+        <Input placeholder={t("form.namePlaceholder")} />
+        <Description>{t("form.nameHint")}</Description>
+      </TextField>
       <TextField fullWidth isRequired value={url} onChange={setUrl} isDisabled={pending}>
         <Label>{hosted ? t("builder.baseUrl") : t("form.url")}</Label>
         <Input inputMode="url" placeholder={hosted ? "https://api.example.com" : "https://mcp.example.com/mcp"} />
         <Description>{hosted ? t("builder.baseHint") : t("form.urlHint")}</Description>
+      </TextField>
+      <TextField fullWidth value={description} onChange={setDescription} isDisabled={pending}>
+        <Label>{t("form.descriptionField")}</Label>
+        <Input />
+        <Description>{t("form.descriptionHint")}</Description>
       </TextField>
       <Switch isSelected={internal} onChange={setInternal} isDisabled={pending}>
         <Switch.Content>
@@ -175,125 +167,19 @@ export default function ServerDialog({
         </Switch.Content>
         <Description>{t("form.internalHint")}</Description>
       </Switch>
-      <Separator />
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Select
-          fullWidth
-          selectedKey={authType}
-          onSelectionChange={(key) => {
-            const next = MCP_AUTH_TYPES.find((type) => type === String(key));
-            if (next) setAuthType(next);
-          }}
-          isDisabled={pending}
-        >
-          <Label>{t("form.authType")}</Label>
-          <Select.Trigger>
-            <Select.Value />
-            <Select.Indicator />
-          </Select.Trigger>
-          <Select.Popover>
-            <ListBox aria-label={t("form.authType")}>
-              {authTypes.map((type) => (
-                <ListBox.Item key={type} id={type} textValue={t("form.authOption", { type })}>
-                  {t("form.authOption", { type })}
-                  <ListBox.ItemIndicator />
-                </ListBox.Item>
-              ))}
-            </ListBox>
-          </Select.Popover>
-        </Select>
-        {authUsesName(authType) ? (
-          <TextField
-            fullWidth
-            isRequired
-            value={authHeader}
-            onChange={setAuthHeader}
-            isInvalid={authHeader.trim() !== "" && !headerValid}
-            isDisabled={pending}
-          >
-            <Label>{t("form.authName", { type: authType })}</Label>
-            <Input autoComplete="off" spellCheck={false} placeholder={t("form.authNamePlaceholder", { type: authType })} />
-          </TextField>
-        ) : null}
-      </div>
-      {oauth ? (
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Select
-            fullWidth
-            selectedKey={oauthGrant}
-            onSelectionChange={(key) => {
-              const next = MCP_OAUTH_GRANTS.find((grant) => grant === String(key));
-              if (next) setOauthGrant(next);
-            }}
-            isDisabled={pending}
-          >
-            <Label>{t("form.grant")}</Label>
-            <Select.Trigger>
-              <Select.Value />
-              <Select.Indicator />
-            </Select.Trigger>
-            <Select.Popover>
-              <ListBox aria-label={t("form.grant")}>
-                {MCP_OAUTH_GRANTS.map((grant) => (
-                  <ListBox.Item key={grant} id={grant} textValue={t("form.grantOption", { grant })}>
-                    {t("form.grantOption", { grant })}
-                    <ListBox.ItemIndicator />
-                  </ListBox.Item>
-                ))}
-              </ListBox>
-            </Select.Popover>
-            <Description>{t("form.grantHint", { grant: oauthGrant })}</Description>
-          </Select>
-          <TextField
-            fullWidth
-            value={oauthClientId}
-            onChange={setOauthClientId}
-            isRequired={oauthGrant === "client_credentials"}
-            isDisabled={pending}
-          >
-            <Label>{t("form.clientId")}</Label>
-            <Input autoComplete="off" />
-            <Description>{t("form.clientIdHint", { grant: oauthGrant })}</Description>
-          </TextField>
-        </div>
-      ) : null}
-      {authType !== "none" ? (
-        <TextField fullWidth value={secret} onChange={setSecret} isDisabled={pending} isRequired={secretRequired && !keepsSecret}>
-          <Label>{t("form.secret", { type: authType })}</Label>
-          <Input type="password" autoComplete="off" placeholder={keepsSecret ? t("form.secretKeep") : ""} />
-          <Description>{t("form.secretHint", { type: authType })}</Description>
-        </TextField>
-      ) : null}
-      {oauth ? (
-        <TextField fullWidth value={oauthScopes} onChange={setOauthScopes} isDisabled={pending}>
-          <Label>{t("form.scopes")}</Label>
-          <Input autoComplete="off" placeholder="files:read files:write" />
-          <Description>{t("form.scopesHint")}</Description>
-        </TextField>
-      ) : null}
-      {oauth && oauthGrant === "authorization_code" && redirectUri ? (
-        <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
-          <div className="min-w-0 space-y-1">
-            <p className="text-muted">{t("form.redirectUri")}</p>
-            <code className="min-w-0 font-mono text-xs break-all text-foreground">{redirectUri}</code>
-          </div>
-          <CopyButton text={redirectUri} label={t("form.copyRedirectUri")} />
-        </div>
-      ) : null}
-      <Switch isSelected={enabled} onChange={setEnabled} isDisabled={pending}>
-        <Switch.Content>
-          <Switch.Control>
-            <Switch.Thumb />
-          </Switch.Control>
-          <Label>{t("form.enabled")}</Label>
-        </Switch.Content>
-        <Description>{t("form.enabledHint")}</Description>
-      </Switch>
-      <Separator />
+    </>
+  );
+
+  const toolsStep = (
+    <>
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="min-w-0 space-y-1">
+        <div className="flex flex-wrap items-center gap-2">
           <p className="text-sm font-medium text-foreground">{t("form.tools")}</p>
-          <p className="text-sm text-muted">{t("form.toolsHint")}</p>
+          {tools.length ? (
+            <Chip size="sm" variant="soft">
+              {t("allowedCount", { allowed: enabledCount, count: tools.length })}
+            </Chip>
+          ) : null}
         </div>
         {hosted ? null : (
           <Button
@@ -338,34 +224,94 @@ export default function ServerDialog({
         </Alert>
       ) : null}
       {tools.length ? (
-        <div className="max-h-80 space-y-2 overflow-y-auto">
-          {tools.map((tool) => (
-            <Card key={tool.name} variant="secondary">
-              <Card.Content className="flex flex-row items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="truncate font-mono text-sm text-foreground">{tool.name}</p>
-                  {tool.description ? <p className="truncate text-xs text-muted">{tool.description}</p> : null}
+        <Card variant="secondary" className="max-h-80 overflow-y-auto">
+          <Card.Content className="gap-0">
+            {tools.map((tool, index) => (
+              <Fragment key={tool.name}>
+                {index > 0 ? <Separator /> : null}
+                <div className="flex items-start justify-between gap-3 py-2.5">
+                  <div className="min-w-0">
+                    <p className="font-mono text-sm break-all text-foreground">{tool.name}</p>
+                    {tool.description ? <p className="text-xs break-words text-muted">{tool.description}</p> : null}
+                  </div>
+                  <Switch
+                    size="sm"
+                    isSelected={!disabled.includes(tool.name)}
+                    onChange={(on) => toggleTool(tool.name, on)}
+                    isDisabled={pending}
+                    aria-label={t("form.toggleTool", { name: tool.name })}
+                  >
+                    <Switch.Content>
+                      <Switch.Control>
+                        <Switch.Thumb />
+                      </Switch.Control>
+                    </Switch.Content>
+                  </Switch>
                 </div>
-                <Switch
-                  size="sm"
-                  isSelected={!disabled.includes(tool.name)}
-                  onChange={(on) => toggleTool(tool.name, on)}
-                  isDisabled={pending}
-                  aria-label={t("form.toggleTool", { name: tool.name })}
-                >
-                  <Switch.Content>
-                    <Switch.Control>
-                      <Switch.Thumb />
-                    </Switch.Control>
-                  </Switch.Content>
-                </Switch>
-              </Card.Content>
-            </Card>
-          ))}
-        </div>
+              </Fragment>
+            ))}
+          </Card.Content>
+        </Card>
       ) : (
-        <p className="text-sm text-muted">{t("form.noTools")}</p>
+        <p className="text-sm text-muted">{hosted ? t("toolCount", { count: 0 }) : t("form.noTools")}</p>
       )}
-    </FormDialog>
+      <Separator />
+      <Switch isSelected={enabled} onChange={setEnabled} isDisabled={pending}>
+        <Switch.Content>
+          <Switch.Control>
+            <Switch.Thumb />
+          </Switch.Control>
+          <Label>{t("form.enabled")}</Label>
+        </Switch.Content>
+        <Description>{t("form.enabledHint")}</Description>
+      </Switch>
+    </>
+  );
+
+  return (
+    <StepDialog
+      state={state}
+      size="lg"
+      title={t("form.title", { mode: editing ? "edit" : "create", name: editing?.name ?? "" })}
+      description={editing ? undefined : t("form.description")}
+      submitLabel={t("form.submit", { mode: editing ? "edit" : "create" })}
+      pending={saving}
+      isSubmitDisabled={testing}
+      onSubmit={save}
+      steps={[
+        {
+          id: "server",
+          title: t("form.step", { step: "server" }),
+          description: t("form.stepHint", { step: "server" }),
+          isValid: serverReady,
+          content: serverStep,
+        },
+        {
+          id: "signin",
+          title: t("form.step", { step: "signin" }),
+          description: t("form.stepHint", { step: "signin" }),
+          isValid: authReady,
+          content: (
+            <ServerAuthFields
+              value={auth}
+              onChange={(patch) => setAuth((current) => ({ ...current, ...patch }))}
+              hosted={hosted}
+              keepsSecret={keepsSecret}
+              secretRequired={secretRequired}
+              headerValid={headerValid}
+              redirectUri={redirectUri}
+              isDisabled={pending}
+            />
+          ),
+        },
+        {
+          id: "tools",
+          title: t("form.step", { step: "tools" }),
+          description: t("form.stepHint", { step: hosted ? "hostedTools" : "tools" }),
+          optional: true,
+          content: toolsStep,
+        },
+      ]}
+    />
   );
 }

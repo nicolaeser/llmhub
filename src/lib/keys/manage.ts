@@ -13,12 +13,15 @@ import { pauseActive, pauseEnd } from "@/lib/keys/pause";
 import { readsTemplates } from "@/lib/models/templates";
 import { alertKeyBlocked } from "@/lib/alerts/notify";
 import { writeAudit } from "@/lib/audit";
-import { usageTotals } from "@/lib/usage/usage-totals";
+import { usageTotals, usageWindowStart } from "@/lib/usage/usage-totals";
+import { loadBudget } from "@/lib/tenancy/budgets";
+import { money } from "@/lib/utils/money";
 import { isInternalKey } from "@/lib/gateway/access/key-tenancy";
 import { loadModelPolicies, templateRuleSelect } from "@/lib/gateway/access/model-access";
 import { templateModels, templateRulesOf } from "@/lib/gateway/access/model-policy";
 import type { AuthenticatedSession } from "@/types/auth";
-import type { KeyChoices, KeyDetail } from "@/types/keys";
+import type { KeyActivity, KeyChoices, KeyDetail, KeyDetailPage } from "@/types/keys";
+import type { SpendScope } from "@/types/structure";
 
 async function keyBinding(
   session: AuthenticatedSession,
@@ -301,16 +304,13 @@ export async function loadKeyDetail(id: string): Promise<KeyDetail> {
   };
 }
 
-export async function loadKeysPage() {
-  const session = await requirePermission(PERMISSIONS.KEYS_READ);
+async function keyPlaces(session: AuthenticatedSession, refs: Omit<ReturnType<typeof keyReferences>, "users">) {
   const company = companyOf(session);
   const inScope = company ? { orgId: company } : {};
-  const keys = await listKeys(session);
-  const refs = keyReferences(keys, session.user.id);
   const seesTenancy =
     hasPerm(session.permissions, PERMISSIONS.TENANCY_READ) || hasPerm(session.permissions, PERMISSIONS.TENANCY_MANAGE);
   const referenced = (ids: string[]) => (seesTenancy ? {} : { id: { in: ids } });
-  const [orgs, teams, projects, members, users, choices, providerCount, overview] = await Promise.all([
+  const [orgs, teams, projects, members] = await Promise.all([
     prisma.organization.findMany({
       where: company ? { id: company } : referenced(refs.orgs),
       orderBy: { alias: "asc" },
@@ -331,14 +331,8 @@ export async function loadKeysPage() {
       orderBy: { name: "asc" },
       select: { id: true, name: true, orgId: true, teamId: true },
     }),
-    prisma.user.findMany({ where: { ...inScope, id: { in: refs.users } }, select: { id: true, username: true } }),
-    keyOptions(session),
-    prisma.providerConnection.count(),
-    hasPerm(session.permissions, PERMISSIONS.SPEND_READ) ? usageTotals(7, spendScope(session)) : null,
   ]);
   return {
-    keys,
-    companyId: company ?? "",
     orgs,
     teams: teams.map((row) => ({ id: row.id, alias: row.alias, orgId: row.orgId ?? "" })),
     projects: projects.map((row) => ({
@@ -353,6 +347,26 @@ export async function loadKeysPage() {
       orgId: row.orgId,
       teamId: row.teamId ?? "",
     })),
+  };
+}
+
+export async function loadKeysPage() {
+  const session = await requirePermission(PERMISSIONS.KEYS_READ);
+  const company = companyOf(session);
+  const inScope = company ? { orgId: company } : {};
+  const keys = await listKeys(session);
+  const refs = keyReferences(keys, session.user.id);
+  const [places, users, choices, providerCount, overview] = await Promise.all([
+    keyPlaces(session, refs),
+    prisma.user.findMany({ where: { ...inScope, id: { in: refs.users } }, select: { id: true, username: true } }),
+    keyOptions(session),
+    prisma.providerConnection.count(),
+    hasPerm(session.permissions, PERMISSIONS.SPEND_READ) ? usageTotals(7, spendScope(session)) : null,
+  ]);
+  return {
+    keys,
+    companyId: company ?? "",
+    ...places,
     owners: Object.fromEntries(users.map((user) => [user.id, user.username])),
     ...choices,
     providers: providerCount,
@@ -364,5 +378,74 @@ export async function loadKeysPage() {
     canMcp: managesMcpRules(session, company ?? null),
     canOpenCompanies: hasPerm(session.permissions, PERMISSIONS.TENANCY_READ),
     setupLinks: setupLinks(session),
+  };
+}
+
+async function keyActivity(keyId: string, scope: SpendScope): Promise<KeyActivity> {
+  const [totals, last] = await Promise.all([
+    prisma.usageDaily.aggregate({
+      where: { keyId, day: { gte: usageWindowStart(7) }, ...scope },
+      _sum: { cost: true, requests: true, errors: true },
+    }),
+    prisma.requestLog.findFirst({
+      where: { keyId, ...scope },
+      orderBy: { createdAt: "desc" },
+      select: { createdAt: true },
+    }),
+  ]);
+  return {
+    spend7d: money(totals._sum.cost),
+    requests7d: totals._sum.requests ?? 0,
+    errors7d: totals._sum.errors ?? 0,
+    lastUsed: last?.createdAt.toISOString() ?? "",
+  };
+}
+
+export async function loadKeyDetailPage(id: string): Promise<KeyDetailPage> {
+  const session = await requirePermission(PERMISSIONS.KEYS_READ);
+  const detail = await loadKeyDetail(id);
+  const key = detail.key;
+  const company = companyOf(session);
+  const canSeeUsage = hasPerm(session.permissions, PERMISSIONS.SPEND_READ);
+  const canBudget = hasPerm(session.permissions, PERMISSIONS.BUDGETS_MANAGE);
+  const refs = keyReferences([key], session.user.id);
+  const [places, user, choices, activity, budget] = await Promise.all([
+    keyPlaces(session, refs),
+    key.user_id
+      ? prisma.user.findFirst({
+          where: { id: key.user_id, ...(company ? { orgId: company } : {}) },
+          select: { username: true },
+        })
+      : null,
+    keyOptions(session),
+    canSeeUsage ? keyActivity(key.token_id, spendScope(session)) : null,
+    canBudget ? loadBudget({ kind: "key", id: key.token_id }) : null,
+  ]);
+  const kind = key.member_id ? "member" : key.project_id ? "project" : "internal";
+  const target =
+    kind === "project"
+      ? places.projects.find((row) => row.id === key.project_id)
+      : kind === "member"
+        ? places.members.find((row) => row.id === key.member_id)
+        : undefined;
+  return {
+    ...detail,
+    owner: {
+      kind,
+      name: target?.alias ?? (kind === "internal" ? (user?.username ?? "") : ""),
+      orgId: key.org_id,
+      orgAlias: places.orgs.find((row) => row.id === key.org_id)?.alias ?? "",
+      teamAlias: places.teams.find((row) => row.id === key.team_id)?.alias ?? "",
+    },
+    activity,
+    budget,
+    options: { ...choices, companyId: company ?? "", ...places },
+    selfName: session.user.username,
+    canManage: hasPerm(session.permissions, PERMISSIONS.KEYS_MANAGE),
+    canBind: hasPerm(session.permissions, PERMISSIONS.TENANCY_MANAGE),
+    canBudget,
+    canMcp: managesMcpRules(session, company ?? null),
+    canSeeUsage,
+    canOpenCompany: hasPerm(session.permissions, PERMISSIONS.TENANCY_READ) && Boolean(key.org_id),
   };
 }

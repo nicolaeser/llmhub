@@ -48,67 +48,65 @@ export function StepUpDialog({
   }
 
   return (
-    <Modal state={state}>
-      <Modal.Backdrop>
-        <Modal.Container>
-          <Modal.Dialog className="max-w-md">
-            {({ close }) => (
-              <>
-                <Modal.Header>
-                  <Modal.Heading>{title}</Modal.Heading>
-                </Modal.Header>
-                <Modal.Body className="space-y-4">
-                  <p className="text-sm text-muted">{description}</p>
-                  <SecondFactorInput
-                    value={value}
-                    onChange={(next) => {
-                      setValue(next);
-                      setError(null);
-                    }}
-                    onComplete={(code) => submit(code, close)}
-                    isDisabled={pending}
-                    isInvalid={Boolean(error)}
-                    autoFocus
-                    label={t("stepUpLabel")}
-                  />
-                  {error ? (
-                    <Alert status="danger">
-                      <Alert.Content>
-                        <Alert.Description>{errorText(error)}</Alert.Description>
-                      </Alert.Content>
-                    </Alert>
-                  ) : null}
-                </Modal.Body>
-                <Modal.Footer>
-                  <Button
-                    variant="tertiary"
-                    onPress={() => {
-                      setValue(emptySecondFactor);
-                      setError(null);
-                      close();
-                    }}
-                  >
-                    {tCommon("cancel")}
-                  </Button>
-                  <Button
-                    variant={danger ? "danger" : "primary"}
-                    isPending={pending}
-                    isDisabled={!secondFactorComplete(value)}
-                    onPress={() => submit(value.code, close)}
-                  >
-                    {({ isPending }) => (
-                      <>
-                        {isPending ? <Spinner color="current" size="sm" /> : null}
-                        {confirmLabel}
-                      </>
-                    )}
-                  </Button>
-                </Modal.Footer>
-              </>
-            )}
-          </Modal.Dialog>
-        </Modal.Container>
-      </Modal.Backdrop>
-    </Modal>
+    <Modal.Backdrop isOpen={state.isOpen} onOpenChange={state.setOpen}>
+      <Modal.Container>
+        <Modal.Dialog className="max-w-md">
+          {({ close }) => (
+            <>
+              <Modal.Header>
+                <Modal.Heading>{title}</Modal.Heading>
+              </Modal.Header>
+              <Modal.Body className="space-y-4">
+                <p className="text-sm text-muted">{description}</p>
+                <SecondFactorInput
+                  value={value}
+                  onChange={(next) => {
+                    setValue(next);
+                    setError(null);
+                  }}
+                  onComplete={(code) => submit(code, close)}
+                  isDisabled={pending}
+                  isInvalid={Boolean(error)}
+                  autoFocus
+                  label={t("stepUpLabel")}
+                />
+                {error ? (
+                  <Alert status="danger">
+                    <Alert.Content>
+                      <Alert.Description>{errorText(error)}</Alert.Description>
+                    </Alert.Content>
+                  </Alert>
+                ) : null}
+              </Modal.Body>
+              <Modal.Footer>
+                <Button
+                  variant="tertiary"
+                  onPress={() => {
+                    setValue(emptySecondFactor);
+                    setError(null);
+                    close();
+                  }}
+                >
+                  {tCommon("cancel")}
+                </Button>
+                <Button
+                  variant={danger ? "danger" : "primary"}
+                  isPending={pending}
+                  isDisabled={!secondFactorComplete(value)}
+                  onPress={() => submit(value.code, close)}
+                >
+                  {({ isPending }) => (
+                    <>
+                      {isPending ? <Spinner color="current" size="sm" /> : null}
+                      {confirmLabel}
+                    </>
+                  )}
+                </Button>
+              </Modal.Footer>
+            </>
+          )}
+        </Modal.Dialog>
+      </Modal.Container>
+    </Modal.Backdrop>
   );
 }

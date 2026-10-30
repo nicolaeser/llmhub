@@ -7,7 +7,7 @@ import { useClock } from "@/lib/hooks/use-clock";
 import { Link } from "@/i18n/routing";
 import { headroom, meterColor } from "@/lib/utils/budget";
 import type { BudgetView, CapLink } from "@/types/structure";
-import { usedRatio } from "./tree-model";
+import { budgetRatio } from "@/lib/tenancy/company-view";
 
 export default function BudgetCard({
   chain,
@@ -27,10 +27,9 @@ export default function BudgetCard({
   onBoost: () => void;
 }) {
   const t = useTranslations("Companies.budget");
-  const tAlerts = useTranslations("Budgets.alerts");
   const format = useFormatter();
   const now = useClock(60_000);
-  const ratio = usedRatio(budget);
+  const ratio = budgetRatio(budget);
   const capped = budget.maxBudget > 0;
   const own = chain[0];
   const binding = headroom(chain);
@@ -128,7 +127,7 @@ export default function BudgetCard({
           <p className="text-sm text-muted">{t("inherits")}</p>
         ) : null}
         <p className="text-sm text-muted">
-          {tAlerts("levels", {
+          {t("alerts", {
             capped: capped ? "yes" : "no",
             levels: format.list(
               thresholds.map((value) => format.number(value / 100, "percent")),
@@ -139,7 +138,7 @@ export default function BudgetCard({
             <>
               {" "}
               <Link href="/settings?tab=logging" className="text-accent">
-                {tAlerts("settings")}
+                {t("alertSettings")}
               </Link>
             </>
           ) : null}

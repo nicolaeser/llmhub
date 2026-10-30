@@ -5,6 +5,7 @@ import {
   Button,
   Card,
   Description,
+  Disclosure,
   FieldError,
   Input,
   Label,
@@ -31,6 +32,7 @@ import {
   MIN_MARKUP_PERCENT,
   marginShare,
 } from "@/lib/gateway/billing/markup-policy";
+import { markupKindOf } from "@/lib/pricing/markup-view";
 import type { PickerItem } from "@/types/console";
 import type {
   MarkupKind,
@@ -123,6 +125,8 @@ export default function MarkupDialog({
   const valid = targetValid && modelValid && amountValid && !patternInvalid;
   const sale = applyMarkup(EXAMPLE_PURCHASE, amountValid ? percent : 0);
   const share = marginShare(EXAMPLE_PURCHASE, sale);
+  const targetLabel =
+    scope === "all" ? "" : (targets.find((item) => item.id === targetId)?.label ?? "");
 
   function changeScope(next: MarkupScope) {
     setScope(next);
@@ -322,48 +326,52 @@ export default function MarkupDialog({
         </div>
       </div>
 
-      <TextField fullWidth value={note} onChange={setNote} isDisabled={pending}>
-        <Label>{t("dialog.note")}</Label>
-        <Input placeholder={t("dialog.notePlaceholder")} maxLength={200} />
-      </TextField>
-
       <Card variant="secondary">
         <Card.Header>
           <Card.Title>{t("dialog.preview")}</Card.Title>
           <Card.Description>
-            {t("dialog.previewHint", { purchase: EXAMPLE_PURCHASE })}
+            {targetValid && modelValid
+              ? t("summary", {
+                  kind: amountValid ? markupKindOf(percent) : "none",
+                  amount: Math.abs(percent) / 100,
+                  scope: scope === "all" ? "all" : "one",
+                  target: targetLabel,
+                  models: chosenModel ? "some" : "all",
+                  model: chosenModel,
+                })
+              : t("dialog.previewPending")}
           </Card.Description>
         </Card.Header>
         <Card.Content>
-          <dl className="grid grid-cols-3 gap-3">
-            <div>
-              <dt className="text-xs text-muted">{t("metrics.purchase")}</dt>
-              <dd className="text-lg font-semibold tabular-nums">
-                {format.number(EXAMPLE_PURCHASE, "currency")}
-              </dd>
-            </div>
-            <div>
-              <dt className="text-xs text-muted">{t("metrics.sale")}</dt>
-              <dd className="text-lg font-semibold tabular-nums">{format.number(sale, "currency")}</dd>
-            </div>
-            <div>
-              <dt className="text-xs text-muted">{t("metrics.margin")}</dt>
-              <dd
-                className={
-                  sale < EXAMPLE_PURCHASE
-                    ? "text-lg font-semibold text-warning tabular-nums"
-                    : "text-lg font-semibold text-success tabular-nums"
-                }
-              >
-                {format.number(sale - EXAMPLE_PURCHASE, "currency")}
-              </dd>
-              {share === null ? null : (
-                <dd className="text-xs text-muted">{format.number(share, "percent")}</dd>
-              )}
-            </div>
-          </dl>
+          <p className="text-sm text-foreground tabular-nums">
+            {t("dialog.previewExample", { purchase: EXAMPLE_PURCHASE, sale })}
+            {share === null ? null : (
+              <span className={sale < EXAMPLE_PURCHASE ? "text-warning" : "text-success"}>
+                {" "}
+                {t("dialog.previewMargin", { amount: sale - EXAMPLE_PURCHASE, share })}
+              </span>
+            )}
+          </p>
         </Card.Content>
       </Card>
+
+      <Disclosure>
+        <Disclosure.Heading>
+          <Disclosure.Trigger className="flex w-full items-center justify-between gap-2 text-sm font-medium">
+            {t("dialog.more", { hasNote: note.trim() ? "yes" : "no" })}
+            <Disclosure.Indicator />
+          </Disclosure.Trigger>
+        </Disclosure.Heading>
+        <Disclosure.Content>
+          <Disclosure.Body className="pt-3">
+            <TextField fullWidth value={note} onChange={setNote} isDisabled={pending}>
+              <Label>{t("dialog.note")}</Label>
+              <Input placeholder={t("dialog.notePlaceholder")} maxLength={200} />
+              <Description>{t("dialog.noteHint")}</Description>
+            </TextField>
+          </Disclosure.Body>
+        </Disclosure.Content>
+      </Disclosure>
     </FormDialog>
   );
 }

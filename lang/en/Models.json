@@ -1,11 +1,11 @@
 {
   "title": "Models",
-  "subtitle": "Public model names, the providers behind them, and presets that bundle model access for API keys.",
-  "tab": "{tab, select, catalog {Catalog} groups {Groups and routing} presets {Presets} other {}}",
+  "subtitle": "What clients can call: public model names, where their requests go, and presets that bundle model access for API keys.",
+  "tab": "{tab, select, catalog {Catalog} groups {Routing} presets {Model presets} other {}}",
   "add": "Add model",
   "formTitle": "{mode, select, edit {Edit model} add {Add model} other {Add model}}",
   "formSubmit": "{mode, select, save {Save} create {Add model} other {Add model}}",
-  "addHint": "Choose where requests for this public name go. Everything below the endpoints is optional.",
+  "addHint": "Pick the public name clients send and where its requests go. Fallbacks, pricing, and advanced settings are optional.",
   "emptyTitle": "No models",
   "empty": "Add a public name clients can send as model.",
   "needProvider": "Connect a <providers>provider</providers> first, then add a public model name.",
@@ -27,7 +27,8 @@
     "alias": "Public name",
     "enabled": "Status",
     "context": "Context window",
-    "endpoints": "Providers"
+    "endpoints": "Providers",
+    "routing": "Routing"
   },
   "fields": {
     "alias": "Public model name",
@@ -111,5 +112,36 @@
     "timeZoneHint": "Window times follow this time zone, including daylight saving changes. A request is priced by when it started.",
     "add": "Add time window",
     "remove": "Remove window {index, number}"
-  }
+  },
+  "menu": {
+    "label": "Actions for {alias}",
+    "toggle": "{enabled, select, true {Disable} other {Enable}}"
+  },
+  "intro": "Each public name routes requests to one or more provider models, with optional fallbacks when they fail.",
+  "count": "{count, plural, one {# model} other {# models}}",
+  "removeHint": "Clients can no longer call {alias}. Disable it instead to keep its settings.",
+  "previewTitle": "What {alias} does",
+  "steps": {
+    "name": {
+      "title": "Name",
+      "description": "The model name clients send, and how it appears in /api/v1/models."
+    },
+    "endpoints": {
+      "title": "Routing",
+      "description": "The provider models that answer requests for this name. Add more to share load or keep serving when one is down."
+    },
+    "fallbacks": {
+      "title": "Fallbacks",
+      "description": "Other models to try, in order, when the endpoints here fail or are at their limit."
+    },
+    "pricing": {
+      "title": "Pricing",
+      "description": "How requests to this name are billed. By default the routed provider's price applies."
+    },
+    "advanced": {
+      "title": "Advanced",
+      "description": "Availability, automatic provider updates, and model variants."
+    }
+  },
+  "summary": "{spread, select, none {No endpoint yet} single {Routes to {targets}} other {Spreads requests across {endpoints, plural, other {# endpoints}} on {targets} ({strategy, select, weighted_random {weighted random} least_inflight {least busy first} cost_lowest {lowest cost first} fast {fastest first} priority {in priority order} round_robin {round robin} quota_balanced {most headroom first} quota_expiring {soonest reset first} smart {smart} other {{strategy}}})}}{fallback, select, some {, falls back to {fallbacks}} other {}}{overflow, select, some {, overflows to {overflowModel}} other {}}."
 }

@@ -10,7 +10,7 @@ import { useErrorToast } from "@/components/console/use-error-toast";
 import { routing } from "@/i18n/routing";
 import { isActionFail } from "@/lib/http/action-result";
 import { setLocaleAction } from "../_action";
-import { useBuildStatus } from "./build-status";
+import { BuildVersion, useBuildStatus } from "./build-status";
 
 export type ConsoleUser = { email: string; username: string };
 
@@ -76,7 +76,7 @@ export default function UserMenu({ user, variant }: { user: ConsoleUser; variant
   const trigger = wide ? (
     <Dropdown.Trigger
       aria-label={label}
-      className="flex min-w-0 flex-1 items-center gap-2.5 rounded-xl px-2 py-1.5 text-left hover:bg-foreground/5 motion-safe:transition-colors"
+      className="flex w-full min-w-0 items-center gap-2.5 rounded-xl px-2 py-1.5 text-left hover:bg-foreground/5 motion-safe:transition-colors"
     >
       {avatar}
       <span className="min-w-0 flex-1">
@@ -108,6 +108,7 @@ export default function UserMenu({ user, variant }: { user: ConsoleUser; variant
               <Header>
                 <span className="block text-sm font-medium text-foreground break-words">{user.username}</span>
                 <span className="block text-xs text-muted break-words">{user.email}</span>
+                <BuildVersion />
               </Header>
               <Dropdown.Item id="account" href="/account" textValue={t("account")}>
                 <UserRound size={16} aria-hidden className="shrink-0 text-muted" />

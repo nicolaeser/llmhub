@@ -35,12 +35,26 @@ const nextConfig: NextConfig = {
       ["/assistant", "/"],
       ["/integrations", "/mcp"],
     ];
-    const movedTabs: [string, string, string][] = [["/keys", "templates", "/models?tab=presets"]];
+    const movedTabs: [string, string, string][] = [
+      ["/keys", "templates", "/models?tab=presets"],
+      ["/providers", "usage", "/providers?tab=subscriptions"],
+      ["/providers", "links", "/providers?tab=subscriptions&links=open"],
+    ];
+    const movedNodes: [string, string][] = [
+      ["org", "/companies/:id"],
+      ["key", "/keys/:id"],
+    ];
     return [
       ...moved.map(([source, destination]) => ({ source, destination, permanent: false })),
       ...movedTabs.map(([source, tab, destination]) => ({
         source,
         has: [{ type: "query" as const, key: "tab", value: tab }],
+        destination,
+        permanent: false,
+      })),
+      ...movedNodes.map(([kind, destination]) => ({
+        source: "/companies",
+        has: [{ type: "query" as const, key: "node", value: `${kind}:(?<id>[\\w-]+)` }],
         destination,
         permanent: false,
       })),

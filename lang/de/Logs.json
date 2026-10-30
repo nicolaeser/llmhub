@@ -1,6 +1,6 @@
 {
   "title": "Protokolle",
-  "subtitle": "Anfragen, Agent-Sitzungen, Ausgabenereignisse und Admin-Audit",
+  "subtitle": "Jede Anfrage über das Gateway, Agent-Sitzungen, Ausgabenereignisse und das Admin-Audit.",
   "tabs": {
     "requests": "Anfragen",
     "sessions": "Sitzungen",
@@ -24,7 +24,8 @@
     "changes": "Änderungen",
     "endpoint": "Endpunkt",
     "caller": "Aufrufer",
-    "pii": "Prüfungen"
+    "pii": "Prüfungen",
+    "usage": "Verbrauch"
   },
   "emptyRequests": "Noch keine Anfrageprotokolle.",
   "emptySpend": "Keine Ausgabenereignisse.",
@@ -54,7 +55,10 @@
     "title": "{count, plural, =0 {Filter} other {Filter · # aktiv}}",
     "label": "Label",
     "labelHint": "key:value, zum Beispiel cost_center:4711",
-    "labelInvalid": "Gib das Label als key:value ein."
+    "labelInvalid": "Gib das Label als key:value ein.",
+    "anyModel": "Alle Modelle",
+    "statusPlaceholder": "Zum Beispiel 429",
+    "more": "{count, plural, =0 {Weitere Filter} other {Weitere Filter · # aktiv}}"
   },
   "prev": "Zurück",
   "next": "Weiter",
@@ -136,7 +140,12 @@
     "replayModel": "Modell für die Wiederholung",
     "replayHint": "Lädt diese Anfrage in die Spielwiese, damit du sie erneut senden kannst. Behalte das ursprüngliche Modell oder wähle ein anderes zum Vergleich.",
     "replayPick": "Modell wählen",
-    "replayNoModels": "Keine Modelle verfügbar"
+    "replayNoModels": "Keine Modelle verfügbar",
+    "streamed": "Gestreamt",
+    "caller": "Wer sie gesendet hat",
+    "request": "Anfrage",
+    "copyId": "Anfrage-ID kopieren",
+    "replayTitle": "Erneut senden"
   },
   "sessions": {
     "title": "{agent, select, claude_code {Claude-Code-Sitzung} codex {Codex-Sitzung} none {Agent-Sitzung} other {Sitzung von {agent}}}",
@@ -219,5 +228,8 @@
     "sideTitle": "{count, plural, one {# Nebenunterhaltung} other {# Nebenunterhaltungen}}",
     "sideItem": "Nebenunterhaltung {index, number, integer}",
     "sideMeta": "{count, plural, one {# Anfrage} other {# Anfragen}} · {models}"
-  }
+  },
+  "export": "Exportieren",
+  "tokenFlow": "{prompt, number, integer} → {completion, number, integer} Tokens",
+  "costLatency": "{cost} · {latency, number, integer} ms"
 }

@@ -74,7 +74,8 @@ test("the console polls only the version endpoint and the sidebar carries the up
 
   const sidebar = readJsx(path.join(components, "sidebar.tsx"));
   assert.ok(rendersComponent(sidebar, importedAs(sidebar, "./build-status", "BuildNotice")));
-  assert.ok(rendersComponent(sidebar, importedAs(sidebar, "./build-status", "BuildVersion")));
+  const userMenu = readJsx(path.join(components, "user-menu.tsx"));
+  assert.ok(rendersComponent(userMenu, importedAs(userMenu, "./build-status", "BuildVersion")));
 
   const layout = readJsx(path.join(root, "src/app/(app)/layout.tsx"));
   const provider = layout.elements.filter(
@@ -86,7 +87,7 @@ test("the console polls only the version endpoint and the sidebar carries the up
   assert.ok(within(provider[0]!).some((element) => element.tag === "Sidebar"));
 });
 
-test("before the first check the sidebar shows the loaded version and no notice", async () => {
+test("before the first check the user menu shows the loaded version and no notice", async () => {
   const { default: BuildStatusProvider, BuildNotice, BuildVersion } = await import("@/app/(app)/_components/build-status");
   const messages = JSON.parse(readFileSync(path.join(root, "lang/en/Common.json"), "utf8"));
   const html = renderToStaticMarkup(
@@ -104,7 +105,7 @@ test("before the first check the sidebar shows the loaded version and no notice"
       }),
     }),
   );
-  assert.equal(html, '<p class="truncate px-2 text-xs text-muted" title="v2026.10.07.38e8b1b">Version v2026.10.07.38e8b1b</p>');
+  assert.equal(html, '<p class="truncate text-xs text-muted" title="v2026.10.07.38e8b1b">Version v2026.10.07.38e8b1b</p>');
 });
 
 test("without a notice the footer status slot keeps the version in place", async () => {
@@ -122,5 +123,5 @@ test("without a notice the footer status slot keeps the version in place", async
       }),
     }),
   );
-  assert.equal(html, '<p class="truncate px-2 text-xs text-muted" title="v2026.10.07.38e8b1b">Version v2026.10.07.38e8b1b</p>');
+  assert.equal(html, '<p class="truncate text-xs text-muted" title="v2026.10.07.38e8b1b">Version v2026.10.07.38e8b1b</p>');
 });

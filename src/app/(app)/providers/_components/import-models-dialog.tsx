@@ -54,94 +54,92 @@ export default function ImportModelsDialog({
   }
 
   return (
-    <Modal state={state}>
-      <Modal.Backdrop>
-        <Modal.Container>
-          <Modal.Dialog className="max-w-lg">
-            {({ close }) => (
-              <>
-                <Modal.Header>
-                  <Modal.Heading>{tCommon("import")}</Modal.Heading>
-                </Modal.Header>
-                <Modal.Body className="space-y-4">
-                  <SearchField value={query} onChange={setQuery} aria-label={tCommon("search")}>
-                    <SearchField.Group>
-                      <SearchField.SearchIcon />
-                      <SearchField.Input placeholder={tCommon("search")} />
-                      <SearchField.ClearButton aria-label={tCommon("close")} />
-                    </SearchField.Group>
-                  </SearchField>
-                  {models === null ? (
-                    <output
-                      aria-live="polite"
-                      aria-label={tCommon("loading")}
-                      className="flex justify-center py-6 text-accent"
-                    >
-                      <Spinner color="current" />
-                    </output>
-                  ) : models.length === 0 ? (
-                    <p className="text-sm text-muted">{tCommon("empty")}</p>
-                  ) : (
-                    <ListBox
-                      aria-label={tCommon("import")}
-                      selectionMode="multiple"
-                      selectedKeys={picked}
-                      onSelectionChange={(keys) =>
-                        setPicked(
-                          keys === "all"
-                            ? new Set(filtered.map((m) => m.id))
-                            : new Set([...keys].map(String)),
-                        )
-                      }
-                      className="max-h-72 overflow-y-auto"
-                    >
-                      {filtered.map((m) => (
-                        <ListBox.Item key={m.id} id={m.id} textValue={m.id}>
-                          <div className="flex min-w-0 flex-1 flex-col gap-1">
-                            <div className="flex min-w-0 items-center justify-between gap-3">
-                              <span className="truncate font-mono text-xs">{m.id}</span>
-                              <span className="truncate text-xs text-muted">{m.name}</span>
-                            </div>
-                            {m.alias ? (
-                              <div className="flex min-w-0 items-center gap-2">
-                                <span className="truncate font-mono text-xs text-muted">
-                                  {t("importTarget", { alias: m.alias })}
-                                </span>
-                                <Chip size="sm" variant="soft" color={m.exists ? "accent" : "default"}>
-                                  {t("importTargetState", { exists: String(m.exists) })}
-                                </Chip>
-                              </div>
-                            ) : null}
-                          </div>
-                          <ListBox.ItemIndicator />
-                        </ListBox.Item>
-                      ))}
-                    </ListBox>
-                  )}
-                </Modal.Body>
-                <Modal.Footer>
-                  <Button variant="tertiary" onPress={close} isDisabled={pending} aria-label={tCommon("cancel")}>
-                    {tCommon("cancel")}
-                  </Button>
-                  <Button
-                    aria-label={tCommon("import")}
-                    isPending={pending}
-                    isDisabled={!provider || models === null}
-                    onPress={() => save(close)}
+    <Modal.Backdrop isOpen={state.isOpen} onOpenChange={state.setOpen}>
+      <Modal.Container>
+        <Modal.Dialog className="max-w-lg">
+          {({ close }) => (
+            <>
+              <Modal.Header>
+                <Modal.Heading>{tCommon("import")}</Modal.Heading>
+              </Modal.Header>
+              <Modal.Body className="space-y-4">
+                <SearchField value={query} onChange={setQuery} aria-label={tCommon("search")}>
+                  <SearchField.Group>
+                    <SearchField.SearchIcon />
+                    <SearchField.Input placeholder={tCommon("search")} />
+                    <SearchField.ClearButton aria-label={tCommon("close")} />
+                  </SearchField.Group>
+                </SearchField>
+                {models === null ? (
+                  <output
+                    aria-live="polite"
+                    aria-label={tCommon("loading")}
+                    className="flex justify-center py-6 text-accent"
                   >
-                    {({ isPending }) => (
-                      <>
-                        {isPending ? <Spinner color="current" size="sm" /> : null}
-                        {tCommon("import")}
-                      </>
-                    )}
-                  </Button>
-                </Modal.Footer>
-              </>
-            )}
-          </Modal.Dialog>
-        </Modal.Container>
-      </Modal.Backdrop>
-    </Modal>
+                    <Spinner color="current" />
+                  </output>
+                ) : models.length === 0 ? (
+                  <p className="text-sm text-muted">{tCommon("empty")}</p>
+                ) : (
+                  <ListBox
+                    aria-label={tCommon("import")}
+                    selectionMode="multiple"
+                    selectedKeys={picked}
+                    onSelectionChange={(keys) =>
+                      setPicked(
+                        keys === "all"
+                          ? new Set(filtered.map((m) => m.id))
+                          : new Set([...keys].map(String)),
+                      )
+                    }
+                    className="max-h-72 overflow-y-auto"
+                  >
+                    {filtered.map((m) => (
+                      <ListBox.Item key={m.id} id={m.id} textValue={m.id}>
+                        <div className="flex min-w-0 flex-1 flex-col gap-1">
+                          <div className="flex min-w-0 items-center justify-between gap-3">
+                            <span className="truncate font-mono text-xs">{m.id}</span>
+                            <span className="truncate text-xs text-muted">{m.name}</span>
+                          </div>
+                          {m.alias ? (
+                            <div className="flex min-w-0 items-center gap-2">
+                              <span className="truncate font-mono text-xs text-muted">
+                                {t("importTarget", { alias: m.alias })}
+                              </span>
+                              <Chip size="sm" variant="soft" color={m.exists ? "accent" : "default"}>
+                                {t("importTargetState", { exists: String(m.exists) })}
+                              </Chip>
+                            </div>
+                          ) : null}
+                        </div>
+                        <ListBox.ItemIndicator />
+                      </ListBox.Item>
+                    ))}
+                  </ListBox>
+                )}
+              </Modal.Body>
+              <Modal.Footer>
+                <Button variant="tertiary" onPress={close} isDisabled={pending} aria-label={tCommon("cancel")}>
+                  {tCommon("cancel")}
+                </Button>
+                <Button
+                  aria-label={tCommon("import")}
+                  isPending={pending}
+                  isDisabled={!provider || models === null}
+                  onPress={() => save(close)}
+                >
+                  {({ isPending }) => (
+                    <>
+                      {isPending ? <Spinner color="current" size="sm" /> : null}
+                      {tCommon("import")}
+                    </>
+                  )}
+                </Button>
+              </Modal.Footer>
+            </>
+          )}
+        </Modal.Dialog>
+      </Modal.Container>
+    </Modal.Backdrop>
   );
 }

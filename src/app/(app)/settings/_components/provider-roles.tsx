@@ -2,9 +2,7 @@
 
 import { useTransition } from "react";
 import { Alert, Button, Chip, Spinner, Table, toast } from "@heroui/react";
-import { UserCog } from "lucide-react";
 import { useTranslations } from "next-intl";
-import IconTile from "@/components/console/icon-tile";
 import RowCard, { RowCards, TABLE_FROM_LG } from "@/components/console/row-cards";
 import { useErrorToast } from "@/components/console/use-error-toast";
 import { roleTemplateKeys } from "@/lib/auth/permissions";
@@ -88,8 +86,7 @@ export default function ProviderRoles({
 
   return (
     <SettingSection title={t("title")} subtitle={t("subtitle")}>
-      <div className="flex items-start gap-3">
-        <IconTile icon={UserCog} tone={state === "on" ? "success" : state === "lost" ? "warning" : "neutral"} />
+      <div className="flex flex-col gap-3">
         <div className="min-w-0 flex-1 space-y-3">
           <div className="space-y-1">
             <div className="flex flex-wrap items-center gap-2">
@@ -154,9 +151,9 @@ export default function ProviderRoles({
               />
             ))}
           </RowCards>
-          <Table aria-label={t("title")} className={TABLE_FROM_LG}>
+          <Table className={TABLE_FROM_LG}>
             <Table.ScrollContainer>
-              <Table.Content>
+              <Table.Content aria-label={t("title")}>
                 <Table.Header>
                   <Table.Column isRowHeader>{t("columns.value")}</Table.Column>
                   <Table.Column>{t("columns.role")}</Table.Column>

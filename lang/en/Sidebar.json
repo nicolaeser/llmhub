@@ -3,10 +3,12 @@
   "sidebar": "Sidebar",
   "primaryNav": "Primary navigation",
   "location": "Current location",
+  "details": "Details",
   "toggleCollapsed": "{collapsed, select, true {Expand sidebar} other {Collapse sidebar}}",
   "openMenu": "Open navigation menu",
   "goHome": "Go to the start page",
   "sections": {
+    "home": "Home",
     "organization": "Organization",
     "gateway": "Gateway",
     "policies": "Policies",
@@ -14,6 +16,7 @@
     "system": "System"
   },
   "items": {
+    "overview": "Overview",
     "companies": "Companies",
     "company": "Company",
     "keys": "API keys",

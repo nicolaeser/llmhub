@@ -9,6 +9,7 @@ import { PERMISSIONS } from "@/lib/auth/permissions";
 import { useActionData } from "@/lib/hooks/use-action-data";
 import { loadDeveloperTabsAction } from "./_action";
 import ApiTab from "./_components/api-tab";
+import ConnectTab from "./_components/connect-tab";
 import PlaygroundTab from "./_components/playground-tab";
 
 export default function DeveloperPage() {
@@ -21,6 +22,9 @@ export default function DeveloperPage() {
   }
 
   const tabs = [
+    ...(granted.includes(PERMISSIONS.KEYS_READ)
+      ? [{ id: "connect", label: t("tab", { tab: "connect" }), panel: <ConnectTab /> }]
+      : []),
     ...(granted.includes(PERMISSIONS.PLAYGROUND_USE)
       ? [{ id: "playground", label: t("tab", { tab: "playground" }), panel: <PlaygroundTab /> }]
       : []),

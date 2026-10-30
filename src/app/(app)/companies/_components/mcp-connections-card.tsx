@@ -36,8 +36,7 @@ export default function McpConnectionsCard({
   load: (orgId: string) => Promise<McpCompanyServers | ActionFail>;
   onInstall: Parameters<typeof InstallDialog>[0]["onInstall"];
 }) {
-  const t = useTranslations("Mcp.connections");
-  const tMcp = useTranslations("Mcp");
+  const t = useTranslations("Companies.integrations");
   const showError = useErrorToast();
   const [data, setData] = useState<McpCompanyServers | null>(null);
   const [failed, setFailed] = useState(false);
@@ -111,7 +110,7 @@ export default function McpConnectionsCard({
                       <span className="font-medium break-all text-foreground">{server.name}</span>
                       {server.kind === "hosted" ? (
                         <Chip size="sm" variant="soft">
-                          {tMcp("hosted")}
+                          {t("hosted")}
                         </Chip>
                       ) : null}
                       <Chip size="sm" variant="soft" color={stateColor(state)}>

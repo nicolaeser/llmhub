@@ -3,7 +3,6 @@
 import { runAction } from "@/lib/http/action-result";
 import {
   createKey,
-  loadKeyDetail,
   loadKeyOptions,
   pauseKey,
   resumeKey,
@@ -15,9 +14,13 @@ import { loadKeyMcpAccess, saveKeyMcpAccess } from "@/lib/mcp/key-access";
 import { loadCompanyMcpServers, saveCompanyMcpInstallation } from "@/lib/mcp/servers";
 import { loadCompanyPolicies } from "@/lib/settings/guardrail-policies";
 import { addBoost, removeBoost, setBudget } from "@/lib/tenancy/budgets";
+import { companySlice } from "@/lib/tenancy/company-view";
 import {
+  createCompany,
   deleteNode,
-  loadStructure,
+  loadCompany,
+  loadCompanyDirectory,
+  locateNode,
   saveCompanyLabelKeys,
   saveMember,
   saveOrg,
@@ -25,33 +28,59 @@ import {
   saveTeam,
 } from "@/lib/tenancy/structure";
 import { deleteReport, saveReport, sendReportNow } from "@/lib/reports/manage";
+import type { StructurePayload, TenancyKind } from "@/types/structure";
 
-export async function loadStructureAction(...args: Parameters<typeof loadStructure>) {
-  return runAction(() => loadStructure(...args));
+function companyView(payload: StructurePayload, orgId: string): StructurePayload {
+  const view = companySlice(payload, orgId);
+  if (!view) throw new Error("NOT_FOUND");
+  return view;
 }
 
-export async function saveOrgAction(...args: Parameters<typeof saveOrg>) {
-  return runAction(() => saveOrg(...args));
+export async function loadCompanyDirectoryAction() {
+  return runAction(() => loadCompanyDirectory());
 }
 
-export async function saveCompanyLabelKeysAction(...args: Parameters<typeof saveCompanyLabelKeys>) {
-  return runAction(() => saveCompanyLabelKeys(...args));
+export async function loadCompanyAction(...args: Parameters<typeof loadCompany>) {
+  return runAction(() => loadCompany(...args));
 }
 
-export async function saveTeamAction(...args: Parameters<typeof saveTeam>) {
-  return runAction(() => saveTeam(...args));
+export async function locateNodeAction(...args: Parameters<typeof locateNode>) {
+  return runAction(() => locateNode(...args));
 }
 
-export async function saveProjectAction(...args: Parameters<typeof saveProject>) {
-  return runAction(() => saveProject(...args));
+export async function createCompanyAction(...args: Parameters<typeof createCompany>) {
+  return runAction(() => createCompany(...args));
 }
 
-export async function saveMemberAction(...args: Parameters<typeof saveMember>) {
-  return runAction(() => saveMember(...args));
+export async function saveOrgAction(input: { id: string; alias: string }) {
+  return runAction(async () => companyView(await saveOrg(input), input.id));
 }
 
-export async function deleteNodeAction(...args: Parameters<typeof deleteNode>) {
-  return runAction(() => deleteNode(...args));
+export async function saveCompanyLabelKeysAction(input: { orgId: string; keys: string[] }) {
+  return runAction(async () => companyView(await saveCompanyLabelKeys(input), input.orgId));
+}
+
+export async function saveTeamAction(input: Parameters<typeof saveTeam>[0]) {
+  return runAction(async () => companyView(await saveTeam(input), input.orgId));
+}
+
+export async function saveProjectAction(input: Parameters<typeof saveProject>[0]) {
+  return runAction(async () => companyView(await saveProject(input), input.orgId));
+}
+
+export async function saveMemberAction(input: Parameters<typeof saveMember>[0]) {
+  return runAction(async () => companyView(await saveMember(input), input.orgId));
+}
+
+export async function deleteNodeAction(input: { kind: Exclude<TenancyKind, "org">; id: string; orgId: string }) {
+  return runAction(async () => companyView(await deleteNode(input), input.orgId));
+}
+
+export async function deleteCompanyAction(id: string) {
+  return runAction(async () => {
+    await deleteNode({ kind: "org", id });
+    return { id };
+  });
 }
 
 export async function setBudgetAction(...args: Parameters<typeof setBudget>) {
@@ -92,10 +121,6 @@ export async function loadCompanyPoliciesAction(...args: Parameters<typeof loadC
 
 export async function loadKeyOptionsAction() {
   return runAction(() => loadKeyOptions());
-}
-
-export async function loadKeyDetailAction(...args: Parameters<typeof loadKeyDetail>) {
-  return runAction(() => loadKeyDetail(...args));
 }
 
 export async function createKeyAction(...args: Parameters<typeof createKey>) {

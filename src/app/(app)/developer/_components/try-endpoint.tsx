@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useSyncExternalStore, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import {
   Button,
   Card,
@@ -26,39 +26,9 @@ import {
 } from "@/lib/gateway/endpoints/openapi";
 import { gatewayPath } from "@/lib/gateway/api-paths";
 import type { OverlayState, TrySnapshot, OpenApiPath } from "@/types/api-ref";
+import { useStoredKey } from "./stored-key";
 
-const KEY_STORAGE = "llmhub.api-ref.bearer";
 const MAX_SNAPSHOT = 1_000_000;
-const keyListeners = new Set<() => void>();
-
-function storageName(management: boolean): string {
-  return management ? `${KEY_STORAGE}.management` : KEY_STORAGE;
-}
-
-function readStoredKey(name: string): string {
-  try {
-    return sessionStorage.getItem(name) ?? "";
-  } catch {
-    return "";
-  }
-}
-
-function subscribeStoredKey(onStoreChange: () => void) {
-  keyListeners.add(onStoreChange);
-  return () => {
-    keyListeners.delete(onStoreChange);
-  };
-}
-
-function writeStoredKey(name: string, value: string) {
-  try {
-    if (value) sessionStorage.setItem(name, value);
-    else sessionStorage.removeItem(name);
-  } catch {
-    return;
-  }
-  for (const listener of keyListeners) listener();
-}
 
 function pretty(body: string): string {
   try {
@@ -125,12 +95,7 @@ export default function TryEndpoint({
     [endpoint.path],
   );
   const management = endpoint.style === "management";
-  const storage = storageName(management);
-  const apiKey = useSyncExternalStore(
-    subscribeStoredKey,
-    () => readStoredKey(storage),
-    () => "",
-  );
+  const [apiKey, setApiKey] = useStoredKey(management);
   const [format, setFormat] = useState(endpoint.style === "anthropic" ? "anthropic" : "openai");
   const anthropic = format === "anthropic";
   const [params, setParams] = useState(() =>
@@ -225,150 +190,148 @@ export default function TryEndpoint({
   }
 
   return (
-    <Modal state={state}>
-      <Modal.Backdrop>
-        <Modal.Container>
-          <Modal.Dialog className="max-w-2xl">
-            {({ close }) => (
-              <>
-                <Modal.Header>
-                  <Modal.Heading>{t("tryTitle")}</Modal.Heading>
-                </Modal.Header>
-                <Modal.Body className="max-h-[70vh] space-y-4 overflow-y-auto">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Chip size="sm" variant="soft">
-                      {endpoint.method}
-                    </Chip>
-                    <code className="font-mono text-xs">{endpoint.path}</code>
-                  </div>
-                  <p className="text-sm text-muted">{t("tryHint", { surface: endpoint.style })}</p>
-                  {endpoint.style === "dual" ? (
-                    <Tabs
-                      selectedKey={format}
-                      onSelectionChange={(key) => setFormat(String(key))}
-                      aria-label={t("formatLabel")}
-                      className="w-fit"
-                    >
-                      <Tabs.List className="w-fit min-w-0" aria-label={t("formatLabel")}>
-                        <Tabs.Tab id="openai" className="w-auto">
-                          {t("format", { format: "openai" })}
-                        </Tabs.Tab>
-                        <Tabs.Tab id="anthropic" className="w-auto">
-                          {t("format", { format: "anthropic" })}
-                        </Tabs.Tab>
-                      </Tabs.List>
-                    </Tabs>
-                  ) : null}
-                  {anthropic ? (
-                    <p className="text-xs text-muted">
-                      {t("anthropicHeaders", { version: ANTHROPIC_VERSION, legacy: ANTHROPIC_LEGACY_VERSION })}
-                    </p>
-                  ) : null}
-                  <TextField fullWidth
-                    value={apiKey}
-                    onChange={(value) => writeStoredKey(storage, value)}
+    <Modal.Backdrop isOpen={state.isOpen} onOpenChange={state.setOpen}>
+      <Modal.Container>
+        <Modal.Dialog className="max-w-2xl">
+          {({ close }) => (
+            <>
+              <Modal.Header>
+                <Modal.Heading>{t("tryTitle")}</Modal.Heading>
+              </Modal.Header>
+              <Modal.Body className="max-h-[70vh] space-y-4 overflow-y-auto">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Chip size="sm" variant="soft">
+                    {endpoint.method}
+                  </Chip>
+                  <code className="font-mono text-xs">{endpoint.path}</code>
+                </div>
+                <p className="text-sm text-muted">{t("tryHint", { surface: endpoint.style })}</p>
+                {endpoint.style === "dual" ? (
+                  <Tabs
+                    selectedKey={format}
+                    onSelectionChange={(key) => setFormat(String(key))}
+                    aria-label={t("formatLabel")}
+                    className="w-fit"
+                  >
+                    <Tabs.List className="w-fit min-w-0" aria-label={t("formatLabel")}>
+                      <Tabs.Tab id="openai" className="w-auto">
+                        {t("format", { format: "openai" })}
+                      </Tabs.Tab>
+                      <Tabs.Tab id="anthropic" className="w-auto">
+                        {t("format", { format: "anthropic" })}
+                      </Tabs.Tab>
+                    </Tabs.List>
+                  </Tabs>
+                ) : null}
+                {anthropic ? (
+                  <p className="text-xs text-muted">
+                    {t("anthropicHeaders", { version: ANTHROPIC_VERSION, legacy: ANTHROPIC_LEGACY_VERSION })}
+                  </p>
+                ) : null}
+                <TextField fullWidth
+                  value={apiKey}
+                  onChange={setApiKey}
+                  type="password"
+                  aria-label={t("apiKey", { surface: endpoint.style })}
+                >
+                  <Label>{t("apiKey", { surface: endpoint.style })}</Label>
+                  <Input
                     type="password"
-                    aria-label={t("apiKey", { surface: endpoint.style })}
+                    autoComplete="off"
+                    placeholder={t("apiKeyPlaceholder", { surface: endpoint.style })}
+                  />
+                  <Description>
+                    {t.rich("apiKeyHint", {
+                      surface: endpoint.style,
+                      keys: (chunks) => (
+                        <Link href={management ? "/account" : "/keys"} className="text-accent">
+                          {chunks}
+                        </Link>
+                      ),
+                    })}
+                  </Description>
+                </TextField>
+                {names.map((name) => (
+                  <TextField fullWidth
+                    key={name}
+                    value={params[name] ?? ""}
+                    onChange={(value) =>
+                      setParams((cur) => ({ ...cur, [name]: value }))
+                    }
+                    aria-label={t("param", { name })}
                   >
-                    <Label>{t("apiKey", { surface: endpoint.style })}</Label>
+                    <Label>{t("param", { name })}</Label>
                     <Input
-                      type="password"
-                      autoComplete="off"
-                      placeholder={t("apiKeyPlaceholder", { surface: endpoint.style })}
-                    />
-                    <Description>
-                      {t.rich("apiKeyHint", {
-                        surface: endpoint.style,
-                        keys: (chunks) => (
-                          <Link href={management ? "/account" : "/keys"} className="text-accent">
-                            {chunks}
-                          </Link>
-                        ),
-                      })}
-                    </Description>
-                  </TextField>
-                  {names.map((name) => (
-                    <TextField fullWidth
-                      key={name}
-                      value={params[name] ?? ""}
-                      onChange={(value) =>
-                        setParams((cur) => ({ ...cur, [name]: value }))
-                      }
                       aria-label={t("param", { name })}
-                    >
-                      <Label>{t("param", { name })}</Label>
-                      <Input
-                        aria-label={t("param", { name })}
-                      />
-                    </TextField>
-                  ))}
-                  {endpoint.method === "GET" || endpoint.method === "DELETE" ? null : (
-                    <TextField fullWidth value={body} onChange={setBody}>
-                      <Label>{t("body")}</Label>
-                      <TextArea className="min-h-40 font-mono text-xs" />
-                    </TextField>
-                  )}
-                  <div className="space-y-2">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <p className="text-sm font-medium">{t("response")}</p>
-                      {result ? (
-                        <div className="flex flex-wrap items-center gap-2">
-                          <Chip
-                            size="sm"
-                            variant="soft"
-                            color={result.status < 400 ? "success" : "danger"}
-                          >
-                            {t("statusCode", { status: result.status })}
-                          </Chip>
-                          <span className="text-xs text-muted">
-                            {t("latency", { ms: result.latencyMs })}
-                          </span>
-                        </div>
-                      ) : null}
-                    </div>
+                    />
+                  </TextField>
+                ))}
+                {endpoint.method === "GET" || endpoint.method === "DELETE" ? null : (
+                  <TextField fullWidth value={body} onChange={setBody}>
+                    <Label>{t("body")}</Label>
+                    <TextArea className="min-h-40 font-mono text-xs" />
+                  </TextField>
+                )}
+                <div className="space-y-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-sm font-medium">{t("response")}</p>
                     {result ? (
-                      <Surface variant="secondary" className="overflow-x-auto rounded-xl p-4">
-                        <pre className="font-mono text-xs whitespace-pre-wrap">
-                          {result.binary
-                            ? t("binaryResponse", {
-                                type: result.contentType || "octet-stream",
-                                bytes: result.bytes,
-                              })
-                            : pretty(result.body) || t("emptyResponse")}
-                        </pre>
-                      </Surface>
-                    ) : (
-                      <Card variant="secondary" className="items-center py-6 text-center">
-                        <Card.Description>{t("responseEmpty")}</Card.Description>
-                      </Card>
-                    )}
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Chip
+                          size="sm"
+                          variant="soft"
+                          color={result.status < 400 ? "success" : "danger"}
+                        >
+                          {t("statusCode", { status: result.status })}
+                        </Chip>
+                        <span className="text-xs text-muted">
+                          {t("latency", { ms: result.latencyMs })}
+                        </span>
+                      </div>
+                    ) : null}
                   </div>
-                </Modal.Body>
-                <Modal.Footer>
-                  <Button
-                    variant="tertiary"
-                    onPress={close}
-                    aria-label={tCommon("close")}
-                  >
-                    {tCommon("close")}
-                  </Button>
-                  <Button
-                    isPending={pending}
-                    onPress={send}
-                  >
-                    {({ isPending }) => (
-                      <>
-                        {isPending ? <Spinner color="current" size="sm" /> : null}
-                        {t("send")}
-                      </>
-                    )}
-                  </Button>
-                </Modal.Footer>
-              </>
-            )}
-          </Modal.Dialog>
-        </Modal.Container>
-      </Modal.Backdrop>
-    </Modal>
+                  {result ? (
+                    <Surface variant="secondary" className="overflow-x-auto rounded-xl p-4">
+                      <pre className="font-mono text-xs whitespace-pre-wrap">
+                        {result.binary
+                          ? t("binaryResponse", {
+                              type: result.contentType || "octet-stream",
+                              bytes: result.bytes,
+                            })
+                          : pretty(result.body) || t("emptyResponse")}
+                      </pre>
+                    </Surface>
+                  ) : (
+                    <Card variant="secondary" className="items-center py-6 text-center">
+                      <Card.Description>{t("responseEmpty")}</Card.Description>
+                    </Card>
+                  )}
+                </div>
+              </Modal.Body>
+              <Modal.Footer>
+                <Button
+                  variant="tertiary"
+                  onPress={close}
+                  aria-label={tCommon("close")}
+                >
+                  {tCommon("close")}
+                </Button>
+                <Button
+                  isPending={pending}
+                  onPress={send}
+                >
+                  {({ isPending }) => (
+                    <>
+                      {isPending ? <Spinner color="current" size="sm" /> : null}
+                      {t("send")}
+                    </>
+                  )}
+                </Button>
+              </Modal.Footer>
+            </>
+          )}
+        </Modal.Dialog>
+      </Modal.Container>
+    </Modal.Backdrop>
   );
 }

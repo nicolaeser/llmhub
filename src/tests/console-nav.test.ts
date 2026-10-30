@@ -28,9 +28,10 @@ function hrefs(scope: ScopeKind, granted: readonly Permission[] = permissions) {
 }
 
 test("the console lands on the first NAV item the user may open", () => {
-  assert.equal(homePath(permissions), "/companies");
-  assert.equal(homePath([PERMISSIONS.KEYS_READ]), "/keys");
-  assert.equal(homePath([PERMISSIONS.SPEND_READ]), "/usage");
+  assert.equal(homePath(permissions), "/overview");
+  assert.equal(homePath([PERMISSIONS.KEYS_READ]), "/overview");
+  assert.equal(homePath([PERMISSIONS.SPEND_READ]), "/overview");
+  assert.equal(homePath([PERMISSIONS.PROVIDERS_READ]), "/overview");
   assert.equal(homePath([PERMISSIONS.PLAYGROUND_USE]), "/developer");
   assert.equal(homePath([PERMISSIONS.ROLES_MANAGE]), "/users");
   assert.equal(homePath([PERMISSIONS.PRICING_READ]), "/usage");
@@ -38,15 +39,18 @@ test("the console lands on the first NAV item the user may open", () => {
 });
 
 test("the company scope lands on the first company page and never on a platform page", () => {
-  assert.equal(homePath(permissions, "company"), "/companies");
-  assert.equal(homePath([PERMISSIONS.PROVIDERS_READ, PERMISSIONS.SPEND_READ]), "/providers");
-  assert.equal(homePath([PERMISSIONS.PROVIDERS_READ, PERMISSIONS.SPEND_READ], "company"), "/usage");
+  assert.equal(homePath(permissions, "company"), "/overview");
+  assert.equal(homePath([PERMISSIONS.PROVIDERS_READ, PERMISSIONS.SPEND_READ]), "/overview");
+  assert.equal(homePath([PERMISSIONS.PROVIDERS_READ, PERMISSIONS.SPEND_READ], "company"), "/overview");
+  assert.equal(homePath([PERMISSIONS.PROVIDERS_READ], "company"), "/account");
+  assert.equal(homePath([PERMISSIONS.PRICING_READ], "company"), "/usage");
   assert.equal(homePath([PERMISSIONS.ROLES_MANAGE], "company"), "/account");
   assert.equal(homePath([PERMISSIONS.SETTINGS_READ], "company"), "/guardrails");
 });
 
 test("platform and company scopes show their own navigation", () => {
   assert.deepEqual(hrefs("platform"), [
+    "/overview",
     "/companies",
     "/keys",
     "/users",
@@ -61,6 +65,7 @@ test("platform and company scopes show their own navigation", () => {
     "/developer",
   ]);
   assert.deepEqual(hrefs("company"), [
+    "/overview",
     "/companies",
     "/keys",
     "/guardrails",
@@ -72,8 +77,8 @@ test("platform and company scopes show their own navigation", () => {
   ]);
   const platformSections = visibleNav(permissions, "platform").map((section) => section.id);
   const companySections = visibleNav(permissions, "company").map((section) => section.id);
-  assert.deepEqual(platformSections, ["organization", "gateway", "policies", "insights", "system"]);
-  assert.deepEqual(companySections, ["organization", "policies", "insights", "system"]);
+  assert.deepEqual(platformSections, ["home", "organization", "gateway", "policies", "insights", "system"]);
+  assert.deepEqual(companySections, ["home", "organization", "policies", "insights", "system"]);
   const sectionHrefs = (scope: ScopeKind, id: string) =>
     visibleNav(permissions, scope)
       .find((section) => section.id === id)
@@ -116,6 +121,9 @@ test("a page opens exactly when its navigation entry is visible", () => {
   assert.equal(canOpen([PERMISSIONS.MODELS_READ], "/keys", "company"), false);
   assert.equal(canOpen([PERMISSIONS.KEYS_READ], "/keys", "company"), true);
   assert.equal(canOpen(permissions, "/account", "platform"), false);
+  assert.equal(canOpen([PERMISSIONS.PROVIDERS_READ], "/overview", "platform"), true);
+  assert.equal(canOpen([PERMISSIONS.PROVIDERS_READ], "/overview", "company"), false);
+  assert.equal(canOpen([PERMISSIONS.KEYS_READ], "/overview", "company"), true);
   for (const scope of ["platform", "company"] as const) {
     for (const granted of [[], [PERMISSIONS.KEYS_READ], [PERMISSIONS.SPEND_READ], [...permissions]]) {
       for (const href of hrefs(scope, granted)) assert.equal(canOpen(granted, href, scope), true, `${scope} ${href}`);
@@ -143,7 +151,7 @@ test("platform-only paths are exactly the pages without a company entry", () => 
   for (const href of ["/settings", "/users", "/providers", "/models", "/providers/health", "/settings/x"]) {
     assert.equal(platformOnlyPath(href), true, href);
   }
-  for (const href of ["/companies", "/keys", "/guardrails", "/knowledge", "/mcp", "/usage", "/logs", "/developer", "/account", "/modelsx"]) {
+  for (const href of ["/overview", "/companies", "/keys", "/guardrails", "/knowledge", "/mcp", "/usage", "/logs", "/developer", "/account", "/modelsx"]) {
     assert.equal(platformOnlyPath(href), false, href);
   }
   const companyHrefs = new Set(hrefs("company"));
@@ -158,8 +166,9 @@ test("the root path sends signed-in users to their console home and others to si
   assert.deepEqual(recordedPrisma.calls, []);
   await signedIn();
   for (const [granted, home] of [
-    [[PERMISSIONS.KEYS_READ], "/keys"],
-    [[PERMISSIONS.SPEND_READ], "/usage"],
+    [[PERMISSIONS.KEYS_READ], "/overview"],
+    [[PERMISSIONS.SPEND_READ], "/overview"],
+    [[PERMISSIONS.PLAYGROUND_USE], "/developer"],
     [[], "/account"],
   ] as const) {
     recordedPrisma.handlers = { session: { findUnique: () => sessionRow([...granted]) } };
@@ -174,12 +183,16 @@ test("the root path sends the owner in a company view and company users to the c
     session: { findUnique: () => sessionRow([], { isOwner: true }) },
     organization: { findUnique: () => ({ id: COMPANY_ID }) },
   });
-  assert.equal(await redirectOf(ConsoleHome), "/companies");
+  assert.equal(await redirectOf(ConsoleHome), "/overview");
   await signedIn();
   recordedPrisma.reset({
     session: { findUnique: () => sessionRow([PERMISSIONS.PROVIDERS_READ, PERMISSIONS.SPEND_READ], { orgId: COMPANY_ID }) },
   });
-  assert.equal(await redirectOf(ConsoleHome), "/usage");
+  assert.equal(await redirectOf(ConsoleHome), "/overview");
+  recordedPrisma.reset({
+    session: { findUnique: () => sessionRow([PERMISSIONS.PROVIDERS_READ], { orgId: COMPANY_ID }) },
+  });
+  assert.equal(await redirectOf(ConsoleHome), "/account");
 });
 
 test("platform-only pages send the company scope back to the console home", async () => {
@@ -224,6 +237,14 @@ test("retired console paths redirect to the tab that replaced them", async () =>
   const movedTab = redirects.find((rule) => rule.source === "/keys");
   assert.equal(movedTab?.destination, "/models?tab=presets");
   assert.deepEqual(movedTab?.has, [{ type: "query", key: "tab", value: "templates" }]);
+  const providerTab = (tab: string) =>
+    redirects.find(
+      (rule) =>
+        rule.source === "/providers" &&
+        rule.has?.some((item) => item.type === "query" && item.key === "tab" && item.value === tab),
+    )?.destination;
+  assert.equal(providerTab("usage"), "/providers?tab=subscriptions");
+  assert.equal(providerTab("links"), "/providers?tab=subscriptions&links=open");
   assert.equal(target.get("/roles"), "/users?tab=roles");
   assert.equal(target.get("/markups"), "/usage?tab=markups");
   assert.equal(target.get("/logging"), "/settings?tab=logging");
@@ -270,7 +291,12 @@ test("the console keeps a short navigation in each scope", () => {
   for (const scope of ["platform", "company"] as const) {
     assert.ok(hrefs(scope).length <= 13, scope);
   }
-  for (const section of NAV) assert.ok(section.items.length >= 2, section.id);
+  for (const section of NAV.filter((section) => !section.untitled)) assert.ok(section.items.length >= 2, section.id);
+  for (const scope of ["platform", "company"] as const) {
+    const home = visibleNav(permissions, scope)[0];
+    assert.equal(home?.untitled, true, scope);
+    assert.deepEqual(home?.items.map((item) => item.href), ["/overview"], scope);
+  }
 });
 
 test("console copy no longer calls a scope a workspace", () => {

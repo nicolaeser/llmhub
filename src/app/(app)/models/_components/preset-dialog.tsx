@@ -24,13 +24,14 @@ import {
   type useOverlayState,
 } from "@heroui/react";
 import { useTranslations } from "next-intl";
-import FormDialog from "@/components/console/form-dialog";
 import MultiPicker from "@/components/console/multi-picker";
+import StepDialog, { type DialogStep } from "@/components/console/step-dialog";
 import { useErrorToast } from "@/components/console/use-error-toast";
-import { DATA_REGIONS, hasRules, templateModels } from "@/lib/gateway/access/model-policy";
+import { DATA_REGIONS, hasRules } from "@/lib/gateway/access/model-policy";
 import { isActionFail } from "@/lib/http/action-result";
 import type { ModelPolicy, ModelTemplateView, TemplateProviderOption, TemplateRules } from "@/types/model-templates";
 import { createTemplateAction, updateTemplateAction } from "../_action";
+import { usePresetSummary } from "./use-preset-summary";
 
 const STARTERS = {
   blank: {},
@@ -80,6 +81,7 @@ export default function PresetDialog({
   const t = useTranslations("ModelTemplates");
   const tProviders = useTranslations("Providers");
   const showError = useErrorToast();
+  const summarize = usePresetSummary(policies, providers);
   const [starter, setStarter] = useState<Starter>("blank");
   const [name, setName] = useState(editing?.name ?? "");
   const [description, setDescription] = useState(editing?.description ?? "");
@@ -107,7 +109,8 @@ export default function PresetDialog({
     maxRetentionDays: days ?? null,
   };
   const defined = models.length > 0 || hasRules(rules);
-  const matches = defined ? templateModels(rules, policies) : [];
+  const preview = summarize(rules);
+  const matches = defined ? preview.summary.matches : [];
   const mode = editing ? "edit" : "create";
   const known = new Set(providers.map((provider) => provider.id));
   const removed = providerIds.filter((id) => !known.has(id));
@@ -146,171 +149,209 @@ export default function PresetDialog({
     });
   }
 
+  const previewCard = (
+    <Card variant="secondary" aria-live="polite">
+      <Card.Header className="flex-row flex-wrap items-start justify-between gap-2">
+        <div className="min-w-0 flex-1 basis-60">
+          <Card.Title>{t("preview.title")}</Card.Title>
+          <Card.Description className="break-words">{defined ? preview.sentence : t("preview.empty")}</Card.Description>
+        </div>
+        {defined ? (
+          <Chip size="sm" variant="soft" color={matches.length ? "success" : "warning"} className="whitespace-nowrap">
+            {t("matchCount", { count: matches.length })}
+          </Chip>
+        ) : null}
+      </Card.Header>
+      {matches.length ? (
+        <Card.Content className="space-y-2">
+          <TagGroup size="sm" aria-label={t("preview.title")}>
+            <TagGroup.List>
+              {matches.slice(0, PREVIEW_LIMIT).map((alias) => (
+                <Tag key={alias} id={alias}>
+                  {alias}
+                </Tag>
+              ))}
+            </TagGroup.List>
+          </TagGroup>
+          {matches.length > PREVIEW_LIMIT ? (
+            <p className="text-xs text-muted">{t("preview.more", { count: matches.length - PREVIEW_LIMIT })}</p>
+          ) : null}
+        </Card.Content>
+      ) : null}
+    </Card>
+  );
+
+  const basicsStep: DialogStep = {
+    id: "basics",
+    title: t("steps.basics.title"),
+    description: t("steps.basics.description"),
+    isValid: Boolean(name.trim()),
+    content: (
+      <>
+        {editing ? null : (
+          <Select
+            selectedKey={starter}
+            onSelectionChange={(key) => {
+              if (isStarter(key)) applyStarter(key);
+            }}
+            isDisabled={pending}
+            fullWidth
+          >
+            <Label>{t("preset.label")}</Label>
+            <Select.Trigger>
+              <Select.Value />
+              <Select.Indicator />
+            </Select.Trigger>
+            <Select.Popover>
+              <ListBox aria-label={t("preset.label")}>
+                {STARTER_IDS.map((id) => (
+                  <ListBox.Item key={id} id={id} textValue={t("preset.option", { preset: id })}>
+                    {t("preset.option", { preset: id })}
+                    <ListBox.ItemIndicator />
+                  </ListBox.Item>
+                ))}
+              </ListBox>
+            </Select.Popover>
+            <Description>{t("preset.hint")}</Description>
+          </Select>
+        )}
+        <TextField fullWidth isRequired value={name} onChange={setName} isDisabled={pending} maxLength={80}>
+          <Label>{t("fields.name")}</Label>
+          <Input />
+        </TextField>
+        <TextField fullWidth value={description} onChange={setDescription} isDisabled={pending} maxLength={300}>
+          <Label>{t("fields.description")}</Label>
+          <Input placeholder={t("fields.descriptionPlaceholder")} />
+        </TextField>
+      </>
+    ),
+  };
+
+  const rulesStep: DialogStep = {
+    id: "rules",
+    title: t("steps.rules.title"),
+    description: t("fields.rulesHint"),
+    isValid: days !== undefined,
+    content: (
+      <>
+        <Fieldset className="gap-4">
+          <Fieldset.Legend>{t("steps.rules.dataHandling")}</Fieldset.Legend>
+          <Switch isSelected={zdrOnly} onChange={setZdrOnly} isDisabled={pending}>
+            <Switch.Content>
+              <Switch.Control>
+                <Switch.Thumb />
+              </Switch.Control>
+              <Label>{t("fields.zdrOnly")}</Label>
+            </Switch.Content>
+            <Description>{t("fields.zdrOnlyHint")}</Description>
+          </Switch>
+          <Switch isSelected={noTrainingOnly} onChange={setNoTrainingOnly} isDisabled={pending}>
+            <Switch.Content>
+              <Switch.Control>
+                <Switch.Thumb />
+              </Switch.Control>
+              <Label>{t("fields.noTrainingOnly")}</Label>
+            </Switch.Content>
+            <Description>{t("fields.noTrainingOnlyHint")}</Description>
+          </Switch>
+          <TextField fullWidth value={retention} onChange={setRetention} isDisabled={pending} isInvalid={days === undefined}>
+            <Label>{t("fields.retention")}</Label>
+            <Input inputMode="numeric" placeholder={t("fields.retentionPlaceholder")} />
+            <Description>{t("fields.retentionHint")}</Description>
+            <FieldError>{t("fields.retentionInvalid", { max: MAX_RETENTION_DAYS })}</FieldError>
+          </TextField>
+          <CheckboxGroup value={regions} onChange={setRegions} isDisabled={pending}>
+            <Label>{t("fields.regions")}</Label>
+            <div className="flex flex-wrap gap-x-5 gap-y-2">
+              {DATA_REGIONS.map((region) => (
+                <Checkbox key={region} value={region}>
+                  <Checkbox.Content>
+                    <Checkbox.Control>
+                      <Checkbox.Indicator />
+                    </Checkbox.Control>
+                    {t("region", { region })}
+                  </Checkbox.Content>
+                </Checkbox>
+              ))}
+            </div>
+            <Description>{t("fields.regionsHint")}</Description>
+          </CheckboxGroup>
+        </Fieldset>
+        <Separator />
+        <Fieldset className="gap-4">
+          <Fieldset.Legend>{t("steps.rules.scope")}</Fieldset.Legend>
+          <MultiPicker
+            label={t("fields.providers")}
+            description={t("fields.providersHint")}
+            placeholder={t("fields.providersPlaceholder")}
+            searchLabel={t("fields.search")}
+            emptyLabel={t("fields.noResults")}
+            items={providerItems}
+            selected={providerIds}
+            onChange={setProviderIds}
+            isDisabled={pending}
+          />
+          {removed.length ? (
+            <Alert status="warning">
+              <Alert.Indicator />
+              <Alert.Content>
+                <Alert.Title>{t("removed.title", { count: removed.length })}</Alert.Title>
+                <Alert.Description>{t("removed.description", { count: removed.length })}</Alert.Description>
+              </Alert.Content>
+              <Button
+                size="sm"
+                variant="secondary"
+                isDisabled={pending}
+                onPress={() => setProviderIds((current) => current.filter((id) => known.has(id)))}
+              >
+                {t("removed.action", { count: removed.length })}
+              </Button>
+            </Alert>
+          ) : null}
+          <TextField fullWidth value={patterns} onChange={setPatterns} isDisabled={pending}>
+            <Label>{t("fields.patterns")}</Label>
+            <Input placeholder="claude-*, gpt-4o*" />
+            <Description>{t("fields.patternsHint")}</Description>
+          </TextField>
+        </Fieldset>
+        {previewCard}
+      </>
+    ),
+  };
+
+  const modelsStep: DialogStep = {
+    id: "models",
+    title: t("steps.models.title"),
+    description: t("fields.modelsHint"),
+    optional: true,
+    content: (
+      <>
+        <MultiPicker
+          label={t("fields.models")}
+          placeholder={t("fields.modelsPlaceholder")}
+          searchLabel={t("fields.search")}
+          emptyLabel={t("fields.noResults")}
+          items={policies.map((policy) => ({ id: policy.alias, label: policy.alias }))}
+          selected={models}
+          onChange={setModels}
+          isDisabled={pending}
+        />
+        {previewCard}
+      </>
+    ),
+  };
+
   return (
-    <FormDialog
+    <StepDialog
       state={state}
       size="lg"
       title={t("dialogTitle", { mode })}
+      description={editing ? editing.name : t("dialogHint")}
+      steps={[basicsStep, rulesStep, modelsStep]}
       submitLabel={t("dialogSubmit", { mode })}
       pending={pending}
       isSubmitDisabled={!name.trim() || !defined || days === undefined}
       onSubmit={save}
-    >
-      {editing ? null : (
-        <Select
-          selectedKey={starter}
-          onSelectionChange={(key) => {
-            if (isStarter(key)) applyStarter(key);
-          }}
-          isDisabled={pending}
-          fullWidth
-        >
-          <Label>{t("preset.label")}</Label>
-          <Select.Trigger>
-            <Select.Value />
-            <Select.Indicator />
-          </Select.Trigger>
-          <Select.Popover>
-            <ListBox aria-label={t("preset.label")}>
-              {STARTER_IDS.map((id) => (
-                <ListBox.Item key={id} id={id} textValue={t("preset.option", { preset: id })}>
-                  {t("preset.option", { preset: id })}
-                  <ListBox.ItemIndicator />
-                </ListBox.Item>
-              ))}
-            </ListBox>
-          </Select.Popover>
-        </Select>
-      )}
-      <TextField fullWidth isRequired value={name} onChange={setName} isDisabled={pending} maxLength={80}>
-        <Label>{t("fields.name")}</Label>
-        <Input />
-      </TextField>
-      <TextField fullWidth value={description} onChange={setDescription} isDisabled={pending} maxLength={300}>
-        <Label>{t("fields.description")}</Label>
-        <Input placeholder={t("fields.descriptionPlaceholder")} />
-      </TextField>
-      <Separator />
-      <Fieldset className="gap-4">
-        <Fieldset.Legend>{t("fields.rulesTitle")}</Fieldset.Legend>
-        <p className="text-sm text-muted">{t("fields.rulesHint")}</p>
-        <Switch isSelected={zdrOnly} onChange={setZdrOnly} isDisabled={pending}>
-          <Switch.Content>
-            <Switch.Control>
-              <Switch.Thumb />
-            </Switch.Control>
-            <Label>{t("fields.zdrOnly")}</Label>
-          </Switch.Content>
-          <Description>{t("fields.zdrOnlyHint")}</Description>
-        </Switch>
-        <Switch isSelected={noTrainingOnly} onChange={setNoTrainingOnly} isDisabled={pending}>
-          <Switch.Content>
-            <Switch.Control>
-              <Switch.Thumb />
-            </Switch.Control>
-            <Label>{t("fields.noTrainingOnly")}</Label>
-          </Switch.Content>
-          <Description>{t("fields.noTrainingOnlyHint")}</Description>
-        </Switch>
-        <TextField fullWidth value={retention} onChange={setRetention} isDisabled={pending} isInvalid={days === undefined}>
-          <Label>{t("fields.retention")}</Label>
-          <Input inputMode="numeric" placeholder={t("fields.retentionPlaceholder")} />
-          <Description>{t("fields.retentionHint")}</Description>
-          <FieldError>{t("fields.retentionInvalid", { max: MAX_RETENTION_DAYS })}</FieldError>
-        </TextField>
-        <CheckboxGroup value={regions} onChange={setRegions} isDisabled={pending}>
-          <Label>{t("fields.regions")}</Label>
-          <div className="flex flex-wrap gap-x-5 gap-y-2">
-            {DATA_REGIONS.map((region) => (
-              <Checkbox key={region} value={region}>
-                <Checkbox.Content>
-                  <Checkbox.Control>
-                    <Checkbox.Indicator />
-                  </Checkbox.Control>
-                  {t("region", { region })}
-                </Checkbox.Content>
-              </Checkbox>
-            ))}
-          </div>
-          <Description>{t("fields.regionsHint")}</Description>
-        </CheckboxGroup>
-        <MultiPicker
-          label={t("fields.providers")}
-          description={t("fields.providersHint")}
-          placeholder={t("fields.providersPlaceholder")}
-          searchLabel={t("fields.search")}
-          emptyLabel={t("fields.noResults")}
-          items={providerItems}
-          selected={providerIds}
-          onChange={setProviderIds}
-          isDisabled={pending}
-        />
-        {removed.length ? (
-          <Alert status="warning">
-            <Alert.Indicator />
-            <Alert.Content>
-              <Alert.Title>{t("removed.title", { count: removed.length })}</Alert.Title>
-              <Alert.Description>{t("removed.description", { count: removed.length })}</Alert.Description>
-            </Alert.Content>
-            <Button
-              size="sm"
-              variant="secondary"
-              isDisabled={pending}
-              onPress={() => setProviderIds((current) => current.filter((id) => known.has(id)))}
-            >
-              {t("removed.action", { count: removed.length })}
-            </Button>
-          </Alert>
-        ) : null}
-        <TextField fullWidth value={patterns} onChange={setPatterns} isDisabled={pending}>
-          <Label>{t("fields.patterns")}</Label>
-          <Input placeholder="claude-*, gpt-4o*" />
-          <Description>{t("fields.patternsHint")}</Description>
-        </TextField>
-      </Fieldset>
-      <Separator />
-      <MultiPicker
-        label={t("fields.models")}
-        description={t("fields.modelsHint")}
-        placeholder={t("fields.modelsPlaceholder")}
-        searchLabel={t("fields.search")}
-        emptyLabel={t("fields.noResults")}
-        items={policies.map((policy) => ({ id: policy.alias, label: policy.alias }))}
-        selected={models}
-        onChange={setModels}
-        isDisabled={pending}
-      />
-      <Card variant="secondary">
-        <Card.Header className="flex-row flex-wrap items-start justify-between gap-2">
-          <div className="min-w-0">
-            <Card.Title>{t("preview.title")}</Card.Title>
-            <Card.Description>
-              {defined ? t("preview.summary", { count: matches.length }) : t("preview.empty")}
-            </Card.Description>
-          </div>
-          {defined ? (
-            <Chip size="sm" variant="soft" color={matches.length ? "success" : "warning"}>
-              {t("matchCount", { count: matches.length })}
-            </Chip>
-          ) : null}
-        </Card.Header>
-        {matches.length ? (
-          <Card.Content className="space-y-2">
-            <TagGroup size="sm" aria-label={t("preview.title")}>
-              <TagGroup.List>
-                {matches.slice(0, PREVIEW_LIMIT).map((alias) => (
-                  <Tag key={alias} id={alias}>
-                    {alias}
-                  </Tag>
-                ))}
-              </TagGroup.List>
-            </TagGroup>
-            {matches.length > PREVIEW_LIMIT ? (
-              <p className="text-xs text-muted">{t("preview.more", { count: matches.length - PREVIEW_LIMIT })}</p>
-            ) : null}
-          </Card.Content>
-        ) : null}
-      </Card>
-    </FormDialog>
+    />
   );
 }

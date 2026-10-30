@@ -10,7 +10,7 @@ const PLATFORM_KEY = "platform";
 
 type Variant = "expanded" | "rail" | "drawer";
 
-const ROW = "flex w-full min-w-0 items-center gap-2.5 rounded-xl px-2 py-1.5 text-left";
+const ROW = "flex w-full min-w-0 items-center gap-2.5 rounded-xl px-2 py-1.5 text-left ring-1 ring-inset ring-border";
 
 export default function ScopeSwitcher({ variant }: { variant: Variant }) {
   const t = useTranslations("Sidebar.scope");
@@ -24,7 +24,7 @@ export default function ScopeSwitcher({ variant }: { variant: Variant }) {
   const hint = company ? t("companyHint") : t("platformHint");
   const label = t("label", { kind: scope.kind, alias: company ? scope.alias : "" });
   const rail = variant === "rail";
-  const container = rail ? "flex justify-center pb-2" : "px-2 pb-2";
+  const container = rail ? "flex justify-center pb-2" : "px-3 pb-2";
 
   const summary = (
     <>

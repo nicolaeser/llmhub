@@ -41,11 +41,12 @@ There is no `default-N` scale. Must not use raw Tailwind palette colors (`text-z
 
 ## Color
 
-The console is confident and calm: one indigo accent (hue 276) on neutrals that carry a faint trace of the same hue (277) in both themes, so canvas, panels, borders, and shadows read as one family. Must not add hues beyond the accent and the three status tokens.
+The console is confident and calm: one indigo accent (hue 276 in light, 274 in dark) on near-neutral greys (chroma 0.002 to 0.008 at hue 277) in both themes, so canvas, panels, borders, and shadows read as one quiet family and the accent carries the color. Must not add hues beyond the accent and the three status tokens, and must not tint neutrals further toward the accent.
 
-- Light theme: a cool off-white canvas (`--background`), white panels (`--surface`) lifted by `--surface-shadow` (a hairline ring plus a soft drop in the ink hue), tinted nested panels and fills (`--surface-secondary`, `--surface-tertiary`, `--default`), and translucent ink borders.
-- Dark theme: a deep ink canvas with three clearly separated surface steps; `--surface-shadow` is an inset top highlight plus a faint ring. Must not fall back to flat mid-grey surfaces.
-- Status tokens are tuned per theme so `text-success`, `text-warning`, `text-danger`, `text-accent`, and `text-muted` reach WCAG AA (4.5:1) on `--background`, `--surface`, `--surface-secondary`, and `--default`. Solid fills carry their `-foreground` token (white in light, deep ink in dark for `--accent` and `--danger`). Re-check these ratios with computed colors whenever a token moves.
+- Light theme: a near-white canvas (`--background`), white panels (`--surface`) lifted by a hairline `--surface-shadow`, faintly tinted nested panels and fills (`--surface-secondary`, `--surface-tertiary`, `--default`), and translucent ink borders.
+- Dark theme: a near-black canvas with three clearly separated surface steps and white-alpha borders; `--surface-shadow` is a hairline ring. Must not fall back to flat mid-grey surfaces.
+- Shape: `--radius: 0.25rem` and `--field-radius: 0.5rem` make buttons and cards rounded rectangles (about 12 px), chips and menu items about 8 px, and fields 8 px. Must not bring back pill shapes with radius classes on HeroUI controls.
+- Status tokens are tuned per theme so `text-success`, `text-warning`, `text-danger`, `text-accent`, and `text-muted` reach WCAG AA (4.5:1) on `--background`, `--surface`, `--surface-secondary`, `--surface-tertiary`, `--default`, `--overlay`, and the field background. Solid fills carry their `-foreground` token: white in light, deep ink in dark for `--accent`, `--success`, `--warning`, and `--danger`. Re-check these ratios with computed colors whenever a token moves.
 - Every console page passes its nav icon to `PageHeader` (`icon`), which renders an accent `IconTile` next to the `h1`.
 - `IconTile` (`src/components/console/icon-tile.tsx`) is the only tinted icon box: a token fill at low opacity with an inset ring of the same tone; tones `accent`, `success`, `warning`, `danger`, `neutral`, sizes `sm` / `md` / `lg` / `xl` (`xl` is for `EmptyState`). Must not hand-roll `bg-*/N` icon boxes.
 - `StatCard` takes an `icon` and a `tone` that matches the meaning of the number (`success` for healthy or available, `warning` for limited or nearing a cap, `danger` for failures, `accent` for neutral totals, `neutral` for a zero or a timing). The label sits top left, the tile top right, and the value below it in `tabular-nums`.
@@ -75,7 +76,7 @@ Status colors keep their meaning and are never reused as a categorical series; a
 
 - Use Geist via `--font-geist-sans` / `--font-geist-mono` from `src/app/layout.tsx`.
 - Use the Tailwind type scale `text-xs` through `text-2xl` in the console. Must not write `text-[Npx]` or `text-[Nrem]`.
-- Exactly one `h1` per route. Console page titles are `text-xl sm:text-2xl font-semibold tracking-tight`; stat values are `text-xl` that grows to `text-2xl` from a 13rem card; account screens use `text-3xl sm:text-4xl`, and the `<accent>` chunk of an account heading is `text-accent`. Panel headings are `Card.Title`.
+- Exactly one `h1` per route. Console page titles come from `PageHeader` (`text-xl font-semibold tracking-tight` next to an `md` `IconTile`); stat values are `text-xl` that grows to `text-2xl` from a 13rem card; account screens use `text-2xl`, and the `<accent>` chunk of an account heading is `text-muted`. Panel headings are `Card.Title`.
 - Account routes emit `main` from `account-shell`. Console routes use the `(app)` layout `main`. Must not nest `<main>` in `<main>`.
 - Do not use marketing em-dashes in product UI copy.
 
@@ -92,7 +93,7 @@ HeroUI `size` maps control height. Must not mix `size` with a competing height c
 | Icon | Lucide `size={14}` or `size={16}` |
 | Full-width field | `fullWidth` on `TextField` / `Select` / `Button` |
 
-The rail widths (`w-16` / `w-64`), meter fills, and table `min-w-*` locks are allowed. Below `md`, the rail is hidden and navigation opens in a HeroUI `Drawer` (`placement="left"`, `Backdrop variant="blur"`) with the scope switcher on top, the navigation, and the user menu row; it repeats no footer controls. Expanded navigation groups sections in a `DisclosureGroup`. The collapsed rail keeps one centre line: centred brand, `size-10` square links with `justify-center` and a `Tooltip` (`placement="right"`) on every item, a `Separator` between sections and above the pinned items, and a one-column footer (a fixed status slot, the user menu, then the collapse toggle). A rail link is the `Tooltip.Trigger` itself (`render` returns the `Link`), and a rail menu is an icon-only `Button` inside the `Tooltip`; must not nest a link or button inside a trigger. Must not centre rail items with padding alone or spread footer controls with `justify-between`. Navigation rows (links, scope switcher, user menu) are `rounded-xl`; the active link is `bg-accent/12` with an inset `ring-accent/25`, foreground text, and an accent icon, idle rows hover with `bg-foreground/5`, and their color change uses `motion-safe:transition-colors`.
+The rail widths (`w-16` / `w-60`), meter fills, and table `min-w-*` locks are allowed. The sidebar sits on the canvas color (`bg-background`) with a vertical `Separator` to the content. Below `md`, the rail is hidden and navigation opens in a HeroUI `Drawer` (`placement="left"`, `Backdrop variant="blur"`) with the scope switcher on top, the navigation, and the user menu row; it repeats no footer controls. Expanded navigation shows each section under a small plain `text-xs text-muted` label (no `DisclosureGroup`, no chevrons); the first section (`untitled`, Overview) has no label. The collapsed rail keeps one centre line: centred brand, `size-9` square links with `justify-center` and a `Tooltip` (`placement="right"`) on every item, a `Separator` between sections, and a one-column footer (the build notice when there is one, then the user menu). The collapse toggle lives in the top bar before the breadcrumbs, not in the sidebar. A rail link is the `Tooltip.Trigger` itself (`render` returns the `Link`), and a rail menu is an icon-only `Button` inside the `Tooltip`; must not nest a link or button inside a trigger. Must not centre rail items with padding alone or spread footer controls with `justify-between`. Navigation rows (links, scope switcher, user menu) are `rounded-xl`; the active link is `bg-foreground/8` with `font-medium` foreground text and an accent icon, idle rows are `text-muted` and hover with `bg-foreground/5`, and their color change uses `motion-safe:transition-colors`.
 
 ## Responsive layout
 
@@ -101,9 +102,20 @@ Every console screen must work at 390 px wide without horizontal page scroll.
 - Below `sm` the `(app)` layout pads `main` with `p-4`. Below `md` the top bar shows the menu button, brand and page title (truncated), a scope button that opens the drawer, the health dot (its label stays visible when the status is down), and the Avatar user menu that holds the connection check and sign-out.
 - `PageHeader` actions wrap under the title when they do not fit beside it. Must not force them onto the title row.
 - `StatCard` keeps label and tile on one row and sizes the value with a container query, so it never needs to stack. Four-up stat grids must not start before `lg`, because the rail narrows the pane at `md`.
-- A list `Table` must have a card twin: `RowCards` with one `RowCard` per row (`src/components/console/row-cards.tsx`) below `lg`, and `className={TABLE_FROM_LG}` on the `Table`. Tables in a narrow column (the company detail pane) use `until="xl"` with `TABLE_FROM_XL`. Inside a `Card` the twin uses `variant="secondary"`, inside a secondary card `variant="tertiary"`. Row chips and actions live in one helper that the table cell and the card both call, so the two never drift. Markdown tables inside transcripts may scroll instead.
+- A list `Table` must have a card twin: `RowCards` with one `RowCard` per row (`src/components/console/row-cards.tsx`) below `lg`, and `className={TABLE_FROM_LG}` on the `Table`. Inside a `Card` the twin uses `variant="secondary"`, inside a secondary card `variant="tertiary"`. Row chips and actions live in one helper that the table cell and the card both call, so the two never drift. Markdown tables inside transcripts may scroll instead.
 - Long filter forms collapse below `md` into a `Disclosure` whose trigger counts active filters; the desktop form stays expanded. Breakpoint-dependent rendering reads `useMediaQuery` with `BELOW_MD` / `BELOW_LG` from `src/lib/hooks/use-media-query.ts`. Must not add resize listeners or set state in an effect for this.
 - Long values (emails, model ids, paths) wrap with `break-words`. Use `break-all` only where the table cell already did.
+
+## Page structure and rule lists
+
+The console must be understandable without documentation.
+
+- Every page answers what this is, what the state is, and what to do next: `PageHeader` with the nav icon, the title, one plain sentence, and at most one primary action; secondary actions are `variant="secondary"` or sit in a `Dropdown`.
+- No page inside a page. Nesting stops at page, `Card`, `Card variant="secondary"`. An entity detail is its own route with tabs (see [instructions/frontend.md](instructions/frontend.md)) or at most one `Modal` / `Drawer`; a stack of six or more cards becomes tabs.
+- List toolbars put the `SearchField` left, filters next to it, and the primary action right or in the page header. A list shows its `SearchField` from 6 rows (`SEARCH_FROM = 6`).
+- Lists that grow with use (guardrail rules and overrides, markups, model groups and presets, MCP access rules) are a `Table` with its `RowCards` twin and a one-line plain summary per row from a pure helper (`src/app/(app)/guardrails/_components/rule-summary.ts`, `src/lib/pricing/markup-view.ts`, `src/app/(app)/models/_components/group-summary.ts`, `src/app/(app)/mcp/_components/access-view.ts`). Each rule is added and edited in its own dialog. Rules inside a dialog switch in place between the list and a single-rule view; must not open a dialog on top of a dialog or edit a growing list inline in one large form.
+- Inheritance is visible where it applies: each part says "Inherited from …" or "Set here", and override rows show what changes (from → to).
+- Concepts are explained in one short sentence where they appear (`Description`, `Card.Description`, `EmptyState`), without walls of text.
 
 ## HeroUI composition
 
@@ -115,9 +127,11 @@ Every console screen must work at 390 px wide without horizontal page scroll.
 | Icon-only | `Button isIconOnly` + `aria-label` |
 | Panel | `Card` + `Card.Header` / `Card.Title` / `Card.Description` / `Card.Content` / `Card.Footer` |
 | Menu | `Dropdown` with a `Button` child + `Dropdown.Popover` + `Dropdown.Menu`; `Dropdown.Trigger` only for a custom non-button trigger, never wrapping a `Button` |
-| Tabs | `Tabs`; `List` needs `aria-label` |
+| Tabs | `Tabs`; `List` needs `aria-label`. Page-level tabs are `PageTabs` (underline style, `variant="secondary"`, the list scrolls horizontally on narrow screens) |
 | Fields | `TextField` + `Label` + `Input` + `Description` + `FieldError` |
-| Overlay | `Modal` with `Modal.Backdrop`; `useOverlayState` |
+| Overlay | `Modal` with `Modal.Backdrop`; `useOverlayState`. A dialog opened from state (not from a trigger child) passes `isOpen` / `onOpenChange` to `Modal.Backdrop` (or `AlertDialog.Backdrop`) instead of `state` on the root, which otherwise logs a React Aria "PressResponder rendered without a pressable child" warning |
+| Form with more than about six fields | `StepDialog` (`src/components/console/step-dialog.tsx`): steps with `title`, `description`, `optional`, `isValid`, `content`; trailing optional steps let the user finish early. Shorter forms are a `FormDialog`, optionally with an Advanced `Disclosure` |
+| Choice between a few options that need explaining | Choice cards: a radio group of option cards with a one-line hint each (`src/components/console/choice-cards.tsx`) |
 | Confirm | `AlertDialog` (`src/components/console/confirm-dialog.tsx`) |
 | Table | `Table.ScrollContainer` > `Table.Content`, with a `RowCards` twin below `lg` (see Responsive layout) |
 | Status pill | `Chip` for real state only |

@@ -31,12 +31,14 @@ export default function AccessWindowFields({
   windows,
   timeZone,
   isDisabled,
+  showIntro = true,
   onWindowsChange,
   onTimeZoneChange,
 }: {
   windows: AccessWindowDraft[];
   timeZone: string;
   isDisabled: boolean;
+  showIntro?: boolean;
   onWindowsChange: (windows: AccessWindowDraft[]) => void;
   onTimeZoneChange: (timeZone: string) => void;
 }) {
@@ -56,10 +58,12 @@ export default function AccessWindowFields({
 
   return (
     <div className="space-y-3">
-      <div className="space-y-1">
-        <p className="text-sm font-medium text-foreground">{t("title")}</p>
-        <p className="text-sm text-muted">{t("hint")}</p>
-      </div>
+      {showIntro ? (
+        <div className="space-y-1">
+          <p className="text-sm font-medium text-foreground">{t("title")}</p>
+          <p className="text-sm text-muted">{t("hint")}</p>
+        </div>
+      ) : null}
       {windows.map((w, i) => {
         const daysLabel = `${idPrefix}-days-${w.key}`;
         const wholeDays = coversWholeDays(w);

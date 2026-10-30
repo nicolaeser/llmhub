@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Alert, Button, Card, Table, toast, useOverlayState } from "@heroui/react";
+import { Alert, Button, Card, Chip, Disclosure, SearchField, Table, toast, useOverlayState } from "@heroui/react";
 import {
   BadgePercent,
   Building2,
@@ -25,10 +25,12 @@ import PageStatus from "@/components/console/page-status";
 import RowCard, { RowCards, TABLE_FROM_LG } from "@/components/console/row-cards";
 import StatCard from "@/components/console/stat-card";
 import { useErrorToast } from "@/components/console/use-error-toast";
+import RowMenu from "@/components/providers/row-menu";
 import { deleteMarkupAction, loadMarkupsAction } from "../_action";
 import { useActionData } from "@/lib/hooks/use-action-data";
 import { isActionFail } from "@/lib/http/action-result";
 import { isModelPattern, marginShare, markupScopeRank } from "@/lib/gateway/billing/markup-policy";
+import { markupKindOf } from "@/lib/pricing/markup-view";
 import type { MarkupRule, MarkupScope, MarkupView } from "@/types/pricing";
 import MarkupDialog from "./markup-dialog";
 import MarkupLookup from "./markup-lookup";
@@ -42,16 +44,24 @@ const SCOPE_ICONS = {
 
 const PRECEDENCE = ["project", "team", "org", "all"] as const satisfies readonly MarkupScope[];
 
+const KIND_COLORS = { markup: "success", discount: "warning", none: "default" } as const;
+
+const SEARCH_FROM = 6;
+
+type MarkupAction = "edit" | "delete";
+
 export default function MarkupsTab() {
   const t = useTranslations("Markups");
   const showError = useErrorToast();
   const tCommon = useTranslations("Common");
   const format = useFormatter();
   const [editing, setEditing] = useState<MarkupView | null>(null);
+  const [removing, setRemoving] = useState<MarkupView | null>(null);
   const [dialogKey, setDialogKey] = useState(0);
-  const [deleting, setDeleting] = useState<string | null>(null);
-  const [, startDelete] = useTransition();
+  const [query, setQuery] = useState("");
+  const [deleting, startDelete] = useTransition();
   const formState = useOverlayState();
+  const deleteState = useOverlayState();
   const page = useActionData(loadMarkupsAction);
   const { data, setData } = page;
 
@@ -61,17 +71,21 @@ export default function MarkupsTab() {
 
   const orgAlias = (id: string) => data.orgs.find((org) => org.id === id)?.alias ?? "";
 
-  function target(rule: MarkupRule): { label: string; detail: string } {
-    if (!data || rule.scope === "all") return { label: t("scope", { scope: "all" }), detail: "" };
-    const missing = { label: t("deletedTarget", { scope: rule.scope }), detail: rule.targetId };
+  function target(rule: MarkupRule): { label: string; detail: string; missing: boolean } {
+    if (!data || rule.scope === "all") return { label: t("scope", { scope: "all" }), detail: "", missing: false };
+    const missing = { label: t("deletedTarget", { scope: rule.scope }), detail: rule.targetId, missing: true };
     if (rule.scope === "org") {
       const org = data.orgs.find((row) => row.id === rule.targetId);
-      return org ? { label: org.alias, detail: t("scope", { scope: "org" }) } : missing;
+      return org ? { label: org.alias, detail: t("scope", { scope: "org" }), missing: false } : missing;
     }
     if (rule.scope === "team") {
       const team = data.teams.find((row) => row.id === rule.targetId);
       return team
-        ? { label: team.alias, detail: format.list([t("scope", { scope: "team" }), orgAlias(team.orgId)].filter(Boolean), { type: "unit" }) }
+        ? {
+            label: team.alias,
+            detail: format.list([t("scope", { scope: "team" }), orgAlias(team.orgId)].filter(Boolean), { type: "unit" }),
+            missing: false,
+          }
         : missing;
     }
     const project = data.projects.find((row) => row.id === rule.targetId);
@@ -83,11 +97,23 @@ export default function MarkupsTab() {
         [t("scope", { scope: "project" }), orgAlias(project.orgId), team?.alias ?? ""].filter(Boolean),
         { type: "unit" },
       ),
+      missing: false,
     };
   }
 
   function describe(rule: MarkupRule): string {
     return t("ruleName", { target: target(rule).label, models: rule.model || t("allModels") });
+  }
+
+  function summary(rule: MarkupRule): string {
+    return t("summary", {
+      kind: markupKindOf(rule.percent),
+      amount: Math.abs(rule.percent) / 100,
+      scope: rule.scope === "all" ? "all" : "one",
+      target: target(rule).label,
+      models: rule.model ? "some" : "all",
+      model: rule.model,
+    });
   }
 
   function openDialog(markup: MarkupView | null) {
@@ -105,11 +131,9 @@ export default function MarkupsTab() {
     }));
   }
 
-  function remove(id: string) {
-    setDeleting(id);
+  function remove(markup: MarkupView) {
     startDelete(async () => {
-      const result = await deleteMarkupAction(id);
-      setDeleting(null);
+      const result = await deleteMarkupAction(markup.id);
       if (isActionFail(result)) {
         showError(result.error);
         return;
@@ -119,12 +143,26 @@ export default function MarkupsTab() {
     });
   }
 
-  const markups = [...data.markups].sort(
+  function onAction(markup: MarkupView, action: MarkupAction) {
+    if (action === "edit") openDialog(markup);
+    if (action === "delete") {
+      setRemoving(markup);
+      deleteState.open();
+    }
+  }
+
+  const q = query.trim().toLowerCase();
+  const sorted = [...data.markups].sort(
     (a, b) =>
       markupScopeRank(a.scope) - markupScopeRank(b.scope) ||
       target(a).label.localeCompare(target(b).label) ||
       a.model.localeCompare(b.model),
   );
+  const markups = q
+    ? sorted.filter((row) =>
+        [target(row).label, row.model || t("allModels"), row.note].some((text) => text.toLowerCase().includes(q)),
+      )
+    : sorted;
   const margin = data.totals.sale - data.totals.purchase;
   const share = marginShare(data.totals.purchase, data.totals.sale);
   const createButton = data.canManage ? (
@@ -132,81 +170,59 @@ export default function MarkupsTab() {
       <Plus size={16} aria-hidden />
       {t("add")}
     </Button>
-  ) : undefined;
+  ) : null;
 
-  function modelCell(markup: MarkupView) {
-    if (!markup.model) return <span className="text-sm text-muted">{t("allModels")}</span>;
+  function changeChip(markup: MarkupView) {
+    const kind = markupKindOf(markup.percent);
     return (
-      <div>
-        <div className="font-mono text-sm break-words">{markup.model}</div>
-        <div className="text-xs text-muted">
+      <Chip size="sm" variant="soft" color={KIND_COLORS[kind]}>
+        <span className="tabular-nums">{format.number(markup.percent / 100, "markup")}</span>
+      </Chip>
+    );
+  }
+
+  function modelLabel(markup: MarkupView) {
+    if (!markup.model) return <span className="text-muted">{t("allModels")}</span>;
+    return (
+      <span className="font-mono text-xs break-all">
+        {markup.model}
+        <span className="ml-2 font-sans text-muted">
           {t("modelKind", { kind: isModelPattern(markup.model) ? "pattern" : "one" })}
+        </span>
+      </span>
+    );
+  }
+
+  function menu(markup: MarkupView) {
+    if (!data?.canManage) return null;
+    return (
+      <RowMenu<MarkupAction>
+        label={t("actions", { rule: describe(markup) })}
+        items={[
+          { id: "edit", label: tCommon("edit"), icon: Pencil },
+          { id: "delete", label: tCommon("delete"), icon: Trash2, danger: true },
+        ]}
+        onAction={(action) => onAction(markup, action)}
+      />
+    );
+  }
+
+  function targetCell(markup: MarkupView) {
+    const where = target(markup);
+    return (
+      <div className="flex min-w-0 items-center gap-3">
+        <IconTile icon={SCOPE_ICONS[markup.scope]} size="sm" tone={where.missing ? "warning" : "accent"} />
+        <div className="min-w-0">
+          <p className="text-sm font-medium break-words text-foreground">{where.label}</p>
+          {where.detail ? <p className="text-xs break-words text-muted">{where.detail}</p> : null}
         </div>
       </div>
-    );
-  }
-
-  function percentCell(markup: MarkupView) {
-    return (
-      <>
-        <span
-          className={
-            markup.percent > 0
-              ? "font-semibold text-success tabular-nums"
-              : markup.percent < 0
-                ? "font-semibold text-warning tabular-nums"
-                : "font-semibold text-muted tabular-nums"
-          }
-        >
-          {format.number(markup.percent / 100, "markup")}
-        </span>
-        <div className="text-xs text-muted">
-          {t("kind", { kind: markup.percent > 0 ? "markup" : markup.percent < 0 ? "discount" : "none" })}
-        </div>
-      </>
-    );
-  }
-
-  function markupActions(markup: MarkupView) {
-    return (
-      <>
-        <Button
-          isIconOnly
-          size="sm"
-          variant="ghost"
-          aria-label={tCommon("edit")}
-          onPress={() => openDialog(markup)}
-        >
-          <Pencil size={14} aria-hidden />
-        </Button>
-        <ConfirmDialog
-          title={t("deleteConfirm", { rule: describe(markup) })}
-          description={t("deleteHint")}
-          confirmLabel={tCommon("delete")}
-          cancelLabel={tCommon("cancel")}
-          pending={deleting === markup.id}
-          onConfirm={() => remove(markup.id)}
-        >
-          <Button
-            isIconOnly
-            size="sm"
-            variant="danger-soft"
-            aria-label={tCommon("delete")}
-            isPending={deleting === markup.id}
-          >
-            <Trash2 size={14} aria-hidden />
-          </Button>
-        </ConfirmDialog>
-      </>
     );
   }
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="max-w-2xl text-sm text-muted">{t("subtitle")}</p>
-        {markups.length ? createButton : null}
-      </div>
+      <p className="max-w-2xl text-sm text-muted">{t("subtitle")}</p>
 
       {data.canManage ? null : (
         <Alert status="accent">
@@ -220,123 +236,111 @@ export default function MarkupsTab() {
         <StatCard
           icon={ShoppingCart}
           tone="neutral"
-          label={t("summary.purchase", { days: data.windowDays })}
+          label={t("summaryStats.purchase", { days: data.windowDays })}
           value={format.number(data.totals.purchase, "currency")}
         />
         <StatCard
           icon={Tag}
-          label={t("summary.sale", { days: data.windowDays })}
+          label={t("summaryStats.sale", { days: data.windowDays })}
           value={format.number(data.totals.sale, "currency")}
         />
         <StatCard
           icon={margin < 0 ? TrendingDown : TrendingUp}
           tone={margin < 0 ? "danger" : "success"}
-          label={t("summary.margin", { days: data.windowDays })}
+          label={t("summaryStats.margin", { days: data.windowDays })}
           value={
             share === null
               ? format.number(margin, "currency")
-              : t("summary.marginValue", { amount: margin, share })
+              : t("summaryStats.marginValue", { amount: margin, share })
           }
         />
       </div>
 
-      {markups.length === 0 ? (
-        <EmptyState icon={BadgePercent} title={t("emptyTitle")} description={t("empty")} action={createButton} />
+      {data.markups.length === 0 ? (
+        <EmptyState
+          icon={BadgePercent}
+          title={t("emptyTitle")}
+          description={t("empty")}
+          action={createButton ?? undefined}
+        />
       ) : (
-        <>
-          <RowCards label={t("title")}>
-            {markups.map((markup) => {
-              const where = target(markup);
-              return (
-                <RowCard
-                  key={markup.id}
-                  title={
-                    <span className="flex items-center gap-2">
-                      <IconTile icon={SCOPE_ICONS[markup.scope]} size="sm" />
-                      {where.label}
-                    </span>
-                  }
-                  description={where.detail || undefined}
-                  aside={data.canManage ? markupActions(markup) : undefined}
-                  details={[
-                    { label: t("columns.model"), value: modelCell(markup) },
-                    { label: t("columns.percent"), value: percentCell(markup) },
-                    { label: t("columns.note"), value: markup.note || tCommon("none"), wide: true },
-                  ]}
-                />
-              );
-            })}
-          </RowCards>
-          <Table aria-label={t("title")} className={TABLE_FROM_LG}>
-            <Table.ScrollContainer>
-              <Table.Content aria-label={t("title")} className="min-w-[48rem]">
-                <Table.Header>
-                  <Table.Column isRowHeader>{t("columns.scope")}</Table.Column>
-                  <Table.Column>{t("columns.model")}</Table.Column>
-                  <Table.Column>{t("columns.percent")}</Table.Column>
-                  <Table.Column>{t("columns.note")}</Table.Column>
-                  {data.canManage ? <Table.Column>{tCommon("actions")}</Table.Column> : null}
-                </Table.Header>
-                <Table.Body>
-                  {markups.map((markup) => {
-                    const Icon = SCOPE_ICONS[markup.scope];
-                    const where = target(markup);
-                    return (
-                      <Table.Row key={markup.id} id={markup.id}>
-                        <Table.Cell>
-                          <div className="flex items-center gap-3">
-                            <IconTile icon={Icon} size="sm" />
-                            <div className="min-w-0">
-                              <div className="truncate font-medium">{where.label}</div>
-                              {where.detail ? <div className="truncate text-xs text-muted">{where.detail}</div> : null}
-                            </div>
-                          </div>
-                        </Table.Cell>
-                        <Table.Cell>{modelCell(markup)}</Table.Cell>
-                        <Table.Cell>{percentCell(markup)}</Table.Cell>
-                        <Table.Cell>
-                          <span className="text-sm text-muted">{markup.note || tCommon("none")}</span>
-                        </Table.Cell>
-                        {data.canManage ? (
+        <div className="space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            {data.markups.length >= SEARCH_FROM ? (
+              <SearchField value={query} onChange={setQuery} aria-label={t("search")} className="w-full sm:max-w-xs">
+                <SearchField.Group>
+                  <SearchField.SearchIcon />
+                  <SearchField.Input placeholder={t("search")} />
+                  <SearchField.ClearButton aria-label={t("clear")} />
+                </SearchField.Group>
+              </SearchField>
+            ) : (
+              <p className="text-sm text-muted">{t("count", { count: data.markups.length })}</p>
+            )}
+            {createButton}
+          </div>
+          {markups.length === 0 ? (
+            <Card>
+              <Card.Content>
+                <p className="text-sm text-muted">{t("noMatches")}</p>
+              </Card.Content>
+            </Card>
+          ) : (
+            <>
+              <RowCards label={t("title")}>
+                {markups.map((markup) => (
+                  <RowCard
+                    key={markup.id}
+                    title={summary(markup)}
+                    description={markup.note || undefined}
+                    aside={menu(markup)}
+                    chips={changeChip(markup)}
+                    details={[
+                      { label: t("columns.scope"), value: targetCell(markup), wide: true },
+                      { label: t("columns.model"), value: modelLabel(markup), wide: true },
+                    ]}
+                  />
+                ))}
+              </RowCards>
+              <Table aria-label={t("title")} className={TABLE_FROM_LG}>
+                <Table.ScrollContainer>
+                  <Table.Content aria-label={t("title")} className="min-w-3xl">
+                    <Table.Header>
+                      <Table.Column isRowHeader>{t("columns.rule")}</Table.Column>
+                      <Table.Column>{t("columns.scope")}</Table.Column>
+                      <Table.Column>{t("columns.model")}</Table.Column>
+                      <Table.Column>{t("columns.percent")}</Table.Column>
+                      <Table.Column>
+                        <span className="sr-only">{tCommon("actions")}</span>
+                      </Table.Column>
+                    </Table.Header>
+                    <Table.Body>
+                      {markups.map((markup) => (
+                        <Table.Row key={markup.id} id={markup.id}>
                           <Table.Cell>
-                            <div className="flex gap-1">{markupActions(markup)}</div>
+                            <div className="min-w-0 max-w-sm">
+                              <p className="text-sm font-medium break-words text-foreground">{summary(markup)}</p>
+                              {markup.note ? <p className="text-xs break-words text-muted">{markup.note}</p> : null}
+                            </div>
                           </Table.Cell>
-                        ) : null}
-                      </Table.Row>
-                    );
-                  })}
-                </Table.Body>
-              </Table.Content>
-            </Table.ScrollContainer>
-          </Table>
-        </>
+                          <Table.Cell>{targetCell(markup)}</Table.Cell>
+                          <Table.Cell>{modelLabel(markup)}</Table.Cell>
+                          <Table.Cell>{changeChip(markup)}</Table.Cell>
+                          <Table.Cell>
+                            <div className="flex justify-end">{menu(markup)}</div>
+                          </Table.Cell>
+                        </Table.Row>
+                      ))}
+                    </Table.Body>
+                  </Table.Content>
+                </Table.ScrollContainer>
+              </Table>
+            </>
+          )}
+        </div>
       )}
 
-      <div className="grid gap-5 lg:grid-cols-2">
-        <Card className="gap-4">
-          <Card.Header>
-            <Card.Title>{t("precedence.title")}</Card.Title>
-            <Card.Description>{t("precedence.body")}</Card.Description>
-          </Card.Header>
-          <Card.Content className="space-y-4">
-            <ol className="grid gap-2 sm:grid-cols-2">
-              {PRECEDENCE.map((scope, index) => {
-                const Icon = SCOPE_ICONS[scope];
-                return (
-                  <li key={scope} className="flex items-center gap-3 rounded-lg bg-default px-3 py-2">
-                    <span className="text-xs font-semibold text-muted tabular-nums">
-                      {format.number(index + 1, "integer")}
-                    </span>
-                    <Icon size={14} aria-hidden className="text-accent" />
-                    <span className="text-sm font-medium">{t("scope", { scope })}</span>
-                  </li>
-                );
-              })}
-            </ol>
-            <p className="text-sm text-muted">{t("precedence.models")}</p>
-            <p className="text-sm text-muted">{t("precedence.billing")}</p>
-          </Card.Content>
-        </Card>
+      <div className="grid items-start gap-5 lg:grid-cols-2">
         <MarkupLookup
           markups={data.markups}
           orgs={data.orgs}
@@ -345,6 +349,39 @@ export default function MarkupsTab() {
           models={data.models}
           describe={describe}
         />
+        <Card>
+          <Disclosure>
+            <Disclosure.Heading>
+              <Disclosure.Trigger className="flex w-full items-start justify-between gap-3 text-left">
+                <span className="min-w-0">
+                  <span className="block text-sm font-semibold text-foreground">{t("precedence.title")}</span>
+                  <span className="block text-sm text-muted">{t("precedence.body")}</span>
+                </span>
+                <Disclosure.Indicator />
+              </Disclosure.Trigger>
+            </Disclosure.Heading>
+            <Disclosure.Content>
+              <Disclosure.Body className="space-y-4 pt-4">
+                <ol className="grid gap-2 sm:grid-cols-2">
+                  {PRECEDENCE.map((scope, index) => {
+                    const Icon = SCOPE_ICONS[scope];
+                    return (
+                      <li key={scope} className="flex items-center gap-3 rounded-lg bg-default px-3 py-2">
+                        <span className="text-xs font-semibold text-muted tabular-nums">
+                          {format.number(index + 1, "integer")}
+                        </span>
+                        <Icon size={14} aria-hidden className="text-accent" />
+                        <span className="text-sm font-medium">{t("scope", { scope })}</span>
+                      </li>
+                    );
+                  })}
+                </ol>
+                <p className="text-sm text-muted">{t("precedence.models")}</p>
+                <p className="text-sm text-muted">{t("precedence.billing")}</p>
+              </Disclosure.Body>
+            </Disclosure.Content>
+          </Disclosure>
+        </Card>
       </div>
 
       <MarkupDialog
@@ -356,6 +393,17 @@ export default function MarkupsTab() {
         projects={data.projects}
         models={data.models}
         onSaved={saved}
+      />
+      <ConfirmDialog
+        state={deleteState}
+        title={t("deleteConfirm", { rule: removing ? describe(removing) : "" })}
+        description={t("deleteHint")}
+        confirmLabel={tCommon("delete")}
+        cancelLabel={tCommon("cancel")}
+        pending={deleting}
+        onConfirm={() => {
+          if (removing) remove(removing);
+        }}
       />
     </div>
   );

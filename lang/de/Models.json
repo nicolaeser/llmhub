@@ -1,11 +1,11 @@
 {
   "title": "Modelle",
-  "subtitle": "Öffentliche Modellnamen, die Anbieter dahinter und Vorlagen, die Modellfreigaben für API-Keys bündeln.",
-  "tab": "{tab, select, catalog {Katalog} groups {Gruppen und Routing} presets {Vorlagen} other {}}",
+  "subtitle": "Was Clients aufrufen können: öffentliche Modellnamen, wohin ihre Anfragen gehen, und Vorlagen, die Modellfreigaben für API-Keys bündeln.",
+  "tab": "{tab, select, catalog {Katalog} groups {Routing} presets {Modellvorlagen} other {}}",
   "add": "Modell hinzufügen",
   "formTitle": "{mode, select, edit {Modell bearbeiten} add {Modell hinzufügen} other {Modell hinzufügen}}",
   "formSubmit": "{mode, select, save {Speichern} create {Modell hinzufügen} other {Modell hinzufügen}}",
-  "addHint": "Lege fest, wohin Anfragen für diesen öffentlichen Namen gehen. Alles unterhalb der Endpunkte ist optional.",
+  "addHint": "Wähle den öffentlichen Namen, den Clients senden, und wohin seine Anfragen gehen. Fallbacks, Preise und erweiterte Einstellungen sind optional.",
   "emptyTitle": "Keine Modelle",
   "empty": "Lege einen öffentlichen Namen an, den Clients als model senden.",
   "needProvider": "Verbinde zuerst einen <providers>Anbieter</providers>, dann lege ein öffentliches Modell an.",
@@ -27,7 +27,8 @@
     "alias": "Öffentlicher Name",
     "enabled": "Status",
     "context": "Kontextfenster",
-    "endpoints": "Anbieter"
+    "endpoints": "Anbieter",
+    "routing": "Routing"
   },
   "fields": {
     "alias": "Öffentlicher Modellname",
@@ -111,5 +112,36 @@
     "timeZoneHint": "Die Uhrzeiten gelten in dieser Zeitzone, inklusive Sommer- und Winterzeit. Eine Anfrage wird nach ihrem Startzeitpunkt berechnet.",
     "add": "Zeitfenster hinzufügen",
     "remove": "Fenster {index, number} entfernen"
-  }
+  },
+  "menu": {
+    "label": "Aktionen für {alias}",
+    "toggle": "{enabled, select, true {Deaktivieren} other {Aktivieren}}"
+  },
+  "intro": "Jeder öffentliche Name leitet Anfragen an ein oder mehrere Anbietermodelle weiter, optional mit Fallbacks, wenn diese ausfallen.",
+  "count": "{count, plural, one {# Modell} other {# Modelle}}",
+  "removeHint": "Clients können {alias} dann nicht mehr aufrufen. Deaktiviere es stattdessen, um die Einstellungen zu behalten.",
+  "previewTitle": "Was {alias} macht",
+  "steps": {
+    "name": {
+      "title": "Name",
+      "description": "Der Modellname, den Clients senden, und wie er in /api/v1/models erscheint."
+    },
+    "endpoints": {
+      "title": "Routing",
+      "description": "Die Anbietermodelle, die Anfragen für diesen Namen beantworten. Füge weitere hinzu, um Last zu verteilen oder weiterzuarbeiten, wenn einer ausfällt."
+    },
+    "fallbacks": {
+      "title": "Fallbacks",
+      "description": "Andere Modelle, die der Reihe nach versucht werden, wenn die Endpunkte hier fehlschlagen oder am Limit sind."
+    },
+    "pricing": {
+      "title": "Preise",
+      "description": "Wie Anfragen an diesen Namen abgerechnet werden. Standardmäßig gilt der Preis des gerouteten Anbieters."
+    },
+    "advanced": {
+      "title": "Erweitert",
+      "description": "Verfügbarkeit, automatische Anbieter-Updates und Modellvarianten."
+    }
+  },
+  "summary": "{spread, select, none {Noch kein Endpunkt} single {Leitet an {targets} weiter} other {Verteilt Anfragen auf {endpoints, plural, other {# Endpunkte}} bei {targets} ({strategy, select, weighted_random {gewichteter Zufall} least_inflight {geringste Last zuerst} cost_lowest {günstigste zuerst} fast {schnellste zuerst} priority {nach Priorität} round_robin {reihum} quota_balanced {meiste Reserve zuerst} quota_expiring {nächster Reset zuerst} smart {intelligent} other {{strategy}}})}}{fallback, select, some {, Fallback auf {fallbacks}} other {}}{overflow, select, some {, Überlauf auf {overflowModel}} other {}}."
 }

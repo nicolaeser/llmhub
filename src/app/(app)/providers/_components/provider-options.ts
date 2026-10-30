@@ -72,7 +72,7 @@ export function optionById(id: string | null): AddProviderOption | null {
   return ADD_PROVIDER_SECTIONS.flatMap(providerOptions).find((option) => option.id === id) ?? null;
 }
 
-export function filterOf(kind: string): AddProviderFilter {
+export function filterOf(kind: string): AddProviderSection {
   return isSignInKind(kind) ? "subscription" : "api";
 }
 

@@ -1,66 +1,64 @@
 "use client";
 
-import { Button, Dropdown } from "@heroui/react";
-import { Link2, MoreHorizontal, Plus, Upload } from "lucide-react";
+import { Button, Dropdown, Label } from "@heroui/react";
+import { ChevronDown, Link2, ListChecks, Plus, Upload } from "lucide-react";
 import { useTranslations } from "next-intl";
-import { BELOW_MD, useMediaQuery } from "@/lib/hooks/use-media-query";
+
+const TOOLBAR_ACTIONS = ["import", "createLink", "links"] as const;
+
+type ToolbarAction = (typeof TOOLBAR_ACTIONS)[number];
 
 export default function ProvidersToolbar({
+  linkCount,
   onImport,
   onCreateLink,
+  onOpenLinks,
   onAdd,
 }: {
+  linkCount: number | null;
   onImport: () => void;
   onCreateLink: () => void;
+  onOpenLinks: () => void;
   onAdd: () => void;
 }) {
   const t = useTranslations("Providers.toolbar");
-  const compact = useMediaQuery(BELOW_MD);
 
-  if (compact) {
-    return (
-      <div className="flex w-full items-center gap-2">
-        <Button fullWidth onPress={onAdd}>
-          <Plus size={16} aria-hidden />
-          {t("add")}
-        </Button>
-        <Dropdown>
-          <Button isIconOnly variant="secondary" aria-label={t("more")}>
-            <MoreHorizontal size={16} aria-hidden />
-          </Button>
-          <Dropdown.Popover placement="bottom end">
-            <Dropdown.Menu
-              aria-label={t("more")}
-              onAction={(key) => {
-                if (key === "import") onImport();
-                if (key === "link") onCreateLink();
-              }}
-            >
-              <Dropdown.Item id="import" textValue={t("import")}>
-                <Upload size={14} aria-hidden />
-                {t("import")}
-              </Dropdown.Item>
-              <Dropdown.Item id="link" textValue={t("createLink")}>
-                <Link2 size={14} aria-hidden />
-                {t("createLink")}
-              </Dropdown.Item>
-            </Dropdown.Menu>
-          </Dropdown.Popover>
-        </Dropdown>
-      </div>
-    );
+  function run(action: ToolbarAction) {
+    if (action === "import") onImport();
+    if (action === "createLink") onCreateLink();
+    if (action === "links") onOpenLinks();
   }
 
   return (
     <>
-      <Button variant="secondary" onPress={onImport}>
-        <Upload size={16} aria-hidden />
-        {t("import")}
-      </Button>
-      <Button variant="secondary" onPress={onCreateLink}>
-        <Link2 size={16} aria-hidden />
-        {t("createLink")}
-      </Button>
+      <Dropdown>
+        <Button variant="secondary">
+          {t("more")}
+          <ChevronDown size={16} aria-hidden />
+        </Button>
+        <Dropdown.Popover placement="bottom end">
+          <Dropdown.Menu
+            aria-label={t("more")}
+            onAction={(key) => {
+              const action = TOOLBAR_ACTIONS.find((item) => item === key);
+              if (action) run(action);
+            }}
+          >
+            <Dropdown.Item id="import" textValue={t("import")}>
+              <Upload size={14} aria-hidden />
+              <Label>{t("import")}</Label>
+            </Dropdown.Item>
+            <Dropdown.Item id="createLink" textValue={t("createLink")}>
+              <Link2 size={14} aria-hidden />
+              <Label>{t("createLink")}</Label>
+            </Dropdown.Item>
+            <Dropdown.Item id="links" textValue={t("links", { count: linkCount ?? 0 })}>
+              <ListChecks size={14} aria-hidden />
+              <Label>{t("links", { count: linkCount ?? 0 })}</Label>
+            </Dropdown.Item>
+          </Dropdown.Menu>
+        </Dropdown.Popover>
+      </Dropdown>
       <Button onPress={onAdd}>
         <Plus size={16} aria-hidden />
         {t("add")}

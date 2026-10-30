@@ -2,6 +2,7 @@
   "title": "Konto und Sicherheit",
   "subtitle": "Deine Anmeldemethoden, aktiven Sitzungen und Sicherheitsaktivitäten.",
   "owner": "Inhaber",
+  "tabs": "{tab, select, security {Anmeldung} sessions {Sitzungen und Aktivität} keys {Management-API-Keys} preferences {Anzeige} other {}}",
   "credentials": {
     "title": "Deine API-Keys sind deaktiviert",
     "body": "Der Zugriff wurde am {date} beim Identitätsanbieter entfernt, deshalb funktionieren deine API-Keys, Management-Keys und der Playground-Zugang nicht mehr. {canRestore, select, true {Du hast dich erneut mit einer Rolle angemeldet und kannst sie wieder aktivieren.} other {Melde dich erneut über den Identitätsanbieter an, sobald du eine Rolle hast, oder wende dich an einen Administrator.}}",

@@ -2,12 +2,10 @@
 
 import { useState } from "react";
 import { Alert, Button, Chip, Surface, toast, useOverlayState } from "@heroui/react";
-import { UsersRound } from "lucide-react";
 import { useTranslations } from "next-intl";
 import CopyButton from "@/components/console/copy-button";
 import { StepUpDialog } from "@/components/security/step-up-dialog";
 import { issueScimTokenAction, revokeScimTokenAction } from "../_action";
-import IconTile from "@/components/console/icon-tile";
 import { SettingSection } from "./setting-fields";
 import { isActionFail } from "@/lib/http/action-result";
 
@@ -31,8 +29,7 @@ export default function ScimSection({
 
   return (
     <SettingSection title={t("scim.title")} subtitle={t("scim.subtitle")}>
-      <div className="flex items-start gap-3">
-        <IconTile icon={UsersRound} tone={tokenSet ? "success" : "neutral"} />
+      <div className="flex flex-col gap-3">
         <ul className="min-w-0 flex-1 divide-y divide-border">
           <li className="flex flex-wrap items-center justify-between gap-2 pb-3 text-sm">
             <span className="text-muted">{t("scim.endpoint")}</span>

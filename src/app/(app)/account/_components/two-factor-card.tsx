@@ -125,96 +125,92 @@ export default function TwoFactorCard({
         }}
       />
 
-      <Modal state={replaceModal}>
-        <Modal.Backdrop isDismissable={false}>
-          <Modal.Container>
-            <Modal.Dialog className="max-w-2xl">
-              <Modal.Header>
-                <Modal.Heading>{t("replaceTitle")}</Modal.Heading>
-              </Modal.Header>
-              <Modal.Body className="space-y-5">
-                {enrollment ? <TotpEnrollmentPanel enrollment={enrollment} /> : null}
-                <SecondFactorInput
-                  value={value}
-                  onChange={(next) => {
-                    setValue(next);
-                    setError(null);
-                  }}
-                  onComplete={activate}
-                  isDisabled={pending}
-                  isInvalid={Boolean(error)}
-                  allowRecovery={false}
-                  autoFocus
-                />
-                {error ? (
-                  <Alert status="danger">
-                    <Alert.Content>
-                      <Alert.Description>{errorText(error)}</Alert.Description>
-                    </Alert.Content>
-                  </Alert>
-                ) : null}
-              </Modal.Body>
-              <Modal.Footer>
-                <Button
-                  variant="tertiary"
-                  isDisabled={pending}
-                  onPress={() => {
-                    replaceModal.close();
-                    setEnrollment(null);
-                    cancelTotpReplacementAction().then((result) => {
-                      if (!isActionFail(result)) onChange(result);
-                    });
-                  }}
-                >
-                  {tCommon("cancel")}
-                </Button>
-                <Button
-                  isPending={pending}
-                  isDisabled={!/^\d{6}$/.test(value.code)}
-                  onPress={() => activate(value.code)}
-                >
-                  {({ isPending }) => (
-                    <>
-                      {isPending ? <Spinner color="current" size="sm" /> : null}
-                      {t("activate")}
-                    </>
-                  )}
-                </Button>
-              </Modal.Footer>
-            </Modal.Dialog>
-          </Modal.Container>
-        </Modal.Backdrop>
-      </Modal>
+      <Modal.Backdrop isDismissable={false} isOpen={replaceModal.isOpen} onOpenChange={replaceModal.setOpen}>
+        <Modal.Container>
+          <Modal.Dialog className="max-w-2xl">
+            <Modal.Header>
+              <Modal.Heading>{t("replaceTitle")}</Modal.Heading>
+            </Modal.Header>
+            <Modal.Body className="space-y-5">
+              {enrollment ? <TotpEnrollmentPanel enrollment={enrollment} /> : null}
+              <SecondFactorInput
+                value={value}
+                onChange={(next) => {
+                  setValue(next);
+                  setError(null);
+                }}
+                onComplete={activate}
+                isDisabled={pending}
+                isInvalid={Boolean(error)}
+                allowRecovery={false}
+                autoFocus
+              />
+              {error ? (
+                <Alert status="danger">
+                  <Alert.Content>
+                    <Alert.Description>{errorText(error)}</Alert.Description>
+                  </Alert.Content>
+                </Alert>
+              ) : null}
+            </Modal.Body>
+            <Modal.Footer>
+              <Button
+                variant="tertiary"
+                isDisabled={pending}
+                onPress={() => {
+                  replaceModal.close();
+                  setEnrollment(null);
+                  cancelTotpReplacementAction().then((result) => {
+                    if (!isActionFail(result)) onChange(result);
+                  });
+                }}
+              >
+                {tCommon("cancel")}
+              </Button>
+              <Button
+                isPending={pending}
+                isDisabled={!/^\d{6}$/.test(value.code)}
+                onPress={() => activate(value.code)}
+              >
+                {({ isPending }) => (
+                  <>
+                    {isPending ? <Spinner color="current" size="sm" /> : null}
+                    {t("activate")}
+                  </>
+                )}
+              </Button>
+            </Modal.Footer>
+          </Modal.Dialog>
+        </Modal.Container>
+      </Modal.Backdrop>
 
-      <Modal state={codesModal}>
-        <Modal.Backdrop isDismissable={false}>
-          <Modal.Container>
-            <Modal.Dialog className="max-w-lg">
-              <Modal.Header>
-                <Modal.Heading>{t("newCodesTitle")}</Modal.Heading>
-              </Modal.Header>
-              <Modal.Body>
-                <RecoveryCodesPanel
-                  codes={codes}
-                  acknowledged={acknowledged}
-                  onAcknowledgedChange={setAcknowledged}
-                />
-              </Modal.Body>
-              <Modal.Footer>
-                <Button
-                  isDisabled={!acknowledged}
-                  onPress={() => {
-                    codesModal.close();
-                    setCodes([]);
-                  }}
-                >
-                  {tCommon("done")}
-                </Button>
-              </Modal.Footer>
-            </Modal.Dialog>
-          </Modal.Container>
-        </Modal.Backdrop>
-      </Modal>
+      <Modal.Backdrop isDismissable={false} isOpen={codesModal.isOpen} onOpenChange={codesModal.setOpen}>
+        <Modal.Container>
+          <Modal.Dialog className="max-w-lg">
+            <Modal.Header>
+              <Modal.Heading>{t("newCodesTitle")}</Modal.Heading>
+            </Modal.Header>
+            <Modal.Body>
+              <RecoveryCodesPanel
+                codes={codes}
+                acknowledged={acknowledged}
+                onAcknowledgedChange={setAcknowledged}
+              />
+            </Modal.Body>
+            <Modal.Footer>
+              <Button
+                isDisabled={!acknowledged}
+                onPress={() => {
+                  codesModal.close();
+                  setCodes([]);
+                }}
+              >
+                {tCommon("done")}
+              </Button>
+            </Modal.Footer>
+          </Modal.Dialog>
+        </Modal.Container>
+      </Modal.Backdrop>
     </Card>
   );
 }

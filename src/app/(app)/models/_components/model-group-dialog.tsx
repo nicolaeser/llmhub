@@ -3,27 +3,25 @@
 import { useState, useTransition } from "react";
 import {
   Button,
+  Card,
   Checkbox,
   CheckboxGroup,
   Description,
-  Disclosure,
-  DisclosureGroup,
-  Fieldset,
   Input,
   Label,
   ListBox,
   Select,
-  Separator,
   Switch,
   TextField,
   toast,
   type useOverlayState,
 } from "@heroui/react";
-import { Plus } from "lucide-react";
+import { Plus, Route } from "lucide-react";
 import { useTranslations } from "next-intl";
-import FormDialog from "@/components/console/form-dialog";
+import IconTile from "@/components/console/icon-tile";
 import MultiPicker from "@/components/console/multi-picker";
 import SearchSelect from "@/components/console/search-select";
+import StepDialog, { type DialogStep } from "@/components/console/step-dialog";
 import { modelRole, type ModelChoice } from "@/lib/models/model-role";
 import { useErrorToast } from "@/components/console/use-error-toast";
 import { createModelGroupAction, updateModelGroupAction } from "../_action";
@@ -42,6 +40,8 @@ import {
   withCatalogPrice,
   type BillingMode,
 } from "./deployment-draft";
+import { DEFAULT_STRATEGY } from "./group-summary";
+import { useGroupSummary } from "./use-group-summary";
 
 const AUTO_ROUTE_MODES = ["inherit", "on", "off"] as const;
 
@@ -73,8 +73,9 @@ export default function ModelGroupDialog({
   const t = useTranslations("Models");
   const tCommon = useTranslations("Common");
   const showError = useErrorToast();
+  const summarize = useGroupSummary(providers);
   const [alias, setAlias] = useState(editing?.alias ?? "");
-  const [strategy, setStrategy] = useState(editing?.strategy || "least_inflight");
+  const [strategy, setStrategy] = useState(editing?.strategy || DEFAULT_STRATEGY);
   const [retries, setRetries] = useState(String(editing?.numRetries ?? 2));
   const [overflow, setOverflow] = useState(editing?.overflowGroup ?? "");
   const [fallbacks, setFallbacks] = useState<string[]>(editing?.fallbackGroups ?? []);
@@ -115,12 +116,19 @@ export default function ModelGroupDialog({
       validPrice(price.output) &&
       priceWindows.every(windowValid) &&
       !scheduleOverlaps(priceWindows));
-  const fallbackCount = fallbacks.length + (overflow ? 1 : 0);
+  const preview = summarize({
+    deployments: deps.map((dep) => ({ providerId: dep.providerId || null, kind: dep.kind, model: dep.model })),
+    strategy,
+    fallbackGroups: fallbacks,
+    overflowGroup: overflow,
+    billingMode,
+    priceInput: price.input,
+    priceOutput: price.output,
+    priceWindows: priceWindows.length,
+  });
 
   function setDep(i: number, patch: Partial<DeploymentDraft>) {
-    setDeps((cur) =>
-      cur.map((d, idx) => (idx === i ? { ...d, ...withCatalogPrice(d, patch, providers) } : d)),
-    );
+    setDeps((cur) => cur.map((d, idx) => (idx === i ? { ...d, ...withCatalogPrice(d, patch, providers) } : d)));
   }
 
   function save(close: () => void) {
@@ -150,9 +158,7 @@ export default function ModelGroupDialog({
         fallbackGroups: fallbacks,
         deployments: deps.filter((d) => d.model.trim()).map(deploymentInput),
       };
-      const result = editing
-        ? await updateModelGroupAction(body)
-        : await createModelGroupAction(body);
+      const result = editing ? await updateModelGroupAction(body) : await createModelGroupAction(body);
       if (isActionFail(result)) {
         showError(result.error);
         return;
@@ -163,68 +169,59 @@ export default function ModelGroupDialog({
     });
   }
 
-  return (
-    <FormDialog
-      state={state}
-      size="lg"
-      title={t("formTitle", { mode: editing ? "edit" : "add" })}
-      description={t("addHint")}
-      submitLabel={t("formSubmit", { mode })}
-      pending={pending}
-      isSubmitDisabled={!alias.trim() || !pricesValid}
-      onSubmit={save}
-    >
-      <TextField
-        fullWidth
-        isRequired
-        value={alias}
-        onChange={(value) => setAlias(value.toLowerCase())}
-        isDisabled={Boolean(editing) || pending}
-      >
-        <Label>{t("fields.alias")}</Label>
-        <Input placeholder="gpt-5.5" />
-        <Description>{t("fields.aliasHint")}</Description>
-      </TextField>
-      <Switch isSelected={enabled} onChange={setEnabled} isDisabled={pending}>
-        <Switch.Content>
-          <Switch.Control>
-            <Switch.Thumb />
-          </Switch.Control>
-          <Label>{t("fields.enabled")}</Label>
-        </Switch.Content>
-        <Description>{t("fields.enabledHint")}</Description>
-      </Switch>
+  const previewCard = (
+    <Card variant="secondary" className="flex-row items-start gap-3" aria-live="polite">
+      <IconTile icon={Route} size="sm" tone={preview.summary.spread === "none" ? "warning" : "accent"} />
+      <div className="min-w-0 space-y-1">
+        <p className="text-xs text-muted">{t("previewTitle", { alias: alias.trim() || "alias" })}</p>
+        <p className="text-sm break-words text-foreground">{preview.sentence}</p>
+        {preview.pricing ? <p className="text-xs break-words text-muted">{preview.pricing}</p> : null}
+      </div>
+    </Card>
+  );
 
-      <Separator />
+  const nameStep: DialogStep = {
+    id: "name",
+    title: t("steps.name.title"),
+    description: t("steps.name.description"),
+    isValid: Boolean(alias.trim()),
+    content: (
+      <>
+        <TextField
+          fullWidth
+          isRequired
+          autoFocus={!editing}
+          value={alias}
+          onChange={(value) => setAlias(value.toLowerCase())}
+          isDisabled={Boolean(editing) || pending}
+        >
+          <Label>{t("fields.alias")}</Label>
+          <Input placeholder="gpt-5.5" />
+          <Description>{t("fields.aliasHint")}</Description>
+        </TextField>
+        <div className="grid gap-4 sm:grid-cols-2 sm:items-start">
+          <TextField fullWidth value={displayName} onChange={setDisplayName} isDisabled={pending}>
+            <Label>{t("fields.displayName")}</Label>
+            <Input />
+            <Description>{t("fields.displayNameHint")}</Description>
+          </TextField>
+          <TextField fullWidth value={vendor} onChange={setVendor} isDisabled={pending}>
+            <Label>{t("fields.vendor")}</Label>
+            <Input placeholder="anthropic" />
+            <Description>{t("fields.vendorHint")}</Description>
+          </TextField>
+        </div>
+      </>
+    ),
+  };
 
-      <Fieldset className="gap-3">
-        <Fieldset.Legend>{t("sections.endpoints")}</Fieldset.Legend>
-        <p className="text-sm text-muted">{t("sections.endpointsHint")}</p>
-        {deps.length > 1 ? (
-          <Select
-            selectedKey={strategy}
-            onSelectionChange={(key) => setStrategy(String(key))}
-            isDisabled={pending}
-            fullWidth
-          >
-            <Label>{t("fields.strategy")}</Label>
-            <Select.Trigger>
-              <Select.Value />
-              <Select.Indicator />
-            </Select.Trigger>
-            <Select.Popover>
-              <ListBox aria-label={t("fields.strategy")}>
-                {STRATEGIES.map((s) => (
-                  <ListBox.Item key={s} id={s} textValue={t(`strategies.${s}`)}>
-                    {t(`strategies.${s}`)}
-                    <ListBox.ItemIndicator />
-                  </ListBox.Item>
-                ))}
-              </ListBox>
-            </Select.Popover>
-            <Description>{t("strategyHint", { strategy })}</Description>
-          </Select>
-        ) : null}
+  const endpointsStep: DialogStep = {
+    id: "endpoints",
+    title: t("steps.endpoints.title"),
+    description: t("steps.endpoints.description"),
+    optional: Boolean(editing),
+    content: (
+      <>
         {deps.map((d, i) => (
           <DeploymentCard
             key={d.id ?? i}
@@ -250,11 +247,79 @@ export default function ModelGroupDialog({
             {t("addEndpoint")}
           </Button>
         </div>
-      </Fieldset>
+        {deps.length > 1 ? (
+          <Select
+            selectedKey={strategy}
+            onSelectionChange={(key) => setStrategy(String(key))}
+            isDisabled={pending}
+            fullWidth
+          >
+            <Label>{t("fields.strategy")}</Label>
+            <Select.Trigger>
+              <Select.Value />
+              <Select.Indicator />
+            </Select.Trigger>
+            <Select.Popover>
+              <ListBox aria-label={t("fields.strategy")}>
+                {STRATEGIES.map((s) => (
+                  <ListBox.Item key={s} id={s} textValue={t(`strategies.${s}`)}>
+                    {t(`strategies.${s}`)}
+                    <ListBox.ItemIndicator />
+                  </ListBox.Item>
+                ))}
+              </ListBox>
+            </Select.Popover>
+            <Description>{t("strategyHint", { strategy })}</Description>
+          </Select>
+        ) : null}
+        {previewCard}
+      </>
+    ),
+  };
 
-      <Separator />
+  const fallbacksStep: DialogStep = {
+    id: "fallbacks",
+    title: t("steps.fallbacks.title"),
+    description: t("steps.fallbacks.description"),
+    optional: true,
+    content: (
+      <>
+        <MultiPicker
+          label={t("fields.fallbacks")}
+          placeholder={t("fields.fallbacksPlaceholder")}
+          searchLabel={tCommon("search")}
+          emptyLabel={tCommon("noResults")}
+          items={otherModels.map(modelOption)}
+          selected={fallbacks}
+          onChange={setFallbacks}
+          isDisabled={pending}
+        />
+        <SearchSelect
+          label={t("fields.overflow")}
+          description={t("fields.overflowHint")}
+          items={overflowItems}
+          value={overflow || "none"}
+          onChange={(next) => setOverflow(next === "none" ? "" : next)}
+          isDisabled={pending}
+        />
+        <TextField fullWidth value={retries} onChange={setRetries} isDisabled={pending}>
+          <Label>{t("fields.retries")}</Label>
+          <Input inputMode="numeric" />
+          <Description>{t("fields.retriesHint")}</Description>
+        </TextField>
+        {previewCard}
+      </>
+    ),
+  };
 
-      <div className="flex flex-col gap-3">
+  const pricingStep: DialogStep = {
+    id: "pricing",
+    title: t("steps.pricing.title"),
+    description: t("steps.pricing.description"),
+    optional: true,
+    isValid: pricesValid,
+    content: (
+      <>
         <Select
           selectedKey={billingMode}
           onSelectionChange={(key) => setBillingMode(billingModeOf(String(key)))}
@@ -289,107 +354,71 @@ export default function ModelGroupDialog({
             onTimeZoneChange={setPriceTimeZone}
           />
         ) : null}
-      </div>
+      </>
+    ),
+  };
 
-      <DisclosureGroup allowsMultipleExpanded>
-        <Separator />
-        <Disclosure>
-          <Disclosure.Heading>
-            <Disclosure.Trigger className="flex w-full items-center justify-between gap-2 py-3 text-sm font-medium">
-              <span className="flex-1 text-left">{t("sections.fallbacks")}</span>
-              <span className="text-xs font-normal text-muted">
-                {t("sections.fallbacksSummary", { count: fallbackCount })}
-              </span>
-              <Disclosure.Indicator />
-            </Disclosure.Trigger>
-          </Disclosure.Heading>
-          <Disclosure.Content>
-            <Disclosure.Body className="flex flex-col gap-4 pb-3">
-              <p className="text-sm text-muted">{t("sections.fallbacksHint")}</p>
-              <MultiPicker
-                label={t("fields.fallbacks")}
-                placeholder={t("fields.fallbacksPlaceholder")}
-                searchLabel={tCommon("search")}
-                emptyLabel={tCommon("noResults")}
-                items={otherModels.map(modelOption)}
-                selected={fallbacks}
-                onChange={setFallbacks}
-                isDisabled={pending}
-              />
-              <SearchSelect
-                label={t("fields.overflow")}
-                description={t("fields.overflowHint")}
-                items={overflowItems}
-                value={overflow || "none"}
-                onChange={(next) => setOverflow(next === "none" ? "" : next)}
-                isDisabled={pending}
-              />
-              <TextField fullWidth value={retries} onChange={setRetries} isDisabled={pending}>
-                <Label>{t("fields.retries")}</Label>
-                <Input inputMode="numeric" />
-                <Description>{t("fields.retriesHint")}</Description>
-              </TextField>
-            </Disclosure.Body>
-          </Disclosure.Content>
-        </Disclosure>
-        <Separator />
-        <Disclosure>
-          <Disclosure.Heading>
-            <Disclosure.Trigger className="flex w-full items-center justify-between gap-2 py-3 text-sm font-medium">
-              <span>{tCommon("advanced")}</span>
-              <Disclosure.Indicator />
-            </Disclosure.Trigger>
-          </Disclosure.Heading>
-          <Disclosure.Content>
-            <Disclosure.Body className="flex flex-col gap-4 pb-3">
-              <div className="grid gap-4 sm:grid-cols-2 sm:items-start">
-                <TextField fullWidth value={displayName} onChange={setDisplayName} isDisabled={pending}>
-                  <Label>{t("fields.displayName")}</Label>
-                  <Input />
-                  <Description>{t("fields.displayNameHint")}</Description>
-                </TextField>
-                <TextField fullWidth value={vendor} onChange={setVendor} isDisabled={pending}>
-                  <Label>{t("fields.vendor")}</Label>
-                  <Input placeholder="anthropic" />
-                  <Description>{t("fields.vendorHint")}</Description>
-                </TextField>
-              </div>
-              <SearchSelect
-                label={t("fields.autoRoutes")}
-                description={t("fields.autoRoutesHint")}
-                items={AUTO_ROUTE_MODES.map((option) => ({
-                  id: option,
-                  label: t("fields.autoRoutesMode", { mode: option }),
-                }))}
-                value={autoRoutes === null ? "inherit" : autoRoutes ? "on" : "off"}
-                onChange={(option) => setAutoRoutes(option === "inherit" ? null : option === "on")}
-                isDisabled={pending}
-              />
-              <CheckboxGroup
-                value={variants}
-                onChange={(next) => setVariants(MODEL_VARIANTS.filter((variant) => next.includes(variant)))}
-                isDisabled={pending}
-              >
-                <Label>{t("fields.variants")}</Label>
-                <Description>{t("fields.variantsHint")}</Description>
-                {MODEL_VARIANTS.map((variant) => (
-                  <Checkbox key={variant} value={variant}>
-                    <Checkbox.Content>
-                      <Checkbox.Control>
-                        <Checkbox.Indicator />
-                      </Checkbox.Control>
-                      <Label>
-                        {t("fields.variantLabel", { variant, alias: variantAlias(alias.trim() || "alias", variant) })}
-                      </Label>
-                    </Checkbox.Content>
-                    <Description>{t("fields.variantHint", { variant })}</Description>
-                  </Checkbox>
-                ))}
-              </CheckboxGroup>
-            </Disclosure.Body>
-          </Disclosure.Content>
-        </Disclosure>
-      </DisclosureGroup>
-    </FormDialog>
+  const advancedStep: DialogStep = {
+    id: "advanced",
+    title: t("steps.advanced.title"),
+    description: t("steps.advanced.description"),
+    optional: true,
+    content: (
+      <>
+        <Switch isSelected={enabled} onChange={setEnabled} isDisabled={pending}>
+          <Switch.Content>
+            <Switch.Control>
+              <Switch.Thumb />
+            </Switch.Control>
+            <Label>{t("fields.enabled")}</Label>
+          </Switch.Content>
+          <Description>{t("fields.enabledHint")}</Description>
+        </Switch>
+        <SearchSelect
+          label={t("fields.autoRoutes")}
+          description={t("fields.autoRoutesHint")}
+          items={AUTO_ROUTE_MODES.map((option) => ({
+            id: option,
+            label: t("fields.autoRoutesMode", { mode: option }),
+          }))}
+          value={autoRoutes === null ? "inherit" : autoRoutes ? "on" : "off"}
+          onChange={(option) => setAutoRoutes(option === "inherit" ? null : option === "on")}
+          isDisabled={pending}
+        />
+        <CheckboxGroup
+          value={variants}
+          onChange={(next) => setVariants(MODEL_VARIANTS.filter((variant) => next.includes(variant)))}
+          isDisabled={pending}
+        >
+          <Label>{t("fields.variants")}</Label>
+          <Description>{t("fields.variantsHint")}</Description>
+          {MODEL_VARIANTS.map((variant) => (
+            <Checkbox key={variant} value={variant}>
+              <Checkbox.Content>
+                <Checkbox.Control>
+                  <Checkbox.Indicator />
+                </Checkbox.Control>
+                <Label>{t("fields.variantLabel", { variant, alias: variantAlias(alias.trim() || "alias", variant) })}</Label>
+              </Checkbox.Content>
+              <Description>{t("fields.variantHint", { variant })}</Description>
+            </Checkbox>
+          ))}
+        </CheckboxGroup>
+      </>
+    ),
+  };
+
+  return (
+    <StepDialog
+      state={state}
+      size="lg"
+      title={editing ? t("formTitle", { mode: "edit" }) : t("formTitle", { mode: "add" })}
+      description={editing ? editing.alias : t("addHint")}
+      steps={[nameStep, endpointsStep, fallbacksStep, pricingStep, advancedStep]}
+      submitLabel={t("formSubmit", { mode })}
+      pending={pending}
+      isSubmitDisabled={!alias.trim() || !pricesValid}
+      onSubmit={save}
+    />
   );
 }

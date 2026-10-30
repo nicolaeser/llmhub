@@ -30,7 +30,7 @@ import { STRATEGY_ICONS } from "./account-routing-picker";
 import { accountMenuActions, accountRow, type AccountMenuAction, type AccountRow } from "./account-rows";
 import { ACCOUNT_STATE_COLOR, type CountedState } from "./account-status";
 import LimitMeter, { ResetLine } from "./limit-meter";
-import RowMenu, { type RowMenuItem } from "./row-menu";
+import RowMenu, { type RowMenuItem } from "@/components/providers/row-menu";
 
 const MENU_ICONS = {
   details: Info,

@@ -154,7 +154,7 @@ export default function LoggingTab() {
   );
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-8">
       <SettingsLead description={t("description")} canManage={view.canManage} />
       <SettingSection
         title={t("alerts")}

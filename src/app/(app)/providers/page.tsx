@@ -31,8 +31,7 @@ import AddProviderDialog from "./_components/add-provider-dialog";
 import ApiProviders from "./_components/api-providers";
 import AuthFilesDialog from "./_components/auth-files-dialog";
 import ImportModelsDialog from "./_components/import-models-dialog";
-import KeyUsageTab from "./_components/key-usage-tab";
-import LinksTab, { useSubAddLinks } from "./_components/links-tab";
+import LinksDrawer, { useLinksDrawer, useSubAddLinks } from "./_components/links-drawer";
 import ProviderDialog from "./_components/provider-dialog";
 import ProviderHealth from "./_components/provider-health";
 import { filterOf, poolTab, SUBSCRIPTION_CATALOG } from "./_components/provider-options";
@@ -41,7 +40,7 @@ import SubAddDialog from "./_components/sub-add-dialog";
 import SubscriptionAccounts from "./_components/subscription-accounts";
 import { useAccountLimits } from "./_components/use-account-limits";
 
-const TABS = ["api", "subscriptions", "usage", "links", "health"] as const satisfies readonly ProvidersTab[];
+const TABS = ["api", "subscriptions", "health"] as const satisfies readonly ProvidersTab[];
 
 const SUBSCRIPTION_KINDS = SUBSCRIPTION_CATALOG.map((spec) => spec.kind);
 
@@ -54,6 +53,7 @@ export default function ProvidersPage() {
   const signInRows = data ? data.connected.filter((row) => isSignInKind(row.kind)) : null;
   const limits = useAccountLimits(signInRows, page.reload);
   const links = useSubAddLinks();
+  const linksDrawer = useLinksDrawer();
   const antigravity = useActionData<AntigravityClientState>(loadAntigravityConfigAction);
   const [spec, setSpec] = useState<ProviderKindSpec | null>(null);
   const [edit, setEdit] = useState<ProviderView | null>(null);
@@ -107,7 +107,6 @@ export default function ProvidersPage() {
 
   function linkCreated(result: SubAddCreated) {
     links.page.setData((current) => ({ ...current, links: [result.link, ...current.links] }));
-    selectTab("links");
   }
 
   function openAdd(kind: string | null, filter: AddProviderFilter) {
@@ -154,6 +153,7 @@ export default function ProvidersPage() {
   }
 
   const { canManage } = data;
+  const linkCount = links.page.data?.links.length ?? null;
   const antigravityState = antigravity.data;
   const antigravityReady = antigravityState === null ? null : antigravityState.saved || antigravityState.bundled;
 
@@ -185,22 +185,11 @@ export default function ProvidersPage() {
           onAntigravity={antigravity.setData}
           onAdd={(kind) => openAdd(kind, "subscription")}
           onCreateLink={links.openCreate}
+          canSeeKeyUsage={data.canSeeKeyUsage}
+          linkCount={linkCount}
+          onOpenLinks={() => linksDrawer.setOpen(true)}
         />
       ),
-    },
-    ...(data.canSeeKeyUsage
-      ? [
-          {
-            id: "usage" as const,
-            label: t("tabs", { tab: "usage" }),
-            panel: <KeyUsageTab rows={signInRows ?? []} limits={limits} />,
-          },
-        ]
-      : []),
-    {
-      id: "links",
-      label: t("tabs", { tab: "links" }),
-      panel: <LinksTab links={links} canManage={canManage} onCreate={() => links.openCreate(null)} />,
     },
     { id: "health", label: t("tabs", { tab: "health" }), panel: <ProviderHealth /> },
   ] satisfies (PageTab & { id: ProvidersTab })[];
@@ -214,14 +203,23 @@ export default function ProvidersPage() {
         actions={
           canManage ? (
             <ProvidersToolbar
+              linkCount={linkCount}
               onImport={() => openImportFiles("files")}
               onCreateLink={() => links.openCreate(null)}
+              onOpenLinks={() => linksDrawer.setOpen(true)}
               onAdd={() => openAdd(null, "all")}
             />
           ) : undefined
         }
       />
       <PageTabs label={t("tabsLabel")} tabs={tabs} />
+      <LinksDrawer
+        links={links}
+        open={linksDrawer.open}
+        canManage={canManage}
+        onOpenChange={linksDrawer.setOpen}
+        onCreate={() => links.openCreate(null)}
+      />
 
       {canManage ? (
         <>

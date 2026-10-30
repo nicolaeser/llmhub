@@ -24,6 +24,7 @@ import type { FeatureModelChoice } from "@/types/models";
 import type { KnowledgeCompany, KnowledgeProject, VectorStoreDefaults, VectorStoreView } from "@/types/rag";
 import { useErrorToast } from "@/components/console/use-error-toast";
 import FormDialog from "@/components/console/form-dialog";
+import StepDialog from "@/components/console/step-dialog";
 import { InternalBadge } from "@/components/console/subscription-badge";
 
 const DEFAULT_KEY = ":default";
@@ -145,44 +146,36 @@ export default function StoreDialog({
     });
   }
 
-  return (
-    <FormDialog
-      state={state}
-      size="lg"
-      title={t("dialog.title", { mode })}
-      submitLabel={t("dialog.submit", { mode })}
-      pending={pending}
-      isSubmitDisabled={!valid}
-      onSubmit={save}
-    >
-      {editing ? null : (
-        <>
-          <SearchSelect
-            isRequired
-            label={t("dialog.company")}
-            placeholder={t("dialog.companyPlaceholder")}
-            items={companies.map((company) => ({ id: company.id, label: company.alias }))}
-            value={orgId}
-            onChange={(next) => {
-              setOrgId(next);
-              setProjectId("");
-            }}
-            isDisabled={pending || companies.length < 2}
-          />
-          <SearchSelect
-            label={t("dialog.project")}
-            items={[
-              { id: WHOLE_COMPANY_KEY, label: t("dialog.wholeCompany") },
-              ...companyProjects.map((project) => ({ id: project.id, label: project.alias })),
-            ]}
-            value={projectId || WHOLE_COMPANY_KEY}
-            onChange={(next) => setProjectId(next === WHOLE_COMPANY_KEY ? "" : next)}
-            isDisabled={pending || !orgId}
-            description={t("dialog.projectHint", { scope: projectId ? "project" : "organization" })}
-          />
-          <Separator />
-        </>
-      )}
+  const ownerFields = (
+    <>
+      <SearchSelect
+        isRequired
+        label={t("dialog.company")}
+        placeholder={t("dialog.companyPlaceholder")}
+        items={companies.map((company) => ({ id: company.id, label: company.alias }))}
+        value={orgId}
+        onChange={(next) => {
+          setOrgId(next);
+          setProjectId("");
+        }}
+        isDisabled={pending || companies.length < 2}
+      />
+      <SearchSelect
+        label={t("dialog.project")}
+        items={[
+          { id: WHOLE_COMPANY_KEY, label: t("dialog.wholeCompany") },
+          ...companyProjects.map((project) => ({ id: project.id, label: project.alias })),
+        ]}
+        value={projectId || WHOLE_COMPANY_KEY}
+        onChange={(next) => setProjectId(next === WHOLE_COMPANY_KEY ? "" : next)}
+        isDisabled={pending || !orgId}
+        description={t("dialog.projectHint", { scope: projectId ? "project" : "organization" })}
+      />
+    </>
+  );
+
+  const identityFields = (
+    <>
       <TextField
         fullWidth
         isRequired
@@ -193,112 +186,60 @@ export default function StoreDialog({
         isInvalid={name.length > 0 && !nameValid}
       >
         <Label>{t("dialog.name")}</Label>
-        <Input />
+        <Input placeholder={t("dialog.namePlaceholder")} />
         <FieldError>{t("dialog.nameRequired")}</FieldError>
       </TextField>
       <TextField fullWidth value={description} onChange={setDescription} maxLength={512} isDisabled={pending}>
         <Label>{t("dialog.description")}</Label>
         <Input />
+        <Description>{t("dialog.descriptionHint")}</Description>
       </TextField>
-      <Separator />
-      {editing ? (
-        <p className="text-sm text-muted">
-          {t("dialog.fixed", {
-            model: editing.embeddingModel,
-            dimensions: editing.embeddingDimensions,
-            chunk: editing.chunkMaxTokens,
-            overlap: editing.chunkOverlapTokens,
+    </>
+  );
+
+  const embeddingFields = (
+    <>
+      <div className="space-y-2">
+        <SearchSelect
+          isRequired={!defaults.embedding_model}
+          label={t("dialog.embeddingModel")}
+          placeholder={t("dialog.embeddingPlaceholder")}
+          items={
+            defaults.embedding_model
+              ? modelItems("embedding", embeddingModel, defaults.embedding_model)
+              : choicesForRole(models, "embedding", embeddingModel).map((model) => modelPickerItem(model, internal))
+          }
+          value={embeddingModel || (defaults.embedding_model ? DEFAULT_KEY : "")}
+          onChange={(key) => setEmbeddingModel(pickModel(key))}
+          isDisabled={pending}
+          description={t("dialog.embeddingHint", {
+            hasDefault: defaults.embedding_model ? "true" : "false",
           })}
-        </p>
-      ) : (
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div className="space-y-2 sm:col-span-2">
-            <SearchSelect
-              isRequired={!defaults.embedding_model}
-              label={t("dialog.embeddingModel")}
-              placeholder={t("dialog.embeddingPlaceholder")}
-              items={
-                defaults.embedding_model
-                  ? modelItems("embedding", embeddingModel, defaults.embedding_model)
-                  : choicesForRole(models, "embedding", embeddingModel).map((model) => modelPickerItem(model, internal))
-              }
-              value={embeddingModel || (defaults.embedding_model ? DEFAULT_KEY : "")}
-              onChange={(key) => setEmbeddingModel(pickModel(key))}
-              isDisabled={pending}
-              description={t("dialog.embeddingHint", {
-                hasDefault: defaults.embedding_model ? "true" : "false",
-              })}
-            />
-            {testButton("embedding", embeddingModel, defaults.embedding_model)}
-          </div>
-          <NumberField
-            fullWidth
-            value={dimensions}
-            onChange={setDimensions}
-            minValue={0}
-            maxValue={MAX_DIMENSIONS}
-            formatOptions={formats.number.integer}
-            isDisabled={pending}
-            className="sm:col-span-2"
-          >
-            <Label>{t("dialog.dimensions")}</Label>
-            <NumberField.Group>
-              <NumberField.DecrementButton />
-              <NumberField.Input />
-              <NumberField.IncrementButton />
-            </NumberField.Group>
-            <Description>{t("dialog.dimensionsHint")}</Description>
-          </NumberField>
-          <NumberField
-            fullWidth
-            isRequired
-            value={chunk}
-            onChange={setChunk}
-            minValue={MIN_CHUNK_TOKENS}
-            maxValue={MAX_CHUNK_TOKENS}
-            step={50}
-            formatOptions={formats.number.integer}
-            isDisabled={pending}
-            isInvalid={!chunkValid}
-          >
-            <Label>{t("dialog.chunkSize")}</Label>
-            <NumberField.Group>
-              <NumberField.DecrementButton />
-              <NumberField.Input />
-              <NumberField.IncrementButton />
-            </NumberField.Group>
-            {chunkValid ? (
-              <Description>{t("dialog.chunkSizeHint")}</Description>
-            ) : (
-              <FieldError>{t("dialog.chunkSizeHint")}</FieldError>
-            )}
-          </NumberField>
-          <NumberField
-            fullWidth
-            isRequired
-            value={overlap}
-            onChange={setOverlap}
-            minValue={0}
-            maxValue={maxOverlap}
-            step={50}
-            formatOptions={formats.number.integer}
-            isDisabled={pending}
-            isInvalid={!overlapValid}
-          >
-            <Label>{t("dialog.chunkOverlap")}</Label>
-            <NumberField.Group>
-              <NumberField.DecrementButton />
-              <NumberField.Input />
-              <NumberField.IncrementButton />
-            </NumberField.Group>
-            {overlapValid ? (
-              <Description>{t("dialog.chunkOverlapHint", { max: maxOverlap })}</Description>
-            ) : (
-              <FieldError>{t("dialog.chunkOverlapInvalid", { max: maxOverlap })}</FieldError>
-            )}
-          </NumberField>
-        </div>
-      )}
+        />
+        {testButton("embedding", embeddingModel, defaults.embedding_model)}
+      </div>
+      <NumberField
+        fullWidth
+        value={dimensions}
+        onChange={setDimensions}
+        minValue={0}
+        maxValue={MAX_DIMENSIONS}
+        formatOptions={formats.number.integer}
+        isDisabled={pending}
+      >
+        <Label>{t("dialog.dimensions")}</Label>
+        <NumberField.Group>
+          <NumberField.DecrementButton />
+          <NumberField.Input />
+          <NumberField.IncrementButton />
+        </NumberField.Group>
+        <Description>{t("dialog.dimensionsHint")}</Description>
+      </NumberField>
+    </>
+  );
+
+  const helperModels = (
+    <>
       <div className="space-y-2">
         <SearchSelect
           label={t("dialog.rerankModel")}
@@ -321,23 +262,160 @@ export default function StoreDialog({
         />
         {testButton("ocr", ocrModel, defaults.ocr_model)}
       </div>
+    </>
+  );
+
+  const chunkFields = (
+    <div className="grid gap-4 sm:grid-cols-2">
       <NumberField
         fullWidth
-        value={expiry}
-        onChange={setExpiry}
-        minValue={1}
-        maxValue={MAX_EXPIRY_DAYS}
+        isRequired
+        value={chunk}
+        onChange={setChunk}
+        minValue={MIN_CHUNK_TOKENS}
+        maxValue={MAX_CHUNK_TOKENS}
+        step={50}
         formatOptions={formats.number.integer}
         isDisabled={pending}
+        isInvalid={!chunkValid}
       >
-        <Label>{t("dialog.expiry")}</Label>
+        <Label>{t("dialog.chunkSize")}</Label>
         <NumberField.Group>
           <NumberField.DecrementButton />
           <NumberField.Input />
           <NumberField.IncrementButton />
         </NumberField.Group>
-        <Description>{t("dialog.expiryHint")}</Description>
+        {chunkValid ? (
+          <Description>{t("dialog.chunkSizeHint")}</Description>
+        ) : (
+          <FieldError>{t("dialog.chunkSizeHint")}</FieldError>
+        )}
       </NumberField>
-    </FormDialog>
+      <NumberField
+        fullWidth
+        isRequired
+        value={overlap}
+        onChange={setOverlap}
+        minValue={0}
+        maxValue={maxOverlap}
+        step={50}
+        formatOptions={formats.number.integer}
+        isDisabled={pending}
+        isInvalid={!overlapValid}
+      >
+        <Label>{t("dialog.chunkOverlap")}</Label>
+        <NumberField.Group>
+          <NumberField.DecrementButton />
+          <NumberField.Input />
+          <NumberField.IncrementButton />
+        </NumberField.Group>
+        {overlapValid ? (
+          <Description>{t("dialog.chunkOverlapHint", { max: maxOverlap })}</Description>
+        ) : (
+          <FieldError>{t("dialog.chunkOverlapInvalid", { max: maxOverlap })}</FieldError>
+        )}
+      </NumberField>
+    </div>
+  );
+
+  const expiryField = (
+    <NumberField
+      fullWidth
+      value={expiry}
+      onChange={setExpiry}
+      minValue={1}
+      maxValue={MAX_EXPIRY_DAYS}
+      formatOptions={formats.number.integer}
+      isDisabled={pending}
+    >
+      <Label>{t("dialog.expiry")}</Label>
+      <NumberField.Group>
+        <NumberField.DecrementButton />
+        <NumberField.Input />
+        <NumberField.IncrementButton />
+      </NumberField.Group>
+      <Description>{t("dialog.expiryHint")}</Description>
+    </NumberField>
+  );
+
+  if (editing) {
+    return (
+      <FormDialog
+        state={state}
+        size="lg"
+        title={t("dialog.title", { mode })}
+        description={t("dialog.editHint")}
+        submitLabel={t("dialog.submit", { mode })}
+        pending={pending}
+        isSubmitDisabled={!valid}
+        onSubmit={save}
+      >
+        {identityFields}
+        <Separator />
+        {helperModels}
+        {expiryField}
+        <p className="text-xs text-muted">
+          {t("dialog.fixed", {
+            model: editing.embeddingModel,
+            dimensions: editing.embeddingDimensions,
+            chunk: editing.chunkMaxTokens,
+            overlap: editing.chunkOverlapTokens,
+          })}
+        </p>
+      </FormDialog>
+    );
+  }
+
+  return (
+    <StepDialog
+      state={state}
+      size="lg"
+      title={t("dialog.title", { mode })}
+      description={t("dialog.createHint")}
+      submitLabel={t("dialog.submit", { mode })}
+      pending={pending}
+      isSubmitDisabled={!valid}
+      onSubmit={save}
+      steps={[
+        {
+          id: "owner",
+          title: t("dialog.step", { step: "owner" }),
+          description: t("dialog.stepHint", { step: "owner" }),
+          isValid: Boolean(orgId) && nameValid,
+          content: (
+            <>
+              {ownerFields}
+              {identityFields}
+            </>
+          ),
+        },
+        {
+          id: "models",
+          title: t("dialog.step", { step: "models" }),
+          description: t("dialog.stepHint", { step: "models" }),
+          optional: Boolean(defaults.embedding_model),
+          isValid: embeddingValid,
+          content: (
+            <>
+              {embeddingFields}
+              {helperModels}
+            </>
+          ),
+        },
+        {
+          id: "indexing",
+          title: t("dialog.step", { step: "indexing" }),
+          description: t("dialog.stepHint", { step: "indexing" }),
+          optional: true,
+          isValid: chunkValid && overlapValid,
+          content: (
+            <>
+              {chunkFields}
+              {expiryField}
+            </>
+          ),
+        },
+      ]}
+    />
   );
 }

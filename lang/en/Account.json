@@ -2,6 +2,7 @@
   "title": "Account and security",
   "subtitle": "Your sign-in methods, active sessions, and security activity.",
   "owner": "Owner",
+  "tabs": "{tab, select, security {Sign-in} sessions {Sessions and activity} keys {Management API keys} preferences {Display} other {}}",
   "credentials": {
     "title": "Your API keys are disabled",
     "body": "Access was removed at the identity provider on {date}, so your API keys, management keys and playground access stopped working. {canRestore, select, true {You signed in again with a role and can enable them again.} other {Sign in again through the identity provider once you have a role, or ask an administrator.}}",

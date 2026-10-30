@@ -6,9 +6,9 @@ import {
   Button,
   Card,
   Chip,
+  Drawer,
   Dropdown,
   Label,
-  Modal,
   Separator,
   Switch,
   Tabs,
@@ -18,10 +18,11 @@ import { Braces, ChevronDown, Download, FileCode, FileText, Play, Route, type Lu
 import { useFormatter, useTranslations } from "next-intl";
 import { loadAliasesAction } from "../_action";
 import Markdown from "./markdown";
+import CopyButton from "@/components/console/copy-button";
 import SearchSelect from "@/components/console/search-select";
 import { SectionLoading } from "@/components/console/page-status";
 import { useGuardrailHitLabel } from "@/components/guardrails/guardrail-hit";
-import { useRouter } from "@/i18n/routing";
+import { Link, useRouter } from "@/i18n/routing";
 import { splitPiiPlaceholders } from "@/lib/gateway/safety/pii";
 import { isActionFail } from "@/lib/http/action-result";
 import type { RequestLogDetail, RequestLogExportFormat, TranscriptEntry } from "@/types/logs";
@@ -30,6 +31,7 @@ import LabelChips from "./label-chips";
 import PiiChip from "./pii-chip";
 import { PiiCode, PiiPlaceholder } from "./pii-placeholder";
 import PiiRestore from "./pii-restore";
+import StatusChip from "./status-chip";
 
 const EXPORT_FORMATS: { id: RequestLogExportFormat; icon: LucideIcon }[] = [
   { id: "pdf", icon: FileText },
@@ -102,9 +104,9 @@ function Json({ value }: { value: unknown }) {
   );
 }
 
-function Field({ label, children }: { label: string; children: ReactNode }) {
+function Field({ label, wide = false, children }: { label: string; wide?: boolean; children: ReactNode }) {
   return (
-    <div className="min-w-0">
+    <div className={wide ? "min-w-0 sm:col-span-2" : "min-w-0"}>
       <dt className="text-xs text-muted">{label}</dt>
       <dd className="text-sm break-words">{children}</dd>
     </div>
@@ -200,7 +202,8 @@ function Replay({ detail }: { detail: RequestLogDetail }) {
   }, [detail.model]);
 
   return (
-    <Modal.Footer className="flex-col items-stretch">
+    <section className="space-y-3" aria-label={t("replayTitle")}>
+      <h3 className="text-sm font-semibold">{t("replayTitle")}</h3>
       <p className="text-xs text-muted">{t("replayHint")}</p>
       <div className="flex flex-wrap items-end gap-3">
         <SearchSelect
@@ -222,7 +225,7 @@ function Replay({ detail }: { detail: RequestLogDetail }) {
           {t("replay")}
         </Button>
       </div>
-    </Modal.Footer>
+    </section>
   );
 }
 
@@ -249,89 +252,163 @@ export default function LogDetailDialog({
   const label = (kind: "key" | "user" | "member" | "org" | "team" | "project", name: string, id: string) =>
     name || (id ? t("deleted", { kind }) : tCommon("none"));
 
+  const facts = (current: RequestLogDetail) => [
+    { id: "cost", label: t("columns.cost"), value: format.number(current.cost, "price") },
+    {
+      id: "tokens",
+      label: t("columns.tokens"),
+      value: t("tokenFlow", { prompt: current.promptTokens, completion: current.completionTokens }),
+    },
+    { id: "latency", label: t("columns.latency"), value: t("latencyMs", { value: current.latencyMs }) },
+    {
+      id: "cache",
+      label: tDetail("cache"),
+      value: tDetail("cacheValue", { read: current.cacheReadTokens, written: current.cacheWriteTokens }),
+    },
+  ];
+
   return (
-    <Modal state={state}>
-      <Modal.Backdrop>
-        <Modal.Container scroll="inside">
-          <Modal.Dialog className="sm:min-w-lg sm:max-w-5xl">
-            <Modal.CloseTrigger aria-label={tCommon("close")} />
-            <Modal.Header>
-              <div className="flex flex-wrap items-start justify-between gap-3 pr-10">
-                <div className="min-w-0 space-y-1">
-                  <Modal.Heading>{tDetail("title")}</Modal.Heading>
-                  {detail ? (
-                    <p className="text-sm text-muted">
-                      {tDetail("subtitle", {
-                        model: detail.model,
-                        time: format.dateTime(new Date(detail.createdAt), "zoned"),
-                      })}
-                    </p>
-                  ) : null}
-                </div>
+    <Drawer.Backdrop variant="blur" isOpen={state.isOpen} onOpenChange={state.setOpen}>
+      <Drawer.Content placement="right">
+        <Drawer.Dialog className="w-full sm:w-2xl xl:w-3xl">
+          <Drawer.CloseTrigger aria-label={tCommon("close")} />
+          <Drawer.Header className="space-y-3 pr-10">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="min-w-0 space-y-1">
+                <Drawer.Heading className="break-words">{detail ? detail.model : tDetail("title")}</Drawer.Heading>
                 {detail ? (
-                  <Dropdown>
-                    <Button size="sm" variant="secondary">
-                      <Download size={14} aria-hidden />
-                      {tDetail("export")}
-                      <ChevronDown size={14} aria-hidden />
-                    </Button>
-                    <Dropdown.Popover>
-                      <Dropdown.Menu
-                        aria-label={tDetail("export")}
-                        onAction={(key) => onExport(String(key) as RequestLogExportFormat)}
-                      >
-                        {EXPORT_FORMATS.map(({ id, icon: Icon }) => (
-                          <Dropdown.Item key={id} id={id} textValue={tDetail("exportFormat", { format: id })}>
-                            <div className="flex items-center gap-2">
-                              <Icon size={14} aria-hidden />
-                              <Label>{tDetail("exportFormat", { format: id })}</Label>
-                            </div>
-                          </Dropdown.Item>
-                        ))}
-                      </Dropdown.Menu>
-                    </Dropdown.Popover>
-                  </Dropdown>
+                  <p className="text-sm text-muted">{format.dateTime(new Date(detail.createdAt), "zoned")}</p>
                 ) : null}
               </div>
-            </Modal.Header>
-            <Modal.Body className="space-y-5">
-              {!detail ? (
-                <SectionLoading shape="details" />
-              ) : (
-                <>
-                  {detail.error ? (
-                    <Alert status="danger">
-                      <Alert.Indicator />
-                      <Alert.Content>
-                        <Alert.Title>{tDetail("error")}</Alert.Title>
-                        <Alert.Description>{detail.error}</Alert.Description>
-                      </Alert.Content>
-                    </Alert>
-                  ) : null}
-                  <dl className="grid gap-x-4 gap-y-3 sm:grid-cols-2 lg:grid-cols-3">
+              {detail ? (
+                <Dropdown>
+                  <Button size="sm" variant="secondary">
+                    <Download size={14} aria-hidden />
+                    {tDetail("export")}
+                    <ChevronDown size={14} aria-hidden />
+                  </Button>
+                  <Dropdown.Popover placement="bottom end">
+                    <Dropdown.Menu
+                      aria-label={tDetail("export")}
+                      onAction={(key) => {
+                        const picked = EXPORT_FORMATS.find((item) => item.id === key);
+                        if (picked) onExport(picked.id);
+                      }}
+                    >
+                      {EXPORT_FORMATS.map(({ id, icon: Icon }) => (
+                        <Dropdown.Item key={id} id={id} textValue={tDetail("exportFormat", { format: id })}>
+                          <Icon size={14} aria-hidden />
+                          <Label>{tDetail("exportFormat", { format: id })}</Label>
+                        </Dropdown.Item>
+                      ))}
+                    </Dropdown.Menu>
+                  </Dropdown.Popover>
+                </Dropdown>
+              ) : null}
+            </div>
+            {detail ? (
+              <div className="flex flex-wrap items-center gap-1">
+                <StatusChip status={detail.status} outcome={detail.outcome} />
+                {detail.stream ? (
+                  <Chip size="sm" variant="soft" className="whitespace-nowrap">
+                    {tDetail("streamed")}
+                  </Chip>
+                ) : null}
+                {detail.agent ? (
+                  <Chip size="sm" variant="soft" className="whitespace-nowrap">
+                    {t("agent", { agent: detail.agent })}
+                  </Chip>
+                ) : null}
+              </div>
+            ) : null}
+          </Drawer.Header>
+          <Drawer.Body className="space-y-6">
+            {!detail ? (
+              <SectionLoading shape="details" />
+            ) : (
+              <>
+                {detail.error ? (
+                  <Alert status="danger">
+                    <Alert.Indicator />
+                    <Alert.Content>
+                      <Alert.Title>{tDetail("error")}</Alert.Title>
+                      <Alert.Description className="break-words">{detail.error}</Alert.Description>
+                    </Alert.Content>
+                  </Alert>
+                ) : null}
+                <Card variant="secondary">
+                  <Card.Content>
+                    <dl className="grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-4">
+                      {facts(detail).map((fact) => (
+                        <div key={fact.id} className="min-w-0">
+                          <dt className="text-xs text-muted">{fact.label}</dt>
+                          <dd className="text-sm font-medium break-words text-foreground tabular-nums">{fact.value}</dd>
+                        </div>
+                      ))}
+                    </dl>
+                  </Card.Content>
+                </Card>
+
+                <section className="space-y-3" aria-label={tDetail("caller")}>
+                  <h3 className="text-sm font-semibold">{tDetail("caller")}</h3>
+                  <dl className="grid gap-x-4 gap-y-3 sm:grid-cols-2">
+                    {detail.system ? (
+                      <Field label={t("columns.caller")}>
+                        {t("caller.system")}
+                        <span className="block text-xs text-muted">{t("caller.feature", { feature: detail.system })}</span>
+                      </Field>
+                    ) : null}
+                    <Field label={tDetail("key")}>
+                      {detail.keyId && detail.keyLabel ? (
+                        <Link href={`/keys/${encodeURIComponent(detail.keyId)}`} className="text-accent">
+                          {detail.keyLabel}
+                        </Link>
+                      ) : (
+                        label("key", detail.keyLabel, detail.keyId)
+                      )}
+                    </Field>
+                    <Field label={t("columns.org")}>
+                      {detail.orgId && detail.orgLabel ? (
+                        <Link href={`/companies/${encodeURIComponent(detail.orgId)}`} className="text-accent">
+                          {detail.orgLabel}
+                        </Link>
+                      ) : (
+                        label("org", detail.orgLabel, detail.orgId)
+                      )}
+                    </Field>
+                    <Field label={tDetail("member")}>{label("member", detail.memberLabel, detail.memberId)}</Field>
+                    <Field label={tDetail("user")}>{label("user", detail.userLabel, detail.userId)}</Field>
+                    <Field label={tDetail("team")}>{label("team", detail.teamLabel, detail.teamId)}</Field>
+                    <Field label={t("columns.project")}>{label("project", detail.projectLabel, detail.projectId)}</Field>
+                  </dl>
+                </section>
+
+                <Separator />
+                <section className="space-y-3" aria-label={tDetail("request")}>
+                  <h3 className="text-sm font-semibold">{tDetail("request")}</h3>
+                  <dl className="grid gap-x-4 gap-y-3 sm:grid-cols-2">
                     <Field label={tDetail("requestId")}>
-                      <span className="font-mono text-xs">{detail.id}</span>
+                      <span className="flex min-w-0 items-center gap-1">
+                        <span className="min-w-0 font-mono text-xs break-all">{detail.id}</span>
+                        <CopyButton text={detail.id} label={tDetail("copyId")} />
+                      </span>
                     </Field>
                     <Field label={t("columns.endpoint")}>
-                      <span className="font-mono text-xs">{detail.endpoint || tCommon("none")}</span>
-                    </Field>
-                    <Field label={t("columns.status")}>
-                      {t("statusOutcome", { status: detail.status, outcome: detail.outcome })}
+                      <span className="font-mono text-xs break-all">{detail.endpoint || tCommon("none")}</span>
                     </Field>
                     <Field label={tDetail("upstream")}>
                       {detail.upstreamModel
                         ? tDetail("upstreamValue", { provider: detail.provider, model: detail.upstreamModel })
                         : tCommon("none")}
                     </Field>
-                    <Field label={tDetail("stream")}>{tDetail("yesNo", { value: String(detail.stream) })}</Field>
                     <Field label={tDetail("tag")}>{detail.tag ? <PiiText text={detail.tag} /> : tCommon("none")}</Field>
-                    <Field label={t("labels.title")}>
+                    <Field label={t("labels.title")} wide>
                       {detail.labels.length ? <LabelChips labels={detail.labels} /> : tCommon("none")}
                     </Field>
-                    <Field label={tDetail("session")}>
+                    <Field label={tDetail("session")} wide>
                       {detail.sessionId ? (
                         <div className="flex flex-wrap items-center gap-2">
-                          <div className="min-w-0 font-mono break-all">
+                          <div className="min-w-0 font-mono text-xs break-all">
                             <PiiText text={detail.sessionId} />
                           </div>
                           {onOpenSession ? (
@@ -345,72 +422,48 @@ export default function LogDetailDialog({
                         tCommon("none")
                       )}
                     </Field>
-                    <Field label={tDetail("agent")}>
-                      {detail.agent ? t("agent", { agent: detail.agent }) : tCommon("none")}
-                    </Field>
-                    {detail.system ? (
-                      <Field label={t("columns.caller")}>
-                        {t("caller.system")}
-                        <span className="block text-xs text-muted">{t("caller.feature", { feature: detail.system })}</span>
-                      </Field>
-                    ) : null}
-                    <Field label={tDetail("key")}>{label("key", detail.keyLabel, detail.keyId)}</Field>
-                    <Field label={tDetail("user")}>{label("user", detail.userLabel, detail.userId)}</Field>
-                    <Field label={tDetail("member")}>{label("member", detail.memberLabel, detail.memberId)}</Field>
-                    <Field label={t("columns.org")}>{label("org", detail.orgLabel, detail.orgId)}</Field>
-                    <Field label={tDetail("team")}>{label("team", detail.teamLabel, detail.teamId)}</Field>
-                    <Field label={t("columns.project")}>{label("project", detail.projectLabel, detail.projectId)}</Field>
-                    <Field label={t("columns.latency")}>{t("latencyMs", { value: detail.latencyMs })}</Field>
-                    <Field label={t("columns.tokens")}>
-                      {t("tokenSplit", { prompt: detail.promptTokens, completion: detail.completionTokens })}
-                    </Field>
-                    <Field label={tDetail("cache")}>
-                      {tDetail("cacheValue", { read: detail.cacheReadTokens, written: detail.cacheWriteTokens })}
-                    </Field>
-                    <Field label={t("columns.cost")}>{format.number(detail.cost, "money")}</Field>
                   </dl>
-                  <Separator />
-                  <section className="space-y-3" aria-label={tDetail("privacy")}>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <h3 className="text-sm font-semibold">{tDetail("privacy")}</h3>
-                      <PiiChip
-                        outcome={detail.outcome}
-                        piiMode={detail.piiMode}
-                        piiInput={detail.piiInput}
-                        piiOutput={detail.piiOutput}
-                      />
-                      <GuardrailChip
-                        outcome={detail.outcome}
-                        guardInput={detail.guardInput}
-                        guardOutput={detail.guardOutput}
-                      />
-                    </div>
-                    <dl className="grid gap-x-4 gap-y-3 sm:grid-cols-3">
-                      <Field label={tDetail("piiFilter")}>
-                        {tDetail("piiMode", { mode: detail.piiMode || "none" })}
-                      </Field>
-                      <Field label={tDetail("piiPrompt")}>{entities(detail.piiInput)}</Field>
-                      <Field label={tDetail("piiResponse")}>{entities(detail.piiOutput)}</Field>
-                      <Field label={tDetail("guardPrompt")}>{hits(detail.guardInput)}</Field>
-                      <Field label={tDetail("guardResponse")}>{hits(detail.guardOutput)}</Field>
-                    </dl>
-                    {detail.piiRestore ? <PiiRestore restore={detail.piiRestore} /> : null}
-                    {detail.piiMode ? (
-                      <p className="text-xs text-muted">{tDetail("piiStored", { mode: detail.piiMode })}</p>
-                    ) : null}
-                  </section>
-                  <Separator />
-                  <section className="space-y-3" aria-label={tDetail("content")}>
-                    <h3 className="text-sm font-semibold">{tDetail("content")}</h3>
-                    <Content detail={detail} />
-                  </section>
-                </>
-              )}
-            </Modal.Body>
-            {detail?.replayable ? <Replay detail={detail} /> : null}
-          </Modal.Dialog>
-        </Modal.Container>
-      </Modal.Backdrop>
-    </Modal>
+                </section>
+
+                <Separator />
+                <section className="space-y-3" aria-label={tDetail("privacy")}>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h3 className="text-sm font-semibold">{tDetail("privacy")}</h3>
+                    <PiiChip
+                      outcome={detail.outcome}
+                      piiMode={detail.piiMode}
+                      piiInput={detail.piiInput}
+                      piiOutput={detail.piiOutput}
+                    />
+                    <GuardrailChip outcome={detail.outcome} guardInput={detail.guardInput} guardOutput={detail.guardOutput} />
+                  </div>
+                  <dl className="grid gap-x-4 gap-y-3 sm:grid-cols-2">
+                    <Field label={tDetail("piiFilter")}>{tDetail("piiMode", { mode: detail.piiMode || "none" })}</Field>
+                    <Field label={tDetail("piiPrompt")}>{entities(detail.piiInput)}</Field>
+                    <Field label={tDetail("piiResponse")}>{entities(detail.piiOutput)}</Field>
+                    <Field label={tDetail("guardPrompt")}>{hits(detail.guardInput)}</Field>
+                    <Field label={tDetail("guardResponse")}>{hits(detail.guardOutput)}</Field>
+                  </dl>
+                  {detail.piiRestore ? <PiiRestore restore={detail.piiRestore} /> : null}
+                  {detail.piiMode ? <p className="text-xs text-muted">{tDetail("piiStored", { mode: detail.piiMode })}</p> : null}
+                </section>
+
+                <Separator />
+                <section className="space-y-3" aria-label={tDetail("content")}>
+                  <h3 className="text-sm font-semibold">{tDetail("content")}</h3>
+                  <Content detail={detail} />
+                </section>
+                {detail.replayable ? (
+                  <>
+                    <Separator />
+                    <Replay detail={detail} />
+                  </>
+                ) : null}
+              </>
+            )}
+          </Drawer.Body>
+        </Drawer.Dialog>
+      </Drawer.Content>
+    </Drawer.Backdrop>
   );
 }

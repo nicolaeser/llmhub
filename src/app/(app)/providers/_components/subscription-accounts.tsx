@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Button, SearchField, Spinner, useOverlayState } from "@heroui/react";
-import { CircleCheck, CirclePause, Gauge, KeyRound, Plus, RefreshCw, UserRound } from "lucide-react";
+import { CircleCheck, CirclePause, Gauge, KeyRound, Link2, Plus, RefreshCw, UserRound } from "lucide-react";
 import { useFormatter, useTranslations } from "next-intl";
 import EmptyState from "@/components/console/empty-state";
 import { LoadError } from "@/components/console/page-status";
@@ -46,6 +46,9 @@ export default function SubscriptionAccounts({
   onAntigravity,
   onAdd,
   onCreateLink,
+  canSeeKeyUsage,
+  linkCount,
+  onOpenLinks,
 }: {
   rows: ProviderView[];
   presets: ProviderPresetUsage | null;
@@ -56,6 +59,9 @@ export default function SubscriptionAccounts({
   onAntigravity: (state: AntigravityClientState) => void;
   onAdd: (kind: SignInKind | null) => void;
   onCreateLink: (kind: SignInKind) => void;
+  canSeeKeyUsage: boolean;
+  linkCount: number | null;
+  onOpenLinks: () => void;
 }) {
   const t = useTranslations("Subscriptions");
   const tProviders = useTranslations("Providers");
@@ -187,6 +193,10 @@ export default function SubscriptionAccounts({
                 </>
               )}
             </Button>
+            <Button variant="tertiary" onPress={onOpenLinks}>
+              <Link2 size={16} aria-hidden />
+              {tProviders("toolbar.links", { count: linkCount ?? 0 })}
+            </Button>
           </div>
           <div className="w-full md:w-72">
             <TimeZonePicker label={t("timeZone")} value={timeZone} isDisabled={false} onChange={setConsoleTimeZone} />
@@ -255,6 +265,7 @@ export default function SubscriptionAccounts({
         reports={details ? reportsLimits(details.kind) : false}
         timeZone={timeZone}
         canManage={canManage}
+        keyUsage={canSeeKeyUsage}
         refreshing={details ? limits.refreshing.includes(details.id) : false}
         onRefresh={limits.refreshOne}
         onItem={limits.storeItem}

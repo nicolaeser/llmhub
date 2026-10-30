@@ -29,3 +29,12 @@ export type OpenApiPath = {
 export type TryTarget =
   | { ok: true; method: OpenApiMethod; path: string }
   | { ok: false; error: "UNKNOWN_ENDPOINT" | "MISSING_PARAM" };
+
+export type ConnectRoute = "api" | "subscription";
+
+export type ConnectGuideData = {
+  keyCount: number;
+  models: Record<ConnectRoute, string[]>;
+  canCreateKey: boolean;
+  canSeeLogs: boolean;
+};

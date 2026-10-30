@@ -1,5 +1,5 @@
 {
   "title": "Developer",
-  "subtitle": "Try models in the playground, then connect clients with the API reference.",
-  "tab": "{tab, select, playground {Playground} api {API reference} other {}}"
+  "subtitle": "Connect your tools to the hub, try models in the playground, and look up every endpoint.",
+  "tab": "{tab, select, connect {Connect a tool} playground {Playground} api {API reference} other {}}"
 }

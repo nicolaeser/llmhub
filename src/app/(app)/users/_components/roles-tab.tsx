@@ -224,7 +224,7 @@ export default function RolesTab() {
       </RowCards>
       <Table aria-label={t("title")} className={TABLE_FROM_LG}>
         <Table.ScrollContainer>
-          <Table.Content>
+          <Table.Content aria-label={t("title")}>
             <Table.Header>
               <Table.Column isRowHeader>{t("columns.role")}</Table.Column>
               <Table.Column>{t("columns.members")}</Table.Column>

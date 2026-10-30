@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Button, Chip, Label, SearchField, Switch, Table, toast, useOverlayState } from "@heroui/react";
-import { BookOpen, Network, Plus, Trash2 } from "lucide-react";
+import { Button, Chip, SearchField, Table, toast, useOverlayState } from "@heroui/react";
+import { BookOpen, Network, Pencil, Plus, Power, PowerOff, Trash2 } from "lucide-react";
 import { useFormatter, useTranslations } from "next-intl";
 import { Link } from "@/i18n/routing";
 import ConfirmDialog from "@/components/console/confirm-dialog";
@@ -11,46 +11,43 @@ import EmptyState from "@/components/console/empty-state";
 import PageStatus from "@/components/console/page-status";
 import RowCard, { RowCards, TABLE_FROM_LG } from "@/components/console/row-cards";
 import { useErrorToast } from "@/components/console/use-error-toast";
-import {
-  deleteModelGroupAction,
-  loadModelsAction,
-  setModelGroupEnabledAction,
-} from "../_action";
+import RowMenu, { type RowMenuItem } from "@/components/providers/row-menu";
+import { deleteModelGroupAction, loadModelsAction, setModelGroupEnabledAction } from "../_action";
 import { useActionData } from "@/lib/hooks/use-action-data";
 import { setSearchParams, useSearchParam } from "@/lib/hooks/use-search-param";
 import { isActionFail } from "@/lib/http/action-result";
 import { splitTag } from "@/lib/gateway/catalog/model-catalog";
 import type { ModelGroupView, ProviderOpt } from "@/types/models";
-import type { RoutePool } from "@/types/routing";
 import { hiddenFrom, routePool } from "@/lib/gateway/routing/route-pool";
 import { modelRole } from "@/lib/models/model-role";
 import { contextRange, contextWindowOf } from "./deployment-draft";
+import { groupMatches } from "./group-summary";
 import ModelGroupDialog from "./model-group-dialog";
+import { useGroupSummary } from "./use-group-summary";
 
-function matchesGroup(group: ModelGroupView, query: string): boolean {
-  if (!query) return true;
-  return [group.alias, group.vendor, group.displayName].some((value) => value?.toLowerCase().includes(query));
-}
+const SEARCH_FROM = 6;
+
+type GroupAction = "edit" | "toggle" | "delete";
 
 export default function GroupsTab() {
   const t = useTranslations("Models");
-  const tProviders = useTranslations("Providers");
   const tCatalog = useTranslations("ModelCatalog");
-  const showError = useErrorToast();
   const tCommon = useTranslations("Common");
+  const showError = useErrorToast();
   const format = useFormatter();
   const [editing, setEditing] = useState<ModelGroupView | null>(null);
   const [dialogKey, setDialogKey] = useState(0);
-  const [deleting, setDeleting] = useState<string | null>(null);
-  const [toggling, setToggling] = useState<string | null>(null);
-  const [, startDelete] = useTransition();
-  const [, startToggle] = useTransition();
+  const [busy, setBusy] = useState<string | null>(null);
+  const [removing, setRemoving] = useState<ModelGroupView | null>(null);
+  const [, startChange] = useTransition();
   const groupParam = useSearchParam("group");
   const [typed, setTyped] = useState<string | null>(null);
   const query = typed ?? groupParam ?? "";
   const formState = useOverlayState();
+  const removeState = useOverlayState();
   const page = useActionData<{ groups: ModelGroupView[]; providers: ProviderOpt[]; canManage: boolean }>(loadModelsAction);
   const { data, setData } = page;
+  const summarize = useGroupSummary(data?.providers ?? []);
 
   function setGroups(update: (current: ModelGroupView[]) => ModelGroupView[]) {
     setData((current) => ({ ...current, groups: update(current.groups) }));
@@ -61,8 +58,21 @@ export default function GroupsTab() {
   }
 
   const { groups, providers, canManage } = data;
-  const needle = query.trim().toLowerCase();
-  const shown = groups.filter((group) => matchesGroup(group, needle));
+  const rows = groups.map((group) => ({
+    group,
+    text: summarize({
+      deployments: group.deployments,
+      strategy: group.strategy,
+      fallbackGroups: group.fallbackGroups,
+      overflowGroup: group.overflowGroup,
+      billingMode: group.billingMode,
+      priceInput: group.priceInput,
+      priceOutput: group.priceOutput,
+      priceWindows: group.priceWindows.length,
+    }),
+  }));
+  const searchable = groups.length >= SEARCH_FROM || Boolean(groupParam);
+  const shown = rows.filter((row) => groupMatches(row.group, row.text.summary.targets, searchable ? query : ""));
 
   function search(value: string) {
     setTyped(value);
@@ -76,31 +86,22 @@ export default function GroupsTab() {
     }));
   }
 
-  function routes(group: ModelGroupView) {
-    const seen = new Map<string, { name: string; pool: RoutePool }>();
-    for (const route of pooledRoutes(group)) {
-      const pool = routePool(route);
-      const name =
-        route.provider?.name ?? tProviders(pool === "subscription" ? "kindShort" : "kindName", { kind: route.kind });
-      const key = `${name}:${pool}`;
-      if (!seen.has(key)) seen.set(key, { name, pool });
-    }
-    return [...seen.entries()].map(([key, route]) => ({ key, ...route }));
-  }
-
   function groupChips(group: ModelGroupView) {
     const { tag } = splitTag(group.alias);
-    const internal = hiddenFrom("api", pooledRoutes(group));
-    if (!tag && !internal) return null;
+    const routes = pooledRoutes(group);
+    const internal = hiddenFrom("api", routes);
+    const subscription = routes.some((route) => routePool(route) === "subscription");
+    if (!tag && !internal && !subscription) return null;
     return (
-      <span className="inline-flex flex-wrap items-center gap-1">
+      <>
+        {subscription ? <SubscriptionBadge /> : null}
         {internal ? <InternalBadge /> : null}
         {tag ? (
           <Chip size="sm" variant="soft" color="warning" className="whitespace-nowrap">
             {tCatalog("tag", { tag })}
           </Chip>
         ) : null}
-      </span>
+      </>
     );
   }
 
@@ -118,27 +119,27 @@ export default function GroupsTab() {
     );
   }
 
-  function toggle(alias: string, enabled: boolean) {
-    setToggling(alias);
-    startToggle(async () => {
-      const result = await setModelGroupEnabledAction({ alias, enabled });
-      setToggling(null);
+  function toggle(group: ModelGroupView) {
+    setBusy(group.alias);
+    startChange(async () => {
+      const result = await setModelGroupEnabledAction({ alias: group.alias, enabled: !group.enabled });
+      setBusy(null);
       if (isActionFail(result)) {
         showError(result.error);
         return;
       }
       saved(result);
-      toast(t("toasts.enabled", { alias: result.alias, enabled: String(result.enabled) }), {
-        variant: "success",
-      });
+      toast(t("toasts.enabled", { alias: result.alias, enabled: String(result.enabled) }), { variant: "success" });
     });
   }
 
-  function remove(alias: string) {
-    setDeleting(alias);
-    startDelete(async () => {
+  function remove() {
+    if (!removing) return;
+    const alias = removing.alias;
+    setBusy(alias);
+    startChange(async () => {
       const result = await deleteModelGroupAction(alias);
-      setDeleting(null);
+      setBusy(null);
       if (isActionFail(result)) {
         showError(result.error);
         return;
@@ -152,21 +153,45 @@ export default function GroupsTab() {
     return format.list([group.vendor, group.displayName].filter(Boolean), { type: "unit" });
   }
 
-  function routingNotes(group: ModelGroupView) {
-    const notes = [
-      group.deployments.length > 1 ? t("strategyLabel", { strategy: group.strategy }) : null,
-      group.fallbackGroups.length ? t("fallbackNote", { models: format.list(group.fallbackGroups, { type: "unit" }) }) : null,
-      group.overflowGroup ? t("overflowNote", { model: group.overflowGroup }) : null,
-      group.billingMode === "routed"
-        ? null
-        : t("billingSummary", {
-            mode: group.billingMode,
-            input: group.priceInput,
-            output: group.priceOutput,
-            windows: group.priceWindows.length,
-          }),
-    ].filter(Boolean);
-    return notes.length ? notes.join(" · ") : null;
+  function statusChip(group: ModelGroupView) {
+    return (
+      <Chip size="sm" variant="soft" color={group.enabled ? "success" : "default"} className="whitespace-nowrap">
+        {t("enabledState", { enabled: String(group.enabled) })}
+      </Chip>
+    );
+  }
+
+  function menu(group: ModelGroupView) {
+    if (!canManage) return null;
+    const items: RowMenuItem<GroupAction>[] = [
+      { id: "edit", label: tCommon("edit"), icon: Pencil },
+      { id: "toggle", label: t("menu.toggle", { enabled: String(group.enabled) }), icon: group.enabled ? PowerOff : Power },
+      { id: "delete", label: tCommon("delete"), icon: Trash2, danger: true },
+    ];
+    return (
+      <RowMenu
+        label={t("menu.label", { alias: group.alias })}
+        items={items}
+        pending={busy === group.alias}
+        onAction={(action) => {
+          if (action === "edit") openDialog(group);
+          if (action === "toggle") toggle(group);
+          if (action === "delete") {
+            setRemoving(group);
+            removeState.open();
+          }
+        }}
+      />
+    );
+  }
+
+  function routing(row: (typeof rows)[number]) {
+    return (
+      <div className="min-w-0 space-y-1">
+        <p className="text-sm break-words text-foreground">{row.text.sentence}</p>
+        {row.text.pricing ? <p className="text-xs break-words text-muted">{row.text.pricing}</p> : null}
+      </div>
+    );
   }
 
   function contextLabel(group: ModelGroupView) {
@@ -183,83 +208,8 @@ export default function GroupsTab() {
     );
   }
 
-  function endpointList(group: ModelGroupView) {
-    const notes = routingNotes(group);
-    return (
-      <div className="min-w-0 space-y-1">
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-          {routes(group).map((route) => (
-            <span key={route.key} className="inline-flex items-center gap-1.5 text-sm">
-              <span>{route.name}</span>
-              {route.pool === "subscription" ? <SubscriptionBadge /> : null}
-              {route.pool === "internal" ? <InternalBadge /> : null}
-            </span>
-          ))}
-        </div>
-        {notes ? <p className="text-xs break-words text-muted">{notes}</p> : null}
-      </div>
-    );
-  }
-
-  function enabledSwitch(group: ModelGroupView) {
-    if (!canManage) {
-      return (
-        <Chip size="sm" variant="soft" color={group.enabled ? "success" : "default"} className="whitespace-nowrap">
-          {t("enabledState", { enabled: String(group.enabled) })}
-        </Chip>
-      );
-    }
-    return (
-      <Switch
-        size="sm"
-        isSelected={group.enabled}
-        onChange={(next) => toggle(group.alias, next)}
-        isDisabled={toggling === group.alias}
-        aria-label={t("enabledToggle", { alias: group.alias })}
-      >
-        <Switch.Content>
-          <Switch.Control>
-            <Switch.Thumb />
-          </Switch.Control>
-          <Label>{t("enabledState", { enabled: String(group.enabled) })}</Label>
-        </Switch.Content>
-      </Switch>
-    );
-  }
-
-  function groupActions(group: ModelGroupView) {
-    if (!canManage) return undefined;
-    return (
-      <>
-        <Button size="sm" variant="secondary" aria-label={tCommon("edit")} onPress={() => openDialog(group)}>
-          {tCommon("edit")}
-        </Button>
-        <ConfirmDialog
-          title={t("removeConfirm", { alias: group.alias })}
-          confirmLabel={tCommon("delete")}
-          cancelLabel={tCommon("cancel")}
-          pending={deleting === group.alias}
-          onConfirm={() => remove(group.alias)}
-        >
-          <Button
-            isIconOnly
-            size="sm"
-            variant="danger-soft"
-            aria-label={tCommon("delete")}
-            isPending={deleting === group.alias}
-          >
-            <Trash2 size={14} aria-hidden />
-          </Button>
-        </ConfirmDialog>
-      </>
-    );
-  }
-
   const createButton = canManage ? (
-    <Button
-      aria-label={t("add")}
-      onPress={() => openDialog(null)}
-    >
+    <Button onPress={() => openDialog(null)}>
       <Plus size={16} aria-hidden />
       {t("add")}
     </Button>
@@ -277,7 +227,7 @@ export default function GroupsTab() {
   }
 
   return (
-    <div>
+    <div className="space-y-5">
       {groups.length === 0 ? (
         <EmptyState
           icon={Network}
@@ -300,76 +250,78 @@ export default function GroupsTab() {
           }
         />
       ) : (
-        <div className="space-y-4">
+        <>
+          <p className="max-w-3xl text-sm text-muted">{t("intro")}</p>
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <SearchField value={query} onChange={search} aria-label={t("search")} className="w-full max-w-sm">
-              <SearchField.Group>
-                <SearchField.SearchIcon />
-                <SearchField.Input placeholder={t("search")} />
-                <SearchField.ClearButton aria-label={tCommon("close")} />
-              </SearchField.Group>
-            </SearchField>
+            {searchable ? (
+              <SearchField value={query} onChange={search} aria-label={t("search")} className="w-full max-w-sm">
+                <SearchField.Group>
+                  <SearchField.SearchIcon />
+                  <SearchField.Input placeholder={t("search")} />
+                  <SearchField.ClearButton aria-label={tCommon("close")} />
+                </SearchField.Group>
+              </SearchField>
+            ) : (
+              <p className="text-sm text-muted tabular-nums">{t("count", { count: groups.length })}</p>
+            )}
             {createButton}
           </div>
           {shown.length === 0 ? (
             <EmptyState icon={Network} title={t("noMatches")} />
           ) : (
             <>
-              <RowCards label={t("title")}>
-                {shown.map((g) => (
+              <RowCards label={t("tab", { tab: "groups" })}>
+                {shown.map((row) => (
                   <RowCard
-                    key={g.alias}
-                    title={g.alias}
-                    description={g.vendor || g.displayName ? groupDetail(g) : undefined}
-                    aside={enabledSwitch(g)}
-                    chips={groupChips(g)}
+                    key={row.group.alias}
+                    title={<span className="font-mono">{row.group.alias}</span>}
+                    description={row.group.vendor || row.group.displayName ? groupDetail(row.group) : undefined}
+                    aside={
+                      <>
+                        {statusChip(row.group)}
+                        {menu(row.group)}
+                      </>
+                    }
+                    chips={groupChips(row.group)}
                     details={[
-                      { label: t("columns.endpoints"), value: endpointList(g), wide: true },
-                      { label: t("columns.context"), value: contextLabel(g), wide: true },
+                      { label: t("columns.routing"), value: routing(row), wide: true },
+                      { label: t("columns.context"), value: contextLabel(row.group), wide: true },
                     ]}
-                    actions={groupActions(g)}
                   />
                 ))}
               </RowCards>
-              <Table aria-label={t("title")} className={TABLE_FROM_LG}>
+              <Table aria-label={t("tab", { tab: "groups" })} className={TABLE_FROM_LG}>
                 <Table.ScrollContainer>
-                  <Table.Content className="min-w-3xl">
+                  <Table.Content aria-label={t("tab", { tab: "groups" })} className="min-w-3xl">
                     <Table.Header>
                       <Table.Column isRowHeader>{t("columns.alias")}</Table.Column>
-                      <Table.Column>{t("columns.endpoints")}</Table.Column>
+                      <Table.Column>{t("columns.routing")}</Table.Column>
                       <Table.Column>{t("columns.context")}</Table.Column>
                       <Table.Column>{t("columns.enabled")}</Table.Column>
                       {canManage ? <Table.Column>{tCommon("actions")}</Table.Column> : null}
                     </Table.Header>
                     <Table.Body>
-                      {shown.map((g) => (
-                        <Table.Row key={g.alias} id={g.alias}>
+                      {shown.map((row) => (
+                        <Table.Row key={row.group.alias} id={row.group.alias}>
                           <Table.Cell>
-                            {canManage ? (
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                className="font-medium"
-                                onPress={() => openDialog(g)}
-                              >
-                                {g.alias}
-                              </Button>
-                            ) : (
-                              <span className="px-3 font-medium">{g.alias}</span>
-                            )}
-                            {groupChips(g)}
-                            {g.vendor || g.displayName ? (
-                              <div className="px-3 text-xs text-muted">{groupDetail(g)}</div>
-                            ) : null}
+                            <div className="min-w-0 space-y-1">
+                              <p className="font-mono text-sm font-medium break-words text-foreground">
+                                {row.group.alias}
+                              </p>
+                              {row.group.vendor || row.group.displayName ? (
+                                <p className="text-xs break-words text-muted">{groupDetail(row.group)}</p>
+                              ) : null}
+                              {groupChips(row.group) ? (
+                                <div className="flex flex-wrap gap-1">{groupChips(row.group)}</div>
+                              ) : null}
+                            </div>
                           </Table.Cell>
-                          <Table.Cell>{endpointList(g)}</Table.Cell>
-                          <Table.Cell>{contextLabel(g)}</Table.Cell>
-                          <Table.Cell>{enabledSwitch(g)}</Table.Cell>
-                          {canManage ? (
-                            <Table.Cell>
-                              <div className="flex gap-1">{groupActions(g)}</div>
-                            </Table.Cell>
-                          ) : null}
+                          <Table.Cell>
+                            <div className="max-w-md">{routing(row)}</div>
+                          </Table.Cell>
+                          <Table.Cell>{contextLabel(row.group)}</Table.Cell>
+                          <Table.Cell>{statusChip(row.group)}</Table.Cell>
+                          {canManage ? <Table.Cell>{menu(row.group)}</Table.Cell> : null}
                         </Table.Row>
                       ))}
                     </Table.Body>
@@ -378,22 +330,33 @@ export default function GroupsTab() {
               </Table>
             </>
           )}
-        </div>
+        </>
       )}
 
       {canManage ? (
-        <ModelGroupDialog
-          key={dialogKey}
-          state={formState}
-          editing={editing}
-          providers={providers}
-          models={groups.map((group) => ({
-            alias: group.alias,
-            label: group.displayName || group.alias,
-            role: modelRole([...group.deployments.map((deployment) => deployment.model), group.alias, group.displayName]),
-          }))}
-          onSaved={saved}
-        />
+        <>
+          <ModelGroupDialog
+            key={dialogKey}
+            state={formState}
+            editing={editing}
+            providers={providers}
+            models={groups.map((group) => ({
+              alias: group.alias,
+              label: group.displayName || group.alias,
+              role: modelRole([...group.deployments.map((deployment) => deployment.model), group.alias, group.displayName]),
+            }))}
+            onSaved={saved}
+          />
+          <ConfirmDialog
+            state={removeState}
+            title={t("removeConfirm", { alias: removing?.alias ?? "" })}
+            description={t("removeHint", { alias: removing?.alias ?? "" })}
+            confirmLabel={tCommon("delete")}
+            cancelLabel={tCommon("cancel")}
+            pending={busy !== null && busy === removing?.alias}
+            onConfirm={remove}
+          />
+        </>
       ) : null}
     </div>
   );

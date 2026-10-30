@@ -152,5 +152,10 @@
       "label": "MCP verwalten",
       "description": "Server bauen, Vorlagen anbieten und die Rollen eines MCP-Servers ändern."
     }
-  }
+  },
+  "templateBased": "Basiert auf der eingebauten Rolle {template}. Ihre Berechtigungen können geändert worden sein.",
+  "levelsHint": "Berechtigungen sind nach Bereichen gruppiert. Arbeiten ändert Alltägliches, Sensibel betrifft Sicherheit, Zugangsdaten oder andere Benutzer. Alles andere ist nur lesend.",
+  "editorHint": "{count, plural, =0 {Noch keine Berechtigung gewählt.} one {# Berechtigung gewählt.} other {# Berechtigungen gewählt.}} Du kannst nur Berechtigungen vergeben, die du selbst hast.",
+  "domainCount": "{count, number} von {total, number}",
+  "selectDomain": "{all, select, yes {Alle abwählen} other {Alle auswählen}}"
 }

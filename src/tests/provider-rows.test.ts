@@ -4,8 +4,10 @@ import { accountMatches, accountMenuActions, accountRow } from "@/app/(app)/prov
 import {
   byProviderOrder,
   credentialState,
+  providerMatches,
   providerMenuActions,
   providerRow,
+  providerStatus,
 } from "@/app/(app)/providers/_components/provider-rows";
 import type { LimitSnapshot, LimitWindow, ProviderView } from "@/types/providers";
 
@@ -150,4 +152,20 @@ test("account search matches account, name, plan, link label, and extra labels",
   assert.equal(accountMatches(row, "design"), true);
   assert.equal(accountMatches(row, "claude code", ["Claude Code"]), true);
   assert.equal(accountMatches(row, "gemini"), false);
+});
+
+test("provider status folds a missing credential into the status", () => {
+  const api = provider({ kind: "openai", signIn: null, hasApiKey: true });
+  assert.equal(providerStatus(api), "active");
+  assert.equal(providerStatus({ ...api, hasApiKey: false }), "missing");
+  assert.equal(providerStatus({ ...api, hasApiKey: false, enabled: false }), "paused");
+});
+
+test("provider search matches name, kind, and translated labels", () => {
+  const api = provider({ name: "Team OpenAI", kind: "openai", signIn: null });
+  assert.equal(providerMatches(api, ""), true);
+  assert.equal(providerMatches(api, "team"), true);
+  assert.equal(providerMatches(api, "OPENAI"), true);
+  assert.equal(providerMatches(api, "azure"), false);
+  assert.equal(providerMatches(api, "kompatibel", ["OpenAI-kompatibel"]), true);
 });

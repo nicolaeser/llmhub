@@ -1,0 +1,82 @@
+{
+  "title": "Übersicht",
+  "subtitle": "Was eingerichtet ist, wie die Anfragen laufen und was du dir ansehen solltest.",
+  "stats": {
+    "spendToday": "Ausgaben heute",
+    "requestsToday": "Anfragen heute",
+    "activeKeys": "Aktive API-Keys",
+    "providersOnline": "Anbieter online",
+    "errorsToday": "Fehlgeschlagen heute",
+    "weekSpend": "{amount, number, money} in den letzten 7 Tagen",
+    "weekRequests": "{count, number, integer} in den letzten 7 Tagen",
+    "keysTotal": "{count, plural, one {# Key} other {# Keys}} insgesamt",
+    "providersTotal": "{count, number, integer} verbunden",
+    "utc": "Tage werden in UTC gezählt."
+  },
+  "setup": {
+    "title": "Erste Schritte",
+    "description": "Du richtest das einmal ein. Jeder Schritt baut auf dem vorherigen auf.",
+    "progress": "{done, number, integer} von {total, number, integer} erledigt",
+    "complete": "Einrichtung abgeschlossen",
+    "status": "{done, select, true {Erledigt} other {Offen}}",
+    "open": "Öffnen",
+    "steps": {
+      "provider": {
+        "title": "Anbieter verbinden",
+        "hint": "Hinterlege einen API-Key oder melde dich bei OpenAI, Anthropic oder einem anderen Anbieter an.",
+        "action": "Anbieter verbinden"
+      },
+      "model": {
+        "title": "Modelle freigeben",
+        "hint": "Lege fest, welche Modelle das Gateway deinen Anwendungen anbietet.",
+        "action": "Modelle auswählen"
+      },
+      "company": {
+        "title": "Unternehmen anlegen",
+        "hint": "Unternehmen bündeln Abteilungen, Projekte, Personen und ihre Budgets.",
+        "action": "Unternehmen anlegen"
+      },
+      "key": {
+        "title": "API-Key erstellen",
+        "hint": "Anwendungen senden Anfragen mit einem Key. Jeder Key gehört zu einem Projekt oder einer Person.",
+        "action": "Key erstellen"
+      },
+      "request": {
+        "title": "Erste Anfrage senden",
+        "hint": "Teste ein Modell in der Spielwiese oder rufe /api/v1 mit deinem Key auf.",
+        "action": "Ausprobieren"
+      }
+    }
+  },
+  "attention": {
+    "title": "Braucht Aufmerksamkeit",
+    "description": "Budgets kurz vor dem Limit, fehlerhafte Anbieter und fehlgeschlagene Anfragen von heute.",
+    "empty": "Gerade braucht nichts deine Aufmerksamkeit.",
+    "budget": "{target, select, company {Unternehmen {name}} other {API-Key {name}}} hat {ratio, number, percent} des Budgets verbraucht",
+    "provider": "{name} {cooling, select, true {ist nach wiederholten Fehlern pausiert} other {hatte zuletzt {failures, plural, one {# fehlgeschlagene Anfrage} other {# fehlgeschlagene Anfragen}}}}",
+    "errors": "{count, plural, one {# Anfrage ist heute fehlgeschlagen} other {# Anfragen sind heute fehlgeschlagen}}",
+    "open": "Ansehen"
+  },
+  "concepts": {
+    "title": "So hängt LLM Hub zusammen",
+    "description": "Die Bausteine, die du am häufigsten brauchst.",
+    "open": "Öffnen",
+    "openNamed": "{name} öffnen",
+    "company": {
+      "title": "Unternehmen",
+      "body": "Ein Kunde oder Geschäftsbereich. Es bündelt Abteilungen, Projekte und Personen und kann ein eigenes Budget haben."
+    },
+    "key": {
+      "title": "API-Key",
+      "body": "Der Zugang, mit dem eine Anwendung das Gateway aufruft. Er bestimmt Modelle, Budget und Limits."
+    },
+    "preset": {
+      "title": "Modellvorlage",
+      "body": "Eine benannte Auswahl an Modellen, die viele Keys teilen, statt Modelle für jeden Key einzeln zu wählen."
+    },
+    "guardrail": {
+      "title": "Leitplanke",
+      "body": "Eine Regel, die jede Anfrage prüft, zum Beispiel um personenbezogene Daten zu maskieren oder Geheimnisse zu blockieren."
+    }
+  }
+}

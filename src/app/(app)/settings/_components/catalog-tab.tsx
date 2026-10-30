@@ -12,9 +12,7 @@ import {
   TextField,
   toast,
 } from "@heroui/react";
-import { BookOpen, Library } from "lucide-react";
 import { useTranslations } from "next-intl";
-import IconTile from "@/components/console/icon-tile";
 import ModelTestButton, { internalAliases, modelPickerItem } from "@/components/console/model-test";
 import SearchSelect from "@/components/console/search-select";
 import { SettingSection, SettingSwitch, SettingText } from "./setting-fields";
@@ -87,12 +85,11 @@ export default function CatalogTab() {
   }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-8">
       <SettingsLead description={t("description")} canManage={view.canManage} />
 
       <SettingSection title={t("jev.title")} subtitle={t("jev.subtitle")}>
-        <div className="flex items-start gap-3">
-          <IconTile icon={BookOpen} tone={settings.catalog_jev.enabled ? "success" : "accent"} />
+        <div className="flex flex-col gap-3">
           <SettingSwitch
             label={t("jev.autoRoutes")}
             isSelected={settings.catalog_auto_routes}
@@ -190,8 +187,7 @@ export default function CatalogTab() {
       </SettingSection>
 
       <SettingSection title={t("knowledge.title")} subtitle={t("knowledge.subtitle")}>
-        <div className="flex items-start gap-3">
-          <IconTile icon={Library} />
+        <div className="flex flex-col gap-3">
           <div className="grid min-w-0 flex-1 gap-4 md:grid-cols-2 md:items-start">
             <div className="space-y-2">
               <SearchSelect
