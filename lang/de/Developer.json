@@ -1,5 +1,5 @@
 {
   "title": "Entwickler",
-  "subtitle": "Probiere Modelle in der Spielwiese aus und binde dann Clients mit der API-Referenz an.",
-  "tab": "{tab, select, playground {Spielwiese} api {API-Referenz} other {}}"
+  "subtitle": "Verbinde deine Tools mit dem Hub, probier Modelle in der Spielwiese aus und schlag jeden Endpunkt nach.",
+  "tab": "{tab, select, connect {Tool verbinden} playground {Spielwiese} api {API-Referenz} other {}}"
 }

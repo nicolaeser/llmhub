@@ -22,14 +22,14 @@ export default function StatCard({
   const t = useTranslations("Common");
   const loading = pending || value === null;
   return (
-    <Card className="@container gap-2" aria-busy={loading || undefined}>
-      <div className="flex items-start justify-between gap-3">
-        <Card.Description className="min-w-0 pt-1 font-medium">{label}</Card.Description>
-        {icon ? <IconTile icon={icon} tone={loading ? "neutral" : tone} /> : null}
+    <Card className="@container gap-1.5" aria-busy={loading || undefined}>
+      <div className="flex min-h-7 items-center justify-between gap-3">
+        <Card.Description className="min-w-0">{label}</Card.Description>
+        {icon ? <IconTile icon={icon} tone={loading ? "neutral" : tone} size="sm" /> : null}
       </div>
       {loading ? (
         <>
-          <Skeleton className="my-1 h-7 w-20 rounded-lg" />
+          <Skeleton className="my-1 h-6 w-20 rounded-lg" />
           <span className="sr-only">{t("notLoaded")}</span>
         </>
       ) : (

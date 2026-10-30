@@ -51,8 +51,8 @@ export default function NodeDialog({
   const member = kind === "member" ? data.members.find((row) => row.id === editingId) : undefined;
   const editing = Boolean(org ?? team ?? project ?? member);
   const placed = team ?? project ?? member;
+  const orgId = placed?.orgId ?? initialOrg;
   const [alias, setAlias] = useState(org?.alias ?? placed?.alias ?? "");
-  const [orgId, setOrgId] = useState(placed?.orgId ?? (initialOrg || data.orgs[0]?.id || ""));
   const [teamId, setTeamId] = useState(project?.teamId ?? member?.teamId ?? initialTeam);
   const [rpm, setRpm] = useState(team?.rpmLimit ?? 0);
   const [tpm, setTpm] = useState(team?.tpmLimit ?? 0);
@@ -62,7 +62,6 @@ export default function NodeDialog({
   const [logContent, setLogContent] = useState(member?.logContent ?? true);
   const [pending, start] = useTransition();
   const mode = editing ? "edit" : "create";
-  const needsOrg = kind !== "org";
   const hasDepartment = kind === "project" || kind === "member";
   const departments = data.teams.filter((row) => row.orgId === orgId);
 
@@ -72,7 +71,7 @@ export default function NodeDialog({
       const before = idsOf(data, kind);
       const result =
         kind === "org"
-          ? await saveOrgAction({ id, alias })
+          ? await saveOrgAction({ id: orgId, alias })
           : kind === "team"
             ? await saveTeamAction({
                 id,
@@ -103,25 +102,9 @@ export default function NodeDialog({
       description={t("hint", { kind })}
       submitLabel={t("submit", { kind, mode })}
       pending={pending}
-      isSubmitDisabled={!alias.trim() || (needsOrg && !orgId)}
+      isSubmitDisabled={!alias.trim() || !orgId}
       onSubmit={save}
     >
-      {needsOrg ? (
-        <SearchSelect
-          isRequired
-          label={t("org")}
-          placeholder={t("orgPlaceholder")}
-          items={data.orgs.map((item) => ({ id: item.id, label: item.alias }))}
-          value={orgId}
-          onChange={(next) => {
-            setOrgId(next);
-            setTeamId("");
-          }}
-          isDisabled={pending || editing || data.orgs.length < 2}
-          description={editing ? t("orgLocked", { kind }) : undefined}
-        />
-      ) : null}
-
       <TextField
         fullWidth
         isRequired
@@ -143,7 +126,7 @@ export default function NodeDialog({
           ]}
           value={teamId || "none"}
           onChange={(next) => setTeamId(next === "none" ? "" : next)}
-          isDisabled={pending || !orgId}
+          isDisabled={pending}
           description={t("teamHint", { kind })}
         />
       ) : null}

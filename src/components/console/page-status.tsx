@@ -5,7 +5,7 @@ import { Alert, Button, Spinner } from "@heroui/react";
 import { RotateCcw, type LucideIcon } from "lucide-react";
 import { useTranslations } from "next-intl";
 import type { LoadStatus } from "@/types/actions";
-import PageHeader from "./page-header";
+import PageHeader, { type PageBackLink } from "./page-header";
 import {
   ChartsSkeleton,
   DetailsSkeleton,
@@ -33,12 +33,14 @@ type HeaderProps = {
   title?: ReactNode;
   subtitle?: ReactNode;
   icon?: LucideIcon;
+  back?: PageBackLink;
 };
 
 export function PageLoading({
   title,
   subtitle,
   icon,
+  back,
   header = false,
   layout = "table",
   stats = 0,
@@ -49,7 +51,7 @@ export function PageLoading({
   return (
     <div>
       {title ? (
-        <PageHeader icon={icon} title={title} subtitle={subtitle} subtitlePending={!subtitle} />
+        <PageHeader icon={icon} back={back} title={title} subtitle={subtitle} subtitlePending={!subtitle} />
       ) : header ? (
         <HeaderSkeleton />
       ) : null}
@@ -114,14 +116,15 @@ export default function PageStatus({
   title,
   subtitle,
   icon,
+  back,
   state,
   ...shape
 }: HeaderProps & LoadingShape & { state: LoadStatus }) {
-  if (state.error === null) return <PageLoading title={title} subtitle={subtitle} icon={icon} {...shape} />;
+  if (state.error === null) return <PageLoading title={title} subtitle={subtitle} icon={icon} back={back} {...shape} />;
   if (!title) return <LoadError state={state} />;
   return (
     <div>
-      <PageHeader icon={icon} title={title} subtitle={subtitle} />
+      <PageHeader icon={icon} back={back} title={title} subtitle={subtitle} />
       <LoadError state={state} />
     </div>
   );

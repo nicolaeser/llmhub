@@ -8,5 +8,8 @@ import { useConsoleScope } from "../_components/console-scope";
 export default function CompaniesLoading() {
   const t = useTranslations("Companies");
   const { scope } = useConsoleScope();
-  return <PageLoading icon={Building2} title={scope.kind === "company" ? scope.alias : t("title")} layout="split" />;
+  if (scope.kind === "company") {
+    return <PageLoading icon={Building2} title={scope.alias} tabs stats={4} layout="panels" />;
+  }
+  return <PageLoading icon={Building2} title={t("title")} subtitle={t("subtitle")} />;
 }

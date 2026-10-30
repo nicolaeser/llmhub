@@ -52,65 +52,63 @@ export default function ProviderSettingsDialog({
   const tCommon = useTranslations("Common");
 
   return (
-    <Modal state={state}>
-      <Modal.Backdrop>
-        <Modal.Container>
-          <Modal.Dialog className="max-w-4xl">
-            {({ close }) =>
-              kind ? (
-                <>
-                  <Modal.Header className="flex-row items-start gap-3">
-                    <IconTile icon={kindIcon(kind)} />
-                    <div className="min-w-0 flex-1">
-                      <Modal.Heading>{t("title", { provider: tProviders("kindShort", { kind }) })}</Modal.Heading>
-                      <p className="text-sm text-muted">{t("description")}</p>
-                    </div>
-                  </Modal.Header>
-                  <Modal.Body className="space-y-6">
-                    {kind === "antigravity" ? (
-                      <AntigravitySetup state={antigravity} onChanged={onAntigravity} />
-                    ) : null}
-                    {accounts > 0 ? (
-                      <AccountRoutingPicker
+    <Modal.Backdrop isOpen={state.isOpen} onOpenChange={state.setOpen}>
+      <Modal.Container>
+        <Modal.Dialog className="max-w-4xl">
+          {({ close }) =>
+            kind ? (
+              <>
+                <Modal.Header className="flex-row items-start gap-3">
+                  <IconTile icon={kindIcon(kind)} />
+                  <div className="min-w-0 flex-1">
+                    <Modal.Heading>{t("title", { provider: tProviders("kindShort", { kind }) })}</Modal.Heading>
+                    <p className="text-sm text-muted">{t("description")}</p>
+                  </div>
+                </Modal.Header>
+                <Modal.Body className="space-y-6">
+                  {kind === "antigravity" ? (
+                    <AntigravitySetup state={antigravity} onChanged={onAntigravity} />
+                  ) : null}
+                  {accounts > 0 ? (
+                    <AccountRoutingPicker
+                      kind={kind}
+                      strategy={routing[kind] ?? DEFAULT_ACCOUNT_STRATEGY}
+                      accounts={accounts}
+                      onSaved={onRouting}
+                    />
+                  ) : null}
+                  {accounts > 0 && isResetKind(kind) ? (
+                    <>
+                      <Separator />
+                      <AutoResetSettings
                         kind={kind}
-                        strategy={routing[kind] ?? DEFAULT_ACCOUNT_STRATEGY}
-                        accounts={accounts}
-                        onSaved={onRouting}
+                        policy={autoReset[kind] ?? autoResetPolicy({})}
+                        onSaved={onAutoReset}
                       />
-                    ) : null}
-                    {accounts > 0 && isResetKind(kind) ? (
-                      <>
-                        <Separator />
-                        <AutoResetSettings
-                          kind={kind}
-                          policy={autoReset[kind] ?? autoResetPolicy({})}
-                          onSaved={onAutoReset}
-                        />
-                      </>
-                    ) : null}
-                    {accounts > 0 && startsWindows(kind) ? (
-                      <>
-                        <Separator />
-                        <WindowKickoffSettings
-                          kind={kind}
-                          model={kickoff[kind] ?? ""}
-                          models={kickoffModels[kind] ?? []}
-                          onSaved={onKickoff}
-                        />
-                      </>
-                    ) : null}
-                  </Modal.Body>
-                  <Modal.Footer>
-                    <Button variant="secondary" onPress={close}>
-                      {tCommon("done")}
-                    </Button>
-                  </Modal.Footer>
-                </>
-              ) : null
-            }
-          </Modal.Dialog>
-        </Modal.Container>
-      </Modal.Backdrop>
-    </Modal>
+                    </>
+                  ) : null}
+                  {accounts > 0 && startsWindows(kind) ? (
+                    <>
+                      <Separator />
+                      <WindowKickoffSettings
+                        kind={kind}
+                        model={kickoff[kind] ?? ""}
+                        models={kickoffModels[kind] ?? []}
+                        onSaved={onKickoff}
+                      />
+                    </>
+                  ) : null}
+                </Modal.Body>
+                <Modal.Footer>
+                  <Button variant="secondary" onPress={close}>
+                    {tCommon("done")}
+                  </Button>
+                </Modal.Footer>
+              </>
+            ) : null
+          }
+        </Modal.Dialog>
+      </Modal.Container>
+    </Modal.Backdrop>
   );
 }

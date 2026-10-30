@@ -1,8 +1,8 @@
 {
   "title": "Anbieter",
-  "subtitle": "Verbinde Modellanbieter per API-Key oder Abo-Anmeldung und behalte ihren Zustand im Blick.",
+  "subtitle": "Wohin Anfragen gehen: Dienste, die du per API-Key aufrufst, und Abo-Konten wie ChatGPT oder Claude, bei denen sich jemand anmeldet.",
   "tabsLabel": "Anbieteransichten",
-  "tabs": "{tab, select, api {API-Keys} subscriptions {Abos} usage {Nutzung nach Key} links {Konto-Links} health {Status} other {{tab}}}",
+  "tabs": "{tab, select, api {API-Anbieter} subscriptions {Abo-Konten} health {Zustand} other {{tab}}}",
   "columns": {
     "provider": "Anbieter",
     "credential": "Zugangsdaten",
@@ -10,10 +10,11 @@
     "dataHandling": "Datenverarbeitung"
   },
   "toolbar": {
-    "import": "Importieren",
-    "createLink": "Link erstellen",
+    "import": "Konten importieren",
+    "createLink": "Konto-Link erstellen",
+    "links": "{count, plural, =0 {Konto-Links} other {Konto-Links (#)}}",
     "add": "Anbieter hinzufügen",
-    "more": "Weitere Aktionen"
+    "more": "Mehr"
   },
   "picker": {
     "title": "Anbieter hinzufügen",
@@ -51,11 +52,11 @@
   "kindDescription": "{kind, select, openai {Offizielle OpenAI-API.} anthropic {Native Anthropic-Messages-API.} openrouter {Ein Key für Hunderte Modelle.} openrouter_eu {OpenRouter mit Routing innerhalb der EU.} xai {Grok über die xAI-API.} typesafe {Jev-Entscheidungsmodell über die TypeSafe-API.} openai_compat {vLLM, SGLang, Ollama oder jeder OpenAI-kompatible Server.} codex {Mit ChatGPT Plus, Pro oder Business anmelden. Chat-Anfragen nutzen die Codex-Limits des Abos.} grok_build {Mit SuperGrok oder X Premium+ anmelden. Anfragen nutzen die Grok-Limits des Abos.} claude {Mit Claude Pro oder Max anmelden. Anfragen nutzen die Claude-Code-Limits des Abos.} antigravity {Melde dich mit einem Google-Konto mit Antigravity-Zugang an. Anfragen nutzen das Gemini- und Claude-Kontingent des Plans.} moonshot {Kimi-Modelle über die internationale Kimi API Platform (platform.kimi.ai, api.moonshot.ai).} moonshot_cn {Kimi-Modelle über die chinesische Kimi API Platform (platform.kimi.com, api.moonshot.cn).} kimi {Melde dich mit einem Konto der chinesischen Kimi-Seite (kimi.com) mit Kimi-Code-Plan an. Anfragen nutzen die Kimi-Code-Limits des Plans.} kimi_ai {Melde dich mit einem Konto der internationalen Kimi-Seite (kimi.ai) mit Kimi-Code-Plan an. Anfragen nutzen die Kimi-Code-Limits des Plans.} meta {Muse-Modelle über einen Meta-Model-API-Key (api.meta.ai).} muse_code {Melde dich mit einem Meta-Konto mit Muse Code an. Anfragen nutzen die Muse-Limits des Abos.} gemini {Gemini-Modelle mit einem AI-Studio-API-Key: Chat mit Tools, Bildern und Thinking sowie Embeddings und Bildgenerierung.} vertex {Gemini-, Claude-, Imagen- und Partnermodelle in deinem Google-Cloud-Projekt, mit Service-Account-Key oder Express-Mode-API-Key.} devin {Mit einem Devin-Konto anmelden. Anfragen nutzen die Modelle und das Tages- und Wochenkontingent dieses Kontos.} other {}}",
   "displayName": "Anzeigename",
   "baseUrl": "API-Basis-URL",
-  "apiKey": "API-Schlüssel",
-  "apiKeyKeep": "Leer lassen, um den gespeicherten Schlüssel zu behalten.",
+  "apiKey": "API-Key",
+  "apiKeyKeep": "Leer lassen, um den gespeicherten Key zu behalten.",
   "form": {
     "connection": "Verbindung",
-    "connectionHint": "{method, select, vertex {Die Zugangsdaten und das Google-Cloud-Projekt, die das Gateway aufruft.} other {Der Schlüssel, den das Gateway bei jeder Anfrage an diesen Anbieter mitsendet.}}",
+    "connectionHint": "{method, select, vertex {Die Zugangsdaten und das Google-Cloud-Projekt, die das Gateway aufruft.} other {Der API-Key, den das Gateway bei jeder Anfrage an diesen Anbieter mitsendet.}}",
     "models": "Modelle und Sichtbarkeit",
     "modelsHint": "{method, select, signIn {Wie neue Modelle dieses Kontos in den Modellkatalog gelangen.} other {Wie neue Modelle in den Modellkatalog gelangen und ob die API diesen Anbieter bedient.}}",
     "advancedHint": "{method, select, apiKey {Anzeigename und API-Basis-URL.} other {Der Name, den die Konsole überall anzeigt.}}"
@@ -91,13 +92,9 @@
   },
   "deleteConfirm": "Seine Routen und Katalogeinträge werden entfernt, und Modellgruppen ohne verbleibende Routen werden gelöscht, sofern sie keine eigenen Einstellungen haben.",
   "overview": {
-    "intro": "Anbieter, die das Gateway mit einem API-Key oder einem Service-Account aufruft. Ihre Angaben zur Datenverarbeitung entscheiden, welche Modellvorlagen über sie leiten dürfen.",
-    "active": "Aktiv",
-    "total": "{count, plural, one {von # Anbieter} other {von # Anbietern}}",
-    "paused": "Pausiert",
-    "missing": "Ohne Zugangsdaten",
-    "missingHint": "Hinterlege einen Schlüssel, damit Anfragen sie erreichen",
-    "models": "Modelle"
+    "intro": "Dienste, die das Gateway mit einem API-Key oder einem Service-Account aufruft. Ihre Angaben zur Datenverarbeitung entscheiden, welche Modellvorlagen sie nutzen dürfen.",
+    "missingTitle": "{count, plural, one {# Anbieter hat keinen API-Key} other {# Anbieter haben keinen API-Key}}",
+    "missingHint": "Anfragen an {names} schlagen fehl, bis du einen Key hinterlegst. Öffne dazu Bearbeiten im Zeilenmenü."
   },
   "empty": "Noch keine Anbieter verbunden.",
   "emptyTitle": "Einen Anbieter verbinden",
@@ -116,7 +113,8 @@
     "noTrainingHint": "Der Anbieter verwendet Prompts und Ausgaben nicht zum Trainieren von Modellen.",
     "zdrChip": "ZDR",
     "retentionChip": "{days, plural, one {# Tag Aufbewahrung} other {# Tage Aufbewahrung}}",
-    "noTrainingChip": "Kein Training"
+    "noTrainingChip": "Kein Training",
+    "unset": "Nicht angegeben"
   },
   "presets": {
     "usedBy": "{count, plural, one {Genutzt von Vorlage {names}} other {Genutzt von # Vorlagen: {names}}}",
@@ -144,5 +142,17 @@
     "locationHint": "global, eine Region wie us-central1 oder europe-west4 oder die Multi-Region us oder eu. Claude und Partnermodelle gibt es nur an manchen Standorten.",
     "apiKeyHint": "Ein API-Key aus dem Express Mode von Vertex AI. Er erreicht nur Gemini-Modelle; Claude, Partnermodelle und Imagen brauchen einen Service-Account.",
     "current": "{credential, select, service_account {{named, select, true {Hinterlegt: {account}, Projekt {project}, {location}} other {Hinterlegt: Service-Account, Projekt {project}, {location}}}} api_key {Hinterlegt: Express-Mode-API-Key} other {}}"
-  }
+  },
+  "add": {
+    "description": "Wähle zuerst, was du verbinden willst. Danach folgen nur die Felder für diese Art.",
+    "step": "{step, select, type {Art} provider {Anbieter} source {Quelle} connect {Verbinden} data {Datenverarbeitung} models {Modelle} other {{step}}}",
+    "stepHint": "{step, select, type {Was soll die Anfragen bedienen?} provider {Wähle den Dienst, den du verbinden willst.} source {Wähle, woher die Konten kommen.} other {}}",
+    "typeLabel": "Anbieterart",
+    "type": "{type, select, api {Anbieter mit API-Key} subscription {Abo-Konto} import {Importieren oder teilen} other {{type}}}",
+    "typeHint": "{type, select, api {Ein Modelldienst, den du mit deinem eigenen API-Key oder Service-Account aufrufst, etwa OpenAI, Anthropic oder ein eigener Server. Der Anbieter rechnet pro Token ab.} subscription {Ein angemeldetes Abo wie ChatGPT, Claude oder Google. Anfragen nutzen die Limits dieses Abos statt einer Abrechnung pro Token.} import {Übernimm vorhandene Konten aus CLIProxyAPI oder Auth-Dateien, oder sende jemandem einen Link, um das eigene Konto zu verbinden.} other {}}"
+  },
+  "search": "Anbieter suchen",
+  "noMatches": "Kein Anbieter passt zur Suche",
+  "status": "{status, select, active {Aktiv} paused {Pausiert} missing {API-Key fehlt} other {{status}}}",
+  "rowSubtitle": "{kind} · {credential}"
 }

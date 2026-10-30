@@ -1,8 +1,8 @@
 {
   "title": "Providers",
-  "subtitle": "Connect model providers by API key or subscription sign-in and keep an eye on their health.",
+  "subtitle": "Where requests go: services you call with an API key, and subscription accounts such as ChatGPT or Claude that people sign in to.",
   "tabsLabel": "Provider views",
-  "tabs": "{tab, select, api {API keys} subscriptions {Subscriptions} usage {Usage by key} links {Account links} health {Health} other {{tab}}}",
+  "tabs": "{tab, select, api {API providers} subscriptions {Subscription accounts} health {Health} other {{tab}}}",
   "columns": {
     "provider": "Provider",
     "credential": "Credential",
@@ -10,10 +10,11 @@
     "dataHandling": "Data handling"
   },
   "toolbar": {
-    "import": "Import",
-    "createLink": "Create link",
+    "import": "Import accounts",
+    "createLink": "Create add-account link",
+    "links": "{count, plural, =0 {Add-account links} other {Add-account links (#)}}",
     "add": "Add provider",
-    "more": "More actions"
+    "more": "More"
   },
   "picker": {
     "title": "Add a provider",
@@ -91,13 +92,9 @@
   },
   "deleteConfirm": "Its routes and catalog entries are removed, and model groups left without routes are deleted unless they have their own settings.",
   "overview": {
-    "intro": "Providers the gateway calls with an API key or a service account. Their data handling facts decide which model presets may route through them.",
-    "active": "Active",
-    "total": "{count, plural, one {of # provider} other {of # providers}}",
-    "paused": "Paused",
-    "missing": "Without credentials",
-    "missingHint": "Add a key so requests can reach them",
-    "models": "Models"
+    "intro": "Services the gateway calls with an API key or a service account. Their data handling facts decide which model presets may use them.",
+    "missingTitle": "{count, plural, one {# provider has no API key} other {# providers have no API key}}",
+    "missingHint": "Requests routed to {names} fail until you add a key. Open Edit in the row menu."
   },
   "empty": "No providers connected yet.",
   "emptyTitle": "Connect a provider",
@@ -116,7 +113,8 @@
     "noTrainingHint": "The provider does not use prompts or outputs to train models.",
     "zdrChip": "ZDR",
     "retentionChip": "{days, plural, one {# day retention} other {# days retention}}",
-    "noTrainingChip": "No training"
+    "noTrainingChip": "No training",
+    "unset": "Not specified"
   },
   "presets": {
     "usedBy": "{count, plural, one {Used by preset {names}} other {Used by # presets: {names}}}",
@@ -144,5 +142,17 @@
     "locationHint": "global, a region such as us-central1 or europe-west4, or the multi-region us or eu. Claude and partner models are only offered in some locations.",
     "apiKeyHint": "An API key from Vertex AI express mode. It reaches Gemini models only; Claude, partner models, and Imagen need a service account.",
     "current": "{credential, select, service_account {{named, select, true {Stored: {account}, project {project}, {location}} other {Stored: service account, project {project}, {location}}}} api_key {Stored: express mode API key} other {}}"
-  }
+  },
+  "add": {
+    "description": "Choose what to connect first. Only the fields for that type follow.",
+    "step": "{step, select, type {Type} provider {Provider} source {Source} connect {Connect} data {Data handling} models {Models} other {{step}}}",
+    "stepHint": "{step, select, type {What should serve the requests?} provider {Pick the service to connect.} source {Pick where the accounts come from.} other {}}",
+    "typeLabel": "Provider type",
+    "type": "{type, select, api {API key provider} subscription {Subscription account} import {Import or share} other {{type}}}",
+    "typeHint": "{type, select, api {A model service you call with your own API key or service account, such as OpenAI, Anthropic, or a self-hosted server. The provider bills you per token.} subscription {A signed-in plan such as ChatGPT, Claude, or Google. Requests use that plan's usage limits instead of per-token billing.} import {Move accounts you already have from CLIProxyAPI or auth files, or send someone a link to connect their own account.} other {}}"
+  },
+  "search": "Search providers",
+  "noMatches": "No provider matches this search",
+  "status": "{status, select, active {Active} paused {Paused} missing {Needs API key} other {{status}}}",
+  "rowSubtitle": "{kind} · {credential}"
 }

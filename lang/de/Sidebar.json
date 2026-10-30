@@ -3,10 +3,12 @@
   "sidebar": "Seitenleiste",
   "primaryNav": "Hauptnavigation",
   "location": "Aktuelle Position",
+  "details": "Details",
   "toggleCollapsed": "{collapsed, select, true {Seitenleiste ausklappen} other {Seitenleiste einklappen}}",
   "openMenu": "Navigationsmenü öffnen",
   "goHome": "Zur Startseite",
   "sections": {
+    "home": "Start",
     "organization": "Organisation",
     "gateway": "Gateway",
     "policies": "Richtlinien",
@@ -14,6 +16,7 @@
     "system": "System"
   },
   "items": {
+    "overview": "Übersicht",
     "companies": "Unternehmen",
     "company": "Unternehmen",
     "keys": "API-Keys",

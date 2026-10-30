@@ -1,6 +1,6 @@
 {
   "title": "Console users",
-  "subtitle": "Everyone who signs in to this console. Platform users see every company; users assigned to a company see only that company. People of a company only call the API and are managed under Companies.",
+  "subtitle": "People who sign in to this console. Their role decides what they can do. Platform users see every company, company users only their own. People of a company only call the API and are managed under Companies.",
   "tab": "{tab, select, users {Users} roles {Roles and permissions} other {}}",
   "emptyTitle": "No console users",
   "empty": "Add the users who sign in to the console.",
@@ -29,7 +29,9 @@
     "role": "Role",
     "initialPassword": "Initial password",
     "access": "Access to",
-    "accessHint": "{scope, select, company {Sees and manages only this company. The role's permissions for providers, models, settings, users, and roles do not apply.} other {Platform user. The role applies to every company and to platform settings.}}"
+    "accessHint": "{scope, select, company {Sees and manages only one company. Provider, model, settings, user, and role permissions do not apply.} other {Platform user. The role applies to every company and to platform settings.}}",
+    "company": "Company",
+    "companyPlaceholder": "Choose a company"
   },
   "toasts": {
     "created": "User created",
@@ -77,5 +79,11 @@
     "value": "{named, select, yes {Access to {alias}} other {Access to the selected company}}",
     "clear": "Show all console users",
     "empty": "No console users can sign in for this company."
+  },
+  "createHint": "Console users sign in to this console. Someone who only calls the API needs an API key, not an account here.",
+  "customRole": "Custom role. Its permissions are listed under Roles and permissions.",
+  "pickRole": "Pick the role that matches what this person does.",
+  "accessMode": {
+    "title": "{mode, select, company {One company} other {Whole hub}}"
   }
 }

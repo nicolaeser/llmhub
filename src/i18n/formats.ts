@@ -43,8 +43,10 @@ export const formats = {
     money: {
       style: "currency",
       currency: "USD",
-      minimumFractionDigits: 4,
-      maximumFractionDigits: 4,
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+      maximumSignificantDigits: 1,
+      roundingPriority: "morePrecision",
     },
     price: {
       style: "currency",

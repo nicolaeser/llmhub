@@ -101,5 +101,9 @@
     "run": "Testen",
     "state": "{ok, select, true {Funktioniert} other {Fehlgeschlagen}}",
     "detail": "{model} antwortete nach {ms, number, integer} ms mit HTTP {status}"
+  },
+  "steps": {
+    "label": "Schritte",
+    "progress": "Schritt {current, number, integer} von {total, number, integer}"
   }
 }

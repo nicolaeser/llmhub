@@ -25,46 +25,58 @@ export default function SetupSteps({
   onStep,
 }: {
   data: StructurePayload;
-  company: string | null;
+  company: string;
   steps: SetupStep[];
   onStep: (step: SetupStep) => void;
 }) {
   const t = useTranslations("Companies.steps");
   const done = setupDone(data);
   const current = steps.find((step) => !done[step]);
-  const title = t("title", { scope: company ? "company" : "platform", alias: company ?? "" });
+  const finished = steps.filter((step) => done[step]).length;
+  const title = t("title", { alias: company });
 
   return (
     <Card render={(props) => <section {...props} />} aria-label={title}>
-      <Card.Header>
-        <Card.Title>{title}</Card.Title>
-        <Card.Description>{t("subtitle")}</Card.Description>
+      <Card.Header className="flex-row flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0 flex-1 basis-64">
+          <Card.Title>{title}</Card.Title>
+          <Card.Description>{t("subtitle")}</Card.Description>
+        </div>
+        <Chip size="sm" variant="soft">
+          {t("progress", { done: finished, total: steps.length })}
+        </Chip>
       </Card.Header>
       <Card.Content>
-        <ol className={`grid gap-3 sm:grid-cols-2 ${steps.length > 4 ? "xl:grid-cols-5" : steps.length > 3 ? "xl:grid-cols-4" : "xl:grid-cols-3"}`}>
+        <ol className="flex flex-col divide-y divide-border">
           {steps.map((step, index) => {
             const isDone = done[step];
             const isCurrent = step === current;
             return (
-              <li key={step} aria-current={isCurrent ? "step" : undefined}>
-                <Card variant="secondary" className="h-full gap-2">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs tabular-nums text-muted">
-                      {t("number", { n: index + 1 })}
-                    </span>
-                    <Chip size="sm" variant="soft" color={isDone ? "success" : "default"}>
-                      {isDone ? <Check size={12} aria-hidden /> : null}
-                      {t("status", { status: isDone ? "done" : "todo" })}
-                    </Chip>
-                  </div>
-                  <p className="text-sm font-medium">{t(`${step}.title`)}</p>
+              <li
+                key={step}
+                aria-current={isCurrent ? "step" : undefined}
+                className="flex flex-wrap items-center gap-3 py-3 first:pt-0 last:pb-0"
+              >
+                <span
+                  className={`grid size-6 shrink-0 place-items-center rounded-full text-xs font-semibold tabular-nums ${
+                    isDone ? "bg-success/12 text-success" : isCurrent ? "bg-accent/12 text-accent" : "bg-default text-muted"
+                  }`}
+                  aria-hidden
+                >
+                  {isDone ? <Check size={14} /> : index + 1}
+                </span>
+                <div className="min-w-0 flex-1 basis-48">
+                  <p className={`text-sm font-medium ${isDone ? "text-muted" : "text-foreground"}`}>
+                    {t(`${step}.title`)}
+                    <span className="sr-only"> {t("status", { status: isDone ? "done" : "todo" })}</span>
+                  </p>
                   <p className="text-xs text-muted">{t(`${step}.hint`)}</p>
-                  {isCurrent ? (
-                    <Button size="sm" className="mt-auto self-start" onPress={() => onStep(step)}>
-                      {t(`${step}.action`)}
-                    </Button>
-                  ) : null}
-                </Card>
+                </div>
+                {isCurrent ? (
+                  <Button size="sm" onPress={() => onStep(step)}>
+                    {t(`${step}.action`)}
+                  </Button>
+                ) : null}
               </li>
             );
           })}

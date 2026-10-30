@@ -27,10 +27,17 @@ function sourceFiles(dir: string): string[] {
 test("confirm-dialog is a HeroUI AlertDialog driven by the caller's overlay state", () => {
   const state = overlay(true);
   const controlled = ConfirmDialog({ title: "Delete?", confirmLabel: "Delete", cancelLabel: "Cancel", onConfirm: () => {}, state });
-  assert.equal(controlled.type, AlertDialog);
+  assert.equal(controlled.type, AlertDialog.Backdrop);
   assert.equal(controlled.props.isOpen, true);
   assert.equal(controlled.props.onOpenChange, state.setOpen);
-  const triggered = ConfirmDialog({ title: "Delete?", confirmLabel: "Delete", cancelLabel: "Cancel", onConfirm: () => {} });
+  const triggered = ConfirmDialog({
+    title: "Delete?",
+    confirmLabel: "Delete",
+    cancelLabel: "Cancel",
+    onConfirm: () => {},
+    children: "Delete",
+  });
+  assert.equal(triggered.type, AlertDialog);
   assert.equal(triggered.props.isOpen, undefined);
   assert.equal(triggered.props.onOpenChange, undefined);
 });
@@ -56,9 +63,9 @@ test("key rotation and revocation only run once their ConfirmDialog is confirmed
   }
   const callers = [
     "src/components/keys/use-key-dialogs.tsx",
-    "src/app/(app)/keys/_components/keys-tab.tsx",
-    "src/app/(app)/companies/_components/keys-card.tsx",
-    "src/app/(app)/companies/_components/key-pane.tsx",
+    "src/app/(app)/keys/page.tsx",
+    "src/app/(app)/keys/_components/key-list.tsx",
+    "src/app/(app)/keys/[id]/page.tsx",
   ];
   for (const rel of callers) {
     const source = readJsx(path.join(root, rel));

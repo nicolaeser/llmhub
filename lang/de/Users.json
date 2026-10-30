@@ -1,6 +1,6 @@
 {
   "title": "Konsolen-Benutzer",
-  "subtitle": "Alle, die sich an dieser Konsole anmelden. Plattform-Benutzer sehen alle Unternehmen; einem Unternehmen zugeordnete Benutzer sehen nur dieses. Personen eines Unternehmens nutzen nur die API und werden unter Unternehmen gepflegt.",
+  "subtitle": "Alle, die sich an dieser Konsole anmelden. Ihre Rolle bestimmt, was sie tun dürfen. Plattform-Benutzer sehen alle Unternehmen, Unternehmens-Benutzer nur ihr eigenes. Personen eines Unternehmens nutzen nur die API und werden unter Unternehmen gepflegt.",
   "tab": "{tab, select, users {Benutzer} roles {Rollen und Berechtigungen} other {}}",
   "emptyTitle": "Keine Konsolen-Benutzer",
   "empty": "Lege die Benutzer an, die sich an der Konsole anmelden.",
@@ -29,7 +29,9 @@
     "role": "Rolle",
     "initialPassword": "Startpasswort",
     "access": "Zugriff auf",
-    "accessHint": "{scope, select, company {Sieht und verwaltet nur dieses Unternehmen. Rechte der Rolle für Anbieter, Modelle, Einstellungen, Benutzer und Rollen gelten dann nicht.} other {Plattform-Benutzer. Die Rolle gilt für alle Unternehmen und die Plattform-Einstellungen.}}"
+    "accessHint": "{scope, select, company {Sieht und verwaltet nur ein Unternehmen. Berechtigungen für Anbieter, Modelle, Einstellungen, Benutzer und Rollen gelten nicht.} other {Plattform-Benutzer. Die Rolle gilt für alle Unternehmen und die Plattform-Einstellungen.}}",
+    "company": "Unternehmen",
+    "companyPlaceholder": "Unternehmen wählen"
   },
   "toasts": {
     "created": "Benutzer angelegt",
@@ -77,5 +79,11 @@
     "value": "{named, select, yes {Zugriff auf {alias}} other {Zugriff auf das ausgewählte Unternehmen}}",
     "clear": "Alle Konsolen-Benutzer anzeigen",
     "empty": "Für dieses Unternehmen kann sich kein Konsolen-Benutzer anmelden."
+  },
+  "createHint": "Konsolen-Benutzer melden sich an dieser Konsole an. Wer nur die API aufruft, braucht einen API-Key statt eines Kontos hier.",
+  "customRole": "Eigene Rolle. Ihre Berechtigungen findest du unter Rollen und Berechtigungen.",
+  "pickRole": "Wähle die Rolle, die zur Aufgabe der Person passt.",
+  "accessMode": {
+    "title": "{mode, select, company {Ein Unternehmen} other {Gesamter Hub}}"
   }
 }

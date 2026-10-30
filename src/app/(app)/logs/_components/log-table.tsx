@@ -3,6 +3,7 @@
 import { Button, Table } from "@heroui/react";
 import { Activity, Coins, FileText, ScrollText } from "lucide-react";
 import { useFormatter, useTranslations } from "next-intl";
+import { Link } from "@/i18n/routing";
 import EmptyState from "@/components/console/empty-state";
 import RowCard, { RowCards, TABLE_FROM_LG } from "@/components/console/row-cards";
 import type { loadLogsAction } from "../_action";
@@ -54,6 +55,44 @@ export default function LogTable({
     );
   }
 
+  function keyCell(row: RequestLogRow) {
+    const label = keyLabel(row);
+    if (row.system || !row.keyId || !row.keyLabel) return <span className="text-sm break-words">{label}</span>;
+    return (
+      <Link href={`/keys/${encodeURIComponent(row.keyId)}`} className="text-sm break-words text-accent">
+        {label}
+      </Link>
+    );
+  }
+
+  function caller(row: RequestLogRow) {
+    return (
+      <div className="min-w-32">
+        {keyCell(row)}
+        {row.system || row.memberId || row.userId ? (
+          <p className="text-xs break-words text-muted">{personLabel(row)}</p>
+        ) : null}
+      </div>
+    );
+  }
+
+  function usage(row: RequestLogRow) {
+    return (
+      <div className="min-w-0 tabular-nums">
+        <p className="text-sm whitespace-nowrap">
+          {t("tokenFlow", { prompt: row.promptTokens, completion: row.completionTokens })}
+        </p>
+        <p className="text-xs whitespace-nowrap text-muted">
+          {t("costLatency", { cost: format.number(row.cost, "money"), latency: row.latencyMs })}
+        </p>
+      </div>
+    );
+  }
+
+  function hasChecks(row: RequestLogRow) {
+    return Boolean(row.piiMode) || row.piiInput.length > 0 || row.piiOutput.length > 0 || guarded(row);
+  }
+
   function statusChip(row: RequestLogRow) {
     return <StatusChip status={row.status} outcome={row.outcome} />;
   }
@@ -102,36 +141,23 @@ export default function LogTable({
           {logs.requests.map((row) => (
             <RowCard
               key={row.id}
-              title={row.model}
+              title={<span className="break-words">{row.model}</span>}
               description={
                 <>
                   {time(row.createdAt)}
-                  <span className="block font-mono text-xs">{row.endpoint || tCommon("none")}</span>
+                  <span className="block font-mono text-xs break-words">{row.endpoint || tCommon("none")}</span>
                 </>
               }
               aside={detailButton(row)}
               chips={
                 <>
                   {statusChip(row)}
-                  {policyChips(row)}
+                  {hasChecks(row) ? policyChips(row) : null}
                 </>
               }
               details={[
-                { label: t("columns.latency"), value: t("latencyMs", { value: row.latencyMs }) },
-                { label: t("columns.cost"), value: format.number(row.cost, "money") },
-                {
-                  label: t("columns.tokens"),
-                  value: t("tokenSplit", { prompt: row.promptTokens, completion: row.completionTokens }),
-                },
-                {
-                  label: t("columns.caller"),
-                  value: (
-                    <>
-                      {keyLabel(row)}
-                      <span className="block text-xs text-muted">{personLabel(row)}</span>
-                    </>
-                  ),
-                },
+                { label: t("columns.caller"), value: caller(row) },
+                { label: t("columns.usage"), value: usage(row) },
                 ...(row.labels.length
                   ? [{ label: t("labels.title"), value: <LabelChips labels={row.labels} />, wide: true }]
                   : []),
@@ -141,43 +167,40 @@ export default function LogTable({
         </RowCards>
         <Table aria-label={t("tabs.requests")} className={TABLE_FROM_LG}>
           <Table.ScrollContainer>
-            <Table.Content aria-label={t("tabs.requests")} className="min-w-6xl">
+            <Table.Content aria-label={t("tabs.requests")} className="min-w-5xl">
               <Table.Header>
-                <Table.Column isRowHeader>{t("columns.time")}</Table.Column>
-                <Table.Column>{t("columns.model")}</Table.Column>
+                <Table.Column isRowHeader>{t("columns.model")}</Table.Column>
+                <Table.Column>{t("columns.time")}</Table.Column>
                 <Table.Column>{t("columns.caller")}</Table.Column>
                 <Table.Column>{t("columns.status")}</Table.Column>
-                <Table.Column>{t("columns.latency")}</Table.Column>
-                <Table.Column>{t("columns.tokens")}</Table.Column>
-                <Table.Column>{t("columns.cost")}</Table.Column>
+                <Table.Column>{t("columns.usage")}</Table.Column>
                 <Table.Column>{t("columns.pii")}</Table.Column>
-                <Table.Column>{tCommon("actions")}</Table.Column>
+                <Table.Column>
+                  <span className="sr-only">{tCommon("actions")}</span>
+                </Table.Column>
               </Table.Header>
               <Table.Body>
                 {logs.requests.map((row) => (
                   <Table.Row key={row.id} id={row.id}>
-                    <Table.Cell>{time(row.createdAt)}</Table.Cell>
                     <Table.Cell>
-                      <p className="text-sm">{row.model}</p>
-                      <p className="font-mono text-xs text-muted">{row.endpoint || tCommon("none")}</p>
-                      {row.labels.length ? (
-                        <div className="mt-1 max-w-xs">
-                          <LabelChips labels={row.labels} />
-                        </div>
-                      ) : null}
+                      <div className="max-w-xs min-w-44">
+                        <p className="text-sm font-medium break-words">{row.model}</p>
+                        <p className="font-mono text-xs break-words text-muted">{row.endpoint || tCommon("none")}</p>
+                        {row.labels.length ? (
+                          <div className="mt-1">
+                            <LabelChips labels={row.labels} />
+                          </div>
+                        ) : null}
+                      </div>
                     </Table.Cell>
                     <Table.Cell>
-                      <p className="text-sm">{keyLabel(row)}</p>
-                      <p className="text-xs text-muted">{personLabel(row)}</p>
+                      <span className="text-sm whitespace-nowrap text-muted tabular-nums">{time(row.createdAt)}</span>
                     </Table.Cell>
+                    <Table.Cell>{caller(row)}</Table.Cell>
                     <Table.Cell>{statusChip(row)}</Table.Cell>
-                    <Table.Cell>{t("latencyMs", { value: row.latencyMs })}</Table.Cell>
+                    <Table.Cell>{usage(row)}</Table.Cell>
                     <Table.Cell>
-                      {t("tokenSplit", { prompt: row.promptTokens, completion: row.completionTokens })}
-                    </Table.Cell>
-                    <Table.Cell>{format.number(row.cost, "money")}</Table.Cell>
-                    <Table.Cell>
-                      <div className="flex flex-wrap gap-1">{policyChips(row)}</div>
+                      {hasChecks(row) ? <div className="flex flex-wrap gap-1">{policyChips(row)}</div> : null}
                     </Table.Cell>
                     <Table.Cell>{detailButton(row)}</Table.Cell>
                   </Table.Row>

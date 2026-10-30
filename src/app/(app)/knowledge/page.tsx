@@ -1,10 +1,9 @@
 "use client";
 
 import { useCallback, useMemo, useState, useTransition } from "react";
-import { Alert, Button, Chip, SearchField, Table, toast, useOverlayState } from "@heroui/react";
-import { FolderOpen, Library, Pencil, Plus, Trash2 } from "lucide-react";
+import { Alert, Button, SearchField, Table, toast, useOverlayState } from "@heroui/react";
+import { Library, Plus, SearchX } from "lucide-react";
 import { useFormatter, useTranslations } from "next-intl";
-import ConfirmDialog from "@/components/console/confirm-dialog";
 import EmptyState from "@/components/console/empty-state";
 import PageHeader from "@/components/console/page-header";
 import PageStatus from "@/components/console/page-status";
@@ -13,34 +12,22 @@ import SearchSelect from "@/components/console/search-select";
 import { useErrorToast } from "@/components/console/use-error-toast";
 import { deleteKnowledgeAction, loadKnowledgeAction } from "./_action";
 import { useActionData } from "@/lib/hooks/use-action-data";
-import { useClock } from "@/lib/hooks/use-clock";
 import { isActionFail } from "@/lib/http/action-result";
 import { formatBytes } from "@/lib/utils/bytes";
-import type { VectorStoreStatus, VectorStoreView } from "@/types/rag";
+import type { VectorStoreView } from "@/types/rag";
 import FilesDialog from "./_components/files-dialog";
+import { StoreActions, StoreActivity, StoreFiles, StoreName, StoreOwner, StoreStatusChip } from "./_components/store-cells";
 import StoreDialog from "./_components/store-dialog";
 
 const ALL_COMPANIES = ":all";
 
-const STATUS_COLOR = {
-  in_progress: "warning",
-  completed: "success",
-  expired: "default",
-} as const satisfies Record<VectorStoreStatus, "warning" | "success" | "default">;
-
-function ownerName(store: VectorStoreView): string {
-  if (store.scope === "project") return store.projectName;
-  if (store.scope === "member") return store.memberName;
-  if (store.scope === "user") return store.userName;
-  return "";
-}
+const SEARCH_FROM = 6;
 
 export default function KnowledgePage() {
   const t = useTranslations("Knowledge");
   const showError = useErrorToast();
   const tCommon = useTranslations("Common");
   const format = useFormatter();
-  const now = useClock(30_000);
   const [query, setQuery] = useState("");
   const [company, setCompany] = useState(ALL_COMPANIES);
   const [editing, setEditing] = useState<VectorStoreView | null>(null);
@@ -120,104 +107,16 @@ export default function KnowledgePage() {
       </Button>
     ) : undefined;
 
-  function ownerCell(store: VectorStoreView) {
+  function actions(store: VectorStoreView) {
     return (
-      <>
-        <div className="text-sm">{t("owner.name", { scope: store.scope, name: ownerName(store) })}</div>
-        <div className="text-xs text-muted">{t("owner.kind", { scope: store.scope })}</div>
-      </>
-    );
-  }
-
-  function statusChip(store: VectorStoreView) {
-    return (
-      <Chip size="sm" variant="soft" color={STATUS_COLOR[store.status]}>
-        {t("status", { status: store.status })}
-      </Chip>
-    );
-  }
-
-  function filesCell(store: VectorStoreView) {
-    return (
-      <>
-        <div className="text-sm">
-          {t("fileCounts", { completed: store.fileCounts.completed, total: store.fileCounts.total })}
-        </div>
-        {store.fileCounts.failed > 0 ? (
-          <div className="text-xs text-danger">{t("failedCount", { count: store.fileCounts.failed })}</div>
-        ) : null}
-      </>
-    );
-  }
-
-  function embeddingCell(store: VectorStoreView) {
-    return (
-      <>
-        <div className="font-mono text-xs break-words">{store.embeddingModel}</div>
-        {store.embeddingDimensions > 0 ? (
-          <div className="text-xs text-muted">{t("dimensions", { count: store.embeddingDimensions })}</div>
-        ) : null}
-      </>
-    );
-  }
-
-  function activityCell(store: VectorStoreView) {
-    return (
-      <>
-        <div className="text-sm">{format.relativeTime(new Date(store.lastActiveAt), now)}</div>
-        {store.expiresAt && store.status !== "expired" ? (
-          <div className="text-xs text-muted">
-            {t("expires", { when: format.relativeTime(new Date(store.expiresAt), now) })}
-          </div>
-        ) : null}
-      </>
-    );
-  }
-
-  function storeActions(store: VectorStoreView) {
-    return (
-      <>
-        <Button
-          isIconOnly
-          size="sm"
-          variant="ghost"
-          aria-label={t("manageFiles")}
-          onPress={() => openFiles(store)}
-        >
-          <FolderOpen size={14} aria-hidden />
-        </Button>
-        {canManage ? (
-          <>
-            <Button
-              isIconOnly
-              size="sm"
-              variant="ghost"
-              aria-label={tCommon("edit")}
-              onPress={() => openDialog(store)}
-            >
-              <Pencil size={14} aria-hidden />
-            </Button>
-            <ConfirmDialog
-              title={t("deleteConfirm", { name: store.name })}
-              description={t("deleteHint", { count: store.fileCounts.total })}
-              confirmLabel={tCommon("delete")}
-              cancelLabel={tCommon("cancel")}
-              pending={deleting === store.id}
-              onConfirm={() => remove(store.id)}
-            >
-              <Button
-                isIconOnly
-                size="sm"
-                variant="danger-soft"
-                aria-label={tCommon("delete")}
-                isPending={deleting === store.id}
-              >
-                <Trash2 size={14} aria-hidden />
-              </Button>
-            </ConfirmDialog>
-          </>
-        ) : null}
-      </>
+      <StoreActions
+        store={store}
+        canManage={canManage}
+        deleting={deleting === store.id}
+        onFiles={() => openFiles(store)}
+        onEdit={() => openDialog(store)}
+        onDelete={() => remove(store.id)}
+      />
     );
   }
 
@@ -232,6 +131,7 @@ export default function KnowledgePage() {
 
       {canManage ? null : (
         <Alert status="accent">
+          <Alert.Indicator />
           <Alert.Content>
             <Alert.Description>{t("readOnly")}</Alert.Description>
           </Alert.Content>
@@ -242,36 +142,35 @@ export default function KnowledgePage() {
         <EmptyState icon={Library} title={t("emptyTitle")} description={t("empty")} action={createButton} />
       ) : (
         <>
-          <div className="flex flex-wrap items-end gap-3">
-            <SearchField
-              value={query}
-              onChange={setQuery}
-              aria-label={t("search")}
-              className="w-full max-w-sm"
-            >
-              <SearchField.Group>
-                <SearchField.SearchIcon />
-                <SearchField.Input placeholder={t("search")} />
-                <SearchField.ClearButton aria-label={tCommon("close")} />
-              </SearchField.Group>
-            </SearchField>
-            {view.companies.length > 1 ? (
-              <SearchSelect
-                hideLabel
-                label={t("companyFilter")}
-                items={[
-                  { id: ALL_COMPANIES, label: t("allCompanies") },
-                  ...view.companies.map((item) => ({ id: item.id, label: item.alias })),
-                ]}
-                value={company}
-                onChange={setCompany}
-                className="w-full sm:max-w-xs"
-              />
-            ) : null}
-          </div>
+          {stores.length >= SEARCH_FROM || view.companies.length > 1 ? (
+            <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+              {stores.length >= SEARCH_FROM ? (
+                <SearchField value={query} onChange={setQuery} aria-label={t("search")} className="w-full sm:max-w-xs">
+                  <SearchField.Group>
+                    <SearchField.SearchIcon />
+                    <SearchField.Input placeholder={t("search")} />
+                    <SearchField.ClearButton aria-label={tCommon("close")} />
+                  </SearchField.Group>
+                </SearchField>
+              ) : null}
+              {view.companies.length > 1 ? (
+                <SearchSelect
+                  hideLabel
+                  label={t("companyFilter")}
+                  items={[
+                    { id: ALL_COMPANIES, label: t("allCompanies") },
+                    ...view.companies.map((item) => ({ id: item.id, label: item.alias })),
+                  ]}
+                  value={company}
+                  onChange={setCompany}
+                  className="w-full sm:max-w-xs"
+                />
+              ) : null}
+            </div>
+          ) : null}
 
           {filtered.length === 0 ? (
-            <EmptyState icon={Library} title={t("noMatches")} />
+            <EmptyState icon={SearchX} title={t("noMatches")} description={t("noMatchesHint")} />
           ) : (
             <>
               <RowCards label={t("title")}>
@@ -279,53 +178,50 @@ export default function KnowledgePage() {
                   <RowCard
                     key={store.id}
                     title={store.name}
-                    description={store.description || undefined}
-                    aside={statusChip(store)}
+                    description={<StoreOwner store={store} />}
+                    aside={<StoreStatusChip store={store} />}
                     details={[
-                      { label: t("columns.company"), value: store.orgName || tCommon("none") },
-                      { label: t("columns.owner"), value: ownerCell(store) },
-                      { label: t("columns.files"), value: filesCell(store) },
+                      ...(store.description ? [{ label: t("dialog.description"), value: store.description, wide: true }] : []),
+                      { label: t("columns.files"), value: <StoreFiles store={store} /> },
                       { label: t("columns.size"), value: formatBytes(format, store.usageBytes) },
-                      { label: t("columns.embedding"), value: embeddingCell(store) },
-                      { label: t("columns.lastActive"), value: activityCell(store) },
+                      { label: t("columns.lastActive"), value: <StoreActivity store={store} />, wide: true },
                     ]}
-                    actions={storeActions(store)}
+                    actions={actions(store)}
                   />
                 ))}
               </RowCards>
               <Table aria-label={t("title")} className={TABLE_FROM_LG}>
                 <Table.ScrollContainer>
-                  <Table.Content aria-label={t("title")} className="min-w-[64rem]">
+                  <Table.Content aria-label={t("title")}>
                     <Table.Header>
                       <Table.Column isRowHeader>{t("columns.name")}</Table.Column>
-                      <Table.Column>{t("columns.company")}</Table.Column>
-                      <Table.Column>{t("columns.owner")}</Table.Column>
                       <Table.Column>{t("columns.status")}</Table.Column>
                       <Table.Column>{t("columns.files")}</Table.Column>
                       <Table.Column>{t("columns.size")}</Table.Column>
-                      <Table.Column>{t("columns.embedding")}</Table.Column>
                       <Table.Column>{t("columns.lastActive")}</Table.Column>
-                      <Table.Column>{tCommon("actions")}</Table.Column>
+                      <Table.Column>
+                        <span className="sr-only">{tCommon("actions")}</span>
+                      </Table.Column>
                     </Table.Header>
                     <Table.Body>
                       {filtered.map((store) => (
                         <Table.Row key={store.id} id={store.id}>
                           <Table.Cell>
-                            <div className="font-medium">{store.name}</div>
-                            {store.description ? (
-                              <div className="text-xs text-muted">{store.description}</div>
-                            ) : null}
+                            <StoreName store={store} />
                           </Table.Cell>
-                          <Table.Cell>{store.orgName || tCommon("none")}</Table.Cell>
-                          <Table.Cell>{ownerCell(store)}</Table.Cell>
-                          <Table.Cell>{statusChip(store)}</Table.Cell>
-                          <Table.Cell>{filesCell(store)}</Table.Cell>
-                          <Table.Cell>{formatBytes(format, store.usageBytes)}</Table.Cell>
-                          <Table.Cell>{embeddingCell(store)}</Table.Cell>
-                          <Table.Cell>{activityCell(store)}</Table.Cell>
                           <Table.Cell>
-                            <div className="flex gap-1">{storeActions(store)}</div>
+                            <StoreStatusChip store={store} />
                           </Table.Cell>
+                          <Table.Cell>
+                            <StoreFiles store={store} />
+                          </Table.Cell>
+                          <Table.Cell>
+                            <span className="text-sm tabular-nums">{formatBytes(format, store.usageBytes)}</span>
+                          </Table.Cell>
+                          <Table.Cell>
+                            <StoreActivity store={store} />
+                          </Table.Cell>
+                          <Table.Cell>{actions(store)}</Table.Cell>
                         </Table.Row>
                       ))}
                     </Table.Body>
@@ -334,6 +230,7 @@ export default function KnowledgePage() {
               </Table>
             </>
           )}
+          <p className="text-xs text-muted">{t("howItWorks")}</p>
         </>
       )}
 

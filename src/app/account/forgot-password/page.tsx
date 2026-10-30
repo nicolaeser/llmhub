@@ -27,7 +27,7 @@ export default function ForgotPasswordPage() {
     <AccountShell
       title={t.rich("heading", {
         lead: (chunks) => chunks,
-        accent: (chunks) => <span className="text-accent">{chunks}</span>,
+        accent: (chunks) => <span className="text-muted">{chunks}</span>,
       })}
       subtitle={t("subtitle")}
       footer={

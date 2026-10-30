@@ -1,6 +1,6 @@
 {
   "title": "Logs",
-  "subtitle": "Requests, agent sessions, spend events, and admin audit trail",
+  "subtitle": "Every request through the gateway, agent sessions, spend events, and the admin audit trail.",
   "tabs": {
     "requests": "Requests",
     "sessions": "Sessions",
@@ -24,7 +24,8 @@
     "changes": "Changes",
     "endpoint": "Endpoint",
     "caller": "Caller",
-    "pii": "Checks"
+    "pii": "Checks",
+    "usage": "Usage"
   },
   "emptyRequests": "No request logs yet.",
   "emptySpend": "No spend events.",
@@ -54,7 +55,10 @@
     "title": "{count, plural, =0 {Filters} other {Filters · # active}}",
     "label": "Label",
     "labelHint": "key:value, for example cost_center:4711",
-    "labelInvalid": "Enter the label as key:value."
+    "labelInvalid": "Enter the label as key:value.",
+    "anyModel": "Any model",
+    "statusPlaceholder": "For example 429",
+    "more": "{count, plural, =0 {More filters} other {More filters · # active}}"
   },
   "prev": "Previous",
   "next": "Next",
@@ -136,7 +140,12 @@
     "replayModel": "Replay model",
     "replayHint": "Load this request into the Playground to send it again. Keep the original model or pick another to compare.",
     "replayPick": "Choose a model",
-    "replayNoModels": "No models available"
+    "replayNoModels": "No models available",
+    "streamed": "Streamed",
+    "caller": "Who sent it",
+    "request": "Request",
+    "copyId": "Copy request ID",
+    "replayTitle": "Send again"
   },
   "sessions": {
     "title": "{agent, select, claude_code {Claude Code session} codex {Codex session} none {Agent session} other {{agent} session}}",
@@ -219,5 +228,8 @@
     "sideTitle": "{count, plural, one {# side conversation} other {# side conversations}}",
     "sideItem": "Side conversation {index, number, integer}",
     "sideMeta": "{count, plural, one {# request} other {# requests}} · {models}"
-  }
+  },
+  "export": "Export",
+  "tokenFlow": "{prompt, number, integer} → {completion, number, integer} tokens",
+  "costLatency": "{cost} · {latency, number, integer} ms"
 }

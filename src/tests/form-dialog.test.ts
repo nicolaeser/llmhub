@@ -17,10 +17,13 @@ const FORM_DIALOGS = [
   "src/app/(app)/account/_components/passkeys-card.tsx",
   "src/app/(app)/companies/_components/node-dialog.tsx",
   "src/app/(app)/companies/_components/report-dialog.tsx",
-  "src/app/(app)/guardrails/_components/override-dialog.tsx",
-  "src/components/keys/key-dialog.tsx",
+  "src/app/(app)/keys/[id]/_components/key-section-dialog.tsx",
   "src/components/keys/key-mcp-dialog.tsx",
+  "src/app/(app)/guardrails/_components/rule-dialog.tsx",
+  "src/app/(app)/guardrails/_components/check-dialog.tsx",
   "src/app/(app)/knowledge/_components/store-dialog.tsx",
+  "src/app/(app)/mcp/_components/access-dialog.tsx",
+  "src/app/(app)/mcp/_components/permissions-dialog.tsx",
   "src/app/(app)/usage/_components/markup-dialog.tsx",
   "src/app/(app)/models/_components/assign-dialog.tsx",
   "src/app/(app)/models/_components/model-group-dialog.tsx",
@@ -90,11 +93,11 @@ function submitForm(form: TreeElement): { prevented: boolean } {
   return event;
 }
 
-test("form-dialog renders a HeroUI Modal around a Form submitted from the footer", () => {
+test("form-dialog renders a controlled HeroUI Modal backdrop around a Form submitted from the footer", () => {
   const tree = render();
-  assert.equal(tree.type, Modal);
-  assert.equal(tree.props.state, state);
-  onlyElement(tree, Modal.Backdrop);
+  assert.equal(tree.type, Modal.Backdrop);
+  assert.equal(tree.props.isOpen, state.isOpen);
+  assert.equal(tree.props.onOpenChange, state.setOpen);
   onlyElement(tree, Modal.Container);
   const closed: string[] = [];
   const close = () => {
@@ -139,10 +142,15 @@ test("form-dialog offers four distinct widths and defaults to md", () => {
 });
 
 for (const rel of FORM_DIALOGS) {
-  test(`${rel} uses the shared FormDialog`, () => {
+  test(`${rel} uses the shared FormDialog or StepDialog`, () => {
     const source = readJsx(path.join(root, rel));
-    const formDialog = importedAs(source, "@/components/console/form-dialog");
-    assert.ok(rendersComponent(source, formDialog), "renders FormDialog");
+    const shared = ["@/components/console/form-dialog", "@/components/console/step-dialog"].map((from) =>
+      importedAs(source, from),
+    );
+    assert.ok(
+      shared.some((local) => rendersComponent(source, local)),
+      "renders FormDialog or StepDialog",
+    );
     assert.equal(rendersComponent(source, importedAs(source, "@heroui/react", "Modal")), false, "renders Modal directly");
   });
 }

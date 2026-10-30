@@ -1,11 +1,9 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import { Alert, Button, toast, useOverlayState } from "@heroui/react";
-import { X } from "lucide-react";
+import { useState, useTransition, type ReactNode } from "react";
+import { toast, useOverlayState } from "@heroui/react";
 import { useTranslations } from "next-intl";
 import ConfirmDialog from "@/components/console/confirm-dialog";
-import CopyButton from "@/components/console/copy-button";
 import { useErrorToast } from "@/components/console/use-error-toast";
 import { isActionFail } from "@/lib/http/action-result";
 import type { ActionFail } from "@/types/actions";
@@ -19,9 +17,11 @@ import type {
   VirtualKeyView,
 } from "@/types/keys";
 import type { McpKeyAccess, McpKeyAccessChoice } from "@/types/mcp";
+import type { BudgetInput, BudgetResult } from "@/types/structure";
 import KeyDialog from "./key-dialog";
 import KeyMcpDialog from "./key-mcp-dialog";
 import KeyPauseDialog from "./key-pause-dialog";
+import KeySecretDialog, { type IssuedSecret } from "./key-secret-dialog";
 
 export type KeyServerActions = {
   create: (input: KeyCreateInput) => Promise<{ key: IssuedKey } | ActionFail>;
@@ -32,6 +32,7 @@ export type KeyServerActions = {
   revoke: (id: string) => Promise<{ id: string } | ActionFail>;
   loadMcp: (keyId: string) => Promise<McpKeyAccess | ActionFail>;
   saveMcp: (input: { keyId: string; servers: McpKeyAccessChoice[] }) => Promise<McpKeyAccess | ActionFail>;
+  setBudget?: (input: BudgetInput) => Promise<BudgetResult | ActionFail>;
 };
 
 export type KeyTarget = { id: string; name: string };
@@ -54,11 +55,15 @@ const NO_OPTIONS: KeyOptions = {
 export function useKeyDialogs({
   actions,
   canBind,
+  canBudget = false,
+  linkToDetail = true,
   onSaved,
   onRevoked,
 }: {
   actions: KeyServerActions;
   canBind: boolean;
+  canBudget?: boolean;
+  linkToDetail?: boolean;
   onSaved: (key: VirtualKeyView, change: KeyChange) => void;
   onRevoked: (id: string) => void;
 }) {
@@ -67,7 +72,7 @@ export function useKeyDialogs({
   const showError = useErrorToast();
   const [form, setForm] = useState<KeyForm | null>(null);
   const [target, setTarget] = useState<KeyTarget | null>(null);
-  const [secret, setSecret] = useState<{ name: string; value: string } | null>(null);
+  const [secret, setSecret] = useState<IssuedSecret | null>(null);
   const [busy, setBusy] = useState<{ id: string; action: "resume" | "rotate" | "revoke" } | null>(null);
   const [dialogKey, setDialogKey] = useState(0);
   const [, start] = useTransition();
@@ -76,6 +81,12 @@ export function useKeyDialogs({
   const pauseState = useOverlayState();
   const rotateState = useOverlayState();
   const revokeState = useOverlayState();
+  const secretState = useOverlayState();
+
+  function reveal(row: VirtualKeyView, value: string, rotated: boolean) {
+    setSecret({ id: row.token_id, name: row.key_alias || row.key_name, value, rotated });
+    secretState.open();
+  }
 
   function openForm(next: KeyForm) {
     setForm(next);
@@ -114,7 +125,7 @@ export function useKeyDialogs({
       }
       const { key: value, ...row } = result.key;
       onSaved(row, "rotated");
-      setSecret({ name: key.name, value });
+      reveal(row, value, true);
       toast(t("toasts.rotated"), { variant: "success" });
     });
   }
@@ -128,30 +139,12 @@ export function useKeyDialogs({
         showError(result.error);
         return;
       }
-      setSecret(null);
       onRevoked(result.id);
       toast(t("toasts.revoked"), { variant: "success" });
     });
   }
 
-  const notice = secret ? (
-    <Alert status="success">
-      <Alert.Indicator />
-      <Alert.Content>
-        <Alert.Title>{t("secretTitle", { name: secret.name })}</Alert.Title>
-        <Alert.Description>
-          {t("secretHint")}
-          <code className="mt-2 block break-all font-mono text-sm text-foreground">{secret.value}</code>
-        </Alert.Description>
-      </Alert.Content>
-      <div className="flex shrink-0 items-start gap-1">
-        <CopyButton text={secret.value} label={t("copySecret")} />
-        <Button isIconOnly size="sm" variant="ghost" aria-label={t("secretDismiss")} onPress={() => setSecret(null)}>
-          <X size={14} aria-hidden />
-        </Button>
-      </div>
-    </Alert>
-  ) : null;
+  const notice: ReactNode = null;
 
   const dialogs = (
     <>
@@ -164,11 +157,13 @@ export function useKeyDialogs({
         canBind={canBind}
         onCreate={actions.create}
         onUpdate={actions.update}
+        onBudget={canBudget ? actions.setBudget : undefined}
         onSaved={(row, created) => {
           onSaved(row, created ? "created" : "updated");
-          if (created) setSecret({ name: row.key_alias || row.key_name, value: created });
+          if (created) reveal(row, created, false);
         }}
       />
+      <KeySecretDialog state={secretState} secret={secret} linkToDetail={linkToDetail} />
       <KeyMcpDialog
         key={`mcp-${dialogKey}`}
         state={mcpState}

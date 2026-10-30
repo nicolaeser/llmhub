@@ -5,17 +5,6 @@
   "readOnly": "Du kannst Aufschläge ansehen. Zum Ändern brauchst du die Berechtigung Aufschläge verwalten.",
   "emptyTitle": "Noch keine Aufschläge",
   "empty": "Jeder Kunde zahlt den Modellpreis unverändert. Lege einen Aufschlag an, um mit Marge weiterzuverkaufen, oder einen Rabatt für einen Vertrag.",
-  "summary": {
-    "purchase": "Einkauf, {days, plural, one {letzter Tag} other {letzte # Tage}}",
-    "sale": "Verkauf, {days, plural, one {letzter Tag} other {letzte # Tage}}",
-    "margin": "Marge, {days, plural, one {letzter Tag} other {letzte # Tage}}",
-    "marginValue": "{amount, number, currency} · {share, number, percent}"
-  },
-  "metrics": {
-    "purchase": "Einkauf",
-    "sale": "Verkauf",
-    "margin": "Marge"
-  },
   "scope": "{scope, select, all {Alle Kunden} org {Unternehmen} team {Abteilung} project {Projekt} other {Bereich}}",
   "deletedTarget": "{scope, select, org {Gelöschtes Unternehmen} team {Gelöschte Abteilung} project {Gelöschtes Projekt} other {Gelöscht}}",
   "ruleName": "{target} · {models}",
@@ -25,8 +14,8 @@
   "columns": {
     "scope": "Gilt für",
     "model": "Modelle",
-    "percent": "Aufschlag",
-    "note": "Notiz"
+    "percent": "Änderung",
+    "rule": "Regel"
   },
   "deleteConfirm": "Aufschlag {rule} löschen?",
   "deleteHint": "Anfragen erhalten dann die nächste passende Regel oder den normalen Preis, wenn keine Regel passt.",
@@ -64,7 +53,11 @@
     "note": "Notiz",
     "notePlaceholder": "Vertrag, Grund oder Ticket",
     "preview": "Vorschau",
-    "previewHint": "Für {purchase, number, currency} Einkauf."
+    "previewPending": "Wähle, wofür die Regel gilt und welche Modelle sie abdeckt.",
+    "previewExample": "{purchase, number, currency} Einkauf werden als {sale, number, currency} berechnet.",
+    "previewMargin": "Marge {amount, number, currency} ({share, number, percent}).",
+    "more": "{hasNote, select, yes {Notiz hinzugefügt} other {Notiz hinzufügen}}",
+    "noteHint": "Nur für Admins sichtbar, etwa der Vertrag oder das Ticket hinter diesem Preis."
   },
   "lookup": {
     "title": "Anfrage prüfen",
@@ -73,5 +66,17 @@
     "example": "{purchase, number, currency} werden zu {sale, number, currency}",
     "matched": "Aus der Regel {rule}.",
     "unmatched": "Keine Regel passt. Der Preis wird unverändert abgerechnet."
-  }
+  },
+  "summaryStats": {
+    "purchase": "Einkauf, {days, plural, one {letzter Tag} other {letzte # Tage}}",
+    "sale": "Verkauf, {days, plural, one {letzter Tag} other {letzte # Tage}}",
+    "margin": "Marge, {days, plural, one {letzter Tag} other {letzte # Tage}}",
+    "marginValue": "{amount, number, currency} · {share, number, percent}"
+  },
+  "summary": "{kind, select, markup {{amount, number, percent} Aufschlag} discount {{amount, number, percent} Rabatt} other {Unveränderter Preis}} {scope, select, all {für alle Kunden} other {für {target}}} auf {models, select, all {alle Modelle} other {{model}}}",
+  "actions": "Aktionen für {rule}",
+  "search": "Aufschläge suchen",
+  "clear": "Suche löschen",
+  "count": "{count, plural, one {# Regel. Jede Anfrage bekommt genau eine.} other {# Regeln. Jede Anfrage bekommt genau eine.}}",
+  "noMatches": "Kein Aufschlag passt zu dieser Suche."
 }

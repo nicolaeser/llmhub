@@ -98,6 +98,48 @@ export default function BoostDialog({
       isSubmitDisabled={!target || !valid || removing !== null}
       onSubmit={add}
     >
+      {budget?.boosts.length ? (
+        <div className="space-y-2">
+          <p className="text-sm font-medium">{t("active")}</p>
+          <ul className="space-y-2">
+            {budget.boosts.map((boost) => (
+              <li key={boost.id}>
+                <Card
+                  variant="secondary"
+                  className="flex-row items-center justify-between gap-3 px-3 py-2"
+                >
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium tabular-nums">
+                      {format.number(boost.amount, "currency")}
+                    </p>
+                    <p className="text-xs text-muted">
+                      {t("expires", { date: new Date(boost.until) })}
+                    </p>
+                  </div>
+                  <Button
+                    isIconOnly
+                    size="sm"
+                    variant="danger-soft"
+                    aria-label={t("remove")}
+                    isPending={removing === boost.id}
+                    isDisabled={pending || (removing !== null && removing !== boost.id)}
+                    onPress={() => remove(boost.id)}
+                  >
+                    {({ isPending }) =>
+                      isPending ? (
+                        <Spinner color="current" size="sm" />
+                      ) : (
+                        <Trash2 size={14} aria-hidden />
+                      )
+                    }
+                  </Button>
+                </Card>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
       <div className="space-y-3">
         <NumberField
           fullWidth
@@ -161,47 +203,6 @@ export default function BoostDialog({
         <p className="text-xs text-muted">{t("until", { date: until })}</p>
       </div>
 
-      {budget?.boosts.length ? (
-        <div className="space-y-2">
-          <p className="text-sm font-medium">{t("active")}</p>
-          <ul className="space-y-2">
-            {budget.boosts.map((boost) => (
-              <li key={boost.id}>
-                <Card
-                  variant="secondary"
-                  className="flex-row items-center justify-between gap-3 px-3 py-2"
-                >
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium tabular-nums">
-                      {format.number(boost.amount, "currency")}
-                    </p>
-                    <p className="text-xs text-muted">
-                      {t("expires", { date: new Date(boost.until) })}
-                    </p>
-                  </div>
-                  <Button
-                    isIconOnly
-                    size="sm"
-                    variant="danger-soft"
-                    aria-label={t("remove")}
-                    isPending={removing === boost.id}
-                    isDisabled={pending || (removing !== null && removing !== boost.id)}
-                    onPress={() => remove(boost.id)}
-                  >
-                    {({ isPending }) =>
-                      isPending ? (
-                        <Spinner color="current" size="sm" />
-                      ) : (
-                        <Trash2 size={14} aria-hidden />
-                      )
-                    }
-                  </Button>
-                </Card>
-              </li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
     </FormDialog>
   );
 }

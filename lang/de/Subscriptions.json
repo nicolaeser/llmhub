@@ -1,5 +1,5 @@
 {
-  "intro": "Bediene Anfragen an /api/subscription mit angemeldeten Abos wie ChatGPT, Claude, Google Antigravity, SuperGrok, Kimi Code, Meta Muse Code und Devin. Jedes Konto zeigt seine eigenen Limits und wann sie zurückgesetzt werden.",
+  "intro": "Angemeldete Abos wie ChatGPT oder Claude. Clients erreichen sie über /api/subscription, und jedes Konto zeigt seine Nutzungslimits und wann sie zurückgesetzt werden.",
   "empty": "Melde dich bei einem Abo wie ChatGPT, Claude oder Google an, importiere vorhandene Konten oder sende jemandem einen Konto-Link.",
   "addAccount": "Konto hinzufügen",
   "refreshAll": "Alle Limits aktualisieren",
@@ -80,7 +80,9 @@
   },
   "details": {
     "title": "Details zu {name}",
-    "limits": "Nutzungslimits"
+    "limits": "Nutzungslimits",
+    "keyUsage": "Nutzung nach API-Key",
+    "keyUsageHint": "Welche API-Keys die Limits dieses Kontos in den laufenden Fenstern genutzt haben. Nutzung außerhalb von LLM Hub lässt sich nicht unterscheiden und zählt zu den Keys, die es hier genutzt haben."
   },
   "stateCount": "{state, select, available {{count, plural, other {# verfügbar}}} limited {{count, plural, other {# am Limit}}} expired {{count, plural, one {# Anmeldung abgelaufen} other {# Anmeldungen abgelaufen}}} paused {{count, plural, other {# pausiert}}} other {{count, plural, other {#}}}}",
   "status": "{status, select, paused {Pausiert} available {Verfügbar} limited {Limit erreicht} expired {Anmeldung abgelaufen} unavailable {Limits nicht verfügbar} checking {Wird geprüft} other {Verbunden}}",
@@ -257,7 +259,8 @@
     "delete": "Link löschen",
     "deleteTitle": "{label} löschen?",
     "deleteDescription": "{manageable, select, true {Der Link funktioniert sofort nicht mehr und wird entfernt. Bereits hinzugefügte Konten bleiben verbunden, und ihre Besitzer können sie weiterhin trennen.} other {Der Link funktioniert sofort nicht mehr und wird entfernt. Bereits hinzugefügte Konten bleiben verbunden und lassen sich nur hier in der Konsole trennen.}}",
-    "deleted": "{label} gelöscht"
+    "deleted": "{label} gelöscht",
+    "emptyHint": "Erstelle einen Link, damit jemand anderes das eigene Abo-Konto ohne Konsolen-Login verbinden kann."
   },
   "settings": {
     "title": "Einstellungen: {provider}",
@@ -268,27 +271,7 @@
     "setupRequired": "Einrichtung nötig"
   },
   "keyUsage": {
-    "intro": "Live-Ansicht, welche API-Keys die Nutzungslimits der einzelnen Abos füllen. Der Anteil eines Keys ist die gemeldete Auslastung des Limits, aufgeteilt nach seinem Anteil an den Kosten der Requests, die seit Fensterbeginn über LLM Hub liefen. Nutzung desselben Kontos außerhalb von LLM Hub lässt sich nicht unterscheiden und zählt zu den Keys, die es hier genutzt haben.",
-    "search": "Konten oder Keys suchen",
     "freshness": "{live, select, true {Live} other {Aktualisiert {when}}}",
-    "emptyTitle": "Noch keine Abo-Limits",
-    "empty": "Konten erscheinen hier, sobald ihre Nutzungslimits gelesen wurden.",
-    "noMatches": "Kein Konto und kein Key passt zur Suche",
-    "stats": {
-      "fullest": "Vollstes Limit",
-      "where": "{window} · {account}",
-      "topKey": "Top-Key",
-      "topKeyHint": "{used} von {window} · {account}",
-      "activeKeys": "Aktive Keys",
-      "activeKeysHint": "Mit Requests in einem laufenden Fenster",
-      "inUse": "Genutzte Konten",
-      "inUseValue": "{used, number} von {total, number}",
-      "inUseHint": "Mit Requests in einem laufenden Fenster"
-    },
-    "accountKind": "{kind} · {name}",
-    "columns": {
-      "key": "API-Key"
-    },
     "keysOn": "API-Keys auf {account}",
     "noKey": "Kein API-Key",
     "noKeyHint": "Konsolen- und System-Requests",
@@ -296,7 +279,6 @@
     "otherKeys": "{count, plural, one {# weiterer Key} other {# weitere Keys}}",
     "outside": "Außerhalb von LLM Hub oder unbekannt",
     "free": "Frei",
-    "share": "{share, number, percent} der Nutzung · {requests, plural, one {# Request} other {# Requests}}",
     "windowRequests": "{count, plural, =0 {Keine Requests über LLM Hub in diesem Fenster} one {# Request in diesem Fenster, aufgeteilt nach {basis, select, cost {Kosten} tokens {Tokens} other {Requests}}} other {# Requests in diesem Fenster, aufgeteilt nach {basis, select, cost {Kosten} tokens {Tokens} other {Requests}}}}",
     "windowPending": "Requests für dieses Fenster werden geladen",
     "noRequests": "In den laufenden Fenstern hat noch kein API-Key Requests über dieses Konto geschickt."

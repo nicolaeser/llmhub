@@ -8,22 +8,10 @@ export type RowDetail = {
 };
 
 export const TABLE_FROM_LG = "max-lg:hidden";
-export const TABLE_FROM_XL = "max-xl:hidden";
 
-export function RowCards({
-  label,
-  until = "lg",
-  children,
-}: {
-  label: string;
-  until?: "lg" | "xl";
-  children: ReactNode;
-}) {
+export function RowCards({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <ul
-      aria-label={label}
-      className={until === "xl" ? "grid grid-cols-1 gap-3 xl:hidden" : "grid grid-cols-1 gap-3 lg:hidden"}
-    >
+    <ul aria-label={label} className="grid grid-cols-1 gap-3 lg:hidden">
       {children}
     </ul>
   );

@@ -16,6 +16,11 @@ services:
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
     ports:
       - "127.0.0.1:3000:3000"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "2"
 
   postgres:
     image: postgres:18-alpine
@@ -32,6 +37,11 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "2"
 
   redis:
     image: redis:8-alpine
@@ -47,6 +57,11 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "2"
 
   rustfs-init:
     image: busybox
@@ -54,6 +69,11 @@ services:
     volumes:
       - ./rustfs-data:/data
     command: ["chown", "-R", "10001:10001", "/data"]
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "2"
 
   rustfs:
     image: rustfs/rustfs:latest
@@ -75,3 +95,8 @@ services:
       interval: 10s
       timeout: 5s
       retries: 100
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "2"

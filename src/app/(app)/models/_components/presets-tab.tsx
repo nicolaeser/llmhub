@@ -1,42 +1,55 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Alert, Button, Chip, Table, toast, useOverlayState } from "@heroui/react";
+import { Alert, Button, Chip, SearchField, Table, toast, useOverlayState } from "@heroui/react";
 import { ListChecks, Pencil, Plus, Trash2 } from "lucide-react";
-import { useFormatter, useTranslations } from "next-intl";
+import { useTranslations } from "next-intl";
 import ConfirmDialog from "@/components/console/confirm-dialog";
 import EmptyState from "@/components/console/empty-state";
 import PageStatus from "@/components/console/page-status";
 import RowCard, { RowCards, TABLE_FROM_LG } from "@/components/console/row-cards";
 import { useErrorToast } from "@/components/console/use-error-toast";
-import { templateModels } from "@/lib/gateway/access/model-policy";
+import RowMenu, { type RowMenuItem } from "@/components/providers/row-menu";
 import { useActionData } from "@/lib/hooks/use-action-data";
 import { isActionFail } from "@/lib/http/action-result";
 import type { ModelTemplateView } from "@/types/model-templates";
 import { deleteTemplateAction, loadTemplatesAction } from "../_action";
 import PresetDialog from "./preset-dialog";
+import { presetMatches } from "./preset-summary";
+import { usePresetSummary, type PresetSummaryText } from "./use-preset-summary";
 
-type RuleChip = { id: string; label: string; warning?: boolean };
+const SEARCH_FROM = 6;
+
+type PresetAction = "edit" | "delete";
+
+type PresetRow = { template: ModelTemplateView; text: PresetSummaryText };
 
 export default function PresetsTab() {
   const t = useTranslations("ModelTemplates");
   const tCommon = useTranslations("Common");
   const showError = useErrorToast();
-  const format = useFormatter();
   const [editing, setEditing] = useState<ModelTemplateView | null>(null);
   const [dialogKey, setDialogKey] = useState(0);
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [removing, setRemoving] = useState<ModelTemplateView | null>(null);
+  const [query, setQuery] = useState("");
   const [, startDelete] = useTransition();
   const formState = useOverlayState();
+  const removeState = useOverlayState();
   const page = useActionData(loadTemplatesAction);
   const { data, setData } = page;
+  const summarize = usePresetSummary(data?.policies ?? [], data?.providers ?? []);
 
   if (!data) {
     return <PageStatus state={page} />;
   }
 
   const { templates, policies, providers, canManage } = data;
-  const known = new Set(providers.map((provider) => provider.id));
+  const rows: PresetRow[] = templates.map((template) => ({ template, text: summarize(template) }));
+  const searchable = templates.length >= SEARCH_FROM;
+  const shown = searchable
+    ? rows.filter((row) => presetMatches(row.template, row.text.summary, query))
+    : rows;
 
   function setTemplates(update: (current: ModelTemplateView[]) => ModelTemplateView[]) {
     setData((current) => ({ ...current, templates: update(current.templates) }));
@@ -56,7 +69,9 @@ export default function PresetsTab() {
     );
   }
 
-  function remove(id: string) {
+  function remove() {
+    if (!removing) return;
+    const id = removing.id;
     setDeleting(id);
     startDelete(async () => {
       const result = await deleteTemplateAction(id);
@@ -70,89 +85,43 @@ export default function PresetsTab() {
     });
   }
 
-  function ruleChips(template: ModelTemplateView): RuleChip[] {
-    const removed = template.providerIds.filter((id) => !known.has(id)).length;
-    const chips: (RuleChip | null)[] = [
-      template.zdrOnly ? { id: "zdr", label: t("rule.zdr") } : null,
-      template.noTrainingOnly ? { id: "noTraining", label: t("rule.noTraining") } : null,
-      template.maxRetentionDays !== null
-        ? { id: "retention", label: t("rule.retention", { days: template.maxRetentionDays }) }
-        : null,
-      template.regions.length
-        ? {
-            id: "regions",
-            label: t("rule.regions", {
-              regions: format.list(template.regions.map((region) => t("region", { region }))),
-            }),
-          }
-        : null,
-      template.providerIds.length > removed
-        ? { id: "providers", label: t("rule.providers", { count: template.providerIds.length - removed }) }
-        : null,
-      removed ? { id: "removed", label: t("rule.removed", { count: removed }), warning: true } : null,
-      template.patterns.length
-        ? { id: "patterns", label: t("rule.patterns", { patterns: format.list(template.patterns) }) }
-        : null,
-      template.models.length ? { id: "models", label: t("rule.models", { count: template.models.length }) } : null,
-    ];
-    return chips.filter((chip): chip is RuleChip => chip !== null);
-  }
-
-  function rules(template: ModelTemplateView) {
-    const chips = ruleChips(template);
-    if (!chips.length) return <span className="text-sm text-muted">{tCommon("none")}</span>;
+  function summary(row: PresetRow) {
+    const { removed } = row.text.summary;
     return (
-      <span className="flex flex-wrap gap-1">
-        {chips.map((chip) => (
-          <Chip
-            key={chip.id}
-            size="sm"
-            variant="soft"
-            color={chip.warning ? "warning" : undefined}
-            className="max-w-full break-words"
-          >
-            {chip.label}
+      <div className="min-w-0 space-y-1">
+        <p className="text-sm break-words text-foreground">{row.text.sentence}</p>
+        {removed ? (
+          <Chip size="sm" variant="soft" color="warning" className="whitespace-nowrap">
+            {t("rule.removed", { count: removed })}
           </Chip>
-        ))}
-      </span>
+        ) : null}
+      </div>
     );
   }
 
-  function matchLabel(template: ModelTemplateView) {
-    return t("matchCount", { count: templateModels(template, policies).length });
+  function keys(template: ModelTemplateView) {
+    return <span className="text-sm whitespace-nowrap tabular-nums">{t("keyCount", { count: template.keyCount })}</span>;
   }
 
-  function presetActions(template: ModelTemplateView) {
+  function menu(template: ModelTemplateView) {
+    if (!canManage) return null;
+    const items: RowMenuItem<PresetAction>[] = [
+      { id: "edit", label: tCommon("edit"), icon: Pencil },
+      { id: "delete", label: tCommon("delete"), icon: Trash2, danger: true },
+    ];
     return (
-      <>
-        <Button
-          isIconOnly
-          size="sm"
-          variant="ghost"
-          aria-label={t("editLabel", { name: template.name })}
-          onPress={() => openDialog(template)}
-        >
-          <Pencil size={14} aria-hidden />
-        </Button>
-        <ConfirmDialog
-          title={t("deleteConfirm", { name: template.name })}
-          description={template.keyCount > 0 ? t("deleteInUse", { count: template.keyCount }) : t("deleteHint")}
-          confirmLabel={tCommon("delete")}
-          cancelLabel={tCommon("cancel")}
-          pending={deleting === template.id}
-          onConfirm={() => remove(template.id)}
-        >
-          <Button
-            isIconOnly
-            size="sm"
-            variant="danger-soft"
-            aria-label={t("deleteLabel", { name: template.name })}
-            isPending={deleting === template.id}
-          >
-            <Trash2 size={14} aria-hidden />
-          </Button>
-        </ConfirmDialog>
-      </>
+      <RowMenu
+        label={t("actionsLabel", { name: template.name })}
+        items={items}
+        pending={deleting === template.id}
+        onAction={(action) => {
+          if (action === "edit") openDialog(template);
+          if (action === "delete") {
+            setRemoving(template);
+            removeState.open();
+          }
+        }}
+      />
     );
   }
 
@@ -165,13 +134,6 @@ export default function PresetsTab() {
 
   return (
     <div className="space-y-5">
-      {templates.length ? (
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <p className="max-w-2xl text-sm text-muted">{t("subtitle")}</p>
-          {createButton}
-        </div>
-      ) : null}
-
       {canManage ? null : (
         <Alert status="accent">
           <Alert.Indicator />
@@ -185,67 +147,98 @@ export default function PresetsTab() {
         <EmptyState icon={ListChecks} title={t("emptyTitle")} description={t("empty")} action={createButton} />
       ) : (
         <>
-          <RowCards label={t("title")}>
-            {templates.map((template) => (
-              <RowCard
-                key={template.id}
-                title={template.name}
-                description={template.description || undefined}
-                aside={canManage ? presetActions(template) : undefined}
-                chips={rules(template)}
-                details={[
-                  { label: t("columns.models"), value: matchLabel(template) },
-                  { label: t("columns.keys"), value: t("keyCount", { count: template.keyCount }) },
-                ]}
-              />
-            ))}
-          </RowCards>
-          <Table aria-label={t("title")} className={TABLE_FROM_LG}>
-            <Table.ScrollContainer>
-              <Table.Content aria-label={t("title")} className="min-w-3xl">
-                <Table.Header>
-                  <Table.Column isRowHeader>{t("columns.name")}</Table.Column>
-                  <Table.Column>{t("columns.rules")}</Table.Column>
-                  <Table.Column>{t("columns.models")}</Table.Column>
-                  <Table.Column>{t("columns.keys")}</Table.Column>
-                  {canManage ? <Table.Column>{tCommon("actions")}</Table.Column> : null}
-                </Table.Header>
-                <Table.Body>
-                  {templates.map((template) => (
-                    <Table.Row key={template.id} id={template.id}>
-                      <Table.Cell>
-                        <div className="font-medium break-words">{template.name}</div>
-                        {template.description ? (
-                          <div className="text-xs break-words text-muted">{template.description}</div>
-                        ) : null}
-                      </Table.Cell>
-                      <Table.Cell>{rules(template)}</Table.Cell>
-                      <Table.Cell className="whitespace-nowrap tabular-nums">{matchLabel(template)}</Table.Cell>
-                      <Table.Cell className="whitespace-nowrap tabular-nums">
-                        {t("keyCount", { count: template.keyCount })}
-                      </Table.Cell>
-                      {canManage ? (
-                        <Table.Cell>
-                          <div className="flex gap-1">{presetActions(template)}</div>
-                        </Table.Cell>
-                      ) : null}
-                    </Table.Row>
-                  ))}
-                </Table.Body>
-              </Table.Content>
-            </Table.ScrollContainer>
-          </Table>
+          <p className="max-w-3xl text-sm text-muted">{t("subtitle")}</p>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            {searchable ? (
+              <SearchField value={query} onChange={setQuery} aria-label={t("search")} className="w-full max-w-sm">
+                <SearchField.Group>
+                  <SearchField.SearchIcon />
+                  <SearchField.Input placeholder={t("search")} />
+                  <SearchField.ClearButton aria-label={tCommon("close")} />
+                </SearchField.Group>
+              </SearchField>
+            ) : (
+              <p className="text-sm text-muted tabular-nums">{t("count", { count: templates.length })}</p>
+            )}
+            {createButton}
+          </div>
+          {shown.length === 0 ? (
+            <EmptyState icon={ListChecks} title={t("noMatches")} />
+          ) : (
+            <>
+              <RowCards label={t("title")}>
+                {shown.map((row) => (
+                  <RowCard
+                    key={row.template.id}
+                    title={row.template.name}
+                    description={row.template.description || undefined}
+                    aside={menu(row.template)}
+                    details={[
+                      { label: t("columns.allows"), value: summary(row), wide: true },
+                      { label: t("columns.keys"), value: keys(row.template) },
+                    ]}
+                  />
+                ))}
+              </RowCards>
+              <Table aria-label={t("title")} className={TABLE_FROM_LG}>
+                <Table.ScrollContainer>
+                  <Table.Content aria-label={t("title")} className="min-w-3xl">
+                    <Table.Header>
+                      <Table.Column isRowHeader>{t("columns.name")}</Table.Column>
+                      <Table.Column>{t("columns.allows")}</Table.Column>
+                      <Table.Column>{t("columns.keys")}</Table.Column>
+                      {canManage ? <Table.Column>{tCommon("actions")}</Table.Column> : null}
+                    </Table.Header>
+                    <Table.Body>
+                      {shown.map((row) => (
+                        <Table.Row key={row.template.id} id={row.template.id}>
+                          <Table.Cell>
+                            <div className="max-w-xs min-w-0">
+                              <div className="font-medium break-words">{row.template.name}</div>
+                              {row.template.description ? (
+                                <div className="text-xs break-words text-muted">{row.template.description}</div>
+                              ) : null}
+                            </div>
+                          </Table.Cell>
+                          <Table.Cell>
+                            <div className="max-w-lg">{summary(row)}</div>
+                          </Table.Cell>
+                          <Table.Cell>{keys(row.template)}</Table.Cell>
+                          {canManage ? <Table.Cell>{menu(row.template)}</Table.Cell> : null}
+                        </Table.Row>
+                      ))}
+                    </Table.Body>
+                  </Table.Content>
+                </Table.ScrollContainer>
+              </Table>
+            </>
+          )}
         </>
       )}
 
-      <PresetDialog
-        key={dialogKey}
-        state={formState}
-        editing={editing}
-        policies={policies}
-        providers={providers}
-        onSaved={saved}
-      />
+      {canManage ? (
+        <>
+          <PresetDialog
+            key={dialogKey}
+            state={formState}
+            editing={editing}
+            policies={policies}
+            providers={providers}
+            onSaved={saved}
+          />
+          <ConfirmDialog
+            state={removeState}
+            title={t("deleteConfirm", { name: removing?.name ?? "" })}
+            description={
+              removing && removing.keyCount > 0 ? t("deleteInUse", { count: removing.keyCount }) : t("deleteHint")
+            }
+            confirmLabel={tCommon("delete")}
+            cancelLabel={tCommon("cancel")}
+            pending={deleting !== null && deleting === removing?.id}
+            onConfirm={remove}
+          />
+        </>
+      ) : null}
     </div>
   );
 }

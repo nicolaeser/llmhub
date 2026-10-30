@@ -9,7 +9,8 @@
     "name": "Preset",
     "rules": "Rules",
     "models": "Models",
-    "keys": "Keys"
+    "keys": "Keys",
+    "allows": "Allows"
   },
   "rule": {
     "zdr": "Zero data retention",
@@ -31,7 +32,8 @@
   "preset": {
     "label": "Start from",
     "option": "{preset, select, zdr {Zero data retention} eu {EU data residency} noTraining {No training on prompts} shortRetention {Retention up to 30 days} other {Blank}}",
-    "name": "{preset, select, zdr {Zero data retention} eu {EU only} noTraining {No training} shortRetention {Retention up to 30 days} other {}}"
+    "name": "{preset, select, zdr {Zero data retention} eu {EU only} noTraining {No training} shortRetention {Retention up to 30 days} other {}}",
+    "hint": "Fills in common rules. You can change them in the next step."
   },
   "fields": {
     "name": "Name",
@@ -78,5 +80,26 @@
   "toasts": {
     "saved": "{mode, select, edit {Preset updated} other {Preset created}}",
     "deleted": "Preset deleted"
-  }
+  },
+  "actionsLabel": "Actions for {name}",
+  "search": "Search presets",
+  "count": "{count, plural, one {# preset} other {# presets}}",
+  "noMatches": "No preset matches this search",
+  "dialogHint": "A preset is a reusable rule for which models an API key may call. Keys that use it follow changes automatically.",
+  "steps": {
+    "basics": {
+      "title": "Basics",
+      "description": "Name the preset so key managers recognize it."
+    },
+    "rules": {
+      "title": "Rules",
+      "dataHandling": "Data handling",
+      "scope": "Providers and names"
+    },
+    "models": {
+      "title": "Extra models"
+    }
+  },
+  "condition": "{kind, select, zdr {zero data retention only} noTraining {no training on prompts} retention {{days, plural, =0 {no data kept} one {data kept at most # day} other {data kept at most # days}}} regions {{regions} only} patterns {names like {patterns}} picked {plus {count, plural, one {# picked model} other {# picked models}}} other {}}",
+  "summary": "{mode, select, empty {No rules yet, so no models} picked {Allows {count, plural, one {# picked model} other {# picked models}}} other {Allows {count, plural, =0 {no models} one {# model} other {# models}}{scoped, select, true { from {providers}} other {}}{limited, select, true {, {conditions}} other {}}{picked, plural, =0 {} one {, plus # picked model} other {, plus # picked models}}}}"
 }

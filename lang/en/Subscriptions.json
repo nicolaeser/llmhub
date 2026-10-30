@@ -1,5 +1,5 @@
 {
-  "intro": "Serve requests to /api/subscription from signed-in subscription plans such as ChatGPT, Claude, Google Antigravity, SuperGrok, Kimi Code, Meta Muse Code, and Devin. Each account shows its own limits and when they reset.",
+  "intro": "Signed-in plans such as ChatGPT or Claude. Clients reach them through /api/subscription, and each account shows its usage limits and when they reset.",
   "empty": "Sign in to a subscription such as ChatGPT, Claude, or Google, import existing accounts, or send someone an add-account link.",
   "addAccount": "Add account",
   "refreshAll": "Refresh all limits",
@@ -80,7 +80,9 @@
   },
   "details": {
     "title": "Details for {name}",
-    "limits": "Usage limits"
+    "limits": "Usage limits",
+    "keyUsage": "Usage by API key",
+    "keyUsageHint": "Which API keys used this account's limits in the current windows. Use outside LLM Hub cannot be told apart and counts toward the keys that used it here."
   },
   "stateCount": "{state, select, available {{count, plural, other {# available}}} limited {{count, plural, other {# at a limit}}} expired {{count, plural, one {# sign-in expired} other {# sign-ins expired}}} paused {{count, plural, other {# paused}}} other {{count, plural, other {#}}}}",
   "status": "{status, select, paused {Paused} available {Available} limited {Limit reached} expired {Sign-in expired} unavailable {Limits unavailable} checking {Checking} other {Connected}}",
@@ -257,7 +259,8 @@
     "delete": "Delete link",
     "deleteTitle": "Delete {label}?",
     "deleteDescription": "{manageable, select, true {The link stops working right away and is removed. Accounts already added stay connected, and their owners can still disconnect them.} other {The link stops working right away and is removed. Accounts already added stay connected and can only be disconnected here in the console.}}",
-    "deleted": "{label} deleted"
+    "deleted": "{label} deleted",
+    "emptyHint": "Create a link so someone else can connect their own subscription account without a console login."
   },
   "settings": {
     "title": "{provider} settings",
@@ -268,27 +271,7 @@
     "setupRequired": "Setup needed"
   },
   "keyUsage": {
-    "intro": "Live view of which API keys fill each subscription's usage limits. A key's part is the limit's reported usage, split by its share of the cost of requests that went through LLM Hub since the window started. Use of the same account outside LLM Hub cannot be told apart and counts toward the keys that used it here.",
-    "search": "Search accounts or keys",
     "freshness": "{live, select, true {Live} other {Updated {when}}}",
-    "emptyTitle": "No subscription limits yet",
-    "empty": "Accounts appear here once their usage limits have been read.",
-    "noMatches": "No account or key matches the search",
-    "stats": {
-      "fullest": "Fullest limit",
-      "where": "{window} · {account}",
-      "topKey": "Top key",
-      "topKeyHint": "{used} of {window} · {account}",
-      "activeKeys": "Active keys",
-      "activeKeysHint": "With requests in a current window",
-      "inUse": "Accounts in use",
-      "inUseValue": "{used, number} of {total, number}",
-      "inUseHint": "With requests in a current window"
-    },
-    "accountKind": "{kind} · {name}",
-    "columns": {
-      "key": "API key"
-    },
     "keysOn": "API keys on {account}",
     "noKey": "No API key",
     "noKeyHint": "Console and system requests",
@@ -296,7 +279,6 @@
     "otherKeys": "{count, plural, one {# other key} other {# other keys}}",
     "outside": "Outside LLM Hub or unknown",
     "free": "Unused",
-    "share": "{share, number, percent} of use · {requests, plural, one {# request} other {# requests}}",
     "windowRequests": "{count, plural, =0 {No requests through LLM Hub in this window} one {# request in this window, split by {basis, select, cost {cost} tokens {tokens} other {requests}}} other {# requests in this window, split by {basis, select, cost {cost} tokens {tokens} other {requests}}}}",
     "windowPending": "Loading requests for this window",
     "noRequests": "No API key has sent requests through this account in its current windows."

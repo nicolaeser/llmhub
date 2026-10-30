@@ -43,7 +43,7 @@ export default function CacheTab() {
   const update = (patch: Partial<SemanticCacheSettings>) => setSemantic({ ...semantic, ...patch });
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-8">
       <SettingsLead description={t("description")} canManage={view.canManage} />
       {view.stats ? <CacheStats initial={view.stats} semanticOn={view.semantic.enabled} /> : null}
       <SettingSection title={t("store.title")} subtitle={t("store.description")}>

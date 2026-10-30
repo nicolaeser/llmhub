@@ -2,9 +2,8 @@
 
 import { useState, useTransition } from "react";
 import { Alert, Button, Chip, Disclosure, Spinner, toast } from "@heroui/react";
-import { HardDrive, KeySquare } from "lucide-react";
+
 import { useTranslations } from "next-intl";
-import IconTile from "@/components/console/icon-tile";
 import { SettingSection, SettingText } from "./setting-fields";
 import { useErrorToast } from "@/components/console/use-error-toast";
 import { hasPlaceholder, presetEndpoint, S3_ADDRESSING, S3_PRESETS, s3Preset } from "@/lib/s3/presets";
@@ -32,7 +31,6 @@ export default function StorageTab() {
   const settings = draft ?? view.settings;
   const disabled = !view.canManage || pending;
   const preset = s3Preset(settings.preset);
-  const keysReady = view.keys.accessKeyId && view.keys.secretAccessKey;
   const endpointPending = hasPlaceholder(settings.endpoint);
   const update = (patch: Partial<S3Settings>) => {
     setDraft({ ...settings, ...patch });
@@ -79,7 +77,7 @@ export default function StorageTab() {
   }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-8">
       <SettingsLead description={t("description")} canManage={view.canManage} />
 
       {probe ? (
@@ -102,7 +100,6 @@ export default function StorageTab() {
 
       <SettingSection title={t("bucket.title")} subtitle={t("bucket.subtitle")}>
         <div className="flex flex-wrap items-center gap-3">
-          <IconTile icon={HardDrive} tone={view.active ? "success" : "neutral"} />
           <Chip size="sm" variant="soft" color={view.active ? "success" : "default"}>
             {t("state", { active: view.active ? "true" : "false" })}
           </Chip>
@@ -189,8 +186,7 @@ export default function StorageTab() {
       </SettingSection>
 
       <SettingSection title={t("keys.title")} subtitle={t("keys.subtitle")}>
-        <div className="flex items-start gap-3">
-          <IconTile icon={KeySquare} tone={keysReady ? "success" : "warning"} />
+        <div className="flex flex-col gap-3">
           <ul className="min-w-0 flex-1 divide-y divide-border">
             {(["S3_ACCESS_KEY_ID", "S3_SECRET_ACCESS_KEY"] as const).map((name) => {
               const set = name === "S3_ACCESS_KEY_ID" ? view.keys.accessKeyId : view.keys.secretAccessKey;

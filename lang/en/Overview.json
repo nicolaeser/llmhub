@@ -1,0 +1,82 @@
+{
+  "title": "Overview",
+  "subtitle": "What is set up, how requests are going, and what needs a look.",
+  "stats": {
+    "spendToday": "Spend today",
+    "requestsToday": "Requests today",
+    "activeKeys": "Active API keys",
+    "providersOnline": "Providers online",
+    "errorsToday": "Failed requests today",
+    "weekSpend": "{amount, number, money} in the last 7 days",
+    "weekRequests": "{count, number, integer} in the last 7 days",
+    "keysTotal": "{count, plural, one {# key} other {# keys}} in total",
+    "providersTotal": "{count, number, integer} connected",
+    "utc": "Days are counted in UTC."
+  },
+  "setup": {
+    "title": "Get started",
+    "description": "Set these up once. Each step builds on the one before.",
+    "progress": "{done, number, integer} of {total, number, integer} done",
+    "complete": "Setup complete",
+    "status": "{done, select, true {Done} other {To do}}",
+    "open": "Open",
+    "steps": {
+      "provider": {
+        "title": "Connect a provider",
+        "hint": "Add an API key or sign in to OpenAI, Anthropic, or another upstream.",
+        "action": "Connect provider"
+      },
+      "model": {
+        "title": "Enable models",
+        "hint": "Choose which models the gateway offers to your apps.",
+        "action": "Choose models"
+      },
+      "company": {
+        "title": "Add a company",
+        "hint": "Companies hold departments, projects, people, and their budgets.",
+        "action": "Add company"
+      },
+      "key": {
+        "title": "Create an API key",
+        "hint": "Apps send requests with a key. Each key belongs to a project or a person.",
+        "action": "Create key"
+      },
+      "request": {
+        "title": "Send a first request",
+        "hint": "Try a model in the playground or call /api/v1 with your key.",
+        "action": "Try it"
+      }
+    }
+  },
+  "attention": {
+    "title": "Needs attention",
+    "description": "Budgets near their cap, failing providers, and failed requests today.",
+    "empty": "Nothing needs attention right now.",
+    "budget": "{target, select, company {Company {name}} other {API key {name}}} used {ratio, number, percent} of its budget",
+    "provider": "{name} {cooling, select, true {is paused after repeated errors} other {failed {failures, plural, one {# request} other {# requests}} recently}}",
+    "errors": "{count, plural, one {# request failed today} other {# requests failed today}}",
+    "open": "View"
+  },
+  "concepts": {
+    "title": "How LLM Hub fits together",
+    "description": "The building blocks you will use most.",
+    "open": "Open",
+    "openNamed": "Open {name}",
+    "company": {
+      "title": "Company",
+      "body": "A customer or business unit. It groups departments, projects, and people and can have its own budget."
+    },
+    "key": {
+      "title": "API key",
+      "body": "The credential an app uses to call the gateway. It decides which models, budget, and limits apply."
+    },
+    "preset": {
+      "title": "Model preset",
+      "body": "A named set of models that many keys can share instead of picking models key by key."
+    },
+    "guardrail": {
+      "title": "Guardrail",
+      "body": "A rule that checks every request, for example to mask personal data or block secrets."
+    }
+  }
+}

@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useId, type ReactNode } from "react";
 import { Card, Description, Input, Label, Switch, TextField } from "@heroui/react";
 
 export function SettingSection({
@@ -14,15 +14,20 @@ export function SettingSection({
   footer?: ReactNode;
   children: ReactNode;
 }) {
+  const headingId = useId();
   return (
-    <Card className="gap-4">
-      <Card.Header>
-        <Card.Title>{title}</Card.Title>
-        {subtitle ? <Card.Description>{subtitle}</Card.Description> : null}
-      </Card.Header>
-      {children}
-      {footer ? <Card.Footer>{footer}</Card.Footer> : null}
-    </Card>
+    <section aria-labelledby={headingId} className="grid gap-x-10 gap-y-3 lg:grid-cols-[16rem_minmax(0,1fr)]">
+      <div className="space-y-1 lg:pt-1">
+        <h2 id={headingId} className="text-sm font-semibold text-foreground">
+          {title}
+        </h2>
+        {subtitle ? <p className="text-sm text-muted">{subtitle}</p> : null}
+      </div>
+      <Card className="min-w-0 gap-4">
+        {children}
+        {footer ? <Card.Footer>{footer}</Card.Footer> : null}
+      </Card>
+    </section>
   );
 }
 

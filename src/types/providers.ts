@@ -502,7 +502,7 @@ export type ProviderListActions = {
   remove: (id: string) => void;
 };
 
-export type ProvidersTab = "api" | "subscriptions" | "usage" | "links" | "health";
+export type ProvidersTab = "api" | "subscriptions" | "health";
 
 export type ProviderDraft = {
   name: string;

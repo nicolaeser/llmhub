@@ -1,10 +1,11 @@
 "use client";
 
-import { Fragment, useState, useTransition } from "react";
-import { Alert, Chip, Disclosure, Label, Separator, Switch, toast, type useOverlayState } from "@heroui/react";
+import { useState, useTransition, type ReactNode } from "react";
+import { Alert, Card, Chip, Description, Disclosure, Label, Switch, toast, type useOverlayState } from "@heroui/react";
 import { useTranslations } from "next-intl";
-import FormDialog from "@/components/console/form-dialog";
+import StepDialog, { type DialogStep } from "@/components/console/step-dialog";
 import { useErrorToast } from "@/components/console/use-error-toast";
+import { SectionChip, SectionDetail, useSectionText, useSourceLabel } from "@/components/guardrails/policy-labels";
 import { guardrailsValid } from "@/lib/gateway/safety/guardrails";
 import {
   effectivePolicies,
@@ -17,14 +18,29 @@ import { isActionFail } from "@/lib/http/action-result";
 import { POLICY_SECTIONS } from "@/schemas/guardrails";
 import type { PolicyLayer, PolicyOverrideView, PolicyRef, PolicySection, PolicyTarget } from "@/types/guardrails";
 import { savePolicyOverrideAction } from "../_action";
-import GuardrailRules from "./guardrail-rules";
 import InjectionFields from "./injection-fields";
+import OverrideRules from "./override-rules";
 import PiiEntityPicker from "./pii-entity-picker";
-import PiiPolicyFields from "./pii-policy-fields";
-import { useSectionText, useSourceLabel } from "@/components/guardrails/policy-labels";
+import { PiiBehaviorFields, PiiDetectionFields } from "./pii-policy-fields";
 import PolicyTargetPicker, { firstRef } from "./policy-target-picker";
 import { findTarget, inheritedFor, type PolicyBook } from "./policy-view";
 import SecretsFields from "./secrets-fields";
+
+function MoreSettings({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <Disclosure>
+      <Disclosure.Heading>
+        <Disclosure.Trigger className="flex w-full items-center justify-between gap-2 text-sm font-medium">
+          {title}
+          <Disclosure.Indicator />
+        </Disclosure.Trigger>
+      </Disclosure.Heading>
+      <Disclosure.Content>
+        <Disclosure.Body className="pt-3">{children}</Disclosure.Body>
+      </Disclosure.Content>
+    </Disclosure>
+  );
+}
 
 export default function OverrideDialog({
   state,
@@ -56,6 +72,8 @@ export default function OverrideDialog({
   const target = editing?.target ?? findTarget(book, ref);
   const inherited = target ? inheritedFor(book, target) : effectivePolicies(book.platform, []);
   const inheritedLayer = fullLayer(inherited);
+  const inheritedSummaries = sectionSummaries(inheritedLayer);
+  const ownSummaries = sectionSummaries(layer);
   const clearing = Boolean(editing) && isInheritAll(layer);
   const rulesValid = !layer.rules || guardrailsValid({ ...book.platform.guardrails, rules: layer.rules });
 
@@ -82,35 +100,31 @@ export default function OverrideDialog({
     });
   }
 
+  function inheritedLine(section: PolicySection) {
+    const summary = inheritedSummaries.find((row) => row.section === section);
+    return t("dialog.inherited", {
+      source: sourceLabel(inherited.sources[section]),
+      summary: summary ? sectionText(summary) : "",
+    });
+  }
+
   function fields(section: PolicySection) {
     if (section === "pii" && layer.pii) {
       const pii = layer.pii;
+      const change = (next: typeof pii) => setLayer((current) => ({ ...current, pii: next }));
       return (
         <div className="space-y-4">
-          <PiiPolicyFields
-            value={pii}
-            onChange={(next) => setLayer((cur) => ({ ...cur, pii: next }))}
-            isDisabled={pending}
-          />
-          <Disclosure>
-            <Disclosure.Heading>
-              <Disclosure.Trigger className="flex w-full items-center justify-between gap-2 text-sm font-medium">
-                {t("entitiesSummary", { count: pii.entities.length })}
-                <Disclosure.Indicator />
-              </Disclosure.Trigger>
-            </Disclosure.Heading>
-            <Disclosure.Content>
-              <Disclosure.Body className="pt-3">
-                <PiiEntityPicker
-                  value={pii.entities}
-                  onChange={(entities) =>
-                    setLayer((cur) => ({ ...cur, pii: cur.pii ? { ...cur.pii, entities } : cur.pii }))
-                  }
-                  isDisabled={pending}
-                />
-              </Disclosure.Body>
-            </Disclosure.Content>
-          </Disclosure>
+          <PiiBehaviorFields value={pii} onChange={change} isDisabled={pending} />
+          <MoreSettings title={t("entitiesSummary", { count: pii.entities.length })}>
+            <PiiEntityPicker
+              value={pii.entities}
+              onChange={(entities) => change({ ...pii, entities })}
+              isDisabled={pending}
+            />
+          </MoreSettings>
+          <MoreSettings title={t("detectionSummary", { detector: pii.detector })}>
+            <PiiDetectionFields value={pii} onChange={change} isDisabled={pending} />
+          </MoreSettings>
         </div>
       );
     }
@@ -118,7 +132,7 @@ export default function OverrideDialog({
       return (
         <InjectionFields
           value={layer.injection}
-          onChange={(next) => setLayer((cur) => ({ ...cur, injection: next }))}
+          onChange={(next) => setLayer((current) => ({ ...current, injection: next }))}
           isDisabled={pending}
         />
       );
@@ -127,16 +141,16 @@ export default function OverrideDialog({
       return (
         <SecretsFields
           value={layer.secrets}
-          onChange={(next) => setLayer((cur) => ({ ...cur, secrets: next }))}
+          onChange={(next) => setLayer((current) => ({ ...current, secrets: next }))}
           isDisabled={pending}
         />
       );
     }
     if (section === "rules" && layer.rules) {
       return (
-        <GuardrailRules
+        <OverrideRules
           rules={layer.rules}
-          onChange={(rules) => setLayer((cur) => ({ ...cur, rules }))}
+          onChange={(rules) => setLayer((current) => ({ ...current, rules }))}
           isDisabled={pending}
         />
       );
@@ -144,80 +158,114 @@ export default function OverrideDialog({
     return null;
   }
 
-  function inheritedLine(section: PolicySection) {
-    const summary = sectionSummaries(inheritedLayer).find((row) => row.section === section);
-    return t("dialog.inherited", {
-      source: sourceLabel(inherited.sources[section]),
-      summary: summary ? sectionText(summary) : "",
-    });
+  function sectionStep(section: PolicySection): DialogStep {
+    const custom = layer[section] !== null;
+    return {
+      id: section,
+      title: t("dialog.step", { step: section }),
+      optional: true,
+      isValid: section === "rules" ? rulesValid : undefined,
+      content: (
+        <div className="space-y-5">
+          <Card variant="secondary" className="gap-3">
+            <Switch
+              isSelected={custom}
+              onChange={(next) => toggle(section, next)}
+              isDisabled={pending || !target}
+            >
+              <Switch.Content>
+                <Switch.Control>
+                  <Switch.Thumb />
+                </Switch.Control>
+                <Label>{t("dialog.setHereFor", { section })}</Label>
+              </Switch.Content>
+              <Description>{custom ? t("dialog.custom", { section }) : inheritedLine(section)}</Description>
+            </Switch>
+          </Card>
+          {fields(section)}
+        </div>
+      ),
+    };
   }
 
+  const overview = (
+    <dl className="grid gap-3 sm:grid-cols-2">
+      {POLICY_SECTIONS.map((section) => {
+        const own = ownSummaries.find((row) => row.section === section);
+        const from = inheritedSummaries.find((row) => row.section === section);
+        const shown = own ?? from;
+        return (
+          <Card key={section} variant="secondary" className="gap-1.5">
+            <dt className="flex flex-wrap items-center justify-between gap-2 text-sm font-medium text-foreground">
+              {t("section", { section })}
+              <Chip size="sm" variant="soft" color={own ? "accent" : undefined}>
+                {t("dialog.origin", { own: own ? "true" : "false" })}
+              </Chip>
+            </dt>
+            <dd className="flex flex-wrap items-center gap-2">
+              {shown ? (
+                <>
+                  <SectionChip summary={shown} />
+                  <SectionDetail summary={shown} />
+                </>
+              ) : null}
+            </dd>
+            {own ? null : (
+              <dd className="text-xs break-words text-muted">
+                {t("dialog.from", { source: sourceLabel(inherited.sources[section]) })}
+              </dd>
+            )}
+          </Card>
+        );
+      })}
+    </dl>
+  );
+
   return (
-    <FormDialog
+    <StepDialog
       state={state}
       size="xl"
-      title={t("dialog.title", { mode: editing ? "edit" : "create" })}
+      title={editing ? t("dialog.title", { mode: "edit" }) : t("dialog.title", { mode: "create" })}
       description={t("dialog.hint")}
       submitLabel={clearing ? t("overrides.remove") : t("dialog.save")}
-      submitVariant={clearing ? "danger" : "primary"}
       pending={pending}
       isSubmitDisabled={!ref || !rulesValid || (!editing && isInheritAll(layer))}
       onSubmit={save}
-    >
-      {editing ? (
-        <div className="flex flex-wrap items-center gap-2">
-          <Chip size="sm" variant="soft">
-            {t("scopeLabel", { scope: editing.target.scope })}
-          </Chip>
-          <span className="text-sm font-medium break-words">{editing.target.alias}</span>
-          {editing.target.path.length ? (
-            <span className="text-xs break-words text-muted">{editing.target.path.join(" › ")}</span>
-          ) : null}
-        </div>
-      ) : (
-        <PolicyTargetPicker targets={available} value={ref} onChange={pickTarget} isDisabled={pending} />
-      )}
-      {POLICY_SECTIONS.map((section) => {
-        const custom = layer[section] !== null;
-        const label = t("section", { section });
-        return (
-          <Fragment key={section}>
-            <Separator />
-            <section className="space-y-4" aria-label={label}>
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div className="min-w-0 flex-1 space-y-0.5">
-                  <h3 className="text-sm font-semibold">{label}</h3>
-                  <p className="text-xs break-words text-muted">
-                    {custom ? t("dialog.custom", { section }) : inheritedLine(section)}
-                  </p>
+      steps={[
+        {
+          id: "target",
+          title: t("dialog.step", { step: "target" }),
+          description: editing ? t("dialog.targetEditHint") : t("dialog.targetHint"),
+          isValid: ref !== null,
+          content: (
+            <div className="space-y-5">
+              {editing ? (
+                <div className="flex flex-wrap items-center gap-2">
+                  <Chip size="sm" variant="soft">
+                    {t("scopeLabel", { scope: editing.target.scope })}
+                  </Chip>
+                  <span className="text-sm font-medium break-words text-foreground">{editing.target.alias}</span>
+                  {editing.target.path.length ? (
+                    <span className="text-xs break-words text-muted">{editing.target.path.join(" › ")}</span>
+                  ) : null}
                 </div>
-                <Switch
-                  isSelected={custom}
-                  onChange={(next) => toggle(section, next)}
-                  isDisabled={pending || !target}
-                  aria-label={t("dialog.setHereFor", { section })}
-                >
-                  <Switch.Content>
-                    <Switch.Control>
-                      <Switch.Thumb />
-                    </Switch.Control>
-                    <Label>{t("dialog.setHere")}</Label>
-                  </Switch.Content>
-                </Switch>
-              </div>
-              {fields(section)}
-            </section>
-          </Fragment>
-        );
-      })}
-      {clearing ? (
-        <Alert status="warning">
-          <Alert.Indicator />
-          <Alert.Content>
-            <Alert.Description>{t("dialog.clearing")}</Alert.Description>
-          </Alert.Content>
-        </Alert>
-      ) : null}
-    </FormDialog>
+              ) : (
+                <PolicyTargetPicker targets={available} value={ref} onChange={pickTarget} isDisabled={pending} />
+              )}
+              {target ? overview : null}
+              {clearing ? (
+                <Alert status="warning">
+                  <Alert.Indicator />
+                  <Alert.Content>
+                    <Alert.Description>{t("dialog.clearing")}</Alert.Description>
+                  </Alert.Content>
+                </Alert>
+              ) : null}
+            </div>
+          ),
+        },
+        ...POLICY_SECTIONS.map(sectionStep),
+      ]}
+    />
   );
 }
