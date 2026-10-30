@@ -10,8 +10,14 @@ import { loadSubscriptionKeyUsageAction } from "../_action";
 const REFRESH_GAP_MS = 10_000;
 const FALLBACK_POLL_MS = 30_000;
 
-export function useLiveKeyUsage(trigger: string) {
-  const usage = useActionData<SubscriptionKeyUsage>(loadSubscriptionKeyUsageAction);
+async function withoutKeyUsage(): Promise<SubscriptionKeyUsage> {
+  return { at: 0, accounts: [], keys: {} };
+}
+
+export type KeyUsageFeed = ReturnType<typeof useLiveKeyUsage>;
+
+export function useLiveKeyUsage(trigger: string, enabled: boolean) {
+  const usage = useActionData<SubscriptionKeyUsage>(enabled ? loadSubscriptionKeyUsageAction : withoutKeyUsage);
   const { setData } = usage;
   const live = useLiveConnected();
   const seen = useRef(trigger);
@@ -19,7 +25,7 @@ export function useLiveKeyUsage(trigger: string) {
   const ticket = useRef(0);
 
   useEffect(() => {
-    if (seen.current === trigger) return;
+    if (!enabled || seen.current === trigger) return;
     seen.current = trigger;
     const wait = Math.max(0, lastRun.current + REFRESH_GAP_MS - Date.now());
     const timer = setTimeout(() => {
@@ -30,10 +36,10 @@ export function useLiveKeyUsage(trigger: string) {
       });
     }, wait);
     return () => clearTimeout(timer);
-  }, [trigger, setData]);
+  }, [enabled, trigger, setData]);
 
   useEffect(() => {
-    if (live) return;
+    if (!enabled || live) return;
     const timer = setInterval(() => {
       if (document.visibilityState !== "visible") return;
       const current = ++ticket.current;
@@ -42,7 +48,7 @@ export function useLiveKeyUsage(trigger: string) {
       });
     }, FALLBACK_POLL_MS);
     return () => clearInterval(timer);
-  }, [live, setData]);
+  }, [enabled, live, setData]);
 
   return { usage, live };
 }

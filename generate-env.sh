@@ -604,7 +604,12 @@ next_steps() {
   say "  $step. Point $host at this server and serve it through a reverse proxy with TLS, for example Caddy:"
   say ""
   say "       $host {"
-  say "         reverse_proxy 127.0.0.1:$port"
+  say "         reverse_proxy 127.0.0.1:$port {"
+  say "           health_uri /internal-api/ready"
+  say "           health_interval 2s"
+  say "           lb_try_duration 90s"
+  say "           lb_try_interval 500ms"
+  say "         }"
   say "       }"
   say ""
   if [[ $(value_of IP_MODE) == cloudflare ]]; then

@@ -47,6 +47,10 @@ export async function updaterSnapshot(now = Date.now()): Promise<UpdaterSnapshot
   return snapshotOf(await readUpdaterRows(), now);
 }
 
+export async function replacedByUpdater(now = Date.now()): Promise<boolean> {
+  return isRestarting((await readUpdaterRows()).status, now);
+}
+
 export async function writeSetting(key: string, value: unknown): Promise<string> {
   const serialized = JSON.stringify(value);
   await prisma.setting.upsert({

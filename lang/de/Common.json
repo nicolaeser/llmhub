@@ -30,7 +30,7 @@
   "goHome": "Zur Startseite",
   "signOut": "Abmelden",
   "health": {
-    "status": "{status, select, live {Live} updating {Wird aktualisiert…} reconnecting {Verbinde neu…} down {Offline} other {Verbinden…}}"
+    "status": "{status, select, live {Live} updating {Wird aktualisiert…} restarting {Neustart…} reconnecting {Verbinde neu…} down {Offline} other {Verbinden…}}"
   },
   "theme": {
     "toggle": "{isDark, select, true {Zum hellen Modus wechseln} other {Zum dunklen Modus wechseln}}"
@@ -57,7 +57,8 @@
     "open": "Serverstatus: {status}. Details anzeigen",
     "connection": "Verbindung",
     "version": "Version",
-    "started": "Gestartet"
+    "started": "Gestartet",
+    "draining": "Laufende Anfragen werden noch abgeschlossen. Neue API-Anfragen erhalten bis zum Neustart einen kurzen Hinweis, es gleich erneut zu versuchen."
   },
   "updater": {
     "title": "Automatische Updates",
@@ -87,7 +88,7 @@
     "check": "Jetzt prüfen",
     "update": "Jetzt aktualisieren",
     "updateTitle": "Update jetzt installieren?",
-    "updateDescription": "Der Updater lädt das neueste Image und startet LLM Hub neu. Laufende Anfragen werden abgebrochen und die Konsole verbindet sich neu, sobald die neue Version bereit ist. Startet sie nicht, wird die aktuelle Version wiederhergestellt.",
+    "updateDescription": "Der Updater lädt das neueste Image und startet LLM Hub neu. Laufende Anfragen haben bis zu 25 Sekunden Zeit, neue API-Anfragen werden gebeten, es gleich erneut zu versuchen, und die Konsole verbindet sich neu, sobald die neue Version bereit ist. Startet sie nicht, wird die aktuelle Version wiederhergestellt.",
     "updateConfirm": "Update installieren",
     "requested": "{action, select, check {Der Updater sucht nach einem neuen Image.} update {Der Updater installiert das Update.} other {Anfrage gesendet.}}",
     "install": "Installieren",

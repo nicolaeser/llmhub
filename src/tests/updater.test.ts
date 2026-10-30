@@ -5,7 +5,12 @@ import { recordedPrisma } from "./support/recorded-prisma";
 import { createConfigFor, hasHealthcheck, stopSeconds } from "../../scripts/updater/container-config.mjs";
 import { createAgent, desiredOf } from "../../scripts/updater/agent.mjs";
 import { untarFirstFile } from "../../scripts/updater/docker.mjs";
-import { recreateContainer, replaceStoppedContainers, waitHealthy } from "../../scripts/updater/recreate.mjs";
+import {
+  recreateContainer,
+  replaceStoppedContainers,
+  UPDATE_DRAIN_SECONDS,
+  waitHealthy,
+} from "../../scripts/updater/recreate.mjs";
 import { replayLogText } from "../../scripts/updater/log.mjs";
 import {
   digestsFor,
@@ -163,14 +168,47 @@ async function recreateRecorded(container: ReturnType<typeof appContainer>) {
   return calls;
 }
 
-test("recreating a container gives open requests the grace period and keeps it on the new container", async () => {
+test("recreating a container drains it briefly and keeps the full grace period on the new container", async () => {
   const container = appContainer();
   const calls = await recreateRecorded(container);
-  assert.deepEqual(calls.find(([name]) => name === "stop"), ["stop", container.Id, 330]);
+  assert.deepEqual(calls.find(([name]) => name === "stop"), ["stop", container.Id, UPDATE_DRAIN_SECONDS]);
   assert.deepEqual(calls.find(([name]) => name === "create"), ["create", "llmhub-app-1", 330]);
   const tuned = await recreateRecorded(appContainer({ StopTimeout: 45 }));
-  assert.deepEqual(tuned.find(([name]) => name === "stop")?.[2], 45);
+  assert.deepEqual(tuned.find(([name]) => name === "stop")?.[2], UPDATE_DRAIN_SECONDS);
   assert.deepEqual(tuned.find(([name]) => name === "create")?.[2], 45);
+  const quick = await recreateRecorded(appContainer({ StopTimeout: 10 }));
+  assert.deepEqual(quick.find(([name]) => name === "stop")?.[2], 10);
+  assert.deepEqual(quick.find(([name]) => name === "create")?.[2], 10);
+});
+
+test("a failed stop request still starts the old container again", async () => {
+  const calls: string[] = [];
+  const container = appContainer();
+  const docker = {
+    inspectImage: async () => oldImage(),
+    inspectContainer: async () => null,
+    stop: async (id: string) => {
+      calls.push("stop");
+      throw new Error(`POST /containers/${id}/stop timed out`);
+    },
+    rename: async () => void calls.push("rename"),
+    create: async () => {
+      calls.push("create");
+      return { Id: "sha256:created" };
+    },
+    start: async (id: string) => void calls.push(id === container.Id ? "start_old" : "start"),
+    remove: async () => void calls.push("remove"),
+  };
+  await assert.rejects(
+    recreateContainer(docker, container, {
+      imageRef: "ghcr.io/nicolaeser/llmhub:latest",
+      image: { Id: "sha256:new" },
+      onPhase: async () => {},
+      waitOptions: { pollMs: 1 },
+    }),
+    (err: Error & { rolledBack?: boolean }) => err.rolledBack === true && /stop timed out/.test(err.message),
+  );
+  assert.deepEqual(calls, ["stop", "start_old"]);
 });
 
 test("a recreated job that exits cleanly counts as started, a service that exits does not", async () => {
@@ -543,8 +581,8 @@ test("updater views mark stale updaters as disconnected and expire old commands"
 });
 
 test("the browser derives its badge from the live link and parses only complete payloads", async () => {
-  const { healthOf, liveStatusOf, UPDATING_GRACE_MS } = await import("@/lib/updates/build-change");
-  const base = { updating: false, reachable: null, lostAt: null, now: 0 };
+  const { healthOf, liveStatusOf, RESTARTING_GRACE_MS, UPDATING_GRACE_MS } = await import("@/lib/updates/build-change");
+  const base = { updating: false, reachable: null, lostAt: null, restartAt: null, now: 0 };
   assert.equal(healthOf({ ...base, link: "connecting" }), "connecting");
   assert.equal(healthOf({ ...base, link: "open" }), "live");
   assert.equal(healthOf({ ...base, link: "open", updating: true }), "updating");
@@ -553,6 +591,13 @@ test("the browser derives its badge from the live link and parses only complete 
   assert.equal(healthOf({ ...base, link: "lost", lostAt: 1, now: 2, updating: true, reachable: false }), "updating");
   assert.equal(
     healthOf({ ...base, link: "lost", lostAt: 1, now: 2 + UPDATING_GRACE_MS, updating: true, reachable: false }),
+    "down",
+  );
+  assert.equal(healthOf({ ...base, link: "lost", lostAt: 1, restartAt: 1, now: 2 }), "restarting");
+  assert.equal(healthOf({ ...base, link: "lost", lostAt: 1, restartAt: 1, now: 2, updating: true }), "updating");
+  assert.equal(healthOf({ ...base, link: "open", restartAt: 1, now: 2 }), "live");
+  assert.equal(
+    healthOf({ ...base, link: "lost", lostAt: 1, restartAt: 1, now: 2 + RESTARTING_GRACE_MS, reachable: false }),
     "down",
   );
   const build = { version: "v2026.10.12.abc1234", startedAt: "2026-10-19T09:00:00.000Z" };

@@ -1,5 +1,5 @@
 {
-  "intro": "Signed-in plans such as ChatGPT or Claude. Clients reach them through /api/subscription, and each account shows its usage limits and when they reset.",
+  "intro": "Signed-in plans such as ChatGPT or Claude. Clients reach them through /api/subscription, and each account shows its usage limits and when they reset.{keys, select, true { The bars show which API keys used each limit.} other {}}",
   "empty": "Sign in to a subscription such as ChatGPT, Claude, or Google, import existing accounts, or send someone an add-account link.",
   "addAccount": "Add account",
   "refreshAll": "Refresh all limits",
@@ -278,7 +278,10 @@
     "deletedKey": "Deleted key",
     "otherKeys": "{count, plural, one {# other key} other {# other keys}}",
     "outside": "Outside LLM Hub or unknown",
+    "outsideShort": "Outside LLM Hub",
     "free": "Unused",
+    "barLabel": "{window} by API key",
+    "legend": "{window}: API keys",
     "windowRequests": "{count, plural, =0 {No requests through LLM Hub in this window} one {# request in this window, split by {basis, select, cost {cost} tokens {tokens} other {requests}}} other {# requests in this window, split by {basis, select, cost {cost} tokens {tokens} other {requests}}}}",
     "windowPending": "Loading requests for this window",
     "noRequests": "No API key has sent requests through this account in its current windows."
