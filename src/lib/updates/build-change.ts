@@ -8,6 +8,7 @@ export const LIVE_URL = "/internal-api/live";
 export const LIVE_STALE_MS = 35_000;
 export const LIVE_WATCHDOG_MS = 5_000;
 export const UPDATING_GRACE_MS = 15 * 60_000;
+export const RESTARTING_GRACE_MS = 3 * 60_000;
 
 export function buildInfoOf(json: unknown): BuildInfo | null {
   if (!json || typeof json !== "object") return null;
@@ -46,10 +47,12 @@ export function healthOf(input: {
   updating: boolean;
   reachable: boolean | null;
   lostAt: number | null;
+  restartAt: number | null;
   now: number;
 }): ServerHealth {
   if (input.link === "open") return input.updating ? "updating" : "live";
   if (input.lostAt === null) return "connecting";
   if (input.updating && input.now - input.lostAt < UPDATING_GRACE_MS) return "updating";
+  if (input.restartAt !== null && input.now - input.restartAt < RESTARTING_GRACE_MS) return "restarting";
   return input.reachable === false ? "down" : "reconnecting";
 }

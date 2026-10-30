@@ -33,9 +33,16 @@ The app listens on `127.0.0.1:3000` (`LLMHUB_PORT`). Put a reverse proxy with TL
 
 ```text
 hub.example.com {
-  reverse_proxy 127.0.0.1:3000
+  reverse_proxy 127.0.0.1:3000 {
+    health_uri /internal-api/ready
+    health_interval 2s
+    lb_try_duration 90s
+    lb_try_interval 500ms
+  }
 }
 ```
+
+The health check and `lb_try_duration` keep updates and restarts invisible to clients: while the app drains or starts, Caddy holds new requests for up to 90 seconds and sends them to the app as soon as it is ready again, instead of answering 502.
 
 Sign-in limits, sessions, the audit log, and key IP allowlists use the client address that `IP_MODE` selects. The default `proxy` takes the last `X-Forwarded-For` entry, the one your reverse proxy appends, so port 3000 must only be reachable through the proxy. With Cloudflare in front, set `IP_MODE=cloudflare` and accept web traffic only from Cloudflare. Postgres and Redis keep their data in `./postgres-data` and `./redis-data` next to the compose file and are not published on host ports. Migrations run on every container start.
 
@@ -95,7 +102,7 @@ The compose files also read these values from `.env`. They configure the Postgre
 | `POSTGRES_MEMORY_LIMIT` | `2g` | Memory cap of Postgres. |
 | `REDIS_MEMORY_LIMIT` | `1g` | Memory cap of Redis. |
 
-The updater in `docker-compose.au.yml` is capped at 256 MB. On `docker compose stop`, `down`, or an update, the app gets 330 seconds to finish open requests and streams (`stop_grace_period`), because API requests may run for up to 300 seconds.
+The updater in `docker-compose.au.yml` is capped at 256 MB. On `docker compose stop` or `down`, the app gets 330 seconds to finish open requests and streams (`stop_grace_period`), because API requests may run for up to 300 seconds. While it drains, it keeps accepting connections but answers new API requests with `503 server_restarting`, `Retry-After: 15`, and `x-should-retry: true` (Anthropic clients see `overloaded_error`), so Claude Code, Codex, and SDKs retry instead of reporting an exhausted subscription or budget, and `/internal-api/ready` answers 503. It exits as soon as no API request is open. An update through the updater drains for at most 25 seconds, so the outage stays short.
 
 The image sets `PORT=3000`, `HOSTNAME=0.0.0.0`, and `NODE_ENV=production`.
 
@@ -138,6 +145,8 @@ Restore with the same or a newer image than the one that wrote the backup. A new
 3. Run `docker compose pull app && docker compose up -d`.
 4. Check `/internal-api/ready` and `/internal-api/version`.
 
+If your Caddy block is still the plain `reverse_proxy 127.0.0.1:3000`, replace it with the block from [Quick start](#quick-start) and reload Caddy (`systemctl reload caddy` or `caddy reload`). Its health check on `/internal-api/ready` and `lb_try_duration` hold new requests while the app drains and restarts and hand them to the new container; without them, clients get 502 during every restart and must retry on their own. The first update to a release with the drain mode is still installed by the previous updater and image, which wait up to 330 seconds for open streams; from the next update on, the app drains for at most 25 seconds.
+
 Each container start applies pending migrations under a database lock before the server starts, so several replicas can start at the same time. Migrations are forward-only. To roll back, restore the backup taken before the upgrade and start the previous tag.
 
 ## Automatic updates
@@ -145,7 +154,7 @@ Each container start applies pending migrations under a database lock before the
 `docker-compose.au.yml` is `docker-compose.yml` plus an updater container. The app, Postgres, and Redis services are identical; the app only gains the label `llmhub.updater.target=true`. The updater runs from the same image (`node updater.mjs`) and keeps the app on the newest image of its tag:
 
 1. Every five minutes it asks the registry for the digest behind the tag the app runs and compares it with the running image.
-2. When automatic updates are on, or when someone presses Update now in the console, it pulls the image, stops the app, starts a new container with the same settings, environment overrides, labels, networks, and aliases, and waits until the image's health check reports healthy (up to ten minutes, because migrations run on start).
+2. When automatic updates are on, or when someone presses Update now in the console, it pulls the image, stops the app with a drain of 30 seconds (running requests finish, new API requests are asked to retry), starts a new container with the same settings, environment overrides, labels, networks, and aliases, and waits until the image's health check reports healthy (up to ten minutes, because migrations run on start).
 3. If the new container stops or turns unhealthy, it removes it and starts the previous container again. A digest that failed is not installed automatically again until a newer image is published; Update now retries it.
 4. After a successful update it removes the old container, recreates stopped containers that carry the label on the new image without starting them, removes the old image if nothing else uses it, and then replaces its own container with the new image. No labelled container is left on the old image.
 

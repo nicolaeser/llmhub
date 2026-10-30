@@ -1,6 +1,7 @@
 import "server-only";
 import { bearerToken, isPayloadTooLarge, readJSON } from "@/lib/http/api";
 import { clientIp, ipAllowed } from "@/lib/http/client-ip";
+import { DRAIN_RETRY_SECONDS, isDraining } from "@/lib/http/drain";
 import { authenticateBearer } from "@/lib/gateway/access/principal";
 import { defaultEntityIds } from "@/lib/gateway/safety/pii";
 import { redactWithPolicy } from "@/lib/gateway/safety/pii-detector";
@@ -76,11 +77,24 @@ export function usageLimitHeaders(gate: GateError, anthropic: boolean, now = Dat
   return { "x-codex-primary-used-percent": "100", "x-codex-primary-reset-at": String(resetsAt) };
 }
 
+export function restartingError(now = Date.now()): GateError {
+  return new GateError(
+    503,
+    "server_restarting",
+    `the gateway is restarting; retry in ${DRAIN_RETRY_SECONDS} seconds`,
+    { retryAt: now + DRAIN_RETRY_SECONDS * 1000 },
+  );
+}
+
+export function allowServing(): void {
+  if (isDraining()) throw restartingError();
+}
+
 export function gateResponse(err: unknown, req: Request): NextResponse {
   void alertUpstreamFailure(err);
   const gate = toGateError(err);
   const requestId = newRequestId();
-  if (gate.status >= 500) {
+  if (gate.status >= 500 && gate.code !== "server_restarting") {
     logger.error("gateway.error", { requestId, code: gate.code, ...errorFields(err) });
   }
   const now = Date.now();
@@ -118,6 +132,7 @@ export function withTrace(principal: Principal, endpoint: string): Principal {
 }
 
 export async function gateRequest(req: Request, pool: PublicPool = "api"): Promise<Principal> {
+  allowServing();
   const token = bearerToken(req);
   const path = requestPath(req);
   const principal = { ...withTrace(await authenticateBearer(token), path), pool, client: requestClient(req.headers) };

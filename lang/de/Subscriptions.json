@@ -1,5 +1,5 @@
 {
-  "intro": "Angemeldete Abos wie ChatGPT oder Claude. Clients erreichen sie über /api/subscription, und jedes Konto zeigt seine Nutzungslimits und wann sie zurückgesetzt werden.",
+  "intro": "Angemeldete Abos wie ChatGPT oder Claude. Clients erreichen sie über /api/subscription, und jedes Konto zeigt seine Nutzungslimits und wann sie zurückgesetzt werden.{keys, select, true { Die Balken zeigen, welche API-Keys die einzelnen Limits genutzt haben.} other {}}",
   "empty": "Melde dich bei einem Abo wie ChatGPT, Claude oder Google an, importiere vorhandene Konten oder sende jemandem einen Konto-Link.",
   "addAccount": "Konto hinzufügen",
   "refreshAll": "Alle Limits aktualisieren",
@@ -278,7 +278,10 @@
     "deletedKey": "Gelöschter Key",
     "otherKeys": "{count, plural, one {# weiterer Key} other {# weitere Keys}}",
     "outside": "Außerhalb von LLM Hub oder unbekannt",
+    "outsideShort": "Außerhalb von LLM Hub",
     "free": "Frei",
+    "barLabel": "{window} nach API-Key",
+    "legend": "{window}: API-Keys",
     "windowRequests": "{count, plural, =0 {Keine Requests über LLM Hub in diesem Fenster} one {# Request in diesem Fenster, aufgeteilt nach {basis, select, cost {Kosten} tokens {Tokens} other {Requests}}} other {# Requests in diesem Fenster, aufgeteilt nach {basis, select, cost {Kosten} tokens {Tokens} other {Requests}}}}",
     "windowPending": "Requests für dieses Fenster werden geladen",
     "noRequests": "In den laufenden Fenstern hat noch kein API-Key Requests über dieses Konto geschickt."

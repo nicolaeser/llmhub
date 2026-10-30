@@ -24,13 +24,23 @@ import RowCard, { RowCards, TABLE_FROM_LG } from "@/components/console/row-cards
 import { PlanBadge } from "@/components/console/subscription-badge";
 import { kindIcon } from "@/components/providers/kind-icons";
 import { reportsLimits } from "@/lib/gateway/upstreams/provider-kinds";
-import type { AccountStrategy, LimitSnapshot, ProviderView, SignInKind } from "@/types/providers";
+import type {
+  AccountStrategy,
+  LimitSnapshot,
+  ProviderView,
+  SignInKind,
+  SubscriptionKeyUsage,
+} from "@/types/providers";
 import type { AutoResetPolicy } from "@/types/resets";
 import { STRATEGY_ICONS } from "./account-routing-picker";
 import { accountMenuActions, accountRow, type AccountMenuAction, type AccountRow } from "./account-rows";
 import { ACCOUNT_STATE_COLOR, type CountedState } from "./account-status";
+import { useSegmentName } from "./key-usage-labels";
+import { accountUsage, groupSegments } from "./key-usage-view";
 import LimitMeter, { ResetLine } from "./limit-meter";
 import RowMenu, { type RowMenuItem } from "@/components/providers/row-menu";
+
+const ROW_KEYS = 3;
 
 const MENU_ICONS = {
   details: Info,
@@ -52,6 +62,7 @@ export default function SubscriptionGroup({
   total,
   counts,
   limits,
+  keyUsage,
   settingsLoaded,
   strategy,
   autoReset,
@@ -69,6 +80,7 @@ export default function SubscriptionGroup({
   total: number;
   counts: { state: CountedState; count: number }[];
   limits: Record<string, LimitSnapshot>;
+  keyUsage: SubscriptionKeyUsage | null;
   settingsLoaded: boolean;
   strategy: AccountStrategy;
   autoReset: AutoResetPolicy | null;
@@ -94,6 +106,20 @@ export default function SubscriptionGroup({
   const titleId = `subscriptions-${kind}`;
   const reports = reportsLimits(kind);
   const accounts = rows.map((row) => ({ row, account: accountRow(row, limits[row.id], reports, now.getTime()) }));
+  const keyLabels = keyUsage?.keys ?? {};
+  const segmentName = useSegmentName(keyLabels);
+  const shortSegmentName = useSegmentName(keyLabels, true);
+  const usageById = new Map(keyUsage?.accounts.map((item) => [item.id, item]));
+
+  function keysFor(row: ProviderView, account: AccountRow) {
+    const usage = usageById.get(row.id);
+    if (!usage) return () => null;
+    const view = accountUsage(account.groups, usage, now.getTime());
+    return (groupId: string) => {
+      const segments = groupSegments(view, groupId, ROW_KEYS);
+      return segments.length ? { segments, nameOf: segmentName, shortNameOf: shortSegmentName } : null;
+    };
+  }
 
   const groupItems: RowMenuItem<GroupAction>[] = [
     {
@@ -215,11 +241,12 @@ export default function SubscriptionGroup({
       if (account.limits) return <p className="text-xs text-muted">{t("limits.none")}</p>;
       return <p className="text-xs text-muted">{tCommon("none")}</p>;
     }
+    const keys = keysFor(row, account);
     return (
       <div className="space-y-3">
         {account.needsSignIn ? signIn(row, account) : null}
         {account.summary.groups.map((group) => (
-          <LimitMeter key={group.id} group={group} timeZone={timeZone} compact />
+          <LimitMeter key={group.id} group={group} timeZone={timeZone} compact keys={keys(group.id)} />
         ))}
         {account.detailed ? (
           <Button

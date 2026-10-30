@@ -37,7 +37,8 @@ LABEL org.opencontainers.image.title="LLM Hub" \
       org.opencontainers.image.source="https://github.com/nicolaeser/llmhub"
 ENV NODE_ENV=production \
     PORT=3000 \
-    HOSTNAME=0.0.0.0
+    HOSTNAME=0.0.0.0 \
+    NEXT_MANUAL_SIG_HANDLE=true
 RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack /opt/yarn-v* \
       /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack /usr/local/bin/yarn /usr/local/bin/yarnpkg
 COPY --from=prismacli --chown=node:node /pc/node_modules ./node_modules

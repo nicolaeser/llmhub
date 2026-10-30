@@ -4,6 +4,7 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
+import { shouldAlert } from "@/lib/alerts/notify";
 import { AuthError } from "@/lib/auth/errors";
 import {
   ERR_ALL_PAUSED,
@@ -15,7 +16,8 @@ import {
   waitText,
 } from "@/lib/gateway/core";
 import { anthropicErrorBody, GateError, gatewayErrorType, openAIErrorBody, usageLimitReset } from "@/lib/gateway/errors";
-import { gateResponse, retryHeaders, toGateError, usageLimitHeaders } from "@/lib/gateway/access/gate";
+import { gateResponse, restartingError, retryHeaders, toGateError, usageLimitHeaders } from "@/lib/gateway/access/gate";
+import { DRAIN_RETRY_SECONDS } from "@/lib/http/drain";
 import { upstreamError } from "@/lib/gateway/dispatch/upstream";
 import { ApiProblem, PROBLEM_CONTENT_TYPE, problemFromError, problemResponse } from "@/lib/http/problem";
 import { isProblemCode, problemSpec } from "@/lib/http/problem-codes";
@@ -289,4 +291,22 @@ test("gateResponse sends retry headers in both error shapes", async () => {
   assert.equal(body.code, "rate_limit_exceeded");
   assert.equal(body.type, "usage_limit_reached");
   assert.equal(String(body.resets_at), reset);
+});
+
+test("a restarting gateway answers a short retry in both shapes, never a usage limit", async () => {
+  const err = restartingError();
+  for (const url of ["http://hub.local/v1/messages", "http://hub.local/v1/responses"]) {
+    const res = gateResponse(err, new Request(url, { method: "POST" }));
+    assert.equal(res.status, 503);
+    assert.equal(res.headers.get("retry-after"), String(DRAIN_RETRY_SECONDS));
+    assert.equal(res.headers.get("x-should-retry"), "true");
+    assert.equal(res.headers.get("anthropic-ratelimit-unified-status"), null);
+    assert.equal(res.headers.get("x-codex-primary-reset-at"), null);
+  }
+  const anthropic = await gateResponse(err, new Request("http://hub.local/v1/messages", { method: "POST" })).json();
+  assert.equal(anthropic.error.type, "overloaded_error");
+  const openai = (await gateResponse(err, new Request("http://hub.local/v1/responses", { method: "POST" })).json()).error;
+  assert.equal(openai.code, "server_restarting");
+  assert.equal(openai.type, "api_error");
+  assert.equal(shouldAlert(err), false);
 });

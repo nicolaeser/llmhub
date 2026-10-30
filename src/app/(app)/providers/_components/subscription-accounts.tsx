@@ -12,6 +12,7 @@ import { DEFAULT_ACCOUNT_STRATEGY } from "@/lib/gateway/routing/account-access";
 import { autoResetPolicy, isResetKind } from "@/lib/gateway/routing/auto-reset-policy";
 import { reportsLimits, startsWindows } from "@/lib/gateway/upstreams/provider-kinds";
 import { setConsoleTimeZone, useConsoleTimeZone } from "@/lib/hooks/use-console-time-zone";
+import { useLiveRequests } from "@/lib/hooks/use-live";
 import { isActionFail } from "@/lib/http/action-result";
 import type {
   AccountRouting,
@@ -33,6 +34,7 @@ import ProviderSettingsDialog from "./provider-settings-dialog";
 import { SUBSCRIPTION_CATALOG } from "./provider-options";
 import SubscriptionGroup from "./subscription-group";
 import type { AccountLimitsState } from "./use-account-limits";
+import { useLiveKeyUsage } from "./use-key-usage";
 import { useProviderRowActions } from "./use-provider-row-actions";
 import { useResetTime } from "./use-reset-time";
 
@@ -84,6 +86,12 @@ export default function SubscriptionAccounts({
   const detailsState = useOverlayState();
   const rowActions = useProviderRowActions({ presets, onReplace: actions.replace, onRemove: actions.remove });
   const { items } = limits;
+  const versions = rows
+    .filter((row) => reportsLimits(row.kind))
+    .map((row) => `${row.id}:${items[row.id]?.version ?? 0}`)
+    .join(",");
+  const requestId = useLiveRequests()?.requestId ?? "";
+  const keyUsage = useLiveKeyUsage(`${requestId}|${versions}`, canSeeKeyUsage);
 
   useEffect(() => {
     let active = true;
@@ -175,7 +183,7 @@ export default function SubscriptionAccounts({
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4">
-        <p className="max-w-3xl text-sm text-muted">{t("intro")}</p>
+        <p className="max-w-3xl text-sm text-muted">{t("intro", { keys: String(canSeeKeyUsage) })}</p>
         <div className="flex flex-col gap-3 md:flex-row md:flex-wrap md:items-end md:justify-between">
           <div className="flex min-w-0 flex-wrap items-center gap-3 md:grow md:basis-96">
             <SearchField value={query} onChange={setQuery} aria-label={t("search")} className="w-full max-w-sm">
@@ -244,6 +252,7 @@ export default function SubscriptionAccounts({
           total={group.all.length}
           counts={COUNTED_STATES.map((state) => ({ state, count: tally(state, group.all) })).filter((item) => item.count > 0)}
           limits={items}
+          keyUsage={keyUsage.usage.data}
           settingsLoaded={routing !== null}
           strategy={routing?.[group.kind] ?? DEFAULT_ACCOUNT_STRATEGY}
           autoReset={isResetKind(group.kind) ? (autoReset[group.kind] ?? autoResetPolicy({})) : null}
@@ -265,7 +274,7 @@ export default function SubscriptionAccounts({
         reports={details ? reportsLimits(details.kind) : false}
         timeZone={timeZone}
         canManage={canManage}
-        keyUsage={canSeeKeyUsage}
+        keyUsage={canSeeKeyUsage ? keyUsage : null}
         refreshing={details ? limits.refreshing.includes(details.id) : false}
         onRefresh={limits.refreshOne}
         onItem={limits.storeItem}
