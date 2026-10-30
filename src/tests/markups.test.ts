@@ -22,6 +22,7 @@ import {
 import { toCsv } from "@/lib/export/csv";
 import { serializeUsage } from "@/lib/management/serialize";
 import { markupSchema } from "@/schemas/pricing";
+import { markupKindOf } from "@/lib/pricing/markup-view";
 import { markupCreateSchema, markupUpdateSchema } from "@/schemas/management";
 import type { AuthenticatedSession, Permission } from "@/types/auth";
 import type { BillingGroup, TokenUsage } from "@/types/billing";
@@ -459,4 +460,10 @@ test("scheduled usage reports stay on the sale price like company users", async 
   const [header, line] = String(mail.attachments?.[0]?.content).split("\n");
   assert.equal(header, CHARGEBACK_COLUMNS.join(","));
   assert.equal(line?.split(",")[CHARGEBACK_COLUMNS.indexOf("spend")], "1.2");
+});
+
+test("a markup row is summarized as a markup, a discount, or the plain price", () => {
+  assert.equal(markupKindOf(15), "markup");
+  assert.equal(markupKindOf(-10), "discount");
+  assert.equal(markupKindOf(0), "none");
 });

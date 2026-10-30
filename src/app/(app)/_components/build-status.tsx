@@ -421,7 +421,7 @@ export function BuildVersion() {
   const status = useBuildStatus();
   if (!status) return null;
   return (
-    <p className="truncate px-2 text-xs text-muted" title={status.loaded}>
+    <p className="truncate text-xs text-muted" title={status.loaded}>
       {t("version.current", { version: status.loaded })}
     </p>
   );

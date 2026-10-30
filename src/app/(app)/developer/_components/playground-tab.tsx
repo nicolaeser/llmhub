@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { Alert, Card, toast } from "@heroui/react";
+import { Alert, buttonVariants, Card, toast } from "@heroui/react";
 import { PlayCircle } from "lucide-react";
 import { useTranslations } from "next-intl";
 import EmptyState from "@/components/console/empty-state";
@@ -261,10 +261,7 @@ export default function PlaygroundTab() {
           ),
         })}
         action={
-          <Link
-            href={gap === "provider" ? "/providers" : "/models"}
-            className="text-sm font-medium text-accent"
-          >
+          <Link href={gap === "provider" ? "/providers" : "/models"} className={buttonVariants()}>
             {t("emptySetupAction", { gap })}
           </Link>
         }

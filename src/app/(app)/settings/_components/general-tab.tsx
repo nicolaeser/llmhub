@@ -2,9 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { Chip, toast } from "@heroui/react";
-import { CloudDownload, RefreshCw, Server, UserPlus } from "lucide-react";
 import { useTranslations } from "next-intl";
-import IconTile from "@/components/console/icon-tile";
 import { SettingSection, SettingSwitch } from "./setting-fields";
 import { useErrorToast } from "@/components/console/use-error-toast";
 import { useActionData } from "@/lib/hooks/use-action-data";
@@ -60,12 +58,11 @@ export default function GeneralTab() {
   }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-8">
       <SettingsLead description={t("description")} canManage={view.canManage} />
 
       <SettingSection title={t("access.title")} subtitle={t("access.subtitle")}>
-        <div className="flex items-start gap-3">
-          <IconTile icon={UserPlus} />
+        <div className="flex flex-col gap-3">
           <SettingSwitch
             label={t("access.registration")}
             isSelected={settings.registration_enabled}
@@ -77,8 +74,7 @@ export default function GeneralTab() {
       </SettingSection>
 
       <SettingSection title={t("updates.title")} subtitle={t("updates.subtitle")}>
-        <div className="flex items-start gap-3">
-          <IconTile icon={RefreshCw} tone={view.updates.available ? "warning" : "accent"} />
+        <div className="flex flex-col gap-3">
           <div className="min-w-0 space-y-3">
             <SettingSwitch
               label={t("updates.enabled")}
@@ -109,11 +105,7 @@ export default function GeneralTab() {
       </SettingSection>
 
       <SettingSection title={t("automatic.title")} subtitle={t("automatic.subtitle")}>
-        <div className="flex items-start gap-3">
-          <IconTile
-            icon={CloudDownload}
-            tone={updater?.connected ? (updater.available ? "warning" : "success") : "neutral"}
-          />
+        <div className="flex flex-col gap-3">
           <div className="min-w-0 flex-1">
             <UpdaterPanel updater={updater} canManage={view.canManage} detailed onView={showUpdater} />
           </div>
@@ -121,8 +113,7 @@ export default function GeneralTab() {
       </SettingSection>
 
       <SettingSection title={t("env.title")} subtitle={t("env.subtitle")}>
-        <div className="flex items-start gap-3">
-          <IconTile icon={Server} tone="neutral" />
+        <div className="flex flex-col gap-3">
           <ul className="min-w-0 flex-1 divide-y divide-border">
             <li className="flex flex-wrap items-baseline justify-between gap-2 pb-3 text-sm">
               <span className="text-muted">{t("env.appUrl")}</span>

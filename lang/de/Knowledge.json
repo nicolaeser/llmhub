@@ -1,33 +1,24 @@
 {
   "title": "Wissensbasen",
-  "subtitle": "Vektorspeicher für Retrieval-Augmented Generation. API-Keys durchsuchen sie mit file_search und /api/v1/vector_stores. Jede Wissensbasis gehört zu genau einem Unternehmen und optional zu einem Projekt und ist für andere Unternehmen und Projekte nie sichtbar.",
+  "subtitle": "Dokumente, die deine API-Keys durchsuchen können, damit Modelle mit deinen eigenen Inhalten antworten. Jede Wissensbasis gehört zu einem Unternehmen oder zu einem Projekt darin.",
   "add": "Neue Wissensbasis",
   "emptyTitle": "Noch keine Wissensbasen",
-  "empty": "Lege eine Wissensbasis an, lade Dokumente hoch und lass die API-Keys des Unternehmens sie mit file_search durchsuchen.",
+  "empty": "Lege eine Wissensbasis an und lade Dokumente hoch. Jede Datei wird in Abschnitte zerlegt und indexiert, danach können die API-Keys des Unternehmens sie mit file_search durchsuchen.",
   "readOnly": "Du kannst Wissensbasen und ihre Dateien ansehen. Zum Ändern brauchst du die Berechtigung tenancy:manage.",
-  "noMatches": "Keine Wissensbasis passt zu den Filtern.",
+  "noMatches": "Keine Wissensbasis gefunden",
   "search": "Nach Name suchen",
   "companyFilter": "Unternehmen",
   "allCompanies": "Alle Unternehmen",
-  "manageFiles": "Dateien verwalten",
   "columns": {
     "name": "Wissensbasis",
-    "company": "Unternehmen",
-    "owner": "Zuordnung",
     "status": "Status",
     "files": "Dateien",
     "size": "Größe",
-    "embedding": "Embedding-Modell",
     "lastActive": "Zuletzt aktiv"
-  },
-  "owner": {
-    "name": "{scope, select, organization {Ganzes Unternehmen} other {{name}}}",
-    "kind": "{scope, select, project {Projekt} member {Person} user {Konsolen-Benutzer} other {Alle API-Keys des Unternehmens}}"
   },
   "status": "{status, select, in_progress {Wird verarbeitet} completed {Bereit} expired {Abgelaufen} other {Unbekannt}}",
   "fileCounts": "{completed, number, integer} von {total, number, integer} bereit",
   "failedCount": "{count, plural, one {# fehlgeschlagen} other {# fehlgeschlagen}}",
-  "dimensions": "{count, number, integer} Dimensionen",
   "expires": "Läuft {when} ab",
   "deleteConfirm": "{name} löschen?",
   "deleteHint": "{count, plural, =0 {API-Keys können sie danach nicht mehr durchsuchen.} one {Ihre Datei wird ebenfalls gelöscht. API-Keys können sie danach nicht mehr durchsuchen.} other {Ihre # Dateien werden ebenfalls gelöscht. API-Keys können sie danach nicht mehr durchsuchen.}}",
@@ -64,7 +55,13 @@
     "chunkOverlapInvalid": "Die Überlappung darf höchstens {max, number, integer} Tokens betragen.",
     "expiry": "Nach Tagen ohne Nutzung ablaufen",
     "expiryHint": "Zwischen 1 und 365. Leer lassen, um die Wissensbasis bis zum Löschen zu behalten.",
-    "fixed": "Nach dem Anlegen fest: {model}, {dimensions, plural, =0 {native Dimensionen} other {# Dimensionen}}, Chunks mit {chunk, number, integer} Tokens und {overlap, number, integer} Tokens Überlappung."
+    "fixed": "Nach dem Anlegen fest: {model}, {dimensions, plural, =0 {native Dimensionen} other {# Dimensionen}}, Chunks mit {chunk, number, integer} Tokens und {overlap, number, integer} Tokens Überlappung.",
+    "namePlaceholder": "Produkthandbuch",
+    "descriptionHint": "Optional. Sagt deinem Team, was darin steckt.",
+    "createHint": "Nur Besitzer und Name sind Pflicht. Die Standardwerte passen für die meisten Dokumente.",
+    "editHint": "Ändere Name, Hilfsmodelle oder Ablauf. Embedding-Modell und Zerlegung bleiben so, wie sie angelegt wurden.",
+    "step": "{step, select, owner {Besitzer und Name} models {Modelle} indexing {Indexierung} other {{step}}}",
+    "stepHint": "{step, select, owner {Wer sie durchsuchen darf. Eine unternehmensweite Wissensbasis kann jeder API-Key des Unternehmens durchsuchen.} models {Das Embedding-Modell macht Text als Vektoren durchsuchbar. Es lässt sich später nicht ändern.} indexing {Wie Dateien in Abschnitte zerlegt werden und wann eine ungenutzte Wissensbasis abläuft.} other {}}"
   },
   "files": {
     "title": "Dateien in {name}",
@@ -88,11 +85,19 @@
   },
   "upload": {
     "title": "Dokumente hochladen",
-    "hint": "PDF, Word, PowerPoint, Excel, Text, Markdown, CSV, JSON, HTML, Quellcode und Bilder. Bis zu {limit} pro Datei. Zieh Dateien hierher oder wähle sie aus.",
+    "hint": "PDF, Word, PowerPoint, Excel, Text, Markdown, CSV, JSON, HTML, Quellcode und Bilder, bis {limit} pro Datei. Jede Datei wird nach dem Hochladen indexiert und ist durchsuchbar, sobald sie Bereit zeigt.",
     "choose": "Dateien auswählen",
     "queue": "Uploads",
     "clear": "Erledigte ausblenden",
     "status": "{status, select, pending {Wird hochgeladen} done {Hochgeladen} other {Fehlgeschlagen}}",
     "error": "{code, select, TOO_LARGE {Größer als {limit}.} PAYLOAD_TOO_LARGE {Größer als {limit}.} NETWORK {Die Verbindung wurde unterbrochen. Versuche es erneut.} FORBIDDEN {Dafür fehlt die Berechtigung.} UNAUTHORIZED {Die Sitzung ist abgelaufen. Bitte erneut anmelden.} NOT_FOUND {Diese Wissensbasis gibt es nicht mehr.} VALIDATION {Die Datei ist leer oder konnte nicht gelesen werden.} other {Der Upload ist fehlgeschlagen. Versuche es erneut.}}"
-  }
+  },
+  "noMatchesHint": "Versuche einen anderen Namen oder zeige alle Unternehmen.",
+  "ownerLine": "{company} · {scope, select, project {Projekt {name}} member {Person {name}} user {Konsolen-Benutzer {name}} other {Ganzes Unternehmen}}",
+  "indexingCount": "{count, plural, one {# wird indexiert} other {# werden indexiert}}",
+  "filesButton": "{count, plural, =0 {Dateien hinzufügen} one {# Datei} other {# Dateien}}",
+  "filesFor": "Dateien in {name}",
+  "editFor": "{name} bearbeiten",
+  "deleteFor": "{name} löschen",
+  "howItWorks": "Hochgeladene Dateien werden in Abschnitte zerlegt und indexiert. Eine Datei ist durchsuchbar, sobald ihr Status Bereit ist."
 }

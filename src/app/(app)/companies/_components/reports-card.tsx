@@ -5,7 +5,7 @@ import { Alert, Button, Card, Chip, Spinner, Table, toast, useOverlayState } fro
 import { Pencil, Plus, Send, Trash2 } from "lucide-react";
 import { useFormatter, useTranslations } from "next-intl";
 import ConfirmDialog from "@/components/console/confirm-dialog";
-import RowCard, { RowCards, TABLE_FROM_XL } from "@/components/console/row-cards";
+import RowCard, { RowCards, TABLE_FROM_LG } from "@/components/console/row-cards";
 import { isActionFail } from "@/lib/http/action-result";
 import type { MemberNode } from "@/types/structure";
 import type { UsageReportView } from "@/types/reports";
@@ -14,20 +14,16 @@ import ReportDialog from "./report-dialog";
 import { useErrorToast } from "@/components/console/use-error-toast";
 
 export default function ReportsCard({
-  kind,
-  name,
-  orgId,
-  teamId,
+  company,
+  departments,
   reports,
   people,
   canReport,
   mailEnabled,
   onChange,
 }: {
-  kind: "org" | "team";
-  name: string;
-  orgId: string;
-  teamId: string;
+  company: { id: string; alias: string };
+  departments: { id: string; alias: string }[];
   reports: UsageReportView[];
   people: MemberNode[];
   canReport: boolean;
@@ -98,6 +94,15 @@ export default function ReportsCard({
     return t("language", {
       language: format.displayName(report.locale, { type: "language" }) ?? report.locale,
     });
+  }
+
+  function coverage(report: UsageReportView) {
+    const department = departments.find((row) => row.id === report.teamId);
+    return t("covers", { kind: department ? "team" : "org", name: department?.alias ?? company.alias });
+  }
+
+  function subtitle(report: UsageReportView) {
+    return format.list([coverage(report), languageLabel(report)], { type: "unit" });
   }
 
   function deliveryStatus(report: UsageReportView) {
@@ -174,7 +179,7 @@ export default function ReportsCard({
       <Card.Header className="flex-row flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <Card.Title>{t("title", { count: reports.length })}</Card.Title>
-          <Card.Description>{t("hint", { kind })}</Card.Description>
+          <Card.Description>{t("hint")}</Card.Description>
         </div>
         {canReport ? (
           <Button size="sm" onPress={() => openDialog(null)}>
@@ -196,13 +201,13 @@ export default function ReportsCard({
           <p className="text-sm text-muted">{t("empty")}</p>
         ) : (
           <>
-            <RowCards label={t("title", { count: reports.length })} until="xl">
+            <RowCards label={t("title", { count: reports.length })}>
               {reports.map((report) => (
                 <RowCard
                   key={report.id}
                   variant="secondary"
                   title={t("schedule", { cadence: report.cadence, format: report.format })}
-                  description={languageLabel(report)}
+                  description={subtitle(report)}
                   chips={pausedChip(report)}
                   details={[
                     { label: tCommon("status"), value: deliveryStatus(report), wide: true },
@@ -212,7 +217,7 @@ export default function ReportsCard({
                 />
               ))}
             </RowCards>
-            <Table className={TABLE_FROM_XL}>
+            <Table className={TABLE_FROM_LG}>
               <Table.ScrollContainer>
                 <Table.Content aria-label={t("title", { count: reports.length })} className="min-w-xl">
                   <Table.Header>
@@ -229,7 +234,7 @@ export default function ReportsCard({
                               {t("schedule", { cadence: report.cadence, format: report.format })}
                               {pausedChip(report)}
                             </p>
-                            <p className="text-xs text-muted">{languageLabel(report)}</p>
+                            <p className="text-xs text-muted">{subtitle(report)}</p>
                             <div className="mt-2">{deliveryStatus(report)}</div>
                           </div>
                         </Table.Cell>
@@ -253,10 +258,8 @@ export default function ReportsCard({
           key={dialogKey}
           state={dialogState}
           report={editing}
-          kind={kind}
-          name={name}
-          orgId={orgId}
-          teamId={teamId}
+          company={company}
+          departments={departments}
           people={people}
           onSaved={onChange}
         />

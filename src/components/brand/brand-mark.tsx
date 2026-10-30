@@ -1,6 +1,6 @@
 const SIZES = {
-  sm: { box: "size-8 rounded-lg", glyph: "size-5" },
-  md: { box: "size-9 rounded-lg", glyph: "size-6" },
+  sm: { box: "size-7 rounded-xl", glyph: "size-5" },
+  md: { box: "size-9 rounded-xl", glyph: "size-6" },
   lg: { box: "size-12 rounded-2xl shadow-overlay", glyph: "size-8" },
 } as const;
 

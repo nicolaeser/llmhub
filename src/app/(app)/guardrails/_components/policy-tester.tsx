@@ -12,7 +12,6 @@ import { isActionFail } from "@/lib/http/action-result";
 import type {
   EffectivePolicies,
   GuardrailDirection,
-  PlatformPolicies,
   PolicyRef,
   PolicySection,
   PolicyTestResult,
@@ -35,15 +34,7 @@ function outcomeOf(result: PolicyTestResult): { key: string; color: "danger" | "
   return { key: "passed", color: result.hits.length || result.pii.length ? "warning" : "success" };
 }
 
-export default function PolicyTester({
-  book,
-  draft,
-  isDraft,
-}: {
-  book: PolicyBook;
-  draft: PlatformPolicies;
-  isDraft: boolean;
-}) {
+export default function PolicyTester({ book }: { book: PolicyBook }) {
   const t = useTranslations("Guardrails");
   const showError = useErrorToast();
   const [source, setSource] = useState<TestSource>("platform");
@@ -55,7 +46,7 @@ export default function PolicyTester({
   const sourceLabel = useSourceLabel((target) => findTarget(book, target)?.alias);
   const target = source === "target" ? findTarget(book, ref) : undefined;
   const policies: EffectivePolicies | null =
-    source === "platform" ? effectivePolicies(draft, []) : target ? effectiveFor(book, target) : null;
+    source === "platform" ? effectivePolicies(book.platform, []) : target ? effectiveFor(book, target) : null;
   const sources: readonly { id: TestSource; label: string }[] = [
     { id: "platform", label: t("test.sourceOption", { source: "platform" }) },
     ...(book.targets.length ? [{ id: "target" as const, label: t("test.sourceOption", { source: "target" }) }] : []),
@@ -101,7 +92,6 @@ export default function PolicyTester({
               setSource(next);
               setResult(null);
             }}
-            description={source === "platform" && isDraft ? t("test.draftHint") : undefined}
           />
           {source === "target" ? (
             <PolicyTargetPicker

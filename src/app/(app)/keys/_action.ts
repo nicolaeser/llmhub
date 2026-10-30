@@ -1,13 +1,26 @@
 "use server";
 
 import { runAction } from "@/lib/http/action-result";
-import { createKey, loadKeysPage, pauseKey, resumeKey, revokeKey, rotateKey, updateKey } from "@/lib/keys/manage";
+import {
+  createKey,
+  loadKeyDetailPage,
+  loadKeysPage,
+  pauseKey,
+  resumeKey,
+  revokeKey,
+  rotateKey,
+  updateKey,
+} from "@/lib/keys/manage";
 import { loadKeyMcpAccess, saveKeyMcpAccess } from "@/lib/mcp/key-access";
 import { addBoost, loadBudget, removeBoost, setBudget } from "@/lib/tenancy/budgets";
 import type { BoostInput, BudgetInput, BudgetRef } from "@/types/structure";
 
 export async function loadKeysPageAction(...args: Parameters<typeof loadKeysPage>) {
   return runAction(() => loadKeysPage(...args));
+}
+
+export async function loadKeyDetailAction(id: string) {
+  return runAction(() => loadKeyDetailPage(id));
 }
 
 export async function createKeyAction(...args: Parameters<typeof createKey>) {

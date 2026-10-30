@@ -1,4 +1,11 @@
-import { chainLayers, effectivePolicies, policyChain, refKey } from "@/lib/gateway/safety/policy-layers";
+import {
+  chainLayers,
+  effectivePolicies,
+  fullLayer,
+  policyChain,
+  refKey,
+  sectionSummaries,
+} from "@/lib/gateway/safety/policy-layers";
 import { POLICY_SCOPES } from "@/schemas/guardrails";
 import type {
   EffectivePolicies,
@@ -6,7 +13,9 @@ import type {
   PolicyLayer,
   PolicyOverrideView,
   PolicyRef,
+  PolicySection,
   PolicyTarget,
+  SectionSummary,
 } from "@/types/guardrails";
 
 export type PolicyBook = {
@@ -50,4 +59,30 @@ export function replaceOverride(
 ): PolicyOverrideView[] {
   const key = refKey(ref);
   return sortOverrides([...rows.filter((row) => refKey(row.target) !== key), ...(next ? [next] : [])]);
+}
+
+export type SectionChange = {
+  section: PolicySection;
+  from: SectionSummary;
+  to: SectionSummary;
+  source: PolicyRef | null;
+};
+
+export function overrideChanges(book: PolicyBook, row: PolicyOverrideView): SectionChange[] {
+  const inherited = inheritedFor(book, row.target);
+  const before = new Map(sectionSummaries(fullLayer(inherited)).map((summary) => [summary.section, summary]));
+  return sectionSummaries(row).flatMap((to) => {
+    const from = before.get(to.section);
+    return from ? [{ section: to.section, from, to, source: inherited.sources[to.section] }] : [];
+  });
+}
+
+export function sameSummary(a: SectionSummary, b: SectionSummary): boolean {
+  return a.state === b.state && a.count === b.count;
+}
+
+export function overrideMatches(row: PolicyOverrideView, query: string): boolean {
+  const needle = query.trim().toLowerCase();
+  if (!needle) return true;
+  return [row.target.alias, ...row.target.path].some((part) => part.toLowerCase().includes(needle));
 }

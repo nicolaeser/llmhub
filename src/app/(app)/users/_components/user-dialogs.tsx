@@ -2,15 +2,20 @@
 
 import { useState, useTransition } from "react";
 import {
+  Card,
   Description,
   Input,
   Label,
+  Radio,
+  RadioGroup,
   Switch,
   TextField,
   toast,
   useOverlayState,
 } from "@heroui/react";
+import { Building2, Globe, type LucideIcon } from "lucide-react";
 import { useTranslations } from "next-intl";
+import IconTile from "@/components/console/icon-tile";
 import SearchSelect from "@/components/console/search-select";
 import { isActionFail } from "@/lib/http/action-result";
 import { useRoleName } from "@/components/security/use-role-name";
@@ -32,6 +37,13 @@ function defaultRoleId(roles: RoleOption[]) {
   return (assignable.find((role) => role.templateKey === "viewer") ?? assignable[0])?.id ?? "";
 }
 
+type AccessMode = "platform" | "company";
+
+const ACCESS_MODES: { id: AccessMode; icon: LucideIcon }[] = [
+  { id: "platform", icon: Globe },
+  { id: "company", icon: Building2 },
+];
+
 function RoleSelect({
   roles,
   value,
@@ -46,45 +58,97 @@ function RoleSelect({
   description?: string;
 }) {
   const t = useTranslations("Users");
+  const tRoles = useTranslations("Roles");
   const roleName = useRoleName();
   const offered = roles.filter((role) => role.assignable || role.id === value);
+  const selected = offered.find((role) => role.id === value);
+  const explained = selected
+    ? selected.templateKey && !selected.name
+      ? tRoles("templateDescription", { key: selected.templateKey })
+      : selected.templateKey
+        ? tRoles("templateBased", { template: tRoles("templateName", { key: selected.templateKey }) })
+        : t("customRole")
+    : t("pickRole");
   return (
     <SearchSelect
       label={t("fields.role")}
-      items={offered.map((role) => ({ id: role.id, label: roleName(role) }))}
+      items={offered.map((role) => ({
+        id: role.id,
+        label: roleName(role),
+        detail: role.templateKey && !role.name ? tRoles("templateDescription", { key: role.templateKey }) : undefined,
+      }))}
       value={value}
       onChange={onChange}
       disabledKeys={offered.filter((role) => !role.assignable).map((role) => role.id)}
       isDisabled={isDisabled}
-      description={description}
+      description={description ?? explained}
     />
   );
 }
 
-function AccessSelect({
+function AccessFields({
   orgs,
+  mode,
   value,
+  onModeChange,
   onChange,
   isDisabled,
 }: {
   orgs: UsersConsolePayload["orgs"];
+  mode: AccessMode;
   value: string;
+  onModeChange: (mode: AccessMode) => void;
   onChange: (id: string) => void;
   isDisabled: boolean;
 }) {
   const t = useTranslations("Users");
   return (
-    <SearchSelect
-      label={t("fields.access")}
-      items={[
-        { id: "platform", label: t("access", { scope: "platform", org: "" }) },
-        ...orgs.map((org) => ({ id: org.id, label: t("access", { scope: "company", org: org.alias }) })),
-      ]}
-      value={value || "platform"}
-      onChange={(next) => onChange(next === "platform" ? "" : next)}
-      isDisabled={isDisabled}
-      description={t("fields.accessHint", { scope: value ? "company" : "platform" })}
-    />
+    <div className="space-y-3">
+      <RadioGroup
+        value={mode}
+        onChange={(next) => onModeChange(next === "company" ? "company" : "platform")}
+        isDisabled={isDisabled || orgs.length === 0}
+        className="gap-2"
+      >
+        <Label>{t("fields.access")}</Label>
+        <div className="grid gap-2 sm:grid-cols-2">
+          {ACCESS_MODES.map((item) => {
+            const selected = item.id === mode;
+            return (
+              <Card
+                key={item.id}
+                variant="secondary"
+                className={selected ? "border border-accent bg-accent/8 p-0" : "border border-transparent p-0"}
+              >
+                <Radio value={item.id} className="mt-0 h-full w-full">
+                  <Radio.Content className="h-full w-full items-start gap-3 p-3">
+                    <IconTile icon={item.icon} tone={selected ? "accent" : "neutral"} size="sm" />
+                    <span className="min-w-0 flex-1 space-y-1">
+                      <Label>{t("accessMode.title", { mode: item.id })}</Label>
+                      <span className="block text-xs font-normal text-muted">{t("fields.accessHint", { scope: item.id })}</span>
+                    </span>
+                    <Radio.Control>
+                      <Radio.Indicator />
+                    </Radio.Control>
+                  </Radio.Content>
+                </Radio>
+              </Card>
+            );
+          })}
+        </div>
+      </RadioGroup>
+      {mode === "company" ? (
+        <SearchSelect
+          isRequired
+          label={t("fields.company")}
+          placeholder={t("fields.companyPlaceholder")}
+          items={orgs.map((org) => ({ id: org.id, label: org.alias }))}
+          value={value}
+          onChange={onChange}
+          isDisabled={isDisabled}
+        />
+      ) : null}
+    </div>
   );
 }
 
@@ -106,11 +170,12 @@ export function CreateUserDialog({
   const [password, setPassword] = useState("");
   const [roleId, setRoleId] = useState(() => defaultRoleId(roles));
   const [orgId, setOrgId] = useState("");
+  const [mode, setMode] = useState<AccessMode>("platform");
   const [pending, start] = useTransition();
 
   function save(close: () => void) {
     start(async () => {
-      const result = await createUserAction({ username, email, password, roleId, orgId });
+      const result = await createUserAction({ username, email, password, roleId, orgId: mode === "company" ? orgId : "" });
       if (isActionFail(result)) {
         toast.danger(errorText(result.error));
         return;
@@ -124,11 +189,12 @@ export function CreateUserDialog({
   return (
     <FormDialog
       state={state}
-      size="sm"
+      size="md"
       title={t("createTitle")}
+      description={t("createHint")}
       submitLabel={t("create")}
       pending={pending}
-      isSubmitDisabled={!username.trim() || !email.trim() || !password || !roleId}
+      isSubmitDisabled={!username.trim() || !email.trim() || !password || !roleId || (mode === "company" && !orgId)}
       onSubmit={save}
     >
       <TextField fullWidth value={username} onChange={setUsername} isDisabled={pending}>
@@ -145,7 +211,14 @@ export function CreateUserDialog({
         <Description>{t("initialPasswordHint")}</Description>
       </TextField>
       <RoleSelect roles={roles} value={roleId} onChange={setRoleId} isDisabled={pending} />
-      <AccessSelect orgs={orgs} value={orgId} onChange={setOrgId} isDisabled={pending} />
+      <AccessFields
+        orgs={orgs}
+        mode={mode}
+        value={orgId}
+        onModeChange={setMode}
+        onChange={setOrgId}
+        isDisabled={pending}
+      />
     </FormDialog>
   );
 }
@@ -168,8 +241,10 @@ export function ChangeAccessDialog({
   const errorText = useSecurityError();
   const [roleId, setRoleId] = useState(target?.roleId ?? "");
   const [orgId, setOrgId] = useState(target?.orgId ?? "");
+  const [mode, setMode] = useState<AccessMode>(target?.orgId ? "company" : "platform");
   const [pending, start] = useTransition();
-  const changed = roleId !== target?.roleId || orgId !== (target?.orgId ?? "");
+  const nextOrg = mode === "company" ? orgId : "";
+  const changed = roleId !== target?.roleId || nextOrg !== (target?.orgId ?? "");
 
   function save(close: () => void) {
     if (!target) return;
@@ -177,7 +252,7 @@ export function ChangeAccessDialog({
       const result = await assignUserAccessAction({
         userId: target.id,
         roleId,
-        orgId,
+        orgId: nextOrg,
         revision: target.revision,
       });
       if (isActionFail(result)) {
@@ -193,11 +268,12 @@ export function ChangeAccessDialog({
   return (
     <FormDialog
       state={state}
-      size="sm"
+      size="md"
       title={t("changeRoleTitle", { username: target?.username ?? "" })}
+      description={target?.managedBy ? undefined : t("changeRoleHint")}
       submitLabel={tCommon("save")}
       pending={pending}
-      isSubmitDisabled={!roleId || !changed}
+      isSubmitDisabled={!roleId || !changed || (mode === "company" && !orgId)}
       onSubmit={save}
     >
       <RoleSelect
@@ -207,8 +283,14 @@ export function ChangeAccessDialog({
         isDisabled={pending || Boolean(target?.managedBy)}
         description={target?.managedBy ? t("managed.hint", { provider: target.managedBy }) : undefined}
       />
-      <AccessSelect orgs={orgs} value={orgId} onChange={setOrgId} isDisabled={pending} />
-      {target?.managedBy ? null : <p className="text-xs text-muted">{t("changeRoleHint")}</p>}
+      <AccessFields
+        orgs={orgs}
+        mode={mode}
+        value={orgId}
+        onModeChange={setMode}
+        onChange={setOrgId}
+        isDisabled={pending}
+      />
     </FormDialog>
   );
 }

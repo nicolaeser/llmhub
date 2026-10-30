@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Button, Skeleton, Tabs, useOverlayState } from "@heroui/react";
-import { Activity, ArrowUp, Download } from "lucide-react";
+import { Button, Dropdown, Label, Skeleton, Tabs, useOverlayState } from "@heroui/react";
+import { Activity, ArrowUp, ChevronDown, Download, FileJson, FileSpreadsheet } from "lucide-react";
 import { useTranslations } from "next-intl";
 import PageHeader from "@/components/console/page-header";
 import PageStatus, { LoadError, SectionLoading } from "@/components/console/page-status";
@@ -34,6 +34,7 @@ const POLL_INTERVAL_MS = 15_000;
 const LIVE_RELOAD_GAP_MS = 10_000;
 const NO_OPTIONS: LogOptions = { models: [], keys: [], users: [] };
 const LOG_KINDS: readonly LogKind[] = ["requests", "sessions", "spend", "audit"];
+const EXPORT_FORMATS = ["csv", "jsonl"] as const;
 
 function kindOf(search: string): LogKind {
   const requested = new URLSearchParams(search).get("tab");
@@ -161,7 +162,7 @@ export default function LogsPage() {
 
   if (!logs || !options) {
     return (
-      <PageStatus icon={Activity} title={t("title")} subtitle={t("subtitle")} state={logsState} filters={10} tabs layout="rows" />
+      <PageStatus icon={Activity} title={t("title")} subtitle={t("subtitle")} state={logsState} filters={5} tabs layout="rows" />
     );
   }
 
@@ -177,16 +178,31 @@ export default function LogsPage() {
         title={t("title")}
         subtitle={t("subtitle")}
         actions={
-          <div className="flex gap-2">
-            <Button variant="secondary" onPress={() => download(exportHref(kind, "csv", filters))}>
-              <Download size={14} aria-hidden />
-              {t("exportCsv")}
+          <Dropdown>
+            <Button variant="secondary">
+              <Download size={16} aria-hidden />
+              {t("export")}
+              <ChevronDown size={16} aria-hidden />
             </Button>
-            <Button variant="secondary" onPress={() => download(exportHref(kind, "jsonl", filters))}>
-              <Download size={14} aria-hidden />
-              {t("exportJsonl")}
-            </Button>
-          </div>
+            <Dropdown.Popover placement="bottom end">
+              <Dropdown.Menu
+                aria-label={t("export")}
+                onAction={(key) => {
+                  const format = EXPORT_FORMATS.find((item) => item === key);
+                  if (format) download(exportHref(kind, format, filters));
+                }}
+              >
+                <Dropdown.Item id="csv" textValue={t("exportCsv")}>
+                  <FileSpreadsheet size={14} aria-hidden />
+                  <Label>{t("exportCsv")}</Label>
+                </Dropdown.Item>
+                <Dropdown.Item id="jsonl" textValue={t("exportJsonl")}>
+                  <FileJson size={14} aria-hidden />
+                  <Label>{t("exportJsonl")}</Label>
+                </Dropdown.Item>
+              </Dropdown.Menu>
+            </Dropdown.Popover>
+          </Dropdown>
         }
       />
       <LogFilters
@@ -200,30 +216,36 @@ export default function LogsPage() {
         }}
       />
       <Tabs
+        variant="secondary"
         selectedKey={kind}
         onSelectionChange={(key) => {
           const next = String(key);
           setSearchParams({ tab: next === "requests" ? null : next });
         }}
-        aria-label={t("title")}
         className="mb-4 max-w-full"
       >
-        <Tabs.List className="w-full flex-wrap" aria-label={t("title")}>
-          <Tabs.Tab id="requests" className="w-auto whitespace-nowrap">
-            {t("tabs.requests")}
-          </Tabs.Tab>
-          <Tabs.Tab id="sessions" className="w-auto whitespace-nowrap">
-            {t("tabs.sessions")}
-          </Tabs.Tab>
-          <Tabs.Tab id="spend" className="w-auto whitespace-nowrap">
-            {t("tabs.spend")}
-          </Tabs.Tab>
-          {logs.canAudit ? (
-            <Tabs.Tab id="audit" className="w-auto whitespace-nowrap">
-              {t("tabs.audit")}
+        <Tabs.ListContainer>
+          <Tabs.List aria-label={t("title")}>
+            <Tabs.Tab id="requests" className="w-auto whitespace-nowrap">
+              {t("tabs.requests")}
+              <Tabs.Indicator />
             </Tabs.Tab>
-          ) : null}
-        </Tabs.List>
+            <Tabs.Tab id="sessions" className="w-auto whitespace-nowrap">
+              {t("tabs.sessions")}
+              <Tabs.Indicator />
+            </Tabs.Tab>
+            <Tabs.Tab id="spend" className="w-auto whitespace-nowrap">
+              {t("tabs.spend")}
+              <Tabs.Indicator />
+            </Tabs.Tab>
+            {logs.canAudit ? (
+              <Tabs.Tab id="audit" className="w-auto whitespace-nowrap">
+                {t("tabs.audit")}
+                <Tabs.Indicator />
+              </Tabs.Tab>
+            ) : null}
+          </Tabs.List>
+        </Tabs.ListContainer>
       </Tabs>
 
       <LoadError state={logsState} className="mb-4" />

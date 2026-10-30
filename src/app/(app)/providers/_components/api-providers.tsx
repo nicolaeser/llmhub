@@ -1,20 +1,31 @@
 "use client";
 
-import { Button, Chip, Table } from "@heroui/react";
-import { Boxes, CircleCheck, CirclePause, Download, KeyRound, Pause, Pencil, Play, Plug, Plus, Unplug } from "lucide-react";
+import { useState } from "react";
+import { Alert, Button, Chip, SearchField, Table } from "@heroui/react";
+import { Download, Pause, Pencil, Play, Plug, Plus, Unplug } from "lucide-react";
 import { useFormatter, useTranslations } from "next-intl";
 import EmptyState from "@/components/console/empty-state";
 import IconTile from "@/components/console/icon-tile";
 import RowCard, { RowCards, TABLE_FROM_LG } from "@/components/console/row-cards";
-import StatCard from "@/components/console/stat-card";
 import { InternalBadge } from "@/components/console/subscription-badge";
 import { kindIcon } from "@/components/providers/kind-icons";
 import { PROVIDER_CATALOG } from "@/lib/gateway/upstreams/provider-kinds";
 import type { ProviderListActions, ProviderPresetUsage, ProviderView } from "@/types/providers";
 import PolicyChips from "./policy-chips";
-import RowMenu, { type RowMenuItem } from "./row-menu";
-import { byProviderOrder, providerMenuActions, providerRow, type ProviderMenuAction } from "./provider-rows";
+import RowMenu, { type RowMenuItem } from "@/components/providers/row-menu";
+import {
+  byProviderOrder,
+  providerMatches,
+  providerMenuActions,
+  providerRow,
+  providerStatus,
+  type ProviderMenuAction,
+} from "./provider-rows";
 import { useProviderRowActions } from "./use-provider-row-actions";
+
+const SEARCH_FROM = 6;
+
+const STATUS_COLOR = { active: "success", paused: "default", missing: "warning" } as const;
 
 const MENU_ICONS = {
   edit: Pencil,
@@ -41,6 +52,7 @@ export default function ApiProviders({
   const tCommon = useTranslations("Common");
   const format = useFormatter();
   const rowActions = useProviderRowActions({ presets, onReplace: actions.replace, onRemove: actions.remove });
+  const [query, setQuery] = useState("");
 
   if (rows.length === 0) {
     return canManage ? (
@@ -93,25 +105,16 @@ export default function ApiProviders({
     );
   }
 
-  function credentialChip(row: ProviderView) {
+  function credentialText(row: ProviderView) {
     const { credential } = providerRow(row);
-    return (
-      <Chip
-        size="sm"
-        variant="soft"
-        color={credential === "missing" ? "warning" : "default"}
-        className="whitespace-nowrap"
-      >
-        {t("keyState", { state: credential })}
-      </Chip>
-    );
+    return credential === "missing" ? null : t("keyState", { state: credential });
   }
 
   function statusChip(row: ProviderView) {
-    const { active } = providerRow(row);
+    const status = providerStatus(row);
     return (
-      <Chip size="sm" variant="soft" color={active ? "success" : "default"} className="whitespace-nowrap">
-        {t("enabled.state", { enabled: String(active) })}
+      <Chip size="sm" variant="soft" color={STATUS_COLOR[status]} className="whitespace-nowrap">
+        {t("status", { status })}
       </Chip>
     );
   }
@@ -124,7 +127,7 @@ export default function ApiProviders({
     const names = presets?.[row.id] ?? [];
     return (
       <div className="min-w-0 space-y-1">
-        <PolicyChips policy={row.policy} fallback={<span className="text-sm text-muted">{tCommon("none")}</span>} />
+        <PolicyChips policy={row.policy} fallback={<span className="text-sm text-muted">{t("dataHandling.unset")}</span>} />
         {names.length ? (
           <p className="text-xs break-words text-muted">
             {t("presets.usedBy", { count: names.length, names: format.list(names) })}
@@ -139,99 +142,101 @@ export default function ApiProviders({
   }
 
   const sorted = [...rows].sort(byProviderOrder);
-  const summaries = rows.map(providerRow);
-  const active = summaries.filter((row) => row.active).length;
-  const missing = summaries.filter((row) => row.credential === "missing").length;
-  const models = summaries.reduce((total, row) => total + row.models, 0);
+  const searchable = rows.length >= SEARCH_FROM;
+  const shown = searchable
+    ? sorted.filter((row) => providerMatches(row, query, [t("kindName", { kind: row.kind })]))
+    : sorted;
+  const missing = rows.filter((row) => providerStatus(row) === "missing");
+
+  function subtitle(row: ProviderView) {
+    const credential = credentialText(row);
+    return credential ? t("rowSubtitle", { kind: t("kindName", { kind: row.kind }), credential }) : t("kindName", { kind: row.kind });
+  }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <p className="max-w-3xl text-sm text-muted">{t("overview.intro")}</p>
-      <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-        <StatCard
-          icon={CircleCheck}
-          tone={active > 0 ? "success" : "neutral"}
-          label={t("overview.active")}
-          value={format.number(active)}
-          hint={t("overview.total", { count: rows.length })}
-        />
-        <StatCard
-          icon={CirclePause}
-          tone="neutral"
-          label={t("overview.paused")}
-          value={format.number(rows.length - active)}
-        />
-        <StatCard
-          icon={KeyRound}
-          tone={missing > 0 ? "warning" : "neutral"}
-          label={t("overview.missing")}
-          value={format.number(missing)}
-          hint={missing > 0 ? t("overview.missingHint") : undefined}
-        />
-        <StatCard icon={Boxes} tone="accent" label={t("overview.models")} value={format.number(models)} />
-      </div>
-      <RowCards label={t("tabs", { tab: "api" })}>
-        {sorted.map((row) => (
-          <RowCard
-            key={row.id}
-            title={row.name}
-            description={t("kindName", { kind: row.kind })}
-            aside={
-              <>
-                {statusChip(row)}
-                {menu(row)}
-              </>
-            }
-            chips={
-              <>
-                {credentialChip(row)}
-                {badges(row)}
-              </>
-            }
-            details={[
-              { label: t("columns.models"), value: modelCount(row) },
-              { label: t("columns.dataHandling"), value: dataHandling(row), wide: true },
-            ]}
-          />
-        ))}
-      </RowCards>
-      <Table aria-label={t("tabs", { tab: "api" })} className={TABLE_FROM_LG}>
-        <Table.ScrollContainer>
-          <Table.Content aria-label={t("tabs", { tab: "api" })} className="min-w-[56rem]">
-            <Table.Header>
-              <Table.Column isRowHeader>{t("columns.provider")}</Table.Column>
-              <Table.Column>{t("columns.credential")}</Table.Column>
-              <Table.Column>{t("columns.models")}</Table.Column>
-              <Table.Column>{t("columns.dataHandling")}</Table.Column>
-              <Table.Column>{tCommon("status")}</Table.Column>
-              {canManage ? <Table.Column>{tCommon("actions")}</Table.Column> : null}
-            </Table.Header>
-            <Table.Body>
-              {sorted.map((row) => (
-                <Table.Row key={row.id} id={row.id}>
-                  <Table.Cell>
-                    <div className="flex min-w-0 items-center gap-3">
-                      <IconTile icon={kindIcon(row.kind)} tone={row.enabled ? "accent" : "neutral"} size="sm" />
-                      <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="text-sm font-medium break-words">{row.name}</span>
-                          {badges(row)}
+      {missing.length ? (
+        <Alert status="warning">
+          <Alert.Indicator />
+          <Alert.Content>
+            <Alert.Title>{t("overview.missingTitle", { count: missing.length })}</Alert.Title>
+            <Alert.Description>
+              {t("overview.missingHint", { names: format.list(missing.map((row) => row.name)) })}
+            </Alert.Description>
+          </Alert.Content>
+        </Alert>
+      ) : null}
+      {searchable ? (
+        <SearchField value={query} onChange={setQuery} aria-label={t("search")} className="w-full max-w-sm">
+          <SearchField.Group>
+            <SearchField.SearchIcon />
+            <SearchField.Input placeholder={t("search")} />
+            <SearchField.ClearButton aria-label={tCommon("close")} />
+          </SearchField.Group>
+        </SearchField>
+      ) : null}
+      {shown.length === 0 ? (
+        <EmptyState icon={Plug} title={t("noMatches")} />
+      ) : (
+        <>
+          <RowCards label={t("tabs", { tab: "api" })}>
+            {shown.map((row) => (
+              <RowCard
+                key={row.id}
+                title={row.name}
+                description={subtitle(row)}
+                aside={
+                  <>
+                    {statusChip(row)}
+                    {menu(row)}
+                  </>
+                }
+                chips={badges(row)}
+                details={[
+                  { label: t("columns.models"), value: modelCount(row) },
+                  { label: t("columns.dataHandling"), value: dataHandling(row), wide: true },
+                ]}
+              />
+            ))}
+          </RowCards>
+          <Table aria-label={t("tabs", { tab: "api" })} className={TABLE_FROM_LG}>
+            <Table.ScrollContainer>
+              <Table.Content aria-label={t("tabs", { tab: "api" })} className="min-w-[48rem]">
+                <Table.Header>
+                  <Table.Column isRowHeader>{t("columns.provider")}</Table.Column>
+                  <Table.Column>{tCommon("status")}</Table.Column>
+                  <Table.Column>{t("columns.models")}</Table.Column>
+                  <Table.Column>{t("columns.dataHandling")}</Table.Column>
+                  {canManage ? <Table.Column>{tCommon("actions")}</Table.Column> : null}
+                </Table.Header>
+                <Table.Body>
+                  {shown.map((row) => (
+                    <Table.Row key={row.id} id={row.id}>
+                      <Table.Cell>
+                        <div className="flex min-w-0 items-center gap-3">
+                          <IconTile icon={kindIcon(row.kind)} tone={row.enabled ? "accent" : "neutral"} size="sm" />
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="text-sm font-medium break-words">{row.name}</span>
+                              {badges(row)}
+                            </div>
+                            <div className="text-xs text-muted">{subtitle(row)}</div>
+                          </div>
                         </div>
-                        <div className="text-xs text-muted">{t("kindName", { kind: row.kind })}</div>
-                      </div>
-                    </div>
-                  </Table.Cell>
-                  <Table.Cell>{credentialChip(row)}</Table.Cell>
-                  <Table.Cell>{modelCount(row)}</Table.Cell>
-                  <Table.Cell>{dataHandling(row)}</Table.Cell>
-                  <Table.Cell>{statusChip(row)}</Table.Cell>
-                  {canManage ? <Table.Cell>{menu(row)}</Table.Cell> : null}
-                </Table.Row>
-              ))}
-            </Table.Body>
-          </Table.Content>
-        </Table.ScrollContainer>
-      </Table>
+                      </Table.Cell>
+                      <Table.Cell>{statusChip(row)}</Table.Cell>
+                      <Table.Cell>{modelCount(row)}</Table.Cell>
+                      <Table.Cell>{dataHandling(row)}</Table.Cell>
+                      {canManage ? <Table.Cell>{menu(row)}</Table.Cell> : null}
+                    </Table.Row>
+                  ))}
+                </Table.Body>
+              </Table.Content>
+            </Table.ScrollContainer>
+          </Table>
+        </>
+      )}
       {canManage ? rowActions.dialogs : null}
     </div>
   );

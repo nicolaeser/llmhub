@@ -204,139 +204,137 @@ export default function BuilderDialog({
   const stepIndex = STEPS.indexOf(step);
 
   return (
-    <Modal state={state}>
-      <Modal.Backdrop>
-        <Modal.Container>
-          <Modal.Dialog className="max-w-3xl">
-            {({ close }) => (
-              <>
-                <Modal.Header>
-                  <Modal.Heading>{t("builder.title")}</Modal.Heading>
-                  <p className="text-sm text-muted">{t("builder.description")}</p>
-                </Modal.Header>
-                <Modal.Body>
-                  <div className="flex flex-col gap-4">
-                    <div className="space-y-2">
-                      <div className="flex flex-wrap gap-2" role="group" aria-label={t("builder.stepsLabel")}>
-                        {STEPS.map((id, index) => (
-                          <Button
-                            key={id}
-                            size="sm"
-                            variant={id === step ? "primary" : "tertiary"}
-                            isDisabled={pending || (index > stepIndex && (!draft || (id === "access" && !reviewReady)))}
-                            onPress={() => setStep(id)}
-                          >
-                            {t("builder.step", { step: id })}
-                          </Button>
-                        ))}
-                      </div>
-                      <p className="text-sm text-muted">{t("builder.stepHint", { step })}</p>
+    <Modal.Backdrop isOpen={state.isOpen} onOpenChange={state.setOpen}>
+      <Modal.Container>
+        <Modal.Dialog className="max-w-3xl">
+          {({ close }) => (
+            <>
+              <Modal.Header>
+                <Modal.Heading>{t("builder.title")}</Modal.Heading>
+                <p className="text-sm text-muted">{t("builder.description")}</p>
+              </Modal.Header>
+              <Modal.Body>
+                <div className="flex flex-col gap-4">
+                  <div className="space-y-2">
+                    <div className="flex flex-wrap gap-2" role="group" aria-label={t("builder.stepsLabel")}>
+                      {STEPS.map((id, index) => (
+                        <Button
+                          key={id}
+                          size="sm"
+                          variant={id === step ? "primary" : "tertiary"}
+                          isDisabled={pending || (index > stepIndex && (!draft || (id === "access" && !reviewReady)))}
+                          onPress={() => setStep(id)}
+                        >
+                          {t("builder.step", { step: id })}
+                        </Button>
+                      ))}
                     </div>
-
-                    {step === "brief" ? (
-                      <BuilderBrief
-                        model={model}
-                        models={models}
-                        canTestModels={canTestModels}
-                        template={template}
-                        instruction={instruction}
-                        links={links}
-                        docs={docs}
-                        files={files}
-                        sourceErrors={sourceErrors}
-                        pending={pending}
-                        drafting={drafting}
-                        onModel={chooseModel}
-                        onTemplate={setTemplate}
-                        onInstruction={setInstruction}
-                        onLinks={setLinks}
-                        onDocs={setDocs}
-                        onFiles={setFiles}
-                        onSourceErrors={setSourceErrors}
-                      />
-                    ) : null}
-
-                    {step === "review" && draft ? (
-                      <BuilderReview
-                        draft={draft}
-                        server={server}
-                        baseValid={baseValid}
-                        tools={tools}
-                        enabled={enabled}
-                        chosen={chosen}
-                        tooMany={tooMany}
-                        search={search}
-                        pending={pending}
-                        canDraft={canDraft}
-                        onServer={patchServer}
-                        onTools={setTools}
-                        onEnabled={setEnabled}
-                        onSearch={setSearch}
-                        onRedraft={runDraft}
-                      />
-                    ) : null}
-
-                    {step === "access" ? (
-                      <BuilderAccess
-                        tools={chosen}
-                        global={global}
-                        rules={rules}
-                        pending={pending}
-                        onGlobal={setGlobal}
-                        onRules={setRules}
-                      />
-                    ) : null}
+                    <p className="text-sm text-muted">{t("builder.stepHint", { step })}</p>
                   </div>
-                </Modal.Body>
-                <Modal.Footer>
-                  <Button variant="tertiary" onPress={close} isDisabled={pending}>
-                    {tCommon("cancel")}
-                  </Button>
-                  {step !== "brief" ? (
-                    <Button
-                      variant="secondary"
-                      isDisabled={pending}
-                      onPress={() => setStep(step === "access" ? "review" : "brief")}
-                    >
-                      {t("builder.back")}
-                    </Button>
-                  ) : null}
+
                   {step === "brief" ? (
-                    <Button
-                      variant="primary"
-                      onPress={runDraft}
-                      isPending={drafting}
-                      isDisabled={pending || !canDraft}
-                    >
-                      {({ isPending }) => (
-                        <>
-                          {isPending ? <Spinner color="current" size="sm" /> : <Sparkles size={14} aria-hidden />}
-                          {t("builder.draft")}
-                        </>
-                      )}
-                    </Button>
+                    <BuilderBrief
+                      model={model}
+                      models={models}
+                      canTestModels={canTestModels}
+                      template={template}
+                      instruction={instruction}
+                      links={links}
+                      docs={docs}
+                      files={files}
+                      sourceErrors={sourceErrors}
+                      pending={pending}
+                      drafting={drafting}
+                      onModel={chooseModel}
+                      onTemplate={setTemplate}
+                      onInstruction={setInstruction}
+                      onLinks={setLinks}
+                      onDocs={setDocs}
+                      onFiles={setFiles}
+                      onSourceErrors={setSourceErrors}
+                    />
                   ) : null}
-                  {step === "review" ? (
-                    <Button variant="primary" isDisabled={pending || !reviewReady} onPress={() => setStep("access")}>
-                      {tCommon("continue")}
-                    </Button>
+
+                  {step === "review" && draft ? (
+                    <BuilderReview
+                      draft={draft}
+                      server={server}
+                      baseValid={baseValid}
+                      tools={tools}
+                      enabled={enabled}
+                      chosen={chosen}
+                      tooMany={tooMany}
+                      search={search}
+                      pending={pending}
+                      canDraft={canDraft}
+                      onServer={patchServer}
+                      onTools={setTools}
+                      onEnabled={setEnabled}
+                      onSearch={setSearch}
+                      onRedraft={runDraft}
+                    />
                   ) : null}
+
                   {step === "access" ? (
-                    <Button variant="primary" onPress={() => create(close)} isPending={saving} isDisabled={!reviewReady || drafting}>
-                      {({ isPending }) => (
-                        <>
-                          {isPending ? <Spinner color="current" size="sm" /> : null}
-                          {t("builder.create")}
-                        </>
-                      )}
-                    </Button>
+                    <BuilderAccess
+                      tools={chosen}
+                      global={global}
+                      rules={rules}
+                      pending={pending}
+                      onGlobal={setGlobal}
+                      onRules={setRules}
+                    />
                   ) : null}
-                </Modal.Footer>
-              </>
-            )}
-          </Modal.Dialog>
-        </Modal.Container>
-      </Modal.Backdrop>
-    </Modal>
+                </div>
+              </Modal.Body>
+              <Modal.Footer>
+                <Button variant="tertiary" onPress={close} isDisabled={pending}>
+                  {tCommon("cancel")}
+                </Button>
+                {step !== "brief" ? (
+                  <Button
+                    variant="secondary"
+                    isDisabled={pending}
+                    onPress={() => setStep(step === "access" ? "review" : "brief")}
+                  >
+                    {t("builder.back")}
+                  </Button>
+                ) : null}
+                {step === "brief" ? (
+                  <Button
+                    variant="primary"
+                    onPress={runDraft}
+                    isPending={drafting}
+                    isDisabled={pending || !canDraft}
+                  >
+                    {({ isPending }) => (
+                      <>
+                        {isPending ? <Spinner color="current" size="sm" /> : <Sparkles size={14} aria-hidden />}
+                        {t("builder.draft")}
+                      </>
+                    )}
+                  </Button>
+                ) : null}
+                {step === "review" ? (
+                  <Button variant="primary" isDisabled={pending || !reviewReady} onPress={() => setStep("access")}>
+                    {tCommon("continue")}
+                  </Button>
+                ) : null}
+                {step === "access" ? (
+                  <Button variant="primary" onPress={() => create(close)} isPending={saving} isDisabled={!reviewReady || drafting}>
+                    {({ isPending }) => (
+                      <>
+                        {isPending ? <Spinner color="current" size="sm" /> : null}
+                        {t("builder.create")}
+                      </>
+                    )}
+                  </Button>
+                ) : null}
+              </Modal.Footer>
+            </>
+          )}
+        </Modal.Dialog>
+      </Modal.Container>
+    </Modal.Backdrop>
   );
 }

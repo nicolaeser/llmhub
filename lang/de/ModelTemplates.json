@@ -9,7 +9,8 @@
     "name": "Vorlage",
     "rules": "Regeln",
     "models": "Modelle",
-    "keys": "Keys"
+    "keys": "Keys",
+    "allows": "Erlaubt"
   },
   "rule": {
     "zdr": "Zero Data Retention",
@@ -31,7 +32,8 @@
   "preset": {
     "label": "Ausgangspunkt",
     "option": "{preset, select, zdr {Zero Data Retention} eu {Datenhaltung in der EU} noTraining {Kein Training mit Prompts} shortRetention {Aufbewahrung bis 30 Tage} other {Leer}}",
-    "name": "{preset, select, zdr {Zero Data Retention} eu {Nur EU} noTraining {Kein Training} shortRetention {Aufbewahrung bis 30 Tage} other {}}"
+    "name": "{preset, select, zdr {Zero Data Retention} eu {Nur EU} noTraining {Kein Training} shortRetention {Aufbewahrung bis 30 Tage} other {}}",
+    "hint": "Füllt übliche Regeln aus. Im nächsten Schritt kannst du sie ändern."
   },
   "fields": {
     "name": "Name",
@@ -78,5 +80,26 @@
   "toasts": {
     "saved": "{mode, select, edit {Vorlage aktualisiert} other {Vorlage angelegt}}",
     "deleted": "Vorlage gelöscht"
-  }
+  },
+  "actionsLabel": "Aktionen für {name}",
+  "search": "Vorlagen suchen",
+  "count": "{count, plural, one {# Vorlage} other {# Vorlagen}}",
+  "noMatches": "Keine Vorlage passt zur Suche",
+  "dialogHint": "Eine Vorlage ist eine wiederverwendbare Regel, welche Modelle ein API-Key aufrufen darf. Keys mit dieser Vorlage folgen Änderungen automatisch.",
+  "steps": {
+    "basics": {
+      "title": "Grunddaten",
+      "description": "Gib der Vorlage einen Namen, an dem alle, die Keys verwalten, sie erkennen."
+    },
+    "rules": {
+      "title": "Regeln",
+      "dataHandling": "Datenverarbeitung",
+      "scope": "Anbieter und Namen"
+    },
+    "models": {
+      "title": "Weitere Modelle"
+    }
+  },
+  "condition": "{kind, select, zdr {nur Zero Data Retention} noTraining {kein Training mit Prompts} retention {{days, plural, =0 {keine Datenaufbewahrung} one {Aufbewahrung höchstens # Tag} other {Aufbewahrung höchstens # Tage}}} regions {nur {regions}} patterns {Namen wie {patterns}} picked {plus {count, plural, one {# gewähltes Modell} other {# gewählte Modelle}}} other {}}",
+  "summary": "{mode, select, empty {Noch keine Regeln, daher keine Modelle} picked {Erlaubt {count, plural, one {# gewähltes Modell} other {# gewählte Modelle}}} other {Erlaubt {count, plural, =0 {keine Modelle} one {# Modell} other {# Modelle}}{scoped, select, true { von {providers}} other {}}{limited, select, true {, {conditions}} other {}}{picked, plural, =0 {} one {, dazu # gewähltes Modell} other {, dazu # gewählte Modelle}}}}"
 }

@@ -1,7 +1,7 @@
 "use client";
 
-import { Breadcrumbs, Button, Separator } from "@heroui/react";
-import { Building2, Menu, ShieldCheck } from "lucide-react";
+import { Breadcrumbs, Button, Separator, Tooltip } from "@heroui/react";
+import { Building2, Menu, PanelLeftClose, PanelLeftOpen, ShieldCheck } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { usePathname } from "@/i18n/routing";
 import BrandMark from "@/components/brand/brand-mark";
@@ -25,17 +25,38 @@ export default function ConsoleTopbar({
   const { scope, kind, shown } = useConsoleScope();
   const item = navItemFor(pathname, kind);
   const title = item ? t(item.labelKey) : pathname === "/account" || pathname.startsWith("/account/") ? t("account") : "";
+  const nested = item ? pathname !== item.href : false;
   const alias = scope.kind === "company" ? scope.alias : "";
   const scopeLabel = t("scope.label", { kind, alias });
   const ScopeIcon = kind === "company" ? Building2 : ShieldCheck;
+  const toggleLabel = t("toggleCollapsed", { collapsed: nav?.collapsed ? "true" : "false" });
+  const ToggleIcon = nav?.collapsed ? PanelLeftOpen : PanelLeftClose;
 
   return (
     <>
-      <header className="flex h-14 items-center gap-1.5 bg-surface px-3 sm:gap-2 sm:px-4 md:px-6">
+      <header className="flex h-14 shrink-0 items-center gap-1.5 bg-background px-3 sm:gap-2 sm:px-4 md:px-5">
         {nav ? (
           <Button isIconOnly size="sm" variant="ghost" aria-label={t("openMenu")} onPress={nav.open} className="md:hidden">
             <Menu size={16} aria-hidden />
           </Button>
+        ) : null}
+        {nav ? (
+          <div className="hidden items-center gap-3 md:flex">
+            <Tooltip delay={300} closeDelay={0}>
+              <Button
+                isIconOnly
+                size="sm"
+                variant="ghost"
+                aria-label={toggleLabel}
+                aria-expanded={!nav.collapsed}
+                onPress={nav.toggleCollapsed}
+              >
+                <ToggleIcon size={16} aria-hidden />
+              </Button>
+              <Tooltip.Content placement="bottom start">{toggleLabel}</Tooltip.Content>
+            </Tooltip>
+            <Separator orientation="vertical" className="h-4" />
+          </div>
         ) : null}
         <div className="flex min-w-0 flex-1 items-center gap-2 md:hidden">
           <BrandMark />
@@ -43,7 +64,10 @@ export default function ConsoleTopbar({
         </div>
         <Breadcrumbs aria-label={t("location")} className="hidden min-w-0 flex-1 md:flex">
           <Breadcrumbs.Item href={homePath(permissions, kind)}>{scopeLabel}</Breadcrumbs.Item>
-          {title ? <Breadcrumbs.Item>{title}</Breadcrumbs.Item> : null}
+          {title ? (
+            <Breadcrumbs.Item href={nested && item ? item.href : undefined}>{title}</Breadcrumbs.Item>
+          ) : null}
+          {nested ? <Breadcrumbs.Item>{t("details")}</Breadcrumbs.Item> : null}
         </Breadcrumbs>
         {nav && shown ? (
           <Button

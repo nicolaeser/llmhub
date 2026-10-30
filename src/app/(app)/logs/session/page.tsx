@@ -150,19 +150,23 @@ export default function LogSessionPage() {
         }
       />
       <Tabs
+        variant="secondary"
         selectedKey={view}
         onSelectionChange={(key) => setSearchParams({ tab: String(key) })}
-        aria-label={t("title")}
         className="mb-4 max-w-full"
       >
-        <Tabs.List className="w-fit" aria-label={t("title")}>
-          <Tabs.Tab id="chat" className="w-auto whitespace-nowrap">
-            {tSessions("views.chat")}
-          </Tabs.Tab>
-          <Tabs.Tab id="requests" className="w-auto whitespace-nowrap">
-            {t("tabs.requests")}
-          </Tabs.Tab>
-        </Tabs.List>
+        <Tabs.ListContainer>
+          <Tabs.List aria-label={t("title")}>
+            <Tabs.Tab id="chat" className="w-auto whitespace-nowrap">
+              {tSessions("views.chat")}
+              <Tabs.Indicator />
+            </Tabs.Tab>
+            <Tabs.Tab id="requests" className="w-auto whitespace-nowrap">
+              {t("tabs.requests")}
+              <Tabs.Indicator />
+            </Tabs.Tab>
+          </Tabs.List>
+        </Tabs.ListContainer>
       </Tabs>
       <LoadError state={state} className="mb-4" />
       {view === "chat" ? (

@@ -4,15 +4,14 @@ import type {
   BudgetView,
   CapLink,
   ConsoleUserNode,
+  DepartmentGroup,
   KeyNode,
   MemberNode,
   NodeKind,
-  NodeLink,
   NodeRef,
-  ProjectNode,
   SetupStep,
   StructurePayload,
-  TreeRow,
+  TenancyKind,
 } from "@/types/structure";
 
 const NODE_KINDS: readonly NodeKind[] = ["org", "team", "project", "member", "key"];
@@ -61,112 +60,60 @@ function rowsOf(data: StructurePayload, kind: BudgetKind): { id: string; alias: 
   return data.keys;
 }
 
-function step(data: StructurePayload, kind: NodeKind, id: string): NodeLink[] {
-  const row = id ? rowsOf(data, kind).find((item) => item.id === id) : undefined;
-  return row ? [{ kind, id: row.id, alias: row.alias }] : [];
+export type NodeAction = "edit" | "budget" | "boost" | "addProject" | "createKey" | "usage" | "delete";
+
+export type NodeFlags = { canManage: boolean; canBudget: boolean; canCreateKeys: boolean; canSeeUsage: boolean };
+
+export function nodeActions(kind: Exclude<TenancyKind, "org">, flags: NodeFlags, capped: boolean): NodeAction[] {
+  const actions: NodeAction[] = [];
+  if (flags.canManage) actions.push("edit");
+  if (flags.canBudget) actions.push("budget");
+  if (flags.canBudget && capped) actions.push("boost");
+  if (kind === "team" && flags.canManage) actions.push("addProject");
+  if (kind !== "team" && flags.canCreateKeys) actions.push("createKey");
+  if (flags.canSeeUsage) actions.push("usage");
+  if (flags.canManage) actions.push("delete");
+  return actions;
 }
 
-function placeOfKey(data: StructurePayload, key: KeyNode): { kind: "project" | "member"; row: ProjectNode | MemberNode } | null {
-  const project = key.projectId ? data.projects.find((row) => row.id === key.projectId) : undefined;
-  if (project) return { kind: "project", row: project };
-  const member = key.memberId ? data.members.find((row) => row.id === key.memberId) : undefined;
-  return member ? { kind: "member", row: member } : null;
-}
-
-export function nodePath(data: StructurePayload, ref: NodeRef | null): NodeLink[] {
-  if (!ref) return [];
-  if (ref.kind === "org") return step(data, "org", ref.id);
-  if (ref.kind === "team") {
-    const team = data.teams.find((row) => row.id === ref.id);
-    return team ? [...step(data, "org", team.orgId), ...step(data, "team", team.id)] : [];
-  }
-  if (ref.kind === "project" || ref.kind === "member") {
-    const row = (ref.kind === "project" ? data.projects : data.members).find((item) => item.id === ref.id);
-    return row
-      ? [...step(data, "org", row.orgId), ...step(data, "team", row.teamId), ...step(data, ref.kind, row.id)]
-      : [];
-  }
-  const key = data.keys.find((row) => row.id === ref.id);
-  if (!key) return [];
-  const place = placeOfKey(data, key);
-  return [
-    ...step(data, "org", place?.row.orgId ?? key.orgId),
-    ...step(data, "team", place ? place.row.teamId : key.teamId),
-    ...(place ? step(data, place.kind, place.row.id) : []),
-    ...step(data, "key", key.id),
-  ];
-}
-
-export function nodeExists(data: StructurePayload, ref: NodeRef | null): boolean {
-  if (!ref) return false;
-  const path = nodePath(data, ref);
-  const self = path.at(-1);
-  if (!self || self.kind !== ref.kind || self.id !== ref.id) return false;
-  return ref.kind !== "key" || path[0]?.kind === "org";
-}
-
-export function parentOf(data: StructurePayload, ref: NodeRef): NodeRef | null {
-  const path = nodePath(data, ref);
-  const parent = path.at(-2);
-  return parent ? { kind: parent.kind, id: parent.id } : null;
+export function nodeIn(data: StructurePayload, ref: NodeRef | null): boolean {
+  if (!ref || ref.kind === "org") return false;
+  return rowsOf(data, ref.kind).some((row) => row.id === ref.id);
 }
 
 function matches(text: string, query: string) {
   return !query || text.toLowerCase().includes(query);
 }
 
-export function treeRows(data: StructurePayload, query: string): TreeRow[] {
+export function structureGroups(data: StructurePayload, query: string): DepartmentGroup[] {
   const q = query.trim().toLowerCase();
   const teamIds = new Set(data.teams.map((row) => row.id));
-  const row = (kind: NodeKind, item: { id: string; alias: string; budget: BudgetView }, depth: number): TreeRow => ({
-    kind,
-    id: item.id,
-    alias: item.alias,
-    budget: item.budget,
-    depth,
+  const projectsOf = (teamId: string | null) =>
+    data.projects.filter((row) => (teamId === null ? !teamIds.has(row.teamId) : row.teamId === teamId));
+  const membersOf = (teamId: string) => data.members.filter((row) => row.teamId === teamId).length;
+  const groups: DepartmentGroup[] = data.teams.map((team) => ({
+    team,
+    projects: projectsOf(team.id),
+    members: membersOf(team.id),
+  }));
+  const loose = projectsOf(null);
+  const all = loose.length ? [...groups, { team: null, projects: loose, members: 0 }] : groups;
+  if (!q) return all;
+  return all.flatMap((group) => {
+    if (group.team && matches(group.team.alias, q)) return [group];
+    const projects = group.projects.filter((row) => matches(row.alias, q) || matches(row.owner, q));
+    return projects.length ? [{ ...group, projects }] : [];
   });
-  const keyRows = (pick: (key: KeyNode) => boolean, depth: number) =>
-    q
-      ? data.keys
-          .filter((key) => pick(key) && (matches(key.alias, q) || matches(key.prefix, q)))
-          .map((key) => row("key", key, depth))
-      : [];
-  const branch = (kind: NodeKind, item: { id: string; alias: string; budget: BudgetView }, depth: number, children: TreeRow[]) =>
-    matches(item.alias, q) || children.length ? [row(kind, item, depth), ...children] : [];
-  const project = (item: ProjectNode, depth: number) =>
-    branch("project", item, depth, keyRows((key) => key.projectId === item.id, depth + 1));
-  const member = (item: MemberNode, depth: number) =>
-    q ? branch("member", item, depth, keyRows((key) => key.memberId === item.id, depth + 1)) : [];
-  const placedIn = <T extends { orgId: string; teamId: string }>(rows: T[], orgId: string, teamId: string | null) =>
-    rows.filter((item) => (teamId === null ? item.orgId === orgId && !teamIds.has(item.teamId) : item.teamId === teamId));
-  return data.orgs.flatMap((org) =>
-    branch("org", org, 0, [
-      ...data.teams
-        .filter((team) => team.orgId === org.id)
-        .flatMap((team) =>
-          branch("team", team, 1, [
-            ...placedIn(data.projects, org.id, team.id).flatMap((item) => project(item, 2)),
-            ...placedIn(data.members, org.id, team.id).flatMap((item) => member(item, 2)),
-          ]),
-        ),
-      ...placedIn(data.projects, org.id, null).flatMap((item) => project(item, 1)),
-      ...placedIn(data.members, org.id, null).flatMap((item) => member(item, 1)),
-      ...keyRows((key) => !key.projectId && !key.memberId && key.orgId === org.id, 1),
-    ]),
-  );
 }
 
-export function treeHighlight(
-  data: StructurePayload,
-  ref: NodeRef | null,
-  rows: readonly TreeRow[],
-): { key: string; exact: boolean } | null {
-  if (!ref) return null;
-  const shown = new Set(rows.map(nodeKey));
-  const hit = nodePath(data, ref)
-    .reverse()
-    .find((link) => shown.has(nodeKey(link)));
-  return hit ? { key: nodeKey(hit), exact: hit.kind === ref.kind && hit.id === ref.id } : null;
+export function matchesMember(member: MemberNode, query: string): boolean {
+  const q = query.trim().toLowerCase();
+  return matches(member.alias, q) || matches(member.email, q);
+}
+
+export function matchesKey(key: KeyNode, query: string): boolean {
+  const q = query.trim().toLowerCase();
+  return matches(key.alias, q) || matches(key.prefix, q);
 }
 
 export function nodeAlias(data: StructurePayload, kind: BudgetKind, id: string): string {
@@ -242,7 +189,3 @@ export function withBudget(
   return { ...data, keys: patch(data.keys) };
 }
 
-export function usedRatio(budget: BudgetView): number | null {
-  const cap = budget.maxBudget > 0 ? budget.maxBudget + budget.boost : 0;
-  return cap > 0 ? Math.min(1, budget.spend / cap) : null;
-}

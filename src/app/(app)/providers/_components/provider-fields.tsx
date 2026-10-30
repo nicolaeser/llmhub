@@ -35,7 +35,18 @@ const SIGN_IN_ACTIONS: SignInFlowActions<SignInFileResult> = {
   importFile: importSignInFileAction,
 };
 
-function FieldSection({ title, hint, children }: { title: string; hint: string; children: ReactNode }) {
+function FieldSection({
+  title,
+  hint,
+  bare = false,
+  children,
+}: {
+  title: string;
+  hint: string;
+  bare?: boolean;
+  children: ReactNode;
+}) {
+  if (bare) return <div className="space-y-4">{children}</div>;
   return (
     <section className="space-y-4" aria-label={title}>
       <div className="space-y-1">
@@ -47,54 +58,80 @@ function FieldSection({ title, hint, children }: { title: string; hint: string; 
   );
 }
 
-export default function ProviderFields({
-  spec,
-  editing,
-  draft,
-  isDisabled,
-  onChange,
-}: {
+type FieldsProps = {
   spec: ProviderKindSpec;
   editing: ProviderView | null;
   draft: ProviderDraft;
   isDisabled: boolean;
   onChange: (update: (draft: ProviderDraft) => ProviderDraft) => void;
-}) {
-  const t = useTranslations("Providers");
-  const tCommon = useTranslations("Common");
-  const signInKind = isSignInKind(spec.kind) ? spec.kind : null;
-  const vertexKind = spec.kind === "vertex";
-  const method = signInKind ? "signIn" : vertexKind ? "vertex" : "apiKey";
+  bare?: boolean;
+};
 
-  function set(patch: Partial<ProviderDraft>) {
-    onChange((current) => ({ ...current, ...patch }));
+function methodOf(spec: ProviderKindSpec) {
+  if (isSignInKind(spec.kind)) return "signIn";
+  return spec.kind === "vertex" ? "vertex" : "apiKey";
+}
+
+function patcher(onChange: FieldsProps["onChange"]) {
+  return (patch: Partial<ProviderDraft>) => onChange((current) => ({ ...current, ...patch }));
+}
+
+export function ConnectionFields({ spec, editing, draft, isDisabled, onChange, bare }: FieldsProps) {
+  const t = useTranslations("Providers");
+  const set = patcher(onChange);
+  const signInKind = isSignInKind(spec.kind) ? spec.kind : null;
+
+  if (signInKind) {
+    return (
+      <SignInPanel
+        kind={signInKind}
+        current={editing?.signIn ?? null}
+        isDisabled={isDisabled}
+        actions={SIGN_IN_ACTIONS}
+        onSignedIn={(result) => set({ signIn: result.credential })}
+      />
+    );
   }
 
-  const credentials = vertexKind ? (
-    <VertexFields
-      draft={draft.vertex}
-      current={editing?.vertex ?? null}
-      apiKey={draft.apiKey}
-      isDisabled={isDisabled}
-      onApiKey={(apiKey) => set({ apiKey })}
-      onChange={(vertex) => set({ vertex })}
-    />
-  ) : (
-    <TextField
-      fullWidth
-      value={draft.apiKey}
-      onChange={(apiKey) => set({ apiKey })}
-      isDisabled={isDisabled}
-      aria-label={t("apiKey")}
-    >
-      <Label>{t("apiKey")}</Label>
-      <Input
-        type="password"
-        aria-label={t("apiKey")}
-        placeholder={editing?.hasApiKey ? t("apiKeyKeep") : spec.kind === "gemini" ? "AIza…" : "sk-…"}
-      />
-    </TextField>
+  return (
+    <FieldSection title={t("form.connection")} hint={t("form.connectionHint", { method: methodOf(spec) })} bare={bare}>
+      {spec.kind === "vertex" ? (
+        <VertexFields
+          draft={draft.vertex}
+          current={editing?.vertex ?? null}
+          apiKey={draft.apiKey}
+          isDisabled={isDisabled}
+          onApiKey={(apiKey) => set({ apiKey })}
+          onChange={(vertex) => set({ vertex })}
+        />
+      ) : (
+        <TextField
+          fullWidth
+          value={draft.apiKey}
+          onChange={(apiKey) => set({ apiKey })}
+          isDisabled={isDisabled}
+          aria-label={t("apiKey")}
+        >
+          <Label>{t("apiKey")}</Label>
+          <Input
+            type="password"
+            aria-label={t("apiKey")}
+            placeholder={editing?.hasApiKey ? t("apiKeyKeep") : spec.kind === "gemini" ? "AIza…" : "sk-…"}
+          />
+        </TextField>
+      )}
+    </FieldSection>
   );
+}
+
+export function DataHandlingFields({
+  draft,
+  isDisabled,
+  onChange,
+  bare,
+}: Pick<FieldsProps, "draft" | "isDisabled" | "onChange" | "bare">) {
+  const t = useTranslations("Providers");
+  const set = patcher(onChange);
 
   const region = (
     <Select
@@ -122,67 +159,59 @@ export default function ProviderFields({
   );
 
   return (
-    <>
-      {signInKind ? (
-        <SignInPanel
-          kind={signInKind}
-          current={editing?.signIn ?? null}
-          isDisabled={isDisabled}
-          actions={SIGN_IN_ACTIONS}
-          onSignedIn={(result) => set({ signIn: result.credential })}
-        />
+    <FieldSection title={t("dataHandling.title")} hint={t("dataHandling.hint")} bare={bare}>
+      <Switch isSelected={draft.zdr} onChange={(zdr) => set({ zdr })} isDisabled={isDisabled}>
+        <Switch.Content>
+          <Switch.Control>
+            <Switch.Thumb />
+          </Switch.Control>
+          <Label>{t("dataHandling.zdr")}</Label>
+        </Switch.Content>
+        <Description>{t("dataHandling.zdrHint")}</Description>
+      </Switch>
+      {draft.zdr ? (
+        region
       ) : (
-        <FieldSection title={t("form.connection")} hint={t("form.connectionHint", { method })}>
-          {credentials}
-        </FieldSection>
-      )}
-      <Separator />
-      <FieldSection title={t("dataHandling.title")} hint={t("dataHandling.hint")}>
-        <Switch isSelected={draft.zdr} onChange={(zdr) => set({ zdr })} isDisabled={isDisabled}>
-          <Switch.Content>
-            <Switch.Control>
-              <Switch.Thumb />
-            </Switch.Control>
-            <Label>{t("dataHandling.zdr")}</Label>
-          </Switch.Content>
-          <Description>{t("dataHandling.zdrHint")}</Description>
-        </Switch>
-        {draft.zdr ? (
-          region
-        ) : (
-          <>
-            <div className="grid gap-4 sm:grid-cols-2 sm:items-start">
-              <TextField
-                fullWidth
-                value={draft.retention}
-                onChange={(retention) => set({ retention })}
-                isDisabled={isDisabled}
-                isInvalid={!retentionValid(draft)}
-              >
-                <Label>{t("dataHandling.retention")}</Label>
-                <Input inputMode="numeric" placeholder="30" />
-                <Description>{t("dataHandling.retentionHint")}</Description>
-              </TextField>
-              {region}
-            </div>
-            <Switch
-              isSelected={draft.noTraining}
-              onChange={(noTraining) => set({ noTraining })}
+        <>
+          <div className="grid gap-4 sm:grid-cols-2 sm:items-start">
+            <TextField
+              fullWidth
+              value={draft.retention}
+              onChange={(retention) => set({ retention })}
               isDisabled={isDisabled}
+              isInvalid={!retentionValid(draft)}
             >
-              <Switch.Content>
-                <Switch.Control>
-                  <Switch.Thumb />
-                </Switch.Control>
-                <Label>{t("dataHandling.noTraining")}</Label>
-              </Switch.Content>
-              <Description>{t("dataHandling.noTrainingHint")}</Description>
-            </Switch>
-          </>
-        )}
-      </FieldSection>
-      <Separator />
-      <FieldSection title={t("form.models")} hint={t("form.modelsHint", { method })}>
+              <Label>{t("dataHandling.retention")}</Label>
+              <Input inputMode="numeric" placeholder="30" />
+              <Description>{t("dataHandling.retentionHint")}</Description>
+            </TextField>
+            {region}
+          </div>
+          <Switch isSelected={draft.noTraining} onChange={(noTraining) => set({ noTraining })} isDisabled={isDisabled}>
+            <Switch.Content>
+              <Switch.Control>
+                <Switch.Thumb />
+              </Switch.Control>
+              <Label>{t("dataHandling.noTraining")}</Label>
+            </Switch.Content>
+            <Description>{t("dataHandling.noTrainingHint")}</Description>
+          </Switch>
+        </>
+      )}
+    </FieldSection>
+  );
+}
+
+export function ModelSettingsFields({ spec, draft, isDisabled, onChange, bare }: Omit<FieldsProps, "editing">) {
+  const t = useTranslations("Providers");
+  const tCommon = useTranslations("Common");
+  const set = patcher(onChange);
+  const signInKind = isSignInKind(spec.kind);
+  const method = methodOf(spec);
+
+  return (
+    <>
+      <FieldSection title={t("form.models")} hint={t("form.modelsHint", { method })} bare={bare}>
         <Select
           fullWidth
           selectedKey={draft.newModels}
@@ -244,7 +273,7 @@ export default function ProviderFields({
               <Label>{t("displayName")}</Label>
               <Input aria-label={t("displayName")} />
             </TextField>
-            {signInKind || vertexKind ? null : (
+            {signInKind || spec.kind === "vertex" ? null : (
               <TextField
                 fullWidth
                 value={draft.baseUrl}
@@ -259,6 +288,18 @@ export default function ProviderFields({
           </Disclosure.Body>
         </Disclosure.Content>
       </Disclosure>
+    </>
+  );
+}
+
+export default function ProviderFields(props: FieldsProps) {
+  return (
+    <>
+      <ConnectionFields {...props} />
+      <Separator />
+      <DataHandlingFields draft={props.draft} isDisabled={props.isDisabled} onChange={props.onChange} />
+      <Separator />
+      <ModelSettingsFields spec={props.spec} draft={props.draft} isDisabled={props.isDisabled} onChange={props.onChange} />
     </>
   );
 }

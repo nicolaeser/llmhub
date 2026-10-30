@@ -15,10 +15,8 @@ import {
   TextField,
   toast,
 } from "@heroui/react";
-import { KeyRound, ListChecks, ShieldCheck, UsersRound } from "lucide-react";
 import { useTranslations } from "next-intl";
 import CopyButton from "@/components/console/copy-button";
-import IconTile from "@/components/console/icon-tile";
 import { SettingSection, SettingSwitch, SettingText } from "./setting-fields";
 import { useErrorToast } from "@/components/console/use-error-toast";
 import {
@@ -194,12 +192,11 @@ export default function SignInTab() {
   ] as const;
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-8">
       <SettingsLead description={t("description")} canManage={view.canManage} />
 
       <SettingSection title={t("sso.title")} subtitle={t("sso.subtitle")}>
-        <div className="flex items-start gap-3">
-          <IconTile icon={KeyRound} tone={ready ? "success" : "accent"} />
+        <div className="flex flex-col gap-3">
           <SettingSwitch
             label={t("sso.enabled")}
             isSelected={oidc.enabled}
@@ -316,8 +313,7 @@ export default function SignInTab() {
       ) : null}
 
       <SettingSection title={t("checklist.title")} subtitle={t("checklist.subtitle")}>
-        <div className="flex items-start gap-3">
-          <IconTile icon={ListChecks} tone={ready ? "success" : "warning"} />
+        <div className="flex flex-col gap-3">
           <ol className="min-w-0 flex-1 divide-y divide-border">
             {checklist.map((item, index) => (
               <li key={item.key} className="space-y-2 py-3 first:pt-0 last:pb-0">
@@ -348,8 +344,7 @@ export default function SignInTab() {
       </SettingSection>
 
       <SettingSection title={t("accounts.title")} subtitle={t("accounts.subtitle")}>
-        <div className="flex items-start gap-3">
-          <IconTile icon={UsersRound} />
+        <div className="flex flex-col gap-3">
           <div className="grid min-w-0 flex-1 gap-4 md:grid-cols-2 md:items-start">
             <OptionSelect
               label={t("accounts.defaultRole")}
@@ -418,8 +413,7 @@ export default function SignInTab() {
       </SettingSection>
 
       <SettingSection title={t("ssoOnly.title")} subtitle={t("ssoOnly.subtitle")}>
-        <div className="flex items-start gap-3">
-          <IconTile icon={ShieldCheck} tone={oidc.sso_only && ready ? "success" : "neutral"} />
+        <div className="flex flex-col gap-3">
           <SettingSwitch
             label={t("ssoOnly.enabled")}
             isSelected={oidc.sso_only}

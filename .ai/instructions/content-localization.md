@@ -19,7 +19,7 @@ Load when changing `lang/`, `src/i18n/`, or user-visible strings. Load [next-int
 - Must use `t.rich` for inline React markup, `t.markup` only for string HTML, and `t.raw` only for unparsed JSON.
 - Must keep ICU argument names, plural/select branches, and rich tags identical across locales.
 - Must keep `if` only for control flow (empty vs populated UI, auth, business rules), not for choosing a label.
-- Named formats live in `src/i18n/formats.ts` and must be returned from `getRequestConfig`.
+- Named formats live in `src/i18n/formats.ts` and must be returned from `getRequestConfig`. Spend, budgets, and costs use `money` (2 decimals, and one significant digit below a cent through `roundingPriority: "morePrecision"`, so 96.1 reads `$96.10` and 0.0012 reads `$0.001`); per-token prices use `price` (up to 8 decimals); whole-dollar presets use `currencyWhole`. Show amounts with `tabular-nums`.
 - German copy must reuse the console's established terms, anchored in `lang/de/Sidebar.json`: Unternehmen (not Firma), Abteilung, Konsolen-Benutzer, API-Keys (not Schlüssel), Anbieter (not Provider), Leitplanken, Wissensbasen, Nutzung, Protokolle, Anfragen, Ausgaben. Admin terms: Inhaber for the owner account created by setup (not Owner), Admin for the role template, Rolle and Berechtigung (not Recht), Identitätsanbieter for the SSO provider. Search `lang/de/` for an existing term before coining a new one.
 
 ## Validation

@@ -11,10 +11,6 @@ export type TenancyRef = { kind: TenancyKind; id: string };
 
 export type NodeRef = { kind: NodeKind; id: string };
 
-export type NodeLink = NodeRef & { alias: string };
-
-export type TreeRow = NodeLink & { budget: BudgetView; depth: number };
-
 export type SetupStep = "org" | "team" | "project" | "member" | "budget";
 
 export type SpendScope = { orgId?: string; userId?: string };
@@ -121,6 +117,30 @@ export type StructurePayload = {
   canSeePolicies: boolean;
   mailEnabled: boolean;
 };
+
+export type DepartmentGroup = { team: TeamNode | null; projects: ProjectNode[]; members: number };
+
+export type CompanyRow = {
+  id: string;
+  alias: string;
+  budget: BudgetView;
+  teams: number;
+  projects: number;
+  members: number;
+  keys: number;
+};
+
+export type CompanyDirectory = {
+  rows: CompanyRow[];
+  canManage: boolean;
+  canSeeKeys: boolean;
+};
+
+export type CompanyStatus = "exhausted" | "near" | "empty" | "ok";
+
+export type CompanyTab = "overview" | "structure" | "people" | "keys" | "access" | "integrations" | "reports";
+
+export type CompanyLink = { orgId: string; tab: CompanyTab | null; node: TenancyRef | null };
 
 export type MemberInput = {
   id?: string;

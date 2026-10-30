@@ -5,6 +5,7 @@ import {
   Building2,
   Code2,
   KeyRound,
+  LayoutDashboard,
   Library,
   Network,
   Plug,
@@ -16,7 +17,39 @@ import { hasPerm, PERMISSIONS } from "@/lib/auth/permissions";
 import type { Permission } from "@/types/auth";
 import type { NavItem, NavSection, ScopeKind } from "@/types/console";
 
+const OVERVIEW_PERMISSIONS = {
+  platform: [
+    PERMISSIONS.TENANCY_READ,
+    PERMISSIONS.KEYS_READ,
+    PERMISSIONS.PROVIDERS_READ,
+    PERMISSIONS.MODELS_READ,
+    PERMISSIONS.SPEND_READ,
+  ],
+  company: [PERMISSIONS.TENANCY_READ, PERMISSIONS.KEYS_READ, PERMISSIONS.SPEND_READ],
+} as const satisfies Record<ScopeKind, readonly Permission[]>;
+
 export const NAV: NavSection[] = [
+  {
+    id: "home",
+    labelKey: "sections.home",
+    untitled: true,
+    items: [
+      {
+        href: "/overview",
+        labelKey: "items.overview",
+        scope: "platform",
+        icon: LayoutDashboard,
+        permission: OVERVIEW_PERMISSIONS.platform,
+      },
+      {
+        href: "/overview",
+        labelKey: "items.overview",
+        scope: "company",
+        icon: LayoutDashboard,
+        permission: OVERVIEW_PERMISSIONS.company,
+      },
+    ],
+  },
   {
     id: "organization",
     labelKey: "sections.organization",

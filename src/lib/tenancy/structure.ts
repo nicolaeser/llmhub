@@ -11,6 +11,7 @@ import { money } from "@/lib/utils/money";
 import type { AuthenticatedSession, Permission } from "@/types/auth";
 import type {
   BudgetKind,
+  CompanyDirectory,
   MemberInput,
   ProjectInput,
   StructurePayload,
@@ -38,15 +39,16 @@ function isNodeKind(value: unknown): value is TenancyKind {
   return typeof value === "string" && NODE_KINDS.includes(value);
 }
 
-async function structurePayload(session: AuthenticatedSession): Promise<StructurePayload> {
+async function structurePayload(session: AuthenticatedSession, only?: string): Promise<StructurePayload> {
   const now = new Date();
   const company = companyOf(session);
-  const inScope = company ? { orgId: company } : {};
+  const orgId = company ?? only ?? null;
+  const inScope = orgId ? { orgId } : {};
   const seesKeys = hasPerm(session.permissions, PERMISSIONS.KEYS_READ);
   const managesKeys = hasPerm(session.permissions, PERMISSIONS.KEYS_MANAGE);
   const seesReports = hasPerm(session.permissions, PERMISSIONS.SPEND_READ_ALL);
   const [orgs, teams, projects, members, users, keys, temps, enterprise, reports] = await Promise.all([
-    prisma.organization.findMany({ where: company ? { id: company } : {}, orderBy: { alias: "asc" } }),
+    prisma.organization.findMany({ where: orgId ? { id: orgId } : {}, orderBy: { alias: "asc" } }),
     prisma.team.findMany({ where: inScope, orderBy: { alias: "asc" } }),
     prisma.project.findMany({ where: inScope, orderBy: { alias: "asc" } }),
     prisma.member.findMany({ where: inScope, orderBy: { name: "asc" } }),
@@ -56,11 +58,13 @@ async function structurePayload(session: AuthenticatedSession): Promise<Structur
       select: { ...HOLDER, username: true, orgId: true },
     }),
     seesKeys
-      ? prisma.virtualKey.findMany({ where: keyScope(session), orderBy: { keyAlias: "asc" } })
+      ? prisma.virtualKey.findMany({ where: { ...keyScope(session), ...inScope }, orderBy: { keyAlias: "asc" } })
       : Promise.resolve([]),
     prisma.tempBudget.findMany({ where: { until: { gt: now } }, orderBy: { until: "asc" } }),
     getEnterprise(),
-    seesReports ? reportViews(session, now) : Promise.resolve([]),
+    seesReports
+      ? reportViews(session, now).then((rows) => (orgId ? rows.filter((row) => row.orgId === orgId) : rows))
+      : Promise.resolve([]),
   ]);
   const boosts = (kind: BudgetKind, id: string) =>
     temps
@@ -172,26 +176,102 @@ export async function loadStructure() {
   return structurePayload(await requirePermission(PERMISSIONS.TENANCY_READ));
 }
 
+export async function loadCompany(orgId: string) {
+  const session = await requirePermission(PERMISSIONS.TENANCY_READ);
+  const id = typeof orgId === "string" ? orgId.trim() : "";
+  if (!id || !inCompany(session, id)) throw new Error("NOT_FOUND");
+  const payload = await structurePayload(session, id);
+  if (!payload.orgs.length) throw new Error("NOT_FOUND");
+  return payload;
+}
+
+export async function loadCompanyDirectory(): Promise<CompanyDirectory> {
+  const session = await requirePermission(PERMISSIONS.TENANCY_READ);
+  const canSeeKeys = hasPerm(session.permissions, PERMISSIONS.KEYS_READ);
+  const flags = { canManage: hasPerm(session.permissions, PERMISSIONS.TENANCY_MANAGE), canSeeKeys };
+  if (companyOf(session)) return { rows: [], ...flags };
+  const now = new Date();
+  const [orgs, teams, projects, members, keys, temps] = await Promise.all([
+    prisma.organization.findMany({ orderBy: { alias: "asc" } }),
+    prisma.team.groupBy({ by: ["orgId"], _count: { _all: true } }),
+    prisma.project.groupBy({ by: ["orgId"], _count: { _all: true } }),
+    prisma.member.groupBy({ by: ["orgId"], _count: { _all: true } }),
+    canSeeKeys
+      ? prisma.virtualKey.groupBy({ by: ["orgId"], where: keyScope(session), _count: { _all: true } })
+      : Promise.resolve([]),
+    prisma.tempBudget.findMany({ where: { entityType: "org", until: { gt: now } }, orderBy: { until: "asc" } }),
+  ]);
+  const tally = (rows: { orgId: string | null; _count: { _all: number } }[]) =>
+    new Map(rows.map((row) => [row.orgId ?? "", row._count._all]));
+  const [teamCount, projectCount, memberCount, keyCount] = [tally(teams), tally(projects), tally(members), tally(keys)];
+  return {
+    rows: orgs.map((row) => ({
+      id: row.id,
+      alias: row.alias,
+      budget: budgetView(
+        row,
+        temps
+          .filter((temp) => temp.entityId === row.id)
+          .map((temp) => ({ id: temp.id, amount: money(temp.amount), until: temp.until })),
+        now,
+      ),
+      teams: teamCount.get(row.id) ?? 0,
+      projects: projectCount.get(row.id) ?? 0,
+      members: memberCount.get(row.id) ?? 0,
+      keys: keyCount.get(row.id) ?? 0,
+    })),
+    ...flags,
+  };
+}
+
+export async function locateNode(input: { kind: TenancyKind; id: string }): Promise<{ orgId: string }> {
+  const session = await requirePermission(PERMISSIONS.TENANCY_READ);
+  if (!isNodeKind(input?.kind)) throw new Error("UNKNOWN_ENTITY_TYPE");
+  const id = typeof input.id === "string" ? input.id.trim() : "";
+  if (!id) throw new Error("MISSING_ID");
+  const where = { where: { id }, select: { orgId: true } } as const;
+  const row =
+    input.kind === "org"
+      ? await prisma.organization.findUnique({ where: { id }, select: { id: true } }).then((org) => (org ? { orgId: org.id } : null))
+      : input.kind === "team"
+        ? await prisma.team.findUnique(where)
+        : input.kind === "project"
+          ? await prisma.project.findUnique(where)
+          : await prisma.member.findUnique(where);
+  if (!row?.orgId || !inCompany(session, row.orgId)) throw new Error("NOT_FOUND");
+  return { orgId: row.orgId };
+}
+
+async function writeOrg(session: AuthenticatedSession, input: { id?: string; alias: string }) {
+  assertPlatform(session);
+  const alias = cleanAlias(input.alias);
+  const id = input.id?.trim() || null;
+  const existing = id ? await prisma.organization.findUnique({ where: { id } }) : null;
+  if (id && !existing) throw new Error("NOT_FOUND");
+  await assertUniqueAlias("org", alias, id, null);
+  const row = existing
+    ? await prisma.organization.update({ where: { id: existing.id }, data: { alias } })
+    : await prisma.organization.create({ data: { alias } });
+  await writeAudit({
+    actor: session.user.id,
+    action: existing ? "org.update" : "org.create",
+    objectType: "org",
+    objectId: row.id,
+    before: existing ? { alias: existing.alias } : undefined,
+    after: { alias: row.alias },
+  });
+  return { id: row.id, alias: row.alias };
+}
+
 export async function saveOrg(input: { id?: string; alias: string }) {
   return mutate(PERMISSIONS.TENANCY_MANAGE, async (session) => {
-      assertPlatform(session);
-      const alias = cleanAlias(input.alias);
-      const id = input.id?.trim() || null;
-      const existing = id ? await prisma.organization.findUnique({ where: { id } }) : null;
-      if (id && !existing) throw new Error("NOT_FOUND");
-      await assertUniqueAlias("org", alias, id, null);
-      const row = existing
-        ? await prisma.organization.update({ where: { id: existing.id }, data: { alias } })
-        : await prisma.organization.create({ data: { alias } });
-      await writeAudit({
-        actor: session.user.id,
-        action: existing ? "org.update" : "org.create",
-        objectType: "org",
-        objectId: row.id,
-        before: existing ? { alias: existing.alias } : undefined,
-        after: { alias: row.alias },
-      });
-    });
+    await writeOrg(session, input);
+  });
+}
+
+export async function createCompany(input: { alias: string }) {
+  const session = await requirePermission(PERMISSIONS.TENANCY_MANAGE);
+  return writeOrg(session, { alias: input?.alias });
 }
 
 export async function saveCompanyLabelKeys(input: { orgId: string; keys: string[] }) {

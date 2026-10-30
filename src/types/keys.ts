@@ -1,6 +1,7 @@
 import type { z } from "zod";
 import type { accessWindowSchema } from "@/schemas/keys";
 import type { TemplateOption } from "@/types/model-templates";
+import type { BudgetDetail } from "@/types/structure";
 
 export type KeyBindingOption = { id: string; alias: string; orgId: string; teamId: string };
 
@@ -117,3 +118,58 @@ export type KeyBindingRow = {
   projectId: string | null;
   memberId: string | null;
 };
+
+export type KeyDraft = {
+  alias: string;
+  kind: KeyBindingKind;
+  projectId: string;
+  memberId: string;
+  restricted: boolean;
+  models: string[];
+  templateIds: string[];
+  rpm: number;
+  tpm: number;
+  maxRequestCost: number;
+  days: number;
+  budget: number;
+  budgetPeriod: string;
+  ips: string;
+  endpoints: KeyEndpoint[];
+  windows: AccessWindowDraft[];
+  timeZone: string;
+  logContent: boolean;
+  blocked: boolean;
+};
+
+export type KeyAccessSummary = { state: "all" | "none" | "some"; models: string[] };
+
+export type KeyOwner = {
+  kind: KeyBindingKind;
+  name: string;
+  orgId: string;
+  orgAlias: string;
+  teamAlias: string;
+};
+
+export type KeyActivity = {
+  spend7d: number;
+  requests7d: number;
+  errors7d: number;
+  lastUsed: string;
+};
+
+export type KeyDetailPage = KeyDetail & {
+  owner: KeyOwner;
+  activity: KeyActivity | null;
+  budget: BudgetDetail | null;
+  options: KeyOptions;
+  selfName: string;
+  canManage: boolean;
+  canBind: boolean;
+  canBudget: boolean;
+  canMcp: boolean;
+  canSeeUsage: boolean;
+  canOpenCompany: boolean;
+};
+
+export type KeySection = "basics" | "access" | "limits" | "network" | "schedule" | "content";

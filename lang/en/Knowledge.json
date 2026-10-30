@@ -1,33 +1,24 @@
 {
   "title": "Knowledge bases",
-  "subtitle": "Vector stores for retrieval-augmented generation. API keys search them with file_search and /api/v1/vector_stores. Every knowledge base belongs to exactly one company and optionally one project, and is never visible to another company or project.",
+  "subtitle": "Documents your API keys can search, so models answer with your own content. Each knowledge base belongs to one company, or to one project in it.",
   "add": "New knowledge base",
   "emptyTitle": "No knowledge bases yet",
-  "empty": "Create a knowledge base, upload documents, and let the company's API keys search them with file_search.",
+  "empty": "Create a knowledge base and upload documents. Each file is split into passages and indexed, then the company's API keys can search it with file_search.",
   "readOnly": "You can view knowledge bases and their files. Changing them needs the tenancy:manage permission.",
-  "noMatches": "No knowledge base matches the filters.",
+  "noMatches": "No knowledge base matches",
   "search": "Search by name",
   "companyFilter": "Company",
   "allCompanies": "All companies",
-  "manageFiles": "Manage files",
   "columns": {
     "name": "Knowledge base",
-    "company": "Company",
-    "owner": "Owner",
     "status": "Status",
     "files": "Files",
     "size": "Size",
-    "embedding": "Embedding model",
     "lastActive": "Last active"
-  },
-  "owner": {
-    "name": "{scope, select, organization {Whole company} other {{name}}}",
-    "kind": "{scope, select, project {Project} member {Person} user {Console user} other {Every API key of the company}}"
   },
   "status": "{status, select, in_progress {Processing} completed {Ready} expired {Expired} other {Unknown}}",
   "fileCounts": "{completed, number, integer} of {total, number, integer} ready",
   "failedCount": "{count, plural, one {# failed} other {# failed}}",
-  "dimensions": "{count, number, integer} dimensions",
   "expires": "Expires {when}",
   "deleteConfirm": "Delete {name}?",
   "deleteHint": "{count, plural, =0 {API keys can no longer search it.} one {Its file is deleted too. API keys can no longer search it.} other {Its # files are deleted too. API keys can no longer search it.}}",
@@ -64,7 +55,13 @@
     "chunkOverlapInvalid": "The overlap must not exceed {max, number, integer} tokens.",
     "expiry": "Expire after days without use",
     "expiryHint": "Between 1 and 365. Leave empty to keep the knowledge base until it is deleted.",
-    "fixed": "Fixed after creation: {model}, {dimensions, plural, =0 {native dimensions} other {# dimensions}}, chunks of {chunk, number, integer} tokens with {overlap, number, integer} tokens overlap."
+    "fixed": "Fixed after creation: {model}, {dimensions, plural, =0 {native dimensions} other {# dimensions}}, chunks of {chunk, number, integer} tokens with {overlap, number, integer} tokens overlap.",
+    "namePlaceholder": "Product handbook",
+    "descriptionHint": "Optional. Tells your team what is inside.",
+    "createHint": "Only owner and name are required. The defaults work for most documents.",
+    "editHint": "Change the name, the helper models, or when it expires. The embedding model and chunking stay as they were created.",
+    "step": "{step, select, owner {Owner and name} models {Models} indexing {Indexing} other {{step}}}",
+    "stepHint": "{step, select, owner {Who may search it. A company-wide knowledge base is searchable by every API key of the company.} models {The embedding model turns text into searchable vectors. It cannot be changed later.} indexing {How files are split into passages, and when an unused knowledge base expires.} other {}}"
   },
   "files": {
     "title": "Files in {name}",
@@ -88,11 +85,19 @@
   },
   "upload": {
     "title": "Upload documents",
-    "hint": "PDF, Word, PowerPoint, Excel, text, Markdown, CSV, JSON, HTML, source code, and images. Up to {limit} per file. Drop files here or choose them.",
+    "hint": "PDF, Word, PowerPoint, Excel, text, Markdown, CSV, JSON, HTML, source code, and images, up to {limit} per file. Each file is indexed after upload and becomes searchable when it shows Ready.",
     "choose": "Choose files",
     "queue": "Uploads",
     "clear": "Clear finished",
     "status": "{status, select, pending {Uploading} done {Uploaded} other {Failed}}",
     "error": "{code, select, TOO_LARGE {Larger than {limit}.} PAYLOAD_TOO_LARGE {Larger than {limit}.} NETWORK {The connection was interrupted. Try again.} FORBIDDEN {You do not have permission for this.} UNAUTHORIZED {Your session ended. Sign in again.} NOT_FOUND {This knowledge base no longer exists.} VALIDATION {The file is empty or could not be read.} other {The upload failed. Try again.}}"
-  }
+  },
+  "noMatchesHint": "Try another name, or show all companies.",
+  "ownerLine": "{company} · {scope, select, project {Project {name}} member {Person {name}} user {Console user {name}} other {Whole company}}",
+  "indexingCount": "{count, plural, one {# being indexed} other {# being indexed}}",
+  "filesButton": "{count, plural, =0 {Add files} one {# file} other {# files}}",
+  "filesFor": "Files in {name}",
+  "editFor": "Edit {name}",
+  "deleteFor": "Delete {name}",
+  "howItWorks": "Uploaded files are split into passages and indexed. A file can be searched once its status is Ready."
 }

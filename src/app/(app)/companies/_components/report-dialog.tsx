@@ -29,22 +29,20 @@ function splitRecipients(value: string): string[] {
   return value.split(/[\s,;]+/).filter(Boolean);
 }
 
+const WHOLE_COMPANY = "company";
+
 export default function ReportDialog({
   state,
   report,
-  kind,
-  name,
-  orgId,
-  teamId,
+  company,
+  departments,
   people,
   onSaved,
 }: {
   state: ReturnType<typeof useOverlayState>;
   report: UsageReportView | null;
-  kind: "org" | "team";
-  name: string;
-  orgId: string;
-  teamId: string;
+  company: { id: string; alias: string };
+  departments: { id: string; alias: string }[];
   people: MemberNode[];
   onSaved: (reports: UsageReportView[]) => void;
 }) {
@@ -57,6 +55,8 @@ export default function ReportDialog({
   const [language, setLanguage] = useState(report?.locale ?? locale);
   const [recipients, setRecipients] = useState(report?.recipients.join("\n") ?? "");
   const [enabled, setEnabled] = useState(report?.enabled ?? true);
+  const [teamId, setTeamId] = useState(report?.teamId ?? "");
+  const department = departments.find((row) => row.id === teamId);
   const [pending, start] = useTransition();
   const mode = report ? "edit" : "create";
   const list = splitRecipients(recipients);
@@ -69,7 +69,7 @@ export default function ReportDialog({
     start(async () => {
       const result = await saveReportAction({
         id: report?.id,
-        orgId,
+        orgId: company.id,
         teamId,
         cadence,
         format: attachment,
@@ -91,12 +91,45 @@ export default function ReportDialog({
     <FormDialog
       state={state}
       title={t("title", { mode })}
-      description={t("hint", { kind, name })}
+      description={t("hint", { kind: department ? "team" : "org", name: department?.alias ?? company.alias })}
       submitLabel={t("submit", { mode })}
       pending={pending}
       isSubmitDisabled={!list.length || invalid.length > 0 || tooMany}
       onSubmit={save}
     >
+      {departments.length ? (
+        <Select
+          fullWidth
+          selectedKey={teamId || WHOLE_COMPANY}
+          onSelectionChange={(key) => {
+            const next = departments.find((row) => row.id === key);
+            setTeamId(next?.id ?? "");
+          }}
+          isDisabled={pending || Boolean(report)}
+        >
+          <Label>{t("covers")}</Label>
+          <Select.Trigger>
+            <Select.Value />
+            <Select.Indicator />
+          </Select.Trigger>
+          <Description>{t("coversHint", { mode })}</Description>
+          <Select.Popover>
+            <ListBox aria-label={t("covers")}>
+              <ListBox.Item id={WHOLE_COMPANY} textValue={t("wholeCompany", { name: company.alias })}>
+                {t("wholeCompany", { name: company.alias })}
+                <ListBox.ItemIndicator />
+              </ListBox.Item>
+              {departments.map((row) => (
+                <ListBox.Item key={row.id} id={row.id} textValue={row.alias}>
+                  {row.alias}
+                  <ListBox.ItemIndicator />
+                </ListBox.Item>
+              ))}
+            </ListBox>
+          </Select.Popover>
+        </Select>
+      ) : null}
+
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <Select
           fullWidth

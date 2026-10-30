@@ -1,7 +1,17 @@
 import { Card, Separator, Skeleton } from "@heroui/react";
 import { TABLE_FROM_LG } from "@/components/console/row-cards";
 
-export type LoadingLayout = "table" | "rows" | "cards" | "panels" | "columns" | "form" | "split" | "charts" | "chat";
+export type LoadingLayout =
+  | "table"
+  | "rows"
+  | "cards"
+  | "panels"
+  | "columns"
+  | "form"
+  | "split"
+  | "charts"
+  | "chat"
+  | "dashboard";
 
 export type StatCount = 0 | 3 | 4;
 
@@ -28,10 +38,10 @@ function TextSkeleton({ lines = 2 }: { lines?: number }) {
 
 export function HeaderSkeleton() {
   return (
-    <div className="mb-7 flex items-center gap-4">
-      <Skeleton className="size-12 shrink-0 rounded-2xl" />
-      <div className="min-w-0 flex-1 space-y-2.5">
-        <Skeleton className="h-6 w-48 max-w-full rounded-lg" />
+    <div className="mb-6 flex items-start gap-3">
+      <Skeleton className="mt-0.5 size-8 shrink-0 rounded-2xl" />
+      <div className="min-w-0 flex-1 space-y-2 pt-1">
+        <Skeleton className="h-5 w-48 max-w-full rounded-lg" />
         <Skeleton className="h-3.5 w-80 max-w-full rounded-lg" />
       </div>
     </div>
@@ -42,9 +52,9 @@ const TAB_WIDTHS = ["w-24", "w-20", "w-28"] as const;
 
 export function TabsSkeleton() {
   return (
-    <div className="flex flex-wrap gap-2 p-1">
+    <div className="flex h-8.25 items-center gap-8 border-b border-border px-4">
       {TAB_WIDTHS.map((width) => (
-        <Skeleton key={width} className={`h-8 rounded-3xl ${width}`} />
+        <Skeleton key={width} className={`h-3.5 rounded-lg ${width}`} />
       ))}
     </div>
   );
@@ -52,12 +62,12 @@ export function TabsSkeleton() {
 
 function StatCardSkeleton() {
   return (
-    <Card className="gap-2">
-      <div className="flex items-start justify-between gap-3">
-        <Skeleton className="mt-1.5 h-3.5 w-24 max-w-full rounded-lg" />
-        <Skeleton className="size-9 shrink-0 rounded-xl" />
+    <Card className="gap-1.5">
+      <div className="flex min-h-7 items-center justify-between gap-3">
+        <Skeleton className="h-3.5 w-24 max-w-full rounded-lg" />
+        <Skeleton className="size-7 shrink-0 rounded-xl" />
       </div>
-      <Skeleton className="my-1 h-7 w-20 rounded-lg" />
+      <Skeleton className="my-1 h-6 w-20 rounded-lg" />
     </Card>
   );
 }
@@ -429,7 +439,63 @@ function ChatSkeleton() {
   );
 }
 
+function ChecklistSkeleton({ rows }: { rows: number }) {
+  return (
+    <Card className="gap-4">
+      <div className="flex items-start justify-between gap-3">
+        <div className="w-full min-w-0 space-y-2">
+          <Skeleton className="h-4 w-32 rounded-lg" />
+          <Skeleton className="h-3 w-64 max-w-full rounded-lg" />
+        </div>
+        <Skeleton className="h-5 w-20 shrink-0 rounded-2xl" />
+      </div>
+      <div>
+        {times(rows).map((row) => (
+          <div key={row}>
+            {row ? <Separator /> : null}
+            <div className="flex items-center gap-3 py-3">
+              <Skeleton className="size-6 shrink-0 rounded-full" />
+              <Skeleton className={`h-3.5 rounded-lg ${CELL_WIDTHS[row % CELL_WIDTHS.length]}`} />
+            </div>
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
+function DashboardSkeleton() {
+  return (
+    <div className="space-y-5">
+      <div className="grid items-start gap-5 xl:grid-cols-5">
+        <div className="min-w-0 xl:col-span-3">
+          <ChecklistSkeleton rows={5} />
+        </div>
+        <div className="min-w-0 xl:col-span-2">
+          <ChecklistSkeleton rows={1} />
+        </div>
+      </div>
+      <div className="space-y-3">
+        <div className="space-y-2">
+          <Skeleton className="h-4 w-48 max-w-full rounded-lg" />
+          <Skeleton className="h-3 w-64 max-w-full rounded-lg" />
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          {times(4).map((card) => (
+            <Card key={card} className="gap-3">
+              <Skeleton className="size-7 rounded-xl" />
+              <Skeleton className="h-4 w-24 rounded-lg" />
+              <TextSkeleton lines={2} />
+            </Card>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function LayoutSkeleton({ layout }: { layout: LoadingLayout }) {
+  if (layout === "dashboard") return <DashboardSkeleton />;
   if (layout === "cards") return <CardGridSkeleton />;
   if (layout === "panels") return <PanelsSkeleton />;
   if (layout === "columns") return <ColumnsSkeleton />;

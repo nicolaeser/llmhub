@@ -103,6 +103,39 @@ export default function BudgetDialog({
       isSubmitDisabled={!target || Boolean(conflict) || (limited && !valid)}
       onSubmit={save}
     >
+      <Card variant="secondary">
+        <Card.Content className="space-y-3">
+          {cap > 0 ? (
+            <Meter
+              value={ratio * 100}
+              color={meterColor(ratio)}
+              size="sm"
+              aria-label={t("preview")}
+            >
+              <Label>{t("preview")}</Label>
+              <Meter.Output />
+              <Meter.Track>
+                <Meter.Fill />
+              </Meter.Track>
+            </Meter>
+          ) : null}
+          <p className="text-sm text-muted">
+            {t("previewText", {
+              spend,
+              capped: cap > 0 ? "yes" : "no",
+              cap,
+              boost: budget?.boost ?? 0,
+              hasBoost: (budget?.boost ?? 0) > 0 ? "yes" : "no",
+            })}
+          </p>
+          {resetsAt ? (
+            <p className="text-sm text-muted">
+              {t("resets", { when: resetsAt > now ? "later" : "now", date: resetsAt })}
+            </p>
+          ) : null}
+        </Card.Content>
+      </Card>
+
       <Switch isSelected={limited} onChange={setLimited} isDisabled={pending}>
         <Switch.Content>
           <Switch.Control>
@@ -110,6 +143,7 @@ export default function BudgetDialog({
           </Switch.Control>
           <Label>{t("limitSpend")}</Label>
         </Switch.Content>
+        <Description>{t("limitSpendHint")}</Description>
       </Switch>
 
       {limited ? (
@@ -157,9 +191,7 @@ export default function BudgetDialog({
             ))}
           </div>
         </div>
-      ) : (
-        <p className="text-sm text-muted">{t("unlimitedHint")}</p>
-      )}
+      ) : null}
 
       <div className="space-y-2">
         <p id={periodLabel} className="text-sm font-medium">
@@ -194,38 +226,6 @@ export default function BudgetDialog({
         <p className="text-xs text-muted">{t("periodHint")}</p>
       </div>
 
-      <Card variant="secondary">
-        <Card.Content className="space-y-3">
-          {cap > 0 ? (
-            <Meter
-              value={ratio * 100}
-              color={meterColor(ratio)}
-              size="sm"
-              aria-label={t("preview")}
-            >
-              <Label>{t("preview")}</Label>
-              <Meter.Output />
-              <Meter.Track>
-                <Meter.Fill />
-              </Meter.Track>
-            </Meter>
-          ) : null}
-          <p className="text-sm text-muted">
-            {t("previewText", {
-              spend,
-              capped: cap > 0 ? "yes" : "no",
-              cap,
-              boost: budget?.boost ?? 0,
-              hasBoost: (budget?.boost ?? 0) > 0 ? "yes" : "no",
-            })}
-          </p>
-          {resetsAt ? (
-            <p className="text-sm text-muted">
-              {t("resets", { when: resetsAt > now ? "later" : "now", date: resetsAt })}
-            </p>
-          ) : null}
-        </Card.Content>
-      </Card>
     </FormDialog>
   );
 }

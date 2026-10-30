@@ -152,5 +152,10 @@
       "label": "Manage MCP",
       "description": "Build servers, offer templates, and change a server's roles."
     }
-  }
+  },
+  "templateBased": "Based on the built-in role {template}. Its permissions may have been changed.",
+  "levelsHint": "Permissions are grouped by area. Work changes everyday things, Sensitive affects security, credentials, or other users. Everything else is read only.",
+  "editorHint": "{count, plural, =0 {No permission selected yet.} one {# permission selected.} other {# permissions selected.}} You can only grant permissions you hold yourself.",
+  "domainCount": "{count, number} of {total, number}",
+  "selectDomain": "{all, select, yes {Clear all} other {Select all}}"
 }

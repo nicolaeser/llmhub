@@ -206,7 +206,7 @@ export default function UsersTab() {
   function accessValue(user: ConsoleUser) {
     if (!user.orgId || !canSeeCompanies) return accessLabel(user);
     return (
-      <Link href={`/companies?node=org:${user.orgId}`} className="text-accent">
+      <Link href={`/companies/${user.orgId}`} className="text-accent">
         {accessLabel(user)}
       </Link>
     );
@@ -444,7 +444,7 @@ export default function UsersTab() {
               </RowCards>
               <Table aria-label={t("title")} className={TABLE_FROM_LG}>
                 <Table.ScrollContainer>
-                  <Table.Content>
+                  <Table.Content aria-label={t("title")}>
                     <Table.Header>
                       <Table.Column isRowHeader>{t("columns.user")}</Table.Column>
                       <Table.Column>{t("columns.role")}</Table.Column>

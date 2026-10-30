@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type ReactNode } from "react";
+import { useMemo, useState } from "react";
 import {
   Alert,
   Button,
@@ -12,7 +12,7 @@ import {
   Tabs,
   useOverlayState,
 } from "@heroui/react";
-import { Code2, Download, KeyRound } from "lucide-react";
+import { Code2, KeyRound } from "lucide-react";
 import { useTranslations } from "next-intl";
 import CopyButton from "@/components/console/copy-button";
 import EmptyState from "@/components/console/empty-state";
@@ -34,31 +34,6 @@ const CHAT_CURL_BODY =
 const MESSAGES_CURL_BODY =
   '\'{"model":"my-alias","max_tokens":256,"messages":[{"role":"user","content":"Hello"}]}\'';
 const EXAMPLE_STYLES = ["openai", "anthropic", "management"] as const;
-const CLI_CLIENTS = ["claude", "desktop", "codex", "cursor"] as const;
-const API_KEY_PLACEHOLDER = "sk-hub-…";
-const DESKTOP_CONFIG_FILE = "llmhub-claude-desktop.json";
-
-function claudeDesktopConfig(gatewayBaseUrl: string) {
-  return JSON.stringify(
-    {
-      inferenceProvider: "gateway",
-      inferenceGatewayBaseUrl: gatewayBaseUrl,
-      inferenceGatewayApiKey: API_KEY_PLACEHOLDER,
-      inferenceGatewayAuthScheme: "bearer",
-    },
-    null,
-    2,
-  );
-}
-
-function downloadJson(fileName: string, json: string) {
-  const url = URL.createObjectURL(new Blob([`${json}\n`], { type: "application/json" }));
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = fileName;
-  link.click();
-  URL.revokeObjectURL(url);
-}
 
 const ERROR_EXAMPLES = {
   openai: {
@@ -92,7 +67,6 @@ export default function ApiTab() {
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<OpenApiPath | null>(null);
   const [example, setExample] = useState<string>("openai");
-  const [cli, setCli] = useState<string>("claude");
   const [errorShape, setErrorShape] = useState<string>("openai");
   const tryState = useOverlayState();
   const page = useActionData(loadApiRefAction);
@@ -122,22 +96,6 @@ export default function ApiTab() {
       : example === "management"
         ? t("curlManagement", { origin })
         : t("curl", { origin, body: CHAT_CURL_BODY });
-  const cliSetup =
-    cli === "codex"
-      ? t("cliCodex", { openai: `${origin}${SUBSCRIPTION_PREFIX}/v1` })
-      : cli === "cursor"
-        ? t("cliCursor", { openai: `${origin}${API_PREFIX}/v1` })
-        : cli === "desktop"
-          ? claudeDesktopConfig(`${origin}${SUBSCRIPTION_PREFIX}`)
-          : t("cliClaude", { anthropic: `${origin}${SUBSCRIPTION_PREFIX}` });
-  const desktopMenu = (chunks: ReactNode) => (
-    <span className="font-medium text-foreground">{chunks}</span>
-  );
-  const desktopSteps = {
-    developer: t.rich("desktopSteps.developer", { menu: desktopMenu }),
-    import: t.rich("desktopSteps.import", { menu: desktopMenu, file: DESKTOP_CONFIG_FILE }),
-    apply: t.rich("desktopSteps.apply", { menu: desktopMenu, key: API_KEY_PLACEHOLDER }),
-  };
   const bases = [
     {
       id: "openai",
@@ -189,8 +147,19 @@ export default function ApiTab() {
   }
 
   return (
-    <div className="space-y-5">
-      <p className="max-w-3xl text-sm text-muted">{t("subtitle")}</p>
+    <div className="space-y-8">
+      <div className="max-w-3xl space-y-1 text-sm text-muted">
+        <p>{t("subtitle")}</p>
+        <p>
+          {t.rich("connectHint", {
+            connect: (chunks) => (
+              <Link href="/developer?tab=connect" className="text-accent">
+                {chunks}
+              </Link>
+            ),
+          })}
+        </p>
+      </div>
 
       <div className="grid gap-5 lg:grid-cols-2">
         {bases.map((base) => (
@@ -226,44 +195,6 @@ export default function ApiTab() {
         ))}
       </div>
 
-      <Card className="gap-3">
-        <Card.Header>
-          <Card.Title>{t("cliTitle")}</Card.Title>
-          <Card.Description>{t("cliDescription")}</Card.Description>
-        </Card.Header>
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <Tabs selectedKey={cli} onSelectionChange={(key) => setCli(String(key))} aria-label={t("cliLabel")} className="w-fit">
-            <Tabs.List className="w-fit min-w-0" aria-label={t("cliLabel")}>
-              {CLI_CLIENTS.map((client) => (
-                <Tabs.Tab key={client} id={client} className="w-auto">
-                  {t("cliName", { client })}
-                </Tabs.Tab>
-              ))}
-            </Tabs.List>
-          </Tabs>
-          <div className="flex flex-wrap gap-2">
-            {cli === "desktop" ? (
-              <Button size="sm" variant="secondary" onPress={() => downloadJson(DESKTOP_CONFIG_FILE, cliSetup)}>
-                <Download size={14} aria-hidden />
-                {t("desktopDownload")}
-              </Button>
-            ) : null}
-            <CopyButton text={cliSetup} label={tCommon("copy")} showLabel />
-          </div>
-        </div>
-        <Surface variant="secondary" className="overflow-x-auto rounded-xl p-4">
-          <pre className="font-mono text-xs whitespace-pre-wrap">{cliSetup}</pre>
-        </Surface>
-        {cli === "desktop" ? (
-          <ol className="list-decimal space-y-1 pl-5 text-sm text-muted" aria-label={t("desktopStepsLabel")}>
-            {Object.entries(desktopSteps).map(([id, step]) => (
-              <li key={id}>{step}</li>
-            ))}
-          </ol>
-        ) : null}
-        <p className="text-sm text-muted">{t("cliHint", { client: cli })}</p>
-      </Card>
-
       <Card>
         <Card.Header className="flex-row flex-wrap items-center justify-between gap-2">
           <Tabs
@@ -288,7 +219,7 @@ export default function ApiTab() {
       </Card>
 
       <section className="space-y-3">
-        <h2 className="text-sm font-medium">{t("endpoints")}</h2>
+        <h2 className="text-base font-semibold tracking-tight text-foreground">{t("endpoints")}</h2>
         <SearchField
           value={query}
           onChange={setQuery}
@@ -323,9 +254,9 @@ export default function ApiTab() {
                 />
               ))}
             </RowCards>
-            <Table aria-label={t("endpoints")} className={TABLE_FROM_LG}>
+            <Table className={TABLE_FROM_LG}>
               <Table.ScrollContainer>
-                <Table.Content>
+                <Table.Content aria-label={t("endpoints")}>
                   <Table.Header>
                     <Table.Column isRowHeader>{t("columns.method")}</Table.Column>
                     <Table.Column>{t("columns.path")}</Table.Column>
@@ -364,7 +295,7 @@ export default function ApiTab() {
 
       <section className="space-y-3" id="errors">
         <div>
-          <h2 className="text-sm font-medium">{t("errorsTitle")}</h2>
+          <h2 className="text-base font-semibold tracking-tight text-foreground">{t("errorsTitle")}</h2>
           <p className="mt-1 text-sm text-muted">{t("errorsHint")}</p>
         </div>
         <Card>
@@ -414,9 +345,9 @@ export default function ApiTab() {
               />
             ))}
           </RowCards>
-          <Table aria-label={t("problemCodes")} className={TABLE_FROM_LG}>
+          <Table className={TABLE_FROM_LG}>
             <Table.ScrollContainer>
-              <Table.Content>
+              <Table.Content aria-label={t("problemCodes")}>
                 <Table.Header>
                   <Table.Column isRowHeader>{t("problemCodes")}</Table.Column>
                   <Table.Column>{t("columns.status")}</Table.Column>
@@ -438,9 +369,9 @@ export default function ApiTab() {
               </Table.Content>
             </Table.ScrollContainer>
           </Table>
-          <Table aria-label={t("gatewayCodes")}>
+          <Table>
             <Table.ScrollContainer>
-              <Table.Content>
+              <Table.Content aria-label={t("gatewayCodes")}>
                 <Table.Header>
                   <Table.Column isRowHeader>{t("gatewayCodes")}</Table.Column>
                   <Table.Column>{t("columns.status")}</Table.Column>
@@ -463,7 +394,7 @@ export default function ApiTab() {
 
       <section className="space-y-3">
         <div>
-          <h2 className="text-sm font-medium">{t("keysTitle")}</h2>
+          <h2 className="text-base font-semibold tracking-tight text-foreground">{t("keysTitle")}</h2>
           <p className="mt-1 text-sm text-muted">{t("keysHint")}</p>
         </div>
         {keys.length === 0 ? (

@@ -2,21 +2,29 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   accessUsersOf,
-  nodeExists,
-  nodeKey,
-  nodePath,
-  parentOf,
+  matchesKey,
+  matchesMember,
+  nodeActions,
+  nodeIn,
   parseNodeRef,
-  treeHighlight,
-  treeRows,
+  structureGroups,
   usageFilterOf,
 } from "@/app/(app)/companies/_components/tree-model";
+import {
+  companyAlias,
+  companyHref,
+  companySlice,
+  companyStatus,
+  companyTabOf,
+  legacyCompanyLink,
+  matchesCompany,
+} from "@/lib/tenancy/company-view";
 import { logsHref } from "@/lib/gateway/request-logs/request-log-query";
 import { usageHref } from "@/lib/usage/usage-query";
 import { keyOptionsOf, keyPresetOf, withKey, withoutKey } from "@/app/(app)/companies/_components/key-model";
-import { keyMenuActions } from "@/components/keys/key-menu";
+import { keyMenuActions } from "@/app/(app)/keys/_components/key-menu";
 import type { VirtualKeyView } from "@/types/keys";
-import type { BudgetView, KeyNode, NodeRef, StructurePayload } from "@/types/structure";
+import type { BudgetView, CompanyRow, KeyNode, NodeRef, StructurePayload } from "@/types/structure";
 
 function budget(maxBudget = 0, spend = 0): BudgetView {
   return {
@@ -101,7 +109,8 @@ const ref = (value: string): NodeRef => {
   return parsed;
 };
 
-const shape = (rows: ReturnType<typeof treeRows>) => rows.map((row) => `${row.depth}:${nodeKey(row)}`);
+const groups = (data: StructurePayload, query: string) =>
+  structureGroups(data, query).map((group) => `${group.team?.id ?? "-"}:${group.projects.map((row) => row.id).join(",")}`);
 
 test("node refs accept keys but not console users", () => {
   assert.deepEqual(parseNodeRef("key:k1"), { kind: "key", id: "k1" });
@@ -111,69 +120,124 @@ test("node refs accept keys but not console users", () => {
   assert.equal(parseNodeRef(undefined), null);
 });
 
-test("a key's path runs from its company through department and project or person to the key", () => {
-  const path = (value: string) => nodePath(structure, ref(value)).map((link) => `${nodeKey(link)}=${link.alias}`);
-  assert.deepEqual(path("key:k1"), ["org:o1=Acme", "team:t1=IT", "project:p1=Support bot", "key:k1=deploy-bot"]);
-  assert.deepEqual(path("key:k2"), ["org:o1=Acme", "team:t1=IT", "member:m1=Alex Example", "key:k2=alex-laptop"]);
-  assert.deepEqual(path("key:k3"), ["org:o1=Acme", "key:k3=ops-internal"]);
-  assert.deepEqual(path("key:k5"), ["org:o1=Acme", "member:m2=Robin Sample", "key:k5=robin-phone"]);
-  assert.deepEqual(path("member:m1"), ["org:o1=Acme", "team:t1=IT", "member:m1=Alex Example"]);
-  assert.deepEqual(path("team:t1"), ["org:o1=Acme", "team:t1=IT"]);
-  assert.deepEqual(path("key:missing"), []);
+test("departments list their projects and projects without a department come last", () => {
+  assert.deepEqual(groups(structure, ""), ["t1:p1", "-:p2"]);
+  assert.equal(structureGroups(structure, "")[0]?.members, 1);
+  assert.deepEqual(groups({ ...structure, projects: [] }, ""), ["t1:"]);
 });
 
-test("only keys of a company in scope open as nodes", () => {
-  assert.equal(nodeExists(structure, ref("key:k1")), true);
-  assert.equal(nodeExists(structure, ref("key:k3")), true);
-  assert.equal(nodeExists(structure, ref("key:k4")), false);
-  assert.equal(nodeExists(structure, ref("key:unknown")), false);
-  assert.equal(nodeExists(structure, ref("member:m2")), true);
-  assert.equal(nodeExists(structure, ref("project:elsewhere")), false);
-  assert.equal(nodeExists({ ...structure, keys: [] }, ref("key:k1")), false);
+test("a structure search keeps a matching department whole and filters projects elsewhere", () => {
+  const research = { ...structure, teams: structure.teams.map((row) => ({ ...row, alias: "Research" })) };
+  assert.deepEqual(groups(research, "research"), ["t1:p1"]);
+  assert.deepEqual(groups(structure, "it"), ["t1:p1", "-:p2"]);
+  assert.deepEqual(groups(structure, "website"), ["-:p2"]);
+  assert.deepEqual(groups(structure, "SUPPORT"), ["t1:p1"]);
+  assert.deepEqual(groups(structure, "nothing matches"), []);
+  assert.deepEqual(
+    groups({ ...structure, projects: [{ ...structure.projects[0]!, owner: "ops@example.com" }] }, "ops@"),
+    ["t1:p1"],
+  );
 });
 
-test("the parent of a key is its project or person, else its company", () => {
-  assert.deepEqual(parentOf(structure, ref("key:k1")), { kind: "project", id: "p1" });
-  assert.deepEqual(parentOf(structure, ref("key:k2")), { kind: "member", id: "m1" });
-  assert.deepEqual(parentOf(structure, ref("key:k3")), { kind: "org", id: "o1" });
-  assert.deepEqual(parentOf(structure, ref("member:m1")), { kind: "team", id: "t1" });
-  assert.equal(parentOf(structure, ref("org:o1")), null);
+test("people and keys match by name, email, or key prefix", () => {
+  const [alex, robin] = structure.members;
+  assert.ok(alex && robin);
+  assert.equal(matchesMember(alex, "alex"), true);
+  assert.equal(matchesMember({ ...robin, email: "robin@example.com" }, "EXAMPLE.com"), true);
+  assert.equal(matchesMember(robin, "alex"), false);
+  const deploy = structure.keys[0];
+  assert.ok(deploy);
+  assert.equal(matchesKey(deploy, "deploy"), true);
+  assert.equal(matchesKey(deploy, "sk-hub-k1"), true);
+  assert.equal(matchesKey(deploy, "laptop"), false);
 });
 
-test("the unfiltered tree lists companies, departments, and projects only", () => {
-  assert.deepEqual(shape(treeRows(structure, "")), [
-    "0:org:o1",
-    "1:team:t1",
-    "2:project:p1",
-    "1:project:p2",
-    "0:org:o2",
+test("a focused row must exist in the loaded company", () => {
+  assert.equal(nodeIn(structure, ref("team:t1")), true);
+  assert.equal(nodeIn(structure, ref("member:m2")), true);
+  assert.equal(nodeIn(structure, ref("key:k3")), true);
+  assert.equal(nodeIn(structure, ref("project:elsewhere")), false);
+  assert.equal(nodeIn(structure, ref("org:o1")), false);
+  assert.equal(nodeIn(structure, null), false);
+});
+
+test("row menus offer only what the caller may do", () => {
+  const all = { canManage: true, canBudget: true, canCreateKeys: true, canSeeUsage: true };
+  assert.deepEqual(nodeActions("team", all, true), ["edit", "budget", "boost", "addProject", "usage", "delete"]);
+  assert.deepEqual(nodeActions("project", all, false), ["edit", "budget", "createKey", "usage", "delete"]);
+  assert.deepEqual(nodeActions("member", { ...all, canManage: false, canCreateKeys: false }, true), [
+    "budget",
+    "boost",
+    "usage",
   ]);
+  assert.deepEqual(
+    nodeActions("member", { canManage: false, canBudget: false, canCreateKeys: false, canSeeUsage: false }, true),
+    [],
+  );
 });
 
-test("a filter also shows matching people and keys under their place", () => {
-  assert.deepEqual(shape(treeRows(structure, "alex")), ["0:org:o1", "1:team:t1", "2:member:m1", "3:key:k2"]);
-  assert.deepEqual(shape(treeRows(structure, "deploy")), ["0:org:o1", "1:team:t1", "2:project:p1", "3:key:k1"]);
-  assert.deepEqual(shape(treeRows(structure, "robin")), ["0:org:o1", "1:member:m2", "2:key:k5"]);
-  assert.deepEqual(shape(treeRows(structure, "internal")), ["0:org:o1", "1:key:k3"]);
-  assert.deepEqual(shape(treeRows(structure, "sk-hub-k2")), ["0:org:o1", "1:team:t1", "2:member:m1", "3:key:k2"]);
-  assert.deepEqual(shape(treeRows(structure, "beta")), ["0:org:o2"]);
-  assert.deepEqual(shape(treeRows(structure, "nothing matches")), []);
+test("a company view holds only that company's rows", () => {
+  const view = companySlice(structure, "o1");
+  assert.ok(view);
+  assert.deepEqual(view.orgs.map((row) => row.id), ["o1"]);
+  assert.deepEqual(view.teams.map((row) => row.id), ["t1"]);
+  assert.deepEqual(view.users.map((row) => row.id), ["u1"]);
+  assert.deepEqual(view.keys.map((row) => row.id), ["k1", "k2", "k3", "k5"]);
+  assert.deepEqual(companySlice(structure, "o2")?.projects, []);
+  assert.equal(companySlice(structure, "missing"), null);
 });
 
-test("a selected person or key highlights its nearest row in the tree", () => {
-  const rows = treeRows(structure, "");
-  assert.deepEqual(treeHighlight(structure, ref("member:m1"), rows), { key: "team:t1", exact: false });
-  assert.deepEqual(treeHighlight(structure, ref("member:m2"), rows), { key: "org:o1", exact: false });
-  assert.deepEqual(treeHighlight(structure, ref("key:k1"), rows), { key: "project:p1", exact: false });
-  assert.deepEqual(treeHighlight(structure, ref("key:k2"), rows), { key: "team:t1", exact: false });
-  assert.deepEqual(treeHighlight(structure, ref("key:k3"), rows), { key: "org:o1", exact: false });
-  assert.deepEqual(treeHighlight(structure, ref("project:p2"), rows), { key: "project:p2", exact: true });
-  assert.equal(treeHighlight(structure, null, rows), null);
-  const filtered = treeRows(structure, "alex");
-  assert.deepEqual(treeHighlight(structure, ref("member:m1"), filtered), { key: "member:m1", exact: true });
-  assert.deepEqual(treeHighlight(structure, ref("key:k2"), filtered), { key: "key:k2", exact: true });
-  assert.deepEqual(treeHighlight(structure, ref("project:p2"), filtered), { key: "org:o1", exact: false });
-  assert.equal(treeHighlight(structure, ref("org:o2"), filtered), null);
+function companyRow(overrides: Partial<CompanyRow>): CompanyRow {
+  return { id: "o1", alias: "Acme", budget: budget(), teams: 0, projects: 1, members: 0, keys: 0, ...overrides };
+}
+
+test("the directory status reads the budget first and then whether the company is set up", () => {
+  assert.equal(companyStatus(companyRow({ budget: budget(100, 100) })), "exhausted");
+  assert.equal(companyStatus(companyRow({ budget: budget(100, 85) })), "near");
+  assert.equal(companyStatus(companyRow({ budget: budget(100, 10) })), "ok");
+  assert.equal(companyStatus(companyRow({ projects: 0, members: 0 })), "empty");
+  assert.equal(companyStatus(companyRow({ projects: 0, members: 2 })), "ok");
+  assert.equal(matchesCompany(companyRow({}), "acm"), true);
+  assert.equal(matchesCompany(companyRow({}), "beta"), false);
+});
+
+test("company links point at the detail route in the platform and at /companies in the company scope", () => {
+  assert.equal(companyHref({ orgId: "o1", tab: null, node: null }, true), "/companies/o1");
+  assert.equal(companyHref({ orgId: "o1", tab: "overview", node: null }, true), "/companies/o1");
+  assert.equal(
+    companyHref({ orgId: "o1", tab: "structure", node: { kind: "team", id: "t1" } }, true),
+    "/companies/o1?tab=structure&node=team%3At1",
+  );
+  assert.equal(companyHref({ orgId: "o1", tab: "people", node: null }, false), "/companies?tab=people");
+});
+
+test("old ?node= links open the tab that now holds the row", () => {
+  assert.equal(companyTabOf(ref("team:t1")), "structure");
+  assert.equal(companyTabOf(ref("project:p1")), "structure");
+  assert.equal(companyTabOf(ref("member:m1")), "people");
+  assert.equal(companyTabOf(ref("key:k1")), "keys");
+  assert.equal(companyTabOf(ref("org:o1")), null);
+  assert.deepEqual(legacyCompanyLink(ref("project:p1"), "o1"), {
+    orgId: "o1",
+    tab: "structure",
+    node: { kind: "project", id: "p1" },
+  });
+  assert.deepEqual(legacyCompanyLink(ref("org:o1"), "o1"), { orgId: "o1", tab: null, node: null });
+});
+
+test("old company and key node links redirect on the server", async () => {
+  const { default: config } = await import("../../next.config");
+  const redirects = (await config.redirects?.()) ?? [];
+  const byNode = (kind: string) =>
+    redirects.find(
+      (rule) => rule.source === "/companies" && rule.has?.some((item) => item.type === "query" && item.value?.startsWith(`${kind}:`)),
+    );
+  assert.equal(byNode("org")?.destination, "/companies/:id");
+  assert.equal(byNode("key")?.destination, "/keys/:id");
+  const pattern = new RegExp(`^${byNode("org")?.has?.[0]?.value}$`);
+  assert.equal(pattern.exec("org:cm1abc_X-2")?.groups?.id, "cm1abc_X-2");
+  assert.equal(pattern.test("org:../x"), false);
+  assert.equal(byNode("team"), undefined);
 });
 
 test("new keys from a project or person start with that binding", () => {
@@ -301,4 +365,14 @@ test("console users with company access are listed only for platform callers who
   assert.deepEqual(accessUsersOf(reader, "o1")?.map((user) => user.id), ["u1"]);
   assert.deepEqual(accessUsersOf(reader, "o2"), []);
   assert.equal(accessUsersOf({ ...reader, companyId: "o1" }, "o1"), null);
+});
+
+test("loading screens name the company from the scope list or the current company scope", () => {
+  const companies = [{ id: "o1", alias: "Acme" }];
+  assert.equal(companyAlias({ scope: { kind: "platform" }, companies, canSwitch: true }, "o1"), "Acme");
+  assert.equal(companyAlias({ scope: { kind: "platform" }, companies, canSwitch: true }, "o2"), undefined);
+  assert.equal(
+    companyAlias({ scope: { kind: "company", id: "o2", alias: "Beta" }, companies: [], canSwitch: false }, "o2"),
+    "Beta",
+  );
 });

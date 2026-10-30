@@ -2,6 +2,8 @@ import type { ProviderView } from "@/types/providers";
 
 export type CredentialState = "stored" | "service_account" | "missing";
 
+export type ProviderStatus = "active" | "paused" | "missing";
+
 export type ProviderMenuAction = "edit" | "import" | "pause" | "resume" | "disconnect";
 
 export type ProviderRow = {
@@ -23,6 +25,17 @@ export function providerRow(row: ProviderView): ProviderRow {
     active: row.enabled,
     internal: row.internal,
   };
+}
+
+export function providerStatus(row: Pick<ProviderView, "enabled" | "hasApiKey" | "vertex">): ProviderStatus {
+  if (!row.enabled) return "paused";
+  return credentialState(row) === "missing" ? "missing" : "active";
+}
+
+export function providerMatches(row: Pick<ProviderView, "name" | "kind">, query: string, labels: string[] = []): boolean {
+  const needle = query.trim().toLocaleLowerCase();
+  if (!needle) return true;
+  return [row.name, row.kind, ...labels].some((value) => value.toLocaleLowerCase().includes(needle));
 }
 
 export function providerMenuActions(canManage: boolean, row: Pick<ProviderView, "enabled">): ProviderMenuAction[] {

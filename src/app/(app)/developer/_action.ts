@@ -5,6 +5,7 @@ import { PERMISSIONS } from "@/lib/auth/permissions";
 import { runAction } from "@/lib/http/action-result";
 import { loadReplay } from "@/lib/gateway/request-logs/replay";
 import { loadApiRef } from "@/lib/keys/api-reference";
+import { loadConnectGuide } from "@/lib/keys/connect-guide";
 import { loadAliases } from "@/lib/models/aliases";
 
 export async function loadDeveloperTabsAction() {
@@ -21,4 +22,8 @@ export async function loadAliasesAction(...args: Parameters<typeof loadAliases>)
 
 export async function loadApiRefAction(...args: Parameters<typeof loadApiRef>) {
   return runAction(() => loadApiRef(...args));
+}
+
+export async function loadConnectGuideAction() {
+  return runAction(() => loadConnectGuide());
 }

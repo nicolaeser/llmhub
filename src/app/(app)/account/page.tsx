@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect } from "react";
-import { Card, Chip } from "@heroui/react";
+import { Avatar, Card, Chip } from "@heroui/react";
 import { CircleUser } from "lucide-react";
 import { useTranslations } from "next-intl";
 import PageHeader from "@/components/console/page-header";
+import PageTabs from "@/components/console/page-tabs";
 import { LoadError, PageLoading } from "@/components/console/page-status";
 import { CardSkeleton } from "@/components/console/skeletons";
 import { useActionData } from "@/lib/hooks/use-action-data";
@@ -45,20 +46,32 @@ export default function AccountPage() {
     };
   }, [setOverview]);
 
+  const managementPanel = managementKeys ? (
+    <ManagementKeysCard payload={managementKeys} onChange={setManagementKeys} />
+  ) : keys.error ? (
+    <LoadError state={keys} />
+  ) : (
+    <div aria-busy="true">
+      <CardSkeleton lines={3} />
+    </div>
+  );
+  const showManagement = !managementKeys || managementKeys.grantable.length > 0 || managementKeys.keys.length > 0;
+
   return (
     <div>
       <PageHeader icon={CircleUser} title={t("title")} subtitle={t("subtitle")} />
       {page.error && !overview ? (
         <LoadError state={page} />
       ) : !overview ? (
-        <PageLoading layout="columns" />
+        <PageLoading layout="columns" tabs />
       ) : (
         <div className="space-y-5">
-          <Card className="flex-row flex-wrap items-center justify-between gap-4">
-            <div className="min-w-0">
-              <p className="truncate text-sm font-medium">
-                {overview.user.username}
-              </p>
+          <Card className="flex-row flex-wrap items-center gap-4">
+            <Avatar color="accent" variant="soft">
+              <Avatar.Fallback>{overview.user.username.slice(0, 2).toUpperCase()}</Avatar.Fallback>
+            </Avatar>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-medium text-foreground">{overview.user.username}</p>
               <p className="truncate text-sm text-muted">{overview.user.email}</p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -77,33 +90,48 @@ export default function AccountPage() {
             </div>
           </Card>
           <CredentialsAlert credentials={overview.credentials} onChange={setOverview} />
-          <div className="grid items-start gap-5 xl:grid-cols-2">
-            <div className="space-y-5">
-              <TwoFactorCard twoFactor={overview.twoFactor} onChange={setOverview} />
-              <PasskeysCard
-                passkeys={overview.passkeys}
-                available={overview.passkeysAvailable}
-                onChange={setOverview}
-              />
-              <PasswordCard changedAt={overview.password.changedAt} onChange={setOverview} />
-              <PreferencesCard />
-            </div>
-            <div className="space-y-5">
-              <SessionsCard sessions={overview.sessions} onChange={setOverview} />
-              {managementKeys ? (
-                managementKeys.grantable.length || managementKeys.keys.length ? (
-                  <ManagementKeysCard payload={managementKeys} onChange={setManagementKeys} />
-                ) : null
-              ) : keys.error ? (
-                <LoadError state={keys} />
-              ) : (
-                <div aria-busy="true">
-                  <CardSkeleton lines={3} />
-                </div>
-              )}
-              <ActivityCard events={overview.events} />
-            </div>
-          </div>
+          <PageTabs
+            label={t("title")}
+            tabs={[
+              {
+                id: "security",
+                label: t("tabs", { tab: "security" }),
+                panel: (
+                  <div className="grid items-start gap-5 xl:grid-cols-2">
+                    <div className="space-y-5">
+                      <TwoFactorCard twoFactor={overview.twoFactor} onChange={setOverview} />
+                      <PasswordCard changedAt={overview.password.changedAt} onChange={setOverview} />
+                    </div>
+                    <PasskeysCard
+                      passkeys={overview.passkeys}
+                      available={overview.passkeysAvailable}
+                      onChange={setOverview}
+                    />
+                  </div>
+                ),
+              },
+              {
+                id: "sessions",
+                label: t("tabs", { tab: "sessions" }),
+                panel: (
+                  <div className="grid items-start gap-5 xl:grid-cols-2">
+                    <SessionsCard sessions={overview.sessions} onChange={setOverview} />
+                    <ActivityCard events={overview.events} />
+                  </div>
+                ),
+              },
+              ...(showManagement ? [{ id: "keys", label: t("tabs", { tab: "keys" }), panel: managementPanel }] : []),
+              {
+                id: "preferences",
+                label: t("tabs", { tab: "preferences" }),
+                panel: (
+                  <div className="max-w-2xl">
+                    <PreferencesCard />
+                  </div>
+                ),
+              },
+            ]}
+          />
         </div>
       )}
     </div>

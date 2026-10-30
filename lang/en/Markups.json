@@ -5,17 +5,6 @@
   "readOnly": "You can view markups. Changing them needs the Manage markups permission.",
   "emptyTitle": "No markups yet",
   "empty": "Every customer is billed the model price unchanged. Add a markup to resell with a margin, or a discount for a contract.",
-  "summary": {
-    "purchase": "Purchase cost, {days, plural, one {last # day} other {last # days}}",
-    "sale": "Sale, {days, plural, one {last # day} other {last # days}}",
-    "margin": "Margin, {days, plural, one {last # day} other {last # days}}",
-    "marginValue": "{amount, number, currency} · {share, number, percent}"
-  },
-  "metrics": {
-    "purchase": "Purchase",
-    "sale": "Sale",
-    "margin": "Margin"
-  },
   "scope": "{scope, select, all {All customers} org {Company} team {Department} project {Project} other {Scope}}",
   "deletedTarget": "{scope, select, org {Deleted company} team {Deleted department} project {Deleted project} other {Deleted}}",
   "ruleName": "{target} · {models}",
@@ -25,8 +14,8 @@
   "columns": {
     "scope": "Applies to",
     "model": "Models",
-    "percent": "Markup",
-    "note": "Note"
+    "percent": "Change",
+    "rule": "Rule"
   },
   "deleteConfirm": "Delete the markup {rule}?",
   "deleteHint": "Requests then get the next matching rule, or the plain price if no rule matches.",
@@ -64,7 +53,11 @@
     "note": "Note",
     "notePlaceholder": "Contract, reason, or ticket",
     "preview": "Preview",
-    "previewHint": "For {purchase, number, currency} of purchase cost."
+    "previewPending": "Pick where the rule applies and which models it covers.",
+    "previewExample": "{purchase, number, currency} of purchase cost is billed as {sale, number, currency}.",
+    "previewMargin": "Margin {amount, number, currency} ({share, number, percent}).",
+    "more": "{hasNote, select, yes {Note added} other {Add a note}}",
+    "noteHint": "Only shown to admins, for example the contract or ticket behind this price."
   },
   "lookup": {
     "title": "Check a request",
@@ -73,5 +66,17 @@
     "example": "{purchase, number, currency} becomes {sale, number, currency}",
     "matched": "From the rule {rule}.",
     "unmatched": "No rule matches. The price is billed unchanged."
-  }
+  },
+  "summaryStats": {
+    "purchase": "Purchase cost, {days, plural, one {last # day} other {last # days}}",
+    "sale": "Sale, {days, plural, one {last # day} other {last # days}}",
+    "margin": "Margin, {days, plural, one {last # day} other {last # days}}",
+    "marginValue": "{amount, number, currency} · {share, number, percent}"
+  },
+  "summary": "{kind, select, markup {{amount, number, percent} markup} discount {{amount, number, percent} discount} other {Plain price}} {scope, select, all {for every customer} other {for {target}}} on {models, select, all {all models} other {{model}}}",
+  "actions": "Actions for {rule}",
+  "search": "Search markups",
+  "clear": "Clear search",
+  "count": "{count, plural, one {# rule. Each request gets exactly one.} other {# rules. Each request gets exactly one.}}",
+  "noMatches": "No markup matches this search."
 }

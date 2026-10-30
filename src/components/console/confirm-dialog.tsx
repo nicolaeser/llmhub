@@ -26,37 +26,45 @@ export default function ConfirmDialog({
   focusCancel?: boolean;
   children?: ReactNode;
 }) {
+  const backdrop = (
+    <AlertDialog.Backdrop
+      variant="blur"
+      {...(children ? {} : { isOpen: state?.isOpen ?? false, onOpenChange: state?.setOpen })}
+    >
+      <AlertDialog.Container>
+        <AlertDialog.Dialog className="max-w-md">
+          <AlertDialog.Header>
+            <AlertDialog.Icon status={status} />
+            <AlertDialog.Heading>{title}</AlertDialog.Heading>
+          </AlertDialog.Header>
+          {description ? (
+            <AlertDialog.Body>
+              <p className="text-sm text-muted">{description}</p>
+            </AlertDialog.Body>
+          ) : null}
+          <AlertDialog.Footer>
+            <Button slot="close" variant="tertiary" autoFocus={focusCancel}>
+              {cancelLabel}
+            </Button>
+            <Button
+              slot="close"
+              variant={status === "danger" ? "danger" : "primary"}
+              isPending={pending}
+              onPress={onConfirm}
+            >
+              {confirmLabel}
+            </Button>
+          </AlertDialog.Footer>
+        </AlertDialog.Dialog>
+      </AlertDialog.Container>
+    </AlertDialog.Backdrop>
+  );
+
+  if (!children) return backdrop;
   return (
     <AlertDialog isOpen={state?.isOpen} onOpenChange={state?.setOpen}>
-      {children ? <AlertDialog.Trigger>{children}</AlertDialog.Trigger> : null}
-      <AlertDialog.Backdrop variant="blur">
-        <AlertDialog.Container>
-          <AlertDialog.Dialog className="max-w-md">
-            <AlertDialog.Header>
-              <AlertDialog.Icon status={status} />
-              <AlertDialog.Heading>{title}</AlertDialog.Heading>
-            </AlertDialog.Header>
-            {description ? (
-              <AlertDialog.Body>
-                <p className="text-sm text-muted">{description}</p>
-              </AlertDialog.Body>
-            ) : null}
-            <AlertDialog.Footer>
-              <Button slot="close" variant="tertiary" autoFocus={focusCancel}>
-                {cancelLabel}
-              </Button>
-              <Button
-                slot="close"
-                variant={status === "danger" ? "danger" : "primary"}
-                isPending={pending}
-                onPress={onConfirm}
-              >
-                {confirmLabel}
-              </Button>
-            </AlertDialog.Footer>
-          </AlertDialog.Dialog>
-        </AlertDialog.Container>
-      </AlertDialog.Backdrop>
+      <AlertDialog.Trigger>{children}</AlertDialog.Trigger>
+      {backdrop}
     </AlertDialog>
   );
 }

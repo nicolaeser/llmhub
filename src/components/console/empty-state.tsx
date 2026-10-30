@@ -15,15 +15,15 @@ export default function EmptyState({
   action?: ReactNode;
 }) {
   return (
-    <Card className="w-full items-center gap-5 px-6 py-14 text-center">
-      <IconTile icon={icon} size="xl" />
-      <Card.Header className="items-center gap-1.5">
-        <Card.Title className="text-lg font-semibold tracking-tight">{title}</Card.Title>
+    <Card className="w-full items-center gap-4 px-6 py-12 text-center">
+      <IconTile icon={icon} size="lg" />
+      <Card.Header className="items-center gap-1">
+        <Card.Title className="text-base font-semibold tracking-tight">{title}</Card.Title>
         {description ? (
           <Card.Description className="max-w-md text-balance">{description}</Card.Description>
         ) : null}
       </Card.Header>
-      {action ? <Card.Footer className="flex-wrap justify-center gap-2">{action}</Card.Footer> : null}
+      {action ? <Card.Footer className="flex-wrap justify-center gap-2 pt-1">{action}</Card.Footer> : null}
     </Card>
   );
 }

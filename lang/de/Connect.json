@@ -1,0 +1,296 @@
+{
+  "intro": "Jedes Tool braucht dieselben drei Angaben: die Adresse des Hubs, einen API-Key und einen Modellnamen. Wähle dein Tool und folge den Schritten. Die Werte sind schon eingesetzt.",
+  "local": {
+    "title": "Diese Adresse funktioniert nur auf diesem Rechner",
+    "body": "Du hast den Hub unter {host} geöffnet. Andere Rechner und Cloud-Tools wie Cursor erreichen ihn so nicht. Öffne die Konsole über die öffentliche Adresse des Hubs, dann nutzen die Schritte unten diese."
+  },
+  "pick": {
+    "title": "Wähle dein Tool",
+    "description": "Nicht dabei? Nimm Anderes Tool. Fast jedes KI-Tool kann eine OpenAI-kompatible Adresse nutzen."
+  },
+  "group": "{group, select, coding {Coding-Tools} apps {Chat-Apps} code {Eigener Code} other {Alles andere}}",
+  "access": {
+    "title": "Deine Zugangsdaten",
+    "description": "Füge deinen API-Key ein, dann steht er direkt in den Schritten unten. Er bleibt in diesem Browser-Tab.",
+    "route": "Worüber sollen die Anfragen laufen?",
+    "routeOption": "{route, select, subscription {Abos} other {API-Anbieter}}",
+    "routeHint": "{route, select, subscription {Nutzt die verbundenen Claude-, ChatGPT- und anderen Abos. Nur Chat und Coding-Agents.} other {Abrechnung nach Verbrauch. Funktioniert mit allen Endpunkten, auch Embeddings und Bildern.}}",
+    "url": "Adresse (Base URL)",
+    "urlHint": "{protocol, select, anthropic {Für Anthropic-Tools, ohne /v1 am Ende. Den Rest hängt das Tool selbst an.} other {Für OpenAI-kompatible Tools, endet auf /v1. Häng kein /chat/completions an, das macht das Tool.}}",
+    "key": "API-Key",
+    "keyHint": "Den vollständigen Key siehst du nur einmal, beim Erstellen. Die Key-Liste zeigt nur seinen Anfang, und der reicht nicht. Verloren? Erstell einen neuen.",
+    "check": "Key prüfen",
+    "createKey": "API-Key erstellen",
+    "noKey": "Du hast noch keinen API-Key",
+    "noKeyHint": "{create, select, yes {Erstell zuerst einen. Jedes Tool braucht ihn.} other {Bitte einen Admin deines Unternehmens um einen API-Key.}}",
+    "model": "Modell",
+    "modelHint": "Trag diesen Namen genau so im Tool ein.",
+    "noModels": "Es sind noch keine Modelle aktiviert."
+  },
+  "result": {
+    "title": "{ok, select, yes {Der Key funktioniert} other {Der Key funktioniert nicht}}",
+    "ok": "Er darf {count, plural, =0 {noch keine Modelle} one {# Modell} other {# Modelle}} nutzen. Die Modellliste zeigt jetzt genau diese.",
+    "fail": "{code, select, invalid_api_key {Diesen Key kennt der Hub nicht. Kopier den ganzen Key, beginnend mit sk-hub-, ohne Leerzeichen.} key_paused {Dieser Key ist pausiert. Setz ihn unter API-Keys fort.} ip_not_allowed {Dieser Key funktioniert nur von bestimmten IP-Adressen, und dieser Browser gehört nicht dazu. Dein Tool kann trotzdem funktionieren.} outside_access_window {Dieser Key funktioniert nur zu bestimmten Zeiten. Prüf sein Zeitfenster unter API-Keys.} endpoint_not_allowed {Dieser Key darf keine Modelle auflisten. Für Chat kann dein Tool trotzdem funktionieren.} budget_exceeded {Das Budget dieses Keys ist aufgebraucht.} rate_limit_exceeded {Gerade zu viele Anfragen. Versuch es gleich noch einmal.} network {Der Hub antwortet nicht. Prüf deine Verbindung.} other {Die Prüfung ist fehlgeschlagen. Sieh in die Hilfe unten.}}"
+  },
+  "setup": {
+    "title": "{tool} einrichten",
+    "sdk": "SDK",
+    "sdkName": "{sdk, select, anthropic {Anthropic-SDK} other {OpenAI-SDK}}",
+    "shell": "Betriebssystem",
+    "shellName": "{shell, select, windows {Windows} other {macOS und Linux}}",
+    "notes": "Gut zu wissen",
+    "download": "Datei herunterladen",
+    "replaceKey": "Ersetze {placeholder} durch deinen vollständigen API-Key, oder füge den Key oben ein."
+  },
+  "check": "{withLogs, select, yes {Schick eine kurze Testnachricht. Kommt eine Antwort, bist du fertig. Jede Anfrage erscheint außerdem nach wenigen Sekunden unter <logs>Protokolle</logs>, bei Problemen mit dem genauen Fehler.} other {Schick eine kurze Testnachricht. Kommt eine Antwort, bist du fertig.}}",
+  "persist": "{shell, select, windows {$env:-Zeilen gelten nur für dieses PowerShell-Fenster. Damit eine Variable bleibt, führ einmal setx NAME \"wert\" aus und öffne ein neues Fenster.} other {export-Zeilen gelten nur für dieses Terminal-Fenster. Damit sie bleiben, trag sie in ~/.zshrc oder ~/.bashrc ein.}}",
+  "tools": {
+    "claudeCode": {
+      "name": "Claude Code",
+      "hint": "Coding-Agent von Anthropic im Terminal",
+      "about": "Claude Code liest die Adresse des Hubs und deinen Key aus seiner Einstellungsdatei.",
+      "steps": {
+        "settings": "Öffne <code>~/.claude/settings.json</code> (unter Windows <code>%USERPROFILE%\\.claude\\settings.json</code>). Leg die Datei an, falls es sie nicht gibt, und füge das ein. Hat sie schon einen <code>env</code>-Block, füg nur die Zeilen darin hinzu.",
+        "start": "Öffne ein neues Terminal und starte <code>claude</code>. Mit <code>/model</code> wählst du eines der Modelle des Hubs.",
+        "status": "Tipp <code>/status</code>. In der Zeile Anthropic base URL muss die Adresse des Hubs stehen."
+      },
+      "alt": {
+        "terminal": "Nur mal ausprobieren? Führ stattdessen das im Terminal aus. Es gilt nur für dieses Fenster."
+      },
+      "notes": {
+        "models": "{route, select, subscription {/model listet alle Modelle des Hubs, die dein Key nutzen darf.} other {/model listet nur die Claude-Modelle des Hubs. Jedes andere Modell nutzt du mit /model und seinem genauen Namen.}} Die eingebauten Modelle von Claude Code bleiben in der Liste.",
+        "vscode": "Du nutzt die Claude-Code-Erweiterung in VS Code? Trag ANTHROPIC_BASE_URL und ANTHROPIC_AUTH_TOKEN zusätzlich in der VS-Code-Einstellung claudeCode.environmentVariables ein.",
+        "gatewayMode": "Setz zusätzlich CLAUDE_CODE_USE_GATEWAY=1, damit Claude Code die Reset-Zeiten von Nutzungslimits vom Hub liest und Apps wie T3 Code danach selbst weitermachen. In diesem Modus zeigt die Auswahl nur die üblichen Claude-Namen."
+      }
+    },
+    "codex": {
+      "name": "Codex CLI",
+      "hint": "Coding-Agent von OpenAI im Terminal",
+      "about": "Codex nutzt den Hub als Modellanbieter und lädt seine Modellliste vom Hub.",
+      "steps": {
+        "config": "Öffne <code>~/.codex/config.toml</code> (unter Windows <code>%USERPROFILE%\\.codex\\config.toml</code>). Leg die Datei an, falls es sie nicht gibt, und füge das ganz oben ein. Gibt es schon eine Zeile <code>model_provider</code>, ersetz sie.",
+        "key": "Speichere deinen API-Key als Umgebungsvariable <code>LLMHUB_API_KEY</code>:",
+        "start": "Öffne ein neues Terminal und starte <code>codex</code>. Mit <code>/model</code> wählst du eines der Modelle des Hubs."
+      }
+    },
+    "opencode": {
+      "name": "OpenCode",
+      "hint": "Open-Source-Coding-Agent im Terminal",
+      "about": "OpenCode bindet den Hub über eine Konfigurationsdatei als eigenen Anbieter ein.",
+      "steps": {
+        "config": "Öffne <code>~/.config/opencode/opencode.json</code>. Leg die Datei an, falls es sie nicht gibt, und füge das ein. Hat sie schon einen <code>provider</code>-Block, füg nur den Eintrag <code>llmhub</code> hinzu.",
+        "start": "Starte <code>opencode</code>. Es nutzt sofort {model}; mit <code>/models</code> wechselst du das Modell.",
+        "verify": "Unsicher, ob es geklappt hat? Dieser Befehl muss llmhub/{model} auflisten:"
+      },
+      "notes": {
+        "moreModels": "Für weitere Modelle füg unter models je einen Eintrag mit dem genauen Namen aus der Modellliste hinzu.",
+        "project": "Eine opencode.json in einem Projektordner gilt nur für dieses Projekt. Committe sie nicht, solange dein Key darin steht."
+      }
+    },
+    "cursor": {
+      "name": "Cursor",
+      "hint": "KI-Code-Editor",
+      "about": "Cursor schickt seine Chat- und Agent-Anfragen mit deinem Key über den Hub.",
+      "steps": {
+        "open": "Öffne <b>Cursor Settings → Models</b>.",
+        "key": "Schalte unter <b>API Keys</b> den <b>OpenAI API Key</b> ein und füge deinen Key ein:",
+        "url": "Schalte <b>Override OpenAI Base URL</b> ein und füge die Adresse ein:",
+        "model": "Klick auf <b>Add model</b> und gib den Modellnamen genau so ein:"
+      },
+      "notes": {
+        "public": "Die Server von Cursor rufen diese Adresse auf, deshalb muss der Hub über öffentliches HTTPS erreichbar sein. localhost und private Netzwerkadressen funktionieren nicht.",
+        "builtIn": "Nur Chat- und Agent-Anfragen nutzen deinen Key. Tab-Vervollständigung und die eingebauten Modelle von Cursor nicht."
+      }
+    },
+    "cline": {
+      "name": "Cline",
+      "hint": "Coding-Agent für VS Code",
+      "about": "Cline spricht mit dem Hub als OpenAI-kompatibler Anbieter.",
+      "steps": {
+        "open": "Öffne Cline in VS Code und klick auf das Zahnrad. Wähle unter <b>API Provider</b> den Eintrag <b>OpenAI Compatible</b>, nicht OpenAI.",
+        "fields": "Füll diese Felder aus. Sobald Adresse und Key drin sind, füllt sich die Liste Model ID mit den Modellen des Hubs."
+      },
+      "fields": {
+        "url": "Base URL",
+        "key": "OpenAI Compatible API Key",
+        "model": "Model ID"
+      }
+    },
+    "continue": {
+      "name": "Continue",
+      "hint": "KI-Assistent für VS Code und JetBrains",
+      "about": "Continue liest seine Modelle aus einer Konfigurationsdatei.",
+      "steps": {
+        "config": "Öffne <code>~/.continue/config.yaml</code> (unter Windows <code>%USERPROFILE%\\.continue\\config.yaml</code>). In Continue öffnet sie auch das Zahnrad neben <b>Local Config</b>. Füge das ein. Hat die Datei schon eine <code>models</code>-Liste, füg nur den Eintrag hinzu, der mit - name beginnt.",
+        "start": "Speichere die Datei, Continue lädt sie selbst neu. Wähle {model} in der Modellauswahl des Chats."
+      },
+      "notes": {
+        "moreModels": "Für weitere Modelle füg unter models je einen Eintrag hinzu."
+      }
+    },
+    "aider": {
+      "name": "Aider",
+      "hint": "Pair-Programming im Terminal",
+      "about": "Aider spricht mit dem Hub als OpenAI-kompatible API.",
+      "steps": {
+        "env": "Setz Adresse und Key im Terminal:",
+        "start": "Starte Aider mit dem Modell. Das openai/ davor ist Pflicht:"
+      },
+      "notes": {
+        "prefix": "Setz immer openai/ vor den Modellnamen, auch bei Claude- oder Gemini-Modellen.",
+        "warning": "Aider warnt vor unbekannter Kontextgröße und unbekannten Kosten. Das kannst du ignorieren."
+      }
+    },
+    "zed": {
+      "name": "Zed",
+      "hint": "Code-Editor mit KI-Agent",
+      "about": "Zed bindet den Hub als OpenAI-kompatiblen Anbieter ein.",
+      "steps": {
+        "open": "Öffne <b>Settings → AI → LLM Providers</b> und klick auf <b>Add Provider</b>.",
+        "fields": "Füll das Formular aus:",
+        "start": "Öffne das Agent Panel und wähle {model} in der Modellliste."
+      },
+      "fields": {
+        "name": "Anbietername",
+        "url": "API URL",
+        "key": "API-Key",
+        "model": "Model ID"
+      },
+      "notes": {
+        "keychain": "Zed speichert den Key im Schlüsselbund deines Systems, nicht in seiner Einstellungsdatei."
+      }
+    },
+    "claudeDesktop": {
+      "name": "Claude Desktop",
+      "hint": "App von Anthropic für Chat, Cowork und Code",
+      "about": "Claude Desktop lässt Chat, Cowork und Code über den Hub laufen, nachdem du einmal eine Konfigurationsdatei importiert hast.",
+      "steps": {
+        "download": "Lad die Konfigurationsdatei herunter. {filled, select, yes {Adresse und Key stehen schon drin.} other {Die Adresse steht schon drin.}}",
+        "developer": "Öffne Claude Desktop ohne Anmeldung, wähle <b>Help → Troubleshooting → Enable Developer Mode…</b> und bestätige. Unter Windows sind diese Menüs im App-Menü oben links.",
+        "import": "Wähle <b>Developer → Configure Third-Party Inference…</b>, dann <b>Import configuration…</b>, und wähle {file}.",
+        "apply": "{filled, select, yes {Prüf, dass dein Key unter Gateway API key steht,} other {Ersetze {key} unter Gateway API key durch deinen API-Key,}} dann klick auf <b>Apply Changes</b> und <b>Save & Restart</b>. Starte nach dem Neustart in der Drittanbieter-Konfiguration, statt dich bei Claude.ai anzumelden."
+      },
+      "notes": {
+        "claudeOnly": "Claude Desktop zeigt nur Claude-Modelle und blendet alle anderen aus.",
+        "https": "Der Hub muss über HTTPS erreichbar sein. Einfaches http funktioniert nur auf einer Loopback-Adresse wie 127.0.0.1.",
+        "fleet": "Für alle Nutzer eines Linux-Geräts speicherst du dieselbe Datei als root unter /etc/claude-desktop/managed-settings.json; sie muss root gehören und darf für andere nicht beschreibbar sein. Für macOS- und Windows-Flotten erzeugt Export im selben Fenster ein .mobileconfig- oder .reg-Profil für dein MDM."
+      }
+    },
+    "openWebui": {
+      "name": "Open WebUI",
+      "hint": "Selbst gehostete Chat-Oberfläche",
+      "about": "Open WebUI bindet den Hub als Verbindung ein und listet alle Modelle, die dein Key nutzen darf.",
+      "steps": {
+        "open": "Öffne <b>Admin Panel → Settings → Connections</b>. Klick neben <b>Manage OpenAI API Connections</b> auf <b>+</b>.",
+        "fields": "Trag Adresse und Key ein. Klick auf <b>Verify Connection</b> neben der URL, dann auf <b>Save</b>.",
+        "start": "Starte einen neuen Chat. Die Modelle des Hubs stehen in der Modellauswahl."
+      },
+      "fields": {
+        "url": "URL",
+        "key": "API Key"
+      },
+      "notes": {
+        "server": "Der Open-WebUI-Server ruft den Hub auf, nicht dein Browser. Laufen beide in Docker auf demselben Rechner, ist localhost im Container nicht der Hub; nimm die Netzwerkadresse des Hubs."
+      }
+    },
+    "python": {
+      "name": "Python",
+      "hint": "Mit dem OpenAI- oder Anthropic-SDK",
+      "about": "Die offiziellen SDKs funktionieren unverändert. Nur Adresse und Key ändern sich.",
+      "steps": {
+        "install": "Installier das SDK:",
+        "code": "Speichere das als hello.py:",
+        "run": "Führ es aus. Die Antwort des Modells erscheint."
+      },
+      "notes": {
+        "env": "{sdk, select, anthropic {Statt den Key in den Code zu schreiben, kannst du ANTHROPIC_BASE_URL und ANTHROPIC_API_KEY als Umgebungsvariablen setzen und base_url und api_key weglassen.} other {Statt den Key in den Code zu schreiben, kannst du OPENAI_BASE_URL und OPENAI_API_KEY als Umgebungsvariablen setzen und base_url und api_key weglassen.}}"
+      }
+    },
+    "node": {
+      "name": "JavaScript",
+      "hint": "Node.js mit dem OpenAI- oder Anthropic-SDK",
+      "about": "Die offiziellen SDKs funktionieren unverändert. Nur Adresse und Key ändern sich.",
+      "steps": {
+        "install": "Installier das SDK:",
+        "code": "Speichere das als hello.mjs:",
+        "run": "Führ es aus. Die Antwort des Modells erscheint."
+      },
+      "notes": {
+        "env": "{sdk, select, anthropic {Statt den Key in den Code zu schreiben, kannst du ANTHROPIC_BASE_URL und ANTHROPIC_API_KEY als Umgebungsvariablen setzen und baseURL und apiKey weglassen.} other {Statt den Key in den Code zu schreiben, kannst du OPENAI_BASE_URL und OPENAI_API_KEY als Umgebungsvariablen setzen und baseURL und apiKey weglassen.}}"
+      }
+    },
+    "curl": {
+      "name": "Terminal-Test",
+      "hint": "Key und Modell prüfen, ohne etwas zu installieren",
+      "about": "Zwei Befehle, die zeigen, ob dein Key und dein Modell funktionieren.",
+      "steps": {
+        "models": "{shell, select, windows {Führ das in PowerShell aus. Es listet die Modelle, die dein Key nutzen darf:} other {Führ das im Terminal aus. Es listet die Modelle, die dein Key nutzen darf:}}",
+        "request": "Schick eine erste Nachricht:"
+      }
+    },
+    "other": {
+      "name": "Anderes Tool",
+      "hint": "Alles mit einer OpenAI-kompatiblen Einstellung",
+      "about": "Such nach einer Einstellung wie OpenAI-compatible, Custom provider, Custom endpoint oder Base URL.",
+      "steps": {
+        "fields": "Trag dort diese drei Werte ein:",
+        "env": "Kommandozeilen-Tools und Skripte lesen stattdessen oft diese Umgebungsvariablen:",
+        "anthropic": "Bietet das Tool nur Anthropic an? Nimm <code>{url}</code> als Adresse, ohne /v1."
+      },
+      "fields": {
+        "url": "Base URL",
+        "key": "API-Key",
+        "model": "Modell"
+      },
+      "notes": {
+        "suffix": "Fragt ein Tool nach dem vollständigen Endpunkt, häng /chat/completions an die Adresse an. Die meisten Tools wollen nur die Adresse."
+      }
+    }
+  },
+  "help": {
+    "title": "Funktioniert nicht?",
+    "description": "Die häufigsten Fehler und was du tun kannst. Tools zeigen den Code meist in ihrer Fehlermeldung.",
+    "topics": {
+      "key": {
+        "title": "401 oder invalid_api_key: Der Key wird abgelehnt",
+        "body": "Kopier den ganzen Key. Er beginnt mit sk-hub-. Der Anfang aus der Key-Liste reicht nicht. Achte auf Leerzeichen oder Zeilenumbrüche am Ende. Key verloren? Erstell unter <keys>API-Keys</keys> einen neuen."
+      },
+      "url": {
+        "title": "404 oder Not Found: Falsche Adresse",
+        "body": "OpenAI-kompatible Tools brauchen die Adresse mit /v1 am Ende, Anthropic-Tools ohne /v1. Häng kein /chat/completions oder /messages an, das macht das Tool."
+      },
+      "model": {
+        "title": "model_not_found oder model_access_denied",
+        "body": "Trag den Modellnamen genau so ein wie in der Modellliste, mit Groß- und Kleinschreibung. Dein Key darf nur bestimmte Modelle nutzen; frag deinen Admin, wenn eins fehlt."
+      },
+      "subscription": {
+        "title": "account_not_assigned",
+        "body": "Deinem Key ist kein Abo-Konto zugewiesen. Wechsle oben auf API-Anbieter oder bitte deinen Admin, dir ein Konto zuzuweisen."
+      },
+      "limit": {
+        "title": "429, budget_exceeded oder rate_limit_exceeded",
+        "body": "Budget oder Rate-Limit deines Keys ist aufgebraucht. Unter <keys>API-Keys</keys> siehst du, wie viel übrig ist; Limits setzen sich von selbst zurück."
+      },
+      "blocked": {
+        "title": "403 mit key_paused, ip_not_allowed oder outside_access_window",
+        "body": "Der Key ist pausiert oder nur von bestimmten Adressen oder zu bestimmten Zeiten erlaubt. Öffne den Key unter <keys>API-Keys</keys>, um seine Regeln zu sehen."
+      },
+      "network": {
+        "title": "Timeout oder Connection refused",
+        "body": "Das Tool erreicht den Hub nicht. Cloud-Tools wie Cursor rufen die Adresse von ihren eigenen Servern auf, dafür muss der Hub öffentlich per HTTPS erreichbar sein. localhost funktioniert nur für Programme auf demselben Rechner."
+      },
+      "models": {
+        "title": "Das Tool zeigt keine Modelle",
+        "body": "Manche Tools laden die Modellliste nicht selbst. Trag den Modellnamen dann von Hand ein, genau wie in der Modellliste oben."
+      },
+      "home": {
+        "title": "Wo ist ~?",
+        "body": "~ ist dein Benutzerordner: /Users/dein-name unter macOS, /home/dein-name unter Linux und C:\\Users\\dein-name unter Windows. Ordner mit einem Punkt am Anfang sind versteckt; im Finder zeigt Cmd+Shift+. sie an, im Windows-Explorer schaltest du Ansicht → Ausgeblendete Elemente ein."
+      },
+      "logs": {
+        "title": "Immer noch Probleme?",
+        "body": "{withLogs, select, yes {Jede Fehlerantwort trägt einen x-request-id-Header. Unter <logs>Protokolle</logs> findest du die Anfrage mit dem genauen Fehler.} other {Jede Fehlerantwort trägt einen x-request-id-Header. Schick ihn deinem Admin; er führt zur genauen Anfrage.}}"
+      }
+    }
+  }
+}

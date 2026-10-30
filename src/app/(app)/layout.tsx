@@ -26,7 +26,7 @@ export default async function AppLayout({
         <IgnoreAutofill />
         <Sidebar user={user} permissions={session.permissions} initialCollapsed={collapsed}>
           <ConsoleTopbar user={user} permissions={session.permissions} />
-          <main className="min-h-0 flex-1 scroll-pt-4 overflow-auto bg-background p-4 sm:scroll-pt-6 sm:p-6 lg:scroll-pt-8 lg:px-10 lg:py-8">
+          <main className="min-h-0 flex-1 scroll-pt-4 overflow-auto bg-background p-4 sm:scroll-pt-6 sm:p-6 lg:scroll-pt-8 lg:px-8 lg:py-8">
             <div className="mx-auto max-w-[1400px]">
               <AutoUpdateNotice />
               <ScopedPage>{children}</ScopedPage>
