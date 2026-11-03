@@ -92,6 +92,7 @@ export default function BuildStatusProvider({
   const t = useTranslations("Common");
   const [link, setLink] = useState<LiveLink>("connecting");
   const [lostAt, setLostAt] = useState<number | null>(null);
+  const [restartAt, setRestartAt] = useState<number | null>(null);
   const [clock, setClock] = useState(0);
   const [reachable, setReachable] = useState<boolean | null>(null);
   const [served, setServed] = useState<BuildInfo | null>(null);
@@ -205,6 +206,7 @@ export default function BuildStatusProvider({
     const markOpen = () => {
       lastEventAt = Date.now();
       lost = false;
+      setRestartAt(null);
       setLink("open");
       setLiveLink("open");
       setReachable(true);
@@ -237,7 +239,10 @@ export default function BuildStatusProvider({
         receiveAccess(liveAccessKeyOf(parseJsonOrNull(event.data)));
       });
       next.addEventListener("ping", markOpen);
-      next.addEventListener("restart", markLost);
+      next.addEventListener("restart", () => {
+        setRestartAt((current) => current ?? Date.now());
+        markLost();
+      });
       next.addEventListener("expired", () => {
         next.close();
         markLost();
@@ -325,7 +330,7 @@ export default function BuildStatusProvider({
     };
   }, [loadUpdate]);
 
-  const health = healthOf({ link, updating: live?.updating ?? false, reachable, lostAt, now: clock });
+  const health = healthOf({ link, updating: live?.updating ?? false, reachable, lostAt, restartAt, now: clock });
 
   return (
     <BuildStatusContext.Provider

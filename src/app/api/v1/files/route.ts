@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { gateRequest, gateResponse, readBody } from "@/lib/gateway/access/gate";
 import { GateError } from "@/lib/gateway/errors";
 import { fileJson, listObjects, putObject } from "@/lib/gateway/storage/objects";
+import { idempotent, jsonFingerprint, uploadFingerprint } from "@/lib/gateway/storage/idempotency";
 import { ownerId } from "@/lib/gateway/core";
 import { assertContentLength, MAX_UPLOAD_BYTES } from "@/lib/http/api";
 
@@ -24,6 +25,7 @@ export async function POST(req: Request) {
     let purpose = "assistants";
     let contentType = "";
     let payload = Buffer.alloc(0);
+    let fingerprint = () => "";
     if (ct.includes("multipart/form-data")) {
       assertContentLength(req, MAX_UPLOAD_BYTES);
       const form = await req.formData();
@@ -36,6 +38,7 @@ export async function POST(req: Request) {
       filename = blob.name || filename;
       contentType = blob.type;
       payload = Buffer.from(await blob.arrayBuffer());
+      fingerprint = () => uploadFingerprint(req, { purpose, filename, contentType, payload });
     } else {
       const body = await readBody(req);
       filename = typeof body.filename === "string" ? body.filename : filename;
@@ -45,16 +48,19 @@ export async function POST(req: Request) {
       } else if (typeof body.content === "string") {
         payload = Buffer.from(body.content);
       }
+      fingerprint = () => jsonFingerprint(req, body);
     }
-    const stored = await putObject({
-      kind: "file",
-      owner: ownerId(principal),
-      filename,
-      purpose,
-      contentType,
-      payload,
+    return await idempotent({ req, principal, fingerprint }, async () => {
+      const stored = await putObject({
+        kind: "file",
+        owner: ownerId(principal),
+        filename,
+        purpose,
+        contentType,
+        payload,
+      });
+      return NextResponse.json(fileJson(stored));
     });
-    return NextResponse.json(fileJson(stored));
   } catch (err) {
     return gateResponse(err, req);
   }

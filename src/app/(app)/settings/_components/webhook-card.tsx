@@ -1,21 +1,10 @@
 "use client";
 
-import {
-  Button,
-  Card,
-  Checkbox,
-  CheckboxGroup,
-  Description,
-  FieldError,
-  Input,
-  Label,
-  ListBox,
-  Select,
-  TextField,
-} from "@heroui/react";
+import { Button, Card, Description, Input, Label, ListBox, Select, TextField } from "@heroui/react";
 import { Trash2 } from "lucide-react";
 import { useTranslations } from "next-intl";
-import { WEBHOOK_EVENTS, WEBHOOK_FORMATS } from "@/lib/alerts/events";
+import { WEBHOOK_FORMATS } from "@/lib/alerts/events";
+import AlertEventsField from "./alert-events-field";
 import type { AlertWebhookDraft } from "@/types/settings";
 
 export default function WebhookCard({
@@ -115,26 +104,12 @@ export default function WebhookCard({
           <Description>{t("formatHint", { format: draft.format })}</Description>
         </Select>
       </div>
-      <CheckboxGroup
+      <AlertEventsField
         value={draft.events}
-        onChange={(events) => onChange({ ...draft, events: WEBHOOK_EVENTS.filter((e) => events.includes(e)) })}
+        onChange={(events) => onChange({ ...draft, events })}
         isDisabled={isDisabled}
         isInvalid={draft.events.length === 0}
-      >
-        <Label>{t("events")}</Label>
-        {WEBHOOK_EVENTS.map((event) => (
-          <Checkbox key={event} value={event}>
-            <Checkbox.Content>
-              <Checkbox.Control>
-                <Checkbox.Indicator />
-              </Checkbox.Control>
-              <Label>{t("eventLabel", { event })}</Label>
-            </Checkbox.Content>
-            <Description>{t("eventHint", { event })}</Description>
-          </Checkbox>
-        ))}
-        <FieldError>{t("eventsRequired")}</FieldError>
-      </CheckboxGroup>
+      />
     </Card>
   );
 }

@@ -170,6 +170,7 @@ model VirtualKey {
   prevHash         String        @default("")
   prevHashUntil    DateTime?
   spendResetAt     DateTime?
+  lastUsedAt       DateTime?
   createdAt        DateTime      @default(now())
 
   policy        PolicyOverride?
@@ -245,6 +246,8 @@ model ProviderConnection {
   restricted    Boolean  @default(false)
   internal      Boolean  @default(false)
   newModels     String   @default("auto")
+  maxConcurrency      Int?
+  adaptiveConcurrency Boolean  @default(false)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
@@ -307,6 +310,7 @@ model ProviderLogin {
   refreshedAt DateTime?
   retryAt     DateTime?
   failures    Int                @default(0)
+  lastUsedAt  DateTime?
   createdAt   DateTime           @default(now())
   updatedAt   DateTime           @updatedAt
 }

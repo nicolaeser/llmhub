@@ -3,22 +3,37 @@ import "server-only";
 import prisma from "@/lib/db/prisma";
 import { fireAlert } from "@/lib/alerts/notify";
 import {
+  answeredRequests,
   anomalyLookbackDays,
   daysUntil,
   DEFAULT_KEY_EXPIRY_WARNING_DAYS,
+  errorRate,
+  errorRateMessage,
   expiryWindow,
   historyDays,
+  isErrorRateSpike,
   isSpendAnomaly,
+  LATENCY_BASELINE_TTL_MS,
+  latencyBaselineWindow,
+  latencyMessage,
+  latencySpike,
   nextAnomalyState,
+  nextIncidentState,
   recentHour,
   sameHourWindows,
   sameState,
   spendAnomalyRule,
+  trafficAlertRule,
+  trafficScopes,
+  trafficWindow,
   usd,
 } from "@/lib/alerts/rules";
 import { getAlertState, getEnterprise, saveAlertState } from "@/lib/settings/enterprise";
+import { p95Latency } from "@/lib/usage/usage-totals";
+import { CLIENT_CLOSED_STATUS } from "@/lib/gateway/errors";
 import { money } from "@/lib/utils/money";
 import type { Prisma } from "@/generated/prisma/client";
+import type { AlertStateKind, TrafficAlertRule, TrafficScope, WebhookEvent } from "@/types/alerts";
 
 function spendBy<K extends "keyId" | "projectId">(
   rows: ({ _sum: { cost: Prisma.Decimal | null } } & Record<K, string>)[],
@@ -184,4 +199,109 @@ export async function runKeyExpiryAlerts(now = new Date()): Promise<number> {
   }
   if (!sameState(previous, state)) await saveAlertState("key_expiry", state);
   return fired;
+}
+
+async function windowTraffic(now: Date, rule: TrafficAlertRule): Promise<TrafficScope[]> {
+  const rows = await prisma.requestLog.groupBy({
+    by: ["model", "status"],
+    where: { createdAt: trafficWindow(now, rule.windowMinutes) },
+    _count: { _all: true },
+  });
+  return trafficScopes(rows.map((row) => ({ model: row.model, status: row.status, count: row._count._all })));
+}
+
+async function settleIncidents<T extends { scope: TrafficScope }>(
+  kind: AlertStateKind,
+  event: WebhookEvent,
+  now: Date,
+  incidents: T[],
+  notify: (incident: T) => { message: string; details: Record<string, unknown> },
+): Promise<number> {
+  const previous = await getAlertState(kind);
+  const { state, fire } = nextIncidentState(
+    previous,
+    incidents.map((incident) => incident.scope.id),
+    now,
+  );
+  let fired = 0;
+  for (const incident of incidents) {
+    if (!fire.includes(incident.scope.id)) continue;
+    const { message, details } = notify(incident);
+    await fireAlert(event, message);
+    await prisma.gatewayAuditLog.create({
+      data: {
+        actor: "worker",
+        action: event,
+        objectType: incident.scope.model ? "model" : "gateway",
+        objectId: incident.scope.model || incident.scope.id,
+        afterJson: JSON.stringify(details),
+      },
+    });
+    fired += 1;
+  }
+  if (!sameState(previous, state)) await saveAlertState(kind, state);
+  return fired;
+}
+
+export async function runErrorRateAlerts(now = new Date()): Promise<number> {
+  const rule = trafficAlertRule(await getEnterprise());
+  const scopes = rule.errorRatePercent > 0 ? await windowTraffic(now, rule) : [];
+  const incidents = scopes.flatMap((scope) => {
+    const rate = errorRate(scope.counts);
+    return isErrorRateSpike(rate, rule) ? [{ scope, rate }] : [];
+  });
+  return settleIncidents("error_rate", "error_rate_spike", now, incidents, ({ scope, rate }) => ({
+    message: errorRateMessage(scope.model, rate, rule),
+    details: {
+      requests: rate.requests,
+      errors: rate.errors,
+      percent: rate.percent,
+      threshold: rule.errorRatePercent,
+      windowMinutes: rule.windowMinutes,
+    },
+  }));
+}
+
+const latencyBaselines = new Map<string, { at: number; p95: number }>();
+
+function latencyWhere(scope: TrafficScope, createdAt: Prisma.DateTimeFilter): Prisma.RequestLogWhereInput {
+  return { createdAt, status: { not: CLIENT_CLOSED_STATUS }, ...(scope.model ? { model: scope.model } : {}) };
+}
+
+async function latencyBaseline(scope: TrafficScope, now: Date, rule: TrafficAlertRule): Promise<number> {
+  const key = `${scope.id}|${rule.windowMinutes}|${rule.minRequests}`;
+  const cached = latencyBaselines.get(key);
+  if (cached && now.getTime() - cached.at < LATENCY_BASELINE_TTL_MS) return cached.p95;
+  const where = latencyWhere(scope, latencyBaselineWindow(now, rule.windowMinutes));
+  const requests = await prisma.requestLog.count({ where });
+  const p95 = requests >= rule.minRequests ? await p95Latency(where) : 0;
+  for (const [id, entry] of latencyBaselines) {
+    if (now.getTime() - entry.at >= LATENCY_BASELINE_TTL_MS) latencyBaselines.delete(id);
+  }
+  latencyBaselines.set(key, { at: now.getTime(), p95 });
+  return p95;
+}
+
+export async function runLatencyAlerts(now = new Date()): Promise<number> {
+  const rule = trafficAlertRule(await getEnterprise());
+  const enabled = rule.latencyP95Ms > 0 || rule.latencyFactor > 0;
+  const scopes = enabled ? await windowTraffic(now, rule) : [];
+  const incidents = [];
+  for (const scope of scopes) {
+    const requests = answeredRequests(scope.counts);
+    if (requests < rule.minRequests) continue;
+    const p95 = await p95Latency(latencyWhere(scope, trafficWindow(now, rule.windowMinutes)));
+    const baseline = rule.latencyFactor > 0 ? await latencyBaseline(scope, now, rule) : 0;
+    const spike = latencySpike(p95, baseline, rule);
+    if (spike.absolute || spike.relative) incidents.push({ scope, latency: { p95, baseline, requests }, spike });
+  }
+  return settleIncidents("latency", "latency_spike", now, incidents, ({ scope, latency, spike }) => ({
+    message: latencyMessage(scope.model, latency, spike, rule),
+    details: {
+      ...latency,
+      threshold: rule.latencyP95Ms,
+      factor: rule.latencyFactor,
+      windowMinutes: rule.windowMinutes,
+    },
+  }));
 }

@@ -30,8 +30,11 @@ export const GATEWAY_ERRORS = {
   model_not_found: 404,
   not_found: 404,
   batch_not_cancellable: 409,
+  idempotency_key_reused: 409,
+  idempotency_key_in_progress: 409,
   payload_too_large: 413,
   rate_limit_exceeded: 429,
+  concurrency_limit_exceeded: 429,
   budget_exceeded: 429,
   client_closed_request: 499,
   internal_error: 500,
@@ -39,6 +42,7 @@ export const GATEWAY_ERRORS = {
   no_healthy_deployment: 503,
   no_provider_key: 503,
   pii_detector_unavailable: 503,
+  server_restarting: 503,
   upstream_timeout: 504,
 } as const satisfies Record<string, number>;
 

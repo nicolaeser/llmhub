@@ -333,4 +333,11 @@ test("scheduled report mails summarise every label key in the PDF and a labels C
   );
   const pdf = mail.attachments?.find((file) => file.filename.endsWith(".pdf"));
   assert.ok(readPdf(pdf!.content as Uint8Array).texts.some((shown) => shown.text === "Spend by label env"));
+  const html = mail.html ?? "";
+  assert.ok(html.startsWith('<!DOCTYPE html>\n<html lang="en">'));
+  for (const text of ["<title>Usage report</title>", "Acme · September 2026", "Spend by model", "Open usage in LLM Hub", "The CSV lists spend by project"]) {
+    assert.ok(html.includes(text), text);
+  }
+  assert.match(html, /<a href="http[^"]*\/usage"/);
+  assert.match(mail.text, /^Usage report for Acme\nPeriod: September 2026\n/);
 });

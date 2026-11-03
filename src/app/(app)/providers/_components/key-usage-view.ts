@@ -70,11 +70,16 @@ export function keyShade(rank: number): number | null {
   return KEY_SHADES[rank] ?? null;
 }
 
-export function barSegments(window: WindowView, ranks: Map<string, number>): BarSegment[] {
+export function keyRanks(usage: AccountUsage): Map<string, number> {
+  return new Map(usage.keys.map((key) => [key.keyId, key.rank]));
+}
+
+export function barSegments(window: WindowView, ranks: Map<string, number>, named: number = KEY_SHADES.length): BarSegment[] {
   const ranked: BarSegment[] = [];
   const rest: KeySlice[] = [];
   for (const slice of window.slices) {
-    const shade = keyShade(ranks.get(slice.keyId) ?? KEY_SHADES.length);
+    const rank = ranks.get(slice.keyId) ?? KEY_SHADES.length;
+    const shade = rank < named ? keyShade(rank) : null;
     if (shade === null) rest.push(slice);
     else ranked.push({ id: slice.keyId, kind: "key", keyIds: [slice.keyId], percent: slice.percent, shade });
   }
@@ -88,4 +93,17 @@ export function barSegments(window: WindowView, ranks: Map<string, number>): Bar
     { id: OUTSIDE_HUB, kind: "outside", keyIds: [], percent: outside, shade: 0.22 },
   ];
   return segments.filter((segment) => segment.percent >= VISIBLE_PERCENT);
+}
+
+function windowRanks(window: WindowView): Map<string, number> {
+  const ordered = [...window.slices].sort(
+    (a, b) => b.percent - a.percent || b.requests - a.requests || a.keyId.localeCompare(b.keyId),
+  );
+  return new Map(ordered.map((slice, rank) => [slice.keyId, rank]));
+}
+
+export function groupSegments(usage: AccountUsage, groupId: string, named: number): BarSegment[] {
+  const window = usage.windows.find((item) => item.group.id === groupId);
+  if (!window?.slices.length) return [];
+  return barSegments(window, windowRanks(window), named);
 }

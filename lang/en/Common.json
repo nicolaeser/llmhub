@@ -30,7 +30,7 @@
   "goHome": "Go to the start page",
   "signOut": "Sign out",
   "health": {
-    "status": "{status, select, live {Live} updating {Updating…} reconnecting {Reconnecting…} down {Offline} other {Connecting…}}"
+    "status": "{status, select, live {Live} updating {Updating…} restarting {Restarting…} reconnecting {Reconnecting…} down {Offline} other {Connecting…}}"
   },
   "theme": {
     "toggle": "{isDark, select, true {Switch to light mode} other {Switch to dark mode}}"
@@ -57,7 +57,8 @@
     "open": "Server status: {status}. Show details",
     "connection": "Connection",
     "version": "Version",
-    "started": "Started"
+    "started": "Started",
+    "draining": "Running requests finish first. New API requests are answered with a short retry hint until the server is back."
   },
   "updater": {
     "title": "Automatic updates",
@@ -87,7 +88,7 @@
     "check": "Check now",
     "update": "Update now",
     "updateTitle": "Install the update now?",
-    "updateDescription": "The updater downloads the newest image and restarts LLM Hub. Running requests are cut off and the console reconnects once the new version is healthy. If it does not start, the current version is restored.",
+    "updateDescription": "The updater downloads the newest image and restarts LLM Hub. Running requests get up to 25 seconds to finish, new API requests are asked to retry shortly, and the console reconnects once the new version is healthy. If it does not start, the current version is restored.",
     "updateConfirm": "Install update",
     "requested": "{action, select, check {The updater checks for a new image.} update {The updater installs the update.} other {Request sent.}}",
     "install": "Install",

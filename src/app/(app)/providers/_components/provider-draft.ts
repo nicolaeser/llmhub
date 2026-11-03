@@ -4,7 +4,7 @@ import {
   serviceAccountSummary,
   VERTEX_DEFAULT_LOCATION,
 } from "@/lib/gateway/upstreams/vertex-target";
-import { DEFAULT_NEW_MODEL_MODE } from "@/schemas/providers";
+import { DEFAULT_NEW_MODEL_MODE, MAX_CONCURRENCY } from "@/schemas/providers";
 import type {
   ProviderBody,
   ProviderDraft,
@@ -15,6 +15,7 @@ import type {
 } from "@/types/providers";
 
 const RETENTION_DAYS = /^\d{0,4}$/;
+const CONCURRENCY = /^\d{0,5}$/;
 
 export function vertexDraftReady(draft: VertexDraft, apiKey: string, current: VertexView | null): boolean {
   const switched = current !== null && current.credential !== draft.credential;
@@ -48,6 +49,8 @@ export function draftFor(spec: ProviderKindSpec | null, editing: ProviderView | 
     noTraining: policy?.noTraining ?? false,
     internal: editing?.internal ?? false,
     newModels: editing?.newModels ?? DEFAULT_NEW_MODEL_MODE,
+    concurrencyLimit: editing?.concurrency.limit == null ? "" : String(editing.concurrency.limit),
+    adaptiveConcurrency: editing?.concurrency.adaptive ?? false,
   };
 }
 
@@ -55,8 +58,13 @@ export function retentionValid(draft: ProviderDraft): boolean {
   return draft.zdr || RETENTION_DAYS.test(draft.retention.trim());
 }
 
+export function concurrencyValid(draft: ProviderDraft): boolean {
+  const value = draft.concurrencyLimit.trim();
+  return CONCURRENCY.test(value) && (!value || Number(value) <= MAX_CONCURRENCY);
+}
+
 export function draftReady(spec: ProviderKindSpec | null, editing: ProviderView | null, draft: ProviderDraft): boolean {
-  if (!spec || !retentionValid(draft)) return false;
+  if (!spec || !retentionValid(draft) || !concurrencyValid(draft)) return false;
   if (isSignInKind(spec.kind)) return editing !== null || Boolean(draft.signIn);
   if (spec.kind === "vertex") return vertexDraftReady(draft.vertex, draft.apiKey, editing?.vertex ?? null);
   return true;
@@ -64,6 +72,7 @@ export function draftReady(spec: ProviderKindSpec | null, editing: ProviderView 
 
 export function draftBody(spec: ProviderKindSpec, draft: ProviderDraft): ProviderBody {
   const retention = draft.retention.trim();
+  const concurrency = draft.concurrencyLimit.trim();
   const vertex = spec.kind === "vertex";
   const serviceAccount = vertex && draft.vertex.credential === "service_account";
   return {
@@ -81,5 +90,6 @@ export function draftBody(spec: ProviderKindSpec, draft: ProviderDraft): Provide
     vertex: serviceAccount ? { project: draft.vertex.project, location: draft.vertex.location } : undefined,
     internal: isSignInKind(spec.kind) ? undefined : draft.internal,
     newModels: draft.newModels,
+    concurrency: { limit: concurrency ? Number(concurrency) : null, adaptive: draft.adaptiveConcurrency },
   };
 }

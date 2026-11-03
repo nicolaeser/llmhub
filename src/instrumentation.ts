@@ -7,6 +7,12 @@ export async function register() {
   }
   if (process.env.NEXT_RUNTIME !== "nodejs") return;
   if (process.env.NEXT_PHASE === "phase-production-build") return;
+  if (process.env.NEXT_MANUAL_SIG_HANDLE) {
+    const { installDrainHandler, trackRequests } = await import("./lib/http/drain");
+    const { replacedByUpdater } = await import("./lib/updates/updater-store");
+    trackRequests();
+    installDrainHandler({ replacing: replacedByUpdater });
+  }
   await import("./sentry.server.config");
   const { parseEnvironment } = await import("./lib/env");
   const environment = parseEnvironment();

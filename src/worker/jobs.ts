@@ -13,6 +13,7 @@ import { refreshDueLimits } from "@/lib/providers/limit-refresh";
 import { runWindowKickoffs } from "@/lib/providers/window-kickoff";
 import { crossedThresholds, forecastBudget } from "@/lib/usage/forecast";
 import { purgeStoredObjects } from "@/lib/gateway/storage/objects";
+import { purgeIdempotencyKeys } from "@/lib/gateway/storage/idempotency";
 import { runPendingIngests } from "@/lib/rag/ingest";
 import { expireVectorStores, purgeOrphanUploads } from "@/lib/rag/stores";
 import { getAlertState, getEnterprise, saveAlertState } from "@/lib/settings/enterprise";
@@ -23,7 +24,7 @@ import { QUEUE_NAMES } from "@/lib/jobs/queues";
 import { runUsageReports } from "@/lib/reports/usage-report";
 import { revalidateSsoSessions } from "@/lib/auth/sso-sessions";
 import { reportWorkerJobFailure } from "@/lib/sentry/worker-jobs";
-import { runKeyExpiryAlerts, runSpendAnomalyAlerts } from "./alert-checks";
+import { runErrorRateAlerts, runKeyExpiryAlerts, runLatencyAlerts, runSpendAnomalyAlerts } from "./alert-checks";
 import { retentionCutoff } from "./retention";
 import { runRetentionSweep } from "./retention-sweep";
 import type { MaintenanceSweepResult, SpendResetRow } from "@/types/jobs";
@@ -116,6 +117,7 @@ export async function runMaintenanceSweep(
       }),
     );
   }
+  result.storedObjects += await runSweepJob("idempotency_keys", () => purgeIdempotencyKeys(now));
   result.batches = await runSweepJob("batches", () => runPendingBatches());
   result.vectorStores = await runSweepJob("vector_stores", () => expireVectorStores(now));
   result.storedObjects += await runSweepJob("orphan_uploads", () => purgeOrphanUploads(now));
@@ -123,6 +125,8 @@ export async function runMaintenanceSweep(
   await runSweepJob("spend_resets", () => runSpendResets(now));
   await runSweepJob("budget_alerts", () => runBudgetAlerts());
   await runSweepJob("spend_anomaly_alerts", () => runSpendAnomalyAlerts(now));
+  await runSweepJob("error_rate_alerts", () => runErrorRateAlerts(now));
+  await runSweepJob("latency_alerts", () => runLatencyAlerts(now));
   await runSweepJob("key_expiry_alerts", () => runKeyExpiryAlerts(now));
   result.reports = await runSweepJob("usage_reports", () => runUsageReports(now));
   await runSweepJob("sso_revalidation", () => revalidateSsoSessions(now));

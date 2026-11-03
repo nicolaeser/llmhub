@@ -6,6 +6,7 @@ export const BACKUP_SUFFIX = "-llmhub-old";
 export const HEALTHY_TIMEOUT_MS = 10 * 60_000;
 export const SETTLE_MS = 20_000;
 export const PORT_RELEASE_TIMEOUT_MS = 15_000;
+export const UPDATE_DRAIN_SECONDS = 30;
 const POLL_MS = 2_000;
 const FAILED_LOG_LINES = 40;
 const START_OLD_ATTEMPTS = 3;
@@ -109,6 +110,7 @@ export async function recreateContainer(docker, container, { imageRef, image, on
   const oldImage = await docker.inspectImage(container.Image);
   if (!oldImage) throw new Error(`the image of ${name} cannot be inspected`);
   const graceSeconds = stopSeconds(container);
+  const drainSeconds = Math.min(graceSeconds, UPDATE_DRAIN_SECONDS);
   const body = createConfigFor(container, oldImage, {
     imageRef,
     imageId: image.Id,
@@ -116,13 +118,16 @@ export async function recreateContainer(docker, container, { imageRef, image, on
     stopTimeout: graceSeconds,
   });
   const wasRunning = container.State?.Running === true;
-  const progress = { stopped: false, renamed: false, created: null };
+  const progress = { stopRequested: false, renamed: false, created: null };
   try {
     await onPhase("recreating");
     await removeContainerNamed(docker, backup, container.Id);
-    await docker.stop(container.Id, graceSeconds);
-    progress.stopped = true;
+    log("info", "updater.container_stopping", { container: name, drainSeconds });
+    const stoppingAt = Date.now();
+    progress.stopRequested = true;
+    await docker.stop(container.Id, drainSeconds);
     await waitStopped(docker, container.Id, waitOptions);
+    log("info", "updater.container_stopped", { container: name, durationMs: Date.now() - stoppingAt });
     await docker.rename(container.Id, backup);
     progress.renamed = true;
     progress.created = (await docker.create(name, body)).Id;
@@ -139,7 +144,7 @@ export async function recreateContainer(docker, container, { imageRef, image, on
       restored = (await attempt("remove_new", () => docker.remove(progress.created))) && restored;
     }
     if (progress.renamed) restored = (await attempt("rename_old", () => docker.rename(container.Id, name))) && restored;
-    if (progress.stopped && wasRunning) {
+    if (progress.stopRequested && wasRunning) {
       restored = (await attemptTimes("start_old", () => docker.start(container.Id))) && restored;
     }
     log(restored ? "warn" : "error", restored ? "updater.rolled_back" : "updater.rollback_incomplete", { container: name });

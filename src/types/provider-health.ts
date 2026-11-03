@@ -34,3 +34,5 @@ export type HealthReport = {
   cooldownMs: number;
   deployments: DeploymentHealthView[];
 };
+
+export type AdaptiveLimit = { limit: number; until: number };

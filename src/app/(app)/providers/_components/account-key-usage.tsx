@@ -4,29 +4,17 @@ import { Chip, Skeleton } from "@heroui/react";
 import { useFormatter, useTranslations } from "next-intl";
 import { LoadError } from "@/components/console/page-status";
 import { Link } from "@/i18n/routing";
-import { useLiveRequests } from "@/lib/hooks/use-live";
-import type { ProviderView, UsageKeyLabel } from "@/types/providers";
+import type { ProviderView } from "@/types/providers";
 import type { AccountRow } from "./account-rows";
 import KeyUsageBar, { SegmentDot } from "./key-usage-bar";
-import { accountUsage, barSegments, keyShade, type BarSegment, type KeyRow, type WindowView } from "./key-usage-view";
+import { useKeyName, useSegmentName, useUsagePercent } from "./key-usage-labels";
+import { accountUsage, barSegments, keyRanks, keyShade, type KeyRow, type WindowView } from "./key-usage-view";
 import { useLimitLabel } from "./limit-meter";
-import { useLiveKeyUsage } from "./use-key-usage";
+import type { KeyUsageFeed } from "./use-key-usage";
 import { useResetTime } from "./use-reset-time";
 
 const FULL_PERCENT = 100;
 const WARN_PERCENT = 80;
-
-type KeyName = { label: string; detail: string };
-
-function useKeyName(): (keyId: string, keys: Record<string, UsageKeyLabel>) => KeyName {
-  const t = useTranslations("Subscriptions.keyUsage");
-  return (keyId, keys) => {
-    if (!keyId) return { label: t("noKey"), detail: t("noKeyHint") };
-    const key = keys[keyId];
-    if (!key) return { label: t("deletedKey"), detail: "" };
-    return { label: key.label, detail: [key.company, key.owner].filter(Boolean).join(" · ") };
-  };
-}
 
 function usedTone(used: number): string {
   if (used >= FULL_PERCENT) return "text-sm font-medium tabular-nums text-danger";
@@ -37,12 +25,12 @@ function usedTone(used: number): string {
 export default function AccountKeyUsage({
   row,
   account,
-  version,
+  feed,
   timeZone,
 }: {
   row: ProviderView;
   account: AccountRow;
-  version: number;
+  feed: KeyUsageFeed;
   timeZone: string;
 }) {
   const t = useTranslations("Subscriptions.keyUsage");
@@ -52,11 +40,10 @@ export default function AccountKeyUsage({
   const { now } = useResetTime(timeZone);
   const limitLabel = useLimitLabel();
   const keyName = useKeyName();
-  const requestId = useLiveRequests()?.requestId ?? "";
-  const { usage, live } = useLiveKeyUsage(`${requestId}|${row.id}:${version}`);
+  const percent = useUsagePercent();
+  const { usage, live } = feed;
   const { data } = usage;
-  const percent = (value: number) =>
-    format.number(value / FULL_PERCENT, { style: "percent", maximumFractionDigits: value > 0 && value < 10 ? 1 : 0 });
+  const segmentName = useSegmentName(data?.keys ?? {});
 
   const heading = (
     <div className="flex flex-wrap items-center justify-between gap-2">
@@ -89,13 +76,7 @@ export default function AccountKeyUsage({
   }
 
   const view = accountUsage(account.groups, data.accounts.find((item) => item.id === row.id), now.getTime());
-  const ranks = new Map(view.keys.map((key) => [key.keyId, key.rank]));
-
-  const segmentName = (segment: BarSegment) => {
-    if (segment.kind === "other") return t("otherKeys", { count: segment.keyIds.length });
-    if (segment.kind === "outside") return t("outside");
-    return keyName(segment.id, data.keys).label;
-  };
+  const ranks = keyRanks(view);
 
   const windowBlock = (window: WindowView) => {
     const { group } = window;

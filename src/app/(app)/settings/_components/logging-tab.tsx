@@ -16,14 +16,22 @@ import { loadLoggingAction, saveLoggingAction } from "../_action";
 import BudgetAlertsCard from "./budget-alerts-card";
 import LabelKeysCard from "./label-keys-card";
 import WebhookCard from "./webhook-card";
+import AlertEmailsSection, { splitAlertRecipients } from "./alert-emails-section";
 import SaveBar, { SettingsLead } from "./save-bar";
 import TabState from "./tab-state";
 import { useActionData } from "@/lib/hooks/use-action-data";
 import { isActionFail } from "@/lib/http/action-result";
 import {
+  DEFAULT_ERROR_RATE_PERCENT,
   DEFAULT_KEY_EXPIRY_WARNING_DAYS,
+  DEFAULT_LATENCY_FACTOR,
+  DEFAULT_LATENCY_P95_MS,
   DEFAULT_SPEND_ANOMALY_FACTOR,
   DEFAULT_SPEND_ANOMALY_MIN_COST,
+  DEFAULT_TRAFFIC_MIN_REQUESTS,
+  DEFAULT_TRAFFIC_WINDOW_MINUTES,
+  MAX_TRAFFIC_WINDOW_MINUTES,
+  MIN_TRAFFIC_WINDOW_MINUTES,
 } from "@/lib/alerts/rules";
 import { MAX_ALERT_WEBHOOKS, WEBHOOK_EVENTS } from "@/lib/alerts/events";
 import {
@@ -34,6 +42,7 @@ import {
   RETENTION_MAX_DAYS,
 } from "@/lib/settings/retention-defaults";
 import type { AlertRules, AlertWebhookDraft, LoggingSettingsView } from "@/types/settings";
+import type { WebhookEvent } from "@/types/alerts";
 import { useErrorToast } from "@/components/console/use-error-toast";
 
 export default function LoggingTab() {
@@ -45,7 +54,14 @@ export default function LoggingTab() {
     spendAnomalyFactor: DEFAULT_SPEND_ANOMALY_FACTOR,
     spendAnomalyMinCost: DEFAULT_SPEND_ANOMALY_MIN_COST,
     keyExpiryWarningDays: DEFAULT_KEY_EXPIRY_WARNING_DAYS,
+    errorRatePercent: DEFAULT_ERROR_RATE_PERCENT,
+    trafficWindowMinutes: DEFAULT_TRAFFIC_WINDOW_MINUTES,
+    trafficMinRequests: DEFAULT_TRAFFIC_MIN_REQUESTS,
+    latencyP95Ms: DEFAULT_LATENCY_P95_MS,
+    latencyFactor: DEFAULT_LATENCY_FACTOR,
   });
+  const [mailRecipients, setMailRecipients] = useState("");
+  const [mailEvents, setMailEvents] = useState<WebhookEvent[]>([]);
   const draftSeq = useRef(0);
   const [retention, setRetention] = useState(DEFAULT_LOG_RETENTION_DAYS);
   const [spendRetention, setSpendRetention] = useState(0);
@@ -73,6 +89,8 @@ export default function LoggingTab() {
       })),
     );
     setRules(next.alertRules);
+    setMailRecipients(next.alertEmails.recipients.join("\n"));
+    setMailEvents(next.alertEmails.events);
     setRetention(next.logRetentionDays);
     setSpendRetention(next.spendRetentionDays);
     setUsageRetention(next.usageRetentionDays);
@@ -112,13 +130,14 @@ export default function LoggingTab() {
     field: keyof AlertRules,
     label: string,
     hint: string,
-    options: { step: number; format: Intl.NumberFormatOptions },
+    options: { step: number; format: Intl.NumberFormatOptions; min?: number; max?: number },
   ) => (
     <NumberField
       fullWidth
       value={rules[field]}
       onChange={(value) => setRules((current) => ({ ...current, [field]: Number.isFinite(value) ? value : 0 }))}
-      minValue={0}
+      minValue={options.min ?? 0}
+      maxValue={options.max}
       step={options.step}
       formatOptions={options.format}
       isDisabled={disabled}
@@ -206,6 +225,42 @@ export default function LoggingTab() {
           })}
         </div>
       </SettingSection>
+      <SettingSection title={t("trafficTitle")} subtitle={t("trafficHint")}>
+        <div className="grid gap-4 md:grid-cols-3 md:items-start">
+          {ruleField("errorRatePercent", t("errorRate"), t("errorRateHint"), {
+            step: 1,
+            max: 100,
+            format: formats.number.factor,
+          })}
+          {ruleField("latencyP95Ms", t("latencyP95"), t("latencyP95Hint"), {
+            step: 1000,
+            format: formats.number.integer,
+          })}
+          {ruleField("latencyFactor", t("latencyFactor"), t("latencyFactorHint"), {
+            step: 0.5,
+            format: formats.number.factor,
+          })}
+          {ruleField("trafficWindowMinutes", t("trafficWindow"), t("trafficWindowHint"), {
+            step: 5,
+            min: MIN_TRAFFIC_WINDOW_MINUTES,
+            max: MAX_TRAFFIC_WINDOW_MINUTES,
+            format: formats.number.integer,
+          })}
+          {ruleField("trafficMinRequests", t("trafficMinRequests"), t("trafficMinRequestsHint"), {
+            step: 1,
+            min: 1,
+            format: formats.number.integer,
+          })}
+        </div>
+      </SettingSection>
+      <AlertEmailsSection
+        recipients={mailRecipients}
+        events={mailEvents}
+        mailEnabled={view.mailEnabled}
+        isDisabled={disabled}
+        onRecipientsChange={setMailRecipients}
+        onEventsChange={setMailEvents}
+      />
       <BudgetAlertsCard
         thresholds={view.budgetAlerts.thresholds}
         canManage={view.budgetAlerts.canManage}
@@ -263,6 +318,7 @@ export default function LoggingTab() {
                 events: hook.events,
               })),
               alertRules: rules,
+              alertEmails: { recipients: splitAlertRecipients(mailRecipients), events: mailEvents },
               logRetentionDays: retention,
               spendRetentionDays: spendRetention,
               usageRetentionDays: usageRetention,

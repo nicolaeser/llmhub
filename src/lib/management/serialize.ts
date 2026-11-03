@@ -110,6 +110,9 @@ export function serializeProvider(provider: ProviderSource) {
     restricted: provider.restricted,
     internal: provider.internal,
     new_models: provider.newModels,
+    max_concurrency: provider.concurrency.limit,
+    adaptive_concurrency: provider.concurrency.adaptive,
+    default_concurrency: provider.concurrency.defaultLimit,
     assigned_to: provider.assignments.map((target) => ({ scope: target.scope, id: target.id })),
     sign_in: provider.signIn
       ? { account: orNull(provider.signIn.account), plan: orNull(provider.signIn.plan), status: provider.signIn.status }

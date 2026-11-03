@@ -10,6 +10,7 @@ import UpdaterPanel, { Fact } from "./updater-panel";
 const DOT_COLORS: Record<ServerHealth, string> = {
   live: "bg-success",
   updating: "bg-warning",
+  restarting: "bg-warning",
   reconnecting: "bg-warning",
   down: "bg-danger",
   connecting: "bg-accent",
@@ -24,7 +25,7 @@ export default function LiveBadge() {
   const label = t("health.status", { status: health });
   const live = build?.live ?? null;
   const served = build?.served ?? null;
-  const pulsing = health === "live" || health === "updating";
+  const pulsing = health === "live" || health === "updating" || health === "restarting";
 
   return (
     <>
@@ -53,6 +54,9 @@ export default function LiveBadge() {
               </Fact>
               {served ? <Fact label={t("live.started")}>{format.relativeTime(new Date(served.startedAt), now)}</Fact> : null}
             </ul>
+            {health === "restarting" || health === "updating" ? (
+              <p className="text-xs text-muted">{t("live.draining")}</p>
+            ) : null}
             {live?.canRead && build ? (
               <>
                 <Separator />

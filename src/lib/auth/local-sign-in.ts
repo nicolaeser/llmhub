@@ -9,6 +9,7 @@ import { effectivePermissions, hasPerm, PERMISSIONS } from "@/lib/auth/permissio
 import { securityEvent, userActor } from "@/lib/auth/security-events";
 import { env } from "@/lib/env";
 import { logger } from "@/lib/logging/logger";
+import { renderMailHtml } from "@/lib/mail/html";
 import { mailErrorCode, sendMail } from "@/lib/mail/send";
 import { getEnterprise, normalizeOidc } from "@/lib/settings/enterprise";
 import type { LocalSignInPolicy, OidcSettings } from "@/types/auth";
@@ -100,6 +101,7 @@ async function notifyEmergencySignIn(account: SignedInAccount, ipAddress: string
   await fireAlert("emergency_sign_in", `${who} signed in locally with emergency access instead of the identity provider`);
   const recipients = await adminRecipients(account.id);
   if (!recipients.length) return;
+  const usersUrl = new URL("/users", env.NEXT_PUBLIC_APP_URL).toString();
   try {
     const result = await sendMail({
       to: recipients,
@@ -109,8 +111,18 @@ async function notifyEmergencySignIn(account: SignedInAccount, ipAddress: string
         `IP address: ${ipAddress ?? "unknown"}`,
         "",
         "If you did not expect this, block the account on the users page:",
-        new URL("/users", env.NEXT_PUBLIC_APP_URL).toString(),
+        usersUrl,
       ].join("\n"),
+      html: renderMailHtml({
+        lang: "en",
+        brand: "LLM Hub",
+        title: "Emergency sign-in",
+        intro: `${who} signed in with a local password or passkey instead of the identity provider.`,
+        rows: [{ label: "IP address", value: ipAddress ?? "unknown" }],
+        paragraphs: ["If you did not expect this, block the account on the users page."],
+        action: { label: "Open users", href: usersUrl },
+        footer: "You receive this because you can manage users in LLM Hub.",
+      }),
     });
     if (!result.sent) logger.info("auth.emergency_sign_in.mail_skipped", { userId: account.id });
   } catch (err) {

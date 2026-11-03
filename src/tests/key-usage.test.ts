@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { accountUsage, barSegments } from "@/app/(app)/providers/_components/key-usage-view";
+import { accountUsage, barSegments, groupSegments } from "@/app/(app)/providers/_components/key-usage-view";
 import { limitGroups } from "@/lib/gateway/upstreams/limit-groups";
 import { usageWindows, windowStart, windowUsage } from "@/lib/providers/key-usage-shares";
 import type { KeyUsageRow, LimitWindow, SubscriptionLimits } from "@/types/providers";
@@ -155,4 +155,53 @@ test("barSegments groups keys beyond the shades and shows usage without requests
     barSegments(idle.windows[0]!, new Map()).map((segment) => [segment.kind, segment.percent]),
     [["outside", 70]],
   );
+});
+
+test("row bars name the top keys of each window, fold the rest, and stay plain without requests", () => {
+  const plan = limits([
+    window({ usedPercent: 80, resetsAt: iso(1) }),
+    window({ usedPercent: 90, windowSeconds: 604_800, resetsAt: iso(48) }),
+    window({ scope: "opus", usedPercent: 30, windowSeconds: 604_800, resetsAt: iso(48) }),
+  ]);
+  const groups = limitGroups("claude", plan, NOW);
+  const [short, week, opus] = groups;
+  const view = accountUsage(
+    groups,
+    {
+      id: "acct",
+      windows: [
+        windowUsage({ groupId: short!.id, since: NOW - 4 * HOUR, scopes: null }, [
+          row("a", 4),
+          row("b", 2),
+          row("c", 1),
+          row("d", 1),
+          row("e", 0.1),
+        ]),
+        windowUsage({ groupId: week!.id, since: NOW - 48 * HOUR, scopes: null }, [row("e", 9), row("a", 1)]),
+      ],
+    },
+    NOW,
+  );
+  assert.equal(view.keys[0]?.keyId, "e");
+  const segments = groupSegments(view, short!.id, 3);
+  assert.deepEqual(
+    segments.map((segment) => [segment.kind, segment.id, segment.keyIds, segment.shade]),
+    [
+      ["key", "a", ["a"], 1],
+      ["key", "b", ["b"], 0.72],
+      ["key", "c", ["c"], 0.5],
+      ["other", "other", ["d", "e"], 0.5],
+    ],
+  );
+  assert.ok(Math.abs(segments.reduce((sum, segment) => sum + segment.percent, 0) - 80) < 1e-9);
+  assert.deepEqual(
+    groupSegments(view, week!.id, 3).map((segment) => [segment.id, segment.percent]),
+    [
+      ["e", 81],
+      ["a", 9],
+    ],
+  );
+  assert.deepEqual(groupSegments(view, opus!.id, 3), []);
+  assert.deepEqual(groupSegments(view, "missing", 3), []);
+  assert.deepEqual(groupSegments(accountUsage(groups, undefined, NOW), short!.id, 3), []);
 });

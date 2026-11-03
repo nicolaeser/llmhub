@@ -8,7 +8,7 @@ import { requirePermission } from "@/lib/auth/guards";
 import { hasPerm, PERMISSIONS } from "@/lib/auth/permissions";
 import { companyOf, inCompany, keyVisibleTo, setupLinks, spendScope } from "@/lib/auth/scope";
 import { managesMcpRules } from "@/lib/mcp/scope";
-import { keyReferences, listKeys, toKeyView } from "@/lib/keys/view";
+import { keyReferences, listKeysWithLastUse, toKeyView } from "@/lib/keys/view";
 import { pauseActive, pauseEnd } from "@/lib/keys/pause";
 import { readsTemplates } from "@/lib/models/templates";
 import { alertKeyBlocked } from "@/lib/alerts/notify";
@@ -354,7 +354,7 @@ export async function loadKeysPage() {
   const session = await requirePermission(PERMISSIONS.KEYS_READ);
   const company = companyOf(session);
   const inScope = company ? { orgId: company } : {};
-  const keys = await listKeys(session);
+  const { keys, lastUsed } = await listKeysWithLastUse(session);
   const refs = keyReferences(keys, session.user.id);
   const [places, users, choices, providerCount, overview] = await Promise.all([
     keyPlaces(session, refs),
@@ -365,6 +365,7 @@ export async function loadKeysPage() {
   ]);
   return {
     keys,
+    lastUsed,
     companyId: company ?? "",
     ...places,
     owners: Object.fromEntries(users.map((user) => [user.id, user.username])),
@@ -382,22 +383,18 @@ export async function loadKeysPage() {
 }
 
 async function keyActivity(keyId: string, scope: SpendScope): Promise<KeyActivity> {
-  const [totals, last] = await Promise.all([
+  const [totals, key] = await Promise.all([
     prisma.usageDaily.aggregate({
       where: { keyId, day: { gte: usageWindowStart(7) }, ...scope },
       _sum: { cost: true, requests: true, errors: true },
     }),
-    prisma.requestLog.findFirst({
-      where: { keyId, ...scope },
-      orderBy: { createdAt: "desc" },
-      select: { createdAt: true },
-    }),
+    prisma.virtualKey.findUnique({ where: { id: keyId }, select: { lastUsedAt: true } }),
   ]);
   return {
     spend7d: money(totals._sum.cost),
     requests7d: totals._sum.requests ?? 0,
     errors7d: totals._sum.errors ?? 0,
-    lastUsed: last?.createdAt.toISOString() ?? "",
+    lastUsed: key?.lastUsedAt?.toISOString() ?? "",
   };
 }
 

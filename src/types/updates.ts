@@ -22,7 +22,7 @@ export type BuildInfo = {
   startedAt: string;
 };
 
-export type ServerHealth = "connecting" | "live" | "reconnecting" | "updating" | "down";
+export type ServerHealth = "connecting" | "live" | "reconnecting" | "updating" | "restarting" | "down";
 
 export type UpdaterState = z.infer<typeof updaterReportSchema>["state"];
 

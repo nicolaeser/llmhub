@@ -1,4 +1,5 @@
 import { after } from "next/server";
+import { holdShutdown } from "@/lib/http/drain";
 import { errorFields } from "@/lib/logging/format";
 import { logger } from "@/lib/logging/logger";
 import { parseJsonOrNull } from "@/lib/utils/json";
@@ -52,6 +53,7 @@ export function relayEvent(block: string, options: SseRelayOptions): string | nu
 }
 
 function keepServerFor(task: Promise<void>): boolean {
+  holdShutdown(task);
   try {
     after(task);
     return true;

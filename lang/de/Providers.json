@@ -59,10 +59,14 @@
     "connectionHint": "{method, select, vertex {Die Zugangsdaten und das Google-Cloud-Projekt, die das Gateway aufruft.} other {Der API-Key, den das Gateway bei jeder Anfrage an diesen Anbieter mitsendet.}}",
     "models": "Modelle und Sichtbarkeit",
     "modelsHint": "{method, select, signIn {Wie neue Modelle dieses Kontos in den Modellkatalog gelangen.} other {Wie neue Modelle in den Modellkatalog gelangen und ob die API diesen Anbieter bedient.}}",
-    "advancedHint": "{method, select, apiKey {Anzeigename und API-Basis-URL.} other {Der Name, den die Konsole überall anzeigt.}}"
+    "advancedHint": "{method, select, apiKey {Anzeigename, API-Basis-URL und gleichzeitige Anfragen.} other {Anzeigename und gleichzeitige Anfragen.}}"
   },
   "internalOnly": "Nur intern",
   "internalOnlyHint": "Nicht über die API erreichbar; für Konsolenfunktionen nutzbar.",
+  "concurrencyLimit": "Gleichzeitige Anfragen",
+  "concurrencyLimitHint": "So viele Anfragen schickt diese Verbindung höchstens gleichzeitig an den Anbieter. Weitere Anfragen warten bis zu fünf Sekunden auf einen freien Platz und erhalten dann 429. Leer nutzt den Standard von {limit, number} für diesen Anbietertyp; 0 schaltet die Grenze ab.",
+  "adaptiveConcurrency": "An Ratenlimits anpassen",
+  "adaptiveConcurrencyHint": "Halbiert die Grenze bei jeder 429-Antwort des Anbieters und hebt sie schrittweise wieder an, solange Anfragen gelingen. Spätestens zehn Minuten nach der letzten 429 gilt wieder die volle Grenze.",
   "newModels": "Neue Modelle im Modellkatalog",
   "newModelsOption": "{mode, select, auto {Automatisch} active {Aktiviert} other {Deaktiviert}}",
   "newModelsHint": "{mode, select, auto {Die Katalogregeln entscheiden: Vertrauenswürdige Anbieter kommen zu Aliassen, die neue Anbieter automatisch aufnehmen, alles andere wartet als neu, bis du es einschaltest.} active {Der Katalog schaltet die Modelle dieses Anbieters ein, sobald er sie zugeordnet hat, und legt fehlende Aliasse an, auch bei eigenen Servern. Was du ausschaltest, bleibt aus, und Aliasse, die keine neuen Anbieter aufnehmen, bleiben unberührt.} other {Neue Modelle dieses Anbieters landen ausgeschaltet im Katalog und werden nie automatisch geroutet. Schalte sie dort einzeln ein.}}",

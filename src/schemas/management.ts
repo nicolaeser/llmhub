@@ -7,7 +7,7 @@ import { MODEL_VARIANTS } from "@/lib/gateway/catalog/model-variants";
 import { MANAGEMENT_PERMISSIONS } from "@/lib/management/scope";
 import { accessWindowsSchema, allowedEndpointsSchema } from "@/schemas/keys";
 import { MAX_KEY_PAUSE_HOURS } from "@/lib/keys/pause";
-import { DEFAULT_NEW_MODEL_MODE, NEW_MODEL_MODES, vertexTargetSchema } from "@/schemas/providers";
+import { DEFAULT_NEW_MODEL_MODE, MAX_CONCURRENCY, NEW_MODEL_MODES, vertexTargetSchema } from "@/schemas/providers";
 import { budgetPeriod, MAX_BOOST_HOURS } from "@/lib/utils/budget";
 import { labelKey, parseLabelFilter } from "@/lib/usage/labels";
 
@@ -150,6 +150,8 @@ export const providerCreateSchema = z
     vertex: vertexTargetSchema.optional(),
     internal: z.boolean().default(false),
     new_models: z.enum(NEW_MODEL_MODES).default(DEFAULT_NEW_MODEL_MODE),
+    max_concurrency: z.number().int().min(0).max(MAX_CONCURRENCY).nullable().optional(),
+    adaptive_concurrency: z.boolean().optional(),
   })
   .strict();
 
@@ -162,6 +164,8 @@ export const providerUpdateSchema = z
     vertex: vertexTargetSchema,
     internal: z.boolean(),
     new_models: z.enum(NEW_MODEL_MODES),
+    max_concurrency: z.number().int().min(0).max(MAX_CONCURRENCY).nullable(),
+    adaptive_concurrency: z.boolean(),
   })
   .partial()
   .strict();

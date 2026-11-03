@@ -8,6 +8,15 @@ export const providerPolicySchema = z.object({
   noTraining: z.boolean().default(false),
 });
 
+export const MAX_CONCURRENCY = 10_000;
+
+export const providerConcurrencySchema = z
+  .object({
+    limit: z.number().int().min(0).max(MAX_CONCURRENCY).nullable().optional(),
+    adaptive: z.boolean().optional(),
+  })
+  .strict();
+
 export const NEW_MODEL_MODES = ["auto", "active", "disabled"] as const;
 
 export const DEFAULT_NEW_MODEL_MODE = "auto";

@@ -26,6 +26,7 @@ import { ACCOUNT_STATE_COLOR } from "./account-status";
 import BankedResets from "./banked-resets";
 import LimitMeter from "./limit-meter";
 import PolicyChips from "./policy-chips";
+import type { KeyUsageFeed } from "./use-key-usage";
 import { useResetTime } from "./use-reset-time";
 
 const STATE_ICON: Record<AccountState, LucideIcon> = {
@@ -67,7 +68,7 @@ export default function AccountDetailsDialog({
   reports: boolean;
   timeZone: string;
   canManage: boolean;
-  keyUsage: boolean;
+  keyUsage: KeyUsageFeed | null;
   refreshing: boolean;
   onRefresh: (id: string) => void;
   onItem: (item: LimitSnapshot | null) => void;
@@ -231,12 +232,7 @@ export default function AccountDetailsDialog({
                   {keyUsage && reports && account.groups.length > 0 ? (
                     <>
                       <Separator />
-                      <AccountKeyUsage
-                        row={row}
-                        account={account}
-                        version={entry?.version ?? 0}
-                        timeZone={timeZone}
-                      />
+                      <AccountKeyUsage row={row} account={account} feed={keyUsage} timeZone={timeZone} />
                     </>
                   ) : null}
 

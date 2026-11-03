@@ -24,13 +24,23 @@ import RowCard, { RowCards, TABLE_FROM_LG } from "@/components/console/row-cards
 import { PlanBadge } from "@/components/console/subscription-badge";
 import { kindIcon } from "@/components/providers/kind-icons";
 import { reportsLimits } from "@/lib/gateway/upstreams/provider-kinds";
-import type { AccountStrategy, LimitSnapshot, ProviderView, SignInKind } from "@/types/providers";
+import type {
+  AccountStrategy,
+  LimitSnapshot,
+  ProviderView,
+  SignInKind,
+  SubscriptionKeyUsage,
+} from "@/types/providers";
 import type { AutoResetPolicy } from "@/types/resets";
 import { STRATEGY_ICONS } from "./account-routing-picker";
 import { accountMenuActions, accountRow, type AccountMenuAction, type AccountRow } from "./account-rows";
 import { ACCOUNT_STATE_COLOR, type CountedState } from "./account-status";
+import { useSegmentName } from "./key-usage-labels";
+import { accountUsage, groupSegments } from "./key-usage-view";
 import LimitMeter, { ResetLine } from "./limit-meter";
 import RowMenu, { type RowMenuItem } from "@/components/providers/row-menu";
+
+const ROW_KEYS = 3;
 
 const MENU_ICONS = {
   details: Info,
@@ -52,6 +62,7 @@ export default function SubscriptionGroup({
   total,
   counts,
   limits,
+  keyUsage,
   settingsLoaded,
   strategy,
   autoReset,
@@ -69,6 +80,7 @@ export default function SubscriptionGroup({
   total: number;
   counts: { state: CountedState; count: number }[];
   limits: Record<string, LimitSnapshot>;
+  keyUsage: SubscriptionKeyUsage | null;
   settingsLoaded: boolean;
   strategy: AccountStrategy;
   autoReset: AutoResetPolicy | null;
@@ -94,6 +106,20 @@ export default function SubscriptionGroup({
   const titleId = `subscriptions-${kind}`;
   const reports = reportsLimits(kind);
   const accounts = rows.map((row) => ({ row, account: accountRow(row, limits[row.id], reports, now.getTime()) }));
+  const keyLabels = keyUsage?.keys ?? {};
+  const segmentName = useSegmentName(keyLabels);
+  const shortSegmentName = useSegmentName(keyLabels, true);
+  const usageById = new Map(keyUsage?.accounts.map((item) => [item.id, item]));
+
+  function keysFor(row: ProviderView, account: AccountRow) {
+    const usage = usageById.get(row.id);
+    if (!usage) return () => null;
+    const view = accountUsage(account.groups, usage, now.getTime());
+    return (groupId: string) => {
+      const segments = groupSegments(view, groupId, ROW_KEYS);
+      return segments.length ? { segments, nameOf: segmentName, shortNameOf: shortSegmentName } : null;
+    };
+  }
 
   const groupItems: RowMenuItem<GroupAction>[] = [
     {
@@ -215,11 +241,12 @@ export default function SubscriptionGroup({
       if (account.limits) return <p className="text-xs text-muted">{t("limits.none")}</p>;
       return <p className="text-xs text-muted">{tCommon("none")}</p>;
     }
+    const keys = keysFor(row, account);
     return (
       <div className="space-y-3">
         {account.needsSignIn ? signIn(row, account) : null}
         {account.summary.groups.map((group) => (
-          <LimitMeter key={group.id} group={group} timeZone={timeZone} compact />
+          <LimitMeter key={group.id} group={group} timeZone={timeZone} compact keys={keys(group.id)} />
         ))}
         {account.detailed ? (
           <Button
@@ -240,6 +267,14 @@ export default function SubscriptionGroup({
       <span className="flex min-w-0 items-center gap-1.5 text-sm whitespace-nowrap text-foreground">
         <Users size={14} aria-hidden className={account.restricted ? "shrink-0 text-warning" : "shrink-0 text-muted"} />
         {t("access.short", { restricted: String(account.restricted), count: account.assignments })}
+      </span>
+    );
+  }
+
+  function lastUsed(account: AccountRow) {
+    return (
+      <span className="text-sm whitespace-nowrap text-foreground">
+        {account.lastUsed === null ? t("neverUsed") : format.relativeTime(new Date(account.lastUsed), now)}
       </span>
     );
   }
@@ -337,18 +372,20 @@ export default function SubscriptionGroup({
               { label: t("columns.usage"), value: usage(row, account), wide: true },
               ...(account.state === "limited" ? [{ label: tCommon("status"), value: recovery(account), wide: true }] : []),
               { label: t("columns.access"), value: access(account) },
+              { label: t("columns.lastUsed"), value: lastUsed(account) },
             ]}
           />
         ))}
       </RowCards>
       <Table aria-label={t("group.label", { provider: name })} className={TABLE_FROM_LG}>
         <Table.ScrollContainer>
-          <Table.Content aria-label={t("group.label", { provider: name })} className="min-w-[56rem]">
+          <Table.Content aria-label={t("group.label", { provider: name })} className="min-w-[62rem]">
             <Table.Header>
               <Table.Column isRowHeader>{t("columns.account")}</Table.Column>
               <Table.Column>{tCommon("status")}</Table.Column>
               <Table.Column>{t("columns.usage")}</Table.Column>
               <Table.Column>{t("columns.access")}</Table.Column>
+              <Table.Column>{t("columns.lastUsed")}</Table.Column>
               <Table.Column>{tCommon("actions")}</Table.Column>
             </Table.Header>
             <Table.Body>
@@ -373,6 +410,7 @@ export default function SubscriptionGroup({
                     <div className="min-w-72">{usage(row, account)}</div>
                   </Table.Cell>
                   <Table.Cell>{access(account)}</Table.Cell>
+                  <Table.Cell>{lastUsed(account)}</Table.Cell>
                   <Table.Cell>{menu(row, account)}</Table.Cell>
                 </Table.Row>
               ))}

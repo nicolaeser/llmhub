@@ -282,7 +282,7 @@ export async function withDeployment<T>(
   const access = accessOf(opts?.principal);
   const request = opts?.request ?? null;
   const tracksHealth = opts?.health !== false;
-  const run: RunRouting = { session: runSession(request, opts?.headers), tried: new Set() };
+  const run: RunRouting = { session: runSession(request, opts?.headers), tried: new Set(), signal: opts?.signal };
   const renewed = new Set<string>();
   const context =
     opts?.fitContext && request
@@ -346,7 +346,12 @@ export async function withDeployment<T>(
         const acquired = await acquireGroup(group, limits[root], servable, opts?.strategy, opts?.cost, access, run);
         const account = signInAccount(acquired.dep);
         const switched = account !== null && failedAccount !== null && failedAccount !== account;
-        prepareHandoff(acquired.dep, acquired.pinned, switched, request);
+        try {
+          prepareHandoff(acquired.dep, acquired.pinned, switched, request);
+        } catch (err) {
+          acquired.release();
+          throw err;
+        }
         try {
           const started = Date.now();
           upstreamTried = true;

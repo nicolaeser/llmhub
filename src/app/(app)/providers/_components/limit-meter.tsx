@@ -4,8 +4,19 @@ import { Disclosure, Label, Meter } from "@heroui/react";
 import { useFormatter, useTranslations } from "next-intl";
 import { meterColor } from "@/lib/utils/budget";
 import type { LimitGroup } from "@/types/providers";
+import KeyUsageBar, { KeyUsageLegend } from "./key-usage-bar";
+import type { SegmentNamer } from "./key-usage-labels";
+import type { BarSegment } from "./key-usage-view";
 import { exhaustionAt } from "./limit-timing";
 import { useResetTime } from "./use-reset-time";
+
+export type MeterKeys = { segments: BarSegment[]; nameOf: SegmentNamer; shortNameOf: SegmentNamer };
+
+const OUTPUT_TONE: Record<ReturnType<typeof meterColor>, string | undefined> = {
+  accent: undefined,
+  warning: "text-warning",
+  danger: "text-danger",
+};
 
 const DAY_SECONDS = 86_400;
 const HOUR_SECONDS = 3_600;
@@ -68,35 +79,55 @@ export default function LimitMeter({
   group,
   timeZone,
   compact = false,
+  keys = null,
 }: {
   group: LimitGroup;
   timeZone: string;
   compact?: boolean;
+  keys?: MeterKeys | null;
 }) {
   const t = useTranslations("Subscriptions.limits");
+  const tKeys = useTranslations("Subscriptions.keyUsage");
   const format = useFormatter();
   const { now } = useResetTime(timeZone);
   const reset = group.resetsAt ? Date.parse(group.resetsAt) : NaN;
   const pending = Number.isFinite(reset) && reset > now.getTime();
   const runsOut = exhaustionAt(group, now.getTime());
   const used = group.usedPercent;
+  const color = meterColor(used / 100);
   const label = useLimitLabel()(group);
   const listed = !compact && group.members.length > 1;
+  const split = keys !== null && keys.segments.length > 0;
 
   return (
     <div className="min-w-0 space-y-1">
       <Meter
         value={used}
-        color={meterColor(used / 100)}
+        color={color}
         aria-label={label}
         valueLabel={t("used", { used: used / 100, uniform: String(group.uniform) })}
       >
         <Label>{label}</Label>
-        <Meter.Output />
-        <Meter.Track>
-          <Meter.Fill />
-        </Meter.Track>
+        <Meter.Output className={split ? OUTPUT_TONE[color] : undefined} />
+        {split ? null : (
+          <Meter.Track>
+            <Meter.Fill />
+          </Meter.Track>
+        )}
       </Meter>
+      {split ? (
+        <div className="space-y-1.5 pb-0.5">
+          <KeyUsageBar
+            size="sm"
+            label={tKeys("barLabel", { window: label })}
+            segments={keys.segments}
+            used={used}
+            nameOf={keys.nameOf}
+            freeLabel={tKeys("free")}
+          />
+          <KeyUsageLegend label={tKeys("legend", { window: label })} segments={keys.segments} nameOf={keys.shortNameOf} />
+        </div>
+      ) : null}
       {pending ? <ResetLine at={reset} reached={group.limitReached} timeZone={timeZone} full={!compact} /> : null}
       {!pending && used === 0 ? <p className="text-xs text-muted">{t("notStarted")}</p> : null}
       {!pending && used > 0 ? (

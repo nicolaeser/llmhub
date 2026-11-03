@@ -6,7 +6,7 @@ import { variantRoute } from "@/lib/gateway/routing/variant-route";
 import { parseRequest } from "@/lib/gateway/protocols/parse-request";
 import { requestClient } from "@/lib/gateway/request-logs/request-session";
 import type { ZodType } from "zod";
-import type { ScreenedRequest, ScreenOptions } from "@/types/gateway";
+import type { GatedRequest, ScreenedRequest, ScreenOptions } from "@/types/gateway";
 
 export function gatewayRoute(handle: (req: Request) => Promise<Response>): (req: Request) => Promise<Response> {
   return async (req) => {
@@ -18,10 +18,17 @@ export function gatewayRoute(handle: (req: Request) => Promise<Response>): (req:
   };
 }
 
-export async function screenModelRequest(req: Request, options: ScreenOptions = {}): Promise<ScreenedRequest> {
+export async function gateModelRequest(req: Request, options: ScreenOptions = {}): Promise<GatedRequest> {
   const gated = await gateRequest(options.auth ?? req, options.pool);
   const raw = await readBody(req);
-  const principal = { ...gated, client: requestClient(req.headers, raw) };
+  return { principal: { ...gated, client: requestClient(req.headers, raw) }, raw };
+}
+
+export async function screenModelRequest(req: Request, options: ScreenOptions = {}): Promise<ScreenedRequest> {
+  return screenGatedRequest(await gateModelRequest(req, options));
+}
+
+export async function screenGatedRequest({ principal, raw }: GatedRequest): Promise<ScreenedRequest> {
   const variant = await variantRoute(modelOf(raw), principal.pool ?? "api");
   const body = variant ? variantBody(raw, variant.model, variant.variant) : raw;
   const model = modelOf(body);

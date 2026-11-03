@@ -13,7 +13,7 @@ import { Link, useRouter } from "@/i18n/routing";
 import { accessSummary } from "@/lib/keys/draft";
 import { isKeyPaused, keyState, type KeyState } from "@/lib/keys/pause";
 import { meterColor } from "@/lib/utils/budget";
-import type { KeyBindingKind, KeyOptions, VirtualKeyView } from "@/types/keys";
+import type { KeyBindingKind, KeyLastUse, KeyOptions, VirtualKeyView } from "@/types/keys";
 
 const ALL = "all";
 const STATES: KeyState[] = ["active", "paused", "blocked"];
@@ -61,6 +61,7 @@ function FilterSelect({
 
 export default function KeyList({
   keys,
+  lastUsed,
   options,
   owners,
   flags,
@@ -70,6 +71,7 @@ export default function KeyList({
   onAction,
 }: {
   keys: VirtualKeyView[];
+  lastUsed: KeyLastUse;
   options: KeyOptions;
   owners: Record<string, string>;
   flags: KeyMenuFlags;
@@ -161,6 +163,15 @@ export default function KeyList({
             <Meter.Fill />
           </Meter.Track>
         </Meter>
+      </span>
+    );
+  }
+
+  function lastUsedValue(row: VirtualKeyView) {
+    const at = lastUsed[row.token_id];
+    return (
+      <span className="text-sm whitespace-nowrap text-foreground">
+        {at ? format.relativeTime(new Date(at), now) : t("detail.neverUsed")}
       </span>
     );
   }
@@ -265,6 +276,7 @@ export default function KeyList({
                   { label: t("columns.binding"), value: ownerValue(row), wide: true },
                   { label: t("columns.access"), value: accessLabel(row) },
                   { label: t("columns.spend"), value: spendValue(row) },
+                  { label: t("columns.lastUsed"), value: lastUsedValue(row) },
                 ]}
               />
             ))}
@@ -282,6 +294,7 @@ export default function KeyList({
                   <Table.Column>{t("columns.binding")}</Table.Column>
                   <Table.Column>{t("columns.access")}</Table.Column>
                   <Table.Column>{t("columns.spend")}</Table.Column>
+                  <Table.Column>{t("columns.lastUsed")}</Table.Column>
                   <Table.Column>{t("columns.status")}</Table.Column>
                   {hasActions ? <Table.Column>{tCommon("actions")}</Table.Column> : null}
                 </Table.Header>
@@ -299,6 +312,7 @@ export default function KeyList({
                         <span className="text-sm">{accessLabel(row)}</span>
                       </Table.Cell>
                       <Table.Cell>{spendValue(row)}</Table.Cell>
+                      <Table.Cell>{lastUsedValue(row)}</Table.Cell>
                       <Table.Cell>
                         <div className="flex flex-wrap gap-1">{keyChips(row)}</div>
                       </Table.Cell>

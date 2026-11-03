@@ -8,6 +8,7 @@ import { env } from "@/lib/env";
 import { clientBucket, clientIp } from "@/lib/http/client-ip";
 import { fieldErrors, problemResponse } from "@/lib/http/problem";
 import { logger } from "@/lib/logging/logger";
+import { renderMailHtml } from "@/lib/mail/html";
 import { sendMail } from "@/lib/mail/send";
 import { readJsonOr } from "@/lib/utils/json";
 import { forgotPasswordSchema } from "@/schemas/auth";
@@ -41,6 +42,15 @@ async function sendResetLink(email: string) {
       to: user.email,
       subject: "Reset your LLM Hub password",
       text: `Reset your password:\n${url}\n\nThis link expires in one hour.`,
+      html: renderMailHtml({
+        lang: "en",
+        brand: "LLM Hub",
+        title: "Reset your password",
+        intro: "Use the button below to choose a new password for your LLM Hub account.",
+        action: { label: "Reset password", href: url.toString() },
+        paragraphs: [`If the button does not work, open this link: ${url}`],
+        footer: "This link expires in one hour. If you did not ask for a reset, ignore this e-mail.",
+      }),
     });
     if (!result.sent) logger.info("auth.reset_token.mail_skipped", { userId: user.id });
   } catch (err) {

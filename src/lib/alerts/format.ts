@@ -1,4 +1,5 @@
-import type { AlertPayload, WebhookEvent, WebhookFormat } from "@/types/alerts";
+import { renderMailHtml } from "@/lib/mail/html";
+import type { AlertMail, AlertPayload, WebhookEvent, WebhookFormat } from "@/types/alerts";
 
 const EVENT_TITLES: Record<WebhookEvent, string> = {
   upstream_exhaustion: "Upstream exhaustion",
@@ -9,9 +10,24 @@ const EVENT_TITLES: Record<WebhookEvent, string> = {
   key_blocked: "API key blocked",
   pii_blocked: "Request blocked by PII policy",
   emergency_sign_in: "Emergency sign-in",
+  error_rate_spike: "Error rate spike",
+  latency_spike: "Latency spike",
 };
 
 const SLACK_SECTION_LIMIT = 3000;
+
+const EVENT_PAGES: Record<WebhookEvent, string> = {
+  upstream_exhaustion: "/logs",
+  budget_threshold: "/overview",
+  provider_models_changed: "/models",
+  spend_anomaly: "/usage",
+  key_expiring: "/keys",
+  key_blocked: "/keys",
+  pii_blocked: "/logs",
+  emergency_sign_in: "/users",
+  error_rate_spike: "/logs",
+  latency_spike: "/logs",
+};
 
 function clip(value: string, limit: number): string {
   return value.length > limit ? `${value.slice(0, limit - 1)}…` : value;
@@ -74,4 +90,40 @@ export function webhookBody(format: WebhookFormat, alert: AlertPayload): string 
     source: "llm-hub",
     ts: alert.ts,
   });
+}
+
+function consoleLink(appUrl: string, path: string): string {
+  return new URL(path, appUrl).toString();
+}
+
+export function alertMail(alert: AlertPayload, appUrl: string): AlertMail {
+  const page = consoleLink(appUrl, EVENT_PAGES[alert.event]);
+  const settings = consoleLink(appUrl, "/settings?tab=logging");
+  return {
+    subject: alertTitle(alert.event),
+    html: renderMailHtml({
+      lang: "en",
+      brand: "LLM Hub",
+      title: EVENT_TITLES[alert.event],
+      intro: alert.message,
+      rows: [
+        { label: "Event", value: alert.event },
+        { label: "Time", value: alert.ts },
+        { label: "Alert ID", value: alert.id },
+      ],
+      action: { label: "Open LLM Hub", href: page },
+      paragraphs: [`Change alert emails in the settings: ${settings}`],
+      footer: "You receive this because your address is an alert email recipient in LLM Hub.",
+    }),
+    text: [
+      alert.message,
+      "",
+      "--",
+      `Event: ${alert.event}`,
+      `Time: ${alert.ts}`,
+      `Alert ID: ${alert.id}`,
+      `Open LLM Hub: ${page}`,
+      `Change alert emails: ${settings}`,
+    ].join("\n"),
+  };
 }
