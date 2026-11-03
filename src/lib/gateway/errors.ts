@@ -30,6 +30,8 @@ export const GATEWAY_ERRORS = {
   model_not_found: 404,
   not_found: 404,
   batch_not_cancellable: 409,
+  idempotency_key_reused: 409,
+  idempotency_key_in_progress: 409,
   payload_too_large: 413,
   rate_limit_exceeded: 429,
   concurrency_limit_exceeded: 429,

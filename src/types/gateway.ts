@@ -101,3 +101,40 @@ export type StoredPayloadLocation = {
   url?: string;
 };
 
+
+export type GatedRequest = {
+  principal: Principal;
+  raw: JsonMap;
+};
+
+export type IdempotencyReplayMode = "body" | "too_large" | "stream" | "private";
+
+export type IdempotencyScope = {
+  pool: RoutePool;
+  owner: string;
+  endpoint: string;
+};
+
+export type IdempotencyClaim = {
+  id: string;
+  lease: string;
+  fingerprint: string;
+};
+
+export type IdempotencyOutcome =
+  | { kind: "claimed"; claim: IdempotencyClaim }
+  | { kind: "replay"; status: number; contentType: string; body: Uint8Array };
+
+export type IdempotentRequest = {
+  req: Request;
+  principal: Principal;
+  fingerprint: () => string;
+  finishedEvents?: readonly string[];
+};
+
+export type UploadFingerprint = {
+  purpose: string;
+  filename: string;
+  contentType: string;
+  payload: Uint8Array;
+};

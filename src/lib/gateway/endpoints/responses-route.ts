@@ -2,7 +2,8 @@ import "server-only";
 import { NextResponse } from "next/server";
 import { dispatchChat, streamChat } from "@/lib/gateway/dispatch/chat";
 import { modelChain } from "@/lib/gateway/access/gate";
-import { gatewayRoute, screenModelRequest, validRequest } from "@/lib/gateway/endpoints/pipeline";
+import { gatewayRoute, gateModelRequest, screenGatedRequest, validRequest } from "@/lib/gateway/endpoints/pipeline";
+import { idempotent, jsonFingerprint } from "@/lib/gateway/storage/idempotency";
 import { putObject, updateObjectPayload } from "@/lib/gateway/storage/objects";
 import { previousConversation } from "@/lib/gateway/storage/responses-store";
 import { resolveResponsesFiles } from "@/lib/gateway/storage/file-refs";
@@ -42,12 +43,25 @@ function storedPayload(response: JsonMap, messages: JsonMap[], input: JsonMap[])
   return Buffer.from(JSON.stringify({ response, messages, input }));
 }
 
+const RESPONSE_FINISHED_EVENTS = ["event: response.completed\n", "event: response.incomplete\n"] as const;
+
 export function createResponseRoute(pool: PublicPool) {
   return gatewayRoute(async (req) => {
-    const screened = await screenModelRequest(req, { pool });
-    const files = await resolveResponsesFiles(screened.clean, screened.principal);
-    const { body: clean, namespaces, webSearch } = clientTools(files);
-    return withToolNamespaces(await respond(req, screened, clean, webSearch), namespaces);
+    const gated = await gateModelRequest(req, { pool });
+    return idempotent(
+      {
+        req,
+        principal: gated.principal,
+        fingerprint: () => jsonFingerprint(req, gated.raw),
+        finishedEvents: RESPONSE_FINISHED_EVENTS,
+      },
+      async () => {
+        const screened = await screenGatedRequest(gated);
+        const files = await resolveResponsesFiles(screened.clean, screened.principal);
+        const { body: clean, namespaces, webSearch } = clientTools(files);
+        return withToolNamespaces(await respond(req, screened, clean, webSearch), namespaces);
+      },
+    );
   });
 }
 

@@ -5,6 +5,7 @@ import { allowModel, applyGuardrails, gateRequest, gateResponse, modelOf, readBo
 import { meter } from "@/lib/gateway/billing/meter";
 import { forwardToModel } from "@/lib/gateway/dispatch/upstream";
 import { storeVideo } from "@/lib/gateway/endpoints/videos";
+import { idempotent, jsonFingerprint } from "@/lib/gateway/storage/idempotency";
 
 export const maxDuration = 300;
 
@@ -12,19 +13,21 @@ export async function POST(req: Request) {
   try {
     const principal = await gateRequest(req);
     const body = await readBody(req);
-    const model = modelOf(body);
-    allowModel(principal, model);
-    const { body: clean } = await applyGuardrails(body, principal);
-    const aliases = modelChain(principal, model, clean);
-    const usage = meter(principal, model, body);
-    try {
-      const hit = await forwardToModel(aliases, principal, "/videos", clean);
-      await usage.ok(hit, usageFromUnknown(asRecord(hit.json)?.usage, hit.json));
-      return NextResponse.json(await storeVideo(principal, model, hit.json));
-    } catch (err) {
-      await usage.fail(err);
-      throw err;
-    }
+    return await idempotent({ req, principal, fingerprint: () => jsonFingerprint(req, body) }, async () => {
+      const model = modelOf(body);
+      allowModel(principal, model);
+      const { body: clean } = await applyGuardrails(body, principal);
+      const aliases = modelChain(principal, model, clean);
+      const usage = meter(principal, model, body);
+      try {
+        const hit = await forwardToModel(aliases, principal, "/videos", clean);
+        await usage.ok(hit, usageFromUnknown(asRecord(hit.json)?.usage, hit.json));
+        return NextResponse.json(await storeVideo(principal, model, hit.json));
+      } catch (err) {
+        await usage.fail(err);
+        throw err;
+      }
+    });
   } catch (err) {
     return gateResponse(err, req);
   }

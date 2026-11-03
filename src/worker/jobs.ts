@@ -13,6 +13,7 @@ import { refreshDueLimits } from "@/lib/providers/limit-refresh";
 import { runWindowKickoffs } from "@/lib/providers/window-kickoff";
 import { crossedThresholds, forecastBudget } from "@/lib/usage/forecast";
 import { purgeStoredObjects } from "@/lib/gateway/storage/objects";
+import { purgeIdempotencyKeys } from "@/lib/gateway/storage/idempotency";
 import { runPendingIngests } from "@/lib/rag/ingest";
 import { expireVectorStores, purgeOrphanUploads } from "@/lib/rag/stores";
 import { getAlertState, getEnterprise, saveAlertState } from "@/lib/settings/enterprise";
@@ -116,6 +117,7 @@ export async function runMaintenanceSweep(
       }),
     );
   }
+  result.storedObjects += await runSweepJob("idempotency_keys", () => purgeIdempotencyKeys(now));
   result.batches = await runSweepJob("batches", () => runPendingBatches());
   result.vectorStores = await runSweepJob("vector_stores", () => expireVectorStores(now));
   result.storedObjects += await runSweepJob("orphan_uploads", () => purgeOrphanUploads(now));
