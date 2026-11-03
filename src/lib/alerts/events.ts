@@ -7,8 +7,12 @@ export const WEBHOOK_EVENTS = [
   "key_blocked",
   "pii_blocked",
   "emergency_sign_in",
+  "error_rate_spike",
+  "latency_spike",
 ] as const;
 
 export const WEBHOOK_FORMATS = ["json", "slack", "teams"] as const;
 
 export const MAX_ALERT_WEBHOOKS = 20;
+
+export const MAX_ALERT_EMAILS = 10;

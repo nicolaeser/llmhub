@@ -1,6 +1,11 @@
 import type { z } from "zod";
-import type { alertWebhooksSchema, catalogSettingsSchema, generalSettingsSchema } from "@/schemas/settings";
-import type { AlertWebhook, WebhookEvent, WebhookFormat } from "@/types/alerts";
+import type {
+  alertEmailsSchema,
+  alertWebhooksSchema,
+  catalogSettingsSchema,
+  generalSettingsSchema,
+} from "@/schemas/settings";
+import type { AlertEmails, AlertWebhook, WebhookEvent, WebhookFormat } from "@/types/alerts";
 import type {
   AppRolesCheck,
   OidcDiscoveryFailure,
@@ -77,6 +82,8 @@ export type CatalogSettingsView = {
 export type LoggingSettingsView = {
   alertWebhooks: AlertWebhookView[];
   alertRules: AlertRules;
+  alertEmails: AlertEmails;
+  mailEnabled: boolean;
   logRetentionDays: number;
   spendRetentionDays: number;
   usageRetentionDays: number;
@@ -95,6 +102,8 @@ export type LoggingSettingsView = {
 
 export type AlertWebhookInput = z.infer<typeof alertWebhooksSchema>[number];
 
+export type AlertEmailsInput = z.infer<typeof alertEmailsSchema>;
+
 export type AlertWebhookView = {
   id: string;
   url: string;
@@ -107,6 +116,11 @@ export type AlertRules = {
   spendAnomalyFactor: number;
   spendAnomalyMinCost: number;
   keyExpiryWarningDays: number;
+  errorRatePercent: number;
+  trafficWindowMinutes: number;
+  trafficMinRequests: number;
+  latencyP95Ms: number;
+  latencyFactor: number;
 };
 
 export type AlertWebhookDraft = AlertWebhookInput & {
@@ -138,6 +152,12 @@ export type Enterprise = {
   spend_anomaly_factor?: number;
   spend_anomaly_min_cost?: number;
   key_expiry_warning_days?: number;
+  error_rate_threshold?: number;
+  traffic_window_minutes?: number;
+  traffic_min_requests?: number;
+  latency_p95_ms?: number;
+  latency_factor?: number;
+  alert_emails?: AlertEmails;
   registration_enabled?: boolean;
   catalog_jev?: JevSettings;
   antigravity?: AntigravitySettings;

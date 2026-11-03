@@ -9,9 +9,15 @@ import {
   DEFAULT_KEY_EXPIRY_WARNING_DAYS,
   DEFAULT_SPEND_ANOMALY_FACTOR,
   DEFAULT_SPEND_ANOMALY_MIN_COST,
+  errorRateThreshold,
+  latencyThresholdMs,
+  trafficAlertRule,
+  trafficMinRequests,
+  trafficWindowMinutes,
 } from "@/lib/alerts/rules";
-import { getEnterprise, patchEnterprise } from "@/lib/settings/enterprise";
+import { getEnterprise, normalizeAlertEmails, patchEnterprise } from "@/lib/settings/enterprise";
 import { WEBHOOK_EVENTS } from "@/lib/alerts/events";
+import { mailEnabled } from "@/lib/mail/send";
 import { resolveS3Config } from "@/lib/s3/config";
 import {
   DEFAULT_CONTENT_RETENTION_DAYS,
@@ -20,10 +26,16 @@ import {
   DEFAULT_SECURITY_RETENTION_DAYS,
   clampRetentionDays,
 } from "@/lib/settings/retention-defaults";
-import { alertWebhooksSchema } from "@/schemas/settings";
+import { alertEmailsSchema, alertWebhooksSchema } from "@/schemas/settings";
 import type { AlertWebhook } from "@/types/alerts";
 import type { AuthenticatedSession } from "@/types/auth";
-import type { AlertRules, AlertWebhookInput, AlertWebhookView, LoggingSettingsView } from "@/types/settings";
+import type {
+  AlertEmailsInput,
+  AlertRules,
+  AlertWebhookInput,
+  AlertWebhookView,
+  LoggingSettingsView,
+} from "@/types/settings";
 
 export function visibleWebhookUrl(url: string, canManage: boolean): string {
   if (canManage) return url;
@@ -33,6 +45,7 @@ export function visibleWebhookUrl(url: string, canManage: boolean): string {
 async function view(session: AuthenticatedSession): Promise<LoggingSettingsView> {
   const enterprise = await getEnterprise();
   const canManage = hasPerm(session.permissions, PERMISSIONS.SETTINGS_MANAGE);
+  const traffic = trafficAlertRule(enterprise);
   return {
     alertWebhooks: (enterprise.alert_webhooks ?? []).map(
       (hook): AlertWebhookView => ({
@@ -47,7 +60,14 @@ async function view(session: AuthenticatedSession): Promise<LoggingSettingsView>
       spendAnomalyFactor: enterprise.spend_anomaly_factor ?? DEFAULT_SPEND_ANOMALY_FACTOR,
       spendAnomalyMinCost: enterprise.spend_anomaly_min_cost ?? DEFAULT_SPEND_ANOMALY_MIN_COST,
       keyExpiryWarningDays: enterprise.key_expiry_warning_days ?? DEFAULT_KEY_EXPIRY_WARNING_DAYS,
+      errorRatePercent: traffic.errorRatePercent,
+      trafficWindowMinutes: traffic.windowMinutes,
+      trafficMinRequests: traffic.minRequests,
+      latencyP95Ms: traffic.latencyP95Ms,
+      latencyFactor: traffic.latencyFactor,
     },
+    alertEmails: normalizeAlertEmails(enterprise.alert_emails),
+    mailEnabled: mailEnabled(),
     logRetentionDays: enterprise.log_retention_days ?? DEFAULT_LOG_RETENTION_DAYS,
     spendRetentionDays: enterprise.spend_retention_days ?? 0,
     usageRetentionDays: enterprise.usage_retention_days ?? 0,
@@ -76,6 +96,7 @@ export async function loadLogging() {
 export async function saveLogging(input: {
   alertWebhooks: AlertWebhookInput[];
   alertRules: AlertRules;
+  alertEmails: AlertEmailsInput;
   logRetentionDays: number;
   spendRetentionDays: number;
   usageRetentionDays: number;
@@ -92,6 +113,11 @@ export async function saveLogging(input: {
   if (!parsed.success) {
     const badUrl = parsed.error.issues.some((issue) => issue.path.at(-1) === "url");
     throw new Error(badUrl ? "INVALID_URL" : "VALIDATION");
+  }
+  const emails = alertEmailsSchema.safeParse(input.alertEmails);
+  if (!emails.success) {
+    const badRecipients = emails.error.issues.some((issue) => issue.path[0] === "recipients");
+    throw new Error(badRecipients ? "ALERT_RECIPIENTS_INVALID" : "VALIDATION");
   }
   const current = new Map(((await getEnterprise()).alert_webhooks ?? []).map((hook) => [hook.id, hook]));
   const alertWebhooks = parsed.data.map((hook): AlertWebhook => {
@@ -119,6 +145,12 @@ export async function saveLogging(input: {
     spend_anomaly_factor: anomalyFactor(Number(input.alertRules.spendAnomalyFactor) || 0),
     spend_anomaly_min_cost: Math.max(0, Number(input.alertRules.spendAnomalyMinCost) || 0),
     key_expiry_warning_days: Math.max(0, Math.trunc(input.alertRules.keyExpiryWarningDays) || 0),
+    error_rate_threshold: errorRateThreshold(Number(input.alertRules.errorRatePercent)),
+    traffic_window_minutes: trafficWindowMinutes(Number(input.alertRules.trafficWindowMinutes)),
+    traffic_min_requests: trafficMinRequests(Number(input.alertRules.trafficMinRequests)),
+    latency_p95_ms: latencyThresholdMs(Number(input.alertRules.latencyP95Ms)),
+    latency_factor: anomalyFactor(Number(input.alertRules.latencyFactor) || 0),
+    alert_emails: { recipients: emails.data.recipients, events: WEBHOOK_EVENTS.filter((event) => emails.data.events.includes(event)) },
   };
   await patchEnterprise({ ...after, alert_webhooks: alertWebhooks });
   await writeAudit({

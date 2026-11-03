@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { CACHE_STATS_RANGES, CACHE_TTL_MAX_SECONDS, SEMANTIC_THRESHOLD_MIN } from "@/lib/gateway/cache/cache-settings";
 import { modelAlias } from "@/lib/gateway/catalog/model-alias";
-import { MAX_ALERT_WEBHOOKS, WEBHOOK_EVENTS, WEBHOOK_FORMATS } from "@/lib/alerts/events";
+import { MAX_ALERT_EMAILS, MAX_ALERT_WEBHOOKS, WEBHOOK_EVENTS, WEBHOOK_FORMATS } from "@/lib/alerts/events";
 import { vectorDefaultsSchema } from "@/schemas/rag";
 import { MAX_ALLOWED_DOMAINS, MAX_ROLE_MAPPINGS, OIDC_PROVIDER_IDS, trimIssuer } from "@/lib/auth/oidc-presets";
 import { hasPlaceholder, S3_ADDRESSING, S3_PRESET_IDS } from "@/lib/s3/presets";
@@ -108,6 +108,23 @@ export const alertWebhooksSchema = z
     }),
   )
   .max(MAX_ALERT_WEBHOOKS);
+
+export const alertRecipientSchema = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .max(254)
+  .refine((value) => value.includes("@") && !/[\s,;<>"]/.test(value));
+
+export const alertEmailsSchema = z
+  .object({
+    recipients: z
+      .array(alertRecipientSchema)
+      .transform((list) => [...new Set(list)])
+      .pipe(z.array(z.string()).max(MAX_ALERT_EMAILS)),
+    events: z.array(z.enum(WEBHOOK_EVENTS)),
+  })
+  .refine((emails) => !emails.recipients.length || emails.events.length > 0, { path: ["events"] });
 
 export const semanticCacheSchema = z
   .object({

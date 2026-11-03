@@ -64,6 +64,8 @@ test("normalizeEnterprise migrates the single legacy webhook to every event", as
         "key_blocked",
         "pii_blocked",
         "emergency_sign_in",
+        "error_rate_spike",
+        "latency_spike",
       ],
     },
   ]);

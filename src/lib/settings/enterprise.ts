@@ -33,13 +33,23 @@ import { SEMANTIC_THRESHOLD_DEFAULT, SEMANTIC_THRESHOLD_MIN } from "@/lib/gatewa
 import { DEFAULT_AUTO_CONFIDENCE, DEFAULT_JEV_MODEL, JEV_SUGGEST_CONFIDENCE } from "@/lib/gateway/catalog/model-catalog";
 import {
   anomalyFactor,
+  DEFAULT_ERROR_RATE_PERCENT,
   DEFAULT_KEY_EXPIRY_WARNING_DAYS,
+  DEFAULT_LATENCY_FACTOR,
+  DEFAULT_LATENCY_P95_MS,
   DEFAULT_SPEND_ANOMALY_FACTOR,
   DEFAULT_SPEND_ANOMALY_MIN_COST,
+  DEFAULT_TRAFFIC_MIN_REQUESTS,
+  DEFAULT_TRAFFIC_WINDOW_MINUTES,
+  errorRateThreshold,
+  latencyThresholdMs,
+  trafficMinRequests,
+  trafficWindowMinutes,
 } from "@/lib/alerts/rules";
-import { WEBHOOK_EVENTS, WEBHOOK_FORMATS } from "@/lib/alerts/events";
+import { MAX_ALERT_EMAILS, WEBHOOK_EVENTS, WEBHOOK_FORMATS } from "@/lib/alerts/events";
+import { alertRecipientSchema } from "@/schemas/settings";
 import type { JsonMap, Principal } from "@/types/gateway";
-import type { AlertStateKind, AlertWebhook, WebhookFormat } from "@/types/alerts";
+import type { AlertEmails, AlertStateKind, AlertWebhook, WebhookFormat } from "@/types/alerts";
 import type { CatalogRouting, JevSettings } from "@/types/model-catalog";
 import {
   DEFAULT_OIDC_SCOPES,
@@ -80,6 +90,8 @@ const ALERT_STATE_SETTINGS: Record<AlertStateKind, string> = {
   budget: "budget_alert_state",
   spend_anomaly: "spend_anomaly_state",
   key_expiry: "key_expiry_alert_state",
+  error_rate: "error_rate_alert_state",
+  latency: "latency_alert_state",
 };
 const LEGACY_WEBHOOK_ID = "legacy";
 
@@ -140,6 +152,12 @@ const DEFAULT_ENTERPRISE: Enterprise = {
   spend_anomaly_factor: DEFAULT_SPEND_ANOMALY_FACTOR,
   spend_anomaly_min_cost: DEFAULT_SPEND_ANOMALY_MIN_COST,
   key_expiry_warning_days: DEFAULT_KEY_EXPIRY_WARNING_DAYS,
+  error_rate_threshold: DEFAULT_ERROR_RATE_PERCENT,
+  traffic_window_minutes: DEFAULT_TRAFFIC_WINDOW_MINUTES,
+  traffic_min_requests: DEFAULT_TRAFFIC_MIN_REQUESTS,
+  latency_p95_ms: DEFAULT_LATENCY_P95_MS,
+  latency_factor: DEFAULT_LATENCY_FACTOR,
+  alert_emails: { recipients: [], events: [] },
   oidc: normalizeOidc({}),
   s3: normalizeS3({}),
 };
@@ -262,6 +280,19 @@ function normalizeWebhooks(rec: JsonMap): AlertWebhook[] {
   ];
 }
 
+export function normalizeAlertEmails(raw: unknown): AlertEmails {
+  const rec = asRecord(raw) ?? {};
+  const events = asStringArray(rec.events);
+  const recipients = asStringArray(rec.recipients).flatMap((value) => {
+    const parsed = alertRecipientSchema.safeParse(value);
+    return parsed.success ? [parsed.data] : [];
+  });
+  return {
+    recipients: [...new Set(recipients)].slice(0, MAX_ALERT_EMAILS),
+    events: WEBHOOK_EVENTS.filter((event) => events.includes(event)),
+  };
+}
+
 export function normalizeJev(raw: unknown): JevSettings {
   const rec = asRecord(raw) ?? {};
   return {
@@ -349,6 +380,12 @@ export function normalizeEnterprise(raw: unknown): Enterprise {
       0,
       Math.trunc(asNumber(rec.key_expiry_warning_days, DEFAULT_KEY_EXPIRY_WARNING_DAYS)),
     ),
+    error_rate_threshold: errorRateThreshold(asNumber(rec.error_rate_threshold, DEFAULT_ERROR_RATE_PERCENT)),
+    traffic_window_minutes: trafficWindowMinutes(asNumber(rec.traffic_window_minutes, DEFAULT_TRAFFIC_WINDOW_MINUTES)),
+    traffic_min_requests: trafficMinRequests(asNumber(rec.traffic_min_requests, DEFAULT_TRAFFIC_MIN_REQUESTS)),
+    latency_p95_ms: latencyThresholdMs(asNumber(rec.latency_p95_ms, DEFAULT_LATENCY_P95_MS)),
+    latency_factor: anomalyFactor(asNumber(rec.latency_factor, DEFAULT_LATENCY_FACTOR)),
+    alert_emails: normalizeAlertEmails(rec.alert_emails),
   };
 }
 

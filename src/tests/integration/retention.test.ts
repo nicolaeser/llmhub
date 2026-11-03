@@ -106,6 +106,7 @@ test("saving the logging settings keeps an explicit 0 and unsaved values use the
       saveLogging({
         alertWebhooks: [],
         alertRules: fresh.alertRules,
+        alertEmails: fresh.alertEmails,
         logRetentionDays: 0,
         spendRetentionDays: 0,
         usageRetentionDays: 400,

@@ -3,14 +3,21 @@ import { createHmac, randomUUID } from "node:crypto";
 import { jobsEnabled } from "@/lib/jobs/connection";
 import { enqueueWebhook } from "@/lib/jobs/queues";
 import { isRouterError } from "@/lib/gateway/core";
-import { claimCooldown, PII_ALERT_COOLDOWN_MS } from "@/lib/alerts/rules";
+import {
+  ALERT_MAIL_COOLDOWN_MS,
+  alertMailRecipients,
+  claimCooldown,
+  PII_ALERT_COOLDOWN_MS,
+} from "@/lib/alerts/rules";
 import { getEnterprise } from "@/lib/settings/enterprise";
 import { writeAudit } from "@/lib/audit";
-import { webhookBody } from "@/lib/alerts/format";
+import { alertMail, webhookBody } from "@/lib/alerts/format";
+import { env } from "@/lib/env";
+import { mailEnabled, mailErrorCode, sendMail } from "@/lib/mail/send";
 import { errorFields } from "@/lib/logging/format";
 import { logger } from "@/lib/logging/logger";
 import type { Principal } from "@/types/gateway";
-import type { WebhookEvent } from "@/types/alerts";
+import type { AlertEmails, AlertPayload, WebhookEvent } from "@/types/alerts";
 import type { WebhookJobData } from "@/types/jobs";
 
 export function webhookHeaders(
@@ -82,11 +89,44 @@ async function dispatchWebhook(job: WebhookJobData): Promise<void> {
   await deliverWebhook(job, 1);
 }
 
+const alertMails = new Map<string, number>();
+
+async function auditAlertMail(alert: AlertPayload, after: Record<string, unknown>, failed: boolean): Promise<void> {
+  await writeAudit({
+    actor: "worker",
+    action: failed ? "alert_failed" : "alert_delivered",
+    objectType: "alert",
+    objectId: alert.id,
+    after: { channel: "email", event: alert.event, ...after },
+  }).catch((err) => logger.error("alert.audit_failed", { alertEvent: alert.event, ...errorFields(err) }));
+}
+
+async function deliverAlertMail(alert: AlertPayload, recipients: string[]): Promise<void> {
+  try {
+    await sendMail({ to: recipients, ...alertMail(alert, env.NEXT_PUBLIC_APP_URL) });
+  } catch (err) {
+    const code = mailErrorCode(err);
+    logger.warn("alert.mail_failed", { alertEvent: alert.event, err: code });
+    await auditAlertMail(alert, { recipients: recipients.length, error: code }, true);
+    return;
+  }
+  await auditAlertMail(alert, { recipients: recipients.length }, false);
+}
+
+function mailAlert(emails: AlertEmails | undefined, alert: AlertPayload): void {
+  const recipients = alertMailRecipients(emails, alert.event);
+  if (!recipients.length || !mailEnabled()) return;
+  if (!claimCooldown(alertMails, alert.event, Date.now(), ALERT_MAIL_COOLDOWN_MS)) return;
+  void deliverAlertMail(alert, recipients);
+}
+
 export async function fireAlert(event: WebhookEvent, message: string): Promise<void> {
   try {
-    const hooks = (await getEnterprise()).alert_webhooks?.filter((h) => h.events.includes(event)) ?? [];
-    if (!hooks.length) return;
+    const enterprise = await getEnterprise();
+    const hooks = enterprise.alert_webhooks?.filter((h) => h.events.includes(event)) ?? [];
     const id = randomUUID();
+    mailAlert(enterprise.alert_emails, { id, event, message, ts: new Date().toISOString() });
+    if (!hooks.length) return;
     await Promise.allSettled(hooks.map((h) => dispatchWebhook({ id, webhookId: h.id, event, message })));
   } catch (err) {
     logger.error("alert.fire_failed", { alertEvent: event, ...errorFields(err) });
