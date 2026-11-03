@@ -13,6 +13,7 @@ import { CLIENT_CLOSED_STATUS, GateError } from "@/lib/gateway/errors";
 import { applyMarkup, markupRuleOf, pickMarkup, scaleByMarkup } from "@/lib/gateway/billing/markup-policy";
 import { tighterCap } from "@/lib/gateway/billing/cost-cap";
 import { tokenCount } from "@/lib/gateway/billing/tokens";
+import { markUsed } from "@/lib/gateway/billing/last-used";
 import { errorFields } from "@/lib/logging/format";
 import { logger } from "@/lib/logging/logger";
 import { notifyLive } from "@/lib/updates/live-topics";
@@ -438,6 +439,7 @@ export async function recordUsage(input: {
     response: input.response,
     error: input.error,
   });
+  await markUsed(input.principal, input.deployment);
   return cost;
 }
 

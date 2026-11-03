@@ -31,6 +31,7 @@ function provider(overrides: Partial<ProviderView> = {}): ProviderView {
     signIn: { account: "user@example.test", plan: "max", status: "active" },
     sharedVia: null,
     manageActive: false,
+    lastUsedAt: null,
     discovered: [],
     policy: { zdr: false, retentionDays: null, region: "", noTraining: false },
     vertex: null,

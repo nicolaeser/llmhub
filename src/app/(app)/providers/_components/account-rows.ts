@@ -43,6 +43,7 @@ export type AccountRow = {
   nextCheck: number | null;
   restricted: boolean;
   assignments: number;
+  lastUsed: number | null;
 };
 
 export function accountRow(
@@ -78,6 +79,7 @@ export function accountRow(
     nextCheck: failure && entry?.nextAt ? Math.max(Date.parse(entry.nextAt), now) : null,
     restricted: row.restricted,
     assignments: row.assignments.length,
+    lastUsed: row.lastUsedAt ? Date.parse(row.lastUsedAt) : null,
   };
 }
 

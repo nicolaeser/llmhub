@@ -61,7 +61,8 @@
   "columns": {
     "account": "Account",
     "usage": "Usage",
-    "access": "Access"
+    "access": "Access",
+    "lastUsed": "Last used"
   },
   "menu": {
     "label": "Actions for {name}",
@@ -89,6 +90,7 @@
   "sharedVia": "{named, select, true {Via link: {label}} other {Via link}}",
   "manageOff": "No manage link",
   "noAccount": "No account name",
+  "neverUsed": "Never",
   "noneTitle": "No subscription accounts yet",
   "backIn": "Available again {when} ({date}).",
   "backInUnknown": "Limit reached. The provider did not say when it resets.",
