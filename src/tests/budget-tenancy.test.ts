@@ -207,7 +207,7 @@ function rejectsWith(status: number, code: string, message?: string) {
 }
 
 function charged(model: string): Call[] {
-  return calls.filter((call) => call.model === model && call.method === "updateMany");
+  return calls.filter((call) => call.model === model && call.method === "updateMany" && call.args.data?.spend !== undefined);
 }
 
 test("capExceeded treats 0 as unlimited and extra as headroom", () => {
@@ -258,6 +258,11 @@ test("recordUsage charges the user and member budgets alongside key, team, org, 
     );
     assert.equal(table(model).get(id)!.spend, 4, model);
   }
+  const marked = calls.filter((call) => call.method === "updateMany" && call.args.data?.lastUsedAt);
+  assert.deepEqual(
+    marked.map((call) => [call.model, call.args.where?.id]),
+    [["virtualKey", "k"]],
+  );
   const usage = calls.find((call) => call.model === "usageDaily" && call.method === "upsert");
   const now = new Date();
   assert.deepEqual(usage?.args.where, {

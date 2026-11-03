@@ -151,6 +151,8 @@ export type KeyOwner = {
   teamAlias: string;
 };
 
+export type KeyLastUse = Record<string, string>;
+
 export type KeyActivity = {
   spend7d: number;
   requests7d: number;

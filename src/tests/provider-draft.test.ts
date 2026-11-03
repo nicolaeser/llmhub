@@ -42,6 +42,7 @@ function row(overrides: Partial<ProviderView>): ProviderView {
     signIn: null,
     sharedVia: null,
     manageActive: false,
+    lastUsedAt: null,
     discovered: [],
     policy: { zdr: false, retentionDays: 30, region: "us", noTraining: true },
     vertex: null,

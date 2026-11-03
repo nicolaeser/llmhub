@@ -217,6 +217,7 @@ export default function KeysPage() {
             </div>
             <KeyList
               keys={data.keys}
+              lastUsed={data.lastUsed}
               options={options}
               owners={data.owners}
               flags={{ canManage, canMcp, canBudget }}

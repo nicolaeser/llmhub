@@ -96,13 +96,14 @@ export function publicProvider(row: ProviderRecord) {
     signIn: signInOf(row),
     sharedVia: row.subAdd ? row.subAdd.label : null,
     manageActive: Boolean(row.subAdd?.manageHash),
+    lastUsedAt: row.login?.lastUsedAt?.toISOString() ?? null,
     discovered: discoveredOf(row.discovered),
     policy: policyOf(row),
     vertex: row.kind === "vertex" ? vertexView(row) : null,
   };
 }
 
-const loginSelect = { select: { account: true, plan: true, status: true } } as const;
+const loginSelect = { select: { account: true, plan: true, status: true, lastUsedAt: true } } as const;
 export const providerInclude = {
   login: loginSelect,
   assignments: assignmentSelect,

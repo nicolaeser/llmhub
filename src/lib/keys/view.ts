@@ -3,7 +3,7 @@ import "server-only";
 import prisma from "@/lib/db/prisma";
 import type { AuthenticatedSession } from "@/types/auth";
 import { keyScope } from "@/lib/auth/scope";
-import type { VirtualKeyView } from "@/types/keys";
+import type { KeyLastUse, VirtualKeyView } from "@/types/keys";
 import { money } from "@/lib/utils/money";
 import { accessTimeZoneOf, accessWindowsOf, allowedEndpointsOf } from "@/lib/gateway/access/key-restrictions";
 import { pauseActive } from "@/lib/keys/pause";
@@ -85,11 +85,26 @@ export function keyReferences(keys: readonly VirtualKeyView[], selfId: string) {
   };
 }
 
-export async function listKeys(session: AuthenticatedSession) {
-  const rows = await prisma.virtualKey.findMany({
+function scopedKeyRows(session: AuthenticatedSession) {
+  return prisma.virtualKey.findMany({
     where: keyScope(session),
     orderBy: { createdAt: "desc" },
     include: { templates: { select: { templateId: true } } },
   });
-  return rows.map(toKeyView);
+}
+
+export async function listKeys(session: AuthenticatedSession) {
+  return (await scopedKeyRows(session)).map(toKeyView);
+}
+
+export async function listKeysWithLastUse(
+  session: AuthenticatedSession,
+): Promise<{ keys: VirtualKeyView[]; lastUsed: KeyLastUse }> {
+  const rows = await scopedKeyRows(session);
+  return {
+    keys: rows.map(toKeyView),
+    lastUsed: Object.fromEntries(
+      rows.flatMap((row) => (row.lastUsedAt ? [[row.id, row.lastUsedAt.toISOString()]] : [])),
+    ),
+  };
 }

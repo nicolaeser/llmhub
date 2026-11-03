@@ -25,6 +25,7 @@
     "name": "Key-Name",
     "binding": "Gehört zu",
     "spend": "Ausgaben / Budget",
+    "lastUsed": "Zuletzt genutzt",
     "status": "Status",
     "access": "Modellzugriff"
   },

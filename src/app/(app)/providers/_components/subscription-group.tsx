@@ -271,6 +271,14 @@ export default function SubscriptionGroup({
     );
   }
 
+  function lastUsed(account: AccountRow) {
+    return (
+      <span className="text-sm whitespace-nowrap text-foreground">
+        {account.lastUsed === null ? t("neverUsed") : format.relativeTime(new Date(account.lastUsed), now)}
+      </span>
+    );
+  }
+
   return (
     <section aria-labelledby={titleId} className="space-y-3">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -364,18 +372,20 @@ export default function SubscriptionGroup({
               { label: t("columns.usage"), value: usage(row, account), wide: true },
               ...(account.state === "limited" ? [{ label: tCommon("status"), value: recovery(account), wide: true }] : []),
               { label: t("columns.access"), value: access(account) },
+              { label: t("columns.lastUsed"), value: lastUsed(account) },
             ]}
           />
         ))}
       </RowCards>
       <Table aria-label={t("group.label", { provider: name })} className={TABLE_FROM_LG}>
         <Table.ScrollContainer>
-          <Table.Content aria-label={t("group.label", { provider: name })} className="min-w-[56rem]">
+          <Table.Content aria-label={t("group.label", { provider: name })} className="min-w-[62rem]">
             <Table.Header>
               <Table.Column isRowHeader>{t("columns.account")}</Table.Column>
               <Table.Column>{tCommon("status")}</Table.Column>
               <Table.Column>{t("columns.usage")}</Table.Column>
               <Table.Column>{t("columns.access")}</Table.Column>
+              <Table.Column>{t("columns.lastUsed")}</Table.Column>
               <Table.Column>{tCommon("actions")}</Table.Column>
             </Table.Header>
             <Table.Body>
@@ -400,6 +410,7 @@ export default function SubscriptionGroup({
                     <div className="min-w-72">{usage(row, account)}</div>
                   </Table.Cell>
                   <Table.Cell>{access(account)}</Table.Cell>
+                  <Table.Cell>{lastUsed(account)}</Table.Cell>
                   <Table.Cell>{menu(row, account)}</Table.Cell>
                 </Table.Row>
               ))}

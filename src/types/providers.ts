@@ -22,7 +22,7 @@ export type ProviderRecord = {
   maxConcurrency?: number | null;
   adaptiveConcurrency?: boolean;
   assignments?: AssignmentSource[];
-  login?: { account: string; plan: string; status: string } | null;
+  login?: { account: string; plan: string; status: string; lastUsedAt?: Date | null } | null;
   subAdd?: { label: string; manageHash: string | null } | null;
 };
 
@@ -139,6 +139,7 @@ export type ProviderView = {
   signIn: ProviderSignIn | null;
   sharedVia: string | null;
   manageActive: boolean;
+  lastUsedAt: string | null;
   discovered: { id: string; name: string }[];
   policy: ProviderPolicyInput;
   vertex: VertexView | null;

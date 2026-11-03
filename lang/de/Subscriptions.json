@@ -61,7 +61,8 @@
   "columns": {
     "account": "Konto",
     "usage": "Nutzung",
-    "access": "Zugriff"
+    "access": "Zugriff",
+    "lastUsed": "Zuletzt genutzt"
   },
   "menu": {
     "label": "Aktionen für {name}",
@@ -89,6 +90,7 @@
   "sharedVia": "{named, select, true {Über Link: {label}} other {Über Link}}",
   "manageOff": "Kein Verwaltungslink",
   "noAccount": "Ohne Kontoname",
+  "neverUsed": "Nie",
   "noneTitle": "Noch keine Abo-Konten",
   "backIn": "Wieder verfügbar {when} ({date}).",
   "backInUnknown": "Limit erreicht. Der Anbieter nennt keinen Zeitpunkt für die Zurücksetzung.",
