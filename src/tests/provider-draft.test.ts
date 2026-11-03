@@ -37,6 +37,7 @@ function row(overrides: Partial<ProviderView>): ProviderView {
     restricted: false,
     internal: false,
     newModels: "auto",
+    concurrency: { limit: null, adaptive: false, defaultLimit: 8 },
     assignments: [],
     signIn: null,
     sharedVia: null,

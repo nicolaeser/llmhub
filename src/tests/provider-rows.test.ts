@@ -26,6 +26,7 @@ function provider(overrides: Partial<ProviderView> = {}): ProviderView {
     restricted: false,
     internal: false,
     newModels: "auto",
+    concurrency: { limit: null, adaptive: false, defaultLimit: 8 },
     assignments: [],
     signIn: { account: "user@example.test", plan: "max", status: "active" },
     sharedVia: null,

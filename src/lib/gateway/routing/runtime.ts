@@ -3,7 +3,8 @@ import prisma from "@/lib/db/prisma";
 import { accountAllowed, DEFAULT_ACCOUNT_STRATEGY } from "@/lib/gateway/routing/account-access";
 import { PIN_HOLD_MS, pinsAccounts, readPin } from "@/lib/gateway/routing/account-affinity";
 import { accountPolicies } from "@/lib/gateway/routing/account-routing";
-import { isSignInKind, PROVIDER_CATALOG, reportsLimits } from "@/lib/gateway/upstreams/provider-kinds";
+import { concurrencyLimit, isSignInKind, PROVIDER_CATALOG, reportsLimits } from "@/lib/gateway/upstreams/provider-kinds";
+import { hasRoom, takePermit } from "@/lib/gateway/routing/concurrency";
 import {
   nextLatencyEwma,
   pickCostLowest,
@@ -36,8 +37,11 @@ import { routePermitted } from "@/lib/gateway/access/model-policy";
 import { priceWindowQuery, priceWindowRates } from "@/lib/gateway/billing/price-schedule";
 import { costRejection } from "@/lib/gateway/billing/cost-cap";
 import {
+  adaptiveLimits,
   COOLDOWN_MS,
   cooldownEnds,
+  recordConcurrencyLimited,
+  recordConcurrencySuccess,
   recordFailure,
   recordRejection,
   recordSuccess,
@@ -48,6 +52,7 @@ import { attachModelFacts } from "@/lib/gateway/routing/model-facts";
 import type { CostFilter } from "@/types/billing";
 import type {
   AccountPin,
+  ConcurrencyTarget,
   DeploymentRow,
   ResolvedModelGroup,
   ResolvedDeployment,
@@ -91,6 +96,8 @@ const providerSelect = {
     enabled: true,
     restricted: true,
     internal: true,
+    maxConcurrency: true,
+    adaptiveConcurrency: true,
     assignments: { select: { orgId: true, teamId: true, projectId: true, memberId: true, keyId: true } },
     login: { select: { status: true } },
   },
@@ -352,14 +359,45 @@ function pinStaysPut(
   usable: ResolvedDeployment[],
   cooling: Map<string, number>,
   run: RunRouting | null,
+  busy: Set<string> = new Set(),
   now = Date.now(),
 ): boolean {
   if (!pin || chosen.provider?.id === pin.providerId) return false;
   return usable.some((dep) => {
     if (dep.provider?.id !== pin.providerId) return false;
     const left = (cooling.get(dep.id) ?? 0) - now;
-    return left > 0 ? left <= PIN_HOLD_MS : Boolean(run?.tried.has(dep.id));
+    return left > 0 ? left <= PIN_HOLD_MS : Boolean(run?.tried.has(dep.id)) || busy.has(dep.id);
   });
+}
+
+export function concurrencyTarget(dep: ResolvedDeployment): ConcurrencyTarget {
+  const provider = dep.provider;
+  return {
+    key: provider ? `provider:${provider.id}` : `deployment:${dep.id}`,
+    limit: concurrencyLimit(provider?.kind ?? dep.kind, provider?.maxConcurrency),
+    adaptive: Boolean(provider?.adaptiveConcurrency),
+  };
+}
+
+async function concurrencyTargets(items: ResolvedDeployment[]): Promise<Map<string, ConcurrencyTarget>> {
+  const targets = new Map(items.map((dep) => [dep.id, concurrencyTarget(dep)]));
+  const adaptive = [...new Set([...targets.values()].filter((t) => t.adaptive && t.limit > 0).map((t) => t.key))];
+  if (!adaptive.length) return targets;
+  const lowered = await adaptiveLimits(adaptive);
+  for (const [id, target] of targets) {
+    const limit = lowered.get(target.key);
+    if (limit !== undefined) targets.set(id, { ...target, limit: Math.min(target.limit, limit) });
+  }
+  return targets;
+}
+
+function busyDeployments(items: ResolvedDeployment[], targets: Map<string, ConcurrencyTarget>): Set<string> {
+  return new Set(
+    items.flatMap((dep) => {
+      const target = targets.get(dep.id)!;
+      return hasRoom(target.key, target.limit) ? [] : [dep.id];
+    }),
+  );
 }
 
 export async function acquireGroup(
@@ -403,10 +441,16 @@ export async function acquireGroup(
     throw wait ? waitingError(wait) : ERR_NO_HEALTHY;
   }
   const quota = await withinQuota(affordable(group, ready, cost));
-  const pins = await runPins(quota.items, run?.session ?? "");
-  const sticky = pinnedChoice(quota.items, pins);
-  const candidates = sticky.length ? sticky : await byAccountPolicy(pinnedKinds(quota.items, pins), quota.scores);
+  const targets = await concurrencyTargets(quota.items);
+  const busy = busyDeployments(quota.items, targets);
+  const open = quota.items.filter((dep) => !busy.has(dep.id));
+  const offered = open.length ? open : quota.items;
+  const pins = await runPins(offered, run?.session ?? "");
+  const sticky = pinnedChoice(offered, pins);
+  const candidates = sticky.length ? sticky : await byAccountPolicy(pinnedKinds(offered, pins), quota.scores);
   const dep = pick(candidates, strategy || group.strategy, quota.scores);
+  const target = targets.get(dep.id)!;
+  const releasePermit = await takePermit(target.key, target.limit, { signal: run?.signal });
   const pinned = pinOf(dep, pins);
   inflight.set(dep.id, (inflight.get(dep.id) ?? 0) + 1);
   let released = false;
@@ -414,13 +458,14 @@ export async function acquireGroup(
     dep,
     overflow: false,
     pinned,
-    pinHeld: pinStaysPut(pinned, dep, usable, health.cooling, run),
+    pinHeld: pinStaysPut(pinned, dep, usable, health.cooling, run, busy),
     release: () => {
       if (released) return;
       released = true;
       const left = (inflight.get(dep.id) ?? 1) - 1;
       if (left > 0) inflight.set(dep.id, left);
       else inflight.delete(dep.id);
+      releasePermit();
     },
   };
 }
@@ -429,9 +474,15 @@ export function markFailure(dep: Deployment, retryAt: number | null = null): voi
   recordFailure(dep.id, Date.now(), retryAt);
 }
 
+export function markThrottled(dep: ResolvedDeployment, now = Date.now()): void {
+  const target = concurrencyTarget(dep);
+  if (target.adaptive) recordConcurrencyLimited(target.key, target.limit, now);
+}
+
 export function markLimited(dep: ResolvedDeployment, retryAt: number | null, now = Date.now()): void {
   const recovery = quotaRecovery(dep, now);
   recordFailure(dep.id, now, recovery === null ? retryAt : Math.max(retryAt ?? 0, recovery));
+  markThrottled(dep, now);
 }
 
 export function markOverloaded(dep: Deployment): void {
@@ -442,8 +493,10 @@ export function markRejected(dep: Deployment, until: number): void {
   recordRejection(dep.id, until);
 }
 
-export function markSuccess(dep: Deployment, latencyMs?: number): void {
+export function markSuccess(dep: ResolvedDeployment, latencyMs?: number): void {
   recordSuccess(dep.id, latencyMs);
+  const target = concurrencyTarget(dep);
+  if (target.adaptive) recordConcurrencySuccess(target.key, target.limit);
   if (latencyMs == null || !(latencyMs >= 0)) return;
   latencyEwma.set(dep.id, nextLatencyEwma(latencyEwma.get(dep.id), latencyMs));
 }

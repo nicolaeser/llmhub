@@ -245,6 +245,8 @@ model ProviderConnection {
   restricted    Boolean  @default(false)
   internal      Boolean  @default(false)
   newModels     String   @default("auto")
+  maxConcurrency      Int?
+  adaptiveConcurrency Boolean  @default(false)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 

@@ -59,10 +59,14 @@
     "connectionHint": "{method, select, vertex {The credential and Google Cloud project the gateway calls.} other {The key the gateway sends with every request to this provider.}}",
     "models": "Models and visibility",
     "modelsHint": "{method, select, signIn {How new models from this account reach the model catalog.} other {How new models reach the model catalog, and whether the API serves this provider.}}",
-    "advancedHint": "{method, select, apiKey {Display name and API base URL.} other {The name shown across the console.}}"
+    "advancedHint": "{method, select, apiKey {Display name, API base URL, and concurrent requests.} other {Display name and concurrent requests.}}"
   },
   "internalOnly": "Internal only",
   "internalOnlyHint": "Not served on the API; usable by console features.",
+  "concurrencyLimit": "Concurrent requests",
+  "concurrencyLimitHint": "Most requests this connection sends upstream at once. Further requests wait up to five seconds for a free slot, then answer 429. Empty uses the default of {limit, number} for this provider type; 0 turns the limit off.",
+  "adaptiveConcurrency": "Adapt to rate limits",
+  "adaptiveConcurrencyHint": "Halves the limit whenever the provider answers 429 and raises it step by step while requests succeed. The full limit returns at the latest ten minutes after the last 429.",
   "newModels": "New models in the model catalog",
   "newModelsOption": "{mode, select, auto {Automatic} active {Turned on} other {Turned off}}",
   "newModelsHint": "{mode, select, auto {Catalog rules decide: trusted providers join aliases that add new providers automatically, everything else waits as new until you turn it on.} active {The catalog turns this provider's models on as soon as it has grouped them and creates missing aliases, own servers included. Models you turn off stay off, and aliases that do not add new providers are left alone.} other {This provider's new models arrive in the catalog turned off and are never routed automatically. Turn them on there one by one.}}",

@@ -56,6 +56,8 @@ export type DeploymentRow = {
     enabled: boolean;
     restricted: boolean;
     internal: boolean;
+    maxConcurrency?: number | null;
+    adaptiveConcurrency?: boolean;
     assignments: AssignmentRow[];
     login: { status: string } | null;
   } | null;
@@ -105,7 +107,15 @@ export type QuotaScores = Map<string, { pressure: number; reset: number }>;
 
 export type AccountPin = { providerId: string; handoffAt: number };
 
-export type RunRouting = { session: string; tried: Set<string> };
+export type RunRouting = { session: string; tried: Set<string>; signal?: AbortSignal };
+
+export type ConcurrencyWaiter = { grant: () => void };
+
+export type ConcurrencyGate = { active: number; limit: number; queue: ConcurrencyWaiter[] };
+
+export type PermitOptions = { waitMs?: number; signal?: AbortSignal };
+
+export type ConcurrencyTarget = { key: string; limit: number; adaptive: boolean };
 
 export type RouteEntry = { alias: string; root: string; pool: RoutePool; relaxed: boolean; estimated: boolean };
 

@@ -23,6 +23,7 @@ export const PATCH = managementRoute<{ id: string }>(PERMISSIONS.PROVIDERS_MANAG
       vertex: body.vertex,
       internal: body.internal,
       newModels: body.new_models,
+      concurrency: { limit: body.max_concurrency, adaptive: body.adaptive_concurrency },
     });
   return respond(serializeProvider(provider));
 });

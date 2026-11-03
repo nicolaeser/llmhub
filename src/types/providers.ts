@@ -1,5 +1,5 @@
 import type { z } from "zod";
-import type { signInCredentialSchema, signInTicketSchema } from "@/schemas/providers";
+import type { providerConcurrencySchema, signInCredentialSchema, signInTicketSchema } from "@/schemas/providers";
 import type { ActionFail } from "@/types/actions";
 import type { NewModelMode } from "@/types/model-catalog";
 import type { AutoResetPolicies, ResetCredits } from "@/types/resets";
@@ -19,10 +19,16 @@ export type ProviderRecord = {
   restricted: boolean;
   internal: boolean;
   newModels: string;
+  maxConcurrency?: number | null;
+  adaptiveConcurrency?: boolean;
   assignments?: AssignmentSource[];
   login?: { account: string; plan: string; status: string } | null;
   subAdd?: { label: string; manageHash: string | null } | null;
 };
+
+export type ProviderConcurrency = z.infer<typeof providerConcurrencySchema>;
+
+export type ProviderConcurrencyView = { limit: number | null; adaptive: boolean; defaultLimit: number };
 
 export type ProviderPolicyInput = {
   zdr: boolean;
@@ -128,6 +134,7 @@ export type ProviderView = {
   restricted: boolean;
   internal: boolean;
   newModels: NewModelMode;
+  concurrency: ProviderConcurrencyView;
   assignments: AssignmentTarget[];
   signIn: ProviderSignIn | null;
   sharedVia: string | null;
@@ -516,6 +523,8 @@ export type ProviderDraft = {
   noTraining: boolean;
   internal: boolean;
   newModels: NewModelMode;
+  concurrencyLimit: string;
+  adaptiveConcurrency: boolean;
 };
 
 export type ProviderBody = {
@@ -528,6 +537,7 @@ export type ProviderBody = {
   vertex?: VertexTarget;
   internal?: boolean;
   newModels: NewModelMode;
+  concurrency: ProviderConcurrency;
 };
 
 export type AddProviderSection = "api" | "subscription" | "import";

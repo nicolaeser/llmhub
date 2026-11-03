@@ -5,6 +5,8 @@ import { requirePlatformPermission } from "@/lib/auth/guards";
 import { hasPerm, PERMISSIONS } from "@/lib/auth/permissions";
 import { writeAudit } from "@/lib/audit";
 import {
+  concurrencyLimit,
+  defaultConcurrency,
   isSignInKind,
   PROVIDER_CATALOG,
   reportsLimits,
@@ -37,11 +39,19 @@ import {
   sealTicket,
   startAuthorization,
 } from "@/lib/gateway/upstreams/subscription-sign-in";
-import { DEFAULT_NEW_MODEL_MODE, NEW_MODEL_MODES, providerPolicySchema, vertexTargetSchema } from "@/schemas/providers";
+import {
+  DEFAULT_NEW_MODEL_MODE,
+  NEW_MODEL_MODES,
+  providerConcurrencySchema,
+  providerPolicySchema,
+  vertexTargetSchema,
+} from "@/schemas/providers";
 import type {
   ImportCandidate,
   LimitSnapshot,
   LimitSnapshotList,
+  ProviderConcurrency,
+  ProviderConcurrencyView,
   ProviderPolicyInput,
   ProviderRecord,
   ProvidersPage,
@@ -81,6 +91,7 @@ export function publicProvider(row: ProviderRecord) {
     restricted: row.restricted,
     internal: row.internal,
     newModels: newModelMode(row.newModels),
+    concurrency: concurrencyOf(row),
     assignments: assignmentTargets(row.assignments ?? []),
     signIn: signInOf(row),
     sharedVia: row.subAdd ? row.subAdd.label : null,
@@ -103,6 +114,25 @@ function signInCredential(raw: string | undefined, uid: string, kind: string): S
   const credential = openCredential(raw, uid, kind);
   if (!credential) throw new Error("SIGN_IN_EXPIRED");
   return credential;
+}
+
+function concurrencyOf(row: ProviderRecord): ProviderConcurrencyView {
+  return {
+    limit: row.maxConcurrency ?? null,
+    adaptive: row.adaptiveConcurrency === true,
+    defaultLimit: defaultConcurrency(row.kind),
+  };
+}
+
+function parseConcurrency(raw: unknown): { maxConcurrency?: number | null; adaptiveConcurrency?: boolean } {
+  if (raw === undefined) return {};
+  const parsed = providerConcurrencySchema.safeParse(raw);
+  if (!parsed.success) throw new Error("VALIDATION");
+  const { limit, adaptive } = parsed.data;
+  return {
+    ...(limit === undefined ? {} : { maxConcurrency: limit }),
+    ...(adaptive === undefined ? {} : { adaptiveConcurrency: adaptive }),
+  };
 }
 
 function policyOf(row: ProviderRecord): ProviderPolicyInput {
@@ -136,7 +166,16 @@ export function providerAuditAfter(row: ProviderRecord, extra?: Record<string, u
     policy: policyOf(row),
     internal: row.internal,
     newModels: newModelMode(row.newModels),
+    concurrency: auditConcurrency(row),
     ...extra,
+  };
+}
+
+function auditConcurrency(row: ProviderRecord) {
+  return {
+    limit: row.maxConcurrency ?? null,
+    adaptive: row.adaptiveConcurrency === true,
+    effective: concurrencyLimit(row.kind, row.maxConcurrency),
   };
 }
 
@@ -191,11 +230,13 @@ export async function createProvider(input: {
   vertex?: Partial<VertexTarget>;
   internal?: boolean;
   newModels?: NewModelMode;
+  concurrency?: ProviderConcurrency;
 }) {
   const session = await requirePlatformPermission(PERMISSIONS.PROVIDERS_MANAGE);
   const kind = input.kind.trim();
   if (!KNOWN_KINDS.has(kind)) throw new Error("UNKNOWN_PROVIDER_KIND");
   const newModels = parseNewModels(input.newModels) ?? DEFAULT_NEW_MODEL_MODE;
+  const concurrency = parseConcurrency(input.concurrency);
   const spec = specFor(kind);
   const signedIn = isSignInKind(kind);
   if (signedIn && input.internal === true) throw new Error("INTERNAL_SIGN_IN");
@@ -226,6 +267,7 @@ export async function createProvider(input: {
           apiKey: vertex ? vertex.apiKey : apiKey ? seal(apiKey) : "",
           internal: input.internal === true,
           newModels,
+          ...concurrency,
           ...parsePolicy(input.policy),
           ...(login ? { login: { create: login } } : {}),
         },
@@ -261,9 +303,11 @@ export async function updateProvider(input: {
   vertex?: Partial<VertexTarget>;
   internal?: boolean;
   newModels?: NewModelMode;
+  concurrency?: ProviderConcurrency;
 }) {
   const session = await requirePlatformPermission(PERMISSIONS.PROVIDERS_MANAGE);
   const newModels = parseNewModels(input.newModels);
+  const concurrency = parseConcurrency(input.concurrency);
   const existing = await prisma.providerConnection.findUnique({ where: { id: input.id } });
   if (!existing) throw new Error("NOT_FOUND");
   const signedIn = isSignInKind(existing.kind);
@@ -292,6 +336,7 @@ export async function updateProvider(input: {
       ...(input.enabled === undefined ? {} : { enabled: input.enabled }),
       ...(input.internal === undefined ? {} : { internal: input.internal }),
       ...(newModels === undefined ? {} : { newModels }),
+      ...concurrency,
       ...(input.policy ? parsePolicy(input.policy) : {}),
       ...(login ? { login: { upsert: { create: login, update: { ...login, version: { increment: 1 } } } } } : {}),
     },

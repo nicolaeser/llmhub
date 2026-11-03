@@ -39,7 +39,7 @@ import type {
 } from "@/types/providers";
 import { createProviderAction } from "../_action";
 import AntigravitySetup from "./antigravity-setup";
-import { draftBody, draftFor, draftReady, retentionValid } from "./provider-draft";
+import { concurrencyValid, draftBody, draftFor, draftReady, retentionValid } from "./provider-draft";
 import { ConnectionFields, DataHandlingFields, ModelSettingsFields } from "./provider-fields";
 import { ADD_PROVIDER_SECTIONS, filterOf, kindSearchText, optionById, providerOptions } from "./provider-options";
 
@@ -318,6 +318,7 @@ export default function AddProviderDialog({
     title: tAdd("step", { step: "models" }),
     description: spec ? t("form.modelsHint", { method: signInKind ? "signIn" : "apiKey" }) : undefined,
     optional: true,
+    isValid: concurrencyValid(draft),
     content: spec ? <ModelSettingsFields spec={spec} draft={draft} isDisabled={pending} onChange={setDraft} bare /> : null,
   };
 

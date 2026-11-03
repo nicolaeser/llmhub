@@ -3,6 +3,7 @@ import { redisUrl } from "@/lib/jobs/connection";
 import { logger } from "@/lib/logging/logger";
 import { sharedRedis, withRedisTimeout } from "@/lib/redis/client";
 import type {
+  AdaptiveLimit,
   HealthBackend,
   HealthCounts,
   DeploymentHealthState,
@@ -16,6 +17,9 @@ export const LATENCY_BOUNDS_MS = [
   50, 100, 200, 300, 500, 750, 1_000, 1_500, 2_000, 3_000, 5_000, 7_500, 10_000, 15_000, 20_000,
   30_000, 45_000, 60_000, 90_000, 120_000, 180_000, 300_000,
 ] as const;
+export const ADAPTIVE_LIMIT_TTL_MS = 10 * 60_000;
+export const ADAPTIVE_MIN_LIMIT = 1;
+const ADAPTIVE_DECREASE = 0.5;
 const ALLOWED_FAILS = 2;
 const MINUTE_MS = 60_000;
 const MINUTE_TTL_SECONDS = (HEALTH_RETENTION_MINUTES + 2) * 60;
@@ -31,6 +35,7 @@ const globalForHealth = globalThis as unknown as {
   __llmhubProviderHealth?: HealthMemory;
   __llmhubCooldownSince?: Map<string, number>;
   __llmhubRejectedUntil?: Map<string, number>;
+  __llmhubAdaptiveLimits?: Map<string, AdaptiveLimit>;
 };
 
 function memory(): HealthMemory {
@@ -353,7 +358,89 @@ export async function deploymentHealth(
   return { backend, states };
 }
 
+function adaptiveMemory(): Map<string, AdaptiveLimit> {
+  globalForHealth.__llmhubAdaptiveLimits ??= new Map();
+  return globalForHealth.__llmhubAdaptiveLimits;
+}
+
+function adaptiveKey(id: string): string {
+  return `${KEY_PREFIX}:concurrency:${id}`;
+}
+
+function localAdaptive(id: string, now: number): AdaptiveLimit | null {
+  const entry = adaptiveMemory().get(id);
+  if (!entry) return null;
+  if (entry.until > now) return entry;
+  adaptiveMemory().delete(id);
+  return null;
+}
+
+async function shareAdaptive(id: string, limit: number | null, ttlMs = ADAPTIVE_LIMIT_TTL_MS): Promise<void> {
+  const redis = await sharedRedis();
+  if (!redis) return;
+  try {
+    if (limit === null) await withRedisTimeout(redis.del(adaptiveKey(id)));
+    else await withRedisTimeout(redis.set(adaptiveKey(id), String(limit), "PX", Math.max(1, Math.ceil(ttlMs))));
+  } catch (err) {
+    logger.warn("provider_health.redis_fallback", { err: errText(err) });
+  }
+}
+
+export function nextDecreasedLimit(current: number): number {
+  return Math.max(ADAPTIVE_MIN_LIMIT, Math.floor(current * ADAPTIVE_DECREASE));
+}
+
+export function nextIncreasedLimit(current: number): number {
+  return current + 1 / Math.max(ADAPTIVE_MIN_LIMIT, current);
+}
+
+export function recordConcurrencyLimited(id: string, configured: number, now = Date.now()): number {
+  if (!(configured > 0)) return configured;
+  const current = Math.min(configured, localAdaptive(id, now)?.limit ?? configured);
+  const limit = nextDecreasedLimit(current);
+  adaptiveMemory().set(id, { limit, until: now + ADAPTIVE_LIMIT_TTL_MS });
+  if (redisUrl()) void shareAdaptive(id, limit);
+  return limit;
+}
+
+export function recordConcurrencySuccess(id: string, configured: number, now = Date.now()): void {
+  const entry = localAdaptive(id, now);
+  if (!entry) return;
+  const limit = nextIncreasedLimit(entry.limit);
+  if (limit >= configured) {
+    adaptiveMemory().delete(id);
+    if (redisUrl()) void shareAdaptive(id, null);
+    return;
+  }
+  adaptiveMemory().set(id, { limit, until: entry.until });
+  if (redisUrl() && Math.floor(limit) !== Math.floor(entry.limit)) void shareAdaptive(id, Math.floor(limit), entry.until - now);
+}
+
+export async function adaptiveLimits(ids: string[], now = Date.now()): Promise<Map<string, number>> {
+  const limits = new Map<string, number>();
+  for (const id of ids) {
+    const entry = localAdaptive(id, now);
+    if (entry) limits.set(id, Math.floor(entry.limit));
+  }
+  if (!ids.length || !redisUrl()) return limits;
+  const redis = await sharedRedis();
+  if (!redis) return limits;
+  try {
+    const shared = await withRedisTimeout(redis.mget(ids.map(adaptiveKey)));
+    shared.forEach((value, index) => {
+      const limit = Math.floor(Number(value));
+      if (value === null || !(limit >= ADAPTIVE_MIN_LIMIT)) return;
+      const id = ids[index]!;
+      limits.set(id, Math.min(limits.get(id) ?? limit, limit));
+    });
+  } catch (err) {
+    logger.warn("provider_health.redis_fallback", { err: errText(err) });
+  }
+  return limits;
+}
+
 export function resetProviderHealthMemory(): void {
+  adaptiveMemory().clear();
   const state = memory();
   state.failCount.clear();
   state.cooldownUntil.clear();

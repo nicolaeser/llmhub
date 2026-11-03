@@ -18,6 +18,7 @@ function provider(kind: string): ProviderView {
     restricted: false,
     internal: false,
     newModels: "auto",
+    concurrency: { limit: null, adaptive: false, defaultLimit: 8 },
     assignments: [],
     signIn: { account: "user@example.test", plan: "pro", status: "active" },
     sharedVia: null,

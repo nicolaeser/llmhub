@@ -435,6 +435,7 @@ test("sign-in providers cannot become internal and the flag reaches the manageme
     restricted: false,
     internal: true,
     newModels: "auto" as const,
+    concurrency: { limit: null, adaptive: false, defaultLimit: 64 },
     assignments: [],
     signIn: null,
     sharedVia: null,

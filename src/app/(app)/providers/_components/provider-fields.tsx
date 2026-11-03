@@ -15,7 +15,7 @@ import {
 import { useTranslations } from "next-intl";
 import SignInPanel from "@/components/providers/sign-in-panel";
 import { DATA_REGIONS } from "@/lib/gateway/access/model-policy";
-import { isSignInKind } from "@/lib/gateway/upstreams/provider-kinds";
+import { defaultConcurrency, isSignInKind } from "@/lib/gateway/upstreams/provider-kinds";
 import { NEW_MODEL_MODES } from "@/schemas/providers";
 import type {
   ProviderDraft,
@@ -25,7 +25,7 @@ import type {
   SignInFlowActions,
 } from "@/types/providers";
 import { completeSignInAction, importSignInFileAction, pollSignInAction, startSignInAction } from "../_action";
-import { retentionValid } from "./provider-draft";
+import { concurrencyValid, retentionValid } from "./provider-draft";
 import VertexFields from "./vertex-fields";
 
 const SIGN_IN_ACTIONS: SignInFlowActions<SignInFileResult> = {
@@ -285,6 +285,30 @@ export function ModelSettingsFields({ spec, draft, isDisabled, onChange, bare }:
                 <Input aria-label={t("baseUrl")} />
               </TextField>
             )}
+            <TextField
+              fullWidth
+              value={draft.concurrencyLimit}
+              onChange={(concurrencyLimit) => set({ concurrencyLimit })}
+              isDisabled={isDisabled}
+              isInvalid={!concurrencyValid(draft)}
+            >
+              <Label>{t("concurrencyLimit")}</Label>
+              <Input inputMode="numeric" placeholder={String(defaultConcurrency(spec.kind))} />
+              <Description>{t("concurrencyLimitHint", { limit: defaultConcurrency(spec.kind) })}</Description>
+            </TextField>
+            <Switch
+              isSelected={draft.adaptiveConcurrency}
+              onChange={(adaptiveConcurrency) => set({ adaptiveConcurrency })}
+              isDisabled={isDisabled}
+            >
+              <Switch.Content>
+                <Switch.Control>
+                  <Switch.Thumb />
+                </Switch.Control>
+                <Label>{t("adaptiveConcurrency")}</Label>
+              </Switch.Content>
+              <Description>{t("adaptiveConcurrencyHint")}</Description>
+            </Switch>
           </Disclosure.Body>
         </Disclosure.Content>
       </Disclosure>

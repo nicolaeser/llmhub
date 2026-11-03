@@ -27,7 +27,8 @@ import { chatToMuse, museCompletion } from "@/lib/gateway/upstreams/muse";
 import { limitsSnapshot } from "@/lib/gateway/upstreams/subscription-limits";
 import { claudeRejectionReset } from "@/lib/gateway/upstreams/observed-limits";
 import { retryAfterMs } from "@/lib/gateway/upstreams/reset-credits";
-import { acquireGroup, defaultBase, loadGroup, markFailure, markSuccess, openaiRoot } from "@/lib/gateway/routing/runtime";
+import { acquireGroup, defaultBase, loadGroup, markFailure, markSuccess, markThrottled, openaiRoot } from "@/lib/gateway/routing/runtime";
+import { isConcurrencyLimited } from "@/lib/gateway/routing/concurrency";
 import { applyProviderServiceMode, requestRoutingOverride, serviceModeHeaders } from "@/lib/gateway/dispatch/service-mode";
 import { asRecord, asString } from "@/lib/gateway/core";
 import { costFilter, costRejected } from "@/lib/gateway/billing/cost-cap";
@@ -534,7 +535,7 @@ export async function forwardToModel(
         );
       } catch (err) {
         if (costRejected(err)) throw err;
-        last = new GateError(503, "no_healthy_deployment", "no healthy deployment for model");
+        last = isConcurrencyLimited(err) ? err : new GateError(503, "no_healthy_deployment", "no healthy deployment for model");
         break;
       }
       const { dep, release } = acquired;
@@ -588,6 +589,7 @@ export async function forwardToModel(
           : proxied.json;
         last = upstreamError(proxied.status, json, proxied.headers);
         if (!retryableStatus(proxied.status)) throw last;
+        if (proxied.status === 429) markThrottled(dep);
         markFailure(dep, last.retryAt);
       } catch (err) {
         if (err instanceof GateError && !retryableStatus(err.status)) throw err;

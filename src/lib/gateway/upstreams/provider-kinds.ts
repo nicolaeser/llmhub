@@ -1,3 +1,4 @@
+import { MAX_CONCURRENCY } from "@/schemas/providers";
 import type { SignInKind, SignInMethod, ProviderKindSpec } from "@/types/providers";
 
 export const PROVIDER_CATALOG: ProviderKindSpec[] = [
@@ -62,6 +63,29 @@ export const PROVIDER_CATALOG: ProviderKindSpec[] = [
     auth: "sign_in",
   },
 ];
+
+export const DEFAULT_API_CONCURRENCY = 64;
+export const DEFAULT_SIGN_IN_CONCURRENCY = 8;
+
+const KIND_CONCURRENCY: Record<string, number> = {
+  openai: 128,
+  anthropic: 128,
+  openrouter: 128,
+  openrouter_eu: 128,
+  openai_compat: 32,
+  typesafe: 32,
+  codex: 12,
+  claude: 12,
+};
+
+export function defaultConcurrency(kind: string): number {
+  return KIND_CONCURRENCY[kind] ?? (isSignInKind(kind) ? DEFAULT_SIGN_IN_CONCURRENCY : DEFAULT_API_CONCURRENCY);
+}
+
+export function concurrencyLimit(kind: string, configured: number | null | undefined): number {
+  if (configured === null || configured === undefined || !Number.isFinite(configured)) return defaultConcurrency(kind);
+  return Math.max(0, Math.min(MAX_CONCURRENCY, Math.trunc(configured)));
+}
 
 const LIMIT_KINDS = new Set(["codex", "claude", "grok_build", "antigravity", "kimi", "kimi_ai", "muse_code", "devin"]);
 const TRAFFIC_LIMIT_KINDS = new Set(["muse_code"]);

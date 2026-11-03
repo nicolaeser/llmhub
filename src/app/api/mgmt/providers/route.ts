@@ -21,6 +21,7 @@ export const POST = managementRoute(PERMISSIONS.PROVIDERS_MANAGE, async ({ req }
       vertex: body.vertex,
       internal: body.internal,
       newModels: body.new_models,
+      concurrency: { limit: body.max_concurrency, adaptive: body.adaptive_concurrency },
     });
   return respond(serializeProvider(provider), 201);
 });

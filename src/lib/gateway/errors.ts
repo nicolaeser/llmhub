@@ -32,6 +32,7 @@ export const GATEWAY_ERRORS = {
   batch_not_cancellable: 409,
   payload_too_large: 413,
   rate_limit_exceeded: 429,
+  concurrency_limit_exceeded: 429,
   budget_exceeded: 429,
   client_closed_request: 499,
   internal_error: 500,
