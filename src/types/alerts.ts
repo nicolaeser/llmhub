@@ -34,6 +34,7 @@ export type AlertEmails = {
 export type AlertMail = {
   subject: string;
   text: string;
+  html: string;
 };
 
 export type TrafficAlertRule = {

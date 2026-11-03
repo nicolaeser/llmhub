@@ -1,3 +1,4 @@
+import { renderMailHtml } from "@/lib/mail/html";
 import type { AlertMail, AlertPayload, WebhookEvent, WebhookFormat } from "@/types/alerts";
 
 const EVENT_TITLES: Record<WebhookEvent, string> = {
@@ -96,8 +97,24 @@ function consoleLink(appUrl: string, path: string): string {
 }
 
 export function alertMail(alert: AlertPayload, appUrl: string): AlertMail {
+  const page = consoleLink(appUrl, EVENT_PAGES[alert.event]);
+  const settings = consoleLink(appUrl, "/settings?tab=logging");
   return {
     subject: alertTitle(alert.event),
+    html: renderMailHtml({
+      lang: "en",
+      brand: "LLM Hub",
+      title: EVENT_TITLES[alert.event],
+      intro: alert.message,
+      rows: [
+        { label: "Event", value: alert.event },
+        { label: "Time", value: alert.ts },
+        { label: "Alert ID", value: alert.id },
+      ],
+      action: { label: "Open LLM Hub", href: page },
+      paragraphs: [`Change alert emails in the settings: ${settings}`],
+      footer: "You receive this because your address is an alert email recipient in LLM Hub.",
+    }),
     text: [
       alert.message,
       "",
@@ -105,8 +122,8 @@ export function alertMail(alert: AlertPayload, appUrl: string): AlertMail {
       `Event: ${alert.event}`,
       `Time: ${alert.ts}`,
       `Alert ID: ${alert.id}`,
-      `Open LLM Hub: ${consoleLink(appUrl, EVENT_PAGES[alert.event])}`,
-      `Change alert emails: ${consoleLink(appUrl, "/settings?tab=logging")}`,
+      `Open LLM Hub: ${page}`,
+      `Change alert emails: ${settings}`,
     ].join("\n"),
   };
 }

@@ -22,6 +22,8 @@ import { toCsv } from "@/lib/export/csv";
 import { usageStatsPdf } from "@/lib/export/usage-pdf";
 import { errorFields } from "@/lib/logging/format";
 import { logger } from "@/lib/logging/logger";
+import { env } from "@/lib/env";
+import { renderMailHtml } from "@/lib/mail/html";
 import { mailEnabled, mailErrorCode, sendMail } from "@/lib/mail/send";
 import { lastCompletedPeriod, nextReportAt, REPORT_FORMATS, reportCadence } from "@/lib/reports/period";
 import type { MailAttachment, MailInput } from "@/types/mail";
@@ -31,6 +33,8 @@ const CLAIM_MS = 10 * 60_000;
 const RETRY_MS = 60 * 60_000;
 const DAY_MS = 86_400_000;
 const REPORT_LABEL_KEYS = 8;
+const PDF_MODELS = 12;
+const MAIL_MODELS = 8;
 
 const targetSelect = {
   id: true,
@@ -96,6 +100,7 @@ export async function buildReportMail(
   ]);
   const summary = summarizeUsage(rows, usageDays(period.start, period.days));
   const chargeback = chargebackRows(rows);
+  const byModel = groupSpend(rows, "model").slice(0, PDF_MODELS);
   const byLabel = [...labelGroups.entries()]
     .slice(0, REPORT_LABEL_KEYS)
     .map(([key, labeled]) => ({ key, rows: groupByLabel(labelBreakdown(rows, labeled)) }));
@@ -117,7 +122,7 @@ export async function buildReportMail(
       filename: `${stem}.pdf`,
       contentType: "application/pdf",
       content: usageStatsPdf({
-        stats: { ...summary, p95Latency: p95, byModel: groupSpend(rows, "model").slice(0, 12), chargeback, byLabel },
+        stats: { ...summary, p95Latency: p95, byModel, chargeback, byLabel },
         t,
         format,
         brand,
@@ -142,6 +147,36 @@ export async function buildReportMail(
       });
     }
   }
+  const html = renderMailHtml({
+    lang: locale,
+    brand,
+    title: t("pdf.title"),
+    intro: t("report.intro", { scope: scopeName, period: periodName }),
+    rows: [
+      { label: t("metrics.spend"), value: format.number(summary.spend, "money") },
+      { label: t("metrics.requests"), value: format.number(summary.count, "integer") },
+      { label: t("metrics.errors"), value: format.number(summary.errors, "integer") },
+      { label: t("metrics.tokens"), value: format.number(summary.tokens, "integer") },
+    ],
+    table: {
+      caption: t("pdf.byModel"),
+      columns: [
+        { label: t("pdf.colModel") },
+        { label: t("pdf.colSpend"), align: "end" },
+        { label: t("pdf.colShare"), align: "end" },
+      ],
+      rows: byModel
+        .slice(0, MAIL_MODELS)
+        .map((row) => [
+          row.name,
+          format.number(row.spend, "money"),
+          format.number(summary.spend > 0 ? row.spend / summary.spend : 0, "percent"),
+        ]),
+    },
+    paragraphs: [...(byModel.length ? [] : [t("pdf.noSpend")]), t("report.files", { format: report.format })],
+    action: { label: t("report.open", { brand }), href: new URL("/usage", env.NEXT_PUBLIC_APP_URL).toString() },
+    footer: t("report.footer", { brand }),
+  });
   return {
     to: report.recipients,
     subject: t("report.subject", { brand, scope: scopeName, period: periodName }),
@@ -155,6 +190,7 @@ export async function buildReportMail(
       tokens: summary.tokens,
       format: report.format,
     }),
+    html,
     attachments,
   };
 }

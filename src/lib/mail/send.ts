@@ -5,9 +5,18 @@ import { connect, isIP, type Socket } from "node:net";
 import { hostname } from "node:os";
 import { connect as tlsConnect } from "node:tls";
 import { env } from "@/lib/env";
-import type { MailAttachment, MailInput, MailMessage, MailOptions } from "@/types/mail";
+import type { MailAttachment, MailInput, MailMessage, MailOptions, MimePart } from "@/types/mail";
 
 const LOOPBACK = new Set(["localhost", "127.0.0.1", "::1"]);
+
+export const MAIL_HTML_MAX_BYTES = 1024 * 1024;
+export const MAIL_MESSAGE_MAX_BYTES = 20 * 1024 * 1024;
+
+const QP_LINE = 76;
+const HEADER_LINE = 78;
+const LINE_LIMIT = 998;
+const WORD_BYTES = 39;
+const FILENAME_MAX = 100;
 
 function b64(value: string): string {
   return Buffer.from(value, "utf8").toString("base64");
@@ -32,14 +41,72 @@ function upgrade(socket: Socket, host: string): Socket {
   return tlsConnect({ socket, host, servername: isIP(host) ? undefined : host });
 }
 
-export function encodeSubject(subject: string): string {
-  if (/^[\x20-\x7e]*$/.test(subject)) return subject;
+function sizeError(message: string, code: string): Error {
+  return Object.assign(new Error(message), { code });
+}
+
+function encodedWords(value: string): string[] {
   const words = [""];
-  for (const char of subject) {
-    if (Buffer.byteLength(words[words.length - 1] + char) > 39) words.push("");
+  for (const char of value) {
+    if (Buffer.byteLength(words[words.length - 1] + char) > WORD_BYTES) words.push("");
     words[words.length - 1] += char;
   }
-  return words.map((word) => `=?UTF-8?B?${b64(word)}?=`).join("\r\n ");
+  return words.map((word) => `=?UTF-8?B?${b64(word)}?=`);
+}
+
+function plainHeaderText(value: string): boolean {
+  return /^[\x20-\x7e]*$/.test(value) && !value.includes("=?");
+}
+
+export function encodeSubject(subject: string): string {
+  if (plainHeaderText(subject) && !/\S{77}/.test(subject)) return subject;
+  return encodedWords(subject).join("\r\n ");
+}
+
+export function encodeMailbox(value: string): string {
+  const mailbox = value.trim();
+  const match = /^(.*?)\s*<([^<>]*)>$/.exec(mailbox);
+  if (!match?.[1]) return mailbox;
+  const name = match[1].replace(/^"(.*)"$/, "$1").replace(/\\(.)/g, "$1");
+  if (plainHeaderText(name)) return mailbox;
+  return `${encodedWords(name).join(" ")} <${match[2]}>`;
+}
+
+function foldHeader(line: string): string[] {
+  if (line.length <= HEADER_LINE) return [line];
+  const start = Math.max(line.search(/\S/), 0);
+  const before = line.lastIndexOf(" ", HEADER_LINE);
+  const cut = before > start ? before : line.indexOf(" ", start + 1);
+  if (cut < 0 || !line.slice(cut).trim()) return [line];
+  return [line.slice(0, cut), ...foldHeader(line.slice(cut))];
+}
+
+function headerLines(headers: string[]): string[] {
+  return headers.flatMap((header) => header.split("\r\n").flatMap(foldHeader));
+}
+
+function quotedPrintableTokens(line: string): string[] {
+  const bytes = Buffer.from(line, "utf8");
+  return Array.from(bytes, (byte, index) => {
+    const printable = byte >= 33 && byte <= 126 && byte !== 61;
+    const innerSpace = (byte === 32 || byte === 9) && index < bytes.length - 1;
+    return printable || innerSpace ? String.fromCharCode(byte) : `=${byte.toString(16).toUpperCase().padStart(2, "0")}`;
+  });
+}
+
+export function quotedPrintable(text: string): string[] {
+  return text.split(/\r\n|\r|\n/).flatMap((line) => {
+    const lines: string[] = [];
+    let current = "";
+    for (const token of quotedPrintableTokens(line)) {
+      if (current.length + token.length >= QP_LINE) {
+        lines.push(`${current}=`);
+        current = "";
+      }
+      current += !current && token === "." ? "=2E" : token;
+    }
+    return [...lines, current];
+  });
 }
 
 export function mailEnabled(): boolean {
@@ -62,25 +129,46 @@ export function recipientsOf(to: MailInput["to"]): string[] {
 }
 
 function attachmentName(filename: string): string {
-  return filename.replace(/[^A-Za-z0-9._-]/g, "_") || "attachment";
+  const name = filename.replace(/[^A-Za-z0-9._-]/g, "_") || "attachment";
+  if (name.length <= FILENAME_MAX) return name;
+  const extension = /\.[A-Za-z0-9]{1,10}$/.exec(name)?.[0] ?? "";
+  return name.slice(0, FILENAME_MAX - extension.length) + extension;
 }
 
-function attachmentPart(attachment: MailAttachment, boundary: string): string[] {
+function textPart(subtype: "plain" | "html", content: string): MimePart {
+  return {
+    headers: [`Content-Type: text/${subtype}; charset=utf-8`, "Content-Transfer-Encoding: quoted-printable"],
+    body: quotedPrintable(content),
+  };
+}
+
+function attachmentPart(attachment: MailAttachment): MimePart {
   const content =
     typeof attachment.content === "string" ? Buffer.from(attachment.content, "utf8") : Buffer.from(attachment.content);
   const name = attachmentName(attachment.filename);
-  return [
-    `--${boundary}`,
-    `Content-Type: ${attachment.contentType}; name="${name}"`,
-    "Content-Transfer-Encoding: base64",
-    `Content-Disposition: attachment; filename="${name}"`,
-    "",
-    ...(content.toString("base64").match(/.{1,76}/g) ?? []),
-  ];
+  return {
+    headers: [
+      `Content-Type: ${attachment.contentType}; name="${name}"`,
+      "Content-Transfer-Encoding: base64",
+      `Content-Disposition: attachment; filename="${name}"`,
+    ],
+    body: content.toString("base64").match(/.{1,76}/g) ?? [],
+  };
+}
+
+function multipart(subtype: "alternative" | "mixed", parts: MimePart[]): MimePart {
+  const boundary = `=_${randomUUID().replaceAll("-", "")}`;
+  return {
+    headers: [`Content-Type: multipart/${subtype}; boundary="${boundary}"`],
+    body: [
+      ...parts.flatMap((part) => [`--${boundary}`, ...headerLines(part.headers), "", ...part.body]),
+      `--${boundary}--`,
+    ],
+  };
 }
 
 export function buildMessage(message: MailMessage, now = new Date()): string {
-  const { from, subject, text } = message;
+  const { from, subject, text, html } = message;
   const to = recipientsOf(message.to);
   const attachments = message.attachments ?? [];
   const headerValues = [from, subject, ...to, ...attachments.map((item) => item.contentType)];
@@ -90,30 +178,37 @@ export function buildMessage(message: MailMessage, now = new Date()): string {
   if (attachments.some((item) => /["\\]/.test(item.contentType))) {
     throw new Error("smtp attachment content type is invalid");
   }
+  if (html && Buffer.byteLength(html) > MAIL_HTML_MAX_BYTES) {
+    throw sizeError("smtp html body is too large", "MAIL_HTML_TOO_LARGE");
+  }
   const domain = /@([^@\s]+)$/.exec(address(from))?.[1] ?? "localhost";
-  const body = text.split(/\r\n|\r|\n/).map((line) => (line.startsWith(".") ? `.${line}` : line));
-  const headers = [
-    `From: ${from}`,
-    `To: ${to.join(",\r\n ")}`,
-    `Subject: ${encodeSubject(subject)}`,
-    `Date: ${now.toUTCString().replace("GMT", "+0000")}`,
-    `Message-ID: <${randomUUID()}@${domain}>`,
-    "MIME-Version: 1.0",
+  const content = html ? multipart("alternative", [textPart("plain", text), textPart("html", html)]) : textPart("plain", text);
+  const root = attachments.length ? multipart("mixed", [content, ...attachments.map(attachmentPart)]) : content;
+  const lines = [
+    ...headerLines([
+      `From: ${encodeMailbox(from)}`,
+      `To: ${to.map(encodeMailbox).join(",\r\n ")}`,
+      `Subject: ${encodeSubject(subject)}`,
+      `Date: ${now.toUTCString().replace("GMT", "+0000")}`,
+      `Message-ID: <${randomUUID()}@${domain}>`,
+      "MIME-Version: 1.0",
+      ...root.headers,
+    ]),
+    "",
+    ...root.body,
   ];
-  const textHeaders = ["Content-Type: text/plain; charset=utf-8", "Content-Transfer-Encoding: 8bit"];
-  if (!attachments.length) return [...headers, ...textHeaders, "", ...body].join("\r\n");
-  const boundary = `llmhub-${randomUUID()}`;
-  return [
-    ...headers,
-    `Content-Type: multipart/mixed; boundary="${boundary}"`,
-    "",
-    `--${boundary}`,
-    ...textHeaders,
-    "",
-    ...body,
-    ...attachments.flatMap((attachment) => attachmentPart(attachment, boundary)),
-    `--${boundary}--`,
-  ].join("\r\n");
+  if (lines.some((line) => Buffer.byteLength(line) > LINE_LIMIT)) {
+    throw new Error("smtp line is too long");
+  }
+  const built = lines.join("\r\n");
+  if (Buffer.byteLength(built) > MAIL_MESSAGE_MAX_BYTES) {
+    throw sizeError("smtp message is too large", "MAIL_TOO_LARGE");
+  }
+  return built;
+}
+
+function stuffDots(message: string): string {
+  return message.replace(/^\./gm, "..");
 }
 
 class SmtpSession {
@@ -244,7 +339,7 @@ export async function sendMail(
     await smtp.cmd(`MAIL FROM:<${address(from)}>${caps.has("8BITMIME") ? " BODY=8BITMIME" : ""}`, 250);
     for (const recipient of recipients) await smtp.cmd(`RCPT TO:<${address(recipient)}>`, 250, 251);
     await smtp.cmd("DATA", 354);
-    await smtp.cmd(`${message}\r\n.`, 250);
+    await smtp.cmd(`${stuffDots(message)}\r\n.`, 250);
     await smtp.cmd("QUIT", 221).catch(() => undefined);
     return { sent: true };
   } finally {

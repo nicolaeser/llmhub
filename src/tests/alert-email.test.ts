@@ -135,6 +135,18 @@ test("alertMail builds the subject and a plain text body with a console link", (
   assert.match(alertMail({ id: "a2", event: "key_expiring", message: "x", ts: "t" }, "https://hub.example.test").text, /Open LLM Hub: https:\/\/hub\.example\.test\/keys/);
 });
 
+test("alertMail renders an escaped HTML alternative with the console link", () => {
+  const { html } = alertMail(
+    { id: "a3", event: "pii_blocked", message: 'key <script>alert("x")</script> & co', ts: "2026-11-03T10:00:00.000Z" },
+    "https://hub.example.test/",
+  );
+  assert.match(html, /^<!DOCTYPE html>/i);
+  assert.doesNotMatch(html, /<script>/);
+  assert.match(html, /key &lt;script&gt;alert\(&quot;x&quot;\)&lt;\/script&gt; &amp; co/);
+  assert.match(html, /href="https:\/\/hub\.example\.test\/logs"/);
+  assert.match(html, /Request blocked by PII policy/);
+});
+
 test("alertEmailsSchema bounds recipients, rejects line breaks, and needs an event", () => {
   const ok = alertEmailsSchema.safeParse({ recipients: [" Ops@Example.com ", "ops@example.com"], events: ["latency_spike"] });
   assert.equal(ok.success, true);
