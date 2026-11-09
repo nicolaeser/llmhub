@@ -141,7 +141,7 @@ test("alertMail renders an escaped HTML alternative with the console link", () =
     "https://hub.example.test/",
   );
   assert.match(html, /^<!DOCTYPE html>/i);
-  assert.doesNotMatch(html, /<script>/);
+  assert.doesNotMatch(html, /<script/i);
   assert.match(html, /key &lt;script&gt;alert\(&quot;x&quot;\)&lt;\/script&gt; &amp; co/);
   assert.match(html, /href="https:\/\/hub\.example\.test\/logs"/);
   assert.match(html, /Request blocked by PII policy/);
@@ -189,7 +189,7 @@ test("fireAlert records a failed alert e-mail without recipient addresses", asyn
   const failed = await audited("alert_failed");
 
   assert.deepEqual(failed, [{ channel: "email", event: "error_rate_spike", recipients: 1, error: "SMTP_554" }]);
-  assert.doesNotMatch(JSON.stringify(failed), /example\.com/);
+  assert.doesNotMatch(JSON.stringify(failed), /ops@example\.com/);
 });
 
 test("saveLogging validates and stores alert e-mails and clamps the traffic rules", async () => {
