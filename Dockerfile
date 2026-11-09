@@ -53,6 +53,9 @@ COPY --chown=node:node scripts/redactor ./redactor
 RUN install -d -o node -g node -m 0755 /models
 ARG BUILD_ID=development
 ENV BUILD_ID=${BUILD_ID}
+RUN apt-get update \
+  && DEBIAN_FRONTEND=noninteractive apt-get upgrade -y \
+  && rm -rf /var/lib/apt/lists/*
 RUN --mount=type=secret,id=antigravity_client_secret,required=false \
     if [ -s /run/secrets/antigravity_client_secret ]; then \
       install -o root -g node -m 0440 /run/secrets/antigravity_client_secret antigravity-client-secret; \
