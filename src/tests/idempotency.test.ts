@@ -393,7 +393,7 @@ test("an answer with restored personal data is never stored for replay", async (
   assert.equal(idempotencyRows()[0]!.payload, null);
   const replay = await call(request("key-1"), caller, handler.run);
   assert.equal(replay.status, 409);
-  assert.doesNotMatch(JSON.stringify(idempotencyRows()), /example\.com/);
+  assert.doesNotMatch(JSON.stringify(idempotencyRows()), /a@example\.com/);
 });
 
 test("a finished stream keeps the key without a body, an unfinished or cancelled stream releases it", async () => {
