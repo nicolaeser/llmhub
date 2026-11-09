@@ -64,7 +64,21 @@ test("every stage builds on Debian trixie slim", async () => {
   assert.deepEqual(froms.map((match) => match[2]), ["base", "deps", "prismacli", "builder", "runner"]);
   assert.match(froms[0][1], /^node:\d+\.\d+\.\d+-trixie-slim$/);
   for (const [, image] of froms.slice(1)) assert.equal(image, "base");
-  assert.doesNotMatch(dockerfile, /apt-get|apk |dumb-init|useradd|groupadd/);
+  assert.doesNotMatch(dockerfile, /apt-get install|apk |dumb-init|useradd|groupadd/);
+});
+
+test("the runner applies pending Debian updates on every build", async () => {
+  const dockerfile = await file("Dockerfile");
+  const start = dockerfile.indexOf("AS runner");
+  const runner = dockerfile.slice(start);
+  assert.doesNotMatch(dockerfile.slice(0, start), /apt-get/);
+  const step = runner.indexOf("RUN apt-get update");
+  assert.ok(step > runner.indexOf("ENV BUILD_ID=${BUILD_ID}"), "re-run on every build so a cached layer never skips a Debian fix");
+  assert.ok(step < runner.indexOf("USER node"), "run by root");
+  assert.match(
+    runner,
+    /RUN apt-get update \\\n {2}&& DEBIAN_FRONTEND=noninteractive apt-get upgrade -y \\\n {2}&& rm -rf \/var\/lib\/apt\/lists\/\*\n/,
+  );
 });
 
 test("the runner only carries runtime files and runs as the node user", async () => {
