@@ -208,6 +208,7 @@ export const AUTO_MODEL: PublicModel = {
   pricing: null,
   pools: ["api", "subscription"],
   variants: [],
+  extraNames: [],
 };
 
 export const VERSION = packageJson.version;

@@ -33,6 +33,8 @@
   "fields": {
     "alias": "Öffentlicher Modellname",
     "aliasHint": "Wird kleingeschrieben gespeichert. Clients können jede Schreibweise senden, etwa Gemma-3-27B oder gemma-3-27b.",
+    "extraNames": "Weitere Namen",
+    "extraNamesHint": "Kommagetrennt, zum Beispiel claude-haiku-5.5. Anfragen mit diesen Namen gehen an dieses Modell, und /api/v1/models listet sie mit. Zugriff, Nutzung und Budgets zählen für dieses Modell.",
     "strategy": "Lastverteilungsmodus",
     "baseUrl": "API-Basis-URL",
     "upstream": "Upstream-Modell-ID",
@@ -119,6 +121,7 @@
   },
   "intro": "Jeder öffentliche Name leitet Anfragen an ein oder mehrere Anbietermodelle weiter, optional mit Fallbacks, wenn diese ausfallen.",
   "count": "{count, plural, one {# Modell} other {# Modelle}}",
+  "alsoKnownAs": "Auch erreichbar als {names}",
   "removeHint": "Clients können {alias} dann nicht mehr aufrufen. Deaktiviere es stattdessen, um die Einstellungen zu behalten.",
   "previewTitle": "Was {alias} macht",
   "steps": {

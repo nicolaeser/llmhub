@@ -21,6 +21,7 @@ export const POST = managementRoute(PERMISSIONS.MODELS_MANAGE, async ({ req }) =
       displayName: body.display_name,
       autoRoutes: body.auto_routes,
       variants: body.variants,
+      extraNames: body.extra_names,
       strategy: body.strategy,
       billingMode: body.billing_mode,
       priceInput: body.price_input_per_1k,

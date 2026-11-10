@@ -3,6 +3,7 @@ import { z } from "zod";
 import { KNOWN_BILLING_MODES, KNOWN_KINDS, KNOWN_STRATEGIES } from "@/lib/gateway/core";
 import { MARKUP_SCOPES, MAX_MARKUP_PERCENT, MIN_MARKUP_PERCENT } from "@/lib/gateway/billing/markup-policy";
 import { clockMinute, isTimeZone, MAX_PRICE_WINDOWS } from "@/lib/gateway/billing/price-schedule";
+import { EXTRA_NAME_MAX, MAX_EXTRA_NAMES } from "@/lib/gateway/catalog/model-names";
 import { MODEL_VARIANTS } from "@/lib/gateway/catalog/model-variants";
 import { MANAGEMENT_PERMISSIONS } from "@/lib/management/scope";
 import { accessWindowsSchema, allowedEndpointsSchema } from "@/schemas/keys";
@@ -106,6 +107,7 @@ const modelAliasFields = {
   display_name: z.string().trim().max(120),
   auto_routes: z.boolean().nullable(),
   variants: z.array(z.enum(MODEL_VARIANTS)).max(MODEL_VARIANTS.length),
+  extra_names: z.array(z.string().trim().min(1).max(EXTRA_NAME_MAX)).max(MAX_EXTRA_NAMES),
   strategy,
   billing_mode: billingMode,
   price_input_per_1k: money,
@@ -126,6 +128,7 @@ export const modelAliasCreateSchema = z
     display_name: modelAliasFields.display_name.default(""),
     auto_routes: modelAliasFields.auto_routes.default(null),
     variants: modelAliasFields.variants.default([]),
+    extra_names: modelAliasFields.extra_names.default([]),
     strategy: strategy.default("least_inflight"),
     billing_mode: billingMode.default("routed"),
     price_input_per_1k: money.default(0),

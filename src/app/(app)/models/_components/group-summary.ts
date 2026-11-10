@@ -39,13 +39,13 @@ export function groupSummary(group: GroupSummaryInput, nameOf: (route: SummaryRo
 }
 
 export function groupMatches(
-  group: { alias: string; vendor: string; displayName: string },
+  group: { alias: string; vendor: string; displayName: string; extraNames?: readonly string[] },
   targets: readonly string[],
   query: string,
 ): boolean {
   const needle = query.trim().toLowerCase();
   if (!needle) return true;
-  return [group.alias, group.vendor, group.displayName, ...targets].some((value) =>
+  return [group.alias, group.vendor, group.displayName, ...(group.extraNames ?? []), ...targets].some((value) =>
     value?.toLowerCase().includes(needle),
   );
 }

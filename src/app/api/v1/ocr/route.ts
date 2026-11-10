@@ -4,11 +4,12 @@ import { asRecord } from "@/lib/gateway/core";
 import { allowModel, gateRequest, gateResponse, modelOf, readBody, modelChain } from "@/lib/gateway/access/gate";
 import { meter } from "@/lib/gateway/billing/meter";
 import { forwardToModel } from "@/lib/gateway/dispatch/upstream";
+import { canonicalBody } from "@/lib/gateway/routing/name-route";
 
 export async function POST(req: Request) {
   try {
     const principal = await gateRequest(req);
-    const body = await readBody(req);
+    const body = await canonicalBody(await readBody(req));
     const model = modelOf(body);
     allowModel(principal, model);
     const aliases = modelChain(principal, model, body);

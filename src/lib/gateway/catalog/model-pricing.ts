@@ -6,6 +6,7 @@ import { minuteClock, priceAt, priceWindowQuery, priceWindowRates } from "@/lib/
 import { routePool } from "@/lib/gateway/routing/route-pool";
 import { attachModelFacts } from "@/lib/gateway/routing/model-facts";
 import { modeSupport } from "@/lib/gateway/dispatch/service-mode";
+import { extraNamesOf } from "@/lib/gateway/catalog/model-names";
 import { variantsOf } from "@/lib/gateway/catalog/model-variants";
 import { money } from "@/lib/utils/money";
 import type { CostRates, PriceSchedule } from "@/types/billing";
@@ -22,6 +23,7 @@ const pricedGroupSelect = {
   priceTimeZone: true,
   priceWindows: priceWindowQuery,
   variants: true,
+  extraNames: true,
   deployments: {
     select: {
       kind: true,
@@ -130,6 +132,7 @@ export async function pricedModels(at: Date, aliases?: string[]): Promise<Public
       pricing: priced("api"),
       subscriptionPricing: priced("subscription"),
       variants: variantPools(group.variants, targets[index] ?? []),
+      extraNames: extraNamesOf(group.extraNames),
     };
   });
 }

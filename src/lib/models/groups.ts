@@ -5,7 +5,9 @@ import { requirePlatformPermission } from "@/lib/auth/guards";
 import { hasPerm, PERMISSIONS } from "@/lib/auth/permissions";
 import { writeAudit } from "@/lib/audit";
 import { isReservedAlias, modelAlias } from "@/lib/gateway/catalog/model-alias";
+import { extraNameProblem, extraNamesOf, MAX_EXTRA_NAMES } from "@/lib/gateway/catalog/model-names";
 import { splitVariant, variantAlias, variantsOf } from "@/lib/gateway/catalog/model-variants";
+import { forgetModelNames } from "@/lib/gateway/routing/name-route";
 import {
   asStringArray,
   KNOWN_BILLING_MODES,
@@ -138,6 +140,7 @@ function groupAudit(g: {
   displayName: string;
   autoRoutes: boolean | null;
   variants: string[];
+  extraNames: string[];
   strategy: string;
   billingMode: string;
   priceInput: Prisma.Decimal;
@@ -156,6 +159,7 @@ function groupAudit(g: {
     displayName: g.displayName,
     autoRoutes: g.autoRoutes,
     variants: variantsOf(g.variants),
+    extraNames: extraNamesOf(g.extraNames),
     strategy: g.strategy,
     billingMode: g.billingMode,
     priceInput: money(g.priceInput),
@@ -176,6 +180,7 @@ function mapGroup(g: {
   displayName: string;
   autoRoutes: boolean | null;
   variants: string[];
+  extraNames: string[];
   strategy: string;
   billingMode: string;
   priceInput: Prisma.Decimal;
@@ -194,6 +199,7 @@ function mapGroup(g: {
     displayName: g.displayName,
     autoRoutes: g.autoRoutes,
     variants: variantsOf(g.variants),
+    extraNames: extraNamesOf(g.extraNames),
     strategy: g.strategy,
     billingMode: g.billingMode,
     priceInput: money(g.priceInput),
@@ -331,6 +337,38 @@ async function assertNotVariant(alias: string): Promise<void> {
   if (base && variantsOf(base.variants).includes(parent.variant)) throw new Error("ALIAS_EXISTS");
 }
 
+async function assertAliasUnnamed(alias: string): Promise<void> {
+  if (await prisma.modelGroup.count({ where: { extraNames: { has: alias } } })) throw new Error("ALIAS_EXISTS");
+}
+
+async function extraNamesFor(alias: string, value: unknown): Promise<string[]> {
+  const names = extraNamesOf(value).filter((name) => name !== alias);
+  if (names.length > MAX_EXTRA_NAMES || names.some((name) => extraNameProblem(name))) {
+    throw new Error("EXTRA_NAME_INVALID");
+  }
+  if (!names.length) return names;
+  const variantBases = names.flatMap((name) => {
+    const split = splitVariant(name);
+    return split ? [split] : [];
+  });
+  const [clashes, bases] = await Promise.all([
+    prisma.modelGroup.count({
+      where: { alias: { not: alias }, OR: [{ alias: { in: names } }, { extraNames: { hasSome: names } }] },
+    }),
+    variantBases.length
+      ? prisma.modelGroup.findMany({
+          where: { alias: { in: variantBases.map((split) => split.alias) } },
+          select: { alias: true, variants: true },
+        })
+      : [],
+  ]);
+  const variantTaken = variantBases.some((split) =>
+    bases.some((base) => base.alias === split.alias && variantsOf(base.variants).includes(split.variant)),
+  );
+  if (clashes || variantTaken) throw new Error("EXTRA_NAME_TAKEN");
+  return names;
+}
+
 async function assertVariantsFree(alias: string, variants: ModelVariant[]): Promise<void> {
   if (!variants.length) return;
   const taken = await prisma.modelGroup.count({
@@ -346,6 +384,7 @@ export async function createModelGroup(input: {
   displayName?: string;
   autoRoutes?: boolean | null;
   variants?: ModelVariant[];
+  extraNames?: string[] | string;
   strategy: string;
   billingMode?: string;
   priceInput?: number;
@@ -364,8 +403,10 @@ export async function createModelGroup(input: {
   const existing = await prisma.modelGroup.findUnique({ where: { alias } });
   if (existing) throw new Error("ALIAS_EXISTS");
   await assertNotVariant(alias);
+  await assertAliasUnnamed(alias);
   const variants = variantsOf(input.variants);
   await assertVariantsFree(alias, variants);
+  const extraNames = await extraNamesFor(alias, input.extraNames);
   const deployments = await withCatalogPrices(
     (input.deployments ?? []).filter((d) => d.model.trim()),
   );
@@ -377,6 +418,7 @@ export async function createModelGroup(input: {
       displayName: labelOf(input.displayName, "", DISPLAY_NAME_MAX),
       autoRoutes: input.autoRoutes ?? null,
       variants,
+      extraNames,
       strategy: strategyOf(input.strategy),
       billingMode: billingModeOf(input.billingMode),
       priceInput: priceOf(input.priceInput, 0),
@@ -392,6 +434,7 @@ export async function createModelGroup(input: {
     },
     include: groupInclude,
   });
+  forgetModelNames();
   await writeAudit({
     actor: session.user.id,
     action: "model.create",
@@ -409,6 +452,7 @@ export async function updateModelGroup(input: {
   displayName?: string;
   autoRoutes?: boolean | null;
   variants?: ModelVariant[];
+  extraNames?: string[] | string;
   strategy: string;
   billingMode?: string;
   priceInput?: number;
@@ -431,6 +475,8 @@ export async function updateModelGroup(input: {
   const known = variantsOf(existing.variants);
   const variants = input.variants === undefined ? known : variantsOf(input.variants);
   await assertVariantsFree(alias, variants.filter((variant) => !known.includes(variant)));
+  const extraNames =
+    input.extraNames === undefined ? extraNamesOf(existing.extraNames) : await extraNamesFor(alias, input.extraNames);
   await prisma.modelGroup.update({
     where: { alias },
     data: {
@@ -439,6 +485,7 @@ export async function updateModelGroup(input: {
       displayName: labelOf(input.displayName, existing.displayName, DISPLAY_NAME_MAX),
       autoRoutes: input.autoRoutes === undefined ? existing.autoRoutes : input.autoRoutes,
       variants,
+      extraNames,
       strategy: strategyOf(input.strategy, existing.strategy),
       billingMode: billingModeOf(input.billingMode, existing.billingMode),
       priceInput: priceOf(input.priceInput, money(existing.priceInput)),
@@ -482,6 +529,7 @@ export async function updateModelGroup(input: {
     where: { alias },
     include: groupInclude,
   });
+  forgetModelNames();
   await writeAudit({
     actor: session.user.id,
     action: "model.update",
@@ -529,6 +577,7 @@ export async function deleteModelGroup(alias: string) {
     where: { alias: id },
     include: groupInclude,
   });
+  forgetModelNames();
   await writeAudit({
     actor: session.user.id,
     action: "model.delete",

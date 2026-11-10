@@ -1,5 +1,6 @@
 import "server-only";
 import prisma from "@/lib/db/prisma";
+import { nameIndex } from "@/lib/gateway/catalog/model-names";
 import { modeSupport } from "@/lib/gateway/dispatch/service-mode";
 import { routePool } from "@/lib/gateway/routing/route-pool";
 import { discoveredOf } from "@/lib/gateway/upstreams/provider-prices";
@@ -7,6 +8,7 @@ import type { CatalogFacts, ContextGroup, ModelVariant } from "@/types/models";
 import type { RoutePool } from "@/types/routing";
 
 const SPEED_VARIANTS: readonly ModelVariant[] = ["fast", "ultrafast"];
+const POOLS: readonly RoutePool[] = ["api", "subscription", "internal"];
 
 export function routeCatalogFacts(groups: ContextGroup[]): CatalogFacts {
   const windows: Record<RoutePool, Map<string, number>> = {
@@ -35,6 +37,15 @@ export function routeCatalogFacts(groups: ContextGroup[]): CatalogFacts {
       speeds[pool].set(group.alias, SPEED_VARIANTS.filter((variant) => known.includes(variant) || confirmed.includes(variant)));
     }
   }
+  const taken = new Set(groups.map((group) => group.alias));
+  for (const [name, alias] of nameIndex(groups, taken)) {
+    for (const pool of POOLS) {
+      const window = windows[pool].get(alias);
+      if (window !== undefined) windows[pool].set(name, window);
+      const speed = speeds[pool].get(alias);
+      if (speed) speeds[pool].set(name, speed);
+    }
+  }
   return { windows, speeds };
 }
 
@@ -43,6 +54,7 @@ export async function catalogFacts(): Promise<CatalogFacts> {
     where: { enabled: true },
     select: {
       alias: true,
+      extraNames: true,
       deployments: {
         select: { kind: true, model: true, provider: { select: { kind: true, internal: true, discovered: true } } },
       },

@@ -23,6 +23,7 @@ export type CatalogGroupInput = {
   vendor: string;
   displayName: string;
   autoRoutes: boolean | null;
+  extraNames?: string[];
 };
 
 export type CatalogRouteInput = {

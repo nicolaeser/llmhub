@@ -4,11 +4,12 @@ import { GateError } from "@/lib/gateway/errors";
 import { parseRequest } from "@/lib/gateway/protocols/parse-request";
 import { forwardModelCall, RERANK_PATH, rerankUsage } from "@/lib/rag/models";
 import { rerankRequestSchema } from "@/schemas/rag";
+import { canonicalBody } from "@/lib/gateway/routing/name-route";
 
 export async function POST(req: Request) {
   try {
     const principal = await gateRequest(req);
-    const body = await readBody(req);
+    const body = await canonicalBody(await readBody(req));
     const parsed = parseRequest(rerankRequestSchema, body);
     if (!parsed.ok) throw new GateError(400, "invalid_request", parsed.message, { param: parsed.param });
     const hit = await forwardModelCall({

@@ -33,6 +33,8 @@
   "fields": {
     "alias": "Public model name",
     "aliasHint": "Saved in lowercase. Clients can send any capitalization, such as Gemma-3-27B or gemma-3-27b.",
+    "extraNames": "Additional names",
+    "extraNamesHint": "Comma-separated, for example claude-haiku-5.5. Requests with these names go to this model, and /api/v1/models lists them too. Access, usage, and budgets count toward this model.",
     "strategy": "Load-balance mode",
     "baseUrl": "API base URL",
     "upstream": "Upstream model id",
@@ -119,6 +121,7 @@
   },
   "intro": "Each public name routes requests to one or more provider models, with optional fallbacks when they fail.",
   "count": "{count, plural, one {# model} other {# models}}",
+  "alsoKnownAs": "Also answers to {names}",
   "removeHint": "Clients can no longer call {alias}. Disable it instead to keep its settings.",
   "previewTitle": "What {alias} does",
   "steps": {

@@ -6,13 +6,14 @@ import { meter } from "@/lib/gateway/billing/meter";
 import { forwardToModel } from "@/lib/gateway/dispatch/upstream";
 import { storeVideo } from "@/lib/gateway/endpoints/videos";
 import { idempotent, jsonFingerprint } from "@/lib/gateway/storage/idempotency";
+import { canonicalBody } from "@/lib/gateway/routing/name-route";
 
 export const maxDuration = 300;
 
 export async function POST(req: Request) {
   try {
     const principal = await gateRequest(req);
-    const body = await readBody(req);
+    const body = await canonicalBody(await readBody(req));
     return await idempotent({ req, principal, fingerprint: () => jsonFingerprint(req, body) }, async () => {
       const model = modelOf(body);
       allowModel(principal, model);
