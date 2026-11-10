@@ -39,6 +39,7 @@ import { hiddenFrom, outsidePool, routable, routeOf } from "@/lib/gateway/routin
 import { ContextFit, contextOverflow } from "@/lib/gateway/routing/context-window";
 import { KEEPALIVE_MS, SSE_HEADERS, SSE_KEEPALIVE, sseData } from "@/lib/gateway/protocols/sse";
 import {
+  DEPLETED_COOLDOWN_MS,
   devinResetLookup,
   joinPath,
   mergeUpstreamHeaders,
@@ -46,6 +47,7 @@ import {
   observeUpstreamLimits,
   observeUpstreamStatus,
   prepareBody,
+  providerDepleted,
   proxyJson,
   retryableStatus,
   streamAccept,
@@ -188,6 +190,7 @@ function pinnedAccount(dep: ResolvedDeployment): string | null {
 type FailureClass =
   | "request"
   | "context"
+  | "depleted"
   | "limit"
   | "rejected"
   | "signed_out"
@@ -200,6 +203,7 @@ function failureClass(err: unknown, account: string | null): FailureClass {
   if (!(err instanceof GateError)) return "transient";
   if (err.requestScoped) return "request";
   if (contextOverflow(err)) return "context";
+  if (providerDepleted(err)) return "depleted";
   if (err.status === 429) return "limit";
   if (err.status === OVERLOADED_STATUS) return "overloaded";
   if (account && ACCOUNT_REJECTED_STATUSES.has(err.status)) return "rejected";
@@ -212,6 +216,7 @@ function recordAttemptFailure(dep: ResolvedDeployment, failure: FailureClass, er
   if (failure === "caller" || failure === "request" || failure === "context") return;
   if (failure === "overloaded") markOverloaded(dep);
   else if (failure === "rejected") markRejected(dep, now + ACCOUNT_REJECTED_COOLDOWN_MS);
+  else if (failure === "depleted") markRejected(dep, now + DEPLETED_COOLDOWN_MS);
   else if (failure === "model") markRejected(dep, now + MODEL_UNAVAILABLE_COOLDOWN_MS);
   else if (failure === "limit") markLimited(dep, err instanceof GateError ? err.retryAt : null, now);
   else markFailure(dep, err instanceof GateError ? err.retryAt : null);
@@ -338,7 +343,9 @@ export async function withDeployment<T>(
     }
     const attempts = reachable ? Math.max(0, group.num_retries) + 1 : 0;
     const switchBudget = accountBudget(pooled.filter(servable));
+    const depletionBudget = pooled.filter(servable).length;
     let switches = 0;
+    let depletions = 0;
     let stopAlias = false;
     for (let i = 0; i < attempts; i++) {
       if (opts?.signal?.aborted) throw clientClosedError();
@@ -402,6 +409,20 @@ export async function withDeployment<T>(
             run.tried.add(acquired.dep.id);
             context?.overflowed(acquired.dep);
             context?.record("overflow", alias, [acquired.dep]);
+            continue;
+          }
+          if (failure === "depleted") {
+            logger.warn("gateway.provider_depleted", {
+              deployment: acquired.dep.id,
+              provider: acquired.dep.provider_id,
+              status: err instanceof GateError ? err.status : 0,
+            });
+            run.tried.add(acquired.dep.id);
+            if (account) failedAccount = account;
+            if (depletions < depletionBudget) {
+              depletions++;
+              i--;
+            }
             continue;
           }
           if (account && tracksHealth && failure === "limit") {

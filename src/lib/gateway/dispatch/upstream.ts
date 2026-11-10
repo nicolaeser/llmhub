@@ -27,7 +27,16 @@ import { chatToMuse, museCompletion } from "@/lib/gateway/upstreams/muse";
 import { limitsSnapshot } from "@/lib/gateway/upstreams/subscription-limits";
 import { claudeRejectionReset } from "@/lib/gateway/upstreams/observed-limits";
 import { retryAfterMs } from "@/lib/gateway/upstreams/reset-credits";
-import { acquireGroup, defaultBase, loadGroup, markFailure, markSuccess, markThrottled, openaiRoot } from "@/lib/gateway/routing/runtime";
+import {
+  acquireGroup,
+  defaultBase,
+  loadGroup,
+  markFailure,
+  markRejected,
+  markSuccess,
+  markThrottled,
+  openaiRoot,
+} from "@/lib/gateway/routing/runtime";
 import { isConcurrencyLimited } from "@/lib/gateway/routing/concurrency";
 import { applyProviderServiceMode, requestRoutingOverride, serviceModeHeaders } from "@/lib/gateway/dispatch/service-mode";
 import { asRecord, asString } from "@/lib/gateway/core";
@@ -406,6 +415,17 @@ export function retryableStatus(status: number): boolean {
   return status >= 500 || status === 429;
 }
 
+export const DEPLETED_COOLDOWN_MS = 30 * 60_000;
+
+const DEPLETED_MESSAGE =
+  /credit balance is too low|insufficient (?:credits|balance|funds)|exceeded your current quota|out of credits|billing hard limit/i;
+
+export function providerDepleted(err: unknown): boolean {
+  if (!(err instanceof GateError) || err.requestScoped) return false;
+  if (err.status === 402 || err.code === "insufficient_quota") return true;
+  return (err.status === 400 || err.status === 403) && DEPLETED_MESSAGE.test(err.message);
+}
+
 function detailMessage(detail: unknown): string {
   if (typeof detail === "string") return detail;
   const rec = asRecord(detail);
@@ -523,6 +543,7 @@ export async function forwardToModel(
       continue;
     }
     const attempts = Math.max(0, group.num_retries) + 1;
+    let depleted = 0;
     for (let attempt = 0; attempt < attempts; attempt++) {
       let acquired;
       try {
@@ -535,7 +556,9 @@ export async function forwardToModel(
         );
       } catch (err) {
         if (costRejected(err)) throw err;
-        last = isConcurrencyLimited(err) ? err : new GateError(503, "no_healthy_deployment", "no healthy deployment for model");
+        if (!providerDepleted(last)) {
+          last = isConcurrencyLimited(err) ? err : new GateError(503, "no_healthy_deployment", "no healthy deployment for model");
+        }
         break;
       }
       const { dep, release } = acquired;
@@ -588,6 +611,14 @@ export async function forwardToModel(
             })()
           : proxied.json;
         last = upstreamError(proxied.status, json, proxied.headers);
+        if (providerDepleted(last)) {
+          markRejected(dep, Date.now() + DEPLETED_COOLDOWN_MS);
+          if (depleted < group.mapped.length) {
+            depleted++;
+            attempt--;
+          }
+          continue;
+        }
         if (!retryableStatus(proxied.status)) throw last;
         if (proxied.status === 429) markThrottled(dep);
         markFailure(dep, last.retryAt);
