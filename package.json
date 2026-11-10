@@ -36,7 +36,7 @@
     "@sentry/nextjs": "^11.11.0",
     "@sentry/node": "^11.6.0",
     "@simplewebauthn/browser": "^14.0.0",
-    "@simplewebauthn/server": "^14.0.3",
+    "@simplewebauthn/server": "^14.1.0",
     "bullmq": "^6.7.1",
     "ioredis": "^6.0.0",
     "lucide-react": "^1.70.0",
@@ -61,7 +61,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
-    "@tailwindcss/postcss": "^4.3.4",
+    "@tailwindcss/postcss": "^4.3.5",
     "@types/mdast": "^4.0.4",
     "@types/node": "^24.19.2",
     "@types/pg": "^8.23.1",
