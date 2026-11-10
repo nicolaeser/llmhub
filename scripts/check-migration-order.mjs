@@ -7,7 +7,7 @@ import { pathToFileURL } from "node:url";
 
 const MIGRATIONS = "prisma/migrations";
 const FOLDER = /^(\d{14})_[a-z0-9_]+$/;
-const DEFAULT_BASE = "origin/development";
+const DEFAULT_BASE = "origin/main";
 
 function timestampOf(folder) {
   return FOLDER.exec(folder)?.[1] ?? null;
