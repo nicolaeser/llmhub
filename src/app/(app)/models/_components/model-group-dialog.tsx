@@ -27,6 +27,7 @@ import { useErrorToast } from "@/components/console/use-error-toast";
 import { createModelGroupAction, updateModelGroupAction } from "../_action";
 import { isActionFail } from "@/lib/http/action-result";
 import { scheduleOverlaps, validPrice, windowValid } from "@/lib/gateway/billing/price-schedule";
+import { extraNamesOf } from "@/lib/gateway/catalog/model-names";
 import { MODEL_VARIANTS, variantAlias } from "@/lib/gateway/catalog/model-variants";
 import type { DeploymentDraft, ModelGroupView, ModelVariant, PriceWindowDraft, ProviderOpt } from "@/types/models";
 import CustomPriceFields from "./custom-price-fields";
@@ -84,6 +85,7 @@ export default function ModelGroupDialog({
   const [displayName, setDisplayName] = useState(editing?.displayName ?? "");
   const [autoRoutes, setAutoRoutes] = useState<boolean | null>(editing ? editing.autoRoutes : null);
   const [variants, setVariants] = useState<ModelVariant[]>(editing?.variants ?? []);
+  const [extraNames, setExtraNames] = useState((editing?.extraNames ?? []).join(", "));
   const [billingMode, setBillingMode] = useState<BillingMode>(billingModeOf(editing?.billingMode));
   const [price, setPrice] = useState({ input: editing?.priceInput ?? 0, output: editing?.priceOutput ?? 0 });
   const [priceTimeZone, setPriceTimeZone] = useState(editing?.priceTimeZone || "UTC");
@@ -140,6 +142,7 @@ export default function ModelGroupDialog({
         displayName,
         autoRoutes,
         variants,
+        extraNames: extraNamesOf(extraNames),
         strategy,
         billingMode,
         priceInput: validPrice(price.input) ? price.input : undefined,
@@ -198,6 +201,11 @@ export default function ModelGroupDialog({
           <Label>{t("fields.alias")}</Label>
           <Input placeholder="gpt-5.5" />
           <Description>{t("fields.aliasHint")}</Description>
+        </TextField>
+        <TextField fullWidth value={extraNames} onChange={setExtraNames} isDisabled={pending}>
+          <Label>{t("fields.extraNames")}</Label>
+          <Input placeholder="claude-haiku-5.5" />
+          <Description>{t("fields.extraNamesHint")}</Description>
         </TextField>
         <div className="grid gap-4 sm:grid-cols-2 sm:items-start">
           <TextField fullWidth value={displayName} onChange={setDisplayName} isDisabled={pending}>

@@ -52,6 +52,7 @@ import { forwardToModel } from "@/lib/gateway/dispatch/upstream";
 import { restoreClientJson } from "@/lib/gateway/safety/restore-client";
 import { completionsRequestSchema } from "@/schemas/completions";
 import { responsesRequestSchema } from "@/schemas/responses";
+import { canonicalBody, canonicalModel } from "@/lib/gateway/routing/name-route";
 import type { BatchEndpoint, BatchLineResult, BatchSnapshot } from "@/types/batches";
 import type { GatewayErrorCode } from "@/types/errors";
 import type { JsonMap, Principal } from "@/types/gateway";
@@ -147,7 +148,7 @@ export async function createBatch(principal: Principal, body: JsonMap): Promise<
     throw new GateError(404, "not_found", "input file not found", { param: "input_file_id" });
   }
   const parsed = parseBatchInput(Buffer.from(source.payload).toString("utf8"), endpoint);
-  if (parsed.model) allowModel(principal, parsed.model);
+  if (parsed.model) allowModel(principal, await canonicalModel(parsed.model));
   const metadata = asRecord(body.metadata) ? asStringMap(body.metadata) : null;
   const createdAt = now();
   const failed = parsed.errors.length > 0;
@@ -268,9 +269,10 @@ export async function runBatchLine(owner: Principal, endpoint: BatchEndpoint, ra
   try {
     allowEndpoint(principal, endpoint);
     capRequestCost(principal, await assertBudget(principal), null);
-    const model = modelOf(raw);
+    const named = await canonicalBody(raw);
+    const model = modelOf(named);
     allowModel(principal, model);
-    const { body, output } = await applyGuardrails(raw, principal);
+    const { body, output } = await applyGuardrails(named, principal);
     if (endpoint === "/v1/chat/completions") {
       const clean = await resolveChatFiles(body, principal);
       const dispatched = await dispatchChat({ principal, model, body: clean, aliases: modelChain(principal, model, clean), outputGuard: output });

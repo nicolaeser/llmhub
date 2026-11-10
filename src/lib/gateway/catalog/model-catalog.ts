@@ -397,7 +397,10 @@ export function planCatalog(input: {
   const modes = new Map(input.providers.map((provider) => [provider.id, provider.newModels]));
   const matched = new Map(items.map((item) => [item, groupMatch(item, byKey)]));
   const unmatched = items.filter((item) => !matched.get(item));
-  const taken = new Set([...RESERVED_ALIASES, ...groups.map((group) => group.alias)]);
+  const taken = new Set([
+    ...RESERVED_ALIASES,
+    ...groups.flatMap((group) => [group.alias, ...(group.extraNames ?? [])]),
+  ]);
   const standard = clustersOf(
     unmatched.filter((item) => !item.tag),
     taken,

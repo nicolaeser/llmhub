@@ -153,6 +153,17 @@ export default function GroupsTab() {
     return format.list([group.vendor, group.displayName].filter(Boolean), { type: "unit" });
   }
 
+  function extraNamesList(group: ModelGroupView) {
+    return format.list(group.extraNames, { type: "conjunction" });
+  }
+
+  function extraNamesLine(group: ModelGroupView) {
+    if (!group.extraNames.length) return null;
+    return (
+      <p className="text-xs break-words text-muted">{t("alsoKnownAs", { names: extraNamesList(group) })}</p>
+    );
+  }
+
   function statusChip(group: ModelGroupView) {
     return (
       <Chip size="sm" variant="soft" color={group.enabled ? "success" : "default"} className="whitespace-nowrap">
@@ -284,6 +295,9 @@ export default function GroupsTab() {
                     }
                     chips={groupChips(row.group)}
                     details={[
+                      ...(row.group.extraNames.length
+                        ? [{ label: t("fields.extraNames"), value: extraNamesList(row.group), wide: true }]
+                        : []),
                       { label: t("columns.routing"), value: routing(row), wide: true },
                       { label: t("columns.context"), value: contextLabel(row.group), wide: true },
                     ]}
@@ -311,6 +325,7 @@ export default function GroupsTab() {
                               {row.group.vendor || row.group.displayName ? (
                                 <p className="text-xs break-words text-muted">{groupDetail(row.group)}</p>
                               ) : null}
+                              {extraNamesLine(row.group)}
                               {groupChips(row.group) ? (
                                 <div className="flex flex-wrap gap-1">{groupChips(row.group)}</div>
                               ) : null}

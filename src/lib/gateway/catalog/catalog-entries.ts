@@ -42,7 +42,7 @@ export async function catalogInputs() {
     }),
     prisma.modelGroup.findMany({
       orderBy: { alias: "asc" },
-      select: { alias: true, vendor: true, displayName: true, autoRoutes: true },
+      select: { alias: true, vendor: true, displayName: true, autoRoutes: true, extraNames: true },
     }),
     prisma.deployment.findMany({ select: { providerId: true, model: true, groupAlias: true } }),
     prisma.catalogEntry.findMany({ select: storedSelect }),

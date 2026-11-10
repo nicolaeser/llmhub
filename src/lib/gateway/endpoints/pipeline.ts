@@ -2,6 +2,7 @@ import "server-only";
 import { allowModel, applyGuardrails, gateRequest, gateResponse, modelOf, readBody } from "@/lib/gateway/access/gate";
 import { GateError } from "@/lib/gateway/errors";
 import { variantBody } from "@/lib/gateway/catalog/model-variants";
+import { canonicalBody } from "@/lib/gateway/routing/name-route";
 import { variantRoute } from "@/lib/gateway/routing/variant-route";
 import { parseRequest } from "@/lib/gateway/protocols/parse-request";
 import { requestClient } from "@/lib/gateway/request-logs/request-session";
@@ -29,8 +30,9 @@ export async function screenModelRequest(req: Request, options: ScreenOptions = 
 }
 
 export async function screenGatedRequest({ principal, raw }: GatedRequest): Promise<ScreenedRequest> {
-  const variant = await variantRoute(modelOf(raw), principal.pool ?? "api");
-  const body = variant ? variantBody(raw, variant.model, variant.variant) : raw;
+  const named = await canonicalBody(raw);
+  const variant = await variantRoute(modelOf(named), principal.pool ?? "api");
+  const body = variant ? variantBody(named, variant.model, variant.variant) : named;
   const model = modelOf(body);
   allowModel(principal, model);
   const { body: clean, output } = await applyGuardrails(body, principal);

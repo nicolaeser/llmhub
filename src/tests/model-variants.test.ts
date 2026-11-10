@@ -56,8 +56,8 @@ async function errorCode(res: Response): Promise<string> {
 function countGroups(): void {
   recordedPrisma.reset({
     modelGroup: {
-      count: ({ where }: { where: { alias: { in: string[] } } }) =>
-        [...gateway.groups.keys()].filter((alias) => where.alias.in.includes(alias)).length,
+      count: ({ where }: { where: { alias?: { in: string[] } } }) =>
+        where.alias ? [...gateway.groups.keys()].filter((alias) => where.alias?.in.includes(alias)).length : 0,
     },
   });
 }

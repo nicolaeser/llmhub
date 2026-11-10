@@ -412,9 +412,12 @@ model ModelGroup {
   displayName    String   @default("")
   autoRoutes     Boolean?
   variants       String[] @default([])
+  extraNames     String[] @default([])
 
   deployments  Deployment[]
   priceWindows ModelPriceWindow[]
+
+  @@index([extraNames], type: Gin)
 }
 
 model CatalogEntry {

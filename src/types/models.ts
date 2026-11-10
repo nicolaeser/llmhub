@@ -44,6 +44,7 @@ export type ModelGroupView = {
   displayName: string;
   autoRoutes: boolean | null;
   variants: ModelVariant[];
+  extraNames: string[];
   strategy: string;
   billingMode: string;
   priceInput: number;
@@ -110,11 +111,12 @@ export type PublicModel = {
   subscriptionPricing?: ModelPricing | null;
   pools: RoutePool[];
   variants: ModelVariantRoute[];
+  extraNames: string[];
 };
 
 export type ContextRoute = { kind: string; model: string; provider: { kind: string; internal: boolean; discovered: unknown } | null };
 
-export type ContextGroup = { alias: string; deployments: ContextRoute[] };
+export type ContextGroup = { alias: string; extraNames?: string[]; deployments: ContextRoute[] };
 
 export type ContextWindows = Record<RoutePool, ReadonlyMap<string, number>>;
 
