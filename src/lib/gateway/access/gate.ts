@@ -16,7 +16,9 @@ import { asRecord, newRequestId, routerGateError } from "@/lib/gateway/core";
 import {
   anthropicErrorBody,
   CLIENT_RETRY_MAX_SECONDS,
+  connectionFailureReason,
   GateError,
+  isConnectionFailure,
   openAIErrorBody,
   usageLimitReset,
 } from "@/lib/gateway/errors";
@@ -43,7 +45,7 @@ export function toGateError(err: unknown): GateError {
   if (name === "TimeoutError") {
     return new GateError(504, "upstream_timeout", "upstream request timed out");
   }
-  if (err instanceof TypeError && err.message === "fetch failed") {
+  if (isConnectionFailure(err)) {
     return new GateError(502, "upstream_error", "upstream request failed");
   }
   if (isPayloadTooLarge(err)) {
@@ -97,7 +99,8 @@ export function gateResponse(err: unknown, req: Request): NextResponse {
   const gate = toGateError(err);
   const requestId = newRequestId();
   if (gate.status >= 500 && gate.code !== "server_restarting") {
-    logger.error("gateway.error", { requestId, code: gate.code, ...errorFields(err) });
+    const cause = connectionFailureReason(err);
+    logger.error("gateway.error", { requestId, code: gate.code, ...errorFields(err), ...(cause ? { errCause: cause } : {}) });
   }
   const now = Date.now();
   const retry = retryHeaders(gate, now);

@@ -15,7 +15,15 @@ import {
   waitingError,
   waitText,
 } from "@/lib/gateway/core";
-import { anthropicErrorBody, GateError, gatewayErrorType, openAIErrorBody, usageLimitReset } from "@/lib/gateway/errors";
+import {
+  anthropicErrorBody,
+  connectionFailureReason,
+  GateError,
+  gatewayErrorType,
+  isConnectionFailure,
+  openAIErrorBody,
+  usageLimitReset,
+} from "@/lib/gateway/errors";
 import { gateResponse, restartingError, retryHeaders, toGateError, usageLimitHeaders } from "@/lib/gateway/access/gate";
 import { DRAIN_RETRY_SECONDS } from "@/lib/http/drain";
 import { upstreamError } from "@/lib/gateway/dispatch/upstream";
@@ -88,6 +96,33 @@ test("unknown failures map to fixed gateway codes without leaking internals", ()
   assert.equal(hidden.status, 500);
   assert.equal(hidden.code, "internal_error");
   assert.doesNotMatch(hidden.message, /hunter2/);
+});
+
+test("a connection failure names its network cause without the client seeing it", () => {
+  const socket = new TypeError("fetch failed", { cause: Object.assign(new Error("other side closed"), { code: "UND_ERR_SOCKET" }) });
+  assert.equal(isConnectionFailure(socket), true);
+  assert.equal(connectionFailureReason(socket), "other side closed (UND_ERR_SOCKET)");
+  const dns = new TypeError("fetch failed", { cause: Object.assign(new Error("getaddrinfo EAI_AGAIN api.anthropic.com"), { code: "EAI_AGAIN" }) });
+  assert.equal(connectionFailureReason(dns), "getaddrinfo EAI_AGAIN api.anthropic.com");
+  const refused = (address: string) => Object.assign(new Error(`connect ECONNREFUSED ${address}`), { code: "ECONNREFUSED" });
+  const both = new TypeError("fetch failed", {
+    cause: Object.assign(new AggregateError([refused("10.0.0.1:443"), refused("[::1]:443")], ""), { code: "ECONNREFUSED" }),
+  });
+  assert.equal(connectionFailureReason(both), "connect ECONNREFUSED 10.0.0.1:443; connect ECONNREFUSED [::1]:443");
+  assert.equal(connectionFailureReason(new TypeError("fetch failed")), "");
+  assert.equal(connectionFailureReason(new Error("fetch failed", { cause: new Error("secret") })), "");
+  assert.equal(isConnectionFailure(new TypeError("terminated")), false);
+  assert.equal(toGateError(socket).message, "upstream request failed");
+});
+
+test("only an upstream 529 reads as overloaded; the gateway's own 503 stays a plain server error", async () => {
+  const cooling = toGateError(ERR_NO_HEALTHY);
+  const body = await gateResponse(cooling, new Request("http://hub.local/v1/messages", { method: "POST" })).json();
+  assert.equal(body.error.type, "api_error");
+  assert.doesNotMatch(JSON.stringify(body), /overloaded_error/);
+  const overloaded = upstreamError(529, { type: "error", error: { type: "overloaded_error", message: "Overloaded" } });
+  const upstream = await gateResponse(overloaded, new Request("http://hub.local/v1/messages", { method: "POST" })).json();
+  assert.equal(upstream.error.type, "overloaded_error");
 });
 
 test("gateResponse picks the OpenAI or Anthropic shape and sets a request id", async () => {
@@ -304,7 +339,7 @@ test("a restarting gateway answers a short retry in both shapes, never a usage l
     assert.equal(res.headers.get("x-codex-primary-reset-at"), null);
   }
   const anthropic = await gateResponse(err, new Request("http://hub.local/v1/messages", { method: "POST" })).json();
-  assert.equal(anthropic.error.type, "overloaded_error");
+  assert.equal(anthropic.error.type, "api_error");
   const openai = (await gateResponse(err, new Request("http://hub.local/v1/responses", { method: "POST" })).json()).error;
   assert.equal(openai.code, "server_restarting");
   assert.equal(openai.type, "api_error");

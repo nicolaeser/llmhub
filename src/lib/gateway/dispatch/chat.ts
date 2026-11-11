@@ -3,7 +3,15 @@ import { AnthropicSseTranslator } from "@/lib/gateway/protocols/anthropic";
 import { recordUsage, recordUsageOrLog, usageFromUnknown } from "@/lib/gateway/billing/billing";
 import { alertUpstreamFailure } from "@/lib/alerts/notify";
 import { spendTag } from "@/lib/gateway/access/gate";
-import { CLIENT_CLOSED_STATUS, clientClosedError, GateError, isClientClosed } from "@/lib/gateway/errors";
+import {
+  CLIENT_CLOSED_STATUS,
+  clientClosedError,
+  connectionFailureReason,
+  GateError,
+  isClientClosed,
+  isConnectionFailure,
+  OVERLOADED_STATUS,
+} from "@/lib/gateway/errors";
 import { outputScreen, type OutputScreen } from "@/lib/gateway/safety/guardrails";
 import { instructChat } from "@/lib/gateway/safety/pii-instruction";
 import { requestRoutingOverride, serviceModeHeaders, variantRoutes } from "@/lib/gateway/dispatch/service-mode";
@@ -18,6 +26,7 @@ import {
 import {
   acquireGroup,
   loadGroup,
+  markConnectionFailure,
   markFailure,
   markLimited,
   markOverloaded,
@@ -93,7 +102,6 @@ export const UPSTREAM_TIMEOUT_MS = 300_000;
 const STREAM_IDLE_TIMEOUT_MS = 300_000;
 const ACCOUNT_REJECTED_COOLDOWN_MS = 30 * 60_000;
 const MODEL_UNAVAILABLE_COOLDOWN_MS = 60 * 60_000;
-const OVERLOADED_STATUS = 529;
 const ACCOUNT_REJECTED_STATUSES = new Set([401, 402, 403]);
 const MODEL_UNAVAILABLE = /\bmodel\b/i;
 
@@ -206,10 +214,12 @@ type FailureClass =
   | "signed_out"
   | "model"
   | "overloaded"
+  | "connection"
   | "transient"
   | "caller";
 
 function failureClass(err: unknown, account: string | null): FailureClass {
+  if (isConnectionFailure(err)) return "connection";
   if (!(err instanceof GateError)) return "transient";
   if (err.requestScoped) return "request";
   if (contextOverflow(err)) return "context";
@@ -225,6 +235,7 @@ function failureClass(err: unknown, account: string | null): FailureClass {
 function recordAttemptFailure(dep: ResolvedDeployment, failure: FailureClass, err: unknown, now = Date.now()): void {
   if (failure === "caller" || failure === "request" || failure === "context") return;
   if (failure === "overloaded") markOverloaded(dep);
+  else if (failure === "connection") markConnectionFailure(dep);
   else if (failure === "rejected") markRejected(dep, now + ACCOUNT_REJECTED_COOLDOWN_MS);
   else if (failure === "depleted") markRejected(dep, now + DEPLETED_COOLDOWN_MS);
   else if (failure === "model") markRejected(dep, now + MODEL_UNAVAILABLE_COOLDOWN_MS);
@@ -308,6 +319,7 @@ export async function withDeployment<T>(
         })
       : null;
   let reasoningDropped = false;
+  let reconnected = false;
   let failedAccount: string | null = null;
   let upstreamTried = false;
   let overflow: unknown = null;
@@ -417,6 +429,16 @@ export async function withDeployment<T>(
           last = err;
           if (!isRouterError(err)) upstreamFailure = err;
           if (failure === "limit") limitReason = upstreamWords(err) ?? limitReason;
+          if (failure === "connection" && !reconnected) {
+            logger.warn("gateway.connection_retry", {
+              deployment: acquired.dep.id,
+              provider: acquired.dep.provider_id,
+              cause: connectionFailureReason(err),
+            });
+            reconnected = true;
+            i--;
+            continue;
+          }
           if (failure === "context") {
             overflow = err;
             run.tried.add(acquired.dep.id);

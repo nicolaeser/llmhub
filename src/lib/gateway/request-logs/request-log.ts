@@ -1,6 +1,7 @@
 import "server-only";
 import prisma from "@/lib/db/prisma";
 import { asRecord } from "@/lib/gateway/core";
+import { connectionFailureReason } from "@/lib/gateway/errors";
 import { logPayload } from "@/lib/gateway/request-logs/log-content";
 import { defaultEntityIds, redactJSON, redactPii } from "@/lib/gateway/safety/pii";
 import { piiRestoreSummary, vaultOf } from "@/lib/gateway/safety/pii-vault";
@@ -38,7 +39,8 @@ export async function contentSkip(principal: Principal, enterprise: Enterprise):
 function errorText(error: unknown): string {
   if (!error) return "";
   const text = typeof error === "string" ? error : error instanceof Error ? error.message : "";
-  return text.slice(0, ERROR_LIMIT);
+  const cause = connectionFailureReason(error);
+  return (cause ? `${text}: ${cause}` : text).slice(0, ERROR_LIMIT);
 }
 
 export async function writeRequestLog(entry: RequestLogEntry): Promise<void> {

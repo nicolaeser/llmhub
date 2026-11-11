@@ -237,6 +237,57 @@ test("an overloaded upstream neither cools the account nor moves the pin", async
   assert.equal((await readPin("claude", runSession(request)))?.providerId, "acct-a");
 });
 
+test("a connection failure is retried once at once and never cools a sign-in account", async () => {
+  const { readPin, runSession, writePin } = await import("@/lib/gateway/routing/account-affinity");
+  const alias = freshGroup("claude");
+  const request = session("connection-run");
+  await writePin("claude", runSession(request), { providerId: "acct-a", handoffAt: 0 }, null);
+  for (let round = 0; round < 3; round++) {
+    const served: string[] = [];
+    const routed = await route(
+      alias,
+      async (dep) => {
+        served.push(dep.provider_id);
+        if (served.length === 1) throw new TypeError("fetch failed", { cause: new Error("other side closed") });
+        return "ok";
+      },
+      { request },
+    );
+    assert.deepEqual(served, ["acct-a", "acct-a"]);
+    assert.equal(routed.result, "ok");
+  }
+  const served: string[] = [];
+  const failure = await route(
+    alias,
+    async (dep) => {
+      served.push(dep.provider_id);
+      throw new TypeError("fetch failed");
+    },
+    { request },
+  ).catch((err: unknown) => err);
+  assert.deepEqual(served, ["acct-a", "acct-a"]);
+  assert.ok(failure instanceof TypeError);
+  assert.equal(await cooling(alias, "acct-a"), null);
+  assert.equal(await cooling(alias, "acct-b"), null);
+  await settled();
+  assert.equal((await readPin("claude", runSession(request)))?.providerId, "acct-a");
+});
+
+test("a connection failure still cools an API key deployment so the next request goes elsewhere", async () => {
+  const alias = freshGroup("anthropic");
+  const failure = await route(
+    alias,
+    async () => {
+      throw new TypeError("fetch failed");
+    },
+    { pool: "api" },
+  ).catch((err: unknown) => err);
+  assert.ok(failure instanceof TypeError);
+  assert.notEqual(await cooling(alias, "acct-a"), null);
+  const routed = await route(alias, async (dep) => dep.provider_id, { pool: "api" });
+  assert.equal(routed.result, "acct-b");
+});
+
 test("transient server errors serve the turn elsewhere but keep the pin", async () => {
   const { readPin, runSession, writePin } = await import("@/lib/gateway/routing/account-affinity");
   const alias = freshGroup("claude", { numRetries: 2 });
