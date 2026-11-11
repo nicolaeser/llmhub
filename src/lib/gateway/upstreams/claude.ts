@@ -5,7 +5,7 @@ import type { JsonMap } from "@/types/gateway";
 export const CLAUDE_CODE_VERSION = "2.1.280";
 export const CLAUDE_CODE_IDENTITY = "You are Claude Code, Anthropic's official CLI for Claude.";
 export const CLAUDE_OAUTH_BETAS = ["claude-code-20250219", "oauth-2025-04-20"] as const;
-const CLAUDE_CODE_BILLING_PREFIX = "x-anthropic-billing-header:";
+export const CLAUDE_CODE_BILLING_PREFIX = "x-anthropic-billing-header:";
 const CLAUDE_CODE_SYSTEM_PREFIXES = [
   "You are Claude Code, Anthropic's official CLI for Claude",
   "You are a Claude agent, built on Anthropic's Claude Agent SDK",

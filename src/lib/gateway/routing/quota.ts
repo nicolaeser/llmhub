@@ -9,14 +9,19 @@ function normalized(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
-export function scopeApplies(windowScope: string, model: string): boolean {
+export function scopeApplies(windowScope: string, model: string, exact = false): boolean {
   if (!windowScope) return true;
   const scope = normalized(windowScope);
-  return scope.length > 0 && normalized(model).includes(scope);
+  if (!scope.length) return false;
+  return exact ? normalized(model) === scope : normalized(model).includes(scope);
+}
+
+export function isAccountBucket(window: LimitWindow): boolean {
+  return Boolean(window.accountBucket);
 }
 
 function applies(window: LimitWindow, model: string): boolean {
-  return scopeApplies(window.scope, model);
+  return !isAccountBucket(window) && scopeApplies(window.scope, model, window.exactScope);
 }
 
 function liveWindows(limits: SubscriptionLimits, model: string, now: number): LimitWindow[] {
@@ -37,6 +42,7 @@ export function quotaExhausted(limits: SubscriptionLimits | null, model: string,
 export function hasExhaustedQuota(limits: SubscriptionLimits | null, now = Date.now()): boolean {
   if (!limits) return false;
   return limits.windows.some((window) => {
+    if (isAccountBucket(window)) return false;
     const resetsAt = window.resetsAt ? Date.parse(window.resetsAt) : NaN;
     if (Number.isFinite(resetsAt) && resetsAt <= now) return false;
     return window.limitReached || window.usedPercent >= FULL_PERCENT;
@@ -82,7 +88,7 @@ export function accountRecoveryAt(limits: SubscriptionLimits | null, now = Date.
   if (planWide !== null) return planWide;
   if (!limits) return null;
   const scopedExhausted = limits.windows.filter((window) => {
-    if (!window.scope) return false;
+    if (!window.scope || isAccountBucket(window)) return false;
     const reset = window.resetsAt ? Date.parse(window.resetsAt) : NaN;
     if (Number.isFinite(reset) && reset <= now) return false;
     return (window.limitReached || window.usedPercent >= FULL_PERCENT) && Number.isFinite(reset) && reset > now;

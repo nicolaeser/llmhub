@@ -18,7 +18,7 @@ import { useActionData } from "@/lib/hooks/use-action-data";
 import { useClock } from "@/lib/hooks/use-clock";
 import { isActionFail } from "@/lib/http/action-result";
 import { draftOfKey, keyFieldsOf } from "@/lib/keys/draft";
-import { isKeyPaused, keyState } from "@/lib/keys/pause";
+import { isPaused, keyPause, keyState } from "@/lib/keys/pause";
 import type { KeyDetailPage, KeyOwner, KeySection, VirtualKeyView } from "@/types/keys";
 import type { BudgetResult } from "@/types/structure";
 import KeyDetailSkeleton from "./_components/key-detail-skeleton";
@@ -148,8 +148,9 @@ export default function KeyDetailRoute({ params }: { params: Promise<{ id: strin
   const { key, owner } = data;
   const name = key.key_alias || key.key_name;
   const target = { id: key.token_id, name };
-  const paused = isKeyPaused({ paused: key.paused, pausedUntil: key.paused_until }, now);
-  const state = keyState({ blocked: key.blocked, paused: key.paused, pausedUntil: key.paused_until }, now);
+  const paused = isPaused({ paused: key.paused, pausedUntil: key.paused_until }, now);
+  const state = keyState({ blocked: key.blocked, paused: key.paused, pausedUntil: key.paused_until }, now, data.held);
+  const pause = keyPause({ paused: key.paused, pausedUntil: key.paused_until }, data.held, now);
   const expires = key.expires ? new Date(key.expires) : null;
   const busy = keyDialogs.busy;
   const place = t("binding.place", { org: owner.orgAlias, team: owner.teamAlias, hasTeam: owner.teamAlias ? "yes" : "no" });
@@ -274,7 +275,7 @@ export default function KeyDetailRoute({ params }: { params: Promise<{ id: strin
     <div>
       <PageHeader icon={KeyRound} back={back} title={name} subtitle={subtitle} actions={actions} />
       <div className="-mt-4 mb-6 flex flex-wrap items-center gap-2">
-        <KeyStateChip state={state} pausedUntil={key.paused_until} />
+        <KeyStateChip state={state} pause={pause} />
         <Chip size="sm" variant="soft">
           <span className="font-mono">{key.key_name}…</span>
         </Chip>

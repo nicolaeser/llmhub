@@ -8,7 +8,7 @@ import { failingProviders, capRatio, nearCap, orderSteps, rankAttention } from "
 import { loadModelPolicies } from "@/lib/gateway/access/model-access";
 import { loadProviderHealth } from "@/lib/gateway/routing/health-report";
 import { keyState } from "@/lib/keys/pause";
-import { listKeys } from "@/lib/keys/view";
+import { keyHolds, listKeys } from "@/lib/keys/view";
 import { budgetRatio, companyHref } from "@/lib/tenancy/company-view";
 import { loadCompany, loadCompanyDirectory } from "@/lib/tenancy/structure";
 import { usageToday } from "@/lib/usage/usage-today";
@@ -44,7 +44,7 @@ export async function loadOverview(canOpen: PageAccess): Promise<OverviewPage> {
     readsModels ? loadModelPolicies() : null,
     readsCompanies && platform ? loadCompanyDirectory() : null,
     readsCompanies && company ? loadCompany(company) : null,
-    readsKeys ? listKeys(session) : null,
+    readsKeys ? listKeys(session).then(async (rows) => ({ rows, held: await keyHolds(rows) })) : null,
     spend ? usageToday(spend, now) : null,
     spend ? usageTotals(7, spend) : null,
     spend ? prisma.usageDaily.findFirst({ where: { ...spend, requests: { gt: 0 } }, select: { day: true } }) : null,
@@ -54,7 +54,7 @@ export async function loadOverview(canOpen: PageAccess): Promise<OverviewPage> {
   if (providerCount !== null) steps.push({ id: "provider", done: providerCount > 0, href: linkTo("/providers") });
   if (models !== null) steps.push({ id: "model", done: models.length > 0, href: linkTo("/models") });
   if (directory !== null) steps.push({ id: "company", done: directory.rows.length > 0, href: linkTo("/companies") });
-  if (keys !== null) steps.push({ id: "key", done: keys.length > 0, href: linkTo("/keys") });
+  if (keys !== null) steps.push({ id: "key", done: keys.rows.length > 0, href: linkTo("/keys") });
   if (spend !== null) {
     steps.push({
       id: "request",
@@ -83,7 +83,7 @@ export async function loadOverview(canOpen: PageAccess): Promise<OverviewPage> {
   if (own && nearCap(ownRatio)) {
     attention.push({ kind: "budget", id: `company:${own.id}`, target: "company", name: own.alias, ratio: ownRatio, href: linkTo("/companies") });
   }
-  for (const key of keys ?? []) {
+  for (const key of keys?.rows ?? []) {
     const ratio = capRatio(key.spend, key.max_budget);
     if (nearCap(ratio)) {
       attention.push({
@@ -117,10 +117,14 @@ export async function loadOverview(canOpen: PageAccess): Promise<OverviewPage> {
     week: week ? { spend: week.spend7d, requests: week.requests7d, errors: week.errors7d } : null,
     keys: keys
       ? {
-          total: keys.length,
-          active: keys.filter(
+          total: keys.rows.length,
+          active: keys.rows.filter(
             (key) =>
-              keyState({ blocked: key.blocked, paused: key.paused, pausedUntil: key.paused_until }, nowDate) === "active",
+              keyState(
+                { blocked: key.blocked, paused: key.paused, pausedUntil: key.paused_until },
+                nowDate,
+                keys.held[key.token_id],
+              ) === "active",
           ).length,
         }
       : null,

@@ -10,6 +10,7 @@ export class RouterError extends Error {
     message: string,
     readonly code: "unknown_group" | "no_healthy" | "all_paused" | "signed_out" | "not_assigned" | "unknown_strategy",
     readonly wait: RouterWait | null = null,
+    readonly upstreamReason: string | null = null,
   ) {
     super(message);
     this.name = "RouterError";
@@ -53,6 +54,13 @@ export function isUnavailableError(err: unknown): err is RouterError {
   return isRouterError(err, "no_healthy") || isRouterError(err, "all_paused") || isRouterError(err, "signed_out");
 }
 
+export function withProviderReason(text: string, err: unknown): string {
+  if (!isUnavailableError(err) || err.code === "signed_out") return text;
+  const wait = err.wait;
+  const reason = wait?.limited && !wait.kinds.length ? err.upstreamReason : null;
+  return reason ? `${text}; the provider answered: ${reason}` : text;
+}
+
 export function routerGateError(err: unknown): GateError | null {
   if (isRouterError(err, "unknown_group")) {
     return new GateError(404, "model_not_found", "no deployment for model", { param: "model" });
@@ -66,7 +74,7 @@ export function routerGateError(err: unknown): GateError | null {
   if (isUnavailableError(err)) {
     const wait = err.wait;
     if (wait?.limited) {
-      return new GateError(429, "rate_limit_exceeded", limitMessage(wait), { retryAt: wait.retryAt });
+      return new GateError(429, "rate_limit_exceeded", withProviderReason(limitMessage(wait), err), { retryAt: wait.retryAt });
     }
     return new GateError(503, "no_healthy_deployment", "no healthy deployment for model", {
       retryAt: wait?.retryAt ?? null,

@@ -8,7 +8,8 @@ import { modelAccess, templateRuleSelect } from "@/lib/gateway/access/model-acce
 import { dataRuleOf, templateRulesOf } from "@/lib/gateway/access/model-policy";
 import { GateError } from "@/lib/gateway/errors";
 import { isManagementKey } from "@/lib/management/scope";
-import { resolveKeyTenancy } from "@/lib/gateway/access/key-tenancy";
+import { placePause, resolveKeyTenancy } from "@/lib/gateway/access/key-tenancy";
+import { longestPause } from "@/lib/keys/pause";
 import type { Principal } from "@/types/gateway";
 import type { VirtualKeyView } from "@/types/keys";
 
@@ -33,14 +34,17 @@ async function principalFromKey(
     templates: { templateId: string; template: Parameters<typeof templateRulesOf>[0] }[];
   },
 ): Promise<Principal | null> {
-  const { tenancy, active } = await resolveKeyTenancy(row);
+  const now = new Date();
+  const { tenancy, active, pause } = await resolveKeyTenancy(row, now);
   if (!active) return null;
   const key: VirtualKeyView = toKeyView(row);
   const templates = row.templates.map((link) => templateRulesOf(link.template));
-  const access = await modelAccess(key.models, templates);
+  const [access, place] = await Promise.all([modelAccess(key.models, templates), placePause(tenancy, now)]);
+  const scopePause = longestPause([pause, place]);
   return {
     actor: row.prefix,
     key,
+    ...(scopePause ? { scopePause } : {}),
     teamId: tenancy.teamId,
     orgId: tenancy.orgId,
     userId: tenancy.userId,

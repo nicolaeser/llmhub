@@ -11,6 +11,12 @@ export type TenancyRef = { kind: TenancyKind; id: string };
 
 export type NodeRef = { kind: NodeKind; id: string };
 
+export type PauseState = { paused: boolean; pausedUntil: string };
+
+export type PauseScope = NodeKind;
+
+export type HeldPause = { scope: PauseScope; until: string };
+
 export type SetupStep = "org" | "team" | "project" | "member" | "budget";
 
 export type SpendScope = { orgId?: string; userId?: string };
@@ -38,9 +44,9 @@ export type CapLink = {
   spend: number;
 };
 
-export type OrgNode = { id: string; alias: string; budget: BudgetView; labelKeys: string[] };
+export type OrgNode = PauseState & { id: string; alias: string; budget: BudgetView; labelKeys: string[] };
 
-export type TeamNode = {
+export type TeamNode = PauseState & {
   id: string;
   alias: string;
   orgId: string;
@@ -49,7 +55,7 @@ export type TeamNode = {
   budget: BudgetView;
 };
 
-export type ProjectNode = {
+export type ProjectNode = PauseState & {
   id: string;
   alias: string;
   orgId: string;
@@ -58,7 +64,7 @@ export type ProjectNode = {
   budget: BudgetView;
 };
 
-export type MemberNode = {
+export type MemberNode = PauseState & {
   id: string;
   alias: string;
   email: string;
@@ -76,7 +82,7 @@ export type ConsoleUserNode = {
   budget: BudgetView;
 };
 
-export type KeyNode = {
+export type KeyNode = PauseState & {
   id: string;
   alias: string;
   prefix: string;
@@ -86,8 +92,6 @@ export type KeyNode = {
   projectId: string;
   memberId: string;
   blocked: boolean;
-  paused: boolean;
-  pausedUntil: string;
   budget: BudgetView;
 };
 
@@ -120,7 +124,7 @@ export type StructurePayload = {
 
 export type DepartmentGroup = { team: TeamNode | null; projects: ProjectNode[]; members: number };
 
-export type CompanyRow = {
+export type CompanyRow = PauseState & {
   id: string;
   alias: string;
   budget: BudgetView;
@@ -136,7 +140,7 @@ export type CompanyDirectory = {
   canSeeKeys: boolean;
 };
 
-export type CompanyStatus = "exhausted" | "near" | "empty" | "ok";
+export type CompanyStatus = "paused" | "exhausted" | "near" | "empty" | "ok";
 
 export type CompanyTab = "overview" | "structure" | "people" | "keys" | "access" | "integrations" | "reports";
 
@@ -159,6 +163,8 @@ export type ProjectInput = {
   teamId: string;
   owner: string;
 };
+
+export type PauseInput = { kind: TenancyKind; id: string; hours: number };
 
 export type BudgetRef = { kind: BudgetKind; id: string };
 

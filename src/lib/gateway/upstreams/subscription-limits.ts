@@ -1,7 +1,8 @@
 import "server-only";
 import prisma from "@/lib/db/prisma";
 import { antigravityLimits } from "@/lib/gateway/upstreams/antigravity";
-import { fetchAvailableModels } from "@/lib/gateway/upstreams/antigravity-api";
+import { fetchAvailableModels, fetchQuotaSummary } from "@/lib/gateway/upstreams/antigravity-api";
+import { antigravityQuotaBuckets } from "@/lib/gateway/upstreams/antigravity-quota";
 import { reportsLimits } from "@/lib/gateway/upstreams/provider-kinds";
 import { CLAUDE_OAUTH_BETAS } from "@/lib/gateway/upstreams/claude";
 import { claudeExtraUsage, claudeWindows } from "@/lib/gateway/upstreams/claude-usage";
@@ -42,6 +43,9 @@ import type {
 
 const CLAUDE_USAGE_URL = "https://api.anthropic.com/api/oauth/usage";
 const LIMITS_TIMEOUT_MS = 15_000;
+const SUMMARY_REFUSED_STATUSES = new Set([403, 404]);
+const SUMMARY_REFUSAL_MS = 60 * 60_000;
+const summaryRefusedUntil = new Map<string, number>();
 const TOO_MANY_REQUESTS = 429;
 
 const cache = new Map<string, SubscriptionLimits>();
@@ -182,7 +186,17 @@ async function fetchAntigravityLimits(provider: LimitAccount): Promise<Subscript
   const { status, json, retryAfter } = await fetchAvailableModels(auth);
   failOn([{ status, json: null, retryAfterMs: retryAfterMs(retryAfter, Date.now()) }]);
   if (status < 200 || status >= 300) throw new LimitsFetchError("UPSTREAM_FAILED");
-  return antigravityLimits(json, await storedPlan(provider.id));
+  const limits = antigravityLimits(json, await storedPlan(provider.id));
+  const buckets = await accountBuckets(provider.id, auth);
+  return buckets.length ? { ...limits, windows: [...limits.windows, ...buckets] } : limits;
+}
+
+async function accountBuckets(providerId: string, auth: UpstreamAuth, now = Date.now()): Promise<LimitWindow[]> {
+  if ((summaryRefusedUntil.get(providerId) ?? 0) > now) return [];
+  const { status, json } = await fetchQuotaSummary(auth);
+  if (SUMMARY_REFUSED_STATUSES.has(status)) summaryRefusedUntil.set(providerId, now + SUMMARY_REFUSAL_MS);
+  else summaryRefusedUntil.delete(providerId);
+  return antigravityQuotaBuckets(json);
 }
 
 async function fetchMuseLimits(provider: LimitAccount): Promise<SubscriptionLimits> {
@@ -266,6 +280,7 @@ export function dropCachedLimits(providerId: string): void {
 
 export async function forgetLimits(providerId: string, now = Date.now()): Promise<void> {
   cache.delete(providerId);
+  summaryRefusedUntil.delete(providerId);
   try {
     const written = await prisma.providerLimitSnapshot.updateMany({
       where: { providerId },

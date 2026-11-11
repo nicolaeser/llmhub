@@ -1,0 +1,13 @@
+BEGIN;
+ALTER TABLE "Organization" ADD COLUMN     "paused" BOOLEAN NOT NULL DEFAULT false,
+ADD COLUMN     "pausedUntil" TIMESTAMP(3);
+
+ALTER TABLE "Team" ADD COLUMN     "paused" BOOLEAN NOT NULL DEFAULT false,
+ADD COLUMN     "pausedUntil" TIMESTAMP(3);
+
+ALTER TABLE "Project" ADD COLUMN     "paused" BOOLEAN NOT NULL DEFAULT false,
+ADD COLUMN     "pausedUntil" TIMESTAMP(3);
+
+ALTER TABLE "Member" ADD COLUMN     "paused" BOOLEAN NOT NULL DEFAULT false,
+ADD COLUMN     "pausedUntil" TIMESTAMP(3);
+COMMIT;

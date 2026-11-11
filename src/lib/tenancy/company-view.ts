@@ -1,3 +1,4 @@
+import { isPaused } from "@/lib/keys/pause";
 import type { ConsoleScopeState } from "@/types/console";
 import type {
   BudgetView,
@@ -40,7 +41,8 @@ export function budgetRatio(budget: BudgetView): number | null {
   return cap > 0 ? Math.min(1, budget.spend / cap) : null;
 }
 
-export function companyStatus(row: CompanyRow): CompanyStatus {
+export function companyStatus(row: CompanyRow, now: Date): CompanyStatus {
+  if (isPaused(row, now)) return "paused";
   const ratio = budgetRatio(row.budget);
   if (ratio !== null && ratio >= 1) return "exhausted";
   if (ratio !== null && ratio >= 0.8) return "near";

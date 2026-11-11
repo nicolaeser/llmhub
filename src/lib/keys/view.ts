@@ -3,10 +3,10 @@ import "server-only";
 import prisma from "@/lib/db/prisma";
 import type { AuthenticatedSession } from "@/types/auth";
 import { keyScope } from "@/lib/auth/scope";
-import type { KeyLastUse, VirtualKeyView } from "@/types/keys";
+import type { KeyHolds, KeyLastUse, VirtualKeyView } from "@/types/keys";
 import { money } from "@/lib/utils/money";
 import { accessTimeZoneOf, accessWindowsOf, allowedEndpointsOf } from "@/lib/gateway/access/key-restrictions";
-import { pauseActive } from "@/lib/keys/pause";
+import { longestPause, pauseView, rowPause } from "@/lib/keys/pause";
 import type { Prisma } from "@/generated/prisma/client";
 
 function jsonArray(v: unknown): string[] {
@@ -43,7 +43,7 @@ export function toKeyView(row: {
   createdAt: Date;
   templates: { templateId: string }[];
 }): VirtualKeyView {
-  const paused = pauseActive(row.paused, row.pausedUntil, new Date());
+  const pause = pauseView(row, new Date());
   return {
     token_id: row.id,
     key_name: row.prefix,
@@ -67,8 +67,8 @@ export function toKeyView(row: {
     access_windows: accessWindowsOf(row.accessWindows),
     access_time_zone: accessTimeZoneOf(row.accessTimeZone),
     blocked: row.blocked,
-    paused,
-    paused_until: paused ? (row.pausedUntil?.toISOString() ?? "") : "",
+    paused: pause.paused,
+    paused_until: pause.pausedUntil,
     log_content: row.logContent,
     created_at: row.createdAt.toISOString(),
   };
@@ -83,6 +83,35 @@ export function keyReferences(keys: readonly VirtualKeyView[], selfId: string) {
     members: ids((key) => key.member_id),
     users: [...new Set([selfId, ...ids((key) => key.user_id)])],
   };
+}
+
+export async function keyHolds(keys: readonly VirtualKeyView[], now = new Date()): Promise<KeyHolds> {
+  const refs = keyReferences(keys, "");
+  const where = (ids: string[]) => ({
+    id: { in: ids },
+    paused: true,
+    OR: [{ pausedUntil: null }, { pausedUntil: { gt: now } }],
+  });
+  const select = { id: true, paused: true, pausedUntil: true } as const;
+  const [members, projects, teams, orgs] = await Promise.all([
+    refs.members.length ? prisma.member.findMany({ where: where(refs.members), select }) : [],
+    refs.projects.length ? prisma.project.findMany({ where: where(refs.projects), select }) : [],
+    refs.teams.length ? prisma.team.findMany({ where: where(refs.teams), select }) : [],
+    refs.orgs.length ? prisma.organization.findMany({ where: where(refs.orgs), select }) : [],
+  ]);
+  const byId = <T extends { id: string }>(rows: T[]) => new Map(rows.map((row) => [row.id, row]));
+  const [member, project, team, org] = [byId(members), byId(projects), byId(teams), byId(orgs)];
+  return Object.fromEntries(
+    keys.flatMap((key) => {
+      const pause = longestPause([
+        rowPause("member", member.get(key.member_id), now),
+        rowPause("project", project.get(key.project_id), now),
+        rowPause("team", team.get(key.team_id), now),
+        rowPause("org", org.get(key.org_id), now),
+      ]);
+      return pause ? [[key.token_id, pause]] : [];
+    }),
+  );
 }
 
 function scopedKeyRows(session: AuthenticatedSession) {

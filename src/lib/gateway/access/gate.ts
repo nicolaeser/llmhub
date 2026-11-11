@@ -27,6 +27,7 @@ import { logger } from "@/lib/logging/logger";
 import { modelAlias } from "@/lib/gateway/catalog/model-alias";
 import { aliasChain, servedOnlyInternally } from "@/lib/gateway/routing/runtime";
 import { accessOpen, endpointAllowed } from "@/lib/gateway/access/key-restrictions";
+import { longestPause } from "@/lib/keys/pause";
 import { gatewayPath } from "@/lib/gateway/api-paths";
 import { routeOf } from "@/lib/gateway/routing/route-pool";
 import { requestClient } from "@/lib/gateway/request-logs/request-session";
@@ -34,6 +35,7 @@ import { NextResponse } from "next/server";
 import type { JsonMap, Principal } from "@/types/gateway";
 import type { PublicPool } from "@/types/routing";
 import type { OutputGuard } from "@/types/guardrails";
+import type { PauseScope } from "@/types/structure";
 
 export function toGateError(err: unknown): GateError {
   if (err instanceof GateError) return err;
@@ -150,11 +152,22 @@ export async function gateRequest(req: Request, pool: PublicPool = "api"): Promi
   return principal;
 }
 
+const PAUSED_SUBJECT: Record<PauseScope, string> = {
+  key: "this key",
+  member: "this key's person",
+  project: "this key's project",
+  team: "this key's department",
+  org: "this key's company",
+};
+
 export function allowUnpaused(principal: Principal): void {
   const key = principal.key;
-  if (!key?.paused) return;
-  const message = key.paused_until ? `this key is paused until ${key.paused_until}` : "this key is paused";
-  throw new GateError(403, "key_paused", message);
+  if (!key) return;
+  const own = key.paused ? { scope: "key" as const, until: key.paused_until } : null;
+  const pause = longestPause([own, principal.scopePause]);
+  if (!pause) return;
+  const subject = PAUSED_SUBJECT[pause.scope];
+  throw new GateError(403, "key_paused", pause.until ? `${subject} is paused until ${pause.until}` : `${subject} is paused`);
 }
 
 export function allowEndpoint(principal: Principal, path: string, param?: string): void {

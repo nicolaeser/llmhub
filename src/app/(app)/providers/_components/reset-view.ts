@@ -25,6 +25,13 @@ const REFUSAL_CODE = /^RESET_(?:BLOCKED_)?([A-Z_]+)$/;
 const CODENAME = /^[a-z0-9]+(?:[_-][a-z0-9]+)+$/;
 
 const OPTION_ORDER: readonly ResetFamily[] = ["full", "weekly", "five_hour", "scoped", "other"];
+const NAMED_REFILLS: Record<ResetFamily, readonly ResetLimit["family"][]> = {
+  five_hour: ["five_hour"],
+  weekly: ["weekly"],
+  full: ["five_hour", "weekly"],
+  scoped: ["scoped"],
+  other: [],
+};
 const LIMIT_ORDER: readonly ResetLimit["family"][] = ["five_hour", "weekly", "scoped", "other"];
 const BLOCKERS: readonly ResetBlocker[] = [
   "ineligible",
@@ -56,6 +63,8 @@ export type ResetFlow =
   | { mode: "plain" }
   | { mode: "choose"; options: ResetOption[]; initial: string | null }
   | { mode: "review"; option: ResetOption };
+
+export type ResetStart = { picked: string | null; review: string | null };
 
 export type ResetRefusal = { kind: "choice" } | { kind: "blocker"; blocker: ResetBlocker };
 
@@ -112,6 +121,13 @@ export function resetFlow(credits: ResetCredits): ResetFlow {
   if (options.length === 0) return { mode: "plain" };
   if (options.length === 1) return { mode: "review", option: options[0]! };
   return { mode: "choose", options, initial: defaultResetOption(options)?.id ?? null };
+}
+
+export function resetStart(flow: ResetFlow, optionId: string | null = null): ResetStart {
+  if (flow.mode === "review") return { picked: null, review: flow.option.id };
+  if (flow.mode !== "choose" || !optionId) return { picked: null, review: null };
+  const chosen = flow.options.find((option) => option.id === optionId && isSpendable(option));
+  return chosen ? { picked: chosen.id, review: chosen.id } : { picked: null, review: null };
 }
 
 export function optionNaming(option: Pick<ResetOption, "family" | "scope">): ResetNaming {
@@ -175,6 +191,16 @@ export function resetEffects(option: ResetOption, limits: readonly ResetLimit[])
     givesBack: option.givesBack ? { scope: option.givesBack.scope.trim(), percent, weekly: returned } : null,
     staysFull,
   };
+}
+
+export function alsoRefills(option: Pick<ResetOption, "family" | "scope" | "refills">): ResetLimit[] {
+  const named = NAMED_REFILLS[optionNaming(option).family];
+  return option.refills
+    .filter((limit) => {
+      const family = limitNaming(limit).family;
+      return family !== "other" && !named.includes(family);
+    })
+    .sort(byLimitOrder);
 }
 
 export function leftAfterUse(option: Pick<ResetOption, "left">): number {

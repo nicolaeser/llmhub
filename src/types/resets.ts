@@ -145,6 +145,7 @@ export type ResetOption = {
   total: number;
   expiresAt: string | null;
   blocker: ResetBlocker | null;
+  blockedBy: ResetLimit | null;
   helpsNow: boolean;
   recommended: boolean;
 };

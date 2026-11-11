@@ -10,12 +10,14 @@ import { accountRecoveryAt, hasExhaustedQuota } from "@/lib/gateway/routing/quot
 import { limitsFromTraffic, PROVIDER_CATALOG, reportsLimits } from "@/lib/gateway/upstreams/provider-kinds";
 import {
   claudeHeaderWindows,
+  claudeModelLimitReached,
   isObservedWindow,
   limitsUpdatedAt,
   observedWindowsBefore,
   observedChanged,
   observedFlipped,
   observedTime,
+  withModelLimitReached,
   withObservedWindows,
 } from "@/lib/gateway/upstreams/observed-limits";
 import { parseResetState, resetCreditsView, resetStateKey } from "@/lib/gateway/upstreams/reset-state";
@@ -80,6 +82,7 @@ const observedAt = new Map<string, number>();
 const streamedAt = new Map<string, number>();
 const observedWrites = new Map<string, { at: number; windows: LimitWindow[] }>();
 const observedChains = new Map<string, Promise<boolean>>();
+const modelMarks = new Map<string, { at: number; resetsAt: string | null }>();
 
 export function recordStreamTraffic(providerId: string, now = Date.now()): void {
   streamedAt.set(providerId, now);
@@ -701,9 +704,9 @@ function observeFailed(providerId: string, err: unknown): false {
   return false;
 }
 
-function queueObservedWrite(providerId: string, windows: LimitWindow[], now: number): Promise<boolean> {
+function queueObservedWrite(providerId: string, write: () => Promise<boolean>): Promise<boolean> {
   const chain: Promise<boolean> = (observedChains.get(providerId) ?? Promise.resolve(false))
-    .then(() => storeObservedLimits(providerId, windows, now))
+    .then(write)
     .catch((err: unknown) => observeFailed(providerId, err))
     .finally(() => {
       if (observedChains.get(providerId) === chain) observedChains.delete(providerId);
@@ -712,9 +715,40 @@ function queueObservedWrite(providerId: string, windows: LimitWindow[], now: num
   return chain;
 }
 
+export async function storeModelLimit(providerId: string, reached: LimitWindow, now: number): Promise<boolean> {
+  for (let attempt = 0; attempt < OBSERVED_WRITE_ATTEMPTS; attempt++) {
+    const stored = await readStoredSnapshot(providerId);
+    const marked = stored?.limits ? withModelLimitReached(stored.limits, reached, now) : null;
+    if (!stored || !marked) return false;
+    const written = await prisma.providerLimitSnapshot.updateMany({
+      where: { providerId, version: stored.version },
+      data: { limits: json(marked), version: { increment: 1 } },
+    });
+    if (!written.count) continue;
+    if (stored.fetchedAt !== null) rememberLimits(providerId, marked);
+    notifyLive("limits");
+    return true;
+  }
+  return false;
+}
+
+function markModelLimit(providerId: string, reached: LimitWindow, now: number): Promise<boolean> {
+  const cached = limitsSnapshot(providerId);
+  const marked = cached ? withModelLimitReached(cached, reached, now) : null;
+  const last = modelMarks.get(providerId);
+  const repeated = last !== undefined && last.resetsAt === reached.resetsAt && now - last.at < OBSERVED_REFRESH_MS;
+  if (repeated && !marked) return Promise.resolve(false);
+  modelMarks.set(providerId, { at: now, resetsAt: reached.resetsAt });
+  if (marked) rememberLimits(providerId, marked);
+  return queueObservedWrite(providerId, () => storeModelLimit(providerId, reached, now));
+}
+
 export function observeClaudeLimits(providerId: string, headers: Headers, now = Date.now()): Promise<boolean> {
   try {
-    return observeLimitWindows(providerId, claudeHeaderWindows(headers), now);
+    const plan = observeLimitWindows(providerId, claudeHeaderWindows(headers), now);
+    const reached = claudeModelLimitReached(headers);
+    if (!reached) return plan;
+    return Promise.all([plan, markModelLimit(providerId, reached, now)]).then(([windows, model]) => windows || model);
   } catch (err) {
     return Promise.resolve(observeFailed(providerId, err));
   }
@@ -728,7 +762,7 @@ export function observeLimitWindows(providerId: string, windows: LimitWindow[], 
     if (cached) rememberLimits(providerId, withObservedWindows(cached, windows, now));
     if (!observedWriteDue(observedWrites.get(providerId), windows, now)) return Promise.resolve(false);
     observedWrites.set(providerId, { at: now, windows });
-    return queueObservedWrite(providerId, windows, now);
+    return queueObservedWrite(providerId, () => storeObservedLimits(providerId, windows, now));
   } catch (err) {
     return Promise.resolve(observeFailed(providerId, err));
   }
