@@ -5,14 +5,14 @@ import { readJsonOr } from "@/lib/utils/json";
 import type { UpstreamAuth } from "@/types/providers";
 
 const MODELS_TIMEOUT_MS = 30_000;
+const QUOTA_SUMMARY_TIMEOUT_MS = 10_000;
 
-export async function fetchAvailableModels(
-  auth: UpstreamAuth,
-  baseUrl = "",
-): Promise<{ status: number; json: unknown; retryAfter: string | null }> {
+type InternalReply = { status: number; json: unknown; retryAfter: string | null };
+
+async function postInternal(auth: UpstreamAuth, baseUrl: string, method: string, timeoutMs: number): Promise<InternalReply> {
   const root = (baseUrl.trim() || ANTIGRAVITY_BASE_URL).replace(/\/$/, "");
   try {
-    const res = await fetch(`${root}/v1internal:fetchAvailableModels`, {
+    const res = await fetch(`${root}/v1internal:${method}`, {
       method: "POST",
       headers: {
         ...antigravityHeaders(),
@@ -21,7 +21,7 @@ export async function fetchAvailableModels(
         Accept: "application/json",
       },
       body: JSON.stringify({ project: auth.project ?? "" }),
-      signal: AbortSignal.timeout(MODELS_TIMEOUT_MS),
+      signal: AbortSignal.timeout(timeoutMs),
       redirect: "error",
     });
     const json: unknown = res.ok ? asRecord(await readJsonOr(res, null)) : null;
@@ -29,4 +29,12 @@ export async function fetchAvailableModels(
   } catch {
     return { status: 0, json: null, retryAfter: null };
   }
+}
+
+export async function fetchAvailableModels(auth: UpstreamAuth, baseUrl = ""): Promise<InternalReply> {
+  return postInternal(auth, baseUrl, "fetchAvailableModels", MODELS_TIMEOUT_MS);
+}
+
+export async function fetchQuotaSummary(auth: UpstreamAuth, baseUrl = ""): Promise<InternalReply> {
+  return postInternal(auth, baseUrl, "retrieveUserQuotaSummary", QUOTA_SUMMARY_TIMEOUT_MS);
 }

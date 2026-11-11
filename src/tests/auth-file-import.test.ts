@@ -4,6 +4,7 @@ import type { AddressInfo } from "node:net";
 import test, { afterEach, beforeEach } from "node:test";
 import type { AuthenticatedSession, Permission } from "@/types/auth";
 import type { GlobalWithWorkerBoot } from "@/types/jobs";
+import { holdAntigravityVersion } from "./support/antigravity-version";
 
 type FakeLogin = {
   account: string;
@@ -204,6 +205,7 @@ beforeEach(() => {
   audits.length = 0;
   reactivated.length = 0;
   settings.clear();
+  holdAntigravityVersion();
 });
 
 afterEach(async () => {

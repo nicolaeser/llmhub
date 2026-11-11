@@ -152,6 +152,31 @@ test("fireAlert sends nothing when no webhook subscribes to the event", async ()
   assert.equal(db.audit.length, 0);
 });
 
+test("the exhaustion alert names the provider's answer when the caller sees it too", async () => {
+  const { alertUpstreamFailure } = await import("@/lib/alerts/notify");
+  const { RouterError } = await import("@/lib/gateway/core");
+  db.enterprise = {
+    alert_webhooks: [{ id: "ops", url: "https://ops.test/hook", secret: "", events: ["upstream_exhaustion"] }],
+  };
+  const wait = { retryAt: Date.now() + 3_600_000, limited: true, kinds: [] as string[] };
+  const messages = async (err: unknown) => {
+    calls = [];
+    await alertUpstreamFailure(err);
+    return calls.map((call) => JSON.parse(call.body).message);
+  };
+
+  assert.deepEqual(await messages(new RouterError("router: every deployment is rate limited", "no_healthy", wait, "Quota exceeded.")), [
+    "router: every deployment is rate limited; the provider answered: Quota exceeded.",
+  ]);
+  assert.deepEqual(await messages(new RouterError("router: every deployment is rate limited", "no_healthy", wait)), [
+    "router: every deployment is rate limited",
+  ]);
+  assert.deepEqual(
+    await messages(new RouterError("router: every deployment is rate limited", "no_healthy", { ...wait, kinds: ["codex"] }, "Quota exceeded.")),
+    ["router: every deployment is rate limited"],
+  );
+});
+
 test("deliverWebhook skips a queued job whose webhook was removed or unsubscribed", async () => {
   const { deliverWebhook } = await import("@/lib/alerts/notify");
   db.enterprise = {

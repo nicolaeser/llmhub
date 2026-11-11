@@ -39,11 +39,12 @@ import {
 } from "@/lib/gateway/routing/runtime";
 import { isConcurrencyLimited } from "@/lib/gateway/routing/concurrency";
 import { applyProviderServiceMode, requestRoutingOverride, serviceModeHeaders } from "@/lib/gateway/dispatch/service-mode";
-import { asRecord, asString } from "@/lib/gateway/core";
+import { asRecord, asString, isUnavailableError, RouterError, routerGateError } from "@/lib/gateway/core";
+import { parseJsonOrNull } from "@/lib/utils/json";
 import { costFilter, costRejected } from "@/lib/gateway/billing/cost-cap";
 import type { DevinResetLookup } from "@/types/devin";
 import type { JsonMap, Principal, ProxyFirstResult } from "@/types/gateway";
-import type { ResolvedDeployment, RoutePool } from "@/types/routing";
+import type { ResolvedDeployment, RoutePool, RouterWait } from "@/types/routing";
 import type { LimitWindow, UpstreamAuth } from "@/types/providers";
 
 const BEDROCK_MODEL = /(?:^|\.)anthropic\.claude-/i;
@@ -356,6 +357,8 @@ export async function proxyJson(input: {
     } catch {
       json = {};
     }
+  } else if (!res.ok) {
+    json = parseJsonOrNull(new TextDecoder().decode(raw)) ?? {};
   }
   if (res.ok) json = decodeBody(input.dep, input.path, json, raw, model);
   return { status: res.status, json, headers: res.headers, raw };
@@ -442,16 +445,39 @@ function detailMessage(detail: unknown): string {
     .join("; ");
 }
 
-export function upstreamErrorMessage(status: number, json: unknown): string {
-  const rec = asRecord(json);
+function errorEnvelope(json: unknown): JsonMap | null {
+  return asRecord(Array.isArray(json) ? json[0] : json);
+}
+
+function sentMessage(json: unknown): string {
+  const rec = errorEnvelope(json);
   const error = asRecord(rec?.error);
   return (
     (typeof error?.message === "string" && error.message) ||
     (typeof rec?.error === "string" && rec.error) ||
     detailMessage(rec?.detail) ||
     (typeof rec?.message === "string" && rec.message) ||
-    `upstream returned ${status}`
+    ""
   );
+}
+
+function fallbackMessage(status: number): string {
+  return `upstream returned ${status}`;
+}
+
+export function upstreamErrorMessage(status: number, json: unknown): string {
+  return sentMessage(json) || fallbackMessage(status);
+}
+
+const upstreamWorded = new WeakSet<GateError>();
+
+function wordedByUpstream(err: GateError, sent: string): GateError {
+  if (sent.trim()) upstreamWorded.add(err);
+  return err;
+}
+
+export function upstreamWords(err: unknown): string | null {
+  return err instanceof GateError && upstreamWorded.has(err) ? err.message : null;
 }
 
 const RETRY_JITTER_MAX_MS = 5_000;
@@ -481,7 +507,7 @@ export function upstreamRetryAt(
   if (status !== 429) return null;
   const windowReset = headers ? claudeRejectionReset(headers, now) : null;
   if (windowReset !== null) return windowReset;
-  const error = asRecord(asRecord(json)?.error);
+  const error = asRecord(errorEnvelope(json)?.error);
   const resetsAt = Number(error?.resets_at);
   if (Number.isFinite(resetsAt) && resetsAt > 0) return resetsAt * 1000;
   const resetsIn = Number(error?.resets_in_seconds);
@@ -490,16 +516,20 @@ export function upstreamRetryAt(
 }
 
 export function upstreamError(status: number, json: unknown, headers?: Headers): GateError {
-  const error = asRecord(asRecord(json)?.error);
+  const error = asRecord(errorEnvelope(json)?.error);
   const passCode = status !== 401 && status !== 403 && typeof error?.code === "string" && error.code;
-  const message = upstreamErrorMessage(status, json);
+  const sent = sentMessage(json);
+  const message = sent || fallbackMessage(status);
   const requestScoped = status === 429 && entitlementRefusal(message);
-  return new GateError(status || 502, "upstream_error", message, {
-    param: typeof error?.param === "string" ? error.param : null,
-    upstreamCode: passCode || undefined,
-    retryAt: requestScoped ? null : upstreamRetryAt(status, json, Date.now(), headers),
-    requestScoped,
-  });
+  return wordedByUpstream(
+    new GateError(status || 502, "upstream_error", message, {
+      param: typeof error?.param === "string" ? error.param : null,
+      upstreamCode: passCode || undefined,
+      retryAt: requestScoped ? null : upstreamRetryAt(status, json, Date.now(), headers),
+      requestScoped,
+    }),
+    sent,
+  );
 }
 
 export function withDeploymentModel(raw: BodyInit | undefined, model: string): BodyInit | undefined {
@@ -508,6 +538,19 @@ export function withDeploymentModel(raw: BodyInit | undefined, model: string): B
   for (const [key, value] of raw.entries()) form.append(key, value);
   form.set("model", model);
   return form;
+}
+
+function recoversSooner(wait: RouterWait | null, failure: GateError): boolean {
+  return wait !== null && failure.retryAt !== null && wait.retryAt < failure.retryAt;
+}
+
+function unavailableFailure(err: unknown, upstreamFailure: GateError | null, limitReason: string | null): GateError {
+  const routed = (failure: unknown) =>
+    routerGateError(failure) ?? new GateError(503, "no_healthy_deployment", "no healthy deployment for model");
+  if (!isUnavailableError(err)) return upstreamFailure ?? routed(err);
+  if (err.wait?.limited) return routed(new RouterError(err.message, err.code, err.wait, limitReason));
+  if (!upstreamFailure || recoversSooner(err.wait, upstreamFailure)) return routed(err);
+  return upstreamFailure;
 }
 
 export async function forwardToModel(
@@ -526,11 +569,13 @@ export async function forwardToModel(
   },
 ): Promise<ProxyFirstResult> {
   let last: GateError = new GateError(404, "model_not_found", "no deployment for model", { param: "model" });
+  let upstreamFailure: GateError | null = null;
   const cost = costFilter(principal, body);
   const pool = opts?.pool ?? "api";
   const inPool = routable(pool);
   for (const alias of aliases) {
     if (!alias || alias === "auto") continue;
+    let limitReason: string | null = null;
     let group;
     try {
       group = await loadGroup(alias);
@@ -557,7 +602,7 @@ export async function forwardToModel(
       } catch (err) {
         if (costRejected(err)) throw err;
         if (!providerDepleted(last)) {
-          last = isConcurrencyLimited(err) ? err : new GateError(503, "no_healthy_deployment", "no healthy deployment for model");
+          last = isConcurrencyLimited(err) ? err : unavailableFailure(err, upstreamFailure, limitReason);
         }
         break;
       }
@@ -611,6 +656,8 @@ export async function forwardToModel(
             })()
           : proxied.json;
         last = upstreamError(proxied.status, json, proxied.headers);
+        upstreamFailure = last;
+        if (last.status === 429 && !last.requestScoped) limitReason = upstreamWords(last) ?? limitReason;
         if (providerDepleted(last)) {
           markRejected(dep, Date.now() + DEPLETED_COOLDOWN_MS);
           if (depleted < group.mapped.length) {
@@ -626,6 +673,7 @@ export async function forwardToModel(
         if (err instanceof GateError && !retryableStatus(err.status)) throw err;
         markFailure(dep, err instanceof GateError ? err.retryAt : null);
         last = err instanceof GateError ? err : new GateError(502, "upstream_error", "upstream request failed");
+        upstreamFailure = last;
       } finally {
         release();
       }

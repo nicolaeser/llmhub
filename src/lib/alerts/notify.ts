@@ -2,7 +2,7 @@ import "server-only";
 import { createHmac, randomUUID } from "node:crypto";
 import { jobsEnabled } from "@/lib/jobs/connection";
 import { enqueueWebhook } from "@/lib/jobs/queues";
-import { isRouterError } from "@/lib/gateway/core";
+import { isRouterError, withProviderReason } from "@/lib/gateway/core";
 import {
   ALERT_MAIL_COOLDOWN_MS,
   alertMailRecipients,
@@ -144,7 +144,7 @@ export function shouldAlert(err: unknown): boolean {
 
 export async function alertUpstreamFailure(err: unknown): Promise<void> {
   if (!shouldAlert(err)) return;
-  const message = err instanceof Error ? err.message : "upstream failure";
+  const message = err instanceof Error ? withProviderReason(err.message, err) : "upstream failure";
   await fireAlert("upstream_exhaustion", message);
 }
 

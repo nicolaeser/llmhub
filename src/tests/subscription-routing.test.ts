@@ -14,11 +14,13 @@ import {
   pickQuotaSmart,
   pickRoundRobin,
 } from "@/lib/gateway/routing/router";
+import { antigravityLimits } from "@/lib/gateway/upstreams/antigravity";
 import { claudeLimits } from "@/lib/gateway/upstreams/subscription-limits";
+import { usageWindows, windowUsage } from "@/lib/providers/key-usage-shares";
 import type { Principal } from "@/types/gateway";
 import type { Deployment, QuotaScores } from "@/types/routing";
 import type { VirtualKeyView } from "@/types/keys";
-import type { LimitWindow, SubscriptionLimits } from "@/types/providers";
+import type { KeyUsageRow, LimitWindow, SubscriptionLimits } from "@/types/providers";
 
 const NOW = Date.parse("2026-10-12T12:00:00Z");
 const iso = (hours: number) => new Date(NOW + hours * 3_600_000).toISOString();
@@ -72,6 +74,49 @@ test("a window label never changes which models a scoped window covers", () => {
   assert.equal(quotaExhausted(labelled, "claude-opus-4-6", NOW), false);
   assert.equal(quotaExhausted(labelled, "", NOW), false);
   assert.equal(quotaPressure(labelled, "claude-opus-4-6", NOW), 50);
+});
+
+function antigravitySnapshot(models: Record<string, number>): SubscriptionLimits {
+  const entries = Object.entries(models).map(([id, remainingFraction]) => [
+    id,
+    { displayName: id, quotaInfo: { remainingFraction, resetTime: iso(5) } },
+  ]);
+  return antigravityLimits({ models: Object.fromEntries(entries) }, "pro", NOW);
+}
+
+test("an Antigravity model window covers only the model it names", () => {
+  const flashOut = antigravitySnapshot({ "gemini-2.5-flash": 0, "gemini-3-flash": 0 });
+  assert.equal(quotaExhausted(flashOut, "gemini-2.5-flash", NOW), true);
+  assert.equal(quotaExhausted(flashOut, "Gemini-2.5-Flash", NOW), true);
+  assert.equal(modelRecoveryAt(flashOut, "gemini-2.5-flash", NOW), NOW + 5 * 3_600_000);
+  for (const sibling of ["gemini-2.5-flash-lite", "gemini-2.5-flash-thinking", "gemini-3-flash-agent"]) {
+    assert.equal(quotaExhausted(flashOut, sibling, NOW), false, sibling);
+    assert.equal(modelRecoveryAt(flashOut, sibling, NOW), null, sibling);
+    assert.equal(quotaPressure(flashOut, sibling, NOW), 50, sibling);
+  }
+  const both = antigravitySnapshot({ "gemini-2.5-flash": 0, "gemini-2.5-flash-lite": 0.75 });
+  assert.equal(quotaExhausted(both, "gemini-2.5-flash-lite", NOW), false);
+  assert.equal(quotaPressure(both, "gemini-2.5-flash-lite", NOW), 25);
+});
+
+test("a snapshot stored before exact model scopes keeps matching by containment", () => {
+  const legacy = limits([
+    window({ scope: "gemini-2.5-flash", usedPercent: 100, windowSeconds: 0, resetsAt: iso(5), limitReached: true }),
+  ]);
+  assert.equal(quotaExhausted(legacy, "gemini-2.5-flash", NOW), true);
+  assert.equal(quotaExhausted(legacy, "gemini-2.5-flash-lite", NOW), true);
+});
+
+test("Claude family scopes still cover every model of the family", () => {
+  const opusFull = limits([window({ scope: "Opus", usedPercent: 100, limitReached: true, resetsAt: iso(30) })]);
+  assert.equal(quotaExhausted(opusFull, "claude-opus-4-6-thinking", NOW), true);
+  assert.equal(modelRecoveryAt(opusFull, "claude-opus-4-6-thinking", NOW), NOW + 30 * 3_600_000);
+  const rows: KeyUsageRow[] = [
+    { keyId: "opus", upstreamModel: "claude-opus-4-6-thinking", requests: 2, tokens: 20, cost: 0 },
+    { keyId: "sonnet", upstreamModel: "claude-sonnet-4-5", requests: 1, tokens: 10, cost: 0 },
+  ];
+  const [scoped] = usageWindows("claude", opusFull, NOW);
+  assert.deepEqual(windowUsage(scoped!, rows).keys.map((key) => key.keyId), ["opus"]);
 });
 
 test("pressure is the tightest live window and a renewed window counts as empty", () => {

@@ -208,6 +208,8 @@ export type SignInStart = {
 export type LimitWindow = {
   key?: string;
   scope: string;
+  exactScope?: boolean;
+  accountBucket?: string;
   label?: string;
   usedPercent: number;
   windowSeconds: number;
@@ -511,6 +513,13 @@ export type AntigravitySettings = {
 export type AntigravityClientState = {
   saved: boolean;
   bundled: boolean;
+};
+
+export type AntigravityVersionState = {
+  version: string;
+  nextCheckAt: number;
+  pending: Promise<void> | null;
+  failing: boolean;
 };
 
 export type ProviderListActions = {
