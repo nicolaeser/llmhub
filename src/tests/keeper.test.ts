@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, rm, utimes } from "node:fs/promises";
+import { mkdtemp, rm, stat, utimes } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test, { mock } from "node:test";
@@ -64,11 +64,13 @@ test("a failing keeper step never stops the others and is logged once, then at i
 
 test("the keeper is healthy only while its loop keeps writing the heartbeat", async () => {
   const dir = await mkdtemp(path.join(tmpdir(), "llmhub-keeper-"));
-  const file = path.join(dir, "heartbeat");
+  const file = path.join(dir, "state", "heartbeat");
   try {
     assert.equal(await heartbeatFresh(file), false);
     await writeHeartbeat(file);
     assert.equal(await heartbeatFresh(file), true);
+    assert.equal((await stat(path.join(dir, "state"))).mode & 0o777, 0o700);
+    assert.equal((await stat(file)).mode & 0o777, 0o600);
     const stale = new Date(Date.now() - KEEPER_STALE_MS - 1_000);
     await utimes(file, stale, stale);
     assert.equal(await heartbeatFresh(file), false);

@@ -9,18 +9,22 @@ import { keeperEmbedded, retryDelay, supervise } from "../../scripts/start.mjs";
 
 type Command = [string, string[]];
 
-function script(code: string): Command {
-  return [process.execPath, ["-e", code]];
+const CHILD =
+  'const fs = require("node:fs"); const [trace, name, extra] = process.argv.slice(1); const record = (word) => fs.appendFileSync(trace, word + "\\n");';
+const LONG_RUNNING = `${CHILD} record(name + ":start"); process.on("SIGTERM", () => { record(name + ":stop"); process.exit(0); }); setInterval(() => {}, 1000);`;
+const FAILS_TWICE = `${CHILD} const n = Number(fs.existsSync(extra) ? fs.readFileSync(extra, "utf8") : 0) + 1; fs.writeFileSync(extra, String(n)); record(name); process.exit(n < 3 ? 1 : 0);`;
+const CRASHES = `${CHILD} record(name + ":start"); setTimeout(() => process.exit(3), 300);`;
+const EXITS = `${CHILD} record(name + ":start"); process.exit(1);`;
+const SLOW_SUCCESS = `${CHILD} setTimeout(() => { record(name); process.exit(0); }, 300);`;
+const SLOW_FAILURE = `${CHILD} setTimeout(() => { record(name); process.exit(1); }, 300);`;
+const SUCCEEDS = "process.exit(0)";
+
+function child(code: string, ...args: string[]): Command {
+  return [process.execPath, ["-e", code, ...args]];
 }
 
-function recorder(file: string, word: string) {
-  return `require("node:fs").appendFileSync(${JSON.stringify(file)}, ${JSON.stringify(`${word}\n`)});`;
-}
-
-function longRunning(file: string, name: string, stopCode = 0): Command {
-  return script(
-    `${recorder(file, `${name}:start`)} process.on("SIGTERM", () => { ${recorder(file, `${name}:stop`)} process.exit(${stopCode}); }); setInterval(() => {}, 1000);`,
-  );
+function longRunning(file: string, name: string): Command {
+  return child(LONG_RUNNING, file, name);
 }
 
 async function lines(file: string): Promise<string[]> {
@@ -66,9 +70,7 @@ test("the keeper starts after the first migration attempt and keeps running whil
     const signals = new EventEmitter();
     const done = supervise({
       keeper: longRunning(trace, "keeper"),
-      migrate: script(
-        `const fs = require("node:fs"); const n = Number(fs.existsSync(${JSON.stringify(counter)}) ? fs.readFileSync(${JSON.stringify(counter)}, "utf8") : 0) + 1; fs.writeFileSync(${JSON.stringify(counter)}, String(n)); ${recorder(trace, "migrate")} process.exit(n < 3 ? 1 : 0);`,
-      ),
+      migrate: child(FAILS_TWICE, trace, "migrate", counter),
       server: longRunning(trace, "server"),
       migrationRetryMs: [10],
       signals: signals as unknown as NodeJS.Process,
@@ -94,8 +96,8 @@ test("a crashed server ends the container with its exit code after stopping the 
   await withRun(async (trace, events) => {
     const code = await supervise({
       keeper: longRunning(trace, "keeper"),
-      migrate: script("process.exit(0)"),
-      server: script(`${recorder(trace, "server:start")} setTimeout(() => process.exit(3), 300);`),
+      migrate: child(SUCCEEDS),
+      server: child(CRASHES, trace, "server"),
       signals: new EventEmitter() as unknown as NodeJS.Process,
     });
     assert.equal(code, 3);
@@ -108,8 +110,8 @@ test("a keeper that exits is started again with a delay", async () => {
   await withRun(async (trace, events) => {
     const signals = new EventEmitter();
     const done = supervise({
-      keeper: script(`${recorder(trace, "keeper:start")} process.exit(1);`),
-      migrate: script("process.exit(0)"),
+      keeper: child(EXITS, trace, "keeper"),
+      migrate: child(SUCCEEDS),
       server: longRunning(trace, "server"),
       keeperRestartMs: [10],
       signals: signals as unknown as NodeJS.Process,
@@ -126,7 +128,7 @@ test("a stop during the migration lets it finish and never starts the server", a
     const signals = new EventEmitter();
     const done = supervise({
       keeper: null,
-      migrate: script(`setTimeout(() => { ${recorder(trace, "migrate:done")} process.exit(0); }, 300);`),
+      migrate: child(SLOW_SUCCESS, trace, "migrate:done"),
       server: longRunning(trace, "server"),
       signals: signals as unknown as NodeJS.Process,
     });
@@ -143,7 +145,7 @@ test("a stop during a failing migration does not wait for the next attempt", asy
     const startedAt = Date.now();
     const done = supervise({
       keeper: null,
-      migrate: script(`setTimeout(() => { ${recorder(trace, "migrate:failed")} process.exit(1); }, 300);`),
+      migrate: child(SLOW_FAILURE, trace, "migrate:failed"),
       server: longRunning(trace, "server"),
       migrationRetryMs: [60_000],
       signals: signals as unknown as NodeJS.Process,
