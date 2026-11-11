@@ -146,7 +146,7 @@ function retentionOf(view: LoggingSettingsView) {
 
 async function requestLog(tag: string, days: number) {
   return prisma.requestLog.create({
-    data: { tag, createdAt: ago(days), content: { create: { request: { tag }, createdAt: ago(days) } } },
+    data: { tag, createdAt: ago(days), contents: { create: { request: { tag }, createdAt: ago(days) } } },
   });
 }
 
@@ -214,9 +214,9 @@ test("the sweep deletes expired rows in chunks across tables and keeps recent an
     assert.ok(run);
     assert.deepEqual(run.backlog, []);
 
-    const logs = await prisma.requestLog.findMany({ where: { tag }, include: { content: true } });
+    const logs = await prisma.requestLog.findMany({ where: { tag }, include: { contents: true } });
     assert.deepEqual(
-      logs.map((row) => [row.id, Boolean(row.content)]).sort(),
+      logs.map((row) => [row.id, row.contents.length > 0]).sort(),
       [
         [contentOnly.id, false],
         [recent.id, true],

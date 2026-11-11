@@ -186,7 +186,7 @@ function assertSystemMetered(endpoint: string, model: string) {
   assert.ok(logs.length > 0, endpoint);
   for (const row of logs) {
     assert.equal(row.contentSkip, "system");
-    assert.equal(row.content, undefined);
+    assert.equal(row.contents, undefined);
     assert.deepEqual([row.keyId, row.userId, row.orgId, row.teamId, row.memberId, row.projectId], ["", "", "", "", "", ""]);
   }
 }

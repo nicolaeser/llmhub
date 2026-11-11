@@ -16,6 +16,7 @@ import type {
 } from "@/types/auth";
 import type { SemanticCacheSettings } from "@/types/cache";
 import type { GuardrailPolicy, PiiDetectorSettings, PiiPolicy } from "@/types/guardrails";
+import type { ContentStorage } from "@/types/logs";
 import type { JevSettings } from "@/types/model-catalog";
 import type { AntigravitySettings } from "@/types/providers";
 import type { VectorStoreDefaults } from "@/types/rag";
@@ -92,6 +93,8 @@ export type LoggingSettingsView = {
   objectRetentionDays: number;
   fileRetentionDays: number;
   contentRetentionDays: number;
+  contentMaxGb: number;
+  storage: ContentStorage | null;
   logArchive: boolean;
   logContent: boolean;
   s3Ready: boolean;
@@ -143,6 +146,7 @@ export type Enterprise = {
   log_archive?: boolean;
   log_content?: boolean;
   content_retention_days?: number;
+  content_max_gb?: number;
   pii?: PiiPolicy;
   pii_detector?: PiiDetectorSettings;
   guardrails?: GuardrailPolicy;

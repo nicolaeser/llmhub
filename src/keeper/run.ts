@@ -1,9 +1,10 @@
 import "server-only";
 import { refreshDueLogins, syncLoginJournal } from "@/lib/gateway/upstreams/credentials";
+import prisma from "@/lib/db/prisma";
 import { loginJournal } from "@/lib/gateway/upstreams/login-journal";
 import { errorFields } from "@/lib/logging/format";
 import { logger } from "@/lib/logging/logger";
-import { runKeeperCycle, type KeeperFailures, type KeeperStep } from "./cycle";
+import { nextCycleDelay, runKeeperCycle, waitForDatabase, type KeeperFailures, type KeeperStep } from "./cycle";
 import { KEEPER_CYCLE_MS, KEEPER_STUCK_MS, writeHeartbeat } from "./heartbeat";
 
 const STEPS: KeeperStep[] = [
@@ -17,6 +18,8 @@ export async function runKeeper(): Promise<void> {
   let running: Promise<void> | null = null;
   let timer: ReturnType<typeof setTimeout> | undefined;
 
+  const beat = () => writeHeartbeat().catch((err) => logger.warn("keeper.heartbeat_failed", errorFields(err)));
+
   const cycle = async () => {
     const watchdog = setTimeout(() => {
       logger.error("keeper.cycle_stuck", { limitMs: KEEPER_STUCK_MS });
@@ -24,7 +27,7 @@ export async function runKeeper(): Promise<void> {
     }, KEEPER_STUCK_MS);
     try {
       await runKeeperCycle(STEPS, failures);
-      await writeHeartbeat().catch((err) => logger.warn("keeper.heartbeat_failed", errorFields(err)));
+      await beat();
     } finally {
       clearTimeout(watchdog);
     }
@@ -35,7 +38,7 @@ export async function runKeeper(): Promise<void> {
       .catch((err) => logger.error("keeper.cycle_failed", errorFields(err)))
       .finally(() => {
         running = null;
-        if (!stopping) timer = setTimeout(loop, KEEPER_CYCLE_MS);
+        if (!stopping) timer = setTimeout(loop, nextCycleDelay(failures));
       });
   };
 
@@ -52,5 +55,10 @@ export async function runKeeper(): Promise<void> {
   process.once("SIGTERM", () => void stop("SIGTERM"));
   process.once("SIGINT", () => void stop("SIGINT"));
   logger.info("keeper.started", { cycleMs: KEEPER_CYCLE_MS, journal: await loginJournal.available() });
-  loop();
+  running = waitForDatabase(() => prisma.providerLogin.count(), { stopped: () => stopping, onAttempt: beat })
+    .then(() => undefined)
+    .finally(() => {
+      running = null;
+      if (!stopping) loop();
+    });
 }

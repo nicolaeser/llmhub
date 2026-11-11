@@ -13,6 +13,7 @@ export default function ConfirmDialog({
   state,
   status = "danger",
   focusCancel = false,
+  body,
   children,
 }: {
   title: string;
@@ -24,6 +25,7 @@ export default function ConfirmDialog({
   state?: ReturnType<typeof useOverlayState>;
   status?: "danger" | "warning";
   focusCancel?: boolean;
+  body?: ReactNode;
   children?: ReactNode;
 }) {
   const backdrop = (
@@ -37,9 +39,10 @@ export default function ConfirmDialog({
             <AlertDialog.Icon status={status} />
             <AlertDialog.Heading>{title}</AlertDialog.Heading>
           </AlertDialog.Header>
-          {description ? (
-            <AlertDialog.Body>
-              <p className="text-sm text-muted">{description}</p>
+          {description || body ? (
+            <AlertDialog.Body className="space-y-4">
+              {description ? <p className="text-sm text-muted">{description}</p> : null}
+              {body}
             </AlertDialog.Body>
           ) : null}
           <AlertDialog.Footer>

@@ -54,7 +54,7 @@ export async function requestLogLabels(rows: { keyId: string; userId: string; me
 }
 
 export function requestLogRow(
-  row: RequestLog & { content: { logId: string } | null },
+  row: RequestLog & { contents: { logId: string }[] },
   names: Awaited<ReturnType<typeof requestLogLabels>>,
 ): RequestLogRow {
   return {
@@ -86,7 +86,7 @@ export function requestLogRow(
     guardInput: row.guardInput,
     guardOutput: row.guardOutput,
     labels: labelsOf(row.labels),
-    hasContent: Boolean(row.content),
+    hasContent: row.contents.length > 0,
     contentSkip: row.contentSkip,
     system: systemFeatureOf(row),
     sessionId: row.sessionId,
@@ -101,7 +101,7 @@ export async function findRequestLogDetail(
   const canViewContent = hasPerm(session.permissions, PERMISSIONS.LOGS_CONTENT);
   const row = await prisma.requestLog.findFirst({
     where: { id, ...spendScope(session) },
-    include: { content: { select: { logId: true } } },
+    include: { contents: { select: { logId: true }, take: 1 } },
   });
   if (!row) return null;
   const [names, team, org, project, content] = await Promise.all([
@@ -109,7 +109,7 @@ export async function findRequestLogDetail(
     row.teamId ? prisma.team.findUnique({ where: { id: row.teamId }, select: { alias: true } }) : null,
     row.orgId ? prisma.organization.findUnique({ where: { id: row.orgId }, select: { alias: true } }) : null,
     row.projectId ? prisma.project.findUnique({ where: { id: row.projectId }, select: { alias: true } }) : null,
-    canViewContent && row.content ? prisma.requestLogContent.findUnique({ where: { logId: row.id } }) : null,
+    canViewContent && row.contents.length ? prisma.requestLogContent.findFirst({ where: { logId: row.id } }) : null,
   ]);
   return {
     ...requestLogRow(row, names),

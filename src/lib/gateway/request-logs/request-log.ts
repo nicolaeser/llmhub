@@ -111,7 +111,7 @@ export async function writeRequestLog(entry: RequestLogEntry): Promise<void> {
     contentSkip: skip,
   };
   const log = await prisma.requestLog.create({
-    data: { ...dims, ...meta, cost: entry.cost, ...(piiRestore ? { piiRestore } : {}), ...(content ? { content } : {}) },
+    data: { ...dims, ...meta, cost: entry.cost, ...(piiRestore ? { piiRestore } : {}), ...(content ? { contents: content } : {}) },
   });
   notifyLive("requests");
 

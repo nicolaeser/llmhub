@@ -366,6 +366,22 @@ test("a manual Codex redeem spends the soonest credit, audits it, refreshes limi
   assert.equal([...settings.keys()].some((key) => key.startsWith("provider_reset_lock:")), false);
 });
 
+test("a manual redeem spends the chosen credit and refuses one that is not available", async () => {
+  const { redeemReset } = await import("@/lib/gateway/upstreams/reset-redeem");
+  const account = await addAccount("codex");
+  respond(
+    routeCodex(
+      () => Response.json({ code: "reset", windows_reset: 2 }),
+      () => codexUsage(100),
+    ),
+  );
+  await assert.rejects(redeemReset(account, { actor: "user-1", trigger: "manual", choice: "missing" }), /RESET_NOT_AVAILABLE/);
+  assert.equal(consumes().length, 0);
+  const outcome = await redeemReset(account, { actor: "user-1", trigger: "manual", choice: "late" });
+  assert.equal(outcome.result, "reset");
+  assert.equal(consumes()[0]?.body?.credit_id, "late");
+});
+
 test("a Codex redeem without an applicable reset never calls consume", async () => {
   const { redeemReset } = await import("@/lib/gateway/upstreams/reset-redeem");
   const account = await addAccount("codex");
@@ -417,6 +433,10 @@ test("an unknown Claude claim blocks new claims until fresh limits settle it aft
   assert.equal(pending?.grantId, "bonus_2");
   assert.equal(pending?.orgUuid, ORG);
   await assert.rejects(redeemReset(account, { actor: "worker", trigger: "auto", now: start + 60_000 }), /RESET_PENDING/);
+  await assert.rejects(
+    redeemReset(account, { actor: "user-1", trigger: "manual", now: start + 90_000, choice: "launch_1" }),
+    /RESET_PENDING/,
+  );
   assert.equal(
     (await redeemReset(account, { actor: "user-1", trigger: "manual", now: start + 5 * 60_000 })).result,
     "unknown",

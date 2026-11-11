@@ -9,6 +9,8 @@ import {
   DEFAULT_LOG_RETENTION_DAYS,
   DEFAULT_SECURITY_RETENTION_DAYS,
 } from "@/lib/settings/retention-defaults";
+import { contentMaxBytes, utcDayStart } from "@/lib/db/content-partitions";
+import type { ContentPartitionPolicy } from "@/types/logs";
 import type { Enterprise } from "@/types/settings";
 import { retentionCutoff, shorterRetention } from "./retention";
 import type {
@@ -24,10 +26,6 @@ const RETENTION_CHUNK = 1_000;
 const RETENTION_BUDGET_MS = 20_000;
 export const RETENTION_LEASE = "retention_sweep_lock";
 const RETENTION_LEASE_MS = 50_000;
-
-function utcDay(at: Date): Date {
-  return new Date(Date.UTC(at.getUTCFullYear(), at.getUTCMonth(), at.getUTCDate()));
-}
 
 async function deleteIds(ids: string[], take: number, remove: (ids: string[]) => Promise<{ count: number }>): Promise<RetentionStep> {
   if (!ids.length) return { deleted: 0, more: false };
@@ -89,7 +87,7 @@ const steps: Record<RetentionTable, (cutoff: Date, take: number) => Promise<Rete
   },
   usageRows: async (cutoff) => {
     const oldest = await prisma.usageDaily.findFirst({
-      where: { day: { lt: utcDay(cutoff) } },
+      where: { day: { lt: utcDayStart(cutoff) } },
       orderBy: { day: "asc" },
       select: { day: true },
     });
@@ -99,7 +97,7 @@ const steps: Record<RetentionTable, (cutoff: Date, take: number) => Promise<Rete
   },
   usageLabelRows: async (cutoff) => {
     const oldest = await prisma.usageLabelDaily.findFirst({
-      where: { day: { lt: utcDay(cutoff) } },
+      where: { day: { lt: utcDayStart(cutoff) } },
       orderBy: { day: "asc" },
       select: { day: true },
     });
@@ -146,6 +144,14 @@ function retentionDaysOf(enterprise: Enterprise): Record<RetentionTable, number>
     auditLogs: audit,
     approvalRequests: audit,
   };
+}
+
+export function contentPartitionPolicy(enterprise: Enterprise, now: Date): ContentPartitionPolicy {
+  const days = shorterRetention(
+    enterprise.log_retention_days ?? DEFAULT_LOG_RETENTION_DAYS,
+    enterprise.content_retention_days ?? DEFAULT_CONTENT_RETENTION_DAYS,
+  );
+  return { now, cutoff: retentionCutoff(days, now), maxBytes: contentMaxBytes(enterprise.content_max_gb) };
 }
 
 function retentionTasks(enterprise: Enterprise, now: Date): RetentionTask[] {

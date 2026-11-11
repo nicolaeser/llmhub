@@ -5,6 +5,10 @@ import path from "node:path";
 export const KEEPER_CYCLE_MS = 60_000;
 export const KEEPER_STALE_MS = 3 * KEEPER_CYCLE_MS;
 export const KEEPER_STUCK_MS = 10 * KEEPER_CYCLE_MS;
+export const KEEPER_RETRY_MS = [5_000, 15_000, 30_000];
+export const KEEPER_DATABASE_WAIT_MS = 2_000;
+export const KEEPER_DATABASE_WAIT_ATTEMPTS = 60;
+export const KEEPER_DATABASE_PING_MS = 10_000;
 export const KEEPER_STATE_DIR = path.join(homedir(), ".llmhub-keeper");
 export const KEEPER_HEARTBEAT_FILE = path.join(KEEPER_STATE_DIR, "heartbeat");
 

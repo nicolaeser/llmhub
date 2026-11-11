@@ -83,6 +83,7 @@ import {
   DEFAULT_LOG_RETENTION_DAYS,
   DEFAULT_OBJECT_RETENTION_DAYS,
   DEFAULT_SECURITY_RETENTION_DAYS,
+  clampContentMaxGb,
 } from "@/lib/settings/retention-defaults";
 
 const SETTING_ENTERPRISE = "enterprise";
@@ -133,6 +134,7 @@ const DEFAULT_ENTERPRISE: Enterprise = {
   object_retention_days: DEFAULT_OBJECT_RETENTION_DAYS,
   file_retention_days: 0,
   content_retention_days: DEFAULT_CONTENT_RETENTION_DAYS,
+  content_max_gb: 0,
   alert_webhooks: [],
   log_archive: false,
   log_content: true,
@@ -353,6 +355,7 @@ export function normalizeEnterprise(raw: unknown): Enterprise {
     object_retention_days: asNumber(rec.object_retention_days, DEFAULT_OBJECT_RETENTION_DAYS),
     file_retention_days: asNumber(rec.file_retention_days, 0),
     content_retention_days: asNumber(rec.content_retention_days, DEFAULT_CONTENT_RETENTION_DAYS),
+    content_max_gb: clampContentMaxGb(asNumber(rec.content_max_gb, 0)),
     alert_webhooks: normalizeWebhooks(rec),
     log_archive: asBool(rec.log_archive, false),
     log_content: asBool(rec.log_content, true),

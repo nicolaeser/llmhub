@@ -12,9 +12,13 @@ import { logger } from "@/lib/logging/logger";
 import { refreshAccountLimits } from "@/lib/providers/limit-refresh";
 import type { RedeemResponse } from "@/types/resets";
 
-export async function redeemProviderReset(input: { id: string }): Promise<RedeemResponse> {
+const RESET_CHOICE_MAX = 200;
+
+export async function redeemProviderReset(input: { id: string; choice?: string }): Promise<RedeemResponse> {
   const session = await requirePlatformPermission(PERMISSIONS.PROVIDERS_MANAGE);
   if (typeof input?.id !== "string" || !input.id) throw new Error("MISSING_ID");
+  const choice = input.choice ?? "";
+  if (typeof choice !== "string" || choice.length > RESET_CHOICE_MAX) throw new Error("VALIDATION");
   const row = await prisma.providerConnection.findUnique({
     where: { id: input.id },
     select: { id: true, kind: true, apiKey: true, enabled: true, login: { select: { status: true, version: true } } },
@@ -23,7 +27,7 @@ export async function redeemProviderReset(input: { id: string }): Promise<Redeem
   if (!isResetKind(row.kind)) throw new Error("RESET_UNSUPPORTED");
   if (row.login?.status !== "active") throw new Error("SIGN_IN_EXPIRED");
   const provider = { id: row.id, kind: row.kind, apiKey: row.apiKey };
-  const outcome = await redeemReset(provider, { actor: session.user.id, trigger: "manual" });
+  const outcome = await redeemReset(provider, { actor: session.user.id, trigger: "manual", choice });
   await refreshAccountLimits({ ...provider, enabled: row.enabled, loginVersion: row.login.version }).catch(
     (err: unknown) => {
       logger.warn("provider.reset_refresh_failed", { providerId: row.id, ...errorFields(err) });

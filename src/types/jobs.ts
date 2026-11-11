@@ -25,6 +25,7 @@ export type MaintenanceSweepResult = {
   rotatedKeys: number;
   requestLogs: number;
   requestContents: number;
+  contentPartitions: number;
   spendEvents: number;
   auditLogs: number;
   securityEvents: number;

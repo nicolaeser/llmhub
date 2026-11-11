@@ -1,5 +1,6 @@
 import "server-only";
 
+import { maintainContentPartitions } from "@/lib/db/content-partitions";
 import { purgeAuthRecords } from "@/lib/auth/cleanup";
 import { ATTEMPT_RETENTION_MS } from "@/lib/auth/throttle";
 import prisma from "@/lib/db/prisma";
@@ -26,7 +27,7 @@ import { revalidateSsoSessions } from "@/lib/auth/sso-sessions";
 import { reportWorkerJobFailure } from "@/lib/sentry/worker-jobs";
 import { runErrorRateAlerts, runKeyExpiryAlerts, runLatencyAlerts, runSpendAnomalyAlerts } from "./alert-checks";
 import { retentionCutoff } from "./retention";
-import { runRetentionSweep } from "./retention-sweep";
+import { contentPartitionPolicy, runRetentionSweep } from "./retention-sweep";
 import type { MaintenanceSweepResult, SpendResetRow } from "@/types/jobs";
 import { money } from "@/lib/utils/money";
 
@@ -48,6 +49,10 @@ async function sweepSettings() {
     reportWorkerJobFailure(err, { queue: QUEUE_NAMES.maintenance, step: "settings", finalAttempt: true });
     return null;
   }
+}
+
+export function logMaintenanceSweep(result: MaintenanceSweepResult | null): void {
+  if (result && Object.values(result).some((count) => count > 0)) logger.info("worker.tick", result);
 }
 
 export async function runMaintenanceSweep(
@@ -81,6 +86,7 @@ export async function runMaintenanceSweep(
     rotatedKeys: rotatedKeys.count,
     requestLogs: 0,
     requestContents: 0,
+    contentPartitions: 0,
     spendEvents: 0,
     auditLogs: 0,
     securityEvents: 0,
@@ -105,6 +111,9 @@ export async function runMaintenanceSweep(
 
   const enterprise = await sweepSettings();
   if (enterprise) {
+    result.contentPartitions = await runSweepJob("content_partitions", () =>
+      maintainContentPartitions(contentPartitionPolicy(enterprise, now)),
+    );
     await runSweepJob("retention", async () => {
       const run = await runRetentionSweep(enterprise, now);
       if (!run) return 0;

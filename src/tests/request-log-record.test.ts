@@ -165,7 +165,7 @@ const policy = (over: Partial<PiiPolicy>): PiiPolicy => ({
 });
 
 type StoredLog = Row & {
-  content?: { create: { request?: unknown; response?: unknown; truncated: boolean } };
+  contents?: { create: { request?: unknown; response?: unknown; truncated: boolean } };
 };
 
 function storedLog(): StoredLog {
@@ -235,7 +235,7 @@ test("recordUsage hands every request to the request log with tokens, cost, and 
   assert.equal(log.status, 502);
   assert.equal(log.outcome, "upstream_error");
   assert.equal(log.error, "upstream said no");
-  assert.deepEqual(log.content?.create, { request, response, truncated: false });
+  assert.deepEqual(log.contents?.create, { request, response, truncated: false });
 });
 
 function prismaError(code: string, message: string): Error {
@@ -309,7 +309,7 @@ test("requestLog.create stores tenancy, routing, PII markers, and nested content
   assert.deepEqual(log.piiInput, ["EMAIL_ADDRESS"]);
   assert.deepEqual(log.piiOutput, ["EMAIL_ADDRESS"]);
   assert.equal(log.contentSkip, "");
-  assert.deepEqual(log.content?.create, {
+  assert.deepEqual(log.contents?.create, {
     request: scanned,
     response: { choices: [{ message: { role: "assistant", content: "sent to [EMAIL_ADDRESS]" } }] },
     truncated: false,
@@ -353,12 +353,12 @@ test("content logging honours the gateway, key, member, and user switches", asyn
 
   const allowed = await logFor(principal({ userId: "user_on" }));
   assert.equal(allowed.contentSkip, "");
-  assert.ok(allowed.content?.create.request);
-  assert.ok(allowed.content?.create.response);
+  assert.ok(allowed.contents?.create.request);
+  assert.ok(allowed.contents?.create.response);
 
   const skipped = async (who: Principal) => {
     const log = await logFor(who);
-    assert.equal(log.content, undefined);
+    assert.equal(log.contents, undefined);
     assert.equal(log.promptTokens, 1);
     return log.contentSkip;
   };
@@ -371,7 +371,7 @@ test("content logging honours the gateway, key, member, and user switches", asyn
 });
 
 test("stored log content is masked with the effective PII policy, including overrides", async () => {
-  const masked = (log: StoredLog) => JSON.stringify(log.content?.create);
+  const masked = (log: StoredLog) => JSON.stringify(log.contents?.create);
   enterprise = { pii: { enabled: false } };
   table("policyOverride").set("proj_pii", { projectId: "proj_pii", pii: policy({}) });
   table("policyOverride").set("org_pii", { orgId: "org_pii", pii: policy({}) });
@@ -452,7 +452,7 @@ test("restore mode records which placeholders went out and where the reply used 
   assert.ok(stored.includes("[IP_ADDRESS_1]"));
 
   const withoutContent = await write(restoring(false), reply);
-  assert.equal(withoutContent.content, undefined);
+  assert.equal(withoutContent.contents, undefined);
   assert.deepEqual(withoutContent.piiRestore, summary);
 
   const masked = await write(principal({ trace: trace({ piiMode: "mask" }) }), reply);

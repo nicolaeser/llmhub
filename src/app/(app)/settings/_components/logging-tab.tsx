@@ -9,7 +9,7 @@ import {
   toast,
 } from "@heroui/react";
 import { Plus } from "lucide-react";
-import { useTranslations } from "next-intl";
+import { useFormatter, useTranslations } from "next-intl";
 import { SettingSection, SettingSwitch } from "./setting-fields";
 import { formats } from "@/i18n/formats";
 import { loadLoggingAction, saveLoggingAction } from "../_action";
@@ -39,8 +39,11 @@ import {
   DEFAULT_LOG_RETENTION_DAYS,
   DEFAULT_OBJECT_RETENTION_DAYS,
   DEFAULT_SECURITY_RETENTION_DAYS,
+  CONTENT_MAX_GB_LIMIT,
+  CONTENT_SIZE_NOTICE_BYTES,
   RETENTION_MAX_DAYS,
 } from "@/lib/settings/retention-defaults";
+import { formatBytes } from "@/lib/utils/bytes";
 import type { AlertRules, AlertWebhookDraft, LoggingSettingsView } from "@/types/settings";
 import type { WebhookEvent } from "@/types/alerts";
 import { useErrorToast } from "@/components/console/use-error-toast";
@@ -71,9 +74,11 @@ export default function LoggingTab() {
   const [objectRetention, setObjectRetention] = useState(DEFAULT_OBJECT_RETENTION_DAYS);
   const [fileRetention, setFileRetention] = useState(0);
   const [contentRetention, setContentRetention] = useState(DEFAULT_CONTENT_RETENTION_DAYS);
+  const [contentMax, setContentMax] = useState(0);
   const [archive, setArchive] = useState(false);
   const [content, setContent] = useState(true);
   const [pending, start] = useTransition();
+  const format = useFormatter();
 
   function seed(next: LoggingSettingsView) {
     setWebhooks(
@@ -99,6 +104,7 @@ export default function LoggingTab() {
     setObjectRetention(next.objectRetentionDays);
     setFileRetention(next.fileRetentionDays);
     setContentRetention(next.contentRetentionDays);
+    setContentMax(next.contentMaxGb);
     setArchive(next.logArchive);
     setContent(next.logContent);
   }
@@ -151,13 +157,19 @@ export default function LoggingTab() {
       <Description>{hint}</Description>
     </NumberField>
   );
-  const numberField = (value: number, onChange: (next: number) => void, label: string, hint: string) => (
+  const numberField = (
+    value: number,
+    onChange: (next: number) => void,
+    label: string,
+    hint: string,
+    maxValue = RETENTION_MAX_DAYS,
+  ) => (
     <NumberField
       fullWidth
       value={value}
       onChange={(next) => onChange(Number.isFinite(next) ? next : 0)}
       minValue={0}
-      maxValue={RETENTION_MAX_DAYS}
+      maxValue={maxValue}
       step={1}
       formatOptions={formats.number.integer}
       isDisabled={disabled}
@@ -283,7 +295,22 @@ export default function LoggingTab() {
         />
         <div className="grid gap-4 md:grid-cols-3 md:items-start">
           {numberField(contentRetention, setContentRetention, t("contentRetention"), t("contentRetentionHint", { days: DEFAULT_CONTENT_RETENTION_DAYS }))}
+          {numberField(contentMax, setContentMax, t("contentMax"), t("contentMaxHint"), CONTENT_MAX_GB_LIMIT)}
         </div>
+        {view.storage ? (
+          <div className="space-y-1">
+            <p className="text-sm text-muted">
+              {t("storageUse", {
+                content: formatBytes(format, view.storage.contentBytes),
+                logs: formatBytes(format, view.storage.logBytes),
+                database: formatBytes(format, view.storage.databaseBytes),
+              })}
+            </p>
+            {view.contentMaxGb === 0 && view.storage.contentBytes >= CONTENT_SIZE_NOTICE_BYTES ? (
+              <p className="text-sm text-warning">{t("storageLarge")}</p>
+            ) : null}
+          </div>
+        ) : null}
       </SettingSection>
       <SettingSection title={t("retentionTitle")}>
         <div className="grid gap-4 md:grid-cols-3 md:items-start">
@@ -327,6 +354,7 @@ export default function LoggingTab() {
               objectRetentionDays: objectRetention,
               fileRetentionDays: fileRetention,
               contentRetentionDays: contentRetention,
+              contentMaxGb: contentMax,
               logArchive: archive,
               logContent: content,
             });

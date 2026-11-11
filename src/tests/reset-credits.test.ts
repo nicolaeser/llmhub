@@ -13,9 +13,10 @@ import {
   retryAfterMs,
   sanitizeLabel,
   selectGrant,
+  chosenCredit,
   soonestCredit,
 } from "@/lib/gateway/upstreams/reset-credits";
-import { canRedeemReset, resetWaitsFor, showsResetSummary } from "@/app/(app)/providers/_components/reset-view";
+import { canRedeemReset, resetChoices, resetWaitsFor, showsResetSummary } from "@/app/(app)/providers/_components/reset-view";
 import { autoResetPoliciesOf, autoResetPolicy, isResetKind } from "@/lib/gateway/routing/auto-reset-policy";
 import type { JsonMap } from "@/types/gateway";
 
@@ -114,6 +115,9 @@ test("grant selection prefers next_grant_id, then the lowest usable id", () => {
   assert.equal(selectGrant(parseClaudeResets(block({ next_grant_id: "c_grant" }, grants)), NOW)?.id, "c_grant");
   assert.equal(selectGrant(parseClaudeResets(block({ next_grant_id: null }, grants)), NOW)?.id, "a_grant");
   assert.equal(selectGrant(parseClaudeResets(block({ next_grant_id: "gone" }, grants)), NOW)?.id, "a_grant");
+  assert.equal(selectGrant(parseClaudeResets(block({ next_grant_id: "c_grant" }, grants)), NOW, "b_grant")?.id, "b_grant");
+  assert.equal(selectGrant(parseClaudeResets(block({}, grants)), NOW, "missing"), null);
+  assert.equal(selectGrant(parseClaudeResets(block({}, [grant({ id: "spent", resets_left: 0 }), grant({ id: "a_grant" })])), NOW, "spent"), null);
 });
 
 test("grant selection skips cooldowns, unusable, paused, spent, and out-of-window grants", () => {
@@ -176,6 +180,9 @@ test("the Codex credit list keeps available credits and picks the soonest expiry
   assert.equal(list.availableCount, 4);
   assert.equal(list.totalEarnedCount, 6);
   assert.equal(soonestCredit(list, NOW)?.id, "soon");
+  assert.equal(chosenCredit(list, NOW, "late")?.id, "late");
+  assert.equal(chosenCredit(list, NOW, "never")?.id, "never");
+  for (const id of ["spent", "expired", "other", "missing"]) assert.equal(chosenCredit(list, NOW, id), null, id);
   const credits = codexResetCredits({ available: 3, applicable: 1 }, list, NOW);
   assert.deepEqual(credits, {
     available: 3,
@@ -322,4 +329,33 @@ test("the account list shows banked resets, offers the button only when one can 
   assert.equal(resetWaitsFor({ ...claude, cooldownUntil: "2026-11-10T11:00:00Z" }, now), "limit");
   assert.equal(resetWaitsFor({ ...claude, eligible: false, ineligibleReason: "tier" }, now), "ineligible");
   assert.equal(resetWaitsFor({ available: 1, applicable: 0, canRedeem: false }, now), null);
+});
+
+test("a reset can be picked only when more than one is usable, and never while a request is unresolved", () => {
+  const credit = (id: string) => ({ id, title: id === "a" ? "Launch" : "", expiresAt: id === "a" ? "2026-11-20T00:00:00Z" : null });
+  assert.deepEqual(resetChoices({ available: 1, applicable: 1, credits: [credit("a")] }), []);
+  assert.deepEqual(
+    resetChoices({ available: 2, applicable: 2, credits: [credit("a"), credit("b")] }).map((item) => [item.id, item.kind, item.title, item.expiresAt]),
+    [
+      ["a", "credit", "Launch", "2026-11-20T00:00:00Z"],
+      ["b", "credit", "", null],
+    ],
+  );
+  const grant = (id: string, usable: boolean) => ({ id, label: id, resetsLeft: 2, resetsTotal: 3, endsAt: null, clears: [], usable });
+  assert.deepEqual(
+    resetChoices({ available: 6, applicable: 4, grants: [grant("g1", true), grant("g2", false), grant("g3", true)] }).map((item) => [item.id, item.left, item.total]),
+    [
+      ["g1", 2, 3],
+      ["g3", 2, 3],
+    ],
+  );
+  assert.deepEqual(
+    resetChoices({
+      available: 2,
+      applicable: 2,
+      credits: [credit("a"), credit("b")],
+      pending: { startedAt: "", retryUntil: "", retryable: true },
+    }),
+    [],
+  );
 });

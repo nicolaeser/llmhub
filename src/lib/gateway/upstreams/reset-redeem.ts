@@ -17,6 +17,7 @@ import {
   fetchClaudeResets,
   fetchCodexCredits,
   redeemSucceeded,
+  chosenCredit,
   selectGrant,
   soonestCredit,
 } from "@/lib/gateway/upstreams/reset-credits";
@@ -334,17 +335,20 @@ async function newClaim(
   trigger: ResetTrigger,
   statusAgeMs: number,
   now: number,
+  choice: string,
 ): Promise<PendingClaim> {
   const base = { requestId: randomUUID(), startedAt: now, attempts: 0, trigger, actor };
   if (provider.kind === "codex") {
     const limits = await freshLimits(provider, FORCED_LIMITS_MS);
     if (!((limits?.resetCredits?.applicable ?? 0) > 0)) throw new Error("RESET_NOT_AVAILABLE");
-    const credit = soonestCredit((await readCodex(provider, CODEX_REFRESH_AGE_MS, now))?.value ?? null, now);
+    const list = (await readCodex(provider, CODEX_REFRESH_AGE_MS, now))?.value ?? null;
+    const credit = choice ? chosenCredit(list, now, choice) : soonestCredit(list, now);
+    if (choice && !credit) throw new Error("RESET_NOT_AVAILABLE");
     return { kind: "codex", ...base, ...(credit ? { creditId: credit.id } : {}) };
   }
   const block = (await readClaude(provider, statusAgeMs, now))?.value ?? null;
   if (block?.cooldownUntil && Date.parse(block.cooldownUntil) > now) throw new Error("RESET_COOLDOWN");
-  const grant = selectGrant(block, now);
+  const grant = selectGrant(block, now, choice);
   if (!grant) throw new Error("RESET_NOT_AVAILABLE");
   const orgUuid = await orgOf(provider, auth, now);
   if (!orgUuid) throw new Error("UPSTREAM_FAILED");
@@ -393,6 +397,7 @@ async function redeemLocked(
   trigger: ResetTrigger,
   statusAgeMs: number,
   now: number,
+  choice: string,
 ): Promise<RedeemOutcome> {
   let state = await loadResetState(provider.id);
   if (state.pending && trigger === "auto") throw new Error("RESET_PENDING");
@@ -400,8 +405,9 @@ async function redeemLocked(
     if (!(await settleStaleLocked(provider, actor, now))) throw new Error("RESET_PENDING");
     state = await loadResetState(provider.id);
   }
+  if (state.pending && choice && choice !== (state.pending.creditId ?? state.pending.grantId)) throw new Error("RESET_PENDING");
   const auth = await authFor(provider);
-  const pending = state.pending ?? (await newClaim(provider, auth, actor, trigger, statusAgeMs, now));
+  const pending = state.pending ?? (await newClaim(provider, auth, actor, trigger, statusAgeMs, now, choice));
   const claim: PendingClaim = { ...pending, attempts: pending.attempts + 1 };
   const lastAutoAt = trigger === "auto" ? now : state.lastAutoAt;
   await saveResetState(provider.id, { pending: claim, lastAutoAt });
@@ -421,7 +427,7 @@ async function redeemLocked(
 
 export async function redeemReset(
   provider: ResetProvider,
-  options: { actor: string; trigger: ResetTrigger; now?: number; statusAgeMs?: number },
+  options: { actor: string; trigger: ResetTrigger; now?: number; statusAgeMs?: number; choice?: string },
 ): Promise<RedeemOutcome> {
   const kind = provider.kind;
   if (!isResetKind(kind)) throw new Error("RESET_UNSUPPORTED");
@@ -433,6 +439,7 @@ export async function redeemReset(
       options.trigger,
       options.statusAgeMs ?? CLAUDE_REDEEM_AGE_MS,
       now,
+      options.choice ?? "",
     ),
   );
   if (!leased) throw new Error("RESET_BUSY");
