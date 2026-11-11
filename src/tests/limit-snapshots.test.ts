@@ -57,10 +57,10 @@ const deploymentsByProvider = new Map<string, string[]>();
     },
     findMany: async ({ where }: { where: { key: { in: string[] } } }) =>
       where.key.in.flatMap((key) => (settings.has(key) ? [{ key, value: settings.get(key)! }] : [])),
-    create: async ({ data }: { data: { key: string; value: string } }) => {
-      if (settings.has(data.key)) throw Object.assign(new Error("Unique constraint failed"), { code: "P2002" });
-      settings.set(data.key, data.value);
-      return { ...data };
+    createMany: async ({ data }: { data: { key: string; value: string }[]; skipDuplicates: true }) => {
+      const fresh = data.filter((row) => !settings.has(row.key));
+      for (const row of fresh) settings.set(row.key, row.value);
+      return { count: fresh.length };
     },
     deleteMany: async ({ where }: { where: { key: string; value?: string } }) => {
       const value = settings.get(where.key);

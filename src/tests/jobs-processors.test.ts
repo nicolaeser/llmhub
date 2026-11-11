@@ -20,8 +20,9 @@ function fakeModel(model: string) {
         if (model === "setting" && method === "findUnique") {
           return args.where?.key === "enterprise" ? { key: "enterprise", value: JSON.stringify(enterprise) } : null;
         }
-        if (model === "setting" && method === "create" && args.data?.key === "model_catalog_lock") {
-          throw Object.assign(new Error("lock held by another replica"), { code: "P2002" });
+        if (model === "setting" && method === "createMany") {
+          const rows = args.data as unknown as Row[];
+          return { count: rows.filter((row) => row.key !== "model_catalog_lock").length };
         }
         if (method === "deleteMany" || method === "updateMany") return { count: 0 };
         if (method === "findMany" || method === "groupBy") return [];
@@ -99,9 +100,9 @@ test("processModelSync runs the catalog sync behind its lock", async () => {
   const { processModelSync } = await import("@/lib/jobs/processors");
   await processModelSync({ data: {} } as Parameters<typeof processModelSync>[0]);
   const settings = calls.filter((call) => call.model === "setting");
-  assert.deepEqual(settings.slice(0, 2).map((call) => [call.method, call.args.where?.key ?? call.args.data?.key]), [
+  assert.deepEqual(settings.slice(0, 2).map((call) => [call.method, call.args.where?.key ?? (call.args.data as unknown as Row[])[0]?.key]), [
     ["findUnique", "model_catalog_state"],
-    ["create", "model_catalog_lock"],
+    ["createMany", "model_catalog_lock"],
   ]);
   assert.equal(calls.some((call) => call.model === "providerConnection"), false);
 });

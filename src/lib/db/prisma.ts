@@ -3,6 +3,7 @@ import { Pool } from "pg";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "@/generated/prisma/client";
 import { env } from "@/lib/env";
+import { SequentialClient } from "@/lib/db/sequential-client";
 
 const globalForPrisma = globalThis as unknown as {
   prisma?: PrismaClient;
@@ -14,6 +15,7 @@ const pool =
   new Pool({
     connectionString: env.DATABASE_URL,
     max: 10,
+    Client: SequentialClient,
   });
 
 const adapter = new PrismaPg(pool);

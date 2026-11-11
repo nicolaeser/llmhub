@@ -9,7 +9,8 @@ import type { GlobalWithWorkerBoot } from "@/types/jobs";
 
 process.env.REDIS_URL = "redis://127.0.0.1:1";
 
-type Call = { model: string; method: string; args: { where?: { key?: string }; data?: { key?: string; value?: string } } };
+type SettingRow = { key?: string; value?: string };
+type Call = { model: string; method: string; args: { where?: { key?: string }; data?: SettingRow | SettingRow[] } };
 
 const root = fileURLToPath(new URL("../..", import.meta.url));
 const calls: Call[] = [];
@@ -22,8 +23,8 @@ function fakeModel(model: string) {
     {
       get: (_target, method: string) => async (args: Call["args"]) => {
         calls.push({ model, method, args });
-        if (model === "setting" && method === "create" && leaseHeldElsewhere) {
-          throw Object.assign(new Error("Unique constraint failed"), { code: "P2002" });
+        if (model === "setting" && method === "createMany") {
+          return { count: leaseHeldElsewhere ? 0 : (args.data as SettingRow[]).length };
         }
         if (model === "setting" && method === "deleteMany" && leaseExpired) {
           leaseExpired = false;
@@ -95,7 +96,11 @@ async function flush(condition: () => boolean = () => true) {
 
 const bullmqUnavailable = () => logLines.filter((line) => line.event === "worker.bullmq_unavailable");
 const leaseClaims = () =>
-  calls.filter((call) => call.model === "setting" && call.method === "create" && call.args.data?.key === "maintenance_sweep_lock");
+  calls.flatMap((call) =>
+    call.model === "setting" && call.method === "createMany"
+      ? (call.args.data as SettingRow[]).filter((row) => row.key === "maintenance_sweep_lock")
+      : [],
+  );
 const sweeps = () => calls.filter((call) => call.model === "passwordResetToken" && call.method === "deleteMany");
 
 test("a worker with Redis configured but unreachable falls back to local timers without building BullMQ workers", async () => {
@@ -157,7 +162,7 @@ test("BullMQ retries back off exponentially up to five minutes", async () => {
 });
 
 test("the local maintenance sweep runs only while this replica holds the lease", async () => {
-  assert.equal(leaseClaims()[0]?.args.data?.value, String(bootAt + 55_000));
+  assert.equal(leaseClaims()[0]?.value, String(bootAt + 55_000));
   assert.deepEqual(sweeps(), []);
   assert.ok(calls.some((call) => call.model === "setting" && call.method === "deleteMany"));
 
@@ -166,7 +171,7 @@ test("the local maintenance sweep runs only while this replica holds the lease",
   mock.timers.tick(bootAt + 60_000 - Date.now());
   await flush(() => sweeps().length === 1);
   assert.equal(leaseClaims().length, claimsBefore + 1);
-  assert.equal(leaseClaims().at(-1)?.args.data?.value, String(bootAt + 60_000 + 55_000));
+  assert.equal(leaseClaims().at(-1)?.value, String(bootAt + 60_000 + 55_000));
 });
 
 test("claimLease takes a free or expired lease and yields to a live one", async () => {
@@ -174,8 +179,8 @@ test("claimLease takes a free or expired lease and yields to a live one", async 
   calls.length = 0;
   leaseHeldElsewhere = false;
   assert.equal(await claimLease("probe_lock", 1_000, 5_000), true);
-  assert.deepEqual(calls.map((call) => [call.model, call.method, call.args.data]), [
-    ["setting", "create", { key: "probe_lock", value: "6000" }],
+  assert.deepEqual(calls.map((call) => [call.model, call.method, call.args]), [
+    ["setting", "createMany", { data: [{ key: "probe_lock", value: "6000" }], skipDuplicates: true }],
   ]);
 
   calls.length = 0;
@@ -183,7 +188,7 @@ test("claimLease takes a free or expired lease and yields to a live one", async 
   assert.equal(await claimLease("probe_lock", 1_000, 5_000), false);
   assert.deepEqual(
     calls.map((call) => `${call.model}.${call.method}`),
-    ["setting.create", "setting.deleteMany"],
+    ["setting.createMany", "setting.deleteMany"],
   );
   assert.deepEqual(calls[1]?.args.where, { key: "probe_lock", value: { lt: "5000" } });
 
@@ -192,9 +197,9 @@ test("claimLease takes a free or expired lease and yields to a live one", async 
   assert.equal(await claimLease("probe_lock", 1_000, 5_000), true);
   assert.deepEqual(
     calls.map((call) => `${call.model}.${call.method}`),
-    ["setting.create", "setting.deleteMany", "setting.create"],
+    ["setting.createMany", "setting.deleteMany", "setting.createMany"],
   );
-  assert.deepEqual(calls[2]?.args.data, { key: "probe_lock", value: "6000" });
+  assert.deepEqual(calls[2]?.args.data, [{ key: "probe_lock", value: "6000" }]);
   leaseHeldElsewhere = true;
 });
 

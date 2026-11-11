@@ -11,16 +11,15 @@ import { providerAuth } from "@/lib/gateway/upstreams/credentials";
 import {
   claimClaudeReset,
   claudeResetCredits,
+  codexCreditViews,
   codexResetCredits,
   consumeCodexCredit,
   fetchClaudeOrg,
   fetchClaudeResets,
   fetchCodexCredits,
   redeemSucceeded,
-  chosenCredit,
-  selectGrant,
-  soonestCredit,
 } from "@/lib/gateway/upstreams/reset-credits";
+import { claudeResetOptions, codexResetOptions, pickResetOption } from "@/lib/gateway/upstreams/reset-options";
 import {
   blockUsageReads,
   CLAUDE_POLL_MS,
@@ -34,8 +33,8 @@ import {
 import { limitsUpdatedAt } from "@/lib/gateway/upstreams/observed-limits";
 import {
   parseResetState,
-  pendingView,
   RESET_STATE_PREFIX,
+  resetCreditsView,
   resetStateKey,
   RETRY_WINDOW_MS,
 } from "@/lib/gateway/upstreams/reset-state";
@@ -54,13 +53,16 @@ import type {
   CodexCreditList,
   PendingClaim,
   RedeemOutcome,
-  ResetCredits,
+  ResetCreditView,
   ResetKind,
+  ResetOption,
+  ResetOptionRules,
   ResetProvider,
   ResetResult,
   ResetState,
   ResetTrigger,
   StatusRead,
+  StoredResetView,
 } from "@/types/resets";
 
 export const AUTO_GUARD_MS = 15 * 60_000;
@@ -86,6 +88,7 @@ const WORKER_ACTOR = "worker";
 const LOCK_PREFIX = "provider_reset_lock:";
 const AUTO_LOCK_PREFIX = "provider_reset_auto_lock:";
 const POOL_GUARD_PREFIX = "provider_reset_pool:";
+const UNLISTED_CREDIT: ResetCreditView = { id: "", title: "", expiresAt: null };
 
 type Cached<T> = { at: number; value: T | null };
 
@@ -328,6 +331,27 @@ async function settleStaleLocked(provider: ResetProvider, actor: string, now: nu
   return true;
 }
 
+function codexOptions(
+  limits: SubscriptionLimits | null,
+  list: CodexCreditList | null,
+  now: number,
+  rules: ResetOptionRules,
+): ResetOption[] {
+  const listed = codexCreditViews(list, now);
+  const credits = listed.length ? listed : [UNLISTED_CREDIT];
+  return codexResetOptions(limits?.resetCredits?.applicable ?? 0, credits, limits?.windows ?? [], now, rules).options;
+}
+
+function claudeOptions(
+  provider: ResetProvider,
+  block: ClaudeResetBlock,
+  now: number,
+  rules: ResetOptionRules,
+): ResetOption[] {
+  const windows = block.windows.length ? block.windows : (limitsSnapshot(provider.id)?.windows ?? []);
+  return claudeResetOptions(block, windows, now, rules).options;
+}
+
 async function newClaim(
   provider: ResetProvider & { kind: ResetKind },
   auth: UpstreamAuth,
@@ -336,20 +360,20 @@ async function newClaim(
   statusAgeMs: number,
   now: number,
   choice: string,
+  rules: ResetOptionRules,
 ): Promise<PendingClaim> {
   const base = { requestId: randomUUID(), startedAt: now, attempts: 0, trigger, actor };
   if (provider.kind === "codex") {
     const limits = await freshLimits(provider, FORCED_LIMITS_MS);
-    if (!((limits?.resetCredits?.applicable ?? 0) > 0)) throw new Error("RESET_NOT_AVAILABLE");
+    if (!limits) throw new Error("RESET_NOT_AVAILABLE");
     const list = (await readCodex(provider, CODEX_REFRESH_AGE_MS, now))?.value ?? null;
-    const credit = choice ? chosenCredit(list, now, choice) : soonestCredit(list, now);
-    if (choice && !credit) throw new Error("RESET_NOT_AVAILABLE");
-    return { kind: "codex", ...base, ...(credit ? { creditId: credit.id } : {}) };
+    const credit = pickResetOption(codexOptions(limits, list, now, rules), choice, trigger);
+    return { kind: "codex", ...base, ...(credit.id ? { creditId: credit.id } : {}) };
   }
   const block = (await readClaude(provider, statusAgeMs, now))?.value ?? null;
   if (block?.cooldownUntil && Date.parse(block.cooldownUntil) > now) throw new Error("RESET_COOLDOWN");
-  const grant = selectGrant(block, now, choice);
-  if (!grant) throw new Error("RESET_NOT_AVAILABLE");
+  if (!block) throw new Error("RESET_NOT_AVAILABLE");
+  const grant = pickResetOption(claudeOptions(provider, block, now, rules), choice, trigger);
   const orgUuid = await orgOf(provider, auth, now);
   if (!orgUuid) throw new Error("UPSTREAM_FAILED");
   return { kind: "claude", ...base, grantId: grant.id, orgUuid };
@@ -398,6 +422,7 @@ async function redeemLocked(
   statusAgeMs: number,
   now: number,
   choice: string,
+  rules: ResetOptionRules,
 ): Promise<RedeemOutcome> {
   let state = await loadResetState(provider.id);
   if (state.pending && trigger === "auto") throw new Error("RESET_PENDING");
@@ -407,7 +432,7 @@ async function redeemLocked(
   }
   if (state.pending && choice && choice !== (state.pending.creditId ?? state.pending.grantId)) throw new Error("RESET_PENDING");
   const auth = await authFor(provider);
-  const pending = state.pending ?? (await newClaim(provider, auth, actor, trigger, statusAgeMs, now, choice));
+  const pending = state.pending ?? (await newClaim(provider, auth, actor, trigger, statusAgeMs, now, choice, rules));
   const claim: PendingClaim = { ...pending, attempts: pending.attempts + 1 };
   const lastAutoAt = trigger === "auto" ? now : state.lastAutoAt;
   await saveResetState(provider.id, { pending: claim, lastAutoAt });
@@ -427,7 +452,14 @@ async function redeemLocked(
 
 export async function redeemReset(
   provider: ResetProvider,
-  options: { actor: string; trigger: ResetTrigger; now?: number; statusAgeMs?: number; choice?: string },
+  options: {
+    actor: string;
+    trigger: ResetTrigger;
+    now?: number;
+    statusAgeMs?: number;
+    choice?: string;
+    reachedPercent?: number;
+  },
 ): Promise<RedeemOutcome> {
   const kind = provider.kind;
   if (!isResetKind(kind)) throw new Error("RESET_UNSUPPORTED");
@@ -440,6 +472,7 @@ export async function redeemReset(
       options.statusAgeMs ?? CLAUDE_REDEEM_AGE_MS,
       now,
       options.choice ?? "",
+      options.reachedPercent === undefined ? {} : { reachedPercent: options.reachedPercent },
     ),
   );
   if (!leased) throw new Error("RESET_BUSY");
@@ -458,31 +491,25 @@ async function resetView(
   refresh: boolean,
   locked: boolean,
   now: number,
-): Promise<ResetCredits | null> {
+): Promise<StoredResetView | null> {
   let state = await loadResetState(provider.id);
   if (state.pending && now > state.pending.startedAt + RETRY_WINDOW_MS) {
     if (await settleForView(provider, locked, now)) state = await loadResetState(provider.id);
   }
-  let credits: ResetCredits | null;
-  let checkedAt: number | null;
+  let stored: StoredResetView | null;
   if (provider.kind === "codex") {
     const list = await readCodex(provider, refresh ? CODEX_REFRESH_AGE_MS : CODEX_VIEW_AGE_MS, now);
-    credits = codexResetCredits(limits.resetCredits, list?.value ?? null, now);
-    checkedAt = Date.parse(limits.fetchedAt);
+    const credits = codexResetCredits(limits.resetCredits, list?.value ?? null, now, limits.windows);
+    stored = credits ? { ...credits, checkedAt: limits.fetchedAt } : null;
   } else {
     const status = await readClaude(provider, refresh ? CLAUDE_REFRESH_AGE_MS : CLAUDE_VIEW_AGE_MS, now);
-    credits = status?.value ? claudeResetCredits(status.value, now) : null;
-    checkedAt = status?.at ?? null;
+    stored = status?.value
+      ? { ...claudeResetCredits(status.value, now), checkedAt: iso(status.at), claude: status.value }
+      : null;
   }
-  if (!credits && !state.pending) return null;
-  const base = credits ?? { available: 0, applicable: 0 };
-  const pending = state.pending ? pendingView(state.pending, now) : null;
-  return {
-    ...base,
-    pending,
-    checkedAt: checkedAt !== null && Number.isFinite(checkedAt) ? iso(checkedAt) : null,
-    canRedeem: pending ? pending.retryable : base.applicable > 0,
-  };
+  const view = resetCreditsView(provider.kind, limits, stored, state, now);
+  if (!view) return null;
+  return stored?.claude ? { ...view, claude: stored.claude } : view;
 }
 
 export async function withResetDetails(
@@ -546,9 +573,22 @@ async function usageLimits(provider: ResetProvider, now: number): Promise<Subscr
   });
 }
 
-async function applicableNow(provider: ResetProvider & { kind: ResetKind }, now: number): Promise<boolean> {
-  if (provider.kind === "codex") return ((await usageLimits(provider, now))?.resetCredits?.applicable ?? 0) > 0;
-  return selectGrant((await readClaude(provider, CLAUDE_DECISION_AGE_MS, now))?.value ?? null, now) !== null;
+async function applicableNow(
+  provider: ResetProvider & { kind: ResetKind },
+  now: number,
+  rules: ResetOptionRules,
+): Promise<boolean> {
+  let options: ResetOption[];
+  if (provider.kind === "codex") {
+    const limits = await usageLimits(provider, now);
+    if (!((limits?.resetCredits?.applicable ?? 0) > 0)) return false;
+    options = codexOptions(limits, (await readCodex(provider, CODEX_VIEW_AGE_MS, now))?.value ?? null, now, rules);
+  } else {
+    const block = (await readClaude(provider, CLAUDE_DECISION_AGE_MS, now))?.value ?? null;
+    if (!block) return false;
+    options = claudeOptions(provider, block, now, rules);
+  }
+  return options.some((option) => option.recommended && option.helpsNow && option.blocker === null);
 }
 
 async function poolGuardAt(kind: ResetKind): Promise<number> {
@@ -582,7 +622,7 @@ async function redeemDue(
       reason = state.pending ? "pending" : "guard";
       continue;
     }
-    if (!(await applicableNow(provider, now))) continue;
+    if (!(await applicableNow(provider, now, { reachedPercent: policy.percent }))) continue;
     if (policy.scope === "pool") await savePoolGuard(kind, now);
     try {
       const outcome = await redeemReset(provider, {
@@ -590,6 +630,7 @@ async function redeemDue(
         trigger: "auto",
         now,
         statusAgeMs: CLAUDE_DECISION_AGE_MS,
+        reachedPercent: policy.percent,
       });
       outcomes.push({
         status: redeemSucceeded(outcome.result) ? "redeemed" : "attempted",

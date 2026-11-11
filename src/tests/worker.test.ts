@@ -5,7 +5,8 @@ import test, { mock } from "node:test";
 import { retentionCutoff } from "@/worker/retention";
 import type { GlobalWithWorkerBoot } from "@/types/jobs";
 
-type Call = { model: string; method: string; args: { where?: { key?: string }; data?: { key?: string } } };
+type SettingRow = { key?: string };
+type Call = { model: string; method: string; args: { where?: { key?: string }; data?: SettingRow | SettingRow[] } };
 
 delete process.env.REDIS_URL;
 
@@ -24,6 +25,7 @@ function fakeModel(model: string) {
         if (model === "setting" && method === "findUnique" && args.where?.key === "role_templates_seeded") {
           await catalogGate;
         }
+        if (method === "createMany") return { count: (args.data as SettingRow[]).length };
         if (method === "deleteMany" || method === "updateMany") return { count: 0 };
         if (method === "findMany" || method === "groupBy") return [];
         if (method === "count") return 0;
@@ -55,7 +57,9 @@ const socketConnects = mock.method(net.Socket.prototype, "connect");
 const g = globalThis as GlobalWithWorkerBoot;
 const sourcePath = (relativePath: string) => fileURLToPath(new URL(relativePath, import.meta.url));
 const isLeaseClaim = (call: Call) =>
-  call.model === "setting" && call.method === "create" && call.args.data?.key === "maintenance_sweep_lock";
+  call.model === "setting" &&
+  call.method === "createMany" &&
+  (call.args.data as SettingRow[]).some((row) => row.key === "maintenance_sweep_lock");
 const isCatalogWrite = (call: Call) => call.model === "role" || (call.model === "setting" && call.method === "upsert");
 
 async function until(condition: () => boolean) {

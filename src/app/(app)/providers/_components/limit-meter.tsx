@@ -1,22 +1,25 @@
 "use client";
 
 import { Disclosure, Label, Meter } from "@heroui/react";
+import { OctagonAlert, TriangleAlert } from "lucide-react";
 import { useFormatter, useTranslations } from "next-intl";
-import { meterColor } from "@/lib/utils/budget";
 import type { LimitGroup } from "@/types/providers";
 import KeyUsageBar, { KeyUsageLegend } from "./key-usage-bar";
 import type { SegmentNamer } from "./key-usage-labels";
 import type { BarSegment } from "./key-usage-view";
 import { exhaustionAt } from "./limit-timing";
+import { groupTone, TONE_COLOR, TONE_FILL, TONE_STATE, TONE_TEXT, type LimitState } from "./limit-tone";
 import { useResetTime } from "./use-reset-time";
 
 export type MeterKeys = { segments: BarSegment[]; nameOf: SegmentNamer; shortNameOf: SegmentNamer };
 
-const OUTPUT_TONE: Record<ReturnType<typeof meterColor>, string | undefined> = {
-  accent: undefined,
-  warning: "text-warning",
-  danger: "text-danger",
-};
+const RESET_LINE_TONE = { danger: "text-xs text-danger", warning: "text-xs text-warning" } as const;
+
+export function LimitStateIcon({ state, size = 12 }: { state: LimitState; size?: number }) {
+  if (state === "ok") return null;
+  const Icon = state === "full" ? OctagonAlert : TriangleAlert;
+  return <Icon size={size} aria-hidden className="shrink-0" />;
+}
 
 const DAY_SECONDS = 86_400;
 const HOUR_SECONDS = 3_600;
@@ -49,17 +52,19 @@ export function ResetLine({
   timeZone,
   full = false,
   stacked = false,
+  tone = "danger",
 }: {
   at: number;
   reached: boolean;
   timeZone: string;
   full?: boolean;
   stacked?: boolean;
+  tone?: keyof typeof RESET_LINE_TONE;
 }) {
   const t = useTranslations("Subscriptions.limits");
   const reset = useResetTime(timeZone);
   return (
-    <p className={reached ? "text-xs text-warning" : "text-xs text-muted"}>
+    <p className={reached ? RESET_LINE_TONE[tone] : "text-xs text-muted"}>
       {t.rich("reset", {
         reached: String(reached),
         countdown: reset.countdown(at),
@@ -95,7 +100,8 @@ export default function LimitMeter({
   const pending = Number.isFinite(reset) && reset > now.getTime();
   const runsOut = exhaustionAt(group, now.getTime());
   const used = group.usedPercent;
-  const color = meterColor(used / 100);
+  const tone = groupTone(group);
+  const state = TONE_STATE[tone];
   const label = useLimitLabel()(group);
   const listed = !compact && group.members.length > 1;
   const split = keys !== null && keys.segments.length > 0;
@@ -104,16 +110,25 @@ export default function LimitMeter({
     <div className="min-w-0 space-y-1">
       <Meter
         value={used}
-        color={color}
+        color={TONE_COLOR[tone]}
         aria-label={label}
-        valueLabel={t("used", { used: used / 100, uniform: String(group.uniform) })}
+        valueLabel={t("used", { used: used / 100, uniform: String(group.uniform), state })}
       >
-        <Label>{label}</Label>
-        <Meter.Output className={split ? OUTPUT_TONE[color] : undefined} />
-        {split ? null : (
-          <Meter.Track>
-            <Meter.Fill />
-          </Meter.Track>
+        {({ valueText }) => (
+          <>
+            <Label>{label}</Label>
+            <Meter.Output
+              className={`flex items-center justify-end gap-1 ${(split || state !== "ok" ? TONE_TEXT[tone] : undefined) ?? ""}`}
+            >
+              <LimitStateIcon state={state} />
+              {valueText}
+            </Meter.Output>
+            {split ? null : (
+              <Meter.Track>
+                <Meter.Fill className={TONE_FILL[tone]} />
+              </Meter.Track>
+            )}
+          </>
         )}
       </Meter>
       {split ? (
@@ -132,7 +147,7 @@ export default function LimitMeter({
       {pending ? <ResetLine at={reset} reached={group.limitReached} timeZone={timeZone} full={!compact} /> : null}
       {!pending && used === 0 ? <p className="text-xs text-muted">{t("notStarted")}</p> : null}
       {!pending && used > 0 ? (
-        <p className={group.limitReached ? "text-xs text-warning" : "text-xs text-muted"}>
+        <p className={group.limitReached ? "text-xs text-danger" : "text-xs text-muted"}>
           {t("resetUnknown", { reached: String(group.limitReached) })}
         </p>
       ) : null}

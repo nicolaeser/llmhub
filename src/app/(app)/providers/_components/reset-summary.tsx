@@ -1,12 +1,12 @@
 "use client";
 
 import { TimerReset } from "lucide-react";
-import { useTranslations } from "next-intl";
+import { useFormatter, useTranslations } from "next-intl";
 import type { LimitSnapshot, ProviderView } from "@/types/providers";
 import type { ResetCredits } from "@/types/resets";
 import RedeemResetButton from "./redeem-reset-button";
-import { canRedeemReset, resetWaitsFor } from "./reset-view";
-import { useResetTime } from "./use-reset-time";
+import { canRedeemReset, optionNaming, recommendedReset, resetOptions, resetWaitsFor } from "./reset-view";
+import { useResetLabels } from "./use-reset-labels";
 
 export default function ResetSummary({
   row,
@@ -23,8 +23,11 @@ export default function ResetSummary({
 }) {
   const t = useTranslations("Subscriptions.resets");
   const tLimits = useTranslations("Subscriptions.limits");
-  const reset = useResetTime(timeZone);
-  const now = reset.now.getTime();
+  const format = useFormatter();
+  const labels = useResetLabels(timeZone, credits);
+  const { reset, now } = labels;
+  const recommended = recommendedReset(credits);
+  const names = credits.pending ? [] : [...new Set(resetOptions(credits).map(labels.option))];
   const expiry = credits.expiresAt ? Date.parse(credits.expiresAt) : NaN;
   const cooldown = credits.cooldownUntil ? Date.parse(credits.cooldownUntil) : NaN;
   const waits = resetWaitsFor(credits, now);
@@ -36,6 +39,8 @@ export default function ResetSummary({
           <TimerReset size={12} aria-hidden className="shrink-0 text-muted" />
           {tLimits("resetCredits", { available: credits.available, applicable: credits.applicable })}
         </p>
+        {recommended ? <p className="text-xs text-muted">{t("recommendedNow", optionNaming(recommended))}</p> : null}
+        {!recommended && names.length > 0 ? <p className="break-words text-xs text-muted">{format.list(names)}</p> : null}
         {Number.isFinite(expiry) && expiry > now ? (
           <p className="text-xs text-muted">{t("expires", { when: reset.countdown(expiry), date: reset.date(expiry) })}</p>
         ) : null}

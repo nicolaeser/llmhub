@@ -203,7 +203,7 @@ export default function SubscriptionGroup({
     if (account.recovery === null) {
       return <p className="text-xs text-muted">{tLimits("resetUnknown", { reached: "false" })}</p>;
     }
-    return <ResetLine at={account.recovery} reached timeZone={timeZone} stacked />;
+    return <ResetLine at={account.recovery} reached timeZone={timeZone} stacked tone="warning" />;
   }
 
   function signIn(row: ProviderView, account: AccountRow) {

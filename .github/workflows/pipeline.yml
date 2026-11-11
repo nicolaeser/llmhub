@@ -21,7 +21,7 @@ on:
         value: ${{ jobs.version.outputs.tags }}
 
 env:
-  NODE_VERSION: "24"
+  NODE_VERSION: "26"
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
 

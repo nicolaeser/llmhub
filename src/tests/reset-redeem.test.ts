@@ -42,10 +42,10 @@ function settingMatches(key: string, where: { key?: string | { startsWith: strin
 
 const fakePrisma = {
   setting: {
-    create: async ({ data }: { data: { key: string; value: string } }) => {
-      if (settings.has(data.key)) throw Object.assign(new Error("Unique constraint failed"), { code: "P2002" });
-      settings.set(data.key, data.value);
-      return { ...data };
+    createMany: async ({ data }: { data: { key: string; value: string }[]; skipDuplicates: true }) => {
+      const fresh = data.filter((row) => !settings.has(row.key));
+      for (const row of fresh) settings.set(row.key, row.value);
+      return { count: fresh.length };
     },
     deleteMany: async ({ where }: { where: { key?: string; value?: string | { lt: string } } }) => {
       const keys = [...settings.keys()].filter((key) => settingMatches(key, where));
@@ -198,18 +198,87 @@ function codexCredits() {
 
 function claudeBlock(atLimit: boolean, change: JsonMap = {}) {
   return Response.json({
-    five_hour: { utilization: 100, resets_at: new Date(Date.now() + 3_600_000).toISOString() },
+    five_hour: { utilization: atLimit ? 100 : 40, resets_at: new Date(Date.now() + 3_600_000).toISOString() },
     cedar_ember: {
       eligible: true,
       at_limit: atLimit,
       grants: [
         { id: "launch_1", label: "Launch", resets_total: 1, resets_left: 1, usable_now: true, clears: ["five_hour"] },
-        { id: "bonus_2", label: "Bonus", resets_total: 1, resets_left: 1, usable_now: true },
+        {
+          id: "bonus_2",
+          label: "Bonus",
+          resets_total: 1,
+          resets_left: 1,
+          usable_now: true,
+          clears: ["five_hour", "seven_day"],
+        },
       ],
       next_grant_id: "bonus_2",
       ...change,
     },
   });
+}
+
+const FABLE_GRANT: JsonMap = {
+  id: "fable_1",
+  label: "Fable",
+  resets_total: 1,
+  resets_left: 1,
+  usable_now: true,
+  clears: ["seven_day_overage_included"],
+  gives_back_weekly: true,
+};
+const WEEKLY_GRANT: JsonMap = {
+  id: "weekly_1",
+  label: "Weekly",
+  resets_total: 1,
+  resets_left: 1,
+  usable_now: true,
+  type: "weekly",
+  clears: ["seven_day", "seven_day_overage_included"],
+};
+const SESSION_GRANT: JsonMap = {
+  id: "session_1",
+  label: "Session",
+  resets_total: 1,
+  resets_left: 1,
+  usable_now: true,
+  type: "session",
+  clears: ["five_hour"],
+};
+
+function weeklyFull(fablePercent: number, fableOfWeekly: number): JsonMap {
+  const resetsAt = new Date(Date.now() + 30 * 3_600_000).toISOString();
+  return {
+    five_hour: null,
+    seven_day: { utilization: 100, resets_at: resetsAt },
+    iguana_necktie: null,
+    limits: [
+      { kind: "weekly_all", group: "weekly", percent: 100, resets_at: resetsAt, scope: null, is_active: true },
+      {
+        kind: "weekly_scoped",
+        group: "weekly",
+        percent: fablePercent,
+        resets_at: resetsAt,
+        scope: { model: { id: null, display_name: "Fable" }, surface: null },
+        is_active: false,
+      },
+    ],
+    weekly_scoped_shares: [{ limit_index: 1, used_percent_of_weekly: fableOfWeekly, allowance_percent_of_weekly: 50 }],
+  };
+}
+
+function routeWeeklyFull(grants: JsonMap[], fablePercent = 0, fableOfWeekly = 0, nextGrantId = "fable_1"): Reply {
+  const usage = weeklyFull(fablePercent, fableOfWeekly);
+  return routeClaude(
+    () => Response.json({ result: "reset" }),
+    () =>
+      Response.json({
+        ...usage,
+        cedar_ember: { eligible: true, at_limit: true, exhausted: ["seven_day"], grants, next_grant_id: nextGrantId },
+      }),
+    () => Response.json(usage),
+  );
 }
 
 function claudeUsage(used: number) {
@@ -333,7 +402,7 @@ test("the auto guard waits 15 minutes and never runs while a claim is unresolved
   assert.equal(autoGuardOpen({ pending, lastAutoAt: 0 }, now), false);
 });
 
-test("a manual Codex redeem spends the soonest credit, audits it, refreshes limits, and clears cooldowns", async () => {
+test("a manual Codex redeem needs a choice between credits, audits it, refreshes limits, and clears cooldowns", async () => {
   const { redeemReset, loadResetState } = await import("@/lib/gateway/upstreams/reset-redeem");
   const { coolingDown, recordFailure } = await import("@/lib/gateway/routing/provider-health");
   const account = await addAccount("codex");
@@ -350,7 +419,10 @@ test("a manual Codex redeem spends the soonest credit, audits it, refreshes limi
       () => (spent ? codexUsage(0, { available_count: 1, applicable_available_count: 0 }) : codexUsage(100)),
     ),
   );
-  const outcome = await redeemReset(account, { actor: "user-1", trigger: "manual" });
+  await assert.rejects(redeemReset(account, { actor: "user-1", trigger: "manual" }), /RESET_CHOICE_REQUIRED/);
+  assert.equal(consumes().length, 0);
+  assert.deepEqual(auditResults(account.id), []);
+  const outcome = await redeemReset(account, { actor: "user-1", trigger: "manual", choice: "soon" });
   assert.deepEqual(outcome, { result: "reset", windowsReset: 2 });
   const [consume] = consumes();
   assert.equal(consume?.body?.credit_id, "soon");
@@ -391,7 +463,9 @@ test("a Codex redeem without an applicable reset never calls consume", async () 
       () => codexUsage(100, { available_count: 2, applicable_available_count: 0 }),
     ),
   );
-  await assert.rejects(redeemReset(account, { actor: "user-1", trigger: "manual" }), /RESET_NOT_AVAILABLE/);
+  await assert.rejects(redeemReset(account, { actor: "user-1", trigger: "manual" }), /RESET_NOT_USABLE/);
+  await assert.rejects(redeemReset(account, { actor: "user-1", trigger: "manual", choice: "soon" }), /RESET_NOT_USABLE/);
+  await assert.rejects(redeemReset(account, { actor: "worker", trigger: "auto" }), /RESET_NOT_AVAILABLE/);
   assert.equal(consumes().length, 0);
   assert.deepEqual(auditResults(account.id), []);
 });
@@ -401,7 +475,7 @@ test("an unknown Codex outcome stays pending and the retry reuses the same redee
   const account = await addAccount("codex");
   const answers = [new Response("bad gateway", { status: 502 }), Response.json({ code: "already_redeemed" })];
   respond(routeCodex(() => answers.shift()!));
-  const first = await redeemReset(account, { actor: "user-1", trigger: "manual" });
+  const first = await redeemReset(account, { actor: "user-1", trigger: "manual", choice: "soon" });
   assert.equal(first.result, "unknown");
   const state = await loadResetState(account.id);
   assert.equal(state.pending?.attempts, 1);
@@ -428,7 +502,11 @@ test("an unknown Claude claim blocks new claims until fresh limits settle it aft
   ];
   respond(routeClaude(() => answers.shift()!()));
   const start = Date.now();
-  assert.equal((await redeemReset(account, { actor: "user-1", trigger: "manual", now: start })).result, "unknown");
+  await assert.rejects(redeemReset(account, { actor: "user-1", trigger: "manual", now: start }), /RESET_CHOICE_REQUIRED/);
+  assert.equal(
+    (await redeemReset(account, { actor: "user-1", trigger: "manual", now: start, choice: "bonus_2" })).result,
+    "unknown",
+  );
   const pending = (await loadResetState(account.id)).pending;
   assert.equal(pending?.grantId, "bonus_2");
   assert.equal(pending?.orgUuid, ORG);
@@ -447,9 +525,10 @@ test("an unknown Claude claim blocks new claims until fresh limits settle it aft
   assert.equal((await loadResetState(account.id)).pending?.attempts, 2);
 
   const later = start + RETRY_WINDOW_MS + 60_000;
-  const outcome = await redeemReset(account, { actor: "user-1", trigger: "manual", now: later });
+  const outcome = await redeemReset(account, { actor: "user-1", trigger: "manual", now: later, choice: "launch_1" });
   assert.equal(outcome.result, "reset");
   const third = consumes()[2];
+  assert.equal(third?.body?.grant_id, "launch_1");
   assert.notEqual(third?.body?.request_id, first?.body?.request_id);
   assert.deepEqual(auditResults(account.id), ["unknown", "unknown", "expired", "reset"]);
   assert.equal((await loadResetState(account.id)).pending, null);
@@ -468,7 +547,7 @@ test("the per-account lease lets only one of two concurrent redeems reach the pr
       return Response.json({ code: "reset" });
     }),
   );
-  const first = redeemReset(account, { actor: "user-1", trigger: "manual" });
+  const first = redeemReset(account, { actor: "user-1", trigger: "manual", choice: "late" });
   const second = redeemReset(account, { actor: "worker", trigger: "auto" });
   await assert.rejects(second, /RESET_BUSY/);
   release();
@@ -590,8 +669,19 @@ test("reset details on the console show Claude grants, pending claims, and wheth
     detailed?.resetCredits?.grants?.map((item) => item.label),
     ["Launch", "Bonus"],
   );
-  await redeemReset(account, { actor: "user-1", trigger: "manual" });
+  assert.deepEqual(
+    detailed?.resetCredits?.options?.map((item) => [item.id, item.family, item.blocker, item.recommended]),
+    [
+      ["launch_1", "five_hour", null, false],
+      ["bonus_2", "full", null, true],
+    ],
+  );
+  await redeemReset(account, { actor: "user-1", trigger: "manual", choice: "bonus_2" });
   const pending = await withResetDetails(account, limits);
+  assert.deepEqual(
+    pending?.resetCredits?.options?.map((item) => item.blocker),
+    ["pending", "pending"],
+  );
   assert.equal(pending?.resetCredits?.pending?.retryable, true);
   assert.equal(pending?.resetCredits?.canRedeem, true);
   const statusReads = sent.filter((call) => call.url.includes("cedar_ember=1")).length;
@@ -603,6 +693,13 @@ test("reset details on the console show Claude grants, pending claims, and wheth
   const codexDetails = await withResetDetails(codex, codexLimits);
   assert.equal(codexDetails?.resetCredits?.expiresAt, "2098-01-01T00:00:00.000Z");
   assert.equal(codexDetails?.resetCredits?.canRedeem, true);
+  assert.deepEqual(
+    codexDetails?.resetCredits?.options?.map((item) => [item.id, item.family, item.blocker, item.recommended]),
+    [
+      ["soon", "full", null, true],
+      ["late", "full", null, false],
+    ],
+  );
   assert.deepEqual(codexLimits?.resetCredits, { available: 1, applicable: 1 });
 });
 
@@ -624,7 +721,12 @@ test("only providers:manage can use a reset and only for accounts that bank rese
     await runAsPrincipal(manager, () => runAction(() => redeemProviderReset({ id: grok.id }))),
     { ok: false, error: "RESET_UNSUPPORTED", message: "RESET_UNSUPPORTED" },
   );
-  const result = await runAsPrincipal(manager, () => redeemProviderReset({ id: codex.id }));
+  assert.deepEqual(
+    await runAsPrincipal(manager, () => runAction(() => redeemProviderReset({ id: codex.id }))),
+    { ok: false, error: "RESET_CHOICE_REQUIRED", message: "RESET_CHOICE_REQUIRED" },
+  );
+  assert.equal(consumes().length, 0);
+  const result = await runAsPrincipal(manager, () => redeemProviderReset({ id: codex.id, choice: "soon" }));
   assert.equal(result.result, "reset");
   assert.equal(result.windowsReset, 1);
   assert.ok(result.limits);
@@ -745,4 +847,121 @@ test("the gateway hook decides on recent traffic headers without reading Claude 
   assert.equal(sent.length, 0);
   await autoRedeemIfDue(stale.id);
   assert.equal(sent.filter((call) => call.url.endsWith("/api/oauth/usage")).length, 1);
+});
+
+test("with the weekly limit full and Fable unused the server refuses the Fable reset and spends only the weekly one", async () => {
+  const { redeemReset, loadResetState } = await import("@/lib/gateway/upstreams/reset-redeem");
+  const account = await addAccount("claude");
+  respond(routeWeeklyFull([FABLE_GRANT, WEEKLY_GRANT, SESSION_GRANT]));
+  await assert.rejects(
+    redeemReset(account, { actor: "user-1", trigger: "manual", choice: "fable_1" }),
+    /RESET_NOTHING_TO_GIVE_BACK/,
+  );
+  await assert.rejects(
+    redeemReset(account, { actor: "user-1", trigger: "manual", choice: "session_1" }),
+    /RESET_OTHER_LIMIT/,
+  );
+  await assert.rejects(
+    redeemReset(account, { actor: "user-1", trigger: "manual", choice: "missing" }),
+    /RESET_NOT_AVAILABLE/,
+  );
+  assert.equal(consumes().length, 0);
+  assert.equal((await loadResetState(account.id)).pending, null);
+  assert.deepEqual(auditResults(account.id), []);
+  const outcome = await redeemReset(account, { actor: "user-1", trigger: "manual" });
+  assert.equal(outcome.result, "reset");
+  assert.deepEqual(
+    consumes().map((call) => call.body?.grant_id),
+    ["weekly_1"],
+  );
+});
+
+test("a redeem without a choice is refused while several resets can be spent, and a blocked one answers its own code", async () => {
+  const { runAsPrincipal } = await import("@/lib/auth/delegation");
+  const { runAction } = await import("@/lib/http/action-result");
+  const { redeemProviderReset } = await import("@/lib/providers/resets");
+  const { redeemReset } = await import("@/lib/gateway/upstreams/reset-redeem");
+  const manager = principal(["providers:read", "providers:manage"]);
+  const both = await addAccount("claude");
+  respond(routeWeeklyFull([FABLE_GRANT, WEEKLY_GRANT], 60, 30));
+  assert.deepEqual(
+    await runAsPrincipal(manager, () => runAction(() => redeemProviderReset({ id: both.id }))),
+    { ok: false, error: "RESET_CHOICE_REQUIRED", message: "RESET_CHOICE_REQUIRED" },
+  );
+  assert.equal(consumes().length, 0);
+  const chosen = await runAsPrincipal(manager, () => redeemProviderReset({ id: both.id, choice: "fable_1" }));
+  assert.equal(chosen.result, "reset");
+  assert.equal(consumes()[0]?.body?.grant_id, "fable_1");
+  const unused = await addAccount("claude");
+  respond(routeWeeklyFull([FABLE_GRANT]));
+  for (const input of [{ id: unused.id }, { id: unused.id, choice: "fable_1" }]) {
+    assert.deepEqual(
+      await runAsPrincipal(manager, () => runAction(() => redeemProviderReset(input))),
+      { ok: false, error: "RESET_NOTHING_TO_GIVE_BACK", message: "RESET_NOTHING_TO_GIVE_BACK" },
+    );
+  }
+  assert.equal(consumes().length, 1);
+  const cooling = await addAccount("claude");
+  respond(routeClaude(() => Response.json({ result: "reset" }), () => claudeBlock(true, { cooldown_until: new Date(Date.now() + 60_000).toISOString() })));
+  await assert.rejects(redeemReset(cooling, { actor: "user-1", trigger: "manual", choice: "launch_1" }), /RESET_COOLDOWN/);
+  const paused = await addAccount("claude");
+  respond(
+    routeClaude(
+      () => Response.json({ result: "reset" }),
+      () =>
+        claudeBlock(true, {
+          grants: [{ id: "launch_1", resets_total: 1, resets_left: 1, usable_now: true, clears: ["five_hour"], paused: true }],
+        }),
+    ),
+  );
+  await assert.rejects(redeemReset(paused, { actor: "user-1", trigger: "manual" }), /RESET_PAUSED/);
+  assert.equal(consumes().length, 1);
+});
+
+test("automatic resets spend only the recommended reset in account and pool scope and never the Fable reset that gives nothing back", async () => {
+  const { runAutoResets } = await import("@/lib/gateway/upstreams/reset-redeem");
+  const { forgetAccountPolicies } = await import("@/lib/gateway/routing/account-routing");
+  for (const scope of ["account", "pool"] as const) {
+    sent = [];
+    settings.clear();
+    providers.length = 0;
+    forgetAccountPolicies();
+    setPolicy("claude", { scope, percent: 99 });
+    const account = await addAccount("claude");
+    respond(routeWeeklyFull([FABLE_GRANT, WEEKLY_GRANT, SESSION_GRANT]));
+    assert.equal(await runAutoResets(Date.now()), 1, scope);
+    assert.deepEqual(
+      consumes().map((call) => [owner(call), call.body?.grant_id]),
+      [[account.id, "weekly_1"]],
+      scope,
+    );
+    sent = [];
+    settings.clear();
+    providers.length = 0;
+    const fableOnly = await addAccount("claude");
+    respond(routeWeeklyFull([FABLE_GRANT, SESSION_GRANT]));
+    assert.equal(await runAutoResets(Date.now()), 0, scope);
+    assert.equal(consumes().length, 0, scope);
+    assert.deepEqual(auditResults(fableOnly.id), [], scope);
+  }
+});
+
+test("an automatic reset never spends a reset that would not help, even when it is the only one that can be spent", async () => {
+  const { runAutoResets, redeemReset } = await import("@/lib/gateway/upstreams/reset-redeem");
+  setPolicy("claude", { scope: "account", percent: 99 });
+  const account = await addAccount("claude");
+  const unknownShare = { ...FABLE_GRANT, id: "fable_2" };
+  const usage = { seven_day: { utilization: 100, resets_at: new Date(Date.now() + 30 * 3_600_000).toISOString() } };
+  respond(
+    routeClaude(
+      () => Response.json({ result: "reset" }),
+      () => Response.json({ ...usage, cedar_ember: { eligible: true, at_limit: true, grants: [unknownShare], next_grant_id: "fable_2" } }),
+      () => Response.json(usage),
+    ),
+  );
+  assert.equal(await runAutoResets(Date.now()), 0);
+  await assert.rejects(redeemReset(account, { actor: "worker", trigger: "auto" }), /RESET_NOT_AVAILABLE/);
+  assert.equal(consumes().length, 0);
+  assert.equal((await redeemReset(account, { actor: "user-1", trigger: "manual" })).result, "reset");
+  assert.equal(consumes()[0]?.body?.grant_id, "fable_2");
 });

@@ -12,12 +12,9 @@ recordedPrisma.base = {
   setting: {
     findUnique: (args: { where: { key: string } }) =>
       args.where.key === "enterprise" ? { key: "enterprise", value: JSON.stringify(enterprise) } : null,
-    create: (args: { data: { key: string; value: string } }) => {
-      if (leaseHeld && args.data.key === RETENTION_LEASE) {
-        throw Object.assign(new Error("Unique constraint failed"), { code: "P2002" });
-      }
-      return args.data;
-    },
+    createMany: (args: { data: { key: string; value: string }[]; skipDuplicates: boolean }) => ({
+      count: args.data.filter((row) => !(leaseHeld && row.key === RETENTION_LEASE)).length,
+    }),
   },
 };
 

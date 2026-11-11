@@ -1,6 +1,6 @@
 import type { z } from "zod";
 import type { autoResetInputSchema, resetStateSchema } from "@/schemas/resets";
-import type { LimitSnapshot, SubscriptionLimits } from "@/types/providers";
+import type { LimitSnapshot, LimitWindow, SubscriptionLimits } from "@/types/providers";
 
 export type ResetKind = "codex" | "claude";
 
@@ -16,6 +16,32 @@ export type ClaudeResetGrant = {
   usableNow: boolean;
   useRequiresLimit: boolean;
   percentUsed: Record<string, number>;
+  blocking: string[];
+  type: ClaudeGrantType | null;
+  givesBackWeekly: boolean;
+  unavailableReason: ClaudeUnavailableReason | null;
+};
+
+export type ClaudeGrantType = "session" | "weekly" | "full";
+
+export type ClaudeUnavailableReason =
+  | "cooldown"
+  | "blocked_five_hour"
+  | "blocked_seven_day"
+  | "blocked_opus"
+  | "blocked_sonnet"
+  | "blocked_other"
+  | "cannot_clear"
+  | "needs_limit"
+  | "unavailable";
+
+export type ClaudeResetAccount = {
+  surface: "claude_ai" | "claude_code_cli" | "unknown";
+  tier: "claude_pro" | "claude_max_5x" | "claude_max_20x" | "claude_team" | "unknown";
+  tenureBucket: "under_14" | "14-29" | "30-89" | "90-364" | "365+" | "unknown";
+  billingPath: "stripe" | "apple" | "google_play" | "other" | "unknown";
+  billingPeriod: "monthly" | "annual" | "unknown";
+  extraUsageState: "not_configured" | "disabled" | "enabled" | "unknown";
 };
 
 export type ClaudeIneligibleReason =
@@ -35,10 +61,13 @@ export type ClaudeResetBlock = {
   eligible: boolean;
   ineligibleReason: ClaudeIneligibleReason | null;
   atLimit: boolean;
+  exhausted: string[];
   grants: ClaudeResetGrant[];
   nextGrantId: string;
   weeklyResetsAt: string | null;
   cooldownUntil: string | null;
+  account: ClaudeResetAccount | null;
+  windows: LimitWindow[];
 };
 
 export type CodexResetCreditStatus = "available" | "redeeming" | "redeemed";
@@ -81,6 +110,50 @@ export type PendingResetView = {
   retryable: boolean;
 };
 
+export type ResetFamily = "five_hour" | "weekly" | "scoped" | "full" | "other";
+
+export type ResetLimit = {
+  key: string;
+  family: "five_hour" | "weekly" | "scoped" | "other";
+  scope: string;
+  usedPercent: number | null;
+  limitReached: boolean;
+  resetsAt: string | null;
+};
+
+export type ResetBlocker =
+  | "ineligible"
+  | "cooldown"
+  | "paused"
+  | "not_started"
+  | "not_usable"
+  | "exhausted"
+  | "needs_limit"
+  | "other_limit"
+  | "nothing_to_give_back"
+  | "pending";
+
+export type ResetOption = {
+  id: string;
+  family: ResetFamily;
+  scope: string;
+  label: string;
+  refills: ResetLimit[];
+  givesBack: { scope: string; percentOfWeekly: number | null } | null;
+  movesWeeklyResetDay: boolean;
+  left: number;
+  total: number;
+  expiresAt: string | null;
+  blocker: ResetBlocker | null;
+  helpsNow: boolean;
+  recommended: boolean;
+};
+
+export type ResetOptionRules = {
+  reachedPercent?: number;
+  exhaustedIsCurrent?: boolean;
+};
+
 export type ResetCredits = {
   available: number;
   applicable: number;
@@ -94,7 +167,11 @@ export type ResetCredits = {
   canRedeem?: boolean;
   pending?: PendingResetView | null;
   checkedAt?: string | null;
+  options?: ResetOption[];
+  limits?: ResetLimit[];
 };
+
+export type StoredResetView = ResetCredits & { claude?: ClaudeResetBlock };
 
 export type CodexRedeemResult = "reset" | "already_redeemed" | "nothing_to_reset" | "no_credit";
 
