@@ -66,6 +66,7 @@ test("normalizeEnterprise migrates the single legacy webhook to every event", as
         "emergency_sign_in",
         "error_rate_spike",
         "latency_spike",
+        "archive_failed",
       ],
     },
   ]);

@@ -28,6 +28,10 @@ import { reportWorkerJobFailure } from "@/lib/sentry/worker-jobs";
 import { runErrorRateAlerts, runKeyExpiryAlerts, runLatencyAlerts, runSpendAnomalyAlerts } from "./alert-checks";
 import { retentionCutoff } from "./retention";
 import { contentPartitionPolicy, runRetentionSweep } from "./retention-sweep";
+import { archiveRetentionHolds } from "@/lib/compliance-archive/holds";
+import { holdArchivedTables } from "@/lib/compliance-archive/plan";
+import type { RetentionHolds } from "@/types/archive";
+import type { Enterprise } from "@/types/settings";
 import type { MaintenanceSweepResult, SpendResetRow } from "@/types/jobs";
 import { money } from "@/lib/utils/money";
 
@@ -48,6 +52,17 @@ async function sweepSettings() {
     logger.error("worker.settings_failed", errorFields(err));
     reportWorkerJobFailure(err, { queue: QUEUE_NAMES.maintenance, step: "settings", finalAttempt: true });
     return null;
+  }
+}
+
+async function retentionHolds(enterprise: Enterprise): Promise<RetentionHolds> {
+  try {
+    return await archiveRetentionHolds(enterprise);
+  } catch (err) {
+    logger.error("worker.job_failed", { job: "archive_holds", ...errorFields(err) });
+    reportWorkerJobFailure(err, { queue: QUEUE_NAMES.maintenance, step: "archive_holds", finalAttempt: true });
+    const settings = enterprise.compliance_archive;
+    return settings ? holdArchivedTables(settings) : {};
   }
 }
 
@@ -111,11 +126,12 @@ export async function runMaintenanceSweep(
 
   const enterprise = await sweepSettings();
   if (enterprise) {
+    const holds = await retentionHolds(enterprise);
     result.contentPartitions = await runSweepJob("content_partitions", () =>
-      maintainContentPartitions(contentPartitionPolicy(enterprise, now)),
+      maintainContentPartitions(contentPartitionPolicy(enterprise, now, holds)),
     );
     await runSweepJob("retention", async () => {
-      const run = await runRetentionSweep(enterprise, now);
+      const run = await runRetentionSweep(enterprise, now, { holds });
       if (!run) return 0;
       Object.assign(result, run.deleted, { retentionBacklog: run.backlog.length });
       return Object.values(run.deleted).reduce((sum, count) => sum + count, 0);

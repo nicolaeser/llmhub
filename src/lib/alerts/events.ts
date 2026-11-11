@@ -9,6 +9,7 @@ export const WEBHOOK_EVENTS = [
   "emergency_sign_in",
   "error_rate_spike",
   "latency_spike",
+  "archive_failed",
 ] as const;
 
 export const WEBHOOK_FORMATS = ["json", "slack", "teams"] as const;

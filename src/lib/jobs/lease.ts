@@ -26,3 +26,10 @@ export async function claimLease(key: string, ttlMs: number, now = Date.now()): 
 export async function releaseLease(key: string, token: string): Promise<void> {
   await prisma.setting.deleteMany({ where: { key, value: token } });
 }
+
+export async function renewLease(key: string, token: string, ttlMs: number, now = Date.now()): Promise<string | null> {
+  const value = String(now + ttlMs);
+  if (value === token) return token;
+  const renewed = await prisma.setting.updateMany({ where: { key, value: token }, data: { value } });
+  return renewed.count > 0 ? value : null;
+}

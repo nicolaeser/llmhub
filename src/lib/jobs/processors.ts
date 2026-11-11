@@ -5,10 +5,15 @@ import { CATALOG_BUSY_DELAY_MS } from "@/lib/gateway/catalog/catalog-tasks";
 import { deliverWebhook } from "@/lib/alerts/notify";
 import { logMaintenanceSweep, runMaintenanceSweep } from "@/worker/jobs";
 import { runModelSync } from "@/worker/model-sync";
+import { logArchiveTick, runComplianceArchive } from "@/lib/compliance-archive/runner";
 import type { ModelSyncJobData, WebhookJobData } from "@/types/jobs";
 
 export async function processMaintenance(): Promise<void> {
   logMaintenanceSweep(await runMaintenanceSweep());
+}
+
+export async function processArchive(): Promise<void> {
+  logArchiveTick(await runComplianceArchive());
 }
 
 export async function processModelSync(job: Job<ModelSyncJobData>, token?: string): Promise<void> {

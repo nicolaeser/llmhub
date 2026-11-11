@@ -5,6 +5,15 @@ import { MAX_ALERT_EMAILS, MAX_ALERT_WEBHOOKS, WEBHOOK_EVENTS, WEBHOOK_FORMATS }
 import { vectorDefaultsSchema } from "@/schemas/rag";
 import { MAX_ALLOWED_DOMAINS, MAX_ROLE_MAPPINGS, OIDC_PROVIDER_IDS, trimIssuer } from "@/lib/auth/oidc-presets";
 import { hasPlaceholder, S3_ADDRESSING, S3_PRESET_IDS } from "@/lib/s3/presets";
+import {
+  ARCHIVE_DATASETS,
+  ARCHIVE_FORMATS,
+  ARCHIVE_LOCK_MODES,
+  ARCHIVE_PASSWORD_MAX,
+  ARCHIVE_PREFIX_MAX,
+  ARCHIVE_PREFIX_PATTERN,
+} from "@/lib/compliance-archive/options";
+import { RETENTION_MAX_DAYS } from "@/lib/settings/retention-defaults";
 
 function isHttpUrl(value: string): boolean {
   try {
@@ -141,4 +150,21 @@ export const cacheSettingsSchema = z.object({
 
 export const cacheStatsSchema = z.object({
   days: z.union(CACHE_STATS_RANGES.map((days) => z.literal(days))),
+});
+
+export const complianceArchiveInputSchema = z.object({
+  enabled: z.boolean(),
+  datasets: z.array(z.enum(ARCHIVE_DATASETS)).max(ARCHIVE_DATASETS.length),
+  format: z.enum(ARCHIVE_FORMATS),
+  password: z.string().max(ARCHIVE_PASSWORD_MAX),
+  clearPassword: z.boolean(),
+  include_content: z.boolean(),
+  bucket: z
+    .string()
+    .trim()
+    .max(255)
+    .regex(/^[A-Za-z0-9._-]*$/),
+  prefix: z.string().trim().max(ARCHIVE_PREFIX_MAX).regex(ARCHIVE_PREFIX_PATTERN),
+  retention_days: z.number().int().min(0).max(RETENTION_MAX_DAYS),
+  lock_mode: z.enum(ARCHIVE_LOCK_MODES),
 });

@@ -1161,3 +1161,30 @@ model ToolExecution {
   @@index([status, startedAt])
   @@index([startedAt])
 }
+
+model ComplianceArchiveRun {
+  id            String    @id @default(cuid())
+  dataset       String
+  day           DateTime  @db.Date
+  status        String    @default("pending")
+  format        String    @default("")
+  bucket        String    @default("")
+  objectKey     String    @default("")
+  manifestKey   String    @default("")
+  rows          Int       @default(0)
+  bytes         BigInt    @default(0)
+  sha256        String    @default("")
+  attempts      Int       @default(0)
+  error         String    @default("")
+  nextAttemptAt DateTime  @default(now())
+  retainUntil   DateTime?
+  startedAt     DateTime?
+  finishedAt    DateTime?
+  expiredAt     DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@unique([dataset, day])
+  @@index([status, nextAttemptAt])
+  @@index([day])
+}

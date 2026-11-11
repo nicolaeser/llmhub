@@ -6,12 +6,13 @@ import { logger } from "@/lib/logging/logger";
 import { getQueueConnectionOptions } from "@/lib/jobs/connection";
 import { QUEUE_NAMES } from "@/lib/jobs/queues";
 import {
+  processArchive,
   processMaintenance,
   processModelSync,
   processWebhook,
 } from "@/lib/jobs/processors";
 import { wrapWorkerProcessor } from "@/lib/sentry/worker-jobs";
-import type { MaintenanceJobData, ModelSyncJobData, WebhookJobData } from "@/types/jobs";
+import type { ArchiveJobData, MaintenanceJobData, ModelSyncJobData, WebhookJobData } from "@/types/jobs";
 
 const CONCURRENCY = 1;
 const LOCK_DURATION_MS = 60_000;
@@ -63,6 +64,11 @@ export function buildQueueWorkers(): Worker[] {
     new Worker(
       QUEUE_NAMES.webhooks,
       wrapWorkerProcessor<WebhookJobData>(QUEUE_NAMES.webhooks, processWebhook),
+      workerOptions(),
+    ),
+    new Worker(
+      QUEUE_NAMES.archive,
+      wrapWorkerProcessor<ArchiveJobData>(QUEUE_NAMES.archive, processArchive),
       workerOptions(),
     ),
   ];

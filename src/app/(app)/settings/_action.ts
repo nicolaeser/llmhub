@@ -5,6 +5,12 @@ import { loadCache, loadCacheStats, saveCache } from "@/lib/settings/caching";
 import { loadCatalogSettings, saveCatalogSettings } from "@/lib/settings/catalog";
 import { loadGeneralSettings, saveGeneralSettings } from "@/lib/settings/general";
 import { loadLogging, saveLogging } from "@/lib/settings/logging-alerts";
+import {
+  loadComplianceArchive,
+  retryComplianceArchive,
+  saveComplianceArchive,
+  testComplianceArchive,
+} from "@/lib/settings/compliance-archive";
 import { savePlatformLabelKeys } from "@/lib/settings/request-labels";
 import { testFeatureModel } from "@/lib/models/feature-model-test";
 import { startAppRolesCheck } from "@/lib/auth/app-roles-check";
@@ -105,4 +111,20 @@ export async function savePlatformLabelKeysAction(...args: Parameters<typeof sav
 
 export async function testFeatureModelAction(...args: Parameters<typeof testFeatureModel>) {
   return runAction(() => testFeatureModel(...args));
+}
+
+export async function loadComplianceArchiveAction() {
+  return runAction(() => loadComplianceArchive());
+}
+
+export async function saveComplianceArchiveAction(...args: Parameters<typeof saveComplianceArchive>) {
+  return runAction(() => saveComplianceArchive(...args));
+}
+
+export async function testComplianceArchiveAction(...args: Parameters<typeof testComplianceArchive>) {
+  return runAction(() => testComplianceArchive(...args));
+}
+
+export async function retryComplianceArchiveAction() {
+  return runAction(() => retryComplianceArchive());
 }

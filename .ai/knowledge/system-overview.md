@@ -9,7 +9,7 @@ LLM Hub is a Next.js 16 App Router app: OpenAI- and Anthropic-compatible `/api/v
 - Web (`next start` / `next dev`) serves HTML, server actions, `/api/v1`, `/api/mgmt`, `/internal-api`, `/sso`, `/scim`.
 - Postgres is the durable store (Prisma 7 + `@prisma/adapter-pg`).
 - Optional RustFS/S3 holds files, batches, videos, and log archives.
-- `src/instrumentation.ts` starts an in-process worker (`src/worker/`) after catalog boot: a maintenance sweep every minute (it also revalidates SSO sessions with the identity provider, see `sso_revalidation`), the cached model catalog refresh every two hours, and alert webhook delivery. Optional Redis (`REDIS_URL`) runs it on the BullMQ `maintenance`, `models`, and `webhooks` queues (`QUEUE_NAMES`, `src/lib/jobs/queues.ts`) and shares RPM/TPM; without it the same jobs use process timers and inline delivery. Redis is never awaited at bind time. No separate worker process.
+- `src/instrumentation.ts` starts an in-process worker (`src/worker/`) after catalog boot: a maintenance sweep every minute (it also revalidates SSO sessions with the identity provider, see `sso_revalidation`), the cached model catalog refresh every two hours, alert webhook delivery, and the compliance archive every five minutes. Optional Redis (`REDIS_URL`) runs it on the BullMQ `maintenance`, `models`, `webhooks`, and `archive` queues (`QUEUE_NAMES`, `src/lib/jobs/queues.ts`) and shares RPM/TPM; without it the same jobs use process timers and inline delivery. Redis is never awaited at bind time. No separate worker process.
 - Keeper (`keeper` container in both production compose files, `src/keeper/`, bundled to `keeper/keeper.mjs`): same image, refreshes subscription sign-ins and syncs the login journal every minute, independent of the app process, Redis, and migrations; it needs only Postgres and the `login-journal` volume it shares with the app. With older compose files the app container's supervisor (`scripts/start.mjs`) runs it as a child process instead.
 - Optional updater container (`docker-compose.au.yml`, `scripts/updater.mjs`): same image, holds the Docker socket, and replaces the app and keeper containers with newer images of its tag on request or automatically, and once moves an old append-only Redis of its project to snapshots.
 
@@ -39,7 +39,7 @@ LLM Hub is a Next.js 16 App Router app: OpenAI- and Anthropic-compatible `/api/v
 - New-model mode (`ProviderConnection.newModels`): per provider, whether first-seen models follow the catalog's default rules (`auto`), are routed at once (`active`), or start disabled (`disabled`).
 - Management key (`ManagementKey`): hashed personal credential for `/api/mgmt`, scoped to a subset of the owner's permissions.
 - SCIM token: hashed in `Setting` `scim_token_hash`; created in Settings → Sign-in.
-- Enterprise: JSON settings in `Setting` `enterprise` (registration, OIDC, S3, global PII policy, cache TTL, retention, alert webhooks, budget alert thresholds, log archive, request-content logging, automatic updates). Webhook secrets are sealed and never sent to the client.
+- Enterprise: JSON settings in `Setting` `enterprise` (registration, OIDC, S3, global PII policy, cache TTL, retention, alert webhooks, budget alert thresholds, log archive, compliance archive, request-content logging, automatic updates). Webhook secrets and the compliance archive password are sealed and never sent to the client.
 
 ## Boot
 

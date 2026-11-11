@@ -60,6 +60,7 @@ import {
   trimIssuer,
 } from "@/lib/auth/oidc-presets";
 import { S3_ADDRESSING, S3_PRESET_IDS } from "@/lib/s3/presets";
+import { DEFAULT_COMPLIANCE_ARCHIVE, normalizeComplianceArchive } from "@/lib/compliance-archive/settings";
 import type { OidcSettings, RoleMapping } from "@/types/auth";
 import type { S3AddressingSetting, S3Settings } from "@/types/s3";
 import type { Enterprise } from "@/types/settings";
@@ -162,6 +163,7 @@ const DEFAULT_ENTERPRISE: Enterprise = {
   alert_emails: { recipients: [], events: [] },
   oidc: normalizeOidc({}),
   s3: normalizeS3({}),
+  compliance_archive: DEFAULT_COMPLIANCE_ARCHIVE,
 };
 
 function normalizePii(raw: unknown): PiiPolicy {
@@ -372,6 +374,7 @@ export function normalizeEnterprise(raw: unknown): Enterprise {
     pii_detector: normalizePiiDetector(rec.pii_detector),
     guardrails: normalizeGuardrails(rec.guardrails),
     s3: normalizeS3(rec.s3),
+    compliance_archive: normalizeComplianceArchive(rec.compliance_archive),
     budget_alert_thresholds: (() => {
       const list = asNumberArray(rec.budget_alert_thresholds);
       return list.length ? list : [50, 80, 100];
@@ -467,11 +470,13 @@ export async function getEnterprise(): Promise<Enterprise> {
   const enterprise = normalizeEnterprise({ ...DEFAULT_ENTERPRISE, ...(asRecord(raw) ?? {}) });
   const jev = enterprise.catalog_jev ?? DEFAULT_JEV;
   const antigravity = enterprise.antigravity ?? DEFAULT_ANTIGRAVITY;
+  const archive = enterprise.compliance_archive ?? DEFAULT_COMPLIANCE_ARCHIVE;
   return {
     ...enterprise,
     alert_webhooks: (enterprise.alert_webhooks ?? []).map((hook) => ({ ...hook, secret: open(hook.secret) })),
     catalog_jev: { ...jev, api_key: open(jev.api_key) },
     antigravity: { client_secret: open(antigravity.client_secret) },
+    compliance_archive: { ...archive, password: open(archive.password) },
   };
 }
 
@@ -626,14 +631,19 @@ export async function patchEnterprise(patch: Partial<Enterprise>): Promise<Enter
     vector_stores: patch.vector_stores
       ? normalizeVectorDefaults({ ...current.vector_stores, ...patch.vector_stores })
       : current.vector_stores,
+    compliance_archive: patch.compliance_archive
+      ? normalizeComplianceArchive({ ...current.compliance_archive, ...patch.compliance_archive })
+      : current.compliance_archive,
   };
   const jev = next.catalog_jev ?? DEFAULT_JEV;
   const antigravity = next.antigravity ?? DEFAULT_ANTIGRAVITY;
+  const archive = next.compliance_archive ?? DEFAULT_COMPLIANCE_ARCHIVE;
   await writeJson(SETTING_ENTERPRISE, {
     ...next,
     alert_webhooks: (next.alert_webhooks ?? []).map((hook) => ({ ...hook, secret: seal(hook.secret) })),
     catalog_jev: { ...jev, api_key: seal(jev.api_key) },
     antigravity: { client_secret: seal(antigravity.client_secret) },
+    compliance_archive: { ...archive, password: seal(archive.password) },
   });
   return next;
 }
