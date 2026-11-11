@@ -3,6 +3,7 @@ import {
   ANTIGRAVITY_HIDDEN_MODELS,
   antigravityFamily,
 } from "@/lib/gateway/upstreams/antigravity-models";
+import { isAccountBucket } from "@/lib/gateway/routing/quota";
 import type {
   AntigravityFamily,
   LimitGroup,
@@ -14,6 +15,7 @@ import type {
 
 const FULL_PERCENT = 100;
 const SUMMARY_SIZE = 3;
+const BUCKET_GROUP_PREFIX = "bucket:";
 
 type GroupHead = Pick<LimitGroup, "id" | "scoped" | "family" | "label">;
 
@@ -114,17 +116,29 @@ function windowGroups(windows: LimitWindow[], now: number): LimitGroup[] {
   });
 }
 
+function bucketGroups(windows: LimitWindow[], now: number): LimitGroup[] {
+  return windows.map((window) => {
+    const id = `${BUCKET_GROUP_PREFIX}${window.accountBucket}`;
+    return groupOf({ id, scoped: true, family: null, label: window.label || window.scope }, [window], now);
+  });
+}
+
+export function isAccountBucketGroup(group: Pick<LimitGroup, "id">): boolean {
+  return group.id.startsWith(BUCKET_GROUP_PREFIX);
+}
+
 export function limitGroups(kind: string, limits: SubscriptionLimits | null, now = Date.now()): LimitGroup[] {
   if (!limits) return [];
   const plan = limits.windows
-    .filter((window) => !window.scope)
+    .filter((window) => !window.scope && !isAccountBucket(window))
     .sort(byLength)
     .map((window, index) =>
       groupOf({ id: `plan:${window.windowSeconds}:${index}`, scoped: false, family: null, label: "" }, [window], now),
     );
-  const scoped = limits.windows.filter((window) => window.scope);
+  const buckets = bucketGroups(limits.windows.filter(isAccountBucket), now);
+  const scoped = limits.windows.filter((window) => window.scope && !isAccountBucket(window));
   const grouped = kind === "antigravity" ? antigravityGroups(scoped, now) : windowGroups(scoped.sort(byLength), now);
-  return [...plan, ...grouped];
+  return [...plan, ...buckets, ...grouped];
 }
 
 function pressureOrder(a: LimitGroup, b: LimitGroup): number {

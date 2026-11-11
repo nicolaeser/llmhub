@@ -71,6 +71,36 @@ test("an antigravity account is limited once every visible group is exhausted", 
   assert.equal(recoveryAt(antigravity, entry([model("claude-sonnet-4-6", 100, null)]), NOW), null);
 });
 
+function bucket(id: string, usedPercent: number, hours: number, windowSeconds: number): LimitWindow {
+  return {
+    scope: id,
+    exactScope: true,
+    accountBucket: id,
+    label: "Gemini Models",
+    usedPercent,
+    windowSeconds,
+    resetsAt: iso(hours),
+    limitReached: usedPercent >= 100,
+  };
+}
+
+test("account-level meters never decide whether an antigravity account counts as limited", () => {
+  const families = [model("claude-sonnet-4-6", 100, 5), model("gemini-3-flash", 100, 2)];
+  const roomy = entry([...families, bucket("gemini-5h", 10, 3, 18_000)]);
+  assert.equal(accountState(antigravity, roomy, true, NOW), "limited");
+  assert.equal(recoveryAt(antigravity, roomy, NOW), NOW + 5 * HOUR);
+  assert.equal(partialLimits(antigravity, roomy, NOW), null);
+
+  const full = entry([model("claude-sonnet-4-6", 40, 5), bucket("gemini-5h", 100, 3, 18_000), bucket("gemini-weekly", 100, 72, 604_800)]);
+  assert.equal(accountState(antigravity, full, true, NOW), "available");
+  assert.equal(recoveryAt(antigravity, full, NOW), null);
+  assert.deepEqual(partialLimits(antigravity, full, NOW), { reached: 2, total: 3 });
+
+  const only = entry([bucket("gemini-weekly", 100, 72, 604_800)]);
+  assert.equal(accountState(antigravity, only, true, NOW), "available");
+  assert.deepEqual(partialLimits(antigravity, only, NOW), { reached: 1, total: 1 });
+});
+
 test("an antigravity account with some exhausted groups stays available and reports them", () => {
   const some = entry([
     model("claude-sonnet-4-6", 100, 5),

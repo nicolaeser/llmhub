@@ -1,4 +1,4 @@
-import { limitGroups } from "@/lib/gateway/upstreams/limit-groups";
+import { isAccountBucketGroup, limitGroups } from "@/lib/gateway/upstreams/limit-groups";
 import { scopeApplies } from "@/lib/gateway/routing/quota";
 import type {
   KeyUsageBasis,
@@ -25,7 +25,7 @@ export function windowStart(group: Pick<LimitGroup, "resetsAt" | "windowSeconds"
 export function usageWindows(kind: string, limits: SubscriptionLimits | null, now: number): KeyUsageWindow[] {
   return limitGroups(kind, limits, now).flatMap((group) => {
     const since = windowStart(group, now);
-    if (since === null) return [];
+    if (since === null || isAccountBucketGroup(group)) return [];
     return [{ groupId: group.id, since, scopes: group.scoped ? group.members.map((member) => member.scope) : null }];
   });
 }

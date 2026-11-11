@@ -1,5 +1,5 @@
 import { latestRecovery, quotaExhausted } from "@/lib/gateway/routing/quota";
-import { limitGroups } from "@/lib/gateway/upstreams/limit-groups";
+import { isAccountBucketGroup, limitGroups } from "@/lib/gateway/upstreams/limit-groups";
 import type {
   AccountLimits,
   AccountState,
@@ -23,8 +23,12 @@ function everyGroupExhausted(groups: LimitGroup[]): boolean {
   return groups.length > 0 && groups.every((group) => group.scoped && group.exhausted);
 }
 
+function routedGroups(groups: LimitGroup[]): LimitGroup[] {
+  return groups.filter((group) => !isAccountBucketGroup(group));
+}
+
 function exhaustedGroups(row: ProviderView, limits: SubscriptionLimits, now: number): LimitGroup[] | null {
-  const groups = limitGroups(row.kind, limits, now);
+  const groups = routedGroups(limitGroups(row.kind, limits, now));
   return everyGroupExhausted(groups) ? groups : null;
 }
 
@@ -59,7 +63,7 @@ export function partialLimits(row: ProviderView, entry: AccountLimits | undefine
   if (!entry?.limits || quotaExhausted(entry.limits, "", now)) return null;
   const groups = limitGroups(row.kind, entry.limits, now);
   const reached = groups.filter((group) => group.limitReached).length;
-  if (!reached || everyGroupExhausted(groups)) return null;
+  if (!reached || everyGroupExhausted(routedGroups(groups))) return null;
   return { reached, total: groups.length };
 }
 

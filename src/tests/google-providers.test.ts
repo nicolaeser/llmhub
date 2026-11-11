@@ -591,6 +591,89 @@ test("a Google rate limit names its retry time so the deployment cools down unti
   assert.ok(error.retryAt !== null && error.retryAt >= now + 29_000);
 });
 
+const GOOGLE_LIMIT = {
+  error: {
+    code: 429,
+    status: "RESOURCE_EXHAUSTED",
+    message: "Quota exceeded for metric: generate_content_free_tier_requests, limit: 0",
+    details: [{ "@type": "type.googleapis.com/google.rpc.RetryInfo", retryDelay: "37s" }],
+  },
+};
+
+test("a Gemini chat refusal sent as an event stream still names Google's reason and retry time", async () => {
+  const { proxyJson, upstreamError } = await import("@/lib/gateway/dispatch/upstream");
+  respondWith(
+    () => new Response(JSON.stringify(GOOGLE_LIMIT), { status: 429, headers: { "content-type": "text/event-stream" } }),
+  );
+  const now = Date.now();
+  const result = await proxyJson({
+    dep: deployment("gemini", "gemini-2.5-flash", GEMINI_BASE),
+    auth: { key: "AIzaTest", headers: {}, keyHeader: "x-goog-api-key" },
+    path: "/chat/completions",
+    body: { model: "alias", messages: [{ role: "user", content: "Hi" }], stream: false },
+  });
+  assert.equal(calls[0]!.url, `${GEMINI_BASE}/models/gemini-2.5-flash:streamGenerateContent?alt=sse`);
+  const error = upstreamError(result.status, result.json, result.headers);
+  assert.equal(error.status, 429);
+  assert.equal(error.message, GOOGLE_LIMIT.error.message);
+  assert.ok(error.retryAt !== null && error.retryAt >= now + 36_000 && error.retryAt <= Date.now() + 37_000);
+});
+
+test("an error body that is not JSON still ends in the plain upstream status message", async () => {
+  const { proxyJson, upstreamError } = await import("@/lib/gateway/dispatch/upstream");
+  respondWith(() => new Response("<html>quota</html>", { status: 429, headers: { "content-type": "text/event-stream" } }));
+  const result = await proxyJson({
+    dep: deployment("gemini", "gemini-2.5-flash", GEMINI_BASE),
+    auth: { key: "AIzaTest", headers: {}, keyHeader: "x-goog-api-key" },
+    path: "/chat/completions",
+    body: { model: "alias", messages: [{ role: "user", content: "Hi" }], stream: false },
+  });
+  assert.deepEqual(result.json, {});
+  assert.equal(upstreamError(result.status, result.json, result.headers).message, "upstream returned 429");
+});
+
+test("a Google error wrapped in an array keeps its reason, code, and retry time", async () => {
+  const { upstreamError, upstreamErrorMessage, upstreamRetryAt } = await import("@/lib/gateway/dispatch/upstream");
+  const now = Date.now();
+  const error = upstreamError(429, [GOOGLE_LIMIT]);
+  assert.equal(error.status, 429);
+  assert.equal(error.message, GOOGLE_LIMIT.error.message);
+  assert.ok(error.retryAt !== null && error.retryAt >= now + 36_000);
+  assert.equal(upstreamErrorMessage(429, [GOOGLE_LIMIT]), GOOGLE_LIMIT.error.message);
+  assert.equal(upstreamRetryAt(429, [GOOGLE_LIMIT], now), now + 37_000);
+  const stamped = [{ error: { code: 429, message: "Resource exhausted", details: [{ metadata: { quotaResetDelay: "2m" } }] } }];
+  assert.equal(upstreamRetryAt(429, stamped, now), now + 120_000);
+  const coded = upstreamError(400, [{ error: { code: "invalid_value", message: "bad size", param: "size" } }]);
+  assert.equal(coded.message, "bad size");
+  assert.equal(coded.code, "invalid_value");
+  assert.equal(coded.param, "size");
+  assert.equal(upstreamError(429, []).message, "upstream returned 429");
+  assert.equal(upstreamError(429, ["quota"]).message, "upstream returned 429");
+});
+
+test("a streamed Gemini chat refused with an array body names Google's reason and retry time", async () => {
+  const { openUpstreamStream } = await import("@/lib/gateway/dispatch/chat");
+  const { seal } = await import("@/lib/crypto");
+  respondWith(() => new Response(JSON.stringify([GOOGLE_LIMIT]), { status: 429, headers: { "content-type": "application/json" } }));
+  const dep = deployment("gemini", "gemini-2.5-flash", GEMINI_BASE);
+  dep.provider!.apiKey = seal("AIzaTest");
+  const now = Date.now();
+  const error = await openUpstreamStream({
+    dep,
+    group: { strategy: "priority" } as Parameters<typeof openUpstreamStream>[0]["group"],
+    req: new Request("http://hub.local/api/v1/chat/completions", { method: "POST" }),
+    path: "/chat/completions",
+    payload: { model: "gemini-2.5-flash", messages: [{ role: "user", content: "Hi" }], stream: true },
+  }).then(
+    () => null,
+    (err: unknown) => err,
+  );
+  assert.ok(error instanceof GateError);
+  assert.equal(error.status, 429);
+  assert.equal(error.message, GOOGLE_LIMIT.error.message);
+  assert.ok(error.retryAt !== null && error.retryAt >= now + 36_000);
+});
+
 test("service account keys are validated and normalized to PKCS#8", async () => {
   const { normalizePrivateKey, parseVertexCredential } = await import("@/lib/gateway/upstreams/vertex-credentials");
   const parsed = parseVertexCredential(serviceAccountJson());

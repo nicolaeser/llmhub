@@ -23,6 +23,7 @@ import { routePool } from "@/lib/gateway/routing/route-pool";
 import type { JsonMap } from "@/types/gateway";
 import type { ResolvedDeployment } from "@/types/routing";
 import type { SignInSession } from "@/types/providers";
+import { holdAntigravityVersion } from "./support/antigravity-version";
 
 const settings = new Map<string, string>();
 
@@ -60,6 +61,7 @@ function respondWith(handler: (url: string, body: string) => Response) {
 beforeEach(() => {
   calls = [];
   settings.clear();
+  holdAntigravityVersion();
 });
 
 afterEach(() => {
@@ -78,6 +80,7 @@ const dep: ResolvedDeployment = {
 };
 
 const NOW = Date.parse("2026-10-12T12:00:00Z");
+const HUB_USER_AGENT = "antigravity/hub/2.29.0 (aidev_client; os_type=darwin; arch=arm64; cl=1013060670)";
 
 function sse(...events: JsonMap[]): string {
   return events.map((event) => `data: ${JSON.stringify(event)}\n\n`).join("");
@@ -415,6 +418,10 @@ test("Google durations and 429 details become a retry time", async () => {
   assert.equal(googleDurationSeconds("0.479s"), 0.479);
   assert.equal(googleDurationSeconds("1h2m3.5s"), 3723.5);
   assert.equal(googleDurationSeconds("2m"), 120);
+  assert.equal(googleDurationSeconds("373.2ms"), 0.3732);
+  assert.equal(googleDurationSeconds(" 5ms "), 0.005);
+  assert.equal(googleDurationSeconds("ms"), null);
+  assert.equal(googleDurationSeconds("1s373ms"), null);
   assert.equal(googleDurationSeconds("soon"), null);
   assert.equal(googleDurationSeconds(""), null);
   assert.equal(googleDurationSeconds(5), null);
@@ -422,6 +429,7 @@ test("Google durations and 429 details become a retry time", async () => {
   assert.equal(googleRetryAt({ details: [{ metadata: { quotaResetTimeStamp: stamp } }] }, NOW), NOW + 90_000);
   assert.equal(googleRetryAt({ details: [{ metadata: { quotaResetDelay: "10s" } }] }, NOW), NOW + 10_000);
   assert.equal(googleRetryAt({ details: [{ "@type": "RetryInfo", retryDelay: "4s" }] }, NOW), NOW + 4_000);
+  assert.equal(googleRetryAt({ details: [{ metadata: { quotaResetDelay: "373.2ms" } }] }, NOW), NOW + 373.2);
   assert.equal(googleRetryAt({ details: [{ metadata: { quotaResetTimeStamp: new Date(NOW - 1000).toISOString() } }] }, NOW), null);
   assert.equal(googleRetryAt({}, NOW), null);
   assert.equal(googleRetryAt(null, NOW), null);
@@ -500,10 +508,10 @@ test("per model quota becomes labelled scoped limit windows with reset times", (
   assert.equal(limits.plan, "pro");
   assert.equal(limits.fetchedAt, new Date(NOW).toISOString());
   assert.deepEqual(limits.windows, [
-    { scope: "claude-sonnet-4-6", label: "Claude Sonnet 4.6", usedPercent: 75, windowSeconds: 0, resetsAt: reset, limitReached: false },
-    { scope: "gemini-2.5-pro", label: "Gemini 2.5 Pro", usedPercent: 50, windowSeconds: 0, resetsAt: reset, limitReached: false },
-    { scope: "gemini-3-flash", label: "Gemini 3 Flash", usedPercent: 100, windowSeconds: 0, resetsAt: reset, limitReached: true },
-    { scope: "gemini-3-pro", label: "gemini-3-pro", usedPercent: 0, windowSeconds: 0, resetsAt: null, limitReached: false },
+    { scope: "claude-sonnet-4-6", exactScope: true, label: "Claude Sonnet 4.6", usedPercent: 75, windowSeconds: 0, resetsAt: reset, limitReached: false },
+    { scope: "gemini-2.5-pro", exactScope: true, label: "Gemini 2.5 Pro", usedPercent: 50, windowSeconds: 0, resetsAt: reset, limitReached: false },
+    { scope: "gemini-3-flash", exactScope: true, label: "Gemini 3 Flash", usedPercent: 100, windowSeconds: 0, resetsAt: reset, limitReached: true },
+    { scope: "gemini-3-pro", exactScope: true, label: "gemini-3-pro", usedPercent: 0, windowSeconds: 0, resetsAt: null, limitReached: false },
   ]);
 });
 
@@ -514,7 +522,7 @@ test("the models call posts the project and reports the status", async () => {
   assert.equal(calls[0]!.url, "https://daily-cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels");
   assert.deepEqual(JSON.parse(calls[0]!.body), { project: "proj-1" });
   assert.equal(calls[0]!.headers.Authorization, "Bearer tok");
-  assert.match(calls[0]!.headers["User-Agent"] ?? "", /^antigravity\//);
+  assert.equal(calls[0]!.headers["User-Agent"], HUB_USER_AGENT);
   respondWith(() => new Response("no", { status: 403 }));
   assert.deepEqual(await fetchAvailableModels({ key: "tok", headers: {}, project: "p" }, "https://example.test/"), { status: 403, json: null, retryAfter: null });
   assert.equal(calls[1]!.url, "https://example.test/v1internal:fetchAvailableModels");
@@ -536,7 +544,7 @@ test("antigravity deployments belong to the subscription pool and use the stream
     headers: signInHeaders("antigravity", { access: "tok", refresh: "r", accountId: "proj-1", residency: "" }),
   });
   assert.equal(headers.Authorization, "Bearer tok");
-  assert.match(headers["User-Agent"] ?? "", /^antigravity\/hub\//);
+  assert.equal(headers["User-Agent"], HUB_USER_AGENT);
   const body = prepareBody(dep, "/chat/completions", { model: "alias", messages: [{ role: "user", content: "x" }] });
   assert.equal(body.model, "claude-sonnet-4-6");
   assert.ok(Array.isArray((body.request as JsonMap).contents));

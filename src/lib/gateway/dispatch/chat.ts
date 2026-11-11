@@ -56,8 +56,18 @@ import {
   upstreamHeaders,
   upstreamModel,
   upstreamRetryAt,
+  upstreamWords,
 } from "@/lib/gateway/dispatch/upstream";
-import { asRecord, ERR_UNKNOWN_GROUP, isRouterError, isUnavailableError, newId, routerGateError, stringifyContent } from "@/lib/gateway/core";
+import {
+  asRecord,
+  ERR_UNKNOWN_GROUP,
+  isRouterError,
+  isUnavailableError,
+  newId,
+  RouterError,
+  routerGateError,
+  stringifyContent,
+} from "@/lib/gateway/core";
 import { costFilter, costRejected } from "@/lib/gateway/billing/cost-cap";
 import { ChatStreamTranscript } from "@/lib/gateway/request-logs/log-content";
 import { contextDemand, estimateTokens, requestText } from "@/lib/gateway/billing/tokens";
@@ -283,6 +293,7 @@ export async function withDeployment<T>(
 }> {
   let last: unknown = new GateError(404, "model_not_found", "no deployment for model", { param: "model" });
   let upstreamFailure: unknown = null;
+  let limitReason: string | null = null;
   const surface = opts?.pool ?? opts?.principal?.pool ?? "api";
   const access = accessOf(opts?.principal);
   const request = opts?.request ?? null;
@@ -311,6 +322,7 @@ export async function withDeployment<T>(
   };
   for (let qi = 0; entryAt(qi); qi++) {
     const { alias, root, pool, relaxed, estimated } = queue[qi]!;
+    limitReason = null;
     let group: ResolvedModelGroup;
     try {
       group = await loadGroup(alias);
@@ -404,6 +416,7 @@ export async function withDeployment<T>(
           if (tracksHealth) recordAttemptFailure(acquired.dep, failure, err);
           last = err;
           if (!isRouterError(err)) upstreamFailure = err;
+          if (failure === "limit") limitReason = upstreamWords(err) ?? limitReason;
           if (failure === "context") {
             overflow = err;
             run.tried.add(acquired.dep.id);
@@ -470,6 +483,9 @@ export async function withDeployment<T>(
     context.record("rejected", aliases[0] ?? "", []);
   } else if (overflow && isRouterError(failure)) {
     failure = overflow;
+  }
+  if (limitReason && isUnavailableError(failure) && failure.wait?.limited) {
+    failure = new RouterError(failure.message, failure.code, failure.wait, limitReason);
   }
   if (tracksHealth) await alertUpstreamFailure(failure);
   throw failure;

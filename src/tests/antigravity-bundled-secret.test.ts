@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import test, { after, afterEach, before, beforeEach } from "node:test";
 import { fileURLToPath } from "node:url";
+import { holdAntigravityVersion } from "./support/antigravity-version";
 
 const BUNDLED = "fake-bundled-client-value";
 const SAVED = "fake-saved-client-value";
@@ -44,6 +45,7 @@ after(async () => {
 
 beforeEach(() => {
   settings.clear();
+  holdAntigravityVersion();
 });
 
 afterEach(() => {

@@ -2,6 +2,9 @@ import { asNumber, asRecord, asString, newId, stringifyContent } from "@/lib/gat
 import { GateError } from "@/lib/gateway/errors";
 import { completionFromSse } from "@/lib/gateway/protocols/sse-completion";
 import { ANTIGRAVITY_HIDDEN_MODELS, ANTIGRAVITY_INTERNAL_MODELS } from "@/lib/gateway/upstreams/antigravity-models";
+import { quotaShare } from "@/lib/gateway/upstreams/antigravity-quota";
+import { antigravityUserAgent } from "@/lib/gateway/upstreams/antigravity-version";
+import { CLAUDE_CODE_BILLING_PREFIX } from "@/lib/gateway/upstreams/claude";
 import type { ChatSseTranslator, JsonMap } from "@/types/gateway";
 import type { ResolvedDeployment } from "@/types/routing";
 import type { LimitWindow, SubscriptionLimits, DiscoveredModel, UpstreamAuth } from "@/types/providers";
@@ -13,7 +16,6 @@ export const ANTIGRAVITY_USERINFO_URL = "https://www.googleapis.com/oauth2/v2/us
 export const ANTIGRAVITY_REDIRECT_URI = "http://localhost:51121/oauth-callback";
 export const ANTIGRAVITY_BASE_URL = "https://daily-cloudcode-pa.googleapis.com";
 export const ANTIGRAVITY_CONTROL_URL = "https://cloudcode-pa.googleapis.com";
-export const ANTIGRAVITY_CLIENT_VERSION = "2.23.0";
 export const ANTIGRAVITY_STREAM_PATH = "/v1internal:streamGenerateContent?alt=sse";
 export const ANTIGRAVITY_SCOPE = [
   "cloud-platform",
@@ -48,9 +50,11 @@ const CLAUDE_THINKING_BUDGETS: Record<string, number> = { minimal: 1024, low: 10
 const GEMINI_BUDGETS: Record<string, number> = { minimal: 512, low: 1024, medium: 8192, high: 24576, xhigh: 32768, max: 32768 };
 const CLAUDE_OUTPUT_HEADROOM = 1024;
 const QUOTA_WINDOW_SECONDS = 0;
+const LINE_ENDS = /(?<=\n)/;
+const GO_MILLISECONDS = /^(\d+(?:\.\d+)?)ms$/;
 
 export function antigravityHeaders(): Record<string, string> {
-  return { "User-Agent": `antigravity/hub/${ANTIGRAVITY_CLIENT_VERSION} linux/amd64` };
+  return { "User-Agent": antigravityUserAgent() };
 }
 
 function without(node: JsonMap, ...keys: string[]): JsonMap {
@@ -269,6 +273,19 @@ function generationConfig(body: JsonMap, model: string): JsonMap {
   return config;
 }
 
+function withoutBillingLines(text: string): string {
+  if (!text.includes(CLAUDE_CODE_BILLING_PREFIX)) return text;
+  return text
+    .split(LINE_ENDS)
+    .filter((line) => !line.trimStart().startsWith(CLAUDE_CODE_BILLING_PREFIX))
+    .join("");
+}
+
+function instructionText(content: unknown): string {
+  if (!Array.isArray(content)) return withoutBillingLines(stringifyContent(content));
+  return content.map((part) => withoutBillingLines(stringifyContent([part]))).join("");
+}
+
 export function chatToAntigravity(body: JsonMap): JsonMap {
   const model = asString(body.model);
   const messages = (Array.isArray(body.messages) ? body.messages : [])
@@ -276,7 +293,7 @@ export function chatToAntigravity(body: JsonMap): JsonMap {
     .filter((message): message is JsonMap => message !== null);
   const system = messages
     .filter((message) => INSTRUCTION_ROLES.has(asString(message.role)))
-    .map((message) => stringifyContent(message.content).trim())
+    .map((message) => instructionText(message.content).trim())
     .filter(Boolean)
     .join("\n\n");
   const names = new Map<string, string>();
@@ -329,6 +346,8 @@ export function antigravityUsage(usage: JsonMap | null): JsonMap {
 
 export function googleDurationSeconds(value: unknown): number | null {
   if (typeof value !== "string") return null;
+  const millis = GO_MILLISECONDS.exec(value.trim());
+  if (millis) return Number(millis[1]) / 1000;
   const match = /^(?:(\d+(?:\.\d+)?)h)?(?:(\d+(?:\.\d+)?)m(?!s))?(?:(\d+(?:\.\d+)?)s)?$/.exec(value.trim());
   if (!match || !match[0]) return null;
   const seconds = Number(match[1] ?? 0) * 3600 + Number(match[2] ?? 0) * 60 + Number(match[3] ?? 0);
@@ -500,19 +519,12 @@ export function antigravityLimits(json: unknown, plan: string, now = Date.now())
     const model = asRecord(raw);
     const quota = asRecord(model?.quotaInfo);
     if (!quota) continue;
-    const resetsAt = asString(quota.resetTime);
-    const remaining = quota.remainingFraction;
-    const exhausted = typeof remaining !== "number" && resetsAt !== "";
-    const fraction = typeof remaining === "number" ? Math.min(1, Math.max(0, remaining)) : exhausted ? 0 : 1;
-    const usedPercent = Math.round((1 - fraction) * 1000) / 10;
-    const reset = Date.parse(resetsAt);
     windows.push({
       scope: id,
+      exactScope: true,
       label: asString(model?.displayName).trim() || id,
-      usedPercent,
       windowSeconds: QUOTA_WINDOW_SECONDS,
-      resetsAt: Number.isFinite(reset) ? new Date(reset).toISOString() : null,
-      limitReached: usedPercent >= 100,
+      ...quotaShare(quota),
     });
   }
   windows.sort((a, b) => a.scope.localeCompare(b.scope));
