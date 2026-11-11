@@ -1,3 +1,4 @@
+import { errorSummary } from "@/lib/logging/format";
 import type {
   AnthropicErrorBody,
   AnthropicErrorType,
@@ -72,6 +73,7 @@ export class GateError extends Error {
 }
 
 export const CLIENT_CLOSED_STATUS = GATEWAY_ERRORS.client_closed_request;
+export const OVERLOADED_STATUS = 529;
 
 export function clientClosedError(): GateError {
   return new GateError(CLIENT_CLOSED_STATUS, "client_closed_request", "the client closed the request before the upstream answered");
@@ -79,6 +81,23 @@ export function clientClosedError(): GateError {
 
 export function isClientClosed(err: unknown): boolean {
   return err instanceof GateError && err.code === "client_closed_request";
+}
+
+export function isConnectionFailure(err: unknown): err is TypeError {
+  return err instanceof TypeError && err.message === "fetch failed";
+}
+
+function causeText(cause: unknown): string {
+  if (!(cause instanceof Error)) return "";
+  const code = (cause as { code?: unknown }).code;
+  const nested = cause instanceof AggregateError ? [...new Set(cause.errors.map(causeText).filter(Boolean))] : [];
+  const message = cause.message || nested.join("; ");
+  if (typeof code !== "string" || !code || message.includes(code)) return message;
+  return message ? `${message} (${code})` : code;
+}
+
+export function connectionFailureReason(err: unknown): string {
+  return isConnectionFailure(err) ? errorSummary(causeText(err.cause)) : "";
 }
 
 export function gatewayErrorType(status: number, code: string): GatewayErrorType {
@@ -99,7 +118,7 @@ export function anthropicErrorType(status: number): AnthropicErrorType {
   if (status === 413) return "request_too_large";
   if (status === 429) return "rate_limit_error";
   if (status === 504) return "timeout_error";
-  if (status === 503 || status === 529) return "overloaded_error";
+  if (status === OVERLOADED_STATUS) return "overloaded_error";
   if (status >= 500) return "api_error";
   return "invalid_request_error";
 }

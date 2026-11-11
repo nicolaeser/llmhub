@@ -499,7 +499,7 @@ test("Anthropic error envelope and x-api-key auth", () => {
     [429, "rate_limit_error"],
     [500, "api_error"],
     [502, "api_error"],
-    [503, "overloaded_error"],
+    [503, "api_error"],
     [529, "overloaded_error"],
   ];
   for (const [status, type] of types) {

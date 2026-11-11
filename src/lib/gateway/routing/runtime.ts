@@ -494,6 +494,11 @@ export function markOverloaded(dep: Deployment): void {
   recordUncooledFailure(dep.id);
 }
 
+export function markConnectionFailure(dep: ResolvedDeployment): void {
+  if (signInProvider(dep)) recordUncooledFailure(dep.id);
+  else recordFailure(dep.id);
+}
+
 export function markRejected(dep: Deployment, until: number): void {
   recordRejection(dep.id, until);
 }
