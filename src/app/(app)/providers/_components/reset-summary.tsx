@@ -48,7 +48,7 @@ export default function ResetSummary({
           <p className="text-xs text-muted">{t("ineligible", { reason: credits.ineligibleReason ?? "unknown" })}</p>
         ) : null}
       </div>
-      {canRedeemReset(row, credits, canManage) ? <RedeemResetButton row={row} credits={credits} onItem={onItem} /> : null}
+      {canRedeemReset(row, credits, canManage) ? <RedeemResetButton row={row} credits={credits} timeZone={timeZone} onItem={onItem} /> : null}
     </div>
   );
 }

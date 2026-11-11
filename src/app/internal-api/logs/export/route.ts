@@ -46,7 +46,7 @@ export async function GET(req: NextRequest) {
       where: requestLogWhere(filters, scope),
       orderBy: { createdAt: "desc" },
       take: withContent ? CONTENT_ROW_LIMIT : ROW_LIMIT,
-      include: { content: withContent },
+      include: { contents: withContent ? { take: 1 } : false },
     });
     rows = data.map((r) => ({
       id: r.id,
@@ -83,8 +83,8 @@ export async function GET(req: NextRequest) {
       guardrail_input: format === "csv" ? r.guardInput.join("; ") : r.guardInput,
       guardrail_output: format === "csv" ? r.guardOutput.join("; ") : r.guardOutput,
       content_skip: r.contentSkip,
-      ...(r.content
-        ? { request: r.content.request, response: r.content.response, content_truncated: r.content.truncated }
+      ...(r.contents?.[0]
+        ? { request: r.contents[0].request, response: r.contents[0].response, content_truncated: r.contents[0].truncated }
         : {}),
     }));
     if (withContent) {

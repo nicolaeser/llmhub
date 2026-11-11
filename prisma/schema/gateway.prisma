@@ -605,7 +605,7 @@ model RequestLog {
   guardOutput      String[]           @default([])
   contentSkip      String             @default("")
   createdAt        DateTime           @default(now())
-  content          RequestLogContent?
+  contents         RequestLogContent[]
 
   @@index([createdAt])
   @@index([keyId, createdAt])
@@ -621,13 +621,14 @@ model RequestLog {
 }
 
 model RequestLogContent {
-  logId     String     @id
+  logId     String
   log       RequestLog @relation(fields: [logId], references: [id], onDelete: Cascade)
   request   Json?
   response  Json?
   truncated Boolean    @default(false)
   createdAt DateTime   @default(now())
 
+  @@id([logId, createdAt])
   @@index([createdAt])
 }
 

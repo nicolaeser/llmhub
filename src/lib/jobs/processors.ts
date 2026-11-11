@@ -3,12 +3,12 @@ import "server-only";
 import { DelayedError, type Job } from "bullmq";
 import { CATALOG_BUSY_DELAY_MS } from "@/lib/gateway/catalog/catalog-tasks";
 import { deliverWebhook } from "@/lib/alerts/notify";
-import { runMaintenanceSweep } from "@/worker/jobs";
+import { logMaintenanceSweep, runMaintenanceSweep } from "@/worker/jobs";
 import { runModelSync } from "@/worker/model-sync";
 import type { ModelSyncJobData, WebhookJobData } from "@/types/jobs";
 
 export async function processMaintenance(): Promise<void> {
-  await runMaintenanceSweep();
+  logMaintenanceSweep(await runMaintenanceSweep());
 }
 
 export async function processModelSync(job: Job<ModelSyncJobData>, token?: string): Promise<void> {

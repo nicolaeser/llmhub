@@ -306,7 +306,7 @@ export async function loadLogSession(input: { ref: unknown; page?: number }): Pr
     summarize(groups, where),
     prisma.requestLog.findMany({
       where: { AND: [where, { id: { in: shown.map((step) => step.id) } }] },
-      include: { content: { select: { logId: true } } },
+      include: { contents: { select: { logId: true }, take: 1 } },
     }),
     accountNames(session, [...order.keys()]),
   ]);
@@ -339,7 +339,7 @@ export async function loadLogSessionChat(input: { ref: unknown }): Promise<LogSe
   const session = await requirePermission(PERMISSIONS.SPEND_READ);
   const ref = parseSessionRef(input?.ref);
   if (!ref) throw new Error("VALIDATION");
-  const where: Prisma.RequestLogWhereInput = { AND: [spendScope(session), ref, { content: { isNot: null } }] };
+  const where: Prisma.RequestLogWhereInput = { AND: [spendScope(session), ref, { contents: { some: {} } }] };
   const canViewContent = hasPerm(session.permissions, PERMISSIONS.LOGS_CONTENT);
   const [total, newest] = await Promise.all([
     prisma.requestLog.count({ where }),
@@ -358,10 +358,11 @@ export async function loadLogSessionChat(input: { ref: unknown }): Promise<LogSe
     const rows = await prisma.requestLog.findMany({
       where: { AND: [where, { id: { in: ids.slice(start, start + CHAT_CHUNK_SIZE) } }] },
       orderBy: TIMELINE_ORDER,
-      include: { content: true },
+      include: { contents: { take: 1 } },
     });
     for (const row of rows) {
-      if (!row.content) continue;
+      const content = row.contents[0];
+      if (!content) continue;
       builder.add({
         request: {
           id: row.id,
@@ -376,8 +377,8 @@ export async function loadLogSessionChat(input: { ref: unknown }): Promise<LogSe
           cost: money(row.cost),
           error: row.error,
         },
-        input: requestTranscript(row.content.request),
-        output: responseTranscript(row.content.response),
+        input: requestTranscript(content.request),
+        output: responseTranscript(content.response),
       });
     }
   }

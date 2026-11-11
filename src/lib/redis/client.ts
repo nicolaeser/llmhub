@@ -3,6 +3,7 @@ import type { Redis } from "ioredis";
 import { redisUrl } from "@/lib/jobs/connection";
 import { errorFields } from "@/lib/logging/format";
 import { logger } from "@/lib/logging/logger";
+import { withTimeout } from "@/lib/utils/timeout";
 
 const REDIS_DECISION_TIMEOUT_MS = 2_000;
 const RECONNECT_AFTER_MS = 30_000;
@@ -11,18 +12,8 @@ const globalForRedis = globalThis as unknown as {
   __llmhubRedisRetryAt?: number;
 };
 
-export async function withRedisTimeout<T>(promise: Promise<T>, ms = REDIS_DECISION_TIMEOUT_MS): Promise<T> {
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  try {
-    return await Promise.race([
-      promise,
-      new Promise<T>((_, reject) => {
-        timer = setTimeout(() => reject(new Error("redis timeout")), ms);
-      }),
-    ]);
-  } finally {
-    if (timer) clearTimeout(timer);
-  }
+export function withRedisTimeout<T>(promise: Promise<T>, ms = REDIS_DECISION_TIMEOUT_MS): Promise<T> {
+  return withTimeout(promise, ms, "redis timeout");
 }
 
 async function connect(url: string): Promise<Redis | null> {

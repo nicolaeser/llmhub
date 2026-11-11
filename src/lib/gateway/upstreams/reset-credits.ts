@@ -231,9 +231,10 @@ function byId(a: ClaudeResetGrant, b: ClaudeResetGrant): number {
   return a.id < b.id ? -1 : 1;
 }
 
-export function selectGrant(block: ClaudeResetBlock | null, now: number): ClaudeResetGrant | null {
+export function selectGrant(block: ClaudeResetBlock | null, now: number, chosenId = ""): ClaudeResetGrant | null {
   if (!block?.eligible || claudeCooling(block, now)) return null;
   const usable = block.grants.filter((grant) => grantUsable(grant, block.atLimit, now));
+  if (chosenId) return usable.find((grant) => grant.id === chosenId) ?? null;
   if (!usable.length) return null;
   return usable.find((grant) => grant.id === block.nextGrantId) ?? [...usable].sort(byId)[0]!;
 }
@@ -314,6 +315,10 @@ function liveCredits(list: CodexCreditList | null, now: number): CodexResetCredi
 
 export function soonestCredit(list: CodexCreditList | null, now: number): CodexResetCredit | null {
   return liveCredits(list, now)[0] ?? null;
+}
+
+export function chosenCredit(list: CodexCreditList | null, now: number, chosenId: string): CodexResetCredit | null {
+  return liveCredits(list, now).find((credit) => credit.id === chosenId) ?? null;
 }
 
 export function codexResetCredits(

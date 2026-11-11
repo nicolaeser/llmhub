@@ -414,7 +414,7 @@ test("restore mode instructs every MCP step once and keeps the instruction out o
   }
   const logged = recordedPrisma
     .called("requestLog", "create")
-    .map((call) => (call.args as { data: { content?: { create: { request?: unknown } } } }).data.content?.create.request);
+    .map((call) => (call.args as { data: { contents?: { create: { request?: unknown } } } }).data.contents?.create.request);
   assert.equal(logged.length, 2);
   for (const request of logged) assert.equal(JSON.stringify(request).includes(PII_RESTORE_INSTRUCTION), false);
 });

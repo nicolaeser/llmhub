@@ -39,7 +39,7 @@ export async function loadLogs(input?: { page?: number; pageSize?: number; filte
       orderBy: { createdAt: "desc" },
       skip,
       take: pageSize,
-      include: { content: { select: { logId: true } } },
+      include: { contents: { select: { logId: true }, take: 1 } },
     }),
     prisma.spendEvent.findMany({
       where: spendWhere,

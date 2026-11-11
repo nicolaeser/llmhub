@@ -24,12 +24,13 @@ export async function loadReplay(id: string): Promise<PlaygroundReplay> {
       model: true,
       endpoint: true,
       piiInput: true,
-      content: { select: { request: true, truncated: true } },
+      contents: { select: { request: true, truncated: true }, take: 1 },
     },
   });
   if (!row) throw new Error("NOT_FOUND");
-  const draft = row.content ? replayDraft(row.endpoint, row.content.request) : null;
-  if (!row.content || !draft) throw new Error("NOT_REPLAYABLE");
+  const content = row.contents[0];
+  const draft = content ? replayDraft(row.endpoint, content.request) : null;
+  if (!content || !draft) throw new Error("NOT_REPLAYABLE");
   await writeAudit({
     actor: session.user.id,
     action: "log.content_view",
@@ -40,7 +41,7 @@ export async function loadReplay(id: string): Promise<PlaygroundReplay> {
     ...draft,
     id: row.id,
     model: row.model,
-    truncated: row.content.truncated,
+    truncated: content.truncated,
     masked: row.piiInput.length > 0,
   } satisfies PlaygroundReplay;
 }

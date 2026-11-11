@@ -57,11 +57,11 @@ test("system calls are metered with empty tenancy, store no content, and stay ou
     const spend = await prisma.spendEvent.findMany({ where: { model: alias } });
     assert.equal(spend.length, 1);
     assert.deepEqual([spend[0]!.keyId, spend[0]!.userId, spend[0]!.orgId], ["", "", ""]);
-    const logs = await prisma.requestLog.findMany({ where: { model: alias }, include: { content: true } });
+    const logs = await prisma.requestLog.findMany({ where: { model: alias }, include: { contents: true } });
     assert.equal(logs.length, 1);
     assert.deepEqual(
-      [logs[0]!.endpoint, logs[0]!.contentSkip, logs[0]!.content, logs[0]!.keyId, logs[0]!.userId, logs[0]!.orgId],
-      ["internal:model_test", "system", null, "", "", ""],
+      [logs[0]!.endpoint, logs[0]!.contentSkip, logs[0]!.contents, logs[0]!.keyId, logs[0]!.userId, logs[0]!.orgId],
+      ["internal:model_test", "system", [], "", "", ""],
     );
 
     const home = await data.org();

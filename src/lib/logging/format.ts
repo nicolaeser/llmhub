@@ -21,12 +21,20 @@ export function errorSummary(text: string): string {
   return summary.slice(0, MAX_ERROR_TEXT);
 }
 
+export function errorReason(text: string): string {
+  const lines = text.split("\n").map((part) => part.trim()).filter(Boolean);
+  const [heading = "", ...rest] = lines;
+  const detail = rest.at(-1) ?? "";
+  const reason = heading.endsWith(":") && detail && !detail.includes('"') ? `${heading} ${detail}` : heading;
+  return reason.slice(0, MAX_ERROR_TEXT);
+}
+
 export function errorFields(err: unknown): LogMeta {
   const text = err instanceof Error ? err.message : String(err);
   const code = err !== null && typeof err === "object" ? (err as { code?: unknown }).code : undefined;
   return {
     errName: err instanceof Error ? err.name : typeof err,
-    err: errorSummary(text),
+    err: errorReason(text),
     ...(typeof code === "string" ? { errCode: code } : {}),
   };
 }

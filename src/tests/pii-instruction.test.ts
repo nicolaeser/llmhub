@@ -143,7 +143,7 @@ function instructionCount(value: unknown): number {
 function loggedRequests(): unknown[] {
   return recordedPrisma
     .called("requestLog", "create")
-    .map((call) => (call.args as { data: { content?: { create: { request?: unknown } } } }).data.content?.create.request);
+    .map((call) => (call.args as { data: { contents?: { create: { request?: unknown } } } }).data.contents?.create.request);
 }
 
 async function post(path: string, body: JsonMap): Promise<Response> {

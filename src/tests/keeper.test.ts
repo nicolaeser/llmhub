@@ -3,8 +3,9 @@ import { mkdtemp, rm, stat, utimes } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test, { mock } from "node:test";
-import { REPEATED_FAILURE_LOG_EVERY, runKeeperCycle, type KeeperFailures } from "@/keeper/cycle";
-import { heartbeatFresh, KEEPER_STALE_MS, writeHeartbeat } from "@/keeper/heartbeat";
+import { nextCycleDelay, REPEATED_FAILURE_LOG_EVERY, runKeeperCycle, waitForDatabase, type KeeperFailures } from "@/keeper/cycle";
+import { heartbeatFresh, KEEPER_CYCLE_MS, KEEPER_RETRY_MS, KEEPER_STALE_MS, writeHeartbeat } from "@/keeper/heartbeat";
+import { errorFields } from "@/lib/logging/format";
 
 function captureLogs() {
   const lines: Record<string, unknown>[] = [];
@@ -77,4 +78,79 @@ test("the keeper is healthy only while its loop keeps writing the heartbeat", as
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
+});
+
+const RECOVERING = "\nInvalid `prisma.providerLogin.count()` invocation:\n\n\nDatabase error. Code: `57P03`. Message: `the database system is not yet accepting connections`";
+
+test("the keeper waits for a database that is still starting instead of failing its first cycle", async () => {
+  const logs = captureLogs();
+  try {
+    let pings = 0;
+    let beats = 0;
+    const ready = await waitForDatabase(
+      async () => {
+        pings += 1;
+        if (pings < 4) throw Object.assign(new Error(RECOVERING), { code: "P2039" });
+      },
+      { pauseMs: 1, onAttempt: async () => void (beats += 1) },
+    );
+    assert.equal(ready, true);
+    assert.equal(pings, 4);
+    assert.equal(beats, 3);
+    assert.deepEqual(logs.events(), ["keeper.database_waiting", "keeper.database_ready"]);
+    assert.equal(logs.lines[0]?.level, "info");
+    assert.equal(logs.lines[0]?.errCode, "P2039");
+    assert.match(String(logs.lines[0]?.err), /invocation: Database error\. Code: `57P03`\. Message: `the database system is not yet accepting connections`$/);
+  } finally {
+    logs.restore();
+  }
+});
+
+test("the keeper stops waiting after its attempts, on a stop, and when the database never answers", async () => {
+  const logs = captureLogs();
+  try {
+    const down = async () => {
+      throw new Error("connect ECONNREFUSED");
+    };
+    assert.equal(await waitForDatabase(down, { attempts: 3, pauseMs: 1 }), false);
+    assert.deepEqual(logs.events(), ["keeper.database_waiting", "keeper.database_unavailable"]);
+    assert.equal(logs.lines[1]?.level, "warn");
+    let pings = 0;
+    assert.equal(await waitForDatabase(async () => void (pings += 1), { stopped: () => true }), false);
+    assert.equal(pings, 0);
+    assert.equal(await waitForDatabase(() => new Promise(() => {}), { attempts: 1, pingMs: 5 }), false);
+    assert.equal(logs.lines.at(-1)?.err, "the database did not answer in time");
+    assert.equal(await waitForDatabase(async () => {}), true);
+    let hanging = 0;
+    const never = () => {
+      hanging += 1;
+      return new Promise(() => {});
+    };
+    assert.equal(await waitForDatabase(never, { attempts: 4, pauseMs: 1, pingMs: 2 }), false);
+    assert.equal(hanging, 1);
+    const startedAt = Date.now();
+    assert.equal(await waitForDatabase(down, { attempts: 1_000, pauseMs: 0 }), false);
+    assert.ok(Date.now() - startedAt < 2_000);
+  } finally {
+    logs.restore();
+  }
+});
+
+test("a failed cycle is tried again sooner, a healthy one keeps the cycle length", () => {
+  assert.equal(nextCycleDelay(new Map()), KEEPER_CYCLE_MS);
+  assert.equal(nextCycleDelay(new Map([["sign_in_refresh", 1]])), KEEPER_RETRY_MS[0]);
+  assert.equal(nextCycleDelay(new Map([["login_journal", 1], ["sign_in_refresh", 3]])), KEEPER_RETRY_MS[2]);
+  assert.equal(nextCycleDelay(new Map([["sign_in_refresh", KEEPER_RETRY_MS.length + 1]])), KEEPER_CYCLE_MS);
+  assert.ok(KEEPER_RETRY_MS.every((delay) => delay < KEEPER_CYCLE_MS));
+});
+
+test("an error log line carries the reason below a heading line", () => {
+  assert.equal(errorFields(new Error(RECOVERING)).err?.toString().startsWith("Invalid `prisma.providerLogin.count()` invocation: Database error."), true);
+  assert.equal(errorFields(new Error("connect ECONNREFUSED\n    at stack")).err, "connect ECONNREFUSED");
+  assert.equal(errorFields(new Error("heading:")).err, "heading:");
+  assert.equal(String(errorFields(new Error(`heading:\n${"x".repeat(500)}`)).err).length, 300);
+  assert.equal(
+    errorFields(new Error('Invalid `prisma.user.create()` invocation:\n\nDatabase error. Code: `22P02`. Message: `invalid input syntax for type integer: "secret"`')).err,
+    "Invalid `prisma.user.create()` invocation:",
+  );
 });

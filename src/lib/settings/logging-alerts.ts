@@ -1,6 +1,7 @@
 import "server-only";
 
 import { randomUUID } from "node:crypto";
+import { contentStorage } from "@/lib/db/content-partitions";
 import { requirePlatformPermission } from "@/lib/auth/guards";
 import { hasPerm, PERMISSIONS } from "@/lib/auth/permissions";
 import { writeAudit } from "@/lib/audit";
@@ -25,6 +26,7 @@ import {
   DEFAULT_OBJECT_RETENTION_DAYS,
   DEFAULT_SECURITY_RETENTION_DAYS,
   clampRetentionDays,
+  clampContentMaxGb,
 } from "@/lib/settings/retention-defaults";
 import { alertEmailsSchema, alertWebhooksSchema } from "@/schemas/settings";
 import type { AlertWebhook } from "@/types/alerts";
@@ -76,6 +78,8 @@ async function view(session: AuthenticatedSession): Promise<LoggingSettingsView>
     objectRetentionDays: enterprise.object_retention_days ?? DEFAULT_OBJECT_RETENTION_DAYS,
     fileRetentionDays: enterprise.file_retention_days ?? 0,
     contentRetentionDays: enterprise.content_retention_days ?? DEFAULT_CONTENT_RETENTION_DAYS,
+    contentMaxGb: enterprise.content_max_gb ?? 0,
+    storage: await contentStorage().catch(() => null),
     logArchive: enterprise.log_archive === true,
     logContent: enterprise.log_content !== false,
     s3Ready: Boolean(await resolveS3Config()),
@@ -105,6 +109,7 @@ export async function saveLogging(input: {
   objectRetentionDays: number;
   fileRetentionDays: number;
   contentRetentionDays: number;
+  contentMaxGb?: number;
   logArchive: boolean;
   logContent: boolean;
 }) {
@@ -140,6 +145,7 @@ export async function saveLogging(input: {
     object_retention_days: clampRetentionDays(input.objectRetentionDays),
     file_retention_days: clampRetentionDays(input.fileRetentionDays),
     content_retention_days: clampRetentionDays(input.contentRetentionDays),
+    ...(input.contentMaxGb === undefined ? {} : { content_max_gb: clampContentMaxGb(input.contentMaxGb) }),
     log_archive: input.logArchive,
     log_content: input.logContent,
     spend_anomaly_factor: anomalyFactor(Number(input.alertRules.spendAnomalyFactor) || 0),

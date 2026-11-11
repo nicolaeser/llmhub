@@ -44,25 +44,19 @@ function startLocalModelSync(g: GlobalWithWorkerBoot): void {
 }
 
 async function leasedMaintenanceSweep() {
-  if (!(await claimLease(MAINTENANCE_LEASE, MAINTENANCE_LEASE_MS))) return null;
-  const { runMaintenanceSweep } = await import("./jobs");
-  return runMaintenanceSweep();
+  if (!(await claimLease(MAINTENANCE_LEASE, MAINTENANCE_LEASE_MS))) return;
+  const { logMaintenanceSweep, runMaintenanceSweep } = await import("./jobs");
+  logMaintenanceSweep(await runMaintenanceSweep());
 }
 
 function startLocalTimer(g: GlobalWithWorkerBoot): void {
   startLocalModelSync(g);
   if (g.__llmhubWorkerTimer) return;
   const tick = () =>
-    leasedMaintenanceSweep()
-      .then((result) => {
-        if (result && Object.values(result).some((n) => n > 0)) {
-          logger.info("worker.tick", result);
-        }
-      })
-      .catch((err) => {
-        logger.error("worker.tick_failed", { err: errorMessage(err) });
-        reportWorkerJobFailure(err, { queue: QUEUE_NAMES.maintenance, finalAttempt: true });
-      });
+    leasedMaintenanceSweep().catch((err) => {
+      logger.error("worker.tick_failed", { err: errorMessage(err) });
+      reportWorkerJobFailure(err, { queue: QUEUE_NAMES.maintenance, finalAttempt: true });
+    });
   void tick();
   const timer = setInterval(tick, WORKER_TICK_MS);
   timer.unref();

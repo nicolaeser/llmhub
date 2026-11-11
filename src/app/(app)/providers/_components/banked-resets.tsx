@@ -56,7 +56,7 @@ export default function BankedResets({
           <TimerReset size={14} aria-hidden className="text-muted" />
           <p className="text-sm font-medium">{t("title")}</p>
         </div>
-        {canRedeemReset(row, credits, canManage) ? <RedeemResetButton row={row} credits={credits} onItem={onItem} /> : null}
+        {canRedeemReset(row, credits, canManage) ? <RedeemResetButton row={row} credits={credits} timeZone={timeZone} onItem={onItem} /> : null}
       </div>
       <p className="text-sm text-muted">
         {tLimits("resetCredits", { available: credits.available, applicable: credits.applicable })}

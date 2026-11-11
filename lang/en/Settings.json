@@ -247,6 +247,10 @@
     "contentHint": "Turn it off for a single person in Users or for a single key in its key settings. While PII redaction is active, stored content is masked and every log shows the entities it found.",
     "contentRetention": "Content retention days",
     "contentRetentionHint": "{days, plural, one {# day} other {# days}} by default. 0 keeps content as long as the request log. A lower value removes prompts and responses earlier and keeps the metadata. Integration tool executions store tool output and follow the shorter of both values.",
+    "contentMax": "Maximum content size in GB",
+    "contentMaxHint": "0 sets no limit. Above the limit, the oldest whole days of stored prompts and responses are removed first, and their disk space is released at once. The current day is always kept, and the metadata stays. Content from before the update to daily storage counts as one block and is removed as a whole.",
+    "storageUse": "Stored content uses {content} and request logs use {logs} of the database's {database}.",
+    "storageLarge": "Stored content takes a lot of disk space. Set a maximum size or keep content for fewer days.",
     "description": "Alert webhooks, emails, and rules, request content, retention, and log archiving.",
     "labels": {
       "title": "Request labels",

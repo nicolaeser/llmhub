@@ -159,7 +159,7 @@ function assertNothingStored() {
   for (const call of writes) {
     const data = (call.args as { data?: JsonMap }).data;
     if (call.model === "requestLog") {
-      assert.deepEqual([data?.endpoint, data?.contentSkip, data?.content], ["internal:mcp_builder", "system", undefined]);
+      assert.deepEqual([data?.endpoint, data?.contentSkip, data?.contents], ["internal:mcp_builder", "system", undefined]);
     }
     const text = JSON.stringify(call.args);
     for (const source of SOURCE_TEXT) assert.equal(text.includes(source), false, `${call.model} stores source text`);

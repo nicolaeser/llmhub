@@ -247,6 +247,10 @@
     "contentHint": "Für einzelne Personen unter Benutzer oder für einzelne Keys in deren Einstellungen ausschaltbar. Solange die PII-Schwärzung aktiv ist, werden gespeicherte Inhalte maskiert und jedes Log zeigt die gefundenen Entitäten.",
     "contentRetention": "Aufbewahrung der Inhalte in Tagen",
     "contentRetentionHint": "Standardmäßig {days, plural, one {# Tag} other {# Tage}}. 0 behält Inhalte so lange wie das Request-Log. Ein kleinerer Wert entfernt Prompts und Antworten früher und behält die Metadaten. Werkzeug-Ausführungen von Integrationen speichern Tool-Ausgaben und folgen dem kürzeren der beiden Werte.",
+    "contentMax": "Maximale Größe der Inhalte in GB",
+    "contentMaxHint": "0 setzt keine Grenze. Über der Grenze werden zuerst die ältesten ganzen Tage der gespeicherten Prompts und Antworten entfernt, und ihr Plattenplatz wird sofort frei. Der laufende Tag bleibt immer erhalten, die Metadaten ebenso. Inhalte aus der Zeit vor der Umstellung auf tageweise Ablage zählen als ein Block und werden als Ganzes entfernt.",
+    "storageUse": "Gespeicherte Inhalte belegen {content} und Request-Logs {logs} von {database} der Datenbank.",
+    "storageLarge": "Die gespeicherten Inhalte belegen viel Plattenplatz. Lege eine maximale Größe fest oder bewahre Inhalte kürzer auf.",
     "description": "Alarm-Webhooks, -E-Mails und -Regeln, Anfrageinhalte, Aufbewahrung und Log-Archivierung.",
     "labels": {
       "title": "Anfrage-Labels",

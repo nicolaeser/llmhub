@@ -17,6 +17,7 @@ import { errorFields } from "@/lib/logging/format";
 import { logger } from "@/lib/logging/logger";
 import { notifyLive } from "@/lib/updates/live-topics";
 import { parseJsonOrNull } from "@/lib/utils/json";
+import { withTimeout } from "@/lib/utils/timeout";
 import type { ResolvedDeployment } from "@/types/routing";
 import type {
   LoginJournalEntry,
@@ -190,18 +191,8 @@ function sameAccount(a: string, b: string): boolean {
   return a.toLowerCase() === b.toLowerCase();
 }
 
-async function withinJournalTimeout<T>(work: Promise<T>): Promise<T> {
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  try {
-    return await Promise.race([
-      work,
-      new Promise<T>((_, reject) => {
-        timer = setTimeout(() => reject(new Error("the login journal did not answer in time")), LOGIN_JOURNAL_TIMEOUT_MS);
-      }),
-    ]);
-  } finally {
-    if (timer) clearTimeout(timer);
-  }
+function withinJournalTimeout<T>(work: Promise<T>): Promise<T> {
+  return withTimeout(work, LOGIN_JOURNAL_TIMEOUT_MS, "the login journal did not answer in time");
 }
 
 async function journalLogin(providerId: string, kind: SignInKind, session: SignInSession, refreshedAt: number): Promise<void> {
