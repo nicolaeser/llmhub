@@ -667,6 +667,73 @@ test("traffic header writes are throttled per account and skipped when nothing m
   assert.equal(upstreamCalls.length, 0);
 });
 
+function fableRejected(now: number, resetSeconds: number, status = "rejected"): Headers {
+  const headers = unifiedHeaders(0.3, 0.2, now);
+  headers.set("anthropic-ratelimit-unified-status", status);
+  if (status === "rejected") headers.set("anthropic-ratelimit-unified-representative-claim", "seven_day_overage_included");
+  headers.set("anthropic-ratelimit-unified-reset", String(resetSeconds));
+  headers.set("anthropic-ratelimit-unified-7d_oi-status", "rejected");
+  headers.set("anthropic-ratelimit-unified-7d_oi-reset", String(resetSeconds));
+  return headers;
+}
+
+test("a Fable rejection marks the stored Fable limit full once and keeps Sonnet routable on that account", async () => {
+  const { observeClaudeLimits, readStoredSnapshot, storeModelLimit } = await import("@/lib/gateway/upstreams/limit-store");
+  const { limitsSnapshot } = await import("@/lib/gateway/upstreams/subscription-limits");
+  const { modelRecoveryAt, quotaExhausted } = await import("@/lib/gateway/routing/quota");
+  const now = Date.now();
+  const resetSeconds = Math.floor((now + 50 * HOUR) / 1000);
+  const resetsAt = new Date(resetSeconds * 1000).toISOString();
+  const target = await seededClaude(now);
+  forbidUpstream();
+  assert.equal(await observeClaudeLimits(target.id, fableRejected(now, resetSeconds), now), true);
+  const stored = await readStoredSnapshot(target.id);
+  assert.equal(stored?.version, 3);
+  assert.equal(stored?.fetchedAt, now - 10 * MINUTE);
+  assert.deepEqual(
+    stored?.limits?.windows.map((window) => [window.scope, window.usedPercent, window.limitReached]),
+    [
+      ["", 30, false],
+      ["", 20, false],
+      ["Opus", 70, false],
+      ["Fable", 100, true],
+    ],
+  );
+  assert.equal(stored?.limits?.windows[3]?.resetsAt, resetsAt);
+  const local = limitsSnapshot(target.id);
+  assert.ok(quotaExhausted(local, "claude-fable-5-2", now));
+  assert.equal(quotaExhausted(local, "claude-sonnet-4-5", now), false);
+  assert.equal(modelRecoveryAt(local, "claude-fable-5-2", now), resetSeconds * 1000);
+  assert.equal(await observeClaudeLimits(target.id, fableRejected(now, resetSeconds), now + 10_000), false);
+  assert.equal((await readStoredSnapshot(target.id))?.version, 3);
+  const sonnet = await seededClaude(now, {
+    limits: {
+      ...claudeSnapshotLimits(now - 10 * MINUTE),
+      windows: [
+        ...claudeSnapshotLimits(now - 10 * MINUTE).windows,
+        { key: "iguana_necktie", scope: "Fable", usedPercent: 92, windowSeconds: 604_800, resetsAt, limitReached: false },
+      ],
+    },
+  });
+  assert.equal(await observeClaudeLimits(sonnet.id, fableRejected(now, resetSeconds, "allowed"), now), true);
+  const marked = await readStoredSnapshot(sonnet.id);
+  assert.deepEqual(
+    marked?.limits?.windows.map((window) => [window.key ?? "", window.scope, window.usedPercent, window.limitReached]),
+    [
+      ["", "", 30, false],
+      ["", "", 20, false],
+      ["", "Opus", 70, false],
+      ["iguana_necktie", "Fable", 100, true],
+    ],
+  );
+  const empty = await account("claude");
+  seedSnapshot(empty.id, { checkedAt: new Date(now), nextAt: new Date(now + HOUR) });
+  const reached = { key: "iguana_necktie", scope: "Fable", usedPercent: 100, windowSeconds: 604_800, resetsAt, limitReached: true };
+  assert.equal(await storeModelLimit(empty.id, reached, now), false);
+  assert.equal(await storeModelLimit("missing-account", reached, now), false);
+  assert.equal(upstreamCalls.length, 0);
+});
+
 test("header writes keep a forgotten snapshot off routing and build plan windows for an account without limits", async () => {
   const { observeClaudeLimits, readStoredSnapshot, storeObservedLimits, hydrateLimits } = await import(
     "@/lib/gateway/upstreams/limit-store"

@@ -1,15 +1,16 @@
 "use client";
 
-import { Alert } from "@heroui/react";
+import { Alert, Button } from "@heroui/react";
 import { TimerReset } from "lucide-react";
 import { useFormatter, useTranslations } from "next-intl";
 import { useClock } from "@/lib/hooks/use-clock";
 import type { LimitSnapshot, ProviderView } from "@/types/providers";
 import type { ResetCredits } from "@/types/resets";
-import RedeemResetButton from "./redeem-reset-button";
+import { ResetButton } from "./redeem-reset-button";
 import { ResetOptionChips, ResetOptionNotes } from "./reset-option-card";
-import { canRedeemReset, resetOptions } from "./reset-view";
+import { alsoRefills, canRedeemReset, isSpendable, optionNaming, resetEffects, resetOptions } from "./reset-view";
 import { useResetLabels } from "./use-reset-labels";
+import { useResetRedeem } from "./use-reset-redeem";
 
 export default function BankedResets({
   row,
@@ -30,8 +31,11 @@ export default function BankedResets({
   const now = useClock(60_000);
   const retry = credits.pending?.retryable === true;
   const labels = useResetLabels(timeZone, credits);
+  const redeem = useResetRedeem({ row, credits, timeZone, onItem });
+  const canRedeem = canRedeemReset(row, credits, canManage);
   const grants = credits.grants ?? [];
   const options = credits.pending ? [] : resetOptions(credits);
+  const limits = credits.limits ?? [];
   const cooling = credits.cooldownUntil ? new Date(credits.cooldownUntil) : null;
   const waitingForLimit =
     credits.eligible === true &&
@@ -59,7 +63,9 @@ export default function BankedResets({
           <TimerReset size={14} aria-hidden className="text-muted" />
           <p className="text-sm font-medium">{t("title")}</p>
         </div>
-        {canRedeemReset(row, credits, canManage) ? <RedeemResetButton row={row} credits={credits} timeZone={timeZone} onItem={onItem} /> : null}
+        {canRedeem ? (
+          <ResetButton name={row.name} retry={redeem.retry} pending={redeem.pending} onPress={() => redeem.show()} />
+        ) : null}
       </div>
       <p className="text-sm text-muted">
         {tLimits("resetCredits", { available: credits.available, applicable: credits.applicable })}
@@ -73,15 +79,38 @@ export default function BankedResets({
         <ul aria-label={t("listTitle")} className="space-y-3">
           {options.map((option) => (
             <li key={option.id} className="min-w-0 space-y-1">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="min-w-0 break-words text-sm text-foreground">{labels.option(option)}</span>
-                <ResetOptionChips option={option} />
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex min-w-0 flex-wrap items-center gap-2">
+                  <span className="min-w-0 break-words text-sm text-foreground">{labels.option(option)}</span>
+                  <ResetOptionChips option={option} />
+                </div>
+                {canRedeem && isSpendable(option) ? (
+                  <Button
+                    size="sm"
+                    variant="tertiary"
+                    aria-label={t("option.use", optionNaming(option))}
+                    isDisabled={redeem.pending}
+                    onPress={() => redeem.show(option.id)}
+                  >
+                    {t("option.pick")}
+                  </Button>
+                ) : null}
               </div>
               <div className="space-y-1 text-xs text-muted">
                 {option.refills.length > 0 || !option.givesBack ? <p>{labels.effect(option)}</p> : null}
+                {alsoRefills(option).map((limit) => (
+                  <p key={limit.key}>{labels.alsoRefills(limit)}</p>
+                ))}
                 {option.givesBack ? (
                   <p>{labels.givesBack({ scope: option.givesBack.scope, percent: option.givesBack.percentOfWeekly })}</p>
                 ) : null}
+                {isSpendable(option)
+                  ? resetEffects(option, limits).staysFull.map((limit) => (
+                      <p key={limit.key} className="text-warning">
+                        {labels.staysFull(limit)}
+                      </p>
+                    ))
+                  : null}
                 <p>
                   {labels.left(option)} · {labels.expiry(option)}
                 </p>
@@ -114,6 +143,7 @@ export default function BankedResets({
       {row.kind === "claude" && credits.checkedAt ? (
         <p className="text-xs text-muted">{t("checked", { when: format.relativeTime(new Date(credits.checkedAt), now) })}</p>
       ) : null}
+      {canRedeem ? redeem.dialogs : null}
     </div>
   );
 }

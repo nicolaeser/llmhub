@@ -1,3 +1,9 @@
+import {
+  CLAUDE_MODEL_LIMIT_KEY,
+  CLAUDE_MODEL_LIMIT_SCOPE,
+  CLAUDE_WEEK_SECONDS,
+  isModelLimitWindow,
+} from "@/lib/gateway/upstreams/claude-usage";
 import type { LimitWindow, SubscriptionLimits } from "@/types/providers";
 
 const UNIFIED_PREFIX = "anthropic-ratelimit-unified";
@@ -5,6 +11,7 @@ const OBSERVED_WINDOWS = [
   { claim: "five_hour", key: "5h", windowSeconds: 5 * 3_600 },
   { claim: "seven_day", key: "7d", windowSeconds: 7 * 86_400 },
 ] as const;
+const MODEL_WINDOW = { claim: "seven_day_overage_included", key: "7d_oi" } as const;
 const UNIFIED_STATUSES = ["allowed", "allowed_warning", "rejected"] as const;
 const MAX_UTILIZATION = 1.5;
 const FULL_PERCENT = 100;
@@ -63,6 +70,31 @@ export function claudeHeaderWindows(headers: Headers): LimitWindow[] {
   return windows;
 }
 
+function modelRejected(headers: Headers): boolean {
+  if (unifiedStatus(unified(headers, "status")) !== "rejected") return false;
+  const claim = unified(headers, "representative-claim");
+  if (claim) return claim === MODEL_WINDOW.claim;
+  return unifiedStatus(unified(headers, `${MODEL_WINDOW.key}-status`)) === "rejected";
+}
+
+function modelReset(headers: Headers, claimed: boolean): number | null {
+  return resetTime(unified(headers, `${MODEL_WINDOW.key}-reset`)) ?? (claimed ? resetTime(unified(headers, "reset")) : null);
+}
+
+export function claudeModelLimitReached(headers: Headers): LimitWindow | null {
+  const claimed = modelRejected(headers);
+  if (!claimed && unifiedStatus(unified(headers, `${MODEL_WINDOW.key}-status`)) !== "rejected") return null;
+  const reset = modelReset(headers, claimed);
+  return {
+    key: CLAUDE_MODEL_LIMIT_KEY,
+    scope: CLAUDE_MODEL_LIMIT_SCOPE,
+    usedPercent: FULL_PERCENT,
+    windowSeconds: CLAUDE_WEEK_SECONDS,
+    resetsAt: reset === null ? null : new Date(reset).toISOString(),
+    limitReached: true,
+  };
+}
+
 export function claudeRejectionReset(headers: Headers, now: number): number | null {
   const overall = unifiedStatus(unified(headers, "status"));
   const claim = unified(headers, "representative-claim");
@@ -72,7 +104,10 @@ export function claudeRejectionReset(headers: Headers, now: number): number | nu
   const unreported = !overall && windows.every((window) => window.status === null);
   const claimRejected =
     overall === "rejected" && (OBSERVED_WINDOWS.some((spec) => spec.claim === claim) || !anyAllowed);
-  if (!rejected.length && !claimRejected && !unreported) return null;
+  if (!rejected.length && !claimRejected && !unreported) {
+    const reset = modelRejected(headers) ? modelReset(headers, true) : null;
+    return reset !== null && reset > now ? reset : null;
+  }
   const resets = [
     ...rejected.map((window) => resetTime(unified(headers, `${window.spec.key}-reset`))),
     resetTime(unified(headers, "reset")),
@@ -116,6 +151,28 @@ export function withObservedWindows(limits: SubscriptionLimits, observed: LimitW
     return withKnownReset(window.key === undefined ? next! : { ...next!, key: window.key }, window, at);
   });
   return { ...limits, windows: [...pending, ...windows], observedAt: new Date(at).toISOString() };
+}
+
+function resetAhead(window: LimitWindow, now: number): boolean {
+  const reset = resetMs(window);
+  return reset === null || reset > now;
+}
+
+export function withModelLimitReached(
+  limits: SubscriptionLimits,
+  reached: LimitWindow,
+  now: number,
+): SubscriptionLimits | null {
+  const index = limits.windows.findIndex(isModelLimitWindow);
+  const prior = index < 0 ? null : limits.windows[index]!;
+  if (prior?.limitReached && resetAhead(prior, now) && (reached.resetsAt === null || !resetMoved(prior, reached))) {
+    return null;
+  }
+  const marked = prior
+    ? withKnownReset({ ...prior, usedPercent: FULL_PERCENT, limitReached: true, resetsAt: reached.resetsAt }, prior, now)
+    : reached;
+  const windows = index < 0 ? [...limits.windows, marked] : limits.windows.map((window, at) => (at === index ? marked : window));
+  return { ...limits, windows };
 }
 
 export function observedFlipped(before: LimitWindow[], after: LimitWindow[]): boolean {

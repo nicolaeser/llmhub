@@ -1,5 +1,6 @@
 import "server-only";
 
+import type { ZodType } from "zod";
 import prisma from "@/lib/db/prisma";
 import { requirePermission } from "@/lib/auth/guards";
 import { hasPerm, PERMISSIONS } from "@/lib/auth/permissions";
@@ -31,7 +32,8 @@ import { canReport, reportViews } from "@/lib/reports/manage";
 import { forgetCompanyLabelKeys } from "@/lib/gateway/billing/label-keys";
 import { cleanLabelKeys } from "@/lib/usage/labels";
 import { managesMcpRules, seesMcp } from "@/lib/mcp/scope";
-import { pauseActive } from "@/lib/keys/pause";
+import { pauseEnd, pauseSnapshot, pauseView } from "@/lib/keys/pause";
+import { pauseNodeSchema, resumeNodeSchema } from "@/schemas/tenancy";
 
 const NODE_KINDS: readonly string[] = ["org", "team", "project", "member"];
 
@@ -75,6 +77,7 @@ async function structurePayload(session: AuthenticatedSession, only?: string): P
     orgs: orgs.map((row) => ({
       id: row.id,
       alias: row.alias,
+      ...pauseView(row, now),
       budget: budgetView(row, boosts("org", row.id), now),
       labelKeys: row.labelKeys,
     })),
@@ -84,6 +87,7 @@ async function structurePayload(session: AuthenticatedSession, only?: string): P
       orgId: row.orgId ?? "",
       rpmLimit: row.rpmLimit,
       tpmLimit: row.tpmLimit,
+      ...pauseView(row, now),
       budget: budgetView(row, boosts("team", row.id), now),
     })),
     projects: projects.map((row) => ({
@@ -92,6 +96,7 @@ async function structurePayload(session: AuthenticatedSession, only?: string): P
       orgId: row.orgId ?? "",
       teamId: row.teamId ?? "",
       owner: row.owner,
+      ...pauseView(row, now),
       budget: budgetView(row, boosts("project", row.id), now),
     })),
     members: members.map((row) => ({
@@ -102,6 +107,7 @@ async function structurePayload(session: AuthenticatedSession, only?: string): P
       teamId: row.teamId ?? "",
       blocked: row.blocked,
       logContent: row.logContent,
+      ...pauseView(row, now),
       budget: budgetView(row, boosts("member", row.id), now),
     })),
     users: users.map((row) => ({
@@ -110,23 +116,19 @@ async function structurePayload(session: AuthenticatedSession, only?: string): P
       orgId: row.orgId ?? "",
       budget: budgetView(row, boosts("user", row.id), now),
     })),
-    keys: keys.map((row) => {
-      const paused = pauseActive(row.paused, row.pausedUntil, now);
-      return {
-        id: row.id,
-        alias: row.keyAlias || row.prefix,
-        prefix: row.prefix,
-        userId: row.userId ?? "",
-        orgId: row.orgId ?? "",
-        teamId: row.teamId ?? "",
-        projectId: row.projectId ?? "",
-        memberId: row.memberId ?? "",
-        blocked: row.blocked,
-        paused,
-        pausedUntil: paused ? (row.pausedUntil?.toISOString() ?? "") : "",
-        budget: budgetView(row, boosts("key", row.id), now),
-      };
-    }),
+    keys: keys.map((row) => ({
+      id: row.id,
+      alias: row.keyAlias || row.prefix,
+      prefix: row.prefix,
+      userId: row.userId ?? "",
+      orgId: row.orgId ?? "",
+      teamId: row.teamId ?? "",
+      projectId: row.projectId ?? "",
+      memberId: row.memberId ?? "",
+      blocked: row.blocked,
+      ...pauseView(row, now),
+      budget: budgetView(row, boosts("key", row.id), now),
+    })),
     thresholds: enterprise.budget_alert_thresholds ?? [50, 80, 100],
     companyId: company ?? "",
     canManage: hasPerm(session.permissions, PERMISSIONS.TENANCY_MANAGE),
@@ -208,6 +210,7 @@ export async function loadCompanyDirectory(): Promise<CompanyDirectory> {
     rows: orgs.map((row) => ({
       id: row.id,
       alias: row.alias,
+      ...pauseView(row, now),
       budget: budgetView(
         row,
         temps
@@ -417,6 +420,73 @@ export async function saveMember(input: MemberInput) {
         after: data,
       });
     });
+}
+
+type PauseFields = { paused: boolean; pausedUntil: Date | null };
+
+const PAUSE_FIELDS = { paused: true, pausedUntil: true } as const;
+
+function parseInput<T>(schema: ZodType<T>, raw: unknown): T {
+  const parsed = schema.safeParse(raw);
+  if (!parsed.success) throw new Error("VALIDATION");
+  return parsed.data;
+}
+
+async function pausable(session: AuthenticatedSession, kind: TenancyKind, id: string): Promise<PauseFields> {
+  if (kind === "org") {
+    assertPlatform(session);
+    const org = await prisma.organization.findUnique({ where: { id }, select: PAUSE_FIELDS });
+    if (!org) throw new Error("NOT_FOUND");
+    return org;
+  }
+  const select = { orgId: true, ...PAUSE_FIELDS } as const;
+  const row =
+    kind === "team"
+      ? await prisma.team.findUnique({ where: { id }, select })
+      : kind === "project"
+        ? await prisma.project.findUnique({ where: { id }, select })
+        : await prisma.member.findUnique({ where: { id }, select });
+  if (!row || !inCompany(session, row.orgId)) throw new Error("NOT_FOUND");
+  return row;
+}
+
+function writePause(kind: TenancyKind, id: string, data: PauseFields): Promise<PauseFields> {
+  const query = { where: { id }, data, select: PAUSE_FIELDS };
+  if (kind === "org") return prisma.organization.update(query);
+  if (kind === "team") return prisma.team.update(query);
+  if (kind === "project") return prisma.project.update(query);
+  return prisma.member.update(query);
+}
+
+async function changePause(
+  session: AuthenticatedSession,
+  ref: { kind: TenancyKind; id: string },
+  data: PauseFields,
+): Promise<void> {
+  const existing = await pausable(session, ref.kind, ref.id);
+  const row = await writePause(ref.kind, ref.id, data);
+  await writeAudit({
+    actor: session.user.id,
+    action: `${ref.kind}.${data.paused ? "pause" : "resume"}`,
+    objectType: ref.kind,
+    objectId: ref.id,
+    before: pauseSnapshot(existing),
+    after: pauseSnapshot(row),
+  });
+}
+
+export async function pauseNode(raw: unknown) {
+  return mutate(PERMISSIONS.TENANCY_MANAGE, async (session) => {
+    const input = parseInput(pauseNodeSchema, raw);
+    await changePause(session, input, { paused: true, pausedUntil: pauseEnd(input.hours, new Date()) });
+  });
+}
+
+export async function resumeNode(raw: unknown) {
+  return mutate(PERMISSIONS.TENANCY_MANAGE, async (session) => {
+    const input = parseInput(resumeNodeSchema, raw);
+    await changePause(session, input, { paused: false, pausedUntil: null });
+  });
 }
 
 async function revokeKeys(where: { projectId: string } | { memberId: string }) {

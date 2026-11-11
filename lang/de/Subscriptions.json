@@ -143,15 +143,19 @@
     "option": {
       "name": "{family, select, five_hour {5-Stunden-Reset} weekly {Wochen-Reset} scoped {{scope}-Reset} full {Voller Reset} other {Weiterer Reset}}",
       "effect": "{family, select, five_hour {Füllt das 5-Stunden-Limit wieder auf.} weekly {Füllt das Wochenlimit wieder auf.} scoped {Füllt das {scope}-Limit wieder auf.} full {Füllt das 5-Stunden-Limit und das Wochenlimit wieder auf.} other {Füllt ein weiteres Limit wieder auf.}}",
+      "alsoRefills": "{family, select, five_hour {Füllt auch das 5-Stunden-Limit wieder auf.} weekly {Füllt auch das Wochenlimit wieder auf.} scoped {Füllt auch das {scope}-Limit wieder auf.} other {Füllt auch ein weiteres Limit wieder auf.}}",
+      "staysFull": "{family, select, five_hour {Das 5-Stunden-Limit bleibt voll.} weekly {Das Wochenlimit bleibt voll.} scoped {Das {scope}-Limit bleibt voll.} other {Ein weiteres Limit bleibt voll.}}",
       "givesBack": "{known, select, true {Gibt zurück, was {scope} diese Woche verbraucht hat ({percent, number, percent} des Wochenlimits).} other {Gibt zurück, was {scope} diese Woche verbraucht hat.}}",
       "left": "{left, number} von {total, plural, one {# Reset} other {# Resets}} übrig",
       "expiry": "{dated, select, true {läuft {date} ab} other {kein Ablaufdatum}}",
+      "pick": "Nutzen",
+      "use": "{family, select, five_hour {5-Stunden-Reset nutzen} weekly {Wochen-Reset nutzen} scoped {{scope}-Reset nutzen} full {Vollen Reset nutzen} other {Weiteren Reset nutzen}}",
       "upstream": "Name beim Anbieter: {label}",
       "recommended": "Empfohlen",
       "helpsNow": "Hilft jetzt",
       "blocked": "Gerade nicht nutzbar",
       "early": "Füllt gerade nichts auf, was voll ist.",
-      "blocker": "{blocker, select, ineligible {Dieses Konto kann gerade keine Resets nutzen.} cooldown {{timed, select, true {Resets sind in der Abkühlphase. Der nächste ist {when} möglich ({date}).} other {Resets sind in der Abkühlphase.}}} paused {Der Anbieter hat diesen Reset pausiert.} not_started {Dieser Reset ist noch nicht freigeschaltet.} not_usable {Der Anbieter gibt diesen Reset gerade nicht frei.} exhausted {Dieser Reset ist aufgebraucht.} needs_limit {Nutzbar, sobald ein Limit erreicht ist, das dieser Reset auffüllt.} other_limit {Erreicht ist gerade ein anderes Limit. Dieser Reset füllt es nicht auf.} nothing_to_give_back {{named, select, true {{scope} hat diese Woche nichts verbraucht.} other {Diese Woche wurde nichts verbraucht.}} Dieser Reset würde nichts zurückgeben.} pending {Die letzte Reset-Anfrage ist noch nicht bestätigt.} other {Dieser Reset lässt sich gerade nicht nutzen.}}"
+      "blocker": "{blocker, select, ineligible {Dieses Konto kann gerade keine Resets nutzen.} cooldown {{timed, select, true {Resets sind in der Abkühlphase. Der nächste ist {when} möglich ({date}).} other {Resets sind in der Abkühlphase.}}} paused {Der Anbieter hat diesen Reset pausiert.} not_started {Dieser Reset ist noch nicht freigeschaltet.} not_usable {Der Anbieter gibt diesen Reset gerade nicht frei.} exhausted {Dieser Reset ist aufgebraucht.} needs_limit {Nutzbar, sobald ein Limit erreicht ist, das dieser Reset auffüllt.} other_limit {{limit, select, five_hour {Das 5-Stunden-Limit ist voll.} weekly {Das Wochenlimit ist voll.} scoped {Das {limitScope}-Limit ist voll.} other {Erreicht ist gerade ein anderes Limit.}} Dieser Reset füllt es nicht auf.} nothing_to_give_back {{named, select, true {{scope} hat diese Woche nichts verbraucht.} other {Diese Woche wurde nichts verbraucht.}} Dieser Reset würde nichts zurückgeben.} pending {Die letzte Reset-Anfrage ist noch nicht bestätigt.} other {Dieser Reset lässt sich gerade nicht nutzen.}}"
     },
     "limit": {
       "name": "{family, select, five_hour {5-Stunden-Limit} weekly {Wochenlimit} scoped {{scope}-Limit} other {Weiteres Limit}}",
@@ -196,7 +200,7 @@
       "scope": "Auslöser",
       "scopeOption": "{scope, select, pool {Wenn alle Konten an der Schwelle sind} account {Wenn ein Konto an der Schwelle ist} other {{scope}}}",
       "scopeHint": "{scope, select, pool {Verbraucht nur dann einen Reset, wenn kein Konto dieses Anbieters mehr Luft hat.} account {Jedes Konto verbraucht seinen eigenen Reset, sobald es die Schwelle erreicht.} other {}}",
-      "claudeNote": "Claude nimmt einen Reset erst an, wenn das Konto am Limit ist. Eine niedrigere Schwelle wartet bis dahin.",
+      "claudeNote": "Claude nimmt einen Reset erst an, wenn das Konto am Limit ist. Eine niedrigere Schwelle wartet bis dahin. Das Fable-Limit zählt mit. LLM Hub nutzt den kleinsten Reset, der die vollen Limits auffüllt. Ist nur Fable voll, ist das ein Fable-Reset.",
       "save": "Automatische Resets für {provider} speichern",
       "saveShort": "Speichern",
       "saved": "Automatische Resets für {provider} gespeichert"

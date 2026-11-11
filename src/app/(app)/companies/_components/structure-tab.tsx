@@ -6,10 +6,13 @@ import { Folder, FolderPlus, Network, Plus, Users } from "lucide-react";
 import { useFormatter, useTranslations } from "next-intl";
 import EmptyState from "@/components/console/empty-state";
 import IconTile from "@/components/console/icon-tile";
+import PauseChip from "@/components/console/pause-chip";
+import { useClock } from "@/lib/hooks/use-clock";
+import { isPaused } from "@/lib/keys/pause";
 import type { DepartmentGroup, NodeRef, ProjectNode, StructurePayload, TeamNode } from "@/types/structure";
 import NodeMenu from "./node-menu";
 import SpendMeter from "./spend-meter";
-import { nodeActions, nodeKey, structureGroups, type NodeAction, type NodeFlags } from "./tree-model";
+import { nodeActions, nodeKey, nodePause, structureGroups, type NodeAction, type NodeFlags } from "./tree-model";
 
 const SEARCH_FROM = 6;
 
@@ -28,6 +31,7 @@ export default function StructureTab({
 }) {
   const t = useTranslations("Companies.structure");
   const format = useFormatter();
+  const now = useClock(60_000);
   const [query, setQuery] = useState("");
   const groups = structureGroups(data, query);
   const total = data.teams.length + data.projects.length;
@@ -77,8 +81,16 @@ export default function StructureTab({
     );
   }
 
+  function pauseChip(kind: "team" | "project", id: string) {
+    const pause = nodePause(data, { kind, id }, now);
+    return pause ? <PauseChip pause={pause} own={kind} /> : null;
+  }
+
   function projectRow(project: ProjectNode) {
-    const actions = nodeActions("project", flags, project.budget.maxBudget > 0);
+    const actions = nodeActions("project", flags, {
+      capped: project.budget.maxBudget > 0,
+      paused: isPaused(project, now),
+    });
     const detail = [
       project.owner,
       flags.canCreateKeys || data.canSeeKeys ? t("keys", { count: keyCount(project.id) }) : "",
@@ -92,7 +104,10 @@ export default function StructureTab({
         <Folder size={16} aria-hidden className="mt-0.5 shrink-0 text-muted" />
         <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-6 gap-y-2">
           <div className="min-w-0 flex-1 basis-48">
-            <p className="text-sm font-medium break-words text-foreground">{project.alias}</p>
+            <p className="flex flex-wrap items-center gap-2 text-sm font-medium break-words text-foreground">
+              {project.alias}
+              {pauseChip("project", project.id)}
+            </p>
             {detail.length ? (
               <p className="text-xs break-words text-muted">{format.list(detail, { type: "unit" })}</p>
             ) : null}
@@ -149,7 +164,10 @@ export default function StructureTab({
                       <IconTile icon={Users} size="sm" />
                       <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-6 gap-y-2">
                         <div className="min-w-0 flex-1 basis-48">
-                          <h3 className="text-sm font-semibold break-words text-foreground">{team.alias}</h3>
+                          <h3 className="flex flex-wrap items-center gap-2 text-sm font-semibold break-words text-foreground">
+                            {team.alias}
+                            {pauseChip("team", team.id)}
+                          </h3>
                           <p className="text-xs text-muted">{teamDetail({ ...group, team })}</p>
                         </div>
                         <div className="w-full sm:w-56">
@@ -159,7 +177,10 @@ export default function StructureTab({
                       <NodeMenu
                         kind="team"
                         name={team.alias}
-                        actions={nodeActions("team", flags, team.budget.maxBudget > 0)}
+                        actions={nodeActions("team", flags, {
+                          capped: team.budget.maxBudget > 0,
+                          paused: isPaused(team, now),
+                        })}
                         onAction={(action) => onAction({ kind: "team", id: team.id, alias: team.alias }, action)}
                       />
                     </div>

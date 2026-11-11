@@ -4,6 +4,7 @@ import { useState, useTransition, type ReactNode } from "react";
 import { toast, useOverlayState } from "@heroui/react";
 import { useTranslations } from "next-intl";
 import ConfirmDialog from "@/components/console/confirm-dialog";
+import PauseDialog from "@/components/console/pause-dialog";
 import { useErrorToast } from "@/components/console/use-error-toast";
 import { isActionFail } from "@/lib/http/action-result";
 import type { ActionFail } from "@/types/actions";
@@ -20,7 +21,6 @@ import type { McpKeyAccess, McpKeyAccessChoice } from "@/types/mcp";
 import type { BudgetInput, BudgetResult } from "@/types/structure";
 import KeyDialog from "./key-dialog";
 import KeyMcpDialog from "./key-mcp-dialog";
-import KeyPauseDialog from "./key-pause-dialog";
 import KeySecretDialog, { type IssuedSecret } from "./key-secret-dialog";
 
 export type KeyServerActions = {
@@ -114,6 +114,18 @@ export function useKeyDialogs({
     });
   }
 
+  async function pause(hours: number): Promise<boolean> {
+    if (!target) return false;
+    const result = await actions.pause({ id: target.id, hours });
+    if (isActionFail(result)) {
+      showError(result.error);
+      return false;
+    }
+    onSaved(result.key, "updated");
+    toast(t("toasts.paused"), { variant: "success" });
+    return true;
+  }
+
   function rotate(key: KeyTarget) {
     setBusy({ id: key.id, action: "rotate" });
     start(async () => {
@@ -172,13 +184,14 @@ export function useKeyDialogs({
         onLoad={actions.loadMcp}
         onSave={actions.saveMcp}
       />
-      <KeyPauseDialog
+      <PauseDialog
         key={`pause-${dialogKey}`}
         state={pauseState}
-        keyId={target?.id ?? null}
-        keyName={target?.name ?? ""}
-        onPause={actions.pause}
-        onPaused={(row) => onSaved(row, "updated")}
+        title={t("pause.title", { name: target?.name ?? "" })}
+        description={t("pause.description")}
+        submitLabel={t("pause.submit")}
+        isSubmitDisabled={!target}
+        onPause={pause}
       />
       <ConfirmDialog
         state={rotateState}

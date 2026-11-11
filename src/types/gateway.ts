@@ -1,6 +1,7 @@
 import type { CostCap } from "@/types/billing";
 import type { OutputGuard, PiiMode } from "@/types/guardrails";
 import type { VirtualKeyView } from "@/types/keys";
+import type { HeldPause } from "@/types/structure";
 import type { RouteLimits } from "@/types/model-templates";
 import type { PublicPool, ResolvedDeployment, ResolvedModelGroup, RoutePool } from "@/types/routing";
 
@@ -9,6 +10,7 @@ export type JsonMap = Record<string, unknown>;
 export type Principal = {
   actor: string;
   key?: VirtualKeyView;
+  scopePause?: HeldPause;
   teamId: string;
   orgId: string;
   userId: string;

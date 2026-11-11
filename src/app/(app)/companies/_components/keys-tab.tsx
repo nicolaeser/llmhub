@@ -12,7 +12,7 @@ import { useClock } from "@/lib/hooks/use-clock";
 import { keyState } from "@/lib/keys/pause";
 import type { KeyNode, StructurePayload } from "@/types/structure";
 import SpendMeter from "./spend-meter";
-import { matchesKey, nodeAlias } from "./tree-model";
+import { matchesKey, nodeAlias, nodePause } from "./tree-model";
 
 const SEARCH_FROM = 6;
 
@@ -69,7 +69,10 @@ export default function KeysTab({
     );
   }
 
-  const state = (key: KeyNode) => <KeyStateChip state={keyState(key, now)} pausedUntil={key.pausedUntil} />;
+  const state = (key: KeyNode) => {
+    const pause = nodePause(data, { kind: "key", id: key.id }, now);
+    return <KeyStateChip state={keyState(key, now, pause)} pause={pause} />;
+  };
   const meter = (key: KeyNode) => <SpendMeter budget={key.budget} label={t("usage", { alias: key.alias })} />;
   const open = (key: KeyNode) => (
     <Link

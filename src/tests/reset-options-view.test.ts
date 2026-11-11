@@ -10,6 +10,7 @@ import {
   type LimitTone,
 } from "@/app/(app)/providers/_components/limit-tone";
 import {
+  alsoRefills,
   defaultResetOption,
   isSpendable,
   leftAfterUse,
@@ -20,6 +21,7 @@ import {
   resetEffects,
   resetFlow,
   resetRefusal,
+  resetStart,
   upstreamLabel,
 } from "@/app/(app)/providers/_components/reset-view";
 import type { ResetCredits, ResetLimit, ResetOption } from "@/types/resets";
@@ -41,6 +43,7 @@ function option(over: Partial<ResetOption> = {}): ResetOption {
     total: 1,
     expiresAt: null,
     blocker: null,
+    blockedBy: null,
     helpsNow: false,
     recommended: false,
     ...over,
@@ -201,6 +204,20 @@ test("the flow skips the choice for one option, retries a pending claim, and fal
   assert.equal(recommendedReset({ ...account, pending }), null);
 });
 
+test("picking a reset type in the list opens its review, and the plain button starts at the choice", () => {
+  const fableHelps = { ...fableReset, blocker: null, helpsNow: true };
+  const flow = resetFlow({ ...account, options: [fableHelps, fullReset] });
+  assert.deepEqual(resetStart(flow, "grant_fable"), { picked: "grant_fable", review: "grant_fable" });
+  assert.deepEqual(resetStart(flow, "grant_full"), { picked: "grant_full", review: "grant_full" });
+  assert.deepEqual(resetStart(flow), { picked: null, review: null });
+  assert.deepEqual(resetStart(resetFlow(account), "grant_fable"), { picked: null, review: null });
+  assert.deepEqual(resetStart(flow, "gone"), { picked: null, review: null });
+  const single = resetFlow({ available: 1, applicable: 1, options: [fullReset] });
+  assert.deepEqual(resetStart(single), { picked: null, review: "grant_full" });
+  assert.deepEqual(resetStart(single, "grant_full"), { picked: null, review: "grant_full" });
+  assert.deepEqual(resetStart(resetFlow({ available: 1, applicable: 1 }), "grant_full"), { picked: null, review: null });
+});
+
 test("resets and limits are named by family and scope, never by an upstream codename", () => {
   assert.deepEqual(optionNaming(fullReset), { family: "full", scope: "" });
   assert.deepEqual(optionNaming(fableReset), { family: "scoped", scope: "Fable" });
@@ -213,6 +230,19 @@ test("resets and limits are named by family and scope, never by an upstream code
   assert.equal(upstreamLabel(option({ label: "seven-day-opus" })), "");
   assert.equal(upstreamLabel(option({ label: " Launch reset " })), "Launch reset");
   assert.equal(upstreamLabel(option({ label: "" })), "");
+});
+
+test("the list names every limit a reset refills beyond what its name already says", () => {
+  const opus = limit({ key: "opus", family: "scoped", scope: "Opus" });
+  const unknown = limit({ key: "brand_new", family: "other" });
+  const keys = (item: ResetOption) => alsoRefills(item).map((entry) => entry.key);
+  assert.deepEqual(keys(option({ family: "full", refills: [opus, weeklyFull, fableIdle, fiveHour, unknown] })), ["fable", "opus"]);
+  assert.deepEqual(keys(option({ family: "weekly", refills: [weeklyFull, fableIdle] })), ["fable"]);
+  assert.deepEqual(keys(fullReset), []);
+  assert.deepEqual(keys(fableReset), []);
+  assert.deepEqual(keys(option({ family: "scoped", scope: "Opus, Fable", refills: [opus, fableIdle] })), []);
+  assert.deepEqual(keys(option({ family: "other", refills: [fiveHour, fableIdle, unknown] })), ["five_hour", "fable"]);
+  assert.deepEqual(keys(option({ family: "weekly", refills: [weeklyFull, limit({ key: "blank", family: "scoped", scope: " " })] })), []);
 });
 
 test("refused redeems map to a choice prompt or the matching blocker", () => {

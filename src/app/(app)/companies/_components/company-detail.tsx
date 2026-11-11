@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useTransition } from "react";
 import { Button, Dropdown, toast, useOverlayState } from "@heroui/react";
-import { ArrowRightLeft, BarChart3, Building2, ChevronDown, Pencil, Trash2 } from "lucide-react";
+import { ArrowRightLeft, BarChart3, Building2, ChevronDown, Pause, Pencil, Play, Trash2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import BoostDialog from "@/components/budget/boost-dialog";
 import BudgetDialog from "@/components/budget/budget-dialog";
@@ -11,12 +11,16 @@ import type { PageBackLink } from "@/components/console/page-header";
 import PageHeader from "@/components/console/page-header";
 import PageStatus, { PageLoading } from "@/components/console/page-status";
 import PageTabs from "@/components/console/page-tabs";
+import PauseChip from "@/components/console/pause-chip";
+import PauseDialog from "@/components/console/pause-dialog";
 import { useErrorToast } from "@/components/console/use-error-toast";
 import { useKeyDialogs, type KeyServerActions } from "@/components/keys/use-key-dialogs";
 import { useRouter } from "@/i18n/routing";
 import { useActionData } from "@/lib/hooks/use-action-data";
+import { useClock } from "@/lib/hooks/use-clock";
 import { setSearchParams, useSearchParam } from "@/lib/hooks/use-search-param";
 import { isActionFail } from "@/lib/http/action-result";
+import { isPaused } from "@/lib/keys/pause";
 import { companyAlias, companyHref, companyTabOf } from "@/lib/tenancy/company-view";
 import { usageHref } from "@/lib/usage/usage-query";
 import type { KeyChoices, KeyPreset } from "@/types/keys";
@@ -41,8 +45,10 @@ import {
   loadKeyMcpAccessAction,
   loadKeyOptionsAction,
   pauseKeyAction,
+  pauseNodeAction,
   removeBoostAction,
   resumeKeyAction,
+  resumeNodeAction,
   revokeKeyAction,
   rotateKeyAction,
   saveCompanyMcpInstallationAction,
@@ -65,6 +71,7 @@ import {
   budgetOf,
   chainOf,
   nodeIn,
+  nodePause,
   parseNodeRef,
   setupStepsFor,
   usageFilterOf,
@@ -84,13 +91,24 @@ const KEY_ACTIONS: KeyServerActions = {
   setBudget: setBudgetAction,
 };
 
-type HeaderAction = "edit" | "switch" | "usage" | "delete";
+type HeaderAction = "edit" | "pause" | "resume" | "switch" | "usage" | "delete";
+
+const HEADER_ICONS = {
+  edit: Pencil,
+  pause: Pause,
+  resume: Play,
+  switch: ArrowRightLeft,
+  usage: BarChart3,
+  delete: Trash2,
+} as const;
 
 type NodeForm = { kind: TenancyKind; editingId: string | null; teamId: string };
 
 type PlacedRef = { kind: Exclude<TenancyKind, "org">; id: string; alias: string };
 
 type Removal = { kind: "org"; id: string; alias: string } | PlacedRef;
+
+type PauseTarget = { kind: TenancyKind; id: string; alias: string };
 
 export default function CompanyDetail({ orgId, back }: { orgId: string; back?: PageBackLink }) {
   const t = useTranslations("Companies");
@@ -103,15 +121,19 @@ export default function CompanyDetail({ orgId, back }: { orgId: string; back?: P
   const [nodeForm, setNodeForm] = useState<NodeForm>({ kind: "team", editingId: null, teamId: "" });
   const [budgetTarget, setBudgetTarget] = useState<BudgetTarget | null>(null);
   const [removal, setRemoval] = useState<Removal | null>(null);
+  const [pauseTarget, setPauseTarget] = useState<PauseTarget | null>(null);
   const [keyChoices, setKeyChoices] = useState<KeyChoices | null>(null);
   const [dialogKey, setDialogKey] = useState(0);
   const [creatingKey, setCreatingKey] = useState(false);
   const [deleting, startDelete] = useTransition();
+  const [resuming, startResume] = useTransition();
   const [, startKey] = useTransition();
   const nodeState = useOverlayState();
   const budgetState = useOverlayState();
   const boostState = useOverlayState();
   const deleteState = useOverlayState();
+  const pauseState = useOverlayState();
+  const now = useClock(60_000);
   const page = useActionData(() => loadCompanyAction(orgId));
   const { data, setData } = page;
   const keyDialogs = useKeyDialogs({
@@ -167,8 +189,10 @@ export default function CompanyDetail({ orgId, back }: { orgId: string; back?: P
   const accessUsers = accessUsersOf(data, org.id);
   const shownFocus = focus && nodeIn(data, focus) ? focus : null;
   const budgetFor = budgetTarget ? budgetOf(data, budgetTarget.kind, budgetTarget.id) : null;
+  const orgPause = nodePause(data, { kind: "org", id: org.id }, now);
   const headerActions: HeaderAction[] = [
     ...(data.canManage && isPlatform ? (["edit"] as const) : []),
+    ...(data.canManage && isPlatform ? ([isPaused(org, now) ? "resume" : "pause"] as const) : []),
     ...(isPlatform && consoleScope.canSwitch ? (["switch"] as const) : []),
     ...(data.canSeeUsage ? (["usage"] as const) : []),
     ...(data.canManage && isPlatform ? (["delete"] as const) : []),
@@ -184,6 +208,36 @@ export default function CompanyDetail({ orgId, back }: { orgId: string; back?: P
     setBudgetTarget(target);
     setDialogKey((n) => n + 1);
     (dialog === "budget" ? budgetState : boostState).open();
+  }
+
+  function askPause(target: PauseTarget) {
+    setPauseTarget(target);
+    setDialogKey((n) => n + 1);
+    pauseState.open();
+  }
+
+  async function pause(hours: number): Promise<boolean> {
+    if (!pauseTarget) return false;
+    const result = await pauseNodeAction({ kind: pauseTarget.kind, id: pauseTarget.id, hours, orgId });
+    if (isActionFail(result)) {
+      showError(result.error);
+      return false;
+    }
+    setData(result);
+    toast(t("pause.paused", { kind: pauseTarget.kind }), { variant: "success" });
+    return true;
+  }
+
+  function resume(target: PauseTarget) {
+    startResume(async () => {
+      const result = await resumeNodeAction({ kind: target.kind, id: target.id, orgId });
+      if (isActionFail(result)) {
+        showError(result.error);
+        return;
+      }
+      setData(result);
+      toast(t("pause.resumed", { kind: target.kind }), { variant: "success" });
+    });
   }
 
   function askDelete(target: Removal) {
@@ -211,6 +265,8 @@ export default function CompanyDetail({ orgId, back }: { orgId: string; back?: P
 
   function onNodeAction(ref: PlacedRef, action: NodeAction) {
     if (action === "edit") openNode(ref.kind, ref.id);
+    if (action === "pause") askPause(ref);
+    if (action === "resume") resume(ref);
     if (action === "budget" || action === "boost") openBudget({ kind: ref.kind, id: ref.id, alias: ref.alias }, action);
     if (action === "addProject") openNode("project", null, ref.id);
     if (action === "createKey" && ref.kind !== "team") createKey({ kind: ref.kind, id: ref.id });
@@ -220,6 +276,8 @@ export default function CompanyDetail({ orgId, back }: { orgId: string; back?: P
 
   function onHeaderAction(action: HeaderAction) {
     if (action === "edit" && org) openNode("org", org.id);
+    if (action === "pause" && org) askPause({ kind: "org", id: org.id, alias: org.alias });
+    if (action === "resume" && org) resume({ kind: "org", id: org.id, alias: org.alias });
     if (action === "switch" && org) consoleScope.switchTo(org.id);
     if (action === "usage" && org) router.push(usageHref(usageFilterOf({ kind: "org", id: org.id }, isPlatform)));
     if (action === "delete" && org) askDelete({ kind: "org", id: org.id, alias: org.alias });
@@ -401,7 +459,7 @@ export default function CompanyDetail({ orgId, back }: { orgId: string; back?: P
         actions={
           headerActions.length ? (
             <Dropdown>
-              <Button variant="secondary" isPending={consoleScope.pending || deleting}>
+              <Button variant="secondary" isPending={consoleScope.pending || deleting || resuming}>
                 {t("detail.actions")}
                 <ChevronDown size={14} aria-hidden />
               </Button>
@@ -414,14 +472,7 @@ export default function CompanyDetail({ orgId, back }: { orgId: string; back?: P
                   }}
                 >
                   {headerActions.map((action) => {
-                    const Icon =
-                      action === "edit"
-                        ? Pencil
-                        : action === "switch"
-                          ? ArrowRightLeft
-                          : action === "usage"
-                            ? BarChart3
-                            : Trash2;
+                    const Icon = HEADER_ICONS[action];
                     return (
                       <Dropdown.Item
                         key={action}
@@ -440,6 +491,12 @@ export default function CompanyDetail({ orgId, back }: { orgId: string; back?: P
           ) : undefined
         }
       />
+
+      {orgPause ? (
+        <div className="-mt-4 mb-6 flex flex-wrap items-center gap-2">
+          <PauseChip pause={orgPause} own="org" />
+        </div>
+      ) : null}
 
       <PageTabs label={org.alias} tabs={tabs} />
 
@@ -473,6 +530,15 @@ export default function CompanyDetail({ orgId, back }: { orgId: string; back?: P
         onSubmit={addBoostAction}
         onRemove={removeBoostAction}
         onSaved={applyBudget}
+      />
+      <PauseDialog
+        key={`pause-${dialogKey}`}
+        state={pauseState}
+        title={t("pause.title", { kind: pauseTarget?.kind ?? "other", name: pauseTarget?.alias ?? "" })}
+        description={t("pause.description", { kind: pauseTarget?.kind ?? "other" })}
+        submitLabel={t("pause.submit", { kind: pauseTarget?.kind ?? "other" })}
+        isSubmitDisabled={!pauseTarget}
+        onPause={pause}
       />
       <ConfirmDialog
         state={deleteState}

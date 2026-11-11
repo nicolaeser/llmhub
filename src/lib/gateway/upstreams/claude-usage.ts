@@ -5,6 +5,7 @@ import type { LimitWindow, SubscriptionLimits } from "@/types/providers";
 export const CLAUDE_FIVE_HOUR_SECONDS = 5 * 3_600;
 export const CLAUDE_WEEK_SECONDS = 7 * 86_400;
 export const CLAUDE_MODEL_LIMIT_KEY = "iguana_necktie";
+export const CLAUDE_MODEL_LIMIT_SCOPE = "Fable";
 export const CLAUDE_SCOPED_LIMIT_KEY = "weekly_scoped";
 export const CLAUDE_WINDOWS = [
   { key: "five_hour", scope: "", windowSeconds: CLAUDE_FIVE_HOUR_SECONDS },
@@ -13,7 +14,7 @@ export const CLAUDE_WINDOWS = [
   { key: "seven_day_opus", scope: "Opus", windowSeconds: CLAUDE_WEEK_SECONDS },
   { key: "seven_day_oauth_apps", scope: "OAuth apps", windowSeconds: CLAUDE_WEEK_SECONDS },
   { key: "seven_day_cowork", scope: "Cowork", windowSeconds: CLAUDE_WEEK_SECONDS },
-  { key: CLAUDE_MODEL_LIMIT_KEY, scope: "Fable", windowSeconds: CLAUDE_WEEK_SECONDS },
+  { key: CLAUDE_MODEL_LIMIT_KEY, scope: CLAUDE_MODEL_LIMIT_SCOPE, windowSeconds: CLAUDE_WEEK_SECONDS },
 ] as const;
 const CLAUDE_CREDIT_POOL_SCOPE = "Cloud sessions";
 const FULL_PERCENT = 100;
@@ -48,6 +49,19 @@ export function claudeExtraUsage(raw: unknown): SubscriptionLimits["extraUsage"]
 
 export function scopeKey(scope: string): string {
   return scope.toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+export function isModelLimitScope(scope: string): boolean {
+  return scopeKey(scope).startsWith(scopeKey(CLAUDE_MODEL_LIMIT_SCOPE));
+}
+
+function sameLimitScope(a: string, b: string): boolean {
+  return scopeKey(a) === scopeKey(b) || (isModelLimitScope(a) && isModelLimitScope(b));
+}
+
+export function isModelLimitWindow(window: LimitWindow): boolean {
+  if (window.windowSeconds <= 0) return false;
+  return window.key === CLAUDE_MODEL_LIMIT_KEY || isModelLimitScope(window.scope);
 }
 
 function weeklyShares(payload: JsonMap): Map<number, { used: number | null; allowance: number | null }> {
@@ -85,7 +99,7 @@ export function claudeWindows(payload: JsonMap): LimitWindow[] {
     const limit = asRecord(raw);
     const model = asString(asRecord(asRecord(limit?.scope)?.model)?.display_name);
     if (!limit || limit.kind !== CLAUDE_SCOPED_LIMIT_KEY || !model) return;
-    let window = windows.find((item) => scopeKey(item.scope) === scopeKey(model));
+    let window = windows.find((item) => sameLimitScope(item.scope, model));
     if (!window) {
       if (typeof limit.percent !== "number") return;
       window = claudeWindow(CLAUDE_SCOPED_LIMIT_KEY, model, CLAUDE_WEEK_SECONDS, limit);

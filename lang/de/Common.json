@@ -109,5 +109,11 @@
   "steps": {
     "label": "Schritte",
     "progress": "Schritt {current, number, integer} von {total, number, integer}"
+  },
+  "pause": {
+    "duration": "Pausieren für",
+    "hours": "{hours, select, 0 {Bis zum Fortsetzen} 1 {1 Stunde} 24 {1 Tag} 168 {7 Tage} other {{hours, number, integer} Stunden}}",
+    "until": "{timed, select, yes {Wird am {until} von selbst fortgesetzt.} other {Bleibt pausiert, bis jemand die Pause beendet.}}",
+    "state": "{scope, select, member {Person pausiert} project {Projekt pausiert} team {Abteilung pausiert} org {Unternehmen pausiert} other {Pausiert}}{timed, select, yes { bis {until}} other {}}"
   }
 }

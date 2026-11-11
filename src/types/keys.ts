@@ -1,7 +1,7 @@
 import type { z } from "zod";
 import type { accessWindowSchema } from "@/schemas/keys";
 import type { TemplateOption } from "@/types/model-templates";
-import type { BudgetDetail } from "@/types/structure";
+import type { BudgetDetail, HeldPause } from "@/types/structure";
 
 export type KeyBindingOption = { id: string; alias: string; orgId: string; teamId: string };
 
@@ -153,6 +153,8 @@ export type KeyOwner = {
 
 export type KeyLastUse = Record<string, string>;
 
+export type KeyHolds = Record<string, HeldPause>;
+
 export type KeyActivity = {
   spend7d: number;
   requests7d: number;
@@ -161,6 +163,7 @@ export type KeyActivity = {
 };
 
 export type KeyDetailPage = KeyDetail & {
+  held: HeldPause | null;
   owner: KeyOwner;
   activity: KeyActivity | null;
   budget: BudgetDetail | null;

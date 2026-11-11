@@ -3,6 +3,7 @@ import {
   CLAUDE_MODEL_LIMIT_KEY,
   CLAUDE_WEEK_SECONDS,
   CLAUDE_WINDOWS,
+  isModelLimitWindow,
   scopeKey,
 } from "@/lib/gateway/upstreams/claude-usage";
 import type { LimitWindow } from "@/types/providers";
@@ -24,6 +25,12 @@ export const WEEKLY_LIMIT = "seven_day";
 export const MODEL_LIMIT = "seven_day_overage_included";
 const FULL_PERCENT = 100;
 const PLAN_LIMITS: readonly string[] = [FIVE_HOUR_LIMIT, WEEKLY_LIMIT];
+const REASON_LIMITS: Partial<Record<ClaudeUnavailableReason, string>> = {
+  blocked_five_hour: FIVE_HOUR_LIMIT,
+  blocked_seven_day: WEEKLY_LIMIT,
+  blocked_opus: "seven_day_opus",
+  blocked_sonnet: "seven_day_sonnet",
+};
 const OTHER_LIMIT_REASONS: readonly ClaudeUnavailableReason[] = [
   "blocked_five_hour",
   "blocked_seven_day",
@@ -86,6 +93,7 @@ function grantWindowKey(usageKey: string): string {
 
 function claudeScopedKey(window: LimitWindow): string | null {
   if (window.windowSeconds <= 0) return null;
+  if (isModelLimitWindow(window)) return MODEL_LIMIT;
   const spec = CLAUDE_WINDOWS.find(
     (item) => item.scope && (item.key === window.key || scopeKey(item.scope) === scopeKey(window.scope)),
   );
@@ -118,16 +126,11 @@ function unique(limits: LiveLimit[]): LiveLimit[] {
 }
 
 function claudeLiveLimits(windows: LimitWindow[], now: number): LiveLimit[] {
-  const unnamed = windows.filter((window) => window.scope && window.windowSeconds > 0 && !claudeScopedKey(window));
-  const modelLimitKnown = windows.some((window) => window.scope && claudeScopedKey(window) === MODEL_LIMIT);
   return unique(
     windows.map((window) => {
       if (!window.scope) return limitOf(planKey(window), planFamily(window), window, now);
       if (window.windowSeconds <= 0) return limitOf(`pool_${scopeKey(window.scope)}`, "other", window, now);
-      const known = claudeScopedKey(window);
-      if (known) return limitOf(known, "scoped", window, now);
-      if (!modelLimitKnown && unnamed.length === 1) return limitOf(MODEL_LIMIT, "scoped", window, now);
-      return limitOf(`scoped_${scopeKey(window.scope)}`, "scoped", window, now);
+      return limitOf(claudeScopedKey(window) ?? `scoped_${scopeKey(window.scope)}`, "scoped", window, now);
     }),
   );
 }
@@ -177,6 +180,15 @@ function optionFamily(grant: ClaudeResetGrant, refills: ResetLimit[]): ResetFami
   return refills.every((limit) => limit.family === "scoped") ? "scoped" : "other";
 }
 
+function named(limit: ResetLimit): boolean {
+  if (limit.family === "scoped") return limit.scope !== "";
+  return limit.family !== "other";
+}
+
+function firstNamed(limits: ResetLimit[]): ResetLimit | null {
+  return limits.find(named) ?? limits[0] ?? null;
+}
+
 function scopeNames(limits: ResetLimit[]): string {
   return [...new Set(limits.map((limit) => limit.scope).filter(Boolean))].join(", ");
 }
@@ -206,10 +218,30 @@ function expiryOrder(a: ResetOption, b: ResetOption): number {
   return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
 }
 
-function withRecommended(options: ResetOption[], preferredId: string): ResetOption[] {
-  const helpful = options.filter((option) => option.blocker === null && option.helpsNow);
-  const pick = helpful.find((option) => option.id === preferredId) ?? [...helpful].sort(expiryOrder)[0];
-  return options.map((option) => ({ ...option, recommended: option.id === pick?.id }));
+function fit(option: ResetOption, reached: ReadonlySet<string>): { missed: number; spare: number } {
+  const refilled = new Set(option.refills.map((limit) => limit.key));
+  return {
+    missed: [...reached].filter((key) => !refilled.has(key)).length,
+    spare: [...refilled].filter((key) => !reached.has(key)).length,
+  };
+}
+
+function withRecommended(
+  options: ResetOption[],
+  preferredId: string,
+  reached: ReadonlySet<string> = new Set(),
+): ResetOption[] {
+  const [pick] = options
+    .filter((option) => option.blocker === null && option.helpsNow)
+    .map((option) => ({ option, ...fit(option, reached) }))
+    .sort(
+      (a, b) =>
+        a.missed - b.missed ||
+        a.spare - b.spare ||
+        Number(b.option.id === preferredId) - Number(a.option.id === preferredId) ||
+        expiryOrder(a.option, b.option),
+    );
+  return options.map((option) => ({ ...option, recommended: option.id === pick?.option.id }));
 }
 
 export function claudeResetOptions(
@@ -237,7 +269,8 @@ export function claudeResetOptions(
     .filter((grant) => grant.endsAt === null || after(grant.endsAt, now))
     .map((grant): ResetOption => {
       const keys = [...new Set([...grant.clears, ...(grant.givesBackWeekly ? [MODEL_LIMIT] : [])])];
-      const refills = keys.map((key) => byKey.get(key)?.limit ?? unseenLimit(key, grant, block));
+      const limitFor = (key: string) => byKey.get(key)?.limit ?? unseenLimit(key, grant, block);
+      const refills = keys.map(limitFor);
       const back = grant.givesBackWeekly ? returnedBy(grant, model) : null;
       const noneBack =
         back !== null &&
@@ -261,6 +294,12 @@ export function claudeResetOptions(
       } else if (reason === "needs_limit" || (grant.useRequiresLimit && (notAtLimit || noKnownLimit))) {
         blocker = "needs_limit";
       } else if (!grant.usableNow || reason !== null) blocker = "not_usable";
+      const leftFull = [...PLAN_LIMITS, ...reached].filter((key) => reached.has(key) && !eases(key));
+      const reasonLimit = reason === null ? undefined : REASON_LIMITS[reason];
+      const blockedBy =
+        blocker === "other_limit"
+          ? firstNamed([...new Set([...(reasonLimit ? [reasonLimit] : []), ...grant.blocking, ...leftFull])].map(limitFor))
+          : null;
       const family = optionFamily(grant, refills);
       const scope = model?.limit.scope ?? knownGrantLimit(MODEL_LIMIT).scope;
       return {
@@ -275,11 +314,12 @@ export function claudeResetOptions(
         total: grant.resetsTotal,
         expiresAt: grant.endsAt,
         blocker,
+        blockedBy,
         helpsNow: [...reached].some(helps) && !staysBlocked,
         recommended: false,
       };
     });
-  return { options: withRecommended(options, block.nextGrantId), limits: live.map((item) => item.limit) };
+  return { options: withRecommended(options, block.nextGrantId, reached), limits: live.map((item) => item.limit) };
 }
 
 export function codexResetOptions(
@@ -306,6 +346,7 @@ export function codexResetOptions(
       total: 1,
       expiresAt: credit.expiresAt,
       blocker,
+      blockedBy: null,
       helpsNow,
       recommended: false,
     }),
@@ -314,7 +355,7 @@ export function codexResetOptions(
 }
 
 export function pendingOptions(options: ResetOption[]): ResetOption[] {
-  return options.map((option) => ({ ...option, blocker: "pending", recommended: false }));
+  return options.map((option) => ({ ...option, blocker: "pending", blockedBy: null, recommended: false }));
 }
 
 export function spendableResets(options: ResetOption[]): number {

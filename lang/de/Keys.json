@@ -101,9 +101,6 @@
     "action": "Pausieren",
     "title": "{name} pausieren",
     "description": "Anfragen mit diesem Key werden mit key_paused abgelehnt, bis er fortgesetzt wird. Einstellungen, Budget und Secret bleiben erhalten, und bereits eingereihte Batches laufen zu Ende.",
-    "duration": "Pausieren für",
-    "hours": "{hours, select, 0 {Bis zum Fortsetzen} 1 {1 Stunde} 24 {1 Tag} 168 {7 Tage} other {{hours, number, integer} Stunden}}",
-    "until": "{timed, select, yes {Wird am {until} von selbst fortgesetzt.} other {Bleibt pausiert, bis jemand ihn fortsetzt.}}",
     "submit": "Key pausieren"
   },
   "resume": "Fortsetzen",
@@ -116,7 +113,7 @@
   },
   "edit": "Key bearbeiten",
   "actionsMenu": "Aktionen für {name}",
-  "state": "{state, select, blocked {Gesperrt} paused {{timed, select, yes {Pausiert bis {until}} other {Pausiert}}} other {Aktiv}}",
+  "state": "{state, select, blocked {Gesperrt} paused {Pausiert} other {Aktiv}}",
   "dialogTitle": "{mode, select, edit {Key bearbeiten} other {Key erstellen}}",
   "dialogSubmit": "{mode, select, edit {Speichern} other {Key erstellen}}",
   "access": "{state, select, all {Ohne Vorlagen oder Modelle darf dieser Key jedes Modell nutzen.} none {Dieser Key darf noch kein Modell nutzen. Wähle eine Vorlage mit passenden Modellen oder füge einzelne Modelle hinzu.} other {{count, plural, one {Dieser Key darf # Modell nutzen.} other {Dieser Key darf # Modelle nutzen.}}}}",
