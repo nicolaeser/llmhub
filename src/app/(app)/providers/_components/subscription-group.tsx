@@ -23,7 +23,7 @@ import IconTile from "@/components/console/icon-tile";
 import RowCard, { RowCards, TABLE_FROM_LG } from "@/components/console/row-cards";
 import { PlanBadge } from "@/components/console/subscription-badge";
 import { kindIcon } from "@/components/providers/kind-icons";
-import { reportsLimits } from "@/lib/gateway/upstreams/provider-kinds";
+import { limitsFromTraffic, reportsLimits } from "@/lib/gateway/upstreams/provider-kinds";
 import type {
   AccountStrategy,
   LimitSnapshot,
@@ -38,6 +38,8 @@ import { ACCOUNT_STATE_COLOR, type CountedState } from "./account-status";
 import { useSegmentName } from "./key-usage-labels";
 import { accountUsage, groupSegments } from "./key-usage-view";
 import LimitMeter, { ResetLine } from "./limit-meter";
+import ResetSummary from "./reset-summary";
+import { showsResetSummary } from "./reset-view";
 import RowMenu, { type RowMenuItem } from "@/components/providers/row-menu";
 
 const ROW_KEYS = 3;
@@ -74,6 +76,7 @@ export default function SubscriptionGroup({
   onSettings,
   onCreateLink,
   onMenu,
+  onItem,
 }: {
   kind: SignInKind;
   rows: ProviderView[];
@@ -92,6 +95,7 @@ export default function SubscriptionGroup({
   onSettings: () => void;
   onCreateLink: () => void;
   onMenu: (row: ProviderView, action: AccountMenuAction) => void;
+  onItem: (item: LimitSnapshot | null) => void;
 }) {
   const t = useTranslations("Subscriptions");
   const tRouting = useTranslations("Subscriptions.routing");
@@ -238,7 +242,10 @@ export default function SubscriptionGroup({
     }
     if (account.summary.groups.length === 0) {
       if (account.failure) return <p className="text-xs text-warning">{tError("code", { code: account.failure })}</p>;
-      if (account.limits) return <p className="text-xs text-muted">{t("limits.none")}</p>;
+      if (account.limits) {
+        const waiting = limitsFromTraffic(kind) && !account.limits.observedAt;
+        return <p className="text-xs text-muted">{t(waiting ? "limits.awaitingTraffic" : "limits.none")}</p>;
+      }
       return <p className="text-xs text-muted">{tCommon("none")}</p>;
     }
     const keys = keysFor(row, account);
@@ -248,6 +255,15 @@ export default function SubscriptionGroup({
         {account.summary.groups.map((group) => (
           <LimitMeter key={group.id} group={group} timeZone={timeZone} compact keys={keys(group.id)} />
         ))}
+        {showsResetSummary(account.limits?.resetCredits) ? (
+          <ResetSummary
+            row={row}
+            credits={account.limits.resetCredits}
+            timeZone={timeZone}
+            canManage={canManage}
+            onItem={onItem}
+          />
+        ) : null}
         {account.detailed ? (
           <Button
             size="sm"

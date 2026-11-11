@@ -1,31 +1,13 @@
 "use client";
 
-import { useTransition } from "react";
-import { Alert, Button, Chip, Spinner, toast } from "@heroui/react";
+import { Alert, Chip } from "@heroui/react";
 import { TimerReset } from "lucide-react";
 import { useFormatter, useTranslations } from "next-intl";
 import { useClock } from "@/lib/hooks/use-clock";
-import ConfirmDialog from "@/components/console/confirm-dialog";
-import { useErrorToast } from "@/components/console/use-error-toast";
-import { isActionFail } from "@/lib/http/action-result";
 import type { LimitSnapshot, ProviderView } from "@/types/providers";
-import type { ResetCredits, ResetResult } from "@/types/resets";
-import { redeemProviderResetAction } from "../_action";
-
-const RESULT_TOAST = {
-  reset: "success",
-  already_redeemed: "success",
-  already_used: "success",
-  nothing_to_reset: "warning",
-  no_credit: "warning",
-  not_limited: "warning",
-  cooldown: "warning",
-  ineligible: "warning",
-  unavailable: "warning",
-  rate_limited: "warning",
-  auth_error: "danger",
-  unknown: "warning",
-} as const satisfies Record<ResetResult, "success" | "warning" | "danger">;
+import type { ResetCredits } from "@/types/resets";
+import RedeemResetButton from "./redeem-reset-button";
+import { canRedeemReset } from "./reset-view";
 
 export default function BankedResets({
   row,
@@ -42,13 +24,9 @@ export default function BankedResets({
 }) {
   const t = useTranslations("Subscriptions.resets");
   const tLimits = useTranslations("Subscriptions.limits");
-  const tCommon = useTranslations("Common");
   const format = useFormatter();
   const now = useClock(60_000);
-  const showError = useErrorToast();
-  const [pending, start] = useTransition();
   const retry = credits.pending?.retryable === true;
-  const canPress = canManage && credits.canRedeem === true && row.signIn?.status === "active";
   const grants = credits.grants ?? [];
   const listed = credits.credits ?? [];
   const cooling = credits.cooldownUntil ? new Date(credits.cooldownUntil) : null;
@@ -71,20 +49,6 @@ export default function BankedResets({
     });
   }
 
-  function redeem() {
-    start(async () => {
-      const result = await redeemProviderResetAction({ id: row.id });
-      if (isActionFail(result)) {
-        showError(result.error);
-        return;
-      }
-      onItem(result.item);
-      toast(t("result", { result: result.result, windows: result.windowsReset }), {
-        variant: RESULT_TOAST[result.result],
-      });
-    });
-  }
-
   return (
     <div className="space-y-2">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -92,36 +56,7 @@ export default function BankedResets({
           <TimerReset size={14} aria-hidden className="text-muted" />
           <p className="text-sm font-medium">{t("title")}</p>
         </div>
-        {canPress ? (
-          <ConfirmDialog
-            title={t("confirmTitle", { retry: String(retry) })}
-            description={
-              retry
-                ? t("confirmRetry", { name: row.name })
-                : t("confirmDescription", { kind: row.kind, name: row.name })
-            }
-            confirmLabel={t("confirm", { retry: String(retry) })}
-            cancelLabel={tCommon("cancel")}
-            status="warning"
-            focusCancel
-            pending={pending}
-            onConfirm={redeem}
-          >
-            <Button
-              size="sm"
-              variant="secondary"
-              aria-label={t("useLabel", { retry: String(retry), name: row.name })}
-              isPending={pending}
-            >
-              {({ isPending }) => (
-                <>
-                  {isPending ? <Spinner color="current" size="sm" /> : <TimerReset size={14} aria-hidden />}
-                  {t("use", { retry: String(retry) })}
-                </>
-              )}
-            </Button>
-          </ConfirmDialog>
-        ) : null}
+        {canRedeemReset(row, credits, canManage) ? <RedeemResetButton row={row} credits={credits} onItem={onItem} /> : null}
       </div>
       <p className="text-sm text-muted">
         {tLimits("resetCredits", { available: credits.available, applicable: credits.applicable })}

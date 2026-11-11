@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import { mkdir, mkdtemp, readdir, rm, utimes } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import test, { afterEach, beforeEach } from "node:test";
 import { limitSnapshotModel, seedSnapshot } from "./support/limit-snapshot-fake";
 import type { JsonMap } from "@/types/gateway";
@@ -33,9 +36,9 @@ const fakePrisma = {
       const row = logins.get(where.providerId);
       return row ? { ...row } : null;
     },
-    findMany: async ({ where }: { where: { status: string; expiresAt: { lte: Date } } }) =>
+    findMany: async ({ where }: { where?: { status: string; expiresAt: { lte: Date } } }) =>
       [...logins.values()]
-        .filter((row) => row.status === where.status && row.expiresAt <= where.expiresAt.lte)
+        .filter((row) => !where || (row.status === where.status && row.expiresAt <= where.expiresAt.lte))
         .sort((a, b) => a.expiresAt.getTime() - b.expiresAt.getTime())
         .map((row) => ({ ...row, provider: { kind: loginKinds.get(row.providerId) ?? "codex" } })),
     updateMany: async ({
@@ -321,6 +324,180 @@ test("a revoked refresh token marks the sign-in expired and fails closed", async
   assert.equal(logins.get("p3")!.status, "expired");
   await assert.rejects(providerAuth({ id: "p3", kind: "grok_build", apiKey: "" }), GateError);
   assert.equal(calls.length, 1);
+});
+
+test("rotated tokens that cannot be saved stay in use and are saved once the database answers again", async () => {
+  const { flushUnsavedLogins, openTokens, providerAuth } = await import("@/lib/gateway/upstreams/credentials");
+  await seedLogin("p9", Date.now() + 60_000);
+  const exp = inOneHour();
+  respondWith(() => Response.json({ access_token: jwt({ exp }), refresh_token: "r2" }));
+  const updateMany = fakePrisma.providerLogin.updateMany;
+  let databaseFull = true;
+  fakePrisma.providerLogin.updateMany = async (args: Parameters<typeof updateMany>[0]) => {
+    if (databaseFull && "tokens" in args.data) throw new Error("could not extend file: No space left on device");
+    return updateMany(args);
+  };
+  try {
+    const first = await providerAuth({ id: "p9", kind: "codex", apiKey: "" });
+    assert.equal(first.key, jwt({ exp }));
+    assert.equal(openTokens(logins.get("p9")!.tokens, "p9").refresh, "r1");
+    const second = await providerAuth({ id: "p9", kind: "codex", apiKey: "" });
+    assert.equal(second.key, first.key);
+    assert.equal(calls.length, 1);
+    assert.equal(await flushUnsavedLogins(), 1);
+    databaseFull = false;
+    assert.equal(await flushUnsavedLogins(), 0);
+  } finally {
+    fakePrisma.providerLogin.updateMany = updateMany;
+  }
+  const row = logins.get("p9")!;
+  assert.equal(openTokens(row.tokens, "p9").refresh, "r2");
+  assert.equal(row.version, 1);
+  assert.equal(row.leaseUntil, null);
+  assert.equal(row.status, "active");
+  const third = await providerAuth({ id: "p9", kind: "codex", apiKey: "" });
+  assert.equal(third.key, jwt({ exp }));
+  assert.equal(calls.length, 1);
+});
+
+test("an unsaved session that runs out is refreshed from its own rotated token, never from the stale stored one", async () => {
+  const { flushUnsavedLogins, openTokens, providerAuth } = await import("@/lib/gateway/upstreams/credentials");
+  await seedLogin("p10", Date.now() + 60_000);
+  const shortExp = Math.floor(Date.now() / 1000) + 120;
+  const longExp = inOneHour();
+  const tokensFor: Record<string, { access: string; refresh: string }> = {
+    r1: { access: jwt({ exp: shortExp, n: 1 }), refresh: "r2" },
+    r2: { access: jwt({ exp: longExp, n: 2 }), refresh: "r3" },
+  };
+  respondWith((_url, body) => {
+    const next = tokensFor[JSON.parse(body).refresh_token as string];
+    return next ? Response.json({ access_token: next.access, refresh_token: next.refresh }) : Response.json({ error: "invalid_grant" }, { status: 400 });
+  });
+  const updateMany = fakePrisma.providerLogin.updateMany;
+  let databaseFull = true;
+  fakePrisma.providerLogin.updateMany = async (args: Parameters<typeof updateMany>[0]) => {
+    if (databaseFull && "tokens" in args.data) throw new Error("connection terminated");
+    return updateMany(args);
+  };
+  try {
+    const first = await providerAuth({ id: "p10", kind: "codex", apiKey: "" });
+    assert.equal(first.key, tokensFor.r1!.access);
+    const second = await providerAuth({ id: "p10", kind: "codex", apiKey: "" });
+    assert.equal(second.key, tokensFor.r2!.access);
+    assert.deepEqual(
+      calls.map((call) => JSON.parse(call.body).refresh_token),
+      ["r1", "r2"],
+    );
+    databaseFull = false;
+    assert.equal(await flushUnsavedLogins(), 0);
+  } finally {
+    fakePrisma.providerLogin.updateMany = updateMany;
+  }
+  assert.equal(openTokens(logins.get("p10")!.tokens, "p10").refresh, "r3");
+});
+
+async function withLoginJournal(run: (dir: string) => Promise<void>) {
+  const { loginJournal } = await import("@/lib/gateway/upstreams/login-journal");
+  const previous = loginJournal.dir;
+  const dir = await mkdtemp(path.join(tmpdir(), "llmhub-login-journal-"));
+  loginJournal.dir = dir;
+  try {
+    await run(dir);
+  } finally {
+    loginJournal.dir = previous;
+    await rm(dir, { recursive: true, force: true });
+  }
+}
+
+function journaled(providerId: string, refreshedAt: number, refresh: string, account = "dev@example.com") {
+  const exp = inOneHour();
+  return {
+    providerId,
+    kind: "codex" as const,
+    refreshedAt,
+    session: {
+      tokens: { access: jwt({ exp, refresh }), refresh, accountId: "acct_1", residency: "" },
+      expiresAt: exp * 1000,
+      account,
+      plan: "pro",
+    },
+  };
+}
+
+test("rotated tokens reach the login journal before the database save", async () => {
+  const { providerAuth } = await import("@/lib/gateway/upstreams/credentials");
+  const { loginJournal } = await import("@/lib/gateway/upstreams/login-journal");
+  await withLoginJournal(async () => {
+    await seedLogin("p11", Date.now() + 60_000);
+    respondWith(() => Response.json({ access_token: jwt({ exp: inOneHour() }), refresh_token: "r2" }));
+    const updateMany = fakePrisma.providerLogin.updateMany;
+    fakePrisma.providerLogin.updateMany = async (args: Parameters<typeof updateMany>[0]) => {
+      if ("tokens" in args.data) throw new Error("connection terminated");
+      return updateMany(args);
+    };
+    try {
+      await providerAuth({ id: "p11", kind: "codex", apiKey: "" });
+    } finally {
+      fakePrisma.providerLogin.updateMany = updateMany;
+    }
+    const entry = await loginJournal.latest("p11");
+    assert.equal(entry?.session.tokens.refresh, "r2");
+    assert.equal(entry?.kind, "codex");
+  });
+});
+
+test("a login restored from an older backup takes the journaled tokens instead of refreshing the stale ones", async () => {
+  const { openTokens, providerAuth } = await import("@/lib/gateway/upstreams/credentials");
+  const { loginJournal } = await import("@/lib/gateway/upstreams/login-journal");
+  await withLoginJournal(async () => {
+    await seedLogin("p12", Date.now() + 60_000);
+    logins.get("p12")!.refreshedAt = new Date(Date.now() - 10 * 86_400_000);
+    const newest = journaled("p12", Date.now() - 3_600_000, "r5");
+    await loginJournal.record(newest);
+    respondWith(() => {
+      throw new Error("a stale refresh token must not be used");
+    });
+    const auth = await providerAuth({ id: "p12", kind: "codex", apiKey: "" });
+    assert.equal(auth.key, newest.session.tokens.access);
+    assert.equal(calls.length, 0);
+    const row = logins.get("p12")!;
+    assert.equal(openTokens(row.tokens, "p12").refresh, "r5");
+    assert.equal(row.refreshedAt?.getTime(), newest.refreshedAt);
+    assert.equal(row.version, 1);
+  });
+});
+
+test("the journal sync mirrors logins, restores newer journaled tokens of the same account, and drops long deleted providers", async () => {
+  const { openTokens, syncLoginJournal } = await import("@/lib/gateway/upstreams/credentials");
+  const { loginJournal } = await import("@/lib/gateway/upstreams/login-journal");
+  await withLoginJournal(async (dir) => {
+    const now = Date.now();
+    await seedLogin("p13", now + 3_600_000, "r1");
+    logins.get("p13")!.refreshedAt = new Date(now - 60_000);
+    await seedLogin("p14", now + 3_600_000, "r1");
+    logins.get("p14")!.refreshedAt = new Date(now - 86_400_000);
+    logins.get("p14")!.status = "expired";
+    await loginJournal.record(journaled("p14", now - 3_600_000, "r7"));
+    await seedLogin("p15", now + 3_600_000, "r1");
+    logins.get("p15")!.refreshedAt = new Date(now - 86_400_000);
+    await loginJournal.record(journaled("p15", now - 3_600_000, "r9", "someone-else@example.com"));
+    await loginJournal.record(journaled("gone", now - 40 * 86_400_000, "r3"));
+    const [goneFile] = await readdir(path.join(dir, "gone"));
+    const longAgo = new Date(now - 31 * 86_400_000);
+    await utimes(path.join(dir, "gone", goneFile!), longAgo, longAgo);
+    await mkdir(path.join(dir, "recent"));
+    await loginJournal.record(journaled("recent", now - 60_000, "r4"));
+
+    assert.equal(await syncLoginJournal(now), 3);
+    assert.equal((await loginJournal.latest("p13"))?.session.tokens.refresh, "r1");
+    assert.equal(await loginJournal.latestStamp("p13"), now - 60_000);
+    const restored = logins.get("p14")!;
+    assert.equal(openTokens(restored.tokens, "p14").refresh, "r7");
+    assert.equal(restored.status, "active");
+    assert.equal(openTokens(logins.get("p15")!.tokens, "p15").refresh, "r1");
+    assert.deepEqual((await loginJournal.providers()).sort(), ["p13", "p14", "p15", "recent"]);
+    assert.equal(await syncLoginJournal(now), 0);
+  });
 });
 
 test("a transient refresh failure keeps using a still valid access token", async () => {

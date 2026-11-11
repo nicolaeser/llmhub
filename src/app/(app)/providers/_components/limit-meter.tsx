@@ -89,7 +89,8 @@ export default function LimitMeter({
   const t = useTranslations("Subscriptions.limits");
   const tKeys = useTranslations("Subscriptions.keyUsage");
   const format = useFormatter();
-  const { now } = useResetTime(timeZone);
+  const resetTime = useResetTime(timeZone);
+  const { now } = resetTime;
   const reset = group.resetsAt ? Date.parse(group.resetsAt) : NaN;
   const pending = Number.isFinite(reset) && reset > now.getTime();
   const runsOut = exhaustionAt(group, now.getTime());
@@ -159,15 +160,21 @@ export default function LimitMeter({
                 </p>
               ) : (
                 <ul className="space-y-0.5 text-xs text-muted">
-                  {group.members.map((member) => (
-                    <li key={member.scope} className="break-words">
-                      {t("member", {
-                        model: member.label,
-                        used: member.usedPercent / 100,
-                        reached: String(member.limitReached),
-                      })}
-                    </li>
-                  ))}
+                  {group.members.map((member) => {
+                    const memberReset = member.resetsAt ? Date.parse(member.resetsAt) : NaN;
+                    const timed = Number.isFinite(memberReset) && memberReset > now.getTime();
+                    return (
+                      <li key={member.scope} className="break-words">
+                        {t("member", {
+                          model: member.label,
+                          used: member.usedPercent / 100,
+                          reached: String(member.limitReached),
+                          timed: String(timed),
+                          countdown: timed ? resetTime.countdown(memberReset) : "",
+                        })}
+                      </li>
+                    );
+                  })}
                 </ul>
               )}
             </Disclosure.Body>

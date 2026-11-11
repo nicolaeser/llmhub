@@ -22,7 +22,7 @@ Load `BASE.md` first. Then open only the documents below that match the task.
 - [instructions/api.md](instructions/api.md) — `/api/v1`, `/api/mgmt`, `/internal-api` (including the live stream and the signed updater bridge), SCIM, and SSO contracts plus error formats; load when changing HTTP routes or errors.
 - [instructions/security-privacy.md](instructions/security-privacy.md) — Sessions, mandatory two-factor, passkeys, roles, permissions, management keys, setup, PII policy overrides, request-content logging, and what error reports may carry; load for login, account security, roles, keys, PII, logs, error reporting, or data rights.
 - [instructions/quality-testing.md](instructions/quality-testing.md) — node:test and prebuild gates; load when adding tests or CI-facing checks.
-- [instructions/operations.md](instructions/operations.md) — Env, Docker and compose data mounts, the auto-updater stack, boot migrate, worker schedules, build version, optional Sentry error reporting, and probes; load for deploy, runtime config, or observability.
+- [instructions/operations.md](instructions/operations.md) — Env, Docker and compose data mounts, the auto-updater stack, the sign-in keeper and login journal, boot migrate, worker schedules, build version, optional Sentry error reporting, and probes; load for deploy, runtime config, or observability.
 - [instructions/content-localization.md](instructions/content-localization.md) — en/de namespaces, ICU, and formatters; load when changing strings or public copy.
 
 ## Playbooks

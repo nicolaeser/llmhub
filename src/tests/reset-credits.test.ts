@@ -15,6 +15,7 @@ import {
   selectGrant,
   soonestCredit,
 } from "@/lib/gateway/upstreams/reset-credits";
+import { canRedeemReset, resetWaitsFor, showsResetSummary } from "@/app/(app)/providers/_components/reset-view";
 import { autoResetPoliciesOf, autoResetPolicy, isResetKind } from "@/lib/gateway/routing/auto-reset-policy";
 import type { JsonMap } from "@/types/gateway";
 
@@ -298,4 +299,27 @@ test("auto reset policies default to off, 99 percent, and pool scope", () => {
   );
   assert.equal(isResetKind("claude"), true);
   assert.equal(isResetKind("antigravity"), false);
+});
+
+test("the account list shows banked resets, offers the button only when one can be used, and says why not", () => {
+  const now = Date.parse("2026-11-10T12:00:00Z");
+  const active = { signIn: { status: "active" } } as Parameters<typeof canRedeemReset>[0];
+  const usable = { available: 2, applicable: 1, canRedeem: true };
+  assert.equal(showsResetSummary(null), false);
+  assert.equal(showsResetSummary({ available: 0, applicable: 0 }), false);
+  assert.equal(showsResetSummary(usable), true);
+  assert.equal(
+    showsResetSummary({ available: 0, applicable: 0, pending: { startedAt: "", retryUntil: "", retryable: true } }),
+    true,
+  );
+  assert.equal(canRedeemReset(active, usable, true), true);
+  assert.equal(canRedeemReset(active, usable, false), false);
+  assert.equal(canRedeemReset({ signIn: { status: "expired" } } as Parameters<typeof canRedeemReset>[0], usable, true), false);
+  assert.equal(resetWaitsFor(usable, now), null);
+  const claude = { available: 1, applicable: 0, canRedeem: false, eligible: true, atLimit: false };
+  assert.equal(resetWaitsFor(claude, now), "limit");
+  assert.equal(resetWaitsFor({ ...claude, cooldownUntil: "2026-11-10T13:00:00Z" }, now), "cooldown");
+  assert.equal(resetWaitsFor({ ...claude, cooldownUntil: "2026-11-10T11:00:00Z" }, now), "limit");
+  assert.equal(resetWaitsFor({ ...claude, eligible: false, ineligibleReason: "tier" }, now), "ineligible");
+  assert.equal(resetWaitsFor({ available: 1, applicable: 0, canRedeem: false }, now), null);
 });

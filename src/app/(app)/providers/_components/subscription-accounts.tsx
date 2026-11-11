@@ -264,6 +264,7 @@ export default function SubscriptionAccounts({
           onSettings={() => openSettings(group.kind)}
           onCreateLink={() => onCreateLink(group.kind)}
           onMenu={runMenu}
+          onItem={limits.storeItem}
         />
       ))}
 

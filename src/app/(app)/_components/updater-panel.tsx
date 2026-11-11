@@ -4,7 +4,8 @@ import type { ReactNode } from "react";
 import { Alert, Chip } from "@heroui/react";
 import { useFormatter, useTranslations } from "next-intl";
 import { useClock } from "@/lib/hooks/use-clock";
-import { shortDigest } from "@/lib/updates/updater-view";
+import { diskLow, shortDigest, UPDATER_MIN_FREE_DISK_BYTES } from "@/lib/updates/updater-view";
+import { formatBytes } from "@/lib/utils/bytes";
 import type { UpdaterState, UpdaterView } from "@/types/updates";
 import { AutoUpdateSwitch, UpdaterButtons } from "./updater-controls";
 
@@ -89,6 +90,14 @@ export default function UpdaterPanel({
         <Fact label={t("updater.availability")}>
           {t("updater.available", { available: updater.available ? "true" : "false" })}
         </Fact>
+        {detailed && updater.disk ? (
+          <Fact label={t("updater.diskLabel")}>
+            {t("updater.disk", {
+              free: formatBytes(format, updater.disk.freeBytes),
+              total: formatBytes(format, updater.disk.totalBytes),
+            })}
+          </Fact>
+        ) : null}
         {updater.lastResult ? (
           <Fact label={t("updater.result")}>
             {t("updater.outcome", { outcome: updater.lastResult.outcome, when: when(updater.lastResult.at) })}
@@ -97,6 +106,19 @@ export default function UpdaterPanel({
       </ul>
       {detailed && updater.lastResult?.detail ? (
         <p className="text-xs break-words text-muted">{updater.lastResult.detail}</p>
+      ) : null}
+      {updater.disk && diskLow(updater) ? (
+        <Alert status="warning">
+          <Alert.Indicator />
+          <Alert.Content>
+            <Alert.Description>
+              {t("updater.diskLow", {
+                free: formatBytes(format, updater.disk.freeBytes),
+                required: formatBytes(format, UPDATER_MIN_FREE_DISK_BYTES),
+              })}
+            </Alert.Description>
+          </Alert.Content>
+        </Alert>
       ) : null}
       {updater.pinned ? (
         <Alert status="warning">

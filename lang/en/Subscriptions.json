@@ -113,12 +113,13 @@
     "models": "{count, plural, one {# model} other {# models}}",
     "group": "{family, select, gemini_pro {Gemini Pro} gemini_flash {Gemini Flash} gemini_image {Gemini Image} claude {Claude} gpt_oss {GPT-OSS} other {Other models}}",
     "sharedBy": "Shared by {models}",
-    "member": "{model}: {used, number, percent}{reached, select, true { (limit reached)} other {}}",
+    "member": "{model}: {used, number, percent}{reached, select, true { (limit reached)} other {}}{timed, select, true {, resets {countdown}} other {}}",
     "partial": "{reached, number} of {total, plural, one {# limit} other {# limits}} reached",
     "credits": "{unlimited, select, true {Unlimited credits} other {Credits: {balance}}}",
     "resetCredits": "{available, plural, =0 {No limit resets available} one {# limit reset available} other {# limit resets available}}{applicable, plural, =0 {} other { ({applicable} usable now)}}",
     "extraUsage": "Extra usage: {used} of {limit}",
-    "none": "The provider reported no limits for this plan."
+    "none": "The provider reported no limits for this plan.",
+    "awaitingTraffic": "Limits appear after the first request through this account."
   },
   "resets": {
     "title": "Banked resets",

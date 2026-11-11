@@ -29,7 +29,7 @@ COPY . .
 ARG NEXT_PUBLIC_SENTRY_DSN=
 RUN DATABASE_URL=postgresql://build:build@localhost:5432/build \
     APP_SECRET=build-only-placeholder-not-a-secret-000000 \
-    sh -c "npx prisma generate && npm run build"
+    sh -c "npx prisma generate && npm run build && npm run keeper:build"
 
 FROM base AS runner
 LABEL org.opencontainers.image.title="LLM Hub" \
@@ -47,10 +47,13 @@ COPY --from=builder --chown=node:node /app/.next/static ./.next/static
 COPY --from=builder --chown=node:node /app/public ./public
 COPY --chown=node:node prisma/schema ./prisma/schema
 COPY --chown=node:node prisma/migrations ./prisma/migrations
-COPY --chown=node:node prisma.config.ts scripts/migrate-deploy.mjs scripts/updater.mjs scripts/redactor.mjs ./
+COPY --chown=node:node prisma.config.ts scripts/start.mjs scripts/migrate-deploy.mjs scripts/updater.mjs scripts/redactor.mjs ./
 COPY --chown=node:node scripts/updater ./updater
 COPY --chown=node:node scripts/redactor ./redactor
+COPY --from=builder --chown=node:node /app/.next/keeper ./keeper
 RUN install -d -o node -g node -m 0755 /models
+RUN install -d -o node -g node -m 0700 /login-journal
+VOLUME ["/login-journal"]
 ARG BUILD_ID=development
 ENV BUILD_ID=${BUILD_ID}
 RUN apt-get update \
@@ -64,4 +67,4 @@ USER node
 EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
   CMD ["node", "-e", "fetch('http://127.0.0.1:3000/internal-api/health').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
-CMD ["sh", "-c", "node migrate-deploy.mjs && exec node server.js"]
+CMD ["node", "start.mjs"]

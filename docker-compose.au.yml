@@ -19,8 +19,11 @@ services:
       NODE_ENV: production
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
+      LLMHUB_KEEPER: separate
     ports:
       - "127.0.0.1:${LLMHUB_PORT:-3000}:3000"
+    volumes:
+      - login-journal:/login-journal
     stop_grace_period: 330s
     mem_limit: ${LLMHUB_MEMORY_LIMIT:-4g}
     logging: *logging
@@ -47,7 +50,7 @@ services:
   redis:
     image: redis:8-alpine
     restart: unless-stopped
-    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD}"]
+    command: ["redis-server", "--appendonly", "no", "--save", "60 1", "--stop-writes-on-bgsave-error", "no", "--requirepass", "${REDIS_PASSWORD}"]
     environment:
       REDISCLI_AUTH: ${REDIS_PASSWORD}
     volumes:
@@ -59,6 +62,31 @@ services:
       retries: 10
     mem_limit: ${REDIS_MEMORY_LIMIT:-1g}
     logging: *logging
+
+  keeper:
+    image: ghcr.io/nicolaeser/llmhub:${LLMHUB_TAG:-latest}
+    restart: unless-stopped
+    depends_on:
+      - postgres
+    command: ["node", "--liftoff-only", "--wasm-lazy-compilation", "keeper/keeper.mjs"]
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+    volumes:
+      - login-journal:/login-journal
+    healthcheck:
+      test: ["CMD", "node", "keeper/keeper.mjs", "--healthcheck"]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
+    stop_grace_period: 30s
+    mem_limit: 256m
+    logging: *logging
+    labels:
+      llmhub.updater.target: "true"
 
   updater:
     image: ghcr.io/nicolaeser/llmhub:${LLMHUB_TAG:-latest}
@@ -80,3 +108,6 @@ services:
       retries: 3
     mem_limit: 256m
     logging: *logging
+
+volumes:
+  login-journal:

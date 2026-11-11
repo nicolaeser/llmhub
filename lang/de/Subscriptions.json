@@ -113,12 +113,13 @@
     "models": "{count, plural, one {# Modell} other {# Modelle}}",
     "group": "{family, select, gemini_pro {Gemini Pro} gemini_flash {Gemini Flash} gemini_image {Gemini Image} claude {Claude} gpt_oss {GPT-OSS} other {Weitere Modelle}}",
     "sharedBy": "Gemeinsam genutzt von {models}",
-    "member": "{model}: {used, number, percent}{reached, select, true { (Limit erreicht)} other {}}",
+    "member": "{model}: {used, number, percent}{reached, select, true { (Limit erreicht)} other {}}{timed, select, true {, Reset {countdown}} other {}}",
     "partial": "{reached, number} von {total, plural, one {# Limit} other {# Limits}} erreicht",
     "credits": "{unlimited, select, true {Unbegrenzte Credits} other {Credits: {balance}}}",
     "resetCredits": "{available, plural, =0 {Keine Limit-Resets verfügbar} one {# Limit-Reset verfügbar} other {# Limit-Resets verfügbar}}{applicable, plural, =0 {} other { ({applicable} jetzt nutzbar)}}",
     "extraUsage": "Zusatznutzung: {used} von {limit}",
-    "none": "Der Anbieter meldet für dieses Abo keine Limits."
+    "none": "Der Anbieter meldet für dieses Abo keine Limits.",
+    "awaitingTraffic": "Die Limits erscheinen nach der ersten Anfrage über dieses Konto."
   },
   "resets": {
     "title": "Gesparte Resets",

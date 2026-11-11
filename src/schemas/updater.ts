@@ -33,6 +33,10 @@ export const updaterCommandId = z.string().regex(/^[A-Za-z0-9-]{8,64}$/);
 
 const imageText = z.string().trim().max(300).regex(/^[\w.:/@-]+$/);
 
+const byteCount = z.number().int().min(0).max(Number.MAX_SAFE_INTEGER);
+
+const diskSpace = z.object({ freeBytes: byteCount, totalBytes: byteCount });
+
 export const updaterReportSchema = z.object({
   version: z.string().trim().min(1).max(80),
   state: z.enum(UPDATER_STATES),
@@ -56,6 +60,7 @@ export const updaterReportSchema = z.object({
     })
     .nullable(),
   ackCommandId: updaterCommandId.nullable(),
+  disk: diskSpace.nullable().optional(),
 });
 
 export const updaterCommandSchema = z.object({

@@ -10,7 +10,8 @@ LLM Hub is a Next.js 16 App Router app: OpenAI- and Anthropic-compatible `/api/v
 - Postgres is the durable store (Prisma 7 + `@prisma/adapter-pg`).
 - Optional RustFS/S3 holds files, batches, videos, and log archives.
 - `src/instrumentation.ts` starts an in-process worker (`src/worker/`) after catalog boot: a maintenance sweep every minute (it also revalidates SSO sessions with the identity provider, see `sso_revalidation`), the cached model catalog refresh every two hours, and alert webhook delivery. Optional Redis (`REDIS_URL`) runs it on the BullMQ `maintenance`, `models`, and `webhooks` queues (`QUEUE_NAMES`, `src/lib/jobs/queues.ts`) and shares RPM/TPM; without it the same jobs use process timers and inline delivery. Redis is never awaited at bind time. No separate worker process.
-- Optional updater container (`docker-compose.au.yml`, `scripts/updater.mjs`): same image, holds the Docker socket, and replaces the app container with newer images of its tag on request or automatically.
+- Keeper (`keeper` container in both production compose files, `src/keeper/`, bundled to `keeper/keeper.mjs`): same image, refreshes subscription sign-ins and syncs the login journal every minute, independent of the app process, Redis, and migrations; it needs only Postgres and the `login-journal` volume it shares with the app. With older compose files the app container's supervisor (`scripts/start.mjs`) runs it as a child process instead.
+- Optional updater container (`docker-compose.au.yml`, `scripts/updater.mjs`): same image, holds the Docker socket, and replaces the app and keeper containers with newer images of its tag on request or automatically, and once moves an old append-only Redis of its project to snapshots.
 
 ## Route groups
 
