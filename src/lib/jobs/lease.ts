@@ -1,22 +1,17 @@
 import "server-only";
 
 import prisma from "@/lib/db/prisma";
-import { isPrismaCode } from "@/lib/auth/errors";
+
+async function insertLeaseIfAbsent(key: string, value: string): Promise<boolean> {
+  const { count } = await prisma.setting.createMany({ data: [{ key, value }], skipDuplicates: true });
+  return count > 0;
+}
 
 export async function acquireLease(key: string, ttlMs: number, now = Date.now()): Promise<string | null> {
   const value = String(now + ttlMs);
-  const claim = async () => {
-    try {
-      await prisma.setting.create({ data: { key, value } });
-      return true;
-    } catch (error) {
-      if (isPrismaCode(error, "P2002")) return false;
-      throw error;
-    }
-  };
-  if (await claim()) return value;
+  if (await insertLeaseIfAbsent(key, value)) return value;
   const expired = await prisma.setting.deleteMany({ where: { key, value: { lt: String(now) } } });
-  return expired.count > 0 && (await claim()) ? value : null;
+  return expired.count > 0 && (await insertLeaseIfAbsent(key, value)) ? value : null;
 }
 
 export async function claimLease(key: string, ttlMs: number, now = Date.now()): Promise<boolean> {

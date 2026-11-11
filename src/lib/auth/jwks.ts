@@ -1,4 +1,4 @@
-import { constants, createPublicKey, verify, type JsonWebKey } from "node:crypto";
+import { constants, createPublicKey, verify, type webcrypto } from "node:crypto";
 import type { Jwk, JwksCache, JwtAlgorithm, JwtClaims, JwtConfig, VerificationKey } from "@/types/auth";
 
 const JWKS_TTL_MS = 300_000;
@@ -25,7 +25,7 @@ function b64urlToBuf(value: string): Buffer {
   return Buffer.from(value, "base64url");
 }
 
-function verificationKey(jwk: Jwk & JsonWebKey): VerificationKey[] {
+function verificationKey(jwk: Jwk & webcrypto.JsonWebKey): VerificationKey[] {
   if (jwk.use && jwk.use !== "sig") return [];
   if (jwk.kty !== "RSA" && jwk.kty !== "EC" && jwk.kty !== "OKP") return [];
   try {
@@ -48,7 +48,7 @@ async function loadKeys(url: string, force: boolean): Promise<VerificationKey[]>
   if (cache && age < (force ? JWKS_REFETCH_MS : JWKS_TTL_MS)) return cache.keys;
   const res = await fetch(url, { signal: AbortSignal.timeout(8_000) });
   if (!res.ok) throw new Error(`jwks ${res.status}`);
-  const json = (await res.json()) as { keys?: (Jwk & JsonWebKey)[] };
+  const json = (await res.json()) as { keys?: (Jwk & webcrypto.JsonWebKey)[] };
   const keys = (Array.isArray(json.keys) ? json.keys : []).flatMap(verificationKey);
   cache = { url, keys, fetched: Date.now() };
   return keys;

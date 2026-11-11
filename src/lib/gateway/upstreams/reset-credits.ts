@@ -1,22 +1,29 @@
 import { asRecord, asString } from "@/lib/gateway/core";
 import { CLAUDE_OAUTH_BETAS } from "@/lib/gateway/upstreams/claude";
+import { claudeWindows } from "@/lib/gateway/upstreams/claude-usage";
+import { claudeResetOptions, codexResetOptions, spendableResets } from "@/lib/gateway/upstreams/reset-options";
 import { readJsonOr } from "@/lib/utils/json";
 import { CLAUDE_GRANT_ID, CLAUDE_REQUEST_ID, ORG_UUID } from "@/schemas/resets";
 import type { JsonMap } from "@/types/gateway";
-import type { UpstreamAuth } from "@/types/providers";
+import type { LimitWindow, UpstreamAuth } from "@/types/providers";
 import type {
   ClaudeClaim,
+  ClaudeGrantType,
   ClaudeIneligibleReason,
   ClaudeRedeemResult,
+  ClaudeResetAccount,
   ClaudeResetBlock,
   ClaudeResetGrant,
+  ClaudeUnavailableReason,
   CodexClaim,
   CodexCreditList,
   CodexRedeemResult,
   CodexResetCredit,
   CodexResetCreditStatus,
   RedeemOutcome,
+  ResetCreditView,
   ResetCredits,
+  ResetOptionRules,
   ResetResult,
   StatusRead,
 } from "@/types/resets";
@@ -59,6 +66,24 @@ const CLAUDE_RESULTS = [
   "ineligible",
   "unavailable",
 ] as const satisfies readonly ClaudeRedeemResult[];
+const GRANT_TYPES = ["session", "weekly", "full"] as const satisfies readonly ClaudeGrantType[];
+const UNAVAILABLE_REASONS = [
+  "cooldown",
+  "blocked_five_hour",
+  "blocked_seven_day",
+  "blocked_opus",
+  "blocked_sonnet",
+  "blocked_other",
+  "cannot_clear",
+  "needs_limit",
+  "unavailable",
+] as const satisfies readonly ClaudeUnavailableReason[];
+const ACCOUNT_SURFACES = ["claude_ai", "claude_code_cli"] as const;
+const ACCOUNT_TIERS = ["claude_pro", "claude_max_5x", "claude_max_20x", "claude_team"] as const;
+const TENURE_BUCKETS = ["under_14", "14-29", "30-89", "90-364", "365+"] as const;
+const BILLING_PATHS = ["stripe", "apple", "google_play", "other"] as const;
+const BILLING_PERIODS = ["monthly", "annual"] as const;
+const EXTRA_USAGE_STATES = ["not_configured", "disabled", "enabled"] as const;
 const CREDIT_STATUSES = ["available", "redeeming", "redeemed"] as const satisfies readonly CodexResetCreditStatus[];
 const SUCCESS_RESULTS: ReadonlySet<ResetResult> = new Set<ResetResult>(["reset", "already_redeemed", "already_used"]);
 const UNPRINTABLE_RANGES: readonly [number, number][] = [
@@ -123,6 +148,32 @@ function percentMap(value: unknown): Record<string, number> | undefined {
   return out;
 }
 
+function grantType(value: unknown): ClaudeGrantType | null {
+  return GRANT_TYPES.find((type) => type === value) ?? null;
+}
+
+function unavailableReason(value: unknown): ClaudeUnavailableReason | null {
+  if (value === undefined || value === null) return null;
+  return UNAVAILABLE_REASONS.find((reason) => reason === value) ?? "unavailable";
+}
+
+function oneOf<T extends string>(values: readonly T[], value: unknown): T | "unknown" {
+  return values.find((item) => item === value) ?? "unknown";
+}
+
+function claudeAccount(raw: unknown): ClaudeResetAccount | null {
+  const props = asRecord(raw);
+  if (!props) return null;
+  return {
+    surface: oneOf(ACCOUNT_SURFACES, props.surface),
+    tier: oneOf(ACCOUNT_TIERS, props.tier),
+    tenureBucket: oneOf(TENURE_BUCKETS, props.tenure_bucket),
+    billingPath: oneOf(BILLING_PATHS, props.billing_path),
+    billingPeriod: oneOf(BILLING_PERIODS, props.billing_period),
+    extraUsageState: oneOf(EXTRA_USAGE_STATES, props.extra_usage_state),
+  };
+}
+
 function claudeGrant(raw: unknown): ClaudeResetGrant | null {
   const grant = asRecord(raw);
   if (!grant) return null;
@@ -139,7 +190,11 @@ function claudeGrant(raw: unknown): ClaudeResetGrant | null {
   const usableNow = flag(grant.usable_now, false);
   const useRequiresLimit = flag(grant.use_requires_limit, true);
   const percentUsed = percentMap(grant.percent_used);
+  const blocking = windowList(grant.blocking);
+  const givesBackWeekly = flag(grant.gives_back_weekly, false);
   if (
+    blocking === undefined ||
+    givesBackWeekly === undefined ||
     startsAt === undefined ||
     endsAt === undefined ||
     clears === undefined ||
@@ -162,6 +217,10 @@ function claudeGrant(raw: unknown): ClaudeResetGrant | null {
     usableNow,
     useRequiresLimit,
     percentUsed,
+    blocking,
+    type: grantType(grant.type),
+    givesBackWeekly,
+    unavailableReason: unavailableReason(grant.unavailable_reason),
   };
 }
 
@@ -178,7 +237,14 @@ export function parseClaudeResets(payload: JsonMap | null): ClaudeResetBlock | n
   const atLimit = flag(block.at_limit, false);
   const weeklyResetsAt = timestamp(block.weekly_resets_at);
   const cooldownUntil = timestamp(block.cooldown_until);
-  if (reason === undefined || atLimit === undefined || weeklyResetsAt === undefined || cooldownUntil === undefined) {
+  const exhausted = windowList(block.exhausted);
+  if (
+    reason === undefined ||
+    atLimit === undefined ||
+    weeklyResetsAt === undefined ||
+    cooldownUntil === undefined ||
+    exhausted === undefined
+  ) {
     return null;
   }
   const next = block.next_grant_id;
@@ -196,10 +262,13 @@ export function parseClaudeResets(payload: JsonMap | null): ClaudeResetBlock | n
     eligible: block.eligible,
     ineligibleReason: block.eligible ? null : (reason ?? "unknown"),
     atLimit,
+    exhausted,
     grants,
     nextGrantId: typeof next === "string" ? next : "",
     weeklyResetsAt,
     cooldownUntil,
+    account: claudeAccount(block.event_props),
+    windows: claudeWindows(payload ?? {}),
   };
 }
 
@@ -211,49 +280,23 @@ function grantLive(grant: ClaudeResetGrant, now: number): boolean {
   return grant.endsAt === null || after(grant.endsAt, now);
 }
 
-export function grantUsable(grant: ClaudeResetGrant, atLimit: boolean, now: number): boolean {
-  return (
-    !grant.paused &&
-    grant.usableNow &&
-    grant.resetsLeft > 0 &&
-    !after(grant.startsAt, now) &&
-    grantLive(grant, now) &&
-    (!grant.useRequiresLimit || atLimit)
-  );
-}
-
-function claudeCooling(block: ClaudeResetBlock, now: number): boolean {
-  return after(block.cooldownUntil, now);
-}
-
-function byId(a: ClaudeResetGrant, b: ClaudeResetGrant): number {
-  if (a.id === b.id) return 0;
-  return a.id < b.id ? -1 : 1;
-}
-
-export function selectGrant(block: ClaudeResetBlock | null, now: number, chosenId = ""): ClaudeResetGrant | null {
-  if (!block?.eligible || claudeCooling(block, now)) return null;
-  const usable = block.grants.filter((grant) => grantUsable(grant, block.atLimit, now));
-  if (chosenId) return usable.find((grant) => grant.id === chosenId) ?? null;
-  if (!usable.length) return null;
-  return usable.find((grant) => grant.id === block.nextGrantId) ?? [...usable].sort(byId)[0]!;
-}
-
 function soonest(values: (string | null)[]): string | null {
   const times = values.filter((value): value is string => value !== null).sort((a, b) => Date.parse(a) - Date.parse(b));
   return times[0] ?? null;
 }
 
-export function claudeResetCredits(block: ClaudeResetBlock, now: number): ResetCredits {
+export function claudeResetCredits(
+  block: ClaudeResetBlock,
+  now: number,
+  windows: LimitWindow[] = block.windows,
+  rules: ResetOptionRules = {},
+): ResetCredits {
   const live = block.grants.filter((grant) => grantLive(grant, now));
-  const cooling = claudeCooling(block, now);
-  const selectable = block.eligible && !cooling;
-  const usable = new Set(
-    selectable ? live.filter((grant) => grantUsable(grant, block.atLimit, now)).map((grant) => grant.id) : [],
-  );
+  const { options, limits } = claudeResetOptions(block, windows, now, rules);
+  const usable = new Set(options.filter((option) => option.blocker === null).map((option) => option.id));
   return {
     available: live.reduce((sum, grant) => sum + grant.resetsLeft, 0),
-    applicable: live.filter((grant) => usable.has(grant.id)).reduce((sum, grant) => sum + grant.resetsLeft, 0),
+    applicable: spendableResets(options),
     expiresAt: soonest(live.filter((grant) => grant.resetsLeft > 0).map((grant) => grant.endsAt)),
     grants: live.map((grant) => ({
       id: grant.id,
@@ -267,7 +310,9 @@ export function claudeResetCredits(block: ClaudeResetBlock, now: number): ResetC
     eligible: block.eligible,
     ineligibleReason: block.ineligibleReason,
     atLimit: block.atLimit,
-    cooldownUntil: cooling ? block.cooldownUntil : null,
+    cooldownUntil: after(block.cooldownUntil, now) ? block.cooldownUntil : null,
+    options,
+    limits,
   };
 }
 
@@ -313,26 +358,26 @@ function liveCredits(list: CodexCreditList | null, now: number): CodexResetCredi
     .sort(expiryOrder);
 }
 
-export function soonestCredit(list: CodexCreditList | null, now: number): CodexResetCredit | null {
-  return liveCredits(list, now)[0] ?? null;
-}
-
-export function chosenCredit(list: CodexCreditList | null, now: number, chosenId: string): CodexResetCredit | null {
-  return liveCredits(list, now).find((credit) => credit.id === chosenId) ?? null;
+export function codexCreditViews(list: CodexCreditList | null, now: number): ResetCreditView[] {
+  return liveCredits(list, now).map((credit) => ({ id: credit.id, title: credit.title, expiresAt: credit.expiresAt }));
 }
 
 export function codexResetCredits(
   base: Pick<ResetCredits, "available" | "applicable"> | null,
   list: CodexCreditList | null,
   now: number,
+  windows: LimitWindow[] = [],
+  rules: ResetOptionRules = {},
 ): ResetCredits | null {
   if (!base && !list) return null;
-  const live = liveCredits(list, now);
+  const credits = codexCreditViews(list, now);
+  const applicable = base?.applicable ?? 0;
   return {
     available: base?.available ?? list?.availableCount ?? 0,
-    applicable: base?.applicable ?? 0,
-    expiresAt: live[0]?.expiresAt ?? null,
-    credits: live.map((credit) => ({ id: credit.id, title: credit.title, expiresAt: credit.expiresAt })),
+    applicable,
+    expiresAt: credits[0]?.expiresAt ?? null,
+    credits,
+    ...codexResetOptions(applicable, credits, windows, now, rules),
   };
 }
 

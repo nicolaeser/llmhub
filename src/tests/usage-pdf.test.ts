@@ -122,7 +122,7 @@ test("usagePdf truncates long model names with an ellipsis", () => {
   const shown = texts(usagePdf(withModel(name)));
   assert.ok(!shown.includes(name));
   const truncated = shown.find((text) => text.startsWith("provider/an-"));
-  assert.ok(truncated?.endsWith("…"), truncated);
+  assert.ok(truncated?.endsWith("…"), String(truncated));
 });
 
 test("usagePdf renders empty periods without invalid numbers", () => {

@@ -54,6 +54,7 @@ The console is confident and calm: one indigo accent (hue 276 in light, 274 in d
 - Real state uses colored `Chip`s (`color="success" | "warning" | "danger" | "accent"`, `variant="soft"`); counts and labels stay `variant="soft"` without color.
 - Selected options in choice cards use `bg-accent/8` with `border-accent`; unselected ones stay on `Card variant="secondary"`.
 - Token fills with an opacity modifier (`bg-accent/8` to `bg-accent/14`, same for `success`, `warning`, `danger`) are allowed for tiles, selected states, and highlighted rows only. One tinted emphasis per card.
+- Subscription limit meters are the one other place for `--danger` opacity fills, set only through `src/app/(app)/providers/_components/limit-tone.ts`: below 80 % accent, 80–89 % warning, then four reds that grow more solid with the block they mean (near full `bg-danger/45`, a full short window such as 5 hours `bg-danger/62`, a full model-scoped limit `bg-danger/80`, the full overall weekly limit `bg-danger`), with the text in `text-danger`. A full or near-full meter always shows an icon and the word (`full` / `near` state of `Subscriptions.limits.used`, also in `aria-valuetext`), because the lighter reds miss 3:1 against the track. The account status chip for `limited` stays `warning`: it is a temporary state that recovers by itself, not a failure.
 
 ## Charts
 

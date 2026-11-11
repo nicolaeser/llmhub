@@ -1,19 +1,20 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Button, Description, Label, Radio, RadioGroup, Spinner, toast } from "@heroui/react";
+import { Button, Spinner, toast, useOverlayState } from "@heroui/react";
 import { TimerReset } from "lucide-react";
 import { useTranslations } from "next-intl";
 import ConfirmDialog from "@/components/console/confirm-dialog";
 import { useErrorToast } from "@/components/console/use-error-toast";
 import { isActionFail } from "@/lib/http/action-result";
 import type { LimitSnapshot, ProviderView } from "@/types/providers";
-import type { ResetCredits, ResetResult } from "@/types/resets";
+import type { ResetCredits, ResetOption, ResetResult } from "@/types/resets";
 import { redeemProviderResetAction } from "../_action";
-import { resetChoices } from "./reset-view";
-import { useResetTime } from "./use-reset-time";
+import ResetDialog from "./reset-dialog";
+import { isSpendable, resetFlow, resetRefusal } from "./reset-view";
+import { useResetLabels } from "./use-reset-labels";
 
-const AUTOMATIC = "";
+type OpenDialog = "confirm" | "options";
 
 const RESULT_TOAST = {
   reset: "success",
@@ -44,21 +45,50 @@ export default function RedeemResetButton({
   const t = useTranslations("Subscriptions.resets");
   const tCommon = useTranslations("Common");
   const showError = useErrorToast();
+  const labels = useResetLabels(timeZone, credits);
   const [pending, start] = useTransition();
-  const [picked, setPicked] = useState(AUTOMATIC);
-  const reset = useResetTime(timeZone);
-  const retry = credits.pending?.retryable === true;
-  const choices = resetChoices(credits);
-  const choice = choices.some((item) => item.id === picked) ? picked : AUTOMATIC;
+  const [open, setOpen] = useState<OpenDialog | null>(null);
+  const [picked, setPicked] = useState<string | null>(null);
+  const [reviewId, setReviewId] = useState<string | null>(null);
+  const flow = resetFlow(credits);
+  const retry = flow.mode === "retry";
+  const dialog: OpenDialog = flow.mode === "choose" || flow.mode === "review" ? "options" : "confirm";
+  const options = flow.mode === "choose" ? flow.options : flow.mode === "review" ? [flow.option] : [];
+  const preferred = flow.mode === "choose" ? flow.initial : null;
+  const selected =
+    options.find((option) => option.id === picked && isSpendable(option)) ??
+    options.find((option) => option.id === preferred) ??
+    null;
+  const reviewing = options.find((option) => option.id === reviewId) ?? null;
+  const confirmState = useOverlayState({
+    isOpen: open === "confirm" && dialog === "confirm",
+    onOpenChange: (next) => setOpen(next ? "confirm" : null),
+  });
 
-  function redeem() {
+  function show() {
+    setPicked(null);
+    setReviewId(flow.mode === "review" ? flow.option.id : null);
+    setOpen(dialog);
+  }
+
+  function redeem(option: ResetOption | null) {
     start(async () => {
-      const result = await redeemProviderResetAction({ id: row.id, ...(choice ? { choice } : {}) });
+      const result = await redeemProviderResetAction({ id: row.id, ...(option ? { choice: option.id } : {}) });
       if (isActionFail(result)) {
-        showError(result.error);
+        const refusal = resetRefusal(result.error);
+        if (!refusal) {
+          showError(result.error);
+          return;
+        }
+        if (options.length > 1) setReviewId(null);
+        toast(t("flow.refused", { reason: refusal.kind }), {
+          description: refusal.kind === "blocker" ? labels.blocker(refusal.blocker, option) : undefined,
+          variant: "warning",
+        });
         return;
       }
       onItem(result.item);
+      setOpen(null);
       toast(t("result", { result: result.result, windows: result.windowsReset }), {
         variant: RESULT_TOAST[result.result],
       });
@@ -66,56 +96,14 @@ export default function RedeemResetButton({
   }
 
   return (
-    <ConfirmDialog
-      title={t("confirmTitle", { retry: String(retry) })}
-      description={retry ? t("confirmRetry", { name: row.name }) : t("confirmDescription", { kind: row.kind, name: row.name })}
-      confirmLabel={t("confirm", { retry: String(retry) })}
-      cancelLabel={tCommon("cancel")}
-      status="warning"
-      focusCancel
-      pending={pending}
-      onConfirm={redeem}
-      body={
-        choices.length ? (
-          <RadioGroup value={choice} onChange={setPicked} className="gap-2">
-            <Label>{t("choose")}</Label>
-            <Radio value={AUTOMATIC}>
-              <Radio.Control>
-                <Radio.Indicator />
-              </Radio.Control>
-              <Radio.Content>
-                <Label>{t("chooseAuto")}</Label>
-                <Description>{t("chooseAutoHint", { kind: row.kind })}</Description>
-              </Radio.Content>
-            </Radio>
-            {choices.map((item) => (
-              <Radio key={item.id} value={item.id}>
-                <Radio.Control>
-                  <Radio.Indicator />
-                </Radio.Control>
-                <Radio.Content>
-                  <Label className="break-words">
-                    {item.kind === "credit"
-                      ? t("chooseCredit", { titled: String(item.title !== ""), title: item.title })
-                      : t("grant", { named: String(item.title !== ""), label: item.title })}
-                  </Label>
-                  <Description>
-                    {t("chooseDetail", {
-                      counted: String(item.kind === "grant"),
-                      left: item.left,
-                      total: item.total,
-                      dated: String(item.expiresAt !== null),
-                      date: item.expiresAt ? reset.date(Date.parse(item.expiresAt), true) : "",
-                    })}
-                  </Description>
-                </Radio.Content>
-              </Radio>
-            ))}
-          </RadioGroup>
-        ) : undefined
-      }
-    >
-      <Button size="sm" variant="secondary" aria-label={t("useLabel", { retry: String(retry), name: row.name })} isPending={pending}>
+    <>
+      <Button
+        size="sm"
+        variant="secondary"
+        aria-label={t("useLabel", { retry: String(retry), name: row.name })}
+        isPending={pending}
+        onPress={show}
+      >
         {({ isPending }) => (
           <>
             {isPending ? <Spinner color="current" size="sm" /> : <TimerReset size={14} aria-hidden />}
@@ -123,6 +111,33 @@ export default function RedeemResetButton({
           </>
         )}
       </Button>
-    </ConfirmDialog>
+      <ConfirmDialog
+        state={confirmState}
+        title={t("confirmTitle", { retry: String(retry) })}
+        description={retry ? t("confirmRetry", { name: row.name }) : t("confirmDescription", { kind: row.kind, name: row.name })}
+        confirmLabel={t("confirm", { retry: String(retry) })}
+        cancelLabel={tCommon("cancel")}
+        status="warning"
+        focusCancel
+        pending={pending}
+        onConfirm={() => redeem(null)}
+      />
+      <ResetDialog
+        isOpen={open === "options" && dialog === "options"}
+        name={row.name}
+        credits={credits}
+        options={options}
+        selected={selected}
+        reviewing={reviewing}
+        stale={reviewId !== null && reviewing === null}
+        timeZone={timeZone}
+        pending={pending}
+        onSelect={setPicked}
+        onContinue={() => setReviewId(selected?.id ?? null)}
+        onBack={() => setReviewId(null)}
+        onConfirm={redeem}
+        onClose={() => setOpen(null)}
+      />
+    </>
   );
 }

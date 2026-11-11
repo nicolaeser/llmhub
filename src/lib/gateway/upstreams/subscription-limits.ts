@@ -4,6 +4,7 @@ import { antigravityLimits } from "@/lib/gateway/upstreams/antigravity";
 import { fetchAvailableModels } from "@/lib/gateway/upstreams/antigravity-api";
 import { reportsLimits } from "@/lib/gateway/upstreams/provider-kinds";
 import { CLAUDE_OAUTH_BETAS } from "@/lib/gateway/upstreams/claude";
+import { claudeExtraUsage, claudeWindows } from "@/lib/gateway/upstreams/claude-usage";
 import { CODEX_USAGE_URL } from "@/lib/gateway/upstreams/codex";
 import { devinLimits } from "@/lib/gateway/upstreams/devin-account";
 import { devinStatusReply, readDevinStatus } from "@/lib/gateway/upstreams/devin-api";
@@ -40,18 +41,6 @@ import type {
 } from "@/types/providers";
 
 const CLAUDE_USAGE_URL = "https://api.anthropic.com/api/oauth/usage";
-const CLAUDE_FIVE_HOUR_SECONDS = 5 * 3_600;
-const CLAUDE_WEEK_SECONDS = 7 * 86_400;
-const CLAUDE_WINDOWS = [
-  { key: "five_hour", scope: "", windowSeconds: CLAUDE_FIVE_HOUR_SECONDS },
-  { key: "seven_day", scope: "", windowSeconds: CLAUDE_WEEK_SECONDS },
-  { key: "seven_day_sonnet", scope: "Sonnet", windowSeconds: CLAUDE_WEEK_SECONDS },
-  { key: "seven_day_opus", scope: "Opus", windowSeconds: CLAUDE_WEEK_SECONDS },
-  { key: "seven_day_oauth_apps", scope: "OAuth apps", windowSeconds: CLAUDE_WEEK_SECONDS },
-  { key: "seven_day_cowork", scope: "Cowork", windowSeconds: CLAUDE_WEEK_SECONDS },
-  { key: "iguana_necktie", scope: "Fable", windowSeconds: CLAUDE_WEEK_SECONDS },
-] as const;
-const CLAUDE_CREDIT_POOL_SCOPE = "Cloud sessions";
 const LIMITS_TIMEOUT_MS = 15_000;
 const TOO_MANY_REQUESTS = 429;
 
@@ -115,55 +104,10 @@ export function codexLimits(payload: JsonMap, now = Date.now()): SubscriptionLim
   };
 }
 
-function claudeWindow(scope: string, windowSeconds: number, usage: JsonMap): LimitWindow {
-  const usedPercent = Math.min(100, Math.max(0, asNumber(usage.utilization ?? usage.percent, 0)));
-  const resetsAt = Date.parse(asString(usage.resets_at));
-  return {
-    scope,
-    usedPercent,
-    windowSeconds,
-    resetsAt: Number.isFinite(resetsAt) ? new Date(resetsAt).toISOString() : null,
-    limitReached: usedPercent >= 100,
-  };
-}
-
-function claudeExtraUsage(raw: unknown): SubscriptionLimits["extraUsage"] {
-  const extra = asRecord(raw);
-  if (!extra || extra.is_enabled !== true) return null;
-  const utilization = extra.utilization;
-  return {
-    usedCents: Math.max(0, asNumber(extra.used_credits, 0)),
-    limitCents: Math.max(0, asNumber(extra.monthly_limit, 0)),
-    percent: typeof utilization === "number" ? Math.min(100, Math.max(0, utilization)) : null,
-  };
-}
-
-function scopeKey(scope: string): string {
-  return scope.toLowerCase().replace(/[^a-z0-9]/g, "");
-}
-
 export function claudeLimits(payload: JsonMap, plan: string, now = Date.now()): SubscriptionLimits {
-  const windows: LimitWindow[] = [];
-  for (const spec of CLAUDE_WINDOWS) {
-    const usage = asRecord(payload[spec.key]);
-    if (!usage) continue;
-    const creditPool = spec.key === "iguana_necktie" && usage.limit_dollars !== undefined;
-    windows.push(
-      claudeWindow(creditPool ? CLAUDE_CREDIT_POOL_SCOPE : spec.scope, creditPool ? 0 : spec.windowSeconds, usage),
-    );
-  }
-  const known = new Set(windows.map((window) => scopeKey(window.scope)));
-  for (const raw of Array.isArray(payload.limits) ? payload.limits : []) {
-    const limit = asRecord(raw);
-    const model = asString(asRecord(asRecord(limit?.scope)?.model)?.display_name);
-    if (!limit || limit.kind !== "weekly_scoped" || !model || known.has(scopeKey(model))) continue;
-    if (typeof limit.percent !== "number") continue;
-    known.add(scopeKey(model));
-    windows.push(claudeWindow(model, CLAUDE_WEEK_SECONDS, limit));
-  }
   return {
     plan,
-    windows,
+    windows: claudeWindows(payload),
     credits: null,
     resetCredits: null,
     extraUsage: claudeExtraUsage(payload.extra_usage),

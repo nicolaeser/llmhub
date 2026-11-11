@@ -1,13 +1,15 @@
 "use client";
 
-import { Alert, Chip } from "@heroui/react";
+import { Alert } from "@heroui/react";
 import { TimerReset } from "lucide-react";
 import { useFormatter, useTranslations } from "next-intl";
 import { useClock } from "@/lib/hooks/use-clock";
 import type { LimitSnapshot, ProviderView } from "@/types/providers";
 import type { ResetCredits } from "@/types/resets";
 import RedeemResetButton from "./redeem-reset-button";
-import { canRedeemReset } from "./reset-view";
+import { ResetOptionChips, ResetOptionNotes } from "./reset-option-card";
+import { canRedeemReset, resetOptions } from "./reset-view";
+import { useResetLabels } from "./use-reset-labels";
 
 export default function BankedResets({
   row,
@@ -27,8 +29,9 @@ export default function BankedResets({
   const format = useFormatter();
   const now = useClock(60_000);
   const retry = credits.pending?.retryable === true;
+  const labels = useResetLabels(timeZone, credits);
   const grants = credits.grants ?? [];
-  const listed = credits.credits ?? [];
+  const options = credits.pending ? [] : resetOptions(credits);
   const cooling = credits.cooldownUntil ? new Date(credits.cooldownUntil) : null;
   const waitingForLimit =
     credits.eligible === true &&
@@ -66,43 +69,24 @@ export default function BankedResets({
           {t("expires", { when: format.relativeTime(new Date(credits.expiresAt), now), date: stamp(credits.expiresAt) })}
         </p>
       ) : null}
-      {listed.length > 1 ? (
-        <ul className="space-y-1 text-xs text-muted">
-          {listed.map((credit) => (
-            <li key={credit.id} className="break-words">
-              {t("credit", {
-                titled: String(credit.title !== ""),
-                title: credit.title,
-                dated: String(credit.expiresAt !== null),
-                date: credit.expiresAt ? stamp(credit.expiresAt) : "",
-              })}
-            </li>
-          ))}
-        </ul>
-      ) : null}
-      {grants.length > 0 ? (
-        <ul className="space-y-2">
-          {grants.map((grant) => (
-            <li key={grant.id} className="min-w-0 space-y-1">
+      {options.length > 0 ? (
+        <ul aria-label={t("listTitle")} className="space-y-3">
+          {options.map((option) => (
+            <li key={option.id} className="min-w-0 space-y-1">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="min-w-0 break-words text-sm">
-                  {t("grant", { named: String(grant.label !== ""), label: grant.label })}
-                </span>
-                {grant.usable ? (
-                  <Chip size="sm" variant="soft" color="success" className="whitespace-nowrap">
-                    {t("usable")}
-                  </Chip>
-                ) : null}
+                <span className="min-w-0 break-words text-sm text-foreground">{labels.option(option)}</span>
+                <ResetOptionChips option={option} />
               </div>
-              <p className="text-xs text-muted">
-                {t("grantLeft", { left: grant.resetsLeft, total: grant.resetsTotal })}
-                {grant.clears.length > 0
-                  ? ` · ${t("clears", {
-                      windows: format.list(grant.clears.map((window) => t("window", { window }))),
-                    })}`
-                  : ""}
-                {grant.endsAt ? ` · ${t("grantEnds", { date: stamp(grant.endsAt) })}` : ""}
-              </p>
+              <div className="space-y-1 text-xs text-muted">
+                {option.refills.length > 0 || !option.givesBack ? <p>{labels.effect(option)}</p> : null}
+                {option.givesBack ? (
+                  <p>{labels.givesBack({ scope: option.givesBack.scope, percent: option.givesBack.percentOfWeekly })}</p>
+                ) : null}
+                <p>
+                  {labels.left(option)} · {labels.expiry(option)}
+                </p>
+              </div>
+              <ResetOptionNotes option={option} labels={labels} />
             </li>
           ))}
         </ul>
@@ -110,12 +94,12 @@ export default function BankedResets({
       {credits.eligible === false ? (
         <p className="text-xs text-muted">{t("ineligible", { reason: credits.ineligibleReason ?? "unknown" })}</p>
       ) : null}
-      {cooling ? (
+      {cooling && options.length === 0 ? (
         <p className="text-xs text-warning">
           {t("cooldown", { when: format.relativeTime(cooling, now), date: stamp(credits.cooldownUntil!) })}
         </p>
       ) : null}
-      {waitingForLimit ? <p className="text-xs text-muted">{t("needsLimit")}</p> : null}
+      {waitingForLimit && options.length === 0 ? <p className="text-xs text-muted">{t("needsLimit")}</p> : null}
       {credits.pending ? (
         <Alert status="warning">
           <Alert.Indicator />

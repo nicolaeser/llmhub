@@ -9,18 +9,12 @@ import type { AccountRow } from "./account-rows";
 import KeyUsageBar, { SegmentDot } from "./key-usage-bar";
 import { useKeyName, useSegmentName, useUsagePercent } from "./key-usage-labels";
 import { accountUsage, barSegments, keyRanks, keyShade, type KeyRow, type WindowView } from "./key-usage-view";
-import { useLimitLabel } from "./limit-meter";
+import { LimitStateIcon, useLimitLabel } from "./limit-meter";
+import { groupTone, TONE_STATE, TONE_TEXT } from "./limit-tone";
 import type { KeyUsageFeed } from "./use-key-usage";
 import { useResetTime } from "./use-reset-time";
 
 const FULL_PERCENT = 100;
-const WARN_PERCENT = 80;
-
-function usedTone(used: number): string {
-  if (used >= FULL_PERCENT) return "text-sm font-medium tabular-nums text-danger";
-  if (used >= WARN_PERCENT) return "text-sm font-medium tabular-nums text-warning";
-  return "text-sm font-medium tabular-nums text-foreground";
-}
 
 export default function AccountKeyUsage({
   row,
@@ -81,12 +75,20 @@ export default function AccountKeyUsage({
   const windowBlock = (window: WindowView) => {
     const { group } = window;
     const label = limitLabel(group);
+    const tone = groupTone(group);
     return (
       <div key={group.id} className="min-w-0 space-y-2">
         <div className="flex items-baseline justify-between gap-2">
           <span className="min-w-0 text-sm break-words text-foreground">{label}</span>
-          <span className={usedTone(group.usedPercent)}>
-            {tLimits("used", { used: group.usedPercent / FULL_PERCENT, uniform: String(group.uniform) })}
+          <span
+            className={`flex shrink-0 items-center gap-1 text-sm font-medium tabular-nums ${TONE_TEXT[tone] ?? "text-foreground"}`}
+          >
+            <LimitStateIcon state={TONE_STATE[tone]} />
+            {tLimits("used", {
+              used: group.usedPercent / FULL_PERCENT,
+              uniform: String(group.uniform),
+              state: TONE_STATE[tone],
+            })}
           </span>
         </div>
         <KeyUsageBar

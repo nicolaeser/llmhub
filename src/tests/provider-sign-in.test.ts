@@ -856,6 +856,7 @@ test("Claude usage maps the five hour, weekly, and model weekly windows", async 
   assert.equal(limits.plan, "max_5x");
   assert.deepEqual(limits.windows, [
     {
+      key: "five_hour",
       scope: "",
       usedPercent: 100,
       windowSeconds: 18_000,
@@ -863,13 +864,14 @@ test("Claude usage maps the five hour, weekly, and model weekly windows", async 
       limitReached: true,
     },
     {
+      key: "seven_day",
       scope: "",
       usedPercent: 41.5,
       windowSeconds: 604_800,
       resetsAt: "2026-10-15T09:00:00.000Z",
       limitReached: false,
     },
-    { scope: "Sonnet", usedPercent: 12, windowSeconds: 604_800, resetsAt: null, limitReached: false },
+    { key: "seven_day_sonnet", scope: "Sonnet", usedPercent: 12, windowSeconds: 604_800, resetsAt: null, limitReached: false },
   ]);
   assert.equal(limits.resetCredits, null);
   assert.deepEqual(claudeLimits({}, "", 0).windows, []);

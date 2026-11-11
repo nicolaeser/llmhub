@@ -1,6 +1,6 @@
 import "server-only";
 import prisma from "@/lib/db/prisma";
-import { isPrismaCode } from "@/lib/auth/errors";
+import { acquireLease, releaseLease } from "@/lib/jobs/lease";
 import { asRecord, asNumber, asString } from "@/lib/gateway/core";
 import { jevFingerprint } from "@/lib/gateway/catalog/jev";
 import type { CatalogState, JevSettings } from "@/types/model-catalog";
@@ -54,24 +54,11 @@ export async function saveState(state: CatalogState): Promise<void> {
 }
 
 export async function acquireLock(): Promise<string | null> {
-  const value = String(Date.now() + LOCK_TTL_MS);
-  const claim = async () => {
-    try {
-      await prisma.setting.create({ data: { key: CATALOG_LOCK, value } });
-      return true;
-    } catch (error) {
-      if (isPrismaCode(error, "P2002")) return false;
-      throw error;
-    }
-  };
-  if (await claim()) return value;
-  const expired = await prisma.setting.deleteMany({ where: { key: CATALOG_LOCK, value: { lt: String(Date.now()) } } });
-  if (expired.count && (await claim())) return value;
-  return null;
+  return acquireLease(CATALOG_LOCK, LOCK_TTL_MS);
 }
 
 export async function releaseLock(value: string): Promise<void> {
-  await prisma.setting.deleteMany({ where: { key: CATALOG_LOCK, value } });
+  await releaseLease(CATALOG_LOCK, value);
 }
 
 export function jevErrorOutdated(state: CatalogState | null, settings: JevSettings | undefined): boolean {

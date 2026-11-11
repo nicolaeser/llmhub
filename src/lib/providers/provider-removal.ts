@@ -44,24 +44,22 @@ export async function removeProviderConnection(id: string) {
     }
     const touched = [...new Set(routes.map((route) => route.groupAlias))];
     if (!touched.length) return { row, routes: 0, removedGroups: [], emptyGroups: [] };
-    const [emptied, others] = await Promise.all([
-      tx.modelGroup.findMany({
-        where: { alias: { in: touched }, deployments: { none: {} } },
-        select: {
-          alias: true,
-          enabled: true,
-          billingMode: true,
-          overflowGroup: true,
-          fallbackGroups: true,
-          autoRoutes: true,
-          _count: { select: { priceWindows: true } },
-        },
-      }),
-      tx.modelGroup.findMany({
-        where: { alias: { notIn: touched } },
-        select: { overflowGroup: true, fallbackGroups: true },
-      }),
-    ]);
+    const emptied = await tx.modelGroup.findMany({
+      where: { alias: { in: touched }, deployments: { none: {} } },
+      select: {
+        alias: true,
+        enabled: true,
+        billingMode: true,
+        overflowGroup: true,
+        fallbackGroups: true,
+        autoRoutes: true,
+        _count: { select: { priceWindows: true } },
+      },
+    });
+    const others = await tx.modelGroup.findMany({
+      where: { alias: { notIn: touched } },
+      select: { overflowGroup: true, fallbackGroups: true },
+    });
     const referenced = new Set(others.flatMap((group) => [group.overflowGroup, ...asStringArray(group.fallbackGroups)]));
     const removedGroups = catalogOwnedGroups(emptied, referenced);
     if (removedGroups.length) await tx.modelGroup.deleteMany({ where: { alias: { in: removedGroups } } });

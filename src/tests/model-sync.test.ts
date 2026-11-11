@@ -226,10 +226,10 @@ const fakePrisma = {
       const value = db.settings.get(where.key);
       return value === undefined ? null : { key: where.key, value };
     },
-    create: async ({ data }: { data: { key: string; value: string } }) => {
-      if (db.settings.has(data.key)) throw duplicate();
-      db.settings.set(data.key, data.value);
-      return data;
+    createMany: async ({ data }: { data: { key: string; value: string }[]; skipDuplicates: true }) => {
+      const fresh = data.filter((row) => !db.settings.has(row.key));
+      for (const row of fresh) db.settings.set(row.key, row.value);
+      return { count: fresh.length };
     },
     upsert: async ({ where, update }: { where: { key: string }; update: { value: string } }) => {
       db.settings.set(where.key, update.value);

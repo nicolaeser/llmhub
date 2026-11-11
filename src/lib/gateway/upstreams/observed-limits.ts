@@ -113,7 +113,7 @@ export function withObservedWindows(limits: SubscriptionLimits, observed: LimitW
     const index = isObservedWindow(window) ? pending.findIndex((item) => sameWindow(item, window)) : -1;
     if (index < 0) return window;
     const [next] = pending.splice(index, 1);
-    return withKnownReset(next!, window, at);
+    return withKnownReset(window.key === undefined ? next! : { ...next!, key: window.key }, window, at);
   });
   return { ...limits, windows: [...pending, ...windows], observedAt: new Date(at).toISOString() };
 }

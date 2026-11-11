@@ -12,16 +12,16 @@ import {
   redeemSucceeded,
   retryAfterMs,
   sanitizeLabel,
-  selectGrant,
-  chosenCredit,
-  soonestCredit,
 } from "@/lib/gateway/upstreams/reset-credits";
-import { canRedeemReset, resetChoices, resetWaitsFor, showsResetSummary } from "@/app/(app)/providers/_components/reset-view";
+import { pickResetOption } from "@/lib/gateway/upstreams/reset-options";
+import { canRedeemReset, resetWaitsFor, showsResetSummary } from "@/app/(app)/providers/_components/reset-view";
 import { autoResetPoliciesOf, autoResetPolicy, isResetKind } from "@/lib/gateway/routing/auto-reset-policy";
 import type { JsonMap } from "@/types/gateway";
 
 const NOW = Date.parse("2026-10-19T12:00:00Z");
 const ORG = "4f6c1f2e-8a3b-4c5d-9e7f-0123456789ab";
+const AT_SESSION_LIMIT: JsonMap = { five_hour: { utilization: 100, resets_at: "2026-10-19T15:00:00Z" } };
+const BELOW_LIMITS: JsonMap = { five_hour: { utilization: 20, resets_at: "2026-10-19T15:00:00Z" } };
 const realFetch = globalThis.fetch;
 
 afterEach(() => {
@@ -42,16 +42,44 @@ function grant(change: JsonMap = {}): JsonMap {
   };
 }
 
-function block(change: JsonMap = {}, grants: unknown[] = [grant()]): JsonMap {
-  return { cedar_ember: { eligible: true, at_limit: true, grants, next_grant_id: "launch_1", ...change } };
+function block(change: JsonMap = {}, grants: unknown[] = [grant()], usage: JsonMap = AT_SESSION_LIMIT): JsonMap {
+  return { ...usage, cedar_ember: { eligible: true, at_limit: true, grants, next_grant_id: "launch_1", ...change } };
+}
+
+function picked(payload: JsonMap, choice = ""): string | null {
+  const parsed = parseClaudeResets(payload);
+  if (!parsed) return null;
+  try {
+    return pickResetOption(claudeResetCredits(parsed, NOW).options ?? [], choice, choice ? "manual" : "auto").id;
+  } catch (error) {
+    return error instanceof Error ? error.message : null;
+  }
 }
 
 test("a Claude cedar_ember block parses grants with their documented defaults", () => {
   const parsed = parseClaudeResets(
-    block({ weekly_resets_at: "2026-10-24T08:00:00+02:00", cooldown_until: null }, [
-      grant({ percent_used: { five_hour: 100 } }),
-      { id: "spare", label: null, resets_total: 2, resets_left: 0 },
-    ]),
+    block(
+      {
+        weekly_resets_at: "2026-10-24T08:00:00+02:00",
+        cooldown_until: null,
+        exhausted: ["five_hour", "five_hour"],
+        event_props: { surface: "claude_code_cli", tier: "claude_max_20x", tenure_bucket: "365+", billing_path: "stripe", billing_period: "galactic" },
+      },
+      [
+        grant({ percent_used: { five_hour: 100 } }),
+        { id: "spare", label: null, resets_total: 2, resets_left: 0 },
+        grant({
+          id: "fable_1",
+          clears: ["seven_day_overage_included"],
+          blocking: ["seven_day"],
+          type: "weekly",
+          gives_back_weekly: true,
+          unavailable_reason: "blocked_seven_day",
+          usable_now: false,
+        }),
+        grant({ id: "odd_1", type: "galactic", unavailable_reason: "brand_new_reason", gives_back_weekly: null }),
+      ],
+    ),
   );
   assert.ok(parsed);
   assert.equal(parsed.eligible, true);
@@ -72,7 +100,36 @@ test("a Claude cedar_ember block parses grants with their documented defaults", 
     usableNow: true,
     useRequiresLimit: true,
     percentUsed: { five_hour: 100 },
+    blocking: [],
+    type: null,
+    givesBackWeekly: false,
+    unavailableReason: null,
   });
+  assert.deepEqual(parsed.exhausted, ["five_hour"]);
+  assert.deepEqual(parsed.account, {
+    surface: "claude_code_cli",
+    tier: "claude_max_20x",
+    tenureBucket: "365+",
+    billingPath: "stripe",
+    billingPeriod: "unknown",
+    extraUsageState: "unknown",
+  });
+  assert.deepEqual(
+    parsed.windows.map((window) => [window.key, window.usedPercent]),
+    [["five_hour", 100]],
+  );
+  const [, , fable, odd] = parsed.grants;
+  assert.deepEqual(
+    [fable?.blocking, fable?.type, fable?.givesBackWeekly, fable?.unavailableReason],
+    [["seven_day"], "weekly", true, "blocked_seven_day"],
+  );
+  assert.deepEqual([odd?.type, odd?.givesBackWeekly, odd?.unavailableReason], [null, false, "unavailable"]);
+  const bare = parseClaudeResets({ cedar_ember: { eligible: true } });
+  assert.deepEqual(
+    [bare?.exhausted, bare?.account, bare?.windows, bare?.grants, bare?.atLimit],
+    [[], null, [], [], false],
+  );
+  assert.equal(parseClaudeResets(block({ event_props: "broken" }))?.account, null);
   assert.deepEqual(
     { usableNow: parsed.grants[1]!.usableNow, useRequiresLimit: parsed.grants[1]!.useRequiresLimit, label: parsed.grants[1]!.label },
     { usableNow: false, useRequiresLimit: true, label: "" },
@@ -88,6 +145,10 @@ test("one malformed grant, a duplicate id, or a bad timestamp rejects the whole 
   assert.equal(parseClaudeResets(block({}, [grant({ resets_left: 1.5 })])), null);
   assert.equal(parseClaudeResets(block({}, [grant({ clears: ["five hour"] })])), null);
   assert.equal(parseClaudeResets(block({}, [grant({ paused: "no" })])), null);
+  assert.equal(parseClaudeResets(block({}, [grant({ gives_back_weekly: "yes" })])), null);
+  assert.equal(parseClaudeResets(block({}, [grant({ blocking: ["seven day"] })])), null);
+  assert.equal(parseClaudeResets(block({}, [grant({ blocking: "seven_day" })])), null);
+  assert.equal(parseClaudeResets(block({ exhausted: [7] })), null);
   assert.equal(parseClaudeResets(block({}, [grant({ percent_used: { five_hour: 140 } })])), null);
   assert.equal(parseClaudeResets(block({ cooldown_until: "soon" })), null);
   assert.equal(parseClaudeResets(block({ next_grant_id: "NOPE!" })), null);
@@ -107,40 +168,48 @@ test("an unknown ineligible reason becomes unknown and keeps the block", () => {
   const parsed = parseClaudeResets({ cedar_ember: { eligible: false, ineligible_reason: "brand_new_reason" } });
   assert.equal(parsed?.ineligibleReason, "unknown");
   assert.equal(parseClaudeResets({ cedar_ember: { eligible: false, ineligible_reason: "tier" } })?.ineligibleReason, "tier");
-  assert.equal(selectGrant(parsed, NOW), null);
+  assert.equal(claudeResetCredits(parsed!, NOW).applicable, 0);
+  assert.equal(picked({ cedar_ember: { eligible: false, ineligible_reason: "tier", grants: [grant()] } }, "launch_1"), "RESET_INELIGIBLE");
 });
 
-test("grant selection prefers next_grant_id, then the lowest usable id", () => {
+test("the recommended grant follows next_grant_id, then the soonest expiry, then the lowest id", () => {
   const grants = [grant({ id: "b_grant" }), grant({ id: "a_grant" }), grant({ id: "c_grant" })];
-  assert.equal(selectGrant(parseClaudeResets(block({ next_grant_id: "c_grant" }, grants)), NOW)?.id, "c_grant");
-  assert.equal(selectGrant(parseClaudeResets(block({ next_grant_id: null }, grants)), NOW)?.id, "a_grant");
-  assert.equal(selectGrant(parseClaudeResets(block({ next_grant_id: "gone" }, grants)), NOW)?.id, "a_grant");
-  assert.equal(selectGrant(parseClaudeResets(block({ next_grant_id: "c_grant" }, grants)), NOW, "b_grant")?.id, "b_grant");
-  assert.equal(selectGrant(parseClaudeResets(block({}, grants)), NOW, "missing"), null);
-  assert.equal(selectGrant(parseClaudeResets(block({}, [grant({ id: "spent", resets_left: 0 }), grant({ id: "a_grant" })])), NOW, "spent"), null);
+  assert.equal(picked(block({ next_grant_id: "c_grant" }, grants)), "c_grant");
+  assert.equal(picked(block({ next_grant_id: null }, grants)), "a_grant");
+  assert.equal(picked(block({ next_grant_id: "gone" }, grants)), "a_grant");
+  assert.equal(picked(block({ next_grant_id: null }, [...grants, grant({ id: "z_grant", ends_at: "2026-10-20T00:00:00Z" })])), "z_grant");
+  assert.equal(picked(block({ next_grant_id: "c_grant" }, grants), "b_grant"), "b_grant");
+  assert.equal(picked(block({}, grants), "missing"), "RESET_NOT_AVAILABLE");
+  assert.equal(picked(block({}, [grant({ id: "spent", resets_left: 0 }), grant({ id: "a_grant" })]), "spent"), "RESET_EXHAUSTED");
 });
 
-test("grant selection skips cooldowns, unusable, paused, spent, and out-of-window grants", () => {
-  const select = (change: JsonMap, grants: unknown[] = [grant()]) => selectGrant(parseClaudeResets(block(change, grants)), NOW);
-  assert.equal(select({ cooldown_until: "2026-10-19T13:00:00Z" }), null);
-  assert.equal(select({ cooldown_until: "2026-10-19T11:00:00Z" })?.id, "launch_1");
-  assert.equal(select({ eligible: false }), null);
-  assert.equal(select({ at_limit: false }), null);
-  assert.equal(select({ at_limit: false }, [grant({ use_requires_limit: false })])?.id, "launch_1");
-  assert.equal(select({}, [grant({ usable_now: undefined })]), null);
-  assert.equal(select({}, [grant({ paused: true })]), null);
-  assert.equal(select({}, [grant({ resets_left: 0 })]), null);
-  assert.equal(select({}, [grant({ starts_at: "2026-10-20T00:00:00Z" })]), null);
-  assert.equal(select({}, [grant({ ends_at: "2026-10-19T11:59:59Z" })]), null);
+test("nothing is recommended during cooldowns or for unusable, paused, spent, and out-of-window grants", () => {
+  const select = (change: JsonMap, grants: unknown[] = [grant()], usage = AT_SESSION_LIMIT) => picked(block(change, grants, usage));
+  assert.equal(select({ cooldown_until: "2026-10-19T13:00:00Z" }), "RESET_NOT_AVAILABLE");
+  assert.equal(select({ cooldown_until: "2026-10-19T11:00:00Z" }), "launch_1");
+  assert.equal(select({ eligible: false }), "RESET_NOT_AVAILABLE");
+  assert.equal(select({ at_limit: false }, [grant()], BELOW_LIMITS), "RESET_NOT_AVAILABLE");
+  assert.equal(select({ at_limit: false }), "RESET_NOT_AVAILABLE");
+  assert.equal(select({ at_limit: false }, [grant({ use_requires_limit: false })], BELOW_LIMITS), "RESET_NOT_AVAILABLE");
+  assert.equal(picked(block({ at_limit: false }, [grant({ use_requires_limit: false })], BELOW_LIMITS), "launch_1"), "launch_1");
+  assert.equal(select({}, [grant({ usable_now: undefined })]), "RESET_NOT_AVAILABLE");
+  assert.equal(select({}, [grant({ paused: true })]), "RESET_NOT_AVAILABLE");
+  assert.equal(select({}, [grant({ resets_left: 0 })]), "RESET_NOT_AVAILABLE");
+  assert.equal(select({}, [grant({ starts_at: "2026-10-20T00:00:00Z" })]), "RESET_NOT_AVAILABLE");
+  assert.equal(select({}, [grant({ ends_at: "2026-10-19T11:59:59Z" })]), "RESET_NOT_AVAILABLE");
 });
 
 test("Claude reset credits summarize live grants for the console", () => {
   const parsed = parseClaudeResets(
-    block({ at_limit: false }, [
-      grant({ id: "a_grant", ends_at: "2026-10-25T00:00:00Z", resets_left: 2, resets_total: 3 }),
-      grant({ id: "b_grant", use_requires_limit: false }),
-      grant({ id: "old", ends_at: "2026-10-01T00:00:00Z" }),
-    ]),
+    block(
+      { at_limit: false },
+      [
+        grant({ id: "a_grant", ends_at: "2026-10-25T00:00:00Z", resets_left: 2, resets_total: 3 }),
+        grant({ id: "b_grant", use_requires_limit: false }),
+        grant({ id: "old", ends_at: "2026-10-01T00:00:00Z" }),
+      ],
+      BELOW_LIMITS,
+    ),
   )!;
   const credits = claudeResetCredits(parsed, NOW);
   assert.equal(credits.available, 3);
@@ -155,6 +224,16 @@ test("Claude reset credits summarize live grants for the console", () => {
   );
   assert.equal(credits.atLimit, false);
   assert.equal(credits.cooldownUntil, null);
+  assert.deepEqual(
+    credits.options?.map((item) => [item.id, item.family, item.blocker, item.left, item.total, item.expiresAt]),
+    [
+      ["a_grant", "full", "needs_limit", 2, 3, "2026-10-25T00:00:00.000Z"],
+      ["b_grant", "full", null, 1, 1, "2026-10-22T00:00:00.000Z"],
+    ],
+  );
+  assert.deepEqual(credits.limits, [
+    { key: "five_hour", family: "five_hour", scope: "", usedPercent: 20, limitReached: false, resetsAt: "2026-10-19T15:00:00.000Z" },
+  ]);
   const cooling = claudeResetCredits(parseClaudeResets(block({ cooldown_until: "2026-10-19T12:30:00Z" }))!, NOW);
   assert.equal(cooling.applicable, 0);
   assert.equal(cooling.cooldownUntil, "2026-10-19T12:30:00.000Z");
@@ -179,21 +258,36 @@ test("the Codex credit list keeps available credits and picks the soonest expiry
   assert.ok(list);
   assert.equal(list.availableCount, 4);
   assert.equal(list.totalEarnedCount, 6);
-  assert.equal(soonestCredit(list, NOW)?.id, "soon");
-  assert.equal(chosenCredit(list, NOW, "late")?.id, "late");
-  assert.equal(chosenCredit(list, NOW, "never")?.id, "never");
-  for (const id of ["spent", "expired", "other", "missing"]) assert.equal(chosenCredit(list, NOW, id), null, id);
-  const credits = codexResetCredits({ available: 3, applicable: 1 }, list, NOW);
-  assert.deepEqual(credits, {
-    available: 3,
-    applicable: 1,
-    expiresAt: "2026-10-20T00:00:00.000Z",
-    credits: [
-      { id: "soon", title: "Launch", expiresAt: "2026-10-20T00:00:00.000Z" },
-      { id: "late", title: "Bonus", expiresAt: "2026-11-30T00:00:00.000Z" },
-      { id: "never", title: "", expiresAt: null },
+  const reached = [{ scope: "", usedPercent: 100, windowSeconds: 18_000, resetsAt: null, limitReached: true }];
+  const credits = codexResetCredits({ available: 3, applicable: 1 }, list, NOW, reached);
+  const offered = credits?.options ?? [];
+  assert.equal(pickResetOption(offered, "", "auto").id, "soon");
+  assert.equal(pickResetOption(offered, "late", "manual").id, "late");
+  assert.equal(pickResetOption(offered, "never", "manual").id, "never");
+  for (const id of ["spent", "expired", "other", "missing"]) {
+    assert.throws(() => pickResetOption(offered, id, "manual"), /RESET_NOT_AVAILABLE/, id);
+  }
+  assert.deepEqual(
+    { available: credits?.available, applicable: credits?.applicable, expiresAt: credits?.expiresAt, credits: credits?.credits },
+    {
+      available: 3,
+      applicable: 1,
+      expiresAt: "2026-10-20T00:00:00.000Z",
+      credits: [
+        { id: "soon", title: "Launch", expiresAt: "2026-10-20T00:00:00.000Z" },
+        { id: "late", title: "Bonus", expiresAt: "2026-11-30T00:00:00.000Z" },
+        { id: "never", title: "", expiresAt: null },
+      ],
+    },
+  );
+  assert.deepEqual(
+    offered.map((item) => [item.id, item.recommended]),
+    [
+      ["soon", true],
+      ["late", false],
+      ["never", false],
     ],
-  });
+  );
   const free = parseCodexCredits({
     credits: [],
     available_count: 0,
@@ -209,6 +303,8 @@ test("the Codex credit list keeps available credits and picks the soonest expiry
     applicable: 0,
     expiresAt: null,
     credits: [],
+    options: [],
+    limits: [],
   });
 });
 
@@ -329,33 +425,4 @@ test("the account list shows banked resets, offers the button only when one can 
   assert.equal(resetWaitsFor({ ...claude, cooldownUntil: "2026-11-10T11:00:00Z" }, now), "limit");
   assert.equal(resetWaitsFor({ ...claude, eligible: false, ineligibleReason: "tier" }, now), "ineligible");
   assert.equal(resetWaitsFor({ available: 1, applicable: 0, canRedeem: false }, now), null);
-});
-
-test("a reset can be picked only when more than one is usable, and never while a request is unresolved", () => {
-  const credit = (id: string) => ({ id, title: id === "a" ? "Launch" : "", expiresAt: id === "a" ? "2026-11-20T00:00:00Z" : null });
-  assert.deepEqual(resetChoices({ available: 1, applicable: 1, credits: [credit("a")] }), []);
-  assert.deepEqual(
-    resetChoices({ available: 2, applicable: 2, credits: [credit("a"), credit("b")] }).map((item) => [item.id, item.kind, item.title, item.expiresAt]),
-    [
-      ["a", "credit", "Launch", "2026-11-20T00:00:00Z"],
-      ["b", "credit", "", null],
-    ],
-  );
-  const grant = (id: string, usable: boolean) => ({ id, label: id, resetsLeft: 2, resetsTotal: 3, endsAt: null, clears: [], usable });
-  assert.deepEqual(
-    resetChoices({ available: 6, applicable: 4, grants: [grant("g1", true), grant("g2", false), grant("g3", true)] }).map((item) => [item.id, item.left, item.total]),
-    [
-      ["g1", 2, 3],
-      ["g3", 2, 3],
-    ],
-  );
-  assert.deepEqual(
-    resetChoices({
-      available: 2,
-      applicable: 2,
-      credits: [credit("a"), credit("b")],
-      pending: { startedAt: "", retryUntil: "", retryable: true },
-    }),
-    [],
-  );
 });

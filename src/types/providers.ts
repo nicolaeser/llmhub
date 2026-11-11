@@ -7,7 +7,7 @@ import type {
 } from "@/schemas/providers";
 import type { ActionFail } from "@/types/actions";
 import type { NewModelMode } from "@/types/model-catalog";
-import type { AutoResetPolicies, ResetCredits } from "@/types/resets";
+import type { AutoResetPolicies, ResetCredits, StoredResetView } from "@/types/resets";
 
 export type ProviderRecord = {
   id: string;
@@ -206,12 +206,15 @@ export type SignInStart = {
 };
 
 export type LimitWindow = {
+  key?: string;
   scope: string;
   label?: string;
   usedPercent: number;
   windowSeconds: number;
   resetsAt: string | null;
   limitReached: boolean;
+  usedPercentOfWeekly?: number;
+  allowancePercentOfWeekly?: number;
 };
 
 export type AntigravityFamily = "gemini_pro" | "gemini_flash" | "gemini_image" | "claude" | "gpt_oss" | "other";
@@ -320,7 +323,7 @@ export type LimitPollAccount = LimitAccount & { enabled: boolean; loginVersion: 
 export type StoredLimitSnapshot = {
   providerId: string;
   limits: SubscriptionLimits | null;
-  resets: ResetCredits | null;
+  resets: StoredResetView | null;
   resetsAt: number | null;
   error: string;
   fetchedAt: number | null;
