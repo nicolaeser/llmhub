@@ -94,13 +94,20 @@ expect_embedded_keeper() {
 
 expect_clean_stop() {
   docker stop --time 60 "${app}" >/dev/null
-  local code
+  local code logs
   code="$(docker inspect --format '{{.State.ExitCode}}' "${app}")"
-  if [ "${code}" != "0" ]; then
-    echo "the app stopped with exit code ${code}" >&2
+  if [ "${code}" != "143" ] && [ "${code}" != "0" ]; then
+    echo "the app stopped with exit code ${code} instead of draining" >&2
     return 1
   fi
-  echo "app stopped cleanly"
+  logs="$(docker logs "${app}" 2>&1)"
+  for event in start.stopping server.drained keeper.stopped; do
+    if ! grep -q "\"event\":\"${event}\"" <<<"${logs}"; then
+      echo "the app stopped without ${event}" >&2
+      return 1
+    fi
+  done
+  echo "app drained and stopped with exit code ${code}"
 }
 
 expect_json() {
