@@ -143,15 +143,19 @@
     "option": {
       "name": "{family, select, five_hour {5-hour reset} weekly {Weekly reset} scoped {{scope} reset} full {Full reset} other {Other reset}}",
       "effect": "{family, select, five_hour {Refills the 5-hour limit.} weekly {Refills the weekly limit.} scoped {Refills the {scope} limit.} full {Refills the 5-hour limit and the weekly limit.} other {Refills another limit.}}",
+      "alsoRefills": "{family, select, five_hour {Also refills the 5-hour limit.} weekly {Also refills the weekly limit.} scoped {Also refills the {scope} limit.} other {Also refills another limit.}}",
+      "staysFull": "{family, select, five_hour {The 5-hour limit stays full.} weekly {The weekly limit stays full.} scoped {The {scope} limit stays full.} other {Another limit stays full.}}",
       "givesBack": "{known, select, true {Gives back what {scope} used this week ({percent, number, percent} of the weekly limit).} other {Gives back what {scope} used this week.}}",
       "left": "{left, number} of {total, plural, one {# reset} other {# resets}} left",
       "expiry": "{dated, select, true {expires {date}} other {no expiry}}",
+      "pick": "Use",
+      "use": "{family, select, five_hour {Use 5-hour reset} weekly {Use weekly reset} scoped {Use {scope} reset} full {Use full reset} other {Use other reset}}",
       "upstream": "Provider's name: {label}",
       "recommended": "Recommended",
       "helpsNow": "Helps now",
       "blocked": "Not usable right now",
       "early": "Refills nothing that is full right now.",
-      "blocker": "{blocker, select, ineligible {This account cannot use resets right now.} cooldown {{timed, select, true {Resets are cooling down. The next one is possible {when} ({date}).} other {Resets are cooling down.}}} paused {The provider has paused this reset.} not_started {This reset is not active yet.} not_usable {The provider is not releasing this reset right now.} exhausted {This reset is used up.} needs_limit {Usable once a limit it refills is reached.} other_limit {A different limit is reached right now. This reset does not refill it.} nothing_to_give_back {{named, select, true {{scope} has used nothing this week.} other {Nothing was used this week.}} This reset would give nothing back.} pending {The last reset request is not confirmed yet.} other {This reset cannot be used right now.}}"
+      "blocker": "{blocker, select, ineligible {This account cannot use resets right now.} cooldown {{timed, select, true {Resets are cooling down. The next one is possible {when} ({date}).} other {Resets are cooling down.}}} paused {The provider has paused this reset.} not_started {This reset is not active yet.} not_usable {The provider is not releasing this reset right now.} exhausted {This reset is used up.} needs_limit {Usable once a limit it refills is reached.} other_limit {{limit, select, five_hour {The 5-hour limit is full.} weekly {The weekly limit is full.} scoped {The {limitScope} limit is full.} other {A different limit is reached right now.}} This reset does not refill it.} nothing_to_give_back {{named, select, true {{scope} has used nothing this week.} other {Nothing was used this week.}} This reset would give nothing back.} pending {The last reset request is not confirmed yet.} other {This reset cannot be used right now.}}"
     },
     "limit": {
       "name": "{family, select, five_hour {5-hour limit} weekly {Weekly limit} scoped {{scope} limit} other {Other limit}}",
@@ -196,7 +200,7 @@
       "scope": "Trigger",
       "scopeOption": "{scope, select, pool {When every account is at the threshold} account {When one account is at the threshold} other {{scope}}}",
       "scopeHint": "{scope, select, pool {Spends one reset only when no account of this provider has room left.} account {Each account spends its own reset as soon as it reaches the threshold.} other {}}",
-      "claudeNote": "Claude only accepts a reset once the account is at its limit, so a lower threshold waits until then.",
+      "claudeNote": "Claude only accepts a reset once the account is at its limit, so a lower threshold waits until then. The Fable limit counts too. LLM Hub uses the smallest reset that refills the full limits. When only Fable is full, that is a Fable reset.",
       "save": "Save automatic resets for {provider}",
       "saveShort": "Save",
       "saved": "Automatic resets for {provider} saved"

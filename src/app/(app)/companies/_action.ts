@@ -21,6 +21,8 @@ import {
   loadCompany,
   loadCompanyDirectory,
   locateNode,
+  pauseNode,
+  resumeNode,
   saveCompanyLabelKeys,
   saveMember,
   saveOrg,
@@ -28,7 +30,7 @@ import {
   saveTeam,
 } from "@/lib/tenancy/structure";
 import { deleteReport, saveReport, sendReportNow } from "@/lib/reports/manage";
-import type { StructurePayload, TenancyKind } from "@/types/structure";
+import type { PauseInput, StructurePayload, TenancyKind } from "@/types/structure";
 
 function companyView(payload: StructurePayload, orgId: string): StructurePayload {
   const view = companySlice(payload, orgId);
@@ -74,6 +76,14 @@ export async function saveMemberAction(input: Parameters<typeof saveMember>[0]) 
 
 export async function deleteNodeAction(input: { kind: Exclude<TenancyKind, "org">; id: string; orgId: string }) {
   return runAction(async () => companyView(await deleteNode(input), input.orgId));
+}
+
+export async function pauseNodeAction(input: PauseInput & { orgId: string }) {
+  return runAction(async () => companyView(await pauseNode(input), input.orgId));
+}
+
+export async function resumeNodeAction(input: { kind: TenancyKind; id: string; orgId: string }) {
+  return runAction(async () => companyView(await resumeNode(input), input.orgId));
 }
 
 export async function deleteCompanyAction(id: string) {

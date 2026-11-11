@@ -364,6 +364,40 @@ test("key principals resolve tenancy live and reject inactive owners", async () 
   await assert.rejects(authenticateBearer(token("unknown_key")), rejectsWith(401, "invalid_api_key", "invalid api key"));
 });
 
+test("key principals carry the longest pause of their person, project, department, and company", async () => {
+  const { authenticateBearer, keyPrincipal } = await import("@/lib/gateway/access/principal");
+  const { allowUnpaused } = await import("@/lib/gateway/access/gate");
+  const later = new Date(Date.now() + 3_600_000);
+  holder("member", "m1", { orgId: "org1", teamId: "team1", paused: false, pausedUntil: null });
+  holder("project", "p1", { orgId: "org1", teamId: null, paused: true, pausedUntil: null });
+  holder("team", "team1", { paused: true, pausedUntil: later });
+  holder("organization", "org1", { paused: false, pausedUntil: null });
+  holder("user", "owner", { orgId: "org1" });
+  keyRow("member_key", { memberId: "m1" });
+  keyRow("project_key", { projectId: "p1" });
+  keyRow("owner_key", { userId: "owner" });
+
+  const member = await authenticateBearer(token("member_key"));
+  assert.deepEqual(member.scopePause, { scope: "team", until: later.toISOString() });
+  assert.throws(() => allowUnpaused(member), rejectsWith(403, "key_paused", `this key's department is paused until ${later.toISOString()}`));
+  assert.deepEqual((await authenticateBearer(token("project_key"))).scopePause, { scope: "project", until: "" });
+  assert.equal((await authenticateBearer(token("owner_key"))).scopePause, undefined);
+
+  table("organization").get("org1")!.paused = true;
+  assert.deepEqual((await authenticateBearer(token("member_key"))).scopePause, { scope: "org", until: "" });
+  assert.deepEqual((await authenticateBearer(token("owner_key"))).scopePause, { scope: "org", until: "" });
+  assert.deepEqual((await keyPrincipal("member_key"))?.scopePause, { scope: "org", until: "" });
+
+  table("organization").get("org1")!.paused = false;
+  table("team").get("team1")!.pausedUntil = new Date(Date.now() - 1000);
+  table("project").get("p1")!.paused = false;
+  for (const id of ["member_key", "project_key", "owner_key"]) {
+    const principal = await authenticateBearer(token(id));
+    assert.equal(principal.scopePause, undefined, id);
+    assert.doesNotThrow(() => allowUnpaused(principal), id);
+  }
+});
+
 test("customer keys are never billed to the console user who created them", async () => {
   const { authenticateBearer } = await import("@/lib/gateway/access/principal");
   const { assertBudget, recordUsage } = await import("@/lib/gateway/billing/billing");

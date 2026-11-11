@@ -158,23 +158,66 @@ test("the upstream blocked-by-weekly signal on a gives-back grant means nothing 
 
 test("Fable usage above zero makes the Fable reset spendable next to the weekly reset", () => {
   const list = options(usage(100, 60, 30), [fableGrant(), weeklyGrant()], { next_grant_id: "fable_1" });
-  assert.deepEqual(summary(list), { fable_1: [null, true, true], weekly_1: [null, true, false] });
+  assert.deepEqual(summary(list), { fable_1: [null, true, false], weekly_1: [null, true, true] });
   assert.deepEqual(list[0]?.givesBack, { scope: "Fable", percentOfWeekly: 30 });
   assert.throws(() => pickResetOption(list, "", "manual"), /^Error: RESET_CHOICE_REQUIRED$/);
-  assert.equal(pickResetOption(list, "weekly_1", "manual").id, "weekly_1");
-  assert.equal(pickResetOption(list, "", "auto").id, "fable_1");
-  assert.throws(() => pickResetOption(list, "weekly_1", "auto"), /^Error: RESET_NOT_AVAILABLE$/);
-  const byExpiry = options(usage(100, 60, 30), [fableGrant(), weeklyGrant({ ends_at: "2026-11-20T00:00:00Z" })], {
-    next_grant_id: null,
-  });
-  assert.equal(byExpiry.find((item) => item.recommended)?.id, "weekly_1");
-  const byId = options(usage(100, 60, 30), [weeklyGrant(), fableGrant()], { next_grant_id: "gone" });
-  assert.equal(byId.find((item) => item.recommended)?.id, "fable_1");
+  assert.equal(pickResetOption(list, "fable_1", "manual").id, "fable_1");
+  assert.equal(pickResetOption(list, "", "auto").id, "weekly_1");
+  assert.throws(() => pickResetOption(list, "fable_1", "auto"), /^Error: RESET_NOT_AVAILABLE$/);
+  const fableOnlyGrant = options(usage(100, 60, 30), [fableGrant()]);
+  assert.deepEqual(summary(fableOnlyGrant), { fable_1: [null, true, true] });
+  const secondWeekly = weeklyGrant({ id: "weekly_2", ends_at: "2026-11-20T00:00:00Z" });
+  const byExpiry = options(usage(100, 60, 30), [fableGrant(), weeklyGrant(), secondWeekly], { next_grant_id: null });
+  assert.equal(byExpiry.find((item) => item.recommended)?.id, "weekly_2");
+  const byId = options(usage(100, 60, 30), [fableGrant(), weeklyGrant(), secondWeekly], { next_grant_id: "weekly_1" });
+  assert.equal(byId.find((item) => item.recommended)?.id, "weekly_1");
+  const gone = options(usage(100, 60, 30), [weeklyGrant(), fableGrant()], { next_grant_id: "gone" });
+  assert.equal(gone.find((item) => item.recommended)?.id, "weekly_1");
   const derived = options({ seven_day: { utilization: 100, resets_at: WEEK_RESET }, limits: [fableLimit(60)] }, [fableGrant()]);
   assert.deepEqual(derived[0]?.givesBack, { scope: "Fable", percentOfWeekly: null });
   assert.equal(derived[0]?.helpsNow, true);
   const fableOnly = options(usage(70, 100, 50), [fableGrant(), weeklyGrant()], { exhausted: ["seven_day_overage_included"] });
   assert.deepEqual(summary(fableOnly), { fable_1: [null, true, true], weekly_1: [null, true, false] });
+});
+
+test("the smallest reset that refills the full limits is recommended, whatever upstream suggests next", () => {
+  const exhausted = { exhausted: ["seven_day_overage_included"], next_grant_id: "full_1" };
+  const soonWeekly = weeklyGrant({ ends_at: "2026-11-20T00:00:00Z" });
+  const fableOnly = options(usage(70, 100, 50, 20), [soonWeekly, fableGrant(), fullGrant()], exhausted);
+  assert.deepEqual(summary(fableOnly), {
+    weekly_1: [null, true, false],
+    fable_1: [null, true, true],
+    full_1: [null, true, false],
+  });
+  assert.equal(pickResetOption(fableOnly, "", "auto").id, "fable_1");
+  assert.equal(pickResetOption(fableOnly, "full_1", "manual").id, "full_1");
+  const noFable = options(usage(70, 100, 50, 20), [fullGrant(), soonWeekly], exhausted);
+  assert.deepEqual(summary(noFable), { full_1: [null, true, false], weekly_1: [null, true, true] });
+  const weeklyFull = options(usage(100, 60, 30, 20), [fableGrant(), fullGrant(), weeklyGrant()], { next_grant_id: "fable_1" });
+  assert.deepEqual(summary(weeklyFull), {
+    fable_1: [null, true, false],
+    full_1: [null, true, false],
+    weekly_1: [null, true, true],
+  });
+  const fullOverFable = options(usage(100, 60, 30, 20), [fableGrant(), fullGrant()], { next_grant_id: "fable_1" });
+  assert.deepEqual(summary(fullOverFable), { fable_1: [null, true, false], full_1: [null, true, true] });
+  const sessionAndFable = options(usage(40, 100, 50, 100), [sessionGrant(), fableGrant(), fullGrant()], {
+    exhausted: ["five_hour", "seven_day_overage_included"],
+    next_grant_id: "session_1",
+  });
+  assert.deepEqual(summary(sessionAndFable), {
+    session_1: [null, true, false],
+    fable_1: ["other_limit", false, false],
+    full_1: [null, true, true],
+  });
+  const weeklyToo = options(usage(100, 100, 50, 20), [fableGrant(), weeklyGrant()], {
+    exhausted: ["seven_day", "seven_day_overage_included"],
+    next_grant_id: "weekly_1",
+  });
+  assert.deepEqual(summary(weeklyToo), { fable_1: [null, true, false], weekly_1: [null, true, true] });
+  const sessionFull = options(usage(40, 0, 0, 100), [sessionGrant(), fullGrant()], { next_grant_id: "full_1" });
+  assert.deepEqual(summary(sessionFull), { session_1: [null, true, true], full_1: [null, true, false] });
+  assert.equal(pickResetOption(sessionFull, "", "auto").id, "session_1");
 });
 
 test("a 5-hour reset is refused while the weekly limit it does not refill is full", () => {
@@ -314,10 +357,71 @@ test("no upstream codename reaches a scope or a label, and unknown windows stay 
     [
       ["five_hour", "five_hour", ""],
       ["pool_cloudsessions", "other", "Cloud sessions"],
-      ["seven_day_overage_included", "scoped", "Haiku 5"],
+      ["scoped_haiku5", "scoped", "Haiku 5"],
     ],
   );
   assert.deepEqual([pool.options![0]?.blocker, pool.options![0]?.helpsNow], [null, true]);
+});
+
+test("a Fable name variant is the Fable limit, and a lone other model limit is never taken for it", () => {
+  const variant = (percent: number) => ({ ...fableLimit(percent), scope: { model: { id: null, display_name: "Fable 5.2" } } });
+  const merged = claudeWindows({
+    iguana_necktie: { utilization: 100, resets_at: WEEK_RESET },
+    limits: [variant(100)],
+    weekly_scoped_shares: [{ limit_index: 0, used_percent_of_weekly: 30 }],
+  });
+  assert.deepEqual(
+    merged.map((window) => [window.key, window.scope, window.usedPercentOfWeekly]),
+    [["iguana_necktie", "Fable", 30]],
+  );
+  const renamed = options(
+    {
+      ...usage(70, 0, 0),
+      limits: [weeklyLimit(70), variant(100)],
+      weekly_scoped_shares: [{ limit_index: 1, used_percent_of_weekly: 50 }],
+    },
+    [fableGrant(), weeklyGrant()],
+  );
+  assert.deepEqual(summary(renamed), { fable_1: [null, true, true], weekly_1: [null, true, false] });
+  assert.deepEqual(renamed[0]?.givesBack, { scope: "Fable 5.2", percentOfWeekly: 50 });
+  const mythos = options(
+    {
+      seven_day: { utilization: 70, resets_at: WEEK_RESET },
+      limits: [{ kind: "weekly_scoped", percent: 100, resets_at: WEEK_RESET, scope: { model: { display_name: "Mythos" } } }],
+    },
+    [fableGrant({ percent_used: { seven_day_overage_included: 10 } })],
+  );
+  assert.deepEqual(
+    [mythos[0]?.blocker, mythos[0]?.helpsNow, mythos[0]?.recommended, mythos[0]?.givesBack?.scope, mythos[0]?.blockedBy?.scope],
+    ["other_limit", false, false, "Fable", "Mythos"],
+  );
+});
+
+test("a reset held back by another limit names that limit, and an unknown limit reason counts as one", () => {
+  const atSession = usage(40, 0, 0, 100);
+  const held = (change: JsonMap, payload = atSession) => {
+    const [item] = options(payload, [sessionGrant(change)]);
+    return [item?.blocker, item?.blockedBy?.family ?? null, item?.blockedBy?.scope ?? null];
+  };
+  assert.deepEqual(held({ unavailable_reason: "blocked_opus" }), ["other_limit", "scoped", "Opus"]);
+  assert.deepEqual(held({ unavailable_reason: "blocked_seven_day" }), ["other_limit", "weekly", ""]);
+  assert.deepEqual(held({ blocking: ["seven_day_overage_included"], usable_now: false }), ["other_limit", "scoped", "Fable"]);
+  assert.deepEqual(held({ blocking: ["seven_day_omelette", "seven_day_opus"] }), ["other_limit", "scoped", "Opus"]);
+  assert.deepEqual(held({ blocking: ["seven_day_omelette"] }), ["other_limit", "other", ""]);
+  assert.deepEqual(held({ unavailable_reason: "blocked_fable" }, usage(40, 100, 50, 100)), ["other_limit", "scoped", "Fable"]);
+  assert.deepEqual(held({ unavailable_reason: "blocked_other" }), ["other_limit", null, null]);
+  assert.deepEqual(held({}, usage(100, 0, 0, 100)), ["other_limit", "weekly", ""]);
+  assert.deepEqual(held({ unavailable_reason: "something_new" }), ["not_usable", null, null]);
+  const parsed = parseClaudeResets({
+    cedar_ember: {
+      eligible: true,
+      grants: [sessionGrant({ unavailable_reason: "blocked_fable" }), fableGrant({ unavailable_reason: "brand_new" })],
+    },
+  });
+  assert.deepEqual(
+    parsed?.grants.map((item) => item.unavailableReason),
+    ["blocked_other", "unavailable"],
+  );
 });
 
 test("a window whose reset has passed no longer counts as reached, whatever the grant block still lists", () => {

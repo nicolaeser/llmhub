@@ -8,8 +8,8 @@ import { requirePermission } from "@/lib/auth/guards";
 import { hasPerm, PERMISSIONS } from "@/lib/auth/permissions";
 import { companyOf, inCompany, keyVisibleTo, setupLinks, spendScope } from "@/lib/auth/scope";
 import { managesMcpRules } from "@/lib/mcp/scope";
-import { keyReferences, listKeysWithLastUse, toKeyView } from "@/lib/keys/view";
-import { pauseActive, pauseEnd } from "@/lib/keys/pause";
+import { keyHolds, keyReferences, listKeysWithLastUse, toKeyView } from "@/lib/keys/view";
+import { pauseEnd, pauseSnapshot } from "@/lib/keys/pause";
 import { readsTemplates } from "@/lib/models/templates";
 import { alertKeyBlocked } from "@/lib/alerts/notify";
 import { writeAudit } from "@/lib/audit";
@@ -168,11 +168,6 @@ export async function updateKey(raw: unknown) {
     void alertKeyBlocked(row, session.user.username || session.user.email);
   }
   return { key: toKeyView(row) };
-}
-
-function pauseSnapshot(row: { paused: boolean; pausedUntil: Date | null }) {
-  const paused = pauseActive(row.paused, row.pausedUntil, new Date());
-  return { paused, pausedUntil: paused ? (row.pausedUntil?.toISOString() ?? null) : null };
 }
 
 export async function pauseKey(raw: unknown) {
@@ -356,16 +351,18 @@ export async function loadKeysPage() {
   const inScope = company ? { orgId: company } : {};
   const { keys, lastUsed } = await listKeysWithLastUse(session);
   const refs = keyReferences(keys, session.user.id);
-  const [places, users, choices, providerCount, overview] = await Promise.all([
+  const [places, users, choices, providerCount, overview, held] = await Promise.all([
     keyPlaces(session, refs),
     prisma.user.findMany({ where: { ...inScope, id: { in: refs.users } }, select: { id: true, username: true } }),
     keyOptions(session),
     prisma.providerConnection.count(),
     hasPerm(session.permissions, PERMISSIONS.SPEND_READ) ? usageTotals(7, spendScope(session)) : null,
+    keyHolds(keys),
   ]);
   return {
     keys,
     lastUsed,
+    held,
     companyId: company ?? "",
     ...places,
     owners: Object.fromEntries(users.map((user) => [user.id, user.username])),
@@ -406,7 +403,7 @@ export async function loadKeyDetailPage(id: string): Promise<KeyDetailPage> {
   const canSeeUsage = hasPerm(session.permissions, PERMISSIONS.SPEND_READ);
   const canBudget = hasPerm(session.permissions, PERMISSIONS.BUDGETS_MANAGE);
   const refs = keyReferences([key], session.user.id);
-  const [places, user, choices, activity, budget] = await Promise.all([
+  const [places, user, choices, activity, budget, held] = await Promise.all([
     keyPlaces(session, refs),
     key.user_id
       ? prisma.user.findFirst({
@@ -417,6 +414,7 @@ export async function loadKeyDetailPage(id: string): Promise<KeyDetailPage> {
     keyOptions(session),
     canSeeUsage ? keyActivity(key.token_id, spendScope(session)) : null,
     canBudget ? loadBudget({ kind: "key", id: key.token_id }) : null,
+    keyHolds([key]),
   ]);
   const kind = key.member_id ? "member" : key.project_id ? "project" : "internal";
   const target =
@@ -427,6 +425,7 @@ export async function loadKeyDetailPage(id: string): Promise<KeyDetailPage> {
         : undefined;
   return {
     ...detail,
+    held: held[key.token_id] ?? null,
     owner: {
       kind,
       name: target?.alias ?? (kind === "internal" ? (user?.username ?? "") : ""),

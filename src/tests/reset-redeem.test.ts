@@ -392,6 +392,42 @@ test("usage is the tightest plan window and the threshold picks due accounts", a
   assert.deepEqual(dueForReset({ enabled: true, percent: 50, scope: "pool" }, [], null), []);
 });
 
+test("the Fable limit counts toward automatic resets and other model limits do not", async () => {
+  const { accountRecovery, accountUsage } = await import("@/lib/gateway/upstreams/reset-redeem");
+  const now = Date.now();
+  const fableReset = now + 3_600_000;
+  const fable = {
+    key: "iguana_necktie",
+    scope: "Fable",
+    usedPercent: 100,
+    windowSeconds: 604_800,
+    resetsAt: new Date(fableReset).toISOString(),
+    limitReached: true,
+  };
+  const others = [
+    { scope: "", usedPercent: 10, windowSeconds: 18_000, resetsAt: new Date(now + 60_000).toISOString(), limitReached: false },
+    { scope: "", usedPercent: 50, windowSeconds: 604_800, resetsAt: new Date(now + 600_000).toISOString(), limitReached: false },
+    { scope: "Opus", usedPercent: 100, windowSeconds: 604_800, resetsAt: null, limitReached: true },
+    { key: "iguana_necktie", scope: "Cloud sessions", usedPercent: 100, windowSeconds: 0, resetsAt: null, limitReached: true },
+  ];
+  const limits = {
+    plan: "max",
+    windows: [...others, fable],
+    credits: null,
+    resetCredits: null,
+    extraUsage: null,
+    fetchedAt: new Date(now).toISOString(),
+  };
+  assert.equal(accountUsage(limits, now), 100);
+  assert.equal(accountRecovery(limits, 90, now), fableReset);
+  assert.equal(accountUsage({ ...limits, windows: others }, now), 50);
+  assert.equal(accountRecovery({ ...limits, windows: others }, 90, now), 0);
+  const lapsed = { ...fable, resetsAt: new Date(now - 1).toISOString() };
+  assert.equal(accountUsage({ ...limits, windows: [...others, lapsed] }, now), 50);
+  const scoped = { ...fable, key: "weekly_scoped", usedPercent: 95, limitReached: false };
+  assert.equal(accountUsage({ ...limits, windows: [...others, scoped] }, now), 95);
+});
+
 test("the auto guard waits 15 minutes and never runs while a claim is unresolved", async () => {
   const { autoGuardOpen, AUTO_GUARD_MS } = await import("@/lib/gateway/upstreams/reset-redeem");
   const now = Date.now();
@@ -628,7 +664,7 @@ test("pool scope waits for every account and spends one reset on the account tha
   assert.equal(consumes().length, 1);
 });
 
-test("Claude auto resets wait for the account to be at its limit and then claim next_grant_id", async () => {
+test("Claude auto resets wait for the account to be at its limit and then claim the smallest reset that refills it", async () => {
   const { autoRedeemIfDue } = await import("@/lib/gateway/upstreams/reset-redeem");
   const notYet = await addAccount("claude");
   const atLimit = await addAccount("claude");
@@ -638,7 +674,7 @@ test("Claude auto resets wait for the account to be at its limit and then claim 
   assert.equal(consumes().length, 0);
   respond(routeClaude(() => Response.json({ result: "reset" }), () => claudeBlock(true)));
   assert.deepEqual(await autoRedeemIfDue(atLimit.id), { status: "redeemed", providerId: atLimit.id, result: "reset" });
-  assert.equal(consumes()[0]?.body?.grant_id, "bonus_2");
+  assert.equal(consumes()[0]?.body?.grant_id, "launch_1");
   assert.deepEqual(await autoRedeemIfDue(atLimit.id), { status: "skipped", reason: "guard" });
   assert.equal(consumes().length, 1);
 });
@@ -672,8 +708,8 @@ test("reset details on the console show Claude grants, pending claims, and wheth
   assert.deepEqual(
     detailed?.resetCredits?.options?.map((item) => [item.id, item.family, item.blocker, item.recommended]),
     [
-      ["launch_1", "five_hour", null, false],
-      ["bonus_2", "full", null, true],
+      ["launch_1", "five_hour", null, true],
+      ["bonus_2", "full", null, false],
     ],
   );
   await redeemReset(account, { actor: "user-1", trigger: "manual", choice: "bonus_2" });
@@ -944,6 +980,41 @@ test("automatic resets spend only the recommended reset in account and pool scop
     assert.equal(consumes().length, 0, scope);
     assert.deepEqual(auditResults(fableOnly.id), [], scope);
   }
+});
+
+test("an account with only its Fable limit full gets an automatic Fable reset, never the weekly or full one", async () => {
+  const { runAutoResets } = await import("@/lib/gateway/upstreams/reset-redeem");
+  setPolicy("claude", { scope: "account", percent: 99 });
+  const account = await addAccount("claude");
+  const weekReset = new Date(Date.now() + 30 * 3_600_000).toISOString();
+  const usage = {
+    five_hour: { utilization: 10, resets_at: new Date(Date.now() + 3_600_000).toISOString() },
+    seven_day: { utilization: 50, resets_at: weekReset },
+    iguana_necktie: { utilization: 100, resets_at: weekReset },
+  };
+  const full = { ...WEEKLY_GRANT, id: "full_1", type: "full", clears: ["five_hour", "seven_day", "seven_day_overage_included"] };
+  respond(
+    routeClaude(
+      () => Response.json({ result: "reset" }),
+      () =>
+        Response.json({
+          ...usage,
+          cedar_ember: {
+            eligible: true,
+            at_limit: true,
+            exhausted: ["seven_day_overage_included"],
+            grants: [WEEKLY_GRANT, full, FABLE_GRANT],
+            next_grant_id: "full_1",
+          },
+        }),
+      () => Response.json(usage),
+    ),
+  );
+  assert.equal(await runAutoResets(Date.now()), 1);
+  assert.deepEqual(
+    consumes().map((call) => [owner(call), call.body?.grant_id]),
+    [[account.id, "fable_1"]],
+  );
 });
 
 test("an automatic reset never spends a reset that would not help, even when it is the only one that can be spent", async () => {

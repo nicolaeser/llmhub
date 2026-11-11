@@ -5,11 +5,14 @@ import { Button, Card, Chip, SearchField, Table } from "@heroui/react";
 import { UserPlus, UserRound } from "lucide-react";
 import { useTranslations } from "next-intl";
 import EmptyState from "@/components/console/empty-state";
+import PauseChip from "@/components/console/pause-chip";
 import RowCard, { RowCards, TABLE_FROM_LG } from "@/components/console/row-cards";
+import { useClock } from "@/lib/hooks/use-clock";
+import { isPaused } from "@/lib/keys/pause";
 import type { MemberNode, NodeRef, StructurePayload } from "@/types/structure";
 import NodeMenu from "./node-menu";
 import SpendMeter from "./spend-meter";
-import { matchesMember, nodeActions, type NodeAction, type NodeFlags } from "./tree-model";
+import { matchesMember, nodeActions, nodePause, type NodeAction, type NodeFlags } from "./tree-model";
 
 const SEARCH_FROM = 6;
 
@@ -28,6 +31,7 @@ export default function PeopleTab({
 }) {
   const t = useTranslations("Companies.people");
   const tCommon = useTranslations("Common");
+  const now = useClock(60_000);
   const [query, setQuery] = useState("");
   const members = data.members.filter((member) => matchesMember(member, query));
   const focused = focus?.kind === "member" ? focus.id : null;
@@ -60,13 +64,22 @@ export default function PeopleTab({
     );
   }
 
-  function blockedChip(member: MemberNode) {
-    if (!member.blocked) return null;
+  function stateChips(member: MemberNode) {
+    const pause = nodePause(data, { kind: "member", id: member.id }, now);
     return (
-      <Chip size="sm" variant="soft" color="danger">
-        {tCommon("blockedState", { blocked: "true" })}
-      </Chip>
+      <>
+        {member.blocked ? (
+          <Chip size="sm" variant="soft" color="danger">
+            {tCommon("blockedState", { blocked: "true" })}
+          </Chip>
+        ) : null}
+        {pause ? <PauseChip pause={pause} own="member" /> : null}
+      </>
     );
+  }
+
+  function flagged(member: MemberNode) {
+    return member.blocked || nodePause(data, { kind: "member", id: member.id }, now) !== null;
   }
 
   function menu(member: MemberNode) {
@@ -74,7 +87,10 @@ export default function PeopleTab({
       <NodeMenu
         kind="member"
         name={member.alias}
-        actions={nodeActions("member", flags, member.budget.maxBudget > 0)}
+        actions={nodeActions("member", flags, {
+          capped: member.budget.maxBudget > 0,
+          paused: isPaused(member, now),
+        })}
         onAction={(action) => onAction({ kind: "member", id: member.id, alias: member.alias }, action)}
       />
     );
@@ -116,14 +132,14 @@ export default function PeopleTab({
                 description={member.email || undefined}
                 aside={menu(member)}
                 chips={
-                  focused === member.id || member.blocked ? (
+                  focused === member.id || flagged(member) ? (
                     <>
                       {focused === member.id ? (
                         <Chip size="sm" variant="soft" color="accent">
                           {t("selected")}
                         </Chip>
                       ) : null}
-                      {blockedChip(member)}
+                      {stateChips(member)}
                     </>
                   ) : undefined
                 }
@@ -158,7 +174,7 @@ export default function PeopleTab({
                         <div data-focus={member.id} className="min-w-0">
                           <p className="flex flex-wrap items-center gap-2 text-sm font-medium">
                             {member.alias}
-                            {blockedChip(member)}
+                            {stateChips(member)}
                           </p>
                           {member.email ? <p className="text-xs break-all text-muted">{member.email}</p> : null}
                         </div>

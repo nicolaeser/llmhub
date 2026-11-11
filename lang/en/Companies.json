@@ -4,7 +4,7 @@
   "createOrg": "Add company",
   "emptyTitle": "No companies yet",
   "empty": "{manage, select, yes {A company is a customer of this gateway. Inside it you add departments, projects, and people, give them API keys, and cap their spend with budgets.} other {A company is a customer of this gateway. No company exists yet, and adding one needs the Manage companies permission.}}",
-  "status": "{status, select, exhausted {Budget used up} near {Near budget} empty {Not set up} other {Active}}",
+  "status": "{status, select, paused {{timed, select, yes {Paused until {until}} other {Paused}}} exhausted {Budget used up} near {Near budget} empty {Not set up} other {Active}}",
   "tabs": "{tab, select, overview {Overview} structure {Departments and projects} people {People} keys {API keys} access {Access} integrations {Integrations} reports {Reports and labels} labels {Labels} other {{tab}}}",
   "directory": {
     "search": "Search companies",
@@ -36,17 +36,24 @@
   },
   "menu": {
     "label": "Actions for {name}",
-    "action": "{action, select, edit {{kind, select, team {Edit department} project {Edit project} other {Edit person}}} budget {Set budget} boost {Temporary boost} addProject {Add project here} createKey {{kind, select, project {Create project key} other {Create personal key}}} usage {Show usage} delete {{kind, select, team {Delete department} project {Delete project} other {Delete person}}} other {{action}}}"
+    "action": "{action, select, edit {{kind, select, team {Edit department} project {Edit project} other {Edit person}}} pause {{kind, select, team {Pause department} project {Pause project} other {Pause person}}} resume {{kind, select, team {Resume department} project {Resume project} other {Resume person}}} budget {Set budget} boost {Temporary boost} addProject {Add project here} createKey {{kind, select, project {Create project key} other {Create personal key}}} usage {Show usage} delete {{kind, select, team {Delete department} project {Delete project} other {Delete person}}} other {{action}}}"
   },
   "detail": {
     "fallbackTitle": "Company",
     "back": "All companies",
     "subtitle": "{scope, select, company {Your company} other {Customer}} with {teams, plural, =0 {no departments} one {# department} other {# departments}}, {projects, plural, =0 {no projects} one {# project} other {# projects}}, and {members, plural, =0 {no people} one {# person} other {# people}}.",
     "actions": "Actions",
-    "action": "{action, select, edit {Edit company} switch {Open company view} usage {Show usage} delete {Delete company} other {{action}}}",
+    "action": "{action, select, edit {Edit company} pause {Pause company} resume {Resume company} switch {Open company view} usage {Show usage} delete {Delete company} other {{action}}}",
     "deleteTitle": "{kind, select, org {Delete company {alias}?} team {Delete department {alias}?} project {Delete project {alias}?} member {Delete {alias}?} other {Delete {alias}?}}",
     "deleteHint": "{kind, select, org {Delete its departments, projects, and people first, and move console users with access to this company elsewhere.} team {Its projects and people stay in the company without a department.} project {Every API key of this project is revoked.} member {Every personal API key of this person is revoked.} other {This cannot be undone.}}",
     "deleted": "{kind, select, org {Company deleted} team {Department deleted} project {Project deleted} member {Person deleted} other {Deleted}}"
+  },
+  "pause": {
+    "title": "{kind, select, org {Pause company {name}} team {Pause department {name}} project {Pause project {name}} other {Pause {name}}}",
+    "description": "{kind, select, org {Requests with any API key of this company, including the own keys of its console users, are rejected with key_paused.} team {Requests with any API key of this department's projects and people are rejected with key_paused.} project {Requests with any API key of this project are rejected with key_paused.} other {Requests with any personal API key of this person are rejected with key_paused.}} Keys, budgets, and settings stay as they are, and batches already queued still finish.",
+    "submit": "{kind, select, org {Pause company} team {Pause department} project {Pause project} other {Pause person}}",
+    "paused": "{kind, select, org {Company paused} team {Department paused} project {Project paused} other {Person paused}}",
+    "resumed": "{kind, select, org {Company resumed} team {Department resumed} project {Project resumed} other {Person resumed}}"
   },
   "steps": {
     "subtitle": "Departments are optional, but they let you cap whole groups such as IT. Finished steps stay checked.",

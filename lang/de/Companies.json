@@ -4,7 +4,7 @@
   "createOrg": "Unternehmen hinzufügen",
   "emptyTitle": "Noch keine Unternehmen",
   "empty": "{manage, select, yes {Ein Unternehmen ist ein Kunde dieses Gateways. Darin legst du Abteilungen, Projekte und Personen an, gibst ihnen API-Keys und begrenzt ihre Ausgaben mit Budgets.} other {Ein Unternehmen ist ein Kunde dieses Gateways. Es gibt noch keines, und zum Anlegen fehlt dir die Berechtigung Unternehmen verwalten.}}",
-  "status": "{status, select, exhausted {Budget aufgebraucht} near {Budget fast erreicht} empty {Nicht eingerichtet} other {Aktiv}}",
+  "status": "{status, select, paused {{timed, select, yes {Pausiert bis {until}} other {Pausiert}}} exhausted {Budget aufgebraucht} near {Budget fast erreicht} empty {Nicht eingerichtet} other {Aktiv}}",
   "tabs": "{tab, select, overview {Übersicht} structure {Abteilungen und Projekte} people {Personen} keys {API-Keys} access {Zugriff} integrations {Integrationen} reports {Berichte und Labels} labels {Labels} other {{tab}}}",
   "directory": {
     "search": "Unternehmen suchen",
@@ -36,17 +36,24 @@
   },
   "menu": {
     "label": "Aktionen für {name}",
-    "action": "{action, select, edit {{kind, select, team {Abteilung bearbeiten} project {Projekt bearbeiten} other {Person bearbeiten}}} budget {Budget festlegen} boost {Temporäre Erhöhung} addProject {Projekt hier hinzufügen} createKey {{kind, select, project {Projekt-Key erstellen} other {Persönlichen Key erstellen}}} usage {Nutzung anzeigen} delete {{kind, select, team {Abteilung löschen} project {Projekt löschen} other {Person löschen}}} other {{action}}}"
+    "action": "{action, select, edit {{kind, select, team {Abteilung bearbeiten} project {Projekt bearbeiten} other {Person bearbeiten}}} pause {{kind, select, team {Abteilung pausieren} project {Projekt pausieren} other {Person pausieren}}} resume {{kind, select, team {Abteilung fortsetzen} project {Projekt fortsetzen} other {Person fortsetzen}}} budget {Budget festlegen} boost {Temporäre Erhöhung} addProject {Projekt hier hinzufügen} createKey {{kind, select, project {Projekt-Key erstellen} other {Persönlichen Key erstellen}}} usage {Nutzung anzeigen} delete {{kind, select, team {Abteilung löschen} project {Projekt löschen} other {Person löschen}}} other {{action}}}"
   },
   "detail": {
     "fallbackTitle": "Unternehmen",
     "back": "Alle Unternehmen",
     "subtitle": "{scope, select, company {Dein Unternehmen} other {Kunde}} mit {teams, plural, =0 {keinen Abteilungen} one {# Abteilung} other {# Abteilungen}}, {projects, plural, =0 {keinen Projekten} one {# Projekt} other {# Projekten}} und {members, plural, =0 {keinen Personen} one {# Person} other {# Personen}}.",
     "actions": "Aktionen",
-    "action": "{action, select, edit {Unternehmen bearbeiten} switch {Unternehmensansicht öffnen} usage {Nutzung anzeigen} delete {Unternehmen löschen} other {{action}}}",
+    "action": "{action, select, edit {Unternehmen bearbeiten} pause {Unternehmen pausieren} resume {Unternehmen fortsetzen} switch {Unternehmensansicht öffnen} usage {Nutzung anzeigen} delete {Unternehmen löschen} other {{action}}}",
     "deleteTitle": "{kind, select, org {Unternehmen {alias} löschen?} team {Abteilung {alias} löschen?} project {Projekt {alias} löschen?} member {{alias} löschen?} other {{alias} löschen?}}",
     "deleteHint": "{kind, select, org {Lösche zuerst Abteilungen, Projekte und Personen und entziehe Konsolen-Benutzern den Zugriff auf dieses Unternehmen.} team {Projekte und Personen bleiben im Unternehmen, nur ohne Abteilung.} project {Alle API-Keys dieses Projekts werden widerrufen.} member {Alle persönlichen API-Keys dieser Person werden widerrufen.} other {Das lässt sich nicht rückgängig machen.}}",
     "deleted": "{kind, select, org {Unternehmen gelöscht} team {Abteilung gelöscht} project {Projekt gelöscht} member {Person gelöscht} other {Gelöscht}}"
+  },
+  "pause": {
+    "title": "{kind, select, org {Unternehmen {name} pausieren} team {Abteilung {name} pausieren} project {Projekt {name} pausieren} other {{name} pausieren}}",
+    "description": "{kind, select, org {Anfragen mit allen API-Keys dieses Unternehmens, auch mit den eigenen Keys seiner Konsolen-Benutzer, werden mit key_paused abgelehnt.} team {Anfragen mit allen API-Keys der Projekte und Personen dieser Abteilung werden mit key_paused abgelehnt.} project {Anfragen mit allen API-Keys dieses Projekts werden mit key_paused abgelehnt.} other {Anfragen mit allen persönlichen API-Keys dieser Person werden mit key_paused abgelehnt.}} Keys, Budgets und Einstellungen bleiben erhalten, und bereits eingereihte Batches laufen zu Ende.",
+    "submit": "{kind, select, org {Unternehmen pausieren} team {Abteilung pausieren} project {Projekt pausieren} other {Person pausieren}}",
+    "paused": "{kind, select, org {Unternehmen pausiert} team {Abteilung pausiert} project {Projekt pausiert} other {Person pausiert}}",
+    "resumed": "{kind, select, org {Unternehmen fortgesetzt} team {Abteilung fortgesetzt} project {Projekt fortgesetzt} other {Person fortgesetzt}}"
   },
   "steps": {
     "subtitle": "Abteilungen sind optional, damit lassen sich aber ganze Gruppen wie die IT begrenzen. Erledigte Schritte bleiben abgehakt.",

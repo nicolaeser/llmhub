@@ -3,14 +3,17 @@ import test from "node:test";
 import { CLAUDE_CODE_IDENTITY, withClaudeBetas, withClaudeIdentity } from "@/lib/gateway/upstreams/claude";
 import { signInHeaders } from "@/lib/gateway/upstreams/credentials";
 import { joinPath, prepareBody, upstreamError, upstreamHeaders, upstreamRetryAt } from "@/lib/gateway/dispatch/upstream";
+import { modelRecoveryAt, quotaExhausted } from "@/lib/gateway/routing/quota";
 import { routePool } from "@/lib/gateway/routing/route-pool";
 import {
   claudeHeaderWindows,
+  claudeModelLimitReached,
   limitsUpdatedAt,
   newestLimits,
   observedChanged,
   observedFlipped,
   updatedFromTraffic,
+  withModelLimitReached,
   withObservedWindows,
 } from "@/lib/gateway/upstreams/observed-limits";
 import type { LimitWindow, SubscriptionLimits } from "@/types/providers";
@@ -202,6 +205,108 @@ test("only a rejected five-hour or weekly window parks the account until its res
   assert.equal(upstreamRetryAt(429, {}, now, new Headers({ "anthropic-ratelimit-unified-status": "allowed" }), none), null);
 });
 
+test("a rejected Fable limit parks the request until the Fable reset, and only a Fable claim does", () => {
+  const now = 1_899_990_000_000;
+  const fable = String(1_900_300_000);
+  const none = () => 0;
+  const claimed = new Headers({
+    "anthropic-ratelimit-unified-status": "rejected",
+    "anthropic-ratelimit-unified-representative-claim": "seven_day_overage_included",
+    "anthropic-ratelimit-unified-5h-status": "allowed",
+    "anthropic-ratelimit-unified-7d-status": "allowed",
+    "anthropic-ratelimit-unified-reset": fable,
+    "retry-after": "12",
+  });
+  assert.equal(upstreamRetryAt(429, {}, now, claimed, none), 1_900_300_000_000);
+  const refusal = upstreamError(
+    429,
+    {
+      type: "error",
+      error: { type: "rate_limit_error", message: "Fable limit reached. Turn on usage credits.", details: { error_code: "credits_required" } },
+    },
+    claimed,
+  );
+  assert.equal(refusal.requestScoped, false);
+  assert.equal(refusal.retryAt, 1_900_300_000_000);
+  const unclaimed = new Headers({
+    "anthropic-ratelimit-unified-status": "rejected",
+    "anthropic-ratelimit-unified-5h-status": "allowed",
+    "anthropic-ratelimit-unified-7d-status": "allowed",
+    "anthropic-ratelimit-unified-7d_oi-status": "rejected",
+    "anthropic-ratelimit-unified-7d_oi-reset": fable,
+    "retry-after": "12",
+  });
+  assert.equal(upstreamRetryAt(429, {}, now, unclaimed, none), 1_900_300_000_000);
+  const throttled = new Headers({
+    "anthropic-ratelimit-unified-status": "allowed",
+    "anthropic-ratelimit-unified-7d_oi-status": "rejected",
+    "anthropic-ratelimit-unified-7d_oi-reset": fable,
+    "retry-after": "30",
+  });
+  assert.equal(upstreamRetryAt(429, {}, now, throttled, none), now + 30_000);
+  const overage = new Headers({
+    "anthropic-ratelimit-unified-status": "rejected",
+    "anthropic-ratelimit-unified-representative-claim": "overage",
+    "anthropic-ratelimit-unified-5h-status": "allowed",
+    "anthropic-ratelimit-unified-7d-status": "allowed",
+    "anthropic-ratelimit-unified-7d_oi-status": "rejected",
+    "anthropic-ratelimit-unified-7d_oi-reset": fable,
+    "retry-after": "12",
+  });
+  assert.equal(upstreamRetryAt(429, {}, now, overage, none), now + 12_000);
+  const lapsed = new Headers(claimed);
+  lapsed.set("anthropic-ratelimit-unified-reset", String(Math.floor(now / 1000) - 10));
+  assert.equal(upstreamRetryAt(429, {}, now, lapsed, none), now + 12_000);
+});
+
+test("a Fable rejection on any response names the full Fable window and leaves the plan windows alone", () => {
+  const fable = 1_900_300_000;
+  const reached = {
+    key: "iguana_necktie",
+    scope: "Fable",
+    usedPercent: 100,
+    windowSeconds: 604_800,
+    resetsAt: new Date(fable * 1000).toISOString(),
+    limitReached: true,
+  };
+  const claimed = new Headers({
+    "anthropic-ratelimit-unified-status": "rejected",
+    "anthropic-ratelimit-unified-representative-claim": "seven_day_overage_included",
+    "anthropic-ratelimit-unified-5h-status": "allowed",
+    "anthropic-ratelimit-unified-7d-status": "allowed",
+    "anthropic-ratelimit-unified-reset": String(fable),
+  });
+  assert.deepEqual(claudeModelLimitReached(claimed), reached);
+  assert.deepEqual(claudeHeaderWindows(claimed), []);
+  const sonnet = new Headers({
+    "anthropic-ratelimit-unified-status": "allowed",
+    "anthropic-ratelimit-unified-5h-utilization": "0.2",
+    "anthropic-ratelimit-unified-7d-utilization": "0.4",
+    "anthropic-ratelimit-unified-7d_oi-status": "rejected",
+    "anthropic-ratelimit-unified-7d_oi-reset": String(fable),
+    "anthropic-ratelimit-unified-reset": String(fable - 3_600),
+  });
+  assert.deepEqual(claudeModelLimitReached(sonnet), reached);
+  assert.deepEqual(
+    claudeHeaderWindows(sonnet).map((window) => [window.scope, window.usedPercent, window.limitReached]),
+    [["", 20, false], ["", 40, false]],
+  );
+  const unknownReset = new Headers({ "anthropic-ratelimit-unified-7d_oi-status": "rejected" });
+  assert.equal(claudeModelLimitReached(unknownReset)?.resetsAt, null);
+  assert.equal(
+    claudeModelLimitReached(
+      new Headers({ "anthropic-ratelimit-unified-7d_oi-utilization": "0.99", "anthropic-ratelimit-unified-7d_oi-status": "allowed" }),
+    ),
+    null,
+  );
+  assert.equal(
+    claudeModelLimitReached(
+      new Headers({ "anthropic-ratelimit-unified-status": "rejected", "anthropic-ratelimit-unified-representative-claim": "five_hour" }),
+    ),
+    null,
+  );
+});
+
 test("Retry-After drives short throttles with a little jitter on every provider", () => {
   const now = 1_000_000;
   const apiKey = new Headers({ "retry-after": "20", "anthropic-ratelimit-requests-reset": "2026-10-21T00:00:00Z" });
@@ -389,4 +494,43 @@ test("a newer full read wins but keeps plan windows observed after it", () => {
   assert.equal(newestLimits(older, later), later);
   assert.equal(newestLimits(later, older), later);
   assert.equal(newestLimits(fullLimits(t0), fullLimits(t0 - 1)).fetchedAt, new Date(t0).toISOString());
+});
+
+test("a Fable rejection marks the Fable window full once, keeps every other window, and blocks only Fable models", () => {
+  const t0 = 1_899_990_000_000;
+  const reset = new Date(t0 + 50 * 3_600_000).toISOString();
+  const reached: LimitWindow = { key: "iguana_necktie", scope: "Fable", usedPercent: 100, windowSeconds: WEEK, resetsAt: reset, limitReached: true };
+  const base = fullLimits(t0);
+  const added = withModelLimitReached(base, reached, t0);
+  assert.ok(added);
+  assert.deepEqual(added.windows, [...base.windows, reached]);
+  assert.equal(added.fetchedAt, base.fetchedAt);
+  assert.equal(added.extraUsage, base.extraUsage);
+  assert.equal(withModelLimitReached(added, reached, t0), null);
+  assert.equal(withModelLimitReached(added, { ...reached, resetsAt: null }, t0), null);
+  assert.ok(quotaExhausted(added, "claude-fable-5-2", t0));
+  assert.ok(quotaExhausted(added, "claude-fable-5-2[1m]", t0));
+  assert.equal(quotaExhausted(added, "claude-sonnet-5-5", t0), false);
+  assert.equal(quotaExhausted(added, "claude-opus-5-5", t0), false);
+  assert.equal(modelRecoveryAt(added, "claude-fable-5-2", t0), Date.parse(reset));
+  assert.equal(modelRecoveryAt(added, "claude-sonnet-5-5", t0), null);
+  const polledWindow: LimitWindow = {
+    key: "weekly_scoped",
+    scope: "Fable",
+    usedPercent: 96,
+    windowSeconds: WEEK,
+    resetsAt: reset,
+    limitReached: false,
+    usedPercentOfWeekly: 30,
+  };
+  const polled = { ...base, windows: [...base.windows, polledWindow] };
+  const marked = withModelLimitReached(polled, { ...reached, resetsAt: null }, t0);
+  assert.deepEqual(marked?.windows, [...base.windows, { ...polledWindow, usedPercent: 100, limitReached: true }]);
+  const moved = withModelLimitReached(added, { ...reached, resetsAt: new Date(t0 + 60 * 3_600_000).toISOString() }, t0);
+  assert.equal(moved?.windows.at(-1)?.resetsAt, new Date(t0 + 60 * 3_600_000).toISOString());
+  const lapsed = { ...base, windows: [...base.windows, { ...reached, resetsAt: new Date(t0 - 1_000).toISOString() }] };
+  assert.equal(withModelLimitReached(lapsed, reached, t0)?.windows.at(-1)?.resetsAt, reset);
+  const pool: LimitWindow = { key: "iguana_necktie", scope: "Cloud sessions", usedPercent: 40, windowSeconds: 0, resetsAt: null, limitReached: false };
+  const credits = withModelLimitReached({ ...base, windows: [pool] }, reached, t0);
+  assert.deepEqual(credits?.windows, [pool, reached]);
 });

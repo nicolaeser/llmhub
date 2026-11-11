@@ -6,6 +6,7 @@ import {
   matchesMember,
   nodeActions,
   nodeIn,
+  nodePause,
   parseNodeRef,
   structureGroups,
   usageFilterOf,
@@ -40,6 +41,8 @@ function budget(maxBudget = 0, spend = 0): BudgetView {
   };
 }
 
+const RUNNING = { paused: false, pausedUntil: "" };
+
 function key(id: string, alias: string, place: Partial<KeyNode>): KeyNode {
   return {
     id,
@@ -61,17 +64,37 @@ function key(id: string, alias: string, place: Partial<KeyNode>): KeyNode {
 const structure: StructurePayload = {
   platformLabelKeys: [],
   orgs: [
-    { id: "o1", alias: "Acme", budget: budget(1000), labelKeys: [] },
-    { id: "o2", alias: "Beta", budget: budget(), labelKeys: [] },
+    { id: "o1", alias: "Acme", ...RUNNING, budget: budget(1000), labelKeys: [] },
+    { id: "o2", alias: "Beta", ...RUNNING, budget: budget(), labelKeys: [] },
   ],
-  teams: [{ id: "t1", alias: "IT", orgId: "o1", rpmLimit: 0, tpmLimit: 0, budget: budget(500) }],
+  teams: [{ id: "t1", alias: "IT", orgId: "o1", rpmLimit: 0, tpmLimit: 0, ...RUNNING, budget: budget(500) }],
   projects: [
-    { id: "p1", alias: "Support bot", orgId: "o1", teamId: "t1", owner: "", budget: budget() },
-    { id: "p2", alias: "Website", orgId: "o1", teamId: "", owner: "", budget: budget() },
+    { id: "p1", alias: "Support bot", orgId: "o1", teamId: "t1", owner: "", ...RUNNING, budget: budget() },
+    { id: "p2", alias: "Website", orgId: "o1", teamId: "", owner: "", ...RUNNING, budget: budget() },
   ],
   members: [
-    { id: "m1", alias: "Alex Example", email: "", orgId: "o1", teamId: "t1", blocked: false, logContent: true, budget: budget() },
-    { id: "m2", alias: "Robin Sample", email: "", orgId: "o1", teamId: "", blocked: false, logContent: true, budget: budget() },
+    {
+      id: "m1",
+      alias: "Alex Example",
+      email: "",
+      orgId: "o1",
+      teamId: "t1",
+      blocked: false,
+      logContent: true,
+      ...RUNNING,
+      budget: budget(),
+    },
+    {
+      id: "m2",
+      alias: "Robin Sample",
+      email: "",
+      orgId: "o1",
+      teamId: "",
+      blocked: false,
+      logContent: true,
+      ...RUNNING,
+      budget: budget(),
+    },
   ],
   users: [
     { id: "u1", alias: "operator", orgId: "o1", budget: budget() },
@@ -163,17 +186,60 @@ test("a focused row must exist in the loaded company", () => {
 
 test("row menus offer only what the caller may do", () => {
   const all = { canManage: true, canBudget: true, canCreateKeys: true, canSeeUsage: true };
-  assert.deepEqual(nodeActions("team", all, true), ["edit", "budget", "boost", "addProject", "usage", "delete"]);
-  assert.deepEqual(nodeActions("project", all, false), ["edit", "budget", "createKey", "usage", "delete"]);
-  assert.deepEqual(nodeActions("member", { ...all, canManage: false, canCreateKeys: false }, true), [
+  const capped = { capped: true, paused: false };
+  assert.deepEqual(nodeActions("team", all, capped), [
+    "edit",
+    "pause",
+    "budget",
+    "boost",
+    "addProject",
+    "usage",
+    "delete",
+  ]);
+  assert.deepEqual(nodeActions("project", all, { capped: false, paused: true }), [
+    "edit",
+    "resume",
+    "budget",
+    "createKey",
+    "usage",
+    "delete",
+  ]);
+  assert.deepEqual(nodeActions("member", { ...all, canManage: false, canCreateKeys: false }, capped), [
     "budget",
     "boost",
     "usage",
   ]);
   assert.deepEqual(
-    nodeActions("member", { canManage: false, canBudget: false, canCreateKeys: false, canSeeUsage: false }, true),
+    nodeActions("member", { canManage: false, canBudget: false, canCreateKeys: false, canSeeUsage: false }, capped),
     [],
   );
+});
+
+test("rows inherit the longest pause of the department and company above them", () => {
+  const now = new Date("2026-11-11T12:00:00Z");
+  const later = "2026-11-11T15:00:00.000Z";
+  const paused: StructurePayload = {
+    ...structure,
+    orgs: structure.orgs.map((row) => (row.id === "o1" ? { ...row, paused: true, pausedUntil: later } : row)),
+    teams: structure.teams.map((row) => ({ ...row, paused: true, pausedUntil: "" })),
+  };
+  assert.equal(nodePause(structure, ref("member:m1"), now), null);
+  assert.deepEqual(nodePause(paused, ref("org:o1"), now), { scope: "org", until: later });
+  assert.deepEqual(nodePause(paused, ref("team:t1"), now), { scope: "team", until: "" });
+  assert.deepEqual(nodePause(paused, ref("member:m1"), now), { scope: "team", until: "" });
+  assert.deepEqual(nodePause(paused, ref("member:m2"), now), { scope: "org", until: later });
+  assert.deepEqual(nodePause(paused, ref("project:p2"), now), { scope: "org", until: later });
+  assert.deepEqual(nodePause(paused, ref("key:k1"), now), { scope: "team", until: "" });
+  assert.deepEqual(nodePause(paused, ref("key:k3"), now), { scope: "org", until: later });
+  assert.equal(nodePause(paused, ref("key:k4"), now), null);
+  assert.equal(nodePause(paused, ref("member:m2"), new Date("2026-11-11T16:00:00Z")), null);
+
+  const person: StructurePayload = {
+    ...structure,
+    members: structure.members.map((row) => (row.id === "m2" ? { ...row, paused: true, pausedUntil: "" } : row)),
+  };
+  assert.deepEqual(nodePause(person, ref("key:k5"), now), { scope: "member", until: "" });
+  assert.equal(nodePause(person, ref("key:k2"), now), null);
 });
 
 test("a company view holds only that company's rows", () => {
@@ -188,15 +254,31 @@ test("a company view holds only that company's rows", () => {
 });
 
 function companyRow(overrides: Partial<CompanyRow>): CompanyRow {
-  return { id: "o1", alias: "Acme", budget: budget(), teams: 0, projects: 1, members: 0, keys: 0, ...overrides };
+  return {
+    id: "o1",
+    alias: "Acme",
+    ...RUNNING,
+    budget: budget(),
+    teams: 0,
+    projects: 1,
+    members: 0,
+    keys: 0,
+    ...overrides,
+  };
 }
 
-test("the directory status reads the budget first and then whether the company is set up", () => {
-  assert.equal(companyStatus(companyRow({ budget: budget(100, 100) })), "exhausted");
-  assert.equal(companyStatus(companyRow({ budget: budget(100, 85) })), "near");
-  assert.equal(companyStatus(companyRow({ budget: budget(100, 10) })), "ok");
-  assert.equal(companyStatus(companyRow({ projects: 0, members: 0 })), "empty");
-  assert.equal(companyStatus(companyRow({ projects: 0, members: 2 })), "ok");
+test("the directory status reads the pause, then the budget, and then whether the company is set up", () => {
+  const now = new Date("2026-11-11T12:00:00Z");
+  assert.equal(companyStatus(companyRow({ budget: budget(100, 100) }), now), "exhausted");
+  assert.equal(companyStatus(companyRow({ budget: budget(100, 85) }), now), "near");
+  assert.equal(companyStatus(companyRow({ budget: budget(100, 10) }), now), "ok");
+  assert.equal(companyStatus(companyRow({ projects: 0, members: 0 }), now), "empty");
+  assert.equal(companyStatus(companyRow({ projects: 0, members: 2 }), now), "ok");
+  assert.equal(companyStatus(companyRow({ paused: true, budget: budget(100, 100) }), now), "paused");
+  assert.equal(
+    companyStatus(companyRow({ paused: true, pausedUntil: "2026-11-11T13:00:00.000Z" }), new Date("2026-11-11T14:00:00Z")),
+    "ok",
+  );
   assert.equal(matchesCompany(companyRow({}), "acm"), true);
   assert.equal(matchesCompany(companyRow({}), "beta"), false);
 });
