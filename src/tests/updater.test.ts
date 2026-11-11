@@ -2,16 +2,18 @@ import assert from "node:assert/strict";
 import { hostname } from "node:os";
 import test from "node:test";
 import { recordedPrisma } from "./support/recorded-prisma";
-import { createConfigFor, hasHealthcheck, stopSeconds } from "../../scripts/updater/container-config.mjs";
-import { createAgent, desiredOf } from "../../scripts/updater/agent.mjs";
+import { createConfigFor, hasHealthcheck, inheritedVolumes, stopSeconds } from "../../scripts/updater/container-config.mjs";
+import { createAgent, desiredOf, MIN_FREE_DISK_BYTES, MIN_SWITCH_DISK_BYTES } from "../../scripts/updater/agent.mjs";
 import { untarFirstFile } from "../../scripts/updater/docker.mjs";
 import {
+  CRASH_LOOP_RESTARTS,
   recreateContainer,
   replaceStoppedContainers,
   UPDATE_DRAIN_SECONDS,
   waitHealthy,
 } from "../../scripts/updater/recreate.mjs";
 import { replayLogText } from "../../scripts/updater/log.mjs";
+import { REDIS_SNAPSHOT_FLAGS, snapshotRedisCommand, switchRedisToSnapshots } from "../../scripts/updater/stack.mjs";
 import {
   digestsFor,
   isPinned,
@@ -142,6 +144,145 @@ test("recreate config keeps container overrides and replaces marker variables", 
   assert.equal(hasHealthcheck(appContainer()), true);
   assert.equal(stopSeconds(appContainer()), 330);
   assert.equal(stopSeconds({ Config: { StopTimeout: 45 } }), 45);
+});
+
+test("recreate config keeps anonymous volumes, like compose does, without doubling declared mounts", () => {
+  const journal = "a".repeat(64);
+  const container = {
+    ...appContainer(),
+    HostConfig: {
+      ...appContainer().HostConfig,
+      Mounts: [{ Type: "volume", Source: "llmhub_models", Target: "/models" }],
+      Tmpfs: { "/tmp": "" },
+    },
+    Mounts: [
+      { Type: "bind", Source: "/srv/llmhub/data", Destination: "/data", RW: true },
+      { Type: "volume", Name: "llmhub_models", Destination: "/models", RW: true },
+      { Type: "volume", Name: journal, Destination: "/login-journal", RW: true },
+      { Type: "tmpfs", Destination: "/tmp", RW: true },
+    ],
+  };
+  const body = createConfigFor(container, oldImage(), { imageRef: "ghcr.io/nicolaeser/llmhub:latest", imageId: "sha256:new" });
+  assert.deepEqual(body.HostConfig.Mounts, [
+    { Type: "volume", Source: "llmhub_models", Target: "/models" },
+    { Type: "volume", Source: journal, Target: "/login-journal", ReadOnly: false },
+  ]);
+  assert.deepEqual(body.HostConfig.Binds, ["/srv/llmhub/data:/data"]);
+  assert.deepEqual(inheritedVolumes({ ...container, HostConfig: { VolumesFrom: ["other"] } }), []);
+  assert.equal("Mounts" in createConfigFor(appContainer(), oldImage(), { imageRef: "x", imageId: "y" }).HostConfig, false);
+});
+
+function redisContainer(overrides: { Cmd?: string[]; health?: string; image?: string } = {}) {
+  return {
+    Id: `redis${"0".repeat(59)}`,
+    Name: "/llmhub-redis-1",
+    Image: "sha256:redis",
+    State: { Running: true, Health: { Status: overrides.health ?? "healthy" } },
+    Config: {
+      Image: overrides.image ?? "redis:8-alpine",
+      Cmd: overrides.Cmd ?? ["redis-server", "--appendonly", "yes", "--requirepass", "secret"],
+      Entrypoint: ["docker-entrypoint.sh"],
+      Env: ["REDISCLI_AUTH=secret", "PATH=/usr/local/bin"],
+      Labels: { "com.docker.compose.project": "llmhub", "com.docker.compose.service": "redis" },
+      Healthcheck: { Test: ["CMD", "redis-cli", "ping"], Interval: 5_000_000_000 },
+    },
+    HostConfig: { Binds: ["/srv/llmhub/redis-data:/data:rw"], NetworkMode: "llmhub_default" },
+    Mounts: [{ Type: "bind", Source: "/srv/llmhub/redis-data", Destination: "/data", RW: true }],
+    NetworkSettings: { Networks: { llmhub_default: { Aliases: ["llmhub-redis-1", "redis"] } } },
+  };
+}
+
+function redisDocker(container: ReturnType<typeof redisContainer>, { failHealth = false, stopExitCode = 0 } = {}) {
+  const calls: [string, ...unknown[]][] = [];
+  const created: Record<string, unknown>[] = [];
+  let stopped = false;
+  const docker = {
+    listContainers: async (labels: string[]) => {
+      calls.push(["list", ...labels]);
+      return [{ Id: container.Id }];
+    },
+    inspectContainer: async (id: string) =>
+      id === container.Id
+        ? { ...container, State: stopped ? { Running: false, Status: "exited", ExitCode: stopExitCode } : container.State }
+        : id === "sha256:created"
+          ? { State: { Status: "running", Health: { Status: failHealth ? "unhealthy" : "healthy" } }, Config: { Healthcheck: { Test: ["CMD", "redis-cli", "ping"] } } }
+          : null,
+    inspectImage: async () => ({ Id: "sha256:redis", Config: { Cmd: ["redis-server"], Entrypoint: ["docker-entrypoint.sh"], Env: ["PATH=/usr/local/bin"] } }),
+    stop: async (id: string, seconds: number) => {
+      stopped = id === container.Id || stopped;
+      calls.push(["stop", id, seconds]);
+    },
+    rename: async (id: string, name: string) => void calls.push(["rename", id, name]),
+    create: async (name: string, body: Record<string, unknown>) => {
+      created.push(body);
+      calls.push(["create", name]);
+      return { Id: "sha256:created" };
+    },
+    start: async (id: string) => {
+      stopped = id === container.Id ? false : stopped;
+      calls.push(["start", id]);
+    },
+    remove: async (id: string) => void calls.push(["remove", id]),
+    logs: async () => "",
+  };
+  return { docker, calls, created };
+}
+
+test("only the Redis command shipped with append-only files is moved to snapshots", () => {
+  assert.deepEqual(snapshotRedisCommand(["redis-server", "--appendonly", "yes", "--requirepass", "pw"]), [
+    "redis-server",
+    ...REDIS_SNAPSHOT_FLAGS,
+    "--requirepass",
+    "pw",
+  ]);
+  assert.equal(snapshotRedisCommand(["redis-server", ...REDIS_SNAPSHOT_FLAGS, "--requirepass", "pw"]), null);
+  assert.equal(snapshotRedisCommand(["redis-server", "--appendonly", "yes", "--requirepass", "pw", "--maxmemory", "1gb"]), null);
+  assert.equal(snapshotRedisCommand(["redis-server", "--appendonly", "no", "--requirepass", "pw"]), null);
+  assert.equal(snapshotRedisCommand(undefined), null);
+});
+
+test("the updater moves a healthy bundled Redis to snapshots once and keeps everything else of the container", async () => {
+  const container = redisContainer();
+  const { docker, calls, created } = redisDocker(container);
+  assert.deepEqual(await switchRedisToSnapshots(docker, "llmhub", { waitOptions: { pollMs: 1 } }), ["llmhub-redis-1"]);
+  assert.deepEqual(calls[0], ["list", "com.docker.compose.project=llmhub", "com.docker.compose.service=redis"]);
+  assert.deepEqual(calls.find(([name]) => name === "stop"), ["stop", container.Id, UPDATE_DRAIN_SECONDS]);
+  const body = created[0] as { Cmd: string[]; Env: string[]; Image: string; StopTimeout?: number; HostConfig: { Binds: string[] }; Healthcheck: unknown };
+  assert.deepEqual(body.Cmd, ["redis-server", ...REDIS_SNAPSHOT_FLAGS, "--requirepass", "secret"]);
+  assert.equal(body.Image, "redis:8-alpine");
+  assert.deepEqual(body.Env, ["REDISCLI_AUTH=secret"]);
+  assert.deepEqual(body.HostConfig.Binds, ["/srv/llmhub/redis-data:/data:rw"]);
+  assert.deepEqual(body.Healthcheck, { Test: ["CMD", "redis-cli", "ping"], Interval: 5_000_000_000 });
+  assert.equal("StopTimeout" in body, false);
+  assert.deepEqual(calls.at(-1), ["remove", container.Id]);
+});
+
+test("the updater leaves Redis alone when it is unhealthy, customized, foreign, or already failed to switch", async () => {
+  for (const container of [
+    redisContainer({ health: "starting" }),
+    redisContainer({ Cmd: ["redis-server", "--appendonly", "yes", "--requirepass", "pw", "--maxmemory", "1gb"] }),
+    redisContainer({ image: "ghcr.io/acme/keydb:latest" }),
+  ]) {
+    const { docker, created } = redisDocker(container);
+    assert.deepEqual(await switchRedisToSnapshots(docker, "llmhub"), []);
+    assert.equal(created.length, 0);
+  }
+  const failing = redisDocker(redisContainer(), { failHealth: true });
+  const skip = new Set<string>();
+  assert.deepEqual(await switchRedisToSnapshots(failing.docker, "llmhub", { skip, waitOptions: { pollMs: 1 } }), []);
+  assert.deepEqual(failing.calls.slice(-3).map(([name]) => name), ["remove", "rename", "start"]);
+  assert.equal(skip.size, 1);
+  const before = failing.created.length;
+  assert.deepEqual(await switchRedisToSnapshots(failing.docker, "llmhub", { skip }), []);
+  assert.equal(failing.created.length, before);
+});
+
+test("Redis keeps its append-only file when it could not write its final snapshot on shutdown", async () => {
+  const container = redisContainer();
+  const { docker, calls, created } = redisDocker(container, { stopExitCode: 137 });
+  assert.deepEqual(await switchRedisToSnapshots(docker, "llmhub", { waitOptions: { pollMs: 1 } }), []);
+  assert.equal(created.length, 0);
+  assert.deepEqual(calls.map(([name]) => name), ["list", "stop", "start"]);
 });
 
 async function recreateRecorded(container: ReturnType<typeof appContainer>) {
@@ -696,4 +837,109 @@ test("open live streams end with a restart event when the server shuts down", as
   const refused = await GET(new Request("http://localhost/internal-api/live"));
   assert.equal(refused.status, 503);
   assert.equal(refused.headers.get("connection"), "close");
+});
+
+test("a new container that keeps restarting fails the update without waiting for the health timeout", async () => {
+  let inspections = 0;
+  const startedAt = Date.now();
+  await assert.rejects(
+    waitHealthy(
+      {
+        inspectContainer: async () => {
+          inspections += 1;
+          return {
+            State: { Status: "restarting", Restarting: true, Health: { Status: "starting" }, ExitCode: 1 },
+            RestartCount: inspections,
+            Config: { Healthcheck: HEALTHCHECK },
+          };
+        },
+      },
+      "app",
+      { pollMs: 1 },
+    ),
+    new RegExp(`restarted ${CRASH_LOOP_RESTARTS} times without becoming healthy`),
+  );
+  assert.equal(inspections, CRASH_LOOP_RESTARTS);
+  assert.ok(Date.now() - startedAt < 5_000);
+});
+
+const GIB = 1024 ** 3;
+
+function updateHarness(freeBytes: number[]) {
+  const calls: string[] = [];
+  const self = { Id: hostname(), Name: "/llmhub-updater-1", Config: { Labels: { "com.docker.compose.project": "llmhub" } } };
+  const app = labeledContainer("app", "llmhub-app-1", true);
+  const repo = "ghcr.io/nicolaeser/llmhub";
+  const docker = {
+    listContainers: async (labels: string[]) =>
+      labels.length ? [{ Id: app.Id }] : [{ Id: app.Id, ImageID: "sha256:old" }, { Id: "other", ImageID: "sha256:used" }],
+    inspectContainer: async (id: string) => (id === self.Id ? self : id === app.Id ? app : null),
+    inspectImage: async () => ({ ...oldImage(), Id: "sha256:new", RepoDigests: [`${repo}@${DIGEST_A}`] }),
+    distribution: async () => ({ Descriptor: { digest: DIGEST_B } }),
+    listDanglingImages: async () => [
+      { Id: "sha256:stale", RepoDigests: [`${repo}@${DIGEST_A}`], Size: 600_000_000 },
+      { Id: "sha256:used", RepoDigests: [`${repo}@${DIGEST_A}`], Size: 600_000_000 },
+      { Id: "sha256:foreign", RepoDigests: [`docker.io/library/busybox@${DIGEST_B}`], Size: 4_000_000 },
+    ],
+    removeImage: async (id: string) => void calls.push(`removeImage ${id}`),
+    pull: async () => void calls.push("pull"),
+    stop: async () => void calls.push("stop"),
+    rename: async () => void calls.push("rename"),
+    create: async () => {
+      calls.push("create");
+      return { Id: "sha256:created" };
+    },
+    start: async () => void calls.push("start"),
+    remove: async () => void calls.push("remove"),
+  };
+  let measured = 0;
+  const agent = createAgent({
+    docker,
+    key: scriptKey("x".repeat(32)),
+    appUrl: new URL("http://127.0.0.1:9"),
+    version: "test",
+    diskSpace: async () => {
+      const free = freeBytes[Math.min(measured, freeBytes.length - 1)];
+      measured += 1;
+      return { freeBytes: free, totalBytes: 50 * GIB };
+    },
+  });
+  const lastResult = () => agent.status.lastResult as UpdaterReport["lastResult"];
+  return { agent, calls, lastResult };
+}
+
+test("an update stops before downloading when the Docker disk is nearly full and prunes only unused images of its repository", async () => {
+  const { agent, calls, lastResult } = updateHarness([GIB]);
+  await agent.apply({ commandId: null, target: null });
+  assert.deepEqual(calls, ["removeImage sha256:stale"]);
+  assert.equal(lastResult()?.outcome, "failed");
+  assert.match(lastResult()?.detail ?? "", /only 1\.0 GB are free on the Docker disk and an update needs 2\.0 GB/);
+  assert.equal(agent.status.failedDigest, null);
+  assert.deepEqual(agent.status.disk, { freeBytes: GIB, totalBytes: 50 * GIB });
+});
+
+test("an update leaves the running app alone when the download fills the disk", async () => {
+  const { agent, calls, lastResult } = updateHarness([10 * GIB, 10 * GIB, MIN_SWITCH_DISK_BYTES - 1]);
+  await agent.apply({ commandId: null, target: null });
+  assert.deepEqual(calls, ["removeImage sha256:stale", "pull"]);
+  assert.equal(lastResult()?.outcome, "failed");
+  assert.match(lastResult()?.detail ?? "", /an update needs 0\.5 GB/);
+  assert.ok(MIN_SWITCH_DISK_BYTES < MIN_FREE_DISK_BYTES / 2, "a finished download does not block the switch it was made for");
+  assert.equal(agent.status.failedDigest, null);
+});
+
+test("the console and the updater warn at the same free disk threshold", async () => {
+  const { UPDATER_MIN_FREE_DISK_BYTES, diskLow, updaterView } = await import("@/lib/updates/updater-view");
+  assert.equal(UPDATER_MIN_FREE_DISK_BYTES, MIN_FREE_DISK_BYTES);
+  assert.equal(diskLow({ disk: { freeBytes: MIN_FREE_DISK_BYTES - 1, totalBytes: 50 * GIB } }), true);
+  assert.equal(diskLow({ disk: { freeBytes: MIN_FREE_DISK_BYTES, totalBytes: 50 * GIB } }), false);
+  assert.equal(diskLow({ disk: null }), false);
+  const seenAt = new Date().toISOString();
+  assert.equal(updaterView({ ...report(), seenAt }, null, false, Date.now())?.disk, null);
+  const disk = { freeBytes: GIB, totalBytes: 50 * GIB };
+  assert.deepEqual(updaterView({ ...report({ disk }), seenAt }, null, false, Date.now())?.disk, disk);
+  const { updaterReportSchema } = await import("@/schemas/updater");
+  assert.equal(updaterReportSchema.safeParse(report()).success, true);
+  assert.equal(updaterReportSchema.safeParse(report({ disk })).success, true);
+  assert.equal(updaterReportSchema.safeParse({ ...report(), disk: { freeBytes: -1, totalBytes: 1 } }).success, false);
 });

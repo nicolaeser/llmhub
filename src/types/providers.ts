@@ -1,5 +1,10 @@
 import type { z } from "zod";
-import type { providerConcurrencySchema, signInCredentialSchema, signInTicketSchema } from "@/schemas/providers";
+import type {
+  loginJournalEntrySchema,
+  providerConcurrencySchema,
+  signInCredentialSchema,
+  signInTicketSchema,
+} from "@/schemas/providers";
 import type { ActionFail } from "@/types/actions";
 import type { NewModelMode } from "@/types/model-catalog";
 import type { AutoResetPolicies, ResetCredits } from "@/types/resets";
@@ -188,6 +193,8 @@ export type TokenRefresh =
 export type SignInTicket = z.infer<typeof signInTicketSchema>;
 
 export type SignInCredential = z.infer<typeof signInCredentialSchema>;
+
+export type LoginJournalEntry = z.infer<typeof loginJournalEntrySchema>;
 
 export type SignInStart = {
   method: SignInMethod;

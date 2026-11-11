@@ -1,5 +1,5 @@
 import { Buffer } from "node:buffer";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, statfs, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { setInterval } from "node:timers";
@@ -10,6 +10,7 @@ import { digestsFor, imageRefOf, isPinned, normalizeRepository, parseImageRef, u
 import { errorMessage, log, PREDECESSOR_LOG_LINES, replayLogText } from "./log.mjs";
 import { isBackup, recoverLeftovers, recreateContainer, removeContainerNamed, replaceStoppedContainers } from "./recreate.mjs";
 import { signBody, UPDATER_HEADER, verifySignature } from "./signature.mjs";
+import { switchRedisToSnapshots } from "./stack.mjs";
 
 export const TARGET_LABEL = "llmhub.updater.target";
 export const PREDECESSOR_ENV = "LLMHUB_UPDATER_PREDECESSOR";
@@ -20,6 +21,8 @@ export const HANDOVER_TIMEOUT_MS = 2 * 60_000;
 export const STATE_DIR = path.join(os.homedir(), ".llmhub-updater");
 export const HEARTBEAT_FILE = path.join(STATE_DIR, "heartbeat");
 export const HEARTBEAT_MAX_AGE_MS = 90_000;
+export const MIN_FREE_DISK_BYTES = 2 * 1024 ** 3;
+export const MIN_SWITCH_DISK_BYTES = 512 * 1024 ** 2;
 
 const STATE_FILE = path.join(STATE_DIR, "state.json");
 const SYNC_TIMEOUT_MS = 8_000;
@@ -29,6 +32,19 @@ const COMMAND_ACTIONS = new Set(["check", "update"]);
 const RESULT_OUTCOMES = new Set(["up_to_date", "available", "updated", "rolled_back", "failed", "pinned"]);
 const DIGEST = /^sha256:[0-9a-f]{64}$/;
 const SOCKET_ERRORS = new Set(["ENOENT", "EACCES", "ECONNREFUSED", "EPERM"]);
+
+export async function dockerDiskSpace(where = "/") {
+  const stats = await statfs(where);
+  return { freeBytes: stats.bavail * stats.bsize, totalBytes: stats.blocks * stats.bsize };
+}
+
+function gigabytes(bytes) {
+  return (bytes / 1024 ** 3).toFixed(1);
+}
+
+export function lowDisk(disk, minBytes = MIN_FREE_DISK_BYTES) {
+  return Boolean(disk) && disk.freeBytes < minBytes;
+}
 
 function isoNow() {
   return new Date().toISOString();
@@ -70,7 +86,15 @@ export function desiredOf(json) {
   return { auto: json?.auto === true, command: valid ? { id: command.id, action: command.action } : null };
 }
 
-export function createAgent({ docker, key, appUrl, projectOverride = null, predecessor = null, version }) {
+export function createAgent({
+  docker,
+  key,
+  appUrl,
+  projectOverride = null,
+  predecessor = null,
+  version,
+  diskSpace = dockerDiskSpace,
+}) {
   const status = {
     state: "idle",
     issue: null,
@@ -85,9 +109,12 @@ export function createAgent({ docker, key, appUrl, projectOverride = null, prede
     failedDigest: null,
     lastResult: null,
     ackCommandId: null,
+    disk: null,
   };
   let self = null;
   let project = null;
+  const redisSkipped = new Set();
+  let stackDue = false;
   let desired = { auto: false, command: null };
   let syncedAt = 0;
   let appReachable = null;
@@ -237,6 +264,49 @@ export function createAgent({ docker, key, appUrl, projectOverride = null, prede
     return { ref, containers, stopped };
   }
 
+  async function measureDisk() {
+    try {
+      const disk = await diskSpace();
+      status.disk = { freeBytes: Math.floor(disk.freeBytes), totalBytes: Math.floor(disk.totalBytes) };
+    } catch (err) {
+      status.disk = null;
+      log("warn", "updater.disk_unknown", { err: errorMessage(err) });
+    }
+    return status.disk;
+  }
+
+  async function requireDiskSpace(step, minBytes = MIN_FREE_DISK_BYTES) {
+    const disk = await measureDisk();
+    if (!lowDisk(disk, minBytes)) return;
+    log("error", "updater.disk_low", { step, freeBytes: disk.freeBytes, requiredBytes: minBytes });
+    throw Object.assign(
+      new Error(
+        `only ${gigabytes(disk.freeBytes)} GB are free on the Docker disk and an update needs ${gigabytes(minBytes)} GB; free up space, then update again`,
+      ),
+      { lowDisk: true },
+    );
+  }
+
+  async function pruneUnusedImages(ref) {
+    const dangling = await docker.listDanglingImages().catch((err) => {
+      log("warn", "updater.prune_skipped", { err: errorMessage(err) });
+      return [];
+    });
+    const ours = (dangling ?? []).filter((image) => digestsFor(image.RepoDigests, ref.name).length > 0);
+    if (!ours.length) return;
+    const containers = await docker.listContainers([], true);
+    const used = new Set((containers ?? []).map((container) => container.ImageID));
+    for (const image of ours) {
+      if (used.has(image.Id)) continue;
+      try {
+        await docker.removeImage(image.Id);
+        log("info", "updater.image_pruned", { image: image.Id, sizeBytes: image.Size ?? null });
+      } catch (err) {
+        log("info", "updater.image_kept", { image: image.Id, err: errorMessage(err) });
+      }
+    }
+  }
+
   async function runningDigests(target) {
     const ids = [...new Set(target.containers.map((container) => container.Image))];
     const images = await Promise.all(ids.map((id) => docker.inspectImage(id)));
@@ -250,6 +320,7 @@ export function createAgent({ docker, key, appUrl, projectOverride = null, prede
       return null;
     }
     const digests = await runningDigests(target);
+    await measureDisk();
     status.currentDigest = digests[0]?.[0] ?? null;
     status.checkedAt = isoNow();
     if (status.pinned) {
@@ -336,12 +407,15 @@ export function createAgent({ docker, key, appUrl, projectOverride = null, prede
     const imageRef = imageRefOf(target.ref);
     let pulled = false;
     try {
+      await pruneUnusedImages(target.ref);
+      await requireDiskSpace("pull");
       await setPhase("pulling");
       log("info", "updater.pulling", { image: imageRef });
       await docker.pull(target.ref.name, target.ref.tag);
       pulled = true;
       const image = await docker.inspectImage(imageRef, true);
       if (!image) throw new Error("the pulled image cannot be inspected");
+      await requireDiskSpace("switch", MIN_SWITCH_DISK_BYTES);
       const stale = target.containers.filter((container) => container.Image !== image.Id);
       const freshDigests = digestsFor(image.RepoDigests, target.ref.name);
       for (const container of stale) {
@@ -354,14 +428,29 @@ export function createAgent({ docker, key, appUrl, projectOverride = null, prede
       status.failedDigest = null;
       await result("update", stale.length ? "updated" : "up_to_date", null, commandId);
       await setPhase("idle");
+      await maintainStack();
       await maybeSelfUpdate(target.ref, image).catch((err) =>
         log("error", "updater.self_update_failed", { err: errorMessage(err) }),
       );
     } catch (err) {
       const rolledBack = err?.rolledBack === true;
-      if (pulled) status.failedDigest = status.latestDigest;
+      if (pulled && err?.lowDisk !== true) status.failedDigest = status.latestDigest;
       await result("update", rolledBack ? "rolled_back" : "failed", errorMessage(err), commandId);
       await setPhase("failed");
+    }
+  }
+
+  async function maintainStack() {
+    if (!(await ensureProject())) return;
+    try {
+      const disk = await measureDisk();
+      if (lowDisk(disk)) {
+        log("warn", "updater.stack_skipped", { reason: "disk_low", freeBytes: disk.freeBytes });
+        return;
+      }
+      await switchRedisToSnapshots(docker, project, { skip: redisSkipped });
+    } catch (err) {
+      log("warn", "updater.stack_failed", { err: errorMessage(err) });
     }
   }
 
@@ -369,7 +458,7 @@ export function createAgent({ docker, key, appUrl, projectOverride = null, prede
     const target = await check();
     if (!target || status.pinned) return;
     const trusted = Date.now() - syncedAt < AUTO_TRUST_MS;
-    if (status.available && desired.auto && trusted && status.latestDigest !== status.failedDigest) {
+    if (status.available && desired.auto && trusted && status.latestDigest !== status.failedDigest && !lowDisk(status.disk)) {
       log("info", "updater.auto_update", { digest: status.latestDigest });
       await apply({ commandId: null, target });
       return;
@@ -421,6 +510,11 @@ export function createAgent({ docker, key, appUrl, projectOverride = null, prede
         return;
       }
       if (busy) return;
+      if (stackDue) {
+        stackDue = false;
+        run(maintainStack);
+        return;
+      }
       const command = desired.command;
       if (command && command.id !== lastCommandId) {
         lastCommandId = command.id;
@@ -466,6 +560,7 @@ export function createAgent({ docker, key, appUrl, projectOverride = null, prede
       await docker.stop(previous.Id, 10).catch((err) => log("warn", "updater.predecessor_not_stopped", { err: errorMessage(err) }));
       await docker.remove(previous.Id);
       log("info", "updater.self_updated", { replaced: shortId(previous.Id) });
+      stackDue = true;
       await removeImages([previous.Image], self.Image);
     }
     if (name !== original && !(await docker.inspectContainer(original))) {

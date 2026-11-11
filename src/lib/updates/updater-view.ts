@@ -11,6 +11,7 @@ import type {
 export const UPDATER_CONNECTED_MS = 30_000;
 export const UPDATER_COMMAND_TTL_MS = 10 * 60_000;
 export const UPDATER_RESTART_WINDOW_MS = 15 * 60_000;
+export const UPDATER_MIN_FREE_DISK_BYTES = 2 * 1024 ** 3;
 
 const RESTARTING_STATES: readonly UpdaterState[] = ["pulling", "recreating", "verifying", "rolling_back"];
 
@@ -53,6 +54,7 @@ export function updaterView(
     available: status.available && !status.pinned,
     checkedAt: status.checkedAt,
     lastResult: status.lastResult,
+    disk: status.disk ?? null,
     auto,
     pending: commandActive(command, now) ? command.action : null,
   };
@@ -76,6 +78,10 @@ export function livePayload(
     canRead: access.canRead,
     canManage: access.canRead && access.canManage,
   };
+}
+
+export function diskLow(view: Pick<UpdaterView, "disk">): boolean {
+  return Boolean(view.disk && view.disk.freeBytes < UPDATER_MIN_FREE_DISK_BYTES);
 }
 
 export function shortDigest(digest: string | null): string {

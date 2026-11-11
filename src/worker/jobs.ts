@@ -5,7 +5,7 @@ import { ATTEMPT_RETENTION_MS } from "@/lib/auth/throttle";
 import prisma from "@/lib/db/prisma";
 import { fireAlert } from "@/lib/alerts/notify";
 import { runPendingBatches } from "@/lib/gateway/endpoints/batches";
-import { refreshDueLogins } from "@/lib/gateway/upstreams/credentials";
+import { refreshDueLogins, syncLoginJournal } from "@/lib/gateway/upstreams/credentials";
 import { pruneSupersededLogins } from "@/lib/providers/account-match";
 import { pruneSubAddLinks } from "@/lib/providers/sub-add-prune";
 import { runAutoResets } from "@/lib/gateway/upstreams/reset-redeem";
@@ -94,6 +94,7 @@ export async function runMaintenanceSweep(
     vectorFiles: 0,
     vectorStores: 0,
     reports: 0,
+    loginJournal: 0,
     signIns: 0,
     supersededLogins: 0,
     subAddLinks: 0,
@@ -130,6 +131,7 @@ export async function runMaintenanceSweep(
   await runSweepJob("key_expiry_alerts", () => runKeyExpiryAlerts(now));
   result.reports = await runSweepJob("usage_reports", () => runUsageReports(now));
   await runSweepJob("sso_revalidation", () => revalidateSsoSessions(now));
+  result.loginJournal = await runSweepJob("login_journal", () => syncLoginJournal(now.getTime()));
   result.signIns = await runSweepJob("sign_in_refresh", () => refreshDueLogins(now.getTime()));
   result.supersededLogins = await runSweepJob("superseded_logins", async () => (await pruneSupersededLogins("worker")).length);
   result.subAddLinks = await runSweepJob("sub_add_links", async () => (await pruneSubAddLinks("worker", now.getTime())).length);

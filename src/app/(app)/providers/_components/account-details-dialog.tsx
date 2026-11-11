@@ -18,6 +18,7 @@ import { useFormatter, useTranslations } from "next-intl";
 import IconTile from "@/components/console/icon-tile";
 import { PlanBadge } from "@/components/console/subscription-badge";
 import { limitsUpdatedAt, updatedFromTraffic } from "@/lib/gateway/upstreams/observed-limits";
+import { limitsFromTraffic } from "@/lib/gateway/upstreams/provider-kinds";
 import type { AccountState, LimitSnapshot, ProviderView } from "@/types/providers";
 import type { Tone } from "@/types/console";
 import AccountKeyUsage from "./account-key-usage";
@@ -192,7 +193,9 @@ export default function AccountDetailsDialog({
                       </div>
                     ) : null}
                     {limits && account.groups.length === 0 ? (
-                      <p className="text-sm text-muted">{t("limits.none")}</p>
+                      <p className="text-sm text-muted">
+                        {t(limitsFromTraffic(row.kind) && !limits.observedAt ? "limits.awaitingTraffic" : "limits.none")}
+                      </p>
                     ) : null}
                     {account.groups.length > 0 ? (
                       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">

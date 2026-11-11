@@ -62,8 +62,25 @@ function healthcheckFor(own, defaults) {
   return Object.keys(kept).length ? kept : undefined;
 }
 
+function bindTarget(bind) {
+  return String(bind).split(":")[1];
+}
+
+export function inheritedVolumes(container, host = container.HostConfig ?? {}) {
+  if (Array.isArray(host.VolumesFrom) && host.VolumesFrom.length) return [];
+  const taken = new Set([
+    ...(host.Mounts ?? []).map((mount) => mount.Target),
+    ...(host.Binds ?? []).map(bindTarget),
+  ]);
+  return (container.Mounts ?? [])
+    .filter((mount) => mount.Type === "volume" && mount.Name && mount.Destination && !taken.has(mount.Destination))
+    .map((mount) => ({ Type: "volume", Source: mount.Name, Target: mount.Destination, ReadOnly: mount.RW === false }));
+}
+
 function hostConfigFor(container) {
   const host = clone(container.HostConfig ?? {});
+  const inherited = inheritedVolumes(container, host);
+  if (inherited.length) host.Mounts = [...(host.Mounts ?? []), ...inherited];
   if (Array.isArray(host.Links)) {
     host.Links = host.Links.map((link) => {
       const [target, alias] = String(link).split(":");

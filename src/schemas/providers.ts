@@ -68,6 +68,13 @@ const signInSessionSchema = z.object({
   plan: z.string(),
 });
 
+export const loginJournalEntrySchema = z.object({
+  providerId: z.string().min(1),
+  kind: signInKindSchema,
+  refreshedAt: z.number().int().min(0),
+  session: signInSessionSchema,
+});
+
 export const signInTicketSchema = z.object({
   purpose: z.literal("sign_in_device"),
   uid: z.string().min(1),

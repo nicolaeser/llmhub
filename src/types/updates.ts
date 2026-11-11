@@ -54,6 +54,7 @@ export type UpdaterView = {
   available: boolean;
   checkedAt: string | null;
   lastResult: UpdaterReport["lastResult"];
+  disk: NonNullable<UpdaterReport["disk"]> | null;
   auto: boolean;
   pending: UpdaterAction | null;
 };

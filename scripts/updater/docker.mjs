@@ -128,7 +128,10 @@ export function dockerClient(socketPath = DOCKER_SOCKET) {
     readFile,
     inspectContainer: (id) => optional(call("GET", `/containers/${id}/json`)),
     listContainers: (labels, all = false) =>
-      call("GET", "/containers/json", { query: { all: String(all), filters: JSON.stringify({ label: labels }) } }),
+      call("GET", "/containers/json", {
+        query: { all: String(all), ...(labels.length ? { filters: JSON.stringify({ label: labels }) } : {}) },
+      }),
+    listDanglingImages: () => call("GET", "/images/json", { query: { filters: JSON.stringify({ dangling: ["true"] }) } }),
     inspectImage: (ref, manifests = false) =>
       optional(call("GET", `/images/${ref}/json`, { query: manifests ? { manifests: "1" } : undefined })),
     distribution: (ref) => call("GET", `/distribution/${ref}/json`, { timeout: 60_000 }),

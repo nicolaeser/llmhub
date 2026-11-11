@@ -44,7 +44,7 @@ hub.example.com {
 
 The health check and `lb_try_duration` keep updates and restarts invisible to clients: while the app drains or starts, Caddy holds new requests for up to 90 seconds and sends them to the app as soon as it is ready again, instead of answering 502.
 
-Sign-in limits, sessions, the audit log, and key IP allowlists use the client address that `IP_MODE` selects. The default `proxy` takes the last `X-Forwarded-For` entry, the one your reverse proxy appends, so port 3000 must only be reachable through the proxy. With Cloudflare in front, set `IP_MODE=cloudflare` and accept web traffic only from Cloudflare. Postgres and Redis keep their data in `./postgres-data` and `./redis-data` next to the compose file and are not published on host ports. Migrations run on every container start.
+Sign-in limits, sessions, the audit log, and key IP allowlists use the client address that `IP_MODE` selects. The default `proxy` takes the last `X-Forwarded-For` entry, the one your reverse proxy appends, so port 3000 must only be reachable through the proxy. With Cloudflare in front, set `IP_MODE=cloudflare` and accept web traffic only from Cloudflare. Postgres and Redis keep their data in `./postgres-data` and `./redis-data` next to the compose file and are not published on host ports. Migrations run on every container start. The `keeper` keeps subscription sign-ins alive on its own (see [Subscription sign-ins](#subscription-sign-ins)).
 
 Open `https://hub.example.com/internal-api/setup` to create the owner account. Every account sets up two-factor authentication at its first sign-in. Self-registration stays off until you enable it in Settings. Then connect a provider on the Providers page, create a key on the Keys page, and call the API:
 
@@ -102,7 +102,9 @@ The compose files also read these values from `.env`. They configure the Postgre
 | `POSTGRES_MEMORY_LIMIT` | `2g` | Memory cap of Postgres. |
 | `REDIS_MEMORY_LIMIT` | `1g` | Memory cap of Redis. |
 
-The updater in `docker-compose.au.yml` is capped at 256 MB. On `docker compose stop` or `down`, the app gets 330 seconds to finish open requests and streams (`stop_grace_period`), because API requests may run for up to 300 seconds. While it drains, it keeps accepting connections but answers new API requests with `503 server_restarting`, `Retry-After: 15`, and `x-should-retry: true` (Anthropic clients see `overloaded_error`), so Claude Code, Codex, and SDKs retry instead of reporting an exhausted subscription or budget, and `/internal-api/ready` answers 503. It exits as soon as no API request is open. An update through the updater drains for at most 25 seconds, so the outage stays short.
+The caps are upper limits, not reservations. Keep their sum below the memory of the server: when the server itself runs out, the kernel stops whichever process it picks, which can interrupt a migration or a Redis write in the middle. On a server with 2 GB, for example, set `LLMHUB_MEMORY_LIMIT=1g`, `POSTGRES_MEMORY_LIMIT=512m`, and `REDIS_MEMORY_LIMIT=256m` and add swap. `free -h` shows the memory, and `journalctl -k | grep -i oom` shows whether the kernel stopped a process.
+
+The keeper and the updater in `docker-compose.au.yml` are capped at 256 MB each. On `docker compose stop` or `down`, the app gets 330 seconds to finish open requests and streams (`stop_grace_period`), because API requests may run for up to 300 seconds. While it drains, it keeps accepting connections but answers new API requests with `503 server_restarting`, `Retry-After: 15`, and `x-should-retry: true` (Anthropic clients see `overloaded_error`), so Claude Code, Codex, and SDKs retry instead of reporting an exhausted subscription or budget, and `/internal-api/ready` answers 503. It exits as soon as no API request is open. An update through the updater drains for at most 25 seconds, so the outage stays short.
 
 The image sets `PORT=3000`, `HOSTNAME=0.0.0.0`, and `NODE_ENV=production`.
 
@@ -116,9 +118,34 @@ Sentry is optional. Without a DSN the SDK is never initialized and makes no netw
 
 Browser errors need `NEXT_PUBLIC_SENTRY_DSN` when the image is built, for example `docker build --build-arg NEXT_PUBLIC_SENTRY_DSN=https://…`, because the console is compiled with it; the content security policy then allows that Sentry host. `NEXT_PUBLIC_SENTRY_ENVIRONMENT`, `NEXT_PUBLIC_SENTRY_RELEASE`, and `NEXT_PUBLIC_SENTRY_TRACES_SAMPLE_RATE` set the browser values the same way.
 
+### Disk usage
+
+The updater checks for 2 GB of free space before every update, and the console shows the free space next to it. To see what fills the disk, run from the directory that holds `docker-compose.yml`:
+
+```bash
+df -h /
+docker system df
+sudo du -sh postgres-data redis-data /var/lib/docker /var/lib/containerd 2>/dev/null
+docker compose exec -T postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT relname, pg_size_pretty(pg_total_relation_size(relid)) AS size FROM pg_statio_user_tables ORDER BY pg_total_relation_size(relid) DESC LIMIT 15"'
+```
+
+Container logs are capped at 50 MB per container. In the database, request logs and stored prompts and responses follow the retention in Settings → Logging & alerts; uploaded files, batch files, and vector store files stay in PostgreSQL without S3 (see [Storage](#storage)) until their own retention removes them. `docker image prune` removes images that no container uses, including old Postgres and Redis images.
+
+## Subscription sign-ins
+
+Subscription accounts (Claude, ChatGPT/Codex, Kimi, SuperGrok, Antigravity, and the others you sign in to) use tokens that the provider replaces at every refresh. A refresh token that was used once is dead, so losing the newest one means signing in again. The keeper protects them:
+
+- It runs from the app image (`node keeper/keeper.mjs`) and refreshes due sign-ins every minute, also while the web server is down, restarting, or waiting for a failed migration and while Redis is down. It only needs PostgreSQL. It uses the same code and the same database lease as the app, so the two never refresh the same account at the same time.
+- The current compose files run it as the separate `keeper` container, which also keeps working while the app container is stopped or replaced, and set `LLMHUB_KEEPER=separate` on the app. Without that variable, for example with a compose file from before November 2026, the app container runs the keeper itself: its start command (`node start.mjs`) starts the keeper after the first migration attempt, keeps it running while a failed migration is retried, and restarts it when it exits. Nothing has to be changed for that.
+- Every refreshed token is written to the login journal before it goes into the database: one encrypted file per refresh (AES-256-GCM with a key derived from `APP_SECRET`, mode 600) in `/login-journal`. The current compose files mount the named volume `login-journal` there for the app and the keeper. Without it, the image's anonymous volume holds the journal, and `docker compose up` and the updater hand it to every new app container. The keeper also copies new sign-ins from the database into the journal every minute. It keeps the three newest entries per account, removes an account's entries when the account is removed in LLM Hub, and removes entries whose account is missing from the database 30 days after their last change.
+- When the database holds older tokens for an account than the journal, because saving failed, the process stopped before it could save, or a backup was restored, the newer tokens are written back before anything refreshes, so a used refresh token is never sent again. Entries of another account are never restored.
+- Without PostgreSQL nothing refreshes, because the database lease keeps two processes from refreshing the same account; the newest tokens wait in the journal, and refresh tokens last far longer than an access token.
+
+`docker compose ps keeper` shows whether it is healthy, and `docker compose logs keeper` (or `docker compose logs app` when the app runs it) shows refreshes, restored sign-ins (`provider.sign_in_tokens_restored`), and failed steps. `docker compose down -v` deletes the journal with the volume, so leave out `-v`.
+
 ## Backup and restore
 
-All durable state lives in PostgreSQL, in S3 if you use it, and in `.env`. Back up `.env` together with the database: without the same `APP_SECRET`, encrypted provider credentials and two-factor secrets cannot be read. Redis only holds queues, counters, and caches and does not need a backup.
+All durable state lives in PostgreSQL, in S3 if you use it, and in `.env`. Back up `.env` together with the database: without the same `APP_SECRET`, encrypted provider credentials and two-factor secrets cannot be read. The login journal is not a backup; it only holds the newest sign-in tokens. Redis only holds queues, counters, and caches and does not need a backup. It writes a snapshot at most once a minute instead of an append-only file, so a crash loses at most a minute of queue and counter changes but never leaves a file that keeps Redis from starting, and a failed snapshot, for example on a full disk, does not stop Redis from accepting writes.
 
 Create a backup from the directory that holds `docker-compose.yml`:
 
@@ -134,7 +161,7 @@ docker compose exec -T postgres sh -c 'pg_restore -U "$POSTGRES_USER" -d "$POSTG
 docker compose start app
 ```
 
-Restore with the same or a newer image than the one that wrote the backup. A newer image applies its migrations when it starts.
+Restore with the same or a newer image than the one that wrote the backup. A newer image applies its migrations when it starts. Leave the keeper running: subscription accounts whose tokens were refreshed after the backup get their newer tokens back from the login journal within a minute, without signing in again.
 
 ## Upgrading
 
@@ -142,21 +169,47 @@ Restore with the same or a newer image than the one that wrote the backup. A new
 
 1. Back up the database and `.env` as described above.
 2. Change `LLMHUB_TAG` in `.env`.
-3. Run `docker compose pull app && docker compose up -d`.
+3. Download `docker-compose.yml` (or `docker-compose.au.yml`) of the release again when it changed, then run `docker compose pull && docker compose up -d`.
 4. Check `/internal-api/ready` and `/internal-api/version`.
+
+Compose files from before November 2026 keep working without changes. The app container then runs the keeper itself and keeps the login journal in the image's anonymous volume (see [Subscription sign-ins](#subscription-sign-ins)). Those files run Redis with an append-only file; the updater moves it to snapshots once (see [Automatic updates](#automatic-updates)), and without the updater it stays as it is. Downloading the current file is optional. It adds the separate keeper container, the `login-journal` volume, and the snapshot settings for Redis:
+
+```bash
+curl -fsSLO https://raw.githubusercontent.com/nicolaeser/llmhub/main/docker-compose.yml
+docker compose up -d
+```
+
+Use `docker-compose.au.yml` instead when you run the updater. When Redis moves to snapshots, it is stopped normally and writes a final snapshot, which the new container loads, so queues and counters stay. `redis-data/appendonlydir` is no longer read afterwards and can be deleted.
 
 If your Caddy block is still the plain `reverse_proxy 127.0.0.1:3000`, replace it with the block from [Quick start](#quick-start) and reload Caddy (`systemctl reload caddy` or `caddy reload`). Its health check on `/internal-api/ready` and `lb_try_duration` hold new requests while the app drains and restarts and hand them to the new container; without them, clients get 502 during every restart and must retry on their own. The first update to a release with the drain mode is still installed by the previous updater and image, which wait up to 330 seconds for open streams; from the next update on, the app drains for at most 25 seconds.
 
-Each container start applies pending migrations under a database lock before the server starts, so several replicas can start at the same time. Migrations are forward-only. To roll back, restore the backup taken before the upgrade and start the previous tag.
+Each container start applies pending migrations under a database lock before the server starts, so several replicas can start at the same time. When a migration fails, the container keeps running without the web server, logs `start.migration_failed`, and tries again after 10 seconds, 30 seconds, 1, and 2 minutes, then every 5 minutes; meanwhile it reports unhealthy, and the updater rolls an update back. Migrations are forward-only. To roll back, restore the backup taken before the upgrade and start the previous tag.
+
+### A migration failed
+
+Migrations newer than `20261110120000_model_extra_names` run inside one transaction. When one fails, for example on a full disk or because the container was killed, none of it stays in the database: the start script marks it rolled back and prints the reason, the container restarts and runs it again, and the previous image still starts after a rollback. When Prisma recorded no reason, Postgres logged it (`docker compose logs postgres`).
+
+An older migration that fails can leave part of its changes behind. Every start then stops with `a failed migration blocks the start` (Prisma error P3009), with the previous image as well, and the log names the migration and the database error. Fix the cause, undo what the migration applied (its SQL is in `prisma/migrations/<name>/migration.sql` at the release tag), and mark it rolled back so the next start applies it again:
+
+```bash
+docker compose stop app
+docker compose exec -T postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT migration_name, logs FROM _prisma_migrations WHERE finished_at IS NULL AND rolled_back_at IS NULL"'
+docker compose run --rm --no-deps --entrypoint node app ./node_modules/prisma/build/index.js migrate resolve --rolled-back <name>
+docker compose up -d
+```
+
+For `20261110120000_model_extra_names`, undo it with `ALTER TABLE "ModelGroup" DROP COLUMN IF EXISTS "extraNames";` before marking it rolled back.
 
 ## Automatic updates
 
-`docker-compose.au.yml` is `docker-compose.yml` plus an updater container. The app, Postgres, and Redis services are identical; the app only gains the label `llmhub.updater.target=true`. The updater runs from the same image (`node updater.mjs`) and keeps the app on the newest image of its tag:
+`docker-compose.au.yml` is `docker-compose.yml` plus an updater container. The app, Postgres, Redis, and keeper services are identical; the app and the keeper only gain the label `llmhub.updater.target=true`, so both move to every new image. The updater runs from the same image (`node updater.mjs`) and keeps the app on the newest image of its tag:
 
 1. Every five minutes it asks the registry for the digest behind the tag the app runs and compares it with the running image.
-2. When automatic updates are on, or when someone presses Update now in the console, it pulls the image, stops the app with a drain of 30 seconds (running requests finish, new API requests are asked to retry), starts a new container with the same settings, environment overrides, labels, networks, and aliases, and waits until the image's health check reports healthy (up to ten minutes, because migrations run on start).
-3. If the new container stops or turns unhealthy, it removes it and starts the previous container again. A digest that failed is not installed automatically again until a newer image is published; Update now retries it.
+2. When automatic updates are on, or when someone presses Update now in the console, it first removes older images of the app that no container uses and checks that at least 2 GB are free on the disk that holds Docker. It pulls the image, checks that at least 512 MB are still free, stops the app with a drain of 30 seconds (running requests finish, new API requests are asked to retry), starts a new container with the same settings, environment overrides, labels, networks, and aliases, and waits until the image's health check reports healthy (up to ten minutes, because migrations run on start).
+3. If the new container stops, turns unhealthy, or restarts three times without becoming healthy, it removes it and starts the previous container again. A digest that failed is not installed automatically again until a newer image is published; Update now retries it. With less than 2 GB free, the update stops before the app is touched, automatic updates wait, and the console warns about the disk; once space is freed, the same digest installs again.
 4. After a successful update it removes the old container, recreates stopped containers that carry the label on the new image without starting them, removes the old image if nothing else uses it, and then replaces its own container with the new image. No labelled container is left on the old image.
+
+A new container keeps the anonymous volumes of the one it replaces, as with `docker compose up`, so a stack without the `login-journal` volume keeps its login journal across updates. After an update, the updater also moves Redis from an append-only file to snapshots once, when its container runs exactly the command of the compose files from before November 2026 (`redis-server --appendonly yes --requirepass …`), reports healthy, and at least 2 GB are free. It stops Redis, which writes a final snapshot, and starts it with `--appendonly no --save "60 1" --stop-writes-on-bgsave-error no` and otherwise unchanged settings. If Redis could not shut down cleanly, for example because the snapshot failed, or the new container does not turn healthy, it starts the previous container again, which still has its append-only file. It touches no other Redis and no other container of the stack. Delete `redis-data/appendonlydir` before you ever start Redis with `--appendonly yes` again, because Redis would load that outdated file instead of the snapshot.
 
 Use it instead of `docker-compose.yml`, in the same directory and with the same `.env`:
 
@@ -165,11 +218,11 @@ curl -fsSLO https://raw.githubusercontent.com/nicolaeser/llmhub/main/docker-comp
 docker compose -f docker-compose.au.yml up -d
 ```
 
-Use `-f docker-compose.au.yml` for later compose commands, or add `COMPOSE_FILE=docker-compose.au.yml` to `.env` so a plain `docker compose` uses it. Switching an existing stack keeps its data: Postgres and Redis are unchanged, and only the app container is recreated.
+Use `-f docker-compose.au.yml` for later compose commands, or add `COMPOSE_FILE=docker-compose.au.yml` to `.env` so a plain `docker compose` uses it. Switching an existing stack keeps its data: Postgres, Redis, and the login journal are unchanged, and only the app and keeper containers are recreated.
 
 The updater service sets `pull_policy: always`, so every `docker compose -f docker-compose.au.yml up` pulls the newest image of `LLMHUB_TAG` first and recreates the app and the updater if it changed. A host that still has an older image of the tag, for example one pulled before the updater existed, would otherwise start the updater from an image without `updater.mjs` (`Cannot find module '/app/updater.mjs'`). The command therefore needs the registry to be reachable.
 
-The badge in the console's top bar shows the live connection to the server (Live, Updating, Reconnecting, Offline). Its menu and Settings → General → Automatic updates show the updater, the running and newest image digest, the last check and its result, and offer Check now, Update now, and the Install updates automatically switch (`settings:manage`). Automatic updates start switched off; while an updater is connected and they are off, the console offers to turn them on.
+The badge in the console's top bar shows the live connection to the server (Live, Updating, Reconnecting, Offline). Its menu and Settings → General → Automatic updates show the updater, the running and newest image digest, the free disk space, the last check and its result, and offer Check now, Update now, and the Install updates automatically switch (`settings:manage`). Automatic updates start switched off; while an updater is connected and they are off, the console offers to turn them on.
 
 The updater gets only what it needs:
 

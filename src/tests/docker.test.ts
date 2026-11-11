@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
+import { KEEPER_COMMAND, KEEPER_MODE_ENV, MIGRATE_COMMAND, SEPARATE_KEEPER, SERVER_COMMAND } from "../../scripts/start.mjs";
 import { stopSeconds } from "../../scripts/updater/container-config.mjs";
 import { BACKBONE_FILE, DEFAULT_REVISION } from "../../scripts/redactor/model-files.mjs";
 
@@ -188,7 +189,9 @@ test("CI smoke-tests each platform image natively before tagging it", async () =
   for (const probe of ["/internal-api/ready", "/internal-api/health", "/internal-api/version", "/internal-api/setup"]) {
     assert.ok(script.includes(probe), probe);
   }
-  assert.match(script, /docker restart/);
+  assert.match(script, /docker stop --time 60 "\$\{app\}"/);
+  assert.match(script, /docker start "\$\{app\}"/);
+  assert.ok(script.indexOf("expect_clean_stop\n") < script.indexOf('docker start "${app}"'), "the restart checks a clean stop first");
 });
 
 test("CI migrates a real Postgres, checks schema drift, and runs integration tests", async () => {
@@ -250,11 +253,14 @@ test("workflows pin third-party actions to a commit and reference GitHub actions
   }
 });
 
-test("the container applies migrations before the web server starts", async () => {
+test("the container starts through the supervisor, which migrates before the web server starts", async () => {
   const dockerfile = await file("Dockerfile");
   const cmd = /^CMD \[(.*)\]$/m.exec(dockerfile)?.[1] ?? "";
-  assert.ok(cmd.indexOf("node migrate-deploy.mjs") < cmd.indexOf("exec node server.js"));
-  assert.match(cmd, /&& exec node server\.js/);
+  assert.equal(cmd, '"node", "start.mjs"');
+  assert.deepEqual(MIGRATE_COMMAND[1], ["migrate-deploy.mjs"]);
+  assert.deepEqual(SERVER_COMMAND[1], ["server.js"]);
+  const supervisor = await file("scripts/start.mjs");
+  assert.ok(supervisor.indexOf("launch(migrate)") < supervisor.indexOf("launch(server)"));
   assert.doesNotMatch(dockerfile, /ENTRYPOINT|seed/);
 });
 
@@ -296,8 +302,9 @@ test("compose keeps postgres and redis data in bind mounts next to the compose f
   for (const source of [deploy, dev]) {
     assert.match(source, /^ {6}- \.\/postgres-data:\/var\/lib\/postgresql$/m);
     assert.match(source, /^ {6}- \.\/redis-data:\/data$/m);
-    assert.doesNotMatch(source, /^volumes:/m);
   }
+  assert.equal(deploy.slice(deploy.search(/^volumes:/m)), "volumes:\n  login-journal:\n");
+  assert.doesNotMatch(dev, /^volumes:/m);
   for (const dir of ["postgres-data", "redis-data"]) {
     assert.ok(gitignore.split("\n").includes(`/${dir}/`), dir);
     assert.ok(dockerignore.split("\n").includes(dir), dir);
@@ -456,15 +463,62 @@ test("the runner carries the updater next to the migration script", async () => 
   const runner = dockerfile.slice(dockerfile.indexOf("AS runner"));
   assert.match(
     runner,
-    /COPY --chown=node:node prisma\.config\.ts scripts\/migrate-deploy\.mjs scripts\/updater\.mjs scripts\/redactor\.mjs \.\//,
+    /COPY --chown=node:node prisma\.config\.ts scripts\/start\.mjs scripts\/migrate-deploy\.mjs scripts\/updater\.mjs scripts\/redactor\.mjs \.\//,
   );
   assert.match(runner, /COPY --chown=node:node scripts\/updater \.\/updater\n/);
   assert.match(runner, /COPY --chown=node:node scripts\/redactor \.\/redactor\n/);
   assert.match(runner, /RUN install -d -o node -g node -m 0755 \/models\n/);
   assert.ok(runner.indexOf("/models") < runner.indexOf("USER node"));
+  assert.match(runner, /COPY --from=builder --chown=node:node \/app\/\.next\/keeper \.\/keeper\n/);
+  assert.match(runner, /RUN install -d -o node -g node -m 0700 \/login-journal\n/);
+  assert.match(runner, /RUN install -d -o node -g node -m 0700 \/login-journal\nVOLUME \["\/login-journal"\]\n/);
+  assert.ok(runner.indexOf("/login-journal") < runner.indexOf("USER node"));
   const entry = await file("scripts/updater.mjs");
   assert.match(entry, /from "\.\/updater\/agent\.mjs"/);
   assert.match(entry, /--healthcheck/);
+});
+
+test("the keeper refreshes sign-ins from the image without the app, Redis, or migrations", async () => {
+  const [deploy, dockerfile, pkg, build, smoke] = await Promise.all([
+    file("docker-compose.yml"),
+    file("Dockerfile"),
+    file("package.json"),
+    file("scripts/build-keeper.mjs"),
+    file("scripts/smoke-image.sh"),
+  ]);
+  const services = composeServices(deploy);
+  const keeper = services.get("keeper") ?? "";
+  const command = /^ {4}command: \[(.*)\]$/m.exec(keeper)?.[1] ?? "";
+  assert.equal(command, '"node", "--liftoff-only", "--wasm-lazy-compilation", "keeper/keeper.mjs"');
+  assert.ok(smoke.includes(`node ${command.replaceAll('"', "").split(", ").slice(1).join(" ")}`), "the smoke test starts the keeper like compose");
+  assert.match(keeper, /image: ghcr\.io\/nicolaeser\/llmhub:\$\{LLMHUB_TAG:-latest\}/);
+  assert.match(keeper, /^ {4}restart: unless-stopped$/m);
+  assert.match(keeper, /depends_on:\n {6}- postgres\n/);
+  assert.match(keeper, /env_file:\n {6}- \.env\n/);
+  assert.match(keeper, /DATABASE_URL: postgresql:\/\/\$\{POSTGRES_USER\}:\$\{POSTGRES_PASSWORD\}@postgres:5432\/\$\{POSTGRES_DB\}/);
+  assert.match(keeper, /^ {6}- login-journal:\/login-journal$/m);
+  assert.match(keeper, /test: \["CMD", "node", "keeper\/keeper\.mjs", "--healthcheck"\]/);
+  assert.match(keeper, /^ {4}mem_limit: 256m$/m);
+  assert.doesNotMatch(keeper, /REDIS_URL|ports:|docker\.sock|user:|service_healthy/);
+  assert.match(services.get("app") ?? "", /^ {6}- login-journal:\/login-journal$/m);
+  assert.match(services.get("app") ?? "", new RegExp(`^ {6}${KEEPER_MODE_ENV}: ${SEPARATE_KEEPER}$`, "m"));
+  assert.equal((KEEPER_COMMAND[1] as string[]).join(" "), command.replaceAll('"', "").split(", ").slice(1).join(" "), "the embedded keeper starts like the keeper service");
+  assert.equal(JSON.parse(pkg).scripts["keeper:build"], "node scripts/build-keeper.mjs");
+  assert.match(build, /entryPoints: \{ keeper: "src\/keeper\/main\.ts" \}/);
+  assert.match(build, /outdir: KEEPER_OUT_DIR/);
+  assert.match(build, /KEEPER_OUT_DIR = "\.next\/keeper"/);
+  assert.match(build, /splitting: true/);
+  assert.match(dockerfile, /npm run build && npm run keeper:build/);
+});
+
+test("Redis snapshots atomically and keeps accepting writes when a snapshot fails", async () => {
+  for (const source of [await file("docker-compose.yml"), await file("docker-compose.au.yml")]) {
+    const redis = composeServices(source).get("redis") ?? "";
+    assert.match(
+      redis,
+      /command: \["redis-server", "--appendonly", "no", "--save", "60 1", "--stop-writes-on-bgsave-error", "no", "--requirepass", "\$\{REDIS_PASSWORD\}"\]/,
+    );
+  }
 });
 
 test("the auto-update stack is the production stack plus the updater", async () => {
@@ -475,11 +529,16 @@ test("the auto-update stack is the production stack plus the updater", async () 
     file(".dockerignore"),
   ]);
   assert.doesNotMatch(deploy + dev, /docker\.sock|updater/);
-  const appTarget = '    labels:\n      llmhub.updater.target: "true"\n';
+  const target = '    labels:\n      llmhub.updater.target: "true"\n';
   const updaterStart = au.indexOf("\n  updater:\n");
-  assert.ok(au.includes(appTarget));
-  assert.equal(au.slice(0, updaterStart + 1).replace(appTarget, "").trimEnd(), deploy.trimEnd());
-  const updater = au.slice(updaterStart);
+  const updaterEnd = au.indexOf("\nvolumes:\n");
+  assert.ok(updaterStart > 0 && updaterEnd > updaterStart);
+  assert.deepEqual(
+    [...composeServices(au)].filter(([, block]) => block.includes(target)).map(([name]) => name),
+    ["app", "keeper"],
+  );
+  assert.equal((au.slice(0, updaterStart) + au.slice(updaterEnd)).replaceAll(target, ""), deploy);
+  const updater = au.slice(updaterStart, updaterEnd);
   assert.match(updater, /image: ghcr\.io\/nicolaeser\/llmhub:\$\{LLMHUB_TAG:-latest\}/);
   assert.match(updater, /pull_policy: always/);
   assert.match(updater, /restart: unless-stopped/);

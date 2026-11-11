@@ -3,6 +3,7 @@ import "server-only";
 import prisma from "@/lib/db/prisma";
 import { asStringArray } from "@/lib/gateway/core";
 import { notifyLive } from "@/lib/updates/live-topics";
+import { forgetJournalLogin } from "@/lib/gateway/upstreams/credentials";
 
 type EmptiedGroup = {
   alias: string;
@@ -67,6 +68,7 @@ export async function removeProviderConnection(id: string) {
     const emptyGroups = emptied.map((group) => group.alias).filter((alias) => !removedGroups.includes(alias));
     return { row, routes: routes.length, removedGroups, emptyGroups };
   });
+  await forgetJournalLogin(id);
   notifyLive("limits");
   return removed;
 }

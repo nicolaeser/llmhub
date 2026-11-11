@@ -38,6 +38,7 @@ export type MaintenanceSweepResult = {
   vectorFiles: number;
   vectorStores: number;
   reports: number;
+  loginJournal: number;
   signIns: number;
   supersededLogins: number;
   subAddLinks: number;

@@ -7,6 +7,7 @@ export const HEALTHY_TIMEOUT_MS = 10 * 60_000;
 export const SETTLE_MS = 20_000;
 export const PORT_RELEASE_TIMEOUT_MS = 15_000;
 export const UPDATE_DRAIN_SECONDS = 30;
+export const CRASH_LOOP_RESTARTS = 3;
 const POLL_MS = 2_000;
 const FAILED_LOG_LINES = 40;
 const START_OLD_ATTEMPTS = 3;
@@ -39,7 +40,11 @@ export async function waitStopped(docker, id, { timeoutMs = PORT_RELEASE_TIMEOUT
   }
 }
 
-export async function waitHealthy(docker, id, { healthyTimeoutMs = HEALTHY_TIMEOUT_MS, settleMs = SETTLE_MS, pollMs = POLL_MS } = {}) {
+export async function waitHealthy(
+  docker,
+  id,
+  { healthyTimeoutMs = HEALTHY_TIMEOUT_MS, settleMs = SETTLE_MS, pollMs = POLL_MS, crashLoopRestarts = CRASH_LOOP_RESTARTS } = {},
+) {
   const startedAt = Date.now();
   for (;;) {
     const info = await docker.inspectContainer(id);
@@ -51,6 +56,9 @@ export async function waitHealthy(docker, id, { healthyTimeoutMs = HEALTHY_TIMEO
       const health = state.Health?.Status;
       if (health === "healthy") return;
       if (health === "unhealthy") throw new Error("the new container reported unhealthy");
+      if ((info.RestartCount ?? 0) >= crashLoopRestarts) {
+        throw new Error(`the new container restarted ${info.RestartCount} times without becoming healthy`);
+      }
       if (state.Status === "exited" || state.Status === "dead") {
         throw new Error(`the new container stopped with exit code ${state.ExitCode ?? "unknown"}`);
       }
@@ -104,7 +112,15 @@ export async function removeContainerNamed(docker, name, keepId) {
   return true;
 }
 
-export async function recreateContainer(docker, container, { imageRef, image, onPhase, waitOptions }) {
+function keepConfig(body) {
+  return body;
+}
+
+export async function recreateContainer(
+  docker,
+  container,
+  { imageRef, image, onPhase, waitOptions, configure = keepConfig, cleanStop = false },
+) {
   const name = containerName(container);
   const backup = `${name}${BACKUP_SUFFIX}`;
   const oldImage = await docker.inspectImage(container.Image);
@@ -117,6 +133,7 @@ export async function recreateContainer(docker, container, { imageRef, image, on
     composeImage: composeImageLabel(container, image),
     stopTimeout: graceSeconds,
   });
+  configure(body);
   const wasRunning = container.State?.Running === true;
   const progress = { stopRequested: false, renamed: false, created: null };
   try {
@@ -127,6 +144,10 @@ export async function recreateContainer(docker, container, { imageRef, image, on
     progress.stopRequested = true;
     await docker.stop(container.Id, drainSeconds);
     await waitStopped(docker, container.Id, waitOptions);
+    if (cleanStop) {
+      const exitCode = (await docker.inspectContainer(container.Id))?.State?.ExitCode;
+      if (exitCode !== 0) throw new Error(`${name} did not shut down cleanly (exit code ${exitCode ?? "unknown"})`);
+    }
     log("info", "updater.container_stopped", { container: name, durationMs: Date.now() - stoppingAt });
     await docker.rename(container.Id, backup);
     progress.renamed = true;

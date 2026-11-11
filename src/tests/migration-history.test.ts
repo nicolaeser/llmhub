@@ -4,6 +4,7 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { migrationOrderProblems } from "../../scripts/check-migration-order.mjs";
+import { ATOMIC_MIGRATIONS_AFTER, isAtomicMigrationName, isTransactionalSql } from "../../scripts/migrate-deploy.mjs";
 
 const root = fileURLToPath(new URL("../..", import.meta.url));
 const MIGRATIONS = path.join(root, "prisma/migrations");
@@ -95,5 +96,14 @@ test("migration SQL carries no comments", async () => {
   for (const folder of await migrationFolders()) {
     const sql = await readFile(path.join(MIGRATIONS, folder, "migration.sql"), "utf8");
     assert.doesNotMatch(sql, /^\s*--/m, folder);
+  }
+});
+
+test("every migration after the atomic cutoff runs in one transaction", async () => {
+  const folders = await migrationFolders();
+  assert.ok(folders.some((folder) => folder.slice(0, 14) === ATOMIC_MIGRATIONS_AFTER));
+  for (const folder of folders.filter(isAtomicMigrationName)) {
+    const sql = await readFile(path.join(MIGRATIONS, folder, "migration.sql"), "utf8");
+    assert.ok(isTransactionalSql(sql), `${folder} must start with BEGIN; and end with COMMIT;`);
   }
 });

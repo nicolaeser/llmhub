@@ -115,7 +115,8 @@ test("boot only ensures the catalog and the image migrates without seeding", asy
   ]);
   assert.match(instrumentation, /ensureSystemCatalog\(\)/);
   assert.doesNotMatch(instrumentation, /migrate/);
-  assert.match(dockerfile, /node migrate-deploy\.mjs && exec node server\.js/);
+  assert.match(dockerfile, /^CMD \["node", "start\.mjs"\]$/m);
+  assert.match(await file("scripts/start.mjs"), /\["migrate-deploy\.mjs"\]/);
   assert.match(config, /path: "prisma\/migrations"/);
   for (const source of [dockerfile, config, pkg]) assert.doesNotMatch(source, /seed/);
 });
