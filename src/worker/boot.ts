@@ -7,6 +7,8 @@ import { closeQueues, QUEUE_NAMES } from "@/lib/jobs/queues";
 import { sharedRedis, withRedisTimeout } from "@/lib/redis/client";
 import { reportWorkerJobFailure } from "@/lib/sentry/worker-jobs";
 import { setWorkerMode } from "./health";
+import { ARCHIVE_INTERVAL_MS } from "./archive-schedule";
+import { runArchiveInProcess } from "./archive";
 import type { GlobalWithWorkerBoot } from "@/types/jobs";
 
 const WORKER_TICK_MS = 60_000;
@@ -49,8 +51,16 @@ async function leasedMaintenanceSweep() {
   logMaintenanceSweep(await runMaintenanceSweep());
 }
 
+function startLocalArchive(g: GlobalWithWorkerBoot): void {
+  if (g.__llmhubArchiveTimer) return;
+  const timer = setInterval(() => void runArchiveInProcess(), ARCHIVE_INTERVAL_MS);
+  timer.unref();
+  g.__llmhubArchiveTimer = timer;
+}
+
 function startLocalTimer(g: GlobalWithWorkerBoot): void {
   startLocalModelSync(g);
+  startLocalArchive(g);
   if (g.__llmhubWorkerTimer) return;
   const tick = () =>
     leasedMaintenanceSweep().catch((err) => {
@@ -71,6 +81,10 @@ function stopLocalTimers(g: GlobalWithWorkerBoot): void {
   if (g.__llmhubModelSyncTimer) {
     clearInterval(g.__llmhubModelSyncTimer);
     g.__llmhubModelSyncTimer = undefined;
+  }
+  if (g.__llmhubArchiveTimer) {
+    clearInterval(g.__llmhubArchiveTimer);
+    g.__llmhubArchiveTimer = undefined;
   }
 }
 

@@ -22,9 +22,10 @@ import type { AntigravitySettings } from "@/types/providers";
 import type { VectorStoreDefaults } from "@/types/rag";
 import type { FeatureModelChoice } from "@/types/models";
 import type { S3Settings } from "@/types/s3";
+import type { ComplianceArchiveSettings } from "@/types/archive";
 import type { UpdaterView, UpdateStatus } from "@/types/updates";
 
-export type SettingsTab = "general" | "sign-in" | "storage" | "logging" | "cache" | "catalog";
+export type SettingsTab = "general" | "sign-in" | "storage" | "logging" | "archive" | "cache" | "catalog";
 
 export type GeneralSettings = z.infer<typeof generalSettingsSchema>;
 
@@ -151,6 +152,7 @@ export type Enterprise = {
   pii_detector?: PiiDetectorSettings;
   guardrails?: GuardrailPolicy;
   s3?: S3Settings;
+  compliance_archive?: ComplianceArchiveSettings;
   budget_alert_thresholds?: number[];
   label_keys?: string[];
   spend_anomaly_factor?: number;

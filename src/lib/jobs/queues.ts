@@ -5,6 +5,7 @@ import { getQueueConnectionOptions } from "./connection";
 import { errorFields } from "@/lib/logging/format";
 import { logger } from "@/lib/logging/logger";
 import type {
+  ArchiveJobData,
   QueueName,
   MaintenanceJobData,
   ModelSyncJobData,
@@ -15,7 +16,10 @@ export const QUEUE_NAMES = {
   maintenance: "llmhub-maintenance",
   models: "llmhub-models",
   webhooks: "llmhub-webhooks",
+  archive: "llmhub-archive",
 } as const;
+
+const ARCHIVE_REQUEST_DEDUP_MS = 60_000;
 const DEFAULT_JOB_OPTIONS: DefaultJobOptions = {
   attempts: 5,
   backoff: { type: "exponential", delay: 5_000 },
@@ -48,6 +52,14 @@ export function getMaintenanceQueue(): Queue<MaintenanceJobData> {
 
 export function getModelsQueue(): Queue<ModelSyncJobData> {
   return getQueue<ModelSyncJobData>(QUEUE_NAMES.models);
+}
+
+export function getArchiveQueue(): Queue<ArchiveJobData> {
+  return getQueue<ArchiveJobData>(QUEUE_NAMES.archive);
+}
+
+export function enqueueArchiveRun() {
+  return getArchiveQueue().add(QUEUE_NAMES.archive, {}, { deduplication: { id: "archive-request", ttl: ARCHIVE_REQUEST_DEDUP_MS } });
 }
 
 function getWebhooksQueue(): Queue<WebhookJobData> {

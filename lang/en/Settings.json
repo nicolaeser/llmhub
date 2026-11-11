@@ -1,7 +1,7 @@
 {
   "title": "Settings",
   "subtitle": "Sign-in, storage, logging, caching, and the model catalog. Infrastructure secrets stay in the environment.",
-  "tabs": "{tab, select, general {General} sign_in {Sign-in} storage {Storage} logging {Logging & alerts} cache {Response cache} catalog {Model catalog} other {Settings}}",
+  "tabs": "{tab, select, general {General} sign_in {Sign-in} storage {Storage} logging {Logging & alerts} archive {Compliance archive} cache {Response cache} catalog {Model catalog} other {Settings}}",
   "save": "Save",
   "saved": "Settings saved",
   "readOnly": "You can view these settings. Changing them needs the Manage settings permission.",
@@ -227,8 +227,8 @@
     "webhookTitle": "Webhook {position, number}",
     "removeWebhook": "Remove webhook {position, number}",
     "events": "Events",
-    "eventLabel": "{event, select, upstream_exhaustion {Upstream exhaustion} budget_threshold {Budget threshold} provider_models_changed {Provider models changed} spend_anomaly {Spend anomaly} key_expiring {Key expiring} key_blocked {Key blocked} pii_blocked {PII blocked} emergency_sign_in {Emergency sign-in} error_rate_spike {Error rate spike} latency_spike {Latency spike} other {Event}}",
-    "eventHint": "{event, select, upstream_exhaustion {No healthy deployment answered, or the upstream returned 5xx or 429.} budget_threshold {A key, person, project, department, or company crossed a budget alert threshold.} provider_models_changed {The hourly sync found added or removed provider models.} spend_anomaly {A key or project spent far more in the last hour than it usually does at that hour.} key_expiring {A key expires within the warning window set under Alert rules.} key_blocked {Someone blocked a key in the console, the management API, or the assistant.} pii_blocked {The PII policy blocked a request. At most one alert per key every 15 minutes, without the request content.} emergency_sign_in {An emergency-access account signed in locally instead of through the identity provider.} error_rate_spike {The share of 5xx and 429 answers rose above the threshold set under Error rate and latency.} latency_spike {The p95 latency rose above the threshold or far above its usual level, per the rules under Error rate and latency.} other {}}",
+    "eventLabel": "{event, select, upstream_exhaustion {Upstream exhaustion} budget_threshold {Budget threshold} provider_models_changed {Provider models changed} spend_anomaly {Spend anomaly} key_expiring {Key expiring} key_blocked {Key blocked} pii_blocked {PII blocked} emergency_sign_in {Emergency sign-in} error_rate_spike {Error rate spike} latency_spike {Latency spike} archive_failed {Compliance archive failed} other {Event}}",
+    "eventHint": "{event, select, upstream_exhaustion {No healthy deployment answered, or the upstream returned 5xx or 429.} budget_threshold {A key, person, project, department, or company crossed a budget alert threshold.} provider_models_changed {The hourly sync found added or removed provider models.} spend_anomaly {A key or project spent far more in the last hour than it usually does at that hour.} key_expiring {A key expires within the warning window set under Alert rules.} key_blocked {Someone blocked a key in the console, the management API, or the assistant.} pii_blocked {The PII policy blocked a request. At most one alert per key every 15 minutes, without the request content.} emergency_sign_in {An emergency-access account signed in locally instead of through the identity provider.} error_rate_spike {The share of 5xx and 429 answers rose above the threshold set under Error rate and latency.} latency_spike {The p95 latency rose above the threshold or far above its usual level, per the rules under Error rate and latency.} archive_failed {A day could not be archived to object storage after three attempts.} other {}}",
     "eventsRequired": "Choose at least one event.",
     "format": "Message format",
     "formatLabel": "{format, select, json {JSON} slack {Slack} teams {Microsoft Teams} other {Format}}",
@@ -278,6 +278,88 @@
       "recipientsHint": "Email addresses, one per line or separated by commas. Up to {max, number, integer}.",
       "recipientsInvalid": "Check {list}.",
       "recipientsTooMany": "Enter at most {max, number, integer} addresses."
+    }
+  },
+  "archive": {
+    "description": "Copies request logs and other records to object storage once a day, for audits and legal holds. While the archive is on, database retention deletes only days that are already archived.",
+    "test": "Test destination",
+    "storageMissing": {
+      "title": "Object storage is not set up",
+      "body": "The archive writes to S3-compatible storage. Set the bucket under <link>Storage</link> and the S3 keys in the server environment first."
+    },
+    "dataset": "{dataset, select, requests {Request logs} audit {Audit trail} security {Security activity} tools {Tool executions} other {Data}}",
+    "datasetHint": "{dataset, select, requests {Every gateway request with model, tokens, cost, status, and labels.} audit {Console changes and who made them.} security {Sign-ins, sign-in methods, roles, and management keys of console users, with IP addresses.} tools {Integration tool calls with their decision and result summary.} other {}}",
+    "daily": {
+      "title": "Daily archive",
+      "subtitle": "Each finished UTC day is written as one file per kind of data, shortly after midnight UTC. Older days that are still in the database are archived first.",
+      "state": "{on, select, true {On} other {Off}}",
+      "failed": "{count, plural, one {# failed day} other {# failed days}}",
+      "pending": "{count, plural, one {# day waiting} other {# days waiting}}",
+      "enabled": "Archive to object storage every day",
+      "enabledHint": "Runs in the background and retries on its own after errors.",
+      "datasets": "Data to archive",
+      "content": "Include prompts and responses",
+      "contentHint": "Adds the stored request content to request logs. Content that was never logged, or that content retention already deleted, cannot be archived."
+    },
+    "format": {
+      "title": "File format",
+      "subtitle": "Plain files open with any tool. Encrypted ZIP files need the password.",
+      "label": "Format",
+      "name": "{format, select, jsonl {JSON Lines} jsonl_gzip {JSON Lines, gzip} zip_aes {Encrypted ZIP} other {Format}}",
+      "hint": "{format, select, jsonl {One JSON object per line, uncompressed.} jsonl_gzip {The same lines, compressed with gzip, usually a tenth of the size.} zip_aes {Compressed and encrypted with AES-256. Opens in 7-Zip, WinZip, Keka, and bsdtar.} other {}}",
+      "password": "Archive password",
+      "passwordState": "{set, select, true {A password is stored. Enter a new one to replace it.} other {No password stored}}",
+      "passwordHint": "At least {min, number} characters. A new password applies to archives written from now on.",
+      "keepPassword": "Keep the stored password",
+      "clearPassword": "Remove the stored password",
+      "keepSafe": {
+        "title": "Keep the password somewhere safe",
+        "body": "LLM Hub cannot recover it. Without it, nobody can open the archives, auditors included."
+      }
+    },
+    "destination": {
+      "title": "Destination",
+      "subtitle": "Uses the endpoint, region, and keys from Storage. A separate bucket keeps archives apart from files, for example one with Object Lock turned on.",
+      "bucket": "Bucket",
+      "bucketHint": "Empty uses the storage bucket.",
+      "prefix": "Folder",
+      "prefixHint": "Archives go below this folder, by kind of data, year, and month. Each file gets a manifest with record count and SHA-256 checksum.",
+      "example": "Example path"
+    },
+    "retention": {
+      "title": "Retention in object storage",
+      "subtitle": "How long archives stay in the bucket. Database retention under Logging & alerts stays separate.",
+      "days": "Days to keep archives",
+      "daysHint": "Archives of older days are deleted from the bucket. 0 keeps them indefinitely.",
+      "lock": "Object Lock",
+      "lockName": "{mode, select, none {Off} governance {Governance} compliance {Compliance} other {Off}}",
+      "lockHint": "{mode, select, none {Archives can be deleted at any time.} governance {Archives cannot be changed or deleted before retention ends, except by accounts with a bypass permission.} compliance {Nobody can change or delete archives before retention ends, not even the bucket owner.} other {}}",
+      "lockNeedsDays": "Object Lock needs a retention period. Set the days to keep archives.",
+      "lockNote": "Object Lock needs a bucket that was created with Object Lock turned on.",
+      "held": "Database retention keeps records from {day, date, utcDate} on until they are archived.",
+      "database": "{on, select, true {Database retention deletes only days that are archived.} other {Database retention runs as set under Logging & alerts.}}"
+    },
+    "runs": {
+      "title": "Archive runs",
+      "subtitle": "The most recent days with their outcome per kind of data.",
+      "retryNow": "Retry failed days now",
+      "retried": "Failed days are being retried",
+      "last": "Archived through {day, date, utcDate}, {count, plural, one {# run} other {# runs}} in total.",
+      "never": "Nothing archived yet.",
+      "empty": "No runs yet. The first run starts within five minutes after the archive is turned on.",
+      "status": "{status, select, pending {Waiting} running {Running} done {Archived} failed {Failed} expired {Deleted after retention} other {Unknown}}",
+      "none": "None",
+      "error": "{code, select, STORAGE_MISSING {Object storage is not set up.} PASSWORD_MISSING {No archive password is stored.} AUTH {The storage provider rejected the keys.} SIGNATURE {The secret key or region does not match.} DENIED {These keys may not write to this bucket.} NO_BUCKET {The bucket does not exist.} REGION {The bucket is in another region or needs another endpoint.} LOCK_UNSUPPORTED {The bucket does not support Object Lock.} UNREACHABLE {The storage endpoint did not answer.} LEASE_LOST {Another server took over the run.} other {The export failed.}}",
+      "retry": "Attempt {attempts, number}, next try {at, date, stamp}.",
+      "noObject": "{status, select, done {No records on this day} expired {Deleted from the bucket} other {Not written yet}}",
+      "columns": {
+        "day": "Day",
+        "dataset": "Data",
+        "status": "Status",
+        "records": "Records",
+        "size": "Size",
+        "object": "File"
+      }
     }
   },
   "cache": {

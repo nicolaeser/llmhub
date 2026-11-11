@@ -237,9 +237,10 @@ test("switching to BullMQ needs a live Redis, so the switch order is pinned in s
   assert.match(boot, /await withRedisTimeout\(registerWorkerSchedules\(\), BULLMQ_START_TIMEOUT_MS\)/);
 });
 
-test("QUEUE_NAMES include maintenance, models, and webhooks only", async () => {
+test("QUEUE_NAMES include maintenance, models, webhooks, and archive only", async () => {
   assert.equal(QUEUE_NAMES.maintenance, "llmhub-maintenance");
-  assert.deepEqual(Object.keys(QUEUE_NAMES).sort(), ["maintenance", "models", "webhooks"]);
+  assert.deepEqual(Object.keys(QUEUE_NAMES).sort(), ["archive", "maintenance", "models", "webhooks"]);
+  assert.equal(QUEUE_NAMES.archive, "llmhub-archive");
   assert.equal(QUEUE_NAMES.models, "llmhub-models");
   assert.equal(QUEUE_NAMES.webhooks, "llmhub-webhooks");
 });

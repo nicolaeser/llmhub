@@ -9,6 +9,7 @@ import GeneralTab from "./_components/general-tab";
 import SignInTab from "./_components/sign-in-tab";
 import StorageTab from "./_components/storage-tab";
 import LoggingTab from "./_components/logging-tab";
+import ArchiveTab from "./_components/archive-tab";
 import CacheTab from "./_components/cache-tab";
 import CatalogTab from "./_components/catalog-tab";
 
@@ -26,6 +27,7 @@ export default function SettingsPage() {
           tab("sign-in", <SignInTab />),
           tab("storage", <StorageTab />),
           tab("logging", <LoggingTab />),
+          tab("archive", <ArchiveTab />),
           tab("cache", <CacheTab />),
           tab("catalog", <CatalogTab />),
         ]}

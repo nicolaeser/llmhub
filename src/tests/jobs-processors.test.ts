@@ -78,9 +78,9 @@ function audits(action: string): Row[] {
     .map((call) => JSON.parse(String(call.args.data?.afterJson)));
 }
 
-test("the processors are the maintenance sweep, the model sync, and webhook delivery", async () => {
+test("the processors are the maintenance sweep, the model sync, webhook delivery, and the compliance archive", async () => {
   const processors = await import("@/lib/jobs/processors");
-  assert.deepEqual(Object.keys(processors).sort(), ["processMaintenance", "processModelSync", "processWebhook"]);
+  assert.deepEqual(Object.keys(processors).sort(), ["processArchive", "processMaintenance", "processModelSync", "processWebhook"]);
 });
 
 test("processMaintenance runs the sweep, which runs budget alerts once", async () => {
@@ -133,7 +133,7 @@ test("processWebhook delivers the queued alert and counts BullMQ attempts", asyn
   assert.deepEqual(audits("alert_delivered").map((after) => [after.webhook, after.attempts]), [["ops", 3]]);
 });
 
-test("consumers attach BullMQ workers for the maintenance, models, and webhooks queues", async (t) => {
+test("consumers attach BullMQ workers for the maintenance, models, webhooks, and archive queues", async (t) => {
   t.mock.method(console, "error", () => {});
   const { buildQueueWorkers } = await import("@/worker/consumers");
   const { QUEUE_NAMES } = await import("@/lib/jobs/queues");
@@ -141,14 +141,14 @@ test("consumers attach BullMQ workers for the maintenance, models, and webhooks 
   try {
     assert.deepEqual(
       workers.map((worker) => worker.name),
-      [QUEUE_NAMES.maintenance, QUEUE_NAMES.models, QUEUE_NAMES.webhooks],
+      [QUEUE_NAMES.maintenance, QUEUE_NAMES.models, QUEUE_NAMES.webhooks, QUEUE_NAMES.archive],
     );
   } finally {
     await Promise.all(workers.map((worker) => worker.close(true)));
   }
 });
 
-test("schedules upsert exactly the maintenance and model sync schedulers", async (t) => {
+test("schedules upsert exactly the maintenance, model sync, and archive schedulers", async (t) => {
   t.mock.method(console, "error", () => {});
   const schedulers: unknown[][] = [];
   const added: unknown[][] = [];
@@ -167,6 +167,7 @@ test("schedules upsert exactly the maintenance and model sync schedulers", async
     assert.deepEqual(schedulers, [
       [QUEUE_NAMES.maintenance, QUEUE_NAMES.maintenance, { every: 60_000 }, { name: QUEUE_NAMES.maintenance, data: {} }],
       [QUEUE_NAMES.models, QUEUE_NAMES.models, { every: 7_200_000 }, { name: QUEUE_NAMES.models, data: {} }],
+      [QUEUE_NAMES.archive, QUEUE_NAMES.archive, { every: 300_000 }, { name: QUEUE_NAMES.archive, data: {} }],
     ]);
     assert.deepEqual(added.map((call) => call.slice(0, 2)), [[QUEUE_NAMES.models, QUEUE_NAMES.models]]);
   } finally {

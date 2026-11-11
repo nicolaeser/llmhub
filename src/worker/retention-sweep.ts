@@ -12,6 +12,8 @@ import {
 import { contentMaxBytes, utcDayStart } from "@/lib/db/content-partitions";
 import type { ContentPartitionPolicy } from "@/types/logs";
 import type { Enterprise } from "@/types/settings";
+import { heldCutoff } from "@/lib/compliance-archive/plan";
+import type { RetentionHolds } from "@/types/archive";
 import { retentionCutoff, shorterRetention } from "./retention";
 import type {
   RetentionOptions,
@@ -146,18 +148,22 @@ function retentionDaysOf(enterprise: Enterprise): Record<RetentionTable, number>
   };
 }
 
-export function contentPartitionPolicy(enterprise: Enterprise, now: Date): ContentPartitionPolicy {
+export function contentPartitionPolicy(enterprise: Enterprise, now: Date, holds: RetentionHolds = {}): ContentPartitionPolicy {
   const days = shorterRetention(
     enterprise.log_retention_days ?? DEFAULT_LOG_RETENTION_DAYS,
     enterprise.content_retention_days ?? DEFAULT_CONTENT_RETENTION_DAYS,
   );
-  return { now, cutoff: retentionCutoff(days, now), maxBytes: contentMaxBytes(enterprise.content_max_gb) };
+  return {
+    now,
+    cutoff: heldCutoff(retentionCutoff(days, now), holds.requestContents),
+    maxBytes: contentMaxBytes(enterprise.content_max_gb),
+  };
 }
 
-function retentionTasks(enterprise: Enterprise, now: Date): RetentionTask[] {
+function retentionTasks(enterprise: Enterprise, now: Date, holds: RetentionHolds): RetentionTask[] {
   const days = retentionDaysOf(enterprise);
   return (Object.keys(steps) as RetentionTable[]).flatMap((name) => {
-    const cutoff = retentionCutoff(days[name], now);
+    const cutoff = heldCutoff(retentionCutoff(days[name], now), holds[name]);
     return cutoff ? [{ name, step: (take: number) => steps[name](cutoff, take) }] : [];
   });
 }
@@ -193,7 +199,7 @@ export async function runRetentionSweep(
   now: Date,
   options: RetentionSweepOptions = {},
 ): Promise<RetentionRun | null> {
-  const tasks = retentionTasks(enterprise, now);
+  const tasks = retentionTasks(enterprise, now, options.holds ?? {});
   if (!tasks.length) return { deleted: {}, backlog: [] };
   const leaseKey = options.leaseKey ?? RETENTION_LEASE;
   const token = await acquireLease(leaseKey, RETENTION_LEASE_MS);

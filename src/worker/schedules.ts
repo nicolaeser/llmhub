@@ -1,6 +1,7 @@
 import "server-only";
 
-import { QUEUE_NAMES, getMaintenanceQueue, getModelsQueue } from "@/lib/jobs/queues";
+import { QUEUE_NAMES, getArchiveQueue, getMaintenanceQueue, getModelsQueue } from "@/lib/jobs/queues";
+import { ARCHIVE_INTERVAL_MS } from "./archive-schedule";
 
 const MAINTENANCE_INTERVAL_MS = 60_000;
 const MODEL_SYNC_INTERVAL_MS = 7_200_000;
@@ -22,5 +23,10 @@ export async function registerWorkerSchedules(): Promise<void> {
     QUEUE_NAMES.models,
     {},
     { deduplication: { id: "model-sync-boot", ttl: MODEL_SYNC_BOOT_DEDUP_MS } },
+  );
+  await getArchiveQueue().upsertJobScheduler(
+    QUEUE_NAMES.archive,
+    { every: ARCHIVE_INTERVAL_MS },
+    { name: QUEUE_NAMES.archive, data: {} },
   );
 }

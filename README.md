@@ -12,7 +12,7 @@ It ships as one container image backed by PostgreSQL, with optional Redis and S3
 - **Companies and budgets.** Companies, departments, projects, and people form the tenancy model. API keys belong to a project, a person, or a console user. Every level can carry a spend cap with a reset period and temporary boosts; a child cap can never exceed a capped parent. Keys also support RPM and TPM limits, a per-request cost limit, model allowlists, reusable model templates (providers, regions, zero data retention, no training, maximum retention), client IP allowlists, endpoint restrictions, access time windows, expiry, and rotation.
 - **Safety and privacy.** PII detection with masking, blocking, or restoring, by fixed patterns, a redaction model (PII-Tracer, self-hosted with `docker-compose.rm.yml` or any provider that speaks the same protocol), or both; configurable guardrail rules on input and output, and policy overrides per company, project, or key. Request and response bodies are stored separately from log metadata, can be switched off per key, user, or person, and follow their own retention period (30 days by default, like request logs).
 - **Usage and cost.** Daily usage rollups, dashboards, chargeback by company, department, and project, price markups, CSV, JSONL, PDF, and Markdown exports, and scheduled usage report emails. Prompt cache tokens are billed at provider rates, and an optional response cache with semantic matching answers repeated requests.
-- **Operations.** Request, spend, and audit logs with filters, retention rules for every log type, signed alert webhooks in JSON, Slack, or Teams format (upstream exhaustion, budget thresholds, spend anomalies, expiring or blocked keys, PII blocks, provider model changes).
+- **Operations.** Request, spend, and audit logs with filters, retention rules for every log type, signed alert webhooks in JSON, Slack, or Teams format (upstream exhaustion, budget thresholds, spend anomalies, expiring or blocked keys, PII blocks, provider model changes, failed archive days), and a daily compliance archive to S3 as JSON Lines, gzip, or AES-256 encrypted ZIP with its own bucket retention and optional Object Lock.
 - **Access control.** Console accounts with mandatory two-factor authentication (TOTP, passkeys, recovery codes), editable roles and permissions, company-scoped console users, OIDC single sign-on, SCIM provisioning, and personal management keys for the `/api/mgmt` automation API.
 
 ## Quick start
@@ -110,7 +110,25 @@ The image sets `PORT=3000`, `HOSTNAME=0.0.0.0`, and `NODE_ENV=production`.
 
 ### Storage
 
-S3 is optional. Without it, uploaded files, batch input and output, generated images and videos, stored responses, and vector store files are kept in PostgreSQL as `bytea` rows, which grows the database and its backups. With S3 configured (both access keys in `.env` and the bucket in Settings → Storage), new objects go to the bucket, the database keeps only their metadata, and request logs can also be archived to the bucket. Objects stored before S3 was enabled stay in PostgreSQL.
+S3 is optional. Without it, uploaded files, batch input and output, generated images and videos, stored responses, and vector store files are kept in PostgreSQL as `bytea` rows, which grows the database and its backups. With S3 configured (both access keys in `.env` and the bucket in Settings → Storage), new objects go to the bucket, the database keeps only their metadata, and logs can also be archived to the bucket (see [Compliance archive](#compliance-archive)). Objects stored before S3 was enabled stay in PostgreSQL.
+
+### Compliance archive
+
+Settings → Compliance archive copies request logs (optionally with prompts and responses), the console audit trail, security activity, and tool executions to S3-compatible storage once per finished UTC day, shortly after midnight UTC. It uses the endpoint, region, and keys from Settings → Storage; the bucket can differ from the storage bucket, for example a bucket created with Object Lock. On the first run every day that is still in the database is archived, oldest first.
+
+Each day and kind of data becomes one object under `<storage prefix>/<archive folder>/<data>/<year>/<month>/`, for example `compliance-archive/requests/2026/11/requests-2026-11-10.jsonl.gz`, plus a `.manifest.json` with the record count, the SHA-256 of the records and of the object, the format, and the retention date. Formats:
+
+- `JSON Lines`: one JSON object per line, uncompressed (`.jsonl`).
+- `JSON Lines, gzip`: the same lines compressed with gzip (`.jsonl.gz`).
+- `Encrypted ZIP`: one `.jsonl` file per ZIP, compressed and encrypted with WinZip AES-256 (`.zip`). 7-Zip, WinZip, Keka, and `bsdtar --passphrase` open it; the built-in ZIP support of Windows and macOS does not. The password is stored encrypted with `APP_SECRET` and is never shown again. LLM Hub cannot recover it, so keep a copy in a password manager. A new password applies to archives written afterwards.
+
+Exports stream from PostgreSQL to the bucket in parts of 16 MB (multipart upload), so memory use stays flat on large days. They run every five minutes in the background (the `llmhub-archive` queue with Redis, otherwise a timer in the app), on one replica at a time, and retry failed days after 5 minutes, 15 minutes, 1 hour, and up to once a day. A day that fails three times fires the `archive_failed` alert. Settings → Compliance archive lists the recent days with their outcome and retries failed days on request.
+
+While the archive is on, database retention under Settings → Logging & alerts deletes only rows of days that are archived: a day that waits or failed keeps its rows, and every later day too, until it is archived. So the database can keep a few days while the bucket keeps years. Only the "Maximum content size in GB" limit can still remove stored prompts and responses that are not archived yet, because it protects the disk.
+
+"Days to keep archives" deletes the objects of older days from the bucket (0 keeps them). With Object Lock set to Governance or Compliance, every object is written with that lock mode and a retain-until date at the end of its retention period, so nobody can change or delete it earlier (in Compliance mode not even the bucket owner). Object Lock needs a bucket created with Object Lock turned on; uploads to other buckets fail with "The bucket does not support Object Lock". A lifecycle rule on the bucket works as well and can move old archives to a cheaper storage class.
+
+The per-request switch "Archive request logs to object storage" under Logging & alerts is separate: it writes one unencrypted JSON object per request under `logs/requests/` as requests happen.
 
 ### Error reporting
 

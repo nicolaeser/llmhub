@@ -1,7 +1,7 @@
 {
   "title": "Einstellungen",
   "subtitle": "Anmeldung, Speicher, Protokollierung, Cache und Modellkatalog. Infrastruktur-Secrets bleiben in der Umgebung.",
-  "tabs": "{tab, select, general {Allgemein} sign_in {Anmeldung} storage {Speicher} logging {Protokollierung & Alarme} cache {Antwort-Cache} catalog {Modellkatalog} other {Einstellungen}}",
+  "tabs": "{tab, select, general {Allgemein} sign_in {Anmeldung} storage {Speicher} logging {Protokollierung & Alarme} archive {Compliance-Archiv} cache {Antwort-Cache} catalog {Modellkatalog} other {Einstellungen}}",
   "save": "Speichern",
   "saved": "Einstellungen gespeichert",
   "readOnly": "Du kannst diese Einstellungen ansehen. Zum Ändern brauchst du die Berechtigung Einstellungen verwalten.",
@@ -227,8 +227,8 @@
     "webhookTitle": "Webhook {position, number}",
     "removeWebhook": "Webhook {position, number} entfernen",
     "events": "Events",
-    "eventLabel": "{event, select, upstream_exhaustion {Upstream erschöpft} budget_threshold {Budget-Schwelle} provider_models_changed {Anbietermodelle geändert} spend_anomaly {Kosten-Anomalie} key_expiring {Key läuft ab} key_blocked {Key gesperrt} pii_blocked {PII blockiert} emergency_sign_in {Notfall-Anmeldung} error_rate_spike {Fehlerquote gestiegen} latency_spike {Latenz gestiegen} other {Event}}",
-    "eventHint": "{event, select, upstream_exhaustion {Kein gesundes Deployment hat geantwortet oder der Upstream lieferte 5xx oder 429.} budget_threshold {Ein Key, eine Person, ein Projekt, eine Abteilung oder ein Unternehmen hat eine Budget-Alarmschwelle überschritten.} provider_models_changed {Der stündliche Sync hat hinzugefügte oder entfernte Anbietermodelle gefunden.} spend_anomaly {Ein Key oder Projekt hat in der letzten Stunde deutlich mehr ausgegeben als sonst um diese Uhrzeit.} key_expiring {Ein Key läuft innerhalb der Vorwarnzeit aus den Alarmregeln ab.} key_blocked {Jemand hat einen Key in der Konsole, über die Management-API oder den Assistenten gesperrt.} pii_blocked {Die PII-Richtlinie hat eine Anfrage blockiert. Höchstens ein Alarm pro Key alle 15 Minuten, ohne Anfrageinhalt.} emergency_sign_in {Ein Konto mit Notfallzugang hat sich lokal statt über den Identitätsanbieter angemeldet.} error_rate_spike {Der Anteil der Antworten mit 5xx und 429 liegt über der Schwelle unter Fehlerquote und Latenz.} latency_spike {Die p95-Latenz liegt über der Schwelle oder weit über ihrem üblichen Wert, gemäß den Regeln unter Fehlerquote und Latenz.} other {}}",
+    "eventLabel": "{event, select, upstream_exhaustion {Upstream erschöpft} budget_threshold {Budget-Schwelle} provider_models_changed {Anbietermodelle geändert} spend_anomaly {Kosten-Anomalie} key_expiring {Key läuft ab} key_blocked {Key gesperrt} pii_blocked {PII blockiert} emergency_sign_in {Notfall-Anmeldung} error_rate_spike {Fehlerquote gestiegen} latency_spike {Latenz gestiegen} archive_failed {Compliance-Archiv fehlgeschlagen} other {Event}}",
+    "eventHint": "{event, select, upstream_exhaustion {Kein gesundes Deployment hat geantwortet oder der Upstream lieferte 5xx oder 429.} budget_threshold {Ein Key, eine Person, ein Projekt, eine Abteilung oder ein Unternehmen hat eine Budget-Alarmschwelle überschritten.} provider_models_changed {Der stündliche Sync hat hinzugefügte oder entfernte Anbietermodelle gefunden.} spend_anomaly {Ein Key oder Projekt hat in der letzten Stunde deutlich mehr ausgegeben als sonst um diese Uhrzeit.} key_expiring {Ein Key läuft innerhalb der Vorwarnzeit aus den Alarmregeln ab.} key_blocked {Jemand hat einen Key in der Konsole, über die Management-API oder den Assistenten gesperrt.} pii_blocked {Die PII-Richtlinie hat eine Anfrage blockiert. Höchstens ein Alarm pro Key alle 15 Minuten, ohne Anfrageinhalt.} emergency_sign_in {Ein Konto mit Notfallzugang hat sich lokal statt über den Identitätsanbieter angemeldet.} error_rate_spike {Der Anteil der Antworten mit 5xx und 429 liegt über der Schwelle unter Fehlerquote und Latenz.} latency_spike {Die p95-Latenz liegt über der Schwelle oder weit über ihrem üblichen Wert, gemäß den Regeln unter Fehlerquote und Latenz.} archive_failed {Ein Tag ließ sich nach drei Versuchen nicht in den Objektspeicher archivieren.} other {}}",
     "eventsRequired": "Wähle mindestens ein Event.",
     "format": "Nachrichtenformat",
     "formatLabel": "{format, select, json {JSON} slack {Slack} teams {Microsoft Teams} other {Format}}",
@@ -278,6 +278,88 @@
       "recipientsHint": "E-Mail-Adressen, eine pro Zeile oder durch Kommas getrennt. Höchstens {max, number, integer}.",
       "recipientsInvalid": "Prüfe {list}.",
       "recipientsTooMany": "Gib höchstens {max, number, integer} Adressen ein."
+    }
+  },
+  "archive": {
+    "description": "Kopiert Request-Logs und weitere Aufzeichnungen einmal täglich in den Objektspeicher, für Prüfungen und Aufbewahrungspflichten. Solange das Archiv an ist, löscht die Datenbank-Aufbewahrung nur Tage, die bereits archiviert sind.",
+    "test": "Ziel testen",
+    "storageMissing": {
+      "title": "Objektspeicher ist nicht eingerichtet",
+      "body": "Das Archiv schreibt in S3-kompatiblen Speicher. Lege zuerst unter <link>Speicher</link> den Bucket fest und setze die S3-Schlüssel in der Server-Umgebung."
+    },
+    "dataset": "{dataset, select, requests {Request-Logs} audit {Audit-Protokoll} security {Sicherheitsaktivität} tools {Tool-Ausführungen} other {Daten}}",
+    "datasetHint": "{dataset, select, requests {Jede Anfrage über das Gateway mit Modell, Tokens, Kosten, Status und Labels.} audit {Änderungen in der Konsole und wer sie vorgenommen hat.} security {Anmeldungen, Anmeldemethoden, Rollen und Management-Keys der Konsolen-Benutzer, mit IP-Adressen.} tools {Tool-Aufrufe von Integrationen mit Entscheidung und Ergebnis-Zusammenfassung.} other {}}",
+    "daily": {
+      "title": "Tägliches Archiv",
+      "subtitle": "Jeder abgeschlossene UTC-Tag wird kurz nach Mitternacht UTC als eine Datei pro Datenart geschrieben. Ältere Tage, die noch in der Datenbank liegen, werden zuerst archiviert.",
+      "state": "{on, select, true {An} other {Aus}}",
+      "failed": "{count, plural, one {# fehlgeschlagener Tag} other {# fehlgeschlagene Tage}}",
+      "pending": "{count, plural, one {# Tag wartet} other {# Tage warten}}",
+      "enabled": "Täglich in den Objektspeicher archivieren",
+      "enabledHint": "Läuft im Hintergrund und versucht es nach Fehlern selbst erneut.",
+      "datasets": "Zu archivierende Daten",
+      "content": "Prompts und Antworten einschließen",
+      "contentHint": "Ergänzt Request-Logs um die gespeicherten Inhalte. Inhalte, die nie protokolliert oder durch die Inhalts-Aufbewahrung schon gelöscht wurden, lassen sich nicht archivieren."
+    },
+    "format": {
+      "title": "Dateiformat",
+      "subtitle": "Unverschlüsselte Dateien lassen sich mit jedem Werkzeug öffnen. Verschlüsselte ZIP-Dateien brauchen das Passwort.",
+      "label": "Format",
+      "name": "{format, select, jsonl {JSON Lines} jsonl_gzip {JSON Lines, gzip} zip_aes {Verschlüsseltes ZIP} other {Format}}",
+      "hint": "{format, select, jsonl {Ein JSON-Objekt pro Zeile, unkomprimiert.} jsonl_gzip {Dieselben Zeilen, mit gzip komprimiert, meist ein Zehntel der Größe.} zip_aes {Komprimiert und mit AES-256 verschlüsselt. Lässt sich mit 7-Zip, WinZip, Keka und bsdtar öffnen.} other {}}",
+      "password": "Archiv-Passwort",
+      "passwordState": "{set, select, true {Ein Passwort ist hinterlegt. Gib ein neues ein, um es zu ersetzen.} other {Kein Passwort hinterlegt}}",
+      "passwordHint": "Mindestens {min, number} Zeichen. Ein neues Passwort gilt für Archive, die ab jetzt geschrieben werden.",
+      "keepPassword": "Hinterlegtes Passwort behalten",
+      "clearPassword": "Hinterlegtes Passwort entfernen",
+      "keepSafe": {
+        "title": "Bewahre das Passwort sicher auf",
+        "body": "LLM Hub kann es nicht wiederherstellen. Ohne Passwort kann niemand die Archive öffnen, auch keine Prüfer."
+      }
+    },
+    "destination": {
+      "title": "Ziel",
+      "subtitle": "Nutzt Endpunkt, Region und Schlüssel aus Speicher. Ein eigener Bucket trennt Archive von Dateien, zum Beispiel einer mit aktiviertem Object Lock.",
+      "bucket": "Bucket",
+      "bucketHint": "Leer nutzt den Speicher-Bucket.",
+      "prefix": "Ordner",
+      "prefixHint": "Archive liegen unter diesem Ordner, nach Datenart, Jahr und Monat. Zu jeder Datei gehört ein Manifest mit Anzahl der Einträge und SHA-256-Prüfsumme.",
+      "example": "Beispielpfad"
+    },
+    "retention": {
+      "title": "Aufbewahrung im Objektspeicher",
+      "subtitle": "Wie lange Archive im Bucket bleiben. Die Datenbank-Aufbewahrung unter Protokollierung & Alarme bleibt davon getrennt.",
+      "days": "Archive aufbewahren für Tage",
+      "daysHint": "Archive älterer Tage werden aus dem Bucket gelöscht. 0 bewahrt sie unbegrenzt auf.",
+      "lock": "Object Lock",
+      "lockName": "{mode, select, none {Aus} governance {Governance} compliance {Compliance} other {Aus}}",
+      "lockHint": "{mode, select, none {Archive lassen sich jederzeit löschen.} governance {Archive lassen sich vor Ende der Aufbewahrung nicht ändern oder löschen, außer von Konten mit Bypass-Berechtigung.} compliance {Niemand kann Archive vor Ende der Aufbewahrung ändern oder löschen, auch nicht der Bucket-Inhaber.} other {}}",
+      "lockNeedsDays": "Object Lock braucht eine Aufbewahrungsdauer. Lege fest, wie viele Tage Archive aufbewahrt werden.",
+      "lockNote": "Object Lock braucht einen Bucket, der mit aktiviertem Object Lock angelegt wurde.",
+      "held": "Die Datenbank-Aufbewahrung behält Einträge ab dem {day, date, utcDate}, bis sie archiviert sind.",
+      "database": "{on, select, true {Die Datenbank-Aufbewahrung löscht nur archivierte Tage.} other {Die Datenbank-Aufbewahrung läuft wie unter Protokollierung & Alarme eingestellt.}}"
+    },
+    "runs": {
+      "title": "Archivläufe",
+      "subtitle": "Die letzten Tage mit ihrem Ergebnis pro Datenart.",
+      "retryNow": "Fehlgeschlagene Tage jetzt wiederholen",
+      "retried": "Fehlgeschlagene Tage werden wiederholt",
+      "last": "Archiviert bis {day, date, utcDate}, insgesamt {count, plural, one {# Lauf} other {# Läufe}}.",
+      "never": "Noch nichts archiviert.",
+      "empty": "Noch keine Läufe. Der erste Lauf startet innerhalb von fünf Minuten, nachdem das Archiv eingeschaltet wurde.",
+      "status": "{status, select, pending {Wartet} running {Läuft} done {Archiviert} failed {Fehlgeschlagen} expired {Nach Aufbewahrung gelöscht} other {Unbekannt}}",
+      "none": "Keine",
+      "error": "{code, select, STORAGE_MISSING {Der Objektspeicher ist nicht eingerichtet.} PASSWORD_MISSING {Es ist kein Archiv-Passwort hinterlegt.} AUTH {Der Speicheranbieter hat die Schlüssel abgelehnt.} SIGNATURE {Secret Key oder Region passen nicht.} DENIED {Diese Schlüssel dürfen nicht in diesen Bucket schreiben.} NO_BUCKET {Den Bucket gibt es nicht.} REGION {Der Bucket liegt in einer anderen Region oder braucht einen anderen Endpunkt.} LOCK_UNSUPPORTED {Der Bucket unterstützt kein Object Lock.} UNREACHABLE {Der Speicher-Endpunkt hat nicht geantwortet.} LEASE_LOST {Ein anderer Server hat den Lauf übernommen.} other {Der Export ist fehlgeschlagen.}}",
+      "retry": "Versuch {attempts, number}, nächster Versuch {at, date, stamp}.",
+      "noObject": "{status, select, done {Keine Einträge an diesem Tag} expired {Aus dem Bucket gelöscht} other {Noch nicht geschrieben}}",
+      "columns": {
+        "day": "Tag",
+        "dataset": "Daten",
+        "status": "Status",
+        "records": "Einträge",
+        "size": "Größe",
+        "object": "Datei"
+      }
     }
   },
   "cache": {

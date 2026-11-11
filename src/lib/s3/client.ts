@@ -19,15 +19,19 @@ export class S3Error extends Error {
   }
 }
 
-async function signedFetch(
-  runtime: S3Runtime,
-  method: string,
-  key: string,
-  opts?: { body?: Uint8Array; contentType?: string; signal?: AbortSignal },
-): Promise<Response> {
+export type S3RequestOptions = {
+  body?: Uint8Array;
+  contentType?: string;
+  query?: Record<string, string>;
+  headers?: Record<string, string>;
+  signal?: AbortSignal;
+};
+
+async function signedFetch(runtime: S3Runtime, method: string, key: string, opts?: S3RequestOptions): Promise<Response> {
   const url = objectUrl(runtime, key);
+  for (const [name, value] of Object.entries(opts?.query ?? {})) url.searchParams.set(name, value);
   const body = opts?.body;
-  const extra: Record<string, string> = {};
+  const extra: Record<string, string> = { ...opts?.headers };
   if (opts?.contentType) extra["content-type"] = opts.contentType;
   const signed = authorizationHeader({
     method,
@@ -51,6 +55,12 @@ async function signedFetch(
 
 async function failure(res: Response): Promise<S3Error> {
   return new S3Error(res.status, (await readTextOr(res)).slice(0, 2000));
+}
+
+export async function s3Request(runtime: S3Runtime, method: string, key: string, opts?: S3RequestOptions): Promise<Response> {
+  const res = await signedFetch(runtime, method, key, opts);
+  if (!res.ok) throw await failure(res);
+  return res;
 }
 
 export async function s3Put(

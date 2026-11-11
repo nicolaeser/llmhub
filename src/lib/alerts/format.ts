@@ -12,6 +12,7 @@ const EVENT_TITLES: Record<WebhookEvent, string> = {
   emergency_sign_in: "Emergency sign-in",
   error_rate_spike: "Error rate spike",
   latency_spike: "Latency spike",
+  archive_failed: "Compliance archive failed",
 };
 
 const SLACK_SECTION_LIMIT = 3000;
@@ -27,6 +28,7 @@ const EVENT_PAGES: Record<WebhookEvent, string> = {
   emergency_sign_in: "/users",
   error_rate_spike: "/logs",
   latency_spike: "/logs",
+  archive_failed: "/settings?tab=archive",
 };
 
 function clip(value: string, limit: number): string {

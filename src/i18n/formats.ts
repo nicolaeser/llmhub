@@ -4,6 +4,7 @@ export const formats = {
   dateTime: {
     short: { day: "numeric", month: "short", year: "numeric" },
     utcDay: { day: "numeric", month: "short", timeZone: "UTC" },
+    utcDate: { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" },
     long: { day: "numeric", month: "long", year: "numeric" },
     month: { month: "long", year: "numeric" },
     full: { dateStyle: "full", timeStyle: "short" },

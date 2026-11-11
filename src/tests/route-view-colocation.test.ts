@@ -275,7 +275,7 @@ test("settings tabs share SettingSection from the settings route", () => {
   for (const slug of ["admin-settings", "cache", "logging"]) {
     assert.equal(existsSync(path.join(appRoot, "(app)", slug)), false, slug);
   }
-  for (const tab of ["general", "sign-in", "storage", "logging", "cache", "catalog"]) {
+  for (const tab of ["general", "sign-in", "storage", "logging", "archive", "cache", "catalog"]) {
     const source = read(path.join(appRoot, "(app)", "settings", "_components", `${tab}-tab.tsx`));
     assert.match(source, /from "\.\/setting-fields"/, tab);
     assert.match(source, /<SettingSection\b/, tab);

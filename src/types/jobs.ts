@@ -6,6 +6,8 @@ export type GlobalWithWorkerBoot = typeof globalThis & {
   [BOOT_KEY]?: Promise<void>;
   __llmhubWorkerTimer?: ReturnType<typeof setInterval>;
   __llmhubModelSyncTimer?: ReturnType<typeof setInterval>;
+  __llmhubArchiveTimer?: ReturnType<typeof setInterval>;
+  __llmhubArchiveRun?: Promise<void>;
   __llmhubCatalogTimers?: Map<string, ReturnType<typeof setTimeout>>;
   __llmhubBullmqRetry?: ReturnType<typeof setTimeout>;
   __llmhubQueueWorkers?: { close: () => Promise<void> }[];
@@ -77,6 +79,7 @@ export type RetentionOptions = {
 
 export type RetentionSweepOptions = RetentionOptions & {
   leaseKey?: string;
+  holds?: Partial<Record<RetentionTable, Date>>;
 };
 
 export type RetentionRun = {
@@ -87,6 +90,8 @@ export type RetentionRun = {
 export type QueueName = (typeof QUEUE_NAMES)[keyof typeof QUEUE_NAMES];
 
 export type MaintenanceJobData = Record<string, never>;
+
+export type ArchiveJobData = Record<string, never>;
 
 export type CatalogTask = "refresh" | "provider" | "rebuild";
 
