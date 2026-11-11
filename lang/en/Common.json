@@ -109,5 +109,11 @@
   "steps": {
     "label": "Steps",
     "progress": "Step {current, number, integer} of {total, number, integer}"
+  },
+  "pause": {
+    "duration": "Pause for",
+    "hours": "{hours, select, 0 {Until resumed} 1 {1 hour} 24 {1 day} 168 {7 days} other {{hours, number, integer} hours}}",
+    "until": "{timed, select, yes {Resumes on its own on {until}.} other {Stays paused until someone resumes it.}}",
+    "state": "{scope, select, member {Person paused} project {Project paused} team {Department paused} org {Company paused} other {Paused}}{timed, select, yes { until {until}} other {}}"
   }
 }

@@ -25,6 +25,8 @@ export function useResetLabels(timeZone: string, credits: Pick<ResetCredits, "co
     effect: (option: Pick<ResetOption, "family" | "scope">) => t("option.effect", optionNaming(option)),
     confirm: (option: Pick<ResetOption, "family" | "scope">) => t("flow.confirm", optionNaming(option)),
     limit: (limit: Pick<ResetLimit, "family" | "scope">) => t("limit.name", limitNaming(limit)),
+    alsoRefills: (limit: Pick<ResetLimit, "family" | "scope">) => t("option.alsoRefills", limitNaming(limit)),
+    staysFull: (limit: Pick<ResetLimit, "family" | "scope">) => t("option.staysFull", limitNaming(limit)),
     left: (option: Pick<ResetOption, "left" | "total">) => t("option.left", { left: option.left, total: option.total }),
     expiry: (option: Pick<ResetOption, "expiresAt">) => t("option.expiry", expiry(option)),
     expires: (option: Pick<ResetOption, "expiresAt">) => t("flow.expires", expiry(option)),
@@ -34,12 +36,15 @@ export function useResetLabels(timeZone: string, credits: Pick<ResetCredits, "co
         scope: given.scope,
         percent: (given.percent ?? 0) / 100,
       }),
-    blocker: (blocker: ResetBlocker, option: Pick<ResetOption, "scope" | "givesBack"> | null) => {
+    blocker: (blocker: ResetBlocker, option: Pick<ResetOption, "scope" | "givesBack" | "blockedBy"> | null) => {
       const scope = (option?.givesBack?.scope ?? option?.scope ?? "").trim();
+      const blockedBy = option?.blockedBy ? limitNaming(option.blockedBy) : null;
       return t("option.blocker", {
         blocker,
         named: String(scope !== ""),
         scope,
+        limit: blockedBy?.family ?? "other",
+        limitScope: blockedBy?.scope ?? "",
         timed: String(cooling),
         when: cooling ? reset.countdown(cooldown) : "",
         date: cooling ? reset.date(cooldown) : "",

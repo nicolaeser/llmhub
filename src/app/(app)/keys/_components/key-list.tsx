@@ -11,9 +11,9 @@ import KeyMenu, { hasKeyMenu, keyMenuActions, type KeyMenuAction, type KeyMenuFl
 import KeyStateChip from "@/components/keys/key-state-chip";
 import { Link, useRouter } from "@/i18n/routing";
 import { accessSummary } from "@/lib/keys/draft";
-import { isKeyPaused, keyState, type KeyState } from "@/lib/keys/pause";
+import { isPaused, keyPause, keyState, type KeyState } from "@/lib/keys/pause";
 import { meterColor } from "@/lib/utils/budget";
-import type { KeyBindingKind, KeyLastUse, KeyOptions, VirtualKeyView } from "@/types/keys";
+import type { KeyBindingKind, KeyHolds, KeyLastUse, KeyOptions, VirtualKeyView } from "@/types/keys";
 
 const ALL = "all";
 const STATES: KeyState[] = ["active", "paused", "blocked"];
@@ -62,6 +62,7 @@ function FilterSelect({
 export default function KeyList({
   keys,
   lastUsed,
+  held,
   options,
   owners,
   flags,
@@ -72,6 +73,7 @@ export default function KeyList({
 }: {
   keys: VirtualKeyView[];
   lastUsed: KeyLastUse;
+  held: KeyHolds;
   options: KeyOptions;
   owners: Record<string, string>;
   flags: KeyMenuFlags;
@@ -93,7 +95,11 @@ export default function KeyList({
   const byId = useMemo(() => new Map(keys.map((row) => [row.token_id, row])), [keys]);
 
   function stateOf(row: VirtualKeyView) {
-    return keyState({ blocked: row.blocked, paused: row.paused, pausedUntil: row.paused_until }, now);
+    return keyState({ blocked: row.blocked, paused: row.paused, pausedUntil: row.paused_until }, now, held[row.token_id]);
+  }
+
+  function pauseOf(row: VirtualKeyView) {
+    return keyPause({ paused: row.paused, pausedUntil: row.paused_until }, held[row.token_id], now);
   }
 
   const filtered = keys.filter((row) => {
@@ -179,7 +185,7 @@ export default function KeyList({
   function keyChips(row: VirtualKeyView) {
     return (
       <>
-        <KeyStateChip state={stateOf(row)} pausedUntil={row.paused_until} />
+        <KeyStateChip state={stateOf(row)} pause={pauseOf(row)} />
         {row.log_content ? null : (
           <Chip size="sm" variant="soft" color="warning">
             {t("contentOff")}
@@ -209,7 +215,7 @@ export default function KeyList({
         name={row.key_alias || row.key_name}
         actions={keyMenuActions(flags, {
           capped: row.max_budget > 0,
-          paused: isKeyPaused({ paused: row.paused, pausedUntil: row.paused_until }, now),
+          paused: isPaused({ paused: row.paused, pausedUntil: row.paused_until }, now),
         })}
         pending={busyId === row.token_id}
         isDisabled={lockedId !== null && lockedId !== row.token_id}
@@ -220,7 +226,7 @@ export default function KeyList({
 
   const stateOptions = [
     { id: ALL, label: t("filters.allStates") },
-    ...STATES.map((state) => ({ id: state, label: t("state", { state, timed: "no", until: "" }) })),
+    ...STATES.map((state) => ({ id: state, label: t("state", { state }) })),
   ];
   const kindOptions = [
     { id: ALL, label: t("filters.allOwners") },

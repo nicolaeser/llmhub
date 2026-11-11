@@ -78,6 +78,7 @@ const UNAVAILABLE_REASONS = [
   "needs_limit",
   "unavailable",
 ] as const satisfies readonly ClaudeUnavailableReason[];
+const LIMIT_BLOCK_PREFIX = "blocked_";
 const ACCOUNT_SURFACES = ["claude_ai", "claude_code_cli"] as const;
 const ACCOUNT_TIERS = ["claude_pro", "claude_max_5x", "claude_max_20x", "claude_team"] as const;
 const TENURE_BUCKETS = ["under_14", "14-29", "30-89", "90-364", "365+"] as const;
@@ -154,7 +155,9 @@ function grantType(value: unknown): ClaudeGrantType | null {
 
 function unavailableReason(value: unknown): ClaudeUnavailableReason | null {
   if (value === undefined || value === null) return null;
-  return UNAVAILABLE_REASONS.find((reason) => reason === value) ?? "unavailable";
+  const known = UNAVAILABLE_REASONS.find((reason) => reason === value);
+  if (known) return known;
+  return typeof value === "string" && value.startsWith(LIMIT_BLOCK_PREFIX) ? "blocked_other" : "unavailable";
 }
 
 function oneOf<T extends string>(values: readonly T[], value: unknown): T | "unknown" {

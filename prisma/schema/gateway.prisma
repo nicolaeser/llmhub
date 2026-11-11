@@ -11,6 +11,8 @@ model Organization {
   budgetDuration  String    @default("")
   spendResetAt    DateTime?
   labelKeys       String[]  @default([])
+  paused          Boolean   @default(false)
+  pausedUntil     DateTime?
   createdAt       DateTime  @default(now())
 
   policy   PolicyOverride?
@@ -46,6 +48,8 @@ model Team {
   rpmLimit       Int           @default(0)
   tpmLimit       Int           @default(0)
   spendResetAt   DateTime?
+  paused         Boolean       @default(false)
+  pausedUntil    DateTime?
   createdAt      DateTime      @default(now())
 
   policy   PolicyOverride?
@@ -95,6 +99,8 @@ model Project {
   spend           Decimal       @default(0) @db.Decimal(20, 10)
   budgetDuration  String        @default("")
   spendResetAt    DateTime?
+  paused          Boolean       @default(false)
+  pausedUntil     DateTime?
   createdAt       DateTime      @default(now())
 
   policy        PolicyOverride?
@@ -118,6 +124,8 @@ model Member {
   name           String
   email          String       @default("")
   blocked        Boolean      @default(false)
+  paused         Boolean      @default(false)
+  pausedUntil    DateTime?
   logContent     Boolean      @default(true)
   maxBudget      Decimal      @default(0) @db.Decimal(20, 10)
   spend          Decimal      @default(0) @db.Decimal(20, 10)

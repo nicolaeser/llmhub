@@ -1,6 +1,6 @@
 "use client";
 
-import { BarChart3, FolderPlus, KeyRound, Pencil, Trash2, Wallet, Zap, type LucideIcon } from "lucide-react";
+import { BarChart3, FolderPlus, KeyRound, Pause, Pencil, Play, Trash2, Wallet, Zap, type LucideIcon } from "lucide-react";
 import { useTranslations } from "next-intl";
 import RowMenu from "@/components/providers/row-menu";
 import type { TenancyKind } from "@/types/structure";
@@ -8,6 +8,8 @@ import type { NodeAction } from "./tree-model";
 
 const ICONS: Record<NodeAction, LucideIcon> = {
   edit: Pencil,
+  pause: Pause,
+  resume: Play,
   budget: Wallet,
   boost: Zap,
   addProject: FolderPlus,

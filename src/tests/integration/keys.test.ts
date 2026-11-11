@@ -21,6 +21,10 @@ import { GateError } from "@/lib/gateway/errors";
 import { PATCH as patchKey } from "@/app/api/mgmt/keys/[id]/route";
 import { POST as pauseRoute } from "@/app/api/mgmt/keys/[id]/pause/route";
 import { POST as resumeRoute } from "@/app/api/mgmt/keys/[id]/resume/route";
+import { POST as pauseOrgRoute } from "@/app/api/mgmt/organizations/[id]/pause/route";
+import { POST as resumeOrgRoute } from "@/app/api/mgmt/organizations/[id]/resume/route";
+import { POST as pauseMemberRoute } from "@/app/api/mgmt/members/[id]/pause/route";
+import { loadCompany, pauseNode, resumeNode } from "@/lib/tenancy/structure";
 import type { Permission } from "@/types/auth";
 import { closeDatabase, uniqueName } from "./support/database";
 import { sessionOf, TestData } from "./support/fixtures";
@@ -410,6 +414,141 @@ test("POST /api/mgmt/keys/{id}/pause and /resume switch the pause and return the
     const stored = await prisma.virtualKey.findUniqueOrThrow({ where: { id: key.id } });
     assert.equal(stored.paused, false);
     assert.equal(stored.pausedUntil, null);
+  } finally {
+    await data.cleanup();
+  }
+});
+
+test("keys are refused while their person, project, department, or company is paused", async () => {
+  const data = new TestData();
+  try {
+    const world = await twoCompanies(data);
+    const admin = sessionOf(await data.user(), { permissions: KEY_MANAGER });
+    const personal = await runAsPrincipal(admin, () => createKey(keyInput({ memberId: world.homeMember.id })));
+    const project = await runAsPrincipal(admin, () => createKey(keyInput({ projectId: world.homeProject.id })));
+    const gate = (secret: string | undefined) =>
+      gateRequest(
+        new Request("http://hub.local/api/v1/chat/completions", {
+          method: "POST",
+          headers: { authorization: `Bearer ${secret}` },
+        }),
+      );
+    const refused = (message: string) => (err: unknown) =>
+      err instanceof GateError && err.status === 403 && err.code === "key_paused" && err.message === message;
+    const both = [personal.key.key, project.key.key];
+
+    for (const secret of both) assert.ok(await gate(secret));
+
+    const before = Date.now();
+    const department = await runAsPrincipal(admin, () =>
+      pauseNode({ kind: "team", id: world.homeTeam.id, hours: 1 }),
+    );
+    const team = department.teams.find((row) => row.id === world.homeTeam.id);
+    assert.equal(team?.paused, true);
+    const until = team?.pausedUntil ?? "";
+    assert.ok(Date.parse(until) >= before + 3_600_000 && Date.parse(until) <= Date.now() + 3_600_000);
+    assert.deepEqual(await auditOf("team.pause", world.homeTeam.id), {
+      before: { paused: false, pausedUntil: null },
+      after: { paused: true, pausedUntil: until },
+    });
+    for (const secret of both) {
+      await assert.rejects(gate(secret), refused(`this key's department is paused until ${until}`));
+    }
+    const held = (await runAsPrincipal(admin, () => loadKeysPage())).held;
+    assert.deepEqual(held[personal.key.token_id], { scope: "team", until });
+    assert.deepEqual(held[project.key.token_id], { scope: "team", until });
+
+    await runAsPrincipal(admin, () => pauseNode({ kind: "org", id: world.home.id }));
+    for (const secret of both) await assert.rejects(gate(secret), refused("this key's company is paused"));
+    const company = await runAsPrincipal(admin, () => loadCompany(world.home.id));
+    assert.equal(company.orgs[0]?.paused, true);
+    assert.equal(company.orgs[0]?.pausedUntil, "");
+
+    await runAsPrincipal(admin, () => resumeNode({ kind: "org", id: world.home.id }));
+    await runAsPrincipal(admin, () => resumeNode({ kind: "team", id: world.homeTeam.id }));
+    assert.deepEqual(await auditOf("team.resume", world.homeTeam.id), {
+      before: { paused: true, pausedUntil: until },
+      after: { paused: false, pausedUntil: null },
+    });
+    for (const secret of both) assert.ok(await gate(secret));
+
+    await runAsPrincipal(admin, () => pauseNode({ kind: "member", id: world.homeMember.id }));
+    await assert.rejects(gate(personal.key.key), refused("this key's person is paused"));
+    assert.ok(await gate(project.key.key));
+    await runAsPrincipal(admin, () => pauseNode({ kind: "project", id: world.homeProject.id }));
+    await assert.rejects(gate(project.key.key), refused("this key's project is paused"));
+
+    await prisma.member.update({ where: { id: world.homeMember.id }, data: { pausedUntil: new Date(Date.now() - 1000) } });
+    assert.ok(await gate(personal.key.key));
+
+    const companyUser = sessionOf(await data.user({ orgId: world.home.id }), { permissions: KEY_MANAGER });
+    await assert.rejects(
+      runAsPrincipal(companyUser, () => pauseNode({ kind: "org", id: world.home.id })),
+      failsWith("PLATFORM_ONLY"),
+    );
+    await assert.rejects(
+      runAsPrincipal(companyUser, () => pauseNode({ kind: "member", id: world.awayMember.id })),
+      failsWith("NOT_FOUND"),
+    );
+    await assert.rejects(
+      runAsPrincipal(companyUser, () => pauseNode({ kind: "team", id: world.homeTeam.id, hours: -1 })),
+      failsWith("VALIDATION"),
+    );
+    const reader = sessionOf(await data.user(), { permissions: ["tenancy:read"] });
+    await assert.rejects(runAsPrincipal(reader, () => pauseNode({ kind: "team", id: world.homeTeam.id })), forbidden);
+    await runAsPrincipal(companyUser, () => resumeNode({ kind: "project", id: world.homeProject.id }));
+    assert.ok(await gate(project.key.key));
+  } finally {
+    await data.cleanup();
+  }
+});
+
+test("POST /api/mgmt/organizations/{id}/pause and /resume and the person routes switch the pause", async () => {
+  const data = new TestData();
+  try {
+    const org = await data.org();
+    const member = await data.member(org.id);
+    const owner = await data.user({ isOwner: true });
+    const secret = `sk-mgmt-${uniqueName("secret")}`;
+    await prisma.managementKey.create({
+      data: {
+        userId: owner.id,
+        name: "integration",
+        prefix: secret.slice(0, 16),
+        hash: digest(secret),
+        permissions: ["tenancy:read", "tenancy:manage"],
+      },
+    });
+    const post = async (handler: typeof pauseOrgRoute, path: string, id: string, body?: unknown) => {
+      const res = await handler(
+        new Request(`http://hub.local/api/mgmt/${path}`, {
+          method: "POST",
+          headers: { authorization: `Bearer ${secret}`, "content-type": "application/json" },
+          body: body === undefined ? undefined : JSON.stringify(body),
+        }),
+        { params: Promise.resolve({ id }) },
+      );
+      return { status: res.status, body: await res.json() };
+    };
+
+    const paused = await post(pauseOrgRoute, `organizations/${org.id}/pause`, org.id);
+    assert.equal(paused.status, 200);
+    assert.equal(paused.body.object, "organization");
+    assert.equal(paused.body.paused, true);
+    assert.equal(paused.body.paused_until, null);
+
+    const resumed = await post(resumeOrgRoute, `organizations/${org.id}/resume`, org.id);
+    assert.equal(resumed.status, 200);
+    assert.equal(resumed.body.paused, false);
+    assert.equal((await prisma.organization.findUniqueOrThrow({ where: { id: org.id } })).paused, false);
+
+    const person = await post(pauseMemberRoute, `members/${member.id}/pause`, member.id, { hours: 24 });
+    assert.equal(person.status, 200);
+    assert.equal(person.body.object, "member");
+    assert.equal(person.body.paused, true);
+    assert.ok(Date.parse(person.body.paused_until) > Date.now() + 23 * 3_600_000);
+    assert.equal((await post(pauseMemberRoute, `members/${member.id}/pause`, member.id, { hours: 1, until: "x" })).status, 422);
+    assert.equal((await post(pauseMemberRoute, "members/missing/pause", "missing")).status, 404);
   } finally {
     await data.cleanup();
   }

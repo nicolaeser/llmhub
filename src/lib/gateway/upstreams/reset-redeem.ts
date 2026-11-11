@@ -6,7 +6,8 @@ import { GateError } from "@/lib/gateway/errors";
 import { autoResetPolicies } from "@/lib/gateway/routing/account-routing";
 import { isResetKind } from "@/lib/gateway/routing/auto-reset-policy";
 import { clearCooldowns } from "@/lib/gateway/routing/provider-health";
-import { quotaExhausted } from "@/lib/gateway/routing/quota";
+import { hasExhaustedQuota } from "@/lib/gateway/routing/quota";
+import { isModelLimitWindow } from "@/lib/gateway/upstreams/claude-usage";
 import { providerAuth } from "@/lib/gateway/upstreams/credentials";
 import {
   claimClaudeReset,
@@ -112,13 +113,15 @@ function liveWindow(window: LimitWindow, now: number): LimitWindow {
   return Number.isFinite(resetsAt) && resetsAt <= now ? { ...window, usedPercent: 0, limitReached: false } : window;
 }
 
-function planWindows(limits: SubscriptionLimits, now: number): LimitWindow[] {
-  return limits.windows.filter((window) => !window.scope).map((window) => liveWindow(window, now));
+function resettableWindows(limits: SubscriptionLimits, now: number): LimitWindow[] {
+  return limits.windows
+    .filter((window) => !window.scope || isModelLimitWindow(window))
+    .map((window) => liveWindow(window, now));
 }
 
 export function accountUsage(limits: SubscriptionLimits | null, now: number): number | null {
   if (!limits) return null;
-  const windows = planWindows(limits, now);
+  const windows = resettableWindows(limits, now);
   if (!windows.length) return null;
   if (windows.some((window) => window.limitReached)) return FULL_PERCENT;
   return Math.max(...windows.map((window) => window.usedPercent));
@@ -126,7 +129,7 @@ export function accountUsage(limits: SubscriptionLimits | null, now: number): nu
 
 export function accountRecovery(limits: SubscriptionLimits | null, percent: number, now: number): number {
   if (!limits) return Infinity;
-  const tight = planWindows(limits, now).filter((window) => window.limitReached || window.usedPercent >= percent);
+  const tight = resettableWindows(limits, now).filter((window) => window.limitReached || window.usedPercent >= percent);
   if (!tight.length) return 0;
   return Math.max(...tight.map((window) => (window.resetsAt ? Date.parse(window.resetsAt) : Infinity)));
 }
@@ -412,7 +415,7 @@ async function afterReset(provider: ResetProvider): Promise<void> {
     logger.warn("provider.reset_refresh_failed", { providerId: provider.id, ...errorFields(err) });
     return null;
   });
-  if (!limits || quotaExhausted(limits, "", Date.now())) scheduleRecheck(provider, deployments);
+  if (!limits || hasExhaustedQuota(limits, Date.now())) scheduleRecheck(provider, deployments);
 }
 
 async function redeemLocked(

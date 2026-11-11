@@ -149,6 +149,8 @@ export function serializeTeam(team: TeamNode, structure: StructurePayload) {
     spend: team.budget.spend,
     rpm_limit: team.rpmLimit,
     tpm_limit: team.tpmLimit,
+    paused: team.paused,
+    paused_until: orNull(team.pausedUntil),
     member_count: structure.members.filter((row) => row.teamId === team.id).length,
   };
 }
@@ -164,6 +166,8 @@ export function serializeOrg(org: OrgNode, structure: StructurePayload) {
     project_count: structure.projects.filter((row) => row.orgId === org.id).length,
     member_count: structure.members.filter((row) => row.orgId === org.id).length,
     label_keys: org.labelKeys,
+    paused: org.paused,
+    paused_until: orNull(org.pausedUntil),
   };
 }
 
@@ -179,6 +183,8 @@ export function serializeProject(project: ProjectNode, structure: StructurePaylo
     owner: orNull(project.owner),
     max_budget: project.budget.maxBudget,
     spend: project.budget.spend,
+    paused: project.paused,
+    paused_until: orNull(project.pausedUntil),
   };
 }
 
@@ -193,6 +199,8 @@ export function serializeMember(row: MemberNode, structure: StructurePayload) {
     team_id: orNull(row.teamId),
     team_alias: orNull(structure.teams.find((team) => team.id === row.teamId)?.alias),
     blocked: row.blocked,
+    paused: row.paused,
+    paused_until: orNull(row.pausedUntil),
     log_content: row.logContent,
     max_budget: row.budget.maxBudget,
     spend: row.budget.spend,

@@ -1,3 +1,4 @@
+import { heldPause, longestPause } from "@/lib/keys/pause";
 import type { UsageQuery } from "@/types/usage";
 import type {
   BudgetKind,
@@ -5,10 +6,12 @@ import type {
   CapLink,
   ConsoleUserNode,
   DepartmentGroup,
+  HeldPause,
   KeyNode,
   MemberNode,
   NodeKind,
   NodeRef,
+  PauseState,
   SetupStep,
   StructurePayload,
   TenancyKind,
@@ -60,20 +63,63 @@ function rowsOf(data: StructurePayload, kind: BudgetKind): { id: string; alias: 
   return data.keys;
 }
 
-export type NodeAction = "edit" | "budget" | "boost" | "addProject" | "createKey" | "usage" | "delete";
+export type NodeAction =
+  | "edit"
+  | "pause"
+  | "resume"
+  | "budget"
+  | "boost"
+  | "addProject"
+  | "createKey"
+  | "usage"
+  | "delete";
 
 export type NodeFlags = { canManage: boolean; canBudget: boolean; canCreateKeys: boolean; canSeeUsage: boolean };
 
-export function nodeActions(kind: Exclude<TenancyKind, "org">, flags: NodeFlags, capped: boolean): NodeAction[] {
+export function nodeActions(
+  kind: Exclude<TenancyKind, "org">,
+  flags: NodeFlags,
+  node: { capped: boolean; paused: boolean },
+): NodeAction[] {
   const actions: NodeAction[] = [];
-  if (flags.canManage) actions.push("edit");
+  if (flags.canManage) actions.push("edit", node.paused ? "resume" : "pause");
   if (flags.canBudget) actions.push("budget");
-  if (flags.canBudget && capped) actions.push("boost");
+  if (flags.canBudget && node.capped) actions.push("boost");
   if (kind === "team" && flags.canManage) actions.push("addProject");
   if (kind !== "team" && flags.canCreateKeys) actions.push("createKey");
   if (flags.canSeeUsage) actions.push("usage");
   if (flags.canManage) actions.push("delete");
   return actions;
+}
+
+function pauseRows(data: StructurePayload, kind: TenancyKind): (PauseState & { id: string })[] {
+  if (kind === "org") return data.orgs;
+  if (kind === "team") return data.teams;
+  if (kind === "project") return data.projects;
+  return data.members;
+}
+
+export function nodePause(data: StructurePayload, ref: NodeRef, now: Date): HeldPause | null {
+  const held = (kind: TenancyKind, id: string) =>
+    id ? heldPause(kind, pauseRows(data, kind).find((row) => row.id === id), now) : null;
+  if (ref.kind === "org") return held("org", ref.id);
+  if (ref.kind === "team") {
+    const team = data.teams.find((row) => row.id === ref.id);
+    return longestPause([held("team", ref.id), held("org", team?.orgId ?? "")]);
+  }
+  if (ref.kind === "project" || ref.kind === "member") {
+    const row = (ref.kind === "project" ? data.projects : data.members).find((item) => item.id === ref.id);
+    return longestPause([held(ref.kind, ref.id), held("team", row?.teamId ?? ""), held("org", row?.orgId ?? "")]);
+  }
+  const key = data.keys.find((row) => row.id === ref.id);
+  if (!key) return null;
+  return longestPause([
+    heldPause("key", key, now),
+    held("member", key.memberId),
+    held("project", key.projectId),
+    held("team", key.teamId),
+    held("org", key.orgId),
+  ]);
 }
 
 export function nodeIn(data: StructurePayload, ref: NodeRef | null): boolean {

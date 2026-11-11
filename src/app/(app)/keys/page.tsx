@@ -160,7 +160,9 @@ export default function KeysPage() {
     scope.kind === "platform" &&
     (data.providers === 0 || options.models.length === 0 || data.keys.length === 0);
   const blockedOrPaused = data.keys.filter(
-    (row) => keyState({ blocked: row.blocked, paused: row.paused, pausedUntil: row.paused_until }, now) !== "active",
+    (row) =>
+      keyState({ blocked: row.blocked, paused: row.paused, pausedUntil: row.paused_until }, now, data.held[row.token_id]) !==
+      "active",
   ).length;
 
   return (
@@ -218,6 +220,7 @@ export default function KeysPage() {
             <KeyList
               keys={data.keys}
               lastUsed={data.lastUsed}
+              held={data.held}
               options={options}
               owners={data.owners}
               flags={{ canManage, canMcp, canBudget }}

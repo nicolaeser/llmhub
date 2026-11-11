@@ -10,6 +10,7 @@ import PageStatus from "@/components/console/page-status";
 import RowCard, { RowCards, TABLE_FROM_LG } from "@/components/console/row-cards";
 import { Link, useRouter } from "@/i18n/routing";
 import { useActionData } from "@/lib/hooks/use-action-data";
+import { useClock } from "@/lib/hooks/use-clock";
 import { useSearchParam } from "@/lib/hooks/use-search-param";
 import { isActionFail } from "@/lib/http/action-result";
 import { companyHref, companyStatus, legacyCompanyLink, matchesCompany } from "@/lib/tenancy/company-view";
@@ -22,6 +23,7 @@ import SpendMeter from "./_components/spend-meter";
 import { parseNodeRef } from "./_components/tree-model";
 
 const STATUS_COLORS: Record<CompanyStatus, "danger" | "warning" | "default" | "success"> = {
+  paused: "warning",
   exhausted: "danger",
   near: "warning",
   empty: "default",
@@ -38,6 +40,7 @@ export default function CompaniesPage() {
   const [query, setQuery] = useState("");
   const [addKey, setAddKey] = useState(0);
   const addState = useOverlayState();
+  const now = useClock(60_000);
   const page = useActionData(loadCompanyDirectoryAction);
   const { data } = page;
   const companyScope = consoleScope.scope.kind === "company" ? consoleScope.scope : null;
@@ -82,10 +85,11 @@ export default function CompaniesPage() {
   ) : null;
 
   function statusChip(row: CompanyRow) {
-    const status = companyStatus(row);
+    const status = companyStatus(row, now);
+    const until = status === "paused" && row.pausedUntil ? format.dateTime(new Date(row.pausedUntil), "stamp") : "";
     return (
       <Chip size="sm" variant="soft" color={STATUS_COLORS[status]}>
-        {t("status", { status })}
+        {t("status", { status, timed: until ? "yes" : "no", until })}
       </Chip>
     );
   }
