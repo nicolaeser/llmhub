@@ -73,6 +73,7 @@ export function logMaintenanceSweep(result: MaintenanceSweepResult | null): void
 export async function runMaintenanceSweep(
   now = new Date(),
 ): Promise<MaintenanceSweepResult> {
+  const startedAt = Date.now();
   const attemptCutoff = new Date(now.getTime() - ATTEMPT_RETENTION_MS);
   const [sessions, resetTokens, loginAttempts, tempBudgets, rotatedKeys] =
     await Promise.all([
@@ -160,7 +161,7 @@ export async function runMaintenanceSweep(
   result.signIns = await runSweepJob("sign_in_refresh", () => refreshDueLogins(now.getTime()));
   result.supersededLogins = await runSweepJob("superseded_logins", async () => (await pruneSupersededLogins("worker")).length);
   result.subAddLinks = await runSweepJob("sub_add_links", async () => (await pruneSubAddLinks("worker", now.getTime())).length);
-  result.limits = await runSweepJob("subscription_limits", () => refreshDueLimits(now.getTime()));
+  result.limits = await runSweepJob("subscription_limits", () => refreshDueLimits(now.getTime() + Date.now() - startedAt));
   result.resets = await runSweepJob("auto_resets", () => runAutoResets(now.getTime()));
   result.kickoffs = await runSweepJob("window_kickoffs", () => runWindowKickoffs(now.getTime()));
   return result;

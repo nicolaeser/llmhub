@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { accountState, partialLimits, recoveryAt } from "@/app/(app)/providers/_components/account-status";
-import type { AccountLimits, LimitWindow, ProviderView } from "@/types/providers";
+import type { AccountLimits, LimitSnapshot, LimitWindow, ProviderView } from "@/types/providers";
 
 const NOW = Date.parse("2026-10-12T12:00:00Z");
 const HOUR = 3_600_000;
@@ -143,4 +143,34 @@ test("plan windows keep deciding accounts that have them", () => {
   assert.equal(partialLimits(claude, entry([]), NOW), null);
   assert.equal(accountState(claude, undefined, true, NOW), "checking");
   assert.equal(recoveryAt(claude, undefined, NOW), null);
+});
+
+test("overlapping refreshes of one account keep it busy until the last one ends", async () => {
+  const { finishedRefresh, startedRefresh } = await import("@/app/(app)/providers/_components/account-refreshes");
+  const twice = startedRefresh(startedRefresh(startedRefresh([], "a"), "b"), "a");
+  assert.deepEqual(twice, ["a", "b", "a"]);
+  const once = finishedRefresh(twice, "a");
+  assert.deepEqual(once, ["b", "a"]);
+  assert.deepEqual(finishedRefresh(once, "a"), ["b"]);
+  assert.equal(finishedRefresh(once, "missing"), once);
+});
+
+test("accounts a refresh left running stay awaited until a newer snapshot version arrives", async () => {
+  const { awaitedRefreshes, stillAwaited } = await import("@/app/(app)/providers/_components/account-refreshes");
+  const snapshot = (id: string, version: number) => ({ id, version }) as LimitSnapshot;
+  const awaited = awaitedRefreshes({ a: "pending", b: "refreshed", c: "pending" }, [snapshot("a", 4), snapshot("b", 7)]);
+  assert.deepEqual(awaited, { a: 4, c: -1 });
+  assert.deepEqual(stillAwaited(awaited, { a: snapshot("a", 4) }), ["a", "c"]);
+  assert.deepEqual(stillAwaited(awaited, { a: snapshot("a", 5), c: snapshot("c", 0) }), []);
+  assert.deepEqual(awaitedRefreshes(undefined, [snapshot("a", 4)]), {});
+});
+
+test("a refresh notice counts only the accounts that were not read", async () => {
+  const { refreshNotice } = await import("@/app/(app)/providers/_components/account-refreshes");
+  assert.equal(refreshNotice(undefined), null);
+  assert.equal(refreshNotice({ a: "refreshed", b: "pending" }), null);
+  assert.deepEqual(
+    refreshNotice({ a: "recent", b: "recent", c: "blocked", d: "failed", e: "refreshed", f: "capped", g: "capped" }),
+    { recent: 2, blocked: 1, capped: 2, failed: 1 },
+  );
 });

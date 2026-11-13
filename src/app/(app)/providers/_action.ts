@@ -10,6 +10,7 @@ import {
   saveAntigravityConfig,
   saveAssignments,
   saveAutoReset,
+  saveRefreshCap,
   saveWindowKickoff,
 } from "@/lib/providers/account-routing";
 import { importAuthFiles, importSignInFile } from "@/lib/providers/auth-import";
@@ -109,6 +110,10 @@ export async function saveAutoResetAction(...args: Parameters<typeof saveAutoRes
 
 export async function saveWindowKickoffAction(...args: Parameters<typeof saveWindowKickoff>) {
   return runAction(() => saveWindowKickoff(...args));
+}
+
+export async function saveRefreshCapAction(...args: Parameters<typeof saveRefreshCap>) {
+  return runAction(() => saveRefreshCap(...args));
 }
 
 export async function redeemProviderResetAction(...args: Parameters<typeof redeemProviderReset>) {

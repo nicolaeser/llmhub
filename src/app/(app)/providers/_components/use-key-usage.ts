@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useActionData } from "@/lib/hooks/use-action-data";
 import { useLiveConnected } from "@/lib/hooks/use-live";
-import { isActionFail } from "@/lib/http/action-result";
+import { isActionFail, settleAction } from "@/lib/http/action-result";
+import { singleFlight } from "@/lib/utils/single-flight";
 import type { SubscriptionKeyUsage } from "@/types/providers";
 import { loadSubscriptionKeyUsageAction } from "../_action";
 
@@ -22,7 +23,12 @@ export function useLiveKeyUsage(trigger: string, enabled: boolean) {
   const live = useLiveConnected();
   const seen = useRef(trigger);
   const lastRun = useRef(0);
-  const ticket = useRef(0);
+  const [reloadShares] = useState(() =>
+    singleFlight(async () => {
+      const result = await settleAction(loadSubscriptionKeyUsageAction);
+      if (!isActionFail(result)) setData(result);
+    }),
+  );
 
   useEffect(() => {
     if (!enabled || seen.current === trigger) return;
@@ -30,25 +36,18 @@ export function useLiveKeyUsage(trigger: string, enabled: boolean) {
     const wait = Math.max(0, lastRun.current + REFRESH_GAP_MS - Date.now());
     const timer = setTimeout(() => {
       lastRun.current = Date.now();
-      const current = ++ticket.current;
-      loadSubscriptionKeyUsageAction().then((res) => {
-        if (current === ticket.current && !isActionFail(res)) setData(res);
-      });
+      reloadShares();
     }, wait);
     return () => clearTimeout(timer);
-  }, [enabled, trigger, setData]);
+  }, [enabled, trigger, reloadShares]);
 
   useEffect(() => {
     if (!enabled || live) return;
     const timer = setInterval(() => {
-      if (document.visibilityState !== "visible") return;
-      const current = ++ticket.current;
-      loadSubscriptionKeyUsageAction().then((res) => {
-        if (current === ticket.current && !isActionFail(res)) setData(res);
-      });
+      if (document.visibilityState === "visible") reloadShares();
     }, FALLBACK_POLL_MS);
     return () => clearInterval(timer);
-  }, [enabled, live, setData]);
+  }, [enabled, live, reloadShares]);
 
   return { usage, live };
 }

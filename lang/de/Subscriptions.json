@@ -3,6 +3,7 @@
   "empty": "Melde dich bei einem Abo wie ChatGPT, Claude oder Google an, importiere vorhandene Konten oder sende jemandem einen Konto-Link.",
   "addAccount": "Konto hinzufügen",
   "refreshAll": "Alle Limits aktualisieren",
+  "refreshNotice": "{recent, plural, =0 {} one {# Konto wurde gerade erst abgefragt und nicht erneut gelesen.} other {# Konten wurden gerade erst abgefragt und nicht erneut gelesen.}}{blocked, plural, =0 {} one { Der Anbieter verlangt bei # Konto eine Wartezeit vor der nächsten Abfrage.} other { Der Anbieter verlangt bei # Konten eine Wartezeit vor der nächsten Abfrage.}}{capped, plural, =0 {} one { # Konto wartet wegen der Grenze pro Klick auf die nächste Aktualisierung.} other { # Konten warten wegen der Grenze pro Klick auf die nächste Aktualisierung.}}{failed, plural, =0 {} one { # Konto konnte nicht abgefragt werden.} other { # Konten konnten nicht abgefragt werden.}}",
   "search": "Konten durchsuchen",
   "noMatches": "Keine Konten passen zu dieser Suche",
   "importFiles": {
@@ -217,6 +218,17 @@
     "save": "Fensterstart für {provider} speichern",
     "saveShort": "Speichern",
     "saved": "Fensterstart für {provider} gespeichert"
+  },
+  "refreshCap": {
+    "title": "Konten pro „Alle Limits aktualisieren“",
+    "description": "Wie viele {provider}-Konten ein Klick auf „Alle Limits aktualisieren“ höchstens beim Anbieter abfragt. Die am längsten nicht abgefragten Konten kommen zuerst, die übrigen warten auf den nächsten Klick oder die automatische Abfrage. Eine kleinere Zahl schützt vor dem Rate-Limit des Anbieters für Nutzungsabfragen.",
+    "label": "Abfragegrenze für {provider}",
+    "cap": "Konten pro Klick",
+    "capHint": "0 fragt alle Konten ab. Höchstens {max, number}.",
+    "capInvalid": "Gib eine ganze Zahl von 0 bis {max, number} ein.",
+    "save": "Abfragegrenze für {provider} speichern",
+    "saveShort": "Speichern",
+    "saved": "Abfragegrenze für {provider} gespeichert"
   },
   "routing": {
     "title": "Kontoverteilung",

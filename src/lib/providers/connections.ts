@@ -28,7 +28,8 @@ import { providerPresetUsage } from "@/lib/providers/preset-usage";
 import { removeProviderConnection } from "@/lib/providers/provider-removal";
 import { discoveredOf } from "@/lib/gateway/upstreams/provider-prices";
 import { pollAccounts, readLimitSnapshot, readLimitSnapshots } from "@/lib/gateway/upstreams/limit-store";
-import { refreshAccountLimits, refreshAccountsLimits } from "@/lib/providers/limit-refresh";
+import { currentRefreshCaps } from "@/lib/providers/account-routing";
+import { refreshAccountsLimits } from "@/lib/providers/limit-refresh";
 import {
   completeAuthorization,
   isCodeGrant,
@@ -48,6 +49,7 @@ import {
 } from "@/schemas/providers";
 import type {
   ImportCandidate,
+  LimitRefreshOutcome,
   LimitSnapshot,
   LimitSnapshotList,
   ProviderConcurrency,
@@ -370,7 +372,7 @@ export async function updateProvider(input: {
 export async function loadProviderLimits(input: {
   id: string;
   refresh?: boolean;
-}): Promise<{ limits: SubscriptionLimits | null; item: LimitSnapshot | null }> {
+}): Promise<{ limits: SubscriptionLimits | null; item: LimitSnapshot | null; refresh?: LimitRefreshOutcome }> {
   await requirePlatformPermission(PERMISSIONS.PROVIDERS_READ);
   const row = await prisma.providerConnection.findUnique({
     where: { id: input.id },
@@ -379,25 +381,21 @@ export async function loadProviderLimits(input: {
   if (!row) throw new Error("NOT_FOUND");
   if (!reportsLimits(row.kind)) return { limits: null, item: null };
   if (row.login?.status !== "active") throw new Error("SIGN_IN_EXPIRED");
-  if (input.refresh === true) {
-    await refreshAccountLimits({
-      id: row.id,
-      kind: row.kind,
-      apiKey: row.apiKey,
-      enabled: row.enabled,
-      loginVersion: row.login.version,
-    });
-  }
+  const account = { id: row.id, kind: row.kind, apiKey: row.apiKey, enabled: row.enabled, loginVersion: row.login.version };
+  const refresh = input.refresh === true ? (await refreshAccountsLimits([account]))[row.id] : undefined;
   const item = await readLimitSnapshot(row.id);
   if (item?.error && !item.limits) throw new Error(item.error);
-  return { limits: item?.limits ?? null, item };
+  return { limits: item?.limits ?? null, item, ...(refresh ? { refresh } : {}) };
 }
 
 export async function loadSubscriptionLimits(input: { refresh?: boolean } = {}): Promise<LimitSnapshotList> {
   await requirePlatformPermission(PERMISSIONS.PROVIDERS_READ);
-  if (input.refresh === true) await refreshAccountsLimits(await pollAccounts());
+  const refresh =
+    input.refresh === true
+      ? await refreshAccountsLimits(await pollAccounts(), { caps: await currentRefreshCaps() })
+      : undefined;
   const at = Date.now();
-  return { at, items: await readLimitSnapshots(undefined, at) };
+  return { at, items: await readLimitSnapshots(undefined, at), ...(refresh ? { refresh } : {}) };
 }
 
 export async function startSignIn(kind: string): Promise<SignInStart> {

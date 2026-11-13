@@ -115,6 +115,10 @@ export function limitsFromTraffic(kind: string): boolean {
   return TRAFFIC_LIMIT_KINDS.has(kind);
 }
 
+export function pollsLimits(kind: string): kind is SignInKind {
+  return LIMIT_KINDS.has(kind) && !TRAFFIC_LIMIT_KINDS.has(kind);
+}
+
 export function signInMethod(kind: SignInKind): SignInMethod {
   return CODE_SIGN_IN_KINDS.has(kind) ? "code" : "device";
 }

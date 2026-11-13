@@ -138,10 +138,16 @@ export default function LimitMeter({
             label={tKeys("barLabel", { window: label })}
             segments={keys.segments}
             used={used}
+            tone={tone}
             nameOf={keys.nameOf}
             freeLabel={tKeys("free")}
           />
-          <KeyUsageLegend label={tKeys("legend", { window: label })} segments={keys.segments} nameOf={keys.shortNameOf} />
+          <KeyUsageLegend
+            label={tKeys("legend", { window: label })}
+            segments={keys.segments}
+            tone={tone}
+            nameOf={keys.shortNameOf}
+          />
         </div>
       ) : null}
       {pending ? <ResetLine at={reset} reached={group.limitReached} timeZone={timeZone} full={!compact} /> : null}

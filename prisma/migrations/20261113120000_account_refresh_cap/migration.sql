@@ -1,0 +1,3 @@
+BEGIN;
+ALTER TABLE "AccountRouting" ADD COLUMN     "refreshCap" INTEGER NOT NULL DEFAULT 0;
+COMMIT;

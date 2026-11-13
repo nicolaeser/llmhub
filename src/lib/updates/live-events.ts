@@ -53,6 +53,14 @@ function newer(current: LimitSnapshot | undefined, next: LimitSnapshot): boolean
   return !current || next.version > current.version;
 }
 
+function checkedAfter(item: LimitSnapshot, at: number): boolean {
+  return item.checkedAt !== null && Date.parse(item.checkedAt) > at;
+}
+
+function outlivesRemoval(item: LimitSnapshot, seedAt: number, removedAt: number | undefined): boolean {
+  return removedAt === undefined || removedAt < seedAt || checkedAfter(item, removedAt);
+}
+
 export function applyLimitsEvent(previous: LiveLimits | null, data: unknown): LiveLimits | null {
   const event = record(data);
   const at = finite(event?.at);
@@ -117,8 +125,7 @@ export function applyLiveEvent<T extends LiveTopic>(
 export function mergeLimits(seed: LimitSnapshotList | null, live: LiveLimits | null): Record<string, LimitSnapshot> {
   const merged: Record<string, LimitSnapshot> = {};
   for (const item of seed?.items ?? []) {
-    const removedAt = live?.removed[item.id];
-    if (removedAt === undefined || removedAt < (seed?.at ?? 0)) merged[item.id] = item;
+    if (outlivesRemoval(item, seed?.at ?? 0, live?.removed[item.id])) merged[item.id] = item;
   }
   for (const item of Object.values(live?.items ?? {})) {
     if (newer(merged[item.id], item)) merged[item.id] = item;
@@ -128,8 +135,12 @@ export function mergeLimits(seed: LimitSnapshotList | null, live: LiveLimits | n
 
 export function removedSince(seed: LimitSnapshotList | null, live: LiveLimits | null): string[] {
   const since = seed?.at ?? 0;
+  const seeded = new Map(seed?.items.map((item) => [item.id, item]));
   return Object.entries(live?.removed ?? {})
-    .filter(([, at]) => at >= since)
+    .filter(([id, at]) => {
+      const item = seeded.get(id);
+      return at >= since && !(item && checkedAfter(item, at));
+    })
     .map(([id]) => id);
 }
 
@@ -137,6 +148,18 @@ export function withLimitItems(list: LimitSnapshotList, items: LimitSnapshot[]):
   const byId = new Map(list.items.map((item) => [item.id, item]));
   for (const item of items) if (newer(byId.get(item.id), item)) byId.set(item.id, item);
   return { at: list.at, items: [...byId.values()] };
+}
+
+export function withLimitList(current: LimitSnapshotList, list: LimitSnapshotList): LimitSnapshotList {
+  if (list.at < current.at) return current;
+  const known = new Map(current.items.map((item) => [item.id, item]));
+  const listed = new Set(list.items.map((item) => item.id));
+  const items = list.items.map((item) => {
+    const prior = known.get(item.id);
+    return prior && newer(item, prior) ? prior : item;
+  });
+  const checkedLater = current.items.filter((item) => !listed.has(item.id) && checkedAfter(item, list.at));
+  return { at: list.at, items: [...items, ...checkedLater] };
 }
 
 export function newestOf<T extends { at: number }>(seed: T | null, live: T | null): T | null {

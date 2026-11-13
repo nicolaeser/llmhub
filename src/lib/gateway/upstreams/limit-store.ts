@@ -213,6 +213,18 @@ export function pollDue(snapshot: StoredLimitSnapshot | null, loginVersion: numb
   return snapshot.nextAt <= now || renewedLogin(snapshot, loginVersion);
 }
 
+export function manualReadDue(
+  kind: string,
+  snapshot: StoredLimitSnapshot | null,
+  loginVersion: number,
+  now: number,
+): boolean {
+  if (!snapshot) return true;
+  if (retryBlocked(snapshot, now)) return false;
+  if (snapshot.checkedAt === null || snapshot.checkedAt <= now - manualRefreshGap(kind)) return true;
+  return renewedLogin(snapshot, loginVersion);
+}
+
 export function failureCount(failure: LimitFetchFailure, previous: StoredLimitSnapshot | null): number {
   if (failure.code === RATE_LIMITED && previous?.error !== RATE_LIMITED) return 1;
   return (previous?.failures ?? 0) + 1;
@@ -384,40 +396,57 @@ async function storeFetched(
   return { limits, written: false };
 }
 
+async function releaseClaim(providerId: string, token: string): Promise<void> {
+  try {
+    await prisma.providerLimitSnapshot.updateMany({
+      where: { providerId, leaseToken: token },
+      data: { leaseUntil: null, leaseToken: "" },
+    });
+  } catch (err) {
+    logger.warn("subscription.limits_release_failed", { providerId, ...errorFields(err) });
+  }
+}
+
 async function fetchHeld(
   account: LimitPollAccount,
   token: string,
   now: number,
   random: () => number,
 ): Promise<LimitRefreshResult> {
-  const previous = await readStoredSnapshot(account.id);
-  let fetched: SubscriptionLimits | null = null;
-  let failure: LimitFetchFailure | null = null;
+  let stored = false;
   try {
-    fetched = await fetchSubscriptionLimits(account);
-    if (!fetched) failure = { code: "UPSTREAM_FAILED", retryAfterMs: null };
-  } catch (error) {
-    failure = limitFailure(error);
-    logger.warn("subscription.limits_failed", {
-      providerId: account.id,
-      kind: account.kind,
-      code: failure.code,
-      ...(error instanceof LimitsFetchError ? {} : errorFields(error)),
-    });
+    const previous = await readStoredSnapshot(account.id);
+    let fetched: SubscriptionLimits | null = null;
+    let failure: LimitFetchFailure | null = null;
+    try {
+      fetched = await fetchSubscriptionLimits(account);
+      if (!fetched) failure = { code: "UPSTREAM_FAILED", retryAfterMs: null };
+    } catch (error) {
+      failure = limitFailure(error);
+      logger.warn("subscription.limits_failed", {
+        providerId: account.id,
+        kind: account.kind,
+        code: failure.code,
+        ...(error instanceof LimitsFetchError ? {} : errorFields(error)),
+      });
+    }
+    const { limits, written } = await storeFetched(
+      account,
+      token,
+      { fetched, failure: failure ?? { code: "UPSTREAM_FAILED", retryAfterMs: null }, previous },
+      now,
+      random,
+    );
+    stored = written;
+    if (limits) {
+      rememberLimits(account.id, limits);
+      if (!hasExhaustedQuota(limits, now)) void clearAccountDeploymentsCooldown(account.id);
+    }
+    if (written) notifyLive("limits");
+    return { status: "fetched", limits, failure, snapshot: await readStoredSnapshot(account.id) };
+  } finally {
+    if (!stored) await releaseClaim(account.id, token);
   }
-  const { limits, written } = await storeFetched(
-    account,
-    token,
-    { fetched, failure: failure ?? { code: "UPSTREAM_FAILED", retryAfterMs: null }, previous },
-    now,
-    random,
-  );
-  if (limits) {
-    rememberLimits(account.id, limits);
-    if (!hasExhaustedQuota(limits, now)) void clearAccountDeploymentsCooldown(account.id);
-  }
-  if (written) notifyLive("limits");
-  return { status: "fetched", limits, failure, snapshot: await readStoredSnapshot(account.id) };
 }
 
 export async function refreshLimits(

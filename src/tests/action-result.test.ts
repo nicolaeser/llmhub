@@ -4,6 +4,7 @@ import {
   actionFail,
   isActionFail,
   runAction,
+  settleAction,
 } from "@/lib/http/action-result";
 
 test("actionFail returns a failed action payload", () => {
@@ -66,4 +67,18 @@ test("runAction logs the name and message of unexpected errors but not of action
   assert.equal(entry.errName, "TypeError");
   assert.equal(entry.err, "cannot read properties of undefined");
   assert.deepEqual(Object.keys(entry).sort(), ["err", "errName", "event", "level", "ts"]);
+});
+
+test("settleAction turns a rejected or throwing call into a failed action payload", async () => {
+  assert.equal(await settleAction(async () => 7), 7);
+  const refused = actionFail("SIGN_IN_EXPIRED");
+  assert.equal(await settleAction(async () => refused), refused);
+  const dropped = await settleAction(async () => {
+    throw new TypeError("Failed to fetch");
+  });
+  assert.deepEqual(dropped, actionFail("REQUEST_FAILED"));
+  const thrown = await settleAction((): Promise<number> => {
+    throw new Error("Server Action was not found on the server");
+  });
+  assert.deepEqual(thrown, actionFail("REQUEST_FAILED"));
 });

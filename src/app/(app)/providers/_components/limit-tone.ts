@@ -50,7 +50,9 @@ export const TONE_STATE: Record<LimitTone, LimitState> = {
   full: "full",
 };
 
-export const TONE_COLOR: Record<LimitTone, "accent" | "warning" | "danger"> = {
+export type ToneColor = "accent" | "warning" | "danger";
+
+export const TONE_COLOR: Record<LimitTone, ToneColor> = {
   calm: "accent",
   rising: "warning",
   near: "danger",
@@ -58,6 +60,10 @@ export const TONE_COLOR: Record<LimitTone, "accent" | "warning" | "danger"> = {
   full_scoped: "danger",
   full: "danger",
 };
+
+export function toneHue(tone: LimitTone): string {
+  return `var(--${TONE_COLOR[tone]})`;
+}
 
 export const TONE_FILL: Record<LimitTone, string | undefined> = {
   calm: undefined,

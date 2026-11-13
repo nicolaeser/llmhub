@@ -9,7 +9,8 @@ import { assignmentOptions, replaceAssignments } from "@/lib/gateway/routing/acc
 import { forgetAccountPolicies } from "@/lib/gateway/routing/account-routing";
 import { autoResetPoliciesOf } from "@/lib/gateway/routing/auto-reset-policy";
 import { antigravityClientState, saveAntigravityClientSecret } from "@/lib/gateway/upstreams/antigravity-config";
-import { isSignInKind, signInKinds, startsWindows } from "@/lib/gateway/upstreams/provider-kinds";
+import { isSignInKind, pollsLimits, signInKinds, startsWindows } from "@/lib/gateway/upstreams/provider-kinds";
+import { REFRESH_CAP_MAX } from "@/schemas/providers";
 import { autoResetInputSchema } from "@/schemas/resets";
 import type {
   AccountRouting,
@@ -17,6 +18,7 @@ import type {
   AntigravityClientState,
   AssignmentInput,
   KickoffModels,
+  RefreshCaps,
   SignInKind,
   WindowKickoffs,
 } from "@/types/providers";
@@ -47,6 +49,18 @@ async function currentKickoff(): Promise<WindowKickoffs> {
   return kickoff;
 }
 
+export async function currentRefreshCaps(): Promise<RefreshCaps> {
+  const rows = await prisma.accountRouting.findMany({
+    where: { refreshCap: { gt: 0 } },
+    select: { kind: true, refreshCap: true },
+  });
+  const caps: RefreshCaps = {};
+  for (const row of rows) {
+    if (pollsLimits(row.kind)) caps[row.kind] = row.refreshCap;
+  }
+  return caps;
+}
+
 async function kickoffModels(): Promise<KickoffModels> {
   const rows = await prisma.deployment.findMany({
     where: { group: { enabled: true }, provider: { kind: { in: signInKinds().filter(startsWindows) } } },
@@ -63,17 +77,19 @@ async function kickoffModels(): Promise<KickoffModels> {
 
 export async function loadAccountRouting(): Promise<AccountRoutingView> {
   const session = await requirePlatformPermission(PERMISSIONS.PROVIDERS_READ);
-  const [routing, autoReset, kickoff, models] = await Promise.all([
+  const [routing, autoReset, kickoff, models, refreshCaps] = await Promise.all([
     currentRouting(),
     currentAutoReset(),
     currentKickoff(),
     kickoffModels(),
+    currentRefreshCaps(),
   ]);
   return {
     routing,
     autoReset,
     kickoff,
     kickoffModels: models,
+    refreshCaps,
     canManage: hasPerm(session.permissions, PERMISSIONS.PROVIDERS_MANAGE),
   };
 }
@@ -146,6 +162,28 @@ export async function saveWindowKickoff(input: { kind: string; model: string }) 
     after: { model },
   });
   return { kickoff: await currentKickoff() };
+}
+
+export async function saveRefreshCap(input: { kind: string; cap: number }) {
+  const session = await requirePlatformPermission(PERMISSIONS.PROVIDERS_MANAGE);
+  if (!pollsLimits(input.kind)) throw new Error("UNKNOWN_PROVIDER_KIND");
+  const { kind, cap } = input;
+  if (!Number.isInteger(cap) || cap < 0 || cap > REFRESH_CAP_MAX) throw new Error("VALIDATION");
+  const before = (await currentRefreshCaps())[kind] ?? 0;
+  await prisma.accountRouting.upsert({
+    where: { kind },
+    create: { kind, strategy: DEFAULT_ACCOUNT_STRATEGY, refreshCap: cap },
+    update: { refreshCap: cap },
+  });
+  await writeAudit({
+    actor: session.user.id,
+    action: "account_routing.refresh_cap",
+    objectType: "account_routing",
+    objectId: kind,
+    before: { cap: before },
+    after: { cap },
+  });
+  return { refreshCaps: await currentRefreshCaps() };
 }
 
 export async function loadAssignmentOptions() {
