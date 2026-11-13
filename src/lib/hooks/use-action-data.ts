@@ -1,15 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { onWorkspaceChange } from "@/lib/auth/workspace-event";
-import { actionFail, isActionFail } from "@/lib/http/action-result";
-import type { ActionData, ActionDataUpdate, ActionFail, ActionLoader, ActionSnapshot } from "@/types/actions";
-
-async function settle<T>(load: ActionLoader<T>): Promise<T | ActionFail> {
-  try {
-    return await load();
-  } catch {
-    return actionFail("REQUEST_FAILED");
-  }
-}
+import { isActionFail, settleAction } from "@/lib/http/action-result";
+import type { ActionData, ActionDataUpdate, ActionLoader, ActionSnapshot } from "@/types/actions";
 
 function applyUpdate<T>(update: ActionDataUpdate<T>, current: T): T {
   return typeof update === "function" ? (update as (current: T) => T)(current) : update;
@@ -27,7 +19,7 @@ export function useActionData<T>(load: ActionLoader<T>, onLoad?: (data: T) => vo
 
   const run = useCallback(async () => {
     const ticket = ++latest.current;
-    const result = await settle(loader.current);
+    const result = await settleAction(loader.current);
     if (ticket !== latest.current) return;
     if (isActionFail(result)) {
       const error = result.error;

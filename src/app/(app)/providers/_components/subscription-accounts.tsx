@@ -18,6 +18,7 @@ import type {
   AccountRouting,
   AntigravityClientState,
   KickoffModels,
+  RefreshCaps,
   ProviderListActions,
   ProviderPresetUsage,
   ProviderView,
@@ -76,6 +77,7 @@ export default function SubscriptionAccounts({
   const [autoReset, setAutoReset] = useState<AutoResetPolicies>({});
   const [kickoff, setKickoff] = useState<WindowKickoffs>({});
   const [kickoffModels, setKickoffModels] = useState<KickoffModels>({});
+  const [refreshCaps, setRefreshCaps] = useState<RefreshCaps>({});
   const [access, setAccess] = useState<ProviderView | null>(null);
   const [accessKey, setAccessKey] = useState(0);
   const [settingsKind, setSettingsKind] = useState<SignInKind | null>(null);
@@ -101,6 +103,7 @@ export default function SubscriptionAccounts({
       setAutoReset(res.autoReset);
       setKickoff(res.kickoff);
       setKickoffModels(res.kickoffModels);
+      setRefreshCaps(res.refreshCaps);
     });
     return () => {
       active = false;
@@ -292,10 +295,12 @@ export default function SubscriptionAccounts({
             autoReset={autoReset}
             kickoff={kickoff}
             kickoffModels={kickoffModels}
+            refreshCaps={refreshCaps}
             antigravity={antigravity}
             onRouting={setRouting}
             onAutoReset={setAutoReset}
             onKickoff={setKickoff}
+            onRefreshCaps={setRefreshCaps}
             onAntigravity={onAntigravity}
           />
 

@@ -121,11 +121,14 @@ export type WindowKickoffs = Partial<Record<SignInKind, string>>;
 
 export type KickoffModels = Partial<Record<SignInKind, string[]>>;
 
+export type RefreshCaps = Partial<Record<SignInKind, number>>;
+
 export type AccountRoutingView = {
   routing: AccountRouting;
   autoReset: AutoResetPolicies;
   kickoff: WindowKickoffs;
   kickoffModels: KickoffModels;
+  refreshCaps: RefreshCaps;
   canManage: boolean;
 };
 
@@ -278,7 +281,11 @@ export type LimitSnapshot = AccountLimits & {
   retryAt: string | null;
 };
 
-export type LimitSnapshotList = { at: number; items: LimitSnapshot[] };
+export type LimitRefreshOutcome = "refreshed" | "failed" | "recent" | "blocked" | "capped" | "pending";
+
+export type LimitRefreshOutcomes = Record<string, LimitRefreshOutcome>;
+
+export type LimitSnapshotList = { at: number; items: LimitSnapshot[]; refresh?: LimitRefreshOutcomes };
 
 export type KeyUsageBasis = "cost" | "tokens" | "requests";
 

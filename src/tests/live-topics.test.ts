@@ -49,7 +49,9 @@ async function readUntil(reader: ReadableStreamDefaultReader<Uint8Array>, done: 
   return text;
 }
 
-function snapshot(id: string, version: number, used = 10): LimitSnapshot {
+const CHECKED_AT = Date.parse("2026-10-20T10:00:00.000Z");
+
+function snapshot(id: string, version: number, used = 10, checkedAt = CHECKED_AT): LimitSnapshot {
   return {
     id,
     limits: {
@@ -62,7 +64,7 @@ function snapshot(id: string, version: number, used = 10): LimitSnapshot {
     },
     error: "",
     version,
-    checkedAt: "2026-10-20T10:00:00.000Z",
+    checkedAt: new Date(checkedAt).toISOString(),
     nextAt: null,
     retryAt: null,
   };
@@ -213,31 +215,94 @@ test("the limits feed sends changed snapshots by version and removed accounts", 
 
 test("the browser keeps the newest snapshot per account, honours removals, and merges the action seed", async () => {
   const { applyLimitsEvent, mergeLimits, removedSince, withLimitItems } = await import("@/lib/updates/live-events");
-  const full = applyLimitsEvent(null, { at: 100, full: true, items: [snapshot("a", 2), snapshot("b", 1)], removed: [] });
+  const full = applyLimitsEvent(null, { at: CHECKED_AT + 100, full: true, items: [snapshot("a", 2), snapshot("b", 1)], removed: [] });
   assert.deepEqual(Object.keys(full?.items ?? {}).sort(), ["a", "b"]);
-  const stale = applyLimitsEvent(full, { at: 110, full: false, items: [snapshot("a", 1, 99)], removed: [] });
+  const stale = applyLimitsEvent(full, { at: CHECKED_AT + 110, full: false, items: [snapshot("a", 1, 99)], removed: [] });
   assert.equal(stale?.items.a?.version, 2);
-  const moved = applyLimitsEvent(stale, { at: 120, full: false, items: [snapshot("a", 3, 50)], removed: ["b"] });
+  const moved = applyLimitsEvent(stale, { at: CHECKED_AT + 120, full: false, items: [snapshot("a", 3, 50)], removed: ["b"] });
   assert.equal(moved?.items.a?.limits?.windows[0]?.usedPercent, 50);
   assert.equal(moved?.items.b, undefined);
-  assert.equal(moved?.removed.b, 120);
-  const reconnected = applyLimitsEvent(moved, { at: 130, full: true, items: [snapshot("a", 2)], removed: [] });
+  assert.equal(moved?.removed.b, CHECKED_AT + 120);
+  const reconnected = applyLimitsEvent(moved, { at: CHECKED_AT + 130, full: true, items: [snapshot("a", 2)], removed: [] });
   assert.equal(reconnected?.items.a?.version, 3);
   assert.equal(applyLimitsEvent(moved, { nonsense: true }), moved);
-  assert.equal(applyLimitsEvent(moved, { at: 140, full: false, items: [{ id: "x" }, null], removed: [7] })?.items.x, undefined);
+  assert.equal(applyLimitsEvent(moved, { at: CHECKED_AT + 140, full: false, items: [{ id: "x" }, null], removed: [7] })?.items.x, undefined);
 
-  const seed = { at: 115, items: [snapshot("a", 2), snapshot("b", 1), snapshot("c", 4)] };
+  const seed = { at: CHECKED_AT + 115, items: [snapshot("a", 2), snapshot("b", 1), snapshot("c", 4)] };
   const merged = mergeLimits(seed, moved);
   assert.equal(merged.a?.version, 3);
   assert.equal(merged.b, undefined);
   assert.equal(merged.c?.version, 4);
-  assert.equal(mergeLimits({ ...seed, at: 125 }, moved).b?.version, 1);
+  assert.equal(mergeLimits({ ...seed, at: CHECKED_AT + 125 }, moved).b?.version, 1);
   assert.deepEqual(Object.keys(mergeLimits(null, null)), []);
   assert.deepEqual(removedSince(seed, moved), ["b"]);
-  assert.deepEqual(removedSince({ ...seed, at: 125 }, moved), []);
+  assert.deepEqual(removedSince({ ...seed, at: CHECKED_AT + 125 }, moved), []);
   assert.deepEqual(removedSince(null, null), []);
   const refreshed = withLimitItems(seed, [snapshot("c", 5, 1), snapshot("a", 1)]);
   assert.deepEqual(refreshed.items.map((item) => [item.id, item.version]), [["a", 2], ["b", 1], ["c", 5]]);
+});
+
+test("a refresh result checked after a removal shows the account again and an older one stays hidden", async () => {
+  const { applyLimitsEvent, mergeLimits, removedSince, withLimitItems } = await import("@/lib/updates/live-events");
+  const full = applyLimitsEvent(null, {
+    at: CHECKED_AT + 100,
+    full: true,
+    items: [snapshot("a", 1), snapshot("b", 1)],
+    removed: [],
+  });
+  const expired = applyLimitsEvent(full, { at: CHECKED_AT + 200, full: false, items: [], removed: ["b"] });
+  const seed = { at: CHECKED_AT + 50, items: [snapshot("a", 1), snapshot("b", 1)] };
+  assert.equal(mergeLimits(seed, expired).b, undefined);
+  assert.deepEqual(removedSince(seed, expired), ["b"]);
+
+  const signedInAgain = withLimitItems(seed, [snapshot("b", 2, 40, CHECKED_AT + 300)]);
+  assert.equal(mergeLimits(signedInAgain, expired).b?.version, 2);
+  assert.deepEqual(removedSince(signedInAgain, expired), []);
+
+  const notFetchedAgain = withLimitItems(seed, [snapshot("b", 2, 40, CHECKED_AT + 150)]);
+  assert.equal(mergeLimits(notFetchedAgain, expired).b, undefined);
+  assert.deepEqual(removedSince(notFetchedAgain, expired), ["b"]);
+
+  const neverChecked = withLimitItems(seed, [{ ...snapshot("b", 2), checkedAt: null }]);
+  assert.equal(mergeLimits(neverChecked, expired).b, undefined);
+
+  const announced = applyLimitsEvent(expired, {
+    at: CHECKED_AT + 400,
+    full: false,
+    items: [snapshot("b", 2, 40, CHECKED_AT + 300)],
+    removed: [],
+  });
+  assert.equal(mergeLimits(seed, announced).b?.version, 2);
+  assert.deepEqual(removedSince(seed, announced), []);
+});
+
+test("a snapshot list replaces the seed without undoing newer results or reviving accounts", async () => {
+  const { withLimitItems, withLimitList } = await import("@/lib/updates/live-events");
+  const versions = (list: { items: LimitSnapshot[] }) => list.items.map((item) => [item.id, item.version]);
+  const seed = { at: CHECKED_AT + 100, items: [snapshot("a", 2), snapshot("b", 1), snapshot("gone", 1)] };
+
+  const rowRefreshed = withLimitItems(seed, [snapshot("a", 5, 70, CHECKED_AT + 300)]);
+  const answer = {
+    at: CHECKED_AT + 200,
+    items: [snapshot("a", 3, 30), snapshot("b", 2, 20), snapshot("c", 1)],
+    extra: true,
+  };
+  assert.deepEqual(withLimitList(rowRefreshed, answer), {
+    at: CHECKED_AT + 200,
+    items: [snapshot("a", 5, 70, CHECKED_AT + 300), snapshot("b", 2, 20), snapshot("c", 1)],
+  });
+
+  const sameVersion = withLimitList(seed, { at: CHECKED_AT + 200, items: [snapshot("a", 2, 55)] });
+  assert.equal(sameVersion.items[0]?.limits?.windows[0]?.usedPercent, 55);
+
+  const added = withLimitItems(seed, [snapshot("new", 1, 5, CHECKED_AT + 300)]);
+  assert.deepEqual(versions(withLimitList(added, { at: CHECKED_AT + 200, items: [snapshot("a", 2)] })), [
+    ["a", 2],
+    ["new", 1],
+  ]);
+
+  const current = { at: CHECKED_AT + 500, items: [snapshot("a", 4)] };
+  assert.equal(withLimitList(current, { at: CHECKED_AT + 200, items: [snapshot("a", 3), snapshot("b", 9)] }), current);
 });
 
 test("topic lists, live URLs, and other topic payloads are parsed strictly", async () => {

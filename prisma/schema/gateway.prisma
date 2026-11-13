@@ -302,6 +302,7 @@ model AccountRouting {
   autoResetPercent Int      @default(99)
   autoResetScope   String   @default("pool")
   kickoffModel     String   @default("")
+  refreshCap       Int      @default(0)
   updatedAt        DateTime @updatedAt
 }
 

@@ -4,9 +4,12 @@ import type { AccountKeyUsage, LimitGroup, WindowUsage } from "@/types/providers
 export const KEY_SHADES = [1, 0.72, 0.5, 0.34, 0.22] as const;
 export const OTHER_KEYS = "other";
 export const OUTSIDE_HUB = "outside";
+export const FREE_PART = "free";
 
 const STALE_GRACE_MS = 5 * 60_000;
 const VISIBLE_PERCENT = 0.05;
+const FULL_PERCENT = 100;
+const MIN_SPAN_PERCENT = 2;
 
 export type KeySlice = { keyId: string; percent: number; share: number; requests: number };
 
@@ -25,6 +28,10 @@ export type AccountUsage = { windows: WindowView[]; keys: KeyRow[]; peak: number
 export type SegmentKind = "key" | "other" | "outside";
 
 export type BarSegment = { id: string; kind: SegmentKind; keyIds: string[]; percent: number; shade: number };
+
+export type BarSpan = { start: number; size: number };
+
+export type BarPart = BarSpan & { id: string; segment: BarSegment | null; percent: number };
 
 function currentUsage(group: LimitGroup, usage: WindowUsage | undefined, now: number): WindowUsage | null {
   if (!usage) return null;
@@ -106,4 +113,40 @@ export function groupSegments(usage: AccountUsage, groupId: string, named: numbe
   const window = usage.windows.find((item) => item.group.id === groupId);
   if (!window?.slices.length) return [];
   return barSegments(window, windowRanks(window), named);
+}
+
+export function barSpans(percents: number[]): BarSpan[] {
+  const values = percents.map((value) => (Number.isFinite(value) && value > 0 ? value : 0));
+  const drawn = values.filter((value) => value > 0).length;
+  if (drawn === 0) return values.map(() => ({ start: 0, size: 0 }));
+  const floor = Math.min(MIN_SPAN_PERCENT, FULL_PERCENT / drawn);
+  const floored = new Set<number>();
+  let scale = 0;
+  for (;;) {
+    const open = values.reduce((sum, value, index) => (floored.has(index) ? sum : sum + value), 0);
+    scale = open > 0 ? (FULL_PERCENT - floor * floored.size) / open : 0;
+    const short = values.flatMap((value, index) =>
+      value > 0 && !floored.has(index) && value * scale < floor ? [index] : [],
+    );
+    if (short.length === 0) break;
+    short.forEach((index) => floored.add(index));
+  }
+  const last = values.reduce((found, value, index) => (value > 0 ? index : found), -1);
+  let start = 0;
+  return values.map((value, index) => {
+    const size = index === last ? FULL_PERCENT - start : floored.has(index) ? floor : value * scale;
+    const span = { start, size };
+    start += size;
+    return span;
+  });
+}
+
+export function barParts(segments: BarSegment[], used: number): BarPart[] {
+  const free = Math.max(0, FULL_PERCENT - used);
+  const parts = [
+    ...segments.map((segment) => ({ id: segment.id, segment, percent: segment.percent })),
+    ...(free > 0 ? [{ id: FREE_PART, segment: null, percent: free }] : []),
+  ];
+  const spans = barSpans(parts.map((part) => part.percent));
+  return parts.map((part, index) => ({ ...part, ...(spans[index] ?? { start: 0, size: 0 }) }));
 }

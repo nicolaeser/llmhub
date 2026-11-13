@@ -879,3 +879,239 @@ test("a sweep reads at most four Claude accounts and spreads the rest over the n
   assert.ok(claude.every((item) => snapshotRows.get(item.id)?.fetchedAt));
   assert.ok(codex.every((item) => snapshotRows.get(item.id)?.fetchedAt));
 });
+
+function creditsRead(url: string): boolean {
+  return new URL(url).pathname.endsWith("/rate-limit-reset-credits");
+}
+
+function noCredits(): Response {
+  return Response.json({ credits: [], available_count: 0, total_earned_count: 0 });
+}
+
+function gated(): { open: Promise<void>; release: () => void } {
+  let release: () => void = () => {};
+  const open = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  return { open, release };
+}
+
+test("refreshing all accounts answers within its wait, and a stalled provider holds back only its own accounts", async () => {
+  const { refreshAccountsLimits, MANUAL_KIND_CONCURRENCY } = await import("@/lib/providers/limit-refresh");
+  const stalled = await Promise.all(Array.from({ length: MANUAL_KIND_CONCURRENCY + 1 }, () => account("claude")));
+  const answering = await Promise.all(Array.from({ length: 2 }, () => account("codex")));
+  const anthropic = (url: string) => new URL(url).hostname === "api.anthropic.com";
+  const gate = gated();
+  globalThis.fetch = (async (input: string | URL | Request) => {
+    const url = String(input);
+    upstreamCalls.push(url);
+    if (creditsRead(url)) return noCredits();
+    if (!anthropic(url)) return usage(20);
+    await gate.open;
+    return new URL(url).searchParams.has("cedar_ember") ? new Response("", { status: 404 }) : claudeUsage(30);
+  }) as typeof fetch;
+  const everyone = [...stalled, ...answering];
+  const startedAt = Date.now();
+  const first = await refreshAccountsLimits(everyone, { waitMs: 300 });
+  assert.ok(Date.now() - startedAt < 5_000);
+  assert.deepEqual(answering.map((item) => first[item.id]), ["refreshed", "refreshed"]);
+  assert.ok(stalled.every((item) => first[item.id] === "pending"));
+  assert.ok(answering.every((item) => snapshotRows.get(item.id)?.fetchedAt));
+  assert.equal(upstreamCalls.filter(anthropic).length, MANUAL_KIND_CONCURRENCY);
+  const second = await refreshAccountsLimits(everyone, { waitMs: 50 });
+  assert.deepEqual(answering.map((item) => second[item.id]), ["recent", "recent"]);
+  assert.ok(stalled.every((item) => second[item.id] === "pending"));
+  assert.equal(upstreamCalls.filter(anthropic).length, MANUAL_KIND_CONCURRENCY);
+  gate.release();
+  const settled = await refreshAccountsLimits(stalled, { waitMs: 5_000 });
+  assert.ok(stalled.every((item) => settled[item.id] === "refreshed"));
+  const usageReads = upstreamCalls.filter((url) => anthropic(url) && !new URL(url).searchParams.has("cedar_ember"));
+  assert.equal(usageReads.length, stalled.length);
+  for (const item of stalled) {
+    const row = snapshotRows.get(item.id)!;
+    assert.ok(row.fetchedAt);
+    assert.equal(row.leaseUntil, null);
+  }
+});
+
+test("one stalled account keeps a single slot while the other accounts of its kind are read", async () => {
+  const { refreshAccountsLimits, MANUAL_KIND_CONCURRENCY } = await import("@/lib/providers/limit-refresh");
+  const [slow, ...quick] = await Promise.all(Array.from({ length: MANUAL_KIND_CONCURRENCY + 2 }, () => account()));
+  const gate = gated();
+  globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+    const url = String(input);
+    upstreamCalls.push(url);
+    if (creditsRead(url)) return noCredits();
+    const bearer = (init?.headers as Record<string, string> | undefined)?.Authorization ?? "";
+    if (bearer.endsWith(`access-${slow!.id}`)) await gate.open;
+    return usage(15);
+  }) as typeof fetch;
+  const first = await refreshAccountsLimits([slow!, ...quick], { waitMs: 300 });
+  assert.equal(first[slow!.id], "pending");
+  assert.ok(quick.every((item) => first[item.id] === "refreshed"));
+  assert.equal(snapshotRows.get(slow!.id)?.fetchedAt, null);
+  gate.release();
+  const settled = await refreshAccountsLimits([slow!], { waitMs: 5_000 });
+  assert.equal(settled[slow!.id], "refreshed");
+  assert.equal(upstreamCalls.filter((url) => !creditsRead(url)).length, quick.length + 1);
+});
+
+test("a refresh that never finishes gives up its slot so later refreshes of that kind still run", async () => {
+  const { refreshAccountsLimits, MANUAL_KIND_CONCURRENCY } = await import("@/lib/providers/limit-refresh");
+  const [late, ...hung] = await Promise.all(Array.from({ length: MANUAL_KIND_CONCURRENCY + 1 }, () => account()));
+  const gate = gated();
+  globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+    const url = String(input);
+    upstreamCalls.push(url);
+    if (creditsRead(url)) return noCredits();
+    const bearer = (init?.headers as Record<string, string> | undefined)?.Authorization ?? "";
+    if (!bearer.endsWith(`access-${late!.id}`)) await gate.open;
+    return usage(25);
+  }) as typeof fetch;
+  try {
+    const first = await refreshAccountsLimits(hung, { waitMs: 400, runLimitMs: 100 });
+    assert.ok(hung.every((item) => first[item.id] === "failed"));
+    const next = await refreshAccountsLimits([late!], { waitMs: 2_000 });
+    assert.equal(next[late!.id], "refreshed");
+  } finally {
+    gate.release();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+});
+
+test("a manual refresh says what happened to the account and leaves the reset view alone after a failed read", async () => {
+  const { refreshAccountLimits } = await import("@/lib/providers/limit-refresh");
+  const target = await account();
+  let usageReply = () => usage(10);
+  globalThis.fetch = (async (input: string | URL | Request) => {
+    const url = String(input);
+    upstreamCalls.push(url);
+    return creditsRead(url) ? noCredits() : usageReply();
+  }) as typeof fetch;
+  const creditReads = () => upstreamCalls.filter(creditsRead).length;
+  const now = Date.now();
+  assert.equal(await refreshAccountLimits(target, now), "refreshed");
+  assert.equal(creditReads(), 1);
+  assert.equal(await refreshAccountLimits(target, now + 30_000), "recent");
+  assert.equal(upstreamCalls.length, 2);
+  const versionBefore = snapshotRows.get(target.id)!.version as number;
+  usageReply = () => new Response("", { status: 503 });
+  assert.equal(await refreshAccountLimits(target, now + 6 * MINUTE), "failed");
+  assert.equal(creditReads(), 1);
+  const failed = snapshotRows.get(target.id)!;
+  assert.equal(failed.error, "UPSTREAM_FAILED");
+  assert.equal((failed.limits as SubscriptionLimits).windows[0]?.usedPercent, 10);
+  assert.equal(failed.version, versionBefore + 1);
+  assert.equal((failed.checkedAt as Date).getTime(), now + 6 * MINUTE);
+  usageReply = () => new Response("", { status: 429, headers: { "retry-after": "1200" } });
+  assert.equal(await refreshAccountLimits(target, now + 12 * MINUTE), "failed");
+  const reads = upstreamCalls.filter((url) => !creditsRead(url)).length;
+  assert.equal(await refreshAccountLimits(target, now + 20 * MINUTE), "blocked");
+  assert.equal(upstreamCalls.filter((url) => !creditsRead(url)).length, reads);
+  assert.equal(await refreshAccountLimits({ ...target, id: "removed-account" }, now), null);
+});
+
+test("a read whose result cannot be stored gives its claim back at once", async () => {
+  const { refreshLimits } = await import("@/lib/gateway/upstreams/limit-store");
+  const target = await account();
+  respond(() => usage(33));
+  const model = (globalThis as unknown as { prisma: { providerLimitSnapshot: ReturnType<typeof limitSnapshotModel> } })
+    .prisma.providerLimitSnapshot;
+  const updateMany = model.updateMany;
+  let failing = true;
+  model.updateMany = async (args) => {
+    if (failing && "checkedAt" in args.data) throw new Error("write failed");
+    return updateMany(args);
+  };
+  try {
+    const now = Date.now();
+    await assert.rejects(refreshLimits(target, { kind: "scheduled" }, { now }), { message: "write failed" });
+    assert.equal(snapshotRows.get(target.id)?.leaseUntil, null);
+    assert.equal(snapshotRows.get(target.id)?.leaseToken, "");
+    failing = false;
+    const retried = await refreshLimits(target, { kind: "manual" }, { now: now + 1_000 });
+    assert.equal(retried.status, "fetched");
+    assert.equal(retried.snapshot?.limits?.windows[0]?.usedPercent, 33);
+    assert.equal(upstreamCalls.length, 2);
+  } finally {
+    model.updateMany = updateMany;
+  }
+});
+
+test("a sweep claims and stamps each account when its own read starts", async () => {
+  const { refreshDueLimits } = await import("@/lib/providers/limit-refresh");
+  providers.clear();
+  logins.clear();
+  const accounts = await Promise.all(Array.from({ length: 5 }, () => account()));
+  const READ_MS = 40;
+  respond(async () => {
+    await new Promise((resolve) => setTimeout(resolve, READ_MS));
+    return usage(5);
+  });
+  const now = Date.now();
+  assert.equal(await refreshDueLimits(now), 5);
+  const stamps = accounts.map((item) => (snapshotRows.get(item.id)!.checkedAt as Date).getTime());
+  assert.ok(Math.max(...stamps) - now >= READ_MS - 10);
+  assert.ok(accounts.every((item) => snapshotRows.get(item.id)?.leaseUntil === null));
+});
+
+test("a manual read is due outside the manual gap and never while the provider asked to wait", async () => {
+  const { manualReadDue, manualRefreshGap } = await import("@/lib/gateway/upstreams/limit-store");
+  const now = Date.now();
+  const gap = manualRefreshGap("claude");
+  assert.equal(manualReadDue("claude", null, 3, now), true);
+  assert.equal(manualReadDue("claude", stored({ checkedAt: null }), 3, now), true);
+  assert.equal(manualReadDue("claude", stored({ checkedAt: now - gap }), 3, now), true);
+  assert.equal(manualReadDue("claude", stored({ checkedAt: now - gap + 1 }), 3, now), false);
+  assert.equal(manualReadDue("codex", stored({ checkedAt: now - manualRefreshGap("codex") }), 3, now), true);
+  assert.equal(manualReadDue("claude", stored({ checkedAt: null, retryAt: now + 1 }), 3, now), false);
+  assert.equal(manualReadDue("claude", stored({ checkedAt: now, failures: 1, loginVersion: 2 }), 3, now), true);
+});
+
+test("a refresh cap holds back the most recently checked accounts of its kind and nothing else", async () => {
+  const { overRefreshCap } = await import("@/lib/providers/limit-refresh");
+  const now = Date.now();
+  const of = (id: string, kind: string, snapshot: StoredLimitSnapshot | null) => ({
+    id,
+    kind,
+    apiKey: "",
+    enabled: true,
+    loginVersion: 3,
+    snapshot,
+  });
+  const accounts = [
+    of("newest", "claude", stored({ checkedAt: now - 10 * MINUTE })),
+    of("oldest", "claude", stored({ checkedAt: now - 30 * MINUTE })),
+    of("never", "claude", null),
+    of("middle", "claude", stored({ checkedAt: now - 20 * MINUTE })),
+    of("recent", "claude", stored({ checkedAt: now - 1_000 })),
+    of("blocked", "claude", stored({ checkedAt: now - HOUR, retryAt: now + HOUR })),
+    of("codex-1", "codex", stored({ checkedAt: now - HOUR })),
+    of("codex-2", "codex", stored({ checkedAt: now - HOUR })),
+  ];
+  assert.deepEqual([...overRefreshCap(accounts, { claude: 2 }, new Set(), now)].sort(), ["middle", "newest"]);
+  assert.deepEqual([...overRefreshCap(accounts, { claude: 2 }, new Set(["never"]), now)].sort(), ["middle", "newest"]);
+  assert.deepEqual(
+    [...overRefreshCap(accounts, { claude: 2 }, new Set(["never", "recent"]), now)].sort(),
+    ["middle", "newest", "oldest"],
+  );
+  assert.equal(overRefreshCap(accounts, {}, new Set(), now).size, 0);
+  assert.equal(overRefreshCap(accounts, { claude: 0, codex: 2 }, new Set(), now).size, 0);
+  assert.deepEqual([...overRefreshCap(accounts, { codex: 1 }, new Set(), now)], ["codex-2"]);
+});
+
+test("refreshing all accounts under a cap reads only that many and reports the rest as capped", async () => {
+  const { refreshAccountsLimits } = await import("@/lib/providers/limit-refresh");
+  const targets = await Promise.all(Array.from({ length: 3 }, () => account()));
+  globalThis.fetch = (async (input: string | URL | Request) => {
+    const url = String(input);
+    upstreamCalls.push(url);
+    return creditsRead(url) ? noCredits() : usage(12);
+  }) as typeof fetch;
+  const outcomes = await refreshAccountsLimits(targets, { waitMs: 5_000, caps: { codex: 2 } });
+  assert.deepEqual(targets.map((item) => outcomes[item.id]), ["refreshed", "refreshed", "capped"]);
+  assert.equal(upstreamCalls.filter((url) => !creditsRead(url)).length, 2);
+  assert.equal(snapshotRows.get(targets[2]!.id)?.fetchedAt ?? null, null);
+  const uncapped = await refreshAccountsLimits([targets[2]!], { waitMs: 5_000 });
+  assert.equal(uncapped[targets[2]!.id], "refreshed");
+});

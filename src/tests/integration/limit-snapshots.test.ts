@@ -149,11 +149,48 @@ test("console limit reads come from snapshots and a manual refresh respects the 
     }) as typeof fetch;
     const single = await runAsPrincipal(owner, () => loadProviderLimits({ id: account.id, refresh: true }));
     assert.equal(single.limits?.windows[0]?.usedPercent, 64);
+    assert.equal(single.refresh, "recent");
     assert.ok((single.item?.version ?? 0) >= 1);
     assert.equal(paths.filter((path) => path.endsWith("/wham/usage")).length, 0);
     assert.ok(paths.length <= 1);
     await runAsPrincipal(owner, () => loadProviderLimits({ id: account.id, refresh: true }));
     assert.ok(paths.length <= 1);
+  } finally {
+    await prisma.providerConnection.deleteMany({ where: { id: account.id } });
+    await prisma.user.deleteMany({ where: { id: owner.user.id } });
+  }
+});
+
+test("a manual refresh of one account reports its outcome with the stored snapshot", async () => {
+  const account = await codexAccount();
+  const owner = await ownerSession();
+  try {
+    globalThis.fetch = (async (input: string | URL | Request) => {
+      const path = new URL(String(input)).pathname;
+      if (path.endsWith("/rate-limit-reset-credits")) {
+        return Response.json({ credits: [], available_count: 0, total_earned_count: 0 });
+      }
+      usageCalls += 1;
+      return Response.json({
+        plan_type: "pro",
+        rate_limit: { primary_window: { used_percent: 41, limit_window_seconds: 18_000, reset_after_seconds: 3_600 } },
+      });
+    }) as typeof fetch;
+    const read = await runAsPrincipal(owner, () => loadProviderLimits({ id: account.id }));
+    assert.deepEqual(read, { limits: null, item: null });
+    const refreshed = await runAsPrincipal(owner, () => loadProviderLimits({ id: account.id, refresh: true }));
+    assert.equal(refreshed.refresh, "refreshed");
+    assert.equal(refreshed.item?.limits?.windows[0]?.usedPercent, 41);
+    assert.equal(refreshed.item?.error, "");
+    assert.ok(refreshed.item?.checkedAt);
+    assert.equal(usageCalls, 1);
+    const row = await prisma.providerLimitSnapshot.findUniqueOrThrow({ where: { providerId: account.id } });
+    assert.equal(row.leaseUntil, null);
+    assert.equal(row.version, refreshed.item?.version);
+    const again = await runAsPrincipal(owner, () => loadProviderLimits({ id: account.id, refresh: true }));
+    assert.equal(again.refresh, "recent");
+    assert.equal(again.item?.version, refreshed.item?.version);
+    assert.equal(usageCalls, 1);
   } finally {
     await prisma.providerConnection.deleteMany({ where: { id: account.id } });
     await prisma.user.deleteMany({ where: { id: owner.user.id } });

@@ -3,6 +3,7 @@
   "empty": "Sign in to a subscription such as ChatGPT, Claude, or Google, import existing accounts, or send someone an add-account link.",
   "addAccount": "Add account",
   "refreshAll": "Refresh all limits",
+  "refreshNotice": "{recent, plural, =0 {} one {# account was checked moments ago and was not read again.} other {# accounts were checked moments ago and were not read again.}}{blocked, plural, =0 {} one { The provider asked to wait before checking # account again.} other { The provider asked to wait before checking # accounts again.}}{capped, plural, =0 {} one { # account waits for the next refresh because of the limit per press.} other { # accounts wait for the next refresh because of the limit per press.}}{failed, plural, =0 {} one { # account could not be read.} other { # accounts could not be read.}}",
   "search": "Search accounts",
   "noMatches": "No accounts match this search",
   "importFiles": {
@@ -217,6 +218,17 @@
     "save": "Save window start for {provider}",
     "saveShort": "Save",
     "saved": "Window start for {provider} saved"
+  },
+  "refreshCap": {
+    "title": "Accounts per Refresh all",
+    "description": "How many {provider} accounts one press of Refresh all limits reads from the provider at most. The accounts checked longest ago come first, and the rest wait for the next press or the automatic check. A lower number protects against the provider's rate limit on usage reads.",
+    "label": "Refresh limit for {provider}",
+    "cap": "Accounts per press",
+    "capHint": "0 reads all accounts. At most {max, number}.",
+    "capInvalid": "Enter a whole number from 0 to {max, number}.",
+    "save": "Save refresh limit for {provider}",
+    "saveShort": "Save",
+    "saved": "Refresh limit for {provider} saved"
   },
   "routing": {
     "title": "Account distribution",

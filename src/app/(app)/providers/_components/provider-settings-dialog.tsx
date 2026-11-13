@@ -6,11 +6,12 @@ import IconTile from "@/components/console/icon-tile";
 import { kindIcon } from "@/components/providers/kind-icons";
 import { DEFAULT_ACCOUNT_STRATEGY } from "@/lib/gateway/routing/account-access";
 import { autoResetPolicy, isResetKind } from "@/lib/gateway/routing/auto-reset-policy";
-import { startsWindows } from "@/lib/gateway/upstreams/provider-kinds";
+import { pollsLimits, startsWindows } from "@/lib/gateway/upstreams/provider-kinds";
 import type {
   AccountRouting,
   AntigravityClientState,
   KickoffModels,
+  RefreshCaps,
   SignInKind,
   WindowKickoffs,
 } from "@/types/providers";
@@ -18,6 +19,7 @@ import type { AutoResetPolicies } from "@/types/resets";
 import AccountRoutingPicker from "./account-routing-picker";
 import AntigravitySetup from "./antigravity-setup";
 import AutoResetSettings from "./auto-reset-settings";
+import RefreshCapSettings from "./refresh-cap-settings";
 import WindowKickoffSettings from "./window-kickoff-settings";
 
 export default function ProviderSettingsDialog({
@@ -28,10 +30,12 @@ export default function ProviderSettingsDialog({
   autoReset,
   kickoff,
   kickoffModels,
+  refreshCaps,
   antigravity,
   onRouting,
   onAutoReset,
   onKickoff,
+  onRefreshCaps,
   onAntigravity,
 }: {
   state: ReturnType<typeof useOverlayState>;
@@ -41,10 +45,12 @@ export default function ProviderSettingsDialog({
   autoReset: AutoResetPolicies;
   kickoff: WindowKickoffs;
   kickoffModels: KickoffModels;
+  refreshCaps: RefreshCaps;
   antigravity: AntigravityClientState | null;
   onRouting: (routing: AccountRouting) => void;
   onAutoReset: (policies: AutoResetPolicies) => void;
   onKickoff: (kickoff: WindowKickoffs) => void;
+  onRefreshCaps: (caps: RefreshCaps) => void;
   onAntigravity: (state: AntigravityClientState) => void;
 }) {
   const t = useTranslations("Subscriptions.settings");
@@ -96,6 +102,12 @@ export default function ProviderSettingsDialog({
                         models={kickoffModels[kind] ?? []}
                         onSaved={onKickoff}
                       />
+                    </>
+                  ) : null}
+                  {accounts > 0 && pollsLimits(kind) ? (
+                    <>
+                      <Separator />
+                      <RefreshCapSettings kind={kind} cap={refreshCaps[kind] ?? 0} onSaved={onRefreshCaps} />
                     </>
                   ) : null}
                 </Modal.Body>

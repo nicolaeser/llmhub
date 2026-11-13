@@ -1,5 +1,5 @@
 import { errorFields, writeLogLine } from "@/lib/logging/format";
-import type { ActionFail } from "@/types/actions";
+import type { ActionFail, ActionLoader } from "@/types/actions";
 
 const ACTION_CODE = /^(?:[A-Z][A-Z0-9_]{1,63}|Forbidden|Unauthorized)$/;
 
@@ -22,6 +22,14 @@ export async function runAction<T>(
     }
     const { errName, err: message } = errorFields(err);
     writeLogLine("error", "action.failed", { errName, err: message });
+    return actionFail("REQUEST_FAILED");
+  }
+}
+
+export async function settleAction<T>(load: ActionLoader<T>): Promise<T | ActionFail> {
+  try {
+    return await load();
+  } catch {
     return actionFail("REQUEST_FAILED");
   }
 }

@@ -95,6 +95,7 @@ export default function AccountKeyUsage({
           label={label}
           segments={barSegments(window, ranks)}
           used={group.usedPercent}
+          tone={tone}
           nameOf={segmentName}
           freeLabel={t("free")}
         />
