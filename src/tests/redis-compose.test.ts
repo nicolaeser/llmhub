@@ -25,12 +25,8 @@ test("deploy compose keeps redis and postgres off host ports", async () => {
   assert.doesNotMatch(source, /"[^"\n]*:(5432|6379)"/);
 });
 
-test("REDIS_URL is documented for optional local Redis", async () => {
-  const readme = await file("README.md");
-  assert.match(
-    readme,
-    /docker compose -f docker-compose\.dev\.yml up -d postgres redis rustfs/,
-  );
+test("REDIS_URL is documented and points local development at the dev compose Redis", async () => {
+  const [readme, envExample] = await Promise.all([file("README.md"), file(".env.example")]);
   assert.match(readme, /REDIS_URL/);
-  assert.match(readme, /127\.0\.0\.1:6379/);
+  assert.match(envExample, /^REDIS_URL=redis:\/\/:[^@\s]+@127\.0\.0\.1:6379$/m);
 });
