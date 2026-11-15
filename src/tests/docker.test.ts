@@ -272,6 +272,12 @@ test("migrations use Prisma deploy and never edit its history at startup", async
   assert.match(runner, /APP_SECRET/);
 });
 
+test("the image ships the explicit compatibility recovery tool and its database driver", async () => {
+  const dockerfile = await file("Dockerfile");
+  assert.match(dockerfile, /const keep = \["prisma", "dotenv", "pg"\]/);
+  assert.match(dockerfile, /COPY --chown=node:node scripts\/recover-compatibility\.mjs \.\//);
+});
+
 test("image context excludes secrets and local build output", async () => {
   const ignore = (await file(".dockerignore")).split("\n");
   for (const entry of [".env*", ".git", "node_modules", ".next", "src/generated", "src/tests"]) {

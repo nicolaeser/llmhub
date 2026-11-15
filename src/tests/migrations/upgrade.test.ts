@@ -5,10 +5,12 @@ import { cp, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/pr
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import pg from "pg";
 import { COMPATIBILITY_MIGRATION, CONTENT_SIZE_MIGRATION, LEGACY_MIGRATIONS } from "../support/migration-history";
+import { PRISMA_MIGRATION_LOCK } from "../../../scripts/recover-compatibility.mjs";
 
 const execute = promisify(execFile);
 const root = fileURLToPath(new URL("../../../", import.meta.url));
@@ -81,6 +83,11 @@ async function harness(t: test.TestContext) {
       cwd: root, env: environment(database), maxBuffer: 8 * 1024 ** 2,
     });
   }
+  async function recover(database: Database) {
+    return execute(process.execPath, [path.join(root, "scripts/recover-compatibility.mjs")], {
+      cwd: root, env: environment(database), maxBuffer: 8 * 1024 ** 2,
+    });
+  }
   async function config(names: string[], suffix: string) {
     const folder = path.join(temporary, suffix);
     const migrationPath = path.join(folder, "migrations");
@@ -91,7 +98,7 @@ async function harness(t: test.TestContext) {
     await writeFile(file, `import { defineConfig } from ${JSON.stringify(path.join(root, "node_modules/prisma/config.js"))};\nexport default defineConfig({schema:${JSON.stringify(path.join(root, "prisma/schema"))},migrations:{path:${JSON.stringify(migrationPath)}},datasource:{url:process.env.DATABASE_URL}});\n`);
     return { file, migrationPath };
   }
-  return { create, drop, query, prisma, boot, config, reader };
+  return { create, drop, query, prisma, boot, recover, config, reader };
 }
 
 type Harness = Awaited<ReturnType<typeof harness>>;
@@ -242,6 +249,10 @@ test("a failed compatibility copy rolls back all data and requires explicit Pris
   const failed = (await h.query(database, `SELECT * FROM "_prisma_migrations" WHERE finished_at IS NULL AND rolled_back_at IS NULL`)).rows;
   assert.equal(failed.length, 1);
   await assert.rejects(h.boot(database));
+  await assert.rejects(h.recover(database), (error: unknown) => {
+    assert.match(String((error as { stderr?: string }).stderr), /published compatibility checksum/);
+    return true;
+  });
   assert.deepEqual((await h.query(database, `SELECT * FROM "_prisma_migrations" WHERE finished_at IS NULL AND rolled_back_at IS NULL`)).rows, failed);
   await h.prisma(database, ["migrate", "resolve", "--rolled-back", COMPATIBILITY_MIGRATION]);
   await h.boot(database);
@@ -249,6 +260,68 @@ test("a failed compatibility copy rolls back all data and requires explicit Pris
   assert.deepEqual(await snapshot(h, database), before);
   assert.equal((await h.query(database, `SELECT pg_get_userbyid(relowner) AS owner
     FROM pg_class WHERE oid = '"RequestLogContent"'::regclass`)).rows[0].owner, h.reader);
+});
+
+test("explicit recovery verifies an interrupted published migration and preserves all data", { timeout }, async (t) => {
+  const h = await harness(t);
+  const old = await h.config(legacy, "before-interruption");
+  for (const schema of ["public", "hub"]) {
+    const database = await h.create(undefined, schema);
+    await h.prisma(database, ["migrate", "deploy"], old.file);
+    await coreFixture(h, database);
+    await contentFixture(h, database);
+    await partitionFixture(h, database);
+    const before = await snapshot(h, database);
+    const blocker = new pg.Client({ connectionString: database.url });
+    await blocker.connect();
+    try {
+      await blocker.query(`BEGIN; LOCK TABLE ${identifier(schema)}."RequestLog" IN ACCESS EXCLUSIVE MODE`);
+      const migration = h.boot(database).then(() => null, (error: unknown) => error);
+      let pid: number | undefined;
+      for (let attempt = 0; attempt < 600; attempt += 1) {
+        const active = await h.query(database, `SELECT pid FROM pg_stat_activity WHERE datname = current_database()
+          AND pid <> pg_backend_pid() AND wait_event_type = 'Lock' AND query LIKE '%CREATE TABLE "RequestLogContent_plain"%'`);
+        pid = active.rows[0]?.pid;
+        if (pid) break;
+        await delay(100);
+      }
+      assert.ok(pid, "the published migration must reach its transactional table lock");
+      await assert.rejects(h.recover(database), (error: unknown) => {
+        assert.match(String((error as { stderr?: string }).stderr), /Another migration is running/);
+        return true;
+      });
+      await h.query(database, "SELECT pg_terminate_backend($1)", [pid]);
+      await blocker.query("ROLLBACK");
+      assert.ok(await migration, "the interrupted migration must fail");
+    } finally {
+      await blocker.end();
+    }
+    assert.deepEqual(await snapshot(h, database), before);
+    const failed = (await h.query(database, `SELECT * FROM "_prisma_migrations" WHERE finished_at IS NULL AND rolled_back_at IS NULL`)).rows;
+    assert.equal(failed.length, 1);
+    await h.query(database, 'CREATE TABLE "RequestLogContent_plain" (id int)');
+    await assert.rejects(h.recover(database), (error: unknown) => {
+      assert.match(String((error as { stderr?: string }).stderr), /does not match a rolled-back/);
+      return true;
+    });
+    assert.deepEqual((await h.query(database, `SELECT * FROM "_prisma_migrations" WHERE finished_at IS NULL AND rolled_back_at IS NULL`)).rows, failed);
+    await h.query(database, 'DROP TABLE "RequestLogContent_plain"');
+    await h.recover(database);
+    const recovered = (await h.query(database, `SELECT * FROM "_prisma_migrations" WHERE id = $1`, [failed[0].id])).rows[0];
+    assert.ok(recovered.rolled_back_at);
+    assert.equal(recovered.finished_at, null);
+    await assert.rejects(h.recover(database));
+    await h.boot(database);
+    await assertCurrent(h, database);
+    assert.deepEqual(await snapshot(h, database), before);
+    const free = new pg.Client({ connectionString: database.url });
+    await free.connect();
+    try {
+      assert.equal((await free.query("SELECT pg_try_advisory_lock($1) AS locked", [PRISMA_MIGRATION_LOCK])).rows[0].locked, true);
+    } finally {
+      await free.end();
+    }
+  }
 });
 
 test("an unbaselined existing database is refused without altering its data", { timeout }, async (t) => {
@@ -260,4 +333,23 @@ test("an unbaselined existing database is refused without altering its data", { 
     return true;
   });
   assert.deepEqual((await h.query(database, `SELECT * FROM "preserved"`)).rows, [{ value: "keep" }]);
+});
+
+test("compatibility recovery refuses a partially applied regular migration", { timeout }, async (t) => {
+  const h = await harness(t);
+  const database = await h.create();
+  const broken = await h.config([...legacy, COMPATIBILITY_MIGRATION, CONTENT_SIZE_MIGRATION], "regular-failure");
+  const file = path.join(broken.migrationPath, CONTENT_SIZE_MIGRATION, "migration.sql");
+  await writeFile(file, `ALTER TABLE "RequestLogContent" ADD COLUMN "partial" TEXT;\n`);
+  await h.prisma(database, ["migrate", "deploy"], (await h.config([...legacy, COMPATIBILITY_MIGRATION], "through-bridge")).file);
+  await h.query(database, 'ALTER TABLE "RequestLogContent" ADD COLUMN "partial" TEXT');
+  await assert.rejects(h.prisma(database, ["migrate", "deploy"], broken.file));
+  const before = (await h.query(database, 'SELECT * FROM "_prisma_migrations" ORDER BY started_at')).rows;
+  await assert.rejects(h.recover(database), (error: unknown) => {
+    assert.match(String((error as { stderr?: string }).stderr), /published compatibility checksum/);
+    return true;
+  });
+  assert.deepEqual((await h.query(database, 'SELECT * FROM "_prisma_migrations" ORDER BY started_at')).rows, before);
+  assert.equal((await h.query(database, `SELECT count(*)::int AS n FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'RequestLogContent' AND column_name = 'partial'`)).rows[0].n, 1);
 });

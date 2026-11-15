@@ -134,6 +134,7 @@ expect_page() {
 }
 
 docker network create "${name}" >/dev/null
+docker run --rm "${image}" node recover-compatibility.mjs --help
 docker run -d --quiet --name "${db}" --network "${name}" \
   -e POSTGRES_USER=llmhub \
   -e POSTGRES_PASSWORD=llmhub \

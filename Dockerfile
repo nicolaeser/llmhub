@@ -15,7 +15,7 @@ RUN --mount=type=cache,target=/root/.npm \
     node -e 'const fs = require("node:fs"); \
       const pkg = JSON.parse(fs.readFileSync("package.json", "utf8")); \
       const all = { ...pkg.dependencies, ...pkg.devDependencies }; \
-      const keep = ["prisma", "dotenv"]; \
+      const keep = ["prisma", "dotenv", "pg"]; \
       for (const name of keep) if (!all[name]) throw new Error(name + " is missing from package.json"); \
       fs.writeFileSync("package.json", JSON.stringify({ name: pkg.name, private: true, \
         dependencies: Object.fromEntries(keep.map((name) => [name, all[name]])), \
@@ -48,6 +48,7 @@ COPY --from=builder --chown=node:node /app/public ./public
 COPY --chown=node:node prisma/schema ./prisma/schema
 COPY --chown=node:node prisma/migrations ./prisma/migrations
 COPY --chown=node:node prisma.config.ts scripts/start.mjs scripts/migrate-deploy.mjs scripts/updater.mjs scripts/redactor.mjs ./
+COPY --chown=node:node scripts/recover-compatibility.mjs ./
 COPY --chown=node:node scripts/updater ./updater
 COPY --chown=node:node scripts/redactor ./redactor
 COPY --from=builder --chown=node:node /app/.next/keeper ./keeper

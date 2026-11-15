@@ -384,6 +384,26 @@ docker compose run --rm --no-deps --entrypoint node app ./node_modules/prisma/bu
 docker compose up -d
 ```
 
+For an interrupted `20261115145000_prisma_compatibility` conversion, the image includes a verified repair command. Stop every app replica and the updater, take a backup, and ensure the database has space for the copied content, indexes, and WAL. Use the same Compose file/options as your deployment (`-f docker-compose.au.yml` below is for the updater stack), with the current image:
+
+```bash
+docker compose -f docker-compose.au.yml stop updater app
+docker compose -f docker-compose.au.yml run --rm --no-deps --entrypoint node app recover-compatibility.mjs
+docker compose -f docker-compose.au.yml run --rm --no-deps --entrypoint node app migrate-deploy.mjs
+```
+
+Run each command only after the previous one succeeds. The repair accepts only the published compatibility migration's checksum, exactly one failed migration, the original partitioned content table and policy constraint, and no replacement table or later applied migration. It holds Prisma's PostgreSQL advisory lock throughout verification and `migrate resolve`; only that child process skips acquiring the lock again. It refuses an active migration or unexpected database state without changing migration records. It never resets the database, changes migration SQL, or marks a migration applied. Startup does not invoke this repair automatically.
+
+The deployment command streams Prisma output immediately and reports every 30 seconds while it is still running. A large copy may take longer than ten minutes. Leave PostgreSQL running and the updater stopped until it completes successfully. Then start the app, verify readiness, and resume the updater:
+
+```bash
+docker compose -f docker-compose.au.yml start app
+curl --fail http://127.0.0.1:3000/internal-api/ready
+docker compose -f docker-compose.au.yml start updater
+```
+
+Use your configured host port if it differs from 3000. If verification refuses recovery, inspect the database using the general procedure above instead of bypassing its checks.
+
 `P3005` means the database is nonempty but has no Prisma migration history. Startup refuses it and never creates an automatic baseline. After a backup, compare the database with the schema at its original release and manually resolve only the migrations it actually contains. This repository keeps a historical migration chain; do not blindly resolve all folders or invent an applied `0_init`. A normal existing LLM Hub database already has its history and needs no adoption step.
 
 ## Automatic updates

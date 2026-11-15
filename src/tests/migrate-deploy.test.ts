@@ -18,6 +18,19 @@ test("startup only deploys migrations through the bundled Prisma CLI", async () 
   assert.deepEqual(commands, [["migrate", "deploy"]]);
 });
 
+test("migration output reaches the operator before the command exits and is not repeated", async () => {
+  const messages: string[] = [];
+  await migrateDatabase({ env, write: (message: string) => messages.push(message),
+    run: async (_args: string[], _env: typeof env, onOutput: (chunk: string) => void) => {
+      onOutput("Applying migration\n");
+      assert.deepEqual(messages, ["Applying migration"]);
+      onOutput("Migration applied\n");
+      return { code: 0, signal: null, output: "Applying migration\nMigration applied\n" };
+    },
+  });
+  assert.deepEqual(messages, ["Applying migration", "Migration applied"]);
+});
+
 test("startup retries only transient database and migration-lock failures", async () => {
   for (const code of ["P1001", "P1002", "P1017"]) {
     let calls = 0;
