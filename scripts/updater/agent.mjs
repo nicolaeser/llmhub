@@ -1,14 +1,16 @@
+import { randomUUID } from "node:crypto";
 import { Buffer } from "node:buffer";
-import { mkdir, readFile, statfs, writeFile } from "node:fs/promises";
+import { mkdir, open, readFile, rename, statfs, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { setInterval } from "node:timers";
-import { COMPOSE_PROJECT_LABEL, composeImageLabel, containerName, createConfigFor, shortId } from "./container-config.mjs";
+import { clearInterval, setInterval } from "node:timers";
+import { COMPOSE_PROJECT_LABEL, composeImageLabel, configuredImageRef, containerName, createConfigFor, shortId } from "./container-config.mjs";
 import { DockerError } from "./docker.mjs";
 import { parseJson, readText, send } from "./http.mjs";
 import { digestsFor, imageRefOf, isPinned, normalizeRepository, parseImageRef, updateAvailable } from "./image-ref.mjs";
 import { errorMessage, log, PREDECESSOR_LOG_LINES, replayLogText } from "./log.mjs";
-import { isBackup, recoverLeftovers, recreateContainer, removeContainerNamed, replaceStoppedContainers } from "./recreate.mjs";
+import { isBackup, recoverLeftovers, removeContainerNamed } from "./recreate.mjs";
+import { recreateGroup, recoverGroup } from "./transaction.mjs";
 import { signBody, UPDATER_HEADER, verifySignature } from "./signature.mjs";
 import { switchRedisToSnapshots } from "./stack.mjs";
 
@@ -32,6 +34,22 @@ const COMMAND_ACTIONS = new Set(["check", "update"]);
 const RESULT_OUTCOMES = new Set(["up_to_date", "available", "updated", "rolled_back", "failed", "pinned"]);
 const DIGEST = /^sha256:[0-9a-f]{64}$/;
 const SOCKET_ERRORS = new Set(["ENOENT", "EACCES", "ECONNREFUSED", "EPERM"]);
+
+const PHASES = ["checking", "pulling", "recreating", "verifying", "rolling_back"];
+const boundedDetail = (value) => value == null ? null : [...String(value)].map((char) => char.codePointAt(0) < 32 || char.codePointAt(0) === 127 ? " " : char).join("").slice(0, 300);
+const serviceNames = (values) => [...new Set(values.map((value) => String(value).replace(/[^A-Za-z0-9_.-]/g, "_").slice(0, 64)).filter(Boolean))].slice(0, 8);
+
+export function boundedHistory(values) {
+  if (!Array.isArray(values)) return [];
+  return values.filter((value) => value && COMMAND_ID.test(value.id ?? "") &&
+    Number.isFinite(Date.parse(value.startedAt)) && Number.isFinite(Date.parse(value.finishedAt)) &&
+    RESULT_OUTCOMES.has(value.outcome)).slice(0, 5).map((value) => ({
+    id: value.id, startedAt: new Date(value.startedAt).toISOString(), finishedAt: new Date(value.finishedAt).toISOString(),
+    outcome: value.outcome, detail: boundedDetail(value.detail),
+    services: serviceNames(Array.isArray(value.services) ? value.services : []),
+    phases: Object.fromEntries(PHASES.map((phase) => [phase, Number.isSafeInteger(value.phases?.[phase]) && value.phases[phase] >= 0 ? value.phases[phase] : 0])),
+  }));
+}
 
 export async function dockerDiskSpace(where = "/") {
   const stats = await statfs(where);
@@ -91,9 +109,10 @@ export function createAgent({
   key,
   appUrl,
   projectOverride = null,
-  predecessor = null,
+  predecessor = "",
   version,
   diskSpace = dockerDiskSpace,
+  stateDir = STATE_DIR,
 }) {
   const status = {
     state: "idle",
@@ -110,6 +129,8 @@ export function createAgent({
     lastResult: null,
     ackCommandId: null,
     disk: null,
+    progress: null,
+    history: [],
   };
   let self = null;
   let project = null;
@@ -125,20 +146,46 @@ export function createAgent({
   let handover = null;
   let nextCheckAt = 0;
   let lastCommandId = null;
+  let pendingCommand = null;
+  let initialized = false;
+  let manualRecovery = false;
+  let activeRun = null;
+  let saving = Promise.resolve();
+  let activeTask = null;
+  const timers = [];
+  const stateFile = path.join(stateDir, "state.json");
+  const journalFile = path.join(stateDir, "transaction.json");
+  const heartbeatFile = path.join(stateDir, "heartbeat");
 
   async function persist() {
     const saved = JSON.stringify({
       failedDigest: status.failedDigest,
       lastResult: status.lastResult,
       ackCommandId: status.ackCommandId,
+      pendingCommand,
+      history: status.history,
+      activeRun,
+      progress: status.progress,
     });
-    await writeFile(STATE_FILE, saved).catch((err) => log("warn", "updater.state_not_saved", { err: errorMessage(err) }));
+    saving = saving.catch(() => undefined).then(async () => {
+      await mkdir(stateDir, { recursive: true, mode: 0o700 });
+      const file = await open(`${stateFile}.tmp`, "w", 0o600);
+      try { await file.writeFile(saved); await file.sync(); } finally { await file.close(); }
+      await rename(`${stateFile}.tmp`, stateFile);
+      const directory = await open(stateDir, "r");
+      try { await directory.sync(); } finally { await directory.close(); }
+    });
+    await saving;
   }
 
   function restoreFrom(text) {
     const saved = parseJson(text);
+    status.history = boundedHistory(saved?.history);
+    const interrupted = boundedHistory(saved?.activeRun ? [{ ...saved.activeRun, finishedAt: isoNow(), outcome: "failed" }] : [])[0];
+    activeRun = interrupted ? { ...interrupted, phase: null, phaseAt: Date.now() } : null;
     if (DIGEST.test(saved?.failedDigest ?? "")) status.failedDigest = saved.failedDigest;
     if (restorableResult(saved?.lastResult)) status.lastResult = saved.lastResult;
+    pendingCommand = desiredOf({ command: saved?.pendingCommand }).command;
     if (COMMAND_ID.test(saved?.ackCommandId ?? "")) {
       status.ackCommandId = saved.ackCommandId;
       lastCommandId = saved.ackCommandId;
@@ -146,17 +193,22 @@ export function createAgent({
   }
 
   async function restore() {
-    restoreFrom(await readFile(STATE_FILE, "utf8").catch(() => ""));
+    restoreFrom(await readFile(stateFile, "utf8").catch(() => ""));
   }
 
   async function heartbeat() {
-    await writeFile(HEARTBEAT_FILE, isoNow()).catch((err) =>
+    await writeFile(heartbeatFile, isoNow(), { mode: 0o600 }).catch((err) =>
       log("warn", "updater.heartbeat_failed", { err: errorMessage(err) }),
     );
   }
 
   async function postStatus() {
-    const body = JSON.stringify({ version, ...status });
+    const report = { version, ...status, history: [...status.history] };
+    let body = JSON.stringify(report);
+    while (Buffer.byteLength(body) > 16_384 && report.history.length) {
+      report.history.pop();
+      body = JSON.stringify(report);
+    }
     const res = await send(
       {
         protocol: appUrl.protocol,
@@ -205,9 +257,31 @@ export function createAgent({
     return syncing;
   }
 
-  function setPhase(state) {
+  function accountPhase() {
+    if (!activeRun) return;
+    const now = Date.now();
+    if (PHASES.includes(activeRun.phase)) activeRun.phases[activeRun.phase] += Math.max(0, now - activeRun.phaseAt);
+    activeRun.phaseAt = now;
+  }
+
+  async function setPhase(state) {
+    if (status.state !== state) {
+      accountPhase();
+      if (activeRun) activeRun.phase = state;
+      if (status.progress) status.progress.phaseStartedAt = isoNow();
+    }
     status.state = state;
-    return sync();
+    if (activeRun) await persist();
+    void sync();
+  }
+
+  function onStartup(startup) {
+    if (!status.progress) return;
+    const next = startup?.state ?? undefined;
+    if (status.progress.startup === next) return;
+    status.progress.startup = next;
+    void persist().catch((err) => log("warn", "updater.progress_not_saved", { err: errorMessage(err) }));
+    void sync();
   }
 
   async function result(action, outcome, detail, commandId) {
@@ -218,8 +292,14 @@ export function createAgent({
       detail: detail ? String(detail).slice(0, 500) : null,
       commandId: commandId ?? null,
     };
+    if (action === "update" && activeRun) {
+      accountPhase();
+      status.history = boundedHistory([{ ...activeRun, finishedAt: status.lastResult.at, outcome, detail }, ...status.history.filter((entry) => entry.id !== activeRun.id)]);
+      activeRun = null;
+    }
     const level = outcome === "failed" || outcome === "rolled_back" ? "error" : "info";
     log(level, "updater.result", { action, outcome, ...(detail ? { detail } : {}) });
+    if (pendingCommand?.id === commandId) pendingCommand = null;
     await persist();
   }
 
@@ -232,6 +312,7 @@ export function createAgent({
 
   async function discover() {
     status.issue = null;
+    Object.assign(status, { image: null, tag: null, pinned: false, targets: 0, currentDigest: null, latestDigest: null, available: false });
     if (!(await ensureProject())) {
       status.issue = "no_project";
       return null;
@@ -246,7 +327,7 @@ export function createAgent({
       status.issue = "no_targets";
       return null;
     }
-    const refs = new Set(containers.map((container) => container.Config?.Image));
+    const refs = new Set(containers.map(configuredImageRef));
     if (refs.size !== 1) {
       status.issue = "mixed_images";
       return null;
@@ -260,7 +341,7 @@ export function createAgent({
     status.image = ref.name;
     status.tag = ref.tag;
     status.pinned = isPinned(ref);
-    const stopped = labeled.filter((container) => container.State?.Running !== true && container.Config?.Image === imageRef);
+    const stopped = labeled.filter((container) => container.State?.Running !== true && configuredImageRef(container) === imageRef);
     return { ref, containers, stopped };
   }
 
@@ -330,7 +411,8 @@ export function createAgent({
     }
     try {
       const remote = await docker.distribution(imageRefOf(target.ref));
-      status.latestDigest = typeof remote?.Descriptor?.digest === "string" ? remote.Descriptor.digest : null;
+      if (!DIGEST.test(remote?.Descriptor?.digest ?? "")) throw new Error("the registry returned no valid digest");
+      status.latestDigest = remote.Descriptor.digest;
     } catch (err) {
       status.issue = "registry_unreachable";
       status.available = false;
@@ -348,8 +430,11 @@ export function createAgent({
   }
 
   async function check() {
-    await setPhase("checking");
+    if (manualRecovery) return null;
     try {
+      if (!initialized) await initialize();
+      if (manualRecovery) return null;
+      await setPhase("checking");
       return await inspectTarget();
     } catch (err) {
       status.issue = dockerUnavailable(err) ? "docker_unavailable" : status.issue;
@@ -388,13 +473,25 @@ export function createAgent({
       composeImage: composeImageLabel(self, image),
       env: [`${PREDECESSOR_ENV}=${self.Id}`],
     });
+    await persist();
     const created = await docker.create(nextName, body);
-    await docker.start(created.Id);
     handover = { id: created.Id, until: Date.now() + HANDOVER_TIMEOUT_MS };
+    try {
+      await docker.start(created.Id);
+    } catch (err) {
+      await docker.remove(created.Id);
+      handover = null;
+      throw err;
+    }
     log("info", "updater.self_update_started", { successor: shortId(created.Id) });
   }
 
   async function apply({ commandId, target: checked }) {
+    if (manualRecovery) return;
+    if (!initialized) await initialize();
+    if (manualRecovery) return;
+    activeRun = { id: commandId ?? randomUUID(), startedAt: isoNow(), services: [], phases: Object.fromEntries(PHASES.map((phase) => [phase, 0])), phase: null, phaseAt: Date.now() };
+    await persist();
     const target = checked ?? (await check());
     if (!target) {
       await result("update", "failed", status.issue, commandId);
@@ -404,39 +501,80 @@ export function createAgent({
       await result("update", "pinned", null, commandId);
       return;
     }
+    const targets = [...target.containers, ...target.stopped];
+    activeRun.services = serviceNames(targets.map((container) => container.Config?.Labels?.["com.docker.compose.service"] ?? containerName(container)));
     const imageRef = imageRefOf(target.ref);
     let pulled = false;
+    status.progress = { startedAt: activeRun.startedAt, phaseStartedAt: isoNow(), service: null, completed: 0, total: targets.length };
     try {
       await pruneUnusedImages(target.ref);
       await requireDiskSpace("pull");
       await setPhase("pulling");
       log("info", "updater.pulling", { image: imageRef });
-      await docker.pull(target.ref.name, target.ref.tag);
-      pulled = true;
+      const runningImage = await docker.inspectImage(target.containers[0].Image);
+      const platform = runningImage?.Os && runningImage?.Architecture
+        ? [runningImage.Os, runningImage.Architecture, runningImage.Variant].filter(Boolean).join("/")
+        : undefined;
+      await docker.pull(target.ref.name, target.ref.tag, { platform, onProgress: (download) => {
+        if (status.progress) status.progress.download = download;
+        void persist().catch((err) => log("warn", "updater.progress_not_saved", { err: errorMessage(err) }));
+        void sync();
+      } });
       const image = await docker.inspectImage(imageRef, true);
       if (!image) throw new Error("the pulled image cannot be inspected");
-      await requireDiskSpace("switch", MIN_SWITCH_DISK_BYTES);
-      const stale = target.containers.filter((container) => container.Image !== image.Id);
       const freshDigests = digestsFor(image.RepoDigests, target.ref.name);
-      for (const container of stale) {
-        await recreateContainer(docker, container, { imageRef, image, onPhase: setPhase });
+      if (!status.latestDigest || !freshDigests.includes(status.latestDigest)) {
+        throw new Error("the image tag changed during download; check again before updating");
       }
-      const replaced = await replaceStoppedContainers(docker, target.stopped, { imageRef, image });
-      await removeImages([...stale, ...replaced].map((container) => container.Image), image.Id);
+      pulled = true;
+      await requireDiskSpace("switch", MIN_SWITCH_DISK_BYTES);
+      const stale = targets.filter((container) => container.Image !== image.Id);
+      status.progress.total = stale.length;
+      let switchAnnounced = false;
+      await recreateGroup(docker, stale, { imageRef, image, journalFile,
+        waitOptions: { onStartup },
+        onPhase: async (phase, progress) => {
+          if (progress) Object.assign(status.progress, { service: serviceNames([progress.service ?? ""])[0] ?? null, completed: progress.completed, total: progress.total });
+          await setPhase(phase);
+          if (phase === "recreating" && !switchAnnounced) {
+            await sync();
+            switchAnnounced = true;
+          }
+        },
+      });
+      status.progress.completed = stale.length;
+      status.progress.service = null;
+      await removeImages(stale.map((container) => container.Image), image.Id);
       status.currentDigest = freshDigests[0] ?? status.currentDigest;
       status.available = updateAvailable(status.latestDigest, freshDigests);
       status.failedDigest = null;
       await result("update", stale.length ? "updated" : "up_to_date", null, commandId);
+      status.progress = null;
       await setPhase("idle");
       await maintainStack();
       await maybeSelfUpdate(target.ref, image).catch((err) =>
         log("error", "updater.self_update_failed", { err: errorMessage(err) }),
       );
     } catch (err) {
-      const rolledBack = err?.rolledBack === true;
+      if (err?.committed === true) {
+        status.currentDigest = status.latestDigest;
+        status.available = false;
+        status.failedDigest = null;
+        initialized = false;
+        await result("update", "updated", `Update installed; backup cleanup will resume: ${errorMessage(err)}`, commandId);
+        await setPhase("idle");
+        return;
+      }
+      initialized = false;
+      manualRecovery = err?.manualRecovery === true;
+      if (manualRecovery && status.progress) status.progress.startup = "manual_recovery";
+      const rolledBack = !manualRecovery && err?.rolledBack === true;
       if (pulled && err?.lowDisk !== true) status.failedDigest = status.latestDigest;
       await result("update", rolledBack ? "rolled_back" : "failed", errorMessage(err), commandId);
       await setPhase("failed");
+    } finally {
+      if (!manualRecovery) status.progress = null;
+      void sync();
     }
   }
 
@@ -481,14 +619,20 @@ export function createAgent({
 
   function run(task) {
     busy = true;
-    task()
-      .catch((err) => {
+    activeTask = task()
+      .catch(async (err) => {
         if (dockerUnavailable(err)) status.issue = "docker_unavailable";
         log("error", "updater.task_failed", { err: errorMessage(err), status: err instanceof DockerError ? err.status : undefined });
-        status.state = status.state === "checking" ? "idle" : status.state;
+        status.state = "failed";
+        if (pendingCommand) {
+          await result(pendingCommand.action, "failed", errorMessage(err), pendingCommand.id).catch((saveError) =>
+            log("warn", "updater.state_not_saved", { err: errorMessage(saveError) }),
+          );
+        }
       })
       .finally(() => {
         busy = false;
+        nextCheckAt = Date.now() + CHECK_INTERVAL_MS;
         void sync();
       });
   }
@@ -496,7 +640,7 @@ export function createAgent({
   async function finishHandover() {
     if (!handover || Date.now() < handover.until) return;
     log("warn", "updater.self_update_timed_out", { successor: shortId(handover.id) });
-    await docker.remove(handover.id).catch((err) => log("warn", "updater.successor_not_removed", { err: errorMessage(err) }));
+    await docker.remove(handover.id);
     handover = null;
   }
 
@@ -504,19 +648,22 @@ export function createAgent({
     if (ticking) return;
     ticking = true;
     try {
+      if (!initialized) await initialize();
       await sync();
       if (handover) {
         await finishHandover();
         return;
       }
-      if (busy) return;
+      if (busy || manualRecovery) return;
       if (stackDue) {
         stackDue = false;
         run(maintainStack);
         return;
       }
-      const command = desired.command;
-      if (command && command.id !== lastCommandId) {
+      const command = pendingCommand ?? desired.command;
+      if (command && (pendingCommand || command.id !== lastCommandId)) {
+        pendingCommand = command;
+        await persist();
         lastCommandId = command.id;
         status.ackCommandId = command.id;
         log("info", "updater.command", { action: command.action });
@@ -527,6 +674,10 @@ export function createAgent({
         nextCheckAt = Date.now() + CHECK_INTERVAL_MS;
         run(scheduledCheck);
       }
+    } catch (err) {
+      if (dockerUnavailable(err)) status.issue = "docker_unavailable";
+      log("error", "updater.tick_failed", { err: errorMessage(err) });
+      void sync();
     } finally {
       ticking = false;
     }
@@ -547,7 +698,16 @@ export function createAgent({
     const name = containerName(self);
     const original = previous ? containerName(previous) : name.replace(/-next$/, "");
     if (previous) {
-      const inherited = await docker.readFile(previous.Id, STATE_FILE).catch(() => null);
+      const ownProject = self.Config?.Labels?.[COMPOSE_PROJECT_LABEL];
+      if (!ownProject || previous.Config?.Labels?.[COMPOSE_PROJECT_LABEL] !== ownProject ||
+          previous.Config?.Labels?.["com.docker.compose.service"] !== self.Config?.Labels?.["com.docker.compose.service"]) {
+        throw new Error("the predecessor does not belong to this updater service");
+      }
+      const inherited = await docker.readFile(previous.Id, STATE_FILE).catch((err) => {
+        if (err instanceof DockerError && err.status === 404) return "{}";
+        throw err;
+      });
+      if (!inherited || !parseJson(inherited)) throw new Error("the predecessor state is unavailable");
       if (inherited) {
         restoreFrom(inherited);
         await persist();
@@ -569,31 +729,50 @@ export function createAgent({
     }
   }
 
+  async function initialize() {
+    self = await identify();
+    await adoptPredecessor();
+    project = projectOverride ?? self?.Config?.Labels?.[COMPOSE_PROJECT_LABEL] ?? null;
+    if (!project) {
+      status.issue = "no_project";
+      throw new Error("the updater compose project cannot be identified");
+    }
+    let recovery = null;
+    try {
+      recovery = await recoverGroup(docker, `${COMPOSE_PROJECT_LABEL}=${project}`, { journalFile, onPhase: setPhase, waitOptions: { onStartup } });
+      await recoverLeftovers(docker, `${COMPOSE_PROJECT_LABEL}=${project}`);
+    } catch (err) {
+      if (err?.manualRecovery !== true) throw err;
+      manualRecovery = true;
+      status.state = "failed";
+      status.progress = { startedAt: activeRun?.startedAt ?? isoNow(), phaseStartedAt: isoNow(), service: null, completed: 0, total: 0, startup: "manual_recovery" };
+      if (activeRun) await result("update", "failed", errorMessage(err), pendingCommand?.id);
+    }
+    if (activeRun) await result("update", recovery?.recovered ? (recovery.committed ? "updated" : "rolled_back") : "failed", "Updater restarted during this update; recovery completed before further work", pendingCommand?.id);
+    initialized = true;
+  }
+
   async function start() {
-    await mkdir(STATE_DIR, { recursive: true, mode: 0o700 }).catch((err) =>
-      log("warn", "updater.state_dir_failed", { err: errorMessage(err) }),
-    );
+    await mkdir(stateDir, { recursive: true, mode: 0o700 });
     await heartbeat();
     await restore();
-    try {
-      self = await identify();
-      await adoptPredecessor();
-      project = projectOverride ?? self?.Config?.Labels?.[COMPOSE_PROJECT_LABEL] ?? null;
-      if (project) await recoverLeftovers(docker, `${COMPOSE_PROJECT_LABEL}=${project}`);
-    } catch (err) {
-      if (dockerUnavailable(err)) status.issue = "docker_unavailable";
-      log("error", "updater.start_failed", { err: errorMessage(err) });
-    }
     log("info", "updater.started", {
       version,
       project,
       container: self ? shortId(self.Id) : null,
       app: appUrl.origin,
     });
-    setInterval(() => void heartbeat(), SYNC_INTERVAL_MS);
-    setInterval(() => void tick(), SYNC_INTERVAL_MS);
+    timers.push(setInterval(() => void heartbeat(), SYNC_INTERVAL_MS));
+    timers.push(setInterval(() => void tick(), SYNC_INTERVAL_MS));
     await tick();
   }
 
-  return { start, status, tick, check, apply };
+  async function stop() {
+    for (const timer of timers) clearInterval(timer);
+    await activeTask;
+    await syncing;
+    await saving;
+  }
+
+  return { start, stop, status, tick, check, apply };
 }

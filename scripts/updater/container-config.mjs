@@ -3,6 +3,14 @@ const HEALTHCHECK_FIELDS = ["Test", "Interval", "Timeout", "StartPeriod", "Start
 const GRACEFUL_STOP_SECONDS = 330;
 
 export const COMPOSE_IMAGE_LABEL = "com.docker.compose.image";
+export const UPDATER_IMAGE_REF_LABEL = "llmhub.updater.image-ref";
+
+export function configuredImageRef(container) {
+  const image = container.Config?.Image;
+  return /^sha256:[a-f0-9]{64}$/.test(image ?? "")
+    ? container.Config?.Labels?.[UPDATER_IMAGE_REF_LABEL] ?? image
+    : image;
+}
 export const COMPOSE_PROJECT_LABEL = "com.docker.compose.project";
 
 function unset(value) {
@@ -63,7 +71,8 @@ function healthcheckFor(own, defaults) {
 }
 
 function bindTarget(bind) {
-  return String(bind).split(":")[1];
+  const parts = String(bind).split(":");
+  return parts.length === 1 ? parts[0] : parts[1];
 }
 
 export function inheritedVolumes(container, host = container.HostConfig ?? {}) {
@@ -79,6 +88,17 @@ export function inheritedVolumes(container, host = container.HostConfig ?? {}) {
 
 function hostConfigFor(container) {
   const host = clone(container.HostConfig ?? {});
+  const volumes = new Map((container.Mounts ?? [])
+    .filter((mount) => mount.Type === "volume" && mount.Name && mount.Destination)
+    .map((mount) => [mount.Destination, mount.Name]));
+  if (Array.isArray(host.Binds)) {
+    host.Binds = host.Binds.map((bind) => !String(bind).includes(":") && volumes.has(bind) ? `${volumes.get(bind)}:${bind}` : bind);
+  }
+  if (Array.isArray(host.Mounts)) {
+    host.Mounts = host.Mounts.map((mount) => mount.Type === "volume" && !mount.Source && volumes.has(mount.Target)
+      ? { ...mount, Source: volumes.get(mount.Target) }
+      : mount);
+  }
   const inherited = inheritedVolumes(container, host);
   if (inherited.length) host.Mounts = [...(host.Mounts ?? []), ...inherited];
   if (Array.isArray(host.Links)) {
@@ -101,6 +121,7 @@ export function networkingFor(container) {
       ...(endpoint?.IPAMConfig ? { IPAMConfig: endpoint.IPAMConfig } : {}),
       ...(endpoint?.Links?.length ? { Links: endpoint.Links } : {}),
       ...(endpoint?.DriverOpts ? { DriverOpts: endpoint.DriverOpts } : {}),
+      ...(endpoint?.GwPriority !== undefined ? { GwPriority: endpoint.GwPriority } : {}),
     };
   }
   return { EndpointsConfig: endpoints };

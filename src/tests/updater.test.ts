@@ -249,7 +249,7 @@ test("the updater moves a healthy bundled Redis to snapshots once and keeps ever
   assert.deepEqual(calls.find(([name]) => name === "stop"), ["stop", container.Id, UPDATE_DRAIN_SECONDS]);
   const body = created[0] as { Cmd: string[]; Env: string[]; Image: string; StopTimeout?: number; HostConfig: { Binds: string[] }; Healthcheck: unknown };
   assert.deepEqual(body.Cmd, ["redis-server", ...REDIS_SNAPSHOT_FLAGS, "--requirepass", "secret"]);
-  assert.equal(body.Image, "redis:8-alpine");
+  assert.equal(body.Image, container.Image);
   assert.deepEqual(body.Env, ["REDISCLI_AUTH=secret"]);
   assert.deepEqual(body.HostConfig.Binds, ["/srv/llmhub/redis-data:/data:rw"]);
   assert.deepEqual(body.Healthcheck, { Test: ["CMD", "redis-cli", "ping"], Interval: 5_000_000_000 });
@@ -270,7 +270,7 @@ test("the updater leaves Redis alone when it is unhealthy, customized, foreign, 
   const failing = redisDocker(redisContainer(), { failHealth: true });
   const skip = new Set<string>();
   assert.deepEqual(await switchRedisToSnapshots(failing.docker, "llmhub", { skip, waitOptions: { pollMs: 1 } }), []);
-  assert.deepEqual(failing.calls.slice(-3).map(([name]) => name), ["remove", "rename", "start"]);
+  assert.deepEqual(failing.calls.slice(-3).map(([name]) => name), ["remove", "start", "rename"]);
   assert.equal(skip.size, 1);
   const before = failing.created.length;
   assert.deepEqual(await switchRedisToSnapshots(failing.docker, "llmhub", { skip }), []);
@@ -479,7 +479,10 @@ test("the updater lists stopped labeled containers of its image next to the runn
     version: "test",
   });
   const target = await agent.check();
-  assert.deepEqual(listed, [[["com.docker.compose.project=llmhub", "llmhub.updater.target=true"], true]]);
+  assert.deepEqual(listed, [
+    [["com.docker.compose.project=llmhub"], true],
+    [["com.docker.compose.project=llmhub", "llmhub.updater.target=true"], true],
+  ]);
   assert.deepEqual(target?.containers.map((container) => container.Id), ["app", "redactor"]);
   assert.deepEqual(target?.stopped.map((container) => container.Id), ["fetch"]);
   assert.equal(agent.status.targets, 2);
@@ -489,6 +492,8 @@ test("the updater lists stopped labeled containers of its image next to the runn
 test("stopped labeled containers move to the new image without being started", async () => {
   const calls: [string, ...unknown[]][] = [];
   const docker = {
+    inspectContainer: async () => null,
+    rename: async (id: string, name: string) => void calls.push(["rename", id, name]),
     inspectImage: async (id: string) => (id === "sha256:gone" ? null : oldImage()),
     remove: async (id: string) => void calls.push(["remove", id]),
     create: async (name: string, body: { Image: string; Labels: Record<string, string> }) => {
@@ -511,8 +516,9 @@ test("stopped labeled containers move to the new image without being started", a
     ["fetch"],
   );
   assert.deepEqual(calls, [
-    ["remove", "fetch"],
+    ["rename", "fetch", "llmhub-redactor-fetch-1-llmhub-stopped-old"],
     ["create", "llmhub-redactor-fetch-1", "ghcr.io/nicolaeser/llmhub:latest", "sha256:new"],
+    ["remove", "fetch"],
   ]);
 });
 
@@ -606,6 +612,25 @@ function report(overrides: Partial<UpdaterReport> = {}): UpdaterReport {
     ...overrides,
   };
 }
+
+test("updater progress survives the dashboard view and accepts reports from older agents", async () => {
+  const { updaterReportSchema } = await import("@/schemas/updater");
+  const { updaterView } = await import("@/lib/updates/updater-view");
+  const now = Date.now();
+  const seenAt = new Date(now).toISOString();
+  const progress = { startedAt: seenAt, phaseStartedAt: seenAt, service: "app", completed: 1, total: 2 };
+  const parsed = updaterReportSchema.parse(report({ state: "verifying", progress }));
+  assert.deepEqual(updaterView({ ...parsed, seenAt }, null, false, now)?.progress, progress);
+  assert.equal(updaterView({ ...updaterReportSchema.parse(report()), seenAt }, null, false, now)?.progress, null);
+  for (const invalid of [
+    { ...progress, completed: 3 },
+    { ...progress, completed: -1 },
+    { ...progress, phaseStartedAt: "invalid" },
+    { ...progress, service: "a".repeat(301) },
+  ]) {
+    assert.equal(updaterReportSchema.safeParse(report({ progress: invalid })).success, false);
+  }
+});
 
 function settingStore(initial: Record<string, string> = {}) {
   const rows = new Map(Object.entries(initial));
@@ -874,7 +899,11 @@ function updateHarness(freeBytes: number[]) {
     listContainers: async (labels: string[]) =>
       labels.length ? [{ Id: app.Id }] : [{ Id: app.Id, ImageID: "sha256:old" }, { Id: "other", ImageID: "sha256:used" }],
     inspectContainer: async (id: string) => (id === self.Id ? self : id === app.Id ? app : null),
-    inspectImage: async () => ({ ...oldImage(), Id: "sha256:new", RepoDigests: [`${repo}@${DIGEST_A}`] }),
+    inspectImage: async (id: string) => ({
+      ...oldImage(),
+      Id: id === `${repo}:latest` ? "sha256:new" : "sha256:old",
+      RepoDigests: [`${repo}@${id === `${repo}:latest` ? DIGEST_B : DIGEST_A}`],
+    }),
     distribution: async () => ({ Descriptor: { digest: DIGEST_B } }),
     listDanglingImages: async () => [
       { Id: "sha256:stale", RepoDigests: [`${repo}@${DIGEST_A}`], Size: 600_000_000 },

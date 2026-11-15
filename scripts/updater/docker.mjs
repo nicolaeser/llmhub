@@ -6,6 +6,8 @@ export const DOCKER_SOCKET = "/var/run/docker.sock";
 
 const DEFAULT_TIMEOUT_MS = 30_000;
 const PULL_IDLE_TIMEOUT_MS = 10 * 60_000;
+const PULL_DEADLINE_MS = 60 * 60_000;
+const PULL_LINE_LIMIT = 1024 * 1024;
 
 export class DockerError extends Error {
   constructor(status, message) {
@@ -52,19 +54,22 @@ function pullFailure(event) {
 }
 
 export function dockerClient(socketPath = DOCKER_SOCKET) {
-  function open(method, path, { query, body, timeout = DEFAULT_TIMEOUT_MS } = {}) {
+  function open(method, path, { query, body, timeout = DEFAULT_TIMEOUT_MS, deadline = timeout } = {}) {
     const payload = body === undefined ? undefined : JSON.stringify(body);
     const headers = payload
       ? { Host: "docker", "Content-Type": "application/json", "Content-Length": Buffer.byteLength(payload) }
       : { Host: "docker" };
-    return send({ socketPath, method, path: `${path}${queryString(query)}`, headers, timeout }, payload);
+    return send({ socketPath, method, path: `${path}${queryString(query)}`, headers, timeout, deadline }, payload);
   }
 
   async function call(method, path, options) {
     const res = await open(method, path, options);
     const text = await readText(res);
     if (res.statusCode >= 400) throw failureOf(res.statusCode, text);
-    return text ? parseJson(text) : null;
+    if (!text) return null;
+    const result = parseJson(text);
+    if (result === null) throw new DockerError(res.statusCode, "invalid Docker JSON response");
+    return result;
   }
 
   async function optional(promise) {
@@ -76,23 +81,60 @@ export function dockerClient(socketPath = DOCKER_SOCKET) {
     }
   }
 
-  async function pull(name, tag) {
+  async function pull(name, tag, { platform, onProgress } = {}) {
     const res = await open("POST", "/images/create", {
-      query: { fromImage: name, tag },
+      query: { fromImage: name, tag, platform },
       timeout: PULL_IDLE_TIMEOUT_MS,
+      deadline: PULL_DEADLINE_MS,
     });
     if (res.statusCode >= 400) throw failureOf(res.statusCode, await readText(res));
     let pending = "";
-    let failure = null;
     let status = null;
-    const consume = (line) => {
-      const event = parseJson(line.trim());
-      failure ??= pullFailure(event);
-      if (typeof event?.status === "string" && event.status.startsWith("Status:")) status = event.status;
+    let events = 0;
+    const layers = new Map();
+    let reportedAt = -Infinity;
+    const reportProgress = (force = false) => {
+      if (!onProgress || (!force && Date.now() - reportedAt < 1000)) return;
+      reportedAt = Date.now();
+      const values = [...layers.values()];
+      onProgress({
+        downloadedBytes: values.reduce((sum, layer) => sum + layer.downloaded, 0),
+        totalBytes: !values.length || values.some((layer) => layer.total === null) ? null : values.reduce((sum, layer) => sum + layer.total, 0),
+        layersCompleted: values.filter((layer) => layer.complete).length,
+        layersTotal: values.length,
+      });
     };
-    await new Promise((resolve, reject) => {
-      res.setEncoding("utf8");
-      res.on("data", (chunk) => {
+    const consume = (line) => {
+      if (!line.trim()) return;
+      if (Buffer.byteLength(line) > PULL_LINE_LIMIT) throw new Error("image pull event is too large");
+      const event = parseJson(line);
+      if (!event || typeof event !== "object" || Array.isArray(event)) {
+        throw new Error("invalid image pull event");
+      }
+      const failure = pullFailure(event);
+      if (failure !== null) throw new DockerError(500, failure || "image pull failed");
+      events += 1;
+      if (typeof event.id === "string" && typeof event.status === "string" &&
+          /^(Pulling fs layer|Waiting|Downloading|Download complete|Extracting|Pull complete|Already exists)$/.test(event.status)) {
+        if (!layers.has(event.id) && layers.size >= 4096) throw new Error("too many image layers");
+        const layer = layers.get(event.id) ?? { downloaded: 0, total: null, complete: false };
+        const current = event.progressDetail?.current;
+        const total = event.progressDetail?.total;
+        if (event.status === "Downloading") {
+          if (Number.isSafeInteger(current) && current >= 0) layer.downloaded = Math.max(layer.downloaded, current);
+          if (Number.isSafeInteger(total) && total > 0) layer.total = total;
+        }
+        if (event.status === "Download complete" && layer.total !== null) layer.downloaded = layer.total;
+        if (event.status === "Already exists") layer.total = 0;
+        if (event.status === "Pull complete" || event.status === "Already exists") layer.complete = true;
+        layers.set(event.id, layer);
+        reportProgress();
+      }
+      if (typeof event.status === "string" && event.status.startsWith("Status:")) status = event.status;
+    };
+    res.setEncoding("utf8");
+    try {
+      for await (const chunk of res) {
         pending += chunk;
         let index = pending.indexOf("\n");
         while (index >= 0) {
@@ -100,14 +142,15 @@ export function dockerClient(socketPath = DOCKER_SOCKET) {
           pending = pending.slice(index + 1);
           index = pending.indexOf("\n");
         }
-      });
-      res.on("end", resolve);
-      res.on("error", reject);
-      res.on("aborted", () => reject(new Error("image pull aborted")));
-    });
-    if (pending.trim()) consume(pending);
-    if (failure) throw new DockerError(500, failure);
-    return status;
+        if (Buffer.byteLength(pending) > PULL_LINE_LIMIT) throw new Error("image pull event is too large");
+      }
+      consume(pending);
+      if (!events) throw new Error("empty image pull response");
+      reportProgress(true);
+      return status;
+    } finally {
+      res.destroy();
+    }
   }
 
   async function logs(id, tail) {
@@ -143,6 +186,6 @@ export function dockerClient(socketPath = DOCKER_SOCKET) {
       call("POST", `/containers/${id}/stop`, { query: { t: seconds }, timeout: (seconds + 30) * 1000 }),
     rename: (id, name) => call("POST", `/containers/${id}/rename`, { query: { name } }),
     remove: (id) => call("DELETE", `/containers/${id}`, { query: { force: "true", v: "false" } }),
-    removeImage: (id) => call("DELETE", `/images/${id}`),
+    removeImage: (id) => call("DELETE", `/images/${id}`, { query: { force: "false", noprune: "true" } }),
   };
 }

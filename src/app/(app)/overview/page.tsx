@@ -12,6 +12,7 @@ import { loadOverviewAction } from "./_action";
 import AttentionList from "./_components/attention-list";
 import ConceptCards from "./_components/concept-cards";
 import SetupChecklist from "./_components/setup-checklist";
+import UpdateStatus from "./_components/update-status";
 
 type Stat = { id: string; label: string; value: string; hint?: string; icon: LucideIcon; tone: Tone };
 
@@ -89,6 +90,7 @@ export default function OverviewPage() {
       <PageHeader icon={LayoutDashboard} title={t("title")} subtitle={t("subtitle")} />
       <div className="space-y-5">
         <LoadError state={state} />
+        <UpdateStatus />
         {stats.length ? (
           <div className="space-y-2">
             <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">

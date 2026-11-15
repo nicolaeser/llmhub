@@ -262,7 +262,7 @@ test("a failed compatibility copy rolls back all data and requires explicit Pris
     FROM pg_class WHERE oid = '"RequestLogContent"'::regclass`)).rows[0].owner, h.reader);
 });
 
-test("explicit recovery verifies an interrupted published migration and preserves all data", { timeout }, async (t) => {
+test("normal concurrent boots recover an interrupted published migration and preserve all data", { timeout }, async (t) => {
   const h = await harness(t);
   const old = await h.config(legacy, "before-interruption");
   for (const schema of ["public", "hub"]) {
@@ -276,7 +276,7 @@ test("explicit recovery verifies an interrupted published migration and preserve
     await blocker.connect();
     try {
       await blocker.query(`BEGIN; LOCK TABLE ${identifier(schema)}."RequestLog" IN ACCESS EXCLUSIVE MODE`);
-      const migration = h.boot(database).then(() => null, (error: unknown) => error);
+      const migration = h.prisma(database, ["migrate", "deploy"]).then(() => null, (error: unknown) => error);
       let pid: number | undefined;
       for (let attempt = 0; attempt < 600; attempt += 1) {
         const active = await h.query(database, `SELECT pid FROM pg_stat_activity WHERE datname = current_database()
@@ -300,13 +300,13 @@ test("explicit recovery verifies an interrupted published migration and preserve
     const failed = (await h.query(database, `SELECT * FROM "_prisma_migrations" WHERE finished_at IS NULL AND rolled_back_at IS NULL`)).rows;
     assert.equal(failed.length, 1);
     await h.query(database, 'CREATE TABLE "RequestLogContent_plain" (id int)');
-    await assert.rejects(h.recover(database), (error: unknown) => {
+    await assert.rejects(h.boot(database), (error: unknown) => {
       assert.match(String((error as { stderr?: string }).stderr), /does not match a rolled-back/);
       return true;
     });
     assert.deepEqual((await h.query(database, `SELECT * FROM "_prisma_migrations" WHERE finished_at IS NULL AND rolled_back_at IS NULL`)).rows, failed);
     await h.query(database, 'DROP TABLE "RequestLogContent_plain"');
-    await h.recover(database);
+    await Promise.all([h.boot(database), h.boot(database)]);
     const recovered = (await h.query(database, `SELECT * FROM "_prisma_migrations" WHERE id = $1`, [failed[0].id])).rows[0];
     assert.ok(recovered.rolled_back_at);
     assert.equal(recovered.finished_at, null);
@@ -345,6 +345,7 @@ test("compatibility recovery refuses a partially applied regular migration", { t
   await h.query(database, 'ALTER TABLE "RequestLogContent" ADD COLUMN "partial" TEXT');
   await assert.rejects(h.prisma(database, ["migrate", "deploy"], broken.file));
   const before = (await h.query(database, 'SELECT * FROM "_prisma_migrations" ORDER BY started_at')).rows;
+  await assert.rejects(h.boot(database));
   await assert.rejects(h.recover(database), (error: unknown) => {
     assert.match(String((error as { stderr?: string }).stderr), /published compatibility checksum/);
     return true;

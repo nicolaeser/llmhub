@@ -67,7 +67,7 @@ test("nonempty unbaselined and failed migrations stop without reset, baseline, r
     assert.deepEqual(commands, [["migrate", "deploy"]]);
   }
   assert.match(migrationFailureHelp("P3005"), /No automatic baseline/);
-  assert.match(migrationFailureHelp("P3009"), /left unchanged/);
+  assert.match(migrationFailureHelp("P3009"), /only the verified, fully rolled-back/);
   assert.match(migrationFailureHelp("P3018"), /migrate resolve/);
 });
 
@@ -79,5 +79,35 @@ test("invalid startup configuration fails before invoking Prisma", async () => {
   ]) {
     assert.throws(() => validateMigrationEnv(candidate));
     await assert.rejects(migrateDatabase({ env: candidate, run: async () => { assert.fail("invalid environment"); } }));
+  }
+});
+
+test("verified P3009 recovery retries deploy once and retains conservative schema status", async () => {
+  let calls = 0;
+  let recoveries = 0;
+  const result = await migrateDatabase({ env, write: () => {}, wait: async () => {},
+    recover: async (options) => { assert.equal(options?.automatic, true); recoveries++; },
+    run: async () => ({ code: ++calls === 1 ? 1 : 0, signal: null, output: calls === 1 ? "P3009" : "No pending migrations to apply." }),
+  });
+  assert.equal(calls, 2);
+  assert.equal(recoveries, 1);
+  assert.equal(result?.schemaChanged, "unknown");
+});
+
+test("recovery refusals and repeated migration failures never enter an immediate repair loop", async () => {
+  for (const refuses of [true, false]) {
+    let calls = 0;
+    let recoveries = 0;
+    await assert.rejects(migrateDatabase({ env, write: () => {}, wait: async () => {},
+      recover: async () => { recoveries++; if (refuses) throw new Error("Verification refused"); },
+      run: async () => { calls++; return { code: 1, signal: null, output: "P3009" }; },
+    }));
+    assert.equal(recoveries, 1);
+    assert.equal(calls, refuses ? 1 : 2);
+  }
+  for (const code of ["P3005", "P3018"]) {
+    await assert.rejects(migrateDatabase({ env, write: () => {}, recover: async () => assert.fail("not a recovery trigger"),
+      run: async () => ({ code: 1, signal: null, output: code }),
+    }));
   }
 });

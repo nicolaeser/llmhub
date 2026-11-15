@@ -64,3 +64,17 @@ export async function writeSetting(key: string, value: unknown): Promise<string>
 export async function clearCommand(raw: string): Promise<void> {
   await prisma.setting.deleteMany({ where: { key: UPDATER_COMMAND_SETTING, value: raw } });
 }
+
+export async function claimCommand(raw: string | null, command: UpdaterCommand): Promise<boolean> {
+  const value = JSON.stringify(command);
+  const result = raw === null
+    ? await prisma.setting.createMany({
+        data: [{ key: UPDATER_COMMAND_SETTING, value }],
+        skipDuplicates: true,
+      })
+    : await prisma.setting.updateMany({
+        where: { key: UPDATER_COMMAND_SETTING, value: raw },
+        data: { value },
+      });
+  return result.count === 1;
+}

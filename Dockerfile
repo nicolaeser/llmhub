@@ -47,7 +47,7 @@ COPY --from=builder --chown=node:node /app/.next/static ./.next/static
 COPY --from=builder --chown=node:node /app/public ./public
 COPY --chown=node:node prisma/schema ./prisma/schema
 COPY --chown=node:node prisma/migrations ./prisma/migrations
-COPY --chown=node:node prisma.config.ts scripts/start.mjs scripts/migrate-deploy.mjs scripts/updater.mjs scripts/redactor.mjs ./
+COPY --chown=node:node prisma.config.ts scripts/start.mjs scripts/startup-status.mjs scripts/prisma-runner.mjs scripts/migrate-deploy.mjs scripts/updater.mjs scripts/redactor.mjs ./
 COPY --chown=node:node scripts/recover-compatibility.mjs ./
 COPY --chown=node:node scripts/updater ./updater
 COPY --chown=node:node scripts/redactor ./redactor
@@ -55,6 +55,8 @@ COPY --from=builder --chown=node:node /app/.next/keeper ./keeper
 RUN install -d -o node -g node -m 0755 /models
 RUN install -d -o node -g node -m 0700 /login-journal
 VOLUME ["/login-journal"]
+RUN install -d -o root -g root -m 0700 /root/.llmhub-updater
+VOLUME ["/root/.llmhub-updater"]
 ARG BUILD_ID=development
 ENV BUILD_ID=${BUILD_ID}
 RUN apt-get update \

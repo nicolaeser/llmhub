@@ -1,8 +1,10 @@
 import { spawn } from "node:child_process";
 import path from "node:path";
 import process from "node:process";
-import { clearTimeout, setTimeout } from "node:timers";
+import { clearInterval, setInterval, clearTimeout, setTimeout } from "node:timers";
 import { pathToFileURL } from "node:url";
+
+import { createStartupStatus } from "./startup-status.mjs";
 
 export const KEEPER_MODE_ENV = "LLMHUB_KEEPER";
 export const SEPARATE_KEEPER = "separate";
@@ -28,8 +30,11 @@ export function retryDelay(delays, attempt) {
   return delays[Math.min(Math.max(attempt, 0), delays.length - 1)];
 }
 
-function launch([command, args]) {
-  const child = spawn(command, args, { stdio: "inherit", env: process.env });
+function launch([command, args], onStatus) {
+  const child = spawn(command, args, { stdio: onStatus ? ["inherit", "inherit", "inherit", "ipc"] : "inherit", env: process.env });
+  if (onStatus) child.on("message", (message) => {
+    if (message?.type === "migration_status" && [true, false, "unknown"].includes(message.schemaChanged)) onStatus(message);
+  });
   const exited = new Promise((resolve) => {
     child.once("error", (error) => resolve({ code: null, signal: null, error }));
     child.once("exit", (code, signal) => resolve({ code, signal, error: null }));
@@ -91,7 +96,14 @@ export async function supervise({
   keeperStableMs = KEEPER_STABLE_MS,
   keeperStopMs = KEEPER_STOP_MS,
   signals = process,
+  startupStatus = null,
 } = {}) {
+  const publishStartup = (patch = {}) => {
+    try { startupStatus?.update(patch); }
+    catch { log("error", "start.status_write_failed", { recovery: "Startup status is unavailable; preserve the container and inspect migration logs." }); }
+  };
+  const heartbeat = startupStatus ? setInterval(() => publishStartup(), 10_000) : null;
+  heartbeat?.unref();
   let stopSignal = null;
   let serverChild = null;
   let wake = null;
@@ -129,9 +141,14 @@ export async function supervise({
   try {
     for (let attempt = 0; ; attempt += 1) {
       if (stopSignal) return 0;
-      const result = await launch(migrate).exited;
+      publishStartup({ state: "migrating", schemaChanged: "unknown" });
+      const result = await launch(migrate, startupStatus ? (message) => publishStartup({ schemaChanged: message.schemaChanged }) : null).exited;
       startKeeper();
-      if (result.code === 0) break;
+      if (result.code === 0) {
+        publishStartup({ state: "starting", migrationFinishedAt: new Date().toISOString() });
+        break;
+      }
+      publishStartup({ state: "migration_failed", migrationFinishedAt: new Date().toISOString() });
       const delay = retryDelay(migrationRetryMs, attempt);
       log("error", "start.migration_failed", { attempt: attempt + 1, ...exitFields(result), retryInMs: delay });
       if (stopSignal) return 0;
@@ -146,13 +163,14 @@ export async function supervise({
     log("error", "start.server_exited", exitFields(result));
     return result.code || 1;
   } finally {
+    clearInterval(heartbeat);
     await keeperRun?.stop();
     for (const [signal, handler] of handlers) signals.off(signal, handler);
   }
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
-  void supervise().then((code) => {
+  void supervise({ startupStatus: createStartupStatus() }).then((code) => {
     process.exitCode = code;
   });
 }

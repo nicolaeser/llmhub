@@ -22,12 +22,15 @@ export function commandActive(command: UpdaterCommand | null, now: number): comm
 }
 
 export function updaterConnected(status: Pick<StoredUpdaterStatus, "seenAt"> | null, now: number): boolean {
-  return Boolean(status && now - Date.parse(status.seenAt) < UPDATER_CONNECTED_MS);
+  const age = status ? now - Date.parse(status.seenAt) : NaN;
+  return age >= -UPDATER_CONNECTED_MS && age < UPDATER_CONNECTED_MS;
 }
 
 export function isRestarting(status: Pick<StoredUpdaterStatus, "seenAt" | "state"> | null, now: number): boolean {
   return Boolean(
-    status && RESTARTING_STATES.includes(status.state) && now - Date.parse(status.seenAt) < UPDATER_RESTART_WINDOW_MS,
+    status && RESTARTING_STATES.includes(status.state) &&
+      now - Date.parse(status.seenAt) >= -UPDATER_CONNECTED_MS &&
+      now - Date.parse(status.seenAt) < UPDATER_RESTART_WINDOW_MS,
   );
 }
 
@@ -55,6 +58,8 @@ export function updaterView(
     checkedAt: status.checkedAt,
     lastResult: status.lastResult,
     disk: status.disk ?? null,
+    history: status.history ?? [],
+    progress: status.progress ?? null,
     auto,
     pending: commandActive(command, now) ? command.action : null,
   };
@@ -82,6 +87,10 @@ export function livePayload(
 
 export function diskLow(view: Pick<UpdaterView, "disk">): boolean {
   return Boolean(view.disk && view.disk.freeBytes < UPDATER_MIN_FREE_DISK_BYTES);
+}
+
+export function recoveryRequired(view: Pick<UpdaterView, "progress">): boolean {
+  return view.progress?.startup === "manual_recovery" || view.progress?.startup === "migration_failed";
 }
 
 export function shortDigest(digest: string | null): string {

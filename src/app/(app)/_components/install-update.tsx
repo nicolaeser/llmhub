@@ -5,7 +5,7 @@ import { ArrowUpCircle, Download } from "lucide-react";
 import { useTranslations } from "next-intl";
 import ConfirmDialog from "@/components/console/confirm-dialog";
 import IconTile from "@/components/console/icon-tile";
-import { shortDigest } from "@/lib/updates/updater-view";
+import { recoveryRequired, shortDigest } from "@/lib/updates/updater-view";
 import type { UpdaterView } from "@/types/updates";
 import { useUpdaterRequest } from "./updater-controls";
 
@@ -27,14 +27,15 @@ export default function InstallUpdate({
   const t = useTranslations("Common");
   const { request, installing: requesting } = useUpdaterRequest(onView);
   const busy = installing || requesting || updater.pending === "update";
+  const disabled = busy || recoveryRequired(updater) || !updater.connected || updater.pending !== null || (updater.state !== "idle" && updater.state !== "failed");
   const subtitle = busy ? t("updater.installing") : (latest ?? shortDigest(updater.latestDigest));
 
   const trigger = collapsed ? (
-    <Button isIconOnly size="sm" variant="secondary" aria-label={t("updater.installLabel")} isPending={busy}>
+    <Button isIconOnly size="sm" variant="secondary" aria-label={t("updater.installLabel")} isPending={busy} isDisabled={disabled}>
       {({ isPending }) => (isPending ? <Spinner size="sm" color="current" /> : <Download size={14} aria-hidden />)}
     </Button>
   ) : (
-    <Button size="sm" variant="secondary" isPending={busy}>
+    <Button size="sm" variant="secondary" isPending={busy} isDisabled={disabled}>
       {({ isPending }) => (
         <>
           {isPending ? <Spinner size="sm" color="current" /> : null}

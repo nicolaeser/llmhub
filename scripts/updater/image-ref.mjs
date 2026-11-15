@@ -44,5 +44,5 @@ export function updateAvailable(latestDigest, runningDigests) {
 }
 
 export function imageRefOf(ref) {
-  return `${ref.name}:${ref.tag}`;
+  return ref.digest ? `${ref.name}@${ref.digest}` : `${ref.name}:${ref.tag ?? "latest"}`;
 }

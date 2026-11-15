@@ -7,6 +7,7 @@ import { useTranslations } from "next-intl";
 import ConfirmDialog from "@/components/console/confirm-dialog";
 import { useErrorToast } from "@/components/console/use-error-toast";
 import { isActionFail } from "@/lib/http/action-result";
+import { recoveryRequired } from "@/lib/updates/updater-view";
 import type { UpdaterAction, UpdaterView } from "@/types/updates";
 import { requestUpdaterAction, setAutoUpdateAction } from "../_action";
 
@@ -27,7 +28,7 @@ export function useUpdaterRequest(onView: ViewSetter) {
         return;
       }
       onView(result);
-      toast.success(t("updater.requested", { action }));
+      toast.success(t("updater.requested", { action: result?.pending ?? action }));
     });
   }
 
@@ -90,13 +91,14 @@ export function UpdaterButtons({
   const t = useTranslations("Common");
   const { request, checking, installing } = useUpdaterRequest(onView);
   const offline = !updater.connected;
+  const busy = checking || installing || recoveryRequired(updater) || updater.pending !== null || (updater.state !== "idle" && updater.state !== "failed");
   return (
     <div className="flex flex-wrap gap-2">
       <Button
         size={size}
         variant="secondary"
         isPending={checking || updater.pending === "check"}
-        isDisabled={offline}
+        isDisabled={offline || busy}
         onPress={() => request("check")}
       >
         {({ isPending }) => (
@@ -119,7 +121,7 @@ export function UpdaterButtons({
             size={size}
             variant={updater.available ? "primary" : "secondary"}
             isPending={installing || updater.pending === "update"}
-            isDisabled={offline}
+            isDisabled={offline || busy}
           >
             {({ isPending }) => (
               <>

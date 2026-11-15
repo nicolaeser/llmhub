@@ -6,18 +6,9 @@ import { useFormatter, useTranslations } from "next-intl";
 import { useClock } from "@/lib/hooks/use-clock";
 import { diskLow, shortDigest, UPDATER_MIN_FREE_DISK_BYTES } from "@/lib/updates/updater-view";
 import { formatBytes } from "@/lib/utils/bytes";
-import type { UpdaterState, UpdaterView } from "@/types/updates";
+import type { UpdaterView } from "@/types/updates";
 import { AutoUpdateSwitch, UpdaterButtons } from "./updater-controls";
-
-const STATE_COLORS: Record<UpdaterState, "default" | "accent" | "warning" | "danger"> = {
-  idle: "default",
-  checking: "accent",
-  pulling: "accent",
-  recreating: "accent",
-  verifying: "accent",
-  rolling_back: "warning",
-  failed: "danger",
-};
+import UpdaterActivity from "./updater-activity";
 
 export function Fact({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -59,6 +50,7 @@ export default function UpdaterPanel({
 
   return (
     <div className="space-y-4">
+      <UpdaterActivity updater={updater} />
       <ul className="divide-y divide-border">
         <Fact label={t("updater.connection")}>
           <Chip size="sm" variant="soft" color={updater.connected ? "success" : "default"}>
@@ -66,11 +58,6 @@ export default function UpdaterPanel({
           </Chip>
         </Fact>
         {updater.seenAt ? <Fact label={t("updater.lastSeen")}>{when(updater.seenAt)}</Fact> : null}
-        <Fact label={t("updater.stateLabel")}>
-          <Chip size="sm" variant="soft" color={STATE_COLORS[updater.state]}>
-            {t("updater.state", { state: updater.state })}
-          </Chip>
-        </Fact>
         {detailed ? (
           <>
             <Fact label={t("updater.image")}>
@@ -98,16 +85,8 @@ export default function UpdaterPanel({
             })}
           </Fact>
         ) : null}
-        {updater.lastResult ? (
-          <Fact label={t("updater.result")}>
-            {t("updater.outcome", { outcome: updater.lastResult.outcome, when: when(updater.lastResult.at) })}
-          </Fact>
-        ) : null}
       </ul>
-      {detailed && updater.lastResult?.detail ? (
-        <p className="text-xs break-words text-muted">{updater.lastResult.detail}</p>
-      ) : null}
-      {updater.disk && diskLow(updater) ? (
+      {detailed && updater.disk && diskLow(updater) ? (
         <Alert status="warning">
           <Alert.Indicator />
           <Alert.Content>
@@ -120,7 +99,7 @@ export default function UpdaterPanel({
           </Alert.Content>
         </Alert>
       ) : null}
-      {updater.pinned ? (
+      {detailed && updater.pinned ? (
         <Alert status="warning">
           <Alert.Indicator />
           <Alert.Content>

@@ -25,7 +25,8 @@
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate deploy",
     "seed-dev": "node scripts/seed-dev.mjs",
-    "keeper:build": "node scripts/build-keeper.mjs"
+    "keeper:build": "node scripts/build-keeper.mjs",
+    "test:updater:docker": "node scripts/test-updater-docker.mjs"
   },
   "dependencies": {
     "@heroui/react": "^3.2.7",

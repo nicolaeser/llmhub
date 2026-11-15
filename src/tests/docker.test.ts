@@ -265,11 +265,12 @@ test("the container starts through the supervisor, which migrates before the web
   assert.doesNotMatch(dockerfile, /ENTRYPOINT|seed/);
 });
 
-test("migrations use Prisma deploy and never edit its history at startup", async () => {
+test("migrations use Prisma deploy and delegate recovery to the guarded compatibility verifier", async () => {
   const runner = await file("scripts/migrate-deploy.mjs");
   assert.match(runner, /"migrate", "deploy"/);
   assert.doesNotMatch(runner, /_prisma_migrations|pg_advisory|"resolve"|"reset"|"db", "push"/);
-  assert.match(runner, /APP_SECRET/);
+  assert.match(runner, /recoverCompatibility/);
+  assert.match(await file("scripts/prisma-runner.mjs"), /APP_SECRET/);
 });
 
 test("the image ships the explicit compatibility recovery tool and its database driver", async () => {
@@ -469,7 +470,7 @@ test("the runner carries the updater next to the migration script", async () => 
   const runner = dockerfile.slice(dockerfile.indexOf("AS runner"));
   assert.match(
     runner,
-    /COPY --chown=node:node prisma\.config\.ts scripts\/start\.mjs scripts\/migrate-deploy\.mjs scripts\/updater\.mjs scripts\/redactor\.mjs \.\//,
+    /COPY --chown=node:node prisma\.config\.ts scripts\/start\.mjs scripts\/startup-status\.mjs scripts\/prisma-runner\.mjs scripts\/migrate-deploy\.mjs scripts\/updater\.mjs scripts\/redactor\.mjs \.\//,
   );
   assert.match(runner, /COPY --chown=node:node scripts\/updater \.\/updater\n/);
   assert.match(runner, /COPY --chown=node:node scripts\/redactor \.\/redactor\n/);
@@ -479,6 +480,7 @@ test("the runner carries the updater next to the migration script", async () => 
   assert.match(runner, /RUN install -d -o node -g node -m 0700 \/login-journal\n/);
   assert.match(runner, /RUN install -d -o node -g node -m 0700 \/login-journal\nVOLUME \["\/login-journal"\]\n/);
   assert.ok(runner.indexOf("/login-journal") < runner.indexOf("USER node"));
+  assert.match(runner, /VOLUME \["\/root\/\.llmhub-updater"\]/);
   const entry = await file("scripts/updater.mjs");
   assert.match(entry, /from "\.\/updater\/agent\.mjs"/);
   assert.match(entry, /--healthcheck/);

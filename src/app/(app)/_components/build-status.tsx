@@ -53,6 +53,7 @@ type BuildStatus = {
   check: () => void;
   update: UpdateStatus | null;
   live: LiveStatus | null;
+  liveConnected: boolean;
   setUpdater: (view: UpdaterView | null) => void;
 };
 
@@ -334,7 +335,7 @@ export default function BuildStatusProvider({
 
   return (
     <BuildStatusContext.Provider
-      value={{ loaded: version, served, health, checking, check, update, live, setUpdater }}
+      value={{ loaded: version, served, health, checking, check, update, live, liveConnected: link === "open", setUpdater }}
     >
       {children}
     </BuildStatusContext.Provider>

@@ -37,6 +37,16 @@ const byteCount = z.number().int().min(0).max(Number.MAX_SAFE_INTEGER);
 
 const diskSpace = z.object({ freeBytes: byteCount, totalBytes: byteCount });
 
+export const updaterHistoryEntrySchema = z.object({
+  id: updaterCommandId,
+  startedAt: timestamp,
+  finishedAt: timestamp,
+  outcome: z.enum(UPDATER_OUTCOMES),
+  detail: z.string().max(300).nullable(),
+  services: z.array(z.string().regex(/^[A-Za-z0-9_.-]{1,64}$/)).max(8),
+  phases: z.object({ checking: byteCount, pulling: byteCount, recreating: byteCount, verifying: byteCount, rolling_back: byteCount }),
+});
+
 export const updaterReportSchema = z.object({
   version: z.string().trim().min(1).max(80),
   state: z.enum(UPDATER_STATES),
@@ -60,7 +70,17 @@ export const updaterReportSchema = z.object({
     })
     .nullable(),
   ackCommandId: updaterCommandId.nullable(),
+  history: z.array(updaterHistoryEntrySchema).max(5).optional(),
   disk: diskSpace.nullable().optional(),
+  progress: z.object({
+    download: z.object({ downloadedBytes: byteCount, totalBytes: byteCount.nullable(), layersCompleted: byteCount, layersTotal: byteCount }).optional(),
+    startup: z.enum(["migrating", "migration_failed", "starting", "manual_recovery"]).optional(),
+    startedAt: timestamp,
+    phaseStartedAt: timestamp,
+    service: z.string().trim().min(1).max(300).nullable(),
+    completed: z.number().int().min(0).max(100),
+    total: z.number().int().min(0).max(100),
+  }).refine((value) => value.completed <= value.total).nullable().optional(),
 });
 
 export const updaterCommandSchema = z.object({
