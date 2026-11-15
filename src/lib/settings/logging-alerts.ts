@@ -21,6 +21,7 @@ import { WEBHOOK_EVENTS } from "@/lib/alerts/events";
 import { mailEnabled } from "@/lib/mail/send";
 import { resolveS3Config } from "@/lib/s3/config";
 import {
+  DEFAULT_CONTENT_MAX_GB,
   DEFAULT_CONTENT_RETENTION_DAYS,
   DEFAULT_LOG_RETENTION_DAYS,
   DEFAULT_OBJECT_RETENTION_DAYS,
@@ -78,7 +79,7 @@ async function view(session: AuthenticatedSession): Promise<LoggingSettingsView>
     objectRetentionDays: enterprise.object_retention_days ?? DEFAULT_OBJECT_RETENTION_DAYS,
     fileRetentionDays: enterprise.file_retention_days ?? 0,
     contentRetentionDays: enterprise.content_retention_days ?? DEFAULT_CONTENT_RETENTION_DAYS,
-    contentMaxGb: enterprise.content_max_gb ?? 0,
+    contentMaxGb: enterprise.content_max_gb ?? DEFAULT_CONTENT_MAX_GB,
     storage: await contentStorage().catch(() => null),
     logArchive: enterprise.log_archive === true,
     logContent: enterprise.log_content !== false,

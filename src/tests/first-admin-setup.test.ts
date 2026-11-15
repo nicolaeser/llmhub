@@ -101,7 +101,7 @@ test("boot seeds the role templates and settings defaults without creating users
   }
   assert.deepEqual(
     recordedPrisma.called("setting", "upsert").map((call) => (call.args as { where: { key: string } }).where.key),
-    ["role_templates_seeded", "enterprise"],
+    ["role_templates_seeded", "enterprise", "retention_defaults_7d_5gb"],
   );
   assert.deepEqual(recordedPrisma.called("user"), []);
 });
@@ -131,6 +131,7 @@ test("setup and bootstrap code does not use Prisma raw SQL", async () => {
     "src/lib/bootstrap/first-admin.ts",
     "src/lib/bootstrap/operators.ts",
     "src/lib/bootstrap/system-catalog.ts",
+    "src/lib/bootstrap/retention-defaults.ts",
     "src/app/internal-api/ready/route.ts",
   ]) {
     assert.doesNotMatch(await file(relative), /\$queryRaw|\$executeRaw|pg_advisory/, relative);

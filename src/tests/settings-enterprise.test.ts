@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { normalizeEnterprise, normalizeOidc, normalizeS3 } from "@/lib/settings/enterprise";
 import { clampRetentionDays, RETENTION_MAX_DAYS } from "@/lib/settings/retention-defaults";
+import { withAdoptedRetentionDefaults } from "@/lib/bootstrap/retention-defaults";
 
 test("normalizeOidc fills defaults and drops the retired redirect override", () => {
   assert.deepEqual(normalizeOidc({}), {
@@ -94,13 +95,15 @@ test("normalizeEnterprise keeps split retention and webhook secrets", () => {
 test("normalizeEnterprise logs request content by default and keeps content retention", () => {
   const defaults = normalizeEnterprise({});
   assert.equal(defaults.log_content, true);
-  assert.equal(defaults.content_retention_days, 30);
-  const custom = normalizeEnterprise({ log_content: false, content_retention_days: 7 });
+  assert.equal(defaults.content_retention_days, 7);
+  assert.equal(defaults.content_max_gb, 5);
+  const custom = normalizeEnterprise({ log_content: false, content_retention_days: 14, content_max_gb: 0 });
   assert.equal(custom.log_content, false);
-  assert.equal(custom.content_retention_days, 7);
+  assert.equal(custom.content_retention_days, 14);
+  assert.equal(custom.content_max_gb, 0);
 });
 
-test("request logs and content expire after 30 days and security activity after 90 unless set", () => {
+test("request logs and content expire after 7 days and security activity after 90 unless set", () => {
   const defaults = normalizeEnterprise({});
   assert.deepEqual(
     {
@@ -111,7 +114,7 @@ test("request logs and content expire after 30 days and security activity after 
       usage: defaults.usage_retention_days,
       audit: defaults.audit_retention_days,
     },
-    { log: 30, content: 30, security: 90, spend: 0, usage: 0, audit: 0 },
+    { log: 7, content: 7, security: 90, spend: 0, usage: 0, audit: 0 },
   );
   const kept = normalizeEnterprise({
     log_retention_days: 0,
@@ -130,4 +133,41 @@ test("saved retention days are whole days between 0 and the maximum", () => {
     [-5, 0, 7.9, Number.NaN, RETENTION_MAX_DAYS + 1, 1e12].map(clampRetentionDays),
     [0, 0, 7, 0, RETENTION_MAX_DAYS, RETENTION_MAX_DAYS],
   );
+});
+
+test("never-chosen 30-day and unlimited content values move to the 7-day and 5 GB defaults", () => {
+  const persisted = {
+    cache_ttl_seconds: 0,
+    log_retention_days: 30,
+    content_retention_days: 30,
+    content_max_gb: 0,
+    spend_retention_days: 0,
+    usage_retention_days: 0,
+    audit_retention_days: 0,
+    security_retention_days: 90,
+    object_retention_days: 30,
+    file_retention_days: 0,
+    log_content: true,
+  };
+  const adopted = withAdoptedRetentionDefaults(persisted);
+  assert.deepEqual(Object.keys(adopted ?? {}).filter((field) => !(field in persisted)), []);
+  assert.equal(adopted && "log_retention_days" in adopted, false);
+  assert.equal(adopted && "content_retention_days" in adopted, false);
+  assert.equal(adopted && "content_max_gb" in adopted, false);
+  const normalized = normalizeEnterprise(adopted);
+  assert.deepEqual(
+    [normalized.log_retention_days, normalized.content_retention_days, normalized.content_max_gb, normalized.log_content],
+    [7, 7, 5, true],
+  );
+
+  const partly = withAdoptedRetentionDefaults({ ...persisted, log_retention_days: 14 });
+  assert.equal(partly?.log_retention_days, 14);
+  assert.equal(partly && "content_max_gb" in partly, false);
+
+  assert.equal(withAdoptedRetentionDefaults({ ...persisted, audit_retention_days: 365 }), null);
+  assert.equal(withAdoptedRetentionDefaults({ ...persisted, security_retention_days: 0 }), null);
+  assert.equal(withAdoptedRetentionDefaults({ cache_ttl_seconds: 0 }), null);
+  assert.equal(withAdoptedRetentionDefaults({ log_retention_days: 0, content_retention_days: 7, content_max_gb: 20 }), null);
+  assert.equal(withAdoptedRetentionDefaults(null), null);
+  assert.equal(withAdoptedRetentionDefaults([]), null);
 });

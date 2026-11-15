@@ -80,6 +80,7 @@ import type {
 import type { SemanticCacheSettings } from "@/types/cache";
 import type { VectorStoreDefaults } from "@/types/rag";
 import {
+  DEFAULT_CONTENT_MAX_GB,
   DEFAULT_CONTENT_RETENTION_DAYS,
   DEFAULT_LOG_RETENTION_DAYS,
   DEFAULT_OBJECT_RETENTION_DAYS,
@@ -135,7 +136,7 @@ const DEFAULT_ENTERPRISE: Enterprise = {
   object_retention_days: DEFAULT_OBJECT_RETENTION_DAYS,
   file_retention_days: 0,
   content_retention_days: DEFAULT_CONTENT_RETENTION_DAYS,
-  content_max_gb: 0,
+  content_max_gb: DEFAULT_CONTENT_MAX_GB,
   alert_webhooks: [],
   log_archive: false,
   log_content: true,
@@ -357,7 +358,7 @@ export function normalizeEnterprise(raw: unknown): Enterprise {
     object_retention_days: asNumber(rec.object_retention_days, DEFAULT_OBJECT_RETENTION_DAYS),
     file_retention_days: asNumber(rec.file_retention_days, 0),
     content_retention_days: asNumber(rec.content_retention_days, DEFAULT_CONTENT_RETENTION_DAYS),
-    content_max_gb: clampContentMaxGb(asNumber(rec.content_max_gb, 0)),
+    content_max_gb: clampContentMaxGb(asNumber(rec.content_max_gb, DEFAULT_CONTENT_MAX_GB)),
     alert_webhooks: normalizeWebhooks(rec),
     log_archive: asBool(rec.log_archive, false),
     log_content: asBool(rec.log_content, true),

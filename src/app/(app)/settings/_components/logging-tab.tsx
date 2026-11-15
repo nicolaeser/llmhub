@@ -35,6 +35,7 @@ import {
 } from "@/lib/alerts/rules";
 import { MAX_ALERT_WEBHOOKS, WEBHOOK_EVENTS } from "@/lib/alerts/events";
 import {
+  DEFAULT_CONTENT_MAX_GB,
   DEFAULT_CONTENT_RETENTION_DAYS,
   DEFAULT_LOG_RETENTION_DAYS,
   DEFAULT_OBJECT_RETENTION_DAYS,
@@ -74,7 +75,7 @@ export default function LoggingTab() {
   const [objectRetention, setObjectRetention] = useState(DEFAULT_OBJECT_RETENTION_DAYS);
   const [fileRetention, setFileRetention] = useState(0);
   const [contentRetention, setContentRetention] = useState(DEFAULT_CONTENT_RETENTION_DAYS);
-  const [contentMax, setContentMax] = useState(0);
+  const [contentMax, setContentMax] = useState(DEFAULT_CONTENT_MAX_GB);
   const [archive, setArchive] = useState(false);
   const [content, setContent] = useState(true);
   const [pending, start] = useTransition();
@@ -295,7 +296,7 @@ export default function LoggingTab() {
         />
         <div className="grid gap-4 md:grid-cols-3 md:items-start">
           {numberField(contentRetention, setContentRetention, t("contentRetention"), t("contentRetentionHint", { days: DEFAULT_CONTENT_RETENTION_DAYS }))}
-          {numberField(contentMax, setContentMax, t("contentMax"), t("contentMaxHint"), CONTENT_MAX_GB_LIMIT)}
+          {numberField(contentMax, setContentMax, t("contentMax"), t("contentMaxHint", { gb: DEFAULT_CONTENT_MAX_GB }), CONTENT_MAX_GB_LIMIT)}
         </div>
         {view.storage ? (
           <div className="space-y-1">

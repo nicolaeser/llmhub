@@ -71,14 +71,14 @@ test("request log retention is independent of spend and audit", async () => {
   );
 });
 
-test("unset retention removes request logs and content after 30 days and security activity after 90", async () => {
+test("unset retention removes request logs and content after 7 days and security activity after 90", async () => {
   assert.deepEqual(await sweepCutoffs({}), {
-    requestLog: daysBefore(30),
-    requestLogContent: daysBefore(30),
+    requestLog: daysBefore(7),
+    requestLogContent: daysBefore(7),
     spendEvent: null,
     gatewayAuditLog: null,
     userSecurityEvent: daysBefore(90),
-    toolExecution: daysBefore(30),
+    toolExecution: daysBefore(7),
     approvalRequest: null,
     usageDaily: null,
     usageLabelDaily: null,

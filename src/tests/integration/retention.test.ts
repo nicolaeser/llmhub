@@ -5,6 +5,7 @@ import { Client } from "pg";
 import prisma from "@/lib/db/prisma";
 import { runAsPrincipal } from "@/lib/auth/delegation";
 import { acquireLease, releaseLease } from "@/lib/jobs/lease";
+import { adoptRetentionDefaults, RETENTION_DEFAULTS_ADOPTED } from "@/lib/bootstrap/retention-defaults";
 import { getEnterprise, normalizeEnterprise } from "@/lib/settings/enterprise";
 import { saveGeneralSettings } from "@/lib/settings/general";
 import { loadLogging, saveLogging } from "@/lib/settings/logging-alerts";
@@ -76,8 +77,8 @@ test("the retention migration gives never-chosen settings the new defaults and k
   delete unchosen.log_retention_days;
   delete unchosen.content_retention_days;
   assert.deepEqual(migrated, unchosen);
-  assert.equal(normalizeEnterprise(migrated).log_retention_days, 30);
-  assert.equal(normalizeEnterprise(migrated).content_retention_days, 30);
+  assert.equal(normalizeEnterprise(migrated).log_retention_days, 7);
+  assert.equal(normalizeEnterprise(migrated).content_retention_days, 7);
 
   const saved = await migrateEnterprise(JSON.stringify(persistedDefaults), true);
   assert.deepEqual(JSON.parse(saved ?? "null"), persistedDefaults);
@@ -88,9 +89,70 @@ test("the retention migration gives never-chosen settings the new defaults and k
   const boot = { cache_ttl_seconds: 0, pii: { enabled: true, mode: "mask", output: true } };
   const booted = JSON.parse((await migrateEnterprise(JSON.stringify(boot), false)) ?? "null");
   assert.deepEqual(booted, boot);
-  assert.equal(normalizeEnterprise(booted).content_retention_days, 30);
+  assert.equal(normalizeEnterprise(booted).content_retention_days, 7);
 
   assert.equal(await migrateEnterprise("{not json", false), "{not json");
+});
+
+class RolledBack extends Error {}
+
+async function adoptOnce(value: string, loggingSaved: boolean, adoptedBefore = false) {
+  let outcome: { value: string | null; adopted: boolean } | null = null;
+  await prisma
+    .$transaction(async (tx) => {
+      await tx.gatewayAuditLog.deleteMany({ where: { action: "settings.logging" } });
+      if (loggingSaved) {
+        await tx.gatewayAuditLog.create({
+          data: { actor: "it", action: "settings.logging", objectType: "enterprise", objectId: "enterprise" },
+        });
+      }
+      await tx.setting.deleteMany({ where: { key: RETENTION_DEFAULTS_ADOPTED } });
+      if (adoptedBefore) await tx.setting.create({ data: { key: RETENTION_DEFAULTS_ADOPTED, value: "1" } });
+      await tx.setting.upsert({ where: { key: "enterprise" }, update: { value }, create: { key: "enterprise", value } });
+      await adoptRetentionDefaults(tx);
+      await adoptRetentionDefaults(tx);
+      outcome = {
+        value: (await tx.setting.findUnique({ where: { key: "enterprise" } }))?.value ?? null,
+        adopted: Boolean(await tx.setting.findUnique({ where: { key: RETENTION_DEFAULTS_ADOPTED } })),
+      };
+      throw new RolledBack();
+    })
+    .catch((error: unknown) => {
+      if (!(error instanceof RolledBack)) throw error;
+    });
+  assert.ok(outcome);
+  return outcome as { value: string | null; adopted: boolean };
+}
+
+test("boot moves never-chosen retention to 7 days and 5 GB once and keeps saved logging settings", async () => {
+  const persisted = {
+    cache_ttl_seconds: 0,
+    log_retention_days: 30,
+    content_retention_days: 30,
+    content_max_gb: 0,
+    security_retention_days: 90,
+    object_retention_days: 30,
+    registration_enabled: true,
+  };
+  const unchosen = await adoptOnce(JSON.stringify(persisted), false);
+  assert.equal(unchosen.adopted, true);
+  assert.deepEqual(JSON.parse(unchosen.value ?? "null"), {
+    cache_ttl_seconds: 0,
+    security_retention_days: 90,
+    object_retention_days: 30,
+    registration_enabled: true,
+  });
+  const effective = normalizeEnterprise(JSON.parse(unchosen.value ?? "null"));
+  assert.deepEqual([effective.log_retention_days, effective.content_retention_days, effective.content_max_gb], [7, 7, 5]);
+
+  const saved = await adoptOnce(JSON.stringify(persisted), true);
+  assert.deepEqual([JSON.parse(saved.value ?? "null"), saved.adopted], [persisted, true]);
+
+  const already = await adoptOnce(JSON.stringify(persisted), false, true);
+  assert.deepEqual(JSON.parse(already.value ?? "null"), persisted);
+
+  const broken = await adoptOnce("{not json", false);
+  assert.deepEqual([broken.value, broken.adopted], ["{not json", true]);
 });
 
 test("saving the logging settings keeps an explicit 0 and unsaved values use the defaults", async () => {
@@ -100,7 +162,8 @@ test("saving the logging settings keeps an explicit 0 and unsaved values use the
     await prisma.setting.deleteMany({ where: { key: "enterprise" } });
     const admin = sessionOf(await data.user(), { permissions: ["settings:read", "settings:manage"] });
     const fresh = await runAsPrincipal(admin, () => loadLogging());
-    assert.deepEqual(retentionOf(fresh), { log: 30, content: 30, security: 90, spend: 0, usage: 0, audit: 0 });
+    assert.deepEqual(retentionOf(fresh), { log: 7, content: 7, security: 90, spend: 0, usage: 0, audit: 0 });
+    assert.equal(fresh.contentMaxGb, 5);
 
     const saved = await runAsPrincipal(admin, () =>
       saveLogging({

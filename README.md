@@ -144,7 +144,7 @@ The **Developer** page in the console has step-by-step guides for Claude Code, C
 - **Companies and budgets.** Companies, departments, projects, and people form the structure. An API key belongs to a project, a person, or a console user. Every level can have a spending limit with a reset period and temporary boosts. A lower level can never have a higher limit than the level above it.
 - **Key limits.** Keys support requests and tokens per minute (RPM, TPM), a cost limit per request, model allowlists, reusable model templates (providers, regions, zero data retention, no training, maximum retention), client IP allowlists, endpoint restrictions, access time windows, expiry, and rotation.
 - **Safety and privacy.** PII detection (personal data) can mask, block, or restore values. It finds them with fixed patterns, with a [redaction model](#pii-redaction-model), or with both. Guardrail rules check input and output, and policies can differ per company, project, or key.
-- **Stored content.** Request and response bodies are stored apart from the log data. You can turn storing off per key, user, or person. They are deleted after 30 days by default, like request logs.
+- **Stored content.** Request and response bodies are stored apart from the log data. You can turn storing off per key, user, or person. They are deleted after 7 days by default, like request logs, and trimmed from the oldest once they pass 5 GB.
 - **Usage and cost.** Daily usage numbers, dashboards, chargeback by company, department, and project, price markups, exports as CSV, JSONL, PDF, and Markdown, and usage reports by email. Prompt cache tokens are billed at provider prices. An optional response cache with semantic matching answers repeated requests.
 - **Operations.** Request, spend, and audit logs with filters and their own retention rules. Signed alert webhooks in JSON, Slack, or Teams format, for example when providers run out, budgets reach a threshold, spending looks unusual, keys expire or get blocked, PII is blocked, provider models change, or an archive day fails. A daily [compliance archive](#compliance-archive) to S3.
 - **Access control.** Console accounts with required two-factor authentication (authenticator app, passkeys, recovery codes), editable roles and permissions, console users limited to one company, OIDC single sign-on, SCIM provisioning, and personal management keys for the `/api/mgmt` automation API.
@@ -153,7 +153,7 @@ The **Developer** page in the console has step-by-step guides for Claude Code, C
 
 Most settings live in the console under **Settings** and are stored in the database. This includes the S3 bucket, the OIDC issuer and client ID, registration, retention, PII and guardrail policies, and alert webhooks. Only a few values come from `.env`. For local development, `.env.example` is the template.
 
-Default retention: request logs and stored prompts and responses are deleted after 30 days, account security activity after 90 days. Change this in **Settings → Logging & alerts** (0 keeps them forever). Installations that never saved these settings get these defaults when they upgrade.
+Default retention: request logs and stored prompts and responses are deleted after 7 days, stored prompts and responses are capped at 5 GB, and account security activity is deleted after 90 days. These limits keep the database from filling the disk. Change them in **Settings → Logging & alerts** (0 keeps data forever or removes the size cap). Installations that never saved these settings get these defaults when they upgrade, so the first cleanup after the update can delete a lot of older logs.
 
 ### Variables the app reads
 
@@ -274,7 +274,7 @@ docker compose exec -T postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB
 
 What usually takes space:
 
-- **Stored prompts and responses.** Usually the biggest part of the database, because agent tools such as Claude Code and Codex send the whole conversation again with every request. **Settings → Logging & alerts** shows how much they use and limits them in two ways: "Content retention days" (30 by default) and "Maximum content size in GB" (no limit by default; above it, the oldest eligible bodies are deleted first).
+- **Stored prompts and responses.** Usually the biggest part of the database, because agent tools such as Claude Code and Codex send the whole conversation again with every request. **Settings → Logging & alerts** shows how much they use and limits them in two ways: "Content retention days" (7 by default) and "Maximum content size in GB" (5 by default, 0 for no limit; above it, the oldest eligible bodies are deleted first).
 - **Files without S3.** Uploaded files, batch files, and vector store files stay in PostgreSQL (see [Storage](#storage)) until their own retention deletes them.
 - **Container logs.** At most 50 MB per container.
 - **Old images.** `docker image prune` removes images that no container uses, including old PostgreSQL and Redis images.
