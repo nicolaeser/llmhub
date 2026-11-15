@@ -11,20 +11,18 @@ import { useResetLabels } from "./use-reset-labels";
 export default function ResetSummary({
   row,
   credits,
-  timeZone,
   canManage,
   onItem,
 }: {
   row: ProviderView;
   credits: ResetCredits;
-  timeZone: string;
   canManage: boolean;
   onItem: (item: LimitSnapshot | null) => void;
 }) {
   const t = useTranslations("Subscriptions.resets");
   const tLimits = useTranslations("Subscriptions.limits");
   const format = useFormatter();
-  const labels = useResetLabels(timeZone, credits);
+  const labels = useResetLabels(credits);
   const { reset, now } = labels;
   const recommended = recommendedReset(credits);
   const names = credits.pending ? [] : [...new Set(resetOptions(credits).map(labels.option))];
@@ -53,7 +51,7 @@ export default function ResetSummary({
           <p className="text-xs text-muted">{t("ineligible", { reason: credits.ineligibleReason ?? "unknown" })}</p>
         ) : null}
       </div>
-      {canRedeemReset(row, credits, canManage) ? <RedeemResetButton row={row} credits={credits} timeZone={timeZone} onItem={onItem} /> : null}
+      {canRedeemReset(row, credits, canManage) ? <RedeemResetButton row={row} credits={credits} onItem={onItem} /> : null}
     </div>
   );
 }

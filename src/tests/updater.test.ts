@@ -528,7 +528,7 @@ test("image references, digests, and pinned tags are recognized", () => {
   for (const tag of ["latest", "dev", "development", "main"]) {
     assert.equal(isPinned(parseImageRef(`ghcr.io/nicolaeser/llmhub:${tag}`)), false, tag);
   }
-  for (const tag of ["v2026.10.12.abc1234", "dev-2026.10.12.abc1234", "sha-abc1234", "dev-abc1234", "a".repeat(40)]) {
+  for (const tag of ["v2026.10.12.abc1234", "vdev2026.11.15.abc1234", "dev-2026.10.12.abc1234", "abc1234", "sha-abc1234", "dev-abc1234", "a".repeat(40)]) {
     assert.equal(isPinned(parseImageRef(`ghcr.io/nicolaeser/llmhub:${tag}`)), true, tag);
   }
   assert.equal(isPinned(parseImageRef(`ghcr.io/nicolaeser/llmhub@${DIGEST_A}`)), true);

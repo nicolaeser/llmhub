@@ -27,6 +27,7 @@ env:
 
 jobs:
   version:
+    if: inputs.publish
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
@@ -37,34 +38,12 @@ jobs:
       tags: ${{ steps.version.outputs.tags }}
       labels: ${{ steps.meta.outputs.labels }}
     steps:
+      - uses: actions/checkout@v7
       - name: Version
         id: version
         env:
           CHANNEL: ${{ inputs.channel }}
-        run: |
-          short_sha="$(echo "${GITHUB_SHA}" | cut -c1-7)"
-          case "${CHANNEL}" in
-            main)
-              VERSION_PREFIX=v
-              prerelease=false
-              aliases=(latest "sha-${short_sha}" "sha-${GITHUB_SHA}")
-              ;;
-            development)
-              VERSION_PREFIX=dev-
-              prerelease=true
-              aliases=(dev development "dev-${short_sha}")
-              ;;
-            *)
-              echo "Unknown channel ${CHANNEL}" >&2
-              exit 1
-              ;;
-          esac
-          version="${VERSION_PREFIX}$(date -u +%Y.%m.%d).${short_sha}"
-          {
-            echo "version=${version}"
-            echo "prerelease=${prerelease}"
-            echo "tags=$(printf '%s\n' "${version}" "${aliases[@]}" | jq -Rnc '[inputs]')"
-          } >> "${GITHUB_OUTPUT}"
+        run: node scripts/build-version.mjs
 
       - uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302
         id: meta
@@ -93,6 +72,8 @@ jobs:
           --health-retries 20
     env:
       DATABASE_URL: postgresql://llmhub:llmhub@localhost:5432/llmhub
+      NODE_ENV: development
+      APP_SECRET: test-app-secret-aaaaaaaaaaaaaaaaaaaa
       CHECKPOINT_DISABLE: "1"
     steps:
       - uses: actions/checkout@v7
@@ -118,9 +99,12 @@ jobs:
           fi
           npm run migrations:check -- "${base}"
       - name: Apply migrations
-        run: npx prisma migrate deploy
+        run: node scripts/migrate-deploy.mjs
       - name: Check schema drift
         run: npx prisma migrate diff --from-config-datasource --to-schema prisma/schema --exit-code
+      - run: npm run test:migrations
+        env:
+          MIGRATION_TEST_DATABASE_URL: ${{ env.DATABASE_URL }}
       - run: npm test
         env:
           NODE_OPTIONS: --test-reporter=./src/tests/failure-reporter.mjs
@@ -134,6 +118,7 @@ jobs:
       - run: npm run lint
 
   image:
+    if: inputs.publish
     name: image (${{ matrix.arch }})
     needs: [version, quality]
     runs-on: ${{ matrix.runner }}

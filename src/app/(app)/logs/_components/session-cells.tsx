@@ -49,8 +49,8 @@ export function useCallerLabels() {
   };
 }
 
-export function AgentTile({ agent, active, size = "sm" }: { agent: string; active: boolean; size?: "sm" | "md" }) {
-  return <IconTile icon={AGENT_ICONS[agent] ?? Bot} tone={active ? "success" : "accent"} size={size} />;
+export function agentIcon(agent: string): LucideIcon {
+  return AGENT_ICONS[agent] ?? Bot;
 }
 
 export function SessionIdentity({ row, action }: { row: LogSessionRow; action?: ReactNode }) {
@@ -59,7 +59,7 @@ export function SessionIdentity({ row, action }: { row: LogSessionRow; action?: 
   const caller = useCallerLabels();
   return (
     <div className="flex min-w-0 items-start gap-3">
-      <AgentTile agent={row.agent} active={row.active} />
+      <IconTile icon={agentIcon(row.agent)} tone={row.active ? "success" : "accent"} size="sm" />
       <div className="min-w-0 flex-1 space-y-0.5">
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-sm font-medium text-foreground">{session.title(row.agent)}</span>

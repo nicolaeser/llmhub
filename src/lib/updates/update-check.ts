@@ -1,7 +1,10 @@
 import "server-only";
+import { requireSession } from "@/lib/auth/guards";
+import { hasPerm, PERMISSIONS } from "@/lib/auth/permissions";
 import { asRecord, asString } from "@/lib/gateway/core";
 import { errorFields } from "@/lib/logging/format";
 import { logger } from "@/lib/logging/logger";
+import { getEnterprise } from "@/lib/settings/enterprise";
 import { currentBuild } from "@/lib/updates/build";
 import { noUpdate, releaseChannel, updateStatus } from "@/lib/updates/release-status";
 import type { PublishedRelease, UpdateStatus } from "@/types/updates";
@@ -60,4 +63,10 @@ export async function checkForUpdate(enabled: boolean): Promise<UpdateStatus> {
   const current = currentBuild();
   if (!enabled || !releaseChannel(current)) return noUpdate(current);
   return updateStatus(current, await cachedReleases());
+}
+
+export async function loadUpdateStatus() {
+  const session = await requireSession();
+  const shown = hasPerm(session.permissions, PERMISSIONS.SETTINGS_READ);
+  return checkForUpdate(shown && (await getEnterprise()).update_check !== false);
 }

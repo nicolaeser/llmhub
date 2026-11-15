@@ -9,8 +9,8 @@ import {
   DEFAULT_LOG_RETENTION_DAYS,
   DEFAULT_SECURITY_RETENTION_DAYS,
 } from "@/lib/settings/retention-defaults";
-import { contentMaxBytes, utcDayStart } from "@/lib/db/content-partitions";
-import type { ContentPartitionPolicy } from "@/types/logs";
+import { contentMaxBytes, utcDayStart } from "@/lib/gateway/request-logs/content-size";
+import type { ContentStoragePolicy } from "@/types/logs";
 import type { Enterprise } from "@/types/settings";
 import { heldCutoff } from "@/lib/compliance-archive/plan";
 import type { RetentionHolds } from "@/types/archive";
@@ -41,11 +41,13 @@ const steps: Record<RetentionTable, (cutoff: Date, take: number) => Promise<Rete
       where: { createdAt: { lt: cutoff } },
       orderBy: { createdAt: "asc" },
       take,
-      select: { logId: true },
+      select: { logId: true, createdAt: true },
     });
-    return deleteIds(rows.map((row) => row.logId), take, (ids) =>
-      prisma.requestLogContent.deleteMany({ where: { logId: { in: ids } } }),
-    );
+    if (!rows.length) return { deleted: 0, more: false };
+    const { count } = await prisma.requestLogContent.deleteMany({
+      where: { createdAt: { lt: cutoff }, OR: rows },
+    });
+    return { deleted: count, more: rows.length >= take };
   },
   requestLogs: async (cutoff, take) => {
     const rows = await prisma.requestLog.findMany({
@@ -148,14 +150,12 @@ function retentionDaysOf(enterprise: Enterprise): Record<RetentionTable, number>
   };
 }
 
-export function contentPartitionPolicy(enterprise: Enterprise, now: Date, holds: RetentionHolds = {}): ContentPartitionPolicy {
-  const days = shorterRetention(
-    enterprise.log_retention_days ?? DEFAULT_LOG_RETENTION_DAYS,
-    enterprise.content_retention_days ?? DEFAULT_CONTENT_RETENTION_DAYS,
-  );
+export function contentStoragePolicy(enterprise: Enterprise, now: Date, holds: RetentionHolds = {}): ContentStoragePolicy {
+  const today = utcDayStart(now);
+  const hold = holds.requestContents;
   return {
     now,
-    cutoff: heldCutoff(retentionCutoff(days, now), holds.requestContents),
+    cutoff: hold === null ? null : hold && hold < today ? hold : today,
     maxBytes: contentMaxBytes(enterprise.content_max_gb),
   };
 }
@@ -163,7 +163,8 @@ export function contentPartitionPolicy(enterprise: Enterprise, now: Date, holds:
 function retentionTasks(enterprise: Enterprise, now: Date, holds: RetentionHolds): RetentionTask[] {
   const days = retentionDaysOf(enterprise);
   return (Object.keys(steps) as RetentionTable[]).flatMap((name) => {
-    const cutoff = heldCutoff(retentionCutoff(days[name], now), holds[name]);
+    const hold = holds[name];
+    const cutoff = hold === null ? null : heldCutoff(retentionCutoff(days[name], now), hold);
     return cutoff ? [{ name, step: (take: number) => steps[name](cutoff, take) }] : [];
   });
 }

@@ -5,9 +5,9 @@ import type { ResetBlocker, ResetCredits, ResetLimit, ResetOption } from "@/type
 import { limitNaming, optionNaming } from "./reset-view";
 import { useResetTime } from "./use-reset-time";
 
-export function useResetLabels(timeZone: string, credits: Pick<ResetCredits, "cooldownUntil">) {
+export function useResetLabels(credits: Pick<ResetCredits, "cooldownUntil">) {
   const t = useTranslations("Subscriptions.resets");
-  const reset = useResetTime(timeZone);
+  const reset = useResetTime();
   const now = reset.now.getTime();
   const cooldown = credits.cooldownUntil ? Date.parse(credits.cooldownUntil) : NaN;
   const cooling = Number.isFinite(cooldown) && cooldown > now;

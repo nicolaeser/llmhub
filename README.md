@@ -274,12 +274,14 @@ docker compose exec -T postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB
 
 What usually takes space:
 
-- **Stored prompts and responses.** Usually the biggest part of the database, because agent tools such as Claude Code and Codex send the whole conversation again with every request. **Settings → Logging & alerts** shows how much they use and limits them in two ways: "Content retention days" (30 by default) and "Maximum content size in GB" (no limit by default; above it, the oldest days are deleted first).
+- **Stored prompts and responses.** Usually the biggest part of the database, because agent tools such as Claude Code and Codex send the whole conversation again with every request. **Settings → Logging & alerts** shows how much they use and limits them in two ways: "Content retention days" (30 by default) and "Maximum content size in GB" (no limit by default; above it, the oldest eligible bodies are deleted first).
 - **Files without S3.** Uploaded files, batch files, and vector store files stay in PostgreSQL (see [Storage](#storage)) until their own retention deletes them.
 - **Container logs.** At most 50 MB per container.
 - **Old images.** `docker image prune` removes images that no container uses, including old PostgreSQL and Redis images.
 
-Prompts and responses are stored per day (`RequestLogContent` is partitioned by day). The worker removes an expired day as a whole within a minute, and PostgreSQL frees its disk space at once. Content from before the update to daily storage stays in one block: its rows are deleted as they expire, and the space is freed when the whole block has expired or the size limit removes it. To free it right away, delete all stored prompts and responses with `TRUNCATE "RequestLogContent"`. Request logs, costs, and usage stay.
+Prompts and responses live in a regular `RequestLogContent` table. The worker deletes expired bodies in bounded batches while retaining request metadata, costs, and usage. The size limit uses the UTF-8 bytes of serialized JSON payloads, excluding database/index overhead; the console shows that logical size and how many older rows still need measurement. Size-based cleanup waits for measurement to finish, keeps today's bodies, and respects compliance archive holds. Time-based retention continues during backfill. PostgreSQL reuses deleted space; deleting rows does not immediately shrink its files.
+
+Upgrades from daily partition storage copy all existing bodies into the regular table without changing their contents. See [Updating an existing database](#updating-an-existing-database) before upgrading a large installation.
 
 ## Subscription sign-ins
 
@@ -339,7 +341,7 @@ Restore with the same image version that made the backup, or a newer one. A newe
 
 ## Upgrading
 
-`docker-compose.yml` runs `ghcr.io/nicolaeser/llmhub:${LLMHUB_TAG}`, which is `latest` by default. For controlled upgrades, set `LLMHUB_TAG` in `.env` to a release tag instead, for example `v2026.10.12.abc1234`. Every release on the [releases page](https://github.com/nicolaeser/llmhub/releases) lists its tags and image digest. The `dev` tag follows the `development` branch and is published as a prerelease.
+`docker-compose.yml` runs `ghcr.io/nicolaeser/llmhub:${LLMHUB_TAG}`, which is `latest` by default. For controlled upgrades, set `LLMHUB_TAG` in `.env` to a release tag instead, for example `v2026.10.12.abc1234`. Every release on the [releases page](https://github.com/nicolaeser/llmhub/releases) lists its tags and image digest. The `dev` tag follows the `development` branch and is published as a prerelease with a version such as `vdev2026.10.12.abc1234`. The `latest` tag follows `main`. Both dates come from the built commit, not the build time.
 
 1. Back up the database and `.env` (see [Backup and restore](#backup-and-restore)).
 2. Change `LLMHUB_TAG` in `.env`.
@@ -359,15 +361,21 @@ Use `docker-compose.au.yml` instead if you run the updater. When Redis switches 
 
 **Older Caddy block.** If your Caddy block is still the plain `reverse_proxy 127.0.0.1:3000`, replace it with the block from [step 4](#4-set-up-the-reverse-proxy) and reload Caddy (`systemctl reload caddy` or `caddy reload`). Its health check on `/internal-api/ready` and `lb_try_duration` hold new requests while the app restarts and pass them to the new container. Without them, clients get `502` during every restart and must retry on their own. The first update to a release with this restart behavior is still installed by the previous updater and image, which wait up to 330 seconds for open streams. From the next update on, the app waits at most 25 seconds.
 
+### Updating an existing database
+
+All 63 original migration files remain unchanged. Existing instances apply two forward migrations: `20261115145000_prisma_compatibility` copies request bodies from every legacy, default, and daily partition into a regular table, preserving their keys, timestamps, owner, grants, and JSON/null values; `20261115145340_request_content_size` adds a nullable measurement column and index. Users, credentials, sessions, API keys, settings, and usage are retained. Older clients can still insert bodies without the new column; the worker measures them later.
+
+The compatibility conversion is one transaction: a failed copy leaves the old table and data intact. It locks request-log writes and needs temporary disk space for a second content table plus indexes and PostgreSQL WAL. Take a backup and measure the upgrade on a restored copy. For large installations, schedule a maintenance window and pause automatic updates so their ten-minute readiness deadline cannot interrupt the copy. Deploy the same new image across replicas and allow migrations to complete before resuming traffic.
+
+The historical custom SQL and this one conversion are preserved for compatibility. Subsequent regular migrations are generated by Prisma without edits. Schema changes at startup use only `prisma migrate deploy`; application queries use the Prisma Client API. No production reset or seed is part of an upgrade.
+
 ### A migration failed
 
-Migrations newer than `20261110120000_model_extra_names` run inside one transaction. When one fails (for example on a full disk, or because the container was killed), none of it stays in the database. The start script marks it as rolled back and prints the reason, the container restarts and runs it again, and the previous image still starts after a rollback. If Prisma recorded no reason, look in the PostgreSQL log (`docker compose logs postgres`).
+The startup wrapper never rewrites migration records or automatically marks a failure as rolled back. It retries connection failures (`P1001`, `P1002`, `P1017`); the supervisor keeps the web server stopped after migration failure. `P3009` or `P3018` requires investigation. Regular Prisma-generated migrations can be partially applied; the compatibility conversion described above is transactional.
 
-An older migration that fails can leave some of its changes behind. Every start then stops with `a failed migration blocks the start` (Prisma error P3009), even with the previous image. The log names the migration and the database error. To fix it:
-
-1. Fix the cause.
-2. Undo what the migration changed. Its SQL is in `prisma/migrations/<name>/migration.sql` at the release tag.
-3. Mark it as rolled back, so the next start applies it again:
+1. Stop the app and pause automatic updates. Keep the current image for recovery: an older image may incorrectly assume newer migrations are transactional and automatically resolve their failures.
+2. Back up the database, inspect the failed migration and PostgreSQL logs, and fix the cause. Its SQL is in `prisma/migrations/<name>/migration.sql` at the release tag.
+3. If you reverted every partial change (or verified the transaction rolled back), mark that migration rolled back and retry. If you deliberately completed every change instead, use `migrate resolve --applied <name>`. Never alter `_prisma_migrations` directly.
 
 ```bash
 docker compose stop app
@@ -376,7 +384,7 @@ docker compose run --rm --no-deps --entrypoint node app ./node_modules/prisma/bu
 docker compose up -d
 ```
 
-For `20261110120000_model_extra_names`, undo it with `ALTER TABLE "ModelGroup" DROP COLUMN IF EXISTS "extraNames";` before you mark it as rolled back.
+`P3005` means the database is nonempty but has no Prisma migration history. Startup refuses it and never creates an automatic baseline. After a backup, compare the database with the schema at its original release and manually resolve only the migrations it actually contains. This repository keeps a historical migration chain; do not blindly resolve all folders or invent an applied `0_init`. A normal existing LLM Hub database already has its history and needs no adoption step.
 
 ## Automatic updates
 
@@ -416,7 +424,7 @@ Delete `redis-data/appendonlydir` before you ever start Redis with `--appendonly
 
 ### Pinned tags
 
-When `LLMHUB_TAG` is a release tag (`vYYYY.MM.DD.<sha>` or `dev-YYYY.MM.DD.<sha>`), a commit tag (`sha-<sha>`, `dev-<sha>`), or a digest, the updater reports the tag as pinned and never replaces the image. Set `LLMHUB_TAG` to `latest` or `dev` to get updates. Back up the database regularly while automatic updates are on, because a new image applies its migrations at start and migrations only go forward.
+When `LLMHUB_TAG` is a release tag (`vYYYY.MM.DD.<sha7>` or `vdevYYYY.MM.DD.<sha7>`), a commit tag (`<sha7>`, `dev-<sha7>`), a legacy pinned tag (`dev-YYYY.MM.DD.<sha7>`, `sha-<sha7>`), or a digest, the updater reports the tag as pinned and never replaces the image. Set `LLMHUB_TAG` to `latest` or `dev` to get updates. Back up the database regularly while automatic updates are on, because a new image applies its migrations at start and migrations only go forward.
 
 ### Security
 
@@ -514,3 +522,39 @@ Content-Type: application/json
 - The label is read from `entity_group`, `entity`, or `label`, without a `B-`, `I-`, `E-`, or `S-` prefix. PII-Tracer labels map like this: `private_person` → `PERSON`, `private_email` → `EMAIL_ADDRESS`, `private_phone` → `PHONE_NUMBER`, `private_address` → `ADDRESS`, `private_url` → `URL`, `private_date` → `DATE_TIME`, `account_number` → `ACCOUNT_NUMBER`, `secret` → `SECRET`, and `other_pii` → `OTHER_PII`. Catalog IDs such as `IBAN_CODE` and the names `person`, `per`, `email`, `phone`, `address`, `street_address`, `date`, and `password` work too. Other labels are ignored.
 - `score` (0 to 1) is optional. `word` is ignored.
 - LLM Hub sends at most 16 inputs and 16,000 characters per request. It cuts longer texts into pieces of up to 2,000 characters that overlap by 200, and runs at most two requests at a time per app process.
+
+## Local development
+
+Use Node.js 24 or newer and a local PostgreSQL database dedicated to development. Copy `.env.example` to `.env`, set `NODE_ENV=development`, choose a database name such as `llmhub_dev` in `DATABASE_URL`, and generate your own `APP_SECRET` of at least 32 characters. Install dependencies with `npm ci` and apply the existing migrations with `npm run db:migrate`, then start with `npm run dev`. Open `/internal-api/setup` deliberately to create the first operator; login and registration do not redirect there automatically.
+
+For disposable mock product data, run:
+
+```bash
+npm run seed-dev -- --reset-local=llmhub_dev
+```
+
+This deletes all data in the named database, reapplies every migration, and inserts an example company, departments, projects, and directory people. It creates no login accounts or credentials. The command requires a loopback database named with a `_dev` or `_development` suffix, refuses production and connection overrides, and checks that the confirmation matches the database name. Never use it on a database whose contents you need to retain. Production starts with migrations and an idempotent system catalog; no manual production seed is needed.
+
+Keep route-specific components and hooks in the route's `_components/` directory, using kebab-case filenames. Pages retain routing and composition; server actions use `_action.ts` and call services in `src/lib/<domain>/`. Shared components live in lowercase `src/components/<domain>/` directories once more than one route needs them. The route policy and its allowlist live beside the tests in `src/tests/route-view-policy.ts`.
+
+Start feature work from `origin/development` on `dev/<kebab-topic>`. If the integration branch is absent, arrange it before starting that branch workflow; do not silently substitute `main`.
+
+```bash
+git fetch origin
+git switch -c dev/my-change origin/development
+```
+
+| Branch | Purpose | Published image tags |
+| --- | --- | --- |
+| `dev/<topic>` | One feature or change; quality checks only | None |
+| `development` | Integrate finished features | `vdevYYYY.MM.DD.sha7`, `dev-sha7`, `dev` |
+| `main` | Release | `vYYYY.MM.DD.sha7`, `sha7`, `latest` |
+
+`YYYY.MM.DD` is the built commit's committer date; `sha7` is that commit's first seven SHA characters, including the merge commit when CI builds a merge. Rebuilding the same commit keeps the same version. `scripts/build-version.mjs` enforces the format; CI publishes only from the two integration/release branches.
+
+Run `npm run lint`, `npm run typecheck`, `npm test`, `npm run i18n:check`, `npm run styles:check`, and `npm run heroui:check` before integration. Database integration tests use `npm run test:integration` against a disposable migrated database.
+
+
+For future schema changes, use `npx prisma migrate dev --name <change>` against a disposable development database and commit its generated SQL unchanged. `SHADOW_DATABASE_URL` may point to a separate disposable shadow database. Never edit or squash already shipped migrations. See [.ai/playbooks/database-migration.md](.ai/playbooks/database-migration.md).
+
+`MIGRATION_TEST_DATABASE_URL=<local PostgreSQL URL> npm run test:migrations` tests every historical migration prefix, fresh installations, concurrent boot, custom schemas, and failure recovery. The test role needs permission to create databases and roles; the suite creates and removes its own uniquely named test databases and never resets the database named in the URL.

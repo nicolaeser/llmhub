@@ -20,7 +20,6 @@ export default function ResetDialog({
   selected,
   reviewing,
   stale,
-  timeZone,
   pending,
   onSelect,
   onContinue,
@@ -35,7 +34,6 @@ export default function ResetDialog({
   selected: ResetOption | null;
   reviewing: ResetOption | null;
   stale: boolean;
-  timeZone: string;
   pending: boolean;
   onSelect: (id: string) => void;
   onContinue: () => void;
@@ -45,7 +43,7 @@ export default function ResetDialog({
 }) {
   const t = useTranslations("Subscriptions.resets");
   const tCommon = useTranslations("Common");
-  const labels = useResetLabels(timeZone, credits);
+  const labels = useResetLabels(credits);
   const stepped = options.length > 1 || reviewing === null;
   const steps = [
     { id: "choose", title: t("flow.chooseStep"), active: reviewing === null, done: reviewing !== null },

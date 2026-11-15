@@ -1,9 +1,13 @@
 "use server";
 
 import { runAction } from "@/lib/http/action-result";
-import { testFeatureModel } from "@/lib/models/feature-model-test";
-import { ensureMcpRoles, saveMcpInstallation, saveMcpPermissions, setMcpTemplate } from "@/lib/mcp/catalog";
 import { setBuilderModel } from "@/lib/mcp/builder";
+import {
+  ensureServerRoles,
+  saveServerInstallation,
+  saveServerPermissions,
+  saveServerTemplate,
+} from "@/lib/mcp/catalog-console";
 import { disconnectMcpOAuth, startMcpOAuth } from "@/lib/mcp/server-oauth";
 import { probeMcpServer, refreshMcpServer } from "@/lib/mcp/server-probe";
 import {
@@ -12,11 +16,11 @@ import {
   deleteMcpServer,
   loadMcpServerList,
   loadMcpTargets,
-  presentMcpServer,
   saveMcpAssignments,
   setMcpServerEnabled,
   updateMcpServer,
 } from "@/lib/mcp/servers";
+import { testFeatureModel } from "@/lib/models/feature-model-test";
 
 export async function loadMcpServersAction(...args: Parameters<typeof loadMcpServerList>) {
   return runAction(() => loadMcpServerList(...args));
@@ -70,32 +74,20 @@ export async function createHostedMcpServerAction(input: unknown) {
   return runAction(() => createHostedMcpServer(input));
 }
 
-export async function ensureMcpRolesAction(id: string) {
-  return runAction(async () => {
-    const saved = await ensureMcpRoles(id);
-    return presentMcpServer(saved.serverId);
-  });
+export async function ensureMcpRolesAction(...args: Parameters<typeof ensureServerRoles>) {
+  return runAction(() => ensureServerRoles(...args));
 }
 
-export async function saveMcpPermissionsAction(input: unknown) {
-  return runAction(async () => {
-    const saved = await saveMcpPermissions(input);
-    return presentMcpServer(saved.serverId);
-  });
+export async function saveMcpPermissionsAction(...args: Parameters<typeof saveServerPermissions>) {
+  return runAction(() => saveServerPermissions(...args));
 }
 
-export async function setMcpTemplateAction(input: unknown) {
-  return runAction(async () => {
-    const saved = await setMcpTemplate(input);
-    return presentMcpServer(saved.serverId);
-  });
+export async function setMcpTemplateAction(...args: Parameters<typeof saveServerTemplate>) {
+  return runAction(() => saveServerTemplate(...args));
 }
 
-export async function saveMcpInstallationAction(input: unknown) {
-  return runAction(async () => {
-    const saved = await saveMcpInstallation(input);
-    return presentMcpServer(saved.serverId);
-  });
+export async function saveMcpInstallationAction(...args: Parameters<typeof saveServerInstallation>) {
+  return runAction(() => saveServerInstallation(...args));
 }
 
 export async function testFeatureModelAction(...args: Parameters<typeof testFeatureModel>) {

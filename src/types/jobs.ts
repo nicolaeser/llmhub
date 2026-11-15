@@ -27,7 +27,7 @@ export type MaintenanceSweepResult = {
   rotatedKeys: number;
   requestLogs: number;
   requestContents: number;
-  contentPartitions: number;
+  contentRows: number;
   spendEvents: number;
   auditLogs: number;
   securityEvents: number;
@@ -79,7 +79,7 @@ export type RetentionOptions = {
 
 export type RetentionSweepOptions = RetentionOptions & {
   leaseKey?: string;
-  holds?: Partial<Record<RetentionTable, Date>>;
+  holds?: Partial<Record<RetentionTable, Date | null>>;
 };
 
 export type RetentionRun = {

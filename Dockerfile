@@ -15,7 +15,7 @@ RUN --mount=type=cache,target=/root/.npm \
     node -e 'const fs = require("node:fs"); \
       const pkg = JSON.parse(fs.readFileSync("package.json", "utf8")); \
       const all = { ...pkg.dependencies, ...pkg.devDependencies }; \
-      const keep = ["prisma", "dotenv", "pg"]; \
+      const keep = ["prisma", "dotenv"]; \
       for (const name of keep) if (!all[name]) throw new Error(name + " is missing from package.json"); \
       fs.writeFileSync("package.json", JSON.stringify({ name: pkg.name, private: true, \
         dependencies: Object.fromEntries(keep.map((name) => [name, all[name]])), \

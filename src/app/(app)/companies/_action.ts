@@ -1,42 +1,24 @@
 "use server";
 
 import { runAction } from "@/lib/http/action-result";
-import {
-  createKey,
-  loadKeyOptions,
-  pauseKey,
-  resumeKey,
-  revokeKey,
-  rotateKey,
-  updateKey,
-} from "@/lib/keys/manage";
+import { createKey, loadKeyOptions, pauseKey, resumeKey, revokeKey, rotateKey, updateKey } from "@/lib/keys/manage";
 import { loadKeyMcpAccess, saveKeyMcpAccess } from "@/lib/mcp/key-access";
 import { loadCompanyMcpServers, saveCompanyMcpInstallation } from "@/lib/mcp/servers";
+import { deleteReport, saveReport, sendReportNow } from "@/lib/reports/manage";
 import { loadCompanyPolicies } from "@/lib/settings/guardrail-policies";
 import { addBoost, removeBoost, setBudget } from "@/lib/tenancy/budgets";
-import { companySlice } from "@/lib/tenancy/company-view";
 import {
-  createCompany,
-  deleteNode,
-  loadCompany,
-  loadCompanyDirectory,
-  locateNode,
-  pauseNode,
-  resumeNode,
-  saveCompanyLabelKeys,
-  saveMember,
-  saveOrg,
-  saveProject,
-  saveTeam,
-} from "@/lib/tenancy/structure";
-import { deleteReport, saveReport, sendReportNow } from "@/lib/reports/manage";
-import type { PauseInput, StructurePayload, TenancyKind } from "@/types/structure";
-
-function companyView(payload: StructurePayload, orgId: string): StructurePayload {
-  const view = companySlice(payload, orgId);
-  if (!view) throw new Error("NOT_FOUND");
-  return view;
-}
+  deleteCompany,
+  deleteCompanyNode,
+  editCompany,
+  editCompanyLabels,
+  pauseCompanyNode,
+  resumeCompanyNode,
+  saveCompanyMember,
+  saveCompanyProject,
+  saveCompanyTeam,
+} from "@/lib/tenancy/company-console";
+import { createCompany, loadCompany, loadCompanyDirectory, locateNode } from "@/lib/tenancy/structure";
 
 export async function loadCompanyDirectoryAction() {
   return runAction(() => loadCompanyDirectory());
@@ -54,43 +36,40 @@ export async function createCompanyAction(...args: Parameters<typeof createCompa
   return runAction(() => createCompany(...args));
 }
 
-export async function saveOrgAction(input: { id: string; alias: string }) {
-  return runAction(async () => companyView(await saveOrg(input), input.id));
+export async function saveOrgAction(...args: Parameters<typeof editCompany>) {
+  return runAction(() => editCompany(...args));
 }
 
-export async function saveCompanyLabelKeysAction(input: { orgId: string; keys: string[] }) {
-  return runAction(async () => companyView(await saveCompanyLabelKeys(input), input.orgId));
+export async function saveCompanyLabelKeysAction(...args: Parameters<typeof editCompanyLabels>) {
+  return runAction(() => editCompanyLabels(...args));
 }
 
-export async function saveTeamAction(input: Parameters<typeof saveTeam>[0]) {
-  return runAction(async () => companyView(await saveTeam(input), input.orgId));
+export async function saveTeamAction(...args: Parameters<typeof saveCompanyTeam>) {
+  return runAction(() => saveCompanyTeam(...args));
 }
 
-export async function saveProjectAction(input: Parameters<typeof saveProject>[0]) {
-  return runAction(async () => companyView(await saveProject(input), input.orgId));
+export async function saveProjectAction(...args: Parameters<typeof saveCompanyProject>) {
+  return runAction(() => saveCompanyProject(...args));
 }
 
-export async function saveMemberAction(input: Parameters<typeof saveMember>[0]) {
-  return runAction(async () => companyView(await saveMember(input), input.orgId));
+export async function saveMemberAction(...args: Parameters<typeof saveCompanyMember>) {
+  return runAction(() => saveCompanyMember(...args));
 }
 
-export async function deleteNodeAction(input: { kind: Exclude<TenancyKind, "org">; id: string; orgId: string }) {
-  return runAction(async () => companyView(await deleteNode(input), input.orgId));
+export async function deleteNodeAction(...args: Parameters<typeof deleteCompanyNode>) {
+  return runAction(() => deleteCompanyNode(...args));
 }
 
-export async function pauseNodeAction(input: PauseInput & { orgId: string }) {
-  return runAction(async () => companyView(await pauseNode(input), input.orgId));
+export async function pauseNodeAction(...args: Parameters<typeof pauseCompanyNode>) {
+  return runAction(() => pauseCompanyNode(...args));
 }
 
-export async function resumeNodeAction(input: { kind: TenancyKind; id: string; orgId: string }) {
-  return runAction(async () => companyView(await resumeNode(input), input.orgId));
+export async function resumeNodeAction(...args: Parameters<typeof resumeCompanyNode>) {
+  return runAction(() => resumeCompanyNode(...args));
 }
 
-export async function deleteCompanyAction(id: string) {
-  return runAction(async () => {
-    await deleteNode({ kind: "org", id });
-    return { id };
-  });
+export async function deleteCompanyAction(...args: Parameters<typeof deleteCompany>) {
+  return runAction(() => deleteCompany(...args));
 }
 
 export async function setBudgetAction(...args: Parameters<typeof setBudget>) {

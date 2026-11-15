@@ -19,7 +19,7 @@ import { DEFAULT_COMPLIANCE_ARCHIVE, archivePrefix, normalizeComplianceArchive }
 import { S3Error } from "@/lib/s3/client";
 import { normalizeEnterprise } from "@/lib/settings/enterprise";
 import { nextArchiveSettings } from "@/lib/settings/compliance-archive";
-import { contentPartitionPolicy } from "@/worker/retention-sweep";
+import { contentStoragePolicy } from "@/worker/retention-sweep";
 import type { ComplianceArchiveInput } from "@/types/archive";
 
 const day = (iso: string) => new Date(`${iso}T00:00:00.000Z`);
@@ -97,11 +97,11 @@ test("a hold only ever moves a retention cutoff earlier", () => {
   assert.deepEqual(heldCutoff(day("2026-11-05"), day("2026-11-09")), day("2026-11-05"));
 });
 
-test("content partitions are not dropped before their day is archived", () => {
+test("content size trimming respects the archive hold independently of age retention", () => {
   const now = new Date("2026-12-10T12:00:00Z");
   const enterprise = normalizeEnterprise({ content_retention_days: 7, log_retention_days: 30 });
-  assert.deepEqual(contentPartitionPolicy(enterprise, now).cutoff, new Date("2026-12-03T12:00:00Z"));
-  assert.deepEqual(contentPartitionPolicy(enterprise, now, { requestContents: day("2026-11-30") }).cutoff, day("2026-11-30"));
+  assert.deepEqual(contentStoragePolicy(enterprise, now).cutoff, day("2026-12-10"));
+  assert.deepEqual(contentStoragePolicy(enterprise, now, { requestContents: day("2026-11-30") }).cutoff, day("2026-11-30"));
 });
 
 test("archive settings normalize to safe defaults", () => {

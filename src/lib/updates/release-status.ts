@@ -1,7 +1,7 @@
 import type { PublishedRelease, ReleaseChannel, UpdateStatus } from "@/types/updates";
 
 const STABLE_TAG = /^v(\d{4}\.\d{2}\.\d{2})\.[0-9a-f]+$/;
-const DEV_TAG = /^dev-(\d{4}\.\d{2}\.\d{2})\.[0-9a-f]+$/;
+const DEV_TAG = /^(?:vdev|dev-)(\d{4}\.\d{2}\.\d{2})\.[0-9a-f]+$/;
 
 export function releaseChannel(tag: string): ReleaseChannel | null {
   if (STABLE_TAG.test(tag)) return "stable";

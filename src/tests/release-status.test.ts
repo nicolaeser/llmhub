@@ -27,8 +27,18 @@ afterEach(() => {
 test("release channels follow the CI tag formats", () => {
   assert.equal(releaseChannel("v2026.10.07.671389b"), "stable");
   assert.equal(releaseChannel("dev-2026.10.07.9472612"), "dev");
+  assert.equal(releaseChannel("vdev2026.11.15.9472612"), "dev");
   assert.equal(releaseChannel("development"), null);
   assert.equal(releaseChannel("0.1.0"), null);
+});
+
+test("existing development installs discover releases using the new version prefix", () => {
+  const next = release("vdev2026.11.15.abcdef0", "2026-11-15T08:00:00Z");
+  assert.equal(updateStatus("dev-2026.10.07.9472612", [...releases, next]).latest, next.tag);
+  assert.equal(updateStatus("dev-2026.10.07.9472612", [...releases, next]).available, true);
+  assert.equal(updateStatus(next.tag, [...releases, next]).available, false);
+  assert.equal(updateStatus(next.tag, releases).available, false);
+  assert.equal(updateStatus("v2026.10.07.671389b", [...releases, next]).available, false);
 });
 
 test("a newer release in the same channel is an update, drafts and other channels are not", () => {

@@ -118,7 +118,12 @@ test("boot only ensures the catalog and the image migrates without seeding", asy
   assert.match(dockerfile, /^CMD \["node", "start\.mjs"\]$/m);
   assert.match(await file("scripts/start.mjs"), /\["migrate-deploy\.mjs"\]/);
   assert.match(config, /path: "prisma\/migrations"/);
-  for (const source of [dockerfile, config, pkg]) assert.doesNotMatch(source, /seed/);
+  for (const source of [dockerfile, config]) assert.doesNotMatch(source, /seed/);
+  const scripts = JSON.parse(pkg).scripts;
+  assert.equal(scripts["seed-dev"], "node scripts/seed-dev.mjs");
+  for (const name of ["dev", "build", "start", "postinstall", "db:migrate"]) {
+    assert.doesNotMatch(scripts[name], /seed/);
+  }
 });
 
 test("setup and bootstrap code does not use Prisma raw SQL", async () => {

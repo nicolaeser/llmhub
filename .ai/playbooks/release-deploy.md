@@ -17,6 +17,18 @@ Building, changing boot, or publishing the web process.
 
 A `.env` file exists (`generate-env.sh` for self-hosting). Postgres is reachable.
 
+## Branch and version contract
+
+| Branch | Purpose | Published image tags |
+| --- | --- | --- |
+| `dev/<kebab-topic>` | One feature or change; quality checks only | None |
+| `development` | Integration of finished features | `vdevYYYY.MM.DD.sha7`, `dev-sha7`, `dev` |
+| `main` | Release | `vYYYY.MM.DD.sha7`, `sha7`, `latest` |
+
+Start new work with `git fetch origin` and `git switch -c dev/<kebab-topic> origin/development`. If the integration branch does not exist, resolve that explicitly instead of silently branching from `main`. Preserve existing worktrees and uncommitted work. Creating commits, publishing branches, and merging follow the user's authorization.
+
+The date comes from the built commit's committer timestamp and the suffix is its first seven SHA characters. For a merged feature this is the merge commit, not the feature tip. `scripts/build-version.mjs` enforces `^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}$`. Rebuilding the same commit must produce the same version. Only successful release pipelines move `dev` or `latest`; development releases are prereleases. Historical `dev-YYYY.MM.DD.sha7` and `sha-…` tags remain readable but are no longer published.
+
 ## Procedure
 
 1. Confirm the `Dockerfile` `CMD` is still `node start.mjs` and that `scripts/start.mjs` still runs `migrate-deploy.mjs` before `server.js`.
@@ -29,13 +41,15 @@ A `.env` file exists (`generate-env.sh` for self-hosting). Postgres is reachable
 ## Validation
 
 - `prebuild` checks pass
+- Schema or boot changes pass `npm run test:migrations` against a disposable local PostgreSQL server and the integration suite
+- `src/tests/build-version.test.ts` and the release/updater tests pass after version changes
 - Health 200
 - Ready 200 when Postgres is up
 - Version reports the published `BUILD_ID`
 
 ## Rollback
 
-Roll back the image. Migrations are forward-only.
+Migrations are forward-only. For a schema-incompatible image rollback, restore the pre-upgrade backup. Failed migrations require explicit Prisma recovery using the current image; see [database-migration.md](database-migration.md). Plan the compatibility content-copy upgrade with enough free space and a maintenance window; automatic update readiness expires after ten minutes.
 
 ## Definition of done
 

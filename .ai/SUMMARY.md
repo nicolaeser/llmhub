@@ -16,20 +16,20 @@ Load `BASE.md` first. Then open only the documents below that match the task.
 
 ## Instructions
 
-- [instructions/frontend.md](instructions/frontend.md) — Next.js 16, client state, HeroUI, `_components/`, console navigation, the live status badge, and proxy; load for App Router or component work.
+- [instructions/frontend.md](instructions/frontend.md) — Next.js 16, client state, HeroUI, `_components/` and route ownership checks, shared browser preferences, console navigation, the live status badge, and proxy; load for App Router or component work.
 - [instructions/backend.md](instructions/backend.md) — Server actions, gateway libraries, subscription accounts (imports, mid-run switching, banked resets, window kickoffs, per-key limit attribution), MCP, budgets, model access, context-window routing, PII resolution, alerts, model sync and per-provider new-model modes, request logging, labels, and agent sessions, PDF exports and their embedded fonts, and serializable writes; load for `src/lib` or `_action.ts`.
-- [instructions/data-persistence.md](instructions/data-persistence.md) — Prisma split schema, auth, tenancy, budget, and template models, catalog boot, and migration history; load when changing schema or migrations.
+- [instructions/data-persistence.md](instructions/data-persistence.md) — Prisma split schema, auth, tenancy, budget, and template models, catalog boot, guarded local development fixtures, and the data-preserving migration transition; load when changing schema or migrations.
 - [instructions/api.md](instructions/api.md) — `/api/v1`, `/api/mgmt`, `/internal-api` (including the live stream and the signed updater bridge), SCIM, and SSO contracts plus error formats; load when changing HTTP routes or errors.
 - [instructions/security-privacy.md](instructions/security-privacy.md) — Sessions, mandatory two-factor, passkeys, roles, permissions, management keys, setup, PII policy overrides, request-content logging, and what error reports may carry; load for login, account security, roles, keys, PII, logs, error reporting, or data rights.
-- [instructions/quality-testing.md](instructions/quality-testing.md) — node:test and prebuild gates; load when adding tests or CI-facing checks.
-- [instructions/operations.md](instructions/operations.md) — Env, Docker and compose data mounts, the auto-updater stack, the sign-in keeper and login journal, boot migrate, worker schedules, build version, optional Sentry error reporting, and probes; load for deploy, runtime config, or observability.
+- [instructions/quality-testing.md](instructions/quality-testing.md) — node:test, historical upgrade tests, and prebuild gates; load when adding tests or CI-facing checks.
+- [instructions/operations.md](instructions/operations.md) — Env, Docker and compose data mounts, the auto-updater stack, the sign-in keeper and login journal, boot migrate, worker schedules, commit-based release tags and feature-branch checks, optional Sentry error reporting, and probes; load for deploy, runtime config, or observability.
 - [instructions/content-localization.md](instructions/content-localization.md) — en/de namespaces, ICU, and formatters; load when changing strings or public copy.
 
 ## Playbooks
 
 - [playbooks/build-ui.md](playbooks/build-ui.md) — Steps to change a screen onto STYLE.md and HeroUI primitives; load when implementing or restyling UI.
-- [playbooks/database-migration.md](playbooks/database-migration.md) — Forward-only Prisma migration steps; load when shipping schema SQL.
-- [playbooks/release-deploy.md](playbooks/release-deploy.md) — Build, migrate-on-start, and probes; load when releasing or debugging boot.
+- [playbooks/database-migration.md](playbooks/database-migration.md) — Forward-only generated Prisma migrations and the legacy compatibility boundary; load when shipping schema SQL.
+- [playbooks/release-deploy.md](playbooks/release-deploy.md) — Feature/integration/release branches, image tags, migrate-on-start, and probes; load when releasing or debugging boot.
 - [playbooks/update-ai-context.md](playbooks/update-ai-context.md) — Re-audit this system; load when maintaining `.ai/`.
 
 ## Personas

@@ -1,5 +1,6 @@
 import { recordedPrisma } from "./support/recorded-prisma";
 import assert from "node:assert/strict";
+import { once } from "node:events";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
@@ -163,7 +164,7 @@ test("the console scope names the company and lists companies only for the owner
 });
 
 test("a scope change reaches this tab once and every other tab through the broadcast channel", async () => {
-  const { notifyWorkspace, onWorkspaceChange, relayOtherTabs, WORKSPACE_CHANNEL } = await import("@/lib/auth/workspace-event");
+  const { notifyWorkspace, onWorkspaceChange, relayOtherTabs, WORKSPACE_CHANNEL, WORKSPACE_EVENT } = await import("@/lib/auth/workspace-event");
   const target = globalThis as { window?: EventTarget };
   target.window = new EventTarget();
   const seen: WorkspaceChange[] = [];
@@ -172,15 +173,16 @@ test("a scope change reaches this tab once and every other tab through the broad
   const stopRelay = relayOtherTabs();
   const otherTab = new BroadcastChannel(WORKSPACE_CHANNEL);
   otherTab.onmessage = (event) => received.push(event.data);
-  const settle = () => new Promise((resolve) => setTimeout(resolve, 50));
   try {
+    const incoming = once(target.window, WORKSPACE_EVENT, { signal: AbortSignal.timeout(10_000) });
     otherTab.postMessage({ orgId: COMPANY_ID, alias: "Acme" });
     otherTab.postMessage({ orgId: 42 });
-    await settle();
+    await incoming;
     assert.deepEqual(seen, [{ orgId: COMPANY_ID, alias: "Acme" }]);
 
+    const outgoing = once(otherTab, "message", { signal: AbortSignal.timeout(10_000) });
     notifyWorkspace({ orgId: null, alias: "" });
-    await settle();
+    await outgoing;
     assert.deepEqual(seen, [
       { orgId: COMPANY_ID, alias: "Acme" },
       { orgId: null, alias: "" },

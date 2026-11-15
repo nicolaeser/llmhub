@@ -1,7 +1,7 @@
 import "server-only";
 
 import { randomUUID } from "node:crypto";
-import { contentStorage } from "@/lib/db/content-partitions";
+import { contentStorage } from "@/lib/gateway/request-logs/content-storage";
 import { requirePlatformPermission } from "@/lib/auth/guards";
 import { hasPerm, PERMISSIONS } from "@/lib/auth/permissions";
 import { writeAudit } from "@/lib/audit";

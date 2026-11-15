@@ -1,10 +1,11 @@
 "use client";
 
-import { createContext, useContext, useId, useState } from "react";
+import { createContext, useCallback, useContext, useId, useMemo, useState } from "react";
 import { Drawer, Separator, Tooltip } from "@heroui/react";
 import { useTranslations } from "next-intl";
 import { Link, usePathname } from "@/i18n/routing";
 import BrandMark from "@/components/brand/brand-mark";
+import { useSidebarCollapsed } from "@/lib/hooks/use-sidebar-collapsed";
 import { writeSidebarCookie } from "@/lib/utils/sidebar-cookie";
 import type { Permission } from "@/types/auth";
 import type { NavItem, NavSection } from "@/types/console";
@@ -199,19 +200,20 @@ export default function Sidebar({
   const t = useTranslations("Sidebar");
   const tCommon = useTranslations("Common");
   const pathname = usePathname();
-  const [collapsed, setCollapsed] = useState(initialCollapsed);
+  const collapsed = useSidebarCollapsed(initialCollapsed);
   const [drawerPath, setDrawerPath] = useState<string | null>(null);
   const drawerOpen = drawerPath === pathname;
   const closeDrawer = () => setDrawerPath(null);
 
-  function toggleCollapsed() {
-    const next = !collapsed;
-    setCollapsed(next);
-    writeSidebarCookie(next);
-  }
+  const openDrawer = useCallback(() => setDrawerPath(pathname), [pathname]);
+  const toggleCollapsed = useCallback(() => writeSidebarCookie(!collapsed), [collapsed]);
+  const navigation = useMemo(
+    () => ({ open: openDrawer, collapsed, toggleCollapsed }),
+    [openDrawer, collapsed, toggleCollapsed],
+  );
 
   return (
-    <ConsoleNav.Provider value={{ open: () => setDrawerPath(pathname), collapsed, toggleCollapsed }}>
+    <ConsoleNav.Provider value={navigation}>
       <div className="flex h-svh bg-background text-foreground">
         <aside
           aria-label={t("sidebar")}

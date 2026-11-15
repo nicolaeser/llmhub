@@ -5,6 +5,7 @@ import {
   mkdtempSync,
   readdirSync,
   readFileSync,
+  rmSync,
   writeFileSync,
 } from "node:fs";
 import os from "node:os";
@@ -13,6 +14,9 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 import {
   importersOf,
+  isReExportOnly,
+  passThroughComponents,
+  routeOwnersOf,
   isAllowedAppTsx,
   isForbiddenAppViewFile,
   isForbiddenAppViewTsx,
@@ -44,18 +48,19 @@ function walkFiles(dir: string): string[] {
 test("allows Next special files and route actions only", () => {
   assert.equal(isForbiddenAppViewTsx("page.tsx"), false);
   assert.equal(isForbiddenAppViewTsx("layout.tsx"), false);
-  assert.equal(isForbiddenAppViewTsx("_action.tsx"), false);
-  assert.equal(isForbiddenAppViewTsx("_actions.tsx"), false);
+  assert.equal(isForbiddenAppViewTsx("_action.tsx"), true);
+  assert.equal(isForbiddenAppViewTsx("_actions.tsx"), true);
   assert.equal(isAllowedAppTsx("_action.ts"), true);
-  assert.equal(isAllowedAppTsx("_actions.ts"), true);
+  assert.equal(isAllowedAppTsx("_actions.ts"), false);
   assert.equal(isAllowedAppTsx("icon.tsx"), true);
   assert.equal(isForbiddenAppViewTsx("Foo.tsx"), true);
   assert.equal(isForbiddenAppViewTsx("shared.tsx"), true);
   assert.equal(isForbiddenAppViewTsx("account-shell.tsx"), true);
 });
 
-test("walker allows _components and flags other view modules", () => {
+test("walker allows _components and flags other view modules", (t) => {
   const tmp = mkdtempSync(path.join(os.tmpdir(), "route-view-policy-"));
+  t.after(() => rmSync(tmp, { recursive: true, force: true }));
   mkdirSync(path.join(tmp, "projects", "_components"), { recursive: true });
   writeFileSync(
     path.join(tmp, "page.tsx"),
@@ -77,7 +82,7 @@ test("walker allows _components and flags other view modules", () => {
   const violations = listForbiddenAppViewFiles(tmp).map((file) =>
     path.relative(tmp, file),
   );
-  assert.deepEqual(violations, [path.join("projects", "Extra.tsx")]);
+  assert.deepEqual(violations, ["_action.tsx", path.join("projects", "Extra.tsx")]);
   assert.equal(
     isRouteColocatedView(
       path.join(tmp, "projects", "_components", "projects-view.tsx"),
@@ -91,9 +96,15 @@ test("walker allows _components and flags other view modules", () => {
     false,
   );
   assert.equal(isForbiddenAppViewFile(path.join(tmp, "_action.ts")), false);
+  for (const name of ["_actions.ts", "actions.ts", "helpers.ts", "view.ts", "route.tsx"]) {
+    assert.equal(isForbiddenAppViewFile(path.join(tmp, name)), true, name);
+  }
+  for (const name of ["route.ts", "robots.ts", "sitemap.ts", "icon.ts", "opengraph-image.tsx"]) {
+    assert.equal(isForbiddenAppViewFile(path.join(tmp, name)), false, name);
+  }
 });
 
-test("src/app has no view modules outside Next special files and _components", () => {
+test("src/app keeps route-only source inside Next special files, _action.ts and _components", () => {
   const violations = listForbiddenAppViewFiles(appRoot).map((file) =>
     path.relative(root, file),
   );
@@ -118,8 +129,9 @@ test("predicate flags whole-page extracts in _components", () => {
   assert.equal(isWholePageExtractName("account-shell.tsx"), false);
 });
 
-test("walker flags colocated *-page modules", () => {
+test("walker flags colocated *-page modules", (t) => {
   const tmp = mkdtempSync(path.join(os.tmpdir(), "route-view-page-"));
+  t.after(() => rmSync(tmp, { recursive: true, force: true }));
   mkdirSync(path.join(tmp, "projects", "_components"), { recursive: true });
   writeFileSync(
     path.join(tmp, "projects", "_components", "projects-page.tsx"),
@@ -332,11 +344,12 @@ test("moduleSpecifiers reads static, re-export, and dynamic imports", () => {
 
 test("src/components holds only UI shared by more than one route", () => {
   const importers = importersOf(srcRoot, read);
+  const ownersOf = routeOwnersOf(srcRoot, importers);
   const files = listSourceFiles(componentsRoot);
   assert.ok(files.length > 0);
   for (const file of files) {
-    const owners = new Set(importers(file).map((importer) => routeKey(srcRoot, importer)));
-    const shared = owners.has("components") || owners.size >= 2;
+    const owners = new Set(ownersOf(file));
+    const shared = owners.size >= 2;
     assert.ok(
       shared,
       `${path.relative(root, file)} is used by ${[...owners].join(", ") || "nothing"}; move it into that route's _components/`,
@@ -374,13 +387,7 @@ test("route _components are not imported from another route", () => {
 
 test("no re-export twins in src/app or src/components", () => {
   for (const file of [...listSourceFiles(appRoot), ...listSourceFiles(componentsRoot)]) {
-    const body = read(file)
-      .replace(/^"use (client|server)";\s*/m, "")
-      .trim();
-    assert.ok(
-      body === "" || !/^(?:export\s+(?:\*|\{[^}]*\}|type\s+\{[^}]*\})\s+from\s+["'][^"']+["'];?\s*)+$/.test(body),
-      `${path.relative(root, file)} only re-exports another module`,
-    );
+    assert.equal(isReExportOnly(read(file)), false, `${path.relative(root, file)} only re-exports another module`);
   }
 });
 
@@ -435,4 +442,92 @@ test("every console page has a loading view and every route group has an error b
   for (const rel of ["(app)/error.tsx", "account/error.tsx", "providers/sub-add/error.tsx", "global-error.tsx"]) {
     assert.equal(existsSync(path.join(appRoot, rel)), true, rel);
   }
+});
+
+
+test("moduleSpecifiers parses actual dependencies rather than comments or strings", () => {
+  assert.deepEqual(moduleSpecifiers(`
+    // import Ignored from "./comment";
+    const example = 'import Ignored from "./string"';
+    import "./side-effect";
+    import type { Props } from "./types";
+    export * as things from "./things";
+    const view = import(` + "`./lazy`" + `);
+    const unknown = import(variable);
+  `), ["./side-effect", "./types", "./things", "./lazy"]);
+});
+
+test("import graph resolves aliases, relative paths, extensions and directory indexes", (t) => {
+  const src = mkdtempSync(path.join(os.tmpdir(), "route-owners-"));
+  t.after(() => rmSync(src, { recursive: true, force: true }));
+  const put = (file: string, source: string) => {
+    const full = path.join(src, file);
+    mkdirSync(path.dirname(full), { recursive: true });
+    writeFileSync(full, source);
+    return full;
+  };
+  const leaf = put("components/domain/leaf.tsx", 'import "./cycle";');
+  put("components/domain/cycle.ts", 'import "./leaf";');
+  const index = put("components/domain/index.ts", 'export { Leaf } from "./leaf";');
+  const unused = put("components/domain/unused.tsx", "export const Unused = () => null;");
+  put("app/projects/page.tsx", 'import { Leaf } from "@/components/domain";');
+  put("app/projects/_components/form.tsx", 'import { Leaf } from "../../../components/domain/index.ts";');
+  put("tests/ignored.ts", 'import "@/components/domain/unused";');
+  put("generated/ignored.ts", 'import "@/components/domain/unused";');
+  let importers = importersOf(src, read);
+  assert.deepEqual(importers(index).map((file) => path.relative(src, file)).sort(), [
+    path.join("app", "projects", "_components", "form.tsx"),
+    path.join("app", "projects", "page.tsx"),
+  ]);
+  assert.deepEqual(routeOwnersOf(src, importers)(leaf), ["app/projects"]);
+  assert.deepEqual(routeOwnersOf(src, importers)(unused), []);
+  put("app/teams/page.tsx", 'const leaf = import("@/components/domain/leaf.tsx");');
+  importers = importersOf(src, read);
+  assert.deepEqual(routeOwnersOf(src, importers)(leaf), ["app/projects", "app/teams"]);
+});
+
+test("re-export detection handles directives, comments and imported aliases", () => {
+  for (const source of [
+    '"use client"; /* forwarding */ export { default } from "./view";',
+    'export * as Views from "./view";',
+    'import View from "./view"; export default View;',
+    'import { View } from "./view"; export { View };',
+  ]) assert.equal(isReExportOnly(source), true, source);
+  for (const source of [
+    'import View from "./view"; export default function Page() { return <View />; }',
+    'export const title = "Projects";',
+    'export type Props = { id: string };',
+    '"use client";',
+  ]) assert.equal(isReExportOnly(source), false, source);
+});
+
+test("pass-through detection catches pages and mapping-only components", () => {
+  assert.deepEqual(passThroughComponents(`
+    export default function Page(props: Props) { return (<Dashboard {...props} />); }
+    export const AgentTile = ({ agent }: Props) => <IconTile icon={icons[agent]} />;
+    const Hint = function () { return <Notice />; };
+  `), ["Page", "AgentTile", "Hint"]);
+  assert.deepEqual(passThroughComponents(`
+    export default function Page() { const data = useData(); return <List data={data} />; }
+    function Shell({ children }: Props) { return <Card>{children}</Card>; }
+    function Section() { return <section />; }
+    function Redirect() { return redirect("/"); }
+  `), []);
+});
+
+test("pages and UI modules contain no trivial component forwarding", () => {
+  const files = [...listSourceFiles(appRoot), ...listSourceFiles(componentsRoot)]
+    .filter((file) => path.basename(file) === "page.tsx" || isRouteColocatedView(file) || file.startsWith(componentsRoot));
+  const violations = files.flatMap((file) =>
+    passThroughComponents(read(file)).map((name) => `${path.relative(root, file)}: ${name}`),
+  );
+  assert.deepEqual(violations, []);
+});
+
+test("route actions use only the canonical _action.ts filename outside private UI", () => {
+  const violations = listSourceFiles(appRoot).filter((file) =>
+    /^_?actions?\.tsx?$/.test(path.basename(file)) &&
+    (path.basename(file) !== "_action.ts" || isRouteColocatedView(file)),
+  );
+  assert.deepEqual(violations.map((file) => path.relative(root, file)), []);
 });

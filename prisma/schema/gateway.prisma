@@ -636,9 +636,11 @@ model RequestLogContent {
   response  Json?
   truncated Boolean    @default(false)
   createdAt DateTime   @default(now())
+  sizeBytes Int?
 
   @@id([logId, createdAt])
   @@index([createdAt])
+  @@index([sizeBytes])
 }
 
 model StoredObject {

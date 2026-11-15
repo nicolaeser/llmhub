@@ -16,6 +16,7 @@ A replaced image applies migrations on the next start. Ready fails when Postgres
 ## Review checklist
 
 - The `Dockerfile` `CMD` is `node start.mjs`, which runs `migrate-deploy.mjs` before `server.js`, retries a failed migration instead of exiting, and keeps the embedded keeper running unless `LLMHUB_KEEPER=separate`.
+- Migration startup uses only `prisma migrate deploy`; failed records are left for verified manual `migrate resolve`, never rewritten or automatically baselined.
 - Instrumentation skips migrate and the worker during `next build`.
 - Ready uses a Prisma read, not raw SQL.
 - Compose keeps Postgres and Redis data in the `./postgres-data` and `./redis-data` bind mounts, excluded from git and the image; Redis snapshots with RDB instead of an append-only file and keeps accepting writes when a snapshot fails.

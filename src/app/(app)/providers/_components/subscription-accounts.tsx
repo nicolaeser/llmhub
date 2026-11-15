@@ -71,7 +71,7 @@ export default function SubscriptionAccounts({
   const tCommon = useTranslations("Common");
   const format = useFormatter();
   const timeZone = useConsoleTimeZone();
-  const reset = useResetTime(timeZone);
+  const reset = useResetTime();
   const { now } = reset;
   const [routing, setRouting] = useState<AccountRouting | null>(null);
   const [autoReset, setAutoReset] = useState<AutoResetPolicies>({});
@@ -261,7 +261,6 @@ export default function SubscriptionAccounts({
           autoReset={isResetKind(group.kind) ? (autoReset[group.kind] ?? autoResetPolicy({})) : null}
           kickoff={startsWindows(group.kind) ? (kickoff[group.kind] ?? "") : null}
           canManage={canManage}
-          timeZone={timeZone}
           isBusy={(id) => rowActions.busy === id || limits.refreshing.includes(id)}
           onAdd={() => onAdd(group.kind)}
           onSettings={() => openSettings(group.kind)}
@@ -276,7 +275,6 @@ export default function SubscriptionAccounts({
         row={details}
         entry={details ? items[details.id] : undefined}
         reports={details ? reportsLimits(details.kind) : false}
-        timeZone={timeZone}
         canManage={canManage}
         keyUsage={canSeeKeyUsage ? keyUsage : null}
         refreshing={details ? limits.refreshing.includes(details.id) : false}

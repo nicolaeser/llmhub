@@ -2,6 +2,7 @@
 
 import { useEffect, useSyncExternalStore } from "react";
 import { useTimeZone } from "next-intl";
+import { notifyPreferenceChange, onPreferenceChange } from "@/lib/utils/preference-sync";
 import {
   browserTimeZone,
   cookieTimeZone,
@@ -15,6 +16,7 @@ const LEGACY_STORAGE_KEY = "llmhub.dashboard.time-zone";
 
 const listeners = new Set<() => void>();
 let selected: string | null = null;
+let stopSync: (() => void) | null = null;
 
 function legacyTimeZone(): string | null {
   try {
@@ -48,11 +50,14 @@ function syncStoredTimeZone() {
 }
 
 function subscribe(onChange: () => void): () => void {
-  if (listeners.size === 0) window.addEventListener("focus", syncStoredTimeZone);
   listeners.add(onChange);
+  if (listeners.size === 1) stopSync = onPreferenceChange("time-zone", syncStoredTimeZone);
   return () => {
     listeners.delete(onChange);
-    if (listeners.size === 0) window.removeEventListener("focus", syncStoredTimeZone);
+    if (listeners.size === 0) {
+      stopSync?.();
+      stopSync = null;
+    }
   };
 }
 
@@ -71,9 +76,11 @@ export function setConsoleTimeZone(value: string) {
   const timeZone = cookieTimeZone(value);
   if (!timeZone) return;
   writeTimeZoneCookie(timeZone);
-  if (timeZone === selected) return;
-  selected = timeZone;
-  notify();
+  if (timeZone !== selected) {
+    selected = timeZone;
+    notify();
+  }
+  notifyPreferenceChange("time-zone");
 }
 
 export function useConsoleTimeZone(): string {

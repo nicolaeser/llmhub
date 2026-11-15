@@ -1,4 +1,4 @@
-const RELEASE_TAG = /^(?:v|dev-)\d{4}\.\d{2}\.\d{2}\.[0-9a-f]{7,40}$/;
+const RELEASE_TAG = /^(?:v|vdev|dev-)\d{4}\.\d{2}\.\d{2}\.[0-9a-f]{7,40}$/;
 const COMMIT_TAG = /^(?:sha-|dev-)?[0-9a-f]{7,40}$/;
 const DIGEST = /^sha256:[0-9a-f]{64}$/;
 

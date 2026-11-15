@@ -25,7 +25,8 @@ import type { LogChatRequest, LogChatThread, LogChatTurn, LogSessionRef, Transcr
 import { loadLogSessionChatAction } from "../_action";
 import Markdown from "./markdown";
 import { PiiCode } from "./pii-placeholder";
-import { AgentTile, useCompactTokens } from "./session-cells";
+import IconTile from "@/components/console/icon-tile";
+import { agentIcon, useCompactTokens } from "./session-cells";
 import { useLiveReload } from "./use-live-reload";
 
 const CLIENT_CLOSED = 499;
@@ -67,7 +68,7 @@ function itemsOf(turns: LogChatTurn[]): Item[] {
 function Row({ avatar, agent, children }: { avatar: boolean; agent: string; children: ReactNode }) {
   return (
     <div className="flex items-start gap-3">
-      <div className="w-7 shrink-0">{avatar ? <AgentTile agent={agent} active={false} size="sm" /> : null}</div>
+      <div className="w-7 shrink-0">{avatar ? <IconTile icon={agentIcon(agent)} tone="accent" size="sm" /> : null}</div>
       <div className="min-w-0 flex-1 space-y-2">{children}</div>
     </div>
   );

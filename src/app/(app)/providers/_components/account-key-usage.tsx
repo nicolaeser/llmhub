@@ -20,18 +20,16 @@ export default function AccountKeyUsage({
   row,
   account,
   feed,
-  timeZone,
 }: {
   row: ProviderView;
   account: AccountRow;
   feed: KeyUsageFeed;
-  timeZone: string;
 }) {
   const t = useTranslations("Subscriptions.keyUsage");
   const tDetails = useTranslations("Subscriptions.details");
   const tLimits = useTranslations("Subscriptions.limits");
   const format = useFormatter();
-  const { now } = useResetTime(timeZone);
+  const { now } = useResetTime();
   const limitLabel = useLimitLabel();
   const keyName = useKeyName();
   const percent = useUsagePercent();

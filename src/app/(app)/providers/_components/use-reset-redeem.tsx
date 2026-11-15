@@ -33,18 +33,16 @@ const RESULT_TOAST = {
 export function useResetRedeem({
   row,
   credits,
-  timeZone,
   onItem,
 }: {
   row: ProviderView;
   credits: ResetCredits;
-  timeZone: string;
   onItem: (item: LimitSnapshot | null) => void;
 }) {
   const t = useTranslations("Subscriptions.resets");
   const tCommon = useTranslations("Common");
   const showError = useErrorToast();
-  const labels = useResetLabels(timeZone, credits);
+  const labels = useResetLabels(credits);
   const [pending, start] = useTransition();
   const [open, setOpen] = useState<OpenDialog | null>(null);
   const [picked, setPicked] = useState<string | null>(null);
@@ -116,7 +114,6 @@ export function useResetRedeem({
         selected={selected}
         reviewing={reviewing}
         stale={reviewId !== null && reviewing === null}
-        timeZone={timeZone}
         pending={pending}
         onSelect={setPicked}
         onContinue={() => setReviewId(selected?.id ?? null)}

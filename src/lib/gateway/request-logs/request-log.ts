@@ -11,6 +11,7 @@ import { logger } from "@/lib/logging/logger";
 import { notifyLive } from "@/lib/updates/live-topics";
 import { labelRecord, storedLabel } from "@/lib/usage/labels";
 import type { Prisma } from "@/generated/prisma/client";
+import { contentSizeBytes } from "./content-size";
 import type { Principal } from "@/types/gateway";
 import type { Enterprise } from "@/types/settings";
 import type { ContentSkip, RequestLogEntry } from "@/types/logs";
@@ -73,6 +74,7 @@ export async function writeRequestLog(entry: RequestLogEntry): Promise<void> {
             ...(stored.request ? { request: stored.request.value as Prisma.InputJsonValue } : {}),
             ...(stored.response ? { response: stored.response.value as Prisma.InputJsonValue } : {}),
             truncated: Boolean(stored.request?.truncated || stored.response?.truncated),
+            sizeBytes: contentSizeBytes(stored.request?.value, stored.response?.value),
           },
         }
       : undefined;

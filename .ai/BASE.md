@@ -7,7 +7,7 @@ Read [SUMMARY.md](SUMMARY.md) before starting work. Load only the documents that
 - Must inspect current implementations before adding patterns, abstractions, libraries, or dependencies.
 - Must prefer existing project conventions and the sources of truth listed in [SUMMARY.md](SUMMARY.md).
 - Must preserve unrelated files and existing user changes.
-- Must not add comments to source, tests, scripts, config, SQL, or CSS. Express intent through names and types, and record durable rationale in the matching `.ai/` document. Script shebangs are the only exception.
+- Must not add comments to source, tests, scripts, config, SQL, or CSS. Express intent through names and types, and record durable rationale in the matching `.ai/` document. Script shebangs and untouched Prisma-generated migration SQL and metadata comments are the only exceptions.
 - Must not create commits unless the user explicitly asks for a commit.
 - Must never claim or disclose that repository work was assisted or generated in commits, pull requests, changelogs, documentation, or code comments unless the user explicitly requests that disclosure.
 - Must never add `Co-authored-by`, attribution, or generated-by trailers.

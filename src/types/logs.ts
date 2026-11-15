@@ -255,8 +255,6 @@ export type RequestLogEntry = {
   error?: unknown;
 };
 
-export type ContentPartition = { name: string; from: Date | null; to: Date | null; bytes: number };
+export type ContentStoragePolicy = { now: Date; cutoff: Date | null; maxBytes: number };
 
-export type ContentPartitionPolicy = { now: Date; cutoff: Date | null; maxBytes: number };
-
-export type ContentStorage = { databaseBytes: number; logBytes: number; contentBytes: number };
+export type ContentStorage = { contentBytes: number; pendingRows: number };

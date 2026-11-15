@@ -110,13 +110,12 @@ test("CI bakes the release version into the image as BUILD_ID", async () => {
   assert.match(runner, /ARG BUILD_ID=development\nENV BUILD_ID=\$\{BUILD_ID\}/);
   const pipeline = await file(".github/workflows/pipeline.yml");
   assert.match(pipeline, /^ {2}workflow_call:$/m);
-  assert.match(pipeline, /main\)\n {14}VERSION_PREFIX=v\n/);
-  assert.match(pipeline, /development\)\n {14}VERSION_PREFIX=dev-\n/);
-  assert.match(pipeline, /version="\$\{VERSION_PREFIX\}\$\(date -u \+%Y\.%m\.%d\)\.\$\{short_sha\}"/);
+  assert.match(pipeline, /run: node scripts\/build-version\.mjs/);
+  assert.doesNotMatch(pipeline, /date -u/);
   assert.match(pipeline, /BUILD_ID: \$\{\{ needs\.version\.outputs\.version \}\}/);
   assert.match(pipeline, /build-args: \|\n {12}BUILD_ID=\$\{\{ env\.BUILD_ID \}\}/);
   for (const [workflow, channel] of [
-    [".github/workflows/verify.yml", "github.base_ref"],
+    [".github/workflows/verify.yml", "github.base_ref || github.ref_name"],
     [".github/workflows/release.yml", "github.ref_name"],
   ]) {
     const source = await file(workflow);
@@ -153,14 +152,15 @@ test("the Google OAuth client secret enters the image only as a BuildKit secret"
   assert.ok(dockerignore.split("\n").includes("antigravity-client-secret"));
 });
 
-test("only pushes get write permissions in CI", async () => {
+test("only release pushes get write permissions in CI", async () => {
   const pipeline = await file(".github/workflows/pipeline.yml");
   assert.doesNotMatch(pipeline, /: write/);
   assert.match(pipeline, /outputs: \$\{\{ inputs\.publish && format\('type=image,[^']*push=true'/);
   const verify = await file(".github/workflows/verify.yml");
   assert.match(verify, /^on:\n {2}pull_request:$/m);
   assert.match(verify, /^permissions:\n {2}contents: read$/m);
-  assert.doesNotMatch(verify, /push:|: write|publish: true/);
+  assert.match(verify, /push:\n {4}branches:\n {6}- dev\/\*\*/);
+  assert.doesNotMatch(verify, /: write|publish: true/);
   const release = await file(".github/workflows/release.yml");
   assert.match(release, /^on:\n {2}push:$/m);
   assert.match(release, /^permissions:\n {2}contents: read$/m);
@@ -199,8 +199,9 @@ test("CI migrates a real Postgres, checks schema drift, and runs integration tes
   const quality = pipeline.slice(pipeline.indexOf("\n  quality:\n"), pipeline.indexOf("\n  image:\n"));
   assert.match(quality, /image: postgres:18-alpine/);
   const steps = [
-    "npx prisma migrate deploy",
+    "node scripts/migrate-deploy.mjs",
     "npx prisma migrate diff --from-config-datasource --to-schema prisma/schema --exit-code",
+    "npm run test:migrations",
     "npm test",
     "npm run test:integration",
     "npx tsc --noEmit",
@@ -213,7 +214,7 @@ test("CI rejects migrations that sort before the base branch's newest one", asyn
   const pipeline = await file(".github/workflows/pipeline.yml");
   const quality = pipeline.slice(pipeline.indexOf("\n  quality:\n"), pipeline.indexOf("\n  image:\n"));
   const check = quality.indexOf("npm run migrations:check -- \"${base}\"");
-  assert.ok(check > 0 && check < quality.indexOf("npx prisma migrate deploy"));
+  assert.ok(check > 0 && check < quality.indexOf("node scripts/migrate-deploy.mjs"));
   assert.match(quality, /BASE_REF: \$\{\{ github\.base_ref \}\}/);
   assert.match(quality, /BEFORE: \$\{\{ github\.event\.before \}\}/);
   const pkg = JSON.parse(await file("package.json"));
@@ -264,11 +265,10 @@ test("the container starts through the supervisor, which migrates before the web
   assert.doesNotMatch(dockerfile, /ENTRYPOINT|seed/);
 });
 
-test("migrations run through the Prisma CLI under an advisory lock", async () => {
+test("migrations use Prisma deploy and never edit its history at startup", async () => {
   const runner = await file("scripts/migrate-deploy.mjs");
   assert.match(runner, /"migrate", "deploy"/);
-  assert.match(runner, /"migrate", "status"/);
-  assert.match(runner, /pg_advisory_lock/);
+  assert.doesNotMatch(runner, /_prisma_migrations|pg_advisory|"resolve"|"reset"|"db", "push"/);
   assert.match(runner, /APP_SECRET/);
 });
 

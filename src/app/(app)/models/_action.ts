@@ -1,11 +1,14 @@
 "use server";
 
-import { requirePlatformPermission } from "@/lib/auth/guards";
-import { hasPerm, PERMISSIONS } from "@/lib/auth/permissions";
-import { actionFail, runAction } from "@/lib/http/action-result";
-import { assignEntry, setEntryActive, setGroupActive, setGroupAutoRoutes } from "@/lib/gateway/catalog/catalog-routes";
-import { loadCatalogView } from "@/lib/gateway/catalog/catalog-view";
-import { refreshCatalogNow } from "@/lib/gateway/catalog/catalog-tasks";
+import { runAction } from "@/lib/http/action-result";
+import {
+  assignCatalogEntry,
+  loadCatalog,
+  refreshCatalog,
+  setCatalogEntryActive,
+  setCatalogGroupActive,
+  setCatalogGroupAutoRoutes,
+} from "@/lib/models/catalog";
 import {
   createModelGroup,
   deleteModelGroup,
@@ -14,14 +17,6 @@ import {
   updateModelGroup,
 } from "@/lib/models/groups";
 import { createTemplate, deleteTemplate, loadTemplates, updateTemplate } from "@/lib/models/templates";
-import {
-  catalogEntryActiveSchema,
-  catalogEntryAssignSchema,
-  catalogGroupActiveSchema,
-  catalogGroupAutoRoutesSchema,
-} from "@/schemas/model-catalog";
-import type { AuthenticatedSession } from "@/types/auth";
-import type { CatalogView } from "@/types/model-catalog";
 
 export async function loadModelsAction(...args: Parameters<typeof loadModels>) {
   return runAction(() => loadModels(...args));
@@ -43,70 +38,28 @@ export async function deleteModelGroupAction(...args: Parameters<typeof deleteMo
   return runAction(() => deleteModelGroup(...args));
 }
 
-async function view(session: AuthenticatedSession): Promise<CatalogView> {
-  return {
-    ...(await loadCatalogView()),
-    canManage: hasPerm(session.permissions, PERMISSIONS.MODELS_MANAGE),
-    canConfigure: hasPerm(session.permissions, PERMISSIONS.SETTINGS_MANAGE),
-  };
+export async function loadCatalogAction(...args: Parameters<typeof loadCatalog>) {
+  return runAction(() => loadCatalog(...args));
 }
 
-async function manage() {
-  return requirePlatformPermission(PERMISSIONS.MODELS_MANAGE);
+export async function refreshCatalogAction(...args: Parameters<typeof refreshCatalog>) {
+  return runAction(() => refreshCatalog(...args));
 }
 
-export async function loadCatalogAction() {
-  return runAction(async () => view(await requirePlatformPermission(PERMISSIONS.MODELS_READ)));
+export async function setCatalogGroupActiveAction(...args: Parameters<typeof setCatalogGroupActive>) {
+  return runAction(() => setCatalogGroupActive(...args));
 }
 
-export async function refreshCatalogAction() {
-  return runAction(async () => {
-    const session = await manage();
-    await refreshCatalogNow(session.user.id);
-    return view(session);
-  });
+export async function setCatalogGroupAutoRoutesAction(...args: Parameters<typeof setCatalogGroupAutoRoutes>) {
+  return runAction(() => setCatalogGroupAutoRoutes(...args));
 }
 
-export async function setCatalogGroupActiveAction(raw: unknown) {
-  return runAction(async () => {
-    const session = await manage();
-    const parsed = catalogGroupActiveSchema.safeParse(raw);
-    if (!parsed.success) return actionFail("VALIDATION");
-    await setGroupActive(session.user.id, parsed.data.alias, parsed.data.active);
-    return view(session);
-  });
+export async function setCatalogEntryActiveAction(...args: Parameters<typeof setCatalogEntryActive>) {
+  return runAction(() => setCatalogEntryActive(...args));
 }
 
-export async function setCatalogGroupAutoRoutesAction(raw: unknown) {
-  return runAction(async () => {
-    const session = await manage();
-    const parsed = catalogGroupAutoRoutesSchema.safeParse(raw);
-    if (!parsed.success) return actionFail("VALIDATION");
-    await setGroupAutoRoutes(session.user.id, parsed.data.alias, parsed.data.autoRoutes);
-    return view(session);
-  });
-}
-
-export async function setCatalogEntryActiveAction(raw: unknown) {
-  return runAction(async () => {
-    const session = await manage();
-    const parsed = catalogEntryActiveSchema.safeParse(raw);
-    if (!parsed.success) return actionFail("VALIDATION");
-    const { active, ...ref } = parsed.data;
-    await setEntryActive(session.user.id, ref, active);
-    return view(session);
-  });
-}
-
-export async function assignCatalogEntryAction(raw: unknown) {
-  return runAction(async () => {
-    const session = await manage();
-    const parsed = catalogEntryAssignSchema.safeParse(raw);
-    if (!parsed.success) return actionFail("VALIDATION");
-    const { alias, ...ref } = parsed.data;
-    await assignEntry(session.user.id, ref, alias);
-    return view(session);
-  });
+export async function assignCatalogEntryAction(...args: Parameters<typeof assignCatalogEntry>) {
+  return runAction(() => assignCatalogEntry(...args));
 }
 
 export async function loadTemplatesAction(...args: Parameters<typeof loadTemplates>) {

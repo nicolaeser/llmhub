@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { execFileSync } from "node:child_process";
-import { readdirSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
 import { pathToFileURL } from "node:url";
@@ -30,6 +30,15 @@ export function migrationOrderProblems(baseFolders, headFolders) {
   return problems;
 }
 
+export function migrationHistoryProblems(base, head) {
+  return [
+    ...migrationOrderProblems([...base.keys()], [...head.keys()]),
+    ...[...base].flatMap(([name, sql]) =>
+      head.has(name) && head.get(name) !== sql ? [`${name} exists on the base branch and its SQL must not change`] : [],
+    ),
+  ];
+}
+
 function foldersAt(ref) {
   return execFileSync("git", ["ls-tree", "--name-only", `${ref}:${MIGRATIONS}`], { encoding: "utf8" })
     .split("\n")
@@ -44,7 +53,15 @@ function workingFolders() {
 
 function main() {
   const ref = process.argv[2] || DEFAULT_BASE;
-  const problems = migrationOrderProblems(foldersAt(ref), workingFolders());
+  const base = new Map(foldersAt(ref).filter((folder) => timestampOf(folder)).map((folder) => [
+    folder,
+    execFileSync("git", ["show", `${ref}:${MIGRATIONS}/${folder}/migration.sql`], { encoding: "utf8" }),
+  ]));
+  const head = new Map(workingFolders().map((folder) => [
+    folder,
+    readFileSync(path.join(MIGRATIONS, folder, "migration.sql"), "utf8"),
+  ]));
+  const problems = migrationHistoryProblems(base, head);
   if (problems.length > 0) {
     console.error(problems.join("\n"));
     process.exit(1);

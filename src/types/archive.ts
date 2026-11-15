@@ -108,7 +108,7 @@ export type ArchiveRunRow = {
 
 export type ArchiveHoldRun = { dataset: string; day: Date; status: string };
 
-export type RetentionHolds = Partial<Record<RetentionTable, Date>>;
+export type RetentionHolds = Partial<Record<RetentionTable, Date | null>>;
 
 export type ArchiveTick = {
   planned: number;

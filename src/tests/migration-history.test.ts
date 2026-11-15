@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { readdir, readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { migrationOrderProblems } from "../../scripts/check-migration-order.mjs";
-import { ATOMIC_MIGRATIONS_AFTER, isAtomicMigrationName, isTransactionalSql } from "../../scripts/migrate-deploy.mjs";
+import { migrationHistoryProblems, migrationOrderProblems } from "../../scripts/check-migration-order.mjs";
+import { COMPATIBILITY_MIGRATION, LEGACY_MIGRATIONS } from "./support/migration-history";
 
 const root = fileURLToPath(new URL("../..", import.meta.url));
 const MIGRATIONS = path.join(root, "prisma/migrations");
@@ -92,18 +93,34 @@ test("the CI order check rejects a new migration that sorts before the base bran
   assert.deepEqual(migrationOrderProblems([...base, "migration_lock.toml"], [...base, "migration_lock.toml"]), []);
 });
 
-test("migration SQL carries no comments", async () => {
-  for (const folder of await migrationFolders()) {
-    const sql = await readFile(path.join(MIGRATIONS, folder, "migration.sql"), "utf8");
-    assert.doesNotMatch(sql, /^\s*--/m, folder);
+test("every released migration remains byte-identical and present", async () => {
+  assert.equal(Object.keys(LEGACY_MIGRATIONS).length, 63);
+  for (const [folder, expected] of Object.entries(LEGACY_MIGRATIONS)) {
+    const sql = await readFile(path.join(MIGRATIONS, folder, "migration.sql"));
+    assert.equal(createHash("sha256").update(sql).digest("hex"), expected, folder);
   }
 });
 
-test("every migration after the atomic cutoff runs in one transaction", async () => {
+test("the legacy compatibility bridge is the only new customized migration", async () => {
   const folders = await migrationFolders();
-  assert.ok(folders.some((folder) => folder.slice(0, 14) === ATOMIC_MIGRATIONS_AFTER));
-  for (const folder of folders.filter(isAtomicMigrationName)) {
+  assert.ok(folders.includes(COMPATIBILITY_MIGRATION));
+  const bridge = await readFile(path.join(MIGRATIONS, COMPATIBILITY_MIGRATION, "migration.sql"), "utf8");
+  assert.match(bridge, /^BEGIN;[\s\S]*COMMIT;\s*$/);
+  assert.doesNotMatch(bridge, /^\s*--/m);
+  for (const folder of folders.filter((name) => !(name in LEGACY_MIGRATIONS) && name !== COMPATIBILITY_MIGRATION)) {
+    assert.ok(folder > COMPATIBILITY_MIGRATION, folder);
     const sql = await readFile(path.join(MIGRATIONS, folder, "migration.sql"), "utf8");
-    assert.ok(isTransactionalSql(sql), `${folder} must start with BEGIN; and end with COMMIT;`);
+    assert.doesNotMatch(sql, /\b(?:CREATE\s+(?:EXTENSION|TRIGGER|FUNCTION|VIEW)|CHECK\s*\(|GENERATED\s+ALWAYS|PARTITION\s+BY|COLLATE|INSERT\s+INTO|UPDATE\s+"|DELETE\s+FROM|BEGIN\s*;|COMMIT\s*;|DO\s+\$)/i, folder);
   }
+});
+
+
+test("the CI history check rejects changed SQL even when folder names are unchanged", () => {
+  const name = "20261006000000_init";
+  const base = new Map([[name, 'CREATE TABLE "example" (id TEXT);\n']]);
+  assert.deepEqual(migrationHistoryProblems(base, new Map(base)), []);
+  const changed = new Map([[name, 'CREATE TABLE "example" (id INTEGER);\n']]);
+  assert.deepEqual(migrationHistoryProblems(base, changed), [
+    `${name} exists on the base branch and its SQL must not change`,
+  ]);
 });

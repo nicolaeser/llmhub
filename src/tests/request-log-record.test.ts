@@ -1,3 +1,4 @@
+import { contentSizeBytes } from "@/lib/gateway/request-logs/content-size";
 import assert from "node:assert/strict";
 import test, { beforeEach } from "node:test";
 import { GateError } from "@/lib/gateway/errors";
@@ -165,7 +166,7 @@ const policy = (over: Partial<PiiPolicy>): PiiPolicy => ({
 });
 
 type StoredLog = Row & {
-  contents?: { create: { request?: unknown; response?: unknown; truncated: boolean } };
+  contents?: { create: { request?: unknown; response?: unknown; truncated: boolean; sizeBytes: number } };
 };
 
 function storedLog(): StoredLog {
@@ -235,7 +236,7 @@ test("recordUsage hands every request to the request log with tokens, cost, and 
   assert.equal(log.status, 502);
   assert.equal(log.outcome, "upstream_error");
   assert.equal(log.error, "upstream said no");
-  assert.deepEqual(log.contents?.create, { request, response, truncated: false });
+  assert.deepEqual(log.contents?.create, { request, response, truncated: false, sizeBytes: contentSizeBytes(request, response) });
 });
 
 function prismaError(code: string, message: string): Error {
@@ -310,6 +311,7 @@ test("requestLog.create stores tenancy, routing, PII markers, and nested content
   assert.deepEqual(log.piiOutput, ["EMAIL_ADDRESS"]);
   assert.equal(log.contentSkip, "");
   assert.deepEqual(log.contents?.create, {
+    sizeBytes: contentSizeBytes(scanned, { choices: [{ message: { role: "assistant", content: "sent to [EMAIL_ADDRESS]" } }] }),
     request: scanned,
     response: { choices: [{ message: { role: "assistant", content: "sent to [EMAIL_ADDRESS]" } }] },
     truncated: false,

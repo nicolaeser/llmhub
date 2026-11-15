@@ -4,6 +4,7 @@ import { Alert, Button } from "@heroui/react";
 import { TimerReset } from "lucide-react";
 import { useFormatter, useTranslations } from "next-intl";
 import { useClock } from "@/lib/hooks/use-clock";
+import { useConsoleTimeZone } from "@/lib/hooks/use-console-time-zone";
 import type { LimitSnapshot, ProviderView } from "@/types/providers";
 import type { ResetCredits } from "@/types/resets";
 import { ResetButton } from "./redeem-reset-button";
@@ -15,23 +16,22 @@ import { useResetRedeem } from "./use-reset-redeem";
 export default function BankedResets({
   row,
   credits,
-  timeZone,
   canManage,
   onItem,
 }: {
   row: ProviderView;
   credits: ResetCredits;
-  timeZone: string;
   canManage: boolean;
   onItem: (item: LimitSnapshot | null) => void;
 }) {
   const t = useTranslations("Subscriptions.resets");
   const tLimits = useTranslations("Subscriptions.limits");
   const format = useFormatter();
+  const timeZone = useConsoleTimeZone();
   const now = useClock(60_000);
   const retry = credits.pending?.retryable === true;
-  const labels = useResetLabels(timeZone, credits);
-  const redeem = useResetRedeem({ row, credits, timeZone, onItem });
+  const labels = useResetLabels(credits);
+  const redeem = useResetRedeem({ row, credits, onItem });
   const canRedeem = canRedeemReset(row, credits, canManage);
   const grants = credits.grants ?? [];
   const options = credits.pending ? [] : resetOptions(credits);

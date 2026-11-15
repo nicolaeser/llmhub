@@ -49,20 +49,18 @@ export function useLimitLabel(): (group: Pick<LimitGroup, "scoped" | "family" | 
 export function ResetLine({
   at,
   reached,
-  timeZone,
   full = false,
   stacked = false,
   tone = "danger",
 }: {
   at: number;
   reached: boolean;
-  timeZone: string;
   full?: boolean;
   stacked?: boolean;
   tone?: keyof typeof RESET_LINE_TONE;
 }) {
   const t = useTranslations("Subscriptions.limits");
-  const reset = useResetTime(timeZone);
+  const reset = useResetTime();
   return (
     <p className={reached ? RESET_LINE_TONE[tone] : "text-xs text-muted"}>
       {t.rich("reset", {
@@ -82,19 +80,17 @@ export function ResetLine({
 
 export default function LimitMeter({
   group,
-  timeZone,
   compact = false,
   keys = null,
 }: {
   group: LimitGroup;
-  timeZone: string;
   compact?: boolean;
   keys?: MeterKeys | null;
 }) {
   const t = useTranslations("Subscriptions.limits");
   const tKeys = useTranslations("Subscriptions.keyUsage");
   const format = useFormatter();
-  const resetTime = useResetTime(timeZone);
+  const resetTime = useResetTime();
   const { now } = resetTime;
   const reset = group.resetsAt ? Date.parse(group.resetsAt) : NaN;
   const pending = Number.isFinite(reset) && reset > now.getTime();
@@ -150,7 +146,7 @@ export default function LimitMeter({
           />
         </div>
       ) : null}
-      {pending ? <ResetLine at={reset} reached={group.limitReached} timeZone={timeZone} full={!compact} /> : null}
+      {pending ? <ResetLine at={reset} reached={group.limitReached} full={!compact} /> : null}
       {!pending && used === 0 ? <p className="text-xs text-muted">{t("notStarted")}</p> : null}
       {!pending && used > 0 ? (
         <p className={group.limitReached ? "text-xs text-danger" : "text-xs text-muted"}>

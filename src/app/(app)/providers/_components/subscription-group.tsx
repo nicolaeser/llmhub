@@ -70,7 +70,6 @@ export default function SubscriptionGroup({
   autoReset,
   kickoff,
   canManage,
-  timeZone,
   isBusy,
   onAdd,
   onSettings,
@@ -89,7 +88,6 @@ export default function SubscriptionGroup({
   autoReset: AutoResetPolicy | null;
   kickoff: string | null;
   canManage: boolean;
-  timeZone: string;
   isBusy: (id: string) => boolean;
   onAdd: () => void;
   onSettings: () => void;
@@ -203,7 +201,7 @@ export default function SubscriptionGroup({
     if (account.recovery === null) {
       return <p className="text-xs text-muted">{tLimits("resetUnknown", { reached: "false" })}</p>;
     }
-    return <ResetLine at={account.recovery} reached timeZone={timeZone} stacked tone="warning" />;
+    return <ResetLine at={account.recovery} reached stacked tone="warning" />;
   }
 
   function signIn(row: ProviderView, account: AccountRow) {
@@ -253,13 +251,12 @@ export default function SubscriptionGroup({
       <div className="space-y-3">
         {account.needsSignIn ? signIn(row, account) : null}
         {account.summary.groups.map((group) => (
-          <LimitMeter key={group.id} group={group} timeZone={timeZone} compact keys={keys(group.id)} />
+          <LimitMeter key={group.id} group={group} compact keys={keys(group.id)} />
         ))}
         {showsResetSummary(account.limits?.resetCredits) ? (
           <ResetSummary
             row={row}
             credits={account.limits.resetCredits}
-            timeZone={timeZone}
             canManage={canManage}
             onItem={onItem}
           />

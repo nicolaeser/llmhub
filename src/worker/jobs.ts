@@ -1,6 +1,6 @@
 import "server-only";
 
-import { maintainContentPartitions } from "@/lib/db/content-partitions";
+import { maintainContentStorage } from "@/lib/gateway/request-logs/content-storage";
 import { purgeAuthRecords } from "@/lib/auth/cleanup";
 import { ATTEMPT_RETENTION_MS } from "@/lib/auth/throttle";
 import prisma from "@/lib/db/prisma";
@@ -27,7 +27,7 @@ import { revalidateSsoSessions } from "@/lib/auth/sso-sessions";
 import { reportWorkerJobFailure } from "@/lib/sentry/worker-jobs";
 import { runErrorRateAlerts, runKeyExpiryAlerts, runLatencyAlerts, runSpendAnomalyAlerts } from "./alert-checks";
 import { retentionCutoff } from "./retention";
-import { contentPartitionPolicy, runRetentionSweep } from "./retention-sweep";
+import { contentStoragePolicy, runRetentionSweep } from "./retention-sweep";
 import { archiveRetentionHolds } from "@/lib/compliance-archive/holds";
 import { holdArchivedTables } from "@/lib/compliance-archive/plan";
 import type { RetentionHolds } from "@/types/archive";
@@ -102,7 +102,7 @@ export async function runMaintenanceSweep(
     rotatedKeys: rotatedKeys.count,
     requestLogs: 0,
     requestContents: 0,
-    contentPartitions: 0,
+    contentRows: 0,
     spendEvents: 0,
     auditLogs: 0,
     securityEvents: 0,
@@ -128,8 +128,8 @@ export async function runMaintenanceSweep(
   const enterprise = await sweepSettings();
   if (enterprise) {
     const holds = await retentionHolds(enterprise);
-    result.contentPartitions = await runSweepJob("content_partitions", () =>
-      maintainContentPartitions(contentPartitionPolicy(enterprise, now, holds)),
+    result.contentRows = await runSweepJob("content_storage", () =>
+      maintainContentStorage(contentStoragePolicy(enterprise, now, holds)),
     );
     await runSweepJob("retention", async () => {
       const run = await runRetentionSweep(enterprise, now, { holds });

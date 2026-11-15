@@ -55,7 +55,6 @@ export default function AccountDetailsDialog({
   row,
   entry,
   reports,
-  timeZone,
   canManage,
   keyUsage,
   refreshing,
@@ -67,7 +66,6 @@ export default function AccountDetailsDialog({
   row: ProviderView | null;
   entry: LimitSnapshot | undefined;
   reports: boolean;
-  timeZone: string;
   canManage: boolean;
   keyUsage: KeyUsageFeed | null;
   refreshing: boolean;
@@ -80,7 +78,7 @@ export default function AccountDetailsDialog({
   const tError = useTranslations("Error");
   const tCommon = useTranslations("Common");
   const format = useFormatter();
-  const reset = useResetTime(timeZone);
+  const reset = useResetTime();
   const { now } = reset;
 
   return (
@@ -200,7 +198,7 @@ export default function AccountDetailsDialog({
                     {account.groups.length > 0 ? (
                       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                         {account.groups.map((group) => (
-                          <LimitMeter key={group.id} group={group} timeZone={timeZone} />
+                          <LimitMeter key={group.id} group={group} />
                         ))}
                       </div>
                     ) : null}
@@ -235,7 +233,7 @@ export default function AccountDetailsDialog({
                   {keyUsage && reports && account.groups.length > 0 ? (
                     <>
                       <Separator />
-                      <AccountKeyUsage row={row} account={account} feed={keyUsage} timeZone={timeZone} />
+                      <AccountKeyUsage row={row} account={account} feed={keyUsage} />
                     </>
                   ) : null}
 
@@ -245,7 +243,6 @@ export default function AccountDetailsDialog({
                       <BankedResets
                         row={row}
                         credits={limits.resetCredits}
-                        timeZone={timeZone}
                         canManage={canManage}
                         onItem={onItem}
                       />

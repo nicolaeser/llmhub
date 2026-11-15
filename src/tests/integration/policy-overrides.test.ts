@@ -122,3 +122,34 @@ test("the company scope edits only that company's overrides", async () => {
     await data.cleanup();
   }
 });
+
+
+test("policy writes enforce one target without database-only constraints", async () => {
+  const data = new TestData();
+  try {
+    const org = await data.org();
+    const team = await data.team(org.id);
+    const project = await data.project(org.id, team.id);
+    const key = await data.key({ projectId: project.id, orgId: org.id });
+    const admin = sessionOf(await data.user(), { owner: true, permissions: [...permissions] });
+    const sections = { pii: BLOCK_EMAIL, injection: null, secrets: null, rules: null };
+    const save = (raw: unknown) => runAsPrincipal(admin, () => savePolicyOverride(raw));
+    for (const ref of [{}, { scope: "invalid", id: org.id }, { scope: "org", id: "" }]) {
+      await assert.rejects(save({ ...sections, ...ref }), /VALIDATION/);
+    }
+    const targets = [
+      { scope: "org", id: org.id }, { scope: "team", id: team.id },
+      { scope: "project", id: project.id }, { scope: "key", id: key.id },
+    ];
+    await Promise.all(targets.map((ref) => save({ ...sections, ...ref,
+      orgId: org.id, teamId: team.id, projectId: project.id, keyId: key.id,
+    })));
+    const rows = await prisma.policyOverride.findMany({
+      where: { OR: [{ orgId: org.id }, { teamId: team.id }, { projectId: project.id }, { keyId: key.id }] },
+    });
+    assert.equal(rows.length, 4);
+    for (const row of rows) assert.equal([row.orgId, row.teamId, row.projectId, row.keyId].filter(Boolean).length, 1);
+  } finally {
+    await data.cleanup();
+  }
+});

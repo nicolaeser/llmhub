@@ -7,6 +7,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { createFormatter, NextIntlClientProvider } from "next-intl";
 import LogTable, { type LogsPayload } from "@/app/(app)/logs/_components/log-table";
+import { useResetTime } from "@/app/(app)/providers/_components/use-reset-time";
 import { formats } from "@/i18n/formats";
 import {
   cookieTimeZone,
@@ -136,4 +137,28 @@ test("the logs list shows request times in the console time zone with its name",
   assert.match(utc, /12:00:00\s?PM UTC/);
   assert.match(renderLogs("de", "Europe/Berlin", "requests"), /14:00:00 MESZ/);
   assert.match(renderLogs("de", "Europe/Berlin", "spend"), /13:00:00 MEZ/);
+});
+
+test("subscription reset times read the display zone from their nearest context", () => {
+  function ResetDate() {
+    return useResetTime().date(Date.parse("2026-07-01T12:00:00.000Z"), true);
+  }
+  function renderReset(locale: string, timeZone: string) {
+    return renderToStaticMarkup(
+      createElement(NextIntlClientProvider, {
+        locale,
+        timeZone: "UTC",
+        now: new Date("2026-07-01T11:30:00.000Z"),
+        messages: namespaces(locale, ["Subscriptions"]),
+        children: createElement(NextIntlClientProvider, {
+          locale,
+          timeZone,
+          children: createElement(ResetDate),
+        }),
+      }),
+    );
+  }
+  assert.match(renderReset("en", "Europe/Berlin"), /02:00\s?PM GMT\+2/);
+  assert.match(renderReset("en", "UTC"), /12:00\s?PM UTC/);
+  assert.match(renderReset("de", "Europe/Berlin"), /14:00 MESZ/);
 });

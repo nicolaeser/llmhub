@@ -302,8 +302,7 @@ export default function LoggingTab() {
             <p className="text-sm text-muted">
               {t("storageUse", {
                 content: formatBytes(format, view.storage.contentBytes),
-                logs: formatBytes(format, view.storage.logBytes),
-                database: formatBytes(format, view.storage.databaseBytes),
+                pending: view.storage.pendingRows,
               })}
             </p>
             {view.contentMaxGb === 0 && view.storage.contentBytes >= CONTENT_SIZE_NOTICE_BYTES ? (

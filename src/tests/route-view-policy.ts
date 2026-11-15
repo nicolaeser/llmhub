@@ -1,5 +1,6 @@
 import { readdirSync } from "node:fs";
 import path from "node:path";
+import ts from "typescript";
 
 export const NEXT_ROUTE_SPECIAL_TSX = [
   "page.tsx",
@@ -9,7 +10,6 @@ export const NEXT_ROUTE_SPECIAL_TSX = [
   "not-found.tsx",
   "template.tsx",
   "default.tsx",
-  "route.tsx",
   "global-not-found.tsx",
   "global-error.tsx",
   "forbidden.tsx",
@@ -21,13 +21,6 @@ const SPECIAL = new Set<string>(NEXT_ROUTE_SPECIAL_TSX);
 const METADATA_TSX =
   /^(icon|apple-icon|opengraph-image|twitter-image)(\d+)?\.tsx$/;
 
-const ROUTE_ACTION_FILES = new Set([
-  "_action.ts",
-  "_action.tsx",
-  "_actions.ts",
-  "_actions.tsx",
-]);
-
 const WHOLE_PAGE_EXTRACT = /^[a-z0-9]+(?:-[a-z0-9]+)*-page\.(?:ts|tsx)$/;
 
 export function isNextRouteSpecialTsx(filename: string): boolean {
@@ -36,7 +29,7 @@ export function isNextRouteSpecialTsx(filename: string): boolean {
 
 export function isAllowedAppTsx(filename: string): boolean {
   if (isNextRouteSpecialTsx(filename)) return true;
-  return ROUTE_ACTION_FILES.has(filename);
+  return filename === "_action.ts";
 }
 
 export function isWholePageExtractName(filename: string): boolean {
@@ -54,7 +47,12 @@ export function isRouteColocatedView(filePath: string): boolean {
 
 export function isForbiddenAppViewFile(filePath: string): boolean {
   if (isRouteColocatedView(filePath)) return false;
-  return isForbiddenAppViewTsx(path.basename(filePath));
+  const filename = path.basename(filePath);
+  if (filename.endsWith(".tsx")) return isForbiddenAppViewTsx(filename);
+  if (!filename.endsWith(".ts")) return false;
+  return filename !== "_action.ts" && filename !== "route.ts" &&
+    filename !== "robots.ts" && filename !== "sitemap.ts" &&
+    !isNextRouteSpecialTsx(filename.replace(/\.ts$/, ".tsx"));
 }
 
 export function listForbiddenAppViewFiles(appRoot: string): string[] {
@@ -125,20 +123,76 @@ function stripExt(file: string): string {
 
 export function moduleSpecifiers(source: string): string[] {
   const specs: string[] = [];
-  const re = /(?:import|export)\s[^"'`;]*?from\s+["']([^"']+)["']|import\(\s*["']([^"']+)["']\s*\)/g;
-  for (const match of source.matchAll(re)) specs.push(match[1] ?? match[2]);
+  const tree = parseSource(source);
+  function visit(node: ts.Node) {
+    if ((ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) &&
+        node.moduleSpecifier && ts.isStringLiteral(node.moduleSpecifier)) {
+      specs.push(node.moduleSpecifier.text);
+    } else if (ts.isCallExpression(node) && node.expression.kind === ts.SyntaxKind.ImportKeyword &&
+        node.arguments[0] && ts.isStringLiteralLike(node.arguments[0])) {
+      specs.push(node.arguments[0].text);
+    }
+    ts.forEachChild(node, visit);
+  }
+  visit(tree);
   return specs;
+}
+
+function parseSource(source: string) {
+  return ts.createSourceFile("policy.tsx", source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+}
+
+export function isReExportOnly(source: string): boolean {
+  const statements = parseSource(source).statements.filter((node) =>
+    !ts.isImportDeclaration(node) &&
+    !(ts.isExpressionStatement(node) && ts.isStringLiteral(node.expression)),
+  );
+  return statements.length > 0 && statements.every((node) =>
+    ts.isExportDeclaration(node) ||
+    (ts.isExportAssignment(node) && ts.isIdentifier(node.expression)),
+  );
+}
+
+export function passThroughComponents(source: string): string[] {
+  const found: string[] = [];
+  function inspect(name: string, body: ts.ConciseBody | undefined) {
+    if (!/^[A-Z]/.test(name) || !body) return;
+    let expression: ts.Expression | undefined;
+    if (ts.isBlock(body)) {
+      if (body.statements.length !== 1 || !ts.isReturnStatement(body.statements[0])) return;
+      expression = body.statements[0].expression;
+    } else expression = body;
+    while (expression && ts.isParenthesizedExpression(expression)) expression = expression.expression;
+    if (expression && ts.isJsxSelfClosingElement(expression) && /^[A-Z]/.test(expression.tagName.getText())) {
+      found.push(name);
+    }
+  }
+  for (const node of parseSource(source).statements) {
+    if (ts.isFunctionDeclaration(node)) inspect(node.name?.text ?? "Page", node.body);
+    if (ts.isVariableStatement(node)) {
+      for (const decl of node.declarationList.declarations) {
+        if (ts.isIdentifier(decl.name) && decl.initializer &&
+            (ts.isArrowFunction(decl.initializer) || ts.isFunctionExpression(decl.initializer))) {
+          inspect(decl.name.text, decl.initializer.body);
+        }
+      }
+    }
+  }
+  return found;
 }
 
 export function importersOf(srcRoot: string, readFile: (file: string) => string) {
   const graph = new Map<string, Set<string>>();
-  for (const file of sourceFiles(srcRoot)) {
+  const files = sourceFiles(srcRoot);
+  const known = new Set(files.map(stripExt));
+  for (const file of files) {
     for (const spec of moduleSpecifiers(readFile(file))) {
       let target: string | null = null;
       if (spec.startsWith("@/")) target = path.join(srcRoot, spec.slice(2));
       else if (spec.startsWith(".")) target = path.resolve(path.dirname(file), spec);
       if (!target) continue;
-      const key = stripExt(target);
+      const direct = stripExt(target);
+      const key = known.has(direct) ? direct : path.join(direct, "index");
       if (!graph.has(key)) graph.set(key, new Set());
       graph.get(key)!.add(file);
     }
@@ -159,4 +213,22 @@ export function routeKey(srcRoot: string, file: string): string {
 
 export function listSourceFiles(dir: string): string[] {
   return sourceFiles(dir).sort();
+}
+
+export function routeOwnersOf(srcRoot: string, importers: (file: string) => string[]) {
+  return (file: string): string[] => {
+    const owners = new Set<string>();
+    const visited = new Set<string>();
+    function visit(target: string) {
+      if (visited.has(target)) return;
+      visited.add(target);
+      for (const importer of importers(target)) {
+        const owner = routeKey(srcRoot, importer);
+        if (owner.startsWith("app/")) owners.add(owner);
+        else visit(importer);
+      }
+    }
+    visit(file);
+    return [...owners].sort();
+  };
 }

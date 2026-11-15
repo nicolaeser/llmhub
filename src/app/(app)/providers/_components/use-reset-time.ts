@@ -2,6 +2,7 @@
 
 import { useFormatter, useTranslations } from "next-intl";
 import { useClock } from "@/lib/hooks/use-clock";
+import { useConsoleTimeZone } from "@/lib/hooks/use-console-time-zone";
 import { countdown, nearReset } from "./limit-timing";
 
 const FULL_DATE = {
@@ -15,9 +16,10 @@ const FULL_DATE = {
 const NEAR_DATE = { weekday: "short", hour: "2-digit", minute: "2-digit" } as const;
 const FAR_DATE = { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" } as const;
 
-export function useResetTime(timeZone: string) {
+export function useResetTime() {
   const t = useTranslations("Subscriptions.limits");
   const format = useFormatter();
+  const timeZone = useConsoleTimeZone();
   const now = useClock(60_000);
 
   function dateOptions(at: number, full: boolean) {

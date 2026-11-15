@@ -40,15 +40,13 @@ export function ResetButton({
 export default function RedeemResetButton({
   row,
   credits,
-  timeZone,
   onItem,
 }: {
   row: ProviderView;
   credits: ResetCredits;
-  timeZone: string;
   onItem: (item: LimitSnapshot | null) => void;
 }) {
-  const redeem = useResetRedeem({ row, credits, timeZone, onItem });
+  const redeem = useResetRedeem({ row, credits, onItem });
   return (
     <>
       <ResetButton name={row.name} retry={redeem.retry} pending={redeem.pending} onPress={() => redeem.show()} />
