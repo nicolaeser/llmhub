@@ -25,7 +25,7 @@ export function validateMigrationEnv(env) {
   if ((env.APP_SECRET?.trim().length ?? 0) < 32) throw new Error("APP_SECRET must be at least 32 characters");
 }
 
-export function runPrisma(args, env, onOutput = () => {}, signal) {
+export function runPrisma(args, env, onOutput, signal) {
   return new Promise((resolve, reject) => {
     const child = spawn(process.execPath, ["./node_modules/prisma/build/index.js", ...args], {
       env,
