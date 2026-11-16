@@ -1,14 +1,16 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { Alert, Chip } from "@heroui/react";
+import { Alert, Label, Meter, Separator } from "@heroui/react";
+import { PackageOpen } from "lucide-react";
 import { useFormatter, useTranslations } from "next-intl";
-import { useClock } from "@/lib/hooks/use-clock";
+import IconTile from "@/components/console/icon-tile";
 import { diskLow, shortDigest, UPDATER_MIN_FREE_DISK_BYTES } from "@/lib/updates/updater-view";
 import { formatBytes } from "@/lib/utils/bytes";
 import type { UpdaterView } from "@/types/updates";
-import { AutoUpdateSwitch, UpdaterButtons } from "./updater-controls";
+import { AutoUpdateSwitch, UpdateChimeSwitch, UpdaterButtons } from "./updater-controls";
 import UpdaterActivity from "./updater-activity";
+import UpdaterHistory from "./updater-history";
 
 export function Fact({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -16,6 +18,70 @@ export function Fact({ label, children }: { label: string; children: ReactNode }
       <span className="text-muted">{label}</span>
       <span className="min-w-0 break-words text-foreground">{children}</span>
     </li>
+  );
+}
+
+function UpdaterFacts({ updater }: { updater: UpdaterView }) {
+  const t = useTranslations("Common.updater");
+  const format = useFormatter();
+  const unknown = t("unknown");
+  const disk = updater.disk;
+  const low = diskLow(updater);
+  const newer = updater.latestDigest && updater.latestDigest !== updater.currentDigest;
+
+  return (
+    <div className="space-y-4">
+      <ul className="divide-y divide-border">
+        <Fact label={t("image")}>
+          <code className="font-mono text-xs break-all">{updater.image ? `${updater.image}:${updater.tag ?? ""}` : unknown}</code>
+        </Fact>
+        <Fact label={t("running")}>
+          <code className="font-mono text-xs">{shortDigest(updater.currentDigest) || unknown}</code>
+        </Fact>
+        {newer ? (
+          <Fact label={t("latest")}>
+            <code className="font-mono text-xs">{shortDigest(updater.latestDigest)}</code>
+          </Fact>
+        ) : null}
+      </ul>
+      {disk && disk.totalBytes > 0 ? (
+        <Meter
+          size="sm"
+          value={disk.totalBytes - disk.freeBytes}
+          maxValue={disk.totalBytes}
+          color={low ? "warning" : "accent"}
+        >
+          <Label>{t("diskLabel")}</Label>
+          <Meter.Output>
+            {t("disk", { free: formatBytes(format, disk.freeBytes), total: formatBytes(format, disk.totalBytes) })}
+          </Meter.Output>
+          <Meter.Track>
+            <Meter.Fill />
+          </Meter.Track>
+        </Meter>
+      ) : null}
+      {disk && low ? (
+        <Alert status="warning">
+          <Alert.Indicator />
+          <Alert.Content>
+            <Alert.Description>
+              {t("diskLow", {
+                free: formatBytes(format, disk.freeBytes),
+                required: formatBytes(format, UPDATER_MIN_FREE_DISK_BYTES),
+              })}
+            </Alert.Description>
+          </Alert.Content>
+        </Alert>
+      ) : null}
+      {updater.pinned ? (
+        <Alert status="warning">
+          <Alert.Indicator />
+          <Alert.Content>
+            <Alert.Description>{t("pinned", { tag: updater.tag ?? "" })}</Alert.Description>
+          </Alert.Content>
+        </Alert>
+      ) : null}
+    </div>
   );
 }
 
@@ -30,96 +96,39 @@ export default function UpdaterPanel({
   detailed: boolean;
   onView: (view: UpdaterView | null) => void;
 }) {
-  const t = useTranslations("Common");
-  const format = useFormatter();
-  const now = useClock(10_000);
+  const t = useTranslations("Common.updater");
 
   if (!updater) {
     return (
-      <div className="space-y-2">
-        <p className="text-sm text-muted">{t("updater.missing")}</p>
-        {detailed ? (
-          <code className="block font-mono text-xs break-all text-foreground">{t("updater.command")}</code>
-        ) : null}
+      <div className="flex items-start gap-3">
+        <IconTile icon={PackageOpen} tone="neutral" size="lg" />
+        <div className="min-w-0 flex-1 space-y-2">
+          <p className="text-sm font-semibold text-foreground">{t("missingTitle")}</p>
+          <p className="text-sm text-muted">{t("missing")}</p>
+          {detailed ? <code className="block font-mono text-xs break-all text-foreground">{t("command")}</code> : null}
+        </div>
       </div>
     );
   }
 
-  const when = (iso: string) => format.relativeTime(new Date(iso), now);
-  const unknown = t("updater.unknown");
-
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       <UpdaterActivity updater={updater} />
-      <ul className="divide-y divide-border">
-        <Fact label={t("updater.connection")}>
-          <Chip size="sm" variant="soft" color={updater.connected ? "success" : "default"}>
-            {t("updater.connected", { connected: updater.connected ? "true" : "false" })}
-          </Chip>
-        </Fact>
-        {updater.seenAt ? <Fact label={t("updater.lastSeen")}>{when(updater.seenAt)}</Fact> : null}
-        {detailed ? (
-          <>
-            <Fact label={t("updater.image")}>
-              <code className="font-mono text-xs break-all">
-                {updater.image ? `${updater.image}:${updater.tag ?? ""}` : unknown}
-              </code>
-            </Fact>
-            <Fact label={t("updater.running")}>
-              <code className="font-mono text-xs">{shortDigest(updater.currentDigest) || unknown}</code>
-            </Fact>
-            <Fact label={t("updater.latest")}>
-              <code className="font-mono text-xs">{shortDigest(updater.latestDigest) || unknown}</code>
-            </Fact>
-          </>
-        ) : null}
-        <Fact label={t("updater.checked")}>{updater.checkedAt ? when(updater.checkedAt) : t("updater.never")}</Fact>
-        <Fact label={t("updater.availability")}>
-          {t("updater.available", { available: updater.available ? "true" : "false" })}
-        </Fact>
-        {detailed && updater.disk ? (
-          <Fact label={t("updater.diskLabel")}>
-            {t("updater.disk", {
-              free: formatBytes(format, updater.disk.freeBytes),
-              total: formatBytes(format, updater.disk.totalBytes),
-            })}
-          </Fact>
-        ) : null}
-      </ul>
-      {detailed && updater.disk && diskLow(updater) ? (
-        <Alert status="warning">
-          <Alert.Indicator />
-          <Alert.Content>
-            <Alert.Description>
-              {t("updater.diskLow", {
-                free: formatBytes(format, updater.disk.freeBytes),
-                required: formatBytes(format, UPDATER_MIN_FREE_DISK_BYTES),
-              })}
-            </Alert.Description>
-          </Alert.Content>
-        </Alert>
+      {canManage ? <UpdaterButtons updater={updater} onView={onView} size={detailed ? "md" : "sm"} /> : null}
+      {detailed ? (
+        <>
+          <Separator />
+          <UpdaterFacts updater={updater} />
+        </>
       ) : null}
-      {detailed && updater.pinned ? (
-        <Alert status="warning">
-          <Alert.Indicator />
-          <Alert.Content>
-            <Alert.Description>{t("updater.pinned", { tag: updater.tag ?? "" })}</Alert.Description>
-          </Alert.Content>
-        </Alert>
-      ) : null}
-      {updater.issue ? (
-        <Alert status="danger">
-          <Alert.Indicator />
-          <Alert.Content>
-            <Alert.Description>{t("updater.issue", { issue: updater.issue })}</Alert.Description>
-          </Alert.Content>
-        </Alert>
-      ) : null}
-      {canManage ? (
-        <div className="space-y-4">
-          <AutoUpdateSwitch updater={updater} onView={onView} />
-          <UpdaterButtons updater={updater} onView={onView} size={detailed ? "md" : "sm"} />
-        </div>
+      {canManage || detailed ? <Separator /> : null}
+      {canManage ? <AutoUpdateSwitch updater={updater} onView={onView} /> : null}
+      {detailed ? <UpdateChimeSwitch /> : null}
+      {detailed ? (
+        <>
+          <Separator />
+          <UpdaterHistory updater={updater} />
+        </>
       ) : null}
     </div>
   );

@@ -5,6 +5,7 @@ import { useFormatter, useTranslations } from "next-intl";
 import { useClock } from "@/lib/hooks/use-clock";
 import type { ServerHealth } from "@/types/updates";
 import { useBuildStatus } from "./build-status";
+import { phasePercent, updaterActive } from "./updater-history-view";
 import UpdaterPanel, { Fact } from "./updater-panel";
 
 const DOT_COLORS: Record<ServerHealth, string> = {
@@ -26,6 +27,11 @@ export default function LiveBadge() {
   const live = build?.live ?? null;
   const served = build?.served ?? null;
   const pulsing = health === "live" || health === "updating" || health === "restarting";
+  const run = health === "updating" && live?.updater && updaterActive(live.updater) ? live.updater : null;
+  const percent = run ? phasePercent(run) : null;
+  const shown = run
+    ? t("live.phase", { state: run.state, known: String(percent !== null), percent: (percent ?? 0) / 100 })
+    : label;
 
   return (
     <>
@@ -42,7 +48,7 @@ export default function LiveBadge() {
             ) : null}
             <span className={`relative inline-flex h-2 w-2 rounded-full ${DOT_COLORS[health]}`} />
           </span>
-          <span className={health === "down" ? "truncate text-danger" : "hidden truncate sm:inline"}>{label}</span>
+          <span className={health === "down" ? "truncate text-danger" : "hidden truncate tabular-nums sm:inline"}>{shown}</span>
         </Button>
         <Popover.Content placement="bottom start" className="w-80 max-w-[calc(100vw-2rem)]">
           <Popover.Dialog className="space-y-3">
@@ -60,7 +66,6 @@ export default function LiveBadge() {
             {live?.canRead && build ? (
               <>
                 <Separator />
-                <p className="text-sm font-semibold text-foreground">{t("updater.title")}</p>
                 <UpdaterPanel
                   updater={live.updater}
                   canManage={live.canManage}

@@ -19,6 +19,7 @@ import { WORKSPACE_EVENT } from "@/lib/auth/workspace-event";
 import { isActionFail } from "@/lib/http/action-result";
 import { onWantedLiveTopics, receiveLiveEvent, setLiveLink, wantedLiveTopics } from "@/lib/updates/live-client";
 import { LIVE_TOPICS, liveUrl } from "@/lib/updates/live-events";
+import { finishedRunChime, requestUpdateChime } from "@/lib/updates/update-chime";
 import { parseJsonOrNull } from "@/lib/utils/json";
 import {
   buildInfoOf,
@@ -44,6 +45,7 @@ import type {
 } from "@/types/updates";
 import { loadConsoleAccessAction, loadUpdateStatusAction } from "../_action";
 import InstallUpdate from "./install-update";
+import { updaterActive } from "./updater-history-view";
 
 type BuildStatus = {
   loaded: string;
@@ -103,6 +105,8 @@ export default function BuildStatusProvider({
   const updateCheckedAt = useRef<number | null>(null);
   const announced = useRef<string | null>(null);
   const reconnect = useRef<(() => void) | null>(null);
+  const watchingRun = useRef(false);
+  const seenResultAt = useRef<string | null | undefined>(undefined);
 
   const announce = useCallback(
     (info: BuildInfo) => {
@@ -145,6 +149,21 @@ export default function BuildStatusProvider({
   }, []);
 
   useEffect(() => watchAccess({ key: access, check: loadConsoleAccessAction, reload: reloadPage }), [access]);
+
+  const updater = live?.updater ?? null;
+  const runWatched = Boolean(live?.updating || updater?.pending === "update" || (updater && updaterActive(updater)));
+  const lastResult = updater?.lastResult ?? null;
+
+  useEffect(() => {
+    watchingRun.current = runWatched;
+  }, [runWatched]);
+
+  useEffect(() => {
+    if (!updater) return;
+    const tone = finishedRunChime(seenResultAt.current, lastResult, Date.now());
+    seenResultAt.current = lastResult?.at ?? null;
+    if (tone && lastResult) requestUpdateChime(`${lastResult.commandId ?? "auto"}:${lastResult.at}`, tone);
+  }, [updater, lastResult]);
 
   useEffect(() => {
     if (typeof EventSource === "undefined") {
@@ -254,13 +273,19 @@ export default function BuildStatusProvider({
       });
     };
 
+    const paused = () => document.visibilityState === "hidden" && !watchingRun.current;
+
     const ensureOpen = () => {
-      if (document.visibilityState === "hidden") return;
+      if (paused()) return;
       if (!source || source.readyState === EventSource.CLOSED) connect();
     };
 
     const watchdog = () => {
-      if (document.visibilityState === "hidden") return;
+      if (paused()) {
+        source?.close();
+        source = null;
+        return;
+      }
       const now = Date.now();
       if (lost) {
         setClock(now);
@@ -277,7 +302,7 @@ export default function BuildStatusProvider({
     };
 
     const visibility = () => {
-      if (document.visibilityState !== "hidden") {
+      if (!paused()) {
         ensureOpen();
         return;
       }

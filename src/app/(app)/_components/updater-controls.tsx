@@ -1,15 +1,17 @@
 "use client";
 
-import { useTransition } from "react";
+import { useSyncExternalStore, useTransition } from "react";
 import { Button, Description, Label, Spinner, Switch, toast } from "@heroui/react";
-import { Download, RefreshCw } from "lucide-react";
+import { Download, RefreshCw, Volume2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import ConfirmDialog from "@/components/console/confirm-dialog";
 import { useErrorToast } from "@/components/console/use-error-toast";
 import { isActionFail } from "@/lib/http/action-result";
+import { chimeMuted, onChimeMutedChange, playChime, setChimeMuted } from "@/lib/updates/update-chime";
 import { recoveryRequired } from "@/lib/updates/updater-view";
 import type { UpdaterAction, UpdaterView } from "@/types/updates";
 import { requestUpdaterAction, setAutoUpdateAction } from "../_action";
+import { updaterActive } from "./updater-history-view";
 
 type ViewSetter = (view: UpdaterView | null) => void;
 
@@ -90,15 +92,16 @@ export function UpdaterButtons({
 }) {
   const t = useTranslations("Common");
   const { request, checking, installing } = useUpdaterRequest(onView);
-  const offline = !updater.connected;
-  const busy = checking || installing || recoveryRequired(updater) || updater.pending !== null || (updater.state !== "idle" && updater.state !== "failed");
+  if (!updater.connected || recoveryRequired(updater) || updaterActive(updater)) return null;
+  const busy = checking || installing || updater.pending !== null;
+  const offerUpdate = !updater.pinned && (updater.available || installing || updater.pending === "update");
   return (
     <div className="flex flex-wrap gap-2">
       <Button
         size={size}
         variant="secondary"
         isPending={checking || updater.pending === "check"}
-        isDisabled={offline || busy}
+        isDisabled={busy}
         onPress={() => request("check")}
       >
         {({ isPending }) => (
@@ -108,7 +111,7 @@ export function UpdaterButtons({
           </>
         )}
       </Button>
-      {!updater.pinned ? (
+      {offerUpdate ? (
         <ConfirmDialog
           title={t("updater.updateTitle")}
           description={t("updater.updateDescription")}
@@ -119,9 +122,8 @@ export function UpdaterButtons({
         >
           <Button
             size={size}
-            variant={updater.available ? "primary" : "secondary"}
             isPending={installing || updater.pending === "update"}
-            isDisabled={offline || busy}
+            isDisabled={busy}
           >
             {({ isPending }) => (
               <>
@@ -132,6 +134,28 @@ export function UpdaterButtons({
           </Button>
         </ConfirmDialog>
       ) : null}
+    </div>
+  );
+}
+
+export function UpdateChimeSwitch() {
+  const t = useTranslations("Common.updater");
+  const muted = useSyncExternalStore(onChimeMutedChange, chimeMuted, () => false);
+  return (
+    <div className="flex flex-wrap items-start justify-between gap-3">
+      <Switch isSelected={!muted} onChange={(enabled) => setChimeMuted(!enabled)} className="min-w-0 flex-1">
+        <Switch.Content>
+          <Switch.Control>
+            <Switch.Thumb />
+          </Switch.Control>
+          <Label>{t("chime")}</Label>
+        </Switch.Content>
+        <Description>{t("chimeHint")}</Description>
+      </Switch>
+      <Button size="sm" variant="ghost" onPress={() => void playChime("success")}>
+        <Volume2 size={14} aria-hidden />
+        {t("chimeTest")}
+      </Button>
     </div>
   );
 }

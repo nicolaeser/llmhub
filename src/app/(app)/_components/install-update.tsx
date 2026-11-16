@@ -8,6 +8,7 @@ import IconTile from "@/components/console/icon-tile";
 import { recoveryRequired, shortDigest } from "@/lib/updates/updater-view";
 import type { UpdaterView } from "@/types/updates";
 import { useUpdaterRequest } from "./updater-controls";
+import { phasePercent, updaterActive } from "./updater-history-view";
 
 export default function InstallUpdate({
   updater,
@@ -28,7 +29,11 @@ export default function InstallUpdate({
   const { request, installing: requesting } = useUpdaterRequest(onView);
   const busy = installing || requesting || updater.pending === "update";
   const disabled = busy || recoveryRequired(updater) || !updater.connected || updater.pending !== null || (updater.state !== "idle" && updater.state !== "failed");
-  const subtitle = busy ? t("updater.installing") : (latest ?? shortDigest(updater.latestDigest));
+  const percent = phasePercent(updater);
+  const title = busy ? t("updater.installing") : t("version.updateAvailable");
+  const subtitle = updaterActive(updater)
+    ? t("live.phase", { state: updater.state, known: String(percent !== null), percent: (percent ?? 0) / 100 })
+    : (latest ?? shortDigest(updater.latestDigest));
 
   const trigger = collapsed ? (
     <Button isIconOnly size="sm" variant="secondary" aria-label={t("updater.installLabel")} isPending={busy} isDisabled={disabled}>
@@ -72,8 +77,8 @@ export default function InstallUpdate({
     <div className="flex items-center gap-2.5 px-2 py-1">
       <IconTile icon={ArrowUpCircle} tone="accent" size="sm" />
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-sm font-medium text-foreground">{t("version.updateAvailable")}</span>
-        <span className="block truncate text-xs text-muted">{subtitle}</span>
+        <span className="block truncate text-sm font-medium text-foreground">{title}</span>
+        <span className="block truncate text-xs tabular-nums text-muted">{subtitle}</span>
       </span>
       {action}
     </div>
