@@ -8,21 +8,28 @@ FORCE=false
 ASSUME_DEFAULTS=false
 APP_NAME="LLM Hub"
 REPOSITORY=nicolaeser/llmhub
-COMPOSE_URL="https://raw.githubusercontent.com/$REPOSITORY/main/docker-compose.yml"
+COMPOSE_SOURCE=${COMPOSE_SOURCE:-https://raw.githubusercontent.com/$REPOSITORY/main}
+BASE_COMPOSE=docker-compose.yml
+UPDATER_COMPOSE=docker-compose.au.yml
+OVERRIDE_COMPOSE=docker-compose.override.yml
+DOWNLOADED_COMPOSE=("$BASE_COMPOSE" "$UPDATER_COMPOSE" docker-compose.rm.yml)
 IMAGE_TAG='^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$'
 URL_SAFE='^[A-Za-z0-9._~-]+$'
 SMTP_PATTERN='^(smtps?)://(([^:@/]*)(:([^@/]*))?@)?([^:@/]+)(:([0-9]+))?/?$'
 
 usage() {
   printf 'Usage: %s [--force] [--yes]\n\n' "$0"
-  printf 'Writes the production %s for docker-compose.yml. In a terminal it asks for the\n' "$OUTPUT"
-  printf 'domain, release channel, port, mail, single sign-on, object storage, an\n'
-  printf 'external redaction model, and error reporting, and it generates every password\n'
-  printf 'and secret.\n\n'
+  printf 'Writes the production %s and downloads docker-compose.yml next to it. In a\n' "$OUTPUT"
+  printf 'terminal it asks for the domain, release channel, automatic updates, port, mail,\n'
+  printf 'single sign-on, object storage, an external redaction model, and error\n'
+  printf 'reporting, and it generates every password and secret. With automatic updates it\n'
+  printf 'also downloads docker-compose.au.yml and sets COMPOSE_FILE to use both files.\n'
+  printf 'It installs curl when neither curl nor wget is available.\n\n'
   printf '  --force  update an existing %s and keep its values\n' "$OUTPUT"
   printf '  --yes    accept every default without asking\n\n'
-  printf 'Variables already set in the environment are used as answers.\n'
-  printf 'ENV_OUTPUT=path writes somewhere other than %s.\n' "$OUTPUT"
+  printf 'Variables already set in the environment are used as answers;\n'
+  printf 'AUTO_UPDATE=yes or AUTO_UPDATE=no answers the automatic updates question.\n'
+  printf 'ENV_OUTPUT=path writes somewhere other than %s; the compose files go next to it.\n' "$OUTPUT"
 }
 
 for arg in "$@"; do
@@ -45,6 +52,9 @@ if ((BASH_VERSINFO[0] < 5)); then
   exit 1
 fi
 
+COMPOSE_DIR=$(dirname "$OUTPUT")
+UPDATER_WAS_ON=false
+UPDATER_ON=false
 UPDATING=false
 if [[ -f $OUTPUT ]]; then
   if [[ $FORCE != true ]]; then
@@ -347,9 +357,15 @@ percent() {
 unpercent() { printf '%b' "${1//%/\\x}"; }
 
 latest_release() {
-  command -v curl >/dev/null || return 0
-  curl -fsS --max-time 5 "https://api.github.com/repos/$REPOSITORY/releases/latest" 2>/dev/null |
-    sed -n 's/^ *"tag_name": *"\([^"]*\)".*/\1/p'
+  local response
+  if command -v curl >/dev/null; then
+    response=$(curl -fsS --max-time 5 "https://api.github.com/repos/$REPOSITORY/releases/latest" 2>/dev/null) || return 0
+  elif command -v wget >/dev/null; then
+    response=$(wget -qO- -T 5 -t 1 "https://api.github.com/repos/$REPOSITORY/releases/latest" 2>/dev/null) || return 0
+  else
+    return 0
+  fi
+  sed -n 's/^ *"tag_name": *"\([^"]*\)".*/\1/p' <<<"$response"
 }
 
 release_tag() {
@@ -377,6 +393,67 @@ release_tag() {
     prompt "Release tag" "$value" required "regex:$IMAGE_TAG"
   fi
   remember LLMHUB_TAG "$ANSWER"
+}
+
+compose_list() {
+  local entry entries=()
+  IFS=: read -r -a entries <<<"$1"
+  for entry in "${entries[@]}"; do
+    [[ -n $entry ]] && printf '%s\n' "$entry"
+  done
+  return 0
+}
+
+uses_updater() {
+  local entry
+  while IFS= read -r entry; do
+    [[ $entry == "$UPDATER_COMPOSE" ]] && return 0
+  done < <(compose_list "$1")
+  return 1
+}
+
+updater_default() {
+  local previous=$1 answer=${AUTO_UPDATE-}
+  case "${answer,,}" in
+    y | yes | true | 1 | on) printf 'y' ;;
+    n | no | false | 0 | off) printf 'n' ;;
+    '')
+      if [[ -n $previous ]]; then
+        uses_updater "$previous" && printf 'y' || printf 'n'
+      elif [[ -f $COMPOSE_DIR/$UPDATER_COMPOSE ]]; then
+        printf 'y'
+      else
+        printf 'n'
+      fi
+      ;;
+    *) return 1 ;;
+  esac
+}
+
+compose_files() {
+  local previous fallback enabled=n entry files=("$BASE_COMPOSE")
+  previous=$(current COMPOSE_FILE)
+  note "The updater container replaces the app with each new image of the release channel and rolls back when it fails."
+  note "It holds the Docker socket, which is root access to this server. It publishes no ports and gets only APP_SECRET."
+  if [[ ! $(value_of LLMHUB_TAG) =~ ^(latest|dev)$ ]]; then
+    note "A pinned release tag never updates; choose latest or dev to receive updates."
+  fi
+  fallback=$(updater_default "$previous") || fail "AUTO_UPDATE must be yes or no"
+  if confirm "Install the updater (docker-compose.au.yml)?" "$fallback"; then
+    enabled=y
+    files+=("$UPDATER_COMPOSE")
+    note "Turn on automatic installs in Settings → General → Automatic updates after the first start."
+  fi
+  while IFS= read -r entry; do
+    [[ $entry == "$BASE_COMPOSE" || $entry == "$UPDATER_COMPOSE" ]] || files+=("$entry")
+  done < <(compose_list "$previous")
+  if [[ -z $previous && -f $COMPOSE_DIR/$OVERRIDE_COMPOSE ]]; then
+    files+=("$OVERRIDE_COMPOSE")
+  fi
+  if uses_updater "$previous"; then UPDATER_WAS_ON=true; fi
+  if [[ $enabled == y ]]; then UPDATER_ON=true; fi
+  local IFS=:
+  remember COMPOSE_FILE "${files[*]}"
 }
 
 ip_mode() {
@@ -471,11 +548,97 @@ preflight() {
   else
     warn "Docker with the Compose plugin was not found. Install it before you start ${APP_NAME}."
   fi
-  if [[ -f docker-compose.yml ]]; then
-    ok "docker-compose.yml found"
-  else
-    warn "docker-compose.yml is not next to this script. Download it with: curl -fsSLO $COMPOSE_URL"
+}
+
+install_curl() {
+  local sudo=()
+  if ((EUID != 0)); then
+    command -v sudo >/dev/null || return 1
+    sudo=(sudo)
   fi
+  say "${DIM}Installing curl to download the compose files.${RESET}"
+  if command -v apt-get >/dev/null; then
+    "${sudo[@]}" env DEBIAN_FRONTEND=noninteractive apt-get update -qq &&
+      "${sudo[@]}" env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq curl ca-certificates
+  elif command -v dnf >/dev/null; then
+    "${sudo[@]}" dnf install -y -q curl ca-certificates
+  elif command -v yum >/dev/null; then
+    "${sudo[@]}" yum install -y -q curl ca-certificates
+  elif command -v apk >/dev/null; then
+    "${sudo[@]}" apk add --no-cache curl ca-certificates
+  elif command -v zypper >/dev/null; then
+    "${sudo[@]}" zypper --non-interactive --quiet install curl ca-certificates
+  elif command -v pacman >/dev/null; then
+    "${sudo[@]}" pacman -Sy --noconfirm --needed curl ca-certificates
+  else
+    return 1
+  fi >&2
+}
+
+ensure_downloader() {
+  if command -v curl >/dev/null || command -v wget >/dev/null; then
+    return 0
+  fi
+  install_curl && command -v curl >/dev/null ||
+    fail "Neither curl nor wget is installed, and installing curl failed. Install one of them and run $0 --force."
+  ok "curl installed"
+}
+
+download() {
+  local url=$1 target=$2
+  if command -v curl >/dev/null; then
+    curl -fsSL --retry 3 --connect-timeout 10 --max-time 60 -o "$target" "$url"
+  else
+    wget -q -T 60 -t 3 -O "$target" "$url"
+  fi
+}
+
+managed_compose() {
+  local name=$1 known
+  for known in "${DOWNLOADED_COMPOSE[@]}"; do
+    [[ $known == "$name" ]] && return 0
+  done
+  return 1
+}
+
+fetch_compose() {
+  local name=$1 target=$COMPOSE_DIR/$1 tmp
+  tmp=$(mktemp "$target.XXXXXX")
+  if ! download "$COMPOSE_SOURCE/$name" "$tmp" 2>/dev/null || [[ ! -s $tmp ]]; then
+    rm -f "$tmp"
+    if [[ -f $target ]]; then
+      warn "Could not download $name; the existing file stays."
+      return 0
+    fi
+    fail "Could not download $name from $COMPOSE_SOURCE. $OUTPUT is written; run $0 --force once the server can reach it."
+  fi
+  chmod 644 "$tmp"
+  if [[ ! -f $target ]]; then
+    mv "$tmp" "$target"
+    say "${GREEN}✔${RESET} Downloaded ${BOLD}$name${RESET}"
+  elif cmp -s "$tmp" "$target"; then
+    rm -f "$tmp"
+    ok "$name is current"
+  elif confirm "Replace $name with the current version? The old one is kept as $name.bak" y; then
+    cp -p "$target" "$target.bak"
+    mv "$tmp" "$target"
+    say "${GREEN}✔${RESET} Updated ${BOLD}$name${RESET} (previous version in $name.bak)"
+  else
+    rm -f "$tmp"
+    warn "$name stays as it is."
+  fi
+}
+
+fetch_compose_files() {
+  local entry
+  ensure_downloader
+  while IFS= read -r entry; do
+    if managed_compose "$entry"; then
+      fetch_compose "$entry"
+    elif [[ ! -f $COMPOSE_DIR/$entry ]]; then
+      warn "COMPOSE_FILE lists $entry, which is not in $COMPOSE_DIR."
+    fi
+  done < <(compose_list "$(value_of COMPOSE_FILE)")
 }
 
 database_drift() {
@@ -594,12 +757,12 @@ next_steps() {
   say ""
   say "${BOLD}Next steps${RESET}"
   if $UPDATING; then
-    say "  Apply the changes with ${BOLD}docker compose up -d${RESET}."
+    if $UPDATER_WAS_ON && ! $UPDATER_ON; then
+      say "  Apply the changes and remove the updater with ${BOLD}docker compose up -d --remove-orphans${RESET}."
+    else
+      say "  Apply the changes with ${BOLD}docker compose up -d${RESET}."
+    fi
     return
-  fi
-  if [[ ! -f docker-compose.yml ]]; then
-    say "  $step. Download the compose file: ${BOLD}curl -fsSLO $COMPOSE_URL${RESET}"
-    step=$((step + 1))
   fi
   say "  $step. Point $host at this server and serve it through a reverse proxy with TLS, for example Caddy:"
   say ""
@@ -620,13 +783,17 @@ next_steps() {
   say "  $step. Start ${APP_NAME}: ${BOLD}docker compose up -d${RESET}"
   step=$((step + 1))
   say "  $step. Open ${BOLD}$origin/internal-api/setup${RESET} and create the owner account."
+  if $UPDATER_ON; then
+    step=$((step + 1))
+    say "  $step. Turn on ${BOLD}Settings → General → Automatic updates${RESET} if new images should install on their own."
+  fi
   say ""
   say "${DIM}Back up $OUTPUT together with the database. Without the same APP_SECRET, stored provider keys and two-factor secrets cannot be read.${RESET}"
 }
 
 if $INTERACTIVE; then
   say "${BOLD}${APP_NAME}${RESET} production setup"
-  say "${DIM}Writes $OUTPUT for docker-compose.yml. Enter accepts the value shown; passwords and secrets are generated.${RESET}"
+  say "${DIM}Writes $OUTPUT and downloads the compose files. Enter accepts the value shown; passwords and secrets are generated.${RESET}"
   if $UPDATING; then
     say "${DIM}Updating the existing $OUTPUT: its values are the defaults, and secrets stay as they are.${RESET}"
   fi
@@ -641,6 +808,9 @@ ask NEXT_PUBLIC_APP_URL "Domain or public URL" "" to:public_origin required orig
 release_tag
 ask LLMHUB_PORT "Port on 127.0.0.1 for the reverse proxy" 3000 required port
 ip_mode
+
+section "Automatic updates"
+compose_files
 
 section "Database and Redis"
 ask POSTGRES_USER "PostgreSQL user" llmhub required "regex:^[A-Za-z_][A-Za-z0-9_]{0,62}$"
@@ -706,6 +876,7 @@ if $INTERACTIVE && ! confirm "Write $OUTPUT?" y; then
   exit 1
 fi
 write_env
+fetch_compose_files
 if $INTERACTIVE; then
   next_steps
 fi

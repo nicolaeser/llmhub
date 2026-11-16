@@ -1,8 +1,19 @@
-import { constants, createPublicKey, verify, type webcrypto } from "node:crypto";
-import type { Jwk, JwksCache, JwtAlgorithm, JwtClaims, JwtConfig, VerificationKey } from "@/types/auth";
+import { constants, createPublicKey, verify, type JsonWebKey, type KeyObject } from "node:crypto";
+import { asRecord, asString } from "@/lib/gateway/core";
+import { parseJsonOrNull } from "@/lib/utils/json";
+import { cancelQuietly } from "@/lib/utils/streams";
+import type { JwkKeyType, JwksEntry, JwtAlgorithm, JwtClaims, JwtConfig, VerificationKey } from "@/types/auth";
 
 const JWKS_TTL_MS = 300_000;
 const JWKS_REFETCH_MS = 30_000;
+const JWKS_TIMEOUT_MS = 8_000;
+const JWKS_MAX_BYTES = 512 * 1024;
+const JWKS_MAX_KEYS = 100;
+const JWKS_CACHE_LIMIT = 16;
+const JWT_MAX_LENGTH = 64 * 1024;
+const CLOCK_SKEW_SECONDS = 60;
+const MIN_RSA_BITS = 2048;
+const BASE64URL = /^[A-Za-z0-9_-]*$/;
 
 const ALGORITHMS: Record<string, JwtAlgorithm> = {
   RS256: { kty: "RSA", hash: "sha256" },
@@ -17,41 +28,117 @@ const ALGORITHMS: Record<string, JwtAlgorithm> = {
   EdDSA: { kty: "OKP", hash: null, curves: ["Ed25519", "Ed448"] },
 };
 
+const KEY_TYPES: Record<JwkKeyType, readonly string[]> = {
+  RSA: ["rsa"],
+  EC: ["ec"],
+  OKP: ["ed25519", "ed448"],
+};
+
 export const JWT_ALGORITHMS = Object.keys(ALGORITHMS);
 
-let cache: JwksCache | null = null;
+const cache = new Map<string, JwksEntry>();
+const pending = new Map<string, Promise<VerificationKey[]>>();
 
-function b64urlToBuf(value: string): Buffer {
-  return Buffer.from(value, "base64url");
+export function resetJwksCache(): void {
+  cache.clear();
+  pending.clear();
 }
 
-function verificationKey(jwk: Jwk & webcrypto.JsonWebKey): VerificationKey[] {
-  if (jwk.use && jwk.use !== "sig") return [];
-  if (jwk.kty !== "RSA" && jwk.kty !== "EC" && jwk.kty !== "OKP") return [];
+function publicJwk(jwk: Record<string, unknown>): { kty: JwkKeyType; source: JsonWebKey } | null {
+  const field = (name: string) => asString(jwk[name]);
+  const [kty, crv, x, y, n, e] = ["kty", "crv", "x", "y", "n", "e"].map(field);
+  if (kty === "RSA" && n && e) return { kty, source: { kty, n, e } };
+  if (kty === "EC" && crv && x && y) return { kty, source: { kty, crv, x, y } };
+  if (kty === "OKP" && crv && x) return { kty, source: { kty, crv, x } };
+  return null;
+}
+
+function signingKey(raw: unknown): VerificationKey[] {
+  const jwk = asRecord(raw);
+  if (!jwk) return [];
+  const use = jwk.use;
+  if (use !== undefined && use !== "sig") return [];
+  const ops = jwk.key_ops;
+  if (ops !== undefined && !(Array.isArray(ops) && ops.includes("verify"))) return [];
+  const parsed = publicJwk(jwk);
+  if (!parsed) return [];
+  const { kty, source } = parsed;
+  let key: KeyObject;
   try {
-    return [
-      {
-        kid: jwk.kid ?? "",
-        kty: jwk.kty,
-        crv: jwk.crv ?? "",
-        alg: jwk.alg ?? "",
-        key: createPublicKey({ key: jwk, format: "jwk" }),
-      },
-    ];
+    key = createPublicKey({ key: source, format: "jwk" });
   } catch {
     return [];
+  }
+  if (!KEY_TYPES[kty].includes(key.asymmetricKeyType ?? "")) return [];
+  if (kty === "RSA" && (key.asymmetricKeyDetails?.modulusLength ?? 0) < MIN_RSA_BITS) return [];
+  return [{ kid: asString(jwk.kid), kty, crv: asString(source.crv), alg: asString(jwk.alg), key }];
+}
+
+async function readCapped(res: Response): Promise<string> {
+  const declared = Number(res.headers.get("content-length"));
+  if (Number.isFinite(declared) && declared > JWKS_MAX_BYTES) {
+    await cancelQuietly(res.body?.getReader());
+    throw new Error("jwks too large");
+  }
+  if (!res.body) return "";
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let total = 0;
+  let text = "";
+  let drained = false;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > JWKS_MAX_BYTES) throw new Error("jwks too large");
+      text += decoder.decode(value, { stream: true });
+    }
+    drained = true;
+    return text + decoder.decode();
+  } finally {
+    if (!drained) await cancelQuietly(reader);
+  }
+}
+
+async function fetchKeys(url: string): Promise<VerificationKey[]> {
+  const res = await fetch(url, {
+    headers: { accept: "application/jwk-set+json, application/json" },
+    signal: AbortSignal.timeout(JWKS_TIMEOUT_MS),
+  });
+  if (!res.ok) {
+    await cancelQuietly(res.body?.getReader());
+    throw new Error(`jwks ${res.status}`);
+  }
+  const keys = asRecord(parseJsonOrNull(await readCapped(res)))?.keys;
+  if (!Array.isArray(keys)) throw new Error("jwks invalid");
+  return keys.slice(0, JWKS_MAX_KEYS).flatMap(signingKey);
+}
+
+function remember(url: string, keys: VerificationKey[]): void {
+  cache.delete(url);
+  cache.set(url, { keys, fetched: Date.now() });
+  while (cache.size > JWKS_CACHE_LIMIT) {
+    const oldest = cache.keys().next().value;
+    if (oldest === undefined) break;
+    cache.delete(oldest);
   }
 }
 
 async function loadKeys(url: string, force: boolean): Promise<VerificationKey[]> {
-  const age = cache && cache.url === url ? Date.now() - cache.fetched : Infinity;
-  if (cache && age < (force ? JWKS_REFETCH_MS : JWKS_TTL_MS)) return cache.keys;
-  const res = await fetch(url, { signal: AbortSignal.timeout(8_000) });
-  if (!res.ok) throw new Error(`jwks ${res.status}`);
-  const json = (await res.json()) as { keys?: (Jwk & webcrypto.JsonWebKey)[] };
-  const keys = (Array.isArray(json.keys) ? json.keys : []).flatMap(verificationKey);
-  cache = { url, keys, fetched: Date.now() };
-  return keys;
+  const entry = cache.get(url);
+  const age = entry ? Date.now() - entry.fetched : Infinity;
+  if (entry && age < (force ? JWKS_REFETCH_MS : JWKS_TTL_MS)) return entry.keys;
+  const running = pending.get(url);
+  if (running) return running;
+  const load = fetchKeys(url)
+    .then((keys) => {
+      remember(url, keys);
+      return keys;
+    })
+    .finally(() => pending.delete(url));
+  pending.set(url, load);
+  return load;
 }
 
 function fits(key: VerificationKey, alg: string, spec: JwtAlgorithm, kid: string): boolean {
@@ -62,17 +149,21 @@ function fits(key: VerificationKey, alg: string, spec: JwtAlgorithm, kid: string
 }
 
 export function verifySignature(spec: JwtAlgorithm, key: VerificationKey, data: Buffer, signature: Buffer): boolean {
-  if (spec.kty === "OKP") return verify(null, data, key.key, signature);
-  if (spec.kty === "EC") return verify(spec.hash, data, { key: key.key, dsaEncoding: "ieee-p1363" }, signature);
-  if (spec.saltLength) {
-    return verify(
-      spec.hash,
-      data,
-      { key: key.key, padding: constants.RSA_PKCS1_PSS_PADDING, saltLength: spec.saltLength },
-      signature,
-    );
+  try {
+    if (spec.kty === "OKP") return verify(null, data, key.key, signature);
+    if (spec.kty === "EC") return verify(spec.hash, data, { key: key.key, dsaEncoding: "ieee-p1363" }, signature);
+    if (spec.saltLength) {
+      return verify(
+        spec.hash,
+        data,
+        { key: key.key, padding: constants.RSA_PKCS1_PSS_PADDING, saltLength: spec.saltLength },
+        signature,
+      );
+    }
+    return verify(spec.hash, data, key.key, signature);
+  } catch {
+    return false;
   }
-  return verify(spec.hash, data, key.key, signature);
 }
 
 async function candidates(url: string, alg: string, spec: JwtAlgorithm, kid: string) {
@@ -87,31 +178,57 @@ function claimStrings(value: unknown): string[] {
   return [];
 }
 
-export async function verifyJwt(token: string, cfg: JwtConfig): Promise<JwtClaims> {
+function segment(value: string): Record<string, unknown> {
+  const decoded = asRecord(parseJsonOrNull(Buffer.from(value, "base64url").toString("utf8")));
+  if (!decoded) throw new Error("invalid jwt");
+  return decoded;
+}
+
+function numericDate(claims: JwtClaims, name: string): number {
+  const value = claims[name];
+  if (typeof value !== "number" || !Number.isFinite(value)) throw new Error(`jwt ${name}`);
+  return value;
+}
+
+function checkClaims(claims: JwtClaims, issuer: string, audience: string, now: number): void {
+  if (claims.iss !== issuer) throw new Error("jwt issuer mismatch");
+  const aud = claimStrings(claims.aud);
+  if (!aud.includes(audience)) throw new Error("jwt audience mismatch");
+  const azp = claims.azp;
+  if (azp !== undefined && azp !== audience) throw new Error("jwt azp mismatch");
+  if (aud.length > 1 && azp === undefined) throw new Error("jwt azp mismatch");
+  if (numericDate(claims, "exp") <= now) throw new Error("jwt expired");
+  if (claims.nbf !== undefined && numericDate(claims, "nbf") > now + CLOCK_SKEW_SECONDS) throw new Error("jwt nbf");
+  if (numericDate(claims, "iat") > now + CLOCK_SKEW_SECONDS) throw new Error("jwt iat");
+}
+
+export async function verifyJwt(
+  token: string,
+  cfg: JwtConfig,
+  now = Math.floor(Date.now() / 1000),
+): Promise<JwtClaims> {
   if (!cfg.jwks_url) throw new Error("jwks_url missing");
+  if (!cfg.issuer) throw new Error("jwt issuer missing");
+  if (!cfg.audience) throw new Error("jwt audience missing");
+  if (token.length > JWT_MAX_LENGTH) throw new Error("invalid jwt");
   const parts = token.split(".");
-  if (parts.length !== 3) throw new Error("invalid jwt");
-  const header = JSON.parse(b64urlToBuf(parts[0]!).toString("utf8")) as { alg?: unknown; kid?: unknown };
-  const alg = typeof header.alg === "string" ? header.alg : "";
+  if (parts.length !== 3 || !parts.every((part) => BASE64URL.test(part))) throw new Error("invalid jwt");
+  const [encodedHeader, encodedClaims, encodedSignature] = parts as [string, string, string];
+  if (!encodedHeader || !encodedClaims) throw new Error("invalid jwt");
+  const header = segment(encodedHeader);
+  const alg = asString(header.alg);
   const spec = Object.hasOwn(ALGORITHMS, alg) ? ALGORITHMS[alg] : undefined;
   if (!spec) throw new Error("jwt alg");
-  const kid = typeof header.kid === "string" ? header.kid : "";
+  if (Object.hasOwn(header, "crit")) throw new Error("jwt crit");
+  if (header.kid !== undefined && typeof header.kid !== "string") throw new Error("invalid jwt");
+  if (!encodedSignature) throw new Error("jwt signature");
+  const kid = asString(header.kid);
   const keys = await candidates(cfg.jwks_url, alg, spec, kid);
   if (!keys.length) throw new Error("jwt kid unknown");
-  const data = Buffer.from(`${parts[0]}.${parts[1]}`);
-  const signature = b64urlToBuf(parts[2]!);
+  const data = Buffer.from(`${encodedHeader}.${encodedClaims}`);
+  const signature = Buffer.from(encodedSignature, "base64url");
   if (!keys.some((key) => verifySignature(spec, key, data, signature))) throw new Error("jwt signature");
-  const claims = JSON.parse(b64urlToBuf(parts[1]!).toString("utf8")) as JwtClaims;
-  if (cfg.issuer && claims.iss !== cfg.issuer) throw new Error("jwt issuer mismatch");
-  if (cfg.audience) {
-    const aud = claimStrings(claims.aud);
-    if (!aud.includes(cfg.audience)) throw new Error("jwt audience mismatch");
-    if (aud.length > 1 && typeof claims.azp === "string" && claims.azp !== cfg.audience) {
-      throw new Error("jwt azp mismatch");
-    }
-  }
-  const now = Math.floor(Date.now() / 1000);
-  if (typeof claims.exp !== "number" || claims.exp < now) throw new Error("jwt expired");
-  if (typeof claims.nbf === "number" && claims.nbf > now + 60) throw new Error("jwt nbf");
+  const claims = segment(encodedClaims);
+  checkClaims(claims, cfg.issuer, cfg.audience, now);
   return claims;
 }

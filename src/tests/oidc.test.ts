@@ -22,7 +22,7 @@ import {
   tokenRequest,
   verifyOidcState,
 } from "@/lib/auth/oidc";
-import { verifyJwt } from "@/lib/auth/jwks";
+import { resetJwksCache, verifyJwt } from "@/lib/auth/jwks";
 import {
   appRoleTemplates,
   emailDomainAllowed,
@@ -521,7 +521,7 @@ function signed(alg: string, key: KeyObject, kid: string, claims: object) {
 
 test("ID tokens verify with RSA, EC P-256 and P-384, and Ed25519 keys bound to their kid", async () => {
   const now = Math.floor(Date.now() / 1000);
-  const claims = { iss: "https://idp.example.com", aud: "hub", exp: now + 60 };
+  const claims = { iss: "https://idp.example.com", aud: "hub", iat: now, exp: now + 60 };
   const pairs = [
     { alg: "RS256", ...generateKeyPairSync("rsa", { modulusLength: 2048 }) },
     { alg: "ES256", ...generateKeyPairSync("ec", { namedCurve: "P-256" }) },
@@ -546,13 +546,126 @@ test("ID tokens verify with RSA, EC P-256 and P-384, and Ed25519 keys bound to t
   });
 });
 
+function rawToken(header: object, claims: object, signature = "c2ln") {
+  const encode = (value: object) => Buffer.from(JSON.stringify(value)).toString("base64url");
+  return `${encode(header)}.${encode(claims)}.${signature}`;
+}
+
+test("ID tokens need a known issuer and audience, a fresh exp and iat, a matching azp, and no crit header", async () => {
+  resetJwksCache();
+  const { publicKey, privateKey } = generateKeyPairSync("ec", { namedCurve: "P-256" });
+  const now = 1_800_000_000;
+  const cfg = { issuer: "https://idp.example.com", audience: "hub", jwks_url: "https://idp.example.com/claims-jwks" };
+  const claims = { iss: cfg.issuer, aud: "hub", sub: "s1", iat: now - 10, exp: now + 60 };
+  const token = (extra: object, header: object = {}) =>
+    signed("ES256", privateKey, "k1", { ...claims, ...extra }).replace(
+      /^[^.]+/,
+      Buffer.from(JSON.stringify({ alg: "ES256", kid: "k1", ...header })).toString("base64url"),
+    );
+  const resign = (value: string) => {
+    const [head, body] = value.split(".");
+    const data = `${head}.${body}`;
+    return `${data}.${sign("sha256", Buffer.from(data), { key: privateKey, dsaEncoding: "ieee-p1363" }).toString("base64url")}`;
+  };
+  await withJwks({ keys: [{ ...publicKey.export({ format: "jwk" }), kid: "k1", use: "sig" }] }, async () => {
+    assert.equal((await verifyJwt(resign(token({})), cfg, now)).sub, "s1");
+    assert.equal((await verifyJwt(resign(token({ aud: ["hub", "api"], azp: "hub" })), cfg, now)).sub, "s1");
+    assert.equal((await verifyJwt(resign(token({ nbf: now + 30 })), cfg, now)).sub, "s1");
+    const refused: [object, RegExp, object?][] = [
+      [{ iss: "https://other.example.com" }, /jwt issuer mismatch/],
+      [{ aud: "other" }, /jwt audience mismatch/],
+      [{ azp: "other" }, /jwt azp mismatch/],
+      [{ aud: ["hub", "api"] }, /jwt azp mismatch/],
+      [{ exp: now }, /jwt expired/],
+      [{ exp: "later" }, /jwt exp/],
+      [{ iat: undefined }, /jwt iat/],
+      [{ iat: now + 61 }, /jwt iat/],
+      [{ nbf: now + 61 }, /jwt nbf/],
+      [{}, /jwt crit/, { crit: ["exp"] }],
+      [{}, /invalid jwt/, { kid: 7 }],
+    ];
+    for (const [extra, error, header] of refused) {
+      await assert.rejects(verifyJwt(resign(token(extra, header)), cfg, now), error, JSON.stringify({ extra, header }));
+    }
+    const valid = resign(token({}));
+    await assert.rejects(verifyJwt(`${valid.slice(0, -2)}AA`, cfg, now), /jwt signature/);
+    await assert.rejects(verifyJwt(valid.replace(/\.[^.]+$/, "."), cfg, now), /jwt signature/);
+    await assert.rejects(verifyJwt(`${valid}.extra`, cfg, now), /invalid jwt/);
+    await assert.rejects(verifyJwt(valid.replace(".", ".+"), cfg, now), /invalid jwt/);
+    await assert.rejects(verifyJwt(`${"a".repeat(64 * 1024)}.b.c`, cfg, now), /invalid jwt/);
+    await assert.rejects(verifyJwt(rawToken({ alg: "ES256", kid: "k1" }, ["not", "an", "object"]), cfg, now), /jwt signature|invalid jwt/);
+    await assert.rejects(verifyJwt(valid, { ...cfg, issuer: "" }, now), /jwt issuer missing/);
+    await assert.rejects(verifyJwt(valid, { ...cfg, audience: "" }, now), /jwt audience missing/);
+  });
+  resetJwksCache();
+});
+
+test("the JWKS keeps only public signing keys that are strong enough and fetches once per rotation window", async () => {
+  resetJwksCache();
+  const now = 1_800_000_000;
+  const cfg = { issuer: "https://idp.example.com", audience: "hub", jwks_url: "https://idp.example.com/keys-jwks" };
+  const claims = { iss: cfg.issuer, aud: "hub", iat: now, exp: now + 60 };
+  const strong = generateKeyPairSync("rsa", { modulusLength: 2048 });
+  const weak = generateKeyPairSync("rsa", { modulusLength: 1024 });
+  const ed = generateKeyPairSync("ed25519");
+  const keys = [
+    { ...strong.privateKey.export({ format: "jwk" }), kid: "private-fields", alg: "RS256" },
+    { ...weak.publicKey.export({ format: "jwk" }), kid: "weak" },
+    { ...strong.publicKey.export({ format: "jwk" }), kid: "encryption", use: "enc" },
+    { ...strong.publicKey.export({ format: "jwk" }), kid: "wrap-only", key_ops: ["wrapKey"] },
+    { ...strong.publicKey.export({ format: "jwk" }), kid: "pss-only", alg: "PS256" },
+    { ...ed.publicKey.export({ format: "jwk" }), kid: "ed", key_ops: ["verify"] },
+    { kty: "oct", k: "c2VjcmV0", kid: "hmac" },
+    "not a key",
+  ];
+  let fetches = 0;
+  const original = globalThis.fetch;
+  globalThis.fetch = (async () => {
+    fetches += 1;
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    return Response.json({ keys });
+  }) as typeof fetch;
+  try {
+    const results = await Promise.all([
+      verifyJwt(signed("RS256", strong.privateKey, "private-fields", claims), cfg, now),
+      verifyJwt(signed("EdDSA", ed.privateKey, "ed", claims), cfg, now),
+    ]);
+    assert.equal(results.length, 2);
+    assert.equal(fetches, 1);
+    for (const kid of ["weak", "encryption", "wrap-only", "pss-only", "hmac"]) {
+      const key = kid === "weak" ? weak.privateKey : strong.privateKey;
+      await assert.rejects(verifyJwt(signed("RS256", key, kid, claims), cfg, now), /jwt kid unknown/, kid);
+    }
+    assert.equal(fetches, 1);
+  } finally {
+    globalThis.fetch = original;
+    resetJwksCache();
+  }
+});
+
+test("a JWKS response that is too large or not a key set is refused", async () => {
+  resetJwksCache();
+  const now = 1_800_000_000;
+  const { privateKey } = generateKeyPairSync("ed25519");
+  const cfg = { issuer: "https://idp.example.com", audience: "hub", jwks_url: "https://idp.example.com/large-jwks" };
+  const token = signed("EdDSA", privateKey, "k1", { iss: cfg.issuer, aud: "hub", iat: now, exp: now + 60 });
+  await withJwks({ keys: [], padding: "x".repeat(600 * 1024) }, async () => {
+    await assert.rejects(verifyJwt(token, cfg, now), /jwks too large/);
+  });
+  resetJwksCache();
+  await withJwks({ keys: "none" }, async () => {
+    await assert.rejects(verifyJwt(token, cfg, now), /jwks invalid/);
+  });
+  resetJwksCache();
+});
+
 test("an Entra tenant domain sign-in verifies the ID token against the tenant ID issuer", async () => {
   const { publicKey, privateKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
   const now = Math.floor(Date.now() / 1000);
   const base = "https://login.microsoftonline.com/contoso.com";
   const configured = `${base}/v2.0`;
   const jwksUrl = `https://login.microsoftonline.com/${TENANT_ID}/discovery/v2.0/keys-${now}`;
-  const claims = { iss: ENTRA_TENANT_ISSUER, aud: "hub", exp: now + 60, nonce: "nonce-1", sub: "subject-1" };
+  const claims = { iss: ENTRA_TENANT_ISSUER, aud: "hub", iat: now, exp: now + 60, nonce: "nonce-1", sub: "subject-1" };
   const tenantToken = signed("RS256", privateKey, "k1", claims);
   const domainToken = signed("RS256", privateKey, "k1", { ...claims, iss: configured });
   let idToken = tenantToken;

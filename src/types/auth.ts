@@ -260,16 +260,10 @@ export type SsoAccessHelp = { provider: string; requestAccessUrl: string };
 
 export type SsoFailure = "owner" | "domain" | "conflict" | "email" | "no_role";
 
-export type Jwk = {
-  kty?: string;
-  kid?: string;
-  crv?: string;
-  alg?: string;
-  use?: string;
-};
+export type JwkKeyType = "RSA" | "EC" | "OKP";
 
 export type JwtAlgorithm = {
-  kty: "RSA" | "EC" | "OKP";
+  kty: JwkKeyType;
   hash: string | null;
   curves?: readonly string[];
   saltLength?: number;
@@ -277,13 +271,13 @@ export type JwtAlgorithm = {
 
 export type VerificationKey = {
   kid: string;
-  kty: string;
+  kty: JwkKeyType;
   crv: string;
   alg: string;
   key: KeyObject;
 };
 
-export type JwksCache = { url: string; keys: VerificationKey[]; fetched: number };
+export type JwksEntry = { keys: VerificationKey[]; fetched: number };
 
 export type JwtClaims = Record<string, unknown>;
 

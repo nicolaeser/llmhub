@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { appendFile, mkdtemp, readdir, readFile, rm, stat } from "node:fs/promises";
+import { appendFile, mkdtemp, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -324,23 +324,25 @@ test("production compose drains requests on stop, rotates logs, and caps memory"
     (await routeFiles("src/app")).map(async (route) => Number(/export const maxDuration = (\d+);/.exec(await file(route))?.[1] ?? 0)),
   );
   const longest = Math.max(...durations);
-  for (const source of [deploy, au]) {
-    assert.match(source, /^x-logging: &logging\n {2}driver: json-file\n {2}options:\n {4}max-size: "\d+m"\n {4}max-file: "\d+"\n/);
-    const services = composeServices(source);
-    assert.ok(services.size >= 3);
-    for (const [name, block] of services) {
-      assert.match(block, /^ {4}logging: \*logging$/m, name);
-      assert.match(block, /^ {4}mem_limit: \S+$/m, name);
-    }
-    const app = services.get("app") ?? "";
-    const grace = Number(/^ {4}stop_grace_period: (\d+)s$/m.exec(app)?.[1]);
-    assert.ok(grace > longest, `stop_grace_period ${grace}s must exceed the longest route maxDuration ${longest}s`);
-    assert.equal(stopSeconds({ Config: {} }), grace);
-    assert.match(app, /^ {4}mem_limit: \$\{LLMHUB_MEMORY_LIMIT:-\d+[mg]\}$/m);
-    assert.match(services.get("postgres") ?? "", /^ {4}mem_limit: \$\{POSTGRES_MEMORY_LIMIT:-\d+[mg]\}$/m);
-    assert.match(services.get("redis") ?? "", /^ {4}mem_limit: \$\{REDIS_MEMORY_LIMIT:-\d+[mg]\}$/m);
+  const logging = /^x-logging: &logging\n {2}driver: json-file\n {2}options:\n {4}max-size: "\d+m"\n {4}max-file: "\d+"\n/;
+  assert.match(deploy, logging);
+  const services = composeServices(deploy);
+  assert.ok(services.size >= 3);
+  for (const [name, block] of services) {
+    assert.match(block, /^ {4}logging: \*logging$/m, name);
+    assert.match(block, /^ {4}mem_limit: \S+$/m, name);
   }
-  assert.ok(composeServices(au).has("updater"));
+  const app = services.get("app") ?? "";
+  const grace = Number(/^ {4}stop_grace_period: (\d+)s$/m.exec(app)?.[1]);
+  assert.ok(grace > longest, `stop_grace_period ${grace}s must exceed the longest route maxDuration ${longest}s`);
+  assert.equal(stopSeconds({ Config: {} }), grace);
+  assert.match(app, /^ {4}mem_limit: \$\{LLMHUB_MEMORY_LIMIT:-\d+[mg]\}$/m);
+  assert.match(services.get("postgres") ?? "", /^ {4}mem_limit: \$\{POSTGRES_MEMORY_LIMIT:-\d+[mg]\}$/m);
+  assert.match(services.get("redis") ?? "", /^ {4}mem_limit: \$\{REDIS_MEMORY_LIMIT:-\d+[mg]\}$/m);
+  assert.match(au, logging);
+  const updater = composeServices(au).get("updater") ?? "";
+  assert.match(updater, /^ {4}logging: \*logging$/m);
+  assert.match(updater, /^ {4}mem_limit: 256m$/m);
 });
 
 test("compose files read credentials from the generated .env", async () => {
@@ -406,7 +408,13 @@ test("generate-env.sh --yes builds the production .env from the environment", { 
     spawnSync("bash", [path.join(root, "generate-env.sh"), ...args], {
       encoding: "utf8",
       input: "",
-      env: { NODE_ENV: "production", PATH: process.env.PATH ?? "", ENV_OUTPUT: output, ...answers },
+      env: {
+        NODE_ENV: "production",
+        PATH: process.env.PATH ?? "",
+        ENV_OUTPUT: output,
+        COMPOSE_SOURCE: `file://${root.replace(/\/$/, "")}`,
+        ...answers,
+      },
     });
   try {
     const missing = run(["--yes"]);
@@ -426,6 +434,9 @@ test("generate-env.sh --yes builds the production .env from the environment", { 
     assert.match(written, /^POSTGRES_PASSWORD=[A-Za-z0-9_-]{32}$/m);
     assert.match(written, /^APP_SECRET=[0-9a-f]{64}$/m);
     assert.match(written, /^SMTP_FROM=mailer@example\.com$/m);
+    assert.match(written, /^COMPOSE_FILE=docker-compose\.yml$/m);
+    assert.equal(await readFile(path.join(dir, "docker-compose.yml"), "utf8"), await file("docker-compose.yml"));
+    await assert.rejects(stat(path.join(dir, "docker-compose.au.yml")));
     assert.doesNotMatch(written, /^(?:DATABASE_URL|REDIS_URL|OIDC_CLIENT_SECRET|S3_ACCESS_KEY_ID|SENTRY_DSN)=/m);
 
     const invalidMode = run(["--yes", "--force"], { IP_MODE: "x-forwarded-for" });
@@ -446,6 +457,7 @@ test("generate-env.sh --yes builds the production .env from the environment", { 
     const updated = run(["--yes", "--force"], {
       OIDC_CLIENT_SECRET: "sso-secret",
       IP_MODE: "cloudflare",
+      AUTO_UPDATE: "yes",
       SENTRY_DSN: "https://key@o1.ingest.sentry.example/2",
     });
     assert.equal(updated.status, 0, updated.stderr);
@@ -458,8 +470,24 @@ test("generate-env.sh --yes builds the production .env from the environment", { 
     assert.match(next, /^IP_MODE=cloudflare$/m);
     assert.match(next, /^SENTRY_DSN=https:\/\/key@o1\.ingest\.sentry\.example\/2$/m);
     assert.match(next, /^EXTRA_SETTING=kept$/m);
+    assert.match(next, /^COMPOSE_FILE=docker-compose\.yml:docker-compose\.au\.yml$/m);
+    assert.equal(await readFile(path.join(dir, "docker-compose.au.yml"), "utf8"), await file("docker-compose.au.yml"));
     assert.equal(await readFile(`${output}.bak`, "utf8"), `${written}EXTRA_SETTING=kept\n`);
     assert.equal((await stat(output)).mode & 0o777, 0o600);
+
+    await writeFile(output, next.replace(/^COMPOSE_FILE=.*$/m, "COMPOSE_FILE=docker-compose.au.yml:docker-compose.rm.yml"));
+    const legacy = run(["--yes", "--force"]);
+    assert.equal(legacy.status, 0, legacy.stderr);
+    assert.match(await readFile(output, "utf8"), /^COMPOSE_FILE=docker-compose\.yml:docker-compose\.au\.yml:docker-compose\.rm\.yml$/m);
+    assert.equal(await readFile(path.join(dir, "docker-compose.rm.yml"), "utf8"), await file("docker-compose.rm.yml"));
+
+    const off = run(["--yes", "--force"], { AUTO_UPDATE: "no" });
+    assert.equal(off.status, 0, off.stderr);
+    assert.match(await readFile(output, "utf8"), /^COMPOSE_FILE=docker-compose\.yml:docker-compose\.rm\.yml$/m);
+
+    const invalidUpdate = run(["--yes", "--force"], { AUTO_UPDATE: "sometimes" });
+    assert.equal(invalidUpdate.status, 1);
+    assert.match(invalidUpdate.stderr, /AUTO_UPDATE/);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
@@ -520,16 +548,14 @@ test("the keeper refreshes sign-ins from the image without the app, Redis, or mi
 });
 
 test("Redis snapshots atomically and keeps accepting writes when a snapshot fails", async () => {
-  for (const source of [await file("docker-compose.yml"), await file("docker-compose.au.yml")]) {
-    const redis = composeServices(source).get("redis") ?? "";
-    assert.match(
-      redis,
-      /command: \["redis-server", "--appendonly", "no", "--save", "60 1", "--stop-writes-on-bgsave-error", "no", "--requirepass", "\$\{REDIS_PASSWORD\}"\]/,
-    );
-  }
+  const redis = composeServices(await file("docker-compose.yml")).get("redis") ?? "";
+  assert.match(
+    redis,
+    /command: \["redis-server", "--appendonly", "no", "--save", "60 1", "--stop-writes-on-bgsave-error", "no", "--requirepass", "\$\{REDIS_PASSWORD\}"\]/,
+  );
 });
 
-test("the auto-update stack is the production stack plus the updater", async () => {
+test("the auto-update overlay labels the app and keeper and adds the updater", async () => {
   const [deploy, dev, au, dockerignore] = await Promise.all([
     file("docker-compose.yml"),
     file("docker-compose.dev.yml"),
@@ -537,16 +563,14 @@ test("the auto-update stack is the production stack plus the updater", async () 
     file(".dockerignore"),
   ]);
   assert.doesNotMatch(deploy + dev, /docker\.sock|updater/);
-  const target = '    labels:\n      llmhub.updater.target: "true"\n';
-  const updaterStart = au.indexOf("\n  updater:\n");
-  const updaterEnd = au.indexOf("\nvolumes:\n");
-  assert.ok(updaterStart > 0 && updaterEnd > updaterStart);
-  assert.deepEqual(
-    [...composeServices(au)].filter(([, block]) => block.includes(target)).map(([name]) => name),
-    ["app", "keeper"],
-  );
-  assert.equal((au.slice(0, updaterStart) + au.slice(updaterEnd)).replaceAll(target, ""), deploy);
-  const updater = au.slice(updaterStart, updaterEnd);
+  const target = '    labels:\n      llmhub.updater.target: "true"\n\n';
+  const services = composeServices(au);
+  assert.deepEqual([...services.keys()], ["app", "keeper", "updater"]);
+  assert.equal(services.get("app"), target);
+  assert.equal(services.get("keeper"), target);
+  assert.ok(composeServices(deploy).has("app") && composeServices(deploy).has("keeper"));
+  assert.doesNotMatch(au, /^volumes:|^networks:/m);
+  const updater = services.get("updater") ?? "";
   assert.match(updater, /image: ghcr\.io\/nicolaeser\/llmhub:\$\{LLMHUB_TAG:-latest\}/);
   assert.match(updater, /pull_policy: always/);
   assert.match(updater, /restart: unless-stopped/);

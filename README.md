@@ -31,40 +31,45 @@ LLM Hub runs as one Docker image with PostgreSQL. Redis and S3-compatible storag
 
 The default memory limits add up to about 7 GB. On a smaller server, lower them before the first start (see [Memory limits](#memory-limits)).
 
-### 1. Download the files
+### 1. Download the setup script
 
-Create a folder for LLM Hub and download two files into it. The database data will also live in this folder.
+Create a folder for LLM Hub and download the setup script into it. The compose files and the database data will also live in this folder.
 
 ```bash
 mkdir llmhub && cd llmhub
-curl -fsSLO https://raw.githubusercontent.com/nicolaeser/llmhub/main/docker-compose.yml
 curl -fsSLO https://raw.githubusercontent.com/nicolaeser/llmhub/main/generate-env.sh
 chmod +x generate-env.sh
 ```
 
-### 2. Create the settings file
+Without curl, use `wget https://raw.githubusercontent.com/nicolaeser/llmhub/main/generate-env.sh` instead.
+
+### 2. Create the settings and compose files
 
 ```bash
 ./generate-env.sh
 ```
 
-The script asks a few questions and writes the settings file `.env`. Press Enter to keep the value it shows. It asks for:
+The script asks a few questions, writes the settings file `.env`, and downloads `docker-compose.yml` next to it. Press Enter to keep the value it shows. It asks for:
 
 - **Domain.** `hub.example.com` becomes `https://hub.example.com`.
 - **Release channel.** `latest` for stable releases, `dev` for previews, or a fixed release tag.
 - **Port.** The port on `127.0.0.1` where the reverse proxy reaches the app (default `3000`).
 - **Client addresses.** Whether visitors come through your own reverse proxy or through Cloudflare (`IP_MODE`).
+- **Automatic updates.** Whether to install the updater container (see [Automatic updates](#automatic-updates)). The script then also downloads `docker-compose.au.yml`.
 - **Optional extras.** Mail (for password reset emails), the secret for single sign-on (OIDC), S3 storage keys, the URL of a redaction model that runs elsewhere, and a Sentry DSN for error reports. Leave them empty if you don't need them.
 
 The script creates all passwords and the `APP_SECRET` for you. It shows a summary with hidden secrets and saves the file so that only your user can read it (mode 600).
+
+It also writes `COMPOSE_FILE` into `.env`: `docker-compose.yml`, or `docker-compose.yml:docker-compose.au.yml` with automatic updates. A plain `docker compose` then uses the right files, so you never need `-f`. When neither curl nor wget is installed, the script installs curl with the system package manager (through `sudo` if you are not root).
 
 > [!IMPORTANT]
 > Keep a backup of `.env`. `APP_SECRET` encrypts the stored provider keys and two-factor secrets and signs the sessions. If you lose it or change it, LLM Hub can no longer read them.
 
 More options:
 
-- `./generate-env.sh --yes` takes the default answers without asking. It also runs that way without a terminal. Give answers as environment variables, for example `NEXT_PUBLIC_APP_URL=https://hub.example.com ./generate-env.sh --yes`.
+- `./generate-env.sh --yes` takes the default answers without asking. It also runs that way without a terminal. Give answers as environment variables, for example `NEXT_PUBLIC_APP_URL=https://hub.example.com AUTO_UPDATE=yes ./generate-env.sh --yes`. `AUTO_UPDATE` (`yes` or `no`) only answers the question and isn't written to `.env`.
 - The script never overwrites an existing `.env` unless you add `--force`. With `--force` it keeps the existing values (including the secrets) and saves the old file as `.env.bak`.
+- On every run, the script compares the compose files listed in `COMPOSE_FILE` with the current versions. It asks before it replaces a changed file and keeps the old one as `<file>.bak`; with `--yes` it replaces them. Files it doesn't know, such as your own `docker-compose.override.yml`, stay in `COMPOSE_FILE` untouched.
 
 ### 3. Start LLM Hub
 
@@ -193,10 +198,11 @@ The compose files also read these values from `.env`. They set up the containers
 | `POSTGRES_DB` | `llmhub` | Database name. |
 | `POSTGRES_PASSWORD` | random | Database password. |
 | `REDIS_PASSWORD` | random | Redis password (`--requirepass`). |
+| `COMPOSE_FILE` | `docker-compose.yml` | Compose files a plain `docker compose` uses, separated by `:`. Automatic updates add `docker-compose.au.yml`. |
 
 ### Memory limits
 
-`docker-compose.yml` and `docker-compose.au.yml` limit the memory of each container. `generate-env.sh` doesn't write these values. Add them to `.env` only if you want other limits:
+The compose files limit the memory of each container. `generate-env.sh` doesn't write these values. Add them to `.env` only if you want other limits:
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
@@ -350,14 +356,15 @@ Restore with the same image version that made the backup, or a newer one. A newe
 
 **Migrations.** Each container start applies new database migrations under a database lock before the server starts, so several replicas can start at the same time. When a migration fails, the container keeps running without the web server, logs `start.migration_failed`, and tries again after 10 seconds, 30 seconds, 1 minute, and 2 minutes, then every 5 minutes. The new updater reads migration status separately from health and preserves the replacement and backups when a database change makes container rollback unsafe. Migrations only go forward. To go back to an older version, restore the backup from before the upgrade and start the previous tag.
 
-**Older compose files.** Compose files from before November 2026 keep working without changes. The app container then runs the keeper itself and keeps the login journal in the image's anonymous volume (see [Subscription sign-ins](#subscription-sign-ins)). Those files run Redis with an append-only file. The updater switches it to snapshots once (see [Automatic updates](#automatic-updates)); without the updater it stays as it is. Downloading the current file is optional. It adds the separate keeper container, the `login-journal` volume, and the snapshot settings for Redis:
+**Older compose files.** Compose files from before November 2026 keep working without changes. The app container then runs the keeper itself and keeps the login journal in the image's anonymous volume (see [Subscription sign-ins](#subscription-sign-ins)). Those files run Redis with an append-only file. The updater switches it to snapshots once (see [Automatic updates](#automatic-updates)); without the updater it stays as it is. Getting the current files is optional. They add the separate keeper container, the `login-journal` volume, and the snapshot settings for Redis. Download the current `generate-env.sh` and let it fetch them; it keeps your `.env` values:
 
 ```bash
-curl -fsSLO https://raw.githubusercontent.com/nicolaeser/llmhub/main/docker-compose.yml
+curl -fsSLO https://raw.githubusercontent.com/nicolaeser/llmhub/main/generate-env.sh
+./generate-env.sh --force
 docker compose up -d
 ```
 
-Use `docker-compose.au.yml` instead if you run the updater. When Redis switches to snapshots, it stops normally and writes a final snapshot, which the new container loads, so queues and counters are kept. After that, `redis-data/appendonlydir` is no longer read and can be deleted.
+Older installations with the updater used a full copy of `docker-compose.yml` as `docker-compose.au.yml` and ran `docker compose -f docker-compose.au.yml`. That copy keeps working. Today `docker-compose.au.yml` only adds the updater to `docker-compose.yml`, so it no longer works alone. The script detects the old setup (`COMPOSE_FILE=docker-compose.au.yml` in `.env`, or the file next to it), offers automatic updates as the default, downloads both files, and sets `COMPOSE_FILE=docker-compose.yml:docker-compose.au.yml`. From then on, use a plain `docker compose` without `-f`. When Redis switches to snapshots, it stops normally and writes a final snapshot, which the new container loads, so queues and counters are kept. After that, `redis-data/appendonlydir` is no longer read and can be deleted.
 
 **Older Caddy block.** If your Caddy block is still the plain `reverse_proxy 127.0.0.1:3000`, replace it with the block from [step 4](#4-set-up-the-reverse-proxy) and reload Caddy (`systemctl reload caddy` or `caddy reload`). Its health check on `/internal-api/ready` and `lb_try_duration` hold new requests while the app restarts and pass them to the new container. Without them, clients get `502` during every restart and must retry on their own. The first update to a release with this restart behavior is still installed by the previous updater and image, which wait up to 330 seconds for open streams. From the next update on, the app waits at most 25 seconds.
 
@@ -384,12 +391,12 @@ docker compose run --rm --no-deps --entrypoint node app ./node_modules/prisma/bu
 docker compose up -d
 ```
 
-For an interrupted `20261115145000_prisma_compatibility` conversion, the image includes a verified repair command. Stop every app replica and the updater, take a backup, and ensure the database has space for the copied content, indexes, and WAL. Use the same Compose file/options as your deployment (`-f docker-compose.au.yml` below is for the updater stack), with the current image:
+For an interrupted `20261115145000_prisma_compatibility` conversion, the image includes a verified repair command. Stop every app replica and the updater, take a backup, and ensure the database has space for the copied content, indexes, and WAL. The commands below are for the updater stack with `COMPOSE_FILE` in `.env` (without the updater, leave out `updater`); with an older setup, add the same `-f` options as your deployment. Use the current image:
 
 ```bash
-docker compose -f docker-compose.au.yml stop updater app
-docker compose -f docker-compose.au.yml run --rm --no-deps --entrypoint node app recover-compatibility.mjs
-docker compose -f docker-compose.au.yml run --rm --no-deps --entrypoint node app migrate-deploy.mjs
+docker compose stop updater app
+docker compose run --rm --no-deps --entrypoint node app recover-compatibility.mjs
+docker compose run --rm --no-deps --entrypoint node app migrate-deploy.mjs
 ```
 
 Run each command only after the previous one succeeds. The repair accepts only the published compatibility migration's checksum, exactly one failed migration, the original partitioned content table and policy constraint, and no replacement table or later applied migration. It holds Prisma's PostgreSQL advisory lock throughout verification and `migrate resolve`; only that child process skips acquiring the lock again. It refuses an active migration or unexpected database state without changing migration records. It never resets the database, changes migration SQL, or marks a migration applied. Normal startup uses these same checks automatically, once per deployment attempt.
@@ -397,9 +404,9 @@ Run each command only after the previous one succeeds. The repair accepts only t
 The deployment command streams Prisma output immediately and reports every 30 seconds while it is still running. A large copy may take longer than ten minutes. Leave PostgreSQL running and the updater stopped until it completes successfully. Then start the app, verify readiness, and resume the updater:
 
 ```bash
-docker compose -f docker-compose.au.yml start app
+docker compose start app
 curl --fail http://127.0.0.1:3000/internal-api/ready
-docker compose -f docker-compose.au.yml start updater
+docker compose start updater
 ```
 
 Use your configured host port if it differs from 3000. If verification refuses recovery, inspect the database using the general procedure above instead of bypassing its checks.
@@ -408,18 +415,18 @@ Use your configured host port if it differs from 3000. If verification refuses r
 
 ## Automatic updates
 
-`docker-compose.au.yml` is `docker-compose.yml` plus an updater container. The app, PostgreSQL, Redis, and keeper are the same. The app and the keeper only get the label `llmhub.updater.target=true`, so both move to every new image.
+`docker-compose.au.yml` is an add-on file for `docker-compose.yml`. It adds an updater container and gives the app and the keeper the label `llmhub.updater.target=true`, so both move to every new image. PostgreSQL, Redis, and everything else stay as `docker-compose.yml` defines them.
 
 ### Turn it on
 
-Use it instead of `docker-compose.yml`, in the same folder and with the same `.env`:
+Answer yes to **Automatic updates** in `generate-env.sh`. On an existing installation, run it with `--force`; it keeps all values:
 
 ```bash
-curl -fsSLO https://raw.githubusercontent.com/nicolaeser/llmhub/main/docker-compose.au.yml
-docker compose -f docker-compose.au.yml up -d
+./generate-env.sh --force
+docker compose up -d
 ```
 
-Use `-f docker-compose.au.yml` for later compose commands too, or add `COMPOSE_FILE=docker-compose.au.yml` to `.env` so a plain `docker compose` uses it. Switching keeps all data: PostgreSQL, Redis, and the login journal stay as they are. Only the app and keeper containers are recreated.
+The script downloads `docker-compose.au.yml` and sets `COMPOSE_FILE=docker-compose.yml:docker-compose.au.yml` in `.env`, so a plain `docker compose` uses both files. Switching keeps all data: PostgreSQL, Redis, and the login journal stay as they are. Only the app and keeper containers are recreated.
 
 Automatic updates start switched off. Turn them on in the console: the badge in the top bar (Live, Updating, Reconnecting, Offline) and **Settings → General → Automatic updates** show the updater, the running and the newest image, the free disk space, and the last check. They offer **Check now**, **Update now**, and the **Install updates automatically** switch (needs the `settings:manage` permission). While an updater is connected and updates are off, the console offers to turn them on.
 
@@ -436,7 +443,7 @@ The updater runs from the same image (`node updater.mjs`) and keeps the app on t
 
 A new container keeps the anonymous volumes of the one it replaces, like `docker compose up` does. So a stack without the `login-journal` volume keeps its login journal across updates. The image also provides an anonymous volume for the root updater's transaction and history files, preserving them during ordinary Compose recreation without requiring a Compose file change. Do not use `--renew-anon-volumes` or delete these volumes during recovery.
 
-The updater service sets `pull_policy: always`. Every `docker compose -f docker-compose.au.yml up` first pulls the newest image of `LLMHUB_TAG` and recreates the app and the updater if it changed. Without this, a server with an older image of the tag (for example one pulled before the updater existed) would start the updater from an image without `updater.mjs` (`Cannot find module '/app/updater.mjs'`). So this command needs access to the registry.
+The updater service sets `pull_policy: always`. Every `docker compose up` with `docker-compose.au.yml` first pulls the newest image of `LLMHUB_TAG` and recreates the app and the updater if it changed. Without this, a server with an older image of the tag (for example one pulled before the updater existed) would start the updater from an image without `updater.mjs` (`Cannot find module '/app/updater.mjs'`). So this command needs access to the registry.
 
 ### Redis switch for older installations
 
@@ -475,9 +482,9 @@ These variables configure only the updater. The app doesn't read them:
 ### Turn it off
 
 - **Stop automatic installs:** turn off the switch. The updater keeps checking and offers **Update now**.
-- **Remove the updater:** remove `COMPOSE_FILE` from `.env` if you set it, and run `docker compose -f docker-compose.yml up -d --remove-orphans`. This removes the updater and recreates the app without the label.
+- **Remove the updater:** run `./generate-env.sh --force`, answer no to **Automatic updates**, and run `docker compose up -d --remove-orphans`. This removes the updater and recreates the app and the keeper without the label.
 
-An older updater refreshes itself after the next app update and prints the logs of the previous updater again, so `docker compose logs updater` still shows that run. `docker compose -f docker-compose.au.yml up -d` refreshes it by hand, together with the app.
+An older updater refreshes itself after the next app update and prints the logs of the previous updater again, so `docker compose logs updater` still shows that run. `docker compose up -d` refreshes it by hand, together with the app.
 
 ## PII redaction model
 
@@ -495,14 +502,13 @@ Set it in **Guardrails → PII**, for the global policy and for each override.
 
 ### Run the model next to LLM Hub
 
-`docker-compose.rm.yml` runs [PII-Tracer](https://huggingface.co/perplexity-ai/PII-Tracer) (MIT license, a 0.6B bidirectional Qwen3 encoder) on the CPU next to the app. It is an add-on file for `docker-compose.yml` or `docker-compose.au.yml`:
+`docker-compose.rm.yml` runs [PII-Tracer](https://huggingface.co/perplexity-ai/PII-Tracer) (MIT license, a 0.6B bidirectional Qwen3 encoder) on the CPU next to the app. It is an add-on file for `docker-compose.yml`, with or without `docker-compose.au.yml`:
 
 ```bash
 curl -fsSLO https://raw.githubusercontent.com/nicolaeser/llmhub/main/docker-compose.rm.yml
-docker compose -f docker-compose.yml -f docker-compose.rm.yml up -d
 ```
 
-Add `COMPOSE_FILE=docker-compose.yml:docker-compose.rm.yml` (or `docker-compose.au.yml:docker-compose.rm.yml`) to `.env` so a plain `docker compose` uses both files. It adds three services on a network without internet access. They publish no ports:
+Append `:docker-compose.rm.yml` to `COMPOSE_FILE` in `.env` (for example `COMPOSE_FILE=docker-compose.yml:docker-compose.au.yml:docker-compose.rm.yml`) and run `docker compose up -d`. `generate-env.sh --force` keeps the entry and updates the file with the others. The file adds three services on a network without internet access. They publish no ports:
 
 - `redactor-fetch` downloads the [GGUF build](https://huggingface.co/perplexity-ai/PII-Tracer-GGUF) at a fixed commit into the `redactor-models` volume on the first start (about 1.2 GB), checks every file against its expected hash, and exits. Later starts only check the files. It is the only redactor service with internet access.
 - `redactor-model` runs a fixed version of the `llama.cpp` server image as user `65534` with `--embeddings --pooling none`, which returns one hidden state per token.

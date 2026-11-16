@@ -92,7 +92,7 @@ test("the keeper waits for a database that is still starting instead of failing 
         pings += 1;
         if (pings < 4) throw Object.assign(new Error(RECOVERING), { code: "P2039" });
       },
-      { pauseMs: 1, onAttempt: async () => void (beats += 1) },
+      { attempts: 100_000, pauseMs: 1, onAttempt: async () => void (beats += 1) },
     );
     assert.equal(ready, true);
     assert.equal(pings, 4);
