@@ -191,7 +191,7 @@ export default function KeyList({
             {t("contentOff")}
           </Chip>
         )}
-        {row.allowed_endpoints.length || row.allowed_ips.length || row.access_windows.length ? (
+        {row.allowed_endpoints.length || row.allowed_ips.length || row.access_windows.length || row.account_ids.length ? (
           <Chip size="sm" variant="soft">
             {t("restrictedChip")}
           </Chip>

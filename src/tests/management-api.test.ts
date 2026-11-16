@@ -256,6 +256,7 @@ test("serializers expose snake_case resources with nulls for unset references", 
     paused: false,
     paused_until: "",
     log_content: true,
+    account_ids: [],
     created_at: "2026-10-06T00:00:00.000Z",
   });
   assert.equal(key.object, "api_key");

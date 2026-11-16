@@ -51,6 +51,7 @@ function keyRow(pause: { paused: boolean; pausedUntil: Date | null }) {
     accessTimeZone: "UTC",
     blocked: false,
     logContent: true,
+    accountIds: [],
     createdAt: NOW,
     templates: [],
     ...pause,

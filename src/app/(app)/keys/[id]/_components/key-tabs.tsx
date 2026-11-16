@@ -4,7 +4,7 @@ import { Button, Chip } from "@heroui/react";
 import { Activity, AlertTriangle, Blocks, CircleDollarSign, Clock, ScrollText } from "lucide-react";
 import { useFormatter, useTranslations } from "next-intl";
 import StatCard from "@/components/console/stat-card";
-import { AccessSummaryCard } from "@/components/keys/key-fields";
+import { AccessSummaryCard, useAccountItems } from "@/components/keys/key-fields";
 import { Link } from "@/i18n/routing";
 import { logsHref } from "@/lib/gateway/request-logs/request-log-query";
 import { usageHref } from "@/lib/usage/usage-query";
@@ -200,7 +200,38 @@ export function AccessTab({ data, onEdit }: TabProps) {
           <AccessSummaryCard draft={{ restricted, models: key.models, templateIds: key.templates }} options={options} />
         </div>
       </SectionCard>
+      {options.canAccounts || key.account_ids.length ? <AccountsCard data={data} onEdit={onEdit} /> : null}
     </div>
+  );
+}
+
+function AccountsCard({ data, onEdit }: Omit<TabProps, "now">) {
+  const t = useTranslations("Keys.detail");
+  const { key, options } = data;
+  const items = useAccountItems(options, key.account_ids);
+  const chosen = items.filter((item) => key.account_ids.includes(item.id));
+  const restricted = key.account_ids.length > 0;
+
+  return (
+    <SectionCard
+      title={t("accountsTitle")}
+      description={t("accountsHint", { restricted: restricted ? "yes" : "no" })}
+      editLabel={t("editAccounts")}
+      onEdit={options.canAccounts ? editor(onEdit, data.canManage, "access") : undefined}
+    >
+      {restricted && options.canAccounts ? (
+        <span className="flex flex-wrap gap-1">
+          {chosen.map((item) => (
+            <Chip key={item.id} size="sm" variant="soft">
+              <span className="break-all">{item.detail ? `${item.label} · ${item.detail}` : item.label}</span>
+            </Chip>
+          ))}
+        </span>
+      ) : null}
+      {restricted && !options.canAccounts ? (
+        <p className="text-sm text-muted">{t("accountsCount", { count: key.account_ids.length })}</p>
+      ) : null}
+    </SectionCard>
   );
 }
 

@@ -49,6 +49,7 @@ function view(over: Partial<VirtualKeyView> = {}): VirtualKeyView {
     paused: false,
     paused_until: "",
     log_content: true,
+    account_ids: [],
     created_at: "2026-10-30T00:00:00.000Z",
     ...over,
   };
@@ -69,6 +70,17 @@ test("restricted access needs at least one preset or model", () => {
   assert.equal(draftAccessValid(draft), true);
   assert.equal(draftAccessValid({ ...draft, restricted: true }), false);
   assert.equal(draftAccessValid({ ...draft, restricted: true, templateIds: ["t2"] }), true);
+});
+
+test("a key limited to subscription accounts needs at least one account and keeps it on save", () => {
+  const draft = newKeyDraft("internal", null);
+  assert.equal(draftAccessValid({ ...draft, accountsRestricted: true }), false);
+  assert.equal(draftAccessValid({ ...draft, accountsRestricted: true, accountIds: ["acct-1"] }), true);
+  const limited = draftOfKey(view({ account_ids: ["acct-1", "acct-2"] }));
+  assert.equal(limited.accountsRestricted, true);
+  assert.deepEqual(keyFieldsOf(limited).accountIds, ["acct-1", "acct-2"]);
+  assert.deepEqual(keyFieldsOf({ ...limited, accountsRestricted: false }).accountIds, []);
+  assert.equal(draftOfKey(view()).accountsRestricted, false);
 });
 
 test("the access summary resolves presets into the models a key can call", () => {

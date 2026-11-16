@@ -113,6 +113,7 @@ function keyView(over: Partial<VirtualKeyView> = {}): VirtualKeyView {
     paused: false,
     paused_until: "",
     log_content: true,
+    account_ids: [],
     created_at: "",
     ...over,
   };

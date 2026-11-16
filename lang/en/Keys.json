@@ -40,6 +40,10 @@
     "models": "Individual models",
     "modelsHint": "Allowed in addition to the selected presets.",
     "modelsPlaceholder": "No individual models",
+    "accounts": "Which subscription accounts can it use?",
+    "accountList": "Subscription accounts",
+    "accountListHint": "Requests through subscriptions skip every other account. Restrictions set on an account still apply. <link>Manage accounts</link>",
+    "accountListPlaceholder": "No account",
     "search": "Search",
     "noResults": "No matches",
     "rpm": "Requests per minute",
@@ -191,10 +195,18 @@
     "more": "+{count, number} more",
     "pick": "Pick at least one model preset or model. Until then the key cannot be saved."
   },
+  "accountMode": {
+    "title": "{mode, select, all {All subscription accounts} other {Only selected accounts}}",
+    "hint": "{mode, select, all {Every account the routing allows, including accounts added later.} other {Subscription requests use only the accounts you pick. API providers stay available.}}"
+  },
+  "accounts": {
+    "removed": "Removed account",
+    "pick": "Pick at least one account. Until then the key cannot be saved."
+  },
   "wizard": {
     "description": "{mode, select, edit {Jump to any step, change what you need, then save.} other {Name and owner, then models. Limits and restrictions are optional, you can create the key after step 2.}}",
     "step": "{step, select, basics {Basics} models {Models} limits {Limits} other {Restrictions}}",
-    "stepHint": "{step, select, basics {Give the key a name and choose who uses it. This decides whose budget pays for its requests.} models {Choose which models the key may call. You can change this later.} limits {Optional. Cap spending and request rates, or let the key expire.} other {Optional. Limit where and when the key works and whether prompts are stored.}}"
+    "stepHint": "{step, select, basics {Give the key a name and choose who uses it. This decides whose budget pays for its requests.} models {Choose which models the key may call and which subscription accounts it may use. You can change this later.} limits {Optional. Cap spending and request rates, or let the key expire.} other {Optional. Limit where and when the key works and whether prompts are stored.}}"
   },
   "secret": {
     "title": "{rotated, select, yes {New secret for {name}} other {{name} is ready}}",
@@ -213,14 +225,14 @@
     "tryItHint": "Lists the models this key may call. A JSON answer means the key works."
   },
   "section": {
-    "title": "{section, select, basics {Name and owner} access {Model access} limits {Rate limits} network {Network and endpoints} schedule {Allowed times} other {Request content}}",
+    "title": "{section, select, basics {Name and owner} access {Access} limits {Rate limits} network {Network and endpoints} schedule {Allowed times} other {Request content}}",
     "hint": "{section, select, basics {The owner decides whose budget pays for this key.} access {Choose which models this key may call.} limits {Leave a field empty for no limit.} network {Limit which client addresses and API endpoints may use this key.} schedule {Without time windows, the key works at any time. With windows, requests outside all of them are rejected. Queued batches still finish.} other {Choose whether prompts and responses of this key are stored in request logs.}}"
   },
   "detail": {
     "back": "API keys",
     "subtitle": "{kind, select, project {Project key of {name}} member {Personal key of {name}} other {Internal key of {name}}}{hasPlace, select, yes { in {place}} other {}}.",
     "tabsLabel": "Key sections",
-    "tab": "{tab, select, overview {Overview} access {Model access} limits {Limits} security {Security} other {Integrations}}",
+    "tab": "{tab, select, overview {Overview} access {Access} limits {Limits} security {Security} other {Integrations}}",
     "more": "More",
     "blockAction": "{blocked, select, yes {Unblock key} other {Block key}}",
     "blockConfirm": {
@@ -252,6 +264,10 @@
     "editSection": "{section, select, basics {Edit name and owner} access {Edit model access} limits {Edit rate limits} network {Edit network and endpoints} schedule {Edit allowed times} other {Edit request content}}",
     "accessTitle": "Model access",
     "accessHint": "{restricted, select, yes {Only the presets and models below are allowed. Presets follow model changes automatically.} other {No restriction: the key can call every model, including models added later.}}",
+    "accountsTitle": "Subscription accounts",
+    "accountsHint": "{restricted, select, yes {Subscription requests use only the accounts below. API providers stay available.} other {No restriction: the key can use every subscription account the routing allows.}}",
+    "accountsCount": "{count, plural, one {Limited to # subscription account.} other {Limited to # subscription accounts.}}",
+    "editAccounts": "Edit subscription accounts",
     "none": "None",
     "budgetTitle": "Spending limit",
     "budgetHint": "Caps what this key may spend. Limits of the project, department, and company apply on top.",

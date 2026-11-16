@@ -92,6 +92,7 @@ export type AccountAccess = {
   projectId: string;
   memberId: string;
   keyId: string;
+  accountIds: string[];
 };
 
 export type AssignmentTarget = {

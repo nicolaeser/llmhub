@@ -1,3 +1,4 @@
+import { isSignInKind } from "@/lib/gateway/upstreams/provider-kinds";
 import type { Principal } from "@/types/gateway";
 import type { AccountAccess, AccountStrategy, AssignmentRow, AssignmentScope } from "@/types/providers";
 
@@ -32,6 +33,7 @@ export function accessOf(principal: Principal | undefined): AccountAccess | null
     projectId: key.project_id,
     memberId: principal.memberId,
     keyId: key.token_id,
+    accountIds: key.account_ids,
   };
 }
 
@@ -39,11 +41,18 @@ function same(assigned: string | null, actual: string): boolean {
   return Boolean(assigned) && assigned === actual;
 }
 
+function outsideKeyAccounts(provider: { id: string; kind: string }, access: AccountAccess | null): boolean {
+  const ids = access?.accountIds ?? [];
+  return ids.length > 0 && isSignInKind(provider.kind) && !ids.includes(provider.id);
+}
+
 export function accountAllowed(
-  provider: { restricted: boolean; assignments: AssignmentRow[] } | null | undefined,
+  provider: { id: string; kind: string; restricted: boolean; assignments: AssignmentRow[] } | null | undefined,
   access: AccountAccess | null,
 ): boolean {
-  if (!provider?.restricted) return true;
+  if (!provider) return true;
+  if (outsideKeyAccounts(provider, access)) return false;
+  if (!provider.restricted) return true;
   if (!access) return false;
   return provider.assignments.some(
     (row) =>

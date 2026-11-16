@@ -5,6 +5,8 @@ import { KEY_ENDPOINTS, MAX_ACCESS_WINDOWS } from "@/lib/gateway/access/key-rest
 import { clockMinute, isTimeZone, WEEKDAYS } from "@/lib/gateway/billing/price-schedule";
 import { MAX_PAUSE_HOURS } from "@/lib/keys/pause";
 
+export const MAX_KEY_ACCOUNTS = 200;
+
 const clock = z.string().refine((value) => clockMinute(value) !== null, "expected HH:MM");
 
 export const accessWindowSchema = z
@@ -26,6 +28,11 @@ export const allowedEndpointsSchema = z
   .max(KEY_ENDPOINTS.length)
   .transform((endpoints) => KEY_ENDPOINTS.filter((endpoint) => endpoints.includes(endpoint)));
 
+export const keyAccountIdsSchema = z
+  .array(z.string().trim().min(1).max(64))
+  .max(MAX_KEY_ACCOUNTS)
+  .transform((ids) => [...new Set(ids)]);
+
 export const accessTimeZoneSchema = z.string().trim().max(64).refine(isTimeZone, "unknown IANA time zone");
 
 const keyFields = {
@@ -45,6 +52,7 @@ const keyFields = {
   accessWindows: accessWindowsSchema.default([]),
   accessTimeZone: accessTimeZoneSchema.default("UTC"),
   logContent: z.boolean().default(true),
+  accountIds: keyAccountIdsSchema.default([]),
 };
 
 export const createKeySchema = z.object({

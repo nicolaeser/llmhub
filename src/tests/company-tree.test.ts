@@ -332,7 +332,13 @@ test("new keys from a project or person start with that binding", () => {
 });
 
 test("key dialog options come from the structure and the loaded model choices", () => {
-  const options = keyOptionsOf(structure, { models: ["gpt-x"], templates: [], canTemplates: true });
+  const options = keyOptionsOf(structure, {
+    models: ["gpt-x"],
+    templates: [],
+    canTemplates: true,
+    accounts: [],
+    canAccounts: false,
+  });
   assert.deepEqual(options.models, ["gpt-x"]);
   assert.equal(options.canTemplates, true);
   assert.equal(options.companyId, "");
@@ -372,6 +378,7 @@ function view(overrides: Partial<VirtualKeyView>): VirtualKeyView {
     paused: false,
     paused_until: "",
     log_content: true,
+    account_ids: [],
     created_at: "2026-10-01T00:00:00.000Z",
     ...overrides,
   };

@@ -50,6 +50,8 @@ const NO_OPTIONS: KeyOptions = {
   models: [],
   templates: [],
   canTemplates: false,
+  accounts: [],
+  canAccounts: false,
 };
 
 export function useKeyDialogs({

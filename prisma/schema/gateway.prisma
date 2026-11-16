@@ -175,6 +175,7 @@ model VirtualKey {
   paused           Boolean       @default(false)
   pausedUntil      DateTime?
   logContent       Boolean       @default(true)
+  accountIds       String[]      @default([])
   prevHash         String        @default("")
   prevHashUntil    DateTime?
   spendResetAt     DateTime?

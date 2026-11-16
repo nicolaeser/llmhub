@@ -82,7 +82,7 @@ test("signing in to the same Claude account again keeps its connection, routes, 
     login: { failures: 3, retryAt: new Date(Date.now() + 10 * 60_000) },
     connection: { restricted: true, assignments: { create: [{ orgId: org.id }] } },
   });
-  const access: AccountAccess = { orgId: org.id, teamId: "", projectId: "", memberId: "", keyId: "" };
+  const access: AccountAccess = { orgId: org.id, teamId: "", projectId: "", memberId: "", keyId: "", accountIds: [] };
   try {
     markFailure({ id: route } as ResolvedDeployment, Date.now() + 3 * HOUR_MS);
     assert.ok((await coolingDown([route])).has(route));

@@ -30,6 +30,7 @@ import type {
 import type { BudgetInput, BudgetResult } from "@/types/structure";
 import AccessWindowFields from "./access-window-fields";
 import {
+  AccountAccessFields,
   BindingFields,
   BudgetFields,
   EndpointsField,
@@ -39,6 +40,7 @@ import {
   KeySwitchField,
   ModelAccessFields,
   RateLimitFields,
+  showsAccountFields,
 } from "./key-fields";
 
 function initialKind(preset: KeyPreset | null, options: KeyOptions, canBind: boolean): KeyBindingKind {
@@ -138,7 +140,17 @@ export default function KeyDialog({
       title: t("wizard.step", { step: "models" }),
       description: t("wizard.stepHint", { step: "models" }),
       isValid: draftAccessValid(draft),
-      content: <ModelAccessFields draft={draft} options={options} isDisabled={pending} onChange={change} />,
+      content: (
+        <>
+          <ModelAccessFields draft={draft} options={options} isDisabled={pending} onChange={change} />
+          {showsAccountFields(draft, options) ? (
+            <>
+              <Separator />
+              <AccountAccessFields draft={draft} options={options} isDisabled={pending} onChange={change} />
+            </>
+          ) : null}
+        </>
+      ),
     },
     {
       id: "limits",

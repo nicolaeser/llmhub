@@ -5,6 +5,7 @@ import { anthropicToChat, chatToAnthropic, claude47OrLater, withCacheBreakpoints
 import { withAnthropicModelParams } from "@/lib/gateway/protocols/anthropic-model-params";
 import { ANTHROPIC_VERSION_2023, ANTHROPIC_VERSION_HEADER, anthropicVersionOf } from "@/lib/gateway/protocols/anthropic-version";
 import { plainModel } from "@/lib/gateway/catalog/model-alias";
+import { accessOf } from "@/lib/gateway/routing/account-access";
 import { hiddenFrom, outsidePool, routable } from "@/lib/gateway/routing/route-pool";
 import { servesMessages, speaksAnthropic, speaksGoogle, speaksKimi, speaksMuse } from "@/lib/gateway/upstreams/provider-kinds";
 import { entitlementRefusal, withClaudeBetas, withClaudeIdentity } from "@/lib/gateway/upstreams/claude";
@@ -571,6 +572,7 @@ export async function forwardToModel(
   let last: GateError = new GateError(404, "model_not_found", "no deployment for model", { param: "model" });
   let upstreamFailure: GateError | null = null;
   const cost = costFilter(principal, body);
+  const access = accessOf(principal);
   const pool = opts?.pool ?? "api";
   const inPool = routable(pool);
   for (const alias of aliases) {
@@ -598,6 +600,7 @@ export async function forwardToModel(
           inPool,
           requestRoutingOverride(body),
           cost,
+          access,
         );
       } catch (err) {
         if (costRejected(err)) throw err;

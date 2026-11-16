@@ -94,6 +94,7 @@ function principal(guardrails: GuardrailPolicy, pii: PiiPolicy = PII_OFF): Princ
         paused: false,
         paused_until: "",
         log_content: true,
+        account_ids: [],
         created_at: "",
       },
       teamId: "",

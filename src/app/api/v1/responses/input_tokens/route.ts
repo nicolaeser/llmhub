@@ -36,7 +36,7 @@ export const POST = gatewayRoute(async (req) => {
       if (proxied.status >= 400) throw upstreamError(proxied.status, proxied.json);
       return asNumber(asRecord(proxied.json)?.input_tokens, 0);
     },
-    { strategy: requestRoutingOverride(clean) },
+    { strategy: requestRoutingOverride(clean), principal },
   );
   return NextResponse.json({ object: "response.input_tokens", input_tokens: routed.result });
 });

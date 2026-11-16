@@ -43,6 +43,7 @@ export function serializeApiKey(key: VirtualKeyView) {
     models: key.models,
     template_ids: key.templates,
     log_content: key.log_content,
+    account_ids: key.account_ids,
     max_budget: key.max_budget,
     spend: key.spend,
     budget_duration: orNull(key.budget_duration),

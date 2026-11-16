@@ -77,6 +77,7 @@ function keyPrincipal(models: string[], templates: string[]): Principal {
     paused: false,
     paused_until: "",
     log_content: true,
+    account_ids: [],
     created_at: "",
   };
   return { actor: "sk-hub-abc", key, teamId: "", orgId: "", userId: "", memberId: "", models, routeLimits: {} };

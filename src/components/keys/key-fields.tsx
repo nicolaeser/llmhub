@@ -17,7 +17,7 @@ import {
   ToggleButton,
   ToggleButtonGroup,
 } from "@heroui/react";
-import { Boxes, FolderKanban, ListChecks, ShieldCheck, UserRound, type LucideIcon } from "lucide-react";
+import { Boxes, FolderKanban, ListChecks, ShieldCheck, UserRound, Users, UserCheck, type LucideIcon } from "lucide-react";
 import { useId } from "react";
 import { useFormatter, useTranslations } from "next-intl";
 import IconTile from "@/components/console/icon-tile";
@@ -29,6 +29,7 @@ import { useClock } from "@/lib/hooks/use-clock";
 import { KEY_ENDPOINTS } from "@/lib/gateway/access/key-restrictions";
 import { accessSummary, invalidIps, KEY_EXPIRY_DAYS } from "@/lib/keys/draft";
 import type { KeyBindingKind, KeyDraft, KeyOptions } from "@/types/keys";
+import type { PickerItem } from "@/types/console";
 import { placeOf } from "./key-binding";
 
 export type DraftChange = (patch: Partial<KeyDraft>) => void;
@@ -39,9 +40,16 @@ const KINDS: { id: KeyBindingKind; icon: LucideIcon }[] = [
   { id: "internal", icon: ShieldCheck },
 ];
 
-const ACCESS_MODES: { id: "all" | "some"; icon: LucideIcon }[] = [
+type AccessMode = "all" | "some";
+
+const ACCESS_MODES: { id: AccessMode; icon: LucideIcon }[] = [
   { id: "all", icon: Boxes },
   { id: "some", icon: ListChecks },
+];
+
+const ACCOUNT_MODES: { id: AccessMode; icon: LucideIcon }[] = [
+  { id: "all", icon: Users },
+  { id: "some", icon: UserCheck },
 ];
 
 const BUDGET_PERIODS = [
@@ -55,6 +63,56 @@ const SUMMARY_LIMIT = 12;
 
 function choiceClass(selected: boolean) {
   return selected ? "border border-accent bg-accent/8 p-0" : "border border-transparent p-0";
+}
+
+function ModeCards({
+  label,
+  modes,
+  value,
+  title,
+  hint,
+  isDisabled,
+  onChange,
+}: {
+  label: string;
+  modes: { id: AccessMode; icon: LucideIcon }[];
+  value: AccessMode;
+  title: (mode: AccessMode) => string;
+  hint: (mode: AccessMode) => string;
+  isDisabled: boolean;
+  onChange: (mode: AccessMode) => void;
+}) {
+  return (
+    <RadioGroup
+      value={value}
+      onChange={(next) => onChange(next === "some" ? "some" : "all")}
+      isDisabled={isDisabled}
+      className="gap-3"
+    >
+      <Label>{label}</Label>
+      <div className="grid gap-3 sm:grid-cols-2">
+        {modes.map((item) => {
+          const selected = item.id === value;
+          return (
+            <Card key={item.id} variant="secondary" className={choiceClass(selected)}>
+              <Radio value={item.id} className="mt-0 h-full w-full">
+                <Radio.Content className="h-full w-full items-start gap-3 p-3">
+                  <IconTile icon={item.icon} tone={selected ? "accent" : "neutral"} size="sm" />
+                  <span className="min-w-0 flex-1 space-y-1">
+                    <Label>{title(item.id)}</Label>
+                    <span className="block text-xs font-normal text-muted">{hint(item.id)}</span>
+                  </span>
+                  <Radio.Control>
+                    <Radio.Indicator />
+                  </Radio.Control>
+                </Radio.Content>
+              </Radio>
+            </Card>
+          );
+        })}
+      </div>
+    </RadioGroup>
+  );
 }
 
 function optionalNumber(value: number): number {
@@ -244,35 +302,15 @@ export function ModelAccessFields({
 
   return (
     <div className="space-y-4">
-      <RadioGroup
+      <ModeCards
+        label={t("fields.access")}
+        modes={ACCESS_MODES}
         value={mode}
-        onChange={(value) => onChange({ restricted: value === "some" })}
+        title={(id) => t("accessMode.title", { mode: id })}
+        hint={(id) => t("accessMode.hint", { mode: id })}
         isDisabled={isDisabled}
-        className="gap-3"
-      >
-        <Label>{t("fields.access")}</Label>
-        <div className="grid gap-3 sm:grid-cols-2">
-          {ACCESS_MODES.map((item) => {
-            const selected = item.id === mode;
-            return (
-              <Card key={item.id} variant="secondary" className={choiceClass(selected)}>
-                <Radio value={item.id} className="mt-0 h-full w-full">
-                  <Radio.Content className="h-full w-full items-start gap-3 p-3">
-                    <IconTile icon={item.icon} tone={selected ? "accent" : "neutral"} size="sm" />
-                    <span className="min-w-0 flex-1 space-y-1">
-                      <Label>{t("accessMode.title", { mode: item.id })}</Label>
-                      <span className="block text-xs font-normal text-muted">{t("accessMode.hint", { mode: item.id })}</span>
-                    </span>
-                    <Radio.Control>
-                      <Radio.Indicator />
-                    </Radio.Control>
-                  </Radio.Content>
-                </Radio>
-              </Card>
-            );
-          })}
-        </div>
-      </RadioGroup>
+        onChange={(next) => onChange({ restricted: next === "some" })}
+      />
       {draft.restricted ? (
         <div className="space-y-4">
           <MultiPicker
@@ -316,6 +354,80 @@ export function ModelAccessFields({
         </div>
       ) : null}
       <AccessSummaryCard draft={draft} options={options} />
+    </div>
+  );
+}
+
+export function showsAccountFields(draft: Pick<KeyDraft, "accountIds">, options: Pick<KeyOptions, "accounts" | "canAccounts">) {
+  return options.canAccounts && (options.accounts.length > 0 || draft.accountIds.length > 0);
+}
+
+export function useAccountItems(options: Pick<KeyOptions, "accounts">, selected: string[]): PickerItem[] {
+  const t = useTranslations("Keys");
+  const tProviders = useTranslations("Providers");
+  const known = new Set(options.accounts.map((account) => account.id));
+  return [
+    ...options.accounts.map((account) => ({
+      id: account.id,
+      label: account.name || account.account || tProviders("kindShort", { kind: account.kind }),
+      detail: [tProviders("kindShort", { kind: account.kind }), account.account].filter(Boolean).join(" · "),
+    })),
+    ...selected.filter((id) => !known.has(id)).map((id) => ({ id, label: t("accounts.removed") })),
+  ];
+}
+
+export function AccountAccessFields({
+  draft,
+  options,
+  isDisabled,
+  onChange,
+}: {
+  draft: KeyDraft;
+  options: KeyOptions;
+  isDisabled: boolean;
+  onChange: DraftChange;
+}) {
+  const t = useTranslations("Keys");
+  const items = useAccountItems(options, draft.accountIds);
+  const mode = draft.accountsRestricted ? "some" : "all";
+
+  return (
+    <div className="space-y-4">
+      <ModeCards
+        label={t("fields.accounts")}
+        modes={ACCOUNT_MODES}
+        value={mode}
+        title={(id) => t("accountMode.title", { mode: id })}
+        hint={(id) => t("accountMode.hint", { mode: id })}
+        isDisabled={isDisabled}
+        onChange={(next) => onChange({ accountsRestricted: next === "some" })}
+      />
+      {draft.accountsRestricted ? (
+        <MultiPicker
+          label={t("fields.accountList")}
+          description={t.rich("fields.accountListHint", {
+            link: (chunks) => (
+              <Link href="/providers?tab=subscriptions" className="text-accent">
+                {chunks}
+              </Link>
+            ),
+          })}
+          placeholder={t("fields.accountListPlaceholder")}
+          searchLabel={t("fields.search")}
+          emptyLabel={t("fields.noResults")}
+          items={items}
+          selected={draft.accountIds}
+          onChange={(accountIds) => onChange({ accountIds })}
+          isDisabled={isDisabled}
+        />
+      ) : null}
+      {draft.accountsRestricted && !draft.accountIds.length ? (
+        <Card variant="secondary">
+          <Card.Content>
+            <p className="text-sm text-muted">{t("accounts.pick")}</p>
+          </Card.Content>
+        </Card>
+      ) : null}
     </div>
   );
 }

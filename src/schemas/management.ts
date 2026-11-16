@@ -6,7 +6,7 @@ import { clockMinute, isTimeZone, MAX_PRICE_WINDOWS } from "@/lib/gateway/billin
 import { EXTRA_NAME_MAX, MAX_EXTRA_NAMES } from "@/lib/gateway/catalog/model-names";
 import { MODEL_VARIANTS } from "@/lib/gateway/catalog/model-variants";
 import { MANAGEMENT_PERMISSIONS } from "@/lib/management/scope";
-import { accessWindowsSchema, allowedEndpointsSchema } from "@/schemas/keys";
+import { accessWindowsSchema, allowedEndpointsSchema, keyAccountIdsSchema } from "@/schemas/keys";
 import { MAX_PAUSE_HOURS } from "@/lib/keys/pause";
 import { DEFAULT_NEW_MODEL_MODE, MAX_CONCURRENCY, NEW_MODEL_MODES, vertexTargetSchema } from "@/schemas/providers";
 import { budgetPeriod, MAX_BOOST_HOURS } from "@/lib/utils/budget";
@@ -60,6 +60,7 @@ export const apiKeyCreateSchema = z
     access_windows: accessWindowsSchema.default([]),
     access_time_zone: timeZone.default("UTC"),
     log_content: z.boolean().default(true),
+    account_ids: keyAccountIdsSchema.default([]),
     expires_in_days: z.number().int().min(0).max(3650).default(0),
   })
   .strict();
@@ -79,6 +80,7 @@ export const apiKeyUpdateSchema = z
     access_windows: accessWindowsSchema,
     access_time_zone: timeZone,
     log_content: z.boolean(),
+    account_ids: keyAccountIdsSchema,
     blocked: z.boolean(),
   })
   .partial()

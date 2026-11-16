@@ -27,6 +27,7 @@ export const POST = managementRoute(PERMISSIONS.KEYS_MANAGE, async ({ req }) => 
       accessWindows: body.access_windows,
       accessTimeZone: body.access_time_zone,
       logContent: body.log_content,
+      accountIds: body.account_ids,
       days: body.expires_in_days,
     });
   return respond(serializeApiKey(created.key), 201);

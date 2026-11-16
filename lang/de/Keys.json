@@ -40,6 +40,10 @@
     "models": "Einzelne Modelle",
     "modelsHint": "Zusätzlich zu den gewählten Vorlagen erlaubt.",
     "modelsPlaceholder": "Keine einzelnen Modelle",
+    "accounts": "Welche Abo-Konten darf er nutzen?",
+    "accountList": "Abo-Konten",
+    "accountListHint": "Anfragen über Abos überspringen alle anderen Konten. Einschränkungen an einem Konto gelten weiterhin. <link>Konten verwalten</link>",
+    "accountListPlaceholder": "Kein Konto",
     "search": "Suchen",
     "noResults": "Keine Treffer",
     "rpm": "Anfragen pro Minute",
@@ -191,10 +195,18 @@
     "more": "+{count, number} weitere",
     "pick": "Wähle mindestens eine Modellvorlage oder ein Modell. Vorher lässt sich der Key nicht speichern."
   },
+  "accountMode": {
+    "title": "{mode, select, all {Alle Abo-Konten} other {Nur ausgewählte Konten}}",
+    "hint": "{mode, select, all {Jedes Konto, das das Routing erlaubt, auch später hinzugefügte.} other {Abo-Anfragen nutzen nur die gewählten Konten. API-Anbieter bleiben verfügbar.}}"
+  },
+  "accounts": {
+    "removed": "Entferntes Konto",
+    "pick": "Wähle mindestens ein Konto. Vorher lässt sich der Key nicht speichern."
+  },
   "wizard": {
     "description": "{mode, select, edit {Spring zu einem beliebigen Schritt, ändere, was du brauchst, und speichere.} other {Name und Zuordnung, dann Modelle. Limits und Einschränkungen sind optional, du kannst den Key nach Schritt 2 erstellen.}}",
     "step": "{step, select, basics {Grundlagen} models {Modelle} limits {Limits} other {Einschränkungen}}",
-    "stepHint": "{step, select, basics {Gib dem Key einen Namen und wähle, wer ihn nutzt. Davon hängt ab, welches Budget seine Anfragen bezahlt.} models {Wähle, welche Modelle der Key aufrufen darf. Du kannst das später ändern.} limits {Optional. Begrenze Ausgaben und Anfrageraten oder lass den Key ablaufen.} other {Optional. Lege fest, wo und wann der Key funktioniert und ob Prompts gespeichert werden.}}"
+    "stepHint": "{step, select, basics {Gib dem Key einen Namen und wähle, wer ihn nutzt. Davon hängt ab, welches Budget seine Anfragen bezahlt.} models {Wähle, welche Modelle der Key aufrufen und welche Abo-Konten er nutzen darf. Du kannst das später ändern.} limits {Optional. Begrenze Ausgaben und Anfrageraten oder lass den Key ablaufen.} other {Optional. Lege fest, wo und wann der Key funktioniert und ob Prompts gespeichert werden.}}"
   },
   "secret": {
     "title": "{rotated, select, yes {Neues Secret für {name}} other {{name} ist bereit}}",
@@ -213,14 +225,14 @@
     "tryItHint": "Listet die Modelle, die dieser Key aufrufen darf. Eine JSON-Antwort heißt, der Key funktioniert."
   },
   "section": {
-    "title": "{section, select, basics {Name und Zuordnung} access {Modellzugriff} limits {Ratenlimits} network {Netzwerk und Endpunkte} schedule {Erlaubte Zeiten} other {Anfrageinhalte}}",
+    "title": "{section, select, basics {Name und Zuordnung} access {Zugriff} limits {Ratenlimits} network {Netzwerk und Endpunkte} schedule {Erlaubte Zeiten} other {Anfrageinhalte}}",
     "hint": "{section, select, basics {Die Zuordnung bestimmt, welches Budget diesen Key bezahlt.} access {Wähle, welche Modelle dieser Key aufrufen darf.} limits {Lass ein Feld leer für kein Limit.} network {Lege fest, welche Client-Adressen und API-Endpunkte diesen Key nutzen dürfen.} schedule {Ohne Zeitfenster ist der Key jederzeit nutzbar. Mit Zeitfenstern werden Anfragen außerhalb aller Fenster abgelehnt. Eingereihte Batches laufen trotzdem zu Ende.} other {Lege fest, ob Prompts und Antworten dieses Keys in den Protokollen gespeichert werden.}}"
   },
   "detail": {
     "back": "API-Keys",
     "subtitle": "{kind, select, project {Projekt-Key von {name}} member {Persönlicher Key von {name}} other {Interner Key von {name}}}{hasPlace, select, yes { in {place}} other {}}.",
     "tabsLabel": "Key-Bereiche",
-    "tab": "{tab, select, overview {Übersicht} access {Modellzugriff} limits {Limits} security {Sicherheit} other {Integrationen}}",
+    "tab": "{tab, select, overview {Übersicht} access {Zugriff} limits {Limits} security {Sicherheit} other {Integrationen}}",
     "more": "Mehr",
     "blockAction": "{blocked, select, yes {Key entsperren} other {Key sperren}}",
     "blockConfirm": {
@@ -252,6 +264,10 @@
     "editSection": "{section, select, basics {Name und Zuordnung bearbeiten} access {Modellzugriff bearbeiten} limits {Ratenlimits bearbeiten} network {Netzwerk und Endpunkte bearbeiten} schedule {Erlaubte Zeiten bearbeiten} other {Anfrageinhalte bearbeiten}}",
     "accessTitle": "Modellzugriff",
     "accessHint": "{restricted, select, yes {Nur die Vorlagen und Modelle unten sind erlaubt. Vorlagen folgen Modelländerungen automatisch.} other {Keine Einschränkung: Der Key darf jedes Modell aufrufen, auch später hinzugefügte.}}",
+    "accountsTitle": "Abo-Konten",
+    "accountsHint": "{restricted, select, yes {Abo-Anfragen nutzen nur die Konten unten. API-Anbieter bleiben verfügbar.} other {Keine Einschränkung: Der Key darf jedes Abo-Konto nutzen, das das Routing erlaubt.}}",
+    "accountsCount": "{count, plural, one {Auf # Abo-Konto beschränkt.} other {Auf # Abo-Konten beschränkt.}}",
+    "editAccounts": "Abo-Konten bearbeiten",
     "none": "Keine",
     "budgetTitle": "Ausgabenlimit",
     "budgetHint": "Begrenzt, was dieser Key ausgeben darf. Die Limits von Projekt, Abteilung und Unternehmen gelten zusätzlich.",

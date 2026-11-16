@@ -37,7 +37,12 @@ export async function streamMedia(input: {
         form: form instanceof FormData ? form : undefined,
       });
     },
-    { deferRelease: true, cost: costFilter(input.principal, input.body), signal: input.req.signal },
+    {
+      deferRelease: true,
+      cost: costFilter(input.principal, input.body),
+      principal: input.principal,
+      signal: input.req.signal,
+    },
   ).catch(async (err) => {
     await usage.fail(err);
     throw err;

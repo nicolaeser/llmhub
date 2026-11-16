@@ -282,7 +282,8 @@ test("account strategies are validated by name", () => {
 
 test("account access follows the caller's company, department, project, person, and key", () => {
   const none = { orgId: null, teamId: null, projectId: null, memberId: null, keyId: null };
-  const key = { token_id: "key-1", project_id: "proj-1" } as VirtualKeyView;
+  const claude = { id: "acct-1", kind: "claude" };
+  const key = { token_id: "key-1", project_id: "proj-1", account_ids: [] as string[] } as VirtualKeyView;
   const caller: Principal = {
     actor: "key-1",
     key,
@@ -294,17 +295,46 @@ test("account access follows the caller's company, department, project, person, 
     routeLimits: {},
   };
   const access = accessOf(caller);
-  assert.deepEqual(access, { orgId: "org-1", teamId: "team-1", projectId: "proj-1", memberId: "mem-1", keyId: "key-1" });
+  assert.deepEqual(access, {
+    orgId: "org-1",
+    teamId: "team-1",
+    projectId: "proj-1",
+    memberId: "mem-1",
+    keyId: "key-1",
+    accountIds: [],
+  });
   assert.equal(accessOf({ ...caller, key: undefined }), null);
   assert.equal(accessOf(undefined), null);
-  assert.equal(accountAllowed({ restricted: false, assignments: [] }, null), true);
+  assert.equal(accountAllowed({ ...claude, restricted: false, assignments: [] }, null), true);
   assert.equal(accountAllowed(null, null), true);
-  assert.equal(accountAllowed({ restricted: true, assignments: [] }, access), false);
-  assert.equal(accountAllowed({ restricted: true, assignments: [{ ...none, keyId: "key-1" }] }, null), false);
-  assert.equal(accountAllowed({ restricted: true, assignments: [{ ...none, keyId: "key-2" }] }, access), false);
+  assert.equal(accountAllowed({ ...claude, restricted: true, assignments: [] }, access), false);
+  assert.equal(accountAllowed({ ...claude, restricted: true, assignments: [{ ...none, keyId: "key-1" }] }, null), false);
+  assert.equal(accountAllowed({ ...claude, restricted: true, assignments: [{ ...none, keyId: "key-2" }] }, access), false);
   for (const hit of [{ keyId: "key-1" }, { memberId: "mem-1" }, { projectId: "proj-1" }, { teamId: "team-1" }, { orgId: "org-1" }]) {
-    assert.equal(accountAllowed({ restricted: true, assignments: [{ ...none, ...hit }] }, access), true, JSON.stringify(hit));
+    assert.equal(accountAllowed({ ...claude, restricted: true, assignments: [{ ...none, ...hit }] }, access), true, JSON.stringify(hit));
   }
-  const unbound = { orgId: "", teamId: "", projectId: "", memberId: "", keyId: "key-1" };
-  assert.equal(accountAllowed({ restricted: true, assignments: [{ ...none, orgId: "org-1" }] }, unbound), false);
+  const unbound = { orgId: "", teamId: "", projectId: "", memberId: "", keyId: "key-1", accountIds: [] };
+  assert.equal(accountAllowed({ ...claude, restricted: true, assignments: [{ ...none, orgId: "org-1" }] }, unbound), false);
+});
+
+test("a key limited to chosen subscription accounts skips every other account but keeps API routes", () => {
+  const none = { orgId: null, teamId: null, projectId: null, memberId: null, keyId: null };
+  const limited = { orgId: "org-1", teamId: "", projectId: "", memberId: "", keyId: "key-1", accountIds: ["acct-1"] };
+  const open = { ...limited, accountIds: [] };
+  const account = (id: string, kind = "claude") => ({ id, kind, restricted: false, assignments: [] });
+  assert.equal(accountAllowed(account("acct-1"), limited), true);
+  assert.equal(accountAllowed(account("acct-2"), limited), false);
+  assert.equal(accountAllowed(account("acct-3", "codex"), limited), false);
+  assert.equal(accountAllowed(account("api-1", "openai"), limited), true);
+  assert.equal(accountAllowed(account("acct-2"), open), true);
+  assert.equal(accountAllowed(account("acct-2"), null), true);
+  assert.equal(accountAllowed({ ...account("acct-1"), restricted: true, assignments: [] }, limited), false);
+  assert.equal(
+    accountAllowed({ ...account("acct-1"), restricted: true, assignments: [{ ...none, keyId: "key-1" }] }, limited),
+    true,
+  );
+  assert.equal(
+    accountAllowed({ ...account("acct-2"), restricted: true, assignments: [{ ...none, keyId: "key-1" }] }, limited),
+    false,
+  );
 });

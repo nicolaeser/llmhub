@@ -5,10 +5,14 @@ import type { BudgetDetail, HeldPause } from "@/types/structure";
 
 export type KeyBindingOption = { id: string; alias: string; orgId: string; teamId: string };
 
+export type KeyAccountOption = { id: string; name: string; kind: string; account: string };
+
 export type KeyChoices = {
   models: string[];
   templates: TemplateOption[];
   canTemplates: boolean;
+  accounts: KeyAccountOption[];
+  canAccounts: boolean;
 };
 
 export type KeyOptions = KeyChoices & {
@@ -74,6 +78,7 @@ export type VirtualKeyView = {
   paused: boolean;
   paused_until: string;
   log_content: boolean;
+  account_ids: string[];
   created_at: string;
 };
 
@@ -95,6 +100,7 @@ export type KeyFieldsInput = {
   accessWindows: AccessWindow[];
   accessTimeZone: string;
   logContent: boolean;
+  accountIds: string[];
 };
 
 export type KeyCreateInput = KeyFieldsInput & { days: number };
@@ -138,6 +144,8 @@ export type KeyDraft = {
   windows: AccessWindowDraft[];
   timeZone: string;
   logContent: boolean;
+  accountsRestricted: boolean;
+  accountIds: string[];
   blocked: boolean;
 };
 

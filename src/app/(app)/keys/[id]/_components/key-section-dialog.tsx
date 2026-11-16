@@ -1,12 +1,13 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { toast, type useOverlayState } from "@heroui/react";
+import { Separator, toast, type useOverlayState } from "@heroui/react";
 import { useTranslations } from "next-intl";
 import FormDialog from "@/components/console/form-dialog";
 import { useErrorToast } from "@/components/console/use-error-toast";
 import AccessWindowFields from "@/components/keys/access-window-fields";
 import {
+  AccountAccessFields,
   BindingFields,
   EndpointsField,
   IpAllowlistField,
@@ -14,6 +15,7 @@ import {
   KeySwitchField,
   ModelAccessFields,
   RateLimitFields,
+  showsAccountFields,
 } from "@/components/keys/key-fields";
 import { isActionFail } from "@/lib/http/action-result";
 import {
@@ -96,7 +98,15 @@ export default function KeySectionDialog({
         </>
       ) : null}
       {section === "access" ? (
-        <ModelAccessFields draft={draft} options={options} isDisabled={pending} onChange={change} />
+        <>
+          <ModelAccessFields draft={draft} options={options} isDisabled={pending} onChange={change} />
+          {showsAccountFields(draft, options) ? (
+            <>
+              <Separator />
+              <AccountAccessFields draft={draft} options={options} isDisabled={pending} onChange={change} />
+            </>
+          ) : null}
+        </>
       ) : null}
       {section === "limits" ? <RateLimitFields draft={draft} isDisabled={pending} onChange={change} /> : null}
       {section === "network" ? (

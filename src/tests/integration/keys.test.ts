@@ -553,3 +553,86 @@ test("POST /api/mgmt/organizations/{id}/pause and /resume and the person routes 
     await data.cleanup();
   }
 });
+
+test("only platform users who read providers limit a key to subscription accounts, and stale accounts stay put", async () => {
+  const data = new TestData();
+  const account = await prisma.providerConnection.create({ data: { name: uniqueName("claude"), kind: "claude" } });
+  const second = await prisma.providerConnection.create({ data: { name: uniqueName("codex"), kind: "codex" } });
+  const api = await prisma.providerConnection.create({ data: { name: uniqueName("openai"), kind: "openai" } });
+  try {
+    const world = await twoCompanies(data);
+    const platform = sessionOf(await data.user(), { permissions: [...KEY_MANAGER, "providers:read"] });
+    const blind = sessionOf(await data.user(), { permissions: KEY_MANAGER });
+    const company = sessionOf(await data.user({ orgId: world.home.id }), {
+      permissions: [...KEY_MANAGER, "providers:read"],
+    });
+
+    await assert.rejects(
+      runAsPrincipal(blind, () => createKey(keyInput({ accountIds: [account.id] }))),
+      failsWith("FORBIDDEN"),
+    );
+    await assert.rejects(
+      runAsPrincipal(company, () => createKey(keyInput({ accountIds: [account.id] }))),
+      failsWith("FORBIDDEN"),
+    );
+    await assert.rejects(
+      runAsPrincipal(platform, () => createKey(keyInput({ accountIds: [api.id] }))),
+      failsWith("ACCOUNT_NOT_FOUND"),
+    );
+    await assert.rejects(
+      runAsPrincipal(platform, () => createKey(keyInput({ accountIds: ["missing-account"] }))),
+      failsWith("ACCOUNT_NOT_FOUND"),
+    );
+
+    const { key } = await runAsPrincipal(platform, () =>
+      createKey(keyInput({ accountIds: [account.id, second.id, account.id] })),
+    );
+    assert.deepEqual(key.account_ids, [account.id, second.id]);
+    const principal = await keyPrincipal(key.token_id);
+    assert.deepEqual(principal?.key?.account_ids, [account.id, second.id]);
+
+    const kept = await runAsPrincipal(blind, () =>
+      updateKey(updateInput(key.token_id, { rpm: 30, accountIds: [account.id, second.id] })),
+    );
+    assert.deepEqual(kept.key.account_ids, [account.id, second.id]);
+    await assert.rejects(
+      runAsPrincipal(blind, () => updateKey(updateInput(key.token_id, { accountIds: [] }))),
+      failsWith("FORBIDDEN"),
+    );
+
+    await prisma.providerConnection.delete({ where: { id: second.id } });
+    const stale = await runAsPrincipal(platform, () =>
+      updateKey(updateInput(key.token_id, { accountIds: [account.id, second.id] })),
+    );
+    assert.deepEqual(stale.key.account_ids, [account.id, second.id]);
+    const narrowed = await runAsPrincipal(platform, () => updateKey(updateInput(key.token_id, { accountIds: [account.id] })));
+    assert.deepEqual(narrowed.key.account_ids, [account.id]);
+    const opened = await runAsPrincipal(platform, () => updateKey(updateInput(key.token_id, { accountIds: [] })));
+    assert.deepEqual(opened.key.account_ids, []);
+
+    const owner = await data.user({ isOwner: true });
+    const secret = `sk-mgmt-${uniqueName("secret")}`;
+    await prisma.managementKey.create({
+      data: {
+        userId: owner.id,
+        name: "integration",
+        prefix: secret.slice(0, 16),
+        hash: digest(secret),
+        permissions: ["keys:read", "keys:read-all", "keys:manage", "providers:read"],
+      },
+    });
+    const res = await patchKey(
+      new Request(`http://hub.local/api/mgmt/keys/${key.token_id}`, {
+        method: "PATCH",
+        headers: { authorization: `Bearer ${secret}`, "content-type": "application/json" },
+        body: JSON.stringify({ account_ids: [account.id] }),
+      }),
+      { params: Promise.resolve({ id: key.token_id }) },
+    );
+    assert.equal(res.status, 200);
+    assert.deepEqual((await res.json()).account_ids, [account.id]);
+  } finally {
+    await data.cleanup();
+    await prisma.providerConnection.deleteMany({ where: { id: { in: [account.id, second.id, api.id] } } });
+  }
+});

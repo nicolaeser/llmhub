@@ -50,6 +50,8 @@ export function newKeyDraft(kind: KeyBindingKind, preset: KeyPreset | null): Key
     windows: [],
     timeZone: "UTC",
     logContent: true,
+    accountsRestricted: false,
+    accountIds: [],
     blocked: false,
   };
 }
@@ -74,6 +76,8 @@ export function draftOfKey(key: VirtualKeyView): KeyDraft {
     windows: key.access_windows.map((window, index) => ({ ...window, key: index + 1 })),
     timeZone: key.access_time_zone,
     logContent: key.log_content,
+    accountsRestricted: key.account_ids.length > 0,
+    accountIds: key.account_ids,
     blocked: key.blocked,
   };
 }
@@ -93,6 +97,7 @@ export function keyFieldsOf(draft: KeyDraft): KeyFieldsInput {
     accessWindows: draft.windows.map(({ days, start, end }) => ({ days, start, end })),
     accessTimeZone: draft.timeZone,
     logContent: draft.logContent,
+    accountIds: draft.accountsRestricted ? draft.accountIds : [],
   };
 }
 
@@ -111,7 +116,12 @@ export function draftBasicsValid(draft: KeyDraft): boolean {
 }
 
 export function draftAccessValid(draft: KeyDraft): boolean {
-  return !draft.restricted || draft.models.length > 0 || draft.templateIds.length > 0;
+  const modelsValid = !draft.restricted || draft.models.length > 0 || draft.templateIds.length > 0;
+  return modelsValid && draftAccountsValid(draft);
+}
+
+export function draftAccountsValid(draft: Pick<KeyDraft, "accountsRestricted" | "accountIds">): boolean {
+  return !draft.accountsRestricted || draft.accountIds.length > 0;
 }
 
 export function draftNetworkValid(draft: KeyDraft): boolean {

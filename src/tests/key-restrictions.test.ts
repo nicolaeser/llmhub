@@ -58,6 +58,7 @@ function keyPrincipal(over: Partial<VirtualKeyView>): Principal {
     paused: false,
     paused_until: "",
     log_content: true,
+    account_ids: [],
     created_at: "",
     ...over,
   };

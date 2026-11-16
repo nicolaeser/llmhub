@@ -19,8 +19,9 @@ import { money } from "@/lib/utils/money";
 import { isInternalKey } from "@/lib/gateway/access/key-tenancy";
 import { loadModelPolicies, templateRuleSelect } from "@/lib/gateway/access/model-access";
 import { templateModels, templateRulesOf } from "@/lib/gateway/access/model-policy";
+import { isSignInKind, signInKinds } from "@/lib/gateway/upstreams/provider-kinds";
 import type { AuthenticatedSession } from "@/types/auth";
-import type { KeyActivity, KeyChoices, KeyDetail, KeyDetailPage } from "@/types/keys";
+import type { KeyAccountOption, KeyActivity, KeyChoices, KeyDetail, KeyDetailPage } from "@/types/keys";
 import type { SpendScope } from "@/types/structure";
 
 async function keyBinding(
@@ -71,6 +72,36 @@ async function keyTemplates(ids: string[]) {
   return unique;
 }
 
+function readsKeyAccounts(session: AuthenticatedSession): boolean {
+  return hasPerm(session.permissions, PERMISSIONS.PROVIDERS_READ) && !companyOf(session);
+}
+
+function sameIds(a: string[], b: string[]): boolean {
+  return a.length === b.length && a.every((id) => b.includes(id));
+}
+
+async function keyAccounts(session: AuthenticatedSession, ids: string[], current: string[] = []): Promise<string[]> {
+  if (sameIds(ids, current)) return current;
+  if (!readsKeyAccounts(session)) throw new Error("FORBIDDEN");
+  const added = ids.filter((id) => !current.includes(id));
+  if (!added.length) return ids;
+  const found = await prisma.providerConnection.findMany({ where: { id: { in: added } }, select: { kind: true } });
+  if (found.length !== added.length || !found.every((row) => isSignInKind(row.kind))) {
+    throw new Error("ACCOUNT_NOT_FOUND");
+  }
+  return ids;
+}
+
+async function accountChoices(session: AuthenticatedSession): Promise<KeyAccountOption[]> {
+  if (!readsKeyAccounts(session)) return [];
+  const rows = await prisma.providerConnection.findMany({
+    where: { kind: { in: signInKinds() } },
+    orderBy: [{ kind: "asc" }, { name: "asc" }],
+    select: { id: true, name: true, kind: true, login: { select: { account: true } } },
+  });
+  return rows.map((row) => ({ id: row.id, name: row.name, kind: row.kind, account: row.login?.account ?? "" }));
+}
+
 export async function createKey(raw: unknown) {
   const session = await requirePermission(PERMISSIONS.KEYS_MANAGE);
   const input = parseKeyInput(createKeySchema, raw);
@@ -81,6 +112,7 @@ export async function createKey(raw: unknown) {
     orgId: companyOf(session),
   };
   const templates = await keyTemplates(input.templateIds);
+  const accountIds = await keyAccounts(session, input.accountIds);
   const secret = `sk-hub-${randomToken()}`;
   const row = await prisma.virtualKey.create({
     data: {
@@ -99,6 +131,7 @@ export async function createKey(raw: unknown) {
       accessWindows: input.accessWindows,
       accessTimeZone: input.accessTimeZone,
       logContent: input.logContent,
+      accountIds,
       expiresAt: input.days ? new Date(Date.now() + input.days * 86400000) : null,
     },
     include: withTemplates,
@@ -118,6 +151,7 @@ export async function createKey(raw: unknown) {
       accessWindows: input.accessWindows,
       accessTimeZone: input.accessTimeZone,
       logContent: input.logContent,
+      accountIds,
     },
   });
   return { key: { ...toKeyView(row), key: secret } };
@@ -135,6 +169,7 @@ export async function updateKey(raw: unknown) {
       ? { projectId: null, memberId: null, teamId: null, orgId: existing.orgId }
       : { projectId: null, memberId: null, teamId: null, orgId: companyOf(session), userId: session.user.id });
   const templates = await keyTemplates(input.templateIds);
+  const accountIds = await keyAccounts(session, input.accountIds, existing.accountIds);
   const after = {
     keyAlias: input.alias,
     ...tenancy,
@@ -147,6 +182,7 @@ export async function updateKey(raw: unknown) {
     accessWindows: input.accessWindows,
     accessTimeZone: input.accessTimeZone,
     logContent: input.logContent,
+    accountIds,
     blocked: input.blocked,
   };
   const row = await prisma.virtualKey.update({
@@ -260,12 +296,13 @@ export async function revokeKey(id: string) {
 }
 
 export async function keyOptions(session: AuthenticatedSession): Promise<KeyChoices> {
-  const [policies, templates] = await Promise.all([
+  const [policies, templates, accounts] = await Promise.all([
     loadModelPolicies(),
     prisma.modelTemplate.findMany({
       orderBy: { name: "asc" },
       select: { ...templateRuleSelect, name: true, description: true },
     }),
+    accountChoices(session),
   ]);
   return {
     models: policies.map((policy) => policy.alias),
@@ -276,6 +313,8 @@ export async function keyOptions(session: AuthenticatedSession): Promise<KeyChoi
       matches: templateModels(templateRulesOf(template), policies),
     })),
     canTemplates: readsTemplates(session),
+    accounts,
+    canAccounts: readsKeyAccounts(session),
   };
 }
 

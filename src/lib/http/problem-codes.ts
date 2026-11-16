@@ -50,6 +50,7 @@ export const PROBLEMS = {
   ORG_LOCKED: { status: 422, title: "The company of an existing department, project, or person cannot change" },
   KEY_BINDING_CONFLICT: { status: 422, title: "Bind a key to one project or one person" },
   TEMPLATE_NOT_FOUND: { status: 422, title: "Referenced model template not found" },
+  ACCOUNT_NOT_FOUND: { status: 422, title: "Referenced subscription account not found" },
   TEMPLATE_EMPTY: { status: 422, title: "Model template needs a rule or model" },
   BUDGET_EXCEEDS_PARENT: { status: 422, title: "Budget exceeds a parent budget" },
   BUDGET_NOT_CAPPED: { status: 422, title: "Set a budget before adding a temporary boost" },

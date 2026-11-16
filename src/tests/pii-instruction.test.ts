@@ -204,6 +204,7 @@ function ownerPrincipal(pii: PiiPolicy): Principal {
     paused: false,
     paused_until: "",
     log_content: false,
+    account_ids: [],
     created_at: "",
   };
   return {

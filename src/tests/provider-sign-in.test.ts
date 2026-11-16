@@ -1041,7 +1041,14 @@ test("restricted accounts only serve the keys, people, projects, departments, an
   forgetAccountPolicies();
   t.after(forgetAccountPolicies);
   const none = { orgId: null, teamId: null, projectId: null, memberId: null, keyId: null };
-  const caller = { orgId: "org-1", teamId: "team-1", projectId: "proj-1", memberId: "mem-1", keyId: "key-1" };
+  const caller = {
+    orgId: "org-1",
+    teamId: "team-1",
+    projectId: "proj-1",
+    memberId: "mem-1",
+    keyId: "key-1",
+    accountIds: [] as string[],
+  };
   const pickFor = async (access: typeof caller | null) => {
     const acquired = await acquireGroup(group, undefined, undefined, "priority", undefined, access);
     acquired.release();
@@ -1069,6 +1076,26 @@ test("restricted accounts only serve the keys, people, projects, departments, an
   await assert.rejects(pickFor(caller), (err: unknown) => err === ERR_NOT_ASSIGNED);
   q2.restricted = false;
   assert.equal(await pickFor(caller), "dep-q2");
+});
+
+test("a key limited to chosen subscription accounts only routes to those accounts", async (t) => {
+  const { acquireGroup } = await import("@/lib/gateway/routing/runtime");
+  const { ERR_NOT_ASSIGNED } = await import("@/lib/gateway/core");
+  const { forgetAccountPolicies } = await import("@/lib/gateway/routing/account-routing");
+  const { group } = await claudePool();
+  policyRows.push({ kind: "claude", strategy: "inherit" });
+  forgetAccountPolicies();
+  t.after(forgetAccountPolicies);
+  const caller = { orgId: "org-1", teamId: "", projectId: "", memberId: "", keyId: "key-1", accountIds: [] as string[] };
+  const pickFor = async (accountIds: string[]) => {
+    const acquired = await acquireGroup(group, undefined, undefined, "priority", undefined, { ...caller, accountIds });
+    acquired.release();
+    return acquired.dep.id;
+  };
+  assert.equal(await pickFor([]), "dep-q2");
+  assert.equal(await pickFor(["prov-q3"]), "dep-q3");
+  assert.equal(await pickFor(["prov-q1", "prov-q3"]), "dep-q3");
+  await assert.rejects(pickFor(["prov-gone"]), (err: unknown) => err === ERR_NOT_ASSIGNED);
 });
 
 test("xAI billing maps the weekly credits, the monthly spend cap, and on-demand usage", async () => {

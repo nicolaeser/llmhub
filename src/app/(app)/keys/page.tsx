@@ -78,6 +78,8 @@ export default function KeysPage() {
         models: data.models,
         templates: data.templates,
         canTemplates: data.canTemplates,
+        accounts: data.accounts,
+        canAccounts: data.canAccounts,
       }
     : null;
   const keyDialogs = useKeyDialogs({

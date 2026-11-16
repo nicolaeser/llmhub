@@ -39,6 +39,7 @@ export const PATCH = managementRoute<{ id: string }>(PERMISSIONS.KEYS_MANAGE, as
       accessWindows: body.access_windows ?? current.access_windows,
       accessTimeZone: body.access_time_zone ?? current.access_time_zone,
       logContent: body.log_content ?? current.log_content,
+      accountIds: body.account_ids ?? current.account_ids,
       blocked: body.blocked ?? current.blocked,
     });
   return respond(serializeApiKey(updated.key));

@@ -40,6 +40,7 @@ export function toKeyView(row: {
   paused: boolean;
   pausedUntil: Date | null;
   logContent: boolean;
+  accountIds: string[];
   createdAt: Date;
   templates: { templateId: string }[];
 }): VirtualKeyView {
@@ -70,6 +71,7 @@ export function toKeyView(row: {
     paused: pause.paused,
     paused_until: pause.pausedUntil,
     log_content: row.logContent,
+    account_ids: row.accountIds,
     created_at: row.createdAt.toISOString(),
   };
 }
