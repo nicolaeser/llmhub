@@ -606,11 +606,11 @@ test("the JWKS keeps only public signing keys that are strong enough and fetches
   const cfg = { issuer: "https://idp.example.com", audience: "hub", jwks_url: "https://idp.example.com/keys-jwks" };
   const claims = { iss: cfg.issuer, aud: "hub", iat: now, exp: now + 60 };
   const strong = generateKeyPairSync("rsa", { modulusLength: 2048 });
-  const weak = generateKeyPairSync("rsa", { modulusLength: 1024 });
   const ed = generateKeyPairSync("ed25519");
+  const strongJwk = strong.publicKey.export({ format: "jwk" });
   const keys = [
     { ...strong.privateKey.export({ format: "jwk" }), kid: "private-fields", alg: "RS256" },
-    { ...weak.publicKey.export({ format: "jwk" }), kid: "weak" },
+    { ...strongJwk, n: Buffer.from(strongJwk.n ?? "", "base64url").subarray(0, 128).toString("base64url"), kid: "weak" },
     { ...strong.publicKey.export({ format: "jwk" }), kid: "encryption", use: "enc" },
     { ...strong.publicKey.export({ format: "jwk" }), kid: "wrap-only", key_ops: ["wrapKey"] },
     { ...strong.publicKey.export({ format: "jwk" }), kid: "pss-only", alg: "PS256" },
@@ -633,8 +633,7 @@ test("the JWKS keeps only public signing keys that are strong enough and fetches
     assert.equal(results.length, 2);
     assert.equal(fetches, 1);
     for (const kid of ["weak", "encryption", "wrap-only", "pss-only", "hmac"]) {
-      const key = kid === "weak" ? weak.privateKey : strong.privateKey;
-      await assert.rejects(verifyJwt(signed("RS256", key, kid, claims), cfg, now), /jwt kid unknown/, kid);
+      await assert.rejects(verifyJwt(signed("RS256", strong.privateKey, kid, claims), cfg, now), /jwt kid unknown/, kid);
     }
     assert.equal(fetches, 1);
   } finally {

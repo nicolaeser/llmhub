@@ -1,4 +1,4 @@
-import { constants, createPublicKey, verify, type JsonWebKey, type KeyObject } from "node:crypto";
+import { constants, createPublicKey, verify, type KeyObject } from "node:crypto";
 import { asRecord, asString } from "@/lib/gateway/core";
 import { parseJsonOrNull } from "@/lib/utils/json";
 import { cancelQuietly } from "@/lib/utils/streams";
@@ -14,6 +14,8 @@ const JWT_MAX_LENGTH = 64 * 1024;
 const CLOCK_SKEW_SECONDS = 60;
 const MIN_RSA_BITS = 2048;
 const BASE64URL = /^[A-Za-z0-9_-]*$/;
+
+type PublicJwk = Extract<Parameters<typeof createPublicKey>[0], { format: "jwk" }>["key"];
 
 const ALGORITHMS: Record<string, JwtAlgorithm> = {
   RS256: { kty: "RSA", hash: "sha256" },
@@ -44,7 +46,7 @@ export function resetJwksCache(): void {
   pending.clear();
 }
 
-function publicJwk(jwk: Record<string, unknown>): { kty: JwkKeyType; source: JsonWebKey } | null {
+function publicJwk(jwk: Record<string, unknown>): { kty: JwkKeyType; source: PublicJwk } | null {
   const field = (name: string) => asString(jwk[name]);
   const [kty, crv, x, y, n, e] = ["kty", "crv", "x", "y", "n", "e"].map(field);
   if (kty === "RSA" && n && e) return { kty, source: { kty, n, e } };

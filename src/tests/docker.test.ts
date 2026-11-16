@@ -473,7 +473,6 @@ test("generate-env.sh --yes builds the production .env from the environment", { 
     assert.match(next, /^COMPOSE_FILE=docker-compose\.yml:docker-compose\.au\.yml$/m);
     assert.equal(await readFile(path.join(dir, "docker-compose.au.yml"), "utf8"), await file("docker-compose.au.yml"));
     assert.equal(await readFile(`${output}.bak`, "utf8"), `${written}EXTRA_SETTING=kept\n`);
-    assert.equal((await stat(output)).mode & 0o777, 0o600);
 
     await writeFile(output, next.replace(/^COMPOSE_FILE=.*$/m, "COMPOSE_FILE=docker-compose.au.yml:docker-compose.rm.yml"));
     const legacy = run(["--yes", "--force"]);
@@ -488,6 +487,7 @@ test("generate-env.sh --yes builds the production .env from the environment", { 
     const invalidUpdate = run(["--yes", "--force"], { AUTO_UPDATE: "sometimes" });
     assert.equal(invalidUpdate.status, 1);
     assert.match(invalidUpdate.stderr, /AUTO_UPDATE/);
+    assert.equal((await stat(output)).mode & 0o777, 0o600);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
