@@ -6,6 +6,7 @@ import PageHeader from "@/components/console/page-header";
 import PageTabs from "@/components/console/page-tabs";
 import type { SettingsTab } from "@/types/settings";
 import GeneralTab from "./_components/general-tab";
+import UpdatesTab from "./_components/updates-tab";
 import SignInTab from "./_components/sign-in-tab";
 import StorageTab from "./_components/storage-tab";
 import LoggingTab from "./_components/logging-tab";
@@ -24,6 +25,7 @@ export default function SettingsPage() {
         label={t("title")}
         tabs={[
           tab("general", <GeneralTab />),
+          tab("updates", <UpdatesTab />),
           tab("sign-in", <SignInTab />),
           tab("storage", <StorageTab />),
           tab("logging", <LoggingTab />),

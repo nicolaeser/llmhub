@@ -5,6 +5,15 @@ export const UPDATE_PHASES = ["checking", "pulling", "recreating", "verifying", 
 const RUN_STEPS = ["checking", "pulling", "recreating", "verifying"] as const;
 const ROLLBACK_STEPS = ["checking", "pulling", "rolling_back"] as const;
 const INSTALLED_FOR_MS = 15 * 60_000;
+const NOTABLE_SUMMARIES: ReadonlySet<UpdaterSummary> = new Set([
+  "requested",
+  "running",
+  "recovery",
+  "failed",
+  "rolled_back",
+  "installed",
+  "available",
+]);
 
 export type UpdatePhase = (typeof UPDATE_PHASES)[number];
 export type StepState = "done" | "active" | "waiting";
@@ -86,6 +95,19 @@ export function updaterSummary(
   }
   if (updater.pinned) return "pinned";
   return updater.available ? "available" : "current";
+}
+
+export function summaryNotable(summary: UpdaterSummary): boolean {
+  return NOTABLE_SUMMARIES.has(summary);
+}
+
+export function runProgress(updater: Pick<UpdaterView, "state" | "progress">): { step: number; steps: number; percent: number } | null {
+  if (!updaterActive(updater)) return null;
+  const steps = runSteps(updater.state);
+  const index = steps.findIndex((step) => step.state === "active");
+  if (index < 0) return null;
+  const share = (phasePercent(updater) ?? 0) / 100;
+  return { step: index + 1, steps: steps.length, percent: Math.floor(((index + share) / steps.length) * 100) };
 }
 
 export function durationParts(milliseconds: number): { minutes: number; seconds: number } {

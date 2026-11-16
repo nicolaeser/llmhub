@@ -1,7 +1,7 @@
 {
   "title": "Einstellungen",
   "subtitle": "Anmeldung, Speicher, Protokollierung, Cache und Modellkatalog. Infrastruktur-Secrets bleiben in der Umgebung.",
-  "tabs": "{tab, select, general {Allgemein} sign_in {Anmeldung} storage {Speicher} logging {Protokollierung & Alarme} archive {Compliance-Archiv} cache {Antwort-Cache} catalog {Modellkatalog} other {Einstellungen}}",
+  "tabs": "{tab, select, general {Allgemein} updates {Updates} sign_in {Anmeldung} storage {Speicher} logging {Protokollierung & Alarme} archive {Compliance-Archiv} cache {Antwort-Cache} catalog {Modellkatalog} other {Einstellungen}}",
   "save": "Speichern",
   "saved": "Einstellungen gespeichert",
   "readOnly": "Du kannst diese Einstellungen ansehen. Zum Ändern brauchst du die Berechtigung Einstellungen verwalten.",
@@ -13,18 +13,6 @@
       "subtitle": "Personen können auf der Anmeldeseite selbst ein Konsolenkonto anlegen.",
       "registrationHint": "Standardmäßig aus. Neue Konten bekommen die Rolle Viewer und müssen die Zwei-Faktor-Authentifizierung einrichten. Solange nur SSO erlaubt ist, gilt die Einstellung nicht."
     },
-    "updates": {
-      "title": "Updates",
-      "subtitle": "Vergleicht diesen Build mit den Releases desselben Kanals auf GitHub.",
-      "enabled": "Nach Updates suchen",
-      "hint": "Fragt höchstens alle sechs Stunden die GitHub-Releases ab und zeigt oben „Update verfügbar“. Schalte es in Netzen ohne Internetzugang aus.",
-      "state": "{state, select, available {Installiert ist {current}. Verfügbar ist {latest}.} current {Installiert ist {current}, das neueste Release.} other {Installiert ist {current}.}}",
-      "open": "Release auf GitHub öffnen"
-    },
-    "automatic": {
-      "title": "Automatische Updates",
-      "subtitle": "Ein Updater-Container neben der App prüft die Image-Registry und startet LLM Hub mit neuen Images neu."
-    },
     "env": {
       "title": "Umgebung",
       "subtitle": "Diese Werte kommen aus der Prozessumgebung. Sie werden nicht in der Konsole bearbeitet.",
@@ -33,7 +21,30 @@
       "state": "{ready, select, true {Gesetzt} other {Nicht gesetzt}}",
       "hint": "Secrets kommen aus der Umgebung: S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY, OIDC_CLIENT_SECRET, SMTP_URL und REDIS_URL."
     },
-    "description": "Selbstregistrierung, Update-Prüfung und die Serverumgebung."
+    "description": "Selbstregistrierung und die Serverumgebung."
+  },
+  "updates": {
+    "description": "Live-Status des Updaters, wie er neue Images installiert, und die letzten Läufe.",
+    "automatic": {
+      "title": "Automatische Updates",
+      "subtitle": "Ein Updater-Container neben der App prüft die Image-Registry und startet LLM Hub mit neuen Images neu."
+    },
+    "image": {
+      "title": "Image und Speicher",
+      "subtitle": "Was gerade läuft und wie viel Platz für neue Images bleibt."
+    },
+    "history": {
+      "title": "Letzte Läufe",
+      "subtitle": "Die letzten fünf Installationen und Prüfungen mit ihren Schritten."
+    },
+    "releases": {
+      "title": "GitHub-Releases",
+      "subtitle": "Vergleicht diesen Build mit den Releases desselben Kanals auf GitHub.",
+      "enabled": "Nach Updates suchen",
+      "hint": "Fragt höchstens alle sechs Stunden die GitHub-Releases ab und zeigt oben „Update verfügbar“. Schalte es in Netzen ohne Internetzugang aus.",
+      "state": "{state, select, available {Installiert ist {current}. Verfügbar ist {latest}.} current {Installiert ist {current}, das neueste Release.} other {Installiert ist {current}.}}",
+      "open": "Release auf GitHub öffnen"
+    }
   },
   "signIn": {
     "scim": {

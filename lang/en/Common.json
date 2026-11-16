@@ -93,14 +93,11 @@
     "noticeBody": "An updater is connected to this server. Turn on automatic updates to install new LLM Hub images within five minutes of their release. LLM Hub restarts briefly for each update.",
     "noticeEnable": "Enable automatic updates",
     "dashboardTitle": "System updates",
-    "dashboardDescription": "Live status of the updater and its recent runs.",
-    "openSettings": "Settings",
     "service": "Service: {service}",
     "serviceProgress": "{completed, number, integer} of {total, number, integer} services ready",
     "queued": "{action, select, check {Check requested; waiting for the updater to accept it.} update {Update requested; waiting for the updater to accept it.} other {Request queued.}}",
     "staleProgress": "The connection to the console is interrupted, which is normal while LLM Hub restarts. This shows the last known status.",
     "phaseHint": "{state, select, idle {No update step is running.} checking {Checking the installed services and looking for a new image.} pulling {Downloading the image. Existing services are still running.} recreating {Stopping and replacing the current services. The app may briefly be unavailable.} verifying {Waiting for all replacement services to become healthy. Startup can take several minutes.} rolling_back {The update failed. Restoring the previous services together.} failed {The update did not complete. Check the updater logs before trying again.} other {Waiting for a status report.}}",
-    "historyTitle": "Recent runs",
     "historyEmpty": "No completed runs have been recorded yet. Older updaters may only report the last result.",
     "runServices": "Services: {services}",
     "downloadBytes": "{known, select, true {{downloaded} of {total} downloaded} other {{downloaded} downloaded · Total size unknown}}",
@@ -122,7 +119,9 @@
     "phaseTook": "{phase, select, checking {Check} pulling {Download} recreating {Replace} verifying {Health check} rolling_back {Rollback} other {Step}} {duration}",
     "chime": "Play a sound when an update finishes",
     "chimeHint": "Applies to this browser. When several console tabs are open, only one of them plays it.",
-    "chimeTest": "Test sound"
+    "chimeTest": "Test sound",
+    "details": "Details",
+    "runStep": "Step {step} of {steps}"
   },
   "modelTest": {
     "run": "Test",

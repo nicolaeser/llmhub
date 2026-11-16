@@ -25,7 +25,7 @@ import type { S3Settings } from "@/types/s3";
 import type { ComplianceArchiveSettings } from "@/types/archive";
 import type { UpdaterView, UpdateStatus } from "@/types/updates";
 
-export type SettingsTab = "general" | "sign-in" | "storage" | "logging" | "archive" | "cache" | "catalog";
+export type SettingsTab = "general" | "updates" | "sign-in" | "storage" | "logging" | "archive" | "cache" | "catalog";
 
 export type GeneralSettings = z.infer<typeof generalSettingsSchema>;
 

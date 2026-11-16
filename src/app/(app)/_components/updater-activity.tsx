@@ -170,11 +170,10 @@ function RunSteps({ updater, now }: { updater: UpdaterView; now: number }) {
   );
 }
 
-export default function UpdaterActivity({ updater }: { updater: UpdaterView }) {
+export function useUpdaterHeadline(updater: UpdaterView) {
   const t = useTranslations("Common.updater");
   const format = useFormatter();
   const now = useClock(1_000);
-  const build = useBuildStatus();
   const summary = updaterSummary(updater, now.getTime());
   const running = summary === "running";
   const look = running
@@ -183,10 +182,6 @@ export default function UpdaterActivity({ updater }: { updater: UpdaterView }) {
   const when = (iso: string) => format.relativeTime(new Date(iso), now);
   const result = updater.lastResult;
   const startedAt = updater.progress?.startedAt;
-  const recovery = updater.progress?.startup === "manual_recovery" || updater.progress?.startup === "migration_failed"
-    ? updater.progress.startup
-    : null;
-  const interrupted = build?.liveConnected === false && (running || summary === "requested");
 
   const detail = (() => {
     switch (summary) {
@@ -211,24 +206,48 @@ export default function UpdaterActivity({ updater }: { updater: UpdaterView }) {
     }
   })();
 
+  return {
+    now: now.getTime(),
+    summary,
+    running,
+    look,
+    title: running ? t("runTitle", { state: updater.state }) : t("summary", { summary }),
+    detail,
+    elapsed: running && startedAt ? stopwatch(elapsedMilliseconds(startedAt, now.getTime())) : null,
+  };
+}
+
+export function RunClock({ elapsed }: { elapsed: string }) {
+  return (
+    <Chip size="sm" variant="soft">
+      <Clock size={12} aria-hidden />
+      <span className="tabular-nums">{elapsed}</span>
+    </Chip>
+  );
+}
+
+export default function UpdaterActivity({ updater }: { updater: UpdaterView }) {
+  const t = useTranslations("Common.updater");
+  const build = useBuildStatus();
+  const { now, summary, running, look, title, detail, elapsed } = useUpdaterHeadline(updater);
+  const recovery = updater.progress?.startup === "manual_recovery" || updater.progress?.startup === "migration_failed"
+    ? updater.progress.startup
+    : null;
+  const interrupted = build?.liveConnected === false && (running || summary === "requested");
+
   return (
     <div className="min-w-0 space-y-4">
       <div className="flex items-start gap-3">
         <IconTile icon={look.icon} tone={look.tone} size="lg" />
         <div className="min-w-0 flex-1 space-y-0.5">
           <p className="text-sm font-semibold text-foreground" role="status" aria-live="polite">
-            {running ? t("runTitle", { state: updater.state }) : t("summary", { summary })}
+            {title}
           </p>
           <p className="break-words text-sm text-muted">{detail}</p>
         </div>
-        {running && startedAt ? (
-          <Chip size="sm" variant="soft">
-            <Clock size={12} aria-hidden />
-            <span className="tabular-nums">{stopwatch(elapsedMilliseconds(startedAt, now.getTime()))}</span>
-          </Chip>
-        ) : null}
+        {elapsed ? <RunClock elapsed={elapsed} /> : null}
       </div>
-      {running ? <RunSteps updater={updater} now={now.getTime()} /> : null}
+      {running ? <RunSteps updater={updater} now={now} /> : null}
       {interrupted ? (
         <Alert status="warning">
           <Alert.Indicator />

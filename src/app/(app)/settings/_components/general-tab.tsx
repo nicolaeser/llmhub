@@ -8,9 +8,6 @@ import { useErrorToast } from "@/components/console/use-error-toast";
 import { useActionData } from "@/lib/hooks/use-action-data";
 import { isActionFail } from "@/lib/http/action-result";
 import type { GeneralSettings } from "@/types/settings";
-import type { UpdaterView } from "@/types/updates";
-import { useBuildStatus } from "../../_components/build-status";
-import UpdaterPanel from "../../_components/updater-panel";
 import { loadGeneralSettingsAction, saveGeneralSettingsAction } from "../_action";
 import SaveBar, { SettingsLead } from "./save-bar";
 import TabState from "./tab-state";
@@ -20,19 +17,11 @@ export default function GeneralTab() {
   const tSettings = useTranslations("Settings");
   const showError = useErrorToast();
   const [draft, setDraft] = useState<GeneralSettings | null>(null);
-  const [updaterOverride, setUpdaterOverride] = useState<{ view: UpdaterView | null } | null>(null);
   const [pending, start] = useTransition();
   const page = useActionData(loadGeneralSettingsAction);
   const { data: view, setData } = page;
-  const live = useBuildStatus();
 
   if (!view) return <TabState state={page} />;
-
-  const updater = live?.live ? live.live.updater : updaterOverride ? updaterOverride.view : view.updater;
-  const showUpdater = (next: UpdaterView | null) => {
-    setUpdaterOverride({ view: next });
-    live?.setUpdater(next);
-  };
 
   const settings = draft ?? view.settings;
   const disabled = !view.canManage || pending;
@@ -70,45 +59,6 @@ export default function GeneralTab() {
             isDisabled={disabled}
             hint={t("access.registrationHint")}
           />
-        </div>
-      </SettingSection>
-
-      <SettingSection title={t("updates.title")} subtitle={t("updates.subtitle")}>
-        <div className="flex flex-col gap-3">
-          <div className="min-w-0 space-y-3">
-            <SettingSwitch
-              label={t("updates.enabled")}
-              isSelected={settings.update_check}
-              onChange={(update_check) => update({ update_check })}
-              isDisabled={disabled}
-              hint={t("updates.hint")}
-            />
-            <p className="text-sm text-foreground">
-              {t("updates.state", {
-                current: view.updates.current,
-                latest: view.updates.latest ?? "",
-                state: view.updates.available ? "available" : view.updates.latest ? "current" : "unknown",
-              })}
-            </p>
-            {view.updates.available && view.updates.url ? (
-              <a
-                href={view.updates.url}
-                target="_blank"
-                rel="noreferrer noopener"
-                className="text-sm font-medium text-accent"
-              >
-                {t("updates.open")}
-              </a>
-            ) : null}
-          </div>
-        </div>
-      </SettingSection>
-
-      <SettingSection title={t("automatic.title")} subtitle={t("automatic.subtitle")}>
-        <div className="flex flex-col gap-3">
-          <div className="min-w-0 flex-1">
-            <UpdaterPanel updater={updater} canManage={view.canManage} detailed onView={showUpdater} />
-          </div>
         </div>
       </SettingSection>
 

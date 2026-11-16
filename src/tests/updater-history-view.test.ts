@@ -7,8 +7,10 @@ import {
   elapsedMilliseconds,
   phasePercent,
   recentUpdateRuns,
+  runProgress,
   runSteps,
   stopwatch,
+  summaryNotable,
   updaterSummary,
 } from "../app/(app)/_components/updater-history-view";
 import { finishedRunChime } from "../lib/updates/update-chime";
@@ -90,6 +92,24 @@ test("summary ranks connection, recovery, activity, requests, failures, and fres
   assert.equal(updaterSummary({ ...idle, lastResult: { ...updated, at: "2026-11-16T11:00:00Z" }, available: true }, NOW), "available");
   assert.equal(updaterSummary({ ...idle, pinned: true }, NOW), "pinned");
   assert.equal(updaterSummary(idle, NOW), "current");
+});
+
+test("the overview only surfaces summaries that need a look", () => {
+  for (const summary of ["requested", "running", "recovery", "failed", "rolled_back", "installed", "available"] as const) {
+    assert.equal(summaryNotable(summary), true, summary);
+  }
+  for (const summary of ["offline", "checking", "pinned", "current"] as const) {
+    assert.equal(summaryNotable(summary), false, summary);
+  }
+});
+
+test("run progress spreads the active step's percent over all steps", () => {
+  const download = { downloadedBytes: 1, totalBytes: 2, layersCompleted: 0, layersTotal: 1 };
+  assert.deepEqual(runProgress({ state: "pulling", progress: { ...progress, download } }), { step: 2, steps: 4, percent: 37 });
+  assert.deepEqual(runProgress({ state: "verifying", progress: { ...progress, completed: 2 } }), { step: 4, steps: 4, percent: 100 });
+  assert.deepEqual(runProgress({ state: "rolling_back", progress }), { step: 3, steps: 3, percent: 66 });
+  assert.equal(runProgress({ state: "idle", progress }), null);
+  assert.equal(runProgress({ state: "failed", progress }), null);
 });
 
 test("durations split into whole minutes and seconds and the stopwatch pads like a clock", () => {

@@ -1,7 +1,7 @@
 {
   "title": "Settings",
   "subtitle": "Sign-in, storage, logging, caching, and the model catalog. Infrastructure secrets stay in the environment.",
-  "tabs": "{tab, select, general {General} sign_in {Sign-in} storage {Storage} logging {Logging & alerts} archive {Compliance archive} cache {Response cache} catalog {Model catalog} other {Settings}}",
+  "tabs": "{tab, select, general {General} updates {Updates} sign_in {Sign-in} storage {Storage} logging {Logging & alerts} archive {Compliance archive} cache {Response cache} catalog {Model catalog} other {Settings}}",
   "save": "Save",
   "saved": "Settings saved",
   "readOnly": "You can view these settings. Changing them needs the Manage settings permission.",
@@ -13,18 +13,6 @@
       "subtitle": "People can create their own console account from the sign-in page.",
       "registrationHint": "Off by default. New accounts get the Viewer role and must set up two-factor authentication. It is ignored while sign-in is limited to SSO."
     },
-    "updates": {
-      "title": "Updates",
-      "subtitle": "Compares this build with the releases published on GitHub for the same channel.",
-      "enabled": "Check for updates",
-      "hint": "Asks the GitHub releases API at most every six hours and shows Update available in the top bar. Turn it off in networks without internet access.",
-      "state": "{state, select, available {Running {current}. {latest} is available.} current {Running {current}, the newest release.} other {Running {current}.}}",
-      "open": "Open the release on GitHub"
-    },
-    "automatic": {
-      "title": "Automatic updates",
-      "subtitle": "An updater container next to the app checks the image registry and restarts LLM Hub with new images."
-    },
     "env": {
       "title": "Environment",
       "subtitle": "These values come from process env. They are not edited in the console.",
@@ -33,7 +21,30 @@
       "state": "{ready, select, true {Set} other {Not set}}",
       "hint": "Secrets come from the environment: S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY, OIDC_CLIENT_SECRET, SMTP_URL, and REDIS_URL."
     },
-    "description": "Self-registration, update checks, and the server environment."
+    "description": "Self-registration and the server environment."
+  },
+  "updates": {
+    "description": "Live status of the updater, how it installs new images, and the last runs.",
+    "automatic": {
+      "title": "Automatic updates",
+      "subtitle": "An updater container next to the app checks the image registry and restarts LLM Hub with new images."
+    },
+    "image": {
+      "title": "Image and disk",
+      "subtitle": "What is running now and how much space new images have."
+    },
+    "history": {
+      "title": "Recent runs",
+      "subtitle": "The last five installs and checks with their steps."
+    },
+    "releases": {
+      "title": "GitHub releases",
+      "subtitle": "Compares this build with the releases published on GitHub for the same channel.",
+      "enabled": "Check for updates",
+      "hint": "Asks the GitHub releases API at most every six hours and shows Update available in the top bar. Turn it off in networks without internet access.",
+      "state": "{state, select, available {Running {current}. {latest} is available.} current {Running {current}, the newest release.} other {Running {current}.}}",
+      "open": "Open the release on GitHub"
+    }
   },
   "signIn": {
     "scim": {

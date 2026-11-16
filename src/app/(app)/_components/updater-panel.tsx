@@ -1,16 +1,18 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { Alert, Label, Meter, Separator } from "@heroui/react";
-import { PackageOpen } from "lucide-react";
+import { Alert, buttonVariants, Label, Meter, Separator } from "@heroui/react";
+import { ArrowRight, PackageOpen } from "lucide-react";
 import { useFormatter, useTranslations } from "next-intl";
 import IconTile from "@/components/console/icon-tile";
+import { Link } from "@/i18n/routing";
 import { diskLow, shortDigest, UPDATER_MIN_FREE_DISK_BYTES } from "@/lib/updates/updater-view";
 import { formatBytes } from "@/lib/utils/bytes";
 import type { UpdaterView } from "@/types/updates";
-import { AutoUpdateSwitch, UpdateChimeSwitch, UpdaterButtons } from "./updater-controls";
+import { AutoUpdateSwitch, UpdaterButtons } from "./updater-controls";
 import UpdaterActivity from "./updater-activity";
-import UpdaterHistory from "./updater-history";
+
+export const UPDATES_HREF = "/settings?tab=updates";
 
 export function Fact({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -21,7 +23,7 @@ export function Fact({ label, children }: { label: string; children: ReactNode }
   );
 }
 
-function UpdaterFacts({ updater }: { updater: UpdaterView }) {
+export function UpdaterFacts({ updater }: { updater: UpdaterView }) {
   const t = useTranslations("Common.updater");
   const format = useFormatter();
   const unknown = t("unknown");
@@ -85,51 +87,59 @@ function UpdaterFacts({ updater }: { updater: UpdaterView }) {
   );
 }
 
+export function UpdaterMissing({ withCommand }: { withCommand: boolean }) {
+  const t = useTranslations("Common.updater");
+  return (
+    <div className="flex items-start gap-3">
+      <IconTile icon={PackageOpen} tone="neutral" size="lg" />
+      <div className="min-w-0 flex-1 space-y-2">
+        <p className="text-sm font-semibold text-foreground">{t("missingTitle")}</p>
+        <p className="text-sm text-muted">{t("missing")}</p>
+        {withCommand ? <code className="block font-mono text-xs break-all text-foreground">{t("command")}</code> : null}
+      </div>
+    </div>
+  );
+}
+
 export default function UpdaterPanel({
   updater,
   canManage,
-  detailed,
   onView,
+  onOpenDetails,
 }: {
   updater: UpdaterView | null;
   canManage: boolean;
-  detailed: boolean;
   onView: (view: UpdaterView | null) => void;
+  onOpenDetails?: () => void;
 }) {
   const t = useTranslations("Common.updater");
+  const details = onOpenDetails ? (
+    <Link href={UPDATES_HREF} onClick={onOpenDetails} className={buttonVariants({ size: "sm", variant: "secondary", fullWidth: true })}>
+      {t("details")}
+      <ArrowRight size={14} aria-hidden />
+    </Link>
+  ) : null;
 
   if (!updater) {
     return (
-      <div className="flex items-start gap-3">
-        <IconTile icon={PackageOpen} tone="neutral" size="lg" />
-        <div className="min-w-0 flex-1 space-y-2">
-          <p className="text-sm font-semibold text-foreground">{t("missingTitle")}</p>
-          <p className="text-sm text-muted">{t("missing")}</p>
-          {detailed ? <code className="block font-mono text-xs break-all text-foreground">{t("command")}</code> : null}
-        </div>
+      <div className="space-y-4">
+        <UpdaterMissing withCommand={false} />
+        {details}
       </div>
     );
   }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       <UpdaterActivity updater={updater} />
-      {canManage ? <UpdaterButtons updater={updater} onView={onView} size={detailed ? "md" : "sm"} /> : null}
-      {detailed ? (
+      {canManage ? <UpdaterButtons updater={updater} onView={onView} size="sm" /> : null}
+      {canManage ? (
         <>
           <Separator />
-          <UpdaterFacts updater={updater} />
+          <AutoUpdateSwitch updater={updater} onView={onView} />
         </>
       ) : null}
-      {canManage || detailed ? <Separator /> : null}
-      {canManage ? <AutoUpdateSwitch updater={updater} onView={onView} /> : null}
-      {detailed ? <UpdateChimeSwitch /> : null}
-      {detailed ? (
-        <>
-          <Separator />
-          <UpdaterHistory updater={updater} />
-        </>
-      ) : null}
+      {details}
     </div>
   );
 }

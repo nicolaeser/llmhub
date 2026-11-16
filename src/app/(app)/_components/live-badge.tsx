@@ -1,10 +1,13 @@
 "use client";
 
+import { useState } from "react";
 import { Button, Popover, Separator } from "@heroui/react";
 import { useFormatter, useTranslations } from "next-intl";
+import { usePathname } from "@/i18n/routing";
 import { useClock } from "@/lib/hooks/use-clock";
 import type { ServerHealth } from "@/types/updates";
 import { useBuildStatus } from "./build-status";
+import { useConsoleScope } from "./console-scope";
 import { phasePercent, updaterActive } from "./updater-history-view";
 import UpdaterPanel, { Fact } from "./updater-panel";
 
@@ -22,6 +25,9 @@ export default function LiveBadge() {
   const format = useFormatter();
   const now = useClock(30_000);
   const build = useBuildStatus();
+  const { kind } = useConsoleScope();
+  const pathname = usePathname();
+  const [openPath, setOpenPath] = useState<string | null>(null);
   const health = build?.health ?? "connecting";
   const label = t("health.status", { status: health });
   const live = build?.live ?? null;
@@ -38,7 +44,7 @@ export default function LiveBadge() {
       <span className="sr-only" role="status">
         {label}
       </span>
-      <Popover>
+      <Popover isOpen={openPath === pathname} onOpenChange={(open) => setOpenPath(open ? pathname : null)}>
         <Button size="sm" variant="ghost" aria-label={t("live.open", { status: label })} className="min-w-0">
           <span className="relative flex h-2 w-2 shrink-0" aria-hidden>
             {pulsing ? (
@@ -69,8 +75,8 @@ export default function LiveBadge() {
                 <UpdaterPanel
                   updater={live.updater}
                   canManage={live.canManage}
-                  detailed={false}
                   onView={build.setUpdater}
+                  onOpenDetails={kind === "platform" ? () => setOpenPath(null) : undefined}
                 />
               </>
             ) : null}

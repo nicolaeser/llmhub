@@ -93,14 +93,11 @@
     "noticeBody": "Mit diesem Server ist ein Updater verbunden. Schalte automatische Updates ein, damit neue LLM-Hub-Images innerhalb von fünf Minuten nach ihrer Veröffentlichung installiert werden. LLM Hub startet dafür jeweils kurz neu.",
     "noticeEnable": "Automatische Updates einschalten",
     "dashboardTitle": "System-Updates",
-    "dashboardDescription": "Live-Status des Updaters und seine letzten Läufe.",
-    "openSettings": "Einstellungen",
     "service": "Dienst: {service}",
     "serviceProgress": "{completed, number, integer} von {total, number, integer} Diensten bereit",
     "queued": "{action, select, check {Prüfung angefordert; der Updater muss sie noch annehmen.} update {Update angefordert; der Updater muss es noch annehmen.} other {Anfrage wartet.}}",
     "staleProgress": "Die Verbindung zur Konsole ist unterbrochen. Das ist während des Neustarts von LLM Hub normal. Angezeigt wird der letzte bekannte Stand.",
     "phaseHint": "{state, select, idle {Es läuft kein Update-Schritt.} checking {Die installierten Dienste werden geprüft und ein neues Image wird gesucht.} pulling {Das Image wird heruntergeladen. Bestehende Dienste laufen weiter.} recreating {Die aktuellen Dienste werden angehalten und ersetzt. Die Anwendung ist möglicherweise kurz nicht verfügbar.} verifying {Warten auf die Betriebsbereitschaft aller neuen Dienste. Der Start kann mehrere Minuten dauern.} rolling_back {Das Update ist fehlgeschlagen. Die vorherigen Dienste werden gemeinsam wiederhergestellt.} failed {Das Update wurde nicht abgeschlossen. Prüfe die Updater-Logs vor einem erneuten Versuch.} other {Warten auf eine Statusmeldung.}}",
-    "historyTitle": "Letzte Läufe",
     "historyEmpty": "Noch keine abgeschlossenen Läufe aufgezeichnet. Ältere Updater melden möglicherweise nur das letzte Ergebnis.",
     "runServices": "Dienste: {services}",
     "downloadBytes": "{known, select, true {{downloaded} von {total} heruntergeladen} other {{downloaded} heruntergeladen · Gesamtgröße unbekannt}}",
@@ -122,7 +119,9 @@
     "phaseTook": "{phase, select, checking {Prüfen} pulling {Herunterladen} recreating {Ersetzen} verifying {Startprüfung} rolling_back {Zurücksetzen} other {Schritt}} {duration}",
     "chime": "Ton abspielen, wenn ein Update fertig ist",
     "chimeHint": "Gilt für diesen Browser. Sind mehrere Konsolen-Tabs offen, spielt nur einer davon den Ton.",
-    "chimeTest": "Ton testen"
+    "chimeTest": "Ton testen",
+    "details": "Details",
+    "runStep": "Schritt {step} von {steps}"
   },
   "modelTest": {
     "run": "Testen",
