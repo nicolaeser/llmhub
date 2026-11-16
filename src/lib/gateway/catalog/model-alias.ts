@@ -1,6 +1,11 @@
 export const API_ROUTE_PREFIX = "api/";
 export const ANTHROPIC_ROUTE_PREFIX = "anthropic/";
 
+export const ROUTE_DESCRIPTIONS = {
+  subscription: "Runs on a signed-in subscription",
+  api: "Runs on the API and bills at API prices",
+} as const;
+
 export const RESERVED_ALIASES: ReadonlySet<string> = new Set(["auto"]);
 
 export function isReservedAlias(alias: string): boolean {

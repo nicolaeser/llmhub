@@ -48,6 +48,7 @@ import type { ResetCredits, ResetState } from "@/types/resets";
 export const LIMITS_POLL_MS = 3 * 60_000;
 export const CLAUDE_POLL_MS = 30 * 60_000;
 export const CLAUDE_TRAFFIC_POLL_MS = 2 * 3_600_000;
+export const PAUSED_POLL_MS = 30 * 60_000;
 export const POLL_JITTER = 0.15;
 export const MIN_POLL_GAP_MS = 60_000;
 export const RESET_GRACE_MS = 30_000;
@@ -323,8 +324,13 @@ function withLatestObservation(
   return observed ? withObservedWindows(limits, observed.windows.filter(isObservedWindow), observedTime(observed)) : limits;
 }
 
+function pausedPollAt(now: number, random: () => number, earliest = now): number {
+  return Math.max(earliest, now + jittered(PAUSED_POLL_MS, random));
+}
+
 function successData(account: LimitPollAccount, limits: SubscriptionLimits, now: number, random: () => number) {
   const streaming = isStreamingActive(account.id, now);
+  const nextAt = account.enabled ? nextPollAt(account.kind, limits, now, random, streaming) : pausedPollAt(now, random);
   return {
     limits: json(limits),
     error: "",
@@ -332,7 +338,7 @@ function successData(account: LimitPollAccount, limits: SubscriptionLimits, now:
     checkedAt: new Date(now),
     failures: 0,
     retryAt: null,
-    nextAt: new Date(nextPollAt(account.kind, limits, now, random, streaming)),
+    nextAt: new Date(nextAt),
     loginVersion: account.loginVersion,
   };
 }
@@ -346,12 +352,13 @@ function failureData(
 ) {
   const failures = failureCount(failure, previous);
   const limited = failure.code === RATE_LIMITED;
+  const retryAt = now + failureDelay(failure, failures, random);
   return {
     error: failure.code,
     checkedAt: new Date(now),
     failures,
     retryAt: limited ? new Date(now + rateLimitWait(failures, failure.retryAfterMs)) : null,
-    nextAt: new Date(now + failureDelay(failure, failures, random)),
+    nextAt: new Date(account.enabled ? retryAt : pausedPollAt(now, random, retryAt)),
     loginVersion: account.loginVersion,
   };
 }
@@ -483,9 +490,11 @@ export async function freshLimits(provider: LimitAccount, maxAgeMs: number): Pro
   return result.limits;
 }
 
-export async function pollAccounts(): Promise<(LimitPollAccount & { snapshot: StoredLimitSnapshot | null })[]> {
+export async function pollAccounts(
+  options: { includePaused?: boolean } = {},
+): Promise<(LimitPollAccount & { snapshot: StoredLimitSnapshot | null })[]> {
   const rows = await prisma.providerConnection.findMany({
-    where: { ...ACTIVE_ACCOUNT, enabled: true },
+    where: { ...ACTIVE_ACCOUNT, ...(options.includePaused ? {} : { enabled: true }) },
     select: {
       id: true,
       kind: true,
@@ -507,7 +516,6 @@ export async function pollAccounts(): Promise<(LimitPollAccount & { snapshot: St
 
 export function snapshotView(
   kind: string,
-  polled: boolean,
   stored: StoredLimitSnapshot,
   state: ResetState | null,
   now: number,
@@ -521,7 +529,7 @@ export function snapshotView(
     error: stored.error,
     version: stored.version,
     checkedAt: iso(stored.checkedAt),
-    nextAt: polled ? iso(stored.nextAt) : null,
+    nextAt: iso(stored.nextAt),
     retryAt: stored.retryAt !== null && stored.retryAt > now ? iso(stored.retryAt) : null,
   };
 }
@@ -541,18 +549,18 @@ export async function readLimitSnapshots(providerIds?: string[], now = Date.now(
       provider: ACTIVE_ACCOUNT,
       ...(providerIds ? { providerId: { in: providerIds } } : {}),
     },
-    include: { provider: { select: { kind: true, enabled: true } } },
+    include: { provider: { select: { kind: true } } },
   });
   const states = await resetStates(rows.filter((row) => isResetKind(row.provider.kind)).map((row) => row.providerId));
   return rows.map((row) =>
-    snapshotView(row.provider.kind, row.provider.enabled, storedOf(row), states.get(row.providerId) ?? null, now),
+    snapshotView(row.provider.kind, storedOf(row), states.get(row.providerId) ?? null, now),
   );
 }
 
 export async function readLimitSnapshot(providerId: string, now = Date.now()): Promise<LimitSnapshot | null> {
   const [stored, provider] = await Promise.all([
     readStoredSnapshot(providerId),
-    prisma.providerConnection.findUnique({ where: { id: providerId }, select: { kind: true, enabled: true } }),
+    prisma.providerConnection.findUnique({ where: { id: providerId }, select: { kind: true } }),
   ]);
   if (!stored || !provider || stored.checkedAt === null) return null;
   const state = isResetKind(provider.kind)
@@ -561,7 +569,7 @@ export async function readLimitSnapshot(providerId: string, now = Date.now()): P
         providerId,
       )
     : null;
-  return snapshotView(provider.kind, provider.enabled, stored, state, now);
+  return snapshotView(provider.kind, stored, state, now);
 }
 
 export async function limitVersions(): Promise<Map<string, number>> {

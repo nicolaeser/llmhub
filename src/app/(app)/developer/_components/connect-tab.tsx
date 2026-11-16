@@ -206,7 +206,7 @@ export default function ConnectTab() {
   const currentCheck = check && check.key === key && check.route === route ? check : null;
   const models = currentCheck?.ok ? chatFirst(currentCheck.models, data.models) : routeModels(data.models, route);
   const model = models.includes(modelChoice) ? modelChoice : (models[0] ?? MODEL_PLACEHOLDER);
-  const guide = toolGuide(tool.id, { origin, route, key: key || KEY_PLACEHOLDER, model, shell, sdk });
+  const guide = toolGuide(tool.id, { origin, route, key: key || KEY_PLACEHOLDER, model, models, shell, sdk });
   const toolName = t(`tools.${tool.id}.name`);
   const local = origin && isLocalOrigin(origin) ? new URL(origin).host : null;
 

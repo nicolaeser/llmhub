@@ -162,8 +162,8 @@ test("fallback chains accept additional names", async () => {
   assert.equal(upstreamModel("/chat/completions"), MODEL);
 });
 
-test("the models list shows additional names and retrieves them by id", async () => {
-  assert.deepEqual(await listIds(), [MODEL, EXTRA, "auto"]);
+test("the models list shows each model once and still retrieves additional names by id", async () => {
+  assert.deepEqual(await listIds(), [MODEL, "auto"]);
   const one = await import("@/app/api/v1/models/[id]/route");
   const found = await one.GET(new Request(`http://hub.local/api/v1/models/${EXTRA}`, { headers: HEADERS }), {
     params: Promise.resolve({ id: EXTRA }),

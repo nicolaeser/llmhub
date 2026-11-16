@@ -465,19 +465,18 @@ test("the snapshot view adds the pending reset claim and keeps Codex reset count
   const limits = { ...limitsAt(100, now + HOUR, now), resetCredits: { available: 2, applicable: 1 } };
   const view = { available: 1, applicable: 0, credits: [{ id: "c1", title: "Reset", expiresAt: null }], checkedAt: null };
   const base = stored({ providerId: "codex-1", limits, resets: view, checkedAt: now, nextAt: now + MINUTE, retryAt: now - 1 });
-  const plain = snapshotView("codex", true, base, null, now);
+  const plain = snapshotView("codex", base, null, now);
   assert.equal(plain.limits?.resetCredits?.available, 2);
   assert.equal(plain.limits?.resetCredits?.applicable, 1);
   assert.equal(plain.limits?.resetCredits?.canRedeem, true);
   assert.deepEqual(plain.limits?.resetCredits?.credits, view.credits);
   assert.equal(plain.retryAt, null);
   assert.equal(plain.nextAt, new Date(now + MINUTE).toISOString());
-  assert.equal(snapshotView("codex", false, base, null, now).nextAt, null);
   const pending = { kind: "codex" as const, requestId: "req-1", startedAt: now - RETRY_WINDOW_MS - 1, attempts: 1, trigger: "manual" as const, actor: "u" };
-  const claimed = snapshotView("codex", true, base, { pending, lastAutoAt: 0 }, now);
+  const claimed = snapshotView("codex", base, { pending, lastAutoAt: 0 }, now);
   assert.equal(claimed.limits?.resetCredits?.pending?.retryable, false);
   assert.equal(claimed.limits?.resetCredits?.canRedeem, false);
-  const claude = snapshotView("claude", true, { ...base, limits: { ...limits, resetCredits: null }, resets: null }, { pending, lastAutoAt: 0 }, now);
+  const claude = snapshotView("claude", { ...base, limits: { ...limits, resetCredits: null }, resets: null }, { pending, lastAutoAt: 0 }, now);
   assert.deepEqual(claude.limits?.resetCredits, {
     available: 0,
     applicable: 0,
@@ -1053,6 +1052,26 @@ test("a sweep claims and stamps each account when its own read starts", async ()
   const stamps = accounts.map((item) => (snapshotRows.get(item.id)!.checkedAt as Date).getTime());
   assert.ok(Math.max(...stamps) - now >= READ_MS - 10);
   assert.ok(accounts.every((item) => snapshotRows.get(item.id)?.leaseUntil === null));
+});
+
+test("a sweep keeps reading paused accounts every 30 minutes and serves active accounts first", async () => {
+  const { refreshDueLimits } = await import("@/lib/providers/limit-refresh");
+  const { PAUSED_POLL_MS, POLL_JITTER, pollDue, readStoredSnapshot } = await import("@/lib/gateway/upstreams/limit-store");
+  providers.clear();
+  logins.clear();
+  const claude = await Promise.all(Array.from({ length: 5 }, () => account("claude")));
+  const paused = claude[0]!;
+  providers.set(paused.id, { kind: "claude", enabled: false });
+  respond(() => claudeUsage(5));
+  const now = Date.now();
+  assert.equal(await refreshDueLimits(now), 4);
+  assert.equal(snapshotRows.get(paused.id)?.fetchedAt ?? null, null);
+  assert.equal(await refreshDueLimits(now + MINUTE), 1);
+  const nextAt = (snapshotRows.get(paused.id)!.nextAt as Date).getTime() - (now + MINUTE);
+  assert.ok(nextAt >= PAUSED_POLL_MS * (1 - POLL_JITTER) - 1_000 && nextAt <= PAUSED_POLL_MS * (1 + POLL_JITTER) + 1_000, String(nextAt));
+  const stored = await readStoredSnapshot(paused.id);
+  assert.equal(pollDue(stored, paused.loginVersion, now + 10 * MINUTE), false);
+  assert.equal(pollDue(stored, paused.loginVersion, now + MINUTE + PAUSED_POLL_MS * (1 + POLL_JITTER) + 2_000), true);
 });
 
 test("a manual read is due outside the manual gap and never while the provider asked to wait", async () => {

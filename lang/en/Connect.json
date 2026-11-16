@@ -58,9 +58,9 @@
         "terminal": "Just want to try it once? Run this in a terminal instead. It applies to that window only."
       },
       "notes": {
-        "models": "{route, select, subscription {/model lists every hub model your key may use.} other {/model lists only the hub's Claude models. Use any other model by typing /model followed by its exact name.}} Claude Code's built-in models stay in the list.",
-        "vscode": "Using the Claude Code extension in VS Code? Add ANTHROPIC_BASE_URL and ANTHROPIC_AUTH_TOKEN under the VS Code setting claudeCode.environmentVariables as well.",
-        "gatewayMode": "Add CLAUDE_CODE_USE_GATEWAY=1 so Claude Code reads usage-limit resets from the hub and apps such as T3 Code resume on their own. In that mode the picker shows only standard Claude names."
+        "models": "{route, select, subscription {/model lists every chat model your key may use, each once.} other {/model lists only the hub's Claude models. Use any other model by typing /model followed by its exact name.}} Claude Code keeps its own Opus, Sonnet, Haiku, and Fable entries; the ANTHROPIC_DEFAULT_… lines point them at the hub's newest matching model.",
+        "vscode": "Using the Claude Code extension in VS Code? Add the same variables under the VS Code setting claudeCode.environmentVariables as well.",
+        "gatewayMode": "CLAUDE_CODE_USE_GATEWAY=1 lets Claude Code read usage-limit resets from the hub, so apps such as T3 Code resume on their own. Keep the ANTHROPIC_DEFAULT_… lines with it: without them, the Opus, Sonnet, and Haiku entries ask for older models."
       }
     },
     "codex": {

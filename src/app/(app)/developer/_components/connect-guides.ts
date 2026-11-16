@@ -45,6 +45,7 @@ export type GuideValues = {
   route: ConnectRoute;
   key: string;
   model: string;
+  models: readonly string[];
   shell: ConnectShell;
   sdk: ConnectSdk;
 };
@@ -122,12 +123,32 @@ export function claudeDesktopConfig(gatewayBaseUrl: string, key: string): string
   });
 }
 
+const CLAUDE_TIERS = ["opus", "sonnet", "haiku", "fable"] as const;
+
+const CLAUDE_TIER_ID = /^claude-(opus|sonnet|haiku|fable)-(\d+)(?:-(\d{1,2}))?$/;
+
+export function claudeTierModels(ids: readonly string[]): [string, string][] {
+  const newest = new Map<string, { id: string; rank: number }>();
+  for (const id of ids) {
+    const match = CLAUDE_TIER_ID.exec(id);
+    if (!match) continue;
+    const rank = Number(match[2]) * 100 + Number(match[3] ?? 0);
+    if ((newest.get(match[1]!)?.rank ?? -1) < rank) newest.set(match[1]!, { id, rank });
+  }
+  return CLAUDE_TIERS.flatMap((tier): [string, string][] => {
+    const found = newest.get(tier);
+    return found ? [[`ANTHROPIC_DEFAULT_${tier.toUpperCase()}_MODEL`, found.id]] : [];
+  });
+}
+
 function claudeCodeGuide(values: GuideValues, urls: ReturnType<typeof gatewayUrls>): ToolGuide {
-  const env = [
+  const env: [string, string][] = [
     ["ANTHROPIC_BASE_URL", urls.anthropic],
     ["ANTHROPIC_AUTH_TOKEN", values.key],
+    ["CLAUDE_CODE_USE_GATEWAY", "1"],
     ["CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY", "1"],
-  ] as const;
+    ...claudeTierModels(values.models),
+  ];
   return {
     steps: [
       {

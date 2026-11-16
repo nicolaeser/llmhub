@@ -58,9 +58,9 @@
         "terminal": "Nur mal ausprobieren? Führ stattdessen das im Terminal aus. Es gilt nur für dieses Fenster."
       },
       "notes": {
-        "models": "{route, select, subscription {/model listet alle Modelle des Hubs, die dein Key nutzen darf.} other {/model listet nur die Claude-Modelle des Hubs. Jedes andere Modell nutzt du mit /model und seinem genauen Namen.}} Die eingebauten Modelle von Claude Code bleiben in der Liste.",
-        "vscode": "Du nutzt die Claude-Code-Erweiterung in VS Code? Trag ANTHROPIC_BASE_URL und ANTHROPIC_AUTH_TOKEN zusätzlich in der VS-Code-Einstellung claudeCode.environmentVariables ein.",
-        "gatewayMode": "Setz zusätzlich CLAUDE_CODE_USE_GATEWAY=1, damit Claude Code die Reset-Zeiten von Nutzungslimits vom Hub liest und Apps wie T3 Code danach selbst weitermachen. In diesem Modus zeigt die Auswahl nur die üblichen Claude-Namen."
+        "models": "{route, select, subscription {/model listet jedes Chat-Modell, das dein Key nutzen darf, genau einmal.} other {/model listet nur die Claude-Modelle des Hubs. Jedes andere Modell nutzt du mit /model und seinem genauen Namen.}} Claude Code behält seine eigenen Einträge Opus, Sonnet, Haiku und Fable; die Zeilen ANTHROPIC_DEFAULT_… lassen sie auf das neueste passende Modell des Hubs zeigen.",
+        "vscode": "Du nutzt die Claude-Code-Erweiterung in VS Code? Trag dieselben Variablen zusätzlich in der VS-Code-Einstellung claudeCode.environmentVariables ein.",
+        "gatewayMode": "Mit CLAUDE_CODE_USE_GATEWAY=1 liest Claude Code die Reset-Zeiten von Nutzungslimits vom Hub, sodass Apps wie T3 Code danach selbst weitermachen. Behalte dazu die Zeilen ANTHROPIC_DEFAULT_…: Ohne sie fragen die Einträge Opus, Sonnet und Haiku ältere Modelle an."
       }
     },
     "codex": {

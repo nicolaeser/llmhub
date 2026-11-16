@@ -257,7 +257,7 @@ test("the Codex catalog lists chat models with Codex metadata and the full Codex
   assert.equal((codexCatalog(entries, "api", facts).models as JsonMap[])[0]!.description, null);
 });
 
-test("the Codex catalog offers Fast and Ultra Fast where a route confirms them and keeps variants at their own speed", () => {
+test("the Codex catalog offers Fast and Ultrafast where a route confirms them and hides what the base model already covers", () => {
   const entries: JsonMap[] = [
     { id: "gpt-6-astra", display_name: "GPT-6 Astra", route: "subscription" },
     { id: "gpt-6-astra-fast", display_name: "GPT-6 Astra (Fast)", route: "subscription", variant: "fast" },
@@ -271,8 +271,16 @@ test("the Codex catalog offers Fast and Ultra Fast where a route confirms them a
       internal: new Map(),
     },
   };
-  const [base, variant, api] = codexCatalog(entries, "subscription", facts).models as [JsonMap, JsonMap, JsonMap];
+  const extraNames: JsonMap[] = [{ id: "gpt-6.0-astra", display_name: "GPT-6 Astra", route: "subscription" }];
+  const [base, variant, api, extra] = codexCatalog(entries, "subscription", facts, extraNames).models as [
+    JsonMap,
+    JsonMap,
+    JsonMap,
+    JsonMap,
+  ];
   assert.deepEqual((base.service_tiers as JsonMap[]).map((tier) => tier.id), ["priority", "ultrafast"]);
+  assert.deepEqual((base.service_tiers as JsonMap[]).map((tier) => tier.name), ["Fast", "Ultrafast"]);
+  assert.deepEqual([base.visibility, variant.visibility, api.visibility, extra.visibility], ["list", "hide", "list", "hide"]);
   assert.deepEqual(base.additional_speed_tiers, ["fast"]);
   assert.deepEqual(variant.service_tiers, []);
   assert.deepEqual(variant.additional_speed_tiers, []);

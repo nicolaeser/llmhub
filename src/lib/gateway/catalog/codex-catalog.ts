@@ -1,4 +1,4 @@
-import { plainModel } from "@/lib/gateway/catalog/model-alias";
+import { plainModel, ROUTE_DESCRIPTIONS } from "@/lib/gateway/catalog/model-alias";
 import { CODEX_BASE_INSTRUCTIONS, CODEX_COMPACT_INSTRUCTIONS } from "@/lib/gateway/catalog/codex-instructions";
 import { isModelVariant, splitVariant } from "@/lib/gateway/catalog/model-variants";
 import { CODEX_FAST_TIER, CODEX_ULTRAFAST_TIER } from "@/lib/gateway/upstreams/codex";
@@ -18,19 +18,21 @@ const REASONING_LEVELS = [
 
 const SPEED_TIERS: Partial<Record<ModelVariant, JsonMap>> = {
   fast: { id: CODEX_FAST_TIER, name: "Fast", description: "Faster responses that use your limits at a higher rate" },
-  ultrafast: { id: CODEX_ULTRAFAST_TIER, name: "Ultra Fast", description: "Fastest responses at the highest usage rate" },
-};
-
-const ROUTE_DESCRIPTION: Record<PublicPool, string> = {
-  subscription: "Runs on a signed-in subscription",
-  api: "Runs on the API and bills at API prices",
+  ultrafast: { id: CODEX_ULTRAFAST_TIER, name: "Ultrafast", description: "Fastest responses at the highest usage rate" },
 };
 
 function reasons(id: string): boolean {
   return !/non[-_]?reasoning/i.test(id);
 }
 
-function codexModel(entry: JsonMap, surface: PublicPool, facts: CatalogFacts, priority: number, instructions: string): JsonMap {
+function codexModel(
+  entry: JsonMap,
+  surface: PublicPool,
+  facts: CatalogFacts,
+  priority: number,
+  instructions: string,
+  listed: boolean,
+): JsonMap {
   const id = String(entry.id);
   const route: PublicPool = entry.route === "api" || entry.route === "subscription" ? entry.route : surface;
   const variant = isModelVariant(entry.variant) ? entry.variant : null;
@@ -38,15 +40,17 @@ function codexModel(entry: JsonMap, surface: PublicPool, facts: CatalogFacts, pr
   const alias = variant ? (splitVariant(plain)?.alias ?? plain) : plain;
   const reasoning = reasons(id);
   const window = facts.windows[route].get(alias);
-  const speeds = variant ? [] : (facts.speeds[route].get(alias) ?? []);
+  const baseSpeeds = facts.speeds[route].get(alias) ?? [];
+  const speeds = variant ? [] : baseSpeeds;
+  const tierOnBase = variant !== null && baseSpeeds.includes(variant);
   const model: JsonMap = {
     slug: id,
     display_name: typeof entry.display_name === "string" && entry.display_name ? entry.display_name : id,
-    description: surface === "subscription" ? ROUTE_DESCRIPTION[route] : null,
+    description: surface === "subscription" ? ROUTE_DESCRIPTIONS[route] : null,
     default_reasoning_level: reasoning ? "medium" : null,
     supported_reasoning_levels: reasoning ? REASONING_LEVELS : [],
     shell_type: "shell_command",
-    visibility: "list",
+    visibility: listed && !tierOnBase ? "list" : "hide",
     supported_in_api: true,
     priority,
     availability_nux: null,
@@ -69,10 +73,14 @@ function codexModel(entry: JsonMap, surface: PublicPool, facts: CatalogFacts, pr
   return model;
 }
 
-export function codexCatalog(entries: JsonMap[], surface: PublicPool, facts: CatalogFacts): JsonMap {
-  const chat = entries.filter((entry) => modelRole([String(entry.id), String(entry.display_name ?? "")]) === "chat");
+export function codexCatalog(entries: JsonMap[], surface: PublicPool, facts: CatalogFacts, extraNames: JsonMap[] = []): JsonMap {
+  const isChat = (entry: JsonMap) => modelRole([String(entry.id), String(entry.display_name ?? "")]) === "chat";
+  const chat = [
+    ...entries.filter(isChat).map((entry) => ({ entry, listed: true })),
+    ...extraNames.filter(isChat).map((entry) => ({ entry, listed: false })),
+  ];
   const build = (instructions: string) => ({
-    models: chat.map((entry, index) => codexModel(entry, surface, facts, index, instructions)),
+    models: chat.map(({ entry, listed }, index) => codexModel(entry, surface, facts, index, instructions, listed)),
   });
   const full = build(CODEX_BASE_INSTRUCTIONS);
   return Buffer.byteLength(JSON.stringify(full)) <= CODEX_CATALOG_LIMIT ? full : build(CODEX_COMPACT_INSTRUCTIONS);

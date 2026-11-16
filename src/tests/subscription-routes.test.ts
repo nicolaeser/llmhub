@@ -6,6 +6,7 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { GateError } from "@/lib/gateway/errors";
 import type { JsonMap, Principal } from "@/types/gateway";
+import type { PublicModel } from "@/types/models";
 
 type FakeRoute = { id: string; kind: string };
 
@@ -202,6 +203,7 @@ test("subscription model listings come from the subscription pool", async () => 
   const discovered = await list(subscriptionApp, "/api/subscription/v1/models?limit=1000");
   assert.ok(discovered.includes("anthropic/grok-build") && discovered.includes("anthropic/api/gpt-api"), discovered.join());
   assert.ok(discovered.every((id) => id.startsWith("anthropic/")), discovered.join());
+  assert.equal(new Set(discovered).size, discovered.length, discovered.join());
   const api = await list(gatewayApp, "/api/v1/models");
   assert.ok(api.includes("gpt-api") && !api.includes("grok-build"), api.join());
   const retrieve = async (surface: string, url: string) =>
@@ -313,17 +315,68 @@ test("the subscription model list adds the API models with the api/ prefix and a
     ],
   );
   assert.equal(sub[0]!.display_name, "gpt-5.5");
+  assert.equal(sub[0]!.description, "Runs on a signed-in subscription");
+  assert.equal(sub[2]!.display_name, "Auto");
   assert.equal(sub[3]!.display_name, "gpt-5.5 (API)");
+  assert.equal(sub[3]!.description, "Runs on the API and bills at API prices");
   const api = modelEntries(models, "api", all, created);
   assert.deepEqual(
     api.map((entry) => entry.id),
     ["gpt-5.5", "gpt-api", "overflow-only", "auto"],
   );
-  assert.equal(api.some((entry) => "route" in entry), false);
+  assert.equal(api.some((entry) => "route" in entry || "description" in entry), false);
   const limited = modelEntries(models, "subscription", (alias) => alias !== "gpt-api" && alias !== "grok-build", created);
   assert.deepEqual(
     limited.map((entry) => entry.id),
     ["gpt-5.5", "auto", "api/gpt-5.5", "api/overflow-only", "api/auto"],
+  );
+});
+
+test("model lists show each model once, keep variants beside it, and leave additional names to lookups", async () => {
+  const { extraNameEntries, gatewayDiscoveryEntries, modelEntries } = await import("@/lib/gateway/endpoints/models-route");
+  const created = new Date("2026-11-16T12:00:00Z");
+  const model = (alias: string, displayName: string, extra: Partial<PublicModel>): PublicModel => ({
+    alias,
+    vendor: "",
+    displayName,
+    tags: [],
+    pricing: null,
+    subscriptionPricing: null,
+    pools: ["subscription"],
+    variants: [],
+    extraNames: [],
+    ...extra,
+  });
+  const models = [
+    model("claude-opus-5-5", "Claude Opus 5.5", {
+      pools: ["subscription", "api"],
+      extraNames: ["claude-opus-5.5"],
+      variants: [{ variant: "fast", pools: ["subscription", "api"] }],
+    }),
+    model("gpt-5.5", "GPT-5.5", { variants: [{ variant: "fast", pools: ["subscription"] }] }),
+    model("gpt-image-2", "GPT Image 2", {}),
+  ];
+  const all = () => true;
+  const listed = modelEntries(models, "subscription", all, created);
+  assert.deepEqual(
+    listed.map((entry) => `${entry.id} | ${entry.display_name}`),
+    [
+      "claude-opus-5-5 | Claude Opus 5.5",
+      "claude-opus-5-5-fast | Claude Opus 5.5 (Fast)",
+      "gpt-5.5 | GPT-5.5",
+      "gpt-5.5-fast | GPT-5.5 (Fast)",
+      "gpt-image-2 | GPT Image 2",
+      "api/claude-opus-5-5 | Claude Opus 5.5 (API)",
+      "api/claude-opus-5-5-fast | Claude Opus 5.5 (API, Fast)",
+    ],
+  );
+  assert.deepEqual(
+    extraNameEntries(models, "subscription", all, created).map((entry) => entry.id),
+    ["claude-opus-5.5", "api/claude-opus-5.5"],
+  );
+  assert.deepEqual(
+    gatewayDiscoveryEntries(listed).map((entry) => entry.id),
+    ["claude-opus-5-5", "anthropic/gpt-5.5", "anthropic/gpt-5.5-fast", "api/claude-opus-5-5"],
   );
 });
 

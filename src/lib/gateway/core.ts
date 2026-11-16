@@ -1,5 +1,6 @@
 import packageJson from "../../../package.json";
 import { GateError } from "@/lib/gateway/errors";
+import { ROUTE_DESCRIPTIONS } from "@/lib/gateway/catalog/model-alias";
 import { PROVIDER_CATALOG } from "@/lib/gateway/upstreams/provider-kinds";
 import type { JsonMap, Principal } from "@/types/gateway";
 import type { ModelPricing, PublicModel } from "@/types/models";
@@ -204,14 +205,14 @@ export function modelEntry(
     created_at: created.toISOString(),
     ...(origin?.tags.length ? { tags: origin.tags } : {}),
     ...(pricing ? { pricing } : {}),
-    ...(route ? { route } : {}),
+    ...(route ? { route, description: ROUTE_DESCRIPTIONS[route] } : {}),
   };
 }
 
 export const AUTO_MODEL: PublicModel = {
   alias: "auto",
   vendor: "",
-  displayName: "",
+  displayName: "Auto",
   tags: [],
   pricing: null,
   pools: ["api", "subscription"],

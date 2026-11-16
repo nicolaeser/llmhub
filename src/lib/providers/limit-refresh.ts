@@ -69,12 +69,12 @@ async function viewRefresh(account: LimitPollAccount, refresh: boolean, now: num
 export async function refreshDueLimits(now = Date.now()): Promise<number> {
   const started = Date.now();
   const current = () => now + Date.now() - started;
-  const accounts = await pollAccounts();
+  const accounts = await pollAccounts({ includePaused: true });
   const reads = new Map<string, number>();
   const due = withinSweep(
     accounts
       .filter((account) => pollDue(account.snapshot, account.loginVersion, now))
-      .sort((a, b) => (a.snapshot?.nextAt ?? 0) - (b.snapshot?.nextAt ?? 0)),
+      .sort((a, b) => Number(b.enabled) - Number(a.enabled) || (a.snapshot?.nextAt ?? 0) - (b.snapshot?.nextAt ?? 0)),
     SWEEP_LIMIT,
     reads,
   );
