@@ -11,7 +11,7 @@ import { splitVariant, VARIANT_LABELS, variantAlias } from "@/lib/gateway/catalo
 import { CODEX_VERSION_PARAM, codexCatalog } from "@/lib/gateway/catalog/codex-catalog";
 import { catalogFacts } from "@/lib/gateway/catalog/model-context";
 import { pricedModels } from "@/lib/gateway/catalog/model-pricing";
-import { canonicalModel } from "@/lib/gateway/routing/name-route";
+import { canonicalModel, modelResolver } from "@/lib/gateway/routing/name-route";
 import { listedIn, routeOf } from "@/lib/gateway/routing/route-pool";
 import { modelRole } from "@/lib/models/model-role";
 import type { JsonMap } from "@/types/gateway";
@@ -85,17 +85,14 @@ function nativeAliasEntries(
   surface: PublicPool,
   allowed: (alias: string) => boolean,
   created: Date,
-  taken: ReadonlySet<string>,
+  resolve: (model: string) => string,
 ): JsonMap[] {
-  const claimed = new Set(taken);
-  return [...models]
+  return models
     .filter((model) => allowed(model.alias) && listedIn(model, surface))
-    .sort((a, b) => a.alias.localeCompare(b.alias))
     .flatMap((model) =>
-      anthropicPublicIds(model.alias, claimed).map((id) => {
-        claimed.add(id);
-        return routedEntry(model, id, surface, surface, created);
-      }),
+      anthropicPublicIds(model.alias)
+        .filter((id) => resolve(id) === model.alias)
+        .map((id) => routedEntry(model, id, surface, surface, created)),
     );
 }
 
@@ -134,8 +131,8 @@ export function listModelsRoute(pool: PublicPool) {
       }
       const gatewayDiscovery = pool === "subscription" && query.get("limit") === GATEWAY_DISCOVERY_LIMIT;
       if (!gatewayDiscovery) return listResponse(listed);
-      const taken = new Set([...models.map((model) => model.alias), ...listed.map((entry) => String(entry.id))]);
-      return listResponse(gatewayDiscoveryEntries([...listed, ...nativeAliasEntries(models, pool, allowed, created, taken)]));
+      const native = nativeAliasEntries(models, pool, allowed, created, await modelResolver());
+      return listResponse(gatewayDiscoveryEntries([...listed, ...native]));
     } catch (err) {
       return gateResponse(err, req);
     }

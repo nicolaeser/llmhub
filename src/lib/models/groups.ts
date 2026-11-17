@@ -555,6 +555,7 @@ export async function setModelGroupEnabled(input: { alias: string; enabled: bool
     data: { enabled: input.enabled },
     include: groupInclude,
   });
+  forgetModelNames();
   await writeAudit({
     actor: session.user.id,
     action: input.enabled ? "model.enable" : "model.disable",

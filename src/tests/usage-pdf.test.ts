@@ -149,11 +149,11 @@ test("usagePdf puts the instance URL, edition, and page label on the letterhead"
     }),
   );
   const shown = texts(bytes);
-  assert.ok(shown.includes("https://hub.example.com"));
+  assert.ok(shown.some((text) => text === "https://hub.example.com"));
   assert.ok(shown.includes("v2026.11.15.abc1234"));
   assert.ok(shown.includes("Page 1 of 1"));
   const pdf = latin1(bytes);
-  assert.match(pdf, /\/Subtype \/Link \/Rect \[[^\]]+\] \/Border \[0 0 0\] \/A << \/Type \/Action \/S \/URI \/URI \(https:\/\/hub\.example\.com\) >>/);
+  assert.match(pdf, /\/Subtype \/Link \/Rect \[[^\]]+\] \/Border \[0 0 0\] \/A << \/Type \/Action \/S \/URI \/URI \(https:\/\/hub\.example\.com\/\) >>/);
   assert.match(pdf, /\/Subject <FEFF00680074007400700073/);
 });
 

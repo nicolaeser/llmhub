@@ -62,6 +62,24 @@ function sameStyle(a: Segment, b: Run): boolean {
   );
 }
 
+function charPieces(text: string, width: number, measure: (char: string) => number): { text: string; width: number }[] {
+  const pieces: { text: string; width: number }[] = [];
+  let piece = "";
+  let pieceWidth = 0;
+  for (const char of text) {
+    const charWidth = measure(char);
+    if (piece && pieceWidth + charWidth > width + FIT_TOLERANCE) {
+      pieces.push({ text: piece, width: pieceWidth });
+      piece = "";
+      pieceWidth = 0;
+    }
+    piece += char;
+    pieceWidth += charWidth;
+  }
+  if (piece) pieces.push({ text: piece, width: pieceWidth });
+  return pieces;
+}
+
 function wrap(runs: Run[], width: number, measure: Measure): Line[] {
   const lines: Line[] = [];
   let segments: Segment[] = [];
@@ -93,20 +111,10 @@ function wrap(runs: Run[], width: number, measure: Measure): Line[] {
       push(segment);
       return;
     }
-    let piece = "";
-    let pieceWidth = 0;
-    for (const char of segment.text) {
-      const charWidth = measure(char, segment);
-      if (piece && used + pieceWidth + charWidth > width + FIT_TOLERANCE) {
-        push({ ...segment, text: piece, width: pieceWidth });
-        flush();
-        piece = "";
-        pieceWidth = 0;
-      }
-      piece += char;
-      pieceWidth += charWidth;
-    }
-    if (piece) push({ ...segment, text: piece, width: pieceWidth });
+    charPieces(segment.text, width, (char) => measure(char, segment)).forEach((piece, index) => {
+      if (index > 0) flush();
+      push({ ...segment, ...piece });
+    });
   };
 
   for (const run of runs) {
@@ -150,19 +158,7 @@ function codeLines(value: string, width: number, measure: (text: string) => numb
       out.push(line);
       continue;
     }
-    let piece = "";
-    let pieceWidth = 0;
-    for (const char of line) {
-      const charWidth = measure(char);
-      if (piece && pieceWidth + charWidth > width + FIT_TOLERANCE) {
-        out.push(piece);
-        piece = "";
-        pieceWidth = 0;
-      }
-      piece += char;
-      pieceWidth += charWidth;
-    }
-    if (piece) out.push(piece);
+    out.push(...charPieces(line, width, measure).map((piece) => piece.text));
   }
   return out;
 }

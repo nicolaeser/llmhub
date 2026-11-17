@@ -311,7 +311,7 @@ function documentUrl(value: string): string | null {
   try {
     const url = new URL(value);
     if ((url.protocol !== "http:" && url.protocol !== "https:") || url.username || url.password) return null;
-    return value;
+    return url.href;
   } catch {
     return null;
   }

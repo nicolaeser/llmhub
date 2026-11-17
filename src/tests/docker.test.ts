@@ -39,13 +39,17 @@ test("next emits the standalone server the image runs", async () => {
   assert.match(config, /output: "standalone"/);
 });
 
-test("the standalone trace carries the usage PDF fonts with their licenses", async () => {
+test("the standalone trace carries the PDF fonts with their licenses to both export routes", async () => {
   const config = await file("next.config.ts");
   assert.match(config, /"\/internal-api\/usage\/export": \["\.\/src\/lib\/export\/fonts\/\*"\]/);
+  assert.match(config, /"\/internal-api\/logs\/\\\\\[id\\\\\]\/export": \["\.\/src\/lib\/export\/fonts\/\*"\]/);
   const fonts = (await readdir(path.join(root, "src/lib/export/fonts"))).sort();
   assert.deepEqual(fonts, [
     "Geist-Bold.ttf.br",
+    "Geist-BoldItalic.ttf.br",
+    "Geist-Italic.ttf.br",
     "Geist-Regular.ttf.br",
+    "GeistMono-Regular.ttf.br",
     "NotoSans-Bold.ttf.br",
     "NotoSans-Regular.ttf.br",
     "NotoSansKR-Regular.ttf.br",

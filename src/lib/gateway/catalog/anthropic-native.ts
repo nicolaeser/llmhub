@@ -1,7 +1,12 @@
 import { isReservedAlias, modelAlias } from "@/lib/gateway/catalog/model-alias";
 
-// Claude Code 2.1.326 calls a dated gateway id for these models. The undated id is the same model.
-const GATEWAY_IDS: Record<string, string> = {
+export type AnthropicAliasIndex = {
+  aliases: ReadonlySet<string>;
+  enabled: ReadonlySet<string>;
+  owners: ReadonlyMap<string, string | null>;
+};
+
+const CLAUDE_CODE_GATEWAY_IDS: Readonly<Record<string, string>> = {
   "claude-haiku-4-5": "claude-haiku-4-5-20251001",
   "claude-sonnet-4": "claude-sonnet-4-20250514",
   "claude-sonnet-4-5": "claude-sonnet-4-5-20250929",
@@ -10,50 +15,74 @@ const GATEWAY_IDS: Record<string, string> = {
   "claude-opus-4-5": "claude-opus-4-5-20251101",
 };
 
-// Claude Code's own ids for the original 4.0 releases. The provider id drops the trailing "-0".
-const LOGICAL_BASE: Record<string, string> = {
+const CLAUDE_CODE_RELEASE_IDS: Readonly<Record<string, string>> = {
   "claude-opus-4-0": "claude-opus-4",
   "claude-sonnet-4-0": "claude-sonnet-4",
 };
 
-export function anthropicBaseModel(model: string): string {
+export const EMPTY_ANTHROPIC_INDEX: AnthropicAliasIndex = { aliases: new Set(), enabled: new Set(), owners: new Map() };
+
+function anthropicParts(model: string): { base: string; snapshot: string } | null {
   const id = model.trim().toLowerCase();
   const start = id.lastIndexOf("claude-");
-  if (start < 0) return "";
-  return id
+  if (start < 0) return null;
+  const core = id
     .slice(start)
     .replace(/\[[^\]]*\]/g, "")
+    .replace(/@(\d{8})(?=$|[@:-])/, "-$1")
     .replace(/[@:].*$/, "")
-    .replace(/-v\d+$/, "")
-    .replace(/-\d{8}$/, "")
-    .replace(/\./g, "-");
+    .replace(/-v\d+$/, "");
+  const snapshot = /-(\d{8})$/.exec(core)?.[1] ?? "";
+  return { base: core.replace(/-\d{8}$/, "").replace(/\./g, "-"), snapshot };
 }
 
-function catalogBase(model: string): string {
-  const native = anthropicBaseModel(model);
-  if (!native) return "";
-  return LOGICAL_BASE[native] ?? native;
+export function anthropicBaseModel(model: string): string {
+  return anthropicParts(model)?.base ?? "";
 }
 
-// The catalog alias for a native or dated Anthropic id, when exactly one enabled model is that model.
-// A different release (claude-sonnet-5 versus claude-sonnet-5-5) is not a match.
-export function anthropicCatalogAlias(model: string, aliases: ReadonlySet<string>): string | undefined {
+function releaseParts(model: string): { base: string; snapshot: string } | null {
+  const parts = anthropicParts(model);
+  if (!parts) return null;
+  return { base: CLAUDE_CODE_RELEASE_IDS[parts.base] ?? parts.base, snapshot: parts.snapshot };
+}
+
+export function anthropicAliasIndex(rows: readonly { alias: string; enabled: boolean }[]): AnthropicAliasIndex {
+  const owners = new Map<string, string | null>();
+  for (const row of rows) {
+    const base = releaseParts(row.alias)?.base;
+    if (base) owners.set(base, owners.has(base) ? null : row.alias);
+  }
+  return {
+    aliases: new Set(rows.map((row) => row.alias)),
+    enabled: new Set(rows.filter((row) => row.enabled).map((row) => row.alias)),
+    owners,
+  };
+}
+
+function sameSnapshot(base: string, requested: string, owned: string): boolean {
+  if (!requested || !owned) return !requested || CLAUDE_CODE_GATEWAY_IDS[base] === `${base}-${requested}`;
+  return requested === owned;
+}
+
+export function anthropicCatalogAlias(model: string, index: AnthropicAliasIndex): string | undefined {
   const plain = modelAlias(model);
-  if (aliases.has(plain)) return undefined;
-  const stripped = plain.replace(/\[[^\]]*\]/g, "");
-  if (stripped !== plain && aliases.has(stripped)) return stripped;
-  const base = catalogBase(stripped);
-  if (!base) return undefined;
-  if (base !== stripped && aliases.has(base)) return base;
-  const owners = [...aliases].filter((alias) => alias !== stripped && catalogBase(alias) === base);
-  return owners.length === 1 ? owners[0] : undefined;
+  if (index.aliases.has(plain)) return undefined;
+  const unbracketed = plain.replace(/\[[^\]]*\]/g, "");
+  if (unbracketed !== plain && index.aliases.has(unbracketed)) {
+    return index.enabled.has(unbracketed) ? unbracketed : undefined;
+  }
+  const requested = releaseParts(unbracketed);
+  if (!requested) return undefined;
+  const owner = index.aliases.has(requested.base) ? requested.base : index.owners.get(requested.base);
+  if (!owner || !index.enabled.has(owner)) return undefined;
+  const owned = releaseParts(owner);
+  if (!owned || !sameSnapshot(requested.base, requested.snapshot, owned.snapshot)) return undefined;
+  return owner;
 }
 
-// Ids Claude Code asks for that are not the catalog alias. Real aliases and reserved names are left out.
-export function anthropicPublicIds(alias: string, taken: ReadonlySet<string>): string[] {
-  const key = modelAlias(alias);
-  const base = catalogBase(key);
+export function anthropicPublicIds(alias: string): string[] {
+  const base = releaseParts(modelAlias(alias))?.base;
   if (!base) return [];
-  const ids = [GATEWAY_IDS[base], base].filter((id): id is string => Boolean(id));
-  return [...new Set(ids)].filter((id) => id !== key && !taken.has(id) && !isReservedAlias(id));
+  const ids = [CLAUDE_CODE_GATEWAY_IDS[base], base].filter((id): id is string => Boolean(id));
+  return [...new Set(ids)].filter((id) => id !== alias && !isReservedAlias(id));
 }

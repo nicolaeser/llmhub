@@ -1,5 +1,6 @@
 import "server-only";
 import prisma from "@/lib/db/prisma";
+import { anthropicAliasIndex, type AnthropicAliasIndex } from "@/lib/gateway/catalog/anthropic-native";
 import { extraNamesOf, nameIndex, namedBody, namedModel } from "@/lib/gateway/catalog/model-names";
 import type { JsonMap } from "@/types/gateway";
 
@@ -9,7 +10,7 @@ type NameCache = {
   at: number;
   generation: number;
   names: ReadonlyMap<string, string>;
-  aliases: ReadonlySet<string>;
+  native: AnthropicAliasIndex;
 };
 
 type NameState = {
@@ -28,13 +29,12 @@ function state(): NameState {
 async function loadNames(generation: number): Promise<NameCache> {
   const at = Date.now();
   const rows = await prisma.modelGroup.findMany({ select: { alias: true, enabled: true, extraNames: true } });
-  const aliases = new Set(rows.map((row) => row.alias));
-  const enabled = new Set(rows.filter((row) => row.enabled !== false).map((row) => row.alias));
+  const native = anthropicAliasIndex(rows);
   const names = nameIndex(
     rows.filter((row) => extraNamesOf(row.extraNames).length > 0),
-    aliases,
+    native.aliases,
   );
-  const loaded = { at, generation, names, aliases: enabled };
+  const loaded = { at, generation, names, native };
   const current = state();
   if (current.generation === generation) current.loaded = loaded;
   return loaded;
@@ -62,12 +62,16 @@ export function forgetModelNames(): void {
   current.loading = null;
 }
 
-export async function canonicalModel(model: string): Promise<string> {
+export async function modelResolver(): Promise<(model: string) => string> {
   const loaded = await cachedNames();
-  return namedModel(model, loaded.names, loaded.aliases);
+  return (model) => namedModel(model, loaded.names, loaded.native);
+}
+
+export async function canonicalModel(model: string): Promise<string> {
+  return (await modelResolver())(model);
 }
 
 export async function canonicalBody(body: JsonMap): Promise<JsonMap> {
   const loaded = await cachedNames();
-  return namedBody(body, loaded.names, loaded.aliases);
+  return namedBody(body, loaded.names, loaded.native);
 }

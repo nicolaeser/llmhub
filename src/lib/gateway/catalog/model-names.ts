@@ -1,8 +1,6 @@
-import { anthropicCatalogAlias } from "@/lib/gateway/catalog/anthropic-native";
+import { anthropicCatalogAlias, EMPTY_ANTHROPIC_INDEX, type AnthropicAliasIndex } from "@/lib/gateway/catalog/anthropic-native";
 import { isReservedAlias, modelAlias, plainModel } from "@/lib/gateway/catalog/model-alias";
 import type { JsonMap } from "@/types/gateway";
-
-const EMPTY_ALIASES: ReadonlySet<string> = new Set();
 
 export const MAX_EXTRA_NAMES = 20;
 export const EXTRA_NAME_MAX = 120;
@@ -36,20 +34,20 @@ export function nameIndex(
 export function namedModel(
   model: string,
   names: ReadonlyMap<string, string>,
-  aliases: ReadonlySet<string> = EMPTY_ALIASES,
+  native: AnthropicAliasIndex = EMPTY_ANTHROPIC_INDEX,
 ): string {
-  if (!names.size && !aliases.size) return model;
+  if (!names.size && !native.aliases.size) return model;
   const requested = model.trim();
   const plain = plainModel(requested);
-  const alias = names.get(modelAlias(plain)) ?? anthropicCatalogAlias(plain, aliases);
+  const alias = names.get(modelAlias(plain)) ?? anthropicCatalogAlias(plain, native);
   return alias ? `${requested.slice(0, requested.length - plain.length)}${alias}` : model;
 }
 
-function namedChain(value: unknown, names: ReadonlyMap<string, string>, aliases: ReadonlySet<string>): unknown {
-  if (typeof value === "string") return namedModel(value, names, aliases);
-  if (Array.isArray(value)) return value.map((item) => namedChain(item, names, aliases));
+function namedChain(value: unknown, names: ReadonlyMap<string, string>, native: AnthropicAliasIndex): unknown {
+  if (typeof value === "string") return namedModel(value, names, native);
+  if (Array.isArray(value)) return value.map((item) => namedChain(item, names, native));
   if (value && typeof value === "object" && typeof (value as JsonMap).model === "string") {
-    return { ...(value as JsonMap), model: namedModel(String((value as JsonMap).model), names, aliases) };
+    return { ...(value as JsonMap), model: namedModel(String((value as JsonMap).model), names, native) };
   }
   return value;
 }
@@ -57,12 +55,12 @@ function namedChain(value: unknown, names: ReadonlyMap<string, string>, aliases:
 export function namedBody(
   body: JsonMap,
   names: ReadonlyMap<string, string>,
-  aliases: ReadonlySet<string> = EMPTY_ALIASES,
+  native: AnthropicAliasIndex = EMPTY_ANTHROPIC_INDEX,
 ): JsonMap {
-  if (!names.size && !aliases.size) return body;
+  if (!names.size && !native.aliases.size) return body;
   const named: JsonMap = { ...body };
-  if (typeof body.model === "string") named.model = namedModel(body.model, names, aliases);
-  if ("fallbacks" in body) named.fallbacks = namedChain(body.fallbacks, names, aliases);
-  if ("fallback" in body) named.fallback = namedChain(body.fallback, names, aliases);
+  if (typeof body.model === "string") named.model = namedModel(body.model, names, native);
+  if ("fallbacks" in body) named.fallbacks = namedChain(body.fallbacks, names, native);
+  if ("fallback" in body) named.fallback = namedChain(body.fallback, names, native);
   return named;
 }

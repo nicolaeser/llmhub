@@ -276,6 +276,27 @@ test("gateway discovery lists the native id and the console list does not", asyn
   assert.equal(((await found.json()) as JsonMap).id, HAIKU_DATED);
 });
 
+test("gateway discovery only lists a native id where requests for it are routed", async () => {
+  const { GET } = await import("@/app/api/subscription/v1/models/route");
+  const discovered = async () => {
+    forgetModelNames();
+    const res = await GET(new Request("http://hub.local/api/subscription/v1/models?limit=1000", { headers: HEADERS }));
+    return ((await res.json()) as { data: { id: string; display_name?: string }[] }).data;
+  };
+  gateway.groups.set(`bedrock-${HAIKU}`, claudeGroup(`bedrock-${HAIKU}`));
+  gateway.groups.set(`vertex-${HAIKU}`, claudeGroup(`vertex-${HAIKU}`));
+  const twins = (await discovered()).map((entry) => entry.id);
+  assert.equal(twins.includes(HAIKU_DATED), false);
+  assert.equal(twins.includes(HAIKU), false);
+  gateway.groups.delete(`bedrock-${HAIKU}`);
+  gateway.groups.delete(`vertex-${HAIKU}`);
+  gateway.groups.set(HAIKU, claudeGroup(HAIKU));
+  gateway.groups.set(MODEL, groupRow(MODEL, { extraNames: [HAIKU_DATED] }));
+  const claimed = (await discovered()).map((entry) => entry.id);
+  assert.ok(claimed.includes(HAIKU));
+  assert.equal(claimed.includes(HAIKU_DATED), false);
+});
+
 test("updating a model keeps its additional names unless they are sent", async () => {
   const { runAsPrincipal } = await import("@/lib/auth/delegation");
   const { updateModelGroup } = await import("@/lib/models/groups");

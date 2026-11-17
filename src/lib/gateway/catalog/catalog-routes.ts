@@ -5,6 +5,7 @@ import { writeAudit } from "@/lib/audit";
 import { reconcile, storedSelect, type StoredRow } from "@/lib/gateway/catalog/catalog-entries";
 import { activationEntries, trustedKind } from "@/lib/gateway/catalog/model-catalog";
 import { isReservedAlias } from "@/lib/gateway/catalog/model-alias";
+import { forgetModelNames } from "@/lib/gateway/routing/name-route";
 import { discoveredOf } from "@/lib/gateway/upstreams/provider-prices";
 import { catalogRouting, getEnterprise } from "@/lib/settings/enterprise";
 import type { DiscoveredModel } from "@/types/providers";
@@ -49,6 +50,7 @@ export async function addRoute(target: RouteTarget): Promise<"created" | "added"
           deployments: { create: deployment },
         },
       });
+      forgetModelNames();
       return "created";
     } catch (error) {
       if (!isPrismaCode(error, "P2002")) throw error;
@@ -190,6 +192,7 @@ export async function setGroupActive(actor: string, alias: string, active: boole
   if (group) {
     if (group.enabled === active) return;
     await prisma.modelGroup.update({ where: { alias }, data: { enabled: active } });
+    forgetModelNames();
     await writeAudit({
       actor,
       action: active ? "model.enable" : "model.disable",

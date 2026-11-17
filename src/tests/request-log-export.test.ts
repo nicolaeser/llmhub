@@ -200,12 +200,12 @@ test("request exports name the instance and link it from the PDF", () => {
   const bytes = requestLogPdf(sourced);
   const pdf = latin1(bytes);
   assertValidPdf(pdf);
-  assert.ok(texts(bytes).includes("https://hub.example.com"));
+  assert.ok(texts(bytes).some((text) => text === "https://hub.example.com"));
   assert.ok(texts(bytes).includes("v2026.11.15.abc1234"));
-  assert.match(pdf, /\/URI \(https:\/\/hub\.example\.com\)/);
+  assert.match(pdf, /\/URI \(https:\/\/hub\.example\.com\/\)/);
   const md = requestLogMarkdown(sourced);
   assert.ok(md.includes("https://hub.example.com\n"));
-  assert.ok(md.endsWith("_Erstellt am 6. Okt. 2026, 12:11:00 UTC · https://hub.example.com · v2026.11.15.abc1234 · LLM Hub_\n"));
+  assert.ok(md.endsWith("_Erstellt am 6. Okt. 2026, 12:11:00 UTC · v2026.11.15.abc1234 · LLM Hub_\n"));
 });
 
 test("requestLogMarkdown keeps content, escapes fields, and fences code safely", () => {

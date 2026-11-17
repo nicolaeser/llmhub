@@ -80,7 +80,7 @@ export function requestLogMarkdown(doc: RequestLogDocument): string {
       );
     }
   }
-  const credit = [doc.generated, doc.instance, doc.edition, doc.brand].flatMap((part) => (part ? [part] : []));
+  const credit = [doc.generated, doc.edition, doc.brand].flatMap((part) => (part ? [part] : []));
   parts.push(`---\n\n_${credit.map((part) => escapeInline(part)).join(" · ")}_`);
   return `${parts.join("\n\n")}\n`;
 }
