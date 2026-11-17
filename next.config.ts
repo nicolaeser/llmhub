@@ -8,6 +8,7 @@ const nextConfig: NextConfig = {
   output: "standalone",
   outputFileTracingIncludes: {
     "/internal-api/usage/export": ["./src/lib/export/fonts/*"],
+    "/internal-api/logs/\\[id\\]/export": ["./src/lib/export/fonts/*"],
   },
   poweredByHeader: false,
   turbopack: {

@@ -1,5 +1,8 @@
+import { anthropicCatalogAlias } from "@/lib/gateway/catalog/anthropic-native";
 import { isReservedAlias, modelAlias, plainModel } from "@/lib/gateway/catalog/model-alias";
 import type { JsonMap } from "@/types/gateway";
+
+const EMPTY_ALIASES: ReadonlySet<string> = new Set();
 
 export const MAX_EXTRA_NAMES = 20;
 export const EXTRA_NAME_MAX = 120;
@@ -30,28 +33,36 @@ export function nameIndex(
   return index;
 }
 
-export function namedModel(model: string, names: ReadonlyMap<string, string>): string {
-  if (!names.size) return model;
+export function namedModel(
+  model: string,
+  names: ReadonlyMap<string, string>,
+  aliases: ReadonlySet<string> = EMPTY_ALIASES,
+): string {
+  if (!names.size && !aliases.size) return model;
   const requested = model.trim();
   const plain = plainModel(requested);
-  const alias = names.get(modelAlias(plain));
+  const alias = names.get(modelAlias(plain)) ?? anthropicCatalogAlias(plain, aliases);
   return alias ? `${requested.slice(0, requested.length - plain.length)}${alias}` : model;
 }
 
-function namedChain(value: unknown, names: ReadonlyMap<string, string>): unknown {
-  if (typeof value === "string") return namedModel(value, names);
-  if (Array.isArray(value)) return value.map((item) => namedChain(item, names));
+function namedChain(value: unknown, names: ReadonlyMap<string, string>, aliases: ReadonlySet<string>): unknown {
+  if (typeof value === "string") return namedModel(value, names, aliases);
+  if (Array.isArray(value)) return value.map((item) => namedChain(item, names, aliases));
   if (value && typeof value === "object" && typeof (value as JsonMap).model === "string") {
-    return { ...(value as JsonMap), model: namedModel(String((value as JsonMap).model), names) };
+    return { ...(value as JsonMap), model: namedModel(String((value as JsonMap).model), names, aliases) };
   }
   return value;
 }
 
-export function namedBody(body: JsonMap, names: ReadonlyMap<string, string>): JsonMap {
-  if (!names.size) return body;
+export function namedBody(
+  body: JsonMap,
+  names: ReadonlyMap<string, string>,
+  aliases: ReadonlySet<string> = EMPTY_ALIASES,
+): JsonMap {
+  if (!names.size && !aliases.size) return body;
   const named: JsonMap = { ...body };
-  if (typeof body.model === "string") named.model = namedModel(body.model, names);
-  if ("fallbacks" in body) named.fallbacks = namedChain(body.fallbacks, names);
-  if ("fallback" in body) named.fallback = namedChain(body.fallback, names);
+  if (typeof body.model === "string") named.model = namedModel(body.model, names, aliases);
+  if ("fallbacks" in body) named.fallbacks = namedChain(body.fallbacks, names, aliases);
+  if ("fallback" in body) named.fallback = namedChain(body.fallback, names, aliases);
   return named;
 }

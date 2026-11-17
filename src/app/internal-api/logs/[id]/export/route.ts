@@ -6,9 +6,11 @@ import { writeAudit } from "@/lib/audit";
 import { parseHit } from "@/lib/gateway/safety/guardrails";
 import { piiPlaceholderGroups } from "@/lib/gateway/safety/pii";
 import { findRequestLogDetail } from "@/lib/gateway/request-logs/request-log-detail";
+import { requestStatusTone } from "@/lib/gateway/request-logs/request-status";
 import { fileResponse } from "@/lib/export/csv";
 import { problemResponse } from "@/lib/http/problem";
 import { requestLogMarkdown } from "@/lib/export/request-log-markdown";
+import { exportIdentity } from "@/lib/export/identity";
 import { requestLogPdf } from "@/lib/export/request-log-pdf";
 import { labelText } from "@/lib/usage/labels";
 import type {
@@ -91,15 +93,19 @@ async function requestLogDocument(detail: RequestLogDetail): Promise<RequestLogD
   });
   const content = detail.content;
   const status = t("statusOutcome", { status: detail.status, outcome: detail.outcome });
+  const identity = exportIdentity();
 
   return {
     brand: tCommon("appName"),
+    instance: identity.instance,
+    edition: identity.edition,
     title: tDetail("title"),
     subtitle: tDetail("subtitle", {
       model: detail.model,
       time: format.dateTime(new Date(detail.createdAt), "zoned"),
     }),
     status,
+    statusTone: requestStatusTone(detail.status),
     generated: tDetail("generated", { at: await getNow() }),
     error: detail.error ? { label: tDetail("error"), text: detail.error } : null,
     fields: [

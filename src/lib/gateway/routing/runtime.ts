@@ -32,7 +32,7 @@ import {
   waitingError,
 } from "@/lib/gateway/core";
 import { modelAlias } from "@/lib/gateway/catalog/model-alias";
-import { modelNames } from "@/lib/gateway/routing/name-route";
+import { canonicalModel } from "@/lib/gateway/routing/name-route";
 import { hiddenFrom } from "@/lib/gateway/routing/route-pool";
 import { routePermitted } from "@/lib/gateway/access/model-policy";
 import { priceWindowQuery, priceWindowRates } from "@/lib/gateway/billing/price-schedule";
@@ -157,8 +157,8 @@ export async function loadGroup(requested: string): Promise<ResolvedModelGroup> 
       },
     });
   const direct = await findGroup(alias);
-  const named = direct ? undefined : (await modelNames()).get(alias);
-  const group = direct ?? (named ? await findGroup(named) : null);
+  const resolved = direct ? alias : await canonicalModel(alias);
+  const group = direct ?? (resolved !== alias ? await findGroup(resolved) : null);
   if (!group?.enabled) throw ERR_UNKNOWN_GROUP;
   const mapped = group.deployments.map(mapDeployment);
   await attachModelFacts(mapped);

@@ -11,18 +11,26 @@ const FONT_DIR = path.join(process.cwd(), "src", "lib", "export", "fonts");
 const FACES = [
   "Geist-Regular",
   "Geist-Bold",
+  "Geist-Italic",
+  "Geist-BoldItalic",
+  "GeistMono-Regular",
   "NotoSans-Regular",
   "NotoSans-Bold",
   "NotoSansSC-Regular",
   "NotoSansKR-Regular",
 ] as const;
 
-const CHAINS: Partial<Record<PdfFont, readonly (typeof FACES)[number][]>> = {
+const CHAINS: Record<PdfFont, readonly (typeof FACES)[number][]> = {
   regular: ["Geist-Regular", "NotoSans-Regular", "NotoSansSC-Regular", "NotoSansKR-Regular"],
   bold: ["Geist-Bold", "NotoSans-Bold", "NotoSansSC-Regular", "NotoSansKR-Regular"],
+  italic: ["Geist-Italic", "NotoSans-Regular", "NotoSansSC-Regular", "NotoSansKR-Regular"],
+  boldItalic: ["Geist-BoldItalic", "NotoSans-Bold", "NotoSansSC-Regular", "NotoSansKR-Regular"],
+  mono: ["GeistMono-Regular", "Geist-Regular", "NotoSans-Regular", "NotoSansSC-Regular", "NotoSansKR-Regular"],
 };
 
 const BOLD_WEIGHT = 600;
+const isBold = (font: PdfFont) => font === "bold" || font === "boldItalic";
+const isItalic = (font: PdfFont) => font === "italic" || font === "boldItalic";
 const BFCHAR_BLOCK = 100;
 
 const loaded = new Map<string, TrueTypeFont>();
@@ -49,7 +57,8 @@ function glyph(chain: readonly string[], font: PdfFont, char: string): PdfGlyph 
       code: gid,
       width: scaled(source, source.advances[gid]!),
       text: char,
-      emboldened: font === "bold" && source.weight < BOLD_WEIGHT,
+      emboldened: isBold(font) && source.weight < BOLD_WEIGHT,
+      oblique: isItalic(font) && source.italicAngle === 0,
     };
   }
   return undefined;
@@ -57,7 +66,6 @@ function glyph(chain: readonly string[], font: PdfFont, char: string): PdfGlyph 
 
 function layout(value: string, font: PdfFont): PdfGlyph[] {
   const chain = CHAINS[font];
-  if (!chain) throw new Error("PDF_FONT_UNSUPPORTED");
   return Array.from(value.normalize("NFC"), (char) => glyph(chain, font, char) ?? glyph(chain, font, "?")!);
 }
 

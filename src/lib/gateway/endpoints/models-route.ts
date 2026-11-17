@@ -4,13 +4,14 @@ import { gateRequest, gateResponse, modelPermitted } from "@/lib/gateway/access/
 import { GateError } from "@/lib/gateway/errors";
 import { apiKeyRequest } from "@/lib/gateway/protocols/messages";
 import { AUTO_MODEL, modelEntry } from "@/lib/gateway/core";
+import { anthropicPublicIds } from "@/lib/gateway/catalog/anthropic-native";
 import { ANTHROPIC_ROUTE_PREFIX, API_ROUTE_PREFIX, modelAlias } from "@/lib/gateway/catalog/model-alias";
 import { nameIndex } from "@/lib/gateway/catalog/model-names";
 import { splitVariant, VARIANT_LABELS, variantAlias } from "@/lib/gateway/catalog/model-variants";
 import { CODEX_VERSION_PARAM, codexCatalog } from "@/lib/gateway/catalog/codex-catalog";
 import { catalogFacts } from "@/lib/gateway/catalog/model-context";
 import { pricedModels } from "@/lib/gateway/catalog/model-pricing";
-import { modelNames } from "@/lib/gateway/routing/name-route";
+import { canonicalModel } from "@/lib/gateway/routing/name-route";
 import { listedIn, routeOf } from "@/lib/gateway/routing/route-pool";
 import { modelRole } from "@/lib/models/model-role";
 import type { JsonMap } from "@/types/gateway";
@@ -79,6 +80,25 @@ export function extraNameEntries(models: PublicModel[], surface: PublicPool, all
   );
 }
 
+function nativeAliasEntries(
+  models: PublicModel[],
+  surface: PublicPool,
+  allowed: (alias: string) => boolean,
+  created: Date,
+  taken: ReadonlySet<string>,
+): JsonMap[] {
+  const claimed = new Set(taken);
+  return [...models]
+    .filter((model) => allowed(model.alias) && listedIn(model, surface))
+    .sort((a, b) => a.alias.localeCompare(b.alias))
+    .flatMap((model) =>
+      anthropicPublicIds(model.alias, claimed).map((id) => {
+        claimed.add(id);
+        return routedEntry(model, id, surface, surface, created);
+      }),
+    );
+}
+
 export function gatewayDiscoveryEntries(entries: JsonMap[]): JsonMap[] {
   return entries
     .filter((entry) => modelRole([String(entry.id), String(entry.display_name ?? "")]) === "chat")
@@ -113,7 +133,9 @@ export function listModelsRoute(pool: PublicPool) {
         return NextResponse.json(codexCatalog(listed, pool, await catalogFacts(), named));
       }
       const gatewayDiscovery = pool === "subscription" && query.get("limit") === GATEWAY_DISCOVERY_LIMIT;
-      return listResponse(gatewayDiscovery ? gatewayDiscoveryEntries(listed) : listed);
+      if (!gatewayDiscovery) return listResponse(listed);
+      const taken = new Set([...models.map((model) => model.alias), ...listed.map((entry) => String(entry.id))]);
+      return listResponse(gatewayDiscoveryEntries([...listed, ...nativeAliasEntries(models, pool, allowed, created, taken)]));
     } catch (err) {
       return gateResponse(err, req);
     }
@@ -131,13 +153,16 @@ export function retrieveModelRoute(pool: PublicPool) {
         : requested;
       const created = new Date();
       const base = splitVariant(alias)?.alias;
-      const named = (await modelNames()).get(alias);
+      const resolved = await canonicalModel(alias);
+      const named = resolved === alias ? undefined : resolved;
       const lookup = [alias, base, named].filter((name): name is string => Boolean(name));
       const models = alias === AUTO_MODEL.alias ? [AUTO_MODEL] : await pricedModels(created, lookup);
       const allowed = (model: string) => modelPermitted(principal, model);
-      const entry = [...modelEntries(models, pool, allowed, created), ...extraNameEntries(models, pool, allowed, created)].find(
-        (candidate) => candidate.id === listId,
-      );
+      const entries = [...modelEntries(models, pool, allowed, created), ...extraNameEntries(models, pool, allowed, created)];
+      const ownerId = named && listId.endsWith(alias) ? `${listId.slice(0, listId.length - alias.length)}${named}` : named;
+      const entry =
+        entries.find((candidate) => candidate.id === listId) ??
+        (ownerId ? entries.find((candidate) => candidate.id === ownerId) : undefined);
       if (!entry) throw new GateError(404, "model_not_found", "model not found", { param: "id" });
       return NextResponse.json({ ...entry, id: requested });
     } catch (err) {

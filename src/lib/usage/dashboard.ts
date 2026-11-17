@@ -22,6 +22,7 @@ import {
   usageNames,
   usageSlices,
 } from "@/lib/usage/usage-totals";
+import type { AuthenticatedSession } from "@/types/auth";
 import type { UsageSlice, UsageTab } from "@/types/usage";
 
 export async function loadUsageTabs(): Promise<UsageTab[]> {
@@ -32,7 +33,12 @@ export async function loadUsageTabs(): Promise<UsageTab[]> {
   return tabs;
 }
 
-export async function loadUsage(
+export async function loadUsage(input?: Parameters<typeof loadUsageFor>[1]) {
+  return loadUsageFor(await requirePermission(PERMISSIONS.SPEND_READ), input);
+}
+
+export async function loadUsageFor(
+  session: AuthenticatedSession,
   input:
     | number
     | {
@@ -48,7 +54,6 @@ export async function loadUsage(
         labelValue?: string;
       } = 14,
 ) {
-  const session = await requirePermission(PERMISSIONS.SPEND_READ);
   const query = typeof input === "number" ? { days: input } : input;
   const text = (value: string | undefined) => (value ?? "").trim();
   const days = Math.min(366, Math.max(1, Math.trunc(query.days ?? 14) || 14));

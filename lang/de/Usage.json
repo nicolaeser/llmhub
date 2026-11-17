@@ -65,7 +65,11 @@
     "title": "Nutzungsbericht",
     "period": "{days, plural, one {Letzter # Tag} other {Letzte # Tage}} · {range} (UTC)",
     "filter": "Modell: {model}",
+    "scopeLabel": "Bereich",
+    "filterLabel": "Filter",
+    "scope": "{own, select, yes {{hasCompany, select, yes {{company} · Konsolen-Benutzer {user}} other {Konsolen-Benutzer {user}}}} other {{hasCompany, select, yes {{company}} other {Alle Unternehmen}}}}",
     "generated": "Erstellt am {at, date, long}",
+    "page": "Seite {page, number, integer} von {total, number, integer}",
     "byModel": "Ausgaben nach Modell",
     "colModel": "Modell",
     "colShare": "Anteil",
@@ -76,6 +80,8 @@
     "noSpend": "Keine Ausgaben in diesem Zeitraum.",
     "byLabel": "Ausgaben nach Label {key}",
     "colLabelValue": "Wert",
+    "continued": "{heading} (Fortsetzung)",
+    "topValues": "Top {shown, number, integer} von {total, number, integer} Werten nach Ausgaben. Die Summe enthält alle Werte.",
     "labelFilter": "{key}: {value}"
   },
   "report": {

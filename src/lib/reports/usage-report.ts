@@ -19,6 +19,7 @@ import {
 } from "@/lib/usage/usage-stats";
 import { p95Latency, usageLabelGroups, usageNames, usageSlices } from "@/lib/usage/usage-totals";
 import { toCsv } from "@/lib/export/csv";
+import { exportIdentity } from "@/lib/export/identity";
 import { usageStatsPdf } from "@/lib/export/usage-pdf";
 import { errorFields } from "@/lib/logging/format";
 import { logger } from "@/lib/logging/logger";
@@ -105,6 +106,7 @@ export async function buildReportMail(
     .slice(0, REPORT_LABEL_KEYS)
     .map(([key, labeled]) => ({ key, rows: groupByLabel(labelBreakdown(rows, labeled)) }));
   const brand = tCommon("appName");
+  const identity = exportIdentity();
   const scopeName = t("report.scope", {
     hasTeam: report.team ? "yes" : "no",
     org: report.org.alias,
@@ -126,8 +128,10 @@ export async function buildReportMail(
         t,
         format,
         brand,
+        instance: identity.instance,
+        edition: identity.edition,
         period: periodName,
-        filter: scopeName,
+        scope: scopeName,
         generatedAt: now,
         dayDate: (day) => new Date(`${day}T00:00:00Z`),
       }),

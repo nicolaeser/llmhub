@@ -201,6 +201,8 @@ export type RequestLogDetail = RequestLogRow & {
 
 export type RequestLogExportFormat = "pdf" | "md" | "json";
 
+export type RequestStatusTone = "success" | "warning" | "danger";
+
 export type RequestLogDocumentEntry = {
   role: string;
   assistant: boolean;
@@ -216,6 +218,9 @@ export type RequestLogDocument = {
   title: string;
   subtitle: string;
   status: string;
+  statusTone: RequestStatusTone;
+  instance?: string;
+  edition?: string;
   generated: string;
   error: { label: string; text: string } | null;
   fields: RequestLogDocumentField[];

@@ -65,7 +65,11 @@
     "title": "Usage report",
     "period": "{days, plural, one {Last # day} other {Last # days}} · {range} (UTC)",
     "filter": "Model: {model}",
+    "scopeLabel": "Scope",
+    "filterLabel": "Filter",
+    "scope": "{own, select, yes {{hasCompany, select, yes {{company} · Console user {user}} other {Console user {user}}}} other {{hasCompany, select, yes {{company}} other {All companies}}}}",
     "generated": "Generated {at, date, long}",
+    "page": "Page {page, number, integer} of {total, number, integer}",
     "byModel": "Spend by model",
     "colModel": "Model",
     "colShare": "Share",
@@ -76,6 +80,8 @@
     "noSpend": "No spend in this period.",
     "byLabel": "Spend by label {key}",
     "colLabelValue": "Value",
+    "continued": "{heading} (continued)",
+    "topValues": "Top {shown, number, integer} of {total, number, integer} values by spend. The total includes all values.",
     "labelFilter": "{key}: {value}"
   },
   "report": {

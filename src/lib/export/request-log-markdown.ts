@@ -57,6 +57,7 @@ function entry(item: RequestLogDocumentEntry): string {
 
 export function requestLogMarkdown(doc: RequestLogDocument): string {
   const parts = [`# ${escapeInline(doc.title)}`, `${escapeInline(doc.subtitle)} · **${escapeInline(doc.status)}**`];
+  if (doc.instance) parts.push(escapeInline(doc.instance));
   if (doc.error) parts.push(quote(`**${escapeInline(doc.error.label)}:** ${doc.error.text}`));
   parts.push(fieldList(doc.fields));
   parts.push(`## ${escapeInline(doc.privacy.heading)}`, fieldList(doc.privacy.fields));
@@ -79,6 +80,7 @@ export function requestLogMarkdown(doc: RequestLogDocument): string {
       );
     }
   }
-  parts.push(`---\n\n_${escapeInline(doc.generated)} · ${escapeInline(doc.brand)}_`);
+  const credit = [doc.generated, doc.instance, doc.edition, doc.brand].flatMap((part) => (part ? [part] : []));
+  parts.push(`---\n\n_${credit.map((part) => escapeInline(part)).join(" · ")}_`);
   return `${parts.join("\n\n")}\n`;
 }

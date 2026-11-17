@@ -17,12 +17,19 @@ export type PdfTextStyle = {
 
 export type PdfCanvas = ReturnType<typeof canvas>;
 
+export type PdfTone = "neutral" | "success" | "warning" | "danger";
+
+export type PdfHeaderBadge = { label: string; tone?: PdfTone };
+
+export type PdfHeaderDetail = { label: string; value: string };
+
 export type PdfGlyph = {
   face: string;
   code: number;
   width: number;
   text: string;
   emboldened: boolean;
+  oblique: boolean;
 };
 
 export type PdfStream = { entries: string; data: Uint8Array };
@@ -68,6 +75,8 @@ export type UsagePdfStats = UsageSummary & {
 
 export type UsagePdfTable = {
   heading: string;
+  continued: string;
+  note?: string;
   columns: { model: string; share: string; spend: string; prompt: string; completion: string };
   rows: {
     name: string;
@@ -85,7 +94,10 @@ export type UsagePdfInput = {
   brand: string;
   title: string;
   period: string;
-  filter?: string;
+  details?: PdfHeaderDetail[];
+  instance?: string;
+  edition?: string;
+  pageLabel?: (page: number, total: number) => string;
   generated: string;
   kpis: { label: string; value: string }[];
   daily: {

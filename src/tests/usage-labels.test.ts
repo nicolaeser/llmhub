@@ -283,7 +283,7 @@ test("loadUsage filters by a label value through the label rollup and the log in
   assert.equal(ignored.count, 14);
 });
 
-test("usage PDFs add a page with the spend per label value, named No label for the rest", async () => {
+test("usage PDFs add the spend per label value below the model table, named No label for the rest", async () => {
   const messages = (await loadLocaleMessages("en")) as Messages;
   const now = new Date("2026-10-07T12:00:00Z");
   const t = createTranslator({ locale: "en", messages, formats, timeZone: "UTC", now, namespace: "Usage" });
@@ -306,11 +306,12 @@ test("usage PDFs add a page with the spend per label value, named No label for t
     dayDate: (day) => new Date(`${day}T00:00:00Z`),
   });
   const pdf = Buffer.from(bytes).toString("latin1");
-  assert.equal(Number(pdf.match(/\/Type \/Pages \/Kids \[[^\]]*\] \/Count (\d+)/)?.[1]), 2);
+  assert.equal(Number(pdf.match(/\/Type \/Pages \/Kids \[[^\]]*\] \/Count (\d+)/)?.[1]), 1);
   const texts = readPdf(bytes).texts.map((shown) => shown.text);
   assert.ok(texts.includes("Spend by label env"));
   assert.ok(texts.includes("No label"));
   assert.ok(texts.includes("dev"));
+  assert.ok(texts.includes("Page 1 of 1"));
 });
 
 test("scheduled report mails summarise every label key in the PDF and a labels CSV", async () => {
@@ -333,6 +334,7 @@ test("scheduled report mails summarise every label key in the PDF and a labels C
   );
   const pdf = mail.attachments?.find((file) => file.filename.endsWith(".pdf"));
   assert.ok(readPdf(pdf!.content as Uint8Array).texts.some((shown) => shown.text === "Spend by label env"));
+  assert.ok(readPdf(pdf!.content as Uint8Array).texts.some((shown) => shown.text === "Acme"));
   const html = mail.html ?? "";
   assert.ok(html.startsWith('<!DOCTYPE html>\n<html lang="en">'));
   for (const text of ["<title>Usage report</title>", "Acme · September 2026", "Spend by model", "Open usage in LLM Hub", "The CSV lists spend by project"]) {

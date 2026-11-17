@@ -6,9 +6,9 @@ import {
   CONTENT_W,
   drawFooter,
   drawHeader,
+  drawRunningHeader,
   FOOTER_RULE,
   MARGIN,
-  PAGE_H,
   PAGE_W,
   pdfDocument,
 } from "./pdf";
@@ -19,7 +19,28 @@ import type { SliceRow } from "@/types/usage";
 
 const ROW_HEIGHT = 19;
 const LABEL_TABLE_ROWS = 12;
-const TABLE_GAP = 28;
+const SECTION_GAP = 22;
+const TABLE_HEADING = 24;
+const TABLE_EMPTY = 36;
+const TABLE_NOTE = 16;
+const TABLE_LEAD_ROWS = 3;
+const TABLE_TAIL_ROWS = 2;
+const CONTENT_BOTTOM = FOOTER_RULE + 12;
+const DAY_LABEL_GAP = 6;
+const TABLE_RIGHT = PAGE_W - MARGIN;
+const TABLE_COLUMNS = {
+  model: MARGIN + 10,
+  share: MARGIN + 182,
+  spend: MARGIN + 365,
+  prompt: MARGIN + 440,
+  completion: TABLE_RIGHT - 10,
+};
+const SHARE_BAR = 64;
+const HEADER_CELL = { size: 7.5, font: "bold", color: COLORS.muted } satisfies PdfTextStyle;
+const BODY_CELL = { size: 9 } satisfies PdfTextStyle;
+const TOTAL_CELL = { ...BODY_CELL, font: "bold" } satisfies PdfTextStyle;
+
+type PdfFlow = { page: PdfCanvas; top: number };
 
 function niceStep(max: number, count: number): number {
   const raw = max / count;
@@ -36,6 +57,7 @@ function drawKpis(page: PdfCanvas, kpis: UsagePdfInput["kpis"], top: number): nu
     const x = MARGIN + (index % columns) * (width + gap);
     const cardTop = top - Math.floor(index / columns) * (height + gap);
     page.roundedRect(x, cardTop - height, width, height, 6, index === 0 ? COLORS.accentSoft : COLORS.surface);
+    page.rect(x, cardTop - height + 10, 3, height - 20, index === 0 ? COLORS.accent : COLORS.accentRaised);
     page.text(kpi.label, x + 12, cardTop - 19, { size: 8, color: COLORS.muted, maxWidth: width - 24 });
     page.text(kpi.value, x + 12, cardTop - 41, {
       size: 15,
@@ -49,16 +71,19 @@ function drawKpis(page: PdfCanvas, kpis: UsagePdfInput["kpis"], top: number): nu
 }
 
 function drawDailyChart(page: PdfCanvas, daily: UsagePdfInput["daily"], top: number): number {
-  page.text(daily.heading, MARGIN, top - 12, { size: 11, font: "bold" });
-  const plotTop = top - 32;
+  const padX = 12;
   const plotHeight = 110;
+  const plotTop = top - 36;
   const baseline = plotTop - plotHeight;
-  const right = PAGE_W - MARGIN;
+  const panelBottom = baseline - 20;
+  page.roundedRect(MARGIN, panelBottom, CONTENT_W, top - panelBottom, 8, COLORS.surface);
+  page.text(daily.heading, MARGIN + padX, top - 18, { size: 11, font: "bold" });
+  const right = PAGE_W - MARGIN - padX;
   const tickStyle = { size: 7.5, color: COLORS.muted } satisfies PdfTextStyle;
   const values = daily.days.map((day) => Math.max(0, day.value));
   const max = Math.max(0, ...values);
 
-  let left = MARGIN;
+  let left = MARGIN + padX;
   let scaleTop = 0;
   if (max > 0) {
     const step = niceStep(max, 4);
@@ -68,7 +93,7 @@ function drawDailyChart(page: PdfCanvas, daily: UsagePdfInput["daily"], top: num
       value: step * index,
       label: daily.formatTick(step * index),
     }));
-    left = MARGIN + Math.max(...ticks.map((tick) => page.textWidth(tick.label, tickStyle))) + 8;
+    left = MARGIN + padX + Math.max(...ticks.map((tick) => page.textWidth(tick.label, tickStyle))) + 8;
     for (const tick of ticks) {
       const y = baseline + (tick.value / scaleTop) * plotHeight;
       if (tick.value > 0) page.line(left, y, right, y, COLORS.border, 0.5);
@@ -94,79 +119,114 @@ function drawDailyChart(page: PdfCanvas, daily: UsagePdfInput["daily"], top: num
     });
   }
 
-  const labelCount = Math.min(values.length, 7);
-  const indexes = new Set(
-    Array.from({ length: labelCount }, (_, j) =>
-      labelCount > 1 ? Math.round((j * (values.length - 1)) / (labelCount - 1)) : 0,
-    ),
-  );
-  for (const index of indexes) {
-    const label = daily.days[index]?.label ?? "";
-    const width = page.textWidth(label, tickStyle);
+  const labels = daily.days.map((day, index) => {
+    const width = page.textWidth(day.label, tickStyle);
     const center = left + index * slot + slot / 2;
-    const x = Math.min(right - width, Math.max(left, center - width / 2));
-    page.text(label, x, baseline - 12, tickStyle);
+    return { text: day.label, x: Math.min(right - width, Math.max(left, center - width / 2)), width };
+  });
+  for (const index of dayLabelIndexes(labels)) {
+    const label = labels[index]!;
+    page.text(label.text, label.x, baseline - 12, tickStyle);
   }
-  return baseline - 12;
+  return panelBottom;
 }
 
-function tableHeight(table: UsagePdfTable): number {
-  return 24 + ROW_HEIGHT * (Math.max(1, table.rows.length) + 2);
+function nextDayLabelStep(step: number): number {
+  if (step < 3) return step + 1;
+  return step < 7 ? 7 : step + 7;
 }
 
-function drawSpendTable(page: PdfCanvas, table: UsagePdfTable, top: number): number {
-  page.text(table.heading, MARGIN, top - 12, { size: 11, font: "bold", maxWidth: CONTENT_W });
-  const rowHeight = ROW_HEIGHT;
-  const right = PAGE_W - MARGIN;
-  const col = {
-    model: MARGIN + 10,
-    share: MARGIN + 182,
-    spend: MARGIN + 365,
-    prompt: MARGIN + 440,
-    completion: right - 10,
-  };
-  const shareBar = 64;
-  const header = { size: 7.5, font: "bold", color: COLORS.muted } satisfies PdfTextStyle;
-  const cell = { size: 9 } satisfies PdfTextStyle;
-
-  let y = top - 24;
-  page.roundedRect(MARGIN, y - rowHeight, CONTENT_W, rowHeight, 4, COLORS.surface);
-  const headerBaseline = y - 12.5;
-  page.text(table.columns.model, col.model, headerBaseline, header);
-  page.text(table.columns.share, col.share, headerBaseline, header);
-  page.text(table.columns.spend, col.spend, headerBaseline, { ...header, align: "right" });
-  page.text(table.columns.prompt, col.prompt, headerBaseline, { ...header, align: "right" });
-  page.text(table.columns.completion, col.completion, headerBaseline, { ...header, align: "right" });
-  y -= rowHeight;
-
-  if (table.rows.length === 0) {
-    page.text(table.empty, MARGIN + CONTENT_W / 2, y - 24, { ...cell, color: COLORS.muted, align: "center" });
-    return y - 36;
+function dayLabelIndexes(labels: { x: number; width: number }[]): number[] {
+  const last = labels.length - 1;
+  if (last < 0) return [];
+  for (let step = 1; step <= last; step = nextDayLabelStep(step)) {
+    const indexes: number[] = [];
+    for (let index = last; index >= 0; index -= step) indexes.unshift(index);
+    const apart = indexes.every((index, at) => {
+      if (at === 0) return true;
+      const previous = labels[indexes[at - 1]!]!;
+      return previous.x + previous.width + DAY_LABEL_GAP <= labels[index]!.x;
+    });
+    if (apart) return indexes;
   }
+  return [last];
+}
 
-  const fits = Math.max(0, Math.floor((y - FOOTER_RULE - 12) / rowHeight) - 1);
-  for (const row of table.rows.slice(0, fits)) {
-    const baseline = y - 12.5;
-    page.text(row.name || "—", col.model, baseline, { ...cell, maxWidth: col.share - col.model - 16 });
-    const share = Math.min(1, Math.max(0, row.share));
-    page.roundedRect(col.share, baseline + 0.5, shareBar, 5, 2.5, COLORS.track);
-    if (share > 0) page.roundedRect(col.share, baseline + 0.5, Math.max(2.5, shareBar * share), 5, 2.5, COLORS.accent);
-    page.text(row.shareLabel, col.share + shareBar + 6, baseline, { size: 8, color: COLORS.muted });
-    page.text(row.spend, col.spend, baseline, { ...cell, align: "right" });
-    page.text(row.prompt, col.prompt, baseline, { ...cell, align: "right", color: COLORS.muted });
-    page.text(row.completion, col.completion, baseline, { ...cell, align: "right", color: COLORS.muted });
-    y -= rowHeight;
-    page.line(MARGIN, y, right, y, COLORS.border, 0.5);
-  }
-
-  page.line(MARGIN, y, right, y, COLORS.ink, 0.75);
+function drawTableHead(page: PdfCanvas, table: UsagePdfTable, heading: string, top: number): number {
+  page.text(heading, MARGIN, top - 12, { size: 11, font: "bold", maxWidth: CONTENT_W });
+  const y = top - TABLE_HEADING;
+  page.roundedRect(MARGIN, y - ROW_HEIGHT, CONTENT_W, ROW_HEIGHT, 4, COLORS.surface);
   const baseline = y - 12.5;
-  const total = { ...cell, font: "bold" } satisfies PdfTextStyle;
-  page.text(table.total.name, col.model, baseline, total);
-  page.text(table.total.spend, col.spend, baseline, { ...total, align: "right" });
-  page.text(table.total.prompt, col.prompt, baseline, { ...total, align: "right" });
-  page.text(table.total.completion, col.completion, baseline, { ...total, align: "right" });
-  return y - rowHeight;
+  page.text(table.columns.model, TABLE_COLUMNS.model, baseline, HEADER_CELL);
+  page.text(table.columns.share, TABLE_COLUMNS.share, baseline, HEADER_CELL);
+  page.text(table.columns.spend, TABLE_COLUMNS.spend, baseline, { ...HEADER_CELL, align: "right" });
+  page.text(table.columns.prompt, TABLE_COLUMNS.prompt, baseline, { ...HEADER_CELL, align: "right" });
+  page.text(table.columns.completion, TABLE_COLUMNS.completion, baseline, { ...HEADER_CELL, align: "right" });
+  page.rect(MARGIN + 8, y - ROW_HEIGHT + 0.6, CONTENT_W - 16, 1.5, COLORS.accent);
+  return y - ROW_HEIGHT;
+}
+
+function drawTableRow(page: PdfCanvas, row: UsagePdfTable["rows"][number], y: number): number {
+  const col = TABLE_COLUMNS;
+  const baseline = y - 12.5;
+  page.text(row.name || "—", col.model, baseline, { ...BODY_CELL, maxWidth: col.share - col.model - 16 });
+  const share = Math.min(1, Math.max(0, row.share));
+  page.roundedRect(col.share, baseline + 0.5, SHARE_BAR, 5, 2.5, COLORS.track);
+  if (share > 0) page.roundedRect(col.share, baseline + 0.5, Math.max(2.5, SHARE_BAR * share), 5, 2.5, COLORS.accent);
+  page.text(row.shareLabel, col.share + SHARE_BAR + 6, baseline, { size: 8, color: COLORS.muted });
+  page.text(row.spend, col.spend, baseline, { ...BODY_CELL, align: "right" });
+  page.text(row.prompt, col.prompt, baseline, { ...BODY_CELL, align: "right", color: COLORS.muted });
+  page.text(row.completion, col.completion, baseline, { ...BODY_CELL, align: "right", color: COLORS.muted });
+  page.line(MARGIN, y - ROW_HEIGHT, TABLE_RIGHT, y - ROW_HEIGHT, COLORS.border, 0.5);
+  return y - ROW_HEIGHT;
+}
+
+function drawTableTotal(page: PdfCanvas, table: UsagePdfTable, y: number): number {
+  const col = TABLE_COLUMNS;
+  page.line(MARGIN, y, TABLE_RIGHT, y, COLORS.ink, 0.75);
+  const baseline = y - 12.5;
+  page.text(table.total.name, col.model, baseline, TOTAL_CELL);
+  page.text(table.total.spend, col.spend, baseline, { ...TOTAL_CELL, align: "right" });
+  page.text(table.total.prompt, col.prompt, baseline, { ...TOTAL_CELL, align: "right" });
+  page.text(table.total.completion, col.completion, baseline, { ...TOTAL_CELL, align: "right" });
+  const bottom = y - ROW_HEIGHT;
+  if (!table.note) return bottom;
+  page.text(table.note, col.model, bottom - 12, { size: 8, color: COLORS.muted, maxWidth: CONTENT_W - 20 });
+  return bottom - TABLE_NOTE;
+}
+
+function drawSpendTable(flow: PdfFlow, table: UsagePdfTable, nextPage: () => PdfFlow): PdfFlow {
+  let { page, top } = flow;
+  if (table.rows.length === 0) {
+    if (top - TABLE_HEADING - ROW_HEIGHT - TABLE_EMPTY < CONTENT_BOTTOM) ({ page, top } = nextPage());
+    const y = drawTableHead(page, table, table.heading, top);
+    page.text(table.empty, MARGIN + CONTENT_W / 2, y - 24, { ...BODY_CELL, color: COLORS.muted, align: "center" });
+    return { page, top: y - TABLE_EMPTY };
+  }
+
+  const tail = ROW_HEIGHT + (table.note ? TABLE_NOTE : 0);
+  let heading = table.heading;
+  let drawn = 0;
+  let fresh = false;
+  for (;;) {
+    const room = top - TABLE_HEADING - ROW_HEIGHT - CONTENT_BOTTOM;
+    const remaining = table.rows.length - drawn;
+    const finishes = remaining * ROW_HEIGHT + tail <= room;
+    const fitting = Math.min(Math.floor(room / ROW_HEIGHT), remaining - TABLE_TAIL_ROWS);
+    if (!finishes && !fresh && fitting < TABLE_LEAD_ROWS) {
+      ({ page, top } = nextPage());
+      fresh = true;
+      continue;
+    }
+    const take = finishes ? remaining : Math.max(1, fitting);
+    let y = drawTableHead(page, table, heading, top);
+    for (const row of table.rows.slice(drawn, drawn + take)) y = drawTableRow(page, row, y);
+    drawn += take;
+    if (finishes) return { page, top: drawTableTotal(page, table, y) };
+    ({ page, top } = nextPage());
+    fresh = true;
+    heading = table.continued;
+  }
 }
 
 export function usagePdf(input: UsagePdfInput): Uint8Array {
@@ -175,22 +235,31 @@ export function usagePdf(input: UsagePdfInput): Uint8Array {
     brand: input.brand,
     title: input.title,
     subtitle: input.period,
-    badge: input.filter,
+    details: input.details,
+    instance: input.instance,
   });
-  const kpiBottom = drawKpis(page, input.kpis, headerBottom - 24);
-  const chartBottom = drawDailyChart(page, input.daily, kpiBottom - 28);
-  drawSpendTable(page, input.byModel, chartBottom - 26);
+  const kpiBottom = drawKpis(page, input.kpis, headerBottom);
+  const chartBottom = drawDailyChart(page, input.daily, kpiBottom - SECTION_GAP);
   const pages = [page];
-  let top = 0;
+  const nextPage = (): PdfFlow => {
+    const next = canvas(unicodeTypeface);
+    pages.push(next);
+    return { page: next, top: drawRunningHeader(next, { brand: input.brand, detail: `${input.title} · ${input.period}` }) };
+  };
+  let flow = drawSpendTable({ page, top: chartBottom - SECTION_GAP }, input.byModel, nextPage);
   for (const table of input.byLabel ?? []) {
-    if (pages.length === 1 || top - tableHeight(table) < FOOTER_RULE + 12) {
-      pages.push(canvas(unicodeTypeface));
-      top = PAGE_H - MARGIN;
-    }
-    top = drawSpendTable(pages.at(-1)!, table, top) - TABLE_GAP;
+    flow = drawSpendTable({ page: flow.page, top: flow.top - SECTION_GAP }, table, nextPage);
   }
-  for (const each of pages) drawFooter(each, { left: input.generated, right: input.brand });
-  return pdfDocument(pages, { title: input.title, producer: input.brand });
+  pages.forEach((each, index) =>
+    drawFooter(each, {
+      left: input.generated,
+      center: input.pageLabel?.(index + 1, pages.length),
+      right: input.brand,
+      instance: input.instance,
+      edition: input.edition,
+    }),
+  );
+  return pdfDocument(pages, { title: input.title, producer: input.brand, subject: input.instance });
 }
 
 function spendTable(
@@ -209,6 +278,10 @@ function spendTable(
   );
   return {
     heading: input.heading,
+    continued: t("pdf.continued", { heading: input.heading }),
+    ...(input.rows.length > input.shown
+      ? { note: t("pdf.topValues", { shown: input.shown, total: input.rows.length }) }
+      : {}),
     columns: {
       model: input.first,
       share: t("pdf.colShare"),
@@ -243,7 +316,10 @@ export function usageStatsPdf(input: {
   format: Formatter;
   brand: string;
   period: string;
+  scope?: string;
   filter?: string;
+  instance?: string;
+  edition?: string;
   generatedAt: Date;
   dayDate: (day: string) => Date;
 }): Uint8Array {
@@ -256,7 +332,13 @@ export function usageStatsPdf(input: {
     brand: input.brand,
     title: t("pdf.title"),
     period: input.period,
-    filter: input.filter,
+    details: [
+      { label: t("pdf.scopeLabel"), value: input.scope ?? "" },
+      { label: t("pdf.filterLabel"), value: input.filter ?? "" },
+    ],
+    instance: input.instance,
+    edition: input.edition,
+    pageLabel: (page, total) => t("pdf.page", { page, total }),
     generated: t("pdf.generated", { at: input.generatedAt }),
     kpis: [
       { label: t("metrics.spend"), value: format.number(stats.spend, "money") },

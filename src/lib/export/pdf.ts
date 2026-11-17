@@ -5,8 +5,11 @@ import type {
   PdfFace,
   PdfFont,
   PdfGlyph,
+  PdfHeaderBadge,
+  PdfHeaderDetail,
   PdfObject,
   PdfTextStyle,
+  PdfTone,
   PdfTypeface,
 } from "@/types/export";
 
@@ -14,8 +17,7 @@ export const PAGE_W = 595.28;
 export const PAGE_H = 841.89;
 export const MARGIN = 40;
 export const CONTENT_W = PAGE_W - MARGIN * 2;
-export const HEADER_H = 122;
-export const FOOTER_RULE = 44;
+export const FOOTER_RULE = 48;
 
 export const COLORS = {
   accent: [82, 82, 232],
@@ -23,6 +25,8 @@ export const COLORS = {
   accentSoft: [233, 237, 255],
   onAccent: [255, 255, 255],
   onAccentMuted: [201, 210, 252],
+  mast: [20, 22, 46],
+  mastMuted: [198, 203, 232],
   ink: [23, 25, 40],
   muted: [99, 102, 121],
   border: [220, 221, 230],
@@ -33,6 +37,7 @@ export const COLORS = {
   warningSoft: [253, 240, 214],
   danger: [199, 31, 42],
   dangerSoft: [253, 228, 226],
+  success: [18, 121, 70],
 } satisfies Record<string, PdfColor>;
 
 const FONTS: Record<PdfFont, { resource: string; baseFont: string }> = {
@@ -95,6 +100,7 @@ const WIN_ANSI: Record<string, number> = {
   " ": 0xa0,
 };
 const EMBOLDEN = 1 / 30;
+const OBLIQUE = 0.21;
 
 function winAnsi(char: string): number {
   const code = char.codePointAt(0)!;
@@ -118,7 +124,7 @@ function advance(byte: number, font: PdfFont): number {
 function standardLayout(value: string, font: PdfFont): PdfGlyph[] {
   return Array.from(value.normalize("NFC"), (char) => {
     const code = winAnsi(char);
-    return { face: FONTS[font].resource, code, width: advance(code, font), text: char, emboldened: false };
+    return { face: FONTS[font].resource, code, width: advance(code, font), text: char, emboldened: false, oblique: false };
   });
 }
 
@@ -139,10 +145,6 @@ function measure(glyphs: PdfGlyph[], size: number, tracking = 0): number {
   return (glyphs.reduce((sum, glyph) => sum + glyph.width, 0) * size) / 1000 + tracking * glyphs.length;
 }
 
-export function textWidth(value: string, style: PdfTextStyle): number {
-  return measure(standardLayout(value, style.font ?? "regular"), style.size, style.tracking);
-}
-
 function truncate(glyphs: PdfGlyph[], ellipsis: PdfGlyph, size: number, maxWidth: number): PdfGlyph[] {
   if (measure(glyphs, size) <= maxWidth) return glyphs;
   const out = glyphs.slice();
@@ -155,7 +157,9 @@ function runs(glyphs: PdfGlyph[]): PdfGlyph[][] {
   const out: PdfGlyph[][] = [];
   for (const glyph of glyphs) {
     const last = out.at(-1);
-    if (last && last[0]!.face === glyph.face && last[0]!.emboldened === glyph.emboldened) last.push(glyph);
+    const head = last?.[0];
+    const joins = head?.face === glyph.face && head.emboldened === glyph.emboldened && head.oblique === glyph.oblique;
+    if (last && joins) last.push(glyph);
     else out.push([glyph]);
   }
   return out;
@@ -167,6 +171,7 @@ const rgb = (color: PdfColor) => color.map((channel) => num(channel / 255)).join
 export function canvas(typeface: PdfTypeface = standardTypeface) {
   const ops: string[] = [];
   const glyphs = new Map<string, Map<number, string>>();
+  const links: { rect: [number, number, number, number]; url: string }[] = [];
 
   function rect(x: number, y: number, w: number, h: number, fill: PdfColor) {
     ops.push(`${rgb(fill)} rg ${num(x)} ${num(y)} ${num(w)} ${num(h)} re f`);
@@ -195,8 +200,36 @@ export function canvas(typeface: PdfTypeface = standardTypeface) {
     ops.push(`${rgb(fill)} rg ${path.join(" ")} h f`);
   }
 
-  function line(x1: number, y1: number, x2: number, y2: number, stroke: PdfColor, width = 0.5) {
-    ops.push(`${rgb(stroke)} RG ${num(width)} w ${num(x1)} ${num(y1)} m ${num(x2)} ${num(y2)} l S`);
+  function line(
+    x1: number,
+    y1: number,
+    x2: number,
+    y2: number,
+    stroke: PdfColor,
+    width = 0.5,
+    cap: "butt" | "round" = "butt",
+  ) {
+    ops.push(`${rgb(stroke)} RG ${num(width)} w ${cap === "round" ? 1 : 0} J ${num(x1)} ${num(y1)} m ${num(x2)} ${num(y2)} l S`);
+  }
+
+  function circle(cx: number, cy: number, r: number, fill: PdfColor) {
+    if (r <= 0) return;
+    const k = 0.5523;
+    const curve = (x1: number, y1: number, x2: number, y2: number, x3: number, y3: number) =>
+      `${num(x1)} ${num(y1)} ${num(x2)} ${num(y2)} ${num(x3)} ${num(y3)} c`;
+    ops.push(
+      `${rgb(fill)} rg ${num(cx + r)} ${num(cy)} m ${[
+        curve(cx + r, cy + k * r, cx + k * r, cy + r, cx, cy + r),
+        curve(cx - k * r, cy + r, cx - r, cy + k * r, cx - r, cy),
+        curve(cx - r, cy - k * r, cx - k * r, cy - r, cx, cy - r),
+        curve(cx + k * r, cy - r, cx + r, cy - k * r, cx + r, cy),
+      ].join(" ")} h f`,
+    );
+  }
+
+  function link(x: number, y: number, w: number, h: number, url: string) {
+    if (w <= 0 || h <= 0) return;
+    links.push({ rect: [x, y, x + w, y + h], url });
   }
 
   function show(run: PdfGlyph[], size: number, color: string): string {
@@ -225,8 +258,19 @@ export function canvas(typeface: PdfTypeface = standardTypeface) {
       glyphs.set(glyph.face, used);
     }
     const color = rgb(style.color ?? COLORS.ink);
-    const shown = runs(laid).map((run) => show(run, size, color));
-    const op = `BT ${num(style.tracking ?? 0)} Tc ${color} rg ${num(left)} ${num(y)} Td ${shown.join(" ")} ET`;
+    const split = runs(laid);
+    let shown: string[];
+    if (laid.some((glyph) => glyph.oblique)) {
+      let cursor = left;
+      shown = split.map((run) => {
+        const placed = `1 0 ${run[0]!.oblique ? OBLIQUE : 0} 1 ${num(cursor)} ${num(y)} Tm ${show(run, size, color)}`;
+        cursor += measure(run, size, style.tracking);
+        return placed;
+      });
+    } else {
+      shown = [`${num(left)} ${num(y)} Td`, ...split.map((run) => show(run, size, color))];
+    }
+    const op = `BT ${num(style.tracking ?? 0)} Tc ${color} rg ${shown.join(" ")} ET`;
     ops.push(laid.some((glyph) => glyph.emboldened) ? `q ${op} Q` : op);
   }
 
@@ -234,71 +278,234 @@ export function canvas(typeface: PdfTypeface = standardTypeface) {
     return measure(typeface.layout(value, style.font ?? "regular"), style.size, style.tracking);
   }
 
-  return { typeface, ops, glyphs, rect, roundedRect, line, text, textWidth: pageTextWidth };
+  return { typeface, ops, glyphs, links, rect, roundedRect, line, circle, link, text, textWidth: pageTextWidth };
+}
+
+const HUB_LINKS = [
+  [12, 5.5, 12, 12.75],
+  [12, 12.75, 18.28, 16.38],
+  [12, 12.75, 5.72, 16.38],
+] as const;
+const HUB_NODES = [
+  [12, 12.75, 3.25],
+  [12, 5.5, 2.25],
+  [18.28, 16.38, 2.25],
+  [5.72, 16.38, 2.25],
+] as const;
+
+export function drawHubMark(page: PdfCanvas, x: number, y: number, size: number, color: PdfColor) {
+  const scale = size / 24;
+  const px = (vx: number) => x + vx * scale;
+  const py = (vy: number) => y + (24 - vy) * scale;
+  for (const [x1, y1, x2, y2] of HUB_LINKS) page.line(px(x1), py(y1), px(x2), py(y2), color, 2 * scale, "round");
+  for (const [cx, cy, r] of HUB_NODES) page.circle(px(cx), py(cy), r * scale, color);
+}
+
+function drawLogo(page: PdfCanvas, x: number, y: number, tile: number) {
+  page.roundedRect(x, y, tile, tile, tile * 0.28, COLORS.accent);
+  const inset = tile * 0.18;
+  drawHubMark(page, x + inset, y + inset, tile - inset * 2, COLORS.onAccent);
+}
+
+function documentUrl(value: string): string | null {
+  try {
+    const url = new URL(value);
+    if ((url.protocol !== "http:" && url.protocol !== "https:") || url.username || url.password) return null;
+    return value;
+  } catch {
+    return null;
+  }
+}
+
+function drawLinkedText(page: PdfCanvas, value: string, x: number, y: number, style: PdfTextStyle) {
+  const natural = page.textWidth(value, style);
+  const width = style.maxWidth === undefined ? natural : Math.min(natural, style.maxWidth);
+  const left = style.align === "right" ? x - width : style.align === "center" ? x - width / 2 : x;
+  page.text(value, x, y, style);
+  const href = documentUrl(value);
+  if (!href || width <= 0) return;
+  page.link(left, y - 2, width, style.size + 4, href);
+  page.line(left, y - 1.4, left + width, y - 1.4, style.color ?? COLORS.accent, 0.45);
+}
+
+const MASTHEAD = 58;
+const LOGO = 28;
+const BADGE_HEIGHT = 18;
+const BADGE_FILL: Record<PdfTone, PdfColor> = {
+  neutral: COLORS.accent,
+  success: COLORS.success,
+  warning: COLORS.warning,
+  danger: COLORS.danger,
+};
+const DETAIL_LABEL = { size: 7.5, font: "bold", color: COLORS.muted, tracking: 0.3 } satisfies PdfTextStyle;
+const DETAIL_VALUE = { size: 9, color: COLORS.ink } satisfies PdfTextStyle;
+const DETAIL_LABEL_GAP = 6;
+const DETAIL_ITEM_GAP = 22;
+const DETAIL_LEADING = 13;
+const DETAIL_ITEM_LEADING = 15;
+const DETAIL_MAX_LINES = 2;
+
+function detailLines(page: PdfCanvas, value: string, width: number): string[] {
+  const lines: string[] = [];
+  const words = value.split(/\s+/).filter(Boolean);
+  let start = 0;
+  for (let end = 1; end < words.length; end++) {
+    if (page.textWidth(words.slice(start, end + 1).join(" "), DETAIL_VALUE) <= width) continue;
+    if (lines.length === DETAIL_MAX_LINES - 1) break;
+    lines.push(words.slice(start, end).join(" "));
+    start = end;
+  }
+  return [...lines, words.slice(start).join(" ")];
+}
+
+function drawHeaderDetails(page: PdfCanvas, details: PdfHeaderDetail[], baseline: number): number {
+  const items = details.map((detail) => ({
+    ...detail,
+    labelWidth: page.textWidth(detail.label, DETAIL_LABEL),
+    valueWidth: page.textWidth(detail.value, DETAIL_VALUE),
+  }));
+  const inline =
+    items.reduce((sum, item) => sum + item.labelWidth + DETAIL_LABEL_GAP + item.valueWidth, 0) +
+      DETAIL_ITEM_GAP * (items.length - 1) <=
+    CONTENT_W;
+  if (inline) {
+    let x = MARGIN;
+    items.forEach((item, index) => {
+      if (index > 0) {
+        page.line(x - DETAIL_ITEM_GAP / 2, baseline - 1.5, x - DETAIL_ITEM_GAP / 2, baseline + 7.5, COLORS.border, 0.75);
+      }
+      page.text(item.label, x, baseline, DETAIL_LABEL);
+      x += item.labelWidth + DETAIL_LABEL_GAP;
+      page.text(item.value, x, baseline, DETAIL_VALUE);
+      x += item.valueWidth + DETAIL_ITEM_GAP;
+    });
+    return baseline;
+  }
+  const valueX = MARGIN + Math.max(...items.map((item) => item.labelWidth)) + DETAIL_LABEL_GAP + 4;
+  const valueW = PAGE_W - MARGIN - valueX;
+  let y = baseline + DETAIL_ITEM_LEADING;
+  for (const item of items) {
+    y -= DETAIL_ITEM_LEADING;
+    page.text(item.label, MARGIN, y, DETAIL_LABEL);
+    detailLines(page, item.value, valueW).forEach((line, index) => {
+      if (index > 0) y -= DETAIL_LEADING;
+      page.text(line, valueX, y, { ...DETAIL_VALUE, maxWidth: valueW });
+    });
+  }
+  return y;
 }
 
 export function drawHeader(
   page: PdfCanvas,
-  input: { brand: string; title: string; subtitle: string; badge?: string },
+  input: {
+    brand: string;
+    title: string;
+    subtitle: string;
+    badge?: PdfHeaderBadge;
+    details?: PdfHeaderDetail[];
+    instance?: string;
+  },
 ): number {
-  const bottom = PAGE_H - HEADER_H;
-  page.rect(0, bottom, PAGE_W, HEADER_H, COLORS.accent);
+  const mastheadBottom = PAGE_H - MASTHEAD;
+  page.rect(0, mastheadBottom, PAGE_W, MASTHEAD, COLORS.mast);
+  page.rect(0, PAGE_H - 3.5, PAGE_W, 3.5, COLORS.accent);
 
-  const mark = 22;
-  const markY = PAGE_H - 28 - mark;
-  page.roundedRect(MARGIN, markY, mark, mark, 5, COLORS.onAccent);
-  const glyph = mark * 0.64;
-  const scale = glyph / 24;
-  const origin = { x: MARGIN + (mark - glyph) / 2, y: markY + (mark - glyph) / 2 };
-  for (const [gx, gy, gw, gh] of [
-    [6.75, 4.5, 3, 15],
-    [14.25, 4.5, 3, 15],
-    [6.75, 10.5, 10.5, 3],
-  ] as const) {
-    page.rect(origin.x + gx * scale, origin.y + glyph - (gy + gh) * scale, gw * scale, gh * scale, COLORS.accent);
-  }
-  page.text(input.brand, MARGIN + mark + 9, markY + 7, {
-    size: 11,
+  const tileY = PAGE_H - 15 - LOGO;
+  drawLogo(page, MARGIN, tileY, LOGO);
+  const textX = MARGIN + LOGO + 10;
+
+  const badgeStyle = { size: 8, font: "bold", color: COLORS.onAccent, maxWidth: 200 } satisfies PdfTextStyle;
+  const badgeW = input.badge?.label
+    ? Math.min(page.textWidth(input.badge.label, badgeStyle), badgeStyle.maxWidth) + 18
+    : 0;
+  const textMax = PAGE_W - MARGIN - textX - (badgeW ? badgeW + 14 : 0);
+  page.text(input.brand, textX, input.instance ? tileY + 15 : tileY + 9, {
+    size: 12,
     font: "bold",
     color: COLORS.onAccent,
     tracking: 0.2,
+    maxWidth: textMax,
   });
-
-  if (input.badge) {
-    const style = { size: 8.5, font: "bold", color: COLORS.onAccent, maxWidth: 220 } satisfies PdfTextStyle;
-    const width = Math.min(page.textWidth(input.badge, style), style.maxWidth);
-    page.roundedRect(PAGE_W - MARGIN - width - 20, markY + 1, width + 20, 20, 10, COLORS.accentRaised);
-    page.text(input.badge, PAGE_W - MARGIN - 10, markY + 8, { ...style, align: "right" });
+  if (input.instance) {
+    drawLinkedText(page, input.instance, textX, tileY + 3, {
+      size: 8,
+      color: COLORS.mastMuted,
+      maxWidth: textMax,
+    });
+  }
+  if (input.badge && badgeW) {
+    const badgeY = tileY + (LOGO - BADGE_HEIGHT) / 2;
+    page.roundedRect(
+      PAGE_W - MARGIN - badgeW,
+      badgeY,
+      badgeW,
+      BADGE_HEIGHT,
+      BADGE_HEIGHT / 2,
+      BADGE_FILL[input.badge.tone ?? "neutral"],
+    );
+    page.text(input.badge.label, PAGE_W - MARGIN - 9, badgeY + 5.5, { ...badgeStyle, align: "right" });
   }
 
-  page.text(input.title, MARGIN, PAGE_H - 82, {
-    size: 24,
-    font: "bold",
-    color: COLORS.onAccent,
-    maxWidth: CONTENT_W,
-  });
-  page.text(input.subtitle, MARGIN, PAGE_H - 100, {
-    size: 10,
-    color: COLORS.onAccentMuted,
-    maxWidth: CONTENT_W,
-  });
-  return bottom;
+  const titleY = mastheadBottom - 40;
+  page.text(input.title, MARGIN, titleY, { size: 22, font: "bold", color: COLORS.ink, maxWidth: CONTENT_W });
+  const subtitleY = titleY - 18;
+  page.text(input.subtitle, MARGIN, subtitleY, { size: 10, color: COLORS.muted, maxWidth: CONTENT_W });
+  const details = (input.details ?? []).filter((detail) => detail.value);
+  const lastY = details.length ? drawHeaderDetails(page, details, subtitleY - 16) : subtitleY;
+  const ruleY = lastY - 13;
+  page.rect(MARGIN, ruleY, 28, 2.25, COLORS.accent);
+  return ruleY - 20;
 }
 
-export function drawFooter(page: PdfCanvas, input: { left: string; center?: string; right: string }) {
-  page.line(MARGIN, FOOTER_RULE, PAGE_W - MARGIN, FOOTER_RULE, COLORS.border, 0.5);
-  const third = CONTENT_W / 3 - 8;
-  page.text(input.left, MARGIN, FOOTER_RULE - 14, { size: 8, color: COLORS.muted, maxWidth: input.center ? third : CONTENT_W / 2 });
-  if (input.center) {
-    page.text(input.center, PAGE_W / 2, FOOTER_RULE - 14, { size: 8, color: COLORS.muted, align: "center", maxWidth: third });
-  }
-  page.text(input.right, PAGE_W - MARGIN, FOOTER_RULE - 14, {
+export function drawRunningHeader(page: PdfCanvas, input: { brand: string; detail: string }): number {
+  page.rect(0, PAGE_H - 3, PAGE_W, 3, COLORS.accent);
+  const tile = 14;
+  const tileY = PAGE_H - 14 - tile;
+  drawLogo(page, MARGIN, tileY, tile);
+  page.text(input.brand, MARGIN + tile + 6, tileY + 3.5, { size: 8, font: "bold", maxWidth: 120 });
+  page.text(input.detail, PAGE_W - MARGIN, tileY + 3.5, {
     size: 8,
-    font: "bold",
     color: COLORS.muted,
     align: "right",
-    maxWidth: third,
+    maxWidth: CONTENT_W - 150,
   });
+  const rule = tileY - 8;
+  page.line(MARGIN, rule, PAGE_W - MARGIN, rule, COLORS.border, 0.6);
+  return rule - 16;
+}
+
+export function drawFooter(
+  page: PdfCanvas,
+  input: { left: string; center?: string; right: string; instance?: string; edition?: string },
+) {
+  page.rect(0, 0, PAGE_W, 5, COLORS.accent);
+  page.line(MARGIN, FOOTER_RULE, PAGE_W - MARGIN, FOOTER_RULE, COLORS.border, 0.6);
+  const lineY = 30;
+  const centerW = input.center ? 128 : 0;
+  const side = (CONTENT_W - centerW) / 2 - 6;
+  page.text(input.left, MARGIN, lineY, { size: 8, color: COLORS.muted, maxWidth: side });
+  if (input.center) {
+    page.text(input.center, PAGE_W / 2, lineY, { size: 8, color: COLORS.muted, align: "center", maxWidth: centerW - 8 });
+  }
+  page.text(input.right, PAGE_W - MARGIN, lineY, {
+    size: 8,
+    font: "bold",
+    color: COLORS.ink,
+    align: "right",
+    maxWidth: side,
+  });
+  if (input.instance) {
+    drawLinkedText(page, input.instance, MARGIN, 15, { size: 7.5, color: COLORS.accent, maxWidth: CONTENT_W * 0.62 });
+  }
+  if (input.edition) {
+    page.text(input.edition, PAGE_W - MARGIN, 15, {
+      size: 7.5,
+      color: COLORS.muted,
+      align: "right",
+      maxWidth: CONTENT_W * 0.32,
+      shrink: true,
+    });
+  }
 }
 
 function pdfString(value: string): string {
@@ -307,7 +514,18 @@ function pdfString(value: string): string {
   return `<${out}>`;
 }
 
-export function pdfDocument(pages: PdfCanvas[], info: { title: string; producer: string }): Uint8Array {
+function pdfLiteral(value: string): string {
+  return `(${value.replace(/[\\()]/g, (char) => `\\${char}`)})`;
+}
+
+function infoDict(info: { title: string; producer: string; subject?: string }): string {
+  return `<< /Title ${pdfString(info.title)} /Author ${pdfString(info.producer)} /Subject ${pdfString(info.subject || info.title)} /Creator ${pdfString(info.producer)} /Producer ${pdfString(info.producer)} >>`;
+}
+
+export function pdfDocument(
+  pages: PdfCanvas[],
+  info: { title: string; producer: string; subject?: string },
+): Uint8Array {
   const used = new Map<string, { face: PdfFace; glyphs: Map<number, string> }>();
   for (const page of pages) {
     for (const [name, face] of Object.entries(page.typeface.faces)) {
@@ -326,22 +544,26 @@ export function pdfDocument(pages: PdfCanvas[], info: { title: string; producer:
     fontRefs.set(name, ref);
     fontObjects.push(...face.objects(glyphs, ref));
   }
-  const firstPage = 3 + fontObjects.length;
-  const pageRef = (index: number) => firstPage + index * 2;
   const resources = [...fontRefs].map(([name, ref]) => `/${name} ${ref} 0 R`).join(" ");
 
-  const objects: PdfObject[] = [
-    "<< /Type /Catalog /Pages 2 0 R >>",
-    `<< /Type /Pages /Kids [${pages.map((_, index) => `${pageRef(index)} 0 R`).join(" ")}] /Count ${pages.length} >>`,
-    ...fontObjects,
-  ];
-  pages.forEach((page, index) => {
+  const objects: PdfObject[] = ["<< /Type /Catalog /Pages 2 0 R >>", "", ...fontObjects];
+  const kids: number[] = [];
+  for (const page of pages) {
+    const pageRef = objects.length + 1;
+    kids.push(pageRef);
+    const annots = page.links;
+    const annotRefs = annots.map((_, index) => `${pageRef + 2 + index} 0 R`).join(" ");
     objects.push(
-      `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${PAGE_W} ${PAGE_H}] /Contents ${pageRef(index) + 1} 0 R /Resources << /Font << ${resources} >> >> >>`,
+      `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${PAGE_W} ${PAGE_H}] /Contents ${pageRef + 1} 0 R${annotRefs ? ` /Annots [${annotRefs}]` : ""} /Resources << /Font << ${resources} >> >> >>`,
       { entries: "", data: Buffer.from(page.ops.join("\n"), "latin1") },
+      ...annots.map(
+        (item) =>
+          `<< /Type /Annot /Subtype /Link /Rect [${item.rect.map((value) => num(value)).join(" ")}] /Border [0 0 0] /A << /Type /Action /S /URI /URI ${pdfLiteral(item.url)} >> >>`,
+      ),
     );
-  });
-  objects.push(`<< /Title ${pdfString(info.title)} /Producer ${pdfString(info.producer)} >>`);
+  }
+  objects[1] = `<< /Type /Pages /Kids [${kids.map((ref) => `${ref} 0 R`).join(" ")}] /Count ${pages.length} >>`;
+  objects.push(infoDict(info));
 
   const chunks: Buffer[] = [Buffer.from("%PDF-1.4\n", "latin1")];
   const xref = [0];

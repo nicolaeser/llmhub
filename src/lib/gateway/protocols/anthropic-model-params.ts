@@ -1,3 +1,4 @@
+import { anthropicBaseModel } from "@/lib/gateway/catalog/anthropic-native";
 import { asRecord, asString } from "@/lib/gateway/core";
 import { strictAnthropicVersion } from "@/lib/gateway/protocols/anthropic-version";
 import { logger } from "@/lib/logging/logger";
@@ -39,19 +40,6 @@ const BUDGET_EFFORTS: { below: number; effort: string }[] = [
   { below: 32768, effort: "high" },
 ];
 const LARGEST_BUDGET_EFFORT = "xhigh";
-
-function anthropicBaseModel(model: string): string {
-  const id = model.trim().toLowerCase();
-  const start = id.lastIndexOf("claude-");
-  if (start < 0) return "";
-  return id
-    .slice(start)
-    .replace(/\[[^\]]*\]/g, "")
-    .replace(/[@:].*$/, "")
-    .replace(/-v\d+$/, "")
-    .replace(/-\d{8}$/, "")
-    .replace(/\./g, "-");
-}
 
 function budgetEffort(budget: number): string {
   return BUDGET_EFFORTS.find((step) => budget < step.below)?.effort ?? LARGEST_BUDGET_EFFORT;

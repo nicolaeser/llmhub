@@ -5,10 +5,17 @@ import type { JsonMap } from "@/types/gateway";
 
 const NAMES_TTL_MS = 15_000;
 
+type NameCache = {
+  at: number;
+  generation: number;
+  names: ReadonlyMap<string, string>;
+  aliases: ReadonlySet<string>;
+};
+
 type NameState = {
   generation: number;
-  loaded: { at: number; generation: number; names: ReadonlyMap<string, string> } | null;
-  loading: Promise<ReadonlyMap<string, string>> | null;
+  loaded: NameCache | null;
+  loading: Promise<NameCache> | null;
 };
 
 const holder = globalThis as typeof globalThis & { __llmhubModelNames?: NameState };
@@ -18,33 +25,34 @@ function state(): NameState {
   return holder.__llmhubModelNames;
 }
 
-async function loadNames(generation: number): Promise<ReadonlyMap<string, string>> {
+async function loadNames(generation: number): Promise<NameCache> {
   const at = Date.now();
-  const groups = await prisma.modelGroup.findMany({
-    where: { extraNames: { isEmpty: false } },
-    select: { alias: true, extraNames: true },
-  });
-  const wanted = [...new Set(groups.flatMap((group) => extraNamesOf(group.extraNames)))];
-  const taken = wanted.length
-    ? await prisma.modelGroup.findMany({ where: { alias: { in: wanted } }, select: { alias: true } })
-    : [];
-  const names = nameIndex(groups, new Set(taken.map((row) => row.alias)));
+  const rows = await prisma.modelGroup.findMany({ select: { alias: true, enabled: true, extraNames: true } });
+  const aliases = new Set(rows.map((row) => row.alias));
+  const enabled = new Set(rows.filter((row) => row.enabled !== false).map((row) => row.alias));
+  const names = nameIndex(
+    rows.filter((row) => extraNamesOf(row.extraNames).length > 0),
+    aliases,
+  );
+  const loaded = { at, generation, names, aliases: enabled };
   const current = state();
-  if (current.generation === generation) current.loaded = { at, generation, names };
-  return names;
+  if (current.generation === generation) current.loaded = loaded;
+  return loaded;
 }
 
-export async function modelNames(): Promise<ReadonlyMap<string, string>> {
+async function cachedNames(): Promise<NameCache> {
   const current = state();
   const loaded = current.loaded;
-  if (loaded && loaded.generation === current.generation && loaded.at + NAMES_TTL_MS > Date.now()) {
-    return loaded.names;
-  }
+  if (loaded && loaded.generation === current.generation && loaded.at + NAMES_TTL_MS > Date.now()) return loaded;
   const generation = current.generation;
   const loading = (current.loading ??= loadNames(generation).finally(() => {
     if (state().loading === loading) state().loading = null;
   }));
   return loading;
+}
+
+export async function modelNames(): Promise<ReadonlyMap<string, string>> {
+  return (await cachedNames()).names;
 }
 
 export function forgetModelNames(): void {
@@ -55,9 +63,11 @@ export function forgetModelNames(): void {
 }
 
 export async function canonicalModel(model: string): Promise<string> {
-  return namedModel(model, await modelNames());
+  const loaded = await cachedNames();
+  return namedModel(model, loaded.names, loaded.aliases);
 }
 
 export async function canonicalBody(body: JsonMap): Promise<JsonMap> {
-  return namedBody(body, await modelNames());
+  const loaded = await cachedNames();
+  return namedBody(body, loaded.names, loaded.aliases);
 }

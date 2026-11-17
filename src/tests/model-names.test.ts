@@ -198,6 +198,84 @@ test("model groups reject additional names that clash or are reserved", async ()
   });
 });
 
+const HAIKU = "claude-haiku-4-5";
+const HAIKU_DATED = "claude-haiku-4-5-20251001";
+
+function claudeGroup(alias: string) {
+  const row = groupRow(alias);
+  row.deployments[0]!.kind = "claude";
+  return row;
+}
+
+test("a dated Anthropic id routes, bills, and logs as the catalog model", async () => {
+  gateway.groups.set(HAIKU, groupRow(HAIKU));
+  gateway.key = virtualKeyRow({ models: [HAIKU] });
+  for (const id of [HAIKU_DATED, "claude-haiku-4-5@20251001", "us.anthropic.claude-haiku-4-5-20251001-v1:0", `${HAIKU}[1m]`]) {
+    gateway.upstream.length = 0;
+    const res = await postChat(chat(id, "native"));
+    assert.equal(res.status, 200, id);
+    assert.equal(upstreamModel("/chat/completions"), HAIKU, id);
+  }
+  assert.deepEqual(loggedModels(), [HAIKU, HAIKU, HAIKU, HAIKU]);
+});
+
+test("claude-sonnet-5 is not silently served as sonnet 5.5", async () => {
+  gateway.groups.set("claude-sonnet-5-5", groupRow("claude-sonnet-5-5"));
+  const res = await postChat(chat("claude-sonnet-5", "auto mode"));
+  assert.equal(res.status, 404);
+  assert.equal(gateway.upstream.length, 0);
+});
+
+test("a key allowed only the catalog model can call its native id and no other release", async () => {
+  gateway.groups.set(HAIKU, groupRow(HAIKU));
+  gateway.groups.set("claude-sonnet-5-5", groupRow("claude-sonnet-5-5"));
+  gateway.key = virtualKeyRow({ models: ["claude-sonnet-5-5"] });
+  const denied = await postChat(chat(HAIKU_DATED, "denied"));
+  assert.equal(denied.status, 403);
+  gateway.key = virtualKeyRow({ models: [HAIKU] });
+  gateway.upstream.length = 0;
+  const allowed = await postChat(chat(HAIKU_DATED, "allowed"));
+  assert.equal(allowed.status, 200);
+  assert.equal(upstreamModel("/chat/completions"), HAIKU);
+});
+
+test("an additional name and a real model win over the native spelling", async () => {
+  gateway.groups.set(MODEL, groupRow(MODEL, { extraNames: [HAIKU_DATED] }));
+  gateway.groups.set(HAIKU, claudeGroup(HAIKU));
+  const named = await postChat(chat(HAIKU_DATED, "operator name"));
+  assert.equal(named.status, 200);
+  assert.equal(upstreamModel("/chat/completions"), MODEL);
+  gateway.groups.set(MODEL, groupRow(MODEL));
+  gateway.groups.set(HAIKU_DATED, groupRow(HAIKU_DATED));
+  forgetModelNames();
+  gateway.upstream.length = 0;
+  const exact = await postChat(chat(HAIKU_DATED, "real alias"));
+  assert.equal(exact.status, 200);
+  assert.equal(upstreamModel("/chat/completions"), HAIKU_DATED);
+});
+
+test("gateway discovery lists the native id and the console list does not", async () => {
+  gateway.groups.set(HAIKU, claudeGroup(HAIKU));
+  const { GET } = await import("@/app/api/subscription/v1/models/route");
+  const ids = async (url: string) => {
+    const body = (await (await GET(new Request(url, { headers: HEADERS }))).json()) as { data: { id: string }[] };
+    return body.data.map((entry) => entry.id);
+  };
+  const consoleList = await ids("http://hub.local/api/subscription/v1/models");
+  assert.ok(consoleList.includes(HAIKU));
+  assert.equal(consoleList.includes(HAIKU_DATED), false);
+  const discovered = await ids("http://hub.local/api/subscription/v1/models?limit=1000");
+  assert.ok(discovered.includes(HAIKU));
+  assert.ok(discovered.includes(HAIKU_DATED));
+  assert.equal((await listIds()).includes(HAIKU_DATED), false);
+  const one = await import("@/app/api/subscription/v1/models/[id]/route");
+  const found = await one.GET(new Request(`http://hub.local/api/subscription/v1/models/${HAIKU_DATED}`, { headers: HEADERS }), {
+    params: Promise.resolve({ id: HAIKU_DATED }),
+  });
+  assert.equal(found.status, 200);
+  assert.equal(((await found.json()) as JsonMap).id, HAIKU_DATED);
+});
+
 test("updating a model keeps its additional names unless they are sent", async () => {
   const { runAsPrincipal } = await import("@/lib/auth/delegation");
   const { updateModelGroup } = await import("@/lib/models/groups");

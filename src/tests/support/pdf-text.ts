@@ -1,7 +1,7 @@
 import { inflateSync } from "node:zlib";
 
 export type ShownGlyph = { code: number; text: string };
-export type ShownRun = { face: string; glyphs: ShownGlyph[]; emboldened: boolean };
+export type ShownRun = { face: string; glyphs: ShownGlyph[]; emboldened: boolean; oblique: boolean };
 export type ShownText = { text: string; runs: ShownRun[] };
 export type EmbeddedFont = { baseFont: string; outlined: Set<number>; glyphCount: number };
 export type ReadPdf = { objectCount: number; texts: ShownText[]; fonts: Map<string, EmbeddedFont> };
@@ -70,10 +70,11 @@ export function readPdf(bytes: Uint8Array): ReadPdf {
     }
     const content = at(ref(page.dict, "Contents")).stream!.toString("latin1");
     for (const [block] of content.matchAll(/BT [\s\S]*? ET/g)) {
-      const runs = [...block.matchAll(/(2 Tr [^/]*)?\/(\S+) [\d.]+ Tf <([0-9a-f]*)> Tj/g)].map(
-        ([, emboldened, face, hex]): ShownRun => ({
+      const runs = [...block.matchAll(/(?:1 0 ([\d.]+) 1 \S+ \S+ Tm )?(2 Tr [^/]*)?\/(\S+) [\d.]+ Tf <([0-9a-f]*)> Tj/g)].map(
+        ([, skew, emboldened, face, hex]): ShownRun => ({
           face: face!,
           emboldened: Boolean(emboldened),
+          oblique: Number(skew ?? 0) > 0,
           glyphs: (hex!.match(/.{4}/g) ?? []).map((unit) => {
             const code = parseInt(unit, 16);
             return { code, text: maps.get(face!)?.get(code) ?? "�" };
