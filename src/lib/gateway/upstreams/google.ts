@@ -1,6 +1,6 @@
 import { asNumber, asRecord, asString } from "@/lib/gateway/core";
 import { GateError } from "@/lib/gateway/errors";
-import { AnthropicSseTranslator, chatToAnthropic } from "@/lib/gateway/protocols/anthropic";
+import { AnthropicSseTranslator, chatToAnthropic, withCacheBreakpoints } from "@/lib/gateway/protocols/anthropic";
 import { withAnthropicModelParams } from "@/lib/gateway/protocols/anthropic-model-params";
 import { completionFromSse } from "@/lib/gateway/protocols/sse-completion";
 import { AntigravitySseTranslator, chatToAntigravity } from "@/lib/gateway/upstreams/antigravity";
@@ -298,7 +298,8 @@ export function googlePayload(kind: string, path: string, body: JsonMap): JsonMa
   const route = googleModelRoute(kind, asString(body.model));
   if (route.route === "google") return chatToGemini(kind, body);
   if (route.route === "anthropic") {
-    return withAnthropicModelParams(route.model, { ...chatToAnthropic({ ...body, model: route.model }), model: route.model });
+    const native = withCacheBreakpoints({ ...chatToAnthropic({ ...body, model: route.model }), model: route.model });
+    return withAnthropicModelParams(route.model, native);
   }
   return { ...body, model: route.model };
 }

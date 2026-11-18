@@ -87,7 +87,7 @@ test("the agent comes from x-llmhub-agent, else the Claude Code or Codex client 
   assert.equal(requestClient(headers({ "x-llmhub-agent": "aider", originator: "codex_cli_rs" })).agent, "aider");
 });
 
-test("account switches count handovers within a pinned kind only", () => {
+test("account switches count handovers within one provider kind", () => {
   const steps = [
     { provider: "claude", providerId: "acct-a" },
     { provider: "openai", providerId: "key-1" },
@@ -99,14 +99,14 @@ test("account switches count handovers within a pinned kind only", () => {
     { provider: "claude", providerId: "acct-a" },
     { provider: "anthropic", providerId: "api-1" },
   ];
-  assert.deepEqual(accountSwitchFlags(steps), [false, false, false, false, true, false, false, true, false]);
-  assert.equal(countAccountSwitches(steps), 2);
-  assert.equal(countPinnedAccounts(steps), 3);
+  assert.deepEqual(accountSwitchFlags(steps), [false, false, false, true, true, false, false, true, false]);
+  assert.equal(countAccountSwitches(steps), 3);
+  assert.equal(countPinnedAccounts(steps), 5);
   assert.equal(switchesPossible(steps), true);
   assert.equal(
     switchesPossible([
       { provider: "openai", providerId: "key-1" },
-      { provider: "openai", providerId: "key-2" },
+      { provider: "openai", providerId: "key-1" },
       { provider: "claude", providerId: "acct-a" },
       { provider: "codex", providerId: "acct-c" },
     ]),

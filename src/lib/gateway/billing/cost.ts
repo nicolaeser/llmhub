@@ -20,10 +20,17 @@ function modelName(dep: Deployment | null | undefined): string {
   return (dep?.model ?? "").toLowerCase();
 }
 
-function cacheReadRate(model: string): number {
-  if (/claude-(?:fable|mythos)-5[-.]1(?![0-9])/.test(model)) return 0.025;
-  if (/claude-opus-5[-.]5(?![0-9])/.test(model)) return 0.05;
-  return CACHE_READ_RATE;
+const CACHE_READ_RATES: [RegExp, number][] = [
+  [/claude-(?:fable|mythos)-5[-.][12](?![0-9])/, 0.025],
+  [/claude-(?:opus|sonnet)-5[-.]5(?![0-9])/, 0.05],
+  [/(?:^|\/)grok-[34](?:[-.]|$)/, 0.25],
+  [/(?:^|\/)kimi-k2(?![.0-9])/, 0.25],
+  [/(?:^|\/)(?:gpt-4\.1|o3(?!-mini)|o4-mini)(?![0-9])/, 0.25],
+  [/(?:^|\/)(?:gpt-4o|o1|o3-mini)(?![0-9])/, 0.5],
+];
+
+export function cacheReadRate(model: string): number {
+  return CACHE_READ_RATES.find(([pattern]) => pattern.test(model))?.[1] ?? CACHE_READ_RATE;
 }
 
 function tierRate(dep: Deployment, usage: Partial<TokenUsage>): number {

@@ -1,7 +1,13 @@
 import "server-only";
 import { env } from "@/lib/env";
 import { GateError } from "@/lib/gateway/errors";
-import { anthropicToChat, chatToAnthropic, claude47OrLater, withCacheBreakpoints } from "@/lib/gateway/protocols/anthropic";
+import {
+  anthropicToChat,
+  chatToAnthropic,
+  claude47OrLater,
+  withCacheBreakpoints,
+  withinCacheBreakpointLimit,
+} from "@/lib/gateway/protocols/anthropic";
 import { withAnthropicModelParams } from "@/lib/gateway/protocols/anthropic-model-params";
 import { ANTHROPIC_VERSION_2023, ANTHROPIC_VERSION_HEADER, anthropicVersionOf } from "@/lib/gateway/protocols/anthropic-version";
 import { plainModel } from "@/lib/gateway/catalog/model-alias";
@@ -23,6 +29,7 @@ import { deploymentAuth } from "@/lib/gateway/upstreams/credentials";
 import { DEVIN_CHAT_PATH, windowReset } from "@/lib/gateway/upstreams/devin-account";
 import { chatToDevin, devinCompletion, encodeDevinRequest } from "@/lib/gateway/upstreams/devin";
 import { kimiChatBody } from "@/lib/gateway/upstreams/kimi";
+import { promptCacheHeaders, withOpenRouterClaudeCache } from "@/lib/gateway/upstreams/prompt-cache";
 import { observeClaudeLimits, observeLimitWindows, recordStreamTraffic } from "@/lib/gateway/upstreams/limit-store";
 import { chatToMuse, museCompletion } from "@/lib/gateway/upstreams/muse";
 import { limitsSnapshot } from "@/lib/gateway/upstreams/subscription-limits";
@@ -263,12 +270,12 @@ export function prepareBody(
     payload.messages = withoutThinkingBlocks(payload.messages);
   }
   if (speaksAnthropic(dep.kind)) {
-    let native = payload;
+    let native = withinCacheBreakpointLimit(payload);
     if (nativeChatPath(path)) {
       native = chatToAnthropic(payload);
       if (typeof payload.speed === "string") native.speed = payload.speed;
       if (typeof payload.service_tier === "string") native.service_tier = payload.service_tier;
-      if (dep.kind === "claude") native = withCacheBreakpoints(native);
+      native = withCacheBreakpoints(native);
     }
     native = withAnthropicModelParams(asString(native.model), native, upstreamAnthropicVersion(dep, clientHeaders));
     return dep.kind === "claude" ? withClaudeIdentity(native) : native;
@@ -279,7 +286,7 @@ export function prepareBody(
   if (speaksKimi(dep.kind) && nativeChatPath(path)) return kimiChatBody(payload, dep.kind);
   if (speaksGoogle(dep.kind)) return googlePayload(dep.kind, path, payload);
   if (dep.kind === "devin" && nativeChatPath(path)) return chatToDevin(payload, dep.facts);
-  return payload;
+  return nativeChatPath(path) ? withOpenRouterClaudeCache(dep.kind, payload) : payload;
 }
 
 function decodeBody(
@@ -325,6 +332,7 @@ export async function proxyJson(input: {
   const headers = mergeUpstreamHeaders(
     upstreamHeaders(input.dep, input.auth, input.headers),
     serviceModeHeaders(input.dep.kind, input.body ?? {}, input.groupStrategy, input.dep.model, input.dep.facts),
+    promptCacheHeaders(input.dep.kind, input.body ?? {}),
   );
   if (input.rawBody instanceof FormData) {
     delete headers["Content-Type"];
@@ -383,6 +391,7 @@ async function proxyRaw(input: {
   const headers = mergeUpstreamHeaders(
     upstreamHeaders(input.dep, input.auth, input.headers),
     serviceModeHeaders(input.dep.kind, input.body ?? {}, input.groupStrategy, input.dep.model, input.dep.facts),
+    promptCacheHeaders(input.dep.kind, input.body ?? {}),
   );
   if (input.rawBody instanceof FormData) {
     delete headers["Content-Type"];

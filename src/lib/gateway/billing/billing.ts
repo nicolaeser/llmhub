@@ -480,7 +480,8 @@ export function usageFromUnknown(value: unknown, envelope?: unknown): Partial<To
   const cached =
     tokenCount(rec.cache_read_input_tokens) ||
     detail(rec, "prompt_tokens_details", "cached_tokens") ||
-    detail(rec, "input_tokens_details", "cached_tokens");
+    detail(rec, "input_tokens_details", "cached_tokens") ||
+    tokenCount(rec.cached_tokens);
   const created = tokenCount(rec.cache_creation_input_tokens);
   const createdLong = Math.min(created, detail(rec, "cache_creation", "ephemeral_1h_input_tokens"));
   const reasoning =

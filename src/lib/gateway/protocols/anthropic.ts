@@ -613,6 +613,8 @@ export class AnthropicSseTranslator {
 }
 
 const EPHEMERAL = { type: "ephemeral" };
+export const MAX_CACHE_BREAKPOINTS = 4;
+const UNMARKABLE_BLOCKS = new Set(["thinking", "redacted_thinking"]);
 
 function hasCacheControl(value: unknown): boolean {
   if (Array.isArray(value)) return value.some(hasCacheControl);
@@ -621,15 +623,64 @@ function hasCacheControl(value: unknown): boolean {
   return "cache_control" in rec || Object.values(rec).some((item) => typeof item === "object" && hasCacheControl(item));
 }
 
+export function setsCacheControl(body: JsonMap): boolean {
+  return "cache_control" in body || hasCacheControl(body.system) || hasCacheControl(body.messages) || hasCacheControl(body.tools);
+}
+
+function markable(block: JsonMap): boolean {
+  if (UNMARKABLE_BLOCKS.has(String(block.type))) return false;
+  return block.type !== "text" || (typeof block.text === "string" && block.text !== "");
+}
+
 function markLast(blocks: unknown): unknown {
-  if (!Array.isArray(blocks) || !blocks.length) return blocks;
-  const last = asRecord(blocks.at(-1));
-  if (!last) return blocks;
-  return [...blocks.slice(0, -1), { ...last, cache_control: EPHEMERAL }];
+  if (!Array.isArray(blocks)) return blocks;
+  const index = blocks.findLastIndex((raw) => {
+    const block = asRecord(raw);
+    return block !== null && markable(block);
+  });
+  if (index < 0) return blocks;
+  return blocks.with(index, { ...asRecord(blocks[index]), cache_control: EPHEMERAL });
+}
+
+function eachMarkedBlock(blocks: unknown, visit: (block: JsonMap) => JsonMap): unknown {
+  if (!Array.isArray(blocks)) return blocks;
+  return blocks.map((raw) => {
+    const block = asRecord(raw);
+    if (!block) return raw;
+    const nested = Array.isArray(block.content) ? { ...block, content: eachMarkedBlock(block.content, visit) } : block;
+    return asRecord(nested.cache_control) ? visit(nested) : nested;
+  });
+}
+
+function eachMarker(body: JsonMap, visit: (block: JsonMap) => JsonMap): JsonMap {
+  const out: JsonMap = { ...body };
+  for (const section of ["tools", "system", "messages"] as const) {
+    if (Array.isArray(body[section])) out[section] = eachMarkedBlock(body[section], visit);
+  }
+  return out;
+}
+
+export function withinCacheBreakpointLimit(body: JsonMap): JsonMap {
+  const slots = MAX_CACHE_BREAKPOINTS - (asRecord(body.cache_control) ? 1 : 0);
+  let total = 0;
+  eachMarker(body, (block) => {
+    total += 1;
+    return block;
+  });
+  if (total <= slots) return body;
+  let index = 0;
+  return eachMarker(body, (block) => {
+    const kept = index === 0 || index >= total - (slots - 1);
+    index += 1;
+    if (kept) return block;
+    const copy = { ...block };
+    delete copy.cache_control;
+    return copy;
+  });
 }
 
 export function withCacheBreakpoints(body: JsonMap): JsonMap {
-  if (hasCacheControl(body.system) || hasCacheControl(body.messages) || hasCacheControl(body.tools)) return body;
+  if (setsCacheControl(body)) return withinCacheBreakpointLimit(body);
   const out: JsonMap = { ...body };
   if (Array.isArray(out.tools) && out.tools.length) out.tools = markLast(out.tools);
   if (typeof out.system === "string" && out.system) out.system = [{ type: "text", text: out.system, cache_control: EPHEMERAL }];

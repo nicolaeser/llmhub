@@ -2,7 +2,7 @@ import "server-only";
 import { createHash } from "node:crypto";
 import { asRecord, asString } from "@/lib/gateway/core";
 import { claudeCodeCacheKey, claudeCodeSessionKey } from "@/lib/gateway/protocols/messages";
-import { isSignInKind } from "@/lib/gateway/upstreams/provider-kinds";
+import { PROVIDER_CATALOG } from "@/lib/gateway/upstreams/provider-kinds";
 import { redisUrl } from "@/lib/jobs/connection";
 import { errorFields } from "@/lib/logging/format";
 import { logger } from "@/lib/logging/logger";
@@ -13,7 +13,6 @@ import type { AccountPin } from "@/types/routing";
 
 export const PIN_TTL_MS = 6 * 3_600_000;
 export const PIN_HOLD_MS = 60_000;
-const PINNED_API_KINDS = new Set(["anthropic"]);
 export const CLAUDE_CODE_SESSION_HEADER = "x-claude-code-session-id";
 export const MAX_SESSION_LENGTH = 512;
 const MAX_PINS = 20_000;
@@ -52,7 +51,7 @@ function sharedKey(key: string): string {
 }
 
 export function pinsAccounts(kind: string): boolean {
-  return isSignInKind(kind) || PINNED_API_KINDS.has(kind);
+  return PROVIDER_CATALOG.some((spec) => spec.kind === kind);
 }
 
 function headerValue(headers: Record<string, string> | undefined, name: string): string {

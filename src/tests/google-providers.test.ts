@@ -369,9 +369,9 @@ test("Vertex Claude requests use the Anthropic body with the Vertex version and 
   assert.equal(wire.model, undefined);
   assert.equal(wire.anthropic_version, "vertex-2023-10-16");
   assert.equal(wire.stream, true);
-  assert.equal(wire.system, "Be brief.");
+  assert.deepEqual(wire.system, [{ type: "text", text: "Be brief.", cache_control: { type: "ephemeral" } }]);
   assert.equal(wire.max_tokens, 300);
-  assert.deepEqual(wire.messages, [{ role: "user", content: [{ type: "text", text: "Hi" }] }]);
+  assert.deepEqual(wire.messages, [{ role: "user", content: [{ type: "text", text: "Hi", cache_control: { type: "ephemeral" } }] }]);
   const partner = googlePayload("vertex", "/chat/completions", {
     model: "publishers/meta/models/llama-4-maverick-17b-128e-instruct-maas",
     messages: [{ role: "user", content: "Hi" }],

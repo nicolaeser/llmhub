@@ -15,6 +15,7 @@ import {
 import { outputScreen, type OutputScreen } from "@/lib/gateway/safety/guardrails";
 import { instructChat } from "@/lib/gateway/safety/pii-instruction";
 import { requestRoutingOverride, serviceModeHeaders, variantRoutes } from "@/lib/gateway/dispatch/service-mode";
+import { promptCacheHeaders } from "@/lib/gateway/upstreams/prompt-cache";
 import { accessOf } from "@/lib/gateway/routing/account-access";
 import { pinsAccounts, runSession, writePin } from "@/lib/gateway/routing/account-affinity";
 import {
@@ -611,6 +612,7 @@ export async function openUpstreamStream(input: {
     ...mergeUpstreamHeaders(
       upstreamHeaders(input.dep, auth, input.headers),
       serviceModeHeaders(input.dep.kind, input.payload, input.group.strategy, input.dep.model, input.dep.facts),
+      promptCacheHeaders(input.dep.kind, input.payload),
     ),
     Accept: streamAccept(input.dep.kind),
   };

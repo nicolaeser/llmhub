@@ -48,7 +48,8 @@ test("Anthropic fast mode, US inference, and per-model cache reads are priced", 
   close(costOf(opus, { ...base, service_tier: "priority" }), 24);
   assert.equal(priceFactors(opus, base).cacheRead, 0.05);
   assert.equal(priceFactors(dep("anthropic", "claude-fable-5-1"), base).cacheRead, 0.025);
-  assert.equal(priceFactors(dep("anthropic", "claude-sonnet-5-5"), base).cacheRead, 0.1);
+  assert.equal(priceFactors(dep("anthropic", "claude-sonnet-5-5"), base).cacheRead, 0.05);
+  assert.equal(priceFactors(dep("anthropic", "claude-haiku-5-5"), base).cacheRead, 0.1);
   close(costOf(opus, { prompt_tokens: 1000, completion_tokens: 0, cache_read_input_tokens: 1000 }), 0.2);
 });
 
@@ -96,7 +97,7 @@ test("cache tokens stay inside the prompt and savings net cache writes against r
     { read: 70, written: 30, writtenLong: 30 },
   );
   const sonnet = dep("anthropic", "claude-sonnet-5-5");
-  close(cacheSavingsOf(sonnet, { prompt_tokens: 1000, completion_tokens: 0, cache_read_input_tokens: 1000 }), 0.9);
+  close(cacheSavingsOf(sonnet, { prompt_tokens: 1000, completion_tokens: 0, cache_read_input_tokens: 1000 }), 0.95);
   close(cacheSavingsOf(sonnet, { prompt_tokens: 1000, completion_tokens: 0, cache_creation_input_tokens: 1000 }), -0.25);
   close(cacheSavingsOf(sonnet, base), 0);
   close(cacheSavingsOf(null, { prompt_tokens: 1000, completion_tokens: 0, cache_read_input_tokens: 1000 }), 0);
