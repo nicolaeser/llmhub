@@ -1,9 +1,1 @@
-[
-  {
-    "advisory": "GHSA-fc5q-39xc-vjpf",
-    "package": "picomatch",
-    "range": "<=4.0.7",
-    "reviewBy": "2027-01-31",
-    "reason": "No patched picomatch release exists. Only build and development tooling loads it (the Sentry Rollup plugin and the next-intl extractor watcher), always with globs from repository config, never from request input."
-  }
-]
+[]
