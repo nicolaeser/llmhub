@@ -241,7 +241,13 @@ test("pull requests review new dependencies and audit production dependencies", 
   const verify = await file(".github/workflows/verify.yml");
   const dependencies = verify.slice(verify.indexOf("\n  dependencies:\n"));
   assert.match(dependencies, /uses: actions\/dependency-review-action@v\d+(?:\.\d+){0,2}\n {8}with:\n {10}fail-on-severity: high\n/);
-  assert.match(dependencies, /run: npm audit --omit=dev --audit-level=high/);
+  assert.match(dependencies, /run: node scripts\/audit-production\.mjs/);
+  const exceptions = JSON.parse(await file(".github/audit-exceptions.json"));
+  for (const entry of exceptions) {
+    assert.match(entry.advisory, /^GHSA(?:-[0-9a-z]{4}){3}$/);
+    assert.match(entry.reviewBy, /^\d{4}-\d{2}-\d{2}$/);
+    assert.ok(entry.package && entry.range && entry.reason.length > 40);
+  }
   assert.match(dependencies, /timeout-minutes: \d+/);
 });
 

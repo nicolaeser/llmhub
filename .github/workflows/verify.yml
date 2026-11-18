@@ -41,4 +41,4 @@ jobs:
         with:
           node-version: "26"
       - name: Audit production dependencies
-        run: npm audit --omit=dev --audit-level=high
+        run: node scripts/audit-production.mjs
