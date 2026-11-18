@@ -43,6 +43,22 @@ test("startup retries only transient database and migration-lock failures", asyn
   }
 });
 
+test("startup retries a schema creation race with another start but no other unique violation", async () => {
+  let calls = 0;
+  const delays: number[] = [];
+  await migrateDatabase({ env, write: () => {}, delayMs: 3, wait: async (ms: number) => { delays.push(ms); },
+    run: async () => ({ code: ++calls < 2 ? 1 : 0, signal: null, output: "Error: P2002: Unique constraint failed on the fields: (`nspname`)\n" }),
+  });
+  assert.equal(calls, 2);
+  assert.deepEqual(delays, [3]);
+  calls = 0;
+  await assert.rejects(migrateDatabase({ env, write: () => {},
+    wait: async () => { assert.fail("other unique violations must not retry"); },
+    run: async () => { calls += 1; return { code: 1, signal: null, output: "Error: P2002: Unique constraint failed on the fields: (`email`)\n" }; },
+  }), /migrations failed/);
+  assert.equal(calls, 1);
+});
+
 test("unreachable databases stop the migration step after bounded retries", async () => {
   let calls = 0;
   let waits = 0;

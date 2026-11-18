@@ -8,6 +8,7 @@ import { pathToFileURL } from "node:url";
 const DATABASE_CONNECT_ATTEMPTS = 10;
 const DATABASE_CONNECT_DELAY_MS = 3_000;
 const RETRYABLE = /\bP(?:1001|1002|1017)\b/;
+const CONCURRENT_SCHEMA_CREATION = /\bP2002\b[^\n]*`nspname`/;
 
 export function migrationFailureHelp(output) {
   if (/\bP3005\b/.test(output)) {
@@ -60,6 +61,11 @@ export async function migrateDatabase({
       recoveryAttempted = true;
       write("[migrate] Checking whether the published transactional compatibility migration can be safely retried.");
       await recover({ env, write, automatic: true });
+      await wait(delayMs);
+      continue;
+    }
+    if (CONCURRENT_SCHEMA_CREATION.test(result.output) && attempt < attempts) {
+      write(`[migrate] another start created the database schema at the same time, retrying (${attempt}/${attempts})`);
       await wait(delayMs);
       continue;
     }
