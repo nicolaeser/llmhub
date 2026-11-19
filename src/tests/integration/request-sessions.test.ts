@@ -71,7 +71,7 @@ test("agent sessions sum their requests per session, key, and user inside the vi
     assert.equal(traced!.promptTokens, 600);
     assert.equal(traced!.completionTokens, 60);
     assert.equal(traced!.cacheReadTokens, 40);
-    assert.equal(traced!.accounts, 2);
+    assert.equal(traced!.accounts, 3);
     assert.equal(traced!.accountSwitches, 2);
     assert.equal(traced!.durationMs, 52_000);
     assert.equal(traced!.startedAt, new Date(started - 2_000).toISOString());
