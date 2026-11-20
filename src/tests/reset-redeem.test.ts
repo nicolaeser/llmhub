@@ -27,7 +27,7 @@ const logins = new Map<string, FakeLogin>();
 const providers: FakeProvider[] = [];
 const routing: RoutingRow[] = [];
 const deployments: { id: string; providerId: string }[] = [];
-const audits: { actor: string; action: string; objectId: string; afterJson: string }[] = [];
+const audits: { actor: string; action: string; objectId: string; beforeJson: string; afterJson: string }[] = [];
 let sent: Sent[] = [];
 
 function settingMatches(key: string, where: { key?: string | { startsWith: string }; value?: string | { lt: string } }) {
@@ -802,6 +802,34 @@ test("auto reset settings are validated, stored per kind, and audited", async ()
     ),
     { ok: false, error: "FORBIDDEN", message: "FORBIDDEN" },
   );
+});
+
+test("the API fallback switch is stored per sign-in kind and audited", async () => {
+  const { runAsPrincipal } = await import("@/lib/auth/delegation");
+  const { runAction } = await import("@/lib/http/action-result");
+  const { loadAccountRouting, saveApiFallback } = await import("@/lib/providers/account-routing");
+  const manager = principal(["providers:read", "providers:manage"]);
+  assert.deepEqual(
+    await runAsPrincipal(manager, () => runAction(() => saveApiFallback({ kind: "anthropic", enabled: true }))),
+    { ok: false, error: "UNKNOWN_PROVIDER_KIND", message: "UNKNOWN_PROVIDER_KIND" },
+  );
+  assert.deepEqual(
+    await runAsPrincipal(manager, () =>
+      runAction(() => saveApiFallback({ kind: "claude", enabled: "yes" } as unknown as { kind: string; enabled: boolean })),
+    ),
+    { ok: false, error: "VALIDATION", message: "VALIDATION" },
+  );
+  const saved = await runAsPrincipal(manager, () => saveApiFallback({ kind: "claude", enabled: true }));
+  assert.deepEqual(saved.apiFallback, { claude: true });
+  const audit = audits.find((row) => row.action === "account_routing.api_fallback");
+  assert.deepEqual(
+    [audit?.objectId, audit?.beforeJson, audit?.afterJson],
+    ["claude", JSON.stringify({ enabled: false }), JSON.stringify({ enabled: true })],
+  );
+  const viewer = principal(["providers:read"]);
+  assert.deepEqual((await runAsPrincipal(viewer, () => loadAccountRouting())).apiFallback, { claude: true });
+  const off = await runAsPrincipal(manager, () => saveApiFallback({ kind: "claude", enabled: false }));
+  assert.deepEqual(off.apiFallback, {});
 });
 
 test("the Claude reset view and the limits poll share one 429 block that escalates until a read succeeds", async () => {

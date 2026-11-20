@@ -124,12 +124,15 @@ export type KickoffModels = Partial<Record<SignInKind, string[]>>;
 
 export type RefreshCaps = Partial<Record<SignInKind, number>>;
 
+export type ApiFallbacks = Partial<Record<SignInKind, boolean>>;
+
 export type AccountRoutingView = {
   routing: AccountRouting;
   autoReset: AutoResetPolicies;
   kickoff: WindowKickoffs;
   kickoffModels: KickoffModels;
   refreshCaps: RefreshCaps;
+  apiFallback: ApiFallbacks;
   canManage: boolean;
 };
 

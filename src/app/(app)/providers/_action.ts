@@ -8,6 +8,7 @@ import {
   loadAssignmentOptions,
   saveAccountRouting,
   saveAntigravityConfig,
+  saveApiFallback,
   saveAssignments,
   saveAutoReset,
   saveRefreshCap,
@@ -114,6 +115,10 @@ export async function saveWindowKickoffAction(...args: Parameters<typeof saveWin
 
 export async function saveRefreshCapAction(...args: Parameters<typeof saveRefreshCap>) {
   return runAction(() => saveRefreshCap(...args));
+}
+
+export async function saveApiFallbackAction(...args: Parameters<typeof saveApiFallback>) {
+  return runAction(() => saveApiFallback(...args));
 }
 
 export async function redeemProviderResetAction(...args: Parameters<typeof redeemProviderReset>) {

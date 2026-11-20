@@ -304,6 +304,7 @@ model AccountRouting {
   autoResetScope   String   @default("pool")
   kickoffModel     String   @default("")
   refreshCap       Int      @default(0)
+  apiFallback      Boolean  @default(false)
   updatedAt        DateTime @updatedAt
 }
 

@@ -17,6 +17,7 @@ import { isActionFail } from "@/lib/http/action-result";
 import type {
   AccountRouting,
   AntigravityClientState,
+  ApiFallbacks,
   KickoffModels,
   RefreshCaps,
   ProviderListActions,
@@ -78,6 +79,7 @@ export default function SubscriptionAccounts({
   const [kickoff, setKickoff] = useState<WindowKickoffs>({});
   const [kickoffModels, setKickoffModels] = useState<KickoffModels>({});
   const [refreshCaps, setRefreshCaps] = useState<RefreshCaps>({});
+  const [apiFallback, setApiFallback] = useState<ApiFallbacks>({});
   const [access, setAccess] = useState<ProviderView | null>(null);
   const [accessKey, setAccessKey] = useState(0);
   const [settingsKind, setSettingsKind] = useState<SignInKind | null>(null);
@@ -104,6 +106,7 @@ export default function SubscriptionAccounts({
       setKickoff(res.kickoff);
       setKickoffModels(res.kickoffModels);
       setRefreshCaps(res.refreshCaps);
+      setApiFallback(res.apiFallback);
     });
     return () => {
       active = false;
@@ -294,11 +297,13 @@ export default function SubscriptionAccounts({
             kickoff={kickoff}
             kickoffModels={kickoffModels}
             refreshCaps={refreshCaps}
+            apiFallback={apiFallback}
             antigravity={antigravity}
             onRouting={setRouting}
             onAutoReset={setAutoReset}
             onKickoff={setKickoff}
             onRefreshCaps={setRefreshCaps}
+            onApiFallback={setApiFallback}
             onAntigravity={onAntigravity}
           />
 

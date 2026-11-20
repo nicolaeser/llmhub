@@ -230,6 +230,15 @@
     "saveShort": "Speichern",
     "saved": "Abfragegrenze für {provider} gespeichert"
   },
+  "apiFallback": {
+    "title": "Auf API-Routen ausweichen",
+    "description": "Wenn kein {provider}-Konto eine Anfrage annehmen kann, etwa weil alle Konten ihr Nutzungslimit erreicht haben, schickt LLM Hub sie an die API-Routen desselben Modells. Diese Anfragen kosten API-Preise und zählen zu den Budgets.",
+    "label": "API-Ausweichroute für {provider}",
+    "enabled": "API-Routen nutzen, wenn die Konten nicht antworten können",
+    "hint": "Nur Modelle mit einer API-Route weichen aus. Ist der Schalter aus, bleiben Anfragen beim Abo und erhalten den Fehler zum Nutzungslimit.",
+    "on": "API-Ausweichroute für {provider} eingeschaltet",
+    "off": "API-Ausweichroute für {provider} ausgeschaltet"
+  },
   "routing": {
     "title": "Kontoverteilung",
     "description": "Wie Anfragen auf diese Konten verteilt werden. Ein Konto am Nutzungslimit wird übersprungen, solange ein anderes noch Luft hat.",

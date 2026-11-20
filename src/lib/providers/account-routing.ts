@@ -16,6 +16,7 @@ import type {
   AccountRouting,
   AccountRoutingView,
   AntigravityClientState,
+  ApiFallbacks,
   AssignmentInput,
   KickoffModels,
   RefreshCaps,
@@ -61,6 +62,15 @@ export async function currentRefreshCaps(): Promise<RefreshCaps> {
   return caps;
 }
 
+async function currentApiFallback(): Promise<ApiFallbacks> {
+  const rows = await prisma.accountRouting.findMany({ where: { apiFallback: true }, select: { kind: true, apiFallback: true } });
+  const fallback: ApiFallbacks = {};
+  for (const row of rows) {
+    if (row.apiFallback && isSignInKind(row.kind)) fallback[row.kind] = true;
+  }
+  return fallback;
+}
+
 async function kickoffModels(): Promise<KickoffModels> {
   const rows = await prisma.deployment.findMany({
     where: { group: { enabled: true }, provider: { kind: { in: signInKinds().filter(startsWindows) } } },
@@ -77,12 +87,13 @@ async function kickoffModels(): Promise<KickoffModels> {
 
 export async function loadAccountRouting(): Promise<AccountRoutingView> {
   const session = await requirePlatformPermission(PERMISSIONS.PROVIDERS_READ);
-  const [routing, autoReset, kickoff, models, refreshCaps] = await Promise.all([
+  const [routing, autoReset, kickoff, models, refreshCaps, apiFallback] = await Promise.all([
     currentRouting(),
     currentAutoReset(),
     currentKickoff(),
     kickoffModels(),
     currentRefreshCaps(),
+    currentApiFallback(),
   ]);
   return {
     routing,
@@ -90,6 +101,7 @@ export async function loadAccountRouting(): Promise<AccountRoutingView> {
     kickoff,
     kickoffModels: models,
     refreshCaps,
+    apiFallback,
     canManage: hasPerm(session.permissions, PERMISSIONS.PROVIDERS_MANAGE),
   };
 }
@@ -184,6 +196,29 @@ export async function saveRefreshCap(input: { kind: string; cap: number }) {
     after: { cap },
   });
   return { refreshCaps: await currentRefreshCaps() };
+}
+
+export async function saveApiFallback(input: { kind: string; enabled: boolean }) {
+  const session = await requirePlatformPermission(PERMISSIONS.PROVIDERS_MANAGE);
+  if (!isSignInKind(input.kind)) throw new Error("UNKNOWN_PROVIDER_KIND");
+  if (typeof input.enabled !== "boolean") throw new Error("VALIDATION");
+  const { kind, enabled } = input;
+  const before = (await currentApiFallback())[kind] ?? false;
+  await prisma.accountRouting.upsert({
+    where: { kind },
+    create: { kind, strategy: DEFAULT_ACCOUNT_STRATEGY, apiFallback: enabled },
+    update: { apiFallback: enabled },
+  });
+  forgetAccountPolicies();
+  await writeAudit({
+    actor: session.user.id,
+    action: "account_routing.api_fallback",
+    objectType: "account_routing",
+    objectId: kind,
+    before: { enabled: before },
+    after: { enabled },
+  });
+  return { apiFallback: await currentApiFallback() };
 }
 
 export async function loadAssignmentOptions() {

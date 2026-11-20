@@ -1,4 +1,5 @@
 import { API_KEY, errorOf, gateway, gatewayRequest } from "./support/gateway-harness";
+import { recordedPrisma } from "./support/recorded-prisma";
 import assert from "node:assert/strict";
 import { readdirSync } from "node:fs";
 import path from "node:path";
@@ -271,6 +272,78 @@ test("a prefixed model runs on the API pool and a fallback can move from plan qu
     (err: unknown) => err instanceof GateError && err.status === 404 && err.message === "model has no API route",
   );
   await assert.rejects(withDeployment(["api/gpt-5.5"], {}, pick), (err: unknown) => isRouterError(err, "unknown_group"));
+});
+
+test("the API fallback switch moves exhausted subscription requests to the API routes of the same model", async () => {
+  const { withDeployment } = await import("@/lib/gateway/dispatch/chat");
+  const { forgetAccountPolicies } = await import("@/lib/gateway/routing/account-routing");
+  const { markFailure } = await import("@/lib/gateway/routing/runtime");
+  const surface = { pool: "subscription" as const };
+  const tried: string[] = [];
+  const limited = async (dep: { id: string }) => {
+    tried.push(dep.id);
+    if (dep.id.startsWith("seat-") || dep.id === "paygo-busy") throw new GateError(429, "rate_limit_exceeded", "limit reached");
+    return dep.id;
+  };
+  const fallbackKinds = { kinds: [] as string[] };
+  recordedPrisma.base.accountRouting = {
+    findMany: () => fallbackKinds.kinds.map((kind) => ({ kind, strategy: "smart", apiFallback: true })),
+  };
+  const aliases = ["spill-a", "spill-b", "spill-on", "spill-cool", "spill-c", "spill-d", "spill-e", "spill-sub"];
+  groups.set("spill-a", groupRow("spill-a", [{ id: "seat-a", kind: "codex" }, { id: "paygo-a", kind: "openai" }]));
+  groups.set("spill-b", groupRow("spill-b", [{ id: "seat-b", kind: "codex" }, { id: "paygo-b", kind: "openai" }]));
+  groups.set("spill-on", groupRow("spill-on", [{ id: "seat-on", kind: "codex" }, { id: "paygo-on", kind: "openai" }]));
+  groups.set("spill-cool", groupRow("spill-cool", [{ id: "seat-cool", kind: "codex" }, { id: "paygo-cool", kind: "openai" }]));
+  groups.set("spill-c", groupRow("spill-c", [{ id: "seat-c", kind: "codex" }]));
+  groups.set("spill-d", {
+    ...groupRow("spill-d", [{ id: "seat-d", kind: "codex" }, { id: "paygo-d", kind: "openai" }]),
+    fallbackGroups: ["spill-sub"],
+  });
+  groups.set("spill-sub", groupRow("spill-sub", [{ id: "plan-sub", kind: "codex" }]));
+  groups.set("spill-e", groupRow("spill-e", [{ id: "seat-e", kind: "codex" }, { id: "paygo-busy", kind: "openai" }]));
+  try {
+    forgetAccountPolicies();
+    await assert.rejects(
+      withDeployment(["spill-a"], {}, limited, surface),
+      (err: unknown) => err instanceof GateError && err.status === 429,
+    );
+    assert.deepEqual(tried.splice(0), ["seat-a"]);
+
+    fallbackKinds.kinds = ["claude"];
+    forgetAccountPolicies();
+    await assert.rejects(withDeployment(["spill-b"], {}, limited, surface));
+    assert.deepEqual(tried.splice(0), ["seat-b"]);
+
+    fallbackKinds.kinds = ["codex"];
+    forgetAccountPolicies();
+    const spilled = await withDeployment(["spill-on"], {}, limited, surface);
+    assert.equal(spilled.result, "paygo-on");
+    assert.equal(spilled.alias, "spill-on");
+    assert.deepEqual(tried.splice(0), ["seat-on", "paygo-on"]);
+
+    markFailure({ id: "seat-cool" } as Parameters<typeof markFailure>[0], Date.now() + 3_600_000);
+    assert.equal((await withDeployment(["spill-cool"], {}, limited, surface)).result, "paygo-cool");
+    assert.deepEqual(tried.splice(0), ["paygo-cool"]);
+
+    await assert.rejects(
+      withDeployment(["spill-c"], {}, limited, surface),
+      (err: unknown) => err instanceof GateError && err.status === 429,
+    );
+    assert.deepEqual(tried.splice(0), ["seat-c"]);
+
+    const planFirst = await withDeployment(["spill-d"], {}, limited, surface);
+    assert.equal(planFirst.result, "plan-sub");
+    assert.deepEqual(tried.splice(0), ["seat-d", "plan-sub"]);
+
+    await assert.rejects(withDeployment(["spill-e", "api/spill-e"], {}, limited, surface));
+    assert.deepEqual(tried.splice(0), ["seat-e", "paygo-busy"]);
+
+    assert.equal((await withDeployment(["spill-a"], {}, limited)).result, "paygo-a");
+  } finally {
+    for (const alias of aliases) groups.delete(alias);
+    delete recordedPrisma.base.accountRouting;
+    forgetAccountPolicies();
+  }
 });
 
 test("model access follows the plain alias for prefixed models", async () => {

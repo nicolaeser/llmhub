@@ -17,6 +17,7 @@ import { instructChat } from "@/lib/gateway/safety/pii-instruction";
 import { requestRoutingOverride, serviceModeHeaders, variantRoutes } from "@/lib/gateway/dispatch/service-mode";
 import { promptCacheHeaders } from "@/lib/gateway/upstreams/prompt-cache";
 import { accessOf } from "@/lib/gateway/routing/account-access";
+import { apiFallbackKinds } from "@/lib/gateway/routing/account-routing";
 import { pinsAccounts, runSession, writePin } from "@/lib/gateway/routing/account-affinity";
 import {
   dropAccountReasoning,
@@ -280,6 +281,16 @@ function prepareHandoff(dep: ResolvedDeployment, pinned: AccountPin | null, swit
   else if (pinned && pinned.handoffAt > 0) dropAccountReasoning(request, pinned.handoffAt);
 }
 
+function queued(entries: RouteEntry[], alias: string, pool: RoutePool): boolean {
+  return entries.some((entry) => entry.alias === alias && entry.pool === pool);
+}
+
+async function spillsToApi(group: ResolvedModelGroup, pooled: ResolvedDeployment[]): Promise<boolean> {
+  if (!pooled.length || !group.mapped.some(routable("api"))) return false;
+  const kinds = await apiFallbackKinds();
+  return pooled.some((dep) => kinds.has(dep.provider?.kind ?? dep.kind));
+}
+
 export async function withDeployment<T>(
   aliases: string[],
   limits: RouteLimits,
@@ -329,8 +340,10 @@ export async function withDeployment<T>(
     return { alias: route.alias, root: route.alias, pool: route.pool, relaxed: false, estimated: false };
   });
   const deferred: RouteEntry[] = [];
+  const spilled: RouteEntry[] = [];
   const entryAt = (index: number): RouteEntry | undefined => {
     if (index === queue.length) queue.push(...deferred.splice(0));
+    if (index === queue.length) queue.push(...spilled.splice(0));
     return queue[index];
   };
   for (let qi = 0; entryAt(qi); qi++) {
@@ -487,16 +500,20 @@ export async function withDeployment<T>(
       }
     }
     for (const fb of group.fallback_groups) {
-      if (!queue.some((entry) => entry.alias === fb && entry.pool === pool)) {
+      if (!queued(queue, fb, pool)) {
         queue.push({ alias: fb, root, pool, relaxed: false, estimated: false });
       }
     }
-    if (
-      !stopAlias &&
-      group.overflow_group &&
-      !queue.some((entry) => entry.alias === group.overflow_group && entry.pool === pool)
-    ) {
+    if (!stopAlias && group.overflow_group && !queued(queue, group.overflow_group, pool)) {
       queue.push({ alias: group.overflow_group, root, pool, relaxed: false, estimated: false });
+    }
+    if (
+      pool === "subscription" &&
+      !queued(queue, alias, "api") &&
+      !queued(spilled, alias, "api") &&
+      (await spillsToApi(group, pooled))
+    ) {
+      spilled.push({ alias, root, pool: "api", relaxed: false, estimated: false });
     }
   }
   const waiting = isUnavailableError(last) && last.wait !== null;

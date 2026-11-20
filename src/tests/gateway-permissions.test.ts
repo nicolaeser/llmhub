@@ -51,6 +51,7 @@ async function providerChanges(): Promise<Call[]> {
       "saveAutoReset",
       () => routing.saveAutoReset({ kind: "codex", enabled: true, percent: 5000, scope: "pool" } as AutoResetInput),
     ],
+    ["saveApiFallback", () => routing.saveApiFallback({ kind: "claude", enabled: true })],
     ["loadAssignmentOptions", () => routing.loadAssignmentOptions()],
     ["saveAssignments", () => routing.saveAssignments({ providerId: "p1", restricted: true, targets: [] })],
     ["saveAntigravityConfig", () => routing.saveAntigravityConfig({ clientSecret: "secret" })],

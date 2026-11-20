@@ -230,6 +230,15 @@
     "saveShort": "Save",
     "saved": "Refresh limit for {provider} saved"
   },
+  "apiFallback": {
+    "title": "Fall back to API routes",
+    "description": "When no {provider} account can take a request, for example because every account has reached its usage limit, LLM Hub sends it to the API routes of the same model. Those requests bill at API prices and count toward budgets.",
+    "label": "API fallback for {provider}",
+    "enabled": "Use API routes when the accounts cannot answer",
+    "hint": "Only models that also have an API route fall back. When off, requests stay on the subscription and get the usage limit error.",
+    "on": "API fallback for {provider} turned on",
+    "off": "API fallback for {provider} turned off"
+  },
   "routing": {
     "title": "Account distribution",
     "description": "How requests spread across these accounts. An account at a usage limit is skipped while another still has room.",

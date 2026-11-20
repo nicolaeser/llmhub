@@ -10,6 +10,7 @@ import { pollsLimits, startsWindows } from "@/lib/gateway/upstreams/provider-kin
 import type {
   AccountRouting,
   AntigravityClientState,
+  ApiFallbacks,
   KickoffModels,
   RefreshCaps,
   SignInKind,
@@ -18,6 +19,7 @@ import type {
 import type { AutoResetPolicies } from "@/types/resets";
 import AccountRoutingPicker from "./account-routing-picker";
 import AntigravitySetup from "./antigravity-setup";
+import ApiFallbackSettings from "./api-fallback-settings";
 import AutoResetSettings from "./auto-reset-settings";
 import RefreshCapSettings from "./refresh-cap-settings";
 import WindowKickoffSettings from "./window-kickoff-settings";
@@ -31,11 +33,13 @@ export default function ProviderSettingsDialog({
   kickoff,
   kickoffModels,
   refreshCaps,
+  apiFallback,
   antigravity,
   onRouting,
   onAutoReset,
   onKickoff,
   onRefreshCaps,
+  onApiFallback,
   onAntigravity,
 }: {
   state: ReturnType<typeof useOverlayState>;
@@ -46,11 +50,13 @@ export default function ProviderSettingsDialog({
   kickoff: WindowKickoffs;
   kickoffModels: KickoffModels;
   refreshCaps: RefreshCaps;
+  apiFallback: ApiFallbacks;
   antigravity: AntigravityClientState | null;
   onRouting: (routing: AccountRouting) => void;
   onAutoReset: (policies: AutoResetPolicies) => void;
   onKickoff: (kickoff: WindowKickoffs) => void;
   onRefreshCaps: (caps: RefreshCaps) => void;
+  onApiFallback: (fallback: ApiFallbacks) => void;
   onAntigravity: (state: AntigravityClientState) => void;
 }) {
   const t = useTranslations("Subscriptions.settings");
@@ -82,6 +88,16 @@ export default function ProviderSettingsDialog({
                       accounts={accounts}
                       onSaved={onRouting}
                     />
+                  ) : null}
+                  {accounts > 0 ? (
+                    <>
+                      <Separator />
+                      <ApiFallbackSettings
+                        kind={kind}
+                        enabled={apiFallback[kind] ?? false}
+                        onSaved={onApiFallback}
+                      />
+                    </>
                   ) : null}
                   {accounts > 0 && isResetKind(kind) ? (
                     <>
