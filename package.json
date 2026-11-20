@@ -84,6 +84,7 @@
   },
   "overrides": {
     "deepmerge-ts": "^8.0.2",
+    "effect": "^3.22.5",
     "minimatch": "^11.0.5",
     "mysql2": "^3.24.5"
   },
