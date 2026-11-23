@@ -39,7 +39,16 @@ export type McpHeaderParam = {
 
 export type McpToolAction = "read" | "write" | "delete";
 
-export type McpServerKind = "remote" | "hosted";
+export type McpServerKind = "remote" | "hosted" | "media";
+
+export type McpMediaKind = "image" | "speech" | "video" | "transcription";
+
+export type McpMediaSpec = {
+  image: { model: string };
+  speech: { model: string; voice: string };
+  video: { model: string };
+  transcription: { model: string };
+};
 
 export type McpToolSpec = {
   name: string;
@@ -258,6 +267,12 @@ export type McpDraft = McpDraftServer & {
   parts: number;
 };
 
+export type McpMediaModel = {
+  alias: string;
+  label: string;
+  media: boolean;
+};
+
 export type McpBuilderModel = {
   alias: string;
   label: string;
@@ -279,6 +294,7 @@ export type McpServerRecord = {
   protocolVersion: string;
   kind: McpServerKind;
   spec: HostedSpec;
+  media: McpMediaSpec;
 };
 
 export type McpRoleGrant = {
@@ -416,6 +432,7 @@ export type McpServerView = {
   oauth: McpOAuthView | null;
   internal: boolean;
   kind: McpServerKind;
+  media: McpMediaSpec | null;
   enabled: boolean;
   global: boolean;
   template: boolean;

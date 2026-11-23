@@ -109,7 +109,7 @@ export async function refreshMcpServer(id: string) {
   const session = await requireMcpManager();
   if (!id) throw new Error("MISSING_ID");
   const row = await loadRow(id);
-  if (row.kind === "hosted") return { server: scopedView(row, session) };
+  if (row.kind !== "remote") return { server: scopedView(row, session) };
   const result = await probe(serverRecord(row));
   const updated = await storeProbe(id, result);
   await writeAudit({

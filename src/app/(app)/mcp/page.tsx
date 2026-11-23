@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Alert, Button, CloseButton, useOverlayState } from "@heroui/react";
-import { Blocks, Plug, Sparkles } from "lucide-react";
+import { Blocks, ImagePlus, Plug, Sparkles } from "lucide-react";
 import { useTranslations } from "next-intl";
 import EmptyState from "@/components/console/empty-state";
 import PageHeader from "@/components/console/page-header";
@@ -15,6 +15,7 @@ import { loadMcpServersAction, saveMcpInstallationAction, setMcpTemplateAction }
 import AccessDialog from "./_components/access-dialog";
 import AddServerMenu, { type AddChoice } from "./_components/add-server-menu";
 import BuilderDialog from "./_components/builder-dialog";
+import MediaDialog from "./_components/media-dialog";
 import PermissionsDialog from "./_components/permissions-dialog";
 import ServerDialog from "./_components/server-dialog";
 import ServerList from "./_components/server-list";
@@ -37,6 +38,7 @@ export default function McpPage() {
   const permissionsState = useOverlayState();
   const installState = useOverlayState();
   const builderState = useOverlayState();
+  const mediaState = useOverlayState();
 
   if (!data) {
     return <PageStatus icon={Blocks} title={t("title")} subtitle={t("subtitle")} state={page} filters={1} />;
@@ -66,11 +68,12 @@ export default function McpPage() {
 
   function add(choice: AddChoice) {
     if (choice === "build") openWith(builderState, () => {});
+    else if (choice === "media") openWith(mediaState, () => setEditing(null));
     else openWith(formState, () => setEditing(null));
   }
 
   const handlers = {
-    onEdit: (server: McpServerView) => openWith(formState, () => setEditing(server)),
+    onEdit: (server: McpServerView) => openWith(server.kind === "media" ? mediaState : formState, () => setEditing(server)),
     onAccess: (server: McpServerView) => openWith(accessState, () => setAccess(server)),
     onPermissions: (server: McpServerView) => openWith(permissionsState, () => setPermissions(server)),
     onInstall: (server: McpServerView) => openWith(installState, () => setInstall(server)),
@@ -120,6 +123,10 @@ export default function McpPage() {
                   <Sparkles size={16} aria-hidden />
                   {t("addChoice", { choice: "build" })}
                 </Button>
+                <Button variant="secondary" onPress={() => add("media")}>
+                  <ImagePlus size={16} aria-hidden />
+                  {t("addChoice", { choice: "media" })}
+                </Button>
                 <Button onPress={() => add("connect")}>
                   <Plug size={16} aria-hidden />
                   {t("addChoice", { choice: "connect" })}
@@ -136,8 +143,15 @@ export default function McpPage() {
           <ServerDialog
             key={`form-${dialogKey}`}
             state={formState}
-            editing={editing}
+            editing={editing?.kind === "media" ? null : editing}
             redirectUri={redirectUri}
+            onSaved={replace}
+          />
+          <MediaDialog
+            key={`media-${dialogKey}`}
+            state={mediaState}
+            editing={editing?.kind === "media" ? editing : null}
+            models={data.mediaModels}
             onSaved={replace}
           />
           <PermissionsDialog key={`permissions-${dialogKey}`} state={permissionsState} server={permissions} onSaved={replace} />

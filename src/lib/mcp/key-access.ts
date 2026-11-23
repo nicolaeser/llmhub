@@ -9,6 +9,7 @@ import { assignmentViews, mcpAssignmentSelect } from "@/lib/mcp/assignments";
 import { roleViews } from "@/lib/mcp/catalog";
 import { toolSpecs } from "@/lib/mcp/client";
 import { classifyTools, toolActionsOf } from "@/lib/mcp/resolve";
+import { serverKindOf } from "@/lib/mcp/toolset";
 import { managesMcpRules, visibleToCompany } from "@/lib/mcp/scope";
 import { keyMcpAccessSchema } from "@/schemas/mcp";
 import type { Prisma } from "@/generated/prisma/client";
@@ -123,7 +124,7 @@ async function accessOf(key: KeyRow, company: string | null): Promise<McpKeyAcce
         serverId: server.id,
         name: server.name,
         description: server.description,
-        kind: server.kind === "hosted" ? "hosted" : "remote",
+        kind: serverKindOf(server.kind),
         enabled: server.enabled,
         template: server.template,
         connected: !server.template || server.installations.some((row) => row.enabled),

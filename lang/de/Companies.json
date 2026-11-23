@@ -189,7 +189,8 @@
     "auth": "{type, select, none {Kein Key nötig} header {Header {header}} basic {Benutzername und Passwort} query {Adressparameter {header}} other {Bearer-Token}}",
     "tools": "{count, plural, =0 {Keine Tools} one {# Tool} other {# Tools}}",
     "action": "{state, select, connected {Verbindung bearbeiten} paused {Verbindung bearbeiten} other {Verbinden}}",
-    "hosted": "Aus API-Dokumentation"
+    "hosted": "Aus API-Dokumentation",
+    "mediaBadge": "Medien"
   },
   "reports": {
     "title": "Geplante Berichte ({count, number, integer})",

@@ -6,7 +6,7 @@ import { mcpAccess } from "@/lib/mcp/scope";
 import { installationViews, roleViews } from "@/lib/mcp/catalog";
 import { eraOf, toolSpecs } from "@/lib/mcp/client";
 import { toolActionsOf } from "@/lib/mcp/resolve";
-import { serverRecord } from "@/lib/mcp/toolset";
+import { serverKindOf, serverRecord } from "@/lib/mcp/toolset";
 import type { Prisma } from "@/generated/prisma/client";
 import type { AuthenticatedSession } from "@/types/auth";
 import type { McpOAuthView, McpServerStatus, McpServerView } from "@/types/mcp";
@@ -71,7 +71,8 @@ function statusOf(row: Pick<ServerRow, "enabled" | "lastError" | "refreshedAt" |
 }
 
 function shownUrl(url: string): string {
-  return URL.canParse(url) ? new URL(url).origin : "";
+  const origin = URL.canParse(url) ? new URL(url).origin : "";
+  return origin === "null" ? "" : origin;
 }
 
 function oauthView(row: ServerRow): McpOAuthView | null {
@@ -90,7 +91,7 @@ export function viewOf(row: ServerRow, canManage = true, companyId: string | nul
     id: row.id,
     name: row.name,
     description: row.description,
-    url: canManage ? row.url : shownUrl(row.url),
+    url: record.kind === "media" ? "" : canManage ? row.url : shownUrl(row.url),
     authType: record.authType,
     authHeader: row.authHeader,
     hasSecret: Boolean(row.authSecret),
@@ -99,7 +100,8 @@ export function viewOf(row: ServerRow, canManage = true, companyId: string | nul
     oauthScopes: row.oauthScopes,
     oauth: oauthView(row),
     internal: row.internal,
-    kind: row.kind === "hosted" ? "hosted" : "remote",
+    kind: serverKindOf(row.kind),
+    media: record.kind === "media" ? record.media : null,
     enabled: row.enabled,
     global: row.global,
     template: row.template,

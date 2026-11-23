@@ -113,6 +113,11 @@ export default function McpConnectionsCard({
                           {t("hosted")}
                         </Chip>
                       ) : null}
+                      {server.kind === "media" ? (
+                        <Chip size="sm" variant="soft">
+                          {t("mediaBadge")}
+                        </Chip>
+                      ) : null}
                       <Chip size="sm" variant="soft" color={stateColor(state)}>
                         {t("state", { state })}
                       </Chip>

@@ -3,6 +3,7 @@ import prisma from "@/lib/db/prisma";
 import { hostedAuth, mcpAuthFor, mcpCapabilities } from "@/lib/mcp/auth";
 import { McpClient, toolSpecs } from "@/lib/mcp/client";
 import { callHosted, hostedSpec } from "@/lib/mcp/hosted";
+import { callMedia, mediaSpec } from "@/lib/mcp/media";
 import { chainOf, classifyTools, effectiveServers, toolActionsOf } from "@/lib/mcp/resolve";
 import { bindTools } from "@/lib/mcp/tool-names";
 import { guardedFetch } from "@/lib/mcp/transport";
@@ -19,6 +20,7 @@ import type {
   McpExecutor,
   McpFetch,
   McpOAuthGrant,
+  McpServerKind,
   McpServerRecord,
   McpStaticAuthType,
   McpToolset,
@@ -57,6 +59,10 @@ export function isAssignmentMode(value: string): value is McpAssignmentMode {
   return value === "allow" || value === "block";
 }
 
+export function serverKindOf(kind: string | undefined): McpServerKind {
+  return kind === "hosted" || kind === "media" ? kind : "remote";
+}
+
 export function serverRecord(row: {
   id: string;
   name: string;
@@ -86,8 +92,9 @@ export function serverRecord(row: {
     oauthScopes: row.oauthScopes,
     transport: isTransport(row.transport) ? row.transport : "streamable_http",
     protocolVersion: row.protocolVersion,
-    kind: row.kind === "hosted" ? "hosted" : "remote",
+    kind: serverKindOf(row.kind),
     spec: hostedSpec(row.spec),
+    media: mediaSpec(row.spec),
   };
 }
 
@@ -245,6 +252,7 @@ export function createExecutor(
   records: Map<string, McpServerRecord>,
   fetchFor: (internal: boolean) => McpFetch = guardedFetch,
   remember: (serverId: string, connection: McpConnection) => Promise<void> = rememberConnection,
+  principal: Principal | null = null,
 ): McpExecutor {
   const sessions = new Map<string, McpClient>();
   const session = (record: McpServerRecord) => {
@@ -258,6 +266,7 @@ export function createExecutor(
     async call(bound, args, signal) {
       const record = records.get(bound.serverId);
       if (!record) return { text: "This tool is no longer available.", isError: true };
+      if (record.kind === "media") return callMedia(record.media, bound.tool.name, args, principal);
       if (record.kind === "hosted") {
         return callHosted(record.url, record.internal, record.spec, bound.tool.name, args, signal, fetchFor(record.internal), hostedAuth(record));
       }
@@ -288,5 +297,5 @@ export async function mcpToolsetFor(
   const { servers, records } = await loadMcpServers(chainOf(principal));
   const tools = bindTools(servers, reservedNames);
   if (!tools.length) return null;
-  return { tools, byName: new Map(tools.map((tool) => [tool.name, tool])), executor: createExecutor(records) };
+  return { tools, byName: new Map(tools.map((tool) => [tool.name, tool])), executor: createExecutor(records, guardedFetch, rememberConnection, principal) };
 }

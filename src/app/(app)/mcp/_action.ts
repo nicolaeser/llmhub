@@ -13,12 +13,14 @@ import { probeMcpServer, refreshMcpServer } from "@/lib/mcp/server-probe";
 import {
   createHostedMcpServer,
   createMcpServer,
+  createMediaMcpServer,
   deleteMcpServer,
   loadMcpServerList,
   loadMcpTargets,
   saveMcpAssignments,
   setMcpServerEnabled,
   updateMcpServer,
+  updateMediaMcpServer,
 } from "@/lib/mcp/servers";
 import { testFeatureModel } from "@/lib/models/feature-model-test";
 
@@ -72,6 +74,14 @@ export async function setBuilderModelAction(model: string) {
 
 export async function createHostedMcpServerAction(input: unknown) {
   return runAction(() => createHostedMcpServer(input));
+}
+
+export async function createMediaMcpServerAction(input: unknown) {
+  return runAction(() => createMediaMcpServer(input));
+}
+
+export async function updateMediaMcpServerAction(input: { id: string } & Record<string, unknown>) {
+  return runAction(() => updateMediaMcpServer(input));
 }
 
 export async function ensureMcpRolesAction(...args: Parameters<typeof ensureServerRoles>) {

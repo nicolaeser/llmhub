@@ -305,8 +305,8 @@
     "tools": "{count, plural, =0 {No tools} one {# tool} other {# tools}}",
     "action": "{state, select, connected {Edit connection} paused {Edit connection} other {Connect}}"
   },
-  "addChoice": "{choice, select, build {Build from API docs} other {Connect a server}}",
-  "addChoiceHint": "{choice, select, build {MCP Anything reads the documentation of any HTTP API and turns its calls into tools.} other {Add an MCP server that already runs, by its address.}}",
+  "addChoice": "{choice, select, build {Build from API docs} media {Add media tools} other {Connect a server}}",
+  "addChoiceHint": "{choice, select, build {MCP Anything reads the documentation of any HTTP API and turns its calls into tools.} media {Lets chat models create images, speech, and videos and transcribe audio with models on this gateway.} other {Add an MCP server that already runs, by its address.}}",
   "list": {
     "search": "Search servers",
     "filter": "Show",
@@ -323,5 +323,20 @@
     "menu": "Actions for {name}",
     "menuItem": "{action, select, edit {Edit} access {Who can use it} permissions {Roles and permissions} install {{company, select, true {Company API key} other {Company API keys}}} reload {Reload tools} signin {Sign in again} signout {Sign out} enable {Enable} disable {Disable} delete {Delete} other {{action}}}",
     "toggled": "{enabled, select, true {Server enabled} other {Server disabled}}"
+  },
+  "media": {
+    "title": "{mode, select, edit {Edit {name}} other {Add media tools}}",
+    "description": "Gives chat models tools that create and read media with models on this gateway. Pick a model for each tool you want; tools without a model are not offered. Results are stored as files and returned as links that open without an API key for 7 days.",
+    "mediaModel": "Media model",
+    "global": "Offer to everyone",
+    "globalHint": "When off, assign the server to companies, departments, or API keys under Who can use it.",
+    "badge": "Media",
+    "model": "{kind, select, image {Image model} speech {Speech model} video {Video model} other {Transcription model}}",
+    "modelHint": "{kind, select, image {Answers generate_image.} speech {Answers text_to_speech.} video {Answers generate_video and get_video.} other {Answers transcribe_audio.}} Callers need access to the model; usage and budgets count for the caller.",
+    "none": "None",
+    "noModels": "No enabled model with an API provider route is available yet. Add or enable one under Models before saving.",
+    "unavailableModel": "Disabled or removed; pick another model or None",
+    "voice": "Default voice",
+    "voiceHint": "Used when the model does not name a voice. Leave empty for alloy."
   }
 }

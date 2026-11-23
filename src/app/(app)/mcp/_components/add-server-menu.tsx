@@ -1,14 +1,15 @@
 "use client";
 
 import { Button, Description, Dropdown, Label } from "@heroui/react";
-import { ChevronDown, Plug, Plus, Sparkles, type LucideIcon } from "lucide-react";
+import { ChevronDown, ImagePlus, Plug, Plus, Sparkles, type LucideIcon } from "lucide-react";
 import { useTranslations } from "next-intl";
 
-export type AddChoice = "connect" | "build";
+export type AddChoice = "connect" | "build" | "media";
 
 const CHOICES: readonly { id: AddChoice; icon: LucideIcon }[] = [
   { id: "connect", icon: Plug },
   { id: "build", icon: Sparkles },
+  { id: "media", icon: ImagePlus },
 ];
 
 export default function AddServerMenu({ onChoose }: { onChoose: (choice: AddChoice) => void }) {
