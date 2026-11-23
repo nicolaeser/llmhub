@@ -465,6 +465,7 @@ export class MessagesStreamEncoder implements ChatStreamEncoder {
   private done = false;
   private signature = "";
   private searches = 0;
+  private held = "";
 
   constructor(
     private model: string,
@@ -500,8 +501,9 @@ export class MessagesStreamEncoder implements ChatStreamEncoder {
 
   private close(): string[] {
     if (this.open === null) return [];
+    const closed = this.open;
     const out: string[] = [];
-    if (this.open === "thinking") {
+    if (closed === "thinking") {
       out.push(
         sseEvent("content_block_delta", {
           type: "content_block_delta",
@@ -513,6 +515,7 @@ export class MessagesStreamEncoder implements ChatStreamEncoder {
     }
     this.open = null;
     out.push(sseEvent("content_block_stop", { type: "content_block_stop", index: this.index }));
+    if (closed === "tool_use") out.push(...this.release());
     return out;
   }
 
@@ -590,7 +593,17 @@ export class MessagesStreamEncoder implements ChatStreamEncoder {
     return out;
   }
 
+  private release(): string[] {
+    const held = this.held;
+    this.held = "";
+    return held.trim() ? [...this.text(held), ...this.close()] : [];
+  }
+
   private text(delta: string): string[] {
+    if (this.open === "tool_use") {
+      this.held += delta;
+      return [];
+    }
     const out: string[] = [];
     if (this.open !== "text") {
       out.push(...this.close());
