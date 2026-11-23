@@ -12,6 +12,7 @@ let cached: {
   policies: Map<string, AccountStrategy>;
   resets: AutoResetPolicies;
   apiFallback: ReadonlySet<string>;
+  keyConcurrency: ReadonlyMap<string, number>;
 } | null = null;
 
 async function routingState(now: number) {
@@ -24,6 +25,7 @@ async function routingState(now: number) {
     ),
     resets: autoResetPoliciesOf(rows),
     apiFallback: new Set(rows.filter((row) => row.apiFallback).map((row) => row.kind)),
+    keyConcurrency: new Map(rows.filter((row) => row.keyConcurrency > 0).map((row) => [row.kind, row.keyConcurrency])),
   };
   return cached;
 }
@@ -38,6 +40,10 @@ export async function autoResetPolicies(now = Date.now()): Promise<AutoResetPoli
 
 export async function apiFallbackKinds(now = Date.now()): Promise<ReadonlySet<string>> {
   return (await routingState(now)).apiFallback;
+}
+
+export async function keyConcurrencyLimits(now = Date.now()): Promise<ReadonlyMap<string, number>> {
+  return (await routingState(now)).keyConcurrency;
 }
 
 export function forgetAccountPolicies(): void {

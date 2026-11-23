@@ -113,7 +113,7 @@ export type ConcurrencyWaiter = { grant: () => void };
 
 export type ConcurrencyGate = { active: number; limit: number; queue: ConcurrencyWaiter[] };
 
-export type PermitOptions = { waitMs?: number; signal?: AbortSignal };
+export type PermitOptions = { waitMs?: number; signal?: AbortSignal; limited?: () => Error };
 
 export type ConcurrencyTarget = { key: string; limit: number; adaptive: boolean };
 

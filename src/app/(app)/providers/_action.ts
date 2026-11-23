@@ -11,6 +11,7 @@ import {
   saveApiFallback,
   saveAssignments,
   saveAutoReset,
+  saveKeyConcurrency,
   saveRefreshCap,
   saveWindowKickoff,
 } from "@/lib/providers/account-routing";
@@ -119,6 +120,10 @@ export async function saveRefreshCapAction(...args: Parameters<typeof saveRefres
 
 export async function saveApiFallbackAction(...args: Parameters<typeof saveApiFallback>) {
   return runAction(() => saveApiFallback(...args));
+}
+
+export async function saveKeyConcurrencyAction(...args: Parameters<typeof saveKeyConcurrency>) {
+  return runAction(() => saveKeyConcurrency(...args));
 }
 
 export async function redeemProviderResetAction(...args: Parameters<typeof redeemProviderReset>) {

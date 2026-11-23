@@ -18,6 +18,7 @@ import type {
   AccountRouting,
   AntigravityClientState,
   ApiFallbacks,
+  KeyConcurrencyLimits,
   KickoffModels,
   RefreshCaps,
   ProviderListActions,
@@ -80,6 +81,7 @@ export default function SubscriptionAccounts({
   const [kickoffModels, setKickoffModels] = useState<KickoffModels>({});
   const [refreshCaps, setRefreshCaps] = useState<RefreshCaps>({});
   const [apiFallback, setApiFallback] = useState<ApiFallbacks>({});
+  const [keyConcurrency, setKeyConcurrency] = useState<KeyConcurrencyLimits>({});
   const [access, setAccess] = useState<ProviderView | null>(null);
   const [accessKey, setAccessKey] = useState(0);
   const [settingsKind, setSettingsKind] = useState<SignInKind | null>(null);
@@ -107,6 +109,7 @@ export default function SubscriptionAccounts({
       setKickoffModels(res.kickoffModels);
       setRefreshCaps(res.refreshCaps);
       setApiFallback(res.apiFallback);
+      setKeyConcurrency(res.keyConcurrency);
     });
     return () => {
       active = false;
@@ -298,12 +301,14 @@ export default function SubscriptionAccounts({
             kickoffModels={kickoffModels}
             refreshCaps={refreshCaps}
             apiFallback={apiFallback}
+            keyConcurrency={keyConcurrency}
             antigravity={antigravity}
             onRouting={setRouting}
             onAutoReset={setAutoReset}
             onKickoff={setKickoff}
             onRefreshCaps={setRefreshCaps}
             onApiFallback={setApiFallback}
+            onKeyConcurrency={setKeyConcurrency}
             onAntigravity={onAntigravity}
           />
 

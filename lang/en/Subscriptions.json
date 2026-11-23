@@ -239,6 +239,17 @@
     "on": "API fallback for {provider} turned on",
     "off": "API fallback for {provider} turned off"
   },
+  "keyConcurrency": {
+    "title": "Parallel requests per API key",
+    "description": "How many requests one API key may run on {provider} accounts at the same time. Agents that start many subagents at once otherwise take every slot of the shared accounts and hit the provider's rate limit for everyone. Further requests from that key wait in line for up to a minute.",
+    "label": "Parallel requests per API key for {provider}",
+    "limit": "Requests per key at once",
+    "limitHint": "0 turns the limit off. At most {max, number}. Applies per server instance.",
+    "limitInvalid": "Enter a whole number from 0 to {max, number}.",
+    "save": "Save parallel request limit for {provider}",
+    "saveShort": "Save",
+    "saved": "Parallel request limit for {provider} saved"
+  },
   "routing": {
     "title": "Account distribution",
     "description": "How requests spread across these accounts. An account at a usage limit is skipped while another still has room.",

@@ -126,6 +126,8 @@ export type RefreshCaps = Partial<Record<SignInKind, number>>;
 
 export type ApiFallbacks = Partial<Record<SignInKind, boolean>>;
 
+export type KeyConcurrencyLimits = Partial<Record<SignInKind, number>>;
+
 export type AccountRoutingView = {
   routing: AccountRouting;
   autoReset: AutoResetPolicies;
@@ -133,6 +135,7 @@ export type AccountRoutingView = {
   kickoffModels: KickoffModels;
   refreshCaps: RefreshCaps;
   apiFallback: ApiFallbacks;
+  keyConcurrency: KeyConcurrencyLimits;
   canManage: boolean;
 };
 

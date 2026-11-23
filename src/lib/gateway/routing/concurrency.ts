@@ -4,6 +4,7 @@ import type { ConcurrencyGate, ConcurrencyWaiter, PermitOptions } from "@/types/
 
 export const CONCURRENCY_WAIT_MS = 5_000;
 export const CONCURRENCY_RETRY_MS = 1_000;
+export const KEY_CONCURRENCY_WAIT_MS = 60_000;
 const QUEUE_PER_PERMIT = 4;
 const MIN_QUEUE = 16;
 const MAX_QUEUE = 1_024;
@@ -23,6 +24,15 @@ export function concurrencyLimitedError(now = Date.now()): GateError {
   return new GateError(429, "concurrency_limit_exceeded", "too many concurrent requests for this provider; retry shortly", {
     retryAt: now + CONCURRENCY_RETRY_MS,
   });
+}
+
+export function keyConcurrencyLimitedError(kind: string, now = Date.now()): GateError {
+  return new GateError(
+    429,
+    "concurrency_limit_exceeded",
+    `too many concurrent requests from this API key on ${kind} accounts; retry shortly`,
+    { retryAt: now + CONCURRENCY_RETRY_MS },
+  );
 }
 
 export function isConcurrencyLimited(err: unknown): err is GateError {
@@ -69,7 +79,8 @@ export function takePermit(key: string, limit: number, opts: PermitOptions = {})
   wake(gate);
   if (gate.active < limit && !gate.queue.length) return Promise.resolve(permit(key, gate));
   const waitMs = opts.waitMs ?? CONCURRENCY_WAIT_MS;
-  if (waitMs <= 0 || gate.queue.length >= queueCapacity(limit)) return Promise.reject(concurrencyLimitedError());
+  const limited = opts.limited ?? concurrencyLimitedError;
+  if (waitMs <= 0 || gate.queue.length >= queueCapacity(limit)) return Promise.reject(limited());
   return new Promise((resolve, reject) => {
     const leave = () => {
       clearTimeout(timer);
@@ -83,13 +94,13 @@ export function takePermit(key: string, limit: number, opts: PermitOptions = {})
         resolve(permit(key, gate));
       },
     };
-    const giveUp = (err: GateError) => {
+    const giveUp = (err: Error) => {
       leave();
       drain(key, gate);
       reject(err);
     };
     const onAbort = () => giveUp(clientClosedError());
-    const timer = setTimeout(() => giveUp(concurrencyLimitedError()), waitMs);
+    const timer = setTimeout(() => giveUp(limited()), waitMs);
     opts.signal?.addEventListener("abort", onAbort, { once: true });
     gate.queue.push(waiter);
   });

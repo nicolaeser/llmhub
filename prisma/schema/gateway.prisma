@@ -305,6 +305,7 @@ model AccountRouting {
   kickoffModel     String   @default("")
   refreshCap       Int      @default(0)
   apiFallback      Boolean  @default(false)
+  keyConcurrency   Int      @default(0)
   updatedAt        DateTime @updatedAt
 }
 
