@@ -8,7 +8,7 @@ type FakeAccount = { id: string; kind: string; limit: number | null };
 delete process.env.REDIS_URL;
 
 const groups = new Map<string, ReturnType<typeof groupRow>>();
-const routing = { keyConcurrency: 0 };
+const routing = { keyConcurrency: 0, queries: 0 };
 let counter = 0;
 
 function groupRow(alias: string, accounts: FakeAccount[]) {
@@ -61,8 +61,12 @@ function groupRow(alias: string, accounts: FakeAccount[]) {
   deployment: { findMany: async () => [] },
   providerLogin: { findUnique: async () => null },
   accountRouting: {
-    findMany: async () =>
-      routing.keyConcurrency > 0 ? [{ kind: "claude", strategy: "smart", keyConcurrency: routing.keyConcurrency }] : [],
+    findMany: async () => {
+      routing.queries += 1;
+      return routing.keyConcurrency > 0
+        ? [{ kind: "claude", strategy: "smart", keyConcurrency: routing.keyConcurrency }]
+        : [];
+    },
   },
   setting: { findUnique: async () => null },
   gatewayAuditLog: { create: async () => ({}) },
@@ -97,9 +101,12 @@ function settle(ms = 20): Promise<void> {
 
 beforeEach(async () => {
   const { forgetAccountPolicies } = await import("@/lib/gateway/routing/account-routing");
+  const { forgetPins } = await import("@/lib/gateway/routing/account-affinity");
   const { resetConcurrencyGates } = await import("@/lib/gateway/routing/concurrency");
   routing.keyConcurrency = 0;
+  routing.queries = 0;
   forgetAccountPolicies();
+  forgetPins();
   resetConcurrencyGates();
 });
 
@@ -215,4 +222,32 @@ test("a full key queue answers with a key-specific concurrency error", async () 
   held();
   for (const waiter of waiters) (await waiter)();
   assert.deepEqual(await gate(key), { active: 0, queued: 0 });
+});
+
+test("acquireGroup skips accountRouting queries without a key or without sign-in routes", async () => {
+  const { acquireGroup, loadGroup } = await import("@/lib/gateway/routing/runtime");
+  const { writePin } = await import("@/lib/gateway/routing/account-affinity");
+
+  const api = fresh([{ kind: "openai", limit: null }]);
+  const apiGroup = await loadGroup(api.alias);
+  const apiWithKey = await acquireGroup(apiGroup, undefined, () => true, "", undefined, access("key-a"), null);
+  apiWithKey.release();
+  const apiWithoutAccess = await acquireGroup(apiGroup, undefined, () => true, "", undefined, null, null);
+  apiWithoutAccess.release();
+  assert.equal(routing.queries, 0);
+
+  const signIn = fresh([{ kind: "claude", limit: null }]);
+  const signInGroup = await loadGroup(signIn.alias);
+  await writePin("claude", "session-1", { providerId: signIn.ids[0]!, handoffAt: 0 }, null);
+  const run = { session: "session-1", tried: new Set<string>() };
+
+  const withoutAccess = await acquireGroup(signInGroup, undefined, () => true, "", undefined, null, run);
+  withoutAccess.release();
+  const withoutKeyId = await acquireGroup(signInGroup, undefined, () => true, "", undefined, access(""), run);
+  withoutKeyId.release();
+  assert.equal(routing.queries, 0);
+
+  const withKey = await acquireGroup(signInGroup, undefined, () => true, "", undefined, access("key-a"), run);
+  withKey.release();
+  assert.equal(routing.queries, 1);
 });

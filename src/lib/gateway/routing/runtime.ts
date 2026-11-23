@@ -74,6 +74,7 @@ import { money } from "@/lib/utils/money";
 const inflight = new Map<string, number>();
 const latencyEwma = new Map<string, number>();
 const roundRobinCursors = new Map<string, number>();
+const EMPTY_KEY_LIMITS: ReadonlyMap<string, number> = new Map();
 
 function mapDeployment(row: DeploymentRow): ResolvedDeployment {
   return {
@@ -494,7 +495,10 @@ export async function acquireGroup(
     throw wait ? waitingError(wait) : ERR_NO_HEALTHY;
   }
   const quota = await withinQuota(affordable(group, ready, cost));
-  const [targets, keyLimits] = await Promise.all([concurrencyTargets(quota.items), keyConcurrencyLimits()]);
+  const [targets, keyLimits] = await Promise.all([
+    concurrencyTargets(quota.items),
+    access?.keyId && quota.items.some(signInProvider) ? keyConcurrencyLimits() : EMPTY_KEY_LIMITS,
+  ]);
   const busy = busyDeployments(quota.items, targets, access, keyLimits);
   const open = quota.items.filter((dep) => !busy.has(dep.id));
   const offered = open.length ? open : quota.items;
