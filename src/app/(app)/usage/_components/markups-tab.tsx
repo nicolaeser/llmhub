@@ -24,6 +24,7 @@ import IconTile from "@/components/console/icon-tile";
 import PageStatus from "@/components/console/page-status";
 import RowCard, { RowCards, TABLE_FROM_LG } from "@/components/console/row-cards";
 import StatCard from "@/components/console/stat-card";
+import { columnSort, descriptorOf, sortByColumn, type ColumnSort } from "@/components/console/table-sort";
 import { useErrorToast } from "@/components/console/use-error-toast";
 import RowMenu from "@/components/providers/row-menu";
 import { deleteMarkupAction, loadMarkupsAction } from "../_action";
@@ -59,6 +60,7 @@ export default function MarkupsTab() {
   const [removing, setRemoving] = useState<MarkupView | null>(null);
   const [dialogKey, setDialogKey] = useState(0);
   const [query, setQuery] = useState("");
+  const [sort, setSort] = useState<ColumnSort | null>(null);
   const [deleting, startDelete] = useTransition();
   const formState = useOverlayState();
   const deleteState = useOverlayState();
@@ -163,6 +165,13 @@ export default function MarkupsTab() {
         [target(row).label, row.model || t("allModels"), row.note].some((text) => text.toLowerCase().includes(q)),
       )
     : sorted;
+  const shown = sortByColumn(markups, sort, (row, column) => {
+    if (column === "rule") return summary(row) || null;
+    if (column === "scope") return target(row).label || null;
+    if (column === "model") return row.model || null;
+    if (column === "percent") return row.percent;
+    return null;
+  });
   const margin = data.totals.sale - data.totals.purchase;
   const share = marginShare(data.totals.purchase, data.totals.sale);
   const createButton = data.canManage ? (
@@ -288,7 +297,7 @@ export default function MarkupsTab() {
           ) : (
             <>
               <RowCards label={t("title")}>
-                {markups.map((markup) => (
+                {shown.map((markup) => (
                   <RowCard
                     key={markup.id}
                     title={summary(markup)}
@@ -304,18 +313,47 @@ export default function MarkupsTab() {
               </RowCards>
               <Table aria-label={t("title")} className={TABLE_FROM_LG}>
                 <Table.ScrollContainer>
-                  <Table.Content aria-label={t("title")} className="min-w-3xl">
+                  <Table.Content
+                    aria-label={t("title")}
+                    className="min-w-3xl"
+                    sortDescriptor={sort ? descriptorOf(sort) : undefined}
+                    onSortChange={(descriptor) => setSort(columnSort(descriptor, sort))}
+                  >
                     <Table.Header>
-                      <Table.Column isRowHeader>{t("columns.rule")}</Table.Column>
-                      <Table.Column>{t("columns.scope")}</Table.Column>
-                      <Table.Column>{t("columns.model")}</Table.Column>
-                      <Table.Column>{t("columns.percent")}</Table.Column>
+                      <Table.Column isRowHeader allowsSorting id="rule">
+                        {({ sortDirection }) => (
+                          <Table.SortableColumnHeader sortDirection={sortDirection}>
+                            {t("columns.rule")}
+                          </Table.SortableColumnHeader>
+                        )}
+                      </Table.Column>
+                      <Table.Column allowsSorting id="scope">
+                        {({ sortDirection }) => (
+                          <Table.SortableColumnHeader sortDirection={sortDirection}>
+                            {t("columns.scope")}
+                          </Table.SortableColumnHeader>
+                        )}
+                      </Table.Column>
+                      <Table.Column allowsSorting id="model">
+                        {({ sortDirection }) => (
+                          <Table.SortableColumnHeader sortDirection={sortDirection}>
+                            {t("columns.model")}
+                          </Table.SortableColumnHeader>
+                        )}
+                      </Table.Column>
+                      <Table.Column allowsSorting id="percent">
+                        {({ sortDirection }) => (
+                          <Table.SortableColumnHeader sortDirection={sortDirection}>
+                            {t("columns.percent")}
+                          </Table.SortableColumnHeader>
+                        )}
+                      </Table.Column>
                       <Table.Column>
                         <span className="sr-only">{tCommon("actions")}</span>
                       </Table.Column>
                     </Table.Header>
                     <Table.Body>
-                      {markups.map((markup) => (
+                      {shown.map((markup) => (
                         <Table.Row key={markup.id} id={markup.id}>
                           <Table.Cell>
                             <div className="min-w-0 max-w-sm">

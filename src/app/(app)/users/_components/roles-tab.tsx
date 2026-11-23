@@ -16,6 +16,7 @@ import { useTranslations } from "next-intl";
 import ConfirmDialog from "@/components/console/confirm-dialog";
 import PageStatus from "@/components/console/page-status";
 import RowCard, { RowCards, TABLE_FROM_LG } from "@/components/console/row-cards";
+import { columnSort, descriptorOf, sortByColumn, type ColumnSort } from "@/components/console/table-sort";
 import { useActionData } from "@/lib/hooks/use-action-data";
 import { isActionFail } from "@/lib/http/action-result";
 import { isSubset, permissionCatalog, roleTemplateKeys, roleTemplates } from "@/lib/auth/permissions";
@@ -43,6 +44,7 @@ export default function RolesTab() {
   const roleName = useRoleName();
   const errorText = useSecurityError();
   const [editing, setEditing] = useState<RoleSummary | null>(null);
+  const [sort, setSort] = useState<ColumnSort | null>(null);
   const [editorKey, setEditorKey] = useState(0);
   const [target, setTarget] = useState<RoleSummary | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -192,6 +194,13 @@ export default function RolesTab() {
     return <PageStatus state={page} />;
   }
 
+  const shown = sortByColumn(data.roles, sort, (role, column) => {
+    if (column === "role") return role.name ?? role.templateKey;
+    if (column === "members") return role.memberCount;
+    if (column === "permissions") return role.permissions.length;
+    return null;
+  });
+
   return (
     <div>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
@@ -202,7 +211,7 @@ export default function RolesTab() {
         </Button>
       </div>
       <RowCards label={t("title")}>
-        {data.roles.map((role) => (
+        {shown.map((role) => (
           <RowCard
             key={role.id}
             title={roleName(role)}
@@ -224,15 +233,33 @@ export default function RolesTab() {
       </RowCards>
       <Table aria-label={t("title")} className={TABLE_FROM_LG}>
         <Table.ScrollContainer>
-          <Table.Content aria-label={t("title")}>
+          <Table.Content
+            aria-label={t("title")}
+            sortDescriptor={sort ? descriptorOf(sort) : undefined}
+            onSortChange={(descriptor) => setSort(columnSort(descriptor, sort))}
+          >
             <Table.Header>
-              <Table.Column isRowHeader>{t("columns.role")}</Table.Column>
-              <Table.Column>{t("columns.members")}</Table.Column>
-              <Table.Column>{t("columns.permissions")}</Table.Column>
+              <Table.Column isRowHeader allowsSorting id="role">
+                {({ sortDirection }) => (
+                  <Table.SortableColumnHeader sortDirection={sortDirection}>{t("columns.role")}</Table.SortableColumnHeader>
+                )}
+              </Table.Column>
+              <Table.Column allowsSorting id="members">
+                {({ sortDirection }) => (
+                  <Table.SortableColumnHeader sortDirection={sortDirection}>{t("columns.members")}</Table.SortableColumnHeader>
+                )}
+              </Table.Column>
+              <Table.Column allowsSorting id="permissions">
+                {({ sortDirection }) => (
+                  <Table.SortableColumnHeader sortDirection={sortDirection}>
+                    {t("columns.permissions")}
+                  </Table.SortableColumnHeader>
+                )}
+              </Table.Column>
               <Table.Column>{tCommon("actions")}</Table.Column>
             </Table.Header>
             <Table.Body>
-              {data.roles.map((role) => (
+              {shown.map((role) => (
                 <Table.Row key={role.id} id={role.id}>
                   <Table.Cell>
                     <div className="min-w-0">

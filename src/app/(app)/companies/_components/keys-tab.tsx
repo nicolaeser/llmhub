@@ -6,6 +6,7 @@ import { ChevronRight, KeyRound, Plus } from "lucide-react";
 import { useTranslations } from "next-intl";
 import EmptyState from "@/components/console/empty-state";
 import RowCard, { RowCards, TABLE_FROM_LG } from "@/components/console/row-cards";
+import { columnSort, descriptorOf, sortByColumn, type ColumnSort } from "@/components/console/table-sort";
 import KeyStateChip from "@/components/keys/key-state-chip";
 import { Link } from "@/i18n/routing";
 import { useClock } from "@/lib/hooks/use-clock";
@@ -29,6 +30,7 @@ export default function KeysTab({
   const tCommon = useTranslations("Common");
   const now = useClock(60_000);
   const [query, setQuery] = useState("");
+  const [sort, setSort] = useState<ColumnSort | null>(null);
   const keys = data.keys.filter((key) => matchesKey(key, query));
 
   const createButton = onCreate ? (
@@ -53,7 +55,7 @@ export default function KeysTab({
     );
   }
 
-  function owner(key: KeyNode) {
+  function ownerOf(key: KeyNode) {
     const kind = key.memberId ? "member" : key.projectId ? "project" : "internal";
     const name =
       kind === "member"
@@ -61,6 +63,11 @@ export default function KeysTab({
         : kind === "project"
           ? nodeAlias(data, "project", key.projectId)
           : nodeAlias(data, "user", key.userId);
+    return { kind, name };
+  }
+
+  function owner(key: KeyNode) {
+    const { kind, name } = ownerOf(key);
     return (
       <>
         <span className="block break-words">{name || tCommon("none")}</span>
@@ -74,6 +81,13 @@ export default function KeysTab({
     return <KeyStateChip state={keyState(key, now, pause)} pause={pause} />;
   };
   const meter = (key: KeyNode) => <SpendMeter budget={key.budget} label={t("usage", { alias: key.alias })} />;
+  const shown = sortByColumn(keys, sort, (key, column) => {
+    if (column === "key") return key.alias;
+    if (column === "owner") return ownerOf(key).name || null;
+    if (column === "status") return keyState(key, now, nodePause(data, { kind: "key", id: key.id }, now));
+    if (column === "budget") return key.budget.spend;
+    return null;
+  });
   const open = (key: KeyNode) => (
     <Link
       href={`/keys/${key.id}`}
@@ -110,7 +124,7 @@ export default function KeysTab({
       ) : (
         <>
           <RowCards label={t("title")}>
-            {keys.map((key) => (
+            {shown.map((key) => (
               <RowCard
                 key={key.id}
                 title={
@@ -130,18 +144,47 @@ export default function KeysTab({
           </RowCards>
           <Table aria-label={t("title")} className={TABLE_FROM_LG}>
             <Table.ScrollContainer>
-              <Table.Content aria-label={t("title")} className="min-w-3xl">
+              <Table.Content
+                aria-label={t("title")}
+                className="min-w-3xl"
+                sortDescriptor={sort ? descriptorOf(sort) : undefined}
+                onSortChange={(descriptor) => setSort(columnSort(descriptor, sort))}
+              >
                 <Table.Header>
-                  <Table.Column isRowHeader>{t("columns.key")}</Table.Column>
-                  <Table.Column>{t("columns.owner")}</Table.Column>
-                  <Table.Column>{tCommon("status")}</Table.Column>
-                  <Table.Column>{t("columns.budget")}</Table.Column>
+                  <Table.Column isRowHeader allowsSorting id="key">
+                    {({ sortDirection }) => (
+                      <Table.SortableColumnHeader sortDirection={sortDirection}>
+                        {t("columns.key")}
+                      </Table.SortableColumnHeader>
+                    )}
+                  </Table.Column>
+                  <Table.Column allowsSorting id="owner">
+                    {({ sortDirection }) => (
+                      <Table.SortableColumnHeader sortDirection={sortDirection}>
+                        {t("columns.owner")}
+                      </Table.SortableColumnHeader>
+                    )}
+                  </Table.Column>
+                  <Table.Column allowsSorting id="status">
+                    {({ sortDirection }) => (
+                      <Table.SortableColumnHeader sortDirection={sortDirection}>
+                        {tCommon("status")}
+                      </Table.SortableColumnHeader>
+                    )}
+                  </Table.Column>
+                  <Table.Column allowsSorting id="budget">
+                    {({ sortDirection }) => (
+                      <Table.SortableColumnHeader sortDirection={sortDirection}>
+                        {t("columns.budget")}
+                      </Table.SortableColumnHeader>
+                    )}
+                  </Table.Column>
                   <Table.Column>
                     <span className="sr-only">{tCommon("actions")}</span>
                   </Table.Column>
                 </Table.Header>
                 <Table.Body>
-                  {keys.map((key) => (
+                  {shown.map((key) => (
                     <Table.Row key={key.id} id={key.id}>
                       <Table.Cell>
                         <div className="min-w-0">

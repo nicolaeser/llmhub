@@ -10,6 +10,7 @@ import { isSignInKind } from "@/lib/gateway/upstreams/provider-kinds";
 import { LoadError, PageLoading } from "@/components/console/page-status";
 import StatCard from "@/components/console/stat-card";
 import RowCard, { RowCards, TABLE_FROM_LG } from "@/components/console/row-cards";
+import { columnSort, descriptorOf, sortByColumn, type ColumnSort, type SortValue } from "@/components/console/table-sort";
 import { Link } from "@/i18n/routing";
 import { useActionData } from "@/lib/hooks/use-action-data";
 import { isActionFail } from "@/lib/http/action-result";
@@ -36,6 +37,28 @@ const STATE_COLOR = {
   idle: "default",
 } as const satisfies Record<RouteState, "warning" | "danger" | "success" | "default">;
 
+function healthSortValue(row: DeploymentHealthView, column: string): SortValue {
+  if (column === "model") return row.alias;
+  if (column === "provider") return row.provider || row.kind;
+  if (column === "status") return routeState(row);
+  if (column === "attempts") return row.attempts;
+  if (column === "errorRate") return row.attempts ? row.errorRate : null;
+  if (column === "p50") return row.p50;
+  if (column === "p95") return row.p95;
+  if (column === "trips") return row.trips;
+  return null;
+}
+
+function sortableColumn(id: string, label: string, rowHeader = false) {
+  return (
+    <Table.Column allowsSorting id={id} isRowHeader={rowHeader}>
+      {({ sortDirection }) => (
+        <Table.SortableColumnHeader sortDirection={sortDirection}>{label}</Table.SortableColumnHeader>
+      )}
+    </Table.Column>
+  );
+}
+
 export default function ProviderHealth() {
   const t = useTranslations("ProviderHealth");
   const tProviders = useTranslations("Providers");
@@ -43,6 +66,7 @@ export default function ProviderHealth() {
   const format = useFormatter();
   const [minutes, setMinutes] = useState<number>(DEFAULT_WINDOW);
   const [showIdle, setShowIdle] = useState(false);
+  const [sort, setSort] = useState<ColumnSort | null>(null);
   const health = useActionData(() => loadProviderHealthAction(DEFAULT_WINDOW));
   const { data: report, setData: setReport, pending } = health;
 
@@ -70,6 +94,7 @@ export default function ProviderHealth() {
 
   const active = report.deployments.filter((row) => row.attempts > 0 || row.cooldownUntil);
   const visible = showIdle ? report.deployments : active;
+  const shown = sortByColumn(visible, sort, healthSortValue);
   const cooling = report.deployments.filter((row) => row.cooldownUntil).length;
   const attempts = report.deployments.reduce((sum, row) => sum + row.attempts, 0);
   const failures = report.deployments.reduce((sum, row) => sum + row.failures, 0);
@@ -214,7 +239,7 @@ export default function ProviderHealth() {
         </Card.Header>
         {visible.length ? (
           <RowCards label={t("endpoints")}>
-            {visible.map((row) => (
+            {shown.map((row) => (
               <RowCard
                 key={row.id}
                 variant="secondary"
@@ -248,23 +273,28 @@ export default function ProviderHealth() {
         )}
         <Table className={TABLE_FROM_LG}>
           <Table.ScrollContainer>
-            <Table.Content aria-label={t("endpoints")} className="min-w-4xl">
+            <Table.Content
+              aria-label={t("endpoints")}
+              className="min-w-4xl"
+              sortDescriptor={sort ? descriptorOf(sort) : undefined}
+              onSortChange={(descriptor) => setSort(columnSort(descriptor, sort))}
+            >
               <Table.Header>
-                <Table.Column isRowHeader>{t("columns.model")}</Table.Column>
-                <Table.Column>{t("columns.provider")}</Table.Column>
-                <Table.Column>{tCommon("status")}</Table.Column>
-                <Table.Column>{t("columns.attempts")}</Table.Column>
-                <Table.Column>{t("columns.errorRate")}</Table.Column>
-                <Table.Column>{t("columns.p50")}</Table.Column>
-                <Table.Column>{t("columns.p95")}</Table.Column>
-                <Table.Column>{t("columns.trips")}</Table.Column>
+                {sortableColumn("model", t("columns.model"), true)}
+                {sortableColumn("provider", t("columns.provider"))}
+                {sortableColumn("status", tCommon("status"))}
+                {sortableColumn("attempts", t("columns.attempts"))}
+                {sortableColumn("errorRate", t("columns.errorRate"))}
+                {sortableColumn("p50", t("columns.p50"))}
+                {sortableColumn("p95", t("columns.p95"))}
+                {sortableColumn("trips", t("columns.trips"))}
               </Table.Header>
               <Table.Body
                 renderEmptyState={() => (
                   <p className="py-6 text-center text-sm text-muted">{t("quiet", { n: report.minutes })}</p>
                 )}
               >
-                {visible.map((row) => (
+                {shown.map((row) => (
                   <Table.Row key={row.id} id={row.id}>
                     <Table.Cell>
                       <div className="font-medium">{row.alias}</div>

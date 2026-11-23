@@ -18,6 +18,7 @@ import { useFormatter, useTranslations } from "next-intl";
 import { useClock } from "@/lib/hooks/use-clock";
 import ConfirmDialog from "@/components/console/confirm-dialog";
 import RowCard, { RowCards, TABLE_FROM_LG } from "@/components/console/row-cards";
+import { columnSort, descriptorOf, sortByColumn, type ColumnSort } from "@/components/console/table-sort";
 import { listKnowledgeFilesAction, removeKnowledgeFileAction } from "../_action";
 import { isActionFail } from "@/lib/http/action-result";
 import { formatBytes } from "@/lib/utils/bytes";
@@ -50,6 +51,21 @@ const UPLOAD_COLOR = {
   failed: "danger",
 } as const satisfies Record<UploadStatus, "accent" | "success" | "danger">;
 
+function epoch(value: string | null | undefined): number | null {
+  if (!value) return null;
+  const ms = Date.parse(value);
+  return Number.isNaN(ms) ? null : ms;
+}
+
+function fileSortValue(file: VectorFileView, column: string) {
+  if (column === "name") return file.filename;
+  if (column === "status") return file.status;
+  if (column === "chunks") return file.chunkCount;
+  if (column === "size") return file.usageBytes;
+  if (column === "created") return epoch(file.createdAt);
+  return null;
+}
+
 function problemCode(body: unknown): string {
   const code = body && typeof body === "object" ? (body as { code?: unknown }).code : undefined;
   return typeof code === "string" && code ? code : "REQUEST_FAILED";
@@ -74,6 +90,7 @@ export default function FilesDialog({
   const format = useFormatter();
   const now = useClock(30_000);
   const [files, setFiles] = useState<VectorFileView[]>([]);
+  const [sort, setSort] = useState<ColumnSort | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadFailed, setLoadFailed] = useState(false);
   const [uploads, setUploads] = useState<UploadItem[]>([]);
@@ -86,6 +103,7 @@ export default function FilesDialog({
   const open = state.isOpen;
   const processing = files.some((file) => file.status === "in_progress");
   const limit = formatBytes(format, maxUploadBytes);
+  const shown = sortByColumn(files, sort, fileSortValue);
 
   useEffect(() => {
     let active = true;
@@ -337,7 +355,7 @@ export default function FilesDialog({
                 ) : (
                   <>
                     <RowCards label={t("files.title", { name: store.name })}>
-                      {files.map((file) => (
+                      {shown.map((file) => (
                         <RowCard
                           key={file.fileId}
                           variant="secondary"
@@ -360,17 +378,52 @@ export default function FilesDialog({
                     </RowCards>
                     <Table aria-label={t("files.title", { name: store.name })} className={TABLE_FROM_LG}>
                       <Table.ScrollContainer>
-                        <Table.Content aria-label={t("files.title", { name: store.name })} className="min-w-[40rem]">
+                        <Table.Content
+                          aria-label={t("files.title", { name: store.name })}
+                          className="min-w-[40rem]"
+                          sortDescriptor={sort ? descriptorOf(sort) : undefined}
+                          onSortChange={(descriptor) => setSort(columnSort(descriptor, sort))}
+                        >
                           <Table.Header>
-                            <Table.Column isRowHeader>{t("files.columns.name")}</Table.Column>
-                            <Table.Column>{t("files.columns.status")}</Table.Column>
-                            <Table.Column>{t("files.columns.chunks")}</Table.Column>
-                            <Table.Column>{t("files.columns.size")}</Table.Column>
-                            <Table.Column>{t("files.columns.created")}</Table.Column>
+                            <Table.Column isRowHeader allowsSorting id="name">
+                              {({ sortDirection }) => (
+                                <Table.SortableColumnHeader sortDirection={sortDirection}>
+                                  {t("files.columns.name")}
+                                </Table.SortableColumnHeader>
+                              )}
+                            </Table.Column>
+                            <Table.Column allowsSorting id="status">
+                              {({ sortDirection }) => (
+                                <Table.SortableColumnHeader sortDirection={sortDirection}>
+                                  {t("files.columns.status")}
+                                </Table.SortableColumnHeader>
+                              )}
+                            </Table.Column>
+                            <Table.Column allowsSorting id="chunks">
+                              {({ sortDirection }) => (
+                                <Table.SortableColumnHeader sortDirection={sortDirection}>
+                                  {t("files.columns.chunks")}
+                                </Table.SortableColumnHeader>
+                              )}
+                            </Table.Column>
+                            <Table.Column allowsSorting id="size">
+                              {({ sortDirection }) => (
+                                <Table.SortableColumnHeader sortDirection={sortDirection}>
+                                  {t("files.columns.size")}
+                                </Table.SortableColumnHeader>
+                              )}
+                            </Table.Column>
+                            <Table.Column allowsSorting id="created">
+                              {({ sortDirection }) => (
+                                <Table.SortableColumnHeader sortDirection={sortDirection}>
+                                  {t("files.columns.created")}
+                                </Table.SortableColumnHeader>
+                              )}
+                            </Table.Column>
                             <Table.Column>{tCommon("actions")}</Table.Column>
                           </Table.Header>
                           <Table.Body>
-                            {files.map((file) => (
+                            {shown.map((file) => (
                               <Table.Row key={file.fileId} id={file.fileId}>
                                 <Table.Cell>
                                   <div className="break-all font-medium">{file.filename}</div>

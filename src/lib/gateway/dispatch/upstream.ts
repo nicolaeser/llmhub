@@ -23,7 +23,15 @@ import {
   withProject,
 } from "@/lib/gateway/upstreams/antigravity";
 import { chatToCodex, codexCompletion } from "@/lib/gateway/upstreams/codex";
-import { googlePath, googlePayload, googleResponse, googleWire, keepsThinkingBlocks } from "@/lib/gateway/upstreams/google";
+import {
+  googlePath,
+  googlePayload,
+  googleResponse,
+  googleWire,
+  keepsThinkingBlocks,
+  requireVertexEmbeddingPredictions,
+  vertexEmbeddingChunks,
+} from "@/lib/gateway/upstreams/google";
 import { forgetVertexToken } from "@/lib/gateway/upstreams/vertex-credentials";
 import { deploymentAuth } from "@/lib/gateway/upstreams/credentials";
 import { DEVIN_CHAT_PATH, windowReset } from "@/lib/gateway/upstreams/devin-account";
@@ -295,6 +303,7 @@ function decodeBody(
   json: unknown,
   raw: Uint8Array,
   model: string,
+  encodingFormat = "",
 ): unknown {
   if (speaksAnthropic(dep.kind) && nativeChatPath(path)) {
     const rec = asRecord(json);
@@ -309,9 +318,36 @@ function decodeBody(
   if (speaksMuse(dep.kind) && nativeChatPath(path)) {
     return museCompletion(new TextDecoder().decode(raw), model, museUsageObserver(dep));
   }
-  if (speaksGoogle(dep.kind)) return googleResponse(dep.kind, path, model, new TextDecoder().decode(raw), json);
+  if (speaksGoogle(dep.kind)) return googleResponse(dep.kind, path, model, new TextDecoder().decode(raw), json, encodingFormat);
   if (dep.kind === "devin" && nativeChatPath(path)) return devinCompletion(raw, model, devinResetLookup(dep));
   return json;
+}
+
+type UpstreamReply = { status: number; json: unknown; headers: Headers; raw: Uint8Array };
+
+function parsedJson(text: string): unknown {
+  const parsed = parseJsonOrNull(text);
+  if (parsed !== null) return parsed;
+  return text.trim() === "null" ? null : {};
+}
+
+function upstreamJson(raw: Uint8Array, ok: boolean, contentType: string): unknown {
+  const text = new TextDecoder().decode(raw);
+  if (contentType.includes("json")) return parsedJson(text);
+  if (!ok) return parseJsonOrNull(text) ?? {};
+  return {};
+}
+
+async function readUpstream(dep: ResolvedDeployment, res: Response): Promise<UpstreamReply> {
+  observeUpstreamLimits(dep, res.headers);
+  observeUpstreamStatus(dep, res.status);
+  const raw = new Uint8Array(await res.arrayBuffer());
+  return { status: res.status, json: upstreamJson(raw, res.ok, res.headers.get("content-type") ?? ""), headers: res.headers, raw };
+}
+
+function decodeUpstream(dep: ResolvedDeployment, path: string, body: JsonMap | null | undefined, parsed: UpstreamReply, model: string): UpstreamReply {
+  if (parsed.status < 200 || parsed.status >= 300) return parsed;
+  return { ...parsed, json: decodeBody(dep, path, parsed.json, parsed.raw, model, asString(body?.encoding_format)) };
 }
 
 export async function proxyJson(input: {
@@ -339,38 +375,34 @@ export async function proxyJson(input: {
   } else if (input.contentType) {
     headers["Content-Type"] = input.contentType;
   }
-  const init: RequestInit = {
-    method,
-    headers,
-    signal: AbortSignal.timeout(input.timeoutMs && input.timeoutMs > 0 ? input.timeoutMs : 120_000),
-  };
-  if (input.rawBody != null) {
-    init.body = input.rawBody;
-  } else if (input.body && method !== "GET" && method !== "HEAD") {
-    init.body = upstreamBody(
-      input.dep,
-      input.auth,
-      input.path,
-      prepareBody(input.dep, input.path, input.body, input.groupStrategy, input.headers),
-    );
-  }
-  const res = await fetch(url, init);
-  observeUpstreamLimits(input.dep, res.headers);
-  observeUpstreamStatus(input.dep, res.status);
-  const raw = new Uint8Array(await res.arrayBuffer());
-  let json: unknown = {};
-  const ct = res.headers.get("content-type") ?? "";
-  if (ct.includes("json")) {
-    try {
-      json = JSON.parse(new TextDecoder().decode(raw));
-    } catch {
-      json = {};
+  const signal = AbortSignal.timeout(input.timeoutMs && input.timeoutMs > 0 ? input.timeoutMs : 120_000);
+  const payload =
+    input.rawBody == null && input.body && method !== "GET" && method !== "HEAD"
+      ? prepareBody(input.dep, input.path, input.body, input.groupStrategy, input.headers)
+      : null;
+  const chunks = payload ? vertexEmbeddingChunks(input.dep.kind, input.path, model, payload) : null;
+  if (chunks) {
+    const predictions: unknown[] = [];
+    let headersOut: Headers | null = null;
+    for (const chunk of chunks) {
+      const res = await fetch(url, { method, headers, signal, body: upstreamBody(input.dep, input.auth, input.path, chunk) });
+      const parsed = await readUpstream(input.dep, res);
+      if (!res.ok) return parsed;
+      const batch = requireVertexEmbeddingPredictions(input.dep.kind, input.path, chunk, parsed.json);
+      if (!batch) throw new GateError(502, "upstream_error", "Vertex AI returned no embeddings");
+      predictions.push(...batch);
+      headersOut = parsed.headers;
     }
-  } else if (!res.ok) {
-    json = parseJsonOrNull(new TextDecoder().decode(raw)) ?? {};
+    const merged = { predictions };
+    const raw = new TextEncoder().encode(JSON.stringify(merged));
+    return decodeUpstream(input.dep, input.path, input.body, { status: 200, json: merged, headers: headersOut ?? new Headers(), raw }, model);
   }
-  if (res.ok) json = decodeBody(input.dep, input.path, json, raw, model);
-  return { status: res.status, json, headers: res.headers, raw };
+  const init: RequestInit = { method, headers, signal };
+  if (input.rawBody != null) init.body = input.rawBody;
+  else if (payload) init.body = upstreamBody(input.dep, input.auth, input.path, payload);
+  const parsed = await readUpstream(input.dep, await fetch(url, init));
+  if (payload && parsed.status >= 200 && parsed.status < 300) requireVertexEmbeddingPredictions(input.dep.kind, input.path, payload, parsed.json);
+  return decodeUpstream(input.dep, input.path, input.body, parsed, model);
 }
 
 async function proxyRaw(input: {

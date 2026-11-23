@@ -6,6 +6,7 @@ import { Pencil, Plus, Send, Trash2 } from "lucide-react";
 import { useFormatter, useTranslations } from "next-intl";
 import ConfirmDialog from "@/components/console/confirm-dialog";
 import RowCard, { RowCards, TABLE_FROM_LG } from "@/components/console/row-cards";
+import { columnSort, descriptorOf, sortByColumn, type ColumnSort } from "@/components/console/table-sort";
 import { isActionFail } from "@/lib/http/action-result";
 import type { MemberNode } from "@/types/structure";
 import type { UsageReportView } from "@/types/reports";
@@ -38,6 +39,7 @@ export default function ReportsCard({
   const [editing, setEditing] = useState<UsageReportView | null>(null);
   const [dialogKey, setDialogKey] = useState(0);
   const [busy, setBusy] = useState("");
+  const [sort, setSort] = useState<ColumnSort | null>(null);
   const [pending, start] = useTransition();
 
   function openDialog(report: UsageReportView | null) {
@@ -174,6 +176,12 @@ export default function ReportsCard({
     );
   }
 
+  const shown = sortByColumn(reports, sort, (report, column) => {
+    if (column === "schedule") return `${report.cadence} ${report.format}`;
+    if (column === "recipients") return report.recipients.length ? report.recipients.join(", ") : null;
+    return null;
+  });
+
   return (
     <Card>
       <Card.Header className="flex-row flex-wrap items-start justify-between gap-3">
@@ -202,7 +210,7 @@ export default function ReportsCard({
         ) : (
           <>
             <RowCards label={t("title", { count: reports.length })}>
-              {reports.map((report) => (
+              {shown.map((report) => (
                 <RowCard
                   key={report.id}
                   variant="secondary"
@@ -219,14 +227,31 @@ export default function ReportsCard({
             </RowCards>
             <Table className={TABLE_FROM_LG}>
               <Table.ScrollContainer>
-                <Table.Content aria-label={t("title", { count: reports.length })} className="min-w-xl">
+                <Table.Content
+                  aria-label={t("title", { count: reports.length })}
+                  className="min-w-xl"
+                  sortDescriptor={sort ? descriptorOf(sort) : undefined}
+                  onSortChange={(descriptor) => setSort(columnSort(descriptor, sort))}
+                >
                   <Table.Header>
-                    <Table.Column isRowHeader>{t("columns.schedule")}</Table.Column>
-                    <Table.Column>{t("columns.recipients")}</Table.Column>
+                    <Table.Column isRowHeader allowsSorting id="schedule">
+                      {({ sortDirection }) => (
+                        <Table.SortableColumnHeader sortDirection={sortDirection}>
+                          {t("columns.schedule")}
+                        </Table.SortableColumnHeader>
+                      )}
+                    </Table.Column>
+                    <Table.Column allowsSorting id="recipients">
+                      {({ sortDirection }) => (
+                        <Table.SortableColumnHeader sortDirection={sortDirection}>
+                          {t("columns.recipients")}
+                        </Table.SortableColumnHeader>
+                      )}
+                    </Table.Column>
                     {canReport ? <Table.Column>{tCommon("actions")}</Table.Column> : null}
                   </Table.Header>
                   <Table.Body>
-                    {reports.map((report) => (
+                    {shown.map((report) => (
                       <Table.Row key={report.id} id={report.id}>
                         <Table.Cell>
                           <div className="min-w-0">

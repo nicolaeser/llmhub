@@ -10,6 +10,7 @@ import SubscriptionBadge, { InternalBadge } from "@/components/console/subscript
 import EmptyState from "@/components/console/empty-state";
 import PageStatus from "@/components/console/page-status";
 import RowCard, { RowCards, TABLE_FROM_LG } from "@/components/console/row-cards";
+import { columnSort, descriptorOf, sortByColumn, type ColumnSort } from "@/components/console/table-sort";
 import { useErrorToast } from "@/components/console/use-error-toast";
 import RowMenu, { type RowMenuItem } from "@/components/providers/row-menu";
 import { deleteModelGroupAction, loadModelsAction, setModelGroupEnabledAction } from "../_action";
@@ -42,6 +43,7 @@ export default function GroupsTab() {
   const [, startChange] = useTransition();
   const groupParam = useSearchParam("group");
   const [typed, setTyped] = useState<string | null>(null);
+  const [sort, setSort] = useState<ColumnSort | null>(null);
   const query = typed ?? groupParam ?? "";
   const formState = useOverlayState();
   const removeState = useOverlayState();
@@ -72,7 +74,19 @@ export default function GroupsTab() {
     }),
   }));
   const searchable = groups.length >= SEARCH_FROM || Boolean(groupParam);
-  const shown = rows.filter((row) => groupMatches(row.group, row.text.summary.targets, searchable ? query : ""));
+  const matched = rows.filter((row) => groupMatches(row.group, row.text.summary.targets, searchable ? query : ""));
+  const shown = sortByColumn(matched, sort, (row, column) => {
+    if (column === "alias") return row.group.alias;
+    if (column === "routing") return row.text.summary.endpoints;
+    if (column === "enabled") return row.group.enabled;
+    if (column === "context") {
+      const range = contextRange(
+        row.group.deployments.map((dep) => contextWindowOf(providers, dep.providerId, dep.model)),
+      );
+      return range.range === "none" ? null : range.max;
+    }
+    return null;
+  });
 
   function search(value: string) {
     setTyped(value);
@@ -306,12 +320,41 @@ export default function GroupsTab() {
               </RowCards>
               <Table aria-label={t("tab", { tab: "groups" })} className={TABLE_FROM_LG}>
                 <Table.ScrollContainer>
-                  <Table.Content aria-label={t("tab", { tab: "groups" })} className="min-w-3xl">
+                  <Table.Content
+                    aria-label={t("tab", { tab: "groups" })}
+                    className="min-w-3xl"
+                    sortDescriptor={sort ? descriptorOf(sort) : undefined}
+                    onSortChange={(descriptor) => setSort(columnSort(descriptor, sort))}
+                  >
                     <Table.Header>
-                      <Table.Column isRowHeader>{t("columns.alias")}</Table.Column>
-                      <Table.Column>{t("columns.routing")}</Table.Column>
-                      <Table.Column>{t("columns.context")}</Table.Column>
-                      <Table.Column>{t("columns.enabled")}</Table.Column>
+                      <Table.Column isRowHeader allowsSorting id="alias">
+                        {({ sortDirection }) => (
+                          <Table.SortableColumnHeader sortDirection={sortDirection}>
+                            {t("columns.alias")}
+                          </Table.SortableColumnHeader>
+                        )}
+                      </Table.Column>
+                      <Table.Column allowsSorting id="routing">
+                        {({ sortDirection }) => (
+                          <Table.SortableColumnHeader sortDirection={sortDirection}>
+                            {t("columns.routing")}
+                          </Table.SortableColumnHeader>
+                        )}
+                      </Table.Column>
+                      <Table.Column allowsSorting id="context">
+                        {({ sortDirection }) => (
+                          <Table.SortableColumnHeader sortDirection={sortDirection}>
+                            {t("columns.context")}
+                          </Table.SortableColumnHeader>
+                        )}
+                      </Table.Column>
+                      <Table.Column allowsSorting id="enabled">
+                        {({ sortDirection }) => (
+                          <Table.SortableColumnHeader sortDirection={sortDirection}>
+                            {t("columns.enabled")}
+                          </Table.SortableColumnHeader>
+                        )}
+                      </Table.Column>
                       {canManage ? <Table.Column>{tCommon("actions")}</Table.Column> : null}
                     </Table.Header>
                     <Table.Body>

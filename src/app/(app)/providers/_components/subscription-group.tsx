@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { Button, Chip, Skeleton, Table } from "@heroui/react";
 import {
   Download,
@@ -21,6 +22,7 @@ import { useFormatter, useTranslations } from "next-intl";
 import { useClock } from "@/lib/hooks/use-clock";
 import IconTile from "@/components/console/icon-tile";
 import RowCard, { RowCards, TABLE_FROM_LG } from "@/components/console/row-cards";
+import { columnSort, descriptorOf, sortByColumn, type ColumnSort, type SortValue } from "@/components/console/table-sort";
 import { PlanBadge } from "@/components/console/subscription-badge";
 import { kindIcon } from "@/components/providers/kind-icons";
 import { limitsFromTraffic, reportsLimits } from "@/lib/gateway/upstreams/provider-kinds";
@@ -57,6 +59,27 @@ const MENU_ICONS = {
 } as const;
 
 type GroupAction = "settings" | "link";
+
+function subscriptionSortValue(account: AccountRow, column: string): SortValue {
+  if (column === "account") return account.title;
+  if (column === "status") return account.state;
+  if (column === "access") return account.assignments;
+  if (column === "lastUsed") return account.lastUsed;
+  if (column === "usage" && account.groups.length > 0) {
+    return Math.max(...account.groups.map((group) => group.usedPercent));
+  }
+  return null;
+}
+
+function sortableColumn(id: string, label: string, rowHeader = false) {
+  return (
+    <Table.Column allowsSorting id={id} isRowHeader={rowHeader}>
+      {({ sortDirection }) => (
+        <Table.SortableColumnHeader sortDirection={sortDirection}>{label}</Table.SortableColumnHeader>
+      )}
+    </Table.Column>
+  );
+}
 
 export default function SubscriptionGroup({
   kind,
@@ -103,11 +126,16 @@ export default function SubscriptionGroup({
   const tCommon = useTranslations("Common");
   const format = useFormatter();
   const now = useClock(60_000);
+  const [sort, setSort] = useState<ColumnSort | null>(null);
   const name = tProviders("kindShort", { kind });
   const StrategyIcon = STRATEGY_ICONS[strategy];
   const titleId = `subscriptions-${kind}`;
   const reports = reportsLimits(kind);
-  const accounts = rows.map((row) => ({ row, account: accountRow(row, limits[row.id], reports, now.getTime()) }));
+  const accounts = sortByColumn(
+    rows.map((row) => ({ row, account: accountRow(row, limits[row.id], reports, now.getTime()) })),
+    sort,
+    ({ account }, column) => subscriptionSortValue(account, column),
+  );
   const keyLabels = keyUsage?.keys ?? {};
   const segmentName = useSegmentName(keyLabels);
   const shortSegmentName = useSegmentName(keyLabels, true);
@@ -392,13 +420,18 @@ export default function SubscriptionGroup({
       </RowCards>
       <Table aria-label={t("group.label", { provider: name })} className={TABLE_FROM_LG}>
         <Table.ScrollContainer>
-          <Table.Content aria-label={t("group.label", { provider: name })} className="min-w-[62rem]">
+          <Table.Content
+            aria-label={t("group.label", { provider: name })}
+            className="min-w-[62rem]"
+            sortDescriptor={sort ? descriptorOf(sort) : undefined}
+            onSortChange={(descriptor) => setSort(columnSort(descriptor, sort))}
+          >
             <Table.Header>
-              <Table.Column isRowHeader>{t("columns.account")}</Table.Column>
-              <Table.Column>{tCommon("status")}</Table.Column>
-              <Table.Column>{t("columns.usage")}</Table.Column>
-              <Table.Column>{t("columns.access")}</Table.Column>
-              <Table.Column>{t("columns.lastUsed")}</Table.Column>
+              {sortableColumn("account", t("columns.account"), true)}
+              {sortableColumn("status", tCommon("status"))}
+              {sortableColumn("usage", t("columns.usage"))}
+              {sortableColumn("access", t("columns.access"))}
+              {sortableColumn("lastUsed", t("columns.lastUsed"))}
               <Table.Column>{tCommon("actions")}</Table.Column>
             </Table.Header>
             <Table.Body>

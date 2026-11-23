@@ -22,6 +22,7 @@ import ConfirmDialog from "@/components/console/confirm-dialog";
 import EmptyState from "@/components/console/empty-state";
 import PageStatus from "@/components/console/page-status";
 import RowCard, { RowCards, TABLE_FROM_LG } from "@/components/console/row-cards";
+import { columnSort, descriptorOf, sortByColumn, type ColumnSort } from "@/components/console/table-sort";
 import { useErrorToast } from "@/components/console/use-error-toast";
 import { Link, useRouter } from "@/i18n/routing";
 import { logsHref } from "@/lib/gateway/request-logs/request-log-query";
@@ -69,6 +70,7 @@ export default function UsersTab() {
   const router = useRouter();
   const company = useSearchParam("company") ?? "";
   const [query, setQuery] = useState("");
+  const [sort, setSort] = useState<ColumnSort | null>(null);
   const [target, setTarget] = useState<ConsoleUser | null>(null);
   const [budgetFor, setBudgetFor] = useState<(BudgetDetail & { alias: string }) | null>(null);
   const [dialogKey, setDialogKey] = useState(0);
@@ -169,6 +171,18 @@ export default function UsersTab() {
     return <PageStatus state={page} />;
   }
 
+  const shown = sortByColumn(filtered, sort, (user, column) => {
+    if (column === "user") return user.username;
+    if (column === "role") return user.isOwner ? "owner" : (user.roleName ?? user.roleTemplateKey);
+    if (column === "access") return user.orgId ? user.orgAlias || null : "platform";
+    if (column === "security") return user.twoFactorEnabled;
+    if (column === "status") return user.blocked ? "blocked" : "active";
+    if (column === "lastActive") {
+      const parsed = Date.parse(user.lastActive ?? "");
+      return Number.isNaN(parsed) ? null : parsed;
+    }
+    return null;
+  });
   const { canManage, canSecure, canBudget, canSeeCompanies, insights, selfId } = data;
   const showActions = hasUserActions(data);
   const companyAlias =
@@ -411,7 +425,7 @@ export default function UsersTab() {
           ) : (
             <>
               <RowCards label={t("title")}>
-                {filtered.map((user) => (
+                {shown.map((user) => (
                   <RowCard
                     key={user.id}
                     title={user.username}
@@ -444,18 +458,58 @@ export default function UsersTab() {
               </RowCards>
               <Table aria-label={t("title")} className={TABLE_FROM_LG}>
                 <Table.ScrollContainer>
-                  <Table.Content aria-label={t("title")}>
+                  <Table.Content
+                    aria-label={t("title")}
+                    sortDescriptor={sort ? descriptorOf(sort) : undefined}
+                    onSortChange={(descriptor) => setSort(columnSort(descriptor, sort))}
+                  >
                     <Table.Header>
-                      <Table.Column isRowHeader>{t("columns.user")}</Table.Column>
-                      <Table.Column>{t("columns.role")}</Table.Column>
-                      <Table.Column>{t("columns.access")}</Table.Column>
-                      <Table.Column>{t("columns.security")}</Table.Column>
-                      <Table.Column>{tCommon("status")}</Table.Column>
-                      <Table.Column>{t("columns.lastActive")}</Table.Column>
+                      <Table.Column isRowHeader allowsSorting id="user">
+                        {({ sortDirection }) => (
+                          <Table.SortableColumnHeader sortDirection={sortDirection}>
+                            {t("columns.user")}
+                          </Table.SortableColumnHeader>
+                        )}
+                      </Table.Column>
+                      <Table.Column allowsSorting id="role">
+                        {({ sortDirection }) => (
+                          <Table.SortableColumnHeader sortDirection={sortDirection}>
+                            {t("columns.role")}
+                          </Table.SortableColumnHeader>
+                        )}
+                      </Table.Column>
+                      <Table.Column allowsSorting id="access">
+                        {({ sortDirection }) => (
+                          <Table.SortableColumnHeader sortDirection={sortDirection}>
+                            {t("columns.access")}
+                          </Table.SortableColumnHeader>
+                        )}
+                      </Table.Column>
+                      <Table.Column allowsSorting id="security">
+                        {({ sortDirection }) => (
+                          <Table.SortableColumnHeader sortDirection={sortDirection}>
+                            {t("columns.security")}
+                          </Table.SortableColumnHeader>
+                        )}
+                      </Table.Column>
+                      <Table.Column allowsSorting id="status">
+                        {({ sortDirection }) => (
+                          <Table.SortableColumnHeader sortDirection={sortDirection}>
+                            {tCommon("status")}
+                          </Table.SortableColumnHeader>
+                        )}
+                      </Table.Column>
+                      <Table.Column allowsSorting id="lastActive">
+                        {({ sortDirection }) => (
+                          <Table.SortableColumnHeader sortDirection={sortDirection}>
+                            {t("columns.lastActive")}
+                          </Table.SortableColumnHeader>
+                        )}
+                      </Table.Column>
                       {showActions ? <Table.Column>{tCommon("actions")}</Table.Column> : null}
                     </Table.Header>
                     <Table.Body>
-                      {filtered.map((user) => (
+                      {shown.map((user) => (
                         <Table.Row key={user.id} id={user.id}>
                           <Table.Cell>
                             <div className="min-w-0">

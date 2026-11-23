@@ -1,11 +1,13 @@
 "use client";
 
+import { useState } from "react";
 import { Button, Table } from "@heroui/react";
 import { Activity, Coins, FileText, ScrollText } from "lucide-react";
 import { useFormatter, useTranslations } from "next-intl";
 import { Link } from "@/i18n/routing";
 import EmptyState from "@/components/console/empty-state";
 import RowCard, { RowCards, TABLE_FROM_LG } from "@/components/console/row-cards";
+import { columnSort, descriptorOf, sortByColumn, type ColumnSort } from "@/components/console/table-sort";
 import type { loadLogsAction } from "../_action";
 import type { LogKind, RequestLogRow } from "@/types/logs";
 import GuardrailChip from "./guardrail-chip";
@@ -15,6 +17,11 @@ import StatusChip from "./status-chip";
 
 function guarded(row: RequestLogRow): boolean {
   return row.outcome === "guardrail_blocked" || row.guardInput.length > 0 || row.guardOutput.length > 0;
+}
+
+function epochMs(value: string): number | null {
+  const parsed = Date.parse(value);
+  return Number.isNaN(parsed) ? null : parsed;
 }
 
 export type LogsPayload = Exclude<Awaited<ReturnType<typeof loadLogsAction>>, { ok: false }>;
@@ -31,6 +38,9 @@ export default function LogTable({
   const t = useTranslations("Logs");
   const tCommon = useTranslations("Common");
   const format = useFormatter();
+  const [requestSort, setRequestSort] = useState<ColumnSort | null>(null);
+  const [spendSort, setSpendSort] = useState<ColumnSort | null>(null);
+  const [auditSort, setAuditSort] = useState<ColumnSort | null>(null);
 
   function time(value: string) {
     const date = new Date(value);
@@ -133,12 +143,40 @@ export default function LogTable({
     );
   }
 
+  const requestRows = sortByColumn(logs.requests, requestSort, (row, column) => {
+    if (column === "model") return row.model || null;
+    if (column === "time") return epochMs(row.createdAt);
+    if (column === "caller") return keyLabel(row);
+    if (column === "status") return row.status;
+    if (column === "usage") return row.promptTokens + row.completionTokens;
+    if (column === "pii") {
+      if (!hasChecks(row)) return null;
+      return row.piiMode || row.outcome || null;
+    }
+    return null;
+  });
+  const spendRows = sortByColumn(logs.spend, spendSort, (row, column) => {
+    if (column === "time") return epochMs(row.createdAt);
+    if (column === "model") return row.model || null;
+    if (column === "spend") return row.spend;
+    if (column === "tokens") return row.promptTokens + row.completionTokens;
+    return null;
+  });
+  const auditRows = sortByColumn(logs.audit, auditSort, (row, column) => {
+    if (column === "time") return epochMs(row.createdAt);
+    if (column === "actor") return row.actor || null;
+    if (column === "action") return row.action || null;
+    if (column === "object") return `${row.objectType} ${row.objectId}`.trim() || null;
+    if (column === "changes") return row.after || row.before || null;
+    return null;
+  });
+
   if (kind === "requests") {
     if (!logs.requests.length) return <EmptyState icon={Activity} title={t("emptyRequests")} description={t("emptyRequestsHint")} />;
     return (
       <>
         <RowCards label={t("tabs.requests")}>
-          {logs.requests.map((row) => (
+          {requestRows.map((row) => (
             <RowCard
               key={row.id}
               title={<span className="break-words">{row.model}</span>}
@@ -167,20 +205,49 @@ export default function LogTable({
         </RowCards>
         <Table aria-label={t("tabs.requests")} className={TABLE_FROM_LG}>
           <Table.ScrollContainer>
-            <Table.Content aria-label={t("tabs.requests")} className="min-w-5xl">
+            <Table.Content
+              aria-label={t("tabs.requests")}
+              className="min-w-5xl"
+              sortDescriptor={requestSort ? descriptorOf(requestSort) : undefined}
+              onSortChange={(descriptor) => setRequestSort(columnSort(descriptor, requestSort))}
+            >
               <Table.Header>
-                <Table.Column isRowHeader>{t("columns.model")}</Table.Column>
-                <Table.Column>{t("columns.time")}</Table.Column>
-                <Table.Column>{t("columns.caller")}</Table.Column>
-                <Table.Column>{t("columns.status")}</Table.Column>
-                <Table.Column>{t("columns.usage")}</Table.Column>
-                <Table.Column>{t("columns.pii")}</Table.Column>
+                <Table.Column isRowHeader allowsSorting id="model">
+                  {({ sortDirection }) => (
+                    <Table.SortableColumnHeader sortDirection={sortDirection}>{t("columns.model")}</Table.SortableColumnHeader>
+                  )}
+                </Table.Column>
+                <Table.Column allowsSorting id="time">
+                  {({ sortDirection }) => (
+                    <Table.SortableColumnHeader sortDirection={sortDirection}>{t("columns.time")}</Table.SortableColumnHeader>
+                  )}
+                </Table.Column>
+                <Table.Column allowsSorting id="caller">
+                  {({ sortDirection }) => (
+                    <Table.SortableColumnHeader sortDirection={sortDirection}>{t("columns.caller")}</Table.SortableColumnHeader>
+                  )}
+                </Table.Column>
+                <Table.Column allowsSorting id="status">
+                  {({ sortDirection }) => (
+                    <Table.SortableColumnHeader sortDirection={sortDirection}>{t("columns.status")}</Table.SortableColumnHeader>
+                  )}
+                </Table.Column>
+                <Table.Column allowsSorting id="usage">
+                  {({ sortDirection }) => (
+                    <Table.SortableColumnHeader sortDirection={sortDirection}>{t("columns.usage")}</Table.SortableColumnHeader>
+                  )}
+                </Table.Column>
+                <Table.Column allowsSorting id="pii">
+                  {({ sortDirection }) => (
+                    <Table.SortableColumnHeader sortDirection={sortDirection}>{t("columns.pii")}</Table.SortableColumnHeader>
+                  )}
+                </Table.Column>
                 <Table.Column>
                   <span className="sr-only">{tCommon("actions")}</span>
                 </Table.Column>
               </Table.Header>
               <Table.Body>
-                {logs.requests.map((row) => (
+                {requestRows.map((row) => (
                   <Table.Row key={row.id} id={row.id}>
                     <Table.Cell>
                       <div className="max-w-xs min-w-44">
@@ -218,7 +285,7 @@ export default function LogTable({
     return (
       <>
         <RowCards label={t("tabs.spend")}>
-          {logs.spend.map((row) => (
+          {spendRows.map((row) => (
             <RowCard
               key={row.id}
               title={row.model}
@@ -235,15 +302,35 @@ export default function LogTable({
         </RowCards>
         <Table aria-label={t("tabs.spend")} className={TABLE_FROM_LG}>
           <Table.ScrollContainer>
-            <Table.Content aria-label={t("tabs.spend")}>
+            <Table.Content
+              aria-label={t("tabs.spend")}
+              sortDescriptor={spendSort ? descriptorOf(spendSort) : undefined}
+              onSortChange={(descriptor) => setSpendSort(columnSort(descriptor, spendSort))}
+            >
               <Table.Header>
-                <Table.Column isRowHeader>{t("columns.time")}</Table.Column>
-                <Table.Column>{t("columns.model")}</Table.Column>
-                <Table.Column>{t("columns.spend")}</Table.Column>
-                <Table.Column>{t("columns.tokens")}</Table.Column>
+                <Table.Column isRowHeader allowsSorting id="time">
+                  {({ sortDirection }) => (
+                    <Table.SortableColumnHeader sortDirection={sortDirection}>{t("columns.time")}</Table.SortableColumnHeader>
+                  )}
+                </Table.Column>
+                <Table.Column allowsSorting id="model">
+                  {({ sortDirection }) => (
+                    <Table.SortableColumnHeader sortDirection={sortDirection}>{t("columns.model")}</Table.SortableColumnHeader>
+                  )}
+                </Table.Column>
+                <Table.Column allowsSorting id="spend">
+                  {({ sortDirection }) => (
+                    <Table.SortableColumnHeader sortDirection={sortDirection}>{t("columns.spend")}</Table.SortableColumnHeader>
+                  )}
+                </Table.Column>
+                <Table.Column allowsSorting id="tokens">
+                  {({ sortDirection }) => (
+                    <Table.SortableColumnHeader sortDirection={sortDirection}>{t("columns.tokens")}</Table.SortableColumnHeader>
+                  )}
+                </Table.Column>
               </Table.Header>
               <Table.Body>
-                {logs.spend.map((row) => (
+                {spendRows.map((row) => (
                   <Table.Row key={row.id} id={row.id}>
                     <Table.Cell>{time(row.createdAt)}</Table.Cell>
                     <Table.Cell>{row.model}</Table.Cell>
@@ -265,7 +352,7 @@ export default function LogTable({
   return (
     <>
       <RowCards label={t("tabs.audit")}>
-        {logs.audit.map((row) => (
+        {auditRows.map((row) => (
           <RowCard
             key={row.id}
             title={row.action}
@@ -283,16 +370,40 @@ export default function LogTable({
       </RowCards>
       <Table aria-label={t("tabs.audit")} className={TABLE_FROM_LG}>
         <Table.ScrollContainer>
-          <Table.Content aria-label={t("tabs.audit")}>
+          <Table.Content
+            aria-label={t("tabs.audit")}
+            sortDescriptor={auditSort ? descriptorOf(auditSort) : undefined}
+            onSortChange={(descriptor) => setAuditSort(columnSort(descriptor, auditSort))}
+          >
             <Table.Header>
-              <Table.Column isRowHeader>{t("columns.time")}</Table.Column>
-              <Table.Column>{t("columns.actor")}</Table.Column>
-              <Table.Column>{t("columns.action")}</Table.Column>
-              <Table.Column>{t("columns.object")}</Table.Column>
-              <Table.Column>{t("columns.changes")}</Table.Column>
+              <Table.Column isRowHeader allowsSorting id="time">
+                {({ sortDirection }) => (
+                  <Table.SortableColumnHeader sortDirection={sortDirection}>{t("columns.time")}</Table.SortableColumnHeader>
+                )}
+              </Table.Column>
+              <Table.Column allowsSorting id="actor">
+                {({ sortDirection }) => (
+                  <Table.SortableColumnHeader sortDirection={sortDirection}>{t("columns.actor")}</Table.SortableColumnHeader>
+                )}
+              </Table.Column>
+              <Table.Column allowsSorting id="action">
+                {({ sortDirection }) => (
+                  <Table.SortableColumnHeader sortDirection={sortDirection}>{t("columns.action")}</Table.SortableColumnHeader>
+                )}
+              </Table.Column>
+              <Table.Column allowsSorting id="object">
+                {({ sortDirection }) => (
+                  <Table.SortableColumnHeader sortDirection={sortDirection}>{t("columns.object")}</Table.SortableColumnHeader>
+                )}
+              </Table.Column>
+              <Table.Column allowsSorting id="changes">
+                {({ sortDirection }) => (
+                  <Table.SortableColumnHeader sortDirection={sortDirection}>{t("columns.changes")}</Table.SortableColumnHeader>
+                )}
+              </Table.Column>
             </Table.Header>
             <Table.Body>
-              {logs.audit.map((row) => (
+              {auditRows.map((row) => (
                 <Table.Row key={row.id} id={row.id}>
                   <Table.Cell>{time(row.createdAt)}</Table.Cell>
                   <Table.Cell>{row.actor}</Table.Cell>

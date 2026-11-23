@@ -7,6 +7,7 @@ import { useTranslations } from "next-intl";
 import ConfirmDialog from "@/components/console/confirm-dialog";
 import EmptyState from "@/components/console/empty-state";
 import RowCard, { RowCards, TABLE_FROM_LG } from "@/components/console/row-cards";
+import { columnSort, descriptorOf, sortByColumn, type ColumnSort } from "@/components/console/table-sort";
 import { useErrorToast } from "@/components/console/use-error-toast";
 import { MAX_RULES } from "@/lib/gateway/safety/guardrails";
 import { isActionFail } from "@/lib/http/action-result";
@@ -34,10 +35,17 @@ export default function RulesTab({
   const dialog = useOverlayState();
   const [editing, setEditing] = useState<{ rule: GuardrailRule | null; key: number }>({ rule: null, key: 0 });
   const [query, setQuery] = useState("");
+  const [sort, setSort] = useState<ColumnSort | null>(null);
   const [removing, setRemoving] = useState<string | null>(null);
   const [, start] = useTransition();
   const rules = policy.rules;
   const visible = rules.filter((rule) => ruleMatches(rule, query));
+  const shown = sortByColumn(visible, sort, (rule, column) => {
+    if (column === "rule") return rule.name;
+    if (column === "target") return rule.target;
+    if (column === "action") return rule.action;
+    return null;
+  });
   const full = rules.length >= MAX_RULES;
 
   function open(rule: GuardrailRule | null) {
@@ -132,7 +140,7 @@ export default function RulesTab({
       ) : (
         <>
           <RowCards label={t("rules.title")}>
-            {visible.map((rule) => (
+            {shown.map((rule) => (
               <RowCard
                 key={rule.id}
                 title={rule.name}
@@ -154,15 +162,31 @@ export default function RulesTab({
           </RowCards>
           <Table aria-label={t("rules.title")} className={TABLE_FROM_LG}>
             <Table.ScrollContainer>
-              <Table.Content aria-label={t("rules.title")}>
+              <Table.Content
+                aria-label={t("rules.title")}
+                sortDescriptor={sort ? descriptorOf(sort) : undefined}
+                onSortChange={(descriptor) => setSort(columnSort(descriptor, sort))}
+              >
                 <Table.Header>
-                  <Table.Column isRowHeader>{t("rules.columnRule")}</Table.Column>
-                  <Table.Column>{t("rules.target")}</Table.Column>
-                  <Table.Column>{t("rules.action")}</Table.Column>
+                  <Table.Column isRowHeader allowsSorting id="rule">
+                    {({ sortDirection }) => (
+                      <Table.SortableColumnHeader sortDirection={sortDirection}>{t("rules.columnRule")}</Table.SortableColumnHeader>
+                    )}
+                  </Table.Column>
+                  <Table.Column allowsSorting id="target">
+                    {({ sortDirection }) => (
+                      <Table.SortableColumnHeader sortDirection={sortDirection}>{t("rules.target")}</Table.SortableColumnHeader>
+                    )}
+                  </Table.Column>
+                  <Table.Column allowsSorting id="action">
+                    {({ sortDirection }) => (
+                      <Table.SortableColumnHeader sortDirection={sortDirection}>{t("rules.action")}</Table.SortableColumnHeader>
+                    )}
+                  </Table.Column>
                   {canManage ? <Table.Column>{tCommon("actions")}</Table.Column> : null}
                 </Table.Header>
                 <Table.Body>
-                  {visible.map((rule) => (
+                  {shown.map((rule) => (
                     <Table.Row key={rule.id} id={rule.id}>
                       <Table.Cell>
                         <div className="min-w-0 space-y-0.5">

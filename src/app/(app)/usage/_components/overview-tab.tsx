@@ -35,6 +35,7 @@ import PageStatus, { LoadError, SectionLoading } from "@/components/console/page
 import RowCard, { RowCards, TABLE_FROM_LG } from "@/components/console/row-cards";
 import SearchSelect from "@/components/console/search-select";
 import StatCard from "@/components/console/stat-card";
+import { columnSort, descriptorOf, sortByColumn, type ColumnSort } from "@/components/console/table-sort";
 import MarginCard from "./margin-card";
 import UsageCharts from "./usage-charts";
 import type { PickerItem } from "@/types/console";
@@ -81,6 +82,9 @@ export default function OverviewTab() {
   const query = useMemo(() => usageQueryFromSearch(search ?? ""), [search]);
   const [picked, setPicked] = useState<Partial<Record<FilterKey, PickerItem>>>({});
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [labelSort, setLabelSort] = useState<ColumnSort | null>(null);
+  const [modelSort, setModelSort] = useState<ColumnSort | null>(null);
+  const [cacheSort, setCacheSort] = useState<ColumnSort | null>(null);
   const compact = useMediaQuery(BELOW_MD);
   const usage = useActionData(() => loadUsageAction(usageQueryFromSearch(window.location.search)));
   const { data: stats, pending } = usage;
@@ -208,6 +212,31 @@ export default function OverviewTab() {
   const narrowing = tenantFilters.filter((filter) => query[filter.key]).length + (query.labelValue ? 1 : 0);
   const activeFilters = narrowing + (query.labelKey && !query.labelValue ? 1 : 0);
   const labelName = (row: SliceRow) => row.name || t("labels.none");
+  const labelRows = sortByColumn(stats.byLabel, labelSort, (row, column) => {
+    if (column === "value") return row.name || null;
+    if (column === "spend") return row.spend;
+    if (column === "share") return stats.spend > 0 ? row.spend / stats.spend : 0;
+    if (column === "requests") return row.requests ?? 0;
+    if (column === "prompt") return row.prompt;
+    if (column === "completion") return row.completion;
+    return null;
+  });
+  const modelRows = sortByColumn(stats.byModel, modelSort, (row, column) => {
+    if (column === "name") return row.name || null;
+    if (column === "spend") return row.spend;
+    if (column === "prompt") return row.prompt;
+    if (column === "completion") return row.completion;
+    return null;
+  });
+  const cacheRows = sortByColumn(stats.cacheByProject, cacheSort, (row, column) => {
+    if (column === "project") return label("project", row.name) || null;
+    if (column === "prompt") return row.prompt;
+    if (column === "cacheRead") return row.cacheRead ?? 0;
+    if (column === "cacheWrite") return row.cacheWrite ?? 0;
+    if (column === "hitRate") return row.prompt ? (row.cacheRead ?? 0) / row.prompt : 0;
+    if (column === "savings") return row.cacheSavings ?? 0;
+    return null;
+  });
 
   return (
     <div>
@@ -368,7 +397,7 @@ export default function OverviewTab() {
             {stats.byLabel.length ? (
               <>
                 <RowCards label={t("labels.byLabel", { key: stats.labelKey })}>
-                  {stats.byLabel.map((row) => (
+                  {labelRows.map((row) => (
                     <RowCard
                       key={row.name || ANY_LABEL}
                       variant="secondary"
@@ -388,17 +417,56 @@ export default function OverviewTab() {
                 </RowCards>
                 <Table aria-label={t("labels.byLabel", { key: stats.labelKey })} className={TABLE_FROM_LG}>
                   <Table.ScrollContainer>
-                    <Table.Content>
+                    <Table.Content
+                      sortDescriptor={labelSort ? descriptorOf(labelSort) : undefined}
+                      onSortChange={(descriptor) => setLabelSort(columnSort(descriptor, labelSort))}
+                    >
                       <Table.Header>
-                        <Table.Column isRowHeader>{t("labels.value")}</Table.Column>
-                        <Table.Column>{t("columns.spend")}</Table.Column>
-                        <Table.Column>{t("columns.share")}</Table.Column>
-                        <Table.Column>{t("metrics.requests")}</Table.Column>
-                        <Table.Column>{t("columns.prompt")}</Table.Column>
-                        <Table.Column>{t("columns.completion")}</Table.Column>
+                        <Table.Column isRowHeader allowsSorting id="value">
+                          {({ sortDirection }) => (
+                            <Table.SortableColumnHeader sortDirection={sortDirection}>
+                              {t("labels.value")}
+                            </Table.SortableColumnHeader>
+                          )}
+                        </Table.Column>
+                        <Table.Column allowsSorting id="spend">
+                          {({ sortDirection }) => (
+                            <Table.SortableColumnHeader sortDirection={sortDirection}>
+                              {t("columns.spend")}
+                            </Table.SortableColumnHeader>
+                          )}
+                        </Table.Column>
+                        <Table.Column allowsSorting id="share">
+                          {({ sortDirection }) => (
+                            <Table.SortableColumnHeader sortDirection={sortDirection}>
+                              {t("columns.share")}
+                            </Table.SortableColumnHeader>
+                          )}
+                        </Table.Column>
+                        <Table.Column allowsSorting id="requests">
+                          {({ sortDirection }) => (
+                            <Table.SortableColumnHeader sortDirection={sortDirection}>
+                              {t("metrics.requests")}
+                            </Table.SortableColumnHeader>
+                          )}
+                        </Table.Column>
+                        <Table.Column allowsSorting id="prompt">
+                          {({ sortDirection }) => (
+                            <Table.SortableColumnHeader sortDirection={sortDirection}>
+                              {t("columns.prompt")}
+                            </Table.SortableColumnHeader>
+                          )}
+                        </Table.Column>
+                        <Table.Column allowsSorting id="completion">
+                          {({ sortDirection }) => (
+                            <Table.SortableColumnHeader sortDirection={sortDirection}>
+                              {t("columns.completion")}
+                            </Table.SortableColumnHeader>
+                          )}
+                        </Table.Column>
                       </Table.Header>
                       <Table.Body>
-                        {stats.byLabel.map((row) => (
+                        {labelRows.map((row) => (
                           <Table.Row key={row.name || ANY_LABEL} id={row.name || ANY_LABEL}>
                             <Table.Cell>
                               <span className={row.name ? "break-words" : "text-muted"}>{labelName(row)}</span>
@@ -448,7 +516,7 @@ export default function OverviewTab() {
               <Card.Title>{t("pdf.byModel")}</Card.Title>
             </Card.Header>
             <RowCards label={t("pdf.byModel")}>
-              {stats.byModel.map((row) => (
+              {modelRows.map((row) => (
                 <RowCard
                   key={row.name || "none"}
                   variant="secondary"
@@ -463,15 +531,42 @@ export default function OverviewTab() {
             </RowCards>
             <Table aria-label={t("pdf.byModel")} className={TABLE_FROM_LG}>
               <Table.ScrollContainer>
-                <Table.Content>
+                <Table.Content
+                  sortDescriptor={modelSort ? descriptorOf(modelSort) : undefined}
+                  onSortChange={(descriptor) => setModelSort(columnSort(descriptor, modelSort))}
+                >
                   <Table.Header>
-                    <Table.Column isRowHeader>{t("columns.name")}</Table.Column>
-                    <Table.Column>{t("columns.spend")}</Table.Column>
-                    <Table.Column>{t("columns.prompt")}</Table.Column>
-                    <Table.Column>{t("columns.completion")}</Table.Column>
+                    <Table.Column isRowHeader allowsSorting id="name">
+                      {({ sortDirection }) => (
+                        <Table.SortableColumnHeader sortDirection={sortDirection}>
+                          {t("columns.name")}
+                        </Table.SortableColumnHeader>
+                      )}
+                    </Table.Column>
+                    <Table.Column allowsSorting id="spend">
+                      {({ sortDirection }) => (
+                        <Table.SortableColumnHeader sortDirection={sortDirection}>
+                          {t("columns.spend")}
+                        </Table.SortableColumnHeader>
+                      )}
+                    </Table.Column>
+                    <Table.Column allowsSorting id="prompt">
+                      {({ sortDirection }) => (
+                        <Table.SortableColumnHeader sortDirection={sortDirection}>
+                          {t("columns.prompt")}
+                        </Table.SortableColumnHeader>
+                      )}
+                    </Table.Column>
+                    <Table.Column allowsSorting id="completion">
+                      {({ sortDirection }) => (
+                        <Table.SortableColumnHeader sortDirection={sortDirection}>
+                          {t("columns.completion")}
+                        </Table.SortableColumnHeader>
+                      )}
+                    </Table.Column>
                   </Table.Header>
                   <Table.Body>
-                    {stats.byModel.map((row) => (
+                    {modelRows.map((row) => (
                       <Table.Row key={row.name || "none"} id={row.name || "none"}>
                         <Table.Cell>{row.name || tCommon("none")}</Table.Cell>
                         <Table.Cell>{format.number(row.spend, "money")}</Table.Cell>
@@ -520,7 +615,7 @@ export default function OverviewTab() {
               <Card.Title>{t("cache.byProject")}</Card.Title>
             </Card.Header>
             <RowCards label={t("cache.byProject")}>
-              {stats.cacheByProject.map((row) => (
+              {cacheRows.map((row) => (
                 <RowCard
                   key={row.name}
                   variant="secondary"
@@ -540,17 +635,56 @@ export default function OverviewTab() {
             </RowCards>
             <Table aria-label={t("cache.byProject")} className={TABLE_FROM_LG}>
               <Table.ScrollContainer>
-                <Table.Content>
+                <Table.Content
+                  sortDescriptor={cacheSort ? descriptorOf(cacheSort) : undefined}
+                  onSortChange={(descriptor) => setCacheSort(columnSort(descriptor, cacheSort))}
+                >
                   <Table.Header>
-                    <Table.Column isRowHeader>{t("group.project")}</Table.Column>
-                    <Table.Column>{t("columns.prompt")}</Table.Column>
-                    <Table.Column>{t("columns.cacheRead")}</Table.Column>
-                    <Table.Column>{t("columns.cacheWrite")}</Table.Column>
-                    <Table.Column>{t("columns.hitRate")}</Table.Column>
-                    <Table.Column>{t("columns.savings")}</Table.Column>
+                    <Table.Column isRowHeader allowsSorting id="project">
+                      {({ sortDirection }) => (
+                        <Table.SortableColumnHeader sortDirection={sortDirection}>
+                          {t("group.project")}
+                        </Table.SortableColumnHeader>
+                      )}
+                    </Table.Column>
+                    <Table.Column allowsSorting id="prompt">
+                      {({ sortDirection }) => (
+                        <Table.SortableColumnHeader sortDirection={sortDirection}>
+                          {t("columns.prompt")}
+                        </Table.SortableColumnHeader>
+                      )}
+                    </Table.Column>
+                    <Table.Column allowsSorting id="cacheRead">
+                      {({ sortDirection }) => (
+                        <Table.SortableColumnHeader sortDirection={sortDirection}>
+                          {t("columns.cacheRead")}
+                        </Table.SortableColumnHeader>
+                      )}
+                    </Table.Column>
+                    <Table.Column allowsSorting id="cacheWrite">
+                      {({ sortDirection }) => (
+                        <Table.SortableColumnHeader sortDirection={sortDirection}>
+                          {t("columns.cacheWrite")}
+                        </Table.SortableColumnHeader>
+                      )}
+                    </Table.Column>
+                    <Table.Column allowsSorting id="hitRate">
+                      {({ sortDirection }) => (
+                        <Table.SortableColumnHeader sortDirection={sortDirection}>
+                          {t("columns.hitRate")}
+                        </Table.SortableColumnHeader>
+                      )}
+                    </Table.Column>
+                    <Table.Column allowsSorting id="savings">
+                      {({ sortDirection }) => (
+                        <Table.SortableColumnHeader sortDirection={sortDirection}>
+                          {t("columns.savings")}
+                        </Table.SortableColumnHeader>
+                      )}
+                    </Table.Column>
                   </Table.Header>
                   <Table.Body>
-                    {stats.cacheByProject.map((row) => (
+                    {cacheRows.map((row) => (
                       <Table.Row key={row.name} id={row.name}>
                         <Table.Cell>{label("project", row.name) || tCommon("none")}</Table.Cell>
                         <Table.Cell>{format.number(row.prompt, "integer")}</Table.Cell>
