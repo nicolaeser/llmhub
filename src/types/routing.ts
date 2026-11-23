@@ -93,6 +93,7 @@ export type ContextIndex = {
 export type ResolvedDeployment = Deployment & {
   provider?: DeploymentRow["provider"];
   facts?: ModelFacts;
+  merge_system_messages?: boolean;
 };
 
 export type FactTarget = Pick<ResolvedDeployment, "kind" | "model" | "provider_id" | "facts">;

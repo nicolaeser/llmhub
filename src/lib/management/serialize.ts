@@ -73,6 +73,7 @@ export function serializeModelAlias(group: ModelGroupView) {
     auto_routes: group.autoRoutes,
     variants: group.variants,
     extra_names: group.extraNames,
+    merge_system_messages: group.mergeSystemMessages,
     strategy: group.strategy,
     billing_mode: group.billingMode,
     price_input_per_1k: group.priceInput,

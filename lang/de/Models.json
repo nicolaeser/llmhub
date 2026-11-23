@@ -54,6 +54,8 @@
     "priceOut": "Output-Preis / 1k Tokens",
     "enabled": "Über die API verfügbar",
     "enabledHint": "Wenn aus, ist das Modell in /api/v1/models ausgeblendet und Anfragen daran schlagen mit „Modell nicht gefunden“ fehl, auch als Fallback. Die Einstellungen bleiben erhalten.",
+    "mergeSystemMessages": "Systemnachrichten zusammenführen",
+    "mergeSystemMessagesHint": "Fasst alle Systemnachrichten zu einer am Anfang zusammen, bevor eine Chat-Anfrage weitergeleitet wird. Für Modelle, deren Chat-Template nur eine Systemnachricht am Anfang akzeptiert, etwa Qwen.",
     "vendor": "Hersteller",
     "vendorHint": "Erscheint als owned_by in /api/v1/models, zum Beispiel anthropic oder openai.",
     "displayName": "Anzeigename",

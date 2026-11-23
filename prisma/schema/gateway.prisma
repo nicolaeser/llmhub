@@ -425,6 +425,7 @@ model ModelGroup {
   autoRoutes     Boolean?
   variants       String[] @default([])
   extraNames     String[] @default([])
+  mergeSystemMessages Boolean @default(false)
 
   deployments  Deployment[]
   priceWindows ModelPriceWindow[]

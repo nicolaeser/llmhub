@@ -141,6 +141,7 @@ function groupAudit(g: {
   autoRoutes: boolean | null;
   variants: string[];
   extraNames: string[];
+  mergeSystemMessages: boolean;
   strategy: string;
   billingMode: string;
   priceInput: Prisma.Decimal;
@@ -160,6 +161,7 @@ function groupAudit(g: {
     autoRoutes: g.autoRoutes,
     variants: variantsOf(g.variants),
     extraNames: extraNamesOf(g.extraNames),
+    mergeSystemMessages: g.mergeSystemMessages,
     strategy: g.strategy,
     billingMode: g.billingMode,
     priceInput: money(g.priceInput),
@@ -181,6 +183,7 @@ function mapGroup(g: {
   autoRoutes: boolean | null;
   variants: string[];
   extraNames: string[];
+  mergeSystemMessages: boolean;
   strategy: string;
   billingMode: string;
   priceInput: Prisma.Decimal;
@@ -200,6 +203,7 @@ function mapGroup(g: {
     autoRoutes: g.autoRoutes,
     variants: variantsOf(g.variants),
     extraNames: extraNamesOf(g.extraNames),
+    mergeSystemMessages: g.mergeSystemMessages,
     strategy: g.strategy,
     billingMode: g.billingMode,
     priceInput: money(g.priceInput),
@@ -385,6 +389,7 @@ export async function createModelGroup(input: {
   autoRoutes?: boolean | null;
   variants?: ModelVariant[];
   extraNames?: string[] | string;
+  mergeSystemMessages?: boolean;
   strategy: string;
   billingMode?: string;
   priceInput?: number;
@@ -419,6 +424,7 @@ export async function createModelGroup(input: {
       autoRoutes: input.autoRoutes ?? null,
       variants,
       extraNames,
+      mergeSystemMessages: input.mergeSystemMessages ?? false,
       strategy: strategyOf(input.strategy),
       billingMode: billingModeOf(input.billingMode),
       priceInput: priceOf(input.priceInput, 0),
@@ -453,6 +459,7 @@ export async function updateModelGroup(input: {
   autoRoutes?: boolean | null;
   variants?: ModelVariant[];
   extraNames?: string[] | string;
+  mergeSystemMessages?: boolean;
   strategy: string;
   billingMode?: string;
   priceInput?: number;
@@ -486,6 +493,7 @@ export async function updateModelGroup(input: {
       autoRoutes: input.autoRoutes === undefined ? existing.autoRoutes : input.autoRoutes,
       variants,
       extraNames,
+      mergeSystemMessages: input.mergeSystemMessages ?? existing.mergeSystemMessages,
       strategy: strategyOf(input.strategy, existing.strategy),
       billingMode: billingModeOf(input.billingMode, existing.billingMode),
       priceInput: priceOf(input.priceInput, money(existing.priceInput)),

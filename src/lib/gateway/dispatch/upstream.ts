@@ -9,6 +9,7 @@ import {
   withinCacheBreakpointLimit,
 } from "@/lib/gateway/protocols/anthropic";
 import { withAnthropicModelParams } from "@/lib/gateway/protocols/anthropic-model-params";
+import { withSingleLeadingSystem } from "@/lib/gateway/protocols/leading-system";
 import { ANTHROPIC_VERSION_2023, ANTHROPIC_VERSION_HEADER, anthropicVersionOf } from "@/lib/gateway/protocols/anthropic-version";
 import { plainModel } from "@/lib/gateway/catalog/model-alias";
 import { accessOf } from "@/lib/gateway/routing/account-access";
@@ -277,6 +278,7 @@ export function prepareBody(
   ) {
     payload.messages = withoutThinkingBlocks(payload.messages);
   }
+  if (dep.merge_system_messages && !speaksAnthropic(dep.kind) && nativeChatPath(path)) payload = withSingleLeadingSystem(payload);
   if (speaksAnthropic(dep.kind)) {
     let native = withinCacheBreakpointLimit(payload);
     if (nativeChatPath(path)) {

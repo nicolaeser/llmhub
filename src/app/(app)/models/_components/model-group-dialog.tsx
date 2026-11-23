@@ -86,6 +86,7 @@ export default function ModelGroupDialog({
   const [autoRoutes, setAutoRoutes] = useState<boolean | null>(editing ? editing.autoRoutes : null);
   const [variants, setVariants] = useState<ModelVariant[]>(editing?.variants ?? []);
   const [extraNames, setExtraNames] = useState((editing?.extraNames ?? []).join(", "));
+  const [mergeSystemMessages, setMergeSystemMessages] = useState(editing?.mergeSystemMessages ?? false);
   const [billingMode, setBillingMode] = useState<BillingMode>(billingModeOf(editing?.billingMode));
   const [price, setPrice] = useState({ input: editing?.priceInput ?? 0, output: editing?.priceOutput ?? 0 });
   const [priceTimeZone, setPriceTimeZone] = useState(editing?.priceTimeZone || "UTC");
@@ -143,6 +144,7 @@ export default function ModelGroupDialog({
         autoRoutes,
         variants,
         extraNames: extraNamesOf(extraNames),
+        mergeSystemMessages,
         strategy,
         billingMode,
         priceInput: validPrice(price.input) ? price.input : undefined,
@@ -381,6 +383,15 @@ export default function ModelGroupDialog({
             <Label>{t("fields.enabled")}</Label>
           </Switch.Content>
           <Description>{t("fields.enabledHint")}</Description>
+        </Switch>
+        <Switch isSelected={mergeSystemMessages} onChange={setMergeSystemMessages} isDisabled={pending}>
+          <Switch.Content>
+            <Switch.Control>
+              <Switch.Thumb />
+            </Switch.Control>
+            <Label>{t("fields.mergeSystemMessages")}</Label>
+          </Switch.Content>
+          <Description>{t("fields.mergeSystemMessagesHint")}</Description>
         </Switch>
         <SearchSelect
           label={t("fields.autoRoutes")}

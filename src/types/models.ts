@@ -45,6 +45,7 @@ export type ModelGroupView = {
   autoRoutes: boolean | null;
   variants: ModelVariant[];
   extraNames: string[];
+  mergeSystemMessages: boolean;
   strategy: string;
   billingMode: string;
   priceInput: number;

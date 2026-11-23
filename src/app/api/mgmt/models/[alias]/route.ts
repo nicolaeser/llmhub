@@ -29,6 +29,7 @@ export const PATCH = managementRoute<{ alias: string }>(PERMISSIONS.MODELS_MANAG
       autoRoutes: body.auto_routes,
       variants: body.variants,
       extraNames: body.extra_names,
+      mergeSystemMessages: body.merge_system_messages,
       strategy: body.strategy ?? existing.strategy,
       billingMode: body.billing_mode ?? existing.billingMode,
       priceInput: body.price_input_per_1k,

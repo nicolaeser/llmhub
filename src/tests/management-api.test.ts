@@ -16,7 +16,7 @@ import { ApiProblem, problemFromError } from "@/lib/http/problem";
 import { authenticateManagementKey } from "@/lib/management/auth";
 import { managementRoute, readBody, readQuery } from "@/lib/management/http";
 import { isManagementKey, keyScope, managementPermissions, MANAGEMENT_PERMISSIONS } from "@/lib/management/scope";
-import { serializeApiKey, serializeUsage } from "@/lib/management/serialize";
+import { serializeApiKey, serializeModelAlias, serializeUsage } from "@/lib/management/serialize";
 import {
   apiKeyCreateSchema,
   budgetUpdateSchema,
@@ -212,6 +212,10 @@ test("request bodies are strict, typed, and reported with JSON pointers", async 
   assert.equal(modelAliasUpdateSchema.safeParse({ price_schedule: [{ ...night, start: "25:00" }] }).success, false);
   assert.equal(priced.price_time_zone, "UTC");
   assert.deepEqual(priced.price_schedule, []);
+  assert.equal(priced.merge_system_messages, false);
+  assert.equal(modelAliasCreateSchema.parse({ alias: "a", merge_system_messages: true }).merge_system_messages, true);
+  assert.deepEqual(modelAliasUpdateSchema.parse({ merge_system_messages: true }), { merge_system_messages: true });
+  assert.equal(modelAliasUpdateSchema.safeParse({ merge_system_messages: false }).success, true);
   assert.equal(teamUpdateSchema.safeParse({}).success, true);
   assert.equal(budgetUpdateSchema.safeParse({ max_budget: 10, budget_duration: "30d" }).success, true);
   assert.equal(budgetUpdateSchema.safeParse({ max_budget: 10, budget_duration: "fortnight" }).success, false);
@@ -264,6 +268,29 @@ test("serializers expose snake_case resources with nulls for unset references", 
   assert.equal(key.member_id, "m1");
   assert.equal(key.expires_at, null);
   assert.equal("key" in key, false);
+  const modelAlias = serializeModelAlias({
+    alias: "qwen",
+    enabled: true,
+    vendor: "",
+    displayName: "",
+    autoRoutes: null,
+    variants: [],
+    extraNames: [],
+    mergeSystemMessages: true,
+    strategy: "least_inflight",
+    billingMode: "routed",
+    priceInput: 0,
+    priceOutput: 0,
+    priceTimeZone: "UTC",
+    priceWindows: [],
+    overflowGroup: "",
+    numRetries: 0,
+    fallbackGroups: [],
+    endpoints: 0,
+    deployments: [],
+  });
+  assert.equal(modelAlias.object, "model_alias");
+  assert.equal(modelAlias.merge_system_messages, true);
   const usage = serializeUsage({
     days: 7,
     model: "",

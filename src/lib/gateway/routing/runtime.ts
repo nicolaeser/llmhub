@@ -134,9 +134,9 @@ export async function loadGroup(requested: string): Promise<ResolvedModelGroup> 
   if (alias === "auto") {
     const rows = await prisma.deployment.findMany({
       where: { group: { enabled: true } },
-      include: { provider: providerSelect },
+      include: { provider: providerSelect, group: { select: { mergeSystemMessages: true } } },
     });
-    const mapped = rows.map(mapDeployment);
+    const mapped = rows.map((row) => ({ ...mapDeployment(row), merge_system_messages: row.group.mergeSystemMessages }));
     await attachModelFacts(mapped);
     return {
       alias: "auto",
@@ -166,7 +166,7 @@ export async function loadGroup(requested: string): Promise<ResolvedModelGroup> 
   const resolved = direct ? alias : await canonicalModel(alias);
   const group = direct ?? (resolved !== alias ? await findGroup(resolved) : null);
   if (!group?.enabled) throw ERR_UNKNOWN_GROUP;
-  const mapped = group.deployments.map(mapDeployment);
+  const mapped = group.deployments.map((row) => ({ ...mapDeployment(row), merge_system_messages: group.mergeSystemMessages }));
   await attachModelFacts(mapped);
   return {
     alias: group.alias,
