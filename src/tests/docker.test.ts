@@ -99,6 +99,12 @@ test("the runner only carries runtime files and runs as the node user", async ()
   }
 });
 
+test("the Prisma CLI stage keeps the project overrides so its closure gets the pinned fixes", async () => {
+  const dockerfile = await file("Dockerfile");
+  const stage = dockerfile.slice(dockerfile.indexOf("AS prismacli"), dockerfile.indexOf("AS builder"));
+  assert.match(stage, /overrides: pkg\.overrides/);
+});
+
 test("the dependency stage skips the postinstall generate that the builder runs with the schema", async () => {
   const [dockerfile, pkg] = await Promise.all([file("Dockerfile"), file("package.json")]);
   assert.equal(JSON.parse(pkg).scripts.postinstall, "prisma generate");

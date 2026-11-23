@@ -19,7 +19,7 @@ RUN --mount=type=cache,target=/root/.npm \
       for (const name of keep) if (!all[name]) throw new Error(name + " is missing from package.json"); \
       fs.writeFileSync("package.json", JSON.stringify({ name: pkg.name, private: true, \
         dependencies: Object.fromEntries(keep.map((name) => [name, all[name]])), \
-        allowScripts: { prisma: true, "@prisma/engines": true } }));' \
+        overrides: pkg.overrides, allowScripts: { prisma: true, "@prisma/engines": true } }));' \
   && npm install --omit=dev --no-audit --no-fund \
   && node node_modules/prisma/build/index.js --version
 
