@@ -10,6 +10,7 @@ import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import pg from "pg";
 import { COMPATIBILITY_MIGRATION, CONTENT_SIZE_MIGRATION, LEGACY_MIGRATIONS } from "../support/migration-history";
+import { assertDisposableDatabaseUrl, TEST_APP_SECRET } from "../support/service-env";
 import { PRISMA_MIGRATION_LOCK } from "../../../scripts/recover-compatibility.mjs";
 
 const execute = promisify(execFile);
@@ -24,12 +25,7 @@ const identifier = (value: string) => `"${value.replaceAll('"', '""')}"`;
 type Database = { name: string; url: string; schema: string };
 
 async function harness(t: test.TestContext) {
-  const raw = process.env.MIGRATION_TEST_DATABASE_URL;
-  assert.ok(raw, "MIGRATION_TEST_DATABASE_URL must point to a disposable local PostgreSQL server");
-  const base = new URL(raw);
-  assert.ok(["postgres:", "postgresql:"].includes(base.protocol));
-  assert.ok(["127.0.0.1", "localhost", "[::1]"].includes(base.hostname), "migration tests require loopback PostgreSQL");
-  assert.equal(process.env.NODE_ENV, "development");
+  const base = assertDisposableDatabaseUrl(process.env, "migration tests");
   const admin = new pg.Client({ connectionString: base.toString() });
   await admin.connect();
   const prefix = `llmhub_upgrade_${randomBytes(6).toString("hex")}`;
@@ -71,7 +67,7 @@ async function harness(t: test.TestContext) {
   }
   function environment(database: Database) {
     return { ...process.env, NODE_ENV: "development" as const, DATABASE_URL: database.url,
-      APP_SECRET: "test-app-secret-aaaaaaaaaaaaaaaaaaaa" };
+      APP_SECRET: TEST_APP_SECRET };
   }
   async function prisma(database: Database, args: string[], config?: string) {
     return execute(process.execPath, [cli, ...args, ...(config ? ["--config", config] : [])], {
