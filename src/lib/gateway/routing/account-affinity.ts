@@ -2,11 +2,8 @@ import "server-only";
 import { createHash } from "node:crypto";
 import { asRecord, asString } from "@/lib/gateway/core";
 import { claudeCodeCacheKey, claudeCodeSessionKey } from "@/lib/gateway/protocols/messages";
+import { PinStore } from "@/lib/gateway/routing/pin-store";
 import { PROVIDER_CATALOG } from "@/lib/gateway/upstreams/provider-kinds";
-import { redisUrl } from "@/lib/jobs/connection";
-import { errorFields } from "@/lib/logging/format";
-import { logger } from "@/lib/logging/logger";
-import { sharedRedis, withRedisTimeout } from "@/lib/redis/client";
 import { parseJsonOrNull } from "@/lib/utils/json";
 import type { JsonMap } from "@/types/gateway";
 import type { AccountPin } from "@/types/routing";
@@ -15,7 +12,6 @@ export const PIN_TTL_MS = 6 * 3_600_000;
 export const PIN_HOLD_MS = 60_000;
 export const CLAUDE_CODE_SESSION_HEADER = "x-claude-code-session-id";
 export const MAX_SESSION_LENGTH = 512;
-const MAX_PINS = 20_000;
 const KEY_PREFIX = "llmhub:account-pin:v1";
 const SETTLE_PIN_SCRIPT = `
 local current = redis.call('GET', KEYS[1])
@@ -33,21 +29,10 @@ redis.call('SET', KEYS[1], encoded, 'PX', ARGV[3])
 return encoded
 `;
 
-type StoredPin = AccountPin & { until: number };
-
-const pinHolder = globalThis as typeof globalThis & { __llmhubAccountPins?: Map<string, StoredPin> };
-
-function pins(): Map<string, StoredPin> {
-  pinHolder.__llmhubAccountPins ??= new Map();
-  return pinHolder.__llmhubAccountPins;
-}
+const accountPins = new PinStore<AccountPin>("account", KEY_PREFIX, "account_pin.redis_fallback");
 
 function pinKey(kind: string, session: string): string {
   return `${kind}:${session}`;
-}
-
-function sharedKey(key: string): string {
-  return `${KEY_PREFIX}:${key}`;
 }
 
 export function pinsAccounts(kind: string): boolean {
@@ -98,40 +83,23 @@ function settledPin(stored: AccountPin | null, wanted: AccountPin, expected: Acc
 }
 
 function localPin(key: string, now: number): AccountPin | null {
-  const local = pins().get(key);
-  if (!local) return null;
-  if (local.until > now) return { providerId: local.providerId, handoffAt: local.handoffAt };
-  pins().delete(key);
-  return null;
+  const local = accountPins.local(key, now);
+  return local ? { providerId: local.providerId, handoffAt: local.handoffAt } : null;
 }
 
 function rememberLocally(key: string, pin: AccountPin, now: number): void {
-  const store = pins();
-  store.delete(key);
-  store.set(key, { ...pin, until: now + PIN_TTL_MS });
-  while (store.size > MAX_PINS) {
-    const oldest = store.keys().next().value;
-    if (oldest === undefined) break;
-    store.delete(oldest);
-  }
+  accountPins.remember(key, { providerId: pin.providerId, handoffAt: pin.handoffAt }, PIN_TTL_MS, now);
 }
 
 export async function readPin(kind: string, session: string, now = Date.now()): Promise<AccountPin | null> {
   if (!session) return null;
   const key = pinKey(kind, session);
   const local = localPin(key, now);
-  if (!redisUrl()) return local;
-  const redis = await sharedRedis();
-  if (!redis) return local;
-  try {
-    const pin = storedPin(await withRedisTimeout(redis.get(sharedKey(key))));
-    if (!pin) return local;
-    if (!samePin(local, pin)) rememberLocally(key, pin, now);
-    return pin;
-  } catch (err) {
-    logger.warn("account_pin.redis_fallback", errorFields(err));
-    return local;
-  }
+  const shared = await accountPins.shared((redis) => redis.get(accountPins.sharedKey(key)));
+  const pin = shared ? storedPin(shared.value) : null;
+  if (!pin) return local;
+  if (!samePin(local, pin)) rememberLocally(key, pin, now);
+  return pin;
 }
 
 export async function writePin(
@@ -143,21 +111,13 @@ export async function writePin(
 ): Promise<AccountPin | null> {
   if (!session) return null;
   const key = pinKey(kind, session);
-  const redis = redisUrl() ? await sharedRedis() : null;
-  if (redis) {
-    try {
-      const pin = storedPin(
-        await withRedisTimeout(
-          redis.eval(SETTLE_PIN_SCRIPT, 1, sharedKey(key), JSON.stringify(wanted), expected?.providerId ?? "", PIN_TTL_MS),
-        ),
-      );
-      if (pin) {
-        rememberLocally(key, pin, now);
-        return pin;
-      }
-    } catch (err) {
-      logger.warn("account_pin.redis_fallback", errorFields(err));
-    }
+  const shared = await accountPins.shared((redis) =>
+    redis.eval(SETTLE_PIN_SCRIPT, 1, accountPins.sharedKey(key), JSON.stringify(wanted), expected?.providerId ?? "", PIN_TTL_MS),
+  );
+  const settled = shared ? storedPin(shared.value) : null;
+  if (settled) {
+    rememberLocally(key, settled, now);
+    return settled;
   }
   const pin = settledPin(localPin(key, now), wanted, expected);
   rememberLocally(key, pin, now);
@@ -165,5 +125,5 @@ export async function writePin(
 }
 
 export function forgetPins(): void {
-  pins().clear();
+  accountPins.forget();
 }

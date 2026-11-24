@@ -26,6 +26,11 @@ const optionalSampleRate = optionalTrimmedString.refine(
   "must be a number from 0 to 1",
 );
 
+const optionalCount = optionalTrimmedString.refine(
+  (v) => v === undefined || /^\d+$/.test(v),
+  "must be a whole number of 0 or more",
+);
+
 export const envSchema = z.object({
   NODE_ENV: z.enum(["development", "production"]),
   DATABASE_URL: z.string().min(1),
@@ -54,4 +59,5 @@ export const envSchema = z.object({
   SENTRY_ENVIRONMENT: optionalTrimmedString,
   SENTRY_RELEASE: optionalTrimmedString,
   SENTRY_TRACES_SAMPLE_RATE: optionalSampleRate,
+  SESSION_AFFINITY_SPILL_MARGIN: optionalCount,
 });

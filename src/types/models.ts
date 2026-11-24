@@ -46,6 +46,7 @@ export type ModelGroupView = {
   variants: ModelVariant[];
   extraNames: string[];
   mergeSystemMessages: boolean;
+  sessionAffinity: boolean;
   strategy: string;
   billingMode: string;
   priceInput: number;

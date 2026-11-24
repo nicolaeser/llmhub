@@ -216,6 +216,10 @@ test("request bodies are strict, typed, and reported with JSON pointers", async 
   assert.equal(modelAliasCreateSchema.parse({ alias: "a", merge_system_messages: true }).merge_system_messages, true);
   assert.deepEqual(modelAliasUpdateSchema.parse({ merge_system_messages: true }), { merge_system_messages: true });
   assert.equal(modelAliasUpdateSchema.safeParse({ merge_system_messages: false }).success, true);
+  assert.equal(priced.session_affinity, false);
+  assert.equal(modelAliasCreateSchema.parse({ alias: "a", session_affinity: true }).session_affinity, true);
+  assert.deepEqual(modelAliasUpdateSchema.parse({ session_affinity: true }), { session_affinity: true });
+  assert.equal(modelAliasUpdateSchema.safeParse({ session_affinity: "yes" }).success, false);
   assert.equal(teamUpdateSchema.safeParse({}).success, true);
   assert.equal(budgetUpdateSchema.safeParse({ max_budget: 10, budget_duration: "30d" }).success, true);
   assert.equal(budgetUpdateSchema.safeParse({ max_budget: 10, budget_duration: "fortnight" }).success, false);
@@ -277,6 +281,7 @@ test("serializers expose snake_case resources with nulls for unset references", 
     variants: [],
     extraNames: [],
     mergeSystemMessages: true,
+    sessionAffinity: true,
     strategy: "least_inflight",
     billingMode: "routed",
     priceInput: 0,
@@ -291,6 +296,7 @@ test("serializers expose snake_case resources with nulls for unset references", 
   });
   assert.equal(modelAlias.object, "model_alias");
   assert.equal(modelAlias.merge_system_messages, true);
+  assert.equal(modelAlias.session_affinity, true);
   const usage = serializeUsage({
     days: 7,
     model: "",

@@ -1,13 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import { Alert, Button, CloseButton, useOverlayState } from "@heroui/react";
-import { Blocks, ImagePlus, Plug, Sparkles } from "lucide-react";
+import { Alert, Button, buttonVariants, CloseButton, useOverlayState } from "@heroui/react";
+import { Blocks, Code2, ImagePlus, Plug, Sparkles } from "lucide-react";
 import { useTranslations } from "next-intl";
 import EmptyState from "@/components/console/empty-state";
 import PageHeader from "@/components/console/page-header";
 import PageStatus, { LoadError } from "@/components/console/page-status";
 import InstallDialog from "@/components/mcp/install-dialog";
+import { Link } from "@/i18n/routing";
 import { useActionData } from "@/lib/hooks/use-action-data";
 import { setSearchParams, useSearchParam } from "@/lib/hooks/use-search-param";
 import type { McpServerView } from "@/types/mcp";
@@ -88,7 +89,17 @@ export default function McpPage() {
         icon={Blocks}
         title={t("title")}
         subtitle={t("subtitle")}
-        actions={canManage && servers.length ? <AddServerMenu onChoose={add} /> : undefined}
+        actions={
+          servers.length ? (
+            <>
+              <Link href="/developer?tab=connect&mode=mcp" className={buttonVariants({ variant: "secondary" })}>
+                <Code2 size={16} aria-hidden />
+                {t("useInTools")}
+              </Link>
+              {canManage ? <AddServerMenu onChoose={add} /> : null}
+            </>
+          ) : undefined
+        }
       />
       <LoadError state={page} />
       {oauthResult === "connected" || oauthResult === "failed" ? (

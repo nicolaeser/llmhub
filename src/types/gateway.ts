@@ -39,6 +39,8 @@ export type RequestTrace = {
   guardBlocked: boolean;
   costCap?: CostCap | null;
   labels?: LabelCandidates;
+  sessionHeaders?: Record<string, string>;
+  affinityDeployment?: string;
 };
 
 export type LabelCandidates = Record<string, string>;

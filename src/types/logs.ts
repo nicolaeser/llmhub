@@ -191,6 +191,8 @@ export type RequestLogDetail = RequestLogRow & {
   deploymentId: string;
   provider: string;
   upstreamModel: string;
+  affinity: string;
+  affinityKey: string;
   tag: string;
   error: string;
   piiRestore: PiiRestoreSummary | null;

@@ -969,6 +969,7 @@ async function claudePool(): Promise<{ group: ResolvedModelGroup; mapped: PoolDe
     fallback_groups: [],
     deployments: mapped,
     mapped,
+    session_affinity: false,
   };
   return { group, mapped };
 }

@@ -1,5 +1,6 @@
 import type { Prisma } from "@/generated/prisma/client";
 import type { PriceWindowRates } from "@/types/billing";
+import type { JsonMap } from "@/types/gateway";
 import type { AssignmentRow } from "@/types/providers";
 
 export type RoutePool = "api" | "subscription" | "internal";
@@ -33,7 +34,7 @@ export type ModelGroup = {
   deployments: Deployment[];
 };
 
-export type ResolvedModelGroup = ModelGroup & { mapped: ResolvedDeployment[] };
+export type ResolvedModelGroup = ModelGroup & { mapped: ResolvedDeployment[]; session_affinity: boolean };
 
 export type DeploymentRow = {
   id: string;
@@ -108,7 +109,15 @@ export type QuotaScores = Map<string, { pressure: number; reset: number }>;
 
 export type AccountPin = { providerId: string; handoffAt: number };
 
-export type RunRouting = { session: string; tried: Set<string>; signal?: AbortSignal };
+export type AffinityOutcome = "hit" | "spill" | "failover" | "new" | "off";
+
+export type SessionAffinity = { outcome: AffinityOutcome; key: string };
+
+export type AffinityRequest = { body: JsonMap | null; headers?: Record<string, string>; scope: string };
+
+export type RunAffinity = { request: AffinityRequest; sessions: Map<string, string>; failed: Set<string> };
+
+export type RunRouting = { session: string; tried: Set<string>; signal?: AbortSignal; affinity?: RunAffinity };
 
 export type ConcurrencyWaiter = { grant: () => void };
 

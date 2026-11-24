@@ -13,6 +13,7 @@ type EmptiedGroup = {
   fallbackGroups: unknown;
   autoRoutes: boolean | null;
   mergeSystemMessages: boolean;
+  sessionAffinity: boolean;
   _count: { priceWindows: number };
 };
 
@@ -24,6 +25,7 @@ export function catalogOwnedGroups(emptied: EmptiedGroup[], referenced: Set<stri
         group.billingMode === "routed" &&
         group.autoRoutes === null &&
         !group.mergeSystemMessages &&
+        !group.sessionAffinity &&
         !group.overflowGroup &&
         asStringArray(group.fallbackGroups).length === 0 &&
         group._count.priceWindows === 0 &&
@@ -56,6 +58,7 @@ export async function removeProviderConnection(id: string) {
         fallbackGroups: true,
         autoRoutes: true,
         mergeSystemMessages: true,
+        sessionAffinity: true,
         _count: { select: { priceWindows: true } },
       },
     });

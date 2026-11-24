@@ -14,7 +14,7 @@ function deploymentRow(alias: string, route: FakeRoute) {
   return {
     id: route.id,
     groupAlias: alias,
-    group: { mergeSystemMessages: false },
+    group: { mergeSystemMessages: false, sessionAffinity: false },
     kind: route.kind,
     baseUrl: `https://${route.id}.test/v1`,
     model: alias,
@@ -47,6 +47,7 @@ function groupRow(alias: string, routes: FakeRoute[], change: Record<string, unk
     vendor: "openai",
     displayName: "",
     mergeSystemMessages: false,
+    sessionAffinity: false,
     strategy: "priority",
     billingMode: "routed",
     priceInput: 0,

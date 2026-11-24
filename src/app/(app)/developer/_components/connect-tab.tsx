@@ -1,27 +1,10 @@
 "use client";
 
-import { useState, useSyncExternalStore, useTransition, type ReactNode } from "react";
-import {
-  Alert,
-  Button,
-  buttonVariants,
-  Card,
-  Disclosure,
-  DisclosureGroup,
-  Input,
-  Label,
-  Radio,
-  RadioGroup,
-  Separator,
-  Spinner,
-  Surface,
-  Tabs,
-  TextField,
-} from "@heroui/react";
-import { AppWindow, Braces, Download, KeyRound, Plug, SquareTerminal, type LucideIcon } from "lucide-react";
+import { useState, useTransition, type ReactNode } from "react";
+import { Alert, buttonVariants, Card, Disclosure, DisclosureGroup, RadioGroup, Separator, Tabs } from "@heroui/react";
+import { AppWindow, Braces, KeyRound, Plug, SquareTerminal, type LucideIcon } from "lucide-react";
 import { useTranslations } from "next-intl";
 import ChoiceCards from "@/components/console/choice-cards";
-import CopyButton from "@/components/console/copy-button";
 import PageStatus from "@/components/console/page-status";
 import SearchSelect from "@/components/console/search-select";
 import { Link } from "@/i18n/routing";
@@ -37,6 +20,7 @@ import {
   connectTool,
   gatewayUrls,
   isLocalOrigin,
+  KEY_CHECK_CODES,
   KEY_PLACEHOLDER,
   MODEL_PLACEHOLDER,
   routeModels,
@@ -49,7 +33,13 @@ import {
   type GuideCode,
   type GuideStep,
 } from "./connect-guides";
+import { CodeBlock, KeyField, Section, ShellTabs, StepItem, ToolCard, useDetectedShell, ValueRow } from "./connect-parts";
+import McpConnect from "./mcp-connect";
 import { useStoredKey } from "./stored-key";
+
+const CONNECT_MODES = ["models", "mcp"] as const;
+
+type ConnectMode = (typeof CONNECT_MODES)[number];
 
 const GROUP_ICONS: Record<ConnectGroup, LucideIcon> = {
   coding: SquareTerminal,
@@ -58,34 +48,9 @@ const GROUP_ICONS: Record<ConnectGroup, LucideIcon> = {
   other: Plug,
 };
 
-const CHECK_CODES = [
-  "invalid_api_key",
-  "key_paused",
-  "ip_not_allowed",
-  "outside_access_window",
-  "endpoint_not_allowed",
-  "budget_exceeded",
-  "rate_limit_exceeded",
-] as const;
-
 const HELP_TOPICS = ["key", "url", "model", "subscription", "limit", "blocked", "network", "models", "home", "logs"] as const;
 
 type KeyCheck = { key: string; route: ConnectRoute } & ({ ok: true; models: string[] } | { ok: false; code: string });
-
-const noSubscription = () => () => {};
-
-function detectShell(): ConnectShell {
-  return /Windows/i.test(navigator.userAgent) ? "windows" : "posix";
-}
-
-function downloadJson(fileName: string, text: string) {
-  const url = URL.createObjectURL(new Blob([`${text}\n`], { type: "application/json" }));
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = fileName;
-  link.click();
-  URL.revokeObjectURL(url);
-}
 
 async function checkKey(key: string, route: ConnectRoute, url: string): Promise<KeyCheck> {
   try {
@@ -99,89 +64,20 @@ async function checkKey(key: string, route: ConnectRoute, url: string): Promise<
       return { key, route, ok: true, models };
     }
     const code = typeof body?.error?.code === "string" ? body.error.code : "";
-    return { key, route, ok: false, code: CHECK_CODES.find((known) => known === code) ?? "other" };
+    return { key, route, ok: false, code: KEY_CHECK_CODES.find((known) => known === code) ?? "other" };
   } catch {
     return { key, route, ok: false, code: "network" };
   }
 }
 
-function Section({
-  number,
-  title,
-  description,
-  actions,
-  children,
-}: {
-  number: number;
-  title: string;
-  description?: ReactNode;
-  actions?: ReactNode;
-  children: ReactNode;
-}) {
-  return (
-    <Card render={(props) => <section {...props} />} aria-label={title} className="gap-5">
-      <Card.Header className="flex-row flex-wrap items-start justify-between gap-3">
-        <div className="flex min-w-0 flex-1 basis-72 items-start gap-3">
-          <span
-            className="grid size-7 shrink-0 place-items-center rounded-full bg-accent text-sm font-semibold text-accent-foreground tabular-nums"
-            aria-hidden
-          >
-            {number}
-          </span>
-          <div className="min-w-0">
-            <Card.Title>{title}</Card.Title>
-            {description ? <Card.Description>{description}</Card.Description> : null}
-          </div>
-        </div>
-        {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
-      </Card.Header>
-      <Card.Content className="space-y-5">{children}</Card.Content>
-    </Card>
-  );
-}
-
-function CodeBlock({ code, copyLabel, downloadLabel }: { code: GuideCode; copyLabel: string; downloadLabel: string }) {
-  return (
-    <div className="space-y-2">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        {code.file ? <code className="font-mono text-xs text-muted break-words">{code.file}</code> : <span />}
-        <div className="flex flex-wrap gap-2">
-          {code.download ? (
-            <Button size="sm" variant="secondary" onPress={() => downloadJson(code.download!, code.text)}>
-              <Download size={14} aria-hidden />
-              {downloadLabel}
-            </Button>
-          ) : null}
-          <CopyButton text={code.text} label={copyLabel} variant="secondary" showLabel />
-        </div>
-      </div>
-      <Surface variant="secondary" className="overflow-x-auto rounded-xl p-4">
-        <pre className="font-mono text-xs whitespace-pre-wrap break-words">{code.text}</pre>
-      </Surface>
-    </div>
-  );
-}
-
-function ValueRow({ label, value, hint, copyLabel }: { label: string; value: string; hint?: string; copyLabel: string }) {
-  return (
-    <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-      <div className="min-w-0 flex-1 basis-64">
-        <p className="text-sm font-medium">{label}</p>
-        <code className="mt-1 block font-mono text-sm break-all">{value}</code>
-        {hint ? <p className="mt-1 text-xs text-muted">{hint}</p> : null}
-      </div>
-      <CopyButton text={value} label={copyLabel} variant="secondary" showLabel />
-    </div>
-  );
-}
-
-export default function ConnectTab() {
+export default function ConnectTab({ canSeeMcp }: { canSeeMcp: boolean }) {
   const t = useTranslations("Connect");
   const tCommon = useTranslations("Common");
   const origin = useOrigin();
   const page = useActionData(loadConnectGuideAction);
+  const mode: ConnectMode = useSearchParam("mode") === "mcp" ? "mcp" : "models";
   const tool = connectTool(useSearchParam("tool"));
-  const detectedShell = useSyncExternalStore(noSubscription, detectShell, () => "posix" as const);
+  const detectedShell = useDetectedShell();
   const [shellChoice, setShellChoice] = useState<ConnectShell | null>(null);
   const [sdk, setSdk] = useState<ConnectSdk>("openai");
   const [routeChoice, setRouteChoice] = useState<{ tool: ConnectTool; route: ConnectRoute } | null>(null);
@@ -193,6 +89,25 @@ export default function ConnectTab() {
   if (!page.data) return <PageStatus state={page} layout="panels" />;
 
   const data = page.data;
+  const modePicker = (
+    <ChoiceCards
+      label={t("mode.label")}
+      value={mode}
+      columns={2}
+      options={CONNECT_MODES.map((id) => ({ id, label: t("mode.option", { mode: id }), hint: t("mode.hint", { mode: id }) }))}
+      onChange={(next) => setSearchParams({ mode: next === "mcp" ? "mcp" : null })}
+    />
+  );
+
+  if (mode === "mcp") {
+    return (
+      <div className="space-y-6">
+        {modePicker}
+        <McpConnect data={data} canSeeMcp={canSeeMcp} />
+      </div>
+    );
+  }
+
   const hasSubscriptions = data.models.subscription.length > 0;
   const route: ConnectRoute = !hasSubscriptions
     ? "api"
@@ -279,26 +194,13 @@ export default function ConnectTab() {
           </Tabs.List>
         </Tabs>
       ) : null}
-      {tool.shell ? (
-        <Tabs
-          selectedKey={shell}
-          onSelectionChange={(next) => setShellChoice(next === "windows" ? "windows" : "posix")}
-          className="w-fit"
-        >
-          <Tabs.List className="w-fit min-w-0" aria-label={t("setup.shell")}>
-            {(["posix", "windows"] as const).map((id) => (
-              <Tabs.Tab key={id} id={id} className="w-auto">
-                {t("setup.shellName", { shell: id })}
-              </Tabs.Tab>
-            ))}
-          </Tabs.List>
-        </Tabs>
-      ) : null}
+      {tool.shell ? <ShellTabs shell={shell} onChange={setShellChoice} /> : null}
     </>
   );
 
   return (
     <div className="space-y-6">
+      {modePicker}
       <p className="max-w-3xl text-sm text-muted">{t("intro")}</p>
 
       {local ? (
@@ -327,28 +229,15 @@ export default function ConnectTab() {
                   {t("group", { group })}
                 </p>
                 <div className="grid grid-cols-2 gap-2 xl:grid-cols-3">
-                  {CONNECT_TOOLS.filter((item) => item.group === group).map((item) => {
-                    const selected = item.id === tool.id;
-                    return (
-                      <Card
-                        key={item.id}
-                        variant="secondary"
-                        className={selected ? "border border-accent bg-accent/8 p-0" : "border border-transparent p-0"}
-                      >
-                        <Radio value={item.id} className="mt-0 h-full w-full">
-                          <Radio.Content className="h-full w-full items-start gap-3 p-3">
-                            <Radio.Control>
-                              <Radio.Indicator />
-                            </Radio.Control>
-                            <span className="min-w-0 flex-1 space-y-1">
-                              <Label>{t(`tools.${item.id}.name`)}</Label>
-                              <span className="hidden text-xs font-normal text-muted sm:block">{t(`tools.${item.id}.hint`)}</span>
-                            </span>
-                          </Radio.Content>
-                        </Radio>
-                      </Card>
-                    );
-                  })}
+                  {CONNECT_TOOLS.filter((item) => item.group === group).map((item) => (
+                    <ToolCard
+                      key={item.id}
+                      id={item.id}
+                      label={t(`tools.${item.id}.name`)}
+                      hint={t(`tools.${item.id}.hint`)}
+                      selected={item.id === tool.id}
+                    />
+                  ))}
                 </div>
               </div>
             );
@@ -392,20 +281,7 @@ export default function ConnectTab() {
         ) : null}
 
         <div className="space-y-3">
-          <div className="flex flex-wrap items-end gap-2">
-            <TextField fullWidth value={apiKey} onChange={setApiKey} type="password" className="min-w-0 flex-1 basis-64">
-              <Label>{t("access.key")}</Label>
-              <Input type="password" autoComplete="off" spellCheck={false} placeholder={KEY_PLACEHOLDER} />
-            </TextField>
-            <Button variant="secondary" isPending={checking} isDisabled={!key} onPress={runCheck}>
-              {({ isPending }) => (
-                <>
-                  {isPending ? <Spinner color="current" size="sm" /> : null}
-                  {t("access.check")}
-                </>
-              )}
-            </Button>
-          </div>
+          <KeyField value={apiKey} onChange={setApiKey} checking={checking} onCheck={runCheck} />
           <p className="text-xs text-muted">{t("access.keyHint")}</p>
           {data.keyCount > 0 || key ? createKeyLink : null}
           {currentCheck ? (
@@ -450,14 +326,7 @@ export default function ConnectTab() {
       >
         <ol className="space-y-6" aria-label={t("setup.title", { tool: toolName })}>
           {guide.steps.map((step, index) => (
-            <li key={step.id} className="flex gap-3">
-              <span
-                className="grid size-6 shrink-0 place-items-center rounded-full text-xs font-semibold text-muted tabular-nums ring-1 ring-border ring-inset"
-                aria-hidden
-              >
-                {index + 1}
-              </span>
-              <div className="min-w-0 flex-1 space-y-3">
+            <StepItem key={step.id} index={index}>
                 <p className="text-sm text-foreground">{stepText(step)}</p>
                 {step.code ? codeBlock(step.code) : null}
                 {step.fields ? (
@@ -481,8 +350,7 @@ export default function ConnectTab() {
                     {codeBlock(step.alt.code)}
                   </>
                 ) : null}
-              </div>
-            </li>
+            </StepItem>
           ))}
         </ol>
 

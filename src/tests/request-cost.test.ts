@@ -41,6 +41,7 @@ function group(deployments: ResolvedDeployment[], over: Partial<ResolvedModelGro
     fallback_groups: [],
     deployments,
     mapped: deployments,
+    session_affinity: false,
     ...over,
   };
 }

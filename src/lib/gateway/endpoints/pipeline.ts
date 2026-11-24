@@ -6,13 +6,16 @@ import { canonicalBody } from "@/lib/gateway/routing/name-route";
 import { variantRoute } from "@/lib/gateway/routing/variant-route";
 import { parseRequest } from "@/lib/gateway/protocols/parse-request";
 import { requestClient } from "@/lib/gateway/request-logs/request-session";
+import { sessionHeaders, withDeploymentHeader } from "@/lib/gateway/routing/deployment-affinity";
 import type { ZodType } from "zod";
-import type { GatedRequest, ScreenedRequest, ScreenOptions } from "@/types/gateway";
+import type { GatedRequest, RequestTrace, ScreenedRequest, ScreenOptions } from "@/types/gateway";
+
+const requestTraces = new WeakMap<Request, RequestTrace>();
 
 export function gatewayRoute(handle: (req: Request) => Promise<Response>): (req: Request) => Promise<Response> {
   return async (req) => {
     try {
-      return await handle(req);
+      return withDeploymentHeader(await handle(req), requestTraces.get(req));
     } catch (err) {
       return gateResponse(err, req);
     }
@@ -22,6 +25,10 @@ export function gatewayRoute(handle: (req: Request) => Promise<Response>): (req:
 export async function gateModelRequest(req: Request, options: ScreenOptions = {}): Promise<GatedRequest> {
   const gated = await gateRequest(options.auth ?? req, options.pool);
   const raw = await readBody(req);
+  if (gated.trace) {
+    gated.trace.sessionHeaders = sessionHeaders(req.headers);
+    requestTraces.set(req, gated.trace);
+  }
   return { principal: { ...gated, client: requestClient(req.headers, raw) }, raw };
 }
 
