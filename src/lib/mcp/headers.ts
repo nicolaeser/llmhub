@@ -65,6 +65,11 @@ export function headerValue(value: string): string {
   return `=?base64?${Buffer.from(value, "utf8").toString("base64")}?=`;
 }
 
+export function decodeHeaderValue(value: string): string {
+  const encoded = /^=\?base64\?([A-Za-z0-9+/]*={0,2})\?=$/.exec(value);
+  return encoded ? Buffer.from(encoded[1]!, "base64").toString("utf8") : value;
+}
+
 function paramText(value: unknown): string | null {
   if (typeof value === "string") return value;
   if (typeof value === "boolean") return value ? "true" : "false";

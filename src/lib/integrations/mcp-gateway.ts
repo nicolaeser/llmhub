@@ -2,10 +2,11 @@ import "server-only";
 import prisma from "@/lib/db/prisma";
 import { GateError } from "@/lib/gateway/errors";
 import { executeBoundTool } from "@/lib/integrations/execution";
-import { parseRpc, rpcFail, rpcOk, toolCard, visibleTools, type CallableTool } from "@/lib/integrations/mcp-protocol";
+import { toolCard, visibleTools, type CallableTool } from "@/lib/integrations/mcp-protocol";
 import { DEFAULT_EXECUTION_POLICY } from "@/lib/integrations/workflow";
+import { McpEndpointError, type McpEndpointTools } from "@/lib/mcp/endpoint";
 import { executionPolicySchema, policyRuleSchema } from "@/schemas/integrations";
-import type { Principal } from "@/types/gateway";
+import type { JsonMap, Principal } from "@/types/gateway";
 import type { PolicyRule, SideEffect } from "@/types/integrations";
 
 function policyOf(value: unknown) {
@@ -24,58 +25,60 @@ function rulesOf(value: unknown): PolicyRule[] {
   return parsed.success ? parsed.data : [];
 }
 
-const PROTOCOL = "2025-06-18";
+const INTEGRATION_MCP_INFO = { name: "llmhub-integrations", version: "1" };
+const SERVER_ERROR = -32000;
+const POLICY_ERROR = -32001;
+const POLICY_ERRORS = new Set(["POLICY_DENIED", "FORBIDDEN", "APPROVAL_REQUIRED"]);
 
-function fail(id: unknown, message: string): Record<string, unknown> {
-  const code = message === "POLICY_DENIED" || message === "FORBIDDEN" || message === "APPROVAL_REQUIRED" ? -32001 : -32000;
-  return rpcFail(id, code, message);
+function integrationError(message: string): McpEndpointError {
+  return new McpEndpointError(POLICY_ERRORS.has(message) ? POLICY_ERROR : SERVER_ERROR, message);
 }
 
-export async function handleIntegrationMcp(principal: Principal, body: unknown, agentSlug: string): Promise<Record<string, unknown>> {
-  const parsed = parseRpc(body);
-  if ("error" in parsed) return rpcFail(null, -32600, parsed.error);
-  if (parsed.method === "initialize") {
-    return rpcOk(parsed.id, { protocolVersion: PROTOCOL, capabilities: { tools: { listChanged: false } }, serverInfo: { name: "llmhub-integrations", version: "1" } });
-  }
-  if (parsed.method === "ping") return rpcOk(parsed.id, {});
-  if (!principal.orgId) throw new GateError(403, "permission_denied", "company context required");
-  if (!agentSlug) return fail(parsed.id, "AGENT_REQUIRED");
-  const agent = await prisma.hubAgent.findUnique({ where: { orgId_slug: { orgId: principal.orgId, slug: agentSlug } } });
-  if (!agent) return fail(parsed.id, "AGENT_REQUIRED");
-  if (parsed.method === "tools/list") {
-    const tools = await callableFor(agent.id, principal.orgId);
-    return rpcOk(parsed.id, { tools: visibleTools(tools, new Date(), "production").map(toolCard) });
-  }
-  if (parsed.method === "tools/call") {
-    const name = typeof parsed.params.name === "string" ? parsed.params.name : "";
-    const args = parsed.params.arguments && typeof parsed.params.arguments === "object" && !Array.isArray(parsed.params.arguments)
-      ? (parsed.params.arguments as Record<string, unknown>)
-      : {};
-    const tools = await callableFor(agent.id, principal.orgId);
-    const tool = tools.find((item) => item.name === name);
-    if (!tool) return fail(parsed.id, "TOOL_NOT_PUBLISHED");
-    try {
-      const result = await executeBoundTool({
-        orgId: principal.orgId,
-        actor: principal.actor,
-        agentId: agent.id,
-        agentSlug: agent.slug,
-        toolName: name,
-        connectionId: tool.connectionId,
-        args,
-        correlationId: principal.trace?.endpoint || crypto.randomUUID(),
-      });
-      return rpcOk(parsed.id, {
-        content: [{ type: "text", text: JSON.stringify(result.output ?? null) }],
-        structuredContent: result.output ?? null,
-        isError: result.status !== "succeeded",
-      });
-    } catch (err) {
-      const message = err instanceof Error && /^[A-Z0-9_]+$/.test(err.message) ? err.message : "upstream_failed";
-      return fail(parsed.id, message);
-    }
-  }
-  return rpcFail(parsed.id, -32601, "method_not_found");
+function isObject(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+export function integrationMcpTools(principal: Principal, agentSlug: string): McpEndpointTools {
+  const agentOf = async () => {
+    if (!principal.orgId) throw new GateError(403, "permission_denied", "company context required");
+    const agent = agentSlug
+      ? await prisma.hubAgent.findUnique({ where: { orgId_slug: { orgId: principal.orgId, slug: agentSlug } } })
+      : null;
+    if (!agent) throw integrationError("AGENT_REQUIRED");
+    return { agent, orgId: principal.orgId };
+  };
+  return {
+    info: INTEGRATION_MCP_INFO,
+    async list() {
+      const { agent, orgId } = await agentOf();
+      return visibleTools(await callableFor(agent.id, orgId), new Date(), "production").map(toolCard) as JsonMap[];
+    },
+    async call(name, args) {
+      const { agent, orgId } = await agentOf();
+      const tool = (await callableFor(agent.id, orgId)).find((item) => item.name === name);
+      if (!tool) throw integrationError("TOOL_NOT_PUBLISHED");
+      try {
+        const result = await executeBoundTool({
+          orgId,
+          actor: principal.actor,
+          agentId: agent.id,
+          agentSlug: agent.slug,
+          toolName: name,
+          connectionId: tool.connectionId,
+          args,
+          correlationId: principal.trace?.endpoint || crypto.randomUUID(),
+        });
+        const output = result.output ?? null;
+        return {
+          content: [{ type: "text", text: JSON.stringify(output) }],
+          ...(isObject(output) ? { structuredContent: output } : {}),
+          isError: result.status !== "succeeded",
+        };
+      } catch (err) {
+        throw integrationError(err instanceof Error && /^[A-Z0-9_]+$/.test(err.message) ? err.message : "upstream_failed");
+      }
+    },
+  };
 }
 
 async function callableFor(agentId: string, orgId: string): Promise<CallableTool[]> {

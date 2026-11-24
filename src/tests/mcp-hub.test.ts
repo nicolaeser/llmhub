@@ -1,8 +1,9 @@
 import { recordedPrisma } from "./support/recorded-prisma";
 import assert from "node:assert/strict";
 import test from "node:test";
-import { MCP_PROTOCOL_VERSION } from "@/lib/mcp/client";
-import { handleHubMcp } from "@/lib/mcp/hub";
+import { MCP_LEGACY_PROTOCOL_VERSION, MCP_PROTOCOL_VERSION } from "@/lib/mcp/client";
+import { answerMcp, INVALID_PARAMS } from "@/lib/mcp/endpoint";
+import { HUB_MCP_INFO, hubMcpTools } from "@/lib/mcp/hub";
 import type { JsonMap, Principal } from "@/types/gateway";
 
 const principal = {
@@ -72,17 +73,18 @@ function reset() {
 }
 
 async function rpc(body: JsonMap | null): Promise<{ status: number; json: JsonMap | null }> {
-  const response = await handleHubMcp(principal, body);
-  const text = await response.text();
-  return { status: response.status, json: text ? (JSON.parse(text) as JsonMap) : null };
+  const reply = await answerMcp(body, new Headers(), hubMcpTools(principal), AbortSignal.timeout(5_000));
+  return { status: reply.status, json: reply.body as JsonMap | null };
 }
 
-test("the hub lists the caller's tools and hides blocked actions", async () => {
+test("the hub negotiates the client's legacy version and lists the caller's tools without blocked actions", async () => {
   reset();
-  const init = await rpc({ jsonrpc: "2.0", id: 1, method: "initialize" });
+  const init = await rpc({ jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2025-06-18", capabilities: {} } });
   assert.equal(init.status, 200);
-  assert.equal((init.json!.result as JsonMap).protocolVersion, MCP_PROTOCOL_VERSION);
-  assert.equal(((init.json!.result as JsonMap).serverInfo as JsonMap).name, "llmhub");
+  assert.equal((init.json!.result as JsonMap).protocolVersion, "2025-06-18");
+  assert.deepEqual((init.json!.result as JsonMap).serverInfo, HUB_MCP_INFO);
+  const future = await rpc({ jsonrpc: "2.0", id: 9, method: "initialize", params: { protocolVersion: "2099-01-01" } });
+  assert.equal((future.json!.result as JsonMap).protocolVersion, MCP_LEGACY_PROTOCOL_VERSION);
 
   const listed = await rpc({ jsonrpc: "2.0", id: 2, method: "tools/list" });
   const tools = ((listed.json!.result as JsonMap).tools as JsonMap[]).map((item) => item.name);
@@ -92,8 +94,7 @@ test("the hub lists the caller's tools and hides blocked actions", async () => {
   assert.equal(((listed.json!.result as JsonMap).tools as JsonMap[])[1]!.annotations, undefined);
 
   const missing = await rpc({ jsonrpc: "2.0", id: 3, method: "tools/call", params: { name: "mcp__Pets__delete_pet", arguments: {} } });
-  assert.equal(((missing.json!.result as JsonMap).isError), true);
-  assert.equal((((missing.json!.result as JsonMap).content as JsonMap[])[0]!.text), "Unknown tool.");
+  assert.deepEqual(missing.json!.error, { code: INVALID_PARAMS, message: "Unknown tool: mcp__Pets__delete_pet" });
 
   const note = await rpc({ jsonrpc: "2.0", method: "notifications/initialized" });
   assert.equal(note.status, 202);
