@@ -10,6 +10,7 @@ import { logger } from "@/lib/logging/logger";
 import { parseJsonOrNull } from "@/lib/utils/json";
 import { cancelQuietly } from "@/lib/utils/streams";
 import { executeCalls, MCP_MAX_STEPS, MCP_TOOL_BUDGET_MS, toolDescription } from "@/lib/mcp/chat-loop";
+import { withMessagesHubInstruction } from "@/lib/mcp/instruction";
 import { traceStep } from "@/lib/mcp/screen";
 import { messagesRequestSchema } from "@/schemas/anthropic";
 import type { JsonMap } from "@/types/gateway";
@@ -57,7 +58,7 @@ export function messagesStepBody(base: JsonMap, transcript: JsonMap[], step: num
   const messages = Array.isArray(base.messages) ? base.messages : [];
   const next: JsonMap = { ...base, messages: [...messages, ...transcript] };
   if (step > 0 && forces(next.tool_choice, toolset)) next.tool_choice = relaxed(next.tool_choice);
-  if (!last) return next;
+  if (!last) return withMessagesHubInstruction(next, toolset);
   const tools = (Array.isArray(next.tools) ? next.tools : []).filter((tool) => !toolset.byName.has(toolName(tool)));
   if (tools.length) {
     next.tools = tools;

@@ -8,7 +8,7 @@ import { seal } from "@/lib/crypto";
 import { PII_RESTORE_INSTRUCTION } from "@/lib/gateway/safety/pii-instruction";
 import type { JsonMap } from "@/types/gateway";
 
-const TOOL = "mcp__weather__forecast";
+const TOOL = "hub__weather__forecast";
 const mcpCalls: { method: string; auth: string; session: string; version: string; name: string; params: JsonMap }[] = [];
 let toolText = (city: string) => `Sunny in ${city}`;
 let stateless = false;
@@ -75,12 +75,13 @@ function serverRow() {
     internal: true,
     enabled: true,
     global: false,
+    globalAccess: "all",
     toolsRestricted: false,
     allowedTools: [],
     tools: [
       { name: "forecast", description: "Weather forecast", inputSchema: { type: "object", properties: { city: { type: "string" } } } },
     ],
-    assignments: [{ serverId: "srv1", orgId: null, teamId: null, projectId: null, memberId: null, keyId: "key-1", mode: "allow", blockedTools: [] }],
+    assignments: [{ serverId: "srv1", orgId: null, teamId: null, projectId: null, memberId: null, keyId: "key-1", access: "all", extraTools: [], blockedTools: [] }],
   };
 }
 
@@ -409,7 +410,11 @@ test("restore mode instructs every MCP step once and keeps the instruction out o
   assert.equal(bodies.length, 2);
   for (const body of bodies) {
     const messages = body.messages as JsonMap[];
-    assert.deepEqual(messages[0], { role: "system", content: PII_RESTORE_INSTRUCTION });
+    const content = String(messages[0]!.content);
+    assert.equal(messages[0]!.role, "system");
+    assert.ok(content.startsWith("Tools from the gateway:"));
+    assert.ok(content.endsWith(`\n\n${PII_RESTORE_INSTRUCTION}`));
+    assert.equal(content.split(PII_RESTORE_INSTRUCTION).length, 2);
     assert.equal(messages.filter((message) => message.role === "system").length, 1);
   }
   const logged = recordedPrisma

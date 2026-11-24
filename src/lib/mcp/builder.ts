@@ -9,6 +9,7 @@ import { chatOnce, withDeployment } from "@/lib/gateway/dispatch/chat";
 import { GateError } from "@/lib/gateway/errors";
 import { errorFields } from "@/lib/logging/format";
 import { logger } from "@/lib/logging/logger";
+import { addressInText, normalizeBaseUrl, rebaseTools } from "@/lib/mcp/base-url";
 import { DRAFT_TIME_MS, draftWithAgent, turnOf } from "@/lib/mcp/builder-agent";
 import { crawlBudget, crawlDocs, fetchSitePage, withoutSecrets } from "@/lib/mcp/docs-crawl";
 import { sameSite } from "@/lib/mcp/docs-login";
@@ -33,6 +34,7 @@ import {
 import type { JsonMap } from "@/types/gateway";
 import type {
   HostedTool,
+  McpApiAddress,
   McpBuilderLibrary,
   McpBuilderModel,
   McpBuilderTemplate,
@@ -238,8 +240,9 @@ async function draftFromSpec(
   document: JsonMap,
   origin: Extract<McpDocsSource, { text: string }>,
   others: McpDocsSource[],
+  address: McpApiAddress,
 ): Promise<DraftBody> {
-  const imported = importOpenApi(document, origin.link);
+  const imported = importOpenApi(document, origin.link, address);
   if (!imported.tools.length) throw new Error("MCP_BUILDER_EMPTY");
   const picked =
     template === "custom"
@@ -290,11 +293,17 @@ function sitePageFetcher(sites: McpDocsSite[]): McpBuilderLibrary["fetchPage"] {
   };
 }
 
+function addressNote(instruction: string, address: McpApiAddress): string {
+  const known = address.given || address.hinted;
+  return known ? `${instruction}\n\nThe API is reached at ${known}. Use it as baseUrl and keep tool paths relative to it.` : instruction;
+}
+
 async function draftFromModel(
   instruction: string,
   sources: McpDocsSource[],
   sites: McpDocsSite[],
   deadline: number,
+  address: McpApiAddress,
 ): Promise<DraftBody> {
   const alias = await builderAlias();
   if (!alias) throw new Error("MCP_BUILDER_MODEL");
@@ -302,7 +311,7 @@ async function draftFromModel(
   let result;
   try {
     result = await draftWithAgent({
-      instruction,
+      instruction: addressNote(instruction, address),
       library,
       complete: (messages, tools) => complete(alias, messages, tools),
       deadline,
@@ -311,10 +320,14 @@ async function draftFromModel(
     throw draftFailure(err, library.attachments.length > 0);
   }
   logger.info("mcp.builder_drafted", { passes: result.passes, parts: result.parts, tools: result.tools.length });
+  const drafted = normalizeBaseUrl(result.server.baseUrl);
+  const baseUrl = address.given || (/^https?:\/\/[^/]/.test(drafted) ? drafted : address.hinted || drafted);
+  const tools = rebaseTools(baseUrl, result.tools);
   return {
     ...result.server,
-    tools: result.tools,
-    included: result.tools.map((tool) => tool.name),
+    baseUrl,
+    tools,
+    included: tools.map((tool) => tool.name),
     source: "model",
     operations: result.tools.length,
     importedFrom: null,
@@ -332,11 +345,17 @@ function crawlSummaries(reads: LinkRead[]): McpCrawlSummary[] {
   });
 }
 
+function builderAddress(given: string, instruction: string): McpApiAddress {
+  const address = normalizeBaseUrl(given);
+  return /^https?:\/\//.test(address) ? { given: address } : { hinted: addressInText(instruction) };
+}
+
 export async function draftMcpServer(raw: unknown, uploads: McpBuilderUpload[] = []): Promise<McpDraft> {
   await requireMcpManager();
   const input = parse(builderDraftSchema, raw);
   if (!input.links.length && !input.docs && !uploads.length) throw new Error("VALIDATION");
   const files = readUploads(uploads);
+  const address = builderAddress(input.address, input.instruction);
   const pasted = docsLink(input.docs);
   const started = Date.now();
   const budget = crawlBudget(started);
@@ -369,11 +388,12 @@ export async function draftMcpServer(raw: unknown, uploads: McpBuilderUpload[] =
         document,
         source,
         sources.filter((other) => other !== source),
+        address,
       );
       return { ...draft, crawls };
     }
   }
   const sites = reads.flatMap((read) => (read.site && read.crawl ? [read.site] : []));
-  const draft = await draftFromModel(input.instruction, sources, sites, started + DRAFT_TIME_MS);
+  const draft = await draftFromModel(input.instruction, sources, sites, started + DRAFT_TIME_MS, address);
   return { ...draft, crawls: crawlSummaries(reads) };
 }

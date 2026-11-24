@@ -85,7 +85,7 @@ test("readPick keeps only known operation names", () => {
   assert.equal(readPick("no", tools), null);
 });
 
-test("a hosted server accepts per-key tool and action blocks", async () => {
+test("a hosted server accepts an access level with tool exceptions per target", async () => {
   const { hostedServerSchema } = await import("@/schemas/mcp");
   const parsed = hostedServerSchema.parse({
     name: "Pets",
@@ -94,13 +94,19 @@ test("a hosted server accepts per-key tool and action blocks", async () => {
     internal: false,
     authType: "none",
     tools: [pet],
-    global: false,
-    assignments: [{ scope: "key", id: "key_1", mode: "allow", blockedTools: ["get_pet"], blockedActions: ["delete"] }],
+    defaultAccess: "read",
+    assignments: [{ scope: "key", id: "key_1", access: "write", blockedTools: ["get_pet"] }],
   });
   assert.equal(parsed.assignments[0]?.scope, "key");
-  assert.deepEqual(parsed.assignments[0]?.blockedActions, ["delete"]);
-  assert.equal(parsed.assignments[0]?.roleKey, "");
+  assert.equal(parsed.assignments[0]?.access, "write");
+  assert.deepEqual(parsed.assignments[0]?.blockedTools, ["get_pet"]);
+  assert.deepEqual(parsed.assignments[0]?.extraTools, []);
+  assert.equal(parsed.defaultAccess, "read");
   assert.equal(parsed.template, false);
+  assert.equal(
+    hostedServerSchema.safeParse({ ...parsed, assignments: [{ scope: "key", id: "key_1", access: "allow" }] }).success,
+    false,
+  );
   const bare = hostedServerSchema.parse({
     name: "Pets",
     description: "",
@@ -109,7 +115,7 @@ test("a hosted server accepts per-key tool and action blocks", async () => {
     authType: "none",
     tools: [pet],
   });
-  assert.equal(bare.global, false);
+  assert.equal(bare.defaultAccess, "none");
   assert.equal(bare.template, false);
   assert.deepEqual(bare.assignments, []);
   const keyed = { name: "Pets", description: "", baseUrl: "https://api.example.com", internal: false, authType: "bearer", tools: [pet] };

@@ -1,16 +1,16 @@
 "use client";
 
 import { useState } from "react";
-import { Button, Chip } from "@heroui/react";
+import { Button, Chip, Separator } from "@heroui/react";
 import { ArrowLeft, Plus, Trash2 } from "lucide-react";
 import { useTranslations } from "next-intl";
-import MultiPicker from "@/components/console/multi-picker";
 import SearchSelect from "@/components/console/search-select";
-import { MCP_ACTIONS } from "@/schemas/mcp";
-import type { McpAssignmentMode, McpAssignmentView, McpTargetOptions } from "@/types/mcp";
-import type { PickerItem } from "@/types/console";
+import AccessLevelField from "@/components/mcp/access-level-field";
+import { useAccessLabels } from "@/components/mcp/access-labels";
+import ToolAccessList from "@/components/mcp/tool-access-list";
+import type { McpAssignmentView, McpCeiling, McpRuleAccess, McpTargetOptions, McpToolSpec } from "@/types/mcp";
 import type { AssignmentScope } from "@/types/providers";
-import { ModeField, NO_ROLE, RoleField, ScopeSelect, type RoleChoice } from "./access-fields";
+import { ScopeSelect } from "./access-fields";
 import { newRule, ruleKey } from "./access-view";
 
 function BackButton({ onPress, isDisabled }: { onPress: () => void; isDisabled?: boolean }) {
@@ -26,7 +26,6 @@ function BackButton({ onPress, isDisabled }: { onPress: () => void; isDisabled?:
 export function AddRuleView({
   rules,
   options,
-  roles,
   defaultScope,
   pending,
   onAdd,
@@ -34,7 +33,6 @@ export function AddRuleView({
 }: {
   rules: McpAssignmentView[];
   options: McpTargetOptions;
-  roles: readonly RoleChoice[];
   defaultScope: AssignmentScope;
   pending: boolean;
   onAdd: (rule: McpAssignmentView) => void;
@@ -43,16 +41,13 @@ export function AddRuleView({
   const t = useTranslations("Mcp.assign");
   const [scope, setScope] = useState<AssignmentScope>(defaultScope);
   const [target, setTarget] = useState("");
-  const [mode, setMode] = useState<McpAssignmentMode>("allow");
-  const [role, setRole] = useState<RoleChoice | null>(null);
+  const [access, setAccess] = useState<McpRuleAccess>("read");
   const taken = new Set(rules.map(ruleKey));
   const candidates = options[scope].filter((item) => !taken.has(ruleKey({ scope, id: item.id })));
 
   function add() {
     const option = options[scope].find((item) => item.id === target);
-    if (!option) return;
-    const rule = newRule(scope, option, mode);
-    onAdd(mode === "allow" && role ? { ...rule, ...role.apply } : rule);
+    if (option) onAdd(newRule(scope, option, access));
   }
 
   return (
@@ -80,10 +75,7 @@ export function AddRuleView({
           isDisabled={pending}
         />
       </div>
-      <ModeField value={mode} onChange={setMode} isDisabled={pending} />
-      {mode === "allow" && roles.length ? (
-        <RoleField roles={roles} value={role?.id ?? NO_ROLE} onChange={setRole} isDisabled={pending} />
-      ) : null}
+      <AccessLevelField value={access} onChange={setAccess} context="rule" isDisabled={pending} />
       <div className="flex flex-wrap justify-end gap-2">
         <Button variant="secondary" onPress={add} isDisabled={pending || !target}>
           <Plus size={14} aria-hidden />
@@ -97,10 +89,9 @@ export function AddRuleView({
 export function EditRuleView({
   rule,
   label,
-  inherited,
-  roles,
-  roleKey,
-  toolItems,
+  above,
+  ceiling,
+  tools,
   pending,
   onChange,
   onRemove,
@@ -108,22 +99,19 @@ export function EditRuleView({
 }: {
   rule: McpAssignmentView;
   label: string;
-  inherited: { granted: string; blocked: string };
-  roles: readonly RoleChoice[];
-  roleKey: string;
-  toolItems: PickerItem[];
+  above: string;
+  ceiling: McpCeiling;
+  tools: McpToolSpec[];
   pending: boolean;
   onChange: (change: Partial<McpAssignmentView>) => void;
   onRemove: () => void;
   onBack: () => void;
 }) {
-  const tPage = useTranslations("Mcp");
   const t = useTranslations("Mcp.assign");
-  const tCommon = useTranslations("Common");
-  const actionItems = MCP_ACTIONS.map((action) => ({ id: action, label: tPage("action", { action }) }));
+  const labels = useAccessLabels();
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       <BackButton onPress={onBack} isDisabled={pending} />
       <div className="space-y-1">
         <div className="flex flex-wrap items-center gap-2">
@@ -132,42 +120,18 @@ export function EditRuleView({
             {t("scope", { scope: rule.scope })}
           </Chip>
         </div>
-        {inherited.granted ? <p className="text-xs text-muted">{t("inherited", { sources: inherited.granted })}</p> : null}
-        {inherited.blocked ? <p className="text-xs text-danger">{t("blockedAbove", { sources: inherited.blocked })}</p> : null}
+        <p className="text-xs text-muted">{above}</p>
       </div>
-      <ModeField value={rule.mode} onChange={(mode) => onChange({ mode })} isDisabled={pending} />
-      {rule.mode === "allow" && roles.length ? (
-        <RoleField
-          roles={roles}
-          value={roleKey}
-          onChange={(choice) => onChange(choice ? choice.apply : { roleId: "", role: null })}
-          isDisabled={pending}
-        />
-      ) : null}
-      {toolItems.length ? (
-        <MultiPicker
-          label={t("blockedTools")}
-          description={t("blockedToolsHint", { mode: rule.mode })}
-          placeholder={t("blockedToolsPlaceholder")}
-          searchLabel={tCommon("search")}
-          emptyLabel={tCommon("noResults")}
-          items={toolItems}
-          selected={rule.blockedTools}
-          onChange={(ids) => onChange({ blockedTools: ids })}
-          isDisabled={pending}
-        />
-      ) : null}
-      <MultiPicker
-        label={t("blockedActions")}
-        description={t("blockedActionsHint")}
-        placeholder={t("blockedActionsPlaceholder")}
-        searchLabel={tCommon("search")}
-        emptyLabel={tCommon("noResults")}
-        items={actionItems}
-        selected={rule.blockedActions}
-        onChange={(ids) => onChange({ blockedActions: MCP_ACTIONS.filter((action) => ids.includes(action)) })}
+      <AccessLevelField
+        value={rule.access}
+        onChange={(access) => onChange({ access, extraTools: [], blockedTools: access === "none" ? [] : rule.blockedTools })}
+        context="rule"
+        ceiling={ceiling.level}
+        ceilingSource={ceiling.limitedBy ? labels.source(ceiling.limitedBy) : undefined}
         isDisabled={pending}
       />
+      <Separator />
+      <ToolAccessList tools={tools} grant={rule} ceiling={ceiling} onChange={onChange} isDisabled={pending} />
       <div className="flex flex-wrap justify-between gap-2">
         <Button variant="danger-soft" onPress={onRemove} isDisabled={pending}>
           <Trash2 size={14} aria-hidden />

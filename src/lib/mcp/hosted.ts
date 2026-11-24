@@ -1,5 +1,6 @@
 import { parseJsonOrNull } from "@/lib/utils/json";
 import { MAX_HOSTED_TOOLS, MCP_ACTIONS, MCP_HTTP_METHODS, hostedToolSchema, mcpDraftBaseSchema } from "@/schemas/mcp";
+import { basePathOf, joinBasePath } from "@/lib/mcp/base-url";
 import { checkServerUrl } from "@/lib/mcp/url-guard";
 import type { JsonMap } from "@/types/gateway";
 import type {
@@ -172,14 +173,6 @@ function serverOf(head: JsonMap | null): McpDraftServer | null {
   return parsed.success ? parsed.data : null;
 }
 
-function basePath(baseUrl: string): string {
-  try {
-    return new URL(baseUrl).pathname.replace(/\/+$/, "");
-  } catch {
-    return "";
-  }
-}
-
 function locate(raw: string, baseUrl: string): { path: string; query: string[]; renamed: Map<string, string> } | null {
   let value = raw.trim().replace(/^https?:\/\/[^/]+/i, "");
   if (!value) return null;
@@ -196,7 +189,7 @@ function locate(raw: string, baseUrl: string): { path: string; query: string[]; 
       : [];
   if (mark >= 0) value = value.slice(0, mark);
   value = `/${value}`.replace(/\/{2,}/g, "/");
-  const prefix = basePath(baseUrl);
+  const prefix = basePathOf(baseUrl);
   if (prefix && (value === prefix || value.startsWith(`${prefix}/`))) value = value.slice(prefix.length) || "/";
   value = value.replace(/\/:([A-Za-z_][A-Za-z0-9_]*)/g, "/{$1}");
   const renamed = new Map<string, string>();
@@ -346,14 +339,14 @@ export function buildHostedRequest(
   } catch {
     return { error: "MCP_URL_INVALID" };
   }
-  const prefix = base.pathname.replace(/\/$/, "");
   const url = new URL(base.origin);
-  url.pathname = `${prefix}${path}`;
+  url.pathname = joinBasePath(base.pathname.replace(/\/+$/, ""), path);
   const known = allowedKeys(tool.inputSchema);
+  const open = tool.inputSchema.additionalProperties === true;
   const inQuery = new Set(tool.query);
   const rest: JsonMap = {};
   for (const [key, value] of Object.entries(args)) {
-    if (used.has(key) || !known.has(key)) continue;
+    if (used.has(key) || (!known.has(key) && !open)) continue;
     if (!inQuery.has(key)) {
       rest[key] = value;
       continue;

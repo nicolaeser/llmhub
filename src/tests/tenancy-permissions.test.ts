@@ -64,7 +64,6 @@ test("MCP server changes refuse the company scope and callers without a manage p
     ["disconnectMcpOAuth", () => oauth.disconnectMcpOAuth("srv1")],
     ["setBuilderModel", () => builder.setBuilderModel("")],
     ["draftMcpServer", () => builder.draftMcpServer({})],
-    ["ensureMcpRoles", () => catalog.ensureMcpRoles("srv1")],
     ["saveMcpPermissions", () => catalog.saveMcpPermissions({})],
     ["setMcpTemplate", () => catalog.setMcpTemplate({})],
   ];
@@ -87,8 +86,8 @@ test("company access rules only touch servers the company can see", async () => 
     runAsPrincipal(companyUser, () =>
       saveMcpAssignments({
         serverId: "private1",
-        global: false,
-        assignments: [{ scope: "org", id: COMPANY_ID, mode: "allow", blockedTools: [] }],
+        defaultAccess: "none",
+        assignments: [{ scope: "org", id: COMPANY_ID, access: "read" }],
       }),
     ),
     /NOT_FOUND/,

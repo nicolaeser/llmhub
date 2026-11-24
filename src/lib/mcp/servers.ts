@@ -9,7 +9,7 @@ import { seal } from "@/lib/crypto";
 import { replaceCompanyMcpAssignments, replaceMcpAssignments, targetOptions } from "@/lib/mcp/assignments";
 import { builderModels } from "@/lib/mcp/builder";
 import { managesMcpRules, mcpAccess, requireMcpManager, seesMcp, visibleToCompany } from "@/lib/mcp/scope";
-import { ensureBuiltinRoles, saveMcpInstallation } from "@/lib/mcp/catalog";
+import { saveMcpInstallation } from "@/lib/mcp/catalog";
 import { toolSpecOf } from "@/lib/mcp/hosted";
 import { mcpOAuthRedirectUri } from "@/lib/mcp/oauth";
 import { assertRemoteAuth, assertUrl, connectionFields, parse, secretFor, secretRequired } from "@/lib/mcp/server-input";
@@ -18,6 +18,8 @@ import { auditShape, loadRow, scopedView, serverSelect, viewOf, type ServerRow }
 import { serverRecord } from "@/lib/mcp/toolset";
 import { MEDIA_SERVER_URL, mediaToolSpecs } from "@/lib/mcp/media";
 import { enabledModelChoices } from "@/lib/models/aliases";
+import { rebaseTools } from "@/lib/mcp/base-url";
+import { defaultAccessOf } from "@/lib/mcp/resolve";
 import { BUILDER_MODEL_KEY, authUsesName, hostedServerSchema, mcpAssignmentsSchema, mcpServerInputSchema, mediaServerSchema } from "@/schemas/mcp";
 import type { Prisma } from "@/generated/prisma/client";
 import type { McpMediaModel, McpMediaSpec } from "@/types/mcp";
@@ -109,7 +111,6 @@ export async function createMcpServer(raw: unknown) {
         authSecret,
         internal: input.internal,
         enabled: input.enabled,
-        global: input.global,
         toolsRestricted: input.toolsRestricted,
         allowedTools: [...new Set(input.allowedTools)],
       },
@@ -132,7 +133,8 @@ export async function createMcpServer(raw: unknown) {
 
 export async function createHostedMcpServer(raw: unknown) {
   const session = await requireMcpManager();
-  const input = parse(hostedServerSchema, raw);
+  const parsed = parse(hostedServerSchema, raw);
+  const input = { ...parsed, tools: rebaseTools(parsed.baseUrl, parsed.tools) };
   assertUrl(input.baseUrl, input.internal);
   const tools = input.tools.map(toolSpecOf);
   let created: ServerRow;
@@ -159,20 +161,9 @@ export async function createHostedMcpServer(raw: unknown) {
     if (isPrismaCode(err, "P2002")) throw new Error("NAME_EXISTS", { cause: err });
     throw err;
   }
-  await ensureBuiltinRoles(created.id);
-  const roles = await prisma.mcpRole.findMany({ where: { serverId: created.id }, select: { id: true, key: true } });
-  const roleIds = new Map(roles.map((role) => [role.key, role.id]));
-  const names = new Set(input.tools.map((tool) => tool.name));
-  const assignments = input.assignments.map((row) => ({
-    scope: row.scope,
-    id: row.id,
-    mode: row.mode,
-    blockedTools: row.blockedTools.filter((name) => names.has(name)),
-    blockedActions: row.blockedActions,
-    roleId: row.roleKey ? roleIds.get(row.roleKey) ?? "" : "",
-  }));
-  if (input.global || assignments.length) {
-    const saved = await replaceMcpAssignments(created.id, input.global, assignments);
+  const assignments = input.assignments;
+  if (input.defaultAccess !== "none" || assignments.length) {
+    const saved = await replaceMcpAssignments(created.id, input.defaultAccess, assignments);
     if (!saved) {
       await prisma.mcpServer.delete({ where: { id: created.id } });
       throw new Error("VALIDATION");
@@ -187,7 +178,7 @@ export async function createHostedMcpServer(raw: unknown) {
       ...auditShape(created),
       kind: "hosted",
       tools: tools.map((tool) => tool.name),
-      global: input.global,
+      defaultAccess: input.defaultAccess,
       template: input.template,
       assignments: assignments.length,
     },
@@ -251,7 +242,6 @@ export async function createMediaMcpServer(raw: unknown) {
     if (isPrismaCode(err, "P2002")) throw new Error("NAME_EXISTS", { cause: err });
     throw err;
   }
-  await ensureBuiltinRoles(created.id);
   await writeAudit({
     actor: session.user.id,
     action: "mcp_server.create",
@@ -325,7 +315,6 @@ export async function updateMcpServer(raw: { id: string } & Record<string, unkno
           authSecret,
           internal: input.internal,
           enabled: input.enabled,
-          global: input.global,
           toolsRestricted: input.toolsRestricted,
           allowedTools: [...new Set(input.allowedTools)],
         },
@@ -376,7 +365,6 @@ export async function updateMcpServer(raw: { id: string } & Record<string, unkno
           authSecret,
           internal: input.internal,
           enabled: input.enabled,
-          global: input.global,
           toolsRestricted: input.toolsRestricted,
           allowedTools: [...new Set(input.allowedTools)],
           ...(connectionChanged ? { lastError: "", refreshedAt: null } : {}),
@@ -466,22 +454,22 @@ export async function saveMcpAssignments(raw: unknown) {
   const before = await loadRow(input.serverId);
   const saved = company
     ? await replaceCompanyMcpAssignments(input.serverId, company, input.assignments)
-    : await replaceMcpAssignments(input.serverId, input.global, input.assignments);
+    : await replaceMcpAssignments(input.serverId, input.defaultAccess, input.assignments);
   if (!saved) throw new Error("NOT_FOUND");
   await writeAudit({
     actor: session.user.id,
     action: "mcp_server.assign",
     objectType: "mcp_server",
     objectId: input.serverId,
-    before: { global: before.global, assignments: before.assignments.length },
+    before: { defaultAccess: defaultAccessOf(before), assignments: before.assignments.length },
     after: {
-      global: saved.global,
+      defaultAccess: saved.defaultAccess,
       assignments: saved.assignments.map((row) => ({
         scope: row.scope,
         id: row.id,
-        mode: row.mode,
+        access: row.access,
+        extraTools: row.extraTools,
         blockedTools: row.blockedTools,
-        blockedActions: row.blockedActions,
       })),
     },
   });

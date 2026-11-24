@@ -26,12 +26,12 @@ export function enabledTools(server: McpServerView): number {
   return server.tools.filter((tool) => server.allowedTools.includes(tool.name)).length;
 }
 
-export function accessOf(server: McpServerView): { first: string; allowed: number; blocks: number } {
-  const allowed = server.assignments.filter((rule) => rule.mode === "allow");
+export function accessOf(server: McpServerView): { first: string; allowed: number; limits: number } {
+  const allowed = server.assignments.filter((rule) => rule.access !== "inherit" && rule.access !== "none");
   return {
     first: allowed[0]?.label ?? "",
     allowed: allowed.length,
-    blocks: server.assignments.length - allowed.length,
+    limits: server.assignments.length - allowed.length,
   };
 }
 

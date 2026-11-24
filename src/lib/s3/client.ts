@@ -2,7 +2,7 @@ import "server-only";
 
 import { authorizationHeader, sha256Hex } from "@/lib/s3/sign";
 import { readTextOr } from "@/lib/utils/json";
-import { objectUrl, publicObjectUrl } from "@/lib/s3/url";
+import { endpointAllowed, objectUrl, publicObjectUrl } from "@/lib/s3/url";
 import type { S3Runtime } from "@/types/s3";
 
 export class S3Error extends Error {
@@ -29,6 +29,7 @@ export type S3RequestOptions = {
 
 async function signedFetch(runtime: S3Runtime, method: string, key: string, opts?: S3RequestOptions): Promise<Response> {
   const url = objectUrl(runtime, key);
+  if (!endpointAllowed(url.origin)) throw new Error("S3_ENDPOINT_BLOCKED");
   for (const [name, value] of Object.entries(opts?.query ?? {})) url.searchParams.set(name, value);
   const body = opts?.body;
   const extra: Record<string, string> = { ...opts?.headers };

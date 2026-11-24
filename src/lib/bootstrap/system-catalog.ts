@@ -2,6 +2,7 @@ import "server-only";
 import prisma from "@/lib/db/prisma";
 import { roleTemplateKeys, roleTemplates } from "@/lib/auth/permissions";
 import { ensureRedactorProvider } from "@/lib/bootstrap/redactor-provider";
+import { adoptMcpAccessLevels } from "@/lib/bootstrap/mcp-access-levels";
 import { adoptRetentionDefaults } from "@/lib/bootstrap/retention-defaults";
 
 const TEMPLATES_SEEDED = "role_templates_seeded";
@@ -40,6 +41,7 @@ async function upsertCatalog(): Promise<void> {
     },
   });
   await adoptRetentionDefaults();
+  await adoptMcpAccessLevels();
   await ensureRedactorProvider();
 }
 

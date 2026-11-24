@@ -6,10 +6,12 @@ import { Sparkles } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useErrorToast } from "@/components/console/use-error-toast";
 import { isActionFail } from "@/lib/http/action-result";
+import { normalizeBaseUrl } from "@/lib/mcp/base-url";
 import { docsLoginFor } from "@/lib/mcp/docs-login";
-import { MAX_HOSTED_TOOLS, MCP_ROLE_KEYS, authNameValid } from "@/schemas/mcp";
+import { MAX_HOSTED_TOOLS, authNameValid } from "@/schemas/mcp";
 import type {
   HostedTool,
+  McpAccessLevel,
   McpAssignmentView,
   McpBuilderModel,
   McpBuilderTemplate,
@@ -72,6 +74,7 @@ export default function BuilderDialog({
   const [template, setTemplate] = useState<McpBuilderTemplate>("readonly");
   const [instruction, setInstruction] = useState(initial);
   const [docs, setDocs] = useState("");
+  const [address, setAddress] = useState("");
   const [links, setLinks] = useState<McpDocsLinkRow[]>([]);
   const [files, setFiles] = useState<McpDocsFileRow[]>([]);
   const [sourceErrors, setSourceErrors] = useState<Record<string, string>>({});
@@ -80,14 +83,14 @@ export default function BuilderDialog({
   const [tools, setTools] = useState<HostedTool[]>([]);
   const [enabled, setEnabled] = useState<string[]>([]);
   const [search, setSearch] = useState("");
-  const [global, setGlobal] = useState(false);
+  const [defaultAccess, setDefaultAccess] = useState<McpAccessLevel>("none");
   const [rules, setRules] = useState<McpAssignmentView[]>([]);
   const [savingModel, startModel] = useTransition();
   const [drafting, startDraft] = useTransition();
   const [saving, startSave] = useTransition();
   const pending = savingModel || drafting || saving;
   const chosen = tools.filter((tool) => enabled.includes(tool.name));
-  const baseValid = /^https?:\/\/[^\s/]+/i.test(server.baseUrl.trim());
+  const baseValid = /^https?:\/\/[^\s/]+/i.test(normalizeBaseUrl(server.baseUrl));
   const tooMany = chosen.length > MAX_HOSTED_TOOLS;
   const nameValid = authNameValid(server.authType, server.authHeader);
   const needsSecret = server.authType !== "none" && !server.shared && !server.secret.trim();
@@ -147,7 +150,7 @@ export default function BuilderDialog({
         name: row.name,
         secret: row.secret,
       }));
-      body.append("request", JSON.stringify({ template, instruction, docs, links: sent }));
+      body.append("request", JSON.stringify({ template, instruction, docs, links: sent, address }));
       for (const row of files) body.append("file", row.file, row.file.name);
       let res: Response;
       try {
@@ -174,21 +177,20 @@ export default function BuilderDialog({
       const result = await createHostedMcpServerAction({
         name: server.name,
         description: server.description,
-        baseUrl: server.baseUrl,
+        baseUrl: normalizeBaseUrl(server.baseUrl),
         internal: server.internal,
         authType: server.authType,
         authHeader: server.authHeader,
         secret: server.shared ? "" : server.secret,
         tools: chosen,
         template: server.shared,
-        global,
+        defaultAccess,
         assignments: rules.map((rule) => ({
           scope: rule.scope,
           id: rule.id,
-          mode: rule.mode,
+          access: rule.access,
+          extraTools: rule.extraTools.filter((id) => included.has(id)),
           blockedTools: rule.blockedTools.filter((id) => included.has(id)),
-          blockedActions: rule.blockedActions,
-          roleKey: rule.mode === "allow" && rule.role && MCP_ROLE_KEYS.includes(rule.role.key as (typeof MCP_ROLE_KEYS)[number]) ? rule.role.key : "",
         })),
       });
       if (isActionFail(result)) {
@@ -239,6 +241,7 @@ export default function BuilderDialog({
                       canTestModels={canTestModels}
                       template={template}
                       instruction={instruction}
+                      address={address}
                       links={links}
                       docs={docs}
                       files={files}
@@ -248,6 +251,7 @@ export default function BuilderDialog({
                       onModel={chooseModel}
                       onTemplate={setTemplate}
                       onInstruction={setInstruction}
+                      onAddress={setAddress}
                       onLinks={setLinks}
                       onDocs={setDocs}
                       onFiles={setFiles}
@@ -278,10 +282,10 @@ export default function BuilderDialog({
                   {step === "access" ? (
                     <BuilderAccess
                       tools={chosen}
-                      global={global}
+                      defaultAccess={defaultAccess}
                       rules={rules}
                       pending={pending}
-                      onGlobal={setGlobal}
+                      onDefaultAccess={setDefaultAccess}
                       onRules={setRules}
                     />
                   ) : null}

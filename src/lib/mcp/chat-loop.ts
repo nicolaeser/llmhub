@@ -13,6 +13,7 @@ import { parseJsonOrNull } from "@/lib/utils/json";
 import { MCP_REQUEST_TIMEOUT_MS } from "@/lib/mcp/client";
 import { mcpErrorCode } from "@/lib/mcp/errors";
 import { screenToolResult, traceStep } from "@/lib/mcp/screen";
+import { withChatHubInstruction } from "@/lib/mcp/instruction";
 import { isMcpToolName } from "@/lib/mcp/tool-names";
 import type { JsonMap } from "@/types/gateway";
 import type {
@@ -70,7 +71,7 @@ export function stepBody(base: JsonMap, transcript: JsonMap[], step: number, las
   const messages = Array.isArray(base.messages) ? base.messages : [];
   const next: JsonMap = { ...base, messages: [...messages, ...transcript] };
   if (step > 0 && forcesTool(next.tool_choice, toolset)) next.tool_choice = "auto";
-  if (!last) return next;
+  if (!last) return withChatHubInstruction(next, toolset);
   const tools = (Array.isArray(next.tools) ? next.tools : []).filter((tool) => !toolset.byName.has(functionName(tool)));
   if (tools.length) {
     next.tools = tools;

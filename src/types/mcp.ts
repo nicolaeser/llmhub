@@ -12,7 +12,9 @@ export type McpTransport = "streamable_http" | "sse";
 
 export type McpEra = "modern" | "legacy" | "sse";
 
-export type McpAssignmentMode = "allow" | "block";
+export type McpAccessLevel = "none" | "read" | "write" | "all";
+
+export type McpRuleAccess = McpAccessLevel | "inherit";
 
 export type McpServerStatus = "connected" | "error" | "disabled" | "unchecked" | "signin";
 
@@ -255,6 +257,8 @@ export type McpDocsLogin = {
   secret: string;
 };
 
+export type McpApiAddress = { given?: string; hinted?: string };
+
 export type McpDraft = McpDraftServer & {
   tools: HostedTool[];
   included: string[];
@@ -297,22 +301,10 @@ export type McpServerRecord = {
   media: McpMediaSpec;
 };
 
-export type McpRoleGrant = {
-  allActions: boolean;
-  actions: string[];
-  tools: string[];
-  deniedTools: string[];
-};
-
-export type McpToolGrant = "inherit" | "allow" | "deny";
-
-export type McpRoleView = McpRoleGrant & {
-  id: string;
-  key: string;
-  name: string;
-  description: string;
-  builtin: boolean;
-  assigned: number;
+export type McpAccessGrant = {
+  access: McpRuleAccess;
+  extraTools: string[];
+  blockedTools: string[];
 };
 
 export type McpInstallationView = {
@@ -333,11 +325,7 @@ export type McpAssignmentRule = {
   projectId: string | null;
   memberId: string | null;
   keyId: string | null;
-  mode: McpAssignmentMode;
-  blockedTools: string[];
-  blockedActions: string[];
-  role?: McpRoleGrant | null;
-};
+} & McpAccessGrant;
 
 export type McpChain = {
   orgId: string;
@@ -350,7 +338,7 @@ export type McpChain = {
 export type McpServerPolicy = {
   id: string;
   name: string;
-  global: boolean;
+  defaultAccess: McpAccessLevel;
   enabled: boolean;
   toolsRestricted: boolean;
   allowedTools: string[];
@@ -435,12 +423,12 @@ export type McpServerView = {
   media: McpMediaSpec | null;
   enabled: boolean;
   global: boolean;
+  defaultAccess: McpAccessLevel;
   template: boolean;
   toolsRestricted: boolean;
   allowedTools: string[];
   tools: McpToolSpec[];
   toolActions: McpToolActions;
-  roles: McpRoleView[];
   installations: McpInstallationView[];
   transport: McpTransport;
   protocolVersion: string;
@@ -463,21 +451,12 @@ export type McpAssignmentView = {
   scope: AssignmentScope;
   id: string;
   label: string;
-  mode: McpAssignmentMode;
-  blockedTools: string[];
-  blockedActions: string[];
-  roleId: string;
-  role: (McpRoleGrant & { key: string; name: string }) | null;
-};
+} & McpAccessGrant;
 
 export type McpAssignmentInput = {
   scope: AssignmentScope;
   id: string;
-  mode: McpAssignmentMode;
-  blockedTools: string[];
-  blockedActions: string[];
-  roleId?: string;
-};
+} & McpAccessGrant;
 
 export type McpTargetOption = {
   id: string;
@@ -504,7 +483,6 @@ export type McpServerInput = {
   oauthScopes: string;
   internal: boolean;
   enabled: boolean;
-  global: boolean;
   toolsRestricted: boolean;
   allowedTools: string[];
 };
@@ -519,13 +497,20 @@ export type McpProbeResult = {
   era: McpEra | null;
 };
 
+export type McpAccessSource = { kind: "default" } | { kind: "rule"; rule: McpAssignmentView };
+
+export type McpCeiling = {
+  level: McpAccessLevel | null;
+  limitedBy: McpAccessSource | null;
+  allows: (tool: Pick<McpToolSpec, "name">) => boolean;
+};
+
 export type McpExplanation = {
   state: "granted" | "blocked" | "none";
-  grantedBy: McpAssignmentView[];
-  blockedBy: McpAssignmentView[];
-  global: boolean;
-  blockedTools: string[];
-  blockedActions: string[];
+  level: McpAccessLevel;
+  limitedBy: McpAccessSource | null;
+  steps: McpAssignmentView[];
+  usesDefault: boolean;
   tools: string[];
 };
 
@@ -593,18 +578,9 @@ export type McpMessagesBlock = {
 };
 
 export type McpAssignmentSource = AssignmentSource & {
-  mode: string;
+  access: string;
+  extraTools: string[];
   blockedTools: string[];
-  blockedActions: string[];
-  roleId?: string | null;
-  role?: {
-    key: string;
-    name: string;
-    allActions: boolean;
-    actions: string[];
-    tools: string[];
-    deniedTools: string[];
-  } | null;
 };
 
 export type McpTokenAuthMethod = "none" | "client_secret_basic" | "client_secret_post";
@@ -674,8 +650,6 @@ export type McpOAuthLoginState = {
   version: number;
 };
 
-export type McpKeyAccessMode = "inherit" | "allow" | "block";
-
 export type McpKeyServerAccess = {
   serverId: string;
   name: string;
@@ -684,11 +658,10 @@ export type McpKeyServerAccess = {
   enabled: boolean;
   template: boolean;
   connected: boolean;
-  global: boolean;
+  defaultAccess: McpAccessLevel;
   toolsRestricted: boolean;
   allowedTools: string[];
   tools: McpToolSpec[];
-  roles: McpRoleView[];
   inherited: McpAssignmentView[];
   rule: McpAssignmentView | null;
 };
@@ -701,13 +674,7 @@ export type McpKeyAccess = {
   servers: McpKeyServerAccess[];
 };
 
-export type McpKeyAccessChoice = {
-  serverId: string;
-  mode: McpKeyAccessMode;
-  roleId: string;
-  blockedTools: string[];
-  blockedActions: McpToolAction[];
-};
+export type McpKeyAccessChoice = { serverId: string } & McpAccessGrant;
 
 export type McpCompanyServers = {
   company: { id: string; alias: string };

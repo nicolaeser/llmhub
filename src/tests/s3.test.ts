@@ -5,7 +5,7 @@ import { s3FromParts } from "@/lib/s3/config";
 import { hasPlaceholder, presetEndpoint, S3_PRESETS, s3Preset } from "@/lib/s3/presets";
 import { probeStorage, s3ProbeCode } from "@/lib/s3/probe";
 import { authorizationHeader, sha256Hex } from "@/lib/s3/sign";
-import { joinKey, objectUrl, publicObjectUrl, resolveAddressing } from "@/lib/s3/url";
+import { endpointAllowed, joinKey, objectUrl, publicObjectUrl, resolveAddressing } from "@/lib/s3/url";
 import { storageSettingsSchema } from "@/schemas/settings";
 import type { S3Location } from "@/types/s3";
 
@@ -183,4 +183,43 @@ test("SigV4 authorization header is stable for a frozen timestamp", () => {
   assert.match(signed.authorization, /^AWS4-HMAC-SHA256 Credential=AKIAEXAMPLE\/20150830\/us-east-1\/s3\/aws4_request/);
   assert.match(signed.authorization, /SignedHeaders=host;x-amz-content-sha256;x-amz-date/);
   assert.match(signed.authorization, /Signature=[0-9a-f]{64}$/);
+});
+
+test("storage endpoints reach private object stores but never metadata or link-local addresses", () => {
+  for (const endpoint of [
+    "",
+    "https://s3.eu-central-1.amazonaws.com",
+    "http://127.0.0.1:9000",
+    "http://localhost:9000",
+    "http://10.0.0.5:9000",
+    "https://minio.internal:9000",
+    "s3.example.com",
+  ]) {
+    assert.equal(endpointAllowed(endpoint), true, endpoint);
+  }
+  for (const endpoint of [
+    "http://169.254.169.254",
+    "http://[fd00:ec2::254]",
+    "http://[::ffff:169.254.169.254]",
+    "http://100.100.100.200",
+    "http://metadata.google.internal",
+    "http://0.0.0.0:9000",
+    "http://[fe80::1]:9000",
+  ]) {
+    assert.equal(endpointAllowed(endpoint), false, endpoint);
+  }
+});
+
+test("S3 requests to a blocked endpoint fail before any fetch", async () => {
+  const runtime = s3FromParts({ bucket: "latest", endpoint: "http://169.254.169.254", prefix: "meta-data" }, KEYS)!;
+  let calls = 0;
+  const result = await withFetch(
+    () => {
+      calls += 1;
+      return new Response(null, { status: 200 });
+    },
+    () => probeStorage(runtime),
+  );
+  assert.equal(calls, 0);
+  assert.deepEqual(result, { ok: false, step: "put", code: "UNREACHABLE", status: null });
 });
