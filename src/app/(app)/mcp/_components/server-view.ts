@@ -35,7 +35,12 @@ export function accessOf(server: McpServerView): { first: string; allowed: numbe
   };
 }
 
+export function connectedOrgsOf(server: McpServerView): string[] {
+  return server.installations
+    .filter((row) => row.enabled && (row.authType === "none" || row.hasSecret))
+    .map((row) => row.orgId);
+}
+
 export function companyConnected(server: McpServerView, companyId: string | null): boolean {
-  const installation = companyId ? server.installations.find((row) => row.orgId === companyId) : null;
-  return Boolean(installation?.enabled && (installation.authType === "none" || installation.hasSecret));
+  return Boolean(companyId && connectedOrgsOf(server).includes(companyId));
 }

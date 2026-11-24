@@ -15,10 +15,6 @@ export function assertUrl(url: string, internal: boolean): void {
   if (!verdict.ok) throw new Error(verdict.code);
 }
 
-export function assertRemoteAuth(authType: string): void {
-  if (authType === "query") throw new Error("VALIDATION");
-}
-
 export function secretRequired(input: { authType: string; oauthGrant: string }): boolean {
   if (input.authType === "oauth") return input.oauthGrant === "client_credentials";
   return input.authType !== "none";

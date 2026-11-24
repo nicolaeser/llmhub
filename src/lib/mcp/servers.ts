@@ -12,7 +12,7 @@ import { managesMcpRules, mcpAccess, requireMcpManager, seesMcp, visibleToCompan
 import { saveMcpInstallation } from "@/lib/mcp/catalog";
 import { toolSpecOf } from "@/lib/mcp/hosted";
 import { mcpOAuthRedirectUri } from "@/lib/mcp/oauth";
-import { assertRemoteAuth, assertUrl, connectionFields, parse, secretFor, secretRequired } from "@/lib/mcp/server-input";
+import { assertUrl, connectionFields, parse, secretFor, secretRequired } from "@/lib/mcp/server-input";
 import { probe, storeProbe } from "@/lib/mcp/server-probe";
 import { auditShape, loadRow, scopedView, serverSelect, viewOf, type ServerRow } from "@/lib/mcp/server-view";
 import { serverRecord } from "@/lib/mcp/toolset";
@@ -96,7 +96,6 @@ export async function createMcpServer(raw: unknown) {
   const session = await requireMcpManager();
   const input = parse(mcpServerInputSchema, raw);
   assertUrl(input.url, input.internal);
-  assertRemoteAuth(input.authType);
   const authSecret = secretFor(input.authType, input, "");
   if (secretRequired(input) && !authSecret) throw new Error("MCP_SECRET_REQUIRED");
   let created: ServerRow;
@@ -335,7 +334,6 @@ export async function updateMcpServer(raw: { id: string } & Record<string, unkno
     });
     return { server: scopedView(updated, session) };
   }
-  assertRemoteAuth(input.authType);
   const authSecret = secretFor(input.authType, input, before.authSecret);
   if (secretRequired(input) && !authSecret) throw new Error("MCP_SECRET_REQUIRED");
   const fields = connectionFields(input);

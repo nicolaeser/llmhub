@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildHostedRequest, callHosted, cleanToolName, mergeTools, readDraft, readPick } from "@/lib/mcp/hosted";
+import { buildHostedRequest, callHosted, cleanToolName, mergeTools, readDraft, readPick, withoutSecrets } from "@/lib/mcp/hosted";
 import type { HostedTool, McpFetch } from "@/types/mcp";
 
 const pet: HostedTool = {
@@ -221,6 +221,20 @@ test("hosted servers sign calls with basic credentials or an API key in the addr
   assert.equal(calls[1]!.url, "https://api.example.com/v1/pets/7");
 });
 
+test("hosted calls hide the key when the API echoes it back", async () => {
+  const { seal } = await import("@/lib/crypto");
+  const { hostedAuth } = await import("@/lib/mcp/auth");
+  const keyed = hostedAuth({ authType: "query", authHeader: "api_key", authSecret: seal("k&y-SECRET") });
+  const echo: McpFetch = async (url) => new Response(`bad request: ${url}`, { status: 400 });
+  const outcome = await callHosted("https://api.example.com/v1", false, { tools: [pet] }, "get_pet", { id: "7" }, AbortSignal.timeout(1000), echo, keyed);
+  assert.equal(outcome.isError, true);
+  assert.doesNotMatch(outcome.text, /SECRET/);
+  assert.match(outcome.text, /api_key=\[redacted\]/);
+  const bearer = hostedAuth({ authType: "bearer", authHeader: "", authSecret: seal("tok-SECRET-123") });
+  assert.equal(withoutSecrets("got Bearer tok-SECRET-123 and tok-SECRET-123", bearer), "got [redacted] and [redacted]");
+  assert.equal(withoutSecrets("short", hostedAuth({ authType: "query", authHeader: "k", authSecret: seal("ab") })), "short");
+});
+
 test("drafts and hosted servers accept basic and query logins with valid names", async () => {
   const { hostedServerSchema, mcpInstallationSchema, mcpServerInputSchema } = await import("@/schemas/mcp");
   const draft = readDraft('{"name":"Desk","baseUrl":"https://desk.example.com/api","authType":"basic","authHeader":"admin","tools":[]}');
@@ -240,7 +254,14 @@ test("drafts and hosted servers accept basic and query logins with valid names",
   const install = (change: Record<string, unknown>) =>
     mcpInstallationSchema.safeParse({ serverId: "s1", orgId: "o1", enabled: true, ...change }).success;
   assert.equal(install({ authType: "basic", authHeader: "agent", secret: "pw" }), true);
-  assert.equal(install({ authType: "query", authHeader: "" }), false);
+  assert.equal(install({ authType: "query", authHeader: "" }), true);
+  assert.equal(install({ authType: "query", authHeader: "api key" }), false);
+  const { installedAuthName } = await import("@/schemas/mcp");
+  const offered = { authType: "query", authHeader: "api_key" };
+  assert.equal(installedAuthName("query", "", offered), "api_key");
+  assert.equal(installedAuthName("query", "token", offered), "token");
+  assert.equal(installedAuthName("header", "", offered), "");
+  assert.equal(installedAuthName("bearer", "token", offered), "");
   const remote = mcpServerInputSchema.safeParse({
     name: "Desk",
     description: "",
@@ -256,7 +277,13 @@ test("drafts and hosted servers accept basic and query logins with valid names",
     allowedTools: [],
   });
   assert.equal(remote.success, true);
-  const { assertRemoteAuth } = await import("@/lib/mcp/server-input");
-  assert.throws(() => assertRemoteAuth("query"), /^Error: VALIDATION$/);
-  assert.doesNotThrow(() => assertRemoteAuth("basic"));
+  const { urlToken } = await import("@/schemas/mcp");
+  assert.deepEqual(urlToken(" https://mcp.example.com/mcp?team=7&Token=abc%2B1 "), {
+    name: "Token",
+    value: "abc+1",
+    url: "https://mcp.example.com/mcp?team=7",
+  });
+  assert.equal(urlToken("https://mcp.example.com/mcp?token=")?.name, undefined);
+  assert.equal(urlToken("https://mcp.example.com/mcp?page=2"), null);
+  assert.equal(urlToken("not a url"), null);
 });

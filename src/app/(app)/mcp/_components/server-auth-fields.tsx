@@ -37,7 +37,7 @@ export default function ServerAuthFields({
   const t = useTranslations("Mcp");
   const { authType, oauthGrant } = value;
   const oauth = authType === "oauth";
-  const authTypes = MCP_AUTH_TYPES.filter((type) => (hosted ? type !== "oauth" : type !== "query"));
+  const authTypes = MCP_AUTH_TYPES.filter((type) => !hosted || type !== "oauth");
 
   return (
     <>
