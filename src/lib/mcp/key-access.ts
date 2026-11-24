@@ -5,16 +5,15 @@ import { AuthError } from "@/lib/auth/errors";
 import { requireActor } from "@/lib/auth/guards";
 import { companyOf, keyVisibleTo } from "@/lib/auth/scope";
 import { resolveKeyTenancy } from "@/lib/gateway/access/key-tenancy";
-import { assignmentViews, mcpAssignmentSelect } from "@/lib/mcp/assignments";
-import { roleViews } from "@/lib/mcp/catalog";
+import { assignmentData, assignmentViews, mcpAssignmentSelect } from "@/lib/mcp/assignments";
 import { toolSpecs } from "@/lib/mcp/client";
-import { classifyTools, toolActionsOf } from "@/lib/mcp/resolve";
+import { classifyTools, cleanGrant, defaultAccessOf, toolActionsOf } from "@/lib/mcp/resolve";
 import { serverKindOf } from "@/lib/mcp/toolset";
 import { managesMcpRules, visibleToCompany } from "@/lib/mcp/scope";
 import { keyMcpAccessSchema } from "@/schemas/mcp";
 import type { Prisma } from "@/generated/prisma/client";
 import type { AuthenticatedSession } from "@/types/auth";
-import type { McpAssignmentView, McpChain, McpKeyAccess, McpKeyAccessChoice, McpKeyServerAccess } from "@/types/mcp";
+import type { McpChain, McpKeyAccess, McpKeyServerAccess } from "@/types/mcp";
 
 const serverSelect = {
   id: true,
@@ -24,23 +23,11 @@ const serverSelect = {
   enabled: true,
   template: true,
   global: true,
+  globalAccess: true,
   toolsRestricted: true,
   allowedTools: true,
   tools: true,
   toolActions: true,
-  roles: {
-    select: {
-      id: true,
-      key: true,
-      name: true,
-      description: true,
-      allActions: true,
-      actions: true,
-      tools: true,
-      deniedTools: true,
-      builtin: true,
-    },
-  },
 } as const;
 
 type KeyRow = {
@@ -128,11 +115,10 @@ async function accessOf(key: KeyRow, company: string | null): Promise<McpKeyAcce
         enabled: server.enabled,
         template: server.template,
         connected: !server.template || server.installations.some((row) => row.enabled),
-        global: server.global,
+        defaultAccess: defaultAccessOf(server),
         toolsRestricted: server.toolsRestricted,
         allowedTools: server.allowedTools,
         tools: classifyTools(toolSpecs(server.tools), toolActionsOf(server.toolActions)),
-        roles: roleViews(server.roles),
         inherited: rules.filter((rule) => rule.scope !== "key"),
         rule: rules.find((rule) => rule.scope === "key") ?? null,
       };
@@ -145,15 +131,6 @@ export async function loadKeyMcpAccess(keyId: unknown): Promise<McpKeyAccess> {
   return accessOf(key, company);
 }
 
-function ruleOf(choice: McpKeyAccessChoice): Pick<McpAssignmentView, "mode" | "blockedTools" | "blockedActions" | "roleId"> | null {
-  if (choice.mode === "block") return { mode: "block", blockedTools: [], blockedActions: [], roleId: "" };
-  if (choice.mode === "allow") {
-    return { mode: "allow", blockedTools: choice.blockedTools, blockedActions: choice.blockedActions, roleId: choice.roleId };
-  }
-  if (!choice.blockedTools.length && !choice.blockedActions.length) return null;
-  return { mode: "block", blockedTools: choice.blockedTools, blockedActions: choice.blockedActions, roleId: "" };
-}
-
 export async function saveKeyMcpAccess(raw: unknown): Promise<McpKeyAccess> {
   await mcpRulesSession();
   const input = parse(keyMcpAccessSchema, raw);
@@ -162,33 +139,23 @@ export async function saveKeyMcpAccess(raw: unknown): Promise<McpKeyAccess> {
   if (ids.length !== input.servers.length) throw new Error("VALIDATION");
   const servers = await prisma.mcpServer.findMany({
     where: { AND: [{ id: { in: ids } }, serverFilter(company) ?? {}] },
-    select: { id: true, tools: true, roles: { select: { id: true } } },
+    select: { id: true, tools: true },
   });
   if (servers.length !== ids.length) throw new Error("NOT_FOUND");
   const byId = new Map(servers.map((server) => [server.id, server]));
   const rows: Prisma.McpAssignmentCreateManyInput[] = [];
-  const summary: { serverId: string; mode: string; roleId: string; blockedTools: string[]; blockedActions: string[] }[] = [];
+  const summary: { serverId: string; access: string; extraTools: string[]; blockedTools: string[] }[] = [];
   for (const entry of input.servers) {
     const server = byId.get(entry.serverId)!;
     const known = new Set(toolSpecs(server.tools).map((tool) => tool.name));
-    if (entry.roleId && (entry.mode !== "allow" || !server.roles.some((role) => role.id === entry.roleId))) {
-      throw new Error("ROLE_NOT_FOUND");
-    }
-    const rule = ruleOf({
-      ...entry,
-      blockedTools: [...new Set(entry.blockedTools)].filter((name) => known.has(name)),
-      blockedActions: [...new Set(entry.blockedActions)],
-    });
-    summary.push({ serverId: entry.serverId, mode: rule ? rule.mode : "inherit", roleId: rule?.roleId ?? "", blockedTools: rule?.blockedTools ?? [], blockedActions: rule?.blockedActions ?? [] });
-    if (!rule) continue;
-    rows.push({
+    const grant = cleanGrant(entry, known);
+    summary.push({
       serverId: entry.serverId,
-      keyId: key.id,
-      mode: rule.mode,
-      blockedTools: rule.blockedTools,
-      blockedActions: rule.blockedActions,
-      roleId: rule.roleId || null,
+      access: grant?.access ?? "inherit",
+      extraTools: grant?.extraTools ?? [],
+      blockedTools: grant?.blockedTools ?? [],
     });
+    if (grant) rows.push(assignmentData(entry.serverId, { scope: "key", id: key.id, ...grant }));
   }
   await prisma.$transaction(async (tx) => {
     await tx.mcpAssignment.deleteMany({ where: { keyId: key.id, serverId: { in: ids } } });

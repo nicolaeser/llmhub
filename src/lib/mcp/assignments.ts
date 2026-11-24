@@ -1,9 +1,11 @@
 import "server-only";
 import prisma from "@/lib/db/prisma";
 import { MCP_SCOPES } from "@/schemas/mcp";
-import { isAssignmentMode } from "@/lib/mcp/toolset";
+import { toolSpecs } from "@/lib/mcp/client";
+import { legacyColumns } from "@/lib/mcp/legacy-access";
+import { cleanGrant, defaultAccessOf, ruleAccessOf } from "@/lib/mcp/resolve";
 import type { Prisma } from "@/generated/prisma/client";
-import type { McpAssignmentInput, McpAssignmentSource, McpAssignmentView, McpTargetOptions } from "@/types/mcp";
+import type { McpAccessLevel, McpAssignmentInput, McpAssignmentSource, McpAssignmentView, McpTargetOptions } from "@/types/mcp";
 import type { AssignmentScope } from "@/types/providers";
 
 const OPTION_LIMIT = 1000;
@@ -23,11 +25,9 @@ export const mcpAssignmentSelect = {
     projectId: true,
     memberId: true,
     keyId: true,
-    mode: true,
+    access: true,
+    extraTools: true,
     blockedTools: true,
-    blockedActions: true,
-    roleId: true,
-    role: { select: { key: true, name: true, allActions: true, actions: true, tools: true, deniedTools: true } },
     org: { select: { alias: true } },
     team: { select: { alias: true, orgId: true } },
     project: { select: { alias: true, orgId: true } },
@@ -50,23 +50,7 @@ export function assignmentViews(rows: McpAssignmentSource[]): McpAssignmentView[
   return rows.flatMap((row) => {
     const found = target(row);
     if (!found) return [];
-    return [{
-      ...found,
-      mode: isAssignmentMode(row.mode) ? row.mode : "block",
-      blockedTools: row.blockedTools,
-      blockedActions: Array.isArray(row.blockedActions) ? row.blockedActions : [],
-      roleId: row.roleId ?? "",
-      role: row.role
-        ? {
-            key: row.role.key,
-            name: row.role.name,
-            allActions: row.role.allActions,
-            actions: row.role.actions,
-            tools: row.role.tools,
-            deniedTools: row.role.deniedTools,
-          }
-        : null,
-    }];
+    return [{ ...found, access: ruleAccessOf(row.access), extraTools: row.extraTools, blockedTools: row.blockedTools }];
   });
 }
 
@@ -149,24 +133,38 @@ async function targetsExist(ids: Record<AssignmentScope, string[]>): Promise<boo
   return MCP_SCOPES.every((scope, index) => counts[index] === ids[scope].length);
 }
 
-export function uniqueAssignments(assignments: McpAssignmentInput[]): McpAssignmentInput[] {
+export function uniqueAssignments(assignments: McpAssignmentInput[], known?: ReadonlySet<string>): McpAssignmentInput[] {
   const seen = new Map<string, McpAssignmentInput>();
   for (const row of assignments) {
-    seen.set(`${row.scope}:${row.id}`, {
-      ...row,
-      blockedTools: [...new Set(row.blockedTools)],
-      blockedActions: [...new Set(row.blockedActions)],
-    });
+    const grant = cleanGrant(row, known);
+    const key = `${row.scope}:${row.id}`;
+    if (grant) seen.set(key, { scope: row.scope, id: row.id, ...grant });
+    else seen.delete(key);
   }
   return [...seen.values()];
 }
 
-async function rolesBelong(serverId: string, rows: McpAssignmentInput[]): Promise<boolean> {
-  const roleIds = [...new Set(rows.map((row) => row.roleId).filter((id): id is string => Boolean(id)))];
-  if (!roleIds.length) return true;
-  const found = await prisma.mcpRole.count({ where: { serverId, id: { in: roleIds } } });
-  return found === roleIds.length;
+export function assignmentData(serverId: string, row: McpAssignmentInput): Prisma.McpAssignmentCreateManyInput {
+  return {
+    serverId,
+    [COLUMN[row.scope]]: row.id,
+    access: row.access,
+    extraTools: row.extraTools,
+    blockedTools: row.blockedTools,
+    ...legacyColumns(row),
+  };
 }
+
+export function defaultAccessData(level: McpAccessLevel): { global: boolean; globalAccess?: McpAccessLevel } {
+  return level === "none" ? { global: false } : { global: true, globalAccess: level };
+}
+
+async function knownTools(serverId: string): Promise<Set<string> | null> {
+  const server = await prisma.mcpServer.findUnique({ where: { id: serverId }, select: { tools: true } });
+  return server ? new Set(toolSpecs(server.tools).map((tool) => tool.name)) : null;
+}
+
+type SavedAccess = { defaultAccess: McpAccessLevel; assignments: McpAssignmentView[] };
 
 async function targetsInCompany(rows: McpAssignmentInput[], orgId: string): Promise<boolean> {
   const ids = idsByScope(rows);
@@ -192,20 +190,14 @@ function holderOrg(row: {
 
 export async function replaceMcpAssignments(
   serverId: string,
-  global: boolean,
+  defaultAccess: McpAccessLevel,
   assignments: McpAssignmentInput[],
-): Promise<{ global: boolean; assignments: McpAssignmentView[] } | null> {
-  const rows = uniqueAssignments(assignments);
+): Promise<SavedAccess | null> {
+  const known = await knownTools(serverId);
+  if (!known) return null;
+  const rows = uniqueAssignments(assignments, known);
   if (!(await targetsExist(idsByScope(rows)))) return null;
-  if (!(await rolesBelong(serverId, rows))) return null;
-  const data: Prisma.McpAssignmentCreateManyInput[] = rows.map((row) => ({
-    serverId,
-    [COLUMN[row.scope]]: row.id,
-    mode: row.mode,
-    blockedTools: row.blockedTools,
-    blockedActions: row.blockedActions,
-    roleId: row.mode === "allow" ? row.roleId || null : null,
-  }));
+  const data = rows.map((row) => assignmentData(serverId, row));
   const saved = await prisma.$transaction(async (tx) => {
     const exists = await tx.mcpServer.findUnique({ where: { id: serverId }, select: { id: true } });
     if (!exists) return null;
@@ -213,22 +205,23 @@ export async function replaceMcpAssignments(
     if (data.length) await tx.mcpAssignment.createMany({ data });
     return tx.mcpServer.update({
       where: { id: serverId },
-      data: { global },
-      select: { global: true, assignments: mcpAssignmentSelect },
+      data: defaultAccessData(defaultAccess),
+      select: { global: true, globalAccess: true, assignments: mcpAssignmentSelect },
     });
   });
-  return saved ? { global: saved.global, assignments: assignmentViews(saved.assignments) } : null;
+  return saved ? { defaultAccess: defaultAccessOf(saved), assignments: assignmentViews(saved.assignments) } : null;
 }
 
 export async function replaceCompanyMcpAssignments(
   serverId: string,
   orgId: string,
   assignments: McpAssignmentInput[],
-): Promise<{ global: boolean; assignments: McpAssignmentView[] } | null> {
-  const rows = uniqueAssignments(assignments);
+): Promise<SavedAccess | null> {
+  const known = await knownTools(serverId);
+  if (!known) return null;
+  const rows = uniqueAssignments(assignments, known);
   if (!(await targetsExist(idsByScope(rows)))) return null;
   if (!(await targetsInCompany(rows, orgId))) return null;
-  if (!(await rolesBelong(serverId, rows))) return null;
   const current = await prisma.mcpAssignment.findMany({
     where: { serverId },
     select: {
@@ -241,14 +234,7 @@ export async function replaceCompanyMcpAssignments(
     },
   });
   const drop = current.filter((row) => holderOrg(row) === orgId).map((row) => row.id);
-  const data: Prisma.McpAssignmentCreateManyInput[] = rows.map((row) => ({
-    serverId,
-    [COLUMN[row.scope]]: row.id,
-    mode: row.mode,
-    blockedTools: row.blockedTools,
-    blockedActions: row.blockedActions,
-    roleId: row.mode === "allow" ? row.roleId || null : null,
-  }));
+  const data = rows.map((row) => assignmentData(serverId, row));
   const saved = await prisma.$transaction(async (tx) => {
     const exists = await tx.mcpServer.findUnique({ where: { id: serverId }, select: { id: true } });
     if (!exists) return null;
@@ -256,8 +242,8 @@ export async function replaceCompanyMcpAssignments(
     if (data.length) await tx.mcpAssignment.createMany({ data });
     return tx.mcpServer.findUnique({
       where: { id: serverId },
-      select: { global: true, assignments: mcpAssignmentSelect },
+      select: { global: true, globalAccess: true, assignments: mcpAssignmentSelect },
     });
   });
-  return saved ? { global: saved.global, assignments: assignmentViews(saved.assignments) } : null;
+  return saved ? { defaultAccess: defaultAccessOf(saved), assignments: assignmentViews(saved.assignments) } : null;
 }

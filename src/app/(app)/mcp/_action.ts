@@ -3,7 +3,6 @@
 import { runAction } from "@/lib/http/action-result";
 import { setBuilderModel } from "@/lib/mcp/builder";
 import {
-  ensureServerRoles,
   saveServerInstallation,
   saveServerPermissions,
   saveServerTemplate,
@@ -82,10 +81,6 @@ export async function createMediaMcpServerAction(input: unknown) {
 
 export async function updateMediaMcpServerAction(input: { id: string } & Record<string, unknown>) {
   return runAction(() => updateMediaMcpServer(input));
-}
-
-export async function ensureMcpRolesAction(...args: Parameters<typeof ensureServerRoles>) {
-  return runAction(() => ensureServerRoles(...args));
 }
 
 export async function saveMcpPermissionsAction(...args: Parameters<typeof saveServerPermissions>) {

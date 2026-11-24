@@ -110,13 +110,13 @@ export function ServerAccess({ server, companyId }: { server: McpServerView; com
     <div className="min-w-0 space-y-1">
       <p className="text-sm break-words text-foreground">
         {t("list.access", {
-          global: String(server.global),
+          level: server.defaultAccess,
           allowed: access.allowed,
           first: access.first,
           more: Math.max(access.allowed - 1, 0),
         })}
       </p>
-      {access.blocks ? <p className="text-xs text-muted">{t("list.blocks", { count: access.blocks })}</p> : null}
+      {access.limits ? <p className="text-xs text-muted">{t("list.limits", { count: access.limits })}</p> : null}
       {server.template && companyId ? (
         <Chip size="sm" variant="soft" color={connected ? "success" : "warning"}>
           {connected ? t("install.connected") : t("install.missing")}

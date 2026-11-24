@@ -5,6 +5,7 @@ import {
   Alert,
   Description,
   Label,
+  Input,
   ListBox,
   Select,
   TextArea,
@@ -26,6 +27,7 @@ export default function BuilderBrief({
   canTestModels,
   template,
   instruction,
+  address,
   links,
   docs,
   files,
@@ -35,6 +37,7 @@ export default function BuilderBrief({
   onModel,
   onTemplate,
   onInstruction,
+  onAddress,
   onLinks,
   onDocs,
   onFiles,
@@ -45,6 +48,7 @@ export default function BuilderBrief({
   canTestModels: boolean;
   template: McpBuilderTemplate;
   instruction: string;
+  address: string;
   links: McpDocsLinkRow[];
   docs: string;
   files: McpDocsFileRow[];
@@ -54,6 +58,7 @@ export default function BuilderBrief({
   onModel: (model: string) => void;
   onTemplate: (template: McpBuilderTemplate) => void;
   onInstruction: (instruction: string) => void;
+  onAddress: (address: string) => void;
   onLinks: Dispatch<SetStateAction<McpDocsLinkRow[]>>;
   onDocs: (docs: string) => void;
   onFiles: Dispatch<SetStateAction<McpDocsFileRow[]>>;
@@ -161,6 +166,11 @@ export default function BuilderBrief({
         <Label>{t("builder.instruction")}</Label>
         <TextArea className="min-h-24" />
         <Description>{t("builder.instructionHint")}</Description>
+      </TextField>
+      <TextField fullWidth value={address} onChange={onAddress} isDisabled={pending}>
+        <Label>{t("builder.address")}</Label>
+        <Input inputMode="url" placeholder="https://support.example.com" />
+        <Description>{t("builder.addressHint")}</Description>
       </TextField>
       <BuilderSources
         links={links}

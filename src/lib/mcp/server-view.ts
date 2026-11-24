@@ -3,9 +3,9 @@ import prisma from "@/lib/db/prisma";
 import { companyOf } from "@/lib/auth/scope";
 import { assignmentViews, mcpAssignmentSelect } from "@/lib/mcp/assignments";
 import { mcpAccess } from "@/lib/mcp/scope";
-import { installationViews, roleViews } from "@/lib/mcp/catalog";
+import { installationViews } from "@/lib/mcp/catalog";
 import { eraOf, toolSpecs } from "@/lib/mcp/client";
-import { toolActionsOf } from "@/lib/mcp/resolve";
+import { defaultAccessOf, toolActionsOf } from "@/lib/mcp/resolve";
 import { serverKindOf, serverRecord } from "@/lib/mcp/toolset";
 import type { Prisma } from "@/generated/prisma/client";
 import type { AuthenticatedSession } from "@/types/auth";
@@ -29,6 +29,7 @@ export const serverSelect = {
   internal: true,
   enabled: true,
   global: true,
+  globalAccess: true,
   template: true,
   toolsRestricted: true,
   allowedTools: true,
@@ -38,7 +39,6 @@ export const serverSelect = {
   lastError: true,
   updatedAt: true,
   assignments: mcpAssignmentSelect,
-  roles: { orderBy: { name: "asc" }, include: { _count: { select: { assignments: true } } } },
   installations: {
     select: {
       id: true,
@@ -104,12 +104,12 @@ export function viewOf(row: ServerRow, canManage = true, companyId: string | nul
     media: record.kind === "media" ? record.media : null,
     enabled: row.enabled,
     global: row.global,
+    defaultAccess: defaultAccessOf(row),
     template: row.template,
     toolsRestricted: row.toolsRestricted,
     allowedTools: row.allowedTools,
     tools: toolSpecs(row.tools),
     toolActions: toolActionsOf(row.toolActions),
-    roles: roleViews(row.roles),
     installations: installationViews(row.installations, companyId),
     transport: record.transport,
     protocolVersion: row.protocolVersion,
@@ -158,6 +158,7 @@ export function auditShape(
     | "internal"
     | "enabled"
     | "global"
+    | "globalAccess"
     | "toolsRestricted"
     | "allowedTools"
   >,
@@ -173,7 +174,7 @@ export function auditShape(
     oauthScopes: row.oauthScopes,
     internal: row.internal,
     enabled: row.enabled,
-    global: row.global,
+    defaultAccess: defaultAccessOf(row),
     toolsRestricted: row.toolsRestricted,
     allowedTools: row.allowedTools,
   };

@@ -6,6 +6,7 @@ import { writeAudit } from "@/lib/audit";
 import { env } from "@/lib/env";
 import { s3FromParts, s3KeysPresent } from "@/lib/s3/config";
 import { probeStorage } from "@/lib/s3/probe";
+import { endpointAllowed } from "@/lib/s3/url";
 import { getEnterprise, normalizeS3, patchEnterprise } from "@/lib/settings/enterprise";
 import { storageSettingsSchema } from "@/schemas/settings";
 import type { Permission } from "@/types/auth";
@@ -28,6 +29,7 @@ function parseStorage(raw: unknown): S3Settings {
     const badUrl = parsed.error.issues.some((issue) => ["endpoint", "public_base_url"].includes(String(issue.path[0])));
     throw new Error(badUrl ? "INVALID_URL" : "VALIDATION");
   }
+  if (!endpointAllowed(parsed.data.endpoint)) throw new Error("INVALID_URL");
   return parsed.data;
 }
 

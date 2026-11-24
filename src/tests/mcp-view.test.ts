@@ -1,15 +1,15 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { roleReach, toolMatches, withGrant } from "@/app/(app)/mcp/_components/role-view";
+import { ancestorRules, newRule } from "@/app/(app)/mcp/_components/access-view";
 import { accessOf, enabledTools, inFilter, matchesQuery, serverFilterOf } from "@/app/(app)/mcp/_components/server-view";
-import type { McpAssignmentView, McpRoleView, McpServerView, McpToolSpec } from "@/types/mcp";
+import type { McpAssignmentView, McpRuleAccess, McpServerView, McpTargetOptions, McpToolSpec } from "@/types/mcp";
 
 function tool(name: string, action?: McpToolSpec["action"]): McpToolSpec {
   return { name, title: "", description: "", inputSchema: {}, ...(action ? { action } : {}) };
 }
 
-function assignment(label: string, mode: McpAssignmentView["mode"]): McpAssignmentView {
-  return { scope: "org", id: label, label, mode, blockedTools: [], blockedActions: [], roleId: "", role: null };
+function assignment(label: string, access: McpRuleAccess, scope: McpAssignmentView["scope"] = "org"): McpAssignmentView {
+  return { scope, id: label, label, access, extraTools: [], blockedTools: [] };
 }
 
 function server(change: Partial<McpServerView>): McpServerView {
@@ -26,19 +26,6 @@ function server(change: Partial<McpServerView>): McpServerView {
     ...change,
   } as McpServerView;
 }
-
-const reader: McpRoleView = {
-  id: "r",
-  key: "reader",
-  name: "Reader",
-  description: "",
-  builtin: true,
-  assigned: 0,
-  allActions: false,
-  actions: ["read"],
-  tools: [],
-  deniedTools: [],
-};
 
 test("server filters read the status query and sort servers into views", () => {
   assert.equal(serverFilterOf("attention"), "attention");
@@ -58,26 +45,35 @@ test("server search matches name, description, and URL", () => {
   assert.equal(matchesQuery(server({}), "jira"), false);
 });
 
-test("enabledTools honours the server allowlist and accessOf summarises the rules", () => {
+test("enabledTools honours the server allowlist and accessOf counts granting and limiting rules", () => {
   assert.equal(enabledTools(server({})), 3);
   assert.equal(enabledTools(server({ toolsRestricted: true, allowedTools: ["list_issues"] })), 1);
   assert.deepEqual(
-    accessOf(server({ assignments: [assignment("Acme", "allow"), assignment("Northwind", "allow"), assignment("Test", "block")] })),
-    { first: "Acme", allowed: 2, blocks: 1 },
+    accessOf(
+      server({
+        assignments: [assignment("Acme", "read"), assignment("Northwind", "all"), assignment("Test", "none"), assignment("Ops", "inherit")],
+      }),
+    ),
+    { first: "Acme", allowed: 2, limits: 2 },
   );
-  assert.deepEqual(accessOf(server({})), { first: "", allowed: 0, blocks: 0 });
+  assert.deepEqual(accessOf(server({})), { first: "", allowed: 0, limits: 0 });
 });
 
-test("role helpers set single tool grants and count what a role reaches", () => {
-  const tools = server({}).tools;
-  assert.deepEqual(roleReach(reader, tools), { granted: 1, total: 3, exceptions: 0 });
-  const allowed = { ...reader, ...withGrant(reader, "close_issue", "allow") };
-  assert.deepEqual([allowed.tools, allowed.deniedTools], [["close_issue"], []]);
-  const denied = { ...allowed, ...withGrant(allowed, "close_issue", "deny") };
-  assert.deepEqual([denied.tools, denied.deniedTools], [[], ["close_issue"]]);
-  assert.deepEqual(roleReach(allowed, tools), { granted: 2, total: 3, exceptions: 1 });
-  const reset = { ...denied, ...withGrant(denied, "close_issue", "inherit") };
-  assert.deepEqual([reset.tools, reset.deniedTools], [[], []]);
-  assert.equal(toolMatches(tool("list_issues"), "issue"), true);
-  assert.equal(toolMatches(tool("list_issues"), "repo"), false);
+test("ancestorRules lists the rules above a target in chain order", () => {
+  const none = { orgId: "", teamId: "", projectId: "", memberId: "" };
+  const options: McpTargetOptions = {
+    org: [{ ...none, id: "acme", label: "Acme", detail: "" }],
+    team: [{ ...none, id: "sales", label: "Sales", detail: "Acme", orgId: "acme" }],
+    project: [],
+    member: [],
+    key: [{ id: "k1", label: "ci", detail: "Acme", orgId: "acme", teamId: "sales", projectId: "", memberId: "" }],
+  };
+  const key = newRule("key", options.key[0]!, "all");
+  const rules = [assignment("sales", "write", "team"), assignment("acme", "read"), assignment("other", "all"), key];
+  assert.deepEqual(
+    ancestorRules(key, rules, options).map((rule) => `${rule.scope}:${rule.access}`),
+    ["org:read", "team:write"],
+  );
+  assert.deepEqual(ancestorRules(assignment("acme", "read"), rules, options), []);
+  assert.deepEqual(key, { scope: "key", id: "k1", label: "ci", access: "all", extraTools: [], blockedTools: [] });
 });

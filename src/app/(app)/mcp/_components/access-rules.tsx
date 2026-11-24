@@ -1,52 +1,51 @@
 "use client";
 
 import { useState } from "react";
-import { Button, Card, Chip, Description, Label, Separator, Switch } from "@heroui/react";
+import { Button, Chip, Table } from "@heroui/react";
 import { Pencil, Plus, Trash2 } from "lucide-react";
 import { useFormatter, useTranslations } from "next-intl";
 import { SectionLoading } from "@/components/console/page-status";
-import type { PickerItem } from "@/types/console";
-import type { McpAssignmentView, McpServerPolicy, McpTargetOptions } from "@/types/mcp";
+import RowCard, { RowCards, TABLE_FROM_LG } from "@/components/console/row-cards";
+import { levelColor, useAccessLabels } from "@/components/mcp/access-labels";
+import { ceilingOf, levelRank } from "@/lib/mcp/resolve";
+import type { McpAccessLevel, McpAssignmentView, McpCeiling, McpServerPolicy, McpTargetOptions } from "@/types/mcp";
 import type { AssignmentScope } from "@/types/providers";
-import { NO_ROLE, type RoleChoice } from "./access-fields";
+import { DefaultAccessSelect } from "./access-fields";
 import AccessPreview from "./access-preview";
 import { AddRuleView, EditRuleView } from "./access-rule-editor";
-import { ancestorRules, blocksServer, EMPTY_TARGETS, ruleKey } from "./access-view";
+import { ancestorRules, EMPTY_TARGETS, ruleKey } from "./access-view";
 
 type View = { kind: "list" } | { kind: "add" } | { kind: "edit"; key: string };
 
 export default function AccessRules({
   rules,
   onRules,
-  global,
-  onGlobal,
-  showGlobal,
+  defaultAccess,
+  onDefaultAccess,
+  showDefault,
   options,
   policy,
-  toolItems,
-  roles,
-  roleOf,
   defaultScope = "org",
   pending,
 }: {
   rules: McpAssignmentView[];
   onRules: (rules: McpAssignmentView[]) => void;
-  global: boolean;
-  onGlobal: (global: boolean) => void;
-  showGlobal: boolean;
+  defaultAccess: McpAccessLevel;
+  onDefaultAccess: (level: McpAccessLevel) => void;
+  showDefault: boolean;
   options: McpTargetOptions | null;
   policy: Pick<McpServerPolicy, "toolsRestricted" | "allowedTools" | "tools">;
-  toolItems: PickerItem[];
-  roles: readonly RoleChoice[];
-  roleOf: (rule: McpAssignmentView) => string;
   defaultScope?: AssignmentScope;
   pending: boolean;
 }) {
-  const tPage = useTranslations("Mcp");
   const t = useTranslations("Mcp.assign");
+  const tAccess = useTranslations("Mcp.access");
   const format = useFormatter();
+  const labels = useAccessLabels();
   const [view, setView] = useState<View>({ kind: "list" });
   const known = options ?? EMPTY_TARGETS;
+  const server = { ...policy, defaultAccess };
+  const tools = policy.toolsRestricted ? policy.tools.filter((tool) => policy.allowedTools.includes(tool.name)) : policy.tools;
   const editing = view.kind === "edit" ? rules.find((rule) => ruleKey(rule) === view.key) : undefined;
 
   function labelOf(rule: Pick<McpAssignmentView, "scope" | "id">): string {
@@ -57,45 +56,26 @@ export default function AccessRules({
     );
   }
 
-  function sources(list: McpAssignmentView[]): string {
-    return format.list(
-      list.map((item) => t("source", { scope: item.scope, label: labelOf(item) })),
-      { type: "conjunction" },
-    );
+  function ceilingFor(rule: McpAssignmentView): { above: McpAssignmentView[]; ceiling: McpCeiling } {
+    const above = ancestorRules(rule, rules, known).map((item) => ({ ...item, label: labelOf(item) }));
+    return { above, ceiling: ceilingOf(server, above) };
   }
 
-  function inheritance(rule: McpAssignmentView): { granted: string; blocked: string } {
-    const ancestors = ancestorRules(rule, rules, known);
-    const grants = ancestors.filter((item) => item.mode === "allow");
-    const blocks = ancestors.filter(blocksServer);
-    const granted = [grants.length ? sources(grants) : "", global ? t("allCallers") : ""].filter(Boolean);
-    return {
-      granted: granted.length ? format.list(granted, { type: "conjunction" }) : "",
-      blocked: blocks.length ? sources(blocks) : "",
-    };
+  function aboveLine(above: McpAssignmentView[]): string {
+    if (!above.length) return tAccess("aboveNone");
+    return tAccess("above", {
+      list: format.list(
+        above.map((item) => `${labels.source({ kind: "rule", rule: item })}: ${labels.summary(item)}`),
+        { type: "conjunction" },
+      ),
+    });
   }
 
-  function roleLabel(rule: McpAssignmentView): string {
-    const key = roleOf(rule);
-    if (key === NO_ROLE) return "";
-    return roles.find((role) => role.id === key)?.label ?? rule.role?.name ?? "";
-  }
-
-  function summary(rule: McpAssignmentView): string {
-    const role = rule.mode === "allow" ? roleLabel(rule) : "";
-    const parts = [
-      rule.mode === "allow" ? (role ? t("ruleRole", { role }) : t("roleNone")) : "",
-      rule.blockedTools.length ? t("ruleTools", { count: rule.blockedTools.length }) : "",
-      rule.blockedActions.length
-        ? t("ruleActions", {
-            list: format.list(
-              rule.blockedActions.map((action) => tPage("action", { action })),
-              { type: "conjunction" },
-            ),
-          })
-        : "",
-    ].filter(Boolean);
-    return parts.length ? format.list(parts, { type: "unit" }) : t("blockServerHint");
+  function limitNote(rule: McpAssignmentView): string {
+    if (rule.access === "inherit" || rule.access === "none") return "";
+    const { ceiling } = ceilingFor(rule);
+    if (!ceiling.level || !ceiling.limitedBy || levelRank(rule.access) <= levelRank(ceiling.level)) return "";
+    return tAccess("limited", { level: tAccess("level", { access: ceiling.level }), source: labels.source(ceiling.limitedBy) });
   }
 
   function update(key: string, change: Partial<McpAssignmentView>) {
@@ -107,6 +87,46 @@ export default function AccessRules({
     setView({ kind: "list" });
   }
 
+  function levelCell(rule: McpAssignmentView) {
+    const note = limitNote(rule);
+    return (
+      <div className="space-y-1">
+        <Chip size="sm" variant="soft" color={levelColor(rule.access)}>
+          {labels.level(rule)}
+        </Chip>
+        {note ? <p className="text-xs text-warning">{note}</p> : null}
+      </div>
+    );
+  }
+
+  function rowActions(rule: McpAssignmentView, label: string) {
+    const key = ruleKey(rule);
+    return (
+      <div className="flex items-center gap-1">
+        <Button
+          size="sm"
+          variant="tertiary"
+          aria-label={t("edit", { label })}
+          onPress={() => setView({ kind: "edit", key })}
+          isDisabled={pending}
+        >
+          <Pencil size={14} aria-hidden />
+          {t("editShort")}
+        </Button>
+        <Button
+          isIconOnly
+          size="sm"
+          variant="danger-soft"
+          aria-label={t("remove", { label })}
+          isDisabled={pending}
+          onPress={() => remove(key)}
+        >
+          <Trash2 size={14} aria-hidden />
+        </Button>
+      </div>
+    );
+  }
+
   if (options === null) return <SectionLoading />;
 
   if (view.kind === "add") {
@@ -114,12 +134,11 @@ export default function AccessRules({
       <AddRuleView
         rules={rules}
         options={known}
-        roles={roles}
         defaultScope={defaultScope}
         pending={pending}
         onAdd={(rule) => {
           onRules([...rules, rule]);
-          setView({ kind: "list" });
+          setView({ kind: "edit", key: ruleKey(rule) });
         }}
         onBack={() => setView({ kind: "list" })}
       />
@@ -128,14 +147,14 @@ export default function AccessRules({
 
   if (editing) {
     const key = ruleKey(editing);
+    const { above, ceiling } = ceilingFor(editing);
     return (
       <EditRuleView
         rule={editing}
         label={labelOf(editing)}
-        inherited={inheritance(editing)}
-        roles={roles}
-        roleKey={roleOf(editing)}
-        toolItems={toolItems}
+        above={aboveLine(above)}
+        ceiling={ceiling}
+        tools={tools}
         pending={pending}
         onChange={(change) => update(key, change)}
         onRemove={() => remove(key)}
@@ -146,17 +165,7 @@ export default function AccessRules({
 
   return (
     <div className="space-y-5">
-      {showGlobal ? (
-        <Switch isSelected={global} onChange={onGlobal} isDisabled={pending}>
-          <Switch.Content>
-            <Switch.Control>
-              <Switch.Thumb />
-            </Switch.Control>
-            <Label>{t("global")}</Label>
-          </Switch.Content>
-          <Description>{t("globalHint")}</Description>
-        </Switch>
-      ) : null}
+      {showDefault ? <DefaultAccessSelect value={defaultAccess} onChange={onDefaultAccess} isDisabled={pending} /> : null}
       <div className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2">
@@ -171,66 +180,65 @@ export default function AccessRules({
           </Button>
         </div>
         {rules.length === 0 ? (
-          <p className="text-sm text-muted">{global ? t("noneGlobal") : t("none")}</p>
+          <p className="text-sm text-muted">{t("none", { access: defaultAccess })}</p>
         ) : (
-          <Card variant="secondary">
-            <Card.Content className="gap-0">
-              <ul aria-label={t("rules")}>
-                {rules.map((rule, index) => {
-                  const key = ruleKey(rule);
-                  const inherited = inheritance(rule);
-                  const label = labelOf(rule);
-                  return (
-                    <li key={key}>
-                      {index > 0 ? <Separator /> : null}
-                      <div className="flex flex-wrap items-start justify-between gap-3 py-3">
-                        <div className="min-w-0 flex-1 space-y-1">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span className="text-sm font-medium break-words text-foreground">{label}</span>
-                            <Chip size="sm" variant="soft">
-                              {t("scope", { scope: rule.scope })}
-                            </Chip>
-                            <Chip size="sm" variant="soft" color={rule.mode === "allow" ? "success" : "danger"}>
-                              {blocksServer(rule) ? t("blockServer") : t("mode", { mode: rule.mode })}
-                            </Chip>
-                          </div>
-                          <p className="text-xs break-words text-muted">{summary(rule)}</p>
-                          {inherited.blocked ? (
-                            <p className="text-xs text-danger">{t("blockedAbove", { sources: inherited.blocked })}</p>
-                          ) : null}
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <Button
-                            size="sm"
-                            variant="tertiary"
-                            aria-label={t("edit", { label })}
-                            onPress={() => setView({ kind: "edit", key })}
-                            isDisabled={pending}
-                          >
-                            <Pencil size={14} aria-hidden />
-                            {t("editShort")}
-                          </Button>
-                          <Button
-                            isIconOnly
-                            size="sm"
-                            variant="danger-soft"
-                            aria-label={t("remove", { label })}
-                            isDisabled={pending}
-                            onPress={() => remove(key)}
-                          >
-                            <Trash2 size={14} aria-hidden />
-                          </Button>
-                        </div>
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
-            </Card.Content>
-          </Card>
+          <>
+            <RowCards label={t("rules")}>
+              {rules.map((rule) => {
+                const label = labelOf(rule);
+                return (
+                  <RowCard
+                    key={ruleKey(rule)}
+                    variant="secondary"
+                    title={label}
+                    description={t("scope", { scope: rule.scope })}
+                    details={[
+                      { label: t("columnLevel"), value: levelCell(rule) },
+                      { label: t("columnExceptions"), value: labels.exceptions(rule) || t("noExceptions") },
+                    ]}
+                    actions={rowActions(rule, label)}
+                  />
+                );
+              })}
+            </RowCards>
+            <Table aria-label={t("rules")} className={TABLE_FROM_LG}>
+              <Table.ScrollContainer>
+                <Table.Content className="min-w-xl">
+                  <Table.Header>
+                    <Table.Column isRowHeader>{t("columnTarget")}</Table.Column>
+                    <Table.Column>{t("columnLevel")}</Table.Column>
+                    <Table.Column>{t("columnExceptions")}</Table.Column>
+                    <Table.Column>
+                      <span className="sr-only">{t("columnActions")}</span>
+                    </Table.Column>
+                  </Table.Header>
+                  <Table.Body>
+                    {rules.map((rule) => {
+                      const label = labelOf(rule);
+                      return (
+                        <Table.Row key={ruleKey(rule)} id={ruleKey(rule)}>
+                          <Table.Cell>
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium break-words">{label}</p>
+                              <p className="text-xs text-muted">{t("scope", { scope: rule.scope })}</p>
+                            </div>
+                          </Table.Cell>
+                          <Table.Cell>{levelCell(rule)}</Table.Cell>
+                          <Table.Cell>
+                            <span className="text-sm text-muted">{labels.exceptions(rule) || t("noExceptions")}</span>
+                          </Table.Cell>
+                          <Table.Cell>{rowActions(rule, label)}</Table.Cell>
+                        </Table.Row>
+                      );
+                    })}
+                  </Table.Body>
+                </Table.Content>
+              </Table.ScrollContainer>
+            </Table>
+          </>
         )}
       </div>
-      <AccessPreview policy={{ ...policy, global }} rules={rules} options={known} labelOf={labelOf} isDisabled={pending} />
+      <AccessPreview policy={server} rules={rules} options={known} labelOf={labelOf} isDisabled={pending} />
     </div>
   );
 }

@@ -1,10 +1,11 @@
 import { parse as parseYaml } from "yaml";
 import { classifySideEffect } from "@/lib/integrations/ingest";
+import { normalizeBaseUrl, rebaseTools } from "@/lib/mcp/base-url";
 import { cleanParamName, cleanToolName, mergeTools } from "@/lib/mcp/hosted";
 import { parseJsonOrNull } from "@/lib/utils/json";
 import { authNameValid, hostedToolSchema } from "@/schemas/mcp";
 import type { JsonMap } from "@/types/gateway";
-import type { HostedTool, McpDraftServer, McpOpenApiImport, McpToolAction } from "@/types/mcp";
+import type { HostedTool, McpApiAddress, McpDraftServer, McpOpenApiImport, McpToolAction } from "@/types/mcp";
 
 const METHODS = ["get", "post", "put", "patch", "delete"] as const;
 const SCHEMA_DEPTHS = [4, 2, 1, 0] as const;
@@ -14,10 +15,48 @@ const MAX_ENUM = 50;
 const MAX_FIELD_TEXT = 300;
 const MAX_REF_HOPS = 16;
 const PROPERTY_NAME = /^[A-Za-z0-9_.-]{1,64}$/;
-const KEPT_KEYS = ["type", "format", "default", "minimum", "maximum", "minLength", "maxLength", "minItems", "maxItems", "pattern", "nullable"] as const;
+const KEPT_KEYS = ["format", "default", "minimum", "maximum", "minLength", "maxLength", "minItems", "maxItems", "pattern", "nullable"] as const;
+const JSON_TYPES = new Set(["string", "number", "integer", "boolean", "object", "array", "null"]);
+const TYPE_ALIASES: Record<string, { type: string; format?: string }> = {
+  datetime: { type: "string", format: "date-time" },
+  "date-time": { type: "string", format: "date-time" },
+  timestamp: { type: "string", format: "date-time" },
+  date: { type: "string", format: "date" },
+  time: { type: "string", format: "time" },
+  text: { type: "string" },
+  file: { type: "string" },
+  int: { type: "integer" },
+  long: { type: "integer" },
+  float: { type: "number" },
+  double: { type: "number" },
+  decimal: { type: "number" },
+  bool: { type: "boolean" },
+};
+const RPC_SEGMENTS = new Set(["do", "function", "functions", "rpc", "call"]);
+const ACTION_WORDS = new Set([
+  "search", "find", "list", "get", "view", "show", "lookup", "query", "count", "check", "export", "download",
+  "create", "add", "new", "insert", "update", "edit", "set", "save", "upsert", "patch", "replace",
+  "delete", "remove", "clear", "purge", "archive", "start", "stop", "lock", "unlock", "mark", "upload", "import",
+  "send", "close", "open", "cancel", "approve", "reject", "assign", "move", "copy", "merge", "sync", "reset",
+]);
+const READ_WORDS = new Set(["get", "search", "find", "list", "lookup", "query", "count", "check", "validate", "verify"]);
+const LOOKUP_WORD = /^(?:view|get|find|search|show|list)by/;
+const MIN_ENTITY_FIELDS = 3;
+const MIN_ENVELOPE_SAMPLES = 3;
 const PRIVATE_HOST = /^(?:localhost|127\.|10\.|192\.168\.|172\.(?:1[6-9]|2\d|3[01])\.|\[?::1\]?$)/i;
 
 type Trail = ReadonlySet<string>;
+
+type Body = { schema: unknown; required: boolean };
+
+type Spec = {
+  root: JsonMap;
+  prefix: string;
+  envelope: ReadonlySet<string>;
+  entities: ReadonlyMap<string, { schema: unknown; source: string }>;
+};
+
+type Draft = { tool: HostedTool; tag: string };
 
 function asMap(value: unknown): JsonMap | null {
   return value && typeof value === "object" && !Array.isArray(value) ? (value as JsonMap) : null;
@@ -108,6 +147,7 @@ function compact(root: JsonMap, value: unknown, depth: number, trail: Trail): Js
   const node = flatten(root, resolved.node, resolved.trail);
   const variant = !node.type && !node.properties ? [node.oneOf, node.anyOf].find(Array.isArray)?.[0] : undefined;
   const out: JsonMap = variant === undefined ? {} : compact(root, variant, depth, resolved.trail);
+  Object.assign(out, typeFields(node.type));
   for (const key of KEPT_KEYS) {
     if (node[key] !== undefined) out[key] = node[key];
   }
@@ -130,7 +170,20 @@ function compact(root: JsonMap, value: unknown, depth: number, trail: Trail): Js
     }
   }
   if (node.items !== undefined && depth > 0) out.items = compact(root, node.items, depth - 1, resolved.trail);
+  if (out.type === "array" && out.items === undefined) out.items = {};
   return out;
+}
+
+function typeFields(value: unknown): JsonMap {
+  if (Array.isArray(value)) {
+    const kept = value.filter((item): item is string => typeof item === "string" && JSON_TYPES.has(item));
+    return kept.length ? { type: kept.length === 1 ? kept[0] : kept } : {};
+  }
+  if (typeof value !== "string") return {};
+  const name = value.trim().toLowerCase();
+  if (JSON_TYPES.has(name)) return { type: name };
+  const alias = TYPE_ALIASES[name];
+  return alias ? { ...alias } : {};
 }
 
 function parametersOf(root: JsonMap, pathItem: JsonMap, operation: JsonMap): JsonMap[] {
@@ -146,7 +199,7 @@ function parametersOf(root: JsonMap, pathItem: JsonMap, operation: JsonMap): Jso
   return [...merged.values()];
 }
 
-function bodyOf(root: JsonMap, operation: JsonMap, parameters: JsonMap[]): { schema: unknown; required: boolean } | null {
+function bodyOf(root: JsonMap, operation: JsonMap, parameters: JsonMap[]): Body | null {
   const requestBody = deref(root, operation.requestBody, new Set()).node;
   const content = asMap(requestBody?.content);
   if (content) {
@@ -158,13 +211,176 @@ function bodyOf(root: JsonMap, operation: JsonMap, parameters: JsonMap[]): { sch
   return legacy?.schema ? { schema: legacy.schema, required: legacy.required === true } : null;
 }
 
-function inputOf(
+function refOf(value: unknown): string {
+  const node = asMap(value);
+  if (!node) return "";
+  if (typeof node.$ref === "string") return node.$ref;
+  return typeof asMap(node.items)?.$ref === "string" ? String(asMap(node.items)!.$ref) : "";
+}
+
+function successSchema(root: JsonMap, operation: JsonMap): unknown {
+  const responses = asMap(operation.responses) ?? {};
+  const code = Object.keys(responses).find((key) => /^2\d\d$/.test(key)) ?? (responses.default ? "default" : undefined);
+  const response = code ? deref(root, responses[code], new Set()).node : null;
+  if (!response) return undefined;
+  const content = asMap(response.content);
+  if (!content) return response.schema;
+  const type = Object.keys(content).find((key) => /json/i.test(key)) ?? (content["*/*"] ? "*/*" : undefined);
+  return type ? asMap(content[type])?.schema : undefined;
+}
+
+function entityOf(root: JsonMap, schema: unknown): JsonMap | null {
+  const resolved = deref(root, schema, new Set());
+  if (!resolved.node) return null;
+  const node = flatten(root, resolved.node, resolved.trail);
+  if (asMap(node.properties)) return node;
+  const items = deref(root, node.items, resolved.trail).node;
+  return items && asMap(items.properties) ? flatten(root, items, resolved.trail) : null;
+}
+
+function fieldNames(root: JsonMap, schema: unknown): string[] {
+  return Object.keys(asMap(entityOf(root, schema)?.properties) ?? {});
+}
+
+function splitPath(path: string): string[] {
+  return path.split("/").filter(Boolean);
+}
+
+function isParam(segment: string): boolean {
+  return /^\{[^{}]*\}$/.test(segment);
+}
+
+function commonPrefix(paths: string[]): string {
+  if (paths.length < 2) return "";
+  const lists = paths.map(splitPath);
+  const shared: string[] = [];
+  for (let at = 0; ; at += 1) {
+    const segment = lists[0]![at];
+    if (!segment || isParam(segment)) break;
+    if (!lists.every((list) => list[at] === segment && list.length > at + 1)) break;
+    shared.push(segment);
+  }
+  return shared.length ? `/${shared.join("/")}` : "";
+}
+
+function snake(value: string): string {
+  return value
+    .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
+    .replace(/([A-Z]+)([A-Z][a-z])/g, "$1_$2")
+    .replace(/[^A-Za-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .toLowerCase();
+}
+
+function asciiSlug(value: string): string {
+  return snake(value.normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/ß/g, "ss"));
+}
+
+function resourceOf(path: string, prefix: string): string {
+  const first = splitPath(path.slice(prefix.length)).find((segment) => !isParam(segment));
+  return first && !RPC_SEGMENTS.has(first.toLowerCase()) ? first.toLowerCase() : "";
+}
+
+function isRpc(path: string, prefix: string): boolean {
+  return splitPath(path.slice(prefix.length)).some((segment) => RPC_SEGMENTS.has(segment.toLowerCase()));
+}
+
+function operationName(verb: (typeof METHODS)[number], path: string, prefix: string): string {
+  const kept: string[] = [];
+  let byId = false;
+  for (const segment of splitPath(path.slice(prefix.length))) {
+    if (isParam(segment)) {
+      byId = true;
+      if (kept.length && snake(kept[kept.length - 1]!) === snake(segment.slice(1, -1))) kept.pop();
+      continue;
+    }
+    if (RPC_SEGMENTS.has(segment.toLowerCase()) || /^\d+$/.test(segment)) continue;
+    kept.push(segment);
+  }
+  const base = kept.map(snake).filter(Boolean).join("_");
+  if (!base) return "";
+  const named = base.split("_").some((word) => ACTION_WORDS.has(word) || LOOKUP_WORD.test(word));
+  if (named || isRpc(path, prefix)) return cleanToolName(base);
+  const action = { get: byId ? "get" : "list", post: "create", put: "update", patch: "update", delete: "delete" }[verb];
+  return cleanToolName(`${action}_${base}`);
+}
+
+function firstSentence(value: string): string {
+  const match = /^([\s\S]+?[.!?])(?:\s|$)/.exec(value);
+  return (match?.[1] ?? value).trim();
+}
+
+function envelopeOf(root: JsonMap, operations: { verb: (typeof METHODS)[number]; operation: JsonMap }[]): Set<string> {
+  const samples = operations
+    .filter(({ verb }) => verb === "post" || verb === "put" || verb === "patch")
+    .map(({ operation }) => fieldNames(root, successSchema(root, operation)))
+    .filter((fields) => fields.length > 0);
+  if (samples.length < MIN_ENVELOPE_SAMPLES) return new Set();
+  return new Set(samples[0]!.filter((name) => samples.every((fields) => fields.includes(name))));
+}
+
+function entitiesOf(
   root: JsonMap,
+  prefix: string,
+  operations: { verb: (typeof METHODS)[number]; path: string; operation: JsonMap }[],
+): Map<string, { schema: unknown; source: string }> {
+  const entities = new Map<string, { schema: unknown; source: string }>();
+  for (const { verb, path, operation } of operations) {
+    if (verb !== "get" || splitPath(path).some(isParam) || isRpc(path, prefix)) continue;
+    const resource = resourceOf(path, prefix);
+    if (!resource || entities.has(resource)) continue;
+    const schema = successSchema(root, operation);
+    if (fieldNames(root, schema).length >= MIN_ENTITY_FIELDS) entities.set(resource, { schema, source: path });
+  }
+  return entities;
+}
+
+function bodyFields(
+  spec: Spec,
+  verb: (typeof METHODS)[number],
   path: string,
-  parameters: JsonMap[],
-  body: { schema: unknown; required: boolean } | null,
+  operation: JsonMap,
+  body: Body,
   depth: number,
-): { inputSchema: JsonMap; query: string[] } {
+  taken: ReadonlySet<string>,
+): { properties: JsonMap; required: string[]; open: boolean; borrowed: string } {
+  const { root } = spec;
+  const pathNames = new Set([...path.matchAll(/\{([^{}]*)\}/g)].map((match) => match[1]!.toLowerCase()));
+  const echo = Boolean(refOf(body.schema)) && refOf(body.schema) === refOf(successSchema(root, operation));
+  const fields = compact(root, body.schema, depth + 1, new Set());
+  const properties: JsonMap = {};
+  for (const [name, field] of Object.entries(asMap(fields.properties) ?? {})) {
+    if (!PROPERTY_NAME.test(name) || taken.has(name)) continue;
+    if (echo && (spec.envelope.has(name) || pathNames.has(name.toLowerCase()))) continue;
+    properties[name] = field;
+  }
+  const required = body.required && !echo ? names(fields.required).filter((name) => name in properties) : [];
+  if (Object.keys(properties).length || (fields.type && fields.type !== "object")) {
+    return { properties, required, open: false, borrowed: "" };
+  }
+  const entity = isRpc(path, spec.prefix) ? undefined : spec.entities.get(resourceOf(path, spec.prefix));
+  if (entity) {
+    const borrowed = compact(root, entity.schema, depth + 1, new Set());
+    const source = asMap(borrowed.properties) ?? asMap(asMap(borrowed.items)?.properties) ?? {};
+    for (const [name, field] of Object.entries(source)) {
+      if (!PROPERTY_NAME.test(name) || taken.has(name) || spec.envelope.has(name)) continue;
+      if (pathNames.has(name.toLowerCase()) || (verb === "post" && name.toLowerCase() === "id")) continue;
+      properties[name] = field;
+    }
+  }
+  return { properties, required: [], open: true, borrowed: entity && Object.keys(properties).length ? entity.source : "" };
+}
+
+function inputOf(
+  spec: Spec,
+  verb: (typeof METHODS)[number],
+  path: string,
+  operation: JsonMap,
+  parameters: JsonMap[],
+  body: Body | null,
+  depth: number,
+): { inputSchema: JsonMap; query: string[]; open: boolean; borrowed: string } {
+  const { root } = spec;
   const properties: JsonMap = {};
   const required = new Set<string>();
   const query: string[] = [];
@@ -184,48 +400,68 @@ function inputOf(
     if (!(name in properties)) properties[name] = { type: "string" };
     required.add(name);
   }
-  const fields = body ? compact(root, body.schema, depth + 1, new Set()) : {};
-  const bodyProperties = asMap(fields.properties) ?? {};
-  const bodyRequired = new Set(names(fields.required));
-  for (const [name, field] of Object.entries(bodyProperties)) {
-    if (!PROPERTY_NAME.test(name) || name in properties) continue;
-    properties[name] = field;
-    if (body?.required && bodyRequired.has(name)) required.add(name);
-  }
+  const fields = body
+    ? bodyFields(spec, verb, path, operation, body, depth, new Set(Object.keys(properties)))
+    : { properties: {}, required: [], open: false, borrowed: "" };
+  Object.assign(properties, fields.properties);
+  for (const name of fields.required) required.add(name);
   const inputSchema: JsonMap = { type: "object", properties };
   if (required.size) inputSchema.required = [...required];
-  return { inputSchema, query: query.slice(0, 50) };
+  if (fields.open) inputSchema.additionalProperties = true;
+  return { inputSchema, query: query.slice(0, 50), open: fields.open, borrowed: fields.borrowed };
+}
+
+function openNote(borrowed: string): string {
+  return borrowed
+    ? ` The API documentation does not list the request fields; the fields shown are those of the records returned by GET ${borrowed}, and other fields the API accepts may be passed too.`
+    : " The API documentation does not list the request fields; pass the fields the API expects.";
 }
 
 function actionOf(method: HostedTool["method"], operationId: string, summary: string): McpToolAction {
   if (classifySideEffect(method, operationId, summary) === "destructive") return "delete";
+  if (method === "POST" && READ_WORDS.has(snake(operationId).split("_")[0] ?? "")) return "read";
   return method === "GET" ? "read" : "write";
 }
 
-function toolOf(root: JsonMap, rawPath: string, verb: (typeof METHODS)[number], pathItem: JsonMap, operation: JsonMap): HostedTool | null {
+function toolOf(spec: Spec, rawPath: string, verb: (typeof METHODS)[number], pathItem: JsonMap, operation: JsonMap): Draft | null {
+  const { root } = spec;
   const method = verb.toUpperCase() as HostedTool["method"];
   const path = rawPath.trim().replace(/\{([^{}]*)\}/g, (_match, inner: string) => `{${cleanParamName(inner)}}`);
   const operationId = text(operation.operationId);
   const summary = text(operation.summary);
   const detail = text(operation.description);
+  const tag = names(operation.tags)[0]?.trim() ?? "";
   const parameters = parametersOf(root, pathItem, operation);
   const body = method === "GET" || method === "DELETE" ? null : bodyOf(root, operation, parameters);
+  const name = cleanToolName(operationId || operationName(verb, path, spec.prefix) || `${verb}_${path}`);
+  const title = summary ? firstSentence(summary) : tag ? `${tag}: ${method} ${path}` : `${method} ${path}`;
   for (const depth of SCHEMA_DEPTHS) {
-    const { inputSchema, query } = inputOf(root, path, parameters, body, depth);
+    const { inputSchema, query, open, borrowed } = inputOf(spec, verb, path, operation, parameters, body, depth);
     if (JSON.stringify(inputSchema).length > MAX_SCHEMA_CHARS) continue;
+    const described = detail || summary || title;
     const parsed = hostedToolSchema.safeParse({
-      name: cleanToolName(operationId || `${verb}_${path}`),
-      title: clip(summary || `${method} ${path}`, 200),
-      description: clip(detail || summary, 2000),
-      action: actionOf(method, operationId, summary),
+      name,
+      title: clip(title, 200),
+      description: clip(open ? `${clip(described, 1500)}${openNote(borrowed)}` : described, 2000),
+      action: actionOf(method, operationId || name, summary),
       method,
       path,
       query,
       inputSchema,
     });
-    return parsed.success ? parsed.data : null;
+    return parsed.success ? { tool: parsed.data, tag } : null;
   }
   return null;
+}
+
+function distinctNames(drafts: Draft[]): HostedTool[] {
+  const counts = new Map<string, number>();
+  for (const { tool } of drafts) counts.set(tool.name, (counts.get(tool.name) ?? 0) + 1);
+  return drafts.map(({ tool, tag }) => {
+    const slug = asciiSlug(tag);
+    if ((counts.get(tool.name) ?? 0) < 2 || !slug || tool.name.endsWith(`_${slug}`)) return tool;
+    return { ...tool, name: cleanToolName(`${tool.name.slice(0, 63 - slug.length)}_${slug}`) };
+  });
 }
 
 function baseUrlOf(root: JsonMap): string {
@@ -279,9 +515,35 @@ function resolvedBase(baseUrl: string, documentUrl: string): string {
   return `${url.origin}${url.pathname}`.replace(/\/+$/, "");
 }
 
-export function importOpenApi(root: JsonMap, documentUrl = ""): McpOpenApiImport {
+function absolute(baseUrl: string): boolean {
+  return /^https?:\/\/[^/]/i.test(baseUrl);
+}
+
+function chosenBase(declared: string, documentUrl: string, address: McpApiAddress): string {
+  const given = normalizeBaseUrl(address.given ?? "");
+  if (absolute(given)) return given;
+  if (absolute(declared)) return declared;
+  const hinted = normalizeBaseUrl(address.hinted ?? "");
+  if (absolute(hinted)) return declared ? resolvedBase(declared, `${hinted}/`) : hinted;
+  return resolvedBase(declared, documentUrl);
+}
+
+export function importOpenApi(root: JsonMap, documentUrl = "", address: McpApiAddress = {}): McpOpenApiImport {
   const info = asMap(root.info) ?? {};
-  const baseUrl = resolvedBase(baseUrlOf(root), documentUrl);
+  const baseUrl = chosenBase(baseUrlOf(root), documentUrl, address);
+  const operations: { verb: (typeof METHODS)[number]; path: string; pathItem: JsonMap; operation: JsonMap }[] = [];
+  for (const [path, value] of Object.entries(asMap(root.paths) ?? {})) {
+    const pathItem = asMap(value);
+    if (!pathItem) continue;
+    for (const verb of METHODS) {
+      const operation = asMap(pathItem[verb]);
+      if (operation) operations.push({ verb, path: path.trim(), pathItem, operation });
+    }
+  }
+  const handled = operations.slice(0, MAX_OPERATIONS);
+  const prefix = commonPrefix(handled.map((entry) => entry.path));
+  const spec: Spec = { root, prefix, envelope: envelopeOf(root, handled), entities: entitiesOf(root, prefix, handled) };
+  const drafts = handled.flatMap(({ verb, path, pathItem, operation }) => toolOf(spec, path, verb, pathItem, operation) ?? []);
   const server: McpDraftServer = {
     name: clip(text(info.title) || "API", 48),
     description: clip(text(info.description).split(/\n\s*\n/)[0] ?? "", 500),
@@ -290,19 +552,6 @@ export function importOpenApi(root: JsonMap, documentUrl = ""): McpOpenApiImport
     ...authOf(root),
     notes: "",
   };
-  const tools: HostedTool[] = [];
-  let operations = 0;
-  for (const [path, value] of Object.entries(asMap(root.paths) ?? {})) {
-    const pathItem = asMap(value);
-    if (!pathItem) continue;
-    for (const verb of METHODS) {
-      const operation = asMap(pathItem[verb]);
-      if (!operation) continue;
-      operations += 1;
-      if (operations > MAX_OPERATIONS) continue;
-      const tool = toolOf(root, path, verb, pathItem, operation);
-      if (tool) tools.push(tool);
-    }
-  }
-  return { server, tools: mergeTools([], tools, MAX_OPERATIONS), operations };
+  const tools = rebaseTools(baseUrl, distinctNames(drafts));
+  return { server, tools: mergeTools([], tools, MAX_OPERATIONS), operations: operations.length };
 }

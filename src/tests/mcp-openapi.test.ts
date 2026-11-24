@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { buildHostedRequest, templateAllows } from "@/lib/mcp/hosted";
 import { importOpenApi, readApiDocument } from "@/lib/mcp/openapi";
+import type { JsonMap } from "@/types/gateway";
 
 const openapi = {
   openapi: "3.1.0",
@@ -124,4 +125,117 @@ test("builder templates select actions", () => {
   assert.equal(templateAllows("writes", "delete"), false);
   assert.equal(templateAllows("full", "delete"), true);
   assert.equal(templateAllows("custom", "delete"), true);
+});
+
+const legacy = {
+  swagger: "2.0",
+  info: { title: "Inventory API" },
+  paths: {
+    "/v1/item/search/": {
+      get: { tags: ["Items"], responses: { 200: { schema: { type: null, items: { $ref: "#/definitions/ItemList" } } } } },
+    },
+    "/v1/item/": {
+      post: {
+        tags: ["Items"],
+        summary: "Creates an item.",
+        parameters: [{ in: "body", name: "body", schema: { $ref: "#/definitions/null" } }],
+        responses: { 200: { schema: { type: "boolean", items: { $ref: "#/definitions/PostItem" } } } },
+      },
+    },
+    "/v1/item/{id}": {
+      put: {
+        tags: ["Items"],
+        summary: "Updates an item. Unlock it first.",
+        parameters: [
+          { name: "id", in: "path", required: true, type: "integer" },
+          { in: "body", name: "body", required: true, schema: { $ref: "#/definitions/PutItem" } },
+        ],
+        responses: { 200: { schema: { type: "boolean", items: { $ref: "#/definitions/PutItem" } } } },
+      },
+    },
+    "/v1/Supplier/viewByName/name/{name}": { get: { tags: ["Suppliers"], parameters: [{ name: "name", in: "path", required: true, type: "string" }] } },
+    "/v1/do/function/GetSupplierByMail": {
+      post: {
+        tags: ["Suppliers"],
+        parameters: [{ in: "body", name: "body", schema: { $ref: "#/definitions/null" } }],
+        responses: { 200: { schema: { items: { $ref: "#/definitions/PostItem" } } } },
+      },
+    },
+    "/v1/slot/": { post: { tags: ["Bookings"], responses: { 200: { schema: { items: { $ref: "#/definitions/PostItem" } } } } } },
+    "/v1/Slot/": { post: { tags: ["Shifts"], responses: { 200: { schema: { items: { $ref: "#/definitions/PostItem" } } } } } },
+    "/v1/slot/search/params[Scheduled]/1": { get: { tags: ["Bookings"] } },
+  },
+  definitions: {
+    ItemList: {
+      properties: {
+        id: { type: "integer" },
+        label: { type: "string", description: "Example: Widget" },
+        created: { type: "datetime" },
+        tags: { type: "array" },
+        odd: { type: "whatever" },
+      },
+    },
+    PostItem: { properties: { Success: { type: "boolean" }, Id: { type: "number" }, Message: { type: "string" } }, required: ["Success", "Id", "Message"] },
+    PutItem: {
+      properties: { id: { type: "integer" }, Success: { type: "boolean" }, Id: { type: "number" }, Message: { type: "string" } },
+      required: ["id", "Success", "Id", "Message"],
+    },
+  },
+};
+
+test("importOpenApi names, types, and fills loose legacy specs without inventing required fields", () => {
+  const imported = importOpenApi(legacy, "", { hinted: "https://api.example.com" });
+  assert.equal(imported.server.baseUrl, "https://api.example.com");
+  const byName = new Map(imported.tools.map((tool) => [tool.name, tool]));
+  assert.deepEqual([...byName.keys()], [
+    "item_search",
+    "create_item",
+    "update_item",
+    "supplier_view_by_name",
+    "get_supplier_by_mail",
+    "create_slot_bookings",
+    "create_slot_shifts",
+    "slot_search_params_scheduled",
+  ]);
+  assert.equal(byName.get("get_supplier_by_mail")!.action, "read");
+  assert.equal(byName.get("item_search")!.title, "Items: GET /v1/item/search/");
+  assert.equal(byName.get("slot_search_params_scheduled")!.path, "/v1/slot/search/params[Scheduled]/1");
+
+  const update = byName.get("update_item")!;
+  assert.equal(update.title, "Updates an item.");
+  assert.deepEqual(update.inputSchema.required, ["id"]);
+  assert.equal(update.inputSchema.additionalProperties, true);
+  const fields = update.inputSchema.properties as Record<string, JsonMap>;
+  assert.deepEqual(Object.keys(fields), ["id", "label", "created", "tags", "odd"]);
+  assert.deepEqual(fields.created, { type: "string", format: "date-time" });
+  assert.deepEqual(fields.tags, { type: "array", items: {} });
+  assert.deepEqual(fields.odd, {});
+  assert.match(update.description, /records returned by GET \/v1\/item\/search\//);
+
+  const create = byName.get("create_item")!;
+  assert.equal(create.inputSchema.required, undefined);
+  assert.deepEqual(Object.keys(create.inputSchema.properties as JsonMap), ["label", "created", "tags", "odd"]);
+  const lookup = byName.get("get_supplier_by_mail")!;
+  assert.deepEqual(lookup.inputSchema, { type: "object", properties: {}, additionalProperties: true });
+
+  assert.deepEqual(buildHostedRequest(imported.server.baseUrl, lookup, { email: "a@b.example" }), {
+    url: "https://api.example.com/v1/do/function/GetSupplierByMail",
+    method: "POST",
+    body: '{"email":"a@b.example"}',
+  });
+});
+
+test("an explicit address wins and tool paths never repeat its path", () => {
+  const imported = importOpenApi({ ...legacy, host: "vendor.example.com" }, "https://docs.example.com/spec.json", {
+    given: "api.example.com/v1/",
+  });
+  assert.equal(imported.server.baseUrl, "https://api.example.com/v1");
+  const update = imported.tools.find((tool) => tool.name === "update_item")!;
+  assert.equal(update.path, "/item/{id}");
+  assert.deepEqual(buildHostedRequest(imported.server.baseUrl, update, { id: 7 }), { url: "https://api.example.com/v1/item/7", method: "PUT" });
+  assert.deepEqual(buildHostedRequest("https://api.example.com/v1", { ...update, path: "/v1/item/{id}" }, { id: 7 }), {
+    url: "https://api.example.com/v1/item/7",
+    method: "PUT",
+  });
+  assert.equal(importOpenApi({ ...legacy, host: "vendor.example.com" }, "", { hinted: "https://other.example.com" }).server.baseUrl, "https://vendor.example.com");
 });
