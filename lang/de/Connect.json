@@ -1,5 +1,156 @@
 {
   "intro": "Jedes Tool braucht dieselben drei Angaben: die Adresse des Hubs, einen API-Key und einen Modellnamen. Wähle dein Tool und folge den Schritten. Die Werte sind schon eingesetzt.",
+  "mode": {
+    "label": "Was möchtest du verbinden?",
+    "option": "{mode, select, mcp {MCP-Tools} other {Modelle}}",
+    "hint": "{mode, select, mcp {Gib deinen Tools die MCP-Server des Hubs über eine einzige Adresse.} other {Nutze die Modelle des Hubs in deinen Tools: Adresse, Key und Modellname.}}"
+  },
+  "mcp": {
+    "intro": "Der Hub bündelt alle MCP-Server, die dein Key nutzen darf, hinter einer MCP-Adresse. Dein Tool meldet sich mit deinem API-Key des Hubs an, der Hub führt jeden Tool-Aufruf mit den Rechten dieses Keys aus, und die Zugangsdaten der Server verlassen den Hub nie.",
+    "auto": {
+      "title": "Du nutzt den Hub schon für Modelle?",
+      "body": "Dann haben deine Tools diese MCP-Tools bereits: Der Hub hängt sie an jede Modellanfrage an und führt sie selbst aus. Verbinde die MCP-Adresse für Tools, die andere Modelle nutzen, oder wenn das Tool die MCP-Tools selbst aufrufen soll."
+    },
+    "pick": "Nicht dabei? Wähle Anderes Tool. Jeder MCP-Client, der einen Header senden kann, funktioniert.",
+    "access": {
+      "url": "MCP-Adresse",
+      "urlHint": "Streamable HTTP für jede MCP-Version. Der Key steht im Authorization-Header.",
+      "tools": "{manage, select, yes {Welche Tools du bekommst, hängt von den MCP-Servern ab, die für deinen Key freigegeben sind. Du verwaltest sie auf der Seite <mcp>MCP-Server</mcp>.} other {Welche Tools du bekommst, hängt von den MCP-Servern ab, die für deinen Key freigegeben sind. Das legt dein Admin fest.}}"
+    },
+    "result": {
+      "ok": "{count, plural, =0 {Er erreicht noch keine MCP-Tools.} one {Er erreicht # MCP-Tool.} other {Er erreicht # MCP-Tools.}}",
+      "none": "{manage, select, yes {Gib auf der Seite <mcp>MCP-Server</mcp> einen Server für diesen Key frei.} other {Bitte deinen Admin, MCP-Server für diesen Key freizugeben.}}",
+      "fail": "{code, select, invalid_api_key {Diesen Key kennt der Hub nicht. Kopier den ganzen Key, beginnend mit sk-hub-, ohne Leerzeichen.} key_paused {Dieser Key ist pausiert. Setz ihn unter API-Keys fort.} ip_not_allowed {Dieser Key funktioniert nur von bestimmten IP-Adressen, und dieser Browser gehört nicht dazu. Dein Tool kann trotzdem funktionieren.} outside_access_window {Dieser Key funktioniert nur zu bestimmten Zeiten. Prüf sein Zeitfenster unter API-Keys.} endpoint_not_allowed {Dieser Key darf MCP nicht nutzen. Nimm MCP unter API-Keys in seine erlaubten Endpunkte auf.} budget_exceeded {Das Budget dieses Keys ist aufgebraucht.} rate_limit_exceeded {Gerade zu viele Anfragen. Versuch es gleich noch einmal.} network {Der Hub antwortet nicht. Prüf deine Verbindung.} other {Die Prüfung ist fehlgeschlagen. Sieh in die Hilfe unten.}}"
+    },
+    "fields": "{field, select, url {MCP-Adresse} header {Header-Name} value {Header-Wert} other {Adresse für ältere SSE-Clients}}",
+    "check": "Bitte dein Tool um etwas, das eines der MCP-Tools erledigt. Beim ersten Mal fragt das Tool eventuell, ob es den Aufruf ausführen darf.",
+    "help": "Die häufigsten Probleme und was du tun kannst.",
+    "topics": {
+      "endpoint": {
+        "title": "403 mit endpoint_not_allowed: Der Key darf MCP nicht nutzen",
+        "body": "Der Key erlaubt nur bestimmte Endpunkte. Öffne ihn unter <keys>API-Keys</keys> und nimm MCP in die erlaubten Endpunkte auf, oder lass die Liste leer."
+      },
+      "noTools": {
+        "title": "Das Tool verbindet sich, zeigt aber keine Tools",
+        "body": "{manage, select, yes {Der Hub bietet nur MCP-Server an, die für deinen Key, sein Projekt, seine Abteilung oder sein Unternehmen freigegeben sind. Prüf die Zugriffsregeln auf der Seite <mcp>MCP-Server</mcp>. Änderungen erscheinen, sobald das Tool seine Tool-Liste neu lädt.} other {Der Hub bietet nur MCP-Server an, die für deinen Key, sein Projekt, seine Abteilung oder sein Unternehmen freigegeben sind. Bitte deinen Admin, die Server freizugeben, die du brauchst. Änderungen erscheinen, sobald das Tool seine Tool-Liste neu lädt.}}"
+      },
+      "sse": {
+        "title": "Das Tool bietet nur SSE an",
+        "body": "Ältere Tools sprechen den HTTP+SSE-Transport von 2024. Wähle oben Anderes Tool und nimm die Adresse, die auf /mcp/sse endet. Der Header bleibt gleich."
+      },
+      "twice": {
+        "title": "Jedes Tool erscheint doppelt",
+        "body": "Dein Tool nutzt den Hub auch für Modelle, und der Hub hängt dieselben Tools an jede Modellanfrage an. Lass das Tool bei seinen Modellanfragen den Header X-LLMHub-MCP: off senden. Die Hinweise zu Claude Code, Codex CLI und OpenCode zeigen, wo."
+      },
+      "network": {
+        "title": "Zeitüberschreitung oder Verbindung abgelehnt",
+        "body": "Das Tool erreicht den Hub nicht. MCP-Tools verbinden sich von deinem Rechner aus, also muss die Adresse des Hubs von dort erreichbar sein. localhost funktioniert nur auf demselben Rechner."
+      }
+    },
+    "tools": {
+      "claudeCode": {
+        "name": "Claude Code",
+        "hint": "Coding-Agent von Anthropic im Terminal",
+        "about": "Claude Code fügt den Hub als einen MCP-Server für alle deine Projekte hinzu.",
+        "steps": {
+          "add": "Führ das in einem Terminal aus. Mit <code>--scope user</code> stehen die Tools in jedem Projekt bereit.",
+          "verify": "Starte <code>claude</code> und tipp <code>/mcp</code>. llmhub muss als verbunden erscheinen, mit seinen Tools."
+        },
+        "notes": {
+          "twice": "Claude Code nutzt den Hub auch für Modelle? Füg <code>{setting}</code> in den <code>env</code>-Block von <code>~/.claude/settings.json</code> ein, damit die Tools nicht doppelt angeboten werden.",
+          "remove": "Zum Entfernen führst du <code>{command}</code> aus."
+        }
+      },
+      "codex": {
+        "name": "Codex CLI",
+        "hint": "Coding-Agent von OpenAI im Terminal",
+        "about": "Codex liest die MCP-Adresse aus seiner Konfigurationsdatei und den Key aus einer Umgebungsvariable.",
+        "steps": {
+          "config": "Öffne <code>~/.codex/config.toml</code> (unter Windows <code>%USERPROFILE%\\.codex\\config.toml</code>). Leg die Datei an, falls es sie nicht gibt, und füge das am Ende ein.",
+          "key": "Speichere deinen API-Key als Umgebungsvariable <code>LLMHUB_API_KEY</code>. Die Einrichtung für Modelle nutzt dieselbe Variable:",
+          "verify": "Öffne ein neues Terminal, starte <code>codex</code> und tipp <code>/mcp</code>. llmhub muss seine Tools zeigen."
+        },
+        "notes": {
+          "twice": "Codex nutzt den Hub auch für Modelle? Füg <code>{setting}</code> unter <code>[model_providers.llmhub]</code> ein, damit die Tools nicht doppelt angeboten werden."
+        }
+      },
+      "opencode": {
+        "name": "OpenCode",
+        "hint": "Open-Source-Coding-Agent im Terminal",
+        "about": "OpenCode liest MCP-Server aus seiner Konfigurationsdatei.",
+        "steps": {
+          "config": "Öffne <code>~/.config/opencode/opencode.json</code>. Leg die Datei an, falls es sie nicht gibt, und füge das ein. Hat sie schon einen <code>mcp</code>-Block, füg nur den Eintrag <code>llmhub</code> hinzu.",
+          "verify": "Starte <code>opencode</code>. Die Tools des Hubs stehen sofort bereit."
+        },
+        "notes": {
+          "twice": "OpenCode nutzt den Hub auch für Modelle? Füg <code>{setting}</code> in die <code>options</code> des Anbieters <code>llmhub</code> ein, damit die Tools nicht doppelt angeboten werden."
+        }
+      },
+      "cursor": {
+        "name": "Cursor",
+        "hint": "KI-Code-Editor",
+        "about": "Cursor liest MCP-Server aus der Datei mcp.json in deinem Benutzerordner.",
+        "steps": {
+          "config": "Öffne <code>~/.cursor/mcp.json</code> (unter Windows <code>%USERPROFILE%\\.cursor\\mcp.json</code>). Leg die Datei an, falls es sie nicht gibt, und füge das ein. Hat sie schon einen <code>mcpServers</code>-Block, füg nur den Eintrag <code>llmhub</code> hinzu.",
+          "verify": "Öffne <b>Cursor Settings → Tools & MCP</b>. llmhub muss einen grünen Punkt und seine Tools zeigen."
+        },
+        "notes": {
+          "project": "Nur für ein Projekt? Leg denselben Inhalt in <code>.cursor/mcp.json</code> im Projekt ab."
+        }
+      },
+      "vscode": {
+        "name": "VS Code",
+        "hint": "GitHub Copilot im Agent-Modus",
+        "about": "VS Code liest MCP-Server aus deiner Benutzerkonfiguration und bietet sie im Agent-Modus von Copilot an.",
+        "steps": {
+          "open": "Öffne die Befehlspalette (Strg+Umschalt+P, unter macOS Cmd+Shift+P) und führ <b>MCP: Open User Configuration</b> aus.",
+          "config": "Füge das ein. Hat die Datei schon einen <code>servers</code>-Block, füg nur den Eintrag <code>llmhub</code> hinzu.",
+          "verify": "Führ <b>MCP: List Servers</b> aus. llmhub muss als laufend erscheinen. Wechsle im Copilot-Chat zu Agent; der Tools-Button listet die Tools des Hubs."
+        },
+        "notes": {
+          "project": "Nur für ein Projekt? Leg denselben Inhalt in <code>.vscode/mcp.json</code> im Projekt ab. Committe die Datei nicht mit deinem Key."
+        }
+      },
+      "claudeDesktop": {
+        "name": "Claude Desktop",
+        "hint": "App von Anthropic für Chat, Cowork und Code",
+        "about": "Claude Desktop erreicht den Hub über mcp-remote, eine kleine Brücke, die deinen Key mitschickt.",
+        "steps": {
+          "node": "Installier Node.js von nodejs.org, falls es noch fehlt. Claude Desktop startet die Brücke mit <code>npx</code>.",
+          "open": "Öffne in Claude Desktop <b>Settings → Developer</b> und klick auf <b>Edit Config</b>. Das öffnet <code>claude_desktop_config.json</code>.",
+          "config": "Füge das ein. Hat die Datei schon einen <code>mcpServers</code>-Block, füg nur den Eintrag <code>llmhub</code> hinzu.",
+          "restart": "Beende Claude Desktop vollständig und starte es neu. Unter <b>Settings → Developer</b> erscheint llmhub dann als laufend."
+        },
+        "notes": {
+          "connectors": "Eigene Connectors unter Settings → Connectors können keinen API-Key mitschicken, deshalb braucht Claude Desktop die Brücke.",
+          "header": "Der Key steht im env-Block, weil Windows Argumente mit Leerzeichen zerlegt. Lass nach <code>Authorization:</code> kein Leerzeichen."
+        }
+      },
+      "gemini": {
+        "name": "Gemini CLI",
+        "hint": "Coding-Agent von Google im Terminal",
+        "about": "Gemini CLI liest MCP-Server aus seiner Einstellungsdatei.",
+        "steps": {
+          "config": "Öffne <code>~/.gemini/settings.json</code> (unter Windows <code>%USERPROFILE%\\.gemini\\settings.json</code>). Leg die Datei an, falls es sie nicht gibt, und füge das ein. Hat sie schon einen <code>mcpServers</code>-Block, füg nur den Eintrag <code>llmhub</code> hinzu.",
+          "verify": "Starte <code>gemini</code> und tipp <code>/mcp</code>. llmhub muss als bereit erscheinen, mit seinen Tools."
+        }
+      },
+      "other": {
+        "name": "Anderes Tool",
+        "hint": "Jeder MCP-Client, der einen Header senden kann",
+        "about": "Jeder MCP-Client braucht die Adresse und einen Header.",
+        "steps": {
+          "fields": "Trag diese Werte in deinem Tool ein. Wähle als Transport Streamable HTTP (manchmal nur HTTP).",
+          "test": "Prüf im Terminal, ob dein Key Tools erreicht:",
+          "sse": "Dein Tool bietet nur SSE an? Nimm stattdessen diese Adresse. Der Header bleibt gleich."
+        },
+        "notes": {
+          "versions": "Die Adresse spricht jede MCP-Version von 2024-11-05 bis 2026-07-28 und braucht keine Session.",
+          "noHeader": "Tools, die keinen Header senden können, können die MCP-Adresse des Hubs nicht nutzen. Der Key steht nie in der Adresse."
+        }
+      }
+    }
+  },
   "local": {
     "title": "Diese Adresse funktioniert nur auf diesem Rechner",
     "body": "Du hast den Hub unter {host} geöffnet. Andere Rechner und Cloud-Tools wie Cursor erreichen ihn so nicht. Öffne die Konsole über die öffentliche Adresse des Hubs, dann nutzen die Schritte unten diese."

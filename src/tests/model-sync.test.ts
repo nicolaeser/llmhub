@@ -944,6 +944,7 @@ test("only plain catalog groups disappear with their last provider", async () =>
     fallbackGroups: [],
     autoRoutes: null,
     mergeSystemMessages: false,
+    sessionAffinity: false,
     _count: { priceWindows: 0 },
   };
   assert.deepEqual(
@@ -954,6 +955,7 @@ test("only plain catalog groups disappear with their last provider", async () =>
         { alias: "custom-price", ...plain, billingMode: "custom" },
         { alias: "pinned", ...plain, autoRoutes: true },
         { alias: "merged-system", ...plain, mergeSystemMessages: true },
+        { alias: "sticky-replicas", ...plain, sessionAffinity: true },
         { alias: "paused", ...plain, enabled: false },
         { alias: "with-fallback", ...plain, fallbackGroups: ["gpt-4o"] },
         { alias: "windowed", ...plain, _count: { priceWindows: 1 } },

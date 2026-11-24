@@ -142,6 +142,7 @@ function groupAudit(g: {
   variants: string[];
   extraNames: string[];
   mergeSystemMessages: boolean;
+  sessionAffinity: boolean;
   strategy: string;
   billingMode: string;
   priceInput: Prisma.Decimal;
@@ -162,6 +163,7 @@ function groupAudit(g: {
     variants: variantsOf(g.variants),
     extraNames: extraNamesOf(g.extraNames),
     mergeSystemMessages: g.mergeSystemMessages,
+    sessionAffinity: g.sessionAffinity,
     strategy: g.strategy,
     billingMode: g.billingMode,
     priceInput: money(g.priceInput),
@@ -184,6 +186,7 @@ function mapGroup(g: {
   variants: string[];
   extraNames: string[];
   mergeSystemMessages: boolean;
+  sessionAffinity: boolean;
   strategy: string;
   billingMode: string;
   priceInput: Prisma.Decimal;
@@ -204,6 +207,7 @@ function mapGroup(g: {
     variants: variantsOf(g.variants),
     extraNames: extraNamesOf(g.extraNames),
     mergeSystemMessages: g.mergeSystemMessages,
+    sessionAffinity: g.sessionAffinity,
     strategy: g.strategy,
     billingMode: g.billingMode,
     priceInput: money(g.priceInput),
@@ -390,6 +394,7 @@ export async function createModelGroup(input: {
   variants?: ModelVariant[];
   extraNames?: string[] | string;
   mergeSystemMessages?: boolean;
+  sessionAffinity?: boolean;
   strategy: string;
   billingMode?: string;
   priceInput?: number;
@@ -425,6 +430,7 @@ export async function createModelGroup(input: {
       variants,
       extraNames,
       mergeSystemMessages: input.mergeSystemMessages ?? false,
+      sessionAffinity: input.sessionAffinity ?? false,
       strategy: strategyOf(input.strategy),
       billingMode: billingModeOf(input.billingMode),
       priceInput: priceOf(input.priceInput, 0),
@@ -460,6 +466,7 @@ export async function updateModelGroup(input: {
   variants?: ModelVariant[];
   extraNames?: string[] | string;
   mergeSystemMessages?: boolean;
+  sessionAffinity?: boolean;
   strategy: string;
   billingMode?: string;
   priceInput?: number;
@@ -494,6 +501,7 @@ export async function updateModelGroup(input: {
       variants,
       extraNames,
       mergeSystemMessages: input.mergeSystemMessages ?? existing.mergeSystemMessages,
+      sessionAffinity: input.sessionAffinity ?? existing.sessionAffinity,
       strategy: strategyOf(input.strategy, existing.strategy),
       billingMode: billingModeOf(input.billingMode, existing.billingMode),
       priceInput: priceOf(input.priceInput, money(existing.priceInput)),

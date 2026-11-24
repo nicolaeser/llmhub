@@ -9,7 +9,14 @@ import { loadConnectGuide } from "@/lib/keys/connect-guide";
 import { loadAliases } from "@/lib/models/aliases";
 
 export async function loadDeveloperTabsAction() {
-  return runAction(() => grantedPermissions([PERMISSIONS.PLAYGROUND_USE, PERMISSIONS.KEYS_READ]));
+  return runAction(() =>
+    grantedPermissions([
+      PERMISSIONS.PLAYGROUND_USE,
+      PERMISSIONS.KEYS_READ,
+      PERMISSIONS.SETTINGS_READ,
+      PERMISSIONS.MCP_READ,
+    ]),
+  );
 }
 
 export async function loadReplayAction(...args: Parameters<typeof loadReplay>) {

@@ -70,3 +70,18 @@ test("resolveTryTarget fills path params and rejects unknown routes", () => {
   assert.match(exampleRequestBody("POST", "/api/mgmt/keys", "gpt") ?? "", /"alias": "ci-pipeline"/);
   assert.equal(exampleRequestBody("POST", "/api/mgmt/unknown", "gpt"), null);
 });
+
+test("chat completions, Responses, and Messages document the session affinity headers", () => {
+  const documented = OPENAPI_PATHS.filter((row) => row.headers?.length).map((row) => `${row.method} ${row.path}`);
+  assert.deepEqual(documented.sort(), [
+    "POST /api/v1/chat/completions",
+    "POST /api/v1/messages",
+    "POST /api/v1/responses",
+  ]);
+  for (const row of OPENAPI_PATHS.filter((entry) => entry.headers?.length)) {
+    assert.deepEqual(row.headers, [
+      { name: "x-session-affinity", direction: "request" },
+      { name: "x-llmhub-deployment", direction: "response" },
+    ]);
+  }
+});

@@ -23,10 +23,13 @@
     "style": "API",
     "summary": "Zusammenfassung",
     "status": "Status",
-    "title": "Titel"
+    "title": "Titel",
+    "headers": "Header"
   },
   "style": "{style, select, openai {OpenAI} anthropic {Anthropic} dual {OpenAI und Anthropic} management {Management} other {Andere}}",
   "endpoints": "Endpunkte",
+  "headersHint": "Modelle mit Sitzungsbindung halten jede Unterhaltung auf einem ihrer Endpunkte. Clients können x-session-affinity senden, um die Gruppierung selbst zu wählen; Antworten dieser Modelle tragen die ID des Endpunkts in x-llmhub-deployment.",
+  "header": "{direction, select, request {Anfrage: <code>{name}</code>} other {Antwort: <code>{name}</code>}}",
   "errorsTitle": "Fehler",
   "errorsHint": "Jeder Fehler hat einen stabilen Code und einen x-request-id-Header. Gib die Request-ID an, wenn du ein Problem meldest.",
   "errorShapesLabel": "Fehlerformate",

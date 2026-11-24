@@ -2,6 +2,7 @@
   "title": "MCP servers",
   "subtitle": "Give models tools from other systems, such as a ticket tracker or your own API. The gateway runs the tools and decides who may use them.",
   "add": "Add server",
+  "useInTools": "Use in your tools",
   "readOnly": "You can view MCP servers. Changing them needs the permission to manage MCP.",
   "installOnly": "You can connect a company API key and set access inside your company. Changing the server itself needs permission to manage MCP.",
   "empty": {

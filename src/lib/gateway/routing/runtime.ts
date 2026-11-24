@@ -3,6 +3,14 @@ import prisma from "@/lib/db/prisma";
 import { accountAllowed, DEFAULT_ACCOUNT_STRATEGY } from "@/lib/gateway/routing/account-access";
 import { PIN_HOLD_MS, pinsAccounts, readPin } from "@/lib/gateway/routing/account-affinity";
 import { accountPolicies, keyConcurrencyLimits } from "@/lib/gateway/routing/account-routing";
+import {
+  affinityPlan,
+  groupSession,
+  noteAffinity,
+  readDeploymentPin,
+  settleDeploymentPin,
+  spillMargin,
+} from "@/lib/gateway/routing/deployment-affinity";
 import { concurrencyLimit, isSignInKind, PROVIDER_CATALOG, reportsLimits } from "@/lib/gateway/upstreams/provider-kinds";
 import {
   hasRoom,
@@ -66,6 +74,7 @@ import type {
   QuotaScores,
   RouterWait,
   RunRouting,
+  SessionAffinity,
 } from "@/types/routing";
 import type { AccountAccess } from "@/types/providers";
 import type { DeploymentRule, RoutePolicy } from "@/types/model-templates";
@@ -151,6 +160,7 @@ export async function loadGroup(requested: string): Promise<ResolvedModelGroup> 
       fallback_groups: [],
       deployments: mapped,
       mapped,
+      session_affinity: false,
     };
   }
 
@@ -181,6 +191,7 @@ export async function loadGroup(requested: string): Promise<ResolvedModelGroup> 
     fallback_groups: asStringArray(group.fallbackGroups),
     deployments: mapped,
     mapped,
+    session_affinity: group.sessionAffinity,
   };
 }
 
@@ -468,6 +479,7 @@ export async function acquireGroup(
   overflow: boolean;
   pinned: AccountPin | null;
   pinHeld: boolean;
+  affinity: SessionAffinity | null;
 }> {
   const permitted = permittedDeployments(group.mapped, rules).filter(serves);
   const active = permitted.filter((dep) => dep.provider?.enabled !== false);
@@ -505,11 +517,26 @@ export async function acquireGroup(
   const pins = await runPins(offered, run?.session ?? "");
   const sticky = pinnedChoice(offered, pins);
   const candidates = sticky.length ? sticky : await byAccountPolicy(pinnedKinds(offered, pins), quota.scores);
-  const dep = pick(candidates, strategy || group.strategy, quota.scores);
+  const session = groupSession(group, run);
+  const plan = session
+    ? affinityPlan({
+        pinned: await readDeploymentPin(group.alias, session),
+        candidates,
+        queued: quota.items,
+        busy,
+        failed: run?.affinity?.failed ?? new Set(),
+        load: (id) => inflight.get(id) ?? 0,
+        margin: spillMargin(),
+      })
+    : null;
+  const dep = plan?.keep ?? pick(plan?.pool ?? candidates, strategy || group.strategy, quota.scores);
   const target = targets.get(dep.id)!;
   const keyTarget = keyConcurrencyTarget(dep, access, keyLimits);
   const releasePermit = await takeDeploymentPermits(dep, target, keyTarget, run?.signal);
   const pinned = pinOf(dep, pins);
+  const affinity: SessionAffinity | null = group.session_affinity ? { outcome: plan?.outcome ?? "off", key: session } : null;
+  if (plan) settleDeploymentPin(group.alias, session, plan.outcome, dep.id);
+  noteAffinity(dep, affinity);
   inflight.set(dep.id, (inflight.get(dep.id) ?? 0) + 1);
   let released = false;
   return {
@@ -517,6 +544,7 @@ export async function acquireGroup(
     overflow: false,
     pinned,
     pinHeld: pinStaysPut(pinned, dep, usable, health.cooling, run, busy),
+    affinity,
     release: () => {
       if (released) return;
       released = true;

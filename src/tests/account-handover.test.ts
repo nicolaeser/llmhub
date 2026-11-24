@@ -278,6 +278,7 @@ test("releasing a finished request twice does not undercount the in-flight load"
     fallback_groups: [],
     deployments: mapped,
     mapped,
+    session_affinity: false,
   };
   const first = await acquireGroup(group, undefined);
   const second = await acquireGroup(group, undefined);

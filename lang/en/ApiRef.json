@@ -23,10 +23,13 @@
     "style": "API",
     "summary": "Summary",
     "status": "Status",
-    "title": "Title"
+    "title": "Title",
+    "headers": "Headers"
   },
   "style": "{style, select, openai {OpenAI} anthropic {Anthropic} dual {OpenAI and Anthropic} management {Management} other {Other}}",
   "endpoints": "Endpoints",
+  "headersHint": "Models with session affinity keep each conversation on one of their endpoints. Clients may send x-session-affinity to choose the grouping themselves; responses of those models carry the endpoint's ID in x-llmhub-deployment.",
+  "header": "{direction, select, request {Request: <code>{name}</code>} other {Response: <code>{name}</code>}}",
   "errorsTitle": "Errors",
   "errorsHint": "Every error has a stable code and an x-request-id header. Quote the request id when you report a problem.",
   "errorShapesLabel": "Error formats",

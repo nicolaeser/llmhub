@@ -143,3 +143,13 @@ test("Sentry variables are optional, and a configured DSN or sample rate must be
     assert.throws(() => parseEnvironment({ ...valid, [name]: value }), new RegExp(name), value);
   }
 });
+
+test("SESSION_AFFINITY_SPILL_MARGIN is an optional whole number", () => {
+  assert.equal(parseEnvironment(valid).SESSION_AFFINITY_SPILL_MARGIN, undefined);
+  assert.equal(parseEnvironment({ ...valid, SESSION_AFFINITY_SPILL_MARGIN: "" }).SESSION_AFFINITY_SPILL_MARGIN, undefined);
+  assert.equal(parseEnvironment({ ...valid, SESSION_AFFINITY_SPILL_MARGIN: " 0 " }).SESSION_AFFINITY_SPILL_MARGIN, "0");
+  assert.equal(parseEnvironment({ ...valid, SESSION_AFFINITY_SPILL_MARGIN: "12" }).SESSION_AFFINITY_SPILL_MARGIN, "12");
+  for (const value of ["-1", "1.5", "four", "4x"]) {
+    assert.throws(() => parseEnvironment({ ...valid, SESSION_AFFINITY_SPILL_MARGIN: value }), /SESSION_AFFINITY_SPILL_MARGIN/, value);
+  }
+});

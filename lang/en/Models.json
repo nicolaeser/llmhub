@@ -56,6 +56,8 @@
     "enabledHint": "When off, the model is hidden from /api/v1/models and requests to it fail with model not found, also as a fallback. Settings are kept.",
     "mergeSystemMessages": "Merge system messages",
     "mergeSystemMessagesHint": "Combines all system messages into one at the start before a chat request goes upstream. Turn on for models whose chat template accepts only a single leading system message, such as Qwen.",
+    "sessionAffinity": "Session affinity",
+    "sessionAffinityHint": "Keeps each conversation on the same endpoint so self-hosted replicas reuse their prompt cache. Meant for several replicas of one model, not for cloud APIs.",
     "vendor": "Vendor",
     "vendorHint": "Shown as owned_by in /api/v1/models, for example anthropic or openai.",
     "displayName": "Display name",

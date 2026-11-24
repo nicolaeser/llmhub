@@ -119,6 +119,8 @@ export async function findRequestLogDetail(
     deploymentId: row.deploymentId,
     provider: row.provider,
     upstreamModel: row.upstreamModel,
+    affinity: row.affinity,
+    affinityKey: row.affinityKey,
     tag: row.tag,
     error: row.error,
     piiRestore: piiRestoreOf(row.piiRestore),

@@ -3,6 +3,7 @@ import prisma from "@/lib/db/prisma";
 import { asRecord } from "@/lib/gateway/core";
 import { connectionFailureReason } from "@/lib/gateway/errors";
 import { logPayload } from "@/lib/gateway/request-logs/log-content";
+import { servedAffinity } from "@/lib/gateway/routing/deployment-affinity";
 import { defaultEntityIds, redactJSON, redactPii } from "@/lib/gateway/safety/pii";
 import { piiRestoreSummary, vaultOf } from "@/lib/gateway/safety/pii-vault";
 import { requestEnterprise, resolvePii } from "@/lib/settings/enterprise";
@@ -79,6 +80,7 @@ export async function writeRequestLog(entry: RequestLogEntry): Promise<void> {
         }
       : undefined;
   const streamFlag = asRecord(request)?.stream;
+  const affinity = servedAffinity(entry.deployment);
   const dims = {
     keyId: entry.principal.key?.token_id ?? "",
     userId: entry.principal.userId,
@@ -94,6 +96,8 @@ export async function writeRequestLog(entry: RequestLogEntry): Promise<void> {
     provider: entry.deployment?.kind ?? "",
     upstreamModel: entry.deployment?.model ?? "",
     providerId: entry.deployment?.provider_id ?? "",
+    affinity: affinity?.outcome ?? "",
+    affinityKey: affinity?.key ?? "",
     stream: entry.stream ?? (streamFlag === true || streamFlag === "true"),
     tag,
     labels: (entry.labels ?? []).map(storedLabel),
@@ -137,6 +141,8 @@ export async function writeRequestLog(entry: RequestLogEntry): Promise<void> {
       provider: meta.provider,
       upstream_model: meta.upstreamModel,
       provider_id: meta.providerId,
+      affinity: meta.affinity,
+      affinity_key: meta.affinityKey,
       stream: meta.stream,
       status: meta.status,
       outcome: meta.outcome,

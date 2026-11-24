@@ -74,6 +74,7 @@ export function serializeModelAlias(group: ModelGroupView) {
     variants: group.variants,
     extra_names: group.extraNames,
     merge_system_messages: group.mergeSystemMessages,
+    session_affinity: group.sessionAffinity,
     strategy: group.strategy,
     billing_mode: group.billingMode,
     price_input_per_1k: group.priceInput,
