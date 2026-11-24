@@ -48,6 +48,44 @@ export function authUsesName(authType: string): boolean {
   return authType === "header" || authType === "basic" || authType === "query";
 }
 
+export function installedAuthName(
+  authType: string,
+  name: string,
+  server: { authType: string; authHeader: string },
+): string {
+  if (!authUsesName(authType)) return "";
+  return name || (server.authType === authType ? server.authHeader : "");
+}
+
+const URL_TOKEN_NAMES = new Set([
+  "token",
+  "access_token",
+  "accesstoken",
+  "auth",
+  "auth_token",
+  "authtoken",
+  "api_token",
+  "apitoken",
+  "api_key",
+  "apikey",
+  "api-key",
+  "x-api-key",
+  "key",
+  "secret",
+]);
+
+export function urlToken(raw: string): { name: string; value: string; url: string } | null {
+  const text = raw.trim();
+  if (!URL.canParse(text)) return null;
+  const parsed = new URL(text);
+  for (const [name, value] of parsed.searchParams) {
+    if (!value || !URL_TOKEN_NAMES.has(name.toLowerCase()) || !AUTH_QUERY_NAME.test(name)) continue;
+    parsed.searchParams.delete(name);
+    return { name, value, url: parsed.toString() };
+  }
+  return null;
+}
+
 export function authNameValid(authType: string, value: string): boolean {
   const name = value.trim();
   if (authType === "header") return AUTH_HEADER_NAME.test(name);
@@ -321,7 +359,7 @@ export const mcpInstallationSchema = z
     if (value.baseUrl && !/^https?:\/\//.test(value.baseUrl)) {
       ctx.addIssue({ code: "custom", path: ["baseUrl"], message: "invalid url" });
     }
-    if (!authNameValid(value.authType, value.authHeader)) {
+    if (value.authHeader && !authNameValid(value.authType, value.authHeader)) {
       ctx.addIssue({ code: "custom", path: ["authHeader"], message: "invalid name" });
     }
   });

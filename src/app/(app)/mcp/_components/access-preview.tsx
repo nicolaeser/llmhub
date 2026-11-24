@@ -19,12 +19,14 @@ export default function AccessPreview({
   rules,
   options,
   labelOf,
+  connectedOrgs,
   isDisabled,
 }: {
   policy: Pick<McpServerPolicy, "defaultAccess" | "toolsRestricted" | "allowedTools" | "tools">;
   rules: McpAssignmentView[];
   options: McpTargetOptions;
   labelOf: (rule: Pick<McpAssignmentView, "scope" | "id">) => string;
+  connectedOrgs: string[] | null;
   isDisabled?: boolean;
 }) {
   const t = useTranslations("Mcp.assign");
@@ -36,6 +38,8 @@ export default function AccessPreview({
   const option = options[scope].find((item) => item.id === id) ?? null;
   const named = rules.map((rule) => ({ ...rule, label: labelOf(rule) }));
   const explanation = option ? explainAccess(policy, named, chainFor(scope, option)) : null;
+  const orgId = option ? (scope === "org" ? option.id : option.orgId) : "";
+  const notConnected = Boolean(explanation?.state === "granted" && connectedOrgs && !connectedOrgs.includes(orgId));
   const path = explanation
     ? [
         ...(explanation.usesDefault ? [`${tAccess("defaultSource")}: ${tAccess("level", { access: policy.defaultAccess })}`] : []),
@@ -95,6 +99,7 @@ export default function AccessPreview({
                     })}
                   </p>
                 ) : null}
+                {notConnected ? <p className="text-sm text-warning">{t("previewNotConnected")}</p> : null}
               </Card.Content>
             </Card>
           ) : null}

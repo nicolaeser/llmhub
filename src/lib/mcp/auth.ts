@@ -69,6 +69,20 @@ export function hostedAuth(server: Pick<McpServerRecord, "authType" | "authHeade
   return { headers: {}, query: secret && server.authHeader ? { [server.authHeader]: secret } : {} };
 }
 
+export function withQueryAuth(
+  fetch: McpFetch,
+  server: Pick<McpServerRecord, "url" | "authType" | "authHeader" | "authSecret">,
+): McpFetch {
+  const entries = Object.entries(hostedAuth(server).query);
+  const origin = URL.canParse(server.url) ? new URL(server.url).origin : "";
+  if (!entries.length || !origin) return fetch;
+  return (url, init) => {
+    const target = new URL(url);
+    if (target.origin === origin) for (const [name, value] of entries) target.searchParams.set(name, value);
+    return fetch(target.toString(), init);
+  };
+}
+
 export function sealTokens(grant: Pick<McpTokenGrant, "access" | "refresh">): string {
   return seal(JSON.stringify({ access: grant.access, refresh: grant.refresh }));
 }
