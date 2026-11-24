@@ -322,6 +322,11 @@ export default function KeyMcpDialog({
                               {tMcp("hosted")}
                             </Chip>
                           ) : null}
+                          {server.kind === "media" ? (
+                            <Chip size="sm" variant="soft">
+                              {tMcp("media.badge")}
+                            </Chip>
+                          ) : null}
                           {sameChoice(choice, choiceOf(server)) ? null : (
                             <Chip size="sm" variant="soft" color="accent">
                               {t("changed")}

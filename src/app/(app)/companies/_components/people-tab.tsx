@@ -7,6 +7,7 @@ import { useTranslations } from "next-intl";
 import EmptyState from "@/components/console/empty-state";
 import PauseChip from "@/components/console/pause-chip";
 import RowCard, { RowCards, TABLE_FROM_LG } from "@/components/console/row-cards";
+import { columnSort, descriptorOf, sortByColumn, type ColumnSort } from "@/components/console/table-sort";
 import { useClock } from "@/lib/hooks/use-clock";
 import { isPaused } from "@/lib/keys/pause";
 import type { MemberNode, NodeRef, StructurePayload } from "@/types/structure";
@@ -33,17 +34,25 @@ export default function PeopleTab({
   const tCommon = useTranslations("Common");
   const now = useClock(60_000);
   const [query, setQuery] = useState("");
+  const [sort, setSort] = useState<ColumnSort | null>(null);
   const members = data.members.filter((member) => matchesMember(member, query));
   const focused = focus?.kind === "member" ? focus.id : null;
   const teamAlias = (teamId: string) => data.teams.find((row) => row.id === teamId)?.alias ?? "";
   const keyCount = (memberId: string) => data.keys.filter((key) => key.memberId === memberId).length;
+  const shown = sortByColumn(members, sort, (member, column) => {
+    if (column === "person") return member.alias;
+    if (column === "team") return teamAlias(member.teamId) || null;
+    if (column === "keys") return keyCount(member.id);
+    if (column === "budget") return member.budget.spend;
+    return null;
+  });
 
   useEffect(() => {
     if (!focused) return;
-    const shown = [...document.querySelectorAll(`[data-focus="${focused}"]`)].find(
+    const target = [...document.querySelectorAll(`[data-focus="${focused}"]`)].find(
       (element) => element instanceof HTMLElement && element.offsetParent !== null,
     );
-    shown?.scrollIntoView({ block: "center" });
+    target?.scrollIntoView({ block: "center" });
   }, [focused]);
 
   const addButton = flags.canManage ? (
@@ -125,7 +134,7 @@ export default function PeopleTab({
       ) : (
         <>
           <RowCards label={t("title")}>
-            {members.map((member) => (
+            {shown.map((member) => (
               <RowCard
                 key={member.id}
                 title={<span data-focus={member.id}>{member.alias}</span>}
@@ -153,18 +162,49 @@ export default function PeopleTab({
           </RowCards>
           <Table aria-label={t("title")} className={TABLE_FROM_LG}>
             <Table.ScrollContainer>
-              <Table.Content aria-label={t("title")} className="min-w-3xl">
+              <Table.Content
+                aria-label={t("title")}
+                className="min-w-3xl"
+                sortDescriptor={sort ? descriptorOf(sort) : undefined}
+                onSortChange={(descriptor) => setSort(columnSort(descriptor, sort))}
+              >
                 <Table.Header>
-                  <Table.Column isRowHeader>{t("columns.person")}</Table.Column>
-                  <Table.Column>{t("columns.team")}</Table.Column>
-                  {data.canSeeKeys ? <Table.Column>{t("columns.keys")}</Table.Column> : null}
-                  <Table.Column>{t("columns.budget")}</Table.Column>
+                  <Table.Column isRowHeader allowsSorting id="person">
+                    {({ sortDirection }) => (
+                      <Table.SortableColumnHeader sortDirection={sortDirection}>
+                        {t("columns.person")}
+                      </Table.SortableColumnHeader>
+                    )}
+                  </Table.Column>
+                  <Table.Column allowsSorting id="team">
+                    {({ sortDirection }) => (
+                      <Table.SortableColumnHeader sortDirection={sortDirection}>
+                        {t("columns.team")}
+                      </Table.SortableColumnHeader>
+                    )}
+                  </Table.Column>
+                  {data.canSeeKeys ? (
+                    <Table.Column allowsSorting id="keys">
+                      {({ sortDirection }) => (
+                        <Table.SortableColumnHeader sortDirection={sortDirection}>
+                          {t("columns.keys")}
+                        </Table.SortableColumnHeader>
+                      )}
+                    </Table.Column>
+                  ) : null}
+                  <Table.Column allowsSorting id="budget">
+                    {({ sortDirection }) => (
+                      <Table.SortableColumnHeader sortDirection={sortDirection}>
+                        {t("columns.budget")}
+                      </Table.SortableColumnHeader>
+                    )}
+                  </Table.Column>
                   <Table.Column>
                     <span className="sr-only">{tCommon("actions")}</span>
                   </Table.Column>
                 </Table.Header>
                 <Table.Body>
-                  {members.map((member) => (
+                  {shown.map((member) => (
                     <Table.Row
                       key={member.id}
                       id={member.id}

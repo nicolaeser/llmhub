@@ -7,10 +7,11 @@ import { useFormatter, useTranslations } from "next-intl";
 import EmptyState from "@/components/console/empty-state";
 import IconTile from "@/components/console/icon-tile";
 import RowCard, { RowCards, TABLE_FROM_LG } from "@/components/console/row-cards";
+import { columnSort, descriptorOf, sortByColumn, type ColumnSort, type SortValue } from "@/components/console/table-sort";
 import { InternalBadge } from "@/components/console/subscription-badge";
 import { kindIcon } from "@/components/providers/kind-icons";
 import { PROVIDER_CATALOG } from "@/lib/gateway/upstreams/provider-kinds";
-import type { ProviderListActions, ProviderPresetUsage, ProviderView } from "@/types/providers";
+import type { ProviderListActions, ProviderPolicyInput, ProviderPresetUsage, ProviderView } from "@/types/providers";
 import PolicyChips from "./policy-chips";
 import RowMenu, { type RowMenuItem } from "@/components/providers/row-menu";
 import {
@@ -26,6 +27,34 @@ import { useProviderRowActions } from "./use-provider-row-actions";
 const SEARCH_FROM = 6;
 
 const STATUS_COLOR = { active: "success", paused: "default", missing: "warning" } as const;
+
+function dataHandlingValue(policy: ProviderPolicyInput): string | null {
+  const parts = [
+    policy.zdr ? "zdr" : "",
+    policy.region,
+    policy.retentionDays === null ? "" : String(policy.retentionDays),
+    policy.noTraining ? "noTraining" : "",
+  ].filter((part) => part.length > 0);
+  return parts.length ? parts.join(" ") : null;
+}
+
+function providerSortValue(row: ProviderView, column: string): SortValue {
+  if (column === "provider") return row.name;
+  if (column === "status") return providerStatus(row);
+  if (column === "models") return providerRow(row).models;
+  if (column === "dataHandling") return dataHandlingValue(row.policy);
+  return null;
+}
+
+function sortableColumn(id: string, label: string, rowHeader = false) {
+  return (
+    <Table.Column allowsSorting id={id} isRowHeader={rowHeader}>
+      {({ sortDirection }) => (
+        <Table.SortableColumnHeader sortDirection={sortDirection}>{label}</Table.SortableColumnHeader>
+      )}
+    </Table.Column>
+  );
+}
 
 const MENU_ICONS = {
   edit: Pencil,
@@ -53,6 +82,7 @@ export default function ApiProviders({
   const format = useFormatter();
   const rowActions = useProviderRowActions({ presets, onReplace: actions.replace, onRemove: actions.remove });
   const [query, setQuery] = useState("");
+  const [sort, setSort] = useState<ColumnSort | null>(null);
 
   if (rows.length === 0) {
     return canManage ? (
@@ -141,11 +171,12 @@ export default function ApiProviders({
     return providerRow(row).internal ? <InternalBadge /> : null;
   }
 
-  const sorted = [...rows].sort(byProviderOrder);
+  const ordered = [...rows].sort(byProviderOrder);
   const searchable = rows.length >= SEARCH_FROM;
-  const shown = searchable
-    ? sorted.filter((row) => providerMatches(row, query, [t("kindName", { kind: row.kind })]))
-    : sorted;
+  const matched = searchable
+    ? ordered.filter((row) => providerMatches(row, query, [t("kindName", { kind: row.kind })]))
+    : ordered;
+  const shown = sortByColumn(matched, sort, providerSortValue);
   const missing = rows.filter((row) => providerStatus(row) === "missing");
 
   function subtitle(row: ProviderView) {
@@ -202,12 +233,17 @@ export default function ApiProviders({
           </RowCards>
           <Table aria-label={t("tabs", { tab: "api" })} className={TABLE_FROM_LG}>
             <Table.ScrollContainer>
-              <Table.Content aria-label={t("tabs", { tab: "api" })} className="min-w-[48rem]">
+              <Table.Content
+                aria-label={t("tabs", { tab: "api" })}
+                className="min-w-[48rem]"
+                sortDescriptor={sort ? descriptorOf(sort) : undefined}
+                onSortChange={(descriptor) => setSort(columnSort(descriptor, sort))}
+              >
                 <Table.Header>
-                  <Table.Column isRowHeader>{t("columns.provider")}</Table.Column>
-                  <Table.Column>{tCommon("status")}</Table.Column>
-                  <Table.Column>{t("columns.models")}</Table.Column>
-                  <Table.Column>{t("columns.dataHandling")}</Table.Column>
+                  {sortableColumn("provider", t("columns.provider"), true)}
+                  {sortableColumn("status", tCommon("status"))}
+                  {sortableColumn("models", t("columns.models"))}
+                  {sortableColumn("dataHandling", t("columns.dataHandling"))}
                   {canManage ? <Table.Column>{tCommon("actions")}</Table.Column> : null}
                 </Table.Header>
                 <Table.Body>

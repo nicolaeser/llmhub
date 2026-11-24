@@ -9,6 +9,7 @@ import PageHeader from "@/components/console/page-header";
 import PageStatus from "@/components/console/page-status";
 import RowCard, { RowCards, TABLE_FROM_LG } from "@/components/console/row-cards";
 import SearchSelect from "@/components/console/search-select";
+import { columnSort, descriptorOf, sortByColumn, type ColumnSort } from "@/components/console/table-sort";
 import { useErrorToast } from "@/components/console/use-error-toast";
 import { deleteKnowledgeAction, loadKnowledgeAction } from "./_action";
 import { useActionData } from "@/lib/hooks/use-action-data";
@@ -23,6 +24,21 @@ const ALL_COMPANIES = ":all";
 
 const SEARCH_FROM = 6;
 
+function epoch(value: string | null | undefined): number | null {
+  if (!value) return null;
+  const ms = Date.parse(value);
+  return Number.isNaN(ms) ? null : ms;
+}
+
+function storeSortValue(store: VectorStoreView, column: string) {
+  if (column === "name") return store.name;
+  if (column === "status") return store.status;
+  if (column === "files") return store.fileCounts.total;
+  if (column === "size") return store.usageBytes;
+  if (column === "lastActive") return epoch(store.lastActiveAt);
+  return null;
+}
+
 export default function KnowledgePage() {
   const t = useTranslations("Knowledge");
   const showError = useErrorToast();
@@ -30,6 +46,7 @@ export default function KnowledgePage() {
   const format = useFormatter();
   const [query, setQuery] = useState("");
   const [company, setCompany] = useState(ALL_COMPANIES);
+  const [sort, setSort] = useState<ColumnSort | null>(null);
   const [editing, setEditing] = useState<VectorStoreView | null>(null);
   const [filesId, setFilesId] = useState<string | null>(null);
   const [dialogKey, setDialogKey] = useState(0);
@@ -66,6 +83,7 @@ export default function KnowledgePage() {
         (company === ALL_COMPANIES || store.orgId === company) && (!q || store.name.toLowerCase().includes(q)),
     );
   }, [stores, query, company]);
+  const shown = sortByColumn(filtered, sort, storeSortValue);
 
   function openDialog(store: VectorStoreView | null) {
     setEditing(store);
@@ -174,7 +192,7 @@ export default function KnowledgePage() {
           ) : (
             <>
               <RowCards label={t("title")}>
-                {filtered.map((store) => (
+                {shown.map((store) => (
                   <RowCard
                     key={store.id}
                     title={store.name}
@@ -192,19 +210,53 @@ export default function KnowledgePage() {
               </RowCards>
               <Table aria-label={t("title")} className={TABLE_FROM_LG}>
                 <Table.ScrollContainer>
-                  <Table.Content aria-label={t("title")}>
+                  <Table.Content
+                    aria-label={t("title")}
+                    sortDescriptor={sort ? descriptorOf(sort) : undefined}
+                    onSortChange={(descriptor) => setSort(columnSort(descriptor, sort))}
+                  >
                     <Table.Header>
-                      <Table.Column isRowHeader>{t("columns.name")}</Table.Column>
-                      <Table.Column>{t("columns.status")}</Table.Column>
-                      <Table.Column>{t("columns.files")}</Table.Column>
-                      <Table.Column>{t("columns.size")}</Table.Column>
-                      <Table.Column>{t("columns.lastActive")}</Table.Column>
+                      <Table.Column isRowHeader allowsSorting id="name">
+                        {({ sortDirection }) => (
+                          <Table.SortableColumnHeader sortDirection={sortDirection}>
+                            {t("columns.name")}
+                          </Table.SortableColumnHeader>
+                        )}
+                      </Table.Column>
+                      <Table.Column allowsSorting id="status">
+                        {({ sortDirection }) => (
+                          <Table.SortableColumnHeader sortDirection={sortDirection}>
+                            {t("columns.status")}
+                          </Table.SortableColumnHeader>
+                        )}
+                      </Table.Column>
+                      <Table.Column allowsSorting id="files">
+                        {({ sortDirection }) => (
+                          <Table.SortableColumnHeader sortDirection={sortDirection}>
+                            {t("columns.files")}
+                          </Table.SortableColumnHeader>
+                        )}
+                      </Table.Column>
+                      <Table.Column allowsSorting id="size">
+                        {({ sortDirection }) => (
+                          <Table.SortableColumnHeader sortDirection={sortDirection}>
+                            {t("columns.size")}
+                          </Table.SortableColumnHeader>
+                        )}
+                      </Table.Column>
+                      <Table.Column allowsSorting id="lastActive">
+                        {({ sortDirection }) => (
+                          <Table.SortableColumnHeader sortDirection={sortDirection}>
+                            {t("columns.lastActive")}
+                          </Table.SortableColumnHeader>
+                        )}
+                      </Table.Column>
                       <Table.Column>
                         <span className="sr-only">{tCommon("actions")}</span>
                       </Table.Column>
                     </Table.Header>
                     <Table.Body>
-                      {filtered.map((store) => (
+                      {shown.map((store) => (
                         <Table.Row key={store.id} id={store.id}>
                           <Table.Cell>
                             <StoreName store={store} />

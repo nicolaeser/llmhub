@@ -6,6 +6,7 @@ import { KeyRound } from "lucide-react";
 import { useFormatter, useTranslations } from "next-intl";
 import EmptyState from "@/components/console/empty-state";
 import RowCard, { RowCards, TABLE_FROM_LG } from "@/components/console/row-cards";
+import { columnSort, descriptorOf, sortByColumn, type ColumnSort } from "@/components/console/table-sort";
 import { bindingKind, placeOf } from "@/components/keys/key-binding";
 import KeyMenu, { hasKeyMenu, keyMenuActions, type KeyMenuAction, type KeyMenuFlags } from "./key-menu";
 import KeyStateChip from "@/components/keys/key-state-chip";
@@ -90,6 +91,7 @@ export default function KeyList({
   const [status, setStatus] = useState(ALL);
   const [kind, setKind] = useState(ALL);
   const [company, setCompany] = useState(ALL);
+  const [sort, setSort] = useState<ColumnSort | null>(null);
   const hasActions = hasKeyMenu(flags);
   const showCompany = !options.companyId && options.orgs.length > 1;
   const byId = useMemo(() => new Map(keys.map((row) => [row.token_id, row])), [keys]);
@@ -224,6 +226,22 @@ export default function KeyList({
     );
   }
 
+  const shown = sortByColumn(filtered, sort, (row, column) => {
+    if (column === "name") return row.key_alias || row.key_name;
+    if (column === "binding") return ownerOf(row).name || null;
+    if (column === "access") {
+      const summary = accessSummary({ models: row.models, templateIds: row.templates }, options.templates);
+      return summary.state === "some" ? summary.models.join(", ") : summary.state;
+    }
+    if (column === "spend") return row.spend;
+    if (column === "lastUsed") {
+      const parsed = Date.parse(lastUsed[row.token_id] ?? "");
+      return Number.isNaN(parsed) ? null : parsed;
+    }
+    if (column === "status") return stateOf(row);
+    return null;
+  });
+
   const stateOptions = [
     { id: ALL, label: t("filters.allStates") },
     ...STATES.map((state) => ({ id: state, label: t("state", { state }) })),
@@ -271,7 +289,7 @@ export default function KeyList({
       ) : (
         <>
           <RowCards label={t("title")}>
-            {filtered.map((row) => (
+            {shown.map((row) => (
               <RowCard
                 key={row.token_id}
                 title={keyName(row)}
@@ -291,21 +309,59 @@ export default function KeyList({
             <Table.ScrollContainer>
               <Table.Content
                 aria-label={t("title")}
+                sortDescriptor={sort ? descriptorOf(sort) : undefined}
+                onSortChange={(descriptor) => setSort(columnSort(descriptor, sort))}
                 onRowAction={(id) => {
                   if (byId.has(String(id))) router.push(`/keys/${String(id)}`);
                 }}
               >
                 <Table.Header>
-                  <Table.Column isRowHeader>{t("columns.name")}</Table.Column>
-                  <Table.Column>{t("columns.binding")}</Table.Column>
-                  <Table.Column>{t("columns.access")}</Table.Column>
-                  <Table.Column>{t("columns.spend")}</Table.Column>
-                  <Table.Column>{t("columns.lastUsed")}</Table.Column>
-                  <Table.Column>{t("columns.status")}</Table.Column>
+                  <Table.Column isRowHeader allowsSorting id="name">
+                    {({ sortDirection }) => (
+                      <Table.SortableColumnHeader sortDirection={sortDirection}>
+                        {t("columns.name")}
+                      </Table.SortableColumnHeader>
+                    )}
+                  </Table.Column>
+                  <Table.Column allowsSorting id="binding">
+                    {({ sortDirection }) => (
+                      <Table.SortableColumnHeader sortDirection={sortDirection}>
+                        {t("columns.binding")}
+                      </Table.SortableColumnHeader>
+                    )}
+                  </Table.Column>
+                  <Table.Column allowsSorting id="access">
+                    {({ sortDirection }) => (
+                      <Table.SortableColumnHeader sortDirection={sortDirection}>
+                        {t("columns.access")}
+                      </Table.SortableColumnHeader>
+                    )}
+                  </Table.Column>
+                  <Table.Column allowsSorting id="spend">
+                    {({ sortDirection }) => (
+                      <Table.SortableColumnHeader sortDirection={sortDirection}>
+                        {t("columns.spend")}
+                      </Table.SortableColumnHeader>
+                    )}
+                  </Table.Column>
+                  <Table.Column allowsSorting id="lastUsed">
+                    {({ sortDirection }) => (
+                      <Table.SortableColumnHeader sortDirection={sortDirection}>
+                        {t("columns.lastUsed")}
+                      </Table.SortableColumnHeader>
+                    )}
+                  </Table.Column>
+                  <Table.Column allowsSorting id="status">
+                    {({ sortDirection }) => (
+                      <Table.SortableColumnHeader sortDirection={sortDirection}>
+                        {t("columns.status")}
+                      </Table.SortableColumnHeader>
+                    )}
+                  </Table.Column>
                   {hasActions ? <Table.Column>{tCommon("actions")}</Table.Column> : null}
                 </Table.Header>
                 <Table.Body>
-                  {filtered.map((row) => (
+                  {shown.map((row) => (
                     <Table.Row key={row.token_id} id={row.token_id}>
                       <Table.Cell>
                         <div className="min-w-0">

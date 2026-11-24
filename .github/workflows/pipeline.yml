@@ -103,8 +103,6 @@ jobs:
       - name: Check schema drift
         run: npx prisma migrate diff --from-config-datasource --to-schema prisma/schema --exit-code
       - run: npm run test:migrations
-        env:
-          MIGRATION_TEST_DATABASE_URL: ${{ env.DATABASE_URL }}
       - run: npm test
         env:
           NODE_OPTIONS: --test-reporter=./src/tests/failure-reporter.mjs

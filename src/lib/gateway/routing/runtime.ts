@@ -2,9 +2,14 @@ import "server-only";
 import prisma from "@/lib/db/prisma";
 import { accountAllowed, DEFAULT_ACCOUNT_STRATEGY } from "@/lib/gateway/routing/account-access";
 import { PIN_HOLD_MS, pinsAccounts, readPin } from "@/lib/gateway/routing/account-affinity";
-import { accountPolicies } from "@/lib/gateway/routing/account-routing";
+import { accountPolicies, keyConcurrencyLimits } from "@/lib/gateway/routing/account-routing";
 import { concurrencyLimit, isSignInKind, PROVIDER_CATALOG, reportsLimits } from "@/lib/gateway/upstreams/provider-kinds";
-import { hasRoom, takePermit } from "@/lib/gateway/routing/concurrency";
+import {
+  hasRoom,
+  KEY_CONCURRENCY_WAIT_MS,
+  keyConcurrencyLimitedError,
+  takePermit,
+} from "@/lib/gateway/routing/concurrency";
 import {
   nextLatencyEwma,
   pickCostLowest,
@@ -69,6 +74,7 @@ import { money } from "@/lib/utils/money";
 const inflight = new Map<string, number>();
 const latencyEwma = new Map<string, number>();
 const roundRobinCursors = new Map<string, number>();
+const EMPTY_KEY_LIMITS: ReadonlyMap<string, number> = new Map();
 
 function mapDeployment(row: DeploymentRow): ResolvedDeployment {
   return {
@@ -128,9 +134,9 @@ export async function loadGroup(requested: string): Promise<ResolvedModelGroup> 
   if (alias === "auto") {
     const rows = await prisma.deployment.findMany({
       where: { group: { enabled: true } },
-      include: { provider: providerSelect },
+      include: { provider: providerSelect, group: { select: { mergeSystemMessages: true } } },
     });
-    const mapped = rows.map(mapDeployment);
+    const mapped = rows.map((row) => ({ ...mapDeployment(row), merge_system_messages: row.group.mergeSystemMessages }));
     await attachModelFacts(mapped);
     return {
       alias: "auto",
@@ -160,7 +166,7 @@ export async function loadGroup(requested: string): Promise<ResolvedModelGroup> 
   const resolved = direct ? alias : await canonicalModel(alias);
   const group = direct ?? (resolved !== alias ? await findGroup(resolved) : null);
   if (!group?.enabled) throw ERR_UNKNOWN_GROUP;
-  const mapped = group.deployments.map(mapDeployment);
+  const mapped = group.deployments.map((row) => ({ ...mapDeployment(row), merge_system_messages: group.mergeSystemMessages }));
   await attachModelFacts(mapped);
   return {
     alias: group.alias,
@@ -396,13 +402,56 @@ async function concurrencyTargets(items: ResolvedDeployment[]): Promise<Map<stri
   return targets;
 }
 
-function busyDeployments(items: ResolvedDeployment[], targets: Map<string, ConcurrencyTarget>): Set<string> {
+export function keyConcurrencyTarget(
+  dep: ResolvedDeployment,
+  access: AccountAccess | null,
+  limits: ReadonlyMap<string, number>,
+): ConcurrencyTarget | null {
+  const kind = dep.provider?.kind;
+  if (!kind || !access?.keyId || !isSignInKind(kind)) return null;
+  const limit = limits.get(kind) ?? 0;
+  return limit > 0 ? { key: `key:${kind}:${access.keyId}`, limit, adaptive: false } : null;
+}
+
+function busyDeployments(
+  items: ResolvedDeployment[],
+  targets: Map<string, ConcurrencyTarget>,
+  access: AccountAccess | null,
+  keyLimits: ReadonlyMap<string, number>,
+): Set<string> {
   return new Set(
     items.flatMap((dep) => {
       const target = targets.get(dep.id)!;
-      return hasRoom(target.key, target.limit) ? [] : [dep.id];
+      const keyTarget = keyConcurrencyTarget(dep, access, keyLimits);
+      const keyFull = keyTarget !== null && !hasRoom(keyTarget.key, keyTarget.limit);
+      return keyFull || !hasRoom(target.key, target.limit) ? [dep.id] : [];
     }),
   );
+}
+
+async function takeDeploymentPermits(
+  dep: ResolvedDeployment,
+  target: ConcurrencyTarget,
+  keyTarget: ConcurrencyTarget | null,
+  signal: AbortSignal | undefined,
+): Promise<() => void> {
+  const releaseKey = keyTarget
+    ? await takePermit(keyTarget.key, keyTarget.limit, {
+        signal,
+        waitMs: KEY_CONCURRENCY_WAIT_MS,
+        limited: () => keyConcurrencyLimitedError(dep.provider!.kind),
+      })
+    : () => {};
+  try {
+    const releaseProvider = await takePermit(target.key, target.limit, { signal });
+    return () => {
+      releaseProvider();
+      releaseKey();
+    };
+  } catch (err) {
+    releaseKey();
+    throw err;
+  }
 }
 
 export async function acquireGroup(
@@ -446,8 +495,11 @@ export async function acquireGroup(
     throw wait ? waitingError(wait) : ERR_NO_HEALTHY;
   }
   const quota = await withinQuota(affordable(group, ready, cost));
-  const targets = await concurrencyTargets(quota.items);
-  const busy = busyDeployments(quota.items, targets);
+  const [targets, keyLimits] = await Promise.all([
+    concurrencyTargets(quota.items),
+    access?.keyId && quota.items.some(signInProvider) ? keyConcurrencyLimits() : EMPTY_KEY_LIMITS,
+  ]);
+  const busy = busyDeployments(quota.items, targets, access, keyLimits);
   const open = quota.items.filter((dep) => !busy.has(dep.id));
   const offered = open.length ? open : quota.items;
   const pins = await runPins(offered, run?.session ?? "");
@@ -455,7 +507,8 @@ export async function acquireGroup(
   const candidates = sticky.length ? sticky : await byAccountPolicy(pinnedKinds(offered, pins), quota.scores);
   const dep = pick(candidates, strategy || group.strategy, quota.scores);
   const target = targets.get(dep.id)!;
-  const releasePermit = await takePermit(target.key, target.limit, { signal: run?.signal });
+  const keyTarget = keyConcurrencyTarget(dep, access, keyLimits);
+  const releasePermit = await takeDeploymentPermits(dep, target, keyTarget, run?.signal);
   const pinned = pinOf(dep, pins);
   inflight.set(dep.id, (inflight.get(dep.id) ?? 0) + 1);
   let released = false;

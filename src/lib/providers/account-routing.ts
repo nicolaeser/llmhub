@@ -10,7 +10,7 @@ import { forgetAccountPolicies } from "@/lib/gateway/routing/account-routing";
 import { autoResetPoliciesOf } from "@/lib/gateway/routing/auto-reset-policy";
 import { antigravityClientState, saveAntigravityClientSecret } from "@/lib/gateway/upstreams/antigravity-config";
 import { isSignInKind, pollsLimits, signInKinds, startsWindows } from "@/lib/gateway/upstreams/provider-kinds";
-import { REFRESH_CAP_MAX } from "@/schemas/providers";
+import { KEY_CONCURRENCY_MAX, REFRESH_CAP_MAX } from "@/schemas/providers";
 import { autoResetInputSchema } from "@/schemas/resets";
 import type {
   AccountRouting,
@@ -18,6 +18,7 @@ import type {
   AntigravityClientState,
   ApiFallbacks,
   AssignmentInput,
+  KeyConcurrencyLimits,
   KickoffModels,
   RefreshCaps,
   SignInKind,
@@ -71,6 +72,18 @@ async function currentApiFallback(): Promise<ApiFallbacks> {
   return fallback;
 }
 
+async function currentKeyConcurrency(): Promise<KeyConcurrencyLimits> {
+  const rows = await prisma.accountRouting.findMany({
+    where: { keyConcurrency: { gt: 0 } },
+    select: { kind: true, keyConcurrency: true },
+  });
+  const limits: KeyConcurrencyLimits = {};
+  for (const row of rows) {
+    if (isSignInKind(row.kind)) limits[row.kind] = row.keyConcurrency;
+  }
+  return limits;
+}
+
 async function kickoffModels(): Promise<KickoffModels> {
   const rows = await prisma.deployment.findMany({
     where: { group: { enabled: true }, provider: { kind: { in: signInKinds().filter(startsWindows) } } },
@@ -87,13 +100,14 @@ async function kickoffModels(): Promise<KickoffModels> {
 
 export async function loadAccountRouting(): Promise<AccountRoutingView> {
   const session = await requirePlatformPermission(PERMISSIONS.PROVIDERS_READ);
-  const [routing, autoReset, kickoff, models, refreshCaps, apiFallback] = await Promise.all([
+  const [routing, autoReset, kickoff, models, refreshCaps, apiFallback, keyConcurrency] = await Promise.all([
     currentRouting(),
     currentAutoReset(),
     currentKickoff(),
     kickoffModels(),
     currentRefreshCaps(),
     currentApiFallback(),
+    currentKeyConcurrency(),
   ]);
   return {
     routing,
@@ -102,6 +116,7 @@ export async function loadAccountRouting(): Promise<AccountRoutingView> {
     kickoffModels: models,
     refreshCaps,
     apiFallback,
+    keyConcurrency,
     canManage: hasPerm(session.permissions, PERMISSIONS.PROVIDERS_MANAGE),
   };
 }
@@ -219,6 +234,29 @@ export async function saveApiFallback(input: { kind: string; enabled: boolean })
     after: { enabled },
   });
   return { apiFallback: await currentApiFallback() };
+}
+
+export async function saveKeyConcurrency(input: { kind: string; limit: number }) {
+  const session = await requirePlatformPermission(PERMISSIONS.PROVIDERS_MANAGE);
+  if (!isSignInKind(input.kind)) throw new Error("UNKNOWN_PROVIDER_KIND");
+  const { kind, limit } = input;
+  if (!Number.isInteger(limit) || limit < 0 || limit > KEY_CONCURRENCY_MAX) throw new Error("VALIDATION");
+  const before = (await currentKeyConcurrency())[kind] ?? 0;
+  await prisma.accountRouting.upsert({
+    where: { kind },
+    create: { kind, strategy: DEFAULT_ACCOUNT_STRATEGY, keyConcurrency: limit },
+    update: { keyConcurrency: limit },
+  });
+  forgetAccountPolicies();
+  await writeAudit({
+    actor: session.user.id,
+    action: "account_routing.key_concurrency",
+    objectType: "account_routing",
+    objectId: kind,
+    before: { limit: before },
+    after: { limit },
+  });
+  return { keyConcurrency: await currentKeyConcurrency() };
 }
 
 export async function loadAssignmentOptions() {

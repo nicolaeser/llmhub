@@ -30,6 +30,7 @@ export const vertexTargetSchema = z
 
 export const MAX_AUTH_FILES = 50;
 export const REFRESH_CAP_MAX = 50;
+export const KEY_CONCURRENCY_MAX = 64;
 export const MAX_AUTH_FILE_BYTES = 256 * 1024;
 
 const signInKindSchema = z.enum(["codex", "grok_build", "claude", "antigravity", "kimi", "kimi_ai", "muse_code", "devin"]);

@@ -78,7 +78,7 @@ export default function ServerActions({
   const { canManage, canInstall, canAssign, companyId } = flags;
   const browserSignIn = server.authType === "oauth" && server.oauthGrant === "authorization_code";
   const signedIn = server.oauth?.status === "active";
-  const canConnect = canInstall && (server.template || canManage);
+  const canConnect = canInstall && server.kind !== "media" && (server.template || canManage);
   const needsSignIn = canManage && browserSignIn && !signedIn;
   const needsKey = Boolean(canConnect && companyId && server.template && !companyConnected(server, companyId));
 
@@ -87,7 +87,7 @@ export default function ServerActions({
     ...(canAssign ? (["access"] as const) : []),
     ...(canManage ? (["permissions"] as const) : []),
     ...(canConnect && !needsKey ? (["install"] as const) : []),
-    ...(canManage && server.kind !== "hosted" && server.enabled ? (["reload"] as const) : []),
+    ...(canManage && server.kind === "remote" && server.enabled ? (["reload"] as const) : []),
     ...(canManage && browserSignIn && signedIn ? (["signin", "signout"] as const) : []),
     ...(canManage ? (["toggle", "delete"] as const) : []),
   ];

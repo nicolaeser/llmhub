@@ -1,16 +1,22 @@
 "use client";
 
-import { useId, type ReactNode } from "react";
+import { useId, useState, type ReactNode } from "react";
 import { Button, Card, Chip, Meter, Skeleton, Table } from "@heroui/react";
 import { Activity, ArrowLeftRight, Coins, FileText, Timer } from "lucide-react";
 import { useFormatter, useTranslations } from "next-intl";
 import { SectionLoading } from "@/components/console/page-status";
 import RowCard, { RowCards, TABLE_FROM_LG } from "@/components/console/row-cards";
 import StatCard from "@/components/console/stat-card";
+import { columnSort, descriptorOf, sortByColumn, type ColumnSort } from "@/components/console/table-sort";
 import type { LogSessionDetail, LogSessionRequest } from "@/types/logs";
 import { useCallerLabels, useCompactTokens } from "./session-cells";
 import { useSessionFormat } from "./session-format";
 import StatusChip from "./status-chip";
+
+function epochMs(value: string): number | null {
+  const parsed = Date.parse(value);
+  return Number.isNaN(parsed) ? null : parsed;
+}
 
 function Field({ label, children, wide = false }: { label: string; children: ReactNode; wide?: boolean }) {
   return (
@@ -40,6 +46,7 @@ export default function SessionTrace({
   const caller = useCallerLabels();
   const tokens = useCompactTokens();
   const timelineId = useId();
+  const [sort, setSort] = useState<ColumnSort | null>(null);
   const page = data.page;
 
   function latency(row: LogSessionRequest, slowest: number) {
@@ -105,6 +112,21 @@ export default function SessionTrace({
   const first = (page - 1) * data.pageSize + 1;
   const last = Math.min(data.total, page * data.pageSize);
   const slowest = Math.max(0, ...data.requests.map((row) => row.latencyMs));
+  const requests = sortByColumn(data.requests, sort, (row, column) => {
+    if (column === "time") return epochMs(row.createdAt);
+    if (column === "offset") return row.offsetMs;
+    if (column === "model") return row.model || null;
+    if (column === "account") {
+      if (!row.account) return null;
+      const known = data.accounts.find((item) => item.index === row.account);
+      return known?.label || String(row.account);
+    }
+    if (column === "status") return row.status;
+    if (column === "latency") return row.latencyMs;
+    if (column === "tokens") return row.promptTokens + row.completionTokens;
+    if (column === "cost") return row.cost;
+    return null;
+  });
 
   return (
     <div className="space-y-5">
@@ -173,7 +195,7 @@ export default function SessionTrace({
         ) : (
           <>
             <RowCards label={tSessions("timeline")}>
-              {data.requests.map((row) => (
+              {requests.map((row) => (
                 <RowCard
                   key={row.id}
                   title={row.model}
@@ -208,20 +230,61 @@ export default function SessionTrace({
             </RowCards>
             <Table aria-label={tSessions("timeline")} className={TABLE_FROM_LG}>
               <Table.ScrollContainer>
-                <Table.Content aria-label={tSessions("timeline")} className="min-w-6xl">
+                <Table.Content
+                  aria-label={tSessions("timeline")}
+                  className="min-w-6xl"
+                  sortDescriptor={sort ? descriptorOf(sort) : undefined}
+                  onSortChange={(descriptor) => setSort(columnSort(descriptor, sort))}
+                >
                   <Table.Header>
-                    <Table.Column isRowHeader>{t("columns.time")}</Table.Column>
-                    <Table.Column>{tSessions("columns.offset")}</Table.Column>
-                    <Table.Column>{t("columns.model")}</Table.Column>
-                    <Table.Column>{tSessions("columns.account")}</Table.Column>
-                    <Table.Column>{t("columns.status")}</Table.Column>
-                    <Table.Column>{t("columns.latency")}</Table.Column>
-                    <Table.Column>{t("columns.tokens")}</Table.Column>
-                    <Table.Column>{t("columns.cost")}</Table.Column>
+                    <Table.Column isRowHeader allowsSorting id="time">
+                      {({ sortDirection }) => (
+                        <Table.SortableColumnHeader sortDirection={sortDirection}>{t("columns.time")}</Table.SortableColumnHeader>
+                      )}
+                    </Table.Column>
+                    <Table.Column allowsSorting id="offset">
+                      {({ sortDirection }) => (
+                        <Table.SortableColumnHeader sortDirection={sortDirection}>
+                          {tSessions("columns.offset")}
+                        </Table.SortableColumnHeader>
+                      )}
+                    </Table.Column>
+                    <Table.Column allowsSorting id="model">
+                      {({ sortDirection }) => (
+                        <Table.SortableColumnHeader sortDirection={sortDirection}>{t("columns.model")}</Table.SortableColumnHeader>
+                      )}
+                    </Table.Column>
+                    <Table.Column allowsSorting id="account">
+                      {({ sortDirection }) => (
+                        <Table.SortableColumnHeader sortDirection={sortDirection}>
+                          {tSessions("columns.account")}
+                        </Table.SortableColumnHeader>
+                      )}
+                    </Table.Column>
+                    <Table.Column allowsSorting id="status">
+                      {({ sortDirection }) => (
+                        <Table.SortableColumnHeader sortDirection={sortDirection}>{t("columns.status")}</Table.SortableColumnHeader>
+                      )}
+                    </Table.Column>
+                    <Table.Column allowsSorting id="latency">
+                      {({ sortDirection }) => (
+                        <Table.SortableColumnHeader sortDirection={sortDirection}>{t("columns.latency")}</Table.SortableColumnHeader>
+                      )}
+                    </Table.Column>
+                    <Table.Column allowsSorting id="tokens">
+                      {({ sortDirection }) => (
+                        <Table.SortableColumnHeader sortDirection={sortDirection}>{t("columns.tokens")}</Table.SortableColumnHeader>
+                      )}
+                    </Table.Column>
+                    <Table.Column allowsSorting id="cost">
+                      {({ sortDirection }) => (
+                        <Table.SortableColumnHeader sortDirection={sortDirection}>{t("columns.cost")}</Table.SortableColumnHeader>
+                      )}
+                    </Table.Column>
                     <Table.Column>{tCommon("actions")}</Table.Column>
                   </Table.Header>
                   <Table.Body>
-                    {data.requests.map((row) => (
+                    {requests.map((row) => (
                       <Table.Row key={row.id} id={row.id}>
                         <Table.Cell>
                           <time

@@ -305,8 +305,8 @@
     "tools": "{count, plural, =0 {Keine Tools} one {# Tool} other {# Tools}}",
     "action": "{state, select, connected {Verbindung bearbeiten} paused {Verbindung bearbeiten} other {Verbinden}}"
   },
-  "addChoice": "{choice, select, build {Aus API-Doku bauen} other {Server verbinden}}",
-  "addChoiceHint": "{choice, select, build {MCP Anything liest die Dokumentation einer HTTP-API und macht aus ihren Aufrufen Tools.} other {Füge einen laufenden MCP-Server über seine Adresse hinzu.}}",
+  "addChoice": "{choice, select, build {Aus API-Doku bauen} media {Medien-Tools hinzufügen} other {Server verbinden}}",
+  "addChoiceHint": "{choice, select, build {MCP Anything liest die Dokumentation einer HTTP-API und macht aus ihren Aufrufen Tools.} media {Lässt Chat-Modelle mit Modellen dieses Gateways Bilder, Sprache und Videos erzeugen und Audio transkribieren.} other {Füge einen laufenden MCP-Server über seine Adresse hinzu.}}",
   "list": {
     "search": "Server durchsuchen",
     "filter": "Anzeigen",
@@ -323,5 +323,20 @@
     "menu": "Aktionen für {name}",
     "menuItem": "{action, select, edit {Bearbeiten} access {Wer ihn nutzen darf} permissions {Rollen und Berechtigungen} install {{company, select, true {API-Key des Unternehmens} other {API-Keys der Unternehmen}}} reload {Tools neu laden} signin {Erneut anmelden} signout {Abmelden} enable {Aktivieren} disable {Deaktivieren} delete {Löschen} other {{action}}}",
     "toggled": "{enabled, select, true {Server aktiviert} other {Server deaktiviert}}"
+  },
+  "media": {
+    "title": "{mode, select, edit {{name} bearbeiten} other {Medien-Tools hinzufügen}}",
+    "description": "Gibt Chat-Modellen Tools, die mit Modellen dieses Gateways Medien erzeugen und lesen. Wähle für jedes gewünschte Tool ein Modell; Tools ohne Modell werden nicht angeboten. Ergebnisse werden als Dateien gespeichert und als Links zurückgegeben, die sich 7 Tage lang ohne API-Key öffnen lassen.",
+    "mediaModel": "Medienmodell",
+    "global": "Allen anbieten",
+    "globalHint": "Wenn aus, weise den Server unter „Wer ihn nutzen darf“ Unternehmen, Abteilungen oder API-Keys zu.",
+    "badge": "Medien",
+    "model": "{kind, select, image {Bildmodell} speech {Sprachmodell} video {Videomodell} other {Transkriptionsmodell}}",
+    "modelHint": "{kind, select, image {Beantwortet generate_image.} speech {Beantwortet text_to_speech.} video {Beantwortet generate_video und get_video.} other {Beantwortet transcribe_audio.}} Aufrufer brauchen Zugriff auf das Modell; Nutzung und Budgets zählen für den Aufrufer.",
+    "none": "Keins",
+    "noModels": "Noch kein aktives Modell mit Route über einen API-Anbieter verfügbar. Lege unter Modelle eines an oder aktiviere es vor dem Speichern.",
+    "unavailableModel": "Deaktiviert oder entfernt; wähle ein anderes Modell oder Keins",
+    "voice": "Standardstimme",
+    "voiceHint": "Gilt, wenn das Modell keine Stimme nennt. Leer lassen für alloy."
   }
 }

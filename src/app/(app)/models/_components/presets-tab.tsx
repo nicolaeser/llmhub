@@ -8,6 +8,7 @@ import ConfirmDialog from "@/components/console/confirm-dialog";
 import EmptyState from "@/components/console/empty-state";
 import PageStatus from "@/components/console/page-status";
 import RowCard, { RowCards, TABLE_FROM_LG } from "@/components/console/row-cards";
+import { columnSort, descriptorOf, sortByColumn, type ColumnSort } from "@/components/console/table-sort";
 import { useErrorToast } from "@/components/console/use-error-toast";
 import RowMenu, { type RowMenuItem } from "@/components/providers/row-menu";
 import { useActionData } from "@/lib/hooks/use-action-data";
@@ -24,6 +25,13 @@ type PresetAction = "edit" | "delete";
 
 type PresetRow = { template: ModelTemplateView; text: PresetSummaryText };
 
+function presetSortValue(row: PresetRow, column: string) {
+  if (column === "name") return row.template.name;
+  if (column === "allows") return row.text.summary.matches.length;
+  if (column === "keys") return row.template.keyCount;
+  return null;
+}
+
 export default function PresetsTab() {
   const t = useTranslations("ModelTemplates");
   const tCommon = useTranslations("Common");
@@ -33,6 +41,7 @@ export default function PresetsTab() {
   const [deleting, setDeleting] = useState<string | null>(null);
   const [removing, setRemoving] = useState<ModelTemplateView | null>(null);
   const [query, setQuery] = useState("");
+  const [sort, setSort] = useState<ColumnSort | null>(null);
   const [, startDelete] = useTransition();
   const formState = useOverlayState();
   const removeState = useOverlayState();
@@ -47,9 +56,8 @@ export default function PresetsTab() {
   const { templates, policies, providers, canManage } = data;
   const rows: PresetRow[] = templates.map((template) => ({ template, text: summarize(template) }));
   const searchable = templates.length >= SEARCH_FROM;
-  const shown = searchable
-    ? rows.filter((row) => presetMatches(row.template, row.text.summary, query))
-    : rows;
+  const matched = searchable ? rows.filter((row) => presetMatches(row.template, row.text.summary, query)) : rows;
+  const shown = sortByColumn(matched, sort, presetSortValue);
 
   function setTemplates(update: (current: ModelTemplateView[]) => ModelTemplateView[]) {
     setData((current) => ({ ...current, templates: update(current.templates) }));
@@ -182,11 +190,34 @@ export default function PresetsTab() {
               </RowCards>
               <Table aria-label={t("title")} className={TABLE_FROM_LG}>
                 <Table.ScrollContainer>
-                  <Table.Content aria-label={t("title")} className="min-w-3xl">
+                  <Table.Content
+                    aria-label={t("title")}
+                    className="min-w-3xl"
+                    sortDescriptor={sort ? descriptorOf(sort) : undefined}
+                    onSortChange={(descriptor) => setSort(columnSort(descriptor, sort))}
+                  >
                     <Table.Header>
-                      <Table.Column isRowHeader>{t("columns.name")}</Table.Column>
-                      <Table.Column>{t("columns.allows")}</Table.Column>
-                      <Table.Column>{t("columns.keys")}</Table.Column>
+                      <Table.Column isRowHeader allowsSorting id="name">
+                        {({ sortDirection }) => (
+                          <Table.SortableColumnHeader sortDirection={sortDirection}>
+                            {t("columns.name")}
+                          </Table.SortableColumnHeader>
+                        )}
+                      </Table.Column>
+                      <Table.Column allowsSorting id="allows">
+                        {({ sortDirection }) => (
+                          <Table.SortableColumnHeader sortDirection={sortDirection}>
+                            {t("columns.allows")}
+                          </Table.SortableColumnHeader>
+                        )}
+                      </Table.Column>
+                      <Table.Column allowsSorting id="keys">
+                        {({ sortDirection }) => (
+                          <Table.SortableColumnHeader sortDirection={sortDirection}>
+                            {t("columns.keys")}
+                          </Table.SortableColumnHeader>
+                        )}
+                      </Table.Column>
                       {canManage ? <Table.Column>{tCommon("actions")}</Table.Column> : null}
                     </Table.Header>
                     <Table.Body>

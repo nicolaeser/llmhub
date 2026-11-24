@@ -1,8 +1,10 @@
 "use client";
 
+import { useState } from "react";
 import { Chip, Table } from "@heroui/react";
 import { useFormatter, useTranslations } from "next-intl";
 import RowCard, { RowCards, TABLE_FROM_LG } from "@/components/console/row-cards";
+import { columnSort, descriptorOf, sortByColumn, type ColumnSort } from "@/components/console/table-sort";
 import { formats } from "@/i18n/formats";
 import { formatBytes } from "@/lib/utils/bytes";
 import type { ArchiveRunStatus, ArchiveRunView } from "@/types/archive";
@@ -19,10 +21,25 @@ function dayDate(day: string): Date {
   return new Date(`${day}T00:00:00Z`);
 }
 
+function runSortValue(run: ArchiveRunView, column: string) {
+  if (column === "day") {
+    const ms = run.day ? dayDate(run.day).getTime() : Number.NaN;
+    return Number.isNaN(ms) ? null : ms;
+  }
+  if (column === "dataset") return run.dataset;
+  if (column === "status") return run.status;
+  if (column === "records") return run.rows;
+  if (column === "size") return run.bytes;
+  if (column === "object") return run.objectKey || null;
+  return null;
+}
+
 export default function ArchiveRuns({ runs }: { runs: ArchiveRunView[] }) {
   const t = useTranslations("Settings.archive.runs");
   const tArchive = useTranslations("Settings.archive");
   const format = useFormatter();
+  const [sort, setSort] = useState<ColumnSort | null>(null);
+  const shown = sortByColumn(runs, sort, runSortValue);
 
   if (!runs.length) return <p className="text-sm text-muted">{t("empty")}</p>;
 
@@ -50,7 +67,7 @@ export default function ArchiveRuns({ runs }: { runs: ArchiveRunView[] }) {
   return (
     <>
       <RowCards label={t("title")}>
-        {runs.map((run) => (
+        {shown.map((run) => (
           <RowCard
             key={run.id}
             variant="secondary"
@@ -67,17 +84,53 @@ export default function ArchiveRuns({ runs }: { runs: ArchiveRunView[] }) {
       </RowCards>
       <Table className={TABLE_FROM_LG}>
         <Table.ScrollContainer>
-          <Table.Content aria-label={t("title")}>
+          <Table.Content
+            aria-label={t("title")}
+            sortDescriptor={sort ? descriptorOf(sort) : undefined}
+            onSortChange={(descriptor) => setSort(columnSort(descriptor, sort))}
+          >
             <Table.Header>
-              <Table.Column isRowHeader>{t("columns.day")}</Table.Column>
-              <Table.Column>{t("columns.dataset")}</Table.Column>
-              <Table.Column>{t("columns.status")}</Table.Column>
-              <Table.Column>{t("columns.records")}</Table.Column>
-              <Table.Column>{t("columns.size")}</Table.Column>
-              <Table.Column>{t("columns.object")}</Table.Column>
+              <Table.Column isRowHeader allowsSorting id="day">
+                {({ sortDirection }) => (
+                  <Table.SortableColumnHeader sortDirection={sortDirection}>{t("columns.day")}</Table.SortableColumnHeader>
+                )}
+              </Table.Column>
+              <Table.Column allowsSorting id="dataset">
+                {({ sortDirection }) => (
+                  <Table.SortableColumnHeader sortDirection={sortDirection}>
+                    {t("columns.dataset")}
+                  </Table.SortableColumnHeader>
+                )}
+              </Table.Column>
+              <Table.Column allowsSorting id="status">
+                {({ sortDirection }) => (
+                  <Table.SortableColumnHeader sortDirection={sortDirection}>
+                    {t("columns.status")}
+                  </Table.SortableColumnHeader>
+                )}
+              </Table.Column>
+              <Table.Column allowsSorting id="records">
+                {({ sortDirection }) => (
+                  <Table.SortableColumnHeader sortDirection={sortDirection}>
+                    {t("columns.records")}
+                  </Table.SortableColumnHeader>
+                )}
+              </Table.Column>
+              <Table.Column allowsSorting id="size">
+                {({ sortDirection }) => (
+                  <Table.SortableColumnHeader sortDirection={sortDirection}>{t("columns.size")}</Table.SortableColumnHeader>
+                )}
+              </Table.Column>
+              <Table.Column allowsSorting id="object">
+                {({ sortDirection }) => (
+                  <Table.SortableColumnHeader sortDirection={sortDirection}>
+                    {t("columns.object")}
+                  </Table.SortableColumnHeader>
+                )}
+              </Table.Column>
             </Table.Header>
             <Table.Body>
-              {runs.map((run) => (
+              {shown.map((run) => (
                 <Table.Row key={run.id} id={run.id}>
                   <Table.Cell>
                     <span className="whitespace-nowrap">{day(run)}</span>

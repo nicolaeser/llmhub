@@ -586,7 +586,7 @@ Run `npm run lint`, `npm run typecheck`, `npm test`, `npm run i18n:check`, `npm 
 
 For future schema changes, use `npx prisma migrate dev --name <change>` against a disposable development database and commit its generated SQL unchanged. `SHADOW_DATABASE_URL` may point to a separate disposable shadow database. Never edit or squash already shipped migrations. See [.ai/playbooks/database-migration.md](.ai/playbooks/database-migration.md).
 
-`MIGRATION_TEST_DATABASE_URL=<local PostgreSQL URL> npm run test:migrations` tests every historical migration prefix, fresh installations, concurrent boot, custom schemas, and failure recovery. The test role needs permission to create databases and roles; the suite creates and removes its own uniquely named test databases and never resets the database named in the URL.
+`DATABASE_URL=<local PostgreSQL URL> npm run test:migrations` tests every historical migration prefix, fresh installations, concurrent boot, custom schemas, and failure recovery. The test role needs permission to create databases and roles; the suite creates and removes its own uniquely named test databases and never resets the database named in the URL.
 
 `npm run test:updater:docker` checks real Docker replacements, group rollback, process crashes, lost daemon responses, low-disk refusal, and volume preservation with disposable labeled fixtures. `node scripts/test-compose-upgrade.mjs <local-image> <expected-build-id>` checks an older Compose layout through a local test registry: `pull` followed by `up -d`, automatic recovery from an interrupted compatibility migration, retained request content and anonymous volumes, and the embedded keeper. Both commands require a local Docker daemon and remove their own test resources afterward.
 

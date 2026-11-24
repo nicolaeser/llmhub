@@ -189,7 +189,8 @@
     "auth": "{type, select, none {No key needed} header {Header {header}} basic {User name and password} query {Address parameter {header}} other {Bearer token}}",
     "tools": "{count, plural, =0 {No tools} one {# tool} other {# tools}}",
     "action": "{state, select, connected {Edit connection} paused {Edit connection} other {Connect}}",
-    "hosted": "Built from API docs"
+    "hosted": "Built from API docs",
+    "mediaBadge": "Media"
   },
   "reports": {
     "title": "Scheduled reports ({count, number, integer})",

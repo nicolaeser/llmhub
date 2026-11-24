@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Card, Table, ToggleButton, ToggleButtonGroup } from "@heroui/react";
 import { useFormatter, useTranslations } from "next-intl";
 import RowCard, { RowCards, TABLE_FROM_LG } from "@/components/console/row-cards";
+import { columnSort, descriptorOf, sortByColumn, type ColumnSort } from "@/components/console/table-sort";
 import { marginShare } from "@/lib/gateway/billing/markup-policy";
 import { chargebackParts, SYSTEM_SLICE, systemSlice } from "@/lib/usage/usage-stats";
 import type { SliceRow } from "@/types/usage";
@@ -48,6 +49,7 @@ export default function MarginCard({
   const format = useFormatter();
   const groups: readonly MarginGroup[] = companyView ? GROUPS.filter((item) => item !== "orgId") : GROUPS;
   const [picked, setGroup] = useState<MarginGroup>(groups[0]);
+  const [sort, setSort] = useState<ColumnSort | null>(null);
   const group = groups.includes(picked) ? picked : groups[0];
   const rows = marginRows(chargeback, group);
   const share = marginShare(purchase, sale);
@@ -57,6 +59,14 @@ export default function MarginCard({
     if (id === SYSTEM_SLICE) return t("system");
     return names[id] ?? t("deleted", { group: GROUP_LABEL[group] });
   };
+  const shown = sortByColumn(rows, sort, (row, column) => {
+    if (column === "name") return label(row.id) || null;
+    if (column === "purchase") return row.purchase;
+    if (column === "sale") return row.sale;
+    if (column === "margin") return row.sale - row.purchase;
+    if (column === "share") return marginShare(row.purchase, row.sale);
+    return null;
+  });
   const percent = (value: number | null) => (value === null ? tCommon("none") : format.number(value, "percent"));
 
   return (
@@ -113,7 +123,7 @@ export default function MarginCard({
         {rows.length ? (
           <>
             <RowCards label={t("margin.title")}>
-              {rows.map((row) => (
+              {shown.map((row) => (
                 <RowCard
                   key={row.id || "none"}
                   variant="secondary"
@@ -136,16 +146,51 @@ export default function MarginCard({
             </RowCards>
             <Table aria-label={t("margin.title")} className={TABLE_FROM_LG}>
               <Table.ScrollContainer>
-                <Table.Content aria-label={t("margin.title")} className="min-w-[40rem]">
+                <Table.Content
+                  aria-label={t("margin.title")}
+                  className="min-w-[40rem]"
+                  sortDescriptor={sort ? descriptorOf(sort) : undefined}
+                  onSortChange={(descriptor) => setSort(columnSort(descriptor, sort))}
+                >
                   <Table.Header>
-                    <Table.Column isRowHeader>{t(`group.${GROUP_LABEL[group]}`)}</Table.Column>
-                    <Table.Column>{t("margin.metrics.purchase")}</Table.Column>
-                    <Table.Column>{t("margin.metrics.sale")}</Table.Column>
-                    <Table.Column>{t("margin.metrics.margin")}</Table.Column>
-                    <Table.Column>{t("margin.share")}</Table.Column>
+                    <Table.Column isRowHeader allowsSorting id="name">
+                      {({ sortDirection }) => (
+                        <Table.SortableColumnHeader sortDirection={sortDirection}>
+                          {t(`group.${GROUP_LABEL[group]}`)}
+                        </Table.SortableColumnHeader>
+                      )}
+                    </Table.Column>
+                    <Table.Column allowsSorting id="purchase">
+                      {({ sortDirection }) => (
+                        <Table.SortableColumnHeader sortDirection={sortDirection}>
+                          {t("margin.metrics.purchase")}
+                        </Table.SortableColumnHeader>
+                      )}
+                    </Table.Column>
+                    <Table.Column allowsSorting id="sale">
+                      {({ sortDirection }) => (
+                        <Table.SortableColumnHeader sortDirection={sortDirection}>
+                          {t("margin.metrics.sale")}
+                        </Table.SortableColumnHeader>
+                      )}
+                    </Table.Column>
+                    <Table.Column allowsSorting id="margin">
+                      {({ sortDirection }) => (
+                        <Table.SortableColumnHeader sortDirection={sortDirection}>
+                          {t("margin.metrics.margin")}
+                        </Table.SortableColumnHeader>
+                      )}
+                    </Table.Column>
+                    <Table.Column allowsSorting id="share">
+                      {({ sortDirection }) => (
+                        <Table.SortableColumnHeader sortDirection={sortDirection}>
+                          {t("margin.share")}
+                        </Table.SortableColumnHeader>
+                      )}
+                    </Table.Column>
                   </Table.Header>
                   <Table.Body>
-                    {rows.map((row) => (
+                    {shown.map((row) => (
                       <Table.Row key={row.id || "none"} id={row.id || "none"}>
                         <Table.Cell>{label(row.id)}</Table.Cell>
                         <Table.Cell className="tabular-nums">{format.number(row.purchase, "money")}</Table.Cell>

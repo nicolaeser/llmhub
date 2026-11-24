@@ -31,7 +31,7 @@ The following `20261115145340_request_content_size` and all future regular migra
 
 ## Validation
 
-- `MIGRATION_TEST_DATABASE_URL=<local disposable server URL> npm run test:migrations` creates and removes its own databases. It tests all historical prefixes with data, fresh installs, non-public schemas, concurrent starts, immutable history, generated SQL, rollback of the compatibility copy, P3009 recovery, and P3005 refusal. Never supply production credentials.
+- `DATABASE_URL=<local disposable server URL> npm run test:migrations` creates and removes its own databases. It tests all historical prefixes with data, fresh installs, non-public schemas, concurrent starts, immutable history, generated SQL, rollback of the compatibility copy, P3009 recovery, and P3005 refusal. Never supply production credentials.
 - `npm test`, `npm run test:integration`, `npx tsc --noEmit`, and the repository UI, localization, lint, and build gates.
 - Bootstrap changes also require the seed production guard and concurrent first-operator tests. Development reset/fixtures are documented in [data-persistence.md](../instructions/data-persistence.md#development-fixtures).
 

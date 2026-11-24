@@ -11,6 +11,7 @@ import type {
   AccountRouting,
   AntigravityClientState,
   ApiFallbacks,
+  KeyConcurrencyLimits,
   KickoffModels,
   RefreshCaps,
   SignInKind,
@@ -21,6 +22,7 @@ import AccountRoutingPicker from "./account-routing-picker";
 import AntigravitySetup from "./antigravity-setup";
 import ApiFallbackSettings from "./api-fallback-settings";
 import AutoResetSettings from "./auto-reset-settings";
+import KeyConcurrencySettings from "./key-concurrency-settings";
 import RefreshCapSettings from "./refresh-cap-settings";
 import WindowKickoffSettings from "./window-kickoff-settings";
 
@@ -34,12 +36,14 @@ export default function ProviderSettingsDialog({
   kickoffModels,
   refreshCaps,
   apiFallback,
+  keyConcurrency,
   antigravity,
   onRouting,
   onAutoReset,
   onKickoff,
   onRefreshCaps,
   onApiFallback,
+  onKeyConcurrency,
   onAntigravity,
 }: {
   state: ReturnType<typeof useOverlayState>;
@@ -51,12 +55,14 @@ export default function ProviderSettingsDialog({
   kickoffModels: KickoffModels;
   refreshCaps: RefreshCaps;
   apiFallback: ApiFallbacks;
+  keyConcurrency: KeyConcurrencyLimits;
   antigravity: AntigravityClientState | null;
   onRouting: (routing: AccountRouting) => void;
   onAutoReset: (policies: AutoResetPolicies) => void;
   onKickoff: (kickoff: WindowKickoffs) => void;
   onRefreshCaps: (caps: RefreshCaps) => void;
   onApiFallback: (fallback: ApiFallbacks) => void;
+  onKeyConcurrency: (limits: KeyConcurrencyLimits) => void;
   onAntigravity: (state: AntigravityClientState) => void;
 }) {
   const t = useTranslations("Subscriptions.settings");
@@ -96,6 +102,16 @@ export default function ProviderSettingsDialog({
                         kind={kind}
                         enabled={apiFallback[kind] ?? false}
                         onSaved={onApiFallback}
+                      />
+                    </>
+                  ) : null}
+                  {accounts > 0 ? (
+                    <>
+                      <Separator />
+                      <KeyConcurrencySettings
+                        kind={kind}
+                        limit={keyConcurrency[kind] ?? 0}
+                        onSaved={onKeyConcurrency}
                       />
                     </>
                   ) : null}

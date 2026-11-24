@@ -3,7 +3,8 @@ import { asRecord } from "@/lib/gateway/core";
 import { MCP_PROTOCOL_VERSION } from "@/lib/mcp/client";
 import { chainOf } from "@/lib/mcp/resolve";
 import { bindTools } from "@/lib/mcp/tool-names";
-import { createExecutor, loadMcpServers } from "@/lib/mcp/toolset";
+import { createExecutor, loadMcpServers, rememberConnection } from "@/lib/mcp/toolset";
+import { guardedFetch } from "@/lib/mcp/transport";
 import { parseJsonOrNull } from "@/lib/utils/json";
 import type { JsonMap, Principal } from "@/types/gateway";
 import type { McpBoundTool } from "@/types/mcp";
@@ -55,7 +56,7 @@ export async function handleHubMcp(principal: Principal, body: unknown): Promise
   if (message.method !== "tools/list" && message.method !== "tools/call") return fail(id, -32601, "Method not found");
   const { servers, records } = await loadMcpServers(chainOf(principal));
   const tools = bindTools(servers);
-  const executor = createExecutor(records);
+  const executor = createExecutor(records, guardedFetch, rememberConnection, principal);
   try {
     if (message.method === "tools/list") return rpc(id, { tools: tools.map(toolCard) });
     const name = typeof params.name === "string" ? params.name : "";

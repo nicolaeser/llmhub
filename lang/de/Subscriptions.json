@@ -239,6 +239,17 @@
     "on": "API-Ausweichroute für {provider} eingeschaltet",
     "off": "API-Ausweichroute für {provider} ausgeschaltet"
   },
+  "keyConcurrency": {
+    "title": "Parallele Anfragen pro API-Schlüssel",
+    "description": "Wie viele Anfragen ein API-Schlüssel gleichzeitig über {provider}-Konten laufen lassen darf. Agents, die viele Subagents auf einmal starten, belegen sonst alle Plätze der gemeinsamen Konten und lösen für alle das Ratenlimit des Anbieters aus. Weitere Anfragen dieses Schlüssels warten bis zu einer Minute in der Warteschlange.",
+    "label": "Parallele Anfragen pro API-Schlüssel für {provider}",
+    "limit": "Anfragen pro Schlüssel gleichzeitig",
+    "limitHint": "0 schaltet die Grenze aus. Höchstens {max, number}. Gilt pro Serverinstanz.",
+    "limitInvalid": "Gib eine ganze Zahl von 0 bis {max, number} ein.",
+    "save": "Grenze für parallele Anfragen für {provider} speichern",
+    "saveShort": "Speichern",
+    "saved": "Grenze für parallele Anfragen für {provider} gespeichert"
+  },
   "routing": {
     "title": "Kontoverteilung",
     "description": "Wie Anfragen auf diese Konten verteilt werden. Ein Konto am Nutzungslimit wird übersprungen, solange ein anderes noch Luft hat.",

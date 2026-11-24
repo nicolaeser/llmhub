@@ -1,6 +1,6 @@
 import "server-only";
 import { asNumber, asRecord, asString } from "@/lib/gateway/core";
-import { geminiRoot } from "@/lib/gateway/upstreams/google";
+import { geminiRoot, VERTEX_EMBEDDING_MODEL } from "@/lib/gateway/upstreams/google";
 import { VERTEX_API_VERSION, VERTEX_LIST_VERSION, vertexTarget } from "@/lib/gateway/upstreams/vertex-target";
 import { errorFields } from "@/lib/logging/format";
 import { logger } from "@/lib/logging/logger";
@@ -15,7 +15,7 @@ const LIST_TIMEOUT_MS = 30_000;
 const GEMINI_METHODS = new Set(["generateContent", "embedContent", "predict", "predictLongRunning"]);
 const VERTEX_CHAT_GEMINI = /^gemini-/i;
 const VERTEX_IMAGEN = /^imagen-/i;
-const VERTEX_UNSUPPORTED = /embedding|-live|tts|native-audio/i;
+const VERTEX_UNSUPPORTED = /-live|tts|native-audio/i;
 const VERTEX_CLAUDE = /^claude-/i;
 const CLAUDE_VERSION = /^[0-9]{8}$/;
 const KEY_PROBE_MODEL = "gemini-2.5-flash";
@@ -58,7 +58,8 @@ export function geminiModels(json: unknown): DiscoveredPage {
 function vertexModelId(publisher: string, model: JsonMap): string {
   const id = asString(model.name).split("/").pop() ?? "";
   if (publisher === "google") {
-    return (VERTEX_CHAT_GEMINI.test(id) || VERTEX_IMAGEN.test(id)) && !VERTEX_UNSUPPORTED.test(id) ? id : "";
+    const kept = VERTEX_CHAT_GEMINI.test(id) || VERTEX_IMAGEN.test(id) || VERTEX_EMBEDDING_MODEL.test(id);
+    return kept && !VERTEX_UNSUPPORTED.test(id) ? id : "";
   }
   if (!VERTEX_CLAUDE.test(id)) return "";
   const version = asString(model.versionId);
@@ -143,8 +144,8 @@ async function fetchExpressModels(baseUrl: string, headers: Record<string, strin
     logger.info("provider.vertex_express_list_unavailable", errorFields(err));
     return [];
   });
-  const chat = listed.filter((model) => !VERTEX_IMAGEN.test(model.id));
-  if (chat.length) return chat;
+  const withoutImagen = listed.filter((model) => !VERTEX_IMAGEN.test(model.id));
+  if (withoutImagen.length) return withoutImagen;
   await checkExpressKey(baseUrl, headers);
   return expressModels();
 }

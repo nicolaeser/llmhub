@@ -1,9 +1,11 @@
 "use client";
 
+import { useState } from "react";
 import { Button, Card, Chip, Disclosure, Label, Switch, Table } from "@heroui/react";
 import { ArrowRight, ArrowRightLeft } from "lucide-react";
 import { useFormatter, useTranslations } from "next-intl";
 import RowCard, { RowCards, TABLE_FROM_LG } from "@/components/console/row-cards";
+import { columnSort, descriptorOf, sortByColumn, type ColumnSort } from "@/components/console/table-sort";
 import SearchSelect from "@/components/console/search-select";
 import SubscriptionBadge from "@/components/console/subscription-badge";
 import { isSignInKind } from "@/lib/gateway/upstreams/provider-kinds";
@@ -22,6 +24,14 @@ type Handlers = {
 };
 
 const AUTO_MODES = ["inherit", "on", "off"] as const;
+
+function entrySortValue(entry: CatalogEntryView, column: string) {
+  if (column === "provider") return entry.providerName;
+  if (column === "model") return entry.upstreamId;
+  if (column === "match") return entry.source || "own";
+  if (column === "active") return entry.status === "active";
+  return null;
+}
 
 function autoMode(value: boolean | null): (typeof AUTO_MODES)[number] {
   if (value === null) return "inherit";
@@ -61,6 +71,8 @@ function VariantBody({
   const tProviders = useTranslations("Providers");
   const format = useFormatter();
   const { canManage, busy } = handlers;
+  const [sort, setSort] = useState<ColumnSort | null>(null);
+  const entries = sortByColumn(group.entries, sort, entrySortValue);
 
   function kindLabel(entry: CatalogEntryView) {
     return isSignInKind(entry.kind)
@@ -138,7 +150,7 @@ function VariantBody({
       {group.entries.length ? (
         <>
           <RowCards label={group.alias}>
-            {group.entries.map((entry) => {
+            {entries.map((entry) => {
               const key = catalogEntryKey(entry);
               return (
                 <RowCard
@@ -171,16 +183,45 @@ function VariantBody({
           </RowCards>
           <Table aria-label={group.alias} className={TABLE_FROM_LG}>
             <Table.ScrollContainer>
-              <Table.Content aria-label={group.alias} className="min-w-[44rem]">
+              <Table.Content
+                aria-label={group.alias}
+                className="min-w-[44rem]"
+                sortDescriptor={sort ? descriptorOf(sort) : undefined}
+                onSortChange={(descriptor) => setSort(columnSort(descriptor, sort))}
+              >
                 <Table.Header>
-                  <Table.Column isRowHeader>{t("columns.provider")}</Table.Column>
-                  <Table.Column>{t("columns.model")}</Table.Column>
-                  <Table.Column>{t("columns.match")}</Table.Column>
-                  <Table.Column>{t("columns.active")}</Table.Column>
+                  <Table.Column isRowHeader allowsSorting id="provider">
+                    {({ sortDirection }) => (
+                      <Table.SortableColumnHeader sortDirection={sortDirection}>
+                        {t("columns.provider")}
+                      </Table.SortableColumnHeader>
+                    )}
+                  </Table.Column>
+                  <Table.Column allowsSorting id="model">
+                    {({ sortDirection }) => (
+                      <Table.SortableColumnHeader sortDirection={sortDirection}>
+                        {t("columns.model")}
+                      </Table.SortableColumnHeader>
+                    )}
+                  </Table.Column>
+                  <Table.Column allowsSorting id="match">
+                    {({ sortDirection }) => (
+                      <Table.SortableColumnHeader sortDirection={sortDirection}>
+                        {t("columns.match")}
+                      </Table.SortableColumnHeader>
+                    )}
+                  </Table.Column>
+                  <Table.Column allowsSorting id="active">
+                    {({ sortDirection }) => (
+                      <Table.SortableColumnHeader sortDirection={sortDirection}>
+                        {t("columns.active")}
+                      </Table.SortableColumnHeader>
+                    )}
+                  </Table.Column>
                   <Table.Column>{t("columns.actions")}</Table.Column>
                 </Table.Header>
                 <Table.Body>
-                  {group.entries.map((entry) => {
+                  {entries.map((entry) => {
                     const key = catalogEntryKey(entry);
                     return (
                       <Table.Row key={key} id={key}>

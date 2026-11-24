@@ -7,6 +7,7 @@ import { useTranslations } from "next-intl";
 import ConfirmDialog from "@/components/console/confirm-dialog";
 import EmptyState from "@/components/console/empty-state";
 import RowCard, { RowCards, TABLE_FROM_LG } from "@/components/console/row-cards";
+import { columnSort, descriptorOf, sortByColumn, type ColumnSort } from "@/components/console/table-sort";
 import { SectionChip, SectionDetail, useSectionText } from "@/components/guardrails/policy-labels";
 import { refKey } from "@/lib/gateway/safety/policy-layers";
 import type { PolicyOverrideView, PolicyTarget } from "@/types/guardrails";
@@ -74,8 +75,19 @@ export default function PolicyOverrides({
   const t = useTranslations("Guardrails");
   const tCommon = useTranslations("Common");
   const [query, setQuery] = useState("");
+  const [sort, setSort] = useState<ColumnSort | null>(null);
   const overrides = book.overrides;
   const visible = overrides.filter((row) => overrideMatches(row, query));
+  const shown = sortByColumn(visible, sort, (row, column) => {
+    if (column === "target") return row.target.alias || null;
+    if (column === "changes") {
+      const changes = overrideChanges(book, row);
+      return changes.length
+        ? changes.map((change) => `${change.section}:${change.to.state}:${change.to.count}`).join(", ")
+        : null;
+    }
+    return null;
+  });
 
   function actions(row: PolicyOverrideView) {
     return (
@@ -147,7 +159,7 @@ export default function PolicyOverrides({
       ) : (
         <>
           <RowCards label={t("overrides.title")}>
-            {visible.map((row) => (
+            {shown.map((row) => (
               <RowCard
                 key={refKey(row.target)}
                 title={row.target.alias}
@@ -161,14 +173,26 @@ export default function PolicyOverrides({
           </RowCards>
           <Table aria-label={t("overrides.title")} className={TABLE_FROM_LG}>
             <Table.ScrollContainer>
-              <Table.Content aria-label={t("overrides.title")}>
+              <Table.Content
+                aria-label={t("overrides.title")}
+                sortDescriptor={sort ? descriptorOf(sort) : undefined}
+                onSortChange={(descriptor) => setSort(columnSort(descriptor, sort))}
+              >
                 <Table.Header>
-                  <Table.Column isRowHeader>{t("overrides.target")}</Table.Column>
-                  <Table.Column>{t("overrides.changes")}</Table.Column>
+                  <Table.Column isRowHeader allowsSorting id="target">
+                    {({ sortDirection }) => (
+                      <Table.SortableColumnHeader sortDirection={sortDirection}>{t("overrides.target")}</Table.SortableColumnHeader>
+                    )}
+                  </Table.Column>
+                  <Table.Column allowsSorting id="changes">
+                    {({ sortDirection }) => (
+                      <Table.SortableColumnHeader sortDirection={sortDirection}>{t("overrides.changes")}</Table.SortableColumnHeader>
+                    )}
+                  </Table.Column>
                   {canManage ? <Table.Column>{tCommon("actions")}</Table.Column> : null}
                 </Table.Header>
                 <Table.Body>
-                  {visible.map((row) => (
+                  {shown.map((row) => (
                     <Table.Row key={refKey(row.target)} id={refKey(row.target)}>
                       <Table.Cell>
                         <TargetName target={row.target} />

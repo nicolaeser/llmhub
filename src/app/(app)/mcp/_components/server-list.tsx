@@ -6,6 +6,7 @@ import { SearchX } from "lucide-react";
 import { useTranslations } from "next-intl";
 import EmptyState from "@/components/console/empty-state";
 import RowCard, { RowCards, TABLE_FROM_LG } from "@/components/console/row-cards";
+import { columnSort, descriptorOf, sortByColumn, type ColumnSort } from "@/components/console/table-sort";
 import { setSearchParams, useSearchParam } from "@/lib/hooks/use-search-param";
 import type { McpServerView } from "@/types/mcp";
 import ServerActions, { type ServerFlags, type ServerHandlers } from "./server-actions";
@@ -26,10 +27,22 @@ export default function ServerList({
   const t = useTranslations("Mcp");
   const tCommon = useTranslations("Common");
   const [query, setQuery] = useState("");
+  const [sort, setSort] = useState<ColumnSort | null>(null);
   const status = useSearchParam("status");
   const legacyTab = useSearchParam("tab");
   const filter = serverFilterOf(status ?? legacyTab);
   const rows = servers.filter((server) => inFilter(server, filter) && matchesQuery(server, query));
+  const shown = sortByColumn(rows, sort, (server, column) => {
+    if (column === "server") return server.name;
+    if (column === "status") return server.status;
+    if (column === "tools") return server.tools.length;
+    if (column === "access") {
+      if (server.global) return "global";
+      const labels = server.assignments.filter((rule) => rule.mode === "allow").map((rule) => rule.label);
+      return labels.length ? labels.join(", ") : null;
+    }
+    return null;
+  });
   const showActions = flags.canManage || flags.canAssign || flags.canInstall;
 
   return (
@@ -80,14 +93,14 @@ export default function ServerList({
       ) : (
         <>
           <RowCards label={t("title")}>
-            {rows.map((server) => (
+            {shown.map((server) => (
               <RowCard
                 key={server.id}
                 title={server.name}
-                description={server.description || <span className="font-mono text-xs break-all">{server.url}</span>}
+                description={server.description || (server.url ? <span className="font-mono text-xs break-all">{server.url}</span> : undefined)}
                 aside={<ServerStatusChip server={server} />}
                 chips={
-                  server.kind === "hosted" || server.template || server.internal ? (
+                  server.kind !== "remote" || server.template || server.internal ? (
                     <ServerKindChips server={server} />
                   ) : undefined
                 }
@@ -105,12 +118,40 @@ export default function ServerList({
           </RowCards>
           <Table aria-label={t("title")} className={TABLE_FROM_LG}>
             <Table.ScrollContainer>
-              <Table.Content aria-label={t("title")}>
+              <Table.Content
+                aria-label={t("title")}
+                sortDescriptor={sort ? descriptorOf(sort) : undefined}
+                onSortChange={(descriptor) => setSort(columnSort(descriptor, sort))}
+              >
                 <Table.Header>
-                  <Table.Column isRowHeader>{t("list.columns", { column: "server" })}</Table.Column>
-                  <Table.Column>{t("list.columns", { column: "status" })}</Table.Column>
-                  <Table.Column>{t("list.columns", { column: "tools" })}</Table.Column>
-                  <Table.Column>{t("list.columns", { column: "access" })}</Table.Column>
+                  <Table.Column isRowHeader allowsSorting id="server">
+                    {({ sortDirection }) => (
+                      <Table.SortableColumnHeader sortDirection={sortDirection}>
+                        {t("list.columns", { column: "server" })}
+                      </Table.SortableColumnHeader>
+                    )}
+                  </Table.Column>
+                  <Table.Column allowsSorting id="status">
+                    {({ sortDirection }) => (
+                      <Table.SortableColumnHeader sortDirection={sortDirection}>
+                        {t("list.columns", { column: "status" })}
+                      </Table.SortableColumnHeader>
+                    )}
+                  </Table.Column>
+                  <Table.Column allowsSorting id="tools">
+                    {({ sortDirection }) => (
+                      <Table.SortableColumnHeader sortDirection={sortDirection}>
+                        {t("list.columns", { column: "tools" })}
+                      </Table.SortableColumnHeader>
+                    )}
+                  </Table.Column>
+                  <Table.Column allowsSorting id="access">
+                    {({ sortDirection }) => (
+                      <Table.SortableColumnHeader sortDirection={sortDirection}>
+                        {t("list.columns", { column: "access" })}
+                      </Table.SortableColumnHeader>
+                    )}
+                  </Table.Column>
                   {showActions ? (
                     <Table.Column>
                       <span className="sr-only">{tCommon("actions")}</span>
@@ -118,7 +159,7 @@ export default function ServerList({
                   ) : null}
                 </Table.Header>
                 <Table.Body>
-                  {rows.map((server) => (
+                  {shown.map((server) => (
                     <Table.Row key={server.id} id={server.id}>
                       <Table.Cell>
                         <ServerName server={server} />

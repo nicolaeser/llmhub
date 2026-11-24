@@ -211,8 +211,9 @@ export async function saveMcpPermissions(raw: unknown) {
 export async function setMcpTemplate(raw: unknown) {
   const session = await requireMcpManager();
   const input = parse(mcpTemplateSchema, raw);
-  const server = await prisma.mcpServer.findUnique({ where: { id: input.id }, select: { id: true, template: true } });
+  const server = await prisma.mcpServer.findUnique({ where: { id: input.id }, select: { id: true, template: true, kind: true } });
   if (!server) throw new Error("NOT_FOUND");
+  if (input.template && server.kind === "media") throw new Error("VALIDATION");
   if (input.template) await ensureBuiltinRoles(server.id);
   await prisma.mcpServer.update({ where: { id: server.id }, data: { template: input.template } });
   await writeAudit({
@@ -237,7 +238,7 @@ export async function saveMcpInstallation(raw: unknown) {
     select: { id: true, template: true, internal: true, kind: true },
   });
   if (!server) throw new Error("NOT_FOUND");
-  if (!server.template) throw new Error("VALIDATION");
+  if (!server.template || server.kind === "media") throw new Error("VALIDATION");
   if (input.authType === "query" && server.kind !== "hosted") throw new Error("VALIDATION");
   if (input.baseUrl) {
     const verdict = checkServerUrl(input.baseUrl, server.internal);

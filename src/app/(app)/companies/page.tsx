@@ -8,6 +8,7 @@ import EmptyState from "@/components/console/empty-state";
 import PageHeader from "@/components/console/page-header";
 import PageStatus from "@/components/console/page-status";
 import RowCard, { RowCards, TABLE_FROM_LG } from "@/components/console/row-cards";
+import { columnSort, descriptorOf, sortByColumn, type ColumnSort } from "@/components/console/table-sort";
 import { Link, useRouter } from "@/i18n/routing";
 import { useActionData } from "@/lib/hooks/use-action-data";
 import { useClock } from "@/lib/hooks/use-clock";
@@ -38,6 +39,7 @@ export default function CompaniesPage() {
   const consoleScope = useConsoleScope();
   const nodeParam = useSearchParam("node");
   const [query, setQuery] = useState("");
+  const [sort, setSort] = useState<ColumnSort | null>(null);
   const [addKey, setAddKey] = useState(0);
   const addState = useOverlayState();
   const now = useClock(60_000);
@@ -72,6 +74,16 @@ export default function CompaniesPage() {
   }
 
   const rows = data.rows.filter((row) => matchesCompany(row, query));
+  const shown = sortByColumn(rows, sort, (row, column) => {
+    if (column === "company") return row.alias;
+    if (column === "teams") return row.teams;
+    if (column === "projects") return row.projects;
+    if (column === "members") return row.members;
+    if (column === "keys") return row.keys;
+    if (column === "budget") return row.budget.spend;
+    if (column === "status") return companyStatus(row, now);
+    return null;
+  });
   const addButton = data.canManage ? (
     <Button
       onPress={() => {
@@ -146,7 +158,7 @@ export default function CompaniesPage() {
           ) : (
             <>
               <RowCards label={t("title")}>
-                {rows.map((row) => (
+                {shown.map((row) => (
                   <RowCard
                     key={row.id}
                     title={name(row)}
@@ -164,21 +176,70 @@ export default function CompaniesPage() {
               </RowCards>
               <Table aria-label={t("title")} className={TABLE_FROM_LG}>
                 <Table.ScrollContainer>
-                  <Table.Content aria-label={t("title")} className="min-w-3xl">
+                  <Table.Content
+                    aria-label={t("title")}
+                    className="min-w-3xl"
+                    sortDescriptor={sort ? descriptorOf(sort) : undefined}
+                    onSortChange={(descriptor) => setSort(columnSort(descriptor, sort))}
+                  >
                     <Table.Header>
-                      <Table.Column isRowHeader>{t("directory.columns.company")}</Table.Column>
-                      <Table.Column>{t("directory.columns.teams")}</Table.Column>
-                      <Table.Column>{t("directory.columns.projects")}</Table.Column>
-                      <Table.Column>{t("directory.columns.members")}</Table.Column>
-                      {data.canSeeKeys ? <Table.Column>{t("directory.columns.keys")}</Table.Column> : null}
-                      <Table.Column>{t("directory.columns.budget")}</Table.Column>
-                      <Table.Column>{tCommon("status")}</Table.Column>
+                      <Table.Column isRowHeader allowsSorting id="company">
+                        {({ sortDirection }) => (
+                          <Table.SortableColumnHeader sortDirection={sortDirection}>
+                            {t("directory.columns.company")}
+                          </Table.SortableColumnHeader>
+                        )}
+                      </Table.Column>
+                      <Table.Column allowsSorting id="teams">
+                        {({ sortDirection }) => (
+                          <Table.SortableColumnHeader sortDirection={sortDirection}>
+                            {t("directory.columns.teams")}
+                          </Table.SortableColumnHeader>
+                        )}
+                      </Table.Column>
+                      <Table.Column allowsSorting id="projects">
+                        {({ sortDirection }) => (
+                          <Table.SortableColumnHeader sortDirection={sortDirection}>
+                            {t("directory.columns.projects")}
+                          </Table.SortableColumnHeader>
+                        )}
+                      </Table.Column>
+                      <Table.Column allowsSorting id="members">
+                        {({ sortDirection }) => (
+                          <Table.SortableColumnHeader sortDirection={sortDirection}>
+                            {t("directory.columns.members")}
+                          </Table.SortableColumnHeader>
+                        )}
+                      </Table.Column>
+                      {data.canSeeKeys ? (
+                        <Table.Column allowsSorting id="keys">
+                          {({ sortDirection }) => (
+                            <Table.SortableColumnHeader sortDirection={sortDirection}>
+                              {t("directory.columns.keys")}
+                            </Table.SortableColumnHeader>
+                          )}
+                        </Table.Column>
+                      ) : null}
+                      <Table.Column allowsSorting id="budget">
+                        {({ sortDirection }) => (
+                          <Table.SortableColumnHeader sortDirection={sortDirection}>
+                            {t("directory.columns.budget")}
+                          </Table.SortableColumnHeader>
+                        )}
+                      </Table.Column>
+                      <Table.Column allowsSorting id="status">
+                        {({ sortDirection }) => (
+                          <Table.SortableColumnHeader sortDirection={sortDirection}>
+                            {tCommon("status")}
+                          </Table.SortableColumnHeader>
+                        )}
+                      </Table.Column>
                       <Table.Column>
                         <span className="sr-only">{tCommon("actions")}</span>
                       </Table.Column>
                     </Table.Header>
                     <Table.Body>
-                      {rows.map((row) => (
+                      {shown.map((row) => (
                         <Table.Row key={row.id} id={row.id}>
                           <Table.Cell>
                             <span className="text-sm font-medium">{name(row)}</span>

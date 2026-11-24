@@ -35,6 +35,19 @@ const AUDIO_MIME: Record<string, string> = {
 };
 const EMPTY_USER_TURN: JsonMap = { role: "user", parts: [{ text: "" }] };
 const IMAGEN_MODEL = /^imagen-/i;
+export const VERTEX_EMBEDDING_MODEL = /^(?:gemini-embedding-|text-embedding-|text-multilingual-embedding-)/i;
+const GEMINI_EMBEDDING_MODEL = /^gemini-embedding-/i;
+const EMBEDDING_BATCH = 250;
+const EMBEDDING_TASKS = new Set([
+  "RETRIEVAL_QUERY",
+  "RETRIEVAL_DOCUMENT",
+  "SEMANTIC_SIMILARITY",
+  "CLASSIFICATION",
+  "CLUSTERING",
+  "QUESTION_ANSWERING",
+  "FACT_VERIFICATION",
+  "CODE_RETRIEVAL_QUERY",
+]);
 const GEMMA_MODEL = /^gemma-/i;
 const ALL_THINKING_LEVELS: readonly ThinkingLevel[] = ["minimal", "low", "medium", "high"];
 const EFFORT_LEVELS: Record<string, ThinkingLevel> = {
@@ -104,6 +117,10 @@ export function googlePath(kind: string, base: string, model: string, path: stri
     requireProject(root, "Imagen models");
     return `${root}/publishers/google/models/${modelSegment(route.model)}:predict`;
   }
+  if (embeddingPath(path)) {
+    if (route.route !== "google" || !VERTEX_EMBEDDING_MODEL.test(route.model)) throw unsupportedEndpoint(kind);
+    return `${root}/publishers/google/models/${modelSegment(route.model)}:predict`;
+  }
   if (!chatPath(path)) throw unsupportedEndpoint(kind);
   if (route.route === "google") return `${root}/publishers/google/models/${modelSegment(route.model)}:${GEMINI_STREAM_ACTION}`;
   requireProject(root, "partner models");
@@ -120,6 +137,10 @@ function requireProject(root: string, what: string): void {
 
 function imagePath(path: string): boolean {
   return /(?:^|\/)images\/generations$/.test(path);
+}
+
+function embeddingPath(path: string): boolean {
+  return /(?:^|\/)embeddings$/.test(path);
 }
 
 export function imagenRequest(body: JsonMap): JsonMap {
@@ -147,6 +168,119 @@ export function imagenImages(json: unknown, now = Date.now()): JsonMap {
   });
   if (!data.length) throw new GateError(502, "upstream_error", "Vertex AI returned no images; the prompt may have been filtered");
   return { created: Math.floor(now / 1000), data };
+}
+
+function embeddingTexts(input: unknown): string[] {
+  if (typeof input === "string") return [input];
+  if (Array.isArray(input)) {
+    const texts = input.filter((item): item is string => typeof item === "string");
+    if (texts.length > 0 && texts.length === input.length) return texts;
+    if (input.length > 0) throw new GateError(400, "unsupported_parameter", "Vertex AI embeddings take text, not token ids", { param: "input" });
+  }
+  if (typeof input === "number") throw new GateError(400, "unsupported_parameter", "Vertex AI embeddings take text, not token ids", { param: "input" });
+  throw new GateError(400, "missing_required_parameter", "input is required", { param: "input" });
+}
+
+function requireEmbeddingFormat(value: unknown): void {
+  if (value === undefined || value === "float" || value === "base64") return;
+  throw new GateError(400, "unsupported_parameter", "encoding_format must be float or base64", { param: "encoding_format" });
+}
+
+function embeddingTask(value: unknown): string {
+  if (value === undefined) return "";
+  const task = asString(value);
+  if (EMBEDDING_TASKS.has(task)) return task;
+  throw new GateError(400, "unsupported_parameter", "task_type is not a Vertex AI embedding task", { param: "task_type" });
+}
+
+function embeddingTitle(value: unknown, task: string): string {
+  if (value === undefined || value === "") return "";
+  const title = asString(value);
+  if (!title || task !== "RETRIEVAL_DOCUMENT") {
+    throw new GateError(400, "unsupported_parameter", "title is only valid with task_type RETRIEVAL_DOCUMENT", { param: "title" });
+  }
+  return title;
+}
+
+function embeddingDimensions(value: unknown): number | null {
+  if (value === undefined) return null;
+  if (typeof value === "number" && Number.isInteger(value) && value > 0) return value;
+  throw new GateError(400, "unsupported_parameter", "dimensions must be a positive integer", { param: "dimensions" });
+}
+
+function vertexEmbeddingRequest(body: JsonMap): JsonMap {
+  const texts = embeddingTexts(body.input);
+  requireEmbeddingFormat(body.encoding_format);
+  const task = embeddingTask(body.task_type);
+  const title = embeddingTitle(body.title, task);
+  const dimensions = embeddingDimensions(body.dimensions);
+  const instances = texts.map((content) => {
+    const instance: JsonMap = { content };
+    if (task) instance.task_type = task;
+    if (title) instance.title = title;
+    return instance;
+  });
+  if (dimensions === null) return { instances };
+  return { instances, parameters: { outputDimensionality: dimensions } };
+}
+
+export function requireVertexEmbeddingPredictions(kind: string, path: string, payload: JsonMap, json: unknown): unknown[] | null {
+  if (kind !== "vertex" || !embeddingPath(path) || !Array.isArray(payload.instances)) return null;
+  const predictions = asRecord(json)?.predictions;
+  if (!Array.isArray(predictions) || predictions.length !== payload.instances.length) {
+    throw new GateError(502, "upstream_error", "Vertex AI returned no embeddings");
+  }
+  return predictions;
+}
+
+export function vertexEmbeddingChunks(kind: string, path: string, model: string, payload: JsonMap): JsonMap[] | null {
+  if (kind !== "vertex" || !embeddingPath(path)) return null;
+  const instances = payload.instances;
+  if (!Array.isArray(instances)) return null;
+  const size = GEMINI_EMBEDDING_MODEL.test(googleModelRoute(kind, model).model) ? 1 : EMBEDDING_BATCH;
+  if (instances.length <= size) return null;
+  const parameters = asRecord(payload.parameters);
+  const chunks: JsonMap[] = [];
+  for (let start = 0; start < instances.length; start += size) {
+    const slice = instances.slice(start, start + size);
+    chunks.push(parameters ? { instances: slice, parameters } : { instances: slice });
+  }
+  return chunks;
+}
+
+function embeddingVector(prediction: unknown): number[] {
+  const values = asRecord(asRecord(prediction)?.embeddings)?.values;
+  const numbers = Array.isArray(values) ? values.filter((value): value is number => typeof value === "number" && Number.isFinite(value)) : [];
+  if (!Array.isArray(values) || numbers.length === 0 || numbers.length !== values.length) {
+    throw new GateError(502, "upstream_error", "Vertex AI returned no embeddings");
+  }
+  return numbers;
+}
+
+function embeddingTokens(prediction: unknown): number {
+  const count = asNumber(asRecord(asRecord(asRecord(prediction)?.embeddings)?.statistics)?.token_count, 0);
+  return count > 0 ? count : 0;
+}
+
+function float32Base64(values: number[]): string {
+  const bytes = new Uint8Array(values.length * 4);
+  const view = new DataView(bytes.buffer);
+  for (let index = 0; index < values.length; index++) view.setFloat32(index * 4, values[index]!, true);
+  return Buffer.from(bytes).toString("base64");
+}
+
+function vertexEmbeddingResponse(model: string, json: unknown, encodingFormat: string): JsonMap {
+  const predictions = asRecord(json)?.predictions;
+  if (!Array.isArray(predictions) || predictions.length === 0) {
+    throw new GateError(502, "upstream_error", "Vertex AI returned no embeddings");
+  }
+  let tokens = 0;
+  const data = predictions.map((prediction, index) => {
+    const values = embeddingVector(prediction);
+    tokens += embeddingTokens(prediction);
+    return { object: "embedding", index, embedding: encodingFormat === "base64" ? float32Base64(values) : values };
+  });
+  return { object: "list", data, model, usage: { prompt_tokens: tokens, total_tokens: tokens } };
 }
 
 function dataUrlPart(url: string): JsonMap {
@@ -294,6 +428,7 @@ export function chatToGemini(kind: string, body: JsonMap): JsonMap {
 
 export function googlePayload(kind: string, path: string, body: JsonMap): JsonMap {
   if (kind === "vertex" && imagePath(path)) return imagenRequest(body);
+  if (kind === "vertex" && embeddingPath(path)) return vertexEmbeddingRequest(body);
   if (!chatPath(path)) return body;
   const route = googleModelRoute(kind, asString(body.model));
   if (route.route === "google") return chatToGemini(kind, body);
@@ -343,8 +478,9 @@ class GeminiSseTranslator implements ChatSseTranslator {
   }
 }
 
-export function googleResponse(kind: string, path: string, model: string, text: string, json: unknown): unknown {
+export function googleResponse(kind: string, path: string, model: string, text: string, json: unknown, encodingFormat = ""): unknown {
   if (kind === "vertex" && imagePath(path)) return imagenImages(json);
+  if (kind === "vertex" && embeddingPath(path)) return vertexEmbeddingResponse(model, json, encodingFormat);
   if (!chatPath(path)) return json;
   const route = googleModelRoute(kind, model).route;
   if (route === "google") return completionFromSse(new GeminiSseTranslator(model), text, model);
