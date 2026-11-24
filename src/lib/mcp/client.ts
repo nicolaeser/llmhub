@@ -20,6 +20,8 @@ import type {
 
 export const MCP_PROTOCOL_VERSION = "2026-07-28";
 export const MCP_LEGACY_PROTOCOL_VERSION = "2025-11-25";
+export const MCP_LEGACY_PROTOCOL_VERSIONS = [MCP_LEGACY_PROTOCOL_VERSION, "2025-06-18", "2025-03-26", "2024-11-05", "2024-10-07"];
+export const MCP_SUPPORTED_PROTOCOL_VERSIONS = [MCP_PROTOCOL_VERSION, ...MCP_LEGACY_PROTOCOL_VERSIONS];
 export const MCP_MAX_RESPONSE_BYTES = 2 * 1024 * 1024;
 export const MCP_REQUEST_TIMEOUT_MS = 30_000;
 export const MCP_MAX_TOOLS = 200;
@@ -35,17 +37,17 @@ const DEFAULT_RETRY_MS = 1_000;
 const MAX_RETRY_MS = 5_000;
 const CLOSE_TIMEOUT_MS = 5_000;
 const CLIENT_INFO = { name: "llmhub", version: "1.0.0" };
-const META_VERSION = "io.modelcontextprotocol/protocolVersion";
+export const META_VERSION = "io.modelcontextprotocol/protocolVersion";
 const META_CLIENT = "io.modelcontextprotocol/clientInfo";
-const META_CAPABILITIES = "io.modelcontextprotocol/clientCapabilities";
-const META_SERVER = "io.modelcontextprotocol/serverInfo";
-const HEADER_MISMATCH = -32020;
+export const META_CAPABILITIES = "io.modelcontextprotocol/clientCapabilities";
+export const META_SERVER = "io.modelcontextprotocol/serverInfo";
+export const HEADER_MISMATCH = -32020;
 const MISSING_CAPABILITY = -32021;
-const UNSUPPORTED_VERSION = -32022;
-const METHOD_NOT_FOUND = -32601;
+export const UNSUPPORTED_VERSION = -32022;
+export const METHOD_NOT_FOUND = -32601;
 const MODERN_ERRORS = new Set([HEADER_MISMATCH, MISSING_CAPABILITY, UNSUPPORTED_VERSION]);
 const FALLBACK_STATUS = new Set([400, 404, 405]);
-const NAMED_PARAMS: Record<string, string> = { "tools/call": "name", "prompts/get": "name", "resources/read": "uri" };
+export const NAMED_PARAMS: Record<string, string> = { "tools/call": "name", "prompts/get": "name", "resources/read": "uri" };
 const JSON_HEADERS = { "Content-Type": "application/json", Accept: "application/json, text/event-stream" };
 
 const NO_AUTH: McpAuth = { headers: async () => ({}), rejected: async () => false };

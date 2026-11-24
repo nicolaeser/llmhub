@@ -1,28 +1,16 @@
 import "server-only";
-import { asRecord } from "@/lib/gateway/core";
-import { MCP_PROTOCOL_VERSION } from "@/lib/mcp/client";
+import { logger } from "@/lib/logging/logger";
+import { MCP_REQUEST_TIMEOUT_MS } from "@/lib/mcp/client";
+import { INVALID_PARAMS, McpEndpointError, type McpEndpointTools } from "@/lib/mcp/endpoint";
+import { mcpErrorCode } from "@/lib/mcp/errors";
 import { chainOf } from "@/lib/mcp/resolve";
 import { bindTools } from "@/lib/mcp/tool-names";
 import { createExecutor, loadMcpServers, rememberConnection } from "@/lib/mcp/toolset";
 import { guardedFetch } from "@/lib/mcp/transport";
-import { parseJsonOrNull } from "@/lib/utils/json";
 import type { JsonMap, Principal } from "@/types/gateway";
 import type { McpBoundTool } from "@/types/mcp";
 
-const PROTOCOL_HEADER = { "mcp-protocol-version": MCP_PROTOCOL_VERSION };
-
-function rpc(id: unknown, result: JsonMap): Response {
-  return Response.json({ jsonrpc: "2.0", id, result }, { headers: PROTOCOL_HEADER });
-}
-
-function fail(id: unknown, code: number, message: string): Response {
-  return Response.json({ jsonrpc: "2.0", id: id ?? null, error: { code, message } }, { headers: PROTOCOL_HEADER });
-}
-
-function argumentsOf(value: unknown): JsonMap {
-  if (typeof value === "string") return asRecord(parseJsonOrNull(value)) ?? {};
-  return asRecord(value) ?? {};
-}
+export const HUB_MCP_INFO = { name: "llmhub", version: "1.0.0" };
 
 function toolCard(tool: McpBoundTool): JsonMap {
   const action = tool.tool.action;
@@ -39,32 +27,35 @@ function toolCard(tool: McpBoundTool): JsonMap {
   };
 }
 
-export async function handleHubMcp(principal: Principal, body: unknown): Promise<Response> {
-  const message = asRecord(body);
-  if (!message || typeof message.method !== "string") return fail(null, -32600, "Invalid Request");
-  if (message.id === undefined) return new Response(null, { status: 202, headers: PROTOCOL_HEADER });
-  const id = message.id;
-  const params = asRecord(message.params) ?? {};
-  if (message.method === "ping") return rpc(id, {});
-  if (message.method === "initialize") {
-    return rpc(id, {
-      protocolVersion: MCP_PROTOCOL_VERSION,
-      capabilities: { tools: { listChanged: false } },
-      serverInfo: { name: "llmhub", version: "1.0.0" },
-    });
-  }
-  if (message.method !== "tools/list" && message.method !== "tools/call") return fail(id, -32601, "Method not found");
+async function boundTools(principal: Principal) {
   const { servers, records } = await loadMcpServers(chainOf(principal));
-  const tools = bindTools(servers);
-  const executor = createExecutor(records, guardedFetch, rememberConnection, principal);
-  try {
-    if (message.method === "tools/list") return rpc(id, { tools: tools.map(toolCard) });
-    const name = typeof params.name === "string" ? params.name : "";
-    const bound = tools.find((tool) => tool.name === name);
-    if (!bound) return rpc(id, { content: [{ type: "text", text: "Unknown tool." }], isError: true });
-    const outcome = await executor.call(bound, argumentsOf(params.arguments), AbortSignal.timeout(30_000));
-    return rpc(id, { content: [{ type: "text", text: outcome.text }], isError: outcome.isError });
-  } finally {
-    await executor.close();
-  }
+  return { tools: bindTools(servers), records };
+}
+
+export function hubMcpTools(principal: Principal): McpEndpointTools {
+  return {
+    info: HUB_MCP_INFO,
+    async list() {
+      return (await boundTools(principal)).tools.map(toolCard);
+    },
+    async call(name, args, signal) {
+      const { tools, records } = await boundTools(principal);
+      const bound = tools.find((tool) => tool.name === name);
+      if (!bound) throw new McpEndpointError(INVALID_PARAMS, `Unknown tool: ${name}`);
+      const executor = createExecutor(records, guardedFetch, rememberConnection, principal);
+      const started = Date.now();
+      const trace = { serverId: bound.serverId, tool: bound.tool.name };
+      try {
+        const outcome = await executor.call(bound, args, AbortSignal.any([signal, AbortSignal.timeout(MCP_REQUEST_TIMEOUT_MS)]));
+        logger.info("mcp.tool_call", { ...trace, ms: Date.now() - started, ok: !outcome.isError });
+        return { content: [{ type: "text", text: outcome.text }], isError: outcome.isError };
+      } catch (err) {
+        const code = mcpErrorCode(err);
+        logger.warn("mcp.tool_call", { ...trace, ms: Date.now() - started, ok: false, code });
+        return { content: [{ type: "text", text: `The tool call failed (${code}).` }], isError: true };
+      } finally {
+        await executor.close();
+      }
+    },
+  };
 }
