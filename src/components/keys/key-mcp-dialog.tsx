@@ -1,103 +1,72 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
-import {
-  Alert,
-  Button,
-  Card,
-  Checkbox,
-  CheckboxGroup,
-  Chip,
-  Description,
-  Disclosure,
-  Label,
-  ListBox,
-  SearchField,
-  Select,
-  Switch,
-  ToggleButton,
-  ToggleButtonGroup,
-  toast,
-  type useOverlayState,
-} from "@heroui/react";
+import { Alert, Card, Chip, Disclosure, SearchField, Separator, toast, type useOverlayState } from "@heroui/react";
 import { Blocks, SearchX } from "lucide-react";
 import { useFormatter, useTranslations } from "next-intl";
 import EmptyState from "@/components/console/empty-state";
 import FormDialog from "@/components/console/form-dialog";
 import { SectionLoading } from "@/components/console/page-status";
 import { useErrorToast } from "@/components/console/use-error-toast";
+import AccessLevelField from "@/components/mcp/access-level-field";
+import { useAccessLabels } from "@/components/mcp/access-labels";
+import ToolAccessList from "@/components/mcp/tool-access-list";
 import { isActionFail } from "@/lib/http/action-result";
-import { explainAccess } from "@/lib/mcp/resolve";
-import { MCP_ACTIONS, MCP_KEY_ACCESS_MODES, MCP_ROLE_KEYS } from "@/schemas/mcp";
+import { ceilingOf, cleanGrant, explainAccess } from "@/lib/mcp/resolve";
 import type { ActionFail } from "@/types/actions";
 import type {
   McpAssignmentView,
+  McpCeiling,
   McpExplanation,
   McpKeyAccess,
   McpKeyAccessChoice,
   McpKeyServerAccess,
-  McpRoleView,
-  McpToolAction,
-  McpToolSpec,
 } from "@/types/mcp";
 
 const SEARCH_FROM = 6;
 
-type ToolState = "on" | "hiddenHere" | "actionHere" | "hiddenAbove" | "role" | "server" | "none";
 type ServerStatus = "paused" | "blocked" | "none" | "unconnected" | "available";
 
 function choiceOf(server: McpKeyServerAccess): McpKeyAccessChoice {
   const rule = server.rule;
-  const blockedActions = MCP_ACTIONS.filter((action) => rule?.blockedActions.includes(action));
-  if (!rule) return { serverId: server.serverId, mode: "inherit", roleId: "", blockedTools: [], blockedActions: [] };
-  if (rule.mode === "allow") {
-    return { serverId: server.serverId, mode: "allow", roleId: rule.roleId, blockedTools: rule.blockedTools, blockedActions };
-  }
-  if (!rule.blockedTools.length && !blockedActions.length) {
-    return { serverId: server.serverId, mode: "block", roleId: "", blockedTools: [], blockedActions: [] };
-  }
-  return { serverId: server.serverId, mode: "inherit", roleId: "", blockedTools: rule.blockedTools, blockedActions };
+  if (!rule) return { serverId: server.serverId, access: "inherit", extraTools: [], blockedTools: [] };
+  return { serverId: server.serverId, access: rule.access, extraTools: rule.extraTools, blockedTools: rule.blockedTools };
+}
+
+function sorted(names: string[]): string {
+  return [...names].sort().join("\n");
 }
 
 function sameChoice(a: McpKeyAccessChoice, b: McpKeyAccessChoice): boolean {
-  const narrows = a.mode !== "block";
+  const left = cleanGrant(a);
+  const right = cleanGrant(b);
+  if (!left || !right) return !left && !right;
   return (
-    a.mode === b.mode &&
-    (a.mode !== "allow" || a.roleId === b.roleId) &&
-    (!narrows || ([...a.blockedTools].sort().join() === [...b.blockedTools].sort().join() && a.blockedActions.join() === b.blockedActions.join()))
+    left.access === right.access &&
+    sorted(left.extraTools) === sorted(right.extraTools) &&
+    sorted(left.blockedTools) === sorted(right.blockedTools)
   );
 }
 
-function roleGrant(role: McpRoleView | undefined): McpAssignmentView["role"] {
-  if (!role) return null;
-  return {
-    key: role.key,
-    name: role.name,
-    allActions: role.allActions,
-    actions: role.actions,
-    tools: role.tools,
-    deniedTools: role.deniedTools,
-  };
-}
-
-function keyRule(access: McpKeyAccess, server: McpKeyServerAccess, choice: McpKeyAccessChoice): McpAssignmentView | null {
-  if (choice.mode === "inherit" && !choice.blockedTools.length && !choice.blockedActions.length) return null;
-  const role = choice.mode === "allow" ? server.roles.find((item) => item.id === choice.roleId) : undefined;
-  return {
-    scope: "key",
-    id: access.keyId,
-    label: access.label,
-    mode: choice.mode === "allow" ? "allow" : "block",
-    blockedTools: choice.mode === "block" ? [] : choice.blockedTools,
-    blockedActions: choice.mode === "block" ? [] : choice.blockedActions,
-    roleId: role?.id ?? "",
-    role: roleGrant(role),
-  };
+function keyRule(access: McpKeyAccess, choice: McpKeyAccessChoice): McpAssignmentView | null {
+  const grant = cleanGrant(choice);
+  return grant ? { scope: "key", id: access.keyId, label: access.label, ...grant } : null;
 }
 
 function explain(access: McpKeyAccess, server: McpKeyServerAccess, choice: McpKeyAccessChoice | null): McpExplanation {
-  const own = choice ? keyRule(access, server, choice) : null;
+  const own = choice ? keyRule(access, choice) : null;
   return explainAccess(server, own ? [...server.inherited, own] : server.inherited, access.chain);
+}
+
+function ceilingFor(access: McpKeyAccess, server: McpKeyServerAccess, choice: McpKeyAccessChoice): McpCeiling {
+  if (choice.access !== "inherit") return ceilingOf(server, server.inherited);
+  const base = explain(access, server, null);
+  const names = new Set(base.tools);
+  return {
+    level: base.state === "granted" ? base.level : null,
+    limitedBy: base.limitedBy,
+    allows: (tool) => names.has(tool.name),
+  };
 }
 
 function statusOf(server: McpKeyServerAccess, explanation: McpExplanation): ServerStatus {
@@ -115,31 +84,6 @@ function statusColor(status: ServerStatus): "success" | "warning" | "danger" | "
   return "default";
 }
 
-function actionColor(action: McpToolAction | undefined): "success" | "warning" | "danger" | "default" {
-  if (action === "read") return "success";
-  if (action === "write") return "warning";
-  if (action === "delete") return "danger";
-  return "default";
-}
-
-function toolState(
-  tool: McpToolSpec,
-  server: McpKeyServerAccess,
-  choice: McpKeyAccessChoice,
-  explanation: McpExplanation,
-): ToolState {
-  if (explanation.state !== "granted") return "none";
-  if (explanation.tools.includes(tool.name)) return "on";
-  if (choice.blockedTools.includes(tool.name)) return "hiddenHere";
-  if (tool.action && choice.blockedActions.includes(tool.action)) return "actionHere";
-  const above = server.inherited;
-  if (above.some((rule) => rule.blockedTools.includes(tool.name) || (tool.action && rule.blockedActions.includes(tool.action)))) {
-    return "hiddenAbove";
-  }
-  if (server.toolsRestricted && !server.allowedTools.includes(tool.name)) return "server";
-  return "role";
-}
-
 export default function KeyMcpDialog({
   state,
   keyId,
@@ -155,9 +99,10 @@ export default function KeyMcpDialog({
 }) {
   const t = useTranslations("Keys.mcp");
   const tMcp = useTranslations("Mcp");
-  const tAssign = useTranslations("Mcp.assign");
+  const tAccess = useTranslations("Mcp.access");
   const tCommon = useTranslations("Common");
   const format = useFormatter();
+  const labels = useAccessLabels();
   const showError = useErrorToast();
   const [access, setAccess] = useState<McpKeyAccess | null>(null);
   const [choices, setChoices] = useState<Record<string, McpKeyAccessChoice>>({});
@@ -210,31 +155,14 @@ export default function KeyMcpDialog({
     });
   }
 
-  function sources(list: McpAssignmentView[]): string {
-    return format.list(
-      list.map((rule) => tAssign("source", { scope: rule.scope, label: rule.label })),
-      { type: "conjunction" },
-    );
-  }
-
-  function inheritedLine(server: McpKeyServerAccess): string {
+  function aboveLine(server: McpKeyServerAccess): string {
     if (!access) return "";
-    const base = explain(access, server, null);
-    if (base.state === "blocked") return t("inheritedBlocked", { sources: sources(base.blockedBy) });
-    if (base.grantedBy.length) {
-      const role = base.grantedBy.find((rule) => rule.role)?.role;
-      return t("inheritedBy", {
-        sources: sources(base.grantedBy),
-        hasRole: role ? "yes" : "no",
-        role: role ? roleLabel(role.key, role.name) : "",
-      });
-    }
-    if (base.global) return t("inheritedAll");
-    return t("inheritedNone");
-  }
-
-  function roleLabel(key: string, name: string): string {
-    return (MCP_ROLE_KEYS as readonly string[]).includes(key) ? tAssign("rolePreset", { role: key }) : name;
+    const parts = [
+      ...(server.defaultAccess !== "none" ? [`${tAccess("defaultSource")}: ${tAccess("level", { access: server.defaultAccess })}`] : []),
+      ...server.inherited.map((rule) => `${labels.source({ kind: "rule", rule })}: ${labels.summary(rule)}`),
+    ];
+    if (!parts.length) return t("aboveNone");
+    return tAccess("above", { list: format.list(parts, { type: "conjunction" }) });
   }
 
   function save(close: () => void) {
@@ -308,7 +236,7 @@ export default function KeyMcpDialog({
             const choice = choices[server.serverId] ?? choiceOf(server);
             const explanation = explain(access, server, choice);
             const status = statusOf(server, explanation);
-            const allowed = MCP_ACTIONS.filter((action) => !choice.blockedActions.includes(action));
+            const ceiling = ceilingFor(access, server, choice);
             return (
               <Card key={server.serverId} variant="secondary">
                 <Card.Content>
@@ -346,7 +274,7 @@ export default function KeyMcpDialog({
                     <Disclosure.Content>
                       <Disclosure.Body className="flex flex-col gap-4 pt-4">
                         {server.description ? <p className="text-sm text-muted">{server.description}</p> : null}
-                        <p className="text-sm text-muted">{inheritedLine(server)}</p>
+                        <p className="text-sm text-muted">{aboveLine(server)}</p>
                         {status === "unconnected" ? (
                           <Alert status="warning">
                             <Alert.Indicator />
@@ -355,166 +283,28 @@ export default function KeyMcpDialog({
                             </Alert.Content>
                           </Alert>
                         ) : null}
-                        <div className="flex flex-col items-start gap-2">
-                          <Label>{t("modeLabel")}</Label>
-                          <ToggleButtonGroup
-                            size="sm"
-                            selectionMode="single"
-                            disallowEmptySelection
-                            aria-label={t("modeLabel")}
-                            selectedKeys={[choice.mode]}
-                            onSelectionChange={(keys) => {
-                              const next = MCP_KEY_ACCESS_MODES.find((item) => item === [...keys][0]);
-                              if (next) update(server.serverId, { mode: next, roleId: next === "allow" ? choice.roleId : "" });
-                            }}
-                            isDisabled={saving}
-                          >
-                            {MCP_KEY_ACCESS_MODES.map((mode, index) => (
-                              <ToggleButton key={mode} id={mode}>
-                                {index > 0 ? <ToggleButtonGroup.Separator /> : null}
-                                {t("mode", { mode })}
-                              </ToggleButton>
-                            ))}
-                          </ToggleButtonGroup>
-                          <Description>{t("modeHint", { mode: choice.mode })}</Description>
-                        </div>
-                        {choice.mode === "block" ? null : (
-                          <>
-                            <div className="grid gap-4 md:grid-cols-2">
-                              {choice.mode === "allow" ? (
-                                <Select
-                                  fullWidth
-                                  selectedKey={choice.roleId || "every"}
-                                  onSelectionChange={(key) => update(server.serverId, { roleId: String(key) === "every" ? "" : String(key) })}
-                                  isDisabled={saving}
-                                >
-                                  <Label>{t("role")}</Label>
-                                  <Select.Trigger>
-                                    <Select.Value />
-                                    <Select.Indicator />
-                                  </Select.Trigger>
-                                  <Select.Popover>
-                                    <ListBox>
-                                      <ListBox.Item id="every" textValue={tAssign("roleNone")}>
-                                        {tAssign("roleNone")}
-                                        <ListBox.ItemIndicator />
-                                      </ListBox.Item>
-                                      {server.roles.map((role) => (
-                                        <ListBox.Item key={role.id} id={role.id} textValue={roleLabel(role.key, role.name)}>
-                                          {roleLabel(role.key, role.name)}
-                                          <ListBox.ItemIndicator />
-                                        </ListBox.Item>
-                                      ))}
-                                    </ListBox>
-                                  </Select.Popover>
-                                  <Description>{t("roleHint")}</Description>
-                                </Select>
-                              ) : null}
-                              <CheckboxGroup
-                                value={allowed}
-                                onChange={(values) =>
-                                  update(server.serverId, {
-                                    blockedActions: MCP_ACTIONS.filter((action) => !values.includes(action)),
-                                  })
-                                }
-                                isDisabled={saving}
-                              >
-                                <Label>{t("actions")}</Label>
-                                <div className="flex flex-wrap gap-4">
-                                  {MCP_ACTIONS.map((action) => (
-                                    <Checkbox key={action} value={action}>
-                                      <Checkbox.Content>
-                                        <Checkbox.Control>
-                                          <Checkbox.Indicator />
-                                        </Checkbox.Control>
-                                        <Label>{tMcp("action", { action })}</Label>
-                                      </Checkbox.Content>
-                                    </Checkbox>
-                                  ))}
-                                </div>
-                                <Description>{t("actionsHint")}</Description>
-                              </CheckboxGroup>
-                            </div>
-                            <div className="flex flex-wrap items-center justify-between gap-2">
-                              <div className="space-y-1">
-                                <p className="text-sm font-medium text-foreground">{t("tools")}</p>
-                                <p className="text-sm text-muted">{t("toolsHint")}</p>
-                              </div>
-                              <div className="flex flex-wrap gap-2">
-                                <Button
-                                  size="sm"
-                                  variant="tertiary"
-                                  isDisabled={saving}
-                                  onPress={() => update(server.serverId, { blockedTools: [], blockedActions: ["write", "delete"] })}
-                                >
-                                  {t("readOnly")}
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="tertiary"
-                                  isDisabled={saving}
-                                  onPress={() => update(server.serverId, { blockedTools: [], blockedActions: [] })}
-                                >
-                                  {t("showAll")}
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="tertiary"
-                                  isDisabled={saving}
-                                  onPress={() => update(server.serverId, { blockedTools: server.tools.map((tool) => tool.name) })}
-                                >
-                                  {t("hideAll")}
-                                </Button>
-                              </div>
-                            </div>
-                            {server.tools.length === 0 ? <p className="text-sm text-muted">{t("noTools")}</p> : null}
-                            <ul className="flex flex-col divide-y divide-border">
-                              {server.tools.map((tool) => {
-                                const visible = !choice.blockedTools.includes(tool.name);
-                                const current = toolState(tool, server, choice, explanation);
-                                return (
-                                  <li key={tool.name} className="flex flex-wrap items-center justify-between gap-3 py-2">
-                                    <div className="min-w-0 flex-1 space-y-0.5">
-                                      <div className="flex flex-wrap items-center gap-2">
-                                        <span className="text-sm font-medium break-all text-foreground">{tool.title || tool.name}</span>
-                                        {tool.action ? (
-                                          <Chip size="sm" variant="soft" color={actionColor(tool.action)}>
-                                            {tMcp("action", { action: tool.action })}
-                                          </Chip>
-                                        ) : null}
-                                      </div>
-                                      <p className="font-mono text-xs break-all text-muted">{tool.name}</p>
-                                    </div>
-                                    <div className="flex items-center gap-3">
-                                      <span className={current === "on" ? "text-xs text-success" : "text-xs text-muted"}>
-                                        {t("toolState", { state: current })}
-                                      </span>
-                                      <Switch
-                                        size="sm"
-                                        isSelected={visible}
-                                        isDisabled={saving}
-                                        aria-label={t("toolVisible", { name: tool.title || tool.name })}
-                                        onChange={(next) =>
-                                          update(server.serverId, {
-                                            blockedTools: next
-                                              ? choice.blockedTools.filter((name) => name !== tool.name)
-                                              : [...choice.blockedTools, tool.name],
-                                          })
-                                        }
-                                      >
-                                        <Switch.Content>
-                                          <Switch.Control>
-                                            <Switch.Thumb />
-                                          </Switch.Control>
-                                        </Switch.Content>
-                                      </Switch>
-                                    </div>
-                                  </li>
-                                );
-                              })}
-                            </ul>
-                          </>
-                        )}
+                        <AccessLevelField
+                          value={choice.access}
+                          onChange={(next) =>
+                            update(server.serverId, {
+                              access: next,
+                              extraTools: [],
+                              blockedTools: next === "none" ? [] : choice.blockedTools,
+                            })
+                          }
+                          context="rule"
+                          ceiling={choice.access === "inherit" ? null : ceiling.level}
+                          ceilingSource={ceiling.limitedBy ? labels.source(ceiling.limitedBy) : undefined}
+                          isDisabled={saving}
+                        />
+                        <Separator />
+                        <ToolAccessList
+                          tools={server.tools}
+                          grant={choice}
+                          ceiling={ceiling}
+                          onChange={(next) => update(server.serverId, next)}
+                          isDisabled={saving}
+                        />
                       </Disclosure.Body>
                     </Disclosure.Content>
                   </Disclosure>

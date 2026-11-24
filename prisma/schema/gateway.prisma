@@ -785,6 +785,7 @@ model McpServer {
   internal        Boolean   @default(false)
   enabled         Boolean   @default(true)
   global          Boolean   @default(false)
+  globalAccess    String    @default("all")
   template        Boolean   @default(false)
   toolsRestricted Boolean   @default(false)
   allowedTools    String[]  @default([])
@@ -872,6 +873,8 @@ model McpAssignment {
   keyId        String?
   key          VirtualKey?   @relation(fields: [keyId], references: [id], onDelete: Cascade)
   mode           String        @default("allow")
+  access         String        @default("")
+  extraTools     String[]      @default([])
   blockedTools   String[]      @default([])
   blockedActions String[]      @default([])
   roleId         String?

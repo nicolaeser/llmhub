@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { normalizeBaseUrl } from "@/lib/mcp/base-url";
 
 export const BUILDER_MODEL_KEY = "mcp_builder_model";
 export const MCP_SCOPES = ["org", "team", "project", "member", "key"] as const;
@@ -7,8 +8,8 @@ export const MCP_HTTP_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"] as con
 export const MCP_STATIC_AUTH_TYPES = ["none", "bearer", "basic", "header", "query"] as const;
 export const MCP_AUTH_TYPES = [...MCP_STATIC_AUTH_TYPES, "oauth"] as const;
 export const MCP_OAUTH_GRANTS = ["authorization_code", "client_credentials"] as const;
-export const MCP_MODES = ["allow", "block"] as const;
-export const MCP_ROLE_KEYS = ["reader", "operator", "admin"] as const;
+export const MCP_ACCESS_LEVELS = ["none", "read", "write", "all"] as const;
+export const MCP_RULE_ACCESS = ["inherit", ...MCP_ACCESS_LEVELS] as const;
 export const MCP_BUILDER_TEMPLATES = ["readonly", "writes", "full", "custom"] as const;
 export const MAX_MCP_ASSIGNMENTS = 500;
 export const MAX_HOSTED_TOOLS = 200;
@@ -28,7 +29,12 @@ const RESERVED_HEADERS = new Set([
 ]);
 
 const toolNames = z.array(z.string().trim().min(1).max(128)).max(200);
-const actions = z.array(z.enum(MCP_ACTIONS)).max(MCP_ACTIONS.length);
+
+const accessRule = {
+  access: z.enum(MCP_RULE_ACCESS),
+  extraTools: toolNames.default([]),
+  blockedTools: toolNames.default([]),
+};
 
 const PATH_PARAM = /\{([A-Za-z][A-Za-z0-9_]*)\}/g;
 const AUTH_HEADER_NAME = /^[A-Za-z0-9-]{1,64}$/;
@@ -62,7 +68,7 @@ export const hostedToolSchema = z
       .trim()
       .min(1)
       .max(512)
-      .regex(/^\/(?!\/)(?!.*\.\.)[A-Za-z0-9._~{}:/-]*$/),
+      .regex(/^\/(?!\/)(?!.*\.\.)[A-Za-z0-9._~{}:/[\]-]*$/),
     query: z.array(z.string().trim().regex(/^[A-Za-z0-9_.-]{1,64}$/)).max(50).default([]),
     inputSchema: z.record(z.string(), z.unknown()).default({}),
   })
@@ -167,6 +173,7 @@ export const builderDraftSchema = z.object({
   instruction: z.string().trim().min(1).max(2_000),
   docs: z.string().trim().max(MAX_BUILDER_DOCS).default(""),
   links: z.array(builderLinkSchema).max(MAX_BUILDER_LINKS).default([]),
+  address: z.string().trim().max(2048).default(""),
 });
 
 const mediaModel = z.string().trim().max(200).default("");
@@ -190,7 +197,7 @@ export const hostedServerSchema = z
   .object({
     name: z.string().trim().min(1).max(48),
     description: z.string().trim().max(500),
-    baseUrl: z.string().trim().min(1).max(2048),
+    baseUrl: z.string().trim().min(1).max(2048).transform(normalizeBaseUrl),
     internal: z.boolean(),
     authType: z.enum(MCP_STATIC_AUTH_TYPES),
     authHeader: z.string().trim().max(64).default(""),
@@ -203,18 +210,9 @@ export const hostedServerSchema = z
       }),
     tools: z.array(hostedToolSchema).min(1).max(MAX_HOSTED_TOOLS),
     template: z.boolean().default(false),
-    global: z.boolean().default(false),
+    defaultAccess: z.enum(MCP_ACCESS_LEVELS).default("none"),
     assignments: z
-      .array(
-        z.object({
-          scope: z.enum(MCP_SCOPES),
-          id: z.string().min(1).max(64),
-          mode: z.enum(MCP_MODES),
-          blockedTools: toolNames,
-          blockedActions: actions.default([]),
-          roleKey: z.enum(["", ...MCP_ROLE_KEYS]).default(""),
-        }),
-      )
+      .array(z.object({ scope: z.enum(MCP_SCOPES), id: z.string().min(1).max(64), ...accessRule }))
       .max(MAX_MCP_ASSIGNMENTS)
       .default([]),
   })
@@ -276,7 +274,6 @@ export const mcpServerInputSchema = z
     ...connectionShape,
     clearSecret: z.boolean(),
     enabled: z.boolean(),
-    global: z.boolean(),
     toolsRestricted: z.boolean(),
     allowedTools: toolNames,
   })
@@ -291,42 +288,17 @@ export const mcpProbeSchema = z
 
 export const mcpAssignmentsSchema = z.object({
   serverId: z.string().min(1).max(64),
-  global: z.boolean(),
+  defaultAccess: z.enum(MCP_ACCESS_LEVELS),
   assignments: z
-    .array(
-      z.object({
-        scope: z.enum(MCP_SCOPES),
-        id: z.string().min(1).max(64),
-        mode: z.enum(MCP_MODES),
-        blockedTools: toolNames,
-        blockedActions: actions.default([]),
-        roleId: z.string().max(64).default(""),
-      }),
-    )
+    .array(z.object({ scope: z.enum(MCP_SCOPES), id: z.string().min(1).max(64), ...accessRule }))
     .max(MAX_MCP_ASSIGNMENTS),
 });
-
-export const MAX_MCP_ROLES = 50;
 
 export const mcpPermissionsSchema = z.object({
   serverId: z.string().min(1).max(64),
   toolActions: z
     .record(z.string().trim().min(1).max(128), z.enum(MCP_ACTIONS))
     .refine((value) => Object.keys(value).length <= 200, { message: "too many tools" }),
-  roles: z
-    .array(
-      z.object({
-        id: z.string().max(64).default(""),
-        name: z.string().trim().min(1).max(48),
-        description: z.string().trim().max(200).default(""),
-        allActions: z.boolean(),
-        actions: actions.default([]),
-        tools: toolNames.default([]),
-        deniedTools: toolNames.default([]),
-      }),
-    )
-    .max(MAX_MCP_ROLES),
-  removed: z.array(z.string().min(1).max(64)).max(MAX_MCP_ROLES).default([]),
 });
 
 export const mcpInstallationSchema = z
@@ -334,7 +306,7 @@ export const mcpInstallationSchema = z
     serverId: z.string().min(1).max(64),
     orgId: z.string().min(1).max(64),
     enabled: z.boolean(),
-    baseUrl: z.string().trim().max(2048).default(""),
+    baseUrl: z.string().trim().max(2048).default("").transform(normalizeBaseUrl),
     authType: z.enum(MCP_STATIC_AUTH_TYPES),
     authHeader: z.string().trim().max(64).default(""),
     secret: z
@@ -368,19 +340,9 @@ export const mcpOAuthCallbackSchema = z.object({
   error: z.string().max(256).default(""),
 });
 
-export const MCP_KEY_ACCESS_MODES = ["inherit", "allow", "block"] as const;
-
 export const keyMcpAccessSchema = z.object({
   keyId: z.string().min(1).max(64),
   servers: z
-    .array(
-      z.object({
-        serverId: z.string().min(1).max(64),
-        mode: z.enum(MCP_KEY_ACCESS_MODES),
-        roleId: z.string().max(64).default(""),
-        blockedTools: toolNames.default([]),
-        blockedActions: actions.default([]),
-      }),
-    )
+    .array(z.object({ serverId: z.string().min(1).max(64), ...accessRule }))
     .max(500),
 });

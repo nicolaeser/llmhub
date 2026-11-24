@@ -1,4 +1,5 @@
 import "server-only";
+import { checkServerUrl } from "@/lib/mcp/url-guard";
 import type { S3AddressingSetting, S3AddressingStyle, S3Location } from "@/types/s3";
 
 const IPV4 = /^(?:\d{1,3}\.){3}\d{1,3}$/;
@@ -40,6 +41,10 @@ export function originOf(url: string, fallback = "https://s3.amazonaws.com"): st
   } catch {
     return fallback;
   }
+}
+
+export function endpointAllowed(endpoint: string): boolean {
+  return checkServerUrl(originOf(endpoint), true).ok;
 }
 
 export function defaultAwsEndpoint(region: string): string {

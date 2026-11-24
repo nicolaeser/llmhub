@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import { after, test } from "node:test";
 import prisma from "@/lib/db/prisma";
 import { runAsPrincipal } from "@/lib/auth/delegation";
-import { ensureMcpRoles, saveMcpPermissions } from "@/lib/mcp/catalog";
+import { adoptMcpAccessLevels } from "@/lib/bootstrap/mcp-access-levels";
+import { saveMcpPermissions } from "@/lib/mcp/catalog";
 import { loadKeyMcpAccess, saveKeyMcpAccess } from "@/lib/mcp/key-access";
 import {
   createMcpServer,
@@ -29,7 +30,7 @@ function toolNames(result: Awaited<ReturnType<typeof loadMcpServers>>, serverId:
   return found ? found.tools.map((tool) => tool.name) : null;
 }
 
-test("MCP assignments inherit down the tenancy chain and blocks win", async () => {
+test("MCP access levels reach down the tenancy chain and lower levels only narrow them", async () => {
   const owner = await ownerSession();
   const org = await prisma.organization.create({ data: { alias: uniqueName("org") } });
   const other = await prisma.organization.create({ data: { alias: uniqueName("other") } });
@@ -54,7 +55,6 @@ test("MCP assignments inherit down the tenancy chain and blocks win", async () =
         clearSecret: false,
         internal: true,
         enabled: true,
-        global: false,
         toolsRestricted: false,
         allowedTools: [],
       }),
@@ -70,12 +70,13 @@ test("MCP assignments inherit down the tenancy chain and blocks win", async () =
     const saved = await runAsPrincipal(owner, () =>
       saveMcpAssignments({
         serverId,
-        global: false,
+        defaultAccess: "none",
         assignments: [
-          { scope: "org", id: org.id, mode: "allow", blockedTools: [] },
-          { scope: "team", id: team.id, mode: "block", blockedTools: ["delete"] },
-          { scope: "member", id: member.id, mode: "block", blockedTools: [] },
-          { scope: "key", id: otherKey.id, mode: "allow", blockedTools: ["fetch", "fetch"] },
+          { scope: "org", id: org.id, access: "all" },
+          { scope: "team", id: team.id, access: "inherit", blockedTools: ["delete"] },
+          { scope: "member", id: member.id, access: "none" },
+          { scope: "key", id: otherKey.id, access: "all", blockedTools: ["fetch", "fetch", "ghost"] },
+          { scope: "project", id: project.id, access: "inherit" },
         ],
       }),
     );
@@ -102,7 +103,7 @@ test("MCP assignments inherit down the tenancy chain and blocks win", async () =
 
     await assert.rejects(
       runAsPrincipal(owner, () =>
-        saveMcpAssignments({ serverId, global: false, assignments: [{ scope: "team", id: "missing", mode: "allow", blockedTools: [] }] }),
+        saveMcpAssignments({ serverId, defaultAccess: "none", assignments: [{ scope: "team", id: "missing", access: "all" }] }),
       ),
       /NOT_FOUND/,
     );
@@ -115,13 +116,13 @@ test("MCP assignments inherit down the tenancy chain and blocks win", async () =
     await prisma.member.delete({ where: { id: member.id } });
     assert.equal(await prisma.mcpAssignment.count({ where: { serverId } }), 3);
 
-    await runAsPrincipal(owner, () => saveMcpAssignments({ serverId, global: true, assignments: [] }));
+    await runAsPrincipal(owner, () => saveMcpAssignments({ serverId, defaultAccess: "all", assignments: [] }));
     const global = await loadMcpServers(chain({ orgId: other.id }));
     assert.deepEqual(toolNames(global, serverId), ["search", "fetch", "delete"]);
 
     const list = await runAsPrincipal(owner, () => loadMcpServerList());
     assert.equal(list.canManage, true);
-    assert.ok(list.servers.some((row) => row.id === serverId && row.global));
+    assert.ok(list.servers.some((row) => row.id === serverId && row.global && row.defaultAccess === "all"));
 
     await runAsPrincipal(owner, () => deleteMcpServer(serverId));
     assert.equal(await prisma.mcpAssignment.count({ where: { serverId } }), 0);
@@ -138,13 +139,13 @@ test("MCP assignments inherit down the tenancy chain and blocks win", async () =
   }
 });
 
-test("per-tool role grants and operator classification decide what a key reaches", async () => {
+test("tool classification sorts tools into levels and old role rules are adopted at boot", async () => {
   const owner = await ownerSession();
   const org = await prisma.organization.create({ data: { alias: uniqueName("org") } });
   const key = await prisma.virtualKey.create({ data: { hash: uniqueName("hash"), prefix: "sk-it", orgId: org.id } });
   const server = await prisma.mcpServer.create({
     data: {
-      name: uniqueName("perms").slice(0, 40),
+      name: uniqueName("levels").slice(0, 40),
       url: "http://127.0.0.1:1/mcp",
       internal: true,
       refreshedAt: new Date(),
@@ -161,98 +162,60 @@ test("per-tool role grants and operator classification decide what a key reaches
     return result.servers.find((item) => item.serverId === server.id)?.tools.map((tool) => tool.name) ?? null;
   };
   try {
-    await runAsPrincipal(owner, () => ensureMcpRoles(server.id));
-    const builtins = await prisma.mcpRole.findMany({ where: { serverId: server.id } });
-    const role = (roleKey: string) => builtins.find((item) => item.key === roleKey)!;
-    const asInput = (row: (typeof builtins)[number]) => ({
-      id: row.id,
-      name: row.name,
-      description: row.description,
-      allActions: row.allActions,
-      actions: row.actions,
-      tools: row.tools,
-      deniedTools: row.deniedTools,
-    });
-
     await runAsPrincipal(owner, () =>
-      saveMcpAssignments({
-        serverId: server.id,
-        global: false,
-        assignments: [{ scope: "key", id: key.id, mode: "allow", blockedTools: [], roleId: role("reader").id }],
-      }),
+      saveMcpAssignments({ serverId: server.id, defaultAccess: "none", assignments: [{ scope: "key", id: key.id, access: "read" }] }),
     );
     assert.equal(await reached(), null);
 
     await runAsPrincipal(owner, () =>
-      saveMcpPermissions({
-        serverId: server.id,
-        toolActions: { list: "read", close: "write", purge: "delete", ghost: "read" },
-        roles: [
-          { ...asInput(role("reader")), name: "Renamed", tools: ["close", "ghost"] },
-          asInput(role("operator")),
-          { ...asInput(role("admin")), deniedTools: ["purge"] },
-          { name: "Closer", description: "", allActions: false, actions: [], tools: ["close", "list"], deniedTools: ["list"] },
-        ],
-        removed: [],
-      }),
+      saveMcpPermissions({ serverId: server.id, toolActions: { list: "read", close: "write", purge: "delete", ghost: "read" } }),
     );
-    const stored = await prisma.mcpServer.findUniqueOrThrow({ where: { id: server.id }, include: { roles: true } });
+    const stored = await prisma.mcpServer.findUniqueOrThrow({ where: { id: server.id } });
     assert.deepEqual(stored.toolActions, { list: "read", close: "write", purge: "delete" });
-    const reader = stored.roles.find((item) => item.key === "reader")!;
-    assert.equal(reader.name, "Reader");
-    assert.deepEqual(reader.tools, ["close"]);
-    const closer = stored.roles.find((item) => item.name === "Closer")!;
-    assert.deepEqual([closer.tools, closer.deniedTools], [["close"], ["list"]]);
-    assert.deepEqual(await reached(), ["list", "close"]);
+    assert.deepEqual(await reached(), ["list"]);
 
     await runAsPrincipal(owner, () =>
       saveMcpAssignments({
         serverId: server.id,
-        global: false,
+        defaultAccess: "none",
         assignments: [
-          { scope: "org", id: org.id, mode: "allow", blockedTools: [], roleId: role("admin").id },
-          { scope: "key", id: key.id, mode: "allow", blockedTools: [], roleId: closer.id },
+          { scope: "org", id: org.id, access: "write" },
+          { scope: "key", id: key.id, access: "all" },
         ],
       }),
     );
-    assert.deepEqual(await reached(), ["close"]);
-    const listed = await runAsPrincipal(owner, () => loadMcpServerList());
-    assert.equal(listed.servers.find((row) => row.id === server.id)?.roles.find((row) => row.id === closer.id)?.assigned, 1);
-
-    const keep = (await prisma.mcpRole.findMany({ where: { serverId: server.id } })).map(asInput);
-    await assert.rejects(
-      runAsPrincipal(owner, () =>
-        saveMcpPermissions({ serverId: server.id, toolActions: {}, roles: keep.filter((row) => row.id !== closer.id), removed: [closer.id] }),
-      ),
-      /MCP_ROLE_IN_USE/,
-    );
-    await assert.rejects(
-      runAsPrincipal(owner, () =>
-        saveMcpPermissions({ serverId: server.id, toolActions: {}, roles: keep, removed: [role("reader").id] }),
-      ),
-      /VALIDATION/,
-    );
-    assert.equal(await prisma.mcpRole.count({ where: { serverId: server.id } }), 4);
-
-    await runAsPrincipal(owner, () =>
-      saveMcpAssignments({
-        serverId: server.id,
-        global: false,
-        assignments: [{ scope: "org", id: org.id, mode: "allow", blockedTools: [], roleId: role("admin").id }],
-      }),
-    );
     assert.deepEqual(await reached(), ["list", "close"]);
-    await runAsPrincipal(owner, () =>
-      saveMcpPermissions({
-        serverId: server.id,
-        toolActions: {},
-        roles: keep.filter((row) => row.id !== closer.id),
-        removed: [closer.id],
-      }),
+    const rows = await prisma.mcpAssignment.findMany({ where: { serverId: server.id }, orderBy: { keyId: "asc" } });
+    assert.deepEqual(
+      rows.map((row) => [row.access, row.mode, row.blockedActions]),
+      [
+        ["all", "allow", []],
+        ["write", "allow", ["delete"]],
+      ],
     );
-    assert.equal(await prisma.mcpRole.count({ where: { serverId: server.id } }), 3);
-    assert.deepEqual(await prisma.mcpServer.findUniqueOrThrow({ where: { id: server.id }, select: { toolActions: true } }), { toolActions: {} });
-    assert.deepEqual(await reached(), ["list", "close"]);
+
+    await prisma.mcpAssignment.deleteMany({ where: { serverId: server.id } });
+    const reader = await prisma.mcpRole.create({
+      data: { serverId: server.id, key: "reader", name: "Reader", actions: ["read"], tools: ["purge"], builtin: true },
+    });
+    await prisma.mcpAssignment.createMany({
+      data: [
+        { serverId: server.id, orgId: org.id, mode: "allow", roleId: reader.id },
+        { serverId: server.id, keyId: key.id, mode: "block", blockedActions: ["delete"] },
+      ],
+    });
+    assert.equal(await reached(), null);
+    assert.equal(await adoptMcpAccessLevels(), 2);
+    assert.equal(await adoptMcpAccessLevels(), 0);
+    const adopted = await prisma.mcpAssignment.findMany({ where: { serverId: server.id }, orderBy: { keyId: "asc" } });
+    assert.deepEqual(
+      adopted.map((row) => [row.access, row.extraTools, row.blockedTools]),
+      [
+        ["inherit", [], ["purge"]],
+        ["read", ["purge"], []],
+      ],
+    );
+    assert.deepEqual(await reached(), ["list"]);
   } finally {
     await prisma.mcpServer.delete({ where: { id: server.id } });
     await prisma.virtualKey.delete({ where: { id: key.id } });
@@ -262,7 +225,7 @@ test("per-tool role grants and operator classification decide what a key reaches
   }
 });
 
-test("a key's own MCP rule narrows, grants, or blocks a server tool by tool", async () => {
+test("a key's own level narrows, grants, or blocks a server tool by tool", async () => {
   const owner = await ownerSession();
   const org = await prisma.organization.create({ data: { alias: uniqueName("org") } });
   const member = await prisma.member.create({ data: { name: uniqueName("person"), orgId: org.id } });
@@ -286,43 +249,40 @@ test("a key's own MCP rule narrows, grants, or blocks a server tool by tool", as
   const [server, other] = servers;
   const chain = { orgId: org.id, teamId: "", projectId: "", memberId: member.id, keyId: key.id };
   try {
-    await runAsPrincipal(owner, () => ensureMcpRoles(server!.id));
-    await runAsPrincipal(owner, () => ensureMcpRoles(other!.id));
     await runAsPrincipal(owner, () =>
-      saveMcpAssignments({ serverId: server!.id, global: false, assignments: [{ scope: "org", id: org.id, mode: "allow", blockedTools: [] }] }),
+      saveMcpAssignments({ serverId: server!.id, defaultAccess: "none", assignments: [{ scope: "org", id: org.id, access: "all" }] }),
     );
     const before = await runAsPrincipal(owner, () => loadKeyMcpAccess(key.id));
     assert.deepEqual(before.chain, chain);
     const entry = before.servers.find((row) => row.serverId === server!.id)!;
     assert.equal(entry.rule, null);
-    assert.deepEqual(entry.inherited.map((rule) => rule.scope), ["org"]);
+    assert.deepEqual(entry.inherited.map((rule) => [rule.scope, rule.access]), [["org", "all"]]);
     assert.equal(entry.tools.find((tool) => tool.name === "delete")?.action, "delete");
     assert.deepEqual(toolNames(await loadMcpServers(chain), server!.id), ["search", "fetch", "delete"]);
 
     const narrowed = await runAsPrincipal(owner, () =>
       saveKeyMcpAccess({
         keyId: key.id,
-        servers: [{ serverId: server!.id, mode: "inherit", blockedTools: ["fetch", "missing"], blockedActions: ["delete"] }],
+        servers: [{ serverId: server!.id, access: "read", blockedTools: ["fetch", "missing"] }],
       }),
     );
     const narrowedRule = narrowed.servers.find((row) => row.serverId === server!.id)?.rule;
-    assert.equal(narrowedRule?.mode, "block");
+    assert.equal(narrowedRule?.access, "read");
     assert.deepEqual(narrowedRule?.blockedTools, ["fetch"]);
     assert.deepEqual(toolNames(await loadMcpServers(chain), server!.id), ["search"]);
 
-    const reader = await prisma.mcpRole.findFirstOrThrow({ where: { serverId: other!.id, key: "reader" } });
     const granted = await runAsPrincipal(owner, () =>
-      saveKeyMcpAccess({ keyId: key.id, servers: [{ serverId: other!.id, mode: "allow", roleId: reader.id }] }),
+      saveKeyMcpAccess({ keyId: key.id, servers: [{ serverId: other!.id, access: "read" }] }),
     );
-    assert.equal(granted.servers.find((row) => row.serverId === other!.id)?.rule?.role?.key, "reader");
+    assert.equal(granted.servers.find((row) => row.serverId === other!.id)?.rule?.access, "read");
     assert.deepEqual(toolNames(await loadMcpServers(chain), other!.id), ["search", "fetch"]);
     assert.deepEqual(toolNames(await loadMcpServers(chain), server!.id), ["search"]);
 
     await assert.rejects(
       runAsPrincipal(owner, () =>
-        saveKeyMcpAccess({ keyId: key.id, servers: [{ serverId: server!.id, mode: "allow", roleId: reader.id }] }),
+        saveKeyMcpAccess({ keyId: key.id, servers: [{ serverId: server!.id, access: "allow" }] }),
       ),
-      /ROLE_NOT_FOUND/,
+      /VALIDATION/,
     );
     await assert.rejects(
       runAsPrincipal(owner, () => saveKeyMcpAccess({ keyId: "missing", servers: [] })),
@@ -330,7 +290,7 @@ test("a key's own MCP rule narrows, grants, or blocks a server tool by tool", as
     );
 
     await runAsPrincipal(owner, () =>
-      saveKeyMcpAccess({ keyId: key.id, servers: [{ serverId: server!.id, mode: "block" }] }),
+      saveKeyMcpAccess({ keyId: key.id, servers: [{ serverId: server!.id, access: "none" }] }),
     );
     assert.equal(toolNames(await loadMcpServers(chain), server!.id), null);
 
@@ -338,8 +298,8 @@ test("a key's own MCP rule narrows, grants, or blocks a server tool by tool", as
       saveKeyMcpAccess({
         keyId: key.id,
         servers: [
-          { serverId: server!.id, mode: "inherit" },
-          { serverId: other!.id, mode: "inherit" },
+          { serverId: server!.id, access: "inherit" },
+          { serverId: other!.id, access: "inherit" },
         ],
       }),
     );

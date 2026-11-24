@@ -37,8 +37,8 @@ export default function ServerList({
     if (column === "status") return server.status;
     if (column === "tools") return server.tools.length;
     if (column === "access") {
-      if (server.global) return "global";
-      const labels = server.assignments.filter((rule) => rule.mode === "allow").map((rule) => rule.label);
+      if (server.defaultAccess !== "none") return "global";
+      const labels = server.assignments.filter((rule) => rule.access !== "inherit" && rule.access !== "none").map((rule) => rule.label);
       return labels.length ? labels.join(", ") : null;
     }
     return null;

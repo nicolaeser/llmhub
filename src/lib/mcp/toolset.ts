@@ -4,15 +4,14 @@ import { hostedAuth, mcpAuthFor, mcpCapabilities } from "@/lib/mcp/auth";
 import { McpClient, toolSpecs } from "@/lib/mcp/client";
 import { callHosted, hostedSpec } from "@/lib/mcp/hosted";
 import { callMedia, mediaSpec } from "@/lib/mcp/media";
-import { chainOf, classifyTools, effectiveServers, toolActionsOf } from "@/lib/mcp/resolve";
-import { bindTools } from "@/lib/mcp/tool-names";
+import { chainOf, classifyTools, defaultAccessOf, effectiveServers, ruleAccessOf, toolActionsOf } from "@/lib/mcp/resolve";
+import { HUB_TOOL_PREFIX, bindTools } from "@/lib/mcp/tool-names";
 import { guardedFetch } from "@/lib/mcp/transport";
 import { MCP_STATIC_AUTH_TYPES, authUsesName } from "@/schemas/mcp";
 import { errorFields } from "@/lib/logging/format";
 import { logger } from "@/lib/logging/logger";
 import type { Principal } from "@/types/gateway";
 import type {
-  McpAssignmentMode,
   McpAuth,
   McpAuthType,
   McpChain,
@@ -55,9 +54,6 @@ export function isTransport(value: string): value is McpTransport {
   return value === "streamable_http" || value === "sse";
 }
 
-export function isAssignmentMode(value: string): value is McpAssignmentMode {
-  return value === "allow" || value === "block";
-}
 
 export function serverKindOf(kind: string | undefined): McpServerKind {
   return kind === "hosted" || kind === "media" ? kind : "remote";
@@ -140,7 +136,7 @@ export async function loadMcpServers(chain: McpChain) {
   const conditions = chainConditions(chain);
   const where = {
     enabled: true,
-    OR: [{ global: true }, ...(conditions.length ? [{ assignments: { some: { mode: "allow", OR: conditions } } }] : [])],
+    OR: [{ global: true }, ...(conditions.length ? [{ assignments: { some: { OR: conditions } } }] : [])],
   };
   const anyOffered = await prisma.mcpServer.findMany({ where, select: { id: true }, take: 1 });
   if (!anyOffered.length) return { servers: [], records: new Map<string, McpServerRecord>() };
@@ -163,6 +159,7 @@ export async function loadMcpServers(chain: McpChain) {
       internal: true,
       enabled: true,
       global: true,
+      globalAccess: true,
       template: true,
       toolsRestricted: true,
       allowedTools: true,
@@ -182,10 +179,9 @@ export async function loadMcpServers(chain: McpChain) {
           projectId: true,
           memberId: true,
           keyId: true,
-          mode: true,
+          access: true,
+          extraTools: true,
           blockedTools: true,
-          blockedActions: true,
-          role: { select: { allActions: true, actions: true, tools: true, deniedTools: true } },
         },
       },
     },
@@ -197,27 +193,13 @@ export async function loadMcpServers(chain: McpChain) {
     rows.map((row) => ({
       id: row.id,
       name: row.name,
-      global: row.global,
+      defaultAccess: defaultAccessOf(row),
       enabled: row.enabled && signedIn(row),
       toolsRestricted: row.toolsRestricted,
       allowedTools: row.allowedTools,
       tools: classifyTools(toolSpecs(row.tools), toolActionsOf(row.toolActions)),
     })),
-    rows.flatMap((row) =>
-      row.assignments.map((rule) => ({
-        ...rule,
-        mode: isAssignmentMode(rule.mode) ? rule.mode : "block",
-        blockedActions: Array.isArray(rule.blockedActions) ? rule.blockedActions : [],
-        role: rule.role
-          ? {
-              allActions: rule.role.allActions,
-              actions: rule.role.actions,
-              tools: rule.role.tools,
-              deniedTools: rule.role.deniedTools,
-            }
-          : null,
-      })),
-    ),
+    rows.flatMap((row) => row.assignments.map((rule) => ({ ...rule, access: ruleAccessOf(rule.access) }))),
     chain,
   );
   const offered = new Map(rows.map((row) => [row.id, row]));
@@ -295,7 +277,7 @@ export async function mcpToolsetFor(
 ): Promise<McpToolset | null> {
   if (mcpOptedOut(req.headers)) return null;
   const { servers, records } = await loadMcpServers(chainOf(principal));
-  const tools = bindTools(servers, reservedNames);
+  const tools = bindTools(servers, reservedNames, HUB_TOOL_PREFIX);
   if (!tools.length) return null;
   return { tools, byName: new Map(tools.map((tool) => [tool.name, tool])), executor: createExecutor(records, guardedFetch, rememberConnection, principal) };
 }

@@ -22,6 +22,7 @@ import {
 import { SearchX, Sparkles } from "lucide-react";
 import { useFormatter, useTranslations } from "next-intl";
 import EmptyState from "@/components/console/empty-state";
+import { toolUrl } from "@/lib/mcp/base-url";
 import { MAX_HOSTED_TOOLS, MCP_ACTIONS, MCP_STATIC_AUTH_TYPES, authNameValid, authUsesName } from "@/schemas/mcp";
 import type { HostedTool, McpDocsSourceRef, McpDraft, McpDraftServer, McpToolAction } from "@/types/mcp";
 
@@ -295,7 +296,9 @@ export default function BuilderReview({
                     <Chip size="sm" variant="soft" color={methodColor(tool.method)}>
                       {tool.method}
                     </Chip>
-                    <span className="font-mono text-xs break-all text-muted">{tool.path}</span>
+                    <span className="font-mono text-xs break-all text-muted">
+                      {baseValid ? toolUrl(server.baseUrl, tool.path) : tool.path}
+                    </span>
                   </div>
                   <p className="font-mono text-xs break-all text-muted">{tool.name}</p>
                   {tool.description ? <p className="text-sm text-muted">{tool.description}</p> : null}

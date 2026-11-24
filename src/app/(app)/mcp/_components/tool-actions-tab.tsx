@@ -2,38 +2,36 @@
 
 import { useState } from "react";
 import { Alert, Button, Dropdown, SearchField, Table } from "@heroui/react";
-import { Ban, Check, ChevronDown, CircleCheck, Minus, Sparkles } from "lucide-react";
+import { ChevronDown, Sparkles } from "lucide-react";
 import { useTranslations } from "next-intl";
 import RowCard, { RowCards, TABLE_FROM_LG } from "@/components/console/row-cards";
-import { isToolAction, roleAllowsTool, toolGrant } from "@/lib/mcp/resolve";
+import { isToolAction } from "@/lib/mcp/resolve";
 import { MCP_ACTIONS } from "@/schemas/mcp";
-import type { McpRoleView, McpToolGrant, McpToolSpec } from "@/types/mcp";
-import { toolMatches } from "./role-view";
+import type { McpToolSpec } from "@/types/mcp";
 
-const NEXT_GRANT = { inherit: "allow", allow: "deny", deny: "inherit" } as const satisfies Record<McpToolGrant, McpToolGrant>;
 const UNCLASSIFIED = "none";
-const SEARCH_FROM = 7;
+const SEARCH_FROM = 6;
+
+function toolMatches(tool: McpToolSpec, query: string): boolean {
+  const needle = query.trim().toLowerCase();
+  if (!needle) return true;
+  return tool.name.toLowerCase().includes(needle) || tool.title.toLowerCase().includes(needle);
+}
 
 export default function ToolActionsTab({
   tools,
   baseTools,
-  roles,
   suggested,
   pending,
-  roleLabel,
   onClassify,
   onAcceptHints,
-  onGrant,
 }: {
   tools: McpToolSpec[];
   baseTools: McpToolSpec[];
-  roles: McpRoleView[];
   suggested: number;
   pending: boolean;
-  roleLabel: (role: McpRoleView) => string;
   onClassify: (tool: McpToolSpec, value: string) => void;
   onAcceptHints: () => void;
-  onGrant: (role: McpRoleView, tool: string, grant: McpToolGrant) => void;
 }) {
   const t = useTranslations("Mcp");
   const tCommon = useTranslations("Common");
@@ -74,35 +72,6 @@ export default function ToolActionsTab({
           <p className="text-xs text-muted">{t("permissions.serverHint", { action: base.hint })}</p>
         ) : null}
       </div>
-    );
-  }
-
-  function grantButton(role: McpRoleView, tool: McpToolSpec, labeled: boolean) {
-    const grant = toolGrant(role, tool.name);
-    const granted = roleAllowsTool(role, tool);
-    const icon =
-      grant === "deny" ? (
-        <Ban size={16} className="text-danger" aria-hidden />
-      ) : grant === "allow" ? (
-        <CircleCheck size={16} className="text-success" aria-hidden />
-      ) : granted ? (
-        <Check size={16} className="text-foreground" aria-hidden />
-      ) : (
-        <Minus size={16} className="text-muted" aria-hidden />
-      );
-    return (
-      <Button
-        key={role.id}
-        isIconOnly={!labeled}
-        size="sm"
-        variant={labeled ? "secondary" : "ghost"}
-        isDisabled={pending}
-        aria-label={t("permissions.cell", { role: roleLabel(role), tool: tool.name, grant, granted: String(granted) })}
-        onPress={() => onGrant(role, tool.name, NEXT_GRANT[grant])}
-      >
-        {icon}
-        {labeled ? roleLabel(role) : null}
-      </Button>
     );
   }
 
@@ -153,21 +122,15 @@ export default function ToolActionsTab({
                 title={<span className="break-all">{tool.title || tool.name}</span>}
                 description={tool.title ? <span className="font-mono text-xs break-all">{tool.name}</span> : undefined}
                 details={[{ label: t("permissions.columnAction"), value: actionMenu(tool), wide: true }]}
-                actions={roles.map((role) => grantButton(role, tool, true))}
               />
             ))}
           </RowCards>
           <Table aria-label={t("permissions.matrixLabel")} className={TABLE_FROM_LG}>
             <Table.ScrollContainer>
-              <Table.Content className="min-w-xl">
+              <Table.Content className="min-w-md">
                 <Table.Header>
                   <Table.Column isRowHeader>{t("permissions.columnTool")}</Table.Column>
                   <Table.Column>{t("permissions.columnAction")}</Table.Column>
-                  {roles.map((role) => (
-                    <Table.Column key={role.id} id={role.id}>
-                      {roleLabel(role)}
-                    </Table.Column>
-                  ))}
                 </Table.Header>
                 <Table.Body>
                   {visible.map((tool) => (
@@ -179,33 +142,12 @@ export default function ToolActionsTab({
                         </div>
                       </Table.Cell>
                       <Table.Cell>{actionMenu(tool)}</Table.Cell>
-                      {roles.map((role) => (
-                        <Table.Cell key={role.id}>{grantButton(role, tool, false)}</Table.Cell>
-                      ))}
                     </Table.Row>
                   ))}
                 </Table.Body>
               </Table.Content>
             </Table.ScrollContainer>
           </Table>
-          <div className="flex flex-wrap gap-x-4 gap-y-2 text-xs text-muted">
-            <span className="flex items-center gap-1">
-              <Check size={14} className="text-foreground" aria-hidden />
-              {t("permissions.legend", { kind: "inherited" })}
-            </span>
-            <span className="flex items-center gap-1">
-              <CircleCheck size={14} className="text-success" aria-hidden />
-              {t("permissions.legend", { kind: "allowed" })}
-            </span>
-            <span className="flex items-center gap-1">
-              <Ban size={14} className="text-danger" aria-hidden />
-              {t("permissions.legend", { kind: "denied" })}
-            </span>
-            <span className="flex items-center gap-1">
-              <Minus size={14} className="text-muted" aria-hidden />
-              {t("permissions.legend", { kind: "none" })}
-            </span>
-          </div>
         </>
       )}
     </div>

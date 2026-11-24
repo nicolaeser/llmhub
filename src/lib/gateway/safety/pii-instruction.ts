@@ -1,5 +1,5 @@
 import { gatewayPath } from "@/lib/gateway/api-paths";
-import { asRecord, stringifyContent } from "@/lib/gateway/core";
+import { withChatInstruction, withMessagesInstruction } from "@/lib/gateway/protocols/leading-system";
 import { vaultOf } from "@/lib/gateway/safety/pii-vault";
 import type { JsonMap, RequestTrace } from "@/types/gateway";
 
@@ -17,7 +17,6 @@ const PLAYGROUND_CHAT_PATH = "/internal-api/playground/chat";
 
 const BATCH_ENDPOINT_PREFIX = "batch:";
 const CONVERSATION_ENDPOINTS = new Set(["/v1/chat/completions", "/v1/responses", "/v1/messages", PLAYGROUND_CHAT_PATH]);
-const INSTRUCTION_ROLES = new Set(["system", "developer"]);
 
 export function isConversationEndpoint(endpoint: string): boolean {
   const path = endpoint.startsWith(BATCH_ENDPOINT_PREFIX) ? endpoint.slice(BATCH_ENDPOINT_PREFIX.length) : endpoint;
@@ -29,43 +28,12 @@ export function needsPiiInstruction(trace: RequestTrace | undefined): boolean {
   return (vaultOf(trace)?.size ?? 0) > 0;
 }
 
-function mentionsInstruction(content: unknown): boolean {
-  return stringifyContent(content).includes(PII_RESTORE_INSTRUCTION);
-}
-
-function appendedText(text: string): string {
-  return text ? `${text}\n\n${PII_RESTORE_INSTRUCTION}` : PII_RESTORE_INSTRUCTION;
-}
-
-function appendedContent(content: unknown): unknown {
-  if (typeof content === "string") return appendedText(content);
-  if (!Array.isArray(content)) return null;
-  const separator = stringifyContent(content) ? "\n\n" : "";
-  return [...content, { type: "text", text: `${separator}${PII_RESTORE_INSTRUCTION}` }];
-}
-
-function isInstructionMessage(message: unknown): boolean {
-  return INSTRUCTION_ROLES.has(String(asRecord(message)?.role ?? ""));
-}
-
 export function withChatPiiInstruction(body: JsonMap): JsonMap {
-  if (!Array.isArray(body.messages)) return body;
-  const messages: unknown[] = body.messages;
-  if (messages.some((message) => isInstructionMessage(message) && mentionsInstruction(asRecord(message)?.content))) {
-    return body;
-  }
-  const leading = asRecord(messages[0]);
-  const content = leading && isInstructionMessage(leading) ? appendedContent(leading.content) : null;
-  if (leading && content !== null) return { ...body, messages: [{ ...leading, content }, ...messages.slice(1)] };
-  return { ...body, messages: [{ role: "system", content: PII_RESTORE_INSTRUCTION }, ...messages] };
+  return withChatInstruction(body, PII_RESTORE_INSTRUCTION);
 }
 
 export function withMessagesPiiInstruction(body: JsonMap): JsonMap {
-  const system = body.system;
-  if (mentionsInstruction(system)) return body;
-  if (typeof system === "string") return { ...body, system: appendedText(system) };
-  if (Array.isArray(system)) return { ...body, system: [...system, { type: "text", text: PII_RESTORE_INSTRUCTION }] };
-  return { ...body, system: PII_RESTORE_INSTRUCTION };
+  return withMessagesInstruction(body, PII_RESTORE_INSTRUCTION);
 }
 
 export function instructChat(trace: RequestTrace | undefined, body: JsonMap): JsonMap {

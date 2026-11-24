@@ -326,6 +326,29 @@ test("settings readers see only the origin of alert webhook URLs", async () => {
   assert.equal(manager.alertWebhooks[0]?.url, url);
 });
 
+test("storage settings refuse cloud metadata endpoints before saving or probing", async () => {
+  const { saveStorageSettings, testStorageSettings } = await import("@/lib/settings/storage");
+  const manager = caller([PERMISSIONS.SETTINGS_READ, PERMISSIONS.SETTINGS_MANAGE]);
+  const input = {
+    preset: "custom",
+    bucket: "latest",
+    region: "us-east-1",
+    endpoint: "http://169.254.169.254",
+    prefix: "meta-data",
+    addressing: "path",
+    public_base_url: "",
+  };
+  const calls: Call[] = [
+    ["saveStorageSettings", () => saveStorageSettings(input)],
+    ["testStorageSettings", () => testStorageSettings(input)],
+  ];
+  for (const [name, call] of calls) {
+    recordedPrisma.reset();
+    await assert.rejects(runAsPrincipal(manager, call), /INVALID_URL/, name);
+    assert.deepEqual(recordedPrisma.calls, [], name);
+  }
+});
+
 test("catalog actions answer the company view and read-only callers with a refusal", async () => {
   const actions = await import("@/app/(app)/models/_action");
   const companyView = caller(permissions, { isOwner: true, workspaceOrgId: COMPANY_ID });

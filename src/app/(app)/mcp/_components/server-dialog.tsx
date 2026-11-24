@@ -124,7 +124,6 @@ export default function ServerDialog({
         oauthScopes: oauthScopes.trim(),
         internal,
         enabled,
-        global: editing?.global ?? false,
         toolsRestricted: restricted,
         allowedTools: restricted ? tools.filter((tool) => !off.has(tool.name)).map((tool) => tool.name) : [],
       };
