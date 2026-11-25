@@ -280,3 +280,40 @@ test("budget changes need budgets:manage", async () => {
     await data.cleanup();
   }
 });
+
+test("budgets store their enforcement mode and drop the overrun on hard budgets", async () => {
+  const data = new TestData();
+  try {
+    const org = await data.org({ maxBudget: 100 });
+    const team = await data.team(org.id);
+    const admin = sessionOf(await data.user(), { permissions: BUDGET_ADMIN });
+    const as = <T>(fn: () => Promise<T>) => runAsPrincipal(admin, fn);
+    const base = { kind: "team" as const, id: team.id, maxBudget: 50, budgetDuration: "" };
+
+    const soft = await as(() => setBudget({ ...base, budgetMode: "soft", overrunPct: 20 }));
+    assert.equal(soft.budget.budgetMode, "soft");
+    assert.equal(soft.budget.overrunPct, 20);
+    const kept = await as(() => setBudget(base));
+    assert.equal(kept.budget.overrunPct, 20);
+
+    const hard = await as(() => setBudget({ ...base, budgetMode: "hard", overrunPct: 30 }));
+    assert.equal(hard.budget.budgetMode, "hard");
+    assert.equal(hard.budget.overrunPct, null);
+    const row = await prisma.team.findUniqueOrThrow({ where: { id: team.id } });
+    assert.equal(row.budgetMode, "hard");
+    assert.equal(row.budgetOverrunPct, null);
+
+    await assert.rejects(as(() => setBudget({ ...base, budgetMode: "soft", overrunPct: 0 })), failsWith("VALIDATION"));
+    await assert.rejects(
+      as(() => setBudget({ ...base, budgetMode: "strict" as unknown as "soft" })),
+      failsWith("VALIDATION"),
+    );
+    const audit = await prisma.gatewayAuditLog.findFirst({
+      where: { action: "budget.update", objectId: team.id },
+      orderBy: { createdAt: "desc" },
+    });
+    assert.match(audit?.afterJson ?? "", /"budgetMode":"hard"/);
+  } finally {
+    await data.cleanup();
+  }
+});

@@ -22,6 +22,8 @@ export const PUT = managementRoute<{ entity_type: string; entity_id: string }>(
         id,
         maxBudget: body.max_budget,
         budgetDuration: body.budget_duration ?? holder.budget.budgetDuration,
+        budgetMode: body.budget_mode,
+        overrunPct: body.overrun_percent,
       });
     return respond(serializeBudget(kind, { id, alias: holder.alias, budget: updated.budget }));
   },

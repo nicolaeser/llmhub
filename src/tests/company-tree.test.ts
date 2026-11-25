@@ -32,6 +32,8 @@ function budget(maxBudget = 0, spend = 0): BudgetView {
     maxBudget,
     spend,
     budgetDuration: "",
+    budgetMode: "soft",
+    overrunPct: null,
     boost: 0,
     boosts: [],
     resetsAt: null,

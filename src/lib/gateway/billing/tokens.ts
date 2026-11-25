@@ -3,7 +3,7 @@ import { isOpaqueText } from "@/lib/gateway/safety/pii";
 import type { JsonMap } from "@/types/gateway";
 import type { ContextDemand } from "@/types/routing";
 
-const OUTPUT_LIMIT_KEYS = ["max_tokens", "max_completion_tokens", "max_output_tokens"] as const;
+export const OUTPUT_LIMIT_KEYS = ["max_tokens", "max_completion_tokens", "max_output_tokens"] as const;
 const NON_PROMPT_KEYS: ReadonlySet<string> = new Set([
   "model",
   "user",

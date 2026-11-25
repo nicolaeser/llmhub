@@ -24,6 +24,7 @@ export type MaintenanceSweepResult = {
   resetTokens: number;
   loginAttempts: number;
   tempBudgets: number;
+  budgetHolds: number;
   rotatedKeys: number;
   requestLogs: number;
   requestContents: number;

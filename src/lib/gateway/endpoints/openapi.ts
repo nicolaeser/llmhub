@@ -179,7 +179,12 @@ export function exampleRequestBody(
     "/api/mgmt/members/{id}": { team_id: null, blocked: false },
     "/api/mgmt/members/{id}/pause": { hours: 168 },
     "/api/mgmt/budgets/alerts": { thresholds: [50, 80, 100] },
-    "/api/mgmt/budgets/{entity_type}/{entity_id}": { max_budget: 250, budget_duration: "30d" },
+    "/api/mgmt/budgets/{entity_type}/{entity_id}": {
+      max_budget: 250,
+      budget_duration: "30d",
+      budget_mode: "soft",
+      overrun_percent: 10,
+    },
     "/api/mgmt/budgets/{entity_type}/{entity_id}/temporary": { amount: 50, hours: 24 },
     "/api/mgmt/markups": { scope: "org", target_id: "org_id", model: "claude-*", percent: 15, note: "Contract 2026" },
     "/api/mgmt/markups/{id}": { percent: -5 },

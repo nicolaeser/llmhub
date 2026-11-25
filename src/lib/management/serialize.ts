@@ -220,6 +220,8 @@ export function serializeBudget(kind: BudgetKind, holder: { id: string; alias: s
     spend: budget.spend,
     max_budget: budget.maxBudget,
     budget_duration: orNull(budget.budgetDuration),
+    budget_mode: budget.budgetMode,
+    overrun_percent: budget.overrunPct,
     resets_at: budget.resetsAt,
     temporary_amount: budget.boost,
     temporary_budgets: budget.boosts.map((boost) => ({

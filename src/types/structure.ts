@@ -23,10 +23,14 @@ export type SpendScope = { orgId?: string; userId?: string };
 
 export type BoostView = { id: string; amount: number; until: string };
 
+export type BudgetMode = "soft" | "hard";
+
 export type BudgetView = {
   maxBudget: number;
   spend: number;
   budgetDuration: string;
+  budgetMode: BudgetMode;
+  overrunPct: number | null;
   boost: number;
   boosts: BoostView[];
   resetsAt: string | null;
@@ -175,6 +179,8 @@ export type BudgetInput = {
   id: string;
   maxBudget: number;
   budgetDuration: string;
+  budgetMode?: BudgetMode;
+  overrunPct?: number | null;
 };
 
 export type BoostInput = {

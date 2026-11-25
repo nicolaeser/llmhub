@@ -1,4 +1,5 @@
 import type { Prisma } from "@/generated/prisma/client";
+import type { JsonMap, Principal } from "@/types/gateway";
 import type { ResolvedDeployment, ResolvedModelGroup } from "@/types/routing";
 import type { BudgetKind } from "@/types/structure";
 
@@ -7,6 +8,8 @@ export type SpendHolder = {
   spend: Prisma.Decimal;
   maxBudget: Prisma.Decimal;
   budgetDuration: string;
+  budgetMode: string;
+  budgetOverrunPct: number | null;
   spendResetAt: Date | null;
   createdAt: Date;
 };
@@ -81,7 +84,44 @@ export type CostCap = {
   budget: BudgetKind | null;
 };
 
+export type BudgetCeiling = {
+  kind: BudgetKind;
+  id: string;
+  limit: number;
+};
+
+export type BudgetLimits = {
+  cap: CostCap | null;
+  ceilings: BudgetCeiling[];
+};
+
+export type OutputSnapshot = {
+  limits: [string, unknown][];
+  thinking: unknown;
+};
+
+export type HoldPlan = {
+  principal: Principal;
+  body: JsonMap;
+  ceilings: BudgetCeiling[];
+  output: OutputSnapshot;
+  holds: string[];
+};
+
+export type HoldSizing = {
+  base: number;
+  wanted: number;
+  minimum: number;
+  perChoice: number;
+  floorPerChoice: number;
+};
+
+export type HoldOutcome =
+  | { granted: true; holdId: string; amount: number }
+  | { granted: false; available: number; binding: BudgetKind | null };
+
 export type CostFilter = {
-  cap: CostCap;
+  cap: CostCap | null;
   estimate: (dep: ResolvedDeployment, group: ResolvedModelGroup) => number;
+  hold: HoldPlan | null;
 };

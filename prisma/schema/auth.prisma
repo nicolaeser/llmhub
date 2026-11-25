@@ -19,6 +19,8 @@ model User {
   maxBudget      Decimal   @default(0) @db.Decimal(20, 10)
   spend          Decimal   @default(0) @db.Decimal(20, 10)
   budgetDuration String    @default("")
+  budgetMode     String    @default("soft")
+  budgetOverrunPct Int?
   spendResetAt   DateTime?
 
   createdAt DateTime @default(now())

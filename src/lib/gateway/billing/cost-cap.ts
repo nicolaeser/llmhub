@@ -3,19 +3,19 @@ import { GateError } from "@/lib/gateway/errors";
 import { groupBilling } from "@/lib/gateway/billing/price-schedule";
 import { routePool } from "@/lib/gateway/routing/route-pool";
 import { applyProviderServiceMode } from "@/lib/gateway/dispatch/service-mode";
-import { outputTokenLimit, positiveInteger, promptLength, tokensForLength } from "@/lib/gateway/billing/tokens";
+import { outputTokenLimit, promptLength, tokensForLength } from "@/lib/gateway/billing/tokens";
+import { requestChoices, snapshotOutput } from "@/lib/gateway/billing/output-fit";
+import { tighterCap } from "@/lib/utils/budget";
 import type { JsonMap, Principal } from "@/types/gateway";
-import type { CostCap, CostFilter, RequestTokens, TokenUsage } from "@/types/billing";
+import type { BudgetLimits, CostCap, CostFilter, RequestTokens, TokenUsage } from "@/types/billing";
 import type { ResolvedModelGroup, ResolvedDeployment } from "@/types/routing";
 
 export const MAX_COST_HEADER = "x-hub-max-cost";
 
-const CHOICE_KEYS = ["n", "best_of"] as const;
 const COST_REJECTIONS = new Set(["cost_limit_exceeded", "budget_exceeded"]);
 
 export function requestTokens(body: JsonMap): RequestTokens {
-  const choices = Math.max(1, ...CHOICE_KEYS.map((key) => positiveInteger(body[key])));
-  return { prompt: tokensForLength(promptLength(body)), completion: outputTokenLimit(body) * choices };
+  return { prompt: tokensForLength(promptLength(body)), completion: outputTokenLimit(body) * requestChoices(body) };
 }
 
 export function estimateCost(
@@ -46,25 +46,29 @@ export function maxCostHeader(headers: Headers): number | null {
   return value;
 }
 
-export function tighterCap(current: CostCap | null, next: CostCap): CostCap {
-  return current && current.limit <= next.limit ? current : next;
-}
-
-export function capRequestCost(principal: Principal, budget: CostCap | null, maxCost: number | null): void {
+export function capRequestCost(principal: Principal, budget: BudgetLimits, maxCost: number | null): void {
   if (!principal.trace) return;
   const keyLimit = principal.key?.max_request_cost ?? 0;
-  let cap = budget;
+  let cap = budget.cap;
   if (keyLimit > 0) cap = tighterCap(cap, { limit: keyLimit, budget: null });
   if (maxCost !== null) cap = tighterCap(cap, { limit: maxCost, budget: null });
   principal.trace.costCap = cap;
+  principal.trace.ceilings = budget.ceilings;
 }
 
 export function costFilter(principal: Principal, body: JsonMap | null | undefined): CostFilter | undefined {
-  const cap = principal.trace?.costCap;
-  if (!cap || !body) return undefined;
+  const trace = principal.trace;
+  if (!trace || !body) return undefined;
+  const cap = trace.costCap ?? null;
+  const ceilings = trace.ceilings ?? [];
+  if (!cap && !ceilings.length) return undefined;
   const tokens = requestTokens(body);
   const at = new Date();
-  return { cap, estimate: (dep, group) => estimateCost(dep, group, body, tokens, at) };
+  return {
+    cap,
+    estimate: (dep, group) => estimateCost(dep, group, body, tokens, at),
+    hold: ceilings.length ? { principal, body, ceilings, output: snapshotOutput(body), holds: [] } : null,
+  };
 }
 
 function amount(value: number): string {

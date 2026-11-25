@@ -10,6 +10,7 @@ import {
   requestTokens,
 } from "@/lib/gateway/billing/cost-cap";
 import { GateError } from "@/lib/gateway/errors";
+import type { BudgetLimits } from "@/types/billing";
 import type { Principal } from "@/types/gateway";
 import type { ResolvedModelGroup, ResolvedDeployment } from "@/types/routing";
 import type { VirtualKeyView } from "@/types/keys";
@@ -45,6 +46,8 @@ function group(deployments: ResolvedDeployment[], over: Partial<ResolvedModelGro
     ...over,
   };
 }
+
+const NO_LIMITS: BudgetLimits = { cap: null, ceilings: [] };
 
 function traced(key?: Partial<VirtualKeyView>): Principal {
   return {
@@ -114,17 +117,17 @@ test("x-hub-max-cost accepts only positive numbers", () => {
 
 test("the tightest of header, key limit, and remaining budget wins", () => {
   const principal = traced({ max_request_cost: 2 });
-  capRequestCost(principal, { limit: 5, budget: "org" }, 10);
+  capRequestCost(principal, { cap: { limit: 5, budget: "org" }, ceilings: [] }, 10);
   assert.deepEqual(principal.trace?.costCap, { limit: 2, budget: null });
 
-  capRequestCost(principal, { limit: 5, budget: "org" }, 1);
+  capRequestCost(principal, { cap: { limit: 5, budget: "org" }, ceilings: [] }, 1);
   assert.deepEqual(principal.trace?.costCap, { limit: 1, budget: null });
 
-  capRequestCost(principal, { limit: 0.5, budget: "team" }, 1);
+  capRequestCost(principal, { cap: { limit: 0.5, budget: "team" }, ceilings: [] }, 1);
   assert.deepEqual(principal.trace?.costCap, { limit: 0.5, budget: "team" });
 
   const unlimited = traced();
-  capRequestCost(unlimited, null, null);
+  capRequestCost(unlimited, NO_LIMITS, null);
   assert.equal(unlimited.trace?.costCap, null);
   assert.equal(costFilter(unlimited, { max_tokens: 10 }), undefined);
 });
@@ -195,12 +198,12 @@ test("routing skips deployments whose estimate exceeds the cap", async () => {
   const { acquireGroup, loadGroup } = await import("@/lib/gateway/routing/runtime");
   const mixed = await loadGroup("mixed");
   const principal = traced({ max_request_cost: 5 });
-  capRequestCost(principal, null, null);
+  capRequestCost(principal, NO_LIMITS, null);
   const acquired = await acquireGroup(mixed, undefined, undefined, "", costFilter(principal, body));
   assert.equal(acquired.dep.id, "budget");
   acquired.release();
 
-  capRequestCost(principal, null, 1);
+  capRequestCost(principal, NO_LIMITS, 1);
   await assert.rejects(
     acquireGroup(mixed, undefined, undefined, "", costFilter(principal, body)),
     (err: unknown) => err instanceof GateError && err.code === "cost_limit_exceeded",
@@ -210,7 +213,7 @@ test("routing skips deployments whose estimate exceeds the cap", async () => {
 test("a cost rejection stops routing instead of falling back", async () => {
   const { withDeployment } = await import("@/lib/gateway/dispatch/chat");
   const principal = traced();
-  capRequestCost(principal, { limit: 1, budget: "key" }, null);
+  capRequestCost(principal, { cap: { limit: 1, budget: "key" }, ceilings: [] }, null);
   const used: string[] = [];
   await assert.rejects(
     withDeployment(["mixed"], {}, async (dep) => used.push(dep.id), { cost: costFilter(principal, body) }),

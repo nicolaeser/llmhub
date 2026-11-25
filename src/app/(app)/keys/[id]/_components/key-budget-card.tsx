@@ -78,6 +78,18 @@ export default function KeyBudgetCard({
                 ? [{ label: t("budgetResets"), value: resetsAt > now ? format.dateTime(resetsAt, "stamp") : t("budgetResetsNow") }]
                 : []),
               ...(boost > 0 ? [{ label: t("budgetBoost"), value: format.number(boost, "money") }] : []),
+              ...(budget.budgetMode
+                ? [
+                    {
+                      label: tBudgets("mode"),
+                      value: tBudgets("enforcement", {
+                        mode: budget.budgetMode,
+                        capped: budget.overrunPct != null ? "yes" : "no",
+                        overrun: budget.overrunPct ?? 0,
+                      }),
+                    },
+                  ]
+                : []),
             ]}
           />
         ) : null}
