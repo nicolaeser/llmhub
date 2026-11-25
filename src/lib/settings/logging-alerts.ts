@@ -83,6 +83,7 @@ async function view(session: AuthenticatedSession): Promise<LoggingSettingsView>
     storage: await contentStorage().catch(() => null),
     logArchive: enterprise.log_archive === true,
     logContent: enterprise.log_content !== false,
+    logAttachments: enterprise.log_attachments !== false,
     s3Ready: Boolean(await resolveS3Config()),
     canManage,
     budgetAlerts: {
@@ -113,6 +114,7 @@ export async function saveLogging(input: {
   contentMaxGb?: number;
   logArchive: boolean;
   logContent: boolean;
+  logAttachments?: boolean;
 }) {
   const session = await requirePlatformPermission(PERMISSIONS.SETTINGS_MANAGE);
   const parsed = alertWebhooksSchema.safeParse(input.alertWebhooks);
@@ -149,6 +151,7 @@ export async function saveLogging(input: {
     ...(input.contentMaxGb === undefined ? {} : { content_max_gb: clampContentMaxGb(input.contentMaxGb) }),
     log_archive: input.logArchive,
     log_content: input.logContent,
+    ...(input.logAttachments === undefined ? {} : { log_attachments: input.logAttachments }),
     spend_anomaly_factor: anomalyFactor(Number(input.alertRules.spendAnomalyFactor) || 0),
     spend_anomaly_min_cost: Math.max(0, Number(input.alertRules.spendAnomalyMinCost) || 0),
     key_expiry_warning_days: Math.max(0, Math.trunc(input.alertRules.keyExpiryWarningDays) || 0),

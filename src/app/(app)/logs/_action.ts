@@ -1,7 +1,7 @@
 "use server";
 
 import { runAction } from "@/lib/http/action-result";
-import { countNewLogs, loadLogDetail, loadLogOptions, loadLogs } from "@/lib/gateway/request-logs/explorer";
+import { countNewLogs, loadLogDetail, loadLogKeyUsage, loadLogOptions, loadLogs } from "@/lib/gateway/request-logs/explorer";
 import { loadLogSession, loadLogSessionChat, loadLogSessions } from "@/lib/gateway/request-logs/sessions";
 import { loadAliases } from "@/lib/models/aliases";
 
@@ -11,6 +11,10 @@ export async function loadLogsAction(...args: Parameters<typeof loadLogs>) {
 
 export async function countNewLogsAction(...args: Parameters<typeof countNewLogs>) {
   return runAction(() => countNewLogs(...args));
+}
+
+export async function loadLogKeyUsageAction(...args: Parameters<typeof loadLogKeyUsage>) {
+  return runAction(() => loadLogKeyUsage(...args));
 }
 
 export async function loadLogOptionsAction(...args: Parameters<typeof loadLogOptions>) {

@@ -8,7 +8,7 @@ import { assertPlatform, inCompany, keyVisibleTo } from "@/lib/auth/scope";
 import { writeAudit } from "@/lib/audit";
 import { forecastBudget, spendWindow } from "@/lib/usage/forecast";
 import { resolveKeyTenancy } from "@/lib/gateway/access/key-tenancy";
-import { parseBudgetDurationMs } from "@/lib/gateway/billing/period";
+import { parseBudgetDurationMs, periodElapsed } from "@/lib/gateway/billing/period";
 import { patchEnterprise } from "@/lib/settings/enterprise";
 import {
   budgetAmount,
@@ -33,7 +33,9 @@ import type {
   BudgetView,
   CapLink,
   HolderRecord,
+  SpendScope,
 } from "@/types/structure";
+import type { KeyBudgetUsage } from "@/types/logs";
 
 const BUDGET_KINDS: readonly string[] = ["org", "team", "project", "member", "user", "key"];
 const PLATFORM_BUDGETS: readonly BudgetKind[] = ["org", "user"];
@@ -98,6 +100,26 @@ async function activeBoosts(kind: BudgetKind, id: string, now: Date) {
     orderBy: { until: "asc" },
   });
   return rows.map((row) => ({ id: row.id, amount: money(row.amount), until: row.until }));
+}
+
+export async function keyBudgetUsage(scope: SpendScope, keyId: string, now = new Date()): Promise<KeyBudgetUsage | null> {
+  if (!keyId) return null;
+  const row = await prisma.virtualKey.findFirst({
+    where: { id: keyId, ...(scope.orgId ? { orgId: scope.orgId } : {}), ...(scope.userId ? { userId: scope.userId } : {}) },
+    select: { ...HOLDER, keyAlias: true, prefix: true },
+  });
+  if (!row) return null;
+  const budget = budgetView(row, await activeBoosts("key", row.id, now), now);
+  const elapsed = periodElapsed(row.budgetDuration, row.spendResetAt, now, row.createdAt);
+  return {
+    keyId: row.id,
+    label: row.keyAlias || row.prefix,
+    spend: elapsed ? 0 : budget.spend,
+    maxBudget: budget.maxBudget,
+    boost: budget.boost,
+    budgetDuration: budget.budgetDuration,
+    resetsAt: elapsed ? null : budget.resetsAt,
+  };
 }
 
 async function holderRecord(

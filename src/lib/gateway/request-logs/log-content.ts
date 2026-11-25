@@ -1,4 +1,5 @@
 import { asArray, asRecord, asString } from "@/lib/gateway/core";
+import { attachmentRefOf } from "@/lib/gateway/request-logs/log-attachments";
 import { isOpaqueText } from "@/lib/gateway/safety/pii";
 import type { JsonMap } from "@/types/gateway";
 import type { LogPayload, TranscriptEntry } from "@/types/logs";
@@ -190,12 +191,41 @@ function remoteUrl(value: unknown): string {
   return REMOTE_URL.test(text) && text.length <= 2_048 ? text : "";
 }
 
+function storedAttachment(part: JsonMap) {
+  const source = asRecord(part.source);
+  const file = asRecord(part.file);
+  const image = asRecord(part.image_url);
+  const audio = asRecord(part.input_audio);
+  const candidates = [part.image_url, image?.url, part.url, source?.data, source?.url, part.file_data, file?.file_data, audio?.data, part.b64_json, part.result];
+  for (const value of candidates) {
+    const ref = attachmentRefOf(value);
+    if (ref) return ref;
+  }
+  return null;
+}
+
 function mediaEntry(role: string, type: string, part: JsonMap): TranscriptEntry {
   const source = asRecord(part.source);
   const file = asRecord(part.file);
   const url = remoteUrl(part.image_url) || remoteUrl(part.url) || remoteUrl(source);
   const name = asString(part.filename) || asString(file?.filename) || asString(part.title) || asString(source?.media_type);
-  return { role, kind: "media", text: MEDIA_TYPES[type]!, ...(name ? { name } : {}), ...(url ? { url } : {}) };
+  const attachment = storedAttachment(part);
+  return {
+    role,
+    kind: "media",
+    text: MEDIA_TYPES[type]!,
+    ...(name ? { name } : {}),
+    ...(url ? { url } : {}),
+    ...(attachment ? { attachment } : {}),
+  };
+}
+
+function nestedMedia(role: string, content: unknown): TranscriptEntry[] {
+  return asArray(content).flatMap((raw) => {
+    const part = asRecord(raw);
+    const type = asString(part?.type);
+    return part && MEDIA_TYPES[type] ? [mediaEntry(role, type, part)] : [];
+  });
 }
 
 function contentEntries(role: string, content: unknown): TranscriptEntry[] {
@@ -218,6 +248,7 @@ function contentEntries(role: string, content: unknown): TranscriptEntry[] {
       out.push({ role, kind: "tool_call", name: asString(part.name), text: compact(part.input) });
     } else if (type === "tool_result") {
       out.push({ role, kind: "tool_result", text: typeof part.content === "string" ? part.content : textOf(part.content) });
+      out.push(...nestedMedia(role, part.content));
     } else if (MEDIA_TYPES[type]) {
       out.push(mediaEntry(role, type, part));
     }
@@ -234,6 +265,10 @@ function messageEntries(raw: unknown): TranscriptEntry[] {
   }
   if (type === "function_call_output") {
     return [{ role: "tool", kind: "tool_result", text: compact(message.output) }];
+  }
+  if (type === "image_generation_call") {
+    const attachment = attachmentRefOf(message.result);
+    return [{ role: "assistant", kind: "media", text: "image", ...(attachment ? { attachment } : {}) }];
   }
   if (type === "reasoning") {
     const text = textOf(message.summary);
@@ -304,7 +339,8 @@ export function responseTranscript(response: unknown): TranscriptEntry[] {
   for (const raw of asArray(body.data)) {
     const item = asRecord(raw);
     if (item && (typeof item.b64_json === "string" || typeof item.url === "string")) {
-      out.push({ role: "assistant", kind: "media", text: "image" });
+      const attachment = attachmentRefOf(item.b64_json);
+      out.push({ role: "assistant", kind: "media", text: "image", ...(attachment ? { attachment } : {}) });
     }
   }
   return out;

@@ -78,6 +78,7 @@ export default function LoggingTab() {
   const [contentMax, setContentMax] = useState(DEFAULT_CONTENT_MAX_GB);
   const [archive, setArchive] = useState(false);
   const [content, setContent] = useState(true);
+  const [attachments, setAttachments] = useState(true);
   const [pending, start] = useTransition();
   const format = useFormatter();
 
@@ -108,6 +109,7 @@ export default function LoggingTab() {
     setContentMax(next.contentMaxGb);
     setArchive(next.logArchive);
     setContent(next.logContent);
+    setAttachments(next.logAttachments);
   }
 
   const page = useActionData<LoggingSettingsView>(loadLoggingAction, seed);
@@ -294,6 +296,13 @@ export default function LoggingTab() {
           isDisabled={disabled}
           hint={t("contentHint")}
         />
+        <SettingSwitch
+          label={t("attachments")}
+          isSelected={content && attachments}
+          onChange={setAttachments}
+          isDisabled={disabled || !content}
+          hint={t("attachmentsHint")}
+        />
         <div className="grid gap-4 md:grid-cols-3 md:items-start">
           {numberField(contentRetention, setContentRetention, t("contentRetention"), t("contentRetentionHint", { days: DEFAULT_CONTENT_RETENTION_DAYS }))}
           {numberField(contentMax, setContentMax, t("contentMax"), t("contentMaxHint", { gb: DEFAULT_CONTENT_MAX_GB }), CONTENT_MAX_GB_LIMIT)}
@@ -357,6 +366,7 @@ export default function LoggingTab() {
               contentMaxGb: contentMax,
               logArchive: archive,
               logContent: content,
+              logAttachments: attachments,
             });
             if (isActionFail(result)) {
               showError(result.error);

@@ -27,6 +27,7 @@ import { runUsageReports } from "@/lib/reports/usage-report";
 import { revalidateSsoSessions } from "@/lib/auth/sso-sessions";
 import { reportWorkerJobFailure } from "@/lib/sentry/worker-jobs";
 import { runErrorRateAlerts, runKeyExpiryAlerts, runLatencyAlerts, runSpendAnomalyAlerts } from "./alert-checks";
+import { pruneOrphanAttachments } from "@/lib/gateway/request-logs/attachment-store";
 import { retentionCutoff } from "./retention";
 import { contentStoragePolicy, runRetentionSweep } from "./retention-sweep";
 import { archiveRetentionHolds } from "@/lib/compliance-archive/holds";
@@ -151,6 +152,7 @@ export async function runMaintenanceSweep(
   result.batches = await runSweepJob("batches", () => runPendingBatches());
   result.vectorStores = await runSweepJob("vector_stores", () => expireVectorStores(now));
   result.storedObjects += await runSweepJob("orphan_uploads", () => purgeOrphanUploads(now));
+  result.storedObjects += await runSweepJob("log_attachments", () => pruneOrphanAttachments(now));
   result.vectorFiles = await runSweepJob("vector_ingests", () => runPendingIngests());
   await runSweepJob("spend_resets", () => runSpendResets(now));
   await runSweepJob("budget_alerts", () => runBudgetAlerts());

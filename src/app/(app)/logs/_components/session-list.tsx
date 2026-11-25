@@ -31,6 +31,7 @@ import {
 } from "./session-cells";
 import { useSessionFormat } from "./session-format";
 import { useLiveReload } from "./use-live-reload";
+import type { LogStream } from "./use-log-stream";
 
 const PAGE_SIZE = 25;
 const NOW_INTERVAL_MS = 30_000;
@@ -59,9 +60,11 @@ function sortOf(descriptor: SortDescriptor, current: LogSessionSort): LogSession
 
 export default function SessionList({
   filters,
+  stream,
   onOpen,
 }: {
   filters: LogFilterValues;
+  stream: LogStream;
   onOpen: (ref: LogSessionRef) => void;
 }) {
   const t = useTranslations("Logs");
@@ -91,7 +94,7 @@ export default function SessionList({
       if (!isActionFail(res)) setData((current) => (current.page === 1 ? res : current));
     });
   }, [fetchPage, sort, setData]);
-  useLiveReload(page === 1 && !pending, refresh);
+  useLiveReload(page === 1 && !pending, stream, refresh);
 
   function load(next: number, order = sort) {
     setSort(order);

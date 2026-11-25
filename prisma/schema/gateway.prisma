@@ -655,9 +655,35 @@ model RequestLogContent {
   createdAt DateTime   @default(now())
   sizeBytes Int?
 
+  attachments RequestLogAttachment[]
+
   @@id([logId, createdAt])
   @@index([createdAt])
   @@index([sizeBytes])
+}
+
+model LogAttachment {
+  id          String   @id
+  contentType String
+  bytes       Int
+  payload     Bytes?
+  storageKey  String   @default("")
+  usedAt      DateTime @default(now())
+
+  refs RequestLogAttachment[]
+
+  @@index([usedAt])
+}
+
+model RequestLogAttachment {
+  logId            String
+  contentCreatedAt DateTime
+  attachmentId     String
+  content          RequestLogContent @relation(fields: [logId, contentCreatedAt], references: [logId, createdAt], onDelete: Cascade)
+  attachment       LogAttachment     @relation(fields: [attachmentId], references: [id], onDelete: Cascade)
+
+  @@id([logId, contentCreatedAt, attachmentId])
+  @@index([attachmentId])
 }
 
 model StoredObject {

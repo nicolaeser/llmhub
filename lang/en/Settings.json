@@ -289,7 +289,9 @@
       "recipientsHint": "Email addresses, one per line or separated by commas. Up to {max, number, integer}.",
       "recipientsInvalid": "Check {list}.",
       "recipientsTooMany": "Enter at most {max, number, integer} addresses."
-    }
+    },
+    "attachments": "Store images and attachments",
+    "attachmentsHint": "Keeps inline images, PDFs, and audio from requests and answers (up to 10 MB each) so the log and the session chat can show them. The same image is stored once for all requests that resend it. Images cannot be masked by the PII policy, so a screenshot shows whatever it contains. Attachments follow the content retention and count toward the content size limit."
   },
   "archive": {
     "description": "Copies request logs and other records to object storage once a day, for audits and legal holds. While the archive is on, database retention deletes only days that are already archived.",

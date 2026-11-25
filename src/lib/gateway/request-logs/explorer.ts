@@ -16,8 +16,9 @@ import {
   requestLogWhere,
   spendEventWhere,
 } from "@/lib/gateway/request-logs/request-log-query";
+import { keyBudgetUsage } from "@/lib/tenancy/budgets";
 import { money } from "@/lib/utils/money";
-import type { LogOptions } from "@/types/logs";
+import type { LiveKeyUsage, LogOptions } from "@/types/logs";
 
 const OPTION_LIMIT = 500;
 const NEW_LOGS_CAP = 1000;
@@ -108,6 +109,14 @@ export async function countNewLogs(input: { since: string; filters?: unknown }) 
     take: NEW_LOGS_CAP,
   });
   return { count, capped: count >= NEW_LOGS_CAP };
+}
+
+export async function loadLogKeyUsage(input: { keyId: unknown }): Promise<LiveKeyUsage> {
+  const session = await requirePermission(PERMISSIONS.SPEND_READ);
+  const keyId = typeof input?.keyId === "string" ? input.keyId.trim().slice(0, 64) : "";
+  if (!keyId) throw new Error("MISSING_ID");
+  const at = Date.now();
+  return { at, usage: await keyBudgetUsage(spendScope(session), keyId, new Date(at)) };
 }
 
 export async function loadLogOptions() {
