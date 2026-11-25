@@ -41,7 +41,12 @@ import { DEVIN_CHAT_PATH, windowReset } from "@/lib/gateway/upstreams/devin-acco
 import { chatToDevin, devinCompletion, encodeDevinRequest } from "@/lib/gateway/upstreams/devin";
 import { kimiChatBody } from "@/lib/gateway/upstreams/kimi";
 import { promptCacheHeaders, withOpenRouterClaudeCache } from "@/lib/gateway/upstreams/prompt-cache";
-import { observeClaudeLimits, observeLimitWindows, recordStreamTraffic } from "@/lib/gateway/upstreams/limit-store";
+import {
+  observeClaudeLimits,
+  observeCodexLimits,
+  observeLimitWindows,
+  recordStreamTraffic,
+} from "@/lib/gateway/upstreams/limit-store";
 import { chatToMuse, museCompletion } from "@/lib/gateway/upstreams/muse";
 import { limitsSnapshot } from "@/lib/gateway/upstreams/subscription-limits";
 import { claudeRejectionReset } from "@/lib/gateway/upstreams/observed-limits";
@@ -159,9 +164,11 @@ export function mergeUpstreamHeaders(
 }
 
 export function observeUpstreamLimits(dep: ResolvedDeployment, headers: Headers): void {
-  if (dep.provider) recordStreamTraffic(dep.provider.id);
-  if (dep.provider?.kind !== "claude") return;
-  void observeClaudeLimits(dep.provider.id, headers);
+  const provider = dep.provider;
+  if (!provider) return;
+  recordStreamTraffic(provider.id);
+  if (provider.kind === "claude") void observeClaudeLimits(provider.id, headers);
+  else if (provider.kind === "codex") void observeCodexLimits(provider.id, headers);
 }
 
 export function observeUpstreamStatus(dep: ResolvedDeployment, status: number): void {

@@ -12,7 +12,9 @@ const OBSERVED_WINDOWS = [
   { claim: "seven_day", key: "7d", windowSeconds: 7 * 86_400 },
 ] as const;
 const MODEL_WINDOW = { claim: "seven_day_overage_included", key: "7d_oi" } as const;
-const UNIFIED_STATUSES = ["allowed", "allowed_warning", "rejected"] as const;
+const CODEX_PREFIX = "x-codex";
+const CODEX_SLOTS = ["primary", "secondary"] as const;
+const UNIFIED_STATUSES =["allowed", "allowed_warning", "rejected"] as const;
 const MAX_UTILIZATION = 1.5;
 const FULL_PERCENT = 100;
 const SECONDS_EPOCH_LIMIT = 100_000_000_000;
@@ -65,6 +67,37 @@ export function claudeHeaderWindows(headers: Headers): LimitWindow[] {
         unifiedStatus(unified(headers, `${spec.key}-status`)) === "rejected" ||
         (rejected && claimed) ||
         percent >= FULL_PERCENT,
+    });
+  }
+  return windows;
+}
+
+function codexPercent(value: string): number | null {
+  if (!DECIMAL.test(value)) return null;
+  const percent = Number(value);
+  return Number.isFinite(percent) ? Math.min(FULL_PERCENT, percent) : null;
+}
+
+function codexReset(headers: Headers, slot: string, now: number): number | null {
+  const at = resetTime(headers.get(`${CODEX_PREFIX}-${slot}-reset-at`)?.trim() ?? "");
+  if (at !== null) return at;
+  const after = headers.get(`${CODEX_PREFIX}-${slot}-reset-after-seconds`)?.trim() ?? "";
+  return DECIMAL.test(after) ? now + Math.round(Number(after) * 1000) : null;
+}
+
+export function codexHeaderWindows(headers: Headers, now: number): LimitWindow[] {
+  const windows: LimitWindow[] = [];
+  for (const slot of CODEX_SLOTS) {
+    const used = codexPercent(headers.get(`${CODEX_PREFIX}-${slot}-used-percent`)?.trim() ?? "");
+    const minutes = Number(headers.get(`${CODEX_PREFIX}-${slot}-window-minutes`)?.trim() ?? "");
+    if (used === null || !Number.isInteger(minutes) || minutes <= 0) continue;
+    const reset = codexReset(headers, slot, now);
+    windows.push({
+      scope: "",
+      usedPercent: used,
+      windowSeconds: minutes * 60,
+      resetsAt: reset === null ? null : new Date(reset).toISOString(),
+      limitReached: used >= FULL_PERCENT,
     });
   }
   return windows;

@@ -38,7 +38,12 @@ const logins = new Map<string, FakeLogin>();
       const row = logins.get(where.providerId);
       return row ? { ...row } : null;
     },
-    updateMany: async () => ({ count: 0 }),
+    updateMany: async ({ where, data }: { where: { providerId: string; plan?: { not: string } }; data: { plan?: string } }) => {
+      const row = logins.get(where.providerId);
+      if (!row || where.plan === undefined || data.plan === undefined || row.plan === data.plan) return { count: 0 };
+      row.plan = data.plan;
+      return { count: 1 };
+    },
   },
 };
 
@@ -47,6 +52,7 @@ const HOUR = 3_600_000;
 const iso = (hours: number) => new Date(NOW + hours * HOUR).toISOString();
 const MODELS_URL = "https://daily-cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels";
 const SUMMARY_URL = "https://daily-cloudcode-pa.googleapis.com/v1internal:retrieveUserQuotaSummary";
+const LOAD_URL = "https://cloudcode-pa.googleapis.com/v1internal:loadCodeAssist";
 
 const SUMMARY = {
   groups: [
@@ -77,10 +83,16 @@ const MODELS = {
 const realFetch = globalThis.fetch;
 let calls: { url: string; body: string; headers: Record<string, string> }[] = [];
 let counter = 0;
+let tierReads = 0;
+let paidTier = "g1-pro-tier";
 
 function respondWith(handler: (url: string) => Response) {
   globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
     const url = String(input);
+    if (url === LOAD_URL) {
+      tierReads += 1;
+      return Response.json({ currentTier: { id: "standard-tier" }, paidTier: { id: paidTier } });
+    }
     calls.push({ url, body: typeof init?.body === "string" ? init.body : "", headers: (init?.headers ?? {}) as Record<string, string> });
     return handler(url);
   }) as typeof fetch;
@@ -233,6 +245,17 @@ test("a limits read adds the account-level windows to the per-model ones", async
       ["3p-weekly", "3p-weekly", 20],
     ],
   );
+});
+
+test("a limits read picks up an upgraded plan at most once an hour per account", async () => {
+  const account = await seedAccount();
+  tierReads = 0;
+  paidTier = "g1-ultra-tier";
+  assert.equal((await readLimits(() => Response.json(SUMMARY), account)).plan, "ultra");
+  assert.equal(logins.get(account)?.plan, "ultra");
+  paidTier = "g1-pro-tier";
+  assert.equal((await readLimits(() => Response.json(SUMMARY), account)).plan, "ultra");
+  assert.equal(tierReads, 1);
 });
 
 const FAILED_SUMMARIES: { name: string; reply: () => Response }[] = [

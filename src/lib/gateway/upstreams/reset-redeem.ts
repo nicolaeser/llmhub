@@ -23,9 +23,9 @@ import {
 import { claudeResetOptions, codexResetOptions, pickResetOption } from "@/lib/gateway/upstreams/reset-options";
 import {
   blockUsageReads,
-  CLAUDE_POLL_MS,
   expireResetView,
   freshLimits,
+  HEADER_POLL_MS,
   readStoredSnapshot,
   storeResetView,
   touchLimitSnapshot,
@@ -78,7 +78,7 @@ const ORG_TTL_MS = 60 * 60_000;
 const READ_BACKOFF_MS = 5 * 60_000;
 const RATE_LIMIT_BACKOFF_MS = 60 * 60_000;
 const USAGE_MAX_AGE_MS = 10 * 60_000;
-const CLAUDE_USAGE_MAX_AGE_MS = 2 * CLAUDE_POLL_MS;
+const CLAUDE_USAGE_MAX_AGE_MS = 2 * HEADER_POLL_MS;
 const FORCED_LIMITS_MS = 10_000;
 const HOOK_LIMITS_MS = 60_000;
 const CLAUDE_HOOK_LIMITS_MS = 5 * 60_000;

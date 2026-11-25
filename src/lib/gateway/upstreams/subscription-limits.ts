@@ -5,7 +5,7 @@ import { fetchAvailableModels, fetchQuotaSummary } from "@/lib/gateway/upstreams
 import { antigravityQuotaBuckets } from "@/lib/gateway/upstreams/antigravity-quota";
 import { reportsLimits } from "@/lib/gateway/upstreams/provider-kinds";
 import { CLAUDE_OAUTH_BETAS } from "@/lib/gateway/upstreams/claude";
-import { claudeExtraUsage, claudeWindows } from "@/lib/gateway/upstreams/claude-usage";
+import { claudeExtraUsage, claudeLimitWindows } from "@/lib/gateway/upstreams/claude-usage";
 import { CODEX_USAGE_URL } from "@/lib/gateway/upstreams/codex";
 import { devinLimits } from "@/lib/gateway/upstreams/devin-account";
 import { devinStatusReply, readDevinStatus } from "@/lib/gateway/upstreams/devin-api";
@@ -14,6 +14,7 @@ import { museModelsUrl } from "@/lib/gateway/upstreams/muse";
 import { asNumber, asRecord, asString } from "@/lib/gateway/core";
 import { newestLimits } from "@/lib/gateway/upstreams/observed-limits";
 import { providerAuth, sessionAuth } from "@/lib/gateway/upstreams/credentials";
+import { antigravityPlanOf, claudeProfilePlan } from "@/lib/gateway/upstreams/subscription-sign-in";
 import { GateError } from "@/lib/gateway/errors";
 import { retryAfterMs } from "@/lib/gateway/upstreams/reset-credits";
 import { errorFields } from "@/lib/logging/format";
@@ -46,6 +47,8 @@ const LIMITS_TIMEOUT_MS = 15_000;
 const SUMMARY_REFUSED_STATUSES = new Set([403, 404]);
 const SUMMARY_REFUSAL_MS = 60 * 60_000;
 const summaryRefusedUntil = new Map<string, number>();
+const PLAN_CHECK_MS = 60 * 60_000;
+const planCheckedAt = new Map<string, number>();
 const TOO_MANY_REQUESTS = 429;
 
 const cache = new Map<string, SubscriptionLimits>();
@@ -111,7 +114,7 @@ export function codexLimits(payload: JsonMap, now = Date.now()): SubscriptionLim
 export function claudeLimits(payload: JsonMap, plan: string, now = Date.now()): SubscriptionLimits {
   return {
     plan,
-    windows: claudeWindows(payload),
+    windows: claudeLimitWindows(payload),
     credits: null,
     resetCredits: null,
     extraUsage: claudeExtraUsage(payload.extra_usage),
@@ -181,12 +184,32 @@ async function storedPlan(providerId: string): Promise<string> {
   return row?.plan ?? "";
 }
 
+function planCheckDue(providerId: string, now: number): boolean {
+  if (now - (planCheckedAt.get(providerId) ?? -Infinity) < PLAN_CHECK_MS) return false;
+  planCheckedAt.set(providerId, now);
+  return true;
+}
+
+async function currentPlan(providerId: string, read: () => Promise<string>, now = Date.now()): Promise<string> {
+  const [stored, fresh] = await Promise.all([storedPlan(providerId), planCheckDue(providerId, now) ? read() : ""]);
+  return fresh || stored;
+}
+
+async function saveLoginPlan(providerId: string, plan: string): Promise<void> {
+  if (!plan) return;
+  try {
+    await prisma.providerLogin.updateMany({ where: { providerId, plan: { not: plan } }, data: { plan } });
+  } catch (err) {
+    logger.warn("subscription.plan_save_failed", { providerId, ...errorFields(err) });
+  }
+}
+
 async function fetchAntigravityLimits(provider: LimitAccount): Promise<SubscriptionLimits> {
   const auth = await usageAuth(provider);
   const { status, json, retryAfter } = await fetchAvailableModels(auth);
   failOn([{ status, json: null, retryAfterMs: retryAfterMs(retryAfter, Date.now()) }]);
   if (status < 200 || status >= 300) throw new LimitsFetchError("UPSTREAM_FAILED");
-  const limits = antigravityLimits(json, await storedPlan(provider.id));
+  const limits = antigravityLimits(json, await currentPlan(provider.id, () => antigravityPlanOf(auth.key)));
   const buckets = await accountBuckets(provider.id, auth);
   return buckets.length ? { ...limits, windows: [...limits.windows, ...buckets] } : limits;
 }
@@ -242,13 +265,22 @@ export async function checkSignInSession(kind: SignInKind, session: SignInSessio
   return "unreachable";
 }
 
+async function fetchClaudeLimits(provider: LimitAccount): Promise<SubscriptionLimits> {
+  const json = await fetchUsage(provider, CLAUDE_USAGE_URL, { "anthropic-beta": CLAUDE_OAUTH_BETAS.join(",") });
+  const plan = await currentPlan(provider.id, async () => claudeProfilePlan((await usageAuth(provider)).key));
+  return claudeLimits(json, plan);
+}
+
 export async function fetchSubscriptionLimits(provider: LimitAccount): Promise<SubscriptionLimits | null> {
+  const limits = await readSubscriptionLimits(provider);
+  if (limits) await saveLoginPlan(provider.id, limits.plan);
+  return limits;
+}
+
+async function readSubscriptionLimits(provider: LimitAccount): Promise<SubscriptionLimits | null> {
   if (!reportsLimits(provider.kind)) return null;
   if (provider.kind === "antigravity") return fetchAntigravityLimits(provider);
-  if (provider.kind === "claude") {
-    const json = await fetchUsage(provider, CLAUDE_USAGE_URL, { "anthropic-beta": CLAUDE_OAUTH_BETAS.join(",") });
-    return claudeLimits(json, await storedPlan(provider.id));
-  }
+  if (provider.kind === "claude") return fetchClaudeLimits(provider);
   if (provider.kind === "grok_build") return fetchXaiLimits(provider);
   if (provider.kind === "kimi" || provider.kind === "kimi_ai") {
     return kimiLimits(await fetchUsage(provider, kimiUsageUrl(provider.kind)), await storedPlan(provider.id));
@@ -281,6 +313,7 @@ export function dropCachedLimits(providerId: string): void {
 export async function forgetLimits(providerId: string, now = Date.now()): Promise<void> {
   cache.delete(providerId);
   summaryRefusedUntil.delete(providerId);
+  planCheckedAt.delete(providerId);
   try {
     const written = await prisma.providerLimitSnapshot.updateMany({
       where: { providerId },

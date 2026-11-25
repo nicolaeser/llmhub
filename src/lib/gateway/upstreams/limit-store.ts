@@ -7,10 +7,16 @@ import { isPrismaCode } from "@/lib/auth/errors";
 import { asRecord } from "@/lib/gateway/core";
 import { isResetKind } from "@/lib/gateway/routing/auto-reset-policy";
 import { accountRecoveryAt, hasExhaustedQuota } from "@/lib/gateway/routing/quota";
-import { limitsFromTraffic, PROVIDER_CATALOG, reportsLimits } from "@/lib/gateway/upstreams/provider-kinds";
+import {
+  limitsFromHeaders,
+  limitsFromTraffic,
+  PROVIDER_CATALOG,
+  reportsLimits,
+} from "@/lib/gateway/upstreams/provider-kinds";
 import {
   claudeHeaderWindows,
   claudeModelLimitReached,
+  codexHeaderWindows,
   isObservedWindow,
   limitsUpdatedAt,
   observedWindowsBefore,
@@ -46,8 +52,8 @@ import type {
 import type { ResetCredits, ResetState } from "@/types/resets";
 
 export const LIMITS_POLL_MS = 3 * 60_000;
-export const CLAUDE_POLL_MS = 30 * 60_000;
-export const CLAUDE_TRAFFIC_POLL_MS = 2 * 3_600_000;
+export const HEADER_POLL_MS = 30 * 60_000;
+export const HEADER_FULL_READ_MS = 2 * 3_600_000;
 export const PAUSED_POLL_MS = 30 * 60_000;
 export const POLL_JITTER = 0.15;
 export const MIN_POLL_GAP_MS = 60_000;
@@ -158,7 +164,7 @@ export function jittered(ms: number, random: () => number, spread = POLL_JITTER)
 }
 
 export function pollInterval(kind: string, streaming = false): number {
-  return streaming && kind === "claude" ? CLAUDE_POLL_MS : LIMITS_POLL_MS;
+  return streaming && limitsFromHeaders(kind) ? HEADER_POLL_MS : LIMITS_POLL_MS;
 }
 
 export function manualRefreshGap(kind: string): number {
@@ -174,7 +180,7 @@ export function nextPollAt(
 ): number {
   const isStreaming =
     streaming ||
-    (kind === "claude" &&
+    (limitsFromHeaders(kind) &&
       limits !== null &&
       now - observedTime(limits) < LIMITS_POLL_MS &&
       !hasExhaustedQuota(limits, now));
@@ -696,12 +702,12 @@ function observedBase(now: number): SubscriptionLimits {
 function trafficPollAt(stored: StoredLimitSnapshot, limits: SubscriptionLimits, now: number): number | null {
   if (stored.fetchedAt === null || stored.failures > 0) return null;
   const recovery = accountRecoveryAt(limits, now);
-  if (recovery !== null && recovery + RESET_GRACE_MS < now + CLAUDE_POLL_MS) {
+  if (recovery !== null && recovery + RESET_GRACE_MS < now + HEADER_POLL_MS) {
     const afterReset = recovery + RESET_GRACE_MS;
     const target = Math.max(now + MIN_POLL_GAP_MS, afterReset);
     return target !== stored.nextAt ? target : null;
   }
-  const at = Math.min(stored.fetchedAt + CLAUDE_TRAFFIC_POLL_MS, now + CLAUDE_POLL_MS);
+  const at = Math.min(stored.fetchedAt + HEADER_FULL_READ_MS, now + HEADER_POLL_MS);
   return at > stored.nextAt ? at : null;
 }
 
@@ -786,6 +792,14 @@ export function observeClaudeLimits(providerId: string, headers: Headers, now = 
     const reached = claudeModelLimitReached(headers);
     if (!reached) return plan;
     return Promise.all([plan, markModelLimit(providerId, reached, now)]).then(([windows, model]) => windows || model);
+  } catch (err) {
+    return Promise.resolve(observeFailed(providerId, err));
+  }
+}
+
+export function observeCodexLimits(providerId: string, headers: Headers, now = Date.now()): Promise<boolean> {
+  try {
+    return observeLimitWindows(providerId, codexHeaderWindows(headers, now), now);
   } catch (err) {
     return Promise.resolve(observeFailed(providerId, err));
   }
